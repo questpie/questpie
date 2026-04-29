@@ -222,7 +222,7 @@ export function generateTemplate(options: TemplateOptions): string {
 		);
 	} else {
 		lines.push(
-			'type _AppAppConfig = _ModuleConfig extends { app: infer TApp } ? TApp : {};',
+			"type _AppAppConfig = _ModuleConfig extends { app: infer TApp } ? TApp : {};",
 		);
 	}
 	lines.push(
@@ -234,7 +234,7 @@ export function generateTemplate(options: TemplateOptions): string {
 		);
 	} else {
 		lines.push(
-			'type _AppAuthConfig = _ModuleConfig extends { auth: infer TAuth } ? TAuth : {};',
+			"type _AppAuthConfig = _ModuleConfig extends { auth: infer TAuth } ? TAuth : {};",
 		);
 	}
 	lines.push(
@@ -504,27 +504,19 @@ export function generateTemplate(options: TemplateOptions): string {
 		lines.push(
 			'type _AppQuestpieConfig = Omit<QuestpieConfig, "app" | "db" | "collections" | "globals" | "auth"> & {',
 		);
-		lines.push("\tapp: (typeof _runtime)[\"app\"];");
-		lines.push("\tdb: (typeof _runtime)[\"db\"];");
+		lines.push('\tapp: (typeof _runtime)["app"];');
+		lines.push('\tdb: (typeof _runtime)["db"];');
 		lines.push("\tcollections: _AppCollectionDefinitions;");
 		lines.push("\tglobals: _AppGlobalDefinitions;");
 		lines.push("\tauth: _AppAuthConfig;");
 		lines.push("};");
-		lines.push(
-			"type _AppQuestpie = Questpie<_AppQuestpieConfig>;",
-		);
+		lines.push("type _AppQuestpie = Questpie<_AppQuestpieConfig>;");
 		lines.push(
 			"type _AppDb = DrizzleClientFromQuestpieConfig<_AppQuestpieConfig>;",
 		);
-		lines.push(
-			"type _AppGlobalsAPI = _AppQuestpie[\"globals\"];",
-		);
-		lines.push(
-			"type _AppStorage = _AppQuestpie[\"storage\"];",
-		);
-		lines.push(
-			"type _AppTables = TablesFromConfig<_AppQuestpieConfig>;",
-		);
+		lines.push('type _AppGlobalsAPI = _AppQuestpie["globals"];');
+		lines.push('type _AppStorage = _AppQuestpie["storage"];');
+		lines.push("type _AppTables = TablesFromConfig<_AppQuestpieConfig>;");
 		lines.push("");
 
 		lines.push(
@@ -544,14 +536,14 @@ export function generateTemplate(options: TemplateOptions): string {
 		if (hasEmails) {
 			lines.push(`\t\t\temail: MailerService<${emailsTypeName}>;`);
 		} else {
-			lines.push("\t\t\temail: _AppQuestpie[\"email\"];");
+			lines.push('\t\t\temail: _AppQuestpie["email"];');
 		}
 		lines.push("\t\t\tqueue: QueueClient<AppJobs>;");
 		lines.push("\t\t\tstorage: _AppStorage;");
-		lines.push("\t\t\tkv: _AppQuestpie[\"kv\"];");
-		lines.push("\t\t\tlogger: _AppQuestpie[\"logger\"];");
-		lines.push("\t\t\tsearch: _AppQuestpie[\"search\"];");
-		lines.push("\t\t\trealtime: _AppQuestpie[\"realtime\"];");
+		lines.push('\t\t\tkv: _AppQuestpie["kv"];');
+		lines.push('\t\t\tlogger: _AppQuestpie["logger"];');
+		lines.push('\t\t\tsearch: _AppQuestpie["search"];');
+		lines.push('\t\t\trealtime: _AppQuestpie["realtime"];');
 		lines.push("");
 		lines.push("\t\t\t// Entity APIs");
 		lines.push("\t\t\tcollections: _CollectionsAPI;");

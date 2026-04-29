@@ -1,5 +1,4 @@
 import "virtual:iconify-preload";
-
 import {
 	createRootRoute,
 	HeadContent,
@@ -24,7 +23,16 @@ export const Route = createRootRoute({
 				{ name: "viewport", content: "width=device-width, initial-scale=1" },
 				{ name: "format-detection", content: "telephone=no" },
 				{ name: "color-scheme", content: "light dark" },
-				{ name: "theme-color", content: "#B700FF" },
+				{
+					name: "theme-color",
+					media: "(prefers-color-scheme: light)",
+					content: "#fafafa",
+				},
+				{
+					name: "theme-color",
+					media: "(prefers-color-scheme: dark)",
+					content: "#121212",
+				},
 			],
 			links: [
 				...generateLinks({ cssUrl: appCss, includeCanonical: false }),

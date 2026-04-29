@@ -81,7 +81,10 @@ export { createContextFactory } from "#questpie/server/config/create-context-fac
 export * from "#questpie/server/config/global-hooks-types.js";
 export * from "#questpie/server/config/module-types.js";
 export { appConfig, authConfig } from "#questpie/server/config/factories.js";
-export type { AppStateConfig, ResolvedAppStateConfig } from "#questpie/server/config/app-state-config.js";
+export type {
+	AppStateConfig,
+	ResolvedAppStateConfig,
+} from "#questpie/server/config/app-state-config.js";
 export * from "#questpie/server/config/questpie.js";
 export * from "#questpie/server/config/types.js";
 export * from "#questpie/server/errors/index.js";
@@ -113,6 +116,7 @@ export {
 	extractDependencies,
 	getDebounce,
 	isReactiveConfig,
+	isReactivePropPlaceholder,
 	type OptionsConfig,
 	type OptionsContext,
 	type OptionsHandler,
@@ -121,7 +125,12 @@ export {
 	type ReactiveConfig,
 	type ReactiveContext,
 	type ReactiveHandler,
+	type ReactivePropPlaceholder,
+	type ReactivePropValue,
 	type ReactiveServerContext,
+	serializeFormLayoutProps,
+	serializeReactivePropsRecord,
+	serializeReactivePropValue,
 	type SerializedOptionsConfig,
 	type SerializedReactiveConfig,
 	type TrackingResult,
@@ -147,7 +156,10 @@ export type {
 	SelectModifier,
 } from "#questpie/server/fields/types.js";
 // v3 field primitives
-export { fieldType, wrapFieldComplete } from "#questpie/server/fields/field-type.js";
+export {
+	fieldType,
+	wrapFieldComplete,
+} from "#questpie/server/fields/field-type.js";
 export type { FieldTypeDefinition } from "#questpie/server/fields/field-type.js";
 export type {
 	FieldCommonMethods,
@@ -167,7 +179,10 @@ export {
 	introspectGlobal,
 	introspectGlobals,
 } from "#questpie/server/global/introspection.js";
-export type { GlobalFieldsOf, GlobalStateOf } from "#questpie/server/global/builder/extensions.js";
+export type {
+	GlobalFieldsOf,
+	GlobalStateOf,
+} from "#questpie/server/global/builder/extensions.js";
 export * from "#questpie/server/global/builder/global.js";
 export * from "#questpie/server/global/builder/global-builder.js";
 export * from "#questpie/server/global/builder/types.js";
@@ -198,7 +213,6 @@ export * from "#questpie/server/modules/core/integrated/queue/job.js";
 export * from "#questpie/server/modules/core/integrated/queue/service.js";
 export * from "#questpie/server/modules/core/integrated/queue/types.js";
 export * from "#questpie/server/modules/core/integrated/queue/worker.js";
-export * from "#questpie/server/modules/core/integrated/queue/workflow.js";
 export * from "#questpie/server/modules/core/integrated/realtime/adapter.js";
 export * from "#questpie/server/modules/core/integrated/realtime/adapters/pg-notify.js";
 export * from "#questpie/server/modules/core/integrated/realtime/adapters/redis-streams.js";
@@ -213,8 +227,12 @@ export * from "#questpie/server/modules/core/integrated/search/collection.js";
 export * from "#questpie/server/modules/core/integrated/search/facet-utils.js";
 export * from "#questpie/server/modules/core/integrated/search/jobs/index-records.job.js";
 export * from "#questpie/server/modules/core/integrated/search/providers/index.js";
-export { createSearchService, SearchServiceWrapper } from "#questpie/server/modules/core/integrated/search/service.js";
+export {
+	createSearchService,
+	SearchServiceWrapper,
+} from "#questpie/server/modules/core/integrated/search/service.js";
 export * from "#questpie/server/modules/core/integrated/search/types.js";
+export * from "#questpie/server/modules/core/integrated/kv/adapter.js";
 export * from "#questpie/server/modules/core/integrated/storage/signed-url.js";
 export type { KVConfig } from "#questpie/server/modules/core/integrated/kv/types.js";
 export type { LoggerConfig } from "#questpie/server/modules/core/integrated/logger/types.js";
@@ -225,7 +243,10 @@ export * from "#questpie/server/migration/runner.js";
 export * from "#questpie/server/migration/types.js";
 export * from "#questpie/server/modules/starter/.generated/module.js";
 export { default as starterModule } from "#questpie/server/modules/starter/.generated/module.js";
-export { type CoreMessageKey, coreBackendMessages } from "#questpie/server/modules/starter/_messages.js";
+export {
+	type CoreMessageKey,
+	coreBackendMessages,
+} from "#questpie/server/modules/starter/_messages.js";
 export { route } from "#questpie/server/routes/define-route.js";
 export * from "#questpie/server/routes/index.js";
 export { seed } from "#questpie/server/seed/define-seed.js";

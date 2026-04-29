@@ -22,7 +22,7 @@ export type ZodErrorMapFn = (issue: ZodIssue) => { message: string };
  */
 export interface ZodIssue {
 	code: string;
-	message: string;
+	message?: string;
 	path?: (string | number)[];
 	// Common issue properties
 	expected?: string;
@@ -32,10 +32,12 @@ export interface ZodIssue {
 	inclusive?: boolean;
 	exact?: boolean;
 	type?: string;
+	origin?: string;
 	// String-specific
 	validation?: string;
 	// v4 format
 	format?: string;
+	values?: unknown[];
 	// Custom params
 	params?: Record<string, unknown>;
 }
@@ -103,16 +105,18 @@ export function createZodErrorMap(
 			// ================================================================
 			// Type errors
 			// ================================================================
-			case "invalid_type":
-				if (issue.received === "undefined" || issue.received === "null") {
+			case "invalid_type": {
+				const received = getReceivedType(issue);
+				if (received === "undefined" || received === "null") {
 					return { message: translate("validation.required") };
 				}
 				return {
 					message: translate("validation.invalidType", {
-						expected: issue.expected,
-						received: issue.received,
+						expected: issue.expected ?? "unknown",
+						received: received ?? "unknown",
 					}),
 				};
+			}
 
 			// ================================================================
 			// Size/length errors (too_small, too_big)
@@ -143,11 +147,10 @@ export function createZodErrorMap(
 			// Enum/Union errors
 			// ================================================================
 			case "invalid_enum_value":
+			case "invalid_value":
 				return {
 					message: translate("validation.enum.invalid", {
-						options: issue.params?.options
-							? (issue.params.options as string[]).join(", ")
-							: "",
+						options: getEnumOptions(issue).join(", "),
 					}),
 				};
 
@@ -183,13 +186,13 @@ export function createZodErrorMap(
 						}),
 					};
 				}
-				return { message: issue.message };
+				return { message: issue.message ?? "Invalid input" };
 
 			// ================================================================
 			// Default - return original message
 			// ================================================================
 			default:
-				return { message: issue.message };
+				return { message: issue.message ?? "Invalid input" };
 		}
 	};
 }
@@ -201,8 +204,9 @@ export function createZodErrorMap(
 function handleTooSmall(issue: ZodIssue, t: ValidationTranslateFn) {
 	const min = issue.minimum;
 	const inclusive = issue.inclusive !== false;
+	const type = issue.type ?? issue.origin;
 
-	switch (issue.type) {
+	switch (type) {
 		case "string":
 			if (issue.exact) {
 				return { message: t("validation.string.length", { length: min }) };
@@ -235,15 +239,16 @@ function handleTooSmall(issue: ZodIssue, t: ValidationTranslateFn) {
 			return { message: t("validation.date.min", { min: String(min) }) };
 
 		default:
-			return { message: issue.message };
+			return { message: issue.message ?? "Invalid input" };
 	}
 }
 
 function handleTooBig(issue: ZodIssue, t: ValidationTranslateFn) {
 	const max = issue.maximum;
 	const inclusive = issue.inclusive !== false;
+	const type = issue.type ?? issue.origin;
 
-	switch (issue.type) {
+	switch (type) {
 		case "string":
 			if (issue.exact) {
 				return { message: t("validation.string.length", { length: max }) };
@@ -273,8 +278,20 @@ function handleTooBig(issue: ZodIssue, t: ValidationTranslateFn) {
 			return { message: t("validation.date.max", { max: String(max) }) };
 
 		default:
-			return { message: issue.message };
+			return { message: issue.message ?? "Invalid input" };
 	}
+}
+
+function getReceivedType(issue: ZodIssue): string | undefined {
+	if (issue.received) return issue.received;
+
+	const match = issue.message?.match(/received\s+([A-Za-z_][\w-]*)/i);
+	return match?.[1];
+}
+
+function getEnumOptions(issue: ZodIssue): string[] {
+	const options = issue.params?.options ?? issue.values;
+	return Array.isArray(options) ? options.map(String) : [];
 }
 
 function handleInvalidString(issue: ZodIssue, t: ValidationTranslateFn) {
@@ -294,7 +311,7 @@ function handleInvalidString(issue: ZodIssue, t: ValidationTranslateFn) {
 		case "base64":
 			return { message: t("validation.string.base64") };
 		default:
-			return { message: issue.message };
+			return { message: issue.message ?? "Invalid input" };
 	}
 }
 
@@ -316,7 +333,7 @@ function handleInvalidFormat(issue: ZodIssue, t: ValidationTranslateFn) {
 		case "base64":
 			return { message: t("validation.string.base64") };
 		default:
-			return { message: issue.message };
+			return { message: issue.message ?? "Invalid input" };
 	}
 }
 

@@ -23,6 +23,7 @@ import type {
 	MultiTargetCodegenResult,
 } from "../codegen/types.js";
 import { isPackageConfig, type PackageConfig } from "../config.js";
+import { resolveCliPath, toFileImportSpecifier } from "../utils.js";
 
 // ============================================================================
 // generate command
@@ -112,7 +113,9 @@ export async function loadConfigForCodegen(
 	configPath: string,
 ): Promise<ConfigLoadResult> {
 	try {
-		const configModule = await import(/* @vite-ignore */ configPath);
+		const configModule = await import(
+			/* @vite-ignore */ toFileImportSpecifier(configPath)
+		);
 		const config = configModule.default || configModule.config || configModule;
 
 		// PackageConfig mode: iterate over modulesDir subdirectories
@@ -170,7 +173,7 @@ export async function loadConfigForCodegen(
  * - Package: `packageConfig({ modulesDir: "..." })` → iterates module subdirectories
  */
 export async function generateCommand(options: GenerateOptions): Promise<void> {
-	const rawConfigPath = resolve(process.cwd(), options.configPath);
+	const rawConfigPath = resolveCliPath(options.configPath);
 	const { configPath, rootDir } = await resolveEntityRoot(rawConfigPath);
 
 	// Load plugins + module/package config from questpie.config.ts

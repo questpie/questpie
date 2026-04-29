@@ -1501,6 +1501,28 @@ export type {
 	RelationSchema,
 } from "#questpie/server/collection/introspection.js";
 export type { GlobalSchema } from "#questpie/server/global/introspection.js";
+// Re-export reactive prop placeholder shape so the admin client can detect
+// it in `extraProps` values and decide whether to call /admin/reactive.
+export type {
+	ReactivePropPlaceholder,
+	ReactivePropValue,
+} from "#questpie/server/fields/reactive-types.js";
+
+/**
+ * Type guard for `ReactivePropPlaceholder` — inlined here to avoid pulling
+ * the server's reactive runtime (Proxy dep-tracking) into the client bundle.
+ * Keep in sync with `serializeReactivePropValue`'s output shape.
+ */
+import type { ReactivePropPlaceholder as _ReactivePropPlaceholder } from "#questpie/server/fields/reactive-types.js";
+export function isReactivePropPlaceholder(
+	value: unknown,
+): value is _ReactivePropPlaceholder {
+	return (
+		typeof value === "object" &&
+		value !== null &&
+		(value as { "~reactive"?: unknown })["~reactive"] === "prop"
+	);
+}
 // Re-export collection and global meta types
 export type {
 	CollectionFieldMeta,

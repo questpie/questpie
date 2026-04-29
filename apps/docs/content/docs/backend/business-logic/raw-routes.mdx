@@ -1,9 +1,9 @@
 ---
-title: Routes
+title: Raw HTTP Routes
 description: Raw HTTP routes for webhooks, custom APIs, and endpoints that need full request/response control.
 ---
 
-Routes give you raw HTTP request/response handling for cases that don't fit collection CRUD or JSON routes - webhooks, OAuth callbacks, health checks, file downloads, streaming.
+Raw HTTP routes give you direct request/response handling for cases that don't fit collection CRUD or typed JSON routes - webhooks, OAuth callbacks, health checks, file downloads, streaming.
 
 ## Defining a Route
 
@@ -78,7 +78,7 @@ route({
 });
 ```
 
-## Calling Routes from the Client
+## Calling Raw Routes from the Client
 
 The client SDK provides typed access to routes:
 
@@ -180,6 +180,6 @@ export default route()
 
 ## Related Pages
 
-- [Routes (JSON)](/docs/backend/business-logic/routes) — Typed JSON route handlers
+- [Typed Routes](/docs/backend/business-logic/routes) — Typed JSON route handlers
 - [Jobs](/docs/backend/business-logic/jobs) — Background processing
 - [File Convention](/docs/backend/architecture/file-convention) — Discovery rules

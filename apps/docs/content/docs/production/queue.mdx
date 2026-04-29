@@ -8,15 +8,15 @@ QUESTPIE uses [pg-boss](https://github.com/timgit/pg-boss) for background job pr
 ## Configuration
 
 ```ts title="questpie.config.ts"
-import { pgBossAdapter, runtimeConfig } from "questpie"
+import { pgBossAdapter, runtimeConfig } from "questpie";
 
 export default runtimeConfig({
-  queue: {
-    adapter: pgBossAdapter({
-      connectionString: process.env.DATABASE_URL,
-    }),
-  },
-})
+	queue: {
+		adapter: pgBossAdapter({
+			connectionString: process.env.DATABASE_URL,
+		}),
+	},
+});
 ```
 
 pg-boss creates its own schema in your database (`pgboss.*` tables) for job storage, scheduling, and dead-letter queues.
@@ -26,30 +26,30 @@ pg-boss creates its own schema in your database (`pgboss.*` tables) for job stor
 Jobs are defined in `jobs/` using the file convention:
 
 ```ts title="src/questpie/server/jobs/send-email.ts"
-import { job } from "questpie"
-import z from "zod"
+import { job } from "questpie";
+import z from "zod";
 
 export default job({
-  name: "send-email",
-  schema: z.object({
-    to: z.string().email(),
-    subject: z.string(),
-    body: z.string(),
-  }),
-  handler: async ({ payload, email, logger }) => {
-    await email.send({
-      to: payload.to,
-      subject: payload.subject,
-      html: payload.body,
-    })
-    logger.info({ to: payload.to }, "Email sent")
-  },
-  options: {
-    retryLimit: 3,
-    retryDelay: 5,
-    retryBackoff: true,
-  },
-})
+	name: "send-email",
+	schema: z.object({
+		to: z.string().email(),
+		subject: z.string(),
+		body: z.string(),
+	}),
+	handler: async ({ payload, email, logger }) => {
+		await email.send({
+			to: payload.to,
+			subject: payload.subject,
+			html: payload.body,
+		});
+		logger.info({ to: payload.to }, "Email sent");
+	},
+	options: {
+		retryLimit: 3,
+		retryDelay: 5,
+		retryBackoff: true,
+	},
+});
 ```
 
 See [Jobs](/docs/backend/business-logic/jobs) for the full job definition guide.
@@ -60,37 +60,108 @@ From hooks, routes, or other jobs — use the typed `queue` context:
 
 ```ts
 handler: async ({ queue }) => {
-  await queue.sendEmail.publish({
-    to: "user@example.com",
-    subject: "Welcome",
-    body: "<h1>Hello!</h1>",
-  })
-}
+	await queue.sendEmail.publish({
+		to: "user@example.com",
+		subject: "Welcome",
+		body: "<h1>Hello!</h1>",
+	});
+};
 ```
 
 The `queue` object is fully typed — autocompletion shows all registered jobs and their payload schemas.
 
+## Running Queue Workers
+
+Publishing stores the job in PostgreSQL. A job handler runs only when a worker consumes the queue:
+
+```ts title="src/worker.ts"
+import { app } from "#questpie";
+
+await app.queue.listen({
+	teamSize: 5,
+	batchSize: 3,
+});
+```
+
+In production, run at least two process types against the same generated app and environment:
+
+| Process   | Responsibility                                       |
+| --------- | ---------------------------------------------------- |
+| Web/API   | Handles HTTP requests and publishes jobs             |
+| Worker    | Calls `app.queue.listen()` and executes job handlers |
+| Scheduler | Optional one-off process that registers cron jobs    |
+
+`teamSize` controls concurrent work inside one worker process. Scale horizontally by running more worker processes. QUESTPIE installs graceful shutdown handlers for `SIGINT` and `SIGTERM` by default, so workers can drain cleanly during deploys.
+
+For serverless or cron-style environments, process a bounded batch instead:
+
+```ts title="scripts/process-queue-once.ts"
+import { app } from "#questpie";
+
+const result = await app.queue.runOnce({
+	batchSize: 10,
+	jobs: ["sendEmail"],
+});
+
+await app.queue.stop();
+
+console.log(`Processed ${result.processed} jobs`);
+```
+
 ## Job Options
 
-| Option | Type | Default | Description |
-| --- | --- | --- | --- |
-| `retryLimit` | `number` | `0` | Max retry attempts on failure |
-| `retryDelay` | `number` | `0` | Seconds between retries |
-| `retryBackoff` | `boolean` | `false` | Exponential backoff on retries |
-| `expireInSeconds` | `number` | `900` | Job expires if not completed |
-| `startAfter` | `Date \| string` | now | Delay job start |
-| `singletonKey` | `string` | — | Prevent duplicate jobs with same key |
-| `priority` | `number` | `0` | Higher = processed first |
+| Option            | Type             | Default | Description                          |
+| ----------------- | ---------------- | ------- | ------------------------------------ |
+| `retryLimit`      | `number`         | `0`     | Max retry attempts on failure        |
+| `retryDelay`      | `number`         | `0`     | Seconds between retries              |
+| `retryBackoff`    | `boolean`        | `false` | Exponential backoff on retries       |
+| `expireInSeconds` | `number`         | `900`   | Job expires if not completed         |
+| `startAfter`      | `Date \| string` | now     | Delay job start                      |
+| `singletonKey`    | `string`         | —       | Prevent duplicate jobs with same key |
+| `priority`        | `number`         | `0`     | Higher = processed first             |
+| `cron`            | `string`         | —       | Cron expression for recurring jobs   |
 
-## Scheduled Jobs
+## Delayed Jobs
 
 Use `startAfter` to schedule future execution:
 
 ```ts
 await queue.sendReminder.publish(
-  { appointmentId: "abc" },
-  { startAfter: new Date("2026-03-20T09:00:00Z") },
-)
+	{ appointmentId: "abc" },
+	{ startAfter: new Date("2026-05-01T09:00:00Z") },
+);
+```
+
+## Recurring Jobs
+
+Use `options.cron` for recurring work. `app.queue.listen()` registers cron schedules automatically before it starts workers:
+
+```ts title="src/questpie/server/jobs/send-daily-digest.ts"
+import { job } from "questpie";
+import z from "zod";
+
+export default job({
+	name: "send-daily-digest",
+	schema: z.object({}),
+	options: {
+		cron: "0 8 * * *",
+		retryLimit: 3,
+	},
+	handler: async ({ services }) => {
+		await services.digest.sendDaily();
+	},
+});
+```
+
+Cron jobs must accept an empty payload because schedule registration validates the payload with `schema.parse({})`.
+
+If you need a deploy step that only registers schedules, run:
+
+```ts title="scripts/register-schedules.ts"
+import { app } from "#questpie";
+
+await app.queue.registerSchedules();
+await app.queue.stop();
 ```
 
 ## Singleton Jobs
@@ -99,9 +170,9 @@ Prevent duplicate jobs with `singletonKey`:
 
 ```ts
 await queue.syncInventory.publish(
-  { warehouseId: "wh-1" },
-  { singletonKey: "sync-wh-1" },
-)
+	{ warehouseId: "wh-1" },
+	{ singletonKey: "sync-wh-1" },
+);
 ```
 
 If a job with the same singleton key is already queued/active, the publish is a no-op.
@@ -119,5 +190,6 @@ States: `created` → `active` → `completed` / `failed` / `expired`
 ## Related Pages
 
 - [Jobs](/docs/backend/business-logic/jobs) — Defining job handlers
+- [Services](/docs/backend/business-logic/services) — Reusable business logic used by jobs
 - [Email](/docs/production/email) — Sending emails from jobs
 - [Config API](/docs/reference/config-api) — Queue adapter configuration

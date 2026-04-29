@@ -39,12 +39,11 @@ After codegen, this view is registered in the admin client and available for use
 ### React Component
 
 ```tsx title="src/admin/views/kanban-view.tsx"
-import { useListViewContext } from "@questpie/admin/client";
+import type { CollectionListViewProps } from "@questpie/admin/client";
 
-export function KanbanView() {
-	const { data, columns, config, onRecordClick } = useListViewContext();
-
-	const statusColumn = config.groupBy || "status";
+export function KanbanView({ config, onRowClick }: CollectionListViewProps) {
+	const data = config?.data ?? [];
+	const statusColumn = config?.groupBy || "status";
 	const groups = groupByField(data, statusColumn);
 
 	return (
@@ -58,7 +57,7 @@ export function KanbanView() {
 						{items.map((item) => (
 							<div
 								key={item.id}
-								onClick={() => onRecordClick(item.id)}
+								onClick={() => onRowClick?.(item)}
 								style={{
 									padding: 12,
 									borderRadius: 8,
@@ -128,11 +127,9 @@ export default view("page-builder", {
 ```
 
 ```tsx title="src/admin/views/page-builder-view.tsx"
-import { useFormViewContext } from "@questpie/admin/client";
+import type { CollectionFormViewProps } from "@questpie/admin/client";
 
-export function PageBuilderView() {
-	const { data, onChange, fields } = useFormViewContext();
-
+export function PageBuilderView(props: CollectionFormViewProps) {
 	return <div>{/* Custom drag-and-drop page builder UI */}</div>;
 }
 ```

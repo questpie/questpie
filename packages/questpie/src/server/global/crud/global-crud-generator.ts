@@ -1,16 +1,4 @@
-import {
-	and,
-	avg,
-	count,
-	eq,
-	inArray,
-	max,
-	min,
-	not,
-	or,
-	sql,
-	sum,
-} from "drizzle-orm";
+import { and, avg, count, eq, inArray, max, min, sql, sum } from "drizzle-orm";
 import { alias, type PgTable } from "drizzle-orm/pg-core";
 
 import type { RelationConfig } from "#questpie/server/collection/builder/types.js";
@@ -19,13 +7,6 @@ import {
 	processNestedRelations,
 	separateNestedRelations,
 } from "#questpie/server/collection/crud/relation-mutations/nested-operations.js";
-import {
-	resolveBelongsToRelation,
-	resolveHasManyRelation,
-	resolveHasManyWithAggregation,
-	resolveManyToManyRelation,
-} from "#questpie/server/collection/crud/relation-resolvers/index.js";
-import { resolveFieldKey } from "#questpie/server/collection/crud/shared/field-resolver.js";
 import {
 	executeGlobalGlobalHooks,
 	executeGlobalGlobalTransitionHooks,
@@ -37,6 +18,7 @@ import {
 	getRestrictedReadFields,
 	mergeI18nRows,
 	normalizeContext,
+	normalizeJsonbInput,
 	onAfterCommit,
 	splitLocalizedFields,
 	withTransaction,
@@ -56,7 +38,6 @@ import {
 } from "#questpie/server/fields/runtime.js";
 import type { FieldAccess } from "#questpie/server/fields/types.js";
 import type {
-	GlobalAccessContext,
 	GlobalBuilderState,
 	GlobalHookContext,
 	GlobalHookFunction,
@@ -268,27 +249,7 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 	private wrapGetWithCMSContext<TArgs extends any[], TResult>(
 		fn: (...args: TArgs) => Promise<TResult>,
 	): (...args: TArgs) => Promise<TResult> {
-		return (...args: TArgs) => {
-			let context: CRUDContext | undefined;
-
-			if (args.length > 0) {
-				const lastArg = args[args.length - 1];
-				const isCRUDContext =
-					lastArg &&
-					typeof lastArg === "object" &&
-					("session" in lastArg ||
-						"locale" in lastArg ||
-						"accessMode" in lastArg ||
-						"db" in lastArg ||
-						"defaultLocale" in lastArg);
-
-				if (isCRUDContext) {
-					context = lastArg as CRUDContext;
-				}
-			}
-
-			return fn(...args);
-		};
+		return (...args: TArgs) => fn(...args);
 	}
 
 	/**
@@ -388,6 +349,33 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 		return rows[0] || null;
 	}
 
+	/**
+	 * Acquire a transaction-scoped Postgres advisory lock keyed on the global's
+	 * table name. Serializes auto-create attempts across concurrent processes so
+	 * we never end up with two singleton rows for the same global.
+	 *
+	 * Released automatically on COMMIT/ROLLBACK. No-op (with a warning) on DBs
+	 * that do not implement `pg_advisory_xact_lock` — the subsequent existence
+	 * re-check is the actual correctness guard.
+	 */
+	private async acquireAutoCreateLock(tx: any): Promise<void> {
+		const lockKey = `questpie:global:${this.state.name}`;
+		try {
+			await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`);
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			// Only swallow the "function does not exist" case — anything else
+			// (permission errors, connection errors, …) must surface so we don't
+			// silently mask a broken DB configuration in production.
+			if (!/pg_advisory_xact_lock|does not exist/i.test(message)) {
+				throw error;
+			}
+			console.warn(
+				`[questpie] pg_advisory_xact_lock unavailable; auto-create for global "${this.state.name}" falls back to existence re-check only. Underlying error: ${message}`,
+			);
+		}
+	}
+
 	private createGet() {
 		return async (
 			options: GlobalGetOptions = {},
@@ -435,6 +423,16 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 
 				if (!baseRow) {
 					baseRow = await withTransaction(db, async (tx: any) => {
+						// Serialize concurrent auto-creates: take the lock first, then
+						// re-check existence inside the locked transaction. Without this
+						// two boot-time fetches can both see "0 rows" and both INSERT.
+						await this.acquireAutoCreateLock(tx);
+
+						const existingAfterLock = await this.getCurrentRow(tx, normalized);
+						if (existingAfterLock) {
+							return existingAfterLock;
+						}
+
 						const insertValues: Record<string, any> = {};
 						if (isScoped) {
 							insertValues.scopeId = scopeId ?? null;
@@ -509,21 +507,34 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 
 				if (!row) {
 					row = await withTransaction(db, async (tx: any) => {
-						// Auto-create with scope_id if scoped
-						const insertValues: Record<string, any> = {};
-						if (isScoped) {
-							insertValues.scopeId = scopeId ?? null;
-						}
+						// Serialize concurrent auto-creates: take the lock first, then
+						// re-check existence inside the locked transaction. Without this
+						// two boot-time fetches can both see "0 rows" and both INSERT.
+						await this.acquireAutoCreateLock(tx);
 
-						const [inserted] = await tx
-							.insert(this.table)
-							.values(insertValues)
-							.returning();
-						if (!inserted) {
-							throw ApiError.internal("Failed to auto-create global record");
-						}
+						const existingAfterLock = await this.getCurrentRow(tx, normalized);
 
-						await this.createVersion(tx, inserted, "create", normalized);
+						let baseRecord = existingAfterLock;
+						if (!baseRecord) {
+							// Auto-create with scope_id if scoped
+							const insertValues: Record<string, any> = {};
+							if (isScoped) {
+								insertValues.scopeId = scopeId ?? null;
+							}
+
+							const [inserted] = await tx
+								.insert(this.table)
+								.values(insertValues)
+								.returning();
+							if (!inserted) {
+								throw ApiError.internal(
+									"Failed to auto-create global record",
+								);
+							}
+
+							await this.createVersion(tx, inserted, "create", normalized);
+							baseRecord = inserted;
+						}
 
 						const {
 							query: createdQuery,
@@ -531,7 +542,7 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 							needsFallback: createdNeedsFallback,
 						} = this.buildSelectQuery(tx, normalized, options.columns);
 						let createdRows = await createdQuery
-							.where(eq((this.table as any).id, inserted.id))
+							.where(eq((this.table as any).id, baseRecord.id))
 							.limit(1);
 
 						// Application-side i18n merge
@@ -546,7 +557,7 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 							});
 						}
 
-						return createdRows[0] || inserted;
+						return createdRows[0] || baseRecord;
 					});
 				}
 			}
@@ -655,6 +666,16 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 			// Separate nested relation operations from regular fields
 			let { regularFields, nestedRelations } =
 				this.separateNestedRelationsInternal(data);
+
+			// Decode any pre-stringified jsonb values before any hook or write
+			// path observes them. Drizzle stringifies jsonb values itself; if a
+			// caller (legacy seed, RPC, etc.) passes an already-encoded JSON
+			// string for a jsonb column, double-encoding stores a jsonb string
+			// instead of the intended array/object.
+			regularFields = normalizeJsonbInput(
+				regularFields,
+				this.state.fieldDefinitions,
+			);
 
 			// Validate field-level write access
 			await this.validateFieldWriteAccess(
@@ -900,7 +921,11 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 			const hasVersion = typeof options.version === "number";
 
 			if (!hasVersionId && !hasVersion) {
-				throw ApiError.badRequest("Version or versionId required");
+				throw ApiError.badRequest(
+					"Version or versionId required",
+					undefined,
+					"error.versionRequired",
+				);
 			}
 
 			const parentId = options.id ?? (await this.getCurrentRow(db))?.id;
@@ -1171,22 +1196,6 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 			}
 
 			const { stage: toStage, scheduledAt } = params;
-
-			// If scheduledAt is in the future, schedule via queue job
-			if (scheduledAt && scheduledAt.getTime() > Date.now()) {
-				const { scheduleGlobalTransition } = await import(
-					"#questpie/server/modules/core/workflow/schedule-transition.js"
-				);
-				await scheduleGlobalTransition((this.app as any)?.queue, {
-					global: this.state.name,
-					stage: toStage,
-					scheduledAt,
-				});
-				// Return the existing global record unchanged
-				const normalized = this.normalizeContext(context);
-				const db = this.getDb(normalized);
-				return (await this.getCurrentRow(db, normalized)) ?? null;
-			}
 			const normalized = this.normalizeContext(context);
 			const db = this.getDb(normalized);
 
@@ -1218,6 +1227,9 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 					session: normalized.session,
 					locale: normalized.locale,
 					row: existing,
+					request:
+						((context as any).req as Request | undefined) ??
+						((context as any).request as Request | undefined),
 				});
 				// Globals only support boolean access rules
 				if (result !== true) {
@@ -1233,6 +1245,19 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 			const fromStage = await this.getCurrentWorkflowStage(db, existing.id);
 			this.assertTransitionAllowed(fromStage, toStage);
 
+			// If scheduledAt is in the future, schedule only after validating the
+			// target stage, current record, access, and transition graph.
+			if (scheduledAt && scheduledAt.getTime() > Date.now()) {
+				const { scheduleGlobalTransition } =
+					await import("#questpie/server/modules/core/workflow/schedule-transition.js");
+				await scheduleGlobalTransition((this.app as any)?.queue, {
+					global: this.state.name,
+					stage: toStage,
+					scheduledAt,
+				});
+				return existing;
+			}
+
 			// Build transition hook context
 			const transitionServices = extractAppServices(this.app, {
 				db,
@@ -1244,6 +1269,7 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 				fromStage,
 				toStage,
 				locale: normalized.locale,
+				accessMode: normalized.accessMode,
 			} as GlobalTransitionHookContext;
 
 			// Execute beforeTransition hooks (throw to abort)
@@ -1639,6 +1665,9 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 			locale: normalized.locale,
 			row,
 			input,
+			request:
+				((context as any).req as Request | undefined) ??
+				((context as any).request as Request | undefined),
 		});
 		// Globals only support boolean access rules (not AccessWhere)
 		return result === true;

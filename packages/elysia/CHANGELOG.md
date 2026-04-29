@@ -1,5 +1,54 @@
 # @questpie/elysia
 
+## 3.1.0
+
+### Patch Changes
+
+- Updated dependencies [[`6186dfb`](https://github.com/questpie/questpie/commit/6186dfbb7fd4423f4ee0c5b1af78f3690f433dfb)]:
+  - questpie@3.1.0
+
+## 3.0.9
+
+### Patch Changes
+
+- Updated dependencies []:
+  - questpie@3.0.9
+
+## 3.0.8
+
+### Patch Changes
+
+- Updated dependencies []:
+  - questpie@3.0.8
+
+## 3.0.7
+
+### Patch Changes
+
+- Updated dependencies [[`5d7639b`](https://github.com/questpie/questpie/commit/5d7639b28d4625c5d587ad256cbac98ba14ff886)]:
+  - questpie@3.0.7
+
+## 3.0.6
+
+### Patch Changes
+
+- Updated dependencies [[`ea2ff8d`](https://github.com/questpie/questpie/commit/ea2ff8dea8ad7b20946ed91906374e25a2bb9ba5)]:
+  - questpie@3.0.6
+
+## 3.0.5
+
+### Patch Changes
+
+- Updated dependencies [[`325599e`](https://github.com/questpie/questpie/commit/325599e70089bcdeb632d0e389614e6738a514cb)]:
+  - questpie@3.0.5
+
+## 3.0.4
+
+### Patch Changes
+
+- Updated dependencies [[`affb27e`](https://github.com/questpie/questpie/commit/affb27efff0837d181351793c5db3434e34616cb)]:
+  - questpie@3.0.4
+
 ## 3.0.3
 
 ### Patch Changes

@@ -66,9 +66,13 @@ export interface RelationSelectProps<_T extends QuestpieApp> {
 	locale?: string;
 
 	/**
-	 * Filter options based on form values
+	 * Pre-resolved `where` clause for the relation `find()` call. Reactive
+	 * filters (`f.relation(...).admin({ filter: ({ data }) => ({...}) })` or
+	 * layout-level `props.filter`) are resolved by `FieldRenderer` against
+	 * the live form via `/admin/reactive` before they reach this component —
+	 * so by the time `filter` lands here it's plain JSON.
 	 */
-	filter?: (formValues: any) => any;
+	filter?: Record<string, unknown>;
 
 	/**
 	 * Is the field required
@@ -161,9 +165,9 @@ export function RelationSelect<T extends QuestpieApp>({
 					options.search = search;
 				}
 
-				// Add custom filter if provided
+				// Add custom filter if provided (already resolved by FieldRenderer)
 				if (filter) {
-					options.where = filter({});
+					options.where = filter;
 				}
 
 				const response = await (client as any).collections[
@@ -327,7 +331,7 @@ export function RelationSelect<T extends QuestpieApp>({
 									limit: 50,
 									locale,
 									search,
-									where: filter ? filter({}) : undefined,
+									where: filter ?? undefined,
 								},
 							])
 						}
@@ -391,7 +395,7 @@ export function RelationSelect<T extends QuestpieApp>({
 								limit: 50,
 								locale,
 								search,
-								where: filter ? filter({}) : undefined,
+								where: filter ?? undefined,
 							},
 						])
 					}

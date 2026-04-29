@@ -146,7 +146,11 @@ export function autoExpandFields(
 
 			// Auto-expand upload and uploadMany fields
 			if (fieldType === "upload" || fieldType === "uploadMany") {
-				withFields[fieldName] = true;
+				const relationName =
+					fieldDef["~options"]?.relationName ?? (fieldName as string);
+				if (relationName) {
+					withFields[relationName] = true;
+				}
 			}
 			// For relation fields, only expand if relationName is explicitly specified
 			// This ensures we don't try to expand relations that don't exist on the backend

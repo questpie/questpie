@@ -129,11 +129,11 @@ export function useTransitionStage(
 			// picks up the new stage, version snapshot, and audit entry.
 			if (mode === "collection") {
 				queryClient.invalidateQueries({
-					queryKey: ["questpie", "collections", resourceName],
+					queryKey: ["questpie", "collections"],
 				});
 			} else {
 				queryClient.invalidateQueries({
-					queryKey: ["questpie", "globals", resourceName],
+					queryKey: ["questpie", "globals"],
 				});
 			}
 			queryClient.invalidateQueries({

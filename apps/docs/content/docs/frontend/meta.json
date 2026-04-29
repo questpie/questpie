@@ -1,7 +1,6 @@
 {
-	"title": "Integrate Frontend",
+	"title": "Client Integration",
 	"pages": [
-		"index",
 		"tanstack-query",
 		"querying",
 		"realtime",

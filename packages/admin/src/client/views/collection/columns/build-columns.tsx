@@ -81,6 +81,8 @@ const FIELD_TYPES_NEEDING_FIELD_DEF = new Set([
 	"array",
 	"relation",
 	"reverseRelation",
+	"upload",
+	"uploadMany",
 ]);
 
 function getDefaultColumnSize(fieldType: string): number {
@@ -255,11 +257,14 @@ export function buildColumns<TData extends Record<string, unknown>>(
 		// Check if this field type needs fieldDef passed to the cell
 		const needsFieldDef = FIELD_TYPES_NEEDING_FIELD_DEF.has(fieldType);
 
-		// For relation fields, use relationName as accessor if specified
+		// For relation-like fields, use relationName as accessor if specified
 		// This allows fetching expanded relation data (e.g., row.customer) instead of FK (row.customerId)
 		// If relationName is not specified, we use the field name (which shows the raw FK value)
 		const accessorKey: string =
-			fieldType === "relation" && fieldOptions.relationName
+			(fieldType === "relation" ||
+				fieldType === "upload" ||
+				fieldType === "uploadMany") &&
+			fieldOptions.relationName
 				? fieldOptions.relationName
 				: fieldName;
 

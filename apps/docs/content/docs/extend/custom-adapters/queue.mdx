@@ -54,23 +54,23 @@ Declare what your adapter supports so QUESTPIE knows which runtime paths are ava
 ```ts
 export interface QueueAdapterCapabilities {
 	longRunningConsumer: boolean; // supports listen()
-	runOnceConsumer: boolean;     // supports runOnce()
-	pushConsumer: boolean;        // supports createPushConsumer()
-	scheduling: boolean;          // supports schedule/unschedule
-	singleton: boolean;           // supports singleton jobs
+	runOnceConsumer: boolean; // supports runOnce()
+	pushConsumer: boolean; // supports createPushConsumer()
+	scheduling: boolean; // supports schedule/unschedule
+	singleton: boolean; // supports singleton jobs
 }
 ```
 
 ## Required methods
 
-| Method | Description |
-|---|---|
-| `start()` | Connect to the underlying provider. Called once at app startup. |
-| `stop()` | Disconnect cleanly. Called during graceful shutdown. |
-| `publish(jobName, payload, options?)` | Enqueue a job immediately. Return the job ID or `null`. |
-| `schedule(jobName, cron, payload, options?)` | Register a recurring job with a cron expression. |
-| `unschedule(jobName)` | Remove a previously scheduled recurring job. |
-| `on("error", handler)` | Surface provider errors to QUESTPIE's error handling. |
+| Method                                       | Description                                                     |
+| -------------------------------------------- | --------------------------------------------------------------- |
+| `start()`                                    | Connect to the underlying provider. Called once at app startup. |
+| `stop()`                                     | Disconnect cleanly. Called during graceful shutdown.            |
+| `publish(jobName, payload, options?)`        | Enqueue a job immediately. Return the job ID or `null`.         |
+| `schedule(jobName, cron, payload, options?)` | Register a recurring job with a cron expression.                |
+| `unschedule(jobName)`                        | Remove a previously scheduled recurring job.                    |
+| `on("error", handler)`                       | Surface provider errors to QUESTPIE's error handling.           |
 
 ## Optional: consumer styles
 
@@ -129,7 +129,7 @@ import type {
 	QueueHandlerMap,
 	QueueRunOnceOptions,
 	QueueRunOnceResult,
-} from "questpie/server";
+} from "questpie";
 
 export class InMemoryQueueAdapter implements QueueAdapter {
 	capabilities = {
@@ -201,10 +201,10 @@ export class InMemoryQueueAdapter implements QueueAdapter {
 ## Registration
 
 ```ts title="questpie.config.ts"
-import { config } from "questpie";
+import { runtimeConfig } from "questpie";
 import { InMemoryQueueAdapter } from "./my-queue-adapter";
 
-export default config({
+export default runtimeConfig({
 	// ...
 	queue: {
 		adapter: new InMemoryQueueAdapter(),

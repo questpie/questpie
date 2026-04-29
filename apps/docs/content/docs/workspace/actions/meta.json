@@ -1,4 +1,4 @@
 {
 	"title": "Actions",
-	"pages": ["index", "builtin", "custom"]
+	"pages": ["builtin", "custom"]
 }

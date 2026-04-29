@@ -145,6 +145,8 @@ export const parseDatabaseError = (error: unknown): ApiError | null => {
 			{
 				path: field,
 				message: `A record with this ${field} already exists`,
+				messageKey: "error.database.uniqueViolation.field",
+				messageParams: { field },
 				value: value,
 			},
 		];
@@ -177,6 +179,7 @@ export const parseDatabaseError = (error: unknown): ApiError | null => {
 			{
 				path: field,
 				message: `Referenced record does not exist`,
+				messageKey: "error.database.foreignKeyViolation.field",
 			},
 		];
 
@@ -206,6 +209,8 @@ export const parseDatabaseError = (error: unknown): ApiError | null => {
 			{
 				path: field,
 				message: `${field} is required`,
+				messageKey: "error.database.notNullViolation.field",
+				messageParams: { field },
 			},
 		];
 
@@ -233,6 +238,8 @@ export const parseDatabaseError = (error: unknown): ApiError | null => {
 			{
 				path: field,
 				message: `Invalid value for ${field}`,
+				messageKey: "error.database.checkViolation.field",
+				messageParams: { field },
 			},
 		];
 

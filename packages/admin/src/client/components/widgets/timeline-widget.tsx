@@ -15,10 +15,11 @@ import type {
 } from "../../builder/types/widget-types";
 import { resolveIconElement } from "../../components/component-renderer";
 import { useServerWidgetData } from "../../hooks/use-server-widget-data";
-import { useResolveText } from "../../i18n/hooks";
+import { useResolveText, useTranslation } from "../../i18n/hooks";
 import { cn } from "../../lib/utils";
 import { selectClient, useAdminStore } from "../../runtime";
 import { WidgetCard } from "../../views/dashboard/widget-card";
+import { WidgetEmptyState } from "./widget-empty-state";
 import { TimelineWidgetSkeleton } from "./widget-skeletons";
 
 /**
@@ -45,15 +46,23 @@ const variantStyles = {
 function formatTimestamp(
 	date: Date | string,
 	format: TimelineWidgetConfig["timestampFormat"] = "relative",
+	t: (key: string, params?: Record<string, unknown>) => string,
+	formatDate: (
+		date: Date | number,
+		options?: Intl.DateTimeFormatOptions,
+	) => string,
 ): string {
 	const d = typeof date === "string" ? new Date(date) : date;
 
 	switch (format) {
 		case "absolute":
-			return d.toLocaleDateString();
+			return formatDate(d);
 
 		case "datetime":
-			return d.toLocaleString();
+			return formatDate(d, {
+				dateStyle: "medium",
+				timeStyle: "short",
+			});
 
 		case "relative":
 		default: {
@@ -64,11 +73,11 @@ function formatTimestamp(
 			const hours = Math.floor(minutes / 60);
 			const days = Math.floor(hours / 24);
 
-			if (days > 7) return d.toLocaleDateString();
-			if (days > 0) return `${days}d ago`;
-			if (hours > 0) return `${hours}h ago`;
-			if (minutes > 0) return `${minutes}m ago`;
-			return "just now";
+			if (days > 7) return formatDate(d);
+			if (days > 0) return t("time.daysAgoShort", { count: days });
+			if (hours > 0) return t("time.hoursAgoShort", { count: hours });
+			if (minutes > 0) return t("time.minutesAgoShort", { count: minutes });
+			return t("time.justNow");
 		}
 	}
 }
@@ -108,6 +117,7 @@ export default function TimelineWidget({
 }: TimelineWidgetProps) {
 	const client = useAdminStore(selectClient);
 	const resolveText = useResolveText();
+	const { t, formatDate } = useTranslation();
 	const {
 		maxItems = 10,
 		showTimestamps = true,
@@ -126,7 +136,7 @@ export default function TimelineWidget({
 		enabled: !useServerData && !!config.loader,
 		refetchInterval: config.refreshInterval,
 	});
-	const { data, isLoading, error, refetch } = useServerData
+	const { data, isLoading, error, refetch, isFetching } = useServerData
 		? serverQuery
 		: clientQuery;
 
@@ -140,13 +150,19 @@ export default function TimelineWidget({
 		}
 	};
 
+	const resolvedEmptyMessage = emptyMessage
+		? resolveText(emptyMessage)
+		: undefined;
+
 	// Empty state
 	const emptyContent = (
-		<div className="text-muted-foreground flex h-24 items-center justify-center">
-			<p className="text-sm">
-				{emptyMessage ? resolveText(emptyMessage) : "No activity yet"}
-			</p>
-		</div>
+		<WidgetEmptyState
+			iconName="ph:clock-counter-clockwise"
+			title={resolvedEmptyMessage ?? t("widget.timeline.emptyTitle")}
+			description={
+				resolvedEmptyMessage ? undefined : t("widget.timeline.emptyDescription")
+			}
+		/>
 	);
 
 	// Timeline content
@@ -195,7 +211,12 @@ export default function TimelineWidget({
 								)}
 								{showTimestamps && item.timestamp && (
 									<p className="text-muted-foreground mt-1 text-xs">
-										{formatTimestamp(item.timestamp, timestampFormat)}
+										{formatTimestamp(
+											item.timestamp,
+											timestampFormat,
+											t,
+											formatDate,
+										)}
 									</p>
 								)}
 							</div>
@@ -212,7 +233,8 @@ export default function TimelineWidget({
 										tabIndex: 0,
 										onClick: () => handleItemClick(item),
 										onKeyDown: (e: React.KeyboardEvent) => {
-											if (e.key === "Enter" || e.key === " ") handleItemClick(item);
+											if (e.key === "Enter" || e.key === " ")
+												handleItemClick(item);
 										},
 										style: { cursor: "pointer" },
 									}
@@ -228,12 +250,20 @@ export default function TimelineWidget({
 	return (
 		<WidgetCard
 			title={title}
+			description={
+				config.description ? resolveText(config.description) : undefined
+			}
+			icon={config.icon}
+			variant={config.cardVariant}
 			isLoading={isLoading}
+			isRefreshing={isFetching && !isLoading}
 			loadingSkeleton={<TimelineWidgetSkeleton count={maxItems} />}
 			error={
 				error instanceof Error ? error : error ? new Error(String(error)) : null
 			}
 			onRefresh={() => refetch()}
+			actions={config.actions}
+			className={config.className}
 		>
 			{timelineContent}
 		</WidgetCard>

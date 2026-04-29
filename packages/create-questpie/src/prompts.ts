@@ -10,17 +10,49 @@ export type ProjectOptions = {
 	databaseName: string;
 	installDeps: boolean;
 	initGit: boolean;
+	installSkills: boolean;
+	runCodegen: boolean;
 };
 
 export async function runPrompts(
 	args: Partial<ProjectOptions> & { projectName?: string },
 ): Promise<ProjectOptions> {
+	const isInteractive = Boolean(process.stdin.isTTY && process.stdout.isTTY);
+
+	if (!isInteractive) {
+		if (!args.projectName) {
+			throw new Error("Project name is required in non-interactive mode.");
+		}
+		if (!isValidPackageName(args.projectName)) {
+			throw new Error(
+				"Invalid package name (use lowercase, hyphens, no spaces).",
+			);
+		}
+
+		return {
+			projectName: args.projectName,
+			templateId: args.templateId ?? templates[0].id,
+			databaseName: args.databaseName ?? toDbName(args.projectName),
+			installDeps: args.installDeps ?? true,
+			initGit: args.initGit ?? true,
+			installSkills: args.installSkills ?? true,
+			runCodegen: args.runCodegen ?? true,
+		};
+	}
+
 	p.intro(pc.bgCyan(pc.black(" QUESTPIE — Create a new project ")));
 
 	const questions = await p.group(
 		{
 			projectName: () => {
-				if (args.projectName) return Promise.resolve(args.projectName);
+				if (args.projectName) {
+					if (!isValidPackageName(args.projectName)) {
+						throw new Error(
+							"Invalid package name (use lowercase, hyphens, no spaces).",
+						);
+					}
+					return Promise.resolve(args.projectName);
+				}
 				return p.text({
 					message: "Project name",
 					placeholder: "my-questpie-app",
@@ -67,6 +99,25 @@ export async function runPrompts(
 					initialValue: true,
 				});
 			},
+			installSkills: () => {
+				if (args.installSkills !== undefined)
+					return Promise.resolve(args.installSkills);
+				return p.confirm({
+					message: "Install QUESTPIE agent skills into the project?",
+					initialValue: true,
+				});
+			},
+			runCodegen: ({ results }) => {
+				if (args.runCodegen !== undefined)
+					return Promise.resolve(args.runCodegen);
+				if (args.installDeps === false || results.installDeps === false) {
+					return Promise.resolve(false);
+				}
+				return p.confirm({
+					message: "Run QUESTPIE codegen after installing dependencies?",
+					initialValue: true,
+				});
+			},
 		},
 		{
 			onCancel: () => {
@@ -82,5 +133,7 @@ export async function runPrompts(
 		databaseName: questions.databaseName as string,
 		installDeps: questions.installDeps as boolean,
 		initGit: questions.initGit as boolean,
+		installSkills: questions.installSkills as boolean,
+		runCodegen: questions.runCodegen as boolean,
 	};
 }

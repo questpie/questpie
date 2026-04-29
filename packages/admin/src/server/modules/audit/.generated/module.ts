@@ -3,7 +3,7 @@
 // Regenerate with: questpie generate --module
 
 // ── Collections ────────────────────────────────────────────
-import { auditLogCollection as _coll_auditLogCollection } from "../collections/audit-log";
+import { auditLogCollection as _coll_admin_audit_log } from "../collections/audit-log";
 
 // ── Jobs ────────────────────────────────────────────
 import { auditCleanupJob as _job_auditCleanup } from "../jobs/audit-cleanup";
@@ -17,7 +17,7 @@ import _appConfig from "../config/app";
 // ════════════════════════════════════════════════════════════
 
 export interface AuditCollections {
-	auditLogCollection: typeof _coll_auditLogCollection;
+	admin_audit_log: typeof _coll_admin_audit_log;
 }
 
 export interface AuditJobs {
@@ -31,7 +31,7 @@ export interface AuditJobs {
 const _module = {
 	name: "questpie-audit" as const,
 	collections: {
-		auditLogCollection: _coll_auditLogCollection,
+		admin_audit_log: _coll_admin_audit_log,
 	} as AuditCollections,
 	jobs: {
 		auditCleanup: _job_auditCleanup,

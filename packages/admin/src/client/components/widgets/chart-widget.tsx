@@ -30,9 +30,10 @@ import type {
 
 import { useCollectionList } from "../../hooks/use-collection";
 import { useServerWidgetData } from "../../hooks/use-server-widget-data";
-import { useResolveText } from "../../i18n/hooks";
+import { useResolveText, useTranslation } from "../../i18n/hooks";
 import { formatLabel } from "../../lib/utils";
 import { WidgetCard } from "../../views/dashboard/widget-card";
+import { WidgetEmptyState } from "./widget-empty-state";
 import { ChartWidgetSkeleton } from "./widget-skeletons";
 
 /**
@@ -41,6 +42,11 @@ import { ChartWidgetSkeleton } from "./widget-skeletons";
 type ChartWidgetConfig = {
 	id: string;
 	collection: string;
+	title?: any;
+	description?: any;
+	cardVariant?: "default" | "compact" | "featured";
+	actions?: any[];
+	className?: string;
 	/** Field to aggregate by (e.g., "createdAt" for time series, "status" for categories) */
 	field: string;
 	chartType?: "line" | "bar" | "area" | "pie";
@@ -111,6 +117,7 @@ function ChartTooltip({
  */
 export default function ChartWidget({ config }: ChartWidgetProps) {
 	const resolveText = useResolveText();
+	const { t } = useTranslation();
 	const {
 		collection,
 		field,
@@ -137,23 +144,26 @@ export default function ChartWidget({ config }: ChartWidgetProps) {
 		{
 			limit: 1000,
 		},
-		undefined,
+		{ enabled: !hasLoader },
 		{ realtime },
 	);
 
-	const { isLoading, error, refetch } = hasLoader
+	const { isLoading, error, refetch, isFetching } = hasLoader
 		? serverQuery
 		: collectionQuery;
 
 	// API returns PaginatedResult with { docs, totalDocs, ... }
-	const collectionItems = hasLoader
-		? []
-		: Array.isArray((collectionQuery.data as any)?.docs)
+	const collectionItems = React.useMemo(() => {
+		if (hasLoader) return [];
+		return Array.isArray((collectionQuery.data as any)?.docs)
 			? (collectionQuery.data as any).docs
 			: [];
-	const displayLabel = label
-		? resolveText(label)
-		: `${formatLabel(collection)} by ${field}`;
+	}, [hasLoader, collectionQuery.data]);
+	const displayLabel = config.title
+		? resolveText(config.title)
+		: label
+			? resolveText(label)
+			: `${formatLabel(collection)} by ${field}`;
 
 	// Process data for chart
 	const chartData = React.useMemo(() => {
@@ -193,9 +203,12 @@ export default function ChartWidget({ config }: ChartWidgetProps) {
 
 	// Empty state content
 	const emptyContent = (
-		<div className="text-muted-foreground flex h-24 items-center justify-center">
-			<p className="text-sm">No data available</p>
-		</div>
+		<WidgetEmptyState
+			iconName="ph:chart-line"
+			title={t("widget.chart.emptyTitle")}
+			description={t("widget.chart.emptyDescription")}
+			className="min-h-48"
+		/>
 	);
 
 	// Chart content
@@ -218,12 +231,19 @@ export default function ChartWidget({ config }: ChartWidgetProps) {
 	return (
 		<WidgetCard
 			title={displayLabel}
+			description={
+				config.description ? resolveText(config.description) : undefined
+			}
+			variant={config.cardVariant}
 			isLoading={isLoading}
+			isRefreshing={isFetching && !isLoading}
 			loadingSkeleton={<ChartWidgetSkeleton />}
 			error={
 				error instanceof Error ? error : error ? new Error(String(error)) : null
 			}
 			onRefresh={() => refetch()}
+			actions={config.actions}
+			className={config.className}
 		>
 			{chartContent}
 		</WidgetCard>

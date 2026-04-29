@@ -27,7 +27,11 @@ export * from "./actions.js";
 // ============================================================================
 
 import type { AdminLocaleConfig } from "./common.js";
-import type { DashboardContribution, ServerBrandingConfig } from "./dashboard.js";
+import type {
+	DashboardContribution,
+	ServerBrandingConfig,
+	ServerDashboardConfig,
+} from "./dashboard.js";
 import type { SidebarContribution } from "./sidebar.js";
 
 /**
@@ -50,7 +54,7 @@ import type { SidebarContribution } from "./sidebar.js";
  */
 export interface AdminConfigInput {
 	sidebar?: SidebarContribution;
-	dashboard?: DashboardContribution;
+	dashboard?: DashboardContribution | ServerDashboardConfig;
 	branding?: ServerBrandingConfig;
 	locale?: AdminLocaleConfig;
 }
@@ -66,6 +70,7 @@ export function adminConfig<T extends AdminConfigInput>(config: T): T {
 // Builder Method Types (for documentation — augmented via codegen)
 // ============================================================================
 
+import type { ActionsConfigContext, ServerActionsConfig } from "./actions.js";
 import type {
 	AdminCollectionConfig,
 	AdminGlobalConfig,
@@ -73,7 +78,6 @@ import type {
 	ListViewConfig,
 	PreviewConfig,
 } from "./form-layout.js";
-import type { ActionsConfigContext, ServerActionsConfig } from "./actions.js";
 import type {
 	AdminConfigContext,
 	ComponentFactory,

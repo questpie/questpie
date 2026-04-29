@@ -361,7 +361,7 @@ export function useCollectionDelete<K extends ResolvedCollectionNames>(
 			queryClient.invalidateQueries({
 				queryKey: countQueryKey,
 			});
-			queryClient.invalidateQueries({
+			queryClient.removeQueries({
 				queryKey: itemQueryKey,
 			});
 			(mutationOptions?.onSettled as any)?.(data, error, variables, context);

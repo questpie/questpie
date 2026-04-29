@@ -1,4 +1,3 @@
-import { iconifyPreload } from "@questpie/vite-plugin-iconify";
 import tailwindcss from "@tailwindcss/vite";
 import { devtools } from "@tanstack/devtools-vite";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
@@ -9,7 +8,6 @@ import viteTsConfigPaths from "vite-tsconfig-paths";
 
 export default defineConfig({
 	plugins: [
-		iconifyPreload(),
 		devtools(),
 		nitro({ preset: "bun" }) as any,
 		viteTsConfigPaths({ projects: ["./tsconfig.json"] }),
@@ -22,7 +20,7 @@ export default defineConfig({
 	},
 	build: {
 		rollupOptions: {
-			external: ["bun", /^drizzle-kit/],
+			external: ["bun", /^drizzle-kit/, /^@aws-sdk\//],
 		},
 	},
 });

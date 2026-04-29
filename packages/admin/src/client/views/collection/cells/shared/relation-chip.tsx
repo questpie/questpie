@@ -104,11 +104,7 @@ export function RelationChip({
 						onPointerDown={(e) => e.stopPropagation()}
 					/>
 				}
-				className={cn(
-					"qa-relation-chip item-surface hover:bg-surface-high cursor-pointer gap-1.5 border-transparent bg-transparent",
-					"text-muted-foreground hover:text-foreground max-w-40",
-					className,
-				)}
+				className={cn("qa-relation-chip cursor-pointer", "max-w-40", className)}
 			>
 				{avatar}
 				<span className="truncate">{label}</span>
@@ -120,10 +116,7 @@ export function RelationChip({
 	return (
 		<Badge
 			variant="secondary"
-			className={cn(
-				"qa-relation-chip item-surface text-muted-foreground max-w-40 gap-1.5 border-transparent bg-transparent",
-				className,
-			)}
+			className={cn("qa-relation-chip cursor-default", className)}
 		>
 			{avatar}
 			<span className="truncate">{label}</span>

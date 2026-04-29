@@ -7,13 +7,13 @@ The admin panel provides these actions automatically for every collection. No co
 
 ## Available Actions
 
-| Action | Location | Trigger | Description |
-| --- | --- | --- | --- |
-| **Create** | List view toolbar | "New" button | Opens a blank form to create a new record |
-| **Save** | Form view toolbar | "Save" button | Saves the current form data (create or update) |
-| **Delete** | Form view toolbar | "Delete" button | Deletes the current record (with confirmation) |
-| **Duplicate** | Form view toolbar | "Duplicate" button | Clones the record and opens it as a new form |
-| **Bulk Delete** | List view (multi-select) | Bulk toolbar | Deletes all selected records |
+| Action          | Location                 | Trigger            | Description                                    |
+| --------------- | ------------------------ | ------------------ | ---------------------------------------------- |
+| **Create**      | List view toolbar        | "New" button       | Opens a blank form to create a new record      |
+| **Save**        | Form view toolbar        | "Save" button      | Saves the current form data (create or update) |
+| **Delete**      | Form view toolbar        | "Delete" button    | Deletes the current record (with confirmation) |
+| **Duplicate**   | Form view toolbar        | "Duplicate" button | Clones the record and opens it as a new form   |
+| **Bulk Delete** | List view (multi-select) | Bulk toolbar       | Deletes all selected records                   |
 
 ## Access Control
 
@@ -21,21 +21,23 @@ Actions respect your collection's `.access()` rules. If a user lacks permission 
 
 ```ts
 collection("posts")
-  .fields(({ f }) => ({ /* ... */ }))
-  .access({
-    create: ({ session }) => session?.user?.role === "admin",
-    update: ({ session }) => session?.user?.role === "admin",
-    delete: ({ session }) => session?.user?.role === "admin",
-    read: true,
-  })
+	.fields(({ f }) => ({
+		/* ... */
+	}))
+	.access({
+		create: ({ session }) => session?.user?.role === "admin",
+		update: ({ session }) => session?.user?.role === "admin",
+		delete: ({ session }) => session?.user?.role === "admin",
+		read: true,
+	});
 ```
 
-| Access Rule | Controls |
-| --- | --- |
-| `create` | "New" button visibility |
-| `update` | "Save" button visibility |
-| `delete` | "Delete" and "Bulk Delete" visibility |
-| `read` | Whether records are shown at all |
+| Access Rule | Controls                              |
+| ----------- | ------------------------------------- |
+| `create`    | "New" button visibility               |
+| `update`    | "Save" button visibility              |
+| `delete`    | "Delete" and "Bulk Delete" visibility |
+| `read`      | Whether records are shown at all      |
 
 ## Soft Delete Behavior
 
@@ -67,15 +69,18 @@ When a collection uses versioning with a workflow, additional stage transition a
 
 The form toolbar shows transition buttons like "Move to Review" or "Publish" based on the current stage and allowed transitions.
 
+For stage configuration, transition access rules, hooks, stage reads, and scheduled transitions, see [Versioning & Workflow](/docs/backend/data-modeling/versioning-workflow).
+
 ## Keyboard Shortcuts
 
-| Shortcut | Action |
-| --- | --- |
-| `Ctrl+S` / `Cmd+S` | Save current record |
-| `Delete` | Delete (when focused on record) |
+| Shortcut           | Action                          |
+| ------------------ | ------------------------------- |
+| `Ctrl+S` / `Cmd+S` | Save current record             |
+| `Delete`           | Delete (when focused on record) |
 
 ## Related Pages
 
 - [Custom Actions](/docs/workspace/actions/custom) — Define your own actions
+- [Versioning & Workflow](/docs/backend/data-modeling/versioning-workflow) — Configure draft and publishing stages
 - [Access Control](/docs/backend/rules/access-control) — Permission rules
 - [Bulk Actions](/docs/workspace/bulk-actions) — Multi-select operations

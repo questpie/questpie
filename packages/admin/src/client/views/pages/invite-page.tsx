@@ -9,7 +9,6 @@ import * as React from "react";
 
 import { useAuthClient } from "../../hooks/use-auth";
 import { useTranslation } from "../../i18n/hooks";
-import { selectBrandName, useAdminStore } from "../../runtime/provider";
 import { AuthLayout } from "../auth/auth-layout";
 import { InviteForm, type InviteFormValues } from "../auth/invite-form";
 
@@ -82,7 +81,6 @@ export function InvitePage({
 }: InvitePageProps) {
 	const { t } = useTranslation();
 	const authClient = useAuthClient();
-	const brandName = useAdminStore(selectBrandName);
 
 	const resolvedRoles = roles ?? [
 		{ value: "admin", label: t("defaults.users.fields.role.options.admin") },
@@ -129,7 +127,7 @@ export function InvitePage({
 		<AuthLayout
 			title={title ?? t("auth.inviteUser")}
 			description={description ?? t("auth.inviteUserDescription")}
-			logo={logo ?? <DefaultLogo brandName={brandName} />}
+			logo={logo}
 			className="qa-invite-page"
 		>
 			<InviteForm
@@ -141,13 +139,5 @@ export function InvitePage({
 				success={success}
 			/>
 		</AuthLayout>
-	);
-}
-
-function DefaultLogo({ brandName }: { brandName: string }) {
-	return (
-		<div className="text-center">
-			<h1 className="text-xl font-bold">{brandName}</h1>
-		</div>
 	);
 }

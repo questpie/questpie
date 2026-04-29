@@ -9,13 +9,19 @@
 
 import { createHmac, timingSafeEqual } from "node:crypto";
 
-import { ApiError, route, type Questpie } from "questpie";
+import { ApiError, route } from "questpie";
 import { z } from "zod";
 
 import { getPreviewSecret } from "#questpie/admin/shared/preview-utils.js";
 
 import type { PreviewConfig } from "../../../augmentation.js";
-import { getApp, getSession, getCollectionState } from "./route-helpers.js";
+import { translateAdminMessage } from "./i18n-helpers.js";
+import {
+	getApp,
+	getSession,
+	getCollectionState,
+	getLocale,
+} from "./route-helpers.js";
 
 // ============================================================================
 // Token Utilities
@@ -44,7 +50,7 @@ function base64UrlDecode(input: string): string {
 // ============================================================================
 
 const mintPreviewTokenSchema = z.object({
-	path: z.string().min(1, "Path is required"),
+	path: z.string().min(1),
 	ttlMs: z.number().positive().optional(),
 });
 
@@ -111,10 +117,13 @@ export function createPreviewFunctions(secret: string) {
 		.outputSchema(mintPreviewTokenOutputSchema)
 		.handler(async (ctx) => {
 			const { input } = ctx;
+			const locale = getLocale(ctx);
+			const t = (key: string, params?: Record<string, unknown>) =>
+				translateAdminMessage(locale, key, params);
 			const session = getSession(ctx);
 			// Require authenticated admin session
 			if (!session) {
-				throw ApiError.unauthorized("Admin session required");
+				throw ApiError.unauthorized(t("preview.adminSessionRequired"));
 			}
 
 			const { path, ttlMs = DEFAULT_TTL_MS } = input;
@@ -149,12 +158,16 @@ export function createPreviewFunctions(secret: string) {
 		.post()
 		.schema(verifyPreviewTokenSchema)
 		.outputSchema(verifyPreviewTokenOutputSchema)
-		.handler(async ({ input }) => {
+		.handler(async (ctx) => {
+			const { input } = ctx;
+			const locale = getLocale(ctx);
+			const t = (key: string, params?: Record<string, unknown>) =>
+				translateAdminMessage(locale, key, params);
 			const { token } = input;
 
 			const [encodedPayload, signature] = token.split(".");
 			if (!encodedPayload || !signature) {
-				return { valid: false, error: "Invalid token format" };
+				return { valid: false, error: t("preview.invalidTokenFormat") };
 			}
 
 			// Verify signature
@@ -163,11 +176,11 @@ export function createPreviewFunctions(secret: string) {
 			const expectedBuffer = Uint8Array.from(Buffer.from(expectedSignature));
 
 			if (signatureBuffer.length !== expectedBuffer.length) {
-				return { valid: false, error: "Invalid signature" };
+				return { valid: false, error: t("preview.invalidSignature") };
 			}
 
 			if (!timingSafeEqual(signatureBuffer, expectedBuffer)) {
-				return { valid: false, error: "Invalid signature" };
+				return { valid: false, error: t("preview.invalidSignature") };
 			}
 
 			// Parse and validate payload
@@ -177,20 +190,20 @@ export function createPreviewFunctions(secret: string) {
 				) as PreviewTokenPayload;
 
 				if (!payload?.exp || typeof payload.exp !== "number") {
-					return { valid: false, error: "Invalid payload" };
+					return { valid: false, error: t("preview.invalidPayload") };
 				}
 
 				if (payload.exp < Date.now()) {
-					return { valid: false, error: "Token expired" };
+					return { valid: false, error: t("preview.tokenExpired") };
 				}
 
 				if (!payload.path || typeof payload.path !== "string") {
-					return { valid: false, error: "Invalid path" };
+					return { valid: false, error: t("preview.invalidPath") };
 				}
 
 				return { valid: true, path: payload.path };
 			} catch {
-				return { valid: false, error: "Invalid payload" };
+				return { valid: false, error: t("preview.invalidPayload") };
 			}
 		});
 
@@ -280,7 +293,7 @@ export function createPreviewTokenVerifier(secret?: string) {
 // ============================================================================
 
 const getPreviewUrlSchema = z.object({
-	collection: z.string().min(1, "Collection name is required"),
+	collection: z.string().min(1),
 	record: z.record(z.string(), z.unknown()),
 	locale: z.string().optional(),
 });
@@ -312,10 +325,13 @@ const getPreviewUrl = route()
 	.outputSchema(getPreviewUrlOutputSchema)
 	.handler(async (ctx) => {
 		const { input } = ctx;
+		const messageLocale = getLocale(ctx) ?? input.locale;
+		const t = (key: string, params?: Record<string, unknown>) =>
+			translateAdminMessage(messageLocale, key, params);
 		const session = getSession(ctx);
 		// Require authenticated admin session
 		if (!session) {
-			return { url: null, error: "Unauthorized: Admin session required" };
+			return { url: null, error: t("preview.adminSessionRequired") };
 		}
 
 		const { collection: collectionName, record, locale } = input;
@@ -326,7 +342,10 @@ const getPreviewUrl = route()
 		const collection = collections[collectionName];
 
 		if (!collection) {
-			return { url: null, error: `Collection '${collectionName}' not found` };
+			return {
+				url: null,
+				error: t("preview.collectionNotFound", { collection: collectionName }),
+			};
 		}
 
 		// Get preview config from collection state
@@ -337,12 +356,12 @@ const getPreviewUrl = route()
 		if (!previewConfig?.url) {
 			return {
 				url: null,
-				error: "No preview URL configured for this collection",
+				error: t("preview.noUrlConfigured"),
 			};
 		}
 
 		if (previewConfig.enabled === false) {
-			return { url: null, error: "Preview is disabled for this collection" };
+			return { url: null, error: t("preview.disabledForCollection") };
 		}
 
 		try {
@@ -351,7 +370,9 @@ const getPreviewUrl = route()
 		} catch (err) {
 			return {
 				url: null,
-				error: `Failed to generate preview URL: ${err instanceof Error ? err.message : "Unknown error"}`,
+				error: t("preview.generateUrlFailed", {
+					message: err instanceof Error ? err.message : t("error.unknown"),
+				}),
 			};
 		}
 	});

@@ -32,7 +32,7 @@ export function useServerWidgetData<T = unknown>(
 		queryKey: ["widget", "serverData", widgetId],
 		queryFn: () =>
 			(client as any).routes.fetchWidgetData({ widgetId }) as Promise<T>,
-		enabled: options?.enabled ?? true,
+		enabled: !!widgetId && (options?.enabled ?? true),
 		refetchInterval: options?.refreshInterval,
 	});
 }

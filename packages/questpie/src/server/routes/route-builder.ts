@@ -110,6 +110,17 @@ export class RouteBuilder<
 		return new RouteBuilder({ ...this._config, method: this._addMethod("PATCH") });
 	}
 
+	head(): RouteBuilder<TParams, HasMethod<"HEAD">, TMode, TSchema> {
+		return new RouteBuilder({ ...this._config, method: this._addMethod("HEAD") });
+	}
+
+	options(): RouteBuilder<TParams, HasMethod<"OPTIONS">, TMode, TSchema> {
+		return new RouteBuilder({
+			...this._config,
+			method: this._addMethod("OPTIONS"),
+		});
+	}
+
 	// ── Mode ────────────────────────────────────────────────────
 
 	/**

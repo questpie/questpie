@@ -8,7 +8,7 @@ This guide covers how QUESTPIE packages are built, structured, and published as 
 ## Monorepo Structure
 
 ```text
-questpie-cms/
+questpie/
 ├── packages/
 │   ├── questpie/              # Core framework
 │   ├── admin/                 # Admin UI
@@ -32,7 +32,7 @@ questpie-cms/
 **Tooling:**
 
 - **Runtime**: Bun
-- **Package manager**: pnpm workspaces (via `workspaces` field in root `package.json`)
+- **Package manager**: Bun workspaces (via `workspaces` field in root `package.json`)
 - **Task orchestration**: Turborepo
 - **Build**: tsdown (TypeScript -> ESM)
 - **Versioning**: Changesets

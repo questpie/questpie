@@ -32,6 +32,7 @@ function SelectTrigger({
 	className,
 	size = "default",
 	children,
+	type = "button",
 	...props
 }: SelectPrimitive.Trigger.Props & {
 	size?: "sm" | "default";
@@ -40,6 +41,7 @@ function SelectTrigger({
 		<SelectPrimitive.Trigger
 			data-slot="select-trigger"
 			data-size={size}
+			type={type}
 			className={cn(
 				"qa-select__trigger control-surface font-chrome data-[placeholder]:text-muted-foreground focus-visible:border-border-strong focus-visible:ring-ring/20 aria-expanded:border-border-strong aria-expanded:ring-ring/20 aria-invalid:border-border-strong aria-invalid:ring-ring/20 flex w-fit items-center justify-between gap-2 px-3 py-2 text-sm whitespace-nowrap outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50 aria-expanded:ring-[3px] aria-invalid:ring-[3px] data-[size=sm]:h-8 data-[size=sm]:px-2.5 data-[size=sm]:text-xs *:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-2 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
 				className,
@@ -193,4 +195,13 @@ function SelectScrollDownButton({
 	);
 }
 
-export { Select, SelectContent, SelectItem, SelectTrigger, SelectValue };
+export {
+	Select,
+	SelectContent,
+	SelectGroup,
+	SelectItem,
+	SelectLabel,
+	SelectSeparator,
+	SelectTrigger,
+	SelectValue,
+};

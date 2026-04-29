@@ -6,7 +6,7 @@ import type * as React from "react";
 import { useCallback, useDeferredValue, useId, useMemo, useState } from "react";
 
 import { useIsMobile } from "../../hooks/use-media-query";
-import { useResolveText } from "../../i18n/hooks";
+import { useResolveText, useSafeI18n } from "../../i18n/hooks";
 import { cn } from "../../lib/utils";
 import { Badge } from "../ui/badge";
 import {
@@ -103,6 +103,11 @@ export function SelectMulti<TValue extends string = string>({
 	const resolvedValue = value ?? (EMPTY_VALUE as TValue[]);
 	const resolvedStaticOptions = staticOptions ?? EMPTY_OPTIONS;
 	const resolveText = useResolveText();
+	const i18n = useSafeI18n();
+	const t = (key: string, fallback: string) => {
+		const message = i18n?.t(key);
+		return message && message !== key ? message : fallback;
+	};
 	const resolvedPlaceholder = resolveText(placeholder);
 	const resolvedEmptyMessage = resolveText(emptyMessage);
 	const resolvedDrawerTitle = resolveText(drawerTitle);
@@ -259,7 +264,7 @@ export function SelectMulti<TValue extends string = string>({
 							{!disabled && (
 								<span
 									aria-hidden="true"
-									title="Remove option"
+									title={t("field.removeItem", "Remove option")}
 									onPointerDown={(e) => handleRemove(val, e)}
 									onClick={(e) => handleRemove(val, e)}
 									className="hover:bg-muted-foreground/20 inline-flex size-5 items-center justify-center rounded-full transition-colors"
@@ -280,7 +285,7 @@ export function SelectMulti<TValue extends string = string>({
 				{resolvedValue.length > 0 && !disabled && (
 					<span
 						aria-hidden="true"
-						title="Clear all"
+						title={t("common.clear", "Clear all")}
 						onPointerDown={handleClearAll}
 						onClick={handleClearAll}
 						className="hover:bg-muted inline-flex size-6 items-center justify-center rounded-md opacity-60 transition-[background-color,opacity] hover:opacity-100"
@@ -296,7 +301,7 @@ export function SelectMulti<TValue extends string = string>({
 	const CommandContent = (
 		<Command shouldFilter={!loadOptions}>
 			<CommandInput
-				placeholder="Search..."
+				placeholder={t("ui.searchPlaceholder", "Search...")}
 				value={search}
 				onValueChange={setSearch}
 			/>

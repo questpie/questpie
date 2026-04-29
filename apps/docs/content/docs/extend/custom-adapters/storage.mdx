@@ -12,7 +12,11 @@ QUESTPIE expects a FlyDrive `DriverContract`. The full interface:
 ```ts
 interface DriverContract {
 	// Core operations
-	put(key: string, contents: string | Uint8Array, options?: WriteOptions): Promise<void>;
+	put(
+		key: string,
+		contents: string | Uint8Array,
+		options?: WriteOptions,
+	): Promise<void>;
 	get(key: string): Promise<string>;
 	getBytes(key: string): Promise<Uint8Array>;
 	getStream(key: string): Promise<ReadableStream<Uint8Array>>;
@@ -29,15 +33,30 @@ interface DriverContract {
 	setVisibility(key: string, visibility: ObjectVisibility): Promise<void>;
 
 	// Streaming upload
-	putStream(key: string, contents: Readable, options?: WriteOptions): Promise<void>;
+	putStream(
+		key: string,
+		contents: Readable,
+		options?: WriteOptions,
+	): Promise<void>;
 
 	// File operations
-	copy(source: string, destination: string, options?: WriteOptions): Promise<void>;
-	move(source: string, destination: string, options?: WriteOptions): Promise<void>;
+	copy(
+		source: string,
+		destination: string,
+		options?: WriteOptions,
+	): Promise<void>;
+	move(
+		source: string,
+		destination: string,
+		options?: WriteOptions,
+	): Promise<void>;
 
 	// Bulk operations
 	deleteAll(prefix: string): Promise<void>;
-	listAll(prefix: string, options?: { recursive?: boolean; paginationToken?: string }): Promise<{
+	listAll(
+		prefix: string,
+		options?: { recursive?: boolean; paginationToken?: string },
+	): Promise<{
 		paginationToken?: string;
 		objects: Iterable<DriveFile | DriveDirectory>;
 	}>;
@@ -49,10 +68,10 @@ interface DriverContract {
 For most cloud providers, you do not need to write a driver at all. Install the FlyDrive package for your provider and pass it directly:
 
 ```ts title="questpie.config.ts"
-import { config } from "questpie";
+import { runtimeConfig } from "questpie";
 import { S3Driver } from "flydrive/drivers/s3";
 
-export default config({
+export default runtimeConfig({
 	// ...
 	storage: {
 		driver: new S3Driver({
@@ -99,10 +118,15 @@ export class MyCloudDriver implements DriverContract {
 		// Initialize your provider SDK
 	}
 
-	async put(key: string, contents: string | Uint8Array, _options?: WriteOptions): Promise<void> {
-		const body = typeof contents === "string"
-			? new TextEncoder().encode(contents)
-			: contents;
+	async put(
+		key: string,
+		contents: string | Uint8Array,
+		_options?: WriteOptions,
+	): Promise<void> {
+		const body =
+			typeof contents === "string"
+				? new TextEncoder().encode(contents)
+				: contents;
 		await this.client.upload(this.options.bucket, key, body);
 	}
 
@@ -142,7 +166,10 @@ export class MyCloudDriver implements DriverContract {
 		return `https://${this.options.bucket}.example.com/${key}`;
 	}
 
-	async getSignedUrl(key: string, _options?: SignedURLOptions): Promise<string> {
+	async getSignedUrl(
+		key: string,
+		_options?: SignedURLOptions,
+	): Promise<string> {
 		return this.client.presign(this.options.bucket, key);
 	}
 
@@ -154,20 +181,35 @@ export class MyCloudDriver implements DriverContract {
 		return "public";
 	}
 
-	async setVisibility(_key: string, _visibility: ObjectVisibility): Promise<void> {
+	async setVisibility(
+		_key: string,
+		_visibility: ObjectVisibility,
+	): Promise<void> {
 		// Map to your provider's ACL system
 	}
 
-	async putStream(_key: string, _contents: any, _options?: WriteOptions): Promise<void> {
+	async putStream(
+		_key: string,
+		_contents: any,
+		_options?: WriteOptions,
+	): Promise<void> {
 		throw new Error("Implement stream uploads for production use");
 	}
 
-	async copy(source: string, destination: string, _options?: WriteOptions): Promise<void> {
+	async copy(
+		source: string,
+		destination: string,
+		_options?: WriteOptions,
+	): Promise<void> {
 		const data = await this.getBytes(source);
 		await this.put(destination, data);
 	}
 
-	async move(source: string, destination: string, options?: WriteOptions): Promise<void> {
+	async move(
+		source: string,
+		destination: string,
+		options?: WriteOptions,
+	): Promise<void> {
 		await this.copy(source, destination, options);
 		await this.delete(source);
 	}
@@ -188,32 +230,32 @@ export class MyCloudDriver implements DriverContract {
 ## Registration
 
 ```ts title="questpie.config.ts"
-import { config } from "questpie";
+import { runtimeConfig } from "questpie";
 import { MyCloudDriver } from "./my-storage-driver";
 
-export default config({
+export default runtimeConfig({
 	// ...
 	storage: {
 		driver: new MyCloudDriver({
 			apiKey: process.env.STORAGE_API_KEY!,
 			bucket: process.env.STORAGE_BUCKET!,
 		}),
-		defaultVisibility: "public",     // "public" | "private" (default: "public")
-		signedUrlExpiration: 3600,        // seconds (default: 3600)
-		basePath: "/",                   // base path for serving (default: "/")
+		defaultVisibility: "public", // "public" | "private" (default: "public")
+		signedUrlExpiration: 3600, // seconds (default: 3600)
+		basePath: "/", // base path for serving (default: "/")
 	},
 });
 ```
 
 ### Config options
 
-| Option | Default | Description |
-|---|---|---|
-| `driver` | -- | FlyDrive `DriverContract` instance. If omitted, QUESTPIE uses local `FSDriver`. |
-| `location` | `"./uploads"` | Directory for local storage (only when `driver` is not set). |
-| `defaultVisibility` | `"public"` | Default visibility for uploaded files. |
-| `signedUrlExpiration` | `3600` | Token expiration for signed URLs (seconds). |
-| `basePath` | `"/"` | Base path for serving storage files. |
+| Option                | Default       | Description                                                                     |
+| --------------------- | ------------- | ------------------------------------------------------------------------------- |
+| `driver`              | --            | FlyDrive `DriverContract` instance. If omitted, QUESTPIE uses local `FSDriver`. |
+| `location`            | `"./uploads"` | Directory for local storage (only when `driver` is not set).                    |
+| `defaultVisibility`   | `"public"`    | Default visibility for uploaded files.                                          |
+| `signedUrlExpiration` | `3600`        | Token expiration for signed URLs (seconds).                                     |
+| `basePath`            | `"/"`         | Base path for serving storage files.                                            |
 
 You must provide either `driver` (custom/cloud) or `location` (local), not both.
 

@@ -108,7 +108,11 @@ export async function searchSearch(
 	// Check if search service is available
 	if (!app.search) {
 		return errorResponse(
-			ApiError.notFound("Search", "Search service not configured"),
+			new ApiError({
+				code: "NOT_FOUND",
+				message: "Search service not configured",
+				messageKey: "search.serviceNotConfigured",
+			}),
 			request,
 			resolved.appContext.locale,
 		);
@@ -117,7 +121,11 @@ export async function searchSearch(
 	const body = await parseRouteBody(request);
 	if (body === null) {
 		return errorResponse(
-			ApiError.badRequest("Invalid JSON body"),
+			ApiError.badRequest(
+				"Invalid JSON body",
+				undefined,
+				"error.invalidJsonBody",
+			),
 			request,
 			resolved.appContext.locale,
 		);
@@ -319,7 +327,11 @@ export async function searchReindex(
 	// Check if search service is available
 	if (!app.search) {
 		return errorResponse(
-			ApiError.notFound("Search", "Search service not configured"),
+			new ApiError({
+				code: "NOT_FOUND",
+				message: "Search service not configured",
+				messageKey: "search.serviceNotConfigured",
+			}),
 			request,
 			resolved.appContext.locale,
 		);
@@ -347,10 +359,17 @@ export async function searchReindex(
 
 	if (!hasReindexAccess) {
 		return errorResponse(
-			ApiError.forbidden({
-				operation: "update",
-				resource: `search/reindex/${collectionName}`,
-				reason: "Reindex access denied by policy",
+			new ApiError({
+				code: "FORBIDDEN",
+				message: "Reindex access denied by policy",
+				messageKey: "search.reindexAccessDenied",
+				context: {
+					access: {
+						operation: "update",
+						resource: `search/reindex/${collectionName}`,
+						reason: "Reindex access denied by policy",
+					},
+				},
 			}),
 			request,
 			resolved.appContext.locale,

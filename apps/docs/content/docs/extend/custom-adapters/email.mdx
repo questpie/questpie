@@ -17,13 +17,13 @@ export abstract class MailAdapter {
 
 ```ts
 export type SerializableMailOptions = {
-	from: string;                    // already resolved, never undefined
+	from: string; // already resolved, never undefined
 	to: string | string[];
 	cc?: string | string[];
 	bcc?: string | string[];
 	subject: string;
-	text: string;                    // already rendered
-	html: string;                    // already rendered
+	text: string; // already rendered
+	html: string; // already rendered
 	attachments?: Array<{
 		filename: string;
 		content: Buffer | string;
@@ -38,14 +38,14 @@ By the time your adapter receives `SerializableMailOptions`, both `text` and `ht
 
 ## Required method
 
-| Method | Description |
-|---|---|
+| Method          | Description                                                                                               |
+| --------------- | --------------------------------------------------------------------------------------------------------- |
 | `send(options)` | Deliver the email through your provider. Throw on failure so the caller (usually a queued job) can retry. |
 
 ## Minimal example: HTTP API provider
 
 ```ts title="resend-adapter.ts"
-import { MailAdapter, type SerializableMailOptions } from "questpie/server";
+import { MailAdapter, type SerializableMailOptions } from "questpie";
 
 export class ResendAdapter extends MailAdapter {
 	constructor(private apiKey: string) {
@@ -90,7 +90,7 @@ export class ResendAdapter extends MailAdapter {
 ## Minimal example: SDK-based provider
 
 ```ts title="sendgrid-adapter.ts"
-import { MailAdapter, type SerializableMailOptions } from "questpie/server";
+import { MailAdapter, type SerializableMailOptions } from "questpie";
 import sgMail from "@sendgrid/mail";
 
 export class SendGridAdapter extends MailAdapter {
@@ -126,10 +126,10 @@ export class SendGridAdapter extends MailAdapter {
 ## Registration
 
 ```ts title="questpie.config.ts"
-import { config } from "questpie";
+import { runtimeConfig } from "questpie";
 import { ResendAdapter } from "./resend-adapter";
 
-export default config({
+export default runtimeConfig({
 	// ...
 	email: {
 		adapter: new ResendAdapter(process.env.RESEND_API_KEY!),
@@ -142,11 +142,11 @@ export default config({
 
 ### Config options
 
-| Option | Default | Description |
-|---|---|---|
-| `adapter` | `ConsoleAdapter` | Your adapter instance. Can also be a `Promise<MailAdapter>` for lazy initialization. |
-| `defaults.from` | -- | Default sender address used when a template does not specify one. |
-| `templates` | -- | Email template registry (defined via the `email()` helper). |
+| Option          | Default          | Description                                                                          |
+| --------------- | ---------------- | ------------------------------------------------------------------------------------ |
+| `adapter`       | `ConsoleAdapter` | Your adapter instance. Can also be a `Promise<MailAdapter>` for lazy initialization. |
+| `defaults.from` | --               | Default sender address used when a template does not specify one.                    |
+| `templates`     | --               | Email template registry (defined via the `email()` helper).                          |
 
 ### Async adapter initialization
 

@@ -563,7 +563,6 @@ export interface CodegenTargetContribution {
 	 * creates files in ALL matching targets (they write to different roots).
 	 */
 	scaffolds?: Record<string, ScaffoldConfig>;
-
 }
 
 // ============================================================================

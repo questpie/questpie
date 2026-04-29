@@ -47,6 +47,8 @@ export {
 	type AppAdmin,
 	type InferAdminCMS,
 } from "#questpie/admin/client/builder/admin.js";
+// Admin-flavored CMS client (auto-injects X-Questpie-Admin request header)
+export { createAdminClient } from "#questpie/admin/client/create-admin-client.js";
 // Typed hooks factory
 export {
 	createTypedHooks,
@@ -109,6 +111,10 @@ export {
 	type TipTapDoc,
 	type TipTapNode,
 } from "#questpie/admin/components/rich-text/index.js";
+export {
+	RichTextEditor,
+	type RichTextEditorProps,
+} from "#questpie/admin/client/components/fields/rich-text-editor/index.js";
 
 // ============================================================================
 // PREVIEW
@@ -268,9 +274,18 @@ export {
 } from "#questpie/admin/client/components/component-renderer.js";
 export { AcceptInviteForm } from "#questpie/admin/client/views/auth/accept-invite-form.js";
 export {
+	AuthDefaultLogo,
 	AuthLayout,
 	type AuthLayoutProps,
 } from "#questpie/admin/client/views/auth/auth-layout.js";
+export {
+	BrandLogoMark,
+	type BrandLogoMarkProps,
+} from "#questpie/admin/client/components/brand-logo.js";
+export type {
+	BrandingConfig,
+	BrandLogoConfig,
+} from "#questpie/admin/client/types/admin-config.js";
 export { ForgotPasswordForm } from "#questpie/admin/client/views/auth/forgot-password-form.js";
 // Auth forms (for custom layouts)
 export { LoginForm } from "#questpie/admin/client/views/auth/login-form.js";
@@ -308,6 +323,12 @@ export {
 } from "#questpie/admin/client/hooks/use-collection.js";
 // User hooks
 export { useCurrentUser } from "#questpie/admin/client/hooks/use-current-user.js";
+// Branding hook
+export {
+	type BrandSnapshot,
+	useBrand,
+	useBrandSnapshotRef,
+} from "#questpie/admin/client/hooks/use-brand.js";
 // Field options hook
 export {
 	type OptionItem,
@@ -396,9 +417,9 @@ export type CollectionItem<
 	TApp extends QuestpieApp,
 	TName extends CollectionNames<TApp>,
 > =
-	Awaited<
-		ReturnType<AnyQuestpieClient["collections"][TName]["find"]>
-	> extends { docs: Array<infer TItem> }
+	Awaited<ReturnType<AnyQuestpieClient["collections"][TName]["find"]>> extends {
+		docs: Array<infer TItem>;
+	}
 		? TItem
 		: never;
 
@@ -451,6 +472,11 @@ export type {
 	FieldComponentProps,
 	FormViewConfig,
 } from "#questpie/admin/client/builder/types/field-types.js";
+export type {
+	CollectionFormViewProps,
+	CollectionListViewProps,
+	GlobalFormViewProps,
+} from "#questpie/admin/client/builder/types/views.js";
 // Widget types (for implementing custom widgets)
 export type {
 	AnyWidgetConfig,
@@ -475,6 +501,11 @@ export {
 	type ViewDefinition,
 	type ViewKind,
 } from "#questpie/admin/client/builder/view/view.js";
+// Page definition factory (for custom admin pages)
+export {
+	page,
+	type PageDefinition,
+} from "#questpie/admin/client/builder/page/page.js";
 // Widget factory (for defining custom widgets)
 export {
 	type WidgetDefinition,

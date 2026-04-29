@@ -51,7 +51,14 @@ const getAdminTranslationsSchema = z.object({
 
 const messageValueSchema = z.union([
 	z.string(),
-	z.object({ one: z.string(), other: z.string() }),
+	z.object({
+		one: z.string(),
+		other: z.string(),
+		zero: z.string().optional(),
+		two: z.string().optional(),
+		few: z.string().optional(),
+		many: z.string().optional(),
+	}),
 ]);
 
 const getAdminTranslationsOutputSchema = z.object({

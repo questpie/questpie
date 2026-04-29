@@ -89,6 +89,47 @@ export default {
 	"collection.new": "Nouveau {{name}}",
 	"collection.duplicateSuccess": "{{name}} dupliqué avec succès",
 	"collection.duplicateError": "Échec de la duplication de {{name}}",
+	// Actions
+	"action.collectionNotFound": 'Collection "{{collection}}" introuvable',
+	"action.notFound":
+		'Action "{{action}}" introuvable sur la collection "{{collection}}"',
+	"action.executionFailed": "L'exécution de l'action a échoué",
+	"action.itemCreated": "Élément créé avec succès",
+	"action.itemIdRequired.save":
+		"L'ID de l'élément est requis pour l'action d'enregistrement",
+	"action.itemSaved": "Élément enregistré avec succès",
+	"action.itemIdRequired.delete":
+		"L'ID de l'élément est requis pour l'action de suppression",
+	"action.itemDeleted": "Élément supprimé avec succès",
+	"action.itemIdsRequired.bulkDelete":
+		"Les IDs des éléments sont requis pour la suppression groupée",
+	"action.itemsDeleted": {
+		one: "{{count}} élément supprimé avec succès",
+		other: "{{count}} éléments supprimés avec succès",
+	},
+	"action.itemIdRequired.restore":
+		"L'ID de l'élément est requis pour l'action de restauration",
+	"action.restoreUnsupported":
+		"La restauration n'est pas prise en charge pour cette collection",
+	"action.itemRestored": "Élément restauré avec succès",
+	"action.itemIdsRequired.bulkRestore":
+		"Les IDs des éléments sont requis pour la restauration groupée",
+	"action.itemsRestored": {
+		one: "{{count}} élément restauré avec succès",
+		other: "{{count}} éléments restaurés avec succès",
+	},
+	"action.itemIdRequired.duplicate":
+		"L'ID de l'élément est requis pour l'action de duplication",
+	"action.itemNotFound": "Élément introuvable",
+	"action.itemDuplicated": "Élément dupliqué avec succès",
+	"action.itemIdRequired.transition":
+		"L'ID de l'élément est requis pour l'action de transition",
+	"action.targetStageRequired":
+		"L'étape cible est requise pour l'action de transition",
+	"action.workflowUnsupported":
+		"Les transitions de workflow ne sont pas prises en charge pour cette collection",
+	"action.unknownBuiltin": "Action intégrée inconnue : {{action}}",
+	"action.fieldRequired": 'Le champ "{{field}}" est obligatoire',
 
 	// Relations
 	"relation.select": "Sélectionner {{name}}",
@@ -187,6 +228,9 @@ export default {
 	"auth.profile": "Profil",
 	"auth.myAccount": "Mon compte",
 	"auth.logoutFailed": "Échec de la déconnexion. Veuillez réessayer.",
+	"auth.setupAlreadyCompleted":
+		"La configuration est déjà terminée - des administrateurs existent dans le système",
+	"auth.failedToCreateUserAccount": "Impossible de créer le compte utilisateur",
 
 	// Errors
 	"error.notFound": "Non trouvé",
@@ -238,6 +282,17 @@ export default {
 	"editor.underline": "Souligné",
 	"editor.strikethrough": "Barré",
 	"editor.heading": "Titre {{level}}",
+	"editor.richTextToolbar": "Barre de texte enrichi",
+	"editor.blockType": "Type de bloc",
+	"editor.selectionBlockType": "Type de bloc sélectionné",
+	"editor.paragraph": "Paragraphe",
+	"editor.textBlocks": "Blocs de texte",
+	"editor.headings": "Titres",
+	"editor.blocks": "Blocs",
+	"editor.formatting": "Mise en forme",
+	"editor.moreFormatting": "Plus de mise en forme",
+	"editor.alignment": "Alignement",
+	"editor.insert": "Insérer",
 	"editor.link": "Insérer lien",
 	"editor.image": "Insérer image",
 	"editor.list": "Liste",
@@ -271,6 +326,18 @@ export default {
 	"editor.chooseFile": "Choisir fichier",
 	"editor.uploading": "Téléversement...",
 	"editor.browseLibrary": "Parcourir la bibliothèque",
+	"editor.startWriting": "Commencez à écrire...",
+	"editor.pasteOrTypeLink": "Collez ou saisissez un lien...",
+	"editor.paragraphDescription": "Commencer avec du texte simple",
+	"editor.heading1Description": "Grand titre de section",
+	"editor.heading2Description": "Titre de section moyen",
+	"editor.heading3Description": "Petit titre de section",
+	"editor.bulletListDescription": "Créer une liste à puces",
+	"editor.orderedListDescription": "Créer une liste numérotée",
+	"editor.quoteDescription": "Insérer une citation",
+	"editor.codeBlockDescription": "Insérer un extrait de code",
+	"editor.dividerDescription": "Insérer une ligne horizontale",
+	"editor.tableDescription": "Insérer un tableau 3x3",
 
 	// Toasts
 	"toast.success": "Succès",
@@ -516,6 +583,21 @@ export default {
 	"preview.fullscreen": "Plein écran",
 	"preview.close": "Fermer aperçu",
 	"preview.loading": "Chargement de l'aperçu...",
+	"preview.pathRequired": "Le chemin est requis",
+	"preview.collectionNameRequired": "Le nom de la collection est requis",
+	"preview.adminSessionRequired": "Session administrateur requise",
+	"preview.invalidTokenFormat": "Format de token invalide",
+	"preview.invalidSignature": "Signature invalide",
+	"preview.invalidPayload": "Payload invalide",
+	"preview.tokenExpired": "Token expiré",
+	"preview.invalidPath": "Chemin invalide",
+	"preview.collectionNotFound": 'Collection "{{collection}}" introuvable',
+	"preview.noUrlConfigured":
+		"Aucune URL de prévisualisation n'est configurée pour cette collection",
+	"preview.disabledForCollection":
+		"La prévisualisation est désactivée pour cette collection",
+	"preview.generateUrlFailed":
+		"Impossible de générer l'URL de prévisualisation : {{message}}",
 
 	// Autosave
 	"autosave.saving": "Enregistrement...",
@@ -552,4 +634,400 @@ export default {
 
 	// Audit
 	"audit.section.activity": "Activité",
+
+	// Additional Admin UI Messages
+	"audit.collection.description":
+		"Parcourir tous les changements enregistrés et l'activité des utilisateurs",
+	"audit.collection.label": "Journal d'audit",
+	"audit.sections.changes": "Changements",
+	"audit.sections.event": "Détails de l'événement",
+	"audit.sections.user": "Utilisateur",
+	"audit.widget.recentActivity.empty": "Aucune activité récente enregistrée.",
+	"audit.widget.recentActivity.title": "Activité récente",
+	"auth.backToLogin": "Retour à la connexion",
+	"auth.checkYourEmail": "Consultez votre e-mail",
+	"auth.completeRegistration": "Terminer l'inscription",
+	"auth.createAccountDescription": "Créez votre compte pour commencer",
+	"auth.enterNewPassword": "Entrez votre nouveau mot de passe ci-dessous.",
+	"auth.forgotPasswordDescription":
+		"Entrez votre e-mail pour recevoir un lien de réinitialisation",
+	"auth.forgotPasswordFormDescription":
+		"Entrez votre adresse e-mail et nous vous enverrons un lien pour réinitialiser votre mot de passe.",
+	"auth.forgotPasswordTitle": "Mot de passe oublié",
+	"auth.goToLogin": "Aller à la connexion",
+	"auth.invalidInvitation": "Invitation invalide",
+	"auth.invalidInvitationDescription": "Ce lien d'invitation n'est plus valide",
+	"auth.invalidLink": "Lien invalide",
+	"auth.invalidLinkDescription":
+		"Le lien de réinitialisation du mot de passe est invalide ou a expiré.",
+	"auth.invalidOrExpiredInvitation": "Invitation invalide ou expirée",
+	"auth.invitationExpiredMessage":
+		"L'invitation a peut-être expiré ou a déjà été utilisée. Contactez votre administrateur pour obtenir une nouvelle invitation.",
+	"auth.inviteEmailDescription":
+		"Un lien d'invitation sera envoyé à cet e-mail",
+	"auth.inviteEmailLabel": "Adresse e-mail",
+	"auth.inviteMessage": "Message personnel (facultatif)",
+	"auth.inviteMessageDescription":
+		"Ce message sera inclus dans l'e-mail d'invitation",
+	"auth.inviteMessagePlaceholder":
+		"Ajoutez un message personnel à l'invitation...",
+	"auth.inviteRole": "Rôle",
+	"auth.inviteRoleDescription":
+		"Le rôle détermine les autorisations de l'utilisateur",
+	"auth.inviteSelectRole": "Sélectionner un rôle",
+	"auth.inviteSentSuccess": "Invitation envoyée avec succès",
+	"auth.inviteSentTo": "Invitation envoyée à {{email}}",
+	"auth.inviteUser": "Inviter un utilisateur",
+	"auth.inviteUserDescription":
+		"Envoyer une invitation pour ajouter un nouvel utilisateur",
+	"auth.pleaseWait": "Veuillez patienter...",
+	"auth.rememberYourPassword": "Vous vous souvenez de votre mot de passe ?",
+	"auth.requestNewResetLink":
+		"Veuillez demander un nouveau lien de réinitialisation du mot de passe.",
+	"auth.resetLinkSentDescription":
+		"Nous avons envoyé un lien de réinitialisation du mot de passe à votre adresse e-mail. Consultez votre boîte de réception et suivez les instructions.",
+	"auth.resetPasswordSuccess": "Mot de passe réinitialisé avec succès",
+	"auth.resetPasswordSuccessDescription":
+		"Votre mot de passe a été réinitialisé avec succès. Vous pouvez maintenant vous connecter avec votre nouveau mot de passe.",
+	"auth.sendInvitation": "Envoyer l'invitation",
+	"auth.sendingInvitation": "Envoi de l'invitation...",
+	"auth.signInDescription":
+		"Entrez vos identifiants pour accéder au panneau d'administration",
+	"auth.user": "Utilisateur",
+	"auth.validatingInvitation": "Validation de l'invitation",
+	"blocks.add": "Ajouter un bloc",
+	"blocks.addFirst": "Ajoutez votre premier bloc pour commencer",
+	"blocks.addTo": "Ajouter à {{parent}}",
+	"blocks.emptyTitle": "Aucun bloc",
+	"blocks.libraryDescription":
+		"Choisissez un type de bloc à ajouter à votre mise en page.",
+	"blocks.noDefinitions": "Aucune définition de bloc enregistrée",
+	"blocks.noDefinitionsHint":
+		"Enregistrez des blocs avec .blocks() dans votre configuration d'administration",
+	"blocks.noEditableFields": "Ce bloc n'a aucun champ modifiable.",
+	"blocks.noSearchResults": "Aucun bloc ne correspond à votre recherche",
+	"blocks.searchPlaceholder": "Rechercher des blocs...",
+	"blocks.tryDifferentSearch": "Essayez un autre terme de recherche.",
+	"blocks.uncategorized": "Autre",
+	"blocks.unknownType":
+		'Type de bloc "{{type}}" inconnu. Ce type de bloc n\'est pas enregistré.',
+	"cell.blocks": "Blocs",
+	"cell.file": { one: "{{count}} fichier", other: "{{count}} fichiers" },
+	"cell.item": { one: "{{count}} élément", other: "{{count}} éléments" },
+	"cell.more": "+{{count}} de plus",
+	"collection.bulkRestoreError": "Échec de la restauration des éléments",
+	"collection.bulkRestorePartial": {
+		one: "{{success}} élément restauré, {{failed}} échec",
+		other: "{{success}} éléments restaurés, {{failed}} échecs",
+	},
+	"collection.bulkRestoreSuccess": {
+		one: "{{count}} élément restauré avec succès",
+		other: "{{count}} éléments restaurés avec succès",
+	},
+	"collection.orderSaveFailed": "Échec de l'enregistrement de l'ordre",
+	"collection.orderSaved": "Ordre enregistré",
+	"collection.reorderAddOrderField":
+		"Ajoutez un champ d'ordre numérique avant de réorganiser",
+	"collection.reorderClearFilters": "Effacez les filtres pour réorganiser",
+	"collection.reorderClearSearch": "Effacez la recherche pour réorganiser",
+	"collection.reorderEnableOrderable":
+		"Activez l'ordonnancement avant de réorganiser",
+	"collection.reorderEnterMode": "Entrer en mode de réorganisation",
+	"collection.reorderExitMode": "Quitter le mode de réorganisation",
+	"collection.reorderItems": "Réorganiser les éléments",
+	"collection.reorderMode": "Mode de réorganisation",
+	"collection.reorderRemoveGrouping":
+		"Supprimez le groupement pour réorganiser",
+	"collection.reorderShowOnePage":
+		"Affichez une seule page d'éléments pour réorganiser",
+	"collection.reorderSwitchSort": "Passer au tri {{field}} et réorganiser",
+	"collection.reorderUnavailable": "Réorganisation indisponible : {{reason}}",
+	"collection.restoreError": "Échec de la restauration de l'élément",
+	"collection.restoreSuccess": "Élément restauré avec succès",
+	"collection.restoring": "Restauration...",
+	"collection.sortedByField": "Trié par {{field}} {{direction}}.",
+	"collectionSearch.noResultsDescription":
+		"Essayez un autre terme de recherche ou effacez la recherche pour revenir à la liste complète.",
+	"common.backToList": "Retour à la liste",
+	"common.deleted": "Supprimé",
+	"common.done": "Terminé",
+	"common.moreActions": "Plus d'actions",
+	"common.noValue": "Aucune valeur",
+	"confirm.deleteAll": "Tout supprimer",
+	"confirm.deleteItemDescription":
+		"Cette action est irréversible. L'élément sera définitivement supprimé.",
+	"confirm.deleteItemTitle": "Supprimer l'élément ?",
+	"confirm.deleteSelected": "Supprimer la sélection",
+	"confirm.deleteSelectedDescription":
+		"Cette action est irréversible. Tous les éléments sélectionnés seront définitivement supprimés.",
+	"confirm.deleteSelectedTitle": "Supprimer les éléments sélectionnés ?",
+	"confirm.restore": "Restaurer",
+	"confirm.restoreDescription":
+		"Cet élément sera de nouveau visible dans les vues de liste normales.",
+	"confirm.restoreTitle": "Restaurer l'élément ?",
+	"dashboard.noWidgets": "Aucun widget configuré",
+	"dashboard.noWidgetsDescription":
+		"Ajoutez des widgets à la configuration de votre tableau de bord pour afficher des données ici.",
+	"dashboard.systemStatus": "État du système",
+	"dashboard.welcomeDescription":
+		"Sélectionnez une collection dans la barre latérale pour gérer votre contenu.",
+	"defaults.assets.sections.dimensions": "Dimensions",
+	"defaults.users.tabs.profile": "Profil",
+	"defaults.users.tabs.security": "Sécurité",
+	"dropzone.invalidType": '"{{name}}" n\'est pas un type de fichier accepté',
+	"dropzone.label": "Déposez des fichiers ici ou cliquez pour parcourir",
+	"dropzone.tooLarge": '"{{name}}" dépasse la taille maximale de {{maxSize}}',
+	"dropzone.typeAudio": "Audio",
+	"dropzone.typeImages": "Images",
+	"dropzone.typePDF": "PDF",
+	"dropzone.typeVideos": "Vidéos",
+	"dropzone.uploading": "Téléversement...",
+	"error.accessRestricted": "Accès restreint",
+	"error.accessRestrictedDescription":
+		"Vous n'avez pas l'autorisation d'accéder à cette page. Contactez votre administrateur si vous pensez qu'il s'agit d'une erreur.",
+	"error.accessRestrictedResourceDescription":
+		"La ressource {{type}} \"{{name}}\" n'est pas disponible dans le panneau d'administration. Elle peut être masquée ou vous n'avez pas l'autorisation d'y accéder.",
+	"error.actionFailed": "Action échouée",
+	"error.anErrorOccurred": "Une erreur s'est produite",
+	"error.autosaveFailed": "Échec de l'enregistrement automatique",
+	"error.backToDashboard": "Retour au tableau de bord",
+	"error.componentNotFound": "Composant introuvable",
+	"error.failedToCreateAccount": "Échec de la création du compte",
+	"error.failedToCreateAdminAccount":
+		"Échec de la création du compte administrateur",
+	"error.failedToGeneratePreviewToken":
+		"Échec de la génération du jeton d'aperçu",
+	"error.failedToLoad": "Échec du chargement",
+	"error.failedToLoadAssets": "Échec du chargement des médias",
+	"error.failedToLoadComponent": "Échec du chargement du composant",
+	"error.failedToLoadOptions": "Échec du chargement des options",
+	"error.failedToLoadSelectedItems":
+		"Échec du chargement des éléments sélectionnés",
+	"error.failedToLoadView": "Échec du chargement de {{viewType}}",
+	"error.failedToLoadViewFor":
+		"Échec du chargement de {{viewType}} pour {{collection}}",
+	"error.failedToResetPassword": "Échec de la réinitialisation du mot de passe",
+	"error.failedToSendInvitation": "Échec de l'envoi de l'invitation",
+	"error.failedToSendResetEmail":
+		"Échec de l'envoi de l'e-mail de réinitialisation",
+	"error.invalidCredentials": "Identifiants invalides",
+	"error.maxItemsAllowed": "Maximum {{max}} éléments autorisés",
+	"error.missingFieldComponent":
+		"Aucun composant enregistré pour le type de champ : {{type}}",
+	"error.multipleUploadCollections":
+		"Plusieurs collections de téléversement sont disponibles ({{collections}}). Indiquez la collection à utiliser.",
+	"error.noUploadCollection":
+		"Aucune collection de téléversement n'est configurée.",
+	"error.pageNotFound": "Page introuvable",
+	"error.pageNotFoundDescription": "La page que vous recherchez n'existe pas.",
+	"error.selectAtLeastOne": "Veuillez sélectionner au moins un média",
+	"error.serverActionFailed": "Action serveur échouée",
+	"error.somethingWentWrong": "Une erreur est survenue",
+	"error.tryAgain": "Réessayer",
+	"error.unexpectedError": "Une erreur inattendue s'est produite",
+	"error.unknownWidget": "Widget inconnu",
+	"error.unregisteredViewDescription":
+		"La vue \"{{viewId}}\" n'est pas enregistrée dans le registre des vues d'administration.",
+	"error.uploadFailed": "Téléversement échoué",
+	"error.widgetError": "Erreur de widget",
+	"error.widgetTypeNotRecognized":
+		'Le type de widget "{{type}}" n\'est pas reconnu.',
+	"field.codeEditor": "Éditeur de code",
+	"field.dragToReorder": "Faire glisser pour réorganiser",
+	"field.editItem": "Modifier l'élément",
+	"field.formEditor": "Éditeur de formulaire",
+	"field.moveDown": "Déplacer vers le bas",
+	"field.moveUp": "Déplacer vers le haut",
+	"field.noItems": "Aucun élément",
+	"field.removeItem": "Supprimer l'élément",
+	"field.section": "Section",
+	"form.deletedBanner":
+		"Cet enregistrement a été supprimé le {{date}}. Utilisez l'action Restaurer pour le rendre à nouveau actif.",
+	"form.lastUpdated": "Dernière mise à jour",
+	"history.after": "Après",
+	"history.before": "Avant",
+	"history.blocksCount": { one: "{{count}} bloc", other: "{{count}} blocs" },
+	"history.changeAdded": "Ajouté",
+	"history.changeChanged": "Modifié",
+	"history.changeRemoved": "Supprimé",
+	"history.changedFields": {
+		one: "{{count}} champ modifié",
+		other: "{{count}} champs modifiés",
+	},
+	"history.description": "Changements et activité de cet enregistrement",
+	"history.diffAgainstVersion": "Différence avec la version {{number}}",
+	"history.empty": "Aucune activité enregistrée",
+	"history.hideChanges": "Masquer les changements",
+	"history.initialSnapshot": "Instantané initial",
+	"history.itemsCount": {
+		one: "{{count}} élément",
+		other: "{{count}} éléments",
+	},
+	"history.moreFields": {
+		one: "{{count}} de plus",
+		other: "{{count}} de plus",
+	},
+	"history.noFieldChanges":
+		"Aucun changement au niveau des champs dans cet instantané.",
+	"history.objectWithKeys": {
+		one: "Objet avec {{count}} clé",
+		other: "Objet avec {{count}} clés",
+	},
+	"history.showChanges": {
+		one: "Afficher les changements ({{count}})",
+		other: "Afficher les changements ({{count}})",
+	},
+	"history.stage": "Étape",
+	"history.systemUser": "Système",
+	"history.tabActivity": "Activité",
+	"history.tabVersions": "Versions",
+	"history.title": "Historique",
+	"history.versionDescription":
+		"Parcourez les instantanés de version et inspectez les différences au niveau des champs.",
+	"input.selectDate": "Sélectionner une date",
+	"input.selectDateRange": "Sélectionner une plage de dates",
+	"input.selectDateTime": "Sélectionner une date et une heure",
+	"input.selectTime": "Sélectionner une heure",
+	"lock.blockedDescription":
+		"Ce document est verrouillé. Vous pouvez le consulter, mais vous ne pouvez pas le modifier tant que le verrou n'a pas expiré.",
+	"lock.blockedTitle": "{{name}} est en cours de modification",
+	"lock.cannotSave":
+		"Impossible d'enregistrer : le document est verrouillé par un autre utilisateur",
+	"lock.openElsewhere":
+		"Ce document est ouvert dans un autre onglet. Les modifications seront synchronisées automatiquement.",
+	"media.allFiles": "Tous les fichiers",
+	"media.audio": "Audio",
+	"media.browseLibrary": "Parcourir la médiathèque",
+	"media.documents": "Documents",
+	"media.images": "Images",
+	"media.noAssets": "Aucun média",
+	"media.searchPlaceholder": "Rechercher par nom de fichier...",
+	"media.videos": "Vidéos",
+	"nav.adminNavigation": "Navigation d'administration",
+	"nav.breadcrumb": "Fil d'Ariane",
+	"preview.exitPreview": "Quitter l'aperçu",
+	"preview.exitTooltip":
+		"Quitter le mode aperçu et effacer le cookie de brouillon",
+	"preview.hidePreview": "Masquer l'aperçu",
+	"preview.loadingPreview": "Chargement de l'aperçu...",
+	"preview.mode": "Mode aperçu",
+	"preview.previewError": "Erreur d'aperçu",
+	"preview.refreshing": "Actualisation...",
+	"preview.showPreview": "Afficher l'aperçu",
+	"table.editing": "Modification",
+	"table.emptyDescription":
+		"Les enregistrements apparaîtront ici une fois créés.",
+	"table.noItemsInCollection": "Aucun élément trouvé dans cette collection",
+	"table.pagination": "Pagination",
+	"table.show": "Afficher",
+	"time.daysAgoShort": { one: "il y a {{count}}j", other: "il y a {{count}}j" },
+	"time.hoursAgoShort": {
+		one: "il y a {{count}}h",
+		other: "il y a {{count}}h",
+	},
+	"time.justNow": "à l'instant",
+	"time.minutesAgoShort": {
+		one: "il y a {{count}}m",
+		other: "il y a {{count}}m",
+	},
+	"ui.commandPalette": "Palette de commandes",
+	"ui.commandPaletteDescription": "Rechercher une commande à exécuter...",
+	"ui.expand": "Développer",
+	"ui.expandSidebar": "Développer la barre latérale",
+	"ui.processing": "Traitement...",
+	"ui.searchPlaceholder": "Rechercher...",
+	"ui.skipToMainContent": "Passer au contenu principal",
+	"ui.themeDark": "Sombre",
+	"ui.themeLight": "Clair",
+	"ui.themeSystem": "Système",
+	"ui.toggleSidebar": "Basculer la barre latérale",
+	"ui.toggleTheme": "Changer de thème",
+	"upload.browseLibrary": "Parcourir la bibliothèque",
+	"upload.bulkDescription": "Ajoutez plusieurs fichiers à votre médiathèque",
+	"upload.bulkError": {
+		one: "Échec du téléversement de {{count}} fichier",
+		other: "Échec du téléversement de {{count}} fichiers",
+	},
+	"upload.bulkHint": "Téléversez plusieurs fichiers à la fois",
+	"upload.bulkSuccess": {
+		one: "{{count}} fichier téléversé avec succès",
+		other: "{{count}} fichiers téléversés avec succès",
+	},
+	"upload.bulkTitle": "Téléverser des fichiers",
+	"upload.failedCount": { one: "{{count}} échec", other: "{{count}} échecs" },
+	"upload.filesCount": {
+		one: "{{count}} fichier",
+		other: "{{count}} fichiers",
+	},
+	"upload.uploadedCount": {
+		one: "{{count}} téléversé",
+		other: "{{count}} téléversés",
+	},
+	"upload.waitForComplete": "Veuillez attendre la fin des téléversements",
+	"version.createdAt": "Créé",
+	"version.empty": "Aucune version trouvée.",
+	"version.globalHistoryDescription":
+		"Parcourez les versions globales précédentes et restaurez-en une si nécessaire.",
+	"version.history": "Historique des versions",
+	"version.historyDescription":
+		"Parcourez les versions précédentes et restaurez-en une si nécessaire.",
+	"version.label": "Version {{number}}",
+	"version.operationCreate": "Créé",
+	"version.operationDelete": "Supprimé",
+	"version.operationUnknown": "Modifié",
+	"version.operationUpdate": "Mis à jour",
+	"version.revert": "Rétablir",
+	"version.revertConfirmDescription":
+		"Cela remplacera le contenu actuel par la version {{number}}.",
+	"version.revertConfirmTitle": "Rétablir cette version ?",
+	"version.revertSuccess": "Version restaurée avec succès",
+	"version.user": "Utilisateur",
+	"viewOptions.groupBy": "Grouper par",
+	"viewOptions.groupByDescription":
+		"Grouper la page actuelle par un champ configuré.",
+	"viewOptions.noGrouping": "Aucun groupement",
+	"viewOptions.noResultsDescription":
+		"Aucun enregistrement ne correspond aux filtres actifs. Ajustez-les ou effacez-les pour voir plus de résultats.",
+	"viewOptions.realtime": "Mises à jour en temps réel",
+	"viewOptions.realtimeDescription":
+		"Actualiser automatiquement ce tableau lorsque les données changent.",
+	"viewOptions.showDeleted": "Afficher les supprimés",
+	"viewOptions.showDeletedDescription":
+		"Inclure les enregistrements supprimés de façon réversible dans cette vue.",
+	"viewOptions.sort": "Trier",
+	"widget.chart.emptyDescription":
+		"Configurez une source de données pour afficher un graphique.",
+	"widget.chart.emptyTitle": "Aucune donnée de graphique",
+	"widget.progress.emptyDescription":
+		"Configurez des données de progression pour afficher ce widget.",
+	"widget.progress.emptyTitle": "Aucune progression configurée",
+	"widget.quickActions.emptyDescription":
+		"Ajoutez des actions rapides à la configuration de votre tableau de bord.",
+	"widget.quickActions.emptyTitle": "Aucune action rapide",
+	"widget.recentItems.emptyDescription":
+		"Les éléments récents apparaîtront ici une fois créés.",
+	"widget.recentItems.emptyTitle": "Aucun élément récent",
+	"widget.table.emptyDescription":
+		"Aucun enregistrement ne correspond aux critères actuels.",
+	"widget.table.emptyTitle": "Aucune ligne à afficher",
+	"widget.timeline.emptyDescription": "Aucun événement à afficher.",
+	"widget.timeline.emptyTitle": "Aucune activité pour le moment",
+	"widget.value.emptyDescription":
+		"Configurez une source de valeur pour afficher ce widget.",
+	"widget.value.emptyTitle": "Aucune valeur configurée",
+	"workflow.currentStage": "Étape actuelle",
+	"workflow.noTransitions": "Aucune transition disponible depuis cette étape",
+	"workflow.scheduleLabel": "Planifier pour plus tard",
+	"workflow.scheduledAt": "Date et heure planifiées",
+	"workflow.scheduledDescription":
+		"La transition se produira automatiquement à l'heure planifiée.",
+	"workflow.scheduledSuccess":
+		'Transition vers "{{stage}}" planifiée pour {{date}}',
+	"workflow.transition": "Transition",
+	"workflow.transitionDescription":
+		'Cela effectuera la transition de "{{from}}" vers "{{to}}".',
+	"workflow.transitionFailed": "Échec de la transition",
+	"workflow.transitionSuccess":
+		'Transition vers "{{stage}}" effectuée avec succès',
+	"workflow.transitionTo": "Transition vers {{stage}}",
 } as const;

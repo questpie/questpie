@@ -1,6 +1,8 @@
 import { sql } from "drizzle-orm";
 
+import { withTransaction } from "#questpie/server/collection/crud/shared/transaction.js";
 import { extractAppServices } from "#questpie/server/config/app-context.js";
+import { runWithContext } from "#questpie/server/config/context.js";
 import type { Questpie } from "#questpie/server/config/questpie.js";
 
 import type {
@@ -152,7 +154,9 @@ export class SeedRunner {
 
 				this.log(`  ✅ Seed completed: ${seed.id}`);
 			} catch (error) {
-				this.log(`  ❌ Seed failed: ${seed.id} — ${error instanceof Error ? error.message : String(error)}`);
+				this.log(
+					`  ❌ Seed failed: ${seed.id} — ${error instanceof Error ? error.message : String(error)}`,
+				);
 				throw error;
 			}
 		}
@@ -176,14 +180,12 @@ export class SeedRunner {
 		const ROLLBACK_SENTINEL = Symbol("validate-rollback");
 
 		try {
-			await (this.app.db as any).transaction(async (tx: any) => {
+			await withTransaction(this.app.db, async (tx: any) => {
 				// Create a temporary context with tx db
-				// Note: We can't fully replace app.db inside a transaction,
-				// so validate mode has limitations — it validates the seed function
-				// doesn't throw, but some side effects (storage, email) won't be rolled back.
 				const txServices = extractAppServices(this.app, {
 					db: tx,
 					session: (reqCtx as any).session,
+					locale: reqCtx.locale,
 				});
 
 				for (const seed of pending) {
@@ -199,10 +201,21 @@ export class SeedRunner {
 							this.app.createContext({
 								accessMode: opts?.accessMode ?? "system",
 								locale: opts?.locale,
+								db: tx,
 							}),
 					} as unknown as SeedContext;
 
-					await seed.run(seedCtx);
+					await runWithContext(
+						{
+							app: this.app,
+							session: (reqCtx as any).session,
+							db: tx,
+							locale: reqCtx.locale,
+							accessMode: "system",
+							stage: reqCtx.stage,
+						},
+						() => seed.run(seedCtx),
+					);
 					this.log(`  ✅ Seed valid: ${seed.id}`);
 				}
 

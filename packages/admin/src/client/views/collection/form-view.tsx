@@ -61,7 +61,6 @@ import {
 	useSearchParamToggle,
 	useSidebarSearchParam,
 } from "../../hooks";
-import { useCollectionAuditHistory } from "../../hooks/use-audit-history";
 import { useCollectionVersions } from "../../hooks/use-collection";
 import { useReactiveFields } from "../../hooks/use-reactive-fields";
 import { useServerActions } from "../../hooks/use-server-actions";
@@ -75,6 +74,7 @@ import {
 	useSafeContentLocales,
 	useScopedLocale,
 } from "../../runtime";
+import { shouldHandleAdminShortcut } from "../../utils/keyboard-shortcuts";
 import { AdminViewHeader } from "../layout/admin-view-layout";
 import { AutoFormFields } from "./auto-form-fields";
 import { useResourceFormController } from "./use-resource-form-controller";
@@ -624,14 +624,6 @@ export default function FormView({
 			},
 		);
 
-	const { data: auditData, isLoading: auditLoading } =
-		useCollectionAuditHistory(
-			collection,
-			id ?? "",
-			{ limit: 50 },
-			{ enabled: isEditMode && !!id && isHistoryOpen },
-		);
-
 	// ========================================================================
 	// Workflow — transition dialog state (controller owns the stage data)
 	// ========================================================================
@@ -934,7 +926,12 @@ export default function FormView({
 	// Keyboard shortcut: Cmd+S to save
 	React.useEffect(() => {
 		const handleKeyDown = (e: KeyboardEvent) => {
-			if ((e.metaKey || e.ctrlKey) && e.key === "s") {
+			if (
+				shouldHandleAdminShortcut(e, {
+					allowEditableTarget: true,
+					key: "s",
+				})
+			) {
 				e.preventDefault();
 				e.stopPropagation();
 				form.handleSubmit(onSubmitRef.current, (errors) => {
@@ -1205,14 +1202,15 @@ export default function FormView({
 
 					setActionLoading(true);
 					toast.promise(
-						deleteMutation.mutateAsync(itemId).finally(() => {
+						deleteMutation.mutateAsync({ id: itemId }).finally(() => {
 							setActionLoading(false);
 						}),
 						{
 							loading: t("toast.deleting"),
 							success: () => {
-								// Navigate back to list on delete
-								navigate(`${basePath}/collections/${collection}`);
+								storeNavigate(
+									`${storeBasePath || basePath}/collections/${collection}`,
+								);
 								return t("toast.deleteSuccess");
 							},
 							error: (err) => err.message || t("toast.deleteFailed"),
@@ -1294,6 +1292,67 @@ export default function FormView({
 							error: (err) => err.message || t("toast.actionFailed"),
 						},
 					);
+				}
+				break;
+			}
+			case "server": {
+				const serverHandler = handler as {
+					type: "server";
+					actionId: string;
+					collection: string;
+				};
+				setActionLoading(true);
+				try {
+					const routes = (client as any)?.routes;
+					if (!routes?.executeAction) {
+						throw new Error(t("error.serverActionFailed"));
+					}
+					const response = await routes.executeAction({
+						collection: serverHandler.collection,
+						actionId: serverHandler.actionId,
+						itemId: transformedItem?.id || id,
+					});
+					if (!response?.success || response.result?.type === "error") {
+						throw new Error(
+							response?.error ??
+								response?.result?.toast?.message ??
+								t("error.serverActionFailed"),
+						);
+					}
+					const result = response.result;
+					if (result?.toast?.message) {
+						toast.success(result.toast.message);
+					} else {
+						toast.success(t("toast.actionSuccess"));
+					}
+					if (result?.effects?.invalidate === true) {
+						await actionHelpers.invalidateAll();
+					} else if (Array.isArray(result?.effects?.invalidate)) {
+						for (const col of result.effects.invalidate) {
+							await actionHelpers.invalidateCollection(col);
+						}
+					}
+					if (result?.effects?.redirect) {
+						storeNavigate(result.effects.redirect);
+					}
+					if (result?.type === "redirect" && result.url) {
+						if (result.external) {
+							window.open(result.url, "_blank");
+						} else {
+							storeNavigate(result.url);
+						}
+					}
+					if (result?.effects?.closeModal) {
+						actionHelpers.closeDialog();
+					}
+				} catch (error) {
+					toast.error(
+						error instanceof Error
+							? error.message
+							: t("error.actionFailed"),
+					);
+				} finally {
+					setActionLoading(false);
 				}
 				break;
 			}
@@ -1920,9 +1979,8 @@ export default function FormView({
 				<HistorySidebar
 					open={isHistoryOpen}
 					onOpenChange={setIsHistoryOpen}
-					auditEntries={auditData ?? []}
-					isLoadingAudit={auditLoading}
 					versions={(versionsData ?? []) as any[]}
+					fields={schema?.fields as any}
 					isLoadingVersions={versionsLoading}
 					isReverting={revertVersionMutation.isPending}
 					onRevert={async (version) => {

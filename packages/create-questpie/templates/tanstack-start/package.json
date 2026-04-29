@@ -11,9 +11,20 @@
 		"dev": "bun --bun vite dev --port 3000",
 		"build": "vite build",
 		"start": "bun run .output/server/index.mjs",
-		"check-types": "tsc --noEmit"
+		"check-types": "tsc --noEmit",
+		"routes:generate": "tsr generate",
+		"questpie:generate": "questpie generate -c src/questpie/server/questpie.config.ts",
+		"scaffold:generate": "bun run routes:generate && bun run questpie:generate",
+		"migrate": "questpie migrate -c questpie.config.ts",
+		"migrate:create": "questpie migrate:create -c questpie.config.ts",
+		"migrate:status": "questpie migrate:status -c questpie.config.ts",
+		"migrate:down": "questpie migrate:down -c questpie.config.ts",
+		"migrate:reset": "questpie migrate:reset -c questpie.config.ts",
+		"migrate:fresh": "questpie migrate:fresh -c questpie.config.ts",
+		"scaffold:verify": "bun run scaffold:generate && bun run check-types"
 	},
 	"dependencies": {
+		"@electric-sql/pglite": "^0.3.14",
 		"@questpie/admin": "latest",
 		"@questpie/openapi": "latest",
 		"@questpie/tanstack-query": "latest",
@@ -22,28 +33,31 @@
 		"@tanstack/react-router": "^1.132.0",
 		"@tanstack/react-start": "^1.132.0",
 		"drizzle-orm": "1.0.0-beta.6-4414a19",
+		"nodemailer": "^7.0.12",
+		"pg": "^8.13.1",
+		"pg-boss": "^12.5.4",
 		"questpie": "latest",
 		"react": "^19.0.0",
 		"react-dom": "^19.0.0",
 		"zod": "^4.2.1"
 	},
 	"devDependencies": {
-		"@iconify/json": ">=2",
-		"@questpie/vite-plugin-iconify": "latest",
 		"@tailwindcss/vite": "^4.0.0",
 		"@tanstack/devtools-vite": "latest",
 		"@tanstack/react-devtools": "latest",
 		"@tanstack/react-router-devtools": "latest",
+		"@tanstack/router-cli": "^1.132.0",
 		"@types/react": "^19.0.0",
 		"@types/react-dom": "^19.0.0",
-		"@vitejs/plugin-react": "^4.4.1",
+		"@vitejs/plugin-react": "^6.0.1",
 		"bun-types": "latest",
 		"drizzle-kit": "1.0.0-beta.6-4414a19",
 		"nitro": "latest",
+		"shadcn": "^3.6.1",
 		"tailwindcss": "^4.0.0",
 		"tw-animate-css": "^1.0.0",
 		"typescript": "^5.9.2",
-		"vite": "^6.3.0",
-		"vite-tsconfig-paths": "^4.3.2"
+		"vite": "^8.0.0",
+		"vite-tsconfig-paths": "^6.1.1"
 	}
 }

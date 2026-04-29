@@ -1,6 +1,6 @@
 {
 	"name": "questpie",
-	"version": "3.0.3",
+	"version": "3.1.0",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/questpie/questpie.git",
@@ -43,7 +43,7 @@
 	},
 	"scripts": {
 		"build": "tsdown",
-		"test": "QUESTPIE_MIGRATIONS_SILENT=1 bun test",
+		"test": "QUESTPIE_MIGRATIONS_SILENT=1 bun test --max-concurrency=1",
 		"test:watch": "bun test --watch",
 		"check-types": "tsc --noEmit",
 		"questpie:generate": "bun run ./src/exports/cli.ts generate --verbose",

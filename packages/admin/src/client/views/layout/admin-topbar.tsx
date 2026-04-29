@@ -50,7 +50,7 @@ export const AdminTopbar = React.memo(function AdminTopbar({
 
 				{/* Breadcrumbs */}
 				<nav
-					aria-label="Breadcrumb"
+					aria-label={t("nav.breadcrumb")}
 					className="qa-topbar__breadcrumbs font-chrome text-muted-foreground hidden items-center gap-1.5 text-xs md:flex"
 				>
 					{resolvedBreadcrumbs.map((crumb) => {

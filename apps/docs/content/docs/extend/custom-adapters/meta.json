@@ -1,4 +1,4 @@
 {
 	"title": "Custom Adapters",
-	"pages": ["index", "kv", "queue", "search", "realtime", "storage", "email"]
+	"pages": ["kv", "queue", "search", "realtime", "storage", "email"]
 }

@@ -7,7 +7,7 @@
  * @example
  * ```ts
  * // Schedule a publish transition for 2 hours from now
- * await app.queue['scheduled-transition'].publish({
+ * await app.queue.scheduledTransition.publish({
  *   type: 'collection',
  *   collection: 'posts',
  *   recordId: '123',
@@ -18,13 +18,15 @@
 
 import { z } from "zod";
 
-import type { Questpie } from "#questpie/server/config/questpie.js";
 import { ApiError } from "#questpie/server/errors/base.js";
 import { job } from "../integrated/queue/job.js";
 
 /**
  * Schema for scheduled transition job payload
  */
+const SCHEDULED_TRANSITION_JOB_KEY = "scheduledTransition" as const;
+const SCHEDULED_TRANSITION_JOB_NAME = "scheduled-transition" as const;
+
 const scheduledTransitionSchema = z.discriminatedUnion("type", [
 	z.object({
 		type: z.literal("collection"),
@@ -50,7 +52,7 @@ type ScheduledTransitionPayload = z.infer<
  * Runs in system access mode (no user session).
  */
 const scheduledTransitionJob = job({
-	name: "scheduled-transition",
+	name: SCHEDULED_TRANSITION_JOB_NAME,
 	schema: scheduledTransitionSchema,
 	options: {
 		retryLimit: 3,
@@ -88,6 +90,8 @@ const scheduledTransitionJob = job({
 });
 
 export {
+	SCHEDULED_TRANSITION_JOB_KEY,
+	SCHEDULED_TRANSITION_JOB_NAME,
 	scheduledTransitionJob,
 	scheduledTransitionSchema,
 	type ScheduledTransitionPayload,

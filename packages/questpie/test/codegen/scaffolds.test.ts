@@ -181,12 +181,28 @@ describe("scaffold template output", () => {
 		);
 		expect(output).toContain('collection("blog-posts")');
 		expect(output).toContain("blogPosts");
+		expect(output).toContain('f.text(255).label("Title").required()');
 	});
 
 	it("core email template has .tsx extension", () => {
 		const graph = resolveTargetGraph([coreCodegenPlugin()]);
 		const scaffold = graph.get("server")!.scaffolds.email;
 		expect(scaffold.extension).toBe(".tsx");
+	});
+
+	it("core route template uses an executable JSON route shape", () => {
+		const graph = resolveTargetGraph([coreCodegenPlugin()]);
+		const output = graph.get("server")!.scaffolds.route.template({
+			kebab: "sync-orders",
+			camel: "syncOrders",
+			pascal: "SyncOrders",
+			title: "Sync Orders",
+			targetId: "server",
+		});
+
+		expect(output).toContain(".post()");
+		expect(output).toContain(".schema(z.object({}))");
+		expect(output).not.toContain("ctx");
 	});
 
 	it("multi-target scaffold produces different content per target", () => {

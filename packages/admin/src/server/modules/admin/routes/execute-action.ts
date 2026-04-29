@@ -26,14 +26,8 @@ import type {
 	ServerActionResult,
 	ServerActionsConfig,
 } from "../../../augmentation.js";
-import {
-	type App,
-	getApp,
-	getAppState,
-	getDb,
-	getSession,
-	getLocale,
-} from "./route-helpers.js";
+import { translateAdminMessage } from "./i18n-helpers.js";
+import { type App, getApp, getAppState, getSession } from "./route-helpers.js";
 
 /**
  * Request to execute an action
@@ -194,11 +188,13 @@ export async function executeAction(
 
 	const appState = getAppState(app) as Record<string, any>;
 	const collection = appState.collections?.[collectionSlug];
+	const t = (key: string, params?: Record<string, unknown>) =>
+		translateAdminMessage(locale, key, params);
 
 	if (!collection) {
 		return {
 			success: false,
-			error: `Collection "${collectionSlug}" not found`,
+			error: t("action.collectionNotFound", { collection: collectionSlug }),
 		};
 	}
 
@@ -236,7 +232,10 @@ export async function executeAction(
 	if (!customAction) {
 		return {
 			success: false,
-			error: `Action "${actionId}" not found on collection "${collectionSlug}"`,
+			error: t("action.notFound", {
+				action: actionId,
+				collection: collectionSlug,
+			}),
 		};
 	}
 
@@ -245,6 +244,7 @@ export async function executeAction(
 		const validationError = validateActionFormData(
 			customAction.form.fields,
 			data || {},
+			t,
 		);
 		if (validationError) {
 			return {
@@ -286,7 +286,9 @@ export async function executeAction(
 				type: "error",
 				toast: {
 					message:
-						error instanceof Error ? error.message : "Action execution failed",
+						error instanceof Error
+							? error.message
+							: t("action.executionFailed"),
 				},
 			},
 		};
@@ -308,7 +310,9 @@ async function executeBuiltinAction(
 		session?: unknown;
 	},
 ): Promise<ExecuteActionResponse> {
-	const { collectionSlug, actionId, itemId, itemIds, data } = params;
+	const { collectionSlug, actionId, itemId, itemIds, data, locale } = params;
+	const t = (key: string, messageParams?: Record<string, unknown>) =>
+		translateAdminMessage(locale, key, messageParams);
 	const appRec = app as Record<string, any>;
 	const collectionCrud = appRec.api?.collections?.[collectionSlug];
 	const crudContext = {
@@ -325,7 +329,7 @@ async function executeBuiltinAction(
 					success: true,
 					result: {
 						type: "success",
-						toast: { message: "Item created successfully" },
+						toast: { message: t("action.itemCreated") },
 						effects: {
 							invalidate: [collectionSlug],
 							redirect: `/admin/collections/${collectionSlug}/${result.id}`,
@@ -340,7 +344,7 @@ async function executeBuiltinAction(
 						success: false,
 						result: {
 							type: "error",
-							toast: { message: "Item ID is required for save action" },
+							toast: { message: t("action.itemIdRequired.save") },
 						},
 					};
 				}
@@ -349,7 +353,7 @@ async function executeBuiltinAction(
 					success: true,
 					result: {
 						type: "success",
-						toast: { message: "Item saved successfully" },
+						toast: { message: t("action.itemSaved") },
 						effects: { invalidate: [collectionSlug] },
 					},
 				};
@@ -361,7 +365,7 @@ async function executeBuiltinAction(
 						success: false,
 						result: {
 							type: "error",
-							toast: { message: "Item ID is required for delete action" },
+							toast: { message: t("action.itemIdRequired.delete") },
 						},
 					};
 				}
@@ -370,7 +374,7 @@ async function executeBuiltinAction(
 					success: true,
 					result: {
 						type: "success",
-						toast: { message: "Item deleted successfully" },
+						toast: { message: t("action.itemDeleted") },
 						effects: {
 							invalidate: [collectionSlug],
 							redirect: `/admin/collections/${collectionSlug}`,
@@ -386,7 +390,7 @@ async function executeBuiltinAction(
 						result: {
 							type: "error",
 							toast: {
-								message: "Item IDs are required for bulk delete action",
+								message: t("action.itemIdsRequired.bulkDelete"),
 							},
 						},
 					};
@@ -399,7 +403,9 @@ async function executeBuiltinAction(
 					success: true,
 					result: {
 						type: "success",
-						toast: { message: `${itemIds.length} items deleted successfully` },
+						toast: {
+							message: t("action.itemsDeleted", { count: itemIds.length }),
+						},
 						effects: { invalidate: [collectionSlug] },
 					},
 				};
@@ -411,7 +417,7 @@ async function executeBuiltinAction(
 						success: false,
 						result: {
 							type: "error",
-							toast: { message: "Item ID is required for restore action" },
+							toast: { message: t("action.itemIdRequired.restore") },
 						},
 					};
 				}
@@ -426,7 +432,7 @@ async function executeBuiltinAction(
 						result: {
 							type: "error",
 							toast: {
-								message: "Restore is not supported for this collection",
+								message: t("action.restoreUnsupported"),
 							},
 						},
 					};
@@ -436,7 +442,7 @@ async function executeBuiltinAction(
 					success: true,
 					result: {
 						type: "success",
-						toast: { message: "Item restored successfully" },
+						toast: { message: t("action.itemRestored") },
 						effects: {
 							invalidate: [collectionSlug],
 							redirect: `/admin/collections/${collectionSlug}/${itemId}`,
@@ -452,7 +458,7 @@ async function executeBuiltinAction(
 						result: {
 							type: "error",
 							toast: {
-								message: "Item IDs are required for bulk restore action",
+								message: t("action.itemIdsRequired.bulkRestore"),
 							},
 						},
 					};
@@ -484,7 +490,9 @@ async function executeBuiltinAction(
 					success: true,
 					result: {
 						type: "success",
-						toast: { message: `${itemIds.length} items restored successfully` },
+						toast: {
+							message: t("action.itemsRestored", { count: itemIds.length }),
+						},
 						effects: { invalidate: [collectionSlug] },
 					},
 				};
@@ -496,7 +504,7 @@ async function executeBuiltinAction(
 						success: false,
 						result: {
 							type: "error",
-							toast: { message: "Item ID is required for duplicate action" },
+							toast: { message: t("action.itemIdRequired.duplicate") },
 						},
 					};
 				}
@@ -506,7 +514,7 @@ async function executeBuiltinAction(
 						success: false,
 						result: {
 							type: "error",
-							toast: { message: "Item not found" },
+							toast: { message: t("action.itemNotFound") },
 						},
 					};
 				}
@@ -517,7 +525,7 @@ async function executeBuiltinAction(
 					success: true,
 					result: {
 						type: "success",
-						toast: { message: "Item duplicated successfully" },
+						toast: { message: t("action.itemDuplicated") },
 						effects: {
 							invalidate: [collectionSlug],
 							redirect: `/admin/collections/${collectionSlug}/${duplicated.id}`,
@@ -532,7 +540,7 @@ async function executeBuiltinAction(
 						success: false,
 						result: {
 							type: "error",
-							toast: { message: "Item ID is required for transition action" },
+							toast: { message: t("action.itemIdRequired.transition") },
 						},
 					};
 				}
@@ -543,7 +551,7 @@ async function executeBuiltinAction(
 						result: {
 							type: "error",
 							toast: {
-								message: "Target stage is required for transition action",
+								message: t("action.targetStageRequired"),
 							},
 						},
 					};
@@ -568,8 +576,7 @@ async function executeBuiltinAction(
 						result: {
 							type: "error",
 							toast: {
-								message:
-									"Workflow transitions are not supported for this collection",
+								message: t("action.workflowUnsupported"),
 							},
 						},
 					};
@@ -578,7 +585,9 @@ async function executeBuiltinAction(
 					success: true,
 					result: {
 						type: "success",
-						toast: { message: `Transitioned to "${stage}" successfully` },
+						toast: {
+							message: t("workflow.transitionSuccess", { stage }),
+						},
 						effects: { invalidate: [collectionSlug] },
 					},
 				};
@@ -589,7 +598,9 @@ async function executeBuiltinAction(
 					success: false,
 					result: {
 						type: "error",
-						toast: { message: `Unknown built-in action: ${actionId}` },
+						toast: {
+							message: t("action.unknownBuiltin", { action: actionId }),
+						},
 					},
 				};
 		}
@@ -601,7 +612,9 @@ async function executeBuiltinAction(
 				type: "error",
 				toast: {
 					message:
-						error instanceof Error ? error.message : "Action execution failed",
+						error instanceof Error
+							? error.message
+							: t("action.executionFailed"),
 				},
 			},
 		};
@@ -637,10 +650,11 @@ function isFieldRequired(field: ServerActionFormField): boolean {
 function validateActionFormData(
 	fields: Record<string, ServerActionFormField>,
 	data: Record<string, unknown>,
+	t: (key: string, params?: Record<string, unknown>) => string,
 ): string | null {
 	for (const [fieldName, fieldConfig] of Object.entries(fields)) {
 		if (isFieldRequired(fieldConfig) && !data[fieldName]) {
-			return `Field "${fieldName}" is required`;
+			return t("action.fieldRequired", { field: fieldName });
 		}
 	}
 	return null;

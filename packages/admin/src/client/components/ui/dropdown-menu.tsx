@@ -14,8 +14,17 @@ function DropdownMenuPortal({ ...props }: MenuPrimitive.Portal.Props) {
 	return <MenuPrimitive.Portal data-slot="dropdown-menu-portal" {...props} />;
 }
 
-function DropdownMenuTrigger({ ...props }: MenuPrimitive.Trigger.Props) {
-	return <MenuPrimitive.Trigger data-slot="dropdown-menu-trigger" {...props} />;
+function DropdownMenuTrigger({
+	type = "button",
+	...props
+}: MenuPrimitive.Trigger.Props) {
+	return (
+		<MenuPrimitive.Trigger
+			data-slot="dropdown-menu-trigger"
+			type={type}
+			{...props}
+		/>
+	);
 }
 
 function DropdownMenuContent({
@@ -60,11 +69,11 @@ function DropdownMenuLabel({
 	className,
 	inset,
 	...props
-}: MenuPrimitive.GroupLabel.Props & {
+}: React.ComponentProps<"div"> & {
 	inset?: boolean;
 }) {
 	return (
-		<MenuPrimitive.GroupLabel
+		<div
 			data-slot="dropdown-menu-label"
 			data-inset={inset}
 			className={cn(
@@ -250,12 +259,18 @@ function DropdownMenuShortcut({
 
 export {
 	DropdownMenu,
-	DropdownMenuPortal,
-	DropdownMenuTrigger,
+	DropdownMenuCheckboxItem,
 	DropdownMenuContent,
+	DropdownMenuGroup,
 	DropdownMenuItem,
+	DropdownMenuLabel,
+	DropdownMenuPortal,
+	DropdownMenuRadioGroup,
+	DropdownMenuRadioItem,
 	DropdownMenuSeparator,
+	DropdownMenuShortcut,
 	DropdownMenuSub,
-	DropdownMenuSubTrigger,
 	DropdownMenuSubContent,
+	DropdownMenuSubTrigger,
+	DropdownMenuTrigger,
 };

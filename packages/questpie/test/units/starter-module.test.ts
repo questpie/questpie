@@ -40,6 +40,18 @@ describe("starterModule", () => {
 		expect(starterModule.collections.apikey).toBeDefined();
 	});
 
+	test("user collection keeps auth image URL and adds assets avatar", () => {
+		const fields = starterModule.collections.user.state.fieldDefinitions;
+		const imageMeta = fields.image.getMetadata() as any;
+		const avatarMeta = fields.avatar.getMetadata() as any;
+
+		expect(imageMeta.type).toBe("url");
+		expect(avatarMeta.type).toBe("relation");
+		expect(avatarMeta.isUpload).toBe(true);
+		expect(avatarMeta.targetCollection).toBe("assets");
+		expect(avatarMeta.relationType).toBe("belongsTo");
+	});
+
 	test("sets default access to require authentication", () => {
 		const access = starterModule.config?.app?.access;
 		expect(access).toBeDefined();

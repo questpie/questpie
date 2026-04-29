@@ -1,7 +1,6 @@
 {
-	"title": "Reference",
+	"title": "API Reference",
 	"pages": [
-		"index",
 		"config-api",
 		"collection-api",
 		"global-api",

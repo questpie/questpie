@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import { execFileSync, execSync } from "node:child_process";
 
 import pc from "picocolors";
 
@@ -59,6 +59,16 @@ export function installDependencies(
 	const cmd =
 		packageManager === "npm" ? "npm install" : `${packageManager} install`;
 	execSync(cmd, { cwd, stdio: "inherit" });
+}
+
+export function runPackageScript(
+	cwd: string,
+	packageManager: "bun" | "npm" | "pnpm" | "yarn",
+	script: string,
+): void {
+	const command = packageManager === "npm" ? "npm" : packageManager;
+	const args = packageManager === "npm" ? ["run", script] : ["run", script];
+	execFileSync(command, args, { cwd, stdio: "inherit" });
 }
 
 export function detectPackageManager(): "bun" | "npm" | "pnpm" | "yarn" {

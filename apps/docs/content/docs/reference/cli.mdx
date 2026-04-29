@@ -7,37 +7,36 @@ description: All QUESTPIE CLI commands.
 
 ### Codegen
 
-| Command              | Description                                       |
-| -------------------- | ------------------------------------------------- |
-| `questpie generate`  | Scan file conventions, generate types and factories |
-| `questpie dev`       | Watch mode -- auto-regenerate on file changes     |
+| Command             | Description                                         |
+| ------------------- | --------------------------------------------------- |
+| `questpie generate` | Scan file conventions, generate types and factories |
+| `questpie dev`      | Watch mode -- auto-regenerate on file changes       |
 
 ### Database
 
-| Command                | Description                               |
-| ---------------------- | ----------------------------------------- |
-| `questpie push`        | Push schema to database (no migrations)   |
-| `questpie migrate:generate` | Generate migration from schema diff  |
-| `questpie migrate:up`  | Run pending migrations                    |
-| `questpie migrate:down`| Rollback last migration                   |
-| `questpie migrate:fresh`| Drop all tables and re-run migrations    |
-| `questpie migrate:reset`| Reset migration tracking                 |
-| `questpie migrate:status`| Show migration status                   |
+| Command                     | Description                             |
+| --------------------------- | --------------------------------------- |
+| `questpie push`             | Push schema to database (no migrations) |
+| `questpie migrate:generate` | Generate migration from schema diff     |
+| `questpie migrate:up`       | Run pending migrations                  |
+| `questpie migrate:down`     | Rollback last migration                 |
+| `questpie migrate:fresh`    | Drop all tables and re-run migrations   |
+| `questpie migrate:reset`    | Reset migration tracking                |
+| `questpie migrate:status`   | Show migration status                   |
 
 ### Seeds
 
-| Command                | Description                   |
-| ---------------------- | ----------------------------- |
-| `questpie seed`        | Run pending seed files        |
-| `questpie seed:generate`| Generate a new seed file     |
-| `questpie seed:undo`   | Undo last seed                |
-| `questpie seed:status` | Show seed status              |
-| `questpie seed:reset`  | Reset seed tracking           |
+| Command                | Description            |
+| ---------------------- | ---------------------- |
+| `questpie seed`        | Run pending seed files |
+| `questpie seed:undo`   | Undo last seed         |
+| `questpie seed:status` | Show seed status       |
+| `questpie seed:reset`  | Reset seed tracking    |
 
 ### Scaffolding
 
-| Command                  | Description                        |
-| ------------------------ | ---------------------------------- |
+| Command                      | Description                     |
+| ---------------------------- | ------------------------------- |
 | `questpie add [type] [name]` | Scaffold a new entity or module |
 
 ---
@@ -86,7 +85,9 @@ Push the current Drizzle schema directly to the database without creating migrat
 bunx questpie push
 ```
 
-<Callout type="warn">This may cause data loss. Use only in development.</Callout>
+<Callout type="warn">
+	This may cause data loss. Use only in development.
+</Callout>
 
 ### `questpie migrate:generate`
 
@@ -146,12 +147,12 @@ Run all pending seed files in order.
 bunx questpie seed
 ```
 
-### `questpie seed:generate`
+### `questpie add seed`
 
-Generate a new timestamped seed file.
+Scaffold a new seed file.
 
 ```bash
-bunx questpie seed:generate
+bunx questpie add seed siteSettings
 ```
 
 ### `questpie add`
@@ -181,13 +182,13 @@ export { default } from "./src/questpie/server/questpie.config";
 
 ```ts
 runtimeConfig({
-  cli: {
-    migrations: {
-      directory: "./src/migrations",
-    },
-    seeds: {
-      directory: "./src/seeds",
-    },
-  },
+	cli: {
+		migrations: {
+			directory: "./src/migrations",
+		},
+		seeds: {
+			directory: "./src/seeds",
+		},
+	},
 });
 ```

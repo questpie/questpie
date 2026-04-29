@@ -1,9 +1,13 @@
 import { existsSync } from "node:fs";
-import { join } from "node:path";
 
 import { SeedRunner } from "../../server/seed/runner.js";
-import type { Seed, SeedCategory } from "../../server/seed/types.js";
+import type { Seed } from "../../server/seed/types.js";
 import { loadQuestpieConfig } from "../config.js";
+import {
+	parseCsvOption,
+	parseSeedCategoryOption,
+	resolveCliPath,
+} from "../utils.js";
 
 export type SeedAction = "run" | "undo" | "status" | "reset";
 
@@ -26,7 +30,7 @@ export type RunSeedOptions = {
  */
 export async function runSeedCommand(options: RunSeedOptions): Promise<void> {
 	// Resolve config path
-	const resolvedConfigPath = join(process.cwd(), options.configPath);
+	const resolvedConfigPath = resolveCliPath(options.configPath);
 
 	if (!existsSync(resolvedConfigPath)) {
 		throw new Error(`Config file not found: ${resolvedConfigPath}`);
@@ -56,12 +60,10 @@ export async function runSeedCommand(options: RunSeedOptions): Promise<void> {
 	}
 
 	// Parse category filter
-	const category = options.category
-		? (options.category.split(",") as SeedCategory[])
-		: undefined;
+	const category = parseSeedCategoryOption(options.category);
 
 	// Parse only filter
-	const only = options.only ? options.only.split(",") : undefined;
+	const only = parseCsvOption(options.only);
 
 	// Create seed runner
 	const runner = new SeedRunner(app);

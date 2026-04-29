@@ -16,9 +16,11 @@ export const Route = createRootRoute({
 			},
 		],
 		scripts:
-			process.env.NODE_ENV !== "production"
+			process.env.NODE_ENV !== "production" &&
+			process.env.VITE_REACT_SCAN === "true"
 				? [
 						{
+							async: true,
 							crossOrigin: "anonymous",
 							src: "//unpkg.com/react-scan/dist/auto.global.js",
 						},

@@ -10,10 +10,10 @@ export function CustomPre({
 	...props
 }: ComponentProps<"pre"> & { title?: string }) {
 	return (
-		<div className="group border-border bg-card relative my-6 overflow-hidden border">
+		<div className="group border-border-subtle bg-card relative my-6 overflow-hidden rounded-[var(--surface-radius)] border shadow-[var(--surface-shadow)]">
 			{title && (
-				<div className="border-border bg-card border-b px-4 py-1.5">
-					<span className="text-muted-foreground font-mono text-[9px] tracking-[2px] uppercase">
+				<div className="border-border-subtle bg-surface-low border-b px-4 py-2">
+					<span className="text-muted-foreground font-chrome text-xs font-medium">
 						{title}
 					</span>
 				</div>

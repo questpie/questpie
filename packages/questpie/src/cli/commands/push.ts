@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
-import { join } from "node:path";
 
 import { loadQuestpieConfig } from "../config.js";
+import { resolveCliPath } from "../utils.js";
 
 export type PushOptions = {
 	configPath: string;
@@ -29,7 +29,7 @@ export async function pushCommand(options: PushOptions): Promise<void> {
 	}
 
 	// Resolve config path
-	const resolvedConfigPath = join(process.cwd(), options.configPath);
+	const resolvedConfigPath = resolveCliPath(options.configPath);
 
 	if (!existsSync(resolvedConfigPath)) {
 		throw new Error(`Config file not found: ${resolvedConfigPath}`);

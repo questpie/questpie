@@ -8,7 +8,6 @@
 
 "use client";
 
-import { Icon } from "@iconify/react";
 import { useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 import {
@@ -28,6 +27,7 @@ import type {
 	FormHandler,
 } from "../../builder/types/action-types";
 import { buildValidationSchema } from "../../builder/validation";
+import { useValidationErrorMap } from "../../hooks/use-validation-error-map";
 import { useResolveText, useTranslation } from "../../i18n/hooks";
 import { cn } from "../../lib/utils";
 import { AutoFormFields } from "../../views/collection/auto-form-fields";
@@ -40,6 +40,7 @@ import {
 	ResponsiveDialogHeader,
 	ResponsiveDialogTitle,
 } from "../ui/responsive-dialog";
+import { Skeleton } from "../ui/skeleton";
 
 interface ActionDialogProps<TItem = any> {
 	/** Whether the dialog is open */
@@ -64,6 +65,7 @@ interface ActionDialogProps<TItem = any> {
  */
 function createActionFormResolver(
 	fields: Record<string, FieldDefinition>,
+	errorMap: ReturnType<typeof useValidationErrorMap>,
 ): Resolver<Record<string, any>> {
 	const schema = buildValidationSchema(fields as any);
 
@@ -81,9 +83,10 @@ function createActionFormResolver(
 		for (const issue of result.error.issues) {
 			const path = issue.path.join(".");
 			if (path && !errors[path]) {
+				const { message } = errorMap(issue as Parameters<typeof errorMap>[0]);
 				errors[path] = {
 					type: issue.code,
-					message: issue.message,
+					message,
 				};
 			}
 		}
@@ -114,6 +117,7 @@ function FormDialogContent<TItem>({
 	const { config } = handler;
 	const resolveText = useResolveText();
 	const { t } = useTranslation();
+	const errorMap = useValidationErrorMap();
 	const defaultValues = React.useMemo(() => {
 		const values: Record<string, any> = {};
 
@@ -132,8 +136,8 @@ function FormDialogContent<TItem>({
 
 	// Create resolver from field definitions
 	const resolver = React.useMemo(() => {
-		return createActionFormResolver(config.fields);
-	}, [config.fields]);
+		return createActionFormResolver(config.fields, errorMap);
+	}, [config.fields, errorMap]);
 
 	const form = useForm({
 		defaultValues,
@@ -303,15 +307,19 @@ function CustomDialogContent<TItem>({
 		return () => {
 			mounted = false;
 		};
-	}, [handler.component]);
+	}, [handler.component, t]);
 
 	if (loading) {
 		return (
-			<div className="flex h-32 items-center justify-center">
-				<Icon
-					icon="ph:spinner-gap"
-					className="text-muted-foreground size-6 animate-spin"
-				/>
+			<div className="space-y-4 py-2" aria-busy="true">
+				<div className="space-y-2">
+					<Skeleton variant="text" className="h-4 w-24" />
+					<Skeleton className="h-10 w-full" />
+				</div>
+				<div className="space-y-2">
+					<Skeleton variant="text" className="h-4 w-32" />
+					<Skeleton className="h-10 w-full" />
+				</div>
 			</div>
 		);
 	}

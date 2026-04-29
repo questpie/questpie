@@ -114,7 +114,11 @@ export async function collectionCreate(
 	if (body === null) {
 		return errorResponse(
 			app,
-			ApiError.badRequest("Invalid JSON body"),
+			ApiError.badRequest(
+				"Invalid JSON body",
+				undefined,
+				"error.invalidJsonBody",
+			),
 			request,
 			resolved.appContext.locale,
 		);
@@ -188,7 +192,11 @@ export async function collectionUpdate(
 	if (body === null) {
 		return errorResponse(
 			app,
-			ApiError.badRequest("Invalid JSON body"),
+			ApiError.badRequest(
+				"Invalid JSON body",
+				undefined,
+				"error.invalidJsonBody",
+			),
 			request,
 			resolved.appContext.locale,
 		);
@@ -302,7 +310,11 @@ export async function collectionRevert(
 	if (body === null || typeof body !== "object") {
 		return errorResponse(
 			app,
-			ApiError.badRequest("Invalid JSON body"),
+			ApiError.badRequest(
+				"Invalid JSON body",
+				undefined,
+				"error.invalidJsonBody",
+			),
 			request,
 			resolved.appContext.locale,
 		);
@@ -352,7 +364,11 @@ export async function collectionTransition(
 	if (body === null || typeof body !== "object") {
 		return errorResponse(
 			app,
-			ApiError.badRequest("Invalid JSON body"),
+			ApiError.badRequest(
+				"Invalid JSON body",
+				undefined,
+				"error.invalidJsonBody",
+			),
 			request,
 			resolved.appContext.locale,
 		);
@@ -361,7 +377,12 @@ export async function collectionTransition(
 	try {
 		const payload = body as { stage: string; scheduledAt?: string };
 		if (!payload.stage || typeof payload.stage !== "string") {
-			throw ApiError.badRequest("Missing required field: stage");
+			throw ApiError.badRequest(
+				"Missing required field: stage",
+				undefined,
+				"error.missingRequiredField",
+				{ field: "stage" },
+			);
 		}
 
 		const opts: { id: any; stage: string; scheduledAt?: Date } = {
@@ -372,7 +393,12 @@ export async function collectionTransition(
 		if (payload.scheduledAt) {
 			const date = new Date(payload.scheduledAt);
 			if (Number.isNaN(date.getTime())) {
-				throw ApiError.badRequest("Invalid scheduledAt date");
+				throw ApiError.badRequest(
+					"Invalid scheduledAt date",
+					undefined,
+					"error.invalidDateField",
+					{ field: "scheduledAt" },
+				);
 			}
 			opts.scheduledAt = date;
 		}
@@ -438,7 +464,11 @@ export async function collectionUpdateMany(
 	if (body === null || typeof body !== "object") {
 		return errorResponse(
 			app,
-			ApiError.badRequest("Invalid JSON body"),
+			ApiError.badRequest(
+				"Invalid JSON body",
+				undefined,
+				"error.invalidJsonBody",
+			),
 			request,
 			resolved.appContext.locale,
 		);
@@ -477,7 +507,11 @@ export async function collectionUpdateBatch(
 	if (body === null || typeof body !== "object") {
 		return errorResponse(
 			app,
-			ApiError.badRequest("Invalid JSON body"),
+			ApiError.badRequest(
+				"Invalid JSON body",
+				undefined,
+				"error.invalidJsonBody",
+			),
 			request,
 			resolved.appContext.locale,
 		);
@@ -516,7 +550,11 @@ export async function collectionDeleteMany(
 	if (body === null || typeof body !== "object") {
 		return errorResponse(
 			app,
-			ApiError.badRequest("Invalid JSON body"),
+			ApiError.badRequest(
+				"Invalid JSON body",
+				undefined,
+				"error.invalidJsonBody",
+			),
 			request,
 			resolved.appContext.locale,
 		);
@@ -564,6 +602,22 @@ export async function collectionAudit(
 		const auditCrud = app.collections[auditCollectionName as any] as any;
 		if (!auditCrud) {
 			return smartResponse([], request);
+		}
+
+		const record = await crud.findOne(
+			{
+				where: { id: params.id as any },
+				includeDeleted: true,
+			},
+			resolved.appContext,
+		);
+		if (!record) {
+			return errorResponse(
+				app,
+				ApiError.notFound("Record", params.id),
+				request,
+				resolved.appContext.locale,
+			);
 		}
 
 		const result = await auditCrud.find(

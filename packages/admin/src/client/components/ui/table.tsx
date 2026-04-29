@@ -47,10 +47,7 @@ function TableFooter({ className, ...props }: React.ComponentProps<"tfoot">) {
 	return (
 		<tfoot
 			data-slot="table-footer"
-			className={cn(
-				"qa-table__footer bg-background font-medium",
-				className,
-			)}
+			className={cn("qa-table__footer bg-background font-medium", className)}
 			{...props}
 		/>
 	);

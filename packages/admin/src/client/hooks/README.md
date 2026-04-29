@@ -47,7 +47,7 @@ const { data } = useCollectionList("posts", { limit: 10 }, undefined, {
 Fetch paginated list with filters and sorting:
 
 ```tsx
-import { useCollectionList } from "@questpie/admin/hooks";
+import { useCollectionList } from "@questpie/admin/client";
 
 function PostsList() {
 	const { data, isLoading, error } = useCollectionList("posts", {
@@ -76,7 +76,7 @@ function PostsList() {
 Fetch single item by ID:
 
 ```tsx
-import { useCollectionItem } from "@questpie/admin/hooks";
+import { useCollectionItem } from "@questpie/admin/client";
 
 function PostDetail({ id }: { id: string }) {
 	const { data: post, isLoading } = useCollectionItem("posts", id, {
@@ -100,7 +100,7 @@ function PostDetail({ id }: { id: string }) {
 Create new items:
 
 ```tsx
-import { useCollectionCreate } from "@questpie/admin/hooks";
+import { useCollectionCreate } from "@questpie/admin/client";
 
 function CreatePost() {
 	const createPost = useCollectionCreate("posts", {
@@ -129,7 +129,7 @@ function CreatePost() {
 Update existing items:
 
 ```tsx
-import { useCollectionUpdate } from "@questpie/admin/hooks";
+import { useCollectionUpdate } from "@questpie/admin/client";
 
 function EditPost({ id }: { id: string }) {
 	const updatePost = useCollectionUpdate("posts", {
@@ -158,7 +158,7 @@ function EditPost({ id }: { id: string }) {
 Delete items:
 
 ```tsx
-import { useCollectionDelete } from "@questpie/admin/hooks";
+import { useCollectionDelete } from "@questpie/admin/client";
 
 function DeleteButton({ id }: { id: string }) {
 	const deletePost = useCollectionDelete("posts", {
@@ -185,7 +185,7 @@ function DeleteButton({ id }: { id: string }) {
 Fetch global settings:
 
 ```tsx
-import { useGlobal } from "@questpie/admin/hooks";
+import { useGlobal } from "@questpie/admin/client";
 
 function Settings() {
 	const { data: settings, isLoading } = useGlobal("siteSettings");
@@ -205,7 +205,7 @@ function Settings() {
 Update global settings:
 
 ```tsx
-import { useGlobalUpdate } from "@questpie/admin/hooks";
+import { useGlobalUpdate } from "@questpie/admin/client";
 
 function SettingsForm() {
 	const updateSettings = useGlobalUpdate("siteSettings");
@@ -229,7 +229,7 @@ import {
 	useAdminStore,
 	selectClient,
 	selectBasePath,
-} from "@questpie/admin/hooks";
+} from "@questpie/admin/client";
 
 function MyComponent() {
 	const client = useAdminStore(selectClient);
@@ -259,7 +259,7 @@ Available selectors:
 Get full admin context (legacy, prefer `useAdminStore`):
 
 ```tsx
-import { useAdminContext } from "@questpie/admin/hooks";
+import { useAdminContext } from "@questpie/admin/client";
 
 function MyComponent() {
 	const { admin, client, queryClient } = useAdminContext();
@@ -273,7 +273,7 @@ function MyComponent() {
 Access Better Auth client:
 
 ```tsx
-import { useAuthClient } from "@questpie/admin/hooks";
+import { useAuthClient } from "@questpie/admin/client";
 
 function UserMenu() {
 	const authClient = useAuthClient();
@@ -297,7 +297,7 @@ function UserMenu() {
 Create auth client instance:
 
 ```tsx
-import { createAdminAuthClient } from "@questpie/admin/hooks";
+import { createAdminAuthClient } from "@questpie/admin/client";
 
 const authClient = createAdminAuthClient({
 	baseURL: "http://localhost:3000",
@@ -312,7 +312,7 @@ const authClient = createAdminAuthClient({
 Type-safe navigation helpers:
 
 ```tsx
-import { useAdminRoutes } from "@questpie/admin/hooks";
+import { useAdminRoutes } from "@questpie/admin/client";
 
 function Navigation() {
 	const { routes, navigate } = useAdminRoutes();
@@ -342,7 +342,7 @@ function Navigation() {
 Get href for admin routes:
 
 ```tsx
-import { getAdminLinkHref } from "@questpie/admin/hooks";
+import { getAdminLinkHref } from "@questpie/admin/client";
 
 const href = getAdminLinkHref(
 	{

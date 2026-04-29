@@ -15,11 +15,14 @@ A [QUESTPIE](https://questpie.com) app built with TanStack Start.
 # 1) Start PostgreSQL
 docker compose up -d
 
-# 2) Run migrations
-bun questpie migrate
+# 2) Regenerate codegen and type-check
+bun run scaffold:verify
 
-# 3) Start development server
-bun dev
+# 3) Run migrations
+bun run migrate
+
+# 4) Start development server
+bun run dev
 ```
 
 - Admin panel: `http://localhost:3000/admin`
@@ -67,10 +70,13 @@ migrations/
 | `bun build`                      | Build for production                          |
 | `bun start`                      | Start production server                       |
 | `bun check-types`                | Type check                                    |
+| `bun run scaffold:generate`      | Regenerate routes and QUESTPIE codegen        |
+| `bun run scaffold:verify`        | Regenerate codegen and type-check             |
+| `bun run routes:generate`        | Regenerate TanStack Router route tree         |
+| `bun run questpie:generate`      | Regenerate `src/questpie/server/.generated/*` |
 | `bun questpie add <type> <name>` | Scaffold entity files (auto-runs codegen)     |
-| `bun questpie migrate`           | Run migrations                                |
-| `bun questpie migrate:create`    | Create migration                              |
-| `bunx questpie generate`         | Regenerate `src/questpie/server/.generated/*` |
+| `bun run migrate`                | Run migrations                                |
+| `bun run migrate:create`         | Create migration                              |
 
 ## Adding a Collection
 
@@ -78,14 +84,14 @@ Preferred workflow:
 
 1. Run `bun questpie add collection products`.
 2. The CLI creates the file and runs codegen automatically.
-3. Run `bun questpie migrate:create`.
+3. Run `bun run migrate:create`.
 
 Manual workflow (when you create files by hand):
 
 1. Create a file in `src/questpie/server/collections/`.
 2. Export a collection builder from that file.
-3. Run `bunx questpie generate`.
-4. Run `bun questpie migrate:create`.
+3. Run `bun run questpie:generate`.
+4. Run `bun run migrate:create`.
 
 Collections are discovered automatically by codegen. No manual `app.ts` registration is required.
 
@@ -95,13 +101,13 @@ Preferred workflow:
 
 1. Run `bun questpie add global marketing`.
 2. The CLI creates the file and runs codegen automatically.
-3. Run `bun questpie migrate:create`.
+3. Run `bun run migrate:create`.
 
 Manual workflow (when you create files by hand):
 
 1. Create a file in `src/questpie/server/globals/`.
 2. Export a global builder from that file.
-3. Run `bunx questpie generate`.
-4. Run `bun questpie migrate:create`.
+3. Run `bun run questpie:generate`.
+4. Run `bun run migrate:create`.
 
 Globals are discovered automatically by codegen. No manual `app.ts` registration is required.

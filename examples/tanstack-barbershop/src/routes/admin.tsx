@@ -59,6 +59,9 @@ export const Route = createFileRoute("/admin")({
 
 function AdminLayout() {
 	const location = useLocation();
+	const showDevtools =
+		process.env.NODE_ENV === "development" &&
+		process.env.VITE_TANSTACK_DEVTOOLS === "true";
 
 	return (
 		<html lang="en" className="dark">
@@ -81,17 +84,19 @@ function AdminLayout() {
 				>
 					<Outlet />
 				</AdminLayoutProvider>
-				<TanStackDevtools
-					config={{
-						position: "bottom-right",
-					}}
-					plugins={[
-						{
-							name: "Tanstack Router",
-							render: <TanStackRouterDevtoolsPanel />,
-						},
-					]}
-				/>
+				{showDevtools && (
+					<TanStackDevtools
+						config={{
+							position: "bottom-right",
+						}}
+						plugins={[
+							{
+								name: "Tanstack Router",
+								render: <TanStackRouterDevtoolsPanel />,
+							},
+						]}
+					/>
+				)}
 				<Scripts />
 			</body>
 		</html>

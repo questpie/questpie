@@ -46,7 +46,6 @@ import {
 	verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Icon } from "@iconify/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 import {
@@ -66,7 +65,6 @@ import { MediaPickerDialog } from "../media/media-picker-dialog";
 import { AssetPreview } from "../primitives/asset-preview";
 import { Dropzone } from "../primitives/dropzone";
 import { ResourceSheet } from "../sheets";
-import { Button } from "../ui/button";
 import type { BaseFieldProps } from "./field-types";
 import { sanitizeFilename, useResolvedControl } from "./field-utils";
 import { FieldWrapper } from "./field-wrapper";
@@ -286,7 +284,7 @@ function SingleUploadInner({
 	const resolvedPlaceholder = placeholder
 		? resolveText(placeholder)
 		: undefined;
-	const { upload, isUploading, progress, error: uploadError } = useUpload();
+	const { upload, isUploading, progress } = useUpload();
 	const [isPickerOpen, setIsPickerOpen] = React.useState(false);
 	const [isEditSheetOpen, setIsEditSheetOpen] = React.useState(false);
 
@@ -355,22 +353,22 @@ function SingleUploadInner({
 		const parts: string[] = [];
 		if (normalizedAccept?.length) {
 			const types = normalizedAccept
-				.map((t: string) => {
-					if (t.startsWith("image/")) return "Images";
-					if (t.startsWith("video/")) return "Videos";
-					if (t.startsWith("audio/")) return "Audio";
-					if (t === "application/pdf") return "PDF";
-					return t;
+				.map((type: string) => {
+					if (type.startsWith("image/")) return t("dropzone.typeImages");
+					if (type.startsWith("video/")) return t("dropzone.typeVideos");
+					if (type.startsWith("audio/")) return t("dropzone.typeAudio");
+					if (type === "application/pdf") return t("dropzone.typePDF");
+					return type;
 				})
 				.filter((v: string, i: number, a: string[]) => a.indexOf(v) === i);
 			parts.push(types.join(", "));
 		}
 		if (maxSize) {
 			const mb = (maxSize / (1024 * 1024)).toFixed(0);
-			parts.push(`Max ${mb}MB`);
+			parts.push(t("upload.maxSize", { size: `${mb}MB` }));
 		}
 		return parts.join(" • ") || undefined;
-	}, [normalizedAccept, maxSize]);
+	}, [normalizedAccept, maxSize, t]);
 
 	const hasValue = !!assetId;
 	const isLoading = isUploading || (hasValue && isLoadingAsset);
@@ -415,23 +413,21 @@ function SingleUploadInner({
 					disabled={disabled}
 					loading={isUploading}
 					progress={isUploading ? progress : undefined}
-					label={resolvedPlaceholder || t("dropzone.label")}
+					variant="compact"
+					label={resolvedPlaceholder || t("upload.dropzone")}
 					hint={hintText}
+					action={
+						collection
+							? {
+									label: t("upload.browseLibrary"),
+									icon: "ph:folder-open-bold",
+									onClick: () => setIsPickerOpen(true),
+									disabled,
+								}
+							: undefined
+					}
 					onValidationError={handleValidationError}
 				/>
-			)}
-
-			{!hasValue && !isUploading && !disabled && !!collection && (
-				<Button
-					type="button"
-					variant="outline"
-					size="sm"
-					onClick={() => setIsPickerOpen(true)}
-					className="mt-2 w-full"
-				>
-					<Icon icon="ph:folder-open-bold" className="mr-2 size-4" />
-					Browse Library
-				</Button>
 			)}
 
 			<MediaPickerDialog
@@ -673,22 +669,22 @@ function MultipleUploadInner({
 		const parts: string[] = [];
 		if (normalizedAccept?.length) {
 			const types = normalizedAccept
-				.map((t: string) => {
-					if (t.startsWith("image/")) return "Images";
-					if (t.startsWith("video/")) return "Videos";
-					if (t.startsWith("audio/")) return "Audio";
-					if (t === "application/pdf") return "PDF";
-					return t;
+				.map((type: string) => {
+					if (type.startsWith("image/")) return t("dropzone.typeImages");
+					if (type.startsWith("video/")) return t("dropzone.typeVideos");
+					if (type.startsWith("audio/")) return t("dropzone.typeAudio");
+					if (type === "application/pdf") return t("dropzone.typePDF");
+					return type;
 				})
 				.filter((v: string, i: number, a: string[]) => a.indexOf(v) === i);
 			parts.push(types.join(", "));
 		}
 		if (maxSize) {
 			const mb = (maxSize / (1024 * 1024)).toFixed(0);
-			parts.push(`Max ${mb}MB`);
+			parts.push(t("upload.maxSize", { size: `${mb}MB` }));
 		}
 		return parts.join(" • ") || undefined;
-	}, [normalizedAccept, maxSize]);
+	}, [normalizedAccept, maxSize, t]);
 
 	const hasItems = assetIds.length > 0 || pendingUploads.length > 0;
 	const canAddMore = !maxItems || assetIds.length < maxItems;
@@ -770,28 +766,24 @@ function MultipleUploadInner({
 					disabled={disabled}
 					loading={isUploading}
 					progress={isUploading ? progress : undefined}
+					variant="compact"
 					label={
 						hasItems
-							? t("dropzone.addMore")
-							: resolvedPlaceholder || t("dropzone.label")
+							? t("upload.browse")
+							: resolvedPlaceholder || t("upload.dropzone")
 					}
 					hint={hintText}
+					action={
+						!disabled
+							? {
+									label: t("upload.browseLibrary"),
+									icon: "ph:folder-open-bold",
+									onClick: () => setIsPickerOpen(true),
+								}
+							: undefined
+					}
 					onValidationError={handleValidationError}
-					className={hasItems ? "min-h-[80px]" : undefined}
 				/>
-			)}
-
-			{canAddMore && !isUploading && !disabled && !!collection && (
-				<Button
-					type="button"
-					variant="outline"
-					size="sm"
-					onClick={() => setIsPickerOpen(true)}
-					className="mt-2 w-full"
-				>
-					<Icon icon="ph:folder-open-bold" className="mr-2 size-4" />
-					Browse Library
-				</Button>
 			)}
 
 			<MediaPickerDialog
@@ -870,7 +862,7 @@ export function UploadField({
 	// Determine preview variant based on mode if not specified
 	const effectivePreviewVariant =
 		previewVariant ??
-		(multiple ? (layout === "grid" ? "thumbnail" : "compact") : "card");
+		(multiple ? (layout === "grid" ? "thumbnail" : "compact") : "compact");
 
 	return (
 		<Controller

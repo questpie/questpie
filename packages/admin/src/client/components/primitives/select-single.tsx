@@ -6,7 +6,7 @@ import type * as React from "react";
 import { useCallback, useDeferredValue, useId, useMemo, useState } from "react";
 
 import { useIsMobile } from "../../hooks/use-media-query";
-import { useResolveText } from "../../i18n/hooks";
+import { useResolveText, useSafeI18n } from "../../i18n/hooks";
 import { cn } from "../../lib/utils";
 import {
 	Command,
@@ -121,6 +121,11 @@ export function SelectSingle<TValue extends string = string>({
 }: SelectSingleProps<TValue>) {
 	const resolvedStaticOptions = staticOptions ?? EMPTY_OPTIONS;
 	const resolveText = useResolveText();
+	const i18n = useSafeI18n();
+	const t = (key: string, fallback: string) => {
+		const message = i18n?.t(key);
+		return message && message !== key ? message : fallback;
+	};
 	const resolvedPlaceholder = resolveText(placeholder);
 	const resolvedEmptyMessage = resolveText(emptyMessage);
 	const resolvedDrawerTitle = resolveText(drawerTitle);
@@ -278,7 +283,7 @@ export function SelectSingle<TValue extends string = string>({
 				{clearable && value && !disabled && !isLoadingValue && (
 					<span
 						aria-hidden="true"
-						title="Clear selection"
+						title={t("relation.clear", "Clear selection")}
 						onPointerDown={handleClear}
 						onClick={handleClear}
 						className="hover:bg-surface-high -mr-1 inline-flex size-6 items-center justify-center rounded-md opacity-60 transition-[background-color,opacity] hover:opacity-100"
@@ -295,7 +300,7 @@ export function SelectSingle<TValue extends string = string>({
 		<Command shouldFilter={showSearchInput && !loadOptions}>
 			{showSearchInput && (
 				<CommandInput
-					placeholder="Search..."
+					placeholder={t("ui.searchPlaceholder", "Search...")}
 					value={search}
 					onValueChange={setSearch}
 				/>

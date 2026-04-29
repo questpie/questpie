@@ -1,9 +1,9 @@
 ---
-title: Routes
+title: Typed Routes
 description: Typed server routes — define input schema, handler logic, and call from the client.
 ---
 
-Routes are typed server-side logic exposed as endpoints. Define an input schema with Zod, write a handler that receives typed context, and call it from the client with full type safety.
+Typed routes are server-side logic exposed as JSON endpoints. Define an input schema with Zod, write a handler that receives typed context, and call it from the client with full type safety.
 
 On the client, you call `client.routes.routeName()`.
 
@@ -84,7 +84,7 @@ handler: async ({ input, collections, queue, email, db, session, blog }) => {
 };
 ```
 
-## Calling Routes
+## Calling Typed Routes
 
 ### From the client SDK
 

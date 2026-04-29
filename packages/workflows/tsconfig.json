@@ -1,0 +1,27 @@
+{
+	"$schema": "https://json.schemastore.org/tsconfig",
+	"compilerOptions": {
+		"incremental": true,
+		"composite": true,
+		"target": "ES2022",
+		"module": "ES2022",
+		"moduleResolution": "bundler",
+		"jsx": "react-jsx",
+		"lib": ["ES2022", "DOM", "DOM.Iterable"],
+		"esModuleInterop": true,
+		"forceConsistentCasingInFileNames": true,
+		"strict": true,
+		"skipLibCheck": true,
+		"types": ["bun-types", "react", "react-dom"],
+		"baseUrl": ".",
+		"paths": {
+			"#questpie/admin/*": ["../admin/src/*"]
+		}
+	},
+	"include": [
+		"src/**/*",
+		"src/server/modules/workflows/.generated/*.ts",
+		"src/client/.generated/*.ts"
+	],
+	"exclude": ["node_modules", "dist"]
+}

@@ -40,6 +40,7 @@ import {
 } from "../../components/ui/dropdown-menu";
 import { EmptyState } from "../../components/ui/empty-state";
 import { Label } from "../../components/ui/label";
+import { Skeleton } from "../../components/ui/skeleton";
 import {
 	useGlobal,
 	useGlobalRevertVersion,
@@ -54,6 +55,11 @@ import { useGlobalServerValidation } from "../../hooks/use-server-validation";
 import { useTransitionStage } from "../../hooks/use-transition-stage";
 import { useResolveText, useTranslation } from "../../i18n/hooks";
 import { useSafeContentLocales, useScopedLocale } from "../../runtime";
+import {
+	detectManyToManyRelations,
+	hasManyToManyRelations,
+} from "../../utils/detect-relations";
+import { shouldHandleAdminShortcut } from "../../utils/keyboard-shortcuts";
 import { AutoFormFields } from "../collection/auto-form-fields";
 import { AdminViewHeader } from "../layout/admin-view-layout";
 
@@ -79,6 +85,38 @@ function extractReactiveConfigs(
 	}
 
 	return configs;
+}
+
+function GlobalFormViewSkeleton() {
+	return (
+		<div className="qa-global-form w-full space-y-4" aria-busy="true">
+			<span className="sr-only">Loading global form</span>
+			<AdminViewHeader
+				title={<Skeleton variant="text" className="h-7 w-48" />}
+				meta={<Skeleton variant="text" className="h-3 w-36" />}
+				actions={
+					<>
+						<Skeleton className="size-8" />
+						<Skeleton className="h-8 w-20" />
+					</>
+				}
+			/>
+			<div className="space-y-4">
+				<div className="space-y-2">
+					<Skeleton variant="text" className="h-4 w-24" />
+					<Skeleton className="h-10 w-full" />
+				</div>
+				<div className="space-y-2">
+					<Skeleton variant="text" className="h-4 w-32" />
+					<Skeleton className="h-10 w-full" />
+				</div>
+				<div className="space-y-2">
+					<Skeleton variant="text" className="h-4 w-28" />
+					<Skeleton className="h-32 w-full" />
+				</div>
+			</div>
+		</div>
+	);
 }
 
 // ============================================================================
@@ -170,13 +208,49 @@ export default function GlobalFormView({
 	const { t } = useTranslation();
 	const resolveText = useResolveText();
 
-	const {
-		data: globalData,
-		isLoading: dataLoading,
-		error: dataError,
-	} = useGlobal(globalName);
 	const { fields: schemaFields, schema: globalSchema } =
 		useGlobalFields(globalName);
+
+	// Auto-detect M:N relations (e.g. upload-through) — they are virtual and
+	// are NOT included in the response unless explicitly requested via `with`.
+	const withRelations = React.useMemo(
+		() =>
+			detectManyToManyRelations({
+				fields: config?.fields as any,
+				schema: globalSchema as any,
+			}),
+		[config?.fields, globalSchema],
+	);
+
+	const {
+		data: globalDataRaw,
+		isLoading: dataLoading,
+		error: dataError,
+	} = useGlobal(
+		globalName,
+		hasManyToManyRelations(withRelations) ? { with: withRelations } : undefined,
+	);
+
+	// Backend returns relation arrays as { id, ... } objects but the form needs
+	// arrays of ids — same transform CollectionFormView does for editing.
+	const globalData = React.useMemo(() => {
+		if (!globalDataRaw || !hasManyToManyRelations(withRelations)) {
+			return globalDataRaw;
+		}
+		const result: Record<string, any> = { ...(globalDataRaw as any) };
+		for (const key of Object.keys(withRelations)) {
+			const value = result[key];
+			if (
+				Array.isArray(value) &&
+				value.length > 0 &&
+				typeof value[0] === "object" &&
+				value[0]?.id
+			) {
+				result[key] = value.map((v: any) => v.id);
+			}
+		}
+		return result;
+	}, [globalDataRaw, withRelations]);
 
 	const { locale: contentLocale, setLocale: setContentLocale } =
 		useScopedLocale();
@@ -489,7 +563,12 @@ export default function GlobalFormView({
 	// Keyboard shortcut: Cmd+S to save
 	React.useEffect(() => {
 		const handleKeyDown = (e: KeyboardEvent) => {
-			if ((e.metaKey || e.ctrlKey) && e.key === "s") {
+			if (
+				shouldHandleAdminShortcut(e, {
+					allowEditableTarget: true,
+					key: "s",
+				})
+			) {
 				e.preventDefault();
 				form.handleSubmit(onSubmit)();
 			}
@@ -554,11 +633,7 @@ export default function GlobalFormView({
 	}
 
 	if (dataLoading) {
-		return (
-			<div className="text-muted-foreground flex h-64 items-center justify-center">
-				<Icon icon="ph:spinner-gap" className="size-6 animate-spin" />
-			</div>
-		);
+		return <GlobalFormViewSkeleton />;
 	}
 
 	const globalLabel = resolveText(
@@ -688,6 +763,7 @@ export default function GlobalFormView({
 				auditEntries={auditData ?? []}
 				isLoadingAudit={auditLoading}
 				versions={(versionsData ?? []) as any[]}
+				fields={globalSchema?.fields as any}
 				isLoadingVersions={versionsLoading}
 				isReverting={revertVersionMutation.isPending}
 				onRevert={async (version) => {

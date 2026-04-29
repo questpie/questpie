@@ -107,7 +107,11 @@ export async function globalRevert(
 	if (body === null || typeof body !== "object") {
 		return errorResponse(
 			app,
-			ApiError.badRequest("Invalid JSON body"),
+			ApiError.badRequest(
+				"Invalid JSON body",
+				undefined,
+				"error.invalidJsonBody",
+			),
 			request,
 			resolved.appContext.locale,
 		);
@@ -153,7 +157,11 @@ export async function globalTransition(
 	if (body === null || typeof body !== "object") {
 		return errorResponse(
 			app,
-			ApiError.badRequest("Invalid JSON body"),
+			ApiError.badRequest(
+				"Invalid JSON body",
+				undefined,
+				"error.invalidJsonBody",
+			),
 			request,
 			resolved.appContext.locale,
 		);
@@ -162,7 +170,12 @@ export async function globalTransition(
 	try {
 		const payload = body as { stage: string; scheduledAt?: string };
 		if (!payload.stage || typeof payload.stage !== "string") {
-			throw ApiError.badRequest("Missing required field: stage");
+			throw ApiError.badRequest(
+				"Missing required field: stage",
+				undefined,
+				"error.missingRequiredField",
+				{ field: "stage" },
+			);
 		}
 
 		const opts: { stage: string; scheduledAt?: Date } = {
@@ -172,7 +185,12 @@ export async function globalTransition(
 		if (payload.scheduledAt) {
 			const date = new Date(payload.scheduledAt);
 			if (Number.isNaN(date.getTime())) {
-				throw ApiError.badRequest("Invalid scheduledAt date");
+				throw ApiError.badRequest(
+					"Invalid scheduledAt date",
+					undefined,
+					"error.invalidDateField",
+					{ field: "scheduledAt" },
+				);
 			}
 			opts.scheduledAt = date;
 		}
@@ -234,7 +252,11 @@ export async function globalUpdate(
 	if (body === null) {
 		return errorResponse(
 			app,
-			ApiError.badRequest("Invalid JSON body"),
+			ApiError.badRequest(
+				"Invalid JSON body",
+				undefined,
+				"error.invalidJsonBody",
+			),
 			request,
 			resolved.appContext.locale,
 		);
@@ -302,6 +324,10 @@ export async function globalAudit(
 		if (!auditCrud) {
 			return smartResponse([], request);
 		}
+
+		const globalInstance = app.getGlobalConfig(params.global as any);
+		const crud = globalInstance.generateCRUD(resolved.appContext.db, app);
+		await crud.get({}, resolved.appContext);
 
 		const result = await auditCrud.find(
 			{

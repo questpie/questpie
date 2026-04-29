@@ -60,6 +60,9 @@ export const Route = createFileRoute("/_app")({
 
 function AppLayout() {
 	const { siteSettings } = Route.useLoaderData();
+	const showDevtools =
+		process.env.NODE_ENV === "development" &&
+		process.env.VITE_TANSTACK_DEVTOOLS === "true";
 
 	return (
 		<html lang="en" suppressHydrationWarning>
@@ -118,7 +121,7 @@ function AppLayout() {
 						</LocaleProvider>
 					</ThemeProvider>
 
-					{process.env.NODE_ENV === "development" && (
+					{showDevtools && (
 						<TanStackDevtools
 							config={{
 								position: "bottom-right",

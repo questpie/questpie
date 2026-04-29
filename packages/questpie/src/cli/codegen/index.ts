@@ -166,19 +166,19 @@ export function coreCodegenPlugin(): CodegenPlugin {
 						dir: "collections",
 						description: "Collection definition",
 						template: ({ kebab, camel }) =>
-							`import { collection } from "#questpie/factories";\n\nexport const ${camel} = collection("${kebab}")\n\t.fields(({ f }) => ({\n\t\ttitle: f.text("Title"),\n\t}))\n\t.title(({ f }) => f.title);\n`,
+							`import { collection } from "#questpie/factories";\n\nexport const ${camel} = collection("${kebab}")\n\t.fields(({ f }) => ({\n\t\ttitle: f.text(255).label("Title").required(),\n\t}))\n\t.title(({ f }) => f.title);\n`,
 					},
 					global: {
 						dir: "globals",
 						description: "Global definition",
 						template: ({ kebab, camel }) =>
-							`import { global } from "#questpie/factories";\n\nexport const ${camel} = global("${kebab}")\n\t.fields(({ f }) => ({\n\t\ttitle: f.text("Title"),\n\t}));\n`,
+							`import { global } from "#questpie/factories";\n\nexport const ${camel} = global("${kebab}")\n\t.fields(({ f }) => ({\n\t\ttitle: f.text(255).label("Title").required(),\n\t}));\n`,
 					},
 					job: {
 						dir: "jobs",
 						description: "Background job",
 						template: ({ kebab }) =>
-							`import { job } from "questpie";\nimport { z } from "zod";\n\nexport default job({\n\tname: "${kebab}",\n\tschema: z.object({}),\n\thandler: async ({ payload, ctx }) => {},\n});\n`,
+							`import { job } from "questpie";\nimport { z } from "zod";\n\nexport default job({\n\tname: "${kebab}",\n\tschema: z.object({}),\n\thandler: async () => {},\n});\n`,
 					},
 					service: {
 						dir: "services",
@@ -190,14 +190,14 @@ export function coreCodegenPlugin(): CodegenPlugin {
 						dir: "emails",
 						extension: ".tsx",
 						description: "Email template",
-						template: ({ camel, title }) =>
-							`import { email } from "questpie";\n\nexport default email({\n\tsubject: () => "${title}",\n\trender: async (props: {}) => {\n\t\treturn <div>{/* TODO: implement ${camel} email template */}</div>;\n\t},\n});\n`,
+						template: ({ kebab, title }) =>
+							`import { email } from "questpie";\nimport { z } from "zod";\n\nexport default email({\n\tname: "${kebab}",\n\tschema: z.object({}),\n\thandler: async () => ({\n\t\tsubject: "${title}",\n\t\thtml: "<div>${title}</div>",\n\t}),\n});\n`,
 					},
 					route: {
 						dir: "routes",
 						description: "API route",
 						template: () =>
-							`import { route } from "questpie";\nimport { z } from "zod";\n\nexport default route()\n\t.get()\n\t.schema(z.object({}))\n\t.handler(async ({ input, ctx }) => {\n\t\treturn {};\n\t});\n`,
+							`import { route } from "questpie";\nimport { z } from "zod";\n\nexport default route()\n\t.post()\n\t.schema(z.object({}))\n\t.handler(async () => {\n\t\treturn {};\n\t});\n`,
 					},
 					seed: {
 						dir: "seeds",

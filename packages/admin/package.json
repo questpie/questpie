@@ -1,6 +1,6 @@
 {
 	"name": "@questpie/admin",
-	"version": "3.0.3",
+	"version": "3.1.0",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/questpie/questpie.git",
@@ -49,7 +49,7 @@
 		"dev": "tsdown --watch",
 		"build": "tsdown",
 		"check-types": "tsc --noEmit",
-		"test": "bun test --preload ./test/setup-dom.ts test/",
+		"test": "bun test --preload ./test/setup-dom.ts --max-concurrency=1 test/",
 		"test:watch": "bun test --preload ./test/setup-dom.ts --watch test/",
 		"questpie:generate": "bun x questpie generate --verbose"
 	},

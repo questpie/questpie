@@ -70,7 +70,7 @@ import type {
 	RealtimeAdapter,
 	RealtimeChangeEvent,
 	RealtimeNotice,
-} from "questpie/server";
+} from "questpie";
 
 export class InMemoryRealtimeAdapter implements RealtimeAdapter {
 	private listeners = new Set<(notice: RealtimeNotice) => void>();
@@ -109,10 +109,10 @@ export class InMemoryRealtimeAdapter implements RealtimeAdapter {
 ## Registration
 
 ```ts title="questpie.config.ts"
-import { config } from "questpie";
+import { runtimeConfig } from "questpie";
 import { InMemoryRealtimeAdapter } from "./my-realtime-adapter";
 
-export default config({
+export default runtimeConfig({
 	// ...
 	realtime: {
 		adapter: new InMemoryRealtimeAdapter(),

@@ -277,8 +277,8 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 
 		// Dispose infrastructure services in reverse-DAG order
 		const infraDisposals: Promise<void>[] = [];
-		const reversed = [...Questpie._INFRA_SERVICES].reverse();
-		for (const [svcName] of reversed) {
+		for (let i = Questpie._INFRA_SERVICES.length - 1; i >= 0; i--) {
+			const [svcName] = Questpie._INFRA_SERVICES[i]!;
 			const def = this._serviceDefs[svcName];
 			if (!def?.dispose) continue;
 			if (this._singletonServices[svcName] === undefined) continue;
@@ -773,102 +773,11 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 	 * - Deduplicates entries that appear multiple times due to `.use()` composition.
 	 */
 	private injectGlobalHooks(): void {
-		const {
-			globals: rawGlobalEntries = [],
-		} = this.globalHooks;
-
-		// Deduplicate entries (same object ref can appear multiple times via .use() merges)
-		const globalEntries = [...new Set(rawGlobalEntries)];
-
-		// Helper: check if a hook entry matches a given entity name
-		const matchesFilter = (
-			entry: { include?: string[]; exclude?: string[] },
-			name: string,
-		): boolean => {
-			if (entry.include && !entry.include.includes(name)) return false;
-			if (entry.exclude && entry.exclude.includes(name)) return false;
-			return true;
-		};
-
-		// Helper: append a hook fn to an entity's hooks (supports array or single)
-		const appendHook = (
-			hooks: Record<string, any>,
-			hookName: string,
-			fn: (...args: any[]) => any,
-		) => {
-			const existing = hooks[hookName];
-			if (existing) {
-				const arr = Array.isArray(existing) ? existing : [existing];
-				hooks[hookName] = [...arr, fn];
-			} else {
-				hooks[hookName] = [fn];
-			}
-		};
-
 		// NOTE: Collection global hooks are handled by executeCollectionHooksWithGlobal
 		// in crud-generator.ts — no injection needed here.
-
-		// Inject global global hooks
-		for (const [name, global] of Object.entries(this._globals)) {
-			const state = (global as any).state as any;
-
-			for (const entry of globalEntries) {
-				if (!matchesFilter(entry, name)) continue;
-
-				if (!state.hooks) state.hooks = {};
-
-				// Standard hooks: beforeChange, afterChange
-				for (const hookName of ["beforeChange", "afterChange"] as const) {
-					const globalFn = entry[hookName];
-					if (!globalFn) continue;
-
-					const isAfter = hookName === "afterChange";
-					const wrapped = isAfter
-						? async (ctx: any) => {
-								try {
-									await globalFn({ ...ctx, global: name });
-								} catch (err) {
-									this.logger.error(
-										`[QUESTPIE] Global global hook "${hookName}" error for "${name}":`,
-										err,
-									);
-								}
-							}
-						: async (ctx: any) => {
-								await globalFn({ ...ctx, global: name });
-							};
-
-					appendHook(state.hooks, hookName, wrapped);
-				}
-
-				// Transition hooks: beforeTransition, afterTransition
-				for (const hookName of [
-					"beforeTransition",
-					"afterTransition",
-				] as const) {
-					const globalFn = entry[hookName];
-					if (!globalFn) continue;
-
-					const isAfter = hookName === "afterTransition";
-					const wrapped = isAfter
-						? async (ctx: any) => {
-								try {
-									await globalFn({ ...ctx, global: name });
-								} catch (err) {
-									this.logger.error(
-										`[QUESTPIE] Global global hook "${hookName}" error for "${name}":`,
-										err,
-									);
-								}
-							}
-						: async (ctx: any) => {
-								await globalFn({ ...ctx, global: name });
-							};
-
-					appendHook(state.hooks, hookName, wrapped);
-				}
-			}
-		}
+		// NOTE: Global global hooks are handled by executeHooksWithGlobal and
+		// executeTransitionHooksWithGlobal in global-crud-generator.ts. Injecting
+		// them into entity hooks here would execute module hooks twice.
 	}
 
 	/**

@@ -81,6 +81,7 @@ export interface GlobalCollectionTransitionHookContext<TData = any> {
 	app?: any;
 	session?: any | null;
 	locale?: string;
+	accessMode?: AccessMode;
 	db: any;
 	/** Queue client for publishing background jobs */
 	queue: any;
@@ -187,6 +188,7 @@ export interface GlobalGlobalTransitionHookContext<TData = any> {
 	app?: any;
 	session?: any | null;
 	locale?: string;
+	accessMode?: AccessMode;
 	db: any;
 	/** Queue client for publishing background jobs */
 	queue: any;

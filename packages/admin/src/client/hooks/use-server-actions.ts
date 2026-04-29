@@ -21,6 +21,7 @@ import type {
 	ActionDefinition,
 	ActionsConfig,
 } from "../builder/types/action-types";
+import { useTranslation } from "../i18n/hooks";
 import { selectAdmin, selectClient, useAdminStore } from "../runtime";
 import { useCollectionSchema } from "./use-collection-schema";
 
@@ -39,10 +40,13 @@ type ServerExecuteActionResponse = {
 	error?: string;
 };
 
-function getActionErrorMessage(response: ServerExecuteActionResponse): string {
+function getActionErrorMessage(
+	response: ServerExecuteActionResponse,
+	t: (key: string, params?: Record<string, unknown>) => string,
+): string {
 	if (response.error) return response.error;
 	if (response.result?.toast?.message) return response.result.toast.message;
-	return "Action execution failed"; // Fallback; ctx.helpers.t() not available here
+	return t("action.executionFailed");
 }
 
 async function applyServerActionEffects(
@@ -64,7 +68,11 @@ async function applyServerActionEffects(
 	}
 
 	if (result.type === "redirect" && result.url) {
-		ctx.helpers.navigate(result.url);
+		if ((result as any).external) {
+			window.open(result.url, "_blank");
+		} else {
+			ctx.helpers.navigate(result.url);
+		}
 	}
 }
 
@@ -153,6 +161,8 @@ function mapServerAction(
 	collection: string,
 	fieldRegistry: Record<string, any> | null,
 	client: any,
+	locale: string,
+	t: (key: string, params?: Record<string, unknown>) => string,
 ): ActionDefinition & { scope?: string } {
 	const action: ActionDefinition & { scope?: string } = {
 		id: serverAction.id,
@@ -198,7 +208,7 @@ function mapServerAction(
 				onSubmit: async (data, ctx) => {
 					const routes = client?.routes;
 					if (!routes?.executeAction) {
-						throw new Error("executeAction route is not available");
+						throw new Error(t("error.serverActionFailed"));
 					}
 
 					const itemId =
@@ -226,10 +236,11 @@ function mapServerAction(
 						itemId,
 						itemIds,
 						data,
+						locale,
 					})) as ServerExecuteActionResponse;
 
 					if (!response.success || response.result?.type === "error") {
-						throw new Error(getActionErrorMessage(response));
+						throw new Error(getActionErrorMessage(response, t));
 					}
 
 					await applyServerActionEffects(response.result, ctx);
@@ -275,6 +286,7 @@ export function useServerActions({
 }: UseServerActionsOptions): UseServerActionsReturn {
 	const admin = useAdminStore(selectAdmin);
 	const client = useAdminStore(selectClient);
+	const { t, locale } = useTranslation();
 	const { data: queriedSchema, isPending: isSchemaPending } =
 		useCollectionSchema(collection, {
 			enabled: !schemaOverride,
@@ -289,9 +301,16 @@ export function useServerActions({
 		const fieldRegistry = (admin?.getFields?.() as Record<string, any>) ?? null;
 
 		return actionsConfig.custom.map((serverAction: any) =>
-			mapServerAction(serverAction, collection, fieldRegistry, client),
+			mapServerAction(
+				serverAction,
+				collection,
+				fieldRegistry,
+				client,
+				locale,
+				t,
+			),
 		);
-	}, [schema?.admin?.actions, collection, admin, client]);
+	}, [schema?.admin?.actions, collection, admin, client, locale, t]);
 
 	return {
 		serverActions,
@@ -338,7 +357,11 @@ export function mergeServerActions<TItem = any>(
 			primary: headerActions as ActionDefinition<TItem>[],
 			secondary: headerSecondary as ActionDefinition<TItem>[],
 		},
-		row: rowActions as ActionDefinition<TItem>[],
-		bulk: bulkActions,
+		...("row" in localActions || rowActions.length > 0
+			? { row: rowActions as ActionDefinition<TItem>[] }
+			: {}),
+		...("bulk" in localActions || bulkActions.length > 0
+			? { bulk: bulkActions }
+			: {}),
 	};
 }

@@ -153,10 +153,8 @@ export function BlockLibrarySidebar({
 				className="qa-block-library flex w-full flex-col sm:max-w-md"
 			>
 				<SheetHeader className="space-y-2">
-					<SheetTitle>Add Block</SheetTitle>
-					<SheetDescription>
-						Select a block type to add to your content
-					</SheetDescription>
+					<SheetTitle>{t("blocks.add")}</SheetTitle>
+					<SheetDescription>{t("blocks.libraryDescription")}</SheetDescription>
 				</SheetHeader>
 
 				{/* Search */}
@@ -184,10 +182,12 @@ export function BlockLibrarySidebar({
 								icon="ph:cube"
 								className="text-muted-foreground/50 mb-4 h-12 w-12"
 							/>
-							<p className="text-muted-foreground text-sm">No blocks found</p>
+							<p className="text-muted-foreground text-sm">
+								{t("blocks.noSearchResults")}
+							</p>
 							{search && (
 								<p className="text-muted-foreground mt-1 text-xs">
-									Try a different search term
+									{t("blocks.tryDifferentSearch")}
 								</p>
 							)}
 						</div>

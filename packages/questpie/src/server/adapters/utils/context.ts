@@ -4,6 +4,8 @@
  * Utilities for resolving session, locale, and creating adapter context.
  */
 
+import { tryGetContext } from "../../config/context.js";
+import { getInternalAdapterContext } from "../../config/internal-context.js";
 import type { Questpie } from "../../config/questpie.js";
 import type { QuestpieConfig } from "../../config/types.js";
 import type {
@@ -107,10 +109,13 @@ export const createAdapterContext = async <
 	}
 
 	// Merge all extensions into context
+	// Pass `request` through so access functions can branch on URL/headers
+	// (e.g. distinguish admin vs frontend calls).
 	const appContext = await app.createContext({
 		...baseContext,
 		...(adapterExtension ?? {}),
 		...(cmsExtension ?? {}),
+		request,
 	});
 
 	return {
@@ -132,6 +137,14 @@ export const resolveContext = async <
 ) => {
 	if (context?.appContext) {
 		return context;
+	}
+
+	const stored = tryGetContext();
+	const storedAdapterContext = getInternalAdapterContext(stored) as
+		| AdapterContext
+		| undefined;
+	if (stored?.app === app && storedAdapterContext?.appContext) {
+		return storedAdapterContext;
 	}
 
 	return createAdapterContext(app, request, config);

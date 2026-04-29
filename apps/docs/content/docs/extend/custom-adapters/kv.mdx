@@ -29,13 +29,13 @@ export interface KVAdapter {
 
 ## Required methods
 
-| Method | Description |
-|---|---|
-| `get(key)` | Return the stored value or `null`. Must respect TTL -- expired entries should return `null`. |
+| Method                  | Description                                                                                                                                    |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `get(key)`              | Return the stored value or `null`. Must respect TTL -- expired entries should return `null`.                                                   |
 | `set(key, value, ttl?)` | Store any serializable value. `ttl` is in **seconds**. If omitted, the entry never expires (unless the global `defaultTtl` in config applies). |
-| `delete(key)` | Remove a single key. |
-| `has(key)` | Test existence. Must respect expiration -- return `false` for expired keys. |
-| `clear()` | Wipe all keys managed by this adapter instance. |
+| `delete(key)`           | Remove a single key.                                                                                                                           |
+| `has(key)`              | Test existence. Must respect expiration -- return `false` for expired keys.                                                                    |
+| `clear()`               | Wipe all keys managed by this adapter instance.                                                                                                |
 
 ## Optional: tag-based invalidation
 
@@ -50,7 +50,7 @@ These power QUESTPIE's cache invalidation workflows. If your backend does not su
 ## Minimal example
 
 ```ts title="my-kv-adapter.ts"
-import type { KVAdapter } from "questpie/server";
+import type { KVAdapter } from "questpie";
 
 export class MyKVAdapter implements KVAdapter {
 	private store = new Map<string, { value: unknown; expiresAt?: number }>();
@@ -115,10 +115,10 @@ export class MyKVAdapter implements KVAdapter {
 ## Registration
 
 ```ts title="questpie.config.ts"
-import { config } from "questpie";
+import { runtimeConfig } from "questpie";
 import { MyKVAdapter } from "./my-kv-adapter";
 
-export default config({
+export default runtimeConfig({
 	// ...
 	kv: {
 		adapter: new MyKVAdapter(),

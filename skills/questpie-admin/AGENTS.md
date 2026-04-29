@@ -1,15 +1,14 @@
-
 # QUESTPIE Admin Panel
 
 The QUESTPIE admin panel is a **projection of your server schema** — not the framework itself. It reads collections, globals, and config via introspection and generates a full admin interface. Your backend works without it.
 
 ## Reference Topics
 
-| Topic | File | Covers |
-|---|---|---|
-| Views | `references/views.md` | List views, form views, dashboard, sidebar, filters, bulk actions, visibility, history |
-| Blocks | `references/blocks.md` | Block definitions, fields, prefetch, renderers, block picker |
-| Custom UI | `references/custom-ui.md` | Custom fields, custom views, registries, reactive fields, widgets |
+| Topic     | File                      | Covers                                                                                 |
+| --------- | ------------------------- | -------------------------------------------------------------------------------------- |
+| Views     | `references/views.md`     | List views, form views, dashboard, sidebar, filters, bulk actions, visibility, history |
+| Blocks    | `references/blocks.md`    | Block definitions, fields, prefetch, renderers, block picker                           |
+| Custom UI | `references/custom-ui.md` | Custom fields, custom views, registries, reactive fields, widgets                      |
 
 ## Full Compiled Document
 
@@ -406,8 +405,6 @@ For the full server-side setup (context resolver, type augmentation, access rule
 6. **MEDIUM: `console.error` for user errors** — use `toast.error()` from `sonner`.
 
 ---
-
-
 
 # QUESTPIE Admin Views
 
@@ -840,8 +837,6 @@ export const pages = collection("pages")
 
 ---
 
-
-
 # QUESTPIE Blocks
 
 This skill builds on questpie-admin.
@@ -1020,7 +1015,7 @@ React components that receive block data and return JSX.
 ### Defining a Renderer
 
 ```tsx title="admin/blocks/hero.tsx"
-import type { BlockProps } from "@questpie/admin/client";
+import type { BlockProps } from "../.generated/client";
 
 export function HeroRenderer({ values, data }: BlockProps<"hero">) {
 	return (
@@ -1145,8 +1140,6 @@ function PageRenderer({ blocks, previewData }) {
 Blocks with declarative prefetch (`{ with: { image: true } }`) resolve relations during reconcile — the preview shows the image URL immediately after the server round-trip completes, not just the asset ID.
 
 ---
-
-
 
 # QUESTPIE Custom UI
 
@@ -1450,4 +1443,3 @@ toast.error("Failed to save");
 7. **LOW: Not using shadcn components** — prefer `<Button>`, `<Card>`, `<Input>` from the shadcn component library instead of raw HTML elements. The admin has a consistent brutalist design system.
 
 ---
-

@@ -68,6 +68,8 @@ export type DashboardLayoutItem =
  */
 export interface DashboardSection {
 	type: "section";
+	/** Stable section ID */
+	id?: string;
 	/** Section label */
 	label?: DynamicI18nText;
 	/** Section description */
@@ -82,6 +84,8 @@ export interface DashboardSection {
 	layout?: "grid" | "stack";
 	/** Grid columns (for grid layout) */
 	columns?: number;
+	/** Fixed row height for widgets in this section */
+	rowHeight?: number | string;
 	/** Gap between items */
 	gap?: number;
 	/** Section items */
@@ -114,12 +118,14 @@ export interface DashboardSection {
  */
 export interface DashboardTabs {
 	type: "tabs";
+	/** Stable tabs group ID */
+	id?: string;
 	/** Tab configurations */
 	tabs: DashboardTabConfig[];
 	/** Default active tab ID */
 	defaultTab?: string;
-	/** Tabs visual variant */
-	variant?: "default" | "line" | "pills";
+	/** Custom CSS class */
+	className?: string;
 }
 
 /**
@@ -134,6 +140,12 @@ export interface DashboardTabConfig {
 	icon?: IconComponent | ComponentReference;
 	/** Tab items (widgets or sections) */
 	items: DashboardLayoutItem[];
+	/** Grid columns for this tab */
+	columns?: number;
+	/** Fixed row height for widgets in this tab */
+	rowHeight?: number | string;
+	/** Gap between tab items */
+	gap?: number;
 	/** Badge text (e.g., count) */
 	badge?: string | number;
 }
@@ -150,6 +162,8 @@ export interface DashboardConfig {
 	description?: DynamicI18nText;
 	/** Grid columns (default: 4) */
 	columns?: number;
+	/** Fixed row height for dashboard widgets */
+	rowHeight?: number | string;
 	/** Gap between widgets */
 	gap?: number;
 	/** Dashboard items - widgets, sections, or tabs */

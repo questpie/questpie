@@ -6,11 +6,12 @@
  * need an existing admin to create the first invitation.
  */
 
-import { eq, sql } from "drizzle-orm";
-import { route, type Questpie } from "questpie";
+import { route } from "questpie";
+import { eq, sql } from "questpie/drizzle";
 import { z } from "zod";
 
-import { getApp } from "./route-helpers.js";
+import { translateAdminMessage } from "./i18n-helpers.js";
+import { getApp, getLocale } from "./route-helpers.js";
 
 // ============================================================================
 // Schema Definitions
@@ -23,9 +24,9 @@ const isSetupRequiredOutputSchema = z.object({
 });
 
 const createFirstAdminSchema = z.object({
-	email: z.string().email("Invalid email address"),
-	password: z.string().min(8, "Password must be at least 8 characters"),
-	name: z.string().min(2, "Name must be at least 2 characters"),
+	email: z.string().email(),
+	password: z.string().min(8),
+	name: z.string().min(2),
 });
 
 const createFirstAdminOutputSchema = z.object({
@@ -45,7 +46,7 @@ const createFirstAdminOutputSchema = z.object({
 // ============================================================================
 
 /**
- * Check if setup is required (no users exist in the system).
+ * Check if setup is required (no admin users exist in the system).
  *
  * @example
  * ```ts
@@ -64,15 +65,16 @@ export const isSetupRequired = route()
 		const userCollection = app.getCollectionConfig("user");
 		const result = await app.db
 			.select({ count: sql`count(*)::int` as any })
-			.from(userCollection.table);
+			.from(userCollection.table)
+			.where(eq(userCollection.table.role as any, "admin") as any);
 		return { required: (result[0] as { count: number }).count === 0 };
 	});
 
 /**
  * Create the first admin user in the system.
- * This function only works when no users exist (setup mode).
+ * This function only works when no admin users exist (setup mode).
  *
- * Security: Once any user exists, this function will refuse to create more users.
+ * Security: Once any admin user exists, this function will refuse to create more users.
  * This prevents unauthorized admin creation after initial setup.
  *
  * @example
@@ -96,18 +98,22 @@ export const createFirstAdmin = route()
 	.outputSchema(createFirstAdminOutputSchema)
 	.handler(async (ctx) => {
 		const app = getApp(ctx);
+		const locale = getLocale(ctx);
+		const t = (key: string, params?: Record<string, unknown>) =>
+			translateAdminMessage(locale, key, params);
 		const input = ctx.input as z.infer<typeof createFirstAdminSchema>;
 		const userCollection = app.getCollectionConfig("user");
 
-		// Check if setup already completed (any users exist)
+		// Check if setup already completed (any admin user exists)
 		const checkResult = await app.db
 			.select({ count: sql`count(*)::int` as any })
-			.from(userCollection.table);
+			.from(userCollection.table)
+			.where(eq(userCollection.table.role as any, "admin") as any);
 
 		if ((checkResult[0] as { count: number }).count > 0) {
 			return {
 				success: false,
-				error: "Setup already completed - users exist in the system",
+				error: t("auth.setupAlreadyCompleted"),
 			};
 		}
 
@@ -124,7 +130,7 @@ export const createFirstAdmin = route()
 			if (!signUpResult.user) {
 				return {
 					success: false,
-					error: "Failed to create user account",
+					error: t("auth.failedToCreateUserAccount"),
 				};
 			}
 
@@ -151,9 +157,7 @@ export const createFirstAdmin = route()
 			return {
 				success: false,
 				error:
-					error instanceof Error
-						? error.message
-						: "An unexpected error occurred",
+					error instanceof Error ? error.message : t("error.unexpectedError"),
 			};
 		}
 	});

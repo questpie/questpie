@@ -1,0 +1,72 @@
+---
+title: Admin UI
+description: Monitor and manage workflows from the admin dashboard — list, detail, timeline, and stats widget.
+---
+
+# Admin UI
+
+`@questpie/workflows` includes a full admin UI for monitoring and managing workflow instances. It integrates with the QUESTPIE admin panel via the standard module system.
+
+## Setup
+
+Register the client module in your admin configuration:
+
+```ts title="questpie/admin/index.ts"
+import { workflowsClientModule } from "@questpie/workflows/client";
+
+export default qa
+  .use(adminModule)
+  .use(workflowsClientModule);
+```
+
+This adds:
+- A **Workflows** sidebar entry
+- A **Workflow list page** with filtering and pagination
+- A **Workflow detail page** with step timeline
+- A **Dashboard stats widget**
+
+## Workflow List Page
+
+The list page shows all workflow instances with:
+
+- **Status filter tabs**: All, Running, Suspended, Completed, Failed, Pending
+- **Auto-refresh**: Updates every 5 seconds
+- **Sortable columns**: Name, Status, Started, Duration, Attempt
+- **Click-through**: Navigate to the detail page for any instance
+
+## Workflow Detail Page
+
+The detail page provides:
+
+- **Instance metadata**: Name, ID, status, start time, duration, attempt count
+- **Action buttons**: Cancel (for active instances), Retry (for failed/timed out)
+- **Input/Output viewer**: Expandable JSON views of workflow input and output
+- **Step timeline**: Visual timeline of all steps with:
+  - Step type icon (run, sleep, event, invoke)
+  - Status badge (completed, failed, waiting, skipped)
+  - Duration and timestamps
+  - Expandable result/error data
+  - Compensation markers
+- **Log viewer**: Collapsible panel showing structured logs
+
+## Dashboard Widget
+
+The stats widget shows four key metrics:
+
+- **Total**: Total number of workflow instances
+- **Running**: Currently active instances
+- **Completed**: Successfully finished instances
+- **Failed**: Failed or timed-out instances
+
+The widget auto-refreshes every 10 seconds and is contributed to the admin dashboard automatically when the module is registered.
+
+## Sidebar Entry
+
+The module contributes a sidebar entry under the main navigation:
+
+```
+Workflows (ph:flow-arrow icon)
+└── List view → Detail view
+```
+
+Clicking the sidebar entry navigates to the workflow list page. From there, clicking any instance navigates to its detail page.

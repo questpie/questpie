@@ -25,6 +25,7 @@ import { Icon } from "@iconify/react";
 import * as React from "react";
 
 import type { Asset } from "../../hooks/use-upload";
+import { useSafeI18n } from "../../i18n/hooks";
 import { cn } from "../../lib/utils";
 import { Skeleton } from "../ui/skeleton";
 
@@ -241,6 +242,9 @@ export function MediaGrid({
 	columns = 4,
 	className,
 }: MediaGridProps) {
+	const i18n = useSafeI18n();
+	const t = (key: string, fallback: string) => i18n?.t(key) ?? fallback;
+
 	// Handle toggle selection
 	const handleToggle = (assetId: string) => {
 		if (!onSelectionChange) return;
@@ -282,7 +286,7 @@ export function MediaGrid({
 					className,
 				)}
 			>
-				<p className="text-sm">No assets found</p>
+				<p className="text-sm">{t("media.noAssets", "No assets found")}</p>
 			</div>
 		);
 	}

@@ -2,6 +2,10 @@ import type {
 	BackendMessageKey,
 	BackendTranslateFn,
 } from "#questpie/server/i18n/types.js";
+import {
+	createZodErrorMap,
+	type ZodIssue,
+} from "#questpie/shared/i18n/zod-error-map.js";
 
 import type { ApiErrorCode } from "./codes.js";
 import { getHTTPStatusFromCode } from "./codes.js";
@@ -25,6 +29,45 @@ export type ApiErrorOptions = {
 	/** Original error (preserves stack trace) */
 	cause?: unknown;
 };
+
+function translateFieldError(
+	fieldError: FieldError,
+	t?: BackendTranslateFn,
+	locale?: string,
+): FieldError {
+	let message = fieldError.message;
+
+	if (t && fieldError.validationIssue) {
+		const translate = (key: string, params?: Record<string, unknown>) =>
+			t(
+				key,
+				{
+					field: fieldError.path,
+					...fieldError.messageParams,
+					...params,
+				},
+				locale,
+			);
+		message = createZodErrorMap(translate)(
+			fieldError.validationIssue as ZodIssue,
+		).message;
+	} else if (t && fieldError.messageKey) {
+		message = t(
+			fieldError.messageKey,
+			{
+				field: fieldError.path,
+				...fieldError.messageParams,
+			},
+			locale,
+		);
+	}
+
+	return {
+		path: fieldError.path,
+		message,
+		value: fieldError.value,
+	};
+}
 
 /**
  * Base QUESTPIE Error class
@@ -94,7 +137,9 @@ export class ApiError extends Error {
 		return {
 			code: this.code,
 			message,
-			fieldErrors: this.fieldErrors,
+			fieldErrors: this.fieldErrors?.map((fieldError) =>
+				translateFieldError(fieldError, t, locale),
+			),
 			context: this.context,
 			stack: isDev ? this.stack : undefined,
 			cause: this.cause instanceof Error ? this.cause.message : undefined,
@@ -110,9 +155,12 @@ export class ApiError extends Error {
 		// Zod v4 uses 'issues' property
 		if (zodError.issues && Array.isArray(zodError.issues)) {
 			for (const issue of zodError.issues) {
+				const path = Array.isArray(issue.path) ? issue.path.join(".") : "";
 				fieldErrors.push({
-					path: issue.path.join("."),
+					path,
 					message: issue.message,
+					messageParams: { field: path },
+					validationIssue: issue,
 					value: issue.input,
 				});
 			}
@@ -174,11 +222,19 @@ export class ApiError extends Error {
 	/**
 	 * Create UNAUTHORIZED error
 	 */
-	static unauthorized(message = "Authentication required"): ApiError {
+	static unauthorized(
+		message = "Authentication required",
+		messageKey?: BackendMessageKey,
+		messageParams?: Record<string, unknown>,
+	): ApiError {
+		const useDefaultTranslation = message === "Authentication required";
 		return new ApiError({
 			code: "UNAUTHORIZED",
 			message,
-			messageKey: "error.unauthorized",
+			messageKey:
+				messageKey ??
+				(useDefaultTranslation ? "error.unauthorized" : undefined),
+			messageParams,
 		});
 	}
 
@@ -188,12 +244,16 @@ export class ApiError extends Error {
 	static badRequest(
 		message = "Bad request",
 		fieldErrors?: FieldError[],
+		messageKey?: BackendMessageKey,
+		messageParams?: Record<string, unknown>,
 	): ApiError {
 		const useDefaultTranslation = message === "Bad request";
 		return new ApiError({
 			code: "BAD_REQUEST",
 			message,
-			messageKey: useDefaultTranslation ? "error.badRequest" : undefined,
+			messageKey:
+				messageKey ?? (useDefaultTranslation ? "error.badRequest" : undefined),
+			messageParams,
 			fieldErrors,
 		});
 	}

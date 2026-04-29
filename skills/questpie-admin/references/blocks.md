@@ -181,7 +181,7 @@ React components that receive block data and return JSX.
 ### Defining a Renderer
 
 ```tsx title="admin/blocks/hero.tsx"
-import type { BlockProps } from "@questpie/admin/client";
+import type { BlockProps } from "../.generated/client";
 
 export function HeroRenderer({ values, data }: BlockProps<"hero">) {
 	return (

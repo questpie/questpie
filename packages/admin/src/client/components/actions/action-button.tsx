@@ -18,6 +18,7 @@ import type {
 } from "../../builder/types/action-types";
 import { resolveIconElement } from "../../components/component-renderer";
 import { useResolveText, useTranslation } from "../../i18n/hooks";
+import { cn } from "../../lib/utils";
 import {
 	selectAuthClient,
 	selectClient,
@@ -43,6 +44,8 @@ interface ActionButtonProps<TItem = any> {
 	className?: string;
 	/** Show icon only */
 	iconOnly?: boolean;
+	/** Render as a dropdown menu row */
+	presentation?: "button" | "menu";
 	/** Callback when action dialog should open */
 	onOpenDialog?: (action: ActionDefinition<TItem>) => void;
 }
@@ -69,6 +72,7 @@ export function ActionButton<TItem = any>({
 	size = "default",
 	className,
 	iconOnly = false,
+	presentation = "button",
 	onOpenDialog,
 }: ActionButtonProps<TItem>): React.ReactElement | null {
 	const resolveText = useResolveText();
@@ -187,9 +191,76 @@ export function ActionButton<TItem = any>({
 			}
 
 			case "server": {
-				// Server actions are handled as form/dialog if they have a form config,
-				// otherwise execute directly via the action execution hook
-				onOpenDialog?.(action);
+				setIsLoading(true);
+				try {
+					const routes = (client as any)?.routes;
+					if (!routes?.executeAction) {
+						throw new Error(t("error.serverActionFailed"));
+					}
+
+					const serverHandler = handler as {
+						type: "server";
+						actionId: string;
+						collection: string;
+					};
+					const itemId =
+						item && !Array.isArray(item)
+							? String((item as Record<string, unknown>).id ?? "")
+							: undefined;
+					const itemIds = items
+						?.map((it: any) => it?.id)
+						.filter(Boolean)
+						.map(String);
+					const response = await routes.executeAction({
+						collection: serverHandler.collection,
+						actionId: serverHandler.actionId,
+						itemId,
+						itemIds: itemIds?.length ? itemIds : undefined,
+					});
+
+					if (!response?.success || response.result?.type === "error") {
+						const message =
+							response?.error ??
+							response?.result?.toast?.message ??
+							t("error.serverActionFailed");
+						throw new Error(message);
+					}
+
+					const result = response.result;
+					if (result?.toast?.message) {
+						helpers.toast.success(result.toast.message);
+					} else {
+						helpers.toast.success(t("toast.actionSuccess"));
+					}
+
+					if (result?.effects?.invalidate === true) {
+						await helpers.invalidateAll();
+					} else if (Array.isArray(result?.effects?.invalidate)) {
+						for (const collectionName of result.effects.invalidate) {
+							await helpers.invalidateCollection(collectionName);
+						}
+					}
+
+					if (result?.effects?.redirect) {
+						helpers.navigate(result.effects.redirect);
+					}
+					if (result?.type === "redirect" && result.url) {
+						if (result.external) {
+							window.open(result.url, "_blank");
+						} else {
+							helpers.navigate(result.url);
+						}
+					}
+					if (result?.effects?.closeModal) {
+						helpers.closeDialog();
+					}
+				} catch (error) {
+					helpers.toast.error(
+						error instanceof Error ? error.message : t("error.actionFailed"),
+					);
+				} finally {
+					setIsLoading(false);
+				}
 				break;
 			}
 		}
@@ -219,11 +290,20 @@ export function ActionButton<TItem = any>({
 	return (
 		<>
 			<Button
-				variant={action.variant || "default"}
+				variant={
+					presentation === "menu" ? "ghost" : action.variant || "default"
+				}
 				size={iconOnly ? "icon-sm" : size}
 				onClick={handleClick}
 				disabled={isDisabled || isLoading}
-				className={className}
+				className={cn(
+					presentation === "menu" &&
+						"w-full justify-start rounded-[calc(var(--surface-radius)-2px)] px-3 py-2 text-left",
+					action.variant === "destructive" &&
+						presentation === "menu" &&
+						"text-destructive hover:bg-destructive/10 hover:text-destructive",
+					className,
+				)}
 				title={iconOnly ? label : undefined}
 			>
 				{iconElement}

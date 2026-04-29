@@ -5,7 +5,12 @@
  * for localized validation error messages.
  */
 
-import { createZodErrorMap, type ZodErrorMapFn } from "questpie/shared";
+import {
+	createValidationTranslator,
+	createZodErrorMap,
+	type ValidationTranslateFn,
+	type ZodErrorMapFn,
+} from "questpie/shared";
 import { useMemo } from "react";
 
 import { useSafeI18n } from "../i18n/hooks";
@@ -34,28 +39,28 @@ import { useSafeI18n } from "../i18n/hooks";
  * }
  * ```
  */
-export function useValidationErrorMap(): ZodErrorMapFn {
+export function useValidationTranslator(): ValidationTranslateFn {
 	const i18n = useSafeI18n();
 
 	return useMemo(() => {
-		// Create translate function that uses admin i18n
-		const translate = (
-			key: string,
-			params?: Record<string, unknown>,
-		): string => {
+		const fallbackTranslate = createValidationTranslator(
+			undefined,
+			i18n?.locale,
+		);
+
+		return (key, params) => {
 			if (i18n) {
-				return i18n.t(key, params);
+				const translated = i18n.t(key, params);
+				if (translated !== key) return translated;
 			}
 
-			// Fallback: return key with interpolated params
-			if (!params) return key;
-
-			return key.replace(/\{\{(\w+)\}\}/g, (_, paramKey) => {
-				const value = params[paramKey];
-				return value !== undefined ? String(value) : `{{${paramKey}}}`;
-			});
+			return fallbackTranslate(key, params);
 		};
-
-		return createZodErrorMap(translate);
 	}, [i18n]);
+}
+
+export function useValidationErrorMap(): ZodErrorMapFn {
+	const translate = useValidationTranslator();
+
+	return useMemo(() => createZodErrorMap(translate), [translate]);
 }

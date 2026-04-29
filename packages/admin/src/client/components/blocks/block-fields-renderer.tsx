@@ -24,7 +24,7 @@ import {
 	FieldLayoutRenderer,
 	type FieldLayoutContext,
 } from "../layout/field-layout-renderer.js";
-import { Spinner } from "../ui/spinner.js";
+import { Skeleton } from "../ui/skeleton.js";
 
 // ============================================================================
 // Types
@@ -79,7 +79,7 @@ export function BlockFieldsRenderer({
 	// When form layout is defined, use the shared layout renderer
 	if (blockSchema.form?.fields?.length) {
 		const layoutCtx: FieldLayoutContext = {
-			renderField: (fieldName, opts) => {
+			renderField: (fieldName) => {
 				const fieldDef = blockFields[fieldName];
 				if (!fieldDef) return null;
 				return (
@@ -129,6 +129,16 @@ type BlockFieldProps = {
 	definition: FieldInstance;
 };
 
+function BlockFieldSkeleton({ type }: { type?: string }) {
+	const isLarge = type === "blocks" || type === "json" || type === "richText";
+	return (
+		<div className="space-y-2" aria-busy="true">
+			<Skeleton variant="text" className="h-4 w-24" />
+			<Skeleton className={isLarge ? "h-40 w-full" : "h-10 w-full"} />
+		</div>
+	);
+}
+
 function BlockField({ name, blockId, blocksPath, definition }: BlockFieldProps) {
 	const resolveText = useResolveText();
 	const options = (definition["~options"] || {}) as Record<string, any>;
@@ -148,11 +158,7 @@ function BlockField({ name, blockId, blocksPath, definition }: BlockFieldProps) 
 		useLazyComponent(definition.component);
 
 	if (componentLoading) {
-		return (
-			<div className="flex items-center justify-center p-4">
-				<Spinner className="size-5" />
-			</div>
-		);
+		return <BlockFieldSkeleton type={fieldType} />;
 	}
 
 	// All fields should have a registered component (registry-first)

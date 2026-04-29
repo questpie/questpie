@@ -65,6 +65,61 @@ Publish jobs from hooks, routes, or other jobs via the `queue` context:
 
 The `queue` object is fully typed — autocompletion shows all available jobs and their expected payloads.
 
+## Running Workers
+
+Publishing a job only writes it to the configured queue adapter. It does not execute the handler inside the current request. Start a separate worker process that imports the generated app and listens for queued jobs:
+
+```ts title="src/worker.ts"
+import { app } from "#questpie";
+
+await app.queue.listen({
+	teamSize: 5,
+	batchSize: 3,
+});
+```
+
+Add a script next to your web app scripts:
+
+```json title="package.json"
+{
+	"scripts": {
+		"dev": "bun --bun vite dev",
+		"dev:worker": "bun --bun run --watch ./src/worker.ts",
+		"worker": "bun --bun run ./src/worker.ts"
+	}
+}
+```
+
+Run the app and the worker as two processes:
+
+```bash
+bun run dev
+bun run dev:worker
+```
+
+In production, deploy the HTTP app and the worker separately with the same environment variables and database connection. The HTTP app publishes jobs. The worker process consumes them and runs the job handlers. You can run multiple worker processes for horizontal scaling.
+
+`listen()` registers long-running consumers and installs graceful shutdown handlers for `SIGINT` and `SIGTERM` by default. Use `teamSize` for per-process concurrency and `batchSize` for how many jobs the adapter fetches at once.
+
+## One-Off Processing
+
+For serverless cron, tests, or maintenance scripts, process a bounded batch with `runOnce()` instead of starting a long-running worker:
+
+```ts title="scripts/process-jobs-once.ts"
+import { app } from "#questpie";
+
+const result = await app.queue.runOnce({
+	batchSize: 10,
+	jobs: ["sendAppointmentConfirmation"],
+});
+
+await app.queue.stop();
+
+console.log(`Processed ${result.processed} jobs`);
+```
+
+The `jobs` filter accepts either the generated registration key (`sendAppointmentConfirmation`) or the job definition name (`sendAppointmentConfirmation`, `send-appointment-confirmation`, etc.).
+
 ## Handler Context
 
 Job handlers receive the same `AppContext` as routes:
@@ -75,7 +130,42 @@ Job handlers receive the same `AppContext` as routes:
 | `collections` | Typed collection API                   |
 | `email`       | Email service                          |
 | `queue`       | Publish other jobs                     |
+| `services`    | User-defined services                  |
 | `db`          | Database instance                      |
+| `logger`      | Logger service                         |
+
+## Scheduled Jobs
+
+Use `startAfter` when publishing a single delayed job:
+
+```ts
+await queue.sendAppointmentReminder.publish(
+	{ appointmentId: "appt_123" },
+	{ startAfter: new Date("2026-05-01T08:00:00Z") },
+);
+```
+
+Use `options.cron` on the job definition for recurring work:
+
+```ts title="jobs/sync-inventory.ts"
+import { job } from "questpie";
+import z from "zod";
+
+export default job({
+	name: "syncInventory",
+	schema: z.object({}),
+	options: {
+		cron: "*/15 * * * *",
+		retryLimit: 3,
+	},
+	handler: async ({ services, logger }) => {
+		const result = await services.inventory.sync();
+		logger.info({ result }, "Inventory synced");
+	},
+});
+```
+
+`app.queue.listen()` registers cron schedules automatically before starting workers. If you need a schedule-only setup step, call `await app.queue.registerSchedules()` and then `await app.queue.stop()`. Cron jobs must accept an empty payload because schedule registration validates `schema.parse({})`.
 
 ## Email Templates
 
@@ -165,6 +255,6 @@ export default job({
 ## Related Pages
 
 - [Hooks](/docs/backend/rules/hooks) — Trigger jobs from collection hooks
-- [Routes](/docs/backend/business-logic/routes) — Server-side logic
+- [Typed Routes](/docs/backend/business-logic/routes) — Server-side logic
 - [Queue](/docs/production/queue) — Queue infrastructure setup
 - [Email](/docs/production/email) — Email adapter configuration

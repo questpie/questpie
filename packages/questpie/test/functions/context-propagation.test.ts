@@ -4,20 +4,23 @@
  * Covers two bugs fixed:
  * 1. `executeJsonRoute` now wraps handler in `runWithContext` — locale/session
  *    propagate into nested CRUD calls without manual threading.
- * 2. `normalizeContext` now merges `session` from ALS — partial overrides like
+ * 2. Route execution now preserves request `accessMode` in ALS instead of
+ *    silently escalating HTTP handlers to system mode.
+ * 3. `normalizeContext` now merges `session` from ALS — partial overrides like
  *    `{ accessMode: "user" }` inside a handler still carry the request session.
  */
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
 import { z } from "zod";
 
+import { route } from "../../src/exports/index.js";
 import { createFetchHandler } from "../../src/server/adapters/http.js";
+import { resolveContext } from "../../src/server/adapters/utils/context.js";
 import { normalizeContext } from "../../src/server/collection/crud/shared/context.js";
 import {
 	runWithContext,
 	tryGetContext,
 } from "../../src/server/config/context.js";
-import { route } from "../../src/exports/index.js";
 import { executeJsonRoute } from "../../src/server/routes/execute.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder.js";
 
@@ -161,7 +164,7 @@ describe("executeJsonRoute — context propagation via runWithContext", () => {
 		expect(capturedSession).toBe(fakeSession);
 	});
 
-	it("sets accessMode to 'system' inside handler regardless of request accessMode", async () => {
+	it("propagates accessMode from the execution context into handler ALS", async () => {
 		let capturedAccessMode: string | undefined;
 
 		const checkAccess = route()
@@ -173,7 +176,6 @@ describe("executeJsonRoute — context propagation via runWithContext", () => {
 				return {};
 			});
 
-		// Even though the request comes in as "user", handler body runs as "system"
 		await executeJsonRoute(
 			setup.app,
 			checkAccess,
@@ -183,7 +185,7 @@ describe("executeJsonRoute — context propagation via runWithContext", () => {
 			},
 		);
 
-		expect(capturedAccessMode).toBe("system");
+		expect(capturedAccessMode).toBe("user");
 	});
 
 	it("propagates stage into ALS", async () => {
@@ -253,13 +255,53 @@ describe("Route via HTTP — locale propagates from request into handler ALS", (
 			const ctx = tryGetContext();
 			return { locale: ctx?.locale };
 		});
+	const echoAccessMode = route()
+		.post()
+		.schema(z.object({}))
+		.outputSchema(z.object({ accessMode: z.string().optional() }))
+		.handler(async () => {
+			const ctx = tryGetContext();
+			return { accessMode: ctx?.accessMode };
+		});
+	const bridgeAdapterContext = route()
+		.post()
+		.raw()
+		.handler(async ({ app, request }) => {
+			const resolved = await resolveContext(app, request, {});
+			return Response.json({
+				accessMode: resolved.appContext.accessMode,
+				organizationId:
+					(resolved.appContext as { organizationId?: string }).organizationId ??
+					null,
+			});
+		});
+	const inspectPublicSurface = route()
+		.post()
+		.schema(z.object({}))
+		.outputSchema(
+			z.object({
+				hasAdapterContext: z.boolean(),
+				hasRequestContext: z.boolean(),
+				symbolCount: z.number(),
+			}),
+		)
+		.handler(async (ctx) => ({
+			hasAdapterContext: "adapterContext" in ctx,
+			hasRequestContext: "requestContext" in ctx,
+			symbolCount: Object.getOwnPropertySymbols(ctx).length,
+		}));
 
 	let setup: Awaited<ReturnType<typeof buildMockApp>>;
 
 	beforeEach(async () => {
 		// Must register supported locales so createContext doesn't reject them
 		setup = await buildMockApp({
-			routes: { echoLocale },
+			routes: {
+				echoLocale,
+				echoAccessMode,
+				bridgeAdapterContext,
+				inspectPublicSurface,
+			},
 			locale: {
 				locales: [
 					{ code: "en" },
@@ -290,6 +332,55 @@ describe("Route via HTTP — locale propagates from request into handler ALS", (
 		expect(response?.status).toBe(200);
 		const body = await response?.json();
 		expect(body.locale).toBe("fr");
+	});
+
+	it("handler reads HTTP adapter accessMode via ALS", async () => {
+		const handler = createFetchHandler(setup.app);
+
+		const response = await handler(
+			new Request("http://localhost/echo-access-mode", {
+				method: "POST",
+				body: JSON.stringify({}),
+			}),
+		);
+
+		expect(response?.status).toBe(200);
+		const body = await response?.json();
+		expect(body.accessMode).toBe("user");
+	});
+
+	it("legacy handlers can reuse adapter context without public handler args", async () => {
+		const handler = createFetchHandler(setup.app, {
+			extendContext: async () => ({ organizationId: "org_123" }),
+		});
+
+		const response = await handler(
+			new Request("http://localhost/bridge-adapter-context", {
+				method: "POST",
+			}),
+		);
+
+		expect(response?.status).toBe(200);
+		const body = await response?.json();
+		expect(body.accessMode).toBe("user");
+		expect(body.organizationId).toBe("org_123");
+	});
+
+	it("does not expose adapter plumbing as route handler args", async () => {
+		const handler = createFetchHandler(setup.app);
+
+		const response = await handler(
+			new Request("http://localhost/inspect-public-surface", {
+				method: "POST",
+				body: JSON.stringify({}),
+			}),
+		);
+
+		expect(response?.status).toBe(200);
+		const body = await response?.json();
+		expect(body.hasAdapterContext).toBe(false);
+		expect(body.hasRequestContext).toBe(false);
+		expect(body.symbolCount).toBe(0);
 	});
 
 	it("different requests get their own locale (no ALS leak)", async () => {
@@ -337,8 +428,8 @@ describe("Route via HTTP — custom app context extensions reach JSON handlers",
 			return {
 				appId: ctx.params.appId,
 				method: ctx.request.method,
-				organizationId: (ctx as { organizationId?: string | null })
-					.organizationId ?? null,
+				organizationId:
+					(ctx as { organizationId?: string | null }).organizationId ?? null,
 			};
 		});
 

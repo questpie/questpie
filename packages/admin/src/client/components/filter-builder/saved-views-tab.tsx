@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useTranslation } from "../../i18n/hooks.js";
 import { Button } from "../ui/button.js";
 import { Input } from "../ui/input.js";
+import { Skeleton } from "../ui/skeleton.js";
 import type { FilterBuilderProps, SavedView } from "./types.js";
 
 interface SavedViewsTabProps {
@@ -101,8 +102,10 @@ export function SavedViewsTab({
 				</div>
 
 				{isLoading && (
-					<div className="text-muted-foreground flex justify-center p-4">
-						<Icon icon="ph:spinner-gap" className="size-5 animate-spin" />
+					<div className="space-y-2 py-2" aria-busy="true">
+						<Skeleton className="h-9 w-full" />
+						<Skeleton className="h-9 w-full" />
+						<Skeleton className="h-9 w-full" />
 					</div>
 				)}
 

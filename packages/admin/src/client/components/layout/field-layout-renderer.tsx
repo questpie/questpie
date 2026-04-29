@@ -257,10 +257,10 @@ function TabsRenderer({
 
 	return (
 		<Tabs defaultValue={defaultTab}>
-			<TabsList variant="line">
+			<TabsList className="w-full">
 				{tabs.map((tab: any) => (
-					<TabsTrigger key={tab.id} value={tab.id}>
-						{resolveIconElement(tab.icon, { className: "mr-2 size-4" })}
+					<TabsTrigger key={tab.id} value={tab.id} className="flex-1">
+						{resolveIconElement(tab.icon, { className: "size-3.5" })}
 						{ctx.resolveText(tab.label, tab.id)}
 					</TabsTrigger>
 				))}

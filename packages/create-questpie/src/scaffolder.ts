@@ -1,5 +1,13 @@
 import { existsSync } from "node:fs";
-import { cp, readdir, readFile, rename, writeFile } from "node:fs/promises";
+import {
+	cp,
+	mkdir,
+	readdir,
+	readFile,
+	rename,
+	rm,
+	writeFile,
+} from "node:fs/promises";
 import { join, resolve } from "node:path";
 
 import * as p from "@clack/prompts";
@@ -12,6 +20,7 @@ import {
 	installDependencies,
 	isGitInstalled,
 	label,
+	runPackageScript,
 } from "./utils.js";
 
 const TEMPLATE_VAR_REGEX = /\{\{(\w+)\}\}/g;
@@ -35,6 +44,7 @@ type TemplateVars = {
 	databaseName: string;
 	databaseUser: string;
 	databasePassword: string;
+	authSecret: string;
 };
 
 const TEXT_EXTENSIONS = new Set([
@@ -105,6 +115,88 @@ async function renameEnvExample(targetDir: string): Promise<void> {
 	}
 }
 
+async function createLocalEnv(targetDir: string): Promise<void> {
+	const examplePath = join(targetDir, ".env.example");
+	const envPath = join(targetDir, ".env");
+	if (existsSync(examplePath) && !existsSync(envPath)) {
+		await cp(examplePath, envPath);
+	}
+}
+
+type SkillSource = {
+	name: string;
+	candidates: string[];
+};
+
+function getSkillSources(targetDir: string): SkillSource[] {
+	return [
+		{
+			name: "questpie",
+			candidates: [
+				resolve(import.meta.dirname, "..", "skills", "questpie"),
+				join(targetDir, "node_modules", "questpie", "skills", "questpie"),
+				resolve(
+					import.meta.dirname,
+					"..",
+					"..",
+					"questpie",
+					"skills",
+					"questpie",
+				),
+				resolve(import.meta.dirname, "..", "..", "..", "skills", "questpie"),
+			],
+		},
+		{
+			name: "questpie-admin",
+			candidates: [
+				resolve(import.meta.dirname, "..", "skills", "questpie-admin"),
+				join(
+					targetDir,
+					"node_modules",
+					"@questpie",
+					"admin",
+					"skills",
+					"questpie-admin",
+				),
+				resolve(
+					import.meta.dirname,
+					"..",
+					"..",
+					"admin",
+					"skills",
+					"questpie-admin",
+				),
+				resolve(
+					import.meta.dirname,
+					"..",
+					"..",
+					"..",
+					"skills",
+					"questpie-admin",
+				),
+			],
+		},
+	];
+}
+
+async function installProjectSkills(targetDir: string): Promise<string[]> {
+	const installed: string[] = [];
+	const skillsDir = join(targetDir, ".agents", "skills");
+
+	for (const skill of getSkillSources(targetDir)) {
+		const source = skill.candidates.find((candidate) => existsSync(candidate));
+		if (!source) continue;
+
+		const destination = join(skillsDir, skill.name);
+		await mkdir(skillsDir, { recursive: true });
+		await rm(destination, { recursive: true, force: true });
+		await cp(source, destination, { recursive: true, dereference: true });
+		installed.push(skill.name);
+	}
+
+	return installed;
+}
+
 export async function scaffold(options: ProjectOptions): Promise<void> {
 	const spinner = p.spinner();
 	const targetDir = resolve(process.cwd(), options.projectName);
@@ -120,6 +212,7 @@ export async function scaffold(options: ProjectOptions): Promise<void> {
 		databaseName: options.databaseName,
 		databaseUser: options.databaseName,
 		databasePassword: generatePassword(),
+		authSecret: generatePassword(48),
 	};
 
 	// 1. Copy template
@@ -140,11 +233,12 @@ export async function scaffold(options: ProjectOptions): Promise<void> {
 
 	// 3. Replace template variables
 	await processDirectory(targetDir, vars);
+	await createLocalEnv(targetDir);
 	spinner.stop(label.success("Processed template variables"));
 
 	// 4. Install dependencies
+	const pm = detectPackageManager();
 	if (options.installDeps) {
-		const pm = detectPackageManager();
 		spinner.start(`Installing dependencies with ${pm}`);
 		try {
 			installDependencies(targetDir, pm);
@@ -154,7 +248,39 @@ export async function scaffold(options: ProjectOptions): Promise<void> {
 		}
 	}
 
-	// 5. Initialize git
+	// 5. Install project-local agent skills
+	if (options.installSkills) {
+		spinner.start("Installing QUESTPIE agent skills");
+		try {
+			const installedSkills = await installProjectSkills(targetDir);
+			if (installedSkills.length > 0) {
+				spinner.stop(
+					label.success(`Installed skills: ${installedSkills.join(", ")}`),
+				);
+			} else {
+				spinner.stop(
+					label.warn(
+						"Could not find packaged skills — run `bunx skill add questpie/questpie` manually if available",
+					),
+				);
+			}
+		} catch {
+			spinner.stop(label.warn("Failed to install skills — continuing"));
+		}
+	}
+
+	// 6. Generate QUESTPIE app/types
+	if (options.installDeps && options.runCodegen) {
+		spinner.start("Generating QUESTPIE app");
+		try {
+			runPackageScript(targetDir, pm, "scaffold:generate");
+			spinner.stop(label.success("Generated QUESTPIE app"));
+		} catch {
+			spinner.stop(label.warn("Failed to run codegen — run manually"));
+		}
+	}
+
+	// 7. Initialize git
 	if (options.initGit && isGitInstalled()) {
 		spinner.start("Initializing git repository");
 		try {
@@ -166,28 +292,35 @@ export async function scaffold(options: ProjectOptions): Promise<void> {
 	}
 
 	// Done!
-	const pm = detectPackageManager();
-	const runCmd = pm === "npm" ? "npm run" : pm;
+	const runScript = (script: string) =>
+		pm === "npm" ? `npm run ${script}` : `${pm} run ${script}`;
+	const questpieBin = pm === "npm" ? "npx questpie" : "bunx questpie";
 
 	p.note(
 		[
 			`cd ${options.projectName}`,
 			"",
+			"# Review the generated environment",
+			"# .env has already been created from .env.example",
+			"",
 			"# Start PostgreSQL",
 			"docker compose up -d",
 			"",
+			"# Regenerate and type-check the scaffold",
+			runScript("scaffold:verify"),
+			"",
 			"# Run migrations",
-			`${runCmd} questpie migrate`,
+			runScript("migrate"),
 			"",
 			"# Start dev server",
-			`${runCmd} dev`,
+			runScript("dev"),
 			"",
 			"# Add entities (auto-runs codegen)",
-			`${runCmd} questpie add collection products`,
-			`${runCmd} questpie add global marketing`,
+			`${questpieBin} add collection products`,
+			`${questpieBin} add global marketing`,
 			"",
 			"# If you create files manually",
-			"bunx questpie generate",
+			runScript("questpie:generate"),
 		].join("\n"),
 		"Next steps",
 	);

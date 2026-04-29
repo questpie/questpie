@@ -64,6 +64,12 @@ export interface BaseWidgetConfig {
 	span?: number;
 
 	/**
+	 * Row span in the dashboard tile grid.
+	 * A widget with span=2 and rowSpan=2 renders as a 2x2 tile.
+	 */
+	rowSpan?: number;
+
+	/**
 	 * Grid position (for dashboard layouts)
 	 */
 	position?: {

@@ -9,10 +9,11 @@ import { useQuery } from "@tanstack/react-query";
 
 import type { ProgressWidgetConfig } from "../../builder/types/widget-types";
 import { useServerWidgetData } from "../../hooks/use-server-widget-data";
-import { useResolveText } from "../../i18n/hooks";
+import { useResolveText, useTranslation } from "../../i18n/hooks";
 import { cn } from "../../lib/utils";
 import { selectClient, useAdminStore } from "../../runtime";
 import { WidgetCard } from "../../views/dashboard/widget-card";
+import { WidgetEmptyState } from "./widget-empty-state";
 import { ProgressWidgetSkeleton } from "./widget-skeletons";
 
 /**
@@ -47,6 +48,7 @@ interface ProgressWidgetProps {
 export default function ProgressWidget({ config }: ProgressWidgetProps) {
 	const client = useAdminStore(selectClient);
 	const resolveText = useResolveText();
+	const { t } = useTranslation();
 	const { color, showPercentage = true } = config;
 
 	type ProgressData = {
@@ -66,7 +68,7 @@ export default function ProgressWidget({ config }: ProgressWidgetProps) {
 		enabled: !useServerData && !!config.loader,
 		refetchInterval: config.refreshInterval,
 	});
-	const { data, isLoading, error, refetch } = useServerData
+	const { data, isLoading, error, refetch, isFetching } = useServerData
 		? serverQuery
 		: clientQuery;
 
@@ -121,17 +123,31 @@ export default function ProgressWidget({ config }: ProgressWidgetProps) {
 				<p className="text-muted-foreground text-xs">{data.subtitle}</p>
 			)}
 		</div>
-	) : null;
+	) : (
+		<WidgetEmptyState
+			iconName="ph:target"
+			title={t("widget.progress.emptyTitle")}
+			description={t("widget.progress.emptyDescription")}
+		/>
+	);
 
 	return (
 		<WidgetCard
 			title={title}
+			description={
+				config.description ? resolveText(config.description) : undefined
+			}
+			icon={config.icon}
+			variant={config.cardVariant}
 			isLoading={isLoading}
+			isRefreshing={isFetching && !isLoading}
 			loadingSkeleton={<ProgressWidgetSkeleton />}
 			error={
 				error instanceof Error ? error : error ? new Error(String(error)) : null
 			}
 			onRefresh={() => refetch()}
+			actions={config.actions}
+			className={config.className}
 		>
 			{progressContent}
 		</WidgetCard>

@@ -35,6 +35,8 @@
 		"vite": "^8.0.0"
 	},
 	"devDependencies": {
+		"@iconify/json": ">=2",
+		"@questpie/vite-plugin-iconify": "workspace:*",
 		"@rolldown/plugin-babel": "^0.2.0",
 		"@tailwindcss/vite": "^4.1.18",
 		"@types/mdx": "^2.0.13",
@@ -44,8 +46,6 @@
 		"@types/react-syntax-highlighter": "^15.5.13",
 		"@vitejs/plugin-react": "^6.0.1",
 		"babel-plugin-react-compiler": "^1.0.0",
-		"@iconify/json": ">=2",
-		"@questpie/vite-plugin-iconify": "workspace:*",
 		"nitro": "3.0.1-alpha.1",
 		"shadcn": "^3.6.3",
 		"tailwindcss": "^4.1.18",

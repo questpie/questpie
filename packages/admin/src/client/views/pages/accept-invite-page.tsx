@@ -11,12 +11,11 @@ import * as React from "react";
 
 import { Alert, AlertDescription } from "../../components/ui/alert";
 import { Button } from "../../components/ui/button";
-import { Spinner } from "../../components/ui/spinner";
+import { Skeleton } from "../../components/ui/skeleton";
 import { useAuthClient } from "../../hooks/use-auth";
 import { useTranslation } from "../../i18n/hooks";
 import {
 	selectBasePath,
-	selectBrandName,
 	selectNavigate,
 	useAdminStore,
 } from "../../runtime/provider";
@@ -68,6 +67,23 @@ interface AcceptInvitePageProps {
 	minPasswordLength?: number;
 }
 
+function AcceptInvitePageSkeleton() {
+	return (
+		<div className="space-y-4" aria-busy="true">
+			<span className="sr-only">Loading invitation</span>
+			<div className="space-y-2">
+				<Skeleton variant="text" className="h-4 w-20" />
+				<Skeleton className="h-10 w-full" />
+			</div>
+			<div className="space-y-2">
+				<Skeleton variant="text" className="h-4 w-24" />
+				<Skeleton className="h-10 w-full" />
+			</div>
+			<Skeleton className="h-10 w-full" />
+		</div>
+	);
+}
+
 /**
  * Accept invite page component.
  *
@@ -96,7 +112,6 @@ export function AcceptInvitePage({
 	const authClient = useAuthClient();
 	const navigate = useAdminStore(selectNavigate);
 	const basePath = useAdminStore(selectBasePath);
-	const brandName = useAdminStore(selectBrandName);
 
 	const {
 		data: invitationData,
@@ -162,11 +177,9 @@ export function AcceptInvitePage({
 			<AuthLayout
 				title={t("auth.validatingInvitation")}
 				description={t("auth.pleaseWait")}
-				logo={logo ?? <DefaultLogo brandName={brandName} />}
+				logo={logo}
 			>
-				<div className="flex justify-center py-8">
-					<Spinner className="size-8" />
-				</div>
+				<AcceptInvitePageSkeleton />
 			</AuthLayout>
 		);
 	}
@@ -176,7 +189,7 @@ export function AcceptInvitePage({
 			<AuthLayout
 				title={t("auth.invalidInvitation")}
 				description={t("auth.invalidInvitationDescription")}
-				logo={logo ?? <DefaultLogo brandName={brandName} />}
+				logo={logo}
 			>
 				<div className="space-y-4">
 					<Alert variant="destructive">
@@ -204,7 +217,7 @@ export function AcceptInvitePage({
 		<AuthLayout
 			title={title ?? t("auth.completeRegistration")}
 			description={description ?? t("auth.createAccountDescription")}
-			logo={logo ?? <DefaultLogo brandName={brandName} />}
+			logo={logo}
 			className="qa-accept-invite-page"
 		>
 			<AcceptInviteForm
@@ -214,13 +227,5 @@ export function AcceptInvitePage({
 				minPasswordLength={minPasswordLength}
 			/>
 		</AuthLayout>
-	);
-}
-
-function DefaultLogo({ brandName }: { brandName: string }) {
-	return (
-		<div className="text-center">
-			<h1 className="text-xl font-bold">{brandName}</h1>
-		</div>
 	);
 }

@@ -21,6 +21,26 @@ const settings = global("settings").fields(({ f }) => ({
 	siteName: f.text().required(),
 }));
 
+const privatePosts = collection("private_posts")
+	.fields(({ f }) => ({
+		title: f.text().required(),
+	}))
+	.access({
+		read: false,
+		create: true,
+		update: true,
+		delete: true,
+	});
+
+const privateSettings = global("private_settings")
+	.fields(({ f }) => ({
+		siteName: f.text().required(),
+	}))
+	.access({
+		read: false,
+		update: true,
+	});
+
 // Mock audit log collection matching the schema the audit route expects
 const adminAuditLog = collection("admin_audit_log").fields(({ f }) => ({
 	action: f.text().required(),
@@ -216,6 +236,45 @@ describe("audit routes", () => {
 			expect(docs.length).toBe(1);
 			expect(docs[0].resourceId).toBe(post1.id);
 		});
+
+		it("does not expose audit entries when the caller cannot read the record", async () => {
+			const privateSetup = await buildMockApp({
+				collections: {
+					private_posts: privatePosts,
+					admin_audit_log: adminAuditLog,
+				},
+				defaultAccess: { read: true, create: true, update: true, delete: true },
+			});
+			await runTestDbMigrations(privateSetup.app);
+
+			try {
+				const handler = createFetchHandler(privateSetup.app);
+				const systemCtx = createTestContext({ accessMode: "system" });
+				const post = await privateSetup.app.collections.private_posts.create(
+					{ title: "Private Post" },
+					systemCtx,
+				);
+
+				await (privateSetup.app as any).collections.admin_audit_log.create(
+					{
+						action: "create",
+						resourceType: "collection",
+						resource: "private_posts",
+						resourceId: post.id,
+						title: "Created Private Post",
+					},
+					systemCtx,
+				);
+
+				const response = await handler(
+					new Request(`http://localhost/private_posts/${post.id}/audit`),
+				);
+
+				expect(response?.status).toBe(403);
+			} finally {
+				await privateSetup.cleanup();
+			}
+		});
 	});
 
 	describe("global audit endpoint", () => {
@@ -284,6 +343,8 @@ describe("audit routes", () => {
 			const handler = createFetchHandler(setup.app);
 			const ctx = createTestContext();
 
+			await setup.app.globals.settings.update({ siteName: "Paginated" }, ctx);
+
 			// Insert 3 audit entries
 			for (let i = 1; i <= 3; i++) {
 				await (setup.app as any).collections.admin_audit_log.create(
@@ -305,6 +366,42 @@ describe("audit routes", () => {
 			const body = (await response?.json()) as any;
 			const docs = body.docs ?? body;
 			expect(docs.length).toBe(1);
+		});
+
+		it("does not expose global audit entries when the caller cannot read the global", async () => {
+			const privateSetup = await buildMockApp({
+				collections: { admin_audit_log: adminAuditLog },
+				globals: { private_settings: privateSettings },
+				defaultAccess: { read: true, create: true, update: true, delete: true },
+			});
+			await runTestDbMigrations(privateSetup.app);
+
+			try {
+				const handler = createFetchHandler(privateSetup.app);
+				const systemCtx = createTestContext({ accessMode: "system" });
+
+				await privateSetup.app.globals.private_settings.update(
+					{ siteName: "Private Settings" },
+					systemCtx,
+				);
+				await (privateSetup.app as any).collections.admin_audit_log.create(
+					{
+						action: "update",
+						resourceType: "global",
+						resource: "private_settings",
+						title: "Updated private settings",
+					},
+					systemCtx,
+				);
+
+				const response = await handler(
+					new Request("http://localhost/globals/private_settings/audit"),
+				);
+
+				expect(response?.status).toBe(403);
+			} finally {
+				await privateSetup.cleanup();
+			}
 		});
 	});
 });

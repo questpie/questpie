@@ -200,6 +200,13 @@ export function MediaPickerDialog({
 		() => assets.find((asset) => asset.id === previewAssetId) ?? null,
 		[assets, previewAssetId],
 	);
+	const selectedMimeFilterLabel = React.useMemo(() => {
+		const selectedFilter =
+			MIME_TYPE_FILTERS.find((filter) => filter.value === mimeFilter) ??
+			MIME_TYPE_FILTERS[0];
+
+		return t(selectedFilter.labelKey);
+	}, [mimeFilter, t]);
 
 	// Reset state when dialog closes
 	React.useEffect(() => {
@@ -270,9 +277,10 @@ export function MediaPickerDialog({
 	};
 
 	return (
-		<Sheet open={open} onOpenChange={onOpenChange}>
+		<Sheet open={open} onOpenChange={onOpenChange} modal={false}>
 			<SheetContent
 				side="right"
+				showOverlay={false}
 				className="qa-media-picker w-full p-0 data-[side=right]:sm:max-w-6xl"
 			>
 				<SheetHeader className="px-6 pt-6">
@@ -319,7 +327,7 @@ export function MediaPickerDialog({
 								<SelectTrigger className="w-full sm:w-[180px]">
 									<div className="flex items-center gap-2">
 										<Icon icon="ph:funnel-simple-bold" className="size-4" />
-										<SelectValue />
+										<SelectValue>{selectedMimeFilterLabel}</SelectValue>
 									</div>
 								</SelectTrigger>
 								<SelectContent>

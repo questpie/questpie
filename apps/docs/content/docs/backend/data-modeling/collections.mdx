@@ -29,18 +29,18 @@ export const services = collection("services")
 
 Collections use a chainable builder API. Each method adds a layer:
 
-| Method                                          | Purpose                             |
-| ----------------------------------------------- | ----------------------------------- |
-| `.fields(({ f }) => {...})`                     | Define data fields                  |
-| `.title(({ f }) => f.name)`                     | Record display title                |
-| `.admin(({ c }) => {...})`                      | Admin UI metadata (label, icon)     |
-| `.indexes(({ table }) => [...])`                | Database indexes                    |
-| `.list(({ v, f }) => v.collectionTable({...}))` | List view config                    |
-| `.form(({ v, f }) => v.collectionForm({...}))`  | Form view config                    |
-| `.hooks({...})`                                 | Lifecycle hooks                     |
-| `.access({...})`                                | Access control rules                |
-| `.preview({...})`                               | Live preview config                 |
-| `.options({...})`                               | Schema, timestamps, versioning, soft delete |
+| Method                                          | Purpose                                               |
+| ----------------------------------------------- | ----------------------------------------------------- |
+| `.fields(({ f }) => {...})`                     | Define data fields                                    |
+| `.title(({ f }) => f.name)`                     | Record display title                                  |
+| `.admin(({ c }) => {...})`                      | Admin UI metadata (label, icon)                       |
+| `.indexes(({ table }) => [...])`                | Database indexes                                      |
+| `.list(({ v, f }) => v.collectionTable({...}))` | List view config                                      |
+| `.form(({ v, f }) => v.collectionForm({...}))`  | Form view config                                      |
+| `.hooks({...})`                                 | Lifecycle hooks                                       |
+| `.access({...})`                                | Access control rules                                  |
+| `.preview({...})`                               | Live preview config                                   |
+| `.options({...})`                               | Schema, timestamps, versioning, workflow, soft delete |
 
 ### `.title()`
 
@@ -104,6 +104,8 @@ Configure collection-level behavior:
 })
 ```
 
+For publishing stages such as draft, review, and published, see [Versioning & Workflow](/docs/backend/data-modeling/versioning-workflow).
+
 #### `schema`
 
 Places the collection's tables under a named Postgres schema instead of `public`.
@@ -111,8 +113,8 @@ Applies to all four tables: main, i18n, versions, and i18n_versions.
 
 ```ts
 collection("user")
-  .fields(({ f }) => ({ email: f.text(255).required() }))
-  .options({ schema: "auth" });
+	.fields(({ f }) => ({ email: f.text(255).required() }))
+	.options({ schema: "auth" });
 ```
 
 Generated DDL:
@@ -283,6 +285,7 @@ export const barbers = collection("barbers")
 ## Related Pages
 
 - [Fields](/docs/backend/data-modeling/fields) — All field types and options
+- [Versioning & Workflow](/docs/backend/data-modeling/versioning-workflow) — Version history and publishing stages
 - [Relations](/docs/backend/data-modeling/relations) — Relation field deep dive
 - [Hooks](/docs/backend/rules/hooks) — Lifecycle hooks
 - [Access Control](/docs/backend/rules/access-control) — Who can do what

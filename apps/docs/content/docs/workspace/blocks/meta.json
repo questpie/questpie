@@ -1,4 +1,4 @@
 {
 	"title": "Blocks",
-	"pages": ["index", "defining-blocks", "renderers", "prefetch"]
+	"pages": ["defining-blocks", "renderers", "prefetch"]
 }

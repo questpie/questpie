@@ -36,9 +36,18 @@ export async function storageCollectionUpload(
 	): Response => {
 		return handleError(error, { request: req, app, locale });
 	};
+	const resolved = await resolveContext(app, request, config, context);
 
 	if (request.method !== "POST") {
-		return errorResponse(ApiError.badRequest("Method not allowed"), request);
+		return errorResponse(
+			ApiError.badRequest(
+				"Method not allowed",
+				undefined,
+				"error.methodNotAllowed",
+			),
+			request,
+			resolved.appContext.locale,
+		);
 	}
 
 	const { collection } = params;
@@ -48,7 +57,11 @@ export async function storageCollectionUpload(
 	try {
 		collectionConfig = app.getCollectionConfig(collection as any);
 	} catch {
-		return errorResponse(ApiError.notFound("Collection", collection), request);
+		return errorResponse(
+			ApiError.notFound("Collection", collection),
+			request,
+			resolved.appContext.locale,
+		);
 	}
 
 	// Check if upload is enabled for this collection
@@ -56,17 +69,24 @@ export async function storageCollectionUpload(
 		return errorResponse(
 			ApiError.badRequest(
 				`Collection "${collection}" does not support file uploads. Use .upload() to enable.`,
+				undefined,
+				"upload.collectionNotSupported",
+				{ collection },
 			),
 			request,
+			resolved.appContext.locale,
 		);
 	}
 
-	const resolved = await resolveContext(app, request, config, context);
 	const uploadFile = await resolveUploadFile(request, file);
 
 	if (!uploadFile) {
 		return errorResponse(
-			ApiError.badRequest("No file uploaded. Send 'file' in form-data."),
+			ApiError.badRequest(
+				"No file uploaded. Send 'file' in form-data.",
+				undefined,
+				"upload.noFileUploaded",
+			),
 			request,
 			resolved.appContext.locale,
 		);
@@ -79,6 +99,9 @@ export async function storageCollectionUpload(
 			return errorResponse(
 				ApiError.badRequest(
 					`Collection "${collection}" upload method not available`,
+					undefined,
+					"upload.methodNotAvailable",
+					{ collection },
 				),
 				request,
 				resolved.appContext.locale,
@@ -100,7 +123,8 @@ export async function storageCollectionServe(
 	app: Questpie<any>,
 	request: Request,
 	params: Record<string, string>,
-	_context?: AdapterContext,
+	context?: AdapterContext,
+	config: AdapterConfig<any> = {},
 ): Promise<Response> {
 	const errorResponse = (
 		error: unknown,
@@ -109,9 +133,18 @@ export async function storageCollectionServe(
 	): Response => {
 		return handleError(error, { request: req, app, locale });
 	};
+	const resolved = await resolveContext(app, request, config, context);
 
 	if (request.method !== "GET") {
-		return errorResponse(ApiError.badRequest("Method not allowed"), request);
+		return errorResponse(
+			ApiError.badRequest(
+				"Method not allowed",
+				undefined,
+				"error.methodNotAllowed",
+			),
+			request,
+			resolved.appContext.locale,
+		);
 	}
 
 	const { collection, key } = params;
@@ -121,7 +154,11 @@ export async function storageCollectionServe(
 	try {
 		collectionConfig = app.getCollectionConfig(collection as any);
 	} catch {
-		return errorResponse(ApiError.notFound("Collection", collection), request);
+		return errorResponse(
+			ApiError.notFound("Collection", collection),
+			request,
+			resolved.appContext.locale,
+		);
 	}
 
 	// Check if upload is enabled for this collection
@@ -129,8 +166,12 @@ export async function storageCollectionServe(
 		return errorResponse(
 			ApiError.badRequest(
 				`Collection "${collection}" does not support file serving. Use .upload() to enable.`,
+				undefined,
+				"upload.collectionServeNotSupported",
+				{ collection },
 			),
 			request,
+			resolved.appContext.locale,
 		);
 	}
 
@@ -140,7 +181,11 @@ export async function storageCollectionServe(
 	// Check if file exists
 	const exists = await app.storage.use().exists(key);
 	if (!exists) {
-		return errorResponse(ApiError.notFound("File", key), request);
+		return errorResponse(
+			ApiError.notFound("File", key),
+			request,
+			resolved.appContext.locale,
+		);
 	}
 
 	// Get record metadata to check visibility
@@ -158,8 +203,12 @@ export async function storageCollectionServe(
 	if (visibility === "private") {
 		if (!token) {
 			return errorResponse(
-				ApiError.unauthorized("Token required for private files"),
+				ApiError.unauthorized(
+					"Token required for private files",
+					"upload.tokenRequired",
+				),
 				request,
+				resolved.appContext.locale,
 			);
 		}
 
@@ -170,21 +219,30 @@ export async function storageCollectionServe(
 					"Storage secret not configured. Set 'secret' in your app config to serve private files.",
 				),
 				request,
+				resolved.appContext.locale,
 			);
 		}
 		const payload = await verifySignedUrlToken(token, secret);
 
 		if (!payload) {
 			return errorResponse(
-				ApiError.unauthorized("Invalid or expired token"),
+				ApiError.unauthorized(
+					"Invalid or expired token",
+					"upload.tokenInvalid",
+				),
 				request,
+				resolved.appContext.locale,
 			);
 		}
 
 		if (payload.key !== key) {
 			return errorResponse(
-				ApiError.unauthorized("Token does not match requested file"),
+				ApiError.unauthorized(
+					"Token does not match requested file",
+					"upload.tokenMismatch",
+				),
 				request,
+				resolved.appContext.locale,
 			);
 		}
 	}
@@ -264,7 +322,7 @@ export async function storageCollectionServe(
 			},
 		});
 	} catch (error) {
-		return errorResponse(error, request);
+		return errorResponse(error, request, resolved.appContext.locale);
 	}
 }
 
@@ -303,7 +361,7 @@ export const createStorageRoutes = <
 			params: { collection: string; key: string },
 			_context?: AdapterContext,
 		): Promise<Response> => {
-			return storageCollectionServe(app, request, params, _context);
+			return storageCollectionServe(app, request, params, _context, config);
 		},
 	};
 };

@@ -81,7 +81,12 @@ export async function realtimeSubscribe(
 	// Only accept POST
 	if (request.method !== "POST") {
 		return errorResponse(
-			ApiError.badRequest("Method not allowed. Use POST."),
+			ApiError.badRequest(
+				"Method not allowed. Use POST.",
+				undefined,
+				"error.methodNotAllowed.useMethod",
+				{ method: "POST" },
+			),
 			request,
 		);
 	}
@@ -100,7 +105,11 @@ export async function realtimeSubscribe(
 		body = await request.json();
 	} catch {
 		return errorResponse(
-			ApiError.badRequest("Invalid JSON body"),
+			ApiError.badRequest(
+				"Invalid JSON body",
+				undefined,
+				"error.invalidJsonBody",
+			),
 			request,
 			resolved.appContext.locale,
 		);
@@ -111,7 +120,11 @@ export async function realtimeSubscribe(
 	// Validate topics
 	if (!Array.isArray(topics) || topics.length === 0) {
 		return errorResponse(
-			ApiError.badRequest("Topics array is required and must not be empty"),
+			ApiError.badRequest(
+				"Topics array is required and must not be empty",
+				undefined,
+				"realtime.topicsRequired",
+			),
 			request,
 			resolved.appContext.locale,
 		);
@@ -125,7 +138,11 @@ export async function realtimeSubscribe(
 		if (!topic.id || typeof topic.id !== "string") {
 			topicErrors.push({
 				id: topic.id ?? "unknown",
-				message: "Topic ID is required",
+				message: app.t(
+					"realtime.topicIdRequired",
+					undefined,
+					resolved.appContext.locale,
+				),
 			});
 			continue;
 		}
@@ -133,7 +150,11 @@ export async function realtimeSubscribe(
 		if (!topic.resourceType || !topic.resource) {
 			topicErrors.push({
 				id: topic.id,
-				message: "resourceType and resource are required",
+				message: app.t(
+					"realtime.resourceRequired",
+					undefined,
+					resolved.appContext.locale,
+				),
 			});
 			continue;
 		}
@@ -143,7 +164,11 @@ export async function realtimeSubscribe(
 			if (!crud) {
 				topicErrors.push({
 					id: topic.id,
-					message: `Collection "${topic.resource}" not found`,
+					message: app.t(
+						"realtime.collectionNotFound",
+						{ collection: topic.resource },
+						resolved.appContext.locale,
+					),
 				});
 				continue;
 			}
@@ -156,22 +181,34 @@ export async function realtimeSubscribe(
 			} catch {
 				topicErrors.push({
 					id: topic.id,
-					message: `Global "${topic.resource}" not found`,
+					message: app.t(
+						"realtime.globalNotFound",
+						{ global: topic.resource },
+						resolved.appContext.locale,
+					),
 				});
 			}
 		} else {
 			topicErrors.push({
 				id: topic.id,
-				message: `Invalid resourceType "${topic.resourceType}"`,
+				message: app.t(
+					"realtime.invalidResourceType",
+					{ resourceType: topic.resourceType },
+					resolved.appContext.locale,
+				),
 			});
 		}
 	}
 
 	// If no valid topics, return error
 	if (validatedTopics.length === 0) {
+		const errors = topicErrors.map((e) => `${e.id}: ${e.message}`).join("; ");
 		return errorResponse(
 			ApiError.badRequest(
-				`No valid topics provided. Errors: ${topicErrors.map((e) => `${e.id}: ${e.message}`).join("; ")}`,
+				`No valid topics provided. Errors: ${errors}`,
+				undefined,
+				"realtime.noValidTopics",
+				{ errors },
 			),
 			request,
 			resolved.appContext.locale,

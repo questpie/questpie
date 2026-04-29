@@ -30,11 +30,11 @@ import type {
 	SidebarContribution,
 	SidebarItemDef,
 } from "../../../augmentation.js";
-import { introspectBlocks } from "../block/introspection.js";
 import {
 	resolveDashboardCallback,
 	resolveSidebarCallback,
 } from "../../../proxy-factories.js";
+import { introspectBlocks } from "../block/introspection.js";
 import { adminConfigDTOSchema } from "../dto/admin-config.dto.js";
 import {
 	type App,
@@ -89,8 +89,7 @@ async function hasReadAccess(
 	ctx: { app: App; session?: any; db: any; locale?: string },
 ): Promise<boolean> {
 	// Fall back to app defaultAccess.read if no explicit rule
-	const effectiveRule =
-		readRule ?? ctx.app?.defaultAccess?.read;
+	const effectiveRule = readRule ?? ctx.app?.defaultAccess?.read;
 
 	if (effectiveRule === true) return true;
 	if (effectiveRule === false) return false;
@@ -118,7 +117,9 @@ async function hasReadAccess(
 /**
  * Extract workflow metadata from a collection/global state.
  */
-function extractWorkflowMeta(state: Record<string, any>): WorkflowMeta | undefined {
+function extractWorkflowMeta(
+	state: Record<string, any>,
+): WorkflowMeta | undefined {
 	// Workflow is nested under versioning
 	const versioning = state?.options?.versioning;
 	const workflow =
@@ -156,9 +157,7 @@ function extractWorkflowMeta(state: Record<string, any>): WorkflowMeta | undefin
 /**
  * Extract admin metadata from all registered collections.
  */
-function extractCollectionsMeta(
-	app: App,
-): Record<string, AdminConfigItemMeta> {
+function extractCollectionsMeta(app: App): Record<string, AdminConfigItemMeta> {
 	const result: Record<string, AdminConfigItemMeta> = {};
 	const collections = app.getCollections();
 
@@ -187,9 +186,7 @@ function extractCollectionsMeta(
 /**
  * Extract admin metadata from all registered globals.
  */
-function extractGlobalsMeta(
-	app: App,
-): Record<string, AdminConfigItemMeta> {
+function extractGlobalsMeta(app: App): Record<string, AdminConfigItemMeta> {
 	const result: Record<string, AdminConfigItemMeta> = {};
 	const globals = app.getGlobals();
 
@@ -512,20 +509,28 @@ function mergeDashboardContributions(
 	let title: unknown;
 	let description: unknown;
 	let columns: number | undefined;
+	let rowHeight: number | string | undefined;
+	let gap: number | undefined;
 	let realtime: boolean | undefined;
 	const allActions: unknown[] = [];
 
 	const sectionOrder: string[] = [];
-	const sectionDefs = new Map<
-		string,
-		{ label?: unknown; layout?: string; columns?: number }
-	>();
+	const sectionDefs = new Map<string, Record<string, unknown>>();
 	const sectionItems = new Map<string, DashboardItemDef[]>();
+	const directItems: ServerDashboardItem[] = [];
 
 	for (const contrib of contributions) {
 		if (contrib.title !== undefined) title = contrib.title;
 		if (contrib.description !== undefined) description = contrib.description;
 		if (contrib.columns !== undefined) columns = contrib.columns;
+		if ((contrib as Record<string, unknown>).rowHeight !== undefined) {
+			rowHeight = (contrib as Record<string, unknown>).rowHeight as
+				| number
+				| string;
+		}
+		if ((contrib as Record<string, unknown>).gap !== undefined) {
+			gap = (contrib as Record<string, unknown>).gap as number;
+		}
 		if (contrib.realtime !== undefined) realtime = contrib.realtime;
 
 		if (contrib.actions) {
@@ -534,6 +539,10 @@ function mergeDashboardContributions(
 
 		if (contrib.sections) {
 			for (const sec of contrib.sections) {
+				const { id: _id, ...sectionMeta } = sec as unknown as Record<
+					string,
+					unknown
+				>;
 				// Later definitions (user config) override section order
 				const existingIdx = sectionOrder.indexOf(sec.id);
 				if (existingIdx !== -1) {
@@ -541,24 +550,28 @@ function mergeDashboardContributions(
 				}
 				sectionOrder.push(sec.id);
 				sectionDefs.set(sec.id, {
-					label: sec.label ?? sectionDefs.get(sec.id)?.label,
-					layout: sec.layout ?? sectionDefs.get(sec.id)?.layout,
-					columns: sec.columns ?? sectionDefs.get(sec.id)?.columns,
+					...(sectionDefs.get(sec.id) ?? {}),
+					...sectionMeta,
 				});
 			}
 		}
 
 		if (contrib.items) {
 			for (const item of contrib.items) {
-				const sid = item.sectionId;
+				const record = item as unknown as Record<string, unknown>;
+				const sid = record.sectionId as string | undefined;
+				if (!sid) {
+					directItems.push(item as unknown as ServerDashboardItem);
+					continue;
+				}
 				if (!sectionItems.has(sid)) {
 					sectionItems.set(sid, []);
 				}
 				const items = sectionItems.get(sid) ?? [];
-				if (item.position === "start") {
-					items.unshift(item);
+				if (record.position === "start") {
+					items.unshift(item as DashboardItemDef);
 				} else {
-					items.push(item);
+					items.push(item as DashboardItemDef);
 				}
 				sectionItems.set(sid, items);
 				if (!sectionDefs.has(sid)) {
@@ -570,7 +583,7 @@ function mergeDashboardContributions(
 	}
 
 	// Build final ServerDashboardConfig
-	const dashboardItems: ServerDashboardItem[] = [];
+	const dashboardItems: ServerDashboardItem[] = [...directItems];
 	for (const sectionId of sectionOrder) {
 		const def = sectionDefs.get(sectionId);
 		const items = sectionItems.get(sectionId) ?? [];
@@ -578,9 +591,9 @@ function mergeDashboardContributions(
 		if (items.length > 0 || def?.label) {
 			dashboardItems.push({
 				type: "section",
-				label: def?.label,
+				id: sectionId,
+				...def,
 				layout: def?.layout ?? "grid",
-				columns: def?.columns,
 				items: items.map(
 					({ sectionId: _sid, position: _pos, ...rest }) => rest as any,
 				),
@@ -592,6 +605,8 @@ function mergeDashboardContributions(
 		title: title as any,
 		description: description as any,
 		columns,
+		rowHeight,
+		gap,
 		realtime,
 		actions: allActions.length > 0 ? (allActions as any) : undefined,
 		items: dashboardItems.length > 0 ? dashboardItems : undefined,
@@ -644,7 +659,9 @@ function assignWidgetIds(items: ServerDashboardItem[]): void {
 			if (item.type === "section") {
 				walk((rec.items as unknown as ServerDashboardItem[]) || []);
 			} else if (item.type === "tabs") {
-				for (const tab of (rec.tabs as Array<{ items: ServerDashboardItem[] }>) || []) {
+				for (const tab of (rec.tabs as Array<{
+					items: ServerDashboardItem[];
+				}>) || []) {
 					walk(tab.items || []);
 				}
 			} else {
@@ -680,7 +697,10 @@ async function processDashboardItems(
 				accessCtx,
 			);
 			if (filtered.length > 0) {
-				result.push({ ...item, items: filtered } as unknown as ServerDashboardItem);
+				result.push({
+					...item,
+					items: filtered,
+				} as unknown as ServerDashboardItem);
 			}
 			continue;
 		}
@@ -698,7 +718,15 @@ async function processDashboardItems(
 					return { ...tab, items: filtered };
 				}),
 			);
-			result.push({ ...item, tabs } as unknown as ServerDashboardItem);
+			const visibleTabs = tabs.filter((tab) => tab.items.length > 0);
+			if (visibleTabs.length > 0) {
+				const { variant: _variant, ...serializableTabs } =
+					item as unknown as Record<string, unknown>;
+				result.push({
+					...serializableTabs,
+					tabs: visibleTabs,
+				} as unknown as ServerDashboardItem);
+			}
 			continue;
 		}
 
@@ -720,20 +748,35 @@ async function processDashboardItems(
 		}
 
 		// 2. Check collection access for collection-bound widgets
-		if (widget.collection && !accessibleCollections.has(widget.collection as string)) {
+		if (
+			widget.collection &&
+			!accessibleCollections.has(widget.collection as string)
+		) {
 			continue;
 		}
 
 		// 3. Filter quickActions' individual actions by collection access
 		if (widget.type === "quickActions") {
-			const actions = ((widget.actions as Array<Record<string, any>>) || []).filter((action) => {
+			const actions = (
+				(widget.actions as Array<Record<string, any>>) || []
+			).filter((action) => {
 				if (action.action?.type === "create") {
 					return accessibleCollections.has(action.action.collection);
 				}
 				return true;
 			});
-			const { loader, access, ...serializable } = widget;
-			result.push({ ...serializable, actions } as unknown as ServerDashboardItem);
+			const { loader, access, filterFn, ...serializable } = widget;
+			if (loader) {
+				(serializable as Record<string, unknown>).hasLoader = true;
+			}
+			if (serializable.label && !serializable.title) {
+				(serializable as Record<string, unknown>).title = serializable.label;
+			}
+			result.push({
+				...serializable,
+				actions,
+				quickActions: serializable.quickActions ?? actions,
+			} as unknown as ServerDashboardItem);
 			continue;
 		}
 
@@ -871,7 +914,9 @@ const getAdminConfig = route()
 				dashboard = adminCfg.dashboard;
 			} else {
 				// New: adminCfg.dashboard is DashboardContribution[] or mixed
-				const contributions = normalizeDashboardContributions(adminCfg.dashboard);
+				const contributions = normalizeDashboardContributions(
+					adminCfg.dashboard,
+				);
 				dashboard = mergeDashboardContributions(contributions);
 			}
 
@@ -954,7 +999,9 @@ const getAdminConfig = route()
 
 		// 5. Blocks: unchanged (not access-controlled)
 		if (appState.blocks && Object.keys(appState.blocks).length > 0) {
-			response.blocks = introspectBlocks(appState.blocks as Record<string, any>);
+			response.blocks = introspectBlocks(
+				appState.blocks as Record<string, any>,
+			);
 		}
 
 		// 6. Return filtered metadata

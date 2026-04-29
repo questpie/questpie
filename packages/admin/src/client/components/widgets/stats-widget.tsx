@@ -27,7 +27,12 @@ import { StatsWidgetSkeleton } from "./widget-skeletons";
 type StatsWidgetConfig = {
 	id: string;
 	collection: string;
+	title?: any;
+	description?: any;
 	label?: string;
+	cardVariant?: "default" | "compact" | "featured";
+	actions?: any[];
+	className?: string;
 	realtime?: boolean;
 	/** Static filter (evaluated at build time) */
 	filter?: Record<string, any>;
@@ -210,7 +215,7 @@ export default function StatsWidget({ config }: StatsWidgetProps) {
 	const collectionQuery = useCollectionCount(
 		collection as any,
 		computedFilter ? { where: computedFilter } : undefined,
-		undefined,
+		{ enabled: !hasLoader },
 		{ realtime },
 	);
 
@@ -220,24 +225,36 @@ export default function StatsWidget({ config }: StatsWidgetProps) {
 		isLoading,
 		error,
 		refetch,
+		isFetching,
 	} = hasLoader ? serverQuery : collectionQuery;
 
 	const count = hasLoader
 		? ((rawData as { count: number } | undefined)?.count ?? 0)
 		: ((rawData as number | undefined) ?? 0);
 
-	const displayLabel = label ? resolveText(label) : formatLabel(collection);
+	const displayLabel = config.title
+		? resolveText(config.title)
+		: label
+			? resolveText(label)
+			: formatLabel(collection);
 
 	return (
 		<WidgetCard
 			title={displayLabel}
+			description={
+				config.description ? resolveText(config.description) : undefined
+			}
 			icon={Icon}
+			variant={config.cardVariant}
 			isLoading={isLoading}
+			isRefreshing={isFetching && !isLoading}
 			loadingSkeleton={<StatsWidgetSkeleton />}
 			error={
 				error instanceof Error ? error : error ? new Error(String(error)) : null
 			}
 			onRefresh={() => refetch()}
+			actions={config.actions}
+			className={config.className}
 		>
 			<div className={cn("text-2xl font-bold", variantValueStyles[variant])}>
 				{count.toLocaleString()}

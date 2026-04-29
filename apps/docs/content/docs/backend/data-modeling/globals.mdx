@@ -35,14 +35,14 @@ export const siteSettings = global("siteSettings")
 
 Globals share most methods with collections:
 
-| Method                                     | Purpose                    |
-| ------------------------------------------ | -------------------------- |
-| `.fields(({ f }) => {...})`                | Define data fields         |
-| `.admin(({ c }) => {...})`                 | Admin label and icon       |
-| `.form(({ v, f }) => v.globalForm({...}))` | Form layout                |
-| `.hooks({...})`                            | Lifecycle hooks            |
-| `.access({...})`                           | Read/update access control |
-| `.options({...})`                          | Schema, timestamps, versioning |
+| Method                                     | Purpose                                  |
+| ------------------------------------------ | ---------------------------------------- |
+| `.fields(({ f }) => {...})`                | Define data fields                       |
+| `.admin(({ c }) => {...})`                 | Admin label and icon                     |
+| `.form(({ v, f }) => v.globalForm({...}))` | Form layout                              |
+| `.hooks({...})`                            | Lifecycle hooks                          |
+| `.access({...})`                           | Read/update access control               |
+| `.options({...})`                          | Schema, timestamps, versioning, workflow |
 
 Globals do **not** support `.list()`, `.indexes()`, `.title()`, or `.preview()` since there's only ever one record.
 
@@ -56,6 +56,8 @@ Globals do **not** support `.list()`, `.indexes()`, `.title()`, or `.preview()` 
 })
 ```
 
+Globals can also use workflow stages through `versioning.workflow`. See [Versioning & Workflow](/docs/backend/data-modeling/versioning-workflow).
+
 #### `schema`
 
 Places the global's tables (main, i18n, versions, i18n_versions) under a named
@@ -64,8 +66,8 @@ Postgres schema instead of `public`. `migrate:generate` prepends
 
 ```ts
 global("site-settings")
-  .fields(({ f }) => ({ title: f.text(255) }))
-  .options({ schema: "web" });
+	.fields(({ f }) => ({ title: f.text(255) }))
+	.options({ schema: "web" });
 ```
 
 When unset, tables live in `public` — backward-compatible.
@@ -175,5 +177,6 @@ export const siteSettings = global("siteSettings")
 ## Related Pages
 
 - [Fields](/docs/backend/data-modeling/fields) — All field types and options
+- [Versioning & Workflow](/docs/backend/data-modeling/versioning-workflow) — Version history and publishing stages
 - [Access Control](/docs/backend/rules/access-control) — Read/update rules
 - [Form Views](/docs/workspace/views/form-views) — Admin form layout

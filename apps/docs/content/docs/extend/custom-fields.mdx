@@ -62,11 +62,13 @@ A field factory must return an object with:
 Register a React component to render the field in the admin panel.
 
 ```tsx title="src/admin/fields/color-field.tsx"
-import { useFieldContext } from "@questpie/admin/client";
+import type { FieldComponentProps } from "@questpie/admin/client";
 
-export function ColorField() {
-	const { value, onChange, field } = useFieldContext();
-
+export function ColorField({
+	value,
+	onChange,
+	field,
+}: FieldComponentProps<string>) {
 	return (
 		<div>
 			<label>{field.label}</label>
@@ -74,12 +76,12 @@ export function ColorField() {
 				<input
 					type="color"
 					value={value || "#000000"}
-					onChange={(e) => onChange(e.target.value)}
+					onChange={(e) => onChange?.(e.target.value)}
 				/>
 				<input
 					type="text"
 					value={value || ""}
-					onChange={(e) => onChange(e.target.value)}
+					onChange={(e) => onChange?.(e.target.value)}
 					placeholder="#000000"
 					pattern="^#[0-9a-fA-F]{6}$"
 				/>

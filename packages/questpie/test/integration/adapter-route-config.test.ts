@@ -1,7 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
+import { z } from "zod";
+
+import { collection, route } from "../../src/exports/index.js";
 import { createFetchHandler } from "../../src/server/adapters/http.js";
-import { collection } from "../../src/exports/index.js";
+import type { AdapterContext } from "../../src/server/adapters/types.js";
+import { tryGetContext } from "../../src/server/config/context.js";
 import type { SearchAdapter } from "../../src/server/modules/core/integrated/search/types.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 
@@ -39,6 +43,203 @@ function createSearchAdapterMock(): {
 }
 
 describe("adapter route config", () => {
+	describe("http adapter option matrix", () => {
+		const echoOptions = route()
+			.post()
+			.schema(z.object({}))
+			.outputSchema(
+				z.object({
+					accessMode: z.string().optional(),
+					locale: z.string().optional(),
+					localeFallback: z.boolean().optional(),
+					stage: z.string().optional(),
+					sessionUserId: z.string().nullable(),
+					organizationId: z.string().nullable(),
+				}),
+			)
+			.handler(async (ctx) => {
+				const stored = tryGetContext();
+				return {
+					accessMode: stored?.accessMode,
+					locale: ctx.locale,
+					localeFallback: (ctx as any).localeFallback,
+					stage: (ctx as any).stage,
+					sessionUserId: (ctx.session as any)?.user?.id ?? null,
+					organizationId: (ctx as any).organizationId ?? null,
+				};
+			});
+
+		let setup: Awaited<ReturnType<typeof buildMockApp>>;
+
+		beforeEach(async () => {
+			setup = await buildMockApp({
+				routes: { echoOptions },
+				locale: {
+					locales: [{ code: "en" }, { code: "sk" }, { code: "de" }],
+					defaultLocale: "en",
+				},
+			});
+		});
+
+		afterEach(async () => {
+			await setup.cleanup();
+		});
+
+		it("normalizes basePath and only handles requests under it", async () => {
+			const handler = createFetchHandler(setup.app, { basePath: "api/" });
+
+			const outside = await handler(
+				new Request("http://localhost/echo-options", {
+					method: "POST",
+					body: JSON.stringify({}),
+				}),
+			);
+			expect(outside).toBeNull();
+
+			const inside = await handler(
+				new Request("http://localhost/api/echo-options", {
+					method: "POST",
+					body: JSON.stringify({}),
+				}),
+			);
+			expect(inside?.status).toBe(200);
+		});
+
+		it("uses accessMode from adapter config in route ALS", async () => {
+			const handler = createFetchHandler(setup.app, { accessMode: "system" });
+
+			const response = await handler(
+				new Request("http://localhost/echo-options", {
+					method: "POST",
+					body: JSON.stringify({}),
+				}),
+			);
+
+			expect(response?.status).toBe(200);
+			const body = await response?.json();
+			expect(body.accessMode).toBe("system");
+		});
+
+		it("uses getLocale unless query locale is provided", async () => {
+			const handler = createFetchHandler(setup.app, {
+				getLocale: () => "sk",
+			});
+
+			const fromResolver = await handler(
+				new Request("http://localhost/echo-options", {
+					method: "POST",
+					body: JSON.stringify({}),
+				}),
+			);
+			expect((await fromResolver?.json()).locale).toBe("sk");
+
+			const fromQuery = await handler(
+				new Request("http://localhost/echo-options?locale=de", {
+					method: "POST",
+					body: JSON.stringify({}),
+				}),
+			);
+			expect((await fromQuery?.json()).locale).toBe("de");
+		});
+
+		it("uses getSession result in handler context", async () => {
+			const handler = createFetchHandler(setup.app, {
+				getSession: async () => ({
+					user: { id: "user_123" },
+					session: { id: "session_123" },
+				}),
+			});
+
+			const response = await handler(
+				new Request("http://localhost/echo-options", {
+					method: "POST",
+					body: JSON.stringify({}),
+				}),
+			);
+
+			expect(response?.status).toBe(200);
+			const body = await response?.json();
+			expect(body.sessionUserId).toBe("user_123");
+		});
+
+		it("passes base context into extendContext and merges its return value", async () => {
+			let capturedContext: unknown;
+			const handler = createFetchHandler(setup.app, {
+				accessMode: "system",
+				getSession: async () => ({
+					user: { id: "user_456" },
+					session: { id: "session_456" },
+				}),
+				extendContext: async ({ context }) => {
+					capturedContext = context;
+					return { organizationId: "org_456" };
+				},
+			});
+
+			const response = await handler(
+				new Request(
+					"http://localhost/echo-options?locale=sk&localeFallback=false&stage=review",
+					{
+						method: "POST",
+						body: JSON.stringify({}),
+					},
+				),
+			);
+
+			expect(response?.status).toBe(200);
+			const body = await response?.json();
+			expect(body.organizationId).toBe("org_456");
+			expect(body.locale).toBe("sk");
+			expect(body.localeFallback).toBe(false);
+			expect(body.stage).toBe("review");
+			expect(capturedContext).toMatchObject({
+				accessMode: "system",
+				locale: "sk",
+				localeFallback: false,
+				stage: "review",
+			});
+			expect((capturedContext as any).session.user.id).toBe("user_456");
+		});
+
+		it("uses explicit AdapterContext without calling adapter resolvers", async () => {
+			const session = {
+				user: { id: "explicit_user" },
+				session: { id: "explicit_session" },
+			};
+			const explicitContext: AdapterContext = {
+				session,
+				locale: "de",
+				appContext: {
+					session,
+					locale: "de",
+					accessMode: "system",
+				},
+			};
+			const handler = createFetchHandler(setup.app, {
+				getSession: async () => {
+					throw new Error("getSession should not run");
+				},
+				getLocale: () => {
+					throw new Error("getLocale should not run");
+				},
+			});
+
+			const response = await handler(
+				new Request("http://localhost/echo-options", {
+					method: "POST",
+					body: JSON.stringify({}),
+				}),
+				explicitContext,
+			);
+
+			expect(response?.status).toBe(200);
+			const body = await response?.json();
+			expect(body.accessMode).toBe("system");
+			expect(body.locale).toBe("de");
+			expect(body.sessionUserId).toBe("explicit_user");
+		});
+	});
+
 	describe("search reindex access", () => {
 		const posts = collection("posts")
 			.fields(({ f }) => ({

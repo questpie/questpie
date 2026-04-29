@@ -48,6 +48,7 @@ type ButtonProps = ButtonPrimitive.Props &
 
 function Button({
 	className,
+	type = "button",
 	variant = "default",
 	size = "default",
 	static: staticPress = false,
@@ -56,6 +57,7 @@ function Button({
 	return (
 		<ButtonPrimitive
 			data-slot="button"
+			type={type}
 			className={cn(
 				buttonVariants({ variant, size }),
 				staticPress && "active:scale-100",

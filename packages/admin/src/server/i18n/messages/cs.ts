@@ -88,6 +88,44 @@ export default {
 	"collection.new": "Nový {{name}}",
 	"collection.duplicateSuccess": "{{name}} úspěšně duplikován",
 	"collection.duplicateError": "Nepodařilo se duplikovat {{name}}",
+	// Actions
+	"action.collectionNotFound": 'Kolekce "{{collection}}" nebyla nalezena',
+	"action.notFound":
+		'Akce "{{action}}" nebyla nalezena v kolekci "{{collection}}"',
+	"action.executionFailed": "Provedení akce selhalo",
+	"action.itemCreated": "Položka byla úspěšně vytvořena",
+	"action.itemIdRequired.save": "Pro akci uložení je vyžadováno ID položky",
+	"action.itemSaved": "Položka byla úspěšně uložena",
+	"action.itemIdRequired.delete": "Pro akci smazání je vyžadováno ID položky",
+	"action.itemDeleted": "Položka byla úspěšně smazána",
+	"action.itemIdsRequired.bulkDelete":
+		"Pro hromadné mazání jsou vyžadována ID položek",
+	"action.itemsDeleted": {
+		one: "{{count}} položka byla úspěšně smazána",
+		few: "{{count}} položky byly úspěšně smazány",
+		other: "{{count}} položek bylo úspěšně smazáno",
+	},
+	"action.itemIdRequired.restore": "Pro akci obnovení je vyžadováno ID položky",
+	"action.restoreUnsupported": "Obnovení není pro tuto kolekci podporováno",
+	"action.itemRestored": "Položka byla úspěšně obnovena",
+	"action.itemIdsRequired.bulkRestore":
+		"Pro hromadné obnovení jsou vyžadována ID položek",
+	"action.itemsRestored": {
+		one: "{{count}} položka byla úspěšně obnovena",
+		few: "{{count}} položky byly úspěšně obnoveny",
+		other: "{{count}} položek bylo úspěšně obnoveno",
+	},
+	"action.itemIdRequired.duplicate":
+		"Pro akci duplikace je vyžadováno ID položky",
+	"action.itemNotFound": "Položka nebyla nalezena",
+	"action.itemDuplicated": "Položka byla úspěšně duplikována",
+	"action.itemIdRequired.transition":
+		"Pro akci přechodu je vyžadováno ID položky",
+	"action.targetStageRequired": "Pro akci přechodu je vyžadována cílová fáze",
+	"action.workflowUnsupported":
+		"Workflow přechody nejsou pro tuto kolekci podporovány",
+	"action.unknownBuiltin": "Neznámá vestavěná akce: {{action}}",
+	"action.fieldRequired": 'Pole "{{field}}" je povinné',
 
 	// Relations
 	"relation.select": "Vybrat {{name}}",
@@ -184,6 +222,9 @@ export default {
 	"auth.profile": "Profil",
 	"auth.myAccount": "Můj účet",
 	"auth.logoutFailed": "Odhlášení se nezdařilo. Zkuste to prosím znovu.",
+	"auth.setupAlreadyCompleted":
+		"Nastavení již bylo dokončeno - v systému existují admin uživatelé",
+	"auth.failedToCreateUserAccount": "Nepodařilo se vytvořit uživatelský účet",
 
 	// Errors
 	"error.notFound": "Nenalezeno",
@@ -234,6 +275,17 @@ export default {
 	"editor.underline": "Podtržení",
 	"editor.strikethrough": "Přeškrtnutí",
 	"editor.heading": "Nadpis {{level}}",
+	"editor.richTextToolbar": "Panel bohatého textu",
+	"editor.blockType": "Typ bloku",
+	"editor.selectionBlockType": "Typ vybraného bloku",
+	"editor.paragraph": "Odstavec",
+	"editor.textBlocks": "Textové bloky",
+	"editor.headings": "Nadpisy",
+	"editor.blocks": "Bloky",
+	"editor.formatting": "Formátování",
+	"editor.moreFormatting": "Další formátování",
+	"editor.alignment": "Zarovnání",
+	"editor.insert": "Vložit",
 	"editor.link": "Vložit odkaz",
 	"editor.image": "Vložit obrázek",
 	"editor.list": "Seznam",
@@ -267,6 +319,18 @@ export default {
 	"editor.chooseFile": "Vybrat soubor",
 	"editor.uploading": "Nahrávání...",
 	"editor.browseLibrary": "Procházet knihovnu",
+	"editor.startWriting": "Začněte psát...",
+	"editor.pasteOrTypeLink": "Vložte nebo zadejte odkaz...",
+	"editor.paragraphDescription": "Začít obyčejným textem",
+	"editor.heading1Description": "Velký sekční nadpis",
+	"editor.heading2Description": "Střední sekční nadpis",
+	"editor.heading3Description": "Menší sekční nadpis",
+	"editor.bulletListDescription": "Vytvořit odrážkový seznam",
+	"editor.orderedListDescription": "Vytvořit číslovaný seznam",
+	"editor.quoteDescription": "Vložit citaci",
+	"editor.codeBlockDescription": "Vložit ukázku kódu",
+	"editor.dividerDescription": "Vložit horizontální čáru",
+	"editor.tableDescription": "Vložit tabulku 3x3",
 
 	// Toasts
 	"toast.success": "Úspěch",
@@ -504,6 +568,19 @@ export default {
 	"preview.fullscreen": "Celá obrazovka",
 	"preview.close": "Zavřít náhled",
 	"preview.loading": "Načítání náhledu...",
+	"preview.pathRequired": "Cesta je povinná",
+	"preview.collectionNameRequired": "Název kolekce je povinný",
+	"preview.adminSessionRequired": "Je vyžadována admin relace",
+	"preview.invalidTokenFormat": "Neplatný formát tokenu",
+	"preview.invalidSignature": "Neplatný podpis",
+	"preview.invalidPayload": "Neplatná data tokenu",
+	"preview.tokenExpired": "Platnost tokenu vypršela",
+	"preview.invalidPath": "Neplatná cesta",
+	"preview.collectionNotFound": 'Kolekce "{{collection}}" nebyla nalezena',
+	"preview.noUrlConfigured": "Pro tuto kolekci není nastavena URL náhledu",
+	"preview.disabledForCollection": "Náhled je pro tuto kolekci vypnutý",
+	"preview.generateUrlFailed":
+		"Nepodařilo se vygenerovat URL náhledu: {{message}}",
 
 	// Autosave
 	"autosave.saving": "Ukládání...",
@@ -539,4 +616,431 @@ export default {
 
 	// Audit
 	"audit.section.activity": "Aktivita",
+
+	// English parity additions
+	"common.moreActions": "Další akce",
+	"common.backToList": "Zpět na seznam",
+	"common.deleted": "Smazáno",
+	"common.done": "Hotovo",
+	"common.noValue": "Žádná hodnota",
+	"nav.breadcrumb": "Drobečková navigace",
+	"nav.adminNavigation": "Navigace administrace",
+
+	"dashboard.noWidgets": "Nejsou nakonfigurovány žádné widgety",
+	"dashboard.noWidgetsDescription":
+		"Přidejte widgety do konfigurace dashboardu, aby se zde zobrazila data.",
+	"dashboard.systemStatus": "Stav systému",
+	"dashboard.welcomeDescription":
+		"Vyberte kolekci z postranního panelu pro správu obsahu.",
+
+	"collection.restoring": "Obnovování...",
+	"collection.restoreSuccess": "Položka byla úspěšně obnovena",
+	"collection.restoreError": "Položku se nepodařilo obnovit",
+	"collection.bulkRestoreSuccess": {
+		one: "Úspěšně obnovena {{count}} položka",
+		other: "Úspěšně obnoveno {{count}} položek",
+	},
+	"collection.bulkRestoreError": "Nepodařilo se obnovit položky",
+	"collection.bulkRestorePartial": {
+		one: "Obnovena {{success}} položka, {{failed}} selhalo",
+		other: "Obnoveno {{success}} položek, {{failed}} selhalo",
+	},
+	"collection.orderSaved": "Pořadí uloženo",
+	"collection.orderSaveFailed": "Pořadí se nepodařilo uložit",
+	"collection.reorderMode": "Režim změny pořadí",
+	"collection.sortedByField": "Seřazeno podle {{field}} {{direction}}.",
+	"collection.reorderEnableOrderable":
+		"Před změnou pořadí povolte možnost řazení",
+	"collection.reorderAddOrderField":
+		"Před změnou pořadí přidejte číselné pole pro pořadí",
+	"collection.reorderClearSearch": "Pro změnu pořadí vymažte vyhledávání",
+	"collection.reorderRemoveGrouping": "Pro změnu pořadí zrušte seskupení",
+	"collection.reorderClearFilters": "Pro změnu pořadí vymažte filtry",
+	"collection.reorderShowOnePage":
+		"Pro změnu pořadí zobrazte jednu stránku položek",
+	"collection.reorderExitMode": "Ukončit režim změny pořadí",
+	"collection.reorderItems": "Změnit pořadí položek",
+	"collection.reorderSwitchSort":
+		"Přepnout na řazení podle {{field}} a změnit pořadí",
+	"collection.reorderUnavailable": "Změna pořadí není dostupná: {{reason}}",
+	"collection.reorderEnterMode": "Spustit režim změny pořadí",
+
+	"blocks.add": "Přidat blok",
+	"blocks.addTo": "Přidat do {{parent}}",
+	"blocks.addFirst": "Přidejte první blok a začněte",
+	"blocks.unknownType":
+		'Neznámý typ bloku "{{type}}". Tento typ bloku není zaregistrován.',
+	"blocks.searchPlaceholder": "Hledat bloky...",
+	"blocks.uncategorized": "Ostatní",
+	"blocks.noEditableFields": "Tento blok nemá žádná upravitelná pole.",
+	"blocks.noDefinitions": "Nejsou zaregistrovány žádné definice bloků",
+	"blocks.noDefinitionsHint":
+		"Zaregistrujte bloky pomocí .blocks() v konfiguraci administrace",
+	"blocks.emptyTitle": "Zatím žádné bloky",
+	"blocks.libraryDescription": "Vyberte typ bloku, který chcete přidat.",
+	"blocks.noSearchResults": "Vyhledávání neodpovídají žádné bloky",
+	"blocks.tryDifferentSearch": "Zkuste jiný vyhledávací dotaz.",
+
+	"form.deletedBanner":
+		"Tento záznam byl smazán {{date}}. Použijte akci Obnovit, aby byl znovu aktivní.",
+	"form.lastUpdated": "Naposledy aktualizováno",
+
+	"auth.forgotPasswordTitle": "Zapomenuté heslo",
+	"auth.forgotPasswordDescription":
+		"Zadejte svůj e-mail a obdržíte odkaz pro reset hesla",
+	"auth.checkYourEmail": "Zkontrolujte svůj e-mail",
+	"auth.resetLinkSentDescription":
+		"Odeslali jsme vám odkaz pro reset hesla. Zkontrolujte doručenou poštu a postupujte podle pokynů.",
+	"auth.backToLogin": "Zpět na přihlášení",
+	"auth.forgotPasswordFormDescription":
+		"Zadejte svou e-mailovou adresu a pošleme vám odkaz pro reset hesla.",
+	"auth.rememberYourPassword": "Pamatujete si heslo?",
+	"auth.resetPasswordSuccess": "Heslo bylo úspěšně resetováno",
+	"auth.resetPasswordSuccessDescription":
+		"Vaše heslo bylo úspěšně resetováno. Nyní se můžete přihlásit s novým heslem.",
+	"auth.enterNewPassword": "Zadejte níže nové heslo.",
+	"auth.createAccountDescription": "Vytvořte si účet a začněte",
+	"auth.inviteEmailLabel": "E-mailová adresa",
+	"auth.inviteEmailDescription":
+		"Na tento e-mail bude odeslán odkaz s pozvánkou",
+	"auth.inviteRole": "Role",
+	"auth.inviteSelectRole": "Vyberte roli",
+	"auth.inviteRoleDescription": "Role určuje, jaká oprávnění bude uživatel mít",
+	"auth.inviteMessage": "Osobní zpráva (volitelné)",
+	"auth.inviteMessagePlaceholder": "Přidejte k pozvánce osobní zprávu...",
+	"auth.inviteMessageDescription":
+		"Tato zpráva bude zahrnuta v e-mailu pozvánky",
+	"auth.sendingInvitation": "Odesílání pozvánky...",
+	"auth.sendInvitation": "Odeslat pozvánku",
+	"auth.inviteSentSuccess": "Pozvánka byla úspěšně odeslána",
+	"auth.signInDescription":
+		"Zadejte své přihlašovací údaje pro přístup do administrace",
+	"auth.inviteUser": "Pozvat uživatele",
+	"auth.inviteUserDescription":
+		"Odešlete pozvánku pro přidání nového uživatele",
+	"auth.inviteSentTo": "Pozvánka byla odeslána na {{email}}",
+	"auth.completeRegistration": "Dokončit registraci",
+	"auth.validatingInvitation": "Ověřování pozvánky",
+	"auth.pleaseWait": "Čekejte prosím...",
+	"auth.invalidInvitation": "Neplatná pozvánka",
+	"auth.invalidInvitationDescription":
+		"Tento odkaz s pozvánkou již není platný",
+	"auth.invalidOrExpiredInvitation": "Neplatná nebo vypršená pozvánka",
+	"auth.invitationExpiredMessage":
+		"Platnost pozvánky mohla vypršet nebo již byla použita. Požádejte administrátora o novou pozvánku.",
+	"auth.goToLogin": "Přejít na přihlášení",
+	"auth.invalidLink": "Neplatný odkaz",
+	"auth.invalidLinkDescription":
+		"Odkaz pro reset hesla je neplatný nebo jeho platnost vypršela.",
+	"auth.requestNewResetLink": "Požádejte o nový odkaz pro reset hesla.",
+	"auth.user": "Uživatel",
+
+	"error.somethingWentWrong": "Něco se pokazilo",
+	"error.unexpectedError": "Došlo k neočekávané chybě",
+	"error.failedToLoad": "Nepodařilo se načíst",
+	"error.failedToLoadView": "Nepodařilo se načíst {{viewType}}",
+	"error.failedToLoadViewFor":
+		"Nepodařilo se načíst {{viewType}} pro {{collection}}",
+	"error.widgetError": "Chyba widgetu",
+	"error.unknownWidget": "Neznámý widget",
+	"error.widgetTypeNotRecognized": 'Typ widgetu "{{type}}" nebyl rozpoznán.',
+	"error.componentNotFound": "Komponenta nebyla nalezena",
+	"error.failedToLoadComponent": "Komponentu se nepodařilo načíst",
+	"error.pageNotFound": "Stránka nebyla nalezena",
+	"error.pageNotFoundDescription": "Stránka, kterou hledáte, neexistuje.",
+	"error.accessRestricted": "Přístup omezen",
+	"error.accessRestrictedDescription":
+		"Nemáte oprávnění k přístupu na tuto stránku. Pokud si myslíte, že jde o chybu, kontaktujte administrátora.",
+	"error.accessRestrictedResourceDescription":
+		'{{type}} "{{name}}" není v administraci dostupný. Může být skrytý nebo k němu nemáte oprávnění.',
+	"error.tryAgain": "Zkusit znovu",
+	"error.backToDashboard": "Zpět na dashboard",
+	"error.noUploadCollection":
+		"Není nakonfigurována žádná kolekce pro nahrávání.",
+	"error.multipleUploadCollections":
+		"Je dostupných více kolekcí pro nahrávání ({{collections}}). Určete, kterou kolekci použít.",
+	"error.autosaveFailed": "Automatické uložení selhalo",
+	"error.actionFailed": "Akce selhala",
+	"error.serverActionFailed": "Serverová akce selhala",
+	"error.failedToLoadOptions": "Nepodařilo se načíst možnosti",
+	"error.failedToLoadAssets": "Nepodařilo se načíst soubory",
+	"error.failedToLoadSelectedItems": "Nepodařilo se načíst vybrané položky",
+	"error.invalidCredentials": "Neplatné přihlašovací údaje",
+	"error.failedToSendResetEmail": "Nepodařilo se odeslat e-mail pro reset",
+	"error.failedToResetPassword": "Nepodařilo se resetovat heslo",
+	"error.failedToCreateAccount": "Nepodařilo se vytvořit účet",
+	"error.failedToCreateAdminAccount":
+		"Nepodařilo se vytvořit administrátorský účet",
+	"error.failedToSendInvitation": "Nepodařilo se odeslat pozvánku",
+	"error.anErrorOccurred": "Došlo k chybě",
+	"error.uploadFailed": "Nahrávání selhalo",
+	"error.failedToGeneratePreviewToken":
+		"Nepodařilo se vygenerovat token náhledu",
+	"error.missingFieldComponent":
+		"Pro typ pole není zaregistrována žádná komponenta: {{type}}",
+	"error.selectAtLeastOne": "Vyberte alespoň jeden soubor",
+	"error.maxItemsAllowed": "Povoleno je maximálně {{max}} položek",
+	"error.unregisteredViewDescription":
+		'Zobrazení "{{viewId}}" není zaregistrováno v registru zobrazení administrace.',
+
+	"table.show": "Zobrazit",
+	"table.noItemsInCollection": "V této kolekci nebyly nalezeny žádné položky",
+	"table.emptyDescription": "Záznamy se zde zobrazí po vytvoření.",
+	"table.pagination": "Stránkování",
+	"table.editing": "Úpravy",
+
+	"upload.bulkTitle": "Nahrát soubory",
+	"upload.bulkDescription": "Přidejte do knihovny médií více souborů",
+	"upload.bulkHint": "Nahrajte více souborů najednou",
+	"upload.bulkSuccess": {
+		one: "{{count}} soubor úspěšně nahrán",
+		other: "{{count}} souborů úspěšně nahráno",
+	},
+	"upload.bulkError": {
+		one: "{{count}} soubor se nepodařilo nahrát",
+		other: "{{count}} souborů se nepodařilo nahrát",
+	},
+	"upload.waitForComplete": "Počkejte prosím na dokončení nahrávání",
+	"upload.filesCount": {
+		one: "{{count}} soubor",
+		other: "{{count}} souborů",
+	},
+	"upload.uploadedCount": {
+		one: "{{count}} nahrán",
+		other: "{{count}} nahráno",
+	},
+	"upload.failedCount": {
+		one: "{{count}} selhal",
+		other: "{{count}} selhalo",
+	},
+	"upload.browseLibrary": "Procházet knihovnu",
+
+	"confirm.deleteSelected": "Smazat vybrané",
+	"confirm.deleteSelectedTitle": "Smazat vybrané položky?",
+	"confirm.deleteSelectedDescription":
+		"Tuto akci nelze vrátit zpět. Všechny vybrané položky budou trvale smazány.",
+	"confirm.deleteAll": "Smazat vše",
+	"confirm.restoreTitle": "Obnovit položku?",
+	"confirm.restoreDescription":
+		"Tato položka se znovu zobrazí v běžných seznamech.",
+	"confirm.restore": "Obnovit",
+	"confirm.deleteItemTitle": "Smazat položku?",
+	"confirm.deleteItemDescription":
+		"Tuto akci nelze vrátit zpět. Položka bude trvale smazána.",
+
+	"input.selectDate": "Vybrat datum",
+	"input.selectDateTime": "Vybrat datum a čas",
+	"input.selectDateRange": "Vybrat rozsah dat",
+	"input.selectTime": "Vybrat čas",
+
+	"defaults.users.tabs.profile": "Profil",
+	"defaults.users.tabs.security": "Zabezpečení",
+	"defaults.assets.sections.dimensions": "Rozměry",
+
+	"viewOptions.realtime": "Aktualizace v reálném čase",
+	"viewOptions.realtimeDescription":
+		"Automaticky obnovovat tuto tabulku při změně dat.",
+	"viewOptions.showDeleted": "Zobrazit smazané",
+	"viewOptions.showDeletedDescription":
+		"Zahrnout do tohoto zobrazení soft-deleted záznamy.",
+	"viewOptions.groupBy": "Seskupit podle",
+	"viewOptions.groupByDescription":
+		"Seskupit aktuální stránku podle nakonfigurovaného pole.",
+	"viewOptions.noGrouping": "Bez seskupení",
+	"viewOptions.sort": "Řazení",
+
+	"version.history": "Historie verzí",
+	"version.historyDescription":
+		"Procházejte předchozí verze a v případě potřeby některou obnovte.",
+	"version.globalHistoryDescription":
+		"Procházejte předchozí verze globálních nastavení a v případě potřeby některou obnovte.",
+	"version.empty": "Nebyly nalezeny žádné verze.",
+	"version.label": "Verze {{number}}",
+	"version.createdAt": "Vytvořeno",
+	"version.user": "Uživatel",
+	"version.revert": "Obnovit",
+	"version.revertSuccess": "Verze byla úspěšně obnovena",
+	"version.operationCreate": "Vytvořeno",
+	"version.operationUpdate": "Aktualizováno",
+	"version.operationDelete": "Smazáno",
+	"version.operationUnknown": "Změněno",
+	"version.revertConfirmTitle": "Vrátit se k této verzi?",
+	"version.revertConfirmDescription":
+		"Tato akce nahradí aktuální obsah verzí {{number}}.",
+
+	"viewOptions.noResultsDescription":
+		"Aktivním filtrům neodpovídají žádné záznamy. Upravte je nebo je vymažte, abyste viděli více výsledků.",
+
+	"preview.exitPreview": "Ukončit náhled",
+	"preview.exitTooltip": "Ukončit režim náhledu a vymazat cookie konceptu",
+	"preview.loadingPreview": "Načítání náhledu...",
+	"preview.previewError": "Chyba náhledu",
+	"preview.refreshing": "Obnovování...",
+	"preview.showPreview": "Zobrazit náhled",
+	"preview.hidePreview": "Skrýt náhled",
+	"preview.mode": "Režim náhledu",
+
+	"collectionSearch.noResultsDescription":
+		"Zkuste jiný vyhledávací dotaz nebo vyhledávání vymažte a vraťte se na celý seznam.",
+
+	"audit.collection.label": "Auditní log",
+	"audit.collection.description":
+		"Procházejte všechny zaznamenané změny a aktivitu uživatelů",
+	"audit.sections.event": "Podrobnosti události",
+	"audit.sections.user": "Uživatel",
+	"audit.sections.changes": "Změny",
+	"audit.widget.recentActivity.title": "Nedávná aktivita",
+	"audit.widget.recentActivity.empty":
+		"Nebyla zaznamenána žádná nedávná aktivita.",
+
+	"history.title": "Historie",
+	"history.description": "Změny a aktivita pro tento záznam",
+	"history.versionDescription":
+		"Procházejte snímky verzí a kontrolujte rozdíly na úrovni polí.",
+	"history.tabActivity": "Aktivita",
+	"history.tabVersions": "Verze",
+	"history.empty": "Nebyla zaznamenána žádná aktivita",
+	"history.showChanges": {
+		one: "Zobrazit změnu ({{count}})",
+		other: "Zobrazit změny ({{count}})",
+	},
+	"history.hideChanges": "Skrýt změny",
+	"history.changedFields": {
+		one: "{{count}} změněné pole",
+		other: "{{count}} změněných polí",
+	},
+	"history.moreFields": {
+		one: "{{count}} další",
+		other: "{{count}} dalších",
+	},
+	"history.changeAdded": "Přidáno",
+	"history.changeRemoved": "Odstraněno",
+	"history.changeChanged": "Změněno",
+	"history.diffAgainstVersion": "Rozdíl oproti verzi {{number}}",
+	"history.initialSnapshot": "Počáteční snímek",
+	"history.noFieldChanges": "V tomto snímku nejsou žádné změny na úrovni polí.",
+	"history.before": "Před",
+	"history.after": "Po",
+	"history.stage": "Fáze",
+	"history.systemUser": "Systém",
+	"history.itemsCount": {
+		one: "{{count}} položka",
+		other: "{{count}} položek",
+	},
+	"history.blocksCount": {
+		one: "{{count}} blok",
+		other: "{{count}} bloků",
+	},
+	"history.objectWithKeys": {
+		one: "Objekt s {{count}} klíčem",
+		other: "Objekt s {{count}} klíči",
+	},
+
+	"workflow.transition": "Přechod",
+	"workflow.currentStage": "Aktuální fáze",
+	"workflow.transitionTo": "Přejít do {{stage}}",
+	"workflow.transitionDescription":
+		'Tato akce provede přechod z "{{from}}" do "{{to}}".',
+	"workflow.scheduleLabel": "Naplánovat na později",
+	"workflow.scheduledAt": "Naplánované datum a čas",
+	"workflow.scheduledDescription":
+		"Přechod proběhne automaticky v naplánovaném čase.",
+	"workflow.transitionSuccess": 'Úspěšně převedeno do "{{stage}}"',
+	"workflow.scheduledSuccess": 'Přechod do "{{stage}}" naplánován na {{date}}',
+	"workflow.transitionFailed": "Přechod se nezdařil",
+	"workflow.noTransitions": "Z této fáze nejsou dostupné žádné přechody",
+
+	"lock.blockedTitle": "{{name}} právě upravuje",
+	"lock.blockedDescription":
+		"Tento dokument je uzamčen. Můžete ho zobrazit, ale nemůžete provádět změny, dokud zámek nevyprší.",
+	"lock.openElsewhere":
+		"Tento dokument máte otevřený v jiné kartě. Změny se automaticky synchronizují.",
+	"lock.cannotSave": "Nelze uložit - dokument je uzamčen jiným uživatelem",
+
+	"ui.toggleSidebar": "Přepnout postranní panel",
+	"ui.expandSidebar": "Rozbalit postranní panel",
+	"ui.skipToMainContent": "Přeskočit na hlavní obsah",
+	"ui.processing": "Zpracování...",
+	"ui.commandPalette": "Paleta příkazů",
+	"ui.commandPaletteDescription": "Vyhledejte příkaz ke spuštění...",
+	"ui.searchPlaceholder": "Hledat...",
+	"ui.expand": "Rozbalit",
+	"ui.toggleTheme": "Přepnout motiv",
+	"ui.themeLight": "Světlý",
+	"ui.themeDark": "Tmavý",
+	"ui.themeSystem": "Systémový",
+
+	"dropzone.label": "Přetáhněte sem soubory nebo klikněte pro procházení",
+	"dropzone.invalidType": '"{{name}}" není povolený typ souboru',
+	"dropzone.tooLarge": '"{{name}}" překračuje maximální velikost {{maxSize}}',
+	"dropzone.uploading": "Nahrávání...",
+	"dropzone.typeImages": "Obrázky",
+	"dropzone.typeVideos": "Videa",
+	"dropzone.typeAudio": "Audio",
+	"dropzone.typePDF": "PDF",
+
+	"media.browseLibrary": "Procházet knihovnu médií",
+	"media.allFiles": "Všechny soubory",
+	"media.images": "Obrázky",
+	"media.videos": "Videa",
+	"media.audio": "Audio",
+	"media.documents": "Dokumenty",
+	"media.searchPlaceholder": "Hledat podle názvu souboru...",
+	"media.noAssets": "Nebyla nalezena žádná média",
+
+	"field.moveUp": "Přesunout nahoru",
+	"field.moveDown": "Přesunout dolů",
+	"field.dragToReorder": "Přetažením změnit pořadí",
+	"field.editItem": "Upravit položku",
+	"field.removeItem": "Odstranit položku",
+	"field.noItems": "Žádné položky",
+	"field.codeEditor": "Editor kódu",
+	"field.formEditor": "Editor formuláře",
+	"field.section": "Sekce",
+
+	"cell.file": {
+		one: "{{count}} soubor",
+		other: "{{count}} souborů",
+	},
+	"cell.item": {
+		one: "{{count}} položka",
+		other: "{{count}} položek",
+	},
+	"cell.more": "+{{count}} dalších",
+	"cell.blocks": "Bloky",
+
+	"widget.quickActions.emptyTitle": "Žádné rychlé akce",
+	"widget.quickActions.emptyDescription":
+		"Rychlé akce se zde zobrazí po nakonfigurování.",
+	"widget.chart.emptyTitle": "Žádná data grafu",
+	"widget.chart.emptyDescription":
+		"Data grafu se zde zobrazí, jakmile budou dostupná.",
+	"widget.recentItems.emptyTitle": "Žádné nedávné položky",
+	"widget.recentItems.emptyDescription":
+		"Nedávné položky se zde zobrazí po vytvoření záznamů.",
+	"widget.value.emptyTitle": "Žádná hodnota k zobrazení",
+	"widget.value.emptyDescription":
+		"Tato hodnota se zobrazí, jakmile budou dostupná data.",
+	"widget.progress.emptyTitle": "Žádná data průběhu",
+	"widget.progress.emptyDescription":
+		"Průběh se zde zobrazí, jakmile budou dostupná data.",
+	"widget.timeline.emptyTitle": "Zatím žádná aktivita",
+	"widget.timeline.emptyDescription": "Nejsou k zobrazení žádné události.",
+	"widget.table.emptyTitle": "Žádné řádky k zobrazení",
+	"widget.table.emptyDescription":
+		"Pro aktuální kritéria neexistují žádné záznamy.",
+
+	"time.justNow": "právě teď",
+	"time.minutesAgoShort": {
+		one: "{{count}}m zpátky",
+		other: "{{count}}m zpátky",
+	},
+	"time.hoursAgoShort": {
+		one: "{{count}}h zpátky",
+		other: "{{count}}h zpátky",
+	},
+	"time.daysAgoShort": {
+		one: "{{count}}d zpátky",
+		other: "{{count}}d zpátky",
+	},
 } as const;

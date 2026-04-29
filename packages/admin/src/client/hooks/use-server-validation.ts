@@ -12,8 +12,14 @@ import { ajvResolver } from "@hookform/resolvers/ajv";
 import type { Options as AjvOptions, JSONSchemaType } from "ajv";
 import type { Questpie } from "questpie";
 import type { CollectionSchema } from "questpie/client";
+import type { ValidationTranslateFn } from "questpie/shared";
 import { useMemo } from "react";
-import type { FieldValues, Resolver } from "react-hook-form";
+import type {
+	FieldError,
+	FieldErrors,
+	FieldValues,
+	Resolver,
+} from "react-hook-form";
 
 import type {
 	RegisteredCMS,
@@ -21,6 +27,7 @@ import type {
 } from "../builder/registry";
 import { useCollectionSchema } from "./use-collection-schema";
 import { useGlobalSchema } from "./use-global-schema";
+import { useValidationTranslator } from "./use-validation-error-map";
 
 // ============================================================================
 // Helpers
@@ -56,6 +63,189 @@ function stripAdditionalProperties(schema: unknown): unknown {
 		s.items = stripAdditionalProperties(s.items);
 	}
 	return s;
+}
+
+function translateResolverErrors<TFieldValues extends FieldValues>(
+	errors: FieldErrors<TFieldValues>,
+	translate: ValidationTranslateFn,
+	parentPath = "",
+): FieldErrors<TFieldValues> {
+	const translatedErrors: any = Array.isArray(errors)
+		? [...errors]
+		: { ...errors };
+
+	for (const [key, value] of Object.entries(translatedErrors)) {
+		if (!value || typeof value !== "object") continue;
+
+		const path = parentPath ? `${parentPath}.${key}` : key;
+		if (isFieldError(value)) {
+			translatedErrors[key] = translateFieldError(value, translate, path);
+		} else {
+			translatedErrors[key] = translateResolverErrors(
+				value as FieldErrors<TFieldValues>,
+				translate,
+				path,
+			);
+		}
+	}
+
+	return translatedErrors as FieldErrors<TFieldValues>;
+}
+
+function isFieldError(value: object): value is FieldError {
+	return "message" in value || "type" in value;
+}
+
+function translateFieldError(
+	error: FieldError,
+	translate: ValidationTranslateFn,
+	path: string,
+): FieldError {
+	const translated = translateAjvMessage(error, translate, path);
+	const types =
+		error.types && typeof error.types === "object"
+			? Object.fromEntries(
+					Object.entries(error.types).map(([key, value]) => [
+						key,
+						Array.isArray(value)
+							? value.map((message) =>
+									translateAjvMessage(
+										{ ...error, type: key, message: String(message) },
+										translate,
+										path,
+									),
+								)
+							: translateAjvMessage(
+									{ ...error, type: key, message: String(value) },
+									translate,
+									path,
+								),
+					]),
+				)
+			: error.types;
+
+	return {
+		...error,
+		message: translated,
+		...(types && { types }),
+	};
+}
+
+function translateAjvMessage(
+	error: Pick<FieldError, "message" | "type">,
+	translate: ValidationTranslateFn,
+	field: string,
+): string {
+	const message = typeof error.message === "string" ? error.message : "";
+	const type = typeof error.type === "string" ? error.type : "";
+	const baseParams = { field };
+
+	if (message.startsWith("validation.")) {
+		return translate(message, baseParams);
+	}
+
+	switch (type) {
+		case "required":
+			return translate("validation.required", baseParams);
+		case "type":
+			return translate("validation.invalidType", {
+				...baseParams,
+				expected: extractExpectedType(message) ?? "unknown",
+				received: extractReceivedType(message) ?? "unknown",
+			});
+		case "enum":
+			return translate("validation.enum.invalid", baseParams);
+		case "minLength":
+			return translate("validation.string.min", {
+				...baseParams,
+				min: extractFirstNumber(message) ?? "",
+			});
+		case "maxLength":
+			return translate("validation.string.max", {
+				...baseParams,
+				max: extractFirstNumber(message) ?? "",
+			});
+		case "pattern":
+			return translate("validation.string.regex", baseParams);
+		case "format":
+			return translate(formatMessageToValidationKey(message), baseParams);
+		case "minimum":
+		case "exclusiveMinimum":
+			return translate("validation.number.min", {
+				...baseParams,
+				min: extractFirstNumber(message) ?? "",
+			});
+		case "maximum":
+		case "exclusiveMaximum":
+			return translate("validation.number.max", {
+				...baseParams,
+				max: extractFirstNumber(message) ?? "",
+			});
+		case "minItems":
+			return translate("validation.array.min", {
+				...baseParams,
+				min: extractFirstNumber(message) ?? "",
+			});
+		case "maxItems":
+			return translate("validation.array.max", {
+				...baseParams,
+				max: extractFirstNumber(message) ?? "",
+			});
+		default:
+			return interpolateMessage(message, baseParams);
+	}
+}
+
+function extractFirstNumber(message: string): number | undefined {
+	const match = message.match(/\d+/);
+	return match ? Number(match[0]) : undefined;
+}
+
+function extractExpectedType(message: string): string | undefined {
+	return (
+		message.match(/must be (?:a |an )?([A-Za-z_][\w-]*)/)?.[1] ??
+		message.match(/expected ([A-Za-z_][\w-]*)/)?.[1]
+	);
+}
+
+function extractReceivedType(message: string): string | undefined {
+	return message.match(/received ([A-Za-z_][\w-]*)/)?.[1];
+}
+
+function formatMessageToValidationKey(message: string): string {
+	if (message.includes('"email"')) return "validation.string.email";
+	if (message.includes('"uri"') || message.includes('"url"')) {
+		return "validation.string.url";
+	}
+	if (message.includes('"date-time"')) return "validation.string.datetime";
+	if (message.includes('"time"')) return "validation.time.invalid";
+	return "validation.string.regex";
+}
+
+function interpolateMessage(
+	message: string,
+	params: Record<string, unknown>,
+): string {
+	return message.replace(/\{\{(\w+)\}\}/g, (_, key) => {
+		const value = params[key];
+		return value !== undefined ? String(value) : "";
+	});
+}
+
+function withTranslatedResolver<TFieldValues extends FieldValues>(
+	resolver: Resolver<TFieldValues>,
+	translate: ValidationTranslateFn,
+): Resolver<TFieldValues> {
+	return async (values, context, options) => {
+		const result = await resolver(values, context, options);
+		return {
+			...result,
+			errors: translateResolverErrors(
+				result.errors as FieldErrors<TFieldValues>,
+				translate,
+			),
+		} as any;
+	};
 }
 
 // ============================================================================
@@ -170,6 +360,7 @@ function useServerValidation<
 	options: UseServerValidationOptions = {},
 ): ServerValidationResult<TFieldValues> {
 	const { mode = "create", enabled = true, schema: schemaOverride } = options;
+	const translateValidation = useValidationTranslator();
 	const shouldFetchSchema = enabled && !schemaOverride;
 
 	const {
@@ -182,7 +373,9 @@ function useServerValidation<
 
 	const schema = schemaOverride ?? queriedSchema;
 	const isLoading = schemaOverride ? false : queriedIsLoading;
-	const error = schemaOverride ? null : (queriedError as Error | null | undefined);
+	const error = schemaOverride
+		? null
+		: (queriedError as Error | null | undefined);
 
 	const result = useMemo((): ServerValidationResult<TFieldValues> => {
 		// Get the appropriate JSON Schema based on mode
@@ -203,20 +396,23 @@ function useServerValidation<
 
 		try {
 			// Create resolver using AJV
-			const resolver = ajvResolver(
-				jsonSchema as JSONSchemaType<TFieldValues>,
-				{
-					// Use our pre-configured AJV instance options
-					allErrors: true,
-					strict: false,
-					coerceTypes: true,
-					useDefaults: true,
-					// AJV formats plugin options
-					formats: {},
-				},
-				{
-					mode: "async",
-				},
+			const resolver = withTranslatedResolver(
+				ajvResolver(
+					jsonSchema as JSONSchemaType<TFieldValues>,
+					{
+						// Use our pre-configured AJV instance options
+						allErrors: true,
+						strict: false,
+						coerceTypes: true,
+						useDefaults: true,
+						// AJV formats plugin options
+						formats: {},
+					},
+					{
+						mode: "async",
+					},
+				) as Resolver<TFieldValues>,
+				translateValidation,
 			);
 
 			return {
@@ -238,7 +434,7 @@ function useServerValidation<
 				error: e instanceof Error ? e : new Error(String(e)),
 			};
 		}
-	}, [schema, mode, isLoading, error, collection]);
+	}, [schema, mode, isLoading, error, collection, translateValidation]);
 
 	return result;
 }
@@ -300,6 +496,7 @@ export function useGlobalServerValidation<
 	options: Omit<UseServerValidationOptions, "mode"> = {},
 ): ServerValidationResult<TFieldValues> {
 	const { enabled = true } = options;
+	const translateValidation = useValidationTranslator();
 
 	const {
 		data: schema,
@@ -323,17 +520,20 @@ export function useGlobalServerValidation<
 		}
 
 		try {
-			const resolver = ajvResolver(
-				jsonSchema as JSONSchemaType<TFieldValues>,
-				{
-					allErrors: true,
-					strict: false,
-					coerceTypes: true,
-					useDefaults: true,
-				},
-				{
-					mode: "async",
-				},
+			const resolver = withTranslatedResolver(
+				ajvResolver(
+					jsonSchema as JSONSchemaType<TFieldValues>,
+					{
+						allErrors: true,
+						strict: false,
+						coerceTypes: true,
+						useDefaults: true,
+					},
+					{
+						mode: "async",
+					},
+				) as Resolver<TFieldValues>,
+				translateValidation,
 			);
 
 			return {
@@ -354,7 +554,7 @@ export function useGlobalServerValidation<
 				error: e instanceof Error ? e : new Error(String(e)),
 			};
 		}
-	}, [schema, isLoading, error, globalName]);
+	}, [schema, isLoading, error, globalName, translateValidation]);
 
 	return result;
 }

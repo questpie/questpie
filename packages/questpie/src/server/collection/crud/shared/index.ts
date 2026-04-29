@@ -39,6 +39,7 @@ export {
 	createHookContext,
 	executeHooks,
 } from "./hooks.js";
+export { isJsonbBackedField, normalizeJsonbInput } from "./jsonb-input.js";
 export {
 	hasI18nPrefixedColumns,
 	I18N_CURRENT_PREFIX,

@@ -2,9 +2,15 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
 import { sql } from "drizzle-orm";
 
+import { collection } from "../../src/exports/index.js";
 import { SeedRunner } from "../../src/server/seed/runner.js";
 import type { Seed } from "../../src/server/seed/types.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
+import { runTestDbMigrations } from "../utils/test-db";
+
+const seedPosts = collection("seed_posts").fields(({ f }) => ({
+	title: f.text().required(),
+}));
 
 describe("SeedRunner", () => {
 	let setup: Awaited<ReturnType<typeof buildMockApp>>;
@@ -104,6 +110,41 @@ describe("SeedRunner", () => {
 
 		expect(runCount).toBe(2);
 	});
+
+	it("validate rolls back collection writes through explicit and implicit context", async () => {
+		await setup.cleanup();
+		setup = await buildMockApp({ collections: { seed_posts: seedPosts } });
+		await runTestDbMigrations(setup.app);
+		runner = new SeedRunner(setup.app, { silent: true });
+
+		const seeds: Seed[] = [
+			makeSeed({
+				id: "explicit-context",
+				run: async ({ collections, createContext }) => {
+					const ctx = await createContext();
+					await collections.seed_posts.create({ title: "Explicit" }, ctx);
+				},
+			}),
+			makeSeed({
+				id: "implicit-context",
+				run: async ({ collections }) => {
+					await collections.seed_posts.create({ title: "Implicit" });
+				},
+			}),
+		];
+
+		await runner.run(seeds, { validate: true });
+
+		const docs = await setup.app.collections.seed_posts.find({});
+		expect(docs.totalDocs).toBe(0);
+
+		const status = await runner.status(seeds);
+		expect(status.executed).toHaveLength(0);
+		expect(status.pending.map((seed) => seed.id)).toEqual([
+			"explicit-context",
+			"implicit-context",
+		]);
+	}, 15_000);
 
 	// ── Category filter ─────────────────────────────────────────────────
 

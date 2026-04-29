@@ -3,6 +3,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import type { Auth, BetterAuthOptions } from "better-auth";
 import type { Session, User } from "better-auth/types";
 
+import type { InternalContextStore } from "./internal-context.js";
 import type { AccessMode } from "./types.js";
 
 // ============================================================================
@@ -53,12 +54,13 @@ export type InferContextExtensionsFromAppConfig<TAppConfig> =
  * Used by generated code to avoid recursive `typeof app` references while still
  * preserving plugin-extended session/user fields.
  */
-export type InferSessionFromAuthConfig<TAuthConfig> =
-	[SessionMarker<TAuthConfig>] extends [never]
-		? Auth<
-				TAuthConfig extends BetterAuthOptions ? TAuthConfig : BetterAuthOptions
-			>["$Infer"]["Session"]
-		: SessionMarker<TAuthConfig>;
+export type InferSessionFromAuthConfig<TAuthConfig> = [
+	SessionMarker<TAuthConfig>,
+] extends [never]
+	? Auth<
+			TAuthConfig extends BetterAuthOptions ? TAuthConfig : BetterAuthOptions
+		>["$Infer"]["Session"]
+	: SessionMarker<TAuthConfig>;
 
 /**
  * Infer the database type from a app instance.
@@ -91,15 +93,17 @@ export type InferAppFromApp<TApp> = TApp;
  * Internal AsyncLocalStorage for request-scoped context.
  * Used when getContext() is called to retrieve implicit context.
  */
-const appContextStorage = new AsyncLocalStorage<{
-	app: unknown;
-	session?: unknown | null;
-	db?: unknown;
-	locale?: string;
-	accessMode?: string;
-	stage?: string;
-	_hookDepth?: number;
-}>();
+const appContextStorage = new AsyncLocalStorage<
+	{
+		app: unknown;
+		session?: unknown | null;
+		db?: unknown;
+		locale?: string;
+		accessMode?: string;
+		stage?: string;
+		_hookDepth?: number;
+	} & InternalContextStore
+>();
 
 /** Maximum recursion depth for hook-triggered CRUD operations */
 const MAX_HOOK_RECURSION = 5;
@@ -195,7 +199,10 @@ export function runWithContext<T>(
 		}
 	}
 	// Cast needed because some @types/node versions type AsyncLocalStorage.run() as returning void
-	return appContextStorage.run(ctx, fn) as unknown as Promise<T>;
+	return appContextStorage.run(
+		ctx as StoredContext & InternalContextStore,
+		fn,
+	) as unknown as Promise<T>;
 }
 
 /**

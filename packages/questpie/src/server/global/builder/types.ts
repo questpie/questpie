@@ -180,6 +180,8 @@ export type GlobalTransitionHookContext<TData = any> = AppContext & {
 	toStage: string;
 	/** Current locale */
 	locale?: string;
+	/** Current access mode */
+	accessMode?: AccessMode;
 };
 
 /**

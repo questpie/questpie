@@ -8,6 +8,7 @@ import * as React from "react";
 
 import { useIsMobile } from "../../hooks/use-media-query";
 import { cn } from "../../lib/utils";
+import { shouldHandleAdminShortcut } from "../../utils/keyboard-shortcuts";
 import { Button } from "./button";
 import { Input } from "./input";
 import { Separator } from "./separator";
@@ -26,7 +27,7 @@ const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
 const SIDEBAR_WIDTH = "16rem";
 const SIDEBAR_WIDTH_MOBILE = "min(18rem, 85vw)";
 const SIDEBAR_WIDTH_ICON = "3rem";
-const SIDEBAR_KEYBOARD_SHORTCUT = "b";
+const SIDEBAR_KEYBOARD_SHORTCUT = "\\";
 
 type SidebarContextProps = {
 	state: "expanded" | "collapsed";
@@ -93,8 +94,7 @@ function SidebarProvider({
 	React.useEffect(() => {
 		const handleKeyDown = (event: KeyboardEvent) => {
 			if (
-				event.key === SIDEBAR_KEYBOARD_SHORTCUT &&
-				(event.metaKey || event.ctrlKey)
+				shouldHandleAdminShortcut(event, { key: SIDEBAR_KEYBOARD_SHORTCUT })
 			) {
 				event.preventDefault();
 				toggleSidebar();
@@ -410,7 +410,7 @@ function SidebarGroupLabel({
 		props: mergeProps<"div">(
 			{
 				className: cn(
-					"qa-sidebar-group-label text-sidebar-foreground/55 ring-sidebar-ring flex h-8 shrink-0 items-center px-2 font-mono text-[11px] font-semibold tracking-[0.08em] uppercase tabular-nums outline-hidden transition-[margin,opacity] duration-200 ease-linear group-data-[collapsible=icon]:-mt-8 group-data-[collapsible=icon]:opacity-0 focus-visible:ring-2 [&>svg]:size-4 [&>svg]:shrink-0",
+					"qa-sidebar-group-label text-sidebar-foreground/55 ring-sidebar-ring flex h-8 shrink-0 items-center px-2 font-mono text-[11px] font-semibold tracking-[0.08em] uppercase tabular-nums outline-hidden transition-[height,margin,opacity,padding] duration-200 ease-linear group-data-[collapsible=icon]:pointer-events-none group-data-[collapsible=icon]:mt-0 group-data-[collapsible=icon]:h-0 group-data-[collapsible=icon]:overflow-hidden group-data-[collapsible=icon]:px-0 group-data-[collapsible=icon]:py-0 group-data-[collapsible=icon]:opacity-0 focus-visible:ring-2 [&>svg]:size-4 [&>svg]:shrink-0",
 					className,
 				),
 			},

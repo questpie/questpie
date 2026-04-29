@@ -34,11 +34,11 @@ Declare what search modes your adapter supports:
 
 ```ts
 export type AdapterCapabilities = {
-	lexical: boolean;   // text search (FTS, inverted index)
-	trigram: boolean;    // fuzzy matching (pg_trgm, etc.)
-	semantic: boolean;   // vector/embedding search
-	hybrid: boolean;     // combined lexical + semantic
-	facets: boolean;     // faceted filtering/aggregation
+	lexical: boolean; // text search (FTS, inverted index)
+	trigram: boolean; // fuzzy matching (pg_trgm, etc.)
+	semantic: boolean; // vector/embedding search
+	hybrid: boolean; // combined lexical + semantic
+	facets: boolean; // faceted filtering/aggregation
 };
 ```
 
@@ -58,8 +58,8 @@ Your adapter receives the Drizzle DB instance and a logger during `initialize()`
 ```ts
 export type AdapterMigration = {
 	name: string;
-	up: string;   // SQL to apply
-	down: string;  // SQL to rollback
+	up: string; // SQL to apply
+	down: string; // SQL to rollback
 };
 ```
 
@@ -67,15 +67,15 @@ If your adapter needs database tables (like the Postgres adapter does), return S
 
 ## Required methods
 
-| Method | Description |
-|---|---|
-| `initialize(ctx)` | Capture DB/logger references, validate configuration. Called once at startup. |
-| `getMigrations()` | Return SQL migrations for adapter storage, or `[]` for external services. |
-| `search(options)` | Execute a search query and return results with total count. |
-| `index(params)` | Upsert one record into the search index. |
-| `remove(params)` | Remove one record from the index. |
-| `reindex(collection)` | Rebuild the index for one collection from source data. |
-| `clear()` | Remove all indexed data. |
+| Method                | Description                                                                   |
+| --------------------- | ----------------------------------------------------------------------------- |
+| `initialize(ctx)`     | Capture DB/logger references, validate configuration. Called once at startup. |
+| `getMigrations()`     | Return SQL migrations for adapter storage, or `[]` for external services.     |
+| `search(options)`     | Execute a search query and return results with total count.                   |
+| `index(params)`       | Upsert one record into the search index.                                      |
+| `remove(params)`      | Remove one record from the index.                                             |
+| `reindex(collection)` | Rebuild the index for one collection from source data.                        |
+| `clear()`             | Remove all indexed data.                                                      |
 
 ### `search()` options
 
@@ -123,11 +123,11 @@ export type RemoveParams = {
 
 ## Optional methods
 
-| Method | Description |
-|---|---|
+| Method                 | Description                                                                                          |
+| ---------------------- | ---------------------------------------------------------------------------------------------------- |
 | `indexBatch(params[])` | Bulk index multiple records. If not implemented, QUESTPIE falls back to calling `index()` in a loop. |
-| `getTableSchemas()` | Return Drizzle table schemas for adapter tables (used by migration generator). |
-| `getExtensions()` | Return PostgreSQL extensions your adapter requires (e.g. `["pg_trgm", "pgvector"]`). |
+| `getTableSchemas()`    | Return Drizzle table schemas for adapter tables (used by migration generator).                       |
+| `getExtensions()`      | Return PostgreSQL extensions your adapter requires (e.g. `["pg_trgm", "pgvector"]`).                 |
 
 ## Minimal example
 
@@ -141,7 +141,7 @@ import type {
 	SearchAdapter,
 	SearchOptions,
 	SearchResponse,
-} from "questpie/server";
+} from "questpie";
 
 export class MeilisearchAdapter implements SearchAdapter {
 	readonly name = "meilisearch";
@@ -175,16 +175,12 @@ export class MeilisearchAdapter implements SearchAdapter {
 
 	async search(options: SearchOptions): Promise<SearchResponse> {
 		// Map QUESTPIE search options to Meilisearch API
-		const index = this.client.index(
-			options.collections?.[0] ?? "default",
-		);
+		const index = this.client.index(options.collections?.[0] ?? "default");
 		const result = await index.search(options.query, {
 			limit: options.limit ?? 20,
 			offset: options.offset ?? 0,
 			filter: options.filters
-				? Object.entries(options.filters).map(
-						([k, v]) => `${k} = "${v}"`,
-					)
+				? Object.entries(options.filters).map(([k, v]) => `${k} = "${v}"`)
 				: undefined,
 		});
 
@@ -241,10 +237,10 @@ export class MeilisearchAdapter implements SearchAdapter {
 ## Registration
 
 ```ts title="questpie.config.ts"
-import { config } from "questpie";
+import { runtimeConfig } from "questpie";
 import { MeilisearchAdapter } from "./my-search-adapter";
 
-export default config({
+export default runtimeConfig({
 	// ...
 	search: new MeilisearchAdapter({
 		host: "http://localhost:7700",

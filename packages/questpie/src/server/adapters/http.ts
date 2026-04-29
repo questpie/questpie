@@ -13,8 +13,8 @@ import type { Questpie } from "../config/questpie.js";
 import type { QuestpieConfig } from "../config/types.js";
 import { ApiError } from "../errors/index.js";
 import {
-	executeJsonRoute,
-	executeRawRoute,
+	executeJsonRouteInternal,
+	executeRawRouteInternal,
 } from "../routes/execute.js";
 import { filePathToRoutePattern } from "../routes/file-path-convention.js";
 import { compileMatcher, type RouteMatcher } from "../routes/route-matcher.js";
@@ -168,36 +168,47 @@ export const createFetchHandler = (
 
 				if (!def) {
 					// Path matches but method doesn't → 405
-					return new Response("Method Not Allowed", {
-						status: 405,
-						headers: {
-							Allow: Array.from(match.methods.keys()).join(", "),
+					const resolved = await resolveContext(_app, request, config, context);
+					return new Response(
+						_app.t(
+							"error.methodNotAllowed",
+							undefined,
+							resolved.appContext.locale,
+						),
+						{
+							status: 405,
+							headers: {
+								Allow: Array.from(match.methods.keys()).join(", "),
+							},
 						},
-					});
+					);
 				}
 
 				// Resolve session, locale, and create app context
-				const resolved = await resolveContext(
-					_app,
-					request,
-					config,
-					context,
-				);
+				const resolved = await resolveContext(_app, request, config, context);
 
 				try {
 					if (isJsonRoute(def)) {
 						const body = await parseRouteBody(request);
 						if (body === null) {
 							return handleError(
-								ApiError.badRequest("Invalid JSON body"),
-								{ request, app: _app },
+								ApiError.badRequest(
+									"Invalid JSON body",
+									undefined,
+									"error.invalidJsonBody",
+								),
+								{
+									request,
+									app: _app,
+									locale: resolved.appContext.locale,
+								},
 							);
 						}
-						const result = await executeJsonRoute(
+						const result = await executeJsonRouteInternal(
 							_app,
 							def,
 							body,
-							resolved.appContext,
+							resolved,
 							request,
 							match.params,
 						);
@@ -205,11 +216,11 @@ export const createFetchHandler = (
 					}
 
 					// Raw route — pass matched params through
-					return await executeRawRoute(
+					return await executeRawRouteInternal(
 						_app,
 						def,
 						request,
-						resolved.appContext,
+						resolved,
 						match.params,
 					);
 				} catch (error) {

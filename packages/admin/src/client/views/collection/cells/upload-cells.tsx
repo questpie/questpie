@@ -10,7 +10,9 @@
 
 import * as React from "react";
 
+import type { FieldInstance } from "../../../builder/field/field";
 import { Badge } from "../../../components/ui/badge";
+import { useCollectionItem } from "../../../hooks/use-collection";
 import { useTranslation } from "../../../i18n/hooks";
 import { AssetThumbnail } from "./shared/asset-thumbnail";
 
@@ -22,18 +24,89 @@ import { AssetThumbnail } from "./shared/asset-thumbnail";
  * Upload cell - displays single asset thumbnail or file info
  * Uses AssetThumbnail with size="sm"
  */
-export function UploadCell({ value }: { value: unknown }) {
-	return <AssetThumbnail asset={value} size="sm" showFilename />;
+export function UploadCell({
+	value,
+	fieldDef,
+}: {
+	value: unknown;
+	row?: unknown;
+	fieldDef?: FieldInstance;
+}) {
+	if (Array.isArray(value)) {
+		return <UploadManyCell value={value} fieldDef={fieldDef} />;
+	}
+
+	return <UploadSingleCell value={value} fieldDef={fieldDef} />;
 }
 
 // ============================================================================
 // Upload Many Cell
 // ============================================================================
 
+function getUploadCollection(fieldDef?: FieldInstance): string {
+	const options = fieldDef?.["~options"] ?? {};
+	const target = options.to ?? options.targetCollection;
+
+	if (typeof target === "string" && target.length > 0) {
+		return target;
+	}
+
+	return "assets";
+}
+
+function getAssetId(value: unknown): string | undefined {
+	if (typeof value === "string" && value.length > 0) {
+		return value;
+	}
+
+	if (typeof value === "object" && value !== null) {
+		const id = (value as Record<string, unknown>).id;
+		return typeof id === "string" && id.length > 0 ? id : undefined;
+	}
+
+	return undefined;
+}
+
+function hasAssetDisplayData(value: unknown): boolean {
+	if (typeof value !== "object" || value === null) return false;
+	const asset = value as Record<string, unknown>;
+	return !!(asset.url || asset.filename || asset.mimeType);
+}
+
+function UploadSingleCell({
+	value,
+	fieldDef,
+}: {
+	value: unknown;
+	fieldDef?: FieldInstance;
+}) {
+	const collection = getUploadCollection(fieldDef);
+	const assetId = getAssetId(value);
+	const shouldFetch = !!assetId && !hasAssetDisplayData(value);
+	const { data: fetchedAsset } = useCollectionItem(
+		collection,
+		assetId || "",
+		undefined,
+		{
+			enabled: shouldFetch,
+			staleTime: 30_000,
+		},
+	);
+
+	return (
+		<AssetThumbnail asset={fetchedAsset || value} size="sm" showFilename />
+	);
+}
+
 /**
  * Upload many cell - displays multiple assets count or thumbnails
  */
-function UploadManyCell({ value }: { value: unknown }) {
+export function UploadManyCell({
+	value,
+}: {
+	value: unknown;
+	fieldDef?: FieldInstance;
+}) {
 	const { t } = useTranslation();
 	if (value === null || value === undefined) {
 		return <span className="text-muted-foreground">-</span>;

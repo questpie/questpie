@@ -352,6 +352,7 @@ function renderFields({
 				allCollectionsConfig={allCollectionsConfig}
 				entityMeta={entityMeta}
 				className={cn(item.className, spanClass)}
+				extraProps={(item as { props?: Record<string, any> }).props}
 				renderEmbeddedFields={({
 					embeddedCollection,
 					embeddedCollectionConfig,
@@ -460,6 +461,11 @@ function FieldLayoutItems({
 					className={
 						typeof item === "object" && "className" in item
 							? item.className
+							: undefined
+					}
+					extraProps={
+						typeof item === "object" && "props" in item
+							? (item as { props?: Record<string, any> }).props
 							: undefined
 					}
 					renderEmbeddedFields={({
@@ -770,10 +776,10 @@ function TabsLayoutRenderer({
 
 	return (
 		<Tabs defaultValue={defaultTab}>
-			<TabsList variant="line">
+			<TabsList className="w-full">
 				{visibleTabs.map((tab: TabConfig) => (
-					<TabsTrigger key={tab.id} value={tab.id}>
-						{resolveIconElement(tab.icon, { className: "mr-2 size-4" })}
+					<TabsTrigger key={tab.id} value={tab.id} className="flex-1">
+						{resolveIconElement(tab.icon, { className: "size-3.5" })}
 						{resolveText(tab.label, tab.id, formValues)}
 					</TabsTrigger>
 				))}
@@ -1059,11 +1065,10 @@ export function AutoFormFields<T extends QuestpieApp, K extends string>({
 					<aside
 						className={cn(
 							"qa-form-fields__sidebar",
-							"border-border-subtle w-full @max-2xl:border-b @max-2xl:pb-4 @2xl:border-l @2xl:pl-4",
-							"w-full @2xl:max-w-xs",
+							"w-full @max-2xl:pb-2 @2xl:max-w-[18rem] @2xl:pl-1",
 						)}
 					>
-						<div className="space-y-4 @2xl:sticky @2xl:top-4 @2xl:h-auto">
+						<div className="bg-surface-low/45 space-y-4 rounded-md px-3 py-3 @2xl:sticky @2xl:top-4 @2xl:h-auto">
 							<SidebarRenderer
 								sidebar={formConfig.sidebar}
 								fields={fields}

@@ -22,6 +22,7 @@ import { createStore, useStore } from "zustand";
 
 import type { AnyQuestpieClient } from "../builder";
 import { Admin, type AdminInput } from "../builder/admin";
+import type { BrandLogoConfig } from "../types/admin-config";
 import { I18nProvider } from "../i18n/hooks";
 import { adminMessages } from "../i18n/messages";
 import { createSimpleI18n, type SimpleMessages } from "../i18n/simple";
@@ -98,6 +99,9 @@ export interface AdminState {
 	// Derived/cached values
 	navigation: NavigationGroup[];
 	brandName: string;
+	brandLogo: BrandLogoConfig | null;
+	brandTagline: string | null;
+	brandFavicon: string | null;
 }
 
 export type AdminStore = ReturnType<typeof createAdminStore>;
@@ -151,6 +155,9 @@ function createAdminStore({
 		// Derived values (computed once, updated when needed)
 		navigation: buildNavigation(admin, { basePath }),
 		brandName: "Admin",
+		brandLogo: null,
+		brandTagline: null,
+		brandFavicon: null,
 	}));
 }
 
@@ -512,6 +519,30 @@ export function AdminProvider({
 // Branding Sync (reads server config and updates store)
 // ============================================================================
 
+function resolveBrandText(value: unknown, fallback: string): string {
+	if (typeof value === "string") return value;
+	if (value && typeof value === "object") {
+		const obj = value as Record<string, unknown>;
+		if (typeof obj.en === "string") return obj.en;
+		const first = Object.values(obj).find((v) => typeof v === "string");
+		if (typeof first === "string") return first;
+	}
+	return fallback;
+}
+
+function applyFavicon(href: string | null) {
+	if (typeof document === "undefined" || !href) return;
+	const FAVICON_ID = "qa-brand-favicon";
+	let link = document.getElementById(FAVICON_ID) as HTMLLinkElement | null;
+	if (!link) {
+		link = document.createElement("link");
+		link.id = FAVICON_ID;
+		link.rel = "icon";
+		document.head.appendChild(link);
+	}
+	link.href = href;
+}
+
 function BrandingSync() {
 	const store = useContext(AdminStoreContext);
 	useEffect(() => {
@@ -522,19 +553,31 @@ function BrandingSync() {
 		(client as any).routes
 			.getAdminConfig()
 			.then((config: any) => {
-				if (config?.branding?.name) {
-					const name = config.branding.name;
-					const resolved =
-						typeof name === "string"
-							? name
-							: typeof name === "object" && name !== null
-								? (name.en ?? Object.values(name)[0] ?? "Admin")
-								: "Admin";
-					store.setState({ brandName: resolved as string });
+				const branding = config?.branding;
+				if (!branding) return;
+				const next: Partial<AdminState> = {};
+				if (branding.name !== undefined) {
+					next.brandName = resolveBrandText(branding.name, "Admin");
+				}
+				if (branding.logo !== undefined) {
+					next.brandLogo = (branding.logo ?? null) as BrandLogoConfig | null;
+				}
+				if (branding.tagline !== undefined) {
+					next.brandTagline = branding.tagline
+						? resolveBrandText(branding.tagline, "")
+						: null;
+				}
+				if (branding.favicon !== undefined) {
+					const favicon = branding.favicon ?? null;
+					next.brandFavicon = favicon;
+					applyFavicon(favicon);
+				}
+				if (Object.keys(next).length > 0) {
+					store.setState(next);
 				}
 			})
 			.catch(() => {
-				// Fail silently - keep default "Admin"
+				// Fail silently — keep defaults.
 			});
 	}, [store]);
 	return null;

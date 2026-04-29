@@ -11,7 +11,6 @@ import { useAuthClient } from "../../hooks/use-auth";
 import { useTranslation } from "../../i18n/hooks";
 import {
 	selectBasePath,
-	selectBrandName,
 	selectNavigate,
 	useAdminStore,
 } from "../../runtime/provider";
@@ -79,7 +78,6 @@ export function ForgotPasswordPage({
 	const authClient = useAuthClient();
 	const navigate = useAdminStore(selectNavigate);
 	const basePath = useAdminStore(selectBasePath);
-	const brandName = useAdminStore(selectBrandName);
 
 	const [error, setError] = React.useState<string | null>(null);
 
@@ -128,7 +126,7 @@ export function ForgotPasswordPage({
 		<AuthLayout
 			title={title ?? t("auth.forgotPasswordTitle")}
 			description={description ?? t("auth.forgotPasswordDescription")}
-			logo={logo ?? <DefaultLogo brandName={brandName} />}
+			logo={logo}
 			className="qa-forgot-password-page"
 		>
 			<ForgotPasswordForm
@@ -137,13 +135,5 @@ export function ForgotPasswordPage({
 				error={error}
 			/>
 		</AuthLayout>
-	);
-}
-
-function DefaultLogo({ brandName }: { brandName: string }) {
-	return (
-		<div className="text-center">
-			<h1 className="text-xl font-bold">{brandName}</h1>
-		</div>
 	);
 }

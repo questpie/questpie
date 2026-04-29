@@ -11,6 +11,7 @@ import * as React from "react";
 import { toast } from "sonner";
 
 import type { MaybeLazyComponent } from "../../builder/types/common.js";
+import { BrandLogoMark } from "../../components/brand-logo";
 import { ComponentRenderer } from "../../components/component-renderer";
 import { Button } from "../../components/ui/button";
 import {
@@ -68,6 +69,7 @@ import type {
 	NavigationGroup,
 	NavigationItem,
 } from "../../runtime/routes";
+import type { BrandLogoConfig } from "../../types/admin-config";
 import { getFlagUrl } from "../../utils/locale-to-flag";
 import { useLazyComponent } from "../../utils/use-lazy-component.js";
 
@@ -353,9 +355,11 @@ function useServerNavigation(): NavigationGroup[] | undefined {
 function useSidebarProps(props: { brandName?: string }): {
 	navigation: NavigationGroup[];
 	brandName: string;
+	brandLogo: BrandLogoConfig | null;
 } {
 	const storeNavigation = useAdminStore((s) => s.navigation);
 	const storeBrandName = useAdminStore((s) => s.brandName);
+	const storeBrandLogo = useAdminStore((s) => s.brandLogo);
 
 	// Server-driven navigation is the primary source of truth.
 	// Everything (dashboard, collections, globals, links) should be
@@ -366,6 +370,7 @@ function useSidebarProps(props: { brandName?: string }): {
 	return {
 		navigation: serverNavigation ?? storeNavigation ?? [],
 		brandName: props.brandName ?? storeBrandName ?? "Admin",
+		brandLogo: storeBrandLogo,
 	};
 }
 
@@ -987,7 +992,15 @@ function UserFooter({
 							)}
 						>
 							<div className="qa-sidebar__user-avatar border-sidebar-border bg-sidebar-accent text-sidebar-accent-foreground flex size-8 shrink-0 items-center justify-center rounded-md border">
-								<Icon icon="ph:user-bold" className="size-4" />
+								{user.image ? (
+									<img
+										src={user.image}
+										alt=""
+										className="image-outline size-full rounded-md object-cover"
+									/>
+								) : (
+									<Icon icon="ph:user-bold" className="size-4" />
+								)}
 							</div>
 							{!collapsed && (
 								<>
@@ -1185,10 +1198,11 @@ export function AdminSidebar({
 	showThemeToggle,
 	useActiveProps = true,
 }: AdminSidebarProps): React.ReactElement {
-	// Resolve navigation from server config, brandName from props or store
-	const { navigation, brandName } = useSidebarProps({
+	// Resolve navigation from server config, brandName/brandLogo from store
+	const { navigation, brandName, brandLogo } = useSidebarProps({
 		brandName: brandNameProp,
 	});
+	const { t } = useTranslation();
 
 	const { state, isMobile, setOpenMobile, toggleSidebar } = useSidebar();
 	const collapsed = state === "collapsed";
@@ -1215,17 +1229,23 @@ export function AdminSidebar({
 	);
 
 	// Build effective render functions: prop wins, then registry, then built-in (undefined)
-	const effectiveRenderBrand =
-		renderBrand ??
-		(BrandOverride
-			? (props: AdminSidebarBrandProps) => <BrandOverride {...props} />
-			: undefined);
+	const effectiveRenderBrand = React.useMemo(
+		() =>
+			renderBrand ??
+			(BrandOverride
+				? (props: AdminSidebarBrandProps) => <BrandOverride {...props} />
+				: undefined),
+		[BrandOverride, renderBrand],
+	);
 
-	const effectiveRenderNavItem =
-		renderNavItem ??
-		(NavItemOverride
-			? (props: AdminSidebarNavItemProps) => <NavItemOverride {...props} />
-			: undefined);
+	const effectiveRenderNavItem = React.useMemo(
+		() =>
+			renderNavItem ??
+			(NavItemOverride
+				? (props: AdminSidebarNavItemProps) => <NavItemOverride {...props} />
+				: undefined),
+		[NavItemOverride, renderNavItem],
+	);
 
 	// Close sidebar on mobile when navigating
 	const handleBrandClick = React.useCallback(() => {
@@ -1237,7 +1257,11 @@ export function AdminSidebar({
 	const renderBuiltInBrand = React.useCallback(
 		(isCollapsed: boolean) => (
 			<>
-				<QuestpieSymbol />
+				<BrandLogoMark
+					logo={brandLogo}
+					alt={brandName}
+					fallback={<QuestpieSymbol />}
+				/>
 				{!isCollapsed && (
 					<div className="grid flex-1 text-left leading-tight">
 						<span className="qa-sidebar__brand-name font-chrome truncate text-sm font-medium">
@@ -1247,7 +1271,7 @@ export function AdminSidebar({
 				)}
 			</>
 		),
-		[brandName],
+		[brandLogo, brandName],
 	);
 
 	const renderBrandContent = React.useCallback(
@@ -1290,8 +1314,8 @@ export function AdminSidebar({
 					size="icon-xs"
 					className="text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground"
 					onClick={onSearchOpen}
-					title="Search"
-					aria-label="Search"
+					title={t("common.search")}
+					aria-label={t("common.search")}
 				>
 					<Icon icon="ph:magnifying-glass" />
 				</Button>
@@ -1344,14 +1368,14 @@ export function AdminSidebar({
 						size="icon-xs"
 						className="border-sidebar-border/70 bg-sidebar text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground h-8 w-3 rounded-l-none rounded-r-md border border-l-0 p-0 shadow-[var(--floating-shadow)]"
 						onClick={toggleSidebar}
-						aria-label="Expand sidebar"
+						aria-label={t("ui.expandSidebar")}
 					>
 						<span className="h-3 w-0.5 rounded-full bg-current opacity-55" />
 					</Button>
 					<div className="floating-surface ml-1 flex scale-95 items-center gap-1 p-1 opacity-0 transition-[opacity,transform] duration-[var(--motion-duration-base)] ease-[var(--motion-ease-enter)] group-focus-within/peek:scale-100 group-focus-within/peek:opacity-100 group-hover/peek:scale-100 group-hover/peek:opacity-100 motion-reduce:scale-100 motion-reduce:transition-none">
 						<SidebarTrigger
 							className="text-muted-foreground hover:bg-muted hover:text-foreground"
-							aria-label="Expand sidebar"
+							aria-label={t("ui.expandSidebar")}
 						/>
 						{onSearchOpen && (
 							<Button
@@ -1360,8 +1384,8 @@ export function AdminSidebar({
 								size="icon-sm"
 								className="text-muted-foreground hover:bg-muted hover:text-foreground"
 								onClick={onSearchOpen}
-								title="Search"
-								aria-label="Search"
+								title={t("common.search")}
+								aria-label={t("common.search")}
 							>
 								<Icon icon="ph:magnifying-glass" />
 							</Button>
@@ -1378,8 +1402,8 @@ export function AdminSidebar({
 			)}
 
 			{/* Navigation */}
-			<SidebarContent className="qa-sidebar__content gap-3 px-2 py-3">
-				<nav aria-label="Admin navigation" className="qa-sidebar__nav">
+			<SidebarContent className="qa-sidebar__content gap-3 px-2 py-3 group-data-[collapsible=icon]:gap-2">
+				<nav aria-label={t("nav.adminNavigation")} className="qa-sidebar__nav">
 					{navigation.map((group, index) => (
 						<NavGroup
 							key={group.id ?? `group-${index}`}

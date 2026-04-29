@@ -1,119 +1,82 @@
-import * as React from "react";
+"use client";
+
+import { Tabs as TabsPrimitive } from "@base-ui/react/tabs";
+import { cva, type VariantProps } from "class-variance-authority";
 
 import { cn } from "@/lib/utils";
 
-const Tabs = React.forwardRef<
-	HTMLDivElement,
-	React.HTMLAttributes<HTMLDivElement> & {
-		value?: string;
-		onValueChange?: (value: string) => void;
-		defaultValue?: string;
-	}
->(
-	(
-		{ className, value, onValueChange, defaultValue, children, ...props },
-		ref,
-	) => {
-		const [selectedValue, setSelectedValue] = React.useState(
-			value || defaultValue,
-		);
+function Tabs({
+	className,
+	orientation = "horizontal",
+	...props
+}: TabsPrimitive.Root.Props) {
+	return (
+		<TabsPrimitive.Root
+			data-slot="tabs"
+			data-orientation={orientation}
+			className={cn(
+				"group/tabs flex gap-2 data-[orientation=horizontal]:flex-col",
+				className,
+			)}
+			{...props}
+		/>
+	);
+}
 
-		React.useEffect(() => {
-			if (value !== undefined) {
-				setSelectedValue(value);
-			}
-		}, [value]);
-
-		const contextValue = React.useMemo(
-			() => ({
-				value: selectedValue,
-				onValueChange: (val: string) => {
-					if (onValueChange) {
-						onValueChange(val);
-					} else {
-						setSelectedValue(val);
-					}
-				},
-			}),
-			[selectedValue, onValueChange],
-		);
-
-		return (
-			<TabsContext.Provider value={contextValue}>
-				<div ref={ref} className={cn("w-full", className)} {...props}>
-					{children}
-				</div>
-			</TabsContext.Provider>
-		);
+const tabsListVariants = cva(
+	"group/tabs-list text-muted-foreground border-border-subtle inline-flex w-fit items-center justify-center gap-1 rounded-[var(--control-radius,0.75rem)] border border-[color:var(--border-subtle,var(--border))] bg-[var(--surface-low,var(--card))] p-1 group-data-[orientation=horizontal]/tabs:min-h-9 group-data-[orientation=vertical]/tabs:h-fit group-data-[orientation=vertical]/tabs:flex-col",
+	{
+		variants: {
+			variant: {
+				default: "",
+				line: "border-x-0 border-t-0 bg-transparent p-0",
+			},
+		},
+		defaultVariants: {
+			variant: "default",
+		},
 	},
 );
-Tabs.displayName = "Tabs";
 
-const TabsContext = React.createContext<{
-	value?: string;
-	onValueChange: (value: string) => void;
-} | null>(null);
-
-const TabsList = React.forwardRef<
-	HTMLDivElement,
-	React.HTMLAttributes<HTMLDivElement>
->(({ className, ...props }, ref) => (
-	<div
-		ref={ref}
-		className={cn(
-			"border-border bg-card/30 text-muted-foreground inline-flex h-9 items-center justify-center border p-1 backdrop-blur-sm",
-			className,
-		)}
-		{...props}
-	/>
-));
-TabsList.displayName = "TabsList";
-
-const TabsTrigger = React.forwardRef<
-	HTMLButtonElement,
-	React.ButtonHTMLAttributes<HTMLButtonElement> & { value: string }
->(({ className, value, onClick, ...props }, ref) => {
-	const context = React.useContext(TabsContext);
-	const isSelected = context?.value === value;
-
+function TabsList({
+	className,
+	variant = "default",
+	...props
+}: TabsPrimitive.List.Props & VariantProps<typeof tabsListVariants>) {
 	return (
-		<button
-			ref={ref}
-			type="button"
-			className={cn(
-				"ring-offset-background focus-visible:ring-ring hover:text-foreground inline-flex cursor-pointer items-center justify-center rounded-none px-3 py-1 text-xs font-medium whitespace-nowrap transition-all focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50",
-				isSelected &&
-					"bg-primary/10 text-primary shadow-primary/10 shadow-[0_0_20px_-2px]",
-				className,
-			)}
-			onClick={(e) => {
-				context?.onValueChange(value);
-				onClick?.(e);
-			}}
+		<TabsPrimitive.List
+			data-slot="tabs-list"
+			data-variant={variant}
+			className={cn(tabsListVariants({ variant }), className)}
 			{...props}
 		/>
 	);
-});
-TabsTrigger.displayName = "TabsTrigger";
+}
 
-const TabsContent = React.forwardRef<
-	HTMLDivElement,
-	React.HTMLAttributes<HTMLDivElement> & { value: string }
->(({ className, value, ...props }, ref) => {
-	const context = React.useContext(TabsContext);
-	if (context?.value !== value) return null;
-
+function TabsTrigger({ className, ...props }: TabsPrimitive.Tab.Props) {
 	return (
-		<div
-			ref={ref}
+		<TabsPrimitive.Tab
+			data-slot="tabs-trigger"
 			className={cn(
-				"ring-offset-background focus-visible:ring-ring animate-in fade-in zoom-in-95 mt-2 duration-200 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none",
+				"text-muted-foreground hover:text-foreground data-active:text-foreground focus-visible:ring-foreground/15 relative inline-flex min-h-7 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-[var(--control-radius-inner,0.5rem)] border border-transparent px-3 py-1 text-xs font-[var(--font-chrome,var(--font-sans))] font-medium whitespace-nowrap tabular-nums transition-[background-color,color,border-color,box-shadow,transform] duration-150 ease-out group-data-[orientation=vertical]/tabs:w-full group-data-[orientation=vertical]/tabs:justify-start group-data-[orientation=vertical]/tabs:after:inset-y-1.5 group-data-[orientation=vertical]/tabs:after:right-auto group-data-[orientation=vertical]/tabs:after:left-0 group-data-[orientation=vertical]/tabs:after:h-auto group-data-[orientation=vertical]/tabs:after:w-px group-data-[orientation=vertical]/tabs:after:scale-y-50 group-data-[variant=line]/tabs-list:after:absolute group-data-[variant=line]/tabs-list:after:inset-x-2 group-data-[variant=line]/tabs-list:after:-bottom-px group-data-[variant=line]/tabs-list:after:h-px group-data-[variant=line]/tabs-list:after:scale-x-50 group-data-[variant=line]/tabs-list:after:rounded-full group-data-[variant=line]/tabs-list:after:bg-current group-data-[variant=line]/tabs-list:after:opacity-0 group-data-[variant=line]/tabs-list:after:transition-[opacity,scale] group-data-[variant=line]/tabs-list:after:duration-150 focus-visible:ring-[3px] focus-visible:outline-none active:scale-[0.96] disabled:pointer-events-none disabled:opacity-50 data-active:bg-[var(--surface-high,var(--muted))] group-data-[variant=line]/tabs-list:data-active:bg-transparent group-data-[orientation=vertical]/tabs:data-active:after:scale-y-100 group-data-[variant=line]/tabs-list:data-active:after:scale-x-100 group-data-[variant=line]/tabs-list:data-active:after:opacity-60 motion-reduce:transition-none motion-reduce:after:transition-none motion-reduce:active:scale-100 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5",
 				className,
 			)}
 			{...props}
 		/>
 	);
-});
-TabsContent.displayName = "TabsContent";
+}
+
+function TabsContent({ className, ...props }: TabsPrimitive.Panel.Props) {
+	return (
+		<TabsPrimitive.Panel
+			data-slot="tabs-content"
+			className={cn(
+				"flex-1 text-xs/relaxed transition-opacity duration-100 ease-out outline-none motion-reduce:transition-none",
+				className,
+			)}
+			{...props}
+		/>
+	);
+}
 
 export { Tabs, TabsList, TabsTrigger, TabsContent };

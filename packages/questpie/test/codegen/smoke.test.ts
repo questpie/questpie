@@ -22,11 +22,7 @@ beforeEach(async () => {
 	outDir = join(rootDir, ".generated");
 
 	// modules.ts — required by codegen
-	await writeFile(
-		join(rootDir, "modules.ts"),
-		'export default [];\n',
-		"utf-8",
-	);
+	await writeFile(join(rootDir, "modules.ts"), "export default [];\n", "utf-8");
 
 	// A minimal collection
 	await mkdir(join(rootDir, "collections"), { recursive: true });
@@ -36,7 +32,7 @@ beforeEach(async () => {
 			'import { collection } from "questpie";',
 			"",
 			'export default collection("posts")',
-			'  .fields(({ f }) => ({ title: f.text("Title") }))',
+			'  .fields(({ f }) => ({ title: f.text(255).label("Title").required() }))',
 			"  .title(({ f }) => f.title);",
 			"",
 		].join("\n"),

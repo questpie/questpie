@@ -7,6 +7,7 @@ import {
 	type GenerateMigrationOptions,
 } from "../../server/migration/generator.js";
 import { loadQuestpieConfig } from "../config.js";
+import { resolveCliPath } from "../utils.js";
 import { resolveEntityRoot } from "./codegen.js";
 
 /**
@@ -104,7 +105,7 @@ async function generateMigrationInternal(
 	options: GenerateMigrationOptions = {},
 ): Promise<void> {
 	// Resolve config path
-	const resolvedConfigPath = join(process.cwd(), configPath);
+	const resolvedConfigPath = resolveCliPath(configPath);
 
 	if (!existsSync(resolvedConfigPath)) {
 		throw new Error(`Config file not found: ${resolvedConfigPath}`);
@@ -131,7 +132,7 @@ async function generateMigrationInternal(
 	// Get migration directory: explicit cli override or convention-based default (entity root)
 	const { rootDir } = await resolveEntityRoot(resolvedConfigPath);
 	const migrationDir = cmsConfig.cli?.migrations?.directory
-		? join(process.cwd(), cmsConfig.cli.migrations.directory)
+		? resolveCliPath(cmsConfig.cli.migrations.directory)
 		: join(rootDir, "migrations");
 
 	// Create migration directory if needed

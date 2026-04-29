@@ -88,8 +88,39 @@ export class PgBossAdapter implements QueueAdapter {
 			const handler = handlers[jobName];
 			if (!handler) continue;
 
-			await this.boss.work(jobName, options as any, async (job: any) => {
-				await handler({ id: job.id, data: job.data });
+			// pg-boss v10+ always passes an array to work() callbacks, regardless
+			// of batchSize. Iterating jobs serially keeps the existing teamSize/
+			// batchSize semantics (one batch per worker callback). Per-item
+			// failures are reported to pg-boss via boss.fail(jobName, id, …) so
+			// they retry independently while siblings in the same batch still
+			// complete.
+			await this.boss.work(jobName, options as any, async (jobs: any) => {
+				const arr: any[] = Array.isArray(jobs) ? jobs : jobs ? [jobs] : [];
+				for (const j of arr) {
+					try {
+						await handler({ id: String(j.id), data: j.data });
+					} catch (error) {
+						const err =
+							error instanceof Error
+								? error
+								: new Error(typeof error === "string" ? error : String(error));
+						try {
+							await this.boss.fail(jobName, String(j.id), {
+								message: err.message,
+								stack: err.stack,
+							});
+						} catch (failError) {
+							// If reporting the failure itself fails, surface the
+							// original handler error so pg-boss's own timeout/retry
+							// path can take over.
+							console.error(
+								`[questpie:pg-boss] failed to mark job ${j.id} as failed`,
+								failError,
+							);
+							throw err;
+						}
+					}
+				}
 			});
 		}
 	}

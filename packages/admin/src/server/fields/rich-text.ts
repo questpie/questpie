@@ -7,7 +7,6 @@
  * This field type is only available when using the `adminModule`.
  */
 
-import type { PgJsonbBuilder } from "drizzle-orm/pg-core";
 import {
 	type ContextualOperators,
 	type DefaultFieldState,
@@ -20,6 +19,7 @@ import {
 	jsonb,
 	sql,
 } from "questpie";
+import type { PgJsonbBuilder } from "questpie/drizzle-pg-core";
 import { z } from "zod";
 
 // ============================================================================
@@ -281,6 +281,9 @@ export function richText(): Field<RichTextFieldState> {
  * Use this with the `fieldType()` discovery system instead of the
  * legacy `richText()` factory function.
  */
-export const richTextFieldType: FieldTypeDefinition<"richText", []> = fieldType("richText", {
-	create: createRichTextState as any,
-});
+export const richTextFieldType: FieldTypeDefinition<"richText", []> = fieldType(
+	"richText",
+	{
+		create: createRichTextState as any,
+	},
+);

@@ -1,5 +1,3 @@
-import "virtual:iconify-preload";
-
 import { createRootRoute } from "@tanstack/react-router";
 
 export const Route = createRootRoute({

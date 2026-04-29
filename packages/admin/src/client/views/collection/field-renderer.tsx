@@ -10,10 +10,10 @@ import { useFormContext, useWatch } from "react-hook-form";
 
 import type { ComponentRegistry } from "../../builder";
 import type { FieldInstance } from "../../builder/field/field";
-import type { MaybeLazyComponent } from "../../builder/types/common";
-import { Spinner } from "../../components/ui/spinner";
+import { Skeleton } from "../../components/ui/skeleton";
 import { useAdminConfig } from "../../hooks/use-admin-config";
 import { useFieldHooks } from "../../hooks/use-field-hooks";
+import { useReactiveProps } from "../../hooks/use-reactive-prop";
 import { useResolveText } from "../../i18n/hooks";
 import { useScopedLocale } from "../../runtime";
 import {
@@ -42,6 +42,8 @@ interface FieldRendererProps {
 	registry?: ComponentRegistry;
 	fieldPrefix?: string;
 	className?: string;
+	/** Extra props forwarded to the field component (escape hatch). */
+	extraProps?: Record<string, any>;
 	/**
 	 * Callback to render embedded collection fields.
 	 * Required for embedded fields to work (handles recursive AutoFormFields).
@@ -70,6 +72,23 @@ function renderConfigError(message: string) {
 	return (
 		<div className="border-destructive/40 bg-destructive/5 text-destructive rounded border p-3 text-sm">
 			{message}
+		</div>
+	);
+}
+
+function FieldComponentSkeleton({ type }: { type?: string }) {
+	const largeFieldTypes = new Set(["blocks", "json", "object", "richText"]);
+	const tallFieldTypes = new Set(["textarea", "upload"]);
+	const controlClassName = largeFieldTypes.has(type ?? "")
+		? "h-40 w-full"
+		: tallFieldTypes.has(type ?? "")
+			? "h-28 w-full"
+			: "h-10 w-full";
+
+	return (
+		<div className="space-y-2" aria-busy="true">
+			<Skeleton variant="text" className="h-4 w-24" />
+			<Skeleton className={controlClassName} />
 		</div>
 	);
 }
@@ -144,9 +163,10 @@ function computeDynamicDependencyPaths({
 /**
  * Render field using FieldDefinition.field.component
  *
- * This is the primary rendering method. Field components receive:
- * - Base props (name, value, onChange, label, etc.) from componentProps
- * - Field-specific options from FieldDefinition["~options"]
+ * The caller has already merged field-instance options + layout `extraProps`
+ * + base props (label/value/onChange/…) into `componentProps` and resolved
+ * any `ReactivePropPlaceholder`s via `useReactiveProps`. The component just
+ * receives the final flat record.
  */
 function renderDefinitionComponent({
 	context,
@@ -160,15 +180,12 @@ function renderDefinitionComponent({
 	const Component = context.component;
 	if (!Component) return null;
 
-	// Get field-specific options from FieldDefinition
-	const options = stripFieldUiOptions(getFieldOptions(context.fieldDef));
-
 	// For blocks field, inject the blocks registry from admin state
 	if (context.type === "blocks" && blocks) {
-		return <Component {...componentProps} {...options} blocks={blocks} />;
+		return <Component {...componentProps} blocks={blocks} />;
 	}
 
-	return <Component {...componentProps} {...options} />;
+	return <Component {...componentProps} />;
 }
 
 /**
@@ -193,8 +210,11 @@ function renderEmbeddedField({
 }) {
 	if (context.type !== "embedded") return null;
 
-	const options = stripFieldUiOptions(getFieldOptions(context.fieldDef));
-	const embeddedCollection = options.collection;
+	// `componentProps` already includes resolved field-instance options merged
+	// with layout extraProps (see FieldRenderer body). Pull out `collection`
+	// for the embedded routing — it's part of the merged record.
+	const embeddedCollection = (componentProps as Record<string, unknown>)
+		.collection as string | undefined;
 
 	if (!embeddedCollection) {
 		return renderConfigError(
@@ -218,7 +238,6 @@ function renderEmbeddedField({
 	return (
 		<EmbeddedComponent
 			{...componentProps}
-			{...options}
 			value={context.fieldValue || []}
 			collection={embeddedCollection}
 			renderFields={(index: number) =>
@@ -256,6 +275,7 @@ export function FieldRenderer({
 	renderEmbeddedFields,
 	className,
 	entityMeta: entityMetaProp,
+	extraProps,
 }: FieldRendererProps) {
 	const form = useFormContext() as any;
 	// Use scoped locale (from LocaleScopeProvider in ResourceSheet) or global locale
@@ -361,6 +381,28 @@ export function FieldRenderer({
 	// Build props and resolve I18nText labels to strings
 	const rawComponentProps = buildComponentProps(context);
 
+	// Merge field-instance admin meta (e.g. `f.relation(...).admin({ filter })`)
+	// with layout-level escape-hatch `extraProps` from the form layout. Layout
+	// wins over field-level so per-instance overrides are possible.
+	const mergedFieldProps = React.useMemo(
+		() => ({
+			...stripFieldUiOptions(getFieldOptions(fieldDef)),
+			...(extraProps ?? {}),
+		}),
+		[fieldDef, extraProps],
+	);
+
+	// Resolve any `ReactivePropPlaceholder` entries (from EITHER source) via
+	// /admin/reactive in a single batched call. Static entries pass through
+	// synchronously without touching the network. Field components never see
+	// placeholders.
+	const { props: resolvedFieldProps } = useReactiveProps({
+		entity: collection,
+		entityType: mode,
+		field: fullFieldName,
+		props: mergedFieldProps,
+	});
+
 	// For computed fields, use computed value instead of form value
 	const fieldValue = isComputed
 		? computedValue
@@ -370,6 +412,10 @@ export function FieldRenderer({
 
 	const componentProps = {
 		...rawComponentProps,
+		// Field-instance + layout props (placeholders already resolved). Spread
+		// before our base overrides so framework-controlled keys
+		// (value/onChange/readOnly/label/...) always win.
+		...resolvedFieldProps,
 		// Use computed value if field is computed
 		value: fieldValue,
 		// Use handleChange from hooks instead of context.updateValue
@@ -399,13 +445,9 @@ export function FieldRenderer({
 		});
 	}
 
-	// 2. Show loading spinner while lazy component is loading
+	// 2. Show field-shaped skeleton while lazy component is loading
 	if (!content && componentLoading) {
-		content = (
-			<div className="flex items-center justify-center p-4">
-				<Spinner className="size-5" />
-			</div>
-		);
+		content = <FieldComponentSkeleton type={context.type} />;
 	}
 
 	// 3. Use FieldDefinition.field.component (registry-first approach)

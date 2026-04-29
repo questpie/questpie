@@ -6,16 +6,24 @@
  */
 
 import { useCollectionList } from "../../hooks/use-collection";
-import { useResolveText } from "../../i18n/hooks";
+import { useServerWidgetData } from "../../hooks/use-server-widget-data";
+import { useResolveText, useTranslation } from "../../i18n/hooks";
 import { formatLabel } from "../../lib/utils";
 import { WidgetCard } from "../../views/dashboard/widget-card";
+import { WidgetEmptyState } from "./widget-empty-state";
 import { RecentItemsWidgetSkeleton } from "./widget-skeletons";
 
 /**
  * Recent items widget config (local type for component props)
  */
 type RecentItemsWidgetConfig = {
+	id: string;
 	collection: string;
+	title?: any;
+	description?: any;
+	cardVariant?: "default" | "compact" | "featured";
+	actions?: any[];
+	className?: string;
 	limit?: number;
 	/** Field to use as title (default: "_title") */
 	titleField?: string;
@@ -25,6 +33,8 @@ type RecentItemsWidgetConfig = {
 	subtitleFields?: string[];
 	label?: string;
 	realtime?: boolean;
+	hasLoader?: boolean;
+	refreshInterval?: number;
 	/** Base path for item links */
 	basePath?: string;
 	/** Click handler for items */
@@ -48,6 +58,7 @@ type RecentItemsWidgetProps = {
  */
 export default function RecentItemsWidget({ config }: RecentItemsWidgetProps) {
 	const resolveText = useResolveText();
+	const { t } = useTranslation();
 	const {
 		collection,
 		limit = 5,
@@ -57,24 +68,40 @@ export default function RecentItemsWidget({ config }: RecentItemsWidgetProps) {
 		subtitleFields,
 		onItemClick,
 		realtime,
+		hasLoader,
+		refreshInterval,
 	} = config;
 
+	const serverQuery = useServerWidgetData<any>(config.id, {
+		enabled: !!hasLoader,
+		refreshInterval,
+	});
+
 	// Fetch recent items sorted by date
-	const { data, isLoading, error, refetch } = useCollectionList(
+	const collectionQuery = useCollectionList(
 		collection as any,
 		{
 			orderBy: { [dateField]: "desc" },
 			limit,
 		} as any,
-		undefined,
+		{ enabled: !hasLoader },
 		{ realtime },
 	);
+	const { data, isLoading, error, refetch, isFetching } = hasLoader
+		? serverQuery
+		: collectionQuery;
 
 	// API returns PaginatedResult with { docs, totalDocs, ... }
-	const items = Array.isArray(data?.docs) ? data.docs : [];
-	const displayLabel = label
-		? resolveText(label)
-		: `Recent ${formatLabel(collection)}`;
+	const items = Array.isArray(data)
+		? data
+		: Array.isArray(data?.docs)
+			? data.docs
+			: [];
+	const displayLabel = config.title
+		? resolveText(config.title)
+		: label
+			? resolveText(label)
+			: `Recent ${formatLabel(collection)}`;
 
 	// Determine title field - prefer _title computed field from backend
 	const getTitleValue = (item: any): string => {
@@ -105,7 +132,11 @@ export default function RecentItemsWidget({ config }: RecentItemsWidgetProps) {
 	// List content
 	const listContent =
 		items.length === 0 ? (
-			<p className="text-muted-foreground text-sm">No items yet</p>
+			<WidgetEmptyState
+				iconName="ph:clock-counter-clockwise"
+				title={t("widget.recentItems.emptyTitle")}
+				description={t("widget.recentItems.emptyDescription")}
+			/>
 		) : (
 			<div className="space-y-1">
 				{items.map((item: any) => {
@@ -144,12 +175,19 @@ export default function RecentItemsWidget({ config }: RecentItemsWidgetProps) {
 	return (
 		<WidgetCard
 			title={displayLabel}
+			description={
+				config.description ? resolveText(config.description) : undefined
+			}
+			variant={config.cardVariant}
 			isLoading={isLoading}
+			isRefreshing={isFetching && !isLoading}
 			loadingSkeleton={<RecentItemsWidgetSkeleton count={limit} />}
 			error={
 				error instanceof Error ? error : error ? new Error(String(error)) : null
 			}
 			onRefresh={() => refetch()}
+			actions={config.actions}
+			className={config.className}
 		>
 			{listContent}
 		</WidgetCard>

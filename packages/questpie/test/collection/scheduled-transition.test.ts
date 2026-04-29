@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
 import { collection, global } from "../../src/exports/index.js";
-import { scheduledTransitionJob } from "../../src/server/modules/core/workflow/scheduled-transition.job.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 import { createTestContext } from "../utils/test-context";
 import { runTestDbMigrations } from "../utils/test-db";
@@ -39,7 +38,6 @@ describe("scheduled transitions", () => {
 		setup = await buildMockApp({
 			collections: { workflow_posts },
 			globals: { workflow_settings },
-			jobs: { "scheduled-transition": scheduledTransitionJob },
 		});
 		await runTestDbMigrations(setup.app);
 	});
@@ -222,6 +220,28 @@ describe("scheduled transitions", () => {
 					ctx,
 				),
 			).rejects.toThrow();
+		});
+
+		it("validates global stage before scheduling a future transition", async () => {
+			const ctx = createTestContext({ accessMode: "system" });
+
+			await setup.app.globals.workflow_settings.update(
+				{ siteName: "Invalid Future Stage" },
+				ctx,
+			);
+
+			await expect(
+				setup.app.globals.workflow_settings.transitionStage(
+					{
+						stage: "nonexistent",
+						scheduledAt: new Date(Date.now() + 60_000),
+					},
+					ctx,
+				),
+			).rejects.toThrow('Unknown workflow stage "nonexistent"');
+
+			const jobs = setup.app.mocks.queue.getJobsByName("scheduled-transition");
+			expect(jobs.length).toBe(0);
 		});
 
 		it("does not schedule when transition is immediate (no scheduledAt)", async () => {

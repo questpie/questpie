@@ -475,6 +475,16 @@ function useActionExecution<TItem = any>({
 										}
 									}
 								}
+								if (result?.effects?.redirect) {
+									helpers.navigate(result.effects.redirect);
+								}
+								if (result?.type === "redirect" && result.url) {
+									if (result.external) {
+										window.open(result.url, "_blank");
+									} else {
+										helpers.navigate(result.url);
+									}
+								}
 								if (result?.effects?.closeModal) {
 									helpers.closeDialog();
 								}

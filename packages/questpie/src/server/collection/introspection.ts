@@ -26,6 +26,8 @@ import {
 	extractDependencies,
 	getDebounce,
 	isReactiveConfig,
+	serializeFormLayoutProps,
+	serializeReactivePropsRecord,
 } from "#questpie/server/fields/reactive.js";
 import type {
 	FieldLocation,
@@ -677,6 +679,15 @@ export async function introspectCollection(
 	for (let i = 0; i < fieldEntries.length; i++) {
 		const [name, fieldDef] = fieldEntries[i];
 		const metadata = fieldDef.getMetadata();
+		// Serialize function-valued admin meta (e.g.
+		// `f.relation(...).admin({ filter: ({data}) => ({...}) })`) into
+		// `ReactivePropPlaceholder`. Function stays on the server; client
+		// resolves via /admin/reactive (`type: "prop"`).
+		if (metadata.meta && typeof metadata.meta === "object") {
+			metadata.meta = serializeReactivePropsRecord(
+				metadata.meta as Record<string, unknown>,
+			) as typeof metadata.meta;
+		}
 		const fieldAccess = fieldAccessResults[i];
 
 		// Generate field-level JSON Schema if possible
@@ -996,8 +1007,10 @@ function extractAdminConfig(
 	if (stateAny.adminForm) {
 		result.form = {
 			view: stateAny.adminForm.view,
-			fields: stateAny.adminForm.fields,
-			sidebar: stateAny.adminForm.sidebar,
+			fields: serializeFormLayoutProps(stateAny.adminForm.fields),
+			sidebar: stateAny.adminForm.sidebar
+				? serializeFormLayoutProps(stateAny.adminForm.sidebar)
+				: undefined,
 		};
 	}
 

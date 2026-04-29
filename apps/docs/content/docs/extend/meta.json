@@ -1,13 +1,13 @@
 {
-	"title": "Extend the Platform",
+	"title": "Extend",
 	"pages": [
-		"index",
 		"custom-fields",
 		"custom-views",
 		"custom-adapters",
 		"registries",
 		"building-a-plugin",
 		"building-a-module",
-		"codegen-internals"
+		"codegen-internals",
+		"package-distribution"
 	]
 }

@@ -1,6 +1,6 @@
 {
 	"name": "create-questpie",
-	"version": "2.0.1",
+	"version": "2.0.2",
 	"description": "Create a new QUESTPIE project",
 	"keywords": [
 		"create",
@@ -20,7 +20,8 @@
 	},
 	"files": [
 		"dist",
-		"templates"
+		"templates",
+		"skills"
 	],
 	"type": "module",
 	"publishConfig": {
@@ -29,7 +30,8 @@
 	"scripts": {
 		"build": "tsdown",
 		"dev": "tsdown --watch",
-		"check-types": "tsc --noEmit"
+		"check-types": "tsc --noEmit",
+		"test": "bun test test"
 	},
 	"dependencies": {
 		"@clack/prompts": "^0.10.0",

@@ -7,7 +7,14 @@
 
 import {
 	type ValidationMessage,
+	validationMessagesCS,
+	validationMessagesDE,
 	validationMessagesEN,
+	validationMessagesES,
+	validationMessagesFR,
+	validationMessagesPL,
+	validationMessagesPT,
+	validationMessagesSK,
 } from "#questpie/shared/i18n/index.js";
 
 import { messages } from "./messages/index.js";
@@ -82,6 +89,34 @@ export const allBackendMessagesEN: Record<string, MessageValue> = {
 	...messages.en,
 };
 
+const validationMessagesByLocale: Record<
+	string,
+	Record<string, ValidationMessage>
+> = {
+	cs: validationMessagesCS,
+	de: validationMessagesDE,
+	en: validationMessagesEN,
+	es: validationMessagesES,
+	fr: validationMessagesFR,
+	pl: validationMessagesPL,
+	pt: validationMessagesPT,
+	sk: validationMessagesSK,
+};
+
+function getValidationMessagesForLocale(
+	locale: string,
+): Record<string, ValidationMessage> {
+	const normalizedLocale = locale.toLowerCase();
+	const baseLocale = normalizedLocale.split("-")[0];
+
+	return (
+		validationMessagesByLocale[locale] ??
+		validationMessagesByLocale[normalizedLocale] ??
+		(baseLocale ? validationMessagesByLocale[baseLocale] : undefined) ??
+		validationMessagesEN
+	);
+}
+
 // ============================================================================
 // Helpers
 // ============================================================================
@@ -95,26 +130,38 @@ export function getBackendMessages(
 	locale: string,
 	customMessages?: Record<string, Record<string, MessageValue>>,
 ): Record<string, MessageValue> {
-	// Check for custom messages first
-	if (customMessages?.[locale]) {
-		return { ...allBackendMessagesEN, ...customMessages[locale] };
-	}
+	const normalizedLocale = locale.toLowerCase();
+	const baseLocale = normalizedLocale.split("-")[0];
+	const bundledMessages =
+		messages[locale as keyof typeof messages] ??
+		messages[normalizedLocale as keyof typeof messages] ??
+		(baseLocale ? messages[baseLocale as keyof typeof messages] : undefined) ??
+		{};
+	const customLocaleMessages =
+		customMessages?.[locale] ??
+		customMessages?.[normalizedLocale] ??
+		(baseLocale ? customMessages?.[baseLocale] : undefined) ??
+		{};
 
-	// Check bundled messages
-	const bundledMessages = messages[locale as keyof typeof messages];
-	if (bundledMessages) {
-		return {
-			...convertValidationMessages(validationMessagesEN),
-			...bundledMessages,
-		};
-	}
-
-	// Fallback to English
-	return allBackendMessagesEN;
+	return {
+		...allBackendMessagesEN,
+		...convertValidationMessages(getValidationMessagesForLocale(locale)),
+		...bundledMessages,
+		...customLocaleMessages,
+	};
 }
 
 // ============================================================================
 // Re-export shared validation messages
 // ============================================================================
 
-export { validationMessagesEN } from "#questpie/shared/i18n/index.js";
+export {
+	validationMessagesCS,
+	validationMessagesDE,
+	validationMessagesEN,
+	validationMessagesES,
+	validationMessagesFR,
+	validationMessagesPL,
+	validationMessagesPT,
+	validationMessagesSK,
+} from "#questpie/shared/i18n/index.js";

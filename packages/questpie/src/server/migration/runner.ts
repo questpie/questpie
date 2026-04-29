@@ -60,14 +60,12 @@ export class MigrationRunner {
 	 */
 	async ensureMigrationsTable(): Promise<void> {
 		await this.db.execute(
-			sql.raw(`
-			CREATE TABLE IF NOT EXISTS ${this.tableName} (
+			sql`CREATE TABLE IF NOT EXISTS ${sql.identifier(this.tableName)} (
 				id TEXT PRIMARY KEY,
 				name TEXT NOT NULL,
 				batch INTEGER NOT NULL,
 				executed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-			)
-		`),
+			)`,
 		);
 	}
 
@@ -83,7 +81,22 @@ export class MigrationRunner {
 		const executed = await this.getExecutedMigrations();
 		const executedIds = new Set(executed.map((m) => m.id));
 
-		const pending = migrations.filter((m) => !executedIds.has(m.id));
+		if (
+			options.targetMigration &&
+			!migrations.some((migration) => migration.id === options.targetMigration)
+		) {
+			throw new Error(`Migration not found: ${options.targetMigration}`);
+		}
+
+		let pending = migrations.filter((m) => !executedIds.has(m.id));
+		if (options.targetMigration) {
+			const targetIndex = migrations.findIndex(
+				(migration) => migration.id === options.targetMigration,
+			);
+			pending = pending.filter(
+				(migration) => migrations.indexOf(migration) <= targetIndex,
+			);
+		}
 
 		if (pending.length === 0) {
 			this.log("✅ No pending migrations");
@@ -97,11 +110,6 @@ export class MigrationRunner {
 		const nextBatch = currentBatch + 1;
 
 		for (const migration of pending) {
-			if (options.targetMigration && migration.id === options.targetMigration) {
-				this.log(`🎯 Reached target migration: ${migration.id}, stopping here`);
-				break;
-			}
-
 			this.log(`⬆️  Running migration: ${migration.id}`);
 
 			try {
@@ -112,9 +120,7 @@ export class MigrationRunner {
 
 					// Record it in the migrations table
 					await tx.execute(
-						sql.raw(
-							`INSERT INTO ${this.tableName} (id, name, batch) VALUES ('${migration.id}', '${migration.id}', ${nextBatch})`,
-						),
+						sql`INSERT INTO ${sql.identifier(this.tableName)} (id, name, batch) VALUES (${migration.id}, ${migration.id}, ${nextBatch})`,
 					);
 				});
 
@@ -124,9 +130,8 @@ export class MigrationRunner {
 				throw error;
 			}
 
-			if (options.targetMigration && migration.id === options.targetMigration) {
-				break;
-			}
+			if (options.targetMigration && migration.id === options.targetMigration)
+				this.log(`🎯 Reached target migration: ${migration.id}`);
 		}
 
 		this.log("✅ All migrations completed successfully");
@@ -186,9 +191,7 @@ export class MigrationRunner {
 
 					// Remove from migrations table
 					await tx.execute(
-						sql.raw(
-							`DELETE FROM ${this.tableName} WHERE id = '${migration.id}'`,
-						),
+						sql`DELETE FROM ${sql.identifier(this.tableName)} WHERE id = ${migration.id}`,
 					);
 				});
 
@@ -240,9 +243,7 @@ export class MigrationRunner {
 				await this.db.transaction(async (tx) => {
 					await migration.down({ db: tx });
 					await tx.execute(
-						sql.raw(
-							`DELETE FROM ${this.tableName} WHERE id = '${migration.id}'`,
-						),
+						sql`DELETE FROM ${sql.identifier(this.tableName)} WHERE id = ${migration.id}`,
 					);
 				});
 
@@ -288,9 +289,7 @@ export class MigrationRunner {
 				await this.db.transaction(async (tx) => {
 					await migration.down({ db: tx });
 					await tx.execute(
-						sql.raw(
-							`DELETE FROM ${this.tableName} WHERE id = '${migration.id}'`,
-						),
+						sql`DELETE FROM ${sql.identifier(this.tableName)} WHERE id = ${migration.id}`,
 					);
 				});
 
@@ -362,9 +361,7 @@ export class MigrationRunner {
 	 */
 	private async getExecutedMigrations(): Promise<MigrationRecord[]> {
 		const result: any = await this.db.execute(
-			sql.raw(
-				`SELECT id, name, batch, executed_at FROM ${this.tableName} ORDER BY executed_at ASC`,
-			),
+			sql`SELECT id, name, batch, executed_at FROM ${sql.identifier(this.tableName)} ORDER BY executed_at ASC`,
 		);
 
 		return (result.rows || result || []).map((row: any) => ({
@@ -382,9 +379,7 @@ export class MigrationRunner {
 		batch: number,
 	): Promise<MigrationRecord[]> {
 		const result: any = await this.db.execute(
-			sql.raw(
-				`SELECT id, name, batch, executed_at FROM ${this.tableName} WHERE batch = ${batch} ORDER BY executed_at ASC`,
-			),
+			sql`SELECT id, name, batch, executed_at FROM ${sql.identifier(this.tableName)} WHERE batch = ${batch} ORDER BY executed_at ASC`,
 		);
 
 		return (result.rows || result || []).map((row: any) => ({
@@ -400,7 +395,7 @@ export class MigrationRunner {
 	 */
 	private async getCurrentBatch(): Promise<number> {
 		const result: any = await this.db.execute(
-			sql.raw(`SELECT MAX(batch) as max_batch FROM ${this.tableName}`),
+			sql`SELECT MAX(batch) as max_batch FROM ${sql.identifier(this.tableName)}`,
 		);
 
 		const rows = result.rows || result || [];

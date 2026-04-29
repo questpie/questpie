@@ -298,8 +298,10 @@ export function DashboardWidget({
 	}
 
 	return (
-		<WidgetErrorBoundary widgetType={config.type}>
-			{widgetElement}
-		</WidgetErrorBoundary>
+		<div className="qa-dashboard-widget h-full min-h-0">
+			<WidgetErrorBoundary widgetType={config.type}>
+				{widgetElement}
+			</WidgetErrorBoundary>
+		</div>
 	);
 }

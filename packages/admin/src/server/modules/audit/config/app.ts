@@ -33,6 +33,35 @@ function isAuditDisabled(type: "collection" | "global", name: string): boolean {
  * Compute field-level changes between original and current data.
  * Returns an object of `{ field: { from, to } }` or null if no meaningful changes.
  */
+const SKIP_CHANGE_FIELDS = new Set(["updatedAt", "createdAt", "id"]);
+
+function shouldSkipChangeField(key: string): boolean {
+	return SKIP_CHANGE_FIELDS.has(key) || key.startsWith("_");
+}
+
+function makeFieldChangeMap(
+	data: Record<string, any> | null | undefined,
+	direction: "create" | "delete",
+): Record<string, { from: any; to: any }> | null {
+	if (!data) return null;
+
+	const changes: Record<string, { from: any; to: any }> = {};
+
+	for (const key of Object.keys(data)) {
+		if (shouldSkipChangeField(key)) continue;
+
+		const value = data[key];
+		if (value == null) continue;
+
+		changes[key] =
+			direction === "create"
+				? { from: null, to: value }
+				: { from: value, to: null };
+	}
+
+	return Object.keys(changes).length > 0 ? changes : null;
+}
+
 function computeChanges(
 	original: Record<string, any> | undefined,
 	current: Record<string, any>,
@@ -40,10 +69,9 @@ function computeChanges(
 	if (!original) return null;
 
 	const changes: Record<string, { from: any; to: any }> = {};
-	const skipFields = new Set(["updatedAt", "createdAt", "id"]);
 
 	for (const key of Object.keys(current)) {
-		if (skipFields.has(key) || key.startsWith("_")) continue;
+		if (shouldSkipChangeField(key)) continue;
 
 		const fromVal = original[key];
 		const toVal = current[key];
@@ -117,9 +145,8 @@ function generateTitle(
 	_resourceType: "collection" | "global",
 	resourceTypeLabel: string,
 	resourceLabel: string | null,
-	userName: string | null,
+	userName: string,
 ): string {
-	const user = userName || "Unknown";
 	const resource = resourceLabel || "(unnamed)";
 
 	const actionText: Record<string, string> = {
@@ -131,7 +158,60 @@ function generateTitle(
 
 	const actionVerb = actionText[action] || action;
 
-	return `${user} ${actionVerb} ${resourceTypeLabel} '${resource}'`;
+	return `${userName} ${actionVerb} ${resourceTypeLabel} '${resource}'`;
+}
+
+type AuditActor = {
+	actorType: "anonymous" | "system" | "user";
+	userId: string | null;
+	userName: string;
+};
+
+function firstNonEmptyString(...values: unknown[]): string | null {
+	for (const value of values) {
+		if (typeof value !== "string") continue;
+		const trimmed = value.trim();
+		if (trimmed.length > 0) return trimmed;
+	}
+	return null;
+}
+
+function resolveAuditActor(ctx: {
+	session?: { user?: Record<string, unknown> | null } | null;
+	accessMode?: string;
+}): AuditActor {
+	const user = ctx.session?.user;
+	const userId = user?.id != null ? String(user.id) : null;
+	const userName = firstNonEmptyString(user?.name, user?.email, userId);
+	if (userName) {
+		return { actorType: "user", userId, userName };
+	}
+
+	if (ctx.accessMode === "system") {
+		return { actorType: "system", userId: "system", userName: "System" };
+	}
+
+	return { actorType: "anonymous", userId: null, userName: "Anonymous" };
+}
+
+function buildAuditMetadata(
+	ctx: { accessMode?: string },
+	actor: AuditActor,
+	extra?: Record<string, unknown>,
+): Record<string, unknown> {
+	return {
+		actorType: actor.actorType,
+		accessMode: ctx.accessMode ?? null,
+		...extra,
+	};
+}
+
+function logAuditFailure(
+	ctx: { logger?: { error?: (...args: any[]) => void } },
+	message: string,
+	err: unknown,
+) {
+	ctx.logger?.error?.(message, err);
 }
 
 // ============================================================================
@@ -148,13 +228,12 @@ async function collectionAfterChange(ctx: GlobalCollectionHookContext) {
 		const changes =
 			ctx.operation === "update"
 				? computeChanges(ctx.original, ctx.data)
-				: null;
+				: makeFieldChangeMap(ctx.data, "create");
 
 		if (ctx.operation === "update" && !changes) return;
 
 		const resourceLabel = extractLabel(ctx.data);
-		const userName =
-			ctx.session?.user?.name || ctx.session?.user?.email || null;
+		const actor = resolveAuditActor(ctx);
 		const resourceTypeLabel = getResourceTypeLabel(
 			"collection",
 			ctx.collection,
@@ -167,17 +246,19 @@ async function collectionAfterChange(ctx: GlobalCollectionHookContext) {
 				resource: ctx.collection,
 				resourceId: ctx.data?.id ? String(ctx.data.id) : null,
 				resourceLabel,
-				userId: ctx.session?.user?.id ? String(ctx.session.user.id) : null,
-				userName,
+				userId: actor.userId,
+				userName: actor.userName,
 				locale: ctx.locale || null,
 				changes,
-				metadata: null,
+				metadata: buildAuditMetadata(ctx, actor, {
+					operation: ctx.operation,
+				}),
 				title: generateTitle(
 					action,
 					"collection",
 					resourceTypeLabel,
 					resourceLabel,
-					userName,
+					actor.userName,
 				),
 			},
 			{
@@ -186,7 +267,8 @@ async function collectionAfterChange(ctx: GlobalCollectionHookContext) {
 			},
 		);
 	} catch (err) {
-		console.error(
+		logAuditFailure(
+			ctx,
 			`[Audit] Failed to log ${ctx.operation} for collection "${ctx.collection}":`,
 			err,
 		);
@@ -200,8 +282,7 @@ async function collectionAfterDelete(ctx: GlobalCollectionHookContext) {
 		if (isAuditDisabled("collection", ctx.collection)) return;
 
 		const resourceLabel = extractLabel(ctx.data);
-		const userName =
-			ctx.session?.user?.name || ctx.session?.user?.email || null;
+		const actor = resolveAuditActor(ctx);
 		const resourceTypeLabel = getResourceTypeLabel(
 			"collection",
 			ctx.collection,
@@ -214,17 +295,19 @@ async function collectionAfterDelete(ctx: GlobalCollectionHookContext) {
 				resource: ctx.collection,
 				resourceId: ctx.data?.id ? String(ctx.data.id) : null,
 				resourceLabel,
-				userId: ctx.session?.user?.id ? String(ctx.session.user.id) : null,
-				userName,
+				userId: actor.userId,
+				userName: actor.userName,
 				locale: ctx.locale || null,
-				changes: null,
-				metadata: null,
+				changes: makeFieldChangeMap(ctx.data, "delete"),
+				metadata: buildAuditMetadata(ctx, actor, {
+					operation: "delete",
+				}),
 				title: generateTitle(
 					"delete",
 					"collection",
 					resourceTypeLabel,
 					resourceLabel,
-					userName,
+					actor.userName,
 				),
 			},
 			{
@@ -233,7 +316,8 @@ async function collectionAfterDelete(ctx: GlobalCollectionHookContext) {
 			},
 		);
 	} catch (err) {
-		console.error(
+		logAuditFailure(
+			ctx,
 			`[Audit] Failed to log delete for collection "${ctx.collection}":`,
 			err,
 		);
@@ -249,8 +333,7 @@ async function collectionAfterTransition(
 		if (isAuditDisabled("collection", ctx.collection)) return;
 
 		const resourceLabel = extractLabel(ctx.data);
-		const userName =
-			ctx.session?.user?.name || ctx.session?.user?.email || null;
+		const actor = resolveAuditActor(ctx);
 		const resourceTypeLabel = getResourceTypeLabel(
 			"collection",
 			ctx.collection,
@@ -263,22 +346,22 @@ async function collectionAfterTransition(
 				resource: ctx.collection,
 				resourceId: ctx.data?.id ? String(ctx.data.id) : null,
 				resourceLabel,
-				userId: ctx.session?.user?.id ? String(ctx.session.user.id) : null,
-				userName,
+				userId: actor.userId,
+				userName: actor.userName,
 				locale: ctx.locale || null,
 				changes: {
 					stage: { from: ctx.fromStage, to: ctx.toStage },
 				},
-				metadata: {
+				metadata: buildAuditMetadata(ctx, actor, {
 					fromStage: ctx.fromStage,
 					toStage: ctx.toStage,
-				},
+				}),
 				title: generateTitle(
 					"transition",
 					"collection",
 					resourceTypeLabel,
 					resourceLabel,
-					userName,
+					actor.userName,
 				),
 			},
 			{
@@ -287,7 +370,8 @@ async function collectionAfterTransition(
 			},
 		);
 	} catch (err) {
-		console.error(
+		logAuditFailure(
+			ctx,
 			`[Audit] Failed to log transition for collection "${ctx.collection}":`,
 			err,
 		);
@@ -300,8 +384,7 @@ async function globalAfterChange(ctx: GlobalGlobalHookContext) {
 
 		if (isAuditDisabled("global", ctx.global)) return;
 
-		const userName =
-			ctx.session?.user?.name || ctx.session?.user?.email || null;
+		const actor = resolveAuditActor(ctx);
 		const resourceTypeLabel = getResourceTypeLabel("global", ctx.global);
 
 		await collections[AUDIT_LOG_COLLECTION].create(
@@ -311,17 +394,19 @@ async function globalAfterChange(ctx: GlobalGlobalHookContext) {
 				resource: ctx.global,
 				resourceId: null,
 				resourceLabel: ctx.global,
-				userId: ctx.session?.user?.id ? String(ctx.session.user.id) : null,
-				userName,
+				userId: actor.userId,
+				userName: actor.userName,
 				locale: ctx.locale || null,
 				changes: null,
-				metadata: null,
+				metadata: buildAuditMetadata(ctx, actor, {
+					operation: "update",
+				}),
 				title: generateTitle(
 					"update",
 					"global",
 					resourceTypeLabel,
 					ctx.global,
-					userName,
+					actor.userName,
 				),
 			},
 			{
@@ -330,7 +415,8 @@ async function globalAfterChange(ctx: GlobalGlobalHookContext) {
 			},
 		);
 	} catch (err) {
-		console.error(
+		logAuditFailure(
+			ctx,
 			`[Audit] Failed to log update for global "${ctx.global}":`,
 			err,
 		);
@@ -345,8 +431,7 @@ async function globalAfterTransition(
 
 		if (isAuditDisabled("global", ctx.global)) return;
 
-		const userName =
-			ctx.session?.user?.name || ctx.session?.user?.email || null;
+		const actor = resolveAuditActor(ctx);
 		const resourceTypeLabel = getResourceTypeLabel("global", ctx.global);
 
 		await collections[AUDIT_LOG_COLLECTION].create(
@@ -356,22 +441,22 @@ async function globalAfterTransition(
 				resource: ctx.global,
 				resourceId: null,
 				resourceLabel: ctx.global,
-				userId: ctx.session?.user?.id ? String(ctx.session.user.id) : null,
-				userName,
+				userId: actor.userId,
+				userName: actor.userName,
 				locale: ctx.locale || null,
 				changes: {
 					stage: { from: ctx.fromStage, to: ctx.toStage },
 				},
-				metadata: {
+				metadata: buildAuditMetadata(ctx, actor, {
 					fromStage: ctx.fromStage,
 					toStage: ctx.toStage,
-				},
+				}),
 				title: generateTitle(
 					"transition",
 					"global",
 					resourceTypeLabel,
 					ctx.global,
-					userName,
+					actor.userName,
 				),
 			},
 			{
@@ -380,7 +465,8 @@ async function globalAfterTransition(
 			},
 		);
 	} catch (err) {
-		console.error(
+		logAuditFailure(
+			ctx,
 			`[Audit] Failed to log transition for global "${ctx.global}":`,
 			err,
 		);

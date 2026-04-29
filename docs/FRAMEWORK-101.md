@@ -52,15 +52,15 @@ QuestPie is a **headless CMS framework** for TypeScript. You define your content
 
 ### Tech Stack
 
-| Layer | Technology |
-|---|---|
-| Runtime | **Bun** |
-| Database | **PostgreSQL** via **Drizzle ORM** |
-| Auth | **Better Auth** |
-| Storage | **FlyDrive** (local FS, S3, R2, GCS) |
-| Admin UI | **React** + **TanStack Router** + **Tailwind** |
-| HTTP | Custom trie-based router (no Express/Hono needed) |
-| Build | **tsdown** (Rolldown-based) + **Turbo** monorepo |
+| Layer    | Technology                                        |
+| -------- | ------------------------------------------------- |
+| Runtime  | **Bun**                                           |
+| Database | **PostgreSQL** via **Drizzle ORM**                |
+| Auth     | **Better Auth**                                   |
+| Storage  | **FlyDrive** (local FS, S3, R2, GCS)              |
+| Admin UI | **React** + **TanStack Router** + **Tailwind**    |
+| HTTP     | Custom trie-based router (no Express/Hono needed) |
+| Build    | **tsdown** (Rolldown-based) + **Turbo** monorepo  |
 
 ### Monorepo Packages
 
@@ -134,17 +134,17 @@ A QuestPie project follows a **convention-over-configuration** file layout. The 
 
 ### Export Conventions Per Directory
 
-| Directory | Export Style | Factory |
-|---|---|---|
-| `collections/` | **named** export | `collection("name")` |
-| `globals/` | **named** export | `global("name")` |
-| `routes/` | **default** export | `route()` |
-| `jobs/` | **default** export | `job({...})` |
-| `services/` | **named** export | `service()` |
-| `emails/` | **default** export (.tsx) | `email({...})` |
-| `blocks/` | **named** export | `block("name")` |
-| `migrations/` | **default** export | `migration({...})` |
-| `seeds/` | **default** export | `seed({...})` |
+| Directory      | Export Style              | Factory              |
+| -------------- | ------------------------- | -------------------- |
+| `collections/` | **named** export          | `collection("name")` |
+| `globals/`     | **named** export          | `global("name")`     |
+| `routes/`      | **default** export        | `route()`            |
+| `jobs/`        | **default** export        | `job({...})`         |
+| `services/`    | **named** export          | `service()`          |
+| `emails/`      | **default** export (.tsx) | `email({...})`       |
+| `blocks/`      | **named** export          | `block("name")`      |
+| `migrations/`  | **default** export        | `migration({...})`   |
+| `seeds/`       | **default** export        | `seed({...})`        |
 
 ---
 
@@ -162,10 +162,10 @@ questpie.config.ts  →  modules.ts  →  codegen  →  .generated/index.ts  →
 import { runtimeConfig } from "questpie";
 
 export default runtimeConfig({
-  app: { url: "http://localhost:3000" },
-  db: { url: process.env.DATABASE_URL },
-  storage: { basePath: "/api" },
-  email: { adapter: new ConsoleAdapter() },
+	app: { url: "http://localhost:3000" },
+	db: { url: process.env.DATABASE_URL },
+	storage: { basePath: "/api" },
+	email: { adapter: new ConsoleAdapter() },
 });
 ```
 
@@ -207,11 +207,11 @@ import { createAPIFileRoute } from "@tanstack/react-start/api";
 const handler = createFetchHandler(app, { basePath: "/api" });
 
 export const APIRoute = createAPIFileRoute("/api/$")({
-  GET:    ({ request }) => handler(request),
-  POST:   ({ request }) => handler(request),
-  PUT:    ({ request }) => handler(request),
-  DELETE: ({ request }) => handler(request),
-  PATCH:  ({ request }) => handler(request),
+	GET: ({ request }) => handler(request),
+	POST: ({ request }) => handler(request),
+	PUT: ({ request }) => handler(request),
+	DELETE: ({ request }) => handler(request),
+	PATCH: ({ request }) => handler(request),
 });
 
 // For standalone Bun.serve:
@@ -230,44 +230,44 @@ Modules are the **packaging unit** of the framework. They are plain static objec
 import { module } from "questpie";
 
 export const billingModule = module({
-  name: "billing",
-  modules: [stripeModule],        // sub-dependencies
-  collections: { invoices, subscriptions },
-  globals: { billingSettings },
-  routes: { "create-checkout": createCheckoutRoute },
-  jobs: { retryPayment },
-  services: { stripe: stripeService },
-  migrations: [billingMigration001],
-  seeds: [billingSeeds],
-  messages: { en: { "billing.title": "Billing" } },
-  config: { app: billingAppConfig },
+	name: "billing",
+	modules: [stripeModule], // sub-dependencies
+	collections: { invoices, subscriptions },
+	globals: { billingSettings },
+	routes: { "create-checkout": createCheckoutRoute },
+	jobs: { retryPayment },
+	services: { stripe: stripeService },
+	migrations: [billingMigration001],
+	seeds: [billingSeeds],
+	messages: { en: { "billing.title": "Billing" } },
+	config: { app: billingAppConfig },
 });
 ```
 
 ### What Modules Can Contribute
 
-| Key | Type | Merge Strategy |
-|---|---|---|
-| `collections` | `Record<string, CollectionBuilder>` | spread (later wins per key) |
-| `globals` | `Record<string, GlobalBuilder>` | spread |
-| `routes` | `Record<string, RouteDefinition>` | spread |
-| `jobs` | `Record<string, JobDefinition>` | spread |
-| `services` | `Record<string, ServiceBuilder>` | spread |
-| `fields` | `Record<string, FieldTypeDefinition>` | spread |
-| `migrations` | `Migration[]` | array concat |
-| `seeds` | `Seed[]` | array concat |
-| `messages` | `Record<locale, Record<key, string>>` | deep merge per locale |
-| `config` | `{ app?, auth?, admin?, ... }` | per-key strategy |
+| Key           | Type                                  | Merge Strategy              |
+| ------------- | ------------------------------------- | --------------------------- |
+| `collections` | `Record<string, CollectionBuilder>`   | spread (later wins per key) |
+| `globals`     | `Record<string, GlobalBuilder>`       | spread                      |
+| `routes`      | `Record<string, RouteDefinition>`     | spread                      |
+| `jobs`        | `Record<string, JobDefinition>`       | spread                      |
+| `services`    | `Record<string, ServiceBuilder>`      | spread                      |
+| `fields`      | `Record<string, FieldTypeDefinition>` | spread                      |
+| `migrations`  | `Migration[]`                         | array concat                |
+| `seeds`       | `Seed[]`                              | array concat                |
+| `messages`    | `Record<locale, Record<key, string>>` | deep merge per locale       |
+| `config`      | `{ app?, auth?, admin?, ... }`        | per-key strategy            |
 
 ### Built-in Modules
 
-| Module | Package | Provides |
-|---|---|---|
-| `coreModule` | `questpie` (auto-prepended) | All REST routes, all services, built-in field types |
-| `starterModule` | `questpie` | Auth collections (user, session, account, verification, apikey, assets), Better Auth config |
-| `adminModule` | `@questpie/admin` | Admin panel routes, views, components, admin-specific collections |
-| `auditModule` | `@questpie/admin` | Audit log collection + cleanup job |
-| `openApiModule` | `@questpie/openapi` | OpenAPI schema + Scalar docs UI |
+| Module          | Package                     | Provides                                                                                    |
+| --------------- | --------------------------- | ------------------------------------------------------------------------------------------- |
+| `coreModule`    | `questpie` (auto-prepended) | All REST routes, all services, built-in field types                                         |
+| `starterModule` | `questpie`                  | Auth collections (user, session, account, verification, apikey, assets), Better Auth config |
+| `adminModule`   | `@questpie/admin`           | Admin panel routes, views, components, admin-specific collections                           |
+| `auditModule`   | `@questpie/admin`           | Audit log collection + cleanup job                                                          |
+| `openApiModule` | `@questpie/openapi`         | OpenAPI schema + Scalar docs UI                                                             |
 
 ### Module Resolution
 
@@ -283,123 +283,130 @@ Collections are the **primary data primitive** — each one maps to a PostgreSQL
 import { collection } from "#questpie/factories";
 
 export const posts = collection("posts")
-  .options({
-    timestamps: true,       // adds createdAt, updatedAt
-    softDelete: true,       // adds deletedAt (records are "trashed", not deleted)
-    versioning: {           // creates a _versions table
-      workflow: true,       // enables draft → published stages
-    },
-  })
-  .fields(({ f }) => ({
-    title:    f.text(255).required().label("Title"),
-    slug:     f.text(255).required(),
-    content:  f.richText().localized(),
-    status:   f.select(["draft", "published"]).default("draft"),
-    author:   f.relation("users"),
-    tags:     f.relation("tags").manyToMany({ through: "post_tags" }),
-    cover:    f.upload(),
-  }))
-  .title(({ f }) => f.title)
-  .indexes(({ table }) => [
-    uniqueIndex("posts_slug_unique").on(table.slug),
-  ])
-  .access({
-    read:   true,                                          // public
-    create: ({ session }) => !!session,                    // authenticated only
-    update: ({ session, data }) => data.authorId === session?.user.id,  // own records
-    delete: ({ session }) => session?.user.role === "admin",
-  })
-  .hooks({
-    beforeChange: async ({ data, operation }) => {
-      if (operation === "create") {
-        data.slug = slugify(data.title);
-      }
-      return data;
-    },
-    afterChange: async ({ data, queue }) => {
-      await queue.indexRecords.publish({ collection: "posts", ids: [data.id] });
-    },
-  })
-  .searchable({ content: (r) => r.title })
-  .admin(({ c }) => ({
-    label: "Blog Posts",
-    icon: c.icon({ name: "ph:article" }),
-    group: "content",
-  }))
-  .list(({ v, f, a }) => v.collectionTable({
-    columns: [f.title, f.status, f.author, f.createdAt],
-    defaultSort: { field: f.createdAt, direction: "desc" },
-    filterable: [f.status, f.author],
-    actions: {
-      header: { primary: [a.create()] },
-      row: [a.delete()],
-      bulk: [a.deleteMany()],
-    },
-  }))
-  .form(({ v, f }) => v.collectionForm({
-    fields: [
-      f.title,
-      f.slug,
-      { type: "section", label: "Content", fields: [f.content] },
-      {
-        type: "tabs",
-        tabs: [
-          { id: "media", label: "Media", fields: [f.cover] },
-          { id: "seo", label: "SEO", fields: [f.metaTitle, f.metaDescription] },
-        ],
-      },
-    ],
-    sidebar: {
-      fields: [f.status, f.author, f.tags],
-    },
-  }))
-  .preview({
-    enabled: true,
-    url: ({ record, locale }) => `/blog/${record.slug}?locale=${locale}`,
-    position: "right",
-  })
-  .actions(({ a, c }) => ({
-    custom: [
-      a.action({
-        id: "publish",
-        label: "Publish Now",
-        icon: c.icon({ name: "ph:rocket" }),
-        confirmation: {
-          title: "Publish this post?",
-          description: "It will become visible to all readers.",
-        },
-        handler: async ({ record, collections }) => {
-          await collections.posts.updateById({
-            id: record.id,
-            data: { status: "published" },
-          });
-          return { type: "success", toast: { message: "Published!" } };
-        },
-      }),
-    ],
-  }));
+	.options({
+		timestamps: true, // adds createdAt, updatedAt
+		softDelete: true, // adds deletedAt (records are "trashed", not deleted)
+		versioning: {
+			// creates a _versions table
+			workflow: true, // enables draft → published stages
+		},
+	})
+	.fields(({ f }) => ({
+		title: f.text(255).required().label("Title"),
+		slug: f.text(255).required(),
+		content: f.richText().localized(),
+		status: f.select(["draft", "published"]).default("draft"),
+		author: f.relation("users"),
+		tags: f.relation("tags").manyToMany({ through: "post_tags" }),
+		cover: f.upload(),
+	}))
+	.title(({ f }) => f.title)
+	.indexes(({ table }) => [uniqueIndex("posts_slug_unique").on(table.slug)])
+	.access({
+		read: true, // public
+		create: ({ session }) => !!session, // authenticated only
+		update: ({ session, data }) => data.authorId === session?.user.id, // own records
+		delete: ({ session }) => session?.user.role === "admin",
+	})
+	.hooks({
+		beforeChange: async ({ data, operation }) => {
+			if (operation === "create") {
+				data.slug = slugify(data.title);
+			}
+			return data;
+		},
+		afterChange: async ({ data, queue }) => {
+			await queue.indexRecords.publish({ collection: "posts", ids: [data.id] });
+		},
+	})
+	.searchable({ content: (r) => r.title })
+	.admin(({ c }) => ({
+		label: "Blog Posts",
+		icon: c.icon({ name: "ph:article" }),
+		group: "content",
+	}))
+	.list(({ v, f, a }) =>
+		v.collectionTable({
+			columns: [f.title, f.status, f.author, f.createdAt],
+			defaultSort: { field: f.createdAt, direction: "desc" },
+			filterable: [f.status, f.author],
+			actions: {
+				header: { primary: [a.create()] },
+				row: [a.delete()],
+				bulk: [a.deleteMany()],
+			},
+		}),
+	)
+	.form(({ v, f }) =>
+		v.collectionForm({
+			fields: [
+				f.title,
+				f.slug,
+				{ type: "section", label: "Content", fields: [f.content] },
+				{
+					type: "tabs",
+					tabs: [
+						{ id: "media", label: "Media", fields: [f.cover] },
+						{
+							id: "seo",
+							label: "SEO",
+							fields: [f.metaTitle, f.metaDescription],
+						},
+					],
+				},
+			],
+			sidebar: {
+				fields: [f.status, f.author, f.tags],
+			},
+		}),
+	)
+	.preview({
+		enabled: true,
+		url: ({ record, locale }) => `/blog/${record.slug}?locale=${locale}`,
+		position: "right",
+	})
+	.actions(({ a, c }) => ({
+		custom: [
+			a.action({
+				id: "publish",
+				label: "Publish Now",
+				icon: c.icon({ name: "ph:rocket" }),
+				confirmation: {
+					title: "Publish this post?",
+					description: "It will become visible to all readers.",
+				},
+				handler: async ({ record, collections }) => {
+					await collections.posts.updateById({
+						id: record.id,
+						data: { status: "published" },
+					});
+					return { type: "success", toast: { message: "Published!" } };
+				},
+			}),
+		],
+	}));
 ```
 
 ### CollectionBuilder Methods
 
-| Method | Purpose |
-|---|---|
-| `.fields(({ f }) => {...})` | Define fields (see [Fields](#7-fields)) |
-| `.options({...})` | timestamps, softDelete, versioning |
-| `.title(({ f }) => f.name)` | Which field is the display title |
-| `.indexes(({ table }) => [...])` | Drizzle indexes/constraints |
-| `.access({...})` | Permission rules (see [Access Control](#10-access-control)) |
-| `.hooks({...})` | Lifecycle hooks (see [Hooks](#9-hooks)) |
-| `.searchable({...})` | Full-text search config |
-| `.validation({...})` | Zod validation overrides |
-| `.upload({...})` | Turn into upload collection (see [Uploads](#16-uploads--storage)) |
-| `.set(key, value)` | Plugin extension point |
-| `.merge(other)` | Combine two builders |
-| `.admin({...})` | Admin panel metadata (label, icon, group) |
-| `.list({...})` | List view config |
-| `.form({...})` | Form view config — pick `v.collectionForm` (default split-screen) or `v.visualEditForm` (opt-in canvas+inspector workspace) |
-| `.preview({...})` | Live preview config (URL builder + sizing) |
-| `.actions({...})` | Custom server actions |
+| Method                           | Purpose                                                                                                     |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `.fields(({ f }) => {...})`      | Define fields (see [Fields](#7-fields))                                                                     |
+| `.options({...})`                | timestamps, softDelete, versioning                                                                          |
+| `.title(({ f }) => f.name)`      | Which field is the display title                                                                            |
+| `.indexes(({ table }) => [...])` | Drizzle indexes/constraints                                                                                 |
+| `.access({...})`                 | Permission rules (see [Access Control](#10-access-control))                                                 |
+| `.hooks({...})`                  | Lifecycle hooks (see [Hooks](#9-hooks))                                                                     |
+| `.searchable({...})`             | Full-text search config                                                                                     |
+| `.validation({...})`             | Zod validation overrides                                                                                    |
+| `.upload({...})`                 | Turn into upload collection (see [Uploads](#16-uploads--storage))                                           |
+| `.set(key, value)`               | Plugin extension point                                                                                      |
+| `.merge(other)`                  | Combine two builders                                                                                        |
+| `.admin({...})`                  | Admin panel metadata (label, icon, group)                                                                   |
+| `.list({...})`                   | List view config                                                                                            |
+| `.form({...})`                   | Form view config — pick `v.collectionForm` (default split-screen) or `v.visualEditForm` (opt-in workspace)  |
+| `.preview({...})`                | Live preview config (URL builder + sizing)                                                                  |
+| `.actions({...})`                | Custom server actions                                                                                       |
 
 > `.admin()`, `.list()`, `.form()`, `.preview()`, `.actions()` are added by the admin plugin — they're not available without `@questpie/admin`.
 
@@ -415,31 +422,33 @@ Globals are **singleton documents** — one row per global (or one per tenant if
 import { global } from "#questpie/factories";
 
 export const siteSettings = global("site_settings")
-  .fields(({ f }) => ({
-    siteName:    f.text(255).required().default("My Site"),
-    description: f.textarea(),
-    logo:        f.upload(),
-    socialLinks: f.object({
-      twitter:  f.url(),
-      github:   f.url(),
-      linkedin: f.url(),
-    }),
-  }))
-  .options({
-    timestamps: true,
-    scoped: ({ session }) => session?.user.tenantId,  // multi-tenant scoping
-  })
-  .access({
-    read:   true,
-    update: ({ session }) => session?.user.role === "admin",
-  })
-  .admin(({ c }) => ({
-    label: "Site Settings",
-    icon: c.icon({ name: "ph:gear" }),
-  }))
-  .form(({ v, f }) => v.globalForm({
-    fields: [f.siteName, f.description, f.logo, f.socialLinks],
-  }));
+	.fields(({ f }) => ({
+		siteName: f.text(255).required().default("My Site"),
+		description: f.textarea(),
+		logo: f.upload(),
+		socialLinks: f.object({
+			twitter: f.url(),
+			github: f.url(),
+			linkedin: f.url(),
+		}),
+	}))
+	.options({
+		timestamps: true,
+		scoped: ({ session }) => session?.user.tenantId, // multi-tenant scoping
+	})
+	.access({
+		read: true,
+		update: ({ session }) => session?.user.role === "admin",
+	})
+	.admin(({ c }) => ({
+		label: "Site Settings",
+		icon: c.icon({ name: "ph:gear" }),
+	}))
+	.form(({ v, f }) =>
+		v.globalForm({
+			fields: [f.siteName, f.description, f.logo, f.socialLinks],
+		}),
+	);
 ```
 
 ### GlobalBuilder Methods
@@ -456,60 +465,64 @@ Fields define the shape of your data. Every field starts from a **field type fac
 
 All accessed via `f` in the `.fields()` callback:
 
-| Factory | DB Column | JS Type | Key Options |
-|---|---|---|---|
-| `f.text(maxLength?)` | `varchar(n)` / `text` | `string` | `.pattern(re)`, `.trim()`, `.lowercase()`, `.uppercase()`, `.min(n)`, `.max(n)` |
-| `f.textarea()` | `text` | `string` | `.min(n)`, `.max(n)` |
-| `f.email(maxLength?)` | `varchar(255)` | `string` | `.min(n)`, `.max(n)` |
-| `f.url(maxLength?)` | `varchar(2048)` | `string` | `.min(n)`, `.max(n)` |
-| `f.number(mode?)` | `integer` / `real` / `numeric` / ... | `number` | `.min(n)`, `.max(n)`, `.positive()`, `.int()`, `.step(n)` |
-| `f.boolean()` | `boolean` | `boolean` | — |
-| `f.date()` | `date` | `string` (ISO) | `.autoNow()`, `.autoNowUpdate()` |
-| `f.datetime()` | `timestamp` | `Date` | `.autoNow()`, `.autoNowUpdate()` |
-| `f.time()` | `time` | `string` | — |
-| `f.select(options[])` | `varchar` | `string` | `.enum(name)` |
-| `f.relation(target)` | `varchar(36)` FK | `string` | See [Relations](#8-relations) |
-| `f.upload(config?)` | `varchar(36)` FK | `string` | `.multiple()` |
-| `f.object(fields)` | `jsonb` | `{...}` | Nested field definitions |
-| `f.json(config?)` | `jsonb` / `json` | `JsonValue` | `{ mode: "jsonb" \| "json" }` |
-| `f.richText()` | `jsonb` | TipTap doc | *Admin plugin only* |
-| `f.blocks()` | `jsonb` | Block tree | *Admin plugin only* |
-| `f.from(column, zod?)` | custom | `unknown` | `.type(name)` — escape hatch (PostGIS, etc.). Internal type string is `"custom"` |
+| Factory                | DB Column                            | JS Type        | Key Options                                                                      |
+| ---------------------- | ------------------------------------ | -------------- | -------------------------------------------------------------------------------- |
+| `f.text(maxLength?)`   | `varchar(n)` / `text`                | `string`       | `.pattern(re)`, `.trim()`, `.lowercase()`, `.uppercase()`, `.min(n)`, `.max(n)`  |
+| `f.textarea()`         | `text`                               | `string`       | `.min(n)`, `.max(n)`                                                             |
+| `f.email(maxLength?)`  | `varchar(255)`                       | `string`       | `.min(n)`, `.max(n)`                                                             |
+| `f.url(maxLength?)`    | `varchar(2048)`                      | `string`       | `.min(n)`, `.max(n)`                                                             |
+| `f.number(mode?)`      | `integer` / `real` / `numeric` / ... | `number`       | `.min(n)`, `.max(n)`, `.positive()`, `.int()`, `.step(n)`                        |
+| `f.boolean()`          | `boolean`                            | `boolean`      | —                                                                                |
+| `f.date()`             | `date`                               | `string` (ISO) | `.autoNow()`, `.autoNowUpdate()`                                                 |
+| `f.datetime()`         | `timestamp`                          | `Date`         | `.autoNow()`, `.autoNowUpdate()`                                                 |
+| `f.time()`             | `time`                               | `string`       | —                                                                                |
+| `f.select(options[])`  | `varchar`                            | `string`       | `.enum(name)`                                                                    |
+| `f.relation(target)`   | `varchar(36)` FK                     | `string`       | See [Relations](#8-relations)                                                    |
+| `f.upload(config?)`    | `varchar(36)` FK                     | `string`       | `.multiple()`                                                                    |
+| `f.object(fields)`     | `jsonb`                              | `{...}`        | Nested field definitions                                                         |
+| `f.json(config?)`      | `jsonb` / `json`                     | `JsonValue`    | `{ mode: "jsonb" \| "json" }`                                                    |
+| `f.richText()`         | `jsonb`                              | TipTap doc     | _Admin plugin only_                                                              |
+| `f.blocks()`           | `jsonb`                              | Block tree     | _Admin plugin only_                                                              |
+| `f.from(column, zod?)` | custom                               | `unknown`      | `.type(name)` — escape hatch (PostGIS, etc.). Internal type string is `"custom"` |
 
 ### Common Field Methods (Available on All Types)
 
 ```ts
 f.text(255)
-  .required()                    // NOT NULL
-  .default("untitled")           // default value (or function)
-  .label("Post Title")           // display label (I18nText)
-  .description("The main title") // help text
-  .localized()                   // stored in i18n table, per-locale
-  .virtual(sql`...`)             // computed column, no DB storage
-  .array()                       // wrap as JSONB array
-    .minItems(1)
-    .maxItems(10)
-  .inputFalse()                  // exclude from create/update input (read-only)
-  .inputOptional()               // always optional in input
-  .inputTrue()                   // force into input even if virtual
-  .outputFalse()                 // exclude from output (write-only, e.g. password)
-  .hooks({                       // field-level hooks
-    beforeChange: (value, ctx) => value.trim(),
-    afterRead: (value, ctx) => value,
-    validate: (value, ctx) => { if (!value) throw new Error("Required"); },
-  })
-  .access({                      // field-level access
-    read:   true,
-    create: ({ session }) => !!session,
-    update: ({ session }) => session?.user.role === "admin",
-  })
-  .operators(ops)                // override WHERE operator set for queries
-  .drizzle((col) => col)         // escape hatch: modify Drizzle column
-  .zod((schema) => schema)       // escape hatch: modify Zod schema
-  .fromDb((value) => value)      // transform after reading from DB
-  .toDb((value) => value)        // transform before writing to DB
-  .set(key, value)               // plugin extension point (e.g. admin, form config)
-  .derive(extra)                 // derive additional runtime state
+	.required() // NOT NULL
+	.default("untitled") // default value (or function)
+	.label("Post Title") // display label (I18nText)
+	.description("The main title") // help text
+	.localized() // stored in i18n table, per-locale
+	.virtual(sql`...`) // computed column, no DB storage
+	.array() // wrap as JSONB array
+	.minItems(1)
+	.maxItems(10)
+	.inputFalse() // exclude from create/update input (read-only)
+	.inputOptional() // always optional in input
+	.inputTrue() // force into input even if virtual
+	.outputFalse() // exclude from output (write-only, e.g. password)
+	.hooks({
+		// field-level hooks
+		beforeChange: (value, ctx) => value.trim(),
+		afterRead: (value, ctx) => value,
+		validate: (value, ctx) => {
+			if (!value) throw new Error("Required");
+		},
+	})
+	.access({
+		// field-level access
+		read: true,
+		create: ({ session }) => !!session,
+		update: ({ session }) => session?.user.role === "admin",
+	})
+	.operators(ops) // override WHERE operator set for queries
+	.drizzle((col) => col) // escape hatch: modify Drizzle column
+	.zod((schema) => schema) // escape hatch: modify Zod schema
+	.fromDb((value) => value) // transform after reading from DB
+	.toDb((value) => value) // transform before writing to DB
+	.set(key, value) // plugin extension point (e.g. admin, form config)
+	.derive(extra); // derive additional runtime state
 ```
 
 ### Custom Field Types
@@ -520,15 +533,14 @@ Define reusable field types with `fieldType()`:
 import { fieldType } from "questpie";
 
 export const colorField = fieldType("color", {
-  create: () => ({
-    type: "color",
-    drizzleType: "varchar",
-    drizzleArgs: [7],
-  }),
-  methods: {
-    palette: (field, colors: string[]) =>
-      field.set("palette", colors),
-  },
+	create: () => ({
+		type: "color",
+		drizzleType: "varchar",
+		drizzleArgs: [7],
+	}),
+	methods: {
+		palette: (field, colors: string[]) => field.set("palette", colors),
+	},
 });
 
 // Usage: f.color().palette(["#ff0000", "#00ff00"])
@@ -544,37 +556,37 @@ All relationships are expressed via `f.relation(target)` with chain methods:
 
 ```ts
 // belongsTo (default) — FK on this table
-f.relation("users")
+f.relation("users");
 // Column: authorId varchar(36) → FK to users.id
 
 // hasMany — virtual, FK lives on the target table
 f.relation("comments").hasMany({
-  foreignKey: "postId",
-  onDelete: "cascade",
-})
+	foreignKey: "postId",
+	onDelete: "cascade",
+});
 
 // manyToMany — virtual, uses a junction table
 f.relation("tags").manyToMany({
-  through: "post_tags",
-  sourceField: "postId",    // optional, inferred
-  targetField: "tagId",     // optional, inferred
-})
+	through: "post_tags",
+	sourceField: "postId", // optional, inferred
+	targetField: "tagId", // optional, inferred
+});
 
 // multiple — stores array of IDs as JSONB
-f.relation("assets").multiple()
+f.relation("assets").multiple();
 // Column: imageIds jsonb (["uuid1", "uuid2", ...])
 
 // polymorphic (morphTo) — two columns: type + id
-f.relation({ users: "users", teams: "teams" })
+f.relation({ users: "users", teams: "teams" });
 // Columns: assigneeType varchar, assigneeId varchar
 ```
 
 ### Relation Targets
 
 ```ts
-f.relation("users")                           // string (collection name)
-f.relation(() => users)                       // lazy reference (avoids circular imports)
-f.relation({ users: "users", teams: "teams" }) // polymorphic map
+f.relation("users"); // string (collection name)
+f.relation(() => users); // lazy reference (avoids circular imports)
+f.relation({ users: "users", teams: "teams" }); // polymorphic map
 ```
 
 ### Additional Config
@@ -688,15 +700,17 @@ Apply hooks to **all** collections at once via `config/app.ts`. Available hook n
 
 ```ts
 appConfig({
-  hooks: {
-    collections: [
-      {
-        hook: "afterChange",
-        include: ["posts", "pages"],  // optional filter
-        handler: async (ctx) => { /* audit log */ },
-      },
-    ],
-  },
+	hooks: {
+		collections: [
+			{
+				hook: "afterChange",
+				include: ["posts", "pages"], // optional filter
+				handler: async (ctx) => {
+					/* audit log */
+				},
+			},
+		],
+	},
 });
 ```
 
@@ -752,18 +766,18 @@ Control individual fields:
 
 ```ts
 f.text(255).access({
-  read:   true,
-  create: ({ session }) => session?.user.role === "admin",
-  update: false,  // immutable after creation
-})
+	read: true,
+	create: ({ session }) => session?.user.role === "admin",
+	update: false, // immutable after creation
+});
 
 // Or at collection level:
 collection("users").access({
-  fields: {
-    email:    { update: ({ session }) => session?.user.role === "admin" },
-    password: { read: false },
-  },
-})
+	fields: {
+		email: { update: ({ session }) => session?.user.role === "admin" },
+		password: { read: false },
+	},
+});
 ```
 
 ### Default Behavior
@@ -793,36 +807,40 @@ import { route } from "questpie";
 
 // JSON route with schema validation
 export default route()
-  .post()
-  .schema(z.object({
-    name: z.string(),
-    email: z.string().email(),
-  }))
-  .outputSchema(z.object({
-    success: z.boolean(),
-    id: z.string(),
-  }))
-  .access(({ session }) => !!session)
-  .handler(async ({ input, db, collections, session }) => {
-    const user = await collections.users.create({ ...input });
-    return { success: true, id: user.id };
-  });
+	.post()
+	.schema(
+		z.object({
+			name: z.string(),
+			email: z.string().email(),
+		}),
+	)
+	.outputSchema(
+		z.object({
+			success: z.boolean(),
+			id: z.string(),
+		}),
+	)
+	.access(({ session }) => !!session)
+	.handler(async ({ input, db, collections, session }) => {
+		const user = await collections.users.create({ ...input });
+		return { success: true, id: user.id };
+	});
 ```
 
 ### Route Methods
 
 ```ts
 route()
-  .get()                           // HTTP method
-  .post()
-  .put()
-  .delete()
-  .patch()
-  .raw()                           // raw Request/Response (no JSON parsing)
-  .schema(zodSchema)               // input validation
-  .outputSchema(zodSchema)         // response type (for OpenAPI)
-  .access(rule)                    // access control
-  .handler(fn)                     // terminal — returns RouteDefinition
+	.get() // HTTP method
+	.post()
+	.put()
+	.delete()
+	.patch()
+	.raw() // raw Request/Response (no JSON parsing)
+	.schema(zodSchema) // input validation
+	.outputSchema(zodSchema) // response type (for OpenAPI)
+	.access(rule) // access control
+	.handler(fn); // terminal — returns RouteDefinition
 ```
 
 ### File-Path Routing
@@ -842,62 +860,62 @@ For webhooks, file downloads, or custom responses:
 
 ```ts
 export default route()
-  .post()
-  .raw()
-  .handler(async ({ request }) => {
-    const body = await request.text();
-    // ... verify webhook signature
-    return new Response("OK", { status: 200 });
-  });
+	.post()
+	.raw()
+	.handler(async ({ request }) => {
+		const body = await request.text();
+		// ... verify webhook signature
+		return new Response("OK", { status: 200 });
+	});
 ```
 
 ### Built-in Routes (Auto-registered by Core Module)
 
 **Collection routes:**
 
-| Path | Method | Purpose |
-|---|---|---|
-| `[collection]` | GET | Find (list with pagination) |
-| `[collection]` | POST | Create |
-| `[collection]` | PATCH | Update many |
-| `[collection]/[id]` | GET | Find one |
-| `[collection]/[id]` | PATCH | Update |
-| `[collection]/[id]` | DELETE | Delete |
-| `[collection]/count` | GET | Count |
-| `[collection]/delete-many` | POST | Delete many |
-| `[collection]/[id]/versions` | GET | List versions |
-| `[collection]/[id]/revert` | POST | Revert to version |
-| `[collection]/[id]/transition` | POST | Workflow transition |
-| `[collection]/[id]/restore` | POST | Restore soft-deleted |
-| `[collection]/[id]/audit` | GET | Audit log |
-| `[collection]/upload` | POST | File upload |
-| `[collection]/files/[...key]` | GET | Serve file |
-| `[collection]/schema` | GET | Introspected schema |
-| `[collection]/meta` | GET | Collection metadata |
+| Path                           | Method | Purpose                     |
+| ------------------------------ | ------ | --------------------------- |
+| `[collection]`                 | GET    | Find (list with pagination) |
+| `[collection]`                 | POST   | Create                      |
+| `[collection]`                 | PATCH  | Update many                 |
+| `[collection]/[id]`            | GET    | Find one                    |
+| `[collection]/[id]`            | PATCH  | Update                      |
+| `[collection]/[id]`            | DELETE | Delete                      |
+| `[collection]/count`           | GET    | Count                       |
+| `[collection]/delete-many`     | POST   | Delete many                 |
+| `[collection]/[id]/versions`   | GET    | List versions               |
+| `[collection]/[id]/revert`     | POST   | Revert to version           |
+| `[collection]/[id]/transition` | POST   | Workflow transition         |
+| `[collection]/[id]/restore`    | POST   | Restore soft-deleted        |
+| `[collection]/[id]/audit`      | GET    | Audit log                   |
+| `[collection]/upload`          | POST   | File upload                 |
+| `[collection]/files/[...key]`  | GET    | Serve file                  |
+| `[collection]/schema`          | GET    | Introspected schema         |
+| `[collection]/meta`            | GET    | Collection metadata         |
 
 **Global routes:**
 
-| Path | Method | Purpose |
-|---|---|---|
-| `globals/[name]` | GET | Get global |
-| `globals/[name]` | PATCH | Update global |
-| `globals/[name]/versions` | GET | List versions |
-| `globals/[name]/revert` | POST | Revert to version |
-| `globals/[name]/transition` | POST | Workflow transition |
-| `globals/[name]/schema` | GET | Introspected schema |
-| `globals/[name]/meta` | GET | Global metadata |
-| `globals/[name]/audit` | GET | Audit log |
+| Path                        | Method | Purpose             |
+| --------------------------- | ------ | ------------------- |
+| `globals/[name]`            | GET    | Get global          |
+| `globals/[name]`            | PATCH  | Update global       |
+| `globals/[name]/versions`   | GET    | List versions       |
+| `globals/[name]/revert`     | POST   | Revert to version   |
+| `globals/[name]/transition` | POST   | Workflow transition |
+| `globals/[name]/schema`     | GET    | Introspected schema |
+| `globals/[name]/meta`       | GET    | Global metadata     |
+| `globals/[name]/audit`      | GET    | Audit log           |
 
 **System routes:**
 
-| Path | Method | Purpose |
-|---|---|---|
-| `auth/[...path]` | * | Better Auth handler |
-| `search` | POST | Full-text search |
-| `search/reindex/[collection]` | POST | Reindex collection |
-| `realtime` | POST | SSE subscriptions |
-| `storage/files/[...key]` | GET | Legacy file serving |
-| `health` | GET | Health check |
+| Path                          | Method | Purpose             |
+| ----------------------------- | ------ | ------------------- |
+| `auth/[...path]`              | \*     | Better Auth handler |
+| `search`                      | POST   | Full-text search    |
+| `search/reindex/[collection]` | POST   | Reindex collection  |
+| `realtime`                    | POST   | SSE subscriptions   |
+| `storage/files/[...key]`      | GET    | Legacy file serving |
+| `health`                      | GET    | Health check        |
 
 ---
 
@@ -909,13 +927,13 @@ Services are **injectable singletons or request-scoped factories** available in 
 import { service } from "questpie";
 
 export const analyticsService = service()
-  .lifecycle("singleton")        // created once at startup
-  .create(({ app }) => {
-    return new AnalyticsClient(app.config.analytics);
-  })
-  .dispose((client) => {
-    client.close();
-  });
+	.lifecycle("singleton") // created once at startup
+	.create(({ app }) => {
+		return new AnalyticsClient(app.config.analytics);
+	})
+	.dispose((client) => {
+		client.close();
+	});
 ```
 
 ### Namespaces
@@ -933,10 +951,10 @@ service().namespace("myNamespace").create(...)
 
 ### Lifecycle
 
-| Lifecycle | When Created | When Disposed |
-|---|---|---|
-| `"singleton"` | Once at app startup | At `app.destroy()` |
-| `"request"` | Per incoming HTTP request | After request completes |
+| Lifecycle     | When Created              | When Disposed           |
+| ------------- | ------------------------- | ----------------------- |
+| `"singleton"` | Once at app startup       | At `app.destroy()`      |
+| `"request"`   | Per incoming HTTP request | After request completes |
 
 ### Using Services in Hooks/Routes
 
@@ -945,8 +963,8 @@ Services in the default namespace are on `ctx.services.*`. Top-level services (e
 ```ts
 // In a hook or route handler:
 async ({ db, session, services }) => {
-  await services.analytics.track("page_view", { userId: session.user.id });
-}
+	await services.analytics.track("page_view", { userId: session.user.id });
+};
 ```
 
 ---
@@ -959,20 +977,22 @@ Background jobs for async processing — retries, scheduling, and queuing.
 import { job } from "questpie";
 
 export default job({
-  name: "sendWelcomeEmail",
-  schema: z.object({
-    userId: z.string(),
-    locale: z.string().optional(),
-  }),
-  options: {
-    retryLimit: 3,
-    retryDelay: 5,          // seconds (not ms!)
-    retryBackoff: true,     // exponential
-  },
-  handler: async ({ payload, email, collections }) => {
-    const user = await collections.users.findOne({ where: { id: payload.userId } });
-    await email.send("welcome", { to: user.email, data: { name: user.name } });
-  },
+	name: "sendWelcomeEmail",
+	schema: z.object({
+		userId: z.string(),
+		locale: z.string().optional(),
+	}),
+	options: {
+		retryLimit: 3,
+		retryDelay: 5, // seconds (not ms!)
+		retryBackoff: true, // exponential
+	},
+	handler: async ({ payload, email, collections }) => {
+		const user = await collections.users.findOne({
+			where: { id: payload.userId },
+		});
+		await email.send("welcome", { to: user.email, data: { name: user.name } });
+	},
 });
 ```
 
@@ -983,8 +1003,8 @@ export default job({
 ```ts
 // In any hook, route, or service:
 await ctx.queue.sendWelcomeEmail.publish({
-  userId: "abc-123",
-  locale: "en",
+	userId: "abc-123",
+	locale: "en",
 });
 ```
 
@@ -992,10 +1012,10 @@ The queue client exposes jobs as typed properties: `queue[jobName].publish(paylo
 
 ### Queue Adapters
 
-| Adapter | Use Case |
-|---|---|
-| `pgBossAdapter()` | PostgreSQL-based (default, great for most cases) |
-| `CloudflareQueuesAdapter` | Cloudflare Workers |
+| Adapter                   | Use Case                                         |
+| ------------------------- | ------------------------------------------------ |
+| `pgBossAdapter()`         | PostgreSQL-based (default, great for most cases) |
+| `CloudflareQueuesAdapter` | Cloudflare Workers                               |
 
 ---
 
@@ -1007,20 +1027,20 @@ Email templates define how emails look and what data they accept.
 import { email } from "questpie";
 
 export default email({
-  name: "welcome",
-  schema: z.object({
-    name: z.string(),
-    verifyUrl: z.string().url(),
-  }),
-  handler: ({ input }) => ({
-    subject: `Welcome, ${input.name}!`,
-    html: `
+	name: "welcome",
+	schema: z.object({
+		name: z.string(),
+		verifyUrl: z.string().url(),
+	}),
+	handler: ({ input }) => ({
+		subject: `Welcome, ${input.name}!`,
+		html: `
       <h1>Welcome to our platform</h1>
       <p>Hi ${input.name}, please verify your email:</p>
       <a href="${input.verifyUrl}">Verify Email</a>
     `,
-    text: `Welcome ${input.name}! Verify: ${input.verifyUrl}`,
-  }),
+		text: `Welcome ${input.name}! Verify: ${input.verifyUrl}`,
+	}),
 });
 ```
 
@@ -1028,17 +1048,17 @@ export default email({
 
 ```ts
 await ctx.email.send("welcome", {
-  to: user.email,
-  data: { name: user.name, verifyUrl: "https://..." },
+	to: user.email,
+	data: { name: user.name, verifyUrl: "https://..." },
 });
 ```
 
 ### Email Adapters
 
-| Adapter | Description |
-|---|---|
-| `ConsoleAdapter` | Logs to console (dev) |
-| `SmtpAdapter` | SMTP via Nodemailer |
+| Adapter                       | Description                      |
+| ----------------------------- | -------------------------------- |
+| `ConsoleAdapter`              | Logs to console (dev)            |
+| `SmtpAdapter`                 | SMTP via Nodemailer              |
 | `createEtherealSmtpAdapter()` | Auto-generated test SMTP account |
 
 ---
@@ -1051,18 +1071,18 @@ await ctx.email.send("welcome", {
 import { migration } from "questpie";
 
 export default migration({
-  id: "0001_create_categories_table",
-  up: async ({ db }) => {
-    await db.execute(sql`
+	id: "0001_create_categories_table",
+	up: async ({ db }) => {
+		await db.execute(sql`
       CREATE TABLE categories (
         id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
         name varchar(255) NOT NULL
       )
     `);
-  },
-  down: async ({ db }) => {
-    await db.execute(sql`DROP TABLE categories`);
-  },
+	},
+	down: async ({ db }) => {
+		await db.execute(sql`DROP TABLE categories`);
+	},
 });
 ```
 
@@ -1072,18 +1092,18 @@ export default migration({
 import { seed } from "questpie";
 
 export default seed({
-  id: "seed-default-categories",
-  category: "required",               // "required" | "dev" | "test"
-  run: async ({ collections, log }) => {
-    log("Creating default categories...");
-    await collections.categories.create({ name: "Uncategorized" });
-    await collections.categories.create({ name: "News" });
-  },
-  undo: async ({ collections }) => {
-    await collections.categories.delete({
-      where: { name: { in: ["Uncategorized", "News"] } },
-    });
-  },
+	id: "seed-default-categories",
+	category: "required", // "required" | "dev" | "test"
+	run: async ({ collections, log }) => {
+		log("Creating default categories...");
+		await collections.categories.create({ name: "Uncategorized" });
+		await collections.categories.create({ name: "News" });
+	},
+	undo: async ({ collections }) => {
+		await collections.categories.delete({
+			where: { name: { in: ["Uncategorized", "News"] } },
+		});
+	},
 });
 ```
 
@@ -1111,9 +1131,9 @@ In `questpie.config.ts`:
 
 ```ts
 runtimeConfig({
-  autoMigrate: true,              // run migrations on app startup
-  autoSeed: true,                 // run seeds on startup
-  // autoSeed: "required",        // or only specific categories ("required" | "dev" | "test")
+	autoMigrate: true, // run migrations on app startup
+	autoSeed: true, // run seeds on startup
+	// autoSeed: "required",        // or only specific categories ("required" | "dev" | "test")
 });
 ```
 
@@ -1127,15 +1147,15 @@ Any collection can become a file storage collection:
 
 ```ts
 collection("assets")
-  .upload({
-    visibility: "public",          // "public" | "private"
-    maxSize: 10_000_000,           // 10MB
-    allowedTypes: ["image/*", "application/pdf"],
-  })
-  .fields(({ f }) => ({
-    alt: f.text(255),
-    caption: f.textarea(),
-  }))
+	.upload({
+		visibility: "public", // "public" | "private"
+		maxSize: 10_000_000, // 10MB
+		allowedTypes: ["image/*", "application/pdf"],
+	})
+	.fields(({ f }) => ({
+		alt: f.text(255),
+		caption: f.textarea(),
+	}));
 ```
 
 `.upload()` automatically adds system fields: `key`, `filename`, `mimeType`, `size`, `visibility`, plus HTTP routes for upload and file serving.
@@ -1145,14 +1165,15 @@ collection("assets")
 Reference files from other collections:
 
 ```ts
-f.upload()                         // single file → FK to "assets"
-f.upload({ to: "documents" })      // custom upload collection
-f.upload().multiple()              // multiple files (JSONB array)
-f.upload({                         // many-to-many via junction
-  through: "post_images",
-  mimeTypes: ["image/*"],
-  maxSize: 5_000_000,
-})
+f.upload(); // single file → FK to "assets"
+f.upload({ to: "documents" }); // custom upload collection
+f.upload().multiple(); // multiple files (JSONB array)
+f.upload({
+	// many-to-many via junction
+	through: "post_images",
+	mimeTypes: ["image/*"],
+	maxSize: 5_000_000,
+});
 ```
 
 ### Storage Adapters
@@ -1160,12 +1181,12 @@ f.upload({                         // many-to-many via junction
 ```ts
 // Local filesystem (default)
 runtimeConfig({
-  storage: { location: "./uploads", basePath: "/api" },
+	storage: { location: "./uploads", basePath: "/api" },
 });
 
 // S3-compatible (R2, Minio, etc.)
 runtimeConfig({
-  storage: { driver: myS3Driver },
+	storage: { driver: myS3Driver },
 });
 
 // Auto-detected from env vars:
@@ -1177,9 +1198,9 @@ runtimeConfig({
 
 ```ts
 const file = await collections.assets.upload(
-  { stream: readableStream, filename: "photo.jpg", mimeType: "image/jpeg" },
-  { accessMode: "system" },
-  { alt: "A nice photo" },  // additional field data
+	{ stream: readableStream, filename: "photo.jpg", mimeType: "image/jpeg" },
+	{ accessMode: "system" },
+	{ alt: "A nice photo" }, // additional field data
 );
 ```
 
@@ -1191,24 +1212,24 @@ const file = await collections.assets.upload(
 
 ```ts
 collection("pages").options({
-  versioning: true,                    // basic versioning (max 50 versions)
-  // or:
-  versioning: {
-    maxVersions: 100,
-    workflow: true,                    // enables stage transitions
-  },
-  // or with custom stages:
-  versioning: {
-    workflow: {
-      initialStage: "draft",
-      stages: {
-        draft:     { transitions: ["review"] },
-        review:    { transitions: ["published", "draft"] },
-        published: { transitions: ["draft"] },
-      },
-    },
-  },
-})
+	versioning: true, // basic versioning (max 50 versions)
+	// or:
+	versioning: {
+		maxVersions: 100,
+		workflow: true, // enables stage transitions
+	},
+	// or with custom stages:
+	versioning: {
+		workflow: {
+			initialStage: "draft",
+			stages: {
+				draft: { transitions: ["review"] },
+				review: { transitions: ["published", "draft"] },
+				published: { transitions: ["draft"] },
+			},
+		},
+	},
+});
 ```
 
 ### What Versioning Gives You
@@ -1229,7 +1250,10 @@ await collections.pages.transitionStage({ id: "abc", stage: "published" });
 
 // Client-side
 const versions = await client.collections.pages.findVersions({ id: "abc" });
-await client.collections.pages.transitionStage({ id: "abc", stage: "published" });
+await client.collections.pages.transitionStage({
+	id: "abc",
+	stage: "published",
+});
 ```
 
 ---
@@ -1241,18 +1265,17 @@ Full-text search across collections.
 ### Configuring Search
 
 ```ts
-collection("posts")
-  .searchable({
-    content: (record) => record.title,
-    // or multiple fields:
-    content: (record) => `${record.title} ${record.excerpt}`,
-  })
+collection("posts").searchable({
+	content: (record) => record.title,
+	// or multiple fields:
+	content: (record) => `${record.title} ${record.excerpt}`,
+});
 ```
 
 ### Search Adapters
 
-| Adapter | Description |
-|---|---|
+| Adapter                 | Description                          |
+| ----------------------- | ------------------------------------ |
 | `PostgresSearchAdapter` | pg_trgm + FTS (default, zero-config) |
 | `PgVectorSearchAdapter` | Hybrid semantic search with pgvector |
 
@@ -1261,15 +1284,15 @@ collection("posts")
 ```ts
 // Client-side
 const results = await client.search.search({
-  query: "typescript guide",
-  collections: ["posts", "pages"],
-  limit: 10,
+	query: "typescript guide",
+	collections: ["posts", "pages"],
+	limit: 10,
 });
 
 // Server-side
 const results = await ctx.search.search({
-  query: "typescript guide",
-  collections: ["posts"],
+	query: "typescript guide",
+	collections: ["posts"],
 });
 ```
 
@@ -1299,16 +1322,14 @@ Server-sent events for live data updates.
 
 ```ts
 // With TanStack Query (automatic)
-const { data } = useQuery(
-  qp.collections.posts.find({}, { realtime: true })
-);
+const { data } = useQuery(qp.collections.posts.find({}, { realtime: true }));
 
 // Manual subscription
 const unsub = client.realtime.subscribe(
-  { resourceType: "collection", resource: "posts" },
-  (event) => {
-    console.log("Change:", event.operation, event.recordId);
-  }
+	{ resourceType: "collection", resource: "posts" },
+	(event) => {
+		console.log("Change:", event.operation, event.recordId);
+	},
 );
 ```
 
@@ -1318,16 +1339,16 @@ const unsub = client.realtime.subscribe(
 import { pgNotifyAdapter } from "questpie";
 
 runtimeConfig({
-  realtime: {
-    adapter: pgNotifyAdapter({ connectionString: process.env.DATABASE_URL }),
-  },
+	realtime: {
+		adapter: pgNotifyAdapter({ connectionString: process.env.DATABASE_URL }),
+	},
 });
 ```
 
-| Adapter | Description |
-|---|---|
-| *None* (default) | Polling-based (every 2s) |
-| `pgNotifyAdapter()` | PostgreSQL LISTEN/NOTIFY |
+| Adapter                 | Description                  |
+| ----------------------- | ---------------------------- |
+| _None_ (default)        | Polling-based (every 2s)     |
+| `pgNotifyAdapter()`     | PostgreSQL LISTEN/NOTIFY     |
 | `redisStreamsAdapter()` | Redis Streams consumer group |
 
 ---
@@ -1339,7 +1360,7 @@ runtimeConfig({
 Mark fields as localized — stored per-locale in a separate i18n table:
 
 ```ts
-f.text(255).localized()   // stored in {collection}_i18n table
+f.text(255).localized(); // stored in {collection}_i18n table
 ```
 
 ### Configuring Locales
@@ -1347,11 +1368,11 @@ f.text(255).localized()   // stored in {collection}_i18n table
 ```ts
 // config/app.ts
 appConfig({
-  locale: {
-    locales: ["en", "sk", "de"],
-    defaultLocale: "en",
-    fallback: { sk: "en", de: "en" },
-  },
+	locale: {
+		locales: ["en", "sk", "de"],
+		defaultLocale: "en",
+		fallback: { sk: "en", de: "en" },
+	},
 });
 ```
 
@@ -1360,15 +1381,15 @@ appConfig({
 ```ts
 // Server
 const post = await collections.posts.findOne({
-  where: { id: "abc" },
-  locale: "sk",
-  localeFallback: true,  // fall back to "en" if "sk" not available
+	where: { id: "abc" },
+	locale: "sk",
+	localeFallback: true, // fall back to "en" if "sk" not available
 });
 
 // Client
 const post = await client.collections.posts.findOne({
-  where: { id: "abc" },
-  locale: "sk",
+	where: { id: "abc" },
+	locale: "sk",
 });
 ```
 
@@ -1377,16 +1398,16 @@ const post = await client.collections.posts.findOne({
 ```ts
 // config/admin.ts
 adminConfig({
-  locale: {
-    locales: ["en", "sk"],
-    defaultLocale: "en",
-  },
+	locale: {
+		locales: ["en", "sk"],
+		defaultLocale: "en",
+	},
 });
 
 // messages/en.ts — admin UI string translations
 export default {
-  "admin.posts.title": "Blog Posts",
-  "admin.posts.description": "Manage blog posts",
+	"admin.posts.title": "Blog Posts",
+	"admin.posts.description": "Manage blog posts",
 };
 ```
 
@@ -1406,48 +1427,48 @@ Every hook, route handler, job handler, and service receives `AppContext`. This 
 
 ```ts
 interface AppContext {
-  app:         Questpie              // the app instance
-  db:          DrizzleClient         // Drizzle ORM (may be a transaction in hooks)
-  session:     { user, session } | null   // current auth session
-  collections: { [name]: CollectionAPI }  // typed CRUD for all collections
-  globals:     { [name]: GlobalAPI }      // typed CRUD for all globals
-  queue:       QueueClient                // dispatch background jobs
-  email:       MailerService              // send emails
-  storage:     DriveManager               // file storage operations
-  kv:          KVService                  // key-value store
-  logger:      LoggerService              // structured logging
-  search:      SearchService              // full-text search
-  realtime:    RealtimeService            // publish realtime events
-  t:           (key, params?, locale?) => string  // i18n translator
-  services:    Record<string, unknown>    // user-defined services
+	app: Questpie; // the app instance
+	db: DrizzleClient; // Drizzle ORM (may be a transaction in hooks)
+	session: { user; session } | null; // current auth session
+	collections: { [name]: CollectionAPI }; // typed CRUD for all collections
+	globals: { [name]: GlobalAPI }; // typed CRUD for all globals
+	queue: QueueClient; // dispatch background jobs
+	email: MailerService; // send emails
+	storage: DriveManager; // file storage operations
+	kv: KVService; // key-value store
+	logger: LoggerService; // structured logging
+	search: SearchService; // full-text search
+	realtime: RealtimeService; // publish realtime events
+	t: (key, params?, locale?) => string; // i18n translator
+	services: Record<string, unknown>; // user-defined services
 }
 ```
 
 ### Where AppContext Is Available
 
-| Context | How to Access |
-|---|---|
-| Collection hooks | First argument: `async (ctx) => { ... }` |
-| Route handlers | Destructure: `async ({ db, session, collections }) => { ... }` |
-| Job handlers | Destructure: `async ({ payload, queue, email }) => { ... }` |
-| Email templates | Destructure: `async ({ input, collections }) => { ... }` |
-| Access rules | Destructure: `({ session, data }) => boolean` |
-| Seeds | `async ({ collections, log }) => { ... }` |
-| Services | `create: ({ app }) => ...` (app instance only, not full context) |
+| Context          | How to Access                                                    |
+| ---------------- | ---------------------------------------------------------------- |
+| Collection hooks | First argument: `async (ctx) => { ... }`                         |
+| Route handlers   | Destructure: `async ({ db, session, collections }) => { ... }`   |
+| Job handlers     | Destructure: `async ({ payload, queue, email }) => { ... }`      |
+| Email templates  | Destructure: `async ({ input, collections }) => { ... }`         |
+| Access rules     | Destructure: `({ session, data }) => boolean`                    |
+| Seeds            | `async ({ collections, log }) => { ... }`                        |
+| Services         | `create: ({ app }) => ...` (app instance only, not full context) |
 
 ### Getting Context Programmatically
 
 ```ts
 import { getContext, tryGetContext } from "questpie";
 
-const ctx = getContext();         // throws if outside a request scope
-const ctx = tryGetContext();      // returns null if outside scope
+const ctx = getContext(); // throws if outside a request scope
+const ctx = tryGetContext(); // returns null if outside scope
 
 // Create a fresh context manually:
 const ctx = await app.createContext({
-  session: null,
-  locale: "en",
-  accessMode: "system",
+	session: null,
+	locale: "en",
+	accessMode: "system",
 });
 ```
 
@@ -1462,16 +1483,16 @@ Access collections and globals programmatically from anywhere in server code.
 ```ts
 // via AppContext (in hooks, routes, jobs)
 const posts = await ctx.collections.posts.find({
-  where: { status: "published" },
-  orderBy: { createdAt: "desc" },
-  limit: 10,
-  with: { author: true, tags: true },
+	where: { status: "published" },
+	orderBy: { createdAt: "desc" },
+	limit: 10,
+	with: { author: true, tags: true },
 });
 
 // via app instance (in startup scripts, CLI)
 const post = await app.collections.posts.findOne({
-  where: { slug: "hello-world" },
-  columns: { title: true, content: true },
+	where: { slug: "hello-world" },
+	columns: { title: true, content: true },
 });
 ```
 
@@ -1551,13 +1572,13 @@ const post = await app.collections.posts.findOne({
 
 ```ts
 const settings = await ctx.globals.siteSettings.get({
-  with: { logo: true },
-  locale: "en",
+	with: { logo: true },
+	locale: "en",
 });
 
 await ctx.globals.siteSettings.update({
-  siteName: "New Name",
-  description: "Updated description",
+	siteName: "New Name",
+	description: "Updated description",
 });
 ```
 
@@ -1577,14 +1598,14 @@ All CRUD methods accept an optional second argument for context:
 
 ```ts
 await collections.posts.find(
-  { where: { status: "published" } },
-  {
-    session: mySession,            // override session
-    locale: "sk",                  // override locale
-    accessMode: "user",            // force access checks (default: "system")
-    stage: "published",            // version stage filter
-    db: transactionClient,         // run inside a transaction
-  }
+	{ where: { status: "published" } },
+	{
+		session: mySession, // override session
+		locale: "sk", // override locale
+		accessMode: "user", // force access checks (default: "system")
+		stage: "published", // version stage filter
+		db: transactionClient, // run inside a transaction
+	},
 );
 ```
 
@@ -1601,8 +1622,8 @@ import { createClient } from "questpie/client";
 import type { App } from "@/questpie/server/app";
 
 export const client = createClient<App>({
-  baseURL: "http://localhost:3000",
-  basePath: "/api",                  // matches your catch-all route
+	baseURL: "http://localhost:3000",
+	basePath: "/api", // matches your catch-all route
 });
 ```
 
@@ -1611,28 +1632,28 @@ export const client = createClient<App>({
 ```ts
 // Read
 const posts = await client.collections.posts.find({
-  where: { status: "published" },
-  limit: 10,
-  with: { author: true },
+	where: { status: "published" },
+	limit: 10,
+	with: { author: true },
 });
 
 const post = await client.collections.posts.findOne({
-  where: { id: "abc" },
+	where: { id: "abc" },
 });
 
 const count = await client.collections.posts.count({
-  where: { status: "draft" },
+	where: { status: "draft" },
 });
 
 // Write
 const newPost = await client.collections.posts.create({
-  title: "Hello",
-  content: "...",
+	title: "Hello",
+	content: "...",
 });
 
 const updated = await client.collections.posts.update({
-  id: "abc",
-  data: { title: "Updated" },
+	id: "abc",
+	data: { title: "Updated" },
 });
 
 await client.collections.posts.delete({ id: "abc" });
@@ -1643,7 +1664,10 @@ const asset = await client.collections.assets.upload(fileObject);
 // Versioning
 const versions = await client.collections.posts.findVersions({ id: "abc" });
 await client.collections.posts.revertToVersion({ id: "abc", version: 3 });
-await client.collections.posts.transitionStage({ id: "abc", stage: "published" });
+await client.collections.posts.transitionStage({
+	id: "abc",
+	stage: "published",
+});
 
 // Schema introspection
 const schema = await client.collections.posts.schema();
@@ -1667,16 +1691,16 @@ const stats = await client.routes.admin.stats({ period: "week" });
 
 ```ts
 const results = await client.search.search({
-  query: "typescript",
-  collections: ["posts"],
-  limit: 10,
+	query: "typescript",
+	collections: ["posts"],
+	limit: 10,
 });
 ```
 
 ### Locale
 
 ```ts
-client.setLocale("sk");                 // set for all subsequent requests
+client.setLocale("sk"); // set for all subsequent requests
 const locale = client.getLocale();
 ```
 
@@ -1686,15 +1710,15 @@ const locale = client.getLocale();
 import { QuestpieClientError } from "questpie/client";
 
 try {
-  await client.collections.posts.create({ title: "" });
+	await client.collections.posts.create({ title: "" });
 } catch (err) {
-  if (err instanceof QuestpieClientError) {
-    err.status;                         // HTTP status
-    err.code;                           // error code
-    err.fieldErrors;                    // per-field validation errors
-    err.getFieldError("title");         // specific field error
-    err.isCode("VALIDATION_ERROR");     // check error type
-  }
+	if (err instanceof QuestpieClientError) {
+		err.status; // HTTP status
+		err.code; // error code
+		err.fieldErrors; // per-field validation errors
+		err.getFieldError("title"); // specific field error
+		err.isCode("VALIDATION_ERROR"); // check error type
+	}
 }
 ```
 
@@ -1712,7 +1736,7 @@ import { client } from "@/lib/client";
 import type { App } from "@/questpie/server/app";
 
 export const qp = createQuestpieQueryOptions<App>(client, {
-  keyPrefix: ["questpie"],
+	keyPrefix: ["questpie"],
 });
 ```
 
@@ -1723,30 +1747,28 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 
 // List
 const { data: posts } = useQuery(
-  qp.collections.posts.find({
-    where: { status: "published" },
-    limit: 10,
-  })
+	qp.collections.posts.find({
+		where: { status: "published" },
+		limit: 10,
+	}),
 );
 
 // Single
 const { data: post } = useQuery(
-  qp.collections.posts.findOne({ where: { id: postId } })
+	qp.collections.posts.findOne({ where: { id: postId } }),
 );
 
 // Count
 const { data: count } = useQuery(
-  qp.collections.posts.count({ where: { status: "draft" } })
+	qp.collections.posts.count({ where: { status: "draft" } }),
 );
 
 // Global
-const { data: settings } = useQuery(
-  qp.globals.siteSettings.get()
-);
+const { data: settings } = useQuery(qp.globals.siteSettings.get());
 
 // With realtime (auto-refetches on server changes)
 const { data: posts } = useQuery(
-  qp.collections.posts.find({}, { realtime: true })
+	qp.collections.posts.find({}, { realtime: true }),
 );
 ```
 
@@ -1778,9 +1800,9 @@ const action = useMutation(qp.routes.webhooks.stripe.mutation());
 Consistent key structure for cache invalidation:
 
 ```ts
-["questpie", "collections", "posts", "find", locale, stage, options]
-["questpie", "globals", "siteSettings", "get", locale, stage, options]
-["questpie", "routes", "admin", "stats", "query", locale, options]
+["questpie", "collections", "posts", "find", locale, stage, options][
+	("questpie", "globals", "siteSettings", "get", locale, stage, options)
+][("questpie", "routes", "admin", "stats", "query", locale, options)];
 ```
 
 ---
@@ -1800,48 +1822,70 @@ export default [adminModule] as const;
 import { adminConfig } from "#questpie/factories";
 
 export default adminConfig({
-  branding: {
-    name: "My CMS",
-  },
-  locale: {
-    locales: ["en", "sk"],
-    defaultLocale: "en",
-  },
-  sidebar: ({ s, c }) => ({
-    sections: [
-      s.section({ id: "content", title: "Content", icon: c.icon({ name: "ph:article" }) }),
-      s.section({ id: "settings", title: "Settings", icon: c.icon({ name: "ph:gear" }) }),
-    ],
-    items: [
-      s.item({ sectionId: "content", type: "collection", collection: "posts" }),
-      s.item({ sectionId: "content", type: "collection", collection: "pages" }),
-      s.item({ sectionId: "settings", type: "global", global: "site_settings" }),
-      s.item({ sectionId: "settings", type: "link", label: "API Docs", href: "/api/docs", external: true }),
-      s.item({ sectionId: "settings", type: "divider" }),
-    ],
-  }),
-  dashboard: ({ d, c, a }) => ({
-    title: "Dashboard",
-    sections: [
-      d.section({ id: "overview", label: "Overview", columns: 4 }),
-      d.section({ id: "recent", label: "Recent Activity", columns: 2 }),
-    ],
-    items: [
-      d.stats({
-        sectionId: "overview", id: "total-posts",
-        label: "Total Posts",
-        collection: "posts", span: 1,
-      }),
-      d.recentItems({
-        sectionId: "recent", id: "recent-posts",
-        label: "Recent Posts",
-        collection: "posts", dateField: "createdAt", limit: 5, span: 1,
-      }),
-    ],
-    actions: [
-      a.create({ collection: "posts", label: "New Post" }),
-    ],
-  }),
+	branding: {
+		name: "My CMS",
+	},
+	locale: {
+		locales: ["en", "sk"],
+		defaultLocale: "en",
+	},
+	sidebar: ({ s, c }) => ({
+		sections: [
+			s.section({
+				id: "content",
+				title: "Content",
+				icon: c.icon({ name: "ph:article" }),
+			}),
+			s.section({
+				id: "settings",
+				title: "Settings",
+				icon: c.icon({ name: "ph:gear" }),
+			}),
+		],
+		items: [
+			s.item({ sectionId: "content", type: "collection", collection: "posts" }),
+			s.item({ sectionId: "content", type: "collection", collection: "pages" }),
+			s.item({
+				sectionId: "settings",
+				type: "global",
+				global: "site_settings",
+			}),
+			s.item({
+				sectionId: "settings",
+				type: "link",
+				label: "API Docs",
+				href: "/api/docs",
+				external: true,
+			}),
+			s.item({ sectionId: "settings", type: "divider" }),
+		],
+	}),
+	dashboard: ({ d, c, a }) => ({
+		title: "Dashboard",
+		sections: [
+			d.section({ id: "overview", label: "Overview", columns: 4 }),
+			d.section({ id: "recent", label: "Recent Activity", columns: 2 }),
+		],
+		items: [
+			d.stats({
+				sectionId: "overview",
+				id: "total-posts",
+				label: "Total Posts",
+				collection: "posts",
+				span: 1,
+			}),
+			d.recentItems({
+				sectionId: "recent",
+				id: "recent-posts",
+				label: "Recent Posts",
+				collection: "posts",
+				dateField: "createdAt",
+				limit: 5,
+				span: 1,
+			}),
+		],
+		actions: [a.create({ collection: "posts", label: "New Post" })],
+	}),
 });
 ```
 
@@ -1870,64 +1914,77 @@ These methods are added to `CollectionBuilder`, `GlobalBuilder`, and `Field` by 
 
 ```ts
 collection("posts").admin(({ c }) => ({
-  label: "Blog Posts",               // display name
-  description: "Manage blog posts",  // subtitle
-  icon: c.icon({ name: "ph:article" }),
-  hidden: false,                     // hide from sidebar
-  group: "content",                  // sidebar group key
-  order: 1,                          // order within group
-  audit: true,                       // enable audit logging
-}))
+	label: "Blog Posts", // display name
+	description: "Manage blog posts", // subtitle
+	icon: c.icon({ name: "ph:article" }),
+	hidden: false, // hide from sidebar
+	group: "content", // sidebar group key
+	order: 1, // order within group
+	audit: true, // enable audit logging
+}));
 ```
 
 ### `.list()` — List View Config
 
 ```ts
-collection("posts").list(({ v, f, a }) => v.collectionTable({
-  columns: [f.title, f.status, f.author, f.createdAt],
-  defaultSort: { field: f.createdAt, direction: "desc" },
-  searchable: [f.title, f.content],
-  filterable: [f.status, f.author],
-  actions: {
-    header: { primary: [a.create()], secondary: [a.custom("export")] },
-    row: [a.delete(), a.duplicate()],
-    bulk: [a.deleteMany(), a.custom("bulkPublish")],
-  },
-}))
+collection("posts").list(({ v, f, a }) =>
+	v.collectionTable({
+		columns: [f.title, f.status, f.author, f.createdAt],
+		defaultSort: { field: f.createdAt, direction: "desc" },
+		searchable: [f.title, f.content],
+		filterable: [f.status, f.author],
+		actions: {
+			header: { primary: [a.create()], secondary: [a.custom("export")] },
+			row: [a.delete(), a.duplicate()],
+			bulk: [a.deleteMany(), a.custom("bulkPublish")],
+		},
+	}),
+);
 ```
 
 ### `.form()` — Form View Config
 
 ```ts
-collection("posts").form(({ v, f }) => v.collectionForm({
-  fields: [
-    f.title,
-    f.slug,
-    { type: "section", label: "Content", layout: "stack", fields: [
-      f.content,
-      f.excerpt,
-    ]},
-    { type: "tabs", tabs: [
-      { id: "media", label: "Media", icon: { type: "icon", props: { name: "ph:image" } },
-        fields: [f.cover, f.gallery] },
-      { id: "seo", label: "SEO", fields: [f.metaTitle, f.metaDescription] },
-    ]},
-  ],
-  sidebar: {
-    position: "right",
-    fields: [f.status, f.author, f.tags, f.publishedAt],
-  },
-}))
+collection("posts").form(({ v, f }) =>
+	v.collectionForm({
+		fields: [
+			f.title,
+			f.slug,
+			{
+				type: "section",
+				label: "Content",
+				layout: "stack",
+				fields: [f.content, f.excerpt],
+			},
+			{
+				type: "tabs",
+				tabs: [
+					{
+						id: "media",
+						label: "Media",
+						icon: { type: "icon", props: { name: "ph:image" } },
+						fields: [f.cover, f.gallery],
+					},
+					{ id: "seo", label: "SEO", fields: [f.metaTitle, f.metaDescription] },
+				],
+			},
+		],
+		sidebar: {
+			position: "right",
+			fields: [f.status, f.author, f.tags, f.publishedAt],
+		},
+	}),
+);
 ```
 
 #### Form Layout Primitives
 
-| Type | Description |
-|---|---|
-| `string` (e.g. `f.title`) | Bare field — renders with default config |
-| `{ field, hidden?, readOnly?, disabled?, compute?, className? }` | Field with overrides |
-| `{ type: "section", label?, layout?, columns?, fields: [...] }` | Visual grouping |
-| `{ type: "tabs", tabs: [{ id, label, icon?, fields }] }` | Tabbed layout |
+| Type                                                             | Description                              |
+| ---------------------------------------------------------------- | ---------------------------------------- |
+| `string` (e.g. `f.title`)                                        | Bare field — renders with default config |
+| `{ field, hidden?, readOnly?, disabled?, compute?, className? }` | Field with overrides                     |
+| `{ type: "section", label?, layout?, columns?, fields: [...] }`  | Visual grouping                          |
+| `{ type: "tabs", tabs: [{ id, label, icon?, fields }] }`         | Tabbed layout                            |
 
 #### Reactive Field Config
 
@@ -1950,12 +2007,12 @@ Fields can be dynamically hidden, read-only, disabled, or computed based on othe
 
 ```ts
 collection("posts").preview({
-  enabled: true,
-  url: ({ record, locale }) => `/blog/${record.slug}?locale=${locale}`,
-  position: "right",        // "left" | "right" | "bottom"
-  defaultSize: 50,          // percentage of the workspace; `defaultWidth` accepted as alias
-  minSize: 30,              // percentage; `minWidth` accepted as alias
-})
+	enabled: true,
+	url: ({ record, locale }) => `/blog/${record.slug}?locale=${locale}`,
+	position: "right",   // "left" | "right" | "bottom"
+	defaultSize: 50,     // percentage of the workspace; `defaultWidth` accepted as alias
+	minSize: 30,         // percentage; `minWidth` accepted as alias
+});
 ```
 
 The same `.preview()` config drives both shipped form views (`collection-form` default split-screen + `visual-edit-form` opt-in workspace). Switch views with `.form(({ v }) => v.visualEditForm({...}))`.
@@ -1964,43 +2021,49 @@ The same `.preview()` config drives both shipped form views (`collection-form` d
 
 ```ts
 collection("posts").actions(({ a, c, f }) => ({
-  builtin: [a.create(), a.save(), a.delete()],
-  custom: [
-    a.action({
-      id: "publish",
-      label: "Publish",
-      icon: c.icon({ name: "ph:rocket" }),
-      scope: "single",                        // "single" | "bulk" | "header" | "row"
-      confirmation: {
-        title: "Publish this post?",
-        destructive: false,
-      },
-      handler: async ({ record, collections }) => {
-        await collections.posts.updateById({ id: record.id, data: { status: "published" } });
-        return { type: "success", toast: { message: "Published!" } };
-      },
-    }),
-    a.bulkAction({
-      id: "bulkArchive",
-      label: "Archive Selected",
-      form: {
-        title: "Archive Posts",
-        fields: {
-          reason: f.textarea().label("Reason").required(),
-        },
-      },
-      handler: async ({ records, formData, collections }) => {
-        for (const record of records) {
-          await collections.posts.updateById({
-            id: record.id,
-            data: { status: "archived", archiveReason: formData.reason },
-          });
-        }
-        return { type: "success", toast: { message: `Archived ${records.length} posts` } };
-      },
-    }),
-  ],
-}))
+	builtin: [a.create(), a.save(), a.delete()],
+	custom: [
+		a.action({
+			id: "publish",
+			label: "Publish",
+			icon: c.icon({ name: "ph:rocket" }),
+			scope: "single", // "single" | "bulk" | "header" | "row"
+			confirmation: {
+				title: "Publish this post?",
+				destructive: false,
+			},
+			handler: async ({ record, collections }) => {
+				await collections.posts.updateById({
+					id: record.id,
+					data: { status: "published" },
+				});
+				return { type: "success", toast: { message: "Published!" } };
+			},
+		}),
+		a.bulkAction({
+			id: "bulkArchive",
+			label: "Archive Selected",
+			form: {
+				title: "Archive Posts",
+				fields: {
+					reason: f.textarea().label("Reason").required(),
+				},
+			},
+			handler: async ({ records, formData, collections }) => {
+				for (const record of records) {
+					await collections.posts.updateById({
+						id: record.id,
+						data: { status: "archived", archiveReason: formData.reason },
+					});
+				}
+				return {
+					type: "success",
+					toast: { message: `Archived ${records.length} posts` },
+				};
+			},
+		}),
+	],
+}));
 ```
 
 #### Action Result Types
@@ -2037,26 +2100,26 @@ f.object({ ... }).form(({ f }) => ({
 
 Each server field type maps to a React component in the admin:
 
-| Field Type | Component | Cell (in tables) |
-|---|---|---|
-| `text` | `TextField` | `TextCell` |
-| `textarea` | `TextareaField` | `TextCell` |
-| `number` | `NumberField` | primitive |
-| `email` | `EmailField` | primitive |
-| `url` | `UrlField` | primitive |
-| `boolean` | `BooleanField` | primitive |
-| `date` | `DateField` | primitive |
-| `datetime` | `DatetimeField` | primitive |
-| `time` | `TimeField` | primitive |
-| `select` | `SelectField` | primitive |
-| `relation` | `RelationField` | `RelationCell` |
-| `upload` | `UploadField` | `UploadCell` |
-| `richText` | `RichTextField` | — |
-| `json` | `JsonField` | — |
-| `object` | `ObjectField` | `ObjectCell` |
-| `array` | `ArrayField` | `ArrayCell` |
-| `blocks` | `BlocksField` | `BlocksCell` |
-| `assetPreview` | `AssetPreviewField` | — |
+| Field Type     | Component           | Cell (in tables) |
+| -------------- | ------------------- | ---------------- |
+| `text`         | `TextField`         | `TextCell`       |
+| `textarea`     | `TextareaField`     | `TextCell`       |
+| `number`       | `NumberField`       | primitive        |
+| `email`        | `EmailField`        | primitive        |
+| `url`          | `UrlField`          | primitive        |
+| `boolean`      | `BooleanField`      | primitive        |
+| `date`         | `DateField`         | primitive        |
+| `datetime`     | `DatetimeField`     | primitive        |
+| `time`         | `TimeField`         | primitive        |
+| `select`       | `SelectField`       | primitive        |
+| `relation`     | `RelationField`     | `RelationCell`   |
+| `upload`       | `UploadField`       | `UploadCell`     |
+| `richText`     | `RichTextField`     | —                |
+| `json`         | `JsonField`         | —                |
+| `object`       | `ObjectField`       | `ObjectCell`     |
+| `array`        | `ArrayField`        | `ArrayCell`      |
+| `blocks`       | `BlocksField`       | `BlocksCell`     |
+| `assetPreview` | `AssetPreviewField` | —                |
 
 Register custom field types:
 
@@ -2064,19 +2127,19 @@ Register custom field types:
 import { field } from "@questpie/admin/client";
 
 export const colorPicker = field("color", {
-  component: lazy(() => import("./color-picker-field")),
-  cell: lazy(() => import("./color-picker-cell")),
+	component: lazy(() => import("./color-picker-field")),
+	cell: lazy(() => import("./color-picker-cell")),
 });
 ```
 
 ### Views
 
-| View | Kind | Description |
-|---|---|---|
-| `collection-table` | `list` | Default table view for collection lists |
-| `collection-form` | `form` | Default form view for collection editing (split-screen with iframe; refresh on save) |
-| `visual-edit-form` | `form` | Opt-in canvas + inspector workspace; field-level patches over the V2 protocol |
-| `global-form` | `form` | Default form view for globals |
+| View               | Kind   | Description                                                                              |
+| ------------------ | ------ | ---------------------------------------------------------------------------------------- |
+| `collection-table` | `list` | Default table view for collection lists                                                  |
+| `collection-form`  | `form` | Default form view for collection editing (split-screen with iframe; refresh on save)     |
+| `visual-edit-form` | `form` | Opt-in canvas + inspector workspace; field-level patches over the V2 protocol            |
+| `global-form`      | `form` | Default form view for globals                                                            |
 
 Register custom views:
 
@@ -2084,8 +2147,8 @@ Register custom views:
 import { view } from "@questpie/admin/client";
 
 export const kanbanView = view("kanban-board", {
-  kind: "list",
-  component: lazy(() => import("./kanban-view")),
+	kind: "list",
+	component: lazy(() => import("./kanban-view")),
 });
 ```
 
@@ -2093,17 +2156,17 @@ export const kanbanView = view("kanban-board", {
 
 8 built-in widget types (use via `d.stats()`, `d.chart()`, etc. in dashboard config):
 
-| Widget Type | Dashboard Builder | Description |
-|---|---|---|
-| `stats` | `d.stats({...})` | Single number with optional trend indicator |
-| `value` | `d.value({...})` | Custom formatted value with subtitle/footer |
-| `chart` | `d.chart({...})` | Line, bar, area, or pie chart |
-| `recentItems` | `d.recentItems({...})` | List of recent records from a collection |
-| `quickActions` | `d.quickActions({...})` | Grid of action buttons |
-| `table` | `d.table({...})` | Mini data table |
-| `timeline` | `d.timeline({...})` | Chronological event list |
-| `progress` | `d.progress({...})` | Progress bar toward a target |
-| `custom` | `d.custom({...})` | Fully custom widget component (user-registered) |
+| Widget Type    | Dashboard Builder       | Description                                     |
+| -------------- | ----------------------- | ----------------------------------------------- |
+| `stats`        | `d.stats({...})`        | Single number with optional trend indicator     |
+| `value`        | `d.value({...})`        | Custom formatted value with subtitle/footer     |
+| `chart`        | `d.chart({...})`        | Line, bar, area, or pie chart                   |
+| `recentItems`  | `d.recentItems({...})`  | List of recent records from a collection        |
+| `quickActions` | `d.quickActions({...})` | Grid of action buttons                          |
+| `table`        | `d.table({...})`        | Mini data table                                 |
+| `timeline`     | `d.timeline({...})`     | Chronological event list                        |
+| `progress`     | `d.progress({...})`     | Progress bar toward a target                    |
+| `custom`       | `d.custom({...})`       | Fully custom widget component (user-registered) |
 
 ### Blocks (Content Builder)
 
@@ -2114,40 +2177,40 @@ Blocks are user-defined content components for the page builder (`f.blocks()` fi
 import { block } from "#questpie/factories";
 
 export const hero = block("hero")
-  .fields(({ f }) => ({
-    heading: f.text(255).required(),
-    subheading: f.textarea(),
-    image: f.upload(),
-    cta: f.object({
-      label: f.text(100),
-      url: f.url(),
-    }),
-  }))
-  .admin(({ c }) => ({
-    label: "Hero Banner",
-    icon: c.icon({ name: "ph:image" }),
-    category: { label: "Sections" },
-  }))
-  .form(({ f }) => ({
-    fields: [f.heading, f.subheading, f.image, f.cta],
-  }))
-  .allowChildren(0)
-  .prefetch(async ({ values, db }) => {
-    // Pre-load data for frontend rendering
-    return { imageUrl: values.image ? await getSignedUrl(values.image) : null };
-  });
+	.fields(({ f }) => ({
+		heading: f.text(255).required(),
+		subheading: f.textarea(),
+		image: f.upload(),
+		cta: f.object({
+			label: f.text(100),
+			url: f.url(),
+		}),
+	}))
+	.admin(({ c }) => ({
+		label: "Hero Banner",
+		icon: c.icon({ name: "ph:image" }),
+		category: { label: "Sections" },
+	}))
+	.form(({ f }) => ({
+		fields: [f.heading, f.subheading, f.image, f.cta],
+	}))
+	.allowChildren(0)
+	.prefetch(async ({ values, db }) => {
+		// Pre-load data for frontend rendering
+		return { imageUrl: values.image ? await getSignedUrl(values.image) : null };
+	});
 ```
 
 ```tsx
 // Client: admin/blocks/hero.tsx
 export default function HeroBlock({ values, data }: BlockRendererProps) {
-  return (
-    <section className="hero">
-      <h1>{values.heading}</h1>
-      <p>{values.subheading}</p>
-      {data?.imageUrl && <img src={data.imageUrl} />}
-    </section>
-  );
+	return (
+		<section className="hero">
+			<h1>{values.heading}</h1>
+			<p>{values.subheading}</p>
+			{data?.imageUrl && <img src={data.imageUrl} />}
+		</section>
+	);
 }
 ```
 
@@ -2165,10 +2228,10 @@ Block content is stored as:
 
 Components bridge serializable server config to React rendering. Two built-in:
 
-| Name | Description |
-|---|---|
-| `icon` | Renders Iconify icons (fast path) |
-| `badge` | Renders a styled badge |
+| Name    | Description                       |
+| ------- | --------------------------------- |
+| `icon`  | Renders Iconify icons (fast path) |
+| `badge` | Renders a styled badge            |
 
 Used everywhere in config via `ComponentReference`:
 
@@ -2192,7 +2255,7 @@ Register custom components:
 import { component } from "@questpie/admin/client";
 
 export const statusIndicator = component("statusIndicator", {
-  component: lazy(() => import("./status-indicator")),
+	component: lazy(() => import("./status-indicator")),
 });
 ```
 
@@ -2204,11 +2267,11 @@ Codegen is the bridge between your file conventions and the runtime. It runs via
 
 ### What Gets Generated
 
-| File | Contents |
-|---|---|
-| `server/.generated/index.ts` | `createApp()` call, `App` type, `AppCollections`, `AppGlobals`, module augmentations |
+| File                             | Contents                                                                             |
+| -------------------------------- | ------------------------------------------------------------------------------------ |
+| `server/.generated/index.ts`     | `createApp()` call, `App` type, `AppCollections`, `AppGlobals`, module augmentations |
 | `server/.generated/factories.ts` | Typed `collection()`, `global()`, `block()`, config factories with plugin extensions |
-| `admin/.generated/client.ts` | Admin client config object for `<AdminLayoutProvider>` |
+| `admin/.generated/client.ts`     | Admin client config object for `<AdminLayoutProvider>`                               |
 
 ### When to Regenerate
 
@@ -2238,9 +2301,9 @@ Module packages use `packageConfig()` instead of `runtimeConfig()`:
 import { packageConfig } from "questpie/cli";
 
 export default packageConfig({
-  modulesDir: "src/server/modules",
-  modulePrefix: "questpie",
-  plugins: [adminPlugin()],
+	modulesDir: "src/server/modules",
+	modulePrefix: "questpie",
+	plugins: [adminPlugin()],
 });
 ```
 
@@ -2255,6 +2318,7 @@ QuestPie uses pluggable adapters for all infrastructure concerns.
 ### Database
 
 Always **PostgreSQL** via **Drizzle ORM**. Two client options:
+
 - `Bun.SQL` (production — native Bun PostgreSQL driver)
 - `PGlite` (testing — in-process SQLite-compatible Postgres)
 
@@ -2270,69 +2334,70 @@ Bun.serve({ fetch: createFetchHandler(app) });
 export default createFetchHandler(app, { basePath: "/api" });
 
 // Hono
-import { questpieMiddleware } from "@questpie/hono";
+import { questpieMiddleware } from "@questpie/hono/server";
 app.use("/api/*", questpieMiddleware(questpieApp));
 
 // Elysia
-import { questpieElysia } from "@questpie/elysia";
+import { questpieElysia } from "@questpie/elysia/server";
 app.use(questpieElysia(questpieApp));
 
 // Next.js
 import { questpieNextRouteHandlers } from "@questpie/next";
-export const { GET, POST, PUT, PATCH, DELETE } = questpieNextRouteHandlers(questpieApp);
+export const { GET, POST, PUT, PATCH, DELETE } =
+	questpieNextRouteHandlers(questpieApp);
 ```
 
 ### Storage Adapters
 
-| Config | Driver |
-|---|---|
-| Default | `FSDriver` (local `./uploads`) |
-| `QUESTPIE_STORAGE_*` env vars | S3-compatible (auto-detected) |
-| `{ driver: customDriver }` | Any FlyDrive `DriverContract` |
+| Config                        | Driver                         |
+| ----------------------------- | ------------------------------ |
+| Default                       | `FSDriver` (local `./uploads`) |
+| `QUESTPIE_STORAGE_*` env vars | S3-compatible (auto-detected)  |
+| `{ driver: customDriver }`    | Any FlyDrive `DriverContract`  |
 
 ### Queue Adapters
 
-| Adapter | Description |
-|---|---|
-| `pgBossAdapter()` | PostgreSQL-based job queue (pg-boss) |
-| `CloudflareQueuesAdapter` | Cloudflare Workers Queues |
+| Adapter                   | Description                          |
+| ------------------------- | ------------------------------------ |
+| `pgBossAdapter()`         | PostgreSQL-based job queue (pg-boss) |
+| `CloudflareQueuesAdapter` | Cloudflare Workers Queues            |
 
 ### Search Adapters
 
-| Adapter | Description |
-|---|---|
-| `PostgresSearchAdapter` | pg_trgm + full-text search |
+| Adapter                 | Description                       |
+| ----------------------- | --------------------------------- |
+| `PostgresSearchAdapter` | pg_trgm + full-text search        |
 | `PgVectorSearchAdapter` | Hybrid semantic search (pgvector) |
 
 ### Realtime Adapters
 
-| Adapter | Description |
-|---|---|
-| Default | Polling (2s interval) |
-| `pgNotifyAdapter()` | PostgreSQL LISTEN/NOTIFY |
-| `redisStreamsAdapter()` | Redis Streams |
+| Adapter                 | Description              |
+| ----------------------- | ------------------------ |
+| Default                 | Polling (2s interval)    |
+| `pgNotifyAdapter()`     | PostgreSQL LISTEN/NOTIFY |
+| `redisStreamsAdapter()` | Redis Streams            |
 
 ### KV Adapters
 
-| Adapter | Description |
-|---|---|
-| `MemoryKVAdapter` | In-process (default) |
-| `IORedisKVAdapter` | Redis-backed |
+| Adapter            | Description          |
+| ------------------ | -------------------- |
+| `MemoryKVAdapter`  | In-process (default) |
+| `IORedisKVAdapter` | Redis-backed         |
 
 ### Email Adapters
 
-| Adapter | Description |
-|---|---|
-| `ConsoleAdapter` | Logs to console |
-| `SmtpAdapter` | Nodemailer SMTP |
+| Adapter                       | Description                 |
+| ----------------------------- | --------------------------- |
+| `ConsoleAdapter`              | Logs to console             |
+| `SmtpAdapter`                 | Nodemailer SMTP             |
 | `createEtherealSmtpAdapter()` | Auto-generated test account |
 
 ### Logger
 
-| Adapter | Description |
-|---|---|
-| Default | Pino-based structured logging |
-| Custom | Implement `LoggerAdapter` interface |
+| Adapter | Description                         |
+| ------- | ----------------------------------- |
+| Default | Pino-based structured logging       |
+| Custom  | Implement `LoggerAdapter` interface |
 
 ---
 
@@ -2344,13 +2409,13 @@ QuestPie uses `declare global { namespace Questpie { ... } }` for type extension
 
 ```ts
 declare global {
-  namespace Questpie {
-    interface AppContext {}              // Add custom context keys
-    interface Registry {}               // Type catalog (collections, globals, routes, etc.)
-    interface ViewsRegistry {}          // Admin view autocomplete
-    interface ComponentsRegistry {}     // Admin component autocomplete
-    interface FieldTypesMap {}          // Field factory autocomplete (f.*)
-  }
+	namespace Questpie {
+		interface AppContext {} // Add custom context keys
+		interface Registry {} // Type catalog (collections, globals, routes, etc.)
+		interface ViewsRegistry {} // Admin view autocomplete
+		interface ComponentsRegistry {} // Admin component autocomplete
+		interface FieldTypesMap {} // Field factory autocomplete (f.*)
+	}
 }
 ```
 
@@ -2370,10 +2435,10 @@ Plugins extend the module config type via `declare module "questpie"`:
 
 ```ts
 declare module "questpie" {
-  interface AppStateConfig {
-    admin?: AdminConfigInput;
-    openapi?: OpenApiConfig;
-  }
+	interface AppStateConfig {
+		admin?: AdminConfigInput;
+		openapi?: OpenApiConfig;
+	}
 }
 ```
 
@@ -2385,23 +2450,23 @@ declare module "questpie" {
 bun questpie <command> [options]
 ```
 
-| Command | Description |
-|---|---|
-| `generate` | Run codegen (one-shot) |
-| `dev` | Watch mode codegen (re-runs on file add/remove) |
-| `push` | Push schema to DB (dev only, like drizzle-kit push) |
-| `migrate` / `migrate:up` | Run pending migrations |
-| `migrate:generate` | Generate migration from schema diff |
-| `migrate:down` | Rollback migrations |
-| `migrate:status` | Show migration status |
-| `migrate:reset` | Rollback all |
-| `migrate:fresh` | Reset + re-run all migrations |
-| `seed` | Run pending seeds |
-| `seed:undo` | Undo executed seeds |
-| `seed:status` | Show seed status |
-| `seed:reset` | Reset seed tracking |
-| `add <type> <name>` | Scaffold new entity file |
-| `add --list` | Show available entity types |
+| Command                  | Description                                         |
+| ------------------------ | --------------------------------------------------- |
+| `generate`               | Run codegen (one-shot)                              |
+| `dev`                    | Watch mode codegen (re-runs on file add/remove)     |
+| `push`                   | Push schema to DB (dev only, like drizzle-kit push) |
+| `migrate` / `migrate:up` | Run pending migrations                              |
+| `migrate:generate`       | Generate migration from schema diff                 |
+| `migrate:down`           | Rollback migrations                                 |
+| `migrate:status`         | Show migration status                               |
+| `migrate:reset`          | Rollback all                                        |
+| `migrate:fresh`          | Reset + re-run all migrations                       |
+| `seed`                   | Run pending seeds                                   |
+| `seed:undo`              | Undo executed seeds                                 |
+| `seed:status`            | Show seed status                                    |
+| `seed:reset`             | Reset seed tracking                                 |
+| `add <type> <name>`      | Scaffold new entity file                            |
+| `add --list`             | Show available entity types                         |
 
 Global options: `-c, --config <path>` (default: `questpie.config.ts`)
 
@@ -2560,46 +2625,46 @@ module()                 Packaging unit (groups related entities)
 
 ### Environment Variables
 
-| Variable | Purpose | Default |
-|---|---|---|
-| `DATABASE_URL` | PostgreSQL connection | (required) |
-| `APP_URL` | Application URL | `http://localhost:3000` |
-| `BETTER_AUTH_SECRET` | Auth signing secret | — |
-| `QUESTPIE_DB` | Cloud DB override | — |
-| `QUESTPIE_APP_URL` | Cloud URL override | — |
-| `QUESTPIE_SECRET` | Cloud secret override | — |
-| `QUESTPIE_STORAGE_ENDPOINT` | S3 endpoint | — |
-| `QUESTPIE_STORAGE_BUCKET` | S3 bucket | — |
-| `QUESTPIE_STORAGE_REGION` | S3 region | — |
-| `QUESTPIE_STORAGE_ACCESS_KEY` | S3 access key | — |
-| `QUESTPIE_STORAGE_SECRET_KEY` | S3 secret key | — |
+| Variable                      | Purpose               | Default                 |
+| ----------------------------- | --------------------- | ----------------------- |
+| `DATABASE_URL`                | PostgreSQL connection | (required)              |
+| `APP_URL`                     | Application URL       | `http://localhost:3000` |
+| `BETTER_AUTH_SECRET`          | Auth signing secret   | —                       |
+| `QUESTPIE_DB`                 | Cloud DB override     | —                       |
+| `QUESTPIE_APP_URL`            | Cloud URL override    | —                       |
+| `QUESTPIE_SECRET`             | Cloud secret override | —                       |
+| `QUESTPIE_STORAGE_ENDPOINT`   | S3 endpoint           | —                       |
+| `QUESTPIE_STORAGE_BUCKET`     | S3 bucket             | —                       |
+| `QUESTPIE_STORAGE_REGION`     | S3 region             | —                       |
+| `QUESTPIE_STORAGE_ACCESS_KEY` | S3 access key         | —                       |
+| `QUESTPIE_STORAGE_SECRET_KEY` | S3 secret key         | —                       |
 
 ---
 
 ## Quick Reference: All Primitives
 
-| Primitive | Factory | Import From | Purpose |
-|---|---|---|---|
-| Collection | `collection(name)` | `#questpie/factories` | Data table + CRUD |
-| Global | `global(name)` | `#questpie/factories` | Singleton document |
-| Field | `f.text()`, `f.number()`, ... | `.fields()` callback | Column definition |
-| Field Type | `fieldType(name, config)` | `questpie` | Custom field type |
-| Route | `route()` | `questpie` | HTTP endpoint |
-| Service | `service()` | `questpie` | Injectable dependency |
-| Job | `job({...})` | `questpie` | Background task |
-| Email | `email({...})` | `questpie` | Email template |
-| Block | `block(name)` | `#questpie/factories` | Content builder block |
-| Migration | `migration({...})` | `questpie` | DB schema change |
-| Seed | `seed({...})` | `questpie` | DB seed data |
-| Module | `module({...})` | `questpie` | Packaging unit |
-| Runtime Config | `runtimeConfig({...})` | `questpie` | Infrastructure config |
-| App Config | `appConfig({...})` | `questpie` | Locale, access, hooks |
-| Auth Config | `authConfig({...})` | `questpie` | Better Auth options |
-| Admin Config | `adminConfig({...})` | `#questpie/factories` | Sidebar, dashboard, branding |
-| View | `view(name, {kind, component})` | `@questpie/admin/client` | Admin view component |
-| Widget | `widget(name, {component})` | `@questpie/admin/client` | Dashboard widget |
-| Component | `component(name, {component})` | `@questpie/admin/client` | Server-driven component |
-| Client | `createClient<App>(config)` | `questpie/client` | Frontend API client |
-| Query Options | `createQuestpieQueryOptions(client)` | `@questpie/tanstack-query` | TanStack Query integration |
+| Primitive      | Factory                              | Import From                | Purpose                      |
+| -------------- | ------------------------------------ | -------------------------- | ---------------------------- |
+| Collection     | `collection(name)`                   | `#questpie/factories`      | Data table + CRUD            |
+| Global         | `global(name)`                       | `#questpie/factories`      | Singleton document           |
+| Field          | `f.text()`, `f.number()`, ...        | `.fields()` callback       | Column definition            |
+| Field Type     | `fieldType(name, config)`            | `questpie`                 | Custom field type            |
+| Route          | `route()`                            | `questpie`                 | HTTP endpoint                |
+| Service        | `service()`                          | `questpie`                 | Injectable dependency        |
+| Job            | `job({...})`                         | `questpie`                 | Background task              |
+| Email          | `email({...})`                       | `questpie`                 | Email template               |
+| Block          | `block(name)`                        | `#questpie/factories`      | Content builder block        |
+| Migration      | `migration({...})`                   | `questpie`                 | DB schema change             |
+| Seed           | `seed({...})`                        | `questpie`                 | DB seed data                 |
+| Module         | `module({...})`                      | `questpie`                 | Packaging unit               |
+| Runtime Config | `runtimeConfig({...})`               | `questpie`                 | Infrastructure config        |
+| App Config     | `appConfig({...})`                   | `questpie`                 | Locale, access, hooks        |
+| Auth Config    | `authConfig({...})`                  | `questpie`                 | Better Auth options          |
+| Admin Config   | `adminConfig({...})`                 | `#questpie/factories`      | Sidebar, dashboard, branding |
+| View           | `view(name, {kind, component})`      | `@questpie/admin/client`   | Admin view component         |
+| Widget         | `widget(name, {component})`          | `@questpie/admin/client`   | Dashboard widget             |
+| Component      | `component(name, {component})`       | `@questpie/admin/client`   | Server-driven component      |
+| Client         | `createClient<App>(config)`          | `questpie/client`          | Frontend API client          |
+| Query Options  | `createQuestpieQueryOptions(client)` | `@questpie/tanstack-query` | TanStack Query integration   |
 
 > **Import rule of thumb:** Only `collection()`, `global()`, `block()`, and `adminConfig()` come from `#questpie/factories` (they need codegen-generated types). Everything else comes from `"questpie"` directly.

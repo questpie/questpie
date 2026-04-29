@@ -9,7 +9,7 @@ export const env = createEnv({
 			.string()
 			.transform(Number)
 			.pipe(z.number().int().positive())
-			.default("3000"),
+			.default(3000),
 		BETTER_AUTH_SECRET: z.string().min(1).default("change-me-in-production"),
 		MAIL_ADAPTER: z.enum(["console", "smtp"]).default("console"),
 		SMTP_HOST: z.string().optional(),

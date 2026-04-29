@@ -486,7 +486,10 @@ describe("generateModuleTemplate — config bucket singles", () => {
 	const result = emptyResult();
 	result.singles.set(
 		"adminConfig",
-		makeFile("adminConfig", { varName: "_adminConfig", importPath: "../config/admin" }),
+		makeFile("adminConfig", {
+			varName: "_adminConfig",
+			importPath: "../config/admin",
+		}),
 	);
 	// Add configKey to the discovered file
 	(result.singles.get("adminConfig") as any).configKey = "admin";

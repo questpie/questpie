@@ -282,7 +282,7 @@ Inside a block renderer, `PreviewField` auto-resolves paths using `BlockScopePro
 
 ```tsx title="admin/blocks/hero.tsx"
 import { PreviewField } from "@questpie/admin/client";
-import type { BlockProps } from "@questpie/admin/client";
+import type { BlockProps } from "../.generated/client";
 
 export function HeroRenderer({ values, data }: BlockProps<"hero">) {
 	return (

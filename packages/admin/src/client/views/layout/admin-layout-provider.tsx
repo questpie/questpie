@@ -55,9 +55,9 @@
 
 import type { QueryClient } from "@tanstack/react-query";
 import { QueryClientProvider } from "@tanstack/react-query";
-import type { AnyQuestpieClient } from "../../builder";
 import type * as React from "react";
 
+import type { AnyQuestpieClient } from "../../builder";
 import { Admin, type AdminInput } from "../../builder/admin";
 import { AuthGuard } from "../../components/auth";
 import { getAdminConfigQueryOptions } from "../../hooks/use-admin-config";
@@ -68,6 +68,7 @@ import {
 	getUiLocaleFromCookie,
 } from "../../runtime/translations-provider";
 import { AdminLayout, type AdminLayoutSharedProps } from "./admin-layout";
+import { AdminThemeAppliedContext, useManagedAdminTheme } from "./admin-theme";
 
 // ============================================================================
 // Types
@@ -332,6 +333,8 @@ export function AdminLayoutProvider({
 	children,
 }: AdminLayoutProviderProps): React.ReactElement {
 	const qc = queryClient ?? getDefaultQueryClient();
+	const { theme: managedTheme, setTheme: setManagedTheme } =
+		useManagedAdminTheme(theme, setTheme);
 
 	// Prefetch critical data BEFORE any Suspense boundary in the tree.
 	// This eliminates the sequential waterfall:
@@ -380,8 +383,8 @@ export function AdminLayoutProvider({
 				header={header}
 				footer={footer}
 				sidebarProps={sidebarProps}
-				theme={theme}
-				setTheme={setTheme}
+				theme={managedTheme}
+				setTheme={setManagedTheme}
 				showThemeToggle={showThemeToggle}
 				toasterProps={toasterProps}
 				className={className}
@@ -406,16 +409,18 @@ export function AdminLayoutProvider({
 	}
 
 	const content = (
-		<AdminProvider
-			admin={admin}
-			client={client}
-			authClient={authClient}
-			useServerTranslations={useServerTranslations}
-			translationsFallback={translationsFallback}
-			initialUiLocale={initialUiLocale}
-		>
-			{innerContent}
-		</AdminProvider>
+		<AdminThemeAppliedContext.Provider value={true}>
+			<AdminProvider
+				admin={admin}
+				client={client}
+				authClient={authClient}
+				useServerTranslations={useServerTranslations}
+				translationsFallback={translationsFallback}
+				initialUiLocale={initialUiLocale}
+			>
+				{innerContent}
+			</AdminProvider>
+		</AdminThemeAppliedContext.Provider>
 	);
 
 	// Always wrap with QueryClientProvider

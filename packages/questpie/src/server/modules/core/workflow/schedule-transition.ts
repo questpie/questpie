@@ -6,6 +6,10 @@
  */
 
 import { ApiError } from "#questpie/server/errors/base.js";
+import {
+	SCHEDULED_TRANSITION_JOB_KEY,
+	SCHEDULED_TRANSITION_JOB_NAME,
+} from "#questpie/server/modules/core/jobs/scheduled-transition.js";
 
 /**
  * Thrown by the scheduledTransitionHook's beforeTransition to signal
@@ -32,12 +36,14 @@ export interface ScheduleGlobalTransitionParams {
 	scheduledAt: Date;
 }
 
-const JOB_NAME = "scheduled-transition";
-
 function getScheduledTransitionPublish(
 	queue: any,
 ): ((payload: any, options?: any) => Promise<void>) | null {
-	return queue?.[JOB_NAME]?.publish ?? null;
+	return (
+		queue?.[SCHEDULED_TRANSITION_JOB_KEY]?.publish ??
+		queue?.[SCHEDULED_TRANSITION_JOB_NAME]?.publish ??
+		null
+	);
 }
 
 /**

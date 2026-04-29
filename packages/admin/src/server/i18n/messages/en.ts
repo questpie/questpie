@@ -26,6 +26,7 @@ export default {
 	"common.yes": "Yes",
 	"common.no": "No",
 	"common.ok": "OK",
+	"common.done": "Done",
 	"common.apply": "Apply",
 	"common.reset": "Reset",
 	"common.clear": "Clear",
@@ -43,6 +44,7 @@ export default {
 	"common.backToList": "Back to list",
 	"common.submit": "Submit",
 	"common.deleted": "Deleted",
+	"common.noValue": "No value",
 
 	// Navigation
 	"nav.dashboard": "Dashboard",
@@ -53,6 +55,8 @@ export default {
 	"nav.logout": "Log out",
 	"nav.home": "Home",
 	"nav.back": "Back",
+	"nav.breadcrumb": "Breadcrumb",
+	"nav.adminNavigation": "Admin navigation",
 
 	// Dashboard
 	"dashboard.title": "Dashboard",
@@ -65,6 +69,23 @@ export default {
 	"dashboard.systemStatus": "System Status",
 	"dashboard.welcomeDescription":
 		"Select a collection from the sidebar to manage your content.",
+
+	// Widgets
+	"widget.quickActions.emptyTitle": "No actions configured",
+	"widget.quickActions.emptyDescription": "There are no shortcuts to display.",
+	"widget.chart.emptyTitle": "No chart data",
+	"widget.chart.emptyDescription": "There are no values for this range.",
+	"widget.recentItems.emptyTitle": "No recent items",
+	"widget.recentItems.emptyDescription": "There are no recent records to show.",
+	"widget.value.emptyTitle": "No value to display",
+	"widget.value.emptyDescription": "There is no value for this card yet.",
+	"widget.progress.emptyTitle": "No progress data",
+	"widget.progress.emptyDescription": "There is no target value to display.",
+	"widget.timeline.emptyTitle": "No activity yet",
+	"widget.timeline.emptyDescription": "There are no events to display.",
+	"widget.table.emptyTitle": "No rows to show",
+	"widget.table.emptyDescription":
+		"There are no records for the current criteria.",
 
 	// Collections
 	"collection.create": "Create {{name}}",
@@ -107,6 +128,59 @@ export default {
 		one: "Restored {{success}} item, {{failed}} failed",
 		other: "Restored {{success}} items, {{failed}} failed",
 	},
+	"collection.orderSaved": "Order saved",
+	"collection.orderSaveFailed": "Could not save order",
+	"collection.reorderMode": "Reorder mode",
+	"collection.sortedByField": "Sorted by {{field}} {{direction}}.",
+	"collection.reorderEnableOrderable": "Enable orderable before reordering",
+	"collection.reorderAddOrderField":
+		"Add a numeric order field before reordering",
+	"collection.reorderClearSearch": "Clear search to reorder",
+	"collection.reorderRemoveGrouping": "Remove grouping to reorder",
+	"collection.reorderClearFilters": "Clear filters to reorder",
+	"collection.reorderShowOnePage": "Show one page of items to reorder",
+	"collection.reorderExitMode": "Exit reorder mode",
+	"collection.reorderItems": "Reorder items",
+	"collection.reorderSwitchSort": "Switch to {{field}} sort and reorder",
+	"collection.reorderUnavailable": "Reorder unavailable: {{reason}}",
+	"collection.reorderEnterMode": "Enter reorder mode",
+
+	// Actions
+	"action.collectionNotFound": 'Collection "{{collection}}" not found',
+	"action.notFound":
+		'Action "{{action}}" not found on collection "{{collection}}"',
+	"action.executionFailed": "Action execution failed",
+	"action.itemCreated": "Item created successfully",
+	"action.itemIdRequired.save": "Item ID is required for save action",
+	"action.itemSaved": "Item saved successfully",
+	"action.itemIdRequired.delete": "Item ID is required for delete action",
+	"action.itemDeleted": "Item deleted successfully",
+	"action.itemIdsRequired.bulkDelete":
+		"Item IDs are required for bulk delete action",
+	"action.itemsDeleted": {
+		one: "{{count}} item deleted successfully",
+		other: "{{count}} items deleted successfully",
+	},
+	"action.itemIdRequired.restore": "Item ID is required for restore action",
+	"action.restoreUnsupported": "Restore is not supported for this collection",
+	"action.itemRestored": "Item restored successfully",
+	"action.itemIdsRequired.bulkRestore":
+		"Item IDs are required for bulk restore action",
+	"action.itemsRestored": {
+		one: "{{count}} item restored successfully",
+		other: "{{count}} items restored successfully",
+	},
+	"action.itemIdRequired.duplicate": "Item ID is required for duplicate action",
+	"action.itemNotFound": "Item not found",
+	"action.itemDuplicated": "Item duplicated successfully",
+	"action.itemIdRequired.transition":
+		"Item ID is required for transition action",
+	"action.targetStageRequired":
+		"Target stage is required for transition action",
+	"action.workflowUnsupported":
+		"Workflow transitions are not supported for this collection",
+	"action.unknownBuiltin": "Unknown built-in action: {{action}}",
+	"action.fieldRequired": 'Field "{{field}}" is required',
 
 	// Relations
 	"relation.select": "Select {{name}}",
@@ -138,6 +212,10 @@ export default {
 	"blocks.searchPlaceholder": "Search blocks...",
 	"blocks.uncategorized": "Other",
 	"blocks.noEditableFields": "This block has no editable fields.",
+	"blocks.emptyTitle": "No blocks yet",
+	"blocks.libraryDescription": "Select a block type to add to your content",
+	"blocks.noSearchResults": "No blocks found",
+	"blocks.tryDifferentSearch": "Try a different search term",
 	"blocks.noDefinitions": "No block definitions registered",
 	"blocks.noDefinitionsHint":
 		"Register blocks with .blocks() in your admin configuration",
@@ -215,6 +293,7 @@ export default {
 	"auth.setupDescription": "Create your first admin account to get started.",
 	"auth.profile": "Profile",
 	"auth.myAccount": "My account",
+	"auth.user": "User",
 	"auth.logoutFailed": "Failed to log out. Please try again.",
 	"auth.forgotPasswordTitle": "Forgot password",
 	"auth.forgotPasswordDescription":
@@ -264,6 +343,9 @@ export default {
 	"auth.invalidLinkDescription":
 		"The password reset link is invalid or has expired.",
 	"auth.requestNewResetLink": "Please request a new password reset link.",
+	"auth.setupAlreadyCompleted":
+		"Setup already completed - admin users exist in the system",
+	"auth.failedToCreateUserAccount": "Failed to create user account",
 
 	// Errors
 	"error.notFound": "Not found",
@@ -290,6 +372,8 @@ export default {
 	"error.accessRestricted": "Access Restricted",
 	"error.accessRestrictedDescription":
 		"You don't have permission to access this page. Contact your administrator if you believe this is an error.",
+	"error.accessRestrictedResourceDescription":
+		'The {{type}} "{{name}}" is not available in the admin panel. It may be hidden or you do not have permission to access it.',
 	"error.tryAgain": "Try again",
 	"error.backToDashboard": "Back to Dashboard",
 	"error.noUploadCollection": "No upload collection is configured.",
@@ -305,6 +389,7 @@ export default {
 	"error.failedToSendResetEmail": "Failed to send reset email",
 	"error.failedToResetPassword": "Failed to reset password",
 	"error.failedToCreateAccount": "Failed to create account",
+	"error.failedToCreateAdminAccount": "Failed to create admin account",
 	"error.failedToSendInvitation": "Failed to send invitation",
 	"error.anErrorOccurred": "An error occurred",
 	"error.uploadFailed": "Upload failed",
@@ -313,9 +398,12 @@ export default {
 		"No component registered for field type: {{type}}",
 	"error.selectAtLeastOne": "Please select at least one asset",
 	"error.maxItemsAllowed": "Maximum {{max}} items allowed",
+	"error.unregisteredViewDescription":
+		'View "{{viewId}}" is not registered in the admin view registry.',
 
 	// Table
 	"table.rowsPerPage": "Rows per page",
+	"table.show": "Show",
 	"table.of": "of",
 	"table.noResults": "No results",
 	"table.selectAll": "Select all",
@@ -375,6 +463,17 @@ export default {
 	"editor.underline": "Underline",
 	"editor.strikethrough": "Strikethrough",
 	"editor.heading": "Heading {{level}}",
+	"editor.richTextToolbar": "Rich text toolbar",
+	"editor.blockType": "Block type",
+	"editor.selectionBlockType": "Selection block type",
+	"editor.paragraph": "Paragraph",
+	"editor.textBlocks": "Text blocks",
+	"editor.headings": "Headings",
+	"editor.blocks": "Blocks",
+	"editor.formatting": "Formatting",
+	"editor.moreFormatting": "More formatting",
+	"editor.alignment": "Alignment",
+	"editor.insert": "Insert",
 	"editor.link": "Insert link",
 	"editor.image": "Insert image",
 	"editor.list": "List",
@@ -409,6 +508,17 @@ export default {
 	"editor.uploading": "Uploading...",
 	"editor.browseLibrary": "Browse library",
 	"editor.startWriting": "Start writing...",
+	"editor.pasteOrTypeLink": "Paste or type a link...",
+	"editor.paragraphDescription": "Start with plain text",
+	"editor.heading1Description": "Large section heading",
+	"editor.heading2Description": "Medium section heading",
+	"editor.heading3Description": "Small section heading",
+	"editor.bulletListDescription": "Create a bulleted list",
+	"editor.orderedListDescription": "Create an ordered list",
+	"editor.quoteDescription": "Capture a quote",
+	"editor.codeBlockDescription": "Insert code snippet",
+	"editor.dividerDescription": "Insert a horizontal rule",
+	"editor.tableDescription": "Insert a 3x3 table",
 
 	// Toasts
 	"toast.success": "Success",
@@ -701,6 +811,7 @@ export default {
 	"preview.show": "Preview",
 	"preview.hide": "Hide Preview",
 	"preview.title": "Preview",
+	"preview.mode": "Preview Mode",
 	"preview.livePreview": "Live Preview",
 	"preview.fullscreen": "Fullscreen",
 	"preview.close": "Close preview",
@@ -712,6 +823,18 @@ export default {
 	"preview.refreshing": "Refreshing...",
 	"preview.showPreview": "Show Preview",
 	"preview.hidePreview": "Hide Preview",
+	"preview.pathRequired": "Path is required",
+	"preview.collectionNameRequired": "Collection name is required",
+	"preview.adminSessionRequired": "Admin session required",
+	"preview.invalidTokenFormat": "Invalid token format",
+	"preview.invalidSignature": "Invalid signature",
+	"preview.invalidPayload": "Invalid payload",
+	"preview.tokenExpired": "Token expired",
+	"preview.invalidPath": "Invalid path",
+	"preview.collectionNotFound": 'Collection "{{collection}}" not found',
+	"preview.noUrlConfigured": "No preview URL configured for this collection",
+	"preview.disabledForCollection": "Preview is disabled for this collection",
+	"preview.generateUrlFailed": "Failed to generate preview URL: {{message}}",
 
 	// Autosave
 	"autosave.saving": "Saving...",
@@ -721,6 +844,10 @@ export default {
 	"autosave.secondsAgo": { one: "{{count}}s ago", other: "{{count}}s ago" },
 	"autosave.minutesAgo": { one: "{{count}}m ago", other: "{{count}}m ago" },
 	"autosave.hoursAgo": { one: "{{count}}h ago", other: "{{count}}h ago" },
+	"time.justNow": "just now",
+	"time.minutesAgoShort": { one: "{{count}}m ago", other: "{{count}}m ago" },
+	"time.hoursAgoShort": { one: "{{count}}h ago", other: "{{count}}h ago" },
+	"time.daysAgoShort": { one: "{{count}}d ago", other: "{{count}}d ago" },
 
 	// Global Search
 	"globalSearch.placeholder":
@@ -756,6 +883,8 @@ export default {
 	// History Sidebar
 	"history.title": "History",
 	"history.description": "Changes and activity for this record",
+	"history.versionDescription":
+		"Browse version snapshots and inspect field-level diffs.",
 	"history.tabActivity": "Activity",
 	"history.tabVersions": "Versions",
 	"history.empty": "No activity recorded",
@@ -764,6 +893,27 @@ export default {
 		other: "Show changes ({{count}})",
 	},
 	"history.hideChanges": "Hide changes",
+	"history.changedFields": {
+		one: "{{count}} field changed",
+		other: "{{count}} fields changed",
+	},
+	"history.moreFields": { one: "{{count}} more", other: "{{count}} more" },
+	"history.changeAdded": "Added",
+	"history.changeRemoved": "Removed",
+	"history.changeChanged": "Changed",
+	"history.diffAgainstVersion": "Diff against version {{number}}",
+	"history.initialSnapshot": "Initial snapshot",
+	"history.noFieldChanges": "No field-level changes in this snapshot.",
+	"history.before": "Before",
+	"history.after": "After",
+	"history.stage": "Stage",
+	"history.systemUser": "System",
+	"history.itemsCount": { one: "{{count}} item", other: "{{count}} items" },
+	"history.blocksCount": { one: "{{count}} block", other: "{{count}} blocks" },
+	"history.objectWithKeys": {
+		one: "Object with {{count}} key",
+		other: "Object with {{count}} keys",
+	},
 
 	// Workflow
 	"workflow.transition": "Transition",
@@ -791,6 +941,8 @@ export default {
 
 	// UI
 	"ui.toggleSidebar": "Toggle Sidebar",
+	"ui.expandSidebar": "Expand sidebar",
+	"ui.skipToMainContent": "Skip to main content",
 	"ui.processing": "Processing...",
 	"ui.commandPalette": "Command Palette",
 	"ui.commandPaletteDescription": "Search for a command to run...",
@@ -819,6 +971,7 @@ export default {
 	"media.audio": "Audio",
 	"media.documents": "Documents",
 	"media.searchPlaceholder": "Search by filename...",
+	"media.noAssets": "No assets found",
 
 	// Field actions
 	"field.moveUp": "Move up",

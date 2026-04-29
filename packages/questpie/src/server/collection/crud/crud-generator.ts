@@ -66,6 +66,7 @@ import {
 	getDb,
 	mergeI18nRows,
 	normalizeContext,
+	normalizeJsonbInput,
 	resolveFieldKey,
 	splitLocalizedFields,
 	withTransaction,
@@ -413,6 +414,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 		options: FindManyOptions | FindOneOptionsBase,
 		context: CRUDContext,
 		mode: "many" | "one",
+		findOptions?: { skipOutputHooks?: boolean },
 	): Promise<PaginatedResult<T> | GroupedPaginatedResult<T> | T | null> {
 		// Normalize context FIRST to ensure locale defaults are applied
 		const normalized = this.normalizeContext({
@@ -786,7 +788,6 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 
 				let groupRows: Array<{ value: unknown; count: number }> | undefined;
 				let totalGroups: number | undefined;
-				let groupColumn: Column | undefined;
 
 				if (groupByOptions) {
 					const column = getColumn(readTable, groupByOptions.field);
@@ -796,7 +797,6 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						);
 					}
 
-					groupColumn = column;
 					let totalGroupsQuery = db
 						.select({ count: sql<number>`count(distinct ${column})::int` })
 						.from(readTable);
@@ -939,16 +939,24 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					await this.resolveRelations(rows, options.with, normalized);
 				}
 
-				// Filter fields and run output hooks in parallel per row
+				// Filter fields and run output hooks in parallel per row.
+				// `skipOutputHooks` is set by `_executeUpdate`'s in-tx refetch to
+				// avoid recursing into other collections (e.g. blocks prefetch)
+				// while a tx is open — those calls would inherit `db: tx` and
+				// serialize through the open tx connection, deadlocking under
+				// parallel load. Output hooks + afterRead are re-run by the
+				// caller after the tx commits.
 				await Promise.all(
 					rows.map(async (row: any) => {
 						await this.filterFieldsForRead(row, normalized);
-						await this.runFieldOutputHooks(row, "read", normalized, db);
+						if (!findOptions?.skipOutputHooks) {
+							await this.runFieldOutputHooks(row, "read", normalized, db);
+						}
 					}),
 				);
 
 				// Execute afterRead hooks in parallel per row
-				if (this.state.hooks?.afterRead) {
+				if (this.state.hooks?.afterRead && !findOptions?.skipOutputHooks) {
 					await Promise.all(
 						rows.map((row: any) =>
 							this.executeHooks(
@@ -1401,6 +1409,13 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						nestedRelations,
 					));
 
+					// Decode any pre-stringified jsonb values before any hook or write
+					// path observes them — see normalizeJsonbInput.
+					regularFields = normalizeJsonbInput(
+						regularFields,
+						this.state.fieldDefinitions,
+					);
+
 					// Validate field-level write access (on regular fields only)
 					await this.validateFieldWriteAccess(
 						regularFields,
@@ -1695,6 +1710,16 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 		let { regularFields, nestedRelations } =
 			this.separateNestedRelationsInternal(data);
 
+		// Decode any pre-stringified jsonb values before any hook or write
+		// path observes them. Drizzle stringifies jsonb values itself; if a
+		// caller (legacy seed, RPC, etc.) passes an already-encoded JSON
+		// string for a jsonb column, double-encoding stores a jsonb string
+		// instead of the intended array/object.
+		regularFields = normalizeJsonbInput(
+			regularFields,
+			this.state.fieldDefinitions,
+		);
+
 		// 4. Global Validation (Zod)
 		if (this.state.validation?.updateSchema) {
 			try {
@@ -1825,7 +1850,14 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					);
 				}
 
-				// Re-fetch updated records with full state (i18n, virtuals, title, etc.)
+				// Re-fetch updated records WITHOUT field output hooks / afterRead.
+				// Field output hooks run AFTER the transaction commits — running
+				// them inside the tx caused inner CRUD calls (e.g. blocks prefetch
+				// hitting other collections) to inherit `db: tx` via context
+				// propagation, serializing every parallel inner query through the
+				// tx connection. Bun SQL can deadlock when many parallel queries
+				// queue behind an open tx, leaving the response un-read and the
+				// connection stuck `idle in transaction`.
 				const reFetchResult = (await this._executeFind(
 					{ where: { id: { in: recordIds } }, includeDeleted: true },
 					{
@@ -1834,6 +1866,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						stage: this.workflowConfig?.initialStage,
 					},
 					"many",
+					{ skipOutputHooks: true },
 				)) as PaginatedResult<any>;
 
 				const refetchedRecords = reFetchResult.docs;
@@ -1878,12 +1911,6 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				}
 				// Execute all afterChange hooks in parallel (non-fatal)
 				await Promise.allSettled(afterChangePromises);
-
-				// Realtime change
-
-				// Queue search indexing to run after transaction commits (fire-and-forget)
-				for (const updated of refetchedRecords) {
-				}
 
 				return refetchedRecords;
 			});
@@ -2150,7 +2177,11 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			context: CRUDContext = {},
 		) => {
 			if (!Array.isArray(params.updates)) {
-				throw ApiError.badRequest("updates must be an array");
+				throw ApiError.badRequest(
+					"updates must be an array",
+					undefined,
+					"error.updatesMustBeArray",
+				);
 			}
 
 			if (params.updates.length === 0) {
@@ -2434,7 +2465,11 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			const hasVersion = typeof options.version === "number";
 
 			if (!hasVersionId && !hasVersion) {
-				throw ApiError.badRequest("Version or versionId required");
+				throw ApiError.badRequest(
+					"Version or versionId required",
+					undefined,
+					"error.versionRequired",
+				);
 			}
 
 			const versionRows = await db
@@ -2698,6 +2733,9 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					session: normalized.session,
 					locale: normalized.locale,
 					row: existing,
+					request:
+						((context as any).req as Request | undefined) ??
+						((context as any).request as Request | undefined),
 				});
 				if (canTransition === false) {
 					throw ApiError.forbidden({
@@ -2738,6 +2776,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				toStage,
 				scheduledAt,
 				locale: normalized.locale,
+				accessMode: normalized.accessMode,
 			} as TransitionHookContext;
 
 			// Execute beforeTransition hooks (throw to abort).
@@ -3020,6 +3059,9 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			locale: normalized.locale,
 			row,
 			input,
+			request:
+				((context as any).req as Request | undefined) ??
+				((context as any).request as Request | undefined),
 		});
 	}
 
@@ -3293,6 +3335,9 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			if (uploadOptions.maxSize && file.size > uploadOptions.maxSize) {
 				throw ApiError.badRequest(
 					`File size ${file.size} exceeds maximum allowed size ${uploadOptions.maxSize}`,
+					undefined,
+					"upload.tooLarge",
+					{ maxSize: uploadOptions.maxSize },
 				);
 			}
 
@@ -3322,7 +3367,12 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				? `.${file.name.split(".").pop()?.toLowerCase()}`
 				: "";
 			if (BLOCKED_EXTENSIONS.includes(fileExt)) {
-				throw ApiError.badRequest(`File extension "${fileExt}" is not allowed`);
+				throw ApiError.badRequest(
+					`File extension "${fileExt}" is not allowed`,
+					undefined,
+					"upload.extensionNotAllowed",
+					{ extension: fileExt },
+				);
 			}
 
 			// Validate MIME type
@@ -3339,6 +3389,9 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				if (!isAllowed) {
 					throw ApiError.badRequest(
 						`File type "${file.type}" is not allowed. Allowed types: ${uploadOptions.allowedTypes.join(", ")}`,
+						undefined,
+						"upload.invalidType",
+						{ type: file.type },
 					);
 				}
 			}

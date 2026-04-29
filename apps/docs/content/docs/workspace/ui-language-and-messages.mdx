@@ -1,0 +1,188 @@
+---
+title: UI Language & Messages
+description: Configure the admin interface language and override translated message keys.
+---
+
+QUESTPIE has two independent language systems:
+
+- **Content language** comes from `config/app.ts` and controls localized field values.
+- **UI language** comes from `config/admin.ts` and controls admin interface text, labels, validation messages, and translated message keys.
+
+This page covers UI language and messages. For localized content values, see [Content Languages](/docs/backend/data-modeling/localization).
+
+## Configure UI Locales
+
+Configure the admin interface language in `config/admin.ts`:
+
+```ts title="config/admin.ts"
+import { adminConfig } from "#questpie/factories";
+
+export default adminConfig({
+	locale: {
+		locales: ["en", "sk"],
+		defaultLocale: "en",
+	},
+});
+```
+
+The admin fetches available UI locales through `getAdminLocales` and stores the current UI locale in the `questpie_ui_locale` cookie. Changing UI locale does not change the active content locale.
+
+## Built-In Locales
+
+The admin ships built-in UI messages for the locales present in `@questpie/admin/server`. At the time this guide was written, the built-in set is:
+
+```ts
+["cs", "de", "en", "es", "fr", "pl", "pt", "sk"];
+```
+
+If `config/admin.ts` omits `locale`, the admin exposes every built-in locale. Most projects should set `locale.locales` explicitly so editors see only supported languages.
+
+## Add Or Remove A UI Language
+
+1. Add or remove the locale code in `config/admin.ts`.
+2. Add custom message files for any app-specific keys in `messages/<locale>.ts`.
+3. Reload the admin. Re-run codegen only if you just created `config/admin.ts` or a new `messages/` file.
+
+Example:
+
+```ts title="config/admin.ts"
+export default adminConfig({
+	locale: {
+		locales: ["en", "sk", "de"],
+		defaultLocale: "en",
+	},
+});
+```
+
+## Add Message Keys
+
+Project messages live in `messages/` inside the QUESTPIE server directory:
+
+```text
+src/questpie/server/
+├── config/
+│   └── admin.ts
+└── messages/
+    ├── en.ts
+    └── sk.ts
+```
+
+Each file default-exports the flat message dictionary for that locale. The filename is the locale key; do not wrap the export in `{ en: ... }`.
+
+```ts title="messages/en.ts"
+export default {
+	"admin.posts.help": "Manage published and draft posts.",
+	"admin.action.publish": "Publish",
+	"billing.invoiceSent": "Invoice {{invoiceNumber}} was sent",
+} as const;
+```
+
+```ts title="messages/sk.ts"
+export default {
+	"admin.posts.help": "Spravujte publikovane aj rozpracovane prispevky.",
+	"admin.action.publish": "Publikovat",
+	"billing.invoiceSent": "Faktura {{invoiceNumber}} bola odoslana",
+} as const;
+```
+
+Message values can be strings or plural forms:
+
+```ts title="messages/en.ts"
+export default {
+	"posts.count": {
+		one: "{{count}} post",
+		other: "{{count}} posts",
+	},
+} as const;
+```
+
+## Override Built-In Admin Text
+
+Custom messages override built-in admin messages with the same key:
+
+```ts title="messages/en.ts"
+export default {
+	"common.save": "Save changes",
+	"collection.new": "Create {{name}}",
+} as const;
+```
+
+The server merges messages in this order:
+
+1. Built-in fallback locale messages
+2. Custom fallback locale messages
+3. Built-in active locale messages
+4. Custom active locale messages
+
+Later values win.
+
+## Use Messages In Admin Config
+
+Admin labels accept `I18nText`. Use inline locale maps for small labels and message keys for reusable text:
+
+```ts title="config/admin.ts"
+export default adminConfig({
+	branding: {
+		name: { en: "QuestBlog", sk: "QuestBlog" },
+	},
+	sidebar: {
+		sections: [
+			{
+				id: "content",
+				title: { key: "admin.sidebar.content", fallback: "Content" },
+			},
+		],
+		items: [
+			{
+				sectionId: "content",
+				type: "collection",
+				collection: "posts",
+			},
+		],
+	},
+});
+```
+
+```ts title="messages/en.ts"
+export default {
+	"admin.sidebar.content": "Content",
+} as const;
+```
+
+## Use Messages In Server Code
+
+The same message dictionary is available to hooks, routes, services, jobs, and email templates through `ctx.t()`:
+
+```ts title="routes/send-invoice.ts"
+import { route } from "questpie";
+
+export default route().handler(async ({ input, t, locale }) => {
+	return {
+		message: t(
+			"billing.invoiceSent",
+			{ invoiceNumber: input.invoiceNumber },
+			locale,
+		),
+	};
+});
+```
+
+Backend errors also use this translation config where a message key is present.
+
+## Date Picker Locales
+
+UI messages and browser `Intl` formatting are fetched from the server. Date picker locale objects from `date-fns` are registered separately on the client when needed:
+
+```ts
+import { registerDateFnsLocale } from "@questpie/admin/client";
+import { sk } from "date-fns/locale/sk";
+
+registerDateFnsLocale("sk", sk);
+```
+
+## Related Pages
+
+- [Content Languages](/docs/backend/data-modeling/localization) — Configure localized record values
+- [Workspace Localization](/docs/workspace/localization) — Editor-facing content locale switcher
+- [Admin API](/docs/reference/admin-api) — `adminConfig()` reference
+- [File Convention](/docs/backend/architecture/file-convention) — `messages/` discovery

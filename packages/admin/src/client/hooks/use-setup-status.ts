@@ -1,7 +1,7 @@
 /**
  * Setup Status Hook
  *
- * Hook to check if the app setup is required (no users exist).
+ * Hook to check if the app setup is required (no admin users exist).
  * Useful for redirecting to setup page on first visit.
  */
 
@@ -10,14 +10,14 @@ import { useQuery } from "@tanstack/react-query";
 import { selectClient, useAdminStore } from "../runtime/provider";
 
 export interface SetupStatus {
-	/** Whether setup is required (no users exist) */
+	/** Whether setup is required (no admin users exist) */
 	required: boolean;
 }
 
 /**
  * Check if setup is required.
  *
- * Returns `required: true` if no users exist in the system,
+ * Returns `required: true` if no admin users exist in the system,
  * meaning the setup page should be shown to create the first admin.
  *
  * @example

@@ -9,8 +9,7 @@ import * as React from "react";
 import { toast } from "sonner";
 
 import { useCollectionItem } from "../../../hooks/use-collection";
-import { type Asset, useUpload } from "../../../hooks/use-upload";
-import { useUploadCollection } from "../../../hooks/use-upload-collection";
+import type { Asset } from "../../../hooks/use-upload";
 import { useTranslation } from "../../../i18n/hooks";
 import { MediaPickerDialog } from "../../media/media-picker-dialog";
 import { Button } from "../../ui/button";
@@ -22,7 +21,7 @@ import {
 	PopoverTitle,
 	PopoverTrigger,
 } from "../../ui/popover";
-import { sanitizeFilename } from "../field-utils";
+import { useRichTextImageUpload } from "./image-upload";
 
 type ImagePopoverProps = {
 	editor: Editor | null;
@@ -56,9 +55,10 @@ export function ImagePopover({
 	const [selectedAssetId, setSelectedAssetId] = React.useState<string | null>(
 		null,
 	);
-	const { upload } = useUpload();
-	const { collection, collections: availableUploadCollections } =
-		useUploadCollection(imageCollection);
+	const { collection, uploadImageFile } = useRichTextImageUpload({
+		imageCollection,
+		onImageUpload,
+	});
 	const showMediaLibrary = enableMediaLibrary ?? true;
 	const { data: selectedAsset } = useCollectionItem(
 		collection || "",
@@ -86,60 +86,15 @@ export function ImagePopover({
 
 			try {
 				setUploadingImage(true);
-				let url: string | undefined;
-				if (onImageUpload) {
-					url = await onImageUpload(file);
-				} else {
-					if (!collection) {
-						let errorMessage: string;
-						if (availableUploadCollections.length > 1) {
-							errorMessage = `Multiple upload collections are available (${availableUploadCollections.join(", ")}). Configure rich-text imageCollection to choose one.`;
-						} else {
-							errorMessage =
-								"No upload collection is configured for rich-text image uploads.";
-						}
-						toast.error(errorMessage);
-						setUploadingImage(false);
-						event.target.value = "";
-						return;
-					}
-
-					const sanitizedName = sanitizeFilename(file.name);
-					let uploadFile: File;
-					if (sanitizedName === file.name) {
-						uploadFile = file;
-					} else {
-						uploadFile = new File([file], sanitizedName, {
-							type: file.type,
-						});
-					}
-					const uploadedAsset = (await upload(uploadFile, {
-						to: collection,
-					})) as Asset;
-					if (uploadedAsset) {
-						if (uploadedAsset.url) {
-							url = uploadedAsset.url;
-						}
-					}
-					if (!url) {
-						toast.error(t("upload.error"));
-						setUploadingImage(false);
-						event.target.value = "";
-						return;
-					}
-				}
-				if (url) {
-					let altValue: string | undefined;
-					if (imageAlt) {
-						altValue = imageAlt;
-					} else {
-						altValue = undefined;
-					}
-					editor.chain().focus().setImage({ src: url, alt: altValue }).run();
-					setImageUrl("");
-					setImageAlt("");
-					onOpenChange(false);
-				}
+				const url = await uploadImageFile(file);
+				editor
+					.chain()
+					.focus()
+					.setImage({ src: url, alt: imageAlt || undefined })
+					.run();
+				setImageUrl("");
+				setImageAlt("");
+				onOpenChange(false);
 				setUploadingImage(false);
 				event.target.value = "";
 			} catch (err) {
@@ -154,16 +109,7 @@ export function ImagePopover({
 				event.target.value = "";
 			}
 		},
-		[
-			collection,
-			availableUploadCollections,
-			editor,
-			imageAlt,
-			onImageUpload,
-			onOpenChange,
-			t,
-			upload,
-		],
+		[editor, imageAlt, onOpenChange, t, uploadImageFile],
 	);
 
 	React.useEffect(() => {
@@ -206,14 +152,22 @@ export function ImagePopover({
 					<div className="space-y-3">
 						<div className="space-y-2">
 							<Input
+								aria-label={t("editor.image")}
+								autoComplete="off"
+								inputMode="url"
+								name="rich-text-image-url"
+								type="url"
 								value={imageUrl}
-								placeholder="https://example.com/image.jpg"
+								placeholder="https://example.com/image.jpg…"
 								onChange={(event) => setImageUrl(event.target.value)}
 								disabled={disabled}
 							/>
 							<Input
+								aria-label={t("editor.altText")}
+								autoComplete="off"
+								name="rich-text-image-alt"
 								value={imageAlt}
-								placeholder={t("editor.altText")}
+								placeholder={`${t("editor.altText")}…`}
 								onChange={(event) => setImageAlt(event.target.value)}
 								disabled={disabled}
 							/>

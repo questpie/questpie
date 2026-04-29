@@ -1,11 +1,13 @@
 ---
-title: Operate in Production
+title: Production
 description: Infrastructure services — database, auth, storage, email, queue, search, realtime.
 ---
 
 QUESTPIE provides pluggable adapters for common infrastructure services. Configure them in `runtimeConfig()` and access them through the typed context in hooks, routes, and jobs.
 
-## Services
+## Infrastructure Services
+
+These are framework-level infrastructure services configured in `runtimeConfig()`. They are different from user-defined [Services](/docs/backend/business-logic/services), which wrap application-specific business logic and live under `ctx.services.*` by default.
 
 | Service                                           | Default Adapter          | Description         |
 | ------------------------------------------------- | ------------------------ | ------------------- |

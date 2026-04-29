@@ -11,9 +11,12 @@ This is a [QUESTPIE](https://questpie.com) project scaffolded with `create-quest
 | `bun start`                      | Start production server                        |
 | `bun questpie add <type> <name>` | Scaffold a new entity (collection, seed, etc.) |
 | `bun questpie add --list`        | List all available scaffold types              |
-| `bun questpie generate`          | Regenerate .generated/index.ts                 |
-| `bun questpie migrate:create`    | Generate a migration from schema diff          |
-| `bun questpie migrate`           | Run pending migrations                         |
+| `bun run routes:generate`        | Regenerate TanStack Router route tree          |
+| `bun run questpie:generate`      | Regenerate .generated/index.ts                 |
+| `bun run scaffold:generate`      | Regenerate route tree and QUESTPIE output      |
+| `bun run scaffold:verify`        | Regenerate codegen and type-check              |
+| `bun run migrate:create`         | Generate a migration from schema diff          |
+| `bun run migrate`                | Run pending migrations                         |
 | `bun questpie seed`              | Run pending seeds                              |
 | `docker compose up -d`           | Start PostgreSQL                               |
 
@@ -53,8 +56,8 @@ src/questpie/
 - **`src/questpie/server/modules.ts`** — Module dependencies: `export default [adminModule, openApiModule] as const`.
 - **`src/questpie/server/config/auth.ts`** — Auth config via `authConfig()` factory.
 - **`src/questpie/server/config/admin.ts`** — Admin config (sidebar, dashboard, branding, locale) via `adminConfig()` factory.
-- **`src/questpie/server/config/app.ts`** — *(optional, not scaffolded)* App config (locale, access, hooks, context) via `appConfig()`. Create when needed.
-- **`src/questpie/server/.generated/index.ts`** — Codegen output. Exports typed `app` instance and `App` type. Run `bunx questpie generate` to regenerate.
+- **`src/questpie/server/config/app.ts`** — _(optional, not scaffolded)_ App config (locale, access, hooks, context) via `appConfig()`. Create when needed.
+- **`src/questpie/server/.generated/index.ts`** — Codegen output. Exports typed `app` instance and `App` type. Run `bun run questpie:generate` to regenerate.
 - **`src/lib/env.ts`** — Type-safe env variables via `@t3-oss/env-core`. Add new env vars here with Zod schemas.
 - **`questpie.config.ts`** — CLI config (migration directory, app reference).
 - **`src/routes/api/$.ts`** — API catch-all handler. Serves REST + OpenAPI docs at `/api/docs`.
@@ -81,7 +84,7 @@ Preferred workflow:
 
 1. Run `bun questpie add collection my-thing`
 2. The CLI creates the file and auto-runs codegen
-3. Run `bun questpie migrate:create`
+3. Run `bun run migrate:create`
 
 Manual workflow:
 
@@ -90,8 +93,8 @@ Manual workflow:
    import { collection } from "#questpie/factories";
    export const myThing = collection("my-thing").fields(({ f }) => ({ ... }));
    ```
-2. Run `bunx questpie generate` to regenerate `.generated/index.ts`
-3. Run `bun questpie migrate:create` to generate migration
+2. Run `bun run questpie:generate` to regenerate `.generated/index.ts`
+3. Run `bun run migrate:create` to generate migration
 
 Collections are auto-discovered by codegen — no manual registration needed.
 
@@ -101,13 +104,13 @@ Preferred workflow:
 
 1. Run `bun questpie add global my-global`
 2. The CLI creates the file and auto-runs codegen
-3. Run `bun questpie migrate:create`
+3. Run `bun run migrate:create`
 
 Manual workflow:
 
 1. Create `src/questpie/server/globals/my-global.ts` with a named export
-2. Run `bunx questpie generate`
-3. Run `bun questpie migrate:create`
+2. Run `bun run questpie:generate`
+3. Run `bun run migrate:create`
 
 ### Add a server route (end-to-end type-safe)
 
@@ -126,7 +129,7 @@ Manual workflow:
    	});
    ```
 
-2. Run `bunx questpie generate` — route is auto-discovered and available at `/api/my-function`
+2. Run `bun run questpie:generate` — route is auto-discovered and available at `/api/my-function`
 
 See AGENTS.md for detailed route patterns, access control, and TanStack Query integration.
 

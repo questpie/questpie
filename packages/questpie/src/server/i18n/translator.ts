@@ -7,7 +7,7 @@
 import { DEFAULT_LOCALE } from "#questpie/shared/constants.js";
 
 import type { PluralMessages } from "./messages.js";
-import { allBackendMessagesEN } from "./messages.js";
+import { getBackendMessages } from "./messages.js";
 import type { BackendTranslateFn, TranslationsConfig } from "./types.js";
 
 // ============================================================================
@@ -109,18 +109,12 @@ export function createTranslator(
 	return (key, params, locale): string => {
 		const currentLocale = locale ?? fallbackLocale;
 
-		// Try custom messages first for current locale
-		let message: string | PluralMessages | undefined =
-			customMessages[currentLocale]?.[key];
+		const currentMessages = getBackendMessages(currentLocale, customMessages);
+		let message: string | PluralMessages | undefined = currentMessages[key];
 
-		// Fallback to default backend messages for current locale
-		if (message === undefined) {
-			message = allBackendMessagesEN[key];
-		}
-
-		// Try fallback locale in custom messages
+		// Try fallback locale messages
 		if (message === undefined && currentLocale !== fallbackLocale) {
-			message = customMessages[fallbackLocale]?.[key];
+			message = getBackendMessages(fallbackLocale, customMessages)[key];
 		}
 
 		// Final fallback - return key

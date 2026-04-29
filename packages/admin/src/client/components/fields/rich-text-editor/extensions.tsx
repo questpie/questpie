@@ -59,9 +59,52 @@ function getCodeBlockExtension(): AnyExtension | Promise<AnyExtension> {
 
 type BuildExtensionsOptions = {
 	features: Required<RichTextFeatures>;
+	labels?: RichTextExtensionLabels;
 	placeholder?: string;
 	maxCharacters?: number;
 	customExtensions?: AnyExtension[];
+};
+
+type RichTextExtensionLabels = {
+	bulletList: string;
+	bulletListDescription: string;
+	codeBlock: string;
+	codeBlockDescription: string;
+	divider: string;
+	dividerDescription: string;
+	heading: (level: number) => string;
+	heading1Description: string;
+	heading2Description: string;
+	heading3Description: string;
+	orderedList: string;
+	orderedListDescription: string;
+	paragraph: string;
+	paragraphDescription: string;
+	quote: string;
+	quoteDescription: string;
+	table: string;
+	tableDescription: string;
+};
+
+const defaultLabels: RichTextExtensionLabels = {
+	bulletList: "Bullet list",
+	bulletListDescription: "Create a bulleted list",
+	codeBlock: "Code block",
+	codeBlockDescription: "Insert code snippet",
+	divider: "Divider",
+	dividerDescription: "Insert a horizontal rule",
+	heading: (level) => `Heading ${level}`,
+	heading1Description: "Large section heading",
+	heading2Description: "Medium section heading",
+	heading3Description: "Small section heading",
+	orderedList: "Numbered list",
+	orderedListDescription: "Create an ordered list",
+	paragraph: "Paragraph",
+	paragraphDescription: "Start with plain text",
+	quote: "Quote",
+	quoteDescription: "Capture a quote",
+	table: "Table",
+	tableDescription: "Insert a 3x3 table",
 };
 
 /**
@@ -73,12 +116,14 @@ type BuildExtensionsOptions = {
  */
 export function buildExtensions({
 	features,
+	labels,
 	placeholder,
 	maxCharacters,
 	customExtensions,
 }: BuildExtensionsOptions): AnyExtension[] | Promise<AnyExtension[]> {
 	const base = buildBaseExtensions({
 		features,
+		labels,
 		placeholder,
 		maxCharacters,
 		customExtensions,
@@ -103,6 +148,7 @@ export function buildExtensions({
 
 function buildBaseExtensions({
 	features,
+	labels = defaultLabels,
 	placeholder,
 	maxCharacters,
 	customExtensions,
@@ -173,28 +219,31 @@ function buildBaseExtensions({
 
 	if (features.slashCommands) {
 		extensions.push(
-			createSlashCommandExtension((editor) => {
+			createSlashCommandExtension((_editor) => {
 				const commands: SlashCommandItem[] = [];
 
 				if (features.heading) {
 					commands.push(
 						{
-							title: "Heading 1",
-							description: "Large section heading",
+							title: labels.heading(1),
+							description: labels.heading1Description,
+							icon: "ph:text-h-one",
 							keywords: ["h1"],
 							command: (cmdEditor) =>
 								cmdEditor.chain().focus().toggleHeading({ level: 1 }).run(),
 						},
 						{
-							title: "Heading 2",
-							description: "Medium section heading",
+							title: labels.heading(2),
+							description: labels.heading2Description,
+							icon: "ph:text-h-two",
 							keywords: ["h2"],
 							command: (cmdEditor) =>
 								cmdEditor.chain().focus().toggleHeading({ level: 2 }).run(),
 						},
 						{
-							title: "Heading 3",
-							description: "Small section heading",
+							title: labels.heading(3),
+							description: labels.heading3Description,
+							icon: "ph:text-h-three",
 							keywords: ["h3"],
 							command: (cmdEditor) =>
 								cmdEditor.chain().focus().toggleHeading({ level: 3 }).run(),
@@ -203,8 +252,9 @@ function buildBaseExtensions({
 				}
 
 				commands.push({
-					title: "Paragraph",
-					description: "Start with plain text",
+					title: labels.paragraph,
+					description: labels.paragraphDescription,
+					icon: "ph:text-align-left",
 					keywords: ["text"],
 					command: (cmdEditor) =>
 						cmdEditor.chain().focus().setParagraph().run(),
@@ -212,8 +262,9 @@ function buildBaseExtensions({
 
 				if (features.bulletList) {
 					commands.push({
-						title: "Bullet list",
-						description: "Create a bulleted list",
+						title: labels.bulletList,
+						description: labels.bulletListDescription,
+						icon: "ph:list-bullets",
 						keywords: ["list", "ul"],
 						command: (cmdEditor) =>
 							cmdEditor.chain().focus().toggleBulletList().run(),
@@ -222,8 +273,9 @@ function buildBaseExtensions({
 
 				if (features.orderedList) {
 					commands.push({
-						title: "Numbered list",
-						description: "Create an ordered list",
+						title: labels.orderedList,
+						description: labels.orderedListDescription,
+						icon: "ph:list-numbers",
 						keywords: ["list", "ol"],
 						command: (cmdEditor) =>
 							cmdEditor.chain().focus().toggleOrderedList().run(),
@@ -232,8 +284,9 @@ function buildBaseExtensions({
 
 				if (features.blockquote) {
 					commands.push({
-						title: "Quote",
-						description: "Capture a quote",
+						title: labels.quote,
+						description: labels.quoteDescription,
+						icon: "ph:quotes",
 						keywords: ["blockquote"],
 						command: (cmdEditor) =>
 							cmdEditor.chain().focus().toggleBlockquote().run(),
@@ -242,8 +295,9 @@ function buildBaseExtensions({
 
 				if (features.codeBlock) {
 					commands.push({
-						title: "Code block",
-						description: "Insert code snippet",
+						title: labels.codeBlock,
+						description: labels.codeBlockDescription,
+						icon: "ph:code-block",
 						keywords: ["code"],
 						command: (cmdEditor) =>
 							cmdEditor.chain().focus().toggleCodeBlock().run(),
@@ -252,8 +306,9 @@ function buildBaseExtensions({
 
 				if (features.horizontalRule) {
 					commands.push({
-						title: "Divider",
-						description: "Insert a horizontal rule",
+						title: labels.divider,
+						description: labels.dividerDescription,
+						icon: "ph:minus",
 						keywords: ["hr"],
 						command: (cmdEditor) =>
 							cmdEditor.chain().focus().setHorizontalRule().run(),
@@ -262,8 +317,9 @@ function buildBaseExtensions({
 
 				if (features.table) {
 					commands.push({
-						title: "Table",
-						description: "Insert a 3x3 table",
+						title: labels.table,
+						description: labels.tableDescription,
+						icon: "ph:table",
 						keywords: ["grid"],
 						command: (cmdEditor) =>
 							cmdEditor

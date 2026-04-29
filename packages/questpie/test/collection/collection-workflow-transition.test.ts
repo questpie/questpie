@@ -355,7 +355,7 @@ describe("collection transitionStage", () => {
 		).rejects.toThrow("Transition blocked by hook");
 	});
 
-	it("throws when scheduledAt is used without a queue adapter", async () => {
+	it("schedules future transitions through the core queue job", async () => {
 		const ctx = createTestContext({ accessMode: "system" });
 
 		const created = await setup.app.collections.workflow_posts.create(
@@ -365,12 +365,21 @@ describe("collection transitionStage", () => {
 
 		const futureDate = new Date(Date.now() + 60_000);
 
-		await expect(
-			setup.app.collections.workflow_posts.transitionStage(
-				{ id: created.id, stage: "published", scheduledAt: futureDate },
-				ctx,
-			),
-		).rejects.toThrow("Scheduled transitions require a queue adapter");
+		const result = await setup.app.collections.workflow_posts.transitionStage(
+			{ id: created.id, stage: "published", scheduledAt: futureDate },
+			ctx,
+		);
+
+		expect(result.id).toBe(created.id);
+
+		const jobs = setup.app.mocks.queue.getJobsByName("scheduled-transition");
+		expect(jobs).toHaveLength(1);
+		expect(jobs[0].payload).toEqual({
+			type: "collection",
+			collection: "workflow_posts",
+			recordId: created.id,
+			stage: "published",
+		});
 	});
 
 	it("executes immediately when scheduledAt is in the past", async () => {

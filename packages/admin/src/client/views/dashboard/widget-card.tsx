@@ -88,11 +88,18 @@ function WidgetCardLoading({
 	variant?: WidgetCardVariant;
 }) {
 	return (
-		<Card className={cn("flex flex-col", variantStyles[variant])}>
-			<CardHeader>
+		<Card
+			className={cn("flex h-full min-h-0 flex-col", variantStyles[variant])}
+		>
+			<CardHeader className="shrink-0">
 				<Skeleton className="h-4 w-24" />
 			</CardHeader>
-			<CardContent className={cn("flex-1", variantContentStyles[variant])}>
+			<CardContent
+				className={cn(
+					"min-h-0 flex-1 overflow-hidden",
+					variantContentStyles[variant],
+				)}
+			>
 				<Skeleton className="h-20 w-full" />
 			</CardContent>
 		</Card>
@@ -112,11 +119,11 @@ function WidgetCardError({
 	return (
 		<Card
 			className={cn(
-				"border-destructive/20 bg-destructive/5 flex flex-col",
+				"border-destructive/20 bg-destructive/5 flex h-full min-h-0 flex-col",
 				variantStyles[variant],
 			)}
 		>
-			<CardHeader>
+			<CardHeader className="shrink-0">
 				<CardTitle className="text-destructive text-sm font-medium">
 					{t("toast.error")}
 				</CardTitle>
@@ -128,7 +135,12 @@ function WidgetCardError({
 					</CardAction>
 				)}
 			</CardHeader>
-			<CardContent className={cn("flex-1", variantContentStyles[variant])}>
+			<CardContent
+				className={cn(
+					"min-h-0 flex-1 overflow-auto",
+					variantContentStyles[variant],
+				)}
+			>
 				<p className="text-muted-foreground text-xs">{error.message}</p>
 			</CardContent>
 		</Card>
@@ -175,12 +187,21 @@ export function WidgetCard({
 		if (loadingSkeleton) {
 			return (
 				<Card
-					className={cn("flex flex-col", variantStyles[variant], className)}
+					className={cn(
+						"flex h-full min-h-0 flex-col",
+						variantStyles[variant],
+						className,
+					)}
 				>
-					<CardHeader>
+					<CardHeader className="shrink-0">
 						<Skeleton className="h-4 w-24" />
 					</CardHeader>
-					<CardContent className={cn("flex-1", variantContentStyles[variant])}>
+					<CardContent
+						className={cn(
+							"min-h-0 flex-1 overflow-hidden",
+							variantContentStyles[variant],
+						)}
+					>
 						{loadingSkeleton}
 					</CardContent>
 				</Card>
@@ -202,14 +223,14 @@ export function WidgetCard({
 	return (
 		<Card
 			className={cn(
-				"qa-widget-card flex flex-col",
+				"qa-widget-card flex h-full min-h-0 flex-col",
 				variantStyles[variant],
 				className,
 			)}
 		>
 			{hasHeader && (
-				<CardHeader className="qa-widget-card__header">
-					<div className="flex items-center gap-2">
+				<CardHeader className="qa-widget-card__header shrink-0">
+					<div className="flex min-w-0 items-center gap-2">
 						{resolveIconElement(icon, {
 							className: "h-4 w-4 text-muted-foreground",
 						})}
@@ -309,6 +330,7 @@ export function WidgetCard({
 			<CardContent
 				className={cn(
 					"qa-widget-card__content flex-1",
+					"min-h-0 overflow-auto overscroll-contain",
 					variantContentStyles[variant],
 					!hasHeader && "pt-0",
 				)}

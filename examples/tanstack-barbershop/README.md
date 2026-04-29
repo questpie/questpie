@@ -293,31 +293,35 @@ GET /api/auth/get-session
 
 Queue jobs are automatically set up with pg-boss (uses Postgres - no Redis needed!):
 
-```typescript
-// Jobs defined in app.ts
--send -
-	appointment -
-	confirmation -
-	send -
-	appointment -
-	cancellation -
-	send -
-	appointment -
-	reminder;
+- `src/questpie/server/jobs/send-appointment-confirmation.ts`
+- `src/questpie/server/jobs/send-appointment-cancellation.ts`
+- `src/questpie/server/jobs/send-appointment-reminder.ts`
+- `src/questpie/server/jobs/notify-blog-subscribers.ts`
 
-// Triggered via hooks
-afterCreate: async ({ data }) => {
-	await app.queue.sendAppointmentConfirmation.publish({
-		appointmentId: data.id,
-	});
+```typescript
+afterChange: async ({ data, operation, queue }) => {
+	if (operation === "create") {
+		await queue.sendAppointmentConfirmation.publish({
+			appointmentId: data.id,
+			customerId: data.customer,
+		});
+	}
 };
 ```
 
-To run workers (processes jobs):
+To run workers in development:
+
+```bash
+bun run dev:worker
+```
+
+To run workers in production:
 
 ```bash
 bun run worker
 ```
+
+The worker starts `app.queue.listen()` from `src/worker.ts` and processes queued jobs in a separate process from the web app.
 
 ## 🎨 Styling
 

@@ -36,6 +36,7 @@ import {
 } from "@tanstack/react-table";
 import * as React from "react";
 import { Suspense, useMemo, useState } from "react";
+import { toast } from "sonner";
 
 import { createActionRegistryProxy } from "../../builder/types/action-registry";
 import type {
@@ -49,13 +50,17 @@ import type {
 import { ActionButton } from "../../components/actions/action-button";
 import { ActionDialog } from "../../components/actions/action-dialog";
 import { HeaderActions } from "../../components/actions/header-actions";
+import { sanitizeFilename } from "../../components/fields/field-utils";
 import { FilterBuilderSheet } from "../../components/filter-builder/filter-builder-sheet";
 import type {
 	AvailableField,
 	ViewConfiguration,
 } from "../../components/filter-builder/types";
 import { LocaleSwitcher } from "../../components/locale-switcher";
+import { AssetPreview } from "../../components/primitives/asset-preview";
+import { Dropzone } from "../../components/primitives/dropzone";
 import { flattenOptions } from "../../components/primitives/types";
+import { ResourceSheet } from "../../components/sheets";
 import { Button } from "../../components/ui/button";
 import { Checkbox } from "../../components/ui/checkbox";
 import { EmptyState } from "../../components/ui/empty-state";
@@ -68,6 +73,14 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "../../components/ui/select";
+import {
+	Sheet,
+	SheetContent,
+	SheetDescription,
+	SheetFooter,
+	SheetHeader,
+	SheetTitle,
+} from "../../components/ui/sheet";
 import {
 	Table,
 	TableBody,
@@ -104,6 +117,8 @@ import {
 	useServerActions,
 } from "../../hooks/use-server-actions";
 import { useSidebarSearchParam } from "../../hooks/use-sidebar-search-param";
+import { type Asset, useUpload } from "../../hooks/use-upload";
+import { useUploadCollection } from "../../hooks/use-upload-collection";
 import { useViewState } from "../../hooks/use-view-state";
 import { useResolveText, useTranslation } from "../../i18n/hooks";
 import { cn } from "../../lib/utils";
@@ -139,6 +154,170 @@ type TableViewConfig = ListViewConfig;
 
 const actionRegistry = createActionRegistryProxy<any>();
 const STICKY_TABLE_COLUMN_COUNT = 2;
+const REORDER_DROP_DURATION = 160;
+const REORDER_MOVE_EASING = "cubic-bezier(0.25, 1, 0.5, 1)";
+const REORDER_DROP_ANIMATION = {
+	duration: REORDER_DROP_DURATION,
+	easing: REORDER_MOVE_EASING,
+};
+
+function UploadCollectionButton({
+	collection,
+	onUploaded,
+}: {
+	collection: string;
+	onUploaded?: () => void | Promise<void>;
+}) {
+	const { t } = useTranslation();
+	const [open, setOpen] = React.useState(false);
+
+	return (
+		<>
+			<Button
+				variant="default"
+				size="sm"
+				className="gap-2"
+				onClick={() => setOpen(true)}
+			>
+				<Icon icon="ph:cloud-arrow-up" className="size-3.5" />
+				{t("common.upload")}
+			</Button>
+			<UploadCollectionSheet
+				open={open}
+				onOpenChange={setOpen}
+				collection={collection}
+				onUploaded={onUploaded}
+			/>
+		</>
+	);
+}
+
+function UploadCollectionSheet({
+	open,
+	onOpenChange,
+	collection,
+	onUploaded,
+}: {
+	open: boolean;
+	onOpenChange: (open: boolean) => void;
+	collection: string;
+	onUploaded?: () => void | Promise<void>;
+}) {
+	const { t } = useTranslation();
+	const { uploadMany, isUploading, progress } = useUpload();
+	const [uploadedAssets, setUploadedAssets] = React.useState<Asset[]>([]);
+	const [editAssetId, setEditAssetId] = React.useState<string | null>(null);
+
+	React.useEffect(() => {
+		if (!open) {
+			setUploadedAssets([]);
+			setEditAssetId(null);
+		}
+	}, [open]);
+
+	const handleValidationError = React.useCallback(
+		(errors: { message: string }[]) => {
+			for (const validationError of errors) {
+				toast.error(validationError.message);
+			}
+		},
+		[],
+	);
+
+	const handleDrop = React.useCallback(
+		async (files: File[]) => {
+			if (files.length === 0 || isUploading) return;
+
+			const sanitizedFiles = files.map(
+				(file) =>
+					new File([file], sanitizeFilename(file.name), {
+						type: file.type,
+						lastModified: file.lastModified,
+					}),
+			);
+
+			try {
+				const uploaded = await uploadMany(sanitizedFiles, { to: collection });
+				setUploadedAssets((current) => [...uploaded, ...current]);
+				toast.success(t("upload.bulkSuccess", { count: uploaded.length }));
+				await onUploaded?.();
+			} catch (error) {
+				toast.error(error instanceof Error ? error.message : t("upload.error"));
+			}
+		},
+		[collection, isUploading, onUploaded, t, uploadMany],
+	);
+
+	return (
+		<Sheet open={open} onOpenChange={onOpenChange} modal={false}>
+			<SheetContent
+				side="right"
+				showOverlay={false}
+				className="qa-upload-sheet w-full p-0 data-[side=right]:sm:max-w-xl"
+			>
+				<SheetHeader className="border-b px-6 py-5">
+					<SheetTitle>{t("upload.bulkTitle")}</SheetTitle>
+					<SheetDescription>{t("upload.bulkDescription")}</SheetDescription>
+				</SheetHeader>
+
+				<div className="flex flex-1 flex-col gap-5 overflow-y-auto px-6 py-5">
+					<Dropzone
+						onDrop={handleDrop}
+						multiple
+						loading={isUploading}
+						progress={isUploading ? progress : undefined}
+						label={t("upload.dropzone")}
+						hint={t("upload.bulkHint")}
+						onValidationError={handleValidationError}
+					/>
+
+					{uploadedAssets.length > 0 && (
+						<div className="space-y-3">
+							<p className="text-muted-foreground font-chrome chrome-meta text-xs font-medium">
+								{t("upload.uploadedCount", { count: uploadedAssets.length })}
+							</p>
+							<div className="grid gap-2">
+								{uploadedAssets.map((asset) => (
+									<AssetPreview
+										key={asset.id}
+										asset={asset}
+										variant="compact"
+										onEdit={() => setEditAssetId(asset.id)}
+									/>
+								))}
+							</div>
+						</div>
+					)}
+				</div>
+
+				<SheetFooter className="border-t px-6 py-4">
+					<Button
+						variant="outline"
+						onClick={() => onOpenChange(false)}
+						disabled={isUploading}
+					>
+						{t("common.close")}
+					</Button>
+				</SheetFooter>
+
+				{editAssetId && (
+					<ResourceSheet
+						type="collection"
+						collection={collection}
+						itemId={editAssetId}
+						open={!!editAssetId}
+						onOpenChange={(nextOpen) => {
+							if (!nextOpen) setEditAssetId(null);
+						}}
+						onSave={() => {
+							onUploaded?.();
+						}}
+					/>
+				)}
+			</SheetContent>
+		</Sheet>
+	);
+}
 
 function getColumnSizeStyle(width: number): React.CSSProperties {
 	return { width, minWidth: width, maxWidth: width };
@@ -289,14 +468,18 @@ function stringifyGroupValue(
 	value: unknown,
 	field?: AvailableField,
 	resolveText?: (value: any, fallback?: string) => string,
+	noValueLabel = "No value",
 ): string {
-	if (value === null || value === undefined || value === "") return "No value";
+	if (value === null || value === undefined || value === "")
+		return noValueLabel;
 	if (Array.isArray(value)) {
 		return value.length > 0
 			? value
-					.map((item) => stringifyGroupValue(item, field, resolveText))
+					.map((item) =>
+						stringifyGroupValue(item, field, resolveText, noValueLabel),
+					)
 					.join(", ")
-			: "No value";
+			: noValueLabel;
 	}
 
 	const options = field?.options?.options;
@@ -425,7 +608,13 @@ function SortableTableRow({
 		transform,
 		transition,
 		isDragging,
-	} = useSortable({ id });
+	} = useSortable({
+		id,
+		transition: {
+			duration: REORDER_DROP_DURATION,
+			easing: REORDER_MOVE_EASING,
+		},
+	});
 
 	return (
 		<TableRow
@@ -584,6 +773,7 @@ function TableViewInner({
 	const { fields: resolvedFields, schema } = useCollectionFields(collection, {
 		fallbackFields: (config as any)?.fields,
 	});
+	const { collections: uploadCollections } = useUploadCollection();
 	const schemaListConfig = mapListSchemaToConfig(schema?.admin?.list as any);
 	const resolvedListConfig =
 		viewConfig ??
@@ -645,6 +835,9 @@ function TableViewInner({
 		collection,
 		actionsConfig: mergedActionsConfig,
 	});
+	const canUploadToCollection =
+		uploadCollections.includes(collection) &&
+		schema?.access?.operations?.create?.allowed === true;
 
 	// Build columns from config - buildAllColumns enables showing any field user selects
 	const columns = useMemo(
@@ -688,6 +881,34 @@ function TableViewInner({
 		null,
 	);
 	const reorderStartOrderIdsRef = React.useRef<string[] | null>(null);
+	const reorderOverlayCleanupRef = React.useRef<number | null>(null);
+	const clearReorderOverlay = React.useCallback((delay = 0) => {
+		if (reorderOverlayCleanupRef.current !== null) {
+			window.clearTimeout(reorderOverlayCleanupRef.current);
+			reorderOverlayCleanupRef.current = null;
+		}
+
+		const clear = () => {
+			setActiveReorderId(null);
+			setActiveReorderRect(null);
+			reorderOverlayCleanupRef.current = null;
+		};
+
+		if (delay > 0) {
+			reorderOverlayCleanupRef.current = window.setTimeout(clear, delay);
+			return;
+		}
+
+		clear();
+	}, []);
+	React.useEffect(
+		() => () => {
+			if (reorderOverlayCleanupRef.current !== null) {
+				window.clearTimeout(reorderOverlayCleanupRef.current);
+			}
+		},
+		[],
+	);
 
 	// Default columns using configured columns from .list() or auto-detection
 	// When .list({ columns: [...] }) is defined, those become the defaults
@@ -1314,30 +1535,30 @@ function TableViewInner({
 		(effectiveSort.direction ?? "asc") === orderDirection;
 	const hasMultiplePages = !isSearching && (listData?.totalPages ?? 1) > 1;
 	const reorderHardBlocker = !isOrderableEnabled
-		? "Enable orderable before reordering"
+		? t("collection.reorderEnableOrderable")
 		: !hasOrderField
-			? "Add a numeric order field before reordering"
+			? t("collection.reorderAddOrderField")
 			: isSearching
-				? "Clear search to reorder"
+				? t("collection.reorderClearSearch")
 				: viewState.config.groupBy
-					? "Remove grouping to reorder"
+					? t("collection.reorderRemoveGrouping")
 					: hasActiveFilters
-						? "Clear filters to reorder"
+						? t("collection.reorderClearFilters")
 						: hasMultiplePages
-							? "Show one page of items to reorder"
+							? t("collection.reorderShowOnePage")
 							: null;
 	const reorderTooltip =
 		reorderHardBlocker ??
 		(isOrderSortActive
 			? isReorderMode
-				? "Exit reorder mode"
-				: "Reorder items"
-			: `Switch to ${orderField} sort and reorder`);
+				? t("collection.reorderExitMode")
+				: t("collection.reorderItems")
+			: t("collection.reorderSwitchSort", { field: orderField }));
 	const reorderAriaLabel = reorderHardBlocker
-		? `Reorder unavailable: ${reorderHardBlocker}`
+		? t("collection.reorderUnavailable", { reason: reorderHardBlocker })
 		: isReorderMode
-			? "Exit reorder mode"
-			: "Enter reorder mode";
+			? t("collection.reorderExitMode")
+			: t("collection.reorderEnterMode");
 	const canReorder = isOrderableEnabled && !reorderHardBlocker;
 	const handleReorderToggle = React.useCallback(() => {
 		if (!canReorder) return;
@@ -1407,6 +1628,7 @@ function TableViewInner({
 	const handleReorderDragStart = React.useCallback(
 		(event: DragStartEvent) => {
 			const initialRect = event.active.rect.current.initial;
+			clearReorderOverlay();
 			reorderStartOrderIdsRef.current = sortableRowIds;
 			setActiveReorderId(String(event.active.id));
 			setActiveReorderRect(
@@ -1416,19 +1638,19 @@ function TableViewInner({
 			);
 			setOptimisticOrderIds((current) => current ?? sortableRowIds);
 		},
-		[sortableRowIds],
+		[clearReorderOverlay, sortableRowIds],
 	);
 	const handleReorderDragCancel = React.useCallback(() => {
 		setOptimisticOrderIds(reorderStartOrderIdsRef.current);
-		setActiveReorderId(null);
-		setActiveReorderRect(null);
+		clearReorderOverlay();
 		reorderStartOrderIdsRef.current = null;
-	}, []);
+	}, [clearReorderOverlay]);
 	const handleReorderDragEnd = React.useCallback(
 		async (event: DragEndEvent) => {
-			setActiveReorderId(null);
-			setActiveReorderRect(null);
-			if (updateBatchMutation.isPending) return;
+			if (updateBatchMutation.isPending) {
+				clearReorderOverlay();
+				return;
+			}
 
 			const { active, over } = event;
 			const previousOrderIds =
@@ -1436,6 +1658,7 @@ function TableViewInner({
 			reorderStartOrderIdsRef.current = null;
 			if (!over) {
 				setOptimisticOrderIds(previousOrderIds);
+				clearReorderOverlay();
 				return;
 			}
 
@@ -1444,6 +1667,7 @@ function TableViewInner({
 				const oldIndex = previousOrderIds.indexOf(String(active.id));
 				const newIndex = previousOrderIds.indexOf(String(over.id));
 				if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) {
+					clearReorderOverlay(REORDER_DROP_DURATION);
 					return;
 				}
 
@@ -1451,10 +1675,12 @@ function TableViewInner({
 			}
 
 			if (nextOrderIds.join("\0") === previousOrderIds.join("\0")) {
+				clearReorderOverlay(REORDER_DROP_DURATION);
 				return;
 			}
 
 			setOptimisticOrderIds(nextOrderIds);
+			clearReorderOverlay(REORDER_DROP_DURATION);
 			const rowsById = new Map(tableRows.map((row) => [String(row.id), row]));
 			const reorderedRows = nextOrderIds
 				.map((id) => rowsById.get(id))
@@ -1467,11 +1693,14 @@ function TableViewInner({
 						data: { [orderField]: (index + 1) * orderStep },
 					})),
 				});
-				actionHelpers.toast.success("Order saved");
+				actionHelpers.toast.success(t("collection.orderSaved"));
 			} catch (error) {
+				clearReorderOverlay();
 				setOptimisticOrderIds(previousOrderIds);
 				actionHelpers.toast.error(
-					error instanceof Error ? error.message : "Could not save order",
+					error instanceof Error
+						? error.message
+						: t("collection.orderSaveFailed"),
 				);
 			}
 		},
@@ -1481,7 +1710,9 @@ function TableViewInner({
 			updateBatchMutation,
 			orderField,
 			orderStep,
+			t,
 			actionHelpers.toast,
+			clearReorderOverlay,
 		],
 	);
 	const groupedRowModel = useMemo(() => {
@@ -1497,7 +1728,12 @@ function TableViewInner({
 		if (serverGroups?.length) {
 			const rowsById = new Map(rows.map((row) => [row.id, row]));
 			return serverGroups.flatMap((group: any) => {
-				const label = stringifyGroupValue(group.value, groupField, resolveText);
+				const label = stringifyGroupValue(
+					group.value,
+					groupField,
+					resolveText,
+					t("common.noValue"),
+				);
 				const groupKey = `${groupBy}:${label}`;
 				const collapsed = collapsedGroups.has(groupKey);
 				const groupRows = (group.docs ?? [])
@@ -1529,6 +1765,7 @@ function TableViewInner({
 				(row.original as any)?.[groupBy],
 				groupField,
 				resolveText,
+				t("common.noValue"),
 			);
 			const groupKey = `${groupBy}:${valueLabel}`;
 			const group = groups.get(groupKey);
@@ -1571,6 +1808,7 @@ function TableViewInner({
 		isSearching,
 		listData?.groups,
 		resolveText,
+		t,
 	]);
 
 	// Handlers
@@ -1679,21 +1917,7 @@ function TableViewInner({
 	}
 
 	if (isLoading) {
-		return (
-			<div className="container" aria-busy="true">
-				<div
-					className="text-muted-foreground flex h-64 items-center justify-center"
-					role="status"
-				>
-					<Icon
-						icon="ph:spinner-gap"
-						className="size-6 animate-spin"
-						aria-hidden="true"
-					/>
-					<span className="sr-only">Loading collection data...</span>
-				</div>
-			</div>
-		);
+		return <TableViewSkeleton />;
 	}
 
 	const emptyStateTitle =
@@ -1827,6 +2051,14 @@ function TableViewInner({
 									</TooltipContent>
 								</Tooltip>
 							)}
+							{canUploadToCollection && (
+								<UploadCollectionButton
+									collection={collection}
+									onUploaded={() =>
+										actionHelpers.invalidateCollection(collection)
+									}
+								/>
+							)}
 							{headerActions}
 							{((actions.header.primary?.length ?? 0) > 0 ||
 								(actions.header.secondary?.length ?? 0) > 0) && (
@@ -1863,9 +2095,14 @@ function TableViewInner({
 							<span className="bg-foreground text-background inline-flex size-5 items-center justify-center rounded-full">
 								<Icon icon="ph:arrows-down-up" className="size-3" />
 							</span>
-							<span className="text-foreground font-medium">Reorder mode</span>
+							<span className="text-foreground font-medium">
+								{t("collection.reorderMode")}
+							</span>
 							<span className="hidden sm:inline">
-								Sorted by {orderField} {orderDirection}.
+								{t("collection.sortedByField", {
+									field: orderField,
+									direction: orderDirection,
+								})}
 							</span>
 						</div>
 						<Button
@@ -1873,7 +2110,7 @@ function TableViewInner({
 							size="xs"
 							onClick={() => setIsReorderMode(false)}
 						>
-							Done
+							{t("common.done")}
 						</Button>
 					</div>
 				)}
@@ -2187,7 +2424,10 @@ function TableViewInner({
 									</TableBody>
 								</SortableContext>
 							</Table>
-							<DragOverlay dropAnimation={null}>
+							<DragOverlay
+								adjustScale={false}
+								dropAnimation={REORDER_DROP_ANIMATION}
+							>
 								<ReorderDragOverlay
 									row={activeReorderRow}
 									columns={visibleLeafColumns}
@@ -2233,10 +2473,10 @@ function TableViewInner({
 								{filteredItems.length > 0
 									? `${((viewState.config.pagination?.page ?? 1) - 1) * (viewState.config.pagination?.pageSize ?? 25) + 1}-${Math.min(((viewState.config.pagination?.page ?? 1) - 1) * (viewState.config.pagination?.pageSize ?? 25) + (viewState.config.pagination?.pageSize ?? 25), listData?.totalDocs ?? filteredItems.length)}`
 									: "0"}{" "}
-								of {listData?.totalDocs ?? 0}
+								{t("table.of")} {listData?.totalDocs ?? 0}
 							</span>
 							<div className="flex items-center gap-2">
-								<span className="text-muted-foreground">Show</span>
+								<span className="text-muted-foreground">{t("table.show")}</span>
 								<Select
 									value={String(viewState.config.pagination?.pageSize ?? 25)}
 									onValueChange={(value) =>
@@ -2269,7 +2509,7 @@ function TableViewInner({
 										(viewState.config.pagination?.page ?? 1) - 1,
 									)
 								}
-								aria-label="Previous page"
+								aria-label={t("table.previousPage")}
 							>
 								<Icon icon="ph:caret-left" className="size-4" />
 							</Button>
@@ -2301,7 +2541,7 @@ function TableViewInner({
 											size="sm"
 											className="size-8 min-w-[32px] p-0 tabular-nums"
 											onClick={() => viewState.setPage(pageNum)}
-											aria-label={`Page ${pageNum}`}
+											aria-label={t("table.page", { page: pageNum })}
 											aria-current={
 												currentPage === pageNum ? "page" : undefined
 											}
@@ -2325,7 +2565,7 @@ function TableViewInner({
 										(viewState.config.pagination?.page ?? 1) + 1,
 									)
 								}
-								aria-label="Next page"
+								aria-label={t("table.nextPage")}
 							>
 								<Icon icon="ph:caret-right" className="size-4" />
 							</Button>

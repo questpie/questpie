@@ -51,7 +51,7 @@ Categories control when seeds run:
 | `"dev"`      | Development/demo data (sample content, test users)     | Development only  |
 | `"test"`     | Test fixtures (known datasets for integration tests)   | Test suites only  |
 
-When you run `bunx questpie seed:run`, the `"required"` seeds always execute. Add `--category dev` to also run development seeds.
+When you run `bunx questpie seed`, the `"required"` seeds always execute. Add `--category dev` to also run development seeds.
 
 ## Seed Context
 
@@ -177,19 +177,19 @@ export default seed({
 
 ```bash
 # Run all pending seeds (required category by default)
-bunx questpie seed:run
+bunx questpie seed
 
 # Run seeds of a specific category
-bunx questpie seed:run --category dev
+bunx questpie seed --category dev
 
 # Run a specific seed by ID
-bunx questpie seed:run --only siteSettings
+bunx questpie seed --only siteSettings
 
 # Force re-run even if already executed
-bunx questpie seed:run --force
+bunx questpie seed --force
 
 # Dry-run: validate seeds without committing changes
-bunx questpie seed:run --validate
+bunx questpie seed --validate
 ```
 
 ### Execution Tracking

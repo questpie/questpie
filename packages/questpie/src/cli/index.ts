@@ -8,6 +8,7 @@ import { generateMigrationCommand } from "./commands/generate.js";
 import { pushCommand } from "./commands/push.js";
 import { runMigrationCommand } from "./commands/run.js";
 import { runSeedCommand } from "./commands/seed.js";
+import { parsePositiveIntegerOption } from "./utils.js";
 
 const program = new Command();
 
@@ -133,7 +134,7 @@ program
 			await runMigrationCommand({
 				action: "down",
 				configPath: options.config,
-				batch: options.batch ? Number.parseInt(options.batch, 10) : undefined,
+				batch: parsePositiveIntegerOption(options.batch, "--batch"),
 				targetMigration: options.target,
 				dryRun: options.dryRun,
 			});

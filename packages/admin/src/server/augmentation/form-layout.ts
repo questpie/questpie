@@ -244,6 +244,26 @@ export interface FormTabsLayout {
 }
 
 /**
+ * Per-prop value type for `FormFieldLayoutItem.props` — accepts JSON, a
+ * handler function, or a `{ handler, deps?, debounce? }` config.
+ *
+ * Functions / config objects are resolved server-side via the
+ * `/admin/reactive` `prop` endpoint; static JSON is shipped through
+ * introspection unchanged. See `FormFieldLayoutItem.props` for the
+ * full description.
+ */
+export type FormReactivePropValue<TData = any> =
+	| unknown
+	| ((ctx: FormReactiveContext<TData>) => unknown | Promise<unknown>)
+	| {
+			handler: (
+				ctx: FormReactiveContext<TData>,
+			) => unknown | Promise<unknown>;
+			deps?: string[] | ((ctx: FormReactiveContext<TData>) => any[]);
+			debounce?: number;
+		};
+
+/**
  * Field entry with optional reactive form behavior.
  */
 export interface FormFieldLayoutItem<TData = any> {
@@ -253,6 +273,46 @@ export interface FormFieldLayoutItem<TData = any> {
 	readOnly?: boolean | FormReactiveConfig<TData, boolean>;
 	disabled?: boolean | FormReactiveConfig<TData, boolean>;
 	compute?: FormReactiveConfig<TData, any>;
+	/**
+	 * Extra props forwarded to the field component (escape hatch for
+	 * component-specific config like relation `filter`).
+	 *
+	 * Each prop value can be:
+	 * - **Static JSON** (string, number, boolean, array, object) — passed
+	 *   through introspection unchanged and given to the field component
+	 *   as-is. Use this when the value doesn't depend on form state.
+	 * - **A function** `(ctx) => T` — stays on the server. Introspection
+	 *   emits a `ReactivePropPlaceholder` in its place; the client resolves
+	 *   the value via `/admin/reactive` (type `"prop"`) whenever the
+	 *   tracked dependencies change.
+	 * - **A `{ handler, deps?, debounce? }` config** — same as a function
+	 *   but with explicit dependency control + debouncing.
+	 *
+	 * @example Static
+	 * ```ts
+	 * { field: f.counselorId, props: { filter: { role: "admin" } } }
+	 * ```
+	 *
+	 * @example Reactive (deps inferred from handler)
+	 * ```ts
+	 * { field: f.author, props: { filter: ({ data }) => ({ team: data.team }) } }
+	 * ```
+	 *
+	 * @example Reactive with explicit deps + debounce
+	 * ```ts
+	 * {
+	 *   field: f.author,
+	 *   props: {
+	 *     filter: {
+	 *       handler: ({ data }) => ({ team: data.team }),
+	 *       deps: ["team"],
+	 *       debounce: 200,
+	 *     },
+	 *   },
+	 * }
+	 * ```
+	 */
+	props?: Record<string, FormReactivePropValue<TData>>;
 }
 
 /**
