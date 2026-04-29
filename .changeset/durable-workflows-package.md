@@ -1,6 +1,6 @@
 ---
-"@questpie/admin": patch
-"questpie": patch
+"@questpie/admin": minor
+"questpie": minor
 "@questpie/workflows": minor
 ---
 
