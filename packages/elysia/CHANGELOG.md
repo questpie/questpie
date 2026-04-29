@@ -1,5 +1,12 @@
 # @questpie/elysia
 
+## 3.2.0
+
+### Patch Changes
+
+- Updated dependencies []:
+  - questpie@3.2.0
+
 ## 3.1.0
 
 ### Patch Changes
