@@ -27,7 +27,7 @@ export const siteSettings = global("siteSettings")
 	})
 	.access({
 		read: true,
-		update: ({ session }) => (session?.user as any)?.role === "admin",
+		update: ({ session }) => session?.user?.role === "admin",
 	});
 ```
 
@@ -170,7 +170,7 @@ export const siteSettings = global("siteSettings")
 	.options({ timestamps: true, versioning: true })
 	.access({
 		read: true,
-		update: ({ session }) => (session?.user as any)?.role === "admin",
+		update: ({ session }) => session?.user?.role === "admin",
 	});
 ```
 

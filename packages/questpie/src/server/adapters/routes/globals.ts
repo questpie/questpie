@@ -168,7 +168,7 @@ export async function globalTransition(
 	}
 
 	try {
-		const payload = body as { stage: string; scheduledAt?: string };
+		const payload = body as { stage?: unknown; scheduledAt?: unknown };
 		if (!payload.stage || typeof payload.stage !== "string") {
 			throw ApiError.badRequest(
 				"Missing required field: stage",
@@ -182,7 +182,18 @@ export async function globalTransition(
 			stage: payload.stage,
 		};
 
-		if (payload.scheduledAt) {
+		if (payload.scheduledAt !== undefined) {
+			if (
+				typeof payload.scheduledAt !== "string" &&
+				!(payload.scheduledAt instanceof Date)
+			) {
+				throw ApiError.badRequest(
+					"Invalid scheduledAt date",
+					undefined,
+					"error.invalidDateField",
+					{ field: "scheduledAt" },
+				);
+			}
 			const date = new Date(payload.scheduledAt);
 			if (Number.isNaN(date.getTime())) {
 				throw ApiError.badRequest(

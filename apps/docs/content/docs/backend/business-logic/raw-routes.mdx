@@ -22,13 +22,21 @@ export default route()
 
 Place route files in `routes/`. The file path maps to a flat URL under your `basePath` (`/api` by default):
 
-```text
-routes/
-├── health.ts             → /api/health
-├── webhooks/
-│   ├── stripe.ts         → /api/webhooks/stripe
-│   └── github.ts         → /api/webhooks/github
-└── export.ts             → /api/export
+```mermaid
+flowchart LR
+  Health["routes/health.ts"]
+  Stripe["routes/webhooks/stripe.ts"]
+  Github["routes/webhooks/github.ts"]
+  Export["routes/export.ts"]
+  HealthUrl["/api/health"]
+  StripeUrl["/api/webhooks/stripe"]
+  GithubUrl["/api/webhooks/github"]
+  ExportUrl["/api/export"]
+
+  Health --> HealthUrl
+  Stripe --> StripeUrl
+  Github --> GithubUrl
+  Export --> ExportUrl
 ```
 
 ## Route Methods

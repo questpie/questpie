@@ -1,5 +1,5 @@
-import { index, uniqueIndex } from "drizzle-orm/pg-core";
 import { collection } from "questpie";
+import { index, uniqueIndex } from "questpie/drizzle-pg-core";
 
 /**
  * Workflow Step Collection
@@ -45,21 +45,15 @@ export const wfStepCollection = collection("wf_step")
 		completedAt: f.datetime(),
 	}))
 	.indexes(({ table }) => [
-		uniqueIndex("idx_wfs_instance_name").on(
-			table.instanceId as any,
-			table.name as any,
-		),
-		index("idx_wfs_instance").on(table.instanceId as any),
-		index("idx_wfs_status").on(table.status as any),
-		index("idx_wfs_scheduled").on(table.scheduledAt as any),
+		uniqueIndex("idx_wfs_instance_name").on(table.instanceId, table.name),
+		index("idx_wfs_instance").on(table.instanceId),
+		index("idx_wfs_status").on(table.status),
+		index("idx_wfs_scheduled").on(table.scheduledAt),
 		// Note: Partial index for fast event matching
 		// (WHERE status = 'waiting') requires a raw SQL migration.
 		// Standard index on event_name + status as fallback:
-		index("idx_wfs_event_status").on(
-			table.eventName as any,
-			table.status as any,
-		),
-		index("idx_wfs_match_hash").on(table.matchHash as any, table.status as any),
+		index("idx_wfs_event_status").on(table.eventName, table.status),
+		index("idx_wfs_match_hash").on(table.matchHash, table.status),
 	])
 	.access({
 		create: false,

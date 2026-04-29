@@ -1,7 +1,7 @@
 import { type UseQueryOptions, useQuery } from "@tanstack/react-query";
 import * as React from "react";
 
-import { selectClient, useAdminStore } from "../runtime";
+import { selectBasePath, useAdminStore } from "../runtime";
 
 export type AuditEntry = {
 	id: string;
@@ -21,11 +21,7 @@ export type AuditEntry = {
 };
 
 function useAuditFetcher(path: string) {
-	const client = useAdminStore(selectClient);
-	const basePath = React.useMemo(
-		() => (client as any).getBasePath?.() ?? "",
-		[client],
-	);
+	const basePath = useAdminStore(selectBasePath);
 
 	return React.useCallback(
 		async (signal?: AbortSignal): Promise<AuditEntry[]> => {
@@ -53,7 +49,10 @@ export function useCollectionAuditHistory(
 	collection: string,
 	id: string,
 	options?: { limit?: number },
-	queryOptions?: Omit<UseQueryOptions, "queryKey" | "queryFn">,
+	queryOptions?: Omit<
+		UseQueryOptions<AuditEntry[], Error, AuditEntry[], readonly unknown[]>,
+		"queryKey" | "queryFn"
+	>,
 ) {
 	const params = new URLSearchParams();
 	if (options?.limit) params.set("limit", String(options.limit));
@@ -66,13 +65,16 @@ export function useCollectionAuditHistory(
 		queryFn: ({ signal }: { signal?: AbortSignal }) => fetchAudit(signal),
 		enabled: !!collection && !!id && (queryOptions?.enabled ?? true),
 		...queryOptions,
-	} as any);
+	});
 }
 
 export function useGlobalAuditHistory(
 	globalName: string,
 	options?: { limit?: number },
-	queryOptions?: Omit<UseQueryOptions, "queryKey" | "queryFn">,
+	queryOptions?: Omit<
+		UseQueryOptions<AuditEntry[], Error, AuditEntry[], readonly unknown[]>,
+		"queryKey" | "queryFn"
+	>,
 ) {
 	const params = new URLSearchParams();
 	if (options?.limit) params.set("limit", String(options.limit));
@@ -85,5 +87,5 @@ export function useGlobalAuditHistory(
 		queryFn: ({ signal }: { signal?: AbortSignal }) => fetchAudit(signal),
 		enabled: !!globalName && (queryOptions?.enabled ?? true),
 		...queryOptions,
-	} as any);
+	});
 }

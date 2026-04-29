@@ -1,13 +1,14 @@
 import { route } from "questpie";
 import { z } from "zod";
-import { getCollections } from "./_helpers.js";
+
+import { getCollections, getQueue } from "./_helpers.js";
 
 export default route()
 	.post()
 	.schema(z.object({ name: z.string() }))
 	.handler(async ({ input, ...ctx }) => {
 		const { instances } = getCollections(ctx);
-		const queue = (ctx as any).queue as any;
+		const executeQueue = getQueue(ctx, "questpie-wf-execute");
 
 		const result = await instances.find(
 			{
@@ -35,7 +36,7 @@ export default route()
 					{ accessMode: "system" },
 				);
 
-				await queue["questpie-wf-execute"].publish({
+				await executeQueue.publish({
 					instanceId: instance.id,
 					workflowName: instance.name,
 				});

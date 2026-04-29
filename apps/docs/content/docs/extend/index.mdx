@@ -20,10 +20,13 @@ QUESTPIE is designed to be extensible. The core framework provides primitives �
 
 The extension system follows three levels:
 
-```text
-Plugin  → Declares what CAN exist (categories, builder extensions, registries)
-Module  → Contributes what DOES exist (entities, values)
-Config  → Runs the runtime (infrastructure, secrets)
+```mermaid
+flowchart LR
+  Plugin["Plugin<br/>declares what can exist"]
+  Module["Module<br/>contributes what does exist"]
+  Config["Config<br/>runs the runtime"]
+
+  Plugin --> Module --> Config
 ```
 
 Plugins tell codegen what to discover. Modules provide the actual implementations. Config wires infrastructure.

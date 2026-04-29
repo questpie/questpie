@@ -38,7 +38,7 @@ Access functions receive the full `AppContext`:
 .access({
   update: ({ session, db }) => {
     if (!session) return false;
-    return (session.user as any).role === "admin";
+    return session.user.role === "admin";
   },
 })
 ```
@@ -57,7 +57,7 @@ Globals support `read` and `update` (no create/delete since they're singletons):
 ```ts title="globals/site-settings.ts"
 .access({
   read: true,
-  update: ({ session }) => (session?.user as any)?.role === "admin",
+  update: ({ session }) => session?.user?.role === "admin",
 })
 ```
 
@@ -80,9 +80,9 @@ HTTP requests from clients always use the session-based access mode.
 ```ts
 .access({
   read: true,
-  create: ({ session }) => (session?.user as any)?.role === "admin",
-  update: ({ session }) => (session?.user as any)?.role === "admin",
-  delete: ({ session }) => (session?.user as any)?.role === "admin",
+  create: ({ session }) => session?.user?.role === "admin",
+  update: ({ session }) => session?.user?.role === "admin",
+  delete: ({ session }) => session?.user?.role === "admin",
 })
 ```
 

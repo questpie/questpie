@@ -23,19 +23,16 @@ For single-user split-screen editing, the direct `postMessage` transport from th
 
 ## Architecture
 
-```
-┌─────────────┐          ┌───────────────┐          ┌──────────────┐
-│  Admin Tab   │ ──────> │  QUESTPIE      │ ──────> │  Preview Tab  │
-│  (editor)    │  PATCH   │  Realtime      │  SSE     │  (detached)   │
-│              │  BATCH   │  Server        │  stream  │               │
-└─────────────┘          └───────────────┘          └──────────────┘
-                                │
-                                │  SSE stream
-                                v
-                         ┌──────────────┐
-                         │  Phone/Tablet │
-                         │  (shared URL) │
-                         └──────────────┘
+```mermaid
+flowchart LR
+  Admin["Admin Tab<br/>(editor)"]
+  Realtime["QUESTPIE Realtime Server"]
+  Preview["Preview Tab<br/>(detached)"]
+  Mobile["Phone / Tablet<br/>(shared URL)"]
+
+  Admin -- "PATCH_BATCH" --> Realtime
+  Realtime -- "SSE stream" --> Preview
+  Realtime -- "SSE stream" --> Mobile
 ```
 
 Instead of `postMessage`, patches flow through a realtime channel. The admin publishes patches to the channel. All connected preview clients subscribe and apply patches locally.

@@ -7,42 +7,22 @@ The codegen system is the backbone of QUESTPIE's type safety. It scans your file
 
 ## Pipeline Overview
 
-{/* TODO: Replace with mermaid diagram once fumadocs-mermaid is set up (bun add mermaid, remarkMermaid plugin in source.config.ts) */}
+```mermaid
+flowchart TD
+  Config["questpie.config.ts"]
+  Registry["Plugin Registry<br/>categories, discover patterns, builder extensions, callback params, singleton factories"]
+  Targets["Target Graph Resolution<br/>server, admin-client, etc."]
+  Discovery["File Discovery<br/>scan directories, match patterns, detect exports, derive keys"]
+  Transforms["Transforms<br/>plugin order modifies imports, types, runtime code"]
+  Emission["Template Emission"]
+  Index["index.ts or module.ts"]
+  Factories["factories.ts"]
+  Registries["registries.ts"]
 
-```text
-questpie.config.ts
-    │
-    ▼
-┌─────────────────┐
-│  Plugin Registry │  Each plugin declares categories, discover patterns,
-│  (core + admin)  │  builder extensions, callback params, singleton factories
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│  Target Graph    │  Merge all plugin contributions per target
-│  Resolution      │  ("server", "admin-client", etc.)
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│  File Discovery  │  Scan directories, match patterns, detect exports,
-│  (discover.ts)   │  derive keys, build DiscoveredFile records
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│  Transforms      │  Plugin transform functions modify the codegen context
-│  (plugin order)  │  (add imports, type declarations, runtime code)
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────────────────────────────┐
-│  Template Emission                       │
-│  ├── index.ts (root app) or module.ts   │
-│  ├── factories.ts (builder extensions)   │
-│  └── registries.ts (module augmentation) │
-└─────────────────────────────────────────┘
+  Config --> Registry --> Targets --> Discovery --> Transforms --> Emission
+  Emission --> Index
+  Emission --> Factories
+  Emission --> Registries
 ```
 
 ## Target System
@@ -276,21 +256,28 @@ validators: [createAdminProjectionValidator()];
 
 When running `questpie generate` on a package (not an app), codegen iterates all module directories and generates `module.ts` + `registries.ts` for each module, for each target:
 
-```text
-packages/admin/src/server/modules/
-├── admin/
-│   ├── .generated/
-│   │   ├── module.ts        ← server target
-│   │   └── registries.ts    ← type augmentation
-│   └── client/
-│       └── .generated/
-│           └── module.ts    ← admin-client target
-├── audit/
-│   └── .generated/
-│       └── module.ts
-└── admin-preferences/
-    └── .generated/
-        └── module.ts
+```mermaid
+flowchart TD
+  Root["packages/admin/src/server/modules/"]
+  Admin["admin/"]
+  AdminGenerated[".generated/"]
+  AdminModule["module.ts<br/>server target"]
+  AdminRegistries["registries.ts<br/>type augmentation"]
+  AdminClient["client/"]
+  AdminClientGenerated[".generated/"]
+  AdminClientModule["module.ts<br/>admin-client target"]
+  Audit["audit/"]
+  AuditModule[".generated/module.ts"]
+  Preferences["admin-preferences/"]
+  PreferencesModule[".generated/module.ts"]
+
+  Root --> Admin
+  Admin --> AdminGenerated
+  AdminGenerated --> AdminModule
+  AdminGenerated --> AdminRegistries
+  Admin --> AdminClient --> AdminClientGenerated --> AdminClientModule
+  Root --> Audit --> AuditModule
+  Root --> Preferences --> PreferencesModule
 ```
 
 Each target's `moduleRoot` determines where to look within each module directory. The admin-client target uses `moduleRoot: "client"`, so it discovers from `modules/admin/client/`.
@@ -299,11 +286,11 @@ Each target's `moduleRoot` determines where to look within each module directory
 
 Some keys in the `components` category are **reserved** for built-in chrome overrides. These are not registered via factory calls — they come from plain React component files under `questpie/admin/components/`. Codegen discovers them by filename and registers them under the reserved key:
 
-| File | Key | Consumed by |
-| ---- | --- | ----------- |
-| `admin-sidebar-brand.tsx` | `adminSidebarBrand` | `AdminSidebar` |
+| File                         | Key                   | Consumed by                   |
+| ---------------------------- | --------------------- | ----------------------------- |
+| `admin-sidebar-brand.tsx`    | `adminSidebarBrand`   | `AdminSidebar`                |
 | `admin-sidebar-nav-item.tsx` | `adminSidebarNavItem` | `AdminSidebar` (each nav row) |
-| `admin-auth-layout.tsx` | `adminAuthLayout` | `AuthLayout` (all auth pages) |
+| `admin-auth-layout.tsx`      | `adminAuthLayout`     | `AuthLayout` (all auth pages) |
 
 These keys are runtime-only: they never appear in type augmentation, are not validated by the projection validator, and do not generate types. They are resolved at render time via `admin.getComponent(key)`.
 

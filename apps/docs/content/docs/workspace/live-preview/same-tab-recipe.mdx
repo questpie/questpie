@@ -60,21 +60,17 @@ function PageRoute({ initialData }) {
 
 When the admin opens live preview, the following handshake occurs:
 
-```
-Iframe loads your page
-       |
-       v
-  Frame sends READY  ──────────────>  Admin receives READY
-       |                                      |
-       v                                      v
-  Frame waits...            Admin sends INIT_SNAPSHOT (full record)
-       |                                      |
-       v                                      v
-  Frame receives INIT_SNAPSHOT        Admin enables editing
-       |
-       v
-  Frame applies initial data
-  Frame sends ACK { ackSeq }
+```mermaid
+sequenceDiagram
+  participant Frame as Preview Frame
+  participant Admin as Admin
+
+  Frame->>Frame: Load page
+  Frame->>Admin: READY
+  Admin->>Frame: INIT_SNAPSHOT (full record)
+  Admin->>Admin: Enable editing
+  Frame->>Frame: Apply initial data
+  Frame->>Admin: ACK { ackSeq }
 ```
 
 The hook handles this automatically. When your page mounts inside an iframe, it sends `READY` to the parent. The admin responds with `INIT_SNAPSHOT` carrying the full record. The hook stores this as the draft state and sends an `ACK` back.

@@ -1,6 +1,11 @@
 import { route } from "questpie";
 import { z } from "zod";
-import { getCollections } from "./_helpers.js";
+
+import {
+	getCollections,
+	getQueue,
+	getWorkflowDefinitions,
+} from "./_helpers.js";
 
 export default route()
 	.post()
@@ -12,8 +17,7 @@ export default route()
 		}),
 	)
 	.handler(async ({ input, ...ctx }) => {
-		const app = (ctx as any).app as any;
-		const workflows = (app?.state?.workflows ?? {}) as Record<string, any>;
+		const workflows = getWorkflowDefinitions(ctx);
 		const definition = workflows[input.name];
 
 		if (!definition) {
@@ -21,7 +25,7 @@ export default route()
 		}
 
 		const { instances } = getCollections(ctx);
-		const queue = (ctx as any).queue as any;
+		const executeQueue = getQueue(ctx, "questpie-wf-execute");
 
 		// Validate workflow input against schema
 		const validated = definition.schema.parse(input.input);
@@ -70,7 +74,7 @@ export default route()
 		);
 
 		// Queue execution
-		await queue["questpie-wf-execute"].publish({
+		await executeQueue.publish({
 			instanceId: instance.id,
 			workflowName: input.name,
 		});

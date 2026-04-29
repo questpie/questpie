@@ -9,7 +9,13 @@
  */
 
 import { service } from "questpie";
+
 import { createWorkflowClient } from "../../../client.js";
+import {
+	getCollections,
+	getQueue,
+	getWorkflowDefinitions,
+} from "../routes/_helpers.js";
 
 /**
  * The workflow service definition.
@@ -21,30 +27,15 @@ export const workflowService = service()
 	.namespace(null)
 	.lifecycle("singleton")
 	.create((ctx) => {
-		const collections = (ctx as any).collections as
-			| Record<string, any>
-			| undefined;
-		const queue = (ctx as any).queue as any;
-		const app = (ctx as any).app as any;
-
-		const instancesCrud = collections?.wf_instance;
-		const stepsCrud = collections?.wf_step;
-		const eventsCrud = collections?.wf_event;
-
-		if (!instancesCrud || !stepsCrud || !eventsCrud) {
-			throw new Error(
-				"Workflow system collections not found. Is workflowsModule registered?",
-			);
-		}
-
-		// Get workflow definitions from app state
-		const definitions = (app?.state?.workflows ?? {}) as Record<string, any>;
+		const { instances, steps, events } = getCollections(ctx);
+		const definitions = getWorkflowDefinitions(ctx);
+		const executeQueue = getQueue(ctx, "questpie-wf-execute");
 
 		return createWorkflowClient(definitions, {
-			instances: instancesCrud,
-			steps: stepsCrud,
-			events: eventsCrud,
-			publishExecute: queue["questpie-wf-execute"],
+			instances,
+			steps,
+			events,
+			publishExecute: executeQueue,
 		});
 	});
 

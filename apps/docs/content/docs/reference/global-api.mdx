@@ -124,9 +124,12 @@ Set access control rules. Globals support `read` and `update` operations (no cre
 ```ts
 .access({
   read: true,
+  transition: ({ session }) => session?.user?.role === "editor",
   update: ({ session }) => session?.user?.role === "admin",
 })
 ```
+
+`transition` controls workflow stage transitions. If it is omitted, workflow transitions fall back to the `update` rule.
 
 ## `.set(key, value)`
 
@@ -202,6 +205,40 @@ Access globals from the client using the typed API client:
 const settings = await client.globals.siteSettings.get();
 await client.globals.siteSettings.update({ siteName: "Updated" });
 ```
+
+With workflow enabled, `get()` and `update()` accept `stage`:
+
+```ts
+const published = await client.globals.siteSettings.get({
+	stage: "published",
+});
+
+await client.globals.siteSettings.update(
+	{ announcement: "Launching soon" },
+	{ stage: "draft" },
+);
+```
+
+## Workflow Transition API
+
+Use `transitionStage()` to move a global to a target workflow stage without mutating the working row:
+
+```ts
+await globals.siteSettings.transitionStage({
+	stage: "published",
+});
+```
+
+The client SDK supports the same call, including scheduled transitions:
+
+```ts
+await client.globals.siteSettings.transitionStage({
+	stage: "published",
+	scheduledAt: new Date("2026-05-01T09:00:00Z"),
+});
+```
+
+Transition validation matches collections: the target stage must exist, the transition graph must allow the move, `access.transition` must pass or fall back to `access.update`, and transition hooks run around the version snapshot.
 
 ## Type Inference
 

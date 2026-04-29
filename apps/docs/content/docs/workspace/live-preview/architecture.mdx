@@ -34,31 +34,30 @@ This page documents the target architecture. For the current preview system, see
 
 ## Architecture Overview
 
-```text
-+------------------+        postMessage         +------------------+
-|   Admin Panel    | =========================> |   Preview Frame  |
-|                  |                            |                  |
-|  Form State      |   INIT_SNAPSHOT            |  Draft Store     |
-|  Session Mgr     |   PATCH_BATCH              |  Merge Engine    |
-|  Reconcile Client|   FOCUS_FIELD              |  Render Tree     |
-|                  |   SELECT_BLOCK             |                  |
-|                  |   COMMIT                   |                  |
-|                  | <========================= |                  |
-|                  |   READY                    |                  |
-|                  |   ACK                      |                  |
-|                  |   FIELD_CLICKED            |                  |
-|                  |   BLOCK_CLICKED            |                  |
-|                  |   RELATION_CLICKED         |                  |
-|                  |   RENDER_ERROR             |                  |
-+------------------+                            +------------------+
-         |                                               |
-         |          +------------------+                 |
-         +--------->|   Server         |<----------------+
-                    |                  |
-                    |  Session Store   |
-                    |  Reconcile Engine|
-                    |  Token Mint      |
-                    +------------------+
+```mermaid
+flowchart LR
+  subgraph Admin["Admin Panel"]
+    FormState["Form State"]
+    SessionMgr["Session Manager"]
+    ReconcileClient["Reconcile Client"]
+  end
+
+  subgraph Frame["Preview Frame"]
+    DraftStore["Draft Store"]
+    MergeEngine["Merge Engine"]
+    RenderTree["Render Tree"]
+  end
+
+  subgraph Server["Server"]
+    SessionStore["Session Store"]
+    ReconcileEngine["Reconcile Engine"]
+    TokenMint["Token Mint"]
+  end
+
+  Admin -- "INIT_SNAPSHOT<br/>PATCH_BATCH<br/>FOCUS_FIELD<br/>SELECT_BLOCK<br/>COMMIT" --> Frame
+  Frame -- "READY<br/>ACK<br/>FIELD_CLICKED<br/>BLOCK_CLICKED<br/>RELATION_CLICKED<br/>RENDER_ERROR" --> Admin
+  Admin --> Server
+  Frame --> Server
 ```
 
 ### Three-Layer Model
@@ -77,28 +76,23 @@ Save writes to the database as it does today. After a successful save, the admin
 
 ## Session Lifecycle
 
-```text
-1. Admin opens preview
-   Admin ──── createSession() ───> Server
-   Server returns { sessionId, token }
+```mermaid
+sequenceDiagram
+  participant Admin
+  participant Server
+  participant Frame as Preview Frame
 
-2. Iframe loads with token
-   Frame ──── READY ────────────> Admin
-
-3. Admin sends initial state
-   Admin ──── INIT_SNAPSHOT ────> Frame
-
-4. User edits a field
-   Admin ──── PATCH_BATCH ──────> Frame     (instant local apply)
-   Admin ──── reconcile() ──────> Server    (if watched field changed)
-   Server ─── RECONCILE_RESULT ─> Admin ──> Frame
-
-5. User saves
-   Admin ──── save() ───────────> Server    (DB write)
-   Admin ──── COMMIT ───────────> Frame     (new baseline)
-
-6. Desync detected (seq gap, error, stale session)
-   Admin ──── FULL_RESYNC ──────> Frame     (full snapshot replace)
+  Admin->>Server: createSession()
+  Server-->>Admin: { sessionId, token }
+  Frame->>Admin: READY
+  Admin->>Frame: INIT_SNAPSHOT
+  Admin->>Frame: PATCH_BATCH (instant local apply)
+  Admin->>Server: reconcile()
+  Server-->>Admin: RECONCILE_RESULT
+  Admin->>Frame: RECONCILE_RESULT
+  Admin->>Server: save()
+  Admin->>Frame: COMMIT (new baseline)
+  Admin->>Frame: FULL_RESYNC (seq gap, error, stale session)
 ```
 
 ## Protocol
@@ -246,14 +240,13 @@ These components replace the manual `postMessage` wiring from V1. They handle bi
 
 The server reconcile endpoint receives a session ID and a batch of patches, then returns the authoritative snapshot:
 
-```text
-POST /api/preview/reconcile
+```mermaid
+sequenceDiagram
+  participant Admin
+  participant Server as POST /api/preview/reconcile
 
-Request:
-  { sessionId, patches: JSONPatch[], seq }
-
-Response:
-  { snapshot, computedFields, url, seq }
+  Admin->>Server: { sessionId, patches: JSONPatch[], seq }
+  Server-->>Admin: { snapshot, computedFields, url, seq }
 ```
 
 The reconcile engine:
@@ -277,30 +270,41 @@ See [Same-Tab Recipe](/docs/workspace/live-preview/same-tab-recipe) and [Shared 
 
 ## Code Boundaries
 
-```text
-@questpie/admin (server)
-  src/server/preview/
-    session.ts          -- Session creation, storage, token mint
-    reconcile.ts        -- Reconcile engine
-    routes.ts           -- HTTP endpoints
+```mermaid
+flowchart TD
+  AdminServer["@questpie/admin (server)"]
+  ServerPreview["src/server/preview/"]
+  Session["session.ts<br/>session creation, storage, token mint"]
+  Reconcile["reconcile.ts<br/>reconcile engine"]
+  Routes["routes.ts<br/>HTTP endpoints"]
+  AdminClient["@questpie/admin (client)"]
+  ClientPreview["src/client/preview/"]
+  Transport["transport.ts<br/>postMessage + WebSocket fallback"]
+  ClientSession["session.ts<br/>session state machine"]
+  PatchesClient["patches.ts<br/>form diff to JSON patch"]
+  HooksClient["hooks.ts<br/>useAdminPreview"]
+  Shared["@questpie/preview (shared)"]
+  Contract["contract.ts<br/>messages, envelope, protocol version"]
+  PatchesShared["patches.ts<br/>patch apply + merge utilities"]
+  ReactPkg["@questpie/preview/react"]
+  Store["store.ts<br/>draft store"]
+  HooksReact["hooks.ts<br/>useQuestpiePreview"]
+  Components["components.tsx<br/>PreviewRoot, PreviewField, PreviewBlock"]
 
-@questpie/admin (client)
-  src/client/preview/
-    transport.ts        -- postMessage send/receive, WebSocket fallback
-    session.ts          -- Session state machine
-    patches.ts          -- Form diff -> JSON patch conversion
-    hooks.ts            -- useAdminPreview
-
-@questpie/preview (shared package)
-  src/
-    contract.ts         -- Message types, envelope, protocol version
-    patches.ts          -- Patch apply/merge utilities
-
-@questpie/preview/react (frontend)
-  src/
-    store.ts            -- Draft store (snapshot + local patches)
-    hooks.ts            -- useQuestpiePreview
-    components.tsx      -- PreviewRoot, PreviewField, PreviewBlock
+  AdminServer --> ServerPreview
+  ServerPreview --> Session
+  ServerPreview --> Reconcile
+  ServerPreview --> Routes
+  AdminClient --> ClientPreview
+  ClientPreview --> Transport
+  ClientPreview --> ClientSession
+  ClientPreview --> PatchesClient
+  ClientPreview --> HooksClient
+  Shared --> Contract
+  Shared --> PatchesShared
+  ReactPkg --> Store
+  ReactPkg --> HooksReact
+  ReactPkg --> Components
 ```
 
 The shared message contract lives in a single file (`contract.ts`) imported by both admin and frontend packages. No message type is defined in two places.

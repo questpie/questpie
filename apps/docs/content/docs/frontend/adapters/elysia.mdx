@@ -40,9 +40,9 @@ Create a typed client for frontend use:
 
 ```ts title="src/lib/client.ts"
 import { createClientFromEden } from "@questpie/elysia/client";
-import type { AppConfig } from "#questpie";
+import type { App, AppConfig } from "#questpie";
 
-export const client = createClientFromEden<any, AppConfig>({
+export const client = createClientFromEden<App, AppConfig>({
 	server: "localhost:3000",
 	basePath: "/api",
 });

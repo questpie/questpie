@@ -7,11 +7,24 @@ QUESTPIE provides end-to-end TypeScript type safety. Types flow from your field 
 
 ## The Type Flow
 
-```text
-Field Definition                    Codegen                        Client SDK
-f.text().required()    →    AppCollections type    →    client.collections.posts.find()
-f.number()                    →    with field types        →    where: { price: { gte: 1000 } }
-f.select([...])  →    and operators           →    data.status === "published"
+```mermaid
+flowchart LR
+  Text["f.text().required()"]
+  Number["f.number()"]
+  Select["f.select([...])"]
+  Codegen["Codegen<br/>AppCollections + field types + operators"]
+  Client["Client SDK"]
+  Find["client.collections.posts.find()"]
+  Where["where: { price: { gte: 1000 } }"]
+  Narrow["data.status === \"published\""]
+
+  Text --> Codegen
+  Number --> Codegen
+  Select --> Codegen
+  Codegen --> Client
+  Client --> Find
+  Client --> Where
+  Client --> Narrow
 ```
 
 ## Generated Types

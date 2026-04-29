@@ -7,8 +7,15 @@ description: One schema. Every output. Backend-first TypeScript framework with s
 
 QUESTPIE is a **backend-first TypeScript framework** where you define your data schema once, and codegen + introspection project it into typed runtimes, APIs, and frontends.
 
-```text
-Schema → Codegen → Typed Runtime → Projection → Any Frontend
+```mermaid
+flowchart LR
+  Schema["Schema"]
+  Codegen["Codegen"]
+  Runtime["Typed Runtime"]
+  Projection["Projection"]
+  Frontend["Any Frontend"]
+
+  Schema --> Codegen --> Runtime --> Projection --> Frontend
 ```
 
 Define collections, routes, jobs, and hooks as plain files. Codegen wires them into a type-safe runtime. The admin panel, client SDK, and OpenAPI spec are all **projections** of the same schema — not separate definitions.
@@ -46,14 +53,19 @@ This single file defines:
 
 ## Package Architecture
 
-```text
-Required
-questpie              — core runtime (collections, fields, hooks, routes, codegen)
-@questpie/<adapter>   — HTTP adapter (hono, elysia, or nextjs)
+```mermaid
+flowchart TD
+  Required["Required packages"]
+  Core["questpie<br/>core runtime, fields, hooks, routes, codegen"]
+  Adapter["@questpie/&lt;adapter&gt;<br/>hono, elysia, or nextjs"]
+  Optional["Optional packages"]
+  Admin["@questpie/admin<br/>admin interface via schema introspection"]
+  Query["@questpie/tanstack-query<br/>TanStack Query hooks"]
 
-Optional
-@questpie/admin       — admin interface via schema introspection
-@questpie/tanstack-query — TanStack Query hooks
+  Required --> Core
+  Required --> Adapter
+  Optional --> Admin
+  Optional --> Query
 ```
 
 ## Documentation Sections

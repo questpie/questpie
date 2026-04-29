@@ -145,7 +145,7 @@ export class StepExecutionContext implements WorkflowStepContext {
 	/** Steps that have registered compensation callbacks. */
 	private readonly compensations: Array<{
 		name: string;
-		fn: (result: any) => Promise<void>;
+		fn: (result: unknown) => Promise<void>;
 		result: unknown;
 	}> = [];
 
@@ -514,7 +514,7 @@ export class StepExecutionContext implements WorkflowStepContext {
 	 */
 	getCompensations(): ReadonlyArray<{
 		name: string;
-		fn: (result: any) => Promise<void>;
+		fn: (result: unknown) => Promise<void>;
 		result: unknown;
 	}> {
 		return this.compensations;

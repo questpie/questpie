@@ -11,7 +11,8 @@
 
 import { job } from "questpie";
 import { z } from "zod";
-import type { CollectionCrud } from "../../../client.js";
+
+import { getCollections, getQueue } from "../routes/_helpers.js";
 
 const wfResumeSchema = z.object({
 	instanceId: z.string(),
@@ -30,19 +31,8 @@ export const wfResumeJob = job({
 	},
 	handler: async (ctx) => {
 		const { payload } = ctx;
-		const collections = (ctx as any).collections as
-			| Record<string, CollectionCrud>
-			| undefined;
-		const queue = (ctx as any).queue as any;
-
-		const instancesCrud = collections?.wf_instance;
-		const stepsCrud = collections?.wf_step;
-
-		if (!instancesCrud || !stepsCrud) {
-			throw new Error(
-				"Workflow system collections not found. Is workflowsModule registered?",
-			);
-		}
+		const { instances: instancesCrud, steps: stepsCrud } = getCollections(ctx);
+		const executeQueue = getQueue(ctx, "questpie-wf-execute");
 
 		// Find the step to resume
 		const step = await stepsCrud.findOne(
@@ -91,7 +81,7 @@ export const wfResumeJob = job({
 		}
 
 		// Re-queue the execute job to replay from the resumed step
-		await queue["questpie-wf-execute"].publish({
+		await executeQueue.publish({
 			instanceId: payload.instanceId,
 			workflowName: instance.name,
 		});

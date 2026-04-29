@@ -7,24 +7,27 @@ Hooks let you run logic at specific points in the collection lifecycle. They rec
 
 ## Hook Lifecycle
 
-```text
-API Request
-  ↓
-beforeValidate    — Modify/validate data before schema validation
-  ↓
-Schema Validation — Zod validation from field definitions
-  ↓
-beforeChange      — Transform data before database write
-  ↓
-Database Write    — Insert or update
-  ↓
-afterChange       — Side effects after successful write
+```mermaid
+flowchart TD
+  Request["API Request"]
+  BeforeValidate["beforeValidate<br/>modify or validate data before schema validation"]
+  Schema["Schema Validation<br/>Zod validation from field definitions"]
+  BeforeChange["beforeChange<br/>transform data before database write"]
+  Write["Database Write<br/>insert or update"]
+  AfterChange["afterChange<br/>side effects after successful write"]
+
+  Request --> BeforeValidate --> Schema --> BeforeChange --> Write --> AfterChange
 ```
 
 For deletes:
 
-```text
-beforeDelete → Database Delete → afterDelete
+```mermaid
+flowchart LR
+  BeforeDelete["beforeDelete"]
+  Delete["Database Delete"]
+  AfterDelete["afterDelete"]
+
+  BeforeDelete --> Delete --> AfterDelete
 ```
 
 ## Defining Hooks

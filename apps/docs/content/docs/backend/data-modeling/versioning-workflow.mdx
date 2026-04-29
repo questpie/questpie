@@ -124,6 +124,32 @@ const page = await client.collections.pages.findOne({
 });
 ```
 
+## Write A Stage
+
+Creates and updates use the workflow initial stage unless the request context or client options specify another stage:
+
+```ts
+await collections.posts.create(
+	{
+		title: "Launch notes",
+		content: "Draft content",
+	},
+	{ stage: "review" },
+);
+```
+
+```ts
+await client.collections.posts.update(
+	{
+		id: "post_123",
+		data: { title: "Updated title" },
+	},
+	{ stage: "draft" },
+);
+```
+
+Writing a stage updates the working row for that stage. Publishing is still done through `transitionStage()` so access rules, hooks, and version snapshots run consistently.
+
 ## Transition A Collection Record
 
 Use `transitionStage()` to move a record to a target stage:
@@ -190,6 +216,28 @@ Client-side:
 await client.globals.siteSettings.transitionStage({ stage: "published" });
 ```
 
+## HTTP Transition Endpoints
+
+The core module exposes transition routes under the app API base path:
+
+| Resource   | Endpoint                           | Body                              |
+| ---------- | ---------------------------------- | --------------------------------- |
+| Collection | `POST /:collection/:id/transition` | `{ stage: string, scheduledAt? }` |
+| Global     | `POST /globals/:name/transition`   | `{ stage: string, scheduledAt? }` |
+
+`scheduledAt` must be an ISO datetime string when calling the HTTP API directly:
+
+```ts
+await fetch("/api/posts/post_123/transition", {
+	method: "POST",
+	headers: { "Content-Type": "application/json" },
+	body: JSON.stringify({
+		stage: "published",
+		scheduledAt: "2026-05-01T09:00:00.000Z",
+	}),
+});
+```
+
 ## Transition Access
 
 Use `access.transition` when publishing rules differ from editing rules:
@@ -231,6 +279,16 @@ The admin transition hook supports a future `scheduledAt` value. Scheduled trans
 
 ```ts
 await transition.mutateAsync({
+	id: "post_123",
+	stage: "published",
+	scheduledAt: new Date("2026-05-01T09:00:00Z"),
+});
+```
+
+The typed client SDK accepts the same `scheduledAt` value on collection and global `transitionStage()` calls:
+
+```ts
+await client.collections.posts.transitionStage({
 	id: "post_123",
 	stage: "published",
 	scheduledAt: new Date("2026-05-01T09:00:00Z"),

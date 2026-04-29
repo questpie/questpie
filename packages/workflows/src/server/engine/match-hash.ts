@@ -42,7 +42,7 @@ export const WILDCARD_HASH = "*";
  * @returns A deterministic hash string
  */
 export function computeMatchHash(
-	criteria: Record<string, any> | null | undefined,
+	criteria: Record<string, unknown> | null | undefined,
 ): string {
 	if (!criteria || Object.keys(criteria).length === 0) {
 		return WILDCARD_HASH;
@@ -64,7 +64,7 @@ export function computeMatchHash(
  * @returns Array of hashes to query
  */
 export function getMatchHashesForDispatch(
-	matchData: Record<string, any> | null | undefined,
+	matchData: Record<string, unknown> | null | undefined,
 ): string[] {
 	const hashes = [WILDCARD_HASH];
 

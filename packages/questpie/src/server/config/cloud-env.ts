@@ -177,6 +177,7 @@ function createLazyS3Driver(options: S3DriverOptions) {
 						},
 						region: options.region,
 						bucket: options.bucket,
+						visibility: "public",
 						endpoint: options.endpoint,
 						forcePathStyle: true,
 					});

@@ -16,12 +16,14 @@
  * wf-execute job.
  */
 
+import type { AppContext } from "questpie";
+
 import type { WorkflowDefinition } from "../workflow/types.js";
 import type { CompensationEntry } from "./compensation.js";
 import { createCompletedStepsMap, runCompensations } from "./compensation.js";
 import { StepSuspendError } from "./errors.js";
 import type { EventPersistence, ResumeWaiterFn } from "./events.js";
-import type { FlushCallback } from "./logger.js";
+import type { ExternalLogger, FlushCallback } from "./logger.js";
 import { WorkflowLoggerImpl } from "./logger.js";
 import {
 	type CachedStep,
@@ -77,15 +79,10 @@ export interface EngineContext {
 	flushLogs: FlushCallback;
 
 	/** Optional external logger for dual output. */
-	externalLogger?: {
-		debug(message: string, data?: Record<string, unknown>): void;
-		info(message: string, data?: Record<string, unknown>): void;
-		warn(message: string, data?: Record<string, unknown>): void;
-		error(message: string, data?: Record<string, unknown>): void;
-	};
+	externalLogger?: ExternalLogger;
 
 	/** App context passed to the workflow handler. */
-	appContext: Record<string, any>;
+	appContext: AppContext;
 
 	/** Event persistence operations (optional — for event matching). */
 	eventPersistence?: EventPersistence;

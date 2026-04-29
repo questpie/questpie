@@ -16,14 +16,14 @@ export interface QueueAdapter {
 
 	publish(
 		jobName: string,
-		payload: any,
+		payload: unknown,
 		options?: PublishOptions,
 	): Promise<string | null>;
 
 	schedule(
 		jobName: string,
 		cron: string,
-		payload: any,
+		payload: unknown,
 		options?: Omit<PublishOptions, "startAfter">,
 	): Promise<void>;
 

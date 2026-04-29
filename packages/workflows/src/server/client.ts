@@ -20,7 +20,9 @@ import type { EventPersistence, ResumeWaiterFn } from "./engine/events.js";
 import { dispatchEvent } from "./engine/events.js";
 import type {
 	WorkflowDefinition,
+	WorkflowEventRecord,
 	WorkflowInstance,
+	WorkflowLogRecord,
 	WorkflowStepRecord,
 } from "./workflow/types.js";
 
@@ -34,31 +36,82 @@ import type {
  * This abstracts the QUESTPIE collection CRUD so the client doesn't
  * directly depend on the core package types.
  */
-export interface CollectionCrud {
-	create(input: any, context?: any): Promise<any>;
-	findOne(options?: any, context?: any): Promise<any | null>;
-	find(options?: any, context?: any): Promise<{ docs: any[] }>;
-	updateById(params: any, context?: any): Promise<any>;
-	deleteById?(params: any, context?: any): Promise<any>;
+export type SystemAccessContext = {
+	accessMode: "system";
+};
+
+export type WorkflowCollectionDocument = {
+	id: string;
+} & Record<string, unknown>;
+
+export type CollectionFindResult<TDocument> = {
+	docs: TDocument[];
+	totalDocs?: number;
+	page?: number;
+	limit?: number;
+};
+
+export interface CollectionCrud<
+	TDocument extends { id: string } = WorkflowCollectionDocument,
+> {
+	create(
+		input: Record<string, unknown>,
+		context?: SystemAccessContext,
+	): Promise<TDocument>;
+	findOne(
+		options?: Record<string, unknown>,
+		context?: SystemAccessContext,
+	): Promise<TDocument | null>;
+	find(
+		options?: Record<string, unknown>,
+		context?: SystemAccessContext,
+	): Promise<CollectionFindResult<TDocument>>;
+	count?(
+		options?: Record<string, unknown>,
+		context?: SystemAccessContext,
+	): Promise<number | { totalDocs: number }>;
+	updateById(
+		params: { id: string; data: Record<string, unknown> },
+		context?: SystemAccessContext,
+	): Promise<TDocument>;
+	deleteById?(
+		params: { id: string },
+		context?: SystemAccessContext,
+	): Promise<TDocument>;
 }
 
 /**
  * Queue publish interface — matches the QUESTPIE QueueClient per-job API.
  */
+export type QueuePublishOptions = {
+	priority?: number;
+	startAfter?: number | string | Date;
+};
+
 export interface QueuePublish {
-	publish(payload: any, options?: any): Promise<any>;
+	publish(
+		payload: Record<string, unknown>,
+		options?: QueuePublishOptions,
+	): Promise<unknown>;
 }
+
+export type WorkflowSystemCollections = {
+	wf_instance: CollectionCrud<WorkflowInstance>;
+	wf_step: CollectionCrud<WorkflowStepRecord>;
+	wf_event: CollectionCrud<WorkflowEventRecord>;
+	wf_log: CollectionCrud<WorkflowLogRecord>;
+};
 
 /**
  * Dependencies injected into the workflow client.
  */
 export interface WorkflowClientDeps {
 	/** wf_instance collection CRUD. */
-	instances: CollectionCrud;
+	instances: CollectionCrud<WorkflowInstance>;
 	/** wf_step collection CRUD. */
-	steps: CollectionCrud;
+	steps: CollectionCrud<WorkflowStepRecord>;
 	/** wf_event collection CRUD. */
-	events: CollectionCrud;
+	events: CollectionCrud<WorkflowEventRecord>;
 	/** Queue publish for the execute job. */
 	publishExecute: QueuePublish;
 	/** Queue publish for the resume job. */
@@ -91,7 +144,7 @@ export interface WorkflowClient<
 	 */
 	trigger<K extends keyof TWorkflows & string>(
 		name: K,
-		input: TWorkflows[K] extends WorkflowDefinition<infer I, any, any>
+		input: TWorkflows[K] extends WorkflowDefinition<infer I, unknown, string>
 			? I
 			: unknown,
 		options?: {
@@ -125,7 +178,7 @@ export interface WorkflowClient<
 	sendEvent(
 		event: string,
 		data?: unknown,
-		match?: Record<string, any>,
+		match?: Record<string, unknown>,
 	): Promise<void>;
 
 	/**
@@ -386,10 +439,15 @@ export function createWorkflowClient<
 						},
 						{ accessMode: "system" },
 					);
-					return result.docs.map((s: any) => ({
+					return result.docs.map((s) => ({
 						instanceId: s.instanceId,
 						stepName: s.name,
-						matchCriteria: s.matchCriteria,
+						matchCriteria:
+							typeof s.matchCriteria === "object" &&
+							s.matchCriteria !== null &&
+							!Array.isArray(s.matchCriteria)
+								? (s.matchCriteria as Record<string, unknown>)
+								: null,
 					}));
 				},
 				async markEventConsumed(eventId) {

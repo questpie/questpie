@@ -1,5 +1,10 @@
 import { route } from "questpie";
 import { z } from "zod";
+
+import type {
+	WorkflowLogRecord,
+	WorkflowStepRecord,
+} from "../../../workflow/types.js";
 import { getCollections } from "./_helpers.js";
 
 export default route()
@@ -23,7 +28,7 @@ export default route()
 			throw new Error(`Workflow instance not found: ${input.id}`);
 		}
 
-		let stepDocs: any[] = [];
+		let stepDocs: WorkflowStepRecord[] = [];
 		if (input.includeSteps) {
 			const stepResult = await steps.find(
 				{
@@ -36,7 +41,7 @@ export default route()
 			stepDocs = stepResult.docs;
 		}
 
-		let logDocs: any[] = [];
+		let logDocs: WorkflowLogRecord[] = [];
 		if (input.includeLogs) {
 			const logResult = await logs.find(
 				{

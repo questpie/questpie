@@ -210,13 +210,23 @@ export default service({
 
 ## Request Flow
 
-```text
-1. User selects "Acme Corp" in ScopePicker
-2. ScopeProvider stores scopeId in state + localStorage
-3. useScopedFetch() adds header: x-selected-workspace: ws_123
-4. Server context.ts extracts workspaceId from header
-5. Access rules return where-clause filter: { workspace: { equals: "ws_123" } }
-6. Only Acme Corp's data returned
+```mermaid
+sequenceDiagram
+	participant User
+	participant ScopePicker
+	participant ScopeProvider
+	participant Client as "useScopedFetch()"
+	participant Server as "context.ts"
+	participant Access as "Access rules"
+	participant Data as "Collections"
+
+	User->>ScopePicker: Select "Acme Corp"
+	ScopePicker->>ScopeProvider: Store scopeId in state + localStorage
+	ScopeProvider->>Client: Provide scopeId
+	Client->>Server: Send x-selected-workspace: ws_123
+	Server->>Access: Expose workspaceId in typed context
+	Access->>Data: Apply { workspace: { equals: "ws_123" } }
+	Data-->>User: Return only Acme Corp data
 ```
 
 ## Next Steps

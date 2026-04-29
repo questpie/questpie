@@ -28,20 +28,28 @@ From this single line, QUESTPIE derives:
 
 Traditional approaches require you to define schema in multiple places:
 
-```text
-// Without QUESTPIE — same data defined 3+ times
-Database migration   → INTEGER price NOT NULL
-API validation       → z.object({ price: z.number() })
-TypeScript type      → interface Post { price: number }
-Form component       → <NumberInput name="price" label="Price" required />
+```mermaid
+flowchart TD
+  Without["Without QUESTPIE<br/>same data defined 3+ times"]
+  Migration["Database migration<br/>INTEGER price NOT NULL"]
+  Validation["API validation<br/>z.object({ price: z.number() })"]
+  Type["TypeScript type<br/>interface Post { price: number }"]
+  Form["Form component<br/>&lt;NumberInput name=\"price\" required /&gt;"]
+
+  Without --> Migration
+  Without --> Validation
+  Without --> Type
+  Without --> Form
 ```
 
 With QUESTPIE:
 
-```text
-// With QUESTPIE — defined once
-f.number().required().label("Price")
-→ database, validation, types, UI all derived automatically
+```mermaid
+flowchart LR
+  Field["f.number().required().label(\"Price\")"]
+  Outputs["Database, validation, types, and UI<br/>derived automatically"]
+
+  Field --> Outputs
 ```
 
 ## How It Works
@@ -51,13 +59,20 @@ f.number().required().label("Price")
 3. **Generated types** flow to the runtime, client, and admin
 4. **Each consumer** uses the appropriate projection of the same definition
 
-```text
-Field Definition
-  ├──→ Drizzle column type + constraints
-  ├──→ Zod validation schema
-  ├──→ TypeScript Select/Insert types
-  ├──→ Query operator type narrowing
-  └──→ Admin field renderer selection (via registry)
+```mermaid
+flowchart TD
+  Field["Field Definition"]
+  Drizzle["Drizzle column type + constraints"]
+  Zod["Zod validation schema"]
+  Types["TypeScript Select/Insert types"]
+  Operators["Query operator type narrowing"]
+  Renderer["Admin field renderer selection<br/>via registry"]
+
+  Field --> Drizzle
+  Field --> Zod
+  Field --> Types
+  Field --> Operators
+  Field --> Renderer
 ```
 
 ## Practical Consequences

@@ -7,26 +7,44 @@ This guide covers how QUESTPIE packages are built, structured, and published as 
 
 ## Monorepo Structure
 
-```text
-questpie/
-├── packages/
-│   ├── questpie/              # Core framework
-│   ├── admin/                 # Admin UI
-│   ├── openapi/               # OpenAPI integration
-│   ├── elysia/                # Elysia adapter
-│   ├── hono/                  # Hono adapter
-│   ├── next/                  # Next.js integration
-│   ├── tanstack-query/        # TanStack Query client
-│   └── create-questpie/       # Project scaffolder
-├── apps/
-│   └── docs/                  # Documentation site
-├── examples/
-│   ├── city-portal/
-│   └── tanstack-barbershop/
-├── turbo.json                 # Turborepo task config
-├── .oxlintrc.json             # Linting configuration
-├── .oxfmtrc.json              # Formatting configuration
-└── package.json               # Workspace root
+```mermaid
+flowchart TD
+	Repo["questpie/"]
+	Packages["packages/"]
+	Core["questpie/<br/>Core framework"]
+	Admin["admin/<br/>Admin UI"]
+	OpenAPI["openapi/<br/>OpenAPI integration"]
+	Elysia["elysia/<br/>Elysia adapter"]
+	Hono["hono/<br/>Hono adapter"]
+	Next["next/<br/>Next.js integration"]
+	TanStack["tanstack-query/<br/>TanStack Query client"]
+	Create["create-questpie/<br/>Project scaffolder"]
+	Apps["apps/docs/<br/>Documentation site"]
+	Examples["examples/"]
+	CityPortal["city-portal/"]
+	Barbershop["tanstack-barbershop/"]
+	Turbo["turbo.json<br/>Turborepo task config"]
+	Oxlint[".oxlintrc.json<br/>Linting configuration"]
+	Oxfmt[".oxfmtrc.json<br/>Formatting configuration"]
+	PackageJson["package.json<br/>Workspace root"]
+
+	Repo --> Packages
+	Packages --> Core
+	Packages --> Admin
+	Packages --> OpenAPI
+	Packages --> Elysia
+	Packages --> Hono
+	Packages --> Next
+	Packages --> TanStack
+	Packages --> Create
+	Repo --> Apps
+	Repo --> Examples
+	Examples --> CityPortal
+	Examples --> Barbershop
+	Repo --> Turbo
+	Repo --> Oxlint
+	Repo --> Oxfmt
+	Repo --> PackageJson
 ```
 
 **Tooling:**
@@ -43,22 +61,33 @@ questpie/
 
 Every published package follows this structure:
 
-```text
-packages/my-package/
-├── src/
-│   └── exports/              # Public API entry points
-│       ├── index.ts          # Main entry (.)
-│       ├── client.ts         # Client entry (./client)
-│       └── server.ts         # Server entry (./server)
-├── dist/                     # Build output (gitignored)
-│   ├── index.mjs
-│   ├── index.d.mts
-│   ├── client.mjs
-│   ├── client.d.mts
-│   └── ...
-├── tsconfig.json
-├── tsdown.config.ts
-└── package.json
+```mermaid
+flowchart TD
+	Package["packages/my-package/"]
+	Src["src/"]
+	Exports["exports/<br/>Public API entry points"]
+	Index["index.ts<br/>Main entry: ."]
+	Client["client.ts<br/>Client entry: ./client"]
+	Server["server.ts<br/>Server entry: ./server"]
+	Dist["dist/<br/>Build output, gitignored"]
+	DistIndex["index.mjs + index.d.mts"]
+	DistClient["client.mjs + client.d.mts"]
+	DistOther["Other compiled entries"]
+	Tsconfig["tsconfig.json"]
+	Tsdown["tsdown.config.ts"]
+	PackageJson["package.json"]
+
+	Package --> Src --> Exports
+	Exports --> Index
+	Exports --> Client
+	Exports --> Server
+	Package --> Dist
+	Dist --> DistIndex
+	Dist --> DistClient
+	Dist --> DistOther
+	Package --> Tsconfig
+	Package --> Tsdown
+	Package --> PackageJson
 ```
 
 The `src/exports/` directory centralizes the public API. Internal modules are not directly importable by consumers.

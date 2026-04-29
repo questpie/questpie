@@ -1,12 +1,19 @@
 import { Icon } from "@iconify/react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import React from "react";
+
 import {
 	selectBasePath,
 	selectClient,
 	selectNavigate,
 	useAdminStore,
 } from "@questpie/admin/client";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import React from "react";
+
+import type {
+	WorkflowLogRecord,
+	WorkflowStepRecord,
+} from "../../server/workflow/types.js";
+import { getWorkflowRoutes } from "../workflow-admin-client.js";
 
 // ── Status helpers ─────────────────────────────────────────
 
@@ -104,6 +111,11 @@ function formatDuration(
 	return `${(ms / 3_600_000).toFixed(1)}h`;
 }
 
+function formatJsonValue(value: unknown): string {
+	const json = JSON.stringify(value, null, 2);
+	return json ?? String(value);
+}
+
 // ── Step type icons ────────────────────────────────────────
 
 const STEP_TYPE_ICONS: Record<string, string> = {
@@ -136,7 +148,7 @@ function JsonView({ data, label }: { data: unknown; label: string }) {
 			</button>
 			{expanded && (
 				<pre className="bg-muted/30 border-border overflow-x-auto border-t px-3 py-2 font-mono text-xs">
-					{JSON.stringify(data, null, 2)}
+					{formatJsonValue(data)}
 				</pre>
 			)}
 		</div>
@@ -145,7 +157,7 @@ function JsonView({ data, label }: { data: unknown; label: string }) {
 
 // ── Step timeline ──────────────────────────────────────────
 
-function StepTimeline({ steps }: { steps: any[] }) {
+function StepTimeline({ steps }: { steps: WorkflowStepRecord[] }) {
 	if (steps.length === 0) {
 		return (
 			<div className="text-muted-foreground flex flex-col items-center gap-2 py-8 text-sm">
@@ -157,7 +169,7 @@ function StepTimeline({ steps }: { steps: any[] }) {
 
 	return (
 		<div className="relative flex flex-col">
-			{steps.map((step: any, i: number) => {
+			{steps.map((step, i) => {
 				const isLast = i === steps.length - 1;
 				const statusCfg = STATUS_CONFIG[step.status] ?? STATUS_CONFIG.pending;
 				const typeIcon = STEP_TYPE_ICONS[step.type] ?? "ph:question";
@@ -166,7 +178,7 @@ function StepTimeline({ steps }: { steps: any[] }) {
 					<div key={step.id} className="relative flex gap-3">
 						{/* Timeline line */}
 						{!isLast && (
-							<div className="border-border absolute left-[15px] top-[32px] bottom-0 border-l-2" />
+							<div className="border-border absolute top-[32px] bottom-0 left-[15px] border-l-2" />
 						)}
 
 						{/* Timeline dot */}
@@ -216,16 +228,16 @@ function StepTimeline({ steps }: { steps: any[] }) {
 							</div>
 
 							{/* Step result / error */}
-							{step.result !== null && step.result !== undefined && (
+							{step.result !== null && step.result !== undefined ? (
 								<JsonView data={step.result} label="Result" />
-							)}
-							{step.error && (
-								<div className="bg-red-500/10 mt-1 rounded-md px-3 py-2 font-mono text-xs text-red-600">
+							) : null}
+							{step.error !== null && step.error !== undefined ? (
+								<div className="mt-1 rounded-md bg-red-500/10 px-3 py-2 font-mono text-xs text-red-600">
 									{typeof step.error === "string"
 										? step.error
-										: JSON.stringify(step.error, null, 2)}
+										: formatJsonValue(step.error)}
 								</div>
-							)}
+							) : null}
 						</div>
 					</div>
 				);
@@ -246,18 +258,22 @@ export function WorkflowDetailPage({ instanceId }: { instanceId: string }) {
 
 	const { data, isLoading, error, refetch } = useQuery({
 		queryKey: ["workflows", "instance", instanceId, showLogs],
-		queryFn: () =>
-			(client as any).routes.getWorkflowInstance({
+		queryFn: () => {
+			const routes = getWorkflowRoutes(client);
+			return routes.getWorkflowInstance({
 				id: instanceId,
 				includeSteps: true,
 				includeLogs: showLogs,
-			}) as Promise<{ instance: any; steps: any[]; logs: any[] }>,
+			});
+		},
 		refetchInterval: 5000,
 	});
 
 	const cancelMutation = useMutation({
-		mutationFn: () =>
-			(client as any).routes.cancelWorkflowInstance({ id: instanceId }),
+		mutationFn: () => {
+			const routes = getWorkflowRoutes(client);
+			return routes.cancelWorkflowInstance({ id: instanceId });
+		},
 		onSuccess: () => {
 			queryClient.invalidateQueries({
 				queryKey: ["workflows"],
@@ -266,8 +282,10 @@ export function WorkflowDetailPage({ instanceId }: { instanceId: string }) {
 	});
 
 	const retryMutation = useMutation({
-		mutationFn: () =>
-			(client as any).routes.retryWorkflowInstance({ id: instanceId }),
+		mutationFn: () => {
+			const routes = getWorkflowRoutes(client);
+			return routes.retryWorkflowInstance({ id: instanceId });
+		},
 		onSuccess: () => {
 			queryClient.invalidateQueries({
 				queryKey: ["workflows"],
@@ -394,7 +412,7 @@ export function WorkflowDetailPage({ instanceId }: { instanceId: string }) {
 						<dt className="text-muted-foreground text-xs">Attempt</dt>
 						<dd className="text-sm">{instance.attempt}</dd>
 					</div>
-					{instance.parentInstanceId && (
+					{instance.parentInstanceId ? (
 						<div>
 							<dt className="text-muted-foreground text-xs">Parent</dt>
 							<dd className="text-sm">
@@ -411,20 +429,20 @@ export function WorkflowDetailPage({ instanceId }: { instanceId: string }) {
 								</button>
 							</dd>
 						</div>
-					)}
+					) : null}
 				</div>
 
 				{/* Error display */}
-				{instance.error && (
-					<div className="bg-red-500/10 mt-4 rounded-md px-4 py-3">
+				{instance.error !== null && instance.error !== undefined ? (
+					<div className="mt-4 rounded-md bg-red-500/10 px-4 py-3">
 						<p className="text-sm font-medium text-red-600">Error</p>
 						<pre className="mt-1 overflow-x-auto font-mono text-xs text-red-600">
 							{typeof instance.error === "string"
 								? instance.error
-								: JSON.stringify(instance.error, null, 2)}
+								: formatJsonValue(instance.error)}
 						</pre>
 					</div>
-				)}
+				) : null}
 
 				{/* Input / Output */}
 				<div className="mt-4 flex flex-col gap-2">
@@ -462,7 +480,7 @@ export function WorkflowDetailPage({ instanceId }: { instanceId: string }) {
 				{showLogs && logs.length > 0 && (
 					<div className="border-border border-t">
 						<div className="max-h-80 overflow-y-auto">
-							{logs.map((log: any) => {
+							{logs.map((log: WorkflowLogRecord) => {
 								const levelColors: Record<string, string> = {
 									error: "text-red-600",
 									warn: "text-orange-600",

@@ -5,12 +5,21 @@ description: Server-configured views — list views, form views, dashboard, and 
 
 Views control how data appears in the admin panel. They're configured server-side on your collections and globals, then rendered by the admin client via registries.
 
-```text
-Server Config                     Admin UI
-.list(({ v }) => v.collectionTable({}))   →  Table with columns, sort, search
-.form(({ v, f }) => v.collectionForm({})) →  Form with sections, sidebar, tabs
-sidebar({...})                 →  Navigation sidebar
-dashboard({...})               →  Dashboard with widgets
+```mermaid
+flowchart LR
+  List[".list(({ v }) => v.collectionTable({}))"]
+  Form[".form(({ v, f }) => v.collectionForm({}))"]
+  Sidebar["sidebar({ ... })"]
+  Dashboard["dashboard({ ... })"]
+  Table["Table<br/>columns, sort, search"]
+  FormUi["Form<br/>sections, sidebar, tabs"]
+  Nav["Navigation sidebar"]
+  Widgets["Dashboard widgets"]
+
+  List --> Table
+  Form --> FormUi
+  Sidebar --> Nav
+  Dashboard --> Widgets
 ```
 
 ## How Views Work

@@ -41,8 +41,13 @@ After codegen, this view is registered in the admin client and available for use
 ```tsx title="src/admin/views/kanban-view.tsx"
 import type { CollectionListViewProps } from "@questpie/admin/client";
 
+type KanbanItem = {
+	id: string;
+	_title?: string;
+} & Record<string, unknown>;
+
 export function KanbanView({ config, onRowClick }: CollectionListViewProps) {
-	const data = config?.data ?? [];
+	const data = (config?.data ?? []) as KanbanItem[];
 	const statusColumn = config?.groupBy || "status";
 	const groups = groupByField(data, statusColumn);
 
@@ -75,10 +80,14 @@ export function KanbanView({ config, onRowClick }: CollectionListViewProps) {
 	);
 }
 
-function groupByField(data: any[], field: string) {
-	const groups: Record<string, any[]> = {};
+function groupByField(data: KanbanItem[], field: string) {
+	const groups: Record<string, KanbanItem[]> = {};
 	for (const item of data) {
-		const key = item[field] || "unknown";
+		const value = item[field];
+		const key =
+			typeof value === "string" || typeof value === "number"
+				? String(value)
+				: "unknown";
 		(groups[key] ??= []).push(item);
 	}
 	return groups;

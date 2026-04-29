@@ -111,20 +111,28 @@ categories: {
 
 ## Three Levels in Action
 
-```text
-Plugin (declaration)
-  ├── "Look for blocks/*.ts files"
-  ├── "Generate AppBlocks type"
-  └── "Add blocks to Registry"
+```mermaid
+flowchart TD
+  Plugin["Plugin declaration"]
+  Discover["Look for blocks/*.ts files"]
+  Types["Generate AppBlocks type"]
+  Registry["Add blocks to Registry"]
+  Module["Module contribution"]
+  AdminBlocks["adminModule.blocks = { richText, media, ... }"]
+  AuditSidebar["auditModule.sidebar = { items: [...] }"]
+  Config["Runtime config"]
+  Database["db.url = postgres://..."]
+  AdminConfig["config.admin from config/admin.ts"]
+  Secret["secret = ..."]
 
-Module (contribution)
-  ├── adminModule.blocks = { richText, media, ... }
-  └── auditModule.sidebar = { items: [...] }
-
-Config (runtime)
-  ├── db.url = "postgres://..."
-  ├── config.admin from config/admin.ts
-  └── secret = "..."
+  Plugin --> Discover
+  Plugin --> Types
+  Plugin --> Registry
+  Module --> AdminBlocks
+  Module --> AuditSidebar
+  Config --> Database
+  Config --> AdminConfig
+  Config --> Secret
 ```
 
 ## Related Pages

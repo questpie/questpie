@@ -23,7 +23,7 @@ export interface SearchAdapter {
 
 	// Optional
 	indexBatch?(params: IndexParams[]): Promise<void>;
-	getTableSchemas?(): Record<string, any>;
+	getTableSchemas?(): Record<string, unknown>;
 	getExtensions?(): string[];
 }
 ```
@@ -46,7 +46,7 @@ export type AdapterCapabilities = {
 
 ```ts
 export type AdapterInitContext = {
-	db: PostgresJsDatabase<any>;
+	db: PostgresJsDatabase<Record<string, unknown>>;
 	logger: AdapterLogger;
 };
 ```
@@ -103,7 +103,7 @@ export type IndexParams = {
 	locale: string;
 	title: string;
 	content?: string;
-	metadata?: Record<string, any>;
+	metadata?: Record<string, unknown>;
 	embedding?: number[];
 	facets?: FacetIndexValue[];
 };
@@ -143,6 +143,37 @@ import type {
 	SearchResponse,
 } from "questpie";
 
+type MeiliDocument = {
+	id: string;
+	recordId?: string;
+	locale?: string;
+	title?: string;
+	_rankingScore?: number;
+} & Record<string, unknown>;
+
+type MeiliSearchResult = {
+	hits: MeiliDocument[];
+	estimatedTotalHits?: number;
+};
+
+type MeiliIndex = {
+	search(
+		query: string,
+		options: {
+			limit: number;
+			offset: number;
+			filter?: string[];
+		},
+	): Promise<MeiliSearchResult>;
+	addDocuments(documents: MeiliDocument[]): Promise<unknown>;
+	deleteDocument(id: string): Promise<unknown>;
+	deleteAllDocuments(): Promise<unknown>;
+};
+
+type MeiliClient = {
+	index(name: string): MeiliIndex;
+};
+
 export class MeilisearchAdapter implements SearchAdapter {
 	readonly name = "meilisearch";
 	readonly capabilities: AdapterCapabilities = {
@@ -153,18 +184,16 @@ export class MeilisearchAdapter implements SearchAdapter {
 		facets: true,
 	};
 
-	private client: any; // MeiliSearch client
 	private logger?: AdapterInitContext["logger"];
 
-	constructor(private options: { host: string; apiKey: string }) {}
+	constructor(
+		private options: { host: string; apiKey: string },
+		private client: MeiliClient,
+	) {}
 
 	async initialize(ctx: AdapterInitContext): Promise<void> {
 		this.logger = ctx.logger;
-		// Initialize your Meilisearch client here
-		// this.client = new MeiliSearch({
-		//   host: this.options.host,
-		//   apiKey: this.options.apiKey,
-		// });
+		// The typed provider client is injected in the constructor.
 		this.logger.info("[MeilisearchAdapter] initialized");
 	}
 
@@ -185,9 +214,9 @@ export class MeilisearchAdapter implements SearchAdapter {
 		});
 
 		return {
-			results: result.hits.map((hit: any) => ({
+			results: result.hits.map((hit) => ({
 				collection: options.collections?.[0] ?? "default",
-				recordId: hit.id,
+				recordId: hit.recordId ?? hit.id,
 				locale: hit.locale ?? "en",
 				title: hit.title ?? "",
 				score: hit._rankingScore ?? 1,

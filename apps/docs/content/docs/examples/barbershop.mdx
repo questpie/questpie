@@ -9,57 +9,72 @@ The barbershop example is a complete booking app built with TanStack Start and Q
 
 ## Project Structure
 
-```text
-examples/tanstack-barbershop/
-├── questpie.config.ts                        # CLI config (re-exports)
-├── src/
-│   ├── questpie/
-│   │   ├── server/
-│   │   │   ├── questpie.config.ts            # Runtime config
-│   │   │   ├── modules.ts                    # adminModule + auditModule
-│   │   │   ├── config/
-│   │   │   │   ├── auth.ts                   # Better Auth config
-│   │   │   │   ├── app.ts                    # App-level config
-│   │   │   │   ├── admin.ts                  # Sidebar, dashboard, branding, locale
-│   │   │   │   └── openapi.ts                # OpenAPI config
-│   │   │   ├── collections/
-│   │   │   │   ├── barbers.ts                # Complex: working hours, social links, M2M
-│   │   │   │   ├── services.ts               # Localized, relations
-│   │   │   │   ├── appointments.ts           # Hooks, virtual fields, visibility
-│   │   │   │   ├── barber-services.ts        # Junction table
-│   │   │   │   ├── reviews.ts                # Conditional fields
-│   │   │   │   ├── blog-posts.ts             # Service injection in hooks
-│   │   │   │   └── pages.ts                  # Blocks, preview
-│   │   │   ├── globals/
-│   │   │   │   └── site-settings.ts          # Nested config, versioning
-│   │   │   ├── routes/
-│   │   │   │   ├── create-booking.ts          # Business logic
-│   │   │   │   ├── get-available-time-slots.ts
-│   │   │   │   ├── get-active-barbers.ts
-│   │   │   │   └── get-revenue-stats.ts
-│   │   │   ├── jobs/
-│   │   │   │   ├── send-appointment-confirmation.ts
-│   │   │   │   ├── send-appointment-cancellation.ts
-│   │   │   │   └── notify-blog-subscribers.ts
-│   │   │   ├── services/
-│   │   │   │   └── blog.ts                    # Singleton service
-│   │   │   ├── blocks/                        # Content blocks
-│   │   │   ├── emails/                        # Email templates
-│   │   │   └── .generated/                    # Codegen output
-│   │   └── admin/
-│   │       ├── admin.ts                       # Re-exports generated admin config
-│   │       ├── hooks.ts                       # Typed React hooks
-│   │       ├── .generated/                    # Codegen output
-│   │       │   └── client.ts                  # Admin client config
-│   │       └── blocks/                        # Block renderers
-│   ├── lib/
-│   │   ├── client.ts                          # Client SDK setup
-│   │   └── server-helpers.ts                  # Server context helpers
-│   └── routes/
-│       ├── api/$.ts                           # API catch-all
-│       └── _app/
-│           ├── index.tsx                      # Homepage (page blocks)
-│           └── booking.tsx                    # Multi-step booking wizard
+```mermaid
+flowchart TD
+	App["examples/tanstack-barbershop/"]
+	CliConfig["questpie.config.ts<br/>CLI config"]
+	Src["src/"]
+	Questpie["questpie/"]
+	Server["server/"]
+	RuntimeConfig["questpie.config.ts<br/>Runtime config"]
+	Modules["modules.ts<br/>adminModule + auditModule"]
+	Config["config/<br/>auth.ts, app.ts, admin.ts, openapi.ts"]
+	Collections["collections/"]
+	Barbers["barbers.ts<br/>Working hours, social links, M2M"]
+	ServicesCollection["services.ts<br/>Localized, relations"]
+	Appointments["appointments.ts<br/>Hooks, virtual fields, visibility"]
+	BarberServices["barber-services.ts<br/>Junction table"]
+	Reviews["reviews.ts<br/>Conditional fields"]
+	BlogPosts["blog-posts.ts<br/>Service injection in hooks"]
+	Pages["pages.ts<br/>Blocks, preview"]
+	Globals["globals/site-settings.ts<br/>Nested config, versioning"]
+	ServerRoutes["routes/<br/>create-booking.ts, get-available-time-slots.ts, get-active-barbers.ts, get-revenue-stats.ts"]
+	Jobs["jobs/<br/>send-appointment-confirmation.ts, send-appointment-cancellation.ts, notify-blog-subscribers.ts"]
+	ServerServices["services/blog.ts<br/>Singleton service"]
+	Blocks["blocks/<br/>Content blocks"]
+	Emails["emails/<br/>Email templates"]
+	ServerGenerated[".generated/<br/>Codegen output"]
+	Admin["admin/"]
+	AdminEntry["admin.ts<br/>Re-exports generated admin config"]
+	AdminHooks["hooks.ts<br/>Typed React hooks"]
+	AdminGenerated[".generated/client.ts<br/>Admin client config"]
+	AdminBlocks["blocks/<br/>Block renderers"]
+	Lib["lib/<br/>client.ts, server-helpers.ts"]
+	Routes["routes/"]
+	Api["api/$.ts<br/>API catch-all"]
+	AppRoutes["_app/<br/>index.tsx, booking.tsx"]
+
+	App --> CliConfig
+	App --> Src
+	Src --> Questpie
+	Questpie --> Server
+	Server --> RuntimeConfig
+	Server --> Modules
+	Server --> Config
+	Server --> Collections
+	Collections --> Barbers
+	Collections --> ServicesCollection
+	Collections --> Appointments
+	Collections --> BarberServices
+	Collections --> Reviews
+	Collections --> BlogPosts
+	Collections --> Pages
+	Server --> Globals
+	Server --> ServerRoutes
+	Server --> Jobs
+	Server --> ServerServices
+	Server --> Blocks
+	Server --> Emails
+	Server --> ServerGenerated
+	Questpie --> Admin
+	Admin --> AdminEntry
+	Admin --> AdminHooks
+	Admin --> AdminGenerated
+	Admin --> AdminBlocks
+	Src --> Lib
+	Src --> Routes
+	Routes --> Api
+	Routes --> AppRoutes
 ```
 
 ## Key Patterns

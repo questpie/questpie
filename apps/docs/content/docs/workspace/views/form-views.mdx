@@ -104,11 +104,11 @@ Auto-compute field values from other fields:
 )
 ```
 
-| Option     | Type             | Description              |
-| ---------- | ---------------- | ------------------------ |
-| `handler`  | `(ctx) => value` | Compute function         |
-| `deps`     | `(ctx) => any[]` | Reactive dependencies    |
-| `debounce` | `number`         | Debounce in milliseconds |
+| Option     | Type                 | Description              |
+| ---------- | -------------------- | ------------------------ |
+| `handler`  | `(ctx) => value`     | Compute function         |
+| `deps`     | `(ctx) => unknown[]` | Reactive dependencies    |
+| `debounce` | `number`             | Debounce in milliseconds |
 
 ## Conditional Visibility
 

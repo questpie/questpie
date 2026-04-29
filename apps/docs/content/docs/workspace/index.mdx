@@ -5,16 +5,31 @@ description: The admin panel is a projection of your schema — not the framewor
 
 The admin panel is **a projection**, not the framework. It reads your server schema via introspection and generates an interface. Your backend works without it. Add it when you need an internal tool.
 
-```text
-Server Schema                        Admin Panel
-├── collections/barbers.ts    →    ├── List view (table)
-│   ├── .fields()             →    │   ├── Columns from fields
-│   ├── .form()               →    │   ├── Sort/filter from field types
-│   └── .admin()              →    │   └── Label, icon
-├── globals/settings.ts       →    ├── Form view (singleton)
-└── config/admin.ts           →    ├── Navigation sidebar
-                              →    ├── Dashboard widgets
-                              →    └── App name
+```mermaid
+flowchart LR
+  Collection["collections/barbers.ts"]
+  Fields[".fields()"]
+  Form[".form()"]
+  Admin[".admin()"]
+  Global["globals/settings.ts"]
+  Config["config/admin.ts"]
+  List["List view<br/>table"]
+  Columns["Columns from fields"]
+  Filters["Sort + filters from field types"]
+  Label["Label + icon"]
+  Singleton["Form view<br/>singleton"]
+  Sidebar["Navigation sidebar"]
+  Dashboard["Dashboard widgets"]
+  AppName["App name"]
+
+  Collection --> Fields --> Columns
+  Collection --> Form --> List
+  Collection --> Admin --> Label
+  Fields --> Filters
+  Global --> Singleton
+  Config --> Sidebar
+  Config --> Dashboard
+  Config --> AppName
 ```
 
 ## Sections
