@@ -65,7 +65,7 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Run tests
-        run: bunx turbo run test --filter='./packages/*'
+        run: bunx turbo run test --filter='./packages/*' --concurrency=1
         env:
           QUESTPIE_MIGRATIONS_SILENT: "1"
 
