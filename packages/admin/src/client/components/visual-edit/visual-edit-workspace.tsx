@@ -20,18 +20,15 @@ import * as React from "react";
 import { useIsMobile } from "../../hooks/use-media-query.js";
 import { useTranslation } from "../../i18n/hooks.js";
 import { cn } from "../../lib/utils.js";
-import { Tabs, TabsList, TabsTrigger } from "../ui/tabs.js";
 import { PreviewPane, type PreviewPaneRef } from "../preview/preview-pane.js";
+import { Tabs, TabsList, TabsTrigger } from "../ui/tabs.js";
 import {
 	mapPreviewBlockClickToSelection,
 	mapPreviewClickToSelection,
 } from "./click-router.js";
 import { useDeselectOnEscape } from "./keyboard.js";
-import {
-	VisualEditProvider,
-	useVisualEdit,
-} from "./visual-edit-context.js";
 import type { VisualEditSelection } from "./types.js";
+import { VisualEditProvider, useVisualEdit } from "./visual-edit-context.js";
 
 // ============================================================================
 // Resize hook
@@ -321,19 +318,19 @@ function WorkspaceLayout({
 		<div
 			data-visual-edit-workspace
 			className={cn(
-				"bg-background flex h-full min-h-0 w-full flex-col",
+				"bg-card flex h-full min-h-0 w-full flex-col overflow-hidden",
 				className,
 			)}
 		>
 			{isMobile && (
-				<div className="flex shrink-0 items-center justify-center border-b px-2 py-2">
+				<div className="bg-surface-low/80 flex shrink-0 items-center justify-center border-b px-3 py-2">
 					<Tabs
 						value={activeTab}
 						onValueChange={(value) =>
 							setActiveTab(value as "canvas" | "inspector")
 						}
 					>
-						<TabsList className="h-8">
+						<TabsList variant="pills" className="h-8">
 							<TabsTrigger value="canvas" className="px-3 text-xs">
 								{t("preview.canvasTab", { defaultValue: "Preview" })}
 							</TabsTrigger>
@@ -352,15 +349,13 @@ function WorkspaceLayout({
 				{/* Canvas */}
 				<div
 					className={cn(
-						"bg-muted min-h-0 min-w-0",
+						"bg-surface min-h-0 min-w-0 overflow-hidden",
 						isMobile
 							? cn("h-full", activeTab !== "canvas" && "hidden")
 							: "h-full",
 					)}
 					style={
-						!isMobile
-							? { width: `${100 - inspectorPercent}%` }
-							: undefined
+						!isMobile ? { width: `${100 - inspectorPercent}%` } : undefined
 					}
 				>
 					{previewUrl ? (
@@ -387,8 +382,10 @@ function WorkspaceLayout({
 						})}
 						onMouseDown={handleMouseDown}
 						onClick={(event) => event.preventDefault()}
-						className="bg-border hover:bg-border-strong w-1 shrink-0 cursor-col-resize appearance-none border-0 p-0 transition-colors"
-					/>
+						className="group bg-surface-low focus-visible:ring-ring/20 hover:bg-surface-mid relative z-10 flex w-3 shrink-0 cursor-col-resize appearance-none items-center justify-center border-0 p-0 transition-[background-color] duration-150 ease-out outline-none after:absolute after:inset-y-0 after:-right-4 after:-left-4 focus-visible:ring-[3px]"
+					>
+						<span className="bg-border group-hover:bg-border-strong group-active:bg-primary h-12 w-px rounded-full transition-[background-color,height] duration-150 ease-out group-hover:h-16" />
+					</button>
 				)}
 
 				{/* Inspector */}
@@ -399,9 +396,7 @@ function WorkspaceLayout({
 							? cn("h-full", activeTab !== "inspector" && "hidden")
 							: "h-full",
 					)}
-					style={
-						!isMobile ? { width: `${inspectorPercent}%` } : undefined
-					}
+					style={!isMobile ? { width: `${inspectorPercent}%` } : undefined}
 				>
 					{renderInspector()}
 				</div>

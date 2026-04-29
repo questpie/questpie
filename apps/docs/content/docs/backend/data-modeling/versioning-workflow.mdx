@@ -247,10 +247,12 @@ When a collection or global has versioning with workflow:
 - transition actions appear in the form toolbar
 - buttons are based on the current stage and configured outgoing transitions
 - successful transitions invalidate collection/global queries so the form and history refresh
+- the Visual Edit Workspace sends `FULL_RESYNC` after a transition so the iframe discards stale local patches and re-runs the loader against the new stage snapshot
 
 ## Related Pages
 
 - [Collections](/docs/backend/data-modeling/collections) — Collection builder options
 - [Globals](/docs/backend/data-modeling/globals) — Global builder options
+- [Visual Edit Workspace](/docs/workspace/live-preview/visual-edit) — Patch-based preview during form editing
 - [Hooks API](/docs/reference/hooks-api) — Transition hook context
 - [Built-in Actions](/docs/workspace/actions/builtin) — Admin toolbar actions

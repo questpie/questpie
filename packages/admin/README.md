@@ -276,11 +276,11 @@ Import the admin base stylesheet and scan the admin package:
 
 There are two layers, deliberately separated:
 
-| Layer        | Configured in                                   | Covers                                       |
-| ------------ | ----------------------------------------------- | -------------------------------------------- |
-| **Content**  | `config/admin.ts` → `branding`                  | Name, logo, tagline, favicon                 |
-| **Theme**    | Your app's `admin.css`                          | Colors, fonts, radii, shadows, motion        |
-| **Chrome**   | Files in `questpie/admin/components/` (see below) | Sidebar brand, nav item, auth layout       |
+| Layer       | Configured in                                     | Covers                                |
+| ----------- | ------------------------------------------------- | ------------------------------------- |
+| **Content** | `config/admin.ts` → `branding`                    | Name, logo, tagline, favicon          |
+| **Theme**   | Your app's `admin.css`                            | Colors, fonts, radii, shadows, motion |
+| **Chrome**  | Files in `questpie/admin/components/` (see below) | Sidebar brand, nav item, auth layout  |
 
 ### Branding (config-driven)
 
@@ -351,7 +351,9 @@ yourself:
 ```tsx
 // routes/admin.tsx
 export const Route = createFileRoute("/admin")({
-	loader: async ({ context }) => ({ config: await context.client.routes.getAdminConfig() }),
+	loader: async ({ context }) => ({
+		config: await context.client.routes.getAdminConfig(),
+	}),
 	head: ({ loaderData }) => ({
 		links: [
 			{ rel: "stylesheet", href: adminCss },
@@ -459,7 +461,7 @@ SSE-powered live updates are enabled by default. Collection lists and dashboard 
 
 Two preview modes ship out of the box:
 
-- **`collection-form` (default)** — the legacy split-screen iframe view. Toggle with the eye icon in the form header (or `?preview=true`). Full reload on save / autosave.
+- **`collection-form` (default)** — the standard split-screen iframe view. Toggle with the eye icon in the form header (or `?preview=true`). Full reload on save / autosave.
 - **`visual-edit-form` (opt-in)** — the **Visual Edit Workspace**: a 2-pane layout with a contextual right inspector and patch-based iframe updates. Click any field in the canvas to open it in the inspector; edits land in the iframe without a save round-trip; saves / reverts / stage transitions sync via `COMMIT` / `FULL_RESYNC` messages. Per-field `visualEdit.group` / `order` / `inspector` / `patchStrategy` / `hidden` metadata tunes how each field appears.
 
 ```ts
@@ -481,7 +483,7 @@ Admin keeps major panel states in URL search params so links are shareable and b
 - `sidebar=block-library` - block editor library sidebar
 - `preview=true` - live preview mode (collection form)
 
-Legacy params (`history`, `viewOptions`, and `sidebar=preview`) are still read for backward compatibility.
+Older params (`history`, `viewOptions`, and `sidebar=preview`) are still read for backward compatibility.
 
 ## Package Exports
 
@@ -503,7 +505,7 @@ import {
 	useVisualEdit,
 	useVisualEditPreviewBridge,
 	useFormToPreviewPatcher,
-	// V2 protocol helpers
+	// Patch protocol helpers
 	diffSnapshot,
 	applyPatchBatch,
 } from "@questpie/admin/client";

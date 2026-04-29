@@ -35,8 +35,8 @@ import { hasGroupedDocumentMetadata } from "./group-fields.js";
 import type { VisualEditSelection } from "./types.js";
 import { useFormToPreviewPatcher } from "./use-form-to-preview-patcher.js";
 import { useVisualEditPreviewBridge } from "./use-visual-edit-preview-bridge.js";
-import { resolveNestedVisualEditMeta } from "./visual-edit-meta.js";
 import { VisualEditProvider } from "./visual-edit-context.js";
+import { resolveNestedVisualEditMeta } from "./visual-edit-meta.js";
 import { VisualEditWorkspaceContent } from "./visual-edit-workspace.js";
 import { VisualInspectorPanel } from "./visual-inspector-panel.js";
 
@@ -137,7 +137,7 @@ export type VisualEditFormHostProps = ResourceFormControllerOptions & {
 	minInspectorSize?: number;
 	/**
 	 * Imperative handle to the underlying `PreviewPane`. Lets a
-	 * parent call `triggerRefresh()`, dispatch V2 messages
+	 * parent call `triggerRefresh()`, dispatch patch-preview messages
 	 * (`sendInitSnapshot` / `sendPatchBatch` / `sendCommit` /
 	 * `sendFullResync` / `sendSelectTarget` / `sendNavigatePreview`),
 	 * or send the legacy `sendFocusToPreview` without re-rendering
@@ -150,13 +150,34 @@ export type VisualEditFormHostProps = ResourceFormControllerOptions & {
 	className?: string;
 };
 
+export type VisualEditFormHostWithControllerProps = Omit<
+	VisualEditFormHostProps,
+	"collection" | "id" | "config" | "viewConfig"
+> & {
+	/**
+	 * Controller supplied by the owning form view. Use this when
+	 * the workspace is hosted inside `FormView` so save/autosave,
+	 * workflow, history, and action plumbing stay on the existing
+	 * form shell instead of creating a second controller.
+	 */
+	controller: ResourceFormController;
+	/**
+	 * Standalone hosts should hydrate react-hook-form once the
+	 * async item load resolves. `FormView` already owns that reset
+	 * logic so it passes `false` to avoid clobbering dirty state.
+	 *
+	 * @default true
+	 */
+	manageFormReset?: boolean;
+};
+
 // ============================================================================
 // Component
 // ============================================================================
 
 /**
  * Top-level Visual Edit Workspace primitive — wraps everything a
- * collection edit page needs to drive the V2 patch protocol:
+ * collection edit page needs to drive the patch-based preview protocol:
  *
  * - mounts `useResourceFormController` for the form / mutations
  *   / locking / workflow stage
@@ -208,6 +229,72 @@ export function VisualEditFormHost({
 		viewConfig,
 		defaultValues,
 	});
+
+	return (
+		<VisualEditFormHostWithController
+			controller={controller}
+			defaultValues={defaultValues}
+			previewUrl={previewUrl}
+			allowedOrigins={allowedOrigins}
+			defaultBlocksPath={defaultBlocksPath}
+			registry={registry}
+			allCollectionsConfig={allCollectionsConfig}
+			renderDocument={renderDocument}
+			renderField={renderField}
+			renderBlock={renderBlock}
+			initialSelection={initialSelection}
+			onSelectionChange={onSelectionChange}
+			defaultInspectorSize={defaultInspectorSize}
+			minInspectorSize={minInspectorSize}
+			previewRef={previewRef}
+			className={className}
+		/>
+	);
+}
+
+/**
+ * Visual Edit host for callers that already own a
+ * `ResourceFormController` (notably `FormView`). This keeps the
+ * workspace as a rendering surface over the existing form
+ * lifecycle instead of forking persistence and workflow behavior.
+ */
+export function VisualEditFormHostWithController({
+	controller,
+	defaultValues,
+	previewUrl,
+	allowedOrigins,
+	defaultBlocksPath,
+	registry,
+	allCollectionsConfig,
+	renderDocument,
+	renderField,
+	renderBlock,
+	initialSelection,
+	onSelectionChange,
+	defaultInspectorSize,
+	minInspectorSize,
+	previewRef,
+	className,
+	manageFormReset = true,
+}: VisualEditFormHostWithControllerProps) {
+	const collection = controller.collection;
+
+	React.useEffect(() => {
+		if (!manageFormReset) return;
+		if (controller.isItemLoading) return;
+		if (controller.transformedItem) {
+			controller.form.reset(controller.transformedItem as any);
+		} else if (!controller.isEditMode && defaultValues) {
+			controller.form.reset(defaultValues as any);
+		}
+	}, [
+		controller.form,
+		controller.isEditMode,
+		controller.isItemLoading,
+		controller.transformedItem,
+		defaultValues,
+		manageFormReset,
+	]);
 
 	// Auto-switch the document body: any field with explicit
 	// `visualEdit.group` flips the default to `DocumentInspectorBody`
@@ -388,9 +475,7 @@ function PreviewBridge({
 		previewRef,
 		fields: controller.fields,
 		schema: controller.schema,
-		baseline: controller.transformedItem as
-			| Record<string, unknown>
-			| undefined,
+		baseline: controller.transformedItem as Record<string, unknown> | undefined,
 		disabled: !controller.isEditMode,
 	});
 	return null;

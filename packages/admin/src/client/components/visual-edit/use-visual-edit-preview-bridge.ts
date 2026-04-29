@@ -2,7 +2,7 @@
  * useVisualEditPreviewBridge
  *
  * Glues `useResourceFormController` to a `PreviewPane` so the
- * Visual Edit Workspace can drive the V2 patch protocol without
+ * Visual Edit Workspace can drive the patch-based preview protocol without
  * any wiring inside the controller itself:
  *
  * 1. When the form mounts and an item snapshot is available,
@@ -31,8 +31,8 @@
 import * as React from "react";
 import { useFormContext } from "react-hook-form";
 
-import type { PreviewPaneRef } from "../preview/preview-pane.js";
 import type { ResourceFormController } from "../../views/collection/use-resource-form-controller.js";
+import type { PreviewPaneRef } from "../preview/preview-pane.js";
 import type { VisualEditSelection } from "./types.js";
 import { selectionFieldPath } from "./types.js";
 import { useVisualEdit } from "./visual-edit-context.js";
@@ -206,9 +206,10 @@ function useResyncOnSuccess(
 	}, [isSuccess, previewRef, reason]);
 }
 
-function extrasFromSelection(
-	selection: VisualEditSelection,
-): { kind?: string; blockId?: string } {
+function extrasFromSelection(selection: VisualEditSelection): {
+	kind?: string;
+	blockId?: string;
+} {
 	switch (selection.kind) {
 		case "block":
 		case "block-field":

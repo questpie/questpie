@@ -3,55 +3,57 @@ title: Same-Tab Recipe
 description: Frontend implementation recipe for same-tab split-screen preview using direct postMessage patch transport.
 ---
 
-This page documents the planned Preview V2 same-tab API. The admin panel opens a split-screen with your frontend in an iframe on the right. Changes flow as field-level patches over `postMessage` -- no server round-trip, no polling.
+This page documents the lower-level same-tab patch API. The admin panel opens a split-screen with your frontend in an iframe on the right. Changes flow as field-level patches over `postMessage` -- no server round-trip, no polling.
 
 <Callout type="info">
-	Preview V2 ships today as the **Visual Edit Workspace**. For the standard
-	collection-edit flow you don't need the lower-level recipe on this page —
-	enable `.form(({ v }) => v.visualEditForm({...}))` and the workspace
-	handles the wire transport for you. See
+	The patch-based preview flow ships today as the **Visual Edit Workspace**.
+	For the standard collection-edit flow you don't need the lower-level recipe
+	on this page — enable `.form(({ v }) => v.visualEditForm({...}))` and the
+	workspace handles the wire transport for you. See
 	[Visual Edit Workspace](./visual-edit). Read this page when you need a
-	**custom iframe runtime** that consumes the patch protocol directly. The
-	illustrative API names below (`useQuestpiePreview`, `PreviewRoot`) map to
-	the shipped `useCollectionPreview` + `PreviewProvider` exports.
+	**custom iframe runtime** that consumes the patch protocol directly.
 </Callout>
 
 ## Minimal Page Example
 
-Wire up preview in four lines: call `useQuestpiePreview`, wrap with `PreviewRoot`, annotate fields with `PreviewField`.
+Wire up preview in four lines: call `useCollectionPreview`, wrap with `PreviewProvider`, annotate fields with `PreviewField`.
 
 ```tsx title="routes/pages/$slug.tsx"
 import { useRouter } from "@tanstack/react-router";
 import {
-	useQuestpiePreview,
-	PreviewRoot,
+	useCollectionPreview,
+	PreviewProvider,
 	PreviewField,
 } from "@questpie/admin/client";
 
 function PageRoute({ initialData }) {
 	const router = useRouter();
 
-	const preview = useQuestpiePreview({
+	const preview = useCollectionPreview({
 		initialData,
-		reconcile: () => router.invalidate(),
+		onRefresh: () => router.invalidate(),
 	});
 
 	return (
-		<PreviewRoot preview={preview}>
+		<PreviewProvider
+			isPreviewMode={preview.isPreviewMode}
+			focusedField={preview.focusedField}
+			onFieldClick={preview.handleFieldClick}
+		>
 			<article>
-				<PreviewField path="title">
+				<PreviewField field="title">
 					<h1>{preview.data.title}</h1>
 				</PreviewField>
-				<PreviewField path="summary">
+				<PreviewField field="summary">
 					<p>{preview.data.summary}</p>
 				</PreviewField>
 			</article>
-		</PreviewRoot>
+		</PreviewProvider>
 	);
 }
 ```
 
-`useQuestpiePreview` returns a `preview` object containing:
+`useCollectionPreview` returns a `preview` object containing:
 
 | Property          | Type             | Description                                  |
 | ----------------- | ---------------- | -------------------------------------------- |
@@ -59,39 +61,36 @@ function PageRoute({ initialData }) {
 | `isPreviewMode`   | `boolean`        | Whether running inside the admin iframe      |
 | `focusedField`    | `string \| null` | Field path the admin is currently editing    |
 | `selectedBlockId` | `string \| null` | Block the admin has selected                 |
-| `seq`             | `number`         | Current sequence number                      |
+| `isDraftActive`   | `boolean`        | Whether patch preview is currently active    |
 
 ## Bootstrap Flow
 
 When the admin opens live preview, the following handshake occurs:
 
-```
-Iframe loads your page
-       |
-       v
-  Frame sends READY  ──────────────>  Admin receives READY
-       |                                      |
-       v                                      v
-  Frame waits...            Admin sends INIT_SNAPSHOT (full record)
-       |                                      |
-       v                                      v
-  Frame receives INIT_SNAPSHOT        Admin enables editing
-       |
-       v
-  Frame applies initial data
-  Frame sends ACK { ackSeq }
+```mermaid
+sequenceDiagram
+	participant Frame as Preview iframe
+	participant Admin as Admin
+
+	Frame->>Frame: Load preview page
+	Frame-->>Admin: PREVIEW_READY
+	Admin->>Frame: INIT_SNAPSHOT (full record)
+	par Admin side
+		Admin->>Admin: Enable editing
+	and Frame side
+		Frame->>Frame: Apply initial data
+	end
 ```
 
-The hook handles this automatically. When your page mounts inside an iframe, it sends `READY` to the parent. The admin responds with `INIT_SNAPSHOT` carrying the full record. The hook stores this as the draft state and sends an `ACK` back.
+The hook handles this automatically. When your page mounts inside an iframe, it sends `PREVIEW_READY` to the parent. The admin responds with `INIT_SNAPSHOT` carrying the full record. The hook stores this as the draft state.
 
-Every message carries the protocol envelope:
+Messages are plain object literals with a `type` discriminant. `PATCH_BATCH` additionally carries `seq` for ordering:
 
 ```ts
 {
-  sessionId: "preview_abc123",
+  type: "PATCH_BATCH",
   seq: 42,
-  timestamp: 1711100000000,
-  protocolVersion: 2
+  ops: [{ op: "set", path: "title", value: "Updated Title" }]
 }
 ```
 
@@ -103,29 +102,26 @@ After bootstrap, every keystroke in the admin form produces a `PATCH_BATCH` mess
 // Admin sends:
 {
   type: "PATCH_BATCH",
-  sessionId: "preview_abc123",
   seq: 43,
-  timestamp: 1711100001000,
-  protocolVersion: 2,
-  patches: [
-    { path: "title", value: "Updated Title" },
-    { path: "slug", value: "updated-title" }
+  ops: [
+    { op: "set", path: "title", value: "Updated Title" },
+    { op: "set", path: "slug", value: "updated-title" }
   ]
 }
 ```
 
-The hook merges each patch into the local draft store by path and triggers a React re-render. No server call, no loader re-run -- just a local state update. The frame sends `ACK` with the received `seq` so the admin knows the patch was applied.
+The hook merges each patch into the local draft store by path and triggers a React re-render. No server call, no loader re-run -- just a local state update. The frame sends `PATCH_APPLIED` with the received `seq` so the admin knows the patch was applied.
 
-```
-Admin types in "title" field
-       |
-       v
-  PATCH_BATCH { patches: [{ path: "title", value: "Updated T..." }] }
-       |
-       v
-  Frame merges patch into draft store
-  Frame re-renders
-  Frame sends ACK { ackSeq: 43 }
+```mermaid
+sequenceDiagram
+	participant Admin as Admin
+	participant Frame as Preview iframe
+
+	Admin->>Admin: User types in title field
+	Admin->>Frame: PATCH_BATCH set title=Updated T...
+	Frame->>Frame: Merge patch into draft store
+	Frame->>Frame: Re-render page
+	Frame-->>Admin: PATCH_APPLIED seq=43, applied=1
 ```
 
 ## Commit Flow
@@ -136,54 +132,51 @@ When the editor clicks **Save**, the admin persists to the database and sends `C
 // Admin sends after successful save:
 {
   type: "COMMIT",
-  sessionId: "preview_abc123",
-  seq: 100,
   timestamp: 1711100050000,
-  protocolVersion: 2,
-  data: { title: "Updated Title", slug: "updated-title", ... }
+  snapshot: { title: "Updated Title", slug: "updated-title", ... }
 }
 ```
 
-The hook replaces the local draft store with the authoritative `data` from the COMMIT message, resolving any drift between optimistic patches and server-computed values. If you provide a `reconcile` callback, it is called after the state replacement -- use it to refetch route data or perform side effects:
+The hook replaces the local draft store with the authoritative `snapshot` from the COMMIT message, resolving any drift between optimistic patches and server-computed values. It then calls `onRefresh` -- use it to refetch route data or perform side effects:
 
 ```tsx
-const preview = useQuestpiePreview({
+const preview = useCollectionPreview({
 	initialData,
-	reconcile: async () => {
+	onRefresh: async () => {
 		// Re-run the loader to get server-authoritative data
 		await router.invalidate();
 	},
 });
 ```
 
-After reconcile completes, the draft store resets to the fresh server data. The frame sends `ACK` to confirm.
+After the refresh completes, the draft store resets to the fresh server data.
 
 ## Full Resync
 
-If the admin detects a sequence gap or the frame falls behind, it sends `FULL_RESYNC` with the complete current state. This replaces the entire draft store:
+If the admin detects a sequence gap or the frame falls behind, it sends `FULL_RESYNC` with a reason hint. The iframe discards its local draft and re-runs `onRefresh`:
 
-```
-Admin detects desync (missed ACK, seq gap, etc.)
-       |
-       v
-  FULL_RESYNC { data: { ...fullRecord }, seq: 150 }
-       |
-       v
-  Frame replaces entire draft store
-  Frame re-renders
-  Frame sends ACK { ackSeq: 150 }
+```mermaid
+sequenceDiagram
+	participant Admin as Admin
+	participant Frame as Preview iframe
+
+	Admin->>Admin: Detect desync (missed ack, seq gap)
+	Admin->>Frame: FULL_RESYNC reason=desync
+	Frame->>Frame: Clear local draft
+	Frame->>Frame: Re-run loader
+	Frame->>Frame: Re-render page
 ```
 
 This is a recovery mechanism. Under normal operation, patches are small and incremental. Full resync only fires when something goes wrong -- browser tab was suspended, messages were dropped, or the admin explicitly triggers it.
 
 ## Click-to-Edit
 
-`PreviewField` and `PreviewBlock` make fields and blocks clickable. When the user clicks a field in the preview, a message is sent back to the admin to focus the corresponding form field.
+`PreviewField` makes fields clickable. `BlockRenderer` wires block clicks through `onBlockClick`. When the user clicks a field in the preview, a message is sent back to the admin to focus the corresponding form field.
 
 ### Field Click
 
 ```tsx
-<PreviewField path="title">
+<PreviewField field="title">
 	<h1>{preview.data.title}</h1>
 </PreviewField>
 ```
@@ -193,11 +186,7 @@ Clicking this sends `FIELD_CLICKED` to the admin:
 ```ts
 {
   type: "FIELD_CLICKED",
-  fieldPath: "title",
-  sessionId: "preview_abc123",
-  seq: 44,
-  timestamp: 1711100002000,
-  protocolVersion: 2
+  fieldPath: "title"
 }
 ```
 
@@ -206,9 +195,12 @@ The admin scrolls to and focuses the title field in the form.
 ### Block Click
 
 ```tsx
-<PreviewBlock id={block.id}>
-	<HeroRenderer values={block.values} data={block.data} />
-</PreviewBlock>
+<BlockRenderer
+	content={preview.data.content}
+	renderers={admin.blocks}
+	selectedBlockId={preview.selectedBlockId}
+	onBlockClick={preview.handleBlockClick}
+/>
 ```
 
 Clicking sends `BLOCK_CLICKED`:
@@ -216,11 +208,7 @@ Clicking sends `BLOCK_CLICKED`:
 ```ts
 {
   type: "BLOCK_CLICKED",
-  blockId: "abc-123",
-  sessionId: "preview_abc123",
-  seq: 45,
-  timestamp: 1711100003000,
-  protocolVersion: 2
+  blockId: "abc-123"
 }
 ```
 
@@ -228,34 +216,36 @@ Clicking sends `BLOCK_CLICKED`:
 
 When the editor focuses a field in the admin form, the frame receives `FOCUS_FIELD` and highlights the corresponding element. When the editor selects a block, the frame receives `SELECT_BLOCK`.
 
-The hook tracks these as `preview.focusedField` and `preview.selectedBlockId`. `PreviewField` and `PreviewBlock` apply highlight styles automatically when their path/ID matches.
+The hook tracks these as `preview.focusedField` and `preview.selectedBlockId`. `PreviewField` and `BlockRenderer` apply focus/selection state when their field path or block ID matches.
 
 ## Block Content Example
 
-For pages with block-based content, wrap each block in `PreviewBlock` and use `BlockScopeProvider` for field path resolution inside blocks:
+For pages with block-based content, pass `selectedBlockId` and `onBlockClick` to `BlockRenderer`. It wraps each rendered block in `BlockScopeProvider` so `PreviewField` can resolve field paths inside block renderers:
 
 ```tsx title="routes/pages/$slug.tsx"
 import {
-	useQuestpiePreview,
-	PreviewRoot,
+	useCollectionPreview,
+	PreviewProvider,
 	PreviewField,
-	PreviewBlock,
-	BlockScopeProvider,
 	BlockRenderer,
 } from "@questpie/admin/client";
 import admin from "@/questpie/admin/.generated/client";
 
 function PageRoute({ initialData }) {
 	const router = useRouter();
-	const preview = useQuestpiePreview({
+	const preview = useCollectionPreview({
 		initialData,
-		reconcile: () => router.invalidate(),
+		onRefresh: () => router.invalidate(),
 	});
 
 	return (
-		<PreviewRoot preview={preview}>
+		<PreviewProvider
+			isPreviewMode={preview.isPreviewMode}
+			focusedField={preview.focusedField}
+			onFieldClick={preview.handleFieldClick}
+		>
 			<article>
-				<PreviewField path="title">
+				<PreviewField field="title">
 					<h1>{preview.data.title}</h1>
 				</PreviewField>
 
@@ -266,14 +256,12 @@ function PageRoute({ initialData }) {
 						data={preview.data.content._data}
 						selectedBlockId={preview.selectedBlockId}
 						onBlockClick={
-							preview.isPreviewMode
-								? (blockId) => preview.sendBlockClicked(blockId)
-								: undefined
+							preview.isPreviewMode ? preview.handleBlockClick : undefined
 						}
 					/>
 				)}
 			</article>
-		</PreviewRoot>
+		</PreviewProvider>
 	);
 }
 ```
@@ -295,13 +283,13 @@ export function HeroRenderer({ values, data }: BlockProps<"hero">) {
 				/>
 			)}
 			<div className="relative text-center">
-				<PreviewField path="title">
+				<PreviewField field="title">
 					<h1 className="text-5xl font-bold">{values.title}</h1>
 				</PreviewField>
-				<PreviewField path="subtitle">
+				<PreviewField field="subtitle">
 					<p className="text-xl mt-4">{values.subtitle}</p>
 				</PreviewField>
-				<PreviewField path="ctaText">
+				<PreviewField field="ctaText">
 					<a href={values.ctaLink} className="mt-6 inline-block btn">
 						{values.ctaText}
 					</a>
@@ -319,19 +307,23 @@ Relations (e.g., author, category) require `fieldType="relation"` so the admin k
 ```tsx title="routes/articles/$slug.tsx"
 function ArticlePage({ initialData }) {
 	const router = useRouter();
-	const preview = useQuestpiePreview({
+	const preview = useCollectionPreview({
 		initialData,
-		reconcile: () => router.invalidate(),
+		onRefresh: () => router.invalidate(),
 	});
 
 	return (
-		<PreviewRoot preview={preview}>
+		<PreviewProvider
+			isPreviewMode={preview.isPreviewMode}
+			focusedField={preview.focusedField}
+			onFieldClick={preview.handleFieldClick}
+		>
 			<article>
-				<PreviewField path="title">
+				<PreviewField field="title">
 					<h1>{preview.data.title}</h1>
 				</PreviewField>
 
-				<PreviewField path="author" fieldType="relation">
+				<PreviewField field="author" fieldType="relation">
 					<div className="flex items-center gap-3">
 						<img
 							src={preview.data.author?.avatar}
@@ -342,7 +334,7 @@ function ArticlePage({ initialData }) {
 					</div>
 				</PreviewField>
 
-				<PreviewField path="categories" fieldType="relation">
+				<PreviewField field="categories" fieldType="relation">
 					<div className="flex gap-2">
 						{preview.data.categories?.map((cat) => (
 							<span key={cat.id} className="px-2 py-1 bg-muted text-sm">
@@ -352,16 +344,16 @@ function ArticlePage({ initialData }) {
 					</div>
 				</PreviewField>
 
-				<PreviewField path="body">
+				<PreviewField field="body">
 					<RichTextRenderer content={preview.data.body} />
 				</PreviewField>
 			</article>
-		</PreviewRoot>
+		</PreviewProvider>
 	);
 }
 ```
 
-Clicking a relation field sends `RELATION_CLICKED` back to the admin, which opens the relation picker or navigates to the related record.
+Clicking a relation field sends `FIELD_CLICKED` with `fieldType: "relation"` and the scoped field path, which lets the admin route the selection to the right inspector control.
 
 ## Slug/URL Watch with Server Reconcile
 
@@ -371,8 +363,8 @@ Use `reconcile` with server-side revalidation:
 
 ```tsx title="routes/pages/$slug.tsx"
 import {
-	useQuestpiePreview,
-	PreviewRoot,
+	useCollectionPreview,
+	PreviewProvider,
 	PreviewField,
 } from "@questpie/admin/client";
 
@@ -380,9 +372,9 @@ function PageRoute({ initialData }) {
 	const router = useRouter();
 	const params = Route.useParams();
 
-	const preview = useQuestpiePreview({
+	const preview = useCollectionPreview({
 		initialData,
-		reconcile: async () => {
+		onRefresh: async () => {
 			// The admin already updated the iframe URL to the new slug.
 			// Invalidate the router to re-run the loader with the new params.
 			await router.invalidate();
@@ -390,14 +382,18 @@ function PageRoute({ initialData }) {
 	});
 
 	return (
-		<PreviewRoot preview={preview}>
-			<PreviewField path="title">
+		<PreviewProvider
+			isPreviewMode={preview.isPreviewMode}
+			focusedField={preview.focusedField}
+			onFieldClick={preview.handleFieldClick}
+		>
+			<PreviewField field="title">
 				<h1>{preview.data.title}</h1>
 			</PreviewField>
-			<PreviewField path="slug">
+			<PreviewField field="slug">
 				<p className="text-muted-foreground">/{preview.data.slug}</p>
 			</PreviewField>
-		</PreviewRoot>
+		</PreviewProvider>
 	);
 }
 ```
@@ -410,109 +406,52 @@ When the editor changes the slug from `about-us` to `about`, the admin:
 
 ## Error Handling and Resync
 
-The protocol includes error messages in both directions.
-
-### Admin-Side Error
-
-If the admin encounters an error (e.g., validation failure on save), it sends `ERROR`:
-
-```ts
-{
-  type: "ERROR",
-  error: "Title is required",
-  code: "VALIDATION_FAILED",
-  sessionId: "preview_abc123",
-  seq: 101,
-  timestamp: 1711100060000,
-  protocolVersion: 2
-}
-```
-
-The hook exposes this through `preview.error`. Display it in your preview if needed:
-
-```tsx
-function PageRoute({ initialData }) {
-	const preview = useQuestpiePreview({
-		initialData,
-		reconcile: () => router.invalidate(),
-	});
-
-	return (
-		<PreviewRoot preview={preview}>
-			{preview.error && (
-				<div className="bg-destructive/10 text-destructive p-4 text-sm">
-					{preview.error.error}
-				</div>
-			)}
-			<PreviewField path="title">
-				<h1>{preview.data.title}</h1>
-			</PreviewField>
-		</PreviewRoot>
-	);
-}
-```
-
-### Frame-Side Error
-
-If the frame encounters a render error, send `RENDER_ERROR` back to the admin:
-
-```ts
-{
-  type: "RENDER_ERROR",
-  error: "Failed to render block hero-1",
-  sessionId: "preview_abc123",
-  seq: 46,
-  timestamp: 1711100004000,
-  protocolVersion: 2
-}
-```
-
-The hook sends this automatically if a React error boundary catches an error inside `PreviewRoot`.
+The admin surfaces save and validation errors in the form shell. The iframe-side hook focuses on applying draft messages and recovering from stale data.
 
 ### Requesting Resync
 
-If the frame detects it is out of sync (e.g., received seq 50 but expected 48), the admin will detect the gap from the missing `ACK` and send a `FULL_RESYNC` automatically. No manual intervention is needed.
+If a custom iframe runtime detects it is out of sync, it can send `RESYNC_REQUEST`. The admin answers with `FULL_RESYNC`, which clears the local draft and re-runs `onRefresh`. No manual user intervention is needed.
 
 ## Message Reference
 
 ### Admin to Frame
 
-| Type            | Payload                               | Description                          |
-| --------------- | ------------------------------------- | ------------------------------------ |
-| `INIT_SNAPSHOT` | `{ data }`                            | Full initial record after handshake  |
-| `PATCH_BATCH`   | `{ patches: [{ path, value, seq }] }` | Incremental field-level patches      |
-| `FOCUS_FIELD`   | `{ fieldPath }`                       | Highlight a field in preview         |
-| `SELECT_BLOCK`  | `{ blockId }`                         | Highlight a block in preview         |
-| `COMMIT`        | `{ data }`                            | Server data is authoritative (saved) |
-| `FULL_RESYNC`   | `{ data }`                            | Replace entire draft state           |
-| `ERROR`         | `{ error, code? }`                    | Admin-side error                     |
+| Type               | Payload                                         | Description                          |
+| ------------------ | ----------------------------------------------- | ------------------------------------ |
+| `PREVIEW_REFRESH`  | `{ changedField? }`                             | Ask the iframe to re-run its loader  |
+| `INIT_SNAPSHOT`    | `{ snapshot, schemaVersion?, locale?, stage? }` | Full initial record after handshake  |
+| `PATCH_BATCH`      | `{ seq, ops }`                                  | Incremental field-level patches      |
+| `FOCUS_FIELD`      | `{ fieldPath }`                                 | Highlight a field in preview         |
+| `SELECT_BLOCK`     | `{ blockId }`                                   | Highlight a block in preview         |
+| `SELECT_TARGET`    | `{ fieldPath, kind?, blockId? }`                | Mirror inspector selection           |
+| `COMMIT`           | `{ timestamp, snapshot? }`                      | Server data is authoritative (saved) |
+| `FULL_RESYNC`      | `{ reason? }`                                   | Drop local draft and refresh         |
+| `NAVIGATE_PREVIEW` | `{ url }`                                       | Navigate within the preview origin   |
 
 ### Frame to Admin
 
 | Type               | Payload                               | Description                     |
 | ------------------ | ------------------------------------- | ------------------------------- |
-| `READY`            | `{}`                                  | Frame loaded, awaiting snapshot |
-| `ACK`              | `{ ackSeq }`                          | Acknowledges received sequence  |
+| `PREVIEW_READY`    | `{}`                                  | Frame loaded, awaiting snapshot |
 | `FIELD_CLICKED`    | `{ fieldPath, blockId?, fieldType? }` | User clicked a field            |
 | `BLOCK_CLICKED`    | `{ blockId }`                         | User clicked a block            |
-| `RELATION_CLICKED` | `{ fieldPath, relationId? }`          | User clicked a relation         |
-| `RENDER_ERROR`     | `{ error, seq? }`                     | Frame-side render error         |
+| `REFRESH_COMPLETE` | `{ timestamp }`                       | Loader refresh completed        |
+| `PATCH_APPLIED`    | `{ seq, applied, timestamp }`         | Patch batch was applied         |
+| `RESYNC_REQUEST`   | `{ reason? }`                         | Frame requests full resync      |
 
-All messages carry the envelope: `sessionId`, `seq`, `timestamp`, `protocolVersion`.
+## Refresh And Patch Behavior
 
-## V1 to V2 Migration
+The same hook handles both preview update paths:
 
-The V2 API (`useQuestpiePreview`) replaces the V1 API (`useCollectionPreview`). Key differences:
+| Message path          | Behavior                                                        |
+| --------------------- | --------------------------------------------------------------- |
+| `PREVIEW_REFRESH`     | Calls `onRefresh` so the iframe can re-run its loader           |
+| `PATCH_BATCH`         | Applies field-level patches locally with `seq` ordering         |
+| `COMMIT`              | Swaps to the saved snapshot or refreshes when no snapshot ships |
+| `FULL_RESYNC`         | Clears the local draft and re-runs refresh                      |
+| Preview click helpers | `PreviewField` / `BlockRenderer` route selection back to admin  |
 
-| V1 (`useCollectionPreview`)                      | V2 (`useQuestpiePreview`)                             |
-| ------------------------------------------------ | ----------------------------------------------------- |
-| `onRefresh` callback (full reload)               | `reconcile` callback (only on COMMIT)                 |
-| Admin sends `PREVIEW_REFRESH`, frame re-fetches  | Admin sends `PATCH_BATCH`, frame patches locally      |
-| No sequence numbers                              | Every message carries `seq` for ordering              |
-| No resync protocol                               | `FULL_RESYNC` recovers from desync                    |
-| `handleFieldClick` / `handleBlockClick` manually | `PreviewField` / `PreviewBlock` handle it via context |
-
-The V1 hook continues to work for existing implementations. New projects should use V2 exclusively.
+The iframe page does not choose a protocol version. `useCollectionPreview` accepts the messages the active admin view sends and exposes the merged result through `data`.
 
 ## Related Pages
 

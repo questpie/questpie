@@ -1,22 +1,19 @@
 ---
-title: Live Preview V2 Architecture
-description: Target architecture for the next-generation live preview system.
+title: Preview System Architecture
+description: Target architecture for the patch-based preview system.
 ---
 
-Live Preview V2 replaces the current `edit -> save/autosave -> invalidate -> reload iframe` cycle with a patch-based draft preview system. The preview reflects form changes instantly without writing to the database, while a server reconcile step keeps derived data (slugs, URLs, relations, computed fields) authoritative.
+The preview system replaces the current `edit -> save/autosave -> invalidate -> reload iframe` cycle with a patch-based draft preview flow. The preview reflects form changes instantly without writing to the database, while a server reconcile step keeps derived data (slugs, URLs, relations, computed fields) authoritative.
 
 This page documents the target architecture. For the current preview system, see [Live Preview](/docs/workspace/live-preview).
 
 <Callout type="info">
-	Preview V2 ships today as the **Visual Edit Workspace** — see
-	[Visual Edit Workspace](./visual-edit) for the user-facing flow and
-	[Protocol & Reliability](./protocol) for the wire format. The shipped
-	exports are `VisualEditFormHost`, `VisualEditWorkspace`,
-	`VisualInspectorPanel`, `useCollectionPreview`, `PreviewProvider`,
-	`PreviewField`, and `BlockScopeProvider`. This page is an architecture
-	note that uses illustrative API names (`useQuestpiePreview`, `PreviewRoot`,
-	`PreviewBlock`) — read it for the design intent, but consult
-	[Visual Edit Workspace](./visual-edit) for the real export names.
+	The patch-based preview flow ships today as the **Visual Edit Workspace** —
+	see [Visual Edit Workspace](./visual-edit) for the user-facing flow and
+	[Protocol & Reliability](./protocol) for the wire format. The shipped exports
+	are `VisualEditFormHost`, `VisualEditWorkspace`, `VisualInspectorPanel`,
+	`useCollectionPreview`, `PreviewProvider`, `PreviewField`, and
+	`BlockScopeProvider`.
 </Callout>
 
 ## Design Goals
@@ -27,7 +24,7 @@ This page documents the target architecture. For the current preview system, see
 4. **Robust admin-iframe protocol** -- typed message contract, sequence numbers, session IDs, protocol versioning.
 5. **Clean DX** -- one hook on the admin side, one hook on the frontend side, declarative collection config.
 
-## Problems With V1
+## Problems With Refresh-Only Preview
 
 | Problem                     | Impact                                                                                            |
 | --------------------------- | ------------------------------------------------------------------------------------------------- |
@@ -38,31 +35,17 @@ This page documents the target architecture. For the current preview system, see
 
 ## Architecture Overview
 
-```text
-+------------------+        postMessage         +------------------+
-|   Admin Panel    | =========================> |   Preview Frame  |
-|                  |                            |                  |
-|  Form State      |   INIT_SNAPSHOT            |  Draft Store     |
-|  Session Mgr     |   PATCH_BATCH              |  Merge Engine    |
-|  Reconcile Client|   FOCUS_FIELD              |  Render Tree     |
-|                  |   SELECT_BLOCK             |                  |
-|                  |   COMMIT                   |                  |
-|                  | <========================= |                  |
-|                  |   READY                    |                  |
-|                  |   ACK                      |                  |
-|                  |   FIELD_CLICKED            |                  |
-|                  |   BLOCK_CLICKED            |                  |
-|                  |   RELATION_CLICKED         |                  |
-|                  |   RENDER_ERROR             |                  |
-+------------------+                            +------------------+
-         |                                               |
-         |          +------------------+                 |
-         +--------->|   Server         |<----------------+
-                    |                  |
-                    |  Session Store   |
-                    |  Reconcile Engine|
-                    |  Token Mint      |
-                    +------------------+
+```mermaid
+flowchart LR
+	Admin["Admin Panel<br/>Form State<br/>Session Manager<br/>Reconcile Client"]
+	Frame["Preview Frame<br/>Draft Store<br/>Merge Engine<br/>Render Tree"]
+	Server["Server<br/>Session Store<br/>Reconcile Engine<br/>Token Mint"]
+
+	Admin -- "INIT_SNAPSHOT<br/>PATCH_BATCH<br/>FOCUS_FIELD<br/>SELECT_BLOCK<br/>SELECT_TARGET<br/>COMMIT<br/>FULL_RESYNC" --> Frame
+	Frame -- "PREVIEW_READY<br/>PATCH_APPLIED<br/>FIELD_CLICKED<br/>BLOCK_CLICKED<br/>RESYNC_REQUEST" --> Admin
+	Admin -- "createSession<br/>reconcile<br/>save" --> Server
+	Server -- "token<br/>RECONCILE_RESULT<br/>saved snapshot" --> Admin
+	Frame -- "refresh loader<br/>request data" --> Server
 ```
 
 ### Three-Layer Model
@@ -81,66 +64,68 @@ Save writes to the database as it does today. After a successful save, the admin
 
 ## Session Lifecycle
 
-```text
-1. Admin opens preview
-   Admin ──── createSession() ───> Server
-   Server returns { sessionId, token }
+```mermaid
+sequenceDiagram
+	participant Admin as Admin
+	participant Frame as Preview frame
+	participant Server as Server
 
-2. Iframe loads with token
-   Frame ──── READY ────────────> Admin
-
-3. Admin sends initial state
-   Admin ──── INIT_SNAPSHOT ────> Frame
-
-4. User edits a field
-   Admin ──── PATCH_BATCH ──────> Frame     (instant local apply)
-   Admin ──── reconcile() ──────> Server    (if watched field changed)
-   Server ─── RECONCILE_RESULT ─> Admin ──> Frame
-
-5. User saves
-   Admin ──── save() ───────────> Server    (DB write)
-   Admin ──── COMMIT ───────────> Frame     (new baseline)
-
-6. Desync detected (seq gap, error, stale session)
-   Admin ──── FULL_RESYNC ──────> Frame     (full snapshot replace)
+	Admin->>Server: createSession()
+	Server-->>Admin: sessionId and token
+	Admin->>Frame: Load iframe with token
+	Frame-->>Admin: PREVIEW_READY
+	Admin->>Frame: INIT_SNAPSHOT
+	Note over Admin,Frame: User edits a field
+	Admin->>Frame: PATCH_BATCH (instant local apply)
+	opt Watched field changed
+		Admin->>Server: reconcile()
+		Server-->>Admin: RECONCILE_RESULT
+		Admin->>Frame: Reconciled snapshot
+	end
+	Note over Admin,Server: User saves
+	Admin->>Server: save()
+	Server-->>Admin: Saved record
+	Admin->>Frame: COMMIT (new baseline)
+	opt Desync detected
+		Admin->>Frame: FULL_RESYNC (drop local draft and refresh)
+	end
 ```
 
 ## Protocol
 
-Every message carries a common envelope:
+The shipped same-tab transport uses plain object messages with a `type` discriminant. `PATCH_BATCH` carries a monotonic sequence number; other messages are unsequenced:
 
 ```ts
-interface PreviewMessage {
-	type: string;
-	sessionId: string;
+type PatchBatchMessage = {
+	type: "PATCH_BATCH";
 	seq: number;
-	timestamp: number;
-	protocolVersion: number;
-}
+	ops: PreviewPatchOp[];
+};
 ```
 
 ### Admin to Frame
 
-| Message         | Payload                 | Purpose                                  |
-| --------------- | ----------------------- | ---------------------------------------- |
-| `INIT_SNAPSHOT` | Full record snapshot    | Bootstrap the iframe draft store         |
-| `PATCH_BATCH`   | Array of JSON patches   | Incremental field updates                |
-| `FOCUS_FIELD`   | `{ fieldPath: string }` | Highlight a field in the preview         |
-| `SELECT_BLOCK`  | `{ blockId: string }`   | Highlight a block in the preview         |
-| `COMMIT`        | `{ data }`              | Mark current state as persisted baseline |
-| `FULL_RESYNC`   | `{ data, locale? }`     | Replace entire draft state on desync     |
-| `ERROR`         | `{ error, code? }`      | Signal an unrecoverable error            |
+| Message            | Payload                   | Purpose                                  |
+| ------------------ | ------------------------- | ---------------------------------------- |
+| `INIT_SNAPSHOT`    | Full record snapshot      | Bootstrap the iframe draft store         |
+| `PATCH_BATCH`      | Array of JSON patches     | Incremental field updates                |
+| `FOCUS_FIELD`      | `{ fieldPath: string }`   | Highlight a field in the preview         |
+| `SELECT_BLOCK`     | `{ blockId: string }`     | Highlight a block in the preview         |
+| `SELECT_TARGET`    | `{ fieldPath, blockId? }` | Mirror inspector selection               |
+| `COMMIT`           | `{ data }`                | Mark current state as persisted baseline |
+| `FULL_RESYNC`      | `{ reason? }`             | Drop local draft and re-run refresh      |
+| `NAVIGATE_PREVIEW` | `{ url }`                 | Navigate inside the preview origin       |
 
 ### Frame to Admin
 
-| Message            | Payload                     | Purpose                            |
-| ------------------ | --------------------------- | ---------------------------------- |
-| `READY`            | `{}`                        | Iframe loaded and ready to receive |
-| `ACK`              | `{ ackSeq }`                | Confirm receipt of a message       |
-| `FIELD_CLICKED`    | `{ fieldPath: string }`     | User clicked a preview field       |
-| `BLOCK_CLICKED`    | `{ blockId: string }`       | User clicked a preview block       |
-| `RELATION_CLICKED` | `{ fieldPath, relationId }` | User clicked a related record      |
-| `RENDER_ERROR`     | `{ error, seq? }`           | Frontend render failed             |
+| Message            | Payload                               | Purpose                            |
+| ------------------ | ------------------------------------- | ---------------------------------- |
+| `PREVIEW_READY`    | `{}`                                  | Iframe loaded and ready to receive |
+| `PATCH_APPLIED`    | `{ seq, applied, timestamp }`         | Confirm a patch batch landed       |
+| `FIELD_CLICKED`    | `{ fieldPath, blockId?, fieldType? }` | User clicked a preview field       |
+| `BLOCK_CLICKED`    | `{ blockId: string }`                 | User clicked a preview block       |
+| `REFRESH_COMPLETE` | `{ timestamp }`                       | Refresh fallback completed         |
+| `RESYNC_REQUEST`   | `{ reason? }`                         | Frame requests a full resync       |
 
 For the full typed contract and message schemas, see [Protocol Reference](/docs/workspace/live-preview/protocol).
 
@@ -215,36 +200,54 @@ The admin form integration is automatic. `useAdminPreview` subscribes to form ch
 ### Frontend Side
 
 ```tsx title="routes/pages/$slug.tsx"
-import { useQuestpiePreview } from "@questpie/admin/client";
+import { useRouter } from "@tanstack/react-router";
+import {
+	BlockRenderer,
+	PreviewField,
+	PreviewProvider,
+	type BlockContent,
+	useCollectionPreview,
+} from "@questpie/admin/client";
+import admin from "@/questpie/admin/.generated/client";
 
 function Page({ initialData }) {
-	const { data, isPreviewMode, focusedField, selectedBlock } =
-		useQuestpiePreview({
+	const router = useRouter();
+	const { data, isPreviewMode, focusedField, handleFieldClick } =
+		useCollectionPreview({
 			initialData,
+			onRefresh: () => router.invalidate(),
 		});
 
 	return (
-		<PreviewRoot preview={{ isPreviewMode, focusedField, selectedBlock }}>
-			<PreviewField path="title">
+		<PreviewProvider
+			isPreviewMode={isPreviewMode}
+			focusedField={focusedField}
+			onFieldClick={handleFieldClick}
+		>
+			<PreviewField field="title">
 				<h1>{data.title}</h1>
 			</PreviewField>
-			<PreviewField path="content">
-				<BlockRenderer blocks={data.content} />
+			<PreviewField field="content">
+				<BlockRenderer
+					content={data.content as BlockContent}
+					renderers={admin.blocks}
+				/>
 			</PreviewField>
-		</PreviewRoot>
+		</PreviewProvider>
 	);
 }
 ```
 
 ### Components
 
-| Component                   | Purpose                                                                                             |
-| --------------------------- | --------------------------------------------------------------------------------------------------- |
-| `<PreviewRoot>`             | Context provider. Wraps the page, provides focus/selection state.                                   |
-| `<PreviewField path="...">` | Marks a region as corresponding to a field path. Handles click-to-focus and highlight styling.      |
-| `<PreviewBlock id={id}>`    | Marks a region as corresponding to a block instance. Handles click-to-select and highlight styling. |
+| Component                            | Purpose                                                                                        |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| `<PreviewProvider>`                  | Context provider. Wraps the page, provides focus/selection state.                              |
+| `<PreviewField field="...">`         | Marks a region as corresponding to a field path. Handles click-to-focus and highlight styling. |
+| `<BlockRenderer onBlockClick={...}>` | Marks block regions through renderer wrappers and handles click-to-select.                     |
+| `<BlockScopeProvider>`               | Resolves field paths inside block renderers to the correct block value path.                   |
 
-These components replace the manual `postMessage` wiring from V1. They handle bidirectional focus sync, click events, and highlight rendering internally.
+These components replace manual `postMessage` wiring. They handle bidirectional focus sync, click events, and highlight rendering internally.
 
 ## Reconcile Engine
 
@@ -300,18 +303,20 @@ See [Same-Tab Recipe](/docs/workspace/live-preview/same-tab-recipe) and [Shared 
     contract.ts         -- Message types, envelope, protocol version
     patches.ts          -- Patch apply/merge utilities
 
-@questpie/preview/react (frontend)
-  src/
-    store.ts            -- Draft store (snapshot + local patches)
-    hooks.ts            -- useQuestpiePreview
-    components.tsx      -- PreviewRoot, PreviewField, PreviewBlock
+@questpie/admin/client (frontend)
+  src/client/preview/
+    use-collection-preview.ts  -- Draft store + iframe message listener
+    preview-field.tsx          -- PreviewProvider, PreviewField
+    block-scope-context.tsx    -- BlockScopeProvider
+  src/client/blocks/
+    block-renderer.tsx         -- BlockRenderer click/select integration
 ```
 
 The shared message contract lives in a single file (`contract.ts`) imported by both admin and frontend packages. No message type is defined in two places.
 
 ## Rollout Phases
 
-### Phase 1 -- Harden V1
+### Phase 1 -- Harden Existing Preview
 
 Stabilize the current preview system before introducing the new transport:
 
@@ -328,8 +333,8 @@ Replace the save-reload cycle with direct patch delivery:
 - Implement `contract.ts` with typed message envelope
 - Build admin-side patch computation from form state diff
 - Build iframe-side draft store with patch merge
-- Wire `useAdminPreview` and `useQuestpiePreview` hooks
-- Ship `<PreviewRoot>`, `<PreviewField>`, `<PreviewBlock>` components
+- Wire the admin preview bridge and `useCollectionPreview`
+- Ship `<PreviewProvider>`, `<PreviewField>`, and block click integration
 
 ### Phase 3 -- Hybrid Reconcile
 
@@ -347,7 +352,6 @@ Add server reconcile for derived data:
 - Write [Same-Tab Recipe](/docs/workspace/live-preview/same-tab-recipe)
 - Write [Shared Preview](/docs/workspace/live-preview/shared-preview)
 - Write [Protocol Reference](/docs/workspace/live-preview/protocol)
-- Write [Migration Guide](/docs/workspace/live-preview/migration)
 - Update AGENTS.md and SKILL.md with preview conventions
 
 ### Phase 5 -- Shared Preview (Optional)
@@ -365,6 +369,5 @@ Extend the protocol over the existing QUESTPIE realtime system:
 - [Same-Tab Recipe](/docs/workspace/live-preview/same-tab-recipe) -- Step-by-step integration for same-tab preview
 - [Shared Preview](/docs/workspace/live-preview/shared-preview) -- Detached and multi-device preview
 - [Protocol Reference](/docs/workspace/live-preview/protocol) -- Full typed message contract
-- [Migration Guide](/docs/workspace/live-preview/migration) -- Upgrading from V1 to V2
 - [Blocks](/docs/workspace/blocks) -- Block content and prefetch
 - [Form Views](/docs/workspace/views/form-views) -- Form toolbar configuration

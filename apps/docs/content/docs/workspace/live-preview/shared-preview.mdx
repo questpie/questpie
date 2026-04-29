@@ -6,14 +6,13 @@ description: Detached and multi-user preview using QUESTPIE realtime channels.
 The [same-tab recipe](/docs/workspace/live-preview/same-tab-recipe) covers the default case: admin and preview in a split-screen iframe communicating over `postMessage`. This page covers the advanced case where preview runs in a separate browser tab, a shared URL, or across multiple users -- using QUESTPIE realtime as the transport.
 
 <Callout type="info">
-	The patch-based V2 transport ships today via the
-	[Visual Edit Workspace](./visual-edit) and `useCollectionPreview` for the
-	in-iframe case. The realtime / shared-preview transport described on this
-	page is a **design note** for an advanced use case (multi-user, detached
-	tab, mobile device preview) that isn't wired up to a turn-key admin
-	primitive yet. Read it for the design intent; the illustrative API name
-	`useQuestpiePreview` would map to a realtime-channel-aware variant of
-	`useCollectionPreview`.
+	The patch-based preview transport ships today via the [Visual Edit
+	Workspace](./visual-edit) and `useCollectionPreview` for the in-iframe case.
+	The realtime / shared-preview transport described on this page is a **design
+	note** for an advanced use case (multi-user, detached tab, mobile device
+	preview) that isn't wired up to a turn-key admin primitive yet. Read it for
+	the design intent; a realtime-channel-aware wrapper would build on the same
+	`useCollectionPreview` provider shape.
 </Callout>
 
 ## When to Use Realtime
@@ -29,19 +28,16 @@ For single-user split-screen editing, the direct `postMessage` transport from th
 
 ## Architecture
 
-```
-┌─────────────┐          ┌───────────────┐          ┌──────────────┐
-│  Admin Tab   │ ──────> │  QUESTPIE      │ ──────> │  Preview Tab  │
-│  (editor)    │  PATCH   │  Realtime      │  SSE     │  (detached)   │
-│              │  BATCH   │  Server        │  stream  │               │
-└─────────────┘          └───────────────┘          └──────────────┘
-                                │
-                                │  SSE stream
-                                v
-                         ┌──────────────┐
-                         │  Phone/Tablet │
-                         │  (shared URL) │
-                         └──────────────┘
+```mermaid
+flowchart LR
+	Admin["Admin Tab<br/>(editor)"]
+	Server["QUESTPIE Realtime Server"]
+	Preview["Preview Tab<br/>(detached)"]
+	Mobile["Phone / Tablet<br/>(shared URL)"]
+
+	Admin -- "PATCH_BATCH" --> Server
+	Server -- "SSE stream" --> Preview
+	Server -- "SSE stream" --> Mobile
 ```
 
 Instead of `postMessage`, patches flow through a realtime channel. The admin publishes patches to the channel. All connected preview clients subscribe and apply patches locally.
@@ -121,14 +117,14 @@ When `realtime: true`, the admin publishes patches to the realtime channel in ad
 
 ### 3. Frontend Preview Page
 
-Use `useQuestpiePreview` with the `transport: "realtime"` option:
+Use the shipped `useCollectionPreview` hook for the iframe contract, then layer
+the realtime channel alongside the same provider shape:
 
 ```tsx title="routes/pages/$slug.tsx"
 import {
-	useQuestpiePreview,
-	PreviewRoot,
+	useCollectionPreview,
+	PreviewProvider,
 	PreviewField,
-	PreviewBlock,
 	BlockRenderer,
 } from "@questpie/admin/client";
 import { client } from "@/lib/client";
@@ -137,20 +133,19 @@ import admin from "@/questpie/admin/.generated/client";
 function PageRoute({ initialData, params }) {
 	const router = useRouter();
 
-	const preview = useQuestpiePreview({
+	const preview = useCollectionPreview({
 		initialData,
-		reconcile: () => router.invalidate(),
-		transport: "realtime",
-		realtime: {
-			client,
-			channel: `preview:pages:${initialData.id}:en`,
-		},
+		onRefresh: () => router.invalidate(),
 	});
 
 	return (
-		<PreviewRoot preview={preview}>
+		<PreviewProvider
+			isPreviewMode={preview.isPreviewMode}
+			focusedField={preview.focusedField}
+			onFieldClick={preview.handleFieldClick}
+		>
 			<article>
-				<PreviewField path="title">
+				<PreviewField field="title">
 					<h1>{preview.data.title}</h1>
 				</PreviewField>
 
@@ -161,14 +156,12 @@ function PageRoute({ initialData, params }) {
 						data={preview.data.content._data}
 						selectedBlockId={preview.selectedBlockId}
 						onBlockClick={
-							preview.isPreviewMode
-								? (blockId) => preview.sendBlockClicked(blockId)
-								: undefined
+							preview.isPreviewMode ? preview.handleBlockClick : undefined
 						}
 					/>
 				)}
 			</article>
-		</PreviewRoot>
+		</PreviewProvider>
 	);
 }
 ```
@@ -246,10 +239,9 @@ This complete example shows a page that works both as a normal page and as a det
 ```tsx title="routes/pages/$slug.tsx"
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import {
-	useQuestpiePreview,
-	PreviewRoot,
+	useCollectionPreview,
+	PreviewProvider,
 	PreviewField,
-	PreviewBlock,
 	BlockRenderer,
 	type BlockContent,
 } from "@questpie/admin/client";
@@ -271,27 +263,20 @@ function PageComponent() {
 	const { page } = Route.useLoaderData();
 	const router = useRouter();
 
-	const preview = useQuestpiePreview({
+	const preview = useCollectionPreview({
 		initialData: page,
-		reconcile: () => router.invalidate(),
-		transport: "realtime",
-		realtime: {
-			client,
-			channel: `preview:pages:${page.id}:en`,
-		},
+		onRefresh: () => router.invalidate(),
 	});
 
 	return (
-		<PreviewRoot preview={preview}>
-			{preview.connectionStatus === "reconnecting" && (
-				<div className="bg-warning/10 text-warning fixed top-0 inset-x-0 z-50 p-2 text-center text-sm">
-					Reconnecting to live preview...
-				</div>
-			)}
-
+		<PreviewProvider
+			isPreviewMode={preview.isPreviewMode}
+			focusedField={preview.focusedField}
+			onFieldClick={preview.handleFieldClick}
+		>
 			<article>
 				<header className="py-16 text-center">
-					<PreviewField path="title">
+					<PreviewField field="title">
 						<h1 className="text-5xl font-bold tracking-tight">
 							{preview.data.title}
 						</h1>
@@ -305,9 +290,7 @@ function PageComponent() {
 						data={(preview.data.content as BlockContent)._data}
 						selectedBlockId={preview.selectedBlockId}
 						onBlockClick={
-							preview.isPreviewMode
-								? (blockId) => preview.sendBlockClicked(blockId)
-								: undefined
+							preview.isPreviewMode ? preview.handleBlockClick : undefined
 						}
 					/>
 				)}
@@ -316,12 +299,9 @@ function PageComponent() {
 			{preview.isPreviewMode && (
 				<div className="fixed right-4 bottom-4 z-50 rounded-full bg-foreground text-background px-4 py-2 text-sm font-medium shadow-lg">
 					Live Preview
-					{preview.connectionStatus === "connected" && (
-						<span className="ml-2 inline-block w-2 h-2 rounded-full bg-green-400" />
-					)}
 				</div>
 			)}
-		</PreviewRoot>
+		</PreviewProvider>
 	);
 }
 ```

@@ -99,17 +99,16 @@ export function VisualInspectorPanel({
 		<aside
 			data-visual-inspector
 			className={cn(
-				"bg-background flex h-full min-h-0 w-full flex-col border-l",
+				"bg-card border-border-subtle flex h-full min-h-0 w-full flex-col border-l",
 				className,
 			)}
 		>
 			{/* Header */}
-			<div className="flex shrink-0 items-center justify-between gap-2 border-b px-3 py-2">
-				<div className="flex min-w-0 items-center gap-2">
-					<Icon
-						icon={header.icon}
-						className="text-muted-foreground h-4 w-4 shrink-0"
-					/>
+			<div className="bg-surface-low/80 flex min-h-12 shrink-0 items-center justify-between gap-2 border-b px-4 py-2">
+				<div className="flex min-w-0 items-center gap-2.5">
+					<span className="bg-surface-mid text-muted-foreground flex size-7 shrink-0 items-center justify-center rounded-md">
+						<Icon icon={header.icon} className="size-3.5" />
+					</span>
 					<div className="min-w-0">
 						<div className="truncate text-sm font-medium">{header.title}</div>
 						{header.subtitle && (
@@ -141,9 +140,7 @@ export function VisualInspectorPanel({
 			    selection so each target gets a fresh render. */}
 			<div className="min-h-0 flex-1 overflow-y-auto">
 				<InspectorErrorBoundary
-					resetKey={
-						selectionFieldPath(selection) ?? `kind:${selection.kind}`
-					}
+					resetKey={selectionFieldPath(selection) ?? `kind:${selection.kind}`}
 				>
 					<InspectorBody
 						renderDocument={renderDocument}
@@ -173,14 +170,14 @@ function InspectorBody({
 	switch (selection.kind) {
 		case "idle":
 			return (
-				<div className="p-3">
+				<div className="p-4">
 					{renderDocument ? renderDocument() : <DocumentPlaceholder />}
 				</div>
 			);
 
 		case "field":
 			return (
-				<div className="p-3">
+				<div className="p-4">
 					{renderField ? (
 						renderField(selection.fieldPath)
 					) : (
@@ -191,7 +188,7 @@ function InspectorBody({
 
 		case "block":
 			return (
-				<div className="p-3">
+				<div className="p-4">
 					{renderBlock ? (
 						renderBlock({
 							blocksPath: selection.blocksPath,
@@ -215,7 +212,7 @@ function InspectorBody({
 				selection.fieldPath,
 			);
 			return (
-				<div className="p-3">
+				<div className="p-4">
 					{renderField ? (
 						renderField(fullPath)
 					) : (
@@ -228,7 +225,7 @@ function InspectorBody({
 		case "relation":
 		case "array":
 			return (
-				<div className="p-3">
+				<div className="p-4">
 					{renderField ? (
 						renderField(selection.fieldPath)
 					) : (
@@ -240,7 +237,7 @@ function InspectorBody({
 		case "array-item": {
 			const fullPath = `${selection.fieldPath}.${selection.index}`;
 			return (
-				<div className="p-3">
+				<div className="p-4">
 					{renderField ? (
 						renderField(fullPath)
 					) : (
@@ -314,10 +311,7 @@ function DocumentPlaceholder() {
 	const { t } = useTranslation();
 	return (
 		<div className="text-muted-foreground space-y-2 py-8 text-center text-sm">
-			<Icon
-				icon="ph:cursor-click"
-				className="mx-auto h-8 w-8 opacity-60"
-			/>
+			<Icon icon="ph:cursor-click" className="mx-auto h-8 w-8 opacity-60" />
 			<p>
 				{t("preview.documentPlaceholder", {
 					defaultValue: "Click anything in the preview to start editing.",

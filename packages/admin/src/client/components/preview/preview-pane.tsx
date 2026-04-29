@@ -13,13 +13,13 @@ import * as React from "react";
 
 import { useTranslation } from "../../i18n/hooks.js";
 import { cn } from "../../lib/utils.js";
-import { useInitSnapshotBuffer } from "./use-init-snapshot-buffer.js";
 import type {
 	AdminToPreviewMessage,
 	PreviewToAdminMessage,
 } from "../../preview/types.js";
 import { isPreviewToAdminMessage } from "../../preview/types.js";
 import { selectClient, useAdminStore } from "../../runtime/provider.js";
+import { useInitSnapshotBuffer } from "./use-init-snapshot-buffer.js";
 
 const DEV_TELEMETRY = process.env.NODE_ENV === "development";
 
@@ -489,10 +489,10 @@ export const PreviewPane = React.forwardRef<PreviewPaneRef, PreviewPaneProps>(
 		}, []);
 
 		return (
-			<div className={cn("relative h-full w-full", className)}>
+			<div className={cn("bg-surface relative h-full w-full", className)}>
 				{/* Loading overlay */}
 				{isLoading && (
-					<div className="bg-muted absolute inset-0 z-10 flex items-center justify-center">
+					<div className="bg-surface absolute inset-0 z-10 flex items-center justify-center">
 						<Icon
 							icon="ph:spinner"
 							className="text-muted-foreground h-6 w-6 animate-spin"
@@ -505,17 +505,17 @@ export const PreviewPane = React.forwardRef<PreviewPaneRef, PreviewPaneProps>(
 
 				{/* Error overlay */}
 				{tokenError && (
-					<div className="bg-muted absolute inset-0 z-10 flex items-center justify-center">
-						<div className="bg-destructive/10 border-destructive text-destructive border px-4 py-3 text-sm">
+					<div className="bg-surface absolute inset-0 z-10 flex items-center justify-center p-4">
+						<div className="bg-destructive/10 border-destructive/40 text-destructive max-w-sm rounded-md border px-4 py-3 text-sm shadow-[var(--floating-shadow)]">
 							<p className="font-medium">{t("preview.previewError")}</p>
-							<p>{tokenError}</p>
+							<p className="mt-1 text-pretty">{tokenError}</p>
 						</div>
 					</div>
 				)}
 
 				{/* Refreshing indicator */}
 				{isRefreshing && !isLoading && (
-					<div className="bg-background absolute top-4 right-4 z-10 flex items-center gap-2 border px-3 py-2 shadow-md">
+					<div className="bg-card/95 border-border-subtle absolute top-4 right-4 z-10 flex items-center gap-2 rounded-md border px-3 py-2 shadow-[var(--floating-shadow)] backdrop-blur-sm">
 						<Icon
 							icon="ph:spinner"
 							className="text-muted-foreground h-4 w-4 animate-spin"
@@ -542,7 +542,7 @@ export const PreviewPane = React.forwardRef<PreviewPaneRef, PreviewPaneProps>(
 					<iframe
 						ref={iframeRef}
 						src={previewUrlResolved}
-						className="h-full w-full border-0"
+						className="bg-background h-full w-full border-0"
 						title={t("common.preview")}
 						onLoad={handleLoad}
 						// oxlint-disable-next-line iframe-missing-sandbox

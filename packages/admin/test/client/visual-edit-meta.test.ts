@@ -185,7 +185,7 @@ describe("defaultPatchStrategy", () => {
 	it("returns 'patch' when neither schema nor fieldDef is provided", () => {
 		// The patcher passes whatever it has from the resolver; if the
 		// caller doesn't have either source the safest default is
-		// patch (preserves V2's optimistic-update path) — refresh
+		// patch (preserves the optimistic-update path) — refresh
 		// would silently reload the iframe on every edit of the
 		// orphan field.
 		expect(defaultPatchStrategy({})).toBe("patch");

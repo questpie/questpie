@@ -48,15 +48,15 @@ export const pages = collection("pages")
 
 ### Preview Options
 
-| Option         | Type                            | Default   | Description                                                                            |
-| -------------- | ------------------------------- | --------- | -------------------------------------------------------------------------------------- |
-| `enabled`      | `boolean`                       | `true`    | Enable/disable preview                                                                 |
-| `url`          | `(ctx) => string`               | —         | URL builder function (receives `{ record, locale? }`)                                  |
-| `position`     | `"left" \| "right" \| "bottom"` | `"right"` | Preview panel position                                                                 |
-| `defaultSize`  | `number`                        | `50`      | Default preview pane size as a percentage (0–100)                                      |
-| `minSize`      | `number`                        | `30`      | Minimum preview pane size as a percentage (0–100)                                      |
-| `defaultWidth` | `number`                        | —         | Alias for `defaultSize`. When both are present `defaultSize` wins                      |
-| `minWidth`     | `number`                        | —         | Alias for `minSize`. When both are present `minSize` wins                              |
+| Option         | Type                            | Default   | Description                                                       |
+| -------------- | ------------------------------- | --------- | ----------------------------------------------------------------- |
+| `enabled`      | `boolean`                       | `true`    | Enable/disable preview                                            |
+| `url`          | `(ctx) => string`               | —         | URL builder function (receives `{ record, locale? }`)             |
+| `position`     | `"left" \| "right" \| "bottom"` | `"right"` | Preview panel position                                            |
+| `defaultSize`  | `number`                        | `50`      | Default preview pane size as a percentage (0–100)                 |
+| `minSize`      | `number`                        | `30`      | Minimum preview pane size as a percentage (0–100)                 |
+| `defaultWidth` | `number`                        | —         | Alias for `defaultSize`. When both are present `defaultSize` wins |
+| `minWidth`     | `number`                        | —         | Alias for `minSize`. When both are present `minSize` wins         |
 
 ## Draft Mode & Token Security
 
@@ -68,11 +68,93 @@ Preview URLs go through a token-based security flow:
 4. Route handler verifies the token, sets a `__draft_mode` cookie, and redirects to the path
 5. Your frontend checks the cookie and loads draft data if present
 
+## Prepare A Frontend Page For Preview
+
+A preview-ready frontend page needs three pieces: a collection preview URL, a loader that can read draft data, and preview markers around editable regions.
+
+### 1. Configure The Collection
+
+The collection must expose a URL that the admin can load in the iframe:
+
+```ts title="collections/pages.ts"
+export const pages = collection("pages")
+	.preview({
+		url: ({ record }) =>
+			record.slug === "home"
+				? "/?preview=true"
+				: `/${record.slug}?preview=true`,
+	})
+	.form(({ v }) => v.visualEditForm({}));
+```
+
+Use `v.collectionForm({})` when you want the standard split-screen form. Use `v.visualEditForm({})` when you want the canvas + inspector workspace. Both views use the same `.preview()` URL.
+
+### 2. Load Draft Data When The Preview Cookie Is Present
+
+The `/api/preview` route sets `__draft_mode=true` before redirecting into your page. In the page loader, check that cookie and relax your public filters only for preview requests:
+
+```ts title="lib/get-page.ts"
+import { isDraftMode } from "@questpie/admin/shared";
+
+export async function getPage({ slug, cookie }: {
+	slug: string;
+	cookie?: string;
+}) {
+	const isDraft = isDraftMode(cookie);
+	const ctx = await createRequestContext();
+
+	const page = await app.collections.pages.findOne(
+		{
+			where: { slug },
+			...(isDraft ? {} : { stage: "published" }),
+		},
+		ctx,
+	);
+
+	return page;
+}
+```
+
+For workflow collections, public routes should keep `stage: "published"` outside preview. For simpler collections, keep whatever public visibility filter your site already uses and remove it only when `isDraft` is true.
+
+### 3. Wrap The Page With Preview Helpers
+
+Pass the loaded record into `useCollectionPreview`, wrap the page in `PreviewProvider`, and mark editable regions with `PreviewField`:
+
+```tsx title="routes/pages/$slug.tsx"
+import {
+	PreviewField,
+	PreviewProvider,
+	useCollectionPreview,
+} from "@questpie/admin/client";
+
+function Page({ initialData }) {
+	const preview = useCollectionPreview({
+		initialData,
+		onRefresh: () => router.invalidate(),
+	});
+
+	return (
+		<PreviewProvider
+			isPreviewMode={preview.isPreviewMode}
+			focusedField={preview.focusedField}
+			onFieldClick={preview.handleFieldClick}
+		>
+			<PreviewField field="title">
+				<h1>{preview.data.title}</h1>
+			</PreviewField>
+		</PreviewProvider>
+	);
+}
+```
+
+For block content, render through `BlockRenderer` and pass `preview.handleBlockClick` when preview mode is active. Fields rendered inside block components can use `PreviewField`; `BlockScopeProvider` scopes their paths to the selected block automatically when they are rendered through the block renderer.
+
 ## Field Focus Sync
 
 Clicking a field in the form highlights it in the preview, and vice versa. This uses a bidirectional `postMessage` protocol between the admin iframe and the frontend.
 
-In day-to-day usage you don't write the wire payloads yourself — `useCollectionPreview` and `PreviewField` handle them — but the message shapes are stable and documented in [Protocol & Reliability](./protocol). The relevant types include `FOCUS_FIELD` (admin → preview), `FIELD_CLICKED` and `BLOCK_CLICKED` (preview → admin), and the V2 patch / commit / resync messages used by the [Visual Edit Workspace](./visual-edit).
+In day-to-day usage you don't write the wire payloads yourself — `useCollectionPreview` and `PreviewField` handle them — but the message shapes are stable and documented in [Protocol & Reliability](./protocol). The relevant types include `FOCUS_FIELD` (admin → preview), `FIELD_CLICKED` and `BLOCK_CLICKED` (preview → admin), and the patch / commit / resync messages used by the [Visual Edit Workspace](./visual-edit).
 
 Both directions resolve a single canonical peer origin and validate `event.origin` on receipt — wildcards are never used. See the protocol page for the security model.
 
@@ -117,12 +199,12 @@ function PageComponent({ initialData }) {
 The hook:
 
 - Detects preview mode via `window.self !== window.top`.
-- **V1**: listens for `PREVIEW_REFRESH` messages and calls `onRefresh`.
-- **V2**: applies `PATCH_BATCH` ops to a local draft store, seeds the draft from `INIT_SNAPSHOT`, swaps or drops the draft on `COMMIT`, resets state on `FULL_RESYNC`, updates focus on `SELECT_TARGET`, and accepts same-origin `NAVIGATE_PREVIEW` (via `location.replace` so the back-button stack stays clean). The merged data flows back through `data`; the V2-only `isDraftActive` flag tells you whether the iframe is showing a local draft or the canonical record.
+- Listens for `PREVIEW_REFRESH` messages and calls `onRefresh`.
+- Applies `PATCH_BATCH` ops to a local draft store, seeds the draft from `INIT_SNAPSHOT`, swaps or drops the draft on `COMMIT`, resets state on `FULL_RESYNC`, updates focus on `SELECT_TARGET`, and accepts same-origin `NAVIGATE_PREVIEW` (via `location.replace` so the back-button stack stays clean). The merged data flows back through `data`; `isDraftActive` tells you whether the iframe is showing a local draft or the canonical record.
 - Tracks `selectedBlockId` and `focusedField` from admin focus events (`FOCUS_FIELD`, `SELECT_BLOCK`, `SELECT_TARGET`).
 - Provides click handlers that send `FIELD_CLICKED` / `BLOCK_CLICKED` messages back to the admin.
 
-There is no V1/V2 toggle on the iframe side — the same hook handles both protocols transparently. Opting a collection into the [Visual Edit Workspace](./visual-edit) does not require any changes to your frontend page.
+There is no protocol toggle on the iframe side — the same hook handles refresh and patch messages transparently. Opting a collection into the [Visual Edit Workspace](./visual-edit) does not require any changes to your frontend page.
 
 ## Exit Preview Mode
 
@@ -132,7 +214,6 @@ The "Exit Preview" button redirects to `/api/preview?disable=true`, which clears
 
 - [Visual Edit Workspace](./visual-edit) — Enabling the workspace, selection model, per-field tuning.
 - [Protocol & Reliability](./protocol) — Wire-level reference for the message types both sides exchange today.
-- [Migration Guide](./migration) — Upgrading existing live-preview integrations to the workspace.
 - [Architecture](./architecture) — Design-intent architecture notes for the live-preview surface.
 - [Same-Tab Recipe](./same-tab-recipe) — Frontend integration guide for hosting the preview at the same origin as the admin.
 - [Shared Preview](./shared-preview) — Design notes for multi-user / detached preview transports.

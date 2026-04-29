@@ -115,11 +115,14 @@ export function DocumentInspectorBody({
 	};
 
 	return (
-		<div className={cn("space-y-6", className)}>
+		<div className={cn("space-y-5", className)}>
 			{groups.map((group) => {
 				const label = showGroupHeaders ? labelFor(group) : null;
 				return (
-					<section key={group.key} className="space-y-3">
+					<section
+						key={group.key}
+						className="border-border-subtle space-y-3 border-t pt-5 first:border-t-0 first:pt-0"
+					>
 						{label && (
 							<header className="text-foreground text-xs font-semibold tracking-wide uppercase">
 								{label}

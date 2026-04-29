@@ -17,15 +17,14 @@
 
 "use client";
 
+import type { CollectionSchema } from "questpie/client";
 import * as React from "react";
 import { useFormContext } from "react-hook-form";
 
-import type { CollectionSchema } from "questpie/client";
-
 import type { FieldInstance } from "../../builder/field/field.js";
-import type { PreviewPaneRef } from "../preview/preview-pane.js";
 import { diffSnapshot } from "../../preview/diff.js";
 import type { PreviewPatchOp } from "../../preview/types.js";
+import type { PreviewPaneRef } from "../preview/preview-pane.js";
 import { buildStrategyMap } from "./visual-edit-meta.js";
 
 // ============================================================================
@@ -113,8 +112,7 @@ export function useFormToPreviewPatcher({
 			seqRef.current = 0;
 			return;
 		}
-		// Cheap clone — keys we mutate are top-level only.
-		snapshotRef.current = { ...baseline };
+		snapshotRef.current = cloneSnapshot(baseline);
 		seqRef.current = 0;
 	}, [baseline]);
 
@@ -165,7 +163,7 @@ export function useFormToPreviewPatcher({
 			// stale baseline. Refresh-strategy fields still need to
 			// land in the snapshot — they just travel via a different
 			// channel (PREVIEW_REFRESH).
-			snapshotRef.current = current;
+			snapshotRef.current = cloneSnapshot(current);
 
 			if (patchOps.length > 0) {
 				seqRef.current += 1;
@@ -207,4 +205,10 @@ export function useFormToPreviewPatcher({
 function topLevelKey(path: string): string {
 	const dot = path.indexOf(".");
 	return dot < 0 ? path : path.slice(0, dot);
+}
+
+function cloneSnapshot(
+	snapshot: Record<string, unknown>,
+): Record<string, unknown> {
+	return structuredClone(snapshot);
 }

@@ -8,13 +8,10 @@
  */
 
 import { afterEach, describe, expect, it, mock } from "bun:test";
-import * as React from "react";
+
 import { act, cleanup, render } from "@testing-library/react";
-import {
-	FormProvider,
-	type UseFormReturn,
-	useForm,
-} from "react-hook-form";
+import * as React from "react";
+import { FormProvider, type UseFormReturn, useForm } from "react-hook-form";
 
 import type { FieldInstance } from "#questpie/admin/client/builder/field/field";
 import type { PreviewPaneRef } from "#questpie/admin/client/components/preview/preview-pane";
@@ -424,8 +421,36 @@ describe("useFormToPreviewPatcher — nested objects", () => {
 
 		expect(previewRef.mocks.sendPatchBatch).toHaveBeenCalledTimes(1);
 		const [, ops] = previewRef.mocks.sendPatchBatch.mock.calls[0]!;
-		expect(ops).toEqual([
-			{ op: "set", path: "meta.seo.title", value: "New" },
+		expect(ops).toEqual([{ op: "set", path: "meta.seo.title", value: "New" }]);
+	});
+
+	it("keeps emitting patches for repeated nested object edits", async () => {
+		const previewRef = makePreviewRef();
+		render(
+			<Harness
+				defaultValues={{ meta: { seo: { title: "A", desc: "D" } } }}
+				fields={{ meta: fieldInstance("object") }}
+				previewRef={previewRef}
+				debounceMs={5}
+				onForm={onForm}
+			/>,
+		);
+
+		await act(async () => {
+			formRef.setValue("meta.seo.title", "B");
+			await flushDebounce();
+		});
+		await act(async () => {
+			formRef.setValue("meta.seo.title", "C");
+			await flushDebounce();
+		});
+
+		expect(previewRef.mocks.sendPatchBatch).toHaveBeenCalledTimes(2);
+		expect(previewRef.mocks.sendPatchBatch.mock.calls[0]?.[1]).toEqual([
+			{ op: "set", path: "meta.seo.title", value: "B" },
+		]);
+		expect(previewRef.mocks.sendPatchBatch.mock.calls[1]?.[1]).toEqual([
+			{ op: "set", path: "meta.seo.title", value: "C" },
 		]);
 	});
 });
@@ -484,15 +509,12 @@ describe("useFormToPreviewPatcher — baseline reset (post-COMMIT)", () => {
 		});
 
 		expect(previewRef.mocks.sendPatchBatch).toHaveBeenCalledTimes(2);
-		const [seq, ops] =
-			previewRef.mocks.sendPatchBatch.mock.calls[1]!;
+		const [seq, ops] = previewRef.mocks.sendPatchBatch.mock.calls[1]!;
 		// seq resets after baseline change.
 		expect(seq).toBe(1);
 		// Diff is computed against the NEW baseline — only the
 		// description change is emitted, not a stale title=B op.
-		expect(ops).toEqual([
-			{ op: "set", path: "description", value: "new" },
-		]);
+		expect(ops).toEqual([{ op: "set", path: "description", value: "new" }]);
 	});
 });
 
@@ -543,9 +565,7 @@ describe("useFormToPreviewPatcher — defensive guards", () => {
 
 		expect(real.mocks.sendPatchBatch).toHaveBeenCalledTimes(1);
 		const [, ops] = real.mocks.sendPatchBatch.mock.calls[0]!;
-		expect(ops).toEqual([
-			{ op: "set", path: "title", value: "Newer" },
-		]);
+		expect(ops).toEqual([{ op: "set", path: "title", value: "Newer" }]);
 	});
 
 	it("drops underscore-prefixed top-level keys (form internals)", async () => {
@@ -578,8 +598,6 @@ describe("useFormToPreviewPatcher — defensive guards", () => {
 		// Patches the visible field; silently drops `_internal`.
 		expect(previewRef.mocks.sendPatchBatch).toHaveBeenCalledTimes(1);
 		const [, ops] = previewRef.mocks.sendPatchBatch.mock.calls[0]!;
-		expect(ops).toEqual([
-			{ op: "set", path: "title", value: "New" },
-		]);
+		expect(ops).toEqual([{ op: "set", path: "title", value: "New" }]);
 	});
 });

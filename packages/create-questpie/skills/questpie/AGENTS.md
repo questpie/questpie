@@ -1237,6 +1237,8 @@ collection("pages").options({
 - `revertToVersion({ id, version: 3 })` → restore a previous version
 - `transitionStage({ id, stage: "published" })` → move between workflow stages
 - `beforeTransition` / `afterTransition` hooks
+- Stage reads: `findOne({ where, stage: "published" })` reads the published snapshot while the default read keeps using the working stage
+- Scheduled transitions: pass `scheduledAt` when a queue adapter is configured
 
 ### API Usage
 
@@ -1245,6 +1247,10 @@ collection("pages").options({
 const versions = await collections.pages.findVersions({ id: "abc" });
 await collections.pages.revertToVersion({ id: "abc", version: 5 });
 await collections.pages.transitionStage({ id: "abc", stage: "published" });
+const publishedPage = await collections.pages.findOne({
+	where: { slug: "about" },
+	stage: "published",
+});
 
 // Client-side
 const versions = await client.collections.pages.findVersions({ id: "abc" });
@@ -1253,6 +1259,8 @@ await client.collections.pages.transitionStage({
 	stage: "published",
 });
 ```
+
+For public pages, query `stage: "published"`. For admin preview/draft mode, read the working stage so editors can see unpublished changes. Admin workflow transitions appear in the form toolbar and the Visual Edit Workspace sends `FULL_RESYNC` after stage switches so the iframe drops stale local patches.
 
 ---
 

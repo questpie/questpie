@@ -202,9 +202,9 @@ function LivePreviewContent({
 		if (focusState.type === "field") {
 			previewRef.current.sendFocusToPreview(focusState.fieldPath);
 		} else if (focusState.type === "block") {
-			// V1 assumes the canonical blocks-field name; the V2 workspace
-			// will thread the real `blocksPath` through here once the form
-			// controller is extracted.
+			// Refresh-only preview assumes the canonical blocks-field name;
+			// the visual edit workspace threads the real `blocksPath`
+			// through its patch-based selection flow.
 			const fullPath = blockValuePath(
 				defaultBlocksPath(),
 				focusState.blockId,

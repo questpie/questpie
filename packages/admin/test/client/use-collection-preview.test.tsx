@@ -17,6 +17,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
+
 import { act, cleanup, renderHook } from "@testing-library/react";
 
 import { useCollectionPreview } from "#questpie/admin/client/preview/use-collection-preview";
@@ -85,8 +86,9 @@ afterEach(() => {
 	if (originalReferrerDescriptor) {
 		Object.defineProperty(document, "referrer", originalReferrerDescriptor);
 	}
-	(window.parent as { postMessage: typeof originalParentPostMessage }).postMessage =
-		originalParentPostMessage;
+	(
+		window.parent as { postMessage: typeof originalParentPostMessage }
+	).postMessage = originalParentPostMessage;
 	(window.location as { replace: (url: string) => void }).replace =
 		originalLocationReplace;
 	console.error = originalConsoleError;
@@ -388,9 +390,7 @@ describe("useCollectionPreview — SELECT_TARGET / FOCUS_FIELD", () => {
 			});
 		});
 
-		expect(result.current.focusedField).toBe(
-			"content._values.abc.title",
-		);
+		expect(result.current.focusedField).toBe("content._values.abc.title");
 		expect(result.current.selectedBlockId).toBe("abc");
 	});
 
@@ -441,7 +441,7 @@ describe("useCollectionPreview — SELECT_TARGET / FOCUS_FIELD", () => {
 		// Lock in the design choice: selecting a non-block field after
 		// a block has been highlighted does NOT clear the block. The
 		// canvas can show both a focused field AND a block outline at
-		// the same time. This matches V1's FOCUS_FIELD behaviour.
+		// the same time. This matches refresh-only FOCUS_FIELD behaviour.
 		const onRefresh = mock(() => Promise.resolve());
 		const { result } = renderHook(() =>
 			useCollectionPreview({ initialData: {}, onRefresh }),
@@ -508,7 +508,7 @@ describe("useCollectionPreview — NAVIGATE_PREVIEW", () => {
 	});
 });
 
-describe("useCollectionPreview — PREVIEW_REFRESH (V1 fallback)", () => {
+describe("useCollectionPreview — PREVIEW_REFRESH (refresh fallback)", () => {
 	it("calls onRefresh for legacy refresh messages", async () => {
 		const onRefresh = mock(() => Promise.resolve());
 		renderHook(() =>
@@ -545,18 +545,13 @@ describe("useCollectionPreview — origin resolution fallback", () => {
 		});
 
 		const onRefresh = mock(() => Promise.resolve());
-		renderHook(() =>
-			useCollectionPreview({ initialData: {}, onRefresh }),
-		);
+		renderHook(() => useCollectionPreview({ initialData: {}, onRefresh }));
 
 		// Dispatch a message claiming to come from the page's own origin.
 		// happy-dom sets `window.location.origin` to "http://localhost:3000"
 		// per `setup-dom.ts`.
 		await act(async () => {
-			dispatchAdminMessage(
-				{ type: "PREVIEW_REFRESH" },
-				window.location.origin,
-			);
+			dispatchAdminMessage({ type: "PREVIEW_REFRESH" }, window.location.origin);
 			await flushAsync();
 		});
 
@@ -570,9 +565,7 @@ describe("useCollectionPreview — origin resolution fallback", () => {
 		});
 
 		const onRefresh = mock(() => Promise.resolve());
-		renderHook(() =>
-			useCollectionPreview({ initialData: {}, onRefresh }),
-		);
+		renderHook(() => useCollectionPreview({ initialData: {}, onRefresh }));
 
 		// Same payload, but origin claims to be a different domain.
 		// Without a resolved adminOrigin, the same-origin guard kicks

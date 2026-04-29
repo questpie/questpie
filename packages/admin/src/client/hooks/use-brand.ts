@@ -1,3 +1,4 @@
+import * as React from "react";
 import { createStore, useStore } from "zustand";
 
 import { useAdminStoreRaw } from "../runtime/provider.js";
@@ -44,8 +45,16 @@ function selectBrand(state: {
  * mounted (e.g. on a bare auth page).
  */
 export function useBrand(): BrandSnapshot {
-	const store = useAdminStoreRaw();
-	return useStore(store ?? FALLBACK_STORE, selectBrand);
+	const store = useAdminStoreRaw() ?? FALLBACK_STORE;
+	const name = useStore(store, (state) => state.brandName);
+	const logo = useStore(store, (state) => state.brandLogo);
+	const tagline = useStore(store, (state) => state.brandTagline);
+	const favicon = useStore(store, (state) => state.brandFavicon);
+
+	return React.useMemo(
+		() => ({ name, logo, tagline, favicon }),
+		[name, logo, tagline, favicon],
+	);
 }
 
 /**

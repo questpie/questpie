@@ -44,7 +44,7 @@ export {
 	usePreviewContext,
 } from "./preview-field.js";
 
-// V1 types
+// Refresh/focus message types
 export type {
 	AdminToPreviewMessage,
 	BlockClickedMessage,
@@ -57,7 +57,7 @@ export type {
 	RefreshCompleteMessage,
 	SelectBlockMessage,
 } from "./types.js";
-// V2 protocol types
+// Patch protocol message types
 export type {
 	CommitMessage,
 	FullResyncMessage,

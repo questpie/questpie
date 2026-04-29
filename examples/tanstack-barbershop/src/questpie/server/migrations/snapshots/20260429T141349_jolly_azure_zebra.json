@@ -1,0 +1,713 @@
+{
+	"operations": [
+		{
+			"type": "set",
+			"path": "ddl.table__COLON__public__DOT__pages_versions",
+			"value": {
+				"isRlsEnabled": false,
+				"name": "pages_versions",
+				"entityType": "tables",
+				"schema": "public"
+			},
+			"timestamp": "2026-04-29T14:13:49.610Z",
+			"migrationId": "jollyAzureZebra20260429T141349"
+		},
+		{
+			"type": "set",
+			"path": "ddl.table__COLON__public__DOT__pages_i18n_versions",
+			"value": {
+				"isRlsEnabled": false,
+				"name": "pages_i18n_versions",
+				"entityType": "tables",
+				"schema": "public"
+			},
+			"timestamp": "2026-04-29T14:13:49.610Z",
+			"migrationId": "jollyAzureZebra20260429T141349"
+		},
+		{
+			"type": "set",
+			"path": "ddl.column__COLON__public__DOT__user__DOT__image",
+			"value": {
+				"type": "varchar(500)",
+				"typeSchema": null,
+				"notNull": false,
+				"dimensions": 0,
+				"default": null,
+				"generated": null,
+				"identity": null,
+				"name": "image",
+				"entityType": "columns",
+				"schema": "public",
+				"table": "user"
+			},
+			"timestamp": "2026-04-29T14:13:49.610Z",
+			"migrationId": "jollyAzureZebra20260429T141349"
+		},
+		{
+			"type": "set",
+			"path": "ddl.column__COLON__public__DOT__pages_versions__DOT__version_id",
+			"value": {
+				"type": "text",
+				"typeSchema": null,
+				"notNull": true,
+				"dimensions": 0,
+				"default": "gen_random_uuid()",
+				"generated": null,
+				"identity": null,
+				"name": "version_id",
+				"entityType": "columns",
+				"schema": "public",
+				"table": "pages_versions"
+			},
+			"timestamp": "2026-04-29T14:13:49.610Z",
+			"migrationId": "jollyAzureZebra20260429T141349"
+		},
+		{
+			"type": "set",
+			"path": "ddl.column__COLON__public__DOT__pages_versions__DOT__id",
+			"value": {
+				"type": "text",
+				"typeSchema": null,
+				"notNull": true,
+				"dimensions": 0,
+				"default": null,
+				"generated": null,
+				"identity": null,
+				"name": "id",
+				"entityType": "columns",
+				"schema": "public",
+				"table": "pages_versions"
+			},
+			"timestamp": "2026-04-29T14:13:49.610Z",
+			"migrationId": "jollyAzureZebra20260429T141349"
+		},
+		{
+			"type": "set",
+			"path": "ddl.column__COLON__public__DOT__pages_versions__DOT__version_number",
+			"value": {
+				"type": "integer",
+				"typeSchema": null,
+				"notNull": true,
+				"dimensions": 0,
+				"default": null,
+				"generated": null,
+				"identity": null,
+				"name": "version_number",
+				"entityType": "columns",
+				"schema": "public",
+				"table": "pages_versions"
+			},
+			"timestamp": "2026-04-29T14:13:49.610Z",
+			"migrationId": "jollyAzureZebra20260429T141349"
+		},
+		{
+			"type": "set",
+			"path": "ddl.column__COLON__public__DOT__pages_versions__DOT__version_operation",
+			"value": {
+				"type": "text",
+				"typeSchema": null,
+				"notNull": true,
+				"dimensions": 0,
+				"default": null,
+				"generated": null,
+				"identity": null,
+				"name": "version_operation",
+				"entityType": "columns",
+				"schema": "public",
+				"table": "pages_versions"
+			},
+			"timestamp": "2026-04-29T14:13:49.610Z",
+			"migrationId": "jollyAzureZebra20260429T141349"
+		},
+		{
+			"type": "set",
+			"path": "ddl.column__COLON__public__DOT__pages_versions__DOT__version_stage",
+			"value": {
+				"type": "text",
+				"typeSchema": null,
+				"notNull": false,
+				"dimensions": 0,
+				"default": null,
+				"generated": null,
+				"identity": null,
+				"name": "version_stage",
+				"entityType": "columns",
+				"schema": "public",
+				"table": "pages_versions"
+			},
+			"timestamp": "2026-04-29T14:13:49.610Z",
+			"migrationId": "jollyAzureZebra20260429T141349"
+		},
+		{
+			"type": "set",
+			"path": "ddl.column__COLON__public__DOT__pages_versions__DOT__version_from_stage",
+			"value": {
+				"type": "text",
+				"typeSchema": null,
+				"notNull": false,
+				"dimensions": 0,
+				"default": null,
+				"generated": null,
+				"identity": null,
+				"name": "version_from_stage",
+				"entityType": "columns",
+				"schema": "public",
+				"table": "pages_versions"
+			},
+			"timestamp": "2026-04-29T14:13:49.610Z",
+			"migrationId": "jollyAzureZebra20260429T141349"
+		},
+		{
+			"type": "set",
+			"path": "ddl.column__COLON__public__DOT__pages_versions__DOT__version_user_id",
+			"value": {
+				"type": "text",
+				"typeSchema": null,
+				"notNull": false,
+				"dimensions": 0,
+				"default": null,
+				"generated": null,
+				"identity": null,
+				"name": "version_user_id",
+				"entityType": "columns",
+				"schema": "public",
+				"table": "pages_versions"
+			},
+			"timestamp": "2026-04-29T14:13:49.610Z",
+			"migrationId": "jollyAzureZebra20260429T141349"
+		},
+		{
+			"type": "set",
+			"path": "ddl.column__COLON__public__DOT__pages_versions__DOT__version_created_at",
+			"value": {
+				"type": "timestamp",
+				"typeSchema": null,
+				"notNull": true,
+				"dimensions": 0,
+				"default": "now()",
+				"generated": null,
+				"identity": null,
+				"name": "version_created_at",
+				"entityType": "columns",
+				"schema": "public",
+				"table": "pages_versions"
+			},
+			"timestamp": "2026-04-29T14:13:49.610Z",
+			"migrationId": "jollyAzureZebra20260429T141349"
+		},
+		{
+			"type": "set",
+			"path": "ddl.column__COLON__public__DOT__pages_versions__DOT__slug",
+			"value": {
+				"type": "varchar(255)",
+				"typeSchema": null,
+				"notNull": true,
+				"dimensions": 0,
+				"default": null,
+				"generated": null,
+				"identity": null,
+				"name": "slug",
+				"entityType": "columns",
+				"schema": "public",
+				"table": "pages_versions"
+			},
+			"timestamp": "2026-04-29T14:13:49.610Z",
+			"migrationId": "jollyAzureZebra20260429T141349"
+		},
+		{
+			"type": "set",
+			"path": "ddl.column__COLON__public__DOT__pages_versions__DOT__isPublished",
+			"value": {
+				"type": "boolean",
+				"typeSchema": null,
+				"notNull": true,
+				"dimensions": 0,
+				"default": "false",
+				"generated": null,
+				"identity": null,
+				"name": "isPublished",
+				"entityType": "columns",
+				"schema": "public",
+				"table": "pages_versions"
+			},
+			"timestamp": "2026-04-29T14:13:49.610Z",
+			"migrationId": "jollyAzureZebra20260429T141349"
+		},
+		{
+			"type": "set",
+			"path": "ddl.column__COLON__public__DOT__pages_versions__DOT__created_at",
+			"value": {
+				"type": "timestamp",
+				"typeSchema": null,
+				"notNull": true,
+				"dimensions": 0,
+				"default": "now()",
+				"generated": null,
+				"identity": null,
+				"name": "created_at",
+				"entityType": "columns",
+				"schema": "public",
+				"table": "pages_versions"
+			},
+			"timestamp": "2026-04-29T14:13:49.610Z",
+			"migrationId": "jollyAzureZebra20260429T141349"
+		},
+		{
+			"type": "set",
+			"path": "ddl.column__COLON__public__DOT__pages_versions__DOT__updated_at",
+			"value": {
+				"type": "timestamp",
+				"typeSchema": null,
+				"notNull": true,
+				"dimensions": 0,
+				"default": "now()",
+				"generated": null,
+				"identity": null,
+				"name": "updated_at",
+				"entityType": "columns",
+				"schema": "public",
+				"table": "pages_versions"
+			},
+			"timestamp": "2026-04-29T14:13:49.610Z",
+			"migrationId": "jollyAzureZebra20260429T141349"
+		},
+		{
+			"type": "set",
+			"path": "ddl.column__COLON__public__DOT__pages_i18n_versions__DOT__id",
+			"value": {
+				"type": "text",
+				"typeSchema": null,
+				"notNull": true,
+				"dimensions": 0,
+				"default": "gen_random_uuid()",
+				"generated": null,
+				"identity": null,
+				"name": "id",
+				"entityType": "columns",
+				"schema": "public",
+				"table": "pages_i18n_versions"
+			},
+			"timestamp": "2026-04-29T14:13:49.610Z",
+			"migrationId": "jollyAzureZebra20260429T141349"
+		},
+		{
+			"type": "set",
+			"path": "ddl.column__COLON__public__DOT__pages_i18n_versions__DOT__parent_id",
+			"value": {
+				"type": "text",
+				"typeSchema": null,
+				"notNull": true,
+				"dimensions": 0,
+				"default": null,
+				"generated": null,
+				"identity": null,
+				"name": "parent_id",
+				"entityType": "columns",
+				"schema": "public",
+				"table": "pages_i18n_versions"
+			},
+			"timestamp": "2026-04-29T14:13:49.610Z",
+			"migrationId": "jollyAzureZebra20260429T141349"
+		},
+		{
+			"type": "set",
+			"path": "ddl.column__COLON__public__DOT__pages_i18n_versions__DOT__version_number",
+			"value": {
+				"type": "integer",
+				"typeSchema": null,
+				"notNull": true,
+				"dimensions": 0,
+				"default": null,
+				"generated": null,
+				"identity": null,
+				"name": "version_number",
+				"entityType": "columns",
+				"schema": "public",
+				"table": "pages_i18n_versions"
+			},
+			"timestamp": "2026-04-29T14:13:49.610Z",
+			"migrationId": "jollyAzureZebra20260429T141349"
+		},
+		{
+			"type": "set",
+			"path": "ddl.column__COLON__public__DOT__pages_i18n_versions__DOT__locale",
+			"value": {
+				"type": "text",
+				"typeSchema": null,
+				"notNull": true,
+				"dimensions": 0,
+				"default": null,
+				"generated": null,
+				"identity": null,
+				"name": "locale",
+				"entityType": "columns",
+				"schema": "public",
+				"table": "pages_i18n_versions"
+			},
+			"timestamp": "2026-04-29T14:13:49.610Z",
+			"migrationId": "jollyAzureZebra20260429T141349"
+		},
+		{
+			"type": "set",
+			"path": "ddl.column__COLON__public__DOT__pages_i18n_versions__DOT___localized",
+			"value": {
+				"type": "jsonb",
+				"typeSchema": null,
+				"notNull": false,
+				"dimensions": 0,
+				"default": null,
+				"generated": null,
+				"identity": null,
+				"name": "_localized",
+				"entityType": "columns",
+				"schema": "public",
+				"table": "pages_i18n_versions"
+			},
+			"timestamp": "2026-04-29T14:13:49.610Z",
+			"migrationId": "jollyAzureZebra20260429T141349"
+		},
+		{
+			"type": "set",
+			"path": "ddl.column__COLON__public__DOT__pages_i18n_versions__DOT__title",
+			"value": {
+				"type": "varchar(255)",
+				"typeSchema": null,
+				"notNull": true,
+				"dimensions": 0,
+				"default": null,
+				"generated": null,
+				"identity": null,
+				"name": "title",
+				"entityType": "columns",
+				"schema": "public",
+				"table": "pages_i18n_versions"
+			},
+			"timestamp": "2026-04-29T14:13:49.610Z",
+			"migrationId": "jollyAzureZebra20260429T141349"
+		},
+		{
+			"type": "set",
+			"path": "ddl.column__COLON__public__DOT__pages_i18n_versions__DOT__description",
+			"value": {
+				"type": "text",
+				"typeSchema": null,
+				"notNull": false,
+				"dimensions": 0,
+				"default": null,
+				"generated": null,
+				"identity": null,
+				"name": "description",
+				"entityType": "columns",
+				"schema": "public",
+				"table": "pages_i18n_versions"
+			},
+			"timestamp": "2026-04-29T14:13:49.610Z",
+			"migrationId": "jollyAzureZebra20260429T141349"
+		},
+		{
+			"type": "set",
+			"path": "ddl.column__COLON__public__DOT__pages_i18n_versions__DOT__content",
+			"value": {
+				"type": "jsonb",
+				"typeSchema": null,
+				"notNull": false,
+				"dimensions": 0,
+				"default": null,
+				"generated": null,
+				"identity": null,
+				"name": "content",
+				"entityType": "columns",
+				"schema": "public",
+				"table": "pages_i18n_versions"
+			},
+			"timestamp": "2026-04-29T14:13:49.610Z",
+			"migrationId": "jollyAzureZebra20260429T141349"
+		},
+		{
+			"type": "set",
+			"path": "ddl.column__COLON__public__DOT__pages_i18n_versions__DOT__metaTitle",
+			"value": {
+				"type": "varchar(255)",
+				"typeSchema": null,
+				"notNull": false,
+				"dimensions": 0,
+				"default": null,
+				"generated": null,
+				"identity": null,
+				"name": "metaTitle",
+				"entityType": "columns",
+				"schema": "public",
+				"table": "pages_i18n_versions"
+			},
+			"timestamp": "2026-04-29T14:13:49.610Z",
+			"migrationId": "jollyAzureZebra20260429T141349"
+		},
+		{
+			"type": "set",
+			"path": "ddl.column__COLON__public__DOT__pages_i18n_versions__DOT__metaDescription",
+			"value": {
+				"type": "text",
+				"typeSchema": null,
+				"notNull": false,
+				"dimensions": 0,
+				"default": null,
+				"generated": null,
+				"identity": null,
+				"name": "metaDescription",
+				"entityType": "columns",
+				"schema": "public",
+				"table": "pages_i18n_versions"
+			},
+			"timestamp": "2026-04-29T14:13:49.610Z",
+			"migrationId": "jollyAzureZebra20260429T141349"
+		},
+		{
+			"type": "set",
+			"path": "ddl.column__COLON__public__DOT__site_settings_i18n__DOT__navigation",
+			"value": {
+				"type": "jsonb",
+				"typeSchema": null,
+				"notNull": false,
+				"dimensions": 0,
+				"default": "'[{\"label\":\"Home\",\"href\":\"/\"},{\"label\":\"Services\",\"href\":\"/services\"},{\"label\":\"Our Team\",\"href\":\"/barbers\"},{\"label\":\"Contact\",\"href\":\"/contact\"}]'",
+				"generated": null,
+				"identity": null,
+				"name": "navigation",
+				"entityType": "columns",
+				"schema": "public",
+				"table": "site_settings_i18n"
+			},
+			"timestamp": "2026-04-29T14:13:49.610Z",
+			"migrationId": "jollyAzureZebra20260429T141349"
+		},
+		{
+			"type": "set",
+			"path": "ddl.column__COLON__public__DOT__site_settings_i18n_versions__DOT__navigation",
+			"value": {
+				"type": "jsonb",
+				"typeSchema": null,
+				"notNull": false,
+				"dimensions": 0,
+				"default": "'[{\"label\":\"Home\",\"href\":\"/\"},{\"label\":\"Services\",\"href\":\"/services\"},{\"label\":\"Our Team\",\"href\":\"/barbers\"},{\"label\":\"Contact\",\"href\":\"/contact\"}]'",
+				"generated": null,
+				"identity": null,
+				"name": "navigation",
+				"entityType": "columns",
+				"schema": "public",
+				"table": "site_settings_i18n_versions"
+			},
+			"timestamp": "2026-04-29T14:13:49.610Z",
+			"migrationId": "jollyAzureZebra20260429T141349"
+		},
+		{
+			"type": "set",
+			"path": "ddl.index__COLON__public__DOT__pages_versions__DOT__pages_versions_id_version_number_index",
+			"value": {
+				"nameExplicit": false,
+				"columns": [
+					{
+						"value": "id",
+						"isExpression": false,
+						"asc": true,
+						"nullsFirst": false,
+						"opclass": null
+					},
+					{
+						"value": "version_number",
+						"isExpression": false,
+						"asc": true,
+						"nullsFirst": false,
+						"opclass": null
+					}
+				],
+				"isUnique": false,
+				"where": null,
+				"with": "",
+				"method": "btree",
+				"concurrently": false,
+				"name": "pages_versions_id_version_number_index",
+				"entityType": "indexes",
+				"schema": "public",
+				"table": "pages_versions"
+			},
+			"timestamp": "2026-04-29T14:13:49.610Z",
+			"migrationId": "jollyAzureZebra20260429T141349"
+		},
+		{
+			"type": "set",
+			"path": "ddl.index__COLON__public__DOT__pages_versions__DOT__pages_versions_id_version_stage_version_number_index",
+			"value": {
+				"nameExplicit": false,
+				"columns": [
+					{
+						"value": "id",
+						"isExpression": false,
+						"asc": true,
+						"nullsFirst": false,
+						"opclass": null
+					},
+					{
+						"value": "version_stage",
+						"isExpression": false,
+						"asc": true,
+						"nullsFirst": false,
+						"opclass": null
+					},
+					{
+						"value": "version_number",
+						"isExpression": false,
+						"asc": true,
+						"nullsFirst": false,
+						"opclass": null
+					}
+				],
+				"isUnique": false,
+				"where": null,
+				"with": "",
+				"method": "btree",
+				"concurrently": false,
+				"name": "pages_versions_id_version_stage_version_number_index",
+				"entityType": "indexes",
+				"schema": "public",
+				"table": "pages_versions"
+			},
+			"timestamp": "2026-04-29T14:13:49.610Z",
+			"migrationId": "jollyAzureZebra20260429T141349"
+		},
+		{
+			"type": "set",
+			"path": "ddl.index__COLON__public__DOT__pages_versions__DOT__pages_versions_version_created_at_index",
+			"value": {
+				"nameExplicit": false,
+				"columns": [
+					{
+						"value": "version_created_at",
+						"isExpression": false,
+						"asc": true,
+						"nullsFirst": false,
+						"opclass": null
+					}
+				],
+				"isUnique": false,
+				"where": null,
+				"with": "",
+				"method": "btree",
+				"concurrently": false,
+				"name": "pages_versions_version_created_at_index",
+				"entityType": "indexes",
+				"schema": "public",
+				"table": "pages_versions"
+			},
+			"timestamp": "2026-04-29T14:13:49.610Z",
+			"migrationId": "jollyAzureZebra20260429T141349"
+		},
+		{
+			"type": "set",
+			"path": "ddl.index__COLON__public__DOT__pages_i18n_versions__DOT__pages_i18n_versions_parent_id_version_number_locale_index",
+			"value": {
+				"nameExplicit": false,
+				"columns": [
+					{
+						"value": "parent_id",
+						"isExpression": false,
+						"asc": true,
+						"nullsFirst": false,
+						"opclass": null
+					},
+					{
+						"value": "version_number",
+						"isExpression": false,
+						"asc": true,
+						"nullsFirst": false,
+						"opclass": null
+					},
+					{
+						"value": "locale",
+						"isExpression": false,
+						"asc": true,
+						"nullsFirst": false,
+						"opclass": null
+					}
+				],
+				"isUnique": true,
+				"where": null,
+				"with": "",
+				"method": "btree",
+				"concurrently": false,
+				"name": "pages_i18n_versions_parent_id_version_number_locale_index",
+				"entityType": "indexes",
+				"schema": "public",
+				"table": "pages_i18n_versions"
+			},
+			"timestamp": "2026-04-29T14:13:49.610Z",
+			"migrationId": "jollyAzureZebra20260429T141349"
+		},
+		{
+			"type": "set",
+			"path": "ddl.index__COLON__public__DOT__pages_i18n_versions__DOT__pages_i18n_versions_parent_id_version_number_index",
+			"value": {
+				"nameExplicit": false,
+				"columns": [
+					{
+						"value": "parent_id",
+						"isExpression": false,
+						"asc": true,
+						"nullsFirst": false,
+						"opclass": null
+					},
+					{
+						"value": "version_number",
+						"isExpression": false,
+						"asc": true,
+						"nullsFirst": false,
+						"opclass": null
+					}
+				],
+				"isUnique": false,
+				"where": null,
+				"with": "",
+				"method": "btree",
+				"concurrently": false,
+				"name": "pages_i18n_versions_parent_id_version_number_index",
+				"entityType": "indexes",
+				"schema": "public",
+				"table": "pages_i18n_versions"
+			},
+			"timestamp": "2026-04-29T14:13:49.610Z",
+			"migrationId": "jollyAzureZebra20260429T141349"
+		},
+		{
+			"type": "set",
+			"path": "ddl.pk__COLON__public__DOT__pages_versions__DOT__pages_versions_pkey",
+			"value": {
+				"columns": ["version_id"],
+				"nameExplicit": false,
+				"name": "pages_versions_pkey",
+				"schema": "public",
+				"table": "pages_versions",
+				"entityType": "pks"
+			},
+			"timestamp": "2026-04-29T14:13:49.610Z",
+			"migrationId": "jollyAzureZebra20260429T141349"
+		},
+		{
+			"type": "set",
+			"path": "ddl.pk__COLON__public__DOT__pages_i18n_versions__DOT__pages_i18n_versions_pkey",
+			"value": {
+				"columns": ["id"],
+				"nameExplicit": false,
+				"name": "pages_i18n_versions_pkey",
+				"schema": "public",
+				"table": "pages_i18n_versions",
+				"entityType": "pks"
+			},
+			"timestamp": "2026-04-29T14:13:49.610Z",
+			"migrationId": "jollyAzureZebra20260429T141349"
+		}
+	],
+	"metadata": {
+		"migrationId": "jollyAzureZebra20260429T141349",
+		"timestamp": "2026-04-29T14:13:49.657Z",
+		"prevId": "00000000-0000-0000-0000-000000000000"
+	}
+}

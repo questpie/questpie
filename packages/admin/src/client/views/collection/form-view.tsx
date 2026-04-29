@@ -57,10 +57,8 @@ import {
 } from "../../components/ui/dropdown-menu";
 import { EmptyState } from "../../components/ui/empty-state";
 import { Label } from "../../components/ui/label";
-import {
-	useSearchParamToggle,
-	useSidebarSearchParam,
-} from "../../hooks";
+import { VisualEditFormHostWithController } from "../../components/visual-edit/visual-edit-form-host";
+import { useSearchParamToggle, useSidebarSearchParam } from "../../hooks";
 import { useCollectionVersions } from "../../hooks/use-collection";
 import { useReactiveFields } from "../../hooks/use-reactive-fields";
 import { useServerActions } from "../../hooks/use-server-actions";
@@ -568,6 +566,7 @@ export default function FormView({
 		currentStageLabel,
 		allowedTransitions,
 	} = workflow;
+	const isVisualEditForm = resolvedFormConfig?.view === "visual-edit-form";
 
 	// Preview configuration from introspected schema (server-side .preview() config)
 	// Note: url function cannot be serialized, so we use hasUrlBuilder flag + RPC
@@ -587,10 +586,11 @@ export default function FormView({
 		legacyKey: "history",
 	});
 	const previewRef = React.useRef<PreviewPaneRef>(null);
+	const isPreviewSurfaceActive = isLivePreviewOpen || isVisualEditForm;
 	const triggerPreviewRefresh = React.useCallback(() => {
-		if (!isLivePreviewOpen) return;
+		if (!isPreviewSurfaceActive) return;
 		previewRef.current?.triggerRefresh();
-	}, [isLivePreviewOpen]);
+	}, [isPreviewSurfaceActive]);
 
 	// Create mode (or missing id) should never keep preview open.
 	// Also wait for schema to load — prevents clearing ?preview on page refresh before
@@ -1347,9 +1347,7 @@ export default function FormView({
 					}
 				} catch (error) {
 					toast.error(
-						error instanceof Error
-							? error.message
-							: t("error.actionFailed"),
+						error instanceof Error ? error.message : t("error.actionFailed"),
 					);
 				} finally {
 					setActionLoading(false);
@@ -1524,7 +1522,10 @@ export default function FormView({
 			return result?.url ?? null;
 		},
 		enabled:
-			isLivePreviewOpen && canUseLivePreview && !!client && !!transformedItem,
+			isPreviewSurfaceActive &&
+			canUseLivePreview &&
+			!!client &&
+			!!transformedItem,
 		staleTime: 30_000,
 	});
 
@@ -1670,7 +1671,11 @@ export default function FormView({
 								});
 							})(e);
 						}}
-						className="qa-form-view__form space-y-4"
+						className={
+							isVisualEditForm
+								? "qa-form-view__form flex min-h-0 flex-1 flex-col space-y-4"
+								: "qa-form-view__form space-y-4"
+						}
 					>
 						<AdminViewHeader
 							className="qa-form-view__header"
@@ -1753,7 +1758,7 @@ export default function FormView({
 									{headerActions}
 
 									{/* Live Preview button */}
-									{canUseLivePreview && (
+									{canUseLivePreview && !isVisualEditForm && (
 										<Button
 											type="button"
 											variant="outline"
@@ -1913,13 +1918,30 @@ export default function FormView({
 							</div>
 						)}
 
-						{/* Main Content - Form Fields */}
-						<FormFieldsContent
-							collection={collection}
-							config={formConfigBridge as any}
-							registry={registry}
-							allCollectionsConfig={allCollectionsConfig}
-						/>
+						{/* Main Content - Form Fields or Visual Edit Workspace */}
+						{isVisualEditForm && canUseLivePreview ? (
+							<div className="panel-surface min-h-[640px] min-w-0 flex-1 overflow-hidden">
+								<VisualEditFormHostWithController
+									controller={controller}
+									defaultValues={defaultValuesProp}
+									previewUrl={previewUrl}
+									defaultInspectorSize={schemaPreview?.defaultSize}
+									minInspectorSize={schemaPreview?.minSize}
+									previewRef={previewRef}
+									registry={registry}
+									allCollectionsConfig={allCollectionsConfig}
+									manageFormReset={false}
+									className="h-full"
+								/>
+							</div>
+						) : (
+							<FormFieldsContent
+								collection={collection}
+								config={formConfigBridge as any}
+								registry={registry}
+								allCollectionsConfig={allCollectionsConfig}
+							/>
+						)}
 					</form>
 				</RenderProfiler>
 			</FormProvider>
@@ -2105,9 +2127,19 @@ export default function FormView({
 		</>
 	);
 
-	const formShell = <div className="qa-form-view w-full">{formContent}</div>;
+	const formShell = (
+		<div
+			className={
+				isVisualEditForm
+					? "qa-form-view flex h-full min-h-0 w-full flex-col"
+					: "qa-form-view w-full"
+			}
+		>
+			{formContent}
+		</div>
+	);
 
-	if (!canUseLivePreview) {
+	if (!canUseLivePreview || isVisualEditForm) {
 		return formShell;
 	}
 

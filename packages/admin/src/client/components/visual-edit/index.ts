@@ -8,7 +8,7 @@
  *   `VisualInspectorPanel`).
  * - Inspector bodies (`DocumentInspectorBody`, `BlockInspectorBody`)
  *   plus their grouping helpers and `visualEdit` meta resolution.
- * - V2 patch-protocol bridges (`useFormToPreviewPatcher`,
+ * - Patch-protocol bridges (`useFormToPreviewPatcher`,
  *   `useVisualEditPreviewBridge`).
  * - Production-hardening primitives (`InspectorErrorBoundary`,
  *   `useDeselectOnEscape`, `isEditableElement`).
@@ -65,9 +65,11 @@ export {
 } from "./click-router.js";
 export {
 	VisualEditFormHost,
+	VisualEditFormHostWithController,
 	useVisualEditController,
 	useVisualEditControllerOptional,
 	type VisualEditFormHostProps,
+	type VisualEditFormHostWithControllerProps,
 } from "./visual-edit-form-host.js";
 export {
 	BlockInspectorBody,

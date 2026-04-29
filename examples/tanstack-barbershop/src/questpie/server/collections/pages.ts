@@ -65,6 +65,29 @@ export const pages = collection("pages")
 			return slug === "home" ? "/?preview=true" : `/${slug}?preview=true`;
 		},
 	})
+	.options({
+		versioning: {
+			enabled: true,
+			maxVersions: 50,
+			workflow: {
+				initialStage: "draft",
+				stages: {
+					draft: {
+						label: "Draft",
+						transitions: ["review", "published"],
+					},
+					review: {
+						label: "In review",
+						transitions: ["draft", "published"],
+					},
+					published: {
+						label: "Published",
+						transitions: ["draft"],
+					},
+				},
+			},
+		},
+	})
 	.list(({ v }) => v.collectionTable({}))
 	// Opt the Pages collection into the Visual Edit Workspace.
 	// The canvas drives block edits; the right inspector renders the

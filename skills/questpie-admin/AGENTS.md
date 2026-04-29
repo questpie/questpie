@@ -218,7 +218,7 @@ Live Preview ships two views out of the box:
 - **`collection-form` (default)** — split-screen form on the left, iframe on the right. The iframe refreshes after save / autosave and uses `postMessage` for field / block focus sync.
 - **`visual-edit-form` (opt-in)** — the **Visual Edit Workspace**: canvas iframe on the left, contextual right inspector. Edits land via field-level `PATCH_BATCH` patches without a save round-trip; saves / reverts / stage transitions sync via `COMMIT` / `FULL_RESYNC`. Enable per collection with `.form(({ v }) => v.visualEditForm({}))`.
 
-Both views share the `.preview()` config and the iframe-side `useCollectionPreview` hook — opting a collection into the workspace requires zero frontend page changes. The full visual-edit + V2 surface (`VisualEditFormHost`, `VisualEditWorkspace`, `VisualInspectorPanel`, `useFormToPreviewPatcher`, `useVisualEditPreviewBridge`, `BlockInspectorBody`, `DocumentInspectorBody`, `diffSnapshot`, `applyPatchBatch`, `useInitSnapshotBuffer`, every public type) is re-exported from `@questpie/admin/client`.
+Both views share the `.preview()` config and the iframe-side `useCollectionPreview` hook — opting a collection into the workspace requires zero frontend page changes. The workspace is hosted inside the existing `FormView` shell, so save/create/update, autosave, Cmd+S, locale switching, locks, workflow transitions, history, and header actions stay on the normal form path. The full visual-edit + patch-protocol surface (`VisualEditFormHost`, `VisualEditWorkspace`, `VisualInspectorPanel`, `useFormToPreviewPatcher`, `useVisualEditPreviewBridge`, `BlockInspectorBody`, `DocumentInspectorBody`, `diffSnapshot`, `applyPatchBatch`, `useInitSnapshotBuffer`, every public type) is re-exported from `@questpie/admin/client`.
 
 ### Server Config
 
@@ -278,8 +278,8 @@ function PagePreview({ initialData }) {
 
 ### Key Principles
 
-- V1 default = save / autosave refresh plus field / block focus sync; V2 workspace = field-level `PATCH_BATCH` over `postMessage` with `COMMIT` / `FULL_RESYNC` on save / revert.
-- `useCollectionPreview` handles V1 + V2 messages transparently; the iframe page never branches on protocol version.
+- `collection-form` = save / autosave refresh plus field / block focus sync; `visual-edit-form` = field-level `PATCH_BATCH` over `postMessage` with `COMMIT` / `FULL_RESYNC` on save / revert / stage transition.
+- `useCollectionPreview` handles refresh and patch messages transparently; the iframe page never branches on protocol version.
 - Preview → admin messages (`PREVIEW_READY`, `FIELD_CLICKED`, `BLOCK_CLICKED`, `PATCH_APPLIED`, `RESYNC_REQUEST`, `REFRESH_COMPLETE`) and admin → preview messages (`PREVIEW_REFRESH`, `INIT_SNAPSHOT`, `PATCH_BATCH`, `COMMIT`, `FULL_RESYNC`, `FOCUS_FIELD`, `SELECT_BLOCK`, `SELECT_TARGET`, `NAVIGATE_PREVIEW`) are gated by `isAdminToPreviewMessage` / `isPreviewToAdminMessage` and validated against the resolved peer origin (no `"*"`).
 - Only `PATCH_BATCH` carries a `seq`; the iframe drops batches with `seq <= lastSeqRef`. `INIT_SNAPSHOT` / `COMMIT` / `FULL_RESYNC` reset the counter so the next batch is always accepted.
 - `PreviewProvider` supplies preview context to `PreviewField`; the workspace adds `VisualEditProvider` for the selection state machine.
@@ -807,7 +807,7 @@ export const logs = collection("logs")
 
 ## Form Views and Live Preview
 
-Form views connect to the Live Preview V2 system when the collection has `.preview()` configured. The form editor becomes the source of `postMessage` patches — every field change emits a patch through the bus, giving the preview iframe instant updates.
+Form views connect to the preview system when the collection has `.preview()` configured. The form editor becomes the source of `postMessage` patches — every field change emits a patch through the bus, giving the preview iframe instant updates.
 
 ### Enabling Preview on a Collection
 

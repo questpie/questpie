@@ -193,7 +193,7 @@ export function useCollectionPreview<TData extends Record<string, unknown>>({
 		) => {
 			// Reject messages from unexpected origins. If we never resolved the
 			// admin origin, accept only same-origin parents to avoid silently
-			// trusting arbitrary frames in V2 patch flows.
+			// trusting arbitrary frames in patch-based preview flows.
 			if (adminOrigin) {
 				if (event.origin !== adminOrigin) return;
 			} else if (event.origin !== window.location.origin) {

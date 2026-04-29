@@ -121,7 +121,7 @@ export {
 // Live preview system for headless frontend integration
 // ============================================================================
 
-// Preview message types — V1
+// Preview refresh/focus message types
 export type {
 	AdminToPreviewMessage,
 	BlockClickedMessage,
@@ -134,7 +134,7 @@ export type {
 	RefreshCompleteMessage,
 	SelectBlockMessage,
 } from "#questpie/admin/client/preview/index.js";
-// Preview message types — V2 protocol
+// Preview patch protocol message types
 export type {
 	CommitMessage,
 	FullResyncMessage,
@@ -229,7 +229,9 @@ export {
 	useVisualEditPreviewBridge,
 	type VisualEditContextValue,
 	VisualEditFormHost,
+	VisualEditFormHostWithController,
 	type VisualEditFormHostProps,
+	type VisualEditFormHostWithControllerProps,
 	VisualEditProvider,
 	type VisualEditProviderProps,
 	type VisualEditSelection,

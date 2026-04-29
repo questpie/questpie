@@ -432,7 +432,7 @@ export const pages = collection("pages")
 
 ### How It Works
 
-1. The form view detects `.preview()` config and opens the configured layout (split-screen for V1, canvas+inspector for V2).
-2. **V1**: save / autosave sends a `PREVIEW_REFRESH` message to the preview iframe; the iframe re-runs its loader. **V2**: each field change emits a `PATCH_BATCH` message; saves trigger `COMMIT`; deletes / reverts trigger `FULL_RESYNC`.
-3. The preview page handles every message through `useCollectionPreview({ initialData, onRefresh })` — V1 + V2 messages are dispatched transparently by the same hook.
+1. The form view detects `.preview()` config and opens the configured layout (`collection-form` split screen or `visual-edit-form` canvas + inspector).
+2. `collection-form`: save / autosave sends a `PREVIEW_REFRESH` message to the preview iframe; the iframe re-runs its loader. `visual-edit-form`: each field change emits a `PATCH_BATCH` message; saves trigger `COMMIT`; deletes / reverts / stage transitions trigger `FULL_RESYNC`.
+3. The preview page handles every message through `useCollectionPreview({ initialData, onRefresh })` — refresh and patch messages are dispatched transparently by the same hook.
 4. `PreviewProvider` and `PreviewField` wire field focus and click-to-focus messages back to the admin (`FIELD_CLICKED`, `BLOCK_CLICKED`).

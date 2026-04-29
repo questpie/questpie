@@ -50,6 +50,7 @@ Reference these guidelines when:
 |---|---|---|
 | Quickstart | `references/quickstart.md` | Scaffold, configure, codegen, migrate, serve — zero to running app |
 | Data Modeling | `references/data-modeling.md` | Collections, globals, fields, relations, options, localization |
+| Versioning & Workflow | `references/versioning-workflow.md` | Versions, draft/published stages, transitions, hooks, scheduled transitions |
 | Field Types | `references/field-types.md` | All built-in field types with options and operators |
 | Rules | `references/rules.md` | Access control (row/field level), hooks lifecycle, validation |
 | Business Logic | `references/business-logic.md` | Routes, jobs, services, email templates, context injection |

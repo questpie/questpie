@@ -17,6 +17,12 @@ export default seed({
 			accessMode: "system",
 			locale: "sk",
 		});
+		const publishPage = async (id: string) => {
+			await collections.pages.transitionStage(
+				{ id, stage: "published" },
+				ctxEn,
+			);
+		};
 
 		// Idempotency check
 		const existing = await collections.pages.find(
@@ -718,6 +724,7 @@ export default seed({
 			},
 			ctxSk,
 		);
+		await publishPage(homePage.id);
 		log("Home page created (EN + SK)");
 
 		// ── SERVICES PAGE ──────────────────────────────────────────────
@@ -887,6 +894,7 @@ export default seed({
 			},
 			ctxSk,
 		);
+		await publishPage(servicesPage.id);
 		log("Services page created (EN + SK)");
 
 		// ── ABOUT PAGE ─────────────────────────────────────────────────
@@ -1121,6 +1129,7 @@ export default seed({
 			},
 			ctxSk,
 		);
+		await publishPage(aboutPage.id);
 		log("About page created (EN + SK)");
 
 		// ── GALLERY PAGE ───────────────────────────────────────────────
@@ -1288,6 +1297,7 @@ export default seed({
 			},
 			ctxSk,
 		);
+		await publishPage(galleryPage.id);
 		log("Gallery page created (EN + SK)");
 
 		// ── CONTACT PAGE ───────────────────────────────────────────────
@@ -1409,6 +1419,7 @@ export default seed({
 			},
 			ctxSk,
 		);
+		await publishPage(contactPage.id);
 		log("Contact page created (EN + SK)");
 
 		// ── PRIVACY POLICY PAGE ─────────────────────────────────────────
@@ -1690,6 +1701,7 @@ export default seed({
 			},
 			ctxSk,
 		);
+		await publishPage(privacyPage.id);
 		log("Privacy page created (EN + SK)");
 
 		log("All demo data seeded successfully");

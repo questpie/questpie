@@ -42,12 +42,12 @@ Only `PATCH_BATCH` carries a sequence number (`seq`). Every other message is uns
 
 ### `PREVIEW_REFRESH`
 
-V1 fallback that asks the iframe to re-run its loader.
+Refresh fallback that asks the iframe to re-run its loader.
 
 ```ts
 type PreviewRefreshMessage = {
-  type: "PREVIEW_REFRESH";
-  changedField?: string; // dev-only hint
+	type: "PREVIEW_REFRESH";
+	changedField?: string; // dev-only hint
 };
 ```
 
@@ -59,11 +59,11 @@ Seeds the iframe's local draft with a full record.
 
 ```ts
 type InitSnapshotMessage = {
-  type: "INIT_SNAPSHOT";
-  snapshot: Record<string, unknown>;
-  schemaVersion?: string;
-  locale?: string;
-  stage?: string;
+	type: "INIT_SNAPSHOT";
+	snapshot: Record<string, unknown>;
+	schemaVersion?: string;
+	locale?: string;
+	stage?: string;
 };
 ```
 
@@ -76,13 +76,13 @@ Mutates the iframe's local draft.
 
 ```ts
 type PreviewPatchOp =
-  | { op: "set"; path: string; value: unknown }
-  | { op: "remove"; path: string };
+	| { op: "set"; path: string; value: unknown }
+	| { op: "remove"; path: string };
 
 type PatchBatchMessage = {
-  type: "PATCH_BATCH";
-  seq: number;
-  ops: PreviewPatchOp[];
+	type: "PATCH_BATCH";
+	seq: number;
+	ops: PreviewPatchOp[];
 };
 ```
 
@@ -96,9 +96,9 @@ Marks the local draft as saved.
 
 ```ts
 type CommitMessage = {
-  type: "COMMIT";
-  timestamp: number;
-  snapshot?: Record<string, unknown>;
+	type: "COMMIT";
+	timestamp: number;
+	snapshot?: Record<string, unknown>;
 };
 ```
 
@@ -111,8 +111,8 @@ Discards the iframe's local draft and triggers a re-fetch.
 
 ```ts
 type FullResyncMessage = {
-  type: "FULL_RESYNC";
-  reason?: "revert" | "locale-switch" | "stage-switch" | "desync" | "manual";
+	type: "FULL_RESYNC";
+	reason?: "revert" | "locale-switch" | "stage-switch" | "desync" | "manual";
 };
 ```
 
@@ -124,8 +124,8 @@ Highlights a field in the iframe.
 
 ```ts
 type FocusFieldMessage = {
-  type: "FOCUS_FIELD";
-  fieldPath: string;
+	type: "FOCUS_FIELD";
+	fieldPath: string;
 };
 ```
 
@@ -137,8 +137,8 @@ Sets the iframe's selected-block state.
 
 ```ts
 type SelectBlockMessage = {
-  type: "SELECT_BLOCK";
-  blockId: string;
+	type: "SELECT_BLOCK";
+	blockId: string;
 };
 ```
 
@@ -148,10 +148,10 @@ Newer, kind-aware selection forwarding from the workspace.
 
 ```ts
 type SelectTargetMessage = {
-  type: "SELECT_TARGET";
-  fieldPath: string | null;
-  kind?: string;
-  blockId?: string;
+	type: "SELECT_TARGET";
+	fieldPath: string | null;
+	kind?: string;
+	blockId?: string;
 };
 ```
 
@@ -163,8 +163,8 @@ Asks the iframe to navigate to a URL.
 
 ```ts
 type NavigatePreviewMessage = {
-  type: "NAVIGATE_PREVIEW";
-  url: string;
+	type: "NAVIGATE_PREVIEW";
+	url: string;
 };
 ```
 
@@ -190,8 +190,8 @@ Acks `PREVIEW_REFRESH` after `onRefresh` resolves.
 
 ```ts
 type RefreshCompleteMessage = {
-  type: "REFRESH_COMPLETE";
-  timestamp: number;
+	type: "REFRESH_COMPLETE";
+	timestamp: number;
 };
 ```
 
@@ -201,10 +201,10 @@ Sent when a `<PreviewField>` is clicked.
 
 ```ts
 type FieldClickedMessage = {
-  type: "FIELD_CLICKED";
-  fieldPath: string;
-  blockId?: string;
-  fieldType?: "regular" | "block" | "relation";
+	type: "FIELD_CLICKED";
+	fieldPath: string;
+	blockId?: string;
+	fieldType?: "regular" | "block" | "relation";
 };
 ```
 
@@ -214,8 +214,8 @@ The workspace routes this through `mapPreviewClickToSelection` to derive a `Visu
 
 ```ts
 type BlockClickedMessage = {
-  type: "BLOCK_CLICKED";
-  blockId: string;
+	type: "BLOCK_CLICKED";
+	blockId: string;
 };
 ```
 
@@ -225,10 +225,10 @@ Optional ack for a `PATCH_BATCH`.
 
 ```ts
 type PatchAppliedMessage = {
-  type: "PATCH_APPLIED";
-  seq: number;
-  applied: number;
-  timestamp: number;
+	type: "PATCH_APPLIED";
+	seq: number;
+	applied: number;
+	timestamp: number;
 };
 ```
 
@@ -240,8 +240,8 @@ Reserved for the iframe to ask for a fresh `INIT_SNAPSHOT`.
 
 ```ts
 type ResyncRequestMessage = {
-  type: "RESYNC_REQUEST";
-  reason?: "stale-seq" | "missing-snapshot" | "manual";
+	type: "RESYNC_REQUEST";
+	reason?: "stale-seq" | "missing-snapshot" | "manual";
 };
 ```
 
@@ -251,29 +251,29 @@ type ResyncRequestMessage = {
 
 A typical session:
 
-```
-[admin] mints preview token (1h TTL) ─┐
-                                      ▼
-[admin] iframe src = /api/preview?token=…
-                          │
-                          ▼ (iframe loads)
-[iframe] PREVIEW_READY ──────────────►
-                                      │
-[admin] INIT_SNAPSHOT (canonical) ◄──┘
-                          │
-                          ▼ (user types in inspector)
-[admin] PATCH_BATCH(seq=1, [set title=A])
-[iframe] PATCH_APPLIED(seq=1)
-                          │
-                          ▼ (user saves)
-[admin] mutation.update succeeds
-[admin] COMMIT(snapshot=saved record)
-                          │
-                          ▼ (user navigates iframe)
-[iframe] page reloads → PREVIEW_READY ──►
-[admin] PreviewPane replays buffered INIT_SNAPSHOT (canonical)
-[admin] bridge re-seeds with form values via onReady
-[iframe] back at the right state
+```mermaid
+sequenceDiagram
+	participant Admin as Admin
+	participant Frame as Preview iframe
+	participant Server as Server
+
+	Admin->>Server: Mint preview token (1h TTL)
+	Server-->>Admin: Preview token
+	Admin->>Frame: Load iframe with token
+	Frame-->>Admin: PREVIEW_READY
+	Admin->>Frame: INIT_SNAPSHOT (canonical)
+	Note over Admin,Frame: User types in the inspector
+	Admin->>Frame: PATCH_BATCH seq=1, set title=A
+	Frame-->>Admin: PATCH_APPLIED seq=1
+	Note over Admin,Server: User saves
+	Admin->>Server: mutation.update
+	Server-->>Admin: Saved record
+	Admin->>Frame: COMMIT snapshot=saved record
+	Note over Frame: User navigates or reloads the iframe
+	Frame-->>Admin: PREVIEW_READY
+	Admin->>Frame: Replay buffered INIT_SNAPSHOT (canonical)
+	Admin->>Frame: Re-seed with current form values via onReady
+	Note over Frame: Preview converges to the current form state
 ```
 
 ## Reliability Properties

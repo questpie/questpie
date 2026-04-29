@@ -1,47 +1,24 @@
 /**
  * VisualEditFormView
  *
- * View-registry adapter that surfaces the Visual Edit Workspace
- * (`VisualEditFormHost`) under the same `kind: "form"` contract
- * the legacy `FormView` uses. Once registered, projects opt into
- * the workspace per-collection with:
- *
- * ```ts
- * collection("pages").form(({ v }) => v.visualEditForm({}));
- * ```
- *
- * The component intentionally mirrors `FormView`'s prop shape so
- * the runtime resolver can swap one for the other based purely on
- * the registered view's name.
- *
- * Form-state, mutations, locking, and validation are shared with
- * `FormView` through `useResourceFormController`. Richer
- * behaviours that are still legacy-only (autosave, locale dialog,
- * action toolbar) live in `FormView` for now; consumers needing
- * them can render `FormView` alongside the workspace via
- * `VisualEditFormHost`'s extension points.
+ * Registry adapter for the Visual Edit Workspace. The workspace is
+ * a rendering surface inside the existing `FormView` shell, not a
+ * second form lifecycle. Delegating keeps save/create/update,
+ * autosave, locks, locale switching, history, workflow transitions,
+ * header actions, Cmd+S, and success/error callbacks on the same
+ * path as the default collection form.
  */
 
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import * as React from "react";
+import type * as React from "react";
 
 import type { CollectionBuilderState } from "../../builder/types/collection-types.js";
 import type {
 	ComponentRegistry,
 	FormViewConfig,
 } from "../../builder/types/field-types.js";
-import { useCollectionItem } from "../../hooks/use-collection.js";
-import { useCollectionFields } from "../../hooks/use-collection-fields.js";
-import { useScopedLocale } from "../../runtime/index.js";
-import { selectClient, useAdminStore } from "../../runtime/provider.js";
-import { VisualEditFormHost } from "../../components/visual-edit/visual-edit-form-host.js";
-
-// ============================================================================
-// Types — must mirror FormViewProps shape so the registry can swap
-// either component in.
-// ============================================================================
+import FormView from "./form-view.js";
 
 interface VisualEditFormViewProps {
 	collection: string;
@@ -62,75 +39,8 @@ interface VisualEditFormViewProps {
 	onError?: (error: Error) => void;
 }
 
-// ============================================================================
-// Component
-// ============================================================================
-
-export default function VisualEditFormView({
-	collection,
-	id,
-	config,
-	viewConfig,
-	defaultValues,
-	registry,
-	allCollectionsConfig,
-}: VisualEditFormViewProps): React.ReactElement {
-	const isEditMode = !!id;
-	const { schema } = useCollectionFields(collection, {
-		fallbackFields: (config as any)?.fields,
-	});
-	const previewSchema = schema?.admin?.preview;
-	const hasPreview =
-		!!previewSchema?.hasUrlBuilder && previewSchema?.enabled !== false;
-
-	const { data: item } = useCollectionItem(
-		collection as any,
-		id ?? "",
-		{ localeFallback: false },
-		{ enabled: isEditMode },
-	);
-
-	const client = useAdminStore(selectClient);
-	const { locale } = useScopedLocale();
-
-	const previewQuery = useQuery({
-		queryKey: [
-			"questpie",
-			"preview-url",
-			collection,
-			id ?? "",
-			locale ?? "",
-		],
-		queryFn: async () => {
-			if (!client || !id || !hasPreview) return null;
-			return await (client as any).routes.getPreviewUrl({
-				collection,
-				record: item,
-				locale,
-			});
-		},
-		enabled: !!client && !!id && hasPreview && !!item,
-		staleTime: 30_000,
-	});
-
-	const previewUrl: string | null =
-		typeof previewQuery.data === "string"
-			? previewQuery.data
-			: previewQuery.data?.url ?? null;
-
-	return (
-		<VisualEditFormHost
-			collection={collection}
-			id={id}
-			config={config}
-			viewConfig={viewConfig}
-			defaultValues={defaultValues}
-			registry={registry}
-			allCollectionsConfig={allCollectionsConfig}
-			previewUrl={previewUrl}
-			defaultInspectorSize={previewSchema?.defaultSize}
-			minInspectorSize={previewSchema?.minSize}
-			className="h-full"
-		/>
-	);
+export default function VisualEditFormView(
+	props: VisualEditFormViewProps,
+): React.ReactElement {
+	return <FormView {...props} />;
 }

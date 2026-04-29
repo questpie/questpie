@@ -404,7 +404,7 @@ export const logs = collection("logs")
 
 ## Form Views and Live Preview
 
-Form views connect to the Live Preview V2 system when the collection has `.preview()` configured. The form editor becomes the source of `postMessage` patches — every field change emits a patch through the bus, giving the preview iframe instant updates.
+Form views connect to the preview system when the collection has `.preview()` configured. The form editor becomes the source of `postMessage` patches — every field change emits a patch through the bus, giving the preview iframe instant updates.
 
 ### Enabling Preview on a Collection
 

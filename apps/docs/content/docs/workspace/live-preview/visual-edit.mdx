@@ -3,7 +3,7 @@ title: Visual Edit Workspace
 description: Opt-in 2-pane editing surface — preview canvas on the left, contextual inspector on the right. Built on the patch-based preview protocol.
 ---
 
-The **Visual Edit Workspace** is an alternative form view for collections that have live preview enabled. Instead of the legacy "form on the left, iframe on the right" layout that refreshes on save, the workspace lets editors click directly in the preview to focus a field, edit it in a contextual inspector, and see the change land in the iframe via field-level patches — no full reload.
+The **Visual Edit Workspace** is a form view for collections that have live preview enabled. It renders the iframe as the primary canvas: editors click directly in the preview to focus a field, edit it in a contextual inspector, and see the change land in the iframe via field-level patches — no full reload.
 
 It is purely opt-in. The default `collection-form` view is untouched; existing preview integrations keep working.
 
@@ -18,7 +18,7 @@ Pick the workspace when:
 Stick with the default `collection-form` when:
 
 - The collection has no live preview, or
-- The form is small enough that the legacy split view feels right.
+- The form is small enough that the standard split view feels right.
 
 ## Enabling It
 
@@ -50,10 +50,10 @@ export const pages = collection("pages")
 
 ## Layout
 
-| Region              | Default size | Notes                                                                                                                                                   |
-| ------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Canvas (left)**   | 68%          | Full preview iframe. Reuses `PreviewPane` and the same origin-strict postMessage transport as the legacy live preview.                                  |
-| **Inspector (right)** | 32%        | Render-prop router. Selects the body based on the current `VisualEditSelection`. Mobile collapses both regions into tabs.                               |
+| Region                | Default size | Notes                                                                                                                     |
+| --------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------- |
+| **Canvas (left)**     | 68%          | Full preview iframe. Reuses `PreviewPane` and the same origin-strict postMessage transport as the standard preview view.   |
+| **Inspector (right)** | 32%          | Render-prop router. Selects the body based on the current `VisualEditSelection`. Mobile collapses both regions into tabs. |
 
 The default sizes come from `PreviewConfig.defaultSize` / `minSize` (with `defaultWidth` / `minWidth` accepted as aliases). If both sets are present, the explicit `*Size` keys win.
 
@@ -63,23 +63,21 @@ The inspector renders one of seven modes, picked from the active selection:
 
 Press **Esc** anywhere outside an editable element to clear the active selection and return to the Document mode. The shortcut is intentionally inert while the user is typing in a field component, so it never disrupts text input.
 
+| Selection kind | Inspector body                                                                                             |
+| -------------- | ---------------------------------------------------------------------------------------------------------- |
+| `idle`         | **Document** — non-visual fields, SEO/meta, slug, status. Defaults to `AutoFormFields` for the collection. |
+| `field`        | A single field rendered through the existing `FieldRenderer`.                                              |
+| `block`        | The selected block's fields plus duplicate / remove actions.                                               |
+| `block-field`  | A specific field inside a block, scoped to `${blocksPath}._values.${blockId}.${fieldName}`.                |
+| `relation`     | Single relation field — clicking the related record opens the standard `ResourceSheet` flow.               |
+| `array`        | Whole-array editor (reorder, add).                                                                         |
+| `array-item`   | One item inside an array field, indexed.                                                                   |
 
+Clicks in the canvas are routed through `mapPreviewClickToSelection` so block paths, relation hints, and bare field paths all translate consistently.
 
-| Selection kind | Inspector body                                                                                                  |
-| -------------- | --------------------------------------------------------------------------------------------------------------- |
-| `idle`         | **Document** — non-visual fields, SEO/meta, slug, status. Defaults to `AutoFormFields` for the collection.      |
-| `field`        | A single field rendered through the existing `FieldRenderer`.                                                   |
-| `block`        | The selected block's fields plus duplicate / remove actions.                                                    |
-| `block-field`  | A specific field inside a block, scoped to `${blocksPath}._values.${blockId}.${fieldName}`.                     |
-| `relation`     | Single relation field — clicking the related record opens the standard `ResourceSheet` flow.                    |
-| `array`        | Whole-array editor (reorder, add).                                                                              |
-| `array-item`   | One item inside an array field, indexed.                                                                        |
+## Patch Protocol
 
-Clicks in the canvas are routed through `mapPreviewClickToSelection` — the same helper used by the legacy `parsePreviewFieldPath` — so block paths, relation hints, and bare field paths all translate consistently.
-
-## Patch Protocol (V2)
-
-The workspace drives the preview iframe through the V2 postMessage protocol, not full reloads. See [Protocol & Reliability](./protocol) for the wire spec; the high-level flow is:
+The workspace drives the preview iframe through the patch-based postMessage protocol, not full reloads. See [Protocol & Reliability](./protocol) for the wire spec; the high-level flow is:
 
 1. **Mount.** Iframe sends `PREVIEW_READY`. Admin replies with `INIT_SNAPSHOT` (the canonical record at the current locale/stage).
 2. **Edit.** Each react-hook-form change becomes a `PATCH_BATCH` with a monotonic `seq` and a list of `set` / `remove` ops.
@@ -92,17 +90,17 @@ Iframes built with `useCollectionPreview` get all of this for free: the hook kee
 
 `PATCH_BATCH` payloads are produced by `diffSnapshot` — a recursive diff that descends into plain objects but treats arrays as atomic. Editing `meta.seo.title` in the inspector emits a single `set meta.seo.title = "X"` op rather than replacing the whole `meta` subtree on the wire. Arrays send a full `set` (with the new array as the value) so block reorders, tag updates, and similar operations stay correct without per-index shuffling.
 
-| Change                       | Wire op                                         |
-| ---------------------------- | ----------------------------------------------- |
-| Edit `title`                 | `{ op: "set", path: "title", value: "..." }`   |
-| Edit `meta.seo.title`        | `{ op: "set", path: "meta.seo.title", value: "..." }` |
-| Add `meta.kicker`            | `{ op: "set", path: "meta.kicker", value: "..." }` |
-| Remove `meta.kicker`         | `{ op: "remove", path: "meta.kicker" }`         |
-| Reorder `tags: ["a", "b"]` to `["b", "a"]` | `{ op: "set", path: "tags", value: ["b", "a"] }` |
+| Change                                     | Wire op                                               |
+| ------------------------------------------ | ----------------------------------------------------- |
+| Edit `title`                               | `{ op: "set", path: "title", value: "..." }`          |
+| Edit `meta.seo.title`                      | `{ op: "set", path: "meta.seo.title", value: "..." }` |
+| Add `meta.kicker`                          | `{ op: "set", path: "meta.kicker", value: "..." }`    |
+| Remove `meta.kicker`                       | `{ op: "remove", path: "meta.kicker" }`               |
+| Reorder `tags: ["a", "b"]` to `["b", "a"]` | `{ op: "set", path: "tags", value: ["b", "a"] }`      |
 
 ## Per-Field Tuning (`visualEdit`)
 
-Fields can opt into workspace-specific overrides without touching the legacy form view. Use `.set("admin", { visualEdit: { ... } })` on any field — the same pattern you'd use for any other admin metadata:
+Fields can opt into workspace-specific overrides without touching the default form layout. Use `.set("admin", { visualEdit: { ... } })` on any field — the same pattern you'd use for any other admin metadata:
 
 ```ts title="collections/pages.ts"
 .fields(({ f }) => ({
@@ -117,13 +115,13 @@ Fields can opt into workspace-specific overrides without touching the legacy for
 }));
 ```
 
-| Key             | Default                                  | Effect                                                                                                                                  |
-| --------------- | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `inspector`     | `undefined`                              | Component reference rendered instead of the default field component.                                                                    |
+| Key             | Default                                                                                                      | Effect                                                                                                                                                               |
+| --------------- | ------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `inspector`     | `undefined`                                                                                                  | Component reference rendered instead of the default field component.                                                                                                 |
 | `patchStrategy` | `"patch"` for scalars, `"refresh"` for relations / uploads / blocks / fields with a server `compute` handler | How changes propagate to the preview. Override when a custom field has a known compute pattern (e.g. set `"refresh"` on a slug field whose value is server-derived). |
-| `hidden`        | `false`                                  | Hide the field from the document inspector body. Canvas click targets still work.                                                       |
-| `group`         | `BaseAdminMeta.group`                    | Pin the field to a specific group in the document inspector — workspace-only override.                                                  |
-| `order`         | declaration order                        | Display order inside the resolved group.                                                                                                |
+| `hidden`        | `false`                                                                                                      | Hide the field from the document inspector body. Canvas click targets still work.                                                                                    |
+| `group`         | `BaseAdminMeta.group`                                                                                        | Pin the field to a specific group in the document inspector — workspace-only override.                                                                               |
+| `order`         | declaration order                                                                                            | Display order inside the resolved group.                                                                                                                             |
 
 Fields without a `visualEdit` block fall back to the type-driven default; the resolver lives in `@questpie/admin/client` (`resolveVisualEditMeta`, `resolvePatchStrategy`).
 
@@ -170,7 +168,7 @@ The Document inspector body auto-switches based on what your fields configure:
 - **No `visualEdit.group` anywhere** — defaults to `AutoFormFields`, so a collection's existing `.form({ fields: [...] })` layout (sections, tabs) carries straight into the workspace.
 - **At least one field declares `visualEdit.group`** — defaults to the grouped `DocumentInspectorBody`, which reads each field's `visualEdit.group` / `order` / `hidden` (server metadata wins over client) and renders each group through the same `FieldRenderer` the rest of the inspector uses.
 
-The trigger is intentionally narrow: only `visualEdit.group` flips the default. `visualEdit.order` / `patchStrategy` / `hidden` on their own don't switch the body so legacy projects can use those keys without losing their existing layout.
+The trigger is intentionally narrow: only `visualEdit.group` flips the default. `visualEdit.order` / `patchStrategy` / `hidden` on their own don't switch the body, so projects can use those keys without losing their existing layout.
 
 If you want the grouped body unconditionally — or want to render a fully custom Document body — pass `renderDocument` explicitly:
 
@@ -195,12 +193,19 @@ Fields with `visualEdit.hidden === true` are dropped from the grouped body; reac
 ```ts title="collections/pages.ts"
 export const pages = collection("pages")
 	.fields(({ f }) => ({
-		title: f.text().required().localized().set("admin", {
-			visualEdit: { group: "content", order: 1 },
-		}),
-		slug: f.text().required().set("admin", {
-			visualEdit: { group: "url", order: 1 },
-		}),
+		title: f
+			.text()
+			.required()
+			.localized()
+			.set("admin", {
+				visualEdit: { group: "content", order: 1 },
+			}),
+		slug: f
+			.text()
+			.required()
+			.set("admin", {
+				visualEdit: { group: "url", order: 1 },
+			}),
 		seoTitle: f.text().set("admin", {
 			visualEdit: { group: "seo", order: 1 },
 		}),
@@ -214,7 +219,7 @@ export const pages = collection("pages")
 	.form(({ v }) => v.visualEditForm({}));
 ```
 
-When no field opts into a non-default group, group headers are skipped — the inspector renders a flat field list, matching the legacy "AutoFormFields without sections" appearance.
+When no field opts into a non-default group, group headers are skipped — the inspector renders a flat field list, matching the standard "AutoFormFields without sections" appearance.
 
 If you need the underlying grouping data without the rendered output (e.g. to drive a custom layout), reach for the pure helper `groupFieldsForDocument` from `@questpie/admin/client`.
 
@@ -245,12 +250,12 @@ import {
 
 Most projects only need to register the view (`.form(({ v }) => v.visualEditForm({}))`); the host wires every primitive together with sensible defaults. Drop down to the lower-level pieces only when you need to host the workspace inside a custom layout.
 
-## Migrating From Legacy Live Preview
+## Enabling Visual Edit
 
-The classic live preview keeps working. To migrate a collection:
+Visual Edit is enabled per collection:
 
 1. Confirm `.preview({ url: ... })` is set.
-2. Switch the form view from `v.collectionForm({ ... })` to `v.visualEditForm({ ... })`. The same `fields` / `sidebar` config carries over.
+2. Set the form view to `v.visualEditForm({ ... })`. The same `fields` / `sidebar` config shape is supported.
 3. (Optional) Add `visualEdit` blocks to per-field metadata for fields that need a custom patch strategy or grouping.
 
-No frontend code changes required — `useCollectionPreview` already handles both V1 (`PREVIEW_REFRESH`) and V2 (`INIT_SNAPSHOT` + `PATCH_BATCH` + `COMMIT`) transparently.
+No frontend code changes are required when the page already uses `useCollectionPreview`; the hook handles refresh messages (`PREVIEW_REFRESH`) and patch messages (`INIT_SNAPSHOT` + `PATCH_BATCH` + `COMMIT`) transparently.

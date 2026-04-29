@@ -23,10 +23,7 @@ import {
 	removeBlockFromContent,
 } from "../../blocks/block-operations.js";
 import type { BlockContent, BlockNode } from "../../blocks/types.js";
-import {
-	EMPTY_BLOCK_CONTENT,
-	isBlockContent,
-} from "../../blocks/types.js";
+import { EMPTY_BLOCK_CONTENT, isBlockContent } from "../../blocks/types.js";
 import { useAdminConfig } from "../../hooks/use-admin-config.js";
 import { useTranslation } from "../../i18n/hooks.js";
 import { BlockFieldsRenderer } from "../blocks/block-fields-renderer.js";
@@ -117,9 +114,9 @@ export function BlockInspectorBody({
 	}
 
 	return (
-		<div className="space-y-3">
+		<div className="space-y-4">
 			{/* Inline action toolbar */}
-			<div className="flex items-center justify-end gap-1">
+			<div className="bg-surface-low border-border-subtle flex items-center justify-end gap-1 rounded-md border p-1">
 				<Button
 					variant="ghost"
 					size="sm"

@@ -29,7 +29,7 @@ examples/tanstack-barbershop/
 │   │   │   │   ├── barber-services.ts        # Junction table
 │   │   │   │   ├── reviews.ts                # Conditional fields
 │   │   │   │   ├── blog-posts.ts             # Service injection in hooks
-│   │   │   │   └── pages.ts                  # Blocks, preview
+│   │   │   │   └── pages.ts                  # Blocks, preview, workflow
 │   │   │   ├── globals/
 │   │   │   │   └── site-settings.ts          # Nested config, versioning
 │   │   │   ├── routes/
@@ -201,31 +201,33 @@ function BookingWizard() {
 
 ## What This Example Demonstrates
 
-| Feature                                  | Where                                          |
-| ---------------------------------------- | ---------------------------------------------- |
-| Complex fields (objects, arrays, select) | `collections/barbers.ts`                       |
-| Many-to-many relations                   | `barbers ↔ barberServices ↔ services`          |
-| Virtual SQL fields                       | `appointments.ts` → `displayTitle`             |
-| Lifecycle hooks                          | `appointments.ts` → `afterChange`              |
-| Service injection                        | `blog.ts` → used in `blog-posts.ts` hooks      |
-| Background jobs                          | `jobs/send-appointment-confirmation.ts`        |
-| Email templates                          | `emails/appointment-confirmation.ts`           |
-| Server routes                            | `routes/create-booking.ts`                     |
-| Admin dashboard                          | `config/admin.ts` — stats, charts, timeline    |
-| Admin sidebar                            | `config/admin.ts` — 6 sections, mixed items    |
-| Content blocks                           | `blocks/hero.ts`, `pages.ts` with `f.blocks()` |
-| Conditional visibility                   | `appointments.ts` form → `hidden`              |
-| Computed form fields                     | `barbers.ts` form → slug from name             |
-| Multi-language (i18n)                    | Labels, content, admin UI                      |
-| Access control                           | `site-settings.ts` → admin-only update         |
-| Live preview (legacy split view)         | `barbers.ts` → `.preview()` + `v.collectionForm` |
-| Visual Edit Workspace (V2)               | `pages.ts` → `.preview()` + `v.visualEditForm` with `visualEdit.group` field metadata |
+| Feature                                  | Where                                                                                 |
+| ---------------------------------------- | ------------------------------------------------------------------------------------- |
+| Complex fields (objects, arrays, select) | `collections/barbers.ts`                                                              |
+| Many-to-many relations                   | `barbers ↔ barberServices ↔ services`                                                 |
+| Virtual SQL fields                       | `appointments.ts` → `displayTitle`                                                    |
+| Lifecycle hooks                          | `appointments.ts` → `afterChange`                                                     |
+| Service injection                        | `blog.ts` → used in `blog-posts.ts` hooks                                             |
+| Background jobs                          | `jobs/send-appointment-confirmation.ts`                                               |
+| Email templates                          | `emails/appointment-confirmation.ts`                                                  |
+| Server routes                            | `routes/create-booking.ts`                                                            |
+| Admin dashboard                          | `config/admin.ts` — stats, charts, timeline                                           |
+| Admin sidebar                            | `config/admin.ts` — 6 sections, mixed items                                           |
+| Content blocks                           | `blocks/hero.ts`, `pages.ts` with `f.blocks()`                                        |
+| Conditional visibility                   | `appointments.ts` form → `hidden`                                                     |
+| Computed form fields                     | `barbers.ts` form → slug from name                                                    |
+| Multi-language (i18n)                    | Labels, content, admin UI                                                             |
+| Access control                           | `site-settings.ts` → admin-only update                                                |
+| Live preview (legacy split view)         | `barbers.ts` → `.preview()` + `v.collectionForm`                                      |
+| Visual Edit Workspace                    | `pages.ts` → `.preview()` + `v.visualEditForm` with `visualEdit.group` field metadata |
+| Page release workflow                    | `pages.ts` → draft/review/published stages; public routes read `stage: "published"`   |
 
 ## Related Pages
 
 - [First App](/docs/start-here/first-app) — Minimal getting started
 - [Collections](/docs/backend/data-modeling/collections) — Collection API
 - [Typed Routes](/docs/backend/business-logic/routes) — Typed JSON route handlers
-- [Live Preview](/docs/workspace/live-preview) — Preview overview (V1 split view + V2 workspace)
+- [Live Preview](/docs/workspace/live-preview) — Preview overview (default split view + Visual Edit Workspace)
 - [Visual Edit Workspace](/docs/workspace/live-preview/visual-edit) — Pages collection's editing surface
+- [Versioning & Workflow](/docs/backend/data-modeling/versioning-workflow) — Drafts, review, publishing, and stage reads
 - [Dashboard](/docs/workspace/views/dashboard) — Dashboard widgets
