@@ -10,7 +10,7 @@ import {
 import { createContext, useContext } from "react";
 
 import { LLMCopyButton } from "@/components/llm-actions";
-import { components } from "@/components/mdx";
+import { getMDXComponents } from "@/components/mdx";
 import { baseOptions } from "@/lib/layout.shared";
 
 type DocsLoaderData = {
@@ -20,6 +20,7 @@ type DocsLoaderData = {
 };
 
 const PageUrlContext = createContext<string>("");
+const mdxComponents = getMDXComponents();
 
 function LLMActions() {
 	const url = useContext(PageUrlContext);
@@ -38,7 +39,7 @@ const clientLoader = browserCollections.docs.createClientLoader({
 				<DocsDescription>{frontmatter.description}</DocsDescription>
 				<LLMActions />
 				<DocsBody>
-					<MDX components={components} />
+					<MDX components={mdxComponents} />
 				</DocsBody>
 			</DocsPage>
 		);
