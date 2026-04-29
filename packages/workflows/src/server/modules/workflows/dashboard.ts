@@ -3,6 +3,8 @@ import type {
 	WidgetFetchContext,
 } from "@questpie/admin/server";
 
+import { getCollections, getCountValue } from "./routes/_helpers.js";
+
 const workflowsDashboardContribution: DashboardContribution = {
 	sections: [
 		{
@@ -19,9 +21,8 @@ const workflowsDashboardContribution: DashboardContribution = {
 			label: { en: "Workflow Status" },
 			span: 2,
 			loader: async (ctx: WidgetFetchContext) => {
-				const collections = (ctx as any).collections;
-				const instances = collections?.wf_instance;
-				if (!instances)
+				const { instances } = getCollections(ctx);
+				if (!instances.count)
 					return { total: 0, running: 0, failed: 0, completed: 0 };
 
 				const [total, running, failed, completed] = await Promise.all([
@@ -41,10 +42,10 @@ const workflowsDashboardContribution: DashboardContribution = {
 				]);
 
 				return {
-					total: (total as any).totalDocs ?? total,
-					running: (running as any).totalDocs ?? running,
-					failed: (failed as any).totalDocs ?? failed,
-					completed: (completed as any).totalDocs ?? completed,
+					total: getCountValue(total),
+					running: getCountValue(running),
+					failed: getCountValue(failed),
+					completed: getCountValue(completed),
 				};
 			},
 		},
@@ -58,9 +59,7 @@ const workflowsDashboardContribution: DashboardContribution = {
 			showTimestamps: true,
 			timestampFormat: "relative" as const,
 			loader: async (ctx: WidgetFetchContext) => {
-				const collections = (ctx as any).collections;
-				const instances = collections?.wf_instance;
-				if (!instances) return [];
+				const { instances } = getCollections(ctx);
 
 				const result = await instances.find(
 					{
@@ -70,8 +69,11 @@ const workflowsDashboardContribution: DashboardContribution = {
 					{ accessMode: "system" },
 				);
 
-				return result.docs.map((instance: any) => {
-					const statusIcons: Record<string, { type: string; props: any }> = {
+				return result.docs.map((instance) => {
+					const statusIcons: Record<
+						string,
+						{ type: string; props: Record<string, unknown> }
+					> = {
 						completed: {
 							type: "icon",
 							props: { name: "ph:check-circle", color: "green" },

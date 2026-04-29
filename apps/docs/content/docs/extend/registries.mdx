@@ -7,69 +7,73 @@ Registries are the mechanism that connects server-side schema to client-side ren
 
 ## How Registries Work
 
-```text
-Server: f.text()
-  ↓
-Generated: { type: "text", options: {...} }
-  ↓
-Admin Client: fieldRegistry.get("text")
-  ↓
-React: <TextFieldRenderer value={...} onChange={...} />
+```mermaid
+flowchart TD
+  Server["Server<br/>f.text()"]
+  Generated["Generated schema<br/>{ type: \"text\", options: { ... } }"]
+  Registry["Admin client<br/>fieldRegistry.get(\"text\")"]
+  React["React<br/>&lt;TextFieldRenderer value={...} onChange={...} /&gt;"]
+
+  Server --> Generated --> Registry --> React
 ```
 
 ## Field Registry
 
 Maps field types to React components:
 
-```ts
-// Built-in field renderers
-text      → TextInput
-textarea  → TextareaInput
-richText  → RichTextEditor (TipTap)
-number    → NumberInput
-boolean   → Checkbox / Switch
-date      → DatePicker
-datetime  → DateTimePicker
-select    → SelectDropdown
-relation  → RelationPicker
-upload    → FileUpload
-object    → NestedForm
-array     → RepeatableItems
-blocks    → BlockEditor
-json      → JSONEditor
-```
+| Field type | Renderer                  |
+| ---------- | ------------------------- |
+| `text`     | `TextInput`               |
+| `textarea` | `TextareaInput`           |
+| `richText` | `RichTextEditor` (TipTap) |
+| `number`   | `NumberInput`             |
+| `boolean`  | Checkbox / Switch         |
+| `date`     | `DatePicker`              |
+| `datetime` | `DateTimePicker`          |
+| `select`   | `SelectDropdown`          |
+| `relation` | `RelationPicker`          |
+| `upload`   | `FileUpload`              |
+| `object`   | `NestedForm`              |
+| `array`    | `RepeatableItems`         |
+| `blocks`   | `BlockEditor`             |
+| `json`     | `JSONEditor`              |
 
 ## View Registry
 
 Maps view types to React components:
 
-```ts
-// Built-in view renderers
-table → TableView (list)
-form  → FormView (edit)
-```
+| View type | Renderer           |
+| --------- | ------------------ |
+| `table`   | `TableView` (list) |
+| `form`    | `FormView` (edit)  |
 
 ## Component Registry
 
 General-purpose component registry for dynamic rendering:
 
-```ts
-// Registered components available for server-driven UI
-icon     → IconComponent
-badge    → BadgeComponent
-```
+| Component type | Renderer         |
+| -------------- | ---------------- |
+| `icon`         | `IconComponent`  |
+| `badge`        | `BadgeComponent` |
 
 ## Extending Registries
 
 Register custom renderers by placing files in the admin directory. Codegen discovers them automatically:
 
-```
-questpie/admin/
-  fields/
-    color.tsx        # Custom color field renderer
-    currency.tsx     # Custom currency field renderer
-  views/
-    kanban.tsx       # Custom kanban list view
+```mermaid
+flowchart TD
+	Admin["questpie/admin/"]
+	Fields["fields/"]
+	Color["color.tsx<br/>Custom color field renderer"]
+	Currency["currency.tsx<br/>Custom currency field renderer"]
+	Views["views/"]
+	Kanban["kanban.tsx<br/>Custom kanban list view"]
+
+	Admin --> Fields
+	Fields --> Color
+	Fields --> Currency
+	Admin --> Views
+	Views --> Kanban
 ```
 
 These are merged with built-in defaults during codegen and exported in `.generated/client.ts`.

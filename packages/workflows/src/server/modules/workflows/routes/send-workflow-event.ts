@@ -1,6 +1,8 @@
 import { route } from "questpie";
 import { z } from "zod";
-import { getCollections } from "./_helpers.js";
+
+import type { EventPersistence } from "../../../engine/events.js";
+import { asMatchCriteria, getCollections, getQueue } from "./_helpers.js";
 
 export default route()
 	.post()
@@ -13,13 +15,13 @@ export default route()
 	)
 	.handler(async ({ input, ...ctx }) => {
 		const { events, steps } = getCollections(ctx);
-		const queue = (ctx as any).queue as any;
+		const resumeQueue = getQueue(ctx, "questpie-wf-resume");
 
 		const { dispatchEvent } = await import("../../../engine/events.js");
 
 		// Build event persistence from collections
-		const eventPersistence = {
-			async createEvent(ev: any) {
+		const eventPersistence: EventPersistence = {
+			async createEvent(ev) {
 				const created = await events.create(
 					{
 						eventName: ev.eventName,
@@ -49,10 +51,10 @@ export default route()
 					},
 					{ accessMode: "system" },
 				);
-				return result.docs.map((s: any) => ({
+				return result.docs.map((s) => ({
 					instanceId: s.instanceId,
 					stepName: s.name,
-					matchCriteria: s.matchCriteria,
+					matchCriteria: asMatchCriteria(s.matchCriteria),
 				}));
 			},
 			async markEventConsumed() {
@@ -69,7 +71,7 @@ export default route()
 			},
 			eventPersistence,
 			async (instanceId, stepName, eventResult) => {
-				await queue["questpie-wf-resume"].publish({
+				await resumeQueue.publish({
 					instanceId,
 					stepName,
 					result: eventResult,

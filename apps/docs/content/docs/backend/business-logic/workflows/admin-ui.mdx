@@ -14,12 +14,11 @@ Register the client module in your admin configuration:
 ```ts title="questpie/admin/index.ts"
 import { workflowsClientModule } from "@questpie/workflows/client";
 
-export default qa
-  .use(adminModule)
-  .use(workflowsClientModule);
+export default qa.use(adminModule).use(workflowsClientModule);
 ```
 
 This adds:
+
 - A **Workflows** sidebar entry
 - A **Workflow list page** with filtering and pagination
 - A **Workflow detail page** with step timeline
@@ -64,9 +63,14 @@ The widget auto-refreshes every 10 seconds and is contributed to the admin dashb
 
 The module contributes a sidebar entry under the main navigation:
 
-```
-Workflows (ph:flow-arrow icon)
-└── List view → Detail view
+```mermaid
+flowchart TD
+	Sidebar["Workflows<br/>ph:flow-arrow icon"]
+	List["Workflow list page"]
+	Detail["Workflow detail page"]
+
+	Sidebar --> List
+	List --> Detail
 ```
 
 Clicking the sidebar entry navigates to the workflow list page. From there, clicking any instance navigates to its detail page.

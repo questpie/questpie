@@ -49,19 +49,19 @@ Routes are discovered by file convention. The file path determines the URL:
 
 The handler function receives a typed context object:
 
-| Property        | Type              | Description               |
-| --------------- | ----------------- | ------------------------- |
-| `input`         | `z.infer<schema>` | Validated input           |
-| `collections`   | `AppCollections`  | Typed collection API      |
-| `globals`       | `AppGlobals`      | Typed globals API         |
-| `db`            | `Database`        | Drizzle database instance |
-| `session`       | `Session \| null` | Auth session              |
-| `queue`         | `QueueClient`     | Job queue client          |
-| `email`         | `MailerService`   | Email service             |
-| `logger`        | `Logger`          | Pino logger               |
-| `kv`            | `KVStore`         | Key-value store           |
-| `app`           | `QuestpieApp`     | App instance              |
-| Custom services | any               | Services from `services/` |
+| Property        | Type                    | Description               |
+| --------------- | ----------------------- | ------------------------- |
+| `input`         | `z.infer<schema>`       | Validated input           |
+| `collections`   | `AppCollections`        | Typed collection API      |
+| `globals`       | `AppGlobals`            | Typed globals API         |
+| `db`            | `Database`              | Drizzle database instance |
+| `session`       | `Session \| null`       | Auth session              |
+| `queue`         | `QueueClient`           | Job queue client          |
+| `email`         | `MailerService`         | Email service             |
+| `logger`        | `Logger`                | Pino logger               |
+| `kv`            | `KVStore`               | Key-value store           |
+| `app`           | `QuestpieApp`           | App instance              |
+| Custom services | `AppContext` extensions | Services from `services/` |
 
 ### Example: GET with Query Params
 

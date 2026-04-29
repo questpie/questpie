@@ -115,13 +115,21 @@ curl -X POST http://localhost:3000/api/create-booking \
 
 Organize routes in subdirectories for namespacing:
 
-```text
-routes/
-├── booking/
-│   ├── create.ts          → client.routes.booking.create()
-│   └── cancel.ts          → client.routes.booking.cancel()
-├── get-active-barbers.ts  → client.routes.getActiveBarbers()
-└── get-stats.ts           → client.routes.getStats()
+```mermaid
+flowchart LR
+  BookingCreate["routes/booking/create.ts"]
+  BookingCancel["routes/booking/cancel.ts"]
+  ActiveBarbers["routes/get-active-barbers.ts"]
+  Stats["routes/get-stats.ts"]
+  BookingCreateClient["client.routes.booking.create()"]
+  BookingCancelClient["client.routes.booking.cancel()"]
+  ActiveBarbersClient["client.routes.getActiveBarbers()"]
+  StatsClient["client.routes.getStats()"]
+
+  BookingCreate --> BookingCreateClient
+  BookingCancel --> BookingCancelClient
+  ActiveBarbers --> ActiveBarbersClient
+  Stats --> StatsClient
 ```
 
 ## Real-World Example

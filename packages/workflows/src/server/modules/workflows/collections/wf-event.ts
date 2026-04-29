@@ -1,5 +1,5 @@
-import { index } from "drizzle-orm/pg-core";
 import { collection } from "questpie";
+import { index } from "questpie/drizzle-pg-core";
 
 /**
  * Workflow Event Collection
@@ -29,9 +29,9 @@ export const wfEventCollection = collection("wf_event")
 		expiresAt: f.datetime(),
 	}))
 	.indexes(({ table }) => [
-		index("idx_wfe_event_name").on(table.eventName as any),
-		index("idx_wfe_created").on(table.createdAt as any),
-		index("idx_wfe_expires").on(table.expiresAt as any),
+		index("idx_wfe_event_name").on(table.eventName),
+		index("idx_wfe_created").on(table.createdAt),
+		index("idx_wfe_expires").on(table.expiresAt),
 	])
 	.access({
 		create: false,

@@ -12,6 +12,7 @@
 
 import { job } from "questpie";
 import { z } from "zod";
+
 import type { CollectionCrud } from "../../../client.js";
 import { cronFiredInWindow } from "../../../engine/cron.js";
 import { parseDuration } from "../../../engine/duration.js";
@@ -20,6 +21,13 @@ import type {
 	RetentionPolicy,
 	WorkflowDefinition,
 } from "../../../workflow/types.js";
+import {
+	getCollections,
+	getLogger,
+	getQueue,
+	getWorkflowDefinitions,
+	type WorkflowRuntimeLogger,
+} from "../routes/_helpers.js";
 
 /** Maintenance polling interval in minutes. */
 const POLL_INTERVAL_MINUTES = 5;
@@ -32,23 +40,15 @@ export const wfMaintenanceJob = job({
 		retryLimit: 1,
 	},
 	handler: async (ctx) => {
-		const collections = (ctx as any).collections as
-			| Record<string, CollectionCrud>
-			| undefined;
-		const queue = (ctx as any).queue as any;
-		const logger = (ctx as any).logger as any;
-		const app = (ctx as any).app as any;
-
-		const instancesCrud = collections?.wf_instance;
-		const stepsCrud = collections?.wf_step;
-		const eventsCrud = collections?.wf_event;
-		const logsCrud = collections?.wf_log;
-
-		if (!instancesCrud || !stepsCrud) {
-			throw new Error(
-				"Workflow system collections not found. Is workflowsModule registered?",
-			);
-		}
+		const {
+			instances: instancesCrud,
+			steps: stepsCrud,
+			events: eventsCrud,
+			logs: logsCrud,
+		} = getCollections(ctx);
+		const resumeQueue = getQueue(ctx, "questpie-wf-resume");
+		const executeQueue = getQueue(ctx, "questpie-wf-execute");
+		const logger = getLogger(ctx);
 
 		const now = new Date();
 
@@ -67,7 +67,7 @@ export const wfMaintenanceJob = job({
 		let resumedCount = 0;
 		for (const step of sleepingSteps.docs) {
 			try {
-				await queue["questpie-wf-resume"].publish({
+				await resumeQueue.publish({
 					instanceId: step.instanceId,
 					stepName: step.name,
 				});
@@ -119,10 +119,7 @@ export const wfMaintenanceJob = job({
 
 		// ── 3. Cron triggers ────────────────────────────────────────
 		let cronTriggered = 0;
-		const definitions = (app?.state?.workflows ?? {}) as Record<
-			string,
-			WorkflowDefinition
-		>;
+		const definitions = getWorkflowDefinitions(ctx);
 
 		const windowStart = new Date(
 			now.getTime() - POLL_INTERVAL_MINUTES * 60 * 1000,
@@ -208,7 +205,7 @@ export const wfMaintenanceJob = job({
 					{ accessMode: "system" },
 				);
 
-				await queue["questpie-wf-execute"].publish({
+				await executeQueue.publish({
 					instanceId: instance.id,
 					workflowName: name,
 				});
@@ -389,12 +386,12 @@ function shorterDuration(a: string | undefined, b: string): string {
  * along with their associated steps and logs.
  */
 async function cleanupInstances(
-	instancesCrud: CollectionCrud,
-	stepsCrud: CollectionCrud,
-	logsCrud: CollectionCrud | undefined,
+	instancesCrud: CollectionCrud<{ id: string }>,
+	stepsCrud: CollectionCrud<{ id: string }>,
+	logsCrud: CollectionCrud<{ id: string }> | undefined,
 	status: string,
 	cutoff: Date,
-	logger: any,
+	logger: WorkflowRuntimeLogger | undefined,
 ): Promise<number> {
 	const oldInstances = await instancesCrud.find(
 		{

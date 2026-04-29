@@ -24,52 +24,52 @@ import { workflow } from "@questpie/workflows";
 import z from "zod";
 
 export default workflow({
-  name: "order-fulfillment",
-  schema: z.object({
-    orderId: z.string(),
-    customerId: z.string(),
-  }),
-  timeout: "24h",
-  handler: async ({ input, step }) => {
-    // Each step is automatically cached and replayed on restart
-    const order = await step.run("validate-order", async () => {
-      const o = await db.orders.findOne({ id: input.orderId });
-      if (!o) throw new Error("Order not found");
-      return o;
-    });
+	name: "order-fulfillment",
+	schema: z.object({
+		orderId: z.string(),
+		customerId: z.string(),
+	}),
+	timeout: "24h",
+	handler: async ({ input, step }) => {
+		// Each step is automatically cached and replayed on restart
+		const order = await step.run("validate-order", async () => {
+			const o = await db.orders.findOne({ id: input.orderId });
+			if (!o) throw new Error("Order not found");
+			return o;
+		});
 
-    await step.run("charge-payment", async () => {
-      await stripe.charges.create({
-        amount: order.total,
-        customer: input.customerId,
-      });
-    });
+		await step.run("charge-payment", async () => {
+			await stripe.charges.create({
+				amount: order.total,
+				customer: input.customerId,
+			});
+		});
 
-    await step.run("send-confirmation", async () => {
-      await email.send({
-        to: order.email,
-        template: "order-confirmed",
-        data: { orderId: order.id },
-      });
-    });
+		await step.run("send-confirmation", async () => {
+			await email.send({
+				to: order.email,
+				template: "order-confirmed",
+				data: { orderId: order.id },
+			});
+		});
 
-    // Wait up to 7 days for shipping label scan
-    const shipment = await step.waitForEvent("shipment-scanned", {
-      event: "shipment.label.scanned",
-      match: { orderId: input.orderId },
-      timeout: "7d",
-    });
+		// Wait up to 7 days for shipping label scan
+		const shipment = await step.waitForEvent("shipment-scanned", {
+			event: "shipment.label.scanned",
+			match: { orderId: input.orderId },
+			timeout: "7d",
+		});
 
-    await step.run("notify-shipped", async () => {
-      await email.send({
-        to: order.email,
-        template: "order-shipped",
-        data: { trackingNumber: shipment.trackingNumber },
-      });
-    });
+		await step.run("notify-shipped", async () => {
+			await email.send({
+				to: order.email,
+				template: "order-shipped",
+				data: { trackingNumber: shipment.trackingNumber },
+			});
+		});
 
-    return { status: "fulfilled", orderId: order.id };
-  },
+		return { status: "fulfilled", orderId: order.id };
+	},
 });
 ```
 
@@ -80,9 +80,9 @@ import { runtimeConfig } from "questpie";
 import { workflowsPlugin } from "@questpie/workflows/server";
 
 export default runtimeConfig({
-  plugins: [workflowsPlugin()],
-  db: { url: process.env.DATABASE_URL! },
-  app: { url: process.env.APP_URL! },
+	plugins: [workflowsPlugin()],
+	db: { url: process.env.DATABASE_URL! },
+	app: { url: process.env.APP_URL! },
 });
 ```
 
@@ -99,16 +99,15 @@ import { route } from "questpie";
 import z from "zod";
 
 export default route()
-  .post()
-  .schema(z.object({ orderId: z.string(), customerId: z.string() }))
-  .handler(async ({ input, ...ctx }) => {
-    const workflows = (ctx as any).workflows;
-    const result = await workflows.trigger("order-fulfillment", {
-      orderId: input.orderId,
-      customerId: input.customerId,
-    });
-    return { instanceId: result.instanceId };
-  });
+	.post()
+	.schema(z.object({ orderId: z.string(), customerId: z.string() }))
+	.handler(async ({ input, workflows }) => {
+		const result = await workflows.trigger("order-fulfillment", {
+			orderId: input.orderId,
+			customerId: input.customerId,
+		});
+		return { instanceId: result.instanceId };
+	});
 ```
 
 ## How It Works
@@ -124,31 +123,31 @@ The workflow engine uses **replay-based execution**. When a workflow runs, each 
 
 The module automatically creates four collections:
 
-| Collection | Purpose |
-|---|---|
+| Collection    | Purpose                                                    |
+| ------------- | ---------------------------------------------------------- |
 | `wf_instance` | Workflow instance tracking (status, input/output, timeout) |
-| `wf_step` | Step execution records with replay memoization |
-| `wf_event` | Event persistence for matching |
-| `wf_log` | Structured log entries |
+| `wf_step`     | Step execution records with replay memoization             |
+| `wf_event`    | Event persistence for matching                             |
+| `wf_log`      | Structured log entries                                     |
 
 These are hidden from the admin UI by default but fully queryable via the API.
 
 ## Architecture
 
-```
-workflow() ──> codegen discovers ──> workflowsModule registers
-                                           │
-                                    ┌──────┴──────┐
-                                    │   3 Jobs    │
-                                    │  wf-execute │
-                                    │  wf-resume  │
-                                    │  wf-maint.  │
-                                    └─────────────┘
-                                           │
-                              ┌────────────┼────────────┐
-                              │            │            │
-                          Execution    Suspension    Maintenance
-                          (replay)    (events/sleep)  (cron/cleanup)
+```mermaid
+flowchart TD
+  Definition["workflow() definition"]
+  Codegen["Codegen discovery"]
+  Module["workflowsModule registration"]
+  Jobs["Workflow jobs"]
+  Execute["wf-execute<br/>replay execution"]
+  Resume["wf-resume<br/>events + sleep"]
+  Maintenance["wf-maintenance<br/>cron, timeout, cleanup"]
+
+  Definition --> Codegen --> Module --> Jobs
+  Jobs --> Execute
+  Jobs --> Resume
+  Jobs --> Maintenance
 ```
 
 - **wf-execute**: Runs workflow handlers using the replay engine

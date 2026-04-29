@@ -7,11 +7,19 @@ Blocks are reusable content components for visual page building. Define them ser
 
 ## Architecture
 
-```text
-Server: block("hero")           Client: HeroRenderer
-  .fields({ title, image })  →    Receives { values, data }
-  .admin({ label, icon })        Returns JSX
-  .prefetch({ with: {...} })
+```mermaid
+flowchart LR
+  Block["block(\"hero\")"]
+  Fields[".fields({ title, image })"]
+  Admin[".admin({ label, icon })"]
+  Prefetch[".prefetch({ with: { ... } })"]
+  Renderer["HeroRenderer"]
+  Props["Receives { values, data }"]
+  JSX["Returns JSX"]
+
+  Block --> Fields --> Renderer
+  Block --> Admin --> Renderer
+  Block --> Prefetch --> Props --> Renderer --> JSX
 ```
 
 ## How Blocks Work
@@ -27,29 +35,29 @@ Block content is stored as JSONB with this structure:
 
 ```ts
 type BlockContent = {
-  _tree: BlockNode[]                           // Hierarchical tree of blocks
-  _values: Record<string, Record<string, any>> // Field values per block instance
-  _data?: Record<string, Record<string, any>>  // Prefetched relation data
-}
+	_tree: BlockNode[]; // Hierarchical tree of blocks
+	_values: Record<string, Record<string, unknown>>; // Field values per block instance
+	_data?: Record<string, Record<string, unknown>>; // Prefetched relation data
+};
 
 type BlockNode = {
-  id: string          // Unique instance ID
-  type: string        // Block type name (e.g., "hero", "columns")
-  children: BlockNode[] // Nested blocks
-}
+	id: string; // Unique instance ID
+	type: string; // Block type name (e.g., "hero", "columns")
+	children: BlockNode[]; // Nested blocks
+};
 ```
 
 ## Block Categories
 
 Blocks can be organized into categories in the block editor:
 
-| Category | Purpose | Examples |
-| --- | --- | --- |
-| `layout` | Structural blocks | Columns, Grid, Container, Section |
-| `content` | Text content | Heading, Paragraph, List, Quote |
-| `media` | Visual content | Image, Video, Gallery |
-| `sections` | Pre-built sections | Hero, Features, Testimonials, CTA |
-| `interactive` | User interaction | Form, Accordion, Tabs |
+| Category      | Purpose            | Examples                          |
+| ------------- | ------------------ | --------------------------------- |
+| `layout`      | Structural blocks  | Columns, Grid, Container, Section |
+| `content`     | Text content       | Heading, Paragraph, List, Quote   |
+| `media`       | Visual content     | Image, Video, Gallery             |
+| `sections`    | Pre-built sections | Hero, Features, Testimonials, CTA |
+| `interactive` | User interaction   | Form, Accordion, Tabs             |
 
 Custom categories are supported — use any string as the category name.
 
@@ -58,44 +66,43 @@ Custom categories are supported — use any string as the category name.
 **Server** — define a hero block:
 
 ```ts title="src/questpie/server/blocks/hero.ts"
-import { block } from "#questpie/factories"
+import { block } from "#questpie/factories";
 
 export default block("hero")
-  .fields(({ f }) => ({
-    title: f.text(255).required(),
-    subtitle: f.textarea(),
-    backgroundImage: f.upload(),
-    ctaLabel: f.text(100),
-    ctaLink: f.url(),
-  }))
-  .admin({
-    label: "Hero Section",
-    icon: "ph:star",
-    category: "sections",
-  })
+	.fields(({ f }) => ({
+		title: f.text(255).required(),
+		subtitle: f.textarea(),
+		backgroundImage: f.upload(),
+		ctaLabel: f.text(100),
+		ctaLink: f.url(),
+	}))
+	.admin({
+		label: "Hero Section",
+		icon: "ph:star",
+		category: "sections",
+	});
 ```
 
 **Collection** — use blocks field:
 
 ```ts
-export default collection("pages")
-  .fields(({ f }) => ({
-    title: f.text(255).required(),
-    content: f.blocks(),
-  }))
+export default collection("pages").fields(({ f }) => ({
+	title: f.text(255).required(),
+	content: f.blocks(),
+}));
 ```
 
 **Client** — render the block:
 
 ```tsx title="src/questpie/admin/blocks/hero.tsx"
 export default function HeroRenderer({ values }) {
-  return (
-    <section style={{ backgroundImage: `url(${values.backgroundImage?.url})` }}>
-      <h1>{values.title}</h1>
-      <p>{values.subtitle}</p>
-      {values.ctaLabel && <a href={values.ctaLink}>{values.ctaLabel}</a>}
-    </section>
-  )
+	return (
+		<section style={{ backgroundImage: `url(${values.backgroundImage?.url})` }}>
+			<h1>{values.title}</h1>
+			<p>{values.subtitle}</p>
+			{values.ctaLabel && <a href={values.ctaLink}>{values.ctaLabel}</a>}
+		</section>
+	);
 }
 ```
 

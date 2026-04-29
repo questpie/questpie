@@ -1,12 +1,15 @@
 import { Icon } from "@iconify/react";
+import { useQuery } from "@tanstack/react-query";
+import React from "react";
+
 import {
 	selectBasePath,
 	selectClient,
 	selectNavigate,
 	useAdminStore,
 } from "@questpie/admin/client";
-import { useQuery } from "@tanstack/react-query";
-import React from "react";
+
+import { getWorkflowRoutes } from "../workflow-admin-client.js";
 
 // ── Status helpers ─────────────────────────────────────────
 
@@ -94,17 +97,14 @@ export function WorkflowListPage() {
 
 	const { data, isLoading, error, refetch } = useQuery({
 		queryKey: ["workflows", "instances", statusFilter, page, limit],
-		queryFn: () =>
-			(client as any).routes.listWorkflowInstances({
+		queryFn: () => {
+			const routes = getWorkflowRoutes(client);
+			return routes.listWorkflowInstances({
 				status: statusFilter || undefined,
 				limit,
 				page,
-			}) as Promise<{
-				docs: any[];
-				totalDocs: number;
-				page: number;
-				limit: number;
-			}>,
+			});
+		},
 		refetchInterval: 5000,
 	});
 
@@ -191,7 +191,7 @@ export function WorkflowListPage() {
 									</tr>
 								</thead>
 								<tbody>
-									{data.docs.map((instance: any) => (
+									{data.docs.map((instance) => (
 										<tr
 											key={instance.id}
 											onClick={() =>

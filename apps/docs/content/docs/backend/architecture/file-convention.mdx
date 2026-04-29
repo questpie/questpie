@@ -27,10 +27,11 @@ Each directory maps to a category of entity:
 
 Factory string args are entity identities for collections, globals, blocks, views, and components. They are converted from kebab-case to camelCase:
 
-```text
-collection("blog-posts")  → blogPosts
-block("hero-banner")      → heroBanner
-global("siteSettings")    → siteSettings
+```mermaid
+flowchart LR
+  Collection["collection(\"blog-posts\")"] --> BlogPosts["blogPosts"]
+  Block["block(\"hero-banner\")"] --> HeroBanner["heroBanner"]
+  Global["global(\"siteSettings\")"] --> SiteSettings["siteSettings"]
 ```
 
 Only hyphens are camelized. Underscores are preserved, so `global("site_settings")` generates the key `site_settings`, not `siteSettings`.
@@ -55,40 +56,63 @@ Some configs are single files, not directories:
 
 Group files by entity type:
 
-```text
-src/questpie/server/
-├── collections/
-│   ├── posts.ts
-│   ├── categories.ts
-│   └── comments.ts
-├── routes/
-│   ├── create-booking.ts
-│   └── get-stats.ts
-├── jobs/
-│   └── send-email.ts
-└── services/
-    └── blog.ts
+```mermaid
+flowchart TD
+  Root["src/questpie/server/"]
+  Collections["collections/"]
+  Routes["routes/"]
+  Jobs["jobs/"]
+  Services["services/"]
+  Posts["posts.ts"]
+  Categories["categories.ts"]
+  Comments["comments.ts"]
+  CreateBooking["create-booking.ts"]
+  GetStats["get-stats.ts"]
+  SendEmail["send-email.ts"]
+  BlogService["blog.ts"]
+
+  Root --> Collections
+  Root --> Routes
+  Root --> Jobs
+  Root --> Services
+  Collections --> Posts
+  Collections --> Categories
+  Collections --> Comments
+  Routes --> CreateBooking
+  Routes --> GetStats
+  Jobs --> SendEmail
+  Services --> BlogService
 ```
 
 ### By-Feature
 
 Group files by domain:
 
-```text
-src/questpie/server/
-├── features/
-│   ├── blog/
-│   │   ├── collections/
-│   │   │   └── posts.ts
-│   │   ├── routes/
-│   │   │   └── publish.ts
-│   │   └── jobs/
-│   │       └── notify-subscribers.ts
-│   └── booking/
-│       ├── collections/
-│       │   └── appointments.ts
-│       └── routes/
-│           └── create-booking.ts
+```mermaid
+flowchart TD
+  Root["src/questpie/server/"]
+  Features["features/"]
+  Blog["blog/"]
+  Booking["booking/"]
+  BlogCollections["collections/"]
+  BlogRoutes["routes/"]
+  BlogJobs["jobs/"]
+  BookingCollections["collections/"]
+  BookingRoutes["routes/"]
+  Posts["posts.ts"]
+  Publish["publish.ts"]
+  Notify["notify-subscribers.ts"]
+  Appointments["appointments.ts"]
+  CreateBooking["create-booking.ts"]
+
+  Root --> Features
+  Features --> Blog
+  Features --> Booking
+  Blog --> BlogCollections --> Posts
+  Blog --> BlogRoutes --> Publish
+  Blog --> BlogJobs --> Notify
+  Booking --> BookingCollections --> Appointments
+  Booking --> BookingRoutes --> CreateBooking
 ```
 
 ### Mixed
@@ -99,14 +123,12 @@ Both layouts can coexist. Codegen scans all configured paths.
 
 Routes support nested directories:
 
-```text
-routes/
-├── booking/
-│   ├── create.ts    → client.routes.booking.create()
-│   └── cancel.ts    → client.routes.booking.cancel()
-├── admin/
-│   └── stats.ts     → client.routes.admin.stats()
-└── get-barbers.ts   → client.routes.getBarbers()
+```mermaid
+flowchart LR
+  BookingCreate["routes/booking/create.ts"] --> BookingCreateClient["client.routes.booking.create()"]
+  BookingCancel["routes/booking/cancel.ts"] --> BookingCancelClient["client.routes.booking.cancel()"]
+  AdminStats["routes/admin/stats.ts"] --> AdminStatsClient["client.routes.admin.stats()"]
+  GetBarbers["routes/get-barbers.ts"] --> GetBarbersClient["client.routes.getBarbers()"]
 ```
 
 ## Discovery Process

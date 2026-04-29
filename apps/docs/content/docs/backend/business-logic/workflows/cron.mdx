@@ -14,23 +14,23 @@ import { workflow } from "@questpie/workflows";
 import z from "zod";
 
 export default workflow({
-  name: "daily-report",
-  schema: z.object({}),
-  cron: "0 8 * * *", // Every day at 8:00 AM
-  handler: async ({ step }) => {
-    const stats = await step.run("gather-stats", async () => {
-      // Collect daily metrics
-      return { users: 1234, revenue: 56789 };
-    });
+	name: "daily-report",
+	schema: z.object({}),
+	cron: "0 8 * * *", // Every day at 8:00 AM
+	handler: async ({ step }) => {
+		const stats = await step.run("gather-stats", async () => {
+			// Collect daily metrics
+			return { users: 1234, revenue: 56789 };
+		});
 
-    await step.run("send-report", async () => {
-      await email.send({
-        to: "team@example.com",
-        template: "daily-report",
-        data: stats,
-      });
-    });
-  },
+		await step.run("send-report", async () => {
+			await email.send({
+				to: "team@example.com",
+				template: "daily-report",
+				data: stats,
+			});
+		});
+	},
 });
 ```
 
@@ -38,23 +38,29 @@ export default workflow({
 
 Standard five-field cron format:
 
-```
- ┌──── minute (0-59)
- │ ┌──── hour (0-23)
- │ │ ┌──── day of month (1-31)
- │ │ │ ┌──── month (1-12)
- │ │ │ │ ┌──── day of week (0-7, 0 and 7 = Sunday)
- │ │ │ │ │
- * * * * *
+```mermaid
+flowchart LR
+	Expression["* * * * *"]
+	Minute["minute<br/>0-59"]
+	Hour["hour<br/>0-23"]
+	DayOfMonth["day of month<br/>1-31"]
+	Month["month<br/>1-12"]
+	DayOfWeek["day of week<br/>0-7<br/>0 and 7 = Sunday"]
+
+	Expression --> Minute
+	Expression --> Hour
+	Expression --> DayOfMonth
+	Expression --> Month
+	Expression --> DayOfWeek
 ```
 
-| Expression | Schedule |
-|---|---|
-| `0 * * * *` | Every hour |
-| `0 8 * * *` | Daily at 8 AM |
-| `0 0 * * 1` | Every Monday at midnight |
-| `0 0 1 * *` | First day of each month |
-| `0 9 * * 1-5` | Weekdays at 9 AM |
+| Expression    | Schedule                 |
+| ------------- | ------------------------ |
+| `0 * * * *`   | Every hour               |
+| `0 8 * * *`   | Daily at 8 AM            |
+| `0 0 * * 1`   | Every Monday at midnight |
+| `0 0 1 * *`   | First day of each month  |
+| `0 9 * * 1-5` | Weekdays at 9 AM         |
 
 ## Overlap Policy
 
@@ -62,21 +68,21 @@ Control what happens when a cron trigger fires while a previous instance is stil
 
 ```ts
 export default workflow({
-  name: "sync-inventory",
-  schema: z.object({}),
-  cron: "*/5 * * * *", // Every 5 minutes
-  cronOverlap: "skip", // Don't start if previous is still running
-  handler: async ({ step }) => {
-    // ...
-  },
+	name: "sync-inventory",
+	schema: z.object({}),
+	cron: "*/5 * * * *", // Every 5 minutes
+	cronOverlap: "skip", // Don't start if previous is still running
+	handler: async ({ step }) => {
+		// ...
+	},
 });
 ```
 
-| Policy | Behavior |
-|---|---|
-| `"skip"` (default) | Skip this trigger if an instance is already running |
-| `"allow"` | Start a new instance regardless |
-| `"cancel-previous"` | Cancel the running instance, start fresh |
+| Policy              | Behavior                                            |
+| ------------------- | --------------------------------------------------- |
+| `"skip"` (default)  | Skip this trigger if an instance is already running |
+| `"allow"`           | Start a new instance regardless                     |
+| `"cancel-previous"` | Cancel the running instance, start fresh            |
 
 ## Retention Policy
 
@@ -84,22 +90,22 @@ Automatically clean up old workflow data to prevent unbounded growth.
 
 ```ts
 export default workflow({
-  name: "nightly-cleanup",
-  schema: z.object({}),
-  cron: "0 2 * * *",
-  retention: {
-    completedAfter: "30d", // Delete completed instances after 30 days
-    failedAfter: "90d",    // Keep failed instances longer for debugging
-  },
-  handler: async ({ step }) => {
-    // ...
-  },
+	name: "nightly-cleanup",
+	schema: z.object({}),
+	cron: "0 2 * * *",
+	retention: {
+		completedAfter: "30d", // Delete completed instances after 30 days
+		failedAfter: "90d", // Keep failed instances longer for debugging
+	},
+	handler: async ({ step }) => {
+		// ...
+	},
 });
 ```
 
-| Field | Type | Description |
-|---|---|---|
-| `completedAfter` | `Duration` | Delete completed instances older than this |
-| `failedAfter` | `Duration` | Delete failed/timed-out instances older than this |
+| Field            | Type       | Description                                       |
+| ---------------- | ---------- | ------------------------------------------------- |
+| `completedAfter` | `Duration` | Delete completed instances older than this        |
+| `failedAfter`    | `Duration` | Delete failed/timed-out instances older than this |
 
 The maintenance job runs retention cleanup alongside cron scheduling.

@@ -9,13 +9,23 @@ The admin panel is one projection of your schema — the same way an SDK, an Ope
 
 ## The Core Idea
 
-```text
-Schema Definition → Codegen → Typed Runtime → Projection → Frontend(s)
-                                    ↓
-                              Database tables
-                              API validation
-                              Query operators
-                              Type inference
+```mermaid
+flowchart LR
+  Schema["Schema Definition"]
+  Codegen["Codegen"]
+  Runtime["Typed Runtime"]
+  Projection["Projection"]
+  Frontends["Frontend(s)"]
+  Database["Database tables"]
+  Validation["API validation"]
+  Operators["Query operators"]
+  Inference["Type inference"]
+
+  Schema --> Codegen --> Runtime --> Projection --> Frontends
+  Runtime --> Database
+  Runtime --> Validation
+  Runtime --> Operators
+  Runtime --> Inference
 ```
 
 You write a collection file. Codegen reads it and generates:

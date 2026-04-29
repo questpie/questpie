@@ -52,8 +52,8 @@ Use session data in access rules:
 .access({
   read: true,
   create: ({ session }) => !!session,
-  update: ({ session }) => (session?.user as any)?.role === "admin",
-  delete: ({ session }) => (session?.user as any)?.role === "admin",
+  update: ({ session }) => session?.user?.role === "admin",
+  delete: ({ session }) => session?.user?.role === "admin",
 })
 ```
 

@@ -1,5 +1,5 @@
-import { index } from "drizzle-orm/pg-core";
 import { collection } from "questpie";
+import { index } from "questpie/drizzle-pg-core";
 
 /**
  * Workflow Log Collection
@@ -22,9 +22,7 @@ export const wfLogCollection = collection("wf_log")
 		/** Structured context data (JSON). */
 		data: f.json(),
 	}))
-	.indexes(({ table }) => [
-		index("idx_wfl_instance").on(table.instanceId as any),
-	])
+	.indexes(({ table }) => [index("idx_wfl_instance").on(table.instanceId)])
 	.access({
 		create: false,
 		update: false,

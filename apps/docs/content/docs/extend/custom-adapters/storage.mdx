@@ -104,6 +104,8 @@ If your provider is not covered by FlyDrive, implement `DriverContract`. Start w
 
 ```ts title="my-storage-driver.ts"
 import type {
+	DriveDirectory,
+	DriveFile,
 	DriverContract,
 	ObjectMetaData,
 	ObjectVisibility,
@@ -111,12 +113,19 @@ import type {
 	WriteOptions,
 } from "flydrive/types";
 
-export class MyCloudDriver implements DriverContract {
-	private client: any; // Your provider SDK client
+type ProviderClient = {
+	upload(bucket: string, key: string, body: Uint8Array): Promise<void>;
+	download(bucket: string, key: string): Promise<Uint8Array>;
+	remove(bucket: string, key: string): Promise<void>;
+	head(bucket: string, key: string): Promise<void>;
+	presign(bucket: string, key: string): Promise<string>;
+};
 
-	constructor(private options: { apiKey: string; bucket: string }) {
-		// Initialize your provider SDK
-	}
+export class MyCloudDriver implements DriverContract {
+	constructor(
+		private options: { apiKey: string; bucket: string },
+		private client: ProviderClient,
+	) {}
 
 	async put(
 		key: string,
@@ -190,7 +199,7 @@ export class MyCloudDriver implements DriverContract {
 
 	async putStream(
 		_key: string,
-		_contents: any,
+		_contents: ReadableStream<Uint8Array>,
 		_options?: WriteOptions,
 	): Promise<void> {
 		throw new Error("Implement stream uploads for production use");
@@ -221,7 +230,9 @@ export class MyCloudDriver implements DriverContract {
 		}
 	}
 
-	async listAll(_prefix: string): Promise<{ objects: Iterable<any> }> {
+	async listAll(
+		_prefix: string,
+	): Promise<{ objects: Iterable<DriveFile | DriveDirectory> }> {
 		return { objects: [] };
 	}
 }

@@ -40,6 +40,11 @@ Add `@questpie/workflows` — durable workflow engine for QUESTPIE.
 - Dashboard stats widget showing active/completed/failed counts
 - Sidebar contribution for navigation
 
+**Docs & Type Safety**
+- Full durable workflow documentation with typed route, event, cron, admin, and client examples
+- Mermaid architecture diagrams for workflow and docs architecture pages
+- Runtime workflow helpers and admin client routes are strongly typed without unsafe casts
+
 **Integration**
 - `workflowsPlugin()` codegen plugin for file-convention discovery
 - `workflowsModule` server module with collections, jobs, service, functions

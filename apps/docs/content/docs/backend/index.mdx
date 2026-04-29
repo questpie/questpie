@@ -5,14 +5,26 @@ description: Define your data schema, rules, and business logic — codegen gene
 
 QUESTPIE backends follow a simple flow: **define schema → run codegen → get typed runtime**.
 
-```text
-Schema Files                    Codegen Output
-├── collections/*.ts    →    ├── Database tables (Drizzle)
-├── globals/*.ts        →    ├── CRUD API endpoints
-├── routes/*.ts         →    ├── Custom app routes
-├── jobs/*.ts           →    ├── Type-safe AppContext
-├── services/*.ts       →    └── Client SDK types
-└── hooks/access/validation
+```mermaid
+flowchart LR
+  Collections["collections/*.ts"]
+  Globals["globals/*.ts"]
+  Routes["routes/*.ts"]
+  Jobs["jobs/*.ts"]
+  Services["services/*.ts"]
+  Rules["hooks / access / validation"]
+  Tables["Database tables<br/>(Drizzle)"]
+  Crud["CRUD API endpoints"]
+  AppRoutes["Custom app routes"]
+  Context["Type-safe AppContext"]
+  Client["Client SDK types"]
+
+  Collections --> Tables
+  Globals --> Crud
+  Routes --> AppRoutes
+  Jobs --> Context
+  Services --> Context
+  Rules --> Client
 ```
 
 ## Sections

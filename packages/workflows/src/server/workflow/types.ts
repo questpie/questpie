@@ -1,3 +1,4 @@
+import type { AppContext } from "questpie";
 import type { z } from "zod";
 
 // ============================================================================
@@ -86,8 +87,8 @@ export interface StepRetryPolicy {
  * @template TName - Workflow name as a literal string type
  */
 export interface WorkflowDefinition<
-	TInput = any,
-	TOutput = any,
+	TInput = unknown,
+	TOutput = unknown,
 	TName extends string = string,
 > {
 	/** Unique workflow name — used as the registration key. */
@@ -198,7 +199,7 @@ export interface WorkflowLogger {
  *
  * @template TInput - Validated input type (from `schema`)
  */
-export interface WorkflowHandlerArgs<TInput = any> {
+export interface WorkflowHandlerArgs<TInput = unknown> {
 	/** Validated input payload. */
 	input: TInput;
 	/** Durable step primitives. */
@@ -206,7 +207,7 @@ export interface WorkflowHandlerArgs<TInput = any> {
 	/** Structured workflow logger. */
 	log: WorkflowLogger;
 	/** Full app context (db, queue, collections, etc.). Populated at runtime. */
-	ctx: Record<string, any>;
+	ctx: AppContext;
 }
 
 /**
@@ -214,7 +215,7 @@ export interface WorkflowHandlerArgs<TInput = any> {
  *
  * @template TInput - Validated input type (from `schema`)
  */
-export interface WorkflowFailureArgs<TInput = any> {
+export interface WorkflowFailureArgs<TInput = unknown> {
 	/** Validated input payload. */
 	input: TInput;
 	/** The error that caused the failure. */
@@ -226,7 +227,7 @@ export interface WorkflowFailureArgs<TInput = any> {
 	/** Structured workflow logger. */
 	log: WorkflowLogger;
 	/** Full app context. */
-	ctx: Record<string, any>;
+	ctx: AppContext;
 }
 
 // ============================================================================
@@ -242,7 +243,7 @@ export interface StepRunOptions {
 	/** Step-level timeout. Wraps `fn()` in `Promise.race`. */
 	timeout?: Duration;
 	/** Inline compensation callback — runs in reverse order on failure. */
-	compensate?: (result: any) => Promise<void>;
+	compensate?: (result: unknown) => Promise<void>;
 }
 
 /**
@@ -252,7 +253,7 @@ export interface WaitForEventOptions {
 	/** Event name to match. */
 	event: string;
 	/** JSONB containment match criteria. Null/undefined = match any. */
-	match?: Record<string, any>;
+	match?: Record<string, unknown>;
 	/** Timeout — returns `null` if no event arrives within this duration. */
 	timeout?: Duration;
 }
@@ -278,7 +279,7 @@ export interface SendEventOptions {
 	/** Event data payload. */
 	data?: unknown;
 	/** Match criteria for targeting specific waiters. */
-	match?: Record<string, any>;
+	match?: Record<string, unknown>;
 }
 
 // ============================================================================
@@ -362,6 +363,37 @@ export interface WorkflowStepRecord {
 	updatedAt: Date;
 }
 
+/**
+ * Runtime representation of a workflow event record.
+ */
+export interface WorkflowEventRecord {
+	id: string;
+	eventName: string;
+	data: unknown | null;
+	matchCriteria: unknown | null;
+	sourceType: "workflow" | "hook" | "external";
+	sourceInstanceId: string | null;
+	sourceStepName: string | null;
+	consumedCount: number;
+	expiresAt: Date | null;
+	createdAt: Date;
+	updatedAt: Date;
+}
+
+/**
+ * Runtime representation of a workflow log record.
+ */
+export interface WorkflowLogRecord {
+	id: string;
+	instanceId: string;
+	stepName: string | null;
+	level: "debug" | "info" | "warn" | "error" | "system";
+	message: string;
+	data: unknown | null;
+	createdAt: Date;
+	updatedAt: Date;
+}
+
 // ============================================================================
 // Completed Steps Map
 // ============================================================================
@@ -386,10 +418,10 @@ export interface CompletedStepsMap {
  * Infer the input type from a workflow definition.
  */
 export type InferWorkflowInput<T> =
-	T extends WorkflowDefinition<infer I, any, any> ? I : never;
+	T extends WorkflowDefinition<infer I, unknown, string> ? I : never;
 
 /**
  * Infer the output type from a workflow definition.
  */
 export type InferWorkflowOutput<T> =
-	T extends WorkflowDefinition<any, infer O, any> ? O : never;
+	T extends WorkflowDefinition<unknown, infer O, string> ? O : never;

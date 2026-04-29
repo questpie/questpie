@@ -7,10 +7,14 @@ Running `questpie generate` scans your file conventions and produces the `.gener
 
 ## What Gets Generated
 
-```text
-.generated/
-├── index.ts        — App instance, type exports, createContext helper
-└── module.ts       — Merged module with all entities
+```mermaid
+flowchart TD
+  Generated[".generated/"]
+  Index["index.ts<br/>App instance, type exports, createContext helper"]
+  Module["module.ts<br/>Merged module with all entities"]
+
+  Generated --> Index
+  Generated --> Module
 ```
 
 ### Generated Types

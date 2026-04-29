@@ -11,22 +11,22 @@ Access the logger through the context in hooks, routes, jobs, and services:
 
 ```ts
 handler: async ({ logger }) => {
-  logger.info("Processing request")
-  logger.warn({ userId: "abc" }, "Rate limit approaching")
-  logger.error({ err: error }, "Failed to process payment")
-}
+	logger.info("Processing request");
+	logger.warn({ userId: "abc" }, "Rate limit approaching");
+	logger.error({ err: error }, "Failed to process payment");
+};
 ```
 
 ## Log Levels
 
-| Level | Value | Usage |
-| --- | --- | --- |
-| `trace` | 10 | Verbose debugging (hidden by default) |
-| `debug` | 20 | Development debugging |
-| `info` | 30 | Normal operations (default minimum) |
-| `warn` | 40 | Potential issues, deprecations |
-| `error` | 50 | Errors that need attention |
-| `fatal` | 60 | Critical failures, process should exit |
+| Level   | Value | Usage                                  |
+| ------- | ----- | -------------------------------------- |
+| `trace` | 10    | Verbose debugging (hidden by default)  |
+| `debug` | 20    | Development debugging                  |
+| `info`  | 30    | Normal operations (default minimum)    |
+| `warn`  | 40    | Potential issues, deprecations         |
+| `error` | 50    | Errors that need attention             |
+| `fatal` | 60    | Critical failures, process should exit |
 
 ## Structured Logging
 
@@ -34,19 +34,28 @@ Pass an object as the first argument for structured data. Pino serializes it as 
 
 ```ts
 logger.info(
-  {
-    appointmentId: "abc",
-    action: "created",
-    barberId: "def",
-    duration: 45,
-  },
-  "Appointment created",
-)
+	{
+		appointmentId: "abc",
+		action: "created",
+		barberId: "def",
+		duration: 45,
+	},
+	"Appointment created",
+);
 ```
 
 Output (JSON):
+
 ```json
-{"level":30,"time":1710854400000,"appointmentId":"abc","action":"created","barberId":"def","duration":45,"msg":"Appointment created"}
+{
+	"level": 30,
+	"time": 1710854400000,
+	"appointmentId": "abc",
+	"action": "created",
+	"barberId": "def",
+	"duration": 45,
+	"msg": "Appointment created"
+}
 ```
 
 ## Child Loggers
@@ -54,8 +63,8 @@ Output (JSON):
 Create scoped loggers with persistent context:
 
 ```ts
-const bookingLogger = logger.child({ module: "booking", requestId: "req-123" })
-bookingLogger.info("Checking availability")
+const bookingLogger = logger.child({ module: "booking", requestId: "req-123" });
+bookingLogger.info("Checking availability");
 // → { module: "booking", requestId: "req-123", msg: "Checking availability" }
 ```
 
@@ -65,9 +74,9 @@ Use the `err` key for Error objects — Pino serializes the stack trace:
 
 ```ts
 try {
-  await processPayment(orderId)
+	await processPayment(orderId);
 } catch (error) {
-  logger.error({ err: error, orderId }, "Payment processing failed")
+	logger.error({ err: error, orderId }, "Payment processing failed");
 }
 ```
 
@@ -75,7 +84,7 @@ try {
 
 The log level defaults to `info`. Set it via environment variable:
 
-```text
+```dotenv
 LOG_LEVEL=debug
 ```
 
@@ -85,9 +94,9 @@ In development, pipe output through `pino-pretty` for human-readable logs:
 
 ```json title="package.json"
 {
-  "scripts": {
-    "dev": "questpie dev | pino-pretty"
-  }
+	"scripts": {
+		"dev": "questpie dev | pino-pretty"
+	}
 }
 ```
 

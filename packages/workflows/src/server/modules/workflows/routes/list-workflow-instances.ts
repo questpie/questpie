@@ -1,6 +1,7 @@
 import { route } from "questpie";
 import { z } from "zod";
-import { getCollections } from "./_helpers.js";
+
+import { getCollections, getTotalDocs } from "./_helpers.js";
 
 export default route()
 	.post()
@@ -15,7 +16,7 @@ export default route()
 	.handler(async ({ input, ...ctx }) => {
 		const { instances } = getCollections(ctx);
 
-		const where: Record<string, any> = {};
+		const where: Record<string, unknown> = {};
 		if (input.status) where.status = input.status;
 		if (input.name) where.name = input.name;
 
@@ -31,7 +32,7 @@ export default route()
 
 		return {
 			docs: result.docs,
-			totalDocs: (result as any).totalDocs ?? result.docs.length,
+			totalDocs: getTotalDocs(result),
 			page: input.page,
 			limit: input.limit,
 		};

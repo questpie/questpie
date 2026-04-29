@@ -13,7 +13,7 @@
 
 import { job } from "questpie";
 import { z } from "zod";
-import type { CollectionCrud } from "../../../client.js";
+
 import type { EngineContext } from "../../../engine/engine.js";
 import { executeWorkflowHandler } from "../../../engine/engine.js";
 import type { EventPersistence } from "../../../engine/events.js";
@@ -23,6 +23,13 @@ import type {
 	StepPersistence,
 	TriggerChildFn,
 } from "../../../engine/step-context.js";
+import {
+	asMatchCriteria,
+	getCollections,
+	getLogger,
+	getQueue,
+	getWorkflowDefinitions,
+} from "../routes/_helpers.js";
 
 const wfExecuteSchema = z.object({
 	instanceId: z.string(),
@@ -37,30 +44,22 @@ export const wfExecuteJob = job({
 	},
 	handler: async (ctx) => {
 		const { payload } = ctx;
-		const app = (ctx as any).app as any;
-		const collections = (ctx as any).collections as
-			| Record<string, CollectionCrud>
-			| undefined;
-		const queue = (ctx as any).queue as any;
-		const logger = (ctx as any).logger as any;
+		const workflows = getWorkflowDefinitions(ctx);
+		const {
+			instances: instancesCrud,
+			steps: stepsCrud,
+			logs: logsCrud,
+			events: eventsCrud,
+		} = getCollections(ctx);
+		const executeQueue = getQueue(ctx, "questpie-wf-execute");
+		const resumeQueue = getQueue(ctx, "questpie-wf-resume");
+		const logger = getLogger(ctx);
 
 		// Look up workflow definition from app state
-		const workflows = app?.state?.workflows as Record<string, any> | undefined;
 		const definition = workflows?.[payload.workflowName];
 		if (!definition) {
 			throw new Error(
 				`Workflow definition not found: "${payload.workflowName}"`,
-			);
-		}
-
-		const instancesCrud = collections?.wf_instance;
-		const stepsCrud = collections?.wf_step;
-		const logsCrud = collections?.wf_log;
-		const eventsCrud = collections?.wf_event;
-
-		if (!instancesCrud || !stepsCrud || !logsCrud) {
-			throw new Error(
-				"Workflow system collections not found. Is workflowsModule registered?",
 			);
 		}
 
@@ -145,7 +144,12 @@ export const wfExecuteJob = job({
 
 					// Application-level matching (JSONB @> simulation)
 					for (const event of result.docs) {
-						if (matchesCriteria(matchCriteria, event.matchCriteria as any)) {
+						if (
+							matchesCriteria(
+								matchCriteria,
+								asMatchCriteria(event.matchCriteria),
+							)
+						) {
 							return { id: event.id, data: event.data };
 						}
 					}
@@ -163,10 +167,10 @@ export const wfExecuteJob = job({
 						},
 						{ accessMode: "system" },
 					);
-					return result.docs.map((s: any) => ({
+					return result.docs.map((s) => ({
 						instanceId: s.instanceId,
 						stepName: s.name,
-						matchCriteria: s.matchCriteria,
+						matchCriteria: asMatchCriteria(s.matchCriteria),
 					}));
 				},
 				async markEventConsumed(eventId) {
@@ -233,7 +237,7 @@ export const wfExecuteJob = job({
 			);
 
 			// Queue execution of the child
-			await queue["questpie-wf-execute"].publish({
+			await executeQueue.publish({
 				instanceId: childInstance.id,
 				workflowName,
 			});
@@ -247,7 +251,7 @@ export const wfExecuteJob = job({
 			stepName: string,
 			result: unknown,
 		) => {
-			await queue["questpie-wf-resume"].publish({
+			await resumeQueue.publish({
 				instanceId: waiterInstanceId,
 				stepName,
 				result,
@@ -279,7 +283,7 @@ export const wfExecuteJob = job({
 					{ accessMode: "system" },
 				);
 				return result.docs.map(
-					(s: any): CachedStep => ({
+					(s): CachedStep => ({
 						name: s.name,
 						type: s.type,
 						status: s.status,
@@ -314,7 +318,7 @@ export const wfExecuteJob = job({
 				}
 			},
 			externalLogger: logger,
-			appContext: ctx as any,
+			appContext: ctx,
 			eventPersistence,
 			resumeWaiter,
 			triggerChild,
@@ -334,7 +338,7 @@ export const wfExecuteJob = job({
 			);
 			if (instance?.parentInstanceId && instance?.parentStepName) {
 				// Resume the parent workflow's invoke step
-				await queue["questpie-wf-resume"].publish({
+				await resumeQueue.publish({
 					instanceId: instance.parentInstanceId,
 					stepName: instance.parentStepName,
 					result: result.output,
@@ -374,7 +378,7 @@ export const wfExecuteJob = job({
 						{ accessMode: "system" },
 					);
 					// Re-queue parent to pick up the failure
-					await queue["questpie-wf-execute"].publish({
+					await executeQueue.publish({
 						instanceId: instance.parentInstanceId,
 						workflowName:
 							(

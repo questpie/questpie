@@ -7,66 +7,56 @@ QUESTPIE uses a **file convention** — your project structure determines what g
 
 ## Standard Layout
 
-```text
-my-app/
-├── questpie.config.ts                    # CLI config (re-exports server config)
-├── src/
-│   ├── questpie/
-│   │   ├── server/
-│   │   │   ├── questpie.config.ts        # Runtime config (DB, adapters, secrets)
-│   │   │   ├── app.ts                    # Re-export generated app
-│   │   │   ├── modules.ts                # Module dependencies
-│   │   │   │
-│   │   │   ├── collections/              # One file per collection
-│   │   │   │   ├── posts.ts
-│   │   │   │   ├── categories.ts
-│   │   │   │   └── comments.ts
-│   │   │   │
-│   │   │   ├── globals/                  # One file per global
-│   │   │   │   └── site-settings.ts
-│   │   │   │
-│   │   │   ├── routes/                   # App routes (JSON or raw)
-│   │   │   │   ├── create-booking.ts
-│   │   │   │   └── get-stats.ts
-│   │   │   │
-│   │   │   ├── jobs/                     # Background tasks
-│   │   │   │   └── send-email.ts
-│   │   │   │
-│   │   │   ├── services/                 # Singleton services
-│   │   │   │   └── blog.ts
-│   │   │   │
-│   │   │   ├── blocks/                   # Content blocks (admin plugin)
-│   │   │   │   ├── hero.ts
-│   │   │   │   └── gallery.ts
-│   │   │   │
-│   │   │   ├── emails/                   # Email templates
-│   │   │   │   └── appointment-confirmation.ts
-│   │   │   │
-│   │   │   ├── config/                   # Typed configuration files
-│   │   │   │   ├── auth.ts              # Auth config (Better Auth)
-│   │   │   │   ├── app.ts              # Optional app config (locale, access, hooks)
-│   │   │   │   ├── admin.ts            # Admin config (sidebar, dashboard, branding)
-│   │   │   │   └── openapi.ts          # OpenAPI config
-│   │   │   │
-│   │   │   └── .generated/               # Codegen output (never edit)
-│   │   │       ├── index.ts              # App instance + types
-│   │   │       └── module.ts             # Merged module
-│   │   │
-│   │   └── admin/                        # Admin client customizations
-│   │       ├── admin.ts                  # Re-exports generated admin config
-│   │       ├── hooks.ts                  # Typed React hooks
-│   │       ├── .generated/               # Codegen output (never edit)
-│   │       │   └── client.ts             # Admin client config
-│   │       └── blocks/                   # Block renderers (React)
-│   │           ├── hero.tsx
-│   │           └── gallery.tsx
-│   │
-│   ├── lib/
-│   │   └── client.ts                     # Client SDK setup
-│   │
-│   └── routes/                           # App routes (framework-specific)
-│       └── api/
-│           └── $.ts                      # API catch-all handler
+```mermaid
+flowchart TD
+	App["my-app/"]
+	RootConfig["questpie.config.ts<br/>CLI config"]
+	Src["src/"]
+	Questpie["questpie/"]
+	Server["server/"]
+	RuntimeConfig["questpie.config.ts<br/>Runtime config"]
+	AppReexport["app.ts<br/>Re-export generated app"]
+	Modules["modules.ts<br/>Module dependencies"]
+	Collections["collections/<br/>posts.ts, categories.ts, comments.ts"]
+	Globals["globals/<br/>site-settings.ts"]
+	ServerRoutes["routes/<br/>create-booking.ts, get-stats.ts"]
+	Jobs["jobs/<br/>send-email.ts"]
+	Services["services/<br/>blog.ts"]
+	Blocks["blocks/<br/>hero.ts, gallery.ts"]
+	Emails["emails/<br/>appointment-confirmation.ts"]
+	Config["config/<br/>auth.ts, app.ts, admin.ts, openapi.ts"]
+	ServerGenerated[".generated/<br/>index.ts, module.ts"]
+	Admin["admin/"]
+	AdminEntry["admin.ts<br/>Re-exports generated admin config"]
+	AdminHooks["hooks.ts<br/>Typed React hooks"]
+	AdminGenerated[".generated/client.ts<br/>Admin client config"]
+	AdminBlocks["blocks/<br/>hero.tsx, gallery.tsx"]
+	Lib["lib/client.ts<br/>Client SDK setup"]
+	FrameworkRoutes["routes/api/$.ts<br/>API catch-all handler"]
+
+	App --> RootConfig
+	App --> Src
+	Src --> Questpie
+	Questpie --> Server
+	Server --> RuntimeConfig
+	Server --> AppReexport
+	Server --> Modules
+	Server --> Collections
+	Server --> Globals
+	Server --> ServerRoutes
+	Server --> Jobs
+	Server --> Services
+	Server --> Blocks
+	Server --> Emails
+	Server --> Config
+	Server --> ServerGenerated
+	Questpie --> Admin
+	Admin --> AdminEntry
+	Admin --> AdminHooks
+	Admin --> AdminGenerated
+	Admin --> AdminBlocks
+	Src --> Lib
+	Src --> FrameworkRoutes
 ```
 
 ## Discovery Rules
@@ -103,12 +93,18 @@ Some configs are single files instead of directories:
 
 Routes support nested directories for namespacing:
 
-```text
-routes/
-├── booking/
-│   ├── create.ts          → client.routes.booking.create()
-│   └── cancel.ts          → client.routes.booking.cancel()
-├── get-stats.ts           → client.routes.getStats()
+```mermaid
+flowchart TD
+	Routes["routes/"]
+	Booking["booking/"]
+	Create["create.ts<br/>client.routes.booking.create()"]
+	Cancel["cancel.ts<br/>client.routes.booking.cancel()"]
+	Stats["get-stats.ts<br/>client.routes.getStats()"]
+
+	Routes --> Booking
+	Booking --> Create
+	Booking --> Cancel
+	Routes --> Stats
 ```
 
 ## The `.generated/` Directory
@@ -183,23 +179,30 @@ import { seed } from "questpie";
 
 For larger projects, you can organize by feature instead of by type:
 
-```text
-src/questpie/server/
-├── features/
-│   ├── blog/
-│   │   ├── collections/
-│   │   │   └── posts.ts
-│   │   ├── routes/
-│   │   │   └── publish.ts
-│   │   └── jobs/
-│   │       └── notify-subscribers.ts
-│   └── booking/
-│       ├── collections/
-│       │   └── appointments.ts
-│       └── routes/
-│           └── create-booking.ts
-├── questpie.config.ts
-└── modules.ts
+```mermaid
+flowchart TD
+	Server["src/questpie/server/"]
+	Features["features/"]
+	Blog["blog/"]
+	BlogCollections["collections/posts.ts"]
+	BlogRoutes["routes/publish.ts"]
+	BlogJobs["jobs/notify-subscribers.ts"]
+	Booking["booking/"]
+	BookingCollections["collections/appointments.ts"]
+	BookingRoutes["routes/create-booking.ts"]
+	Config["questpie.config.ts"]
+	Modules["modules.ts"]
+
+	Server --> Features
+	Features --> Blog
+	Blog --> BlogCollections
+	Blog --> BlogRoutes
+	Blog --> BlogJobs
+	Features --> Booking
+	Booking --> BookingCollections
+	Booking --> BookingRoutes
+	Server --> Config
+	Server --> Modules
 ```
 
 Both layouts can coexist. Codegen scans all configured paths.

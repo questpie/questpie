@@ -595,34 +595,28 @@ function FileConventionsSection() {
 		<>
 			<span className="text-primary">src/questpie/server/</span>
 			{`
-├── collections/
-│   ├── `}
+collections/`}
 			<span className="text-foreground font-bold">posts.ts</span>
 			{`
-│   └── `}
+collections/`}
 			<span className="text-foreground font-bold">users.ts</span>
 			{`
-├── routes/
-│   └── `}
+routes/`}
 			<span className="text-foreground font-bold">admin/stats.ts</span>
 			{`
-├── blocks/
-│   └── `}
+blocks/`}
 			<span className="text-foreground font-bold">hero.ts</span>
 			{`
-├── jobs/
-│   └── `}
+jobs/`}
 			<span className="text-foreground font-bold">send-newsletter.ts</span>
 			{`
-├── services/
-│   └── `}
+services/`}
 			<span className="text-foreground font-bold">stripe.ts</span>
 			{`
-├── seeds/
-│   └── `}
+seeds/`}
 			<span className="text-foreground font-bold">demo-data.ts</span>
 			{`
-└── `}
+`}
 			<span className="text-foreground font-bold">auth.ts</span>
 		</>
 	);
@@ -631,41 +625,31 @@ function FileConventionsSection() {
 		<>
 			<span className="text-primary">src/questpie/server/</span>
 			{`
-├── blog/
-│   ├── collections/
-│   │   └── `}
+blog/collections/`}
 			<span className="text-foreground font-bold">posts.ts</span>
 			{`
-│   ├── blocks/
-│   │   └── `}
+blog/blocks/`}
 			<span className="text-foreground font-bold">hero.ts</span>
 			{`
-│   └── jobs/
-│       └── `}
+blog/jobs/`}
 			<span className="text-foreground font-bold">newsletter.ts</span>
 			{`
-├── shop/
-│   ├── collections/
-│   │   ├── `}
+shop/collections/`}
 			<span className="text-foreground font-bold">products.ts</span>
 			{`
-│   │   └── `}
+shop/collections/`}
 			<span className="text-foreground font-bold">orders.ts</span>
 			{`
-│   └── services/
-│       └── `}
+shop/services/`}
 			<span className="text-foreground font-bold">stripe.ts</span>
 			{`
-├── shared/
-│   ├── collections/
-│   │   └── `}
+shared/collections/`}
 			<span className="text-foreground font-bold">users.ts</span>
 			{`
-│   └── routes/
-│       └── `}
+shared/routes/`}
 			<span className="text-foreground font-bold">stats.ts</span>
 			{`
-└── `}
+`}
 			<span className="text-foreground font-bold">auth.ts</span>
 		</>
 	);
@@ -2095,6 +2079,73 @@ const HERO_PRIMITIVES: HeroPrimitive[] = [
 		),
 	},
 	{
+		kind: "Workflow",
+		title: "Run durable flows",
+		description:
+			"Long-running processes persist each step, survive restarts, wait for external events, and stay visible in the admin UI.",
+		icon: "ph:flow-arrow",
+		file: "workflows/order-approval.ts",
+		outputs: ["Replay", "Sleep", "Events", "Admin UI"],
+		snippet: (
+			<>
+				<span className={kw}>export default</span>{" "}
+				<span className={fn}>workflow</span>
+				{`({
+  name: `}
+				<span className={str}>"order-approval"</span>
+				{`,
+  schema: z.object({ orderId: z.string() }),
+  timeout: `}
+				<span className={str}>"7d"</span>
+				{`,
+  handler: async ({ input, step, ctx }) => {
+    `}
+				<span className={kw}>const</span>
+				{` order = `}
+				<span className={kw}>await</span>
+				{` step.`}
+				<span className={fn}>run</span>
+				{"("}
+				<span className={str}>"load-order"</span>
+				{`, async () =>
+      ctx.collections.orders.`}
+				<span className={fn}>findOne</span>
+				{`({ where: { id: input.orderId } }),
+    )
+
+    `}
+				<span className={kw}>await</span>
+				{` step.`}
+				<span className={fn}>sleep</span>
+				{"("}
+				<span className={str}>"fraud-window"</span>
+				{`, `}
+				<span className={str}>"10m"</span>
+				{`)
+    `}
+				<span className={kw}>await</span>
+				{` step.`}
+				<span className={fn}>waitForEvent</span>
+				{"("}
+				<span className={str}>"approval"</span>
+				{`, {
+      event: `}
+				<span className={str}>"order.approved"</span>
+				{`,
+      match: { orderId: input.orderId },
+    })
+
+    `}
+				<span className={kw}>return</span>
+				{` { ready: `}
+				<span className={kw}>true</span>
+				{`, orderId: order.id }
+  },
+})`}
+			</>
+		),
+	},
+	{
 		kind: "Admin attach",
 		title: "Project the workspace",
 		description:
@@ -2146,7 +2197,12 @@ const HERO_PRIMITIVES: HeroPrimitive[] = [
 ];
 
 function HeroPrimitiveCarousel() {
-	const [activeIndex, setActiveIndex] = useState(0);
+	const defaultWorkflowIndex = HERO_PRIMITIVES.findIndex(
+		(primitive) => primitive.kind === "Workflow",
+	);
+	const [activeIndex, setActiveIndex] = useState(
+		defaultWorkflowIndex >= 0 ? defaultWorkflowIndex : 0,
+	);
 	const [isPaused, setIsPaused] = useState(false);
 	const rootRef = useRef<HTMLDivElement>(null);
 	const hasRenderedRef = useRef(false);
@@ -2305,10 +2361,10 @@ const PRIMITIVE_SURFACES = [
 	},
 	{
 		icon: "ph:lightning",
-		title: "Jobs",
+		title: "Jobs + workflows",
 		description:
-			"Move slow workflows into queue-backed handlers without leaving the app contract.",
-		outputs: ["Queue", "Retry", "Worker"],
+			"Move slow work into queue-backed handlers, or model long-running flows as replayed durable steps.",
+		outputs: ["Queue", "Replay", "Cron"],
 	},
 	{
 		icon: "ph:layout",
@@ -2354,8 +2410,8 @@ const PROJECTION_OUTPUTS = [
 	},
 	{
 		icon: "ph:lightning",
-		label: "Jobs",
-		detail: "queue workers",
+		label: "Workflows",
+		detail: "jobs + durable steps",
 	},
 ] as const;
 
@@ -2880,9 +2936,9 @@ export function LandingPage() {
 								</h1>
 								<p className="text-muted-foreground mb-8 max-w-xl text-lg leading-[1.6] md:text-xl">
 									Define the product contract once. QUESTPIE projects your
-									schema, routes, jobs, and admin config into APIs, workspace
-									screens, validation, access rules, typed clients, and realtime
-									updates.
+									schema, routes, jobs, durable workflows, and admin config into
+									APIs, workspace screens, validation, access rules, typed
+									clients, and realtime updates.
 								</p>
 								<div className="flex flex-wrap items-center gap-3 sm:gap-4 lg:mb-12">
 									<Link

@@ -26,7 +26,7 @@ export interface EventPersistence {
 	createEvent(event: {
 		eventName: string;
 		data?: unknown;
-		matchCriteria?: Record<string, any>;
+		matchCriteria?: Record<string, unknown>;
 		sourceType: "workflow" | "hook" | "external";
 		sourceInstanceId?: string;
 		sourceStepName?: string;
@@ -38,7 +38,7 @@ export interface EventPersistence {
 	 */
 	findMatchingEvent(
 		eventName: string,
-		matchCriteria?: Record<string, any>,
+		matchCriteria?: Record<string, unknown>,
 	): Promise<{ id: string; data: unknown } | null>;
 
 	/**
@@ -47,12 +47,12 @@ export interface EventPersistence {
 	 */
 	findWaitingSteps(
 		eventName: string,
-		matchData?: Record<string, any>,
+		matchData?: Record<string, unknown>,
 	): Promise<
 		Array<{
 			instanceId: string;
 			stepName: string;
-			matchCriteria: Record<string, any> | null;
+			matchCriteria: Record<string, unknown> | null;
 		}>
 	>;
 
@@ -88,8 +88,8 @@ export type ResumeWaiterFn = (
  * @returns true if target contains all criteria key-value pairs
  */
 export function matchesCriteria(
-	criteria: Record<string, any> | null | undefined,
-	target: Record<string, any> | null | undefined,
+	criteria: Record<string, unknown> | null | undefined,
+	target: Record<string, unknown> | null | undefined,
 ): boolean {
 	// No criteria = match anything
 	if (!criteria || Object.keys(criteria).length === 0) return true;
@@ -108,7 +108,14 @@ export function matchesCriteria(
 			) {
 				return false;
 			}
-			if (!matchesCriteria(value, target[key])) return false;
+			if (
+				!matchesCriteria(
+					value as Record<string, unknown>,
+					target[key] as Record<string, unknown>,
+				)
+			) {
+				return false;
+			}
 		} else if (target[key] !== value) {
 			return false;
 		}
@@ -136,7 +143,7 @@ export async function dispatchEvent(
 	event: {
 		name: string;
 		data?: unknown;
-		match?: Record<string, any>;
+		match?: Record<string, unknown>;
 		sourceType: "workflow" | "hook" | "external";
 		sourceInstanceId?: string;
 		sourceStepName?: string;
@@ -182,7 +189,7 @@ export async function dispatchEvent(
  */
 export async function checkRetroactiveMatch(
 	eventName: string,
-	matchCriteria: Record<string, any> | undefined,
+	matchCriteria: Record<string, unknown> | undefined,
 	persistence: EventPersistence,
 ): Promise<{ data: unknown } | null> {
 	const event = await persistence.findMatchingEvent(eventName, matchCriteria);

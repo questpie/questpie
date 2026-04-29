@@ -1,5 +1,5 @@
-import { index, uniqueIndex } from "drizzle-orm/pg-core";
 import { collection } from "questpie";
+import { index, uniqueIndex } from "questpie/drizzle-pg-core";
 
 /**
  * Workflow Instance Collection
@@ -39,11 +39,11 @@ export const wfInstanceCollection = collection("wf_instance")
 		completedAt: f.datetime(),
 	}))
 	.indexes(({ table }) => [
-		index("idx_wfi_name").on(table.name as any),
-		index("idx_wfi_status").on(table.status as any),
-		index("idx_wfi_parent").on(table.parentInstanceId as any),
-		uniqueIndex("idx_wfi_idempotency").on(table.idempotencyKey as any),
-		index("idx_wfi_created").on(table.createdAt as any),
+		index("idx_wfi_name").on(table.name),
+		index("idx_wfi_status").on(table.status),
+		index("idx_wfi_parent").on(table.parentInstanceId),
+		uniqueIndex("idx_wfi_idempotency").on(table.idempotencyKey),
+		index("idx_wfi_created").on(table.createdAt),
 	])
 	.access({
 		create: false,

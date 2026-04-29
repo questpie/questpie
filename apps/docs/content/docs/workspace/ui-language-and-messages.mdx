@@ -58,13 +58,19 @@ export default adminConfig({
 
 Project messages live in `messages/` inside the QUESTPIE server directory:
 
-```text
-src/questpie/server/
-├── config/
-│   └── admin.ts
-└── messages/
-    ├── en.ts
-    └── sk.ts
+```mermaid
+flowchart TD
+	Server["src/questpie/server/"]
+	Config["config/"]
+	AdminConfig["admin.ts"]
+	Messages["messages/"]
+	English["en.ts"]
+	Slovak["sk.ts"]
+
+	Server --> Config --> AdminConfig
+	Server --> Messages
+	Messages --> English
+	Messages --> Slovak
 ```
 
 Each file default-exports the flat message dictionary for that locale. The filename is the locale key; do not wrap the export in `{ en: ... }`.

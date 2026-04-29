@@ -22,7 +22,7 @@ export interface CompensationEntry {
 	/** Step name that registered this compensation. */
 	name: string;
 	/** The compensation callback. */
-	fn: (result: any) => Promise<void>;
+	fn: (result: unknown) => Promise<void>;
 	/** The result of the original step (passed to the compensation fn). */
 	result: unknown;
 }
