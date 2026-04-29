@@ -1,4 +1,5 @@
 ---
+"@questpie/admin": patch
 "@questpie/workflows": minor
 ---
 
@@ -44,3 +45,4 @@ Add `@questpie/workflows` — durable workflow engine for QUESTPIE.
 - `workflowsModule` server module with collections, jobs, service, functions
 - `workflowsClientModule` for admin UI pages and widgets
 - Service at `ctx.workflows` via `namespace(null)`
+- `@questpie/admin/client` now exports `page()` and `PageDefinition` for module-provided admin pages
