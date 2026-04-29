@@ -407,6 +407,11 @@ export {
 	type ViewDefinition,
 	type ViewKind,
 } from "#questpie/admin/client/builder/view/view.js";
+// Page definition factory (for custom admin pages)
+export {
+	page,
+	type PageDefinition,
+} from "#questpie/admin/client/builder/page/page.js";
 // Widget factory (for defining custom widgets)
 export {
 	type WidgetDefinition,

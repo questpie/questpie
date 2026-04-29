@@ -12,7 +12,8 @@
 			"@questpie/elysia",
 			"@questpie/hono",
 			"@questpie/next",
-			"@questpie/tanstack-query"
+			"@questpie/tanstack-query",
+			"@questpie/workflows"
 		]
 	],
 	"linked": [],

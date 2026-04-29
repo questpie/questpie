@@ -2538,6 +2538,11 @@ const MODULE_INPUTS = [
 		description: "global hooks",
 	},
 	{
+		icon: "ph:flow-arrow",
+		title: "Workflows",
+		description: "durable steps, events, cron",
+	},
+	{
 		icon: "ph:puzzle-piece",
 		title: "Your module",
 		description: "domain capability",

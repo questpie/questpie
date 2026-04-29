@@ -213,7 +213,6 @@ export * from "#questpie/server/modules/core/integrated/queue/job.js";
 export * from "#questpie/server/modules/core/integrated/queue/service.js";
 export * from "#questpie/server/modules/core/integrated/queue/types.js";
 export * from "#questpie/server/modules/core/integrated/queue/worker.js";
-export * from "#questpie/server/modules/core/integrated/queue/workflow.js";
 export * from "#questpie/server/modules/core/integrated/realtime/adapter.js";
 export * from "#questpie/server/modules/core/integrated/realtime/adapters/pg-notify.js";
 export * from "#questpie/server/modules/core/integrated/realtime/adapters/redis-streams.js";
