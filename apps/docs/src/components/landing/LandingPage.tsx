@@ -909,18 +909,18 @@ function AdminShowcaseSection() {
 								},
 							].map((field) => (
 								<div key={field.label}>
-									<label className="text-muted-foreground font-chrome mb-1.5 block text-xs font-medium">
+									<div className="text-muted-foreground font-chrome mb-1.5 block text-xs font-medium">
 										{field.label}
-									</label>
+									</div>
 									<div className="border-border-subtle bg-card text-foreground font-chrome rounded-[var(--control-radius)] border px-3 py-2 text-sm">
 										{field.value}
 									</div>
 								</div>
 							))}
 							<div>
-								<label className="text-muted-foreground font-chrome mb-1.5 block text-xs font-medium">
+								<div className="text-muted-foreground font-chrome mb-1.5 block text-xs font-medium">
 									Logo
-								</label>
+								</div>
 								<div className="border-border-subtle bg-surface-low flex h-16 items-center justify-center rounded-[var(--control-radius)] border">
 									<Icon
 										ssr
@@ -1645,7 +1645,7 @@ function Nav() {
 						params={{ _splat: "start-here/first-app" }}
 						className={cn(primaryCta, "hidden sm:inline-flex")}
 					>
-						Get started
+						Create app
 					</Link>
 					<button
 						type="button"
@@ -1699,7 +1699,7 @@ function Nav() {
 								className={primaryCta}
 								onClick={() => setMobileOpen(false)}
 							>
-								Get started
+								Create app
 							</Link>
 						</div>
 					</div>
@@ -2855,6 +2855,279 @@ function DevLoopAsset() {
 	);
 }
 
+/* ─── Conversion Sections ─── */
+
+const START_COMMAND = "bun create questpie";
+
+const TRUST_ITEMS = [
+	{ icon: "ph:code", label: "TypeScript + ESM" },
+	{ icon: "ph:database", label: "Drizzle + Zod" },
+	{ icon: "ph:shield-check", label: "Better Auth ready" },
+	{ icon: "ph:globe", label: "OpenAPI output" },
+	{ icon: "ph:git-branch", label: "MIT open source" },
+	{ icon: "ph:plugs-connected", label: "Hono, Elysia, Next" },
+] as const;
+
+const FIRST_RUN_STEPS = [
+	{
+		time: "00",
+		title: "Create app",
+		command: START_COMMAND,
+		detail: "Starter, config, imports, and file conventions are ready.",
+	},
+	{
+		time: "02",
+		title: "Model schema",
+		command: 'collection("posts").fields(({ f }) => ...)',
+		detail: "Fields, access, relations, and admin metadata share one source.",
+	},
+	{
+		time: "05",
+		title: "Run dev",
+		command: "questpie dev",
+		detail: "Generated app types, CRUD API, admin screens, and client SDK.",
+	},
+	{
+		time: "10",
+		title: "Extend",
+		command: "route().post().handler(async ({ collections }) => ...)",
+		detail: "Add product actions, jobs, workflows, services, or modules.",
+	},
+] as const;
+
+const PRODUCT_PATHS = [
+	{
+		icon: "ph:article",
+		title: "Content app",
+		description:
+			"Collections, globals, uploads, localization, blocks, preview, and editor workflow.",
+		href: "/docs/$",
+		params: { _splat: "examples/barbershop" },
+		link: "See example",
+	},
+	{
+		icon: "ph:layout",
+		title: "SaaS admin",
+		description:
+			"CRUD, access rules, dashboards, forms, actions, filters, and custom views.",
+		href: "/docs/$",
+		params: { _splat: "backend/data-modeling/collections" },
+		link: "Model data",
+	},
+	{
+		icon: "ph:flow-arrow",
+		title: "Workflow backend",
+		description:
+			"Routes, jobs, queues, durable steps, cron, emails, realtime, and audit trails.",
+		href: "/docs/$",
+		params: { _splat: "backend/business-logic/workflows" },
+		link: "Run workflows",
+	},
+	{
+		icon: "ph:puzzle-piece",
+		title: "Framework module",
+		description:
+			"Package conventions, builders, registries, fields, views, components, and adapters.",
+		href: "/docs/$",
+		params: { _splat: "extend/building-a-module" },
+		link: "Build module",
+	},
+] as const;
+
+function CopyCommandButton({ command }: { command: string }) {
+	const [copied, setCopied] = useState(false);
+
+	const handleCopy = async () => {
+		await navigator.clipboard.writeText(command);
+		setCopied(true);
+		window.setTimeout(() => setCopied(false), 1500);
+	};
+
+	return (
+		<button
+			type="button"
+			onClick={handleCopy}
+			className="text-muted-foreground hover:bg-surface-high hover:text-foreground flex size-9 shrink-0 items-center justify-center rounded-[var(--control-radius-inner)] transition-[background-color,color,transform] active:scale-[0.96] motion-reduce:active:scale-100"
+			aria-label={copied ? "Command copied" : "Copy command"}
+		>
+			<Icon ssr icon={copied ? "ph:check" : "ph:copy"} width={15} height={15} />
+		</button>
+	);
+}
+
+function HeroCommandBox() {
+	return (
+		<div className="border-border-subtle bg-card/80 mb-8 max-w-xl overflow-hidden rounded-[var(--surface-radius)] border shadow-[var(--surface-shadow)] backdrop-blur-sm">
+			<div className="border-border-subtle bg-surface-low/70 flex items-center justify-between gap-3 border-b px-3 py-2">
+				<div className="text-muted-foreground font-mono text-[11px] font-medium">
+					create your first app
+				</div>
+				<div className="text-muted-foreground font-mono text-[10px]">
+					Bun starter
+				</div>
+			</div>
+			<div className="flex min-w-0 items-center gap-3 px-4 py-3">
+				<span className="text-primary font-mono">$</span>
+				<code className="text-foreground min-w-0 flex-1 overflow-x-auto font-mono text-sm whitespace-nowrap">
+					{START_COMMAND}
+				</code>
+				<CopyCommandButton command={START_COMMAND} />
+			</div>
+			<div className="border-border-subtle bg-border-subtle grid grid-cols-2 gap-px border-t sm:grid-cols-4">
+				{["CRUD API", "Admin UI", "Typed client", "Jobs"].map((output) => (
+					<div
+						key={output}
+						className="bg-card text-muted-foreground font-chrome px-3 py-2 text-xs font-medium"
+					>
+						{output}
+					</div>
+				))}
+			</div>
+		</div>
+	);
+}
+
+function TrustStrip() {
+	return (
+		<section className="px-4 pb-10 md:px-8 md:pb-14">
+			<div className="border-border-subtle bg-card/70 grid grid-cols-2 gap-px overflow-hidden rounded-[var(--surface-radius)] border shadow-[var(--surface-shadow)] backdrop-blur-sm sm:grid-cols-3 lg:grid-cols-6">
+				{TRUST_ITEMS.map((item) => (
+					<div
+						key={item.label}
+						className="bg-card/70 text-muted-foreground font-chrome flex min-h-16 items-center gap-2 px-3 py-3 text-xs font-medium"
+					>
+						<Icon
+							ssr
+							aria-hidden="true"
+							icon={item.icon}
+							width={15}
+							height={15}
+							className="shrink-0"
+						/>
+						<span className="min-w-0 text-pretty">{item.label}</span>
+					</div>
+				))}
+			</div>
+		</section>
+	);
+}
+
+function FirstRunSection() {
+	return (
+		<section className={landingSection}>
+			<div className="grid grid-cols-1 gap-6 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
+				<div>
+					<div className="text-muted-foreground mb-3 font-mono text-xs font-medium">
+						First run
+					</div>
+					<h2 className="text-foreground mb-4 text-3xl leading-tight font-semibold text-balance md:text-4xl">
+						From empty repo to working product surfaces.
+					</h2>
+					<p className="text-muted-foreground max-w-xl text-lg leading-[1.65] text-pretty">
+						QUESTPIE is built for teams that want schema, runtime behavior, and
+						workspace UI to move together. Start with a collection, then keep
+						adding real product behavior without creating parallel definitions.
+					</p>
+					<div className="mt-6 flex flex-wrap gap-3">
+						<Link
+							to="/docs/$"
+							params={{ _splat: "start-here/first-app" }}
+							className={primaryCta}
+						>
+							Create first app{" "}
+							<Icon ssr icon="ph:arrow-right" width={16} height={16} />
+						</Link>
+						<Link
+							to="/docs/$"
+							params={{ _splat: "examples" }}
+							className={secondaryCta}
+						>
+							Browse examples{" "}
+							<Icon ssr icon="ph:squares-four" width={16} height={16} />
+						</Link>
+					</div>
+				</div>
+
+				<div className="grid gap-3">
+					{FIRST_RUN_STEPS.map((step) => (
+						<div
+							key={step.title}
+							className="border-border-subtle bg-card grid gap-3 rounded-[var(--surface-radius)] border p-4 shadow-[var(--surface-shadow)] sm:grid-cols-[4rem_1fr] sm:items-start"
+						>
+							<div className="text-primary font-mono text-sm font-semibold tabular-nums">
+								{step.time}m
+							</div>
+							<div className="min-w-0">
+								<div className="text-foreground font-chrome mb-2 text-sm font-semibold">
+									{step.title}
+								</div>
+								<div className="border-border-subtle bg-surface-low text-muted-foreground flex min-w-0 items-center gap-2 rounded-[var(--control-radius-inner)] border px-3 py-2 font-mono text-xs">
+									<span className="text-primary">$</span>
+									<span className="min-w-0 truncate">{step.command}</span>
+								</div>
+								<p className="text-muted-foreground mt-2 text-sm leading-relaxed text-pretty">
+									{step.detail}
+								</p>
+							</div>
+						</div>
+					))}
+				</div>
+			</div>
+		</section>
+	);
+}
+
+function ProductPathSection() {
+	return (
+		<section className={landingSection}>
+			<div className="mb-8 md:mb-12">
+				<div className="text-muted-foreground mb-3 font-mono text-xs font-medium">
+					Choose your path
+				</div>
+				<h2 className="text-foreground mb-4 text-3xl leading-tight font-semibold text-balance md:text-4xl">
+					Start where your product hurts.
+				</h2>
+				<p className="text-muted-foreground max-w-2xl text-lg leading-[1.65] text-pretty">
+					Use QUESTPIE as a CMS backbone, an internal workspace framework, a
+					workflow runtime, or a module system. The contract stays typed across
+					every surface.
+				</p>
+			</div>
+
+			<div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+				{PRODUCT_PATHS.map((path) => (
+					<Link
+						key={path.title}
+						to={path.href}
+						params={path.params}
+						className="border-border-subtle bg-card hover:bg-surface-low group flex min-h-64 flex-col rounded-[var(--surface-radius)] border p-5 shadow-[var(--surface-shadow)] transition-[background-color,border-color,transform] active:scale-[0.96] motion-reduce:active:scale-100"
+					>
+						<div className="text-muted-foreground border-border-subtle bg-surface-low mb-5 flex size-11 items-center justify-center rounded-[var(--control-radius)] border">
+							<Icon ssr icon={path.icon} width={19} height={19} />
+						</div>
+						<h3 className="text-foreground mb-2 text-lg leading-tight font-semibold text-balance">
+							{path.title}
+						</h3>
+						<p className="text-muted-foreground flex-1 text-sm leading-relaxed text-pretty">
+							{path.description}
+						</p>
+						<div className="text-primary font-chrome mt-5 flex items-center gap-2 text-sm font-medium">
+							{path.link}
+							<Icon
+								ssr
+								icon="ph:arrow-right"
+								width={15}
+								height={15}
+								className="transition-transform group-hover:translate-x-0.5"
+							/>
+						</div>
+					</Link>
+				))}
+			</div>
+		</section>
+	);
+}
+
 /* ═══════════════════════════════════════════════
    LANDING PAGE
    ═══════════════════════════════════════════════ */
@@ -2925,32 +3198,33 @@ export function LandingPage() {
 
 				<div className="relative z-10 mx-auto max-w-[1200px]">
 					{/* ─── HERO ─── */}
-					<section className="mt-14 px-4 py-16 md:px-8 md:py-24">
+					<section className="mt-14 px-4 py-12 md:px-8 md:py-16 lg:py-20">
 						<div className="grid grid-cols-1 items-center gap-8 md:gap-12 lg:grid-cols-2 lg:gap-24">
 							<div>
 								<div className="text-muted-foreground font-chrome mb-5 text-sm font-medium">
-									Schema-first product framework
+									Backend, admin, API, and workflows
 								</div>
 								<h1 className="text-foreground mb-6 text-4xl leading-[1.08] font-semibold text-balance md:text-5xl lg:text-6xl">
-									Build the product, not the plumbing.
+									Ship a typed product backend from one schema.
 								</h1>
 								<p className="text-muted-foreground mb-8 max-w-xl text-lg leading-[1.6] md:text-xl">
-									Define the product contract once. QUESTPIE projects your
-									schema, routes, jobs, durable workflows, and admin config into
-									APIs, workspace screens, validation, access rules, typed
-									clients, and realtime updates.
+									Define fields, access, routes, jobs, workflows, and admin
+									config once. QUESTPIE projects that contract into CRUD APIs,
+									workspace screens, validation, typed clients, OpenAPI, and
+									runtime services.
 								</p>
+								<HeroCommandBox />
 								<div className="flex flex-wrap items-center gap-3 sm:gap-4 lg:mb-12">
 									<Link
 										to="/docs/$"
 										params={{ _splat: "start-here/first-app" }}
 										className={primaryCta}
 									>
-										Start with a schema{" "}
+										Create first app{" "}
 										<Icon ssr icon="ph:arrow-right" width={16} height={16} />
 									</Link>
 									<a href="#schema-output" className={secondaryCta}>
-										See what you get{" "}
+										View generated output{" "}
 										<Icon ssr icon="ph:arrow-down" width={16} height={16} />
 									</a>
 								</div>
@@ -2961,6 +3235,16 @@ export function LandingPage() {
 							</div>
 						</div>
 					</section>
+
+					<TrustStrip />
+
+					<Reveal>
+						<FirstRunSection />
+					</Reveal>
+
+					<Reveal>
+						<ProductPathSection />
+					</Reveal>
 
 					{/* ─── §01 ONE SCHEMA — Hover highlight ─── */}
 					<Reveal>
@@ -3040,7 +3324,7 @@ export function LandingPage() {
 							/>
 						</div>
 						<h2 className="text-foreground mb-6 text-4xl leading-tight font-semibold text-balance md:text-5xl">
-							Start with one schema contract.
+							Start with one schema. Ship every surface.
 						</h2>
 						<div className="border-border-subtle bg-card mb-8 inline-flex items-center gap-4 rounded-[var(--surface-radius)] border px-6 py-3 shadow-[var(--surface-shadow)]">
 							<span className="text-primary font-mono">$</span>
@@ -3052,7 +3336,7 @@ export function LandingPage() {
 								params={{ _splat: "start-here/first-app" }}
 								className={primaryCta}
 							>
-								Read the docs{" "}
+								Create first app{" "}
 								<Icon ssr icon="ph:arrow-right" width={16} height={16} />
 							</Link>
 							<Link

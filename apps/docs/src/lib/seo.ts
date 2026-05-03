@@ -4,9 +4,9 @@
 
 export const siteConfig = {
 	name: "QUESTPIE",
-	title: "QUESTPIE — Build the product, not the plumbing.",
+	title: "QUESTPIE — Typed backend, admin, and API from one schema.",
 	description:
-		"Schema-first TypeScript framework. Define the product contract once and project schema, routes, jobs, and admin config into APIs, workspace screens, validation, typed clients, and realtime updates.",
+		"Schema-first TypeScript framework. Define fields, access, routes, jobs, workflows, and admin config once, then project them into CRUD APIs, workspace screens, validation, typed clients, OpenAPI, and runtime services.",
 	url: "https://questpie.com",
 	ogImage: "/og-questpie.png",
 	twitterHandle: "@questpie",
