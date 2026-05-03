@@ -186,6 +186,8 @@ function PreviewBlockInsertControl({
 }) {
 	const [isHovered, setIsHovered] = React.useState(false);
 	const previewRingColor = "var(--ring, var(--highlight, #b700ff))";
+	const softRingColor = `color-mix(in srgb, ${previewRingColor} 34%, transparent)`;
+	const mutedRingColor = `color-mix(in srgb, ${previewRingColor} 12%, transparent)`;
 
 	const handleInsert = React.useCallback(
 		(event: React.MouseEvent | React.KeyboardEvent) => {
@@ -205,25 +207,42 @@ function PreviewBlockInsertControl({
 	return (
 		<div
 			data-preview-block-insert=""
+			onMouseEnter={() => setIsHovered(true)}
+			onMouseLeave={() => setIsHovered(false)}
+			onFocus={() => setIsHovered(true)}
+			onBlur={() => setIsHovered(false)}
 			style={{
 				alignItems: "center",
 				display: "flex",
-				height: 18,
+				height: 24,
 				justifyContent: "center",
-				marginBlock: -9,
-				pointerEvents: "none",
+				marginBlock: -12,
+				paddingInline: 18,
+				pointerEvents: "auto",
 				position: "relative",
 				zIndex: 40,
 			}}
 		>
+			<span
+				aria-hidden="true"
+				style={{
+					background: `linear-gradient(90deg, transparent, ${softRingColor}, transparent)`,
+					height: 1,
+					left: "50%",
+					opacity: isHovered ? 0.82 : 0,
+					position: "absolute",
+					transform: isHovered
+						? "translateX(-50%) scaleX(1)"
+						: "translateX(-50%) scaleX(0.58)",
+					transformOrigin: "center",
+					transition: "opacity 140ms ease, transform 140ms ease",
+					width: "min(240px, calc(100% - 48px))",
+				}}
+			/>
 			<button
 				type="button"
 				aria-label="Add block here"
 				onClick={handleInsert}
-				onFocus={() => setIsHovered(true)}
-				onBlur={() => setIsHovered(false)}
-				onMouseEnter={() => setIsHovered(true)}
-				onMouseLeave={() => setIsHovered(false)}
 				onKeyDown={(event) => {
 					if (event.key === "Enter" || event.key === " ") {
 						handleInsert(event);
@@ -231,28 +250,47 @@ function PreviewBlockInsertControl({
 				}}
 				style={{
 					alignItems: "center",
-					background: "var(--background, #fff)",
-					border: `1px solid ${previewRingColor}`,
+					background: "transparent",
+					border: 0,
 					borderRadius: 999,
-					boxShadow: isHovered
-						? `0 0 0 4px color-mix(in srgb, ${previewRingColor} 16%, transparent)`
-						: "0 4px 14px rgba(0, 0, 0, 0.18)",
 					color: previewRingColor,
 					cursor: "pointer",
 					display: "inline-flex",
-					fontSize: 15,
-					height: 28,
+					height: 32,
 					justifyContent: "center",
 					lineHeight: 1,
-					opacity: isHovered ? 1 : 0.62,
+					opacity: isHovered ? 1 : 0.28,
+					outline: "none",
+					padding: 0,
 					pointerEvents: "auto",
-					transition:
-						"opacity 150ms ease, box-shadow 150ms ease, transform 150ms ease",
-					transform: isHovered ? "scale(1.05)" : "scale(1)",
-					width: 28,
+					position: "relative",
+					transition: "opacity 140ms ease, transform 140ms ease",
+					transform: isHovered ? "scale(1)" : "scale(0.92)",
+					width: 40,
 				}}
 			>
-				+
+				<span
+					aria-hidden="true"
+					style={{
+						alignItems: "center",
+						background: "var(--background, #fff)",
+						border: `1px solid ${isHovered ? softRingColor : mutedRingColor}`,
+						borderRadius: 999,
+						boxShadow: isHovered
+							? `0 0 0 3px color-mix(in srgb, ${previewRingColor} 8%, transparent), 0 5px 14px rgba(0, 0, 0, 0.12)`
+							: "0 2px 8px rgba(0, 0, 0, 0.10)",
+						display: "inline-flex",
+						fontSize: 13,
+						fontWeight: 500,
+						height: 24,
+						justifyContent: "center",
+						transition:
+							"border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease",
+						width: 24,
+					}}
+				>
+					+
+				</span>
 			</button>
 		</div>
 	);
