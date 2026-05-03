@@ -13,6 +13,7 @@ type CloudDeployStrategy = "adopt" | "render_only" | "gitops_commit";
 type BuildMode = "local_image" | "remote_build" | "prebuilt_image";
 
 type ProcessType = "web" | "worker" | "cron" | "job";
+type ReadinessMode = "tcp" | "http" | "none";
 
 export interface CloudDeployOptions {
 	cwd?: string;
@@ -51,6 +52,8 @@ type ServiceConfig = {
 	command?: string;
 	image?: string;
 	imageTag?: string;
+	readinessMode?: ReadinessMode;
+	readinessPath?: string;
 };
 
 type DomainConfig = {
@@ -274,6 +277,8 @@ export async function cloudDeployCommand(
 				3000,
 			replicas: service.replicas ?? 1,
 			command: service.command,
+			readinessMode: service.readinessMode,
+			readinessPath: service.readinessPath,
 		})),
 		domains: domains.length > 0 ? domains : undefined,
 		postgres,
@@ -520,6 +525,8 @@ function readServices(data: JsonObject): ServiceConfig[] {
 			command: readOwnString(service, "command"),
 			image: readOwnString(service, "image"),
 			imageTag: readOwnString(service, "imageTag"),
+			readinessMode: normalizeReadinessMode(readOwnString(service, "readinessMode")),
+			readinessPath: readOwnString(service, "readinessPath"),
 		}));
 }
 
@@ -594,6 +601,13 @@ function isObject(value: unknown): value is JsonObject {
 
 function normalizeProcessType(value?: string): ProcessType | undefined {
 	if (value === "web" || value === "worker" || value === "cron" || value === "job") {
+		return value;
+	}
+	return undefined;
+}
+
+function normalizeReadinessMode(value?: string): ReadinessMode | undefined {
+	if (value === "tcp" || value === "http" || value === "none") {
 		return value;
 	}
 	return undefined;
