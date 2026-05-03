@@ -5,6 +5,8 @@
  * Design: Clean cards with large numbers and labels.
  */
 
+import { PreviewField } from "@questpie/admin/client";
+
 import { cn } from "../../../lib/utils";
 import type { BlockProps } from "../.generated/client";
 
@@ -19,9 +21,14 @@ export function StatsRenderer({ values }: BlockProps<"stats">) {
 		<section className="px-6 py-16">
 			<div className="mx-auto max-w-6xl">
 				{values.title && (
-					<h2 className="mb-12 text-center text-3xl font-bold tracking-tight">
+					<PreviewField
+						field="title"
+						editable="text"
+						as="h2"
+						className="mb-12 text-center text-3xl font-bold tracking-tight"
+					>
 						{values.title}
-					</h2>
+					</PreviewField>
 				)}
 				<div className={cn("grid grid-cols-1 gap-6", columnsClass)}>
 					{values.stats?.map((stat, index) => (
@@ -29,16 +36,28 @@ export function StatsRenderer({ values }: BlockProps<"stats">) {
 							key={index}
 							className="bg-card rounded-lg border p-6 text-center"
 						>
-							<div className="text-foreground mb-2 text-4xl font-bold">
+							<PreviewField
+								field={`stats.${index}.value`}
+								editable="text"
+								className="text-foreground mb-2 text-4xl font-bold"
+							>
 								{stat.value}
-							</div>
-							<div className="text-foreground mb-1 text-lg font-medium">
+							</PreviewField>
+							<PreviewField
+								field={`stats.${index}.label`}
+								editable="text"
+								className="text-foreground mb-1 text-lg font-medium"
+							>
 								{stat.label}
-							</div>
+							</PreviewField>
 							{stat.description && (
-								<div className="text-muted-foreground text-sm">
+								<PreviewField
+									field={`stats.${index}.description`}
+									editable="text"
+									className="text-muted-foreground text-sm"
+								>
 									{stat.description}
-								</div>
+								</PreviewField>
 							)}
 						</div>
 					))}

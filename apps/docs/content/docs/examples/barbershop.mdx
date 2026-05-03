@@ -26,7 +26,7 @@ flowchart TD
 	BarberServices["barber-services.ts<br/>Junction table"]
 	Reviews["reviews.ts<br/>Conditional fields"]
 	BlogPosts["blog-posts.ts<br/>Service injection in hooks"]
-	Pages["pages.ts<br/>Blocks, preview"]
+	Pages["pages.ts<br/>Blocks, preview, workflow"]
 	Globals["globals/site-settings.ts<br/>Nested config, versioning"]
 	ServerRoutes["routes/<br/>create-booking.ts, get-available-time-slots.ts, get-active-barbers.ts, get-revenue-stats.ts"]
 	Jobs["jobs/<br/>send-appointment-confirmation.ts, send-appointment-cancellation.ts, notify-blog-subscribers.ts"]
@@ -214,26 +214,109 @@ function BookingWizard() {
 }
 ```
 
+### Pages, Workflow, And Preview
+
+The barbershop page collection demonstrates the standard page-builder setup: blocks for page content, `.preview({ url })` for the existing Live Preview button, `v.collectionForm()` for the normal editor, and workflow stages for publishing.
+
+```ts title="src/questpie/server/collections/pages.ts"
+export const pages = collection("pages")
+	.fields(({ f }) => ({
+		title: f.text(255).required().localized(),
+		slug: f.text(255).required(),
+		description: f.textarea().localized(),
+		content: f.blocks().localized(),
+	}))
+	.preview({
+		enabled: true,
+		position: "right",
+		defaultWidth: 50,
+		url: ({ record }) => {
+			const slug = record.slug as string;
+			return slug === "home" ? "/?preview=true" : `/${slug}?preview=true`;
+		},
+	})
+	.options({
+		versioning: {
+			workflow: {
+				initialStage: "draft",
+				stages: {
+					draft: { transitions: ["review", "published"] },
+					review: { transitions: ["draft", "published"] },
+					published: { transitions: ["draft"] },
+				},
+			},
+		},
+	})
+	.form(({ v, f }) =>
+		v.collectionForm({
+			fields: [
+				{ type: "section", label: "Page", fields: [f.title, f.description] },
+				{ type: "section", label: "Content", fields: [f.content] },
+			],
+			sidebar: { fields: [f.slug] },
+		}),
+	);
+```
+
+Public frontend routes read only published page snapshots. Preview requests use the draft-mode cookie set by the preview token flow to load the working stage for the editor.
+
+```ts title="src/lib/get-page.function.ts"
+const page = await app.collections.pages.findOne(
+	{
+		where: { slug },
+		...(draftMode ? {} : { stage: "published" }),
+	},
+	ctx,
+);
+```
+
+The page renderer uses the exported preview APIs and `BlockRenderer` so custom block renderers can annotate fields with `PreviewField`.
+
+```tsx title="src/components/pages/page-renderer.tsx"
+const preview = useCollectionPreview({
+	initialData: page,
+	onRefresh: () => router.invalidate(),
+});
+
+return (
+	<PreviewProvider preview={preview}>
+		<PreviewField field="title" editable="text" as="h1">
+			{preview.data.title}
+		</PreviewField>
+		<BlockRenderer
+			content={preview.data.content}
+			renderers={admin.blocks}
+			data={preview.data.content?._data}
+			selectedBlockId={preview.selectedBlockId}
+			onBlockClick={
+				preview.isPreviewMode ? preview.handleBlockClick : undefined
+			}
+		/>
+	</PreviewProvider>
+);
+```
+
 ## What This Example Demonstrates
 
-| Feature                                  | Where                                          |
-| ---------------------------------------- | ---------------------------------------------- |
-| Complex fields (objects, arrays, select) | `collections/barbers.ts`                       |
-| Many-to-many relations                   | `barbers ↔ barberServices ↔ services`          |
-| Virtual SQL fields                       | `appointments.ts` → `displayTitle`             |
-| Lifecycle hooks                          | `appointments.ts` → `afterChange`              |
-| Service injection                        | `blog.ts` → used in `blog-posts.ts` hooks      |
-| Background jobs                          | `jobs/send-appointment-confirmation.ts`        |
-| Email templates                          | `emails/appointment-confirmation.ts`           |
-| Server routes                            | `routes/create-booking.ts`                     |
-| Admin dashboard                          | `config/admin.ts` — stats, charts, timeline    |
-| Admin sidebar                            | `config/admin.ts` — 6 sections, mixed items    |
-| Content blocks                           | `blocks/hero.ts`, `pages.ts` with `f.blocks()` |
-| Conditional visibility                   | `appointments.ts` form → `hidden`              |
-| Computed form fields                     | `barbers.ts` form → slug from name             |
-| Multi-language (i18n)                    | Labels, content, admin UI                      |
-| Access control                           | `site-settings.ts` → admin-only update         |
-| Live preview                             | `barbers.ts`, `pages.ts` → preview URL         |
+| Feature                                  | Where                                                            |
+| ---------------------------------------- | ---------------------------------------------------------------- |
+| Complex fields (objects, arrays, select) | `collections/barbers.ts`                                         |
+| Many-to-many relations                   | `barbers ↔ barberServices ↔ services`                            |
+| Virtual SQL fields                       | `appointments.ts` → `displayTitle`                               |
+| Lifecycle hooks                          | `appointments.ts` → `afterChange`                                |
+| Service injection                        | `blog.ts` → used in `blog-posts.ts` hooks                        |
+| Background jobs                          | `jobs/send-appointment-confirmation.ts`                          |
+| Email templates                          | `emails/appointment-confirmation.ts`                             |
+| Server routes                            | `routes/create-booking.ts`                                       |
+| Admin dashboard                          | `config/admin.ts` — stats, charts, timeline                      |
+| Admin sidebar                            | `config/admin.ts` — 6 sections, mixed items                      |
+| Content blocks                           | `blocks/hero.ts`, `pages.ts` with `f.blocks()`                   |
+| Conditional visibility                   | `appointments.ts` form → `hidden`                                |
+| Computed form fields                     | `barbers.ts` form → slug from name                               |
+| Multi-language (i18n)                    | Labels, content, admin UI                                        |
+| Access control                           | `site-settings.ts` → admin-only update                           |
+| Live preview                             | `pages.ts` → Preview button, iframe, field and block annotations |
+| Workflow publishing                      | `pages.ts` → public reads use `stage: "published"`               |
 
 ## Related Pages
 

@@ -30,13 +30,12 @@ function BarberProfilePage() {
 	const barber = loaderData?.barber;
 	const router = useRouter();
 
-	const { data, isPreviewMode, focusedField, handleFieldClick } =
-		useCollectionPreview({
-			initialData: barber,
-			onRefresh: () => router.invalidate(),
-		});
+	const preview = useCollectionPreview({
+		initialData: barber,
+		onRefresh: () => router.invalidate(),
+	});
 
-	const previewBarber = data as typeof barber;
+	const previewBarber = preview.data as typeof barber;
 
 	const formatPrice = (cents: number) => {
 		return new Intl.NumberFormat("en-US", {
@@ -46,12 +45,12 @@ function BarberProfilePage() {
 	};
 
 	return (
-		<PreviewProvider
-			isPreviewMode={isPreviewMode}
-			focusedField={focusedField}
-			onFieldClick={handleFieldClick}
-		>
-			<div className={isPreviewMode ? "preview-mode px-6 py-20" : "px-6 py-20"}>
+		<PreviewProvider preview={preview}>
+			<div
+				className={
+					preview.isPreviewMode ? "preview-mode px-6 py-20" : "px-6 py-20"
+				}
+			>
 				<div className="container mx-auto max-w-5xl">
 					{/* Back Link */}
 					<Link
@@ -94,6 +93,7 @@ function BarberProfilePage() {
 							<section>
 								<PreviewField
 									field="name"
+									editable="text"
 									as="h1"
 									className="mb-4 text-4xl font-bold tracking-tight md:text-5xl"
 								>
@@ -142,25 +142,43 @@ function BarberProfilePage() {
 									<span className="text-muted-foreground text-xs font-bold tracking-widest uppercase">
 										Email
 									</span>
-									<a
-										href={`mailto:${previewBarber.email}`}
-										className="hover:text-highlight flex items-center gap-2 font-medium transition-colors"
-									>
-										<Icon icon="ph:envelope-simple" className="size-5" />
-										{previewBarber.email}
-									</a>
+									{preview.isPreviewMode ? (
+										<span className="flex items-center gap-2 font-medium">
+											<Icon icon="ph:envelope-simple" className="size-5" />
+											<PreviewField field="email" editable="text" as="span">
+												{previewBarber.email}
+											</PreviewField>
+										</span>
+									) : (
+										<a
+											href={`mailto:${previewBarber.email}`}
+											className="hover:text-highlight flex items-center gap-2 font-medium transition-colors"
+										>
+											<Icon icon="ph:envelope-simple" className="size-5" />
+											{previewBarber.email}
+										</a>
+									)}
 								</PreviewField>
 								<PreviewField field="phone" className="space-y-1">
 									<span className="text-muted-foreground text-xs font-bold tracking-widest uppercase">
 										Phone
 									</span>
-									<a
-										href={`tel:${previewBarber.phone}`}
-										className="hover:text-highlight flex items-center gap-2 font-medium transition-colors"
-									>
-										<Icon icon="ph:phone" className="size-5" />
-										{previewBarber.phone}
-									</a>
+									{preview.isPreviewMode ? (
+										<span className="flex items-center gap-2 font-medium">
+											<Icon icon="ph:phone" className="size-5" />
+											<PreviewField field="phone" editable="text" as="span">
+												{previewBarber.phone}
+											</PreviewField>
+										</span>
+									) : (
+										<a
+											href={`tel:${previewBarber.phone}`}
+											className="hover:text-highlight flex items-center gap-2 font-medium transition-colors"
+										>
+											<Icon icon="ph:phone" className="size-5" />
+											{previewBarber.phone}
+										</a>
+									)}
 								</PreviewField>
 							</section>
 
@@ -212,7 +230,7 @@ function BarberProfilePage() {
 								</PreviewField>
 							)}
 
-							{isPreviewMode && (
+							{preview.isPreviewMode && (
 								<div className="bg-highlight text-highlight-foreground fixed right-4 bottom-4 z-50 rounded-full px-4 py-2 text-sm font-medium shadow-lg">
 									Preview Mode - Click fields to edit
 								</div>

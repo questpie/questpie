@@ -19,9 +19,8 @@ export const getPage = createServerFn({ method: "GET" })
 
 		const page = await app.collections.pages.findOne(
 			{
-				where: isDraft
-					? { slug: data.slug }
-					: { slug: data.slug, isPublished: true },
+				where: { slug: data.slug },
+				...(isDraft ? {} : { stage: "published" }),
 			},
 			ctx,
 		);
@@ -39,7 +38,6 @@ export const getPage = createServerFn({ method: "GET" })
 				content: page.content,
 				metaTitle: page.metaTitle,
 				metaDescription: page.metaDescription,
-				isPublished: page.isPublished,
 			},
 		};
 	});

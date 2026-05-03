@@ -5,7 +5,7 @@
  */
 
 import { Icon } from "@iconify/react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 
 import {
 	getSiteSettings,
@@ -136,6 +136,7 @@ function ContactPage() {
 									allowFullScreen
 									loading="lazy"
 									referrerPolicy="no-referrer-when-downgrade"
+									sandbox="allow-scripts allow-popups"
 									title="Location Map"
 								/>
 							</div>
@@ -186,12 +187,12 @@ function ContactPage() {
 							<p className="text-muted-foreground mb-6 text-sm italic">
 								{t("contact.holidayNote")}
 							</p>
-							<a
-								href="/booking"
+							<Link
+								to="/booking"
 								className="bg-foreground text-background hover:bg-highlight hover:text-highlight-foreground inline-block w-full py-4 text-lg font-bold transition-all duration-300"
 							>
 								{t("cta.bookNow")}
-							</a>
+							</Link>
 						</div>
 					</div>
 				</div>

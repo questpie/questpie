@@ -9,6 +9,8 @@
 
 import { Icon } from "@iconify/react";
 
+import { PreviewField } from "@questpie/admin/client";
+
 import { buttonVariants } from "../../../components/ui/button";
 import { cn } from "../../../lib/utils";
 import type { BlockProps } from "../.generated/client";
@@ -50,14 +52,24 @@ export function HeroRenderer({ values, data, children }: BlockProps<"hero">) {
 					alignClass,
 				)}
 			>
-				<h1 className="animate-fade-in-up max-w-4xl text-4xl leading-[1.1] font-bold tracking-tight text-white sm:text-5xl md:text-6xl lg:text-7xl">
+				<PreviewField
+					field="title"
+					editable="text"
+					as="h1"
+					className="animate-fade-in-up max-w-4xl text-4xl leading-[1.1] font-bold tracking-tight text-white sm:text-5xl md:text-6xl lg:text-7xl"
+				>
 					{values.title}
-				</h1>
+				</PreviewField>
 
 				{values.subtitle && (
-					<p className="animate-fade-in-up max-w-2xl text-lg text-white/85 [animation-delay:100ms] sm:text-xl md:text-2xl">
+					<PreviewField
+						field="subtitle"
+						editable="textarea"
+						as="p"
+						className="animate-fade-in-up max-w-2xl text-lg text-white/85 [animation-delay:100ms] sm:text-xl md:text-2xl"
+					>
 						{values.subtitle}
-					</p>
+					</PreviewField>
 				)}
 
 				{values.ctaText && (
@@ -70,7 +82,9 @@ export function HeroRenderer({ values, data, children }: BlockProps<"hero">) {
 							"text-base font-semibold",
 						)}
 					>
-						{values.ctaText}
+						<PreviewField field="ctaText" editable="text" as="span">
+							{values.ctaText}
+						</PreviewField>
 						<Icon
 							icon="ph:arrow-right-bold"
 							className="size-5 transition-transform group-hover:translate-x-1"

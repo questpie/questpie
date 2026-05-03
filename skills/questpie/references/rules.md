@@ -88,6 +88,49 @@ Access functions receive `AppContext` with these properties:
 | `session`     | Current auth session (null if unauthed) |
 | `db`          | Database instance                       |
 | `collections` | Typed collection API                    |
+| `request`     | Current HTTP `Request` (headers, URL)   |
+
+Access functions may be async. Use `request` for request-scoped checks such as headers, tenant scope, CAPTCHA tokens, or signed public form tokens:
+
+```ts
+import { ApiError } from "questpie";
+import { isAdminRequest } from "@questpie/admin/shared";
+
+type AccessCtx = {
+	request?: Request | null;
+	session?: { user?: unknown | null } | null;
+};
+
+async function canCreatePublicSubmission({ request, session }: AccessCtx) {
+	if (session?.user) return true;
+	if (request && isAdminRequest(request)) {
+		throw ApiError.unauthorized();
+	}
+
+	const token = request?.headers.get("x-captcha-token");
+	const valid = token ? await verifyCaptchaToken(token) : false;
+	if (valid) return true;
+
+	throw ApiError.forbidden({
+		operation: "create",
+		resource: "public_submissions",
+		reason: "CAPTCHA verification failed",
+	});
+}
+
+export default collection("public_submissions")
+	.fields(({ f }) => ({
+		message: f.textarea().required(),
+	}))
+	.access({
+		read: false,
+		create: canCreatePublicSubmission,
+	});
+```
+
+For public anti-abuse checks, bypass already authenticated users before requiring a CAPTCHA token. Admin-origin requests should not be asked for CAPTCHA either, but remember that `isAdminRequest()` is a caller-intent signal, not authentication; if an admin-origin request reaches this rule without a session, fail it as unauthorized instead of accepting it.
+
+Prefer throwing `ApiError.*` from access rules when callers need a specific structured error response. Returning `false` is fine for generic denial, but it produces the default forbidden message.
 
 ### System Access Mode
 

@@ -5,6 +5,8 @@
  * Design: Responsive masonry-style grid with lightbox support.
  */
 
+import { PreviewField } from "@questpie/admin/client";
+
 import { cn } from "../../../lib/utils";
 import type { BlockProps } from "../.generated/client";
 
@@ -28,9 +30,14 @@ export function GalleryRenderer({ values, data }: BlockProps<"gallery">) {
 		<section className="px-6 py-20">
 			<div className="container">
 				{values.title && (
-					<h2 className="mb-12 text-center text-3xl font-bold tracking-tight sm:text-4xl">
+					<PreviewField
+						field="title"
+						editable="text"
+						as="h2"
+						className="mb-12 text-center text-3xl font-bold tracking-tight sm:text-4xl"
+					>
 						{values.title}
-					</h2>
+					</PreviewField>
 				)}
 
 				<div className={cn("grid grid-cols-1", columnsClass, gapClass)}>

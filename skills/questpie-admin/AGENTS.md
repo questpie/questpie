@@ -213,9 +213,9 @@ The admin renders drag-and-drop upload, image preview, file info, and remove but
 
 ## Live Preview
 
-Live Preview uses a split-screen iframe. The current implementation refreshes the iframe after save/autosave and uses `postMessage` for field/block focus sync.
+Live Preview is one system: the existing collection `FormView`, Preview button, `LivePreviewMode`, and frontend iframe. Preserve the normal form lifecycle. Do not introduce a separate visual-edit form API, a second default form view, or a parallel preview surface.
 
-Preview V2 patch-based docs are design notes until `useQuestpiePreview`, `PreviewRoot`, and `PreviewBlock` are exported.
+The admin form is authoritative. The iframe mirrors form state through `postMessage`, supports field/block focus, and may request inline scalar edits. Persistence still goes through existing save, autosave, Cmd+S, history, workflow, locks, and actions.
 
 ### Server Config
 
@@ -239,35 +239,57 @@ export const pages = collection("pages")
 	});
 ```
 
-Current preview refreshes the iframe after save/autosave and supports field focus through `postMessage`.
+Preview opens the existing split-screen editor. Patches and refresh/resync messages update the iframe mirror; save/autosave still writes through the form.
 
-### Frontend Integration
+### Prepare a Frontend Page
 
-Use `useCollectionPreview` with `PreviewProvider` and `PreviewField`:
+Use exported APIs only: `useCollectionPreview`, `PreviewProvider`, `PreviewField`, and `BlockRenderer`.
+
+Checklist:
+
+1. Configure `.preview({ url })` on the collection.
+2. Load the same record shape the page normally renders.
+3. For workflow-published pages, public reads use `stage: "published"`; authorized preview/draft reads can load the working record.
+4. Call `useCollectionPreview({ initialData, onRefresh })` in the page renderer.
+5. Wrap the visual output in `PreviewProvider`.
+6. Render from `preview.data`, not the original loader object.
+7. Wrap editable scalar text with `PreviewField field="..." editable="text" | "textarea"`.
+8. Render block content with `BlockRenderer`; pass `selectedBlockId` and `onBlockClick`.
+9. Keep add/remove/reorder/nesting block operations in the existing block editor.
 
 ```tsx
 import {
+	BlockRenderer,
 	PreviewField,
 	PreviewProvider,
 	useCollectionPreview,
 } from "@questpie/admin/client";
+import admin from "@/questpie/admin/.generated/client";
 
-function PagePreview({ initialData }) {
+function PagePreview({ page }) {
 	const router = useRouter();
 	const preview = useCollectionPreview({
-		initialData,
+		initialData: page,
 		onRefresh: () => router.invalidate(),
 	});
 
 	return (
-		<PreviewProvider
-			isPreviewMode={preview.isPreviewMode}
-			focusedField={preview.focusedField}
-			onFieldClick={preview.handleFieldClick}
-		>
-			<PreviewField field="title" as="h1">
-				{preview.data.title}
-			</PreviewField>
+		<PreviewProvider preview={preview}>
+			<main className={preview.isPreviewMode ? "questpie-preview" : undefined}>
+				<PreviewField field="title" editable="text" as="h1">
+					{preview.data.title}
+				</PreviewField>
+
+				<BlockRenderer
+					content={preview.data.content}
+					data={preview.data.content?._data}
+					renderers={admin.blocks}
+					selectedBlockId={preview.selectedBlockId}
+					onBlockClick={
+						preview.isPreviewMode ? preview.handleBlockClick : undefined
+					}
+				/>
+			</main>
 		</PreviewProvider>
 	);
 }
@@ -275,11 +297,15 @@ function PagePreview({ initialData }) {
 
 ### Key Principles
 
-- Current preview = save/autosave refresh plus field/block focus sync
-- `useCollectionPreview` sends `PREVIEW_READY`, `FIELD_CLICKED`, and `BLOCK_CLICKED`
+- Keep `FormView`, the Preview button, and `LivePreviewMode`
+- Never add a separate visual-edit form API, a second default form view, or parallel preview API names
+- Preserve save/autosave/Cmd+S/history/workflow/locks/actions
+- `useCollectionPreview` handles preview mode, mirrored data, refresh/resync, and focus state
 - `PreviewProvider` supplies preview context to `PreviewField`
-- Each message carries `sessionId`, `seq`, `timestamp`, `protocolVersion`
-- Preview wrappers must prevent accidental navigation in the iframe
+- `PreviewField` annotates scalar fields and can opt into inline editing with `editable`
+- `BlockRenderer` preserves block IDs and block scopes for block annotations
+- Use `BlockScopeProvider` only for custom/manual block rendering outside `BlockRenderer`
+- Validate all iframe messages before updating form state
 
 ## History & Versions
 
@@ -560,7 +586,7 @@ Section-level visibility:
 {
   type: "section",
   label: { en: "SEO" },
-  hidden: ({ data }) => !data.isPublished,
+  hidden: ({ data }) => !data.showSeo,
   fields: [f.metaTitle, f.metaDescription],
 }
 ```
@@ -803,7 +829,7 @@ export const logs = collection("logs")
 
 ## Form Views and Live Preview
 
-Form views connect to the Live Preview V2 system when the collection has `.preview()` configured. The form editor becomes the source of `postMessage` patches — every field change emits a patch through the bus, giving the preview iframe instant updates.
+Form views connect to the existing Live Preview system when the collection has `.preview()` configured. Keep `v.collectionForm()` as the form surface; do not introduce a separate visual-edit form API, a second default form view, or parallel preview API names. The form editor remains the source of patches, refreshes, commits, and resyncs.
 
 ### Enabling Preview on a Collection
 
@@ -827,9 +853,25 @@ export const pages = collection("pages")
 ### How It Works
 
 1. The form view detects `.preview()` config and opens a split-screen layout
-2. Save/autosave sends a `PREVIEW_REFRESH` message to the preview iframe
-3. The preview page handles refreshes through `useCollectionPreview({ initialData, onRefresh })`
-4. `PreviewProvider` and `PreviewField` wire field focus and click-to-focus messages
+2. The preview iframe mirrors form state with snapshot, patch, refresh, commit, and resync messages
+3. Save/autosave/Cmd+S/history/workflow/locks/actions stay in the form lifecycle
+4. The preview page uses `useCollectionPreview({ initialData, onRefresh })`
+5. `PreviewProvider`, `PreviewField`, and `BlockRenderer` wire field and block annotations
+
+### Frontend Preparation Checklist
+
+Use this checklist before expecting visual editing to work:
+
+1. The collection has `.preview({ url })`.
+2. The page loader returns the complete rendered record shape.
+3. Public workflow reads use `stage: "published"`; preview/draft-mode reads load the working record for authorized editors.
+4. The page renderer calls `useCollectionPreview({ initialData, onRefresh })`.
+5. The rendered page is wrapped in `PreviewProvider preview={preview}`.
+6. UI reads from `preview.data`, not directly from loader data.
+7. Scalar text uses `PreviewField field="..." editable="text" | "textarea"` when inline editing is expected.
+8. Blocks render through `BlockRenderer` with `selectedBlockId` and `onBlockClick`.
+9. `BlockScopeProvider` is only needed for custom/manual block rendering outside `BlockRenderer`.
+10. Add/remove/reorder/nesting block operations stay in the existing block editor.
 
 ---
 
@@ -1111,11 +1153,35 @@ function PageRenderer({ page }) {
 
 ## Blocks in Live Preview
 
-When a collection has `.preview()` configured, blocks can participate in preview focus by combining `BlockScopeProvider` with `PreviewField`.
+When a collection has `.preview()` configured, blocks participate in the existing Live Preview system through `BlockRenderer` and `PreviewField`. The form remains authoritative; block annotations only mirror values, focus fields, select blocks, or request inline scalar edits.
 
-### BlockScopeProvider Wrapper
+### Preferred: BlockRenderer
 
-Use `BlockScopeProvider` in your frontend to scope field paths inside a block:
+Use `BlockRenderer` for normal frontend page rendering. It preserves `data-block-id`, routes block selection, and scopes nested `PreviewField` paths automatically.
+
+```tsx
+<BlockRenderer
+	content={preview.data.content}
+	data={preview.data.content?._data}
+	renderers={admin.blocks}
+	selectedBlockId={preview.selectedBlockId}
+	onBlockClick={preview.isPreviewMode ? preview.handleBlockClick : undefined}
+/>
+```
+
+Inside custom block renderers, annotate scalar values with `PreviewField`:
+
+```tsx
+<PreviewField field="title" editable="text" as="h2">
+	{values.title}
+</PreviewField>
+```
+
+This resolves to `content._values.{blockId}.title` when rendered inside `BlockRenderer`.
+
+### Manual BlockScopeProvider Wrapper
+
+Use `BlockScopeProvider` only when you manually render blocks outside `BlockRenderer`:
 
 ```tsx
 import { BlockScopeProvider } from "@questpie/admin/client";
@@ -1134,7 +1200,7 @@ function PageRenderer({ blocks, previewData }) {
 
 `PreviewField` components inside the provider resolve paths like `content._values.{blockId}.title`.
 
-Blocks with declarative prefetch (`{ with: { image: true } }`) resolve relations during reconcile — the preview shows the image URL immediately after the server round-trip completes, not just the asset ID.
+Inline block edits target `_values`, for example `content._values.<blockId>.title`. Tree edits such as add, remove, reorder, and nesting stay in the existing block editor and should trigger refresh or resync when patching is not safe.
 
 ---
 

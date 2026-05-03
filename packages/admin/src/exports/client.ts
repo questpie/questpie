@@ -125,13 +125,21 @@ export {
 export type {
 	AdminToPreviewMessage,
 	BlockClickedMessage,
+	CommitMessage,
 	FieldClickedMessage,
+	FieldValueEditedMessage,
 	FocusFieldMessage,
+	FullResyncMessage,
+	InitSnapshotMessage,
+	PatchAppliedMessage,
+	PatchBatchMessage,
 	PreviewConfig,
+	PreviewPatchOp,
 	PreviewReadyMessage,
 	PreviewRefreshMessage,
 	PreviewToAdminMessage,
 	RefreshCompleteMessage,
+	ResyncRequestMessage,
 	SelectBlockMessage,
 } from "#questpie/admin/client/preview/index.js";
 // Frontend preview components

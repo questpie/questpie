@@ -1,13 +1,22 @@
 import { notFound } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { getRequestHeaders } from "@tanstack/react-start/server";
+import { z } from "zod";
 
 import { app } from "#questpie";
 import { createRequestContext } from "@/lib/server-helpers";
 import { isDraftMode } from "@questpie/admin/shared";
 
+const localeInputSchema = z
+	.object({ locale: z.string().optional() })
+	.optional();
+const slugInputSchema = z.object({
+	slug: z.string().min(1),
+	locale: z.string().optional(),
+});
+
 export const getBlogPost = createServerFn({ method: "GET" })
-	.inputValidator((data: { slug: string; locale?: string }) => data)
+	.inputValidator((data) => slugInputSchema.parse(data))
 	.handler(async ({ data }) => {
 		const headers = getRequestHeaders();
 		const cookie = headers.get("cookie");
@@ -57,7 +66,7 @@ export const getBlogPost = createServerFn({ method: "GET" })
 	});
 
 export const getAllBlogPosts = createServerFn({ method: "GET" })
-	.inputValidator((data: { locale?: string } | undefined) => data)
+	.inputValidator((data) => localeInputSchema.parse(data))
 	.handler(async ({ data }) => {
 		const ctx = await createRequestContext(data?.locale);
 

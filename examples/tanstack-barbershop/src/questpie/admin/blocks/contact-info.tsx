@@ -7,6 +7,8 @@
 
 import { Icon } from "@iconify/react";
 
+import { PreviewField } from "@questpie/admin/client";
+
 import { useTranslation } from "../../../lib/providers/locale-provider";
 import { cn } from "../../../lib/utils";
 import type { BlockProps } from "../.generated/client";
@@ -32,9 +34,14 @@ export function ContactInfoRenderer({
 		<section className="px-6 py-20">
 			<div className="container">
 				{values.title && (
-					<h2 className="mb-12 text-center text-3xl font-bold tracking-tight sm:text-4xl">
+					<PreviewField
+						field="title"
+						editable="text"
+						as="h2"
+						className="mb-12 text-center text-3xl font-bold tracking-tight sm:text-4xl"
+					>
 						{values.title}
-					</h2>
+					</PreviewField>
 				)}
 
 				<div

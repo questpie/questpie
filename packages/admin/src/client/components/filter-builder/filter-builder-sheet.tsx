@@ -79,6 +79,7 @@ function viewConfigEqual(a: ViewConfiguration, b: ViewConfiguration): boolean {
 
 // Module-level constant for empty array to avoid recreating on each render
 const EMPTY_SAVED_VIEWS: SavedView[] = [];
+const EMPTY_GROUPABLE_FIELDS: AvailableField[] = [];
 
 function normalizeSavedViewConfig(
 	config: ViewConfiguration,
@@ -159,7 +160,7 @@ export function FilterBuilderSheet({
 	onSaveView,
 	onDeleteView,
 	supportsSoftDelete = false,
-	groupableFields = [],
+	groupableFields = EMPTY_GROUPABLE_FIELDS,
 	defaultGroupBy = null,
 }: FilterBuilderSheetProps) {
 	const resolvedSavedViews = savedViews ?? EMPTY_SAVED_VIEWS;

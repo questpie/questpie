@@ -161,7 +161,7 @@ Section-level visibility:
 {
   type: "section",
   label: { en: "SEO" },
-  hidden: ({ data }) => !data.isPublished,
+  hidden: ({ data }) => !data.showSeo,
   fields: [f.metaTitle, f.metaDescription],
 }
 ```
@@ -404,7 +404,7 @@ export const logs = collection("logs")
 
 ## Form Views and Live Preview
 
-Form views connect to the Live Preview V2 system when the collection has `.preview()` configured. The form editor becomes the source of `postMessage` patches — every field change emits a patch through the bus, giving the preview iframe instant updates.
+Form views connect to the existing Live Preview system when the collection has `.preview()` configured. Keep `v.collectionForm()` as the form surface; do not introduce a separate visual-edit form API, a second default form view, or parallel preview API names. The form editor remains the source of patches, refreshes, commits, and resyncs.
 
 ### Enabling Preview on a Collection
 
@@ -428,6 +428,22 @@ export const pages = collection("pages")
 ### How It Works
 
 1. The form view detects `.preview()` config and opens a split-screen layout
-2. Save/autosave sends a `PREVIEW_REFRESH` message to the preview iframe
-3. The preview page handles refreshes through `useCollectionPreview({ initialData, onRefresh })`
-4. `PreviewProvider` and `PreviewField` wire field focus and click-to-focus messages
+2. The preview iframe mirrors form state with snapshot, patch, refresh, commit, and resync messages
+3. Save/autosave/Cmd+S/history/workflow/locks/actions stay in the form lifecycle
+4. The preview page uses `useCollectionPreview({ initialData, onRefresh })`
+5. `PreviewProvider`, `PreviewField`, and `BlockRenderer` wire field and block annotations
+
+### Frontend Preparation Checklist
+
+Use this checklist before expecting visual editing to work:
+
+1. The collection has `.preview({ url })`.
+2. The page loader returns the complete rendered record shape.
+3. Public workflow reads use `stage: "published"`; preview/draft-mode reads load the working record for authorized editors.
+4. The page renderer calls `useCollectionPreview({ initialData, onRefresh })`.
+5. The rendered page is wrapped in `PreviewProvider preview={preview}`.
+6. UI reads from `preview.data`, not directly from loader data.
+7. Scalar text uses `PreviewField field="..." editable="text" | "textarea"` when inline editing is expected.
+8. Blocks render through `BlockRenderer` with `selectedBlockId` and `onBlockClick`.
+9. `BlockScopeProvider` is only needed for custom/manual block rendering outside `BlockRenderer`.
+10. Add/remove/reorder/nesting block operations stay in the existing block editor.

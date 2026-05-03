@@ -5,6 +5,8 @@
  * Design: Bold typography with consistent spacing.
  */
 
+import { PreviewField } from "@questpie/admin/client";
+
 import { cn } from "../../../lib/utils";
 import type { BlockProps } from "../.generated/client";
 
@@ -33,7 +35,10 @@ export function HeadingRenderer({ values }: BlockProps<"heading">) {
 
 	return (
 		<section className={cn("px-6", paddingClass)}>
-			<Tag
+			<PreviewField
+				field="text"
+				editable="text"
+				as={Tag}
 				className={cn(
 					"font-bold tracking-tight",
 					"text-foreground",
@@ -42,7 +47,7 @@ export function HeadingRenderer({ values }: BlockProps<"heading">) {
 				)}
 			>
 				{values.text || "Heading"}
-			</Tag>
+			</PreviewField>
 		</section>
 	);
 }

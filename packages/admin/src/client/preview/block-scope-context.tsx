@@ -61,17 +61,11 @@ export function BlockScopeProvider({
 	basePath = "content._values",
 	children,
 }: BlockScopeProviderProps) {
-	const parentScope = React.useContext(BlockScopeContext);
-
-	// Build field prefix based on parent scope
+	// Block values are keyed globally by block id under the blocks field, even
+	// when blocks are nested in the tree.
 	const fieldPrefix = React.useMemo(() => {
-		if (parentScope) {
-			// Nested block: append to parent prefix
-			return `${parentScope.fieldPrefix}.${blockId}`;
-		}
-		// Top-level block: use basePath
 		return `${basePath}.${blockId}`;
-	}, [parentScope, basePath, blockId]);
+	}, [basePath, blockId]);
 
 	const value = React.useMemo<BlockScopeContextValue>(
 		() => ({

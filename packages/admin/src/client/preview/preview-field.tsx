@@ -21,12 +21,16 @@ export type PreviewFieldProps = {
 	field: string;
 	/** Field type for routing (regular, block, or relation) */
 	fieldType?: "regular" | "block" | "relation";
+	/** Enable inline scalar editing in preview mode */
+	editable?: "text" | "textarea";
 	/** Content to render */
 	children: React.ReactNode;
 	/** HTML element type */
 	as?: React.ElementType;
 	/** Additional class names */
 	className?: string;
+	/** Inline styles for the rendered element */
+	style?: React.CSSProperties;
 	/** Click handler (uses context by default) */
 	onClick?: (
 		fieldPath: string,
@@ -35,6 +39,16 @@ export type PreviewFieldProps = {
 			fieldType?: "regular" | "block" | "relation";
 		},
 	) => void;
+	/** Inline edit commit handler (uses context/default postMessage by default) */
+	onValueCommit?: (payload: PreviewFieldValueEditedPayload) => void;
+};
+
+export type PreviewFieldValueEditedPayload = {
+	path: string;
+	value: unknown;
+	inputKind: "text" | "textarea" | "number" | "boolean";
+	blockId?: string;
+	fieldType?: "regular" | "block" | "relation";
 };
 
 // ============================================================================
@@ -50,6 +64,7 @@ type PreviewContextValue = {
 			fieldType?: "regular" | "block" | "relation";
 		},
 	) => void;
+	handleFieldValueEdited?: (payload: PreviewFieldValueEditedPayload) => void;
 	focusedField: string | null;
 };
 
@@ -60,29 +75,41 @@ const PreviewContext = React.createContext<PreviewContextValue | null>(null);
  * Use this at the root of your preview page.
  */
 export function PreviewProvider({
+	preview,
 	isPreviewMode,
 	focusedField,
 	onFieldClick,
+	onFieldValueEdited,
 	children,
 }: {
-	isPreviewMode: boolean;
-	focusedField: string | null;
-	onFieldClick: (
+	preview?: {
+		isPreviewMode: boolean;
+		focusedField: string | null;
+		handleFieldClick: PreviewContextValue["handleFieldClick"];
+		handleFieldValueEdited?: PreviewContextValue["handleFieldValueEdited"];
+	};
+	isPreviewMode?: boolean;
+	focusedField?: string | null;
+	onFieldClick?: (
 		fieldPath: string,
 		context?: {
 			blockId?: string;
 			fieldType?: "regular" | "block" | "relation";
 		},
 	) => void;
+	onFieldValueEdited?: (payload: PreviewFieldValueEditedPayload) => void;
 	children: React.ReactNode;
 }) {
 	const value = React.useMemo(
 		() => ({
-			isPreviewMode,
-			focusedField,
-			handleFieldClick: onFieldClick,
+			isPreviewMode: preview?.isPreviewMode ?? isPreviewMode ?? false,
+			focusedField: preview?.focusedField ?? focusedField ?? null,
+			handleFieldClick:
+				preview?.handleFieldClick ?? onFieldClick ?? (() => undefined),
+			handleFieldValueEdited:
+				preview?.handleFieldValueEdited ?? onFieldValueEdited,
 		}),
-		[isPreviewMode, focusedField, onFieldClick],
+		[preview, isPreviewMode, focusedField, onFieldClick, onFieldValueEdited],
 	);
 
 	return (
@@ -128,10 +155,13 @@ export function usePreviewContext(): PreviewContextValue | null {
 export function PreviewField({
 	field,
 	fieldType = "regular",
+	editable,
 	children,
 	as: Component = "div",
 	className,
+	style,
 	onClick,
+	onValueCommit,
 }: PreviewFieldProps) {
 	const context = usePreviewContext();
 	const blockScope = useBlockScope();
@@ -139,42 +169,28 @@ export function PreviewField({
 
 	// If no context or not in preview mode, just render normally
 	if (!context?.isPreviewMode) {
-		return <Component className={className}>{children}</Component>;
+		return (
+			<Component className={className} style={style}>
+				{children}
+			</Component>
+		);
 	}
 
-	const { handleFieldClick, focusedField } = context;
-	const isFocused = focusedField === fullPath;
-
-	const handleClick = (e: React.MouseEvent) => {
-		e.stopPropagation();
-		if (onClick) {
-			onClick(fullPath, {
-				blockId: blockScope?.blockId,
-				fieldType,
-			});
-		} else {
-			handleFieldClick(fullPath, {
-				blockId: blockScope?.blockId,
-				fieldType,
-			});
-		}
-	};
-
 	return (
-		<Component
-			data-preview-field={fullPath}
-			data-block-id={blockScope?.blockId}
-			data-field-type={fieldType}
-			onClick={handleClick}
-			className={cn(
-				className,
-				"group relative cursor-pointer transition-[outline-color,outline-offset] duration-150",
-				"hover:outline-primary/60 hover:hover:outline hover:outline-2 hover:outline-offset-2 hover:outline-dashed",
-				isFocused && "outline-primary outline outline-2 outline-offset-2",
-			)}
+		<PreviewFieldElement
+			Component={Component}
+			blockId={blockScope?.blockId}
+			className={className}
+			editable={editable}
+			fieldType={fieldType}
+			fullPath={fullPath}
+			isFocused={context.focusedField === fullPath}
+			onClick={onClick ?? context.handleFieldClick}
+			onValueCommit={onValueCommit ?? context.handleFieldValueEdited}
+			style={style}
 		>
 			{children}
-		</Component>
+		</PreviewFieldElement>
 	);
 }
 
@@ -185,12 +201,15 @@ export function PreviewField({
 export function StandalonePreviewField({
 	field,
 	fieldType = "regular",
+	editable,
 	children,
 	as: Component = "div",
 	className,
+	style,
 	isPreviewMode,
 	isFocused,
 	onFieldClick,
+	onValueCommit,
 }: PreviewFieldProps & {
 	isPreviewMode: boolean;
 	isFocused?: boolean;
@@ -206,31 +225,282 @@ export function StandalonePreviewField({
 	const fullPath = useResolveFieldPath(field);
 
 	if (!isPreviewMode) {
-		return <Component className={className}>{children}</Component>;
+		return (
+			<Component className={className} style={style}>
+				{children}
+			</Component>
+		);
 	}
 
-	const handleClick = (e: React.MouseEvent) => {
-		e.stopPropagation();
-		onFieldClick(fullPath, {
-			blockId: blockScope?.blockId,
+	return (
+		<PreviewFieldElement
+			Component={Component}
+			blockId={blockScope?.blockId}
+			className={className}
+			editable={editable}
+			fieldType={fieldType}
+			fullPath={fullPath}
+			isFocused={!!isFocused}
+			onClick={onFieldClick}
+			onValueCommit={onValueCommit}
+			style={style}
+		>
+			{children}
+		</PreviewFieldElement>
+	);
+}
+
+function PreviewFieldElement({
+	Component,
+	blockId,
+	children,
+	className,
+	editable,
+	fieldType,
+	fullPath,
+	isFocused,
+	onClick,
+	onValueCommit,
+	style,
+}: {
+	Component: React.ElementType;
+	blockId?: string;
+	children: React.ReactNode;
+	className?: string;
+	editable?: "text" | "textarea";
+	fieldType: "regular" | "block" | "relation";
+	fullPath: string;
+	isFocused: boolean;
+	onClick: PreviewContextValue["handleFieldClick"];
+	onValueCommit?: (payload: PreviewFieldValueEditedPayload) => void;
+	style?: React.CSSProperties;
+}) {
+	const [isEditing, setIsEditing] = React.useState(false);
+	const [draftValue, setDraftValue] = React.useState("");
+	const [isHovered, setIsHovered] = React.useState(false);
+	const [hasDomFocus, setHasDomFocus] = React.useState(false);
+	const inputRef = React.useRef<HTMLInputElement | HTMLTextAreaElement>(null);
+	const isEditable = editable === "text" || editable === "textarea";
+	const shouldShowAffordance =
+		isHovered || hasDomFocus || isFocused || isEditing;
+	const previewRingColor = "var(--ring, var(--highlight, #b700ff))";
+
+	const previewStyle = React.useMemo<React.CSSProperties>(
+		() => ({
+			outlineColor: shouldShowAffordance ? previewRingColor : "transparent",
+			outlineOffset: "2px",
+			outlineStyle: "solid",
+			outlineWidth: "2px",
+			boxShadow: shouldShowAffordance
+				? `0 0 0 ${isEditing ? 5 : 4}px color-mix(in srgb, ${previewRingColor} ${isEditing ? 24 : 16}%, transparent)`
+				: undefined,
+			borderRadius: "2px",
+			cursor: isEditable ? "text" : "pointer",
+			transition:
+				"outline-color 150ms ease, box-shadow 150ms ease, background-color 150ms ease",
+			...style,
+		}),
+		[isEditable, isEditing, shouldShowAffordance, style],
+	);
+
+	React.useEffect(() => {
+		if (isEditing) {
+			inputRef.current?.focus();
+			inputRef.current?.select();
+		}
+	}, [isEditing]);
+
+	const startEditing = React.useCallback(() => {
+		if (!isEditable) {
+			return;
+		}
+
+		setDraftValue(childrenToEditableValue(children));
+		setIsEditing(true);
+	}, [children, isEditable]);
+
+	const routeClick = React.useCallback(() => {
+		onClick(fullPath, {
+			blockId,
 			fieldType,
 		});
+	}, [blockId, fieldType, fullPath, onClick]);
+
+	const commitEdit = React.useCallback(() => {
+		if (!isEditing || !editable) {
+			return;
+		}
+
+		const payload = {
+			path: fullPath,
+			value: draftValue,
+			inputKind: editable,
+			blockId,
+			fieldType,
+		} satisfies PreviewFieldValueEditedPayload;
+
+		if (onValueCommit) {
+			onValueCommit(payload);
+		} else {
+			postFieldValueEdited(payload);
+		}
+
+		setIsEditing(false);
+	}, [
+		blockId,
+		draftValue,
+		editable,
+		fieldType,
+		fullPath,
+		isEditing,
+		onValueCommit,
+	]);
+
+	const cancelEdit = React.useCallback(() => {
+		setIsEditing(false);
+		setDraftValue(childrenToEditableValue(children));
+	}, [children]);
+
+	const handleClick = (event: React.MouseEvent) => {
+		event.preventDefault();
+		event.stopPropagation();
+		if (!isEditing) {
+			routeClick();
+		}
 	};
+
+	const handleDoubleClick = (event: React.MouseEvent) => {
+		event.preventDefault();
+		event.stopPropagation();
+		startEditing();
+	};
+
+	const handleKeyDown = (event: React.KeyboardEvent) => {
+		event.stopPropagation();
+
+		if (!isEditing) {
+			if (event.key === "Enter" && isEditable) {
+				event.preventDefault();
+				routeClick();
+				startEditing();
+			}
+			return;
+		}
+
+		if (event.key === "Escape") {
+			event.preventDefault();
+			cancelEdit();
+			return;
+		}
+
+		if (editable === "text" && event.key === "Enter") {
+			event.preventDefault();
+			commitEdit();
+			return;
+		}
+
+		if (
+			editable === "textarea" &&
+			event.key === "Enter" &&
+			(event.metaKey || event.ctrlKey)
+		) {
+			event.preventDefault();
+			commitEdit();
+		}
+	};
+
+	const editor =
+		editable === "textarea" ? (
+			<textarea
+				ref={inputRef as React.RefObject<HTMLTextAreaElement>}
+				value={draftValue}
+				onChange={(event) => setDraftValue(event.target.value)}
+				onBlur={commitEdit}
+				onClick={(event) => event.stopPropagation()}
+				onKeyDown={handleKeyDown}
+				className="min-h-[4lh] w-full resize-y bg-transparent p-0 [letter-spacing:inherit] text-inherit outline-none [font:inherit]"
+			/>
+		) : (
+			<input
+				ref={inputRef as React.RefObject<HTMLInputElement>}
+				type="text"
+				value={draftValue}
+				onChange={(event) => setDraftValue(event.target.value)}
+				onBlur={commitEdit}
+				onClick={(event) => event.stopPropagation()}
+				onKeyDown={handleKeyDown}
+				className="w-full bg-transparent p-0 [letter-spacing:inherit] text-inherit outline-none [font:inherit]"
+			/>
+		);
 
 	return (
 		<Component
 			data-preview-field={fullPath}
-			data-block-id={blockScope?.blockId}
+			data-block-id={blockId}
 			data-field-type={fieldType}
+			data-preview-editable={editable}
+			data-preview-editing={isEditing ? "true" : undefined}
+			tabIndex={0}
 			onClick={handleClick}
+			onDoubleClick={handleDoubleClick}
+			onKeyDown={handleKeyDown}
+			onMouseEnter={() => setIsHovered(true)}
+			onMouseLeave={() => setIsHovered(false)}
+			onFocus={() => setHasDomFocus(true)}
+			onBlur={() => setHasDomFocus(false)}
+			style={previewStyle}
 			className={cn(
 				className,
-				"group relative cursor-pointer transition-[outline-color,outline-offset] duration-150",
-				"hover:outline-primary/60 hover:hover:outline hover:outline-2 hover:outline-offset-2 hover:outline-dashed",
-				isFocused && "outline-primary outline outline-2 outline-offset-2",
+				"group/preview-field relative rounded-[2px] transition-[box-shadow,outline-color,outline-offset] duration-150",
+				"cursor-pointer outline outline-2 outline-offset-2 outline-transparent",
+				"hover:outline-primary/50 hover:shadow-[0_0_0_4px_hsl(var(--primary)/0.10)]",
+				"focus-visible:outline-primary/70 focus-visible:shadow-[0_0_0_4px_hsl(var(--primary)/0.12)]",
+				isEditable && "cursor-text",
+				isFocused &&
+					"outline-primary shadow-[0_0_0_4px_hsl(var(--primary)/0.14)]",
+				isEditing &&
+					"outline-primary bg-background/80 shadow-[0_0_0_4px_hsl(var(--primary)/0.18)]",
 			)}
 		>
-			{children}
+			{isEditing ? editor : children}
 		</Component>
+	);
+}
+
+function childrenToEditableValue(children: React.ReactNode): string {
+	if (
+		children === null ||
+		children === undefined ||
+		typeof children === "boolean"
+	) {
+		return "";
+	}
+
+	if (typeof children === "string" || typeof children === "number") {
+		return String(children);
+	}
+
+	if (Array.isArray(children)) {
+		return children.map(childrenToEditableValue).join("");
+	}
+
+	if (React.isValidElement<{ children?: React.ReactNode }>(children)) {
+		return childrenToEditableValue(children.props.children);
+	}
+
+	return "";
+}
+
+function postFieldValueEdited(payload: PreviewFieldValueEditedPayload) {
+	if (typeof window === "undefined" || !window.parent) {
+		return;
+	}
+
+	window.parent.postMessage(
+		{
+			type: "FIELD_VALUE_EDITED",
+			...payload,
+		},
+		"*",
 	);
 }
