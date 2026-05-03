@@ -3,6 +3,7 @@
 import { Command } from "commander";
 
 import { addCommand } from "./commands/add.js";
+import { cloudDeployCommand } from "./commands/cloud.js";
 import { devCommand, generateCommand } from "./commands/codegen.js";
 import { generateMigrationCommand } from "./commands/generate.js";
 import { pushCommand } from "./commands/push.js";
@@ -13,6 +14,55 @@ import { parsePositiveIntegerOption } from "./utils.js";
 const program = new Command();
 
 program.name("questpie").description("QUESTPIE CLI").version("1.0.0");
+
+function collectStringOption(value: string, previous: string[]) {
+	return [...previous, value];
+}
+
+// QUESTPIE Cloud commands
+const cloudProgram = program
+	.command("cloud")
+	.description("QUESTPIE Cloud deployment commands");
+
+cloudProgram
+	.command("deploy")
+	.description("Build and deploy the current project to QUESTPIE Cloud")
+	.option("--cwd <path>", "Project directory", process.cwd())
+	.option("-c, --config <path>", "Path to questpie.cloud.toml/yaml/json")
+	.option("--cloud-url <url>", "QUESTPIE Cloud base URL")
+	.option("--token <token>", "QUESTPIE Cloud API token")
+	.option("--project <slug>", "Project slug")
+	.option("--client <slug>", "Client slug")
+	.option("-e, --environment <slug>", "Environment slug")
+	.option("--region <code>", "Region code")
+	.option("--namespace <namespace>", "Kubernetes namespace")
+	.option("--app-url <url>", "Public app URL")
+	.option("--domain <hostname>", "Custom domain to attach; repeat for more domains", collectStringOption, [] as string[])
+	.option("--registry <registry>", "Container registry prefix")
+	.option("--image <image>", "Image name without tag")
+	.option("--image-tag <tag>", "Image tag")
+	.option("--dockerfile <path>", "Dockerfile path")
+	.option("--docker-target <target>", "Docker build target")
+	.option("--build-command <command>", "Custom build command")
+	.option("--no-build", "Skip local image build")
+	.option("--push", "Push image after build")
+	.option("--dry-run", "Create a render-only deployment request")
+	.option("--allow-dirty", "Allow deploying with uncommitted git changes")
+	.option("--print-payload", "Print inferred deploy payload and exit")
+	.option(
+		"--strategy <strategy>",
+		"Deploy strategy: adopt, render_only, gitops_commit",
+	)
+	.option("--service <name>", "Default service name")
+	.option("--port <port>", "Default service port")
+	.action(async (options) => {
+		try {
+			await cloudDeployCommand(options);
+		} catch (error) {
+			console.error("Failed to deploy to QUESTPIE Cloud:", error);
+			process.exit(1);
+		}
+	});
 
 // Codegen: generate .generated/index.ts from file convention
 program
