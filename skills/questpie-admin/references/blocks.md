@@ -281,11 +281,35 @@ function PageRenderer({ page }) {
 
 ## Blocks in Live Preview
 
-When a collection has `.preview()` configured, blocks can participate in preview focus by combining `BlockScopeProvider` with `PreviewField`.
+When a collection has `.preview()` configured, blocks participate in the existing Live Preview system through `BlockRenderer` and `PreviewField`. The form remains authoritative; block annotations only mirror values, focus fields, select blocks, or request inline scalar edits.
 
-### BlockScopeProvider Wrapper
+### Preferred: BlockRenderer
 
-Use `BlockScopeProvider` in your frontend to scope field paths inside a block:
+Use `BlockRenderer` for normal frontend page rendering. It preserves `data-block-id`, routes block selection, and scopes nested `PreviewField` paths automatically.
+
+```tsx
+<BlockRenderer
+	content={preview.data.content}
+	data={preview.data.content?._data}
+	renderers={admin.blocks}
+	selectedBlockId={preview.selectedBlockId}
+	onBlockClick={preview.isPreviewMode ? preview.handleBlockClick : undefined}
+/>
+```
+
+Inside custom block renderers, annotate scalar values with `PreviewField`:
+
+```tsx
+<PreviewField field="title" editable="text" as="h2">
+	{values.title}
+</PreviewField>
+```
+
+This resolves to `content._values.{blockId}.title` when rendered inside `BlockRenderer`.
+
+### Manual BlockScopeProvider Wrapper
+
+Use `BlockScopeProvider` only when you manually render blocks outside `BlockRenderer`:
 
 ```tsx
 import { BlockScopeProvider } from "@questpie/admin/client";
@@ -304,4 +328,4 @@ function PageRenderer({ blocks, previewData }) {
 
 `PreviewField` components inside the provider resolve paths like `content._values.{blockId}.title`.
 
-Blocks with declarative prefetch (`{ with: { image: true } }`) resolve relations during reconcile — the preview shows the image URL immediately after the server round-trip completes, not just the asset ID.
+Inline block edits target `_values`, for example `content._values.<blockId>.title`. Tree edits such as add, remove, reorder, and nesting stay in the existing block editor and should trigger refresh or resync when patching is not safe.

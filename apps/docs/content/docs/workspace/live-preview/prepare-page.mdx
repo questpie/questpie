@@ -1,0 +1,185 @@
+---
+title: Prepare a Page
+description: Configure collection preview, draft-mode loaders, workflow stage reads, and frontend annotations.
+---
+
+This guide prepares a page collection for the existing Live Preview system: normal `FormView`, Preview button, `LivePreviewMode`, iframe mirror, field annotations, block annotations, and workflow-aware public reads.
+
+## 1. Configure The Collection
+
+Use `.preview({ url })` and keep the normal `v.collectionForm()`:
+
+```ts title="src/questpie/server/collections/pages.ts"
+import { collection } from "#questpie/factories";
+
+export const pages = collection("pages")
+	.fields(({ f }) => ({
+		title: f.text(255).required().localized(),
+		slug: f.text(255).required(),
+		description: f.textarea().localized(),
+		content: f.blocks().localized(),
+		metaTitle: f.text(255).localized(),
+		metaDescription: f.textarea().localized(),
+	}))
+	.preview({
+		enabled: true,
+		position: "right",
+		defaultWidth: 50,
+		url: ({ record }) => {
+			const slug = record.slug as string;
+			return slug === "home" ? "/?preview=true" : `/${slug}?preview=true`;
+		},
+	})
+	.options({
+		versioning: {
+			workflow: {
+				initialStage: "draft",
+				stages: {
+					draft: { label: "Draft", transitions: ["review", "published"] },
+					review: { label: "In review", transitions: ["draft", "published"] },
+					published: { label: "Published", transitions: ["draft"] },
+				},
+			},
+		},
+	})
+	.form(({ v, f }) =>
+		v.collectionForm({
+			sidebar: { position: "right", fields: [f.slug] },
+			fields: [
+				{ type: "section", label: "Page", fields: [f.title, f.description] },
+				{ type: "section", label: "Content", fields: [f.content] },
+				{
+					type: "section",
+					label: "SEO",
+					layout: "grid",
+					columns: 2,
+					fields: [f.metaTitle, f.metaDescription],
+				},
+			],
+		}),
+	);
+```
+
+Workflow stage is the publication source here. Do not add a duplicate page publication boolean for the same concern.
+
+## 2. Load Public And Preview Data
+
+Public requests should read the published stage. Draft-mode preview requests should read the working stage.
+
+```ts title="src/lib/get-page.function.ts"
+import { app } from "#questpie";
+import { createServerFn } from "@tanstack/react-start";
+import { getRequestHeaders } from "@tanstack/react-start/server";
+import { notFound } from "@tanstack/react-router";
+import { createRequestContext, isDraftMode } from "@/lib/server-helpers";
+
+export const getPage = createServerFn({ method: "GET" })
+	.inputValidator((data: { slug: string }) => data)
+	.handler(async ({ data }) => {
+		const headers = getRequestHeaders();
+		const cookie = headers.get("cookie");
+		const draftMode = isDraftMode(cookie ? String(cookie) : undefined);
+		const ctx = await createRequestContext();
+
+		const page = await app.collections.pages.findOne(
+			{
+				where: { slug: data.slug },
+				...(draftMode ? {} : { stage: "published" }),
+			},
+			ctx,
+		);
+
+		if (!page) throw notFound();
+		return { page };
+	});
+```
+
+The preview token/draft-mode cookie allows the iframe route to load the working stage without making draft content public.
+
+## 3. Wire The Page Renderer
+
+Use the exported preview client APIs:
+
+```tsx title="src/components/pages/page-renderer.tsx"
+import {
+	BlockRenderer,
+	PreviewField,
+	PreviewProvider,
+	useCollectionPreview,
+} from "@questpie/admin/client";
+import { useRouter } from "@tanstack/react-router";
+import { admin } from "@/questpie/admin/admin";
+
+export function PageRenderer({ page }) {
+	const router = useRouter();
+	const preview = useCollectionPreview({
+		initialData: page,
+		onRefresh: () => router.invalidate(),
+	});
+
+	return (
+		<PreviewProvider preview={preview}>
+			<article>
+				<PreviewField field="title" editable="text" as="h1">
+					{preview.data.title}
+				</PreviewField>
+
+				<PreviewField field="description" editable="textarea" as="p">
+					{preview.data.description}
+				</PreviewField>
+
+				<BlockRenderer
+					content={preview.data.content}
+					renderers={admin.blocks}
+					data={preview.data.content?._data}
+					selectedBlockId={preview.selectedBlockId}
+					onBlockClick={
+						preview.isPreviewMode ? preview.handleBlockClick : undefined
+					}
+				/>
+			</article>
+		</PreviewProvider>
+	);
+}
+```
+
+`onRefresh` should invalidate the route loader. Patch messages update the iframe mirror, while refresh/resync keeps loader-derived data aligned.
+
+## 4. Annotate Custom Blocks
+
+Inside block renderers, annotate scalar values with `PreviewField`. `BlockRenderer` supplies block scope, so field names resolve to `content._values.<blockId>.<field>`.
+
+```tsx title="src/questpie/admin/blocks/hero.tsx"
+import { PreviewField } from "@questpie/admin/client";
+import type { BlockProps } from "../.generated/client";
+
+export function HeroRenderer({ values }: BlockProps<"hero">) {
+	return (
+		<section className="hero">
+			<PreviewField field="eyebrow" editable="text" as="p">
+				{values.eyebrow}
+			</PreviewField>
+
+			<PreviewField field="title" editable="text" as="h1">
+				{values.title}
+			</PreviewField>
+
+			<PreviewField field="description" editable="textarea" as="p">
+				{values.description}
+			</PreviewField>
+		</section>
+	);
+}
+```
+
+Tree edits such as add, remove, reorder, and nesting still happen in the block editor. Inline preview edits should target scalar block values.
+
+## 5. Publish Through Workflow
+
+Editors transition the page to `published` from the admin toolbar. Public frontend reads use:
+
+```ts
+stage: "published";
+```
+
+Preview reads use draft mode to show the working stage. Stage transitions should trigger a preview resync because the loader may now resolve a different snapshot.

@@ -5,6 +5,8 @@
  * Design: Prominent button with optional pre-selected service/barber.
  */
 
+import { PreviewField } from "@questpie/admin/client";
+
 import { buttonVariants } from "../../../components/ui/button";
 import { cn } from "../../../lib/utils";
 import type { BlockProps } from "../.generated/client";
@@ -33,17 +35,29 @@ export function BookingCtaRenderer({ values }: BlockProps<"booking-cta">) {
 	return (
 		<section className="px-6 py-16">
 			<div className="mx-auto max-w-3xl text-center">
-				<h2 className="text-3xl font-bold tracking-tight md:text-4xl">
+				<PreviewField
+					field="title"
+					editable="text"
+					as="h2"
+					className="text-3xl font-bold tracking-tight md:text-4xl"
+				>
 					{values.title || "Book Your Appointment"}
-				</h2>
+				</PreviewField>
 				{values.description && (
-					<p className="text-muted-foreground mt-4 text-lg">
+					<PreviewField
+						field="description"
+						editable="textarea"
+						as="p"
+						className="text-muted-foreground mt-4 text-lg"
+					>
 						{values.description}
-					</p>
+					</PreviewField>
 				)}
 				<div className="mt-8">
 					<a href={bookingUrl} className={buttonClass}>
-						{values.buttonText || "Book Now"}
+						<PreviewField field="buttonText" editable="text" as="span">
+							{values.buttonText || "Book Now"}
+						</PreviewField>
 					</a>
 				</div>
 			</div>

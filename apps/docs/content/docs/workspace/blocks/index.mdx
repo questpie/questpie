@@ -3,7 +3,7 @@ title: Blocks
 description: Content blocks for page builders — define server-side, render client-side.
 ---
 
-Blocks are reusable content components for visual page building. Define them server-side with fields and admin metadata, then render them client-side with React components. Block content is stored as JSONB in the database.
+Blocks are reusable content components for page building. Define them server-side with fields and admin metadata, then render them client-side with React components. Block content is stored as JSONB in the database.
 
 ## Architecture
 
@@ -46,6 +46,8 @@ type BlockNode = {
 	children: BlockNode[]; // Nested blocks
 };
 ```
+
+`_tree` stores structure. `_values` stores editable field values by block instance. `_data` stores prefetched relation or upload data. Live Preview inline editing targets `_values`; add, remove, reorder, and nesting operations stay in the existing block editor.
 
 ## Block Categories
 
@@ -95,19 +97,28 @@ export default collection("pages").fields(({ f }) => ({
 **Client** — render the block:
 
 ```tsx title="src/questpie/admin/blocks/hero.tsx"
+import { PreviewField } from "@questpie/admin/client";
+
 export default function HeroRenderer({ values }) {
 	return (
 		<section style={{ backgroundImage: `url(${values.backgroundImage?.url})` }}>
-			<h1>{values.title}</h1>
-			<p>{values.subtitle}</p>
+			<PreviewField field="title" editable="text" as="h1">
+				{values.title}
+			</PreviewField>
+			<PreviewField field="subtitle" editable="textarea" as="p">
+				{values.subtitle}
+			</PreviewField>
 			{values.ctaLabel && <a href={values.ctaLink}>{values.ctaLabel}</a>}
 		</section>
 	);
 }
 ```
 
+When this renderer is used by `BlockRenderer` inside Live Preview, `PreviewField field="title"` resolves to a block value path such as `content._values.<blockId>.title`.
+
 ## Sections
 
 - [Defining Blocks](/docs/workspace/blocks/defining-blocks) — Server-side block definitions with fields and admin config
 - [Renderers](/docs/workspace/blocks/renderers) — Client-side React components for rendering blocks
 - [Prefetch](/docs/workspace/blocks/prefetch) — Prefetching relation data for blocks
+- [Live Preview](/docs/workspace/live-preview) — Preview annotations and iframe editing flow

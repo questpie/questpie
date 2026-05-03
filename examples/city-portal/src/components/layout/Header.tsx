@@ -173,7 +173,9 @@ export function Header({
 
 			{/* Mobile Menu Overlay */}
 			{mobileMenuOpen && (
-				<div
+				<button
+					type="button"
+					aria-label="Close menu"
 					className="fixed inset-0 z-40 bg-black/50 md:hidden"
 					onClick={closeMobileMenu}
 					onKeyDown={(e) => e.key === "Escape" && closeMobileMenu()}

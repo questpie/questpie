@@ -21,7 +21,6 @@ export const pages = collection("pages")
 			.label({ en: "Description", sk: "Popis" })
 			.localized(),
 		content: f.blocks().label({ en: "Content", sk: "Obsah" }).localized(),
-		// SEO fields - hidden until page is published
 		metaTitle: f
 			.text(255)
 			.label({ en: "Meta Title", sk: "Meta názov" })
@@ -30,11 +29,6 @@ export const pages = collection("pages")
 			.textarea()
 			.label({ en: "Meta Description", sk: "Meta popis" })
 			.localized(),
-		isPublished: f
-			.boolean()
-			.label({ en: "Published", sk: "Publikované" })
-			.default(false)
-			.required(),
 	}))
 	.indexes(({ table }) => [uniqueIndex("pages_slug_unique").on(table.slug)])
 	.title(({ f }) => f.title)
@@ -42,6 +36,29 @@ export const pages = collection("pages")
 		label: { en: "Pages", sk: "Stránky" },
 		icon: c.icon("ph:article"),
 	}))
+	.options({
+		versioning: {
+			enabled: true,
+			maxVersions: 50,
+			workflow: {
+				initialStage: "draft",
+				stages: {
+					draft: {
+						label: "Draft",
+						transitions: ["review", "published"],
+					},
+					review: {
+						label: "In review",
+						transitions: ["draft", "published"],
+					},
+					published: {
+						label: "Published",
+						transitions: ["draft"],
+					},
+				},
+			},
+		},
+	})
 	.preview({
 		enabled: true,
 		position: "right",
@@ -80,7 +97,6 @@ export const pages = collection("pages")
 							debounce: 300,
 						},
 					},
-					f.isPublished,
 				],
 			},
 			fields: [
@@ -99,16 +115,7 @@ export const pages = collection("pages")
 					label: { en: "SEO", sk: "SEO" },
 					layout: "grid",
 					columns: 2,
-					fields: [
-						{
-							field: f.metaTitle,
-							hidden: ({ data }) => !data.isPublished,
-						},
-						{
-							field: f.metaDescription,
-							hidden: ({ data }) => !data.isPublished,
-						},
-					],
+					fields: [f.metaTitle, f.metaDescription],
 				},
 			],
 		}),

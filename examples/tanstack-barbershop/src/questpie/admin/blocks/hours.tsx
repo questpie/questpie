@@ -5,6 +5,8 @@
  * Design: Simple, scannable layout with day/hours pairs.
  */
 
+import { PreviewField } from "@questpie/admin/client";
+
 import { useTranslation } from "../../../lib/providers/locale-provider";
 import { cn } from "../../../lib/utils";
 import type { BlockProps } from "../.generated/client";
@@ -30,9 +32,14 @@ export function HoursRenderer({ values, data }: BlockProps<"hours">) {
 		<section className="px-6 py-16">
 			<div className="mx-auto max-w-2xl">
 				{values.title && (
-					<h2 className="mb-8 text-center text-3xl font-bold tracking-tight">
+					<PreviewField
+						field="title"
+						editable="text"
+						as="h2"
+						className="mb-8 text-center text-3xl font-bold tracking-tight"
+					>
 						{values.title}
-					</h2>
+					</PreviewField>
 				)}
 				<div className="bg-card rounded-lg border p-6">
 					<dl className="space-y-3">

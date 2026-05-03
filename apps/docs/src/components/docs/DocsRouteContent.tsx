@@ -7,7 +7,7 @@ import {
 	DocsPage,
 	DocsTitle,
 } from "fumadocs-ui/layouts/docs/page";
-import { createContext, useContext } from "react";
+import { createContext, createElement, useContext, useMemo } from "react";
 
 import { LLMCopyButton } from "@/components/llm-actions";
 import { getMDXComponents } from "@/components/mdx";
@@ -48,12 +48,15 @@ const clientLoader = browserCollections.docs.createClientLoader({
 
 export function DocsRouteContent({ data }: { data: DocsLoaderData }) {
 	const { pageTree } = useFumadocsLoader(data);
-	const Content = clientLoader.getComponent(data.path);
+	const Content = useMemo(
+		() => clientLoader.getComponent(data.path),
+		[data.path],
+	);
 
 	return (
 		<PageUrlContext.Provider value={data.url}>
 			<DocsLayout {...baseOptions()} tree={pageTree}>
-				<Content />
+				{createElement(Content)}
 			</DocsLayout>
 		</PageUrlContext.Provider>
 	);

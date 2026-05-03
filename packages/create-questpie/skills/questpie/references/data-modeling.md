@@ -94,6 +94,10 @@ import { uniqueIndex } from "drizzle-orm/pg-core";
 })
 ```
 
+Live Preview uses the existing admin `FormView`, Preview button, `LivePreviewMode`, and iframe. Do not introduce a separate visual-edit form API, a second default form view, or parallel preview API names.
+
+When workflow is the publication source for pages, public reads use `stage: "published"` and preview/draft-mode reads can load the working stage for authorized editors. Do not add duplicate publication booleans for the same concern.
+
 ### Access Control
 
 ```ts

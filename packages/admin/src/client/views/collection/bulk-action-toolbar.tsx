@@ -67,6 +67,17 @@ interface BulkActionToolbarProps<TItem = any> {
 	onOpenFilters?: () => void;
 }
 
+function getSelectedIds(items: unknown[]): string[] {
+	return items.flatMap((item) => {
+		if (typeof item !== "object" || item === null || !("id" in item)) {
+			return [];
+		}
+
+		const id = (item as { id?: unknown }).id;
+		return id == null ? [] : [String(id)];
+	});
+}
+
 // ============================================================================
 // Component
 // ============================================================================
@@ -179,19 +190,12 @@ export function BulkActionToolbar<TItem = any>({
 		// Handle built-in deleteMany action
 		if (action.id === "deleteMany" && onBulkDelete) {
 			setIsLoading(true);
-			const ids = selectedItems
-				.map((item: any) => {
-					if (item != null) {
-						return item.id;
-					}
-					return undefined;
-				})
-				.filter(Boolean);
+			const ids = getSelectedIds(selectedItems);
 			try {
 				await onBulkDelete(ids);
 				table.resetRowSelection();
 				setIsLoading(false);
-			} catch (_error) {
+			} catch {
 				helpers.toast.error(t("collection.bulkDeleteError"));
 				setIsLoading(false);
 			}
@@ -201,19 +205,12 @@ export function BulkActionToolbar<TItem = any>({
 		// Handle built-in restoreMany action
 		if (action.id === "restoreMany" && onBulkRestore) {
 			setIsLoading(true);
-			const ids = selectedItems
-				.map((item: any) => {
-					if (item != null) {
-						return item.id;
-					}
-					return undefined;
-				})
-				.filter(Boolean);
+			const ids = getSelectedIds(selectedItems);
 			try {
 				await onBulkRestore(ids);
 				table.resetRowSelection();
 				setIsLoading(false);
-			} catch (_error) {
+			} catch {
 				helpers.toast.error(t("collection.bulkRestoreError"));
 				setIsLoading(false);
 			}
@@ -224,14 +221,7 @@ export function BulkActionToolbar<TItem = any>({
 			case "api": {
 				setIsLoading(true);
 				// Pre-compute conditional values before try block
-				const ids = selectedItems
-					.map((item: any) => {
-						if (item != null) {
-							return item.id;
-						}
-						return undefined;
-					})
-					.filter(Boolean);
+				const ids = getSelectedIds(selectedItems);
 				const method = handler.method ? handler.method : "POST";
 				try {
 					helpers.toast.info(
@@ -240,7 +230,7 @@ export function BulkActionToolbar<TItem = any>({
 					helpers.refresh();
 					table.resetRowSelection();
 					setIsLoading(false);
-				} catch (_error) {
+				} catch {
 					helpers.toast.error(t("collection.bulkActionFailed"));
 					setIsLoading(false);
 				}
@@ -254,7 +244,7 @@ export function BulkActionToolbar<TItem = any>({
 					await handler.fn(ctx as any);
 					table.resetRowSelection();
 					setIsLoading(false);
-				} catch (_error) {
+				} catch {
 					helpers.toast.error(t("collection.bulkActionFailed"));
 					setIsLoading(false);
 				}

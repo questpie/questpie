@@ -7,6 +7,8 @@
 
 import { Icon } from "@iconify/react";
 
+import { PreviewField } from "@questpie/admin/client";
+
 import { buttonVariants } from "../../../components/ui/button";
 import { cn } from "../../../lib/utils";
 import type { BlockProps } from "../.generated/client";
@@ -36,14 +38,24 @@ export function CTARenderer({ values }: BlockProps<"cta">) {
 	return (
 		<section className={cn("px-6", sizeStyles, variantStyles.section)}>
 			<div className="container mx-auto max-w-3xl text-center">
-				<h2 className="mb-6 text-3xl font-bold tracking-tight sm:text-4xl md:text-5xl">
+				<PreviewField
+					field="title"
+					editable="text"
+					as="h2"
+					className="mb-6 text-3xl font-bold tracking-tight sm:text-4xl md:text-5xl"
+				>
 					{values.title}
-				</h2>
+				</PreviewField>
 
 				{values.description && (
-					<p className="mx-auto mb-10 max-w-2xl text-lg opacity-90">
+					<PreviewField
+						field="description"
+						editable="textarea"
+						as="p"
+						className="mx-auto mb-10 max-w-2xl text-lg opacity-90"
+					>
 						{values.description}
-					</p>
+					</PreviewField>
 				)}
 
 				{values.buttonText && (
@@ -55,7 +67,9 @@ export function CTARenderer({ values }: BlockProps<"cta">) {
 							variantStyles.button,
 						)}
 					>
-						{values.buttonText}
+						<PreviewField field="buttonText" editable="text" as="span">
+							{values.buttonText}
+						</PreviewField>
 						<Icon
 							icon="ph:arrow-right-bold"
 							className="size-5 transition-transform group-hover:translate-x-1"

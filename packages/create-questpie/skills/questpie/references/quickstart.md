@@ -494,7 +494,7 @@ bun dev
 
 ## 12. Live Preview (Optional)
 
-Add split-screen live preview to any collection with `.preview()`. The current same-tab flow refreshes the preview iframe after save/autosave and supports field focus over `postMessage`.
+Add split-screen live preview to any collection with `.preview()`. Live Preview uses the existing admin `FormView`, Preview button, `LivePreviewMode`, and iframe. Do not introduce a second default form view or parallel preview API names.
 
 ### Add Preview to a Collection
 
@@ -518,32 +518,47 @@ export default collection("pages")
 
 ### Add Preview Support to the Frontend Page
 
+Frontend checklist:
+
+1. Call `useCollectionPreview({ initialData, onRefresh })`.
+2. Wrap the rendered output in `PreviewProvider`.
+3. Render from `preview.data`, not directly from loader data.
+4. Wrap editable scalar text in `PreviewField`.
+5. Render blocks with `BlockRenderer` when the page uses `f.blocks()`.
+
 ```tsx
 import {
+	BlockRenderer,
 	PreviewField,
 	PreviewProvider,
 	useCollectionPreview,
 } from "@questpie/admin/client";
+import admin from "@/questpie/admin/.generated/client";
 
-function PageView({ initialData }) {
+function PageView({ page }) {
 	const router = useRouter();
 	const preview = useCollectionPreview({
-		initialData,
+		initialData: page,
 		onRefresh: () => router.invalidate(),
 	});
 
 	return (
-		<PreviewProvider
-			isPreviewMode={preview.isPreviewMode}
-			focusedField={preview.focusedField}
-			onFieldClick={preview.handleFieldClick}
-		>
-			<PreviewField field="title" as="h1">
+		<PreviewProvider preview={preview}>
+			<PreviewField field="title" editable="text" as="h1">
 				{preview.data.title}
 			</PreviewField>
+			<BlockRenderer
+				content={preview.data.content}
+				data={preview.data.content?._data}
+				renderers={admin.blocks}
+				selectedBlockId={preview.selectedBlockId}
+				onBlockClick={
+					preview.isPreviewMode ? preview.handleBlockClick : undefined
+				}
+			/>
 		</PreviewProvider>
 	);
 }
 ```
 
-The `"hybrid"` strategy is recommended as the default — it applies field patches instantly via `postMessage` while reconciling derived data (slugs, relations) through the server.
+The form remains authoritative. Save, autosave, Cmd+S, history, workflow, locks, and actions stay in the existing form lifecycle.

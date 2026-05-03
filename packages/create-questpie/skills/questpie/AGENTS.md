@@ -295,7 +295,7 @@ export const posts = collection("posts")
 		title: f.text(255).required().label("Title"),
 		slug: f.text(255).required(),
 		content: f.richText().localized(),
-		status: f.select(["draft", "published"]).default("draft"),
+		status: f.select(["internal", "featured"]).default("internal"),
 		author: f.relation("users"),
 		tags: f.relation("tags").manyToMany({ through: "post_tags" }),
 		cover: f.upload(),
@@ -376,9 +376,9 @@ export const posts = collection("posts")
 					description: "It will become visible to all readers.",
 				},
 				handler: async ({ record, collections }) => {
-					await collections.posts.updateById({
+					await collections.posts.transitionStage({
 						id: record.id,
-						data: { status: "published" },
+						stage: "published",
 					});
 					return { type: "success", toast: { message: "Published!" } };
 				},
@@ -1238,6 +1238,8 @@ collection("pages").options({
 - `transitionStage({ id, stage: "published" })` → move between workflow stages
 - `beforeTransition` / `afterTransition` hooks
 
+For publishable pages with workflow enabled, workflow stage is the publication source. Public reads must pass `stage: "published"`. Preview/draft-mode reads may omit `stage` to show the working stage to authorized editors. Do not add duplicate `isPublished` guidance when workflow already controls publishing.
+
 ### API Usage
 
 ```ts
@@ -2012,6 +2014,10 @@ collection("posts").preview({
 });
 ```
 
+Live Preview uses the existing admin `FormView`, Preview button, `LivePreviewMode`, and iframe. Do not introduce a separate visual-edit form API, a second default form view, or parallel preview API names. Preserve save, autosave, Cmd+S, history, workflow transitions, locks, and actions in the normal form lifecycle.
+
+Frontend visual editing needs `useCollectionPreview`, `PreviewProvider`, `PreviewField`, and usually `BlockRenderer`; load the `questpie-admin` skill for the full frontend preparation checklist.
+
 ### `.actions()` — Server Actions
 
 ```ts
@@ -2028,9 +2034,9 @@ collection("posts").actions(({ a, c, f }) => ({
 				destructive: false,
 			},
 			handler: async ({ record, collections }) => {
-				await collections.posts.updateById({
+				await collections.posts.transitionStage({
 					id: record.id,
-					data: { status: "published" },
+					stage: "published",
 				});
 				return { type: "success", toast: { message: "Published!" } };
 			},

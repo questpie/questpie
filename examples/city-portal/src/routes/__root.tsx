@@ -1,4 +1,4 @@
-import { createRootRoute } from "@tanstack/react-router";
+import { createRootRoute, Link } from "@tanstack/react-router";
 
 export const Route = createRootRoute({
 	head: () => ({
@@ -21,12 +21,12 @@ export const Route = createRootRoute({
 			<p className="text-muted-foreground mt-3">
 				The page you are looking for does not exist.
 			</p>
-			<a
-				href="/"
+			<Link
+				to="/"
 				className="text-primary mt-6 inline-block text-sm font-medium hover:underline"
 			>
 				Back to homepage
-			</a>
+			</Link>
 		</main>
 	),
 

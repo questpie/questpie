@@ -11,7 +11,7 @@
  */
 
 import { Icon } from "@iconify/react";
-import { useRouter } from "@tanstack/react-router";
+import { Link, useRouter } from "@tanstack/react-router";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -28,11 +28,7 @@ import {
 	SheetTitle,
 	SheetTrigger,
 } from "@/components/ui/sheet";
-import {
-	type Locale,
-	useLocale,
-	useTranslation,
-} from "@/lib/providers/locale-provider";
+import { type Locale, useLocale } from "@/lib/providers/locale-provider";
 import { useTheme } from "@/lib/providers/theme-provider";
 
 // Types matching site-settings global
@@ -50,10 +46,16 @@ interface HeaderProps {
 	ctaButtonLink?: string;
 }
 
+const EMPTY_NAVIGATION: NavItem[] = [];
+
+function isInternalHref(href: string) {
+	return href.startsWith("/");
+}
+
 export function Header({
 	shopName = "Sharp Cuts",
 	logo,
-	navigation = [],
+	navigation = EMPTY_NAVIGATION,
 	ctaButtonText,
 	ctaButtonLink = "/booking",
 }: HeaderProps) {
@@ -76,30 +78,40 @@ export function Header({
 		<header className="border-border bg-background/95 supports-[backdrop-filter]:bg-background/60 sticky top-0 z-40 w-full border-b backdrop-blur">
 			<div className="container flex h-16 items-center justify-between">
 				{/* Logo */}
-				<a href="/" className="flex items-center gap-2 text-xl font-bold">
+				<Link to="/" className="flex items-center gap-2 text-xl font-bold">
 					{logo ? (
 						<img src={logo} alt={shopName} className="h-8 w-auto" />
 					) : (
 						<Icon icon="ph:scissors-bold" className="size-6" />
 					)}
 					<span className="hidden sm:inline">{shopName}</span>
-				</a>
+				</Link>
 
 				{/* Desktop Navigation */}
 				<nav className="hidden items-center gap-6 md:flex">
-					{navigation.map((item) => (
-						<a
-							key={item.href}
-							href={item.href}
-							className="text-muted-foreground hover:text-foreground text-sm font-medium transition-colors"
-							{...(item.isExternal && {
-								target: "_blank",
-								rel: "noopener noreferrer",
-							})}
-						>
-							{item.label}
-						</a>
-					))}
+					{navigation.map((item) =>
+						item.isExternal || !isInternalHref(item.href) ? (
+							<a
+								key={item.href}
+								href={item.href}
+								className="text-muted-foreground hover:text-foreground text-sm font-medium transition-colors"
+								{...(item.isExternal && {
+									target: "_blank",
+									rel: "noopener noreferrer",
+								})}
+							>
+								{item.label}
+							</a>
+						) : (
+							<Link
+								key={item.href}
+								to={item.href}
+								className="text-muted-foreground hover:text-foreground text-sm font-medium transition-colors"
+							>
+								{item.label}
+							</Link>
+						),
+					)}
 				</nav>
 
 				{/* Right side actions */}
@@ -154,11 +166,21 @@ export function Header({
 
 					{/* Book Now CTA - Desktop */}
 					{ctaButtonText && (
-						<a href={ctaButtonLink} className="hidden sm:block">
-							<Button className="bg-highlight text-highlight-foreground hover:bg-highlight/90">
-								{ctaButtonText}
-							</Button>
-						</a>
+						<>
+							{isInternalHref(ctaButtonLink) ? (
+								<Link to={ctaButtonLink} className="hidden sm:block">
+									<Button className="bg-highlight text-highlight-foreground hover:bg-highlight/90">
+										{ctaButtonText}
+									</Button>
+								</Link>
+							) : (
+								<a href={ctaButtonLink} className="hidden sm:block">
+									<Button className="bg-highlight text-highlight-foreground hover:bg-highlight/90">
+										{ctaButtonText}
+									</Button>
+								</a>
+							)}
+						</>
 					)}
 
 					{/* Mobile Menu */}
@@ -185,28 +207,57 @@ export function Header({
 							</SheetHeader>
 
 							<nav className="mt-8 flex flex-col gap-4 px-4">
-								{navigation.map((item) => (
-									<a
-										key={item.href}
-										href={item.href}
-										className="text-foreground hover:text-muted-foreground block py-2 text-left text-lg font-medium transition-colors"
-										onClick={() => setMobileMenuOpen(false)}
-										{...(item.isExternal && {
-											target: "_blank",
-											rel: "noopener noreferrer",
-										})}
-									>
-										{item.label}
-									</a>
-								))}
+								{navigation.map((item) =>
+									item.isExternal || !isInternalHref(item.href) ? (
+										<a
+											key={item.href}
+											href={item.href}
+											className="text-foreground hover:text-muted-foreground block py-2 text-left text-lg font-medium transition-colors"
+											onClick={() => setMobileMenuOpen(false)}
+											{...(item.isExternal && {
+												target: "_blank",
+												rel: "noopener noreferrer",
+											})}
+										>
+											{item.label}
+										</a>
+									) : (
+										<Link
+											key={item.href}
+											to={item.href}
+											className="text-foreground hover:text-muted-foreground block py-2 text-left text-lg font-medium transition-colors"
+											onClick={() => setMobileMenuOpen(false)}
+										>
+											{item.label}
+										</Link>
+									),
+								)}
 
 								{/* Book Now - Mobile */}
 								{ctaButtonText && (
-									<a href={ctaButtonLink} className="mt-4 block">
-										<Button className="bg-highlight text-highlight-foreground hover:bg-highlight/90 w-full">
-											{ctaButtonText}
-										</Button>
-									</a>
+									<>
+										{isInternalHref(ctaButtonLink) ? (
+											<Link
+												to={ctaButtonLink}
+												className="mt-4 block"
+												onClick={() => setMobileMenuOpen(false)}
+											>
+												<Button className="bg-highlight text-highlight-foreground hover:bg-highlight/90 w-full">
+													{ctaButtonText}
+												</Button>
+											</Link>
+										) : (
+											<a
+												href={ctaButtonLink}
+												className="mt-4 block"
+												onClick={() => setMobileMenuOpen(false)}
+											>
+												<Button className="bg-highlight text-highlight-foreground hover:bg-highlight/90 w-full">
+													{ctaButtonText}
+												</Button>
+											</a>
+										)}
+									</>
 								)}
 							</nav>
 

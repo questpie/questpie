@@ -22,6 +22,10 @@ import {
 import { useIsMobile } from "../../hooks/use-media-query.js";
 import { useTranslation } from "../../i18n/hooks.js";
 import { cn } from "../../lib/utils.js";
+import type {
+	BlockInsertRequestedMessage,
+	FieldValueEditedMessage,
+} from "../../preview/types.js";
 import { Button } from "../ui/button.js";
 import { Tabs, TabsList, TabsTrigger } from "../ui/tabs.js";
 import { PreviewPane, type PreviewPaneRef } from "./preview-pane.js";
@@ -41,6 +45,12 @@ interface LivePreviewModeProps {
 	previewUrl: string | null;
 	/** Optional external ref for preview pane control */
 	previewRef?: React.RefObject<PreviewPaneRef | null>;
+	/** Inline field edit handler from preview iframe */
+	onFieldValueEdited?: (message: FieldValueEditedMessage) => void;
+	/** Patch acknowledgement handler */
+	onPatchApplied?: (seq: number) => void;
+	/** Preview requested a full resync */
+	onResyncRequest?: (reason?: string) => void;
 	/** Default preview pane size (percentage, 0-100). @default 50 */
 	defaultSize?: number;
 	/** Minimum preview pane size (percentage, 0-100). @default 30 */
@@ -157,10 +167,12 @@ function useLivePreviewRenderTelemetry({
 
 function LivePreviewContent({
 	open,
-	onClose,
 	children,
 	previewUrl,
 	previewRef,
+	onFieldValueEdited,
+	onPatchApplied,
+	onResyncRequest,
 	defaultSize = 50,
 	minSize = 30,
 }: LivePreviewContentProps) {
@@ -279,6 +291,16 @@ function LivePreviewContent({
 		[focusContext],
 	);
 
+	const handlePreviewBlockInsertRequest = React.useCallback(
+		(message: BlockInsertRequestedMessage) => {
+			focusContext.requestBlockInsert(
+				message.position,
+				message.referenceBlockId,
+			);
+		},
+		[focusContext],
+	);
+
 	return (
 		<div
 			className={
@@ -324,10 +346,6 @@ function LivePreviewContent({
 								{t("preview.exitPreview")}
 							</span>
 						</Button>
-						<Button variant="ghost" size="icon" onClick={onClose}>
-							<Icon icon="ph:x" className="h-4 w-4" />
-							<span className="sr-only">{t("common.close")}</span>
-						</Button>
 					</div>
 				</div>
 			)}
@@ -372,6 +390,10 @@ function LivePreviewContent({
 								url={previewUrl}
 								onFieldClick={handlePreviewFieldClick}
 								onBlockClick={handlePreviewBlockClick}
+								onBlockInsertRequest={handlePreviewBlockInsertRequest}
+								onFieldValueEdited={onFieldValueEdited}
+								onPatchApplied={onPatchApplied}
+								onResyncRequest={onResyncRequest}
 							/>
 						) : (
 							<div className="flex h-full items-center justify-center">
@@ -409,6 +431,10 @@ function LivePreviewContent({
 									url={previewUrl}
 									onFieldClick={handlePreviewFieldClick}
 									onBlockClick={handlePreviewBlockClick}
+									onBlockInsertRequest={handlePreviewBlockInsertRequest}
+									onFieldValueEdited={onFieldValueEdited}
+									onPatchApplied={onPatchApplied}
+									onResyncRequest={onResyncRequest}
 								/>
 							) : (
 								<div className="flex h-full items-center justify-center">
@@ -439,6 +465,9 @@ export function LivePreviewMode({
 	children,
 	previewUrl,
 	previewRef: previewRefProp,
+	onFieldValueEdited,
+	onPatchApplied,
+	onResyncRequest,
 	defaultSize,
 	minSize,
 }: LivePreviewModeProps) {
@@ -457,6 +486,12 @@ export function LivePreviewMode({
 					: `content._values.${state.blockId}`;
 				scrollFieldIntoView(fullPath);
 			}, 150);
+		} else if (state.type === "block-insert") {
+			const targetBlockId = state.referenceBlockId ?? state.position.parentId;
+			if (!targetBlockId) return;
+			setTimeout(() => {
+				scrollFieldIntoView(`content._values.${targetBlockId}`);
+			}, 150);
 		}
 	}, []);
 
@@ -467,6 +502,9 @@ export function LivePreviewMode({
 				onClose={onClose}
 				previewUrl={previewUrl}
 				previewRef={previewRef}
+				onFieldValueEdited={onFieldValueEdited}
+				onPatchApplied={onPatchApplied}
+				onResyncRequest={onResyncRequest}
 				defaultSize={defaultSize}
 				minSize={minSize}
 			>

@@ -19,12 +19,23 @@ import * as React from "react";
  * - idle: nothing focused
  * - field: regular field focused (e.g., "title", "slug")
  * - block: block field focused, optionally with specific field within block
+ * - block-insert: insert a block at a position using the existing block editor
  * - relation: relation field focused (opens ResourceSheet for editing)
  */
+export type BlockInsertPosition = {
+	parentId: string | null;
+	index: number;
+};
+
 export type FocusState =
 	| { type: "idle" }
 	| { type: "field"; fieldPath: string }
 	| { type: "block"; blockId: string; fieldPath?: string }
+	| {
+			type: "block-insert";
+			position: BlockInsertPosition;
+			referenceBlockId?: string;
+	  }
 	| { type: "relation"; fieldPath: string; targetCollection?: string };
 
 export type FocusContextValue = {
@@ -34,6 +45,11 @@ export type FocusContextValue = {
 	focusField: (fieldPath: string) => void;
 	/** Focus a block, optionally a specific field within it */
 	focusBlock: (blockId: string, fieldPath?: string) => void;
+	/** Open block insertion at a specific position */
+	requestBlockInsert: (
+		position: BlockInsertPosition,
+		referenceBlockId?: string,
+	) => void;
 	/** Focus a relation field (opens ResourceSheet) */
 	focusRelation: (fieldPath: string, targetCollection?: string) => void;
 	/** Clear focus */
@@ -95,6 +111,19 @@ export function FocusProvider({ children, onFocusChange }: FocusProviderProps) {
 		[onFocusChange],
 	);
 
+	const requestBlockInsert = React.useCallback(
+		(position: BlockInsertPosition, referenceBlockId?: string) => {
+			const newState: FocusState = {
+				type: "block-insert",
+				position,
+				referenceBlockId,
+			};
+			setState(newState);
+			onFocusChange?.(newState);
+		},
+		[onFocusChange],
+	);
+
 	const clearFocus = React.useCallback(() => {
 		const newState: FocusState = { type: "idle" };
 		setState(newState);
@@ -110,6 +139,7 @@ export function FocusProvider({ children, onFocusChange }: FocusProviderProps) {
 			state,
 			focusField,
 			focusBlock,
+			requestBlockInsert,
 			focusRelation,
 			clearFocus,
 			// Simple equality checks - no callback overhead
@@ -120,6 +150,7 @@ export function FocusProvider({ children, onFocusChange }: FocusProviderProps) {
 			state,
 			focusField,
 			focusBlock,
+			requestBlockInsert,
 			focusRelation,
 			clearFocus,
 			focusedFieldPath,

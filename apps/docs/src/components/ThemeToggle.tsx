@@ -1,52 +1,84 @@
 "use client";
 
 import { Icon } from "@iconify/react";
-import { useEffect, useState } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
+type Theme = "light" | "dark";
+
+const THEME_STORAGE_KEY = "theme";
+const THEME_CHANGE_EVENT = "questpie-theme-change";
+
+function readStoredTheme(): Theme | null {
+	try {
+		const storedTheme = localStorage.getItem(THEME_STORAGE_KEY);
+		return storedTheme === "dark" || storedTheme === "light"
+			? storedTheme
+			: null;
+	} catch {
+		return null;
+	}
+}
+
+function readThemeSnapshot(): Theme {
+	const storedTheme = readStoredTheme();
+	if (storedTheme) return storedTheme;
+	return document.documentElement.classList.contains("dark") ? "dark" : "light";
+}
+
+function subscribeTheme(onStoreChange: () => void) {
+	const observer = new MutationObserver(onStoreChange);
+	observer.observe(document.documentElement, {
+		attributeFilter: ["class"],
+		attributes: true,
+	});
+
+	const handleStorage = (event: StorageEvent) => {
+		if (event.key === THEME_STORAGE_KEY) onStoreChange();
+	};
+
+	window.addEventListener("storage", handleStorage);
+	window.addEventListener(THEME_CHANGE_EVENT, onStoreChange);
+
+	return () => {
+		observer.disconnect();
+		window.removeEventListener("storage", handleStorage);
+		window.removeEventListener(THEME_CHANGE_EVENT, onStoreChange);
+	};
+}
+
+function applyTheme(nextTheme: Theme) {
+	const root = document.documentElement;
+	root.classList.toggle("dark", nextTheme === "dark");
+	root.classList.toggle("light", nextTheme === "light");
+	root.style.colorScheme = nextTheme;
+
+	try {
+		localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
+	} catch {
+		// Ignore storage failures in restricted browser contexts.
+	}
+
+	window.dispatchEvent(new Event(THEME_CHANGE_EVENT));
+}
+
 export function ThemeToggle() {
-	const [theme, setThemeState] = useState<"light" | "dark">("light");
-	const [mounted, setMounted] = useState(false);
+	const theme = useSyncExternalStore(
+		subscribeTheme,
+		readThemeSnapshot,
+		() => "light",
+	);
 
 	useEffect(() => {
-		setMounted(true);
-		const storedTheme = localStorage.getItem("theme");
-		const currentTheme =
-			storedTheme === "dark" || storedTheme === "light"
-				? storedTheme
-				: document.documentElement.classList.contains("dark")
-					? "dark"
-					: "light";
-
-		applyTheme(currentTheme);
-		setThemeState(currentTheme);
+		applyTheme(readThemeSnapshot());
 	}, []);
-
-	const applyTheme = (nextTheme: "light" | "dark") => {
-		const root = document.documentElement;
-		root.classList.toggle("dark", nextTheme === "dark");
-		root.classList.toggle("light", nextTheme === "light");
-		root.style.colorScheme = nextTheme;
-		localStorage.setItem("theme", nextTheme);
-	};
 
 	const toggleTheme = () => {
 		const newTheme = theme === "dark" ? "light" : "dark";
-		setThemeState(newTheme);
 		applyTheme(newTheme);
 	};
-
-	// Prevent flash during hydration
-	if (!mounted) {
-		return (
-			<div
-				className="inline-flex size-10 items-center justify-center rounded-[var(--control-radius,0.75rem)]"
-				aria-hidden="true"
-			/>
-		);
-	}
 
 	const iconClass =
 		"absolute size-5 transition-[opacity,transform] duration-150 ease-out motion-reduce:transition-none";

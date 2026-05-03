@@ -25,14 +25,7 @@ interface PageRendererProps {
 export function PageRenderer({ page, isHomepage = false }: PageRendererProps) {
 	const router = useRouter();
 
-	const {
-		data,
-		isPreviewMode,
-		selectedBlockId,
-		focusedField,
-		handleFieldClick,
-		handleBlockClick,
-	} = useCollectionPreview({
+	const preview = useCollectionPreview({
 		initialData: page,
 		onRefresh: () => {
 			router.invalidate();
@@ -40,27 +33,31 @@ export function PageRenderer({ page, isHomepage = false }: PageRendererProps) {
 	});
 
 	return (
-		<PreviewProvider
-			isPreviewMode={isPreviewMode}
-			focusedField={focusedField}
-			onFieldClick={handleFieldClick}
-		>
-			<article className={isPreviewMode ? "preview-mode" : ""}>
-				{data.content && (
+		<PreviewProvider preview={preview}>
+			<article className={preview.isPreviewMode ? "questpie-preview" : ""}>
+				{preview.data.content && (
 					<BlockRenderer
-						content={data.content as BlockContent}
+						content={preview.data.content as BlockContent}
 						renderers={admin.blocks}
-						data={data.content._data}
-						selectedBlockId={selectedBlockId}
-						onBlockClick={isPreviewMode ? handleBlockClick : undefined}
+						data={preview.data.content._data}
+						selectedBlockId={preview.selectedBlockId}
+						onBlockClick={
+							preview.isPreviewMode ? preview.handleBlockClick : undefined
+						}
+						onBlockInsert={
+							preview.isPreviewMode ? preview.handleBlockInsert : undefined
+						}
 					/>
 				)}
 
-				{!data.content?._tree?.length && (
-					<EmptyState isPreviewMode={isPreviewMode} isHomepage={isHomepage} />
+				{!preview.data.content?._tree?.length && (
+					<EmptyState
+						isPreviewMode={preview.isPreviewMode}
+						isHomepage={isHomepage}
+					/>
 				)}
 
-				{isPreviewMode && <PreviewModeIndicator />}
+				{preview.isPreviewMode && <PreviewModeIndicator />}
 			</article>
 		</PreviewProvider>
 	);

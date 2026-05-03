@@ -170,7 +170,15 @@ export default adminConfig({
 						type: "stats",
 						collection: "pages",
 						label: { en: "Published Pages", sk: "Publikované stránky" },
-						filter: { isPublished: true },
+						loader: async ({ collections }: WidgetFetchContext) => {
+							const result = await collections.pages.find({
+								stage: "published",
+								limit: 1,
+								columns: { id: true },
+							});
+
+							return { count: result.totalDocs };
+						},
 						span: 1,
 						rowSpan: 1,
 					},

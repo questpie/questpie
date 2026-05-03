@@ -7,6 +7,8 @@
 
 import { Icon } from "@iconify/react";
 
+import { PreviewField } from "@questpie/admin/client";
+
 import { useTranslation } from "../../../lib/providers/locale-provider";
 import { cn } from "../../../lib/utils";
 import type { BlockProps } from "../.generated/client";
@@ -36,12 +38,24 @@ export function ReviewsRenderer({ values, data }: BlockProps<"reviews">) {
 				{(values.title || values.subtitle) && (
 					<div className="mx-auto mb-16 max-w-2xl text-center">
 						{values.title && (
-							<h2 className="mb-4 text-3xl font-bold tracking-tight sm:text-4xl">
+							<PreviewField
+								field="title"
+								editable="text"
+								as="h2"
+								className="mb-4 text-3xl font-bold tracking-tight sm:text-4xl"
+							>
 								{values.title}
-							</h2>
+							</PreviewField>
 						)}
 						{values.subtitle && (
-							<p className="text-muted-foreground text-lg">{values.subtitle}</p>
+							<PreviewField
+								field="subtitle"
+								editable="textarea"
+								as="p"
+								className="text-muted-foreground text-lg"
+							>
+								{values.subtitle}
+							</PreviewField>
 						)}
 					</div>
 				)}

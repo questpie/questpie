@@ -99,6 +99,7 @@ const VERSION_META_KEYS = new Set([
 	"versionUserId",
 	"versionCreatedAt",
 ]);
+const EMPTY_AUDIT_ENTRIES: AuditEntry[] = [];
 
 function formatRelativeTime(date: Date, locale: string): string {
 	const now = new Date();
@@ -919,7 +920,7 @@ function buildVersionDiff({
 export function HistorySidebar({
 	open,
 	onOpenChange,
-	auditEntries = [],
+	auditEntries = EMPTY_AUDIT_ENTRIES,
 	isLoadingAudit = false,
 	versions,
 	fields,

@@ -5,6 +5,8 @@ description: Track record versions, read workflow stages, and transition drafts 
 
 Versioning stores snapshots of collection records and globals. Workflow builds on versioning by adding named stages such as `draft`, `review`, and `published`.
 
+When workflow is used for pages or other publishable content, the workflow stage should be the publication source. Public readers should query `stage: "published"`; editors and preview routes can load the working stage through draft mode or an authorized preview token.
+
 ## Enable Versioning
 
 Use plain versioning when you only need history and restore:
@@ -105,6 +107,15 @@ const published = await collections.posts.findOne({
 });
 ```
 
+For public page routes, pass the published stage explicitly:
+
+```ts
+const page = await collections.pages.findOne({
+	where: { slug: "about" },
+	stage: "published",
+});
+```
+
 The client SDK forwards `stage` the same way:
 
 ```ts
@@ -177,7 +188,39 @@ A transition validates that:
 - the configured transition graph allows the move
 - `access.transition` allows the user, or `access.update` allows the user when `transition` is not configured
 
-Transitioning creates a version snapshot at the target stage. It does not mutate the working draft row.
+Transitioning creates a version snapshot at the target stage. It does not mutate the working draft row. For publishing workflows, transitioning to `published` is what makes the record visible to public stage reads.
+
+## Publishing And Preview
+
+Workflow pairs naturally with Live Preview:
+
+```mermaid
+flowchart LR
+  Draft["Working draft stage"] --> Preview["Admin preview iframe"]
+  Draft --> Transition["transitionStage({ stage: \"published\" })"]
+  Transition --> Published["Published stage snapshot"]
+  Published --> Public["Public frontend reads"]
+```
+
+Public page loaders should read only the published stage:
+
+```ts
+const page = await collections.pages.findOne({
+	where: { slug },
+	stage: "published",
+});
+```
+
+Draft-mode-aware preview loaders can omit `stage` to read the working stage for authorized editors:
+
+```ts
+const page = await collections.pages.findOne({
+	where: { slug },
+	...(isDraftMode ? {} : { stage: "published" }),
+});
+```
+
+Avoid adding a duplicate `isPublished` or `published` boolean when workflow already controls publication. If such a field exists, treat it as business metadata and not the source of frontend visibility.
 
 ## Transition A Global
 
