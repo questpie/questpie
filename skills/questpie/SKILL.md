@@ -43,6 +43,68 @@ Reference these guidelines when:
 | `createClient<AppConfig>()`    | `"questpie/client"`          | No             |
 | `createQuestpieQueryOptions()` | `"@questpie/tanstack-query"` | No             |
 
+## Module And Plugin Configuration - Critical
+
+Codegen imports `modules.ts` before runtime app creation to extract module-contributed plugins. Any module that contributes a `plugin`, discover patterns, generated factories, categories, views, components, fields, or config factories must be statically discoverable from `modules.ts`.
+
+### DO THIS
+
+Use a static module and a plugin-discovered config file for runtime options:
+
+```ts title="modules.ts"
+import { observabilityModule } from "@questpie/observability/server";
+
+export default [observabilityModule] as const;
+```
+
+```ts title="config/observability.ts"
+import { observabilityConfig } from "@questpie/observability/server";
+
+export default observabilityConfig({
+	serviceName: "barbershop",
+	enabled: process.env.NODE_ENV === "production",
+});
+```
+
+The module reads config at runtime from `app.state.config.observability`:
+
+```ts
+export const observabilityModule = module({
+	name: "questpie-observability",
+	plugin: observabilityPlugin(),
+	services: {
+		observability: service({
+			namespace: null,
+			lifecycle: "singleton",
+			create: ({ app, logger }) =>
+				createObservabilityService(app.state.config?.observability, logger),
+		}),
+	},
+});
+```
+
+### DON'T DO THIS
+
+Do not make runtime options the primary API for codegen-aware modules:
+
+```ts title="modules.ts"
+export default [
+	observabilityModule({
+		serviceName: "barbershop",
+	}),
+] as const;
+```
+
+Do not conditionally hide codegen-aware modules or plugins behind env/runtime checks:
+
+```ts title="modules.ts"
+export default [
+	process.env.OTEL_ENABLED ? observabilityModule : undefined,
+].filter(Boolean);
+```
+
+Factory modules are acceptable only for simple runtime-only modules whose plugin identity and codegen contributions do not change. For reusable packages that ship a `CodegenPlugin`, prefer **static module + `config/*.ts` singleton factory**.
+
 ## Reference Topics
 
 ### Core
@@ -179,6 +241,7 @@ await queue.sendReminder.publish({ userId: "abc" });
 | HIGH     | Job handler uses `input` instead of `payload`          | Jobs destructure `{ payload }`, routes destructure `{ input }`                        |
 | HIGH     | `queue.send("name", data)`                             | Use `queue.jobName.publish(data)`                                                     |
 | HIGH     | `beforeCreate` / `afterCreate` hook names              | Use `beforeChange` / `afterChange` with `operation === "create"` guard                |
+| HIGH     | Runtime options in codegen-aware modules               | Use static `module({...})` + plugin-discovered `config/*.ts` factory                  |
 | MEDIUM   | Using npm/yarn instead of Bun                          | QUESTPIE requires Bun as package manager                                              |
 | MEDIUM   | Editing `.generated/` files                            | Never edit — re-run `questpie generate`                                               |
 

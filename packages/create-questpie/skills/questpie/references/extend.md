@@ -86,6 +86,70 @@ export default runtimeConfig({
 });
 ```
 
+Use direct `runtimeConfig({ plugins })` registration only for standalone codegen plugins or custom setups that do not ship a module. Reusable packages should usually attach the plugin to a static module and let codegen extract it from `modules.ts`.
+
+### Configurable Codegen-Aware Modules
+
+When a package ships a module and a `CodegenPlugin`, keep module identity static and put runtime options in a plugin-discovered config file. Codegen imports `modules.ts` before runtime app creation, so it must be able to see the same module/plugin tree regardless of environment or runtime options.
+
+#### DO THIS
+
+```ts title="modules.ts"
+import { observabilityModule } from "@questpie/observability/server";
+
+export default [observabilityModule] as const;
+```
+
+```ts title="config/observability.ts"
+import { observabilityConfig } from "@questpie/observability/server";
+
+export default observabilityConfig({
+	serviceName: "barbershop",
+	enabled: process.env.NODE_ENV === "production",
+	otlpEndpoint: process.env.OTEL_EXPORTER_OTLP_ENDPOINT,
+});
+```
+
+```ts title="@questpie/observability/server.ts"
+export const observabilityModule = module({
+	name: "questpie-observability",
+	plugin: observabilityPlugin(),
+	services: {
+		observability: service({
+			namespace: null,
+			lifecycle: "singleton",
+			create: ({ app, logger }) =>
+				createObservabilityService(app.state.config?.observability, logger),
+		}),
+	},
+});
+```
+
+The plugin contributes `config/observability.ts` as a discover pattern and a typed singleton factory such as `observabilityConfig()`. The service reads the resolved config at runtime from `app.state.config.observability`.
+
+#### DON'T DO THIS
+
+Do not make runtime options the main API for modules that contribute codegen plugins:
+
+```ts title="modules.ts"
+export default [
+	observabilityModule({
+		serviceName: "barbershop",
+		enabled: process.env.NODE_ENV === "production",
+	}),
+] as const;
+```
+
+Do not conditionally include codegen-aware modules or plugins:
+
+```ts title="modules.ts"
+export default [
+	process.env.OTEL_ENABLED ? observabilityModule : undefined,
+].filter(Boolean);
+```
+
+Factory modules are acceptable only for simple runtime-only modules whose plugin identity and generated contributions do not change. If the package contributes discover patterns, generated factories, module categories, views, components, fields, or collection/global extensions, use **static module + `config/*.ts` singleton factory**.
+
 ### Plugin Lifecycle
 
 1. **Discovery** -- codegen scans for files matching category patterns and discover patterns
