@@ -1,5 +1,12 @@
 # @questpie/openapi
 
+## 3.0.14
+
+### Patch Changes
+
+- Updated dependencies [[`7607322`](https://github.com/questpie/questpie/commit/7607322cf6bbc0d933dd2c593edd3de618827b06)]:
+  - questpie@3.2.3
+
 ## 3.0.13
 
 ### Patch Changes
