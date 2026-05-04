@@ -1,3 +1,6 @@
+import { readFile, stat } from "node:fs/promises";
+import { dirname, join, resolve } from "node:path";
+
 import type { Questpie } from "../server/config/questpie.js";
 import { toFileImportSpecifier } from "./utils.js";
 
@@ -123,6 +126,43 @@ export function config<TApp extends Questpie<any>>(
 }
 
 /**
+ * Resolve the entity root directory from a config file path.
+ *
+ * Project root configs commonly re-export the real server config from a deeper
+ * directory. CLI commands that need generated runtime output must follow that
+ * re-export so they look next to the server config, not next to the root shim.
+ */
+export async function resolveConfigRoot(
+	configPath: string,
+): Promise<{ configPath: string; rootDir: string }> {
+	let content: string;
+	try {
+		content = String(await readFile(configPath, "utf-8"));
+	} catch {
+		return { configPath, rootDir: dirname(configPath) };
+	}
+
+	const reExportMatch = content.match(
+		/^\s*export\s*\{\s*default\s*\}\s*from\s*["']([^"']+)["']/m,
+	);
+	if (!reExportMatch) {
+		return { configPath, rootDir: dirname(configPath) };
+	}
+
+	const innerRaw = resolve(dirname(configPath), reExportMatch[1]);
+	for (const candidate of [innerRaw, `${innerRaw}.ts`, `${innerRaw}.mts`]) {
+		try {
+			await stat(candidate);
+			return { configPath: candidate, rootDir: dirname(candidate) };
+		} catch {
+			// Try the next extension candidate.
+		}
+	}
+
+	return { configPath, rootDir: dirname(configPath) };
+}
+
+/**
  * Load and validate config file.
  *
  * Supports multiple config formats:
@@ -149,24 +189,28 @@ export async function loadQuestpieConfig(
 		!("api" in config.app)
 	) {
 		// New AppConfig format — try to load .generated/index.ts
-		const { dirname, join } = await import("node:path");
-		const generatedPath = join(dirname(configPath), ".generated", "index.ts");
+		const { rootDir } = await resolveConfigRoot(configPath);
+		const generatedPath = join(rootDir, ".generated", "index.ts");
 		try {
 			const generatedModule = await import(
 				/* @vite-ignore */ toFileImportSpecifier(generatedPath)
 			);
-			if (generatedModule.app) {
-				return {
-					app: generatedModule.app,
-					cli: config.cli ?? {
-						migrations: config.cli?.migrations,
-						seeds: config.cli?.seeds,
-					},
-				};
+			if (!generatedModule.app) {
+				throw new Error("Generated module does not export `app`.");
 			}
-		} catch {
+
+			return {
+				app: generatedModule.app,
+				cli: config.cli ?? {
+					migrations: config.cli?.migrations,
+					seeds: config.cli?.seeds,
+				},
+			};
+		} catch (error) {
+			const reason = error instanceof Error ? error.message : String(error);
 			throw new Error(
 				`Config at ${configPath} uses the new AppConfig format.\n` +
+					`Could not load generated app at ${generatedPath}: ${reason}\n` +
 					`Run \`questpie generate\` first to create .generated/index.ts,\n` +
 					`or point --config to a file that exports { app: QuestpieInstance }.`,
 			);
