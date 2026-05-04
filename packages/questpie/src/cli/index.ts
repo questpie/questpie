@@ -382,7 +382,7 @@ cloud
 	)
 	.option("--cloud-url <url>", "Questpie Cloud base URL")
 	.option("--endpoint <path>", "Deploy API endpoint", "/api/cloud/deploy")
-	.option("--image-tag <tag>", "Immutable image tag to deploy")
+	.option("--image-tag <tag>", "Image tag to deploy")
 	.option("--image <image>", "Global image override")
 	.option("--image-digest <digest>", "Image digest metadata")
 	.option("--dry-run", "Validate the deployment request without applying it")

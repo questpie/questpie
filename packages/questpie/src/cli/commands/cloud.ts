@@ -238,36 +238,11 @@ function domainsPayload(config: AnyRecord) {
 		definedRecord({
 			hostname: asString(domain.hostname),
 			kind: asString(domain.kind),
-			provider: asString(domain.provider),
 			service: asString(domain.service),
 			isPrimary: asBoolean(domain.isPrimary) ?? asBoolean(domain.primary),
 			redirectMode: asString(domain.redirectMode),
 		}),
 	);
-}
-
-function postgresPayload(config: AnyRecord) {
-	const postgres = pickRecord(config.postgres);
-	return definedRecord({
-		mode: asString(postgres.mode),
-		clusterName: asString(postgres.clusterName),
-		databaseName: asString(postgres.databaseName),
-		username: asString(postgres.username),
-		connectionEnvKey: asString(postgres.connectionEnvKey),
-		passwordEnvKey: asString(postgres.passwordEnvKey),
-	});
-}
-
-function storagePayload(config: AnyRecord) {
-	const storage = pickRecord(config.storage);
-	return definedRecord({
-		provider: asString(storage.provider),
-		bucketName: asString(storage.bucketName),
-		prefix: asString(storage.prefix),
-		endpoint: asString(storage.endpoint),
-		region: asString(storage.region),
-		publicBaseUrl: asString(storage.publicBaseUrl),
-	});
 }
 
 export async function createCloudDeployPayload(
@@ -294,8 +269,6 @@ export async function createCloudDeployPayload(
 		services: servicesPayload(loaded.data, imageTag),
 		releaseJobs: releaseJobsPayload(loaded.data),
 		domains: domainsPayload(loaded.data),
-		postgres: postgresPayload(loaded.data),
-		storage: storagePayload(loaded.data),
 		config: {
 			path: loaded.path,
 			format: loaded.format,
@@ -325,8 +298,7 @@ function printDeployResult(result: AnyRecord, imageTag: string) {
 	for (const domain of domains) {
 		const hostname = String(domain.hostname ?? "unknown");
 		const status = String(domain.status ?? "unknown");
-		const target = asString(domain.targetHostname);
-		console.log(`  Domain:     ${hostname} (${status})${target ? ` -> ${target}` : ""}`);
+		console.log(`  Domain:     ${hostname} (${status})`);
 		const verification = pickRecord(domain.verification);
 		const name = asString(verification.name);
 		const value = asString(verification.value);
