@@ -1,5 +1,15 @@
 # @questpie/admin
 
+## 3.2.4
+
+### Patch Changes
+
+- [`7bd0604`](https://github.com/questpie/questpie/commit/7bd0604b4b0290f2b5d67c6fd4d3ab57a923aa85) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Improve admin live preview and inline editing performance by reducing cascading state updates, stabilizing preview focus and scroll handling, and narrowing preview patch updates.
+
+- Updated dependencies []:
+  - questpie@3.2.4
+  - @questpie/tanstack-query@3.2.4
+
 ## 3.2.3
 
 ### Patch Changes
