@@ -84,6 +84,11 @@ import { useServerActions } from "../../hooks/use-server-actions";
 import { useTransitionStage } from "../../hooks/use-transition-stage";
 import { useResolveText, useTranslation } from "../../i18n/hooks";
 import { RenderProfiler } from "../../lib/render-profiler.js";
+import { diffSnapshot, diffSnapshotAtPath } from "../../preview/diff";
+import {
+	applyPatchBatchImmutable,
+	cloneSnapshot as clonePreviewSnapshot,
+} from "../../preview/patch";
 import type {
 	FieldValueEditedMessage,
 	PreviewPatchOp,
@@ -134,98 +139,6 @@ function extractReactiveConfigs(
 	}
 
 	return configs;
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-	if (!value || typeof value !== "object") return false;
-	const prototype = Object.getPrototypeOf(value);
-	return prototype === Object.prototype || prototype === null;
-}
-
-function clonePreviewSnapshot<T>(value: T): T {
-	if (typeof structuredClone === "function") {
-		try {
-			return structuredClone(value);
-		} catch {
-			// Fall through to JSON clone for form values that are JSON-shaped.
-		}
-	}
-
-	const json = JSON.stringify(value);
-	return json === undefined ? value : (JSON.parse(json) as T);
-}
-
-function arePreviewValuesEqual(a: unknown, b: unknown): boolean {
-	if (Object.is(a, b)) return true;
-
-	if (Array.isArray(a) || Array.isArray(b)) {
-		if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) {
-			return false;
-		}
-		return a.every((value, index) => arePreviewValuesEqual(value, b[index]));
-	}
-
-	if (isPlainObject(a) || isPlainObject(b)) {
-		if (!isPlainObject(a) || !isPlainObject(b)) return false;
-		const aKeys = Object.keys(a);
-		const bKeys = Object.keys(b);
-		if (aKeys.length !== bKeys.length) return false;
-		return aKeys.every(
-			(key) =>
-				Object.prototype.hasOwnProperty.call(b, key) &&
-				arePreviewValuesEqual(a[key], b[key]),
-		);
-	}
-
-	return false;
-}
-
-function joinPreviewPath(basePath: string, key: string): string {
-	return basePath ? `${basePath}.${key}` : key;
-}
-
-function diffPreviewSnapshots(
-	previous: unknown,
-	current: unknown,
-	basePath = "",
-): PreviewPatchOp[] {
-	if (arePreviewValuesEqual(previous, current)) {
-		return [];
-	}
-
-	if (isPlainObject(previous) && isPlainObject(current)) {
-		const ops: PreviewPatchOp[] = [];
-		const keys = new Set([...Object.keys(previous), ...Object.keys(current)]);
-
-		for (const key of keys) {
-			const path = joinPreviewPath(basePath, key);
-			const previousHasKey = Object.prototype.hasOwnProperty.call(
-				previous,
-				key,
-			);
-			const currentHasKey = Object.prototype.hasOwnProperty.call(current, key);
-
-			if (!currentHasKey) {
-				ops.push({ op: "remove", path });
-				continue;
-			}
-
-			if (!previousHasKey) {
-				ops.push({ op: "set", path, value: current[key] });
-				continue;
-			}
-
-			ops.push(...diffPreviewSnapshots(previous[key], current[key], path));
-		}
-
-		return ops;
-	}
-
-	if (!basePath) {
-		return [{ op: "set", path: "", value: current }];
-	}
-
-	return [{ op: "set", path: basePath, value: current }];
 }
 
 function isSafePreviewEditPath(path: string): boolean {
@@ -443,9 +356,7 @@ const PreviewPatchBridge = React.memo(function PreviewPatchBridge({
 	previewRef,
 	enabled,
 }: PreviewPatchBridgeProps) {
-	const previousSnapshotRef = React.useRef<Record<string, unknown> | null>(
-		null,
-	);
+	const previousSnapshotRef = React.useRef<unknown | null>(null);
 	const snapshotVersionRef = React.useRef<number | undefined>(undefined);
 
 	React.useEffect(() => {
@@ -462,30 +373,77 @@ const PreviewPatchBridge = React.memo(function PreviewPatchBridge({
 		snapshotVersionRef.current =
 			previewRef.current?.sendInitSnapshot(initialSnapshot);
 
-		const subscription = form.watch((values) => {
+		let animationFrame: number | null = null;
+		const pendingOps = new Map<string, PreviewPatchOp>();
+
+		const flushPendingOps = () => {
+			animationFrame = null;
+			if (pendingOps.size === 0) {
+				return;
+			}
+
+			const ops = [...pendingOps.values()];
+			pendingOps.clear();
+			previewRef.current?.sendPatchBatch(ops, snapshotVersionRef.current);
+		};
+
+		const queuePatchOps = (ops: PreviewPatchOp[]) => {
+			for (const op of ops) {
+				if (op.path) {
+					pendingOps.set(op.path, op);
+				}
+			}
+
+			if (pendingOps.size === 0 || animationFrame !== null) {
+				return;
+			}
+
+			animationFrame = window.requestAnimationFrame(flushPendingOps);
+		};
+
+		const subscription = form.watch((values, info) => {
 			const previousSnapshot = previousSnapshotRef.current;
-			const nextSnapshot = clonePreviewSnapshot(
-				values as Record<string, unknown>,
-			);
+			const nextValues = values as Record<string, unknown>;
 
 			if (!previousSnapshot) {
+				const nextSnapshot = clonePreviewSnapshot(nextValues);
 				previousSnapshotRef.current = nextSnapshot;
 				snapshotVersionRef.current =
 					previewRef.current?.sendInitSnapshot(nextSnapshot);
 				return;
 			}
 
-			const ops = diffPreviewSnapshots(previousSnapshot, nextSnapshot).filter(
-				(op) => op.path,
+			const changedPath = info?.name;
+			let ops =
+				changedPath && isSafePreviewEditPath(changedPath)
+					? diffSnapshotAtPath(previousSnapshot, nextValues, changedPath)
+					: diffSnapshot(previousSnapshot, nextValues);
+
+			if (ops.some((op) => !op.path)) {
+				const nextSnapshot = clonePreviewSnapshot(nextValues);
+				previousSnapshotRef.current = nextSnapshot;
+				snapshotVersionRef.current =
+					previewRef.current?.sendInitSnapshot(nextSnapshot);
+				pendingOps.clear();
+				return;
+			}
+
+			ops = ops.filter((op) => op.path);
+			if (ops.length === 0) {
+				return;
+			}
+
+			previousSnapshotRef.current = applyPatchBatchImmutable(
+				previousSnapshot,
+				ops,
 			);
-
-			previousSnapshotRef.current = nextSnapshot;
-			if (ops.length === 0) return;
-
-			previewRef.current?.sendPatchBatch(ops, snapshotVersionRef.current);
+			queuePatchOps(ops);
 		});
 
 		return () => {
+			if (animationFrame !== null) {
+				window.cancelAnimationFrame(animationFrame);
+			}
 			subscription.unsubscribe();
 		};
 	}, [enabled, form, previewRef]);
@@ -1126,7 +1084,7 @@ export default function FormView({
 				shouldValidate: true,
 			});
 
-			setTimeout(() => scrollFieldIntoView(message.path), 0);
+			setTimeout(() => scrollFieldIntoView(message.path, { focus: false }), 0);
 		},
 		[form, schema],
 	);

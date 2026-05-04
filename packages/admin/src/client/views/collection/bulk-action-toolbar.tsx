@@ -169,19 +169,8 @@ export function BulkActionToolbar<TItem = any>({
 	const hasFilters = filterCount > 0;
 	const hasSelection = selectedCount > 0;
 	const isVisible = hasSelection || hasFilters;
-	const [shouldRender, setShouldRender] = React.useState(isVisible);
 
-	React.useEffect(() => {
-		if (isVisible) {
-			setShouldRender(true);
-			return;
-		}
-
-		const timeout = window.setTimeout(() => setShouldRender(false), 180);
-		return () => window.clearTimeout(timeout);
-	}, [isVisible]);
-
-	if (!shouldRender) return null;
+	if (!isVisible) return null;
 
 	// Execute bulk action handler
 	const executeBulkAction = async (action: ActionDefinition<TItem>) => {

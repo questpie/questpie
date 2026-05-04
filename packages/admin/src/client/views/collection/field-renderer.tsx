@@ -364,17 +364,6 @@ export function FieldRenderer({
 		staticOptions: context.options,
 	});
 
-	// Hidden fields are not rendered
-	if (context.isHidden) return null;
-
-	// Field not found in config
-	if (!fieldDef) {
-		const entityType = mode === "global" ? "global" : "collection";
-		return renderConfigError(
-			`Field "${fieldName}" not found in ${entityType} "${collection}" config.`,
-		);
-	}
-
 	// Use hook options if available, otherwise use context options
 	const resolvedOptions = hookOptions ?? context.options;
 
@@ -401,7 +390,19 @@ export function FieldRenderer({
 		entityType: mode,
 		field: fullFieldName,
 		props: mergedFieldProps,
+		enabled: !context.isHidden && !!fieldDef,
 	});
+
+	// Hidden fields are not rendered
+	if (context.isHidden) return null;
+
+	// Field not found in config
+	if (!fieldDef) {
+		const entityType = mode === "global" ? "global" : "collection";
+		return renderConfigError(
+			`Field "${fieldName}" not found in ${entityType} "${collection}" config.`,
+		);
+	}
 
 	// For computed fields, use computed value instead of form value
 	const fieldValue = isComputed

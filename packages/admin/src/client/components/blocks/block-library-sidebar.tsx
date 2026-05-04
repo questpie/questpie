@@ -64,6 +64,11 @@ export function BlockLibrarySidebar({
 	const allowedBlocks = useAllowedBlockTypes();
 	const insertPosition = useBlockInsertPosition();
 	const [search, setSearch] = React.useState("");
+	const allowedBlockSet = React.useMemo(
+		() => (allowedBlocks ? new Set(allowedBlocks) : null),
+		[allowedBlocks],
+	);
+	const normalizedSearch = search.trim().toLowerCase();
 
 	// Group blocks by category
 	const categories = React.useMemo(() => {
@@ -77,7 +82,7 @@ export function BlockLibrarySidebar({
 
 		for (const [name, def] of Object.entries(blockRegistry)) {
 			// Filter by allowed blocks
-			if (allowedBlocks && !allowedBlocks.includes(name)) {
+			if (allowedBlockSet && !allowedBlockSet.has(name)) {
 				continue;
 			}
 
@@ -87,9 +92,9 @@ export function BlockLibrarySidebar({
 			}
 
 			// Filter by search
-			if (search) {
+			if (normalizedSearch) {
 				const label = getBlockDisplayLabel(def);
-				if (!label.toLowerCase().includes(search.toLowerCase())) {
+				if (!label.toLowerCase().includes(normalizedSearch)) {
 					continue;
 				}
 			}
@@ -113,15 +118,20 @@ export function BlockLibrarySidebar({
 		}
 
 		// Convert to array and sort
-		const result = Array.from(categoryMap.values());
-		result.sort((a, b) => (a.config.order ?? 999) - (b.config.order ?? 999));
+		const result = Array.from(categoryMap.values()).sort(
+			(a: CategoryInfo, b: CategoryInfo) =>
+				(a.config.order ?? 999) - (b.config.order ?? 999),
+		);
 		for (const category of result) {
-			category.blocks.sort(
-				(a, b) => (a.admin?.order ?? 999) - (b.admin?.order ?? 999),
-			);
+			category.blocks = category.blocks
+				.slice()
+				.sort(
+					(a: BlockWithName, b: BlockWithName) =>
+						(a.admin?.order ?? 999) - (b.admin?.order ?? 999),
+				);
 		}
 		return result;
-	}, [blockRegistry, allowedBlocks, search]);
+	}, [blockRegistry, allowedBlockSet, normalizedSearch]);
 
 	// Focus search on open
 	const searchInputRef = React.useRef<HTMLInputElement>(null);

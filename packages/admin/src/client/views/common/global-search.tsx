@@ -382,20 +382,27 @@ export function GlobalSearch({
 			return;
 		}
 
-		setQuery("");
-		setSelectedIndex(0);
-
 		const timer = setTimeout(() => inputRef.current?.focus(), 50);
 		return () => clearTimeout(timer);
 	}, [isOpen]);
+
+	const resetSearchState = useCallback(() => {
+		setQuery("");
+		setSelectedIndex(0);
+	}, []);
+
+	const closeSearch = useCallback(() => {
+		resetSearchState();
+		onClose();
+	}, [onClose, resetSearchState]);
 
 	// Handle selection
 	const handleSelect = useCallback(
 		(item: SearchItem) => {
 			navigate(item.href);
-			onClose();
+			closeSearch();
 		},
-		[navigate, onClose],
+		[navigate, closeSearch],
 	);
 
 	// Handle keyboard navigation
@@ -420,11 +427,11 @@ export function GlobalSearch({
 					break;
 				case "Escape":
 					e.preventDefault();
-					onClose();
+					closeSearch();
 					break;
 			}
 		},
-		[allItems, selectedIndex, totalCount, handleSelect, onClose],
+		[allItems, selectedIndex, totalCount, handleSelect, closeSearch],
 	);
 
 	const handleHover = useCallback((index: number) => {
@@ -440,7 +447,10 @@ export function GlobalSearch({
 	const hasResults = hasNavResults || hasRecordResults;
 
 	return (
-		<ResponsiveDialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+		<ResponsiveDialog
+			open={isOpen}
+			onOpenChange={(open) => !open && closeSearch()}
+		>
 			<ResponsiveDialogContent
 				className="qa-global-search gap-0 p-0 sm:max-w-3xl"
 				showCloseButton={false}

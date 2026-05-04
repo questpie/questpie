@@ -277,38 +277,15 @@ function PreviewFieldElement({
 }) {
 	const [isEditing, setIsEditing] = React.useState(false);
 	const [draftValue, setDraftValue] = React.useState("");
-	const [isHovered, setIsHovered] = React.useState(false);
-	const [hasDomFocus, setHasDomFocus] = React.useState(false);
-	const inputRef = React.useRef<HTMLInputElement | HTMLTextAreaElement>(null);
 	const isEditable = editable === "text" || editable === "textarea";
-	const shouldShowAffordance =
-		isHovered || hasDomFocus || isFocused || isEditing;
-	const previewRingColor = "var(--ring, var(--highlight, #b700ff))";
-
-	const previewStyle = React.useMemo<React.CSSProperties>(
-		() => ({
-			outlineColor: shouldShowAffordance ? previewRingColor : "transparent",
-			outlineOffset: "2px",
-			outlineStyle: "solid",
-			outlineWidth: "2px",
-			boxShadow: shouldShowAffordance
-				? `0 0 0 ${isEditing ? 5 : 4}px color-mix(in srgb, ${previewRingColor} ${isEditing ? 24 : 16}%, transparent)`
-				: undefined,
-			borderRadius: "2px",
-			cursor: isEditable ? "text" : "pointer",
-			transition:
-				"outline-color 150ms ease, box-shadow 150ms ease, background-color 150ms ease",
-			...style,
-		}),
-		[isEditable, isEditing, shouldShowAffordance, style],
+	const setEditorRef = React.useCallback(
+		(node: HTMLInputElement | HTMLTextAreaElement | null) => {
+			if (!node) return;
+			node.focus({ preventScroll: true });
+			node.select();
+		},
+		[],
 	);
-
-	React.useEffect(() => {
-		if (isEditing) {
-			inputRef.current?.focus();
-			inputRef.current?.select();
-		}
-	}, [isEditing]);
 
 	const startEditing = React.useCallback(() => {
 		if (!isEditable) {
@@ -412,7 +389,7 @@ function PreviewFieldElement({
 	const editor =
 		editable === "textarea" ? (
 			<textarea
-				ref={inputRef as React.RefObject<HTMLTextAreaElement>}
+				ref={setEditorRef}
 				value={draftValue}
 				onChange={(event) => setDraftValue(event.target.value)}
 				onBlur={commitEdit}
@@ -422,7 +399,7 @@ function PreviewFieldElement({
 			/>
 		) : (
 			<input
-				ref={inputRef as React.RefObject<HTMLInputElement>}
+				ref={setEditorRef}
 				type="text"
 				value={draftValue}
 				onChange={(event) => setDraftValue(event.target.value)}
@@ -444,11 +421,7 @@ function PreviewFieldElement({
 			onClick={handleClick}
 			onDoubleClick={handleDoubleClick}
 			onKeyDown={handleKeyDown}
-			onMouseEnter={() => setIsHovered(true)}
-			onMouseLeave={() => setIsHovered(false)}
-			onFocus={() => setHasDomFocus(true)}
-			onBlur={() => setHasDomFocus(false)}
-			style={previewStyle}
+			style={style}
 			className={cn(
 				className,
 				"group/preview-field relative rounded-[2px] transition-[box-shadow,outline-color,outline-offset] duration-150",

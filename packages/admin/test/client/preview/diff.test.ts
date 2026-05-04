@@ -1,6 +1,9 @@
 import { describe, expect, it } from "bun:test";
 
-import { diffSnapshot } from "#questpie/admin/client/preview/diff";
+import {
+	diffSnapshot,
+	diffSnapshotAtPath,
+} from "#questpie/admin/client/preview/diff";
 
 describe("diffSnapshot", () => {
 	it("returns no operations for equal snapshots", () => {
@@ -61,5 +64,47 @@ describe("diffSnapshot", () => {
 				value: { tags: ["news"] },
 			},
 		]);
+	});
+});
+
+describe("diffSnapshotAtPath", () => {
+	it("diffs only the changed path", () => {
+		expect(
+			diffSnapshotAtPath(
+				{ title: "Before", seo: { title: "Stable" } },
+				{ title: "After", seo: { title: "Changed" } },
+				"title",
+			),
+		).toEqual([{ op: "set", path: "title", value: "After" }]);
+	});
+
+	it("supports nested array paths", () => {
+		expect(
+			diffSnapshotAtPath(
+				{ blocks: [{ title: "Before" }] },
+				{ blocks: [{ title: "After" }] },
+				"blocks.0.title",
+			),
+		).toEqual([{ op: "set", path: "blocks.0.title", value: "After" }]);
+	});
+
+	it("creates remove operations when the changed path disappears", () => {
+		expect(
+			diffSnapshotAtPath(
+				{ seo: { description: "Remove me" } },
+				{ seo: {} },
+				"seo.description",
+			),
+		).toEqual([{ op: "remove", path: "seo.description" }]);
+	});
+
+	it("returns no operations for unchanged path values", () => {
+		expect(
+			diffSnapshotAtPath(
+				{ title: "Stable", seo: { title: "Before" } },
+				{ title: "Stable", seo: { title: "After" } },
+				"title",
+			),
+		).toEqual([]);
 	});
 });

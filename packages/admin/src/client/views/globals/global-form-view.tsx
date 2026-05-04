@@ -441,25 +441,23 @@ export default function GlobalFormView({
 		pendingLocale: string | null;
 	}>({ open: false, pendingLocale: null });
 
-	React.useEffect(() => {
-		if (prevLocaleRef.current !== contentLocale) {
+	const handleContentLocaleChange = React.useCallback(
+		(nextLocale: string) => {
+			if (nextLocale === prevLocaleRef.current) return;
+
 			if (form.formState.isDirty && !localeChangeDialog.open) {
 				skipResetRef.current = true;
 				localeSnapshotRef.current = form.getValues();
-				setLocaleChangeDialog({ open: true, pendingLocale: contentLocale });
-				setContentLocale(prevLocaleRef.current);
-			} else {
-				prevLocaleRef.current = contentLocale;
-				skipResetRef.current = false;
+				setLocaleChangeDialog({ open: true, pendingLocale: nextLocale });
+				return;
 			}
-		}
-	}, [
-		contentLocale,
-		form.formState.isDirty,
-		localeChangeDialog.open,
-		setContentLocale,
-		form,
-	]);
+
+			prevLocaleRef.current = nextLocale;
+			skipResetRef.current = false;
+			setContentLocale(nextLocale);
+		},
+		[form, form.formState.isDirty, localeChangeDialog.open, setContentLocale],
+	);
 
 	const handleLocaleChangeConfirm = React.useCallback(() => {
 		skipResetRef.current = false;
@@ -470,6 +468,12 @@ export default function GlobalFormView({
 		}
 		setLocaleChangeDialog({ open: false, pendingLocale: null });
 	}, [localeChangeDialog.pendingLocale, setContentLocale]);
+
+	React.useEffect(() => {
+		if (!localeChangeDialog.open) {
+			prevLocaleRef.current = contentLocale;
+		}
+	}, [contentLocale, localeChangeDialog.open]);
 
 	const handleLocaleChangeCancel = React.useCallback(() => {
 		skipResetRef.current = false;
@@ -656,7 +660,7 @@ export default function GlobalFormView({
 								<LocaleSwitcher
 									locales={localeOptions}
 									value={contentLocale}
-									onChange={setContentLocale}
+									onChange={handleContentLocaleChange}
 								/>
 							)}
 							{workflowEnabled && currentStage && (

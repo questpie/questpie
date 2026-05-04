@@ -66,6 +66,42 @@ export type FocusContextValue = {
 
 const FocusContext = React.createContext<FocusContextValue | null>(null);
 
+function areBlockInsertPositionsEqual(
+	left: BlockInsertPosition,
+	right: BlockInsertPosition,
+): boolean {
+	return left.parentId === right.parentId && left.index === right.index;
+}
+
+function areFocusStatesEqual(left: FocusState, right: FocusState): boolean {
+	if (left.type !== right.type) return false;
+
+	switch (left.type) {
+		case "idle":
+			return true;
+		case "field":
+			return right.type === "field" && left.fieldPath === right.fieldPath;
+		case "block":
+			return (
+				right.type === "block" &&
+				left.blockId === right.blockId &&
+				left.fieldPath === right.fieldPath
+			);
+		case "block-insert":
+			return (
+				right.type === "block-insert" &&
+				areBlockInsertPositionsEqual(left.position, right.position) &&
+				left.referenceBlockId === right.referenceBlockId
+			);
+		case "relation":
+			return (
+				right.type === "relation" &&
+				left.fieldPath === right.fieldPath &&
+				left.targetCollection === right.targetCollection
+			);
+	}
+}
+
 // ============================================================================
 // Provider
 // ============================================================================
@@ -78,57 +114,60 @@ export type FocusProviderProps = {
 
 export function FocusProvider({ children, onFocusChange }: FocusProviderProps) {
 	const [state, setState] = React.useState<FocusState>({ type: "idle" });
+	const stateRef = React.useRef<FocusState>(state);
 
-	// Use functional setState for stable callbacks (React best practice)
-	const focusField = React.useCallback(
-		(fieldPath: string) => {
-			const newState: FocusState = { type: "field", fieldPath };
-			setState(newState);
-			onFocusChange?.(newState);
+	const setFocusState = React.useCallback(
+		(nextState: FocusState) => {
+			if (areFocusStatesEqual(stateRef.current, nextState)) {
+				return;
+			}
+
+			stateRef.current = nextState;
+			setState(nextState);
+			onFocusChange?.(nextState);
 		},
 		[onFocusChange],
+	);
+
+	const focusField = React.useCallback(
+		(fieldPath: string) => {
+			setFocusState({ type: "field", fieldPath });
+		},
+		[setFocusState],
 	);
 
 	const focusBlock = React.useCallback(
 		(blockId: string, fieldPath?: string) => {
-			const newState: FocusState = { type: "block", blockId, fieldPath };
-			setState(newState);
-			onFocusChange?.(newState);
+			setFocusState({ type: "block", blockId, fieldPath });
 		},
-		[onFocusChange],
+		[setFocusState],
 	);
 
 	const focusRelation = React.useCallback(
 		(fieldPath: string, targetCollection?: string) => {
-			const newState: FocusState = {
+			setFocusState({
 				type: "relation",
 				fieldPath,
 				targetCollection,
-			};
-			setState(newState);
-			onFocusChange?.(newState);
+			});
 		},
-		[onFocusChange],
+		[setFocusState],
 	);
 
 	const requestBlockInsert = React.useCallback(
 		(position: BlockInsertPosition, referenceBlockId?: string) => {
-			const newState: FocusState = {
+			setFocusState({
 				type: "block-insert",
 				position,
 				referenceBlockId,
-			};
-			setState(newState);
-			onFocusChange?.(newState);
+			});
 		},
-		[onFocusChange],
+		[setFocusState],
 	);
 
 	const clearFocus = React.useCallback(() => {
-		const newState: FocusState = { type: "idle" };
-		setState(newState);
-		onFocusChange?.(newState);
-	}, [onFocusChange]);
+		setFocusState({ type: "idle" });
+	}, [setFocusState]);
 
 	// Derive focused field/block from state for direct comparison
 	const focusedFieldPath = state.type === "field" ? state.fieldPath : undefined;
@@ -278,6 +317,10 @@ function extractRelativeField(path: string, blockId: string): string {
 export type ScrollFieldIntoViewOptions = {
 	/** Scroll the owning block card if a nested block field is not rendered yet. */
 	fallbackToBlock?: boolean;
+	/** Move DOM focus to the target form control. */
+	focus?: boolean;
+	behavior?: ScrollBehavior;
+	block?: ScrollLogicalPosition;
 };
 
 export type ScheduleScrollFieldIntoViewOptions = ScrollFieldIntoViewOptions & {
@@ -359,8 +402,9 @@ export function scrollFieldIntoView(
 		'input:not([type="hidden"]), textarea, button, select, [tabindex]:not([tabindex="-1"]), [contenteditable="true"]',
 	);
 
+	const { behavior = "auto", block = "nearest", focus = true } = options;
 	const target = focusable ?? wrapper;
-	target.scrollIntoView({ behavior: "smooth", block: "center" });
+	target.scrollIntoView({ behavior, block });
 
 	// Add pulse animation to highlight the field
 	wrapper.classList.add("field-focus-pulse");
@@ -370,12 +414,12 @@ export function scrollFieldIntoView(
 		{ once: true },
 	);
 
-	if (focusable) {
+	if (focus && focusable) {
 		// Use requestAnimationFrame to focus after scroll starts
 		requestAnimationFrame(() => {
 			// Pull focus from iframe back to parent window
 			window.focus();
-			focusable.focus();
+			focusable.focus({ preventScroll: true });
 		});
 	}
 
@@ -390,13 +434,19 @@ export function scheduleScrollFieldIntoView(
 		return;
 	}
 
-	const { attempts = 12, delayMs = 80, fallbackToBlock = false } = options;
+	const {
+		attempts = 12,
+		delayMs = 80,
+		fallbackToBlock = false,
+		...scrollOptions
+	} = options;
 
 	let attempt = 0;
 	const tryScroll = () => {
 		attempt += 1;
 		const isLastAttempt = attempt >= attempts;
 		const didScroll = scrollFieldIntoView(fieldPath, {
+			...scrollOptions,
 			fallbackToBlock: fallbackToBlock && isLastAttempt,
 		});
 

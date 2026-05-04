@@ -212,12 +212,18 @@ function UploadCollectionSheet({
 	const [uploadedAssets, setUploadedAssets] = React.useState<Asset[]>([]);
 	const [editAssetId, setEditAssetId] = React.useState<string | null>(null);
 
-	React.useEffect(() => {
-		if (!open) {
-			setUploadedAssets([]);
-			setEditAssetId(null);
-		}
-	}, [open]);
+	const resetUploadSheetState = React.useCallback(() => {
+		setUploadedAssets([]);
+		setEditAssetId(null);
+	}, []);
+
+	const handleOpenChange = React.useCallback(
+		(nextOpen: boolean) => {
+			if (!nextOpen) resetUploadSheetState();
+			onOpenChange(nextOpen);
+		},
+		[onOpenChange, resetUploadSheetState],
+	);
 
 	const handleValidationError = React.useCallback(
 		(errors: { message: string }[]) => {
@@ -253,7 +259,7 @@ function UploadCollectionSheet({
 	);
 
 	return (
-		<Sheet open={open} onOpenChange={onOpenChange} modal={false}>
+		<Sheet open={open} onOpenChange={handleOpenChange} modal={false}>
 			<SheetContent
 				side="right"
 				showOverlay={false}
@@ -297,7 +303,7 @@ function UploadCollectionSheet({
 				<SheetFooter className="border-t px-6 py-4">
 					<Button
 						variant="outline"
-						onClick={() => onOpenChange(false)}
+						onClick={() => handleOpenChange(false)}
 						disabled={isUploading}
 					>
 						{t("common.close")}

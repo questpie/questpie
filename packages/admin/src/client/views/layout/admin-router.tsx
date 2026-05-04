@@ -566,46 +566,26 @@ const RegistryViewRenderer = React.memo(function RegistryViewRenderer({
 	viewKind: "list" | "form";
 	viewId: string;
 }) {
-	const [state, setState] = React.useState<{
-		Component: React.ComponentType<any> | React.LazyExoticComponent<any> | null;
-		loading: boolean;
+	const loaderIsDynamic = isDynamicImportLoader(loader);
+	const directComponent =
+		loader && !loaderIsDynamic
+			? (loader as React.ComponentType<any> | React.LazyExoticComponent<any>)
+			: null;
+	const cachedComponent = React.useMemo(
+		() => (loaderIsDynamic ? (getCachedComponent(loader) ?? null) : null),
+		[loader, loaderIsDynamic],
+	);
+	const needsAsyncLoad = loaderIsDynamic && !cachedComponent;
+	const [asyncState, setAsyncState] = React.useState<{
+		loader: MaybeLazyComponent | null;
+		Component: React.ComponentType<any> | null;
 		error: Error | null;
-	}>(() => {
-		const cachedComponent = getCachedComponent(loader);
-		return {
-			Component: cachedComponent ?? null,
-			loading: !cachedComponent,
-			error: null,
-		};
-	});
+	}>({ loader: null, Component: null, error: null });
 
 	React.useEffect(() => {
-		if (!loader) {
-			setState({ Component: null, loading: false, error: null });
-			return;
-		}
-
-		if (!isDynamicImportLoader(loader)) {
-			setState({
-				Component: loader as React.ComponentType<any>,
-				loading: false,
-				error: null,
-			});
-			return;
-		}
-
-		const cachedComponent = getCachedComponent(loader);
-		if (cachedComponent) {
-			setState({
-				Component: cachedComponent,
-				loading: false,
-				error: null,
-			});
-			return;
-		}
+		if (!needsAsyncLoad || !isDynamicImportLoader(loader)) return;
 
 		let mounted = true;
-		setState((prev) => ({ ...prev, loading: true, error: null }));
 
 		(async () => {
 			try {
@@ -619,7 +599,7 @@ const RegistryViewRenderer = React.memo(function RegistryViewRenderer({
 					Component = result as unknown as React.ComponentType<any>;
 				}
 				cacheComponent(loader, Component);
-				setState({ Component, loading: false, error: null });
+				setAsyncState({ loader, Component, error: null });
 			} catch (error) {
 				if (!mounted) return;
 				let resolvedError: Error;
@@ -628,9 +608,9 @@ const RegistryViewRenderer = React.memo(function RegistryViewRenderer({
 				} else {
 					resolvedError = new Error("Failed to load view component");
 				}
-				setState({
+				setAsyncState({
+					loader,
 					Component: null,
-					loading: false,
 					error: resolvedError,
 				});
 			}
@@ -639,17 +619,23 @@ const RegistryViewRenderer = React.memo(function RegistryViewRenderer({
 		return () => {
 			mounted = false;
 		};
-	}, [loader]);
+	}, [loader, needsAsyncLoad]);
 
-	if (state.loading) {
+	const asyncMatches = asyncState.loader === loader;
+	const Component =
+		directComponent ??
+		cachedComponent ??
+		(asyncMatches ? asyncState.Component : null);
+	const error = asyncMatches ? asyncState.error : null;
+	const loading = needsAsyncLoad && !Component && !error;
+
+	if (loading) {
 		return <ViewLoadingState viewKind={viewKind} />;
 	}
 
-	if (state.error || !state.Component) {
+	if (error || !Component) {
 		return <UnknownViewState viewKind={viewKind} viewId={viewId} />;
 	}
-
-	const Component = state.Component;
 
 	return (
 		<React.Suspense fallback={<ViewLoadingState viewKind={viewKind} />}>

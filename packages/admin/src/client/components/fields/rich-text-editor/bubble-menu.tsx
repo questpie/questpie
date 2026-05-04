@@ -192,13 +192,12 @@ export function RichTextBubbleMenu({
 	React.useEffect(() => {
 		if (!linkOpen) return;
 
-		const currentLink = editor.getAttributes("link").href as string | undefined;
-		setLinkUrl(currentLink || "");
-		window.requestAnimationFrame(() => {
+		const frame = window.requestAnimationFrame(() => {
 			linkInputRef.current?.focus();
 			linkInputRef.current?.select();
 		});
-	}, [editor, linkOpen]);
+		return () => window.cancelAnimationFrame(frame);
+	}, [linkOpen]);
 
 	return (
 		<TiptapBubbleMenu

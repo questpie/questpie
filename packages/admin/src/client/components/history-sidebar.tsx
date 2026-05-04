@@ -101,6 +101,16 @@ const VERSION_META_KEYS = new Set([
 	"versionCreatedAt",
 ]);
 const EMPTY_AUDIT_ENTRIES: AuditEntry[] = [];
+const RELATIVE_TIME_FORMATTERS = new Map<string, Intl.RelativeTimeFormat>();
+
+function getRelativeTimeFormatter(locale: string) {
+	let formatter = RELATIVE_TIME_FORMATTERS.get(locale);
+	if (!formatter) {
+		formatter = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
+		RELATIVE_TIME_FORMATTERS.set(locale, formatter);
+	}
+	return formatter;
+}
 
 function formatRelativeTime(date: Date, locale: string): string {
 	const now = new Date();
@@ -110,7 +120,7 @@ function formatRelativeTime(date: Date, locale: string): string {
 	const hours = Math.floor(minutes / 60);
 	const days = Math.floor(hours / 24);
 
-	const formatter = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
+	const formatter = getRelativeTimeFormatter(locale);
 
 	if (days > 0) return formatter.format(-days, "day");
 	if (hours > 0) return formatter.format(-hours, "hour");
@@ -251,9 +261,12 @@ function extractRichText(value: unknown): string | null {
 }
 
 function summarizeObjectArray(value: unknown[]): string | null {
-	const labels = value
-		.map((item) => (isObjectRecord(item) ? summarizeObject(item) : null))
-		.filter((item): item is string => !!item);
+	const labels: string[] = [];
+	for (const item of value) {
+		if (!isObjectRecord(item)) continue;
+		const label = summarizeObject(item);
+		if (label) labels.push(label);
+	}
 
 	if (labels.length === 0) return null;
 	return labels.length === value.length
@@ -262,14 +275,15 @@ function summarizeObjectArray(value: unknown[]): string | null {
 }
 
 function summarizeBlocks(value: unknown[]): string | null {
-	const blockNames = value
-		.map((item) => {
-			if (!isObjectRecord(item)) return null;
-			const type =
-				item.blockType ?? item.block ?? item.type ?? item._type ?? item.name;
-			return typeof type === "string" ? formatLabel(type) : null;
-		})
-		.filter((item): item is string => !!item);
+	const blockNames: string[] = [];
+	for (const item of value) {
+		if (!isObjectRecord(item)) continue;
+		const type =
+			item.blockType ?? item.block ?? item.type ?? item._type ?? item.name;
+		if (typeof type === "string") {
+			blockNames.push(formatLabel(type));
+		}
+	}
 
 	if (blockNames.length === 0) return null;
 
@@ -687,7 +701,7 @@ function VersionsList({
 	const resolveText = useResolveText();
 
 	const sortedAscVersions = React.useMemo(() => {
-		return [...versions].sort((a, b) => {
+		return versions.slice().sort((a, b) => {
 			const aNum = a.versionNumber ?? 0;
 			const bNum = b.versionNumber ?? 0;
 			return aNum - bNum;
@@ -696,12 +710,12 @@ function VersionsList({
 
 	const sortedVersions = React.useMemo(
 		() =>
-			[...sortedAscVersions].sort((a, b) => {
+			versions.slice().sort((a, b) => {
 				const aNum = a.versionNumber ?? 0;
 				const bNum = b.versionNumber ?? 0;
 				return bNum - aNum;
 			}),
-		[sortedAscVersions],
+		[versions],
 	);
 
 	const fieldsForDiff = React.useMemo(() => {

@@ -241,6 +241,17 @@ export function JsonField({
  * Code editor for JSON (using Textarea for simplicity)
  * Can be replaced with Monaco/CodeMirror in the future
  */
+function formatJsonEditorValue(value: any): string {
+	if (typeof value === "string") return value;
+	if (value === null || value === undefined) return "";
+
+	try {
+		return JSON.stringify(value, null, 2);
+	} catch {
+		return "";
+	}
+}
+
 function JsonCodeEditor({
 	value,
 	onChange,
@@ -260,38 +271,18 @@ function JsonCodeEditor({
 	maxHeight?: number;
 	error?: boolean;
 }) {
-	const [localValue, setLocalValue] = React.useState<string>(() => {
-		if (typeof value === "string") return value;
-		if (value === null || value === undefined) return "";
-		try {
-			return JSON.stringify(value, null, 2);
-		} catch {
-			return "";
-		}
-	});
+	const externalValue = React.useMemo(
+		() => formatJsonEditorValue(value),
+		[value],
+	);
+	const [localValue, setLocalValue] = React.useState<string>(externalValue);
 	const [parseError, setParseError] = React.useState<string | null>(null);
-	const isEditingRef = React.useRef(false);
-
-	// Sync local value when external value changes (skip if user is actively editing)
-	React.useEffect(() => {
-		if (isEditingRef.current) return;
-
-		if (typeof value === "string") {
-			setLocalValue(value);
-		} else if (value !== null && value !== undefined) {
-			try {
-				setLocalValue(JSON.stringify(value, null, 2));
-			} catch {
-				// Keep current local value if stringification fails
-			}
-		} else {
-			setLocalValue("");
-		}
-	}, [value]);
+	const [isEditing, setIsEditing] = React.useState(false);
+	const displayedValue = isEditing ? localValue : externalValue;
 
 	const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-		isEditingRef.current = true;
 		const newValue = e.target.value;
+		setIsEditing(true);
 		setLocalValue(newValue);
 
 		// Try to parse and update form value
@@ -314,8 +305,9 @@ function JsonCodeEditor({
 
 	const handleFormat = () => {
 		try {
-			const parsed = JSON.parse(localValue);
+			const parsed = JSON.parse(displayedValue);
 			const formatted = JSON.stringify(parsed, null, 2);
+			setIsEditing(true);
 			setLocalValue(formatted);
 			setParseError(null);
 			onChange(parsed);
@@ -328,10 +320,14 @@ function JsonCodeEditor({
 		<div className="space-y-2">
 			<div className="relative">
 				<Textarea
-					value={localValue}
+					value={displayedValue}
 					onChange={handleChange}
+					onFocus={() => {
+						setLocalValue(externalValue);
+						setIsEditing(true);
+					}}
 					onBlur={() => {
-						isEditingRef.current = false;
+						setIsEditing(false);
 					}}
 					disabled={disabled}
 					readOnly={readOnly}
@@ -358,7 +354,7 @@ function JsonCodeEditor({
 			</div>
 
 			{/* Format button */}
-			{!readOnly && !disabled && localValue && (
+			{!readOnly && !disabled && displayedValue && (
 				<div className="flex justify-end">
 					<Button
 						type="button"

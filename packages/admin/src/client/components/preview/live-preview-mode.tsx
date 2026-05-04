@@ -81,6 +81,14 @@ function getFocusStatePath(state: FocusState): string | null {
 	return null;
 }
 
+function isPreviewIframeFocused(): boolean {
+	const activeElement = document.activeElement;
+	return (
+		activeElement instanceof HTMLIFrameElement ||
+		activeElement?.tagName === "IFRAME"
+	);
+}
+
 // ============================================================================
 // Resize Hook
 // ============================================================================
@@ -89,14 +97,25 @@ function useResizablePane(defaultSize = 50, minSize = 30, enabled = true) {
 	const [previewPercent, setPreviewPercent] = React.useState(defaultSize);
 	const isDragging = React.useRef(false);
 	const containerRef = React.useRef<HTMLDivElement>(null);
+	const previousBodyStyleRef = React.useRef({ cursor: "", userSelect: "" });
+
+	const restoreBodyStyle = React.useCallback(() => {
+		Object.assign(document.body.style, previousBodyStyleRef.current);
+	}, []);
 
 	const handleMouseDown = React.useCallback(
 		(e: React.MouseEvent) => {
 			if (!enabled) return;
 			e.preventDefault();
 			isDragging.current = true;
-			document.body.style.cursor = "col-resize";
-			document.body.style.userSelect = "none";
+			previousBodyStyleRef.current = {
+				cursor: document.body.style.cursor,
+				userSelect: document.body.style.userSelect,
+			};
+			Object.assign(document.body.style, {
+				cursor: "col-resize",
+				userSelect: "none",
+			});
 		},
 		[enabled],
 	);
@@ -120,8 +139,7 @@ function useResizablePane(defaultSize = 50, minSize = 30, enabled = true) {
 		const handleMouseUp = () => {
 			if (isDragging.current) {
 				isDragging.current = false;
-				document.body.style.cursor = "";
-				document.body.style.userSelect = "";
+				restoreBodyStyle();
 			}
 		};
 		window.addEventListener("mousemove", handleMouseMove);
@@ -129,8 +147,12 @@ function useResizablePane(defaultSize = 50, minSize = 30, enabled = true) {
 		return () => {
 			window.removeEventListener("mousemove", handleMouseMove);
 			window.removeEventListener("mouseup", handleMouseUp);
+			if (isDragging.current) {
+				isDragging.current = false;
+				restoreBodyStyle();
+			}
 		};
-	}, [enabled, minSize]);
+	}, [enabled, minSize, restoreBodyStyle]);
 
 	return { previewPercent, containerRef, handleMouseDown };
 }
@@ -202,19 +224,25 @@ function LivePreviewContent({
 
 	// Access FocusContext
 	const focusContext = useFocus();
-	const focusState = focusContext.state; // Extract for effect dependency
+	const {
+		state: focusState,
+		focusField,
+		focusBlock,
+		focusRelation,
+		requestBlockInsert,
+	} = focusContext;
 
 	const applyFocusState = React.useCallback(
 		(state: FocusState) => {
 			if (state.type === "field") {
-				focusContext.focusField(state.fieldPath);
+				focusField(state.fieldPath);
 			} else if (state.type === "block") {
-				focusContext.focusBlock(state.blockId, state.fieldPath);
+				focusBlock(state.blockId, state.fieldPath);
 			} else if (state.type === "relation") {
-				focusContext.focusRelation(state.fieldPath, state.targetCollection);
+				focusRelation(state.fieldPath, state.targetCollection);
 			}
 		},
-		[focusContext],
+		[focusBlock, focusField, focusRelation],
 	);
 
 	// Handle exit preview (clear draft mode cookie)
@@ -222,12 +250,6 @@ function LivePreviewContent({
 		// Redirect to exit preview endpoint
 		window.location.href = "/api/preview?disable=true";
 	}, []);
-
-	React.useEffect(() => {
-		if (!open) {
-			setActiveTab("form");
-		}
-	}, [open]);
 
 	// Sync focus changes to preview iframe
 	React.useEffect(() => {
@@ -304,19 +326,16 @@ function LivePreviewContent({
 
 	const handlePreviewBlockClick = React.useCallback(
 		(blockId: string) => {
-			focusContext.focusBlock(blockId);
+			focusBlock(blockId);
 		},
-		[focusContext],
+		[focusBlock],
 	);
 
 	const handlePreviewBlockInsertRequest = React.useCallback(
 		(message: BlockInsertRequestedMessage) => {
-			focusContext.requestBlockInsert(
-				message.position,
-				message.referenceBlockId,
-			);
+			requestBlockInsert(message.position, message.referenceBlockId);
 		},
-		[focusContext],
+		[requestBlockInsert],
 	);
 
 	return (
@@ -494,18 +513,26 @@ export function LivePreviewMode({
 
 	// Handle focus changes from FocusContext - scroll to and focus the field
 	const handleFocusChange = React.useCallback((state: FocusState) => {
+		const shouldFocusForm = !isPreviewIframeFocused();
+
 		if (state.type === "field" || state.type === "relation") {
-			scheduleScrollFieldIntoView(state.fieldPath);
+			scheduleScrollFieldIntoView(state.fieldPath, {
+				focus: shouldFocusForm,
+			});
 		} else if (state.type === "block") {
 			const fullPath = state.fieldPath
 				? `content._values.${state.blockId}.${state.fieldPath}`
 				: `content._values.${state.blockId}`;
-			scheduleScrollFieldIntoView(fullPath, { fallbackToBlock: true });
+			scheduleScrollFieldIntoView(fullPath, {
+				fallbackToBlock: true,
+				focus: shouldFocusForm,
+			});
 		} else if (state.type === "block-insert") {
 			const targetBlockId = state.referenceBlockId ?? state.position.parentId;
 			if (!targetBlockId) return;
 			scheduleScrollFieldIntoView(`content._values.${targetBlockId}`, {
 				fallbackToBlock: true,
+				focus: shouldFocusForm,
 			});
 		}
 	}, []);

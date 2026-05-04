@@ -8,7 +8,6 @@ import type { Editor } from "@tiptap/core";
 import * as React from "react";
 import { toast } from "sonner";
 
-import { useCollectionItem } from "../../../hooks/use-collection";
 import type { Asset } from "../../../hooks/use-upload";
 import { useTranslation } from "../../../i18n/hooks";
 import { MediaPickerDialog } from "../../media/media-picker-dialog";
@@ -52,20 +51,11 @@ export function ImagePopover({
 	const [uploadingImage, setUploadingImage] = React.useState(false);
 	const fileInputRef = React.useRef<HTMLInputElement | null>(null);
 	const [isPickerOpen, setIsPickerOpen] = React.useState(false);
-	const [selectedAssetId, setSelectedAssetId] = React.useState<string | null>(
-		null,
-	);
 	const { collection, uploadImageFile } = useRichTextImageUpload({
 		imageCollection,
 		onImageUpload,
 	});
 	const showMediaLibrary = enableMediaLibrary ?? true;
-	const { data: selectedAsset } = useCollectionItem(
-		collection || "",
-		selectedAssetId || "",
-		undefined,
-		{ enabled: !!collection && !!selectedAssetId },
-	);
 
 	const handleInsertImageUrl = React.useCallback(() => {
 		if (!editor || !imageUrl) return;
@@ -112,32 +102,36 @@ export function ImagePopover({
 		[editor, imageAlt, onOpenChange, t, uploadImageFile],
 	);
 
-	React.useEffect(() => {
-		if (!selectedAssetId || !selectedAsset || !editor) return;
-		const assetUrl = (selectedAsset as Asset | undefined)?.url;
-		if (!assetUrl) {
-			toast.error(t("upload.error"));
-			setSelectedAssetId(null);
-			return;
-		}
-		editor
-			.chain()
-			.focus()
-			.setImage({
-				src: assetUrl,
-				alt: imageAlt || (selectedAsset as Asset | undefined)?.alt || undefined,
-			})
-			.run();
-		setImageUrl("");
-		setImageAlt("");
-		setSelectedAssetId(null);
-		onOpenChange(false);
-	}, [editor, imageAlt, onOpenChange, selectedAsset, selectedAssetId, t]);
+	const insertAssetImage = React.useCallback(
+		(asset: Asset | undefined) => {
+			if (!editor || !asset?.url) {
+				toast.error(t("upload.error"));
+				return;
+			}
 
-	const handlePickerSelect = (ids: string | string[]) => {
-		const selectedId = Array.isArray(ids) ? ids[0] : ids;
-		if (!selectedId) return;
-		setSelectedAssetId(selectedId);
+			editor
+				.chain()
+				.focus()
+				.setImage({
+					src: asset.url,
+					alt: imageAlt || asset.alt || undefined,
+				})
+				.run();
+			setImageUrl("");
+			setImageAlt("");
+			onOpenChange(false);
+		},
+		[editor, imageAlt, onOpenChange, t],
+	);
+
+	const handlePickerSelect = (
+		_ids: string | string[],
+		selectedAssets?: Asset | Asset[],
+	) => {
+		const asset = Array.isArray(selectedAssets)
+			? selectedAssets[0]
+			: selectedAssets;
+		insertAssetImage(asset);
 		setIsPickerOpen(false);
 	};
 

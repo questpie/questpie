@@ -80,7 +80,7 @@ interface MediaPickerDialogProps {
 	/**
 	 * Called when assets are selected
 	 */
-	onSelect: (ids: string | string[]) => void;
+	onSelect: (ids: string | string[], assets?: Asset | Asset[]) => void;
 
 	/**
 	 * Maximum number of items (for multiple mode)
@@ -196,10 +196,10 @@ export function MediaPickerDialog({
 		() => (data?.docs || []) as Asset[],
 		[data?.docs],
 	);
-	const previewAsset = React.useMemo(
-		() => assets.find((asset) => asset.id === previewAssetId) ?? null,
-		[assets, previewAssetId],
-	);
+	const previewAsset = React.useMemo(() => {
+		if (!open || assets.length === 0) return null;
+		return assets.find((asset) => asset.id === previewAssetId) ?? assets[0];
+	}, [assets, open, previewAssetId]);
 	const selectedMimeFilterLabel = React.useMemo(() => {
 		const selectedFilter =
 			MIME_TYPE_FILTERS.find((filter) => filter.value === mimeFilter) ??
@@ -208,31 +208,20 @@ export function MediaPickerDialog({
 		return t(selectedFilter.labelKey);
 	}, [mimeFilter, t]);
 
-	// Reset state when dialog closes
-	React.useEffect(() => {
-		if (!open) {
-			setSelectedIds(new Set());
-			setSearchQuery("");
-			setMimeFilter("all");
-			setPreviewAssetId(null);
-			return;
-		}
-	}, [open]);
+	const resetPickerState = React.useCallback(() => {
+		setSelectedIds(new Set());
+		setSearchQuery("");
+		setMimeFilter("all");
+		setPreviewAssetId(null);
+	}, []);
 
-	// Auto-select first asset for preview
-	React.useEffect(() => {
-		if (!open || assets.length === 0) return;
-
-		if (!previewAssetId) {
-			setPreviewAssetId(assets[0].id);
-			return;
-		}
-
-		const stillExists = assets.some((asset) => asset.id === previewAssetId);
-		if (!stillExists) {
-			setPreviewAssetId(assets[0].id);
-		}
-	}, [open, assets, previewAssetId]);
+	const handleOpenChange = React.useCallback(
+		(nextOpen: boolean) => {
+			if (!nextOpen) resetPickerState();
+			onOpenChange(nextOpen);
+		},
+		[onOpenChange, resetPickerState],
+	);
 
 	// Handle selection change
 	const handleSelectionChange = (ids: Set<string>) => {
@@ -263,21 +252,26 @@ export function MediaPickerDialog({
 
 		if (mode === "single") {
 			const [id] = Array.from(selectedIds);
-			onSelect(id);
+			const asset = assets.find((candidate) => candidate.id === id);
+			onSelect(id, asset);
 		} else {
-			onSelect(Array.from(selectedIds));
+			const ids = Array.from(selectedIds);
+			const selectedAssets = assets.filter((asset) =>
+				selectedIds.has(asset.id),
+			);
+			onSelect(ids, selectedAssets);
 		}
 
-		onOpenChange(false);
+		handleOpenChange(false);
 	};
 
 	// Handle cancel
 	const handleCancel = () => {
-		onOpenChange(false);
+		handleOpenChange(false);
 	};
 
 	return (
-		<Sheet open={open} onOpenChange={onOpenChange} modal={false}>
+		<Sheet open={open} onOpenChange={handleOpenChange} modal={false}>
 			<SheetContent
 				side="right"
 				showOverlay={false}

@@ -63,9 +63,7 @@ export function BlockScopeProvider({
 }: BlockScopeProviderProps) {
 	// Block values are keyed globally by block id under the blocks field, even
 	// when blocks are nested in the tree.
-	const fieldPrefix = React.useMemo(() => {
-		return `${basePath}.${blockId}`;
-	}, [basePath, blockId]);
+	const fieldPrefix = `${basePath}.${blockId}`;
 
 	const value = React.useMemo<BlockScopeContextValue>(
 		() => ({

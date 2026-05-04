@@ -188,50 +188,52 @@ export function RichTextEditor({
 		[t],
 	);
 
-	// Build Tiptap extensions.
-	// `buildExtensions` returns sync when codeBlock is disabled (most editors)
-	// or when lowlight is already cached. The useState initializer captures the
-	// sync result so the editor renders on the very first frame — no loading.
-	const [resolvedExtensions, setResolvedExtensions] = React.useState<
-		AnyExtension[] | undefined
-	>(() => {
-		const result = buildExtensions({
-			features: resolvedFeatures,
-			labels: extensionLabels,
-			placeholder: placeholder || t("editor.startWriting"),
+	// Build Tiptap extensions. Sync results are derived during render; async
+	// codeBlock loading updates state only from the promise callback.
+	const extensionBuild = React.useMemo(
+		() =>
+			buildExtensions({
+				features: resolvedFeatures,
+				labels: extensionLabels,
+				placeholder: placeholder || t("editor.startWriting"),
+				maxCharacters,
+				customExtensions: extensions,
+			}),
+		[
+			resolvedFeatures,
+			extensionLabels,
+			placeholder,
 			maxCharacters,
-			customExtensions: extensions,
-		});
-		return result instanceof Promise ? undefined : result;
-	});
+			extensions,
+			t,
+		],
+	);
+	const syncExtensions =
+		extensionBuild instanceof Promise ? undefined : extensionBuild;
+	const [asyncExtensionState, setAsyncExtensionState] = React.useState<{
+		source: Promise<AnyExtension[]>;
+		extensions: AnyExtension[];
+	} | null>(null);
 
 	React.useEffect(() => {
+		if (!(extensionBuild instanceof Promise)) return;
+
 		let mounted = true;
-		const result = buildExtensions({
-			features: resolvedFeatures,
-			labels: extensionLabels,
-			placeholder: placeholder || t("editor.startWriting"),
-			maxCharacters,
-			customExtensions: extensions,
+		extensionBuild.then((exts) => {
+			if (mounted) {
+				setAsyncExtensionState({ source: extensionBuild, extensions: exts });
+			}
 		});
-		if (result instanceof Promise) {
-			result.then((exts) => {
-				if (mounted) setResolvedExtensions(exts);
-			});
-		} else {
-			setResolvedExtensions(result);
-		}
 		return () => {
 			mounted = false;
 		};
-	}, [
-		resolvedFeatures,
-		extensionLabels,
-		placeholder,
-		maxCharacters,
-		extensions,
-		t,
-	]);
+	}, [extensionBuild]);
+
+	const resolvedExtensions =
+		syncExtensions ??
+		(asyncExtensionState?.source === extensionBuild
+			? asyncExtensionState.extensions
+			: undefined);
 
 	return (
 		<div className="space-y-2" data-disabled={disabled || readOnly}>

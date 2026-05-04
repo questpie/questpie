@@ -41,6 +41,32 @@ export function diffSnapshot(
 	return [{ op: "set", path: basePath, value: cloneSnapshot(next) }];
 }
 
+export function diffSnapshotAtPath(
+	previous: unknown,
+	next: unknown,
+	path: string,
+): PreviewPatchOp[] {
+	if (!path) {
+		return diffSnapshot(previous, next);
+	}
+
+	const previousValue = readPath(previous, path);
+	const nextValue = readPath(next, path);
+
+	if (!nextValue.exists) {
+		return previousValue.exists ? [{ op: "remove", path }] : [];
+	}
+
+	if (
+		previousValue.exists &&
+		isDeepEqual(previousValue.value, nextValue.value)
+	) {
+		return [];
+	}
+
+	return [{ op: "set", path, value: cloneSnapshot(nextValue.value) }];
+}
+
 function joinPath(basePath: string, key: string): string {
 	return basePath ? `${basePath}.${key}` : key;
 }
@@ -91,4 +117,38 @@ function isDeepEqual(left: unknown, right: unknown): boolean {
 	}
 
 	return false;
+}
+
+function isArrayIndex(segment: string): boolean {
+	return /^(0|[1-9]\d*)$/.test(segment);
+}
+
+function readPath(
+	value: unknown,
+	path: string,
+): { exists: true; value: unknown } | { exists: false; value: undefined } {
+	let current = value;
+
+	for (const segment of path.split(".")) {
+		if (Array.isArray(current) && isArrayIndex(segment)) {
+			const index = Number(segment);
+			if (index < 0 || index >= current.length) {
+				return { exists: false, value: undefined };
+			}
+			current = current[index];
+			continue;
+		}
+
+		if (!isPlainObject(current)) {
+			return { exists: false, value: undefined };
+		}
+
+		if (!Object.prototype.hasOwnProperty.call(current, segment)) {
+			return { exists: false, value: undefined };
+		}
+
+		current = current[segment];
+	}
+
+	return { exists: true, value: current };
 }
