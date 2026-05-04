@@ -275,21 +275,84 @@ function extractRelativeField(path: string, blockId: string): string {
 	return path;
 }
 
+export type ScrollFieldIntoViewOptions = {
+	/** Scroll the owning block card if a nested block field is not rendered yet. */
+	fallbackToBlock?: boolean;
+};
+
+export type ScheduleScrollFieldIntoViewOptions = ScrollFieldIntoViewOptions & {
+	/** Number of times to retry while the form expands/renders focused blocks. */
+	attempts?: number;
+	delayMs?: number;
+};
+
+function getPreviewFormSearchRoot(): ParentNode {
+	const formScope = document.querySelector<HTMLElement>(
+		"[data-preview-form-scope]",
+	);
+	return formScope ?? document;
+}
+
+function findExactFieldWrapper(
+	searchRoot: ParentNode,
+	fieldPath: string,
+): HTMLElement | null {
+	for (const element of searchRoot.querySelectorAll<HTMLElement>(
+		"[data-field-path]",
+	)) {
+		if (element.getAttribute("data-field-path") === fieldPath) {
+			return element;
+		}
+	}
+
+	return null;
+}
+
+function getOwningBlockFieldPath(fieldPath: string): string | null {
+	const blockMatch = fieldPath.match(/^content\._values\.([^.]+)/);
+	if (!blockMatch) {
+		return null;
+	}
+
+	return `content._values.${blockMatch[1]}`;
+}
+
+function findFieldWrapper(
+	fieldPath: string,
+	options: ScrollFieldIntoViewOptions,
+): HTMLElement | null {
+	const searchRoot = getPreviewFormSearchRoot();
+	const exactWrapper = findExactFieldWrapper(searchRoot, fieldPath);
+	if (exactWrapper) {
+		return exactWrapper;
+	}
+
+	if (!options.fallbackToBlock) {
+		return null;
+	}
+
+	const owningBlockPath = getOwningBlockFieldPath(fieldPath);
+	if (!owningBlockPath) {
+		return null;
+	}
+
+	return findExactFieldWrapper(searchRoot, owningBlockPath);
+}
+
 /**
  * Scroll a field into view and focus it.
  * Finds the field wrapper by data-field-path within the preview form scope.
  */
-export function scrollFieldIntoView(fieldPath: string): void {
-	// First try to find within the preview form scope (to avoid matching fields in other forms)
-	const formScope = document.querySelector<HTMLElement>(
-		"[data-preview-form-scope]",
-	);
-	const searchRoot = formScope ?? document;
+export function scrollFieldIntoView(
+	fieldPath: string,
+	options: ScrollFieldIntoViewOptions = {},
+): boolean {
+	if (typeof document === "undefined") {
+		return false;
+	}
 
-	const wrapper = searchRoot.querySelector<HTMLElement>(
-		`[data-field-path="${fieldPath}"]`,
-	);
-	if (!wrapper) return;
+	const wrapper = findFieldWrapper(fieldPath, options);
+	if (!wrapper) return false;
 
 	// Find first focusable element inside the wrapper
 	const focusable = wrapper.querySelector<HTMLElement>(
@@ -315,4 +378,34 @@ export function scrollFieldIntoView(fieldPath: string): void {
 			focusable.focus();
 		});
 	}
+
+	return true;
+}
+
+export function scheduleScrollFieldIntoView(
+	fieldPath: string,
+	options: ScheduleScrollFieldIntoViewOptions = {},
+): void {
+	if (typeof window === "undefined") {
+		return;
+	}
+
+	const { attempts = 12, delayMs = 80, fallbackToBlock = false } = options;
+
+	let attempt = 0;
+	const tryScroll = () => {
+		attempt += 1;
+		const isLastAttempt = attempt >= attempts;
+		const didScroll = scrollFieldIntoView(fieldPath, {
+			fallbackToBlock: fallbackToBlock && isLastAttempt,
+		});
+
+		if (didScroll || isLastAttempt) {
+			return;
+		}
+
+		window.setTimeout(tryScroll, delayMs);
+	};
+
+	tryScroll();
 }

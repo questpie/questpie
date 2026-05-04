@@ -16,7 +16,7 @@ import {
 	FocusProvider,
 	type FocusState,
 	parsePreviewFieldPath,
-	scrollFieldIntoView,
+	scheduleScrollFieldIntoView,
 	useFocus,
 } from "../../contexts/focus-context.js";
 import { useIsMobile } from "../../hooks/use-media-query.js";
@@ -66,6 +66,20 @@ type LivePreviewContentProps = LivePreviewModeProps & {
 };
 
 const DEV_TELEMETRY = process.env.NODE_ENV === "development";
+
+function getFocusStatePath(state: FocusState): string | null {
+	if (state.type === "field" || state.type === "relation") {
+		return state.fieldPath;
+	}
+
+	if (state.type === "block") {
+		return state.fieldPath
+			? `content._values.${state.blockId}.${state.fieldPath}`
+			: `content._values.${state.blockId}`;
+	}
+
+	return null;
+}
 
 // ============================================================================
 // Resize Hook
@@ -190,6 +204,19 @@ function LivePreviewContent({
 	const focusContext = useFocus();
 	const focusState = focusContext.state; // Extract for effect dependency
 
+	const applyFocusState = React.useCallback(
+		(state: FocusState) => {
+			if (state.type === "field") {
+				focusContext.focusField(state.fieldPath);
+			} else if (state.type === "block") {
+				focusContext.focusBlock(state.blockId, state.fieldPath);
+			} else if (state.type === "relation") {
+				focusContext.focusRelation(state.fieldPath, state.targetCollection);
+			}
+		},
+		[focusContext],
+	);
+
 	// Handle exit preview (clear draft mode cookie)
 	const handleExitPreview = React.useCallback(() => {
 		// Redirect to exit preview endpoint
@@ -207,7 +234,7 @@ function LivePreviewContent({
 		if (!open) return;
 		if (!previewRef.current) return;
 
-		if (focusState.type === "field") {
+		if (focusState.type === "field" || focusState.type === "relation") {
 			previewRef.current.sendFocusToPreview(focusState.fieldPath);
 		} else if (focusState.type === "block") {
 			// Send full block field path
@@ -242,8 +269,7 @@ function LivePreviewContent({
 			if (!formScope.contains(document.activeElement)) return;
 
 			e.preventDefault();
-			const currentPath =
-				focusState.type === "field" ? focusState.fieldPath : null;
+			const currentPath = getFocusStatePath(focusState);
 			const currentIdx = currentPath
 				? fields.findIndex(
 						(el) => el.getAttribute("data-field-path") === currentPath,
@@ -260,28 +286,20 @@ function LivePreviewContent({
 			const nextField = fields[nextIdx];
 			const nextPath = nextField?.getAttribute("data-field-path");
 			if (nextPath) {
-				focusContext.focusField(nextPath);
+				applyFocusState(parsePreviewFieldPath(nextPath));
 			}
 		};
 
 		window.addEventListener("keydown", handleKeyDown);
 		return () => window.removeEventListener("keydown", handleKeyDown);
-	}, [focusState, focusContext, open]);
+	}, [focusState, applyFocusState, open]);
 
 	// Preview click handlers - update FocusContext state
 	const handlePreviewFieldClick = React.useCallback(
 		(fieldPath: string, context?: any) => {
-			const state = parsePreviewFieldPath(fieldPath, context);
-
-			if (state.type === "field") {
-				focusContext.focusField(state.fieldPath);
-			} else if (state.type === "block") {
-				focusContext.focusBlock(state.blockId, state.fieldPath);
-			} else if (state.type === "relation") {
-				focusContext.focusRelation(state.fieldPath, state.targetCollection);
-			}
+			applyFocusState(parsePreviewFieldPath(fieldPath, context));
 		},
-		[focusContext],
+		[applyFocusState],
 	);
 
 	const handlePreviewBlockClick = React.useCallback(
@@ -476,22 +494,19 @@ export function LivePreviewMode({
 
 	// Handle focus changes from FocusContext - scroll to and focus the field
 	const handleFocusChange = React.useCallback((state: FocusState) => {
-		if (state.type === "field") {
-			scrollFieldIntoView(state.fieldPath);
+		if (state.type === "field" || state.type === "relation") {
+			scheduleScrollFieldIntoView(state.fieldPath);
 		} else if (state.type === "block") {
-			// Wait for block form to render before scrolling
-			setTimeout(() => {
-				const fullPath = state.fieldPath
-					? `content._values.${state.blockId}.${state.fieldPath}`
-					: `content._values.${state.blockId}`;
-				scrollFieldIntoView(fullPath);
-			}, 150);
+			const fullPath = state.fieldPath
+				? `content._values.${state.blockId}.${state.fieldPath}`
+				: `content._values.${state.blockId}`;
+			scheduleScrollFieldIntoView(fullPath, { fallbackToBlock: true });
 		} else if (state.type === "block-insert") {
 			const targetBlockId = state.referenceBlockId ?? state.position.parentId;
 			if (!targetBlockId) return;
-			setTimeout(() => {
-				scrollFieldIntoView(`content._values.${targetBlockId}`);
-			}, 150);
+			scheduleScrollFieldIntoView(`content._values.${targetBlockId}`, {
+				fallbackToBlock: true,
+			});
 		}
 	}, []);
 

@@ -395,6 +395,27 @@ export class Field<TState extends FieldState = FieldState> {
 	getMetadata(): FieldMetadata {
 		const s = this._state;
 
+		if (s.isArray) {
+			const innerField = s.innerField as Field<FieldState> | undefined;
+
+			return {
+				type: "array",
+				label: s.label,
+				description: s.description,
+				required: s.notNull,
+				localized: s.localized,
+				readOnly: s.input === false ? true : undefined,
+				writeOnly: s.output === false ? true : undefined,
+				validation: this._buildValidation(),
+				meta: s.extensions?.admin as any,
+				nestedFields: innerField
+					? {
+							item: innerField.getMetadata(),
+						}
+					: undefined,
+			};
+		}
+
 		// Use custom metadata factory if provided
 		if (s.metadataFactory) {
 			return s.metadataFactory(s);

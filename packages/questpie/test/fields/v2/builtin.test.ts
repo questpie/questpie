@@ -362,6 +362,14 @@ describe("select()", () => {
 		expect(meta.options).toHaveLength(3);
 		expect(meta.options[0].value).toBe("draft");
 	});
+
+	it("getMetadata() returns array metadata for select arrays", () => {
+		const meta = select(options).array().getMetadata() as any;
+
+		expect(meta.type).toBe("array");
+		expect(meta.nestedFields.item.type).toBe("select");
+		expect(meta.nestedFields.item.options).toHaveLength(3);
+	});
 });
 
 // ============================================================================
@@ -430,6 +438,43 @@ describe("object()", () => {
 		expect(meta.nestedFields).toBeDefined();
 		expect(meta.nestedFields.name.type).toBe("text");
 		expect(meta.nestedFields.name.label).toEqual({ en: "Name" });
+	});
+
+	it("getMetadata() returns array metadata for object arrays", () => {
+		const f = object({
+			title: text().required().label({ en: "Title" }),
+			url: url().description({ en: "Destination URL" }),
+		})
+			.array()
+			.label({ en: "Cards" })
+			.description({ en: "Hero cards" })
+			.required()
+			.localized()
+			.inputFalse()
+			.outputFalse()
+			.minItems(1)
+			.maxItems(3)
+			.set("admin", { itemLabel: "title" });
+
+		const meta = f.getMetadata() as any;
+
+		expect(meta.type).toBe("array");
+		expect(meta.label).toEqual({ en: "Cards" });
+		expect(meta.description).toEqual({ en: "Hero cards" });
+		expect(meta.required).toBe(true);
+		expect(meta.localized).toBe(true);
+		expect(meta.readOnly).toBe(true);
+		expect(meta.writeOnly).toBe(true);
+		expect(meta.validation).toEqual({ minItems: 1, maxItems: 3 });
+		expect(meta.meta).toEqual({ itemLabel: "title" });
+		expect(meta.nestedFields.item.type).toBe("object");
+		expect(meta.nestedFields.item.nestedFields.title.type).toBe("text");
+		expect(meta.nestedFields.item.nestedFields.title.label).toEqual({
+			en: "Title",
+		});
+		expect(meta.nestedFields.item.nestedFields.url.description).toEqual({
+			en: "Destination URL",
+		});
 	});
 });
 
