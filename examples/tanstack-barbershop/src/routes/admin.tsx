@@ -1,10 +1,8 @@
 import { TanStackDevtools } from "@tanstack/react-devtools";
 import {
 	createFileRoute,
-	HeadContent,
 	Link,
 	Outlet,
-	Scripts,
 	useLocation,
 } from "@tanstack/react-router";
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
@@ -64,41 +62,35 @@ function AdminLayout() {
 		process.env.VITE_TANSTACK_DEVTOOLS === "true";
 
 	return (
-		<html lang="en" className="dark">
-			<head>
-				<HeadContent />
-			</head>
-			<body>
-				<AdminLayoutProvider
-					admin={admin}
-					client={client}
-					queryClient={queryClient}
-					authClient={authClient}
-					LinkComponent={AdminLink}
-					activeRoute={location.pathname}
-					basePath="/admin"
-					// Enable server-side translations
-					// Translations are configured on server via .adminLocale() and .messages()
-					useServerTranslations
-					// theme="dark"
-				>
-					<Outlet />
-				</AdminLayoutProvider>
-				{showDevtools && (
-					<TanStackDevtools
-						config={{
-							position: "bottom-right",
-						}}
-						plugins={[
-							{
-								name: "Tanstack Router",
-								render: <TanStackRouterDevtoolsPanel />,
-							},
-						]}
-					/>
-				)}
-				<Scripts />
-			</body>
-		</html>
+		<>
+			<AdminLayoutProvider
+				admin={admin}
+				client={client}
+				queryClient={queryClient}
+				authClient={authClient}
+				LinkComponent={AdminLink}
+				activeRoute={location.pathname}
+				basePath="/admin"
+				// Enable server-side translations
+				// Translations are configured on server via .adminLocale() and .messages()
+				useServerTranslations
+				theme="dark"
+			>
+				<Outlet />
+			</AdminLayoutProvider>
+			{showDevtools && (
+				<TanStackDevtools
+					config={{
+						position: "bottom-right",
+					}}
+					plugins={[
+						{
+							name: "Tanstack Router",
+							render: <TanStackRouterDevtoolsPanel />,
+						},
+					]}
+				/>
+			)}
+		</>
 	);
 }

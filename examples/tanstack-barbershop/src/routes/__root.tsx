@@ -1,5 +1,30 @@
 import "virtual:iconify-preload";
-import { createRootRoute, Link } from "@tanstack/react-router";
+import {
+	createRootRoute,
+	HeadContent,
+	Link,
+	Scripts,
+} from "@tanstack/react-router";
+
+const themeInitScript = `
+	(function() {
+		if (window.location.pathname.startsWith('/admin')) {
+			document.documentElement.classList.add('dark');
+			document.documentElement.classList.remove('light');
+			document.documentElement.style.colorScheme = 'dark';
+			return;
+		}
+
+		const theme = localStorage.getItem('barbershop-theme');
+		const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+		const resolvedTheme = theme === 'system' || !theme
+			? (prefersDark ? 'dark' : 'light')
+			: theme;
+		document.documentElement.classList.toggle('dark', resolvedTheme === 'dark');
+		document.documentElement.classList.toggle('light', resolvedTheme === 'light');
+		document.documentElement.style.colorScheme = resolvedTheme;
+	})();
+`;
 
 export const Route = createRootRoute({
 	head: () => ({
@@ -15,8 +40,12 @@ export const Route = createRootRoute({
 				title: "TanStack Start Starter",
 			},
 		],
-		scripts:
-			process.env.NODE_ENV !== "production" &&
+		scripts: [
+			{
+				id: "barbershop-theme-init",
+				children: themeInitScript,
+			},
+			...(process.env.NODE_ENV !== "production" &&
 			process.env.VITE_REACT_SCAN === "true"
 				? [
 						{
@@ -25,7 +54,8 @@ export const Route = createRootRoute({
 							src: "//unpkg.com/react-scan/dist/auto.global.js",
 						},
 					]
-				: [],
+				: []),
+		],
 	}),
 	notFoundComponent: () => (
 		<main className="container px-6 py-24 text-center">
@@ -46,5 +76,15 @@ export const Route = createRootRoute({
 });
 
 function RootDocument({ children }: { children: React.ReactNode }) {
-	return <>{children}</>;
+	return (
+		<html lang="en" suppressHydrationWarning>
+			<head>
+				<HeadContent />
+			</head>
+			<body className="bg-background text-foreground min-h-screen antialiased">
+				{children}
+				<Scripts />
+			</body>
+		</html>
+	);
 }

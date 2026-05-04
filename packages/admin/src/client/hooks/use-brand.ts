@@ -1,4 +1,5 @@
 import { createStore, useStore } from "zustand";
+import { useShallow } from "zustand/shallow";
 
 import { useAdminStoreRaw } from "../runtime/provider.js";
 import type { BrandLogoConfig } from "../types/admin-config.js";
@@ -45,7 +46,7 @@ function selectBrand(state: {
  */
 export function useBrand(): BrandSnapshot {
 	const store = useAdminStoreRaw();
-	return useStore(store ?? FALLBACK_STORE, selectBrand);
+	return useStore(store ?? FALLBACK_STORE, useShallow(selectBrand));
 }
 
 /**
