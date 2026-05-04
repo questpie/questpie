@@ -3,7 +3,11 @@
 import { Command } from "commander";
 
 import { addCommand } from "./commands/add.js";
-import { cloudDeployCommand } from "./commands/cloud.js";
+import {
+	cloudDeployCommand,
+	cloudInitCommand,
+	cloudLoginCommand,
+} from "./commands/cloud.js";
 import { devCommand, generateCommand } from "./commands/codegen.js";
 import { generateMigrationCommand } from "./commands/generate.js";
 import { pushCommand } from "./commands/push.js";
@@ -373,6 +377,58 @@ program
 const cloud = program.command("cloud").description("Questpie Cloud commands");
 
 cloud
+	.command("login")
+	.description("Save Questpie Cloud login for deploys")
+	.option("--cloud-url <url>", "Questpie Cloud base URL")
+	.option("--token <token>", "Questpie Cloud API token")
+	.action(async (options) => {
+		try {
+			await cloudLoginCommand({
+				cloudUrl: options.cloudUrl,
+				token: options.token,
+			});
+		} catch (error) {
+			console.error("❌ Failed to login to Questpie Cloud:", error);
+			process.exit(1);
+		}
+	});
+
+cloud
+	.command("init")
+	.description("Create questpie.cloud.toml for this project")
+	.option(
+		"-c, --config <path>",
+		"Path to questpie.cloud.toml or questpie.cloud.json",
+		"questpie.cloud.toml",
+	)
+	.option("--cloud-url <url>", "Questpie Cloud base URL")
+	.option("--project <slug>", "Project slug")
+	.option("--client <slug>", "Client slug")
+	.option("--environment <slug>", "Environment slug", "production")
+	.option("--region <region>", "Questpie Cloud region", "eu-main")
+	.option("--app-url <url>", "Public app URL")
+	.option("--force", "Overwrite an existing config file")
+	.option("--no-worker", "Do not add a worker service")
+	.action(async (options) => {
+		try {
+			await cloudInitCommand({
+				config: options.config,
+				cloudUrl: options.cloudUrl,
+				project: options.project,
+				client: options.client,
+				environment: options.environment,
+				region: options.region,
+				appUrl: options.appUrl,
+				force: options.force,
+				noWorker: options.worker === false,
+			});
+		} catch (error) {
+			console.error("❌ Failed to initialize Questpie Cloud config:", error);
+			process.exit(1);
+		}
+	});
+
+cloud
 	.command("deploy")
 	.description("Deploy a QUESTPIE project through Questpie Cloud")
 	.option(
@@ -388,7 +444,10 @@ cloud
 	.option("--dry-run", "Validate the deployment request without applying it")
 	.option("--token <token>", "Questpie Cloud API token")
 	.option("--print-payload", "Print the deploy request payload")
-	.option("--no-request", "Do not call Questpie Cloud after building the payload")
+	.option(
+		"--no-request",
+		"Do not call Questpie Cloud after building the payload",
+	)
 	.option("--repo-url <url>", "Git repository URL override")
 	.option("--repo-path <path>", "Local repository path override")
 	.option("--branch <branch>", "Git branch override")

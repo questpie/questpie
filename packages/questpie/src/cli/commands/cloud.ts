@@ -1,13 +1,40 @@
 import { execFile as execFileCallback } from "node:child_process";
-import { readFile } from "node:fs/promises";
-import { extname } from "node:path";
+import { constants } from "node:fs";
+import {
+	access,
+	chmod,
+	mkdir,
+	readFile,
+	rename,
+	writeFile,
+} from "node:fs/promises";
+import { homedir } from "node:os";
+import { basename as pathBasename, dirname, extname, join } from "node:path";
 import { promisify } from "node:util";
 
 import { resolveCliPath } from "../utils.js";
 
 const execFile = promisify(execFileCallback);
+const DEFAULT_CLOUD_URL = "https://cloud.questpie.com";
 
 type AnyRecord = Record<string, unknown>;
+
+export type CloudInitOptions = {
+	config: string;
+	cloudUrl?: string;
+	project?: string;
+	client?: string;
+	environment?: string;
+	region?: string;
+	appUrl?: string;
+	force?: boolean;
+	noWorker?: boolean;
+};
+
+export type CloudLoginOptions = {
+	cloudUrl?: string;
+	token?: string;
+};
 
 export type CloudDeployOptions = {
 	config: string;
@@ -30,6 +57,11 @@ type LoadedCloudConfig = {
 	path: string;
 	format: "toml" | "json";
 	data: AnyRecord;
+};
+
+type CloudProfile = {
+	cloudUrl?: string;
+	token?: string;
 };
 
 type GitMetadata = {
@@ -67,7 +99,9 @@ function asString(value: unknown) {
 }
 
 function asNumber(value: unknown) {
-	return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+	return typeof value === "number" && Number.isFinite(value)
+		? value
+		: undefined;
 }
 
 function asBoolean(value: unknown) {
@@ -82,6 +116,35 @@ function definedRecord(value: AnyRecord): AnyRecord {
 
 function shortSha(value: string | undefined) {
 	return value ? value.slice(0, 12) : undefined;
+}
+
+function cloudProfilePath() {
+	return join(homedir(), ".questpie", "cloud.json");
+}
+
+async function readCloudProfile(): Promise<CloudProfile> {
+	try {
+		const source = String(await readFile(cloudProfilePath(), "utf8"));
+		const parsed = JSON.parse(source) as unknown;
+		if (!isRecord(parsed)) return {};
+		return definedRecord({
+			cloudUrl: asString(parsed.cloudUrl),
+			token: asString(parsed.token),
+		}) as CloudProfile;
+	} catch {
+		return {};
+	}
+}
+
+async function writeCloudProfile(profile: CloudProfile) {
+	const profilePath = cloudProfilePath();
+	await mkdir(dirname(profilePath), { recursive: true });
+	const tempPath = `${profilePath}.tmp`;
+	await writeFile(tempPath, `${JSON.stringify(profile, null, 2)}\n`, {
+		mode: 0o600,
+	});
+	await rename(tempPath, profilePath);
+	await chmod(profilePath, 0o600);
 }
 
 function normalizeGitRepoUrl(value: string | undefined) {
@@ -117,6 +180,25 @@ async function loadCloudConfig(configPath: string): Promise<LoadedCloudConfig> {
 	return { path: configPath, format, data };
 }
 
+async function pathExists(path: string) {
+	try {
+		await access(path, constants.F_OK);
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+async function readPackageJson(cwd = process.cwd()) {
+	try {
+		const source = String(await readFile(join(cwd, "package.json"), "utf8"));
+		const parsed = JSON.parse(source) as unknown;
+		return isRecord(parsed) ? parsed : {};
+	} catch {
+		return {};
+	}
+}
+
 async function git(args: string[], cwd = process.cwd()) {
 	try {
 		const result = await execFile("git", args, { cwd });
@@ -126,7 +208,9 @@ async function git(args: string[], cwd = process.cwd()) {
 	}
 }
 
-async function readGitMetadata(options: CloudDeployOptions): Promise<GitMetadata> {
+async function readGitMetadata(
+	options: CloudDeployOptions,
+): Promise<GitMetadata> {
 	const ciRepo =
 		process.env.CI_REPO_CLONE_URL ??
 		process.env.CI_REPO_URL ??
@@ -147,7 +231,9 @@ async function readGitMetadata(options: CloudDeployOptions): Promise<GitMetadata
 		process.env.CI_COMMIT_SHA ??
 		process.env.GITHUB_SHA ??
 		(await git(["rev-parse", "HEAD"]));
-	const porcelain = process.env.CI ? undefined : await git(["status", "--porcelain"]);
+	const porcelain = process.env.CI
+		? undefined
+		: await git(["status", "--porcelain"]);
 
 	return definedRecord({
 		repoUrl: normalizeGitRepoUrl(repoUrl),
@@ -156,6 +242,124 @@ async function readGitMetadata(options: CloudDeployOptions): Promise<GitMetadata
 		commit,
 		dirty: porcelain === undefined ? false : porcelain.length > 0,
 	}) as GitMetadata;
+}
+
+function inferSlug(value: string | undefined, fallback = "questpie-app") {
+	return (
+		value
+			?.toLowerCase()
+			.replace(/\.git$/g, "")
+			.replace(/[^a-z0-9]+/g, "-")
+			.replace(/^-+|-+$/g, "")
+			.slice(0, 80) || fallback
+	);
+}
+
+function packageScripts(pkg: AnyRecord) {
+	const scripts = pkg.scripts;
+	return isRecord(scripts) ? scripts : {};
+}
+
+function scriptCommand(scripts: AnyRecord, name: string) {
+	return typeof scripts[name] === "string" ? `bun run ${name}` : undefined;
+}
+
+function tomlString(value: string) {
+	return JSON.stringify(value);
+}
+
+function writeTomlKey(
+	output: string[],
+	key: string,
+	value: string | number | boolean,
+) {
+	if (typeof value === "string") {
+		output.push(`${key} = ${tomlString(value)}`);
+		return;
+	}
+	output.push(`${key} = ${String(value)}`);
+}
+
+function writeTomlSection(
+	output: string[],
+	heading: string,
+	values: Record<string, string | number | boolean | undefined>,
+) {
+	output.push("", heading);
+	for (const [key, value] of Object.entries(values)) {
+		if (value !== undefined) writeTomlKey(output, key, value);
+	}
+}
+
+function cloudInitToml(input: {
+	projectSlug: string;
+	clientSlug: string;
+	cloudUrl: string;
+	environmentSlug: string;
+	region: string;
+	appUrl: string;
+	hasWorker: boolean;
+	migrateCommand?: string;
+}) {
+	const output: string[] = [];
+	writeTomlKey(output, "project", input.projectSlug);
+	writeTomlKey(output, "client", input.clientSlug);
+	writeTomlKey(output, "cloudUrl", input.cloudUrl);
+
+	writeTomlSection(output, "[environment]", {
+		slug: input.environmentSlug,
+		kind: input.environmentSlug === "production" ? "production" : "staging",
+		region: input.region,
+		appUrl: input.appUrl,
+	});
+
+	writeTomlSection(output, "[postgres]", {
+		mode: "shared",
+		connectionEnvKey: "QUESTPIE_DB",
+	});
+
+	writeTomlSection(output, "[storage]", {
+		provider: "cloudflare_r2",
+		prefix: input.environmentSlug,
+		region: "auto",
+	});
+
+	writeTomlSection(output, "[[domains]]", {
+		hostname: new URL(input.appUrl).hostname,
+		kind: "internal",
+		primary: true,
+	});
+
+	writeTomlSection(output, "[[services]]", {
+		name: "web",
+		processType: "web",
+		containerPort: 3000,
+		replicas: 1,
+		readinessMode: "tcp",
+	});
+
+	if (input.hasWorker) {
+		writeTomlSection(output, "[[services]]", {
+			name: "worker",
+			processType: "worker",
+			containerPort: 3000,
+			replicas: 1,
+			readinessMode: "none",
+			command: "bun run worker",
+		});
+	}
+
+	if (input.migrateCommand) {
+		writeTomlSection(output, "[[releaseJobs]]", {
+			name: "migrate",
+			service: "web",
+			runPolicy: "per_deploy",
+			backoffLimit: 6,
+			command: input.migrateCommand,
+		});
+	}
+
+	return `${output.join("\n")}\n`;
 }
 
 function projectPayload(config: AnyRecord) {
@@ -188,7 +392,9 @@ function buildPayload(
 	const build = pickRecord(config.build);
 	const mode =
 		asString(build.mode) ??
-		(options.imageTag || asString(build.imageTag) ? "prebuilt_image" : "remote_build");
+		(options.imageTag || asString(build.imageTag)
+			? "prebuilt_image"
+			: "remote_build");
 	return definedRecord({
 		mode,
 		command: asString(build.command),
@@ -233,6 +439,30 @@ function releaseJobsPayload(config: AnyRecord) {
 	);
 }
 
+function postgresPayload(config: AnyRecord) {
+	const postgres = pickRecord(config.postgres);
+	return definedRecord({
+		mode: asString(postgres.mode),
+		clusterName: asString(postgres.clusterName),
+		databaseName: asString(postgres.databaseName),
+		username: asString(postgres.username),
+		connectionEnvKey: asString(postgres.connectionEnvKey),
+		passwordEnvKey: asString(postgres.passwordEnvKey),
+	});
+}
+
+function storagePayload(config: AnyRecord) {
+	const storage = pickRecord(config.storage);
+	return definedRecord({
+		provider: asString(storage.provider),
+		bucketName: asString(storage.bucketName),
+		prefix: asString(storage.prefix),
+		endpoint: asString(storage.endpoint),
+		region: asString(storage.region),
+		publicBaseUrl: asString(storage.publicBaseUrl),
+	});
+}
+
 function domainsPayload(config: AnyRecord) {
 	return records(config.domains).map((domain) =>
 		definedRecord({
@@ -256,7 +486,9 @@ export async function createCloudDeployPayload(
 		shortSha(gitMetadata.commit);
 
 	if (!imageTag) {
-		throw new Error("--image-tag, QUESTPIE_CLOUD_IMAGE_TAG, or git commit is required");
+		throw new Error(
+			"--image-tag, QUESTPIE_CLOUD_IMAGE_TAG, or git commit is required",
+		);
 	}
 
 	return definedRecord({
@@ -269,6 +501,8 @@ export async function createCloudDeployPayload(
 		services: servicesPayload(loaded.data, imageTag),
 		releaseJobs: releaseJobsPayload(loaded.data),
 		domains: domainsPayload(loaded.data),
+		postgres: postgresPayload(loaded.data),
+		storage: storagePayload(loaded.data),
 		config: {
 			path: loaded.path,
 			format: loaded.format,
@@ -294,7 +528,9 @@ function printDeployResult(result: AnyRecord, imageTag: string) {
 		console.log(`  Hostnames:  ${hostnames.map(String).join(", ")}`);
 	}
 
-	const domains = Array.isArray(result.domains) ? result.domains.filter(isRecord) : [];
+	const domains = Array.isArray(result.domains)
+		? result.domains.filter(isRecord)
+		: [];
 	for (const domain of domains) {
 		const hostname = String(domain.hostname ?? "unknown");
 		const status = String(domain.status ?? "unknown");
@@ -311,7 +547,91 @@ function printDeployResult(result: AnyRecord, imageTag: string) {
 	}
 }
 
+export async function cloudLoginCommand(options: CloudLoginOptions) {
+	const cloudUrl =
+		options.cloudUrl ?? process.env.QUESTPIE_CLOUD_URL ?? DEFAULT_CLOUD_URL;
+	const token = options.token ?? process.env.QUESTPIE_CLOUD_TOKEN;
+
+	if (!token) {
+		throw new Error(
+			"Questpie Cloud token is required. Pass --token or set QUESTPIE_CLOUD_TOKEN.",
+		);
+	}
+
+	await writeCloudProfile({ cloudUrl, token });
+	console.log(`Logged in to Questpie Cloud at ${cloudUrl}`);
+}
+
+export async function cloudInitCommand(options: CloudInitOptions) {
+	const configPath = resolveCliPath(options.config);
+	if (!options.force && (await pathExists(configPath))) {
+		throw new Error(
+			`${options.config} already exists. Pass --force to overwrite it.`,
+		);
+	}
+
+	const profile = await readCloudProfile();
+	const pkg = await readPackageJson();
+	const scripts = packageScripts(pkg);
+	const gitMetadata = await readGitMetadata({
+		config: options.config,
+		repoPath: process.cwd(),
+	});
+	const inferredName =
+		asString(pkg.name) ??
+		gitMetadata.repoUrl
+			?.split(/[/:]/g)
+			.at(-1)
+			?.replace(/\.git$/g, "") ??
+		pathBasename(process.cwd());
+	const projectSlug = inferSlug(options.project ?? inferredName);
+	const clientSlug = inferSlug(options.client ?? projectSlug);
+	const environmentSlug = inferSlug(
+		options.environment ?? "production",
+		"production",
+	);
+	const region = options.region ?? "eu-main";
+	const appUrl =
+		options.appUrl ??
+		`https://${projectSlug}${environmentSlug === "production" ? "" : `-${environmentSlug}`}.questpie.app`;
+	const hasWorker =
+		!options.noWorker &&
+		(Boolean(scriptCommand(scripts, "worker")) ||
+			(await pathExists(join(process.cwd(), "worker.ts"))));
+	const migrateCommand =
+		scriptCommand(scripts, "migrate") ??
+		((await pathExists(join(process.cwd(), "questpie.config.ts")))
+			? "bun x questpie migrate:up -c questpie.config.ts"
+			: undefined);
+	const cloudUrl =
+		options.cloudUrl ??
+		profile.cloudUrl ??
+		process.env.QUESTPIE_CLOUD_URL ??
+		DEFAULT_CLOUD_URL;
+
+	await writeFile(
+		configPath,
+		cloudInitToml({
+			projectSlug,
+			clientSlug,
+			cloudUrl,
+			environmentSlug,
+			region,
+			appUrl,
+			hasWorker,
+			migrateCommand,
+		}),
+		"utf8",
+	);
+
+	console.log(`Created ${options.config}`);
+	console.log(`Project: ${projectSlug}`);
+	console.log(`URL:     ${appUrl}`);
+	console.log("Next:    questpie cloud deploy");
+}
+
 export async function cloudDeployCommand(options: CloudDeployOptions) {
+	const profile = await readCloudProfile();
 	const payload = await createCloudDeployPayload(options);
 	const imageTag = String(payload.build.imageTag);
 
@@ -324,14 +644,21 @@ export async function cloudDeployCommand(options: CloudDeployOptions) {
 	const cloudUrl =
 		options.cloudUrl ??
 		asString(payload.config.data.cloudUrl) ??
-		process.env.QUESTPIE_CLOUD_URL;
+		process.env.QUESTPIE_CLOUD_URL ??
+		profile.cloudUrl ??
+		DEFAULT_CLOUD_URL;
 	if (!cloudUrl) {
-		throw new Error("Cloud URL is required. Set cloudUrl in config or QUESTPIE_CLOUD_URL.");
+		throw new Error(
+			"Cloud URL is required. Set cloudUrl in config or QUESTPIE_CLOUD_URL.",
+		);
 	}
 
-	const token = options.token ?? process.env.QUESTPIE_CLOUD_TOKEN;
+	const token =
+		options.token ?? process.env.QUESTPIE_CLOUD_TOKEN ?? profile.token;
 	if (!token) {
-		throw new Error("QUESTPIE_CLOUD_TOKEN is required");
+		throw new Error(
+			"Questpie Cloud login is required. Run questpie cloud login.",
+		);
 	}
 
 	const response = await fetch(
@@ -349,7 +676,9 @@ export async function cloudDeployCommand(options: CloudDeployOptions) {
 
 	const body = await response.text();
 	if (!response.ok) {
-		throw new Error(`Questpie Cloud deploy failed with HTTP ${response.status}: ${body}`);
+		throw new Error(
+			`Questpie Cloud deploy failed with HTTP ${response.status}: ${body}`,
+		);
 	}
 
 	const result = JSON.parse(body) as AnyRecord;
