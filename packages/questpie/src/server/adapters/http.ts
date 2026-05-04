@@ -14,6 +14,10 @@ import { randomUUID } from "node:crypto";
 import type { Questpie } from "../config/questpie.js";
 import type { QuestpieConfig } from "../config/types.js";
 import { ApiError } from "../errors/index.js";
+import type {
+	RequestLoggingConfig,
+	RequestLogMeta,
+} from "../modules/core/integrated/logger/types.js";
 import {
 	executeJsonRouteInternal,
 	executeRawRouteInternal,
@@ -112,32 +116,19 @@ type RequestLoggingOptions = {
 	enabled: boolean;
 	logSuccessfulRequests: boolean;
 	slowThresholdMs: number;
-};
-
-type RequestLogMeta = {
-	event: "http.request";
-	requestId: string;
-	traceId: string;
-	method: string;
-	path: string;
-	route?: string;
-	status: number;
-	durationMs: number;
-	slow: boolean;
-	error?: {
-		name: string;
-		message: string;
-	};
+	ignorePaths: Array<string | RegExp>;
+	ignore?: (meta: RequestLogMeta) => boolean;
 };
 
 function resolveRequestLoggingOptions(
-	config: AdapterConfig["requestLogging"],
+	config: RequestLoggingConfig | undefined,
 ): RequestLoggingOptions {
 	if (config === false) {
 		return {
 			enabled: false,
 			logSuccessfulRequests: false,
 			slowThresholdMs: 1000,
+			ignorePaths: [],
 		};
 	}
 	if (config === true || config === undefined) {
@@ -145,12 +136,15 @@ function resolveRequestLoggingOptions(
 			enabled: true,
 			logSuccessfulRequests: true,
 			slowThresholdMs: 1000,
+			ignorePaths: [],
 		};
 	}
 	return {
 		enabled: config.enabled ?? true,
 		logSuccessfulRequests: config.logSuccessfulRequests ?? true,
 		slowThresholdMs: config.slowThresholdMs ?? 1000,
+		ignorePaths: config.ignorePaths ?? [],
+		...(config.ignore ? { ignore: config.ignore } : {}),
 	};
 }
 
@@ -199,11 +193,16 @@ function logRequest(
 	meta: RequestLogMeta,
 ) {
 	if (!options.enabled) return;
+	if (options.ignore?.(meta)) return;
 	if (
 		meta.status < 400 &&
-		!meta.slow &&
-		!options.logSuccessfulRequests
+		options.ignorePaths.some((path) =>
+			typeof path === "string" ? path === meta.path : path.test(meta.path),
+		)
 	) {
+		return;
+	}
+	if (meta.status < 400 && !meta.slow && !options.logSuccessfulRequests) {
 		return;
 	}
 
@@ -242,7 +241,9 @@ export const createFetchHandler = (
 	const matcher = compileRoutes(
 		_app.config.routes as Record<string, RouteDefinition> | undefined,
 	);
-	const requestLogging = resolveRequestLoggingOptions(config.requestLogging);
+	const requestLogging = resolveRequestLoggingOptions(
+		config.requestLogging ?? _app.config.logger?.requests,
+	);
 
 	return async (
 		request: Request,
@@ -256,7 +257,8 @@ export const createFetchHandler = (
 		let routePattern: string | undefined;
 
 		const complete = (response: Response, error?: unknown): Response => {
-			const durationMs = Math.round((performance.now() - startedAt) * 100) / 100;
+			const durationMs =
+				Math.round((performance.now() - startedAt) * 100) / 100;
 			const meta: RequestLogMeta = {
 				event: "http.request",
 				requestId,

@@ -89,9 +89,7 @@ export const createAdapterContext = async <
 		localeFallback,
 		stage: queryStage,
 		accessMode: config.accessMode ?? "user",
-		...(observability?.requestId
-			? { requestId: observability.requestId }
-			: {}),
+		...(observability?.requestId ? { requestId: observability.requestId } : {}),
 		...(observability?.traceId ? { traceId: observability.traceId } : {}),
 	};
 
@@ -148,7 +146,7 @@ export const resolveContext = async <
 	observability?: { requestId?: string; traceId?: string },
 ) => {
 	if (context?.appContext) {
-		return context;
+		return withObservability(context, observability);
 	}
 
 	const stored = tryGetContext();
@@ -156,8 +154,35 @@ export const resolveContext = async <
 		| AdapterContext
 		| undefined;
 	if (stored?.app === app && storedAdapterContext?.appContext) {
-		return storedAdapterContext;
+		return withObservability(storedAdapterContext, observability);
 	}
 
 	return createAdapterContext(app, request, config, observability);
 };
+
+function withObservability(
+	context: AdapterContext,
+	observability?: { requestId?: string; traceId?: string },
+): AdapterContext {
+	const requestId =
+		context.requestId ??
+		context.appContext.requestId ??
+		observability?.requestId;
+	const traceId =
+		context.traceId ?? context.appContext.traceId ?? observability?.traceId;
+
+	if (!requestId && !traceId) {
+		return context;
+	}
+
+	return {
+		...context,
+		...(requestId ? { requestId } : {}),
+		...(traceId ? { traceId } : {}),
+		appContext: {
+			...context.appContext,
+			...(requestId ? { requestId } : {}),
+			...(traceId ? { traceId } : {}),
+		},
+	};
+}

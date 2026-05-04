@@ -7,6 +7,7 @@
 import type { RequestContext } from "../config/context.js";
 import type { Questpie } from "../config/questpie.js";
 import type { AccessMode, QuestpieConfig } from "../config/types.js";
+import type { RequestLoggingConfig } from "../modules/core/integrated/logger/types.js";
 
 export type ReindexAccessContext<
 	TConfig extends QuestpieConfig = QuestpieConfig,
@@ -32,13 +33,7 @@ export type AdapterConfig<TConfig extends QuestpieConfig = QuestpieConfig> = {
 	 * Enabled by default. Successful requests are logged at info, 4xx at warn,
 	 * 5xx at error, and slow successful requests at warn.
 	 */
-	requestLogging?:
-		| boolean
-		| {
-				enabled?: boolean;
-				logSuccessfulRequests?: boolean;
-				slowThresholdMs?: number;
-			};
+	requestLogging?: RequestLoggingConfig;
 	/**
 	 * Search route options.
 	 */

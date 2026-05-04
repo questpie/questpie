@@ -1,5 +1,9 @@
 import { Elysia } from "elysia";
-import { createFetchHandler, type Questpie } from "questpie";
+import {
+	createFetchHandler,
+	type AdapterConfig,
+	type Questpie,
+} from "questpie";
 
 /**
  * Context stored in Elysia decorator
@@ -13,7 +17,7 @@ export type QuestpieContext = {
 /**
  * Elysia adapter configuration
  */
-export type ElysiaAdapterConfig = {
+export type ElysiaAdapterConfig = Pick<AdapterConfig, "requestLogging"> & {
 	/**
 	 * Base path for QUESTPIE routes
 	 * Use '/' for server-only apps or '/api' for fullstack apps.
@@ -73,6 +77,7 @@ export function questpieElysia(
 	const handler = createFetchHandler(app, {
 		basePath,
 		accessMode: "user",
+		requestLogging: config.requestLogging,
 	});
 
 	const server = new Elysia({ prefix: basePath, name: "questpie" }).all(

@@ -78,12 +78,21 @@ describe("adapter route config", () => {
 			.handler(async () => {
 				throw new Error("boom");
 			});
+		const logOptions = route()
+			.post()
+			.schema(z.object({}))
+			.handler(async (ctx) => {
+				(ctx.logger as any).info("handler observed", {
+					event: "handler.observed",
+				});
+				return { ok: true };
+			});
 
 		let setup: Awaited<ReturnType<typeof buildMockApp>>;
 
 		beforeEach(async () => {
 			setup = await buildMockApp({
-				routes: { echoOptions, crashOptions },
+				routes: { echoOptions, crashOptions, logOptions },
 				locale: {
 					locales: [{ code: "en" }, { code: "sk" }, { code: "de" }],
 					defaultLocale: "en",
@@ -237,6 +246,7 @@ describe("adapter route config", () => {
 			const response = await handler(
 				new Request("http://localhost/echo-options", {
 					method: "POST",
+					headers: { "x-request-id": "req_explicit_context" },
 					body: JSON.stringify({}),
 				}),
 				explicitContext,
@@ -247,6 +257,7 @@ describe("adapter route config", () => {
 			expect(body.accessMode).toBe("system");
 			expect(body.locale).toBe("de");
 			expect(body.sessionUserId).toBe("explicit_user");
+			expect(body.requestId).toBe("req_explicit_context");
 		});
 
 		it("propagates request identifiers into context, response headers, and logs", async () => {
@@ -333,6 +344,119 @@ describe("adapter route config", () => {
 				status: 500,
 				error: { name: "Error", message: "boom" },
 			});
+		});
+
+		it("adds request identifiers to application logs inside the request scope", async () => {
+			setup.app.mocks.logger.clearLogs();
+			const handler = createFetchHandler(setup.app, { requestLogging: false });
+
+			const response = await handler(
+				new Request("http://localhost/log-options", {
+					method: "POST",
+					headers: {
+						"content-type": "application/json",
+						"x-request-id": "req_handler_log",
+					},
+					body: JSON.stringify({}),
+				}),
+			);
+
+			expect(response?.status).toBe(200);
+			const log = setup.app.mocks.logger
+				.getLogsContaining("handler observed")
+				.at(-1);
+			expect(log?.args[0]).toMatchObject({
+				event: "handler.observed",
+				requestId: "req_handler_log",
+				traceId: "req_handler_log",
+			});
+		});
+
+		it("uses logger request defaults unless the adapter overrides them", async () => {
+			const localSetup = await buildMockApp(
+				{
+					routes: { echoOptions, crashOptions },
+					locale: {
+						locales: [{ code: "en" }],
+						defaultLocale: "en",
+					},
+				},
+				{
+					logger: {
+						requests: { logSuccessfulRequests: false },
+					} as any,
+				},
+			);
+
+			try {
+				const handler = createFetchHandler(localSetup.app);
+				const successful = await handler(
+					new Request("http://localhost/echo-options", {
+						method: "POST",
+						headers: { "content-type": "application/json" },
+						body: JSON.stringify({}),
+					}),
+				);
+				expect(successful?.status).toBe(200);
+				expect(
+					localSetup.app.mocks.logger.getLogsContaining(
+						"HTTP request completed",
+					),
+				).toEqual([]);
+
+				const failed = await handler(
+					new Request("http://localhost/crash-options", {
+						method: "POST",
+						headers: { "content-type": "application/json" },
+						body: JSON.stringify({}),
+					}),
+				);
+				expect(failed?.status).toBe(500);
+				expect(
+					localSetup.app.mocks.logger.getLogsContaining(
+						"HTTP request completed",
+					)[0]?.level,
+				).toBe("error");
+
+				localSetup.app.mocks.logger.clearLogs();
+				const verboseHandler = createFetchHandler(localSetup.app, {
+					requestLogging: true,
+				});
+				await verboseHandler(
+					new Request("http://localhost/echo-options", {
+						method: "POST",
+						headers: { "content-type": "application/json" },
+						body: JSON.stringify({}),
+					}),
+				);
+				expect(
+					localSetup.app.mocks.logger.getLogsContaining(
+						"HTTP request completed",
+					)[0]?.level,
+				).toBe("info");
+			} finally {
+				await localSetup.cleanup();
+			}
+		});
+
+		it("can ignore successful request logs for noisy paths", async () => {
+			setup.app.mocks.logger.clearLogs();
+			const handler = createFetchHandler(setup.app, {
+				requestLogging: { ignorePaths: ["/echo-options"] },
+			});
+
+			const response = await handler(
+				new Request("http://localhost/echo-options", {
+					method: "POST",
+					headers: { "content-type": "application/json" },
+					body: JSON.stringify({}),
+				}),
+			);
+
+			expect(response?.status).toBe(200);
+			expect(
+				setup.app.mocks.logger.getLogsContaining("HTTP request completed"),
+			).toEqual([]);
 		});
 	});
 
