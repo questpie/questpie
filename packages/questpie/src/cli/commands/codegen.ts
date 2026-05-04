@@ -42,8 +42,6 @@ export interface GenerateOptions {
 	verbose?: boolean;
 }
 
-export const resolveEntityRoot = resolveConfigRoot;
-
 /**
  * Result of loading a questpie.config.ts for codegen.
  */
@@ -134,7 +132,7 @@ export async function loadConfigForCodegen(
  */
 export async function generateCommand(options: GenerateOptions): Promise<void> {
 	const rawConfigPath = resolveCliPath(options.configPath);
-	const { configPath, rootDir } = await resolveEntityRoot(rawConfigPath);
+	const { configPath, rootDir } = await resolveConfigRoot(rawConfigPath);
 
 	// Load plugins + module/package config from questpie.config.ts
 	const {
@@ -495,7 +493,7 @@ export async function devCommand(options: DevOptions): Promise<void> {
 	});
 
 	const rawConfigPath = resolve(process.cwd(), options.configPath);
-	const { configPath, rootDir } = await resolveEntityRoot(rawConfigPath);
+	const { configPath, rootDir } = await resolveConfigRoot(rawConfigPath);
 	const {
 		plugins: userPlugins,
 		module: moduleOpt,

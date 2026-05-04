@@ -14,12 +14,9 @@ import { join, resolve } from "node:path";
 
 import { coreCodegenPlugin, resolveTargetGraph } from "../codegen/index.js";
 import type { ResolvedTarget, ScaffoldConfig } from "../codegen/types.js";
+import { resolveConfigRoot } from "../config.js";
 import { resolveCliPath } from "../utils.js";
-import {
-	generateCommand,
-	loadConfigForCodegen,
-	resolveEntityRoot,
-} from "./codegen.js";
+import { generateCommand, loadConfigForCodegen } from "./codegen.js";
 
 // ============================================================================
 // Types
@@ -47,7 +44,7 @@ interface ScaffoldEntry {
 export async function addCommand(options: AddOptions): Promise<void> {
 	// 1. Load config and resolve target graph
 	const rawConfigPath = resolveCliPath(options.configPath);
-	const { configPath, rootDir } = await resolveEntityRoot(rawConfigPath);
+	const { configPath, rootDir } = await resolveConfigRoot(rawConfigPath);
 	const { plugins: userPlugins } = await loadConfigForCodegen(configPath);
 
 	const allPlugins = [coreCodegenPlugin(), ...(userPlugins ?? [])];

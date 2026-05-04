@@ -6,9 +6,8 @@ import {
 	DrizzleMigrationGenerator,
 	type GenerateMigrationOptions,
 } from "../../server/migration/generator.js";
-import { loadQuestpieConfig } from "../config.js";
+import { loadQuestpieConfig, resolveConfigRoot } from "../config.js";
 import { resolveCliPath } from "../utils.js";
-import { resolveEntityRoot } from "./codegen.js";
 
 /**
  * Mock stdin to automatically answer interactive prompts with Enter (select default)
@@ -130,7 +129,7 @@ async function generateMigrationInternal(
 	console.log(`📦 Found ${existingMigrations.length} existing migrations`);
 
 	// Get migration directory: explicit cli override or convention-based default (entity root)
-	const { rootDir } = await resolveEntityRoot(resolvedConfigPath);
+	const { rootDir } = await resolveConfigRoot(resolvedConfigPath);
 	const migrationDir = cmsConfig.cli?.migrations?.directory
 		? resolveCliPath(cmsConfig.cli.migrations.directory)
 		: join(rootDir, "migrations");
