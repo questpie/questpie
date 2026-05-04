@@ -434,7 +434,12 @@ export default {
 	"defaults.users.fields.name.placeholder": "Entrez le nom de l'utilisateur",
 	"defaults.users.fields.email.label": "E-mail",
 	"defaults.users.fields.email.description": "Adresse e-mail (lecture seule)",
+	"defaults.users.fields.image.label": "URL de l'image",
+	"defaults.users.fields.avatar.label": "Photo de profil",
 	"defaults.users.fields.role.label": "Rôle",
+	"defaults.users.fields.role.description":
+		"Les administrateurs peuvent gérer toute l'administration ; les utilisateurs ont un accès limité.",
+	"defaults.users.fields.role.placeholder": "Sélectionner un rôle",
 	"defaults.users.fields.role.options.admin": "Administrateur",
 	"defaults.users.fields.role.options.user": "Utilisateur",
 	"defaults.users.fields.emailVerified.label": "E-mail vérifié",
@@ -446,6 +451,9 @@ export default {
 	"defaults.users.fields.banReason.label": "Raison du bannissement",
 	"defaults.users.fields.banReason.placeholder":
 		"Entrez la raison du bannissement...",
+	"defaults.users.fields.banExpires.label": "Fin du bannissement",
+	"defaults.users.fields.banExpires.description":
+		"Quand le bannissement de l'utilisateur doit expirer",
 	"defaults.users.sections.basicInfo": "Informations de base",
 	"defaults.users.sections.permissions": "Permissions",
 	"defaults.users.sections.accessControl": "Contrôle d'accès",
@@ -491,6 +499,10 @@ export default {
 	"defaults.assets.fields.mimeType.description": "Type MIME du fichier",
 	"defaults.assets.fields.size.label": "Taille (octets)",
 	"defaults.assets.fields.size.description": "Taille du fichier en octets",
+	"defaults.assets.fields.width.label": "Largeur",
+	"defaults.assets.fields.width.description": "Largeur de l'image en pixels",
+	"defaults.assets.fields.height.label": "Hauteur",
+	"defaults.assets.fields.height.description": "Hauteur de l'image en pixels",
 	"defaults.assets.fields.alt.label": "Texte alternatif",
 	"defaults.assets.fields.alt.placeholder":
 		"Décrivez l'image pour l'accessibilité",
@@ -498,6 +510,8 @@ export default {
 		"Texte alternatif pour les lecteurs d'écran",
 	"defaults.assets.fields.caption.label": "Légende",
 	"defaults.assets.fields.caption.placeholder": "Ajouter une légende...",
+	"defaults.assets.fields.caption.description":
+		"Légende facultative affichée avec le média",
 	"defaults.assets.fields.visibility.label": "Visibilité",
 	"defaults.assets.fields.visibility.options.public": "Public",
 	"defaults.assets.fields.visibility.options.private": "Privé",

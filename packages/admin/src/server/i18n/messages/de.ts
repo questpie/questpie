@@ -436,7 +436,12 @@ export default {
 	"defaults.users.fields.email.label": "E-Mail",
 	"defaults.users.fields.email.description":
 		"E-Mail-Adresse (schreibgeschützt)",
+	"defaults.users.fields.image.label": "Bild-URL",
+	"defaults.users.fields.avatar.label": "Profilfoto",
 	"defaults.users.fields.role.label": "Rolle",
+	"defaults.users.fields.role.description":
+		"Administratoren können den gesamten Admin-Bereich verwalten; Benutzer haben eingeschränkten Zugriff.",
+	"defaults.users.fields.role.placeholder": "Rolle auswählen",
 	"defaults.users.fields.role.options.admin": "Administrator",
 	"defaults.users.fields.role.options.user": "Benutzer",
 	"defaults.users.fields.emailVerified.label": "E-Mail verifiziert",
@@ -448,6 +453,9 @@ export default {
 	"defaults.users.fields.banReason.label": "Sperrgrund",
 	"defaults.users.fields.banReason.placeholder":
 		"Grund für die Sperre eingeben...",
+	"defaults.users.fields.banExpires.label": "Sperre läuft ab",
+	"defaults.users.fields.banExpires.description":
+		"Wann die Sperre des Benutzers ablaufen soll",
 	"defaults.users.sections.basicInfo": "Grundinformationen",
 	"defaults.users.sections.permissions": "Berechtigungen",
 	"defaults.users.sections.accessControl": "Zugriffskontrolle",
@@ -493,12 +501,18 @@ export default {
 	"defaults.assets.fields.mimeType.description": "MIME-Typ der Datei",
 	"defaults.assets.fields.size.label": "Größe (Bytes)",
 	"defaults.assets.fields.size.description": "Dateigröße in Bytes",
+	"defaults.assets.fields.width.label": "Breite",
+	"defaults.assets.fields.width.description": "Bildbreite in Pixeln",
+	"defaults.assets.fields.height.label": "Höhe",
+	"defaults.assets.fields.height.description": "Bildhöhe in Pixeln",
 	"defaults.assets.fields.alt.label": "Alternativtext",
 	"defaults.assets.fields.alt.placeholder":
 		"Bild für Barrierefreiheit beschreiben",
 	"defaults.assets.fields.alt.description": "Alternativtext für Screenreader",
 	"defaults.assets.fields.caption.label": "Untertitel",
 	"defaults.assets.fields.caption.placeholder": "Untertitel hinzufügen...",
+	"defaults.assets.fields.caption.description":
+		"Optionale Beschriftung, die mit dem Medium angezeigt wird",
 	"defaults.assets.fields.visibility.label": "Sichtbarkeit",
 	"defaults.assets.fields.visibility.options.public": "Öffentlich",
 	"defaults.assets.fields.visibility.options.private": "Privat",

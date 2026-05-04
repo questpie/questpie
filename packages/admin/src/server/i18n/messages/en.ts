@@ -632,7 +632,12 @@ export default {
 	"defaults.users.fields.name.placeholder": "Enter user name",
 	"defaults.users.fields.email.label": "Email",
 	"defaults.users.fields.email.description": "Email address (read-only)",
+	"defaults.users.fields.image.label": "Image URL",
+	"defaults.users.fields.avatar.label": "Profile photo",
 	"defaults.users.fields.role.label": "Role",
+	"defaults.users.fields.role.description":
+		"Admins can manage the whole admin area; users have limited access.",
+	"defaults.users.fields.role.placeholder": "Select a role",
 	"defaults.users.fields.role.options.admin": "Admin",
 	"defaults.users.fields.role.options.user": "User",
 	"defaults.users.fields.emailVerified.label": "Email Verified",
@@ -643,6 +648,9 @@ export default {
 		"Prevent user from accessing the system",
 	"defaults.users.fields.banReason.label": "Ban Reason",
 	"defaults.users.fields.banReason.placeholder": "Enter reason for banning...",
+	"defaults.users.fields.banExpires.label": "Ban Expires",
+	"defaults.users.fields.banExpires.description":
+		"When the user's ban should expire",
 	"defaults.users.sections.basicInfo": "Basic Information",
 	"defaults.users.sections.permissions": "Permissions",
 	"defaults.users.sections.accessControl": "Access Control",
@@ -690,6 +698,10 @@ export default {
 	"defaults.assets.fields.mimeType.description": "MIME type of the file",
 	"defaults.assets.fields.size.label": "Size (bytes)",
 	"defaults.assets.fields.size.description": "File size in bytes",
+	"defaults.assets.fields.width.label": "Width",
+	"defaults.assets.fields.width.description": "Image width in pixels",
+	"defaults.assets.fields.height.label": "Height",
+	"defaults.assets.fields.height.description": "Image height in pixels",
 	"defaults.assets.fields.alt.label": "Alt Text",
 	"defaults.assets.fields.alt.placeholder":
 		"Describe the image for accessibility",
@@ -697,6 +709,8 @@ export default {
 		"Alternative text for screen readers",
 	"defaults.assets.fields.caption.label": "Caption",
 	"defaults.assets.fields.caption.placeholder": "Add a caption...",
+	"defaults.assets.fields.caption.description":
+		"Optional caption shown with the asset",
 	"defaults.assets.fields.visibility.label": "Visibility",
 	"defaults.assets.fields.visibility.options.public": "Public",
 	"defaults.assets.fields.visibility.options.private": "Private",
