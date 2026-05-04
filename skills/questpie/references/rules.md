@@ -365,6 +365,25 @@ Live preview sessions use token-based authentication. When a preview iframe load
 - Access rules (`.access()`) still apply to all data fetched during preview, including prefetched relations and block data.
 - Row-level access (AccessWhere) filters are enforced even in preview context — a user cannot preview records they cannot read.
 
+### Workflow Published Reads
+
+For publishable collections that use workflow stages, do not use `read: true` when public client or HTTP access is available. Gate anonymous reads to the published stage:
+
+```ts
+.access({
+	read: ({ session, input }) => {
+		if (session?.user) return true;
+		return input?.stage === "published";
+	},
+	create: ({ session }) => !!session?.user,
+	update: ({ session }) => !!session?.user,
+	delete: ({ session }) => !!session?.user,
+	transition: ({ session }) => !!session?.user,
+})
+```
+
+Public frontend code must pass `stage: "published"`. Preview/draft-mode reads may omit `stage` only when the request has an authorized editor session.
+
 ### System Access and Preview
 
 Do not use `accessMode: "system"` to serve preview data. Preview requests should go through normal session-based access, with the preview token resolving to the editor's session. This ensures previewed content respects the same visibility rules as the final published page.

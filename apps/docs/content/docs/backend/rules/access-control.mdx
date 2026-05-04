@@ -110,6 +110,34 @@ HTTP requests from clients always use the session-based access mode.
 })
 ```
 
+### Published-stage public reads
+
+For workflow-published pages, `read: true` allows any public client to omit `stage` and read the working draft. Instead, allow anonymous reads only when the request explicitly asks for the published stage:
+
+```ts title="collections/pages.ts"
+.access({
+	read: ({ session, input }) => {
+		if (session?.user) return true;
+		return input?.stage === "published";
+	},
+	create: ({ session }) => !!session?.user,
+	update: ({ session }) => !!session?.user,
+	delete: ({ session }) => !!session?.user,
+	transition: ({ session }) => !!session?.user,
+})
+```
+
+Public frontend code should then call:
+
+```ts
+await client.collections.pages.findOne({
+	where: { slug },
+	stage: "published",
+});
+```
+
+Admin preview can omit `stage` only for authorized editor sessions. Do not use `accessMode: "system"` in public request handlers to bypass this check.
+
 ## Related Pages
 
 - [Hooks](/docs/backend/rules/hooks) — Lifecycle hooks for custom logic

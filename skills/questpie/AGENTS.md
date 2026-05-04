@@ -1238,7 +1238,7 @@ collection("pages").options({
 - `transitionStage({ id, stage: "published" })` → move between workflow stages
 - `beforeTransition` / `afterTransition` hooks
 
-For publishable pages with workflow enabled, workflow stage is the publication source. Public reads must pass `stage: "published"`. Preview/draft-mode reads may omit `stage` to show the working stage to authorized editors. Do not add duplicate `isPublished` guidance when workflow already controls publishing.
+For publishable pages with workflow enabled, workflow stage is the publication source. Public reads must pass `stage: "published"`. If public client/HTTP access is enabled, anonymous read access should require `input?.stage === "published"` so callers cannot omit `stage` and fetch the working draft. Preview/draft-mode reads may omit `stage` to show the working stage to authorized editors. Do not add duplicate `isPublished` guidance when workflow already controls publishing.
 
 ### API Usage
 

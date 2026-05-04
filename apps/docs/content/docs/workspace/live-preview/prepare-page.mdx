@@ -42,6 +42,16 @@ export const pages = collection("pages")
 			},
 		},
 	})
+	.access({
+		read: ({ session, input }) => {
+			if (session?.user) return true;
+			return input?.stage === "published";
+		},
+		create: ({ session }) => !!session?.user,
+		update: ({ session }) => !!session?.user,
+		delete: ({ session }) => !!session?.user,
+		transition: ({ session }) => !!session?.user,
+	})
 	.form(({ v, f }) =>
 		v.collectionForm({
 			sidebar: { position: "right", fields: [f.slug] },
@@ -61,6 +71,8 @@ export const pages = collection("pages")
 ```
 
 Workflow stage is the publication source here. Do not add a duplicate page publication boolean for the same concern.
+
+The `read` rule also protects direct public API reads. A normal frontend request without an editor session must ask for `stage: "published"`; trying to omit `stage` cannot load the working draft. Authorized admin/preview requests have a session, so draft-mode routes can read the working stage.
 
 ## 2. Load Public And Preview Data
 
@@ -95,6 +107,17 @@ export const getPage = createServerFn({ method: "GET" })
 ```
 
 The preview token/draft-mode cookie allows the iframe route to load the working stage without making draft content public.
+
+If your public frontend calls the QUESTPIE client or HTTP API directly, keep the same contract:
+
+```ts
+await client.collections.pages.findOne({
+	where: { slug },
+	stage: "published",
+});
+```
+
+Do not use `accessMode: "system"` in public loaders to get around this. System mode bypasses access rules and would make draft visibility depend on route code instead of the collection policy.
 
 ## 3. Wire The Page Renderer
 

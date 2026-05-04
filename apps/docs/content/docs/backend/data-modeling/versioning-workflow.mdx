@@ -211,6 +211,23 @@ const page = await collections.pages.findOne({
 });
 ```
 
+If the same collection is reachable through the public client or HTTP API, protect anonymous reads in `.access()` too:
+
+```ts title="collections/pages.ts"
+.access({
+	read: ({ session, input }) => {
+		if (session?.user) return true;
+		return input?.stage === "published";
+	},
+	create: ({ session }) => !!session?.user,
+	update: ({ session }) => !!session?.user,
+	delete: ({ session }) => !!session?.user,
+	transition: ({ session }) => !!session?.user,
+})
+```
+
+This keeps the collection policy aligned with the route policy. A public visitor can fetch the published snapshot, but cannot omit `stage` to read the working draft. Preview and admin reads still work because the preview token resolves to the editor session.
+
 Draft-mode-aware preview loaders can omit `stage` to read the working stage for authorized editors:
 
 ```ts

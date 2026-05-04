@@ -258,7 +258,7 @@ Checklist:
 
 1. Configure `.preview({ url })` on the collection.
 2. Load the same record shape the page normally renders.
-3. For workflow-published pages, public reads use `stage: "published"`; authorized preview/draft reads can load the working record.
+3. For workflow-published pages, public reads use `stage: "published"`; if the public client/HTTP API is exposed, anonymous read access also checks `input?.stage === "published"`. Authorized preview/draft reads can load the working record.
 4. Call `useCollectionPreview({ initialData, onRefresh })` in the page renderer.
 5. Wrap the visual output in `PreviewProvider`.
 6. Render from `preview.data`, not the original loader object.

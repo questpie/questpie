@@ -188,6 +188,7 @@ await queue.sendReminder.publish({ userId: "abc" });
 - Preserve save, autosave, Cmd+S, history, workflow transitions, locks, and actions in the normal form lifecycle.
 - Frontend visual editing needs `useCollectionPreview`, `PreviewProvider`, `PreviewField`, and usually `BlockRenderer`; load the `questpie-admin` skill for the full frontend preparation checklist.
 - For publishable pages with workflow enabled, workflow stage is the publication source. Public frontend reads use `stage: "published"`.
+- If public client/HTTP access is enabled, anonymous read access should require `input?.stage === "published"`; editor/preview reads can omit `stage` only when a session is present.
 - Preview/draft-mode reads may load the working stage for authorized editors.
 - Do not add duplicate `isPublished` guidance when workflow already controls publishing.
 
