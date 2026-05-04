@@ -79,6 +79,7 @@ function ColumnHeader({
 const FIELD_TYPES_NEEDING_FIELD_DEF = new Set([
 	"object",
 	"array",
+	"select",
 	"relation",
 	"reverseRelation",
 	"upload",

@@ -29,10 +29,13 @@ import type {
 } from "recharts/types/component/DefaultTooltipContent";
 
 import { useCollectionList } from "../../hooks/use-collection";
+import { useCollectionFields } from "../../hooks/use-collection-fields";
 import { useServerWidgetData } from "../../hooks/use-server-widget-data";
 import { useResolveText, useTranslation } from "../../i18n/hooks";
 import { formatLabel } from "../../lib/utils";
 import { WidgetCard } from "../../views/dashboard/widget-card";
+import { resolveOptionLabelForValue } from "../primitives/option-label";
+import type { SelectOptions } from "../primitives/types";
 import { WidgetEmptyState } from "./widget-empty-state";
 import { ChartWidgetSkeleton } from "./widget-skeletons";
 
@@ -117,7 +120,7 @@ function ChartTooltip({
  */
 export default function ChartWidget({ config }: ChartWidgetProps) {
 	const resolveText = useResolveText();
-	const { t } = useTranslation();
+	const { t, locale } = useTranslation();
 	const {
 		collection,
 		field,
@@ -137,6 +140,14 @@ export default function ChartWidget({ config }: ChartWidgetProps) {
 		enabled: !!hasLoader,
 		refreshInterval,
 	});
+	const { fields } = useCollectionFields(collection, {
+		schemaQueryOptions: { enabled: !!collection && !hasLoader },
+	});
+	const fieldDef = fields[field] as any;
+	const fieldType = fieldDef?.name;
+	const selectOptions = fieldDef?.["~options"]?.options as
+		| SelectOptions<unknown>
+		| undefined;
 
 	// Fetch collection data (limited to 1000 items for performance)
 	const collectionQuery = useCollectionList(
@@ -182,7 +193,15 @@ export default function ChartWidget({ config }: ChartWidgetProps) {
 
 				// For date fields, group by day/week/month based on timeRange
 				let key: string;
-				if (value instanceof Date || !isNaN(Date.parse(value))) {
+				if (fieldType === "select") {
+					key = resolveOptionLabelForValue({
+						value,
+						options: selectOptions,
+						resolveText,
+						t,
+						locale,
+					});
+				} else if (value instanceof Date || !isNaN(Date.parse(value))) {
 					const date = new Date(value);
 					key = formatDateForRange(date, timeRange);
 				} else {
@@ -199,7 +218,18 @@ export default function ChartWidget({ config }: ChartWidgetProps) {
 		return Object.entries(grouped)
 			.map(([name, value]) => ({ name, value: value as number }))
 			.sort((a, b) => a.name.localeCompare(b.name));
-	}, [hasLoader, serverQuery.data, collectionItems, field, timeRange]);
+	}, [
+		hasLoader,
+		serverQuery.data,
+		collectionItems,
+		field,
+		fieldType,
+		selectOptions,
+		resolveText,
+		t,
+		locale,
+		timeRange,
+	]);
 
 	// Empty state content
 	const emptyContent = (

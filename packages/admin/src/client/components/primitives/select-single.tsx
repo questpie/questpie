@@ -25,6 +25,7 @@ import {
 } from "../ui/drawer";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { FieldSelectTrigger } from "./field-select-control";
+import { resolveOptionLabel } from "./option-label";
 import type { BasePrimitiveProps, SelectOption, SelectOptions } from "./types";
 import { flattenOptions } from "./types";
 
@@ -122,8 +123,10 @@ export function SelectSingle<TValue extends string = string>({
 	const resolvedStaticOptions = staticOptions ?? EMPTY_OPTIONS;
 	const resolveText = useResolveText();
 	const i18n = useSafeI18n();
+	const translate = useCallback((key: string) => i18n?.t(key) ?? key, [i18n]);
+	const locale = i18n?.locale ?? "en";
 	const t = (key: string, fallback: string) => {
-		const message = i18n?.t(key);
+		const message = translate(key);
 		return message && message !== key ? message : fallback;
 	};
 	const resolvedPlaceholder = resolveText(placeholder);
@@ -177,6 +180,17 @@ export function SelectSingle<TValue extends string = string>({
 		searchable === "auto"
 			? !!loadOptions || allOptions.length > SEARCH_OPTION_THRESHOLD
 			: searchable;
+	const getOptionLabel = useCallback(
+		(option: SelectOption<TValue>): string =>
+			resolveOptionLabel({
+				value: option.value,
+				label: option.label,
+				resolveText,
+				t: translate,
+				locale,
+			}),
+		[locale, resolveText, translate],
+	);
 
 	// Filter options by search (for static options)
 	const filteredOptions = useMemo(() => {
@@ -190,9 +204,9 @@ export function SelectSingle<TValue extends string = string>({
 			return allOptions;
 		}
 		return allOptions.filter((opt: SelectOption<TValue>) =>
-			resolveText(opt.label).toLowerCase().includes(search.toLowerCase()),
+			getOptionLabel(opt).toLowerCase().includes(search.toLowerCase()),
 		);
-	}, [allOptions, search, loadOptions, resolveText, showSearchInput]);
+	}, [allOptions, search, loadOptions, getOptionLabel, showSearchInput]);
 
 	// Get label for a value — falls back to selectedLabel, then raw value string
 	const getLabel = useCallback(
@@ -200,11 +214,16 @@ export function SelectSingle<TValue extends string = string>({
 			const option = allOptions.find(
 				(opt: SelectOption<TValue>) => opt.value === val,
 			);
-			if (option?.label) return resolveText(option.label);
-			if (selectedLabel) return selectedLabel;
-			return String(val);
+			return resolveOptionLabel({
+				value: val,
+				label: option?.label,
+				resolveText,
+				t: translate,
+				locale,
+				fallback: selectedLabel ?? String(val),
+			});
 		},
-		[allOptions, resolveText, selectedLabel],
+		[allOptions, locale, resolveText, selectedLabel, translate],
 	);
 
 	const handleSelect = useCallback(
@@ -325,7 +344,7 @@ export function SelectSingle<TValue extends string = string>({
 							data-checked={value === option.value}
 						>
 							{option.icon}
-							<span className="truncate">{resolveText(option.label)}</span>
+							<span className="truncate">{getOptionLabel(option)}</span>
 						</CommandItem>
 					))}
 				</CommandGroup>

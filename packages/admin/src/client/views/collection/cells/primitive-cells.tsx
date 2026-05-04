@@ -10,8 +10,15 @@
 
 import * as React from "react";
 
+import type { FieldInstance } from "../../../builder/field/field";
+import {
+	resolveOptionLabelForValue,
+	type ResolveTextFn,
+	type TranslateFn,
+} from "../../../components/primitives/option-label";
+import type { SelectOptions } from "../../../components/primitives/types";
 import { Badge } from "../../../components/ui/badge";
-import { useTranslation } from "../../../i18n/hooks";
+import { useResolveText, useTranslation } from "../../../i18n/hooks";
 
 // ============================================================================
 // Default Cell (Ultra-Simple Fallback)
@@ -190,9 +197,68 @@ export function EmailCell({ value }: { value: unknown }) {
 /**
  * Select/Status cell - badge display
  */
-export function SelectCell({ value }: { value: unknown }) {
-	if (value === null || value === undefined || value === "") {
+function getSelectOptions(fieldDef?: FieldInstance) {
+	const options = fieldDef?.["~options"]?.options;
+	return Array.isArray(options)
+		? (options as SelectOptions<unknown>)
+		: undefined;
+}
+
+export function resolveSelectCellLabel({
+	value,
+	fieldDef,
+	resolveText,
+	t,
+	locale,
+}: {
+	value: unknown;
+	fieldDef?: FieldInstance;
+	resolveText: ResolveTextFn;
+	t: TranslateFn;
+	locale: string;
+}): string {
+	return resolveOptionLabelForValue({
+		value,
+		options: getSelectOptions(fieldDef),
+		resolveText,
+		t,
+		locale,
+	});
+}
+
+export function SelectCell({
+	value,
+	fieldDef,
+}: {
+	value: unknown;
+	fieldDef?: FieldInstance;
+}) {
+	const { t, locale } = useTranslation();
+	const resolveText = useResolveText();
+
+	if (
+		value === null ||
+		value === undefined ||
+		value === "" ||
+		(Array.isArray(value) && value.length === 0)
+	) {
 		return <span className="text-muted-foreground">-</span>;
 	}
-	return <Badge variant="outline">{String(value)}</Badge>;
+
+	const values = Array.isArray(value) ? value : [value];
+	return (
+		<span className="inline-flex max-w-[300px] flex-wrap gap-1">
+			{values.map((item, index) => (
+				<Badge key={`${String(item)}-${index}`} variant="outline">
+					{resolveSelectCellLabel({
+						value: item,
+						fieldDef,
+						resolveText,
+						t,
+						locale,
+					})}
+				</Badge>
+			))}
+		</span>
+	);
 }
