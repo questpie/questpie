@@ -1,5 +1,12 @@
 # @questpie/next
 
+## 3.2.4
+
+### Patch Changes
+
+- Updated dependencies []:
+  - questpie@3.2.4
+
 ## 3.2.3
 
 ### Patch Changes
