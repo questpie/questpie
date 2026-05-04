@@ -8,7 +8,9 @@ services:
       POSTGRES_USER: barbershop
       POSTGRES_PASSWORD: barbershop_dev_password
     ports:
-      - "5432:5432"
+      # Use a project-specific host port to avoid colliding with other
+      # local QUESTPIE examples or a system Postgres on 5432.
+      - "55432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:

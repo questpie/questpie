@@ -14,6 +14,8 @@ export default service({
 	lifecycle: "singleton",
 	create: ({ app }) => {
 		return betterAuth({
+			baseURL: app.config.app.url,
+			secret: app.config.secret,
 			...(app.config.auth ?? {}),
 			database: drizzleAdapter(app.db, {
 				provider: "pg",

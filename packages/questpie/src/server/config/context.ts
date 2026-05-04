@@ -135,7 +135,7 @@ export function guardHookRecursion(): number {
 				"A lifecycle hook is likely triggering CRUD operations that re-trigger the same hook.",
 		);
 	}
-	if (depth >= 3) {
+	if (depth >= MAX_HOOK_RECURSION - 1) {
 		console.warn(
 			`[QUESTPIE] Hook recursion depth at ${depth} — review hooks for potential infinite loops`,
 		);

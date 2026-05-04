@@ -8,7 +8,8 @@
 		"#questpie/*": "./src/questpie/server/.generated/*"
 	},
 	"scripts": {
-		"dev": "bun --bun vite dev",
+		"dev": "bun run dev:check && bun --bun vite dev",
+		"dev:check": "bun run ./scripts/check-dev-db.ts",
 		"dev:worker": "bun --bun run --watch ./src/worker.ts",
 		"worker": "bun --bun run ./src/worker.ts",
 		"generate": "bun x questpie generate -c src/questpie/server/questpie.config.ts",
