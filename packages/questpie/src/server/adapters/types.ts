@@ -27,6 +27,19 @@ export type AdapterConfig<TConfig extends QuestpieConfig = QuestpieConfig> = {
 	basePath?: string;
 	accessMode?: AccessMode;
 	/**
+	 * Request observability emitted by `createFetchHandler`.
+	 *
+	 * Enabled by default. Successful requests are logged at info, 4xx at warn,
+	 * 5xx at error, and slow successful requests at warn.
+	 */
+	requestLogging?:
+		| boolean
+		| {
+				enabled?: boolean;
+				logSuccessfulRequests?: boolean;
+				slowThresholdMs?: number;
+			};
+	/**
 	 * Search route options.
 	 */
 	search?: {
@@ -74,6 +87,8 @@ export type AdapterContext = {
 	locale?: string;
 	localeFallback?: boolean;
 	stage?: string;
+	requestId?: string;
+	traceId?: string;
 	appContext: RequestContext;
 };
 
@@ -83,6 +98,8 @@ export type AdapterBaseContext = {
 	locale?: string;
 	localeFallback?: boolean;
 	stage?: string;
+	requestId?: string;
+	traceId?: string;
 	accessMode: AccessMode;
 };
 

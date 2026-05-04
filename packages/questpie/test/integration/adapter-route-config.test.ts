@@ -55,6 +55,8 @@ describe("adapter route config", () => {
 					stage: z.string().optional(),
 					sessionUserId: z.string().nullable(),
 					organizationId: z.string().nullable(),
+					requestId: z.string().optional(),
+					traceId: z.string().optional(),
 				}),
 			)
 			.handler(async (ctx) => {
@@ -66,14 +68,22 @@ describe("adapter route config", () => {
 					stage: (ctx as any).stage,
 					sessionUserId: (ctx.session as any)?.user?.id ?? null,
 					organizationId: (ctx as any).organizationId ?? null,
+					requestId: ctx.requestId as string | undefined,
+					traceId: ctx.traceId as string | undefined,
 				};
+			});
+		const crashOptions = route()
+			.post()
+			.schema(z.object({}))
+			.handler(async () => {
+				throw new Error("boom");
 			});
 
 		let setup: Awaited<ReturnType<typeof buildMockApp>>;
 
 		beforeEach(async () => {
 			setup = await buildMockApp({
-				routes: { echoOptions },
+				routes: { echoOptions, crashOptions },
 				locale: {
 					locales: [{ code: "en" }, { code: "sk" }, { code: "de" }],
 					defaultLocale: "en",
@@ -237,6 +247,92 @@ describe("adapter route config", () => {
 			expect(body.accessMode).toBe("system");
 			expect(body.locale).toBe("de");
 			expect(body.sessionUserId).toBe("explicit_user");
+		});
+
+		it("propagates request identifiers into context, response headers, and logs", async () => {
+			const handler = createFetchHandler(setup.app);
+			const traceId = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+			const response = await handler(
+				new Request("http://localhost/echo-options", {
+					method: "POST",
+					headers: {
+						"content-type": "application/json",
+						"x-request-id": "req_test_123",
+						traceparent: `00-${traceId}-bbbbbbbbbbbbbbbb-01`,
+					},
+					body: JSON.stringify({}),
+				}),
+			);
+
+			expect(response?.status).toBe(200);
+			expect(response?.headers.get("x-request-id")).toBe("req_test_123");
+			expect(response?.headers.get("x-trace-id")).toBe(traceId);
+
+			const body = await response?.json();
+			expect(body.requestId).toBe("req_test_123");
+			expect(body.traceId).toBe(traceId);
+
+			const log = setup.app.mocks.logger
+				.getLogsContaining("HTTP request completed")
+				.at(-1);
+			expect(log?.level).toBe("info");
+			expect(log?.args[0]).toMatchObject({
+				event: "http.request",
+				requestId: "req_test_123",
+				traceId,
+				method: "POST",
+				path: "/echo-options",
+				route: "echo-options",
+				status: 200,
+			});
+			expect(typeof log?.args[0].durationMs).toBe("number");
+		});
+
+		it("can disable request logging while preserving request headers", async () => {
+			setup.app.mocks.logger.clearLogs();
+			const handler = createFetchHandler(setup.app, { requestLogging: false });
+
+			const response = await handler(
+				new Request("http://localhost/echo-options", {
+					method: "POST",
+					headers: { "content-type": "application/json" },
+					body: JSON.stringify({}),
+				}),
+			);
+
+			expect(response?.status).toBe(200);
+			expect(response?.headers.get("x-request-id")).toBeTruthy();
+			expect(
+				setup.app.mocks.logger.getLogsContaining("HTTP request completed"),
+			).toEqual([]);
+		});
+
+		it("logs unhandled route failures with error metadata", async () => {
+			setup.app.mocks.logger.clearLogs();
+			const handler = createFetchHandler(setup.app);
+
+			const response = await handler(
+				new Request("http://localhost/crash-options", {
+					method: "POST",
+					headers: { "content-type": "application/json" },
+					body: JSON.stringify({}),
+				}),
+			);
+
+			expect(response?.status).toBe(500);
+			const log = setup.app.mocks.logger
+				.getLogsContaining("HTTP request completed")
+				.at(-1);
+			expect(log?.level).toBe("error");
+			expect(log?.args[0]).toMatchObject({
+				event: "http.request",
+				method: "POST",
+				path: "/crash-options",
+				route: "crash-options",
+				status: 500,
+				error: { name: "Error", message: "boom" },
+			});
 		});
 	});
 

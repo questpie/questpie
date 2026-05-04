@@ -67,6 +67,7 @@ export const createAdapterContext = async <
 	app: Questpie<TConfig>,
 	request: Request,
 	config: AdapterConfig<TConfig> = {},
+	observability?: { requestId?: string; traceId?: string },
 ): Promise<AdapterContext> => {
 	const parsedQuery = getQueryParams(new URL(request.url));
 	const queryLocale =
@@ -88,6 +89,10 @@ export const createAdapterContext = async <
 		localeFallback,
 		stage: queryStage,
 		accessMode: config.accessMode ?? "user",
+		...(observability?.requestId
+			? { requestId: observability.requestId }
+			: {}),
+		...(observability?.traceId ? { traceId: observability.traceId } : {}),
 	};
 
 	// 1. Apply adapter-level extension (from adapter config)
@@ -124,6 +129,12 @@ export const createAdapterContext = async <
 		localeFallback: appContext.localeFallback,
 		stage: appContext.stage,
 		appContext,
+		...(typeof appContext.requestId === "string"
+			? { requestId: appContext.requestId }
+			: {}),
+		...(typeof appContext.traceId === "string"
+			? { traceId: appContext.traceId }
+			: {}),
 	};
 };
 
@@ -134,6 +145,7 @@ export const resolveContext = async <
 	request: Request,
 	config: AdapterConfig<TConfig>,
 	context?: AdapterContext,
+	observability?: { requestId?: string; traceId?: string },
 ) => {
 	if (context?.appContext) {
 		return context;
@@ -147,5 +159,5 @@ export const resolveContext = async <
 		return storedAdapterContext;
 	}
 
-	return createAdapterContext(app, request, config);
+	return createAdapterContext(app, request, config, observability);
 };
