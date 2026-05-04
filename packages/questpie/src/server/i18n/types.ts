@@ -8,7 +8,7 @@
 import type { MessageValue, PluralMessages } from "./messages.js";
 
 // ============================================================================
-// Messages Shape (for .messages() builder method)
+// Messages Shape (for module and file-convention messages)
 // ============================================================================
 
 /**
@@ -17,7 +17,7 @@ import type { MessageValue, PluralMessages } from "./messages.js";
 export type LocaleMessagesShape = Record<string, MessageValue>;
 
 /**
- * Messages object shape for .messages() builder method
+ * Messages object shape for module and file-convention messages.
  * Record<locale, Record<key, MessageValue>>
  *
  * @example
@@ -75,7 +75,7 @@ export type TypedTranslateFn<TCustomKeys extends string = never> = (
 ) => string;
 
 // ============================================================================
-// Backend Message Registry (Deprecated - use .messages() instead)
+// Backend Message Registry (Deprecated - use file-convention messages instead)
 // ============================================================================
 
 /**
@@ -84,20 +84,15 @@ export type TypedTranslateFn<TCustomKeys extends string = never> = (
  * This interface is kept for backwards compatibility but is no longer
  * the recommended way to register message keys.
  *
- * Instead, use the `.messages()` method on the builder which provides
- * type-safe message keys through the builder chain:
+ * Instead, define messages through module contributions or the
+ * `questpie/server/messages/<locale>.ts` file convention. Codegen includes
+ * those keys in the generated app type.
+ *
+ * ```ts title="questpie/server/messages/en.ts"
+ * export default { "myModule.error": "Error occurred" } as const;
+ * ```
  *
  * ```ts
- * const messages = {
- *   en: { "myModule.error": "Error occurred" },
- * } as const;
- *
- * const app = runtimeConfig({
- *   modules: [starterModule], // Includes core messages
- *   messages, // Add custom messages
- *   db: { url: '...' },
- * });
- *
  * app.t("myModule.error"); // Type-safe!
  * ```
  *
@@ -110,10 +105,10 @@ export type TypedTranslateFn<TCustomKeys extends string = never> = (
  * }
  * ```
  *
- * @deprecated Use .messages() on the builder instead
+ * @deprecated Use file-convention messages instead.
  */
 export interface BackendMessageRegistry {
-	// Empty - message keys now flow through builder chain via .messages()
+	// Empty - message keys now flow through codegen.
 	// Legacy keys can still be added via module augmentation
 }
 
@@ -123,8 +118,7 @@ export interface BackendMessageRegistry {
  * This type allows any string for maximum flexibility, while still
  * providing autocomplete for keys registered via module augmentation.
  *
- * For type-safe message keys, use the .messages() pattern on the builder
- * which infers keys at the instance level (app.t()).
+ * Type-safe project message keys come from codegen-discovered messages.
  */
 export type BackendMessageKey = keyof BackendMessageRegistry | (string & {});
 
@@ -132,7 +126,7 @@ export type BackendMessageKey = keyof BackendMessageRegistry | (string & {});
  * Backend translate function signature
  *
  * Accepts typed message keys or any string for flexibility.
- * When using the new .messages() pattern, keys are inferred from the builder chain.
+ * When using codegen-discovered messages, keys are inferred on the generated app.
  * The (string & {}) allows arbitrary strings while still providing autocomplete
  * for known keys.
  */

@@ -18,15 +18,13 @@ export type {
  * - Visible columns selection
  *
  * @example
- * ```ts
- * import { runtimeConfig } from "questpie";
+ * ```ts title="questpie/server/modules.ts"
  * import { adminModule } from "@questpie/admin/server";
  *
- * export default runtimeConfig({
- *   modules: [adminModule],
- *   // ...
- * });
+ * export default [adminModule] as const;
+ * ```
  *
+ * ```ts
  * // Access saved views
  * const views = await app.collections.admin_saved_views.find({
  *   where: { collectionName: "posts", userId: currentUser.id }

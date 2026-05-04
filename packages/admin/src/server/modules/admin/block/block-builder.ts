@@ -614,10 +614,10 @@ export class BlockBuilder<
  * Blocks are server-only - the frontend handles rendering independently.
  *
  * @example
- * ```ts
- * import { block } from "@questpie/admin/server";
+ * ```ts title="questpie/server/blocks/hero.ts"
+ * import { block } from "#questpie/factories";
  *
- * const heroBlock = block("hero")
+ * export default block("hero")
  *   .admin(({ c }) => ({
  *     label: { en: "Hero Section" },
  *     icon: c.icon("ph:image"),
@@ -626,16 +626,13 @@ export class BlockBuilder<
  *     },
  *   }))
  *   .fields(({ f }) => ({
- *     title: f.text({ required: true }),
+ *     title: f.text(255).required(),
  *     subtitle: f.text(),
  *   }));
- *
- * // Register blocks on QUESTPIE
- * const app = runtimeConfig({
- *   modules: [adminModule],
- *   blocks: { hero: heroBlock },
- *   .build({ ... });
  * ```
+ *
+ * Blocks are discovered by codegen when `adminModule` is registered in
+ * `questpie/server/modules.ts`.
  */
 export function block<TName extends string>(
 	name: TName,

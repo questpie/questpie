@@ -218,11 +218,6 @@ export function docsRoute(config?: OpenApiConfig & { scalar?: ScalarConfig }) {
  * export default openApiConfig({ info: { title: "My API", version: "1.0.0" } });
  * ```
  *
- * Or pass config directly for backward compatibility:
- * ```ts
- * openApiModule({ info: { title: "My API" } })
- * ```
- *
  * @example Static (reads config from config/openapi.ts):
  * ```ts title="questpie/server/modules.ts"
  * import { openApiModule } from "@questpie/openapi";

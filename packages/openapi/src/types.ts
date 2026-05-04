@@ -44,7 +44,7 @@ export interface ScalarConfig {
 
 /**
  * Configuration for the OpenAPI module.
- * Pass to `openApiModule()` for zero-config setup via `modules.ts`.
+ * Export from `config/openapi.ts` via `openApiConfig()`.
  */
 export interface OpenApiModuleConfig extends OpenApiConfig {
 	/** Scalar UI options */

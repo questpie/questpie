@@ -815,19 +815,16 @@ const getAdminConfigOutputSchema = adminConfigDTOSchema;
  * Filters all results by the current user's read access rules.
  *
  * @example
- * ```ts
- * // In your app
- * const app = runtimeConfig({
- *   modules: [adminModule],
- *   dashboard: ({ d }) => d.dashboard({
- *     title: { en: "Dashboard" },
- *     items: [...],
- *   }))
- *   .sidebar(({ s }) => s.sidebar({
- *     sections: [...],
- *   }))
- *   .build({ ... });
+ * ```ts title="questpie/server/config/admin.ts"
+ * import { adminConfig } from "#questpie/factories";
  *
+ * export default adminConfig({
+ *   dashboard: { items: [] },
+ *   sidebar: { sections: [], items: [] },
+ * });
+ * ```
+ *
+ * ```ts
  * // Client fetches config
  * const config = await client.routes.getAdminConfig({});
  * ```

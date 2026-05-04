@@ -34,7 +34,7 @@ export interface AdminCollectionConfig {
 	order?: number;
 	/**
 	 * Whether this collection should be included in audit logging.
-	 * Requires the audit module to be registered via `runtimeConfig({ modules: [auditModule] })`.
+	 * Requires `auditModule` to be registered in `questpie/server/modules.ts`.
 	 *
 	 * - `true` or `undefined` (default): audited when audit module is active
 	 * - `false`: never audited, even when audit module is active

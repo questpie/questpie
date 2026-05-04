@@ -6,24 +6,21 @@
  *
  * @example
  * ```ts
- * // questpie.config.ts
- * import { runtimeConfig } from "questpie";
+ * // questpie/server/modules.ts
  * import { adminModule } from "@questpie/admin/server";
  *
- * export default runtimeConfig({
- *   modules: [adminModule],  // Registers richText and blocks fields
- * });
+ * export default [adminModule] as const;
+ * ```
  *
- * // collections/pages/index.ts — fields are now available via file convention
- * import { collection } from "questpie";
+ * ```ts
+ * // questpie/server/collections/pages.ts
+ * import { collection } from "#questpie/factories";
  *
- * export default collection("pages", {
- *   fields: ({ f }) => ({
- *     title: f.text({ required: true }),
- *     content: f.richText({ features: ["bold", "italic", "link"] }),
- *     sections: f.blocks({ allowedBlocks: ["hero", "text"] }),
- *   }),
- * });
+ * export default collection("pages").fields(({ f }) => ({
+ *   title: f.text(255).required(),
+ *   content: f.richText(),
+ *   sections: f.blocks(),
+ * }));
  * ```
  */
 

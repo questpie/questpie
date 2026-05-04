@@ -11,15 +11,13 @@ import { uniqueIndex } from "questpie/drizzle-pg-core";
  * Key format: "viewState:{collectionName}" for view state preferences
  *
  * @example
- * ```ts
- * import { runtimeConfig } from "questpie";
+ * ```ts title="questpie/server/modules.ts"
  * import { adminModule } from "@questpie/admin/server";
  *
- * export default runtimeConfig({
- *   modules: [adminModule],
- *   // ...
- * });
+ * export default [adminModule] as const;
+ * ```
  *
+ * ```ts
  * // Access preferences
  * const prefs = await app.collections.admin_preferences.findOne({
  *   where: { userId: currentUser.id, key: "viewState:posts" }

@@ -21,6 +21,8 @@ Codegen merges module contributions with your project-level entities. The admin 
 - Administration sidebar section
 - Audit log entries (via audit module)
 
+Keep `modules.ts` statically discoverable. Codegen imports it before runtime app creation, so codegen-aware modules should not be hidden behind environment checks or configured through `module(options)` calls. Put runtime options in plugin-discovered `config/*.ts` files.
+
 ## What Modules Contribute
 
 A module is a plain object of entities:
