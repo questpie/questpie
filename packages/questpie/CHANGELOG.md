@@ -1,5 +1,11 @@
 # questpie
 
+## 3.2.3
+
+### Patch Changes
+
+- [`7607322`](https://github.com/questpie/questpie/commit/7607322cf6bbc0d933dd2c593edd3de618827b06) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Add `questpie cloud login` and `questpie cloud init`, and let `questpie cloud deploy` use the saved Cloud profile.
+
 ## 3.2.2
 
 ### Patch Changes
