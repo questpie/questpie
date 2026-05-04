@@ -1,7 +1,13 @@
 "use client";
 
 import { CodeBlock, Pre } from "fumadocs-ui/components/codeblock";
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import {
+	useEffect,
+	useId,
+	useRef,
+	useState,
+	useSyncExternalStore,
+} from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -15,6 +21,14 @@ type MermaidRenderState =
 	| { status: "error"; message: string };
 
 type MermaidTheme = "dark" | "default";
+type MermaidModule = typeof import("mermaid").default;
+
+let mermaidPromise: Promise<MermaidModule> | undefined;
+
+function loadMermaid() {
+	mermaidPromise ??= import("mermaid").then((module) => module.default);
+	return mermaidPromise;
+}
 
 function normalizeChart(chart: string): string {
 	return chart.replaceAll("\\n", "\n").trim();
@@ -25,6 +39,16 @@ function resolveMermaidTheme(): MermaidTheme {
 	return document.documentElement.classList.contains("light")
 		? "default"
 		: "dark";
+}
+
+function subscribeTheme(onStoreChange: () => void) {
+	const observer = new MutationObserver(onStoreChange);
+	observer.observe(document.documentElement, {
+		attributeFilter: ["class"],
+		attributes: true,
+	});
+
+	return () => observer.disconnect();
 }
 
 function getThemeVariables(theme: MermaidTheme) {
@@ -66,43 +90,25 @@ export function Mermaid({
 }) {
 	const id = useId();
 	const containerRef = useRef<HTMLDivElement>(null);
-	const normalizedChart = useMemo(() => normalizeChart(chart), [chart]);
-	const diagramId = useMemo(
-		() => `mermaid-${id.replace(/[^a-zA-Z0-9_-]/g, "")}`,
-		[id],
+	const normalizedChart = normalizeChart(chart);
+	const diagramId = `mermaid-${id.replace(/[^a-zA-Z0-9_-]/g, "")}`;
+	const theme = useSyncExternalStore(
+		subscribeTheme,
+		resolveMermaidTheme,
+		(): MermaidTheme => "dark",
 	);
-	const [mounted, setMounted] = useState(false);
-	const [theme, setTheme] = useState<MermaidTheme>("dark");
 	const [renderState, setRenderState] = useState<MermaidRenderState>({
 		status: "idle",
 	});
 
 	useEffect(() => {
-		setMounted(true);
-		setTheme(resolveMermaidTheme());
-
-		const observer = new MutationObserver(() => {
-			setTheme(resolveMermaidTheme());
-		});
-
-		observer.observe(document.documentElement, {
-			attributeFilter: ["class"],
-			attributes: true,
-		});
-
-		return () => observer.disconnect();
-	}, []);
-
-	useEffect(() => {
-		if (!mounted) return;
-
 		let cancelled = false;
 
 		async function renderDiagram() {
 			setRenderState({ status: "loading" });
 
 			try {
-				const { default: mermaid } = await import("mermaid");
+				const mermaid = await loadMermaid();
 
 				mermaid.initialize({
 					startOnLoad: false,
@@ -137,7 +143,7 @@ export function Mermaid({
 		return () => {
 			cancelled = true;
 		};
-	}, [diagramId, mounted, normalizedChart, theme]);
+	}, [diagramId, normalizedChart, theme]);
 
 	useEffect(() => {
 		if (renderState.status !== "ready" || !containerRef.current) return;

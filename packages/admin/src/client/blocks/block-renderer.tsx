@@ -20,8 +20,9 @@
  * ```
  */
 
-import type * as React from "react";
+import * as React from "react";
 
+import { cn } from "../lib/utils.js";
 import { BlockScopeProvider } from "../preview/block-scope-context.js";
 import type { BlockContent, BlockNode } from "./types";
 
@@ -33,6 +34,14 @@ const EMPTY_DATA: Record<string, unknown> = {};
  * Consumers provide their own renderers mapped by block type.
  */
 type BlockRendererFn = (props: any) => React.ReactNode;
+
+export type BlockInsertRequest = {
+	position: {
+		parentId: string | null;
+		index: number;
+	};
+	referenceBlockId?: string;
+};
 
 /**
  * Props for BlockRenderer component.
@@ -48,6 +57,8 @@ export type BlockRendererProps = {
 	selectedBlockId?: string | null;
 	/** Block click handler (for editor mode) */
 	onBlockClick?: (blockId: string) => void;
+	/** Block insert handler (for preview editor mode) */
+	onBlockInsert?: (request: BlockInsertRequest) => void;
 	/** Custom class name for the container */
 	className?: string;
 };
@@ -65,13 +76,18 @@ export function BlockRenderer({
 	data,
 	selectedBlockId,
 	onBlockClick,
+	onBlockInsert,
 	className,
 }: BlockRendererProps) {
 	const resolvedData = data ?? EMPTY_DATA;
 	/**
 	 * Recursively render a block node.
 	 */
-	function renderBlock(node: BlockNode): React.ReactNode {
+	function renderBlock(
+		node: BlockNode,
+		parentId: string | null,
+		index: number,
+	): React.ReactNode {
 		const renderFn =
 			renderers[node.type] ?? renderers[kebabToCamelCase(node.type)];
 
@@ -92,55 +108,56 @@ export function BlockRenderer({
 
 		// Render children for layout blocks
 		const renderedChildren =
-			node.children.length > 0 ? node.children.map(renderBlock) : undefined;
-
-		const handleClick = onBlockClick
-			? (e: React.MouseEvent) => {
-					e.stopPropagation();
-					onBlockClick(node.id);
-				}
-			: undefined;
+			node.children.length > 0
+				? node.children.map((child, childIndex) =>
+						renderBlock(child, node.id, childIndex),
+					)
+				: undefined;
 
 		const BlockComponent = renderFn;
 		const blockElement = (
+			<BlockComponent
+				id={node.id}
+				type={node.type}
+				values={values}
+				data={blockData}
+			>
+				{renderedChildren}
+			</BlockComponent>
+		);
+		const scopedBlockElement = (
 			<BlockScopeProvider blockId={node.id} basePath="content._values">
-				<BlockComponent
-					id={node.id}
-					type={node.type}
-					values={values}
-					data={blockData}
-				>
-					{renderedChildren}
-				</BlockComponent>
+				{blockElement}
 			</BlockScopeProvider>
 		);
 
 		// Wrap in interactive container when in editor mode
-		if (handleClick) {
+		if (onBlockClick) {
 			return (
-				<div
-					key={node.id}
-					data-block-id={node.id}
-					data-block-type={node.type}
-					onClick={handleClick}
-					onKeyDown={(e) => {
-						if (e.key === "Enter" || e.key === " ") {
-							e.preventDefault();
-							onBlockClick?.(node.id);
-						}
-					}}
-					role="button"
-					tabIndex={0}
-					className="cursor-pointer"
-				>
-					{blockElement}
-				</div>
+				<React.Fragment key={node.id}>
+					<PreviewBlockWrapper
+						id={node.id}
+						isSelected={isSelected}
+						onBlockClick={onBlockClick}
+						type={node.type}
+					>
+						{scopedBlockElement}
+					</PreviewBlockWrapper>
+					{onBlockInsert && (
+						<PreviewBlockInsertControl
+							onBlockInsert={onBlockInsert}
+							parentId={parentId}
+							referenceBlockId={node.id}
+							insertIndex={index + 1}
+						/>
+					)}
+				</React.Fragment>
 			);
 		}
 
 		return (
 			<div key={node.id} data-block-id={node.id} data-block-type={node.type}>
-				{blockElement}
+				{scopedBlockElement}
 			</div>
 		);
 	}
@@ -149,7 +166,231 @@ export function BlockRenderer({
 		return null;
 	}
 
-	return <div className={className}>{content._tree.map(renderBlock)}</div>;
+	return (
+		<div className={className}>
+			{content._tree.map((node, index) => renderBlock(node, null, index))}
+		</div>
+	);
+}
+
+function PreviewBlockInsertControl({
+	insertIndex,
+	onBlockInsert,
+	parentId,
+	referenceBlockId,
+}: {
+	insertIndex: number;
+	onBlockInsert: (request: BlockInsertRequest) => void;
+	parentId: string | null;
+	referenceBlockId: string;
+}) {
+	const [isHovered, setIsHovered] = React.useState(false);
+	const previewRingColor = "var(--ring, var(--highlight, #b700ff))";
+	const softRingColor = `color-mix(in srgb, ${previewRingColor} 34%, transparent)`;
+	const mutedRingColor = `color-mix(in srgb, ${previewRingColor} 12%, transparent)`;
+
+	const handleInsert = React.useCallback(
+		(event: React.MouseEvent | React.KeyboardEvent) => {
+			event.preventDefault();
+			event.stopPropagation();
+			onBlockInsert({
+				position: {
+					parentId,
+					index: insertIndex,
+				},
+				referenceBlockId,
+			});
+		},
+		[insertIndex, onBlockInsert, parentId, referenceBlockId],
+	);
+
+	return (
+		<div
+			data-preview-block-insert=""
+			onMouseEnter={() => setIsHovered(true)}
+			onMouseLeave={() => setIsHovered(false)}
+			onFocus={() => setIsHovered(true)}
+			onBlur={() => setIsHovered(false)}
+			style={{
+				alignItems: "center",
+				display: "flex",
+				height: 24,
+				justifyContent: "center",
+				marginBlock: -12,
+				paddingInline: 18,
+				pointerEvents: "auto",
+				position: "relative",
+				zIndex: 40,
+			}}
+		>
+			<span
+				aria-hidden="true"
+				style={{
+					background: `linear-gradient(90deg, transparent, ${softRingColor}, transparent)`,
+					height: 1,
+					left: "50%",
+					opacity: isHovered ? 0.82 : 0,
+					position: "absolute",
+					transform: isHovered
+						? "translateX(-50%) scaleX(1)"
+						: "translateX(-50%) scaleX(0.58)",
+					transformOrigin: "center",
+					transition: "opacity 140ms ease, transform 140ms ease",
+					width: "min(240px, calc(100% - 48px))",
+				}}
+			/>
+			<button
+				type="button"
+				aria-label="Add block here"
+				onClick={handleInsert}
+				onKeyDown={(event) => {
+					if (event.key === "Enter" || event.key === " ") {
+						handleInsert(event);
+					}
+				}}
+				style={{
+					alignItems: "center",
+					background: "transparent",
+					border: 0,
+					borderRadius: 999,
+					color: previewRingColor,
+					cursor: "pointer",
+					display: "inline-flex",
+					height: 32,
+					justifyContent: "center",
+					lineHeight: 1,
+					opacity: isHovered ? 1 : 0.28,
+					outline: "none",
+					padding: 0,
+					pointerEvents: "auto",
+					position: "relative",
+					transition: "opacity 140ms ease, transform 140ms ease",
+					transform: isHovered ? "scale(1)" : "scale(0.92)",
+					width: 40,
+				}}
+			>
+				<span
+					aria-hidden="true"
+					style={{
+						alignItems: "center",
+						background: "var(--background, #fff)",
+						border: `1px solid ${isHovered ? softRingColor : mutedRingColor}`,
+						borderRadius: 999,
+						boxShadow: isHovered
+							? `0 0 0 3px color-mix(in srgb, ${previewRingColor} 8%, transparent), 0 5px 14px rgba(0, 0, 0, 0.12)`
+							: "0 2px 8px rgba(0, 0, 0, 0.10)",
+						display: "inline-flex",
+						fontSize: 13,
+						fontWeight: 500,
+						height: 24,
+						justifyContent: "center",
+						transition:
+							"border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease",
+						width: 24,
+					}}
+				>
+					+
+				</span>
+			</button>
+		</div>
+	);
+}
+
+function PreviewBlockWrapper({
+	children,
+	id,
+	isSelected,
+	onBlockClick,
+	type,
+}: {
+	children: React.ReactNode;
+	id: string;
+	isSelected: boolean;
+	onBlockClick: (blockId: string) => void;
+	type: string;
+}) {
+	const [isHovered, setIsHovered] = React.useState(false);
+	const [hasDomFocus, setHasDomFocus] = React.useState(false);
+	const shouldShowAffordance = isHovered || hasDomFocus || isSelected;
+	const previewRingColor = "var(--ring, var(--highlight, #b700ff))";
+
+	const previewStyle = React.useMemo<React.CSSProperties>(
+		() => ({
+			outlineColor: shouldShowAffordance ? previewRingColor : "transparent",
+			outlineOffset: "4px",
+			outlineStyle: isSelected ? "solid" : "dashed",
+			outlineWidth: "2px",
+			boxShadow: isSelected
+				? `0 0 0 4px color-mix(in srgb, ${previewRingColor} 18%, transparent)`
+				: undefined,
+			cursor: "pointer",
+			transition: "outline-color 150ms ease, box-shadow 150ms ease",
+		}),
+		[isSelected, shouldShowAffordance],
+	);
+
+	const handleClick = React.useCallback(
+		(e: React.MouseEvent) => {
+			const target = e.target as HTMLElement | null;
+			if (target?.closest("[data-preview-field]")) {
+				return;
+			}
+
+			const closestBlock = target?.closest("[data-block-id]");
+			if (closestBlock && closestBlock !== e.currentTarget) {
+				return;
+			}
+
+			e.preventDefault();
+			e.stopPropagation();
+			onBlockClick(id);
+		},
+		[id, onBlockClick],
+	);
+
+	const handleKeyDown = React.useCallback(
+		(e: React.KeyboardEvent) => {
+			const target = e.target as HTMLElement | null;
+			if (
+				target?.closest("[data-preview-field]") ||
+				target?.closest("[data-block-id]") !== e.currentTarget
+			) {
+				return;
+			}
+			if (e.key === "Enter" || e.key === " ") {
+				e.preventDefault();
+				e.stopPropagation();
+				onBlockClick(id);
+			}
+		},
+		[id, onBlockClick],
+	);
+
+	return (
+		<div
+			data-block-id={id}
+			data-block-type={type}
+			data-preview-block=""
+			data-preview-block-selected={isSelected ? "true" : undefined}
+			onClick={handleClick}
+			onKeyDown={handleKeyDown}
+			onMouseEnter={() => setIsHovered(true)}
+			onMouseLeave={() => setIsHovered(false)}
+			onFocus={() => setHasDomFocus(true)}
+			onBlur={() => setHasDomFocus(false)}
+			role="button"
+			tabIndex={0}
+			style={previewStyle}
+			className={cn(
+				"group/preview-block relative cursor-pointer transition-[outline-color,outline-offset,box-shadow] duration-150",
+				"hover:outline-primary/40 hover:outline hover:outline-2 hover:outline-offset-4 hover:outline-dashed",
+				isSelected &&
+					"outline-primary shadow-primary/20 shadow-[0_0_0_4px] outline outline-2 outline-offset-4",
+			)}
+		>
+			{children}
+		</div>
+	);
 }
 
 function kebabToCamelCase(value: string): string {

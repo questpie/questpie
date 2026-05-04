@@ -166,14 +166,15 @@ const adminUserCollection = collection("user")
 							])
 							.label({ key: "defaults.users.fields.role.label" })
 							.description({
-								en: "Admins can manage the whole admin area; users have limited access.",
-								sk: "Administrátori môžu spravovať celú administráciu; používatelia majú obmedzený prístup.",
+								key: "defaults.users.fields.role.description",
+								fallback:
+									"Admins can manage the whole admin area; users have limited access.",
 							})
 							.default("user")
 							.set("admin", {
 								placeholder: {
-									en: "Select a role",
-									sk: "Vyberte rolu",
+									key: "defaults.users.fields.role.placeholder",
+									fallback: "Select a role",
 								},
 							}),
 					},

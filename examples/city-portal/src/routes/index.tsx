@@ -71,12 +71,12 @@ function CitiesLanding() {
 									<p className="text-muted-foreground mb-4 text-lg">
 										No cities have been configured yet.
 									</p>
-									<a
-										href="/admin"
+									<Link
+										to="/admin"
 										className="text-primary font-medium hover:underline"
 									>
 										Set up in Admin
-									</a>
+									</Link>
 								</div>
 							)}
 

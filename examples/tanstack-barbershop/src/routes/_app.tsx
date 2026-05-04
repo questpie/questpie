@@ -11,12 +11,7 @@
 
 import { TanStackDevtools } from "@tanstack/react-devtools";
 import { QueryClientProvider } from "@tanstack/react-query";
-import {
-	createFileRoute,
-	HeadContent,
-	Outlet,
-	Scripts,
-} from "@tanstack/react-router";
+import { createFileRoute, Outlet } from "@tanstack/react-router";
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 
 import {
@@ -65,78 +60,55 @@ function AppLayout() {
 		process.env.VITE_TANSTACK_DEVTOOLS === "true";
 
 	return (
-		<html lang="en" suppressHydrationWarning>
-			<head>
-				<HeadContent />
-				{/* Inline script to prevent FOUC for theme */}
-				<script
-					dangerouslySetInnerHTML={{
-						__html: `
-							(function() {
-								const theme = localStorage.getItem('barbershop-theme');
-								const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-								const resolvedTheme = theme === 'system' || !theme
-									? (prefersDark ? 'dark' : 'light')
-									: theme;
-								document.documentElement.classList.toggle('dark', resolvedTheme === 'dark');
-							})();
-						`,
-					}}
-				/>
-			</head>
-			<body className="bg-background text-foreground min-h-screen antialiased">
-				<QueryClientProvider client={queryClient}>
-					<ThemeProvider>
-						<LocaleProvider>
-							<div className="flex min-h-screen flex-col">
-								<Header
-									shopName={siteSettings.shopName}
-									logo={siteSettings.logo || undefined}
-									navigation={siteSettings.navigation ?? []}
-									ctaButtonText={siteSettings.ctaButtonText || undefined}
-									ctaButtonLink={siteSettings.ctaButtonLink || undefined}
-								/>
-
-								<main className="flex-1">
-									<Outlet />
-								</main>
-
-								<Footer
-									shopName={siteSettings.shopName}
-									tagline={siteSettings.footerTagline || undefined}
-									footerLinks={siteSettings.footerLinks ?? []}
-									socialLinks={(siteSettings.socialLinks ?? []) as SocialLink[]}
-									businessHours={
-										siteSettings.businessHours as BusinessHours | undefined
-									}
-									contactEmail={siteSettings.contactEmail}
-									contactPhone={siteSettings.contactPhone || undefined}
-									address={siteSettings.address || undefined}
-									city={siteSettings.city || undefined}
-									zipCode={siteSettings.zipCode || undefined}
-									country={siteSettings.country || undefined}
-									copyrightText={siteSettings.copyrightText || undefined}
-								/>
-							</div>
-						</LocaleProvider>
-					</ThemeProvider>
-
-					{showDevtools && (
-						<TanStackDevtools
-							config={{
-								position: "bottom-right",
-							}}
-							plugins={[
-								{
-									name: "Tanstack Router",
-									render: <TanStackRouterDevtoolsPanel />,
-								},
-							]}
+		<QueryClientProvider client={queryClient}>
+			<ThemeProvider>
+				<LocaleProvider>
+					<div className="flex min-h-screen flex-col">
+						<Header
+							shopName={siteSettings.shopName}
+							logo={siteSettings.logo || undefined}
+							navigation={siteSettings.navigation ?? []}
+							ctaButtonText={siteSettings.ctaButtonText || undefined}
+							ctaButtonLink={siteSettings.ctaButtonLink || undefined}
 						/>
-					)}
-				</QueryClientProvider>
-				<Scripts />
-			</body>
-		</html>
+
+						<main className="flex-1">
+							<Outlet />
+						</main>
+
+						<Footer
+							shopName={siteSettings.shopName}
+							tagline={siteSettings.footerTagline || undefined}
+							footerLinks={siteSettings.footerLinks ?? []}
+							socialLinks={(siteSettings.socialLinks ?? []) as SocialLink[]}
+							businessHours={
+								siteSettings.businessHours as BusinessHours | undefined
+							}
+							contactEmail={siteSettings.contactEmail}
+							contactPhone={siteSettings.contactPhone || undefined}
+							address={siteSettings.address || undefined}
+							city={siteSettings.city || undefined}
+							zipCode={siteSettings.zipCode || undefined}
+							country={siteSettings.country || undefined}
+							copyrightText={siteSettings.copyrightText || undefined}
+						/>
+					</div>
+				</LocaleProvider>
+			</ThemeProvider>
+
+			{showDevtools && (
+				<TanStackDevtools
+					config={{
+						position: "bottom-right",
+					}}
+					plugins={[
+						{
+							name: "Tanstack Router",
+							render: <TanStackRouterDevtoolsPanel />,
+						},
+					]}
+				/>
+			)}
+		</QueryClientProvider>
 	);
 }

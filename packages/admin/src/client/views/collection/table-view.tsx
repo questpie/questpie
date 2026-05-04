@@ -59,7 +59,11 @@ import type {
 import { LocaleSwitcher } from "../../components/locale-switcher";
 import { AssetPreview } from "../../components/primitives/asset-preview";
 import { Dropzone } from "../../components/primitives/dropzone";
-import { flattenOptions } from "../../components/primitives/types";
+import { resolveOptionLabelForValue } from "../../components/primitives/option-label";
+import {
+	flattenOptions,
+	type SelectOptions,
+} from "../../components/primitives/types";
 import { ResourceSheet } from "../../components/sheets";
 import { Button } from "../../components/ui/button";
 import { Checkbox } from "../../components/ui/checkbox";
@@ -468,6 +472,8 @@ function stringifyGroupValue(
 	value: unknown,
 	field?: AvailableField,
 	resolveText?: (value: any, fallback?: string) => string,
+	t?: (key: string, params?: Record<string, unknown>) => string,
+	locale = "en",
 	noValueLabel = "No value",
 ): string {
 	if (value === null || value === undefined || value === "")
@@ -476,23 +482,30 @@ function stringifyGroupValue(
 		return value.length > 0
 			? value
 					.map((item) =>
-						stringifyGroupValue(item, field, resolveText, noValueLabel),
+						stringifyGroupValue(
+							item,
+							field,
+							resolveText,
+							t,
+							locale,
+							noValueLabel,
+						),
 					)
 					.join(", ")
 			: noValueLabel;
 	}
 
 	const options = field?.options?.options;
-	if (options) {
-		const option = flattenOptions(options).find(
-			(item) => String(item.value) === String(value),
-		);
-		if (option) {
-			return (
-				resolveText?.(option.label, String(option.value)) ??
-				String(option.label)
-			);
-		}
+	if (field?.type === "select" && resolveText && t) {
+		return resolveOptionLabelForValue({
+			value,
+			options: Array.isArray(options)
+				? (options as SelectOptions<unknown>)
+				: undefined,
+			resolveText,
+			t,
+			locale,
+		});
 	}
 
 	if (typeof value === "object") {
@@ -814,7 +827,7 @@ function TableViewInner({
 	const { data: collectionMeta } = useSuspenseCollectionMeta(collection);
 
 	// i18n translations
-	const { t } = useTranslation();
+	const { t, locale: uiLocale } = useTranslation();
 	const resolveText = useResolveText();
 
 	// Locale switching (scoped or global)
@@ -1732,6 +1745,8 @@ function TableViewInner({
 					group.value,
 					groupField,
 					resolveText,
+					t,
+					uiLocale,
 					t("common.noValue"),
 				);
 				const groupKey = `${groupBy}:${label}`;
@@ -1765,6 +1780,8 @@ function TableViewInner({
 				(row.original as any)?.[groupBy],
 				groupField,
 				resolveText,
+				t,
+				uiLocale,
 				t("common.noValue"),
 			);
 			const groupKey = `${groupBy}:${valueLabel}`;
@@ -1809,6 +1826,7 @@ function TableViewInner({
 		listData?.groups,
 		resolveText,
 		t,
+		uiLocale,
 	]);
 
 	// Handlers

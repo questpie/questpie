@@ -7,6 +7,7 @@
 import type { RequestContext } from "../config/context.js";
 import type { Questpie } from "../config/questpie.js";
 import type { AccessMode, QuestpieConfig } from "../config/types.js";
+import type { RequestLoggingConfig } from "../modules/core/integrated/logger/types.js";
 
 export type ReindexAccessContext<
 	TConfig extends QuestpieConfig = QuestpieConfig,
@@ -26,6 +27,13 @@ export type ReindexAccessRule<TConfig extends QuestpieConfig = QuestpieConfig> =
 export type AdapterConfig<TConfig extends QuestpieConfig = QuestpieConfig> = {
 	basePath?: string;
 	accessMode?: AccessMode;
+	/**
+	 * Request observability emitted by `createFetchHandler`.
+	 *
+	 * Enabled by default. Successful requests are logged at info, 4xx at warn,
+	 * 5xx at error, and slow successful requests at warn.
+	 */
+	requestLogging?: RequestLoggingConfig;
 	/**
 	 * Search route options.
 	 */
@@ -74,6 +82,8 @@ export type AdapterContext = {
 	locale?: string;
 	localeFallback?: boolean;
 	stage?: string;
+	requestId?: string;
+	traceId?: string;
 	appContext: RequestContext;
 };
 
@@ -83,6 +93,8 @@ export type AdapterBaseContext = {
 	locale?: string;
 	localeFallback?: boolean;
 	stage?: string;
+	requestId?: string;
+	traceId?: string;
 	accessMode: AccessMode;
 };
 

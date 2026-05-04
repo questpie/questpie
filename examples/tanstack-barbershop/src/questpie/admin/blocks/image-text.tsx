@@ -7,7 +7,7 @@
  * The `image` upload field is expanded via `.prefetch({ with: ['image'] })`.
  */
 
-import { RichTextRenderer, type TipTapDoc } from "@questpie/admin/client";
+import { PreviewField, RichTextRenderer } from "@questpie/admin/client";
 
 import { buttonVariants } from "../../../components/ui/button";
 import { cn } from "../../../lib/utils";
@@ -64,9 +64,14 @@ export function ImageTextRenderer({ values, data }: BlockProps<"image-text">) {
 
 					{/* Content */}
 					<div className={cn(isImageRight && "lg:col-start-1 lg:row-start-1")}>
-						<h2 className="mb-6 text-3xl font-bold tracking-tight sm:text-4xl">
+						<PreviewField
+							field="title"
+							editable="text"
+							as="h2"
+							className="mb-6 text-3xl font-bold tracking-tight sm:text-4xl"
+						>
 							{values.title || "Title"}
-						</h2>
+						</PreviewField>
 						<div className="prose prose-neutral dark:prose-invert mb-6 max-w-none">
 							<RichTextRenderer
 								content={values.content}
@@ -81,7 +86,9 @@ export function ImageTextRenderer({ values, data }: BlockProps<"image-text">) {
 									"text-base font-semibold",
 								)}
 							>
-								{values.ctaText}
+								<PreviewField field="ctaText" editable="text" as="span">
+									{values.ctaText}
+								</PreviewField>
 							</a>
 						)}
 					</div>

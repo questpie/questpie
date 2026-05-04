@@ -3,6 +3,7 @@
 import { Command } from "commander";
 
 import { addCommand } from "./commands/add.js";
+import { cloudDeployCommand } from "./commands/cloud.js";
 import { devCommand, generateCommand } from "./commands/codegen.js";
 import { generateMigrationCommand } from "./commands/generate.js";
 import { pushCommand } from "./commands/push.js";
@@ -365,6 +366,53 @@ program
 			});
 		} catch (error) {
 			console.error("❌ Failed to add entity:", error);
+			process.exit(1);
+		}
+	});
+
+const cloud = program.command("cloud").description("Questpie Cloud commands");
+
+cloud
+	.command("deploy")
+	.description("Deploy a QUESTPIE project through Questpie Cloud")
+	.option(
+		"-c, --config <path>",
+		"Path to questpie.cloud.toml or questpie.cloud.json",
+		"questpie.cloud.toml",
+	)
+	.option("--cloud-url <url>", "Questpie Cloud base URL")
+	.option("--endpoint <path>", "Deploy API endpoint", "/api/cloud/deploy")
+	.option("--image-tag <tag>", "Image tag to deploy")
+	.option("--image <image>", "Global image override")
+	.option("--image-digest <digest>", "Image digest metadata")
+	.option("--dry-run", "Validate the deployment request without applying it")
+	.option("--token <token>", "Questpie Cloud API token")
+	.option("--print-payload", "Print the deploy request payload")
+	.option("--no-request", "Do not call Questpie Cloud after building the payload")
+	.option("--repo-url <url>", "Git repository URL override")
+	.option("--repo-path <path>", "Local repository path override")
+	.option("--branch <branch>", "Git branch override")
+	.option("--commit <sha>", "Git commit SHA override")
+	.action(async (options) => {
+		try {
+			await cloudDeployCommand({
+				config: options.config,
+				cloudUrl: options.cloudUrl,
+				endpoint: options.endpoint,
+				imageTag: options.imageTag,
+				image: options.image,
+				imageDigest: options.imageDigest,
+				dryRun: options.dryRun,
+				token: options.token,
+				printPayload: options.printPayload,
+				noRequest: options.request === false,
+				repoUrl: options.repoUrl,
+				repoPath: options.repoPath,
+				branch: options.branch,
+				commit: options.commit,
+			});
+		} catch (error) {
+			console.error("❌ Failed to deploy through Questpie Cloud:", error);
 			process.exit(1);
 		}
 	});

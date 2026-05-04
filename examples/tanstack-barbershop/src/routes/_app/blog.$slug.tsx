@@ -39,21 +39,20 @@ function BlogPostPage() {
 	const post = loaderData?.post;
 	const router = useRouter();
 
-	const { data, isPreviewMode, focusedField, handleFieldClick } =
-		useCollectionPreview({
-			initialData: post,
-			onRefresh: () => router.invalidate(),
-		});
+	const preview = useCollectionPreview({
+		initialData: post,
+		onRefresh: () => router.invalidate(),
+	});
 
-	const previewPost = data as typeof post;
+	const previewPost = preview.data as typeof post;
 
 	return (
-		<PreviewProvider
-			isPreviewMode={isPreviewMode}
-			focusedField={focusedField}
-			onFieldClick={handleFieldClick}
-		>
-			<div className={isPreviewMode ? "preview-mode px-6 py-20" : "px-6 py-20"}>
+		<PreviewProvider preview={preview}>
+			<div
+				className={
+					preview.isPreviewMode ? "preview-mode px-6 py-20" : "px-6 py-20"
+				}
+			>
 				<div className="container mx-auto max-w-3xl">
 					{/* Back Link */}
 					<Link
@@ -97,6 +96,7 @@ function BlogPostPage() {
 					{/* Title */}
 					<PreviewField
 						field="title"
+						editable="text"
 						as="h1"
 						className="mb-6 text-4xl font-bold tracking-tight md:text-5xl"
 					>
@@ -108,8 +108,10 @@ function BlogPostPage() {
 						<PreviewField field="tags" className="mb-8 flex flex-wrap gap-2">
 							{String(previewPost.tags)
 								.split(",")
-								.map((tag: string) => tag.trim())
-								.filter(Boolean)
+								.flatMap((tag: string) => {
+									const trimmed = tag.trim();
+									return trimmed ? [trimmed] : [];
+								})
 								.map((tag: string) => (
 									<span
 										key={tag}
@@ -165,7 +167,7 @@ function BlogPostPage() {
 						)}
 					</PreviewField>
 
-					{isPreviewMode && (
+					{preview.isPreviewMode && (
 						<div className="bg-highlight text-highlight-foreground fixed right-4 bottom-4 z-50 rounded-full px-4 py-2 text-sm font-medium shadow-lg">
 							Preview Mode - Click fields to edit
 						</div>

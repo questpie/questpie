@@ -61,12 +61,16 @@ cp .env.example .env
 # Edit .env with your Postgres credentials
 
 # 3. Start PostgreSQL
+# The example maps Postgres to localhost:55432 to avoid collisions with other projects.
 docker-compose up -d
 
 # 4. Run migrations (creates tables)
-bun questpie migrate
+bun run migrate
 
-# 5. Start dev server
+# 5. Seed demo content
+bun run seed:demo
+
+# 6. Start dev server
 bun run dev
 
 # Open http://localhost:3000

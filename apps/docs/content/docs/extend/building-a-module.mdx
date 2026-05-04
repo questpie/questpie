@@ -5,6 +5,8 @@ description: Create a reusable module — collections, globals, jobs, routes, se
 
 A module is a reusable package that contributes entities to any QUESTPIE project. Modules are static objects -- they describe what exists, and the framework merges them at startup.
 
+For modules that contribute codegen plugins, generated factories, file conventions, fields, views, blocks, components, or collection/global extensions, keep the exported module static. Put project-specific options in a plugin-discovered `config/*.ts` factory instead of exposing `myModule(options)`.
+
 ## Module Structure
 
 ```ts

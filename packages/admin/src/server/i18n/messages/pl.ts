@@ -434,7 +434,12 @@ export default {
 	"defaults.users.fields.name.placeholder": "Wprowadź imię użytkownika",
 	"defaults.users.fields.email.label": "E-mail",
 	"defaults.users.fields.email.description": "Adres e-mail (tylko do odczytu)",
+	"defaults.users.fields.image.label": "URL obrazu",
+	"defaults.users.fields.avatar.label": "Zdjęcie profilowe",
 	"defaults.users.fields.role.label": "Rola",
+	"defaults.users.fields.role.description":
+		"Administratorzy mogą zarządzać całym panelem administracyjnym; użytkownicy mają ograniczony dostęp.",
+	"defaults.users.fields.role.placeholder": "Wybierz rolę",
 	"defaults.users.fields.role.options.admin": "Administrator",
 	"defaults.users.fields.role.options.user": "Użytkownik",
 	"defaults.users.fields.emailVerified.label": "E-mail zweryfikowany",
@@ -445,6 +450,9 @@ export default {
 		"Zablokuj użytkownikowi dostęp do systemu",
 	"defaults.users.fields.banReason.label": "Powód blokady",
 	"defaults.users.fields.banReason.placeholder": "Wprowadź powód blokady...",
+	"defaults.users.fields.banExpires.label": "Koniec blokady",
+	"defaults.users.fields.banExpires.description":
+		"Kiedy blokada użytkownika ma wygasnąć",
 	"defaults.users.sections.basicInfo": "Podstawowe informacje",
 	"defaults.users.sections.permissions": "Uprawnienia",
 	"defaults.users.sections.accessControl": "Kontrola dostępu",
@@ -489,6 +497,10 @@ export default {
 	"defaults.assets.fields.mimeType.description": "Typ MIME pliku",
 	"defaults.assets.fields.size.label": "Rozmiar (bajty)",
 	"defaults.assets.fields.size.description": "Rozmiar pliku w bajtach",
+	"defaults.assets.fields.width.label": "Szerokość",
+	"defaults.assets.fields.width.description": "Szerokość obrazu w pikselach",
+	"defaults.assets.fields.height.label": "Wysokość",
+	"defaults.assets.fields.height.description": "Wysokość obrazu w pikselach",
 	"defaults.assets.fields.alt.label": "Tekst alternatywny",
 	"defaults.assets.fields.alt.placeholder":
 		"Opisz obraz dla ułatwienia dostępu",
@@ -496,6 +508,8 @@ export default {
 		"Tekst alternatywny dla czytników ekranu",
 	"defaults.assets.fields.caption.label": "Podpis",
 	"defaults.assets.fields.caption.placeholder": "Dodaj podpis...",
+	"defaults.assets.fields.caption.description":
+		"Opcjonalny podpis wyświetlany przy medium",
 	"defaults.assets.fields.visibility.label": "Widoczność",
 	"defaults.assets.fields.visibility.options.public": "Publiczne",
 	"defaults.assets.fields.visibility.options.private": "Prywatne",

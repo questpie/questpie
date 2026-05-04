@@ -478,7 +478,6 @@ export default seed({
 
 				slug: "home",
 				description: "Premium barbershop experience in the heart of the city",
-				isPublished: true,
 				content: {
 					_tree: [
 						{ id: "hero-1", type: "hero", children: [] },
@@ -727,7 +726,6 @@ export default seed({
 
 				slug: "services",
 				description: "All our services and pricing",
-				isPublished: true,
 				content: {
 					_tree: [
 						{ id: "hero-1", type: "hero", children: [] },
@@ -896,7 +894,6 @@ export default seed({
 
 				slug: "about",
 				description: "Our story and philosophy",
-				isPublished: true,
 				content: {
 					_tree: [
 						{ id: "hero-1", type: "hero", children: [] },
@@ -1130,7 +1127,6 @@ export default seed({
 
 				slug: "gallery",
 				description: "See our work",
-				isPublished: true,
 				content: {
 					_tree: [
 						{ id: "hero-1", type: "hero", children: [] },
@@ -1297,7 +1293,6 @@ export default seed({
 
 				slug: "contact",
 				description: "Get in touch with us",
-				isPublished: true,
 				content: {
 					_tree: [
 						{ id: "heading-1", type: "heading", children: [] },
@@ -1418,7 +1413,6 @@ export default seed({
 
 				slug: "privacy",
 				description: "Our privacy policy and data handling practices",
-				isPublished: true,
 				content: {
 					_tree: [
 						{ id: "heading-1", type: "heading", children: [] },
@@ -1691,6 +1685,21 @@ export default seed({
 			ctxSk,
 		);
 		log("Privacy page created (EN + SK)");
+
+		for (const page of [
+			homePage,
+			servicesPage,
+			aboutPage,
+			galleryPage,
+			contactPage,
+			privacyPage,
+		]) {
+			await collections.pages.transitionStage(
+				{ id: page.id, stage: "published" },
+				ctxEn,
+			);
+		}
+		log("Demo pages transitioned to published");
 
 		log("All demo data seeded successfully");
 	},

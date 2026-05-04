@@ -37,12 +37,61 @@ export type FocusFieldMessage = {
 };
 
 /**
+ * Single preview draft patch operation.
+ */
+export type PreviewPatchOp = {
+	op: "set" | "remove";
+	path: string;
+	value?: unknown;
+};
+
+/**
+ * Seed preview with a full draft snapshot.
+ */
+export type InitSnapshotMessage = {
+	type: "INIT_SNAPSHOT";
+	seq: number;
+	data: unknown;
+};
+
+/**
+ * Apply a batch of draft changes.
+ */
+export type PatchBatchMessage = {
+	type: "PATCH_BATCH";
+	seq: number;
+	ops: PreviewPatchOp[];
+	snapshotVersion?: number;
+};
+
+/**
+ * Replace preview draft after a successful save.
+ */
+export type CommitMessage = {
+	type: "COMMIT";
+	seq: number;
+	data: unknown;
+};
+
+/**
+ * Ask preview to discard its draft and reload from the canonical loader.
+ */
+export type FullResyncMessage = {
+	type: "FULL_RESYNC";
+	reason?: string;
+};
+
+/**
  * All messages from Admin to Preview.
  */
 export type AdminToPreviewMessage =
 	| PreviewRefreshMessage
 	| SelectBlockMessage
-	| FocusFieldMessage;
+	| FocusFieldMessage
+	| InitSnapshotMessage
+	| PatchBatchMessage
+	| CommitMessage
+	| FullResyncMessage;
 
 // ============================================================================
 // Preview -> Admin Messages
@@ -77,6 +126,22 @@ export type BlockClickedMessage = {
 	blockId: string;
 };
 
+export type BlockInsertPosition = {
+	parentId: string | null;
+	index: number;
+};
+
+/**
+ * User asked to insert a block from the preview surface.
+ */
+export type BlockInsertRequestedMessage = {
+	type: "BLOCK_INSERT_REQUESTED";
+	/** Insert position in the existing block tree editor */
+	position: BlockInsertPosition;
+	/** Nearby block used for focus/scroll context */
+	referenceBlockId?: string;
+};
+
 /**
  * Preview refresh completed.
  * Sent after preview successfully re-runs loader.
@@ -88,13 +153,45 @@ export type RefreshCompleteMessage = {
 };
 
 /**
+ * Preview acknowledged a patch batch.
+ */
+export type PatchAppliedMessage = {
+	type: "PATCH_APPLIED";
+	seq: number;
+};
+
+/**
+ * Preview detected a mismatch and requested a full resync.
+ */
+export type ResyncRequestMessage = {
+	type: "RESYNC_REQUEST";
+	reason?: string;
+};
+
+/**
+ * User committed an inline edit inside the preview iframe.
+ */
+export type FieldValueEditedMessage = {
+	type: "FIELD_VALUE_EDITED";
+	path: string;
+	value: unknown;
+	inputKind: "text" | "textarea" | "number" | "boolean";
+	blockId?: string;
+	fieldType?: "regular" | "block" | "relation";
+};
+
+/**
  * All messages from Preview to Admin.
  */
 export type PreviewToAdminMessage =
 	| PreviewReadyMessage
 	| FieldClickedMessage
 	| BlockClickedMessage
-	| RefreshCompleteMessage;
+	| BlockInsertRequestedMessage
+	| RefreshCompleteMessage
+	| PatchAppliedMessage
+	| ResyncRequestMessage
+	| FieldValueEditedMessage;
 
 // ============================================================================
 // Preview Configuration
@@ -139,19 +236,132 @@ export type PreviewConfig = {
 // Type Guards
 // ============================================================================
 
+const MAX_INLINE_EDIT_PAYLOAD_BYTES = 64 * 1024;
+const MAX_PATCH_BATCH_OPS = 500;
+
+function isRecord(data: unknown): data is Record<string, unknown> {
+	return !!data && typeof data === "object" && !Array.isArray(data);
+}
+
+function isString(value: unknown): value is string {
+	return typeof value === "string";
+}
+
+function isNumber(value: unknown): value is number {
+	return typeof value === "number" && Number.isFinite(value);
+}
+
+function isPositiveInteger(value: unknown): value is number {
+	return Number.isInteger(value) && (value as number) >= 0;
+}
+
+function isInputKind(
+	value: unknown,
+): value is FieldValueEditedMessage["inputKind"] {
+	return (
+		value === "text" ||
+		value === "textarea" ||
+		value === "number" ||
+		value === "boolean"
+	);
+}
+
+function isPreviewFieldType(
+	value: unknown,
+): value is NonNullable<FieldClickedMessage["fieldType"]> {
+	return value === "regular" || value === "block" || value === "relation";
+}
+
+function isBlockInsertPosition(value: unknown): value is BlockInsertPosition {
+	if (!isRecord(value)) return false;
+	return (
+		(value.parentId === null || isString(value.parentId)) &&
+		isPositiveInteger(value.index)
+	);
+}
+
+function isSerializableValue(value: unknown): boolean {
+	try {
+		const seen = new WeakSet<object>();
+		JSON.stringify(value, (_key, nestedValue) => {
+			if (typeof nestedValue === "function") {
+				throw new TypeError("Functions are not serializable");
+			}
+			if (typeof nestedValue === "symbol") {
+				throw new TypeError("Symbols are not serializable");
+			}
+			if (typeof nestedValue === "bigint") {
+				throw new TypeError("BigInts are not JSON serializable");
+			}
+			if (nestedValue && typeof nestedValue === "object") {
+				if (seen.has(nestedValue)) {
+					throw new TypeError("Circular values are not serializable");
+				}
+				seen.add(nestedValue);
+			}
+			return nestedValue;
+		});
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+function getJsonByteLength(value: unknown): number {
+	try {
+		const json = JSON.stringify(value);
+		if (json === undefined) return 0;
+		if (typeof TextEncoder === "undefined") return json.length;
+		return new TextEncoder().encode(json).length;
+	} catch {
+		return Number.POSITIVE_INFINITY;
+	}
+}
+
+function isReasonablePayload(value: unknown, maxBytes: number): boolean {
+	return isSerializableValue(value) && getJsonByteLength(value) <= maxBytes;
+}
+
+function isPreviewPatchOp(value: unknown): value is PreviewPatchOp {
+	if (!isRecord(value)) return false;
+	if (value.op !== "set" && value.op !== "remove") return false;
+	if (!isString(value.path) || value.path.length === 0) return false;
+	if (value.op === "set" && !isSerializableValue(value.value)) return false;
+	return true;
+}
+
 /**
  * Check if a message is from admin to preview.
  */
 export function isAdminToPreviewMessage(
 	data: unknown,
 ): data is AdminToPreviewMessage {
-	if (!data || typeof data !== "object") return false;
-	const msg = data as { type?: string };
-	return (
-		msg.type === "PREVIEW_REFRESH" ||
-		msg.type === "SELECT_BLOCK" ||
-		msg.type === "FOCUS_FIELD"
-	);
+	if (!isRecord(data)) return false;
+
+	switch (data.type) {
+		case "PREVIEW_REFRESH":
+			return data.changedField === undefined || isString(data.changedField);
+		case "SELECT_BLOCK":
+			return isString(data.blockId) && data.blockId.length > 0;
+		case "FOCUS_FIELD":
+			return isString(data.fieldPath) && data.fieldPath.length > 0;
+		case "INIT_SNAPSHOT":
+		case "COMMIT":
+			return isPositiveInteger(data.seq) && isSerializableValue(data.data);
+		case "PATCH_BATCH":
+			return (
+				isPositiveInteger(data.seq) &&
+				Array.isArray(data.ops) &&
+				data.ops.length <= MAX_PATCH_BATCH_OPS &&
+				data.ops.every(isPreviewPatchOp) &&
+				(data.snapshotVersion === undefined ||
+					isPositiveInteger(data.snapshotVersion))
+			);
+		case "FULL_RESYNC":
+			return data.reason === undefined || isString(data.reason);
+		default:
+			return false;
+	}
 }
 
 /**
@@ -160,12 +370,41 @@ export function isAdminToPreviewMessage(
 export function isPreviewToAdminMessage(
 	data: unknown,
 ): data is PreviewToAdminMessage {
-	if (!data || typeof data !== "object") return false;
-	const msg = data as { type?: string };
-	return (
-		msg.type === "PREVIEW_READY" ||
-		msg.type === "FIELD_CLICKED" ||
-		msg.type === "BLOCK_CLICKED" ||
-		msg.type === "REFRESH_COMPLETE"
-	);
+	if (!isRecord(data)) return false;
+
+	switch (data.type) {
+		case "PREVIEW_READY":
+			return true;
+		case "FIELD_CLICKED":
+			return (
+				isString(data.fieldPath) &&
+				data.fieldPath.length > 0 &&
+				(data.blockId === undefined || isString(data.blockId)) &&
+				(data.fieldType === undefined || isPreviewFieldType(data.fieldType))
+			);
+		case "BLOCK_CLICKED":
+			return isString(data.blockId) && data.blockId.length > 0;
+		case "BLOCK_INSERT_REQUESTED":
+			return (
+				isBlockInsertPosition(data.position) &&
+				(data.referenceBlockId === undefined || isString(data.referenceBlockId))
+			);
+		case "REFRESH_COMPLETE":
+			return isNumber(data.timestamp);
+		case "PATCH_APPLIED":
+			return isPositiveInteger(data.seq);
+		case "RESYNC_REQUEST":
+			return data.reason === undefined || isString(data.reason);
+		case "FIELD_VALUE_EDITED":
+			return (
+				isString(data.path) &&
+				data.path.length > 0 &&
+				isInputKind(data.inputKind) &&
+				(data.blockId === undefined || isString(data.blockId)) &&
+				(data.fieldType === undefined || isPreviewFieldType(data.fieldType)) &&
+				isReasonablePayload(data.value, MAX_INLINE_EDIT_PAYLOAD_BYTES)
+			);
+		default:
+			return false;
+	}
 }

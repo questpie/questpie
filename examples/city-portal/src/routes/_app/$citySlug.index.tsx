@@ -4,7 +4,7 @@
  * Renders the homepage for a specific city with live preview support.
  */
 
-import { createFileRoute, useRouter } from "@tanstack/react-router";
+import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 
 import { getHomepage } from "@/lib/server-functions";
 import admin from "@/questpie/admin/.generated/client";
@@ -34,9 +34,9 @@ function CityHomepage() {
 				<p className="text-muted-foreground mb-8 text-xl">
 					This city portal is being set up. Please check back soon.
 				</p>
-				<a href="/admin" className="text-primary font-medium hover:underline">
+				<Link to="/admin" className="text-primary font-medium hover:underline">
 					Configure in Admin
-				</a>
+				</Link>
 			</div>
 		);
 	}
@@ -82,12 +82,12 @@ function HomepageWithPreview({ page }: { page: any }) {
 						<p className="mb-8 text-xl">
 							Your city council website is ready to be built.
 						</p>
-						<a
-							href="/admin"
+						<Link
+							to="/admin"
 							className="text-primary font-medium hover:underline"
 						>
 							Add content in the Admin Panel
-						</a>
+						</Link>
 					</div>
 				)}
 

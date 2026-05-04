@@ -210,10 +210,9 @@ function buildFieldDefinition(
 		fieldType,
 	);
 
-	// Apply admin overrides from server meta
-	// The meta.admin property is added via module augmentation on field-specific meta interfaces
-	const adminConfig = (metadata.meta as { admin?: AnyAdminMeta } | undefined)
-		?.admin;
+	// Apply admin overrides from server meta. Older metadata used
+	// `meta.admin`; current field extensions serialize the admin config itself.
+	const adminConfig = getAdminConfig(metadata.meta);
 	if (adminConfig) {
 		applyAdminConfig(config, adminConfig);
 	}
@@ -484,9 +483,7 @@ function buildNestedFieldDefinitions(
 			fieldType,
 		);
 
-		const adminConfig = (
-			nestedMetadata.meta as { admin?: AnyAdminMeta } | undefined
-		)?.admin;
+		const adminConfig = getAdminConfig(nestedMetadata.meta);
 		if (adminConfig) {
 			applyAdminConfig(config, adminConfig);
 		}
@@ -514,7 +511,7 @@ function mapArrayItemType(type: string): string | null {
 }
 
 /**
- * Apply admin config overrides from server meta.admin
+ * Apply admin config overrides from server meta
  *
  * Since each field type has its own admin meta with only valid properties,
  * we simply copy all defined properties from adminConfig to config.
@@ -530,6 +527,13 @@ function applyAdminConfig(
 			config[key] = value;
 		}
 	}
+}
+
+function getAdminConfig(meta: unknown): AnyAdminMeta | undefined {
+	if (!meta || typeof meta !== "object") return undefined;
+
+	const record = meta as Record<string, unknown>;
+	return (record.admin ?? record) as AnyAdminMeta;
 }
 
 // ============================================================================

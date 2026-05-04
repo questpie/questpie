@@ -601,7 +601,12 @@ export default {
 	"defaults.users.fields.email.label": "E-mail",
 	"defaults.users.fields.email.description":
 		"E-mailová adresa (len na čítanie)",
+	"defaults.users.fields.image.label": "URL obrázka",
+	"defaults.users.fields.avatar.label": "Profilová fotka",
 	"defaults.users.fields.role.label": "Rola",
+	"defaults.users.fields.role.description":
+		"Administrátori môžu spravovať celú administráciu; používatelia majú obmedzený prístup.",
+	"defaults.users.fields.role.placeholder": "Vyberte rolu",
 	"defaults.users.fields.role.options.admin": "Administrátor",
 	"defaults.users.fields.role.options.user": "Používateľ",
 	"defaults.users.fields.emailVerified.label": "E-mail overený",
@@ -613,6 +618,9 @@ export default {
 	"defaults.users.fields.banReason.label": "Dôvod zablokovania",
 	"defaults.users.fields.banReason.placeholder":
 		"Zadajte dôvod zablokovania...",
+	"defaults.users.fields.banExpires.label": "Platnosť zablokovania",
+	"defaults.users.fields.banExpires.description":
+		"Kedy sa má zablokovanie používateľa skončiť",
 	"defaults.users.sections.basicInfo": "Základné informácie",
 	"defaults.users.sections.permissions": "Oprávnenia",
 	"defaults.users.sections.accessControl": "Riadenie prístupu",
@@ -658,12 +666,18 @@ export default {
 	"defaults.assets.fields.mimeType.description": "MIME typ súboru",
 	"defaults.assets.fields.size.label": "Veľkosť (bajty)",
 	"defaults.assets.fields.size.description": "Veľkosť súboru v bajtoch",
+	"defaults.assets.fields.width.label": "Šírka",
+	"defaults.assets.fields.width.description": "Šírka obrázka v pixeloch",
+	"defaults.assets.fields.height.label": "Výška",
+	"defaults.assets.fields.height.description": "Výška obrázka v pixeloch",
 	"defaults.assets.fields.alt.label": "Alternatívny text",
 	"defaults.assets.fields.alt.placeholder": "Opíšte obrázok pre prístupnosť",
 	"defaults.assets.fields.alt.description":
 		"Alternatívny text pre čítačky obrazovky",
 	"defaults.assets.fields.caption.label": "Popisok",
 	"defaults.assets.fields.caption.placeholder": "Pridajte popisok...",
+	"defaults.assets.fields.caption.description":
+		"Voliteľný popisok zobrazený pri médiu",
 	"defaults.assets.fields.visibility.label": "Viditeľnosť",
 	"defaults.assets.fields.visibility.options.public": "Verejný",
 	"defaults.assets.fields.visibility.options.private": "Súkromný",

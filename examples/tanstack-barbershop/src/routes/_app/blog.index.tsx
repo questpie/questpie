@@ -8,7 +8,6 @@ import { Icon } from "@iconify/react";
 import { createFileRoute } from "@tanstack/react-router";
 
 import { getAllBlogPosts } from "@/lib/getBlogPosts.function";
-import { useTranslation } from "@/lib/providers/locale-provider";
 
 export const Route = createFileRoute("/_app/blog/")({
 	loader: async () => {
@@ -29,7 +28,6 @@ function formatDate(dateStr: string | null | undefined) {
 
 function BlogIndexPage() {
 	const { posts } = Route.useLoaderData();
-	const { t } = useTranslation();
 
 	return (
 		<div className="px-6 py-20">
@@ -97,8 +95,10 @@ function BlogIndexPage() {
 								<div className="flex flex-wrap gap-2">
 									{String(post.tags)
 										.split(",")
-										.map((tag) => tag.trim())
-										.filter(Boolean)
+										.flatMap((tag) => {
+											const trimmed = tag.trim();
+											return trimmed ? [trimmed] : [];
+										})
 										.map((tag) => (
 											<span
 												key={tag}

@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { createMiddleware } from "hono/factory";
 import {
 	type AdapterContext,
+	type AdapterConfig,
 	createAdapterContext,
 	createFetchHandler,
 	type Questpie,
@@ -21,7 +22,7 @@ export type QuestpieVariables<TQuestpie extends Questpie<any> = Questpie<any>> =
 /**
  * Hono adapter configuration
  */
-export type HonoAdapterConfig = {
+export type HonoAdapterConfig = Pick<AdapterConfig, "requestLogging"> & {
 	/**
 	 * Base path for QUESTPIE routes
 	 * Use '/' for server-only apps or '/api' for fullstack apps.
@@ -83,6 +84,7 @@ export function questpieHono<TQuestpie extends Questpie<any>>(
 	const handler = createFetchHandler(app, {
 		basePath,
 		accessMode: "user",
+		requestLogging: config.requestLogging,
 	});
 
 	const resolveContext = (

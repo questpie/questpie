@@ -429,7 +429,12 @@ export default {
 	"defaults.users.fields.email.label": "E-mail",
 	"defaults.users.fields.email.description":
 		"Endereço de e-mail (somente leitura)",
+	"defaults.users.fields.image.label": "URL da imagem",
+	"defaults.users.fields.avatar.label": "Foto do perfil",
 	"defaults.users.fields.role.label": "Função",
+	"defaults.users.fields.role.description":
+		"Administradores podem gerenciar toda a área administrativa; usuários têm acesso limitado.",
+	"defaults.users.fields.role.placeholder": "Selecionar uma função",
 	"defaults.users.fields.role.options.admin": "Administrador",
 	"defaults.users.fields.role.options.user": "Usuário",
 	"defaults.users.fields.emailVerified.label": "E-mail verificado",
@@ -441,6 +446,9 @@ export default {
 	"defaults.users.fields.banReason.label": "Motivo do banimento",
 	"defaults.users.fields.banReason.placeholder":
 		"Digite o motivo do banimento...",
+	"defaults.users.fields.banExpires.label": "Fim do banimento",
+	"defaults.users.fields.banExpires.description":
+		"Quando o banimento do usuário deve expirar",
 	"defaults.users.sections.basicInfo": "Informações básicas",
 	"defaults.users.sections.permissions": "Permissões",
 	"defaults.users.sections.accessControl": "Controle de acesso",
@@ -487,6 +495,10 @@ export default {
 	"defaults.assets.fields.mimeType.description": "Tipo MIME do arquivo",
 	"defaults.assets.fields.size.label": "Tamanho (bytes)",
 	"defaults.assets.fields.size.description": "Tamanho do arquivo em bytes",
+	"defaults.assets.fields.width.label": "Largura",
+	"defaults.assets.fields.width.description": "Largura da imagem em pixels",
+	"defaults.assets.fields.height.label": "Altura",
+	"defaults.assets.fields.height.description": "Altura da imagem em pixels",
 	"defaults.assets.fields.alt.label": "Texto alternativo",
 	"defaults.assets.fields.alt.placeholder":
 		"Descreva a imagem para acessibilidade",
@@ -494,6 +506,8 @@ export default {
 		"Texto alternativo para leitores de tela",
 	"defaults.assets.fields.caption.label": "Legenda",
 	"defaults.assets.fields.caption.placeholder": "Adicionar uma legenda...",
+	"defaults.assets.fields.caption.description":
+		"Legenda opcional exibida com a mídia",
 	"defaults.assets.fields.visibility.label": "Visibilidade",
 	"defaults.assets.fields.visibility.options.public": "Público",
 	"defaults.assets.fields.visibility.options.private": "Privado",

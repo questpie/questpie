@@ -186,7 +186,7 @@ export function useBlockLibraryOpen(): boolean {
 /**
  * Hook to check if a block is selected.
  */
-function useIsBlockSelected(blockId: string): boolean {
+export function useIsBlockSelected(blockId: string): boolean {
 	return useBlockEditorStore((state) => state.selectedBlockId === blockId);
 }
 

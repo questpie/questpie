@@ -17,10 +17,14 @@ import type { I18nText } from "questpie/shared";
  *
  * @example
  * ```ts
- * .adminLocale({
- *   locales: ["en", "sk"],  // UI available in 2 languages
- *   defaultLocale: "en",
- * })
+ * import { adminConfig } from "#questpie/factories";
+ *
+ * export default adminConfig({
+ *   locale: {
+ *     locales: ["en", "sk"],  // UI available in 2 languages
+ *     defaultLocale: "en",
+ *   },
+ * });
  * ```
  */
 export interface AdminLocaleConfig {

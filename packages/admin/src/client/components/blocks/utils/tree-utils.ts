@@ -32,6 +32,24 @@ export function findBlockById(tree: BlockNode[], id: string): BlockNode | null {
 }
 
 /**
+ * Find the path of block IDs from root to the target block.
+ */
+export function getBlockPathIds(
+	tree: BlockNode[],
+	id: string,
+): string[] | null {
+	for (const node of tree) {
+		const nextPath = [node.id];
+		if (node.id === id) return nextPath;
+
+		const childPath = getBlockPathIds(node.children, id);
+		if (childPath) return [...nextPath, ...childPath];
+	}
+
+	return null;
+}
+
+/**
  * Find a block's position (parent and index) in the tree.
  */
 export function findBlockPosition(

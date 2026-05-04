@@ -111,7 +111,7 @@ const getAdminTranslations = route()
 		const input = ctx.input as z.infer<typeof getAdminTranslationsSchema>;
 		const requestedLocale = input.locale;
 
-		// Get admin locale config (set via .adminLocale())
+		// Get admin locale config (set via config/admin.ts)
 		const adminLocaleConfig = getAdminLocaleConfig(app);
 		const supportedLocales =
 			adminLocaleConfig?.locales ?? getSupportedAdminLocales();
@@ -154,7 +154,7 @@ const getAdminTranslations = route()
 /**
  * Get available admin UI locales.
  *
- * Returns locales configured via .adminLocale() or defaults to
+ * Returns locales configured via config/admin.ts or defaults to
  * all locales that have built-in message files.
  *
  * @example

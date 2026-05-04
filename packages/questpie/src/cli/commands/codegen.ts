@@ -9,7 +9,7 @@
 
 import { watch } from "node:fs";
 import { readdir, readFile, stat } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { join, resolve } from "node:path";
 
 import { extractPluginsFromModules } from "../codegen/extract-plugins.js";
 import {
@@ -22,7 +22,11 @@ import type {
 	CodegenPlugin,
 	MultiTargetCodegenResult,
 } from "../codegen/types.js";
-import { isPackageConfig, type PackageConfig } from "../config.js";
+import {
+	isPackageConfig,
+	resolveConfigRoot,
+	type PackageConfig,
+} from "../config.js";
 import { resolveCliPath, toFileImportSpecifier } from "../utils.js";
 
 // ============================================================================
@@ -36,52 +40,6 @@ export interface GenerateOptions {
 	dryRun?: boolean;
 	/** Verbose output. */
 	verbose?: boolean;
-}
-
-/**
- * Resolve the entity root directory from a config file path.
- *
- * When `questpie.config.ts` lives at the project root and re-exports from
- * a deeper server directory, codegen must follow the re-export to find entities.
- *
- * Supports two patterns:
- *   1. `export { default } from "./src/questpie/server/questpie.config"` — re-export
- *   2. Direct config (config file IS the entity root) — current behavior
- *
- * @returns { configPath, rootDir } — resolved inner config path and entity root dir
- */
-export async function resolveEntityRoot(
-	configPath: string,
-): Promise<{ configPath: string; rootDir: string }> {
-	let content: string;
-	try {
-		content = String(await readFile(configPath, "utf-8"));
-	} catch {
-		return { configPath, rootDir: dirname(configPath) };
-	}
-
-	// Detect re-export pattern: export { default } from "..."
-	const reExportMatch = content.match(
-		/^\s*export\s*\{\s*default\s*\}\s*from\s*["']([^"']+)["']/m,
-	);
-	if (!reExportMatch) {
-		return { configPath, rootDir: dirname(configPath) };
-	}
-
-	// Resolve the inner config path
-	const innerRaw = resolve(dirname(configPath), reExportMatch[1]);
-	// Try with and without .ts extension
-	for (const candidate of [innerRaw, `${innerRaw}.ts`, `${innerRaw}.mts`]) {
-		try {
-			await stat(candidate);
-			return { configPath: candidate, rootDir: dirname(candidate) };
-		} catch {
-			// try next
-		}
-	}
-
-	// Re-export target not found — fall back to config dir
-	return { configPath, rootDir: dirname(configPath) };
 }
 
 /**
@@ -174,7 +132,7 @@ export async function loadConfigForCodegen(
  */
 export async function generateCommand(options: GenerateOptions): Promise<void> {
 	const rawConfigPath = resolveCliPath(options.configPath);
-	const { configPath, rootDir } = await resolveEntityRoot(rawConfigPath);
+	const { configPath, rootDir } = await resolveConfigRoot(rawConfigPath);
 
 	// Load plugins + module/package config from questpie.config.ts
 	const {
@@ -535,7 +493,7 @@ export async function devCommand(options: DevOptions): Promise<void> {
 	});
 
 	const rawConfigPath = resolve(process.cwd(), options.configPath);
-	const { configPath, rootDir } = await resolveEntityRoot(rawConfigPath);
+	const { configPath, rootDir } = await resolveConfigRoot(rawConfigPath);
 	const {
 		plugins: userPlugins,
 		module: moduleOpt,

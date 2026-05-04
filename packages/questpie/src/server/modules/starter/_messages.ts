@@ -4,8 +4,8 @@
  * Default translations for all built-in error messages and system messages.
  * These are included automatically when using the `starterModule`.
  *
- * Users can override any message by providing their own translations
- * via the `messages` option in `config()`.
+ * Users can override any message through module `messages` contributions or
+ * `questpie/server/messages/<locale>.ts` files.
  */
 
 export const coreBackendMessages = {

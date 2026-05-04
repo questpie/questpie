@@ -13,11 +13,11 @@ The QUESTPIE admin panel is a **projection of your server schema** — not the f
 
 ## Reference Topics
 
-| Topic | File | Covers |
-|---|---|---|
-| Views | `references/views.md` | List views, form views, dashboard, sidebar, filters, bulk actions, visibility, history |
-| Blocks | `references/blocks.md` | Block definitions, fields, prefetch, renderers, block picker |
-| Custom UI | `references/custom-ui.md` | Custom fields, custom views, registries, reactive fields, widgets |
+| Topic     | File                      | Covers                                                                                 |
+| --------- | ------------------------- | -------------------------------------------------------------------------------------- |
+| Views     | `references/views.md`     | List views, form views, dashboard, sidebar, filters, bulk actions, visibility, history |
+| Blocks    | `references/blocks.md`    | Block definitions, fields, prefetch, renderers, block picker                           |
+| Custom UI | `references/custom-ui.md` | Custom fields, custom views, registries, reactive fields, widgets                      |
 
 ## Full Compiled Document
 
@@ -222,9 +222,9 @@ The admin renders drag-and-drop upload, image preview, file info, and remove but
 
 ## Live Preview
 
-Live Preview uses a split-screen iframe. The current implementation refreshes the iframe after save/autosave and uses `postMessage` for field/block focus sync.
+Live Preview is one system: the existing collection `FormView`, Preview button, `LivePreviewMode`, and frontend iframe. Preserve the normal form lifecycle. Do not introduce a separate visual-edit form API, a second default form view, or a parallel preview surface.
 
-Preview V2 patch-based docs are design notes until `useQuestpiePreview`, `PreviewRoot`, and `PreviewBlock` are exported.
+The admin form is authoritative. The iframe mirrors form state through `postMessage`, supports field/block focus, and may request inline scalar edits. Persistence still goes through existing save, autosave, Cmd+S, history, workflow, locks, and actions.
 
 ### Server Config
 
@@ -248,35 +248,57 @@ export const pages = collection("pages")
 	});
 ```
 
-Current preview refreshes the iframe after save/autosave and supports field focus through `postMessage`.
+Preview opens the existing split-screen editor. Patches and refresh/resync messages update the iframe mirror; save/autosave still writes through the form.
 
-### Frontend Integration
+### Prepare a Frontend Page
 
-Use `useCollectionPreview` with `PreviewProvider` and `PreviewField`:
+Use exported APIs only: `useCollectionPreview`, `PreviewProvider`, `PreviewField`, and `BlockRenderer`.
+
+Checklist:
+
+1. Configure `.preview({ url })` on the collection.
+2. Load the same record shape the page normally renders.
+3. For workflow-published pages, public reads use `stage: "published"`; if the public client/HTTP API is exposed, anonymous read access also checks `input?.stage === "published"`. Authorized preview/draft reads can load the working record.
+4. Call `useCollectionPreview({ initialData, onRefresh })` in the page renderer.
+5. Wrap the visual output in `PreviewProvider`.
+6. Render from `preview.data`, not the original loader object.
+7. Wrap editable scalar text with `PreviewField field="..." editable="text" | "textarea"`.
+8. Render block content with `BlockRenderer`; pass `selectedBlockId` and `onBlockClick`.
+9. Keep add/remove/reorder/nesting block operations in the existing block editor.
 
 ```tsx
 import {
+	BlockRenderer,
 	PreviewField,
 	PreviewProvider,
 	useCollectionPreview,
 } from "@questpie/admin/client";
+import admin from "@/questpie/admin/.generated/client";
 
-function PagePreview({ initialData }) {
+function PagePreview({ page }) {
 	const router = useRouter();
 	const preview = useCollectionPreview({
-		initialData,
+		initialData: page,
 		onRefresh: () => router.invalidate(),
 	});
 
 	return (
-		<PreviewProvider
-			isPreviewMode={preview.isPreviewMode}
-			focusedField={preview.focusedField}
-			onFieldClick={preview.handleFieldClick}
-		>
-			<PreviewField field="title" as="h1">
-				{preview.data.title}
-			</PreviewField>
+		<PreviewProvider preview={preview}>
+			<main className={preview.isPreviewMode ? "questpie-preview" : undefined}>
+				<PreviewField field="title" editable="text" as="h1">
+					{preview.data.title}
+				</PreviewField>
+
+				<BlockRenderer
+					content={preview.data.content}
+					data={preview.data.content?._data}
+					renderers={admin.blocks}
+					selectedBlockId={preview.selectedBlockId}
+					onBlockClick={
+						preview.isPreviewMode ? preview.handleBlockClick : undefined
+					}
+				/>
+			</main>
 		</PreviewProvider>
 	);
 }
@@ -284,11 +306,15 @@ function PagePreview({ initialData }) {
 
 ### Key Principles
 
-- Current preview = save/autosave refresh plus field/block focus sync
-- `useCollectionPreview` sends `PREVIEW_READY`, `FIELD_CLICKED`, and `BLOCK_CLICKED`
+- Keep `FormView`, the Preview button, and `LivePreviewMode`
+- Never add a separate visual-edit form API, a second default form view, or parallel preview API names
+- Preserve save/autosave/Cmd+S/history/workflow/locks/actions
+- `useCollectionPreview` handles preview mode, mirrored data, refresh/resync, and focus state
 - `PreviewProvider` supplies preview context to `PreviewField`
-- Each message carries `sessionId`, `seq`, `timestamp`, `protocolVersion`
-- Preview wrappers must prevent accidental navigation in the iframe
+- `PreviewField` annotates scalar fields and can opt into inline editing with `editable`
+- `BlockRenderer` preserves block IDs and block scopes for block annotations
+- Use `BlockScopeProvider` only for custom/manual block rendering outside `BlockRenderer`
+- Validate all iframe messages before updating form state
 
 ## History & Versions
 

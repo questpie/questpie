@@ -26,24 +26,41 @@ export class PinoLoggerAdapter implements LoggerAdapter {
 	}
 
 	debug(msg: string, ...args: any[]) {
-		this.logger.debug(msg, ...args);
+		this.log("debug", msg, args);
 	}
 
 	info(msg: string, ...args: any[]) {
-		this.logger.info(msg, ...args);
+		this.log("info", msg, args);
 	}
 
 	warn(msg: string, ...args: any[]) {
-		this.logger.warn(msg, ...args);
+		this.log("warn", msg, args);
 	}
 
 	error(msg: string, ...args: any[]) {
-		this.logger.error(msg, ...args);
+		this.log("error", msg, args);
 	}
 
 	child(bindings: Record<string, any>): LoggerAdapter {
 		const childAdapter = new PinoLoggerAdapter();
 		childAdapter.logger = this.logger.child(bindings);
 		return childAdapter;
+	}
+
+	private log(
+		level: "debug" | "info" | "warn" | "error",
+		msg: string,
+		args: any[],
+	) {
+		const [first, ...rest] = args;
+		if (first instanceof Error) {
+			this.logger[level]({ err: first }, msg, ...rest);
+			return;
+		}
+		if (first && typeof first === "object" && !Array.isArray(first)) {
+			this.logger[level](first, msg, ...rest);
+			return;
+		}
+		this.logger[level](msg, ...args);
 	}
 }

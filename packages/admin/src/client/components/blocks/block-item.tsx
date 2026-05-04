@@ -21,6 +21,7 @@ import {
 	useBlockSchema,
 	useBlockValues,
 	useIsBlockExpanded,
+	useIsBlockSelected,
 } from "./block-editor-context.js";
 import { BlockFieldsRenderer } from "./block-fields-renderer.js";
 import { BlockInsertButton } from "./block-insert-button.js";
@@ -70,6 +71,7 @@ export const BlockItem = React.memo(function BlockItem({
 	const blockSchema = useBlockSchema(block.type);
 	const values = useBlockValues(block.id);
 	const isExpanded = useIsBlockExpanded(block.id);
+	const isSelected = useIsBlockSelected(block.id);
 	const isUnknownType = !blockSchema;
 	const canHaveChildren = blockSchema?.allowChildren ?? false;
 
@@ -140,19 +142,23 @@ export const BlockItem = React.memo(function BlockItem({
 
 			{/* Block card */}
 			<Card
+				data-field-path={`content._values.${block.id}`}
 				className={cn(
-					"gap-0 overflow-hidden p-0 transition-shadow",
+					"gap-0 overflow-hidden p-0 transition-[border-color,box-shadow]",
 					isUnknownType && "border-destructive/50",
+					isSelected && "border-primary ring-primary/20 ring-2",
 				)}
 			>
 				{/* Header - clickable to expand/collapse */}
 				<CardHeader
 					role="button"
 					tabIndex={0}
+					aria-expanded={isExpanded}
 					className={cn(
 						"group flex cursor-pointer flex-row items-center gap-2 px-3 py-2 select-none",
 						"hover:bg-muted transition-colors",
 						"focus-visible:ring-ring/25 focus-visible:ring-3 focus-visible:outline-none focus-visible:ring-inset",
+						isSelected && "bg-primary/5",
 					)}
 					onClick={handleToggleExpand}
 					onKeyDown={handleKeyDown}

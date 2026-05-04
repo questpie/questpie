@@ -5,7 +5,7 @@
  */
 
 import { Icon } from "@iconify/react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { format } from "date-fns";
 import * as React from "react";
@@ -36,6 +36,11 @@ const bookingSearchSchema = z.object({
 	barber: z.string().optional(),
 });
 
+const SLOT_SKELETON_KEYS = Array.from(
+	{ length: 9 },
+	(_, index) => `slot-skeleton-${index}`,
+);
+
 export const Route = createFileRoute("/_app/booking")({
 	validateSearch: (search) => bookingSearchSchema.parse(search),
 	loader: async () => {
@@ -54,10 +59,21 @@ export const Route = createFileRoute("/_app/booking")({
 
 type Step = "service" | "barber" | "datetime" | "info" | "success";
 
+type BookingPayload = {
+	barberId: string;
+	serviceId: string;
+	scheduledAt: string;
+	customerName: string;
+	customerEmail: string;
+	customerPhone?: string;
+	notes?: string;
+};
+
 function BookingPage() {
 	const { t, locale } = useTranslation();
 	const { services, barbers } = Route.useLoaderData();
 	const search = Route.useSearch();
+	const queryClient = useQueryClient();
 
 	// Wizard State
 	const [step, setStep] = React.useState<Step>(
@@ -85,6 +101,15 @@ function BookingPage() {
 		phone: "",
 		notes: "",
 	});
+	const selectedDateKey = selectedDate
+		? format(selectedDate, "yyyy-MM-dd")
+		: null;
+	const slotsQueryKey = [
+		"slots",
+		selectedBarber?.id ?? null,
+		selectedDateKey,
+		selectedService?.id ?? null,
+	] as const;
 
 	// Queries & Mutations
 	const {
@@ -93,16 +118,21 @@ function BookingPage() {
 		isError: isSlotsError,
 		error: slotsError,
 	} = useQuery({
-		queryKey: ["slots", selectedBarber?.id, selectedDate, selectedService?.id],
-		queryFn: () =>
-			client.routes.getAvailableTimeSlots({
-				date: format(selectedDate!, "yyyy-MM-dd"),
-				barberId: selectedBarber!.id,
-				serviceId: selectedService!.id,
-			}),
+		queryKey: slotsQueryKey,
+		queryFn: () => {
+			if (!selectedBarber || !selectedDateKey || !selectedService) {
+				throw new Error("Missing booking slot parameters.");
+			}
+
+			return client.routes.getAvailableTimeSlots({
+				date: selectedDateKey,
+				barberId: selectedBarber.id,
+				serviceId: selectedService.id,
+			});
+		},
 		enabled:
 			!!selectedBarber &&
-			!!selectedDate &&
+			!!selectedDateKey &&
 			!!selectedService &&
 			step === "datetime",
 		retry: 2,
@@ -120,8 +150,9 @@ function BookingPage() {
 	}, [isSlotsError, slotsError, t]);
 
 	const bookingMutation = useMutation({
-		mutationFn: (data: any) => client.routes.createBooking(data),
+		mutationFn: (data: BookingPayload) => client.routes.createBooking(data),
 		onSuccess: () => {
+			void queryClient.invalidateQueries({ queryKey: ["slots"] });
 			toast.success(t("booking.error.success"), {
 				description: t("booking.error.successDesc"),
 			});
@@ -373,9 +404,9 @@ function BookingPage() {
 										</h2>
 										{isLoadingSlots ? (
 											<div className="grid grid-cols-3 gap-2">
-												{[...Array(9)].map((_, i) => (
+												{SLOT_SKELETON_KEYS.map((key) => (
 													<div
-														key={i}
+														key={key}
 														className="bg-muted h-12 animate-pulse"
 													/>
 												))}

@@ -103,14 +103,13 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 	 * Backend translator function for i18n
 	 * Translates error messages and system messages
 	 *
-	 * When using .messages() on the builder, the keys are type-safe:
-	 * ```ts
-	 * const app = runtimeConfig({
-	 *   modules: [starterModule], // Includes core messages
-	 *   messages: { en: { "custom.key": "Value" } } as const,
-	 *   db: { url: '...' },
-	 * });
+	 * Project messages are discovered from `questpie/server/messages/<locale>.ts`:
+	 * ```ts title="questpie/server/messages/en.ts"
+	 * export default { "custom.key": "Value" } as const;
+	 * ```
 	 *
+	 * Generated apps can translate both module and project messages:
+	 * ```ts
 	 * app.t("error.notFound"); // Type-safe from starterModule
 	 * app.t("custom.key");     // Type-safe from messages
 	 * ```

@@ -66,11 +66,14 @@ const socialIcons: Record<SocialPlatform, string> = {
 	youtube: "ph:youtube-logo",
 };
 
+const EMPTY_FOOTER_LINKS: FooterLink[] = [];
+const EMPTY_SOCIAL_LINKS: SocialLink[] = [];
+
 export function Footer({
 	shopName = "Sharp Cuts",
 	tagline,
-	footerLinks = [],
-	socialLinks = [],
+	footerLinks = EMPTY_FOOTER_LINKS,
+	socialLinks = EMPTY_SOCIAL_LINKS,
 	businessHours,
 	contactEmail,
 	contactPhone,

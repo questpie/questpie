@@ -5,6 +5,7 @@ import type { AuditEntry } from "../hooks/use-audit-history";
 import { useResolveText, useTranslation } from "../i18n/hooks";
 import type { I18nText } from "../i18n/types";
 import { cn, formatLabel } from "../lib/utils";
+import { resolveOptionLabelForValue } from "./primitives/option-label";
 import {
 	Accordion,
 	AccordionContent,
@@ -99,6 +100,7 @@ const VERSION_META_KEYS = new Set([
 	"versionUserId",
 	"versionCreatedAt",
 ]);
+const EMPTY_AUDIT_ENTRIES: AuditEntry[] = [];
 
 function formatRelativeTime(date: Date, locale: string): string {
 	const now = new Date();
@@ -283,23 +285,28 @@ function resolveSelectValue({
 	field,
 	value,
 	resolveText,
+	t,
+	locale,
 }: {
 	field?: HistoryFieldSchema;
 	value: unknown;
 	resolveText: ReturnType<typeof useResolveText>;
+	t: ReturnType<typeof useTranslation>["t"];
+	locale: string;
 }): string | null {
 	const options = field?.metadata?.options;
 	if (!Array.isArray(options)) return null;
 
 	const values = Array.isArray(value) ? value : [value];
-	const labels = values.map((item) => {
-		const option = options.find((candidate) =>
-			valuesEqual(candidate.value, item),
-		);
-		return option
-			? resolveText(option.label, String(option.value))
-			: String(item);
-	});
+	const labels = values.map((item) =>
+		resolveOptionLabelForValue({
+			value: item,
+			options,
+			resolveText,
+			t,
+			locale,
+		}),
+	);
 
 	return labels.join(", ");
 }
@@ -308,18 +315,26 @@ function formatFieldValue({
 	field,
 	value,
 	t,
+	locale,
 	resolveText,
 }: {
 	field?: HistoryFieldSchema;
 	value: unknown;
 	t: ReturnType<typeof useTranslation>["t"];
+	locale: string;
 	resolveText: ReturnType<typeof useResolveText>;
 }): { summary: string; detail?: string } {
 	if (isEmptyValue(value)) return { summary: "-" };
 
 	const type = field?.metadata?.type;
 	if (type === "select") {
-		const selectLabel = resolveSelectValue({ field, value, resolveText });
+		const selectLabel = resolveSelectValue({
+			field,
+			value,
+			resolveText,
+			t,
+			locale,
+		});
 		if (selectLabel) return { summary: selectLabel };
 	}
 
@@ -398,14 +413,22 @@ function ValuePreview({
 	field,
 	value,
 	t,
+	locale,
 	resolveText,
 }: {
 	field?: HistoryFieldSchema;
 	value: unknown;
 	t: ReturnType<typeof useTranslation>["t"];
+	locale: string;
 	resolveText: ReturnType<typeof useResolveText>;
 }) {
-	const formatted = formatFieldValue({ field, value, t, resolveText });
+	const formatted = formatFieldValue({
+		field,
+		value,
+		t,
+		locale,
+		resolveText,
+	});
 
 	return (
 		<div className="min-w-0 space-y-2">
@@ -467,7 +490,7 @@ function VersionDiffPanel({
 	changes: FieldDiff[];
 	fields?: Record<string, HistoryFieldSchema>;
 }) {
-	const { t } = useTranslation();
+	const { t, locale } = useTranslation();
 	const resolveText = useResolveText();
 	const previousNumber = previousVersion?.versionNumber;
 
@@ -533,6 +556,7 @@ function VersionDiffPanel({
 										field={field}
 										value={change.from}
 										t={t}
+										locale={locale}
 										resolveText={resolveText}
 									/>
 								</div>
@@ -553,6 +577,7 @@ function VersionDiffPanel({
 										field={field}
 										value={change.to}
 										t={t}
+										locale={locale}
 										resolveText={resolveText}
 									/>
 								</div>
@@ -919,7 +944,7 @@ function buildVersionDiff({
 export function HistorySidebar({
 	open,
 	onOpenChange,
-	auditEntries = [],
+	auditEntries = EMPTY_AUDIT_ENTRIES,
 	isLoadingAudit = false,
 	versions,
 	fields,

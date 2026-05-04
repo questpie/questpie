@@ -241,17 +241,17 @@ export interface AdminProviderProps {
 	/**
 	 * Use server-side translations (fetched via getAdminTranslations RPC).
 	 * When true, translations are fetched from the server configured via
-	 * .adminLocale() and config translations.
+	 * config/admin.ts and config translations.
 	 *
 	 * @default false (for backwards compatibility)
 	 *
 	 * @example
 	 * ```tsx
 	 * // Server configures locales and messages
-	 * const app = runtimeConfig({
-	 *   modules: [adminModule],
-	 *   adminLocale: { locales: ["en", "sk"], defaultLocale: "en" },
-	 *   messages: { sk: { "common.save": "Ulozit" } },
+	 * import { adminConfig } from "#questpie/factories";
+	 *
+	 * export default adminConfig({
+	 *   locale: { locales: ["en", "sk"], defaultLocale: "en" },
 	 * });
 	 *
 	 * // Client fetches from server

@@ -1,17 +1,28 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useMemo } from "react";
 
 import { AdminRouter } from "@questpie/admin/client";
+
+function createAdminNavigate(navigate: ReturnType<typeof useNavigate>) {
+	return (path: string) => {
+		void navigate({ to: path });
+	};
+}
 
 function AdminCatchAll() {
 	const navigate = useNavigate();
 	const params = Route.useParams();
 	const splat = params._splat as string;
+	const handleNavigate = useMemo(
+		() => createAdminNavigate(navigate),
+		[navigate],
+	);
 	const segments = splat ? splat.split("/").filter(Boolean) : [];
 
 	return (
 		<AdminRouter
 			segments={segments}
-			navigate={(path) => navigate({ to: path })}
+			navigate={handleNavigate}
 			basePath="/admin"
 		/>
 	);

@@ -7,7 +7,12 @@ import {
 	type UseMutationOptions,
 	type UseQueryOptions,
 } from "@tanstack/react-query";
-import type { QuestpieApp, QuestpieClient } from "questpie/client";
+import type {
+	QuestpieApp,
+	QuestpieClient,
+	RealtimeAPI,
+	TopicConfig,
+} from "questpie/client";
 
 // ============================================================================
 // Re-export types for convenience
@@ -353,6 +358,60 @@ const wrapMutationFn = <TVariables, TData>(
 	};
 };
 
+async function* streamRealtimeQuery<TInitialData>(options: {
+	initialFetch: () => Promise<TInitialData>;
+	realtime: RealtimeAPI;
+	topic: TopicConfig;
+	signal?: AbortSignal;
+	errorMap: QuestpieQueryErrorMap;
+}): AsyncGenerator<unknown, void, unknown> {
+	const { initialFetch, realtime, topic, signal, errorMap } = options;
+	const queue: unknown[] = [];
+	let resolveNext: (() => void) | null = null;
+
+	const notify = () => {
+		resolveNext?.();
+		resolveNext = null;
+	};
+	const handleAbort = () => notify();
+
+	const unsubscribe = realtime.subscribe(
+		topic,
+		(data) => {
+			queue.push(data);
+			notify();
+		},
+		signal,
+	);
+
+	signal?.addEventListener("abort", handleAbort, { once: true });
+
+	try {
+		try {
+			yield await initialFetch();
+		} catch (error) {
+			throw errorMap(error);
+		}
+
+		while (!signal?.aborted) {
+			while (queue.length > 0) {
+				yield queue.shift();
+			}
+
+			if (signal?.aborted) break;
+
+			await new Promise<void>((resolve) => {
+				resolveNext = resolve;
+			});
+			resolveNext = null;
+		}
+	} finally {
+		signal?.removeEventListener("abort", handleAbort);
+		unsubscribe();
+		resolveNext = null;
+	}
+}
+
 // ============================================================================
 // Main Factory
 // ============================================================================
@@ -416,7 +475,13 @@ export function createQuestpieQueryOptions<
 								queryKey: qKey,
 								queryFn: streamedQuery({
 									streamFn: ({ signal }) =>
-										client.realtime.stream(topic, signal),
+										streamRealtimeQuery({
+											initialFetch: () => collection.find(options),
+											realtime: client.realtime,
+											topic,
+											signal,
+											errorMap,
+										}),
 									reducer: (_: any, chunk: any) => chunk,
 									initialValue: undefined,
 									refetchMode: "append",
@@ -445,7 +510,13 @@ export function createQuestpieQueryOptions<
 								queryKey: qKey,
 								queryFn: streamedQuery({
 									streamFn: ({ signal }) =>
-										client.realtime.stream(topic, signal),
+										streamRealtimeQuery({
+											initialFetch: () => collection.count(options),
+											realtime: client.realtime,
+											topic,
+											signal,
+											errorMap,
+										}),
 									reducer: (_: any, chunk: any) =>
 										typeof chunk?.totalDocs === "number"
 											? chunk.totalDocs
@@ -705,7 +776,14 @@ export function createQuestpieQueryOptions<
 						return queryOptions({
 							queryKey: qKey,
 							queryFn: streamedQuery({
-								streamFn: ({ signal }) => client.realtime.stream(topic, signal),
+								streamFn: ({ signal }) =>
+									streamRealtimeQuery({
+										initialFetch: () => global.get(options),
+										realtime: client.realtime,
+										topic,
+										signal,
+										errorMap,
+									}),
 								reducer: (_: any, chunk: any) => chunk,
 								initialValue: undefined,
 								refetchMode: "append",

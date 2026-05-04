@@ -1,11 +1,13 @@
 "use client";
 
-import { useResolveText } from "../../i18n/hooks";
+import { useResolveText, useSafeI18n } from "../../i18n/hooks";
 import { cn } from "../../lib/utils";
 import { Checkbox } from "../ui/checkbox";
+import { resolveOptionLabel } from "./option-label";
 import type {
 	CheckboxGroupProps,
 	CheckboxInputProps,
+	SelectOption,
 	RadioGroupProps,
 } from "./types";
 
@@ -42,6 +44,22 @@ export function CheckboxInput({
 	);
 }
 
+function useOptionLabel<TValue>() {
+	const resolveText = useResolveText();
+	const i18n = useSafeI18n();
+	const locale = i18n?.locale ?? "en";
+	const t = (key: string) => i18n?.t(key) ?? key;
+
+	return (option: SelectOption<TValue>) =>
+		resolveOptionLabel({
+			value: option.value,
+			label: option.label,
+			resolveText,
+			t,
+			locale,
+		});
+}
+
 /**
  * Checkbox Group Primitive
  *
@@ -62,7 +80,7 @@ export function CheckboxInput({
  * />
  * ```
  */
-function CheckboxGroup<TValue extends string = string>({
+export function CheckboxGroup<TValue extends string = string>({
 	value,
 	onChange,
 	options,
@@ -72,7 +90,7 @@ function CheckboxGroup<TValue extends string = string>({
 	id,
 	"aria-invalid": ariaInvalid,
 }: CheckboxGroupProps<TValue>) {
-	const resolveText = useResolveText();
+	const getOptionLabel = useOptionLabel<TValue>();
 	const handleChange = (optionValue: TValue, checked: boolean) => {
 		if (checked) {
 			onChange([...value, optionValue]);
@@ -85,7 +103,7 @@ function CheckboxGroup<TValue extends string = string>({
 		<div
 			id={id}
 			role="group"
-			aria-invalid={ariaInvalid}
+			data-invalid={ariaInvalid || undefined}
 			className={cn(
 				"qa-checkbox-group flex gap-3",
 				orientation === "vertical" ? "flex-col" : "flex-row flex-wrap",
@@ -111,7 +129,7 @@ function CheckboxGroup<TValue extends string = string>({
 							disabled={option.disabled || disabled}
 						/>
 						<label htmlFor={optionId} className="cursor-pointer text-sm">
-							{resolveText(option.label)}
+							{getOptionLabel(option)}
 						</label>
 					</div>
 				);
@@ -139,7 +157,7 @@ function CheckboxGroup<TValue extends string = string>({
  * />
  * ```
  */
-function RadioGroup<TValue extends string = string>({
+export function RadioGroup<TValue extends string = string>({
 	value,
 	onChange,
 	options,
@@ -149,7 +167,7 @@ function RadioGroup<TValue extends string = string>({
 	id,
 	"aria-invalid": ariaInvalid,
 }: RadioGroupProps<TValue>) {
-	const resolveText = useResolveText();
+	const getOptionLabel = useOptionLabel<TValue>();
 	return (
 		<div
 			id={id}
@@ -186,7 +204,7 @@ function RadioGroup<TValue extends string = string>({
 							)}
 						/>
 						<label htmlFor={optionId} className="cursor-pointer text-sm">
-							{resolveText(option.label)}
+							{getOptionLabel(option)}
 						</label>
 					</div>
 				);

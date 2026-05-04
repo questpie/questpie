@@ -10,7 +10,8 @@ import * as React from "react";
 import { useFieldArray, useFormContext, useWatch } from "react-hook-form";
 
 import type { FieldComponentProps } from "../../builder";
-import { useResolveText, useTranslation } from "../../i18n/hooks";
+import { useResolveText, useSafeI18n, useTranslation } from "../../i18n/hooks";
+import { resolveOptionLabel } from "../primitives/option-label";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "../ui/select";
@@ -61,6 +62,17 @@ function ArrayItemInput({
 	options,
 }: ArrayItemInputProps) {
 	const resolveText = useResolveText();
+	const i18n = useSafeI18n();
+	const locale = i18n?.locale ?? "en";
+	const t = (key: string) => i18n?.t(key) ?? key;
+	const getOptionLabel = (option: { label: string; value: any }) =>
+		resolveOptionLabel({
+			value: option.value,
+			label: option.label,
+			resolveText,
+			t,
+			locale,
+		});
 	const form = useFormContext();
 	const itemName = `${name}.${index}`;
 	const itemPlaceholder = placeholder || `Item ${index + 1}`;
@@ -78,6 +90,8 @@ function ArrayItemInput({
 	}
 
 	if (itemType === "select") {
+		const selectedOption = options?.find((o) => o.value === itemValue);
+
 		return (
 			<Select
 				value={itemValue ?? ""}
@@ -91,15 +105,13 @@ function ArrayItemInput({
 			>
 				<SelectTrigger id={itemName}>
 					<span className="truncate">
-						{options?.find((o) => o.value === itemValue)?.label
-							? resolveText(options.find((o) => o.value === itemValue)?.label)
-							: itemPlaceholder}
+						{selectedOption ? getOptionLabel(selectedOption) : itemPlaceholder}
 					</span>
 				</SelectTrigger>
 				<SelectContent>
 					{options?.map((option) => (
 						<SelectItem key={option.value} value={option.value}>
-							{resolveText(option.label)}
+							{getOptionLabel(option)}
 						</SelectItem>
 					))}
 				</SelectContent>

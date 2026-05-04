@@ -7,7 +7,11 @@
 
 import { Icon } from "@iconify/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { CollectionSchema, FieldReactiveSchema } from "questpie/client";
+import type {
+	CollectionSchema,
+	FieldReactiveSchema,
+	FieldSchema,
+} from "questpie/client";
 import { QuestpieClientError } from "questpie/client";
 import * as React from "react";
 import { FormProvider, useForm, useFormState } from "react-hook-form";
@@ -57,6 +61,7 @@ import {
 } from "../../components/ui/dropdown-menu";
 import { EmptyState } from "../../components/ui/empty-state";
 import { Label } from "../../components/ui/label";
+import { scrollFieldIntoView } from "../../contexts/focus-context";
 import {
 	useCollectionValidation,
 	usePreferServerValidation,
@@ -79,6 +84,10 @@ import { useServerActions } from "../../hooks/use-server-actions";
 import { useTransitionStage } from "../../hooks/use-transition-stage";
 import { useResolveText, useTranslation } from "../../i18n/hooks";
 import { RenderProfiler } from "../../lib/render-profiler.js";
+import type {
+	FieldValueEditedMessage,
+	PreviewPatchOp,
+} from "../../preview/types";
 import {
 	selectBasePath,
 	selectClient,
@@ -125,6 +134,220 @@ function extractReactiveConfigs(
 	}
 
 	return configs;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+	if (!value || typeof value !== "object") return false;
+	const prototype = Object.getPrototypeOf(value);
+	return prototype === Object.prototype || prototype === null;
+}
+
+function clonePreviewSnapshot<T>(value: T): T {
+	if (typeof structuredClone === "function") {
+		try {
+			return structuredClone(value);
+		} catch {
+			// Fall through to JSON clone for form values that are JSON-shaped.
+		}
+	}
+
+	const json = JSON.stringify(value);
+	return json === undefined ? value : (JSON.parse(json) as T);
+}
+
+function arePreviewValuesEqual(a: unknown, b: unknown): boolean {
+	if (Object.is(a, b)) return true;
+
+	if (Array.isArray(a) || Array.isArray(b)) {
+		if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) {
+			return false;
+		}
+		return a.every((value, index) => arePreviewValuesEqual(value, b[index]));
+	}
+
+	if (isPlainObject(a) || isPlainObject(b)) {
+		if (!isPlainObject(a) || !isPlainObject(b)) return false;
+		const aKeys = Object.keys(a);
+		const bKeys = Object.keys(b);
+		if (aKeys.length !== bKeys.length) return false;
+		return aKeys.every(
+			(key) =>
+				Object.prototype.hasOwnProperty.call(b, key) &&
+				arePreviewValuesEqual(a[key], b[key]),
+		);
+	}
+
+	return false;
+}
+
+function joinPreviewPath(basePath: string, key: string): string {
+	return basePath ? `${basePath}.${key}` : key;
+}
+
+function diffPreviewSnapshots(
+	previous: unknown,
+	current: unknown,
+	basePath = "",
+): PreviewPatchOp[] {
+	if (arePreviewValuesEqual(previous, current)) {
+		return [];
+	}
+
+	if (isPlainObject(previous) && isPlainObject(current)) {
+		const ops: PreviewPatchOp[] = [];
+		const keys = new Set([...Object.keys(previous), ...Object.keys(current)]);
+
+		for (const key of keys) {
+			const path = joinPreviewPath(basePath, key);
+			const previousHasKey = Object.prototype.hasOwnProperty.call(
+				previous,
+				key,
+			);
+			const currentHasKey = Object.prototype.hasOwnProperty.call(current, key);
+
+			if (!currentHasKey) {
+				ops.push({ op: "remove", path });
+				continue;
+			}
+
+			if (!previousHasKey) {
+				ops.push({ op: "set", path, value: current[key] });
+				continue;
+			}
+
+			ops.push(...diffPreviewSnapshots(previous[key], current[key], path));
+		}
+
+		return ops;
+	}
+
+	if (!basePath) {
+		return [{ op: "set", path: "", value: current }];
+	}
+
+	return [{ op: "set", path: basePath, value: current }];
+}
+
+function isSafePreviewEditPath(path: string): boolean {
+	if (!path || path.length > 512) return false;
+	return path
+		.split(".")
+		.every(
+			(segment) =>
+				segment.length > 0 &&
+				segment !== "__proto__" &&
+				segment !== "prototype" &&
+				segment !== "constructor",
+		);
+}
+
+function hasValueAtPath(value: unknown, path: string): boolean {
+	let current = value;
+	for (const segment of path.split(".")) {
+		if (!current || typeof current !== "object") return false;
+		if (!Object.prototype.hasOwnProperty.call(current, segment)) return false;
+		current = (current as Record<string, unknown>)[segment];
+	}
+	return true;
+}
+
+function getTopLevelFieldSchema(
+	schema: CollectionSchema | undefined,
+	path: string,
+): FieldSchema | undefined {
+	const topLevelField = path.split(".")[0];
+	if (!topLevelField) return undefined;
+	return schema?.fields?.[topLevelField];
+}
+
+function fieldSupportsInlineEdit(
+	field: FieldSchema,
+	path: string,
+	inputKind: FieldValueEditedMessage["inputKind"],
+): boolean {
+	const fieldType = field.metadata?.type;
+	const isNestedPath = path.includes(".");
+
+	if (fieldType === "object" || fieldType === "json") {
+		return isNestedPath;
+	}
+
+	switch (inputKind) {
+		case "text":
+			return (
+				fieldType === "text" ||
+				fieldType === "email" ||
+				fieldType === "url" ||
+				fieldType === "select"
+			);
+		case "textarea":
+			return (
+				fieldType === "textarea" ||
+				fieldType === "richText" ||
+				fieldType === "text"
+			);
+		case "number":
+			return fieldType === "number";
+		case "boolean":
+			return fieldType === "boolean";
+	}
+}
+
+function isAllowedPreviewEditPath({
+	message,
+	schema,
+	values,
+}: {
+	message: FieldValueEditedMessage;
+	schema: CollectionSchema | undefined;
+	values: Record<string, unknown>;
+}): boolean {
+	if (!schema || !isSafePreviewEditPath(message.path)) return false;
+	if (message.fieldType === "relation") return false;
+
+	const blockMatch = message.path.match(/^([^.]+)\._values\.([^.]+)\.(.+)$/);
+	if (blockMatch) {
+		const [, blocksFieldName, blockId] = blockMatch;
+		const blocksField = schema.fields?.[blocksFieldName];
+		if (blocksField?.metadata?.type !== "blocks") return false;
+		if (message.blockId && message.blockId !== blockId) return false;
+		return hasValueAtPath(values, message.path);
+	}
+
+	const field = getTopLevelFieldSchema(schema, message.path);
+	if (!field) return false;
+	if (field.metadata?.readOnly || field.access?.update?.allowed === false) {
+		return false;
+	}
+	if (message.path.includes(".") && !hasValueAtPath(values, message.path)) {
+		return false;
+	}
+	return fieldSupportsInlineEdit(field, message.path, message.inputKind);
+}
+
+function normalizeInlineEditValue(
+	message: FieldValueEditedMessage,
+): { ok: true; value: unknown } | { ok: false } {
+	switch (message.inputKind) {
+		case "text":
+		case "textarea":
+			return typeof message.value === "string"
+				? { ok: true, value: message.value }
+				: { ok: false };
+		case "number": {
+			const value =
+				typeof message.value === "number"
+					? message.value
+					: typeof message.value === "string"
+						? Number(message.value)
+						: Number.NaN;
+			return Number.isFinite(value) ? { ok: true, value } : { ok: false };
+		}
+		case "boolean":
+			return typeof message.value === "boolean"
+				? { ok: true, value: message.value }
+				: { ok: false };
+	}
 }
 
 /**
@@ -209,6 +432,67 @@ const FormStateRefBridge = React.memo(function FormStateRefBridge({
 	return null;
 });
 
+type PreviewPatchBridgeProps = {
+	form: ReturnType<typeof useForm>;
+	previewRef: React.RefObject<PreviewPaneRef | null>;
+	enabled: boolean;
+};
+
+const PreviewPatchBridge = React.memo(function PreviewPatchBridge({
+	form,
+	previewRef,
+	enabled,
+}: PreviewPatchBridgeProps) {
+	const previousSnapshotRef = React.useRef<Record<string, unknown> | null>(
+		null,
+	);
+	const snapshotVersionRef = React.useRef<number | undefined>(undefined);
+
+	React.useEffect(() => {
+		if (!enabled) {
+			previousSnapshotRef.current = null;
+			snapshotVersionRef.current = undefined;
+			return;
+		}
+
+		const initialSnapshot = clonePreviewSnapshot(
+			form.getValues() as Record<string, unknown>,
+		);
+		previousSnapshotRef.current = initialSnapshot;
+		snapshotVersionRef.current =
+			previewRef.current?.sendInitSnapshot(initialSnapshot);
+
+		const subscription = form.watch((values) => {
+			const previousSnapshot = previousSnapshotRef.current;
+			const nextSnapshot = clonePreviewSnapshot(
+				values as Record<string, unknown>,
+			);
+
+			if (!previousSnapshot) {
+				previousSnapshotRef.current = nextSnapshot;
+				snapshotVersionRef.current =
+					previewRef.current?.sendInitSnapshot(nextSnapshot);
+				return;
+			}
+
+			const ops = diffPreviewSnapshots(previousSnapshot, nextSnapshot).filter(
+				(op) => op.path,
+			);
+
+			previousSnapshotRef.current = nextSnapshot;
+			if (ops.length === 0) return;
+
+			previewRef.current?.sendPatchBatch(ops, snapshotVersionRef.current);
+		});
+
+		return () => {
+			subscription.unsubscribe();
+		};
+	}, [enabled, form, previewRef]);
+
+	return null;
+});
+
 type AutosaveManagerProps = {
 	form: ReturnType<typeof useForm>;
 	formElementRef: React.RefObject<HTMLFormElement | null>;
@@ -220,6 +504,7 @@ type AutosaveManagerProps = {
 	isSubmittingRef: React.MutableRefObject<boolean>;
 	updateMutation: { mutateAsync: (args: any) => Promise<any> };
 	onPreviewRefresh?: () => void;
+	onPreviewCommit?: (data: unknown) => void;
 	onSavingChange: (isSaving: boolean) => void;
 	onSaved: (savedAt: Date) => void;
 };
@@ -235,6 +520,7 @@ const AutosaveManager = React.memo(function AutosaveManager({
 	isSubmittingRef,
 	updateMutation,
 	onPreviewRefresh,
+	onPreviewCommit,
 	onSavingChange,
 	onSaved,
 }: AutosaveManagerProps) {
@@ -258,6 +544,7 @@ const AutosaveManager = React.memo(function AutosaveManager({
 
 					form.reset(result as any, { keepTouched: true });
 
+					onPreviewCommit?.(result);
 					onPreviewRefresh?.();
 
 					onSaved(new Date());
@@ -281,6 +568,7 @@ const AutosaveManager = React.memo(function AutosaveManager({
 		isSubmittingRef,
 		onSaved,
 		onSavingChange,
+		onPreviewCommit,
 		onPreviewRefresh,
 		t,
 		updateMutation,
@@ -803,6 +1091,53 @@ export default function FormView({
 		mode: "onBlur",
 	});
 
+	const commitPreviewSnapshot = React.useCallback(
+		(data: unknown) => {
+			if (!isLivePreviewOpen) return;
+			previewRef.current?.sendCommit(clonePreviewSnapshot(data));
+		},
+		[isLivePreviewOpen],
+	);
+
+	const triggerPreviewFullResync = React.useCallback(
+		(reason?: string) => {
+			if (!isLivePreviewOpen) return;
+			previewRef.current?.sendFullResync(reason);
+			previewRef.current?.triggerRefresh();
+		},
+		[isLivePreviewOpen],
+	);
+
+	const handlePreviewFieldValueEdited = React.useCallback(
+		(message: FieldValueEditedMessage) => {
+			const values = form.getValues() as Record<string, unknown>;
+			if (!isAllowedPreviewEditPath({ message, schema, values })) {
+				return;
+			}
+
+			const normalized = normalizeInlineEditValue(message);
+			if (!normalized.ok) {
+				return;
+			}
+
+			form.setValue(message.path as any, normalized.value as any, {
+				shouldDirty: true,
+				shouldTouch: true,
+				shouldValidate: true,
+			});
+
+			setTimeout(() => scrollFieldIntoView(message.path), 0);
+		},
+		[form, schema],
+	);
+
+	const handlePreviewResyncRequest = React.useCallback(
+		(reason?: string) => {
+			triggerPreviewFullResync(reason ?? "preview-request");
+		},
+		[triggerPreviewFullResync],
+	);
+
 	/**
 	 * Execute the confirmed workflow transition (immediate or scheduled).
 	 */
@@ -838,6 +1173,7 @@ export default function FormView({
 						}
 					}
 				}
+				triggerPreviewFullResync("workflow-transition");
 
 				if (transitionSchedule) {
 					if (transitionScheduledAt) {
@@ -953,7 +1289,7 @@ export default function FormView({
 		}
 	}, [
 		contentLocale,
-		form.getValues,
+		form,
 		setContentLocale,
 		localeChangeDialog.open,
 		isEditMode,
@@ -981,6 +1317,7 @@ export default function FormView({
 			localeQueryClient.invalidateQueries({
 				queryKey: ["collections", collection],
 			});
+			triggerPreviewFullResync("locale-change");
 		}
 		setLocaleChangeDialog({ open: false, pendingLocale: null });
 	}, [
@@ -988,6 +1325,7 @@ export default function FormView({
 		setContentLocale,
 		localeQueryClient,
 		collection,
+		triggerPreviewFullResync,
 	]);
 
 	const handleLocaleChangeCancel = React.useCallback(() => {
@@ -1035,6 +1373,7 @@ export default function FormView({
 					if (isEditMode) {
 						form.reset(result as any);
 
+						commitPreviewSnapshot(result);
 						// Trigger preview refresh after successful save
 						triggerPreviewRefresh();
 					} else if (result?.id) {
@@ -1412,7 +1751,7 @@ export default function FormView({
 							let errorBody: Record<string, unknown> = {};
 							try {
 								errorBody = await response.json();
-							} catch (_parseErr) {
+							} catch {
 								// ignore parse errors
 							}
 							let errorMessage: string;
@@ -1514,9 +1853,7 @@ export default function FormView({
 					}
 				} catch (error) {
 					toast.error(
-						error instanceof Error
-							? error.message
-							: t("error.actionFailed"),
+						error instanceof Error ? error.message : t("error.actionFailed"),
 					);
 				} finally {
 					setActionLoading(false);
@@ -1545,7 +1882,7 @@ export default function FormView({
 
 		const result = await revertVersionMutation.mutateAsync(payload);
 		form.reset(result as any);
-		triggerPreviewRefresh();
+		triggerPreviewFullResync("version-revert");
 		toast.success(t("version.revertSuccess"));
 		setPendingRevertVersion(null);
 	};
@@ -1810,9 +2147,15 @@ export default function FormView({
 					isDirtyRef={formIsDirtyRef}
 					isSubmittingRef={formIsSubmittingRef}
 					updateMutation={updateMutation}
+					onPreviewCommit={commitPreviewSnapshot}
 					onPreviewRefresh={triggerPreviewRefresh}
 					onSavingChange={setIsSaving}
 					onSaved={setLastSaved}
+				/>
+				<PreviewPatchBridge
+					form={form}
+					previewRef={previewRef}
+					enabled={isLivePreviewOpen && !!previewUrl && !isBlocked}
 				/>
 				{/* Manage server-side reactive field behaviors (compute, hidden, etc.) */}
 				<ReactiveFieldsManager
@@ -2284,6 +2627,8 @@ export default function FormView({
 			onClose={() => setIsLivePreviewOpen(false)}
 			previewUrl={previewUrl}
 			previewRef={previewRef}
+			onFieldValueEdited={handlePreviewFieldValueEdited}
+			onResyncRequest={handlePreviewResyncRequest}
 			defaultSize={schemaPreview?.defaultSize}
 			minSize={schemaPreview?.minSize}
 		>

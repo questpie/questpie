@@ -13,6 +13,7 @@ import { createStore } from "zustand";
 import type { BlockSchema } from "#questpie/admin/server/block/index.js";
 
 import type { BlockContent, BlockNode } from "../../blocks/types.js";
+import { useFocusOptional } from "../../contexts/focus-context.js";
 import {
 	type BlockEditorActions,
 	BlockEditorContextProvider,
@@ -21,6 +22,7 @@ import {
 import {
 	duplicateBlockInTree,
 	getAllBlockIds,
+	getBlockPathIds,
 	getDefaultValues,
 	insertBlockInTree,
 	removeBlockFromTree,
@@ -59,6 +61,7 @@ export function BlockEditorProvider({
 	children,
 }: BlockEditorProviderProps) {
 	const onChangeRef = React.useRef(onChange);
+	const previewFocusState = useFocusOptional()?.state;
 	React.useEffect(() => {
 		onChangeRef.current = onChange;
 	}, [onChange]);
@@ -270,6 +273,52 @@ export function BlockEditorProvider({
 			};
 		}),
 	);
+
+	React.useEffect(() => {
+		if (
+			previewFocusState?.type !== "block" &&
+			previewFocusState?.type !== "block-insert"
+		) {
+			return;
+		}
+
+		const state = store.getState();
+		const targetBlockId =
+			previewFocusState.type === "block"
+				? previewFocusState.blockId
+				: (previewFocusState.referenceBlockId ??
+					previewFocusState.position.parentId);
+
+		let expandedBlockIds = state.expandedBlockIds;
+		if (targetBlockId) {
+			const blockPath = getBlockPathIds(state.content._tree, targetBlockId);
+			if (!blockPath) {
+				return;
+			}
+
+			expandedBlockIds = new Set(state.expandedBlockIds);
+			for (const blockId of blockPath) {
+				expandedBlockIds.add(blockId);
+			}
+		}
+
+		if (previewFocusState.type === "block-insert") {
+			store.setState({
+				selectedBlockId: targetBlockId,
+				isLibraryOpen: true,
+				insertPosition: previewFocusState.position,
+				expandedBlockIds,
+			});
+			return;
+		}
+
+		store.setState({
+			selectedBlockId: previewFocusState.blockId,
+			isLibraryOpen: false,
+			insertPosition: null,
+			expandedBlockIds,
+		});
+	}, [previewFocusState, store]);
 
 	React.useEffect(() => {
 		const state = store.getState();

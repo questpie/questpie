@@ -28,6 +28,8 @@ type RouteAdapterContext = {
 	locale?: string;
 	localeFallback?: boolean;
 	stage?: string;
+	requestId?: string;
+	traceId?: string;
 	appContext: RequestContext;
 };
 
@@ -52,6 +54,8 @@ function toRouteAdapterContext(context: RequestContext): RouteAdapterContext {
 		localeFallback: context.localeFallback,
 		stage: context.stage,
 		appContext: context,
+		...(context.requestId ? { requestId: context.requestId } : {}),
+		...(context.traceId ? { traceId: context.traceId } : {}),
 	};
 }
 
@@ -70,6 +74,10 @@ function createRouteStoreContext(
 			locale: resolvedContext.locale,
 			accessMode: resolvedContext.accessMode ?? "system",
 			stage: resolvedContext.stage,
+			...(resolvedContext.requestId
+				? { requestId: resolvedContext.requestId }
+				: {}),
+			...(resolvedContext.traceId ? { traceId: resolvedContext.traceId } : {}),
 		},
 		adapterContext,
 	);

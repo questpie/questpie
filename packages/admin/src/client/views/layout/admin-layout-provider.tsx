@@ -53,8 +53,11 @@
  * ```
  */
 
-import type { QueryClient } from "@tanstack/react-query";
-import { QueryClientProvider } from "@tanstack/react-query";
+import {
+	type DefaultOptions,
+	QueryClient,
+	QueryClientProvider,
+} from "@tanstack/react-query";
 import type * as React from "react";
 
 import type { AnyQuestpieClient } from "../../builder";
@@ -145,17 +148,17 @@ interface AdminLayoutProviderProps extends AdminLayoutSharedProps {
 	/**
 	 * Use server-side translations (fetched via getAdminTranslations RPC).
 	 * When true, translations are fetched from the server configured via
-	 * .adminLocale() and config translations.
+	 * config/admin.ts and config translations.
 	 *
 	 * @default false (for backwards compatibility)
 	 *
 	 * @example
 	 * ```tsx
 	 * // Server configures locales and messages
-	 * const app = runtimeConfig({
-	 *   modules: [adminModule],
-	 *   adminLocale: { locales: ["en", "sk"], defaultLocale: "en" },
-	 *   messages: { sk: { "common.save": "Ulozit" } },
+	 * import { adminConfig } from "#questpie/factories";
+	 *
+	 * export default adminConfig({
+	 *   locale: { locales: ["en", "sk"], defaultLocale: "en" },
 	 * });
 	 *
 	 * // Client fetches from server
@@ -194,18 +197,22 @@ interface AdminLayoutProviderProps extends AdminLayoutSharedProps {
 // Component
 // ============================================================================
 
-import { QueryClient as QueryClientClass } from "@tanstack/react-query";
-
 /** Debounced 401 redirect - prevents multiple redirects from concurrent failures */
 let sessionExpiredRedirectPending = false;
+
+const ADMIN_QUERY_STALE_TIME_MS = 60 * 1000;
+const configuredAdminQueryClients = new WeakSet<QueryClient>();
+
+type QueryCacheWithMutableConfig = {
+	config: {
+		onError?: (error: unknown, ...args: unknown[]) => unknown;
+	};
+};
 
 function handleSessionExpiredError(error: unknown) {
 	if (sessionExpiredRedirectPending) return;
 
-	const status =
-		error != null && typeof error === "object" && "status" in error
-			? (error as { status: number }).status
-			: undefined;
+	const status = getErrorStatus(error);
 
 	if (status !== 401) return;
 
@@ -222,34 +229,88 @@ function handleSessionExpiredError(error: unknown) {
 	}
 }
 
+function getErrorStatus(error: unknown): number | undefined {
+	if (error != null && typeof error === "object" && "status" in error) {
+		const status = (error as { status?: unknown }).status;
+		return typeof status === "number" ? status : undefined;
+	}
+	return undefined;
+}
+
+export function shouldRetryAdminQuery(
+	failureCount: number,
+	error: unknown,
+): boolean {
+	const status = getErrorStatus(error);
+	if (status === 401) return false;
+	if (
+		status &&
+		status >= 400 &&
+		status < 500 &&
+		status !== 408 &&
+		status !== 429
+	) {
+		return false;
+	}
+	return failureCount < 3;
+}
+
+function createAdminDefaultOptions(
+	defaultOptions: DefaultOptions = {},
+): DefaultOptions {
+	const queries = defaultOptions.queries ?? {};
+	const mutations = defaultOptions.mutations ?? {};
+	const existingMutationOnError = mutations.onError as
+		| ((error: unknown, ...args: unknown[]) => unknown)
+		| undefined;
+
+	return {
+		...defaultOptions,
+		queries: {
+			...queries,
+			staleTime: queries.staleTime ?? ADMIN_QUERY_STALE_TIME_MS,
+			refetchOnWindowFocus: queries.refetchOnWindowFocus ?? false,
+			retry: queries.retry ?? shouldRetryAdminQuery,
+		},
+		mutations: {
+			...mutations,
+			onError: ((error: unknown, ...args: unknown[]) => {
+				handleSessionExpiredError(error);
+				return existingMutationOnError?.(error, ...args);
+			}) as NonNullable<DefaultOptions["mutations"]>["onError"],
+		},
+	};
+}
+
+function installQueryCacheSessionHandler(queryClient: QueryClient) {
+	const queryCache = queryClient.getQueryCache() as QueryCacheWithMutableConfig;
+	const existingOnError = queryCache.config.onError;
+
+	queryCache.config.onError = (error: unknown, ...args: unknown[]) => {
+		handleSessionExpiredError(error);
+		return existingOnError?.(error, ...args);
+	};
+}
+
+export function configureAdminQueryClient(
+	queryClient: QueryClient,
+): QueryClient {
+	if (configuredAdminQueryClients.has(queryClient)) return queryClient;
+
+	queryClient.setDefaultOptions(
+		createAdminDefaultOptions(queryClient.getDefaultOptions()),
+	);
+	installQueryCacheSessionHandler(queryClient);
+	configuredAdminQueryClients.add(queryClient);
+
+	return queryClient;
+}
+
 let cachedQueryClient: QueryClient | undefined;
 
 function getDefaultQueryClient(): QueryClient {
 	if (!cachedQueryClient) {
-		cachedQueryClient = new QueryClientClass({
-			defaultOptions: {
-				queries: {
-					staleTime: 60 * 1000, // 1 minute
-					refetchOnWindowFocus: false, // Admin panel — no silent refetch on tab switch
-					retry: (failureCount, error) => {
-						// Don't retry on 401 (session expired)
-						const status =
-							error != null && typeof error === "object" && "status" in error
-								? (error as { status: number }).status
-								: undefined;
-						if (status === 401) return false;
-						return failureCount < 3;
-					},
-				},
-				mutations: {
-					onError: handleSessionExpiredError,
-				},
-			},
-		});
-
-		// Use global query cache error handler for queries
-		cachedQueryClient.getQueryCache().config.onError =
-			handleSessionExpiredError;
+		cachedQueryClient = configureAdminQueryClient(new QueryClient());
 	}
 	return cachedQueryClient;
 }
@@ -332,7 +393,9 @@ export function AdminLayoutProvider({
 	// Children
 	children,
 }: AdminLayoutProviderProps): React.ReactElement {
-	const qc = queryClient ?? getDefaultQueryClient();
+	const qc = queryClient
+		? configureAdminQueryClient(queryClient)
+		: getDefaultQueryClient();
 	const { theme: managedTheme, setTheme: setManagedTheme } =
 		useManagedAdminTheme(theme, setTheme);
 

@@ -9,9 +9,15 @@
  * @see QUE-158 (Unified route() builder + URL flattening)
  */
 
+import { randomUUID } from "node:crypto";
+
 import type { Questpie } from "../config/questpie.js";
 import type { QuestpieConfig } from "../config/types.js";
 import { ApiError } from "../errors/index.js";
+import type {
+	RequestLoggingConfig,
+	RequestLogMeta,
+} from "../modules/core/integrated/logger/types.js";
 import {
 	executeJsonRouteInternal,
 	executeRawRouteInternal,
@@ -103,6 +109,114 @@ function compileRoutes(
 }
 
 // ============================================================================
+// Request observability
+// ============================================================================
+
+type RequestLoggingOptions = {
+	enabled: boolean;
+	logSuccessfulRequests: boolean;
+	slowThresholdMs: number;
+	ignorePaths: Array<string | RegExp>;
+	ignore?: (meta: RequestLogMeta) => boolean;
+};
+
+function resolveRequestLoggingOptions(
+	config: RequestLoggingConfig | undefined,
+): RequestLoggingOptions {
+	if (config === false) {
+		return {
+			enabled: false,
+			logSuccessfulRequests: false,
+			slowThresholdMs: 1000,
+			ignorePaths: [],
+		};
+	}
+	if (config === true || config === undefined) {
+		return {
+			enabled: true,
+			logSuccessfulRequests: true,
+			slowThresholdMs: 1000,
+			ignorePaths: [],
+		};
+	}
+	return {
+		enabled: config.enabled ?? true,
+		logSuccessfulRequests: config.logSuccessfulRequests ?? true,
+		slowThresholdMs: config.slowThresholdMs ?? 1000,
+		ignorePaths: config.ignorePaths ?? [],
+		...(config.ignore ? { ignore: config.ignore } : {}),
+	};
+}
+
+function getTraceId(request: Request): string | undefined {
+	const explicit = request.headers.get("x-trace-id");
+	if (explicit) return explicit;
+
+	const traceparent = request.headers.get("traceparent");
+	const traceId = traceparent?.split("-")[1];
+	return traceId && /^[\da-f]{32}$/i.test(traceId) ? traceId : undefined;
+}
+
+function getRequestId(request: Request): string {
+	return (
+		request.headers.get("x-request-id") ??
+		request.headers.get("x-correlation-id") ??
+		randomUUID()
+	);
+}
+
+function getErrorDetails(error: unknown): RequestLogMeta["error"] {
+	if (error instanceof Error) {
+		return { name: error.name, message: error.message };
+	}
+	return { name: "Error", message: String(error) };
+}
+
+function setObservabilityHeaders(
+	response: Response,
+	requestId: string,
+	traceId: string,
+) {
+	try {
+		response.headers.set("x-request-id", requestId);
+		response.headers.set("x-trace-id", traceId);
+	} catch {
+		// Some platform responses expose immutable headers. Logging still carries
+		// the identifiers, so avoid failing the request while attaching metadata.
+	}
+	return response;
+}
+
+function logRequest(
+	app: Questpie<any>,
+	options: RequestLoggingOptions,
+	meta: RequestLogMeta,
+) {
+	if (!options.enabled) return;
+	if (options.ignore?.(meta)) return;
+	if (
+		meta.status < 400 &&
+		options.ignorePaths.some((path) =>
+			typeof path === "string" ? path === meta.path : path.test(meta.path),
+		)
+	) {
+		return;
+	}
+	if (meta.status < 400 && !meta.slow && !options.logSuccessfulRequests) {
+		return;
+	}
+
+	const message = "HTTP request completed";
+	if (meta.status >= 500) {
+		app.logger.error(message, meta);
+	} else if (meta.status >= 400 || meta.slow) {
+		app.logger.warn(message, meta);
+	} else {
+		app.logger.info(message, meta);
+	}
+}
+
+// ============================================================================
 // Main fetch handler
 // ============================================================================
 
@@ -127,13 +241,39 @@ export const createFetchHandler = (
 	const matcher = compileRoutes(
 		_app.config.routes as Record<string, RouteDefinition> | undefined,
 	);
+	const requestLogging = resolveRequestLoggingOptions(
+		config.requestLogging ?? _app.config.logger?.requests,
+	);
 
 	return async (
 		request: Request,
 		context?: AdapterContext,
 	): Promise<Response | null> => {
+		const startedAt = performance.now();
 		const url = new URL(request.url);
 		const pathname = url.pathname;
+		const requestId = context?.requestId ?? getRequestId(request);
+		const traceId = context?.traceId ?? getTraceId(request) ?? requestId;
+		let routePattern: string | undefined;
+
+		const complete = (response: Response, error?: unknown): Response => {
+			const durationMs =
+				Math.round((performance.now() - startedAt) * 100) / 100;
+			const meta: RequestLogMeta = {
+				event: "http.request",
+				requestId,
+				traceId,
+				method: request.method,
+				path: pathname,
+				status: response.status,
+				durationMs,
+				slow: durationMs >= requestLogging.slowThresholdMs,
+				...(routePattern ? { route: routePattern } : {}),
+				...(error ? { error: getErrorDetails(error) } : {}),
+			};
+			logRequest(_app, requestLogging, meta);
+			return setObservabilityHeaders(response, requestId, traceId);
+		};
 
 		// Base path check
 		const matchesBase =
@@ -142,101 +282,137 @@ export const createFetchHandler = (
 				: pathname === basePath || pathname.startsWith(`${basePath}/`);
 		if (!matchesBase) return null;
 
-		const relativePath =
-			basePath === "/" ? pathname : pathname.slice(basePath.length);
-		let segments = relativePath.split("/").filter(Boolean);
+		try {
+			const relativePath =
+				basePath === "/" ? pathname : pathname.slice(basePath.length);
+			let segments = relativePath.split("/").filter(Boolean);
 
-		// Legacy /questpie/ prefix stripping
-		if (segments[0] === "questpie") {
-			segments = segments.slice(1);
-		}
+			// Legacy /questpie/ prefix stripping
+			if (segments[0] === "questpie") {
+				segments = segments.slice(1);
+			}
 
-		if (segments.length === 0) {
-			return handleError(ApiError.notFound("Route"), {
-				request,
-				app: _app,
-			});
-		}
-
-		// Match against compiled trie
-		if (matcher) {
-			const path = segments.join("/");
-			const match = matcher.match(path);
-
-			if (match) {
-				const def = match.methods.get(request.method);
-
-				if (!def) {
-					// Path matches but method doesn't → 405
-					const resolved = await resolveContext(_app, request, config, context);
-					return new Response(
-						_app.t(
-							"error.methodNotAllowed",
-							undefined,
-							resolved.appContext.locale,
-						),
-						{
-							status: 405,
-							headers: {
-								Allow: Array.from(match.methods.keys()).join(", "),
-							},
-						},
-					);
-				}
-
-				// Resolve session, locale, and create app context
-				const resolved = await resolveContext(_app, request, config, context);
-
-				try {
-					if (isJsonRoute(def)) {
-						const body = await parseRouteBody(request);
-						if (body === null) {
-							return handleError(
-								ApiError.badRequest(
-									"Invalid JSON body",
-									undefined,
-									"error.invalidJsonBody",
-								),
-								{
-									request,
-									app: _app,
-									locale: resolved.appContext.locale,
-								},
-							);
-						}
-						const result = await executeJsonRouteInternal(
-							_app,
-							def,
-							body,
-							resolved,
-							request,
-							match.params,
-						);
-						return smartResponse(result, request);
-					}
-
-					// Raw route — pass matched params through
-					return await executeRawRouteInternal(
-						_app,
-						def,
-						request,
-						resolved,
-						match.params,
-					);
-				} catch (error) {
-					return handleError(error, {
+			if (segments.length === 0) {
+				return complete(
+					handleError(ApiError.notFound("Route"), {
 						request,
 						app: _app,
-						locale: resolved.appContext.locale,
-					});
+					}),
+				);
+			}
+
+			// Match against compiled trie
+			if (matcher) {
+				const path = segments.join("/");
+				const match = matcher.match(path);
+				routePattern = match?.pattern;
+
+				if (match) {
+					const def = match.methods.get(request.method);
+
+					if (!def) {
+						// Path matches but method doesn't → 405
+						const resolved = await resolveContext(
+							_app,
+							request,
+							config,
+							context,
+							{ requestId, traceId },
+						);
+						return complete(
+							new Response(
+								_app.t(
+									"error.methodNotAllowed",
+									undefined,
+									resolved.appContext.locale,
+								),
+								{
+									status: 405,
+									headers: {
+										Allow: Array.from(match.methods.keys()).join(", "),
+									},
+								},
+							),
+						);
+					}
+
+					// Resolve session, locale, and create app context
+					const resolved = await resolveContext(
+						_app,
+						request,
+						config,
+						context,
+						{ requestId, traceId },
+					);
+
+					try {
+						if (isJsonRoute(def)) {
+							const body = await parseRouteBody(request);
+							if (body === null) {
+								return complete(
+									handleError(
+										ApiError.badRequest(
+											"Invalid JSON body",
+											undefined,
+											"error.invalidJsonBody",
+										),
+										{
+											request,
+											app: _app,
+											locale: resolved.appContext.locale,
+										},
+									),
+								);
+							}
+							const result = await executeJsonRouteInternal(
+								_app,
+								def,
+								body,
+								resolved,
+								request,
+								match.params,
+							);
+							return complete(smartResponse(result, request));
+						}
+
+						// Raw route — pass matched params through
+						return complete(
+							await executeRawRouteInternal(
+								_app,
+								def,
+								request,
+								resolved,
+								match.params,
+							),
+						);
+					} catch (error) {
+						return complete(
+							handleError(error, {
+								request,
+								app: _app,
+								locale: resolved.appContext.locale,
+							}),
+							error,
+						);
+					}
 				}
 			}
-		}
 
-		// No route matched → 404
-		return handleError(ApiError.notFound("Route"), {
-			request,
-			app: _app,
-		});
+			// No route matched → 404
+			return complete(
+				handleError(ApiError.notFound("Route"), {
+					request,
+					app: _app,
+				}),
+			);
+		} catch (error) {
+			return complete(
+				handleError(error, {
+					request,
+					app: _app,
+				}),
+				error,
+			);
+		}
 	};
 };
