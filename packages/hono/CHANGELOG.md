@@ -1,5 +1,12 @@
 # @questpie/hono
 
+## 3.2.5
+
+### Patch Changes
+
+- Updated dependencies []:
+  - questpie@3.2.5
+
 ## 3.2.4
 
 ### Patch Changes
