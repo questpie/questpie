@@ -1,5 +1,15 @@
 # @questpie/admin
 
+## 3.2.6
+
+### Patch Changes
+
+- [`40768c4`](https://github.com/questpie/questpie/commit/40768c4dc634dce6fa8c71ce1f23e0c7080ab1a9) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Add first-class visual metadata (`icon`, `description`, `className`) to `f.select()` options. Options now flow end-to-end through introspection so the admin renders icons and tonal styling in cells, single/multi dropdowns, and selected-value chips without per-project cell overrides. Adds `c` (component callback proxy) to the fields callback context so `c.icon("ph:check-circle")` is in scope inside `({ f, c }) => f.select([...])`.
+
+- Updated dependencies [[`40768c4`](https://github.com/questpie/questpie/commit/40768c4dc634dce6fa8c71ce1f23e0c7080ab1a9)]:
+  - questpie@3.2.6
+  - @questpie/tanstack-query@3.2.6
+
 ## 3.2.5
 
 ### Patch Changes
