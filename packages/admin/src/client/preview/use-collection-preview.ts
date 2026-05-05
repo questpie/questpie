@@ -134,7 +134,6 @@ export function useCollectionPreview<TData extends Record<string, unknown>>({
 	const [isPreviewMode, setIsPreviewMode] = React.useState(false);
 	const lastAppliedSeqRef = React.useRef<number | null>(null);
 	const initialDataRef = React.useRef(initialData);
-	const focusScrollTimerRef = React.useRef<number | null>(null);
 
 	// Check after mount so the first client render matches SSR output.
 	React.useEffect(() => {
@@ -163,24 +162,6 @@ export function useCollectionPreview<TData extends Record<string, unknown>>({
 
 		// Signal that preview is ready
 		window.parent.postMessage({ type: "PREVIEW_READY" }, "*");
-
-		const scheduleFocusScroll = (fieldPath: string) => {
-			if (focusScrollTimerRef.current !== null) {
-				window.clearTimeout(focusScrollTimerRef.current);
-			}
-
-			focusScrollTimerRef.current = window.setTimeout(() => {
-				focusScrollTimerRef.current = null;
-				const element = findPreviewFieldElement(fieldPath);
-				if (!element || shouldSkipPreviewAutoScroll(element)) {
-					return;
-				}
-
-				if (!isElementNearViewport(element)) {
-					element.scrollIntoView({ behavior: "auto", block: "nearest" });
-				}
-			}, 80);
-		};
 
 		const handleMessage = async (event: MessageEvent<unknown>) => {
 			// In production, validate origin here
@@ -214,7 +195,6 @@ export function useCollectionPreview<TData extends Record<string, unknown>>({
 					setFocusedField((current) =>
 						current === message.fieldPath ? current : message.fieldPath,
 					);
-					scheduleFocusScroll(message.fieldPath);
 					break;
 				}
 
@@ -280,10 +260,6 @@ export function useCollectionPreview<TData extends Record<string, unknown>>({
 		window.addEventListener("message", handleMessage);
 		return () => {
 			window.removeEventListener("message", handleMessage);
-			if (focusScrollTimerRef.current !== null) {
-				window.clearTimeout(focusScrollTimerRef.current);
-				focusScrollTimerRef.current = null;
-			}
 		};
 	}, [isPreviewMode]);
 
@@ -408,39 +384,3 @@ function isPreviewPatchOp(value: unknown): value is PreviewPatchOp {
 	return (op.op === "set" || op.op === "remove") && typeof op.path === "string";
 }
 
-function findPreviewFieldElement(fieldPath: string): Element | null {
-	const escaped =
-		typeof CSS !== "undefined" && typeof CSS.escape === "function"
-			? CSS.escape(fieldPath)
-			: fieldPath.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-
-	return document.querySelector(`[data-preview-field="${escaped}"]`);
-}
-
-function shouldSkipPreviewAutoScroll(element: Element): boolean {
-	const activeElement = document.activeElement;
-	if (activeElement && element.contains(activeElement)) {
-		return true;
-	}
-
-	return (
-		element instanceof HTMLElement && element.dataset.previewEditing === "true"
-	);
-}
-
-function isElementNearViewport(element: Element): boolean {
-	const rect = element.getBoundingClientRect();
-	const viewportHeight =
-		window.innerHeight || document.documentElement.clientHeight;
-	const viewportWidth =
-		window.innerWidth || document.documentElement.clientWidth;
-	const verticalMargin = Math.min(120, viewportHeight * 0.2);
-	const horizontalMargin = Math.min(120, viewportWidth * 0.2);
-
-	return (
-		rect.bottom >= -verticalMargin &&
-		rect.top <= viewportHeight + verticalMargin &&
-		rect.right >= -horizontalMargin &&
-		rect.left <= viewportWidth + horizontalMargin
-	);
-}
