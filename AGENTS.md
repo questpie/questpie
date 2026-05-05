@@ -4,7 +4,7 @@ Source-of-truth guidance for AI agents working in this monorepo.
 
 ## Project Snapshot
 
-- **Monorepo**: Turborepo with **Bun** as the only package manager (`packageManager: bun@1.3.0`).
+- **Monorepo**: Turborepo with **Bun** as the only package manager (`packageManager: bun@1.3.13`).
 - **Language**: TypeScript + ESM across all packages.
 - **Product**: QUESTPIE — application framework (core engine + adapters + config-driven admin UI).
 
