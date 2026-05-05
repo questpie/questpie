@@ -195,6 +195,12 @@ export function SelectMulti<TValue extends string = string>({
 		[allOptions, locale, resolveText, translate],
 	);
 
+	const findOption = useCallback(
+		(val: TValue): SelectOption<TValue> | undefined =>
+			allOptions.find((opt) => opt.value === val),
+		[allOptions],
+	);
+
 	const handleToggle = useCallback(
 		(selectedValue: string) => {
 			const typedValue = selectedValue as TValue;
@@ -273,26 +279,30 @@ export function SelectMulti<TValue extends string = string>({
 				</span>
 			) : (
 				<>
-					{visibleChips.map((val) => (
-						<Badge
-							key={String(val)}
-							variant="secondary"
-							className="min-h-7 gap-1 pr-1"
-						>
-							<span className="max-w-24 truncate">{getLabel(val)}</span>
-							{!disabled && (
-								<span
-									aria-hidden="true"
-									title={t("field.removeItem", "Remove option")}
-									onPointerDown={(e) => handleRemove(val, e)}
-									onClick={(e) => handleRemove(val, e)}
-									className="hover:bg-muted-foreground/20 inline-flex size-5 items-center justify-center rounded-full transition-colors"
-								>
-									<Icon icon="ph:x" className="size-2.5" />
-								</span>
-							)}
-						</Badge>
-					))}
+					{visibleChips.map((val) => {
+						const chipOption = findOption(val);
+						return (
+							<Badge
+								key={String(val)}
+								variant="secondary"
+								className={cn("min-h-7 gap-1 pr-1", chipOption?.className)}
+							>
+								{chipOption?.icon}
+								<span className="max-w-24 truncate">{getLabel(val)}</span>
+								{!disabled && (
+									<span
+										aria-hidden="true"
+										title={t("field.removeItem", "Remove option")}
+										onPointerDown={(e) => handleRemove(val, e)}
+										onClick={(e) => handleRemove(val, e)}
+										className="hover:bg-muted-foreground/20 inline-flex size-5 items-center justify-center rounded-full transition-colors"
+									>
+										<Icon icon="ph:x" className="size-2.5" />
+									</span>
+								)}
+							</Badge>
+						);
+					})}
 					{hiddenCount > 0 && (
 						<Badge variant="outline" className="text-muted-foreground">
 							+{hiddenCount} more
@@ -340,6 +350,9 @@ export function SelectMulti<TValue extends string = string>({
 							option.value as string,
 						);
 						const isDisabled = option.disabled || (!isSelected && !canAddMore);
+						const description = option.description
+							? resolveText(option.description)
+							: undefined;
 
 						return (
 							<CommandItem
@@ -347,10 +360,11 @@ export function SelectMulti<TValue extends string = string>({
 								value={String(option.value)}
 								onSelect={handleToggle}
 								disabled={isDisabled}
+								className={cn("items-start", option.className)}
 							>
 								<div
 									className={cn(
-										"flex size-4 items-center justify-center border",
+										"mt-0.5 flex size-4 shrink-0 items-center justify-center border",
 										isSelected
 											? "border-foreground bg-foreground text-background"
 											: "border-muted-foreground/30",
@@ -359,7 +373,14 @@ export function SelectMulti<TValue extends string = string>({
 									{isSelected && <Icon icon="ph:check" className="size-3" />}
 								</div>
 								{option.icon}
-								<span className="truncate">{getOptionLabel(option)}</span>
+								<div className="flex min-w-0 flex-1 flex-col">
+									<span className="truncate">{getOptionLabel(option)}</span>
+									{description && (
+										<span className="text-muted-foreground truncate text-xs">
+											{description}
+										</span>
+									)}
+								</div>
 							</CommandItem>
 						);
 					})}

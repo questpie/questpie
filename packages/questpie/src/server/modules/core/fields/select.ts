@@ -5,6 +5,7 @@
 import { type PgVarcharBuilder, pgEnum, varchar } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
+import type { ComponentReference } from "#questpie/shared/component-ref.js";
 import type { I18nText } from "#questpie/shared/i18n/types.js";
 
 import type { DefaultFieldState } from "../../../fields/field-class-types.js";
@@ -41,12 +42,36 @@ export interface SelectFieldMethods {
 
 /**
  * Option definition for select field.
+ *
+ * Visual metadata (`icon`, `description`, `className`) is serialized to the
+ * admin client via introspection so the admin UI renders consistently
+ * without per-project cell overrides.
+ *
+ * @example
+ * ```ts
+ * f.select([
+ *   {
+ *     value: "ready",
+ *     label: "Ready",
+ *     description: "Runtime is healthy",
+ *     icon: c.icon("ph:check-circle"),
+ *     className: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700",
+ *   },
+ * ])
+ * ```
  */
 export interface SelectOption {
 	value: string | number;
 	label: I18nText;
 	description?: I18nText;
 	disabled?: boolean;
+	/** Icon shown next to the option in dropdowns and cells. */
+	icon?: ComponentReference;
+	/**
+	 * Tailwind/utility classes applied to the option's visual chrome
+	 * (badge in cells, row in dropdowns). Use for tonal styling.
+	 */
+	className?: string;
 }
 
 function isStaticOptions(
@@ -59,6 +84,19 @@ function getStaticOptions(
 	options: readonly SelectOption[] | OptionsConfig,
 ): readonly SelectOption[] {
 	return isStaticOptions(options) ? options : [];
+}
+
+/**
+ * Serialize a select option for introspection metadata.
+ * Drops `undefined` keys so the client receives only set fields.
+ */
+function serializeOption(option: SelectOption): SelectOption {
+	const out: SelectOption = { value: option.value, label: option.label };
+	if (option.description !== undefined) out.description = option.description;
+	if (option.disabled !== undefined) out.disabled = option.disabled;
+	if (option.icon !== undefined) out.icon = option.icon;
+	if (option.className !== undefined) out.className = option.className;
+	return out;
 }
 
 /**
@@ -127,9 +165,7 @@ export function select(
 					localized: state.localized ?? false,
 					readOnly: state.input === false,
 					writeOnly: state.output === false,
-					options: hasDynamic
-						? []
-						: staticOptions.map((o) => ({ value: o.value, label: o.label })),
+					options: hasDynamic ? [] : staticOptions.map(serializeOption),
 					multiple: state.isArray || state.multiple,
 					meta: state.extensions?.admin,
 				} as SelectFieldMetadata;
@@ -186,9 +222,7 @@ export const selectFieldType = fieldType("select", {
 					localized: state.localized ?? false,
 					readOnly: state.input === false,
 					writeOnly: state.output === false,
-					options: hasDynamic
-						? []
-						: staticOptions.map((o) => ({ value: o.value, label: o.label })),
+					options: hasDynamic ? [] : staticOptions.map(serializeOption),
 					multiple: state.isArray || state.multiple,
 					meta: state.extensions?.admin,
 				} as SelectFieldMetadata;

@@ -263,6 +263,10 @@ export function SelectSingle<TValue extends string = string>({
 
 	const listboxId = `${instanceId}-listbox`;
 
+	const selectedOption = value
+		? allOptions.find((opt: SelectOption<TValue>) => opt.value === value)
+		: undefined;
+
 	const TriggerButton = (
 		<FieldSelectTrigger
 			id={id}
@@ -280,6 +284,7 @@ export function SelectSingle<TValue extends string = string>({
 				// targeting [data-slot="input-group-control"] provides the same fix
 				// at the CSS layer as a safety net.
 				className,
+				selectedOption?.className,
 			)}
 		>
 			<span className="flex min-w-0 flex-1 items-center gap-1.5 truncate">
@@ -288,6 +293,10 @@ export function SelectSingle<TValue extends string = string>({
 						icon="ph:circle-notch"
 						className="text-muted-foreground size-3 shrink-0 animate-spin"
 					/>
+				) : selectedOption?.icon ? (
+					<span className="flex shrink-0 items-center">
+						{selectedOption.icon}
+					</span>
 				) : null}
 				<span
 					className={cn(
@@ -335,18 +344,31 @@ export function SelectSingle<TValue extends string = string>({
 				)}
 				<CommandEmpty>{resolvedEmptyMessage}</CommandEmpty>
 				<CommandGroup>
-					{filteredOptions.map((option) => (
-						<CommandItem
-							key={String(option.value)}
-							value={String(option.value)}
-							onSelect={handleSelect}
-							disabled={option.disabled}
-							data-checked={value === option.value}
-						>
-							{option.icon}
-							<span className="truncate">{getOptionLabel(option)}</span>
-						</CommandItem>
-					))}
+					{filteredOptions.map((option) => {
+						const description = option.description
+							? resolveText(option.description)
+							: undefined;
+						return (
+							<CommandItem
+								key={String(option.value)}
+								value={String(option.value)}
+								onSelect={handleSelect}
+								disabled={option.disabled}
+								data-checked={value === option.value}
+								className={cn("items-start", option.className)}
+							>
+								{option.icon}
+								<div className="flex min-w-0 flex-1 flex-col">
+									<span className="truncate">{getOptionLabel(option)}</span>
+									{description && (
+										<span className="text-muted-foreground truncate text-xs">
+											{description}
+										</span>
+									)}
+								</div>
+							</CommandItem>
+						);
+					})}
 				</CommandGroup>
 			</CommandList>
 		</Command>

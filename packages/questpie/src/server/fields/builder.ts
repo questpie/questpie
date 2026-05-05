@@ -5,6 +5,11 @@
  * Usage: f.text(255).required(), f.number().min(0), etc.
  */
 
+import {
+	type ComponentCallbackProxy,
+	createComponentCallbackProxy,
+} from "#questpie/shared/component-ref.js";
+
 import type { BuiltinFields } from "../modules/core/fields/index.js";
 
 export type { BuiltinFields } from "../modules/core/fields/index.js";
@@ -40,27 +45,38 @@ export type FieldBuilderProxy<TMap = BuiltinFields> = TMap;
 
 /**
  * Context object passed to the `.fields()` callback.
- * Always use destructured syntax: `({ f }) => ...`
+ * Always use destructured syntax: `({ f, c }) => ...`
  *
  * @example
  * ```ts
- * collection("posts").fields(({ f }) => ({
+ * collection("posts").fields(({ f, c }) => ({
  *   title: f.text(255).required(),
- *   content: f.textarea(),
+ *   status: f.select([
+ *     {
+ *       value: "ready",
+ *       label: "Ready",
+ *       icon: c.icon("ph:check-circle"),
+ *       className: "text-emerald-700",
+ *     },
+ *   ]),
  * }))
  * ```
  */
 export type FieldsCallbackContext<TFieldTypes = BuiltinFields> = {
 	f: FieldBuilderProxy<TFieldTypes>;
+	c: ComponentCallbackProxy;
 };
 
 /**
- * Create a fields callback context object `{ f }` from field definitions.
+ * Create a fields callback context object `{ f, c }` from field definitions.
  */
 export function createFieldsCallbackContext<
 	TFields extends Record<string, any>,
 >(fieldDefs: TFields): FieldsCallbackContext<TFields> {
-	return { f: createFieldBuilder(fieldDefs) };
+	return {
+		f: createFieldBuilder(fieldDefs),
+		c: createComponentCallbackProxy(),
+	};
 }
 
 // ============================================================================

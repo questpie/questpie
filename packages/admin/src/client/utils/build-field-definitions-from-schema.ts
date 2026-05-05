@@ -290,14 +290,16 @@ function isNestedMetadata(m: FieldMetadata): m is NestedFieldMetadata {
 // ============================================================================
 
 /**
- * Apply select field config
+ * Apply select field config — preserves visual metadata (icon, description,
+ * className, disabled) so the admin UI can render rich options without
+ * per-project cell overrides.
  */
 function applySelectConfig(
 	config: Record<string, unknown>,
 	metadata: SelectFieldMetadata,
 ): void {
 	config.options = metadata.options.map((opt) => ({
-		value: opt.value,
+		...opt,
 		label: opt.label ?? String(opt.value),
 	}));
 	if (metadata.multiple !== undefined) {

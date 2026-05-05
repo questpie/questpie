@@ -60,8 +60,14 @@ export interface TextareaInputProps extends BasePrimitiveProps {
 export interface SelectOption<TValue = string> {
 	value: TValue;
 	label: I18nText;
+	description?: I18nText;
 	disabled?: boolean;
 	icon?: ReactNode;
+	/**
+	 * Utility classes applied to the option's visual chrome
+	 * (badge in cells, row in dropdowns).
+	 */
+	className?: string;
 }
 
 export interface SelectOptionGroup<TValue = string> {

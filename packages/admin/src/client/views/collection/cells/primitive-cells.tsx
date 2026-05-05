@@ -11,13 +11,19 @@
 import * as React from "react";
 
 import type { FieldInstance } from "../../../builder/field/field";
+import { resolveIconElement } from "../../../components/component-renderer";
 import {
 	resolveOptionLabelForValue,
 	type ResolveTextFn,
 	type TranslateFn,
 } from "../../../components/primitives/option-label";
-import type { SelectOptions } from "../../../components/primitives/types";
+import {
+	flattenOptions,
+	type SelectOption,
+	type SelectOptions,
+} from "../../../components/primitives/types";
 import { Badge } from "../../../components/ui/badge";
+import { cn } from "../../../lib/utils";
 import { useResolveText, useTranslation } from "../../../i18n/hooks";
 
 // ============================================================================
@@ -204,6 +210,16 @@ function getSelectOptions(fieldDef?: FieldInstance) {
 		: undefined;
 }
 
+function findSelectOption(
+	options: SelectOptions<unknown> | undefined,
+	value: unknown,
+): SelectOption<unknown> | undefined {
+	if (!options) return undefined;
+	return flattenOptions(options).find(
+		(opt) => String(opt.value) === String(value),
+	);
+}
+
 export function resolveSelectCellLabel({
 	value,
 	fieldDef,
@@ -246,19 +262,29 @@ export function SelectCell({
 	}
 
 	const values = Array.isArray(value) ? value : [value];
+	const options = getSelectOptions(fieldDef);
 	return (
 		<span className="inline-flex max-w-[300px] flex-wrap gap-1">
-			{values.map((item, index) => (
-				<Badge key={`${String(item)}-${index}`} variant="outline">
-					{resolveSelectCellLabel({
-						value: item,
-						fieldDef,
-						resolveText,
-						t,
-						locale,
-					})}
-				</Badge>
-			))}
+			{values.map((item, index) => {
+				const option = findSelectOption(options, item);
+				const icon = resolveIconElement(option?.icon as never);
+				return (
+					<Badge
+						key={`${String(item)}-${index}`}
+						variant="outline"
+						className={cn("gap-1", option?.className)}
+					>
+						{icon}
+						{resolveSelectCellLabel({
+							value: item,
+							fieldDef,
+							resolveText,
+							t,
+							locale,
+						})}
+					</Badge>
+				);
+			})}
 		</span>
 	);
 }

@@ -354,7 +354,16 @@ export interface FieldMetadataBase {
  */
 export interface SelectFieldMetadata extends FieldMetadataBase {
 	type: "select";
-	options: Array<{ value: string | number; label: I18nText }>;
+	options: Array<{
+		value: string | number;
+		label: I18nText;
+		description?: I18nText;
+		disabled?: boolean;
+		/** Icon component reference (e.g. `c.icon("ph:check-circle")`). */
+		icon?: import("../../shared/component-ref.js").ComponentReference;
+		/** Utility classes applied to the option's visual chrome. */
+		className?: string;
+	}>;
 	multiple?: boolean;
 }
 
