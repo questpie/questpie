@@ -1,4 +1,3 @@
-import pluginBabel from "@rollup/plugin-babel";
 import { glob } from "tinyglobby";
 import { defineConfig } from "tsdown";
 
@@ -18,17 +17,12 @@ export default defineConfig({
 	// Copy CSS files instead of bundling them
 	copy: [{ from: "src/client/styles/**/*.css", to: "dist/client/styles" }],
 
-	plugins: [
-		pluginBabel({
-			babelHelpers: "bundled",
-			parserOpts: {
-				sourceType: "module",
-				plugins: ["jsx", "typescript"],
-			},
-			plugins: ["babel-plugin-react-compiler"],
-			extensions: [".js", ".jsx", ".ts", ".tsx"],
-		}),
-	],
+	// React Compiler is intentionally NOT applied here.
+	// Pre-compiling dist with react-compiler caches calls on stable-but-mutable
+	// references from libraries like @tanstack/react-table (table.getSelectedRowModel())
+	// and @tiptap/react (editor.isActive()), returning stale values across renders.
+	// Consumers should run react-compiler over their own application code in Vite,
+	// where dev/prod gating and library-specific opt-outs are easier to manage.
 
 	exports: {
 		// Export all files including internal chunks so TypeScript can resolve
