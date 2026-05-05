@@ -1,5 +1,11 @@
 # questpie
 
+## 3.2.4
+
+### Patch Changes
+
+- [`ebee6b1`](https://github.com/questpie/questpie/commit/ebee6b161d46d2d6955d5c1839864bbc8d67cd69) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Add the Questpie Cloud MVP CLI flow with validated login, project init, env import, dry-run deploys, deployment following, JSON output, and product-facing command errors.
+
 ## 3.2.3
 
 ### Patch Changes
