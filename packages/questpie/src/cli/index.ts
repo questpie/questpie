@@ -5,8 +5,12 @@ import { Command } from "commander";
 import { addCommand } from "./commands/add.js";
 import {
 	cloudDeployCommand,
+	cloudEnvImportCommand,
+	cloudWhoamiCommand,
+	getCloudErrorExitCode,
 	cloudInitCommand,
 	cloudLoginCommand,
+	isSilentCloudError,
 } from "./commands/cloud.js";
 import { devCommand, generateCommand } from "./commands/codegen.js";
 import { generateMigrationCommand } from "./commands/generate.js";
@@ -376,55 +380,129 @@ program
 
 const cloud = program.command("cloud").description("Questpie Cloud commands");
 
+function handleCloudCommandError(prefix: string, error: unknown) {
+	if (!isSilentCloudError(error)) {
+		const message = error instanceof Error ? error.message : String(error);
+		console.error(`${prefix}: ${message}`);
+	}
+	process.exit(getCloudErrorExitCode(error));
+}
+
 cloud
 	.command("login")
-	.description("Save Questpie Cloud login for deploys")
+	.description("Log in to Questpie Cloud")
 	.option("--cloud-url <url>", "Questpie Cloud base URL")
 	.option("--token <token>", "Questpie Cloud API token")
+	.option("--json", "Print machine-readable output")
 	.action(async (options) => {
 		try {
 			await cloudLoginCommand({
 				cloudUrl: options.cloudUrl,
 				token: options.token,
+				json: options.json,
 			});
 		} catch (error) {
-			console.error("❌ Failed to login to Questpie Cloud:", error);
-			process.exit(1);
+			handleCloudCommandError("Failed to log in to Questpie Cloud", error);
+		}
+	});
+
+cloud
+	.command("whoami")
+	.description("Show the active Questpie Cloud login")
+	.option("--cloud-url <url>", "Questpie Cloud base URL")
+	.option("--token <token>", "Questpie Cloud API token")
+	.option("--json", "Print machine-readable output")
+	.action(async (options) => {
+		try {
+			await cloudWhoamiCommand({
+				cloudUrl: options.cloudUrl,
+				token: options.token,
+				json: options.json,
+			});
+		} catch (error) {
+			handleCloudCommandError("Failed to read Questpie Cloud login", error);
 		}
 	});
 
 cloud
 	.command("init")
-	.description("Create questpie.cloud.toml for this project")
+	.description("Initialize this project for Questpie Cloud")
 	.option(
 		"-c, --config <path>",
-		"Path to questpie.cloud.toml or questpie.cloud.json",
+		"Path to questpie.cloud.toml",
 		"questpie.cloud.toml",
 	)
 	.option("--cloud-url <url>", "Questpie Cloud base URL")
+	.option("--token <token>", "Questpie Cloud API token")
 	.option("--project <slug>", "Project slug")
-	.option("--client <slug>", "Client slug")
+	.option("--name <name>", "Project display name")
 	.option("--environment <slug>", "Environment slug", "production")
-	.option("--region <region>", "Questpie Cloud region", "eu-main")
-	.option("--app-url <url>", "Public app URL")
+	.option("--dockerfile <path>", "Dockerfile path")
+	.option("--context <path>", "Build context", ".")
+	.option("--service <name>", "Service name", "web")
+	.option("--port <port>", "Service port", "3000")
+	.option("--readiness <path>", "Readiness path", "/api/health")
+	.option("--env-file <path>", "Import env vars after init")
 	.option("--force", "Overwrite an existing config file")
-	.option("--no-worker", "Do not add a worker service")
+	.option("--yes", "Confirm non-interactive changes")
+	.option("--dry-run", "Validate without writing local or Cloud state")
+	.option("--json", "Print machine-readable output")
+	.option("--repo-url <url>", "Git repository URL override")
+	.option("--branch <branch>", "Git branch override")
 	.action(async (options) => {
 		try {
 			await cloudInitCommand({
 				config: options.config,
 				cloudUrl: options.cloudUrl,
+				token: options.token,
 				project: options.project,
-				client: options.client,
+				name: options.name,
 				environment: options.environment,
-				region: options.region,
-				appUrl: options.appUrl,
+				dockerfile: options.dockerfile,
+				context: options.context,
+				service: options.service,
+				port: parsePositiveIntegerOption(options.port, "--port"),
+				readiness: options.readiness,
+				envFile: options.envFile,
 				force: options.force,
-				noWorker: options.worker === false,
+				yes: options.yes,
+				dryRun: options.dryRun,
+				json: options.json,
+				repoUrl: options.repoUrl,
+				branch: options.branch,
 			});
 		} catch (error) {
-			console.error("❌ Failed to initialize Questpie Cloud config:", error);
-			process.exit(1);
+			handleCloudCommandError("Failed to initialize Questpie Cloud", error);
+		}
+	});
+
+const cloudEnv = cloud.command("env").description("Questpie Cloud env commands");
+
+cloudEnv
+	.command("import <env-file>")
+	.description("Import env vars for this project")
+	.option(
+		"-c, --config <path>",
+		"Path to questpie.cloud.toml",
+		"questpie.cloud.toml",
+	)
+	.option("--cloud-url <url>", "Questpie Cloud base URL")
+	.option("--token <token>", "Questpie Cloud API token")
+	.option("--service <name>", "Import vars for one service")
+	.option("--dry-run", "Validate without changing Cloud state")
+	.option("--json", "Print machine-readable output")
+	.action(async (envFile, options) => {
+		try {
+			await cloudEnvImportCommand(envFile, {
+				config: options.config,
+				cloudUrl: options.cloudUrl,
+				token: options.token,
+				service: options.service,
+				dryRun: options.dryRun,
+				json: options.json,
+			});
+		} catch (error) {
+			handleCloudCommandError("Failed to import Questpie Cloud env vars", error);
 		}
 	});
 
@@ -433,21 +511,17 @@ cloud
 	.description("Deploy a QUESTPIE project through Questpie Cloud")
 	.option(
 		"-c, --config <path>",
-		"Path to questpie.cloud.toml or questpie.cloud.json",
+		"Path to questpie.cloud.toml",
 		"questpie.cloud.toml",
 	)
 	.option("--cloud-url <url>", "Questpie Cloud base URL")
-	.option("--endpoint <path>", "Deploy API endpoint", "/api/cloud/deploy")
-	.option("--image-tag <tag>", "Image tag to deploy")
-	.option("--image <image>", "Global image override")
-	.option("--image-digest <digest>", "Image digest metadata")
 	.option("--dry-run", "Validate the deployment request without applying it")
 	.option("--token <token>", "Questpie Cloud API token")
-	.option("--print-payload", "Print the deploy request payload")
-	.option(
-		"--no-request",
-		"Do not call Questpie Cloud after building the payload",
-	)
+	.option("--follow", "Follow deployment progress")
+	.option("--json", "Print machine-readable output")
+	.option("--yes", "Confirm non-interactive deploy")
+	.option("--timeout <seconds>", "Follow timeout in seconds", "900")
+	.option("--poll-interval <seconds>", "Follow poll interval in seconds", "5")
 	.option("--repo-url <url>", "Git repository URL override")
 	.option("--repo-path <path>", "Local repository path override")
 	.option("--branch <branch>", "Git branch override")
@@ -457,22 +531,26 @@ cloud
 			await cloudDeployCommand({
 				config: options.config,
 				cloudUrl: options.cloudUrl,
-				endpoint: options.endpoint,
-				imageTag: options.imageTag,
-				image: options.image,
-				imageDigest: options.imageDigest,
 				dryRun: options.dryRun,
 				token: options.token,
-				printPayload: options.printPayload,
-				noRequest: options.request === false,
+				follow: options.follow,
+				json: options.json,
+				yes: options.yes,
+				timeoutSeconds: parsePositiveIntegerOption(
+					options.timeout,
+					"--timeout",
+				),
+				pollIntervalSeconds: parsePositiveIntegerOption(
+					options.pollInterval,
+					"--poll-interval",
+				),
 				repoUrl: options.repoUrl,
 				repoPath: options.repoPath,
 				branch: options.branch,
 				commit: options.commit,
 			});
 		} catch (error) {
-			console.error("❌ Failed to deploy through Questpie Cloud:", error);
-			process.exit(1);
+			handleCloudCommandError("Failed to deploy through Questpie Cloud", error);
 		}
 	});
 
