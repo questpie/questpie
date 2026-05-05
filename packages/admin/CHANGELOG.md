@@ -1,5 +1,15 @@
 # @questpie/admin
 
+## 3.2.7
+
+### Patch Changes
+
+- [`724bf2f`](https://github.com/questpie/questpie/commit/724bf2f27cdb16a6474d3a41b5ff403701ba3577) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Fix live preview iframe scrolling up by ~one viewport when focusing a block. The iframe-side `FOCUS_FIELD` handler no longer calls `scrollIntoView`; the form-panel scroll in the editor still brings the corresponding field into view.
+
+- Updated dependencies []:
+  - questpie@3.2.7
+  - @questpie/tanstack-query@3.2.7
+
 ## 3.2.6
 
 ### Patch Changes
