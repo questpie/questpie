@@ -29,6 +29,12 @@ export const wfInstanceCollection = collection("wf_instance")
 		parentStepName: f.text(255),
 		/** Idempotency key for duplicate prevention. */
 		idempotencyKey: f.text(255),
+		/** Current execution lease owner. Prevents duplicate queue deliveries from running the same instance concurrently. */
+		lockOwner: f.text(255),
+		/** When the current execution lease was acquired. */
+		lockedAt: f.datetime(),
+		/** When the current execution lease expires if the worker stops heartbeating. */
+		lockExpiresAt: f.datetime(),
 		/** Absolute timeout timestamp. */
 		timeoutAt: f.datetime(),
 		/** When execution first started. */
@@ -43,6 +49,7 @@ export const wfInstanceCollection = collection("wf_instance")
 		index("idx_wfi_status").on(table.status),
 		index("idx_wfi_parent").on(table.parentInstanceId),
 		uniqueIndex("idx_wfi_idempotency").on(table.idempotencyKey),
+		index("idx_wfi_status_lock").on(table.status, table.lockExpiresAt),
 		index("idx_wfi_created").on(table.createdAt),
 	])
 	.access({

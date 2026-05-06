@@ -1,6 +1,5 @@
 import type { BetterAuthOptions } from "better-auth";
 import { betterAuth } from "better-auth";
-import type { SQL } from "bun";
 import type { PgTable } from "drizzle-orm/pg-core";
 import type { DriveManager } from "flydrive";
 
@@ -21,19 +20,18 @@ import {
 import { QuestpieSeedsAPI } from "#questpie/server/config/integrated/seeds-api.js";
 import type {
 	AccessMode,
+	DbCloseFn,
 	DrizzleClientFromQuestpieConfig,
 	Locale,
 	TablesFromConfig,
 } from "#questpie/server/config/types.js";
-import type { Global } from "#questpie/server/global/builder/global.js";
 import { GlobalBuilder } from "#questpie/server/global/builder/global-builder.js";
+import type { Global } from "#questpie/server/global/builder/global.js";
 import type { KVService } from "#questpie/server/modules/core/integrated/kv/service.js";
 import type { LoggerService } from "#questpie/server/modules/core/integrated/logger/service.js";
 import type { MailerService } from "#questpie/server/modules/core/integrated/mailer/service.js";
 import type { QueueClient } from "#questpie/server/modules/core/integrated/queue/types.js";
-import {
-	questpieRealtimeLogTable,
-} from "#questpie/server/modules/core/integrated/realtime/collection.js";
+import { questpieRealtimeLogTable } from "#questpie/server/modules/core/integrated/realtime/collection.js";
 import type { RealtimeService } from "#questpie/server/modules/core/integrated/realtime/service.js";
 import type { SearchService } from "#questpie/server/modules/core/integrated/search/types.js";
 import { resolveAutoSeedCategories } from "#questpie/server/seed/types.js";
@@ -41,6 +39,7 @@ import {
 	ServiceBuilder,
 	type ServiceLifecycle,
 } from "#questpie/server/services/define-service.js";
+import { getNodeEnv } from "#questpie/server/utils/env.js";
 import { DEFAULT_LOCALE } from "#questpie/shared/constants.js";
 import type {
 	AnyCollectionOrBuilder,
@@ -73,9 +72,9 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 
 	/**
 	 * @internal Exposed for service definitions (db, realtime).
-	 * Stores the raw SQL connection for cleanup and realtime adapter.
+	 * Stores the database cleanup callback supplied by the db service.
 	 */
-	public _sqlClient?: SQL;
+	public _dbCleanup?: DbCloseFn;
 	/**
 	 * @internal Exposed for service definitions (realtime).
 	 * Stores the PG connection string for PgNotify adapter.
@@ -144,7 +143,9 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 	public search!: SearchService;
 	public realtime!: RealtimeService;
 	/** Extension state for plugin-contributed configurations (admin layout, blocks, sidebar, etc.) */
-	public state?: { config?: import("./app-state-config.js").ResolvedAppStateConfig } & Record<string, unknown>;
+	public state?: {
+		config?: import("./app-state-config.js").ResolvedAppStateConfig;
+	} & Record<string, unknown>;
 
 	public migrations!: QuestpieMigrationsAPI<TConfig>;
 	public seeds!: QuestpieSeedsAPI<TConfig>;
@@ -170,7 +171,6 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 		return this._api.globals;
 	}
 
-
 	public db!: DrizzleClientFromQuestpieConfig<TConfig>;
 
 	private _initPromise: Promise<void> | null = null;
@@ -180,8 +180,16 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 		this.defaultAccess = config.defaultAccess;
 		const rawHooks = config.globalHooks ?? { collections: [], globals: [] };
 		this.globalHooks = {
-			collections: Array.isArray(rawHooks.collections) ? rawHooks.collections : rawHooks.collections ? [rawHooks.collections] : [],
-			globals: Array.isArray(rawHooks.globals) ? rawHooks.globals : rawHooks.globals ? [rawHooks.globals] : [],
+			collections: Array.isArray(rawHooks.collections)
+				? rawHooks.collections
+				: rawHooks.collections
+					? [rawHooks.collections]
+					: [],
+			globals: Array.isArray(rawHooks.globals)
+				? rawHooks.globals
+				: rawHooks.globals
+					? [rawHooks.globals]
+					: [],
 		};
 
 		// Register collections from config
@@ -206,7 +214,7 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 		// In development, track this instance in globalThis so that HMR module
 		// re-evaluations automatically close the previous instance's connection
 		// pools instead of leaking them (postgres "too many clients" in dev).
-		if (process.env.NODE_ENV !== "production") {
+		if (getNodeEnv() !== "production") {
 			const hmrKey = `__questpie_hmr_${config.app.url}`;
 			const existing = (globalThis as Record<string, unknown>)[hmrKey];
 			if (existing && typeof (existing as Questpie).destroy === "function") {
@@ -293,8 +301,9 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 
 		this._singletonServices = {};
 
-		// Close raw SQL connection (not managed by drizzle dispose)
-		await this._sqlClient?.close({ timeout: 5 });
+		// Close raw DB connection/client if one was created by the db service.
+		await this._dbCleanup?.();
+		this._dbCleanup = undefined;
 	}
 
 	private async _autoInit(): Promise<void> {

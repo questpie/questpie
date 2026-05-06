@@ -893,6 +893,15 @@ export default {
 	"audit.sections.changes": "Changes",
 	"audit.widget.recentActivity.title": "Recent Activity",
 	"audit.widget.recentActivity.empty": "No recent activity recorded.",
+	"audit.action.create": "created",
+	"audit.action.update": "updated",
+	"audit.action.delete": "deleted",
+	"audit.action.transition": "changed status of",
+	"audit.resourceType.collection": "collection",
+	"audit.resourceType.global": "global",
+	"audit.unnamed": "(unnamed)",
+	"audit.title.template":
+		"{{userName}} {{action}} {{resourceType}} {{resourceLabel}}",
 
 	// History Sidebar
 	"history.title": "History",

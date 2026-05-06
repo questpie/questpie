@@ -136,7 +136,7 @@ export class PostgresSearchAdapter implements SearchAdapter {
 			},
 			{
 				name: "search_005_trigram_extension",
-				up: `CREATE EXTENSION IF NOT EXISTS pg_trgm;`,
+				up: `CREATE EXTENSION IF NOT EXISTS "pg_trgm";`,
 				down: `-- pg_trgm extension kept for other uses`,
 			},
 			{
@@ -1083,7 +1083,7 @@ export class PostgresSearchAdapter implements SearchAdapter {
 	 * These will be created before migrations are run.
 	 */
 	getExtensions(): string[] {
-		return ["CREATE EXTENSION IF NOT EXISTS pg_trgm;"];
+		return ['CREATE EXTENSION IF NOT EXISTS "pg_trgm";'];
 	}
 }
 

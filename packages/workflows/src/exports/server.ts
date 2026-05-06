@@ -11,6 +11,16 @@ export type {
 } from "../server/client.js";
 export { createWorkflowClient } from "../server/client.js";
 
+// Config
+export type {
+	WorkflowAccessOperation,
+	WorkflowAccessRule,
+	WorkflowsAccessConfig,
+	WorkflowsConfigInput,
+	WorkflowsExecutionLockConfig,
+} from "../server/config.js";
+export { defaultWorkflowAccess, workflowsConfig } from "../server/config.js";
+
 // Engine — compensation
 export type {
 	CompensationEntry,

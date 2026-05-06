@@ -204,7 +204,8 @@ export default email({
 Configure the queue adapter in your runtime config. QUESTPIE uses [pg-boss](https://github.com/timgit/pg-boss) by default:
 
 ```ts title="questpie.config.ts"
-import { pgBossAdapter, runtimeConfig } from "questpie";
+import { runtimeConfig } from "questpie";
+import { pgBossAdapter } from "questpie/adapters/pg-boss";
 
 export default runtimeConfig({
 	queue: {

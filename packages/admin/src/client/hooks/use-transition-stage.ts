@@ -32,7 +32,7 @@ import {
 	useQueryClient,
 } from "@tanstack/react-query";
 
-import { selectBasePath, useAdminStore } from "../runtime";
+import { selectClient, useAdminStore } from "../runtime";
 
 // ============================================================================
 // Types
@@ -82,7 +82,8 @@ export function useTransitionStage(
 	options?: UseTransitionStageOptions,
 ) {
 	const mode = options?.mode ?? "collection";
-	const basePath = useAdminStore(selectBasePath);
+	const client = useAdminStore(selectClient);
+	const basePath = client.getBasePath?.() ?? "/api";
 	const queryClient = useQueryClient();
 
 	return useMutation<TransitionStageResult, Error, TransitionStageParams>({

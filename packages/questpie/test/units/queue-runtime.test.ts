@@ -44,7 +44,7 @@ describe("queue runtime api", () => {
 		await queue.stop();
 	});
 
-	test("cloudflare adapter push consumer handles ack and retry", async () => {
+	test("cloudflare adapter push consumer acks permanent failures and retries handler errors", async () => {
 		const published: any[] = [];
 		const adapter = cloudflareQueuesAdapter({
 			enqueue: async (message) => {
@@ -66,6 +66,9 @@ describe("queue runtime api", () => {
 			handlers: {
 				notify: async (job) => {
 					handled.push(String((job.data as any)?.id));
+				},
+				thrower: async () => {
+					throw new Error("transient failure");
 				},
 			},
 		});
@@ -95,13 +98,139 @@ describe("queue runtime api", () => {
 						retried += 1;
 					},
 				},
+				{
+					id: "3",
+					body: "not-an-envelope",
+					ack: async () => {
+						acked += 1;
+					},
+					retry: async () => {
+						retried += 1;
+					},
+				},
+				{
+					id: "4",
+					body: { jobName: "thrower", payload: { id: "retry" } },
+					ack: async () => {
+						acked += 1;
+					},
+					retry: async () => {
+						retried += 1;
+					},
+				},
 			],
 		});
 
 		expect(handled).toEqual(["ok"]);
-		expect(acked).toBe(1);
+		expect(acked).toBe(3);
 		expect(retried).toBe(1);
-		expect(errors.length).toBe(1);
+		expect(errors).toEqual([
+			'CloudflareQueuesAdapter missing handler for job "missing".',
+			"CloudflareQueuesAdapter failed to decode message envelope.",
+			"transient failure",
+		]);
+	});
+
+	test("cloudflare adapter publish notifies and rethrows enqueue errors", async () => {
+		const adapter = cloudflareQueuesAdapter({
+			enqueue: async () => {
+				throw new Error("queue unavailable");
+			},
+		});
+		const errors: string[] = [];
+		adapter.on("error", (error) => {
+			errors.push(error.message);
+		});
+
+		await expect(adapter.publish("notify", { id: "x" })).rejects.toThrow(
+			"queue unavailable",
+		);
+		expect(errors).toEqual(["queue unavailable"]);
+	});
+
+	test("cloudflare adapter maps startAfter and retryDelay", async () => {
+		const sent: any[] = [];
+		const adapter = cloudflareQueuesAdapter({
+			queue: {
+				send: async (message, options) => {
+					sent.push({ message, options });
+				},
+			},
+		});
+
+		await adapter.publish(
+			"notify",
+			{ id: "delayed" },
+			{ startAfter: 30, retryDelay: 5 },
+		);
+
+		expect(sent).toHaveLength(1);
+		expect(sent[0].options).toEqual({ delaySeconds: 30 });
+		expect(sent[0].message.options).toMatchObject({ retryDelay: 5 });
+
+		const retryCalls: any[] = [];
+		const consumer = adapter.createPushConsumer({
+			handlers: {
+				notify: async () => {
+					throw new Error("retry later");
+				},
+			},
+		});
+
+		await consumer({
+			messages: [
+				{
+					id: "msg-1",
+					attempts: 1,
+					body: sent[0].message,
+					ack: async () => {},
+					retry: async (options) => {
+						retryCalls.push(options);
+					},
+				},
+			],
+		});
+
+		expect(retryCalls).toEqual([{ delaySeconds: 5 }]);
+	});
+
+	test("cloudflare adapter acks handler failures after retryLimit", async () => {
+		const adapter = cloudflareQueuesAdapter({
+			enqueue: async () => null,
+		});
+
+		const consumer = adapter.createPushConsumer({
+			handlers: {
+				notify: async () => {
+					throw new Error("still failing");
+				},
+			},
+		});
+
+		let acked = 0;
+		let retried = 0;
+		await consumer({
+			messages: [
+				{
+					id: "msg-1",
+					attempts: 2,
+					body: {
+						jobName: "notify",
+						payload: {},
+						options: { retryLimit: 1 },
+					},
+					ack: async () => {
+						acked += 1;
+					},
+					retry: async () => {
+						retried += 1;
+					},
+				},
+			],
+		});
+
+		expect(acked).toBe(1);
+		expect(retried).toBe(0);
 	});
 
 	test("registerSchedules supports job selection by key and internal name", async () => {
@@ -133,6 +262,37 @@ describe("queue runtime api", () => {
 
 		await queue.registerSchedules({ jobs: ["internal-b"] });
 		expect(adapter.getScheduledJob("internal-b")?.cron).toBe("0 * * * *");
+	});
+
+	test("queue exposes literal job name aliases", async () => {
+		const adapter = new MockQueueAdapter();
+		const queue = createQueueClient(
+			{
+				wfExecute: {
+					name: "questpie-wf-execute",
+					schema: z.object({ instanceId: z.string() }),
+					handler: async () => {},
+				},
+			},
+			adapter,
+			{
+				createContext: async () => ({ db: {} }),
+				getApp: () => ({ name: "app" }),
+			},
+		);
+
+		expect(queue["questpie-wf-execute"]).toBe(queue.wfExecute);
+
+		await queue["questpie-wf-execute"].publish(
+			{ instanceId: "wf-1" },
+			{ singletonKey: "wf-1" },
+		);
+
+		expect(adapter.getJobs()[0]).toMatchObject({
+			name: "questpie-wf-execute",
+			payload: { instanceId: "wf-1" },
+			options: { singletonKey: "wf-1" },
+		});
 	});
 
 	test("throws clear errors when adapter mode is unsupported", async () => {

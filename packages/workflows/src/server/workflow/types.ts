@@ -319,6 +319,9 @@ export interface WorkflowInstance {
 	parentInstanceId: string | null;
 	parentStepName: string | null;
 	idempotencyKey: string | null;
+	lockOwner: string | null;
+	lockedAt: Date | null;
+	lockExpiresAt: Date | null;
 	timeoutAt: Date | null;
 	startedAt: Date | null;
 	suspendedAt: Date | null;

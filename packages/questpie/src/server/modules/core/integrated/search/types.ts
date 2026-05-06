@@ -744,7 +744,7 @@ export interface SearchAdapter {
 	 * @example
 	 * ```ts
 	 * getExtensions() {
-	 *   return ['CREATE EXTENSION IF NOT EXISTS pg_trgm;'];
+	 *   return ['CREATE EXTENSION IF NOT EXISTS "pg_trgm";'];
 	 * }
 	 * ```
 	 */

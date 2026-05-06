@@ -1,4 +1,3 @@
-import type { SQL as BunSQL } from "bun";
 import type { generateDrizzleJson } from "drizzle-kit/api-postgres";
 
 /**
@@ -101,6 +100,21 @@ export type OperationSnapshot = {
 		prevId?: string;
 	};
 };
+
+/**
+ * PostgreSQL extension required by generated framework/plugin DDL.
+ *
+ * String inputs may be either an extension name (`pg_trgm`) or a full
+ * `CREATE EXTENSION IF NOT EXISTS ...;` statement for backwards compatibility
+ * with existing adapter APIs.
+ */
+export type MigrationExtensionDependency =
+	| string
+	| {
+			name: string;
+			schema?: string;
+			statement?: string;
+	  };
 
 /**
  * Result of migration generation

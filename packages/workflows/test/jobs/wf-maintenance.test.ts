@@ -1,5 +1,7 @@
 import { describe, expect, it } from "bun:test";
+
 import { z } from "zod";
+
 import { wfMaintenanceJob } from "../../src/server/modules/workflows/jobs/wf-maintenance.js";
 import type { WorkflowDefinition } from "../../src/server/workflow/types.js";
 import { createJobContext, createMockStores } from "./helpers.js";
@@ -166,6 +168,53 @@ describe("wf-maintenance job", () => {
 
 			const instance = stores.instances.get("inst-1");
 			expect(instance.status).toBe("completed");
+		});
+	});
+
+	describe("stale execution lock recovery", () => {
+		it("requeues running instances whose execution lock expired", async () => {
+			const stores = createMockStores();
+			const { ctx, queue } = createJobContext({}, { stores, workflows: {} });
+
+			stores.instances.set("inst-1", {
+				id: "inst-1",
+				name: "test-wf",
+				status: "running",
+				lockOwner: "dead-worker",
+				lockExpiresAt: new Date(Date.now() - 60_000),
+				createdAt: new Date(),
+			});
+
+			await handler(ctx);
+
+			const executeChannel = queue["questpie-wf-execute"];
+			expect(executeChannel.calls).toHaveLength(1);
+			expect(executeChannel.calls[0]).toEqual({
+				payload: {
+					instanceId: "inst-1",
+					workflowName: "test-wf",
+				},
+				options: { singletonKey: "inst-1" },
+			});
+		});
+
+		it("does not requeue active execution locks", async () => {
+			const stores = createMockStores();
+			const { ctx, queue } = createJobContext({}, { stores, workflows: {} });
+
+			stores.instances.set("inst-1", {
+				id: "inst-1",
+				name: "test-wf",
+				status: "running",
+				lockOwner: "live-worker",
+				lockExpiresAt: new Date(Date.now() + 60_000),
+				createdAt: new Date(),
+			});
+
+			await handler(ctx);
+
+			const executeChannel = queue._channels.get("questpie-wf-execute");
+			expect(executeChannel?.calls ?? []).toHaveLength(0);
 		});
 	});
 

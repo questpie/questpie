@@ -51,13 +51,15 @@ Broadcast events from hooks or routes:
 
 Configure the realtime adapter in your runtime config:
 
-| Adapter               | Package  | Use case                       |
-| --------------------- | -------- | ------------------------------ |
-| `pgNotifyAdapter`     | Built-in | PostgreSQL LISTEN/NOTIFY       |
-| `redisStreamsAdapter` | Built-in | Redis Streams (multi-instance) |
+| Adapter                     | Package  | Use case                       |
+| --------------------------- | -------- | ------------------------------ |
+| `pgNotifyAdapter`           | Built-in | PostgreSQL LISTEN/NOTIFY       |
+| `redisStreamsAdapter`       | Built-in | Redis Streams (multi-instance) |
+| `cloudflareRealtimeAdapter` | Built-in | Cloudflare Durable Objects     |
 
 ```ts title="questpie.config.ts"
-import { pgNotifyAdapter, runtimeConfig } from "questpie";
+import { runtimeConfig } from "questpie";
+import { pgNotifyAdapter } from "questpie/adapters/pg-notify";
 
 export default runtimeConfig({
 	realtime: {
@@ -72,7 +74,7 @@ export default runtimeConfig({
 For multi-instance deployments, use `redisStreamsAdapter`:
 
 ```ts
-import { redisStreamsAdapter } from "questpie";
+import { redisStreamsAdapter } from "questpie/adapters/redis-streams";
 
 realtime: {
   adapter: redisStreamsAdapter({
@@ -80,6 +82,8 @@ realtime: {
   }),
 }
 ```
+
+For Cloudflare Workers, use `cloudflareRealtimeAdapter` from `questpie/adapters/cloudflare` and mount the Worker with `createCloudflareWorkerHandlers`. See [Deployment](/docs/production/deployment) for the full Worker and Wrangler setup.
 
 ## Related Pages
 

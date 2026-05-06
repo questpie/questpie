@@ -79,12 +79,11 @@ export type {
 	GetGlobal,
 };
 
-import type { PGlite } from "@electric-sql/pglite";
 import type { BetterAuthOptions } from "better-auth";
-import type { drizzle as drizzleBun } from "drizzle-orm/bun-sql";
-import type { drizzle as drizzlePgLite } from "drizzle-orm/pglite";
+import type { PgDatabase } from "drizzle-orm/pg-core";
 import type { DriverContract } from "flydrive/types";
 
+import type { Migration } from "../migration/types.js";
 import type { MailerConfig } from "../modules/core/integrated/mailer/types.js";
 import type { QueueConfig as BaseQueueConfig } from "../modules/core/integrated/queue/types.js";
 import type { RealtimeConfig } from "../modules/core/integrated/realtime/types.js";
@@ -92,7 +91,6 @@ import type {
 	SearchAdapter,
 	SearchConfig,
 } from "../modules/core/integrated/search/types.js";
-import type { Migration } from "../migration/types.js";
 import type { SeedCategory, SeedsConfig } from "../seed/types.js";
 
 export type DrizzleSchemaFromCollections<
@@ -240,27 +238,41 @@ export interface LocaleConfig {
 	fallbacks?: Record<string, string>;
 }
 
-export type DbClientType = "postgres" | "pglite";
+export type DbClientType = "postgres" | "pglite" | "custom";
+
+export type DrizzleSchemaFromQuestpieConfig<TConfig extends QuestpieConfig> =
+	DrizzleSchemaFromCollections<TConfig["collections"]> &
+		DrizzleSchemaFromGlobals<
+			TConfig["globals"] extends Record<string, AnyGlobalOrBuilder>
+				? TConfig["globals"]
+				: Record<string, never>
+		>;
+
+export type AnyDrizzleClient<TSchema extends DbSchemaInput = DbSchemaInput> =
+	PgDatabase<any, TSchema, any>;
+
+type ExtractDbFromCreateResult<TResult> = TResult extends {
+	drizzle: infer TDb;
+}
+	? TDb
+	: TResult;
+
+type NormalizeDrizzleClient<TDb> =
+	TDb extends AnyDrizzleClient<any> ? TDb : never;
+
+type DrizzleClientFromDbConfig<
+	TDbConfig extends DbConfig,
+	TSchema extends DbSchemaInput,
+> = TDbConfig extends { drizzle: infer TDb }
+	? NormalizeDrizzleClient<TDb>
+	: TDbConfig extends { create: (...args: any[]) => infer TResult }
+		? NormalizeDrizzleClient<ExtractDbFromCreateResult<Awaited<TResult>>>
+		: AnyDrizzleClient<TSchema>;
 
 export type DrizzleClientFromQuestpieConfig<TConfig extends QuestpieConfig> =
-	ReturnType<
-		InferyDbClientType<TConfig["db"]> extends "postgres"
-			? typeof drizzleBun<
-					DrizzleSchemaFromCollections<TConfig["collections"]> &
-						DrizzleSchemaFromGlobals<
-							TConfig["globals"] extends Record<string, AnyGlobalOrBuilder>
-								? TConfig["globals"]
-								: Record<string, never>
-						>
-				>
-			: typeof drizzlePgLite<
-					DrizzleSchemaFromCollections<TConfig["collections"]> &
-						DrizzleSchemaFromGlobals<
-							TConfig["globals"] extends Record<string, AnyGlobalOrBuilder>
-								? TConfig["globals"]
-								: Record<string, never>
-						>
-				>
+	DrizzleClientFromDbConfig<
+		TConfig["db"],
+		DrizzleSchemaFromQuestpieConfig<TConfig>
 	>;
 
 export type AccessMode = "user" | "system";
@@ -332,21 +344,84 @@ export interface StorageDriverConfig extends StorageBaseConfig {
  */
 export type StorageConfig = StorageLocalConfig | StorageDriverConfig;
 
+export type DbCloseFn = () => void | Promise<void>;
+
+export type DbSchemaInput = Record<string, unknown>;
+
+export type PGliteClient = {
+	query: (...args: unknown[]) => unknown;
+	close?: (...args: unknown[]) => unknown;
+	[key: string]: unknown;
+};
+
+export interface DbCreateContext<
+	TSchema extends DbSchemaInput = DbSchemaInput,
+> {
+	/**
+	 * Drizzle schema generated from registered collections, globals, and
+	 * framework tables. Pass this into your Drizzle driver factory.
+	 */
+	schema: TSchema;
+}
+
+export type DbCreateResult<TDb extends AnyDrizzleClient = AnyDrizzleClient> =
+	| TDb
+	| {
+			drizzle: TDb;
+			/**
+			 * Optional direct PostgreSQL connection string used by features that need
+			 * a separate session-based connection, such as pg_notify realtime.
+			 */
+			connectionString?: string;
+			/**
+			 * Cleanup callback for the underlying driver/client.
+			 */
+			close?: DbCloseFn;
+	  };
+
 export type DbConfig =
 	| {
 			url: string;
 	  }
 	| {
-			pglite: PGlite;
+			pglite: PGliteClient;
+	  }
+	| {
+			/**
+			 * Fully constructed Drizzle client. Use this when the surrounding
+			 * runtime creates the driver, for example Cloudflare Hyperdrive,
+			 * Neon, Vercel Postgres, or another HTTP/TCP-compatible adapter.
+			 */
+			drizzle: AnyDrizzleClient;
+			connectionString?: string;
+			close?: DbCloseFn;
+	  }
+	| {
+			/**
+			 * Lazily create the Drizzle client from the generated schema. This is
+			 * the preferred option for Cloudflare Workers because bindings such as
+			 * Hyperdrive are runtime-owned and should remain outside framework
+			 * internals.
+			 */
+			create: (
+				ctx: DbCreateContext,
+			) => DbCreateResult | Promise<DbCreateResult>;
 	  };
 
-export type InferyDbClientType<TDbConfig extends DbConfig> = TDbConfig extends {
+export type InferDbClientType<TDbConfig extends DbConfig> = TDbConfig extends {
 	url: string;
 }
 	? "postgres"
-	: TDbConfig extends { pglite: PGlite }
+	: TDbConfig extends { pglite: PGliteClient }
 		? "pglite"
-		: never;
+		: "custom";
+
+/**
+ * @deprecated Use InferDbClientType. Kept for source compatibility with the
+ * historical misspelling.
+ */
+export type InferyDbClientType<TDbConfig extends DbConfig> =
+	InferDbClientType<TDbConfig>;
 
 export interface QuestpieConfig {
 	app: {
@@ -419,7 +494,7 @@ export interface QuestpieConfig {
 	 *
 	 * @example
 	 * ```ts
-	 * import { createPostgresSearchAdapter } from "questpie/server";
+	 * import { createPostgresSearchAdapter } from "questpie/adapters/postgres-search";
 	 *
 	 * config({
 	 *   search: createPostgresSearchAdapter(),
@@ -571,7 +646,6 @@ export interface ContextExtensions {
 // ============================================================================
 // Context Extension System
 // ============================================================================
-
 
 /**
  * Parameters passed to the context resolver function.

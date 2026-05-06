@@ -82,7 +82,9 @@ flowchart TD
 ### Runtime Config
 
 ```ts title="questpie.config.ts"
-import { pgBossAdapter, runtimeConfig, SmtpAdapter } from "questpie";
+import { runtimeConfig } from "questpie";
+import { pgBossAdapter } from "questpie/adapters/pg-boss";
+import { SmtpAdapter } from "questpie/adapters/smtp";
 
 export default runtimeConfig({
 	app: { url: process.env.APP_URL || "http://localhost:3000" },

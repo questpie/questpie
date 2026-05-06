@@ -160,6 +160,7 @@ questpie.config.ts  →  modules.ts  →  codegen  →  .generated/index.ts  →
 
 ```ts
 import { runtimeConfig } from "questpie";
+import { ConsoleAdapter } from "questpie/adapters/console";
 
 export default runtimeConfig({
 	app: { url: "http://localhost:3000" },
@@ -1010,10 +1011,10 @@ The queue client exposes jobs as typed properties: `queue[jobName].publish(paylo
 
 ### Queue Adapters
 
-| Adapter                   | Use Case                                         |
-| ------------------------- | ------------------------------------------------ |
-| `pgBossAdapter()`         | PostgreSQL-based (default, great for most cases) |
-| `CloudflareQueuesAdapter` | Cloudflare Workers                               |
+| Adapter                     | Use Case                                         |
+| --------------------------- | ------------------------------------------------ |
+| `pgBossAdapter()`           | PostgreSQL-based (default, great for most cases) |
+| `cloudflareQueuesAdapter()` | Cloudflare Workers Queues push consumers         |
 
 ---
 
@@ -1334,7 +1335,7 @@ const unsub = client.realtime.subscribe(
 ### Realtime Adapters
 
 ```ts
-import { pgNotifyAdapter } from "questpie";
+import { pgNotifyAdapter } from "questpie/adapters/pg-notify";
 
 runtimeConfig({
 	realtime: {
@@ -2351,10 +2352,10 @@ export const { GET, POST, PUT, PATCH, DELETE } =
 
 ### Queue Adapters
 
-| Adapter                   | Description                          |
-| ------------------------- | ------------------------------------ |
-| `pgBossAdapter()`         | PostgreSQL-based job queue (pg-boss) |
-| `CloudflareQueuesAdapter` | Cloudflare Workers Queues            |
+| Adapter                     | Description                          |
+| --------------------------- | ------------------------------------ |
+| `pgBossAdapter()`           | PostgreSQL-based job queue (pg-boss) |
+| `cloudflareQueuesAdapter()` | Cloudflare Workers Queues            |
 
 ### Search Adapters
 
@@ -2365,18 +2366,20 @@ export const { GET, POST, PUT, PATCH, DELETE } =
 
 ### Realtime Adapters
 
-| Adapter                 | Description              |
-| ----------------------- | ------------------------ |
-| Default                 | Polling (2s interval)    |
-| `pgNotifyAdapter()`     | PostgreSQL LISTEN/NOTIFY |
-| `redisStreamsAdapter()` | Redis Streams            |
+| Adapter                       | Description                |
+| ----------------------------- | -------------------------- |
+| Default                       | Polling (2s interval)      |
+| `pgNotifyAdapter()`           | PostgreSQL LISTEN/NOTIFY   |
+| `redisStreamsAdapter()`       | Redis Streams              |
+| `cloudflareRealtimeAdapter()` | Cloudflare Durable Objects |
 
 ### KV Adapters
 
-| Adapter            | Description          |
-| ------------------ | -------------------- |
-| `MemoryKVAdapter`  | In-process (default) |
-| `IORedisKVAdapter` | Redis-backed         |
+| Adapter                 | Description           |
+| ----------------------- | --------------------- |
+| `MemoryKVAdapter`       | In-process (default)  |
+| `RedisKVAdapter`        | Redis-backed          |
+| `cloudflareKVAdapter()` | Cloudflare Workers KV |
 
 ### Email Adapters
 

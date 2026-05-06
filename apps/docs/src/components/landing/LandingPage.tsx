@@ -210,9 +210,8 @@ const ADAPTER_CATEGORIES: AdapterCategory[] = [
 			},
 			{
 				label: "CF KV",
-				fn: "KVAdapter",
-				code: "kv: { adapter: myCloudflareKvAdapter }",
-				soon: true,
+				fn: "cloudflareKVAdapter",
+				code: "kv: { adapter: cloudflareKVAdapter({ namespace: getKV }) }",
 			},
 		],
 	},
@@ -228,7 +227,7 @@ const ADAPTER_CATEGORIES: AdapterCategory[] = [
 			{
 				label: "CF Queues",
 				fn: "cloudflareQueuesAdapter",
-				code: "queue: { adapter: cloudflareQueuesAdapter({ enqueue }) }",
+				code: "queue: { adapter: cloudflareQueuesAdapter({ queue: getQueue }) }",
 			},
 			{
 				label: "BullMQ",
@@ -274,6 +273,11 @@ const ADAPTER_CATEGORIES: AdapterCategory[] = [
 				fn: "redisStreamsAdapter",
 				code: "realtime: { adapter: redisStreamsAdapter({ client }) }",
 			},
+			{
+				label: "Cloudflare",
+				fn: "cloudflareRealtimeAdapter",
+				code: "realtime: { adapter: cloudflareRealtimeAdapter({ namespace: getDO }) }",
+			},
 		],
 	},
 	{
@@ -318,9 +322,13 @@ const ADAPTER_CATEGORIES: AdapterCategory[] = [
 			},
 			{
 				label: "Resend",
-				fn: "resendAdapter",
-				code: "email: { adapter: resendAdapter() }",
-				soon: true,
+				fn: "ResendAdapter",
+				code: "email: { adapter: new ResendAdapter({ apiKey }) }",
+			},
+			{
+				label: "Plunk",
+				fn: "PlunkAdapter",
+				code: "email: { adapter: new PlunkAdapter({ apiKey }) }",
 			},
 		],
 	},

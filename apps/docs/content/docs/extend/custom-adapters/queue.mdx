@@ -5,6 +5,8 @@ description: Implement a custom job queue adapter for QUESTPIE.
 
 Queue adapters power background jobs, scheduled/recurring work, and serverless push consumers. The built-in `PgBossAdapter` uses PostgreSQL for everything; you might want RabbitMQ, SQS, BullMQ, or Cloudflare Queues instead.
 
+If you need strict per-group FIFO behavior, implement it as provider-native behavior in a dedicated adapter. Do not emulate grouping by creating one physical queue per group or by overloading `singletonKey`; those patterns are operational hacks and cannot provide predictable cross-worker semantics.
+
 ## Interface
 
 ```ts
@@ -227,6 +229,6 @@ The `queue` config requires both an `adapter` and a `jobs` map. Jobs are defined
 
 ## Reference implementations
 
-- [PgBossAdapter](https://github.com/questpie/questpie/blob/main/packages/questpie/src/server/integrated/queue/adapters/pg-boss.ts) -- PostgreSQL-based, supports long-running consumers, runOnce, scheduling, and singleton jobs
-- [CloudflareQueuesAdapter](https://github.com/questpie/questpie/blob/main/packages/questpie/src/server/integrated/queue/adapters/cloudflare-queues.ts) -- push-based queue for Cloudflare Workers
-- [QueueAdapter interface source](https://github.com/questpie/questpie/blob/main/packages/questpie/src/server/integrated/queue/adapter.ts)
+- [PgBossAdapter](https://github.com/questpie/questpie/blob/main/packages/questpie/src/server/modules/core/integrated/queue/adapters/pg-boss.ts) -- PostgreSQL-based, supports long-running consumers, runOnce, scheduling, and singleton jobs
+- [CloudflareQueuesAdapter](https://github.com/questpie/questpie/blob/main/packages/questpie/src/server/modules/core/integrated/queue/adapters/cloudflare-queues.ts) -- push-based queue for Cloudflare Workers
+- [QueueAdapter interface source](https://github.com/questpie/questpie/blob/main/packages/questpie/src/server/modules/core/integrated/queue/adapter.ts)

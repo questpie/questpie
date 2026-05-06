@@ -1,6 +1,6 @@
 ---
 title: Email
-description: Transactional email with Nodemailer — SMTP, console adapter, and email templates.
+description: Transactional email with Resend, Plunk, SMTP, console adapter, and email templates.
 ---
 
 QUESTPIE supports sending transactional emails with typed templates.
@@ -8,23 +8,59 @@ QUESTPIE supports sending transactional emails with typed templates.
 ## Configuration
 
 ```ts title="questpie.config.ts"
-import { SmtpAdapter, ConsoleAdapter, runtimeConfig } from "questpie";
+import { runtimeConfig } from "questpie";
+import { ConsoleAdapter } from "questpie/adapters/console";
+import { ResendAdapter } from "questpie/adapters/resend";
 
 export default runtimeConfig({
 	email: {
 		adapter:
 			process.env.NODE_ENV === "development"
 				? new ConsoleAdapter({ logHtml: false })
-				: new SmtpAdapter({
-						transport: {
-							host: process.env.SMTP_HOST,
-							port: parseInt(process.env.SMTP_PORT || "587"),
-							secure: true,
-						},
+				: new ResendAdapter({
+						apiKey: process.env.RESEND_API_KEY!,
 					}),
+		defaults: {
+			from: "Acme <noreply@example.com>",
+		},
 	},
 });
 ```
+
+Use `SmtpAdapter` when you need SMTP:
+
+```ts
+import { SmtpAdapter } from "questpie/adapters/smtp";
+
+new SmtpAdapter({
+	transport: {
+		host: process.env.SMTP_HOST,
+		port: parseInt(process.env.SMTP_PORT || "587"),
+		secure: true,
+	},
+});
+```
+
+Use `PlunkAdapter` for Plunk:
+
+```ts
+import { PlunkAdapter } from "questpie/adapters/plunk";
+
+new PlunkAdapter({
+	apiKey: process.env.PLUNK_SECRET_KEY!,
+});
+```
+
+`ResendAdapter` also supports Resend-compatible APIs:
+
+```ts
+new ResendAdapter({
+	apiKey: process.env.EMAIL_API_KEY!,
+	baseUrl: "https://api.aisend.app/v1",
+});
+```
+
+On Cloudflare Workers, use an HTTP-based email adapter such as `ResendAdapter` or `PlunkAdapter`. `SmtpAdapter` requires SMTP/TCP access and is rejected by the Cloudflare adapter compatibility check.
 
 ## Email Templates
 
@@ -76,10 +112,12 @@ handler: async ({ email }) => {
 
 ## Adapters
 
-| Adapter          | Description                  |
-| ---------------- | ---------------------------- |
-| `SmtpAdapter`    | Send via SMTP (production)   |
-| `ConsoleAdapter` | Log to console (development) |
+| Adapter          | Description                                    |
+| ---------------- | ---------------------------------------------- |
+| `ResendAdapter`  | Send through Resend or a Resend-compatible API |
+| `PlunkAdapter`   | Send through Plunk's transactional API         |
+| `SmtpAdapter`    | Send through SMTP                              |
+| `ConsoleAdapter` | Log to console in development                  |
 
 ## Related Pages
 

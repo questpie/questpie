@@ -5,10 +5,12 @@ import type {
 	WorkflowLogRecord,
 	WorkflowStepRecord,
 } from "../../../workflow/types.js";
+import { workflowRouteAccess } from "./_access.js";
 import { getCollections } from "./_helpers.js";
 
 export default route()
 	.post()
+	.access(workflowRouteAccess("read"))
 	.schema(
 		z.object({
 			id: z.string(),

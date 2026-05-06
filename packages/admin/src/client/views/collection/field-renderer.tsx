@@ -188,6 +188,22 @@ function renderDefinitionComponent({
 	return <Component {...componentProps} />;
 }
 
+function BlocksDefinitionComponent({
+	context,
+	componentProps,
+}: {
+	context: FieldContext;
+	componentProps: ReturnType<typeof buildComponentProps>;
+}) {
+	const { data: adminConfig } = useAdminConfig();
+
+	return renderDefinitionComponent({
+		context,
+		componentProps,
+		blocks: adminConfig?.blocks,
+	});
+}
+
 /**
  * Render embedded collection field
  *
@@ -281,7 +297,6 @@ export function FieldRenderer({
 	// Use scoped locale (from LocaleScopeProvider in ResourceSheet) or global locale
 	const { locale } = useScopedLocale();
 	const resolveText = useResolveText();
-	const { data: adminConfig } = useAdminConfig();
 	const fullFieldName = getFullFieldName(fieldName, fieldPrefix);
 
 	// Get field options for context + hooks
@@ -453,11 +468,19 @@ export function FieldRenderer({
 
 	// 3. Use FieldDefinition.field.component (registry-first approach)
 	if (!content && resolvedComponent) {
-		content = renderDefinitionComponent({
-			context: { ...context, component: resolvedComponent },
-			componentProps,
-			blocks: adminConfig?.blocks,
-		});
+		const componentContext = { ...context, component: resolvedComponent };
+		content =
+			context.type === "blocks" ? (
+				<BlocksDefinitionComponent
+					context={componentContext}
+					componentProps={componentProps}
+				/>
+			) : (
+				renderDefinitionComponent({
+					context: componentContext,
+					componentProps,
+				})
+			);
 	}
 
 	// 4. No component found - show error (all fields should have registered components)

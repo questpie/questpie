@@ -99,24 +99,51 @@ function getSiblingData(
 	return typeof sibling === "object" ? sibling : null;
 }
 
-function getWatchedValues(
-	allValues: Record<string, any>,
-	siblingData: Record<string, any> | null,
-	watchDeps: string[],
-): Record<string, any> {
-	const result: Record<string, any> = {};
+function getSiblingDepPath(fieldPath: string, dep: string): string | null {
+	const siblingKey = dep.slice("$sibling.".length);
+	if (!siblingKey) return null;
 
-	for (const dep of watchDeps) {
-		if (dep.startsWith("$sibling.")) {
-			const siblingKey = dep.slice("$sibling.".length);
-			result[dep] = siblingData?.[siblingKey];
-		} else if (!dep.startsWith("$")) {
-			result[dep] = allValues[dep];
-		}
+	const parts = fieldPath.split(".");
+	const numericIndex = parts.findIndex((p) => /^\d+$/.test(p));
+	if (numericIndex === -1) return null;
+
+	return [...parts.slice(0, numericIndex + 1), siblingKey].join(".");
+}
+
+function getWatchPathForDep(fieldPath: string, dep: string): string | null {
+	if (dep.startsWith("$sibling.")) {
+		return getSiblingDepPath(fieldPath, dep);
+	}
+
+	if (dep.startsWith("$")) {
+		return null;
+	}
+
+	return dep;
+}
+
+type WatchEntry = {
+	dep: string;
+	path: string;
+};
+
+function getWatchedValuesForDeps(
+	watchEntries: WatchEntry[],
+	watchedValues: unknown,
+): Record<string, unknown> {
+	const result: Record<string, unknown> = {};
+	if (watchEntries.length === 0) return result;
+
+	const values = Array.isArray(watchedValues) ? watchedValues : [watchedValues];
+
+	for (const [index, entry] of watchEntries.entries()) {
+		result[entry.dep] = values[index];
 	}
 
 	return result;
 }
+
+const EMPTY_WATCH_DEPS: string[] = [];
 
 // ============================================================================
 // Hook Implementation
@@ -139,21 +166,31 @@ export function useFieldOptions({
 	const [search, setSearch] = React.useState(initialSearch);
 	const debouncedSearch = useDebouncedValue(search, 300);
 
-	const watchedValues = useWatch({ control: form.control });
-	const formValues = React.useMemo(
-		() => (watchedValues ?? {}) as Record<string, any>,
-		[watchedValues],
+	const watchDeps = optionsConfig?.watch ?? EMPTY_WATCH_DEPS;
+	const watchEntries = React.useMemo<WatchEntry[]>(
+		() =>
+			watchDeps
+				.map((dep) => {
+					const path = getWatchPathForDep(field, dep);
+					return path ? { dep, path } : null;
+				})
+				.filter((entry): entry is WatchEntry => !!entry),
+		[watchDeps, field],
 	);
-	const siblingData = React.useMemo(
-		() => getSiblingData(formValues, field),
-		[formValues, field],
+	const watchPaths = React.useMemo(
+		() => watchEntries.map((entry) => entry.path),
+		[watchEntries],
 	);
-	const watchDeps = optionsConfig?.watch ?? [];
+	const watchedValues = useWatch({
+		control: form.control,
+		name: watchPaths as any,
+		disabled: watchPaths.length === 0,
+	});
 	const depValues = React.useMemo(
-		() => getWatchedValues(formValues, siblingData, watchDeps),
-		[formValues, siblingData, watchDeps],
+		() => getWatchedValuesForDeps(watchEntries, watchedValues),
+		[watchEntries, watchedValues],
 	);
-	const depKey = JSON.stringify(depValues);
+	const depKey = React.useMemo(() => JSON.stringify(depValues), [depValues]);
 
 	const filteredStaticOptions = React.useMemo(() => {
 		if (optionsConfig || !staticOptions) return null;

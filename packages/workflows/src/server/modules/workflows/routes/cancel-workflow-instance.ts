@@ -1,9 +1,12 @@
 import { route } from "questpie";
 import { z } from "zod";
+
+import { workflowRouteAccess } from "./_access.js";
 import { getCollections } from "./_helpers.js";
 
 export default route()
 	.post()
+	.access(workflowRouteAccess("cancel"))
 	.schema(z.object({ id: z.string() }))
 	.handler(async ({ input, ...ctx }) => {
 		const { instances } = getCollections(ctx);
@@ -27,6 +30,9 @@ export default route()
 				id: input.id,
 				data: {
 					status: "cancelled",
+					lockOwner: null,
+					lockedAt: null,
+					lockExpiresAt: null,
 					completedAt: new Date(),
 				},
 			},

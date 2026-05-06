@@ -48,6 +48,25 @@ export function workflowsPlugin(): CodegenPlugin {
 						extractFromModules: true,
 					},
 				},
+				discover: {
+					workflowsConfig: {
+						pattern: "config/workflows.ts",
+						configKey: "workflows",
+					},
+				},
+				registries: {
+					singletonFactories: {
+						workflowsConfig: {
+							configType: "WorkflowsConfigInput",
+							imports: [
+								{
+									name: "WorkflowsConfigInput",
+									from: "@questpie/workflows/server",
+								},
+							],
+						},
+					},
+				},
 				scaffolds: {
 					workflow: {
 						dir: "workflows",

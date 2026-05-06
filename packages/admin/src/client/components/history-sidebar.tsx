@@ -7,6 +7,11 @@ import type { I18nText } from "../i18n/types";
 import { cn, formatLabel } from "../lib/utils";
 import { resolveOptionLabelForValue } from "./primitives/option-label";
 import {
+	StructuredFieldDiff,
+	shouldUseStructuredDiff,
+	type StructuredDiffNestedFields,
+} from "./structured-diff";
+import {
 	Accordion,
 	AccordionContent,
 	AccordionItem,
@@ -49,6 +54,7 @@ type HistoryFieldSchema = {
 		options?: Array<{ value: unknown; label: I18nText }>;
 		multiple?: boolean;
 		writeOnly?: boolean;
+		nestedFields?: StructuredDiffNestedFields;
 	};
 	access?: {
 		read?:
@@ -279,7 +285,7 @@ function summarizeBlocks(value: unknown[]): string | null {
 	for (const item of value) {
 		if (!isObjectRecord(item)) continue;
 		const type =
-			item.blockType ?? item.block ?? item.type ?? item._type ?? item.name;
+			item.blockType ?? item.block ?? item.type ?? item["_type"] ?? item.name;
 		if (typeof type === "string") {
 			blockNames.push(formatLabel(type));
 		}
@@ -560,42 +566,51 @@ function VersionDiffPanel({
 
 							<Separator className="my-3" />
 
-							<div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
-								<div className="min-w-0">
-									<div className="text-muted-foreground mb-2 flex items-center gap-1.5 text-[0.6875rem] font-medium uppercase">
-										<Icon icon="ph:minus" className="size-3" />
-										{t("history.before")}
-									</div>
-									<ValuePreview
-										field={field}
-										value={change.from}
-										t={t}
-										locale={locale}
-										resolveText={resolveText}
-									/>
-								</div>
-
-								<Separator
-									orientation="vertical"
-									className="hidden sm:block"
-									aria-hidden
+							{shouldUseStructuredDiff(change.type, change.from, change.to) ? (
+								<StructuredFieldDiff
+									type={change.type}
+									from={change.from}
+									to={change.to}
+									nestedFields={field?.metadata?.nestedFields}
 								/>
-								<Separator className="sm:hidden" aria-hidden />
-
-								<div className="min-w-0">
-									<div className="text-muted-foreground mb-2 flex items-center gap-1.5 text-[0.6875rem] font-medium uppercase">
-										<Icon icon="ph:plus" className="size-3" />
-										{t("history.after")}
+							) : (
+								<div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
+									<div className="min-w-0">
+										<div className="text-muted-foreground mb-2 flex items-center gap-1.5 text-[0.6875rem] font-medium uppercase">
+											<Icon icon="ph:minus" className="size-3" />
+											{t("history.before")}
+										</div>
+										<ValuePreview
+											field={field}
+											value={change.from}
+											t={t}
+											locale={locale}
+											resolveText={resolveText}
+										/>
 									</div>
-									<ValuePreview
-										field={field}
-										value={change.to}
-										t={t}
-										locale={locale}
-										resolveText={resolveText}
+
+									<Separator
+										orientation="vertical"
+										className="hidden sm:block"
+										aria-hidden
 									/>
+									<Separator className="sm:hidden" aria-hidden />
+
+									<div className="min-w-0">
+										<div className="text-muted-foreground mb-2 flex items-center gap-1.5 text-[0.6875rem] font-medium uppercase">
+											<Icon icon="ph:plus" className="size-3" />
+											{t("history.after")}
+										</div>
+										<ValuePreview
+											field={field}
+											value={change.to}
+											t={t}
+											locale={locale}
+											resolveText={resolveText}
+										/>
+									</div>
 								</div>
-							</div>
+							)}
 						</div>
 					);
 				})}

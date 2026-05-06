@@ -339,7 +339,7 @@ export function createQueueClient<
 	// Use the object key (jobName) for client access to match QueueClient type definition
 	// but use jobDef.name for actual adapter operations (the internal queue name)
 	for (const [jobName, jobDef] of Object.entries(jobs)) {
-		client[jobName] = {
+		const jobClient = {
 			/**
 			 * Publish a job to the queue
 			 */
@@ -401,6 +401,12 @@ export function createQueueClient<
 				await adapter.unschedule(jobDef.name);
 			},
 		};
+
+		client[jobName] = jobClient;
+
+		if (!(jobDef.name in client)) {
+			client[jobDef.name] = jobClient;
+		}
 	}
 
 	return client as QueueClient<TJobs>;

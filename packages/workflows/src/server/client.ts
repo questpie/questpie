@@ -15,6 +15,8 @@
  * ```
  */
 
+import type { PublishOptions } from "questpie";
+
 import { parseDuration } from "./engine/duration.js";
 import type { EventPersistence, ResumeWaiterFn } from "./engine/events.js";
 import { dispatchEvent } from "./engine/events.js";
@@ -83,10 +85,7 @@ export interface CollectionCrud<
 /**
  * Queue publish interface — matches the QUESTPIE QueueClient per-job API.
  */
-export type QueuePublishOptions = {
-	priority?: number;
-	startAfter?: number | string | Date;
-};
+export type QueuePublishOptions = PublishOptions;
 
 export interface QueuePublish {
 	publish(
@@ -273,7 +272,10 @@ export function createWorkflowClient<
 			// Publish execute job
 			await deps.publishExecute.publish(
 				{ instanceId: instance.id, workflowName: name },
-				startAfter ? { startAfter } : undefined,
+				{
+					singletonKey: instance.id,
+					...(startAfter ? { startAfter } : {}),
+				},
 			);
 
 			return { instanceId: instance.id, existing: false };
@@ -300,6 +302,9 @@ export function createWorkflowClient<
 					id: instanceId,
 					data: {
 						status: "cancelled",
+						lockOwner: null,
+						lockedAt: null,
+						lockExpiresAt: null,
 						completedAt: new Date(),
 					},
 				},
@@ -350,6 +355,9 @@ export function createWorkflowClient<
 							id: instance.id,
 							data: {
 								status: "cancelled",
+								lockOwner: null,
+								lockedAt: null,
+								lockExpiresAt: null,
 								completedAt: now,
 							},
 						},
@@ -385,16 +393,24 @@ export function createWorkflowClient<
 							data: {
 								status: "pending",
 								error: null,
+								lockOwner: null,
+								lockedAt: null,
+								lockExpiresAt: null,
 								completedAt: null,
 							},
 						},
 						{ accessMode: "system" },
 					);
 
-					await deps.publishExecute.publish({
-						instanceId: instance.id,
-						workflowName: instance.name,
-					});
+					await deps.publishExecute.publish(
+						{
+							instanceId: instance.id,
+							workflowName: instance.name,
+						},
+						{
+							singletonKey: instance.id,
+						},
+					);
 
 					retriedCount++;
 				} catch {

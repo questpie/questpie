@@ -67,10 +67,13 @@ export const wfMaintenanceJob = job({
 		let resumedCount = 0;
 		for (const step of sleepingSteps.docs) {
 			try {
-				await resumeQueue.publish({
-					instanceId: step.instanceId,
-					stepName: step.name,
-				});
+				await resumeQueue.publish(
+					{
+						instanceId: step.instanceId,
+						stepName: step.name,
+					},
+					{ singletonKey: `${step.instanceId}:${step.name}` },
+				);
 				resumedCount++;
 			} catch (err) {
 				logger?.warn?.(
@@ -104,6 +107,9 @@ export const wfMaintenanceJob = job({
 								message: `Workflow timed out at ${now.toISOString()}`,
 								code: "WORKFLOW_TIMEOUT",
 							},
+							lockOwner: null,
+							lockedAt: null,
+							lockExpiresAt: null,
 							completedAt: now,
 						},
 					},
@@ -117,7 +123,38 @@ export const wfMaintenanceJob = job({
 			}
 		}
 
-		// ── 3. Cron triggers ────────────────────────────────────────
+		// ── 3. Requeue instances whose execution lease expired ───────
+		const staleLockedInstances = await instancesCrud.find(
+			{
+				where: {
+					status: "running",
+					lockExpiresAt: { lte: now },
+				},
+				limit: 100,
+			},
+			{ accessMode: "system" },
+		);
+
+		let recoveredLocks = 0;
+		for (const instance of staleLockedInstances.docs) {
+			try {
+				await executeQueue.publish(
+					{
+						instanceId: instance.id,
+						workflowName: instance.name,
+					},
+					{ singletonKey: instance.id },
+				);
+				recoveredLocks++;
+			} catch (err) {
+				logger?.warn?.(
+					`Failed to requeue stale workflow lock for instance ${instance.id}`,
+					{ error: err instanceof Error ? err.message : String(err) },
+				);
+			}
+		}
+
+		// ── 4. Cron triggers ────────────────────────────────────────
 		let cronTriggered = 0;
 		const definitions = getWorkflowDefinitions(ctx);
 
@@ -167,6 +204,9 @@ export const wfMaintenanceJob = job({
 													"Cancelled by cron overlap policy (cancel-previous)",
 												code: "CRON_OVERLAP_CANCELLED",
 											},
+											lockOwner: null,
+											lockedAt: null,
+											lockExpiresAt: null,
 											completedAt: now,
 										},
 									},
@@ -205,10 +245,13 @@ export const wfMaintenanceJob = job({
 					{ accessMode: "system" },
 				);
 
-				await executeQueue.publish({
-					instanceId: instance.id,
-					workflowName: name,
-				});
+				await executeQueue.publish(
+					{
+						instanceId: instance.id,
+						workflowName: name,
+					},
+					{ singletonKey: instance.id },
+				);
 
 				cronTriggered++;
 			} catch (err) {
@@ -218,7 +261,7 @@ export const wfMaintenanceJob = job({
 			}
 		}
 
-		// ── 4. Retention cleanup ────────────────────────────────────
+		// ── 5. Retention cleanup ────────────────────────────────────
 		let cleanedInstances = 0;
 		let cleanedEvents = 0;
 
@@ -319,12 +362,13 @@ export const wfMaintenanceJob = job({
 		if (
 			resumedCount > 0 ||
 			timedOutCount > 0 ||
+			recoveredLocks > 0 ||
 			cronTriggered > 0 ||
 			cleanedInstances > 0 ||
 			cleanedEvents > 0
 		) {
 			logger?.info?.(
-				`Workflow maintenance: resumed=${resumedCount}, timedOut=${timedOutCount}, cronTriggered=${cronTriggered}, cleaned=${cleanedInstances} instances + ${cleanedEvents} events`,
+				`Workflow maintenance: resumed=${resumedCount}, timedOut=${timedOutCount}, recoveredLocks=${recoveredLocks}, cronTriggered=${cronTriggered}, cleaned=${cleanedInstances} instances + ${cleanedEvents} events`,
 			);
 		}
 	},

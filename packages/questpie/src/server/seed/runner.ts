@@ -4,6 +4,7 @@ import { withTransaction } from "#questpie/server/collection/crud/shared/transac
 import { extractAppServices } from "#questpie/server/config/app-context.js";
 import { runWithContext } from "#questpie/server/config/context.js";
 import type { Questpie } from "#questpie/server/config/questpie.js";
+import { getEnv, getNodeEnv } from "#questpie/server/utils/env.js";
 
 import type {
 	ResetSeedsOptions,
@@ -39,8 +40,8 @@ export class SeedRunner {
 	}
 
 	private readSilentEnv(): boolean {
-		const value = process.env.QUESTPIE_SEEDS_SILENT;
-		const isTestEnv = process.env.NODE_ENV === "test";
+		const value = getEnv("QUESTPIE_SEEDS_SILENT");
+		const isTestEnv = getNodeEnv() === "test";
 		if (isTestEnv) return true;
 		if (!value) return false;
 		return ["1", "true", "yes"].includes(value.toLowerCase());

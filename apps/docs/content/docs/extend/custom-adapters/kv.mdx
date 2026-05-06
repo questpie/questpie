@@ -138,6 +138,6 @@ The `KVConfig` also accepts an optional `defaultTtl` (seconds) that applies when
 
 ## Reference implementations
 
-- [MemoryKVAdapter](https://github.com/questpie/questpie/blob/main/packages/questpie/src/server/integrated/kv/adapters/memory.ts) -- in-memory Map with TTL and tag support
-- [IORedisKVAdapter](https://github.com/questpie/questpie/blob/main/packages/questpie/src/server/integrated/kv/adapters/ioredis.ts) -- Redis via ioredis, tag invalidation via Redis SETs
-- [KVAdapter interface source](https://github.com/questpie/questpie/blob/main/packages/questpie/src/server/integrated/kv/adapter.ts)
+- [MemoryKVAdapter](https://github.com/questpie/questpie/blob/main/packages/questpie/src/server/modules/core/integrated/kv/adapters/memory.ts) -- in-memory Map with TTL and tag support
+- [RedisKVAdapter](https://github.com/questpie/questpie/blob/main/packages/questpie/src/server/modules/core/integrated/kv/adapters/redis.ts) -- Redis via a node-redis compatible client, tag invalidation via Redis SETs
+- [KVAdapter interface source](https://github.com/questpie/questpie/blob/main/packages/questpie/src/server/modules/core/integrated/kv/adapter.ts)

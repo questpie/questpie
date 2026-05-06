@@ -17,9 +17,10 @@ import {
 	FieldLayoutRenderer,
 	type FieldLayoutContext,
 } from "../layout/field-layout-renderer";
+import { Button } from "../ui/button";
 import type { BaseFieldProps, ObjectFieldConfig } from "./field-types";
 import { gridColumnClasses } from "./field-utils";
-import { FieldWrapper } from "./field-wrapper";
+import { FieldLocaleIndicator, FieldWrapper } from "./field-wrapper";
 
 // ============================================================================
 // Types
@@ -39,6 +40,71 @@ interface ObjectFieldProps
 	form?: { fields: any[] };
 }
 
+interface ObjectFieldPanelProps {
+	name: string;
+	label?: string;
+	description?: string;
+	required?: boolean;
+	disabled?: boolean;
+	localized?: boolean;
+	locale?: string;
+	className?: string;
+	isCollapsed: boolean;
+	onToggle: () => void;
+	children: React.ReactNode;
+}
+
+function ObjectFieldPanel({
+	name,
+	label,
+	description,
+	required,
+	disabled,
+	localized,
+	locale,
+	className,
+	isCollapsed,
+	onToggle,
+	children,
+}: ObjectFieldPanelProps): React.ReactElement {
+	const resolveText = useResolveText();
+	const resolvedLabel = resolveText(label ?? name);
+
+	return (
+		<div
+			className={cn("qa-object-field panel-surface overflow-hidden", className)}
+		>
+			<Button
+				type="button"
+				variant="ghost"
+				onClick={onToggle}
+				className="h-auto min-h-10 w-full justify-between rounded-none px-3 py-2 text-left"
+				disabled={disabled}
+			>
+				<span className="flex min-w-0 items-center gap-2">
+					<Icon
+						icon={isCollapsed ? "ph:caret-right" : "ph:caret-down"}
+						className="size-4 shrink-0"
+					/>
+					<span className="min-w-0 truncate font-medium">{resolvedLabel}</span>
+					{required && <span className="text-destructive shrink-0">*</span>}
+				</span>
+				<FieldLocaleIndicator localized={localized} locale={locale} />
+			</Button>
+			{!isCollapsed && (
+				<div className="border-border-subtle space-y-4 border-t p-4">
+					{description && (
+						<p className="text-muted-foreground text-sm text-pretty">
+							{resolveText(description)}
+						</p>
+					)}
+					{children}
+				</div>
+			)}
+		</div>
+	);
+}
+
 // ============================================================================
 // Nested Field Renderer
 // ============================================================================
@@ -55,7 +121,7 @@ function NestedFieldRenderer({
 	fieldDef,
 	parentName,
 	disabled,
-}: NestedFieldRendererProps) {
+}: NestedFieldRendererProps): React.ReactElement {
 	const resolveText = useResolveText();
 	const fullName = `${parentName}.${fieldName}`;
 	const options = (fieldDef["~options"] || {}) as Record<string, any>;
@@ -81,7 +147,7 @@ function NestedFieldRenderer({
 		required,
 		disabled: optionsDisabled,
 		readOnly,
-		hidden,
+		hidden: _hidden,
 		localized,
 		locale,
 		...fieldSpecificOptions
@@ -123,10 +189,13 @@ export function ObjectField({
 	layout = "stack",
 	columns = 2,
 	defaultCollapsed = true,
-}: ObjectFieldProps) {
+}: ObjectFieldProps): React.ReactElement | null {
 	const resolveText = useResolveText();
 	const admin = useAdminStore(selectAdmin);
 	const [isCollapsed, setIsCollapsed] = React.useState(defaultCollapsed);
+	const toggleCollapsed = React.useCallback(() => {
+		setIsCollapsed((current) => !current);
+	}, []);
 
 	// Resolve nested field definitions
 	const nestedFields = React.useMemo(() => {
@@ -149,16 +218,13 @@ export function ObjectField({
 		return fieldsProp;
 	}, [fieldsProp, admin]);
 
-	const fieldEntries = Object.entries(nestedFields);
-
-	if (fieldEntries.length === 0) {
-		return null;
-	}
-
-	// When form layout is defined, use the shared layout renderer
-	if (formProp?.fields?.length) {
-		const layoutCtx: FieldLayoutContext = {
-			renderField: (fieldName, opts) => {
+	const fieldEntries = React.useMemo(
+		() => Object.entries(nestedFields),
+		[nestedFields],
+	);
+	const layoutCtx = React.useMemo<FieldLayoutContext>(
+		() => ({
+			renderField: (fieldName) => {
 				const fieldDef = nestedFields[fieldName] as FieldInstance | undefined;
 				if (!fieldDef) return null;
 				return (
@@ -172,8 +238,16 @@ export function ObjectField({
 				);
 			},
 			resolveText: (text, fallback) => resolveText(text, fallback),
-		};
+		}),
+		[disabled, name, nestedFields, resolveText],
+	);
 
+	if (fieldEntries.length === 0) {
+		return null;
+	}
+
+	// When form layout is defined, use the shared layout renderer
+	if (formProp?.fields?.length) {
 		const content = (
 			<FieldLayoutRenderer items={formProp.fields} ctx={layoutCtx} />
 		);
@@ -181,25 +255,20 @@ export function ObjectField({
 		// Wrap in collapsible or flat container
 		if (wrapper === "collapsible") {
 			return (
-				<div className={cn("qa-object-field panel-surface", className)}>
-					<button
-						type="button"
-						onClick={() => setIsCollapsed(!isCollapsed)}
-						className="hover:bg-muted flex min-h-10 w-full items-center justify-between p-3 text-left transition-colors active:scale-[0.96]"
-						disabled={disabled}
-					>
-						<div className="flex items-center gap-2">
-							{isCollapsed ? (
-								<Icon icon="ph:caret-right" className="h-4 w-4" />
-							) : (
-								<Icon icon="ph:caret-down" className="h-4 w-4" />
-							)}
-							<span className="font-medium">{resolveText(label ?? name)}</span>
-							{required && <span className="text-destructive">*</span>}
-						</div>
-					</button>
-					{!isCollapsed && <div className="border-t p-4">{content}</div>}
-				</div>
+				<ObjectFieldPanel
+					name={name}
+					label={label}
+					description={description}
+					required={required}
+					disabled={disabled}
+					localized={localized}
+					locale={locale}
+					className={className}
+					isCollapsed={isCollapsed}
+					onToggle={toggleCollapsed}
+				>
+					{content}
+				</ObjectFieldPanel>
 			);
 		}
 
@@ -225,40 +294,26 @@ export function ObjectField({
 	// Collapsible wrapper (also support legacy layout="collapsible" for backwards compatibility)
 	if (wrapper === "collapsible" || (layout as string) === "collapsible") {
 		return (
-			<div className={cn("qa-object-field panel-surface", className)}>
-				<button
-					type="button"
-					onClick={() => setIsCollapsed(!isCollapsed)}
-					className="hover:bg-muted flex min-h-10 w-full items-center justify-between p-3 text-left transition-colors active:scale-[0.96]"
+			<ObjectFieldPanel
+				name={name}
+				label={label}
+				description={description}
+				required={required}
+				disabled={disabled}
+				localized={localized}
+				locale={locale}
+				className={className}
+				isCollapsed={isCollapsed}
+				onToggle={toggleCollapsed}
+			>
+				<NestedFieldsLayout
+					fieldEntries={fieldEntries}
+					layout={layout}
+					columns={columns}
+					name={name}
 					disabled={disabled}
-				>
-					<div className="flex items-center gap-2">
-						{isCollapsed ? (
-							<Icon icon="ph:caret-right" className="h-4 w-4" />
-						) : (
-							<Icon icon="ph:caret-down" className="h-4 w-4" />
-						)}
-						<span className="font-medium">{resolveText(label ?? name)}</span>
-						{required && <span className="text-destructive">*</span>}
-					</div>
-				</button>
-				{!isCollapsed && (
-					<div className="border-t p-4">
-						{description && (
-							<p className="text-muted-foreground mb-4 text-sm text-pretty">
-								{resolveText(description)}
-							</p>
-						)}
-						<NestedFieldsLayout
-							fieldEntries={fieldEntries}
-							layout={layout}
-							columns={columns}
-							name={name}
-							disabled={disabled}
-						/>
-					</div>
-				)}
-			</div>
+				/>
+			</ObjectFieldPanel>
 		);
 	}
 
@@ -319,7 +374,7 @@ function NestedFieldsLayout({
 	columns,
 	name,
 	disabled,
-}: NestedFieldsLayoutProps) {
+}: NestedFieldsLayoutProps): React.ReactElement {
 	const fieldElements = fieldEntries.map(([fieldName, fieldDef]) => (
 		<NestedFieldRenderer
 			key={fieldName}

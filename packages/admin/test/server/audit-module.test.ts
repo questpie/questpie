@@ -2,13 +2,14 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
 import { collection, global } from "questpie";
 
-import {
-	AUDIT_LOG_COLLECTION,
-	auditModule,
-} from "../../src/server/modules/audit/index.js";
 import { buildMockApp } from "../../../questpie/test/utils/mocks/mock-app-builder";
 import { createTestContext } from "../../../questpie/test/utils/test-context";
 import { runTestDbMigrations } from "../../../questpie/test/utils/test-db";
+import {
+	AUDIT_LOG_COLLECTION,
+	auditModule,
+	logAuditEntry,
+} from "../../src/server/modules/audit/index.js";
 
 const posts = collection("posts")
 	.fields(({ f }) => ({
@@ -257,5 +258,158 @@ describe("audit module e2e", () => {
 		);
 
 		expect(logs.docs).toHaveLength(0);
+	});
+
+	describe("logAuditEntry — public API", () => {
+		it("writes a custom audit entry with explicit actor", async () => {
+			const ctx = createTestContext({
+				accessMode: "system",
+				session: {
+					user: { id: "job_runner", name: "Job Runner" },
+					session: { id: "s1" },
+				} as any,
+			});
+
+			await logAuditEntry(
+				{ collections: setup.app.collections, ...ctx },
+				{
+					action: "bulk-email",
+					resourceType: "system",
+					resource: "newsletter",
+					resourceLabel: "Q1 Campaign",
+					metadata: { sentCount: 1234 },
+				},
+			);
+
+			const logs = await setup.app.collections[AUDIT_LOG_COLLECTION].find(
+				{ where: { resource: "newsletter" } },
+				ctx,
+			);
+
+			expect(logs.docs).toHaveLength(1);
+			const entry = logs.docs[0];
+			expect(entry.action).toBe("bulk-email");
+			expect(entry.resourceType).toBe("system");
+			expect(entry.resource).toBe("newsletter");
+			expect(entry.resourceLabel).toBe("Q1 Campaign");
+			expect(entry.userName).toBe("Job Runner");
+			expect(entry.userId).toBe("job_runner");
+			expect(entry.metadata).toMatchObject({
+				actorType: "user",
+				sentCount: 1234,
+			});
+			expect(entry.title).toContain("Job Runner");
+			expect(entry.title).toContain("bulk-email");
+			expect(entry.title).toContain("Q1 Campaign");
+		});
+
+		it("resolves actor from session when not overridden", async () => {
+			const ctx = createTestContext({
+				accessMode: "system",
+				session: {
+					user: { id: "u1", name: "Alice" },
+					session: { id: "s1" },
+				} as any,
+			});
+
+			await logAuditEntry(
+				{ collections: setup.app.collections, ...ctx },
+				{
+					action: "archive",
+					resourceType: "collection",
+					resource: "posts",
+					resourceId: "post_123",
+					resourceLabel: "My Post",
+				},
+			);
+
+			const logs = await setup.app.collections[AUDIT_LOG_COLLECTION].find(
+				{ where: { resource: "posts", action: "archive" } },
+				ctx,
+			);
+
+			expect(logs.docs[0].userName).toBe("Alice");
+			expect(logs.docs[0].userId).toBe("u1");
+		});
+
+		it("falls back to System when no session is present", async () => {
+			const ctx = createTestContext({ accessMode: "system" });
+
+			await logAuditEntry(
+				{ collections: setup.app.collections, ...ctx },
+				{
+					action: "cleanup",
+					resourceType: "system",
+					resource: "temp-files",
+				},
+			);
+
+			const logs = await setup.app.collections[AUDIT_LOG_COLLECTION].find(
+				{ where: { resource: "temp-files" } },
+				ctx,
+			);
+
+			expect(logs.docs[0].userName).toBe("System");
+			expect(logs.docs[0].userId).toBe("system");
+			expect(logs.docs[0].metadata).toMatchObject({
+				actorType: "system",
+			});
+		});
+
+		it("allows overriding userName and userId", async () => {
+			const ctx = createTestContext({ accessMode: "system" });
+
+			await logAuditEntry(
+				{ collections: setup.app.collections, ...ctx },
+				{
+					action: "webhook-received",
+					resourceType: "system",
+					resource: "stripe",
+					userName: "Stripe Webhook",
+					userId: "webhook_stripe",
+					actorType: "system",
+					metadata: { eventId: "evt_123" },
+				},
+			);
+
+			const logs = await setup.app.collections[AUDIT_LOG_COLLECTION].find(
+				{ where: { resource: "stripe" } },
+				ctx,
+			);
+
+			expect(logs.docs[0].userName).toBe("Stripe Webhook");
+			expect(logs.docs[0].userId).toBe("webhook_stripe");
+			expect(logs.docs[0].metadata).toMatchObject({
+				actorType: "system",
+				eventId: "evt_123",
+			});
+			expect(logs.docs[0].title).toContain("Stripe Webhook");
+		});
+
+		it("stores changes and locale", async () => {
+			const ctx = createTestContext({ accessMode: "system" });
+
+			await logAuditEntry(
+				{ collections: setup.app.collections, ...ctx },
+				{
+					action: "migrate",
+					resourceType: "system",
+					resource: "database",
+					resourceLabel: "v2 to v3",
+					locale: "en",
+					changes: { schema: { from: "v2", to: "v3" } },
+				},
+			);
+
+			const logs = await setup.app.collections[AUDIT_LOG_COLLECTION].find(
+				{ where: { resource: "database" } },
+				ctx,
+			);
+
+			expect(logs.docs[0].locale).toBe("en");
+			expect(logs.docs[0].changes).toEqual({
+				schema: { from: "v2", to: "v3" },
+			});
+		});
 	});
 });

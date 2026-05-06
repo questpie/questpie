@@ -198,10 +198,15 @@ export {
 } from "../server/modules/admin/index.js";
 // Audit module - automatic audit logging for all mutations
 export {
+	type AuditActorType,
+	type AuditContext,
 	type AuditModule,
 	auditLogCollection,
 	// Static module
 	auditModule,
+	// Public API for custom audit entries
+	logAuditEntry,
+	type LogAuditEntryOptions,
 } from "../server/modules/audit/index.js";
 // Codegen plugin — register in questpie.config.ts
 export { adminPlugin } from "../server/plugin.js";

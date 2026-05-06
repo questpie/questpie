@@ -227,33 +227,64 @@ export interface QueueListenHandle {
 	stop: () => Promise<void>;
 }
 
+export type QueueJobClient<TJob> = {
+	/**
+	 * Publish a job to the queue
+	 */
+	publish: (
+		payload: InferJobPayload<TJob>,
+		options?: PublishOptions,
+	) => Promise<string | null>;
+
+	/**
+	 * Schedule a recurring job with cron
+	 */
+	schedule: (
+		payload: InferJobPayload<TJob>,
+		cron: string,
+		options?: Omit<PublishOptions, "startAfter">,
+	) => Promise<void>;
+
+	/**
+	 * Cancel scheduled jobs
+	 */
+	unschedule: () => Promise<void>;
+};
+
+type LiteralJobDefinitionName<TJob> =
+	TJob extends JobDefinition<any, any, infer TName>
+		? string extends TName
+			? never
+			: TName
+		: never;
+
+type LiteralJobNamesFromDefinitions<TJobs extends Record<string, any>> = {
+	[K in keyof TJobs]: LiteralJobDefinitionName<TJobs[K]>;
+}[keyof TJobs];
+
+type JobByDefinitionName<
+	TJobs extends Record<string, any>,
+	TName extends string,
+> = {
+	[K in keyof TJobs]: LiteralJobDefinitionName<TJobs[K]> extends TName
+		? TJobs[K]
+		: never;
+}[keyof TJobs];
+
 /**
- * Typesafe queue client for publishing jobs
+ * Typesafe queue client for publishing jobs.
+ *
+ * Jobs are exposed by their generated registration key (`sendEmail`) and, when
+ * the definition uses a literal `name`, by the backend job name as a bracket
+ * alias (`queue["questpie-wf-execute"]`). The alias is useful for module code
+ * that only knows the durable queue name.
  */
 export type QueueClient<TJobs extends Record<string, any>> = {
-	[K in keyof TJobs]: {
-		/**
-		 * Publish a job to the queue
-		 */
-		publish: (
-			payload: InferJobPayload<TJobs[K]>,
-			options?: PublishOptions,
-		) => Promise<string | null>;
-
-		/**
-		 * Schedule a recurring job with cron
-		 */
-		schedule: (
-			payload: InferJobPayload<TJobs[K]>,
-			cron: string,
-			options?: Omit<PublishOptions, "startAfter">,
-		) => Promise<void>;
-
-		/**
-		 * Cancel scheduled jobs
-		 */
-		unschedule: () => Promise<void>;
-	};
+	[K in keyof TJobs]: QueueJobClient<TJobs[K]>;
+} & {
+	[K in LiteralJobNamesFromDefinitions<TJobs>]: QueueJobClient<
+		JobByDefinitionName<TJobs, K>
+	>;
 } & {
 	/**
 	 * Adapter capabilities exposed to runtime.

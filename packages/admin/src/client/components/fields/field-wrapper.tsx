@@ -16,6 +16,7 @@ type FieldWrapperProps = {
 	name: string;
 	label?: I18nText;
 	description?: I18nText;
+	labelAccessory?: React.ReactNode;
 	required?: boolean;
 	disabled?: boolean;
 	readOnly?: boolean;
@@ -27,10 +28,73 @@ type FieldWrapperProps = {
 	fieldPath?: string;
 };
 
+type FieldLocaleIndicatorProps = {
+	localized?: boolean;
+	locale?: string;
+};
+
+type FieldLocaleOption = {
+	code: string;
+	label?: I18nText;
+	flagCountryCode?: string;
+};
+
+function getLocaleOptions(
+	contentLocales: { locales?: FieldLocaleOption[] } | null | undefined,
+	resolvedLocale: string | undefined,
+): FieldLocaleOption[] {
+	if (contentLocales?.locales?.length) {
+		return contentLocales.locales;
+	}
+
+	if (resolvedLocale) {
+		return [{ code: resolvedLocale }];
+	}
+
+	return [];
+}
+
+export function FieldCountAccessory({
+	count,
+	max,
+}: {
+	count: number;
+	max?: number;
+}): React.ReactElement | null {
+	if (!max) return null;
+
+	return (
+		<span className="text-muted-foreground text-xs tabular-nums">
+			({count}/{max})
+		</span>
+	);
+}
+
+export function FieldLocaleIndicator({
+	localized,
+	locale,
+}: FieldLocaleIndicatorProps): React.ReactElement | null {
+	const { locale: scopedLocale } = useScopedLocale();
+	const contentLocales = useSafeContentLocales();
+	const resolvedLocale = locale ?? scopedLocale;
+	const localeOptions = getLocaleOptions(contentLocales, resolvedLocale);
+
+	if (!localized) return null;
+
+	return (
+		<LocaleSwitcher
+			locales={localeOptions}
+			value={resolvedLocale}
+			showFlag={false}
+		/>
+	);
+}
+
 export function FieldWrapper({
 	name,
 	label,
 	description,
+	labelAccessory,
 	required,
 	disabled,
 	readOnly,
@@ -39,16 +103,8 @@ export function FieldWrapper({
 	locale,
 	children,
 	fieldPath,
-}: FieldWrapperProps) {
+}: FieldWrapperProps): React.ReactElement {
 	const resolveText = useResolveText();
-	const { locale: scopedLocale } = useScopedLocale();
-	const contentLocales = useSafeContentLocales();
-	const resolvedLocale = locale ?? scopedLocale;
-	const localeOptions = contentLocales?.locales?.length
-		? contentLocales.locales
-		: resolvedLocale
-			? [{ code: resolvedLocale }]
-			: [];
 
 	const resolvedLabel = label ? resolveText(label) : undefined;
 	const resolvedDescription = description
@@ -69,13 +125,8 @@ export function FieldWrapper({
 							{resolvedLabel}
 							{required && <span className="text-destructive">*</span>}
 						</span>
-						{localized && (
-							<LocaleSwitcher
-								locales={localeOptions}
-								value={resolvedLocale}
-								showFlag={false}
-							/>
-						)}
+						{labelAccessory}
+						<FieldLocaleIndicator localized={localized} locale={locale} />
 					</FieldLabel>
 				)}
 				<FieldContent>{children}</FieldContent>

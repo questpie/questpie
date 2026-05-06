@@ -81,10 +81,13 @@ export const wfResumeJob = job({
 		}
 
 		// Re-queue the execute job to replay from the resumed step
-		await executeQueue.publish({
-			instanceId: payload.instanceId,
-			workflowName: instance.name,
-		});
+		await executeQueue.publish(
+			{
+				instanceId: payload.instanceId,
+				workflowName: instance.name,
+			},
+			{ singletonKey: payload.instanceId },
+		);
 	},
 });
 

@@ -9,6 +9,7 @@ import type {
 	AppModuleInput,
 	AppDefinition,
 	ModuleDefinition,
+	ResolvedRuntimeConfig,
 	RuntimeConfig,
 	RuntimeConfigInput,
 } from "#questpie/server/config/module-types.js";
@@ -21,8 +22,8 @@ import {
 	mergeMessagesIntoConfig,
 	mergeTranslationsConfig,
 } from "#questpie/server/i18n/translator.js";
-import { mergeAuthOptions } from "#questpie/server/modules/core/integrated/auth/merge.js";
 import coreModule from "#questpie/server/modules/core/.generated/module.js";
+import { mergeAuthOptions } from "#questpie/server/modules/core/integrated/auth/merge.js";
 
 // ============================================================================
 // module() — identity function for type inference
@@ -96,14 +97,18 @@ export function module<T extends ModuleDefinition>(definition: T): T {
  *
  * @see RFC-MODULE-ARCHITECTURE §3.1 (Functions)
  */
-export function runtimeConfig(input: RuntimeConfigInput): RuntimeConfig {
-	return {
+export function runtimeConfig<TInput extends RuntimeConfigInput>(
+	input: TInput,
+): ResolvedRuntimeConfig<TInput> {
+	const resolved = {
 		...input,
 		app: { url: resolveAppUrl(input.app?.url) },
 		db: resolveDbConfig(input.db),
 		secret: resolveSecret(input.secret as string | undefined),
 		storage: resolveStorageConfig(input.storage as StorageConfig | undefined),
-	};
+	} as unknown as ResolvedRuntimeConfig<TInput>;
+
+	return resolved;
 }
 
 // ============================================================================
@@ -115,7 +120,9 @@ export function runtimeConfig(input: RuntimeConfigInput): RuntimeConfig {
  * Dependencies are resolved before the module that depends on them.
  * Duplicate modules (by name) are deduplicated — last occurrence wins.
  */
-function resolveModules(modules: readonly AppModuleInput[]): ModuleDefinition[] {
+function resolveModules(
+	modules: readonly AppModuleInput[],
+): ModuleDefinition[] {
 	const flat: ModuleDefinition[] = [];
 	for (const mod of modules) {
 		if (mod.modules && mod.modules.length > 0) {
@@ -164,7 +171,12 @@ export const mergeDeepConcat: MergeFn = (a, b) => {
 	for (const [key, value] of Object.entries(b || {})) {
 		if (Array.isArray(result[key]) && Array.isArray(value)) {
 			result[key] = [...result[key], ...value];
-		} else if (result[key] !== undefined && typeof result[key] === "object" && typeof value === "object" && !Array.isArray(value)) {
+		} else if (
+			result[key] !== undefined &&
+			typeof result[key] === "object" &&
+			typeof value === "object" &&
+			!Array.isArray(value)
+		) {
 			result[key] = { ...result[key], ...value };
 		} else {
 			result[key] = value;
@@ -205,8 +217,14 @@ function mergeGlobalHooks(
 	if (!a) return b;
 	if (!b) return a;
 	return {
-		collections: [...normalizeHookEntries(a.collections), ...normalizeHookEntries(b.collections)],
-		globals: [...normalizeHookEntries(a.globals), ...normalizeHookEntries(b.globals)],
+		collections: [
+			...normalizeHookEntries(a.collections),
+			...normalizeHookEntries(b.collections),
+		],
+		globals: [
+			...normalizeHookEntries(a.globals),
+			...normalizeHookEntries(b.globals),
+		],
 	};
 }
 
@@ -268,11 +286,7 @@ const CONFIG_KEY_MERGE = new Map<string, Map<string, MergeFn>>([
  * Merge a single config key using its declared sub-property merge strategies.
  * Falls back to lastWins for unknown sub-keys.
  */
-function mergeConfigKey(
-	configKey: string,
-	existing: any,
-	incoming: any,
-): any {
+function mergeConfigKey(configKey: string, existing: any, incoming: any): any {
 	// Special case: auth is deep-merged as a whole via mergeAuthOptions
 	if (configKey === "auth") {
 		return mergeAuthOptions(existing ?? {}, incoming ?? {});
@@ -606,9 +620,7 @@ async function createAppFromDefinition(
 	// Auto-prepend coreModule so its hooks/jobs are always available.
 	// Dedup: if user already listed coreModule, keep theirs (last-write-wins).
 	const userModules = defModules ?? [];
-	const hasCoreAlready = userModules.some(
-		(m) => m.name === coreModule.name,
-	);
+	const hasCoreAlready = userModules.some((m) => m.name === coreModule.name);
 	const allModules = [
 		...(hasCoreAlready ? [] : [coreModule as unknown as ModuleDefinition]),
 		...userModules,

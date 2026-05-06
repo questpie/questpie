@@ -59,6 +59,7 @@ import type {
 	StorageConfig,
 } from "#questpie/server/config/types.js";
 import type { TranslationsConfig } from "#questpie/server/i18n/types.js";
+import type { Migration } from "#questpie/server/migration/types.js";
 import type { KVConfig } from "#questpie/server/modules/core/integrated/kv/types.js";
 import type { LoggerConfig } from "#questpie/server/modules/core/integrated/logger/types.js";
 import type { MailerConfig } from "#questpie/server/modules/core/integrated/mailer/types.js";
@@ -68,7 +69,6 @@ import type {
 } from "#questpie/server/modules/core/integrated/queue/types.js";
 import type { RealtimeConfig } from "#questpie/server/modules/core/integrated/realtime/types.js";
 import type { SearchAdapter } from "#questpie/server/modules/core/integrated/search/types.js";
-import type { Migration } from "#questpie/server/migration/types.js";
 import type { RouteDefinition } from "#questpie/server/routes/types.js";
 import type { Seed, SeedCategory } from "#questpie/server/seed/types.js";
 
@@ -230,7 +230,7 @@ export interface AppConfigInput {
  *
  * @see RFC-MODULE-ARCHITECTURE §3.1 (Functions), §8.1 (User Project)
  */
-export interface RuntimeConfig {
+export interface RuntimeConfig<TDb extends DbConfig = DbConfig> {
 	/** Codegen plugins — discover additional file patterns and extend generated output. */
 	plugins?: CodegenPlugin[];
 
@@ -238,7 +238,7 @@ export interface RuntimeConfig {
 	app: { url: string };
 
 	/** Database connection (required). */
-	db: DbConfig;
+	db: TDb;
 
 	/** Secret key for signing tokens. */
 	secret?: string;
@@ -323,8 +323,27 @@ export interface RuntimeConfig {
  *
  * @see {@link RuntimeConfig} for the resolved output type.
  */
-export type RuntimeConfigInput = Partial<Pick<RuntimeConfig, "app" | "db">> &
-	Omit<RuntimeConfig, "app" | "db">;
+export type RuntimeConfigInput<TDb extends DbConfig = DbConfig> = Partial<
+	Pick<RuntimeConfig<TDb>, "app" | "db">
+> &
+	Omit<RuntimeConfig<TDb>, "app" | "db">;
+
+type DbFromRuntimeConfigInput<TInput> = TInput extends { db: infer TDb }
+	? TDb extends DbConfig
+		? TDb
+		: DbConfig
+	: DbConfig;
+
+export type ResolvedRuntimeConfig<TInput extends RuntimeConfigInput> = Omit<
+	RuntimeConfig<DbFromRuntimeConfigInput<TInput>>,
+	"app" | "db" | "secret" | "storage"
+> &
+	Omit<TInput, "app" | "db" | "secret" | "storage"> & {
+		app: { url: string };
+		db: DbFromRuntimeConfigInput<TInput>;
+		secret: string | undefined;
+		storage: StorageConfig | undefined;
+	};
 
 // ============================================================================
 // App Definition — what codegen generates (first arg to createApp)

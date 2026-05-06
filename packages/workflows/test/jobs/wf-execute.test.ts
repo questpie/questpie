@@ -1,5 +1,7 @@
 import { describe, expect, it } from "bun:test";
+
 import { z } from "zod";
+
 import { wfExecuteJob } from "../../src/server/modules/workflows/jobs/wf-execute.js";
 import type { WorkflowDefinition } from "../../src/server/workflow/types.js";
 import { createJobContext, createMockStores } from "./helpers.js";
@@ -105,6 +107,9 @@ describe("wf-execute job", () => {
 		expect(instance.output).toEqual({ greeting: "Hello alice" });
 		expect(instance.completedAt).toBeInstanceOf(Date);
 		expect(instance.attempt).toBe(1);
+		expect(instance.lockOwner).toBeNull();
+		expect(instance.lockedAt).toBeNull();
+		expect(instance.lockExpiresAt).toBeNull();
 
 		// Step should be recorded
 		const steps = Array.from(stores.steps.values());
@@ -116,6 +121,99 @@ describe("wf-execute job", () => {
 		// Logs should have been flushed
 		const logs = Array.from(stores.logs.values());
 		expect(logs.length).toBeGreaterThan(0);
+	});
+
+	it("requeues without executing when another worker owns the instance lock", async () => {
+		const stores = createMockStores();
+		const { ctx, queue } = createJobContext(
+			{ instanceId: "inst-1", workflowName: "simple-wf" },
+			{ stores, workflows: { "simple-wf": simpleWorkflow } },
+		);
+		const lockExpiresAt = new Date(Date.now() + 60_000);
+
+		stores.instances.set("inst-1", {
+			id: "inst-1",
+			name: "simple-wf",
+			status: "running",
+			input: { userId: "alice" },
+			attempt: 1,
+			lockOwner: "other-worker",
+			lockedAt: new Date(),
+			lockExpiresAt,
+			createdAt: new Date(),
+		});
+
+		await handler(ctx);
+
+		expect(Array.from(stores.steps.values())).toHaveLength(0);
+		const instance = stores.instances.get("inst-1");
+		expect(instance.status).toBe("running");
+		expect(instance.lockOwner).toBe("other-worker");
+
+		const executeChannel = queue["questpie-wf-execute"];
+		expect(executeChannel.calls).toHaveLength(1);
+		expect(executeChannel.calls[0].payload).toEqual({
+			instanceId: "inst-1",
+			workflowName: "simple-wf",
+		});
+		expect(executeChannel.calls[0].options).toEqual({
+			singletonKey: "inst-1",
+			startAfter: lockExpiresAt,
+		});
+	});
+
+	it("skips terminal duplicate deliveries", async () => {
+		const stores = createMockStores();
+		const { ctx, queue } = createJobContext(
+			{ instanceId: "inst-1", workflowName: "simple-wf" },
+			{ stores, workflows: { "simple-wf": simpleWorkflow } },
+		);
+
+		stores.instances.set("inst-1", {
+			id: "inst-1",
+			name: "simple-wf",
+			status: "completed",
+			input: { userId: "alice" },
+			output: { greeting: "Hello alice" },
+			attempt: 1,
+			completedAt: new Date(),
+			createdAt: new Date(),
+		});
+
+		await handler(ctx);
+
+		expect(Array.from(stores.steps.values())).toHaveLength(0);
+		expect(
+			queue._channels.get("questpie-wf-execute")?.calls ?? [],
+		).toHaveLength(0);
+	});
+
+	it("claims expired execution locks", async () => {
+		const stores = createMockStores();
+		const { ctx } = createJobContext(
+			{ instanceId: "inst-1", workflowName: "simple-wf" },
+			{ stores, workflows: { "simple-wf": simpleWorkflow } },
+		);
+
+		stores.instances.set("inst-1", {
+			id: "inst-1",
+			name: "simple-wf",
+			status: "running",
+			input: { userId: "alice" },
+			attempt: 1,
+			lockOwner: "dead-worker",
+			lockedAt: new Date(Date.now() - 120_000),
+			lockExpiresAt: new Date(Date.now() - 60_000),
+			createdAt: new Date(),
+		});
+
+		await handler(ctx);
+
+		const instance = stores.instances.get("inst-1");
+		expect(instance.status).toBe("completed");
+		expect(instance.output).toEqual({ greeting: "Hello alice" });
+		expect(instance.attempt).toBe(2);
+		expect(instance.lockOwner).toBeNull();
 	});
 
 	it("handles a workflow that fails", async () => {

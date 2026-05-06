@@ -10,6 +10,7 @@ import {
 import { MigrationRunner } from "#questpie/server/migration/runner.js";
 import type {
 	GenerateMigrationResult,
+	Migration,
 	MigrationStatus,
 	RunMigrationsOptions,
 } from "#questpie/server/migration/types.js";
@@ -70,6 +71,7 @@ export class QuestpieMigrationsAPI<
 			fileBaseName,
 			schema: this.app.getSchema(),
 			migrationDir,
+			extensions: this.getRequiredExtensions(),
 		});
 	}
 
@@ -95,7 +97,7 @@ export class QuestpieMigrationsAPI<
 		}
 
 		// 2. Run Drizzle migrations (creates tables)
-		const migrations = this.app.config.migrations?.migrations || [];
+		const migrations = this.getMigrations();
 		await this.runner.runMigrationsUp(migrations, options);
 
 		// 3. Run search adapter migrations (creates FTS/trigram indexes)
@@ -131,17 +133,14 @@ export class QuestpieMigrationsAPI<
 				applied.push(ext);
 			} catch (error: any) {
 				const msg = error?.message?.toLowerCase() || "";
-				// Handle common extension errors gracefully
 				if (
 					msg.includes("already exists") ||
-					msg.includes("extension") ||
-					msg.includes("could not open extension") ||
-					msg.includes("permission denied")
+					msg.includes("duplicate object") ||
+					msg.includes("duplicate key")
 				) {
 					skipped.push(ext);
 				} else {
-					// Re-throw unexpected errors
-					throw error;
+					throw this.createExtensionError(ext, error);
 				}
 			}
 		}
@@ -153,7 +152,7 @@ export class QuestpieMigrationsAPI<
 	 * Rollback last batch of migrations
 	 */
 	async down(): Promise<void> {
-		const migrations = this.app.config.migrations?.migrations || [];
+		const migrations = this.getMigrations();
 		await this.runner.rollbackLastBatch(migrations);
 	}
 
@@ -161,7 +160,7 @@ export class QuestpieMigrationsAPI<
 	 * Rollback to a specific migration
 	 */
 	async downTo(migrationId: string): Promise<void> {
-		const migrations = this.app.config.migrations?.migrations || [];
+		const migrations = this.getMigrations();
 		await this.runner.rollbackToMigration(migrations, migrationId);
 	}
 
@@ -169,7 +168,7 @@ export class QuestpieMigrationsAPI<
 	 * Reset all migrations (rollback everything)
 	 */
 	async reset(): Promise<void> {
-		const migrations = this.app.config.migrations?.migrations || [];
+		const migrations = this.getMigrations();
 		await this.runner.reset(migrations);
 	}
 
@@ -177,15 +176,15 @@ export class QuestpieMigrationsAPI<
 	 * Fresh migrations (reset + run all)
 	 */
 	async fresh(): Promise<void> {
-		const migrations = this.app.config.migrations?.migrations || [];
-		await this.runner.fresh(migrations);
+		await this.reset();
+		await this.up();
 	}
 
 	/**
 	 * Get migration status
 	 */
 	async status(): Promise<MigrationStatus> {
-		const migrations = this.app.config.migrations?.migrations || [];
+		const migrations = this.getMigrations();
 		return this.runner.status(migrations);
 	}
 
@@ -227,15 +226,12 @@ export class QuestpieMigrationsAPI<
 				) {
 					skipped.push(migration.name);
 				} else {
-					// For extension errors, skip gracefully
 					if (
 						msg.includes("extension") ||
-						msg.includes("could not open extension")
+						msg.includes("could not open extension") ||
+						msg.includes("permission denied")
 					) {
-						console.warn(
-							`[Search Migration] Skipping ${migration.name}: ${error.message}`,
-						);
-						skipped.push(migration.name);
+						throw this.createExtensionError(migration.up, error);
 					} else {
 						throw error;
 					}
@@ -283,6 +279,29 @@ export class QuestpieMigrationsAPI<
 		}
 
 		return { applied };
+	}
+
+	private getMigrations(): Migration[] {
+		const migrations = this.app.config.migrations as
+			| Migration[]
+			| { migrations?: Migration[] }
+			| undefined;
+		return Array.isArray(migrations)
+			? migrations
+			: (migrations?.migrations ?? []);
+	}
+
+	private getRequiredExtensions(): string[] {
+		const adapter = this.app.search?.getAdapter();
+		return adapter?.getExtensions?.() ?? [];
+	}
+
+	private createExtensionError(statement: string, error: any): Error {
+		const message = error?.message ?? String(error);
+		return new Error(
+			`Failed to create required PostgreSQL extension before migrations. Statement: ${statement.trim()} Original error: ${message}`,
+			{ cause: error },
+		);
 	}
 
 	private generateRandomMigrationName(): string {

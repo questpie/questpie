@@ -1,7 +1,7 @@
 import { type UseQueryOptions, useQuery } from "@tanstack/react-query";
 import * as React from "react";
 
-import { selectBasePath, useAdminStore } from "../runtime";
+import { selectClient, useAdminStore } from "../runtime";
 
 export type AuditEntry = {
 	id: string;
@@ -21,7 +21,8 @@ export type AuditEntry = {
 };
 
 function useAuditFetcher(path: string) {
-	const basePath = useAdminStore(selectBasePath);
+	const client = useAdminStore(selectClient);
+	const basePath = client.getBasePath?.() ?? "/api";
 
 	return React.useCallback(
 		async (signal?: AbortSignal): Promise<AuditEntry[]> => {

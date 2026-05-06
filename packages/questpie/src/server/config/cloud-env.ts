@@ -1,4 +1,5 @@
 import type { DbConfig, StorageConfig } from "#questpie/server/config/types.js";
+import { getEnv } from "#questpie/server/utils/env.js";
 
 // ============================================================================
 // Cloud environment variable names
@@ -43,9 +44,9 @@ const DEFAULT_APP_URL = "http://localhost:3000";
  */
 export function isQuestpieCloud(): boolean {
 	return Boolean(
-		process.env[CLOUD_ENV.DB] ||
-		process.env[CLOUD_ENV.APP_URL] ||
-		process.env[CLOUD_ENV.STORAGE_ENDPOINT],
+		getEnv(CLOUD_ENV.DB) ||
+		getEnv(CLOUD_ENV.APP_URL) ||
+		getEnv(CLOUD_ENV.STORAGE_ENDPOINT),
 	);
 }
 
@@ -60,8 +61,8 @@ export function isQuestpieCloud(): boolean {
 export function resolveAppUrl(explicit?: string): string {
 	return (
 		explicit ||
-		process.env[CLOUD_ENV.APP_URL] ||
-		process.env[FALLBACK_ENV.APP_URL] ||
+		getEnv(CLOUD_ENV.APP_URL) ||
+		getEnv(FALLBACK_ENV.APP_URL) ||
 		DEFAULT_APP_URL
 	);
 }
@@ -73,8 +74,7 @@ export function resolveAppUrl(explicit?: string): string {
 export function resolveDbConfig(explicit?: DbConfig): DbConfig {
 	if (explicit) return explicit;
 
-	const url =
-		process.env[CLOUD_ENV.DB] || process.env[FALLBACK_ENV.DB] || undefined;
+	const url = getEnv(CLOUD_ENV.DB) || getEnv(FALLBACK_ENV.DB) || undefined;
 
 	if (!url) {
 		throw new Error(
@@ -93,8 +93,8 @@ export function resolveDbConfig(explicit?: DbConfig): DbConfig {
 export function resolveSecret(explicit?: string): string | undefined {
 	return (
 		explicit ||
-		process.env[CLOUD_ENV.SECRET] ||
-		process.env[FALLBACK_ENV.SECRET] ||
+		getEnv(CLOUD_ENV.SECRET) ||
+		getEnv(FALLBACK_ENV.SECRET) ||
 		undefined
 	);
 }
@@ -112,13 +112,13 @@ export function resolveStorageConfig(
 ): StorageConfig | undefined {
 	if (explicit) return explicit;
 
-	const endpoint = process.env[CLOUD_ENV.STORAGE_ENDPOINT];
+	const endpoint = getEnv(CLOUD_ENV.STORAGE_ENDPOINT);
 	if (!endpoint) return undefined;
 
-	const bucket = process.env[CLOUD_ENV.STORAGE_BUCKET];
-	const region = process.env[CLOUD_ENV.STORAGE_REGION] ?? "auto";
-	const accessKey = process.env[CLOUD_ENV.STORAGE_ACCESS_KEY];
-	const secretKey = process.env[CLOUD_ENV.STORAGE_SECRET_KEY];
+	const bucket = getEnv(CLOUD_ENV.STORAGE_BUCKET);
+	const region = getEnv(CLOUD_ENV.STORAGE_REGION) ?? "auto";
+	const accessKey = getEnv(CLOUD_ENV.STORAGE_ACCESS_KEY);
+	const secretKey = getEnv(CLOUD_ENV.STORAGE_SECRET_KEY);
 
 	if (!bucket || !accessKey || !secretKey) {
 		console.warn(

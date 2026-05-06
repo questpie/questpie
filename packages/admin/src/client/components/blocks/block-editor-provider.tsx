@@ -49,6 +49,28 @@ type BlockEditorProviderProps = {
 };
 
 // ============================================================================
+// Helpers
+// ============================================================================
+
+function areSetsEqual(left: Set<string>, right: Set<string>): boolean {
+	if (left === right) return true;
+	if (left.size !== right.size) return false;
+	for (const value of left) {
+		if (!right.has(value)) return false;
+	}
+	return true;
+}
+
+function areInsertPositionsEqual(
+	left: BlockEditorStore["insertPosition"],
+	right: BlockEditorStore["insertPosition"],
+): boolean {
+	if (left === right) return true;
+	if (!left || !right) return left === right;
+	return left.parentId === right.parentId && left.index === right.index;
+}
+
+// ============================================================================
 // Provider Component
 // ============================================================================
 
@@ -303,12 +325,33 @@ export function BlockEditorProvider({
 		}
 
 		if (previewFocusState.type === "block-insert") {
+			if (
+				state.selectedBlockId === targetBlockId &&
+				state.isLibraryOpen === true &&
+				areInsertPositionsEqual(
+					state.insertPosition,
+					previewFocusState.position,
+				) &&
+				areSetsEqual(state.expandedBlockIds, expandedBlockIds)
+			) {
+				return;
+			}
+
 			store.setState({
 				selectedBlockId: targetBlockId,
 				isLibraryOpen: true,
 				insertPosition: previewFocusState.position,
 				expandedBlockIds,
 			});
+			return;
+		}
+
+		if (
+			state.selectedBlockId === previewFocusState.blockId &&
+			state.isLibraryOpen === false &&
+			state.insertPosition === null &&
+			areSetsEqual(state.expandedBlockIds, expandedBlockIds)
+		) {
 			return;
 		}
 

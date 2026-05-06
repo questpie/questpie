@@ -2,6 +2,7 @@ import { convert } from "html-to-text";
 
 import { extractAppServices } from "#questpie/server/config/app-context.js";
 import { tryGetContext } from "#questpie/server/config/context.js";
+import { getNodeEnv } from "#questpie/server/utils/env.js";
 
 import type { MailAdapter } from "./adapter.js";
 import { ConsoleAdapter } from "./adapters/console.adapter.js";
@@ -18,7 +19,7 @@ import type {
 	SerializableMailOptions,
 } from "./types.js";
 
-const isDev = process.env.NODE_ENV !== "production";
+const isDev = getNodeEnv() !== "production";
 
 /**
  * Main mailer service

@@ -44,6 +44,8 @@ By the time your adapter receives `SerializableMailOptions`, both `text` and `ht
 
 ## Minimal example: HTTP API provider
 
+QUESTPIE already ships built-in `ResendAdapter` and `PlunkAdapter`. This example shows the same shape for a custom HTTP provider.
+
 ```ts title="resend-adapter.ts"
 import { MailAdapter, type SerializableMailOptions } from "questpie";
 
@@ -168,6 +170,8 @@ email: {
 
 ## Reference implementations
 
-- [ConsoleAdapter](https://github.com/questpie/questpie/blob/main/packages/questpie/src/server/integrated/mailer/adapters/console.adapter.ts) -- logs emails to console, useful for development
-- [SmtpAdapter](https://github.com/questpie/questpie/blob/main/packages/questpie/src/server/integrated/mailer/adapters/smtp.adapter.ts) -- production SMTP via nodemailer, includes `createEtherealSmtpAdapter()` helper for test accounts
-- [MailAdapter base class source](https://github.com/questpie/questpie/blob/main/packages/questpie/src/server/integrated/mailer/adapter.ts)
+- [ConsoleAdapter](https://github.com/questpie/questpie/blob/main/packages/questpie/src/server/modules/core/integrated/mailer/adapters/console.adapter.ts) -- logs emails to console, useful for development
+- [SmtpAdapter](https://github.com/questpie/questpie/blob/main/packages/questpie/src/server/modules/core/integrated/mailer/adapters/smtp.adapter.ts) -- production SMTP via nodemailer, includes `createEtherealSmtpAdapter()` helper for test accounts
+- [ResendAdapter](https://github.com/questpie/questpie/blob/main/packages/questpie/src/server/modules/core/integrated/mailer/adapters/resend.adapter.ts) -- HTTP adapter for Resend and Resend-compatible APIs
+- [PlunkAdapter](https://github.com/questpie/questpie/blob/main/packages/questpie/src/server/modules/core/integrated/mailer/adapters/plunk.adapter.ts) -- HTTP adapter for Plunk transactional email
+- [MailAdapter base class source](https://github.com/questpie/questpie/blob/main/packages/questpie/src/server/modules/core/integrated/mailer/adapter.ts)

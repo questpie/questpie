@@ -1,0 +1,15 @@
+
+  ⚠ composition_file_too_large: This HTML composition file has 1438 lines. Agents produce better results when large scenes are split into smaller sub-compositions.
+    Fix: Split coherent scenes or layers into separate .html files under compositions/, then mount them from the parent with data-composition-src so each file stays small enough to inspect, revise, and validate independently.
+
+┌  hyperframes preview
+[?25l│
+◇  Studio running
+[?25h
+  Project   questpie-launch-video
+  Studio    http://localhost:3017
+
+  Edit with your AI agent — it has HyperFrames skills installed.
+  Changes reload automatically in the studio.
+
+  Press Ctrl+C to stop

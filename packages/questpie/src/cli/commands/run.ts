@@ -80,7 +80,7 @@ export async function runMigrationCommand(
 	// Execute the requested action
 	switch (options.action) {
 		case "up":
-			await runner.runMigrationsUp(migrations, {
+			await app.migrations.up({
 				targetMigration: options.targetMigration,
 			});
 			break;
@@ -100,7 +100,7 @@ export async function runMigrationCommand(
 			break;
 
 		case "fresh": {
-			await runner.fresh(migrations);
+			await app.migrations.fresh();
 			// Also reset seed tracking since DB is fresh
 			const seedRunner = new SeedRunner(app);
 			await seedRunner.reset();

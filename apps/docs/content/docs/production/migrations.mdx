@@ -33,6 +33,18 @@ Creates a migration file in your configured directory.
 bunx questpie migrate:up
 ```
 
+### Cloudflare Workers
+
+Run migrations outside Cloudflare Workers against the origin PostgreSQL database. Hyperdrive is a Worker binding, not a CLI database endpoint.
+
+If your Worker config lazily uses Hyperdrive at runtime, provide a direct connection string for CLI commands:
+
+```bash
+QUESTPIE_CLI_DATABASE_URL="postgres://user:pass@host:5432/db" bunx questpie migrate:up
+```
+
+Do not point `pgNotifyAdapter` or `pgBossAdapter` at a PgBouncer transaction pool in production. On Cloudflare, use `cloudflareRealtimeAdapter` and `cloudflareQueuesAdapter`; migrations only need the direct PostgreSQL connection for schema changes.
+
 ### Rollback
 
 ```bash

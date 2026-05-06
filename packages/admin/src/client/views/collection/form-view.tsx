@@ -301,6 +301,8 @@ type FormFieldsContentProps = {
 		string,
 		Partial<CollectionBuilderState> | Record<string, any>
 	>;
+	resolvedFields?: Record<string, any>;
+	schema?: CollectionSchema;
 };
 
 const FormFieldsContent = React.memo(function FormFieldsContent({
@@ -308,6 +310,8 @@ const FormFieldsContent = React.memo(function FormFieldsContent({
 	config,
 	registry,
 	allCollectionsConfig,
+	resolvedFields,
+	schema,
 }: FormFieldsContentProps) {
 	return (
 		<RenderProfiler id={`form.fields.${collection}`} minDurationMs={10}>
@@ -316,6 +320,8 @@ const FormFieldsContent = React.memo(function FormFieldsContent({
 				config={config as any}
 				registry={registry}
 				allCollectionsConfig={allCollectionsConfig as any}
+				resolvedFields={resolvedFields as any}
+				schema={schema}
 			/>
 		</RenderProfiler>
 	);
@@ -1697,8 +1703,8 @@ export default function FormView({
 					}
 					setActionLoading(true);
 					const apiPromise = async () => {
-						// Build the URL using API path
-						const url = `${storeBasePath}/${collection}/${endpoint}`;
+						const apiBasePath = client.getBasePath?.() ?? storeBasePath;
+						const url = `${apiBasePath}/${collection}/${endpoint}`;
 						const response = await fetch(url, {
 							method,
 							headers: { "Content-Type": "application/json" },
@@ -2387,6 +2393,8 @@ export default function FormView({
 							config={formConfigBridge}
 							registry={registry}
 							allCollectionsConfig={allCollectionsConfig}
+							resolvedFields={resolvedFields as any}
+							schema={schema}
 						/>
 					</form>
 				</RenderProfiler>

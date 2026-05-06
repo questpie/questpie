@@ -30,7 +30,24 @@ await email.sendTemplate({
 ### Adapter Configuration
 
 ```ts title="questpie.config.ts"
-import { ConsoleAdapter, SmtpAdapter } from "questpie";
+import { ConsoleAdapter } from "questpie/adapters/console";
+import { PlunkAdapter } from "questpie/adapters/plunk";
+import { ResendAdapter } from "questpie/adapters/resend";
+import { SmtpAdapter } from "questpie/adapters/smtp";
+
+// Resend or a Resend-compatible API
+email: {
+  adapter: new ResendAdapter({
+    apiKey: process.env.RESEND_API_KEY!,
+  }),
+}
+
+// Plunk
+email: {
+  adapter: new PlunkAdapter({
+    apiKey: process.env.PLUNK_SECRET_KEY!,
+  }),
+}
 
 // SMTP (production)
 email: {
@@ -85,7 +102,7 @@ Jobs are typed -- the payload must match the job's Zod schema.
 ### Adapter Configuration
 
 ```ts title="questpie.config.ts"
-import { pgBossAdapter } from "questpie";
+import { pgBossAdapter } from "questpie/adapters/pg-boss";
 
 queue: {
   adapter: pgBossAdapter({
@@ -237,6 +254,21 @@ await kv.delete("cache:settings");
 ### Configuration
 
 ```ts title="questpie.config.ts"
+import { createClient } from "redis";
+import { redisKVAdapter } from "questpie/adapters/redis-kv";
+
+async function getRedis() {
+	const redis = createClient({ url: process.env.REDIS_URL! });
+	await redis.connect();
+	return redis;
+}
+
+// Redis
+kv: {
+  adapter: redisKVAdapter({ client: getRedis, keyPrefix: "my-app:" }),
+  defaultTtl: 3600,
+}
+
 // Custom adapter
 kv: {
   adapter: myKvAdapter,
@@ -267,7 +299,8 @@ await realtime.broadcast("posts", {
 ### Configuration
 
 ```ts title="questpie.config.ts"
-import { pgNotifyAdapter, redisStreamsAdapter } from "questpie";
+import { pgNotifyAdapter } from "questpie/adapters/pg-notify";
+import { redisStreamsAdapter } from "questpie/adapters/redis-streams";
 
 // Redis Streams (production, multi-instance)
 realtime: {

@@ -1,10 +1,12 @@
 import { route } from "questpie";
 import { z } from "zod";
 
+import { workflowRouteAccess } from "./_access.js";
 import { getCollections, getTotalDocs } from "./_helpers.js";
 
 export default route()
 	.post()
+	.access(workflowRouteAccess("read"))
 	.schema(
 		z.object({
 			status: z.string().optional(),

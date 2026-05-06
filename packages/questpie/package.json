@@ -22,6 +22,22 @@
 	},
 	"exports": {
 		".": "./src/exports/index.ts",
+		"./adapters/bullmq": "./src/exports/adapters/bullmq.ts",
+		"./adapters/cloudflare": "./src/exports/adapters/cloudflare.ts",
+		"./adapters/cloudflare-kv": "./src/exports/adapters/cloudflare-kv.ts",
+		"./adapters/cloudflare-queues": "./src/exports/adapters/cloudflare-queues.ts",
+		"./adapters/cloudflare-realtime": "./src/exports/adapters/cloudflare-realtime.ts",
+		"./adapters/console": "./src/exports/adapters/console.ts",
+		"./adapters/memory-kv": "./src/exports/adapters/memory-kv.ts",
+		"./adapters/pg-boss": "./src/exports/adapters/pg-boss.ts",
+		"./adapters/pg-notify": "./src/exports/adapters/pg-notify.ts",
+		"./adapters/pgvector-search": "./src/exports/adapters/pgvector-search.ts",
+		"./adapters/plunk": "./src/exports/adapters/plunk.ts",
+		"./adapters/postgres-search": "./src/exports/adapters/postgres-search.ts",
+		"./adapters/redis-kv": "./src/exports/adapters/redis-kv.ts",
+		"./adapters/redis-streams": "./src/exports/adapters/redis-streams.ts",
+		"./adapters/resend": "./src/exports/adapters/resend.ts",
+		"./adapters/smtp": "./src/exports/adapters/smtp.ts",
 		"./cli": "./src/exports/cli.ts",
 		"./client": "./src/exports/client.ts",
 		"./drizzle": "./src/exports/drizzle.ts",
@@ -33,6 +49,22 @@
 		"access": "public",
 		"exports": {
 			".": "./dist/index.mjs",
+			"./adapters/bullmq": "./dist/adapters/bullmq.mjs",
+			"./adapters/cloudflare": "./dist/adapters/cloudflare.mjs",
+			"./adapters/cloudflare-kv": "./dist/adapters/cloudflare-kv.mjs",
+			"./adapters/cloudflare-queues": "./dist/adapters/cloudflare-queues.mjs",
+			"./adapters/cloudflare-realtime": "./dist/adapters/cloudflare-realtime.mjs",
+			"./adapters/console": "./dist/adapters/console.mjs",
+			"./adapters/memory-kv": "./dist/adapters/memory-kv.mjs",
+			"./adapters/pg-boss": "./dist/adapters/pg-boss.mjs",
+			"./adapters/pg-notify": "./dist/adapters/pg-notify.mjs",
+			"./adapters/pgvector-search": "./dist/adapters/pgvector-search.mjs",
+			"./adapters/plunk": "./dist/adapters/plunk.mjs",
+			"./adapters/postgres-search": "./dist/adapters/postgres-search.mjs",
+			"./adapters/redis-kv": "./dist/adapters/redis-kv.mjs",
+			"./adapters/redis-streams": "./dist/adapters/redis-streams.mjs",
+			"./adapters/resend": "./dist/adapters/resend.mjs",
+			"./adapters/smtp": "./dist/adapters/smtp.mjs",
 			"./cli": "./dist/cli.mjs",
 			"./client": "./dist/client.mjs",
 			"./drizzle": "./dist/drizzle.mjs",
@@ -69,9 +101,9 @@
 		"@types/pg": "^8.16.0",
 		"@types/qs": "^6.9.17",
 		"@types/react": "^19.2.7",
+		"bullmq": "^5.0.0",
 		"bun-types": "latest",
 		"drizzle-kit": "1.0.0-beta.6-4414a19",
-		"ioredis": "^5.4.2",
 		"nodemailer": "^7.0.12",
 		"pg": "^8.13.1",
 		"pg-boss": "^12.5.4",
@@ -80,8 +112,8 @@
 	"peerDependencies": {
 		"@react-email/components": "^1.0.2",
 		"@react-email/render": "^2.0.0",
+		"bullmq": "^5.0.0",
 		"drizzle-kit": "1.0.0-beta.6-4414a19",
-		"ioredis": "^5.4.2",
 		"nodemailer": "^7.0.12",
 		"pg": "^8.13.1",
 		"pg-boss": "^12.5.4"
@@ -93,10 +125,10 @@
 		"@react-email/render": {
 			"optional": true
 		},
-		"drizzle-kit": {
+		"bullmq": {
 			"optional": true
 		},
-		"ioredis": {
+		"drizzle-kit": {
 			"optional": true
 		},
 		"nodemailer": {

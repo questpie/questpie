@@ -31,7 +31,7 @@ import {
 } from "../ui/sheet";
 import type { ArrayFieldConfig, BaseFieldProps } from "./field-types";
 import { gridColumnClasses } from "./field-utils";
-import { LocaleBadge } from "./locale-badge";
+import { FieldCountAccessory, FieldWrapper } from "./field-wrapper";
 
 // ============================================================================
 // Types
@@ -50,7 +50,10 @@ interface ObjectArrayFieldProps
 			| "orderable"
 			| "minItems"
 			| "maxItems"
-		> {}
+		> {
+	readOnly?: boolean;
+	error?: string;
+}
 
 // ============================================================================
 // Nested Field Renderer (for object items)
@@ -63,12 +66,12 @@ interface ItemFieldRendererProps {
 	disabled?: boolean;
 }
 
-function ItemFieldRenderer({
+const ItemFieldRenderer = React.memo(function ItemFieldRenderer({
 	fieldName,
 	fieldDef,
 	parentName,
 	disabled,
-}: ItemFieldRendererProps) {
+}: ItemFieldRendererProps): React.ReactElement {
 	const resolveText = useResolveText();
 	const fullName = `${parentName}.${fieldName}`;
 	const options = (fieldDef["~options"] || {}) as Record<string, any>;
@@ -112,7 +115,7 @@ function ItemFieldRenderer({
 			{...fieldSpecificOptions}
 		/>
 	);
-}
+});
 
 // ============================================================================
 // Item Fields Layout
@@ -127,14 +130,14 @@ interface ObjectArrayItemFieldsProps {
 	disabled?: boolean;
 }
 
-function ObjectArrayItemFields({
+const ObjectArrayItemFields = React.memo(function ObjectArrayItemFields({
 	fieldEntries,
 	layout,
 	columns,
 	name,
 	index,
 	disabled,
-}: ObjectArrayItemFieldsProps) {
+}: ObjectArrayItemFieldsProps): React.ReactElement {
 	if (fieldEntries.length === 0) {
 		return (
 			<div className="py-2">
@@ -176,7 +179,156 @@ function ObjectArrayItemFields({
 
 	// Default: stack
 	return <div className="space-y-4">{fieldElements}</div>;
+});
+
+type ObjectArrayItemLabelProps = {
+	name: string;
+	index: number;
+	fallbackLabel?: string;
+	resolveItemLabel: (item: any, index: number) => string;
+};
+
+function ObjectArrayItemLabel({
+	name,
+	index,
+	fallbackLabel,
+	resolveItemLabel,
+}: ObjectArrayItemLabelProps): React.ReactElement {
+	const { control } = useFormContext();
+	const itemValue = useWatch({ control, name: `${name}.${index}` });
+
+	return <>{resolveItemLabel(itemValue, index) || fallbackLabel}</>;
 }
+
+type ObjectArrayItemRowProps = {
+	index: number;
+	totalCount: number;
+	fieldEntries: [string, any][];
+	layout: string;
+	columns: number;
+	name: string;
+	mode: string;
+	orderable: boolean;
+	canRemove: boolean;
+	disabled?: boolean;
+	itemFieldsDisabled?: boolean;
+	resolveItemLabel: (item: any, index: number) => string;
+	onEdit: (index: number) => void;
+	onMove: (from: number, to: number) => void;
+	onRemove: (index: number) => void;
+	t: ReturnType<typeof useTranslation>["t"];
+};
+
+const ObjectArrayItemRow = React.memo(function ObjectArrayItemRow({
+	index,
+	totalCount,
+	fieldEntries,
+	layout,
+	columns,
+	name,
+	mode,
+	orderable,
+	canRemove,
+	disabled,
+	itemFieldsDisabled,
+	resolveItemLabel,
+	onEdit,
+	onMove,
+	onRemove,
+	t,
+}: ObjectArrayItemRowProps): React.ReactElement {
+	const canMoveUp = orderable && index > 0;
+	const canMoveDown = orderable && index < totalCount - 1;
+
+	return (
+		<div className="panel-surface overflow-hidden">
+			<div className="border-border-subtle bg-surface-low flex items-center justify-between border-b px-3 py-2">
+				<div className="flex min-w-0 items-center gap-2">
+					<span className="text-muted-foreground shrink-0 text-xs tabular-nums">
+						#{index + 1}
+					</span>
+					<span className="min-w-0 truncate text-sm font-medium">
+						<ObjectArrayItemLabel
+							name={name}
+							index={index}
+							resolveItemLabel={resolveItemLabel}
+						/>
+					</span>
+				</div>
+				<div className="flex shrink-0 items-center gap-1">
+					{orderable && (
+						<>
+							<Button
+								type="button"
+								variant="ghost"
+								size="icon-sm"
+								className="relative after:absolute after:-inset-1"
+								onClick={() => onMove(index, index - 1)}
+								disabled={!canMoveUp || disabled}
+								title={t("field.moveUp")}
+								aria-label={t("field.moveUp")}
+							>
+								<Icon icon="ph:caret-up" className="size-3.5" />
+							</Button>
+							<Button
+								type="button"
+								variant="ghost"
+								size="icon-sm"
+								className="relative after:absolute after:-inset-1"
+								onClick={() => onMove(index, index + 1)}
+								disabled={!canMoveDown || disabled}
+								title={t("field.moveDown")}
+								aria-label={t("field.moveDown")}
+							>
+								<Icon icon="ph:caret-down" className="size-3.5" />
+							</Button>
+						</>
+					)}
+					{mode !== "inline" && (
+						<Button
+							type="button"
+							variant="ghost"
+							size="icon-sm"
+							className="relative after:absolute after:-inset-1"
+							onClick={() => onEdit(index)}
+							disabled={disabled}
+							title={t("common.edit")}
+							aria-label={t("common.edit")}
+						>
+							<Icon icon="ph:pencil" className="size-3.5" />
+						</Button>
+					)}
+					{canRemove && (
+						<Button
+							type="button"
+							variant="ghost"
+							size="icon-sm"
+							className="relative after:absolute after:-inset-1"
+							onClick={() => onRemove(index)}
+							disabled={disabled}
+							title={t("common.remove")}
+							aria-label={t("common.remove")}
+						>
+							<Icon icon="ph:trash" className="size-3.5" />
+						</Button>
+					)}
+				</div>
+			</div>
+			{mode === "inline" && (
+				<div className="p-3">
+					<ObjectArrayItemFields
+						fieldEntries={fieldEntries}
+						layout={layout}
+						columns={columns}
+						name={name}
+						index={index}
+						disabled={itemFieldsDisabled}
+					/>
+				</div>
+			)}
+		</div>
+	);
+});
 
 // ============================================================================
 // Main Component
@@ -189,6 +341,8 @@ export function ObjectArrayField({
 	placeholder,
 	required,
 	disabled,
+	readOnly,
+	error,
 	localized,
 	locale,
 	item: itemProp,
@@ -199,7 +353,7 @@ export function ObjectArrayField({
 	orderable = false,
 	minItems,
 	maxItems,
-}: ObjectArrayFieldProps) {
+}: ObjectArrayFieldProps): React.ReactElement {
 	const { t } = useTranslation();
 	const resolveText = useResolveText();
 	const resolvedPlaceholder = placeholder
@@ -209,7 +363,6 @@ export function ObjectArrayField({
 	const form = useFormContext();
 	const { control } = form;
 	const { fields, append, remove, move } = useFieldArray({ control, name });
-	const values = useWatch({ control, name }) as any[] | undefined;
 
 	const admin = useAdminStore(selectAdmin);
 	const [activeIndex, setActiveIndex] = React.useState<number | null>(null);
@@ -234,9 +387,13 @@ export function ObjectArrayField({
 		return itemProp;
 	}, [itemProp, admin]);
 
-	const fieldEntries = Object.entries(itemFields);
-	const canAddMore = !maxItems || fields.length < maxItems;
-	const canRemove = !minItems || fields.length > minItems;
+	const fieldEntries = React.useMemo(
+		() => Object.entries(itemFields),
+		[itemFields],
+	);
+	const withinMaxItems = !maxItems || fields.length < maxItems;
+	const canAddMore = !readOnly && withinMaxItems;
+	const canRemove = !readOnly && (!minItems || fields.length > minItems);
 	const fallbackLabel = resolvedLabel || "Item";
 	const emptyLabel = t("array.empty", { name: fallbackLabel });
 	const addLabel = t("array.addItem", { name: fallbackLabel });
@@ -260,8 +417,8 @@ export function ObjectArrayField({
 		[fallbackLabel, itemLabelProp, resolveText],
 	);
 
-	const handleAdd = () => {
-		if (disabled || !canAddMore) return;
+	const handleAdd = React.useCallback(() => {
+		if (disabled || readOnly || !canAddMore) return;
 		// Create empty object with keys from field definitions (immutable pattern)
 		const emptyItem = Object.fromEntries(
 			fieldEntries.map(([key]) => [key, undefined]),
@@ -271,40 +428,59 @@ export function ObjectArrayField({
 			setActiveIndex(fields.length);
 			setIsOpen(true);
 		}
-	};
+	}, [
+		append,
+		canAddMore,
+		disabled,
+		readOnly,
+		fieldEntries,
+		fields.length,
+		mode,
+	]);
 
-	const handleRemove = (index: number) => {
-		if (!canRemove) return;
-		remove(index);
-		if (activeIndex === null) return;
-		if (index === activeIndex) {
-			setIsOpen(false);
-			setActiveIndex(null);
-		} else if (index < activeIndex) {
-			setActiveIndex((prev) => (prev !== null ? prev - 1 : null));
-		}
-	};
+	const handleRemove = React.useCallback(
+		(index: number) => {
+			if (!canRemove) return;
+			remove(index);
+			if (activeIndex === null) return;
+			if (index === activeIndex) {
+				setIsOpen(false);
+				setActiveIndex(null);
+			} else if (index < activeIndex) {
+				setActiveIndex((prev) => (prev !== null ? prev - 1 : null));
+			}
+		},
+		[activeIndex, canRemove, remove],
+	);
 
-	const handleMove = (from: number, to: number) => {
-		if (to < 0 || to >= fields.length) return;
-		move(from, to);
-		if (activeIndex === null) return;
-		if (activeIndex === from) {
-			setActiveIndex(to);
-		} else if (activeIndex === to) {
-			setActiveIndex(from);
-		}
-	};
+	const handleMove = React.useCallback(
+		(from: number, to: number) => {
+			if (to < 0 || to >= fields.length) return;
+			move(from, to);
+			if (activeIndex === null) return;
+			if (activeIndex === from) {
+				setActiveIndex(to);
+			} else if (activeIndex === to) {
+				setActiveIndex(from);
+			}
+		},
+		[activeIndex, fields.length, move],
+	);
 
-	const handleOpenChange = (open: boolean) => {
+	const handleEdit = React.useCallback((index: number) => {
+		setActiveIndex(index);
+		setIsOpen(true);
+	}, []);
+
+	const handleOpenChange = React.useCallback((open: boolean) => {
 		setIsOpen(open);
 		if (!open) {
 			setActiveIndex(null);
 		}
-	};
+	}, []);
 
 	const emptyState = (
-		<div className="py-2">
+		<div className="panel-surface border-border-subtle border-dashed px-3 py-3">
 			<p className="text-muted-foreground text-sm text-pretty">
 				{resolvedPlaceholder || emptyLabel}
 			</p>
@@ -319,133 +495,62 @@ export function ObjectArrayField({
 				columns={columns}
 				name={name}
 				index={activeIndex}
-				disabled={disabled}
+				disabled={disabled || readOnly}
 			/>
 		) : null;
 	const editorTitle =
-		activeIndex !== null
-			? resolveItemLabel(values?.[activeIndex], activeIndex)
-			: fallbackLabel;
+		activeIndex !== null ? (
+			<ObjectArrayItemLabel
+				name={name}
+				index={activeIndex}
+				fallbackLabel={fallbackLabel}
+				resolveItemLabel={resolveItemLabel}
+			/>
+		) : (
+			fallbackLabel
+		);
 
 	const showEditor = mode === "modal" || mode === "drawer";
 
 	return (
-		<div className="qa-object-array-field space-y-2">
-			{label && (
-				<div className="flex items-center gap-2">
-					<label htmlFor={name} className="text-sm font-medium">
-						{resolvedLabel}
-						{required && <span className="text-destructive">*</span>}
-						{maxItems && (
-							<span className="text-muted-foreground ml-2 text-xs tabular-nums">
-								({fields.length}/{maxItems})
-							</span>
-						)}
-					</label>
-					{localized && <LocaleBadge locale={locale || "i18n"} />}
-				</div>
-			)}
-			{description && (
-				<p className="text-muted-foreground text-sm text-pretty">
-					{resolveText(description)}
-				</p>
-			)}
-
-			<div className="space-y-3">
+		<FieldWrapper
+			name={name}
+			label={label}
+			description={description}
+			required={required}
+			disabled={disabled}
+			readOnly={readOnly}
+			error={error}
+			localized={localized}
+			locale={locale}
+			labelAccessory={
+				<FieldCountAccessory count={fields.length} max={maxItems} />
+			}
+		>
+			<div className="qa-object-array-field space-y-3">
 				{fields.length === 0
 					? emptyState
-					: fields.map((field, index) => {
-							const itemValue = values?.[index];
-							const itemLabel = resolveItemLabel(itemValue, index);
-							const canMoveUp = orderable && index > 0;
-							const canMoveDown = orderable && index < fields.length - 1;
-
-							return (
-								<div key={field.id} className="panel-surface overflow-hidden">
-									<div className="border-border-subtle bg-surface-low flex items-center justify-between border-b px-3 py-2">
-										<div className="flex items-center gap-2">
-											<span className="text-muted-foreground text-xs tabular-nums">
-												#{index + 1}
-											</span>
-											<span className="text-sm font-medium">{itemLabel}</span>
-										</div>
-										<div className="flex items-center gap-1">
-											{orderable && (
-												<>
-													<Button
-														type="button"
-														variant="ghost"
-														size="icon-sm"
-														className="relative after:absolute after:-inset-1"
-														onClick={() => handleMove(index, index - 1)}
-														disabled={!canMoveUp || disabled}
-														title={t("field.moveUp")}
-														aria-label={t("field.moveUp")}
-													>
-														<Icon icon="ph:caret-up" className="size-3.5" />
-													</Button>
-													<Button
-														type="button"
-														variant="ghost"
-														size="icon-sm"
-														className="relative after:absolute after:-inset-1"
-														onClick={() => handleMove(index, index + 1)}
-														disabled={!canMoveDown || disabled}
-														title={t("field.moveDown")}
-														aria-label={t("field.moveDown")}
-													>
-														<Icon icon="ph:caret-down" className="size-3.5" />
-													</Button>
-												</>
-											)}
-											{mode !== "inline" && (
-												<Button
-													type="button"
-													variant="ghost"
-													size="icon-sm"
-													className="relative after:absolute after:-inset-1"
-													onClick={() => {
-														setActiveIndex(index);
-														setIsOpen(true);
-													}}
-													disabled={disabled}
-													title={t("common.edit")}
-													aria-label={t("common.edit")}
-												>
-													<Icon icon="ph:pencil" className="size-3.5" />
-												</Button>
-											)}
-											{canRemove && (
-												<Button
-													type="button"
-													variant="ghost"
-													size="icon-sm"
-													className="relative after:absolute after:-inset-1"
-													onClick={() => handleRemove(index)}
-													disabled={disabled}
-													title={t("common.remove")}
-													aria-label={t("common.remove")}
-												>
-													<Icon icon="ph:trash" className="size-3.5" />
-												</Button>
-											)}
-										</div>
-									</div>
-									{mode === "inline" && (
-										<div className="p-3">
-											<ObjectArrayItemFields
-												fieldEntries={fieldEntries}
-												layout={layout}
-												columns={columns}
-												name={name}
-												index={index}
-												disabled={disabled}
-											/>
-										</div>
-									)}
-								</div>
-							);
-						})}
+					: fields.map((field, index) => (
+							<ObjectArrayItemRow
+								key={field.id}
+								index={index}
+								totalCount={fields.length}
+								fieldEntries={fieldEntries}
+								layout={layout}
+								columns={columns}
+								name={name}
+								mode={mode}
+								orderable={orderable && !readOnly}
+								canRemove={canRemove}
+								disabled={disabled}
+								itemFieldsDisabled={disabled || readOnly}
+								resolveItemLabel={resolveItemLabel}
+								onEdit={handleEdit}
+								onMove={handleMove}
+								onRemove={handleRemove}
+								t={t}
+							/>
+						))}
 			</div>
 
 			{canAddMore && (
@@ -489,6 +594,6 @@ export function ObjectArrayField({
 					</SheetContent>
 				</Sheet>
 			)}
-		</div>
+		</FieldWrapper>
 	);
 }

@@ -1,6 +1,6 @@
 ---
 title: Realtime Infrastructure
-description: Realtime adapters — pgNotify for single-instance, Redis Streams for multi-instance.
+description: Realtime adapters — pgNotify, Redis Streams, and Cloudflare Durable Objects.
 ---
 
 QUESTPIE supports real-time data updates via `POST /realtime` multiplexed endpoint.
@@ -12,7 +12,8 @@ QUESTPIE supports real-time data updates via `POST /realtime` multiplexed endpoi
 Uses PostgreSQL `LISTEN/NOTIFY`. Works for single-instance deployments:
 
 ```ts title="questpie.config.ts"
-import { pgNotifyAdapter, runtimeConfig } from "questpie";
+import { runtimeConfig } from "questpie";
+import { pgNotifyAdapter } from "questpie/adapters/pg-notify";
 
 export default runtimeConfig({
 	realtime: {
@@ -28,7 +29,8 @@ export default runtimeConfig({
 Uses Redis Streams. Required for multi-instance deployments:
 
 ```ts
-import { redisStreamsAdapter } from "questpie";
+import { runtimeConfig } from "questpie";
+import { redisStreamsAdapter } from "questpie/adapters/redis-streams";
 
 export default runtimeConfig({
 	realtime: {
@@ -39,12 +41,63 @@ export default runtimeConfig({
 });
 ```
 
+### cloudflareRealtimeAdapter
+
+Cloudflare Workers require an explicit Durable Object-backed realtime adapter. The Cloudflare Worker entrypoint validates that this adapter is present.
+
+```ts title="questpie.config.ts"
+import { runtimeConfig } from "questpie";
+import {
+	cloudflareRealtimeAdapter,
+	type CloudflareDurableObjectNamespace,
+} from "questpie/adapters/cloudflare";
+
+async function getRealtimeNamespace(): Promise<CloudflareDurableObjectNamespace> {
+	const { env } = await import("cloudflare:workers");
+	return env.QUESTPIE_REALTIME as CloudflareDurableObjectNamespace;
+}
+
+export default runtimeConfig({
+	realtime: {
+		adapter: cloudflareRealtimeAdapter({
+			namespace: getRealtimeNamespace,
+		}),
+	},
+});
+```
+
+Export the Durable Object handler from your Worker:
+
+```ts title="worker.ts"
+import { app } from "#questpie";
+import {
+	createCloudflareRealtimeDurableObjectHandler,
+	createCloudflareWorkerHandlers,
+} from "questpie/adapters/cloudflare";
+
+export default createCloudflareWorkerHandlers(app, { basePath: "/api" });
+
+const realtimeDurableObject = createCloudflareRealtimeDurableObjectHandler(
+	app,
+	{
+		basePath: "/api",
+	},
+);
+
+export class QuestpieRealtimeDurableObject {
+	fetch(request: Request) {
+		return realtimeDurableObject(request);
+	}
+}
+```
+
 ## When to Use Which
 
-| Adapter               | Use case                                       |
-| --------------------- | ---------------------------------------------- |
-| `pgNotifyAdapter`     | Single server, development, simple deployments |
-| `redisStreamsAdapter` | Multiple servers, horizontal scaling           |
+| Adapter                     | Use case                                       |
+| --------------------------- | ---------------------------------------------- |
+| `pgNotifyAdapter`           | Single server, development, simple deployments |
+| `redisStreamsAdapter`       | Multiple servers, horizontal scaling           |
+| `cloudflareRealtimeAdapter` | Cloudflare Workers + Durable Objects           |
 
 ## Related Pages
 

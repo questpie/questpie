@@ -35,6 +35,11 @@ Source-of-truth guidance for AI agents working in this monorepo.
 
 Internal imports use the `#questpie/*` subpath alias (e.g. `#questpie/server/fields/field`).
 
+### Public Package Entrypoints
+
+- Public package entrypoints must be declared through `packages/*/tsdown.config.ts` entry globs first. Keep `package.json` `exports` / `publishConfig.exports` aligned with the tsdown-generated paths; do not add ad hoc package subpaths that are not represented in tsdown config.
+- Concrete adapter implementations live under `src/exports/adapters/*` and publish as `questpie/adapters/<name>` instead of expanding the root `questpie` barrel. The root entrypoint should stay focused on framework API, factories, interfaces, and shared types so platform-specific adapter dependencies do not affect unrelated imports.
+
 ### Server-First Split
 
 All QUESTPIE projects follow this split:

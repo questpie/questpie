@@ -15,6 +15,7 @@
  */
 // @ts-nocheck
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+
 import { eq } from "drizzle-orm";
 
 import {
@@ -109,9 +110,7 @@ describe("Core hooks behavioral equivalence (QUE-250)", () => {
 				.from(questpieRealtimeLogTable)
 				.where(eq(questpieRealtimeLogTable.resource, "posts"));
 
-			const createEvents = logs.filter(
-				(l: any) => l.operation === "create",
-			);
+			const createEvents = logs.filter((l: any) => l.operation === "create");
 			expect(createEvents.length).toBeGreaterThanOrEqual(1);
 
 			const event = createEvents[createEvents.length - 1];
@@ -137,9 +136,7 @@ describe("Core hooks behavioral equivalence (QUE-250)", () => {
 				.from(questpieRealtimeLogTable)
 				.where(eq(questpieRealtimeLogTable.resource, "posts"));
 
-			const updateEvents = logs.filter(
-				(l: any) => l.operation === "update",
-			);
+			const updateEvents = logs.filter((l: any) => l.operation === "update");
 			expect(updateEvents.length).toBeGreaterThanOrEqual(1);
 
 			const event = updateEvents[updateEvents.length - 1];
@@ -148,14 +145,8 @@ describe("Core hooks behavioral equivalence (QUE-250)", () => {
 		});
 
 		it("bulk update emits 'bulk_update' with count payload", async () => {
-			const a = await setup.app.collections.posts.create(
-				{ title: "A" },
-				ctx,
-			);
-			const b = await setup.app.collections.posts.create(
-				{ title: "B" },
-				ctx,
-			);
+			const a = await setup.app.collections.posts.create({ title: "A" }, ctx);
+			const b = await setup.app.collections.posts.create({ title: "B" }, ctx);
 
 			await setup.app.collections.posts.update(
 				{
@@ -170,9 +161,7 @@ describe("Core hooks behavioral equivalence (QUE-250)", () => {
 				.from(questpieRealtimeLogTable)
 				.where(eq(questpieRealtimeLogTable.resource, "posts"));
 
-			const bulkEvents = logs.filter(
-				(l: any) => l.operation === "bulk_update",
-			);
+			const bulkEvents = logs.filter((l: any) => l.operation === "bulk_update");
 			expect(bulkEvents.length).toBeGreaterThanOrEqual(1);
 
 			const event = bulkEvents[bulkEvents.length - 1];
@@ -186,31 +175,20 @@ describe("Core hooks behavioral equivalence (QUE-250)", () => {
 				ctx,
 			);
 
-			await setup.app.collections.posts.deleteById(
-				{ id: post.id },
-				ctx,
-			);
+			await setup.app.collections.posts.deleteById({ id: post.id }, ctx);
 
 			const logs = await setup.app.db
 				.select()
 				.from(questpieRealtimeLogTable)
 				.where(eq(questpieRealtimeLogTable.resource, "posts"));
 
-			const deleteEvents = logs.filter(
-				(l: any) => l.operation === "delete",
-			);
+			const deleteEvents = logs.filter((l: any) => l.operation === "delete");
 			expect(deleteEvents.length).toBeGreaterThanOrEqual(1);
 		});
 
 		it("bulk delete emits 'bulk_delete' with count payload", async () => {
-			const a = await setup.app.collections.posts.create(
-				{ title: "X" },
-				ctx,
-			);
-			const b = await setup.app.collections.posts.create(
-				{ title: "Y" },
-				ctx,
-			);
+			const a = await setup.app.collections.posts.create({ title: "X" }, ctx);
+			const b = await setup.app.collections.posts.create({ title: "Y" }, ctx);
 
 			await setup.app.collections.posts.delete(
 				{ where: { id: { in: [a.id, b.id] } } },
@@ -232,10 +210,7 @@ describe("Core hooks behavioral equivalence (QUE-250)", () => {
 		});
 
 		it("notify fires after commit (adapter receives notices)", async () => {
-			await setup.app.collections.posts.create(
-				{ title: "Notify Test" },
-				ctx,
-			);
+			await setup.app.collections.posts.create({ title: "Notify Test" }, ctx);
 
 			// Adapter should have received at least one notice
 			const postNotices = realtimeAdapter.notices.filter(
@@ -259,35 +234,36 @@ describe("Core hooks behavioral equivalence (QUE-250)", () => {
 			expect(typeof setup.app.search.scheduleIndex).toBe("function");
 		});
 
-		it("scheduleIndex returns false when queue has no index-records job (sync fallback)", () => {
-			// Without core module's jobs in queue, scheduleIndex should return false
-			// (callers fall back to sync indexing)
+		it("scheduleIndex queues index-records via literal job name alias", async () => {
+			setup.app.mocks.queue.clearJobs();
+
 			const result = setup.app.search.scheduleIndex("posts", "test-id");
-			expect(result).toBe(false);
+			expect(result).toBe(true);
+
+			await setup.app.search.flushPending();
+
+			const indexJobs = setup.app.mocks.queue.getJobsByName("index-records");
+			expect(indexJobs).toHaveLength(1);
+			expect(indexJobs[0].payload).toEqual({
+				items: [{ collection: "posts", recordId: "test-id" }],
+			});
 		});
 
-		it("create triggers search indexing (sync fallback path)", async () => {
-			// Spy on the search service to track index calls
-			const indexCalls: any[] = [];
-			const originalIndex = setup.app.search.index.bind(setup.app.search);
-			setup.app.search.index = async (params: any) => {
-				indexCalls.push(params);
-				return originalIndex(params);
-			};
+		it("create triggers queued search indexing", async () => {
+			setup.app.mocks.queue.clearJobs();
 
-			await setup.app.collections.posts.create(
+			const post = await setup.app.collections.posts.create(
 				{ title: "Indexed Post" },
 				ctx,
 			);
 
-			// Allow onAfterCommit callbacks to run
-			await new Promise((r) => setTimeout(r, 100));
+			await setup.app.search.flushPending();
 
-			// Search index should have been called at least once for posts
-			const postsIndexCalls = indexCalls.filter(
-				(c) => c.collection === "posts",
-			);
-			expect(postsIndexCalls.length).toBeGreaterThanOrEqual(1);
+			const indexJobs = setup.app.mocks.queue.getJobsByName("index-records");
+			expect(indexJobs).toHaveLength(1);
+			expect(indexJobs[0].payload).toEqual({
+				items: [{ collection: "posts", recordId: post.id }],
+			});
 		});
 
 		it("delete triggers search removal", async () => {
@@ -303,10 +279,7 @@ describe("Core hooks behavioral equivalence (QUE-250)", () => {
 				ctx,
 			);
 
-			await setup.app.collections.posts.deleteById(
-				{ id: post.id },
-				ctx,
-			);
+			await setup.app.collections.posts.deleteById({ id: post.id }, ctx);
 
 			await new Promise((r) => setTimeout(r, 100));
 
@@ -336,10 +309,7 @@ describe("Core hooks behavioral equivalence (QUE-250)", () => {
 			);
 
 			// Delete
-			await setup.app.collections.posts.deleteById(
-				{ id: post.id },
-				ctx,
-			);
+			await setup.app.collections.posts.deleteById({ id: post.id }, ctx);
 
 			// Verify realtime log has correct sequence
 			const logs = await setup.app.db

@@ -24,12 +24,16 @@ These are framework-level infrastructure services configured in `runtimeConfig()
 | [OpenAPI](/docs/production/openapi)               | @questpie/openapi        | API documentation   |
 | [Deployment](/docs/production/deployment)         | Docker                   | Production setup    |
 
+Cloudflare Workers are supported through the explicit `questpie/adapters/cloudflare` entrypoint. A Cloudflare deploy must configure Hyperdrive-backed PostgreSQL, R2/S3 storage, Workers KV, Cloudflare Queues, and Durable Object realtime adapters; QUESTPIE does not fall back to Node/Bun defaults on Workers.
+
 ## Configuration
 
 All services are configured in your `questpie.config.ts`:
 
 ```ts title="questpie.config.ts"
-import { ConsoleAdapter, runtimeConfig, pgBossAdapter } from "questpie";
+import { runtimeConfig } from "questpie";
+import { ConsoleAdapter } from "questpie/adapters/console";
+import { pgBossAdapter } from "questpie/adapters/pg-boss";
 
 export default runtimeConfig({
 	app: { url: process.env.APP_URL },

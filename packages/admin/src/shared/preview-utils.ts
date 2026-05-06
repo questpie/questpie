@@ -146,23 +146,11 @@ export function createDraftModeCookie(enabled: boolean, maxAge = 3600): string {
 }
 
 /**
- * Get preview secret from environment variables.
- * Falls back to SECRET if PREVIEW_SECRET is not set.
+ * Resolve a preview secret from an explicit value.
  *
- * @returns The preview secret
+ * @deprecated Preview token signing now reads `app.config.secret` in server
+ * route handlers. Pass a secret explicitly when using standalone helpers.
  */
-export function getPreviewSecret(): string {
-	const secret =
-		process.env.PREVIEW_SECRET || process.env.SECRET || "dev-preview-secret";
-
-	if (
-		process.env.NODE_ENV === "production" &&
-		secret === "dev-preview-secret"
-	) {
-		console.warn(
-			"[preview] Using default secret in production. Set PREVIEW_SECRET or SECRET env var.",
-		);
-	}
-
-	return secret;
+export function getPreviewSecret(secret?: string): string {
+	return secret ?? "dev-preview-secret";
 }

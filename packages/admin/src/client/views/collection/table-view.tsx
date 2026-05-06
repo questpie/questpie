@@ -29,7 +29,6 @@ import {
 	type ColumnDef,
 	flexRender,
 	getCoreRowModel,
-	getSortedRowModel,
 	type RowSelectionState,
 	type SortingState,
 	useReactTable,
@@ -873,17 +872,6 @@ function TableViewInner({
 		[resolvedFields, resolvedListConfig, collectionMeta],
 	);
 
-	// Auto-detect fields to expand (uploads, relations)
-	const expandedFields = useMemo(
-		() =>
-			autoExpandFields({
-				fields: resolvedFields,
-				list: resolvedListConfig as any,
-				relations: collectionMeta?.relations,
-			}),
-		[resolvedFields, resolvedListConfig, collectionMeta?.relations],
-	);
-
 	// Filter builder sheet state
 	const [isSheetOpen, setIsSheetOpen] = useSidebarSearchParam("view-options", {
 		legacyKey: "viewOptions",
@@ -960,6 +948,32 @@ function TableViewInner({
 		user?.id,
 	);
 	const effectiveRealtime = viewState.config.realtime ?? resolvedRealtime;
+	const visibleColumnsForExpansion = useMemo(
+		() =>
+			viewState.config.visibleColumns.length > 0
+				? viewState.config.visibleColumns
+				: defaultColumns,
+		[viewState.config.visibleColumns, defaultColumns],
+	);
+
+	// Auto-detect fields to expand (uploads, relations), scoped to the columns
+	// currently rendered by the table. Hidden fields should not make the list
+	// query fan out into extra joins/lookup work.
+	const expandedFields = useMemo(
+		() =>
+			autoExpandFields({
+				fields: resolvedFields,
+				list: resolvedListConfig as any,
+				visibleColumns: visibleColumnsForExpansion,
+				relations: collectionMeta?.relations,
+			}),
+		[
+			resolvedFields,
+			resolvedListConfig,
+			visibleColumnsForExpansion,
+			collectionMeta?.relations,
+		],
+	);
 	const isKnownSortField = React.useCallback(
 		(field: string | undefined) =>
 			!!field && (field === "_title" || !!resolvedFields?.[field]),
@@ -977,7 +991,7 @@ function TableViewInner({
 		if (canUseOrderableSort) {
 			return { field: orderField, direction: orderDirection };
 		}
-		return null;
+		return { field: "createdAt", direction: "desc" as const };
 	}, [
 		viewState.config.sortConfig,
 		resolvedListConfig?.defaultSort,
@@ -1610,11 +1624,11 @@ function TableViewInner({
 		data: filteredItems as any[],
 		columns: visibleColumnDefs,
 		getCoreRowModel: getCoreRowModel(),
-		getSortedRowModel: getSortedRowModel(),
+		manualSorting: true,
 		onSortingChange: handleSortingChange,
 		enableRowSelection: true,
 		onRowSelectionChange: setRowSelection,
-		getRowId: (row: any) => row.id, // Use item ID as row ID for selection
+		getRowId: (row: any) => row.id,
 		state: {
 			sorting,
 			rowSelection,

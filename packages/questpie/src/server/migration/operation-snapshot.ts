@@ -146,6 +146,7 @@ export class OperationSnapshotManager {
 
 		// Build ddl map from operations
 		const ddlMap = new Map<string, any>();
+		const extensionMap = new Map<string, any>();
 
 		// Start with base snapshot's ddl
 		if (snapshot.ddl) {
@@ -153,6 +154,10 @@ export class OperationSnapshotManager {
 				const key = this.getEntityKey(entity);
 				ddlMap.set(key, entity);
 			}
+		}
+		for (const extension of (snapshot as any).extensions ?? []) {
+			if (!extension?.name) continue;
+			extensionMap.set(String(extension.name), extension);
 		}
 
 		// Apply operations
@@ -165,11 +170,22 @@ export class OperationSnapshotManager {
 				} else if (operation.type === "remove") {
 					ddlMap.delete(key);
 				}
+			} else if (operation.path.startsWith("extensions.")) {
+				const key = this.decodeKey(operation.path.substring(11)); // Remove "extensions." prefix
+
+				if (operation.type === "set") {
+					extensionMap.set(key, operation.value);
+				} else if (operation.type === "remove") {
+					extensionMap.delete(key);
+				}
 			}
 		}
 
 		// Convert map back to array
 		snapshot.ddl = Array.from(ddlMap.values());
+		(snapshot as any).extensions = Array.from(extensionMap.values()).sort(
+			(a, b) => String(a.name).localeCompare(String(b.name)),
+		);
 
 		return snapshot;
 	}

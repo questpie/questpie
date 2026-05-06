@@ -8,7 +8,7 @@
  * - Auto-generates fields when no form config is defined
  */
 
-import type { CollectionSchema } from "questpie";
+import type { CollectionSchema, GlobalSchema } from "questpie";
 import type { QuestpieApp } from "questpie/client";
 import * as React from "react";
 import { useFormContext, useWatch } from "react-hook-form";
@@ -123,6 +123,18 @@ interface AutoFormFieldsProps<
 	 * All collection configs (for embedded collections)
 	 */
 	allCollectionsConfig?: Record<string, CollectionConfig>;
+
+	/**
+	 * Already-resolved field definitions from a parent view.
+	 * Avoids rebuilding the same schema-backed FieldInstance map in nested shells.
+	 */
+	resolvedFields?: Record<string, FieldInstance>;
+
+	/**
+	 * Already-loaded collection/global schema from a parent view.
+	 * Avoids an extra schema observer when the parent already needed the schema.
+	 */
+	schema?: CollectionSchema | GlobalSchema;
 }
 
 // ============================================================================
@@ -215,40 +227,6 @@ function collectLayoutDependencies(
 // ============================================================================
 // Schema Mapping Helpers
 // ============================================================================
-
-function formatTabId(label: unknown, index: number): string {
-	if (typeof label === "string") {
-		const normalized = label
-			.toLowerCase()
-			.replace(/\s+/g, "-")
-			.replace(/[^a-z0-9-_]/g, "");
-		return normalized || `tab-${index}`;
-	}
-	if (label && typeof label === "object" && "key" in label) {
-		const key = (label as { key?: string }).key;
-		if (key) return key;
-	}
-	return `tab-${index}`;
-}
-
-function mapSectionsToLayout(
-	sections: Array<{
-		label?: any;
-		description?: any;
-		fields: FieldLayoutItem[];
-		collapsible?: boolean;
-		defaultCollapsed?: boolean;
-	}>,
-): FieldLayoutItem[] {
-	return sections.map((section) => ({
-		type: "section",
-		label: section.label,
-		description: section.description,
-		fields: section.fields,
-		wrapper: section.collapsible ? "collapsible" : "flat",
-		defaultCollapsed: section.defaultCollapsed,
-	}));
-}
 
 function mapFormSchemaToConfig(
 	form?: AdminFormSchema,
@@ -911,18 +889,23 @@ export function AutoFormFields<T extends QuestpieApp, K extends string>({
 	fieldResolver,
 	fieldPrefix,
 	allCollectionsConfig,
+	resolvedFields: providedFields,
+	schema: providedSchema,
 }: AutoFormFieldsProps<T, K>): React.ReactElement {
 	const isActionForm = collection === "__action__";
+	const shouldFetchSchema = !providedFields || !providedSchema;
 	// Use the appropriate hook based on mode
 	const collectionResult = useCollectionFields(
 		mode === "collection" ? collection : "",
 		{
 			fallbackFields: mode === "collection" ? config?.fields : undefined,
-			schemaQueryOptions: { enabled: mode === "collection" && !isActionForm },
+			schemaQueryOptions: {
+				enabled: mode === "collection" && !isActionForm && shouldFetchSchema,
+			},
 		},
 	);
 	const globalResult = useGlobalFields(mode === "global" ? collection : "", {
-		schemaQueryOptions: { enabled: mode === "global" },
+		schemaQueryOptions: { enabled: mode === "global" && shouldFetchSchema },
 	});
 	const { data: collectionMeta } = useCollectionMeta(collection as any, {
 		enabled: mode === "collection" && !isActionForm,
@@ -933,10 +916,13 @@ export function AutoFormFields<T extends QuestpieApp, K extends string>({
 
 	const resolvedFields =
 		mode === "global"
-			? { ...globalResult.fields, ...config?.fields }
-			: collectionResult.fields;
+			? { ...(providedFields ?? globalResult.fields), ...config?.fields }
+			: (providedFields ?? collectionResult.fields);
 	const schema =
-		mode === "global" ? (globalResult.schema as any) : collectionResult.schema;
+		providedSchema ??
+		(mode === "global"
+			? (globalResult.schema as any)
+			: collectionResult.schema);
 	const entityMeta = mode === "global" ? globalMeta : collectionMeta;
 	const form = useFormContext() as any;
 	const resolveText = useResolveText();
@@ -1065,22 +1051,24 @@ export function AutoFormFields<T extends QuestpieApp, K extends string>({
 					<aside
 						className={cn(
 							"qa-form-fields__sidebar",
-							"w-full @max-2xl:pb-2 @2xl:max-w-[18rem] @2xl:pl-1",
+							"w-full @max-2xl:pb-2 @2xl:sticky @2xl:top-4 @2xl:h-[calc(100svh-7rem)] @2xl:min-h-0 @2xl:max-w-[18rem] @2xl:shrink-0 @2xl:self-start @2xl:pl-1",
 						)}
 					>
-						<div className="bg-surface-low/45 space-y-4 rounded-md px-3 py-3 @2xl:sticky @2xl:top-4 @2xl:h-auto">
-							<SidebarRenderer
-								sidebar={formConfig.sidebar}
-								fields={fields}
-								collection={collection}
-								mode={mode}
-								registry={registry}
-								fieldPrefix={fieldPrefix}
-								allCollectionsConfig={allCollectionsConfig}
-								entityMeta={entityMeta}
-								formValues={formValues}
-								resolveText={resolveText}
-							/>
+						<div className="bg-surface-low/45 flex min-h-0 flex-col rounded-md @2xl:h-full">
+							<div className="scrollbar-thin min-h-0 space-y-4 overflow-y-auto px-3 py-3 @2xl:flex-1">
+								<SidebarRenderer
+									sidebar={formConfig.sidebar}
+									fields={fields}
+									collection={collection}
+									mode={mode}
+									registry={registry}
+									fieldPrefix={fieldPrefix}
+									allCollectionsConfig={allCollectionsConfig}
+									entityMeta={entityMeta}
+									formValues={formValues}
+									resolveText={resolveText}
+								/>
+							</div>
 						</div>
 					</aside>
 				</div>

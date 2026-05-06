@@ -6,8 +6,9 @@ import {
 	expect,
 	test,
 } from "bun:test";
-import { existsSync, mkdirSync, readdirSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 
 import type { PGlite } from "@electric-sql/pglite";
 import { sql } from "drizzle-orm";
@@ -16,11 +17,17 @@ import { createApp, module } from "../../src/exports/index.js";
 import { collection } from "../../src/exports/index.js";
 import { MigrationRunner } from "../../src/server/migration/runner.js";
 import type { Migration } from "../../src/server/migration/types.js";
+import { createPostgresSearchAdapter } from "../../src/server/modules/core/integrated/search/adapters/postgres.js";
 import { MockKVAdapter } from "../utils/mocks/kv.adapter";
 import { MockLogger } from "../utils/mocks/logger.adapter";
 import { MockMailAdapter } from "../utils/mocks/mailer.adapter";
 import { MockQueueAdapter } from "../utils/mocks/queue.adapter";
-import { createTestDb, testMigrationDir } from "../utils/test-db";
+import {
+	createTestDb,
+	testMigrationDir as baseTestMigrationDir,
+} from "../utils/test-db";
+
+const testMigrationDir = join(baseTestMigrationDir, "migrations");
 
 describe("Migration System - Programmatic", () => {
 	let app: any;
@@ -418,6 +425,182 @@ describe("Migration System - DrizzleMigrationGenerator", () => {
 			migrationDir: testMigrationDir,
 		});
 		expect(result2.skipped).toBe(true);
+	});
+
+	test("should emit required search extensions before dependent indexes", async () => {
+		const { DrizzleMigrationGenerator } =
+			await import("../../src/server/migration/generator.js");
+
+		const adapter = createPostgresSearchAdapter();
+		const posts = collection("posts")
+			.fields(({ f }) => ({
+				title: f.text(255).required(),
+				content: f.textarea(),
+			}))
+			.title(({ f }) => f.title)
+			.searchable({ content: (record) => record.content || "" });
+
+		const def = module({
+			name: "search-extension-test",
+			collections: { posts },
+		});
+		const app = await createApp(def, {
+			app: { url: "http://localhost:3000" },
+			db: { pglite: pgClient },
+			email: { adapter: new MockMailAdapter() },
+			queue: { adapter: new MockQueueAdapter() },
+			kv: { adapter: new MockKVAdapter() },
+			logger: { adapter: new MockLogger() },
+			search: adapter,
+		});
+
+		const generator = new DrizzleMigrationGenerator();
+		const result = await generator.generateMigration({
+			migrationName: "searchExtension20250108",
+			fileBaseName: "20250108_search_extension",
+			schema: app.getSchema(),
+			migrationDir: testMigrationDir,
+			extensions: adapter.getExtensions(),
+		});
+
+		expect(result.skipped).toBe(false);
+
+		const contents = readFileSync(
+			join(testMigrationDir, "20250108_search_extension.ts"),
+			"utf8",
+		);
+		const extensionIndex = contents.indexOf(
+			'CREATE EXTENSION IF NOT EXISTS "pg_trgm";',
+		);
+		const trigramIndex = contents.indexOf('CREATE INDEX "idx_search_trigram"');
+		expect(extensionIndex).toBeGreaterThanOrEqual(0);
+		expect(trigramIndex).toBeGreaterThanOrEqual(0);
+		expect(extensionIndex).toBeLessThan(trigramIndex);
+
+		const snapshot = JSON.parse(
+			readFileSync(
+				join(testMigrationDir, "snapshots", "20250108_search_extension.json"),
+				"utf8",
+			),
+		);
+		expect(
+			snapshot.operations.some(
+				(operation: any) => operation.path === "extensions.pg_trgm",
+			),
+		).toBe(true);
+	});
+
+	test("should not re-emit search extensions once present in snapshots", async () => {
+		const { DrizzleMigrationGenerator } =
+			await import("../../src/server/migration/generator.js");
+
+		const adapter = createPostgresSearchAdapter();
+		const posts = collection("posts")
+			.fields(({ f }) => ({
+				title: f.text(255).required(),
+				content: f.textarea(),
+			}))
+			.title(({ f }) => f.title)
+			.searchable({ content: (record) => record.content || "" });
+
+		const def = module({
+			name: "search-extension-repeat-test",
+			collections: { posts },
+		});
+		const app = await createApp(def, {
+			app: { url: "http://localhost:3000" },
+			db: { pglite: pgClient },
+			email: { adapter: new MockMailAdapter() },
+			queue: { adapter: new MockQueueAdapter() },
+			kv: { adapter: new MockKVAdapter() },
+			logger: { adapter: new MockLogger() },
+			search: adapter,
+		});
+
+		const generator = new DrizzleMigrationGenerator();
+		const result1 = await generator.generateMigration({
+			migrationName: "searchExtensionV120250108",
+			fileBaseName: "20250108_search_extension_v1",
+			schema: app.getSchema(),
+			migrationDir: testMigrationDir,
+			extensions: adapter.getExtensions(),
+		});
+		expect(result1.skipped).toBe(false);
+
+		const result2 = await generator.generateMigration({
+			migrationName: "searchExtensionV220250108",
+			fileBaseName: "20250108_search_extension_v2",
+			schema: app.getSchema(),
+			migrationDir: testMigrationDir,
+			extensions: adapter.getExtensions(),
+		});
+		expect(result2.skipped).toBe(true);
+		expect(
+			existsSync(join(testMigrationDir, "20250108_search_extension_v2.ts")),
+		).toBe(false);
+	});
+
+	test("generated search migration runs on a clean database without runtime extension setup", async () => {
+		const { DrizzleMigrationGenerator } =
+			await import("../../src/server/migration/generator.js");
+
+		const cleanDb = await createTestDb();
+		const adapter = createPostgresSearchAdapter();
+		const posts = collection("posts")
+			.fields(({ f }) => ({
+				title: f.text(255).required(),
+				content: f.textarea(),
+			}))
+			.title(({ f }) => f.title)
+			.searchable({ content: (record) => record.content || "" });
+
+		const def = module({
+			name: "search-extension-fresh-test",
+			collections: { posts },
+		});
+		const app = await createApp(def, {
+			app: { url: "http://localhost:3000" },
+			db: { pglite: cleanDb },
+			email: { adapter: new MockMailAdapter() },
+			queue: { adapter: new MockQueueAdapter() },
+			kv: { adapter: new MockKVAdapter() },
+			logger: { adapter: new MockLogger() },
+			search: adapter,
+		});
+
+		try {
+			const generator = new DrizzleMigrationGenerator();
+			const result = await generator.generateMigration({
+				migrationName: "searchExtensionFresh20250108",
+				fileBaseName: "20250108_search_extension_fresh",
+				schema: app.getSchema(),
+				migrationDir: testMigrationDir,
+				extensions: adapter.getExtensions(),
+			});
+
+			const migrationModule = await import(
+				`${pathToFileURL(`${result.filePath}.ts`).href}?t=${Date.now()}`
+			);
+			const runner = new MigrationRunner(app.db, { silent: true });
+			await runner.fresh([migrationModule.default]);
+
+			const extensionResult = await cleanDb.query(
+				"SELECT extname FROM pg_extension WHERE extname = 'pg_trgm'",
+			);
+			expect(extensionResult.rows.length).toBe(1);
+
+			const indexResult = await cleanDb.query(`
+SELECT indexname
+FROM pg_indexes
+WHERE schemaname = 'public'
+AND tablename = 'questpie_search'
+AND indexname = 'idx_search_trigram'
+`);
+			expect(indexResult.rows.length).toBe(1);
+		} finally {
+			await app.destroy();
+			await cleanDb.close();
+		}
 	});
 
 	test("should build cumulative snapshot from migrations", async () => {

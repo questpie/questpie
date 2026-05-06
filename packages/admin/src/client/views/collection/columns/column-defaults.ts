@@ -25,6 +25,19 @@ const SYSTEM_FIELDS = new Set([
 	"updatedBy",
 ]);
 
+const DEFAULT_CONTENT_COLUMN_LIMIT = 4;
+const HEAVY_DEFAULT_FIELD_TYPES = new Set([
+	"relation",
+	"reverseRelation",
+	"upload",
+	"uploadMany",
+	"blocks",
+	"json",
+	"object",
+	"array",
+	"richText",
+]);
+
 // ============================================================================
 // Default Column Computation
 // ============================================================================
@@ -69,31 +82,30 @@ export function computeDefaultColumns(
 		return defaultCols;
 	}
 
-	// No configured columns - show ALL fields by default
-	// This ensures users see everything when no explicit column config is provided
+	// No configured columns - show a compact, fast default set.
+	// All fields remain available in the column picker.
 	const defaultCols: string[] = [titleColumn];
 
 	if (!fields || Object.keys(fields).length === 0) {
 		return defaultCols;
 	}
 
-	// Add all content fields (non-system fields first, then system fields)
+	// Add a small set of scalar content fields. Relation/upload/rich nested fields
+	// can be expensive because they often require expansion or custom renderers.
 	const contentFields: string[] = [];
-	const systemFields: string[] = [];
 
 	for (const key of Object.keys(fields)) {
 		// Skip the title field if we're already showing it
 		if (useTitleField && key === titleFieldName) continue;
+		if (SYSTEM_FIELDS.has(key)) continue;
 
-		if (SYSTEM_FIELDS.has(key)) {
-			systemFields.push(key);
-		} else {
-			contentFields.push(key);
-		}
+		const fieldType = fields[key]?.name ?? "text";
+		if (HEAVY_DEFAULT_FIELD_TYPES.has(fieldType)) continue;
+
+		contentFields.push(key);
 	}
 
-	// Add all content fields
-	defaultCols.push(...contentFields);
+	defaultCols.push(...contentFields.slice(0, DEFAULT_CONTENT_COLUMN_LIMIT));
 
 	// Add createdAt at the end if timestamps enabled (from meta or field existence)
 	const hasTimestamps = options?.meta?.timestamps ?? !!fields.createdAt;

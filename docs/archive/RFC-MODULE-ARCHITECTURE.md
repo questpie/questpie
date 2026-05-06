@@ -495,7 +495,9 @@ export default [adminModule, auditModule];
 **`questpie.config.ts`:**
 
 ```ts
-import { runtimeConfig, ConsoleAdapter, pgBossAdapter } from "questpie";
+import { runtimeConfig } from "questpie";
+import { ConsoleAdapter } from "questpie/adapters/console";
+import { pgBossAdapter } from "questpie/adapters/pg-boss";
 import { adminPlugin } from "@questpie/admin/plugin";
 
 const DATABASE_URL =

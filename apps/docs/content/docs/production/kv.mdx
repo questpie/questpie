@@ -28,6 +28,62 @@ kv: {
 }
 ```
 
+### Redis
+
+Use `redisKVAdapter` with a connected `node-redis` compatible client:
+
+```ts title="questpie.config.ts"
+import { createClient } from "redis";
+import { runtimeConfig } from "questpie";
+import { redisKVAdapter } from "questpie/adapters/redis-kv";
+
+async function getRedis() {
+	const redis = createClient({
+		url: process.env.REDIS_URL!,
+	});
+	await redis.connect();
+	return redis;
+}
+
+export default runtimeConfig({
+	kv: {
+		adapter: redisKVAdapter({
+			client: getRedis,
+			keyPrefix: "my-app:",
+		}),
+		defaultTtl: 3600,
+	},
+});
+```
+
+`keyPrefix` is recommended when the same Redis database is shared by multiple apps. The adapter uses Redis SETs for tag invalidation and expects a client with the official `node-redis` command shape. The client provider is lazy so CLI commands can import `questpie.config.ts` without opening a Redis connection.
+
+### Cloudflare Workers KV
+
+Use the Cloudflare KV namespace binding directly when deploying on Workers:
+
+```ts title="questpie.config.ts"
+import { runtimeConfig } from "questpie";
+import {
+	cloudflareKVAdapter,
+	type CloudflareKVNamespace,
+} from "questpie/adapters/cloudflare";
+
+async function getKVNamespace(): Promise<CloudflareKVNamespace> {
+	const { env } = await import("cloudflare:workers");
+	return env.QUESTPIE_KV as CloudflareKVNamespace;
+}
+
+export default runtimeConfig({
+	kv: {
+		adapter: cloudflareKVAdapter({ namespace: getKVNamespace }),
+		defaultTtl: 3600,
+	},
+});
+```
+
+Set `keyPrefix` if the same KV namespace is shared by multiple apps. The namespace provider is lazy so `questpie.config.ts` can still be imported by Bun CLI commands outside the Workers runtime.
+
 ## Usage
 
 Access through the `kv` context:

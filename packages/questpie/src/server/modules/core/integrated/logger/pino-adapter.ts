@@ -1,12 +1,14 @@
 import pino from "pino";
 
+import { getNodeEnv } from "#questpie/server/utils/env.js";
+
 import type { LoggerAdapter, LoggerConfig } from "./types.js";
 
 export class PinoLoggerAdapter implements LoggerAdapter {
 	private logger: pino.Logger;
 
 	constructor(config: LoggerConfig = {}) {
-		const isDev = process.env.NODE_ENV === "development";
+		const isDev = getNodeEnv() === "development";
 
 		this.logger = pino({
 			level: config.level || "info",

@@ -191,8 +191,6 @@ export * from "#questpie/server/global/crud/types.js";
 export * from "#questpie/server/i18n/types.js";
 export { auth } from "#questpie/server/modules/core/integrated/auth/merge.js";
 export * from "#questpie/server/modules/core/integrated/auth/types.js";
-export * from "#questpie/server/modules/core/integrated/mailer/adapters/console.adapter.js";
-export * from "#questpie/server/modules/core/integrated/mailer/adapters/smtp.adapter.js";
 export * from "#questpie/server/modules/core/integrated/mailer/adapter.js";
 export * from "#questpie/server/modules/core/integrated/mailer/service.js";
 export {
@@ -207,21 +205,14 @@ export {
 } from "#questpie/server/modules/core/integrated/mailer/template.js";
 export * from "#questpie/server/modules/core/integrated/mailer/types.js";
 export * from "#questpie/server/modules/core/integrated/queue/adapter.js";
-export * from "#questpie/server/modules/core/integrated/queue/adapters/cloudflare-queues.js";
-export * from "#questpie/server/modules/core/integrated/queue/adapters/pg-boss.js";
 export * from "#questpie/server/modules/core/integrated/queue/job.js";
 export * from "#questpie/server/modules/core/integrated/queue/service.js";
 export * from "#questpie/server/modules/core/integrated/queue/types.js";
 export * from "#questpie/server/modules/core/integrated/queue/worker.js";
 export * from "#questpie/server/modules/core/integrated/realtime/adapter.js";
-export * from "#questpie/server/modules/core/integrated/realtime/adapters/pg-notify.js";
-export * from "#questpie/server/modules/core/integrated/realtime/adapters/redis-streams.js";
 export * from "#questpie/server/modules/core/integrated/realtime/collection.js";
 export * from "#questpie/server/modules/core/integrated/realtime/service.js";
 export * from "#questpie/server/modules/core/integrated/realtime/types.js";
-// Search adapters
-export * from "#questpie/server/modules/core/integrated/search/adapters/pgvector.js";
-export * from "#questpie/server/modules/core/integrated/search/adapters/postgres.js";
 // Search module
 export * from "#questpie/server/modules/core/integrated/search/collection.js";
 export * from "#questpie/server/modules/core/integrated/search/facet-utils.js";

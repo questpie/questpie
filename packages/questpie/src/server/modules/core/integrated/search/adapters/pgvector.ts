@@ -9,7 +9,8 @@
  *
  * @example
  * ```ts
- * import { createPgVectorSearchAdapter, createOpenAIEmbeddingProvider } from "questpie/server";
+ * import { createOpenAIEmbeddingProvider } from "questpie";
+ * import { createPgVectorSearchAdapter } from "questpie/adapters/pgvector-search";
  *
  * config({
  *   search: createPgVectorSearchAdapter({
@@ -29,7 +30,7 @@
  * ## Implementation Plan
  *
  * ### Requirements
- * - pgvector extension (`CREATE EXTENSION vector;`)
+ * - pgvector extension (`CREATE EXTENSION "vector";`)
  * - EmbeddingProvider for generating embeddings
  *
  * ### Architecture
@@ -38,7 +39,7 @@
  * - Adds ivfflat or hnsw index for vector similarity
  *
  * ### Migrations
- * - search_007_pgvector_extension: `CREATE EXTENSION IF NOT EXISTS vector;`
+ * - search_007_pgvector_extension: `CREATE EXTENSION IF NOT EXISTS "vector";`
  * - search_008_embedding_column: `ALTER TABLE questpie_search ADD COLUMN embedding vector(dimensions);`
  * - search_009_embedding_index: `CREATE INDEX ... USING ivfflat (embedding vector_cosine_ops);`
  *
@@ -173,7 +174,7 @@ export class PgVectorSearchAdapter implements SearchAdapter {
 		const vectorMigrations: AdapterMigration[] = [
 			{
 				name: "search_007_pgvector_extension",
-				up: `CREATE EXTENSION IF NOT EXISTS vector;`,
+				up: `CREATE EXTENSION IF NOT EXISTS "vector";`,
 				down: `-- pgvector extension kept for other uses`,
 			},
 			{
@@ -263,8 +264,8 @@ export class PgVectorSearchAdapter implements SearchAdapter {
 	 */
 	getExtensions(): string[] {
 		return [
-			"CREATE EXTENSION IF NOT EXISTS pg_trgm;",
-			"CREATE EXTENSION IF NOT EXISTS vector;",
+			'CREATE EXTENSION IF NOT EXISTS "pg_trgm";',
+			'CREATE EXTENSION IF NOT EXISTS "vector";',
 		];
 	}
 }

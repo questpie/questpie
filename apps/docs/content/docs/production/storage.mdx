@@ -51,6 +51,28 @@ export default runtimeConfig({
 });
 ```
 
+### Cloudflare R2
+
+R2 is S3-compatible, so use the same FlyDrive `S3Driver` with the R2 endpoint:
+
+```ts
+storage: {
+  driver: new S3Driver({
+    credentials: {
+      accessKeyId: process.env.R2_ACCESS_KEY_ID!,
+      secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
+    },
+    bucket: process.env.R2_BUCKET!,
+    region: "auto",
+    endpoint: `https://${process.env.CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+    visibility: "public",
+    forcePathStyle: true,
+  }),
+}
+```
+
+For R2, use the regular FlyDrive S3 driver with Cloudflare's S3-compatible R2 endpoint.
+
 ## Client Upload
 
 ```ts

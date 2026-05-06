@@ -116,12 +116,13 @@ const assets = await client.collections.assets.uploadMany(files, {
 
 ## Queue
 
-Background jobs via [pg-boss](https://github.com/timgit/pg-boss). Jobs stored in PostgreSQL -- no external queue service needed.
+Background jobs via [pg-boss](https://github.com/timgit/pg-boss), BullMQ, or a custom queue adapter.
 
 ### Configuration
 
 ```ts
-import { pgBossAdapter, runtimeConfig } from "questpie";
+import { runtimeConfig } from "questpie";
+import { pgBossAdapter } from "questpie/adapters/pg-boss";
 
 export default runtimeConfig({
 	queue: {
@@ -131,6 +132,24 @@ export default runtimeConfig({
 	},
 });
 ```
+
+### BullMQ
+
+```ts
+import { runtimeConfig } from "questpie";
+import { bullMQAdapter } from "questpie/adapters/bullmq";
+
+export default runtimeConfig({
+	queue: {
+		adapter: bullMQAdapter({
+			connection: { url: process.env.REDIS_URL! },
+			queuePrefix: "my-app",
+		}),
+	},
+});
+```
+
+The built-in BullMQ adapter targets open-source BullMQ and does not expose per-group FIFO behavior. Use a native grouped queue adapter if the workload needs one active job per group with cross-group parallelism.
 
 ### Publishing Jobs
 
@@ -154,7 +173,8 @@ SSE-based live updates.
 Uses PostgreSQL `LISTEN/NOTIFY`. Best for single-server deployments:
 
 ```ts
-import { pgNotifyAdapter, runtimeConfig } from "questpie";
+import { runtimeConfig } from "questpie";
+import { pgNotifyAdapter } from "questpie/adapters/pg-notify";
 
 export default runtimeConfig({
 	realtime: {
@@ -170,7 +190,8 @@ export default runtimeConfig({
 Required for horizontal scaling across multiple server instances:
 
 ```ts
-import { redisStreamsAdapter, runtimeConfig } from "questpie";
+import { runtimeConfig } from "questpie";
+import { redisStreamsAdapter } from "questpie/adapters/redis-streams";
 
 export default runtimeConfig({
 	realtime: {
@@ -195,7 +216,8 @@ Transactional email with typed templates.
 ### SMTP (Production)
 
 ```ts
-import { SmtpAdapter, runtimeConfig } from "questpie";
+import { runtimeConfig } from "questpie";
+import { SmtpAdapter } from "questpie/adapters/smtp";
 
 export default runtimeConfig({
 	email: {
@@ -215,7 +237,8 @@ export default runtimeConfig({
 Logs emails to console instead of sending:
 
 ```ts
-import { ConsoleAdapter, runtimeConfig } from "questpie";
+import { runtimeConfig } from "questpie";
+import { ConsoleAdapter } from "questpie/adapters/console";
 
 export default runtimeConfig({
 	email: {
@@ -279,6 +302,26 @@ handler: async ({ email }) => {
 
 Key-value storage for caching, rate limiting, ephemeral data.
 
+### Redis
+
+```ts
+import { createClient } from "redis";
+import { redisKVAdapter } from "questpie/adapters/redis-kv";
+
+async function getRedis() {
+	const redis = createClient({ url: process.env.REDIS_URL! });
+	await redis.connect();
+	return redis;
+}
+
+export default runtimeConfig({
+	kv: {
+		adapter: redisKVAdapter({ client: getRedis, keyPrefix: "my-app:" }),
+		defaultTtl: 3600,
+	},
+});
+```
+
 ### Custom Adapter
 
 ```ts
@@ -305,7 +348,7 @@ export default runtimeConfig({
 ```ts
 handler: async ({ kv }) => {
 	// Set with TTL (seconds)
-	await kv.set("session:abc", JSON.stringify(data), { ttl: 3600 });
+	await kv.set("session:abc", JSON.stringify(data), 3600);
 
 	// Get
 	const value = await kv.get("session:abc");
@@ -478,12 +521,10 @@ const spec = generateOpenApiSpec(app, {
 ## Complete Production Config Example
 
 ```ts
-import {
-	runtimeConfig,
-	pgBossAdapter,
-	pgNotifyAdapter,
-	SmtpAdapter,
-} from "questpie";
+import { runtimeConfig } from "questpie";
+import { pgBossAdapter } from "questpie/adapters/pg-boss";
+import { pgNotifyAdapter } from "questpie/adapters/pg-notify";
+import { SmtpAdapter } from "questpie/adapters/smtp";
 import { S3Driver } from "flydrive/drivers/s3";
 
 export default runtimeConfig({

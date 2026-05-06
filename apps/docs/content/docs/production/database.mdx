@@ -15,6 +15,37 @@ export default runtimeConfig({
 });
 ```
 
+## Cloudflare Workers
+
+Cloudflare Workers still use PostgreSQL for QUESTPIE. Cloudflare does not host a PostgreSQL database for you; Hyperdrive connects Workers to an existing PostgreSQL database and exposes a runtime-only connection string.
+
+Use `db.create()` so the Drizzle client is created from the generated schema at runtime:
+
+```ts title="questpie.config.ts"
+import postgres from "postgres";
+import { drizzle } from "drizzle-orm/postgres-js";
+
+db: {
+  create: async ({ schema }) => {
+    const { env } = await import("cloudflare:workers");
+    const sql = postgres(env.HYPERDRIVE.connectionString, {
+      max: 5,
+      fetch_types: false,
+      prepare: true,
+    });
+
+    return {
+      drizzle: drizzle(sql, { schema }),
+      close: () => sql.end(),
+    };
+  },
+}
+```
+
+Do not use `db: { url }` on Workers. That path creates QUESTPIE's default Bun SQL driver and the Cloudflare adapter rejects it.
+
+For `questpie migrate:*` commands, use a direct PostgreSQL connection from CI or your machine. Hyperdrive is a Worker binding, so it is not available to the Bun CLI unless you explicitly provide a CLI connection string in your config.
+
 ## Schema Generation
 
 Codegen produces Drizzle table definitions from your collections. Each field maps to a column type:

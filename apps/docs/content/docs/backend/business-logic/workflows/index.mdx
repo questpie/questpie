@@ -92,6 +92,26 @@ import { workflowsModule } from "@questpie/workflows/server";
 export default [workflowsModule] as const;
 ```
 
+Workflow routes default to logged-in admin access. Add `config/workflows.ts` when you need a different policy, for example a service-token trigger route while keeping admin reads and mutations locked down:
+
+```ts title="config/workflows.ts"
+import { workflowsConfig } from "@questpie/workflows/server";
+
+export default workflowsConfig({
+	access: {
+		default: ({ session }) => session?.user?.role === "admin",
+		trigger: ({ request }) =>
+			request?.headers.get("x-workflow-token") === process.env.WORKFLOW_TOKEN,
+	},
+	executionLock: {
+		leaseSeconds: 300,
+		heartbeatSeconds: 30,
+	},
+});
+```
+
+Available access operations are `trigger`, `read`, `sendEvent`, `cancel`, and `retry`. `manage` can be used as the shared rule for `sendEvent`, `cancel`, and `retry`.
+
 ### 3. Trigger a Workflow
 
 ```ts title="routes/create-order.ts"
@@ -118,6 +138,14 @@ The workflow engine uses **replay-based execution**. When a workflow runs, each 
 - The workflow resumes exactly where it left off
 - Non-deterministic operations (like API calls) always return the same result on replay
 - Failures at any point can be retried without side effects
+
+## Execution Locks
+
+`wf-execute` claims the `wf_instance` row before it starts replaying a workflow. The claim is stored as an execution lease on the instance and renewed while the job is running.
+
+If the queue delivers the same job twice, the second delivery sees the active lease and requeues itself for the lease expiry instead of running the handler. If a worker stops before releasing the lease, `wf-maintenance` requeues the stale `running` instance after the lease expires.
+
+Queue delivery is still at-least-once, so keep external side effects inside `step.run()` and pass idempotency keys to APIs that support them.
 
 ## Instance Lifecycle
 
@@ -189,3 +217,5 @@ flowchart TD
 - **wf-execute**: Runs workflow handlers using the replay engine
 - **wf-resume**: Resumes suspended workflows after events or sleep timers
 - **wf-maintenance**: Handles cron triggers, timeout checks, and retention cleanup
+
+On Cloudflare Workers, these are still normal QUESTPIE jobs. `wf-execute`, `wf-resume`, and `wf-maintenance` are delivered through Cloudflare Queues; the Worker `scheduled` handler publishes `wf-maintenance` on your configured cron trigger.

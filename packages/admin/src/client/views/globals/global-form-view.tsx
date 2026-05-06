@@ -9,7 +9,7 @@ import { Icon } from "@iconify/react";
 import type { GlobalSchema } from "questpie";
 import { QuestpieClientError } from "questpie/client";
 import * as React from "react";
-import { FormProvider, useForm } from "react-hook-form";
+import { FormProvider, useForm, useFormState } from "react-hook-form";
 import { toast } from "sonner";
 
 import type {
@@ -48,7 +48,6 @@ import {
 	useGlobalVersions,
 	useSidebarSearchParam,
 } from "../../hooks";
-import { useGlobalAuditHistory } from "../../hooks/use-audit-history";
 import { useGlobalFields } from "../../hooks/use-global-fields";
 import { useReactiveFields } from "../../hooks/use-reactive-fields";
 import { useGlobalServerValidation } from "../../hooks/use-server-validation";
@@ -118,6 +117,60 @@ function GlobalFormViewSkeleton() {
 		</div>
 	);
 }
+
+type GlobalFormDirtyRefBridgeProps = {
+	control: ReturnType<typeof useForm>["control"];
+	onDirtyChange: (isDirty: boolean) => void;
+};
+
+const GlobalFormDirtyRefBridge = React.memo(function GlobalFormDirtyRefBridge({
+	control,
+	onDirtyChange,
+}: GlobalFormDirtyRefBridgeProps) {
+	const { isDirty } = useFormState({ control });
+
+	React.useEffect(() => {
+		onDirtyChange(isDirty);
+	}, [isDirty, onDirtyChange]);
+
+	return null;
+});
+
+type GlobalSaveButtonProps = {
+	control: ReturnType<typeof useForm>["control"];
+	isMutationPending: boolean;
+	t: ReturnType<typeof useTranslation>["t"];
+};
+
+const GlobalSaveButton = React.memo(function GlobalSaveButton({
+	control,
+	isMutationPending,
+	t,
+}: GlobalSaveButtonProps) {
+	const { isSubmitting } = useFormState({ control });
+	const isSubmittingNow = isMutationPending || isSubmitting;
+
+	return (
+		<Button
+			type="submit"
+			size="sm"
+			disabled={isSubmittingNow}
+			className="gap-2"
+		>
+			{isSubmittingNow ? (
+				<>
+					<Icon icon="ph:spinner-gap" className="size-4 animate-spin" />
+					{t("common.loading")}
+				</>
+			) : (
+				<>
+					<Icon icon="ph:check" width={16} height={16} />
+					{t("common.save")}
+				</>
+			)}
+		</Button>
+	);
+});
 
 // ============================================================================
 // Types
@@ -280,12 +333,6 @@ export default function GlobalFormView({
 		{ enabled: isHistoryOpen && !!globalSchema?.options?.versioning },
 	);
 
-	const { data: auditData, isLoading: auditLoading } = useGlobalAuditHistory(
-		globalName,
-		{ limit: 50 },
-		{ enabled: isHistoryOpen },
-	);
-
 	// ========================================================================
 	// Workflow — stage badge, transition dropdown, scheduling
 	// ========================================================================
@@ -354,6 +401,10 @@ export default function GlobalFormView({
 		defaultValues: (globalData ?? {}) as any,
 		resolver,
 	});
+	const formIsDirtyRef = React.useRef(false);
+	const handleFormDirtyChange = React.useCallback((isDirty: boolean) => {
+		formIsDirtyRef.current = isDirty;
+	}, []);
 
 	/** Execute the confirmed workflow transition (immediate or scheduled). */
 	const confirmTransition = React.useCallback(() => {
@@ -445,7 +496,7 @@ export default function GlobalFormView({
 		(nextLocale: string) => {
 			if (nextLocale === prevLocaleRef.current) return;
 
-			if (form.formState.isDirty && !localeChangeDialog.open) {
+			if (formIsDirtyRef.current && !localeChangeDialog.open) {
 				skipResetRef.current = true;
 				localeSnapshotRef.current = form.getValues();
 				setLocaleChangeDialog({ open: true, pendingLocale: nextLocale });
@@ -456,7 +507,7 @@ export default function GlobalFormView({
 			skipResetRef.current = false;
 			setContentLocale(nextLocale);
 		},
-		[form, form.formState.isDirty, localeChangeDialog.open, setContentLocale],
+		[form, localeChangeDialog.open, setContentLocale],
 	);
 
 	const handleLocaleChangeConfirm = React.useCallback(() => {
@@ -581,8 +632,6 @@ export default function GlobalFormView({
 		return () => document.removeEventListener("keydown", handleKeyDown);
 	}, [form, onSubmit]);
 
-	const isSubmitting = updateMutation.isPending || form.formState.isSubmitting;
-
 	const confirmRevertVersion = React.useCallback(async () => {
 		if (!pendingRevertVersion) return;
 
@@ -641,12 +690,17 @@ export default function GlobalFormView({
 	}
 
 	const globalLabel = resolveText(
-		(resolvedConfig as any)?.label ?? schemaFields?._globalLabel,
+		(resolvedConfig as any)?.label ??
+			(schemaFields as Record<string, unknown>)["_globalLabel"],
 		globalName,
 	);
 
 	return (
 		<FormProvider {...form}>
+			<GlobalFormDirtyRefBridge
+				control={form.control}
+				onDirtyChange={handleFormDirtyChange}
+			/>
 			<form
 				onSubmit={form.handleSubmit(onSubmit)}
 				className="qa-global-form w-full space-y-4"
@@ -717,37 +771,27 @@ export default function GlobalFormView({
 								</DropdownMenu>
 							)}
 
-							<Button
-								type="button"
-								variant="outline"
-								size="icon-sm"
-								onClick={() => setIsHistoryOpen(true)}
-								title={t("history.title")}
-							>
-								<Icon icon="ph:clock-counter-clockwise" className="size-3.5" />
-								<span className="sr-only">{t("history.title")}</span>
-							</Button>
-							<Button
-								type="submit"
-								size="sm"
-								disabled={isSubmitting}
-								className="gap-2"
-							>
-								{isSubmitting ? (
-									<>
-										<Icon
-											icon="ph:spinner-gap"
-											className="size-4 animate-spin"
-										/>
-										{t("common.loading")}
-									</>
-								) : (
-									<>
-										<Icon icon="ph:check" width={16} height={16} />
-										{t("common.save")}
-									</>
-								)}
-							</Button>
+							{/* History button — only show when versioning is enabled */}
+							{globalSchema?.options?.versioning && (
+								<Button
+									type="button"
+									variant="outline"
+									size="icon-sm"
+									onClick={() => setIsHistoryOpen(true)}
+									title={t("history.title")}
+								>
+									<Icon
+										icon="ph:clock-counter-clockwise"
+										className="size-3.5"
+									/>
+									<span className="sr-only">{t("history.title")}</span>
+								</Button>
+							)}
+							<GlobalSaveButton
+								control={form.control}
+								isMutationPending={updateMutation.isPending}
+								t={t}
+							/>
 						</>
 					}
 				/>
@@ -758,23 +802,25 @@ export default function GlobalFormView({
 					mode="global"
 					config={resolvedConfig}
 					registry={registry}
+					resolvedFields={schemaFields as any}
+					schema={globalSchema}
 				/>
 			</form>
 
-			<HistorySidebar
-				open={isHistoryOpen}
-				onOpenChange={setIsHistoryOpen}
-				auditEntries={auditData ?? []}
-				isLoadingAudit={auditLoading}
-				versions={(versionsData ?? []) as any[]}
-				fields={globalSchema?.fields as any}
-				isLoadingVersions={versionsLoading}
-				isReverting={revertVersionMutation.isPending}
-				onRevert={async (version) => {
-					setPendingRevertVersion(version);
-				}}
-				showVersionsTab={!!globalSchema?.options?.versioning}
-			/>
+			{isHistoryOpen && (
+				<HistorySidebar
+					open={isHistoryOpen}
+					onOpenChange={setIsHistoryOpen}
+					versions={(versionsData ?? []) as any[]}
+					fields={globalSchema?.fields as any}
+					isLoadingVersions={versionsLoading}
+					isReverting={revertVersionMutation.isPending}
+					onRevert={async (version) => {
+						setPendingRevertVersion(version);
+					}}
+					showVersionsTab={!!globalSchema?.options?.versioning}
+				/>
+			)}
 
 			<ConfirmationDialog
 				open={!!pendingRevertVersion}

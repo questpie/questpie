@@ -6,6 +6,12 @@
  */
 
 import type { CollectionCrud } from "../../src/server/client.js";
+import type {
+	WorkflowExecutionLockClaimInput,
+	WorkflowExecutionLockProvider,
+	WorkflowExecutionLockRenewInput,
+	WorkflowExecutionLockReleaseInput,
+} from "../../src/server/modules/workflows/jobs/_execution-lock.js";
 
 // ── Mock CRUD ──────────────────────────────────────────────
 
@@ -127,6 +133,71 @@ export function createMockQueue(): Record<string, MockQueueChannel> & {
 	);
 }
 
+// ── Mock Workflow Execution Lock ───────────────────────────
+
+const executableStatuses = new Set(["pending", "running", "suspended"]);
+
+function toDate(value: unknown): Date | null {
+	if (value instanceof Date) return value;
+	if (typeof value === "string") {
+		const parsed = new Date(value);
+		return Number.isNaN(parsed.getTime()) ? null : parsed;
+	}
+	return null;
+}
+
+export function createMockWorkflowExecutionLock(
+	stores: MockStores,
+): WorkflowExecutionLockProvider {
+	return {
+		async claim(input: WorkflowExecutionLockClaimInput) {
+			const instance = stores.instances.get(input.instanceId);
+			if (!instance) return { status: "skipped", reason: "missing" };
+			if (!executableStatuses.has(instance.status)) {
+				return {
+					status: "skipped",
+					reason: "not-executable",
+					currentStatus: instance.status,
+				};
+			}
+
+			const lockExpiresAt = toDate(instance.lockExpiresAt);
+			const lockAvailable =
+				!instance.lockOwner ||
+				!lockExpiresAt ||
+				lockExpiresAt.getTime() <= input.now.getTime();
+			if (!lockAvailable) {
+				return {
+					status: "locked",
+					retryAt: lockExpiresAt,
+				};
+			}
+
+			instance.lockOwner = input.ownerId;
+			instance.lockedAt = input.now;
+			instance.lockExpiresAt = input.expiresAt;
+			return {
+				status: "claimed",
+				ownerId: input.ownerId,
+				expiresAt: input.expiresAt,
+			};
+		},
+		async renew(input: WorkflowExecutionLockRenewInput) {
+			const instance = stores.instances.get(input.instanceId);
+			if (!instance || instance.lockOwner !== input.ownerId) return false;
+			instance.lockExpiresAt = input.expiresAt;
+			return true;
+		},
+		async release(input: WorkflowExecutionLockReleaseInput) {
+			const instance = stores.instances.get(input.instanceId);
+			if (!instance || instance.lockOwner !== input.ownerId) return;
+			instance.lockOwner = null;
+			instance.lockedAt = null;
+			instance.lockExpiresAt = null;
+		},
+	};
+}
+
 // ── Mock Logger ────────────────────────────────────────────
 
 export interface MockLogger {
@@ -215,6 +286,7 @@ export function createJobContext(
 		queue,
 		logger,
 		app,
+		workflowExecutionLock: createMockWorkflowExecutionLock(stores),
 	};
 
 	return { ctx, stores, queue, logger, collections };

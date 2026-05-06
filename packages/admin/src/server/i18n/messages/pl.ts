@@ -650,6 +650,15 @@ export default {
 	"audit.widget.recentActivity.empty":
 		"Nie zarejestrowano ostatniej aktywności.",
 	"audit.widget.recentActivity.title": "Ostatnia aktywność",
+	"audit.action.create": "utworzył(a)",
+	"audit.action.update": "zaktualizował(a)",
+	"audit.action.delete": "usunął/usunęła",
+	"audit.action.transition": "zmienił(a) status",
+	"audit.resourceType.collection": "kolekcję",
+	"audit.resourceType.global": "globalne ustawienie",
+	"audit.unnamed": "(bez nazwy)",
+	"audit.title.template":
+		"{{userName}} {{action}} {{resourceType}} {{resourceLabel}}",
 	"auth.backToLogin": "Wróć do logowania",
 	"auth.checkYourEmail": "Sprawdź e-mail",
 	"auth.completeRegistration": "Dokończ rejestrację",

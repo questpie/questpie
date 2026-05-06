@@ -7,6 +7,8 @@ description: Schedule recurring workflows with cron expressions and overlap cont
 
 Workflows can be triggered on a recurring schedule using standard cron expressions. The maintenance job checks for due cron workflows and triggers new instances automatically.
 
+In long-running Node/Bun workers, `app.queue.listen()` registers the maintenance job schedule with the queue adapter. On Cloudflare Workers, configure a Cron Trigger for `*/5 * * * *`; the Worker scheduled handler publishes the maintenance job, and the maintenance job evaluates workflow-level `cron` definitions.
+
 ## Defining a Cron Workflow
 
 ```ts title="workflows/daily-report.ts"

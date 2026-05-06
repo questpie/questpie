@@ -1,10 +1,12 @@
 import { route } from "questpie";
 import { z } from "zod";
 
+import { workflowRouteAccess } from "./_access.js";
 import { getWorkflowDefinitions } from "./_helpers.js";
 
 export default route()
 	.post()
+	.access(workflowRouteAccess("read"))
 	.schema(z.object({}))
 	.handler(async ({ ...ctx }) => {
 		const workflows = getWorkflowDefinitions(ctx);

@@ -2,10 +2,12 @@ import { route } from "questpie";
 import { z } from "zod";
 
 import type { EventPersistence } from "../../../engine/events.js";
+import { workflowRouteAccess } from "./_access.js";
 import { asMatchCriteria, getCollections, getQueue } from "./_helpers.js";
 
 export default route()
 	.post()
+	.access(workflowRouteAccess("sendEvent"))
 	.schema(
 		z.object({
 			event: z.string(),
@@ -71,11 +73,14 @@ export default route()
 			},
 			eventPersistence,
 			async (instanceId, stepName, eventResult) => {
-				await resumeQueue.publish({
-					instanceId,
-					stepName,
-					result: eventResult,
-				});
+				await resumeQueue.publish(
+					{
+						instanceId,
+						stepName,
+						result: eventResult,
+					},
+					{ singletonKey: `${instanceId}:${stepName}` },
+				);
 			},
 		);
 

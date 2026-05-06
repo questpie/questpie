@@ -9,10 +9,7 @@
  * @see QUE-158 (Unified route() builder + URL flattening)
  */
 
-import { randomUUID } from "node:crypto";
-
 import type { Questpie } from "../config/questpie.js";
-import type { QuestpieConfig } from "../config/types.js";
 import { ApiError } from "../errors/index.js";
 import type {
 	RequestLoggingConfig,
@@ -161,7 +158,8 @@ function getRequestId(request: Request): string {
 	return (
 		request.headers.get("x-request-id") ??
 		request.headers.get("x-correlation-id") ??
-		randomUUID()
+		globalThis.crypto?.randomUUID?.() ??
+		`${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
 	);
 }
 
@@ -230,19 +228,20 @@ export const createFetchHandler = (
 	app: unknown,
 	config: AdapterConfig = {},
 ) => {
-	const _app = app as Questpie<any>;
+	const appInstance = app as Questpie<any>;
 	const basePath = normalizeBasePath(config.basePath ?? "/");
 
 	// Store adapter config on app so route handlers can access it
 	// (e.g., search.reindexAccess, storage.collection)
-	(_app as any)._adapterConfig = config;
+	const adapterConfigKey = "_adapterConfig";
+	(appInstance as any)[adapterConfigKey] = config;
 
 	// Compile ALL routes (core module + custom module routes) into one matcher
 	const matcher = compileRoutes(
-		_app.config.routes as Record<string, RouteDefinition> | undefined,
+		appInstance.config.routes as Record<string, RouteDefinition> | undefined,
 	);
 	const requestLogging = resolveRequestLoggingOptions(
-		config.requestLogging ?? _app.config.logger?.requests,
+		config.requestLogging ?? appInstance.config.logger?.requests,
 	);
 
 	return async (
@@ -271,7 +270,7 @@ export const createFetchHandler = (
 				...(routePattern ? { route: routePattern } : {}),
 				...(error ? { error: getErrorDetails(error) } : {}),
 			};
-			logRequest(_app, requestLogging, meta);
+			logRequest(appInstance, requestLogging, meta);
 			return setObservabilityHeaders(response, requestId, traceId);
 		};
 
@@ -296,7 +295,7 @@ export const createFetchHandler = (
 				return complete(
 					handleError(ApiError.notFound("Route"), {
 						request,
-						app: _app,
+						app: appInstance,
 					}),
 				);
 			}
@@ -313,7 +312,7 @@ export const createFetchHandler = (
 					if (!def) {
 						// Path matches but method doesn't → 405
 						const resolved = await resolveContext(
-							_app,
+							appInstance,
 							request,
 							config,
 							context,
@@ -321,7 +320,7 @@ export const createFetchHandler = (
 						);
 						return complete(
 							new Response(
-								_app.t(
+								appInstance.t(
 									"error.methodNotAllowed",
 									undefined,
 									resolved.appContext.locale,
@@ -338,7 +337,7 @@ export const createFetchHandler = (
 
 					// Resolve session, locale, and create app context
 					const resolved = await resolveContext(
-						_app,
+						appInstance,
 						request,
 						config,
 						context,
@@ -358,14 +357,14 @@ export const createFetchHandler = (
 										),
 										{
 											request,
-											app: _app,
+											app: appInstance,
 											locale: resolved.appContext.locale,
 										},
 									),
 								);
 							}
 							const result = await executeJsonRouteInternal(
-								_app,
+								appInstance,
 								def,
 								body,
 								resolved,
@@ -378,7 +377,7 @@ export const createFetchHandler = (
 						// Raw route — pass matched params through
 						return complete(
 							await executeRawRouteInternal(
-								_app,
+								appInstance,
 								def,
 								request,
 								resolved,
@@ -389,7 +388,7 @@ export const createFetchHandler = (
 						return complete(
 							handleError(error, {
 								request,
-								app: _app,
+								app: appInstance,
 								locale: resolved.appContext.locale,
 							}),
 							error,
@@ -402,14 +401,14 @@ export const createFetchHandler = (
 			return complete(
 				handleError(ApiError.notFound("Route"), {
 					request,
-					app: _app,
+					app: appInstance,
 				}),
 			);
 		} catch (error) {
 			return complete(
 				handleError(error, {
 					request,
-					app: _app,
+					app: appInstance,
 				}),
 				error,
 			);

@@ -468,18 +468,18 @@ feat!: unified module architecture — static modules, delete factory functions 
 
 ### Key Files Changed
 
-| File                                                           | Action                             | Lines   |
-| -------------------------------------------------------------- | ---------------------------------- | ------- |
-| `packages/questpie/src/server/config/app-context.ts`           | **New**                            | ~50     |
-| `packages/questpie/src/cli/codegen/factory-template.ts`        | **Rewritten** — Proxy wrappers     | ~383    |
-| `packages/questpie/src/cli/codegen/template.ts`                | Modified — AppContext augmentation | ~955    |
-| `packages/questpie/src/server/collection/builder/types.ts`     | Modified — extends AppContext      | ~1020   |
-| `packages/questpie/src/server/global/builder/types.ts`         | Modified — extends AppContext      | ~400    |
-| `packages/questpie/src/server/functions/types.ts`              | Modified — extends AppContext      | ~200    |
-| `packages/questpie/src/server/integrated/queue/types.ts`       | Modified — extends AppContext      | ~100    |
-| `packages/admin/src/server/block/block-builder.ts`             | Modified — extends AppContext      | ~200    |
-| `packages/questpie/src/server/collection/crud/shared/hooks.ts` | Modified — extractAppServices      | ~200    |
-| All context creation sites (~12 files)                         | Modified — extractAppServices      | various |
+| File                                                                  | Action                             | Lines   |
+| --------------------------------------------------------------------- | ---------------------------------- | ------- |
+| `packages/questpie/src/server/config/app-context.ts`                  | **New**                            | ~50     |
+| `packages/questpie/src/cli/codegen/factory-template.ts`               | **Rewritten** — Proxy wrappers     | ~383    |
+| `packages/questpie/src/cli/codegen/template.ts`                       | Modified — AppContext augmentation | ~955    |
+| `packages/questpie/src/server/collection/builder/types.ts`            | Modified — extends AppContext      | ~1020   |
+| `packages/questpie/src/server/global/builder/types.ts`                | Modified — extends AppContext      | ~400    |
+| `packages/questpie/src/server/functions/types.ts`                     | Modified — extends AppContext      | ~200    |
+| `packages/questpie/src/server/modules/core/integrated/queue/types.ts` | Modified — extends AppContext      | ~100    |
+| `packages/admin/src/server/block/block-builder.ts`                    | Modified — extends AppContext      | ~200    |
+| `packages/questpie/src/server/collection/crud/shared/hooks.ts`        | Modified — extractAppServices      | ~200    |
+| All context creation sites (~12 files)                                | Modified — extractAppServices      | various |
 
 ### Phase 9.6: RFC Alignment — Remove App Type, Type AppContext (this session)
 

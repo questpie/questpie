@@ -48,7 +48,7 @@ describe("Search Schema Integration", () => {
 				const extensions = adapter.getExtensions();
 
 				expect(extensions).toHaveLength(1);
-				expect(extensions[0]).toBe("CREATE EXTENSION IF NOT EXISTS pg_trgm;");
+				expect(extensions[0]).toBe('CREATE EXTENSION IF NOT EXISTS "pg_trgm";');
 			});
 		});
 	});
@@ -82,8 +82,12 @@ describe("Search Schema Integration", () => {
 				const extensions = adapter.getExtensions();
 
 				expect(extensions).toHaveLength(2);
-				expect(extensions).toContain("CREATE EXTENSION IF NOT EXISTS pg_trgm;");
-				expect(extensions).toContain("CREATE EXTENSION IF NOT EXISTS vector;");
+				expect(extensions).toContain(
+					'CREATE EXTENSION IF NOT EXISTS "pg_trgm";',
+				);
+				expect(extensions).toContain(
+					'CREATE EXTENSION IF NOT EXISTS "vector";',
+				);
 			});
 		});
 	});

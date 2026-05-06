@@ -1,4 +1,4 @@
-import { collection } from "questpie";
+import { collection, tryGetContext } from "questpie";
 import { index } from "questpie/drizzle-pg-core";
 
 import type {
@@ -6,6 +6,7 @@ import type {
 	FormViewConfig,
 	ListViewConfig,
 } from "../../../augmentation.js";
+import { localizeAuditTitle } from "../config/localize-title.js";
 
 /**
  * The collection slug used by the audit log.
@@ -81,6 +82,14 @@ export const auditLogCollection = collection(AUDIT_LOG_COLLECTION)
 		update: false,
 		delete: false,
 		read: true,
+	})
+	.hooks({
+		afterRead: ({ data, locale }) => {
+			if (!data) return;
+			const stored = tryGetContext();
+			const localized = localizeAuditTitle(data, locale, stored?.app);
+			if (localized) (data as any).title = localized;
+		},
 	})
 	.set("admin", {
 		label: { key: "audit.collection.label" },

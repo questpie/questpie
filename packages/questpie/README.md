@@ -15,7 +15,7 @@ Server-first TypeScript backend framework with a proxy-based field builder, coll
 - **Background Jobs** — `job()` with Zod schema validation, pg-boss or Cloudflare Queues adapters
 - **Authentication** — Better Auth integration with plugins (admin, organization, 2FA, API keys)
 - **Storage** — Flydrive-based (S3, R2, GCS, local) with streaming uploads and typed upload collections
-- **Realtime** — PostgreSQL NOTIFY/LISTEN + Redis Streams with SSE delivery
+- **Realtime** — PostgreSQL NOTIFY/LISTEN, Redis Streams, or Cloudflare Durable Objects with SSE delivery
 - **Email** — SMTP + console adapters with template support
 - **Search** — Full-text search with reindex support
 - **Access Control** — Operation-level and field-level permissions

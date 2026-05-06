@@ -1,6 +1,7 @@
 import { route } from "questpie";
 import { z } from "zod";
 
+import { workflowRouteAccess } from "./_access.js";
 import {
 	getCollections,
 	getQueue,
@@ -9,6 +10,7 @@ import {
 
 export default route()
 	.post()
+	.access(workflowRouteAccess("trigger"))
 	.schema(
 		z.object({
 			name: z.string(),
@@ -74,10 +76,13 @@ export default route()
 		);
 
 		// Queue execution
-		await executeQueue.publish({
-			instanceId: instance.id,
-			workflowName: input.name,
-		});
+		await executeQueue.publish(
+			{
+				instanceId: instance.id,
+				workflowName: input.name,
+			},
+			{ singletonKey: instance.id },
+		);
 
 		return { instanceId: instance.id, existing: false };
 	});

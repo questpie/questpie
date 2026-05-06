@@ -148,7 +148,7 @@ describe("PostgresSearchAdapter", () => {
 
 			expect(extensions).toBeDefined();
 			expect(extensions.length).toBeGreaterThan(0);
-			expect(extensions).toContain("CREATE EXTENSION IF NOT EXISTS pg_trgm;");
+			expect(extensions).toContain('CREATE EXTENSION IF NOT EXISTS "pg_trgm";');
 		});
 	});
 

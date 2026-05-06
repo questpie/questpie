@@ -1,13 +1,11 @@
 /**
- * Tests for KV adapters (Memory and IORedis)
+ * Tests for KV adapters (Memory and Redis)
  */
 
 import { beforeEach, describe, expect, test } from "bun:test";
 
-import type { Redis } from "ioredis";
-
-import { IORedisKVAdapter } from "../../src/server/modules/core/integrated/kv/adapters/ioredis.js";
 import { MemoryKVAdapter } from "../../src/server/modules/core/integrated/kv/adapters/memory.js";
+import { RedisKVAdapter } from "../../src/server/modules/core/integrated/kv/adapters/redis.js";
 
 interface User {
 	name: string;
@@ -348,13 +346,27 @@ describe("MemoryKVAdapter", () => {
 	});
 });
 
-describe("IORedisKVAdapter", () => {
-	let adapter: IORedisKVAdapter;
+describe("RedisKVAdapter", () => {
+	let adapter: RedisKVAdapter;
 	let mockRedis: MockRedis;
 
 	beforeEach(() => {
 		mockRedis = new MockRedis();
-		adapter = new IORedisKVAdapter(mockRedis as unknown as Redis);
+		adapter = new RedisKVAdapter({ client: mockRedis });
+	});
+
+	test("should resolve a lazy client provider on first use", async () => {
+		let calls = 0;
+		adapter = new RedisKVAdapter({
+			client: () => {
+				calls += 1;
+				return mockRedis;
+			},
+		});
+
+		await adapter.set("key1", "value1");
+		expect(await adapter.get("key1")).toBe("value1");
+		expect(calls).toBe(1);
 	});
 
 	describe("basic operations", () => {
@@ -413,12 +425,12 @@ describe("IORedisKVAdapter", () => {
 	});
 
 	describe("TTL (Time To Live)", () => {
-		test("should use setex for TTL", async () => {
+		test("should pass EX option for TTL", async () => {
 			await adapter.set("ttl-key", "value", 60);
 
-			// Verify setex was called
 			const stored = mockRedis.store.get("ttl-key");
 			expect(stored).toBe(JSON.stringify("value"));
+			expect(mockRedis.expirations.get("ttl-key")).toBe(60);
 		});
 
 		test("should use set without TTL", async () => {
@@ -440,8 +452,8 @@ describe("IORedisKVAdapter", () => {
 			expect(result).toEqual({ name: "John" });
 
 			// Verify tags were stored
-			const usersTag = mockRedis.sets.get("tag:users");
-			const activeTag = mockRedis.sets.get("tag:active");
+			const usersTag = mockRedis.sets.get("__questpie_tag:users");
+			const activeTag = mockRedis.sets.get("__questpie_tag:active");
 			expect(usersTag?.has("user:1")).toBe(true);
 			expect(activeTag?.has("user:1")).toBe(true);
 		});
@@ -452,7 +464,7 @@ describe("IORedisKVAdapter", () => {
 			const result = await adapter.get("user:1");
 			expect(result).toEqual({ name: "John" });
 
-			const usersTag = mockRedis.sets.get("tag:users");
+			const usersTag = mockRedis.sets.get("__questpie_tag:users");
 			expect(usersTag?.has("user:1")).toBe(true);
 		});
 
@@ -533,8 +545,8 @@ describe("IORedisKVAdapter", () => {
 			expect(await adapter.get<User>("user:1")).toBeNull();
 
 			// Verify tag sets are cleaned up
-			const usersTag = mockRedis.sets.get("tag:users");
-			const activeTag = mockRedis.sets.get("tag:active");
+			const usersTag = mockRedis.sets.get("__questpie_tag:users");
+			const activeTag = mockRedis.sets.get("__questpie_tag:active");
 			// usersTag should still exist (has user:2) but not contain user:1
 			expect(usersTag?.has("user:1")).toBe(false);
 			expect(usersTag?.has("user:2")).toBe(true);
@@ -557,19 +569,18 @@ describe("IORedisKVAdapter", () => {
 		});
 	});
 
-	describe("pipeline operations", () => {
-		test("should use pipeline for setWithTags", async () => {
+	describe("tag index operations", () => {
+		test("should store every tag for setWithTags", async () => {
 			const tags = ["tag1", "tag2", "tag3"];
 			await adapter.setWithTags("key1", "value1", tags);
 
-			// Verify all tags were set
 			for (const tag of tags) {
-				const tagSet = mockRedis.sets.get(`tag:${tag}`);
+				const tagSet = mockRedis.sets.get(`__questpie_tag:${tag}`);
 				expect(tagSet?.has("key1")).toBe(true);
 			}
 		});
 
-		test("should use pipeline for invalidateByTag", async () => {
+		test("should invalidate every key in a tag index", async () => {
 			await adapter.setWithTags("key1", "value1", ["batch"]);
 			await adapter.setWithTags("key2", "value2", ["batch"]);
 			await adapter.setWithTags("key3", "value3", ["batch"]);
@@ -618,139 +629,87 @@ describe("IORedisKVAdapter", () => {
 class MockRedis {
 	store = new Map<string, string>();
 	sets = new Map<string, Set<string>>();
-	pipelineQueue: Array<() => void> = [];
-	isInPipeline = false;
+	expirations = new Map<string, number>();
 
 	async get(key: string): Promise<string | null> {
 		return this.store.get(key) ?? null;
 	}
 
-	async set(key: string, value: string): Promise<"OK"> {
-		const operation = () => {
-			this.store.set(key, value);
-		};
-
-		if (this.isInPipeline) {
-			this.pipelineQueue.push(operation);
-		} else {
-			operation();
+	async set(
+		key: string,
+		value: string,
+		options?: { EX?: number },
+	): Promise<"OK"> {
+		this.store.set(key, value);
+		if (options?.EX) {
+			this.expirations.set(key, options.EX);
 		}
-
 		return "OK";
 	}
 
-	async setex(key: string, _ttl: number, value: string): Promise<"OK"> {
-		const operation = () => {
-			this.store.set(key, value);
-			// In real Redis, TTL would be handled, but for testing we just store the value
-		};
-
-		if (this.isInPipeline) {
-			this.pipelineQueue.push(operation);
-		} else {
-			operation();
+	async del(keys: string | string[]): Promise<number> {
+		const keyList = Array.isArray(keys) ? keys : [keys];
+		for (const key of keyList) {
+			this.store.delete(key);
+			this.sets.delete(key);
 		}
-
-		return "OK";
-	}
-
-	async del(...keys: string[]): Promise<number> {
-		const operation = () => {
-			for (const key of keys) {
-				this.store.delete(key);
-			}
-		};
-
-		if (this.isInPipeline) {
-			this.pipelineQueue.push(operation);
-		} else {
-			operation();
-		}
-
-		return keys.length;
+		return keyList.length;
 	}
 
 	async exists(key: string): Promise<number> {
 		return this.store.has(key) ? 1 : 0;
 	}
 
-	async flushdb(): Promise<"OK"> {
+	async flushDb(): Promise<"OK"> {
 		this.store.clear();
 		this.sets.clear();
+		this.expirations.clear();
 		return "OK";
 	}
 
-	async sadd(key: string, ...members: string[]): Promise<number> {
-		const operation = () => {
-			if (!this.sets.has(key)) {
-				this.sets.set(key, new Set());
-			}
-			const set = this.sets.get(key)!;
-			for (const member of members) {
-				set.add(member);
-			}
-		};
-
-		if (this.isInPipeline) {
-			this.pipelineQueue.push(operation);
-		} else {
-			operation();
+	async sAdd(key: string, members: string | string[]): Promise<number> {
+		const memberList = Array.isArray(members) ? members : [members];
+		if (!this.sets.has(key)) {
+			this.sets.set(key, new Set());
 		}
-
-		return members.length;
+		const set = this.sets.get(key)!;
+		for (const member of memberList) {
+			set.add(member);
+		}
+		return memberList.length;
 	}
 
-	async smembers(key: string): Promise<string[]> {
+	async sMembers(key: string): Promise<string[]> {
 		const set = this.sets.get(key);
 		return set ? Array.from(set) : [];
 	}
 
-	async srem(key: string, ...members: string[]): Promise<number> {
-		const operation = () => {
-			const set = this.sets.get(key);
-			if (set) {
-				for (const member of members) {
-					set.delete(member);
-				}
-				if (set.size === 0) {
-					this.sets.delete(key);
-				}
+	async sRem(key: string, members: string | string[]): Promise<number> {
+		const memberList = Array.isArray(members) ? members : [members];
+		const set = this.sets.get(key);
+		if (set) {
+			for (const member of memberList) {
+				set.delete(member);
 			}
-		};
-
-		if (this.isInPipeline) {
-			this.pipelineQueue.push(operation);
-		} else {
-			operation();
+			if (set.size === 0) {
+				this.sets.delete(key);
+			}
 		}
-
-		return members.length;
+		return memberList.length;
 	}
 
-	async scan(cursor: string, ..._args: string[]): Promise<[string, string[]]> {
-		// Simple implementation: return all tag keys on first call
-		if (cursor === "0") {
-			const tagKeys = Array.from(this.sets.keys()).filter((k) =>
-				k.startsWith("tag:"),
-			);
-			return ["0", tagKeys];
+	async *scanIterator(options?: { MATCH?: string }): AsyncGenerator<string> {
+		const keys = new Set([...this.store.keys(), ...this.sets.keys()]);
+		for (const key of keys) {
+			if (!options?.MATCH || matchesPattern(key, options.MATCH)) {
+				yield key;
+			}
 		}
-		return ["0", []];
 	}
+}
 
-	pipeline(): this {
-		this.isInPipeline = true;
-		this.pipelineQueue = [];
-		return this;
-	}
-
-	async exec(): Promise<Array<[Error | null, unknown]>> {
-		this.isInPipeline = false;
-		for (const operation of this.pipelineQueue) {
-			operation();
-		}
-		const results = this.pipelineQueue.map(() => [null, "OK"] as [null, "OK"]);
-		this.pipelineQueue = [];
-		return results;
-	}
+function matchesPattern(key: string, pattern: string): boolean {
+	if (pattern === "*") return true;
+	if (pattern.endsWith("*")) return key.startsWith(pattern.slice(0, -1));
+	return key === pattern;
 }

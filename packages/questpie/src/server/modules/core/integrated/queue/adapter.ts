@@ -34,15 +34,20 @@ export type QueueHandlerMap = Record<string, QueueJobHandler>;
 export interface QueuePushMessage {
 	id: string;
 	body: unknown;
+	attempts?: number;
 	ack: () => Promise<void>;
-	retry: () => Promise<void>;
+	retry: (options?: QueueRetryOptions) => Promise<void>;
 }
 
 export interface QueuePushBatch {
 	messages: QueuePushMessage[];
 	ackAll?: () => Promise<void>;
-	retryAll?: () => Promise<void>;
+	retryAll?: (options?: QueueRetryOptions) => Promise<void>;
 	raw?: unknown;
+}
+
+export interface QueueRetryOptions {
+	delaySeconds?: number;
 }
 
 export type QueuePushConsumerHandler = (batch: QueuePushBatch) => Promise<void>;

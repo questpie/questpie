@@ -906,6 +906,15 @@ export default {
 	"audit.widget.recentActivity.title": "Nedávná aktivita",
 	"audit.widget.recentActivity.empty":
 		"Nebyla zaznamenána žádná nedávná aktivita.",
+	"audit.action.create": "vytvořil(a)",
+	"audit.action.update": "upravil(a)",
+	"audit.action.delete": "smazal(a)",
+	"audit.action.transition": "změnil(a) stav",
+	"audit.resourceType.collection": "kolekci",
+	"audit.resourceType.global": "globální nastavení",
+	"audit.unnamed": "(bez názvu)",
+	"audit.title.template":
+		"{{userName}} {{action}} {{resourceType}} {{resourceLabel}}",
 
 	"history.title": "Historie",
 	"history.description": "Změny a aktivita pro tento záznam",

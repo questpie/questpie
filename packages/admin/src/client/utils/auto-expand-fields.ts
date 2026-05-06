@@ -37,6 +37,12 @@ interface AutoExpandFieldsConfig {
 	};
 
 	/**
+	 * Currently visible columns. When provided, auto expansion is scoped to the
+	 * fields that can actually render in the current table.
+	 */
+	visibleColumns?: Array<string | { field: string }>;
+
+	/**
 	 * Known relation names from collection metadata
 	 */
 	relations?: string[];
@@ -122,7 +128,9 @@ export function autoExpandFields(
 
 	// Determine which columns are displayed
 	// TODO: this should adhere to visible columns based on adminPrefs
-	const columnFields = config.list?.columns ?? [];
+	const columnFields = config.visibleColumns?.length
+		? config.visibleColumns
+		: (config.list?.columns ?? []);
 	const fieldsToCheck: string[] = [];
 
 	if (columnFields.length > 0) {

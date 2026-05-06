@@ -32,7 +32,12 @@ import { MockKVAdapter } from "../utils/mocks/kv.adapter";
 import { MockLogger } from "../utils/mocks/logger.adapter";
 import { MockMailAdapter } from "../utils/mocks/mailer.adapter";
 import { MockQueueAdapter } from "../utils/mocks/queue.adapter";
-import { createTestDb, testMigrationDir } from "../utils/test-db";
+import {
+	createTestDb,
+	testMigrationDir as baseTestMigrationDir,
+} from "../utils/test-db";
+
+const testMigrationDir = join(baseTestMigrationDir, "schema-support");
 
 describe("Collection & global — Postgres schema option", () => {
 	let pgClient: PGlite;
@@ -110,9 +115,8 @@ describe("Collection & global — Postgres schema option", () => {
 	});
 
 	test("migration generator emits schema-qualified tables, cross-schema FK, and CREATE SCHEMA", async () => {
-		const { DrizzleMigrationGenerator } = await import(
-			"../../src/server/migration/generator.js"
-		);
+		const { DrizzleMigrationGenerator } =
+			await import("../../src/server/migration/generator.js");
 
 		// Pre-build users so we can reference its table from pages' FK.
 		const usersBuilt = collection("users")
@@ -130,13 +134,11 @@ describe("Collection & global — Postgres schema option", () => {
 			.options({ schema: "web" })
 			.fields(({ f }) => ({
 				title: f.text(255).required(),
-				authorId: f
-					.text(36)
-					.drizzle((c) =>
-						c.references(() => (usersBuilt.table as any).id, {
-							onDelete: "cascade",
-						}),
-					),
+				authorId: f.text(36).drizzle((c) =>
+					c.references(() => (usersBuilt.table as any).id, {
+						onDelete: "cascade",
+					}),
+				),
 			}));
 
 		const def = module({
@@ -186,9 +188,8 @@ describe("Collection & global — Postgres schema option", () => {
 	});
 
 	test("subsequent migration does not re-emit CREATE SCHEMA for existing schemas", async () => {
-		const { DrizzleMigrationGenerator } = await import(
-			"../../src/server/migration/generator.js"
-		);
+		const { DrizzleMigrationGenerator } =
+			await import("../../src/server/migration/generator.js");
 
 		// First migration: users lives in "auth".
 		const usersV1 = collection("users")
@@ -254,9 +255,8 @@ describe("Collection & global — Postgres schema option", () => {
 	});
 
 	test("regression — no schema option anywhere produces zero schema statements", async () => {
-		const { DrizzleMigrationGenerator } = await import(
-			"../../src/server/migration/generator.js"
-		);
+		const { DrizzleMigrationGenerator } =
+			await import("../../src/server/migration/generator.js");
 
 		const posts = collection("posts").fields(({ f }) => ({
 			title: f.text(255).required(),

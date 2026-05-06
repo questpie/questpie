@@ -7,12 +7,8 @@
  * Browser-safe utilities (isDraftMode, createDraftModeCookie, etc.) are in @questpie/admin/shared
  */
 
-import { createHmac, timingSafeEqual } from "node:crypto";
-
 import { ApiError, route } from "questpie";
 import { z } from "zod";
-
-import { getPreviewSecret } from "#questpie/admin/shared/preview-utils.js";
 
 import type { PreviewConfig } from "../../../augmentation.js";
 import { translateAdminMessage } from "./i18n-helpers.js";
@@ -27,10 +23,51 @@ import {
 // Token Utilities
 // ============================================================================
 
-function base64UrlEncode(input: string | Buffer): string {
-	const buffer = Buffer.isBuffer(input) ? input : Buffer.from(input);
-	return buffer
-		.toString("base64")
+const textEncoder = new TextEncoder();
+const textDecoder = new TextDecoder();
+
+type PreviewSecretResolverContext = Record<string, any>;
+type PreviewSecretResolver = (
+	ctx: PreviewSecretResolverContext,
+) => string | Promise<string>;
+type PreviewSecretSource = string | PreviewSecretResolver;
+type PreviewTokenParseError = "invalidPayload" | "tokenExpired" | "invalidPath";
+type PreviewTokenParseResult =
+	| { payload: PreviewTokenPayload }
+	| { error: PreviewTokenParseError };
+
+function bytesFromBase64Input(
+	input: string | Uint8Array | ArrayBuffer,
+): Uint8Array {
+	if (typeof input === "string") {
+		return textEncoder.encode(input);
+	}
+	if (input instanceof Uint8Array) {
+		return input;
+	}
+	return new Uint8Array(input);
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+	let binary = "";
+	const chunkSize = 0x8000;
+	for (let i = 0; i < bytes.length; i += chunkSize) {
+		binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+	}
+	return btoa(binary);
+}
+
+function base64ToBytes(input: string): Uint8Array {
+	const binary = atob(input);
+	const bytes = new Uint8Array(binary.length);
+	for (let i = 0; i < binary.length; i++) {
+		bytes[i] = binary.charCodeAt(i);
+	}
+	return bytes;
+}
+
+function base64UrlEncode(input: string | Uint8Array | ArrayBuffer): string {
+	return bytesToBase64(bytesFromBase64Input(input))
 		.replace(/\+/g, "-")
 		.replace(/\//g, "_")
 		.replace(/=+$/g, "");
@@ -42,7 +79,87 @@ function base64UrlDecode(input: string): string {
 	if (padding) {
 		base64 += "=".repeat(4 - padding);
 	}
-	return Buffer.from(base64, "base64").toString("utf8");
+	return textDecoder.decode(base64ToBytes(base64));
+}
+
+async function signPayload(payload: string, secret: string): Promise<string> {
+	const subtle = globalThis.crypto?.subtle;
+	if (!subtle) {
+		throw new Error(
+			"[preview] Web Crypto API is required to sign preview tokens.",
+		);
+	}
+
+	const key = await subtle.importKey(
+		"raw",
+		textEncoder.encode(secret),
+		{ name: "HMAC", hash: "SHA-256" },
+		false,
+		["sign"],
+	);
+	const signature = await subtle.sign("HMAC", key, textEncoder.encode(payload));
+	return base64UrlEncode(signature);
+}
+
+function timingSafeEqualAscii(a: string, b: string): boolean {
+	const aBytes = textEncoder.encode(a);
+	const bBytes = textEncoder.encode(b);
+	let diff = aBytes.length ^ bBytes.length;
+	const maxLength = Math.max(aBytes.length, bBytes.length);
+	for (let i = 0; i < maxLength; i++) {
+		diff |= (aBytes[i] ?? 0) ^ (bBytes[i] ?? 0);
+	}
+	return diff === 0;
+}
+
+function defaultPreviewSecret(ctx: PreviewSecretResolverContext): string {
+	return getApp(ctx).config.secret ?? "dev-preview-secret";
+}
+
+async function resolvePreviewSecret(
+	source: PreviewSecretSource,
+	ctx: PreviewSecretResolverContext,
+): Promise<string> {
+	const secret = typeof source === "function" ? await source(ctx) : source;
+	if (!secret) {
+		throw new Error("[preview] Preview token secret must not be empty.");
+	}
+	return secret;
+}
+
+function parsePreviewTokenPayload(
+	encodedPayload: string,
+): PreviewTokenParseResult {
+	try {
+		const payload = JSON.parse(
+			base64UrlDecode(encodedPayload),
+		) as PreviewTokenPayload;
+
+		if (!payload?.exp || typeof payload.exp !== "number") {
+			return { error: "invalidPayload" };
+		}
+
+		if (payload.exp < Date.now()) {
+			return { error: "tokenExpired" };
+		}
+
+		if (!payload.path || typeof payload.path !== "string") {
+			return { error: "invalidPath" };
+		}
+
+		return { payload };
+	} catch {
+		return { error: "invalidPayload" };
+	}
+}
+
+async function verifyPreviewSignature(
+	encodedPayload: string,
+	signature: string,
+	secret: string,
+): Promise<boolean> {
+	const expectedSignature = await signPayload(encodedPayload, secret);
+	return timingSafeEqualAscii(signature, expectedSignature);
 }
 
 // ============================================================================
@@ -87,15 +204,13 @@ const DEFAULT_TTL_MS = 60 * 60 * 1000; // 1 hour
 /**
  * Create preview-related RPC functions.
  *
- * @param secret - Secret key for signing tokens
+ * @param secret - Secret key or resolver for signing tokens. Defaults to
+ *   `app.config.secret` from the current route context.
  * @returns Object with preview functions
  */
-export function createPreviewFunctions(secret: string) {
-	const signPayload = (payload: string): string => {
-		const signature = createHmac("sha256", secret).update(payload).digest();
-		return base64UrlEncode(signature);
-	};
-
+export function createPreviewFunctions(
+	secret: PreviewSecretSource = defaultPreviewSecret,
+) {
 	/**
 	 * Mint a preview token for draft mode access.
 	 *
@@ -132,7 +247,10 @@ export function createPreviewFunctions(secret: string) {
 			const payload: PreviewTokenPayload = { path, exp: expiresAt };
 			const payloadString = JSON.stringify(payload);
 			const encodedPayload = base64UrlEncode(payloadString);
-			const signature = signPayload(encodedPayload);
+			const signature = await signPayload(
+				encodedPayload,
+				await resolvePreviewSecret(secret, ctx),
+			);
 
 			return {
 				token: `${encodedPayload}.${signature}`,
@@ -171,40 +289,23 @@ export function createPreviewFunctions(secret: string) {
 			}
 
 			// Verify signature
-			const expectedSignature = signPayload(encodedPayload);
-			const signatureBuffer = Uint8Array.from(Buffer.from(signature));
-			const expectedBuffer = Uint8Array.from(Buffer.from(expectedSignature));
+			const isValidSignature = await verifyPreviewSignature(
+				encodedPayload,
+				signature,
+				await resolvePreviewSecret(secret, ctx),
+			);
 
-			if (signatureBuffer.length !== expectedBuffer.length) {
-				return { valid: false, error: t("preview.invalidSignature") };
-			}
-
-			if (!timingSafeEqual(signatureBuffer, expectedBuffer)) {
+			if (!isValidSignature) {
 				return { valid: false, error: t("preview.invalidSignature") };
 			}
 
 			// Parse and validate payload
-			try {
-				const payload = JSON.parse(
-					base64UrlDecode(encodedPayload),
-				) as PreviewTokenPayload;
-
-				if (!payload?.exp || typeof payload.exp !== "number") {
-					return { valid: false, error: t("preview.invalidPayload") };
-				}
-
-				if (payload.exp < Date.now()) {
-					return { valid: false, error: t("preview.tokenExpired") };
-				}
-
-				if (!payload.path || typeof payload.path !== "string") {
-					return { valid: false, error: t("preview.invalidPath") };
-				}
-
-				return { valid: true, path: payload.path };
-			} catch {
-				return { valid: false, error: t("preview.invalidPayload") };
+			const parsed = parsePreviewTokenPayload(encodedPayload);
+			if ("error" in parsed) {
+				return { valid: false, error: t(`preview.${parsed.error}`) };
 			}
+
+			return { valid: true, path: parsed.payload.path };
 		});
 
 	return {
@@ -225,36 +326,19 @@ export function createPreviewFunctions(secret: string) {
  * @param secret - The secret used to sign the token
  * @returns The payload if valid, null otherwise
  */
-export function verifyPreviewTokenDirect(
+export async function verifyPreviewTokenDirect(
 	token: string,
 	secret: string,
-): PreviewTokenPayload | null {
+): Promise<PreviewTokenPayload | null> {
 	const [encodedPayload, signature] = token.split(".");
 	if (!encodedPayload || !signature) return null;
 
-	const expectedSignature = base64UrlEncode(
-		createHmac("sha256", secret).update(encodedPayload).digest(),
-	);
-
-	const signatureBuffer = Uint8Array.from(Buffer.from(signature));
-	const expectedBuffer = Uint8Array.from(Buffer.from(expectedSignature));
-
-	if (signatureBuffer.length !== expectedBuffer.length) return null;
-	if (!timingSafeEqual(signatureBuffer, expectedBuffer)) return null;
-
-	try {
-		const payload = JSON.parse(
-			base64UrlDecode(encodedPayload),
-		) as PreviewTokenPayload;
-
-		if (!payload?.exp || typeof payload.exp !== "number") return null;
-		if (payload.exp < Date.now()) return null;
-		if (!payload.path || typeof payload.path !== "string") return null;
-
-		return payload;
-	} catch {
+	if (!(await verifyPreviewSignature(encodedPayload, signature, secret))) {
 		return null;
 	}
+
+	const parsed = parsePreviewTokenPayload(encodedPayload);
+	return "payload" in parsed ? parsed.payload : null;
 }
 
 // ============================================================================
@@ -265,26 +349,26 @@ export function verifyPreviewTokenDirect(
  * Create a preview token verifier with bound secret.
  * Use this in route handlers to avoid passing secret repeatedly.
  *
- * @param secret - The secret used to sign tokens (optional, uses env if not provided)
+ * @param secret - The secret used to sign tokens.
  * @returns A verify function that only needs the token
  *
  * @example
  * ```ts
  * // Create once at module level
- * const verifyPreviewToken = createPreviewTokenVerifier();
+ * const verifyPreviewToken = createPreviewTokenVerifier(secret);
  *
  * // Use in route handler
- * const payload = verifyPreviewToken(token);
+ * const payload = await verifyPreviewToken(token);
  * if (!payload) {
  *   return new Response("Invalid token", { status: 401 });
  * }
  * ```
  */
-export function createPreviewTokenVerifier(secret?: string) {
-	const resolvedSecret = secret ?? getPreviewSecret();
-
-	return (token: string): PreviewTokenPayload | null => {
-		return verifyPreviewTokenDirect(token, resolvedSecret);
+export function createPreviewTokenVerifier(
+	secret: string,
+): (token: string) => Promise<PreviewTokenPayload | null> {
+	return (token: string): Promise<PreviewTokenPayload | null> => {
+		return verifyPreviewTokenDirect(token, secret);
 	};
 }
 
@@ -382,10 +466,11 @@ const getPreviewUrl = route()
 // ============================================================================
 
 /**
- * Default preview functions bundle with env-based secret.
+ * Default preview functions bundle. The route handlers resolve the token
+ * secret from `app.config.secret` at request time.
  * Used by the `adminModule` to register preview RPC functions.
  */
 export const previewFunctions = {
-	...createPreviewFunctions(getPreviewSecret()),
+	...createPreviewFunctions(),
 	getPreviewUrl,
 };

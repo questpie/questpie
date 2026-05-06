@@ -8,12 +8,10 @@
  * @see RFC-MODULE-ARCHITECTURE §8.1 (User Project)
  */
 
-import {
-	ConsoleAdapter,
-	pgBossAdapter,
-	runtimeConfig,
-	SmtpAdapter,
-} from "questpie";
+import { runtimeConfig } from "questpie";
+import { ConsoleAdapter } from "questpie/adapters/console";
+import { pgBossAdapter } from "questpie/adapters/pg-boss";
+import { SmtpAdapter } from "questpie/adapters/smtp";
 
 import { messages } from "@/questpie/server/i18n";
 

@@ -1,5 +1,7 @@
 import { sql } from "drizzle-orm";
 
+import { getEnv, getNodeEnv } from "#questpie/server/utils/env.js";
+
 import type {
 	Migration,
 	MigrationDb,
@@ -30,8 +32,8 @@ export class MigrationRunner {
 	}
 
 	private readSilentEnv(): boolean {
-		const value = process.env.QUESTPIE_MIGRATIONS_SILENT;
-		const isTestEnv = process.env.NODE_ENV === "test";
+		const value = getEnv("QUESTPIE_MIGRATIONS_SILENT");
+		const isTestEnv = getNodeEnv() === "test";
 
 		if (isTestEnv) {
 			return true;

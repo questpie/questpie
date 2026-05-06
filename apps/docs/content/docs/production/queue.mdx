@@ -1,14 +1,15 @@
 ---
 title: Queue
-description: Background job processing with pg-boss.
+description: Background job processing with pg-boss, BullMQ, or Cloudflare Queues.
 ---
 
-QUESTPIE uses [pg-boss](https://github.com/timgit/pg-boss) for background job processing. Jobs are stored in PostgreSQL — no external queue service needed.
+QUESTPIE queues use adapter implementations. `pgBossAdapter` stores jobs in PostgreSQL for long-running Node/Bun workers. `bullMQAdapter` stores jobs in Redis through BullMQ. `cloudflareQueuesAdapter` uses Cloudflare Queues push consumers for Workers.
 
 ## Configuration
 
 ```ts title="questpie.config.ts"
-import { pgBossAdapter, runtimeConfig } from "questpie";
+import { runtimeConfig } from "questpie";
+import { pgBossAdapter } from "questpie/adapters/pg-boss";
 
 export default runtimeConfig({
 	queue: {
@@ -20,6 +21,26 @@ export default runtimeConfig({
 ```
 
 pg-boss creates its own schema in your database (`pgboss.*` tables) for job storage, scheduling, and dead-letter queues.
+
+### BullMQ
+
+Use BullMQ when Redis is already part of the deployment and you want Redis-backed queue storage for Node/Bun workers:
+
+```ts title="questpie.config.ts"
+import { runtimeConfig } from "questpie";
+import { bullMQAdapter } from "questpie/adapters/bullmq";
+
+export default runtimeConfig({
+	queue: {
+		adapter: bullMQAdapter({
+			connection: { url: process.env.REDIS_URL! },
+			queuePrefix: "my-app",
+		}),
+	},
+});
+```
+
+The built-in BullMQ adapter targets open-source BullMQ. It does not expose per-group FIFO semantics. If a workload requires one active job per customer, tenant, or aggregate while allowing different groups to run in parallel, use a queue adapter that has native group semantics instead of emulating groups with job IDs or one queue per group.
 
 ## Defining Jobs
 
@@ -72,7 +93,7 @@ The `queue` object is fully typed — autocompletion shows all registered jobs a
 
 ## Running Queue Workers
 
-Publishing stores the job in PostgreSQL. A job handler runs only when a worker consumes the queue:
+Publishing enqueues the job in the configured queue backend. A job handler runs only when a worker consumes the queue:
 
 ```ts title="src/worker.ts"
 import { app } from "#questpie";
@@ -107,6 +128,38 @@ await app.queue.stop();
 
 console.log(`Processed ${result.processed} jobs`);
 ```
+
+### Cloudflare Workers
+
+Cloudflare uses push consumers. Configure `cloudflareQueuesAdapter` in `runtimeConfig`, then export a Worker with `createCloudflareWorkerHandlers`:
+
+```ts title="questpie.config.ts"
+import { runtimeConfig } from "questpie";
+import {
+	cloudflareQueuesAdapter,
+	type CloudflareQueueBinding,
+} from "questpie/adapters/cloudflare";
+
+async function getQueue(): Promise<CloudflareQueueBinding> {
+	const { env } = await import("cloudflare:workers");
+	return env.QUESTPIE_QUEUE as CloudflareQueueBinding;
+}
+
+export default runtimeConfig({
+	queue: {
+		adapter: cloudflareQueuesAdapter({ queue: getQueue }),
+	},
+});
+```
+
+```ts title="worker.ts"
+import { app } from "#questpie";
+import { createCloudflareWorkerHandlers } from "questpie/adapters/cloudflare";
+
+export default createCloudflareWorkerHandlers(app, { basePath: "/api" });
+```
+
+Cloudflare Queues call the exported `queue()` handler. You do not run `app.queue.listen()` on Workers, and `pgBossAdapter` is not a Cloudflare Worker adapter.
 
 ## Job Options
 
@@ -163,6 +216,8 @@ import { app } from "#questpie";
 await app.queue.registerSchedules();
 await app.queue.stop();
 ```
+
+On Cloudflare, recurring jobs use Cron Triggers. Add matching cron expressions to `wrangler.toml`; the Cloudflare adapter's `scheduled()` handler publishes every QUESTPIE job whose `options.cron` equals the trigger cron.
 
 ## Singleton Jobs
 
