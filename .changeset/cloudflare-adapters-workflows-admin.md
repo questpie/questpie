@@ -1,7 +1,7 @@
 ---
-"questpie": major
-"@questpie/admin": major
-"@questpie/workflows": major
+"questpie": minor
+"@questpie/admin": minor
+"@questpie/workflows": minor
 ---
 
 Move concrete integrated adapter implementations out of the root `questpie` entrypoint and expose them through dedicated `questpie/adapters/*` subpaths. Adapter imports such as `pgBossAdapter`, `pgNotifyAdapter`, `redisStreamsAdapter`, `SmtpAdapter`, `ConsoleAdapter`, and BullMQ should now come from their adapter entrypoints. The root entrypoint keeps framework APIs, factories, interfaces, and shared types so optional adapter dependencies are not pulled into unrelated server or Worker bundles.
