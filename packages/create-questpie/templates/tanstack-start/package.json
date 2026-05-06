@@ -15,6 +15,7 @@
 		"routes:generate": "tsr generate",
 		"questpie:generate": "questpie generate -c src/questpie/server/questpie.config.ts",
 		"scaffold:generate": "bun run routes:generate && bun run questpie:generate",
+		"db:push": "questpie push -c questpie.config.ts",
 		"migrate": "questpie migrate -c questpie.config.ts",
 		"migrate:create": "questpie migrate:create -c questpie.config.ts",
 		"migrate:status": "questpie migrate:status -c questpie.config.ts",

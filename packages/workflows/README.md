@@ -29,44 +29,40 @@ import { workflow } from "@questpie/workflows";
 import z from "zod";
 
 export default workflow({
-  name: "user-onboarding",
-  schema: z.object({ userId: z.string(), email: z.string() }),
-  timeout: "7d",
-  handler: async ({ input, step }) => {
-    await step.run("send-welcome", async () => {
-      await email.send({ to: input.email, template: "welcome" });
-    });
+	name: "user-onboarding",
+	schema: z.object({ userId: z.string(), email: z.string() }),
+	timeout: "7d",
+	handler: async ({ input, step, ctx }) => {
+		await step.run("send-welcome", async () => {
+			await ctx.email.sendTemplate({
+				template: "welcome",
+				input: { userId: input.userId },
+				to: input.email,
+			});
+		});
 
-    await step.sleep("wait-before-tips", "24h");
+		await step.sleep("wait-before-tips", "24h");
 
-    await step.run("send-tips", async () => {
-      await email.send({ to: input.email, template: "getting-started" });
-    });
+		await step.run("send-tips", async () => {
+			await ctx.email.sendTemplate({
+				template: "gettingStarted",
+				input: { userId: input.userId },
+				to: input.email,
+			});
+		});
 
-    const feedback = await step.waitForEvent("wait-feedback", {
-      event: "user.feedback",
-      match: { userId: input.userId },
-      timeout: "5d",
-    });
+		const feedback = await step.waitForEvent("wait-feedback", {
+			event: "user.feedback",
+			match: { userId: input.userId },
+			timeout: "5d",
+		});
 
-    return { completed: true, feedbackReceived: !!feedback };
-  },
+		return { completed: true, feedbackReceived: !!feedback };
+	},
 });
 ```
 
 ### Register the Module
-
-```ts
-// questpie.config.ts
-import { runtimeConfig } from "questpie";
-import { workflowsPlugin } from "@questpie/workflows/server";
-
-export default runtimeConfig({
-  plugins: [workflowsPlugin()],
-  db: { url: process.env.DATABASE_URL! },
-  app: { url: process.env.APP_URL! },
-});
-```
 
 ```ts
 // modules.ts
@@ -74,22 +70,24 @@ import { workflowsModule } from "@questpie/workflows/server";
 export default [workflowsModule] as const;
 ```
 
+`workflowsModule` carries the codegen plugin, so `questpie generate` discovers `workflows/*.ts` files without manually adding `workflowsPlugin()` to `questpie.config.ts`.
+
 ### Trigger from Application Code
 
 ```ts
 const result = await ctx.workflows.trigger("user-onboarding", {
-  userId: user.id,
-  email: user.email,
+	userId: user.id,
+	email: user.email,
 });
 ```
 
 ## Exports
 
-| Entry Point | Exports |
-|---|---|
-| `@questpie/workflows` | `workflow()` factory + all types |
+| Entry Point                  | Exports                                                                            |
+| ---------------------------- | ---------------------------------------------------------------------------------- |
+| `@questpie/workflows`        | `workflow()` factory + all types                                                   |
 | `@questpie/workflows/server` | `workflowsModule`, `workflowsPlugin()`, `createWorkflowClient()`, engine internals |
-| `@questpie/workflows/client` | `workflowsClientModule`, admin UI pages and widgets |
+| `@questpie/workflows/client` | `workflowsClientModule`, admin UI pages and widgets                                |
 
 ## Documentation
 

@@ -196,7 +196,9 @@ describe("generateTemplate — minimal (modules.ts only)", () => {
 
 	it("emits AppConfig type", () => {
 		expect(code).toContain("export type AppConfig = {");
-		expect(code).toContain("collections: AppCollections & Record<string, any>;");
+		expect(code).toContain(
+			"collections: AppCollections & Record<string, any>;",
+		);
 		expect(code).toContain("globals: AppGlobals & Record<string, any>;");
 	});
 
@@ -215,7 +217,7 @@ describe("generateTemplate — minimal (modules.ts only)", () => {
 
 	it("derives AppContext infrastructure and globals outside typeof app", () => {
 		expect(code).toContain(
-			'type _AppAppConfig = _ModuleConfig extends { app: infer TApp } ? TApp : {};',
+			"type _AppAppConfig = _ModuleConfig extends { app: infer TApp } ? TApp : {};",
 		);
 		expect(code).toContain(
 			"type _AppContextExtensions = Partial<InferContextExtensionsFromAppConfig<_AppAppConfig>>;",
@@ -226,10 +228,22 @@ describe("generateTemplate — minimal (modules.ts only)", () => {
 		expect(code).toContain(
 			"type _AppGlobalDefinitions = AppGlobals & Record<string, AnyGlobalOrBuilder>;",
 		);
+		expect(code).toContain(
+			"type _AppQuestpieBase = Questpie<_AppQuestpieConfig>;",
+		);
+		expect(code).toContain(
+			'type _AppQuestpie = Omit<_AppQuestpieBase, "collections" | "globals">',
+		);
 		expect(code).toContain("type _AppQuestpieConfig = Omit<QuestpieConfig");
-		expect(code).toContain("type _AppDb = DrizzleClientFromQuestpieConfig<_AppQuestpieConfig>;");
-		expect(code).toContain('type _AppGlobalsAPI = _AppQuestpie["globals"];');
-		expect(code).toContain("type _AppTables = TablesFromConfig<_AppQuestpieConfig>;");
+		expect(code).toContain(
+			"type _AppDb = DrizzleClientFromQuestpieConfig<_AppQuestpieConfig>;",
+		);
+		expect(code).toContain(
+			'type _AppGlobalsAPI = _AppQuestpieBase["globals"];',
+		);
+		expect(code).toContain(
+			"type _AppTables = TablesFromConfig<_AppQuestpieConfig>;",
+		);
 		expect(code).toContain("db: _AppDb;");
 		expect(code).toContain('email: _AppQuestpie["email"];');
 		expect(code).toContain("storage: _AppStorage;");
@@ -725,9 +739,7 @@ describe("generateTemplate — routes (flat record)", () => {
 			singletonFactories: coreSingletonFactories(),
 		});
 
-		expect(code).toContain(
-			'type AppRoutes = _ModuleRoutes & {',
-		);
+		expect(code).toContain("type AppRoutes = _ModuleRoutes & {");
 		expect(code).toContain(
 			'"apps/[appId]/install": RouteWithParams<typeof _route_apps_appId_install, RouteParamsFromKey<"apps/[appId]/install">>;',
 		);
@@ -821,7 +833,7 @@ describe("generateTemplate — app config context", () => {
 		});
 
 		expect(code).toContain(
-			'type _AppAppConfig = (_ModuleConfig extends { app: infer TApp } ? TApp : {}) & typeof _appConfig;',
+			"type _AppAppConfig = (_ModuleConfig extends { app: infer TApp } ? TApp : {}) & typeof _appConfig;",
 		);
 		expect(code).toContain(
 			"type _AppContextExtensions = Partial<InferContextExtensionsFromAppConfig<_AppAppConfig>>;",

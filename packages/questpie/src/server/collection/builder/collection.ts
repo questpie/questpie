@@ -46,6 +46,7 @@ import type {
 import { createCollectionValidationSchemas } from "#questpie/server/collection/builder/validation-helpers.js";
 import { CRUDGenerator } from "#questpie/server/collection/crud/index.js";
 import type { CRUD } from "#questpie/server/collection/crud/types.js";
+import type { FieldState } from "#questpie/server/fields/field-class-types.js";
 import type { FieldSelect } from "#questpie/server/fields/field-types.js";
 import {
 	extractWorkflowFromVersioning,
@@ -240,11 +241,22 @@ type InferLegacyUpdate<
 type OutputExtensions<TState extends CollectionBuilderState> =
 	TState["output"] extends Record<string, any> ? TState["output"] : {};
 
+type AnyFieldDefinition =
+	| { readonly _: FieldState }
+	| { $types: any; toColumn: any };
+
+type HasFieldDefinitions<TFieldDefs> = [TFieldDefs] extends [
+	Record<string, never>,
+]
+	? false
+	: TFieldDefs extends Record<string, AnyFieldDefinition>
+		? keyof TFieldDefs extends never
+			? false
+			: true
+		: false;
+
 export type CollectionSelect<TState extends CollectionBuilderState> =
-	TState["fieldDefinitions"] extends Record<
-		string,
-		{ $types: any; toColumn: any }
-	>
+	HasFieldDefinitions<TState["fieldDefinitions"]> extends true
 		? Prettify<
 				InferCollectionSelect<
 					InferMainTableWithColumns<
@@ -275,10 +287,7 @@ export type CollectionSelect<TState extends CollectionBuilderState> =
  * CollectionInsert - works with both field builder and raw Drizzle columns.
  */
 export type CollectionInsert<TState extends CollectionBuilderState> =
-	TState["fieldDefinitions"] extends Record<
-		string,
-		{ $types: any; toColumn: any }
-	>
+	HasFieldDefinitions<TState["fieldDefinitions"]> extends true
 		? InferCollectionInsert<
 				InferMainTableWithColumns<
 					TState["name"],
@@ -303,10 +312,7 @@ export type CollectionInsert<TState extends CollectionBuilderState> =
  * CollectionUpdate - works with both field builder and raw Drizzle columns.
  */
 export type CollectionUpdate<TState extends CollectionBuilderState> =
-	TState["fieldDefinitions"] extends Record<
-		string,
-		{ $types: any; toColumn: any }
-	>
+	HasFieldDefinitions<TState["fieldDefinitions"]> extends true
 		? InferCollectionUpdate<
 				InferMainTableWithColumns<
 					TState["name"],
@@ -539,10 +545,9 @@ export class Collection<TState extends CollectionBuilderState> {
 	});
 
 	public readonly name: TState["name"];
-	public readonly table: TState["fieldDefinitions"] extends Record<
-		string,
-		{ $types: any; toColumn: any }
-	>
+	public readonly table: HasFieldDefinitions<
+		TState["fieldDefinitions"]
+	> extends true
 		? InferMainTableWithColumns<
 				TState["name"],
 				TState["fieldDefinitions"],

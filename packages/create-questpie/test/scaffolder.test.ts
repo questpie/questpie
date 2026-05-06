@@ -62,6 +62,9 @@ describe("scaffold", () => {
 		expect(packageJson.scripts["scaffold:verify"]).toBe(
 			"bun run scaffold:generate && bun run check-types",
 		);
+		expect(packageJson.scripts["db:push"]).toBe(
+			"questpie push -c questpie.config.ts",
+		);
 		expect(packageJson.scripts.migrate).toBe(
 			"questpie migrate -c questpie.config.ts",
 		);
@@ -83,5 +86,60 @@ describe("scaffold", () => {
 				join(projectDir, ".agents", "skills", "questpie-admin", "SKILL.md"),
 			),
 		).toBe(true);
+	});
+
+	test("applies adapter and workflow options to generated project files", async () => {
+		tempDir = await mkdtemp(join(tmpdir(), "create-questpie-"));
+		process.chdir(tempDir);
+
+		await scaffold({
+			projectName: "adapter-app",
+			templateId: "tanstack-start",
+			databaseName: "adapter_app",
+			installDeps: false,
+			initGit: false,
+			installSkills: false,
+			runCodegen: false,
+			queueAdapter: "bullmq",
+			emailAdapter: "resend",
+			realtimeAdapter: "redis-streams",
+			kvAdapter: "redis",
+			includeWorkflows: true,
+		});
+
+		const projectDir = join(tempDir, "adapter-app");
+		const packageJson = JSON.parse(
+			await readFile(join(projectDir, "package.json"), "utf-8"),
+		);
+		const env = await readFile(
+			join(projectDir, "src", "lib", "env.ts"),
+			"utf-8",
+		);
+		const runtimeConfig = await readFile(
+			join(projectDir, "src", "questpie", "server", "questpie.config.ts"),
+			"utf-8",
+		);
+		const serverModules = await readFile(
+			join(projectDir, "src", "questpie", "server", "modules.ts"),
+			"utf-8",
+		);
+		const adminModules = await readFile(
+			join(projectDir, "src", "questpie", "admin", "modules.ts"),
+			"utf-8",
+		);
+
+		expect(packageJson.dependencies["@questpie/workflows"]).toBe("latest");
+		expect(packageJson.dependencies.bullmq).toBeDefined();
+		expect(packageJson.dependencies.redis).toBeDefined();
+		expect(env).toContain('MAIL_ADAPTER: z.enum(["console","resend"])');
+		expect(env).toContain("RESEND_API_KEY");
+		expect(env).toContain("REDIS_URL");
+		expect(runtimeConfig).toContain("bullMQAdapter");
+		expect(runtimeConfig).toContain("ResendAdapter");
+		expect(runtimeConfig).toContain("redisStreamsAdapter");
+		expect(runtimeConfig).toContain("redisKVAdapter");
+		expect(serverModules).toContain("workflowsModule");
+		expect(adminModules).toContain("workflowsClientModule");
+		expect(adminModules).toContain("...workflowsClientModule.views");
 	});
 });

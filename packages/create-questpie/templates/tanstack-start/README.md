@@ -18,8 +18,8 @@ docker compose up -d
 # 2) Regenerate codegen and type-check
 bun run scaffold:verify
 
-# 3) Run migrations
-bun run migrate
+# 3) Create local database tables
+bun run db:push
 
 # 4) Start development server
 bun run dev
@@ -75,6 +75,7 @@ migrations/
 | `bun run routes:generate`        | Regenerate TanStack Router route tree         |
 | `bun run questpie:generate`      | Regenerate `src/questpie/server/.generated/*` |
 | `bun questpie add <type> <name>` | Scaffold entity files (auto-runs codegen)     |
+| `bun run db:push`                | Push schema directly to local dev database    |
 | `bun run migrate`                | Run migrations                                |
 | `bun run migrate:create`         | Create migration                              |
 
@@ -84,14 +85,14 @@ Preferred workflow:
 
 1. Run `bun questpie add collection products`.
 2. The CLI creates the file and runs codegen automatically.
-3. Run `bun run migrate:create`.
+3. Run `bun run db:push` for local development, or `bun run migrate:create` for production migrations.
 
 Manual workflow (when you create files by hand):
 
 1. Create a file in `src/questpie/server/collections/`.
 2. Export a collection builder from that file.
 3. Run `bun run questpie:generate`.
-4. Run `bun run migrate:create`.
+4. Run `bun run db:push` for local development, or `bun run migrate:create` for production migrations.
 
 Collections are discovered automatically by codegen. No manual `app.ts` registration is required.
 
@@ -101,13 +102,13 @@ Preferred workflow:
 
 1. Run `bun questpie add global marketing`.
 2. The CLI creates the file and runs codegen automatically.
-3. Run `bun run migrate:create`.
+3. Run `bun run db:push` for local development, or `bun run migrate:create` for production migrations.
 
 Manual workflow (when you create files by hand):
 
 1. Create a file in `src/questpie/server/globals/`.
 2. Export a global builder from that file.
 3. Run `bun run questpie:generate`.
-4. Run `bun run migrate:create`.
+4. Run `bun run db:push` for local development, or `bun run migrate:create` for production migrations.
 
 Globals are discovered automatically by codegen. No manual `app.ts` registration is required.

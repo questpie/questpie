@@ -23,7 +23,7 @@ import {
  * Uses `namespace(null)` to place the client at `ctx.workflows`
  * (top-level in AppContext) instead of `ctx.services.workflows`.
  */
-export const workflowService = service()
+export const workflows = service()
 	.namespace(null)
 	.lifecycle("singleton")
 	.create((ctx) => {
@@ -39,4 +39,4 @@ export const workflowService = service()
 		});
 	});
 
-export default workflowService;
+export default workflows;

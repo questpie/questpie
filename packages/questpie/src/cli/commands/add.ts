@@ -16,7 +16,11 @@ import { coreCodegenPlugin, resolveTargetGraph } from "../codegen/index.js";
 import type { ResolvedTarget, ScaffoldConfig } from "../codegen/types.js";
 import { resolveConfigRoot } from "../config.js";
 import { resolveCliPath } from "../utils.js";
-import { generateCommand, loadConfigForCodegen } from "./codegen.js";
+import {
+	extractModulePlugins,
+	generateCommand,
+	loadConfigForCodegen,
+} from "./codegen.js";
 
 // ============================================================================
 // Types
@@ -46,8 +50,11 @@ export async function addCommand(options: AddOptions): Promise<void> {
 	const rawConfigPath = resolveCliPath(options.configPath);
 	const { configPath, rootDir } = await resolveConfigRoot(rawConfigPath);
 	const { plugins: userPlugins } = await loadConfigForCodegen(configPath);
+	const plugins = await extractModulePlugins(rootDir, userPlugins ?? [], {
+		configPath: options.configPath,
+	});
 
-	const allPlugins = [coreCodegenPlugin(), ...(userPlugins ?? [])];
+	const allPlugins = [coreCodegenPlugin(), ...plugins];
 	const targetGraph = resolveTargetGraph(allPlugins);
 
 	// 2. Build scaffold registry: scaffoldName → entries[]

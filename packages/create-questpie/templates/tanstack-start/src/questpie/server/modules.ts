@@ -4,7 +4,6 @@
 import { adminModule } from "@questpie/admin/server";
 import { openApiModule } from "@questpie/openapi";
 
-export default [
-	adminModule,
-	openApiModule,
-] as const;
+const modules = [adminModule, openApiModule] as const;
+
+export default modules;

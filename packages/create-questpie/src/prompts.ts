@@ -4,6 +4,16 @@ import pc from "picocolors";
 import { templates } from "./templates.js";
 import { isValidPackageName, toDbName } from "./utils.js";
 
+export const queueAdapters = ["pg-boss", "bullmq", "none"] as const;
+export const emailAdapters = ["console", "smtp", "resend", "plunk"] as const;
+export const realtimeAdapters = ["none", "pg-notify", "redis-streams"] as const;
+export const kvAdapters = ["memory", "redis"] as const;
+
+export type QueueAdapterOption = (typeof queueAdapters)[number];
+export type EmailAdapterOption = (typeof emailAdapters)[number];
+export type RealtimeAdapterOption = (typeof realtimeAdapters)[number];
+export type KVAdapterOption = (typeof kvAdapters)[number];
+
 export type ProjectOptions = {
 	projectName: string;
 	templateId: string;
@@ -12,12 +22,57 @@ export type ProjectOptions = {
 	initGit: boolean;
 	installSkills: boolean;
 	runCodegen: boolean;
+	continueOnError?: boolean;
+	queueAdapter?: QueueAdapterOption;
+	emailAdapter?: EmailAdapterOption;
+	realtimeAdapter?: RealtimeAdapterOption;
+	kvAdapter?: KVAdapterOption;
+	includeWorkflows?: boolean;
 };
+
+function assertChoice<T extends readonly string[]>(
+	name: string,
+	value: string | undefined,
+	choices: T,
+): T[number] | undefined {
+	if (value === undefined) return undefined;
+	if (choices.includes(value)) return value as T[number];
+	throw new Error(
+		`Invalid ${name}: ${value}. Expected one of: ${choices.join(", ")}.`,
+	);
+}
+
+function withOptionDefaults(options: ProjectOptions): ProjectOptions {
+	return {
+		...options,
+		queueAdapter: options.queueAdapter ?? "pg-boss",
+		emailAdapter: options.emailAdapter ?? "console",
+		realtimeAdapter: options.realtimeAdapter ?? "none",
+		kvAdapter: options.kvAdapter ?? "memory",
+		includeWorkflows: options.includeWorkflows ?? false,
+	};
+}
 
 export async function runPrompts(
 	args: Partial<ProjectOptions> & { projectName?: string },
 ): Promise<ProjectOptions> {
 	const isInteractive = Boolean(process.stdin.isTTY && process.stdout.isTTY);
+	const queueAdapter = assertChoice(
+		"queue adapter",
+		args.queueAdapter,
+		queueAdapters,
+	);
+	const emailAdapter = assertChoice(
+		"email adapter",
+		args.emailAdapter,
+		emailAdapters,
+	);
+	const realtimeAdapter = assertChoice(
+		"realtime adapter",
+		args.realtimeAdapter,
+		realtimeAdapters,
+	);
+	const kvAdapter = assertChoice("KV adapter", args.kvAdapter, kvAdapters);
 
 	if (!isInteractive) {
 		if (!args.projectName) {
@@ -29,7 +84,7 @@ export async function runPrompts(
 			);
 		}
 
-		return {
+		return withOptionDefaults({
 			projectName: args.projectName,
 			templateId: args.templateId ?? templates[0].id,
 			databaseName: args.databaseName ?? toDbName(args.projectName),
@@ -37,7 +92,13 @@ export async function runPrompts(
 			initGit: args.initGit ?? true,
 			installSkills: args.installSkills ?? true,
 			runCodegen: args.runCodegen ?? true,
-		};
+			continueOnError: args.continueOnError ?? false,
+			queueAdapter,
+			emailAdapter,
+			realtimeAdapter,
+			kvAdapter,
+			includeWorkflows: args.includeWorkflows ?? false,
+		});
 	}
 
 	p.intro(pc.bgCyan(pc.black(" QUESTPIE — Create a new project ")));
@@ -127,7 +188,7 @@ export async function runPrompts(
 		},
 	);
 
-	return {
+	return withOptionDefaults({
 		projectName: questions.projectName as string,
 		templateId: questions.templateId as string,
 		databaseName: questions.databaseName as string,
@@ -135,5 +196,11 @@ export async function runPrompts(
 		initGit: questions.initGit as boolean,
 		installSkills: questions.installSkills as boolean,
 		runCodegen: questions.runCodegen as boolean,
-	};
+		continueOnError: args.continueOnError ?? false,
+		queueAdapter,
+		emailAdapter,
+		realtimeAdapter,
+		kvAdapter,
+		includeWorkflows: args.includeWorkflows ?? false,
+	});
 }

@@ -26,7 +26,11 @@ import type { WorkflowDefinition } from "./types.js";
  *     await step.sleep("wait-3-days", "3d");
  *
  *     await step.run("send-reminder", async () => {
- *       await ctx.email.send("reminder", { to: user.email });
+ *       await ctx.email.sendTemplate({
+ *         template: "reminder",
+ *         input: { userId: input.userId },
+ *         to: user.email,
+ *       });
  *     });
  *
  *     return { status: "onboarded" };

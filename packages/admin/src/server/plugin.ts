@@ -310,7 +310,7 @@ export function adminPlugin(): CodegenPlugin {
 						dir: "views",
 						description: "Server-side view definition",
 						template: ({ kebab, camel }) =>
-							`import { view } from "@questpie/admin/server";\n\nexport const ${camel}View = view("${kebab}", "list", {\n\t// TODO: configure view\n});\n`,
+							`import { view } from "@questpie/admin/server";\n\nexport const ${camel}View = view("${kebab}", {\n\tkind: "list",\n});\n`,
 					},
 					component: {
 						dir: "components",
@@ -440,21 +440,21 @@ export function adminPlugin(): CodegenPlugin {
 						extension: ".tsx",
 						description: "Client-side view component",
 						template: ({ kebab, pascal }) =>
-							`import { defineView } from "@questpie/admin";\n\nexport default defineView("${kebab}", (props) => {\n\treturn (\n\t\t<div>\n\t\t\t<h2>${pascal} View</h2>\n\t\t\t{/* TODO: implement view */}\n\t\t</div>\n\t);\n});\n`,
+							`import { type CollectionListViewProps, view } from "@questpie/admin/client";\n\nfunction ${pascal}View(_props: CollectionListViewProps) {\n\treturn (\n\t\t<div>\n\t\t\t<h2>${pascal} View</h2>\n\t\t\t{/* TODO: implement view */}\n\t\t</div>\n\t);\n}\n\nexport default view("${kebab}", {\n\tkind: "list",\n\tcomponent: ${pascal}View,\n});\n`,
 					},
 					field: {
 						dir: "fields",
 						extension: ".tsx",
 						description: "Client-side field component",
 						template: ({ kebab, pascal }) =>
-							`import { field } from "@questpie/admin";\n\nexport default field({\n\tname: "${kebab}",\n\tcomponent: (props) => {\n\t\treturn (\n\t\t\t<div>\n\t\t\t\t<label>${pascal}</label>\n\t\t\t\t{/* TODO: implement field */}\n\t\t\t</div>\n\t\t);\n\t},\n});\n`,
+							`import { type BaseFieldProps, field } from "@questpie/admin/client";\n\nfunction ${pascal}Field({ label, value, onChange, onBlur }: BaseFieldProps) {\n\treturn (\n\t\t<label>\n\t\t\t<span>{label ?? "${pascal}"}</span>\n\t\t\t<input\n\t\t\t\tvalue={typeof value === "string" ? value : ""}\n\t\t\t\tonChange={(event) => onChange?.(event.target.value)}\n\t\t\t\tonBlur={onBlur}\n\t\t\t/>\n\t\t</label>\n\t);\n}\n\nexport default field("${kebab}", {\n\tcomponent: ${pascal}Field,\n});\n`,
 					},
 					widget: {
 						dir: "widgets",
 						extension: ".tsx",
 						description: "Client-side dashboard widget",
 						template: ({ kebab, pascal }) =>
-							`import { defineWidget } from "@questpie/admin";\n\nexport default defineWidget("${kebab}", (props) => {\n\treturn (\n\t\t<div>\n\t\t\t<h3>${pascal} Widget</h3>\n\t\t\t{/* TODO: implement widget */}\n\t\t</div>\n\t);\n});\n`,
+							`import { type WidgetComponentProps, widget } from "@questpie/admin/client";\n\nfunction ${pascal}Widget(_props: WidgetComponentProps) {\n\treturn (\n\t\t<div>\n\t\t\t<h3>${pascal} Widget</h3>\n\t\t\t{/* TODO: implement widget */}\n\t\t</div>\n\t);\n}\n\nexport default widget("${kebab}", {\n\tcomponent: ${pascal}Widget,\n});\n`,
 					},
 				},
 

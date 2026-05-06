@@ -18,7 +18,7 @@ QUESTPIE uses an adapter-based architecture for all infrastructure. Development 
 | Queue    | None (jobs skip)      | pg-boss (`pgBossAdapter`)             |
 | Realtime | pgNotify              | Redis Streams (`redisStreamsAdapter`) |
 | Email    | Console (logs output) | SMTP (`SmtpAdapter`)                  |
-| KV Store | In-memory             | Redis (`"redis"` adapter)             |
+| KV Store | In-memory             | Redis (`redisKVAdapter`)              |
 | Logger   | Pino (console)        | Pino (structured JSON)                |
 
 ## Authentication
@@ -167,7 +167,8 @@ avatar: f.upload({
 Background job processing with [pg-boss](https://github.com/timgit/pg-boss). Jobs stored in PostgreSQL.
 
 ```ts
-import { pgBossAdapter, runtimeConfig } from "questpie";
+import { runtimeConfig } from "questpie";
+import { pgBossAdapter } from "questpie/adapters/pg-boss";
 
 export default runtimeConfig({
 	queue: {
@@ -177,6 +178,10 @@ export default runtimeConfig({
 	},
 });
 ```
+
+> **Warning:** pg-boss uses `LISTEN/NOTIFY` internally. Do not point `connectionString` at a PgBouncer in transaction pool mode — jobs will queue but never wake the worker, so they fire only on the polling fallback (slow, sometimes never). See "PgBouncer Compatibility" for the full adapter matrix and routing options. Use a direct PG connection or `cloudflareQueuesAdapter`.
+
+On Cloudflare Workers, queue processing is push-based. Configure `cloudflareQueuesAdapter` from `questpie/adapters/cloudflare` and export the Worker through `createCloudflareWorkerHandlers`; do not run `app.queue.listen()` in a Worker.
 
 ### Publishing Jobs
 
@@ -197,10 +202,13 @@ The `queue` object is fully typed -- autocompletion shows all registered jobs an
 
 SSE-based live updates via `POST /realtime` multiplexed endpoint.
 
+> **Warning:** `pgNotifyAdapter` requires a direct PG connection (or PgBouncer in `session` mode). Behind PgBouncer transaction pooling, `LISTEN` is silently dropped and clients fall back to polling — events never fan out. See "PgBouncer Compatibility" below.
+
 ### pgNotify (Single Instance)
 
 ```ts
-import { pgNotifyAdapter, runtimeConfig } from "questpie";
+import { runtimeConfig } from "questpie";
+import { pgNotifyAdapter } from "questpie/adapters/pg-notify";
 
 export default runtimeConfig({
 	realtime: {
@@ -216,7 +224,8 @@ export default runtimeConfig({
 Required for horizontal scaling:
 
 ```ts
-import { redisStreamsAdapter } from "questpie";
+import { runtimeConfig } from "questpie";
+import { redisStreamsAdapter } from "questpie/adapters/redis-streams";
 
 export default runtimeConfig({
 	realtime: {
@@ -227,12 +236,40 @@ export default runtimeConfig({
 });
 ```
 
+> **Warning:** `pgNotifyAdapter` and `pgBossAdapter` both rely on PostgreSQL `LISTEN/NOTIFY`. They will silently fail behind PgBouncer in transaction pool mode. See "PgBouncer Compatibility" below.
+
+## PgBouncer Compatibility
+
+PgBouncer in `transaction` pool mode reassigns sessions per-transaction, so persistent listeners are impossible. Once `LISTEN` returns, the connection is handed to a different client and notifications are dropped. This breaks any feature that depends on session-bound state.
+
+Bun SQL (`new SQL({ url })`) already pools connections internally. In single-instance and small-replica deployments, PgBouncer adds nothing on top of it. PgBouncer only earns its keep when you have 20+ replicas, run on serverless with cold-start churn, or share infra with non-Bun consumers.
+
+### Adapter Compatibility Matrix
+
+| Adapter                          | Direct PG | PgBouncer (transaction)           | PgBouncer (session)         |
+| -------------------------------- | --------- | --------------------------------- | --------------------------- |
+| `pgNotifyAdapter` (realtime)     | works     | broken — listens silently dropped | works (pooling neutralized) |
+| `pgBossAdapter` (queue)          | works     | broken — LISTEN/NOTIFY required   | works (pooling neutralized) |
+| Drizzle queries via Bun SQL      | works     | works                             | works                       |
+| `redisStreamsAdapter` (realtime) | n/a       | n/a                               | n/a                         |
+
+Prepared statements also break under transaction pooling. If you must use it, ensure your driver disables prepared statements end-to-end.
+
+### DB Connection Routing
+
+- **Default and recommended:** direct connection to the PG primary. Bun SQL pools internally; you do not need PgBouncer.
+- **If you must use PgBouncer:** put it in `session` pool mode for any process that runs `pgBossAdapter` or `pgNotifyAdapter`. Session mode pins one server connection per client, which neutralizes pooling but keeps `LISTEN/NOTIFY` working.
+- **Split topology:** route web traffic through PgBouncer (transaction mode) and run workers (pgBoss, pgNotify) on a direct connection. This works, but realtime fired from web handlers still routes through the same `QUESTPIE_DB`, so realtime in web fails. In practice, going direct everywhere is simpler.
+- **TODO / current limitation:** the framework reads a single `QUESTPIE_DB` env var. There is no built-in split between a pooled URL and a direct URL for LISTEN consumers. Track this if you need a mixed topology.
+
 ## Email
 
 Transactional email with typed templates. Two adapters: `SmtpAdapter` (production) and `ConsoleAdapter` (development).
 
 ```ts
-import { SmtpAdapter, ConsoleAdapter, runtimeConfig } from "questpie";
+import { runtimeConfig } from "questpie";
+import { ConsoleAdapter } from "questpie/adapters/console";
+import { SmtpAdapter } from "questpie/adapters/smtp";
 
 export default runtimeConfig({
 	email: {
@@ -268,12 +305,21 @@ const results = await client.search.search({
 
 ## KV Store
 
-### Custom Adapter
+### Redis
 
 ```ts
+import { createClient } from "redis";
+import { redisKVAdapter } from "questpie/adapters/redis-kv";
+
+async function getRedis() {
+	const redis = createClient({ url: process.env.REDIS_URL! });
+	await redis.connect();
+	return redis;
+}
+
 export default runtimeConfig({
 	kv: {
-		adapter: myKvAdapter,
+		adapter: redisKVAdapter({ client: getRedis, keyPrefix: "my-app:" }),
 		defaultTtl: 3600,
 	},
 });
@@ -291,7 +337,7 @@ kv: {
 
 ```ts
 handler: async ({ kv }) => {
-	await kv.set("key", "value", { ttl: 3600 });
+	await kv.set("key", "value", 3600);
 	const value = await kv.get("key");
 	await kv.delete("key");
 };
@@ -447,6 +493,35 @@ queue: {
   }),
 }
 ```
+
+### HIGH: PgBouncer transaction pool with pgNotify/pgBoss
+
+Pointing `QUESTPIE_DB` at a PgBouncer in transaction pool mode silently breaks `pgNotifyAdapter` and `pgBossAdapter`. Both rely on PostgreSQL `LISTEN/NOTIFY`, which requires a persistent session. PgBouncer transaction pooling reassigns the session per-transaction, so the listener is dropped right after `LISTEN` returns.
+
+Symptoms:
+
+- Realtime: SSE clients connect but never receive events; UI silently falls back to polling, or never refreshes
+- Queue: jobs sit in the table; workers process them only on the polling tick (delayed by seconds to minutes), or never wake at all
+
+Fix:
+
+```ts
+// WRONG -- QUESTPIE_DB points at PgBouncer (transaction mode)
+realtime: {
+	adapter: pgNotifyAdapter({ connectionString: process.env.QUESTPIE_DB });
+}
+queue: {
+	adapter: pgBossAdapter({ connectionString: process.env.QUESTPIE_DB });
+}
+
+// CORRECT -- direct PG connection (Bun SQL pools internally)
+// Or switch to redisStreamsAdapter for realtime in multi-instance deployments
+realtime: {
+	adapter: redisStreamsAdapter({ url: process.env.REDIS_URL });
+}
+```
+
+If your infra mandates PgBouncer, use `session` pool mode for processes that run pgBoss or pgNotify. See "PgBouncer Compatibility" for the full matrix.
 
 ## Realtime and Live Preview
 

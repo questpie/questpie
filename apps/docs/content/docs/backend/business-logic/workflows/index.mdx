@@ -30,7 +30,7 @@ export default workflow({
 		customerId: z.string(),
 	}),
 	timeout: "24h",
-	handler: async ({ input, step }) => {
+	handler: async ({ input, step, ctx }) => {
 		// Each step is automatically cached and replayed on restart
 		const order = await step.run("validate-order", async () => {
 			const o = await db.orders.findOne({ id: input.orderId });
@@ -46,10 +46,10 @@ export default workflow({
 		});
 
 		await step.run("send-confirmation", async () => {
-			await email.send({
-				to: order.email,
+			await ctx.email.sendTemplate({
 				template: "order-confirmed",
-				data: { orderId: order.id },
+				input: { orderId: order.id },
+				to: order.email,
 			});
 		});
 
@@ -61,10 +61,10 @@ export default workflow({
 		});
 
 		await step.run("notify-shipped", async () => {
-			await email.send({
-				to: order.email,
+			await ctx.email.sendTemplate({
 				template: "order-shipped",
-				data: { trackingNumber: shipment.trackingNumber },
+				input: { trackingNumber: shipment.trackingNumber },
+				to: order.email,
 			});
 		});
 
@@ -77,10 +77,8 @@ export default workflow({
 
 ```ts title="questpie.config.ts"
 import { runtimeConfig } from "questpie";
-import { workflowsPlugin } from "@questpie/workflows/server";
 
 export default runtimeConfig({
-	plugins: [workflowsPlugin()],
 	db: { url: process.env.DATABASE_URL! },
 	app: { url: process.env.APP_URL! },
 });
@@ -91,6 +89,8 @@ import { workflowsModule } from "@questpie/workflows/server";
 
 export default [workflowsModule] as const;
 ```
+
+`workflowsModule` carries the codegen plugin, so `questpie generate` discovers `workflows/*.ts` files and `config/workflows.ts` automatically.
 
 Workflow routes default to logged-in admin access. Add `config/workflows.ts` when you need a different policy, for example a service-token trigger route while keeping admin reads and mutations locked down:
 

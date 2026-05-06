@@ -15,6 +15,12 @@ import type {
 } from "../types.js";
 import { getQueryParams, parseBoolean } from "./request.js";
 
+type BetterAuthSessionApi = {
+	getSession(input: {
+		headers: Headers;
+	}): Promise<{ user: any; session: any } | null | undefined>;
+};
+
 export const resolveSession = async <
 	TConfig extends QuestpieConfig = QuestpieConfig,
 >(
@@ -31,7 +37,8 @@ export const resolveSession = async <
 	}
 
 	try {
-		const result = await app.auth.api.getSession({
+		const authApi = app.auth.api as BetterAuthSessionApi;
+		const result = await authApi.getSession({
 			headers: request.headers,
 		});
 		// Better Auth returns { user, session } directly

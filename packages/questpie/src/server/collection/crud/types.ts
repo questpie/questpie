@@ -9,6 +9,7 @@ import type {
 	UploadOptions,
 } from "#questpie/server/collection/builder/types.js";
 import type { RequestContext } from "#questpie/server/config/context.js";
+import type { FieldState } from "#questpie/server/fields/field-class-types.js";
 import type {
 	FieldDefinitionsWithSystem,
 	FieldSelect,
@@ -93,6 +94,10 @@ export interface WhereOperatorsLegacy<T> {
  */
 type IsAny<T> = 0 extends 1 & T ? true : false;
 
+type AnyFieldDefinition =
+	| { readonly _: FieldState }
+	| { $types: any; toColumn: any };
+
 type IsCollectionLike<T> =
 	IsAny<T> extends true
 		? false
@@ -141,7 +146,7 @@ type RawUpload<TCollection> =
 type CollectionFieldDefinitions<TCollection> =
 	RawFieldDefs<TCollection> extends infer TDefs extends Record<
 		string,
-		{ $types: any; toColumn: any }
+		AnyFieldDefinition
 	>
 		? FieldDefinitionsWithSystem<
 				TDefs,
@@ -162,7 +167,7 @@ type CollectionOutputExtensions<TCollection> =
  * Returns the inferred map if it has specific keys, else falls back to empty.
  */
 type InferRelationsFromFieldDefs<TFieldDefs> =
-	TFieldDefs extends Record<string, { $types: any; toColumn: any }>
+	TFieldDefs extends Record<string, AnyFieldDefinition>
 		? InferRelationConfigsFromFields<TFieldDefs> extends infer TInferred
 			? TInferred extends Record<string, RelationConfig>
 				? keyof TInferred extends never
@@ -208,7 +213,7 @@ type HasFieldDefinitions<TDefs> =
 	// so a generic fallback type would incorrectly pass the constraint.
 	[TDefs] extends [Record<string, never>]
 		? false
-		: TDefs extends Record<string, { $types: any; toColumn: any }>
+		: TDefs extends Record<string, AnyFieldDefinition>
 			? keyof TDefs extends never
 				? false
 				: true
@@ -322,7 +327,7 @@ type BlockNodeFromRegistry<TBlocks> = {
 type BlockValuesFromDefinition<TBlock, TApp> = TBlock extends {
 	state: { fields: infer TFields };
 }
-	? TFields extends Record<string, { $types: any; toColumn: any }>
+	? TFields extends Record<string, AnyFieldDefinition>
 		? {
 				[K in keyof TFields]: FieldSelect<TFields[K], TApp>;
 			}
@@ -370,7 +375,7 @@ type BlocksSelectFromApp<TApp> = BlocksSelectFromRegistry<
  */
 type CollectionSelectFromFieldDefinitions<TCollection, TApp> =
 	CollectionFieldDefinitions<TCollection> extends infer TAllFields
-		? TAllFields extends Record<string, { $types: any; toColumn: any }>
+		? TAllFields extends Record<string, AnyFieldDefinition>
 			? Prettify<
 					{
 						[K in keyof TAllFields as FieldSelect<
@@ -532,7 +537,7 @@ type FieldWhereInputFromDefinition<
 	: never;
 
 type WhereFieldsFromDefinitions<
-	TFieldDefs extends Record<string, { $types: any; toColumn: any }>,
+	TFieldDefs extends Record<string, AnyFieldDefinition>,
 	TApp,
 	Depth extends unknown[],
 > = {
@@ -681,7 +686,7 @@ type WhereFromCollection<
 		? WhereFieldsFromDefinitions<
 				Extract<
 					ResolvedFieldDefs<TCollection>,
-					Record<string, { $types: any; toColumn: any }>
+					Record<string, AnyFieldDefinition>
 				>,
 				TApp,
 				Depth

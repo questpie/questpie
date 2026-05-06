@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:17
+    container_name: toy-factory-backend-postgres
+    environment:
+      POSTGRES_DB: toy_factory_backend
+      POSTGRES_USER: toy_factory_backend
+      POSTGRES_PASSWORD: toy_factory_backend
+    ports:
+      - "5544:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U toy_factory_backend"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:

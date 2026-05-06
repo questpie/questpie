@@ -109,15 +109,16 @@ Factory modules are acceptable only for simple runtime-only modules whose plugin
 
 ### Core
 
-| Topic           | File                            | Covers                                                             |
-| --------------- | ------------------------------- | ------------------------------------------------------------------ |
-| Quickstart      | `references/quickstart.md`      | Scaffold, configure, codegen, migrate, serve — zero to running app |
-| Data Modeling   | `references/data-modeling.md`   | Collections, globals, fields, relations, options, localization     |
-| Field Types     | `references/field-types.md`     | All built-in field types with options and operators                |
-| Rules           | `references/rules.md`           | Access control (row/field level), hooks lifecycle, validation      |
-| Business Logic  | `references/business-logic.md`  | Routes, jobs, services, email templates, context injection         |
-| CRUD API        | `references/crud-api.md`        | Server-side `find`, `create`, `update`, `delete`, globals API      |
-| Query Operators | `references/query-operators.md` | `where` clause operators by field type                             |
+| Topic             | File                            | Covers                                                             |
+| ----------------- | ------------------------------- | ------------------------------------------------------------------ |
+| Quickstart        | `references/quickstart.md`      | Scaffold, configure, codegen, migrate, serve — zero to running app |
+| Data Modeling     | `references/data-modeling.md`   | Collections, globals, fields, relations, options, localization     |
+| Field Types       | `references/field-types.md`     | All built-in field types with options and operators                |
+| Rules             | `references/rules.md`           | Access control (row/field level), hooks lifecycle, validation      |
+| Business Logic    | `references/business-logic.md`  | Routes, jobs, services, email templates, context injection         |
+| Durable Workflows | `references/workflows.md`       | Long-running workflows, steps, events, cron, admin UI              |
+| CRUD API          | `references/crud-api.md`        | Server-side `find`, `create`, `update`, `delete`, globals API      |
+| Query Operators   | `references/query-operators.md` | `where` clause operators by field type                             |
 
 ### Infrastructure
 

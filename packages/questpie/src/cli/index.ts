@@ -1,5 +1,8 @@
 #!/usr/bin/env bun
 
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
 import { Command } from "commander";
 
 import { addCommand } from "./commands/add.js";
@@ -21,7 +24,25 @@ import { parsePositiveIntegerOption } from "./utils.js";
 
 const program = new Command();
 
-program.name("questpie").description("QUESTPIE CLI").version("1.0.0");
+function readPackageVersion(): string {
+	for (const candidate of [
+		resolve(import.meta.dirname, "..", "package.json"),
+		resolve(import.meta.dirname, "..", "..", "package.json"),
+		resolve(import.meta.dirname, "..", "..", "..", "package.json"),
+	]) {
+		if (!existsSync(candidate)) continue;
+		const packageJson = JSON.parse(readFileSync(candidate, "utf-8")) as {
+			version?: string;
+		};
+		if (packageJson.version) return packageJson.version;
+	}
+	return "0.0.0";
+}
+
+program
+	.name("questpie")
+	.description("QUESTPIE CLI")
+	.version(readPackageVersion());
 
 // Codegen: generate .generated/index.ts from file convention
 program
@@ -476,7 +497,9 @@ cloud
 		}
 	});
 
-const cloudEnv = cloud.command("env").description("Questpie Cloud env commands");
+const cloudEnv = cloud
+	.command("env")
+	.description("Questpie Cloud env commands");
 
 cloudEnv
 	.command("import <env-file>")
@@ -502,7 +525,10 @@ cloudEnv
 				json: options.json,
 			});
 		} catch (error) {
-			handleCloudCommandError("Failed to import Questpie Cloud env vars", error);
+			handleCloudCommandError(
+				"Failed to import Questpie Cloud env vars",
+				error,
+			);
 		}
 	});
 

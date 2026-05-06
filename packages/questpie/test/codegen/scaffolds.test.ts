@@ -9,7 +9,10 @@
  * 5. Scaffold template output produces valid content
  * 6. Scaffold registry building collects across targets
  */
-import { describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it } from "bun:test";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import {
 	coreCodegenPlugin,
@@ -20,11 +23,21 @@ import type {
 	ScaffoldConfig,
 } from "../../src/cli/codegen/types.js";
 import {
+	addCommand,
 	toCamelCase,
 	toKebabCase,
 	toPascalCase,
 	toTitleCase,
 } from "../../src/cli/commands/add.js";
+
+let tempDir: string | undefined;
+
+afterEach(async () => {
+	if (tempDir) {
+		await rm(tempDir, { recursive: true, force: true });
+		tempDir = undefined;
+	}
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -267,5 +280,50 @@ describe("scaffold registry building", () => {
 		const fieldEntries = registry.get("field")!;
 		expect(fieldEntries.length).toBe(1);
 		expect(fieldEntries[0].targetId).toBe("admin-client");
+	});
+
+	it("questpie add lists scaffolds contributed by modules.ts plugins", async () => {
+		tempDir = await mkdtemp(join(tmpdir(), "questpie-add-scaffolds-"));
+		const configPath = join(tempDir, "questpie.config.ts");
+		await writeFile(configPath, "export default {};\n", "utf-8");
+		await writeFile(
+			join(tempDir, "modules.ts"),
+			[
+				"export default [{",
+				'	name: "test-module",',
+				"	plugin: {",
+				'		name: "test-module-plugin",',
+				"		targets: {",
+				"			server: {",
+				'				root: ".",',
+				'				outputFile: "index.ts",',
+				"				scaffolds: {",
+				"					workflow: {",
+				'						dir: "workflows",',
+				'						description: "Durable workflow",',
+				'						template: ({ kebab }) => `export default ${JSON.stringify("${kebab}")};`,',
+				"					},",
+				"				},",
+				"			},",
+				"		},",
+				"	},",
+				"}] as const;\n",
+			].join("\n"),
+			"utf-8",
+		);
+
+		const logs: string[] = [];
+		const originalLog = console.log;
+		console.log = (...args: unknown[]) => {
+			logs.push(args.join(" "));
+		};
+		try {
+			await addCommand({ configPath, list: true });
+		} finally {
+			console.log = originalLog;
+		}
+
+		expect(logs.join("\n")).toContain("workflow");
+		expect(logs.join("\n")).toContain("Durable workflow");
 	});
 });

@@ -25,7 +25,7 @@ import _route_sendWorkflowEvent from "../routes/send-workflow-event";
 import _route_triggerWorkflow from "../routes/trigger-workflow";
 
 // ── Services ────────────────────────────────────────────
-import _svc_workflowService from "../services/workflow-service";
+import _svc_workflows from "../services/workflows";
 
 // ── Singles ────────────────────────────────────────────────
 import _adminConfig from "../config/admin";
@@ -62,7 +62,7 @@ export interface WorkflowsRoutes {
 }
 
 export interface WorkflowsServices {
-	workflowService: typeof _svc_workflowService;
+	workflows: typeof _svc_workflows;
 }
 
 // ════════════════════════════════════════════════════════════
@@ -94,7 +94,7 @@ const _module = {
 		triggerWorkflow: _route_triggerWorkflow,
 	} as WorkflowsRoutes,
 	services: {
-		workflowService: _svc_workflowService,
+		workflows: _svc_workflows,
 	} as WorkflowsServices,
 	globals: {},
 	messages: {},

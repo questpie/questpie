@@ -216,11 +216,15 @@ type _AppQuestpieConfig = Omit<QuestpieConfig, "app" | "db" | "collections" | "g
 	globals: _AppGlobalDefinitions;
 	auth: _AppAuthConfig;
 };
-type _AppQuestpie = Questpie<_AppQuestpieConfig>;
+type _AppQuestpieBase = Questpie<_AppQuestpieConfig>;
 type _AppDb = DrizzleClientFromQuestpieConfig<_AppQuestpieConfig>;
-type _AppGlobalsAPI = _AppQuestpie["globals"];
-type _AppStorage = _AppQuestpie["storage"];
+type _AppGlobalsAPI = _AppQuestpieBase["globals"];
+type _AppStorage = _AppQuestpieBase["storage"];
 type _AppTables = TablesFromConfig<_AppQuestpieConfig>;
+type _AppQuestpie = Omit<_AppQuestpieBase, "collections" | "globals"> & {
+	collections: _CollectionsAPI;
+	globals: _AppGlobalsAPI;
+};
 
 // ── AppContext augmentation — auto-types ALL handlers ──────
 declare global {
@@ -344,7 +348,7 @@ export const app = await createApp(
 		},
 	}) satisfies AppDefinition,
 	_runtime,
-);
+) as _AppQuestpie;
 
 /** Fully typed QUESTPIE app instance. */
 export type App = typeof app;

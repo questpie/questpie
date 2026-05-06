@@ -892,7 +892,7 @@ function printDiscovered(
  * Merge order: module-extracted plugins → runtimeConfig plugins.
  * Core plugin is always prepended by runAllTargets/runCodegen.
  */
-async function extractModulePlugins(
+export async function extractModulePlugins(
 	rootDir: string,
 	configPlugins: CodegenPlugin[],
 	options: GenerateOptions,

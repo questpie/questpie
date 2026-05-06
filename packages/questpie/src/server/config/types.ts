@@ -5,6 +5,7 @@ import type {
 	ExtractFieldsByLocation,
 	InferTableWithColumns,
 } from "#questpie/server/collection/builder/types.js";
+import type { FieldState } from "#questpie/server/fields/field-class-types.js";
 import type { GlobalBuilder } from "#questpie/server/global/builder/global-builder.js";
 import type { Global } from "#questpie/server/global/builder/global.js";
 import type { TranslationsConfig } from "#questpie/server/i18n/types.js";
@@ -22,7 +23,7 @@ type NonLocalizedFields<
 	TFields extends Record<string, any>,
 	TLocalized extends ReadonlyArray<keyof TFields>,
 > =
-	TFields extends Record<string, { $types: any; toColumn: any }>
+	TFields extends Record<string, { readonly _: FieldState }>
 		? ExtractFieldsByLocation<TFields, "main">
 		: Omit<TFields, TLocalized[number]>;
 
@@ -30,7 +31,7 @@ type LocalizedFields<
 	TFields extends Record<string, any>,
 	TLocalized extends ReadonlyArray<keyof TFields>,
 > =
-	TFields extends Record<string, { $types: any; toColumn: any }>
+	TFields extends Record<string, { readonly _: FieldState }>
 		? ExtractFieldsByLocation<TFields, "i18n">
 		: Pick<TFields, TLocalized[number]>;
 

@@ -12,9 +12,21 @@ description: Monitor and manage workflows from the admin dashboard — list, det
 Register the client module in your admin configuration:
 
 ```ts title="questpie/admin/index.ts"
+import adminClientModule from "@questpie/admin/client-module";
 import { workflowsClientModule } from "@questpie/workflows/client";
 
-export default qa.use(adminModule).use(workflowsClientModule);
+export default {
+	name: "app-admin" as const,
+	views: { ...adminClientModule.views, ...workflowsClientModule.views },
+	components: {
+		...adminClientModule.components,
+		...workflowsClientModule.components,
+	},
+	fields: { ...adminClientModule.fields, ...workflowsClientModule.fields },
+	pages: { ...adminClientModule.pages, ...workflowsClientModule.pages },
+	widgets: { ...adminClientModule.widgets, ...workflowsClientModule.widgets },
+	blocks: { ...adminClientModule.blocks, ...workflowsClientModule.blocks },
+};
 ```
 
 This adds:

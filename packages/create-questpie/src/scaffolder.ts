@@ -197,20 +197,350 @@ async function installProjectSkills(targetDir: string): Promise<string[]> {
 	return installed;
 }
 
+function handleFatalStepFailure(
+	message: string,
+	error: unknown,
+	continueOnError: boolean,
+): void {
+	if (continueOnError) {
+		return;
+	}
+	const cause =
+		error instanceof Error
+			? error.message
+			: typeof error === "string"
+				? error
+				: String(error);
+	throw new Error(`${message}: ${cause}`);
+}
+
+async function applyProjectOptions(
+	targetDir: string,
+	options: ProjectOptions,
+): Promise<void> {
+	await updatePackageJson(targetDir, options);
+	await writeFile(
+		join(targetDir, "src", "lib", "env.ts"),
+		buildEnvFile(options),
+		"utf-8",
+	);
+	await writeFile(
+		join(targetDir, "src", "questpie", "server", "questpie.config.ts"),
+		buildRuntimeConfig(options),
+		"utf-8",
+	);
+	await writeFile(
+		join(targetDir, "src", "questpie", "server", "modules.ts"),
+		buildServerModules(options),
+		"utf-8",
+	);
+	await writeFile(
+		join(targetDir, "src", "questpie", "admin", "modules.ts"),
+		buildAdminModules(options),
+		"utf-8",
+	);
+}
+
+async function updatePackageJson(
+	targetDir: string,
+	options: ProjectOptions,
+): Promise<void> {
+	const packageJsonPath = join(targetDir, "package.json");
+	const packageJson = JSON.parse(await readFile(packageJsonPath, "utf-8")) as {
+		dependencies: Record<string, string>;
+		devDependencies: Record<string, string>;
+	};
+
+	if (options.queueAdapter === "bullmq") {
+		packageJson.dependencies.bullmq = "^5.0.0";
+	}
+	if (
+		options.queueAdapter === "bullmq" ||
+		options.realtimeAdapter === "redis-streams" ||
+		options.kvAdapter === "redis"
+	) {
+		packageJson.dependencies.redis = "^5.0.0";
+	}
+	if (options.includeWorkflows) {
+		packageJson.dependencies["@questpie/workflows"] = "latest";
+	}
+
+	await writeFile(
+		packageJsonPath,
+		`${JSON.stringify(packageJson, null, "\t")}\n`,
+	);
+}
+
+function buildEnvFile(options: ProjectOptions): string {
+	const mailAdapters = Array.from(
+		new Set(["console", options.emailAdapter ?? "console"]),
+	);
+	const lines = [
+		`import { createEnv } from "@t3-oss/env-core";`,
+		`import { z } from "zod";`,
+		``,
+		`export const env = createEnv({`,
+		`\tserver: {`,
+		`\t\tDATABASE_URL: z.string().url(),`,
+		`\t\tAPP_URL: z.string().url().default("http://localhost:3000"),`,
+		`\t\tPORT: z`,
+		`\t\t\t.string()`,
+		`\t\t\t.transform(Number)`,
+		`\t\t\t.pipe(z.number().int().positive())`,
+		`\t\t\t.default(3000),`,
+		`\t\tBETTER_AUTH_SECRET: z.string().min(1).default("change-me-in-production"),`,
+		`\t\tMAIL_ADAPTER: z.enum(${JSON.stringify(mailAdapters)}).default("console"),`,
+	];
+
+	if (options.emailAdapter === "smtp") {
+		lines.push(
+			`\t\tSMTP_HOST: z.string().optional(),`,
+			`\t\tSMTP_PORT: z`,
+			`\t\t\t.string()`,
+			`\t\t\t.transform(Number)`,
+			`\t\t\t.pipe(z.number().int().positive())`,
+			`\t\t\t.optional(),`,
+		);
+	}
+	if (options.emailAdapter === "resend") {
+		lines.push(`\t\tRESEND_API_KEY: z.string().optional(),`);
+	}
+	if (options.emailAdapter === "plunk") {
+		lines.push(`\t\tPLUNK_SECRET_KEY: z.string().optional(),`);
+	}
+	if (
+		options.queueAdapter === "bullmq" ||
+		options.realtimeAdapter === "redis-streams" ||
+		options.kvAdapter === "redis"
+	) {
+		lines.push(
+			`\t\tREDIS_URL: z.string().url().default("redis://localhost:6379"),`,
+		);
+	}
+
+	lines.push(
+		`\t},`,
+		`\truntimeEnv: process.env,`,
+		`\temptyStringAsUndefined: true,`,
+		`});`,
+		``,
+	);
+
+	return lines.join("\n");
+}
+
+function buildRuntimeConfig(options: ProjectOptions): string {
+	const imports = [
+		`import { runtimeConfig } from "questpie";`,
+		`import { ConsoleAdapter } from "questpie/adapters/console";`,
+	];
+	if (options.queueAdapter === "pg-boss") {
+		imports.push(`import { pgBossAdapter } from "questpie/adapters/pg-boss";`);
+	}
+	if (options.queueAdapter === "bullmq") {
+		imports.push(`import { bullMQAdapter } from "questpie/adapters/bullmq";`);
+	}
+	if (options.emailAdapter === "smtp") {
+		imports.push(`import { SmtpAdapter } from "questpie/adapters/smtp";`);
+	}
+	if (options.emailAdapter === "resend") {
+		imports.push(`import { ResendAdapter } from "questpie/adapters/resend";`);
+	}
+	if (options.emailAdapter === "plunk") {
+		imports.push(`import { PlunkAdapter } from "questpie/adapters/plunk";`);
+	}
+	if (options.realtimeAdapter === "pg-notify") {
+		imports.push(
+			`import { pgNotifyAdapter } from "questpie/adapters/pg-notify";`,
+		);
+	}
+	if (options.realtimeAdapter === "redis-streams") {
+		imports.push(
+			`import { redisStreamsAdapter } from "questpie/adapters/redis-streams";`,
+		);
+	}
+	if (options.kvAdapter === "redis") {
+		imports.push(
+			`import { redisKVAdapter } from "questpie/adapters/redis-kv";`,
+		);
+		imports.push(`import { createClient } from "redis";`);
+	}
+	imports.push(``, `import { env } from "@/lib/env.js";`, ``);
+
+	const helpers: string[] = [];
+	if (options.emailAdapter === "resend" || options.emailAdapter === "plunk") {
+		helpers.push(
+			`function requiredEnv(value: string | undefined, name: string): string {`,
+			`\tif (!value) throw new Error(\`Missing required environment variable: \${name}\`);`,
+			`\treturn value;`,
+			`}`,
+			``,
+		);
+	}
+	if (options.kvAdapter === "redis") {
+		helpers.push(
+			`async function getRedis() {`,
+			`\tconst redis = createClient({ url: env.REDIS_URL });`,
+			`\tawait redis.connect();`,
+			`\treturn redis;`,
+			`}`,
+			``,
+		);
+	}
+
+	const configEntries = [
+		`\tapp: { url: env.APP_URL },`,
+		`\tdb: { url: env.DATABASE_URL },`,
+		`\tstorage: { basePath: "/api" },`,
+		`\temail: {`,
+		`\t\tadapter: ${buildEmailAdapterExpression(options)},`,
+		`\t},`,
+	];
+	if (options.queueAdapter === "pg-boss") {
+		configEntries.push(
+			`\tqueue: {`,
+			`\t\tadapter: pgBossAdapter({ connectionString: env.DATABASE_URL }),`,
+			`\t},`,
+		);
+	}
+	if (options.queueAdapter === "bullmq") {
+		configEntries.push(
+			`\tqueue: {`,
+			`\t\tadapter: bullMQAdapter({ connection: { url: env.REDIS_URL } }),`,
+			`\t},`,
+		);
+	}
+	if (options.realtimeAdapter === "pg-notify") {
+		configEntries.push(
+			`\trealtime: {`,
+			`\t\tadapter: pgNotifyAdapter({ connectionString: env.DATABASE_URL }),`,
+			`\t},`,
+		);
+	}
+	if (options.realtimeAdapter === "redis-streams") {
+		configEntries.push(
+			`\trealtime: {`,
+			`\t\tadapter: redisStreamsAdapter({ url: env.REDIS_URL }),`,
+			`\t},`,
+		);
+	}
+	if (options.kvAdapter === "redis") {
+		configEntries.push(
+			`\tkv: {`,
+			`\t\tadapter: redisKVAdapter({ client: getRedis, keyPrefix: "${options.projectName}:" }),`,
+			`\t},`,
+		);
+	}
+
+	return [
+		`/**`,
+		` * QUESTPIE Runtime Configuration`,
+		` *`,
+		` * Runtime-only configuration: database, adapters, secrets.`,
+		` * Entity definitions are codegen-generated.`,
+		` */`,
+		``,
+		...imports,
+		...helpers,
+		`export default runtimeConfig({`,
+		...configEntries,
+		`});`,
+		``,
+	].join("\n");
+}
+
+function buildEmailAdapterExpression(options: ProjectOptions): string {
+	if (options.emailAdapter === "smtp") {
+		return `env.MAIL_ADAPTER === "smtp"\n\t\t\t? new SmtpAdapter({\n\t\t\t\t\ttransport: {\n\t\t\t\t\t\thost: env.SMTP_HOST || "localhost",\n\t\t\t\t\t\tport: env.SMTP_PORT || 1025,\n\t\t\t\t\t\tsecure: false,\n\t\t\t\t\t},\n\t\t\t\t})\n\t\t\t: new ConsoleAdapter({ logHtml: false })`;
+	}
+	if (options.emailAdapter === "resend") {
+		return `env.MAIL_ADAPTER === "resend"\n\t\t\t? new ResendAdapter({ apiKey: requiredEnv(env.RESEND_API_KEY, "RESEND_API_KEY") })\n\t\t\t: new ConsoleAdapter({ logHtml: false })`;
+	}
+	if (options.emailAdapter === "plunk") {
+		return `env.MAIL_ADAPTER === "plunk"\n\t\t\t? new PlunkAdapter({ apiKey: requiredEnv(env.PLUNK_SECRET_KEY, "PLUNK_SECRET_KEY") })\n\t\t\t: new ConsoleAdapter({ logHtml: false })`;
+	}
+	return `new ConsoleAdapter({ logHtml: false })`;
+}
+
+function buildServerModules(options: ProjectOptions): string {
+	const imports = [
+		`/**`,
+		` * Modules — static module dependencies for this project.`,
+		` */`,
+		`import { adminModule } from "@questpie/admin/server";`,
+		`import { openApiModule } from "@questpie/openapi";`,
+	];
+	const modules = ["adminModule", "openApiModule"];
+	if (options.includeWorkflows) {
+		imports.push(
+			`import { workflowsModule } from "@questpie/workflows/server";`,
+		);
+		modules.push("workflowsModule");
+	}
+
+	return [
+		...imports,
+		``,
+		`const modules = [`,
+		...modules.map((mod) => `\t${mod},`),
+		`] as const;`,
+		``,
+		`export default modules;`,
+		``,
+	].join("\n");
+}
+
+function buildAdminModules(options: ProjectOptions): string {
+	if (!options.includeWorkflows) {
+		return `export { default } from "@questpie/admin/client-module";\n`;
+	}
+
+	const categories = [
+		"views",
+		"components",
+		"fields",
+		"pages",
+		"widgets",
+		"blocks",
+	];
+	return [
+		`import adminClientModule from "@questpie/admin/client-module";`,
+		`import { workflowsClientModule } from "@questpie/workflows/client";`,
+		``,
+		`export default {`,
+		`\tname: "app-admin" as const,`,
+		...categories.map(
+			(category) =>
+				`\t${category}: { ...adminClientModule.${category}, ...workflowsClientModule.${category} },`,
+		),
+		`};`,
+		``,
+	].join("\n");
+}
+
 export async function scaffold(options: ProjectOptions): Promise<void> {
+	const resolvedOptions: ProjectOptions = {
+		...options,
+		queueAdapter: options.queueAdapter ?? "pg-boss",
+		emailAdapter: options.emailAdapter ?? "console",
+		realtimeAdapter: options.realtimeAdapter ?? "none",
+		kvAdapter: options.kvAdapter ?? "memory",
+		includeWorkflows: options.includeWorkflows ?? false,
+	};
 	const spinner = p.spinner();
-	const targetDir = resolve(process.cwd(), options.projectName);
+	const targetDir = resolve(process.cwd(), resolvedOptions.projectName);
+	const continueOnError = resolvedOptions.continueOnError === true;
 
 	// Check if directory exists
 	if (existsSync(targetDir)) {
-		p.log.error(`Directory ${options.projectName} already exists.`);
+		p.log.error(`Directory ${resolvedOptions.projectName} already exists.`);
 		process.exit(1);
 	}
 
 	const vars: TemplateVars = {
-		projectName: options.projectName,
-		databaseName: options.databaseName,
-		databaseUser: options.databaseName,
+		projectName: resolvedOptions.projectName,
+		databaseName: resolvedOptions.databaseName,
+		databaseUser: resolvedOptions.databaseName,
 		databasePassword: generatePassword(),
 		authSecret: generatePassword(48),
 	};
@@ -218,9 +548,11 @@ export async function scaffold(options: ProjectOptions): Promise<void> {
 	// 1. Copy template
 	spinner.start("Copying template files");
 	const templatesDir = getTemplatesDir();
-	const templateDir = join(templatesDir, options.templateId);
+	const templateDir = join(templatesDir, resolvedOptions.templateId);
 	if (!existsSync(templateDir)) {
-		spinner.stop(label.error(`Template "${options.templateId}" not found`));
+		spinner.stop(
+			label.error(`Template "${resolvedOptions.templateId}" not found`),
+		);
 		process.exit(1);
 	}
 	await cp(templateDir, targetDir, { recursive: true });
@@ -234,22 +566,28 @@ export async function scaffold(options: ProjectOptions): Promise<void> {
 	// 3. Replace template variables
 	await processDirectory(targetDir, vars);
 	await createLocalEnv(targetDir);
+	await applyProjectOptions(targetDir, resolvedOptions);
 	spinner.stop(label.success("Processed template variables"));
 
 	// 4. Install dependencies
 	const pm = detectPackageManager();
-	if (options.installDeps) {
+	if (resolvedOptions.installDeps) {
 		spinner.start(`Installing dependencies with ${pm}`);
 		try {
 			installDependencies(targetDir, pm);
 			spinner.stop(label.success("Installed dependencies"));
-		} catch {
-			spinner.stop(label.warn("Failed to install dependencies — run manually"));
+		} catch (error) {
+			spinner.stop(label.warn("Failed to install dependencies"));
+			handleFatalStepFailure(
+				"Dependency installation failed",
+				error,
+				continueOnError,
+			);
 		}
 	}
 
 	// 5. Install project-local agent skills
-	if (options.installSkills) {
+	if (resolvedOptions.installSkills) {
 		spinner.start("Installing QUESTPIE agent skills");
 		try {
 			const installedSkills = await installProjectSkills(targetDir);
@@ -270,18 +608,19 @@ export async function scaffold(options: ProjectOptions): Promise<void> {
 	}
 
 	// 6. Generate QUESTPIE app/types
-	if (options.installDeps && options.runCodegen) {
+	if (resolvedOptions.installDeps && resolvedOptions.runCodegen) {
 		spinner.start("Generating QUESTPIE app");
 		try {
 			runPackageScript(targetDir, pm, "scaffold:generate");
 			spinner.stop(label.success("Generated QUESTPIE app"));
-		} catch {
-			spinner.stop(label.warn("Failed to run codegen — run manually"));
+		} catch (error) {
+			spinner.stop(label.warn("Failed to run codegen"));
+			handleFatalStepFailure("QUESTPIE codegen failed", error, continueOnError);
 		}
 	}
 
 	// 7. Initialize git
-	if (options.initGit && isGitInstalled()) {
+	if (resolvedOptions.initGit && isGitInstalled()) {
 		spinner.start("Initializing git repository");
 		try {
 			gitInit(targetDir);
@@ -298,7 +637,7 @@ export async function scaffold(options: ProjectOptions): Promise<void> {
 
 	p.note(
 		[
-			`cd ${options.projectName}`,
+			`cd ${resolvedOptions.projectName}`,
 			"",
 			"# Review the generated environment",
 			"# .env has already been created from .env.example",
@@ -309,8 +648,8 @@ export async function scaffold(options: ProjectOptions): Promise<void> {
 			"# Regenerate and type-check the scaffold",
 			runScript("scaffold:verify"),
 			"",
-			"# Run migrations",
-			runScript("migrate"),
+			"# Create local database tables",
+			runScript("db:push"),
 			"",
 			"# Start dev server",
 			runScript("dev"),
@@ -321,6 +660,10 @@ export async function scaffold(options: ProjectOptions): Promise<void> {
 			"",
 			"# If you create files manually",
 			runScript("questpie:generate"),
+			"",
+			"# For production migrations",
+			runScript("migrate:create"),
+			runScript("migrate"),
 		].join("\n"),
 		"Next steps",
 	);

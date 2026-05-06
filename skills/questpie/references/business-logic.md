@@ -1,6 +1,7 @@
 ---
 name: questpie-core-business-logic
-description: QUESTPIE routes jobs services emails route job service email background queue scheduling Zod input validation server-side logic reusable services email templates
+description:
+  QUESTPIE routes jobs services emails route job service email background queue scheduling Zod input validation server-side logic reusable services email templates
   - questpie-core
 ---
 
@@ -198,7 +199,8 @@ Configure the queue adapter in your runtime config:
 
 ```ts
 // questpie.config.ts
-import { pgBossAdapter, runtimeConfig } from "questpie";
+import { runtimeConfig } from "questpie";
+import { pgBossAdapter } from "questpie/adapters/pg-boss";
 
 export default runtimeConfig({
 	queue: {

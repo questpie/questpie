@@ -30,11 +30,12 @@ import {
 	createFieldsCallbackContext,
 	type FieldsCallbackContext,
 } from "#questpie/server/fields/builder.js";
+import type { FieldState } from "#questpie/server/fields/field-class-types.js";
+import type { RelationFieldMetadata } from "#questpie/server/fields/types.js";
 import {
 	type BuiltinFields,
 	builtinFields,
 } from "#questpie/server/modules/core/fields/index.js";
-import type { RelationFieldMetadata } from "#questpie/server/fields/types.js";
 import type { SearchableConfig } from "#questpie/server/modules/core/integrated/search/types.js";
 import type { Override } from "#questpie/shared/type-utils.js";
 
@@ -43,10 +44,18 @@ import type { Override } from "#questpie/shared/type-utils.js";
  * Maps each field definition to its column type, excluding virtual fields.
  */
 type ExtractColumnsFromFieldDefinitions<TFields extends Record<string, any>> = {
-	[K in keyof TFields]: TFields[K]["$types"]["column"] extends null
+	[K in keyof TFields]: FieldColumn<TFields[K]> extends null
 		? never
-		: TFields[K]["$types"]["column"];
+		: FieldColumn<TFields[K]>;
 };
+
+type FieldColumn<TField> = TField extends {
+	readonly _: infer TState extends FieldState;
+}
+	? TState["column"]
+	: TField extends { $types: { column: infer TColumn } }
+		? TColumn
+		: never;
 
 /**
  * Extract field types from CollectionBuilderState.

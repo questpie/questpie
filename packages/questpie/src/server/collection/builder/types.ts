@@ -12,6 +12,7 @@ import type { Collection } from "#questpie/server/collection/builder/collection.
 import type { ValidationSchemas } from "#questpie/server/collection/builder/validation-helpers.js";
 import type { AppContext } from "#questpie/server/config/app-context.js";
 import type { AccessMode } from "#questpie/server/config/types.js";
+import type { FieldState } from "#questpie/server/fields/field-class-types.js";
 import type {
 	FieldAccess as FieldDefinitionAccess,
 	FieldLocation,
@@ -227,7 +228,7 @@ export type InferRelationConfigsFromFields<
  * For raw Drizzle columns, passes through as-is.
  */
 type FieldsForRelationsContext<TFields extends Record<string, any>> =
-	TFields extends Record<string, { $types: any; toColumn: any }>
+	TFields extends Record<string, { readonly _: FieldState }>
 		? ExtractFieldsByLocation<TFields, "main">
 		: TFields;
 

@@ -5,6 +5,7 @@ import type {
 	InferRelationConfigsFromFields,
 	RelationConfig,
 } from "#questpie/server/collection/builder/types.js";
+import type { FieldState } from "#questpie/server/fields/field-class-types.js";
 
 // ============================================================================
 // Opaque Types for Better Autocomplete
@@ -203,7 +204,7 @@ type HasSpecificKeys<T extends Record<string, any>> = string extends keyof T
  * Falls back to generic Record when fieldDefinitions doesn't have specific fields.
  */
 type InferRelationsFromFieldDefs<TFieldDefs> =
-	TFieldDefs extends Record<string, { $types: any; toColumn: any }>
+	TFieldDefs extends Record<string, { readonly _: FieldState }>
 		? InferRelationConfigsFromFields<TFieldDefs> extends infer TInferred
 			? TInferred extends Record<string, RelationConfig>
 				? keyof TInferred extends never

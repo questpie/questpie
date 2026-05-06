@@ -19,17 +19,17 @@ export default workflow({
 	name: "daily-report",
 	schema: z.object({}),
 	cron: "0 8 * * *", // Every day at 8:00 AM
-	handler: async ({ step }) => {
+	handler: async ({ step, ctx }) => {
 		const stats = await step.run("gather-stats", async () => {
 			// Collect daily metrics
 			return { users: 1234, revenue: 56789 };
 		});
 
 		await step.run("send-report", async () => {
-			await email.send({
+			await ctx.email.send({
 				to: "team@example.com",
-				template: "daily-report",
-				data: stats,
+				subject: "Daily report",
+				html: `<pre>${JSON.stringify(stats, null, 2)}</pre>`,
 			});
 		});
 	},

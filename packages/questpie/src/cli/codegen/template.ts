@@ -510,13 +510,19 @@ export function generateTemplate(options: TemplateOptions): string {
 		lines.push("\tglobals: _AppGlobalDefinitions;");
 		lines.push("\tauth: _AppAuthConfig;");
 		lines.push("};");
-		lines.push("type _AppQuestpie = Questpie<_AppQuestpieConfig>;");
+		lines.push("type _AppQuestpieBase = Questpie<_AppQuestpieConfig>;");
 		lines.push(
 			"type _AppDb = DrizzleClientFromQuestpieConfig<_AppQuestpieConfig>;",
 		);
-		lines.push('type _AppGlobalsAPI = _AppQuestpie["globals"];');
-		lines.push('type _AppStorage = _AppQuestpie["storage"];');
+		lines.push('type _AppGlobalsAPI = _AppQuestpieBase["globals"];');
+		lines.push('type _AppStorage = _AppQuestpieBase["storage"];');
 		lines.push("type _AppTables = TablesFromConfig<_AppQuestpieConfig>;");
+		lines.push(
+			'type _AppQuestpie = Omit<_AppQuestpieBase, "collections" | "globals"> & {',
+		);
+		lines.push("\tcollections: _CollectionsAPI;");
+		lines.push("\tglobals: _AppGlobalsAPI;");
+		lines.push("};");
 		lines.push("");
 
 		lines.push(
@@ -802,7 +808,7 @@ function emitNewArchitectureRuntime(
 
 	lines.push("\t}) satisfies AppDefinition,");
 	lines.push("\t_runtime,");
-	lines.push(");");
+	lines.push(") as _AppQuestpie;");
 	lines.push("");
 }
 

@@ -43,6 +43,7 @@ export function workflowsPlugin(): CodegenPlugin {
 						dirs: ["workflows"],
 						prefix: "wf",
 						emit: "record",
+						keyFromProperty: "name",
 						registryKey: true,
 						includeInAppState: true,
 						extractFromModules: true,

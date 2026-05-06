@@ -1,6 +1,7 @@
 ---
 name: questpie-tanstack-query
-description: QUESTPIE TanStack Query integration - createQuestpieQueryOptions option builders, useQuery useMutation queryOptions mutationOptions, collections globals routes, streamedQuery SSE realtime subscriptions, batch helpers, type inference AppConfig createClient, React data fetching caching, framework adapters TanStack Start Next.js Hono Elysia, frontend client SDK querying where orderBy pagination with select
+description:
+  QUESTPIE TanStack Query integration - createQuestpieQueryOptions option builders, useQuery useMutation queryOptions mutationOptions, collections globals routes, streamedQuery SSE realtime subscriptions, batch helpers, type inference AppConfig createClient, React data fetching caching, framework adapters TanStack Start Next.js Hono Elysia, frontend client SDK querying where orderBy pagination with select
   - questpie-core
 ---
 
@@ -420,7 +421,7 @@ Pass `{ realtime: true }` as the second argument to `find()`, `count()`, or `get
 
 ```ts
 import { runtimeConfig } from "questpie";
-import { pgNotifyAdapter } from "questpie";
+import { pgNotifyAdapter } from "questpie/adapters/pg-notify";
 
 export default runtimeConfig({
 	realtime: {
@@ -496,7 +497,7 @@ Collection changes do not auto-refresh when realtime is enabled but no adapter i
 
 ```ts
 import { runtimeConfig } from "questpie";
-import { pgNotifyAdapter } from "questpie";
+import { pgNotifyAdapter } from "questpie/adapters/pg-notify";
 
 export default runtimeConfig({
 	realtime: {

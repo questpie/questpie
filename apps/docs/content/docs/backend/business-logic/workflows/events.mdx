@@ -13,9 +13,9 @@ Workflows can wait for external events and emit events for other workflows to co
 
 ```ts
 await step.sendEvent("notify-shipped", {
-  event: "order.shipped",
-  data: { trackingNumber: "1Z999AA10123456784" },
-  match: { orderId: input.orderId },
+	event: "order.shipped",
+	data: { trackingNumber: "1Z999AA10123456784" },
+	match: { orderId: input.orderId },
 });
 ```
 
@@ -25,20 +25,20 @@ Use the workflow client or the built-in route:
 
 ```ts
 // Via workflow client
-await ctx.workflows.sendEvent({
-  event: "payment.received",
-  data: { amount: 99.99 },
-  match: { invoiceId: "inv-123" },
-});
+await ctx.workflows.sendEvent(
+	"payment.received",
+	{ amount: 99.99 },
+	{ invoiceId: "inv-123" },
+);
 ```
 
 ## Waiting for Events
 
 ```ts
 const event = await step.waitForEvent("wait-payment", {
-  event: "payment.received",
-  match: { invoiceId: input.invoiceId },
-  timeout: "72h",
+	event: "payment.received",
+	match: { invoiceId: input.invoiceId },
+	timeout: "72h",
 });
 ```
 
@@ -51,21 +51,18 @@ Events are matched using **JSONB containment**. A dispatched event matches a wai
 ```ts
 // Waiting step
 step.waitForEvent("wait", {
-  event: "order.updated",
-  match: { orderId: "abc-123" },
+	event: "order.updated",
+	match: { orderId: "abc-123" },
 });
 
 // This event MATCHES (orderId matches)
-sendEvent({
-  event: "order.updated",
-  match: { orderId: "abc-123", status: "shipped" },
+sendEvent("order.updated", undefined, {
+	orderId: "abc-123",
+	status: "shipped",
 });
 
 // This event does NOT match (different orderId)
-sendEvent({
-  event: "order.updated",
-  match: { orderId: "xyz-789" },
-});
+sendEvent("order.updated", undefined, { orderId: "xyz-789" });
 ```
 
 ### Match Hash Optimization
@@ -82,11 +79,11 @@ This prevents race conditions where events arrive before the workflow is ready t
 
 All events are stored in the `wf_event` collection with:
 
-| Field | Description |
-|---|---|
-| `eventName` | The event type string |
-| `data` | Arbitrary JSON payload |
-| `matchCriteria` | JSONB match data |
-| `sourceType` | `"workflow"` or `"external"` |
-| `sourceInstanceId` | Originating workflow instance (if any) |
-| `consumedCount` | Number of times this event was consumed |
+| Field              | Description                             |
+| ------------------ | --------------------------------------- |
+| `eventName`        | The event type string                   |
+| `data`             | Arbitrary JSON payload                  |
+| `matchCriteria`    | JSONB match data                        |
+| `sourceType`       | `"workflow"` or `"external"`            |
+| `sourceInstanceId` | Originating workflow instance (if any)  |
+| `consumedCount`    | Number of times this event was consumed |

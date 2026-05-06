@@ -11,8 +11,8 @@ The workflow client provides a typed API for interacting with workflows from you
 
 ```ts
 const result = await ctx.workflows.trigger("order-fulfillment", {
-  orderId: "ord-123",
-  customerId: "cust-456",
+	orderId: "ord-123",
+	customerId: "cust-456",
 });
 
 console.log(result.instanceId); // "wf-inst-abc..."
@@ -22,12 +22,12 @@ console.log(result.instanceId); // "wf-inst-abc..."
 
 ```ts
 const result = await ctx.workflows.trigger("order-fulfillment", input, {
-  idempotencyKey: `order-${input.orderId}`, // Prevent duplicate instances
+	idempotencyKey: `order-${input.orderId}`, // Prevent duplicate instances
 });
 
 if (result.existing) {
-  // Instance already exists for this idempotency key
-  console.log("Already triggered:", result.instanceId);
+	// Instance already exists for this idempotency key
+	console.log("Already triggered:", result.instanceId);
 }
 ```
 
@@ -50,11 +50,8 @@ Resets the instance to `pending` and re-queues execution. Only works on `failed`
 ## Querying Instances
 
 ```ts
-// Get a single instance with its steps
-const detail = await ctx.workflows.getInstance(instanceId, {
-  includeSteps: true,
-  includeLogs: false,
-});
+// Get a single instance
+const detail = await ctx.workflows.getInstance(instanceId);
 
 // Get step history
 const history = await ctx.workflows.getHistory(instanceId);
@@ -63,13 +60,11 @@ const history = await ctx.workflows.getHistory(instanceId);
 ## Sending Events
 
 ```ts
-const result = await ctx.workflows.sendEvent({
-  event: "payment.received",
-  data: { amount: 99.99, currency: "USD" },
-  match: { invoiceId: "inv-123" },
-});
-
-console.log(result.matchedCount); // Number of workflows resumed
+await ctx.workflows.sendEvent(
+	"payment.received",
+	{ amount: 99.99, currency: "USD" },
+	{ invoiceId: "inv-123" },
+);
 ```
 
 ## Batch Operations
@@ -92,9 +87,9 @@ import { createContext } from "#questpie";
 
 const ctx = await createContext();
 const workflows = createWorkflowClient({
-  collections: ctx.collections,
-  queue: ctx.queue,
-  app: ctx.app,
+	collections: ctx.collections,
+	queue: ctx.queue,
+	app: ctx.app,
 });
 
 await workflows.trigger("daily-report", {});
