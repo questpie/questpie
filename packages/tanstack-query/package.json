@@ -1,6 +1,6 @@
 {
 	"name": "@questpie/tanstack-query",
-	"version": "3.2.7",
+	"version": "4.0.0",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/questpie/questpie.git",
@@ -40,6 +40,6 @@
 	},
 	"peerDependencies": {
 		"@tanstack/react-query": "^5.0.0",
-		"questpie": "^3.0.0"
+		"questpie": "^4.0.0"
 	}
 }
