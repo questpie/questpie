@@ -15,28 +15,42 @@
 	"module": "./dist/server.mjs",
 	"types": "./dist/server.d.mts",
 	"exports": {
-		".": {
-			"types": "./dist/server.d.mts",
-			"default": "./src/server.ts"
+		"./modules/openapi": {
+			"types": "./src/modules/openapi.ts",
+			"default": "./src/modules/openapi.ts"
 		},
 		"./plugin": {
-			"types": "./dist/plugin.d.mts",
+			"types": "./src/plugin.ts",
 			"default": "./src/plugin.ts"
 		},
-		"./package.json": "./package.json"
+		"./server": {
+			"types": "./src/server.ts",
+			"default": "./src/server.ts"
+		},
+		"./package.json": {
+			"types": "./package.json",
+			"default": "./package.json"
+		}
 	},
 	"publishConfig": {
 		"access": "public",
 		"exports": {
-			".": {
-				"types": "./dist/server.d.mts",
-				"default": "./dist/server.mjs"
+			"./modules/openapi": {
+				"types": "./dist/modules/openapi.d.mts",
+				"default": "./dist/modules/openapi.mjs"
 			},
 			"./plugin": {
 				"types": "./dist/plugin.d.mts",
 				"default": "./dist/plugin.mjs"
 			},
-			"./package.json": "./package.json"
+			"./server": {
+				"types": "./dist/server.d.mts",
+				"default": "./dist/server.mjs"
+			},
+			"./package.json": {
+				"types": "./package.json",
+				"default": "./package.json"
+			}
 		}
 	},
 	"scripts": {

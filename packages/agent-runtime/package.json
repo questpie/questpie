@@ -21,14 +21,6 @@
 			"types": "./src/exports/index.ts",
 			"default": "./src/exports/index.ts"
 		},
-		"./worker": {
-			"types": "./src/exports/worker.ts",
-			"default": "./src/exports/worker.ts"
-		},
-		"./relay": {
-			"types": "./src/exports/relay.ts",
-			"default": "./src/exports/relay.ts"
-		},
 		"./adapters/claude-code": {
 			"types": "./src/exports/adapters/claude-code.ts",
 			"default": "./src/exports/adapters/claude-code.ts"
@@ -37,9 +29,17 @@
 			"types": "./src/exports/adapters/codex.ts",
 			"default": "./src/exports/adapters/codex.ts"
 		},
+		"./relay": {
+			"types": "./src/exports/relay.ts",
+			"default": "./src/exports/relay.ts"
+		},
 		"./testing": {
 			"types": "./src/exports/testing.ts",
 			"default": "./src/exports/testing.ts"
+		},
+		"./worker": {
+			"types": "./src/exports/worker.ts",
+			"default": "./src/exports/worker.ts"
 		},
 		"./package.json": {
 			"types": "./package.json",
@@ -53,14 +53,6 @@
 				"types": "./dist/index.d.mts",
 				"default": "./dist/index.mjs"
 			},
-			"./worker": {
-				"types": "./dist/worker.d.mts",
-				"default": "./dist/worker.mjs"
-			},
-			"./relay": {
-				"types": "./dist/relay.d.mts",
-				"default": "./dist/relay.mjs"
-			},
 			"./adapters/claude-code": {
 				"types": "./dist/adapters/claude-code.d.mts",
 				"default": "./dist/adapters/claude-code.mjs"
@@ -69,9 +61,17 @@
 				"types": "./dist/adapters/codex.d.mts",
 				"default": "./dist/adapters/codex.mjs"
 			},
+			"./relay": {
+				"types": "./dist/relay.d.mts",
+				"default": "./dist/relay.mjs"
+			},
 			"./testing": {
 				"types": "./dist/testing.d.mts",
 				"default": "./dist/testing.mjs"
+			},
+			"./worker": {
+				"types": "./dist/worker.d.mts",
+				"default": "./dist/worker.mjs"
 			},
 			"./package.json": {
 				"types": "./package.json",

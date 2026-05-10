@@ -20,6 +20,10 @@
 			"types": "./src/exports/index.ts",
 			"default": "./src/exports/index.ts"
 		},
+		"./modules/mcp": {
+			"types": "./src/exports/modules/mcp.ts",
+			"default": "./src/exports/modules/mcp.ts"
+		},
 		"./plugin": {
 			"types": "./src/exports/plugin.ts",
 			"default": "./src/exports/plugin.ts"
@@ -39,6 +43,10 @@
 			".": {
 				"types": "./dist/index.d.mts",
 				"default": "./dist/index.mjs"
+			},
+			"./modules/mcp": {
+				"types": "./dist/modules/mcp.d.mts",
+				"default": "./dist/modules/mcp.mjs"
 			},
 			"./plugin": {
 				"types": "./dist/plugin.d.mts",

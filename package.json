@@ -40,8 +40,7 @@
 		"oxlint": "^1.56.0",
 		"shadcn": "^3.6.3",
 		"turbo": "^2.6.3",
-		"typescript": "5.9.2",
-		"unrun": "0.2.37"
+		"typescript": "5.9.2"
 	},
 	"engines": {
 		"node": ">=18"
