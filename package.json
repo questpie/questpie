@@ -41,7 +41,7 @@
 		"shadcn": "^3.6.3",
 		"turbo": "^2.6.3",
 		"typescript": "5.9.2",
-		"unrun": "^0.2.21"
+		"unrun": "0.2.37"
 	},
 	"engines": {
 		"node": ">=18"
