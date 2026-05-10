@@ -1,4 +1,4 @@
-import { route } from "questpie";
+import { route } from "questpie/services";
 import z from "zod";
 
 export default route()
@@ -10,6 +10,16 @@ export default route()
 			completedOnly: z.boolean().optional().default(true),
 		}),
 	)
+	.meta({
+		title: "Get revenue stats",
+		description:
+			"Calculate revenue statistics for a date range based on completed appointments.",
+		mcp: {
+			expose: true,
+			name: "reports.revenue",
+			annotations: { readOnlyHint: true },
+		},
+	})
 	.handler(async ({ input, collections }) => {
 		const { startDate, endDate, completedOnly } = input;
 

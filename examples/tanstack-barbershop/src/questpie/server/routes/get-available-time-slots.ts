@@ -1,4 +1,4 @@
-import { route } from "questpie";
+import { route } from "questpie/services";
 import z from "zod";
 
 export default route()
@@ -10,6 +10,12 @@ export default route()
 			serviceId: z.string(),
 		}),
 	)
+	.meta({
+		title: "Get available time slots",
+		description:
+			"Returns available booking time slots for a barber and service on a given date.",
+		mcp: { expose: true, annotations: { readOnlyHint: true } },
+	})
 	.handler(async ({ input, collections }) => {
 		const { date, barberId, serviceId } = input;
 
