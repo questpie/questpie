@@ -1,5 +1,11 @@
 # questpie
 
+## 3.4.1
+
+### Patch Changes
+
+- [`080da92`](https://github.com/questpie/questpie/commit/080da92a871df7f71263a3427145de9cd4fbdb58) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Fix CLI binary not running — tsdown tree-shook the side-effect import
+
 ## 3.4.0
 
 ### Minor Changes
