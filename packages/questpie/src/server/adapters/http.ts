@@ -232,7 +232,7 @@ export const createFetchHandler = (
 	const basePath = normalizeBasePath(config.basePath ?? "/");
 
 	// Store adapter config on app so route handlers can access it
-	// (e.g., search.reindexAccess, storage.collection)
+	// (e.g., search.reindexAccess)
 	const adapterConfigKey = "_adapterConfig";
 	(appInstance as any)[adapterConfigKey] = config;
 

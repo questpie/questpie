@@ -7,37 +7,29 @@ export interface ReasoningSectionProps {
 }
 
 export function ReasoningSection({ text, state }: ReasoningSectionProps) {
-  const [open, setOpen] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const isStreaming = state === "streaming";
 
   return (
-    <div className="my-1">
+    <div>
       <button
         type="button"
-        onClick={() => setOpen(!open)}
-        className="flex items-center gap-1.5 text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors py-1"
-        aria-expanded={open}
+        onClick={() => setExpanded((v) => !v)}
+        className="flex items-center gap-2 py-0.5 w-full text-left text-xs text-[var(--muted-foreground)] italic hover:text-[var(--foreground)] transition-colors"
       >
         <Icon
-          icon={open ? "ph:caret-down" : "ph:caret-right"}
-          width={12}
-          height={12}
+          icon={isStreaming ? "ph:circle-notch" : "ph:brain"}
+          width={10}
+          height={10}
+          className={`shrink-0 ${isStreaming ? "animate-spin" : ""}`}
         />
-        <Icon icon="ph:brain" width={14} height={14} />
-        <span>Thinking</span>
-        {isStreaming && (
-          <span className="flex gap-0.5 ml-1">
-            <span className="w-1 h-1 rounded-full bg-[var(--muted-foreground)] animate-pulse" />
-            <span className="w-1 h-1 rounded-full bg-[var(--muted-foreground)] animate-pulse [animation-delay:150ms]" />
-            <span className="w-1 h-1 rounded-full bg-[var(--muted-foreground)] animate-pulse [animation-delay:300ms]" />
-          </span>
-        )}
+        <span className="truncate">{isStreaming ? "Thinking…" : "Thought"}</span>
       </button>
-      {open && (
-        <div className="pl-5 pb-2 text-xs text-[var(--muted-foreground)] whitespace-pre-wrap leading-relaxed">
+      {expanded && (
+        <div className="pl-[18px] pb-1 text-[11px] text-[var(--muted-foreground)] whitespace-pre-wrap leading-relaxed">
           {text}
           {isStreaming && (
-            <span className="inline-block w-1.5 h-3 bg-[var(--muted-foreground)] animate-pulse rounded-sm ml-0.5 align-middle" />
+            <span className="inline-block w-1 h-3 bg-[var(--muted-foreground)] animate-pulse rounded-sm ml-0.5 align-text-bottom" />
           )}
         </div>
       )}

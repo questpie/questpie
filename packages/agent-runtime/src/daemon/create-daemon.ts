@@ -313,11 +313,12 @@ export function createDaemon(
 					let done = false;
 					let waiting: ((value: IteratorResult<RuntimeEvent>) => void) | null = null;
 
-					const listener = (event: RuntimeEvent) => {
+					const listener = (_event: RuntimeEvent) => {
 						if (waiting) {
 							const resolve = waiting;
 							waiting = null;
-							resolve({ value: event, done: false });
+							idx = streamState.events.length;
+							resolve({ value: streamState.events[idx - 1]!, done: false });
 						}
 					};
 					streamState.listeners.add(listener);

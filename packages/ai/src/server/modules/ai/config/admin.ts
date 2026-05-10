@@ -15,6 +15,20 @@ const aiAdminConfig = {
       },
     ],
   },
+  shell: {
+    secondaryRail: {
+      component: { type: "aiChatRail" as const, props: {} },
+      placement: "right" as const,
+      width: 360,
+      minWidth: 320,
+      maxWidth: 480,
+      hiddenOnMobile: true,
+      routes: {
+        include: ["/admin"],
+        match: "prefix" as const,
+      },
+    },
+  },
 };
 
 export default aiAdminConfig;

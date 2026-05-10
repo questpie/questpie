@@ -244,6 +244,8 @@ function mapServerAction(
 					}
 
 					await applyServerActionEffects(response.result, ctx);
+
+					return response.result?.toast?.message;
 				},
 			},
 		};

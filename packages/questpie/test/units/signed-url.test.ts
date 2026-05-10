@@ -75,7 +75,6 @@ describe("signed-url", () => {
 		});
 
 		test("returns null for expired token", async () => {
-			// Generate token that expires in -1 seconds (already expired)
 			const token = await generateSignedUrlToken("test.jpg", testSecret, -1);
 
 			const payload = await verifySignedUrlToken(token, testSecret);
@@ -86,10 +85,9 @@ describe("signed-url", () => {
 		test("returns null for tampered token (modified key)", async () => {
 			const token = await generateSignedUrlToken("test.jpg", testSecret, 3600);
 
-			// Decode, modify key, re-encode (without valid signature)
 			const padded = token.replace(/-/g, "+").replace(/_/g, "/");
 			const decoded = JSON.parse(atob(padded));
-			decoded.key = "hacked.jpg"; // Change the key
+			decoded.key = "hacked.jpg";
 			const tamperedToken = btoa(JSON.stringify(decoded))
 				.replace(/\+/g, "-")
 				.replace(/\//g, "_")
@@ -108,26 +106,28 @@ describe("signed-url", () => {
 	});
 
 	describe("buildStorageFileUrl", () => {
-		test("builds URL without token for public files", () => {
+		test("builds collection URL without token for public files", () => {
 			const url = buildStorageFileUrl(
 				"http://localhost:3000",
 				"/",
+				"media",
 				"test-file.jpg",
 			);
 
-			expect(url).toBe("http://localhost:3000/storage/files/test-file.jpg");
+			expect(url).toBe("http://localhost:3000/media/files/test-file.jpg");
 		});
 
-		test("builds URL with token for private files", () => {
+		test("builds collection URL with token for private files", () => {
 			const url = buildStorageFileUrl(
 				"http://localhost:3000",
 				"/",
+				"media",
 				"secret.pdf",
 				"my-token-123",
 			);
 
 			expect(url).toBe(
-				"http://localhost:3000/storage/files/secret.pdf?token=my-token-123",
+				"http://localhost:3000/media/files/secret.pdf?token=my-token-123",
 			);
 		});
 
@@ -135,11 +135,12 @@ describe("signed-url", () => {
 			const url = buildStorageFileUrl(
 				"http://localhost:3000",
 				"/",
+				"media",
 				"file with spaces.jpg",
 			);
 
 			expect(url).toBe(
-				"http://localhost:3000/storage/files/file%20with%20spaces.jpg",
+				"http://localhost:3000/media/files/file%20with%20spaces.jpg",
 			);
 		});
 
@@ -147,11 +148,12 @@ describe("signed-url", () => {
 			const url = buildStorageFileUrl(
 				"http://localhost:3000",
 				"/",
+				"media",
 				"uploads/2024/01/image.jpg",
 			);
 
 			expect(url).toBe(
-				"http://localhost:3000/storage/files/uploads%2F2024%2F01%2Fimage.jpg",
+				"http://localhost:3000/media/files/uploads%2F2024%2F01%2Fimage.jpg",
 			);
 		});
 
@@ -159,41 +161,56 @@ describe("signed-url", () => {
 			const url = buildStorageFileUrl(
 				"https://api.example.com",
 				"/api",
+				"media",
 				"file.jpg",
 			);
 
-			expect(url).toBe("https://api.example.com/api/storage/files/file.jpg");
+			expect(url).toBe("https://api.example.com/api/media/files/file.jpg");
 		});
 
 		test("works with trailing slash in base URL", () => {
 			const url = buildStorageFileUrl(
 				"http://localhost:3000/",
 				"/",
+				"media",
 				"file.jpg",
 			);
 
-			expect(url).toBe("http://localhost:3000/storage/files/file.jpg");
+			expect(url).toBe("http://localhost:3000/media/files/file.jpg");
+		});
+
+		test("works with different collection names", () => {
+			const url = buildStorageFileUrl(
+				"http://localhost:3000",
+				"/",
+				"documents",
+				"report.pdf",
+			);
+
+			expect(url).toBe("http://localhost:3000/documents/files/report.pdf");
 		});
 	});
 
 	describe("end-to-end token flow", () => {
 		test("generates and verifies token correctly", async () => {
 			const key = "documents/secret-report.pdf";
-			const expiration = 7200; // 2 hours
+			const expiration = 7200;
 
-			// Generate token
 			const token = await generateSignedUrlToken(key, testSecret, expiration);
 
-			// Build URL
-			const url = buildStorageFileUrl("http://localhost:3000", "/", key, token);
+			const url = buildStorageFileUrl(
+				"http://localhost:3000",
+				"/",
+				"media",
+				key,
+				token,
+			);
 
-			// Extract token from URL
 			const urlObj = new URL(url);
 			const extractedToken = urlObj.searchParams.get("token");
 
 			expect(extractedToken).toBe(token);
 
-			// Verify extracted token
 			const payload = await verifySignedUrlToken(extractedToken!, testSecret);
 
 			expect(payload).not.toBeNull();

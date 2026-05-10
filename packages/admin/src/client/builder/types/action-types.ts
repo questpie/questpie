@@ -150,11 +150,11 @@ export interface ActionFormConfig<TItem = any> {
 	fields: Record<string, FieldInstance>;
 	/** Default values */
 	defaultValues?: Record<string, any>;
-	/** Submit handler */
+	/** Submit handler — return a string to override the default success toast */
 	onSubmit: (
 		data: Record<string, any>,
 		ctx: ActionContext<TItem>,
-	) => void | Promise<void>;
+	) => void | string | Promise<void | string>;
 	/** Submit button label */
 	submitLabel?: I18nText;
 	/** Cancel button label */

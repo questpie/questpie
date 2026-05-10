@@ -276,6 +276,7 @@ export async function executeAction(
 			db: appRec.db,
 			session,
 			locale,
+			t,
 		};
 
 		const result = await customAction.handler(context);
@@ -505,7 +506,7 @@ async function executeBuiltinAction(
 						result: {
 							type: "error",
 							toast: {
-								message: "Restore is not supported for this collection",
+								message: t("action.restoreUnsupported"),
 							},
 						},
 					};

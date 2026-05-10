@@ -120,6 +120,8 @@ export default {
 	"action.itemDuplicated": "Item duplicado com sucesso",
 	"action.itemIdRequired.transition":
 		"O ID do item é obrigatório para a ação de transição",
+	"action.itemIdRequired.resetPassword":
+		"O ID do usuário é obrigatório para a redefinição de senha",
 	"action.targetStageRequired":
 		"O estágio de destino é obrigatório para a ação de transição",
 	"action.workflowUnsupported":
@@ -338,6 +340,7 @@ export default {
 	"toast.error": "Erro",
 	"toast.warning": "Aviso",
 	"toast.info": "Informação",
+	"toast.processing": "Processando...",
 	"toast.saving": "Salvando...",
 	"toast.saveFailed": "Falha ao salvar alterações",
 	"toast.saveSuccess": "Alterações salvas com sucesso",

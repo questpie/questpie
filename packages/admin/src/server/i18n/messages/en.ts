@@ -175,6 +175,8 @@ export default {
 	"action.itemDuplicated": "Item duplicated successfully",
 	"action.itemIdRequired.transition":
 		"Item ID is required for transition action",
+	"action.itemIdRequired.resetPassword":
+		"User ID is required for password reset",
 	"action.targetStageRequired":
 		"Target stage is required for transition action",
 	"action.workflowUnsupported":
@@ -525,6 +527,7 @@ export default {
 	"toast.error": "Error",
 	"toast.warning": "Warning",
 	"toast.info": "Info",
+	"toast.processing": "Processing...",
 	"toast.saving": "Saving...",
 	"toast.saveFailed": "Failed to save changes",
 	"toast.saveSuccess": "Changes saved successfully",

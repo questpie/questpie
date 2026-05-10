@@ -13,7 +13,7 @@ export interface RunEvent {
 
 export interface ToolCallState {
   tool: string;
-  status?: string;
+  status: "running" | "completed" | "error";
   output?: unknown;
 }
 
@@ -44,18 +44,25 @@ export function useRunStream(options: UseRunStreamOptions) {
 
   const { text, tools } = useMemo(() => {
     let accText = "";
-    const accTools: ToolCallState[] = [];
+    const toolMap = new Map<string, ToolCallState>();
     for (const event of events) {
       const meta = event.meta;
       if (!meta) continue;
       if (meta.type === "text.delta" && typeof meta.text === "string") {
         accText += meta.text;
-      }
-      if (meta.type === "tool.started") {
-        accTools.push({ tool: meta.tool as string, status: "running" });
+      } else if (meta.type === "tool.started") {
+        const key = (meta.commandId as string) ?? (meta.tool as string);
+        toolMap.set(key, { tool: meta.tool as string, status: "running" });
+      } else if (meta.type === "tool.completed") {
+        const key = (meta.commandId as string) ?? (meta.tool as string);
+        const existing = toolMap.get(key);
+        if (existing) {
+          existing.status = "completed";
+          existing.output = meta.output;
+        }
       }
     }
-    return { text: accText, tools: accTools };
+    return { text: accText, tools: [...toolMap.values()] };
   }, [events]);
 
   const isStreaming =

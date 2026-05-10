@@ -25,7 +25,10 @@ import {
 	createCollectionValidationSchemas,
 	type ValidationSchemas,
 } from "#questpie/server/collection/builder/validation-helpers.js";
-import type { StorageVisibility } from "#questpie/server/config/types.js";
+import {
+	buildStorageFileUrl,
+	generateSignedUrlToken,
+} from "#questpie/server/modules/core/integrated/storage/signed-url.js";
 import {
 	createFieldsCallbackContext,
 	type FieldsCallbackContext,
@@ -736,17 +739,29 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 		// Create upload fields using Collection static method
 		const uploadFields = Collection.uploadCols();
 
-		// Create afterRead hook for URL generation
+		const collectionSlug = this.state.name;
 		const uploadAfterReadHook = async ({ data, app }: any) => {
-			if (!app?.storage || !data?.key) return;
+			if (!data?.key) return;
 
-			const fileVisibility: StorageVisibility = data.visibility || "public";
+			const baseUrl: string = app.config.app.url;
+			const basePath: string = app.config.storage?.basePath || "/";
 
-			if (fileVisibility === "private") {
-				data.url = await app.storage.use().getSignedUrl(data.key);
-			} else {
-				data.url = await app.storage.use().getUrl(data.key);
+			let token: string | undefined;
+			if ((data.visibility || "public") === "private") {
+				const secret: string =
+					app.config.secret || "questpie-default-secret";
+				const expiration: number =
+					app.config.storage?.signedUrlExpiration || 3600;
+				token = await generateSignedUrlToken(data.key, secret, expiration);
 			}
+
+			data.url = buildStorageFileUrl(
+				baseUrl,
+				basePath,
+				collectionSlug,
+				data.key,
+				token,
+			);
 		};
 
 		// Create afterChange hook to sync visibility with storage

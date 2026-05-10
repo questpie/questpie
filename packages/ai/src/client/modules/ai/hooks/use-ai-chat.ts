@@ -1,5 +1,6 @@
 import {
   useCollectionList,
+  useCollectionUpdate,
   selectClient,
   useAdminStore,
 } from "@questpie/admin/client";
@@ -32,6 +33,9 @@ export function useAiChat(options: UseAiChatOptions = {}) {
   const [activeSessionId, setActiveSessionId] = useState<string | undefined>(
     sessionId,
   );
+  const [activeRunId, setActiveRunId] = useState<string | null>(null);
+
+  const cancelRunMutation = useCollectionUpdate("ai_runs");
 
   const messagesQuery = useCollectionList(
     "ai_messages",
@@ -59,6 +63,7 @@ export function useAiChat(options: UseAiChatOptions = {}) {
     },
     onSuccess: (data: any) => {
       if (data.sessionId) setActiveSessionId(data.sessionId);
+      if (data.runId) setActiveRunId(data.runId);
       queryClient.invalidateQueries({ queryKey: ["questpie", "collections"] });
     },
   });
@@ -70,11 +75,28 @@ export function useAiChat(options: UseAiChatOptions = {}) {
     [sendMutation],
   );
 
+  const stopGeneration = useCallback(() => {
+    if (!activeRunId) return;
+    cancelRunMutation.mutate({
+      id: activeRunId,
+      data: { status: "cancelled" },
+    });
+    setActiveRunId(null);
+  }, [activeRunId, cancelRunMutation]);
+
+  const clearActiveRun = useCallback(() => {
+    setActiveRunId(null);
+  }, []);
+
   return {
     session: activeSessionId ?? null,
     messages: (messagesQuery.data?.docs ?? []) as AiMessage[],
     isLoading: messagesQuery.isLoading || sendMutation.isPending,
+    isSending: sendMutation.isPending,
+    activeRunId,
     sendMessage,
+    stopGeneration,
+    clearActiveRun,
     setActiveSessionId,
   };
 }

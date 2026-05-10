@@ -124,6 +124,8 @@ export default {
 	"action.itemDuplicated": "Élément dupliqué avec succès",
 	"action.itemIdRequired.transition":
 		"L'ID de l'élément est requis pour l'action de transition",
+	"action.itemIdRequired.resetPassword":
+		"L'ID de l'utilisateur est requis pour la réinitialisation du mot de passe",
 	"action.targetStageRequired":
 		"L'étape cible est requise pour l'action de transition",
 	"action.workflowUnsupported":
@@ -344,6 +346,7 @@ export default {
 	"toast.error": "Erreur",
 	"toast.warning": "Avertissement",
 	"toast.info": "Information",
+	"toast.processing": "Traitement...",
 	"toast.saving": "Enregistrement...",
 	"toast.saveFailed": "Échec de l'enregistrement des modifications",
 	"toast.saveSuccess": "Modifications enregistrées avec succès",

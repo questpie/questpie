@@ -109,6 +109,8 @@ export interface ServerActionContext<TData = Record<string, unknown>> {
 	session?: unknown;
 	/** Current locale */
 	locale?: string;
+	/** Translation function for admin messages */
+	t: (key: string, params?: Record<string, unknown>) => string;
 }
 
 /**

@@ -150,15 +150,15 @@ function FormDialogContent<TItem>({
 		setIsSubmitting(true);
 
 		const submitPromise = async () => {
-			await config.onSubmit(data, ctx);
-			return data;
+			const result = await config.onSubmit(data, ctx);
+			return typeof result === "string" ? result : undefined;
 		};
 
 		toast.promise(submitPromise(), {
 			loading: t("toast.processing"),
-			success: () => {
+			success: (message) => {
 				onClose();
-				return t("toast.actionSuccess");
+				return message || t("toast.actionSuccess");
 			},
 			error: (error) => {
 				return error instanceof Error ? error.message : t("toast.actionFailed");
@@ -329,7 +329,7 @@ function CustomDialogContent<TItem>({
 			<div className="p-4 text-center">
 				<p className="text-destructive">{error.message}</p>
 				<Button variant="outline" onClick={onClose} className="mt-4">
-					Close
+					{t("common.close")}
 				</Button>
 			</div>
 		);
@@ -338,9 +338,11 @@ function CustomDialogContent<TItem>({
 	if (!Component) {
 		return (
 			<div className="p-4 text-center">
-				<p className="text-muted-foreground">Component not found</p>
+				<p className="text-muted-foreground">
+					{t("error.componentNotFound")}
+				</p>
 				<Button variant="outline" onClick={onClose} className="mt-4">
-					Close
+					{t("common.close")}
 				</Button>
 			</div>
 		);

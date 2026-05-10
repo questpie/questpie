@@ -179,14 +179,13 @@ const adminUserCollection = collection("user")
 							}),
 					},
 				},
-				handler: async ({ data, auth, session }: any) => {
+				handler: async ({ data, auth, session, t }: any) => {
 					const authApi = (auth as any)?.api;
 					if (!authApi?.createUser) {
 						return {
 							type: "error",
 							toast: {
-								message:
-									"Auth admin API is not configured. Cannot create user.",
+								message: t("defaults.users.actions.createUser.errorNoAuth"),
 							},
 						};
 					}
@@ -213,7 +212,7 @@ const adminUserCollection = collection("user")
 						return {
 							type: "error",
 							toast: {
-								message: "Failed to create user",
+								message: t("error.failedToCreateAccount"),
 							},
 						};
 					}
@@ -221,7 +220,9 @@ const adminUserCollection = collection("user")
 					return {
 						type: "success",
 						toast: {
-							message: `User ${createdUserEmail || ""} created successfully`,
+							message: t("defaults.users.actions.createUser.success", {
+								email: createdUserEmail || "",
+							}),
 						},
 						effects: {
 							invalidate: ["user"],
@@ -260,11 +261,13 @@ const adminUserCollection = collection("user")
 							.set("admin", { type: "password", autoComplete: "new-password" }),
 					},
 				},
-				handler: async ({ data, itemId, auth, session }: any) => {
+				handler: async ({ data, itemId, auth, session, t }: any) => {
 					if (!itemId) {
 						return {
 							type: "error",
-							toast: { message: "User ID is required" },
+							toast: {
+								message: t("action.itemIdRequired.resetPassword"),
+							},
 						};
 					}
 
@@ -275,7 +278,9 @@ const adminUserCollection = collection("user")
 						return {
 							type: "error",
 							toast: {
-								message: "Passwords do not match",
+								message: t(
+									"defaults.users.actions.resetPassword.errorMismatch",
+								),
 							},
 						};
 					}
@@ -285,8 +290,7 @@ const adminUserCollection = collection("user")
 						return {
 							type: "error",
 							toast: {
-								message:
-									"Auth admin API is not configured. Cannot reset password.",
+								message: t("defaults.users.actions.createUser.errorNoAuth"),
 							},
 						};
 					}
@@ -306,7 +310,9 @@ const adminUserCollection = collection("user")
 
 					return {
 						type: "success",
-						toast: { message: "Password reset successfully" },
+						toast: {
+							message: t("defaults.users.actions.resetPassword.success"),
+						},
 						effects: { invalidate: ["user"] },
 					};
 				},

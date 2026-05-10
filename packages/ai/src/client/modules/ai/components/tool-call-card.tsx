@@ -21,6 +21,29 @@ export interface ToolCallCardProps {
   approval?: { id: string; approved?: boolean; reason?: string };
 }
 
+function getStatusIcon(
+  state: ToolState,
+  approved?: boolean,
+): { icon: string; className: string } {
+  switch (state) {
+    case "input-streaming":
+    case "input-available":
+      return { icon: "ph:circle-notch", className: "animate-spin text-[var(--muted-foreground)]" };
+    case "approval-requested":
+      return { icon: "ph:hand-palm", className: "text-[var(--warning)]" };
+    case "approval-responded":
+      return approved
+        ? { icon: "ph:check-circle", className: "text-[var(--success)]" }
+        : { icon: "ph:prohibit", className: "text-[var(--destructive)]" };
+    case "output-available":
+      return { icon: "ph:check-circle", className: "text-[var(--muted-foreground)] opacity-60" };
+    case "output-error":
+      return { icon: "ph:x-circle", className: "text-[var(--destructive)]" };
+    case "output-denied":
+      return { icon: "ph:prohibit", className: "text-[var(--muted-foreground)]" };
+  }
+}
+
 export function ToolCallCard({
   toolName,
   state,
@@ -30,195 +53,82 @@ export function ToolCallCard({
   title,
   approval,
 }: ToolCallCardProps) {
-  const isRunning = state === "input-streaming" || state === "input-available";
-  const hasOutput = state === "output-available" || state === "output-error";
-
-  return (
-    <div className="rounded-lg border border-[var(--border)] overflow-hidden my-2">
-      <div className="flex items-center gap-2 px-3 py-2 bg-[var(--muted)]">
-        <Icon icon="ph:wrench" width={14} height={14} className="text-[var(--muted-foreground)]" />
-        <span className="font-mono text-xs font-medium flex-1 truncate">
-          {title || toolName}
-        </span>
-        <StateBadge state={state} approval={approval} />
-      </div>
-
-      <CollapsibleSection
-        label="Input"
-        defaultOpen={!hasOutput}
-      >
-        <JsonView value={input} isStreaming={state === "input-streaming"} />
-      </CollapsibleSection>
-
-      {state === "output-error" && errorText && (
-        <div className="px-3 py-2 text-xs text-[var(--destructive)] border-t border-[var(--border)]">
-          {errorText}
-        </div>
-      )}
-
-      {state === "output-available" && output !== undefined && (
-        <CollapsibleSection label="Output" defaultOpen>
-          <JsonView value={output} />
-        </CollapsibleSection>
-      )}
-
-      {state === "output-denied" && approval?.reason && (
-        <div className="px-3 py-2 text-xs text-[var(--muted-foreground)] border-t border-[var(--border)] italic">
-          Reason: {approval.reason}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// --- State Badge ---
-
-function StateBadge({
-  state,
-  approval,
-}: {
-  state: ToolState;
-  approval?: { approved?: boolean };
-}) {
-  switch (state) {
-    case "input-streaming":
-      return (
-        <span className="flex items-center gap-1 text-[11px] text-[var(--muted-foreground)]">
-          <Icon icon="ph:circle-notch" width={12} height={12} className="animate-spin" />
-          Calling...
-        </span>
-      );
-    case "input-available":
-      return (
-        <span className="flex items-center gap-1 text-[11px] text-[var(--muted-foreground)]">
-          <Icon icon="ph:circle-notch" width={12} height={12} className="animate-spin" />
-          Running...
-        </span>
-      );
-    case "approval-requested":
-      return (
-        <span className="flex items-center gap-1 text-[11px] text-[var(--warning)]">
-          <Icon icon="ph:warning" width={12} height={12} />
-          Needs approval
-        </span>
-      );
-    case "approval-responded":
-      if (approval?.approved) {
-        return (
-          <span className="flex items-center gap-1 text-[11px] text-[var(--success)]">
-            <Icon icon="ph:check-circle" width={12} height={12} />
-            Approved
-          </span>
-        );
-      }
-      return (
-        <span className="flex items-center gap-1 text-[11px] text-[var(--destructive)]">
-          <Icon icon="ph:prohibit" width={12} height={12} />
-          Denied
-        </span>
-      );
-    case "output-available":
-      return (
-        <span className="flex items-center gap-1 text-[11px] text-[var(--success)]">
-          <Icon icon="ph:check-circle" width={12} height={12} />
-          Done
-        </span>
-      );
-    case "output-error":
-      return (
-        <span className="flex items-center gap-1 text-[11px] text-[var(--destructive)]">
-          <Icon icon="ph:x-circle" width={12} height={12} />
-          Error
-        </span>
-      );
-    case "output-denied":
-      return (
-        <span className="flex items-center gap-1 text-[11px] text-[var(--muted-foreground)]">
-          <Icon icon="ph:prohibit" width={12} height={12} />
-          Denied
-        </span>
-      );
-  }
-}
-
-// --- Collapsible Section ---
-
-function CollapsibleSection({
-  label,
-  defaultOpen = false,
-  children,
-}: {
-  label: string;
-  defaultOpen?: boolean;
-  children: React.ReactNode;
-}) {
-  const [open, setOpen] = useState(defaultOpen);
-
-  return (
-    <div className="border-t border-[var(--border)]">
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        className="flex items-center gap-1 w-full px-3 py-1.5 text-xs text-[var(--muted-foreground)] hover:bg-[var(--muted)] transition-colors"
-        aria-expanded={open}
-      >
-        <Icon
-          icon={open ? "ph:caret-down" : "ph:caret-right"}
-          width={12}
-          height={12}
-        />
-        {label}
-      </button>
-      {open && <div className="px-3 py-2">{children}</div>}
-    </div>
-  );
-}
-
-// --- JSON Viewer ---
-
-const MAX_LINES = 20;
-const MAX_CHARS = 5000;
-
-function JsonView({ value, isStreaming }: { value: unknown; isStreaming?: boolean }) {
   const [expanded, setExpanded] = useState(false);
+  const hasDetails =
+    input !== undefined || output !== undefined || errorText || approval?.reason;
 
-  const formatted = useMemo(() => {
-    if (value === undefined || value === null) {
-      return isStreaming ? "..." : "null";
-    }
-    try {
-      const str = JSON.stringify(value, null, 2);
-      return str;
-    } catch {
-      return String(value);
-    }
-  }, [value, isStreaming]);
-
-  const isTruncated = !expanded && (
-    formatted.split("\n").length > MAX_LINES || formatted.length > MAX_CHARS
-  );
-
-  const displayText = isTruncated
-    ? formatted.split("\n").slice(0, MAX_LINES).join("\n").slice(0, MAX_CHARS)
-    : formatted;
+  const statusIcon = getStatusIcon(state, approval?.approved);
 
   return (
     <div>
-      <pre className="text-xs font-mono leading-relaxed overflow-x-auto whitespace-pre-wrap break-all text-[var(--muted-foreground)]">
-        {displayText}
-        {isTruncated && "..."}
+      <button
+        type="button"
+        onClick={() => hasDetails && setExpanded((v) => !v)}
+        className={`flex items-center gap-2 py-0.5 w-full text-left text-xs text-[var(--muted-foreground)] ${hasDetails ? "hover:text-[var(--foreground)] cursor-pointer" : "cursor-default"} transition-colors`}
+      >
+        <Icon icon="ph:wrench" width={10} height={10} className="shrink-0" />
+        <span className="truncate flex-1">{title || toolName}</span>
+        <Icon
+          icon={statusIcon.icon}
+          width={10}
+          height={10}
+          className={`shrink-0 ${statusIcon.className}`}
+        />
+      </button>
+      {expanded && hasDetails && (
+        <div className="pl-[18px] pb-1">
+          {input !== undefined && (
+            <CompactJson label="input" value={input} />
+          )}
+          {output !== undefined && (
+            <CompactJson label="output" value={output} />
+          )}
+          {errorText && (
+            <p className="text-[11px] text-[var(--destructive)]">{errorText}</p>
+          )}
+          {approval?.reason && (
+            <p className="text-[11px] text-[var(--muted-foreground)] italic">
+              {approval.reason}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CompactJson({ label, value }: { label: string; value: unknown }) {
+  const text = useMemo(() => {
+    if (value === undefined || value === null) return "null";
+    try {
+      return JSON.stringify(value, null, 2);
+    } catch {
+      return String(value);
+    }
+  }, [value]);
+
+  const lines = text.split("\n");
+  const truncated = lines.length > 8;
+  const [showFull, setShowFull] = useState(false);
+  const display = showFull ? text : lines.slice(0, 8).join("\n");
+
+  return (
+    <div className="mt-0.5">
+      <span className="text-[10px] uppercase tracking-wider text-[var(--muted-foreground)] opacity-60">
+        {label}
+      </span>
+      <pre className="text-[11px] font-mono leading-snug text-[var(--muted-foreground)] whitespace-pre-wrap break-all">
+        {display}
+        {truncated && !showFull && "..."}
       </pre>
-      {isTruncated && (
+      {truncated && !showFull && (
         <button
           type="button"
-          onClick={() => setExpanded(true)}
-          className="text-[11px] text-[var(--primary)] hover:underline mt-1"
+          onClick={() => setShowFull(true)}
+          className="text-[10px] text-[var(--primary)] hover:underline"
         >
-          Show more
+          show all
         </button>
-      )}
-      {isStreaming && (
-        <span className="inline-block ml-1 w-1.5 h-3.5 bg-[var(--muted-foreground)] animate-pulse rounded-sm" />
       )}
     </div>
   );

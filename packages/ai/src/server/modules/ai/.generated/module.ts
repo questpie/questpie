@@ -33,6 +33,9 @@ import _svc_aiChat from "../services/chat";
 import _svc_aiProviderRuntime from "../services/provider-runtime";
 import _svc_aiWorkerManager from "../services/worker-manager";
 
+// ── Components ────────────────────────────────────────────
+import _comp_aiChatRail from "../client/components/aiChatRail";
+
 // ── Config ────────────────────────────────────────────────
 import _adminConfig from "../config/admin";
 
@@ -67,6 +70,10 @@ export interface AiRoutes {
   workerHeartbeat: typeof _route_workerHeartbeat;
   workerPoll: typeof _route_workerPoll;
   workerRegister: typeof _route_workerRegister;
+}
+
+export interface AiComponents {
+  aiChatRail: typeof _comp_aiChatRail;
 }
 
 export interface AiServices {
@@ -119,7 +126,9 @@ const _module = {
   seeds: [] as const,
   fieldTypes: {},
   views: {},
-  components: {},
+  components: {
+    aiChatRail: _comp_aiChatRail,
+  } as AiComponents,
   blocks: {},
   config: {
     admin: _adminConfig,

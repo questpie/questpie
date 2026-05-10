@@ -2,7 +2,7 @@ import type { DriverContract } from "flydrive/types";
 
 import type { QuestpieConfig } from "#questpie/server/config/types.js";
 
-import { buildStorageFileUrl, generateSignedUrlToken } from "./signed-url.js";
+import { generateSignedUrlToken } from "./signed-url.js";
 
 const DEFAULT_BASE_PATH = "/";
 
@@ -55,12 +55,14 @@ class LazyFSDriver implements DriverContract {
 		const basePath = resolveBasePath(this.config);
 		const appUrl = this.config.app.url;
 
+		const prefix = `${appUrl}${basePath === "/" ? "" : basePath}/files`;
+
 		return new FSDriver({
 			location,
 			visibility: "public",
 			urlBuilder: {
 				async generateURL(key) {
-					return buildStorageFileUrl(appUrl, basePath, key);
+					return `${prefix}/${encodeURIComponent(key)}`;
 				},
 				async generateSignedURL(key, _filePath, options) {
 					const tokenExpiration = options?.expiresIn
@@ -76,7 +78,7 @@ class LazyFSDriver implements DriverContract {
 						secret,
 						tokenExpiration,
 					);
-					return buildStorageFileUrl(appUrl, basePath, key, token);
+					return `${prefix}/${encodeURIComponent(key)}?token=${token}`;
 				},
 			},
 		});

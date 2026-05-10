@@ -128,6 +128,8 @@ export default {
 	"action.itemDuplicated": "Element został pomyślnie zduplikowany",
 	"action.itemIdRequired.transition":
 		"ID elementu jest wymagane dla akcji przejścia",
+	"action.itemIdRequired.resetPassword":
+		"ID użytkownika jest wymagane do zresetowania hasła",
 	"action.targetStageRequired":
 		"Docelowy etap jest wymagany dla akcji przejścia",
 	"action.workflowUnsupported":
@@ -346,6 +348,7 @@ export default {
 	"toast.error": "Błąd",
 	"toast.warning": "Ostrzeżenie",
 	"toast.info": "Informacja",
+	"toast.processing": "Przetwarzanie...",
 	"toast.saving": "Zapisywanie...",
 	"toast.saveFailed": "Nie udało się zapisać zmian",
 	"toast.saveSuccess": "Zmiany zapisane pomyślnie",

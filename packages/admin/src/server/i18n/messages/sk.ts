@@ -147,6 +147,8 @@ export default {
 	"action.itemDuplicated": "Položka bola úspešne zduplikovaná",
 	"action.itemIdRequired.transition":
 		"Pre akciu prechodu je povinné ID položky",
+	"action.itemIdRequired.resetPassword":
+		"Pre resetovanie hesla je povinné ID používateľa",
 	"action.targetStageRequired": "Pre akciu prechodu je povinná cieľová fáza",
 	"action.workflowUnsupported":
 		"Workflow prechody nie sú pre túto kolekciu podporované",
@@ -500,6 +502,7 @@ export default {
 	"toast.error": "Chyba",
 	"toast.warning": "Upozornenie",
 	"toast.info": "Informácia",
+	"toast.processing": "Spracovávam...",
 	"toast.saving": "Ukladám...",
 	"toast.saveFailed": "Nepodarilo sa uložiť zmeny",
 	"toast.saveSuccess": "Zmeny úspešne uložené",

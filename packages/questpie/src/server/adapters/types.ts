@@ -47,16 +47,6 @@ export type AdapterConfig<TConfig extends QuestpieConfig = QuestpieConfig> = {
 		reindexAccess?: ReindexAccessRule<TConfig>;
 	};
 
-	/**
-	 * Storage route options.
-	 */
-	storage?: {
-		/**
-		 * Collection used by the legacy `/storage/files/:key` alias route.
-		 * If omitted, the adapter derives it from registered upload collections.
-		 */
-		collection?: string;
-	};
 	extendContext?: (params: {
 		request: Request;
 		app: Questpie<TConfig>;

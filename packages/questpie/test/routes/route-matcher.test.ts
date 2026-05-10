@@ -425,7 +425,6 @@ describe("Route Matcher — HTTP Dispatch Simulation", () => {
 				// Framework adapter routes
 				["health", "health-check"],
 				["auth/*path", "auth-handler"],
-				["storage/files/*filepath", "storage-handler"],
 				["search", "search-handler"],
 				["search/reindex/:collection", "reindex-handler"],
 				["realtime", "sse-handler"],
@@ -453,13 +452,6 @@ describe("Route Matcher — HTTP Dispatch Simulation", () => {
 		expect(getHandler(m.match("/health"))).toBe("health-check");
 		expect(getHandler(m.match("/auth/login"))).toBe("auth-handler");
 		expect(m.match("/auth/login")!.params).toEqual({ path: "login" });
-		expect(getHandler(m.match("/storage/files/uploads/img.png"))).toBe(
-			"storage-handler",
-		);
-		expect(m.match("/storage/files/uploads/img.png")!.params).toEqual({
-			filepath: "uploads/img.png",
-		});
-
 		// Global CRUD
 		expect(getHandler(m.match("/globals/settings"))).toBe("global-read");
 		expect(getHandler(m.match("/globals/settings/update"))).toBe(

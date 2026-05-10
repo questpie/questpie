@@ -38,8 +38,6 @@ import _route_health from "../routes/health";
 import _route_realtime from "../routes/realtime";
 import _route_search from "../routes/search";
 import _route_search_reindex_collection from "../routes/search/reindex/[collection]";
-import _route_storage_files_spread_key from "../routes/storage/files/[...key]";
-
 // ── Services ────────────────────────────────────────────
 import _svc_auth from "../services/auth";
 import _svc_collectionsApi from "../services/collections-api";
@@ -117,7 +115,6 @@ export interface CoreRoutes {
 	realtime: RouteWithParams<typeof _route_realtime, RouteParamsFromKey<"realtime">>;
 	search: RouteWithParams<typeof _route_search, RouteParamsFromKey<"search">>;
 	"search/reindex/[collection]": RouteWithParams<typeof _route_search_reindex_collection, RouteParamsFromKey<"search/reindex/[collection]">>;
-	"storage/files/[...key]": RouteWithParams<typeof _route_storage_files_spread_key, RouteParamsFromKey<"storage/files/[...key]">>;
 }
 
 export interface CoreServices {
@@ -195,7 +192,6 @@ const _module = {
 		realtime: _route_realtime,
 		search: _route_search,
 		"search/reindex/[collection]": _route_search_reindex_collection,
-		"storage/files/[...key]": _route_storage_files_spread_key,
 	} as CoreRoutes,
 	services: {
 		auth: _svc_auth,

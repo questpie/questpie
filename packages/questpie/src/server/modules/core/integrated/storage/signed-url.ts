@@ -1,5 +1,3 @@
-import type { StorageVisibility } from "#questpie/server/config/types.js";
-
 export interface SignedUrlPayload {
 	key: string;
 	expires: number;
@@ -105,54 +103,26 @@ export async function verifySignedUrlToken(
 }
 
 /**
- * Build the full URL for accessing a file
+ * Build the full URL for accessing a file via its collection route.
+ *
+ * Pattern: `{basePath}/{collection}/files/{key}`
  */
 export function buildStorageFileUrl(
 	baseUrl: string,
 	basePath: string,
+	collection: string,
 	key: string,
 	token?: string,
 ): string {
-	// Normalize basePath to avoid double slashes
 	const normalizedBasePath = basePath.endsWith("/")
 		? basePath.slice(0, -1)
 		: basePath;
 	const url = new URL(
-		`${normalizedBasePath}/storage/files/${encodeURIComponent(key)}`,
+		`${normalizedBasePath}/${encodeURIComponent(collection)}/files/${encodeURIComponent(key)}`,
 		baseUrl,
 	);
 	if (token) {
 		url.searchParams.set("token", token);
 	}
 	return url.toString();
-}
-
-/**
- * Configuration for URL generation
- */
-export interface StorageUrlConfig {
-	baseUrl: string;
-	basePath: string;
-	secret: string;
-	signedUrlExpiration: number;
-}
-
-/**
- * Generate URL for a file based on visibility
- */
-export async function generateFileUrl(
-	key: string,
-	visibility: StorageVisibility,
-	config: StorageUrlConfig,
-): Promise<string> {
-	if (visibility === "private") {
-		const token = await generateSignedUrlToken(
-			key,
-			config.secret,
-			config.signedUrlExpiration,
-		);
-		return buildStorageFileUrl(config.baseUrl, config.basePath, key, token);
-	}
-
-	return buildStorageFileUrl(config.baseUrl, config.basePath, key);
 }
