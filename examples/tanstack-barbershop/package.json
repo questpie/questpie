@@ -38,6 +38,7 @@
 		"@hugeicons/react": "^1.1.1",
 		"@iconify/react": "^6.0.2",
 		"@questpie/admin": "workspace:*",
+		"@questpie/mcp": "workspace:*",
 		"@questpie/openapi": "workspace:*",
 		"@tailwindcss/vite": "^4.0.6",
 		"@tanstack/db": "^0.1.1",
