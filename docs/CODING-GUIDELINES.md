@@ -206,7 +206,7 @@ import { view, block } from "@questpie/admin/factories";
 import type { AppContext } from "questpie/types";
 
 // BAD — bypasses public API, fragile
-import { adminModule } from "@questpie/admin/src/server/modules/admin/index.js";
+// import { adminModule } from "@questpie/admin/src/server/modules/admin/index.js";
 ```
 
 ### Import Organization
