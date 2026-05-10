@@ -1,0 +1,55 @@
+{
+	"name": "autopilot",
+	"version": "0.0.1",
+	"private": true,
+	"type": "module",
+	"imports": {
+		"#questpie": "./src/questpie/server/.generated/index.ts",
+		"#questpie/*": "./src/questpie/server/.generated/*"
+	},
+	"scripts": {
+		"dev": "bun --bun vite dev",
+		"dev:worker": "bun --bun run --watch ./src/worker.ts",
+		"worker": "bun --bun run ./src/worker.ts",
+		"generate": "bun x questpie generate -c src/questpie/server/questpie.config.ts",
+		"migrate": "bun x questpie migrate:up -c src/questpie/server/questpie.config.ts",
+		"migrate:down": "bun x questpie migrate:down -c src/questpie/server/questpie.config.ts",
+		"migrate:status": "bun x questpie migrate:status -c src/questpie/server/questpie.config.ts",
+		"migrate:generate": "bun x questpie migrate:generate -c src/questpie/server/questpie.config.ts",
+		"build": "vite build",
+		"preview": "vite preview",
+		"test": "vitest run",
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@questpie/admin": "workspace:*",
+		"@questpie/mcp": "workspace:*",
+		"@questpie/workflows": "workspace:*",
+		"@tailwindcss/vite": "^4.0.6",
+		"@tanstack/react-query": "^5.62.11",
+		"@tanstack/react-router": "^1.132.0",
+		"@tanstack/react-start": "^1.132.0",
+		"drizzle-orm": "1.0.0-beta.6-4414a19",
+		"nitro": "latest",
+		"questpie": "workspace:*",
+		"react": "^19.2.0",
+		"react-dom": "^19.2.0",
+		"tailwind-merge": "^3.4.0",
+		"tailwindcss": "^4.0.6",
+		"zod": "^4.2.1"
+	},
+	"devDependencies": {
+		"@iconify/json": ">=2",
+		"@iconify/react": "^6.0.2",
+		"@questpie/vite-plugin-iconify": "workspace:*",
+		"@rolldown/plugin-babel": "^0.2.0",
+		"@types/node": "^22.10.2",
+		"@types/react": "^19.2.0",
+		"@types/react-dom": "^19.2.0",
+		"@vitejs/plugin-react": "^6.0.1",
+		"babel-plugin-react-compiler": "^1.0.0",
+		"typescript": "^5.9.2",
+		"vite": "^8.0.0",
+		"vitest": "^3.0.5"
+	}
+}
