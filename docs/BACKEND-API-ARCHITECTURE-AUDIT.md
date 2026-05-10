@@ -295,7 +295,6 @@ Other built-in routes:
 - `POST /realtime`
 - `POST /search`
 - `POST /search/reindex/:collection`
-- `GET /storage/files/:key*`
 
 ### Services
 
@@ -821,8 +820,8 @@ Repairs applied:
   forwarding.
 - Route ALS now preserves the resolved request `accessMode`; HTTP routes no longer
   silently escalate nested CRUD calls to `system`.
-- Core module route wrappers can keep calling collection/global/search/storage/
-  realtime handlers through the compatibility layer without custom session
+- Core module route wrappers can keep calling collection/global/search/realtime
+  handlers through the compatibility layer without custom session
   resolution, locale, stage, and context extensions being re-resolved or dropped.
 - Route builder method helpers now match the declared `HttpMethod` surface, including
   `HEAD` and `OPTIONS`.

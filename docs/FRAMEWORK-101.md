@@ -912,7 +912,6 @@ export default route()
 | `search`                      | POST   | Full-text search    |
 | `search/reindex/[collection]` | POST   | Reindex collection  |
 | `realtime`                    | POST   | SSE subscriptions   |
-| `storage/files/[...key]`      | GET    | Legacy file serving |
 | `health`                      | GET    | Health check        |
 
 ---
