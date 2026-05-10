@@ -325,7 +325,7 @@ OpenAPI should be a **plugin** registered in `questpie.config.ts`:
 ```ts
 import { runtimeConfig } from "questpie";
 import { adminPlugin } from "@questpie/admin/plugin";
-import { openapiPlugin } from "@questpie/openapi";
+import { openapiPlugin } from "@questpie/openapi/plugin";
 
 export default runtimeConfig({
 	plugins: [adminPlugin(), openapiPlugin()],

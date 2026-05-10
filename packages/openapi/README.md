@@ -15,7 +15,7 @@ Register `openApiModule` in your `modules.ts` file to add `/openapi.json` and `/
 ```ts
 // src/questpie/server/modules.ts
 import { adminModule } from "@questpie/admin/modules/admin";
-import { openApiModule } from "@questpie/openapi";
+import { openApiModule } from "@questpie/openapi/modules/openapi";
 
 export default [adminModule, openApiModule] as const;
 ```
@@ -24,7 +24,7 @@ Configure the OpenAPI module via `config/openapi.ts`:
 
 ```ts
 // src/questpie/server/config/openapi.ts
-import { openApiConfig } from "@questpie/openapi";
+import { openApiConfig } from "@questpie/openapi/server";
 
 export default openApiConfig({
 	info: { title: "My API", version: "1.0.0" },
@@ -66,7 +66,7 @@ Routes with an explicit `outputSchema` get full request/response documentation. 
 Generate the spec without mounting routes:
 
 ```ts
-import { generateOpenApiSpec } from "@questpie/openapi";
+import { generateOpenApiSpec } from "@questpie/openapi/server";
 
 const spec = generateOpenApiSpec(app, {
 	basePath: "/api",

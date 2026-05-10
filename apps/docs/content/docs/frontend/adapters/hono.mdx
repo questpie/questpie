@@ -31,7 +31,7 @@ OpenAPI is registered as a module rather than wrapping the handler. Add `openApi
 
 ```ts title="modules.ts"
 import { adminModule } from "@questpie/admin/modules/admin";
-import { openApiModule } from "@questpie/openapi";
+import { openApiModule } from "@questpie/openapi/modules/openapi";
 
 export default [adminModule, openApiModule] as const;
 ```

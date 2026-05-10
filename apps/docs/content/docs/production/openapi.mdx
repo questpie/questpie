@@ -17,7 +17,7 @@ Register the module in your `modules.ts`:
 
 ```ts title="questpie/server/modules.ts"
 import { adminModule } from "@questpie/admin/modules/admin";
-import { openApiModule } from "@questpie/openapi";
+import { openApiModule } from "@questpie/openapi/modules/openapi";
 
 export default [adminModule, openApiModule] as const;
 ```
@@ -25,7 +25,7 @@ export default [adminModule, openApiModule] as const;
 Configure the OpenAPI module in `config/openapi.ts`:
 
 ```ts title="questpie/server/config/openapi.ts"
-import { openApiConfig } from "@questpie/openapi";
+import { openApiConfig } from "@questpie/openapi/server";
 
 export default openApiConfig({
 	info: {
@@ -51,7 +51,7 @@ The module registers two routes:
 ## Configuration
 
 ```ts title="questpie/server/config/openapi.ts"
-import { openApiConfig } from "@questpie/openapi";
+import { openApiConfig } from "@questpie/openapi/server";
 
 export default openApiConfig({
 	// OpenAPI info block
@@ -109,7 +109,7 @@ Collection and global field schemas (from Zod) are automatically converted to JS
 Instead of the module, you can create route files directly:
 
 ```ts title="routes/openapi.json.ts"
-import { openApiRoute } from "@questpie/openapi";
+import { openApiRoute } from "@questpie/openapi/server";
 
 export default openApiRoute({
 	info: { title: "My API", version: "1.0.0" },
@@ -117,7 +117,7 @@ export default openApiRoute({
 ```
 
 ```ts title="routes/docs.ts"
-import { docsRoute } from "@questpie/openapi";
+import { docsRoute } from "@questpie/openapi/server";
 
 export default docsRoute({
 	scalar: { theme: "purple" },
@@ -131,7 +131,7 @@ This gives you full control over the route paths and allows co-locating OpenAPI 
 Generate the spec object directly for custom use cases:
 
 ```ts
-import { generateOpenApiSpec } from "@questpie/openapi";
+import { generateOpenApiSpec } from "@questpie/openapi/server";
 
 const spec = generateOpenApiSpec(app, {
 	info: { title: "My API", version: "1.0.0" },

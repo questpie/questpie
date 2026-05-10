@@ -174,7 +174,7 @@ export default runtimeConfig({
 
 ```ts
 import { adminModule } from "@questpie/admin/modules/admin";
-import { openApiModule } from "@questpie/openapi";
+import { openApiModule } from "@questpie/openapi/modules/openapi";
 
 export default [adminModule, openApiModule] as const;
 ```

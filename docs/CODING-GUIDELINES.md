@@ -205,8 +205,8 @@ import { adminModule } from "@questpie/admin/modules/admin";
 import { view, block } from "@questpie/admin/factories";
 import type { AppContext } from "questpie/types";
 
-// BAD — never import from src/ paths, use public entrypoints
-// import { something } from "@questpie/admin/src/internal/path";
+// BAD — never import from internal src/ paths
+// import { something } from "@questpie/pkg/src/internal/deep/path";
 ```
 
 ### Import Organization

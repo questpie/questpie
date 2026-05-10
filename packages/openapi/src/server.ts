@@ -7,7 +7,7 @@
  * @example
  * ```ts
  * // questpie/server/modules.ts
- * import { openApiModule } from "@questpie/openapi";
+ * import { openApiModule } from "@questpie/openapi/server";
  *
  * export default [
  *   openApiModule,
@@ -16,7 +16,7 @@
  *
  * Then configure in `config/openapi.ts`:
  * ```ts
- * import { openApiConfig } from "@questpie/openapi";
+ * import { openApiConfig } from "@questpie/openapi/server";
  *
  * export default openApiConfig({
  *   info: { title: "My API", version: "1.0.0" },
@@ -54,7 +54,7 @@ export type {
  * @example
  * ```ts
  * // config/openapi.ts
- * import { openApiConfig } from "@questpie/openapi";
+ * import { openApiConfig } from "@questpie/openapi/server";
  *
  * export default openApiConfig({
  *   info: { title: "My API", version: "1.0.0" },
@@ -78,7 +78,7 @@ export function openApiConfig(
  *
  * @example
  * ```ts
- * import { generateOpenApiSpec } from "@questpie/openapi";
+ * import { generateOpenApiSpec } from "@questpie/openapi/server";
  *
  * const spec = generateOpenApiSpec(app, {
  *   info: { title: "My API", version: "1.0.0" },
@@ -145,7 +145,7 @@ function resolveOpenApiConfig(
  *
  * @example
  * ```ts title="routes/openapi-spec.ts"
- * import { openApiRoute } from "@questpie/openapi";
+ * import { openApiRoute } from "@questpie/openapi/server";
  *
  * export default openApiRoute();
  * ```
@@ -181,7 +181,7 @@ export function openApiRoute(config?: OpenApiConfig) {
  *
  * @example
  * ```ts title="routes/docs.ts"
- * import { docsRoute } from "@questpie/openapi";
+ * import { docsRoute } from "@questpie/openapi/server";
  *
  * export default docsRoute();
  * ```
@@ -214,13 +214,13 @@ export function docsRoute(config?: OpenApiConfig & { scalar?: ScalarConfig }) {
  *
  * Configure via `config/openapi.ts`:
  * ```ts
- * import { openApiConfig } from "@questpie/openapi";
+ * import { openApiConfig } from "@questpie/openapi/server";
  * export default openApiConfig({ info: { title: "My API", version: "1.0.0" } });
  * ```
  *
  * @example Static (reads config from config/openapi.ts):
  * ```ts title="questpie/server/modules.ts"
- * import { openApiModule } from "@questpie/openapi";
+ * import { openApiModule } from "@questpie/openapi/server";
  * export default [openApiModule] as const;
  * ```
  */

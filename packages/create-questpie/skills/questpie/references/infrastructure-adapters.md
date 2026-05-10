@@ -410,7 +410,7 @@ bun add @questpie/openapi
 ```ts
 // src/questpie/server/modules.ts
 import { adminModule } from "@questpie/admin/modules/admin";
-import { openApiModule } from "@questpie/openapi";
+import { openApiModule } from "@questpie/openapi/modules/openapi";
 
 export default [adminModule, openApiModule] as const;
 ```
@@ -418,7 +418,7 @@ export default [adminModule, openApiModule] as const;
 Configure it in `config/openapi.ts`:
 
 ```ts
-import { openApiConfig } from "@questpie/openapi";
+import { openApiConfig } from "@questpie/openapi/server";
 
 export default openApiConfig({
 	info: { title: "My API", version: "1.0.0" },
@@ -479,7 +479,7 @@ Instead of the module, create route files directly:
 
 ```ts
 // routes/openapi.json.ts
-import { openApiRoute } from "@questpie/openapi";
+import { openApiRoute } from "@questpie/openapi/server";
 
 export default openApiRoute({
 	info: { title: "My API", version: "1.0.0" },
@@ -488,7 +488,7 @@ export default openApiRoute({
 
 ```ts
 // routes/docs.ts
-import { docsRoute } from "@questpie/openapi";
+import { docsRoute } from "@questpie/openapi/server";
 
 export default docsRoute({
 	scalar: { theme: "purple" },
@@ -498,7 +498,7 @@ export default docsRoute({
 ### Programmatic Access
 
 ```ts
-import { generateOpenApiSpec } from "@questpie/openapi";
+import { generateOpenApiSpec } from "@questpie/openapi/server";
 
 const spec = generateOpenApiSpec(app, {
 	info: { title: "My API", version: "1.0.0" },

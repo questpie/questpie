@@ -30,7 +30,7 @@ Codegen-aware modules use a two-file pattern:
 ```ts title="modules.ts"
 import mcpModule from "@questpie/mcp";
 import { adminModule } from "@questpie/admin/modules/admin";
-import { openApiModule } from "@questpie/openapi";
+import { openApiModule } from "@questpie/openapi/modules/openapi";
 
 export default [adminModule, openApiModule, mcpModule] as const;
 ```
