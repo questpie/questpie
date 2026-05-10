@@ -11,4 +11,4 @@ export type {
 } from "#questpie/cli/config.js";
 export { config, packageConfig } from "#questpie/cli/config.js";
 
-import "#questpie/cli/index.js";
+export { program } from "#questpie/cli/index.js";

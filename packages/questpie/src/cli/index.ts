@@ -22,7 +22,7 @@ import { runMigrationCommand } from "./commands/run.js";
 import { runSeedCommand } from "./commands/seed.js";
 import { parsePositiveIntegerOption } from "./utils.js";
 
-const program = new Command();
+export const program = new Command();
 
 function readPackageVersion(): string {
 	for (const candidate of [
