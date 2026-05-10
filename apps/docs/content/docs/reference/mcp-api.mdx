@@ -1,0 +1,156 @@
+---
+title: MCP API
+description: API reference for @questpie/mcp.
+---
+
+`@questpie/mcp` exports the static module, server factory, config factory, custom tool factory, plugin, stdio helper, and TypeScript types for MCP integrations.
+
+## `mcpModule`
+
+Static QUESTPIE module that registers the MCP codegen plugin and the `/mcp` raw route.
+
+```ts title="modules.ts"
+import mcpModule from "@questpie/mcp";
+
+export default [mcpModule] as const;
+```
+
+The default export and named `mcpModule` export are the same module object.
+
+## `mcpConfig(config)`
+
+Typed identity helper for `config/mcp.ts`.
+
+```ts title="config/mcp.ts"
+import { mcpConfig } from "@questpie/mcp";
+
+export default mcpConfig({
+	crud: {
+		defaults: {
+			collections: { read: true, write: false, delete: false },
+			globals: { read: true, write: false },
+		},
+	},
+});
+```
+
+The config shape is:
+
+```ts
+interface McpConfig {
+	name?: string;
+	version?: string;
+	crud?: McpCrudConfig;
+	routes?: McpRoutesConfig;
+	resources?: McpResourcesConfig;
+	http?: McpHttpConfig;
+	stdio?: McpStdioConfig;
+}
+```
+
+`http.accessMode` is accepted for type compatibility but HTTP always resolves to user mode.
+
+## `createMcpServer(app, options?)`
+
+Creates an MCP SDK `McpServer` and registers QUESTPIE CRUD tools, route tools, resources, and custom tools.
+
+```ts
+import { createMcpServer } from "@questpie/mcp";
+
+const server = await createMcpServer(app, {
+	transport: "http",
+	request,
+	ctx,
+});
+```
+
+Options:
+
+| Option       | Type                 | Description                                     |
+| ------------ | -------------------- | ----------------------------------------------- |
+| `transport`  | `"http" \| "stdio"`  | Transport policy family. Defaults to `"http"`.  |
+| `accessMode` | `"user" \| "system"` | Access mode for stdio. Ignored for HTTP system. |
+| `ctx`        | `AppContext`         | Existing QUESTPIE context to preserve.          |
+| `request`    | `Request`            | HTTP request used for request/session context.  |
+| `config`     | `McpConfig`          | Programmatic config override.                   |
+
+When `transport: "http"` is used without `ctx`, `request` is passed into `app.createContext()` so access rules and custom tools can read request-derived context.
+
+## `mcpTool(name, config).handler(handler)`
+
+Defines a custom tool for files in `mcp-tools/`.
+
+```ts title="mcp-tools/reindex.ts"
+import { mcpTool } from "@questpie/mcp";
+import { z } from "zod";
+
+export default mcpTool("search.reindex", {
+	description: "Reindex search documents.",
+	inputSchema: z.object({ collection: z.string() }),
+	access: ({ accessMode }) => accessMode === "system",
+}).handler(async ({ input, ctx }) => {
+	await ctx.search.reindex(input.collection);
+	return { structuredContent: { ok: true } };
+});
+```
+
+Config:
+
+| Property       | Description                                             |
+| -------------- | ------------------------------------------------------- |
+| `title`        | Optional MCP tool title.                                |
+| `description`  | Tool description.                                       |
+| `inputSchema`  | Zod input schema.                                       |
+| `outputSchema` | Optional Zod output schema.                             |
+| `annotations`  | MCP tool annotations such as `readOnlyHint`.            |
+| `access`       | Boolean or function checked at list time and call time. |
+| `_meta`        | Optional MCP metadata.                                  |
+
+Handlers return a normal MCP `CallToolResult`. For structured results, return `structuredContent`.
+
+## `mcpPlugin()`
+
+Returns the codegen plugin used by `mcpModule`.
+
+```ts
+import { mcpPlugin } from "@questpie/mcp/plugin";
+```
+
+Most apps should use `mcpModule` instead. Use `mcpPlugin()` directly only for custom codegen setups that do not load modules.
+
+The plugin discovers:
+
+- `config/mcp.ts` into `app.state.config.mcp`.
+- `mcp-tools/**/*.ts` into `app.state.mcpTools`.
+
+## `startStdioServer(app, options?)`
+
+Creates and connects an MCP stdio server.
+
+```ts
+import { app } from "#questpie";
+import { startStdioServer } from "@questpie/mcp/stdio";
+
+await startStdioServer(app);
+```
+
+Stdio defaults to `accessMode: "system"`. Pass `{ accessMode: "user" }` when a stdio integration should respect normal user-mode access behavior.
+
+## Types
+
+The root export includes the public MCP types:
+
+```ts
+import type {
+	McpAccessMode,
+	McpAccessRule,
+	McpAccessRuleContext,
+	McpConfig,
+	McpCrudConfig,
+	McpEntityPolicy,
+	McpExecutionOptions,
+	McpToolDefinition,
+	McpToolHandlerArgs,
+	McpTransportKind,
+} from "@questpie/mcp";
+```

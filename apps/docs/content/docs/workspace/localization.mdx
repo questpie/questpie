@@ -37,8 +37,7 @@ The switcher adapts based on the number of locales:
 By default, flags are resolved from locale codes (e.g. `en` -> US flag, `sk` -> SK flag). Override with `flagCountryCode`:
 
 ```ts title="config/app.ts"
-import { appConfig } from "questpie";
-
+import { appConfig } from "questpie/app";
 export default appConfig({
 	locale: {
 		locales: [

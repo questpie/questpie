@@ -131,7 +131,7 @@ export function ColorCell({ value }: { value: string }) {
 Package the server-side field factory into a module so it extends the `f` proxy:
 
 ```ts title="src/modules/custom-fields.ts"
-import { module } from "questpie";
+import { module } from "questpie/app";
 import { colorField } from "../fields/color";
 import { currencyField } from "../fields/currency";
 
@@ -147,7 +147,7 @@ export const customFieldsModule = module({
 Register the module in `modules.ts`:
 
 ```ts title="src/questpie/server/modules.ts"
-import { adminModule } from "@questpie/admin/server";
+import { adminModule } from "@questpie/admin/modules/admin";
 import { customFieldsModule } from "../../modules/custom-fields";
 
 export default [adminModule, customFieldsModule] as const;

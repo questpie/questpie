@@ -3,7 +3,7 @@ import { defineConfig } from "tsdown";
 
 export default defineConfig({
 	// Clean entry points from exports folder + lightweight plugin entry
-	entry: ["src/exports/*.ts"],
+	entry: ["src/exports/*.ts", "src/exports/modules/*.ts", "src/exports/client/modules/*.ts"],
 	outDir: "dist",
 	format: ["esm"],
 	clean: true,

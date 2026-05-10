@@ -131,7 +131,7 @@ import type {
 	QueueHandlerMap,
 	QueueRunOnceOptions,
 	QueueRunOnceResult,
-} from "questpie";
+} from "questpie/queue";
 
 export class InMemoryQueueAdapter implements QueueAdapter {
 	capabilities = {
@@ -203,7 +203,7 @@ export class InMemoryQueueAdapter implements QueueAdapter {
 ## Registration
 
 ```ts title="questpie.config.ts"
-import { runtimeConfig } from "questpie";
+import { runtimeConfig } from "questpie/app";
 import { InMemoryQueueAdapter } from "./my-queue-adapter";
 
 export default runtimeConfig({

@@ -1,6 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { createFetchHandler } from "questpie";
-
+import { createFetchHandler } from "questpie/http";
 import { app } from "@/questpie/server/app.js";
 
 const handler = createFetchHandler(app, {

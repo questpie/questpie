@@ -164,7 +164,7 @@ const REORDER_DROP_ANIMATION = {
 	easing: REORDER_MOVE_EASING,
 };
 
-function UploadCollectionButton({
+export function UploadCollectionButton({
 	collection,
 	onUploaded,
 }: {
@@ -446,14 +446,16 @@ function mapListActionsToDefinitions(
 	};
 }
 
-function mapListSchemaToConfig(list?: {
+export function mapListSchemaToConfig(list?: {
 	view?: string;
 	columns?: string[];
 	defaultSort?: { field: string; direction: "asc" | "desc" };
 	orderable?: ListViewConfig["orderable"];
-	searchable?: string[];
+	searchable?: string[] | boolean;
 	filterable?: string[];
 	grouping?: ListViewConfig["grouping"];
+	layout?: ListViewConfig["layout"];
+	outline?: ListViewConfig["outline"];
 	actions?: unknown;
 }): ListViewConfig | undefined {
 	if (!list) return undefined;
@@ -462,18 +464,23 @@ function mapListSchemaToConfig(list?: {
 	if (list.columns?.length) config.columns = list.columns;
 	if (list.defaultSort) config.defaultSort = list.defaultSort as any;
 	if (list.orderable) config.orderable = list.orderable;
-	if (list.searchable?.length) {
+	if (Array.isArray(list.searchable) && list.searchable.length) {
 		config.searchFields = list.searchable as any;
 		config.searchable = true;
+	} else if (typeof list.searchable === "boolean") {
+		config.searchable = list.searchable;
 	}
+	if (list.filterable?.length) config.filterable = list.filterable as any;
 	if (list.grouping?.fields?.length) config.grouping = list.grouping;
+	if (list.layout) config.layout = list.layout;
+	if (list.outline?.levels?.length) config.outline = list.outline as any;
 
 	config.actions = mapListActionsToDefinitions(list.actions);
 
 	return config;
 }
 
-function stringifyGroupValue(
+export function stringifyGroupValue(
 	value: unknown,
 	field?: AvailableField,
 	resolveText?: (value: any, fallback?: string) => string,

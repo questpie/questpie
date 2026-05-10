@@ -64,22 +64,20 @@ export const posts = collection("posts").fields(({ f }) => ({
 }));
 
 // routes/healthcheck.ts
-import { route } from "questpie";
-
+import { route } from "questpie/services";
 export default route()
 	.get()
 	.handler(async () => ({ status: "ok" }));
 
 // questpie.config.ts
-import { runtimeConfig } from "questpie";
-
+import { runtimeConfig } from "questpie/app";
 export default runtimeConfig({
 	db: { url: process.env.DATABASE_URL! },
 	app: { url: process.env.APP_URL! },
 });
 
 // modules.ts
-import { adminModule } from "@questpie/admin/server";
+import { adminModule } from "@questpie/admin/modules/admin";
 import { openApiModule } from "@questpie/openapi";
 
 export default [adminModule, openApiModule] as const;
@@ -89,8 +87,7 @@ Codegen discovers files and generates `.generated/index.ts` with the `app` insta
 
 ```ts
 import { app } from "#questpie";
-import { createFetchHandler } from "questpie";
-
+import { createFetchHandler } from "questpie/http";
 const handler = createFetchHandler(app, { basePath: "/api" });
 ```
 
@@ -130,7 +127,7 @@ Type-safe server routes via file convention:
 
 ```ts
 // routes/get-stats.ts
-import { route } from "questpie";
+import { route } from "questpie/services";
 import { z } from "zod";
 
 export default route()

@@ -4,11 +4,7 @@
  * Categories organize blocks in the admin block picker UI.
  */
 
-import type {
-	AdminConfigContext,
-	BlockCategoryConfig,
-} from "@questpie/admin/server";
-
+import type { AdminConfigContext, BlockCategoryConfig } from "@questpie/admin/factories";
 export const sections = (c: AdminConfigContext["c"]): BlockCategoryConfig => ({
 	label: "Sections",
 	icon: c.icon("ph:layout"),

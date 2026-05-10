@@ -1,7 +1,7 @@
 /**
  * Modules — static module dependencies for this project.
  */
-import { adminModule } from "@questpie/admin/server";
+import { adminModule } from "@questpie/admin/modules/admin";
 import { openApiModule } from "@questpie/openapi";
 
 const modules = [adminModule, openApiModule] as const;

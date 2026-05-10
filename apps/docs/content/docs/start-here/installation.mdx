@@ -29,8 +29,7 @@ bun add @questpie/admin
 ### 2. Create runtime config
 
 ```ts title="src/questpie/server/questpie.config.ts"
-import { runtimeConfig } from "questpie";
-
+import { runtimeConfig } from "questpie/app";
 export default runtimeConfig({
 	app: {
 		url: process.env.APP_URL || "http://localhost:3000",
@@ -96,8 +95,7 @@ To add the admin interface, install `@questpie/admin` and add the admin module:
 Add the admin module to your modules:
 
 ```ts title="src/questpie/server/modules.ts"
-import { adminModule } from "@questpie/admin/server";
-
+import { adminModule } from "@questpie/admin/modules/admin";
 export default [adminModule] as const;
 ```
 
@@ -131,7 +129,7 @@ export default server;
 For TanStack Start, use the generic fetch handler directly — there is no adapter package:
 
 ```ts title="src/routes/api/$.ts"
-import { createFetchHandler } from "questpie";
+import { createFetchHandler } from "questpie/http";
 import { app } from "#questpie";
 
 const handler = createFetchHandler(app, { basePath: "/api" });

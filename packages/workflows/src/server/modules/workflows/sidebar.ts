@@ -1,4 +1,4 @@
-import type { SidebarContribution } from "@questpie/admin/server";
+import type { SidebarContribution } from "@questpie/admin/factories";
 
 const workflowsSidebarContribution: SidebarContribution = {
 	sections: [

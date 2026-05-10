@@ -66,7 +66,7 @@ export default workflow({
 
 ```ts
 // modules.ts
-import { workflowsModule } from "@questpie/workflows/server";
+import { workflowsModule } from "@questpie/workflows/modules/workflows";
 export default [workflowsModule] as const;
 ```
 

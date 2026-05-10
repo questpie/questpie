@@ -72,6 +72,17 @@ export function generateAdminClientTemplate(
 	// ── 1. Import modules (if discovered) ───────────────────────
 	if (modulesFile) {
 		lines.push(generateImportLine(modulesFile));
+		lines.push(
+			`const _mergedModules = Array.isArray(${modulesFile.varName})`,
+		);
+		lines.push(
+			`\t? ${modulesFile.varName}.reduce((acc: any, m: any) => {`,
+		);
+		lines.push(
+			'\t\tfor (const [k, v] of Object.entries(m)) acc[k] = typeof v === "object" && v !== null && !Array.isArray(v) ? { ...acc[k], ...v } : v;',
+		);
+		lines.push("\t\treturn acc;");
+		lines.push(`\t}, {} as any) : ${modulesFile.varName};`);
 	}
 
 	// ── 2. Import all user-discovered category files ────────────
@@ -132,7 +143,7 @@ export function generateAdminClientTemplate(
 		lines.push("const admin = {};");
 	} else if (!hasAnyUserFiles && !hasExtraCode && modulesFile) {
 		// Module only, no user overrides — re-export module directly
-		lines.push(`const admin = ${modulesFile.varName};`);
+		lines.push("const admin = _mergedModules;");
 	} else {
 		lines.push("const admin = {");
 
@@ -145,11 +156,11 @@ export function generateAdminClientTemplate(
 				// Module base + user overrides
 				const entries = generateCategoryEntries(files, catDecl);
 				lines.push(
-					`\t${cat}: { ...${modulesFile.varName}.${cat}, ${entries} },`,
+					`\t${cat}: { ..._mergedModules.${cat}, ${entries} },`,
 				);
 			} else if (modulesFile && (!files || files.length === 0)) {
 				// Module base, no user overrides — spread module category
-				lines.push(`\t${cat}: { ...${modulesFile.varName}.${cat} },`);
+				lines.push(`\t${cat}: { ..._mergedModules.${cat} },`);
 			} else if (files && files.length > 0) {
 				// No module, user files only
 				const entries = generateCategoryEntries(files, catDecl);

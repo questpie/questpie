@@ -104,7 +104,7 @@ Extensions add chainable methods to collection or global builders. The admin plu
 ## Creating a Plugin
 
 ```ts
-import type { CodegenPlugin } from "questpie";
+import type { CodegenPlugin } from "questpie/codegen";
 
 export function myPlugin(): CodegenPlugin {
 	return {
@@ -153,7 +153,7 @@ export function myPlugin(): CodegenPlugin {
 Register it in your runtime config:
 
 ```ts title="questpie.config.ts"
-import { runtimeConfig } from "questpie";
+import { runtimeConfig } from "questpie/app";
 import { myPlugin } from "./my-plugin";
 
 export default runtimeConfig({

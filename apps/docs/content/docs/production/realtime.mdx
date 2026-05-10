@@ -12,7 +12,7 @@ QUESTPIE supports real-time data updates via `POST /realtime` multiplexed endpoi
 Uses PostgreSQL `LISTEN/NOTIFY`. Works for single-instance deployments:
 
 ```ts title="questpie.config.ts"
-import { runtimeConfig } from "questpie";
+import { runtimeConfig } from "questpie/app";
 import { pgNotifyAdapter } from "questpie/adapters/pg-notify";
 
 export default runtimeConfig({
@@ -29,7 +29,7 @@ export default runtimeConfig({
 Uses Redis Streams. Required for multi-instance deployments:
 
 ```ts
-import { runtimeConfig } from "questpie";
+import { runtimeConfig } from "questpie/app";
 import { redisStreamsAdapter } from "questpie/adapters/redis-streams";
 
 export default runtimeConfig({
@@ -46,7 +46,7 @@ export default runtimeConfig({
 Cloudflare Workers require an explicit Durable Object-backed realtime adapter. The Cloudflare Worker entrypoint validates that this adapter is present.
 
 ```ts title="questpie.config.ts"
-import { runtimeConfig } from "questpie";
+import { runtimeConfig } from "questpie/app";
 import {
 	cloudflareRealtimeAdapter,
 	type CloudflareDurableObjectNamespace,

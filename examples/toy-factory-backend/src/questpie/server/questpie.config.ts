@@ -5,7 +5,7 @@
  * Entity definitions are codegen-generated.
  */
 
-import { runtimeConfig } from "questpie";
+import { runtimeConfig } from "questpie/app";
 import { ConsoleAdapter } from "questpie/adapters/console";
 import { pgBossAdapter } from "questpie/adapters/pg-boss";
 

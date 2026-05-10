@@ -7,6 +7,7 @@
  * - form-layout: FormViewConfig, ListViewConfig, admin collection/global config
  * - dashboard: all dashboard widget and config types
  * - sidebar: sidebar items, sections, contributions
+ * - shell: admin shell slots and rail configuration
  * - actions: action system types
  *
  * @example
@@ -20,6 +21,7 @@ export * from "./views.js";
 export * from "./form-layout.js";
 export * from "./dashboard.js";
 export * from "./sidebar.js";
+export * from "./shell.js";
 export * from "./actions.js";
 
 // ============================================================================
@@ -32,6 +34,7 @@ import type {
 	ServerBrandingConfig,
 	ServerDashboardConfig,
 } from "./dashboard.js";
+import type { ServerAdminShellConfig } from "./shell.js";
 import type { SidebarContribution } from "./sidebar.js";
 
 /**
@@ -55,6 +58,7 @@ import type { SidebarContribution } from "./sidebar.js";
 export interface AdminConfigInput {
 	sidebar?: SidebarContribution;
 	dashboard?: DashboardContribution | ServerDashboardConfig;
+	shell?: ServerAdminShellConfig;
 	branding?: ServerBrandingConfig;
 	locale?: AdminLocaleConfig;
 }

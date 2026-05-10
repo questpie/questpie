@@ -10,6 +10,7 @@
 		"dist"
 	],
 	"type": "module",
+	"sideEffects": false,
 	"main": "./dist/server.mjs",
 	"module": "./dist/server.mjs",
 	"types": "./dist/server.d.mts",

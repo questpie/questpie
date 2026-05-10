@@ -17,7 +17,7 @@
  * @see RFC-PLUGIN-SYSTEM.md
  */
 
-import type { CodegenPlugin } from "questpie";
+import type { CodegenPlugin } from "questpie/codegen";
 
 import { generateAdminClientTemplate } from "./codegen/admin-client-template.js";
 import { createAdminProjectionValidator } from "./codegen/projection-validator.js";
@@ -69,7 +69,7 @@ export function adminPlugin(): CodegenPlugin {
 						placeholder: "$COMPONENT_NAMES",
 						recordPlaceholder: "$COMPONENTS",
 						typeRegistry: {
-							module: "@questpie/admin/server",
+							module: "@questpie/admin/factories",
 							interface: "ComponentTypeRegistry",
 						},
 						includeInAppState: true,
@@ -93,7 +93,7 @@ export function adminPlugin(): CodegenPlugin {
 						dirs: ["fields"],
 						prefix: "ftype",
 						factoryImports: [
-							{ name: "adminFields", from: "@questpie/admin/server" },
+							{ name: "adminFields", from: "@questpie/admin/fields" },
 						],
 					},
 				},
@@ -106,11 +106,11 @@ export function adminPlugin(): CodegenPlugin {
 							builderClass: "BlockBuilder",
 							import: {
 								name: "BlockBuilder",
-								from: "@questpie/admin/server",
+								from: "@questpie/admin/factories",
 							},
 							createMethod: "create",
 							returnType:
-								"import('@questpie/admin/server').BlockBuilder<{ name: TName }>",
+								"import('@questpie/admin/factories').BlockBuilder<{ name: TName }>",
 						},
 					},
 					fieldExtensions: {
@@ -121,7 +121,7 @@ export function adminPlugin(): CodegenPlugin {
 						form: {
 							stateKey: "form",
 							configType:
-								"(ctx: { f: Record<string, string> }) => { fields: import('@questpie/admin/server').FieldLayoutItem[] }",
+								"(ctx: { f: Record<string, string> }) => { fields: import('@questpie/admin/factories').FieldLayoutItem[] }",
 							isCallback: true,
 							callbackContextParams: ["f"],
 						},
@@ -132,11 +132,11 @@ export function adminPlugin(): CodegenPlugin {
 							imports: [
 								{
 									name: "AdminCollectionConfig",
-									from: "@questpie/admin/server",
+									from: "@questpie/admin/factories",
 								},
 								{
 									name: "AdminConfigContext",
-									from: "@questpie/admin/server",
+									from: "@questpie/admin/factories",
 								},
 							],
 							configType:
@@ -149,15 +149,15 @@ export function adminPlugin(): CodegenPlugin {
 							imports: [
 								{
 									name: "ListViewConfig",
-									from: "@questpie/admin/server",
+									from: "@questpie/admin/factories",
 								},
 								{
 									name: "ListViewConfigContext",
-									from: "@questpie/admin/server",
+									from: "@questpie/admin/factories",
 								},
 								{
 									name: "FilterViewsByKind",
-									from: "@questpie/admin/server",
+									from: "@questpie/admin/factories",
 								},
 							],
 							configType:
@@ -176,15 +176,15 @@ export function adminPlugin(): CodegenPlugin {
 							imports: [
 								{
 									name: "FormViewConfig",
-									from: "@questpie/admin/server",
+									from: "@questpie/admin/factories",
 								},
 								{
 									name: "FormViewConfigContext",
-									from: "@questpie/admin/server",
+									from: "@questpie/admin/factories",
 								},
 								{
 									name: "FilterViewsByKind",
-									from: "@questpie/admin/server",
+									from: "@questpie/admin/factories",
 								},
 							],
 							configType:
@@ -201,7 +201,7 @@ export function adminPlugin(): CodegenPlugin {
 							imports: [
 								{
 									name: "PreviewConfig",
-									from: "@questpie/admin/server",
+									from: "@questpie/admin/factories",
 								},
 							],
 							configType: "PreviewConfig",
@@ -211,11 +211,11 @@ export function adminPlugin(): CodegenPlugin {
 							imports: [
 								{
 									name: "ServerActionsConfig",
-									from: "@questpie/admin/server",
+									from: "@questpie/admin/factories",
 								},
 								{
 									name: "ActionsConfigContext",
-									from: "@questpie/admin/server",
+									from: "@questpie/admin/factories",
 								},
 							],
 							configType:
@@ -230,11 +230,11 @@ export function adminPlugin(): CodegenPlugin {
 							imports: [
 								{
 									name: "AdminGlobalConfig",
-									from: "@questpie/admin/server",
+									from: "@questpie/admin/factories",
 								},
 								{
 									name: "AdminConfigContext",
-									from: "@questpie/admin/server",
+									from: "@questpie/admin/factories",
 								},
 							],
 							configType:
@@ -247,15 +247,15 @@ export function adminPlugin(): CodegenPlugin {
 							imports: [
 								{
 									name: "FormViewConfig",
-									from: "@questpie/admin/server",
+									from: "@questpie/admin/factories",
 								},
 								{
 									name: "FormViewConfigContext",
-									from: "@questpie/admin/server",
+									from: "@questpie/admin/factories",
 								},
 								{
 									name: "FilterViewsByKind",
-									from: "@questpie/admin/server",
+									from: "@questpie/admin/factories",
 								},
 							],
 							configType:
@@ -274,7 +274,7 @@ export function adminPlugin(): CodegenPlugin {
 							imports: [
 								{
 									name: "AdminConfigInput",
-									from: "@questpie/admin/server",
+									from: "@questpie/admin/factories",
 								},
 							],
 							isCallback: true,
@@ -288,15 +288,15 @@ export function adminPlugin(): CodegenPlugin {
 				callbackParams: {
 					v: {
 						factory: "createViewCallbackProxy",
-						from: "@questpie/admin/server",
+						from: "@questpie/admin/factories",
 					},
 					c: {
 						factory: "createComponentCallbackProxy",
-						from: "@questpie/admin/server",
+						from: "@questpie/admin/factories",
 					},
 					a: {
 						factory: "createActionCallbackProxy",
-						from: "@questpie/admin/server",
+						from: "@questpie/admin/factories",
 					},
 				},
 				scaffolds: {
@@ -310,13 +310,13 @@ export function adminPlugin(): CodegenPlugin {
 						dir: "views",
 						description: "Server-side view definition",
 						template: ({ kebab, camel }) =>
-							`import { view } from "@questpie/admin/server";\n\nexport const ${camel}View = view("${kebab}", {\n\tkind: "list",\n});\n`,
+							`import { view } from "@questpie/admin/factories";\n\nexport const ${camel}View = view("${kebab}", {\n\tkind: "list",\n});\n`,
 					},
 					component: {
 						dir: "components",
 						description: "Server-side component definition",
 						template: ({ kebab, camel }) =>
-							`import { component } from "@questpie/admin/server";\n\nexport const ${camel}Component = component("${kebab}", {\n\t// TODO: configure component props\n});\n`,
+							`import { component } from "@questpie/admin/factories";\n\nexport const ${camel}Component = component("${kebab}", {\n\t// TODO: configure component props\n});\n`,
 					},
 				},
 			},
@@ -394,7 +394,7 @@ export function adminPlugin(): CodegenPlugin {
 					);
 					ctx.addImport(
 						"type { InferBlockValues, InferBlockData }",
-						"@questpie/admin/server",
+						"@questpie/admin/factories",
 					);
 
 					// Add per-block server type imports and build the map entries

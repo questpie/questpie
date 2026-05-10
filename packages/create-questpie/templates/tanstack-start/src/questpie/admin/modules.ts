@@ -1,1 +1,3 @@
-export { default } from "@questpie/admin/client-module";
+import { adminClientModule } from "@questpie/admin/client/modules/admin";
+
+export default [adminClientModule] as const;

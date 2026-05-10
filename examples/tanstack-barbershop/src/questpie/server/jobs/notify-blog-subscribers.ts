@@ -7,7 +7,7 @@
  * @see collections/blog-posts.ts — fires this job in afterChange hook
  * @see emails/new-blog-post.ts — the email template definition
  */
-import { job } from "questpie";
+import { job } from "questpie/services";
 import { z } from "zod";
 
 export default job({

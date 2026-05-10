@@ -168,6 +168,53 @@ export interface AdminListViewSchema {
 		defaultCollapsed?: boolean;
 		showCounts?: boolean;
 	};
+	/** Dense list row layout hints for list-like views */
+	layout?: {
+		density?: "compact" | "comfortable";
+		titleField?: string;
+		subtitleField?: string;
+		leadingFields?: string[];
+		badgeFields?: string[];
+		metaFields?: string[];
+	};
+	/** Renderer-agnostic multi-level outline/grouping configuration */
+	outline?: {
+		levels?: Array<
+			| {
+					kind: "field";
+					field: string;
+					labelField?: string;
+					order?: "asc" | "desc" | string[];
+			  }
+			| {
+					kind: "relation-field";
+					relation: string;
+					field?: string;
+					labelField?: string;
+					order?: "asc" | "desc" | string[];
+			  }
+			| {
+					kind: "edge";
+					collection: string;
+					parentField: string;
+					childField: string;
+					where?: Record<string, unknown>;
+					groupByEdgeField?: string;
+					repeat?: boolean | { maxDepth?: number };
+			  }
+			| {
+					kind: "path";
+					field: string;
+					separator?: string;
+					syntheticFolders?: boolean;
+					repeat?: boolean | { maxDepth?: number };
+			  }
+		>;
+		defaultExpanded?: boolean | "roots";
+		maxDepth?: number;
+		showCounts?: boolean;
+		preserveMatchingBranches?: boolean;
+	};
 	/** Actions configuration */
 	actions?: {
 		header?: { primary?: unknown[]; secondary?: unknown[] };
@@ -989,6 +1036,8 @@ function extractAdminConfig(
 			searchable: stateAny.adminList.searchable,
 			filterable: stateAny.adminList.filterable,
 			grouping: stateAny.adminList.grouping,
+			layout: stateAny.adminList.layout,
+			outline: stateAny.adminList.outline,
 			actions: serializeListActions(stateAny.adminList.actions),
 		};
 	}

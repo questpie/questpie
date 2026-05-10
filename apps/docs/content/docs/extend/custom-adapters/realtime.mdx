@@ -66,12 +66,8 @@ QUESTPIE's contract does not expose channel or topic management. If your provide
 ## Minimal example
 
 ```ts title="my-realtime-adapter.ts"
-import type {
-	RealtimeAdapter,
-	RealtimeChangeEvent,
-	RealtimeNotice,
-} from "questpie";
-
+import type { RealtimeAdapter, RealtimeChangeEvent } from "questpie/realtime";
+import type { RealtimeNotice } from "questpie/realtime";
 export class InMemoryRealtimeAdapter implements RealtimeAdapter {
 	private listeners = new Set<(notice: RealtimeNotice) => void>();
 
@@ -109,7 +105,7 @@ export class InMemoryRealtimeAdapter implements RealtimeAdapter {
 ## Registration
 
 ```ts title="questpie.config.ts"
-import { runtimeConfig } from "questpie";
+import { runtimeConfig } from "questpie/app";
 import { InMemoryRealtimeAdapter } from "./my-realtime-adapter";
 
 export default runtimeConfig({

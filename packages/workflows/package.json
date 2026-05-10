@@ -2,6 +2,7 @@
 	"name": "@questpie/workflows",
 	"version": "3.3.0",
 	"type": "module",
+	"sideEffects": false,
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/questpie/questpie.git",
@@ -65,6 +66,18 @@
 			"types": "./src/exports/client.ts",
 			"default": "./src/exports/client.ts"
 		},
+		"./client/modules/workflows": {
+			"types": "./src/exports/client/modules/workflows.ts",
+			"default": "./src/exports/client/modules/workflows.ts"
+		},
+		"./modules/workflows": {
+			"types": "./src/exports/modules/workflows.ts",
+			"default": "./src/exports/modules/workflows.ts"
+		},
+		"./plugin": {
+			"types": "./src/exports/plugin.ts",
+			"default": "./src/exports/plugin.ts"
+		},
 		"./server": {
 			"types": "./src/exports/server.ts",
 			"default": "./src/exports/server.ts"
@@ -84,6 +97,18 @@
 			"./client": {
 				"types": "./dist/client.d.mts",
 				"default": "./dist/client.mjs"
+			},
+			"./client/modules/workflows": {
+				"types": "./dist/client/modules/workflows.d.mts",
+				"default": "./dist/client/modules/workflows.mjs"
+			},
+			"./modules/workflows": {
+				"types": "./dist/modules/workflows.d.mts",
+				"default": "./dist/modules/workflows.mjs"
+			},
+			"./plugin": {
+				"types": "./dist/plugin.d.mts",
+				"default": "./dist/plugin.mjs"
 			},
 			"./server": {
 				"types": "./dist/server.d.mts",

@@ -58,7 +58,7 @@ Configure the realtime adapter in your runtime config:
 | `cloudflareRealtimeAdapter` | Built-in | Cloudflare Durable Objects     |
 
 ```ts title="questpie.config.ts"
-import { runtimeConfig } from "questpie";
+import { runtimeConfig } from "questpie/app";
 import { pgNotifyAdapter } from "questpie/adapters/pg-notify";
 
 export default runtimeConfig({

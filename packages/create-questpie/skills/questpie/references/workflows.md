@@ -16,7 +16,7 @@ bun add @questpie/workflows
 ```
 
 ```ts title="modules.ts"
-import { workflowsModule } from "@questpie/workflows/server";
+import { workflowsModule } from "@questpie/workflows/modules/workflows";
 
 export default [workflowsModule] as const;
 ```
@@ -26,21 +26,10 @@ export default [workflowsModule] as const;
 For admin UI pages/widgets, register the client module:
 
 ```ts title="questpie/admin/modules.ts"
-import adminClientModule from "@questpie/admin/client-module";
-import { workflowsClientModule } from "@questpie/workflows/client";
+import { adminClientModule } from "@questpie/admin/client/modules/admin";
+import { workflowsClientModule } from "@questpie/workflows/client/modules/workflows";
 
-export default {
-	name: "app-admin" as const,
-	views: { ...adminClientModule.views, ...workflowsClientModule.views },
-	components: {
-		...adminClientModule.components,
-		...workflowsClientModule.components,
-	},
-	fields: { ...adminClientModule.fields, ...workflowsClientModule.fields },
-	pages: { ...adminClientModule.pages, ...workflowsClientModule.pages },
-	widgets: { ...adminClientModule.widgets, ...workflowsClientModule.widgets },
-	blocks: { ...adminClientModule.blocks, ...workflowsClientModule.blocks },
-};
+export default [adminClientModule, workflowsClientModule] as const;
 ```
 
 ## Define A Workflow
@@ -103,7 +92,7 @@ bun questpie generate
 Use injected `workflows` from route, job, hook, or service context:
 
 ```ts title="routes/start-production.ts"
-import { route } from "questpie";
+import { route } from "questpie/services";
 import { z } from "zod";
 
 export default route()

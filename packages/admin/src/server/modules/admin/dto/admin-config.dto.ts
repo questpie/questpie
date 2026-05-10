@@ -73,6 +73,31 @@ export interface SidebarConfigDTO {
 }
 
 // ============================================================================
+// Shell DTO
+// ============================================================================
+
+export interface AdminShellRouteRulesDTO {
+	include?: string[];
+	exclude?: string[];
+	match?: "prefix" | "exact";
+}
+
+export interface AdminShellRailDTO {
+	component: ComponentReferenceDTO;
+	placement?: "left" | "right";
+	width?: number | string;
+	minWidth?: number | string;
+	maxWidth?: number | string;
+	hiddenOnMobile?: boolean;
+	routes?: AdminShellRouteRulesDTO;
+	className?: string;
+}
+
+export interface AdminShellConfigDTO {
+	secondaryRail?: AdminShellRailDTO;
+}
+
+// ============================================================================
 // Dashboard DTO
 // ============================================================================
 
@@ -221,6 +246,7 @@ export interface UploadsConfigDTO {
 export interface AdminConfigDTO {
 	dashboard?: DashboardConfigDTO;
 	sidebar?: SidebarConfigDTO;
+	shell?: AdminShellConfigDTO;
 	branding?: BrandingConfigDTO;
 	blocks?: Record<string, Record<string, unknown>>;
 	collections?: Record<string, CollectionMetaDTO>;
@@ -283,6 +309,27 @@ const sidebarConfigSchema = z.object({
 	sections: z.array(sidebarSectionSchema),
 });
 
+const adminShellRouteRulesSchema = z.object({
+	include: z.array(z.string()).optional(),
+	exclude: z.array(z.string()).optional(),
+	match: z.enum(["prefix", "exact"]).optional(),
+});
+
+const adminShellRailSchema = z.object({
+	component: componentReferenceSchema,
+	placement: z.enum(["left", "right"]).optional(),
+	width: z.union([z.number(), z.string()]).optional(),
+	minWidth: z.union([z.number(), z.string()]).optional(),
+	maxWidth: z.union([z.number(), z.string()]).optional(),
+	hiddenOnMobile: z.boolean().optional(),
+	routes: adminShellRouteRulesSchema.optional(),
+	className: z.string().optional(),
+});
+
+const adminShellConfigSchema = z.object({
+	secondaryRail: adminShellRailSchema.optional(),
+});
+
 const workflowMetaSchema = z.object({
 	enabled: z.boolean(),
 	initialStage: z.string(),
@@ -334,10 +381,7 @@ const brandLogoSchema = z.union([
 	componentReferenceSchema,
 ]);
 
-const i18nTextSchema = z.union([
-	z.string(),
-	z.record(z.string(), z.string()),
-]);
+const i18nTextSchema = z.union([z.string(), z.record(z.string(), z.string())]);
 
 const brandingConfigSchema = z.object({
 	name: i18nTextSchema.optional(),
@@ -353,6 +397,7 @@ const brandingConfigSchema = z.object({
 export const adminConfigDTOSchema = z.object({
 	dashboard: dashboardConfigSchema.optional(),
 	sidebar: sidebarConfigSchema.optional(),
+	shell: adminShellConfigSchema.optional(),
 	branding: brandingConfigSchema.optional(),
 	blocks: z.record(z.string(), z.record(z.string(), z.any())).optional(),
 	collections: z.record(z.string(), collectionMetaSchema).optional(),

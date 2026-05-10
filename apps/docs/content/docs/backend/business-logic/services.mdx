@@ -10,8 +10,7 @@ Use services for application-specific logic: payment clients, domain workflows, 
 ## Defining a Service
 
 ```ts title="services/blog.ts"
-import { service } from "questpie";
-
+import { service } from "questpie/services";
 const WORDS_PER_MINUTE = 200;
 
 function stripHtml(html: string): string {
@@ -71,7 +70,7 @@ export default collection("posts")
 ```
 
 ```ts title="routes/get-post-stats.ts"
-import { route } from "questpie";
+import { route } from "questpie/services";
 import z from "zod";
 
 export default route()
@@ -98,7 +97,7 @@ export default route()
 ### Singleton (default)
 
 ```ts title="services/stripe.ts"
-import { service } from "questpie";
+import { service } from "questpie/services";
 import Stripe from "stripe";
 
 export default service({
@@ -110,8 +109,7 @@ export default service({
 ### Request-scoped
 
 ```ts title="services/tenant-db.ts"
-import { service } from "questpie";
-
+import { service } from "questpie/services";
 export default service({
 	lifecycle: "request",
 	create: ({ db, session }) => {
@@ -126,8 +124,7 @@ export default service({
 Service factories receive a `ServiceCreateContext` directly. Destructure the infrastructure and services you need; there is no separate `deps` list.
 
 ```ts title="services/analytics.ts"
-import { service } from "questpie";
-
+import { service } from "questpie/services";
 export default service({
 	lifecycle: "singleton",
 	create: ({ db, logger, services }) => {
@@ -146,8 +143,7 @@ Keep long-running processes out of services. A service may publish a job with `q
 By default, user services live under `services.*`. You can place a singleton service under a custom namespace when that reads better for your app:
 
 ```ts title="services/billing.ts"
-import { service } from "questpie";
-
+import { service } from "questpie/services";
 export default service()
 	.namespace("workflows")
 	.create(({ queue }) => ({

@@ -1,5 +1,4 @@
-import { seed } from "questpie";
-
+import { seed } from "questpie/services";
 export default seed({
 	id: "toyFactoryDemo",
 	description: "Demo materials, toys, machines, and one production order",

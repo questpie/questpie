@@ -94,8 +94,7 @@ export const siteSettings = global("siteSettings")
 
 ```ts
 // src/questpie/server/questpie.config.ts
-import { runtimeConfig } from "questpie";
-
+import { runtimeConfig } from "questpie/app";
 export default runtimeConfig({
 	app: { url: process.env.APP_URL! },
 	db: { url: process.env.DATABASE_URL! },
@@ -108,8 +107,7 @@ Modules are registered in a separate file:
 
 ```ts
 // src/questpie/server/modules.ts
-import { adminModule } from "@questpie/admin/server";
-
+import { adminModule } from "@questpie/admin/modules/admin";
 export default [adminModule] as const;
 ```
 
@@ -117,8 +115,7 @@ export default [adminModule] as const;
 
 ```ts
 // src/questpie/server/config/auth.ts
-import { authConfig } from "questpie";
-
+import { authConfig } from "questpie/app";
 export default authConfig({
 	emailAndPassword: { enabled: true },
 });
@@ -131,8 +128,7 @@ Run codegen to produce the typed app instance, then mount:
 ```ts
 // Route handler
 import { app } from "#questpie";
-import { createFetchHandler } from "questpie";
-
+import { createFetchHandler } from "questpie/http";
 const handler = createFetchHandler(app, { basePath: "/api" });
 ```
 
@@ -236,7 +232,7 @@ Type-safe server routes via file convention:
 
 ```ts
 // src/questpie/server/routes/get-stats.ts
-import { route } from "questpie";
+import { route } from "questpie/services";
 import z from "zod";
 
 export default route()
@@ -256,7 +252,7 @@ Routes are auto-discovered by codegen and available at `/api/<name>`.
 
 ```ts
 // src/questpie/server/jobs/send-welcome-email.ts
-import { job } from "questpie";
+import { job } from "questpie/services";
 import { z } from "zod";
 
 export default job({

@@ -76,8 +76,7 @@ export default workflow({
 ### 2. Register the Module
 
 ```ts title="questpie.config.ts"
-import { runtimeConfig } from "questpie";
-
+import { runtimeConfig } from "questpie/app";
 export default runtimeConfig({
 	db: { url: process.env.DATABASE_URL! },
 	app: { url: process.env.APP_URL! },
@@ -85,8 +84,7 @@ export default runtimeConfig({
 ```
 
 ```ts title="modules.ts"
-import { workflowsModule } from "@questpie/workflows/server";
-
+import { workflowsModule } from "@questpie/workflows/modules/workflows";
 export default [workflowsModule] as const;
 ```
 
@@ -115,7 +113,7 @@ Available access operations are `trigger`, `read`, `sendEvent`, `cancel`, and `r
 ### 3. Trigger a Workflow
 
 ```ts title="routes/create-order.ts"
-import { route } from "questpie";
+import { route } from "questpie/services";
 import z from "zod";
 
 export default route()

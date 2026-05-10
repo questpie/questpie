@@ -420,7 +420,7 @@ client.setLocale("sk"); // Set locale for localized content
 Pass `{ realtime: true }` as the second argument to `find()`, `count()`, or `get()` to enable SSE-based live updates. Requires a realtime adapter in `questpie.config.ts`:
 
 ```ts
-import { runtimeConfig } from "questpie";
+import { runtimeConfig } from "questpie/app";
 import { pgNotifyAdapter } from "questpie/adapters/pg-notify";
 
 export default runtimeConfig({
@@ -440,7 +440,7 @@ For multi-instance deployments, create a Redis client and use `redisStreamsAdapt
 
 ```ts title="src/routes/api/$.ts"
 import { createAPIFileRoute } from "@tanstack/react-start/api";
-import { createFetchHandler } from "questpie";
+import { createFetchHandler } from "questpie/http";
 import { app } from "#questpie";
 const handler = createFetchHandler(app, { basePath: "/api" });
 export const Route = createAPIFileRoute("/api/$")({
@@ -496,7 +496,7 @@ const { docs } = await client.collections.posts.find({ limit: 10 });
 Collection changes do not auto-refresh when realtime is enabled but no adapter is configured. Add a realtime adapter in `questpie.config.ts`:
 
 ```ts
-import { runtimeConfig } from "questpie";
+import { runtimeConfig } from "questpie/app";
 import { pgNotifyAdapter } from "questpie/adapters/pg-notify";
 
 export default runtimeConfig({

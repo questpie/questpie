@@ -278,8 +278,7 @@ For advanced cases, create a request-scoped service that provides a tenant-aware
 
 ```ts
 // services/scoped-db.ts
-import { service } from "questpie";
-
+import { service } from "questpie/services";
 export default service({
 	lifecycle: "request",
 	deps: ["db", "session"] as const,

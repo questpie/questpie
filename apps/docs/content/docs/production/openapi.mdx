@@ -16,7 +16,7 @@ bun add @questpie/openapi
 Register the module in your `modules.ts`:
 
 ```ts title="questpie/server/modules.ts"
-import { adminModule } from "@questpie/admin/server";
+import { adminModule } from "@questpie/admin/modules/admin";
 import { openApiModule } from "@questpie/openapi";
 
 export default [adminModule, openApiModule] as const;

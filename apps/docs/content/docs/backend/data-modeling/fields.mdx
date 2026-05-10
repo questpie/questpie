@@ -204,8 +204,7 @@ metadata: f.json(),
 SQL-computed fields (read-only, not stored):
 
 ```ts
-import { sql } from "questpie";
-
+import { sql } from "questpie/builders";
 displayTitle: f.text().virtual(sql<string>`(
   SELECT COALESCE(
     (SELECT name FROM "user" WHERE id = appointments.customer),

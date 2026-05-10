@@ -7,10 +7,20 @@ A module is a reusable package that contributes entities to any QUESTPIE project
 
 For modules that contribute codegen plugins, generated factories, file conventions, fields, views, blocks, components, or collection/global extensions, keep the exported module static. Put project-specific options in a plugin-discovered `config/*.ts` factory instead of exposing `myModule(options)`.
 
+The canonical shape is:
+
+- `modules.ts` imports and exports static module objects.
+- The module's codegen plugin discovers `config/<module>.ts`.
+- The config file uses a small factory such as `mcpConfig()` or `openApiConfig()` for typing.
+
+Only use `myModule(options)` for runtime-only modules whose options do not affect generated identities, file discovery, builder APIs, or generated app state. Direct `runtimeConfig({ plugins })` is mainly for standalone/custom plugin setups that are not loaded from modules.
+
 ## Module Structure
 
 ```ts
-import { module, collection, global, job, route } from "questpie";
+import { module } from "questpie/app";
+import { collection, global } from "questpie/builders";
+import { job, route } from "questpie/services";
 import { z } from "zod";
 
 // Define collections
@@ -104,7 +114,7 @@ export const notificationsModule = module({
 Add the module to your `modules.ts` file:
 
 ```ts title="src/questpie/server/modules.ts"
-import { adminModule } from "@questpie/admin/server";
+import { adminModule } from "@questpie/admin/modules/admin";
 import { notificationsModule } from "questpie-notifications";
 
 export default [adminModule, notificationsModule] as const;

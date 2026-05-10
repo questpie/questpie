@@ -15,8 +15,7 @@ Use this page for content languages. For admin interface language and message ke
 Define content locales in `config/app.ts`:
 
 ```ts title="config/app.ts"
-import { appConfig } from "questpie";
-
+import { appConfig } from "questpie/app";
 export default appConfig({
 	locale: {
 		locales: [
@@ -127,8 +126,7 @@ Switching from `"en"` to `"sk"` loads a separate navigation array for Slovak. It
 Route handlers and hooks receive the request locale in context:
 
 ```ts title="routes/published-pages.ts"
-import { route } from "questpie";
-
+import { route } from "questpie/services";
 export default route().handler(async ({ collections }) => {
 	return collections.pages.find({
 		where: { isPublished: true },

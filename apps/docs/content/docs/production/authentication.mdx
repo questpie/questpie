@@ -8,8 +8,7 @@ QUESTPIE uses [Better Auth](https://www.better-auth.com/) for authentication. Co
 ## Configuration
 
 ```ts title="auth.ts"
-import type { AuthConfig } from "questpie";
-
+import type { AuthConfig } from "questpie/app";
 export default {
 	emailAndPassword: {
 		enabled: true,
@@ -59,7 +58,22 @@ Use session data in access rules:
 
 ## User Collection
 
-The `adminModule` provides a built-in `user` collection for storing user accounts. It's automatically created when you add the admin module.
+The `adminModule` includes the starter auth model and provides the canonical Better Auth `user` collection for storing user accounts. It is automatically created when you add the admin module.
+
+This user contract includes `user.role` with at least `admin` and `user` values. The built-in admin setup route checks for an existing `role = "admin"` user, and the admin UI guard expects `session.user.role === "admin"`.
+
+Do not replace `collection("user")` from scratch in an app that uses `adminModule`. If you need custom user fields or admin layout, merge the starter user collection and extend it:
+
+```ts title="collections/user.ts"
+import { starterModule } from "questpie/app";
+import { collection } from "#questpie/factories";
+
+export default collection("user")
+	.merge(starterModule.collections.user)
+	.fields(({ f }) => ({
+		internalNotes: f.textarea(),
+	}));
+```
 
 ## Related Pages
 

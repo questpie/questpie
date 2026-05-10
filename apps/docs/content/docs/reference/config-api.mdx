@@ -8,7 +8,7 @@ description: runtimeConfig() — all configuration options for your QUESTPIE app
 The central configuration for your QUESTPIE application. Defines database connection, infrastructure adapters, custom codegen plugins, and CLI settings.
 
 ```ts title="questpie.config.ts"
-import { runtimeConfig } from "questpie";
+import { runtimeConfig } from "questpie/app";
 import { ConsoleAdapter } from "questpie/adapters/console";
 import { pgBossAdapter } from "questpie/adapters/pg-boss";
 import { pgNotifyAdapter } from "questpie/adapters/pg-notify";

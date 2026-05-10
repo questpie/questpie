@@ -178,7 +178,7 @@ export function generateModuleTemplate(
 
 		if (categoriesNeedingTypes.has("routes")) {
 			lines.push(
-				'import type { RouteParamsFromKey, RouteWithParams } from "questpie";',
+				'import type { RouteParamsFromKey, RouteWithParams } from "questpie/types";',
 			);
 			lines.push("");
 		}

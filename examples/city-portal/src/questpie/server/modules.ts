@@ -1,7 +1,8 @@
 /**
  * Modules — static module dependencies for this project.
  */
-import { adminModule, auditModule } from "@questpie/admin/server";
+import { adminModule } from "@questpie/admin/modules/admin";
+import { auditModule } from "@questpie/admin/modules/audit";
 import { openApiModule } from "@questpie/openapi";
 
 export default [

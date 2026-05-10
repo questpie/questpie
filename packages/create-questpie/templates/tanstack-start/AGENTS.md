@@ -124,6 +124,12 @@ src/
 - **`questpie.config.ts`** — CLI config (migration directory, app reference).
 - **`src/routes/api/$.ts`** — API catch-all handler. Serves REST + OpenAPI docs at `/api/docs`.
 
+### Admin User Contract
+
+`adminModule` includes the starter auth model and owns the canonical Better Auth `user` collection shape used by admin setup and login guards. That contract includes `user.role` (`admin` or `user`).
+
+Do **not** create a replacement `collection("user")` from scratch. If you need custom user fields or admin layout, merge `starterModule.collections.user` or `adminModule.collections.user` and extend it. Replacing the user collection breaks admin setup/login.
+
 ## How To Write Code
 
 ### Creating a Collection
@@ -250,7 +256,7 @@ Routes are defined as standalone files in `routes/` and auto-discovered by codeg
 
 ```ts
 // src/questpie/server/routes/get-stats.ts
-import { route } from "questpie";
+import { route } from "questpie/services";
 import { z } from "zod";
 
 export default route()
@@ -457,7 +463,7 @@ export const {
 
 ```ts
 // src/routes/api/$.ts
-import { createFetchHandler } from "questpie";
+import { createFetchHandler } from "questpie/http";
 import { app } from "#questpie";
 
 const handler = createFetchHandler(app, { basePath: "/api" });

@@ -1,5 +1,4 @@
-import { authConfig } from "questpie";
-
+import { authConfig } from "questpie/app";
 export default authConfig({
 	emailAndPassword: {
 		enabled: true,

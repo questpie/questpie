@@ -36,8 +36,8 @@ Each entry displays:
 Add `auditModule` to your modules:
 
 ```ts title="modules.ts"
-import { adminModule, auditModule } from "@questpie/admin/server";
-
+import { adminModule } from "@questpie/admin/modules/admin";
+import { auditModule } from "@questpie/admin/modules/audit";
 export default [adminModule, auditModule] as const;
 ```
 

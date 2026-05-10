@@ -20,7 +20,7 @@
  * @see RFC-PLUGIN-SYSTEM.md
  */
 
-import type { CodegenPlugin } from "questpie";
+import type { CodegenPlugin } from "questpie/codegen";
 
 /**
  * Workflows codegen plugin.

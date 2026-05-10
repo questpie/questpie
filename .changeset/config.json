@@ -20,7 +20,7 @@
 	"access": "public",
 	"baseBranch": "main",
 	"updateInternalDependencies": "patch",
-	"ignore": ["city-portal-example", "tanstack-barbershop-example"],
+	"ignore": ["city-portal-example", "tanstack-barbershop-example", "@questpie/mcp", "@questpie/agent-runtime", "@questpie/ai"],
 	"___experimentalUnsafeOptions_WILL_CHANGE_IN_PATCH": {
 		"onlyUpdatePeerDependentsWhenOutOfRange": true
 	}

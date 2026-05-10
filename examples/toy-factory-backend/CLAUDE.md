@@ -118,7 +118,7 @@ Manual workflow:
 1. Create `src/questpie/server/routes/my-function.ts`:
 
    ```ts
-   import { route } from "questpie";
+   import { route } from "questpie/services";
    import { z } from "zod";
 
    export default route()

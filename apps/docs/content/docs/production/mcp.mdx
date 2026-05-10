@@ -1,0 +1,203 @@
+---
+title: MCP
+description: Expose QUESTPIE data, routes, schemas, and custom tools through the Model Context Protocol.
+---
+
+`@questpie/mcp` exposes a QUESTPIE app to MCP clients. It can generate CRUD tools from collections and globals, convert annotated JSON routes into tools, publish schema resources, and discover custom tools from `mcp-tools/`.
+
+## Setup
+
+Install the package:
+
+```bash
+bun add @questpie/mcp
+```
+
+Add the static module to `modules.ts`:
+
+```ts title="modules.ts"
+import mcpModule from "@questpie/mcp";
+
+export default [mcpModule] as const;
+```
+
+Run codegen. The module adds a raw MCP route named `mcp`, which is served at `/api/mcp` when your fetch handler is mounted at `/api`.
+
+```bash
+bun questpie generate
+```
+
+## Configuration
+
+Put MCP options in `config/mcp.ts`. Keep `modules.ts` static; the MCP module's plugin discovers this config file during codegen.
+
+```ts title="config/mcp.ts"
+import { mcpConfig } from "@questpie/mcp";
+
+export default mcpConfig({
+	crud: {
+		defaults: {
+			collections: { read: true, write: false, delete: false },
+			globals: { read: true, write: false },
+		},
+		collections: {
+			posts: { read: true, write: true },
+			users: false,
+		},
+		globals: {
+			siteSettings: { read: true, write: true },
+		},
+		maxLimit: 100,
+	},
+	routes: {
+		exposeAnnotated: true,
+		routes: {
+			"reports/generate": { read: true },
+		},
+	},
+	resources: {
+		schemas: true,
+		routes: true,
+	},
+});
+```
+
+Policy is resolved in this order:
+
+1. Transport defaults.
+2. Global CRUD defaults.
+3. Per-collection, per-global, or per-route override.
+4. QUESTPIE collection, global, and route access rules still execute last and can deny.
+
+HTTP always runs in user mode. `http.accessMode: "system"` and `createMcpServer(app, { transport: "http", accessMode: "system" })` are ignored for system access. Stdio defaults to trusted system mode unless you explicitly lower it to user mode.
+
+## CRUD Tools
+
+Collections can expose:
+
+- `collections.{name}.list`
+- `collections.{name}.count`
+- `collections.{name}.get`
+- `collections.{name}.create`
+- `collections.{name}.update`
+- `collections.{name}.delete`
+
+Globals can expose:
+
+- `globals.{name}.get`
+- `globals.{name}.update`
+
+HTTP defaults to read-only CRUD. Stdio defaults to read, write, and delete. You can filter top-level fields per entity:
+
+```ts title="config/mcp.ts"
+import { mcpConfig } from "@questpie/mcp";
+
+export default mcpConfig({
+	crud: {
+		collections: {
+			posts: {
+				read: true,
+				write: true,
+				fields: {
+					include: ["title", "published"],
+					exclude: ["internalNotes"],
+				},
+			},
+		},
+	},
+});
+```
+
+Field filtering applies to create/update input, tool results, list docs, global results, and schema resources. Nested relation projection is not part of the v1 pass.
+
+## Route Tools
+
+Only simple JSON routes become MCP tools. A simple route is a non-raw route with `.schema()`. Raw routes are never converted.
+
+Annotate routes with `meta.mcp.expose: true`:
+
+```ts title="routes/reports/generate.ts"
+import { route } from "questpie/services";
+import { z } from "zod";
+
+export default route()
+	.post()
+	.schema(z.object({ period: z.enum(["day", "week", "month"]) }))
+	.outputSchema(z.object({ ok: z.boolean() }))
+	.meta({
+		title: "Generate report",
+		description: "Generate a sales report.",
+		mcp: {
+			expose: true,
+			name: "reports.generate",
+			annotations: { readOnlyHint: true },
+		},
+	})
+	.handler(async ({ input, services }) => {
+		await services.reports.generate(input);
+		return { ok: true };
+	});
+```
+
+Routes without path params use the route input schema directly. Routes with path params use `{ params, input }` so params cannot collide with body fields.
+
+Route tools execute through QUESTPIE's route executor, so route validation, access, context, services, and output validation stay unchanged. Route MCP policy is keyed by the route key, not the overridden MCP tool name.
+
+## Resources
+
+The module publishes schema resources:
+
+- `questpie://schema/collections`
+- `questpie://schema/collections/{name}`
+- `questpie://schema/globals`
+- `questpie://schema/globals/{name}`
+- `questpie://schema/routes`
+- `questpie://schema/routes/{key}`
+
+Resources respect MCP policy and QUESTPIE access rules. Collection and global resources include field schemas after MCP field filtering. Route resources include input and output JSON Schema when the route has Zod schemas.
+
+## Custom Tools
+
+Create files in `mcp-tools/`. Codegen discovers default or named exports created with `mcpTool()`.
+
+```ts title="mcp-tools/generate-report.ts"
+import { mcpTool } from "@questpie/mcp";
+import { z } from "zod";
+
+const inputSchema = z.object({
+	period: z.enum(["day", "week", "month"]),
+});
+
+export default mcpTool("generate-report", {
+	description: "Generate a report.",
+	inputSchema,
+	access: ({ session }) => !!session,
+}).handler(async ({ input, ctx }) => {
+	return {
+		structuredContent: await ctx.services.reports.generate(input),
+	};
+});
+```
+
+Custom tool access is checked when tools are listed and again when a tool is called. This prevents stale clients from calling tools after permissions change.
+
+## Stdio
+
+Use stdio for trusted local/system integrations:
+
+```ts title="mcp-stdio.ts"
+import { app } from "#questpie";
+import { startStdioServer } from "@questpie/mcp/stdio";
+
+await startStdioServer(app);
+```
+
+Stdio defaults to `accessMode: "system"`. Lower it when you need user-mode behavior:
+
+```ts
+await startStdioServer(app, { accessMode: "user" });
+```
+
+## Security Notes
+
+Do not expose HTTP MCP as a trusted system endpoint. The current HTTP transport is intentionally user/read-oriented and has no trusted-token or session-resumption mechanism. Use existing QUESTPIE auth/session context for HTTP access and use stdio only in trusted environments.

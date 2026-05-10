@@ -10,7 +10,7 @@ On the client, you call `client.routes.routeName()`.
 ## Defining a Route
 
 ```ts title="routes/get-active-barbers.ts"
-import { route } from "questpie";
+import { route } from "questpie/services";
 import z from "zod";
 
 export default route()
@@ -30,7 +30,7 @@ Place route files in `routes/`. The filename becomes the route key: `get-active-
 Routes validate input with Zod:
 
 ```ts title="routes/create-booking.ts"
-import { route } from "questpie";
+import { route } from "questpie/services";
 import z from "zod";
 
 export default route()
@@ -137,7 +137,7 @@ flowchart LR
 Computing available time slots with business logic:
 
 ```ts title="routes/get-available-time-slots.ts"
-import { route } from "questpie";
+import { route } from "questpie/services";
 import z from "zod";
 
 export default route()

@@ -38,10 +38,14 @@ describe("route builder", () => {
 		]);
 	});
 
-	it("preserves JSON route schema, output schema, access, and params config", () => {
+	it("preserves JSON route schema, output schema, access, metadata, and params config", () => {
 		const inputSchema = z.object({ name: z.string() });
 		const outputSchema = z.object({ greeting: z.string() });
 		const access = { execute: () => true };
+		const meta = {
+			title: "Greeting",
+			mcp: { expose: true, name: "greetings.create" },
+		};
 
 		const def = route()
 			.get()
@@ -49,6 +53,7 @@ describe("route builder", () => {
 			.schema(inputSchema)
 			.outputSchema(outputSchema)
 			.access(access)
+			.meta(meta)
 			.handler(async ({ input, params }) => ({
 				greeting: `${params.id}:${input.name}`,
 			}));
@@ -58,6 +63,7 @@ describe("route builder", () => {
 		expect(def.schema).toBe(inputSchema);
 		expect(def.outputSchema).toBe(outputSchema);
 		expect(def.access).toBe(access);
+		expect(def.meta).toBe(meta);
 	});
 
 	it("raw mode clears previous JSON validation config", () => {

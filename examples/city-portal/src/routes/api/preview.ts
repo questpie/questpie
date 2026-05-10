@@ -12,7 +12,7 @@
 
 import { createFileRoute } from "@tanstack/react-router";
 
-import { createPreviewTokenVerifier } from "@questpie/admin/server";
+import { createPreviewTokenVerifier } from "@questpie/admin/modules/admin";
 import { createDraftModeCookie } from "@questpie/admin/shared";
 
 const verifyPreviewToken = createPreviewTokenVerifier();

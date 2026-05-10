@@ -7,6 +7,11 @@
  */
 
 import { default as _modules } from "../modules";
+const _mergedModules = Array.isArray(_modules)
+	? _modules.reduce((acc: any, m: any) => {
+		for (const [k, v] of Object.entries(m)) acc[k] = typeof v === "object" && v !== null && !Array.isArray(v) ? { ...acc[k], ...v } : v;
+		return acc;
+	}, {} as any) : _modules;
 import { BookingCtaRenderer as _block_bookingCta } from "../blocks/booking-cta";
 import _block_columns from "../blocks/columns";
 import { ContactInfoRenderer as _block_contactInfo } from "../blocks/contact-info";
@@ -24,7 +29,7 @@ import { StatsRenderer as _block_stats } from "../blocks/stats";
 import { TeamRenderer as _block_team } from "../blocks/team";
 import { TextRenderer as _block_text } from "../blocks/text";
 import type { BlockRendererProps } from "@questpie/admin/client";
-import type { InferBlockValues, InferBlockData } from "@questpie/admin/server";
+import type { InferBlockValues, InferBlockData } from "@questpie/admin/factories";
 import type { bookingCtaBlock } from "../../server/blocks/booking-cta";
 import type { columnsBlock } from "../../server/blocks/columns";
 import type { contactInfoBlock } from "../../server/blocks/contact-info";
@@ -43,12 +48,12 @@ import type { teamBlock } from "../../server/blocks/team";
 import type { textBlock } from "../../server/blocks/text";
 
 const admin = {
-	blocks: { ..._modules.blocks, "booking-cta": _block_bookingCta, "columns": _block_columns, "contact-info": _block_contactInfo, "cta": _block_cta, "divider": _block_divider, "gallery": _block_gallery, "heading": _block_heading, "hero": _block_hero, "hours": _block_hours, "image-text": _block_imageText, "reviews": _block_reviews, "services": _block_services, "spacer": _block_spacer, "stats": _block_stats, "team": _block_team, "text": _block_text },
-	views: { ..._modules.views },
-	components: { ..._modules.components },
-	fields: { ..._modules.fields },
-	pages: { ..._modules.pages },
-	widgets: { ..._modules.widgets },
+	blocks: { ..._mergedModules.blocks, "booking-cta": _block_bookingCta, "columns": _block_columns, "contact-info": _block_contactInfo, "cta": _block_cta, "divider": _block_divider, "gallery": _block_gallery, "heading": _block_heading, "hero": _block_hero, "hours": _block_hours, "image-text": _block_imageText, "reviews": _block_reviews, "services": _block_services, "spacer": _block_spacer, "stats": _block_stats, "team": _block_team, "text": _block_text },
+	views: { ..._mergedModules.views },
+	components: { ..._mergedModules.components },
+	fields: { ..._mergedModules.fields },
+	pages: { ..._mergedModules.pages },
+	widgets: { ..._mergedModules.widgets },
 };
 
 type _ServerBlocks = { "booking-cta": typeof bookingCtaBlock; "columns": typeof columnsBlock; "contact-info": typeof contactInfoBlock; "cta": typeof ctaBlock; "divider": typeof dividerBlock; "gallery": typeof galleryBlock; "heading": typeof headingBlock; "hero": typeof heroBlock; "hours": typeof hoursBlock; "image-text": typeof imageTextBlock; "reviews": typeof reviewsBlock; "services": typeof servicesBlock; "spacer": typeof spacerBlock; "stats": typeof statsBlock; "team": typeof teamBlock; "text": typeof textBlock };

@@ -40,9 +40,7 @@ Both server and admin are fully code-generated from file conventions. No manual 
 
 ```typescript
 // questpie.config.ts
-import { runtimeConfig } from "questpie";
-
-
+import { runtimeConfig } from "questpie/app";
 export default runtimeConfig({
 
 	db: { url: process.env.DATABASE_URL! },
@@ -52,8 +50,7 @@ export default runtimeConfig({
 
 ```typescript
 // modules.ts
-import { adminModule } from "@questpie/admin/server";
-
+import { adminModule } from "@questpie/admin/modules/admin";
 export default [adminModule] as const;
 ```
 
@@ -128,8 +125,7 @@ const { client } = useAdminContext();
 
 ```typescript
 // collections/barbers.collection.ts
-import { collection } from "questpie";
-
+import { collection } from "questpie/builders";
 export default collection("barbers").fields(({ f }) => ({
 	name: f.text({ label: "Name", required: true }),
 	email: f.email({ label: "Email", required: true }),
@@ -159,9 +155,7 @@ Server configuration uses the top-level `runtimeConfig()` factory. Modules are r
 
 ```typescript
 // questpie.config.ts
-import { runtimeConfig } from "questpie";
-
-
+import { runtimeConfig } from "questpie/app";
 export default runtimeConfig({
 
 	db: { url: process.env.DATABASE_URL! },
@@ -171,8 +165,7 @@ export default runtimeConfig({
 
 ```typescript
 // modules.ts
-import { adminModule } from "@questpie/admin/server";
-
+import { adminModule } from "@questpie/admin/modules/admin";
 export default [adminModule] as const;
 // Codegen generates .generated/index.ts with the typed app instance
 ```
@@ -278,9 +271,7 @@ Admin UI translations are configured server-side via `.adminLocale()` and fetche
 
 ```typescript
 // questpie.config.ts
-import { runtimeConfig } from "questpie";
-
-
+import { runtimeConfig } from "questpie/app";
 export default runtimeConfig({
 
 	db: { url: process.env.DATABASE_URL! },

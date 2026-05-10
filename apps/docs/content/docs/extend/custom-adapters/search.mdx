@@ -141,7 +141,7 @@ import type {
 	SearchAdapter,
 	SearchOptions,
 	SearchResponse,
-} from "questpie";
+} from "questpie/search";
 
 type MeiliDocument = {
 	id: string;
@@ -266,7 +266,7 @@ export class MeilisearchAdapter implements SearchAdapter {
 ## Registration
 
 ```ts title="questpie.config.ts"
-import { runtimeConfig } from "questpie";
+import { runtimeConfig } from "questpie/app";
 import { MeilisearchAdapter } from "./my-search-adapter";
 
 export default runtimeConfig({

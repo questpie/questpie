@@ -1,5 +1,4 @@
-import { service } from "questpie";
-
+import { service } from "questpie/services";
 const SHIFT_START_HOUR = 8;
 
 function nextShiftStart(from = new Date()): Date {

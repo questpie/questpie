@@ -45,7 +45,9 @@ export function getApp(ctx: RouteHandlerContext): App {
  * Get session from route handler context.
  * Returns undefined if no session exists.
  */
-export function getSession(ctx: RouteHandlerContext): { user: Record<string, any> } | undefined {
+export function getSession(
+	ctx: RouteHandlerContext,
+): { user: Record<string, any> } | undefined {
 	return ctx.session as { user: Record<string, any> } | undefined;
 }
 
@@ -117,7 +119,9 @@ export interface AdminGlobalState {
 /**
  * Get typed collection state.
  */
-export function getCollectionState(collection: { state: any }): AdminCollectionState {
+export function getCollectionState(collection: {
+	state: any;
+}): AdminCollectionState {
 	return collection.state as AdminCollectionState;
 }
 
@@ -140,11 +144,13 @@ export interface AdminAppState {
 		admin?: {
 			sidebar?: unknown;
 			dashboard?: unknown;
+			shell?: unknown;
 			branding?: unknown;
 		};
 	};
 	blocks?: Record<string, unknown>;
 	collections?: Record<string, { state: AdminCollectionState }>;
+	globals?: Record<string, { state: AdminGlobalState }>;
 	[key: string]: unknown;
 }
 
@@ -158,9 +164,89 @@ export function getAppState(app: App): AdminAppState {
 /**
  * Get admin config from app state.
  */
-export function getAdminConfig(app: App): NonNullable<NonNullable<AdminAppState["config"]>["admin"]> {
+export function getAdminConfig(
+	app: App,
+): NonNullable<NonNullable<AdminAppState["config"]>["admin"]> {
 	const state = getAppState(app);
 	return state.config?.admin || {};
+}
+
+/**
+ * Get registered collection definitions from the current or legacy app shape.
+ */
+export function getCollections(app: App): Record<
+	string,
+	{ state: AdminCollectionState; [key: string]: unknown }
+> {
+	const appRec = app as Record<string, any>;
+	if (typeof appRec.getCollections === "function") {
+		return appRec.getCollections();
+	}
+	return getAppState(app).collections ?? {};
+}
+
+/**
+ * Get registered global definitions from the current or legacy app shape.
+ */
+export function getGlobals(app: App): Record<
+	string,
+	{ state: AdminGlobalState; [key: string]: unknown }
+> {
+	const appRec = app as Record<string, any>;
+	if (typeof appRec.getGlobals === "function") {
+		return appRec.getGlobals();
+	}
+	return getAppState(app).globals ?? {};
+}
+
+/**
+ * Get a registered collection definition by slug.
+ */
+export function getCollection(
+	app: App,
+	collectionSlug: string,
+): { state: AdminCollectionState; [key: string]: unknown } | undefined {
+	return getCollections(app)[collectionSlug];
+}
+
+/**
+ * Get a registered global definition by slug.
+ */
+export function getGlobal(
+	app: App,
+	globalSlug: string,
+): { state: AdminGlobalState; [key: string]: unknown } | undefined {
+	return getGlobals(app)[globalSlug];
+}
+
+/**
+ * Get collection CRUD APIs from the current or legacy app shape.
+ */
+export function getCollectionCrud(app: App, collectionSlug: string): any {
+	const appRec = app as Record<string, any>;
+	return (
+		appRec.collections?.[collectionSlug] ??
+		appRec.api?.collections?.[collectionSlug] ??
+		appRec._api?.collections?.[collectionSlug]
+	);
+}
+
+/**
+ * Get all collection CRUD APIs from the current or legacy app shape.
+ */
+export function getCollectionCruds(app: App): any {
+	const appRec = app as Record<string, any>;
+	return (
+		appRec.collections ?? appRec.api?.collections ?? appRec._api?.collections
+	);
+}
+
+/**
+ * Get all global CRUD APIs from the current or legacy app shape.
+ */
+export function getGlobalCruds(app: App): any {
+	const appRec = app as Record<string, any>;
+	return appRec.globals ?? appRec.api?.globals ?? appRec._api?.globals;
 }
 
 // ============================================================================

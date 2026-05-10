@@ -68,7 +68,7 @@ interface DriverContract {
 For most cloud providers, you do not need to write a driver at all. Install the FlyDrive package for your provider and pass it directly:
 
 ```ts title="questpie.config.ts"
-import { runtimeConfig } from "questpie";
+import { runtimeConfig } from "questpie/app";
 import { S3Driver } from "flydrive/drivers/s3";
 
 export default runtimeConfig({
@@ -241,7 +241,7 @@ export class MyCloudDriver implements DriverContract {
 ## Registration
 
 ```ts title="questpie.config.ts"
-import { runtimeConfig } from "questpie";
+import { runtimeConfig } from "questpie/app";
 import { MyCloudDriver } from "./my-storage-driver";
 
 export default runtimeConfig({

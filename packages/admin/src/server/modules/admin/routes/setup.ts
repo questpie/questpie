@@ -41,6 +41,32 @@ const createFirstAdminOutputSchema = z.object({
 	error: z.string().optional(),
 });
 
+const adminUserContractMessage =
+	'QUESTPIE Admin requires the canonical Better Auth "user" collection from adminModule/starterModule. The current "user" collection is missing required admin auth fields. Do not replace collection("user") from scratch; merge starterModule.collections.user or adminModule.collections.user and extend it.';
+
+type AdminUserTableContract = {
+	id: unknown;
+	role: unknown;
+	emailVerified: unknown;
+};
+
+export function getAdminUserTableContract(userCollection: {
+	table?: Record<string, unknown>;
+}): AdminUserTableContract {
+	const table = userCollection?.table;
+	const missing = ["id", "role", "emailVerified"].filter(
+		(field) => !table?.[field],
+	);
+
+	if (missing.length > 0) {
+		throw new Error(
+			`${adminUserContractMessage} Missing field(s): ${missing.join(", ")}.`,
+		);
+	}
+
+	return table as AdminUserTableContract;
+}
+
 // ============================================================================
 // Functions
 // ============================================================================
@@ -63,10 +89,11 @@ export const isSetupRequired = route()
 	.handler(async (ctx) => {
 		const app = getApp(ctx);
 		const userCollection = app.getCollectionConfig("user");
+		const userTable = getAdminUserTableContract(userCollection);
 		const result = await app.db
 			.select({ count: sql`count(*)::int` as any })
 			.from(userCollection.table)
-			.where(eq(userCollection.table.role as any, "admin") as any);
+			.where(eq(userTable.role as any, "admin") as any);
 		return { required: (result[0] as { count: number }).count === 0 };
 	});
 
@@ -103,12 +130,13 @@ export const createFirstAdmin = route()
 			translateAdminMessage(locale, key, params);
 		const input = ctx.input as z.infer<typeof createFirstAdminSchema>;
 		const userCollection = app.getCollectionConfig("user");
+		const userTable = getAdminUserTableContract(userCollection);
 
 		// Check if setup already completed (any admin user exists)
 		const checkResult = await app.db
 			.select({ count: sql`count(*)::int` as any })
 			.from(userCollection.table)
-			.where(eq(userCollection.table.role as any, "admin") as any);
+			.where(eq(userTable.role as any, "admin") as any);
 
 		if ((checkResult[0] as { count: number }).count > 0) {
 			return {
@@ -143,7 +171,7 @@ export const createFirstAdmin = route()
 					role: "admin",
 					emailVerified: true,
 				})
-				.where(eq(userCollection.table.id as any, signUpResult.user.id));
+				.where(eq(userTable.id as any, signUpResult.user.id));
 
 			return {
 				success: true,

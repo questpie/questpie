@@ -331,7 +331,7 @@ function buildEnvFile(options: ProjectOptions): string {
 
 function buildRuntimeConfig(options: ProjectOptions): string {
 	const imports = [
-		`import { runtimeConfig } from "questpie";`,
+		`import { runtimeConfig } from "questpie/app";`,
 		`import { ConsoleAdapter } from "questpie/adapters/console";`,
 	];
 	if (options.queueAdapter === "pg-boss") {
@@ -467,13 +467,13 @@ function buildServerModules(options: ProjectOptions): string {
 		`/**`,
 		` * Modules — static module dependencies for this project.`,
 		` */`,
-		`import { adminModule } from "@questpie/admin/server";`,
+		`import { adminModule } from "@questpie/admin/modules/admin";`,
 		`import { openApiModule } from "@questpie/openapi";`,
 	];
 	const modules = ["adminModule", "openApiModule"];
 	if (options.includeWorkflows) {
 		imports.push(
-			`import { workflowsModule } from "@questpie/workflows/server";`,
+			`import { workflowsModule } from "@questpie/workflows/modules/workflows";`,
 		);
 		modules.push("workflowsModule");
 	}
@@ -491,29 +491,22 @@ function buildServerModules(options: ProjectOptions): string {
 }
 
 function buildAdminModules(options: ProjectOptions): string {
-	if (!options.includeWorkflows) {
-		return `export { default } from "@questpie/admin/client-module";\n`;
+	const imports = [
+		`import { adminClientModule } from "@questpie/admin/client/modules/admin";`,
+	];
+	const modules = ["adminClientModule"];
+
+	if (options.includeWorkflows) {
+		imports.push(
+			`import { workflowsClientModule } from "@questpie/workflows/client/modules/workflows";`,
+		);
+		modules.push("workflowsClientModule");
 	}
 
-	const categories = [
-		"views",
-		"components",
-		"fields",
-		"pages",
-		"widgets",
-		"blocks",
-	];
 	return [
-		`import adminClientModule from "@questpie/admin/client-module";`,
-		`import { workflowsClientModule } from "@questpie/workflows/client";`,
+		...imports,
 		``,
-		`export default {`,
-		`\tname: "app-admin" as const,`,
-		...categories.map(
-			(category) =>
-				`\t${category}: { ...adminClientModule.${category}, ...workflowsClientModule.${category} },`,
-		),
-		`};`,
+		`export default [${modules.join(", ")}] as const;`,
 		``,
 	].join("\n");
 }

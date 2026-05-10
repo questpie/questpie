@@ -11,8 +11,12 @@
 
 import * as React from "react";
 
+import type { ServerAdminShellRailConfig } from "#questpie/admin/server/augmentation.js";
+
+import { ComponentRenderer } from "../../components/component-renderer";
 import { SidebarInset, SidebarProvider } from "../../components/ui/sidebar";
 import { type AdminToasterProps, Toaster } from "../../components/ui/sonner";
+import { useAdminConfig } from "../../hooks/use-admin-config";
 import { useSafeI18n } from "../../i18n/hooks";
 import { cn } from "../../lib/utils";
 import { useAdminStore } from "../../runtime/provider";
@@ -112,6 +116,19 @@ export interface AdminLayoutSharedProps {
 	layoutMode?: LayoutMode;
 }
 
+export interface AdminShellRailProps {
+	/** Current route path, usually the browser pathname. */
+	activeRoute?: string;
+	/** Admin base path, usually "/admin". */
+	basePath: string;
+	/** Resolved rail placement. */
+	placement: "left" | "right";
+	/** Raw rail config from server admin config. */
+	config: ServerAdminShellRailConfig;
+	/** Navigate function from the admin runtime. */
+	navigate: (path: string) => void;
+}
+
 interface AdminLayoutProps extends AdminLayoutSharedProps {
 	/**
 	 * Brand name for sidebar.
@@ -153,6 +170,113 @@ function useLayoutProps(props: {
 		brandName: props.brandName ?? storeBrandName,
 		navigate: props.navigate ?? storeNavigate,
 	};
+}
+
+// ============================================================================
+// Shell Rail
+// ============================================================================
+
+function normalizeRoute(route: string): string {
+	const normalized = route.replace(/\/+$/, "");
+	return normalized || "/";
+}
+
+function resolveRouteRule(rule: string, basePath: string): string {
+	if (rule.startsWith("/")) {
+		return normalizeRoute(rule);
+	}
+	return normalizeRoute(`${basePath}/${rule.replace(/^\/+/, "")}`);
+}
+
+function routeMatchesRule(
+	activeRoute: string | undefined,
+	rule: string,
+	basePath: string,
+	match: "prefix" | "exact",
+): boolean {
+	if (!activeRoute) return false;
+	const active = normalizeRoute(activeRoute);
+	const target = resolveRouteRule(rule, basePath);
+
+	if (match === "exact") {
+		return active === target;
+	}
+
+	return active === target || active.startsWith(`${target}/`);
+}
+
+function shouldRenderShellRail(
+	config: ServerAdminShellRailConfig,
+	activeRoute: string | undefined,
+	basePath: string,
+): boolean {
+	const routes = config.routes;
+	if (!routes) return true;
+
+	const match = routes.match ?? "prefix";
+	const included =
+		!routes.include?.length ||
+		routes.include.some((rule) =>
+			routeMatchesRule(activeRoute, rule, basePath, match),
+		);
+	if (!included) return false;
+
+	return !routes.exclude?.some((rule) =>
+		routeMatchesRule(activeRoute, rule, basePath, match),
+	);
+}
+
+function toCssLength(value: number | string | undefined): string | undefined {
+	if (value === undefined) return undefined;
+	return typeof value === "number" ? `${value}px` : value;
+}
+
+function AdminShellRail({
+	config,
+	activeRoute,
+	basePath,
+	navigate,
+}: {
+	config: ServerAdminShellRailConfig;
+	activeRoute?: string;
+	basePath: string;
+	navigate: (path: string) => void;
+}) {
+	const placement = config.placement ?? "left";
+	const width = toCssLength(config.width ?? 320);
+	const style = {
+		width,
+		minWidth: toCssLength(config.minWidth ?? config.width ?? 280),
+		maxWidth: toCssLength(config.maxWidth),
+	} as React.CSSProperties;
+
+	return (
+		<aside
+			className={cn(
+				"qa-admin-layout__secondary-rail bg-background h-svh min-h-0 shrink-0 flex-col overflow-hidden",
+				config.hiddenOnMobile === false ? "flex" : "hidden md:flex",
+				placement === "left"
+					? "border-border-subtle border-r"
+					: "border-border-subtle border-l",
+				config.className,
+			)}
+			data-placement={placement}
+			style={style}
+		>
+			<ComponentRenderer
+				reference={config.component}
+				additionalProps={
+					{
+						activeRoute,
+						basePath,
+						placement,
+						config,
+						navigate,
+					} satisfies AdminShellRailProps
+				}
+			/>
+		</aside>
+	);
 }
 
 // ============================================================================
@@ -211,6 +335,23 @@ export function AdminLayout({
 	const [isSearchOpen, setIsSearchOpen] = React.useState(false);
 	const openSearch = React.useCallback(() => setIsSearchOpen(true), []);
 	const closeSearch = React.useCallback(() => setIsSearchOpen(false), []);
+	const { data: serverConfig } = useAdminConfig();
+	const currentActiveRoute =
+		activeRoute ??
+		(typeof window !== "undefined" ? window.location.pathname : undefined);
+	const secondaryRailConfig = serverConfig?.shell?.secondaryRail;
+	const shouldShowSecondaryRail =
+		!!secondaryRailConfig &&
+		shouldRenderShellRail(secondaryRailConfig, currentActiveRoute, basePath);
+	const secondaryRail =
+		shouldShowSecondaryRail && secondaryRailConfig ? (
+			<AdminShellRail
+				config={secondaryRailConfig}
+				activeRoute={currentActiveRoute}
+				basePath={basePath}
+				navigate={navigate}
+			/>
+		) : null;
 
 	// Keyboard shortcuts for search
 	React.useEffect(() => {
@@ -257,7 +398,7 @@ export function AdminLayout({
 					{/* Sidebar */}
 					<AdminSidebar
 						LinkComponent={LinkComponent}
-						activeRoute={activeRoute}
+						activeRoute={currentActiveRoute}
 						basePath={basePath}
 						brandName={brandName}
 						theme={theme}
@@ -266,6 +407,8 @@ export function AdminLayout({
 						onSearchOpen={openSearch}
 						{...sidebarProps}
 					/>
+
+					{secondaryRailConfig?.placement !== "right" && secondaryRail}
 
 					{/* Content Area */}
 					<SidebarInset className="qa-admin-layout__content bg-background flex h-svh flex-col overflow-hidden md:rounded-tl-2xl">
@@ -303,6 +446,8 @@ export function AdminLayout({
 							</footer>
 						)}
 					</SidebarInset>
+
+					{secondaryRailConfig?.placement === "right" && secondaryRail}
 				</SidebarProvider>
 
 				{/* Toast notifications */}

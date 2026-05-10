@@ -3,8 +3,7 @@
  *
  * Content locale and other app-level settings.
  */
-import { appConfig } from "questpie";
-
+import { appConfig } from "questpie/app";
 export default appConfig({
 	locale: {
 		locales: [

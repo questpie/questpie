@@ -8,7 +8,7 @@ QUESTPIE supports sending transactional emails with typed templates.
 ## Configuration
 
 ```ts title="questpie.config.ts"
-import { runtimeConfig } from "questpie";
+import { runtimeConfig } from "questpie/app";
 import { ConsoleAdapter } from "questpie/adapters/console";
 import { ResendAdapter } from "questpie/adapters/resend";
 
@@ -67,7 +67,7 @@ On Cloudflare Workers, use an HTTP-based email adapter such as `ResendAdapter` o
 Define templates in `emails/`:
 
 ```ts title="emails/appointment-confirmation.ts"
-import { email } from "questpie";
+import { email } from "questpie/services";
 import z from "zod";
 
 export default email({

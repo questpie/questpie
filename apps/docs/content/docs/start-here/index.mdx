@@ -94,7 +94,7 @@ const posts = await client.collections.posts.find({
 Every handler in QUESTPIE receives its dependencies through context — no imports, no singletons, no god objects:
 
 ```ts title="routes/create-booking.ts"
-import { route } from "questpie";
+import { route } from "questpie/services";
 import z from "zod";
 
 export default route()

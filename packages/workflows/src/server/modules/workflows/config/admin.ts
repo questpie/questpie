@@ -1,4 +1,4 @@
-import { adminConfig } from "@questpie/admin/server";
+import { adminConfig } from "@questpie/admin/factories";
 
 import workflowsDashboardContribution from "../dashboard.js";
 import workflowsSidebarContribution from "../sidebar.js";

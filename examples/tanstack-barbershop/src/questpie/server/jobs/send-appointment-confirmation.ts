@@ -7,7 +7,7 @@
  * @see collections/appointments.ts — dispatches this job on create
  * @see emails/appointment-confirmation.ts — the email template
  */
-import { job } from "questpie";
+import { job } from "questpie/services";
 import { z } from "zod";
 
 export default job({

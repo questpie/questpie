@@ -28,7 +28,7 @@ TanStack Start does not have an adapter package. Use the generic fetch handler:
 
 ```ts title="src/routes/api/$.ts"
 import { createAPIFileRoute } from "@tanstack/react-start/api";
-import { createFetchHandler } from "questpie";
+import { createFetchHandler } from "questpie/http";
 import { app } from "#questpie";
 
 const handler = createFetchHandler(app, { basePath: "/api" });

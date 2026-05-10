@@ -21,6 +21,7 @@ import _coll_verification from "../collections/verification";
 // ── Routes ────────────────────────────────────────────
 import { adminConfigFunctions as _route_adminConfig } from "../routes/admin-config";
 import { actionFunctions as _route_executeAction } from "../routes/execute-action";
+import { translateAdminMessage as _route_i18nHelpers } from "../routes/i18n-helpers";
 import { localeFunctions as _route_locales } from "../routes/locales";
 import { previewFunctions as _route_preview } from "../routes/preview";
 import { reactiveFunctions as _route_reactive } from "../routes/reactive";
@@ -33,6 +34,7 @@ import { widgetDataFunctions as _route_widgetData } from "../routes/widget-data"
 import _view_collectionForm from "../views/form";
 import _view_collectionTable from "../views/table";
 import _view_globalForm from "../views/global-form";
+import _view_listView from "../views/list-view";
 
 // ── Components ────────────────────────────────────────────
 import _comp_badge from "../components/badge";
@@ -46,6 +48,8 @@ import _plugin from "../plugin";
 // TYPES — composed from typeof references (zero inference cost)
 // ════════════════════════════════════════════════════════════
 
+import type { RouteParamsFromKey, RouteWithParams } from "questpie";
+
 export interface AdminCollections {
 	account: typeof _coll_account;
 	admin_locks: typeof _coll_admin_locks;
@@ -58,12 +62,13 @@ export interface AdminCollections {
 	verification: typeof _coll_verification;
 }
 
-export type AdminRoutes = { routeHelpers: typeof _route_routeHelpers } & typeof _route_adminConfig & typeof _route_executeAction & typeof _route_locales & typeof _route_preview & typeof _route_reactive & typeof _route_setup & typeof _route_translations & typeof _route_widgetData;
+export type AdminRoutes = { i18nHelpers: RouteWithParams<typeof _route_i18nHelpers, RouteParamsFromKey<"i18nHelpers">>; routeHelpers: RouteWithParams<typeof _route_routeHelpers, RouteParamsFromKey<"routeHelpers">> } & typeof _route_adminConfig & typeof _route_executeAction & typeof _route_locales & typeof _route_preview & typeof _route_reactive & typeof _route_setup & typeof _route_translations & typeof _route_widgetData;
 
 export interface AdminViews {
 	collectionForm: typeof _view_collectionForm;
 	collectionTable: typeof _view_collectionTable;
 	globalForm: typeof _view_globalForm;
+	listView: typeof _view_listView;
 }
 
 export interface AdminComponents {
@@ -92,6 +97,7 @@ const _module = {
 	routes: {
 		..._route_adminConfig,
 		..._route_executeAction,
+		i18nHelpers: _route_i18nHelpers,
 		..._route_locales,
 		..._route_preview,
 		..._route_reactive,
@@ -104,6 +110,7 @@ const _module = {
 		collectionForm: _view_collectionForm,
 		collectionTable: _view_collectionTable,
 		globalForm: _view_globalForm,
+		listView: _view_listView,
 	} as AdminViews,
 	components: {
 		badge: _comp_badge,

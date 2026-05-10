@@ -8,7 +8,7 @@ description: Complete reference for route(), job(), service(), and email() facto
 Define server routes using the immutable route builder. Each method returns a new frozen instance.
 
 ```ts
-import { route } from "questpie";
+import { route } from "questpie/services";
 import { z } from "zod";
 
 export default route()
@@ -95,8 +95,7 @@ export default route()
 Use `.raw()` for handlers that need direct `Request`/`Response` control. Cannot be combined with `.schema()`.
 
 ```ts
-import { route } from "questpie";
-
+import { route } from "questpie/services";
 export default route()
 	.get()
 	.raw()
@@ -117,7 +116,7 @@ export default route()
 Define background jobs processed by the queue system.
 
 ```ts
-import { job } from "questpie";
+import { job } from "questpie/services";
 import { z } from "zod";
 
 export default job({
@@ -207,7 +206,7 @@ Use an ISO datetime for `scheduledAt` when scheduling a future transition. Query
 Define reusable services that are injected into handler contexts.
 
 ```ts title="services/stripe.ts"
-import { service } from "questpie";
+import { service } from "questpie/services";
 import Stripe from "stripe";
 
 export default service({
@@ -243,7 +242,7 @@ Services are available in all handler contexts by their filename:
 Define email templates with typed input schemas.
 
 ```ts title="emails/welcome.ts"
-import { email } from "questpie";
+import { email } from "questpie/services";
 import { z } from "zod";
 
 export default email({

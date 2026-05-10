@@ -1,4 +1,4 @@
-import { job } from "questpie";
+import { job } from "questpie/services";
 import { z } from "zod";
 
 export default job({

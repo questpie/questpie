@@ -250,7 +250,7 @@ Routes are defined as standalone files in `routes/` and auto-discovered by codeg
 
 ```ts
 // src/questpie/server/routes/get-stats.ts
-import { route } from "questpie";
+import { route } from "questpie/services";
 import { z } from "zod";
 
 export default route()
@@ -457,7 +457,7 @@ export const {
 
 ```ts
 // src/routes/api/$.ts
-import { createFetchHandler } from "questpie";
+import { createFetchHandler } from "questpie/http";
 import { app } from "#questpie";
 
 const handler = createFetchHandler(app, { basePath: "/api" });

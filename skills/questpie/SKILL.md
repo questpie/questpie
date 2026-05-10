@@ -21,6 +21,7 @@ Reference these guidelines when:
 - Setting up access control, hooks, or validation
 - Building typed client SDK queries or TanStack Query integrations
 - Writing modules or plugins for QUESTPIE
+- Exposing QUESTPIE through MCP tools or resources
 - Scaffolding a new project or onboarding
 
 ## Import Paths — Critical
@@ -105,6 +106,10 @@ export default [
 
 Factory modules are acceptable only for simple runtime-only modules whose plugin identity and codegen contributions do not change. For reusable packages that ship a `CodegenPlugin`, prefer **static module + `config/*.ts` singleton factory**.
 
+## Admin Auth Contract - Critical
+
+`adminModule` includes the starter auth model and owns the canonical Better Auth `user` collection shape used by admin setup and login guards. That contract includes `user.role` with at least `admin` and `user` values. Do not replace `collection("user")` from scratch in apps that use `adminModule`; merge `starterModule.collections.user` and extend it when custom user fields or layout are needed.
+
 ## Reference Topics
 
 ### Core
@@ -127,6 +132,7 @@ Factory modules are acceptable only for simple runtime-only modules whose plugin
 | Production | `references/production.md`              | Queue, search, realtime, storage, email, KV adapter setup    |
 | Auth       | `references/auth.md`                    | Better Auth integration, session, providers, access patterns |
 | Adapters   | `references/infrastructure-adapters.md` | All adapter configs: pg-boss, S3, SMTP, pgNotify, Redis      |
+| MCP        | `references/mcp.md`                     | MCP setup, CRUD tools, route tools, custom tools, security   |
 
 ### Extend
 
@@ -172,7 +178,7 @@ export default collection("posts")
 ### Route
 
 ```ts
-import { route } from "questpie";
+import { route } from "questpie/services";
 import z from "zod";
 
 export default route()
@@ -186,7 +192,7 @@ export default route()
 ### Job
 
 ```ts
-import { job } from "questpie";
+import { job } from "questpie/services";
 import z from "zod";
 
 export default job({
@@ -243,6 +249,7 @@ await queue.sendReminder.publish({ userId: "abc" });
 | HIGH     | `queue.send("name", data)`                             | Use `queue.jobName.publish(data)`                                                     |
 | HIGH     | `beforeCreate` / `afterCreate` hook names              | Use `beforeChange` / `afterChange` with `operation === "create"` guard                |
 | HIGH     | Runtime options in codegen-aware modules               | Use static `module({...})` + plugin-discovered `config/*.ts` factory                  |
+| HIGH     | Exposing MCP HTTP as trusted system access             | HTTP MCP is user mode only; use stdio only in trusted local/system contexts           |
 | MEDIUM   | Using npm/yarn instead of Bun                          | QUESTPIE requires Bun as package manager                                              |
 | MEDIUM   | Editing `.generated/` files                            | Never edit — re-run `questpie generate`                                               |
 

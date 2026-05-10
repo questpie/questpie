@@ -8,8 +8,7 @@ Auth is configured via `config/auth.ts` using the `authConfig()` factory:
 
 ```ts
 // src/questpie/server/config/auth.ts
-import { authConfig } from "questpie";
-
+import { authConfig } from "questpie/app";
 export default authConfig({
 	emailAndPassword: {
 		enabled: true,
@@ -38,7 +37,7 @@ Codegen discovers this file automatically. No manual registration needed.
 ### In Routes
 
 ```ts
-import { route } from "questpie";
+import { route } from "questpie/services";
 import z from "zod";
 
 export default route()
@@ -95,15 +94,30 @@ export default route()
 
 ## User Collection
 
-The `adminModule` provides a built-in `user` collection. It stores:
+The `adminModule` includes the starter auth model and provides the canonical Better Auth `user` collection. It stores:
 
 - `id` -- unique identifier
 - `email` -- email address
 - `name` -- display name
 - `image` -- avatar URL
 - `emailVerified` -- verification status
+- `role` -- admin access role (`admin` or `user`)
+- `avatar`, `banned`, `banReason`, `banExpires` -- admin-managed profile and access fields
 
 This collection is automatically created when you add the admin module to your config.
+
+Critical: the built-in admin setup route and admin `AuthGuard` depend on `user.role`. Setup checks whether any user has `role = "admin"`, and the admin UI expects `session.user.role === "admin"`. Do not replace `collection("user")` from scratch in an app that uses `adminModule`; merge `starterModule.collections.user` and extend it if custom user fields or admin layout are needed.
+
+```ts
+import { starterModule } from "questpie/app";
+import { collection } from "#questpie/factories";
+
+export default collection("user")
+	.merge(starterModule.collections.user)
+	.fields(({ f }) => ({
+		internalNotes: f.textarea(),
+	}));
+```
 
 ## Environment Variables
 

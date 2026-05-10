@@ -16,8 +16,7 @@ Inside any handler, `collections` and `globals` are injected via context. The cu
 
 ```ts
 // routes/get-published.ts
-import { route } from "questpie";
-
+import { route } from "questpie/services";
 export default route()
 	.get()
 	.handler(async ({ collections }) => {

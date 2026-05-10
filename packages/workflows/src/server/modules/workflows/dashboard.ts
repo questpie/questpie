@@ -1,7 +1,7 @@
 import type {
 	DashboardContribution,
 	WidgetFetchContext,
-} from "@questpie/admin/server";
+} from "@questpie/admin/factories";
 
 import { getCollections, getCountValue } from "./routes/_helpers.js";
 

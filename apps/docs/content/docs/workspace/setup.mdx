@@ -14,8 +14,7 @@ bun add @questpie/admin
 ## 2. Runtime Config
 
 ```ts title="questpie.config.ts"
-import { runtimeConfig } from "questpie";
-
+import { runtimeConfig } from "questpie/app";
 export default runtimeConfig({
 	app: { url: process.env.APP_URL || "http://localhost:3000" },
 	db: { url: process.env.DATABASE_URL },
@@ -30,8 +29,8 @@ The admin module contributes its codegen plugin automatically, including `config
 Add `adminModule` to your modules:
 
 ```ts title="modules.ts"
-import { adminModule, auditModule } from "@questpie/admin/server";
-
+import { adminModule } from "@questpie/admin/modules/admin";
+import { auditModule } from "@questpie/admin/modules/audit";
 export default [adminModule, auditModule] as const;
 ```
 
@@ -39,6 +38,12 @@ export default [adminModule, auditModule] as const;
 | ------------- | ------------------------------------- |
 | `adminModule` | User collection, auth pages, admin UI |
 | `auditModule` | Audit log collection, timeline widget |
+
+### Admin User Contract
+
+`adminModule` includes the starter auth model and owns the canonical Better Auth `user` collection shape used by admin setup and login guards. That contract includes `user.role` with at least `admin` and `user` values.
+
+The built-in setup route checks whether any user has `role = "admin"`, and the admin UI guard expects `session.user.role === "admin"`. Do not create a replacement `collection("user")` from scratch in an app using `adminModule`; merge `starterModule.collections.user` and extend it if custom user fields or layout are needed.
 
 ## 4. Admin Config
 

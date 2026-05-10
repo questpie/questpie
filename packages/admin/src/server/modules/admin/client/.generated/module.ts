@@ -6,6 +6,7 @@
 import _view_collectionForm from "../views/collection-form";
 import _view_collectionTable from "../views/collection-table";
 import _view_globalForm from "../views/global-form";
+import _view_listView from "../views/list-view";
 
 // ── Components ────────────────────────────────────────────
 import _comp_badge from "../components/badge";
@@ -51,6 +52,12 @@ import _wgt_value from "../widgets/value";
 // ════════════════════════════════════════════════════════════
 // TYPES — composed from typeof references (zero inference cost)
 // ════════════════════════════════════════════════════════════
+
+export type AdminViews =
+	{ [K in typeof _view_collectionForm.name]: typeof _view_collectionForm } &
+	{ [K in typeof _view_collectionTable.name]: typeof _view_collectionTable } &
+	{ [K in typeof _view_globalForm.name]: typeof _view_globalForm } &
+	{ [K in typeof _view_listView.name]: typeof _view_listView };
 
 export interface AdminComponents {
 	badge: typeof _comp_badge;
@@ -107,7 +114,8 @@ const _module = {
 		[_view_collectionForm.name]: _view_collectionForm,
 		[_view_collectionTable.name]: _view_collectionTable,
 		[_view_globalForm.name]: _view_globalForm,
-	},
+		[_view_listView.name]: _view_listView,
+	} as AdminViews,
 	components: {
 		badge: _comp_badge,
 		icon: _comp_icon,

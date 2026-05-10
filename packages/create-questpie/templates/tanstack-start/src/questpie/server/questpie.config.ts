@@ -6,7 +6,7 @@
  * Admin sidebar, dashboard, and branding live in config/admin.ts.
  */
 
-import { runtimeConfig } from "questpie";
+import { runtimeConfig } from "questpie/app";
 import { ConsoleAdapter } from "questpie/adapters/console";
 
 import { env } from "@/lib/env.js";

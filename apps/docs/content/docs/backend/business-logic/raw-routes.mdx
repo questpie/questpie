@@ -8,8 +8,7 @@ Raw HTTP routes give you direct request/response handling for cases that don't f
 ## Defining a Route
 
 ```ts title="routes/health.ts"
-import { route } from "questpie";
-
+import { route } from "questpie/services";
 export default route()
 	.get()
 	.raw()
@@ -122,8 +121,7 @@ Raw routes return `Response` objects - you handle parsing yourself.
 ### Webhook handler
 
 ```ts title="routes/webhooks/stripe.ts"
-import { route } from "questpie";
-
+import { route } from "questpie/services";
 export default route()
 	.post()
 	.raw()
@@ -147,8 +145,7 @@ export default route()
 ### File download
 
 ```ts title="routes/export.ts"
-import { route } from "questpie";
-
+import { route } from "questpie/services";
 export default route()
 	.get()
 	.raw()
@@ -172,8 +169,7 @@ export default route()
 ### Health check
 
 ```ts title="routes/health.ts"
-import { route } from "questpie";
-
+import { route } from "questpie/services";
 export default route()
 	.get()
 	.raw()

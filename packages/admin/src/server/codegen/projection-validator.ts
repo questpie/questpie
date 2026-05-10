@@ -18,7 +18,7 @@ import type {
 	CodegenResult,
 	CrossTargetValidator,
 	ProjectionError,
-} from "questpie";
+} from "questpie/codegen";
 
 /**
  * Category projections to validate between server and admin-client.

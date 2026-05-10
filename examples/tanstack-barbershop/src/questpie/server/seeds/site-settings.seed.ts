@@ -1,5 +1,4 @@
-import { seed } from "questpie";
-
+import { seed } from "questpie/services";
 export default seed({
 	id: "siteSettings",
 	description: "Site settings with EN and SK translations",

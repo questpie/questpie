@@ -280,6 +280,26 @@ interface BrandingConfig {
 }
 
 /**
+ * Generic admin shell slot configuration.
+ */
+export interface ShellConfig {
+	secondaryRail?: {
+		component: ComponentReference;
+		placement?: "left" | "right";
+		width?: number | string;
+		minWidth?: number | string;
+		maxWidth?: number | string;
+		hiddenOnMobile?: boolean;
+		routes?: {
+			include?: string[];
+			exclude?: string[];
+			match?: "prefix" | "exact";
+		};
+		className?: string;
+	};
+}
+
+/**
  * Locale configuration
  */
 export interface LocaleConfig {

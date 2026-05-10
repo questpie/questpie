@@ -1,4 +1,5 @@
 import type {
+	ServerAdminShellConfig,
 	ServerDashboardConfig,
 	ServerSidebarConfig,
 } from "#questpie/admin/server/augmentation.js";
@@ -36,6 +37,7 @@ export type BrandingConfig = {
 export type AdminConfigResponse = {
 	dashboard?: ServerDashboardConfig;
 	sidebar?: ServerSidebarConfig;
+	shell?: ServerAdminShellConfig;
 	branding?: BrandingConfig;
 	blocks?: Record<string, BlockSchema>;
 	collections?: Record<string, AdminConfigItemMeta>;

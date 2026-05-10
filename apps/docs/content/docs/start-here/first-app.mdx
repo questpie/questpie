@@ -46,7 +46,7 @@ This defines:
 ## 3. Add a server route
 
 ```ts title="src/questpie/server/routes/get-overdue-tasks.ts"
-import { route } from "questpie";
+import { route } from "questpie/services";
 import z from "zod";
 
 export default route()
@@ -89,7 +89,7 @@ For TanStack Start:
 
 ```ts title="src/routes/api/$.ts"
 import { createAPIFileRoute } from "@tanstack/react-start/api";
-import { createFetchHandler } from "questpie";
+import { createFetchHandler } from "questpie/http";
 import { app } from "#questpie";
 
 const handler = createFetchHandler(app, { basePath: "/api" });
@@ -151,7 +151,7 @@ bun add @questpie/admin
 ```
 
 ```ts title="src/questpie/server/modules.ts"
-import { adminModule } from "@questpie/admin/server";
+import { adminModule } from "@questpie/admin/modules/admin";
 export default [adminModule] as const;
 ```
 

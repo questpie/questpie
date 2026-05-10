@@ -23,8 +23,7 @@ Add the admin module to `modules.ts`:
 
 ```ts
 // questpie.config.ts
-import { runtimeConfig } from "questpie";
-
+import { runtimeConfig } from "questpie/app";
 export default runtimeConfig({
 	app: { url: process.env.APP_URL! },
 	db: { url: process.env.DATABASE_URL! },
@@ -34,8 +33,7 @@ export default runtimeConfig({
 
 ```ts
 // modules.ts
-import { adminModule } from "@questpie/admin/server";
-
+import { adminModule } from "@questpie/admin/modules/admin";
 export default [adminModule] as const;
 ```
 
@@ -477,8 +475,8 @@ import {
 } from "@questpie/admin/client";
 
 // Server (admin module + server factories/config)
-import { adminModule, auditModule } from "@questpie/admin/server";
-
+import { adminModule } from "@questpie/admin/modules/admin";
+import { auditModule } from "@questpie/admin/modules/audit";
 // Styles
 import "@questpie/admin/client/styles/index.css";
 ```

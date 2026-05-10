@@ -8,7 +8,7 @@ Email templates are defined in `emails/` and discovered by codegen. Each templat
 ## Defining an Email Template
 
 ```ts title="emails/appointment-confirmation.ts"
-import { email } from "questpie";
+import { email } from "questpie/services";
 import { z } from "zod";
 
 export default email({
@@ -41,7 +41,7 @@ The filename becomes the template key: `appointment-confirmation.ts` → `email.
 Use `email.sendTemplate()` from any handler:
 
 ```ts title="routes/confirm-appointment.ts"
-import { route } from "questpie";
+import { route } from "questpie/services";
 import { z } from "zod";
 
 export default route()

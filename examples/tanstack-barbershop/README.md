@@ -114,8 +114,7 @@ export default {
 **`src/questpie/server/questpie.config.ts`** - App runtime config:
 
 ```typescript
-import { runtimeConfig } from "questpie";
-
+import { runtimeConfig } from "questpie/app";
 export default runtimeConfig({
 	db: { url: process.env.DATABASE_URL! },
 	app: { url: process.env.APP_URL! },
@@ -125,7 +124,7 @@ export default runtimeConfig({
 **`src/questpie/server/modules.ts`** - Module dependencies:
 
 ```typescript
-import { adminModule } from "@questpie/admin/server";
+import { adminModule } from "@questpie/admin/modules/admin";
 export default [adminModule] as const;
 ```
 

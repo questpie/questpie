@@ -1,5 +1,4 @@
-import { sql } from "questpie";
-
+import { sql } from "questpie/builders";
 import { collection } from "#questpie/factories";
 
 export const appointments = collection("appointments")

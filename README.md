@@ -79,8 +79,7 @@ export const posts = collection("posts")
 
 ```typescript
 // src/questpie/server/questpie.config.ts
-import { runtimeConfig } from "questpie";
-
+import { runtimeConfig } from "questpie/app";
 export default runtimeConfig({
 	app: { url: process.env.APP_URL! },
 	db: { url: process.env.DATABASE_URL! },
@@ -92,8 +91,7 @@ Modules are registered in a separate `modules.ts` file:
 
 ```typescript
 // src/questpie/server/modules.ts
-import { adminModule } from "@questpie/admin/server";
-
+import { adminModule } from "@questpie/admin/modules/admin";
 export default [adminModule] as const;
 ```
 
@@ -156,8 +154,7 @@ The `adminModule` includes the starter module (auth collections, assets, file up
 
 ```typescript
 // src/questpie/server/questpie.config.ts
-import { runtimeConfig } from "questpie";
-
+import { runtimeConfig } from "questpie/app";
 export default runtimeConfig({
 	app: { url: process.env.APP_URL! },
 	db: { url: process.env.DATABASE_URL! },
@@ -167,8 +164,7 @@ export default runtimeConfig({
 
 ```typescript
 // src/questpie/server/modules.ts
-import { adminModule } from "@questpie/admin/server";
-
+import { adminModule } from "@questpie/admin/modules/admin";
 export default [adminModule] as const;
 ```
 
@@ -178,6 +174,8 @@ The `adminModule` automatically provides:
 - Assets collection with file upload support
 - Admin UI functions, views, and components
 - Better Auth integration
+
+The admin auth contract includes the canonical Better Auth `user` collection with `user.role` (`admin` or `user`). Built-in admin setup and login guards depend on that field. If you customize users, extend the starter user collection instead of replacing `collection("user")` from scratch.
 
 ## Core Concepts
 
@@ -255,8 +253,7 @@ Auth is configured via a standalone `auth.ts` file using the file convention:
 
 ```typescript
 // src/questpie/server/config/auth.ts
-import { authConfig } from "questpie";
-
+import { authConfig } from "questpie/app";
 export default authConfig({
 	emailAndPassword: { enabled: true, requireEmailVerification: false },
 });
@@ -271,7 +268,7 @@ await app.auth.api.signIn.email({ email, password });
 
 ```typescript
 // src/questpie/server/jobs/send-email.ts
-import { job } from "questpie";
+import { job } from "questpie/services";
 import { z } from "zod";
 
 export default job({
@@ -286,8 +283,8 @@ export default job({
 Configure the queue adapter in your config:
 
 ```typescript
-import { pgBossAdapter, runtimeConfig } from "questpie";
-
+import { pgBossAdapter } from "questpie/adapters/pg-boss";
+import { runtimeConfig } from "questpie/app";
 export default runtimeConfig({
 	db: { url: process.env.DATABASE_URL! },
 	queue: {
@@ -305,8 +302,8 @@ Create reusable modules:
 
 ```typescript
 // blog-module.ts
-import { module, collection } from "questpie";
-
+import { module } from "questpie/app";
+import { collection } from "questpie/builders";
 export const blogModule = module({
 	name: "blog",
 	collections: {
@@ -320,7 +317,7 @@ export const blogModule = module({
 });
 
 // modules.ts
-import { adminModule } from "@questpie/admin/server";
+import { adminModule } from "@questpie/admin/modules/admin";
 import { blogModule } from "./blog-module";
 
 export default [adminModule, blogModule] as const;

@@ -1,4 +1,4 @@
-import { email } from "questpie";
+import { email } from "questpie/services";
 import { z } from "zod";
 
 export default email({

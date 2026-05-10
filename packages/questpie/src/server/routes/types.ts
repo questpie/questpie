@@ -48,6 +48,41 @@ export type RouteAccess =
 	  };
 
 // ============================================================================
+// Route Metadata
+// ============================================================================
+
+/**
+ * MCP-specific route metadata.
+ *
+ * Kept structural in core so `questpie` does not depend on the MCP SDK.
+ */
+export interface RouteMcpMeta {
+	expose?: boolean;
+	name?: string;
+	title?: string;
+	description?: string;
+	annotations?: {
+		readOnlyHint?: boolean;
+		destructiveHint?: boolean;
+		idempotentHint?: boolean;
+		openWorldHint?: boolean;
+		[key: string]: unknown;
+	};
+	[key: string]: unknown;
+}
+
+/**
+ * Serializable route metadata for introspection and module integrations.
+ */
+export interface RouteMeta {
+	title?: string;
+	description?: string;
+	tags?: string[];
+	mcp?: RouteMcpMeta;
+	[key: string]: unknown;
+}
+
+// ============================================================================
 // Handler Args
 // ============================================================================
 
@@ -121,6 +156,7 @@ export type JsonRouteDefinition<
 	readonly schema: z.ZodSchema<TInput>;
 	readonly outputSchema?: z.ZodSchema<TOutput>;
 	readonly access?: RouteAccess;
+	readonly meta?: RouteMeta;
 	readonly handler: (
 		args: JsonRouteHandlerArgs<TInput, TParams>,
 	) => TOutput | Promise<TOutput>;
@@ -136,6 +172,7 @@ export type RawRouteDefinition<
 	readonly mode: "raw";
 	readonly method: HttpMethod | HttpMethod[];
 	readonly access?: RouteAccess;
+	readonly meta?: RouteMeta;
 	readonly handler: (
 		args: RawRouteHandlerArgs<TParams>,
 	) => Response | Promise<Response>;
@@ -168,24 +205,19 @@ export type InferRouteOutput<T> = T extends {
 		? Awaited<Result>
 		: never;
 
-export type InferRouteParams<T> = T extends JsonRouteDefinition<
-	any,
-	any,
-	infer TParams
->
-	? TParams
-	: T extends RawRouteDefinition<infer TParams>
+export type InferRouteParams<T> =
+	T extends JsonRouteDefinition<any, any, infer TParams>
 		? TParams
-		: JsonRouteParams;
+		: T extends RawRouteDefinition<infer TParams>
+			? TParams
+			: JsonRouteParams;
 
-export type RouteWithParams<
-	TDef,
-	TParams extends JsonRouteParams,
-> = TDef extends JsonRouteDefinition<infer TInput, infer TOutput, any>
-	? JsonRouteDefinition<TInput, TOutput, TParams>
-	: TDef extends RawRouteDefinition<any>
-		? RawRouteDefinition<TParams>
-		: TDef;
+export type RouteWithParams<TDef, TParams extends JsonRouteParams> =
+	TDef extends JsonRouteDefinition<infer TInput, infer TOutput, any>
+		? JsonRouteDefinition<TInput, TOutput, TParams>
+		: TDef extends RawRouteDefinition<any>
+			? RawRouteDefinition<TParams>
+			: TDef;
 
 // ============================================================================
 // Type Guards

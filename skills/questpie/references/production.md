@@ -27,8 +27,7 @@ QUESTPIE uses [Better Auth](https://www.better-auth.com/). Configure via `config
 
 ```ts
 // src/questpie/server/config/auth.ts
-import { authConfig } from "questpie";
-
+import { authConfig } from "questpie/app";
 export default authConfig({
 	emailAndPassword: {
 		enabled: true,
@@ -73,7 +72,7 @@ handler: async ({ session }) => {
 })
 ```
 
-The `adminModule` provides a built-in `user` collection for storing user accounts.
+The `adminModule` provides the canonical Better Auth `user` collection for storing user accounts. That contract includes `user.role` (`admin` or `user`), which built-in admin setup and login guards depend on. Do not replace `collection("user")` from scratch in apps that use `adminModule`; merge `starterModule.collections.user` and extend it instead.
 
 ## Database
 
@@ -167,7 +166,7 @@ avatar: f.upload({
 Background job processing with [pg-boss](https://github.com/timgit/pg-boss). Jobs stored in PostgreSQL.
 
 ```ts
-import { runtimeConfig } from "questpie";
+import { runtimeConfig } from "questpie/app";
 import { pgBossAdapter } from "questpie/adapters/pg-boss";
 
 export default runtimeConfig({
@@ -207,7 +206,7 @@ SSE-based live updates via `POST /realtime` multiplexed endpoint.
 ### pgNotify (Single Instance)
 
 ```ts
-import { runtimeConfig } from "questpie";
+import { runtimeConfig } from "questpie/app";
 import { pgNotifyAdapter } from "questpie/adapters/pg-notify";
 
 export default runtimeConfig({
@@ -224,7 +223,7 @@ export default runtimeConfig({
 Required for horizontal scaling:
 
 ```ts
-import { runtimeConfig } from "questpie";
+import { runtimeConfig } from "questpie/app";
 import { redisStreamsAdapter } from "questpie/adapters/redis-streams";
 
 export default runtimeConfig({
@@ -267,7 +266,7 @@ Prepared statements also break under transaction pooling. If you must use it, en
 Transactional email with typed templates. Two adapters: `SmtpAdapter` (production) and `ConsoleAdapter` (development).
 
 ```ts
-import { runtimeConfig } from "questpie";
+import { runtimeConfig } from "questpie/app";
 import { ConsoleAdapter } from "questpie/adapters/console";
 import { SmtpAdapter } from "questpie/adapters/smtp";
 
@@ -419,8 +418,7 @@ CMD ["bun", "run", ".output/server/index.mjs"]
 
 ```ts
 // routes/health.ts
-import { route } from "questpie";
-
+import { route } from "questpie/services";
 export default route({
 	method: "GET",
 	handler: async ({ db }) => {

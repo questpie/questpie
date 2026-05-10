@@ -10,8 +10,7 @@ Seeds populate your database with data using the full `AppContext` — collectio
 Place seed files in `seeds/`. Each file exports a seed definition using the `seed()` factory:
 
 ```ts title="seeds/site-settings.seed.ts"
-import { seed } from "questpie";
-
+import { seed } from "questpie/services";
 export default seed({
 	id: "siteSettings",
 	description: "Default site settings",
@@ -73,8 +72,7 @@ The `run` and `undo` handlers receive a `SeedContext` — the full `AppContext` 
 Use `createContext` to seed data in multiple locales:
 
 ```ts title="seeds/site-settings.seed.ts"
-import { seed } from "questpie";
-
+import { seed } from "questpie/services";
 export default seed({
 	id: "siteSettings",
 	category: "required",
@@ -101,8 +99,7 @@ export default seed({
 Seeds should be idempotent — safe to re-run without creating duplicates. Check for existing data before inserting:
 
 ```ts title="seeds/demo-posts.seed.ts"
-import { seed } from "questpie";
-
+import { seed } from "questpie/services";
 export default seed({
 	id: "demoPosts",
 	description: "Demo blog posts",

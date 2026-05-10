@@ -9,8 +9,7 @@
  *     data.readingTime = services.blog.computeReadingTime(data.content);
  *   }})
  */
-import { service } from "questpie";
-
+import { service } from "questpie/services";
 // ── helpers ─────────────────────────────────────────────────────────────────
 
 const WORDS_PER_MINUTE = 200;

@@ -69,7 +69,7 @@ email: {
 ### Defining Email Templates
 
 ```ts title="emails/welcome.ts"
-import { email } from "questpie";
+import { email } from "questpie/services";
 import { z } from "zod";
 
 export default email({
@@ -114,7 +114,7 @@ queue: {
 ### Defining Jobs
 
 ```ts title="jobs/send-welcome-email.ts"
-import { job } from "questpie";
+import { job } from "questpie/services";
 import { z } from "zod";
 
 export default job({

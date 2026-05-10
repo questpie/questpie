@@ -74,7 +74,10 @@ export {
 	useAdminStore,
 	useShallow,
 } from "#questpie/admin/client/runtime/index.js";
-export { AdminLayout } from "#questpie/admin/client/views/layout/admin-layout.js";
+export {
+	AdminLayout,
+	type AdminShellRailProps,
+} from "#questpie/admin/client/views/layout/admin-layout.js";
 export { AdminLayoutProvider } from "#questpie/admin/client/views/layout/admin-layout-provider.js";
 export type {
 	AdminSidebarBrandProps,

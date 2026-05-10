@@ -27,7 +27,15 @@ import type {
 	ServerActionsConfig,
 } from "../../../augmentation.js";
 import { translateAdminMessage } from "./i18n-helpers.js";
-import { type App, getApp, getAppState, getSession } from "./route-helpers.js";
+import {
+	type App,
+	getApp,
+	getCollection,
+	getCollectionCrud,
+	getCollectionCruds,
+	getGlobalCruds,
+	getSession,
+} from "./route-helpers.js";
 
 /**
  * Request to execute an action
@@ -67,8 +75,7 @@ export function getActionsConfig(
 	builtin: string[];
 	custom: Array<Omit<ServerActionDefinition, "handler">>;
 } | null {
-	const appState = getAppState(app) as Record<string, any>;
-	const collection = appState.collections?.[collectionSlug];
+	const collection = getCollection(app, collectionSlug);
 
 	if (!collection) {
 		return null;
@@ -76,7 +83,7 @@ export function getActionsConfig(
 
 	const collectionState = collection.state || collection;
 	const actionsConfig: ServerActionsConfig | undefined =
-		collectionState.adminActions;
+		collectionState.adminActions as ServerActionsConfig | undefined;
 
 	if (!actionsConfig) {
 		// Return default built-in actions if no config
@@ -186,8 +193,7 @@ export async function executeAction(
 		locale,
 	} = request;
 
-	const appState = getAppState(app) as Record<string, any>;
-	const collection = appState.collections?.[collectionSlug];
+	const collection = getCollection(app, collectionSlug);
 	const t = (key: string, params?: Record<string, unknown>) =>
 		translateAdminMessage(locale, key, params);
 
@@ -200,7 +206,7 @@ export async function executeAction(
 
 	const collectionState = collection.state || collection;
 	const actionsConfig: ServerActionsConfig | undefined =
-		collectionState.adminActions;
+		collectionState.adminActions as ServerActionsConfig | undefined;
 
 	// Handle built-in actions
 	const builtinActions = actionsConfig?.builtin || [
@@ -265,8 +271,8 @@ export async function executeAction(
 			itemId,
 			itemIds,
 			auth: appRec.auth,
-			collections: appRec.api?.collections,
-			globals: appRec.api?.globals,
+			collections: getCollectionCruds(app),
+			globals: getGlobalCruds(app),
 			db: appRec.db,
 			session,
 			locale,
@@ -314,7 +320,7 @@ async function executeBuiltinAction(
 	const t = (key: string, messageParams?: Record<string, unknown>) =>
 		translateAdminMessage(locale, key, messageParams);
 	const appRec = app as Record<string, any>;
-	const collectionCrud = appRec.api?.collections?.[collectionSlug];
+	const collectionCrud = getCollectionCrud(app, collectionSlug);
 	const crudContext = {
 		db: appRec.db,
 		session: params.session,
@@ -324,7 +330,9 @@ async function executeBuiltinAction(
 	try {
 		switch (actionId) {
 			case "create": {
-				const result = await appRec.create(collectionSlug, data || {});
+				const result = collectionCrud?.create
+					? await collectionCrud.create(data || {}, crudContext)
+					: await appRec.create(collectionSlug, data || {});
 				return {
 					success: true,
 					result: {
@@ -348,7 +356,14 @@ async function executeBuiltinAction(
 						},
 					};
 				}
-				await appRec.update(collectionSlug, itemId, data || {});
+				if (collectionCrud?.updateById) {
+					await collectionCrud.updateById(
+						{ id: itemId, data: data || {} },
+						crudContext,
+					);
+				} else {
+					await appRec.update(collectionSlug, itemId, data || {});
+				}
 				return {
 					success: true,
 					result: {
@@ -369,7 +384,11 @@ async function executeBuiltinAction(
 						},
 					};
 				}
-				await appRec.delete(collectionSlug, itemId);
+				if (collectionCrud?.deleteById) {
+					await collectionCrud.deleteById({ id: itemId }, crudContext);
+				} else {
+					await appRec.delete(collectionSlug, itemId);
+				}
 				return {
 					success: true,
 					result: {
@@ -396,9 +415,15 @@ async function executeBuiltinAction(
 					};
 				}
 				// Delete items in parallel
-				await Promise.all(
-					itemIds.map((id) => appRec.delete(collectionSlug, id)),
-				);
+				if (collectionCrud?.deleteById) {
+					await Promise.all(
+						itemIds.map((id) => collectionCrud.deleteById({ id }, crudContext)),
+					);
+				} else {
+					await Promise.all(
+						itemIds.map((id) => appRec.delete(collectionSlug, id)),
+					);
+				}
 				return {
 					success: true,
 					result: {
@@ -508,7 +533,9 @@ async function executeBuiltinAction(
 						},
 					};
 				}
-				const original = await appRec.findById(collectionSlug, itemId);
+				const original = collectionCrud?.findOne
+					? await collectionCrud.findOne({ where: { id: itemId } }, crudContext)
+					: await appRec.findById(collectionSlug, itemId);
 				if (!original) {
 					return {
 						success: false,
@@ -520,7 +547,9 @@ async function executeBuiltinAction(
 				}
 				// Remove id and timestamps for duplication
 				const { id, createdAt, updatedAt, ...duplicateData } = original;
-				const duplicated = await appRec.create(collectionSlug, duplicateData);
+				const duplicated = collectionCrud?.create
+					? await collectionCrud.create(duplicateData, crudContext)
+					: await appRec.create(collectionSlug, duplicateData);
 				return {
 					success: true,
 					result: {

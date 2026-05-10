@@ -63,6 +63,12 @@ src/questpie/
 - **`questpie.config.ts`** — CLI config (migration directory, app reference).
 - **`src/routes/api/$.ts`** — API catch-all handler. Serves REST + OpenAPI docs at `/api/docs`.
 
+## Admin User Contract
+
+`adminModule` includes the starter auth model and owns the canonical Better Auth `user` collection shape used by admin setup and login guards. That contract includes `user.role` (`admin` or `user`).
+
+Do **not** create a replacement `collection("user")` from scratch. If you need custom user fields or admin layout, merge `starterModule.collections.user` or `adminModule.collections.user` and extend it. Replacing the user collection breaks admin setup/login.
+
 ## Environment Variables
 
 Defined in `src/lib/env.ts` with runtime validation. See `.env.example` for all available variables.
@@ -118,7 +124,7 @@ Manual workflow:
 1. Create `src/questpie/server/routes/my-function.ts`:
 
    ```ts
-   import { route } from "questpie";
+   import { route } from "questpie/services";
    import { z } from "zod";
 
    export default route()

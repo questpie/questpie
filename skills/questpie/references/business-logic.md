@@ -17,7 +17,7 @@ JSON routes are typed server-side endpoints. Define an input schema with Zod, wr
 
 ```ts
 // routes/get-active-barbers.ts
-import { route } from "questpie";
+import { route } from "questpie/services";
 import z from "zod";
 
 export default route()
@@ -38,7 +38,7 @@ JSON routes validate input with Zod automatically:
 
 ```ts
 // routes/create-booking.ts
-import { route } from "questpie";
+import { route } from "questpie/services";
 import z from "zod";
 
 export default route()
@@ -126,7 +126,7 @@ Jobs are background tasks that run outside the request lifecycle. Ideal for send
 
 ```ts
 // jobs/send-appointment-confirmation.ts
-import { job } from "questpie";
+import { job } from "questpie/services";
 import z from "zod";
 
 export default job({
@@ -199,7 +199,7 @@ Configure the queue adapter in your runtime config:
 
 ```ts
 // questpie.config.ts
-import { runtimeConfig } from "questpie";
+import { runtimeConfig } from "questpie/app";
 import { pgBossAdapter } from "questpie/adapters/pg-boss";
 
 export default runtimeConfig({
@@ -219,8 +219,7 @@ Routes give raw HTTP request/response handling for webhooks, OAuth callbacks, he
 
 ```ts
 // routes/health.ts
-import { route } from "questpie";
-
+import { route } from "questpie/services";
 export default route({
 	method: "GET",
 	handler: async ({ db }) => {
@@ -285,8 +284,7 @@ Route handlers must return a `Response` object.
 
 ```ts
 // routes/webhooks/stripe.ts
-import { route } from "questpie";
-
+import { route } from "questpie/services";
 export default route({
 	method: "POST",
 	handler: async ({ request, db }) => {
@@ -312,8 +310,7 @@ Services are reusable units of logic injected into `AppContext` under the `servi
 
 ```ts
 // services/blog.ts
-import { service } from "questpie";
-
+import { service } from "questpie/services";
 const WORDS_PER_MINUTE = 200;
 
 function stripHtml(html: string): string {
@@ -374,7 +371,7 @@ Services are available via `services` destructuring in any handler:
 
 ```ts
 // services/stripe.ts
-import { service } from "questpie";
+import { service } from "questpie/services";
 import Stripe from "stripe";
 
 export default service({
@@ -387,8 +384,7 @@ export default service({
 
 ```ts
 // services/tenant-db.ts
-import { service } from "questpie";
-
+import { service } from "questpie/services";
 export default service({
 	lifecycle: "request",
 	deps: ["db", "session"] as const,
@@ -405,8 +401,7 @@ Services can depend on other services and infrastructure via `deps`. Use `as con
 
 ```ts
 // services/analytics.ts
-import { service } from "questpie";
-
+import { service } from "questpie/services";
 export default service({
 	deps: ["db", "logger"] as const,
 	create: ({ db, logger }) => {
@@ -451,7 +446,7 @@ Email templates are defined in `emails/` and discovered by codegen. Each templat
 
 ```ts
 // emails/appointment-confirmation.ts
-import { email } from "questpie";
+import { email } from "questpie/services";
 import { z } from "zod";
 
 export default email({
@@ -502,7 +497,7 @@ Email handlers receive the full `AppContext` for fetching data:
 
 ```ts
 // emails/weekly-digest.ts
-import { email } from "questpie";
+import { email } from "questpie/services";
 import { z } from "zod";
 
 export default email({

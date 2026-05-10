@@ -15,7 +15,7 @@ A plugin tells codegen what to discover and what types to generate. Plugins cont
 ### Plugin Structure
 
 ```ts
-import type { CodegenPlugin } from "questpie";
+import type { CodegenPlugin } from "questpie/codegen";
 
 export function myPlugin(): CodegenPlugin {
 	return {
@@ -76,7 +76,7 @@ export function myPlugin(): CodegenPlugin {
 ### Register in Config
 
 ```ts title="questpie.config.ts"
-import { runtimeConfig } from "questpie";
+import { runtimeConfig } from "questpie/app";
 import { myPlugin } from "my-plugin-package";
 
 export default runtimeConfig({
@@ -167,7 +167,9 @@ The admin module contributes a codegen plugin to both `"server"` and `"admin-cli
 A module is a reusable package that contributes entities to any QUESTPIE project.
 
 ```ts
-import { module, collection, job } from "questpie";
+import { module } from "questpie/app";
+import { collection } from "questpie/builders";
+import { job } from "questpie/services";
 import { z } from "zod";
 
 const notificationsCollection = collection("notifications")
@@ -238,7 +240,7 @@ export const notificationsModule = module({
 ### Using a Module
 
 ```ts title="modules.ts"
-import { adminModule } from "@questpie/admin/server";
+import { adminModule } from "@questpie/admin/modules/admin";
 import { notificationsModule } from "my-notifications-package";
 
 export default [adminModule, notificationsModule] as const;
@@ -281,7 +283,7 @@ A custom field defines:
 The `Field` class is an immutable builder:
 
 ```ts
-import { Field } from "questpie";
+import { Field } from "questpie/builders";
 
 // Each method returns a new Field with updated type state
 f.text(255).required().label({ en: "Name" }).admin({ placeholder: "..." });
@@ -312,7 +314,7 @@ QUESTPIE ships with adapters for Hono, Elysia, and Next.js. For other frameworks
 ### Generic Fetch Handler
 
 ```ts
-import { createFetchHandler } from "questpie";
+import { createFetchHandler } from "questpie/http";
 import { app } from "#questpie";
 
 const handler = createFetchHandler(app, { basePath: "/api" });
@@ -360,7 +362,7 @@ export const { GET, POST, PATCH, DELETE } = questpieNextRouteHandlers(app, {
 
 ```ts title="src/routes/api/$.ts"
 import { createAPIFileRoute } from "@tanstack/react-start/api";
-import { createFetchHandler } from "questpie";
+import { createFetchHandler } from "questpie/http";
 import { app } from "#questpie";
 
 const handler = createFetchHandler(app, { basePath: "/api" });
@@ -379,8 +381,8 @@ Three augmentation interfaces allow plugins to extend discriminant types:
 | Interface               | Package                  | Purpose                                          | Fallback      |
 | ----------------------- | ------------------------ | ------------------------------------------------ | ------------- |
 | `FieldTypeRegistry`     | `questpie`               | Field type names (`"text"`, `"number"`, etc.)    | `string`      |
-| `ComponentTypeRegistry` | `@questpie/admin/server` | Component type names (`"icon"`, `"badge"`, etc.) | `string`      |
-| `ViewKindRegistry`      | `@questpie/admin/server` | View kind names (`"list"`, `"edit"`)             | literal union |
+| `ComponentTypeRegistry` | `@questpie/admin/factories` | Component type names (`"icon"`, `"badge"`, etc.) | `string`      |
+| `ViewKindRegistry`      | `@questpie/admin/factories` | View kind names (`"list"`, `"edit"`)             | literal union |
 
 ### How Registries Work
 

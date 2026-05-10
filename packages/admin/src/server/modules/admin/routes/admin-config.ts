@@ -14,7 +14,7 @@
  * ```
  */
 
-import { executeAccessRule, type Questpie, route } from "questpie";
+import { executeAccessRule, route } from "questpie";
 import { z } from "zod";
 
 import type {
@@ -70,6 +70,32 @@ type AdminConfigItemMeta = {
 	order?: number;
 	workflow?: WorkflowMeta;
 };
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+	if (value === null || typeof value !== "object") return false;
+	const proto = Object.getPrototypeOf(value);
+	return proto === Object.prototype || proto === null;
+}
+
+export function stripUndefinedDeep<T>(value: T): T {
+	if (Array.isArray(value)) {
+		return value
+			.filter((item) => item !== undefined)
+			.map((item) => stripUndefinedDeep(item)) as T;
+	}
+
+	if (!isPlainRecord(value)) {
+		return value;
+	}
+
+	const result: Record<string, unknown> = {};
+	for (const [key, child] of Object.entries(value)) {
+		if (child === undefined) continue;
+		result[key] = stripUndefinedDeep(child);
+	}
+
+	return result as T;
+}
 
 // ============================================================================
 // Access Control Helpers
@@ -765,7 +791,12 @@ async function processDashboardItems(
 				}
 				return true;
 			});
-			const { loader, access, filterFn, ...serializable } = widget;
+			const {
+				loader,
+				access: _access,
+				filterFn: _filterFn,
+				...serializable
+			} = widget;
 			if (loader) {
 				(serializable as Record<string, unknown>).hasLoader = true;
 			}
@@ -781,7 +812,12 @@ async function processDashboardItems(
 		}
 
 		// 4. Strip non-serializable props, mark hasLoader, normalize label->title
-		const { loader, access, filterFn, ...serializable } = widget;
+		const {
+			loader,
+			access: _access,
+			filterFn: _filterFn,
+			...serializable
+		} = widget;
 		if (loader) {
 			(serializable as Record<string, unknown>).hasLoader = true;
 		}
@@ -818,7 +854,7 @@ const getAdminConfigOutputSchema = adminConfigDTOSchema;
  * ```ts title="questpie/server/config/admin.ts"
  * import { adminConfig } from "#questpie/factories";
  *
- * export default adminConfig({
+ * export const config = adminConfig({
  *   dashboard: { items: [] },
  *   sidebar: { sections: [], items: [] },
  * });
@@ -876,6 +912,7 @@ const getAdminConfig = route()
 		const response: {
 			dashboard?: unknown;
 			sidebar?: unknown;
+			shell?: unknown;
 			branding?: { name?: unknown; logo?: unknown };
 			blocks?: Record<string, unknown>;
 			collections?: Record<string, unknown>;
@@ -900,6 +937,10 @@ const getAdminConfig = route()
 		// Branding config
 		if (adminCfg.branding) {
 			response.branding = adminCfg.branding;
+		}
+
+		if (adminCfg.shell) {
+			response.shell = adminCfg.shell;
 		}
 
 		// 3. Dashboard: merge contributions → process access → strip non-serializable
@@ -1005,7 +1046,7 @@ const getAdminConfig = route()
 		response.collections = filteredCollectionsMeta;
 		response.globals = filteredGlobalsMeta;
 
-		return response;
+		return stripUndefinedDeep(response);
 	});
 
 // ============================================================================

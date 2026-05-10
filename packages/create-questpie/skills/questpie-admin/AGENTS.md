@@ -33,8 +33,7 @@ bun add @questpie/admin
 ### 2. Runtime Config
 
 ```ts title="questpie.config.ts"
-import { runtimeConfig } from "questpie";
-
+import { runtimeConfig } from "questpie/app";
 export default runtimeConfig({
 	app: { url: process.env.APP_URL || "http://localhost:3000" },
 	db: { url: process.env.DATABASE_URL },
@@ -47,7 +46,7 @@ The admin module contributes the codegen plugin automatically. It discovers `con
 ### 3. Modules
 
 ```ts title="modules.ts"
-import { adminModule, auditModule } from "@questpie/admin/server";
+import { adminModule, auditModule } from "@questpie/admin/modules/admin";
 
 export default [adminModule, auditModule] as const;
 ```
@@ -56,6 +55,26 @@ export default [adminModule, auditModule] as const;
 | ------------- | ------------------------------------- |
 | `adminModule` | User collection, auth pages, admin UI |
 | `auditModule` | Audit log collection, timeline widget |
+
+### Auth/User Contract - Critical
+
+`adminModule` includes the starter auth model and owns the canonical Better Auth `user` collection shape used by admin setup and login guards. That contract includes `user.role` with at least `admin` and `user` values. The built-in setup route checks for `role = "admin"`, and the admin `AuthGuard` expects `session.user.role === "admin"`.
+
+Do not create a replacement `collection("user")` from scratch in an app that uses `adminModule`. If the app needs to customize the user admin UI or add fields, merge the starter user collection and extend it:
+
+```ts title="collections/user.ts"
+import { starterModule } from "questpie/app";
+import { collection } from "#questpie/factories";
+
+export default collection("user")
+	.merge(starterModule.collections.user)
+	.fields(({ f }) => ({
+		// add app-specific user fields here
+		internalNotes: f.textarea(),
+	}));
+```
+
+App-specific authorization tables are fine, but they must not replace or remove the admin user contract unless the app also replaces the built-in admin setup route and auth guard.
 
 ### 4. Admin Config
 
@@ -184,8 +203,7 @@ Separate tokens for independent sidebar theming: `--sidebar`, `--sidebar-foregro
 When collections have `.localized()` fields, the admin shows a locale switcher:
 
 ```ts title="config/app.ts"
-import { appConfig } from "questpie";
-
+import { appConfig } from "questpie/app";
 export default appConfig({
 	locale: {
 		locales: [

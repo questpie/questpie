@@ -27,6 +27,7 @@ import type {
 	RawRouteDefinition,
 	RawRouteHandlerArgs,
 	RouteAccess,
+	RouteMeta,
 } from "./types.js";
 
 // ============================================================================
@@ -53,6 +54,7 @@ interface BuilderConfig {
 	schema?: z.ZodSchema<any>;
 	outputSchema?: z.ZodSchema<any>;
 	access?: RouteAccess;
+	meta?: RouteMeta;
 	handler?: (...args: any[]) => any;
 }
 
@@ -91,27 +93,45 @@ export class RouteBuilder<
 	}
 
 	get(): RouteBuilder<TParams, HasMethod<"GET">, TMode, TSchema> {
-		return new RouteBuilder({ ...this._config, method: this._addMethod("GET") });
+		return new RouteBuilder({
+			...this._config,
+			method: this._addMethod("GET"),
+		});
 	}
 
 	post(): RouteBuilder<TParams, HasMethod<"POST">, TMode, TSchema> {
-		return new RouteBuilder({ ...this._config, method: this._addMethod("POST") });
+		return new RouteBuilder({
+			...this._config,
+			method: this._addMethod("POST"),
+		});
 	}
 
 	put(): RouteBuilder<TParams, HasMethod<"PUT">, TMode, TSchema> {
-		return new RouteBuilder({ ...this._config, method: this._addMethod("PUT") });
+		return new RouteBuilder({
+			...this._config,
+			method: this._addMethod("PUT"),
+		});
 	}
 
 	delete(): RouteBuilder<TParams, HasMethod<"DELETE">, TMode, TSchema> {
-		return new RouteBuilder({ ...this._config, method: this._addMethod("DELETE") });
+		return new RouteBuilder({
+			...this._config,
+			method: this._addMethod("DELETE"),
+		});
 	}
 
 	patch(): RouteBuilder<TParams, HasMethod<"PATCH">, TMode, TSchema> {
-		return new RouteBuilder({ ...this._config, method: this._addMethod("PATCH") });
+		return new RouteBuilder({
+			...this._config,
+			method: this._addMethod("PATCH"),
+		});
 	}
 
 	head(): RouteBuilder<TParams, HasMethod<"HEAD">, TMode, TSchema> {
-		return new RouteBuilder({ ...this._config, method: this._addMethod("HEAD") });
+		return new RouteBuilder({
+			...this._config,
+			method: this._addMethod("HEAD"),
+		});
 	}
 
 	options(): RouteBuilder<TParams, HasMethod<"OPTIONS">, TMode, TSchema> {
@@ -182,6 +202,15 @@ export class RouteBuilder<
 		return new RouteBuilder({ ...this._config, access }) as any;
 	}
 
+	// ── Metadata ────────────────────────────────────────────────
+
+	/**
+	 * Attach serializable metadata for introspection and integrations.
+	 */
+	meta(meta: RouteMeta): RouteBuilder<TParams, _TMethod, TMode, TSchema> {
+		return new RouteBuilder({ ...this._config, meta }) as any;
+	}
+
 	// ── Terminal: handler ───────────────────────────────────────
 
 	/**
@@ -214,6 +243,7 @@ export class RouteBuilder<
 				schema: this._config.schema!,
 				outputSchema: this._config.outputSchema,
 				access: this._config.access,
+				meta: this._config.meta,
 				handler: handler as any,
 			};
 			return Object.freeze(def) as any;
@@ -225,6 +255,7 @@ export class RouteBuilder<
 			mode: "raw",
 			method,
 			access: this._config.access,
+			meta: this._config.meta,
 			handler: handler as any,
 		};
 		return Object.freeze(def) as any;

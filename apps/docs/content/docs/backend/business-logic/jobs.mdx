@@ -8,7 +8,7 @@ Jobs are background tasks that run outside the request lifecycle. They're ideal 
 ## Defining a Job
 
 ```ts title="jobs/send-appointment-confirmation.ts"
-import { job } from "questpie";
+import { job } from "questpie/services";
 import z from "zod";
 
 export default job({
@@ -148,7 +148,7 @@ await queue.sendAppointmentReminder.publish(
 Use `options.cron` on the job definition for recurring work:
 
 ```ts title="jobs/sync-inventory.ts"
-import { job } from "questpie";
+import { job } from "questpie/services";
 import z from "zod";
 
 export default job({
@@ -172,7 +172,7 @@ export default job({
 Jobs often send emails using templates defined in `emails/`:
 
 ```ts title="emails/appointment-confirmation.ts"
-import { email } from "questpie";
+import { email } from "questpie/services";
 import z from "zod";
 
 export default email({
@@ -204,7 +204,7 @@ export default email({
 Configure the queue adapter in your runtime config. QUESTPIE uses [pg-boss](https://github.com/timgit/pg-boss) by default:
 
 ```ts title="questpie.config.ts"
-import { runtimeConfig } from "questpie";
+import { runtimeConfig } from "questpie/app";
 import { pgBossAdapter } from "questpie/adapters/pg-boss";
 
 export default runtimeConfig({
@@ -222,7 +222,7 @@ export default runtimeConfig({
 Notifying subscribers when a blog post is published:
 
 ```ts title="jobs/notify-blog-subscribers.ts"
-import { job } from "questpie";
+import { job } from "questpie/services";
 import z from "zod";
 
 export default job({

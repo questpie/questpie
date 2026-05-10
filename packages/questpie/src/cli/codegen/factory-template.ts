@@ -135,11 +135,11 @@ export function generateFactoryTemplate(
 	if (hasExtensions || hasFieldExtensions) {
 		const fieldImport = hasFieldExtensions ? ", Field" : "";
 		lines.push(
-			`import { CollectionBuilder, GlobalBuilder, wrapBuilderWithExtensions, builtinFields, type EmptyCollectionState, type EmptyGlobalState, type BuiltinFields${fieldImport} } from "questpie";`,
+			`import { CollectionBuilder, GlobalBuilder, wrapBuilderWithExtensions, builtinFields, type EmptyCollectionState, type EmptyGlobalState, type BuiltinFields${fieldImport} } from "questpie/builders";`,
 		);
 	} else {
 		lines.push(
-			'import { CollectionBuilder, GlobalBuilder, builtinFields, type EmptyCollectionState, type EmptyGlobalState, type BuiltinFields } from "questpie";',
+			'import { CollectionBuilder, GlobalBuilder, builtinFields, type EmptyCollectionState, type EmptyGlobalState, type BuiltinFields } from "questpie/builders";',
 		);
 	}
 	lines.push("");

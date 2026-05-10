@@ -47,7 +47,7 @@ By the time your adapter receives `SerializableMailOptions`, both `text` and `ht
 QUESTPIE already ships built-in `ResendAdapter` and `PlunkAdapter`. This example shows the same shape for a custom HTTP provider.
 
 ```ts title="resend-adapter.ts"
-import { MailAdapter, type SerializableMailOptions } from "questpie";
+import { MailAdapter, type SerializableMailOptions } from "questpie/mailer";
 
 export class ResendAdapter extends MailAdapter {
 	constructor(private apiKey: string) {
@@ -92,7 +92,7 @@ export class ResendAdapter extends MailAdapter {
 ## Minimal example: SDK-based provider
 
 ```ts title="sendgrid-adapter.ts"
-import { MailAdapter, type SerializableMailOptions } from "questpie";
+import { MailAdapter, type SerializableMailOptions } from "questpie/mailer";
 import sgMail from "@sendgrid/mail";
 
 export class SendGridAdapter extends MailAdapter {
@@ -128,7 +128,7 @@ export class SendGridAdapter extends MailAdapter {
 ## Registration
 
 ```ts title="questpie.config.ts"
-import { runtimeConfig } from "questpie";
+import { runtimeConfig } from "questpie/app";
 import { ResendAdapter } from "./resend-adapter";
 
 export default runtimeConfig({

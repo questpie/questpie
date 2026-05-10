@@ -10,6 +10,7 @@
 		"hooks-api",
 		"query-operators",
 		"plugin-api",
+		"mcp-api",
 		"admin-api",
 		"infrastructure-api",
 		"error-codes",

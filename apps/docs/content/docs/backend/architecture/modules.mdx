@@ -10,8 +10,8 @@ Modules are **static objects** that contribute entities to your app. They're pre
 List your module dependencies in `modules.ts`:
 
 ```ts title="modules.ts"
-import { adminModule, auditModule } from "@questpie/admin/server";
-
+import { adminModule } from "@questpie/admin/modules/admin";
+import { auditModule } from "@questpie/admin/modules/audit";
 export default [adminModule, auditModule] as const;
 ```
 
@@ -21,7 +21,40 @@ Codegen merges module contributions with your project-level entities. The admin 
 - Administration sidebar section
 - Audit log entries (via audit module)
 
-Keep `modules.ts` statically discoverable. Codegen imports it before runtime app creation, so codegen-aware modules should not be hidden behind environment checks or configured through `module(options)` calls. Put runtime options in plugin-discovered `config/*.ts` files.
+Keep `modules.ts` statically discoverable. Codegen imports it before runtime app creation, so codegen-aware modules should not be hidden behind environment checks or configured through `module(options)` calls.
+
+## Configuration Pattern
+
+Codegen-aware modules use a two-file pattern:
+
+```ts title="modules.ts"
+import mcpModule from "@questpie/mcp";
+import { adminModule } from "@questpie/admin/modules/admin";
+import { openApiModule } from "@questpie/openapi";
+
+export default [adminModule, openApiModule, mcpModule] as const;
+```
+
+```ts title="config/mcp.ts"
+import { mcpConfig } from "@questpie/mcp";
+
+export default mcpConfig({
+	crud: {
+		defaults: {
+			collections: { read: true, write: false, delete: false },
+		},
+	},
+});
+```
+
+Use this rule of thumb:
+
+- `modules.ts` declares static module identity and must be codegen-discoverable.
+- `config/*.ts` holds runtime options for modules that need codegen discovery.
+- `runtimeConfig({ plugins })` is for standalone or custom plugin setups that are not loaded through modules.
+- `module(options)` is only appropriate for runtime-only modules whose options do not change file conventions, generated factories, type registries, builder extensions, or generated app state.
+
+This keeps the generated app deterministic. Codegen can always see the same module graph, while environment-specific or project-specific settings live in config files discovered by the module plugin.
 
 ## What Modules Contribute
 
@@ -119,11 +152,12 @@ const auditModule = module({
 | `adminModule` | `@questpie/admin/server` | User collection, admin UI, auth pages |
 | `auditModule` | `@questpie/admin/server` | Audit log collection, timeline widget |
 
+`adminModule` includes the starter auth model and owns the canonical Better Auth `user` collection shape used by admin setup and login guards. That contract includes `user.role` (`admin` or `user`). If you customize users, merge `starterModule.collections.user` and extend it instead of replacing `collection("user")` from scratch.
+
 ## Creating Custom Modules
 
 ```ts
-import { module } from "questpie";
-
+import { module } from "questpie/app";
 export const notificationsModule = module({
 	name: "notifications",
 	collections: {

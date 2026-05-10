@@ -34,7 +34,7 @@ Use `redisKVAdapter` with a connected `node-redis` compatible client:
 
 ```ts title="questpie.config.ts"
 import { createClient } from "redis";
-import { runtimeConfig } from "questpie";
+import { runtimeConfig } from "questpie/app";
 import { redisKVAdapter } from "questpie/adapters/redis-kv";
 
 async function getRedis() {
@@ -63,7 +63,7 @@ export default runtimeConfig({
 Use the Cloudflare KV namespace binding directly when deploying on Workers:
 
 ```ts title="questpie.config.ts"
-import { runtimeConfig } from "questpie";
+import { runtimeConfig } from "questpie/app";
 import {
 	cloudflareKVAdapter,
 	type CloudflareKVNamespace,

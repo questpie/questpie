@@ -88,7 +88,10 @@ export function generateTemplate(options: TemplateOptions): string {
 
 	// Import createApp + types
 	lines.push(
-		'import { createApp, createContextFactory, type AnyCollectionOrBuilder, type AnyGlobalOrBuilder, type AppDefinition, type CollectionAPI, type DrizzleClientFromQuestpieConfig, type InferContextExtensionsFromAppConfig, type InferSessionFromAuthConfig, type MailerService, type Questpie, type QuestpieConfig, type QueueClient, type RouteParamsFromKey, type RouteWithParams, type TablesFromConfig } from "questpie";',
+		'import { createApp, createContextFactory } from "questpie/app";',
+	);
+	lines.push(
+		'import type { AnyCollectionOrBuilder, AnyGlobalOrBuilder, AppDefinition, CollectionAPI, DrizzleClientFromQuestpieConfig, InferContextExtensionsFromAppConfig, InferSessionFromAuthConfig, MailerService, Questpie, QuestpieConfig, QueueClient, RouteParamsFromKey, RouteWithParams, TablesFromConfig } from "questpie/types";',
 	);
 	lines.push("");
 
@@ -203,7 +206,7 @@ export function generateTemplate(options: TemplateOptions): string {
 	lines.push("");
 
 	lines.push(
-		'import type { ServiceCustomNamespaceInstances, ServiceInstanceOf, ServiceInstancesInNamespace, ServiceTopLevelInstances, UnionToIntersection } from "questpie";',
+		'import type { ServiceCustomNamespaceInstances, ServiceInstanceOf, ServiceInstancesInNamespace, ServiceTopLevelInstances, UnionToIntersection } from "questpie/types";',
 	);
 	lines.push(`type _Module = (typeof ${modulesFile.varName})[number];`);
 	lines.push(
@@ -293,7 +296,7 @@ export function generateTemplate(options: TemplateOptions): string {
 			lines.push(
 				"// Recursive module property extraction (for fields contributed at each level)",
 			);
-			lines.push('import type { ExtractModuleProp } from "questpie";');
+			lines.push('import type { ExtractModuleProp } from "questpie/types";');
 			lines.push("");
 
 			for (const { singleName, registryKey } of tildeKeys) {

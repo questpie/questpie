@@ -30,7 +30,7 @@ export default server;
 OpenAPI is registered as a module rather than wrapping the handler. Add `openApiModule` to your `modules.ts`:
 
 ```ts title="modules.ts"
-import { adminModule } from "@questpie/admin/server";
+import { adminModule } from "@questpie/admin/modules/admin";
 import { openApiModule } from "@questpie/openapi";
 
 export default [adminModule, openApiModule] as const;

@@ -87,9 +87,63 @@ export interface AdminBlockConfig {
 	hidden?: boolean;
 }
 
+export interface ListViewLayoutConfig {
+	/** Visual density for row rendering. */
+	density?: "compact" | "comfortable";
+	/** Primary field rendered as the row title. Defaults to collection title. */
+	titleField?: string;
+	/** Secondary field rendered under the title. */
+	subtitleField?: string;
+	/** Fields rendered before the title, typically icons/status markers. */
+	leadingFields?: string[];
+	/** Fields rendered as compact badges near the title. */
+	badgeFields?: string[];
+	/** Fields rendered as muted right-side metadata. */
+	metaFields?: string[];
+}
+
+export type ListViewOutlineLevel =
+	| {
+			kind: "field";
+			field: string;
+			labelField?: string;
+			order?: "asc" | "desc" | string[];
+	  }
+	| {
+			kind: "relation-field";
+			relation: string;
+			field?: string;
+			labelField?: string;
+			order?: "asc" | "desc" | string[];
+	  }
+	| {
+			kind: "edge";
+			collection: string;
+			parentField: string;
+			childField: string;
+			where?: Record<string, unknown>;
+			groupByEdgeField?: string;
+			repeat?: boolean | { maxDepth?: number };
+	  }
+	| {
+			kind: "path";
+			field: string;
+			separator?: string;
+			syntheticFolders?: boolean;
+			repeat?: boolean | { maxDepth?: number };
+	  };
+
+export interface ListViewOutlineConfig {
+	levels: ListViewOutlineLevel[];
+	defaultExpanded?: boolean | "roots";
+	maxDepth?: number;
+	showCounts?: boolean;
+	preserveMatchingBranches?: boolean;
+}
+
 /**
  * List view configuration for a collection.
- * Defines columns, sorting, filtering, and actions.
+ * Defines columns, sorting, filtering, outline grouping, and actions.
  */
 export interface ListViewConfig {
 	/** View type to use (e.g., "table", "cards") */
@@ -125,6 +179,10 @@ export interface ListViewConfig {
 		/** Show page-local item counts in group headers */
 		showCounts?: boolean;
 	};
+	/** Dense flex/list renderer layout hints for list-like views. */
+	layout?: ListViewLayoutConfig;
+	/** Renderer-agnostic multi-level outline/grouping configuration. */
+	outline?: ListViewOutlineConfig;
 	/** Actions configuration */
 	actions?: {
 		header?: { primary?: ActionReference[]; secondary?: ActionReference[] };
@@ -256,12 +314,10 @@ export type FormReactivePropValue<TData = any> =
 	| unknown
 	| ((ctx: FormReactiveContext<TData>) => unknown | Promise<unknown>)
 	| {
-			handler: (
-				ctx: FormReactiveContext<TData>,
-			) => unknown | Promise<unknown>;
+			handler: (ctx: FormReactiveContext<TData>) => unknown | Promise<unknown>;
 			deps?: string[] | ((ctx: FormReactiveContext<TData>) => any[]);
 			debounce?: number;
-		};
+	  };
 
 /**
  * Field entry with optional reactive form behavior.

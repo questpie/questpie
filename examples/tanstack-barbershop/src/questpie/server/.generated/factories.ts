@@ -3,10 +3,10 @@
 // Typed factory functions with plugin extensions. Regenerate with: questpie generate
 
 // ── Core Imports ───────────────────────────────────────────
-import { CollectionBuilder, GlobalBuilder, wrapBuilderWithExtensions, builtinFields, type EmptyCollectionState, type EmptyGlobalState, type BuiltinFields, Field } from "questpie";
+import { CollectionBuilder, GlobalBuilder, wrapBuilderWithExtensions, builtinFields, type EmptyCollectionState, type EmptyGlobalState, type BuiltinFields, Field } from "questpie/builders";
 
 // ── Runtime Field Imports ──────────────────────────────────
-import { adminFields } from "@questpie/admin/server";
+import { adminFields } from "@questpie/admin/fields";
 
 const _fieldExt: Record<string, { stateKey: string; resolve: (v: any) => any }> = {
 	admin: { stateKey: "admin", resolve: (v: any) => v },
@@ -32,9 +32,11 @@ const _allFieldDefs = Object.fromEntries(
 ) as unknown as typeof _rawFieldDefs;
 
 // ── Plugin Imports ─────────────────────────────────────────
-import { type AdminCollectionConfig, type AdminConfigContext, type ListViewConfig, type ListViewConfigContext, type FilterViewsByKind, type FormViewConfig, type FormViewConfigContext, type PreviewConfig, type ServerActionsConfig, type ActionsConfigContext, type AdminGlobalConfig, type AdminConfigInput, createViewCallbackProxy, createComponentCallbackProxy, createActionCallbackProxy } from "@questpie/admin/server";
-import { type AppConfigInput, type AuthConfig, createFieldNameProxy } from "questpie";
+import { type AdminCollectionConfig, type AdminConfigContext, type ListViewConfig, type ListViewConfigContext, type FilterViewsByKind, type FormViewConfig, type FormViewConfigContext, type PreviewConfig, type ServerActionsConfig, type ActionsConfigContext, type AdminGlobalConfig, type AdminConfigInput, createViewCallbackProxy, createComponentCallbackProxy, createActionCallbackProxy } from "@questpie/admin/factories";
+import { type AppConfigInput, type AuthConfig } from "questpie/types";
+import { type McpConfig } from "@questpie/mcp";
 import { type OpenApiModuleConfig } from "@questpie/openapi";
+import { createFieldNameProxy } from "questpie/builders";
 
 // ════════════════════════════════════════════════════════════
 // Type extraction — driven by CategoryDeclaration
@@ -67,7 +69,7 @@ declare module "questpie" {
 	}
 	interface Field<TState> {
 		admin(config: unknown): Field<TState>;
-		form(configFn: (ctx: { f: Record<string, string> }) => { fields: import('@questpie/admin/server').FieldLayoutItem[] }): Field<TState>;
+		form(configFn: (ctx: { f: Record<string, string> }) => { fields: import('@questpie/admin/factories').FieldLayoutItem[] }): Field<TState>;
 	}
 }
 
@@ -78,7 +80,7 @@ declare global {
 	}
 }
 
-declare module "@questpie/admin/server" {
+declare module "@questpie/admin/factories" {
 	interface ComponentTypeRegistry extends Record<_ComponentsNames_Strict, {}> {}
 }
 
@@ -167,11 +169,11 @@ export function global<TName extends string>(name: TName): GlobalBuilder<EmptyGl
 // Builder factory functions (plugin-contributed)
 // ════════════════════════════════════════════════════════════
 
-import { BlockBuilder } from "@questpie/admin/server";
+import { BlockBuilder } from "@questpie/admin/factories";
 /**
  * Create a typed block builder with wrapped field defs.
  */
-export function block<TName extends string>(name: TName): import('@questpie/admin/server').BlockBuilder<{ name: TName }> {
+export function block<TName extends string>(name: TName): import('@questpie/admin/factories').BlockBuilder<{ name: TName }> {
 	return BlockBuilder.create(name, _allFieldDefs) as any;
 }
 
@@ -189,6 +191,11 @@ export function authConfig<T extends AuthConfig>(config: T): T { return config; 
 export function adminConfig<T extends AdminConfigInput>(config: T): T;
 export function adminConfig<T extends (...args: any[]) => AdminConfigInput>(cb: T): T;
 export function adminConfig(v: any): any { return v; }
+
+/** Typed factory for mcpConfig config. Accepts plain config or callback. */
+export function mcpConfig<T extends McpConfig>(config: T): T;
+export function mcpConfig<T extends (...args: any[]) => McpConfig>(cb: T): T;
+export function mcpConfig(v: any): any { return v; }
 
 /** Typed factory for openapi config. */
 export function openapi<T extends OpenApiModuleConfig>(config: T): T { return config; }

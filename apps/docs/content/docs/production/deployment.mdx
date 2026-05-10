@@ -86,7 +86,7 @@ Use `process.env` for plain text vars and secrets. Use lazy `cloudflare:workers`
 ```ts title="questpie.config.ts"
 import postgres from "postgres";
 import { drizzle } from "drizzle-orm/postgres-js";
-import { runtimeConfig } from "questpie";
+import { runtimeConfig } from "questpie/app";
 import {
 	cloudflareKVAdapter,
 	cloudflareQueuesAdapter,
@@ -314,8 +314,7 @@ For CI, keep the migration connection string as a CI secret. Hyperdrive's runtim
 Add a health check endpoint:
 
 ```ts title="routes/health.ts"
-import { route } from "questpie";
-
+import { route } from "questpie/services";
 export default route({
 	method: "GET",
 	handler: async ({ db }) => {

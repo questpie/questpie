@@ -7,8 +7,7 @@ All adapter configurations for QUESTPIE production infrastructure.
 PostgreSQL with Drizzle ORM. Configured in `questpie.config.ts`:
 
 ```ts
-import { runtimeConfig } from "questpie";
-
+import { runtimeConfig } from "questpie/app";
 export default runtimeConfig({
 	db: {
 		url: process.env.DATABASE_URL || "postgres://localhost/myapp",
@@ -121,7 +120,7 @@ Background jobs via [pg-boss](https://github.com/timgit/pg-boss), BullMQ, or a c
 ### Configuration
 
 ```ts
-import { runtimeConfig } from "questpie";
+import { runtimeConfig } from "questpie/app";
 import { pgBossAdapter } from "questpie/adapters/pg-boss";
 
 export default runtimeConfig({
@@ -136,7 +135,7 @@ export default runtimeConfig({
 ### BullMQ
 
 ```ts
-import { runtimeConfig } from "questpie";
+import { runtimeConfig } from "questpie/app";
 import { bullMQAdapter } from "questpie/adapters/bullmq";
 
 export default runtimeConfig({
@@ -173,7 +172,7 @@ SSE-based live updates.
 Uses PostgreSQL `LISTEN/NOTIFY`. Best for single-server deployments:
 
 ```ts
-import { runtimeConfig } from "questpie";
+import { runtimeConfig } from "questpie/app";
 import { pgNotifyAdapter } from "questpie/adapters/pg-notify";
 
 export default runtimeConfig({
@@ -190,7 +189,7 @@ export default runtimeConfig({
 Required for horizontal scaling across multiple server instances:
 
 ```ts
-import { runtimeConfig } from "questpie";
+import { runtimeConfig } from "questpie/app";
 import { redisStreamsAdapter } from "questpie/adapters/redis-streams";
 
 export default runtimeConfig({
@@ -216,7 +215,7 @@ Transactional email with typed templates.
 ### SMTP (Production)
 
 ```ts
-import { runtimeConfig } from "questpie";
+import { runtimeConfig } from "questpie/app";
 import { SmtpAdapter } from "questpie/adapters/smtp";
 
 export default runtimeConfig({
@@ -237,7 +236,7 @@ export default runtimeConfig({
 Logs emails to console instead of sending:
 
 ```ts
-import { runtimeConfig } from "questpie";
+import { runtimeConfig } from "questpie/app";
 import { ConsoleAdapter } from "questpie/adapters/console";
 
 export default runtimeConfig({
@@ -270,7 +269,7 @@ Templates go in the `emails/` directory:
 
 ```ts
 // emails/welcome.ts
-import { email } from "questpie";
+import { email } from "questpie/services";
 import z from "zod";
 
 export default email({
@@ -410,7 +409,7 @@ bun add @questpie/openapi
 
 ```ts
 // src/questpie/server/modules.ts
-import { adminModule } from "@questpie/admin/server";
+import { adminModule } from "@questpie/admin/modules/admin";
 import { openApiModule } from "@questpie/openapi";
 
 export default [adminModule, openApiModule] as const;
@@ -521,7 +520,7 @@ const spec = generateOpenApiSpec(app, {
 ## Complete Production Config Example
 
 ```ts
-import { runtimeConfig } from "questpie";
+import { runtimeConfig } from "questpie/app";
 import { pgBossAdapter } from "questpie/adapters/pg-boss";
 import { pgNotifyAdapter } from "questpie/adapters/pg-notify";
 import { SmtpAdapter } from "questpie/adapters/smtp";

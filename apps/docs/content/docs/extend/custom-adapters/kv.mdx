@@ -50,7 +50,7 @@ These power QUESTPIE's cache invalidation workflows. If your backend does not su
 ## Minimal example
 
 ```ts title="my-kv-adapter.ts"
-import type { KVAdapter } from "questpie";
+import type { KVAdapter } from "questpie/kv";
 
 export class MyKVAdapter implements KVAdapter {
 	private store = new Map<string, { value: unknown; expiresAt?: number }>();
@@ -115,7 +115,7 @@ export class MyKVAdapter implements KVAdapter {
 ## Registration
 
 ```ts title="questpie.config.ts"
-import { runtimeConfig } from "questpie";
+import { runtimeConfig } from "questpie/app";
 import { MyKVAdapter } from "./my-kv-adapter";
 
 export default runtimeConfig({

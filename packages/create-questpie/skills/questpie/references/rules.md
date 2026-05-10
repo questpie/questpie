@@ -93,7 +93,7 @@ Access functions receive `AppContext` with these properties:
 Access functions may be async. Use `request` for request-scoped checks such as headers, tenant scope, CAPTCHA tokens, or signed public form tokens:
 
 ```ts
-import { ApiError } from "questpie";
+import { ApiError } from "questpie/errors";
 import { isAdminRequest } from "@questpie/admin/shared";
 
 type AccessCtx = {

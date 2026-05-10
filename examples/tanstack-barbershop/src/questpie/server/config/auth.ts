@@ -4,8 +4,7 @@
  * Better Auth settings for the barbershop app.
  * Runtime values (secret, baseURL) come from runtimeConfig / env vars.
  */
-import { authConfig } from "questpie";
-
+import { authConfig } from "questpie/app";
 export default authConfig({
 	emailAndPassword: { enabled: true, requireEmailVerification: false },
 });

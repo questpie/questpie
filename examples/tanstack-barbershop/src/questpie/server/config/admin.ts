@@ -4,8 +4,7 @@
  * Consolidates sidebar, dashboard, branding, and admin locale settings.
  */
 import getRevenueStats from "@/questpie/server/routes/get-revenue-stats";
-import { adminConfig, type WidgetFetchContext } from "@questpie/admin/server";
-
+import { adminConfig, type WidgetFetchContext } from "@questpie/admin/factories";
 export default adminConfig({
 	branding: {
 		name: { en: "Barbershop Control", sk: "Riadenie barbershopu" },

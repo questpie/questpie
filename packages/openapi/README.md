@@ -14,7 +14,7 @@ Register `openApiModule` in your `modules.ts` file to add `/openapi.json` and `/
 
 ```ts
 // src/questpie/server/modules.ts
-import { adminModule } from "@questpie/admin/server";
+import { adminModule } from "@questpie/admin/modules/admin";
 import { openApiModule } from "@questpie/openapi";
 
 export default [adminModule, openApiModule] as const;
@@ -36,7 +36,7 @@ Your route handler stays clean — no wrapper needed:
 
 ```ts
 // routes/api/$.ts
-import { createFetchHandler } from "questpie";
+import { createFetchHandler } from "questpie/http";
 import { app } from "#questpie";
 
 const handler = createFetchHandler(app, { basePath: "/api" });

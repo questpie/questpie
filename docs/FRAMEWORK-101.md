@@ -92,8 +92,8 @@ A QuestPie project follows a **convention-over-configuration** file layout. The 
         modules.ts                  ← export default [adminModule, ...] as const
         app.ts                      ← re-export of .generated/index (stable import)
         config/
-          auth.ts                   ← authConfig({...})       (from "questpie")
-          app.ts                    ← appConfig({...})        (from "questpie", optional)
+          auth.ts                   ← authConfig({...})       (from "questpie/app")
+          app.ts                    ← appConfig({...})        (from "questpie/app", optional)
           admin.ts                  ← adminConfig({...})      (from "#questpie/factories")
         collections/                ← One file per collection
         globals/                    ← One file per global
@@ -159,7 +159,7 @@ questpie.config.ts  →  modules.ts  →  codegen  →  .generated/index.ts  →
 **Step 1** — `questpie.config.ts` declares infrastructure (DB, storage, email, etc.):
 
 ```ts
-import { runtimeConfig } from "questpie";
+import { runtimeConfig } from "questpie/app";
 import { ConsoleAdapter } from "questpie/adapters/console";
 
 export default runtimeConfig({
@@ -173,7 +173,7 @@ export default runtimeConfig({
 **Step 2** — `modules.ts` declares which module packages to use:
 
 ```ts
-import { adminModule } from "@questpie/admin/server";
+import { adminModule } from "@questpie/admin/modules/admin";
 import { openApiModule } from "@questpie/openapi";
 
 export default [adminModule, openApiModule] as const;
@@ -201,7 +201,7 @@ export const app = await createApp(
 
 ```ts
 // src/routes/api/$.ts (TanStack Start example)
-import { createFetchHandler } from "questpie";
+import { createFetchHandler } from "questpie/http";
 import { app } from "@/questpie/server/app";
 import { createAPIFileRoute } from "@tanstack/react-start/api";
 
@@ -228,8 +228,7 @@ This single handler serves all collection CRUD, auth, search, realtime, storage,
 Modules are the **packaging unit** of the framework. They are plain static objects — no class instances, no runtime instantiation.
 
 ```ts
-import { module } from "questpie";
-
+import { module } from "questpie/app";
 export const billingModule = module({
 	name: "billing",
 	modules: [stripeModule], // sub-dependencies
@@ -269,6 +268,8 @@ export const billingModule = module({
 | `adminModule`   | `@questpie/admin`           | Admin panel routes, views, components, admin-specific collections                           |
 | `auditModule`   | `@questpie/admin`           | Audit log collection + cleanup job                                                          |
 | `openApiModule` | `@questpie/openapi`         | OpenAPI schema + Scalar docs UI                                                             |
+
+The starter/admin auth contract includes the canonical Better Auth `user` collection with `user.role` (`admin` or `user`). Built-in admin setup checks for `role = "admin"`, and the admin UI guard expects `session.user.role === "admin"`. Apps using `adminModule` must not replace `collection("user")` from scratch; merge `starterModule.collections.user` and extend it when custom user fields or admin layout are needed.
 
 ### Module Resolution
 
@@ -529,8 +530,7 @@ f.text(255)
 Define reusable field types with `fieldType()`:
 
 ```ts
-import { fieldType } from "questpie";
-
+import { fieldType } from "questpie/builders";
 export const colorField = fieldType("color", {
 	create: () => ({
 		type: "color",
@@ -802,8 +802,7 @@ await collections.posts.find({}, { accessMode: "system" });
 Custom HTTP routes for APIs that don't fit the collection CRUD pattern.
 
 ```ts
-import { route } from "questpie";
-
+import { route } from "questpie/services";
 // JSON route with schema validation
 export default route()
 	.post()
@@ -923,8 +922,7 @@ export default route()
 Services are **injectable singletons or request-scoped factories** available in `AppContext`.
 
 ```ts
-import { service } from "questpie";
-
+import { service } from "questpie/services";
 export const analyticsService = service()
 	.lifecycle("singleton") // created once at startup
 	.create(({ app }) => {
@@ -973,8 +971,7 @@ async ({ db, session, services }) => {
 Background jobs for async processing — retries, scheduling, and queuing.
 
 ```ts
-import { job } from "questpie";
-
+import { job } from "questpie/services";
 export default job({
 	name: "sendWelcomeEmail",
 	schema: z.object({
@@ -1023,8 +1020,7 @@ The queue client exposes jobs as typed properties: `queue[jobName].publish(paylo
 Email templates define how emails look and what data they accept.
 
 ```tsx
-import { email } from "questpie";
-
+import { email } from "questpie/services";
 export default email({
 	name: "welcome",
 	schema: z.object({
@@ -1067,8 +1063,7 @@ await ctx.email.send("welcome", {
 ### Migrations
 
 ```ts
-import { migration } from "questpie";
-
+import { migration } from "questpie/migration";
 export default migration({
 	id: "0001_create_categories_table",
 	up: async ({ db }) => {
@@ -1088,8 +1083,7 @@ export default migration({
 ### Seeds
 
 ```ts
-import { seed } from "questpie";
-
+import { seed } from "questpie/services";
 export default seed({
 	id: "seed-default-categories",
 	category: "required", // "required" | "dev" | "test"
@@ -1458,8 +1452,7 @@ interface AppContext {
 ### Getting Context Programmatically
 
 ```ts
-import { getContext, tryGetContext } from "questpie";
-
+import { getContext, tryGetContext } from "questpie/types";
 const ctx = getContext(); // throws if outside a request scope
 const ctx = tryGetContext(); // returns null if outside scope
 
@@ -1814,7 +1807,7 @@ The admin panel is a **server-driven React SPA**. The server declares what shoul
 
 ```ts
 // modules.ts
-import { adminModule } from "@questpie/admin/server";
+import { adminModule } from "@questpie/admin/modules/admin";
 export default [adminModule] as const;
 
 // config/admin.ts

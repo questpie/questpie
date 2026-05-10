@@ -113,6 +113,54 @@ export function normalizeColumnConfig<T extends string>(
 // List View Configuration
 // ============================================================================
 
+export interface ListViewLayoutConfig<TFieldNames extends string = string> {
+	density?: "compact" | "comfortable";
+	titleField?: TFieldNames;
+	subtitleField?: TFieldNames;
+	leadingFields?: TFieldNames[];
+	badgeFields?: TFieldNames[];
+	metaFields?: TFieldNames[];
+}
+
+export type ListViewOutlineLevel<TFieldNames extends string = string> =
+	| {
+			kind: "field";
+			field: TFieldNames;
+			labelField?: TFieldNames;
+			order?: "asc" | "desc" | string[];
+	  }
+	| {
+			kind: "relation-field";
+			relation: TFieldNames;
+			field?: string;
+			labelField?: string;
+			order?: "asc" | "desc" | string[];
+	  }
+	| {
+			kind: "edge";
+			collection: string;
+			parentField: string;
+			childField: string;
+			where?: Record<string, unknown>;
+			groupByEdgeField?: string;
+			repeat?: boolean | { maxDepth?: number };
+	  }
+	| {
+			kind: "path";
+			field: TFieldNames;
+			separator?: string;
+			syntheticFolders?: boolean;
+			repeat?: boolean | { maxDepth?: number };
+	  };
+
+export interface ListViewOutlineConfig<TFieldNames extends string = string> {
+	levels: ListViewOutlineLevel<TFieldNames>[];
+	defaultExpanded?: boolean | "roots";
+	maxDepth?: number;
+	showCounts?: boolean;
+	preserveMatchingBranches?: boolean;
+}
+
 /**
  * List view configuration
  */
@@ -150,12 +198,17 @@ export interface ListViewConfig<TFieldNames extends string = string> {
 	 * Enable search
 	 * @default true
 	 */
-	searchable?: boolean;
+	searchable?: boolean | TFieldNames[];
 
 	/**
 	 * Searchable fields (defaults to all text-like fields)
 	 */
 	searchFields?: TFieldNames[];
+
+	/**
+	 * Filterable fields exposed by schema-driven list views.
+	 */
+	filterable?: TFieldNames[];
 
 	/**
 	 * Enable row selection
@@ -197,6 +250,16 @@ export interface ListViewConfig<TFieldNames extends string = string> {
 		defaultCollapsed?: boolean;
 		showCounts?: boolean;
 	};
+
+	/**
+	 * Dense list row layout hints used by list-like renderers.
+	 */
+	layout?: ListViewLayoutConfig<TFieldNames>;
+
+	/**
+	 * Renderer-agnostic multi-level outline/grouping configuration.
+	 */
+	outline?: ListViewOutlineConfig<TFieldNames>;
 
 	/**
 	 * Actions configuration for list view

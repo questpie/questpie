@@ -8,7 +8,7 @@ QUESTPIE queues use adapter implementations. `pgBossAdapter` stores jobs in Post
 ## Configuration
 
 ```ts title="questpie.config.ts"
-import { runtimeConfig } from "questpie";
+import { runtimeConfig } from "questpie/app";
 import { pgBossAdapter } from "questpie/adapters/pg-boss";
 
 export default runtimeConfig({
@@ -27,7 +27,7 @@ pg-boss creates its own schema in your database (`pgboss.*` tables) for job stor
 Use BullMQ when Redis is already part of the deployment and you want Redis-backed queue storage for Node/Bun workers:
 
 ```ts title="questpie.config.ts"
-import { runtimeConfig } from "questpie";
+import { runtimeConfig } from "questpie/app";
 import { bullMQAdapter } from "questpie/adapters/bullmq";
 
 export default runtimeConfig({
@@ -47,7 +47,7 @@ The built-in BullMQ adapter targets open-source BullMQ. It does not expose per-g
 Jobs are defined in `jobs/` using the file convention:
 
 ```ts title="src/questpie/server/jobs/send-email.ts"
-import { job } from "questpie";
+import { job } from "questpie/services";
 import z from "zod";
 
 export default job({
@@ -134,7 +134,7 @@ console.log(`Processed ${result.processed} jobs`);
 Cloudflare uses push consumers. Configure `cloudflareQueuesAdapter` in `runtimeConfig`, then export a Worker with `createCloudflareWorkerHandlers`:
 
 ```ts title="questpie.config.ts"
-import { runtimeConfig } from "questpie";
+import { runtimeConfig } from "questpie/app";
 import {
 	cloudflareQueuesAdapter,
 	type CloudflareQueueBinding,
@@ -190,7 +190,7 @@ await queue.sendReminder.publish(
 Use `options.cron` for recurring work. `app.queue.listen()` registers cron schedules automatically before it starts workers:
 
 ```ts title="src/questpie/server/jobs/send-daily-digest.ts"
-import { job } from "questpie";
+import { job } from "questpie/services";
 import z from "zod";
 
 export default job({

@@ -5,6 +5,7 @@ export {
 	executeJsonRoute,
 	executeRawRoute,
 } from "./execute.js";
+export { introspectRoutes, type IntrospectedRoute } from "./introspection.js";
 export type {
 	HttpMethod,
 	InferRouteInput,
@@ -19,6 +20,8 @@ export type {
 	RouteAccessContext,
 	RouteAccessRule,
 	RouteDefinition,
+	RouteMcpMeta,
+	RouteMeta,
 	RouteParamsFromKey,
 	RouteWithParams,
 	RoutesTree,

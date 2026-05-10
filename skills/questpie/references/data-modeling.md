@@ -242,8 +242,7 @@ Every field accepts:
 ### Virtual (Computed) Fields
 
 ```ts
-import { sql } from "questpie";
-
+import { sql } from "questpie/builders";
 displayTitle: f.text().virtual(sql<string>`(
     SELECT COALESCE(name, 'Unknown') || ' - ' ||
     TO_CHAR("scheduledAt", 'YYYY-MM-DD HH24:MI')
@@ -319,8 +318,7 @@ const appointments = await collections.appointments.find({
 ### Locale Configuration
 
 ```ts title="config/app.ts"
-import { appConfig } from "questpie";
-
+import { appConfig } from "questpie/app";
 export default appConfig({
 	locale: {
 		locales: [

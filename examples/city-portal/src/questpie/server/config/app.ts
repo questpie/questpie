@@ -1,5 +1,4 @@
-import { appConfig } from "questpie";
-
+import { appConfig } from "questpie/app";
 export default appConfig({
     locale: {
         locales: [{ code: "en", label: "English", fallback: true, flagCountryCode: "gb" }],

@@ -160,8 +160,7 @@ export default {
 The same message dictionary is available to hooks, routes, services, jobs, and email templates through `ctx.t()`:
 
 ```ts title="routes/send-invoice.ts"
-import { route } from "questpie";
-
+import { route } from "questpie/services";
 export default route().handler(async ({ input, t, locale }) => {
 	return {
 		message: t(

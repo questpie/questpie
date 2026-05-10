@@ -147,18 +147,18 @@ export function coreCodegenPlugin(): CodegenPlugin {
 					singletonFactories: {
 						appConfig: {
 							configType: "AppConfigInput",
-							imports: [{ name: "AppConfigInput", from: "questpie" }],
+							imports: [{ name: "AppConfigInput", from: "questpie/types" }],
 						},
 						authConfig: {
 							configType: "AuthConfig",
-							imports: [{ name: "AuthConfig", from: "questpie" }],
+							imports: [{ name: "AuthConfig", from: "questpie/types" }],
 						},
 					},
 				},
 				callbackParams: {
 					f: {
 						factory: "createFieldNameProxy",
-						from: "questpie",
+						from: "questpie/builders",
 					},
 				},
 				scaffolds: {
@@ -178,32 +178,32 @@ export function coreCodegenPlugin(): CodegenPlugin {
 						dir: "jobs",
 						description: "Background job",
 						template: ({ kebab }) =>
-							`import { job } from "questpie";\nimport { z } from "zod";\n\nexport default job({\n\tname: "${kebab}",\n\tschema: z.object({}),\n\thandler: async () => {},\n});\n`,
+							`import { job } from "questpie/services";\nimport { z } from "zod";\n\nexport default job({\n\tname: "${kebab}",\n\tschema: z.object({}),\n\thandler: async () => {},\n});\n`,
 					},
 					service: {
 						dir: "services",
 						description: "Service definition",
 						template: ({ camel }) =>
-							`import { service } from "questpie";\n\nexport const ${camel}Service = service()\n\t.lifecycle("singleton")\n\t.create(() => {\n\t\treturn {};\n\t});\n`,
+							`import { service } from "questpie/services";\n\nexport const ${camel}Service = service()\n\t.lifecycle("singleton")\n\t.create(() => {\n\t\treturn {};\n\t});\n`,
 					},
 					email: {
 						dir: "emails",
 						extension: ".tsx",
 						description: "Email template",
 						template: ({ kebab, title }) =>
-							`import { email } from "questpie";\nimport { z } from "zod";\n\nexport default email({\n\tname: "${kebab}",\n\tschema: z.object({}),\n\thandler: async () => ({\n\t\tsubject: "${title}",\n\t\thtml: "<div>${title}</div>",\n\t}),\n});\n`,
+							`import { email } from "questpie/services";\nimport { z } from "zod";\n\nexport default email({\n\tname: "${kebab}",\n\tschema: z.object({}),\n\thandler: async () => ({\n\t\tsubject: "${title}",\n\t\thtml: "<div>${title}</div>",\n\t}),\n});\n`,
 					},
 					route: {
 						dir: "routes",
 						description: "API route",
 						template: () =>
-							`import { route } from "questpie";\nimport { z } from "zod";\n\nexport default route()\n\t.post()\n\t.schema(z.object({}))\n\t.handler(async () => {\n\t\treturn {};\n\t});\n`,
+							`import { route } from "questpie/services";\nimport { z } from "zod";\n\nexport default route()\n\t.post()\n\t.schema(z.object({}))\n\t.handler(async () => {\n\t\treturn {};\n\t});\n`,
 					},
 					seed: {
 						dir: "seeds",
 						description: "Database seed",
 						template: ({ camel }) =>
-							`import { seed } from "questpie";\n\nexport default seed({\n\tid: "${camel}",\n\tdescription: "TODO: describe what this seed does",\n\tcategory: "dev",\n\tasync run({ collections, globals, createContext, log }) {\n\t\tlog("Running ${camel} seed...");\n\t},\n});\n`,
+							`import { seed } from "questpie/services";\n\nexport default seed({\n\tid: "${camel}",\n\tdescription: "TODO: describe what this seed does",\n\tcategory: "dev",\n\tasync run({ collections, globals, createContext, log }) {\n\t\tlog("Running ${camel} seed...");\n\t},\n});\n`,
 					},
 					migration: {
 						dir: "migrations",
@@ -214,7 +214,7 @@ export function coreCodegenPlugin(): CodegenPlugin {
 								.replace(/[-:]/g, "")
 								.replace(/\..+/, "")
 								.slice(0, 15);
-							return `import { migration } from "questpie";\nimport { sql } from "drizzle-orm";\n\nexport default migration({\n\tid: "${camel}${timestamp}",\n\tasync up({ db }) {\n\t\t// TODO: implement migration\n\t},\n\tasync down({ db }) {\n\t\t// TODO: implement rollback\n\t},\n});\n`;
+							return `import { migration } from "questpie/services";\nimport { sql } from "drizzle-orm";\n\nexport default migration({\n\tid: "${camel}${timestamp}",\n\tasync up({ db }) {\n\t\t// TODO: implement migration\n\t},\n\tasync down({ db }) {\n\t\t// TODO: implement rollback\n\t},\n});\n`;
 						},
 					},
 				},

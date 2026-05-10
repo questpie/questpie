@@ -101,8 +101,7 @@ Only hyphens are camelized in factory args; underscores are preserved (`global("
 
 ```ts
 // src/questpie/server/questpie.config.ts
-import { runtimeConfig } from "questpie";
-
+import { runtimeConfig } from "questpie/app";
 export default runtimeConfig({
 	app: {
 		url: process.env.APP_URL || "http://localhost:3000",
@@ -162,7 +161,7 @@ Core: `text`, `number`, `boolean`, `date`, `datetime`, `time`, `select`, `relati
 
 ```ts
 // src/questpie/server/routes/get-overdue-tasks.ts
-import { route } from "questpie";
+import { route } from "questpie/services";
 import z from "zod";
 
 export default route()
@@ -239,7 +238,7 @@ bunx questpie migrate:fresh
 ```ts
 // src/routes/api/$.ts
 import { createAPIFileRoute } from "@tanstack/react-start/api";
-import { createFetchHandler } from "questpie";
+import { createFetchHandler } from "questpie/http";
 import { app } from "#questpie";
 
 const handler = createFetchHandler(app, { basePath: "/api" });
@@ -285,7 +284,7 @@ bun add @questpie/admin
 
 ```ts
 // src/questpie/server/modules.ts
-import { adminModule } from "@questpie/admin/server";
+import { adminModule } from "@questpie/admin/modules/admin";
 
 export default [adminModule] as const;
 ```
@@ -443,8 +442,7 @@ export { default } from "./src/questpie/server/questpie.config";
 
 ```ts
 // src/questpie/server/questpie.config.ts
-import { runtimeConfig } from "questpie";
-
+import { runtimeConfig } from "questpie/app";
 export default runtimeConfig({
 	app: { url: process.env.APP_URL || "http://localhost:3000" },
 	db: { url: process.env.DATABASE_URL! },
@@ -469,7 +467,7 @@ export default collection("posts").fields(({ f }) => ({
 ```ts
 // src/routes/api/$.ts
 import { createAPIFileRoute } from "@tanstack/react-start/api";
-import { createFetchHandler } from "questpie";
+import { createFetchHandler } from "questpie/http";
 import { app } from "#questpie";
 
 const handler = createFetchHandler(app, { basePath: "/api" });

@@ -342,8 +342,8 @@ export class DrizzleMigrationGenerator {
 				.join("\n\t\t");
 		};
 
-		return `import { migration } from "questpie"
-import type { OperationSnapshot } from "questpie"
+		return `import { migration } from "questpie/services"
+import type { OperationSnapshot } from "questpie/migration"
 import { sql } from "drizzle-orm"
 import snapshotJson from "./snapshots/${snapshotFileName}.json"
 
