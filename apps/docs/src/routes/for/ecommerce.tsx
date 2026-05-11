@@ -65,9 +65,9 @@ const DATA: UseCaseData = {
 		},
 		{
 			icon: "ph:cube",
-			title: "Everything built in",
+			title: "Build it your way",
 			description:
-				"Products, categories, variants, inventory, media, SEO — all native. No plugins to install, update, or debug.",
+				"Products, categories, variants, inventory — model your data with collections. No plugin dependency chains.",
 		},
 	],
 	features: [
@@ -109,9 +109,9 @@ const DATA: UseCaseData = {
 		},
 		{
 			icon: "ph:envelope",
-			title: "Email automation",
+			title: "Email workflows",
 			description:
-				"Abandoned cart recovery, order confirmations, shipping updates, and promotional campaigns — all automated.",
+				"Build email sequences with Autopilot workflows — order confirmations, shipping updates, and promotional campaigns.",
 		},
 		{
 			icon: "ph:chart-bar",
@@ -131,7 +131,7 @@ const DATA: UseCaseData = {
 			"E-commerce templates ready to customize",
 			"AI storefront builder — describe your brand",
 			"Managed hosting with CDN and SSL",
-			"One-click deploy, zero-downtime updates",
+			"One-click deploy from Cloud dashboard",
 		],
 		autopilot: [
 			"AI product description generator",
@@ -143,7 +143,7 @@ const DATA: UseCaseData = {
 	faq: [
 		{
 			q: "How is this different from Shopify or WooCommerce?",
-			a: "QUESTPIE is open source with no transaction fees. You own your data and infrastructure. Unlike Shopify, there's no per-sale cut. Unlike WooCommerce, everything is built in — no plugin dependency chains. And AI handles content creation that would take you hours.",
+			a: "QUESTPIE is open source with no transaction fees. You own your data and infrastructure. Unlike Shopify, there's no per-sale cut. Unlike WooCommerce, you model your data with collections instead of relying on plugin chains. Autopilot can help with content creation.",
 		},
 		{
 			q: "Can I handle payments?",

@@ -55,19 +55,19 @@ const DATA: UseCaseData = {
 			icon: "ph:pencil-simple",
 			title: "Update once, publish everywhere",
 			description:
-				"Change your menu in the admin panel. Website, ordering system, and social posts update automatically.",
+				"Change your menu in the admin panel. Your website updates instantly. API-driven — connect to any third-party platform.",
 		},
 		{
 			icon: "ph:robot",
-			title: "AI handles your marketing",
+			title: "AI assists your marketing",
 			description:
-				"Autopilot agents write social posts, optimize your Google listing, and send email campaigns on autopilot.",
+				"Autopilot agents can draft social posts, suggest SEO improvements, and help with email campaigns. You review and publish.",
 		},
 		{
 			icon: "ph:wallet",
-			title: "Replace five tools with one",
+			title: "One platform, not five subscriptions",
 			description:
-				"Website, CMS, reservations, ordering, and marketing automation — all included. One bill, one login.",
+				"Website, CMS, and admin panel from Framework. AI assistance from Autopilot. Hosting from Cloud. One ecosystem.",
 		},
 	],
 	features: [
@@ -79,15 +79,15 @@ const DATA: UseCaseData = {
 		},
 		{
 			icon: "ph:calendar-check",
-			title: "Online reservations",
+			title: "Reservation-ready",
 			description:
-				"Guests book tables directly on your site. Automatic confirmations, reminders, and capacity management.",
+				"Build a booking system with Framework collections. Date, time, party size, confirmation emails — define the schema you need.",
 		},
 		{
 			icon: "ph:shopping-bag",
-			title: "Online ordering",
+			title: "Ordering on your terms",
 			description:
-				"Takeout and delivery ordering built into your website. No third-party commissions eating your margins.",
+				"Build your own ordering flow with collections and API. No third-party commissions — customers order directly on your site.",
 		},
 		{
 			icon: "ph:paint-brush",
@@ -147,11 +147,11 @@ const DATA: UseCaseData = {
 		},
 		{
 			q: "Does it handle online ordering and delivery?",
-			a: "Yes. Customers can place orders directly on your website — no commissions to third-party platforms. You manage orders from the admin panel and can integrate with delivery services.",
+			a: "You can build an ordering flow with Framework collections — products, orders, customer details. The admin panel gives your staff a dashboard for managing orders. Integration with delivery services is possible through the REST API and hooks.",
 		},
 		{
 			q: "Can I take reservations through my website?",
-			a: "Yes. The reservation system is built in. Guests pick a date, time, and party size. You get automatic notifications, and guests get confirmation emails. Capacity management prevents overbooking.",
+			a: "Yes. You create a reservations collection with the fields you need — date, time, party size, contact info. Framework handles the form, validation, and API. Cloud templates will include pre-built reservation flows for common setups.",
 		},
 		{
 			q: "How does the AI marketing work?",

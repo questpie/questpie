@@ -49,13 +49,13 @@ const DATA: UseCaseData = {
 			icon: "ph:database",
 			title: "Unified listing management",
 			description:
-				"Manage all properties in one admin panel. Update once — your website, social posts, and exports update automatically.",
+				"Manage all properties in one admin panel. Update a listing once — your website reflects it instantly. API for portal syndication.",
 		},
 		{
 			icon: "ph:funnel",
-			title: "Automated lead pipeline",
+			title: "Lead capture and tracking",
 			description:
-				"Every inquiry captured, categorized, and followed up automatically. No lead falls through the cracks.",
+				"Every inquiry captured in your admin panel. Organize by status, source, and property. Build follow-up workflows with Autopilot.",
 		},
 		{
 			icon: "ph:robot",
@@ -103,9 +103,9 @@ const DATA: UseCaseData = {
 		},
 		{
 			icon: "ph:clock",
-			title: "Automated follow-ups",
+			title: "Follow-up workflows",
 			description:
-				"New inquiry? Automatic thank-you email. No response in 2 days? Reminder. AI handles the drip sequence.",
+				"Build follow-up sequences with Autopilot workflows — thank-you emails, reminders, drip campaigns. You define the rules.",
 		},
 		{
 			icon: "ph:text-aa",
@@ -162,8 +162,8 @@ const DATA: UseCaseData = {
 			a: "Yes. Multi-tenant support means each office can have its own listings, agents, and branding while sharing a unified admin and website. Manage everything from one dashboard.",
 		},
 		{
-			q: "How does lead automation work?",
-			a: "When someone submits an inquiry, Autopilot can send an instant thank-you email, notify the listing agent, and start a drip sequence. You configure the rules — AI handles execution. Review all leads in the admin panel.",
+			q: "How does lead follow-up work?",
+			a: "You define workflows with Autopilot — for example, send a thank-you email on inquiry, notify the listing agent, and schedule follow-up reminders. The workflow engine handles execution. Review all leads in the admin panel.",
 		},
 		{
 			q: "Is it mobile-friendly?",
