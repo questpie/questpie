@@ -225,11 +225,16 @@ export function createTypedHooks<TApp extends QuestpieApp>(): TypedHooks<TApp> {
 			} as any,
 		);
 
+		const baseQuery = collection
+			? (queryOpts as any).collections[collection as string].find({
+					...options,
+					locale: contentLocale,
+				} as any)
+			: { queryKey: ["questpie", "collections", "__none__", "find"], queryFn: () => ({ docs: [], totalDocs: 0 }) };
+
 		return useQuery({
-			...(queryOpts as any).collections[collection as string].find({
-				...options,
-				locale: contentLocale,
-			} as any),
+			...baseQuery,
+			enabled: !!collection && (queryOptions?.enabled ?? true),
 			...queryOptions,
 		});
 	}
@@ -251,11 +256,16 @@ export function createTypedHooks<TApp extends QuestpieApp>(): TypedHooks<TApp> {
 			} as any,
 		);
 
+		const baseQuery = collection
+			? (queryOpts as any).collections[collection as string].count({
+					...options,
+					locale: contentLocale,
+				} as any)
+			: { queryKey: ["questpie", "collections", "__none__", "count"], queryFn: () => 0 };
+
 		return useQuery({
-			...(queryOpts as any).collections[collection as string].count({
-				...options,
-				locale: contentLocale,
-			} as any),
+			...baseQuery,
+			enabled: !!collection && (queryOptions?.enabled ?? true),
 			...queryOptions,
 		});
 	}
@@ -278,12 +288,17 @@ export function createTypedHooks<TApp extends QuestpieApp>(): TypedHooks<TApp> {
 			locale: contentLocale,
 		});
 
+		const baseQuery = collection
+			? (queryOpts as any).collections[collection as string].findOne({
+					where: { id },
+					locale: contentLocale,
+					...options,
+				})
+			: { queryKey: ["questpie", "collections", "__none__", "findOne"], queryFn: () => null };
+
 		return useQuery({
-			...(queryOpts as any).collections[collection as string].findOne({
-				where: { id },
-				locale: contentLocale,
-				...options,
-			}),
+			...baseQuery,
+			enabled: !!collection && (queryOptions?.enabled ?? true),
 			...queryOptions,
 		});
 	}
@@ -522,13 +537,17 @@ export function createTypedHooks<TApp extends QuestpieApp>(): TypedHooks<TApp> {
 			locale: contentLocale,
 		});
 
+		const baseQuery = collection
+			? (queryOpts as any).collections[collection as string].findVersions({
+					id,
+					...(options?.limit !== undefined ? { limit: options.limit } : {}),
+					...(options?.offset !== undefined ? { offset: options.offset } : {}),
+				})
+			: { queryKey: ["questpie", "collections", "__none__", "findVersions"], queryFn: () => ({ docs: [], totalDocs: 0 }) };
+
 		return useQuery({
-			...(queryOpts as any).collections[collection as string].findVersions({
-				id,
-				...(options?.limit !== undefined ? { limit: options.limit } : {}),
-				...(options?.offset !== undefined ? { offset: options.offset } : {}),
-			}),
-			enabled: !!id && (queryOptions?.enabled ?? true),
+			...baseQuery,
+			enabled: !!collection && !!id && (queryOptions?.enabled ?? true),
 			...queryOptions,
 		});
 	}

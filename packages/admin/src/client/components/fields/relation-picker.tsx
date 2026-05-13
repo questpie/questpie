@@ -240,7 +240,7 @@ export function RelationPicker<T extends QuestpieApp>({
 			}
 			return map;
 		},
-		enabled: !!client && selectedIds.length > 0,
+		enabled: !!client && !!targetCollection && selectedIds.length > 0,
 		staleTime: 30_000,
 		placeholderData: (prev) => prev,
 	});
@@ -248,7 +248,7 @@ export function RelationPicker<T extends QuestpieApp>({
 	// Load options from server with search
 	const loadOptions = React.useCallback(
 		async (search: string): Promise<SelectOption<string>[]> => {
-			if (!client) return [];
+			if (!client || !targetCollection) return [];
 
 			try {
 				const options: any = {

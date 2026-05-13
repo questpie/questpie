@@ -61,13 +61,16 @@ export function useCollectionList<K extends ResolvedCollectionNames>(
 	};
 
 	// Pass realtime option to query options builder - this uses streamedQuery internally
-	const baseQuery = (queryOpts as any).collections[collection as string].find(
-		findOptions as any,
-		{ realtime: realtimeOptions?.realtime },
-	);
+	const baseQuery = collection
+		? (queryOpts as any).collections[collection as string].find(
+				findOptions as any,
+				{ realtime: realtimeOptions?.realtime },
+			)
+		: { queryKey: ["questpie", "collections", "__none__", "find"], queryFn: () => ({ docs: [], totalDocs: 0 }) };
 
 	return useQuery({
 		...baseQuery,
+		enabled: !!collection && (queryOptions?.enabled ?? true),
 		...queryOptions,
 	});
 }
@@ -104,13 +107,16 @@ export function useCollectionCount<K extends ResolvedCollectionNames>(
 
 	// Pass realtime option to query options builder - this uses streamedQuery internally
 	// The reducer in tanstack-query already extracts totalDocs from the snapshot
-	const baseQuery = (queryOpts as any).collections[collection as string].count(
-		countOptions as any,
-		{ realtime: realtimeOptions?.realtime },
-	);
+	const baseQuery = collection
+		? (queryOpts as any).collections[collection as string].count(
+				countOptions as any,
+				{ realtime: realtimeOptions?.realtime },
+			)
+		: { queryKey: ["questpie", "collections", "__none__", "count"], queryFn: () => 0 };
 
 	return useQuery({
 		...baseQuery,
+		enabled: !!collection && (queryOptions?.enabled ?? true),
 		...queryOptions,
 	});
 }
@@ -140,12 +146,17 @@ export function useCollectionItem<K extends ResolvedCollectionNames>(
 ): any {
 	const { queryOpts, locale } = useQuestpieQueryOptions();
 
+	const baseQuery = collection
+		? (queryOpts as any).collections[collection as string].findOne({
+				where: { id },
+				locale,
+				...options,
+			})
+		: { queryKey: ["questpie", "collections", "__none__", "findOne"], queryFn: () => null };
+
 	return useQuery({
-		...(queryOpts as any).collections[collection as string].findOne({
-			where: { id },
-			locale,
-			...options,
-		}),
+		...baseQuery,
+		enabled: !!collection && (queryOptions?.enabled ?? true),
 		...queryOptions,
 	});
 }
@@ -427,17 +438,17 @@ export function useCollectionVersions<K extends ResolvedCollectionNames>(
 ): any {
 	const { queryOpts } = useQuestpieQueryOptions();
 
-	const baseQuery = (queryOpts as any).collections[
-		collection as string
-	].findVersions({
-		id,
-		...(options?.limit !== undefined ? { limit: options.limit } : {}),
-		...(options?.offset !== undefined ? { offset: options.offset } : {}),
-	});
+	const baseQuery = collection
+		? (queryOpts as any).collections[collection as string].findVersions({
+				id,
+				...(options?.limit !== undefined ? { limit: options.limit } : {}),
+				...(options?.offset !== undefined ? { offset: options.offset } : {}),
+			})
+		: { queryKey: ["questpie", "collections", "__none__", "findVersions"], queryFn: () => ({ docs: [], totalDocs: 0 }) };
 
 	return useQuery({
 		...baseQuery,
-		enabled: !!id && (queryOptions?.enabled ?? true),
+		enabled: !!collection && !!id && (queryOptions?.enabled ?? true),
 		...queryOptions,
 	});
 }

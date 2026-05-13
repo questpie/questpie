@@ -152,7 +152,7 @@ export function RelationSelect<T extends QuestpieApp>({
 	// Load options from server with search
 	const loadOptions = React.useCallback(
 		async (search: string): Promise<SelectOption<string>[]> => {
-			if (!client) return [];
+			if (!client || !targetCollection) return [];
 
 			try {
 				const options: any = {
@@ -250,7 +250,7 @@ export function RelationSelect<T extends QuestpieApp>({
 	// Fetch selected item details using the hook
 	const { data: selectedItem, isLoading: isLoadingSelectedItem } =
 		useCollectionItem(targetCollection, value || "", undefined, {
-			enabled: !!value,
+			enabled: !!value && !!targetCollection,
 		});
 
 	const selectedOptions = React.useMemo(() => {
