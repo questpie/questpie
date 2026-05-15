@@ -1,5 +1,19 @@
 # @questpie/admin
 
+## 3.5.1
+
+### Patch Changes
+
+- [`a918d08`](https://github.com/questpie/questpie/commit/a918d085a3e8ef1a1b32925215961631e2b23fe7) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Improve admin UI performance and preview stability while tightening React Doctor checks.
+
+  - Reduce stale state updates, redundant render work, and unnecessary layout churn in admin views and preview flows.
+  - Add safer collection and relation query guards when collection names are not yet resolved.
+  - Restore the OpenAPI root package export for `openApiModule` and config helpers.
+
+- Updated dependencies []:
+  - questpie@3.5.1
+  - @questpie/tanstack-query@3.5.1
+
 ## 3.5.0
 
 ### Patch Changes
