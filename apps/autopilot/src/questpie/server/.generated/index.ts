@@ -374,7 +374,7 @@ export type AppConfig = {
 	collections: AppCollections & Record<string, any>;
 	globals: AppGlobals & Record<string, any>;
 	routes: AppRoutes;
-	auth: typeof _authConfig;
+	auth: _AppAuthConfig;
 };
 
 // ════════════════════════════════════════════════════════════

@@ -28,6 +28,21 @@ import {
 } from "../ui/accordion";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 
+function getLayoutItemKey(item: FieldLayoutItem, index: number): string {
+	if (isFieldReference(item)) {
+		return getFieldName(item) ?? `field-${index}`;
+	}
+	if (item.type === "section") {
+		const label =
+			typeof item.label === "string"
+				? item.label
+				: JSON.stringify(item.label ?? "");
+		return `section-${label}-${index}`;
+	}
+	const tabIds = item.tabs.map((tab) => tab.id).join("-");
+	return `tabs-${tabIds || index}`;
+}
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -85,7 +100,7 @@ export function FieldLayoutRenderer({
 				case "section":
 					return (
 						<SectionRenderer
-							key={`section-${index}`}
+							key={getLayoutItemKey(item, index)}
 							section={item}
 							index={index}
 							ctx={ctx}
@@ -93,7 +108,11 @@ export function FieldLayoutRenderer({
 					);
 				case "tabs":
 					return (
-						<TabsRenderer key={`tabs-${index}`} tabsLayout={item} ctx={ctx} />
+						<TabsRenderer
+							key={getLayoutItemKey(item, index)}
+							tabsLayout={item}
+							ctx={ctx}
+						/>
 					);
 				default:
 					return null;
@@ -143,7 +162,7 @@ function SectionRenderer({
 							// Nested layout container
 							return (
 								<FieldLayoutRenderer
-									key={`nested-${idx}`}
+									key={getLayoutItemKey(fieldItem, idx)}
 									items={[fieldItem]}
 									ctx={ctx}
 								/>

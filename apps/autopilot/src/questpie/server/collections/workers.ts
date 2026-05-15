@@ -1,5 +1,6 @@
-import { collection } from "#questpie/factories";
 import { index, uniqueIndex } from "drizzle-orm/pg-core";
+
+import { collection } from "#questpie/factories";
 
 export const workers = collection("workers")
 	.fields(({ f }) => ({
@@ -24,7 +25,7 @@ export const workers = collection("workers")
 	}))
 	.title(({ f }) => f.name)
 	.admin(({ c }) => ({
-		label: { en: "Workers" },
+		label: { en: "Connected Devices" },
 		icon: c.icon("ph:desktop-tower"),
 	}))
 	.list(({ v }) => v.collectionTable({}))

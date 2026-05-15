@@ -18,6 +18,9 @@ import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
+	DropdownMenuLabel,
+	DropdownMenuRadioGroup,
+	DropdownMenuRadioItem,
 	DropdownMenuSeparator,
 	DropdownMenuSub,
 	DropdownMenuSubContent,
@@ -541,7 +544,7 @@ function isRouteActive(
  * Menu button styles - QUESTPIE design: clean, technical look
  */
 const menuButtonStyles = cn(
-	"item-surface font-chrome flex w-full items-center gap-2 px-2 py-2 text-[13px] font-medium transition-[background-color,color,border-color,transform] duration-[var(--motion-duration-base)] ease-[var(--motion-ease-standard)] active:scale-[0.96] motion-reduce:transition-none motion-reduce:active:scale-100",
+	"item-surface font-chrome flex w-full items-center gap-2 p-2 text-[13px] font-medium transition-[background-color,color,border-color,transform] duration-[var(--motion-duration-base)] ease-[var(--motion-ease-standard)] active:scale-[0.96] motion-reduce:transition-none motion-reduce:active:scale-100",
 	"text-sidebar-foreground/75 hover:bg-sidebar-accent hover:text-sidebar-foreground",
 	"focus-visible:ring-sidebar-ring focus-visible:ring-1 focus-visible:outline-none",
 	"group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-2",
@@ -930,11 +933,25 @@ function UserFooter({
 	const setContentLocale = useAdminStore(selectSetContentLocale);
 	const hasMultipleContentLocales = (contentLocales?.locales?.length ?? 0) > 1;
 	const shouldShowThemeToggle = !!setTheme && showThemeToggle !== false;
-	const themeOptions = [
-		{ value: "light", label: t("ui.themeLight"), icon: "ph:sun" },
-		{ value: "dark", label: t("ui.themeDark"), icon: "ph:moon" },
-		{ value: "system", label: t("ui.themeSystem"), icon: "ph:monitor" },
-	] as const;
+	const themeOptions = React.useMemo(
+		() =>
+			[
+				{ value: "light", label: t("ui.themeLight"), icon: "ph:sun" },
+				{ value: "dark", label: t("ui.themeDark"), icon: "ph:moon" },
+				{
+					value: "system",
+					label: t("ui.themeSystem"),
+					icon: "ph:monitor",
+				},
+			] as const,
+		[t],
+	);
+	const handleThemeChange = React.useCallback(
+		(value: string) => {
+			setTheme?.(value as AdminSidebarTheme);
+		},
+		[setTheme],
+	);
 
 	// Close sidebar on mobile when navigating
 	const closeSidebarOnMobile = React.useCallback(() => {
@@ -1042,29 +1059,24 @@ function UserFooter({
 							</DropdownMenuItem>
 							{/* Theme Switcher */}
 							{shouldShowThemeToggle && (
-								<DropdownMenuSub>
-									<DropdownMenuSubTrigger>
-										<Icon icon="ph:circle-half" />
-										{t("ui.toggleTheme")}
-									</DropdownMenuSubTrigger>
-									<DropdownMenuSubContent>
+								<>
+									<DropdownMenuSeparator />
+									<DropdownMenuLabel>{t("ui.toggleTheme")}</DropdownMenuLabel>
+									<DropdownMenuRadioGroup
+										value={theme}
+										onValueChange={handleThemeChange}
+									>
 										{themeOptions.map((option) => (
-											<DropdownMenuItem
+											<DropdownMenuRadioItem
 												key={option.value}
-												onClick={() => setTheme(option.value)}
+												value={option.value}
 											>
 												<Icon icon={option.icon} className="size-4" />
-												<span className="flex-1">{option.label}</span>
-												{theme === option.value && (
-													<Icon
-														icon="ph:check"
-														className="text-foreground size-4"
-													/>
-												)}
-											</DropdownMenuItem>
+												<span>{option.label}</span>
+											</DropdownMenuRadioItem>
 										))}
-									</DropdownMenuSubContent>
-								</DropdownMenuSub>
+									</DropdownMenuRadioGroup>
+								</>
 							)}
 							{/* UI Language Switcher */}
 							{hasMultipleUiLocales && (

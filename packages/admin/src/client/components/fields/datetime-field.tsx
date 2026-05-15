@@ -6,6 +6,12 @@ import type { DateTimeFieldProps } from "./field-types";
 import { useResolvedControl } from "./field-utils";
 import { FieldWrapper } from "./field-wrapper";
 
+function parseDateTimeFieldValue(value: unknown): Date | null {
+	if (!value) return null;
+	const date = value instanceof Date ? value : new Date(String(value));
+	return Number.isNaN(date.getTime()) ? null : date;
+}
+
 export function DatetimeField({
 	name,
 	label,
@@ -29,13 +35,7 @@ export function DatetimeField({
 			name={name}
 			control={resolvedControl}
 			render={({ field, fieldState }) => {
-				// Handle string dates from form (convert to Date object)
-				const dateValue =
-					field.value instanceof Date
-						? field.value
-						: field.value
-							? new Date(field.value)
-							: null;
+				const dateValue = parseDateTimeFieldValue(field.value);
 
 				return (
 					<FieldWrapper

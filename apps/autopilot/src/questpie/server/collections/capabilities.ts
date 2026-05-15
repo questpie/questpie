@@ -6,19 +6,19 @@ export const capabilities = collection("capabilities")
 	.fields(({ f }) => ({
 		name: f.text().label({ en: "Name" }).required(),
 		description: f.textarea().label({ en: "Description" }),
-		defaultModel: f.relation("models").label({ en: "Default Model" }),
+		defaultModel: f.relation("models").label({ en: "Default AI Model" }),
 		allowedProviders: f.json().label({ en: "Allowed Providers" }),
 		allowedTools: f.json().label({ en: "Allowed Tools" }),
-		contextRefs: f.json().label({ en: "Context Refs" }),
-		promptRefs: f.json().label({ en: "Prompt Refs" }),
+		contextRefs: f.json().label({ en: "Knowledge Sources" }),
+		promptRefs: f.json().label({ en: "Prompt References" }),
 		runtimeHints: f.json().label({ en: "Runtime Hints" }),
 		project: f.relation("projects").label({ en: "Project" }),
 		enabled: f.boolean().label({ en: "Enabled" }).default(true),
-		config: f.json().label({ en: "Config" }),
+		config: f.json().label({ en: "Advanced Settings" }),
 	}))
 	.title(({ f }) => f.name)
 	.admin(({ c }) => ({
-		label: { en: "Capabilities" },
+		label: { en: "Skills" },
 		icon: c.icon("ph:puzzle-piece"),
 	}))
 	.list(({ v }) => v.collectionTable({}))
@@ -37,7 +37,13 @@ export const capabilities = collection("capabilities")
 				{
 					type: "section",
 					label: "Tools & Context",
-					fields: [f.allowedTools, f.allowedProviders, f.contextRefs, f.promptRefs, f.runtimeHints],
+					fields: [
+						f.allowedTools,
+						f.allowedProviders,
+						f.contextRefs,
+						f.promptRefs,
+						f.runtimeHints,
+					],
 				},
 				{
 					type: "section",

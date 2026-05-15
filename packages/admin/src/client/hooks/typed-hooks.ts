@@ -230,7 +230,10 @@ export function createTypedHooks<TApp extends QuestpieApp>(): TypedHooks<TApp> {
 					...options,
 					locale: contentLocale,
 				} as any)
-			: { queryKey: ["questpie", "collections", "__none__", "find"], queryFn: () => ({ docs: [], totalDocs: 0 }) };
+			: {
+					queryKey: ["questpie", "collections", "__none__", "find"],
+					queryFn: () => ({ docs: [], totalDocs: 0 }),
+				};
 
 		return useQuery({
 			...baseQuery,
@@ -261,7 +264,10 @@ export function createTypedHooks<TApp extends QuestpieApp>(): TypedHooks<TApp> {
 					...options,
 					locale: contentLocale,
 				} as any)
-			: { queryKey: ["questpie", "collections", "__none__", "count"], queryFn: () => 0 };
+			: {
+					queryKey: ["questpie", "collections", "__none__", "count"],
+					queryFn: () => 0,
+				};
 
 		return useQuery({
 			...baseQuery,
@@ -294,7 +300,10 @@ export function createTypedHooks<TApp extends QuestpieApp>(): TypedHooks<TApp> {
 					locale: contentLocale,
 					...options,
 				})
-			: { queryKey: ["questpie", "collections", "__none__", "findOne"], queryFn: () => null };
+			: {
+					queryKey: ["questpie", "collections", "__none__", "findOne"],
+					queryFn: () => null,
+				};
 
 		return useQuery({
 			...baseQuery,
@@ -543,7 +552,10 @@ export function createTypedHooks<TApp extends QuestpieApp>(): TypedHooks<TApp> {
 					...(options?.limit !== undefined ? { limit: options.limit } : {}),
 					...(options?.offset !== undefined ? { offset: options.offset } : {}),
 				})
-			: { queryKey: ["questpie", "collections", "__none__", "findVersions"], queryFn: () => ({ docs: [], totalDocs: 0 }) };
+			: {
+					queryKey: ["questpie", "collections", "__none__", "findVersions"],
+					queryFn: () => ({ docs: [], totalDocs: 0 }),
+				};
 
 		return useQuery({
 			...baseQuery,

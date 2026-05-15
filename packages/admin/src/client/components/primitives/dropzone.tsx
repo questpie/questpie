@@ -364,7 +364,7 @@ export function Dropzone({
 			onDragOver={handleDragOver}
 			onDrop={handleDrop}
 			className={cn(
-				"qa-dropzone control-surface relative flex cursor-pointer hover:bg-muted/40 rounded-lg border transition-colors",
+				"qa-dropzone control-surface hover:bg-muted/40 relative flex cursor-pointer rounded-lg border transition-colors",
 				isCompact
 					? "min-h-16 flex-row items-center justify-start gap-3 border border-dashed p-3 text-left"
 					: "min-h-[120px] flex-col items-center justify-center gap-2 border-2 p-6 text-center",

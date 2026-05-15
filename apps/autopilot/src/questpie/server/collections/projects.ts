@@ -1,11 +1,12 @@
-import { collection } from "#questpie/factories";
 import { index, uniqueIndex } from "drizzle-orm/pg-core";
+
+import { collection } from "#questpie/factories";
 
 export const projects = collection("projects")
 	.fields(({ f }) => ({
 		name: f.text().required().label({ en: "Name" }),
 		slug: f.text().required().label({ en: "Slug" }),
-		path: f.text().label({ en: "Path" }),
+		path: f.text().label({ en: "Workspace Path" }),
 		gitProvider: f
 			.select([
 				{ value: "github", label: { en: "GitHub" } },
@@ -14,14 +15,14 @@ export const projects = collection("projects")
 				{ value: "none", label: { en: "None" } },
 			])
 			.label({ en: "Git Provider" }),
-		gitRemote: f.text().label({ en: "Git Remote" }),
+		gitRemote: f.text().label({ en: "Git Remote URL" }),
 		defaultBranch: f.text().default("main").label({ en: "Default Branch" }),
-		providerConfig: f.json().label({ en: "Provider Config" }),
+		providerConfig: f.json().label({ en: "Connection Settings" }),
 		metadata: f.json().label({ en: "Metadata" }),
 	}))
 	.title(({ f }) => f.name)
 	.admin(({ c }) => ({
-		label: { en: "Projects" },
+		label: { en: "Workspaces" },
 		icon: c.icon("ph:folder-notch"),
 	}))
 	.list(({ v }) => v.collectionTable({}))

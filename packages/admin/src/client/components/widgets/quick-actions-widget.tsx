@@ -171,7 +171,7 @@ export default function QuickActionsWidget({
 				<div className="grid h-full grid-cols-2 gap-3">
 					{parsedActions.map((action) => {
 						const iconElement = resolveIconElement(action.icon, {
-							className: "h-4 w-4",
+							className: "size-4",
 						});
 
 						return (
@@ -188,7 +188,7 @@ export default function QuickActionsWidget({
 								{iconElement && (
 									<div
 										className={cn(
-											"flex h-9 w-9 items-center justify-center rounded-md",
+											"flex size-9 items-center justify-center rounded-md",
 											iconVariantStyles[action.variant],
 										)}
 									>
@@ -219,7 +219,7 @@ export default function QuickActionsWidget({
 			<div className="-mx-1 space-y-1">
 				{parsedActions.map((action) => {
 					const iconElement = resolveIconElement(action.icon, {
-						className: "h-4 w-4",
+						className: "size-4",
 					});
 
 					return (
@@ -228,14 +228,14 @@ export default function QuickActionsWidget({
 							type="button"
 							onClick={() => handleClick(action)}
 							className={cn(
-								"group flex min-h-10 w-full items-center gap-3 rounded-md px-2 py-2 text-left transition-[background-color,transform] active:scale-[0.96]",
+								"group flex min-h-10 w-full items-center gap-3 rounded-md p-2 text-left transition-[background-color,transform] active:scale-[0.96]",
 								variantStyles[action.variant],
 							)}
 						>
 							{iconElement && (
 								<div
 									className={cn(
-										"flex h-8 w-8 shrink-0 items-center justify-center rounded-md",
+										"flex size-8 shrink-0 items-center justify-center rounded-md",
 										iconVariantStyles[action.variant],
 									)}
 								>
@@ -247,7 +247,7 @@ export default function QuickActionsWidget({
 							</span>
 							<Icon
 								icon="ph:arrow-right"
-								className="text-muted-foreground h-4 w-4 opacity-0 transition-opacity group-hover:opacity-100"
+								className="text-muted-foreground size-4 opacity-0 transition-opacity group-hover:opacity-100"
 							/>
 						</button>
 					);

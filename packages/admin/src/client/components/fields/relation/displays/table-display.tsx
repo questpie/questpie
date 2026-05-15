@@ -61,7 +61,7 @@ function TableSkeleton({
 							{hasActions && (
 								<TableCell>
 									<div className="flex items-center justify-end gap-1">
-										<Skeleton variant="text" className="h-6 w-6" />
+										<Skeleton variant="text" className="size-6" />
 									</div>
 								</TableCell>
 							)}

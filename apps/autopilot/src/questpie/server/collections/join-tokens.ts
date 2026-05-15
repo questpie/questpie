@@ -4,11 +4,7 @@ import { collection } from "#questpie/factories";
 
 export const joinTokens = collection("join_tokens")
 	.fields(({ f }) => ({
-		secretHash: f
-			.text()
-			.required()
-			.outputFalse()
-			.label({ en: "Secret Hash" }),
+		secretHash: f.text().required().outputFalse().label({ en: "Secret Hash" }),
 		description: f.text().label({ en: "Description" }),
 		createdBy: f.text().label({ en: "Created By" }),
 		expiresAt: f.datetime().label({ en: "Expires At" }),
@@ -16,6 +12,7 @@ export const joinTokens = collection("join_tokens")
 		usedByWorker: f.relation("workers").label({ en: "Used By Worker" }),
 	}))
 	.title(({ f }) => f.description)
+	.set("admin", { hidden: true, audit: false })
 	.indexes(({ table }) => [
 		index("join_tokens_expires_at_idx").on(table.expiresAt as any),
 	]);

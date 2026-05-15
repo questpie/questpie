@@ -107,4 +107,20 @@ describe("diffSnapshotAtPath", () => {
 			),
 		).toEqual([]);
 	});
+
+	it("does not deep compare object values on path-level patches", () => {
+		expect(
+			diffSnapshotAtPath(
+				{ body: { type: "doc", content: [{ text: "Same" }] } },
+				{ body: { type: "doc", content: [{ text: "Same" }] } },
+				"body",
+			),
+		).toEqual([
+			{
+				op: "set",
+				path: "body",
+				value: { type: "doc", content: [{ text: "Same" }] },
+			},
+		]);
+	});
 });

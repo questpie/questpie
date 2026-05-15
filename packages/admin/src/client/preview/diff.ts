@@ -59,7 +59,7 @@ export function diffSnapshotAtPath(
 
 	if (
 		previousValue.exists &&
-		isDeepEqual(previousValue.value, nextValue.value)
+		isPatchValueEqual(previousValue.value, nextValue.value)
 	) {
 		return [];
 	}
@@ -117,6 +117,10 @@ function isDeepEqual(left: unknown, right: unknown): boolean {
 	}
 
 	return false;
+}
+
+function isPatchValueEqual(left: unknown, right: unknown): boolean {
+	return Object.is(left, right);
 }
 
 function isArrayIndex(segment: string): boolean {

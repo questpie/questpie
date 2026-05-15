@@ -134,13 +134,13 @@ export function UploadManyCell({
 		const remaining = value.length - imageAssets.length;
 		return (
 			<div className="flex items-center gap-1">
-				<div className="flex -space-x-2">
+				<div className="flex">
 					{imageAssets.map((asset, index) => (
 						<img
 							key={(asset.id as string) || index}
 							src={asset.url as string}
 							alt={(asset.filename as string) || "Asset"}
-							className="image-outline bg-background size-6 rounded object-cover"
+							className={`image-outline bg-background size-6 rounded object-cover${index > 0 ? " -ms-2" : ""}`}
 						/>
 					))}
 				</div>

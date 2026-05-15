@@ -1,5 +1,6 @@
-import { collection } from "#questpie/factories";
 import { index } from "drizzle-orm/pg-core";
+
+import { collection } from "#questpie/factories";
 
 export const chatMessages = collection("chat_messages")
 	.fields(({ f }) => ({
@@ -26,6 +27,8 @@ export const chatMessages = collection("chat_messages")
 	.admin(({ c }) => ({
 		label: { en: "Chat Messages" },
 		icon: c.icon("ph:chat-text"),
+		hidden: true,
+		audit: false,
 	}))
 	.list(({ v }) => v.collectionTable({}))
 	.indexes(({ table }) => [

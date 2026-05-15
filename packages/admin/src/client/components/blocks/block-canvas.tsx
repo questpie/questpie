@@ -128,7 +128,7 @@ export function BlockCanvas() {
 					<div className="bg-background flex items-center gap-2 border p-2 shadow-lg">
 						<Icon
 							icon="ph:dots-six-vertical"
-							className="text-muted-foreground h-4 w-4"
+							className="text-muted-foreground size-4"
 						/>
 						<BlockIcon
 							icon={activeBlockSchema?.admin?.icon}

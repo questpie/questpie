@@ -100,7 +100,7 @@ export function BlockEditorLayout({
 					<div className="text-muted-foreground">
 						<Icon
 							icon="ph:stack"
-							className="text-muted-foreground/30 mx-auto mb-4 h-12 w-12"
+							className="text-muted-foreground/30 mx-auto mb-4 size-12"
 						/>
 						<p className="text-sm font-medium">{t("blocks.emptyTitle")}</p>
 						<p className="text-muted-foreground mt-1 text-xs">
@@ -113,7 +113,7 @@ export function BlockEditorLayout({
 						className="mt-4"
 						onClick={handleOpenSidebar}
 					>
-						<Icon icon="ph:plus" className="mr-2 h-4 w-4" />
+						<Icon icon="ph:plus" className="mr-2 size-4" />
 						{t("blocks.add")}
 					</Button>
 				</div>

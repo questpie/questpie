@@ -174,7 +174,7 @@ export const BlockItem = React.memo(function BlockItem({
 					>
 						<Icon
 							icon="ph:dots-six-vertical"
-							className="text-muted-foreground h-4 w-4"
+							className="text-muted-foreground size-4"
 						/>
 					</button>
 
@@ -183,7 +183,7 @@ export const BlockItem = React.memo(function BlockItem({
 						<Icon
 							icon={"ph:caret-right"}
 							className={cn(
-								"h-4 w-4 transition-transform duration-150 ease-in-out",
+								"size-4 transition-transform duration-150 ease-in-out",
 								isExpanded && "rotate-90",
 							)}
 						/>
@@ -191,7 +191,7 @@ export const BlockItem = React.memo(function BlockItem({
 
 					{/* Block icon */}
 					{isUnknownType ? (
-						<Icon icon="ph:warning" className="text-destructive h-3.5 w-3.5" />
+						<Icon icon="ph:warning" className="text-destructive size-3.5" />
 					) : (
 						<BlockIcon
 							icon={blockSchema?.admin?.icon}
@@ -229,7 +229,7 @@ export const BlockItem = React.memo(function BlockItem({
 							canHaveChildren={canHaveChildren}
 							onDuplicate={handleDuplicate}
 							onRemove={handleRemove}
-							className="h-7 w-7 opacity-0 transition-opacity group-hover:opacity-100"
+							className="size-7 opacity-0 transition-opacity group-hover:opacity-100"
 						/>
 					</div>
 				</CardHeader>
@@ -245,7 +245,7 @@ export const BlockItem = React.memo(function BlockItem({
 				{isExpanded && isUnknownType && (
 					<CardContent className="p-3">
 						<div className="text-destructive flex items-center gap-2 text-sm">
-							<Icon icon="ph:warning" className="h-4 w-4 shrink-0" />
+							<Icon icon="ph:warning" className="size-4 shrink-0" />
 							<span>{t("blocks.unknownType", { type: block.type })}</span>
 						</div>
 					</CardContent>

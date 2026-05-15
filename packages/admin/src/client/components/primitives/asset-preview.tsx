@@ -269,11 +269,11 @@ export function AssetPreview({
 					<img
 						src={thumbnailUrl}
 						alt={asset.alt || filename}
-						className="image-outline h-full w-full object-cover"
+						className="image-outline size-full object-cover"
 						onError={() => setImageError(true)}
 					/>
 				) : (
-					<div className="flex h-full w-full items-center justify-center">
+					<div className="flex size-full items-center justify-center">
 						<Icon
 							icon={fileIconName}
 							className="text-muted-foreground size-8"
@@ -407,7 +407,7 @@ export function AssetPreview({
 						<img
 							src={thumbnailUrl}
 							alt={asset.alt || filename}
-							className="image-outline h-full w-full object-cover"
+							className="image-outline size-full object-cover"
 							onError={() => setImageError(true)}
 						/>
 					) : (
@@ -538,11 +538,11 @@ export function AssetPreview({
 					<img
 						src={thumbnailUrl}
 						alt={asset.alt || filename}
-						className="image-outline h-full w-full object-contain"
+						className="image-outline size-full object-contain"
 						onError={() => setImageError(true)}
 					/>
 				) : (
-					<div className="flex h-full w-full flex-col items-center justify-center gap-2">
+					<div className="flex size-full flex-col items-center justify-center gap-2">
 						<Icon
 							icon={fileIconName}
 							className="text-muted-foreground size-12"

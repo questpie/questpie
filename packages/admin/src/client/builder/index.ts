@@ -101,9 +101,9 @@ export type CollectionItem<
 	TApp extends QuestpieApp,
 	TName extends CollectionNames<TApp>,
 > =
-	Awaited<
-		ReturnType<AnyQuestpieClient["collections"][TName]["find"]>
-	> extends { docs: Array<infer TItem> }
+	Awaited<ReturnType<AnyQuestpieClient["collections"][TName]["find"]>> extends {
+		docs: Array<infer TItem>;
+	}
 		? TItem
 		: never;
 

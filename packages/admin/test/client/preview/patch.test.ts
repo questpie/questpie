@@ -67,6 +67,14 @@ describe("applyPatchBatchImmutable", () => {
 
 		expect(patched).toEqual({ field: { nested: { label: "Before" } } });
 	});
+
+	it("sets primitive values without clone overhead", () => {
+		expect(
+			applyPatchBatchImmutable({}, [
+				{ op: "set", path: "title", value: "Hello" },
+			]),
+		).toEqual({ title: "Hello" });
+	});
 });
 
 describe("shouldApplyPatchBatch", () => {

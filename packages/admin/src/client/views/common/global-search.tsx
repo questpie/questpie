@@ -192,8 +192,8 @@ const SearchGroup = React.memo(function SearchGroup({
 							)}
 						>
 							{item.icon && (
-								<span className="text-muted-foreground flex h-4 w-4 shrink-0 items-center justify-center">
-									{resolveIconElement(item.icon, { className: "h-4 w-4" })}
+								<span className="text-muted-foreground flex size-4 shrink-0 items-center justify-center">
+									{resolveIconElement(item.icon, { className: "size-4" })}
 								</span>
 							)}
 							<div className="flex min-w-0 flex-col items-start">
@@ -528,7 +528,7 @@ export function GlobalSearch({
 						<div className="text-muted-foreground py-8 text-center text-sm">
 							{isSearching ? (
 								<div className="flex items-center justify-center gap-2">
-									<Icon icon="ph:spinner" className="h-4 w-4 animate-spin" />
+									<Icon icon="ph:spinner" className="size-4 animate-spin" />
 									<span>{t("globalSearch.searching")}</span>
 								</div>
 							) : (

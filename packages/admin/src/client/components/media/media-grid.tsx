@@ -184,13 +184,13 @@ function AssetItem({
 				<img
 					src={thumbnailUrl}
 					alt={asset.alt || asset.filename || "Asset"}
-					className="image-outline h-full w-full object-cover"
+					className="image-outline size-full object-cover"
 					onError={() => setImageError(true)}
 				/>
 			) : (
 				<div
 					className={cn(
-						"flex h-full w-full items-center justify-center",
+						"flex size-full items-center justify-center",
 						getAssetTypeColor(asset.mimeType),
 					)}
 				>

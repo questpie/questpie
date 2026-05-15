@@ -665,8 +665,9 @@ interface FieldReactiveConfig<TData = any> {
  * `ReactivePropPlaceholder`. Kept as `Record<string, unknown>` here because
  * the client only ever consumes the post-serialization shape.
  */
-export interface FieldLayoutItemRef<TData = any>
-	extends FieldReactiveConfig<TData> {
+export interface FieldLayoutItemRef<
+	TData = any,
+> extends FieldReactiveConfig<TData> {
 	field: string;
 	className?: string;
 	/** Forwarded to the field component. See server `FormFieldLayoutItem.props`. */

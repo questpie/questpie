@@ -2,7 +2,7 @@ import { cva, type VariantProps } from "class-variance-authority";
 
 import { cn } from "../../lib/utils";
 
-const skeletonVariants = cva("qa-skeleton bg-muted animate-pulse", {
+const skeletonVariants = cva("qa-skeleton bg-muted", {
 	variants: {
 		variant: {
 			default: "rounded-sm",

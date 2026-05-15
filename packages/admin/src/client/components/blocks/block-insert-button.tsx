@@ -95,8 +95,8 @@ export function BlockInsertButton({
 				onClick={handleOpen}
 			>
 				{/* Add button */}
-				<div className="border-border bg-background text-muted-foreground group-hover:border-foreground group-hover:text-foreground relative z-10 flex h-5 w-5 items-center justify-center rounded-full border transition-[background-color,border-color,color]">
-					<Icon icon="ph:plus" className="h-3 w-3" />
+				<div className="border-border bg-background text-muted-foreground group-hover:border-foreground group-hover:text-foreground relative z-10 flex size-5 items-center justify-center rounded-full border transition-[background-color,border-color,color]">
+					<Icon icon="ph:plus" className="size-3" />
 				</div>
 
 				{/* Label */}
@@ -116,7 +116,7 @@ export function BlockInsertButton({
 			className={cn("w-full border-dashed", className)}
 			onClick={handleOpen}
 		>
-			<Icon icon="ph:plus" className="mr-2 h-4 w-4" />
+			<Icon icon="ph:plus" className="mr-2 size-4" />
 			{t("blocks.add")}
 		</Button>
 	);

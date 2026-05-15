@@ -1055,7 +1055,7 @@ export function AutoFormFields<T extends QuestpieApp, K extends string>({
 						)}
 					>
 						<div className="bg-surface-low/45 flex min-h-0 flex-col rounded-md @2xl:h-full">
-							<div className="scrollbar-thin min-h-0 space-y-4 overflow-y-auto px-3 py-3 @2xl:flex-1">
+							<div className="min-h-0 scrollbar-thin space-y-4 overflow-y-auto p-3 @2xl:flex-1">
 								<SidebarRenderer
 									sidebar={formConfig.sidebar}
 									fields={fields}

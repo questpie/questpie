@@ -1,7 +1,7 @@
 import { defineConfig } from "tsdown";
 
 export default defineConfig({
-	entry: ["src/server.ts", "src/plugin.ts", "src/modules/*.ts"],
+	entry: ["src/index.ts", "src/server.ts", "src/plugin.ts", "src/modules/*.ts"],
 	outDir: "dist",
 	format: ["esm"],
 	clean: true,

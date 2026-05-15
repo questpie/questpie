@@ -130,7 +130,7 @@ function WidgetCardError({
 				{onRetry && (
 					<CardAction>
 						<Button variant="ghost" size="icon-xs" onClick={onRetry}>
-							<Icon icon="ph:arrow-clockwise" className="h-3.5 w-3.5" />
+							<Icon icon="ph:arrow-clockwise" className="size-3.5" />
 						</Button>
 					</CardAction>
 				)}
@@ -232,7 +232,7 @@ export function WidgetCard({
 				<CardHeader className="qa-widget-card__header shrink-0">
 					<div className="flex min-w-0 items-center gap-2">
 						{resolveIconElement(icon, {
-							className: "h-4 w-4 text-muted-foreground",
+							className: "size-4 text-muted-foreground",
 						})}
 						<div className="min-w-0 flex-1">
 							{title && (
@@ -262,7 +262,7 @@ export function WidgetCard({
 											title={actions[0].label}
 										>
 											{resolveIconElement(actions[0].icon, {
-												className: "h-3.5 w-3.5",
+												className: "size-3.5",
 											})}
 										</Button>
 										{/* Additional actions in dropdown */}
@@ -273,7 +273,7 @@ export function WidgetCard({
 														<Button variant="ghost" size="icon-xs">
 															<Icon
 																icon="ph:dots-three-vertical"
-																className="h-3.5 w-3.5"
+																className="size-3.5"
 															/>
 														</Button>
 													}
@@ -285,7 +285,7 @@ export function WidgetCard({
 															onClick={action.onClick}
 														>
 															{resolveIconElement(action.icon, {
-																className: "h-3.5 w-3.5 mr-2",
+																className: "size-3.5 mr-2",
 															})}
 															{action.label}
 														</DropdownMenuItem>
@@ -305,10 +305,7 @@ export function WidgetCard({
 									>
 										<Icon
 											icon="ph:arrow-clockwise"
-											className={cn(
-												"h-3.5 w-3.5",
-												isRefreshing && "animate-spin",
-											)}
+											className={cn("size-3.5", isRefreshing && "animate-spin")}
 										/>
 									</Button>
 								)}
@@ -319,7 +316,7 @@ export function WidgetCard({
 										onClick={onExpand}
 										title={t("ui.expand")}
 									>
-										<Icon icon="ph:arrows-out-simple" className="h-3.5 w-3.5" />
+										<Icon icon="ph:arrows-out-simple" className="size-3.5" />
 									</Button>
 								)}
 							</div>

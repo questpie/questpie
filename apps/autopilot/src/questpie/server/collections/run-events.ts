@@ -1,5 +1,6 @@
-import { collection } from "#questpie/factories";
 import { index } from "drizzle-orm/pg-core";
+
+import { collection } from "#questpie/factories";
 
 export const runEvents = collection("run_events")
 	.fields(({ f }) => ({
@@ -22,6 +23,8 @@ export const runEvents = collection("run_events")
 	.admin(({ c }) => ({
 		label: { en: "Run Events" },
 		icon: c.icon("ph:list-bullets"),
+		hidden: true,
+		audit: false,
 	}))
 	.indexes(({ table }) => [
 		index("run_events_run_idx").on(table.run as any),

@@ -46,14 +46,14 @@ export const tasks = collection("tasks")
 				{ value: "project", label: { en: "Project" } },
 			])
 			.default("company")
-			.label({ en: "Scope Type" }),
+			.label({ en: "Applies To" }),
 		workflowConfig: f
 			.relation("workflow_configs")
-			.label({ en: "Workflow Config" }),
-		workflowStep: f.text().label({ en: "Workflow Step" }),
-		capability: f.relation("capabilities").label({ en: "Capability" }),
-		model: f.relation("models").label({ en: "Model" }),
-		queue: f.text().label({ en: "Queue" }),
+			.label({ en: "Automation Plan" }),
+		workflowStep: f.text().label({ en: "Current Step" }),
+		capability: f.relation("capabilities").label({ en: "Skill" }),
+		model: f.relation("models").label({ en: "AI Model" }),
+		queue: f.text().label({ en: "Work Queue" }),
 		startAfter: f.datetime().label({ en: "Start After" }),
 		scheduledBy: f.text().label({ en: "Scheduled By" }),
 		createdBy: f.text().label({ en: "Created By" }),
@@ -62,7 +62,7 @@ export const tasks = collection("tasks")
 	}))
 	.title(({ f }) => f.title)
 	.admin(({ c }) => ({
-		label: { en: "Tasks" },
+		label: { en: "Work" },
 		icon: c.icon("ph:list-checks"),
 	}))
 	.list(({ v, f }) =>
@@ -106,25 +106,18 @@ export const tasks = collection("tasks")
 			fields: [
 				{
 					type: "section",
-					label: { en: "Task Details" },
+					label: { en: "Request" },
 					fields: [f.title, f.description, f.project, f.scopeType],
 				},
 				{
 					type: "section",
-					label: { en: "Execution" },
-					fields: [
-						f.capability,
-						f.model,
-						f.workflowConfig,
-						f.workflowStep,
-						f.queue,
-						f.startAfter,
-					],
+					label: { en: "How Autopilot Runs It" },
+					fields: [f.workflowConfig, f.capability, f.model, f.startAfter],
 				},
 				{
 					type: "section",
-					label: { en: "Metadata" },
-					fields: [f.scheduledBy, f.createdBy, f.context, f.metadata],
+					label: { en: "Internal Details" },
+					fields: [f.workflowStep, f.queue, f.scheduledBy, f.createdBy],
 				},
 			],
 		}),

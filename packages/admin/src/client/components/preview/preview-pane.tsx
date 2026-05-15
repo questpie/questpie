@@ -432,13 +432,13 @@ export const PreviewPane = React.forwardRef<PreviewPaneRef, PreviewPaneProps>(
 		}, []);
 
 		return (
-			<div className={cn("relative h-full w-full", className)}>
+			<div className={cn("relative size-full", className)}>
 				{/* Loading overlay */}
 				{isLoading && (
 					<div className="bg-muted absolute inset-0 z-10 flex items-center justify-center">
 						<Icon
 							icon="ph:spinner"
-							className="text-muted-foreground h-6 w-6 animate-spin"
+							className="text-muted-foreground size-6 animate-spin"
 						/>
 						<span className="text-muted-foreground ml-2 text-sm">
 							{t("preview.loadingPreview")}
@@ -461,7 +461,7 @@ export const PreviewPane = React.forwardRef<PreviewPaneRef, PreviewPaneProps>(
 					<div className="bg-background absolute top-4 right-4 z-10 flex items-center gap-2 border px-3 py-2 shadow-md">
 						<Icon
 							icon="ph:spinner"
-							className="text-muted-foreground h-4 w-4 animate-spin"
+							className="text-muted-foreground size-4 animate-spin"
 						/>
 						<span className="text-muted-foreground text-sm">
 							{t("preview.refreshing")}
@@ -474,7 +474,7 @@ export const PreviewPane = React.forwardRef<PreviewPaneRef, PreviewPaneProps>(
 					<iframe
 						ref={iframeRef}
 						src={previewUrlResolved}
-						className="h-full w-full border-0"
+						className="size-full border-0"
 						title={t("common.preview")}
 						onLoad={handleLoad}
 						sandbox="allow-scripts allow-same-origin allow-forms"

@@ -345,6 +345,20 @@ function getStickyLeftOffset(columns: unknown[], index: number): number {
 	}, 0);
 }
 
+function reconcileOrderIds(orderIds: string[], itemIds: string[]): string[] {
+	const knownIds = new Set(itemIds);
+	const next = orderIds.filter((id) => knownIds.has(id));
+	const nextIds = new Set(next);
+
+	for (const id of itemIds) {
+		if (!nextIds.has(id)) {
+			next.push(id);
+		}
+	}
+
+	return next;
+}
+
 type ServerActionReference =
 	| string
 	| (() => unknown)
@@ -955,13 +969,10 @@ function TableViewInner({
 		user?.id,
 	);
 	const effectiveRealtime = viewState.config.realtime ?? resolvedRealtime;
-	const visibleColumnsForExpansion = useMemo(
-		() =>
-			viewState.config.visibleColumns.length > 0
-				? viewState.config.visibleColumns
-				: defaultColumns,
-		[viewState.config.visibleColumns, defaultColumns],
-	);
+	const visibleColumnsForExpansion =
+		viewState.config.visibleColumns.length > 0
+			? viewState.config.visibleColumns
+			: defaultColumns;
 
 	// Auto-detect fields to expand (uploads, relations), scoped to the columns
 	// currently rendered by the table. Hidden fields should not make the list
@@ -1511,6 +1522,10 @@ function TableViewInner({
 		}
 		return listData?.docs ?? [];
 	}, [isSearching, searchData?.docs, listData?.docs]);
+	const itemIds = useMemo(
+		() => items.map((item: any) => String(item.id)),
+		[items],
+	);
 
 	// Track realtime changes and highlight affected rows
 	const { isHighlighted } = useRealtimeHighlight(items, {
@@ -1524,36 +1539,17 @@ function TableViewInner({
 		realtime: effectiveRealtime,
 	});
 
-	React.useEffect(() => {
-		if (!isReorderMode) {
-			setOptimisticOrderIds(null);
-			return;
-		}
-
-		setOptimisticOrderIds((current) => {
-			const itemIds = items.map((item: any) => String(item.id));
-			if (!current) return itemIds;
-
-			const knownIds = new Set(itemIds);
-			const next = current.filter((id) => knownIds.has(id));
-			for (const id of itemIds) {
-				if (!next.includes(id)) next.push(id);
-			}
-
-			return next;
-		});
-	}, [isReorderMode, items]);
-
 	// Search results are already sorted by score, list results are server-sorted.
 	// While reordering, keep the dropped row order locally until the server/refetch catches up.
 	const filteredItems = useMemo(() => {
 		if (!isReorderMode || !optimisticOrderIds) return items;
 
+		const orderedIds = reconcileOrderIds(optimisticOrderIds, itemIds);
 		const itemsById = new Map(
 			items.map((item: any) => [String(item.id), item]),
 		);
 		const seen = new Set<string>();
-		const ordered = optimisticOrderIds
+		const ordered = orderedIds
 			.map((id) => {
 				const item = itemsById.get(id);
 				if (item) seen.add(id);
@@ -1567,7 +1563,7 @@ function TableViewInner({
 		}
 
 		return ordered;
-	}, [isReorderMode, items, optimisticOrderIds]);
+	}, [isReorderMode, itemIds, items, optimisticOrderIds]);
 	const hasActiveFilters = viewState.config.filters.length > 0;
 	const isOrderSortActive =
 		canUseOrderableSort &&
@@ -1607,12 +1603,27 @@ function TableViewInner({
 			const nextSort = { field: orderField, direction: orderDirection };
 			setSorting([{ id: nextSort.field, desc: nextSort.direction === "desc" }]);
 			viewState.setSort(nextSort);
+			setOptimisticOrderIds(itemIds);
 			setIsReorderMode(true);
 			return;
 		}
 
-		setIsReorderMode((active) => !active);
-	}, [canReorder, isOrderSortActive, orderDirection, viewState]);
+		if (isReorderMode) {
+			setOptimisticOrderIds(null);
+			setIsReorderMode(false);
+			return;
+		}
+
+		setOptimisticOrderIds(itemIds);
+		setIsReorderMode(true);
+	}, [
+		canReorder,
+		isOrderSortActive,
+		isReorderMode,
+		itemIds,
+		orderDirection,
+		viewState,
+	]);
 	const hasViewOptionsState =
 		hasActiveFilters ||
 		!!viewState.config.groupBy ||
@@ -1621,11 +1632,16 @@ function TableViewInner({
 	const clearFilters = () => {
 		viewState.setConfig({ ...viewState.config, filters: [] });
 	};
+	const exitReorderMode = React.useCallback(() => {
+		setOptimisticOrderIds(null);
+		setIsReorderMode(false);
+	}, []);
+
 	React.useEffect(() => {
 		if (isReorderMode && !canReorder) {
-			setIsReorderMode(false);
+			exitReorderMode();
 		}
-	}, [isReorderMode, canReorder]);
+	}, [canReorder, exitReorderMode, isReorderMode]);
 
 	const table = useReactTable({
 		data: filteredItems as any[],
@@ -2150,11 +2166,7 @@ function TableViewInner({
 								})}
 							</span>
 						</div>
-						<Button
-							variant="ghost"
-							size="xs"
-							onClick={() => setIsReorderMode(false)}
-						>
+						<Button variant="ghost" size="xs" onClick={exitReorderMode}>
 							{t("common.done")}
 						</Button>
 					</div>

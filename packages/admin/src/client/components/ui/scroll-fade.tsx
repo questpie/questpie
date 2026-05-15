@@ -45,11 +45,9 @@ function ScrollFade({
 			const v = orientation !== "horizontal";
 			setOverflow({
 				left: h && el.scrollLeft > 1,
-				right:
-					h && el.scrollLeft + el.clientWidth < el.scrollWidth - 1,
+				right: h && el.scrollLeft + el.clientWidth < el.scrollWidth - 1,
 				top: v && el.scrollTop > 1,
-				bottom:
-					v && el.scrollTop + el.clientHeight < el.scrollHeight - 1,
+				bottom: v && el.scrollTop + el.clientHeight < el.scrollHeight - 1,
 			});
 		};
 
@@ -76,7 +74,7 @@ function ScrollFade({
 				<div
 					className={cn(
 						fade,
-						"inset-y-0 bg-gradient-to-r from-background to-transparent",
+						"from-background inset-y-0 bg-gradient-to-r to-transparent",
 						overflow.left ? "opacity-100" : "opacity-0",
 					)}
 					style={{ left: leftInset, width: fadeSize }}
@@ -87,7 +85,7 @@ function ScrollFade({
 				<div
 					className={cn(
 						fade,
-						"inset-y-0 right-0 bg-gradient-to-l from-background to-transparent",
+						"from-background inset-y-0 right-0 bg-gradient-to-l to-transparent",
 						overflow.right ? "opacity-100" : "opacity-0",
 					)}
 					style={{ width: fadeSize }}
@@ -98,7 +96,7 @@ function ScrollFade({
 				<div
 					className={cn(
 						fade,
-						"inset-x-0 top-0 bg-gradient-to-b from-background to-transparent",
+						"from-background inset-x-0 top-0 bg-gradient-to-b to-transparent",
 						overflow.top ? "opacity-100" : "opacity-0",
 					)}
 					style={{ height: fadeSize }}
@@ -109,7 +107,7 @@ function ScrollFade({
 				<div
 					className={cn(
 						fade,
-						"inset-x-0 bottom-0 bg-gradient-to-t from-background to-transparent",
+						"from-background inset-x-0 bottom-0 bg-gradient-to-t to-transparent",
 						overflow.bottom ? "opacity-100" : "opacity-0",
 					)}
 					style={{ height: fadeSize }}

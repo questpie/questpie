@@ -13,7 +13,7 @@ export const secrets = collection("secrets")
 	}))
 	.title(({ f }) => f.name)
 	.admin(({ c }) => ({
-		label: { en: "Secrets" },
+		label: { en: "Secure Values" },
 		icon: c.icon("ph:key"),
 	}))
 	.list(({ v }) => v.collectionTable({}))
@@ -22,6 +22,4 @@ export const secrets = collection("secrets")
 			fields: [f.name, f.scope, f.description],
 		}),
 	)
-	.indexes(({ table }) => [
-		index("secrets_scope_idx").on(table.scope as any),
-	]);
+	.indexes(({ table }) => [index("secrets_scope_idx").on(table.scope as any)]);

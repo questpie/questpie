@@ -15,6 +15,8 @@ export const activity = collection("activity")
 	.admin(({ c }) => ({
 		label: { en: "Activity" },
 		icon: c.icon("ph:clock-counter-clockwise"),
+		hidden: true,
+		audit: false,
 	}))
 	.list(({ v }) => v.collectionTable({}))
 	.indexes(({ table }) => [

@@ -11,10 +11,14 @@
 	],
 	"type": "module",
 	"sideEffects": false,
-	"main": "./dist/server.mjs",
-	"module": "./dist/server.mjs",
-	"types": "./dist/server.d.mts",
+	"main": "./dist/index.mjs",
+	"module": "./dist/index.mjs",
+	"types": "./dist/index.d.mts",
 	"exports": {
+		".": {
+			"types": "./src/index.ts",
+			"default": "./src/index.ts"
+		},
 		"./modules/openapi": {
 			"types": "./src/modules/openapi.ts",
 			"default": "./src/modules/openapi.ts"
@@ -35,6 +39,10 @@
 	"publishConfig": {
 		"access": "public",
 		"exports": {
+			".": {
+				"types": "./dist/index.d.mts",
+				"default": "./dist/index.mjs"
+			},
 			"./modules/openapi": {
 				"types": "./dist/modules/openapi.d.mts",
 				"default": "./dist/modules/openapi.mjs"

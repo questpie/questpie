@@ -206,7 +206,7 @@ function LoadingFallback(): ReactElement {
 		<div className="qp-flex qp-h-screen qp-w-screen qp-items-center qp-justify-center qp-bg-background">
 			<div className="qp-flex qp-flex-col qp-items-center qp-gap-4">
 				<div className="qp-h-8 qp-w-8 qp-animate-spin qp-rounded-full qp-border-4 qp-border-foreground qp-border-t-transparent" />
-				<span className="qp-text-sm qp-text-muted-foreground">Loading...</span>
+				<span className="qp-text-sm qp-text-muted-foreground">Loading…</span>
 			</div>
 		</div>
 	);

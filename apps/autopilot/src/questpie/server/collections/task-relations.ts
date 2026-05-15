@@ -1,5 +1,6 @@
-import { collection } from "#questpie/factories";
 import { index, uniqueIndex } from "drizzle-orm/pg-core";
+
+import { collection } from "#questpie/factories";
 
 export const taskRelations = collection("task_relations")
 	.fields(({ f }) => ({
@@ -21,6 +22,7 @@ export const taskRelations = collection("task_relations")
 		metadata: f.json().label({ en: "Metadata" }),
 	}))
 	.title(({ f }) => f.dedupeKey)
+	.set("admin", { hidden: true, audit: false })
 	.indexes(({ table }) => [
 		uniqueIndex("task_relations_unique").on(
 			table.sourceTask as any,

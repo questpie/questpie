@@ -1,5 +1,6 @@
-import { collection } from "#questpie/factories";
 import { index } from "drizzle-orm/pg-core";
+
+import { collection } from "#questpie/factories";
 
 export const runs = collection("runs")
 	.fields(({ f }) => ({
@@ -33,11 +34,11 @@ export const runs = collection("runs")
 				{ value: "chat", label: { en: "Chat" } },
 				{ value: "task", label: { en: "Task" } },
 				{ value: "schedule", label: { en: "Schedule" } },
-				{ value: "workflow", label: { en: "Workflow" } },
+				{ value: "workflow", label: { en: "Automation" } },
 				{ value: "manual", label: { en: "Manual" } },
 				{ value: "mcp", label: { en: "MCP" } },
 			])
-			.label({ en: "Initiated By" }),
+			.label({ en: "Started By" }),
 		instructions: f.textarea().label({ en: "Instructions" }),
 		summary: f.textarea().label({ en: "Summary" }),
 		error: f.textarea().label({ en: "Error" }),
@@ -45,18 +46,33 @@ export const runs = collection("runs")
 		tokensOutput: f.number().label({ en: "Tokens Output" }),
 		startedAt: f.datetime().label({ en: "Started At" }),
 		endedAt: f.datetime().label({ en: "Ended At" }),
-		runtimeSessionRef: f.text().label({ en: "Runtime Session Ref" }),
-		resumedFromRun: f.relation("runs").label({ en: "Resumed From Run" }),
-		preferredWorker: f.relation("workers").label({ en: "Preferred Worker" }),
+		runtimeSessionRef: f.text().label({ en: "Runtime Session" }),
+		resumedFromRun: f.relation("runs").label({ en: "Resumed From" }),
+		preferredWorker: f.relation("workers").label({ en: "Preferred Device" }),
 		resumable: f.boolean().default(false).label({ en: "Resumable" }),
 		targeting: f.json().label({ en: "Targeting" }),
 		metadata: f.json().label({ en: "Metadata" }),
 	}))
+	.title(({ f }) => f.summary)
 	.admin(({ c }) => ({
-		label: { en: "Runs" },
+		label: { en: "Agent Runs" },
 		icon: c.icon("ph:play"),
 	}))
-	.list(({ v }) => v.collectionTable({}))
+	.list(({ v, f }) =>
+		v.listView({
+			columns: [f.task, f.status, f.project, f.worker, f.startedAt, f.endedAt],
+			searchable: [f.instructions, f.summary, f.error],
+			filterable: [f.status, f.project, f.worker, f.initiatedBy],
+			defaultSort: { field: f.startedAt, direction: "desc" },
+			layout: {
+				density: "compact",
+				titleField: f.task,
+				subtitleField: f.summary,
+				badgeFields: [f.status, f.initiatedBy],
+				metaFields: [f.project, f.worker, f.startedAt],
+			},
+		}),
+	)
 	.indexes(({ table }) => [
 		index("runs_status_idx").on(table.status as any),
 		index("runs_worker_idx").on(table.worker as any),

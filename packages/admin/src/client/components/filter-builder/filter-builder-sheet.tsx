@@ -239,7 +239,10 @@ export function FilterBuilderSheet({
 								<Switch
 									checked={localConfig.realtime ?? true}
 									onCheckedChange={(checked) =>
-										setLocalConfig({ ...localConfig, realtime: checked })
+										setLocalConfig((prevConfig) => ({
+											...prevConfig,
+											realtime: checked,
+										}))
 									}
 								/>
 							}
@@ -253,10 +256,10 @@ export function FilterBuilderSheet({
 									<Switch
 										checked={localConfig.includeDeleted ?? false}
 										onCheckedChange={(checked) =>
-											setLocalConfig({
-												...localConfig,
+											setLocalConfig((prevConfig) => ({
+												...prevConfig,
 												includeDeleted: checked,
-											})
+											}))
 										}
 									/>
 								}
@@ -274,15 +277,15 @@ export function FilterBuilderSheet({
 										onChange={(value) => {
 											const nextGroupBy =
 												!value || value === NO_GROUPING_VALUE ? null : value;
-											setLocalConfig({
-												...localConfig,
+											setLocalConfig((prevConfig) => ({
+												...prevConfig,
 												groupBy: nextGroupBy,
 												collapsedGroups: [],
 												pagination: {
-													...(localConfig.pagination ?? { pageSize: 25 }),
+													...(prevConfig.pagination ?? { pageSize: 25 }),
 													page: 1,
 												},
-											});
+											}));
 										}}
 										options={groupByOptions}
 										clearable={false}
@@ -319,7 +322,10 @@ export function FilterBuilderSheet({
 								fields={availableFields}
 								visibleColumns={localConfig.visibleColumns}
 								onVisibleColumnsChange={(columns) =>
-									setLocalConfig({ ...localConfig, visibleColumns: columns })
+									setLocalConfig((prevConfig) => ({
+										...prevConfig,
+										visibleColumns: columns,
+									}))
 								}
 							/>
 						</TabsContent>
@@ -329,7 +335,10 @@ export function FilterBuilderSheet({
 								fields={availableFields}
 								filters={localConfig.filters}
 								onFiltersChange={(filters) =>
-									setLocalConfig({ ...localConfig, filters })
+									setLocalConfig((prevConfig) => ({
+										...prevConfig,
+										filters,
+									}))
 								}
 							/>
 						</TabsContent>

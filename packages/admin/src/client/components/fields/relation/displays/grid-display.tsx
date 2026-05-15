@@ -89,7 +89,7 @@ export function GridDisplay({
 								<img
 									src={image}
 									alt={getTitle(item)}
-									className="image-outline h-full w-full object-cover"
+									className="image-outline size-full object-cover"
 								/>
 							</div>
 						) : collectionIcon ? (

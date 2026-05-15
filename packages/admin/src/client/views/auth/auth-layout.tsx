@@ -95,11 +95,7 @@ function AuthLogo({
 		logo ??
 		(brand.logo ? (
 			<div className="qa-auth-layout__default-logo flex max-w-full min-w-0 items-center gap-3 text-left">
-				<BrandLogoMark
-					logo={brand.logo}
-					alt={brand.name}
-					className="size-9"
-				/>
+				<BrandLogoMark logo={brand.logo} alt={brand.name} className="size-9" />
 				<div className="min-w-0">
 					<div className="text-foreground truncate text-sm font-semibold tracking-tight">
 						{brand.name}

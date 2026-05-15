@@ -104,7 +104,7 @@ function QuickActionsWidgetSkeleton({
 function ActionGridItem() {
 	return (
 		<div className="flex flex-col items-center justify-center gap-2 p-3">
-			<Skeleton className="h-9 w-9" />
+			<Skeleton className="size-9" />
 			<Skeleton className="h-3 w-16" />
 		</div>
 	);
@@ -112,8 +112,8 @@ function ActionGridItem() {
 
 function ActionListItem() {
 	return (
-		<div className="flex items-center gap-3 px-2 py-2">
-			<Skeleton className="h-8 w-8 shrink-0" />
+		<div className="flex items-center gap-3 p-2">
+			<Skeleton className="size-8 shrink-0" />
 			<Skeleton className="h-4 flex-1" />
 		</div>
 	);
@@ -190,7 +190,7 @@ function TimelineSkeletonItem({ last = false }: { last?: boolean }) {
 		<div className="flex gap-3">
 			{/* Timeline dot */}
 			<div className="flex flex-col items-center">
-				<Skeleton variant="avatar" className="h-3 w-3" />
+				<Skeleton variant="avatar" className="size-3" />
 				{!last && <Skeleton className="mt-1 w-0.5 flex-1" />}
 			</div>
 			{/* Content */}
@@ -232,7 +232,7 @@ export function ValueWidgetSkeleton({
 	return (
 		<div className="space-y-3">
 			<div className="flex items-start gap-3">
-				<Skeleton className="h-10 w-10 shrink-0" />
+				<Skeleton className="size-10 shrink-0" />
 				<div className="flex-1 space-y-2">
 					<Skeleton className="h-4 w-24" />
 					<Skeleton className={cn("h-8", featured ? "w-40" : "w-24")} />

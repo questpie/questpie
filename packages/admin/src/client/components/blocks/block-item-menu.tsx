@@ -170,13 +170,13 @@ function MenuItems({
 				<>
 					<SubMenu>
 						<SubMenuTrigger>
-							<Icon icon="ph:arrow-up" className="h-4 w-4" />
+							<Icon icon="ph:arrow-up" className="size-4" />
 							{t("blocks.addAbove")}
 						</SubMenuTrigger>
 						<SubMenuContent>
 							{blockTypes.map(({ type, label }) => (
 								<MenuItem key={type} onClick={() => handleAddAbove(type)}>
-									<BlockTypeIcon type={type} className="h-4 w-4" />
+									<BlockTypeIcon type={type} className="size-4" />
 									{label}
 								</MenuItem>
 							))}
@@ -184,13 +184,13 @@ function MenuItems({
 					</SubMenu>
 					<SubMenu>
 						<SubMenuTrigger>
-							<Icon icon="ph:arrow-down" className="h-4 w-4" />
+							<Icon icon="ph:arrow-down" className="size-4" />
 							{t("blocks.addBelow")}
 						</SubMenuTrigger>
 						<SubMenuContent>
 							{blockTypes.map(({ type, label }) => (
 								<MenuItem key={type} onClick={() => handleAddBelow(type)}>
-									<BlockTypeIcon type={type} className="h-4 w-4" />
+									<BlockTypeIcon type={type} className="size-4" />
 									{label}
 								</MenuItem>
 							))}
@@ -199,13 +199,13 @@ function MenuItems({
 					{canHaveChildren && (
 						<SubMenu>
 							<SubMenuTrigger>
-								<Icon icon="ph:plus" className="h-4 w-4" />
+								<Icon icon="ph:plus" className="size-4" />
 								{t("blocks.addChild")}
 							</SubMenuTrigger>
 							<SubMenuContent>
 								{blockTypes.map(({ type, label }) => (
 									<MenuItem key={type} onClick={() => handleAddChild(type)}>
-										<BlockTypeIcon type={type} className="h-4 w-4" />
+										<BlockTypeIcon type={type} className="size-4" />
 										{label}
 									</MenuItem>
 								))}
@@ -218,7 +218,7 @@ function MenuItems({
 
 			{/* Duplicate */}
 			<MenuItem onClick={handleDuplicate}>
-				<Icon icon="ph:copy" className="h-4 w-4" />
+				<Icon icon="ph:copy" className="size-4" />
 				{t("common.duplicate")}
 			</MenuItem>
 
@@ -226,7 +226,7 @@ function MenuItems({
 
 			{/* Delete */}
 			<MenuItem variant="destructive" onClick={handleRemove}>
-				<Icon icon="ph:trash" className="h-4 w-4" />
+				<Icon icon="ph:trash" className="size-4" />
 				{t("common.delete")}
 			</MenuItem>
 		</>
@@ -288,7 +288,7 @@ export function BlockItemDropdownMenu({
 					/>
 				}
 			>
-				<Icon icon="ph:dots-three-vertical" className="h-4 w-4" />
+				<Icon icon="ph:dots-three-vertical" className="size-4" />
 				<span className="sr-only">Block actions</span>
 			</DropdownMenuTrigger>
 			<DropdownMenuContent align="end">

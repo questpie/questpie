@@ -14,7 +14,7 @@ export const knowledge = collection("knowledge")
 				{ value: "task", label: { en: "Task" } },
 			])
 			.default("company")
-			.label({ en: "Scope Type" }),
+			.label({ en: "Applies To" }),
 		project: f.relation("projects").label({ en: "Project" }),
 		task: f.relation("tasks").label({ en: "Task" }),
 		run: f.relation("runs").label({ en: "Run" }),
@@ -43,13 +43,13 @@ export const knowledge = collection("knowledge")
 				{ value: "system", label: { en: "System" } },
 			])
 			.label({ en: "Source" }),
-		sourceRef: f.text().label({ en: "Source Ref" }),
+		sourceRef: f.text().label({ en: "Source Reference" }),
 		contentHash: f.text().label({ en: "Content Hash" }),
 		metadata: f.json().label({ en: "Metadata" }),
 	}))
 	.title(({ f }) => f.title)
 	.admin(({ c }) => ({
-		label: { en: "Knowledge" },
+		label: { en: "Knowledge Base" },
 		icon: c.icon("ph:brain"),
 	}))
 	.list(({ v, f }) =>
@@ -112,7 +112,7 @@ export const knowledge = collection("knowledge")
 				{
 					type: "section",
 					label: { en: "Provenance" },
-					fields: [f.project, f.task, f.run, f.sourceRef, f.contentHash],
+					fields: [f.project, f.task, f.run, f.sourceRef],
 				},
 			],
 		}),

@@ -1,5 +1,6 @@
-import { collection } from "#questpie/factories";
 import { index } from "drizzle-orm/pg-core";
+
+import { collection } from "#questpie/factories";
 
 export const scheduleExecutions = collection("schedule_executions")
 	.fields(({ f }) => ({
@@ -19,6 +20,7 @@ export const scheduleExecutions = collection("schedule_executions")
 		triggeredAt: f.datetime().label({ en: "Triggered At" }),
 		metadata: f.json().label({ en: "Metadata" }),
 	}))
+	.set("admin", { hidden: true, audit: false })
 	.indexes(({ table }) => [
 		index("schedule_executions_schedule_idx").on(table.schedule as any),
 	]);

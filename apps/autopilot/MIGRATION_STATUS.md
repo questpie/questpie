@@ -2,6 +2,7 @@
 
 Canonical plan: `/Users/drepkovsky/questpie/repos/questpie-autopilot/MIGRATION_PLAN.md`.
 The old `questpie-autopilot` repo is read-only reference material.
+Canonical admin-view decisions for this app live in `ADMIN_VIEW.md`.
 
 ## Current State
 
@@ -67,7 +68,7 @@ The old `questpie-autopilot` repo is read-only reference material.
 ## Decisions
 
 - No app-specific task board or Knowledge page for CRUD/list surfaces. Use
-  collection views and improve framework views.
+  collection views and improve framework views. See `ADMIN_VIEW.md`.
 - The generic collection list alternative is `outline`, not a one-off `nested`
   option.
 - Project inspection can remain a custom page because it is a multi-resource

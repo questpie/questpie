@@ -51,10 +51,7 @@ export function SelectField<TValue extends string = string>({
 }: SelectFieldProps<TValue>) {
 	const resolvedControl = useResolvedControl(control);
 
-	const resolvedOptions = useMemo(
-		() => resolveOptionIcons(options),
-		[options],
-	);
+	const resolvedOptions = useMemo(() => resolveOptionIcons(options), [options]);
 
 	const resolvedLoadOptions = useMemo(() => {
 		if (!loadOptions) return undefined;

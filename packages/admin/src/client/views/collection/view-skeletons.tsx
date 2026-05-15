@@ -17,7 +17,7 @@ import {
 import { AdminViewHeader, AdminViewLayout } from "../layout/admin-view-layout";
 
 const TABLE_SKELETON_COLUMNS = [
-	{ width: 40, header: "mx-auto h-4 w-4", cells: ["mx-auto h-4 w-4"] },
+	{ width: 40, header: "mx-auto size-4", cells: ["mx-auto size-4"] },
 	{
 		width: 360,
 		header: "h-4 w-28",
@@ -48,7 +48,7 @@ function getSkeletonWidth(widths: readonly string[], rowIndex: number): string {
 	return widths[rowIndex % widths.length] ?? widths[0] ?? "h-4 w-20";
 }
 
-function TableSkeletonRows({ rows = 8 }: { rows?: number }) {
+function TableSkeletonRows({ rows = 12 }: { rows?: number }) {
 	return (
 		<>
 			{Array.from({ length: rows }, (_, rowIndex) => (
@@ -87,8 +87,11 @@ function TableSkeletonShell() {
 	return (
 		<Table className="table-fixed" style={{ width }}>
 			<colgroup>
-				{TABLE_SKELETON_COLUMNS.map((column, index) => (
-					<col key={index} style={{ width: column.width }} />
+				{TABLE_SKELETON_COLUMNS.map((column) => (
+					<col
+						key={`${column.width}-${column.header}`}
+						style={{ width: column.width }}
+					/>
 				))}
 			</colgroup>
 			<TableHeader>
@@ -98,7 +101,7 @@ function TableSkeletonShell() {
 
 						return (
 							<TableHead
-								key={index}
+								key={`${column.width}-${column.header}`}
 								stickyLeft={stickyLeft}
 								showStickyBorder={index === 1}
 								className={index === 0 ? "w-9 min-w-9 px-1.5" : ""}
@@ -186,19 +189,19 @@ export function TableViewSkeleton() {
  */
 export function FormViewSkeleton() {
 	return (
-		<div className="qa-form-view-skeleton container max-w-4xl py-6">
+		<div className="qa-form-view-skeleton qa-form-view w-full" aria-busy="true">
 			<div className="space-y-6">
-				{/* Header */}
-				<div className="flex items-center justify-between">
-					<div className="flex items-center gap-3">
-						<Skeleton variant="text" className="h-8 w-8" /> {/* Back button */}
-						<Skeleton variant="text" className="h-8 w-48" />
-					</div>
-					<div className="flex items-center gap-2">
-						<Skeleton className="h-9 w-20" />
-						<Skeleton className="h-9 w-24" />
-					</div>
-				</div>
+				<span className="sr-only">Loading form view</span>
+				<AdminViewHeader
+					title={<Skeleton variant="text" className="h-7 w-48 max-w-full" />}
+					meta={<Skeleton variant="text" className="h-3 w-36 max-w-full" />}
+					actions={
+						<>
+							<Skeleton className="h-8 w-20" />
+							<Skeleton className="h-8 w-24" />
+						</>
+					}
+				/>
 
 				{/* Form fields */}
 				<div className="space-y-6">

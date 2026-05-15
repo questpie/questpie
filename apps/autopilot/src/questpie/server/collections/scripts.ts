@@ -19,7 +19,7 @@ export const scripts = collection("scripts")
 	}))
 	.title(({ f }) => f.name)
 	.admin(({ c }) => ({
-		label: { en: "Scripts" },
+		label: { en: "Automation Scripts" },
 		icon: c.icon("ph:terminal"),
 	}))
 	.list(({ v }) => v.collectionTable({}))

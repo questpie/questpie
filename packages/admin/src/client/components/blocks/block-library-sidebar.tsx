@@ -172,7 +172,7 @@ export function BlockLibrarySidebar({
 					<div className="relative">
 						<Icon
 							icon="ph:magnifying-glass"
-							className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2"
+							className="text-muted-foreground absolute top-1/2 left-3 size-4 -translate-y-1/2"
 						/>
 						<Input
 							ref={searchInputRef}
@@ -190,7 +190,7 @@ export function BlockLibrarySidebar({
 						<div className="flex flex-col items-center justify-center py-12 text-center">
 							<Icon
 								icon="ph:cube"
-								className="text-muted-foreground/50 mb-4 h-12 w-12"
+								className="text-muted-foreground/50 mb-4 size-12"
 							/>
 							<p className="text-muted-foreground text-sm">
 								{t("blocks.noSearchResults")}
@@ -210,7 +210,7 @@ export function BlockLibrarySidebar({
 										{category.config.icon && (
 											<Icon
 												icon={category.config.icon.props.name as string}
-												className="text-muted-foreground h-4 w-4"
+												className="text-muted-foreground size-4"
 											/>
 										)}
 										<h4 className="text-muted-foreground font-chrome chrome-meta text-xs font-semibold">

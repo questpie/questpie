@@ -1,2 +1,2 @@
 @import "tailwindcss";
-@import "@questpie/admin/styles";
+@import "@questpie/admin/client/styles/index.css";

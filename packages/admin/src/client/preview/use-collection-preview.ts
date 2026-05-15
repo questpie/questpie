@@ -383,4 +383,3 @@ function isPreviewPatchOp(value: unknown): value is PreviewPatchOp {
 	const op = value as { op?: unknown; path?: unknown };
 	return (op.op === "set" || op.op === "remove") && typeof op.path === "string";
 }
-

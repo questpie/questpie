@@ -68,6 +68,7 @@ import {
 	useSearchParamToggle,
 	useSidebarSearchParam,
 } from "../../hooks";
+import { useAdminConfig } from "../../hooks/use-admin-config";
 import {
 	useCollectionCreate,
 	useCollectionDelete,
@@ -89,6 +90,7 @@ import {
 	applyPatchBatchImmutable,
 	cloneSnapshot as clonePreviewSnapshot,
 } from "../../preview/patch";
+import { resolveKnownPreviewPath } from "../../preview/paths";
 import type {
 	FieldValueEditedMessage,
 	PreviewPatchOp,
@@ -355,18 +357,26 @@ type PreviewPatchBridgeProps = {
 	form: ReturnType<typeof useForm>;
 	previewRef: React.RefObject<PreviewPaneRef | null>;
 	enabled: boolean;
+	schema?: CollectionSchema;
+	blocks?: Record<string, { fields?: Record<string, FieldSchema> }> | null;
 };
 
 const PreviewPatchBridge = React.memo(function PreviewPatchBridge({
 	form,
 	previewRef,
 	enabled,
+	schema,
+	blocks,
 }: PreviewPatchBridgeProps) {
 	const previousSnapshotRef = React.useRef<unknown | null>(null);
 	const snapshotVersionRef = React.useRef<number | undefined>(undefined);
+	const subscribedFieldNames = React.useMemo(
+		() => Object.keys(schema?.fields ?? {}).filter(isSafePreviewEditPath),
+		[schema],
+	);
 
 	React.useEffect(() => {
-		if (!enabled) {
+		if (!enabled || subscribedFieldNames.length === 0) {
 			previousSnapshotRef.current = null;
 			snapshotVersionRef.current = undefined;
 			return;
@@ -407,52 +417,61 @@ const PreviewPatchBridge = React.memo(function PreviewPatchBridge({
 			animationFrame = window.requestAnimationFrame(flushPendingOps);
 		};
 
-		const subscription = form.watch((values, info) => {
-			const previousSnapshot = previousSnapshotRef.current;
-			const nextValues = values as Record<string, unknown>;
+		const unsubscribe = form.subscribe({
+			name: subscribedFieldNames as any,
+			exact: false,
+			formState: { values: true },
+			callback: ({ values, name }) => {
+				const previousSnapshot = previousSnapshotRef.current;
+				const nextValues = values as Record<string, unknown>;
 
-			if (!previousSnapshot) {
-				const nextSnapshot = clonePreviewSnapshot(nextValues);
-				previousSnapshotRef.current = nextSnapshot;
-				snapshotVersionRef.current =
-					previewRef.current?.sendInitSnapshot(nextSnapshot);
-				return;
-			}
+				if (!previousSnapshot) {
+					const nextSnapshot = clonePreviewSnapshot(nextValues);
+					previousSnapshotRef.current = nextSnapshot;
+					snapshotVersionRef.current =
+						previewRef.current?.sendInitSnapshot(nextSnapshot);
+					return;
+				}
 
-			const changedPath = info?.name;
-			let ops =
-				changedPath && isSafePreviewEditPath(changedPath)
+				const changedPath = resolveKnownPreviewPath(name, {
+					schema,
+					blocks,
+					values: nextValues,
+					previousValues: previousSnapshot,
+				});
+				let ops = changedPath
 					? diffSnapshotAtPath(previousSnapshot, nextValues, changedPath)
 					: diffSnapshot(previousSnapshot, nextValues);
 
-			if (ops.some((op) => !op.path)) {
-				const nextSnapshot = clonePreviewSnapshot(nextValues);
-				previousSnapshotRef.current = nextSnapshot;
-				snapshotVersionRef.current =
-					previewRef.current?.sendInitSnapshot(nextSnapshot);
-				pendingOps.clear();
-				return;
-			}
+				if (ops.some((op) => !op.path)) {
+					const nextSnapshot = clonePreviewSnapshot(nextValues);
+					previousSnapshotRef.current = nextSnapshot;
+					snapshotVersionRef.current =
+						previewRef.current?.sendInitSnapshot(nextSnapshot);
+					pendingOps.clear();
+					return;
+				}
 
-			ops = ops.filter((op) => op.path);
-			if (ops.length === 0) {
-				return;
-			}
+				ops = ops.filter((op) => op.path);
+				if (ops.length === 0) {
+					return;
+				}
 
-			previousSnapshotRef.current = applyPatchBatchImmutable(
-				previousSnapshot,
-				ops,
-			);
-			queuePatchOps(ops);
+				previousSnapshotRef.current = applyPatchBatchImmutable(
+					previousSnapshot,
+					ops,
+				);
+				queuePatchOps(ops);
+			},
 		});
 
 		return () => {
 			if (animationFrame !== null) {
 				window.cancelAnimationFrame(animationFrame);
 			}
-			subscription.unsubscribe();
+			unsubscribe();
 		};
-	}, [enabled, form, previewRef]);
+	}, [blocks, enabled, form, previewRef, schema, subscribedFieldNames]);
 
 	return null;
 });
@@ -821,6 +840,7 @@ export default function FormView({
 	} = useCollectionFields(collection, {
 		fallbackFields: (config as any)?.fields,
 	});
+	const { data: adminConfig } = useAdminConfig();
 	const resolvedFormConfig = React.useMemo(
 		() =>
 			viewConfig ??
@@ -2119,7 +2139,9 @@ export default function FormView({
 				<PreviewPatchBridge
 					form={form}
 					previewRef={previewRef}
-					enabled={isLivePreviewOpen && !!previewUrl && !isBlocked}
+					enabled={isLivePreviewOpen && !!previewUrl && !isBlocked && !!schema}
+					schema={schema}
+					blocks={adminConfig?.blocks as any}
 				/>
 				{/* Manage server-side reactive field behaviors (compute, hidden, etc.) */}
 				<ReactiveFieldsManager

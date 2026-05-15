@@ -3,12 +3,12 @@ import type { PreviewPatchOp } from "./types.js";
 export type { PreviewPatchOp } from "./types.js";
 
 export function cloneSnapshot<T>(value: T): T {
-	if (typeof globalThis.structuredClone === "function") {
-		return globalThis.structuredClone(value);
+	if (value === null || typeof value !== "object") {
+		return value;
 	}
 
-	if (value === undefined) {
-		return value;
+	if (typeof globalThis.structuredClone === "function") {
+		return globalThis.structuredClone(value);
 	}
 
 	return JSON.parse(JSON.stringify(value)) as T;

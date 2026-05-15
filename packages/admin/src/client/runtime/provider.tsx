@@ -22,12 +22,12 @@ import { createStore, useStore } from "zustand";
 
 import type { AnyQuestpieClient } from "../builder";
 import { Admin, type AdminInput } from "../builder/admin";
-import type { BrandLogoConfig } from "../types/admin-config";
 import { I18nProvider } from "../i18n/hooks";
 import { adminMessages } from "../i18n/messages";
 import { createSimpleI18n, type SimpleMessages } from "../i18n/simple";
 import type { I18nAdapter } from "../i18n/types";
 import { getCookie } from "../lib/cookies.js";
+import type { BrandLogoConfig } from "../types/admin-config";
 import { ContentLocalesProvider } from "./content-locales-provider";
 import { buildNavigation, type NavigationGroup } from "./routes";
 import {

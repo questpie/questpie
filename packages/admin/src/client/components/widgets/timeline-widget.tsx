@@ -173,7 +173,7 @@ export default function TimelineWidget({
 			<div className="space-y-0">
 				{items.map((item, index) => {
 					const iconElement = resolveIconElement(item.icon, {
-						className: "h-3 w-3 text-white",
+						className: "size-3 text-white",
 					});
 					const variant = item.variant || "default";
 					const isLast = index === items.length - 1;
@@ -189,14 +189,14 @@ export default function TimelineWidget({
 							{/* Icon dot */}
 							<div
 								className={cn(
-									"relative z-10 flex h-6 w-6 shrink-0 items-center justify-center rounded-full",
+									"relative z-10 flex size-6 shrink-0 items-center justify-center rounded-full",
 									variantStyles[variant],
 								)}
 							>
 								{iconElement ?? (
 									<IconifyIcon
 										icon="ph:circle-bold"
-										className="h-3 w-3 text-white"
+										className="size-3 text-white"
 									/>
 								)}
 							</div>

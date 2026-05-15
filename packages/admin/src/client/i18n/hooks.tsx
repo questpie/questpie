@@ -8,6 +8,7 @@ import { DEFAULT_LOCALE } from "questpie/shared";
 import * as React from "react";
 import { createContext, useCallback, useContext } from "react";
 
+import { resolveDateFnsLocale } from "./date-locale";
 import type {
 	I18nAdapter,
 	I18nContext as I18nContextType,
@@ -15,7 +16,6 @@ import type {
 	I18nText,
 	UseTranslationResult,
 } from "./types";
-import { resolveDateFnsLocale } from "./date-locale";
 
 // ============================================================================
 // Context

@@ -193,7 +193,7 @@ function Sidebar({
 						<SheetTitle>Sidebar</SheetTitle>
 						<SheetDescription>Displays the mobile sidebar.</SheetDescription>
 					</SheetHeader>
-					<div className="bg-sidebar border-sidebar-border flex h-full w-full flex-col overflow-hidden rounded-xl border shadow-lg">
+					<div className="bg-sidebar border-sidebar-border flex size-full flex-col overflow-hidden rounded-xl border shadow-lg">
 						{children}
 					</div>
 				</SheetContent>

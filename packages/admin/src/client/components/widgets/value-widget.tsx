@@ -165,7 +165,7 @@ export default function ValueWidget({ config }: ValueWidgetProps) {
 				{data.trend && (
 					<div className={cn("flex items-center gap-1 text-sm", cls.trend)}>
 						{resolveIconElement(TrendIcon, {
-							className: cn("h-3 w-3", cls.trendIcon),
+							className: cn("size-3", cls.trendIcon),
 						})}
 						<span>{data.trend.value}</span>
 					</div>

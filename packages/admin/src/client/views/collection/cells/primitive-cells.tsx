@@ -23,8 +23,8 @@ import {
 	type SelectOptions,
 } from "../../../components/primitives/types";
 import { Badge } from "../../../components/ui/badge";
-import { cn } from "../../../lib/utils";
 import { useResolveText, useTranslation } from "../../../i18n/hooks";
+import { cn } from "../../../lib/utils";
 
 // ============================================================================
 // Default Cell (Ultra-Simple Fallback)
@@ -265,12 +265,12 @@ export function SelectCell({
 	const options = getSelectOptions(fieldDef);
 	return (
 		<span className="inline-flex max-w-[300px] flex-wrap gap-1">
-			{values.map((item, index) => {
+			{values.map((item) => {
 				const option = findSelectOption(options, item);
 				const icon = resolveIconElement(option?.icon as never);
 				return (
 					<Badge
-						key={`${String(item)}-${index}`}
+						key={String(item)}
 						variant="outline"
 						className={cn("gap-1", option?.className)}
 					>

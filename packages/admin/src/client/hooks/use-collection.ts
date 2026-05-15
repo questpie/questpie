@@ -66,7 +66,10 @@ export function useCollectionList<K extends ResolvedCollectionNames>(
 				findOptions as any,
 				{ realtime: realtimeOptions?.realtime },
 			)
-		: { queryKey: ["questpie", "collections", "__none__", "find"], queryFn: () => ({ docs: [], totalDocs: 0 }) };
+		: {
+				queryKey: ["questpie", "collections", "__none__", "find"],
+				queryFn: () => ({ docs: [], totalDocs: 0 }),
+			};
 
 	return useQuery({
 		...baseQuery,
@@ -112,7 +115,10 @@ export function useCollectionCount<K extends ResolvedCollectionNames>(
 				countOptions as any,
 				{ realtime: realtimeOptions?.realtime },
 			)
-		: { queryKey: ["questpie", "collections", "__none__", "count"], queryFn: () => 0 };
+		: {
+				queryKey: ["questpie", "collections", "__none__", "count"],
+				queryFn: () => 0,
+			};
 
 	return useQuery({
 		...baseQuery,
@@ -152,7 +158,10 @@ export function useCollectionItem<K extends ResolvedCollectionNames>(
 				locale,
 				...options,
 			})
-		: { queryKey: ["questpie", "collections", "__none__", "findOne"], queryFn: () => null };
+		: {
+				queryKey: ["questpie", "collections", "__none__", "findOne"],
+				queryFn: () => null,
+			};
 
 	return useQuery({
 		...baseQuery,
@@ -444,7 +453,10 @@ export function useCollectionVersions<K extends ResolvedCollectionNames>(
 				...(options?.limit !== undefined ? { limit: options.limit } : {}),
 				...(options?.offset !== undefined ? { offset: options.offset } : {}),
 			})
-		: { queryKey: ["questpie", "collections", "__none__", "findVersions"], queryFn: () => ({ docs: [], totalDocs: 0 }) };
+		: {
+				queryKey: ["questpie", "collections", "__none__", "findVersions"],
+				queryFn: () => ({ docs: [], totalDocs: 0 }),
+			};
 
 	return useQuery({
 		...baseQuery,

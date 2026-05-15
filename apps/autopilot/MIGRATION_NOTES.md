@@ -1,20 +1,16 @@
 # Autopilot Migration Notes
 
-## Admin UX Rule
+## Admin UX
 
-Do not create custom admin pages for resources that are naturally collection
-surfaces.
+Canonical admin-view decisions now live in `ADMIN_VIEW.md`.
 
-Tasks, Knowledge, Runs, Workers, Schedules, and similar data-backed resources
-should be modeled as QuestPie collections and presented through reusable admin
-views. A custom page is only appropriate when the surface is not a collection
-list/detail workflow, for example chat runtime, workspace inspection, or another
-multi-resource command surface.
+Keep this file for migration notes only. Do not duplicate the admin information
+architecture here.
 
-## Generic List View Direction
+## Historical List View Direction
 
-Build one reusable framework/admin `list-view` instead of app-specific
-`task-board` or `knowledge` pages.
+Build one reusable framework/admin `list-view` instead of app-specific task
+board or knowledge pages.
 
 The view should support:
 

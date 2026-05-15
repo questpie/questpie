@@ -139,7 +139,8 @@ export function useReactiveProps({
 			}
 
 			return {
-				staticProps: dynamicOut.length === 0 ? props ?? EMPTY_PROPS : staticOut,
+				staticProps:
+					dynamicOut.length === 0 ? (props ?? EMPTY_PROPS) : staticOut,
 				placeholders: dynamicOut,
 				watchUnion: [...watchSet],
 				debounceMax: dbMax,

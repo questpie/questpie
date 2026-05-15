@@ -13,8 +13,8 @@
  * ```
  */
 
-import { enUS } from "date-fns/locale/en-US";
 import type { Locale } from "date-fns";
+import { enUS } from "date-fns/locale/en-US";
 
 // Registry: locale-code → date-fns Locale. Seeded with English.
 const localeRegistry = new Map<string, Locale>([

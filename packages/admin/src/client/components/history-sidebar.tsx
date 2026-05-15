@@ -108,6 +108,14 @@ const VERSION_META_KEYS = new Set([
 ]);
 const EMPTY_AUDIT_ENTRIES: AuditEntry[] = [];
 const RELATIVE_TIME_FORMATTERS = new Map<string, Intl.RelativeTimeFormat>();
+const HISTORY_SKELETON_ROW_KEYS = [
+	"first",
+	"second",
+	"third",
+	"fourth",
+	"fifth",
+	"sixth",
+];
 
 function getRelativeTimeFormatter(locale: string) {
 	let formatter = RELATIVE_TIME_FORMATTERS.get(locale);
@@ -544,7 +552,7 @@ function VersionDiffPanel({
 					return (
 						<div
 							key={change.name}
-							className="item-surface border-border-subtle bg-surface-low px-3 py-3"
+							className="item-surface border-border-subtle bg-surface-low p-3"
 						>
 							<div className="flex items-start justify-between gap-3">
 								<div className="min-w-0">
@@ -626,8 +634,8 @@ function VersionDiffPanel({
 function HistoryListSkeleton({ rows = 4 }: { rows?: number }) {
 	return (
 		<div className="space-y-4 py-2" aria-busy="true">
-			{Array.from({ length: rows }, (_, index) => (
-				<div key={index} className="flex gap-3">
+			{HISTORY_SKELETON_ROW_KEYS.slice(0, rows).map((rowKey) => (
+				<div key={rowKey} className="flex gap-3">
 					<Skeleton className="mt-1 size-7 shrink-0 rounded-full" />
 					<div className="min-w-0 flex-1 space-y-2">
 						<Skeleton variant="text" className="h-4 w-28" />
@@ -839,7 +847,7 @@ function VersionsList({
 
 				return (
 					<AccordionItem key={key} value={key} className="px-0">
-						<AccordionTrigger className="min-h-20 items-start px-3 py-3 hover:no-underline">
+						<AccordionTrigger className="min-h-20 items-start p-3 hover:no-underline">
 							<div className="flex min-w-0 flex-1 flex-col gap-2">
 								<div className="flex flex-wrap items-center gap-2">
 									<Badge variant="secondary" className="tabular-nums">

@@ -17,14 +17,14 @@ export const providers = collection("providers")
 			])
 			.label({ en: "Type" }),
 		apiEndpoint: f.text().label({ en: "API Endpoint" }),
-		secretRef: f.text().label({ en: "Secret Ref" }),
-		config: f.json().label({ en: "Config" }),
+		secretRef: f.text().label({ en: "Secret Name" }),
+		config: f.json().label({ en: "Advanced Settings" }),
 		project: f.relation("projects").label({ en: "Project" }),
 		enabled: f.boolean().label({ en: "Enabled" }).default(true),
 	}))
 	.title(({ f }) => f.name)
 	.admin(({ c }) => ({
-		label: { en: "Providers" },
+		label: { en: "Connections" },
 		icon: c.icon("ph:plugs-connected"),
 	}))
 	.list(({ v }) => v.collectionTable({}))
@@ -38,6 +38,9 @@ export const providers = collection("providers")
 		}),
 	)
 	.indexes(({ table }) => [
-		index("providers_type_enabled_idx").on(table.type as any, table.enabled as any),
+		index("providers_type_enabled_idx").on(
+			table.type as any,
+			table.enabled as any,
+		),
 		index("providers_project_idx").on(table.project as any),
 	]);

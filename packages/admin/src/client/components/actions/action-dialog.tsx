@@ -338,9 +338,7 @@ function CustomDialogContent<TItem>({
 	if (!Component) {
 		return (
 			<div className="p-4 text-center">
-				<p className="text-muted-foreground">
-					{t("error.componentNotFound")}
-				</p>
+				<p className="text-muted-foreground">{t("error.componentNotFound")}</p>
 				<Button variant="outline" onClick={onClose} className="mt-4">
 					{t("common.close")}
 				</Button>

@@ -447,13 +447,24 @@ function UnknownViewState({
  */
 function RouterSkeleton() {
 	return (
-		<div className="qa-router-skeleton container space-y-4 py-6">
-			<Skeleton className="h-8 w-48" />
-			<Skeleton className="h-10 w-full" />
-			<div className="space-y-2">
-				<Skeleton className="h-12 w-full" />
-				<Skeleton className="h-12 w-full" />
-				<Skeleton className="h-12 w-full" />
+		<div className="qa-router-skeleton min-w-0 space-y-4" aria-busy="true">
+			<span className="sr-only">Loading admin view</span>
+			<AdminViewHeader
+				title={<Skeleton variant="text" className="h-7 w-44 max-w-full" />}
+				description={
+					<Skeleton variant="text" className="h-4 w-64 max-w-full" />
+				}
+				actions={
+					<>
+						<Skeleton className="size-8" />
+						<Skeleton className="size-8" />
+					</>
+				}
+			/>
+			<div className="grid gap-3">
+				<Skeleton className="h-24 w-full" />
+				<Skeleton className="h-24 w-full" />
+				<Skeleton className="h-24 w-full" />
 			</div>
 		</div>
 	);
@@ -669,7 +680,7 @@ function DefaultDashboard() {
 				<Card className="p-6">
 					<div>
 						<div className="mb-4 flex items-center gap-3">
-							<div className="bg-primary h-2 w-2 rounded-full" />
+							<div className="bg-primary size-2 rounded-full" />
 							<h3 className="text-muted-foreground font-chrome chrome-meta text-xs font-medium">
 								{t("dashboard.systemStatus")}
 							</h3>
@@ -692,7 +703,7 @@ function DefaultNotFound() {
 
 	return (
 		<div className="qa-not-found container">
-			<h1 className="mb-4 text-2xl font-bold">{t("error.pageNotFound")}</h1>
+			<h1 className="mb-4 text-2xl font-semibold">{t("error.pageNotFound")}</h1>
 			<p className="text-muted-foreground">
 				{t("error.pageNotFoundDescription")}
 			</p>
@@ -717,10 +728,10 @@ function RestrictedAccess({
 		<div className="qa-restricted-access container py-12">
 			<Card className="mx-auto max-w-lg p-8 text-center">
 				<div>
-					<div className="bg-muted mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full">
+					<div className="bg-muted mx-auto mb-6 flex size-16 items-center justify-center rounded-full">
 						<Icon
 							icon="ph:lock-simple"
-							className="text-muted-foreground h-8 w-8"
+							className="text-muted-foreground size-8"
 						/>
 					</div>
 					<h1 className="mb-2 text-xl font-semibold">
@@ -730,7 +741,7 @@ function RestrictedAccess({
 						{t("error.accessRestrictedResourceDescription", { type, name })}
 					</p>
 					<Button variant="outline" onClick={() => navigate(basePath)}>
-						<Icon icon="ph:arrow-left" className="h-4 w-4" />
+						<Icon icon="ph:arrow-left" className="size-4" />
 						{t("error.backToDashboard")}
 					</Button>
 				</div>
@@ -742,11 +753,21 @@ function RestrictedAccess({
 function LazyPageRenderer({ config }: { config: PageDefinition<string> }) {
 	const { t } = useTranslation();
 	const component = config.component;
-	const [Component, setComponent] = React.useState<React.ComponentType | null>(
-		() => getCachedComponent(component as MaybeLazyComponent) ?? null,
-	);
-	const [loading, setLoading] = React.useState(() => Component == null);
-	const [error, setError] = React.useState<Error | null>(null);
+	const [pageState, setPageState] = React.useState<{
+		source: unknown;
+		Component: React.ComponentType | null;
+		loading: boolean;
+		error: Error | null;
+	}>(() => {
+		const Component =
+			getCachedComponent(component as MaybeLazyComponent) ?? null;
+		return {
+			source: component,
+			Component,
+			loading: Component == null,
+			error: null,
+		};
+	});
 
 	React.useEffect(() => {
 		let mounted = true;
@@ -758,16 +779,23 @@ function LazyPageRenderer({ config }: { config: PageDefinition<string> }) {
 				);
 				if (cachedComponent) {
 					if (mounted) {
-						setComponent(() => cachedComponent);
-						setLoading(false);
-						setError(null);
+						setPageState({
+							source: component,
+							Component: cachedComponent,
+							loading: false,
+							error: null,
+						});
 					}
 					return;
 				}
 
 				if (mounted) {
-					setLoading(true);
-					setError(null);
+					setPageState({
+						source: component,
+						Component: null,
+						loading: true,
+						error: null,
+					});
 				}
 
 				if (typeof component === "function") {
@@ -788,20 +816,39 @@ function LazyPageRenderer({ config }: { config: PageDefinition<string> }) {
 								resolved = mod;
 							}
 							cacheComponent(component as MaybeLazyComponent, resolved);
-							setComponent(() => resolved);
+							setPageState({
+								source: component,
+								Component: resolved,
+								loading: false,
+								error: null,
+							});
 						}
 					} else {
 						if (mounted) {
-							setComponent(() => component as React.ComponentType);
+							setPageState({
+								source: component,
+								Component: component as React.ComponentType,
+								loading: false,
+								error: null,
+							});
 						}
 					}
 				} else if (component) {
 					if (mounted) {
-						setComponent(() => component as React.ComponentType);
+						setPageState({
+							source: component,
+							Component: component as React.ComponentType,
+							loading: false,
+							error: null,
+						});
 					}
-				}
-				if (mounted) {
-					setLoading(false);
+				} else if (mounted) {
+					setPageState({
+						source: component,
+						Component: null,
+						loading: false,
+						error: null,
+					});
 				}
 			} catch (err) {
 				if (mounted) {
@@ -811,10 +858,12 @@ function LazyPageRenderer({ config }: { config: PageDefinition<string> }) {
 					} else {
 						resolvedError = new Error(t("error.failedToLoad"));
 					}
-					setError(resolvedError);
-				}
-				if (mounted) {
-					setLoading(false);
+					setPageState({
+						source: component,
+						Component: null,
+						loading: false,
+						error: resolvedError,
+					});
 				}
 			}
 		}
@@ -825,7 +874,8 @@ function LazyPageRenderer({ config }: { config: PageDefinition<string> }) {
 		};
 	}, [component, t]);
 
-	if (loading) {
+	const isCurrentPageState = pageState.source === component;
+	if (!isCurrentPageState || pageState.loading) {
 		const path = config.path?.replace(/^\//, "") ?? "";
 		return AUTH_ROUTE_SEGMENTS.has(path) ? (
 			<AuthPageSkeleton />
@@ -834,18 +884,19 @@ function LazyPageRenderer({ config }: { config: PageDefinition<string> }) {
 		);
 	}
 
-	if (error) {
+	if (pageState.error) {
 		return (
 			<div className="container">
-				<h1 className="text-destructive mb-4 text-2xl font-bold">
+				<h1 className="text-destructive mb-4 text-2xl font-semibold">
 					{t("error.unexpectedError")}
 				</h1>
-				<p className="text-muted-foreground">{error.message}</p>
+				<p className="text-muted-foreground">{pageState.error.message}</p>
 			</div>
 		);
 	}
 
-	return Component ? <Component /> : <DefaultNotFound />;
+	const PageComponent = pageState.Component;
+	return PageComponent ? <PageComponent /> : <DefaultNotFound />;
 }
 
 // ============================================================================

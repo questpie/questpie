@@ -1,5 +1,6 @@
-import { collection } from "#questpie/factories";
 import { index } from "drizzle-orm/pg-core";
+
+import { collection } from "#questpie/factories";
 
 export const workerLeases = collection("worker_leases")
 	.fields(({ f }) => ({
@@ -18,6 +19,7 @@ export const workerLeases = collection("worker_leases")
 			.label({ en: "Status" }),
 		metadata: f.json().label({ en: "Metadata" }),
 	}))
+	.set("admin", { hidden: true, audit: false })
 	.indexes(({ table }) => [
 		index("worker_leases_worker_idx").on(table.worker as any),
 		index("worker_leases_run_idx").on(table.run as any),

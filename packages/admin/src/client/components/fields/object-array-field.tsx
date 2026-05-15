@@ -480,7 +480,7 @@ export function ObjectArrayField({
 	}, []);
 
 	const emptyState = (
-		<div className="panel-surface border-border-subtle border-dashed px-3 py-3">
+		<div className="panel-surface border-border-subtle border-dashed p-3">
 			<p className="text-muted-foreground text-sm text-pretty">
 				{resolvedPlaceholder || emptyLabel}
 			</p>
@@ -560,7 +560,7 @@ export function ObjectArrayField({
 					onClick={handleAdd}
 					disabled={disabled}
 				>
-					<Icon icon="ph:plus" className="h-4 w-4" />
+					<Icon icon="ph:plus" className="size-4" />
 					{addLabel}
 				</Button>
 			)}
