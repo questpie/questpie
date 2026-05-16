@@ -74,6 +74,12 @@ import _svc_workerManager from "../services/worker-manager";
 
 // ── Migrations ─────────────────────────────────────────────
 import _mig_20260507T095449_jolly_red_phoenix from "../migrations/20260507T095449_jolly_red_phoenix";
+import _mig_20260516T185000_auth_user_admin_columns_repair from "../migrations/20260516T185000_auth_user_admin_columns_repair";
+
+// ── Seeds ──────────────────────────────────────────────────
+import _seed_demoCoverageData_seed from "../seeds/demo-coverage-data.seed";
+import _seed_demoParentIssues_seed from "../seeds/demo-parent-issues.seed";
+import _seed_demoProductData_seed from "../seeds/demo-product-data.seed";
 
 // ── Views ──────────────────────────────────────────────────
 import _view_knowledgeDetail from "../views/knowledge-detail";
@@ -374,7 +380,7 @@ export type AppConfig = {
 	collections: AppCollections & Record<string, any>;
 	globals: AppGlobals & Record<string, any>;
 	routes: AppRoutes;
-	auth: _AppAuthConfig;
+	auth: typeof _authConfig;
 };
 
 // ════════════════════════════════════════════════════════════
@@ -445,7 +451,8 @@ export const app = await createApp(
 			providerRuntime: _svc_providerRuntime,
 			workerManager: _svc_workerManager,
 		},
-		migrations: [_mig_20260507T095449_jolly_red_phoenix],
+		migrations: [_mig_20260507T095449_jolly_red_phoenix, _mig_20260516T185000_auth_user_admin_columns_repair],
+		seeds: [_seed_demoCoverageData_seed, _seed_demoParentIssues_seed, _seed_demoProductData_seed],
 		views: {
 			knowledgeDetail: _view_knowledgeDetail,
 			taskDetail: _view_taskDetail,

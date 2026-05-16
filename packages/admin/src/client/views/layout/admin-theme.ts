@@ -22,13 +22,16 @@ export function useManagedAdminTheme(
 	options: { enabled?: boolean } = {},
 ) {
 	const enabled = options.enabled ?? true;
-	const [uncontrolledTheme, setUncontrolledTheme] =
-		React.useState<AdminTheme>(getStoredAdminTheme);
-	const theme = controlledTheme ?? uncontrolledTheme;
+	const isControlled =
+		controlledTheme !== undefined && controlledSetTheme !== undefined;
+	const [uncontrolledTheme, setUncontrolledTheme] = React.useState<AdminTheme>(
+		() => controlledTheme ?? getStoredAdminTheme(),
+	);
+	const theme = isControlled ? controlledTheme : uncontrolledTheme;
 
 	const setTheme = React.useCallback(
 		(next: AdminTheme) => {
-			if (controlledSetTheme) {
+			if (isControlled) {
 				controlledSetTheme(next);
 				return;
 			}
@@ -40,7 +43,7 @@ export function useManagedAdminTheme(
 				// Ignore storage failures; class application still updates in memory.
 			}
 		},
-		[controlledSetTheme],
+		[controlledSetTheme, isControlled],
 	);
 
 	React.useEffect(() => {

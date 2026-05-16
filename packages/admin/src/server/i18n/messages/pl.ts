@@ -999,6 +999,9 @@ export default {
 	"viewOptions.showDeletedDescription":
 		"Uwzględnij w tym widoku rekordy usunięte miękko.",
 	"viewOptions.sort": "Sortuj",
+	"viewOptions.noSort": "Bez sortowania",
+	"viewOptions.sortDescription":
+		"Wybierz pole i kierunek używane w tym widoku.",
 	"widget.chart.emptyDescription":
 		"Skonfiguruj źródło danych, aby wyświetlić wykres.",
 	"widget.chart.emptyTitle": "Brak danych wykresu",

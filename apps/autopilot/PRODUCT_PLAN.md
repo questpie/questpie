@@ -177,17 +177,17 @@ Goal: remove the current mixed admin/runtime vocabulary.
 
 Tasks:
 
-- [ ] Rename product label `Tasks` / `Work` to `Issues`.
-- [ ] Rename product label `Workflow Configs` / `Automation Plans` to
+- [x] Rename product label `Tasks` / `Work` to `Issues`.
+- [x] Rename product label `Workflow Configs` / `Automation Plans` to
       `Workflows`.
-- [ ] Keep internal collection names unchanged unless a migration is explicitly
+- [x] Keep internal collection names unchanged unless a migration is explicitly
       planned.
-- [ ] Replace sidebar with Home, Issues, Workflows, Schedules, Knowledge,
+- [x] Replace sidebar with Home, Issues, Workflows, Schedules, Knowledge,
       Projects, Settings.
-- [ ] Hide agent runs, run events, workers, leases, schedule executions, task
+- [x] Hide agent runs, run events, workers, leases, schedule executions, task
       relations, models, providers, environments, secrets, and scripts from
       normal navigation.
-- [ ] Add an Advanced/Developer settings grouping for infrastructure-only
+- [x] Add an Advanced/Developer settings grouping for infrastructure-only
       collections if we still need admin access.
 
 Acceptance:

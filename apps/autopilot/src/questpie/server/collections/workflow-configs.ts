@@ -8,7 +8,7 @@ export const workflowConfigs = collection("workflow_configs")
 		description: f.textarea().label({ en: "Description" }),
 		steps: f
 			.json()
-			.label({ en: "Plan Steps" })
+			.label({ en: "Steps" })
 			.description({ en: "Ordered steps Autopilot should follow." })
 			.required(),
 		defaultCapability: f
@@ -21,20 +21,28 @@ export const workflowConfigs = collection("workflow_configs")
 	}))
 	.title(({ f }) => f.name)
 	.admin(({ c }) => ({
-		label: { en: "Automation Plans" },
+		label: { en: "Workflows" },
 		icon: c.icon("ph:flow-arrow"),
 	}))
 	.list(({ v, f }) =>
 		v.listView({
-			columns: [f.name, f.enabled, f.project, f.defaultCapability, f.version],
+			columns: [
+				f.name,
+				f.description,
+				f.steps,
+				f.project,
+				f.defaultCapability,
+				"updatedAt",
+			],
 			searchable: [f.name, f.description],
 			filterable: [f.enabled, f.project, f.defaultCapability],
+			defaultSort: { field: "updatedAt", direction: "desc" },
 			layout: {
 				density: "comfortable",
 				titleField: f.name,
 				subtitleField: f.description,
 				badgeFields: [f.enabled],
-				metaFields: [f.project, f.defaultCapability, f.version],
+				metaFields: [f.project, f.defaultCapability, "updatedAt"],
 			},
 		}),
 	)
@@ -46,24 +54,49 @@ export const workflowConfigs = collection("workflow_configs")
 			},
 			fields: [
 				{
-					type: "section",
-					label: { en: "Plan" },
-					fields: [f.name, f.description, f.project],
-				},
-				{
-					type: "section",
-					label: { en: "Default Run Settings" },
-					fields: [f.defaultCapability],
-				},
-				{
-					type: "section",
-					label: { en: "Steps" },
-					fields: [f.steps],
-				},
-				{
-					type: "section",
-					label: { en: "Advanced" },
-					fields: [f.config],
+					type: "tabs",
+					tabs: [
+						{
+							id: "overview",
+							label: { en: "Overview" },
+							fields: [
+								{
+									type: "section",
+									fields: [f.name, f.description],
+								},
+							],
+						},
+						{
+							id: "steps",
+							label: { en: "Steps" },
+							fields: [
+								{
+									type: "section",
+									fields: [f.steps],
+								},
+							],
+						},
+						{
+							id: "defaults",
+							label: { en: "Defaults" },
+							fields: [
+								{
+									type: "section",
+									fields: [f.project, f.defaultCapability],
+								},
+							],
+						},
+						{
+							id: "advanced",
+							label: { en: "Advanced" },
+							fields: [
+								{
+									type: "section",
+									fields: [f.config],
+								},
+							],
+						},
+					],
 				},
 			],
 		}),

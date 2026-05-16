@@ -865,6 +865,8 @@ export default {
 		"Seskupit aktuální stránku podle nakonfigurovaného pole.",
 	"viewOptions.noGrouping": "Bez seskupení",
 	"viewOptions.sort": "Řazení",
+	"viewOptions.noSort": "Bez řazení",
+	"viewOptions.sortDescription": "Vyberte pole a směr řazení pro tento pohled.",
 
 	"version.history": "Historie verzí",
 	"version.historyDescription":

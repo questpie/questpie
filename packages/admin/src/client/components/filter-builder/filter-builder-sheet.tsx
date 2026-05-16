@@ -3,6 +3,11 @@ import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 
 import { useTranslation } from "../../i18n/hooks.js";
+import {
+	cloneFilters,
+	filtersEqual,
+	sortConfigEqual,
+} from "../../lib/view-filter-utils.js";
 import { SelectSingle } from "../primitives/select-single.js";
 import { Button } from "../ui/button.js";
 import {
@@ -22,43 +27,14 @@ import type {
 	FilterBuilderProps,
 	FilterRule,
 	SavedView,
-	SortConfig,
 	ViewConfiguration,
 } from "./types.js";
 
 const NO_GROUPING_VALUE = "__none";
+const NO_SORT_VALUE = "__none";
 
 function arraysEqual<T>(a: T[], b: T[], eq: (x: T, y: T) => boolean): boolean {
 	return a.length === b.length && a.every((v, i) => eq(v, b[i]));
-}
-
-function filterValueEqual(
-	a: FilterRule["value"],
-	b: FilterRule["value"],
-): boolean {
-	if (a === b) return true;
-	if (Array.isArray(a) && Array.isArray(b)) {
-		return a.length === b.length && a.every((v, i) => v === b[i]);
-	}
-	return false;
-}
-
-function filtersEqual(a: FilterRule[], b: FilterRule[]): boolean {
-	return arraysEqual(
-		a,
-		b,
-		(x, y) =>
-			x.id === y.id &&
-			x.field === y.field &&
-			x.operator === y.operator &&
-			filterValueEqual(x.value, y.value),
-	);
-}
-
-function sortConfigEqual(a: SortConfig | null, b: SortConfig | null): boolean {
-	if (a === b) return true;
-	if (!a || !b) return false;
-	return a.field === b.field && a.direction === b.direction;
 }
 
 function viewConfigEqual(a: ViewConfiguration, b: ViewConfiguration): boolean {
@@ -145,6 +121,9 @@ interface FilterBuilderSheetProps extends FilterBuilderProps {
 
 	/** Default grouping field from list config */
 	defaultGroupBy?: string | null;
+
+	/** Default filters from list config */
+	defaultFilters?: FilterRule[];
 }
 
 export function FilterBuilderSheet({
@@ -162,6 +141,7 @@ export function FilterBuilderSheet({
 	supportsSoftDelete = false,
 	groupableFields = EMPTY_GROUPABLE_FIELDS,
 	defaultGroupBy = null,
+	defaultFilters = [],
 }: FilterBuilderSheetProps) {
 	const resolvedSavedViews = savedViews ?? EMPTY_SAVED_VIEWS;
 	const { t } = useTranslation();
@@ -192,7 +172,7 @@ export function FilterBuilderSheet({
 
 	const handleReset = () => {
 		const resetConfig: ViewConfiguration = {
-			filters: [],
+			filters: cloneFilters(defaultFilters),
 			sortConfig: null,
 			visibleColumns: defaultColumns ?? availableFields.map((f) => f.name),
 			groupBy: defaultGroupBy,
@@ -218,6 +198,21 @@ export function FilterBuilderSheet({
 			})),
 		],
 		[groupableFields, t],
+	);
+	const sortOptions = useMemo(
+		() => [
+			{
+				value: NO_SORT_VALUE,
+				label: t("viewOptions.noSort"),
+				icon: <Icon icon="ph:sort-ascending" className="size-4 opacity-60" />,
+			},
+			...availableFields.map((field) => ({
+				value: field.name,
+				label: field.label,
+				icon: <Icon icon="ph:text-aa" className="size-4 opacity-60" />,
+			})),
+		],
+		[availableFields, t],
 	);
 
 	return (
@@ -297,6 +292,79 @@ export function FilterBuilderSheet({
 								}
 							/>
 						)}
+
+						<ViewOptionRow
+							title={t("viewOptions.sort")}
+							description={t("viewOptions.sortDescription")}
+							control={
+								<div className="flex items-center gap-2">
+									<SelectSingle
+										id="view-options-sort"
+										value={localConfig.sortConfig?.field ?? NO_SORT_VALUE}
+										onChange={(value) => {
+											const nextSortField =
+												!value || value === NO_SORT_VALUE ? null : value;
+											setLocalConfig((prevConfig) => ({
+												...prevConfig,
+												sortConfig: nextSortField
+													? {
+															field: nextSortField,
+															direction:
+																prevConfig.sortConfig?.direction ?? "asc",
+														}
+													: null,
+												pagination: {
+													...(prevConfig.pagination ?? { pageSize: 25 }),
+													page: 1,
+												},
+											}));
+										}}
+										options={sortOptions}
+										clearable={false}
+										emptyMessage={t("viewOptions.noFieldsAvailable")}
+										placeholder={t("viewOptions.noSort")}
+										drawerTitle={t("viewOptions.sort")}
+										className="h-9 w-48"
+									/>
+									<Button
+										variant="outline"
+										size="icon-sm"
+										disabled={!localConfig.sortConfig?.field}
+										aria-label={
+											localConfig.sortConfig?.direction === "asc"
+												? t("table.sortDesc")
+												: t("table.sortAsc")
+										}
+										onClick={() =>
+											setLocalConfig((prevConfig) => ({
+												...prevConfig,
+												sortConfig: prevConfig.sortConfig
+													? {
+															...prevConfig.sortConfig,
+															direction:
+																prevConfig.sortConfig.direction === "asc"
+																	? "desc"
+																	: "asc",
+														}
+													: null,
+												pagination: {
+													...(prevConfig.pagination ?? { pageSize: 25 }),
+													page: 1,
+												},
+											}))
+										}
+									>
+										<Icon
+											icon={
+												localConfig.sortConfig?.direction === "asc"
+													? "ph:sort-ascending"
+													: "ph:sort-descending"
+											}
+										/>
+									</Button>
+								</div>
+							}
+						/>
 					</div>
 
 					<Tabs defaultValue="columns" className="mt-4">

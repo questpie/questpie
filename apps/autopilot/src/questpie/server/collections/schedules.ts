@@ -16,14 +16,12 @@ export const schedules = collection("schedules")
 		timezone: f.text().label({ en: "Timezone" }).default("UTC"),
 		mode: f
 			.select([
-				{ value: "task", label: { en: "Task" } },
-				{ value: "chat", label: { en: "Chat" } },
+				{ value: "task", label: { en: "Create issue" } },
+				{ value: "chat", label: { en: "Run workflow directly" } },
 			])
-			.label({ en: "Mode" }),
-		workflowConfig: f
-			.relation("workflow_configs")
-			.label({ en: "Automation Plan" }),
-		taskTemplate: f.json().label({ en: "Task Template" }),
+			.label({ en: "Action" }),
+		workflowConfig: f.relation("workflow_configs").label({ en: "Workflow" }),
+		taskTemplate: f.json().label({ en: "Issue Template" }),
 		chatPrompt: f.textarea().label({ en: "Chat Prompt" }),
 		concurrencyPolicy: f
 			.select([
@@ -40,14 +38,22 @@ export const schedules = collection("schedules")
 	}))
 	.title(({ f }) => f.name)
 	.admin(({ c }) => ({
-		label: { en: "Scheduled Work" },
+		label: { en: "Schedules" },
 		icon: c.icon("ph:calendar-check"),
 	}))
 	.list(({ v, f }) =>
 		v.listView({
-			columns: [f.name, f.enabled, f.mode, f.workflowConfig, f.nextRunAt],
+			columns: [
+				f.name,
+				f.enabled,
+				f.mode,
+				f.workflowConfig,
+				f.nextRunAt,
+				f.lastRunAt,
+			],
 			searchable: [f.name, f.description, f.chatPrompt],
 			filterable: [f.enabled, f.mode, f.workflowConfig],
+			defaultSort: { field: f.nextRunAt, direction: "asc" },
 			layout: {
 				density: "comfortable",
 				titleField: f.name,
@@ -65,24 +71,54 @@ export const schedules = collection("schedules")
 			},
 			fields: [
 				{
-					type: "section",
-					label: { en: "When It Runs" },
-					fields: [f.name, f.description, f.cron, f.timezone],
-				},
-				{
-					type: "section",
-					label: { en: "Create Work" },
-					fields: [f.workflowConfig, f.taskTemplate],
-				},
-				{
-					type: "section",
-					label: { en: "Send A Chat Prompt" },
-					fields: [f.chatPrompt],
-				},
-				{
-					type: "section",
-					label: { en: "Run History" },
-					fields: [f.lastRunAt, f.nextRunAt, f.createdBy],
+					type: "tabs",
+					tabs: [
+						{
+							id: "schedule",
+							label: { en: "Schedule" },
+							fields: [
+								{
+									type: "section",
+									fields: [f.name, f.description, f.cron, f.timezone],
+								},
+							],
+						},
+						{
+							id: "action",
+							label: { en: "Action" },
+							fields: [
+								{
+									type: "section",
+									fields: [f.mode, f.workflowConfig],
+								},
+							],
+						},
+						{
+							id: "template",
+							label: { en: "Template" },
+							fields: [
+								{
+									type: "section",
+									fields: [f.taskTemplate, f.chatPrompt],
+								},
+							],
+						},
+						{
+							id: "advanced",
+							label: { en: "Advanced" },
+							fields: [
+								{
+									type: "section",
+									fields: [
+										f.concurrencyPolicy,
+										f.lastRunAt,
+										f.nextRunAt,
+										f.createdBy,
+									],
+								},
+							],
+						},
+					],
 				},
 			],
 		}),

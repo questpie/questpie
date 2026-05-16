@@ -1021,6 +1021,9 @@ export default {
 	"viewOptions.showDeletedDescription":
 		"Inclure les enregistrements supprimés de façon réversible dans cette vue.",
 	"viewOptions.sort": "Trier",
+	"viewOptions.noSort": "Aucun tri",
+	"viewOptions.sortDescription":
+		"Choisissez le champ et le sens utilisés par cette vue.",
 	"widget.chart.emptyDescription":
 		"Configurez une source de données pour afficher un graphique.",
 	"widget.chart.emptyTitle": "Aucune donnée de graphique",

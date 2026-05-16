@@ -23,6 +23,7 @@ export const models = collection("models")
 	.admin(({ c }) => ({
 		label: { en: "AI Models" },
 		icon: c.icon("ph:cpu"),
+		hidden: true,
 	}))
 	.list(({ v }) => v.collectionTable({}))
 	.form(({ v, f }) =>

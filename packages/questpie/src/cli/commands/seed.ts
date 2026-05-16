@@ -68,35 +68,39 @@ export async function runSeedCommand(options: RunSeedOptions): Promise<void> {
 	// Create seed runner
 	const runner = new SeedRunner(app);
 
-	// Execute the requested action
-	switch (options.action) {
-		case "run":
-			await runner.run(seeds, {
-				category,
-				only,
-				force: options.force,
-				validate: options.validate,
-			});
-			break;
+	try {
+		// Execute the requested action
+		switch (options.action) {
+			case "run":
+				await runner.run(seeds, {
+					category,
+					only,
+					force: options.force,
+					validate: options.validate,
+				});
+				break;
 
-		case "undo":
-			await runner.undo(seeds, {
-				category,
-				only,
-			});
-			break;
+			case "undo":
+				await runner.undo(seeds, {
+					category,
+					only,
+				});
+				break;
 
-		case "status":
-			await runner.status(seeds);
-			break;
+			case "status":
+				await runner.status(seeds);
+				break;
 
-		case "reset":
-			await runner.reset({
-				only,
-			});
-			break;
+			case "reset":
+				await runner.reset({
+					only,
+				});
+				break;
 
-		default:
-			throw new Error(`Unknown action: ${options.action}`);
+			default:
+				throw new Error(`Unknown action: ${options.action}`);
+		}
+	} finally {
+		await app.destroy();
 	}
 }

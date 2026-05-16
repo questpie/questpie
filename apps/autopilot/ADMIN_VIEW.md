@@ -76,6 +76,11 @@ These should not be top-level product areas:
 
 If needed, expose them through Advanced settings or developer/debug surfaces.
 
+Current implementation keeps `Team` and `Skills` under Settings and exposes
+runtime/provider/model/environment/secret/script/worker collections only under a
+collapsed Advanced settings group. They remain hidden from auto-generated
+navigation and global search.
+
 ## View Rules
 
 Use reusable admin capabilities before adding app-specific pages:

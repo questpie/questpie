@@ -27,6 +27,7 @@ export const workers = collection("workers")
 	.admin(({ c }) => ({
 		label: { en: "Connected Devices" },
 		icon: c.icon("ph:desktop-tower"),
+		hidden: true,
 	}))
 	.list(({ v }) => v.collectionTable({}))
 	.form(({ v, f }) =>

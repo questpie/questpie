@@ -39,6 +39,7 @@ import {
 	extractWorkflowFromVersioning,
 	resolveWorkflowConfig,
 } from "#questpie/server/modules/core/workflow/config.js";
+import type { ComponentReference } from "#questpie/shared/component-ref.js";
 import type { I18nText } from "#questpie/shared/i18n/types.js";
 
 // ============================================================================
@@ -155,6 +156,10 @@ export interface AdminListViewSchema {
 	columns?: string[];
 	/** Default sort configuration */
 	defaultSort?: { field: string; direction: "asc" | "desc" };
+	/** Initial filters used when the user has no saved view state */
+	defaultFilters?: AdminListFilterRule[];
+	/** Header-level quick filter presets */
+	quickFilters?: AdminListQuickFilterSchema[];
 	/** Enables reorder mode for this list using the conventional `order` field */
 	orderable?: boolean | { direction?: "asc" | "desc"; step?: number };
 	/** Searchable fields */
@@ -221,6 +226,47 @@ export interface AdminListViewSchema {
 		row?: unknown[];
 		bulk?: unknown[];
 	};
+}
+
+export type AdminListFilterOperator =
+	| "equals"
+	| "not_equals"
+	| "contains"
+	| "not_contains"
+	| "starts_with"
+	| "ends_with"
+	| "greater_than"
+	| "less_than"
+	| "greater_than_or_equal"
+	| "less_than_or_equal"
+	| "in"
+	| "not_in"
+	| "some"
+	| "every"
+	| "none"
+	| "is_empty"
+	| "is_not_empty";
+
+export type AdminListFilterValue =
+	| string
+	| number
+	| boolean
+	| Array<string | number | boolean>
+	| null;
+
+export interface AdminListFilterRule {
+	id: string;
+	field: string;
+	operator: AdminListFilterOperator;
+	value: AdminListFilterValue;
+}
+
+export interface AdminListQuickFilterSchema {
+	id: string;
+	label: I18nText;
+	description?: I18nText;
+	icon?: ComponentReference;
+	filters: AdminListFilterRule[];
 }
 
 /**
@@ -1032,6 +1078,8 @@ function extractAdminConfig(
 			view: stateAny.adminList.view,
 			columns: stateAny.adminList.columns,
 			defaultSort: stateAny.adminList.defaultSort,
+			defaultFilters: stateAny.adminList.defaultFilters,
+			quickFilters: stateAny.adminList.quickFilters,
 			orderable: stateAny.adminList.orderable,
 			searchable: stateAny.adminList.searchable,
 			filterable: stateAny.adminList.filterable,

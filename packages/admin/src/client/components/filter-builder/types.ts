@@ -12,6 +12,7 @@ import type { I18nText } from "../../i18n/types.js";
 export type {
 	FilterOperator,
 	FilterRule,
+	QuickFilterConfig,
 	SortConfig,
 	ViewConfiguration,
 } from "../../../shared/types/saved-views.types.js";

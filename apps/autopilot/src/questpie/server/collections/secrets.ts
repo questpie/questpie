@@ -15,6 +15,7 @@ export const secrets = collection("secrets")
 	.admin(({ c }) => ({
 		label: { en: "Secure Values" },
 		icon: c.icon("ph:key"),
+		hidden: true,
 	}))
 	.list(({ v }) => v.collectionTable({}))
 	.form(({ v, f }) =>

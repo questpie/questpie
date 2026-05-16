@@ -18,9 +18,6 @@ import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
-	DropdownMenuLabel,
-	DropdownMenuRadioGroup,
-	DropdownMenuRadioItem,
 	DropdownMenuSeparator,
 	DropdownMenuSub,
 	DropdownMenuSubContent,
@@ -946,6 +943,8 @@ function UserFooter({
 			] as const,
 		[t],
 	);
+	const currentThemeOption =
+		themeOptions.find((option) => option.value === theme) ?? themeOptions[2];
 	const handleThemeChange = React.useCallback(
 		(value: string) => {
 			setTheme?.(value as AdminSidebarTheme);
@@ -1061,21 +1060,29 @@ function UserFooter({
 							{shouldShowThemeToggle && (
 								<>
 									<DropdownMenuSeparator />
-									<DropdownMenuLabel>{t("ui.toggleTheme")}</DropdownMenuLabel>
-									<DropdownMenuRadioGroup
-										value={theme}
-										onValueChange={handleThemeChange}
-									>
-										{themeOptions.map((option) => (
-											<DropdownMenuRadioItem
-												key={option.value}
-												value={option.value}
-											>
-												<Icon icon={option.icon} className="size-4" />
-												<span>{option.label}</span>
-											</DropdownMenuRadioItem>
-										))}
-									</DropdownMenuRadioGroup>
+									<DropdownMenuSub>
+										<DropdownMenuSubTrigger>
+											<Icon icon={currentThemeOption.icon} />
+											{t("ui.toggleTheme")}
+										</DropdownMenuSubTrigger>
+										<DropdownMenuSubContent className="min-w-40">
+											{themeOptions.map((option) => (
+												<DropdownMenuItem
+													key={option.value}
+													onClick={() => handleThemeChange(option.value)}
+												>
+													<Icon icon={option.icon} className="size-4" />
+													<span className="flex-1">{option.label}</span>
+													{option.value === theme && (
+														<Icon
+															icon="ph:check"
+															className="text-foreground size-4"
+														/>
+													)}
+												</DropdownMenuItem>
+											))}
+										</DropdownMenuSubContent>
+									</DropdownMenuSub>
 								</>
 							)}
 							{/* UI Language Switcher */}

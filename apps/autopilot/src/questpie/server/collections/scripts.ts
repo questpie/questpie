@@ -21,6 +21,7 @@ export const scripts = collection("scripts")
 	.admin(({ c }) => ({
 		label: { en: "Automation Scripts" },
 		icon: c.icon("ph:terminal"),
+		hidden: true,
 	}))
 	.list(({ v }) => v.collectionTable({}))
 	.form(({ v, f }) =>

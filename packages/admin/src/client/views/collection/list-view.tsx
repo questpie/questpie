@@ -30,6 +30,7 @@ import type {
 } from "../../components/filter-builder/types";
 import { LocaleSwitcher } from "../../components/locale-switcher";
 import { flattenOptions } from "../../components/primitives/types";
+import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import { Checkbox } from "../../components/ui/checkbox";
 import { EmptyState } from "../../components/ui/empty-state";
@@ -91,6 +92,7 @@ import {
 	getAllAvailableFields,
 } from "./columns";
 import { buildOutlineRows, type OutlineRow } from "./outline";
+import { QuickFilterBar } from "./quick-filter-bar";
 import {
 	mapListSchemaToConfig,
 	stringifyGroupValue,
@@ -434,7 +436,7 @@ function ListViewInner({
 	});
 	const [searchTerm, setSearchTerm] = React.useState("");
 	const [isSearchPanelOpen, setIsSearchPanelOpen] = React.useState(false);
-	const [collapsedOutlineKeys, setCollapsedOutlineKeys] = React.useState<
+	const [toggledOutlineKeys, setToggledOutlineKeys] = React.useState<
 		Set<string>
 	>(() => new Set());
 	const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({});
@@ -449,9 +451,21 @@ function ListViewInner({
 	);
 	const groupingConfig = resolvedListConfig?.grouping;
 	const defaultGroupBy = groupingConfig?.defaultField ?? null;
+	const defaultFilters = React.useMemo(
+		() => resolvedListConfig?.defaultFilters ?? [],
+		[resolvedListConfig?.defaultFilters],
+	);
+	const initialViewConfig = React.useMemo(
+		() => ({
+			realtime: resolvedRealtime,
+			groupBy: defaultGroupBy,
+			filters: defaultFilters,
+		}),
+		[resolvedRealtime, defaultGroupBy, defaultFilters],
+	);
 	const viewState = useViewState(
 		defaultColumns,
-		{ realtime: resolvedRealtime, groupBy: defaultGroupBy },
+		initialViewConfig,
 		collection,
 		user?.id,
 	);
@@ -649,7 +663,7 @@ function ListViewInner({
 				docs: items as Record<string, unknown>[],
 				outline: effectiveOutline,
 				edgesByCollection,
-				collapsedKeys: collapsedOutlineKeys,
+				toggledKeys: toggledOutlineKeys,
 				labelForValue: (value, field) =>
 					stringifyGroupValue(
 						value,
@@ -664,7 +678,7 @@ function ListViewInner({
 			items,
 			effectiveOutline,
 			edgesByCollection,
-			collapsedOutlineKeys,
+			toggledOutlineKeys,
 			fieldByName,
 			resolveText,
 			t,
@@ -681,10 +695,17 @@ function ListViewInner({
 		getRowId: (row: any) => String(row.id),
 		state: { rowSelection },
 	});
-	const rowsById = React.useMemo(
-		() => new Map(table.getRowModel().rows.map((row) => [String(row.id), row])),
-		[table, items],
-	);
+	const rowsById = React.useMemo(() => {
+		const map = new Map<string, any>();
+		for (const row of table.getRowModel().rows) {
+			map.set(String(row.id), row);
+			const originalId = (row.original as any)?.id;
+			if (originalId !== undefined && originalId !== null) {
+				map.set(String(originalId), row);
+			}
+		}
+		return map;
+	}, [table]);
 	const deleteMutation = useCollectionDelete(collection as any);
 	const restoreMutation = useCollectionRestore(collection as any);
 	const { data: savedViewsData, isLoading: savedViewsLoading } = useSavedViews(
@@ -696,6 +717,7 @@ function ListViewInner({
 	const hasActiveFilters = viewState.config.filters.length > 0;
 	const hasViewOptionsState =
 		hasActiveFilters ||
+		!!viewState.config.sortConfig ||
 		!!viewState.config.groupBy ||
 		viewState.config.visibleColumns.length !== defaultColumns.length ||
 		!!viewState.config.includeDeleted;
@@ -721,6 +743,19 @@ function ListViewInner({
 	const clearFilters = React.useCallback(() => {
 		viewState.setConfig({ ...viewState.config, filters: [] });
 	}, [viewState]);
+	const applyQuickFilters = React.useCallback(
+		(filters: ViewConfiguration["filters"]) => {
+			viewState.setConfig((current) => ({
+				...current,
+				filters,
+				pagination: {
+					...(current.pagination ?? { pageSize: 25 }),
+					page: 1,
+				},
+			}));
+		},
+		[viewState],
+	);
 	const handleSaveView = React.useCallback(
 		(name: string, configuration: ViewConfiguration) => {
 			saveViewMutation.mutate({ name, configuration });
@@ -746,7 +781,7 @@ function ListViewInner({
 		[restoreMutation, actionHelpers, collection],
 	);
 	const toggleOutlineKey = React.useCallback((key: string) => {
-		setCollapsedOutlineKeys((current) => {
+		setToggledOutlineKeys((current) => {
 			const next = new Set(current);
 			if (next.has(key)) next.delete(key);
 			else next.add(key);
@@ -884,50 +919,6 @@ function ListViewInner({
 									</TooltipContent>
 								</Tooltip>
 							)}
-							<Select
-								value={effectiveSort?.field ?? ""}
-								onValueChange={(field) =>
-									viewState.setSort(
-										field
-											? {
-													field,
-													direction: effectiveSort?.direction ?? "asc",
-												}
-											: null,
-									)
-								}
-							>
-								<SelectTrigger className="h-8 w-40">
-									<SelectValue placeholder="Sort" />
-								</SelectTrigger>
-								<SelectContent>
-									{availableFields.map((field) => (
-										<SelectItem key={field.name} value={field.name}>
-											{resolveText(field.label, field.name)}
-										</SelectItem>
-									))}
-								</SelectContent>
-							</Select>
-							<Button
-								variant="outline"
-								size="icon-sm"
-								aria-label="Toggle sort direction"
-								onClick={() =>
-									viewState.setSort({
-										field: effectiveSort?.field ?? "createdAt",
-										direction:
-											effectiveSort?.direction === "asc" ? "desc" : "asc",
-									})
-								}
-							>
-								<Icon
-									icon={
-										effectiveSort?.direction === "asc"
-											? "ph:sort-ascending"
-											: "ph:sort-descending"
-									}
-								/>
-							</Button>
 							{canUploadToCollection && showToolbar && (
 								<UploadCollectionButton
 									collection={collection}
@@ -956,11 +947,16 @@ function ListViewInner({
 							onChange={(event) => setSearchTerm(event.target.value)}
 							onClear={() => setSearchTerm("")}
 							placeholder={t("collectionSearch.placeholder")}
-							autoFocus
 							isLoading={isSearchActive}
 						/>
 					</div>
 				)}
+
+				<QuickFilterBar
+					quickFilters={resolvedListConfig?.quickFilters}
+					currentFilters={viewState.config.filters}
+					onApply={applyQuickFilters}
+				/>
 
 				{outlineRows.length === 0 ? (
 					<EmptyState
@@ -997,7 +993,7 @@ function ListViewInner({
 						}
 					/>
 				) : (
-					<div className="border-border-subtle overflow-hidden rounded-md border">
+					<div className="border-border-subtle overflow-hidden rounded-[var(--surface-radius)] border">
 						{outlineRows.map((outlineRow) => {
 							if (outlineRow.kind !== "record") {
 								return (
@@ -1011,14 +1007,15 @@ function ListViewInner({
 							}
 
 							const tableRow = rowsById.get(outlineRow.id);
-							if (!tableRow) return null;
-							const item = tableRow.original as any;
+							const item = (tableRow?.original ?? outlineRow.doc) as any;
 							const lock = getLock(item.id);
 							const locked = isDocLocked(item.id);
 							const lockUser = lock ? getLockUser(lock) : null;
-							const isSelected = tableRow.getIsSelected();
+							const isSelected = tableRow?.getIsSelected() ?? false;
 							const titleValue =
-								(titleField ? getValueAtPath(item, titleField) : item._title) ??
+								(titleField
+									? getValueAtPath(item, titleField)
+									: item["_title"]) ??
 								item.title ??
 								item.name ??
 								item.id;
@@ -1029,11 +1026,13 @@ function ListViewInner({
 							return (
 								<div
 									key={outlineRow.key}
+									data-state={isSelected ? "selected" : undefined}
 									className={cn(
-										"group/list-row border-border-subtle hover:bg-muted/35 flex min-w-0 items-start gap-2 border-b px-3 text-sm transition-colors last:border-b-0",
-										density === "compact" ? "py-2" : "py-3",
+										"group/list-row border-border-subtle hover:bg-accent data-[state=selected]:bg-muted flex min-w-0 items-start gap-2 border-b px-3 text-sm transition-colors last:border-b-0",
+										density === "compact"
+											? "min-h-10 py-1.5"
+											: "min-h-12 py-2.5",
 										isHighlighted(item.id) && "bg-info/10",
-										isSelected && "bg-muted/50",
 									)}
 									style={{ paddingLeft: `${12 + outlineRow.depth * 18}px` }}
 								>
@@ -1045,31 +1044,27 @@ function ListViewInner({
 									>
 										<Checkbox
 											checked={isSelected}
-											disabled={!tableRow.getCanSelect()}
+											disabled={!tableRow || !tableRow.getCanSelect()}
 											onCheckedChange={(checked) =>
-												tableRow.toggleSelected(!!checked)
+												tableRow?.toggleSelected(!!checked)
 											}
-											aria-label="Select row"
+											aria-label={t("table.selectRow")}
 										/>
 									</div>
-									<button
-										type="button"
-										className={cn(
-											"text-muted-foreground mt-0.5 flex size-5 shrink-0 items-center justify-center rounded transition-colors",
-											outlineRow.expandable &&
-												"hover:bg-muted hover:text-foreground",
-										)}
-										disabled={!outlineRow.expandable}
-										onClick={(event) => {
-											event.stopPropagation();
-											if (outlineRow.expandable)
+									{outlineRow.expandable ? (
+										<button
+											type="button"
+											className="text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-ring/40 -mt-1 -ml-1 flex size-8 shrink-0 items-center justify-center rounded-[var(--control-radius-inner)] transition-[background-color,color,box-shadow] focus-visible:ring-2 focus-visible:outline-none"
+											onClick={(event) => {
+												event.stopPropagation();
 												toggleOutlineKey(outlineRow.key);
-										}}
-										aria-label={
-											outlineRow.collapsed ? "Expand row" : "Collapse row"
-										}
-									>
-										{outlineRow.expandable ? (
+											}}
+											aria-label={
+												outlineRow.collapsed
+													? t("a11y.expand")
+													: t("a11y.collapse")
+											}
+										>
 											<Icon
 												icon="ph:caret-right-bold"
 												className={cn(
@@ -1077,11 +1072,16 @@ function ListViewInner({
 													!outlineRow.collapsed && "rotate-90",
 												)}
 											/>
-										) : null}
-									</button>
+										</button>
+									) : (
+										<span
+											className="-mt-1 -ml-1 size-8 shrink-0"
+											aria-hidden="true"
+										/>
+									)}
 									<button
 										type="button"
-										className="min-w-0 flex-1 text-left"
+										className="focus-visible:ring-ring/40 -my-1 min-w-0 flex-1 rounded-[var(--control-radius-inner)] py-1 text-left focus-visible:ring-2 focus-visible:outline-none"
 										onClick={() => handleRowClick(item)}
 									>
 										<div className="flex min-w-0 items-center gap-2">
@@ -1100,9 +1100,10 @@ function ListViewInner({
 													: stringifySimpleValue(titleValue)}
 											</span>
 											{badgeFields.map((field) => (
-												<span
+												<Badge
 													key={field}
-													className="bg-muted text-muted-foreground inline-flex h-5 max-w-36 shrink-0 items-center rounded px-1.5 font-mono text-[11px]"
+													variant="secondary"
+													className="max-w-36 font-mono"
 												>
 													<span className="truncate">
 														{renderField(
@@ -1111,7 +1112,7 @@ function ListViewInner({
 															getValueAtPath(item, field),
 														)}
 													</span>
-												</span>
+												</Badge>
 											))}
 											{locked && (
 												<span className="text-warning inline-flex items-center gap-1 text-xs">
@@ -1127,7 +1128,7 @@ function ListViewInner({
 										)}
 									</button>
 									{metaFields.length > 0 && (
-										<div className="text-muted-foreground hidden max-w-[42%] shrink-0 items-center justify-end gap-3 overflow-hidden text-right text-xs md:flex">
+										<div className="text-muted-foreground hidden max-w-[42%] shrink-0 items-center justify-end gap-3 overflow-hidden text-right text-xs tabular-nums md:flex">
 											{metaFields.map((field) => (
 												<span key={field} className="min-w-0 truncate">
 													{renderField(
@@ -1168,29 +1169,102 @@ function ListViewInner({
 					</div>
 				)}
 
-				<div className="text-muted-foreground flex flex-col gap-2 text-xs sm:flex-row sm:items-center sm:justify-between">
-					<span>
-						{isSearching
-							? `${items.length} item${items.length === 1 ? "" : "s"}`
-							: `${items.length > 0 ? ((viewState.config.pagination?.page ?? 1) - 1) * (viewState.config.pagination?.pageSize ?? 25) + 1 : 0}-${Math.min(((viewState.config.pagination?.page ?? 1) - 1) * (viewState.config.pagination?.pageSize ?? 25) + items.length, listData?.totalDocs ?? items.length)} ${t("table.of")} ${listData?.totalDocs ?? 0}`}
-					</span>
-					{!isSearching && (listData?.totalPages ?? 1) > 1 && (
-						<div className="flex items-center gap-2">
+				{!isSearching && (
+					<div
+						className="qa-list-view__pagination flex items-center justify-between gap-4 py-2 tabular-nums"
+						role="navigation"
+						aria-label={t("table.pagination")}
+					>
+						<div
+							className="text-muted-foreground flex items-center gap-4 text-sm"
+							aria-live="polite"
+							aria-atomic="true"
+						>
+							<span>
+								{items.length > 0
+									? `${((viewState.config.pagination?.page ?? 1) - 1) * (viewState.config.pagination?.pageSize ?? 25) + 1}-${Math.min(((viewState.config.pagination?.page ?? 1) - 1) * (viewState.config.pagination?.pageSize ?? 25) + items.length, listData?.totalDocs ?? items.length)}`
+									: "0"}{" "}
+								{t("table.of")} {listData?.totalDocs ?? 0}
+							</span>
+							<div className="flex items-center gap-2">
+								<span>{t("table.show")}</span>
+								<Select
+									value={String(viewState.config.pagination?.pageSize ?? 25)}
+									onValueChange={(value) =>
+										viewState.setPageSize(Number(value))
+									}
+								>
+									<SelectTrigger className="h-8 w-[70px]">
+										<SelectValue />
+									</SelectTrigger>
+									<SelectContent side="top">
+										{[10, 25, 50, 100].map((size) => (
+											<SelectItem key={size} value={String(size)}>
+												{size}
+											</SelectItem>
+										))}
+									</SelectContent>
+								</Select>
+							</div>
+						</div>
+
+						<div className="flex items-center gap-1">
 							<Button
-								variant="outline"
+								variant="ghost"
 								size="sm"
+								className="size-8 p-0"
 								disabled={(viewState.config.pagination?.page ?? 1) <= 1}
 								onClick={() =>
 									viewState.setPage(
-										Math.max(1, (viewState.config.pagination?.page ?? 1) - 1),
+										(viewState.config.pagination?.page ?? 1) - 1,
 									)
 								}
+								aria-label={t("table.previousPage")}
 							>
-								{t("common.previous")}
+								<Icon icon="ph:caret-left" className="size-4" />
 							</Button>
+
+							{Array.from(
+								{
+									length: Math.min(5, listData?.totalPages ?? 1),
+								},
+								(_, i) => {
+									const currentPage = viewState.config.pagination?.page ?? 1;
+									const totalPages = listData?.totalPages ?? 1;
+									let pageNum: number;
+
+									if (totalPages <= 5) {
+										pageNum = i + 1;
+									} else if (currentPage <= 3) {
+										pageNum = i + 1;
+									} else if (currentPage >= totalPages - 2) {
+										pageNum = totalPages - 4 + i;
+									} else {
+										pageNum = currentPage - 2 + i;
+									}
+
+									return (
+										<Button
+											key={pageNum}
+											variant={currentPage === pageNum ? "secondary" : "ghost"}
+											size="sm"
+											className="size-8 min-w-8 p-0 tabular-nums"
+											onClick={() => viewState.setPage(pageNum)}
+											aria-label={t("table.page", { page: pageNum })}
+											aria-current={
+												currentPage === pageNum ? "page" : undefined
+											}
+										>
+											{pageNum}
+										</Button>
+									);
+								},
+							)}
+
 							<Button
-								variant="outline"
+								variant="ghost"
 								size="sm"
+								className="size-8 p-0"
 								disabled={
 									(viewState.config.pagination?.page ?? 1) >=
 									(listData?.totalPages ?? 1)
@@ -1200,12 +1274,26 @@ function ListViewInner({
 										(viewState.config.pagination?.page ?? 1) + 1,
 									)
 								}
+								aria-label={t("table.nextPage")}
 							>
-								{t("common.next")}
+								<Icon icon="ph:caret-right" className="size-4" />
 							</Button>
 						</div>
-					)}
-				</div>
+					</div>
+				)}
+
+				{isSearching && (
+					<div
+						className="text-muted-foreground flex items-center gap-2 py-2 text-sm tabular-nums"
+						aria-live="polite"
+						aria-atomic="true"
+					>
+						{isSearchActive && (
+							<Icon icon="ph:spinner-gap" className="size-3 animate-spin" />
+						)}
+						{t("cell.item", { count: items.length })}
+					</div>
+				)}
 
 				<BulkActionToolbar
 					table={table}
@@ -1239,6 +1327,7 @@ function ListViewInner({
 					supportsSoftDelete={!!collectionMeta?.softDelete}
 					groupableFields={groupableFields}
 					defaultGroupBy={defaultGroupBy}
+					defaultFilters={defaultFilters}
 				/>
 
 				{dialogAction && (
@@ -1268,7 +1357,7 @@ function OutlineHeaderRow({
 	return (
 		<button
 			type="button"
-			className="bg-background/95 border-border-subtle sticky top-0 z-10 flex w-full items-center gap-2 border-b px-3 py-2 text-left backdrop-blur"
+			className="border-border-subtle bg-muted/40 hover:bg-muted/70 focus-visible:ring-ring/40 flex min-h-9 w-full items-center gap-2 border-b px-3 py-1.5 text-left transition-[background-color,color,box-shadow] focus-visible:ring-2 focus-visible:outline-none"
 			style={{ paddingLeft: `${12 + row.depth * 18}px` }}
 			onClick={() => onToggle(row.key)}
 			aria-expanded={!row.collapsed}
@@ -1290,7 +1379,7 @@ function OutlineHeaderRow({
 				{row.label}
 			</span>
 			{showCounts && (
-				<span className="font-chrome chrome-meta text-muted-foreground text-[11px] tabular-nums">
+				<span className="bg-muted text-muted-foreground ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] tracking-normal tabular-nums">
 					{row.count}
 				</span>
 			)}

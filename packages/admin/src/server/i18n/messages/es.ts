@@ -1014,6 +1014,9 @@ export default {
 	"viewOptions.showDeletedDescription":
 		"Incluir registros eliminados de forma reversible en esta vista.",
 	"viewOptions.sort": "Ordenar",
+	"viewOptions.noSort": "Sin ordenación",
+	"viewOptions.sortDescription":
+		"Elige el campo y la dirección para esta vista.",
 	"widget.chart.emptyDescription":
 		"Configure una fuente de datos para mostrar un gráfico.",
 	"widget.chart.emptyTitle": "No hay datos de gráfico",

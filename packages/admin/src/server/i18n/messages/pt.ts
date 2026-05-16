@@ -995,6 +995,9 @@ export default {
 	"viewOptions.showDeletedDescription":
 		"Incluir registros excluídos de forma reversível nesta visualização.",
 	"viewOptions.sort": "Ordenar",
+	"viewOptions.noSort": "Sem ordenação",
+	"viewOptions.sortDescription":
+		"Escolha o campo e a direção usados nesta visualização.",
 	"widget.chart.emptyDescription":
 		"Configure uma fonte de dados para exibir um gráfico.",
 	"widget.chart.emptyTitle": "Nenhum dado de gráfico",

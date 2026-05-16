@@ -221,4 +221,66 @@ describe("outline row builder", () => {
 		const keys = rows.map((row) => row.key);
 		expect(new Set(keys).size).toBe(keys.length);
 	});
+
+	it("toggles nested rows away from roots-only defaults", () => {
+		const outline = {
+			defaultExpanded: "roots" as const,
+			levels: [
+				{ kind: "field" as const, field: "scopeType" },
+				{ kind: "relation-field" as const, relation: "project" },
+				{
+					kind: "path" as const,
+					field: "path",
+					separator: "/",
+					syntheticFolders: true,
+					repeat: true,
+				},
+			],
+		};
+		const sourceDocs = [
+			{
+				id: "a",
+				title: "A",
+				scopeType: "project",
+				project: { id: "p1", title: "Alpha" },
+				path: "docs/guides/a.md",
+			},
+		] as Array<Record<string, unknown>>;
+
+		const closedRows = buildOutlineRows({
+			docs: sourceDocs,
+			outline,
+		});
+		expect(closedRows.map((row) => row.label ?? row.id)).toEqual([
+			"project",
+			"Alpha",
+		]);
+
+		const alphaKey = "root/field:scopeType:project/relation-field:project:p1";
+		const openedRows = buildOutlineRows({
+			docs: sourceDocs,
+			outline,
+			toggledKeys: [alphaKey],
+		});
+		expect(openedRows.map((row) => row.label ?? row.id)).toEqual([
+			"project",
+			"Alpha",
+			"docs",
+		]);
+
+		const docsKey = `${alphaKey}/path:path:docs`;
+		const guidesKey = `${alphaKey}/path:path:docs/guides`;
+		const nestedRows = buildOutlineRows({
+			docs: sourceDocs,
+			outline,
+			toggledKeys: [alphaKey, docsKey, guidesKey],
+		});
+		expect(nestedRows.map((row) => row.label ?? row.id)).toEqual([
+			"project",
+			"Alpha",
+			"docs",
+			"guides",
+			"a",
+		]);
+	});
 });

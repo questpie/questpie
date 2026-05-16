@@ -4,6 +4,8 @@
 @import "@fontsource-variable/geist";
 @import "@fontsource-variable/jetbrains-mono";
 
+@source "../**/*.{js,jsx,ts,tsx}";
+
 /* ================================================================
    QUESTPIE ADMIN THEME — Base
    ================================================================

@@ -6,6 +6,11 @@ import type {
 	SortConfig,
 	ViewConfiguration,
 } from "../components/filter-builder/types.js";
+import {
+	cloneFilters,
+	filtersEqual,
+	sortConfigEqual,
+} from "../lib/view-filter-utils.js";
 import { useAdminStore } from "../runtime/provider.js";
 import {
 	getAdminPreferenceQueryKey,
@@ -157,7 +162,7 @@ export function useViewState(
 
 		// No stored config - use defaults
 		return {
-			filters: initialConfig?.filters ?? [],
+			filters: cloneFilters(initialConfig?.filters ?? []),
 			sortConfig: initialConfig?.sortConfig ?? null,
 			visibleColumns: defaultColumns,
 			groupBy: initialConfig?.groupBy ?? null,
@@ -365,15 +370,23 @@ export function useViewState(
 	const resetConfig = useCallback(() => {
 		setConfig({
 			...EMPTY_CONFIG,
+			filters: cloneFilters(initialConfig?.filters ?? []),
+			sortConfig: initialConfig?.sortConfig ?? null,
 			visibleColumns: defaultColumns,
+			groupBy: initialConfig?.groupBy ?? null,
+			realtime: initialConfig?.realtime,
+			includeDeleted: initialConfig?.includeDeleted ?? false,
 		});
-	}, [setConfig, defaultColumns]);
+	}, [setConfig, defaultColumns, initialConfig]);
 
 	// Check if config has any changes from default
 	const hasChanges = useMemo(() => {
 		return (
-			config.filters.length > 0 ||
-			config.sortConfig !== null ||
+			!filtersEqual(config.filters, initialConfig?.filters ?? []) ||
+			!sortConfigEqual(
+				config.sortConfig ?? null,
+				initialConfig?.sortConfig ?? null,
+			) ||
 			(config.groupBy ?? null) !== (initialConfig?.groupBy ?? null) ||
 			(config.collapsedGroups?.length ?? 0) > 0 ||
 			config.realtime !== initialConfig?.realtime ||
@@ -384,13 +397,7 @@ export function useViewState(
 			JSON.stringify([...config.visibleColumns].sort()) !==
 				JSON.stringify([...defaultColumns].sort())
 		);
-	}, [
-		config,
-		defaultColumns,
-		initialConfig?.includeDeleted,
-		initialConfig?.groupBy,
-		initialConfig?.realtime,
-	]);
+	}, [config, defaultColumns, initialConfig]);
 
 	return {
 		config,

@@ -747,6 +747,9 @@ export default {
 		"Group the current page by a configured field.",
 	"viewOptions.noGrouping": "No grouping",
 	"viewOptions.sort": "Sort",
+	"viewOptions.noSort": "No sorting",
+	"viewOptions.sortDescription":
+		"Choose the field and direction used by this view.",
 
 	// Versions
 	"version.history": "Version history",

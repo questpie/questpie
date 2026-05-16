@@ -37,6 +37,9 @@ export interface BuildOutlineRowsOptions {
 	docs: Record<string, unknown>[];
 	outline?: ListViewOutlineConfig;
 	edgesByCollection?: Record<string, Record<string, unknown>[]>;
+	/** Keys toggled away from their configured default expansion state. */
+	toggledKeys?: Iterable<string>;
+	/** @deprecated Use toggledKeys. */
 	collapsedKeys?: Iterable<string>;
 	labelForValue?: (value: unknown, field?: string) => string;
 	maxDepth?: number;
@@ -101,13 +104,17 @@ function shouldExpand(
 	key: string,
 	depth: number,
 	outline: ListViewOutlineConfig | undefined,
-	collapsedKeys: Set<string>,
+	toggledKeys: Set<string>,
 ): boolean {
-	if (collapsedKeys.has(key)) return false;
 	const defaultExpanded = outline?.defaultExpanded ?? true;
-	if (defaultExpanded === true) return true;
-	if (defaultExpanded === false) return false;
-	return depth === 0;
+	const defaultValue =
+		defaultExpanded === true
+			? true
+			: defaultExpanded === false
+				? false
+				: depth === 0;
+	if (toggledKeys.has(key)) return !defaultValue;
+	return defaultValue;
 }
 
 function compareByOrder(
@@ -190,7 +197,7 @@ function buildFieldRows(
 				rowKey,
 				depth,
 				ctx.outline,
-				ctx.collapsedKeys,
+				ctx.toggledKeys,
 			);
 			return [
 				{
@@ -250,7 +257,7 @@ function buildRelationFieldRows(
 				rowKey,
 				depth,
 				ctx.outline,
-				ctx.collapsedKeys,
+				ctx.toggledKeys,
 			);
 			return [
 				{
@@ -374,7 +381,7 @@ function buildEdgeRows(
 					rowKey,
 					nextDepth,
 					ctx.outline,
-					ctx.collapsedKeys,
+					ctx.toggledKeys,
 				);
 				rows.push({
 					kind: "group",
@@ -417,7 +424,7 @@ function buildEdgeRows(
 		);
 		const expanded =
 			hasChildren &&
-			shouldExpand(rowKey, rowDepth, ctx.outline, ctx.collapsedKeys);
+			shouldExpand(rowKey, rowDepth, ctx.outline, ctx.toggledKeys);
 		rows.push({
 			kind: "record",
 			key: rowKey,
@@ -539,7 +546,7 @@ function buildPathRows(
 				child.key,
 				rowDepth,
 				ctx.outline,
-				ctx.collapsedKeys,
+				ctx.toggledKeys,
 			);
 			rows.push({
 				kind: "synthetic",
@@ -585,7 +592,7 @@ interface BuildContext {
 	levels: ListViewOutlineLevel[];
 	outline?: ListViewOutlineConfig;
 	edgesByCollection: Record<string, Record<string, unknown>[]>;
-	collapsedKeys: Set<string>;
+	toggledKeys: Set<string>;
 	labelForValue: (value: unknown, field?: string) => string;
 	maxDepth: number;
 }
@@ -635,6 +642,7 @@ export function buildOutlineRows({
 	docs,
 	outline,
 	edgesByCollection = {},
+	toggledKeys,
 	collapsedKeys,
 	labelForValue = defaultLabelForValue,
 	maxDepth,
@@ -644,7 +652,7 @@ export function buildOutlineRows({
 		levels,
 		outline,
 		edgesByCollection,
-		collapsedKeys: new Set(collapsedKeys ?? []),
+		toggledKeys: new Set(toggledKeys ?? collapsedKeys ?? []),
 		labelForValue,
 		maxDepth: maxDepth ?? outline?.maxDepth ?? DEFAULT_MAX_DEPTH,
 	};

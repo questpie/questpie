@@ -5,6 +5,26 @@ import { auditModule } from "@questpie/admin/modules/audit";
 import { mcpModule } from "@questpie/mcp";
 import { workflowsModule } from "@questpie/workflows/modules/workflows";
 
+const hiddenAssets = adminModule.collections.assets.set("admin", {
+	...((adminModule.collections.assets.state as any).admin ?? {}),
+	hidden: true,
+	audit: false,
+});
+
+const autopilotAdminModule = {
+	...adminModule,
+	collections: {
+		...adminModule.collections,
+		assets: hiddenAssets,
+	},
+	config: {
+		...adminModule.config,
+		admin: {
+			sidebar: { sections: [], items: [] },
+		},
+	},
+} as unknown as typeof adminModule;
+
 const quietAuditLog = auditModule.collections.admin_audit_log.set("admin", {
 	...(auditModule.collections.admin_audit_log.state.admin ?? {}),
 	hidden: true,
@@ -27,7 +47,7 @@ const quietAuditModule = {
 
 // @ts-expect-error workflowsModule currently exposes a circular generated type.
 const autopilotModules = [
-	adminModule,
+	autopilotAdminModule,
 	quietAuditModule,
 	workflowsModule,
 	mcpModule,

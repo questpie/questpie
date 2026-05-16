@@ -55,8 +55,9 @@ export const runs = collection("runs")
 	}))
 	.title(({ f }) => f.summary)
 	.admin(({ c }) => ({
-		label: { en: "Agent Runs" },
+		label: { en: "Executions" },
 		icon: c.icon("ph:play"),
+		hidden: true,
 	}))
 	.list(({ v, f }) =>
 		v.listView({

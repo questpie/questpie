@@ -142,6 +142,7 @@ import {
 	computeDefaultColumns,
 	getAllAvailableFields,
 } from "./columns";
+import { QuickFilterBar } from "./quick-filter-bar";
 import { TableViewSkeleton } from "./view-skeletons";
 
 // ============================================================================
@@ -464,6 +465,8 @@ export function mapListSchemaToConfig(list?: {
 	view?: string;
 	columns?: string[];
 	defaultSort?: { field: string; direction: "asc" | "desc" };
+	defaultFilters?: ListViewConfig["defaultFilters"];
+	quickFilters?: ListViewConfig["quickFilters"];
 	orderable?: ListViewConfig["orderable"];
 	searchable?: string[] | boolean;
 	filterable?: string[];
@@ -477,6 +480,8 @@ export function mapListSchemaToConfig(list?: {
 	const config: ListViewConfig = {};
 	if (list.columns?.length) config.columns = list.columns;
 	if (list.defaultSort) config.defaultSort = list.defaultSort as any;
+	if (list.defaultFilters?.length) config.defaultFilters = list.defaultFilters;
+	if (list.quickFilters?.length) config.quickFilters = list.quickFilters;
 	if (list.orderable) config.orderable = list.orderable;
 	if (Array.isArray(list.searchable) && list.searchable.length) {
 		config.searchFields = list.searchable as any;
@@ -962,9 +967,21 @@ function TableViewInner({
 
 	// View state (filters, sort, visible columns, realtime) - with database persistence
 	// Uses Suspense internally for loading preferences
+	const defaultFilters = useMemo(
+		() => resolvedListConfig?.defaultFilters ?? [],
+		[resolvedListConfig?.defaultFilters],
+	);
+	const initialViewConfig = useMemo(
+		() => ({
+			realtime: resolvedRealtime,
+			groupBy: defaultGroupBy,
+			filters: defaultFilters,
+		}),
+		[resolvedRealtime, defaultGroupBy, defaultFilters],
+	);
 	const viewState = useViewState(
 		defaultColumns,
-		{ realtime: resolvedRealtime, groupBy: defaultGroupBy },
+		initialViewConfig,
 		collection,
 		user?.id,
 	);
@@ -1626,12 +1643,26 @@ function TableViewInner({
 	]);
 	const hasViewOptionsState =
 		hasActiveFilters ||
+		!!viewState.config.sortConfig ||
 		!!viewState.config.groupBy ||
 		viewState.config.visibleColumns.length !== defaultColumns.length ||
 		!!viewState.config.includeDeleted;
 	const clearFilters = () => {
 		viewState.setConfig({ ...viewState.config, filters: [] });
 	};
+	const applyQuickFilters = React.useCallback(
+		(filters: ViewConfiguration["filters"]) => {
+			viewState.setConfig((current) => ({
+				...current,
+				filters,
+				pagination: {
+					...(current.pagination ?? { pageSize: 25 }),
+					page: 1,
+				},
+			}));
+		},
+		[viewState],
+	);
 	const exitReorderMode = React.useCallback(() => {
 		setOptimisticOrderIds(null);
 		setIsReorderMode(false);
@@ -2150,6 +2181,12 @@ function TableViewInner({
 					</div>
 				)}
 
+				<QuickFilterBar
+					quickFilters={resolvedListConfig?.quickFilters}
+					currentFilters={viewState.config.filters}
+					onApply={applyQuickFilters}
+				/>
+
 				{isReorderMode && canUseOrderableSort && (
 					<div className="border-border/70 bg-muted/30 text-muted-foreground flex min-h-10 items-center justify-between gap-3 border-y px-3 py-2 font-mono text-xs">
 						<div className="flex min-w-0 items-center gap-2">
@@ -2666,6 +2703,7 @@ function TableViewInner({
 					onSaveView={handleSaveView}
 					onDeleteView={handleDeleteView}
 					supportsSoftDelete={collectionMeta?.softDelete ?? false}
+					defaultFilters={defaultFilters}
 				/>
 
 				{/* Action Dialog */}

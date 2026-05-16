@@ -8,7 +8,10 @@
 
 import type { I18nText } from "questpie/shared";
 
-import type { AnyBlockBuilder } from "../modules/admin/block/index.js";
+import type {
+	FilterRule,
+	QuickFilterConfig,
+} from "../../shared/types/saved-views.types.js";
 import type { ActionReference, ComponentReference } from "./common.js";
 
 // ============================================================================
@@ -152,6 +155,10 @@ export interface ListViewConfig {
 	columns?: string[];
 	/** Default sort configuration */
 	defaultSort?: { field: string; direction: "asc" | "desc" };
+	/** Initial filters used when the user has no saved view state */
+	defaultFilters?: FilterRule[];
+	/** Header-level quick filter presets */
+	quickFilters?: QuickFilterConfig[];
 	/**
 	 * Enables reorder mode for this list.
 	 * Requires a numeric field named `order` on the collection.
