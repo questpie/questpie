@@ -345,19 +345,30 @@ function filterSidebarConfig(
 	accessibleCollections: Set<string>,
 	accessibleGlobals: Set<string>,
 ): ServerSidebarConfig {
+	function filterSection(s: ServerSidebarSection): ServerSidebarSection {
+		return {
+			...s,
+			items: (s.items ?? []).filter((item) => {
+				const rec = item as unknown as Record<string, unknown>;
+				if (item.type === "collection")
+					return accessibleCollections.has(rec.collection as string);
+				if (item.type === "global")
+					return accessibleGlobals.has(rec.global as string);
+				return true;
+			}),
+			sections: (s.sections ?? [])
+				.map(filterSection)
+				.filter(
+					(sub) =>
+						(sub.items?.length ?? 0) > 0 ||
+						(sub.sections?.length ?? 0) > 0,
+				),
+		};
+	}
+
 	return {
 		sections: config.sections
-			.map((s) => ({
-				...s,
-				items: (s.items ?? []).filter((item) => {
-					const rec = item as unknown as Record<string, unknown>;
-					if (item.type === "collection")
-						return accessibleCollections.has(rec.collection as string);
-					if (item.type === "global")
-						return accessibleGlobals.has(rec.global as string);
-					return true; // pages, links, dividers always pass
-				}),
-			}))
+			.map(filterSection)
 			.filter(
 				(s) => (s.items?.length ?? 0) > 0 || (s.sections?.length ?? 0) > 0,
 			),
