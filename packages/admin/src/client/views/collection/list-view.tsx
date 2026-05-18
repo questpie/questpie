@@ -549,7 +549,11 @@ function ListViewInner({
 	);
 	const isKnownSortField = React.useCallback(
 		(field: string | undefined) =>
-			!!field && (field === "_title" || !!resolvedFields?.[field]),
+			!!field &&
+			(field === "_title" ||
+				field === "createdAt" ||
+				field === "updatedAt" ||
+				!!resolvedFields?.[field]),
 		[resolvedFields],
 	);
 	const effectiveSort = React.useMemo(() => {
