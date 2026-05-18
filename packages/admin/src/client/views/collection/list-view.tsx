@@ -23,6 +23,7 @@ import type { CollectionListViewProps } from "../../builder/types/views";
 import { ActionButton } from "../../components/actions/action-button";
 import { ActionDialog } from "../../components/actions/action-dialog";
 import { HeaderActions } from "../../components/actions/header-actions";
+import { resolveIconElement } from "../../components/component-renderer";
 import { FilterBuilderSheet } from "../../components/filter-builder/filter-builder-sheet";
 import type {
 	AvailableField,
@@ -91,7 +92,11 @@ import {
 	computeDefaultColumns,
 	getAllAvailableFields,
 } from "./columns";
-import { buildOutlineRows, type OutlineRow } from "./outline";
+import {
+	buildOutlineRows,
+	type OutlineGroupMeta,
+	type OutlineRow,
+} from "./outline";
 import { QuickFilterBar } from "./quick-filter-bar";
 import {
 	mapListSchemaToConfig,
@@ -333,13 +338,32 @@ function SimpleValue({ value }: { value: unknown }): React.ReactElement {
 	return <>{stringifySimpleValue(value)}</>;
 }
 
+function formatShortDate(date: Date): string {
+	const now = new Date();
+	const sameYear = date.getFullYear() === now.getFullYear();
+	const month = date.toLocaleDateString(undefined, { month: "short" });
+	const day = date.getDate();
+	return sameYear
+		? `${month} ${day}`
+		: `${month} ${day}, ${date.getFullYear()}`;
+}
+
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/;
+
 function stringifySimpleValue(value: unknown): string {
 	if (value === null || value === undefined || value === "") return "-";
 	if (typeof value === "object") {
+		if (value instanceof Date && !Number.isNaN(value.getTime())) {
+			return formatShortDate(value);
+		}
 		const record = value as Record<string, unknown>;
 		return String(
 			record.title ?? record.name ?? record.label ?? record.id ?? "-",
 		);
+	}
+	if (typeof value === "string" && ISO_DATE_RE.test(value)) {
+		const date = new Date(value);
+		if (!Number.isNaN(date.getTime())) return formatShortDate(date);
 	}
 	return String(value);
 }
@@ -474,13 +498,39 @@ function ListViewInner({
 		viewState.config.visibleColumns.length > 0
 			? viewState.config.visibleColumns
 			: defaultColumns;
+	const layout = resolvedListConfig?.layout;
+	const titleField =
+		layout?.titleField ??
+		(collectionMeta?.title?.type === "field"
+			? collectionMeta.title.fieldName
+			: undefined);
+	const subtitleField = layout?.subtitleField;
+	const leadingFields = normalizeFieldList(layout?.leadingFields);
+	const badgeFields = normalizeFieldList(layout?.badgeFields);
+	const metaFields = normalizeFieldList(layout?.metaFields);
+	const density = layout?.density ?? "compact";
 	const outlineRelationNames = React.useMemo(
 		() => extractRelationNamesFromOutline(resolvedListConfig?.outline),
 		[resolvedListConfig?.outline],
 	);
 	const visibleColumnsForExpansion = React.useMemo(
-		() => Array.from(new Set([...visibleColumns, ...outlineRelationNames])),
-		[visibleColumns, outlineRelationNames],
+		() =>
+			Array.from(
+				new Set([
+					...visibleColumns,
+					...outlineRelationNames,
+					...metaFields,
+					...leadingFields,
+					...badgeFields,
+				]),
+			),
+		[
+			visibleColumns,
+			outlineRelationNames,
+			metaFields,
+			leadingFields,
+			badgeFields,
+		],
 	);
 	const expandedFields = React.useMemo(
 		() =>
@@ -516,7 +566,105 @@ function ListViewInner({
 		isKnownSortField,
 	]);
 
-	const queryOptions = React.useMemo(() => {
+	const availableFields: AvailableField[] = React.useMemo(
+		() => getAllAvailableFields(resolvedFields, { meta: collectionMeta }),
+		[resolvedFields, collectionMeta],
+	);
+	const fieldByName = React.useMemo(
+		() => new Map(availableFields.map((field) => [field.name, field])),
+		[availableFields],
+	);
+	const effectiveOutline = React.useMemo(() => {
+		const outline = resolvedListConfig?.outline;
+		const groupBy = viewState.config.groupBy;
+		if (!groupBy) return outline;
+		const levels = outline?.levels ?? [];
+		const first = levels[0];
+		if (first?.kind === "field" && first.field === groupBy) return outline;
+		return {
+			...outline,
+			defaultExpanded: outline?.defaultExpanded ?? true,
+			levels: [{ kind: "field" as const, field: groupBy }, ...levels],
+		};
+	}, [resolvedListConfig?.outline, viewState.config.groupBy]);
+
+	const hasOutline = (resolvedListConfig?.outline?.levels?.length ?? 0) > 0;
+
+	const firstFieldLevel = React.useMemo(() => {
+		const first = effectiveOutline?.levels?.[0];
+		return first?.kind === "field" ? first : null;
+	}, [effectiveOutline]);
+
+	const groupValues = React.useMemo(() => {
+		if (!firstFieldLevel) return null;
+		const fieldDef = fieldByName.get(firstFieldLevel.field);
+		if (fieldDef?.type !== "select" || !fieldDef.options?.options) return null;
+		const flat = flattenOptions(fieldDef.options.options as any);
+		const order = firstFieldLevel.order;
+		if (Array.isArray(order)) {
+			return order.map(
+				(v) =>
+					flat.find((o) => String(o.value) === String(v)) ?? {
+						value: v,
+						label: { en: String(v) },
+					},
+			);
+		}
+		return flat;
+	}, [firstFieldLevel, fieldByName]);
+
+	const filteredGroupValues = React.useMemo(() => {
+		if (!groupValues || !firstFieldLevel) return groupValues;
+		const groupField = firstFieldLevel.field;
+		const relevant = viewState.config.filters.filter(
+			(f) => f.field === groupField,
+		);
+		if (relevant.length === 0) return groupValues;
+		return groupValues.filter((gv) => {
+			const val = String(gv.value);
+			for (const filter of relevant) {
+				switch (filter.operator) {
+					case "equals":
+						if (String(filter.value) !== val) return false;
+						break;
+					case "not_equals":
+						if (String(filter.value) === val) return false;
+						break;
+					case "in":
+						if (
+							!Array.isArray(filter.value) ||
+							!filter.value.map(String).includes(val)
+						)
+							return false;
+						break;
+					case "not_in":
+						if (
+							Array.isArray(filter.value) &&
+							filter.value.map(String).includes(val)
+						)
+							return false;
+						break;
+				}
+			}
+			return true;
+		});
+	}, [groupValues, firstFieldLevel, viewState.config.filters]);
+
+	const isGrouped =
+		filteredGroupValues != null && filteredGroupValues.length > 0;
+
+	const [groupLimits, setGroupLimits] = React.useState<Record<string, number>>(
+		{},
+	);
+	const DEFAULT_GROUP_LIMIT = 20;
+	const loadMoreInGroup = React.useCallback((groupKey: string) => {
+		setGroupLimits((prev) => ({
+			...prev,
+			[groupKey]: (prev[groupKey] ?? DEFAULT_GROUP_LIMIT) + DEFAULT_GROUP_LIMIT,
+		}));
+	}, []);
+
+	const baseQueryOptions = React.useMemo(() => {
 		const options: any = {};
 		if (collectionMeta?.softDelete) {
 			options.includeDeleted = !!viewState.config.includeDeleted;
@@ -529,6 +677,24 @@ function ListViewInner({
 		});
 		if (where) options.where = where;
 
+		const sortConfig = effectiveSort;
+		if (sortConfig) {
+			options.orderBy = { [sortConfig.field]: sortConfig.direction };
+		}
+		return options;
+	}, [
+		collectionMeta?.softDelete,
+		collectionMeta?.relations,
+		viewState.config.includeDeleted,
+		viewState.config.filters,
+		expandedFields,
+		effectiveSort,
+		resolvedFields,
+	]);
+
+	const flatQueryOptions = React.useMemo(() => {
+		if (isGrouped) return baseQueryOptions;
+		const options = { ...baseQueryOptions };
 		const groupBy = viewState.config.groupBy;
 		const sortConfig = effectiveSort;
 		if (groupBy && sortConfig?.field && sortConfig.field !== groupBy) {
@@ -536,28 +702,24 @@ function ListViewInner({
 				{ [groupBy]: "asc" },
 				{ [sortConfig.field]: sortConfig.direction },
 			];
-		} else if (groupBy) {
-			options.orderBy = { [groupBy]: sortConfig?.direction ?? "asc" };
-		} else if (sortConfig) {
-			options.orderBy = { [sortConfig.field]: sortConfig.direction };
 		}
-
-		const pageSize = viewState.config.pagination?.pageSize ?? 25;
-		const page = viewState.config.pagination?.page ?? 1;
-		options.limit = pageSize;
-		options.offset = (page - 1) * pageSize;
+		if (hasOutline && !isGrouped) {
+			options.limit = 500;
+		} else {
+			const pageSize = viewState.config.pagination?.pageSize ?? 25;
+			const page = viewState.config.pagination?.page ?? 1;
+			options.limit = pageSize;
+			options.offset = (page - 1) * pageSize;
+		}
 		return options;
 	}, [
-		collectionMeta?.softDelete,
-		collectionMeta?.relations,
-		viewState.config.includeDeleted,
-		viewState.config.filters,
+		baseQueryOptions,
+		isGrouped,
+		hasOutline,
 		viewState.config.groupBy,
 		viewState.config.pagination?.page,
 		viewState.config.pagination?.pageSize,
-		expandedFields,
 		effectiveSort,
-		resolvedFields,
 	]);
 
 	const debouncedSearchTerm = useDebouncedValue(searchTerm, 300);
@@ -575,21 +737,74 @@ function ListViewInner({
 		},
 		{ enabled: isSearching },
 	);
+
+	const groupQueries = useQueries({
+		queries:
+			isGrouped && !isSearching
+				? filteredGroupValues.map((gv) => {
+						const groupKey = String(gv.value);
+						const limit = groupLimits[groupKey] ?? DEFAULT_GROUP_LIMIT;
+						const groupWhere = {
+							...baseQueryOptions.where,
+							[firstFieldLevel!.field]: gv.value,
+						};
+						const collectionQueries = (queryOpts as any).collections?.[
+							collection as string
+						];
+						if (!collectionQueries?.find) {
+							return {
+								queryKey: ["questpie", "group-missing", collection, groupKey],
+								queryFn: async () => ({ docs: [], totalDocs: 0 }),
+								enabled: false,
+							};
+						}
+						return collectionQueries.find(
+							{
+								...baseQueryOptions,
+								where: groupWhere,
+								limit,
+								offset: 0,
+								locale,
+							},
+							{ realtime: false },
+						);
+					})
+				: [],
+	});
+
 	const {
 		data: listData,
 		isLoading: listLoading,
 		error: listError,
 	} = useCollectionList(
 		collection as any,
-		queryOptions,
-		{ enabled: !isSearching },
+		flatQueryOptions,
+		{ enabled: !isSearching && !isGrouped },
 		{ realtime: effectiveRealtime },
 	);
-	const items = React.useMemo(
-		() => (isSearching ? (searchData?.docs ?? []) : (listData?.docs ?? [])),
-		[isSearching, searchData?.docs, listData?.docs],
-	);
-	const isLoading = isSearching ? searchLoading : listLoading;
+
+	const groupDataVersion = isGrouped
+		? groupQueries.map((q) => q.dataUpdatedAt).join(",")
+		: "";
+	const items = React.useMemo(() => {
+		if (isSearching) return searchData?.docs ?? [];
+		if (isGrouped) {
+			return groupQueries.flatMap((q) => (q.data as any)?.docs ?? []);
+		}
+		return listData?.docs ?? [];
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [
+		isSearching,
+		isGrouped,
+		searchData?.docs,
+		groupDataVersion,
+		listData?.docs,
+	]);
+	const isLoading = isSearching
+		? searchLoading
+		: isGrouped
+			? groupQueries.some((q) => q.isLoading)
+			: listLoading;
 	const isSearchActive = isSearching && searchFetching;
 	const { isHighlighted } = useRealtimeHighlight(items, {
 		enabled: effectiveRealtime && !isSearching,
@@ -636,55 +851,116 @@ function ListViewInner({
 		return map;
 	}, [edgeLevels, edgeQueries]);
 
-	const effectiveOutline = React.useMemo(() => {
-		const outline = resolvedListConfig?.outline;
-		const groupBy = viewState.config.groupBy;
-		if (!groupBy) return outline;
-		const levels = outline?.levels ?? [];
-		const first = levels[0];
-		if (first?.kind === "field" && first.field === groupBy) return outline;
+	const metaForValue = React.useCallback(
+		(value: unknown, field?: string): OutlineGroupMeta | undefined => {
+			if (!field) return undefined;
+			const fieldDef = fieldByName.get(field);
+			if (fieldDef?.type !== "select") return undefined;
+			const options = fieldDef?.options?.options;
+			if (!Array.isArray(options)) return undefined;
+			const flat = flattenOptions(options as any);
+			const option = flat.find((opt) => String(opt.value) === String(value));
+			if (!option) return undefined;
+			if (!option.icon && !option.className) return undefined;
+			return { icon: option.icon, className: option.className };
+		},
+		[fieldByName],
+	);
+	const remainingOutline = React.useMemo(() => {
+		if (!isGrouped || !effectiveOutline) return effectiveOutline;
 		return {
-			...outline,
-			defaultExpanded: outline?.defaultExpanded ?? true,
-			levels: [{ kind: "field" as const, field: groupBy }, ...levels],
+			...effectiveOutline,
+			levels: effectiveOutline.levels.slice(1),
 		};
-	}, [resolvedListConfig?.outline, viewState.config.groupBy]);
-	const availableFields: AvailableField[] = React.useMemo(
-		() => getAllAvailableFields(resolvedFields, { meta: collectionMeta }),
-		[resolvedFields, collectionMeta],
+	}, [isGrouped, effectiveOutline]);
+
+	const labelForValue = React.useCallback(
+		(value: unknown, field?: string) =>
+			stringifyGroupValue(
+				value,
+				field ? fieldByName.get(field) : undefined,
+				resolveText,
+				t,
+				uiLocale,
+				t("common.noValue"),
+			),
+		[fieldByName, resolveText, t, uiLocale],
 	);
-	const fieldByName = React.useMemo(
-		() => new Map(availableFields.map((field) => [field.name, field])),
-		[availableFields],
-	);
+
 	const outlineRows = React.useMemo(
 		() =>
-			buildOutlineRows({
-				docs: items as Record<string, unknown>[],
-				outline: effectiveOutline,
-				edgesByCollection,
-				toggledKeys: toggledOutlineKeys,
-				labelForValue: (value, field) =>
-					stringifyGroupValue(
-						value,
-						field ? fieldByName.get(field) : undefined,
-						resolveText,
-						t,
-						uiLocale,
-						t("common.noValue"),
-					),
-			}),
+			isGrouped
+				? []
+				: buildOutlineRows({
+						docs: items as Record<string, unknown>[],
+						outline: effectiveOutline,
+						edgesByCollection,
+						toggledKeys: toggledOutlineKeys,
+						labelForValue,
+						metaForValue,
+					}),
 		[
+			isGrouped,
 			items,
 			effectiveOutline,
 			edgesByCollection,
 			toggledOutlineKeys,
-			fieldByName,
-			resolveText,
-			t,
-			uiLocale,
+			labelForValue,
+			metaForValue,
 		],
 	);
+
+	const allGroupDocs = React.useMemo(() => {
+		if (!isGrouped) return undefined;
+		return groupQueries.flatMap(
+			(q) => ((q.data as any)?.docs ?? []) as Record<string, unknown>[],
+		);
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [isGrouped, groupDataVersion]);
+
+	const groupOutlineRows = React.useMemo(() => {
+		if (!isGrouped) return [];
+		return filteredGroupValues.map((gv, i) => {
+			const docs = ((groupQueries[i]?.data as any)?.docs ?? []) as Record<
+				string,
+				unknown
+			>[];
+			if (docs.length === 0) return [];
+			const outline = remainingOutline;
+			if (!outline || outline.levels.length === 0) {
+				return docs.map(
+					(doc) =>
+						({
+							kind: "record" as const,
+							key: `record:${(doc as any).id}`,
+							id: String((doc as any).id),
+							doc,
+							depth: 0,
+						}) satisfies OutlineRow,
+				);
+			}
+			return buildOutlineRows({
+				docs,
+				outline,
+				edgesByCollection,
+				toggledKeys: toggledOutlineKeys,
+				labelForValue,
+				metaForValue,
+				allDocs: allGroupDocs,
+			});
+		});
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [
+		isGrouped,
+		filteredGroupValues,
+		groupDataVersion,
+		remainingOutline,
+		edgesByCollection,
+		toggledOutlineKeys,
+		labelForValue,
+		metaForValue,
+		allGroupDocs,
+	]);
 
 	const table = useReactTable({
 		data: items as any[],
@@ -719,7 +995,6 @@ function ListViewInner({
 		hasActiveFilters ||
 		!!viewState.config.sortConfig ||
 		!!viewState.config.groupBy ||
-		viewState.config.visibleColumns.length !== defaultColumns.length ||
 		!!viewState.config.includeDeleted;
 	const groupableFields = React.useMemo(() => {
 		const groupableNames = groupingConfig?.fields ?? [];
@@ -727,18 +1002,6 @@ function ListViewInner({
 		const groupableSet = new Set(groupableNames);
 		return availableFields.filter((field) => groupableSet.has(field.name));
 	}, [availableFields, groupingConfig?.fields]);
-
-	const layout = resolvedListConfig?.layout;
-	const titleField =
-		layout?.titleField ??
-		(collectionMeta?.title?.type === "field"
-			? collectionMeta.title.fieldName
-			: undefined);
-	const subtitleField = layout?.subtitleField;
-	const leadingFields = normalizeFieldList(layout?.leadingFields);
-	const badgeFields = normalizeFieldList(layout?.badgeFields);
-	const metaFields = normalizeFieldList(layout?.metaFields);
-	const density = layout?.density ?? "compact";
 
 	const clearFilters = React.useCallback(() => {
 		viewState.setConfig({ ...viewState.config, filters: [] });
@@ -803,6 +1066,72 @@ function ListViewInner({
 			);
 		},
 		[columnsByKey],
+	);
+	const resolveFieldValue = React.useCallback(
+		(item: Record<string, unknown>, field: string): unknown => {
+			const value = getValueAtPath(item, field);
+			if (value != null && typeof value === "object") return value;
+			const fieldDef = fieldByName.get(field);
+			if (fieldDef?.type === "relation") {
+				const accessor = fieldDef.options?.relationName ?? field;
+				const expanded = getValueAtPath(item, accessor);
+				if (expanded && typeof expanded === "object") return expanded;
+			}
+			return value;
+		},
+		[fieldByName],
+	);
+	const renderMetaField = React.useCallback(
+		(field: string, value: unknown): React.ReactNode => {
+			if (value === null || value === undefined || value === "") {
+				return <span className="text-muted-foreground/40">-</span>;
+			}
+			const fieldDef = fieldByName.get(field);
+			const isDate =
+				fieldDef?.type === "datetime" ||
+				fieldDef?.type === "date" ||
+				field === "updatedAt" ||
+				field === "createdAt";
+			if (isDate) {
+				const str =
+					typeof value === "string" && ISO_DATE_RE.test(value)
+						? formatShortDate(new Date(value))
+						: value instanceof Date
+							? formatShortDate(value)
+							: String(value);
+				return <span>{str}</span>;
+			}
+			const label =
+				typeof value === "object"
+					? String(
+							(value as any).title ??
+								(value as any).name ??
+								(value as any).label ??
+								(value as any).id ??
+								"-",
+						)
+					: String(value);
+			return (
+				<Badge variant="secondary" className="max-w-full truncate">
+					{label}
+				</Badge>
+			);
+		},
+		[fieldByName],
+	);
+	const renderLeadingIcon = React.useCallback(
+		(field: string, value: unknown): React.ReactNode => {
+			const fieldDef = fieldByName.get(field);
+			if (fieldDef?.type === "select" && fieldDef.options?.options) {
+				const flat = flattenOptions(fieldDef.options.options as any);
+				const option = flat.find((opt) => String(opt.value) === String(value));
+				if (option?.icon) {
+					return resolveIconElement(option.icon as any);
+				}
+			}
+			return null;
+		},
+		[fieldByName],
 	);
 	const handleRowClick = React.useCallback(
 		(item: any) => navigate(`${basePath}/collections/${collection}/${item.id}`),
@@ -958,218 +1287,384 @@ function ListViewInner({
 					onApply={applyQuickFilters}
 				/>
 
-				{outlineRows.length === 0 ? (
-					<EmptyState
-						title={emptyStateTitle}
-						description={emptyStateDescription}
-						height="h-64"
-						action={
-							isSearching || hasActiveFilters ? (
-								<div className="flex gap-2">
-									{isSearching && (
-										<Button
-											variant="outline"
-											size="sm"
-											className="gap-2"
-											onClick={() => setSearchTerm("")}
-										>
-											<Icon icon="ph:x" className="size-3.5" />
-											{t("common.clear")}
-										</Button>
-									)}
-									{hasActiveFilters && (
-										<Button
-											variant="outline"
-											size="sm"
-											className="gap-2"
-											onClick={clearFilters}
-										>
-											<Icon icon="ph:funnel-x" className="size-3.5" />
-											{t("viewOptions.clearFilters")}
-										</Button>
-									)}
-								</div>
-							) : undefined
-						}
-					/>
-				) : (
-					<div className="border-border-subtle overflow-hidden rounded-[var(--surface-radius)] border">
-						{outlineRows.map((outlineRow) => {
-							if (outlineRow.kind !== "record") {
-								return (
-									<OutlineHeaderRow
-										key={outlineRow.key}
-										row={outlineRow}
-										showCounts={resolvedListConfig?.outline?.showCounts ?? true}
-										onToggle={toggleOutlineKey}
+				{(() => {
+					const isEmpty = isGrouped
+						? groupOutlineRows.every((g) => g.length === 0)
+						: outlineRows.length === 0;
+
+					if (isEmpty) {
+						return (
+							<EmptyState
+								title={emptyStateTitle}
+								description={emptyStateDescription}
+								height="h-64"
+								action={
+									isSearching || hasActiveFilters ? (
+										<div className="flex gap-2">
+											{isSearching && (
+												<Button
+													variant="outline"
+													size="sm"
+													className="gap-2"
+													onClick={() => setSearchTerm("")}
+												>
+													<Icon icon="ph:x" className="size-3.5" />
+													{t("common.clear")}
+												</Button>
+											)}
+											{hasActiveFilters && (
+												<Button
+													variant="outline"
+													size="sm"
+													className="gap-2"
+													onClick={clearFilters}
+												>
+													<Icon icon="ph:funnel-x" className="size-3.5" />
+													{t("viewOptions.clearFilters")}
+												</Button>
+											)}
+										</div>
+									) : undefined
+								}
+							/>
+						);
+					}
+
+					const renderRecordRow = (
+						outlineRow: Extract<OutlineRow, { kind: "record" }>,
+						groupContext?: { field: string; value: unknown },
+					) => {
+						const tableRow = rowsById.get(outlineRow.id);
+						const item = (tableRow?.original ?? outlineRow.doc) as any;
+						const lock = getLock(item.id);
+						const locked = isDocLocked(item.id);
+						const lockUser = lock ? getLockUser(lock) : null;
+						const isSelected = tableRow?.getIsSelected() ?? false;
+						const titleValue =
+							(titleField
+								? getValueAtPath(item, titleField)
+								: item["_title"]) ??
+							item.title ??
+							item.name ??
+							item.id;
+						const subtitleValue = subtitleField
+							? getValueAtPath(item, subtitleField)
+							: undefined;
+						const isGroupMismatch =
+							groupContext != null &&
+							getValueAtPath(item, groupContext.field) !== groupContext.value;
+
+						return (
+							<div
+								key={outlineRow.key}
+								data-state={isSelected ? "selected" : undefined}
+								className={cn(
+									"group/list-row hover:bg-muted/40 data-[state=selected]:bg-muted/60 relative flex min-w-0 cursor-pointer items-center gap-2 rounded-md px-4 text-sm transition-colors",
+									density === "compact" ? "min-h-9 py-1" : "min-h-11 py-2",
+									isHighlighted(item.id) && "bg-info/10",
+									isGroupMismatch && "opacity-45",
+								)}
+							>
+								{outlineRow.depth > 0 && (
+									<span
+										className="bg-border/40 absolute top-0 bottom-0 w-px"
+										style={{
+											left: `${52 + (outlineRow.depth - 1) * 18}px`,
+										}}
+										aria-hidden="true"
 									/>
-								);
-							}
-
-							const tableRow = rowsById.get(outlineRow.id);
-							const item = (tableRow?.original ?? outlineRow.doc) as any;
-							const lock = getLock(item.id);
-							const locked = isDocLocked(item.id);
-							const lockUser = lock ? getLockUser(lock) : null;
-							const isSelected = tableRow?.getIsSelected() ?? false;
-							const titleValue =
-								(titleField
-									? getValueAtPath(item, titleField)
-									: item["_title"]) ??
-								item.title ??
-								item.name ??
-								item.id;
-							const subtitleValue = subtitleField
-								? getValueAtPath(item, subtitleField)
-								: undefined;
-
-							return (
+								)}
 								<div
-									key={outlineRow.key}
+									role="presentation"
 									data-state={isSelected ? "selected" : undefined}
-									className={cn(
-										"group/list-row border-border-subtle hover:bg-accent data-[state=selected]:bg-muted flex min-w-0 items-start gap-2 border-b px-3 text-sm transition-colors last:border-b-0",
-										density === "compact"
-											? "min-h-10 py-1.5"
-											: "min-h-12 py-2.5",
-										isHighlighted(item.id) && "bg-info/10",
-									)}
-									style={{ paddingLeft: `${12 + outlineRow.depth * 18}px` }}
+									className="shrink-0 opacity-0 transition-opacity duration-[var(--motion-duration-fast)] group-hover/list-row:opacity-100 data-[state=selected]:opacity-100"
+									onClick={(event) => event.stopPropagation()}
+									onKeyDown={(event) => event.stopPropagation()}
 								>
+									<Checkbox
+										checked={isSelected}
+										disabled={!tableRow || !tableRow.getCanSelect()}
+										onCheckedChange={(checked) =>
+											tableRow?.toggleSelected(!!checked)
+										}
+										aria-label={t("table.selectRow")}
+									/>
+								</div>
+								{outlineRow.expandable ? (
+									<button
+										type="button"
+										className="text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-ring/40 -ml-1 flex size-7 shrink-0 items-center justify-center rounded-[var(--control-radius-inner)] transition-[background-color,color,box-shadow] focus-visible:ring-2 focus-visible:outline-none"
+										onClick={(event) => {
+											event.stopPropagation();
+											toggleOutlineKey(outlineRow.key);
+										}}
+										aria-label={
+											outlineRow.collapsed
+												? t("a11y.expand")
+												: t("a11y.collapse")
+										}
+									>
+										<Icon
+											icon="ph:caret-right-bold"
+											className={cn(
+												"size-3 transition-transform",
+												!outlineRow.collapsed && "rotate-90",
+											)}
+										/>
+									</button>
+								) : null}
+								<button
+									type="button"
+									className="focus-visible:ring-ring/40 -my-1 min-w-0 flex-1 rounded-[var(--control-radius-inner)] py-1 text-left focus-visible:ring-2 focus-visible:outline-none"
+									style={
+										outlineRow.depth > 0
+											? { paddingLeft: `${outlineRow.depth * 18}px` }
+											: undefined
+									}
+									onClick={() => handleRowClick(item)}
+								>
+									<div className="flex min-w-0 items-center gap-2">
+										{leadingFields.map((field) => {
+											const fieldValue = getValueAtPath(item, field);
+											const icon = renderLeadingIcon(field, fieldValue);
+											return (
+												<span
+													key={field}
+													className="flex size-4 shrink-0 items-center justify-center"
+												>
+													{icon || renderField(tableRow, field, fieldValue)}
+												</span>
+											);
+										})}
+										<span
+											className={cn(
+												"truncate",
+												outlineRow.depth > 0
+													? "text-muted-foreground font-normal"
+													: "text-foreground font-medium",
+											)}
+										>
+											{titleField
+												? renderField(tableRow, titleField, titleValue)
+												: stringifySimpleValue(titleValue)}
+										</span>
+										{badgeFields.map((field) => {
+											const fieldValue = getValueAtPath(item, field);
+											const icon = renderLeadingIcon(field, fieldValue);
+											if (icon) {
+												return (
+													<span
+														key={field}
+														className="flex size-4 shrink-0 items-center justify-center"
+													>
+														{icon}
+													</span>
+												);
+											}
+											return (
+												<span
+													key={field}
+													className="text-muted-foreground inline-flex max-w-36 shrink-0 items-center text-xs"
+												>
+													<span className="truncate">
+														{renderField(tableRow, field, fieldValue)}
+													</span>
+												</span>
+											);
+										})}
+										{locked && (
+											<span className="text-warning inline-flex items-center gap-1 text-xs">
+												<Icon icon="ph:lock-key" className="size-3" />
+												{lockUser?.name ?? t("collection.locked")}
+											</span>
+										)}
+									</div>
+									{subtitleValue !== undefined && (
+										<div className="text-muted-foreground mt-0.5 truncate text-xs">
+											{renderField(tableRow, subtitleField!, subtitleValue)}
+										</div>
+									)}
+								</button>
+								{metaFields.length > 0 && (
+									<div className="text-muted-foreground hidden shrink-0 items-center gap-2 text-xs md:flex">
+										{metaFields.map((field) => (
+											<span
+												key={field}
+												className="flex w-28 min-w-0 items-center justify-end"
+											>
+												{renderMetaField(field, resolveFieldValue(item, field))}
+											</span>
+										))}
+									</div>
+								)}
+								{actions.row.length > 0 && (
 									<div
 										role="presentation"
-										className="mt-0.5 shrink-0"
+										className="flex shrink-0 justify-end gap-1 opacity-0 transition-opacity group-hover/list-row:opacity-100 focus-within:opacity-100"
 										onClick={(event) => event.stopPropagation()}
 										onKeyDown={(event) => event.stopPropagation()}
 									>
-										<Checkbox
-											checked={isSelected}
-											disabled={!tableRow || !tableRow.getCanSelect()}
-											onCheckedChange={(checked) =>
-												tableRow?.toggleSelected(!!checked)
-											}
-											aria-label={t("table.selectRow")}
-										/>
-									</div>
-									{outlineRow.expandable ? (
-										<button
-											type="button"
-											className="text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-ring/40 -mt-1 -ml-1 flex size-8 shrink-0 items-center justify-center rounded-[var(--control-radius-inner)] transition-[background-color,color,box-shadow] focus-visible:ring-2 focus-visible:outline-none"
-											onClick={(event) => {
-												event.stopPropagation();
-												toggleOutlineKey(outlineRow.key);
-											}}
-											aria-label={
-												outlineRow.collapsed
-													? t("a11y.expand")
-													: t("a11y.collapse")
-											}
-										>
-											<Icon
-												icon="ph:caret-right-bold"
-												className={cn(
-													"size-3 transition-transform",
-													!outlineRow.collapsed && "rotate-90",
-												)}
+										{actions.row.map((action) => (
+											<ActionButton
+												key={action.id}
+												action={action}
+												collection={collection}
+												item={item}
+												helpers={actionHelpers}
+												size="icon-sm"
+												iconOnly
+												onOpenDialog={(dialogAction) =>
+													openDialog(dialogAction, item)
+												}
 											/>
-										</button>
-									) : (
-										<span
-											className="-mt-1 -ml-1 size-8 shrink-0"
-											aria-hidden="true"
-										/>
-									)}
-									<button
-										type="button"
-										className="focus-visible:ring-ring/40 -my-1 min-w-0 flex-1 rounded-[var(--control-radius-inner)] py-1 text-left focus-visible:ring-2 focus-visible:outline-none"
-										onClick={() => handleRowClick(item)}
-									>
-										<div className="flex min-w-0 items-center gap-2">
-											{leadingFields.map((field) => (
-												<span key={field} className="shrink-0">
-													{renderField(
-														tableRow,
-														field,
-														getValueAtPath(item, field),
+										))}
+									</div>
+								)}
+							</div>
+						);
+					};
+
+					if (isGrouped) {
+						return (
+							<div className="flex flex-col gap-1.5 overflow-hidden">
+								{filteredGroupValues.map((gv, i) => {
+									const rows = groupOutlineRows[i] ?? [];
+									const queryData = groupQueries[i]?.data as any;
+									const totalDocs = queryData?.totalDocs ?? 0;
+									const loadedCount = (queryData?.docs ?? []).length;
+									const groupKey = String(gv.value);
+									const groupLabel = labelForValue(
+										gv.value,
+										firstFieldLevel?.field,
+									);
+									const meta = metaForValue(gv.value, firstFieldLevel?.field);
+									const groupIcon = meta?.icon
+										? resolveIconElement(meta.icon as any)
+										: null;
+									const isGroupLoading = groupQueries[i]?.isLoading ?? false;
+
+									if (totalDocs === 0 && !isGroupLoading) return null;
+
+									const groupToggleKey = `group:${groupKey}`;
+									const isGroupCollapsed =
+										toggledOutlineKeys.has(groupToggleKey);
+
+									return (
+										<div key={groupKey} className="flex flex-col">
+											<button
+												type="button"
+												className="bg-muted/[0.06] hover:bg-muted/20 flex min-h-8 items-center gap-2 rounded-md px-3 py-1 text-left transition-colors"
+												onClick={() => toggleOutlineKey(groupToggleKey)}
+												aria-expanded={!isGroupCollapsed}
+											>
+												<Icon
+													icon="ph:caret-right-bold"
+													className={cn(
+														"text-muted-foreground size-3 shrink-0 transition-transform",
+														!isGroupCollapsed && "rotate-90",
 													)}
-												</span>
-											))}
-											<span className="text-foreground truncate font-medium">
-												{titleField
-													? renderField(tableRow, titleField, titleValue)
-													: stringifySimpleValue(titleValue)}
-											</span>
-											{badgeFields.map((field) => (
-												<Badge
-													key={field}
-													variant="secondary"
-													className="max-w-36 font-mono"
-												>
-													<span className="truncate">
-														{renderField(
-															tableRow,
-															field,
-															getValueAtPath(item, field),
-														)}
-													</span>
-												</Badge>
-											))}
-											{locked && (
-												<span className="text-warning inline-flex items-center gap-1 text-xs">
-													<Icon icon="ph:lock-key" className="size-3" />
-													{lockUser?.name ?? t("collection.locked")}
-												</span>
-											)}
-										</div>
-										{subtitleValue !== undefined && (
-											<div className="text-muted-foreground mt-0.5 truncate text-xs">
-												{renderField(tableRow, subtitleField!, subtitleValue)}
-											</div>
-										)}
-									</button>
-									{metaFields.length > 0 && (
-										<div className="text-muted-foreground hidden max-w-[42%] shrink-0 items-center justify-end gap-3 overflow-hidden text-right text-xs tabular-nums md:flex">
-											{metaFields.map((field) => (
-												<span key={field} className="min-w-0 truncate">
-													{renderField(
-														tableRow,
-														field,
-														getValueAtPath(item, field),
-													)}
-												</span>
-											))}
-										</div>
-									)}
-									{actions.row.length > 0 && (
-										<div
-											role="presentation"
-											className="flex shrink-0 justify-end gap-1 opacity-0 transition-opacity group-hover/list-row:opacity-100 focus-within:opacity-100"
-											onClick={(event) => event.stopPropagation()}
-											onKeyDown={(event) => event.stopPropagation()}
-										>
-											{actions.row.map((action) => (
-												<ActionButton
-													key={action.id}
-													action={action}
-													collection={collection}
-													item={item}
-													helpers={actionHelpers}
-													size="icon-sm"
-													iconOnly
-													onOpenDialog={(dialogAction) =>
-														openDialog(dialogAction, item)
-													}
 												/>
-											))}
+												{groupIcon && (
+													<span className="size-4 shrink-0">{groupIcon}</span>
+												)}
+												<span className="text-muted-foreground text-xs font-medium">
+													{groupLabel}
+												</span>
+												<span className="text-muted-foreground/60 text-xs tabular-nums">
+													{totalDocs}
+												</span>
+											</button>
+											{!isGroupCollapsed &&
+												(isGroupLoading ? (
+													<div className="flex items-center justify-center py-4">
+														<Icon
+															icon="ph:spinner-gap"
+															className="text-muted-foreground size-4 animate-spin"
+														/>
+													</div>
+												) : (
+													<div className="flex flex-col gap-px">
+														{rows.map((outlineRow) => {
+															if (outlineRow.kind !== "record") {
+																return (
+																	<OutlineHeaderRow
+																		key={outlineRow.key}
+																		row={outlineRow}
+																		showCounts={
+																			resolvedListConfig?.outline?.showCounts ??
+																			true
+																		}
+																		onToggle={toggleOutlineKey}
+																	/>
+																);
+															}
+															return renderRecordRow(outlineRow, {
+																field: firstFieldLevel!.field,
+																value: gv.value,
+															});
+														})}
+														{totalDocs > loadedCount && (
+															<button
+																type="button"
+																className="text-muted-foreground hover:text-foreground hover:bg-muted/50 flex w-full items-center justify-center gap-2 rounded-md py-2 text-xs transition-colors"
+																onClick={() => loadMoreInGroup(groupKey)}
+															>
+																<Icon icon="ph:caret-down" className="size-3" />
+																<span>
+																	{t("table.loadMore")} (
+																	{totalDocs - loadedCount})
+																</span>
+															</button>
+														)}
+													</div>
+												))}
 										</div>
-									)}
-								</div>
-							);
-						})}
+									);
+								})}
+							</div>
+						);
+					}
+
+					return (
+						<div className="flex flex-col gap-px overflow-hidden">
+							{outlineRows.map((outlineRow) => {
+								if (outlineRow.kind !== "record") {
+									return (
+										<OutlineHeaderRow
+											key={outlineRow.key}
+											row={outlineRow}
+											showCounts={
+												resolvedListConfig?.outline?.showCounts ?? true
+											}
+											onToggle={toggleOutlineKey}
+										/>
+									);
+								}
+								return renderRecordRow(outlineRow);
+							})}
+						</div>
+					);
+				})()}
+
+				{!isSearching && (hasOutline || isGrouped) && (
+					<div
+						className="text-muted-foreground flex items-center gap-2 py-2 text-sm tabular-nums"
+						aria-live="polite"
+						aria-atomic="true"
+					>
+						<span>
+							{isGrouped
+								? groupQueries.reduce(
+										(sum, q) => sum + ((q.data as any)?.totalDocs ?? 0),
+										0,
+									)
+								: items.length}{" "}
+							{t("table.items")}
+						</span>
 					</div>
 				)}
 
-				{!isSearching && (
+				{!isSearching && !hasOutline && !isGrouped && (
 					<div
 						className="qa-list-view__pagination flex items-center justify-between gap-4 py-2 tabular-nums"
 						role="navigation"
@@ -1328,6 +1823,7 @@ function ListViewInner({
 					groupableFields={groupableFields}
 					defaultGroupBy={defaultGroupBy}
 					defaultFilters={defaultFilters}
+					panels={{ columns: false }}
 				/>
 
 				{dialogAction && (
@@ -1354,11 +1850,14 @@ function OutlineHeaderRow({
 	showCounts: boolean;
 	onToggle: (key: string) => void;
 }) {
+	const groupIcon =
+		row.kind === "group" && "icon" in row
+			? resolveIconElement(row.icon as any)
+			: null;
 	return (
 		<button
 			type="button"
-			className="border-border-subtle bg-muted/40 hover:bg-muted/70 focus-visible:ring-ring/40 flex min-h-9 w-full items-center gap-2 border-b px-3 py-1.5 text-left transition-[background-color,color,box-shadow] focus-visible:ring-2 focus-visible:outline-none"
-			style={{ paddingLeft: `${12 + row.depth * 18}px` }}
+			className="hover:bg-muted/50 focus-visible:ring-ring/40 flex min-h-8 w-full items-center gap-2 px-3 py-1 text-left transition-[background-color,color,box-shadow] focus-visible:ring-2 focus-visible:outline-none"
 			onClick={() => onToggle(row.key)}
 			aria-expanded={!row.collapsed}
 		>
@@ -1375,11 +1874,17 @@ function OutlineHeaderRow({
 					className="text-muted-foreground size-4"
 				/>
 			)}
-			<span className="font-chrome chrome-meta text-muted-foreground truncate text-[11px] font-semibold tracking-[0.12em] uppercase">
+			{groupIcon && <span className="size-4 shrink-0">{groupIcon}</span>}
+			<span
+				className="text-muted-foreground truncate text-xs font-medium"
+				style={
+					row.depth > 0 ? { paddingLeft: `${row.depth * 18}px` } : undefined
+				}
+			>
 				{row.label}
 			</span>
 			{showCounts && (
-				<span className="bg-muted text-muted-foreground ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] tracking-normal tabular-nums">
+				<span className="text-muted-foreground/70 ml-1 text-xs tabular-nums">
 					{row.count}
 				</span>
 			)}

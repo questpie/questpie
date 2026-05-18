@@ -18,24 +18,126 @@ export const tasks = collection("tasks")
 			.label({ en: "Type" }),
 		status: f
 			.select([
-				{ value: "backlog", label: { en: "Backlog" } },
-				{ value: "pending", label: { en: "Todo" } },
-				{ value: "running", label: { en: "In progress" } },
-				{ value: "waiting", label: { en: "Waiting" } },
-				{ value: "review", label: { en: "In review" } },
-				{ value: "approved", label: { en: "Approved" } },
-				{ value: "done", label: { en: "Done" } },
-				{ value: "failed", label: { en: "Needs attention" } },
-				{ value: "cancelled", label: { en: "Cancelled" } },
+				{
+					value: "backlog",
+					label: { en: "Backlog" },
+					icon: {
+						type: "icon",
+						props: {
+							name: "ph:circle-dashed",
+							className: "text-muted-foreground",
+						},
+					},
+				},
+				{
+					value: "todo",
+					label: { en: "Todo" },
+					icon: {
+						type: "icon",
+						props: { name: "ph:circle", className: "text-muted-foreground" },
+					},
+				},
+				{
+					value: "in_progress",
+					label: { en: "In Progress" },
+					icon: {
+						type: "icon",
+						props: {
+							name: "ph:circle-half-fill",
+							className: "text-yellow-500",
+						},
+					},
+				},
+				{
+					value: "in_review",
+					label: { en: "In Review" },
+					icon: {
+						type: "icon",
+						props: { name: "ph:check-circle", className: "text-green-500" },
+					},
+				},
+				{
+					value: "done",
+					label: { en: "Done" },
+					icon: {
+						type: "icon",
+						props: {
+							name: "ph:check-circle-fill",
+							className: "text-indigo-500",
+						},
+					},
+				},
+				{
+					value: "cancelled",
+					label: { en: "Cancelled" },
+					icon: {
+						type: "icon",
+						props: {
+							name: "ph:x-circle-fill",
+							className: "text-muted-foreground",
+						},
+					},
+				},
+				{
+					value: "duplicate",
+					label: { en: "Duplicate" },
+					icon: {
+						type: "icon",
+						props: {
+							name: "ph:x-circle-fill",
+							className: "text-muted-foreground",
+						},
+					},
+				},
 			])
 			.default("backlog")
 			.label({ en: "Status" }),
 		priority: f
 			.select([
-				{ value: "low", label: { en: "Low" } },
-				{ value: "medium", label: { en: "Medium" } },
-				{ value: "high", label: { en: "High" } },
-				{ value: "urgent", label: { en: "Urgent" } },
+				{
+					value: "low",
+					label: { en: "Low" },
+					icon: {
+						type: "icon",
+						props: {
+							name: "ph:cell-signal-low-fill",
+							className: "text-muted-foreground",
+						},
+					},
+				},
+				{
+					value: "medium",
+					label: { en: "Medium" },
+					icon: {
+						type: "icon",
+						props: {
+							name: "ph:cell-signal-medium-fill",
+							className: "text-muted-foreground",
+						},
+					},
+				},
+				{
+					value: "high",
+					label: { en: "High" },
+					icon: {
+						type: "icon",
+						props: {
+							name: "ph:cell-signal-full-fill",
+							className: "text-muted-foreground",
+						},
+					},
+				},
+				{
+					value: "urgent",
+					label: { en: "Urgent" },
+					icon: {
+						type: "icon",
+						props: {
+							name: "ph:warning-fill",
+							className: "text-red-500",
+						},
+					},
+				},
 			])
 			.default("medium")
 			.label({ en: "Priority" }),
@@ -78,49 +180,36 @@ export const tasks = collection("tasks")
 			defaultSort: { field: "updatedAt", direction: "desc" },
 			defaultFilters: [
 				{
-					id: "issues-open",
+					id: "issues-active",
 					field: f.status,
 					operator: "not_in",
-					value: ["done", "cancelled"],
+					value: ["done", "cancelled", "duplicate"],
 				},
 			],
 			quickFilters: [
 				{
-					id: "open",
-					label: { en: "Open" },
+					id: "active",
+					label: { en: "Active" },
 					icon: { type: "icon", props: { name: "ph:circle-dashed" } },
 					filters: [
 						{
-							id: "issues-open",
+							id: "issues-active",
 							field: f.status,
 							operator: "not_in",
-							value: ["done", "cancelled"],
+							value: ["done", "cancelled", "duplicate"],
 						},
 					],
 				},
 				{
-					id: "needs-review",
-					label: { en: "Needs review" },
-					icon: { type: "icon", props: { name: "ph:seal-check" } },
+					id: "backlog",
+					label: { en: "Backlog" },
+					icon: { type: "icon", props: { name: "ph:circle-dashed" } },
 					filters: [
 						{
-							id: "issues-needs-review",
+							id: "issues-backlog",
 							field: f.status,
 							operator: "equals",
-							value: "review",
-						},
-					],
-				},
-				{
-					id: "needs-attention",
-					label: { en: "Needs attention" },
-					icon: { type: "icon", props: { name: "ph:warning-circle" } },
-					filters: [
-						{
-							id: "issues-needs-attention",
-							field: f.status,
-							operator: "equals",
-							value: "failed",
+							value: "backlog",
 						},
 					],
 				},
@@ -137,30 +226,29 @@ export const tasks = collection("tasks")
 						},
 					],
 				},
-				{
-					id: "scheduled",
-					label: { en: "Scheduled" },
-					icon: { type: "icon", props: { name: "ph:calendar-dots" } },
-					filters: [
-						{
-							id: "issues-scheduled",
-							field: f.startAfter,
-							operator: "is_not_empty",
-							value: null,
-						},
-					],
-				},
 			],
 			layout: {
 				density: "compact",
 				titleField: f.title,
-				leadingFields: [f.priority],
-				badgeFields: [f.status],
+				leadingFields: [f.priority, f.status],
 				metaFields: [f.project, f.workflowConfig, "updatedAt"],
 			},
 			outline: {
 				defaultExpanded: "roots",
 				levels: [
+					{
+						kind: "field",
+						field: f.status,
+						order: [
+							"in_progress",
+							"in_review",
+							"todo",
+							"backlog",
+							"done",
+							"cancelled",
+							"duplicate",
+						],
+					},
 					{
 						kind: "edge",
 						collection: "task_relations",

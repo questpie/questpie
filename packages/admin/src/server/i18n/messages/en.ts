@@ -424,6 +424,8 @@ export default {
 	"table.noItemsInCollection": "No items found in this collection",
 	"table.emptyDescription": "Records will appear here once they are created.",
 	"table.pagination": "Pagination",
+	"table.items": "items",
+	"table.loadMore": "Load more",
 	"table.editing": "Editing",
 
 	// Upload

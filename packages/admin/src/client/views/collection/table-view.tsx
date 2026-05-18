@@ -49,6 +49,7 @@ import type {
 import { ActionButton } from "../../components/actions/action-button";
 import { ActionDialog } from "../../components/actions/action-dialog";
 import { HeaderActions } from "../../components/actions/header-actions";
+import { resolveIconElement } from "../../components/component-renderer";
 import { sanitizeFilename } from "../../components/fields/field-utils";
 import { FilterBuilderSheet } from "../../components/filter-builder/filter-builder-sheet";
 import type {
@@ -1812,6 +1813,17 @@ function TableViewInner({
 		const groupField = groupableFields.find((field) => field.name === groupBy);
 		const collapsedGroups = new Set(viewState.config.collapsedGroups ?? []);
 		const serverGroups = !isSearching ? listData?.groups : undefined;
+
+		const iconForValue = (value: unknown): React.ReactNode => {
+			if (groupField?.type !== "select") return null;
+			const options = groupField.options?.options;
+			if (!Array.isArray(options)) return null;
+			const flat = flattenOptions(options as any);
+			const option = flat.find((opt) => String(opt.value) === String(value));
+			if (!option?.icon) return null;
+			return resolveIconElement(option.icon as any);
+		};
+
 		if (serverGroups?.length) {
 			const rowsById = new Map(rows.map((row) => [row.id, row]));
 			return serverGroups.flatMap((group: any) => {
@@ -1834,6 +1846,7 @@ function TableViewInner({
 						type: "group" as const,
 						key: groupKey,
 						label,
+						icon: iconForValue(group.value),
 						count: group.count,
 						collapsed,
 					},
@@ -1846,12 +1859,18 @@ function TableViewInner({
 
 		const groups = new Map<
 			string,
-			{ label: string; rows: typeof rows; sortIndex: number }
+			{
+				label: string;
+				value: unknown;
+				rows: typeof rows;
+				sortIndex: number;
+			}
 		>();
 
 		for (const row of rows) {
+			const rawValue = (row.original as any)?.[groupBy];
 			const valueLabel = stringifyGroupValue(
-				(row.original as any)?.[groupBy],
+				rawValue,
 				groupField,
 				resolveText,
 				t,
@@ -1866,11 +1885,9 @@ function TableViewInner({
 			}
 			groups.set(groupKey, {
 				label: valueLabel,
+				value: rawValue,
 				rows: [row],
-				sortIndex: getGroupSortIndex(
-					(row.original as any)?.[groupBy],
-					groupField,
-				),
+				sortIndex: getGroupSortIndex(rawValue, groupField),
 			});
 		}
 
@@ -1883,6 +1900,7 @@ function TableViewInner({
 						type: "group" as const,
 						key,
 						label: group.label,
+						icon: iconForValue(group.value),
 						count: group.rows.length,
 						collapsed,
 					},
@@ -2354,22 +2372,26 @@ function TableViewInner({
 															<button
 																type="button"
 																aria-expanded={!entry.collapsed}
-																className="text-muted-foreground hover:text-foreground focus-visible:ring-ring/40 -ml-1 inline-flex min-h-8 items-center gap-2 rounded-md px-1 font-mono text-[11px] font-semibold tracking-[0.12em] uppercase transition-colors focus-visible:ring-2 focus-visible:outline-none"
+																className="text-muted-foreground hover:text-foreground focus-visible:ring-ring/40 -ml-1 inline-flex min-h-8 items-center gap-2 rounded-md px-1 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none"
 																onClick={() =>
 																	viewState.toggleCollapsedGroup(entry.key)
 																}
 															>
 																<Icon
-																	icon={
-																		entry.collapsed
-																			? "ph:caret-right"
-																			: "ph:caret-down"
-																	}
-																	className="size-3.5 shrink-0"
+																	icon="ph:caret-right-bold"
+																	className={cn(
+																		"size-3 shrink-0 transition-transform",
+																		!entry.collapsed && "rotate-90",
+																	)}
 																/>
+																{entry.icon && (
+																	<span className="size-4 shrink-0">
+																		{entry.icon}
+																	</span>
+																)}
 																<span>{entry.label}</span>
 																{groupingConfig?.showCounts !== false && (
-																	<span className="bg-muted text-muted-foreground inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] tracking-normal tabular-nums">
+																	<span className="text-muted-foreground/60 tabular-nums">
 																		{entry.count}
 																	</span>
 																)}

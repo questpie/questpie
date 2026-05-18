@@ -157,6 +157,16 @@ export function DateCell({ value }: { value: unknown }) {
 	return <span className="tabular-nums">{date.toLocaleDateString()}</span>;
 }
 
+function formatShortDate(date: Date): string {
+	const now = new Date();
+	const sameYear = date.getFullYear() === now.getFullYear();
+	const month = date.toLocaleDateString(undefined, { month: "short" });
+	const day = date.getDate();
+	return sameYear
+		? `${month} ${day}`
+		: `${month} ${day}, ${date.getFullYear()}`;
+}
+
 /**
  * DateTime cell - formatted date and time display
  */
@@ -168,11 +178,7 @@ export function DateTimeCell({ value }: { value: unknown }) {
 	if (Number.isNaN(date.getTime())) {
 		return <span className="text-muted-foreground">{String(value)}</span>;
 	}
-	return (
-		<span className="tabular-nums">
-			{date.toLocaleDateString()} {date.toLocaleTimeString()}
-		</span>
-	);
+	return <span className="tabular-nums">{formatShortDate(date)}</span>;
 }
 
 /**

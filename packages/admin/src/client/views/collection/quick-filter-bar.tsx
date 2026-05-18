@@ -41,9 +41,9 @@ export function QuickFilterBar({
 					<Button
 						key={filter.id}
 						variant={active ? "secondary" : "outline"}
-						size="default"
+						size="sm"
 						className={cn(
-							"h-10 gap-2 rounded-md px-3 text-xs",
+							"gap-1.5 text-xs",
 							active && "border-border-strong bg-muted text-foreground",
 						)}
 						aria-pressed={active}

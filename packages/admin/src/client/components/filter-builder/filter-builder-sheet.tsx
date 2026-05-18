@@ -28,6 +28,7 @@ import type {
 	FilterRule,
 	SavedView,
 	ViewConfiguration,
+	FilterBuilderPanels,
 } from "./types.js";
 
 const NO_GROUPING_VALUE = "__none";
@@ -124,6 +125,9 @@ interface FilterBuilderSheetProps extends FilterBuilderProps {
 
 	/** Default filters from list config */
 	defaultFilters?: FilterRule[];
+
+	/** Which panels to show. Defaults: all true. */
+	panels?: FilterBuilderPanels;
 }
 
 export function FilterBuilderSheet({
@@ -142,9 +146,15 @@ export function FilterBuilderSheet({
 	groupableFields = EMPTY_GROUPABLE_FIELDS,
 	defaultGroupBy = null,
 	defaultFilters = [],
+	panels,
 }: FilterBuilderSheetProps) {
 	const resolvedSavedViews = savedViews ?? EMPTY_SAVED_VIEWS;
 	const { t } = useTranslation();
+	const {
+		columns: showColumns = true,
+		filters: showFilters = true,
+		savedViews: showSavedViews = true,
+	} = panels ?? {};
 
 	// Local state for pending changes - reset when sheet opens or config changes
 	const [localConfig, setLocalConfig] =
@@ -367,61 +377,76 @@ export function FilterBuilderSheet({
 						/>
 					</div>
 
-					<Tabs defaultValue="columns" className="mt-4">
+					<Tabs
+						defaultValue={showColumns ? "columns" : "filters"}
+						className="mt-4"
+					>
 						<TabsList className="w-full">
-							<TabsTrigger value="columns" className="flex-1">
-								{t("viewOptions.columns")}
-							</TabsTrigger>
-							<TabsTrigger value="filters" className="flex-1">
-								{t("viewOptions.filters")}
-								{localConfig.filters.length > 0 && (
-									<span className="bg-foreground text-background ml-1.5 rounded-full px-1.5 py-0.5 text-xs tabular-nums">
-										{localConfig.filters.length}
-									</span>
-								)}
-							</TabsTrigger>
-							<TabsTrigger value="views" className="flex-1">
-								{t("viewOptions.savedViews")}
-							</TabsTrigger>
+							{showColumns && (
+								<TabsTrigger value="columns" className="flex-1">
+									{t("viewOptions.columns")}
+								</TabsTrigger>
+							)}
+							{showFilters && (
+								<TabsTrigger value="filters" className="flex-1">
+									{t("viewOptions.filters")}
+									{localConfig.filters.length > 0 && (
+										<span className="bg-foreground text-background ml-1.5 rounded-full px-1.5 py-0.5 text-xs tabular-nums">
+											{localConfig.filters.length}
+										</span>
+									)}
+								</TabsTrigger>
+							)}
+							{showSavedViews && (
+								<TabsTrigger value="views" className="flex-1">
+									{t("viewOptions.savedViews")}
+								</TabsTrigger>
+							)}
 						</TabsList>
 
-						<TabsContent value="columns">
-							<ColumnsTab
-								fields={availableFields}
-								visibleColumns={localConfig.visibleColumns}
-								onVisibleColumnsChange={(columns) =>
-									setLocalConfig((prevConfig) => ({
-										...prevConfig,
-										visibleColumns: columns,
-									}))
-								}
-							/>
-						</TabsContent>
+						{showColumns && (
+							<TabsContent value="columns">
+								<ColumnsTab
+									fields={availableFields}
+									visibleColumns={localConfig.visibleColumns}
+									onVisibleColumnsChange={(columns) =>
+										setLocalConfig((prevConfig) => ({
+											...prevConfig,
+											visibleColumns: columns,
+										}))
+									}
+								/>
+							</TabsContent>
+						)}
 
-						<TabsContent value="filters">
-							<FiltersTab
-								fields={availableFields}
-								filters={localConfig.filters}
-								onFiltersChange={(filters) =>
-									setLocalConfig((prevConfig) => ({
-										...prevConfig,
-										filters,
-									}))
-								}
-							/>
-						</TabsContent>
+						{showFilters && (
+							<TabsContent value="filters">
+								<FiltersTab
+									fields={availableFields}
+									filters={localConfig.filters}
+									onFiltersChange={(filters) =>
+										setLocalConfig((prevConfig) => ({
+											...prevConfig,
+											filters,
+										}))
+									}
+								/>
+							</TabsContent>
+						)}
 
-						<TabsContent value="views">
-							<SavedViewsTab
-								collection={collection}
-								currentConfig={localConfig}
-								savedViews={resolvedSavedViews}
-								isLoading={savedViewsLoading}
-								onLoadView={handleLoadView}
-								onSaveView={handleSaveView}
-								onDeleteView={onDeleteView || (() => {})}
-							/>
-						</TabsContent>
+						{showSavedViews && (
+							<TabsContent value="views">
+								<SavedViewsTab
+									collection={collection}
+									currentConfig={localConfig}
+									savedViews={resolvedSavedViews}
+									isLoading={savedViewsLoading}
+									onLoadView={handleLoadView}
+									onSaveView={handleSaveView}
+									onDeleteView={onDeleteView || (() => {})}
+								/>
+							</TabsContent>
+						)}
 					</Tabs>
 				</div>
 
