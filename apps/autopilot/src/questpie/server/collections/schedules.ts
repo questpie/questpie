@@ -42,9 +42,10 @@ export const schedules = collection("schedules")
 		icon: c.icon("ph:calendar-check"),
 	}))
 	.list(({ v, f }) =>
-		v.listView({
+		v.collectionTable({
 			columns: [
 				f.name,
+				f.description,
 				f.enabled,
 				f.mode,
 				f.workflowConfig,
@@ -54,13 +55,6 @@ export const schedules = collection("schedules")
 			searchable: [f.name, f.description, f.chatPrompt],
 			filterable: [f.enabled, f.mode, f.workflowConfig],
 			defaultSort: { field: f.nextRunAt, direction: "asc" },
-			layout: {
-				density: "comfortable",
-				titleField: f.name,
-				subtitleField: f.description,
-				badgeFields: [f.enabled, f.mode],
-				metaFields: [f.workflowConfig, f.nextRunAt],
-			},
 		}),
 	)
 	.form(({ v, f }) =>

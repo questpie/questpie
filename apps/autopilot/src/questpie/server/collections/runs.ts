@@ -60,18 +60,11 @@ export const runs = collection("runs")
 		hidden: true,
 	}))
 	.list(({ v, f }) =>
-		v.listView({
+		v.collectionTable({
 			columns: [f.task, f.status, f.project, f.worker, f.startedAt, f.endedAt],
 			searchable: [f.instructions, f.summary, f.error],
 			filterable: [f.status, f.project, f.worker, f.initiatedBy],
 			defaultSort: { field: f.startedAt, direction: "desc" },
-			layout: {
-				density: "compact",
-				titleField: f.task,
-				subtitleField: f.summary,
-				badgeFields: [f.status, f.initiatedBy],
-				metaFields: [f.project, f.worker, f.startedAt],
-			},
 		}),
 	)
 	.indexes(({ table }) => [

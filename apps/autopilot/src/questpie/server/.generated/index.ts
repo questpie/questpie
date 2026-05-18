@@ -75,13 +75,16 @@ import _svc_workerManager from "../services/worker-manager";
 // ── Migrations ─────────────────────────────────────────────
 import _mig_20260507T095449_jolly_red_phoenix from "../migrations/20260507T095449_jolly_red_phoenix";
 import _mig_20260516T185000_auth_user_admin_columns_repair from "../migrations/20260516T185000_auth_user_admin_columns_repair";
+import _mig_20260517T095535_happy_orange_unicorn from "../migrations/20260517T095535_happy_orange_unicorn";
 
 // ── Seeds ──────────────────────────────────────────────────
 import _seed_demoCoverageData_seed from "../seeds/demo-coverage-data.seed";
 import _seed_demoParentIssues_seed from "../seeds/demo-parent-issues.seed";
 import _seed_demoProductData_seed from "../seeds/demo-product-data.seed";
+import _seed_demoStressData_seed from "../seeds/demo-stress-data.seed";
 
 // ── Views ──────────────────────────────────────────────────
+import _view_filesView from "../views/files-view";
 import _view_knowledgeDetail from "../views/knowledge-detail";
 import _view_taskDetail from "../views/task-detail";
 
@@ -170,7 +173,7 @@ type _AllModuleFields = ExtractModuleProp<{ modules: typeof _modules }, "fields"
 // Augment factory registries with user-defined files
 declare global {
 	namespace Questpie {
-		interface ViewsRegistry { knowledgeDetail: typeof _view_knowledgeDetail; taskDetail: typeof _view_taskDetail; }
+		interface ViewsRegistry { filesView: typeof _view_filesView; knowledgeDetail: typeof _view_knowledgeDetail; taskDetail: typeof _view_taskDetail; }
 	}
 }
 
@@ -262,6 +265,7 @@ export type AppFieldTypes = _ModuleFieldTypes;
 
 /** All views in the app (modules + user, user overrides) */
 export type AppViews = _ModuleViews & {
+	filesView: typeof _view_filesView;
 	knowledgeDetail: typeof _view_knowledgeDetail;
 	taskDetail: typeof _view_taskDetail;
 };
@@ -451,9 +455,10 @@ export const app = await createApp(
 			providerRuntime: _svc_providerRuntime,
 			workerManager: _svc_workerManager,
 		},
-		migrations: [_mig_20260507T095449_jolly_red_phoenix, _mig_20260516T185000_auth_user_admin_columns_repair],
-		seeds: [_seed_demoCoverageData_seed, _seed_demoParentIssues_seed, _seed_demoProductData_seed],
+		migrations: [_mig_20260507T095449_jolly_red_phoenix, _mig_20260516T185000_auth_user_admin_columns_repair, _mig_20260517T095535_happy_orange_unicorn],
+		seeds: [_seed_demoCoverageData_seed, _seed_demoParentIssues_seed, _seed_demoProductData_seed, _seed_demoStressData_seed],
 		views: {
+			filesView: _view_filesView,
 			knowledgeDetail: _view_knowledgeDetail,
 			taskDetail: _view_taskDetail,
 		},

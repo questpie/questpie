@@ -25,25 +25,18 @@ export const workflowConfigs = collection("workflow_configs")
 		icon: c.icon("ph:flow-arrow"),
 	}))
 	.list(({ v, f }) =>
-		v.listView({
+		v.collectionTable({
 			columns: [
 				f.name,
 				f.description,
-				f.steps,
 				f.project,
 				f.defaultCapability,
+				f.enabled,
 				"updatedAt",
 			],
 			searchable: [f.name, f.description],
 			filterable: [f.enabled, f.project, f.defaultCapability],
 			defaultSort: { field: "updatedAt", direction: "desc" },
-			layout: {
-				density: "comfortable",
-				titleField: f.name,
-				subtitleField: f.description,
-				badgeFields: [f.enabled],
-				metaFields: [f.project, f.defaultCapability, "updatedAt"],
-			},
 		}),
 	)
 	.form(({ v, f }) =>
