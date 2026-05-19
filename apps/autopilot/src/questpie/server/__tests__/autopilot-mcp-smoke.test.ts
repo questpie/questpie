@@ -16,22 +16,17 @@ import { capabilities } from "../collections/capabilities";
 import { chatMessages } from "../collections/chat-messages";
 import { chatSessions } from "../collections/chat-sessions";
 import { environments } from "../collections/environments";
-import { joinTokens } from "../collections/join-tokens";
 import { knowledge } from "../collections/knowledge";
 import { models } from "../collections/models";
 import { projects } from "../collections/projects";
 import { providers } from "../collections/providers";
-import { runEvents } from "../collections/run-events";
 import { runLinks } from "../collections/run-links";
-import { runs } from "../collections/runs";
 import { scheduleExecutions } from "../collections/schedule-executions";
 import { schedules } from "../collections/schedules";
 import { scripts } from "../collections/scripts";
 import { secrets } from "../collections/secrets";
 import { taskRelations } from "../collections/task-relations";
 import { tasks } from "../collections/tasks";
-import { workerLeases } from "../collections/worker-leases";
-import { workers } from "../collections/workers";
 import { workflowConfigs } from "../collections/workflow-configs";
 import mcpConfig from "../config/mcp";
 import {
@@ -93,22 +88,17 @@ describe("Autopilot MCP smoke", () => {
 				chat_messages: chatMessages,
 				chat_sessions: chatSessions,
 				environments,
-				join_tokens: joinTokens,
 				knowledge,
 				models,
 				projects,
 				providers,
-				run_events: runEvents,
 				run_links: runLinks,
-				runs,
 				schedule_executions: scheduleExecutions,
 				schedules,
 				scripts,
 				secrets,
 				task_relations: taskRelations,
 				tasks,
-				worker_leases: workerLeases,
-				workers,
 				workflow_configs: workflowConfigs,
 			},
 			services: {
@@ -183,7 +173,7 @@ describe("Autopilot MCP smoke", () => {
 				"MCP smoke task",
 			);
 
-			const run = await app.collections.runs.create({
+			const run = await app.collections.run_links.create({
 				task: taskId,
 				status: "pending",
 				initiatedBy: "mcp",

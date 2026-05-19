@@ -17,51 +17,33 @@ import { capabilities as _coll_capabilities } from "../collections/capabilities"
 import { chatMessages as _coll_chat_messages } from "../collections/chat-messages";
 import { chatSessions as _coll_chat_sessions } from "../collections/chat-sessions";
 import { environments as _coll_environments } from "../collections/environments";
-import { joinTokens as _coll_join_tokens } from "../collections/join-tokens";
 import { knowledge as _coll_knowledge } from "../collections/knowledge";
 import { models as _coll_models } from "../collections/models";
 import { projects as _coll_projects } from "../collections/projects";
 import { providers as _coll_providers } from "../collections/providers";
-import { runEvents as _coll_run_events } from "../collections/run-events";
 import { runLinks as _coll_run_links } from "../collections/run-links";
-import { runs as _coll_runs } from "../collections/runs";
 import { scheduleExecutions as _coll_schedule_executions } from "../collections/schedule-executions";
 import { schedules as _coll_schedules } from "../collections/schedules";
 import { scripts as _coll_scripts } from "../collections/scripts";
 import { secrets as _coll_secrets } from "../collections/secrets";
 import { taskRelations as _coll_task_relations } from "../collections/task-relations";
 import { tasks as _coll_tasks } from "../collections/tasks";
-import { workerLeases as _coll_worker_leases } from "../collections/worker-leases";
-import { workers as _coll_workers } from "../collections/workers";
 import { workflowConfigs as _coll_workflow_configs } from "../collections/workflow-configs";
 
 // ── Jobs ───────────────────────────────────────────────────
 import _job_cleanup from "../jobs/cleanup";
 import _job_scheduleTick from "../jobs/schedule-tick";
 import _job_taskEscalation from "../jobs/task-escalation";
-import _job_workerTimeout from "../jobs/worker-timeout";
 
 // ── Routes ─────────────────────────────────────────────────
 import _route_chat from "../routes/chat";
-import _route_enrollment from "../routes/enrollment";
-import _route_enrollment_enroll from "../routes/enrollment/enroll";
-import _route_enrollment_tokens from "../routes/enrollment/tokens";
 import _route_events from "../routes/events";
 import _route_intake from "../routes/intake";
 import _route_runs_runId from "../routes/runs/[runId]";
 import _route_runs_runId_artifacts from "../routes/runs/[runId]/artifacts";
 import _route_runs_runId_artifacts_artifactId_content from "../routes/runs/[runId]/artifacts/[artifactId]/content";
-import _route_runs_runId_complete from "../routes/runs/[runId]/complete";
 import _route_runs_runId_events from "../routes/runs/[runId]/events";
 import _route_runStream from "../routes/run-stream";
-import _route_workerHeartbeat from "../routes/worker-heartbeat";
-import _route_workerPoll from "../routes/worker-poll";
-import _route_workerRunComplete from "../routes/worker-run-complete";
-import _route_workerRunEvent from "../routes/worker-run-event";
-import _route_workers_claim from "../routes/workers/claim";
-import _route_workers_deregister from "../routes/workers/deregister";
-import _route_workers_heartbeat from "../routes/workers/heartbeat";
-import _route_workers_register from "../routes/workers/register";
 import _route_workspaceInspection_content from "../routes/workspace-inspection/content";
 import _route_workspaceInspection_diff from "../routes/workspace-inspection/diff";
 import _route_workspaceInspection_list from "../routes/workspace-inspection/list";
@@ -70,14 +52,13 @@ import _route_workspaceInspection_read from "../routes/workspace-inspection/read
 // ── Services ───────────────────────────────────────────────
 import _svc_gitProviderAdapters from "../services/git-provider-adapters";
 import _svc_knowledgeResource from "../services/knowledge-resource";
-import _svc_providerRuntime from "../services/provider-runtime";
-import _svc_workerManager from "../services/worker-manager";
 
 // ── Migrations ─────────────────────────────────────────────
 import _mig_20260507T095449_jolly_red_phoenix from "../migrations/20260507T095449_jolly_red_phoenix";
 import _mig_20260519T135407_add_run_links_and_ai_module from "../migrations/20260519T135407_add_run_links_and_ai_module";
 import _mig_20260519T142100_backfill_legacy_runs_into_run_links from "../migrations/20260519T142100_backfill_legacy_runs_into_run_links";
 import _mig_20260519T145500_link_schedule_executions_to_run_links from "../migrations/20260519T145500_link_schedule_executions_to_run_links";
+import _mig_20260519T161500_drop_legacy_execution_infra from "../migrations/20260519T161500_drop_legacy_execution_infra";
 
 // ── Views ──────────────────────────────────────────────────
 import _view_knowledgeDetail from "../views/knowledge-detail";
@@ -179,22 +160,17 @@ export type AppCollections = _ModuleCollections & {
 	chat_messages: typeof _coll_chat_messages;
 	chat_sessions: typeof _coll_chat_sessions;
 	environments: typeof _coll_environments;
-	join_tokens: typeof _coll_join_tokens;
 	knowledge: typeof _coll_knowledge;
 	models: typeof _coll_models;
 	projects: typeof _coll_projects;
 	providers: typeof _coll_providers;
-	run_events: typeof _coll_run_events;
 	run_links: typeof _coll_run_links;
-	runs: typeof _coll_runs;
 	schedule_executions: typeof _coll_schedule_executions;
 	schedules: typeof _coll_schedules;
 	scripts: typeof _coll_scripts;
 	secrets: typeof _coll_secrets;
 	task_relations: typeof _coll_task_relations;
 	tasks: typeof _coll_tasks;
-	worker_leases: typeof _coll_worker_leases;
-	workers: typeof _coll_workers;
 	workflow_configs: typeof _coll_workflow_configs;
 };
 
@@ -206,31 +182,18 @@ export type AppJobs = _ModuleJobs & {
 	cleanup: typeof _job_cleanup;
 	scheduleTick: typeof _job_scheduleTick;
 	taskEscalation: typeof _job_taskEscalation;
-	workerTimeout: typeof _job_workerTimeout;
 };
 
 /** All routes in the app (modules + user, user overrides) */
 export type AppRoutes = _ModuleRoutes & {
 	chat: RouteWithParams<typeof _route_chat, RouteParamsFromKey<"chat">>;
-	enrollment: RouteWithParams<typeof _route_enrollment, RouteParamsFromKey<"enrollment">>;
-	"enrollment/enroll": RouteWithParams<typeof _route_enrollment_enroll, RouteParamsFromKey<"enrollment/enroll">>;
-	"enrollment/tokens": RouteWithParams<typeof _route_enrollment_tokens, RouteParamsFromKey<"enrollment/tokens">>;
 	events: RouteWithParams<typeof _route_events, RouteParamsFromKey<"events">>;
 	intake: RouteWithParams<typeof _route_intake, RouteParamsFromKey<"intake">>;
 	"runs/[runId]": RouteWithParams<typeof _route_runs_runId, RouteParamsFromKey<"runs/[runId]">>;
 	"runs/[runId]/artifacts": RouteWithParams<typeof _route_runs_runId_artifacts, RouteParamsFromKey<"runs/[runId]/artifacts">>;
 	"runs/[runId]/artifacts/[artifactId]/content": RouteWithParams<typeof _route_runs_runId_artifacts_artifactId_content, RouteParamsFromKey<"runs/[runId]/artifacts/[artifactId]/content">>;
-	"runs/[runId]/complete": RouteWithParams<typeof _route_runs_runId_complete, RouteParamsFromKey<"runs/[runId]/complete">>;
 	"runs/[runId]/events": RouteWithParams<typeof _route_runs_runId_events, RouteParamsFromKey<"runs/[runId]/events">>;
 	runStream: RouteWithParams<typeof _route_runStream, RouteParamsFromKey<"runStream">>;
-	workerHeartbeat: RouteWithParams<typeof _route_workerHeartbeat, RouteParamsFromKey<"workerHeartbeat">>;
-	workerPoll: RouteWithParams<typeof _route_workerPoll, RouteParamsFromKey<"workerPoll">>;
-	workerRunComplete: RouteWithParams<typeof _route_workerRunComplete, RouteParamsFromKey<"workerRunComplete">>;
-	workerRunEvent: RouteWithParams<typeof _route_workerRunEvent, RouteParamsFromKey<"workerRunEvent">>;
-	"workers/claim": RouteWithParams<typeof _route_workers_claim, RouteParamsFromKey<"workers/claim">>;
-	"workers/deregister": RouteWithParams<typeof _route_workers_deregister, RouteParamsFromKey<"workers/deregister">>;
-	"workers/heartbeat": RouteWithParams<typeof _route_workers_heartbeat, RouteParamsFromKey<"workers/heartbeat">>;
-	"workers/register": RouteWithParams<typeof _route_workers_register, RouteParamsFromKey<"workers/register">>;
 	"workspaceInspection/content": RouteWithParams<typeof _route_workspaceInspection_content, RouteParamsFromKey<"workspaceInspection/content">>;
 	"workspaceInspection/diff": RouteWithParams<typeof _route_workspaceInspection_diff, RouteParamsFromKey<"workspaceInspection/diff">>;
 	"workspaceInspection/list": RouteWithParams<typeof _route_workspaceInspection_list, RouteParamsFromKey<"workspaceInspection/list">>;
@@ -241,8 +204,6 @@ export type AppRoutes = _ModuleRoutes & {
 type _AppServiceDefinitions = _ModuleServices & {
 	gitProviderAdapters: typeof _svc_gitProviderAdapters;
 	knowledgeResource: typeof _svc_knowledgeResource;
-	providerRuntime: typeof _svc_providerRuntime;
-	workerManager: typeof _svc_workerManager;
 };
 
 /** All services in the app as resolved service instances. */
@@ -395,51 +356,33 @@ export const app = await createApp(
 			chat_messages: _coll_chat_messages,
 			chat_sessions: _coll_chat_sessions,
 			environments: _coll_environments,
-			join_tokens: _coll_join_tokens,
 			knowledge: _coll_knowledge,
 			models: _coll_models,
 			projects: _coll_projects,
 			providers: _coll_providers,
-			run_events: _coll_run_events,
 			run_links: _coll_run_links,
-			runs: _coll_runs,
 			schedule_executions: _coll_schedule_executions,
 			schedules: _coll_schedules,
 			scripts: _coll_scripts,
 			secrets: _coll_secrets,
 			task_relations: _coll_task_relations,
 			tasks: _coll_tasks,
-			worker_leases: _coll_worker_leases,
-			workers: _coll_workers,
 			workflow_configs: _coll_workflow_configs,
 		},
 		jobs: {
 			cleanup: _job_cleanup,
 			scheduleTick: _job_scheduleTick,
 			taskEscalation: _job_taskEscalation,
-			workerTimeout: _job_workerTimeout,
 		},
 		routes: {
 			chat: _route_chat,
-			enrollment: _route_enrollment,
-			"enrollment/enroll": _route_enrollment_enroll,
-			"enrollment/tokens": _route_enrollment_tokens,
 			events: _route_events,
 			intake: _route_intake,
 			"runs/[runId]": _route_runs_runId,
 			"runs/[runId]/artifacts": _route_runs_runId_artifacts,
 			"runs/[runId]/artifacts/[artifactId]/content": _route_runs_runId_artifacts_artifactId_content,
-			"runs/[runId]/complete": _route_runs_runId_complete,
 			"runs/[runId]/events": _route_runs_runId_events,
 			runStream: _route_runStream,
-			workerHeartbeat: _route_workerHeartbeat,
-			workerPoll: _route_workerPoll,
-			workerRunComplete: _route_workerRunComplete,
-			workerRunEvent: _route_workerRunEvent,
-			"workers/claim": _route_workers_claim,
-			"workers/deregister": _route_workers_deregister,
-			"workers/heartbeat": _route_workers_heartbeat,
-			"workers/register": _route_workers_register,
 			"workspaceInspection/content": _route_workspaceInspection_content,
 			"workspaceInspection/diff": _route_workspaceInspection_diff,
 			"workspaceInspection/list": _route_workspaceInspection_list,
@@ -448,10 +391,8 @@ export const app = await createApp(
 		services: {
 			gitProviderAdapters: _svc_gitProviderAdapters,
 			knowledgeResource: _svc_knowledgeResource,
-			providerRuntime: _svc_providerRuntime,
-			workerManager: _svc_workerManager,
 		},
-		migrations: [_mig_20260507T095449_jolly_red_phoenix, _mig_20260519T135407_add_run_links_and_ai_module, _mig_20260519T142100_backfill_legacy_runs_into_run_links, _mig_20260519T145500_link_schedule_executions_to_run_links],
+		migrations: [_mig_20260507T095449_jolly_red_phoenix, _mig_20260519T135407_add_run_links_and_ai_module, _mig_20260519T142100_backfill_legacy_runs_into_run_links, _mig_20260519T145500_link_schedule_executions_to_run_links, _mig_20260519T161500_drop_legacy_execution_infra],
 		views: {
 			knowledgeDetail: _view_knowledgeDetail,
 			taskDetail: _view_taskDetail,

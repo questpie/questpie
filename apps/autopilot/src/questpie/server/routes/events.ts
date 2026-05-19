@@ -26,19 +26,19 @@ export default route()
 								orderBy: { createdAt: "desc" },
 								limit: 25,
 							}),
-							collections.runs.find({
+							collections.run_links.find({
 								where: { status: { in: ["pending", "claimed", "running"] } },
 								orderBy: { updatedAt: "desc" },
 								limit: 25,
 							}),
 						]);
 
-						for (const item of activity.docs.reverse()) {
+						for (const item of activity.docs.toReversed()) {
 							if (seenActivity.has(item.id)) continue;
 							seenActivity.add(item.id);
 							write({ type: "activity", activity: item });
 						}
-						for (const run of runs.docs.reverse()) {
+						for (const run of runs.docs.toReversed()) {
 							const marker = `${run.id}:${run.status}:${String(run.updatedAt)}`;
 							if (seenRuns.has(marker)) continue;
 							seenRuns.add(marker);

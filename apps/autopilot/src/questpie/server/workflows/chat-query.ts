@@ -4,6 +4,7 @@ import { workflow } from "@questpie/workflows";
 
 import { createAiRunLink } from "../lib/ai-run-links";
 import { mergeRecords, relationId } from "../lib/records";
+import { resolveRuntimeSelection } from "../lib/runtime-selection";
 import { linkScheduleExecutionRun } from "../lib/schedule-run-links";
 
 type RunCompletion = {
@@ -55,7 +56,7 @@ export default workflow({
 				return existing;
 			}
 
-			const runtime = await ctx.services.providerRuntime.resolve({
+			const runtime = await resolveRuntimeSelection(ctx, {
 				modelId: input.modelId,
 				projectId: input.projectId ?? relationId(session.project),
 			});
@@ -76,9 +77,7 @@ export default workflow({
 					promptRefs: runtime.promptRefs,
 					runtimeHints: runtime.runtimeHints,
 				},
-				linkMetadata: {
-					preferredWorker: relationId(session.preferredWorker),
-				},
+				linkMetadata: {},
 			});
 		});
 
@@ -152,7 +151,6 @@ export default workflow({
 						finalRun?.runtimeSessionRef ??
 						session.runtimeSessionRef ??
 						undefined,
-					preferredWorker: relationId(session.preferredWorker) ?? undefined,
 					metadata: mergeRecords(session.metadata, {
 						lastRunId: run.id,
 						lastMessageId: assistantMessage.id,

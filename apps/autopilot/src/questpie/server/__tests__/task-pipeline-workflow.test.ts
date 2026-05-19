@@ -13,25 +13,18 @@ import { capabilities } from "../collections/capabilities";
 import { chatMessages } from "../collections/chat-messages";
 import { chatSessions } from "../collections/chat-sessions";
 import { environments } from "../collections/environments";
-import { joinTokens } from "../collections/join-tokens";
 import { knowledge } from "../collections/knowledge";
 import { models } from "../collections/models";
 import { projects } from "../collections/projects";
 import { providers } from "../collections/providers";
-import { runEvents } from "../collections/run-events";
 import { runLinks } from "../collections/run-links";
-import { runs } from "../collections/runs";
 import { scheduleExecutions } from "../collections/schedule-executions";
 import { schedules } from "../collections/schedules";
 import { scripts } from "../collections/scripts";
 import { secrets } from "../collections/secrets";
 import { taskRelations } from "../collections/task-relations";
 import { tasks } from "../collections/tasks";
-import { workerLeases } from "../collections/worker-leases";
-import { workers } from "../collections/workers";
 import { workflowConfigs } from "../collections/workflow-configs";
-import providerRuntime from "../services/provider-runtime";
-import workerManager from "../services/worker-manager";
 import multiStepTask from "../workflows/multi-step-task";
 import taskPipeline from "../workflows/task-pipeline";
 
@@ -120,28 +113,20 @@ describe("task-pipeline workflow", () => {
 				chat_messages: chatMessages,
 				chat_sessions: chatSessions,
 				environments,
-				join_tokens: joinTokens,
 				knowledge,
 				models,
 				projects,
 				providers,
-				run_events: runEvents,
 				run_links: runLinks,
-				runs,
 				schedule_executions: scheduleExecutions,
 				schedules,
 				scripts,
 				secrets,
 				task_relations: taskRelations,
 				tasks,
-				worker_leases: workerLeases,
-				workers,
 				workflow_configs: workflowConfigs,
 			},
-			services: {
-				providerRuntime,
-				workerManager,
-			},
+			services: {},
 		});
 		await runTestDbMigrations(setup.app);
 	});
@@ -227,12 +212,6 @@ describe("task-pipeline workflow", () => {
 			where: { id: task.id },
 		});
 		expect(updatedTask?.status).toBe("review");
-
-		const createdRuns = await setup!.app.collections.runs.find({
-			where: { task: task.id },
-			limit: 10,
-		});
-		expect(createdRuns.docs).toHaveLength(0);
 
 		const createdRunLinks = await setup!.app.collections.run_links.find({
 			where: { task: task.id },
@@ -391,12 +370,6 @@ describe("task-pipeline workflow", () => {
 			status: "review",
 		});
 		expect(attemptCount).toBe(2);
-
-		const createdRuns = await setup!.app.collections.runs.find({
-			where: { task: task.id },
-			limit: 10,
-		});
-		expect(createdRuns.docs).toHaveLength(0);
 
 		const createdRunLinks = await setup!.app.collections.run_links.find({
 			where: { task: task.id },
@@ -582,11 +555,11 @@ describe("task-pipeline workflow", () => {
 			},
 		]);
 
-		const legacyRuns = await setup!.app.collections.runs.find({
+		const runLinks = await setup!.app.collections.run_links.find({
 			where: { task: task.id },
 			limit: 10,
 		});
-		expect(legacyRuns.docs).toHaveLength(0);
+		expect(runLinks.docs).toHaveLength(1);
 	});
 
 	it("proceeds when dependencies are met", async () => {

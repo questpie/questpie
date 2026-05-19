@@ -5,6 +5,7 @@ import { workflow } from "@questpie/workflows";
 import { createAiRunLink } from "../lib/ai-run-links";
 import { classifyRunError, type RunErrorType } from "../lib/error-classifier";
 import { asRecord, mergeRecords, relationId } from "../lib/records";
+import { resolveRuntimeSelection } from "../lib/runtime-selection";
 import { linkScheduleExecutionRun } from "../lib/schedule-run-links";
 import { workflowsFromContext } from "../lib/workflows";
 
@@ -227,7 +228,7 @@ export default workflow({
 
 		for (let attempt = 1; attempt <= retryPolicy.maxAttempts; attempt++) {
 			const runtime = await step.run(`resolve-runtime-${attempt}`, async () => {
-				return ctx.services.providerRuntime.resolve({
+				return resolveRuntimeSelection(ctx, {
 					modelId: relationId(task.model),
 					capabilityId: relationId(task.capability),
 					projectId: relationId(task.project),

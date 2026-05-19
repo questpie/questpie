@@ -54,6 +54,19 @@ const runStreamSource = readFileSync(
 	"utf8",
 );
 
+const generatedServerSource = readFileSync(
+	new URL("../.generated/index.ts", import.meta.url),
+	"utf8",
+);
+
+const dropLegacyInfraMigrationSource = readFileSync(
+	new URL(
+		"../migrations/20260519T161500_drop_legacy_execution_infra.ts",
+		import.meta.url,
+	),
+	"utf8",
+);
+
 const aiRunMirrorSource = readFileSync(
 	new URL("../lib/ai-run-mirror.ts", import.meta.url),
 	"utf8",
@@ -156,6 +169,38 @@ describe("Autopilot AI run links", () => {
 		expect(runStreamSource).toContain("collections.run_links.findOne");
 		expect(runStreamSource).toContain('resource: "run_links"');
 		expect(runStreamSource).toContain("collections.ai_run_events.find");
+	});
+
+	it("does not register duplicate Autopilot execution infrastructure", () => {
+		for (const legacyImport of [
+			"../collections/runs",
+			"../collections/run-events",
+			"../collections/workers",
+			"../collections/worker-leases",
+			"../services/worker-manager",
+			"../services/provider-runtime",
+			"../jobs/worker-timeout",
+			"../routes/worker-poll",
+			"../routes/worker-run-event",
+			"../routes/worker-run-complete",
+			"../routes/workers/claim",
+			"../routes/runs/[runId]/complete",
+		]) {
+			expect(generatedServerSource).not.toContain(legacyImport);
+		}
+
+		expect(dropLegacyInfraMigrationSource).toContain(
+			'DROP TABLE IF EXISTS "worker_leases"',
+		);
+		expect(dropLegacyInfraMigrationSource).toContain(
+			'DROP TABLE IF EXISTS "run_events"',
+		);
+		expect(dropLegacyInfraMigrationSource).toContain(
+			'DROP TABLE IF EXISTS "workers"',
+		);
+		expect(dropLegacyInfraMigrationSource).toContain(
+			'DROP TABLE IF EXISTS "runs"',
+		);
 	});
 
 	it("keeps AI execution mirroring in Autopilot-owned code", () => {

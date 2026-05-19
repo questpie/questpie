@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { createAiRunLink } from "../lib/ai-run-links";
 import { mergeRecords, relationId } from "../lib/records";
+import { resolveRuntimeSelection } from "../lib/runtime-selection";
 import { workflowsFromContext } from "../lib/workflows";
 
 const attachmentSchema = z
@@ -77,7 +78,7 @@ export default route()
 			) as any,
 		});
 
-		const runtime = await ctx.services.providerRuntime.resolve({
+		const runtime = await resolveRuntimeSelection(ctx, {
 			modelId: input.modelId,
 			projectId: input.projectId ?? relationId(session.project),
 		});
@@ -98,10 +99,7 @@ export default route()
 				promptRefs: runtime.promptRefs,
 				runtimeHints: runtime.runtimeHints,
 			},
-			linkMetadata: {
-				preferredWorker: relationId(session.preferredWorker),
-				attachments: input.attachments ?? [],
-			},
+			linkMetadata: { attachments: input.attachments ?? [] },
 		});
 
 		await collections.chat_messages.updateById({

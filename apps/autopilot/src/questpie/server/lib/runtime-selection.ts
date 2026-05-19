@@ -1,5 +1,4 @@
 import { ApiError } from "questpie/errors";
-import { service } from "questpie/services";
 
 type Collections = Questpie.AppContext["collections"];
 
@@ -109,43 +108,41 @@ async function loadCapability(
 	return capability as Record<string, unknown>;
 }
 
-export default service({
-	lifecycle: "singleton",
-	create: ({ collections }) => ({
-		async resolve(input: ResolveRuntimeInput = {}): Promise<RuntimeResolution> {
-			const capability = await loadCapability(collections, input.capabilityId);
-			const defaultModelId = relationId(capability?.defaultModel);
-			const explicitModelId = input.modelId ?? defaultModelId;
-			const model = await loadModel(
-				collections,
-				explicitModelId,
-				input.projectId,
-			);
-			const provider = await loadProvider(collections, model);
-			const runtimeHints = asRecord(capability?.runtimeHints);
-			const runtime =
-				input.runtime ??
-				runtimeFromValue(model?.runtime) ??
-				runtimeFromValue(runtimeHints.runtime) ??
-				"codex";
-			const providerConfig = {
-				...asRecord(provider?.config),
-				...asRecord(model?.config),
-			};
+export async function resolveRuntimeSelection(
+	ctx: Questpie.AppContext,
+	input: ResolveRuntimeInput = {},
+): Promise<RuntimeResolution> {
+	const capability = await loadCapability(ctx.collections, input.capabilityId);
+	const defaultModelId = relationId(capability?.defaultModel);
+	const explicitModelId = input.modelId ?? defaultModelId;
+	const model = await loadModel(
+		ctx.collections,
+		explicitModelId,
+		input.projectId,
+	);
+	const provider = await loadProvider(ctx.collections, model);
+	const runtimeHints = asRecord(capability?.runtimeHints);
+	const runtime =
+		input.runtime ??
+		runtimeFromValue(model?.runtime) ??
+		runtimeFromValue(runtimeHints.runtime) ??
+		"codex";
+	const providerConfig = {
+		...asRecord(provider?.config),
+		...asRecord(model?.config),
+	};
 
-			return {
-				runtime,
-				model,
-				provider,
-				capability,
-				modelId: relationId(model),
-				providerId: relationId(provider),
-				providerConfig,
-				toolPolicy: capability?.allowedTools ?? null,
-				contextRefs: capability?.contextRefs ?? null,
-				promptRefs: capability?.promptRefs ?? null,
-				runtimeHints,
-			};
-		},
-	}),
-});
+	return {
+		runtime,
+		model,
+		provider,
+		capability,
+		modelId: relationId(model),
+		providerId: relationId(provider),
+		providerConfig,
+		toolPolicy: capability?.allowedTools ?? null,
+		contextRefs: capability?.contextRefs ?? null,
+		promptRefs: capability?.promptRefs ?? null,
+		runtimeHints,
+	};
+}

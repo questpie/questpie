@@ -15,33 +15,24 @@ import { capabilities } from "../collections/capabilities";
 import { chatMessages } from "../collections/chat-messages";
 import { chatSessions } from "../collections/chat-sessions";
 import { environments } from "../collections/environments";
-import { joinTokens } from "../collections/join-tokens";
 import { knowledge } from "../collections/knowledge";
 import { models } from "../collections/models";
 import { projects } from "../collections/projects";
 import { providers } from "../collections/providers";
-import { runEvents } from "../collections/run-events";
 import { runLinks } from "../collections/run-links";
-import { runs } from "../collections/runs";
 import { scheduleExecutions } from "../collections/schedule-executions";
 import { schedules } from "../collections/schedules";
 import { scripts } from "../collections/scripts";
 import { secrets } from "../collections/secrets";
 import { taskRelations } from "../collections/task-relations";
 import { tasks } from "../collections/tasks";
-import { workerLeases } from "../collections/worker-leases";
-import { workers } from "../collections/workers";
 import { workflowConfigs } from "../collections/workflow-configs";
 import { mirrorAiRunCollectionChange } from "../lib/ai-run-mirror";
 import chatRoute from "../routes/chat";
 import runStreamRoute from "../routes/run-stream";
-import runCompleteRoute from "../routes/runs/[runId]/complete";
+import runStatusRoute from "../routes/runs/[runId]";
 import runEventsRoute from "../routes/runs/[runId]/events";
-import workerClaimRoute from "../routes/workers/claim";
 import knowledgeResource from "../services/knowledge-resource";
-import providerRuntime from "../services/provider-runtime";
-import { hashWorkerSecret } from "../services/worker-manager";
-import workerManager from "../services/worker-manager";
 import chatQueryWorkflow from "../workflows/chat-query";
 
 type WorkflowEvent = {
@@ -290,28 +281,21 @@ describe("chat realtime workflow contract", () => {
 					chat_messages: chatMessages,
 					chat_sessions: chatSessions,
 					environments,
-					join_tokens: joinTokens,
 					knowledge,
 					models,
 					projects,
 					providers,
-					run_events: runEvents,
 					run_links: runLinks,
-					runs,
 					schedule_executions: scheduleExecutions,
 					schedules,
 					scripts,
 					secrets,
 					task_relations: taskRelations,
 					tasks,
-					worker_leases: workerLeases,
-					workers,
 					workflow_configs: workflowConfigs,
 				},
 				services: {
 					knowledgeResource,
-					providerRuntime,
-					workerManager,
 				},
 				hooks: {
 					collections: {
@@ -325,9 +309,8 @@ describe("chat realtime workflow contract", () => {
 				routes: {
 					chat: chatRoute,
 					"run-stream": runStreamRoute,
-					"runs/[runId]/complete": runCompleteRoute,
+					"runs/[runId]": runStatusRoute,
 					"runs/[runId]/events": runEventsRoute,
-					"workers/claim": workerClaimRoute,
 				},
 			},
 			{ realtime: { adapter: realtimeAdapter } },
@@ -393,6 +376,34 @@ describe("chat realtime workflow contract", () => {
 		}
 		return payload;
 	}
+
+	it("requires auth for run compatibility reads", async () => {
+		const app = setup!.app;
+		const run = await app.collections.run_links.create({
+			status: "running",
+			runtime: "codex",
+			initiatedBy: "chat",
+			instructions: "Protect this run",
+		} as any);
+		const unauthenticatedHandler = createFetchHandler(app, {
+			basePath: "/api",
+			getSession: async () => null,
+		});
+
+		const runResponse = await unauthenticatedHandler(
+			new Request(`http://localhost/api/runs/${run.id}`, {
+				method: "GET",
+			}),
+		);
+		expect(runResponse?.status).toBe(401);
+
+		const eventsResponse = await unauthenticatedHandler(
+			new Request(`http://localhost/api/runs/${run.id}/events`, {
+				method: "GET",
+			}),
+		);
+		expect(eventsResponse?.status).toBe(401);
+	});
 
 	it("orders initial AI run events by sequence before falling back to creation order", async () => {
 		const app = setup!.app;
@@ -561,9 +572,6 @@ describe("chat realtime workflow contract", () => {
 			(aiRun?.meta as Record<string, unknown> | undefined)?.autopilot,
 		).toBe(undefined);
 
-		const legacyRuns = await app.collections.runs.find({ limit: 10 });
-		expect(legacyRuns.docs).toHaveLength(0);
-
 		const createContext = createContextFactory(app);
 		const ctx = await createContext({ accessMode: "system" });
 		const resources = await ctx.services.knowledgeResource.createRunOutputs({
@@ -731,18 +739,10 @@ describe("chat realtime workflow contract", () => {
 		const app = setup!.app;
 		const createContext = createContextFactory(app);
 		const ctx = await createContext({ accessMode: "system" });
-		const worker = await app.collections.workers.create({
-			deviceId: "chat-workflow-worker",
-			name: "Chat workflow worker",
-			status: "busy",
-			capabilities: workerCapabilities(),
-			machineSecretHash: hashWorkerSecret("unused-workflow"),
-		} as any);
 		const session = await app.collections.chat_sessions.create({
 			title: "Workflow chat",
 			status: "active",
 			scopeType: "company",
-			preferredWorker: worker.id,
 			metadata: { existing: true },
 		} as any);
 		const userMessage = await app.collections.chat_messages.create({
@@ -750,30 +750,16 @@ describe("chat realtime workflow contract", () => {
 			role: "user",
 			content: "What happened?",
 		} as any);
-		const run = await app.collections.runs.create({
+		const run = await app.collections.run_links.create({
+			id: "chat-completed-run",
 			status: "completed",
 			runtime: "codex",
 			initiatedBy: "chat",
 			instructions: userMessage.content,
-			worker: worker.id,
 			runtimeSessionRef: "workflow-runtime-session",
 			resumable: true,
-			targeting: {
-				chatSessionId: session.id,
-				messageId: userMessage.id,
-			},
-		} as any);
-		await app.collections.run_links.create({
-			id: run.id,
-			legacyRunId: run.id,
 			chatSession: session.id,
 			chatMessage: userMessage.id,
-			status: "completed",
-			runtime: "codex",
-			initiatedBy: "chat",
-			instructions: userMessage.content,
-			runtimeSessionRef: "workflow-runtime-session",
-			resumable: true,
 		} as any);
 
 		const result = await chatQueryWorkflow.handler({
@@ -789,7 +775,7 @@ describe("chat realtime workflow contract", () => {
 			step: fakeStep({
 				"run.claimed": {
 					runId: run.id,
-					workerId: worker.id,
+					workerId: "ai-worker-1",
 					leaseId: "lease-1",
 				},
 				"run.completed": {
@@ -840,7 +826,6 @@ describe("chat realtime workflow contract", () => {
 		});
 		expect(updatedSession).toMatchObject({
 			runtimeSessionRef: "workflow-runtime-session",
-			preferredWorker: worker.id,
 			metadata: {
 				existing: true,
 				lastRunId: run.id,

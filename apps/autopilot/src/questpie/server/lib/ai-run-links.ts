@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 
-import type { RuntimeResolution } from "../services/provider-runtime";
 import { asRecord } from "./records";
+import type { RuntimeResolution } from "./runtime-selection";
 
 type InitiatedBy = "chat" | "task" | "schedule" | "workflow" | "manual" | "mcp";
 

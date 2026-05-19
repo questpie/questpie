@@ -4,6 +4,7 @@ import { workflow } from "@questpie/workflows";
 
 import { createAiRunLink } from "../lib/ai-run-links";
 import { asRecord, mergeRecords, relationId, stringFrom } from "../lib/records";
+import { resolveRuntimeSelection } from "../lib/runtime-selection";
 
 type Collections = Questpie.AppContext["collections"];
 
@@ -159,7 +160,7 @@ async function createRunForStep(
 		relationId(step.model) ??
 		relationId(task.model);
 
-	const runtime = await ctx.services.providerRuntime.resolve({
+	const runtime = await resolveRuntimeSelection(ctx, {
 		modelId,
 		capabilityId,
 		projectId: relationId(task.project),
