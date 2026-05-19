@@ -75,6 +75,9 @@ export interface SpawnAgentRunRequest {
 	runtime: string;
 	prompt: string;
 	runtimeSessionRef?: string;
+	cwd?: string;
+	systemPrompt?: string;
+	mcpServers?: unknown[];
 	metadata?: Record<string, unknown>;
 }
 

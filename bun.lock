@@ -316,31 +316,16 @@
         "drizzle-orm",
       ],
     },
-    "packages/agent-runtime": {
-      "name": "@questpie/agent-runtime",
-      "version": "0.1.0",
-      "devDependencies": {
-        "bun-types": "latest",
-        "spawn-agent": "0.0.1",
-        "tsdown": "^0.18.3",
-      },
-      "peerDependencies": {
-        "spawn-agent": "*",
-      },
-      "optionalPeers": [
-        "spawn-agent",
-      ],
-    },
     "packages/ai": {
       "name": "@questpie/ai",
       "version": "3.0.0",
       "dependencies": {
         "@iconify/react": "^6.0.2",
         "@questpie/admin": "workspace:*",
-        "@questpie/agent-runtime": "workspace:*",
         "ai": "^6.0.0",
         "lowlight": "^3.x",
         "questpie": "workspace:*",
+        "spawn-agent": "0.0.1",
       },
       "devDependencies": {
         "@tanstack/react-query": "^5.x",
@@ -354,7 +339,6 @@
       },
       "peerDependencies": {
         "@questpie/admin": "^3.0.0",
-        "@questpie/agent-runtime": "*",
         "@tanstack/react-query": "^5.x",
         "drizzle-orm": "1.0.0-beta.6-4414a19",
         "questpie": "^3.0.0",
@@ -1121,8 +1105,6 @@
     "@quansync/fs": ["@quansync/fs@1.0.0", "", { "dependencies": { "quansync": "^1.0.0" } }, "sha512-4TJ3DFtlf1L5LDMaM6CanJ/0lckGNtJcMjQ1NAV6zDmA0tEHKZtxNKin8EgPaVX1YzljbxckyT2tJrpQKAtngQ=="],
 
     "@questpie/admin": ["@questpie/admin@workspace:packages/admin"],
-
-    "@questpie/agent-runtime": ["@questpie/agent-runtime@workspace:packages/agent-runtime"],
 
     "@questpie/ai": ["@questpie/ai@workspace:packages/ai"],
 

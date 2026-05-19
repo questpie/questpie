@@ -1,17 +1,12 @@
 import { describe, expect, it, beforeEach } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { mkdtemp } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
-import { createFakeAdapter } from "@questpie/agent-runtime/testing";
-import { createDaemon } from "@questpie/agent-runtime/worker";
 
 import {
 	hashSecret,
 	generateSecret,
 } from "../server/modules/ai/services/worker-manager.js";
 import { executeRun } from "../server/worker/execute-run.js";
+import { createFakeSpawnAgentRunner } from "../server/worker/testing.js";
 
 // ---------------------------------------------------------------------------
 // In-memory mock collection store
@@ -893,7 +888,7 @@ describe("Embedded worker execution", () => {
 
 		await executeRun(
 			{
-				async submit() {
+				async run() {
 					throw error;
 				},
 			},
@@ -914,6 +909,8 @@ describe("Embedded worker execution", () => {
 			},
 			{
 				runId: "run_123",
+				leaseId: "lease_123",
+				expiresAt: new Date(),
 				runtime: "codex",
 				prompt: "run this",
 			},
@@ -1005,12 +1002,11 @@ describe("Chat service", () => {
 	});
 });
 
-describe("End-to-end: chat → worker → daemon → completion", () => {
-	it("full flow with fake adapter", async () => {
+describe("End-to-end: chat → worker → spawn-agent runner → completion", () => {
+	it("full flow with fake spawn-agent runner", async () => {
 		const collections = createMockCollections();
 		const wm = buildWorkerManager(collections);
 		const chat = buildChatService(collections);
-		const workerDir = await mkdtemp(join(tmpdir(), "ai-e2e-"));
 
 		// 1. Register worker
 		const secret = generateSecret();
@@ -1033,79 +1029,42 @@ describe("End-to-end: chat → worker → daemon → completion", () => {
 		expect(claimed!.runId).toBe(runId);
 		expect(claimed!.prompt).toBe("write tests");
 
-		// 4. Create daemon with fake adapter and execute
-		const adapter = createFakeAdapter({
+		// 4. Execute through the AI-owned spawn-agent runner seam
+		const runner = createFakeSpawnAgentRunner({
 			responseText: "Tests written successfully",
 		});
-		const daemon = createDaemon(
-			{ workerDir, runtimes: [{ runtime: "claude-code" }] },
-			[adapter],
-		);
-		await daemon.start();
+		await executeRun(runner, wm, claimed!, workerId);
 
-		try {
-			const handle = await daemon.submit({
-				type: "message.send",
-				runtime: claimed!.runtime as any,
-				prompt: claimed!.prompt,
-				sessionRef: claimed!.runtimeSessionRef,
-				priority: 100,
-				meta: { runId: claimed!.runId },
-			});
+		await chat.createAssistantMessage({
+			sessionId,
+			runId: claimed!.runId,
+			content: "Tests written successfully",
+		});
 
-			// 5. Stream events and report
-			let sequence = 0;
-			let accumulatedText = "";
-			for await (const event of handle.events) {
-				await wm.reportRunEvent({
-					runId: claimed!.runId,
-					event: { ...event, sequence: sequence++ },
-				});
-				if (event.type === "text.delta") {
-					accumulatedText += event.text;
-				}
-			}
+		// 5. Verify final state
+		const run = await collections.ai_runs.findOne({ where: { id: runId } });
+		expect(run!.status).toBe("completed");
+		expect(run!.summary).toBe("Tests written successfully");
 
-			// 6. Complete the run
-			const result = await handle.completion;
-			await chat.createAssistantMessage({
-				sessionId,
-				runId: claimed!.runId,
-				content: accumulatedText,
-			});
-			await wm.completeRun({
-				runId: claimed!.runId,
-				workerId,
-				result: result as unknown as Record<string, unknown>,
-			});
+		const events = await collections.ai_run_events.find({
+			where: { run: runId },
+		});
+		expect(events.docs.length).toBeGreaterThanOrEqual(5); // started, resolved, text.delta, usage, completed
 
-			// 7. Verify final state
-			const run = await collections.ai_runs.findOne({ where: { id: runId } });
-			expect(run!.status).toBe("completed");
-			expect(run!.summary).toBe("Tests written successfully");
+		const messages = await chat.getMessages(sessionId);
+		expect(messages).toHaveLength(2);
+		expect(messages[0]!.role).toBe("user");
+		expect(messages[1]!.role).toBe("assistant");
+		expect(messages[1]!.content).toBe("Tests written successfully");
 
-			const events = await collections.ai_run_events.find({
-				where: { run: runId },
-			});
-			expect(events.docs.length).toBeGreaterThanOrEqual(4); // started, resolved, text.delta, usage, completed
+		const worker = await collections.ai_workers.findOne({
+			where: { id: workerId },
+		});
+		expect(worker!.status).toBe("online"); // back to online after completion
 
-			const messages = await chat.getMessages(sessionId);
-			expect(messages).toHaveLength(2);
-			expect(messages[0]!.role).toBe("user");
-			expect(messages[1]!.role).toBe("assistant");
-			expect(messages[1]!.content).toBe("Tests written successfully");
-
-			const worker = await collections.ai_workers.findOne({
-				where: { id: workerId },
-			});
-			expect(worker!.status).toBe("online"); // back to online after completion
-
-			const lease = await collections.ai_worker_leases.findOne({
-				where: { run: runId },
-			});
-			expect(lease!.status).toBe("completed");
-		} finally {
-			await daemon.stop();
-		}
+		const lease = await collections.ai_worker_leases.findOne({
+			where: { run: runId },
+		});
+		expect(lease!.status).toBe("completed");
 	});
 });

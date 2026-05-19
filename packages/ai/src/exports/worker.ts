@@ -1,6 +1,9 @@
 import { executeRun } from "../server/worker/execute-run.js";
-
-export type DirectSpawnRuntime = "claude-code" | "codex";
+import {
+	createSpawnAgentRunner,
+	prepareWorkerVolume,
+	type DirectSpawnRuntime,
+} from "../server/worker/spawn-agent-runner.js";
 
 export interface EmbeddedWorkerConfig {
 	runtimes: { runtime: DirectSpawnRuntime; binaryPath?: string }[];
@@ -14,37 +17,16 @@ export async function startAIWorker(
 	app: any,
 	config: EmbeddedWorkerConfig,
 ): Promise<{ stop(): Promise<void>; workerId: string }> {
-	const { createDaemon } = await import("@questpie/agent-runtime/worker");
 	const { generateSecret } =
 		await import("../server/modules/ai/services/worker-manager.js");
 	const os = await import("node:os");
 
-	const adapters = await Promise.all(
-		config.runtimes.map(async (r) => {
-			if (r.runtime === "codex") {
-				const { createCodexAdapter } =
-					await import("@questpie/agent-runtime/adapters/codex");
-				return createCodexAdapter();
-			}
-			const { createClaudeCodeAdapter } =
-				await import("@questpie/agent-runtime/adapters/claude-code");
-			return createClaudeCodeAdapter();
-		}),
-	);
-
-	const daemon = createDaemon(
-		{
-			workerDir: config.workerDir ?? ".questpie/ai-worker",
-			runtimes: config.runtimes.map((r) => ({
-				runtime: r.runtime,
-				binaryPath: r.binaryPath,
-			})),
-			pollIntervalMs: config.pollIntervalMs ?? 5000,
-		},
-		adapters,
-	);
-
-	await daemon.start();
+	const workerDir = config.workerDir ?? ".questpie/ai-worker";
+	const volume = await prepareWorkerVolume(workerDir);
+	const runner = createSpawnAgentRunner({
+		workerDir,
+		runtimes: config.runtimes,
+	});
 
 	const secret = generateSecret();
 	const hostname = config.name ?? os.hostname();
@@ -53,9 +35,9 @@ export async function startAIWorker(
 	let workerId = "embedded";
 	if (workerManager) {
 		const result = await workerManager.registerWorker({
-			deviceId: `embedded:${daemon.volumeId}`,
+			deviceId: `embedded:${volume.volumeId}`,
 			name: typeof hostname === "string" ? hostname : "embedded",
-			volumeId: daemon.volumeId,
+			volumeId: volume.volumeId,
 			capabilities: config.runtimes.map((r) => ({
 				runtime: r.runtime,
 				maxConcurrent: config.maxConcurrentRuns ?? 1,
@@ -78,7 +60,7 @@ export async function startAIWorker(
 				});
 
 				if (claimed) {
-					await executeRun(daemon, workerManager, claimed, workerId);
+					await executeRun(runner, workerManager, claimed, workerId);
 				}
 			} catch {}
 			await new Promise((resolve) =>
@@ -96,7 +78,8 @@ export async function startAIWorker(
 			if (workerManager) {
 				await workerManager.deregister(workerId);
 			}
-			await daemon.stop();
 		},
 	};
 }
+
+export type { DirectSpawnRuntime };
