@@ -98,7 +98,7 @@ export default route()
 					refreshInFlight = true;
 
 					try {
-						const run = await collections.runs.findOne({
+						const run = await collections.run_links.findOne({
 							where: { id: runId },
 						});
 						if (!run) {
@@ -135,7 +135,7 @@ export default route()
 
 				unsubscribeRun = realtime.subscribe(() => void refresh(), {
 					resourceType: "collection",
-					resource: "runs",
+					resource: "run_links",
 					where: { id: runId },
 				});
 				unsubscribeRunEvents = realtime.subscribe(() => void refresh(), {

@@ -5,7 +5,11 @@ import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import { describe, expect, it } from "vitest";
 
+import { activity } from "../collections/activity";
+import { chatMessages } from "../collections/chat-messages";
+import { knowledge } from "../collections/knowledge";
 import { runLinks } from "../collections/run-links";
+import { taskRelations } from "../collections/task-relations";
 import backfillLegacyRunsMigration from "../migrations/20260519T142100_backfill_legacy_runs_into_run_links";
 import modules from "../modules";
 
@@ -22,6 +26,21 @@ const backfillLegacyRunsMigrationSource = readFileSync(
 		"../migrations/20260519T142100_backfill_legacy_runs_into_run_links.ts",
 		import.meta.url,
 	),
+	"utf8",
+);
+
+const runProjectSource = readFileSync(
+	new URL("../lib/run-project.ts", import.meta.url),
+	"utf8",
+);
+
+const knowledgeResourceSource = readFileSync(
+	new URL("../services/knowledge-resource.ts", import.meta.url),
+	"utf8",
+);
+
+const runStreamSource = readFileSync(
+	new URL("../routes/run-stream.ts", import.meta.url),
 	"utf8",
 );
 
@@ -96,6 +115,28 @@ describe("Autopilot AI run links", () => {
 		]) {
 			expect(fields[field], field).toBeDefined();
 		}
+	});
+
+	it("retargets product run references to app-owned run links", () => {
+		expect(relationTarget(chatMessages.state.fieldDefinitions.run)).toBe(
+			"run_links",
+		);
+		expect(relationTarget(knowledge.state.fieldDefinitions.run)).toBe(
+			"run_links",
+		);
+		expect(relationTarget(activity.state.fieldDefinitions.run)).toBe(
+			"run_links",
+		);
+		expect(relationTarget(taskRelations.state.fieldDefinitions.originRun)).toBe(
+			"run_links",
+		);
+	});
+
+	it("resolves product run reads through run_links", () => {
+		expect(runProjectSource).toContain("collections.run_links.findOne");
+		expect(knowledgeResourceSource).toContain("collections.run_links.findOne");
+		expect(runStreamSource).toContain("collections.run_links.findOne");
+		expect(runStreamSource).toContain('resource: "run_links"');
 	});
 
 	it("keeps run_links ids insertable for legacy run id preservation", () => {

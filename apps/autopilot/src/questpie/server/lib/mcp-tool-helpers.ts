@@ -57,7 +57,7 @@ export async function writableRunForMcp(input: {
 	runId: string;
 }) {
 	if (input.accessMode === "system" || input.ctx.session) {
-		const run = await input.ctx.collections.runs.findOne({
+		const run = await input.ctx.collections.run_links.findOne({
 			where: { id: input.runId },
 		});
 		if (!run) throw ApiError.notFound("Run", input.runId);

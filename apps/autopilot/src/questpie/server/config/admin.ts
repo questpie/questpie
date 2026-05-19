@@ -276,7 +276,7 @@ export default adminConfig({
 						href: row.task
 							? `/admin/collections/tasks/${row.task}`
 							: row.run
-								? `/admin/collections/runs/${row.run}`
+								? `/admin/collections/run_links/${row.run}`
 								: undefined,
 					}));
 				},

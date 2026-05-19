@@ -3,6 +3,7 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { aiModule } from "@questpie/ai/modules/ai";
 import { createMcpServer, mcpModule } from "@questpie/mcp";
 
 import {
@@ -21,6 +22,7 @@ import { models } from "../collections/models";
 import { projects } from "../collections/projects";
 import { providers } from "../collections/providers";
 import { runEvents } from "../collections/run-events";
+import { runLinks } from "../collections/run-links";
 import { runs } from "../collections/runs";
 import { scheduleExecutions } from "../collections/schedule-executions";
 import { schedules } from "../collections/schedules";
@@ -82,6 +84,10 @@ describe("Autopilot MCP smoke", () => {
 		setup = await buildMockApp({
 			modules: [mcpModule],
 			collections: {
+				ai_run_events: aiModule.collections.ai_run_events,
+				ai_runs: aiModule.collections.ai_runs,
+				ai_worker_leases: aiModule.collections.ai_worker_leases,
+				ai_workers: aiModule.collections.ai_workers,
 				activity,
 				capabilities,
 				chat_messages: chatMessages,
@@ -93,6 +99,7 @@ describe("Autopilot MCP smoke", () => {
 				projects,
 				providers,
 				run_events: runEvents,
+				run_links: runLinks,
 				runs,
 				schedule_executions: scheduleExecutions,
 				schedules,
