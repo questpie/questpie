@@ -111,6 +111,15 @@ function workerCapabilities() {
 	];
 }
 
+function relationId(value: unknown): string | null {
+	if (typeof value === "string") return value;
+	if (typeof value === "object" && value && "id" in value) {
+		const id = (value as { id?: unknown }).id;
+		return typeof id === "string" ? id : null;
+	}
+	return null;
+}
+
 function createSSEReader(response: Response) {
 	if (!response.body) throw new Error("Expected SSE response body");
 
@@ -419,6 +428,76 @@ describe("chat realtime workflow contract", () => {
 		}
 	});
 
+	it("creates chat runs as AI run links and stores the link id on the user message", async () => {
+		const app = setup!.app;
+		const provider = await app.collections.providers.create({
+			name: "OpenAI",
+			type: "openai",
+			enabled: true,
+		} as any);
+		const model = await app.collections.models.create({
+			name: "Codex",
+			provider: provider.id,
+			modelId: "gpt-5.3-codex",
+			runtime: "codex",
+			enabled: true,
+		} as any);
+
+		const chat = await callJson("/api/chat", {
+			body: {
+				content: "Create a run link for this chat.",
+				modelId: model.id,
+			},
+		});
+
+		const message = await app.collections.chat_messages.findOne({
+			where: { id: chat.message.id },
+		});
+		expect(relationId(message?.run)).toBe(chat.runId);
+
+		const runLink = await app.collections.run_links.findOne({
+			where: { id: chat.runId },
+		});
+		expect(runLink).toMatchObject({
+			chatSession: chat.session.id,
+			chatMessage: chat.message.id,
+			status: "pending",
+			runtime: "codex",
+			initiatedBy: "chat",
+			provider: provider.id,
+			model: model.id,
+		});
+
+		const aiRunId = relationId(runLink?.aiRun);
+		expect(aiRunId).toBeTruthy();
+		const aiRun = await app.collections.ai_runs.findOne({
+			where: { id: aiRunId! },
+		});
+		expect(aiRun).toMatchObject({
+			status: "pending",
+			runtime: "codex",
+			prompt: "Create a run link for this chat.",
+		});
+		expect(aiRun).not.toHaveProperty("provider");
+		expect(aiRun).not.toHaveProperty("model");
+		expect(
+			(aiRun?.meta as Record<string, unknown> | undefined)?.autopilot,
+		).toBe(undefined);
+
+		const legacyRuns = await app.collections.runs.find({ limit: 10 });
+		expect(legacyRuns.docs).toHaveLength(0);
+
+		const createContext = createContextFactory(app);
+		const ctx = await createContext({ accessMode: "system" });
+		const resources = await ctx.services.knowledgeResource.createRunOutputs({
+			runId: chat.runId,
+			summary: "Knowledge is linked through the product run id.",
+			source: "worker",
+		});
+		expect(resources).toHaveLength(1);
+		expect(relationId(resources[0].run)).toBe(chat.runId);
+	});
+
 	it("streams run snapshots and worker run events while chat completion stays workflow-driven", async () => {
 		const app = setup!.app;
 		const localWorkerHeaders = { "x-local-dev": "true" };
@@ -437,11 +516,8 @@ describe("chat realtime workflow contract", () => {
 			},
 		});
 		expect(chat.runId).toBeTruthy();
-		await app.collections.run_links.create({
+		await app.collections.runs.create({
 			id: chat.runId,
-			legacyRunId: chat.runId,
-			chatSession: chat.session.id,
-			chatMessage: chat.message.id,
 			status: "pending",
 			runtime: "codex",
 			initiatedBy: "chat",
@@ -587,6 +663,7 @@ describe("chat realtime workflow contract", () => {
 			title: "Workflow chat",
 			status: "active",
 			scopeType: "company",
+			preferredWorker: worker.id,
 			metadata: { existing: true },
 		} as any);
 		const userMessage = await app.collections.chat_messages.create({
@@ -606,6 +683,18 @@ describe("chat realtime workflow contract", () => {
 				chatSessionId: session.id,
 				messageId: userMessage.id,
 			},
+		} as any);
+		await app.collections.run_links.create({
+			id: run.id,
+			legacyRunId: run.id,
+			chatSession: session.id,
+			chatMessage: userMessage.id,
+			status: "completed",
+			runtime: "codex",
+			initiatedBy: "chat",
+			instructions: userMessage.content,
+			runtimeSessionRef: "workflow-runtime-session",
+			resumable: true,
 		} as any);
 
 		const result = await chatQueryWorkflow.handler({

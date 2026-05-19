@@ -2,6 +2,7 @@ import { ApiError } from "questpie/errors";
 import { route } from "questpie/services";
 import { z } from "zod";
 
+import { createAiRunLink } from "../lib/ai-run-links";
 import { mergeRecords, relationId } from "../lib/records";
 import { workflowsFromContext } from "../lib/workflows";
 
@@ -80,26 +81,27 @@ export default route()
 			modelId: input.modelId,
 			projectId: input.projectId ?? relationId(session.project),
 		});
-		const run = await collections.runs.create({
-			task: input.taskId ?? relationId(session.task) ?? undefined,
-			project: input.projectId ?? relationId(session.project) ?? undefined,
-			status: "pending",
-			runtime: runtime.runtime,
-			provider: runtime.providerId ?? undefined,
-			model: runtime.modelId ?? undefined,
+		const run = await createAiRunLink({
+			ctx,
+			runtime,
+			taskId: input.taskId ?? relationId(session.task),
+			projectId: input.projectId ?? relationId(session.project),
 			initiatedBy: "chat",
 			instructions: input.content,
-			preferredWorker: relationId(session.preferredWorker) ?? undefined,
-			runtimeSessionRef: session.runtimeSessionRef ?? undefined,
-			targeting: {
-				chatSessionId: session.id,
-				messageId: message.id,
+			chatSessionId: session.id,
+			chatMessageId: message.id,
+			runtimeSessionRef: session.runtimeSessionRef,
+			spawnMetadata: {
 				toolPolicy: runtime.toolPolicy,
 				contextRefs: runtime.contextRefs,
 				attachments: input.attachments ?? [],
 				promptRefs: runtime.promptRefs,
 				runtimeHints: runtime.runtimeHints,
-			} as any,
+			},
+			linkMetadata: {
+				preferredWorker: relationId(session.preferredWorker),
+				attachments: input.attachments ?? [],
+			},
 		});
 
 		await collections.chat_messages.updateById({

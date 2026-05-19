@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { workflow } from "@questpie/workflows";
 
+import { createAiRunLink } from "../lib/ai-run-links";
 import { classifyRunError, type RunErrorType } from "../lib/error-classifier";
 import { asRecord, mergeRecords, relationId } from "../lib/records";
 import { linkScheduleExecutionRun } from "../lib/schedule-run-links";
@@ -234,25 +235,25 @@ export default workflow({
 			});
 
 			const run = await step.run(`create-run-${attempt}`, async () => {
-				return ctx.collections.runs.create({
-					task: input.taskId,
-					project: relationId(task.project) ?? undefined,
-					status: "pending",
-					runtime: runtime.runtime,
-					provider: runtime.providerId ?? undefined,
-					model: runtime.modelId ?? undefined,
-					capability: relationId(task.capability) ?? undefined,
+				return createAiRunLink({
+					ctx,
+					runtime,
+					taskId: input.taskId,
+					projectId: relationId(task.project),
+					capabilityId: relationId(task.capability),
 					initiatedBy: "task",
 					instructions: taskInstructions(task),
-					targeting: {
-						runReason: input.runReason ?? "task-pipeline",
-						requestedBy: input.requestedBy ?? "system",
-						scheduleExecutionId: input.scheduleExecutionId ?? null,
-						attempt,
+					scheduleExecutionId: input.scheduleExecutionId,
+					spawnMetadata: {
 						toolPolicy: runtime.toolPolicy,
 						contextRefs: runtime.contextRefs,
 						promptRefs: runtime.promptRefs,
 						runtimeHints: runtime.runtimeHints,
+					},
+					linkMetadata: {
+						runReason: input.runReason ?? "task-pipeline",
+						requestedBy: input.requestedBy ?? "system",
+						attempt,
 					},
 				});
 			});
@@ -312,18 +313,6 @@ export default workflow({
 
 			const delay = retryDelay(retryPolicy, attempt);
 			await step.run(`record-retry-${attempt}`, async () => {
-				await ctx.collections.run_events.create({
-					run: run.id,
-					type: "retry_scheduled",
-					level: "warn",
-					summary: `Retrying task after ${errorType} failure`,
-					metadata: {
-						errorType,
-						attempt,
-						nextAttempt: attempt + 1,
-						delaySeconds: delay,
-					},
-				});
 				await ctx.collections.activity.create({
 					actor: "workflow:task-pipeline",
 					type: "task.retry",
