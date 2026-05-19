@@ -30,7 +30,7 @@ export async function startAIWorker(
 
 	const secret = generateSecret();
 	const hostname = config.name ?? os.hostname();
-	const workerManager = app.services?.aiWorkerManager;
+	const workerManager = app.services?.workerManager;
 
 	let workerId = "embedded";
 	if (workerManager) {

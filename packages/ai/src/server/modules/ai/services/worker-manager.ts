@@ -241,13 +241,17 @@ export default service()
 					await setWorkerStatus(input.workerId, "busy");
 
 					return {
-						runId: String(run.id),
-						leaseId: lease.id,
-						expiresAt,
-						prompt: (run.prompt as string) ?? "",
-						runtime: runRuntime,
-						runtimeSessionRef: run.runtimeSessionRef as string | undefined,
-						metadata: isRecord(run.meta) ? run.meta : undefined,
+						lease: {
+							id: lease.id,
+							runId: String(run.id),
+							expiresAt,
+						},
+						spawn: {
+							prompt: (run.prompt as string) ?? "",
+							runtime: runRuntime,
+							runtimeSessionRef: run.runtimeSessionRef as string | undefined,
+							metadata: isRecord(run.meta) ? run.meta : undefined,
+						},
 					};
 				}
 

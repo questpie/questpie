@@ -25,32 +25,28 @@ export async function executeRun(
 ) {
 	try {
 		const handle = await runner.run({
-			runtime: claimed.runtime,
-			prompt: claimed.prompt,
-			runtimeSessionRef: claimed.runtimeSessionRef,
-			systemPrompt: claimed.systemPrompt,
-			mcpServers: claimed.mcpServers,
-			metadata: { ...claimed.metadata, runId: claimed.runId },
+			...claimed.spawn,
+			metadata: { ...claimed.spawn.metadata, runId: claimed.lease.runId },
 		});
 
 		let sequence = 0;
 
 		for await (const event of handle.events) {
 			await workerManager.reportRunEvent({
-				runId: claimed.runId,
+				runId: claimed.lease.runId,
 				event: { ...event, sequence: sequence++ },
 			});
 		}
 
 		const result = await handle.completion;
 		await workerManager.completeRun({
-			runId: claimed.runId,
+			runId: claimed.lease.runId,
 			workerId,
 			result: result as CompleteRunInput["result"],
 		});
 	} catch (error) {
 		await workerManager.failRun({
-			runId: claimed.runId,
+			runId: claimed.lease.runId,
 			workerId,
 			error,
 		});

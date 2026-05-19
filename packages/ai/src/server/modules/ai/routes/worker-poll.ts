@@ -14,8 +14,8 @@ export default route()
 	.schema(pollSchema)
 	.handler(async (ctx) => {
 		await authenticateWorker(ctx);
-		const { aiWorkerManager } = getAiServices(ctx);
-		const claimed = await aiWorkerManager.claimRun({
+		const { workerManager } = getAiServices(ctx);
+		const claimed = await workerManager.claimRun({
 			workerId: ctx.input.workerId,
 			runtimes: ctx.input.runtimes,
 			limit: ctx.input.limit,

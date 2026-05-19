@@ -22,8 +22,8 @@ export default route()
 	.schema(eventSchema)
 	.handler(async (ctx) => {
 		await authenticateWorker(ctx);
-		const { aiWorkerManager } = getAiServices(ctx);
-		await aiWorkerManager.reportRunEvent({
+		const { workerManager } = getAiServices(ctx);
+		await workerManager.reportRunEvent({
 			runId: ctx.input.runId,
 			event: ctx.input.event,
 		});

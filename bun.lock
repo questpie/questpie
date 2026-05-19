@@ -322,8 +322,6 @@
       "dependencies": {
         "@iconify/react": "^6.0.2",
         "@questpie/admin": "workspace:*",
-        "ai": "^6.0.0",
-        "lowlight": "^3.x",
         "questpie": "workspace:*",
         "spawn-agent": "0.0.1",
       },

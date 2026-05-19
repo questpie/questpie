@@ -99,8 +99,6 @@ function createMockCollection() {
 function createMockCollections() {
 	return {
 		ai_runs: createMockCollection(),
-		ai_sessions: createMockCollection(),
-		ai_messages: createMockCollection(),
 		ai_workers: createMockCollection(),
 		ai_worker_leases: createMockCollection(),
 		ai_run_events: createMockCollection(),
@@ -312,13 +310,17 @@ function buildWorkerManager(
 				await setWorkerStatus(input.workerId, "busy");
 
 				return {
-					runId: String(run.id),
-					leaseId: lease.id,
-					expiresAt,
-					prompt: (run.prompt as string) ?? "",
-					runtime: runRuntime,
-					runtimeSessionRef: run.runtimeSessionRef as string | undefined,
-					metadata: isRecord(run.meta) ? run.meta : undefined,
+					lease: {
+						id: lease.id,
+						runId: String(run.id),
+						expiresAt,
+					},
+					spawn: {
+						prompt: (run.prompt as string) ?? "",
+						runtime: runRuntime,
+						runtimeSessionRef: run.runtimeSessionRef as string | undefined,
+						metadata: isRecord(run.meta) ? run.meta : undefined,
+					},
 				};
 			}
 			return null;
@@ -418,58 +420,6 @@ function buildWorkerManager(
 				}
 			}
 			return { expiredCount: expired.length };
-		},
-	};
-}
-
-function buildChatService(
-	collections: ReturnType<typeof createMockCollections>,
-) {
-	return {
-		async sendMessage(input: { sessionId?: string | null; content: string }) {
-			let sessionId = input.sessionId;
-			if (!sessionId) {
-				const session = await collections.ai_sessions.create({
-					status: "active",
-					scopeType: "global",
-				});
-				sessionId = session.id;
-			}
-			const message = await collections.ai_messages.create({
-				session: sessionId,
-				role: "user",
-				content: input.content,
-			});
-			const run = await collections.ai_runs.create({
-				status: "pending",
-				runtime: "claude-code",
-				prompt: input.content,
-				createdAt: new Date(),
-			});
-			return { sessionId: sessionId!, messageId: message.id, runId: run.id };
-		},
-
-		async createAssistantMessage(input: {
-			sessionId: string;
-			runId: string;
-			content: unknown;
-			model?: string;
-		}) {
-			return collections.ai_messages.create({
-				session: input.sessionId,
-				role: "assistant",
-				content: input.content,
-				run: input.runId,
-				model: input.model ?? undefined,
-			});
-		},
-
-		async getMessages(sessionId: string) {
-			const result = await collections.ai_messages.find({
-				where: { session: sessionId },
-				orderBy: { createdAt: "asc" },
-			});
-			return result.docs;
 		},
 	};
 }
@@ -592,9 +542,6 @@ describe("Worker manager — spawn run", () => {
 		expect(run!.runtime).toBe("codex");
 		expect(run!.runtimeSessionRef).toBe("sess_123");
 		expect(run!.meta).toEqual({ source: "test" });
-		expect(run!.session).toBeUndefined();
-		expect(run!.provider).toBeUndefined();
-		expect(run!.model).toBeUndefined();
 	});
 
 	it("does not let a Codex-only worker claim a runtime-less spawned run", async () => {
@@ -645,11 +592,14 @@ describe("Worker manager — claim / complete / heartbeat", () => {
 
 		const claimed = await wm.claimRun({ workerId, runtimes: ["claude-code"] });
 		expect(claimed).not.toBeNull();
-		expect(claimed!.prompt).toBe("do something");
-		expect(claimed!.runtime).toBe("claude-code");
+		expect(claimed!.spawn.prompt).toBe("do something");
+		expect(claimed!.spawn.runtime).toBe("claude-code");
+		expect(claimed!.lease.id).toBeTruthy();
+		expect(claimed!.lease.runId).toBeTruthy();
+		expect(claimed!.lease.expiresAt).toBeInstanceOf(Date);
 
 		const run = await collections.ai_runs.findOne({
-			where: { id: claimed!.runId },
+			where: { id: claimed!.lease.runId },
 		});
 		expect(run!.status).toBe("claimed");
 		expect(run!.worker).toBe(workerId);
@@ -664,7 +614,7 @@ describe("Worker manager — claim / complete / heartbeat", () => {
 		await collections.ai_runs.create({
 			status: "pending",
 			runtime: "codex",
-			prompt: "codex task",
+			prompt: "codex work",
 			createdAt: new Date(),
 		});
 
@@ -728,26 +678,26 @@ describe("Worker manager — claim / complete / heartbeat", () => {
 		await collections.ai_runs.create({
 			status: "pending",
 			runtime: "claude-code",
-			prompt: "task",
+			prompt: "work",
 			createdAt: new Date(),
 		});
 		const claimed = await wm.claimRun({ workerId, runtimes: ["claude-code"] });
 
 		await wm.completeRun({
-			runId: claimed!.runId,
+			runId: claimed!.lease.runId,
 			workerId,
 			result: { text: "done", inputTokens: 100, outputTokens: 50 },
 		});
 
 		const run = await collections.ai_runs.findOne({
-			where: { id: claimed!.runId },
+			where: { id: claimed!.lease.runId },
 		});
 		expect(run!.status).toBe("completed");
 		expect(run!.summary).toBe("done");
 		expect(run!.tokensInput).toBe(100);
 
 		const lease = await collections.ai_worker_leases.findOne({
-			where: { run: claimed!.runId },
+			where: { run: claimed!.lease.runId },
 		});
 		expect(lease!.status).toBe("completed");
 
@@ -761,26 +711,26 @@ describe("Worker manager — claim / complete / heartbeat", () => {
 		await collections.ai_runs.create({
 			status: "pending",
 			runtime: "claude-code",
-			prompt: "task",
+			prompt: "work",
 			createdAt: new Date(),
 		});
 		const claimed = await wm.claimRun({ workerId, runtimes: ["claude-code"] });
 
 		await wm.failRun({
-			runId: claimed!.runId,
+			runId: claimed!.lease.runId,
 			workerId,
 			error: new Error("spawn failed"),
 		});
 
 		const run = await collections.ai_runs.findOne({
-			where: { id: claimed!.runId },
+			where: { id: claimed!.lease.runId },
 		});
 		expect(run!.status).toBe("failed");
 		expect(run!.error).toBe("spawn failed");
 		expect(run!.endedAt).toBeInstanceOf(Date);
 
 		const lease = await collections.ai_worker_leases.findOne({
-			where: { run: claimed!.runId },
+			where: { run: claimed!.lease.runId },
 		});
 		expect(lease!.status).toBe("released");
 
@@ -855,7 +805,7 @@ describe("Worker manager — lease expiry", () => {
 
 		// Manually set lease expiresAt to the past
 		const lease = await collections.ai_worker_leases.findOne({
-			where: { run: claimed!.runId },
+			where: { run: claimed!.lease.runId },
 		});
 		await collections.ai_worker_leases.updateById({
 			id: lease!.id,
@@ -866,7 +816,7 @@ describe("Worker manager — lease expiry", () => {
 		expect(expiredCount).toBe(1);
 
 		const run = await collections.ai_runs.findOne({
-			where: { id: claimed!.runId },
+			where: { id: claimed!.lease.runId },
 		});
 		expect(run!.status).toBe("pending");
 
@@ -908,11 +858,15 @@ describe("Embedded worker execution", () => {
 				},
 			},
 			{
-				runId: "run_123",
-				leaseId: "lease_123",
-				expiresAt: new Date(),
-				runtime: "codex",
-				prompt: "run this",
+				lease: {
+					id: "lease_123",
+					runId: "run_123",
+					expiresAt: new Date(),
+				},
+				spawn: {
+					runtime: "codex",
+					prompt: "run this",
+				},
 			},
 			"worker_123",
 		);
@@ -926,87 +880,10 @@ describe("Embedded worker execution", () => {
 	});
 });
 
-describe("Chat service", () => {
-	let collections: ReturnType<typeof createMockCollections>;
-	let chat: ReturnType<typeof buildChatService>;
-
-	beforeEach(() => {
-		collections = createMockCollections();
-		chat = buildChatService(collections);
-	});
-
-	it("sendMessage creates session + message + pending run", async () => {
-		const result = await chat.sendMessage({ content: "hello AI" });
-
-		expect(result.sessionId).toBeTruthy();
-		expect(result.messageId).toBeTruthy();
-		expect(result.runId).toBeTruthy();
-
-		const session = await collections.ai_sessions.findOne({
-			where: { id: result.sessionId },
-		});
-		expect(session!.status).toBe("active");
-
-		const message = await collections.ai_messages.findOne({
-			where: { id: result.messageId },
-		});
-		expect(message!.role).toBe("user");
-		expect(message!.content).toBe("hello AI");
-
-		const run = await collections.ai_runs.findOne({
-			where: { id: result.runId },
-		});
-		expect(run!.status).toBe("pending");
-		expect(run!.prompt).toBe("hello AI");
-	});
-
-	it("sendMessage reuses existing sessionId", async () => {
-		const r1 = await chat.sendMessage({ content: "first" });
-		const r2 = await chat.sendMessage({
-			sessionId: r1.sessionId,
-			content: "second",
-		});
-		expect(r2.sessionId).toBe(r1.sessionId);
-
-		const sessions = await collections.ai_sessions.find({});
-		expect(sessions.docs).toHaveLength(1);
-	});
-
-	it("createAssistantMessage records assistant reply", async () => {
-		const { sessionId, runId } = await chat.sendMessage({ content: "hi" });
-		const msg = await chat.createAssistantMessage({
-			sessionId,
-			runId,
-			content: "hello back",
-		});
-
-		expect(msg.role).toBe("assistant");
-		expect(msg.content).toBe("hello back");
-		expect(msg.run).toBe(runId);
-	});
-
-	it("getMessages returns ordered messages", async () => {
-		const { sessionId } = await chat.sendMessage({ content: "one" });
-		await chat.sendMessage({ sessionId, content: "two" });
-		await chat.createAssistantMessage({
-			sessionId,
-			runId: "r",
-			content: "reply",
-		});
-
-		const msgs = await chat.getMessages(sessionId);
-		expect(msgs).toHaveLength(3);
-		expect(msgs[0]!.content).toBe("one");
-		expect(msgs[1]!.content).toBe("two");
-		expect(msgs[2]!.role).toBe("assistant");
-	});
-});
-
-describe("End-to-end: chat → worker → spawn-agent runner → completion", () => {
+describe("End-to-end: run → worker → spawn-agent runner → completion", () => {
 	it("full flow with fake spawn-agent runner", async () => {
 		const collections = createMockCollections();
 		const wm = buildWorkerManager(collections);
-		const chat = buildChatService(collections);
 
 		// 1. Register worker
 		const secret = generateSecret();
@@ -1018,28 +895,23 @@ describe("End-to-end: chat → worker → spawn-agent runner → completion", ()
 			secret,
 		});
 
-		// 2. User sends message → creates pending run
-		const { sessionId, runId } = await chat.sendMessage({
-			content: "write tests",
+		// 2. App submits an agnostic pending run
+		const { runId } = await wm.spawnRun({
+			runtime: "claude-code",
+			prompt: "write tests",
 		});
 
 		// 3. Worker claims run
 		const claimed = await wm.claimRun({ workerId, runtimes: ["claude-code"] });
 		expect(claimed).not.toBeNull();
-		expect(claimed!.runId).toBe(runId);
-		expect(claimed!.prompt).toBe("write tests");
+		expect(claimed!.lease.runId).toBe(runId);
+		expect(claimed!.spawn.prompt).toBe("write tests");
 
 		// 4. Execute through the AI-owned spawn-agent runner seam
 		const runner = createFakeSpawnAgentRunner({
 			responseText: "Tests written successfully",
 		});
 		await executeRun(runner, wm, claimed!, workerId);
-
-		await chat.createAssistantMessage({
-			sessionId,
-			runId: claimed!.runId,
-			content: "Tests written successfully",
-		});
 
 		// 5. Verify final state
 		const run = await collections.ai_runs.findOne({ where: { id: runId } });
@@ -1050,12 +922,6 @@ describe("End-to-end: chat → worker → spawn-agent runner → completion", ()
 			where: { run: runId },
 		});
 		expect(events.docs.length).toBeGreaterThanOrEqual(5); // started, resolved, text.delta, usage, completed
-
-		const messages = await chat.getMessages(sessionId);
-		expect(messages).toHaveLength(2);
-		expect(messages[0]!.role).toBe("user");
-		expect(messages[1]!.role).toBe("assistant");
-		expect(messages[1]!.content).toBe("Tests written successfully");
 
 		const worker = await collections.ai_workers.findOne({
 			where: { id: workerId },

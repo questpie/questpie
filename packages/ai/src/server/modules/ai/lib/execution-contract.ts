@@ -35,16 +35,12 @@ export interface ClaimRunInput {
 }
 
 export interface ClaimedRun {
-	runId: string;
-	leaseId: string;
-	expiresAt: Date;
-	prompt: string;
-	runtime: string;
-	runtimeSessionRef?: string;
-	mcpServers?: unknown[];
-	systemPrompt?: string;
-	context?: string;
-	metadata?: Record<string, unknown>;
+	lease: {
+		id: string;
+		runId: string;
+		expiresAt: Date;
+	};
+	spawn: SpawnAgentRunRequest;
 }
 
 export interface CompleteRunInput {

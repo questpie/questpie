@@ -19,15 +19,3 @@ export type {
 	SpawnRunInput,
 	WorkerRuntime,
 } from "../server/modules/ai/services/worker-manager.js";
-
-export type {
-	ModelMessage,
-	UIMessage,
-	TextPart,
-	ToolCallPart,
-	ToolResultPart,
-	AssistantModelMessage,
-	UserModelMessage,
-	ToolModelMessage,
-	SystemModelMessage,
-} from "ai";
