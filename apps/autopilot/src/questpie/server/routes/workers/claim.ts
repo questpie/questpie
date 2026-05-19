@@ -6,6 +6,7 @@ import {
 	snakeWorkerId,
 	toLegacyClaimResponse,
 } from "../../lib/legacy-worker-contract";
+import { mergeRecords } from "../../lib/records";
 import { workflowsFromContext } from "../../lib/workflows";
 
 const claimSchema = z.object({
@@ -52,6 +53,24 @@ export default route()
 		const claim = claims[0] ?? null;
 
 		if (claim && typeof claim.run.id === "string") {
+			const runLink = await ctx.collections.run_links.findOne({
+				where: { id: claim.run.id },
+			});
+			if (runLink) {
+				await ctx.collections.run_links.updateById({
+					id: claim.run.id,
+					data: {
+						status: "claimed",
+						startedAt: new Date(),
+						metadata: mergeRecords(runLink.metadata, {
+							workerId: worker.id,
+							leaseId: claim.leaseId,
+							expiresAt: claim.expiresAt.toISOString(),
+						}) as any,
+					},
+				});
+			}
+
 			await workflowsFromContext(ctx).sendEvent(
 				"run.claimed",
 				{

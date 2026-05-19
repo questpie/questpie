@@ -11,7 +11,7 @@ export default route()
 	.handler(async (ctx) => {
 		await authorizeWorkerOrSession(ctx);
 
-		const run = await ctx.collections.runs.findOne({
+		const run = await ctx.collections.run_links.findOne({
 			where: { id: ctx.params.runId },
 		});
 		if (!run) throw ApiError.notFound("Run", ctx.params.runId);

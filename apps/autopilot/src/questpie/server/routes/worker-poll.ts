@@ -1,6 +1,7 @@
 import { route } from "questpie/services";
 import { z } from "zod";
 
+import { mergeRecords } from "../lib/records";
 import { authenticatedWorker } from "../lib/worker-auth";
 import { workflowsFromContext } from "../lib/workflows";
 
@@ -41,6 +42,23 @@ export default route()
 		for (const claim of claims) {
 			const run = claim.run as { id?: unknown };
 			if (typeof run.id !== "string") continue;
+			const runLink = await ctx.collections.run_links.findOne({
+				where: { id: run.id },
+			});
+			if (runLink) {
+				await ctx.collections.run_links.updateById({
+					id: run.id,
+					data: {
+						status: "claimed",
+						startedAt: new Date(),
+						metadata: mergeRecords(runLink.metadata, {
+							workerId: worker.id,
+							leaseId: claim.leaseId,
+							expiresAt: claim.expiresAt.toISOString(),
+						}) as any,
+					},
+				});
+			}
 			await workflowsFromContext(ctx).sendEvent(
 				"run.claimed",
 				{

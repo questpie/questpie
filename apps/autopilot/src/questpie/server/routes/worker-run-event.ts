@@ -1,6 +1,7 @@
 import { route } from "questpie/services";
 import { z } from "zod";
 
+import { mergeRecords } from "../lib/records";
 import { authenticatedWorker } from "../lib/worker-auth";
 import { workflowsFromContext } from "../lib/workflows";
 
@@ -28,6 +29,21 @@ export default route()
 				id: run.id,
 				data: { status: "running", startedAt: new Date() },
 			});
+			const runLink = await ctx.collections.run_links.findOne({
+				where: { id: ctx.input.runId },
+			});
+			if (runLink) {
+				await ctx.collections.run_links.updateById({
+					id: ctx.input.runId,
+					data: {
+						status: "running",
+						startedAt: new Date(),
+						metadata: mergeRecords(runLink.metadata, {
+							workerId: worker.id,
+						}) as any,
+					},
+				});
+			}
 		}
 
 		const event = await ctx.collections.run_events.create({

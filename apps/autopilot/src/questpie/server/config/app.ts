@@ -1,5 +1,7 @@
 import { appConfig } from "questpie/app";
 
+import { mirrorAiRunCollectionChange } from "../lib/ai-run-mirror";
+
 async function publishCollectionChange(
 	ctx: any,
 	operation: "create" | "update" | "delete",
@@ -40,6 +42,9 @@ export default appConfig({
 		collections: {
 			afterChange: async (ctx) => {
 				await publishCollectionChange(ctx, ctx.operation);
+				ctx.onAfterCommit(async () => {
+					await mirrorAiRunCollectionChange(ctx as any);
+				});
 			},
 			afterDelete: async (ctx) => {
 				await publishCollectionChange(ctx, "delete");

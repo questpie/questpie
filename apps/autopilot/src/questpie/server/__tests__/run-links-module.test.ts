@@ -54,6 +54,11 @@ const runStreamSource = readFileSync(
 	"utf8",
 );
 
+const aiRunMirrorSource = readFileSync(
+	new URL("../lib/ai-run-mirror.ts", import.meta.url),
+	"utf8",
+);
+
 function relationTarget(field: unknown): unknown {
 	return (field as { _state?: { to?: unknown } })["_state"]?.to;
 }
@@ -150,6 +155,18 @@ describe("Autopilot AI run links", () => {
 		expect(knowledgeResourceSource).toContain("collections.run_links.findOne");
 		expect(runStreamSource).toContain("collections.run_links.findOne");
 		expect(runStreamSource).toContain('resource: "run_links"');
+		expect(runStreamSource).toContain("collections.ai_run_events.find");
+	});
+
+	it("keeps AI execution mirroring in Autopilot-owned code", () => {
+		expect(aiRunMirrorSource).toContain('ctx.collection !== "ai_runs"');
+		expect(aiRunMirrorSource).toContain('ctx.collection !== "ai_run_events"');
+		expect(aiRunMirrorSource).toContain("where: { aiRun: aiRunId }");
+		expect(aiRunMirrorSource).toContain('"run.claimed"');
+		expect(aiRunMirrorSource).toContain('"run.event"');
+		expect(aiRunMirrorSource).toContain('"run.completed"');
+		expect(aiRunMirrorSource).toContain("knowledgeResource.createRunOutputs");
+		expect(aiRunMirrorSource).toContain("runId: input.runId");
 	});
 
 	it("keeps run_links ids insertable for legacy run id preservation", () => {

@@ -1,7 +1,7 @@
 import { route } from "questpie/services";
 import { z } from "zod";
 
-import { relationId } from "../../../lib/records";
+import { mergeRecords, relationId } from "../../../lib/records";
 import { authenticatedRunWorker } from "../../../lib/worker-auth";
 import { workflowsFromContext } from "../../../lib/workflows";
 
@@ -106,6 +106,37 @@ export default route()
 			artifacts: ctx.input.artifacts?.map(normalizeArtifact),
 			source: "worker",
 		});
+
+		const runLink = await ctx.collections.run_links.findOne({
+			where: { id: ctx.params.runId },
+		});
+		if (runLink) {
+			await ctx.collections.run_links.updateById({
+				id: ctx.params.runId,
+				data: {
+					status,
+					summary: ctx.input.summary,
+					error: ctx.input.error,
+					tokensInput:
+						ctx.input.tokensInput ??
+						ctx.input.tokens_input ??
+						ctx.input.tokens?.input,
+					tokensOutput:
+						ctx.input.tokensOutput ??
+						ctx.input.tokens_output ??
+						ctx.input.tokens?.output,
+					endedAt: new Date(),
+					runtimeSessionRef,
+					resumable: ctx.input.resumable ?? false,
+					metadata: mergeRecords(runLink.metadata, ctx.input.metadata, {
+						workerId: worker.id,
+						knowledgeResourceIds: resources.map(
+							(resource: { id: string }) => resource.id,
+						),
+					}) as any,
+				},
+			});
+		}
 
 		await ctx.collections.run_events.create({
 			run: ctx.params.runId,

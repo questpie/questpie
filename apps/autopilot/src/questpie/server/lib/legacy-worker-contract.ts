@@ -176,11 +176,16 @@ export function toLegacyClaimResponse(input: {
 }
 
 export function toLegacyRunStatus(input: Record<string, unknown>) {
+	const metadata = asRecord(input.metadata);
 	return {
 		...input,
 		task_id: input.taskId ?? input.task_id ?? relationId(input.task),
 		project_id:
 			input.projectId ?? input.project_id ?? relationId(input.project),
-		worker_id: input.workerId ?? input.worker_id ?? relationId(input.worker),
+		worker_id:
+			input.workerId ??
+			input.worker_id ??
+			relationId(input.worker) ??
+			metadata.workerId,
 	};
 }

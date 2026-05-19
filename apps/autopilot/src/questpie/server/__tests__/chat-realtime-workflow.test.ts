@@ -32,6 +32,7 @@ import { tasks } from "../collections/tasks";
 import { workerLeases } from "../collections/worker-leases";
 import { workers } from "../collections/workers";
 import { workflowConfigs } from "../collections/workflow-configs";
+import { mirrorAiRunCollectionChange } from "../lib/ai-run-mirror";
 import chatRoute from "../routes/chat";
 import runStreamRoute from "../routes/run-stream";
 import runCompleteRoute from "../routes/runs/[runId]/complete";
@@ -295,6 +296,15 @@ describe("chat realtime workflow contract", () => {
 					providerRuntime,
 					workerManager,
 				},
+				hooks: {
+					collections: {
+						afterChange: async (ctx) => {
+							ctx.onAfterCommit(async () => {
+								await mirrorAiRunCollectionChange({ ...ctx, workflows } as any);
+							});
+						},
+					},
+				},
 				routes: {
 					chat: chatRoute,
 					"run-stream": runStreamRoute,
@@ -367,46 +377,46 @@ describe("chat realtime workflow contract", () => {
 		return payload;
 	}
 
-	it("orders initial run events by sequence before falling back to creation order", async () => {
+	it("orders initial AI run events by sequence before falling back to creation order", async () => {
 		const app = setup!.app;
-		const run = await app.collections.runs.create({
+		const aiRun = await app.collections.ai_runs.create({
 			status: "pending",
 			runtime: "codex",
-			initiatedBy: "chat",
-			instructions: "Verify stream ordering",
+			prompt: "Verify stream ordering",
 		} as any);
 		await app.collections.run_links.create({
-			id: run.id,
-			legacyRunId: run.id,
+			id: "product-run-ordering",
+			aiRun: aiRun.id,
 			status: "pending",
 			runtime: "codex",
 			initiatedBy: "chat",
 			instructions: "Verify stream ordering",
 		} as any);
-		await app.collections.run_events.create({
-			run: run.id,
+		await app.collections.ai_run_events.create({
+			run: aiRun.id,
 			type: "second",
 			level: "info",
 			summary: "Second sequenced event",
 			sequence: 2,
 		} as any);
-		await app.collections.run_events.create({
-			run: run.id,
+		await app.collections.ai_run_events.create({
+			run: aiRun.id,
 			type: "unsequenced",
 			level: "info",
 			summary: "Unsequenced event",
 		} as any);
-		await app.collections.run_events.create({
-			run: run.id,
+		await app.collections.ai_run_events.create({
+			run: aiRun.id,
 			type: "first",
 			level: "info",
 			summary: "First sequenced event",
 			sequence: 1,
 		} as any);
 
-		const streamResponse = await call(`/api/run-stream?run_id=${run.id}`, {
-			method: "GET",
-		});
+		const streamResponse = await call(
+			"/api/run-stream?run_id=product-run-ordering",
+			{ method: "GET" },
+		);
 		const stream = createSSEReader(streamResponse);
 
 		try {
@@ -423,6 +433,56 @@ describe("chat realtime workflow contract", () => {
 					.filter((event) => event.event === "run_event")
 					.map((event) => event.data.event.type),
 			).toEqual(["first", "second", "unsequenced"]);
+			for (const event of observed.filter(
+				(item) => item.event === "run_event",
+			)) {
+				expect(event.data.event).toMatchObject({
+					run: "product-run-ordering",
+					aiRun: aiRun.id,
+				});
+			}
+		} finally {
+			await stream.close();
+		}
+	});
+
+	it("streams historical run links with mirrored snapshots and no AI event lookup", async () => {
+		const app = setup!.app;
+		await app.collections.run_links.create({
+			id: "legacy-run-snapshot",
+			legacyRunId: "legacy-run-snapshot",
+			status: "completed",
+			runtime: "codex",
+			initiatedBy: "chat",
+			instructions: "Historical run",
+			summary: "Historical summary",
+		} as any);
+
+		const streamResponse = await call(
+			"/api/run-stream?runId=legacy-run-snapshot",
+			{ method: "GET" },
+		);
+		const stream = createSSEReader(streamResponse);
+
+		try {
+			expect(await stream.readEvent()).toMatchObject({
+				event: "heartbeat",
+				data: { type: "heartbeat" },
+			});
+			const observed = await stream.readUntil((events) =>
+				events.some((event) => event.event === "run"),
+			);
+			expect(
+				observed.find((event) => event.event === "run")?.data.run,
+			).toMatchObject({
+				id: "legacy-run-snapshot",
+				aiRun: null,
+				status: "completed",
+				summary: "Historical summary",
+			});
+			await expect(stream.readEvent(150)).rejects.toThrow(
+				/Timed out waiting for SSE event/,
+			);
 		} finally {
 			await stream.close();
 		}
@@ -498,15 +558,14 @@ describe("chat realtime workflow contract", () => {
 		expect(relationId(resources[0].run)).toBe(chat.runId);
 	});
 
-	it("streams run snapshots and worker run events while chat completion stays workflow-driven", async () => {
+	it("streams run snapshots and AI run events while chat completion stays workflow-driven", async () => {
 		const app = setup!.app;
-		const localWorkerHeaders = { "x-local-dev": "true" };
-		const worker = await app.collections.workers.create({
+		const worker = await app.collections.ai_workers.create({
 			deviceId: "chat-stream-worker",
 			name: "Chat stream worker",
 			status: "online",
 			capabilities: workerCapabilities(),
-			machineSecretHash: hashWorkerSecret("unused-local-dev"),
+			secretHash: "unused-local-dev",
 		} as any);
 
 		const chat = await callJson("/api/chat", {
@@ -516,13 +575,11 @@ describe("chat realtime workflow contract", () => {
 			},
 		});
 		expect(chat.runId).toBeTruthy();
-		await app.collections.runs.create({
-			id: chat.runId,
-			status: "pending",
-			runtime: "codex",
-			initiatedBy: "chat",
-			instructions: "Summarize the realtime workflow path.",
-		} as any);
+		const runLink = await app.collections.run_links.findOne({
+			where: { id: chat.runId },
+		});
+		const aiRunId = relationId(runLink?.aiRun);
+		expect(aiRunId).toBeTruthy();
 		expect(workflowEvents[0]).toMatchObject({
 			event: "trigger:chat-query",
 			data: {
@@ -559,53 +616,38 @@ describe("chat realtime workflow contract", () => {
 
 			await realtimeAdapter.waitForSubscribers();
 
-			const claim = await callJson("/api/workers/claim", {
-				headers: localWorkerHeaders,
-				body: {
-					worker_id: worker.id,
-					runtime: "codex",
-					capabilities: workerCapabilities(),
-					shared_checkout_enabled: true,
-					worktree_isolation_available: true,
+			await app.collections.ai_runs.updateById({
+				id: aiRunId!,
+				data: {
+					status: "claimed",
+					worker: worker.id,
+					startedAt: new Date(),
 				},
 			});
-			expect(claim.run).toMatchObject({ id: chat.runId });
 
-			const progressA = await callJson(`/api/runs/${chat.runId}/events`, {
-				headers: localWorkerHeaders,
-				body: {
-					type: "started",
-					summary: "Worker started spawn-agent",
-					sequence: 2,
-					metadata: { phase: "start" },
-				},
-			});
-			const progressB = await callJson(`/api/runs/${chat.runId}/events`, {
-				headers: localWorkerHeaders,
-				body: {
-					type: "progress",
-					summary: "Streaming progress",
-					sequence: 3,
-					metadata: { phase: "progress" },
-				},
-			});
-			const completion = await callJson(`/api/runs/${chat.runId}/complete`, {
-				headers: localWorkerHeaders,
-				body: {
-					status: "completed",
-					summary: "Realtime workflow path completed",
-					runtime_session_ref: "chat-runtime-session",
-					resumable: true,
-				},
-			});
-			expect(completion.ok).toBe(true);
-			await app.collections.run_links.updateById({
-				id: chat.runId,
+			const progressA = await app.collections.ai_run_events.create({
+				run: aiRunId,
+				type: "started",
+				level: "info",
+				summary: "Worker started spawn-agent",
+				sequence: 2,
+				meta: { phase: "start" },
+			} as any);
+			const progressB = await app.collections.ai_run_events.create({
+				run: aiRunId,
+				type: "progress",
+				level: "info",
+				summary: "Streaming progress",
+				sequence: 3,
+				meta: { phase: "progress" },
+			} as any);
+			await app.collections.ai_runs.updateById({
+				id: aiRunId!,
 				data: {
 					status: "completed",
 					summary: "Realtime workflow path completed",
 					runtimeSessionRef: "chat-runtime-session",
-					resumable: true,
+					endedAt: new Date(),
 				},
 			});
 
@@ -621,8 +663,7 @@ describe("chat realtime workflow contract", () => {
 				return (
 					completedRun &&
 					runEventTypes.has("started") &&
-					runEventTypes.has("progress") &&
-					runEventTypes.has("completed")
+					runEventTypes.has("progress")
 				);
 			});
 
@@ -632,8 +673,8 @@ describe("chat realtime workflow contract", () => {
 			const streamedIds = streamedRunEvents.map(
 				(event) => event.data.event.id as string,
 			);
-			expect(streamedIds).toContain(progressA.event_id);
-			expect(streamedIds).toContain(progressB.event_id);
+			expect(streamedIds).toContain(progressA.id);
+			expect(streamedIds).toContain(progressB.id);
 			expect(new Set(streamedIds).size).toBe(streamedIds.length);
 			expect(workflowEvents.map((event) => event.event)).toEqual([
 				"trigger:chat-query",
@@ -642,6 +683,27 @@ describe("chat realtime workflow contract", () => {
 				"run.event",
 				"run.completed",
 			]);
+			expect(workflowEvents.at(-1)).toMatchObject({
+				event: "run.completed",
+				data: {
+					runId: chat.runId,
+					status: "completed",
+					summary: "Realtime workflow path completed",
+				},
+				match: { runId: chat.runId },
+			});
+			const completedMessage = await app.collections.chat_messages.findOne({
+				where: { id: chat.message.id },
+			});
+			expect(completedMessage?.runStatus).toBe("completed");
+			const resources = await app.collections.knowledge.find({
+				where: { run: chat.runId },
+				limit: 10,
+			});
+			expect(resources.docs[0]).toMatchObject({
+				run: chat.runId,
+				path: `runs/${chat.runId}/summary.md`,
+			});
 		} finally {
 			abortController.abort();
 			await stream.close();

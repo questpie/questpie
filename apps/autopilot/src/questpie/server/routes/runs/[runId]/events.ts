@@ -1,6 +1,7 @@
 import { route } from "questpie/services";
 import { z } from "zod";
 
+import { mergeRecords, relationId } from "../../../lib/records";
 import {
 	authenticatedRunWorker,
 	authorizeWorkerOrSession,
@@ -40,12 +41,27 @@ export default route()
 			await authorizeWorkerOrSession(ctx);
 			const url = new URL(ctx.request.url);
 			const limit = Number(url.searchParams.get("limit") ?? 100);
-			const events = await ctx.collections.run_events.find({
-				where: { run: ctx.params.runId },
+			const run = await ctx.collections.run_links.findOne({
+				where: { id: ctx.params.runId },
+			});
+			if (!run) return json([]);
+
+			const aiRunId = relationId(run.aiRun);
+			if (!aiRunId) return json([]);
+
+			const events = await ctx.collections.ai_run_events.find({
+				where: { run: aiRunId },
 				limit: Number.isFinite(limit) ? Math.min(Math.max(limit, 1), 500) : 100,
 				orderBy: { createdAt: "asc" },
 			});
-			return json(events.docs);
+			return json(
+				events.docs.map((event: Record<string, unknown>) => ({
+					...event,
+					run: ctx.params.runId,
+					aiRun: aiRunId,
+					metadata: event.meta,
+				})),
+			);
 		}
 
 		const input = eventSchema.parse(await parseJson(ctx.request));
@@ -56,6 +72,21 @@ export default route()
 				id: run.id,
 				data: { status: "running", startedAt: new Date() },
 			});
+			const runLink = await ctx.collections.run_links.findOne({
+				where: { id: ctx.params.runId },
+			});
+			if (runLink) {
+				await ctx.collections.run_links.updateById({
+					id: ctx.params.runId,
+					data: {
+						status: "running",
+						startedAt: new Date(),
+						metadata: mergeRecords(runLink.metadata, {
+							workerId: worker.id,
+						}) as any,
+					},
+				});
+			}
 		}
 
 		const event = await ctx.collections.run_events.create({
