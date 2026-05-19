@@ -8,8 +8,6 @@ const aiAdminConfig = {
 				items: [
 					{ type: "collection" as const, collection: "ai_runs" },
 					{ type: "collection" as const, collection: "ai_workers" },
-					{ type: "collection" as const, collection: "ai_worker_leases" },
-					{ type: "collection" as const, collection: "ai_run_events" },
 				],
 			},
 		],
