@@ -23,6 +23,7 @@
 	},
 	"dependencies": {
 		"@questpie/admin": "workspace:*",
+		"@questpie/ai": "workspace:*",
 		"@questpie/mcp": "workspace:*",
 		"@questpie/workflows": "workspace:*",
 		"@tailwindcss/vite": "^4.0.6",

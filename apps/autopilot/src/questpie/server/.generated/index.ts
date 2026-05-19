@@ -23,6 +23,7 @@ import { models as _coll_models } from "../collections/models";
 import { projects as _coll_projects } from "../collections/projects";
 import { providers as _coll_providers } from "../collections/providers";
 import { runEvents as _coll_run_events } from "../collections/run-events";
+import { runLinks as _coll_run_links } from "../collections/run-links";
 import { runs as _coll_runs } from "../collections/runs";
 import { scheduleExecutions as _coll_schedule_executions } from "../collections/schedule-executions";
 import { schedules as _coll_schedules } from "../collections/schedules";
@@ -74,6 +75,7 @@ import _svc_workerManager from "../services/worker-manager";
 
 // ── Migrations ─────────────────────────────────────────────
 import _mig_20260507T095449_jolly_red_phoenix from "../migrations/20260507T095449_jolly_red_phoenix";
+import _mig_20260519T135407_add_run_links_and_ai_module from "../migrations/20260519T135407_add_run_links_and_ai_module";
 
 // ── Views ──────────────────────────────────────────────────
 import _view_knowledgeDetail from "../views/knowledge-detail";
@@ -181,6 +183,7 @@ export type AppCollections = _ModuleCollections & {
 	projects: typeof _coll_projects;
 	providers: typeof _coll_providers;
 	run_events: typeof _coll_run_events;
+	run_links: typeof _coll_run_links;
 	runs: typeof _coll_runs;
 	schedule_executions: typeof _coll_schedule_executions;
 	schedules: typeof _coll_schedules;
@@ -374,7 +377,7 @@ export type AppConfig = {
 	collections: AppCollections & Record<string, any>;
 	globals: AppGlobals & Record<string, any>;
 	routes: AppRoutes;
-	auth: _AppAuthConfig;
+	auth: typeof _authConfig;
 };
 
 // ════════════════════════════════════════════════════════════
@@ -396,6 +399,7 @@ export const app = await createApp(
 			projects: _coll_projects,
 			providers: _coll_providers,
 			run_events: _coll_run_events,
+			run_links: _coll_run_links,
 			runs: _coll_runs,
 			schedule_executions: _coll_schedule_executions,
 			schedules: _coll_schedules,
@@ -445,7 +449,7 @@ export const app = await createApp(
 			providerRuntime: _svc_providerRuntime,
 			workerManager: _svc_workerManager,
 		},
-		migrations: [_mig_20260507T095449_jolly_red_phoenix],
+		migrations: [_mig_20260507T095449_jolly_red_phoenix, _mig_20260519T135407_add_run_links_and_ai_module],
 		views: {
 			knowledgeDetail: _view_knowledgeDetail,
 			taskDetail: _view_taskDetail,
