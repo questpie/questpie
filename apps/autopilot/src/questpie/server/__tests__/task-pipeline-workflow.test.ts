@@ -40,6 +40,12 @@ type WorkflowEvent = {
 	data?: unknown;
 };
 
+type WaitEvent = {
+	name: string;
+	event: string;
+	match?: Record<string, unknown>;
+};
+
 function silentLog() {
 	return {
 		debug() {},
@@ -62,6 +68,7 @@ function fakeStep(
 	events: Record<string, unknown>,
 	options?: {
 		invokeResult?: unknown;
+		waitEvents?: WaitEvent[];
 	},
 ) {
 	return {
@@ -70,7 +77,15 @@ function fakeStep(
 			if (typeof fn !== "function") throw new Error("Missing step callback");
 			return fn();
 		},
-		async waitForEvent(_name: string, opts: { event: string }) {
+		async waitForEvent(
+			name: string,
+			opts: { event: string; match?: Record<string, unknown> },
+		) {
+			options?.waitEvents?.push({
+				name,
+				event: opts.event,
+				match: opts.match,
+			});
 			return events[opts.event] ?? null;
 		},
 		async sleep() {},
@@ -144,6 +159,7 @@ describe("task-pipeline workflow", () => {
 			runReason?: string;
 			invokeResult?: unknown;
 			scheduleExecutionId?: string;
+			waitEvents?: WaitEvent[];
 		},
 	) {
 		workflowEvents = [];
@@ -170,6 +186,7 @@ describe("task-pipeline workflow", () => {
 			},
 			step: fakeStep(events, {
 				invokeResult: overrides?.invokeResult,
+				waitEvents: overrides?.waitEvents,
 			}) as any,
 			ctx,
 			log: silentLog(),
@@ -186,14 +203,19 @@ describe("task-pipeline workflow", () => {
 			createdBy: "test",
 		} as any);
 
-		const result = await runPipeline(task.id, {
-			"run.claimed": { runId: "will-be-replaced", workerId: "w1" },
-			"run.completed": {
-				status: "completed",
-				summary: "All tests pass",
-				knowledgeResourceIds: ["kr-1"],
+		const waitEvents: WaitEvent[] = [];
+		const result = await runPipeline(
+			task.id,
+			{
+				"run.claimed": { runId: "will-be-replaced", workerId: "w1" },
+				"run.completed": {
+					status: "completed",
+					summary: "All tests pass",
+					knowledgeResourceIds: ["kr-1"],
+				},
 			},
-		});
+			{ waitEvents },
+		);
 
 		expect(result).toMatchObject({
 			taskId: task.id,
@@ -223,6 +245,18 @@ describe("task-pipeline workflow", () => {
 			initiatedBy: "task",
 		});
 		expect(result.runId).toBe(createdRunLinks.docs[0].id);
+		expect(waitEvents).toEqual([
+			{
+				name: "wait-run-claimed-1",
+				event: "run.claimed",
+				match: { runId: result.runId },
+			},
+			{
+				name: "wait-run-completed-1",
+				event: "run.completed",
+				match: { runId: result.runId },
+			},
+		]);
 
 		const aiRunId = relationId(createdRunLinks.docs[0].aiRun);
 		expect(aiRunId).toBeTruthy();
@@ -246,6 +280,7 @@ describe("task-pipeline workflow", () => {
 			limit: 10,
 		});
 		expect(reviewActivities.docs).toHaveLength(1);
+		expect(relationId(reviewActivities.docs[0]?.run)).toBe(result.runId);
 	});
 
 	it("marks task as failed on non-retryable error", async () => {
@@ -496,19 +531,23 @@ describe("task-pipeline workflow", () => {
 
 		const createContext = createContextFactory(setup!.app);
 		const ctx = await createContext({ accessMode: "system" });
+		const waitEvents: WaitEvent[] = [];
 		const result = await multiStepTask.handler({
 			input: {
 				taskId: task.id,
 				workflowConfigId: workflowConfig.id,
 				requestedBy: "test-runner",
 			},
-			step: fakeStep({
-				"run.claimed": { runId: "claimed", workerId: "w1" },
-				"run.completed": {
-					status: "completed",
-					summary: "Workflow step done",
+			step: fakeStep(
+				{
+					"run.claimed": { runId: "claimed", workerId: "w1" },
+					"run.completed": {
+						status: "completed",
+						summary: "Workflow step done",
+					},
 				},
-			}) as any,
+				{ waitEvents },
+			) as any,
 			ctx,
 			log: silentLog(),
 		});
@@ -530,6 +569,18 @@ describe("task-pipeline workflow", () => {
 			runtime: "codex",
 		});
 		expect(relationId(runLink?.aiRun)).toBeTruthy();
+		expect(waitEvents).toEqual([
+			{
+				name: "wait-run-claimed-implement",
+				event: "run.claimed",
+				match: { runId: result.runId },
+			},
+			{
+				name: "wait-run-completed-implement",
+				event: "run.completed",
+				match: { runId: result.runId },
+			},
+		]);
 
 		const legacyRuns = await setup!.app.collections.runs.find({
 			where: { task: task.id },

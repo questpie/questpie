@@ -345,6 +345,19 @@ describe("mock worker E2E contract", () => {
 			runtimeSessionRef: "mock-session",
 			resumable: true,
 		});
+		const completedRunLink = await app.collections.run_links.findOne({
+			where: { id: run.id },
+		});
+		expect(completedRunLink).toMatchObject({
+			legacyRunId: run.id,
+			aiRun: null,
+			status: "completed",
+			summary: "Mocked run completed",
+			tokensInput: 11,
+			tokensOutput: 22,
+			runtimeSessionRef: "mock-session",
+			resumable: true,
+		});
 
 		const updatedTask = await app.collections.tasks.findOne({
 			where: { id: task.id },
@@ -374,5 +387,15 @@ describe("mock worker E2E contract", () => {
 			"run.event",
 			"run.completed",
 		]);
+		expect(
+			workflowEvents.every(
+				(event) => (event.data as { runId?: string })?.runId === run.id,
+			),
+		).toBe(true);
+		expect(
+			workflowEvents.every(
+				(event) => (event.match as { runId?: string })?.runId === run.id,
+			),
+		).toBe(true);
 	});
 });

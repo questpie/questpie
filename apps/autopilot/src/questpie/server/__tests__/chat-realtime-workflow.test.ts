@@ -50,6 +50,12 @@ type WorkflowEvent = {
 	match?: Record<string, unknown>;
 };
 
+type WaitEvent = {
+	name: string;
+	event: string;
+	match?: Record<string, unknown>;
+};
+
 type SSEEvent = {
 	event: string;
 	data: any;
@@ -205,14 +211,25 @@ function createSSEReader(response: Response) {
 	return { readEvent, readUntil, close };
 }
 
-function fakeStep(events: Record<string, unknown>) {
+function fakeStep(
+	events: Record<string, unknown>,
+	options?: { waitEvents?: WaitEvent[] },
+) {
 	return {
 		async run(_name: string, ...args: unknown[]) {
 			const fn = args[args.length - 1];
 			if (typeof fn !== "function") throw new Error("Missing step callback");
 			return fn();
 		},
-		async waitForEvent(_name: string, opts: { event: string }) {
+		async waitForEvent(
+			name: string,
+			opts: { event: string; match?: Record<string, unknown> },
+		) {
+			options?.waitEvents?.push({
+				name,
+				event: opts.event,
+				match: opts.match,
+			});
 			return events[opts.event] ?? null;
 		},
 		async sleep() {},
@@ -838,6 +855,7 @@ describe("chat realtime workflow contract", () => {
 		});
 		expect(activities.docs).toHaveLength(1);
 		expect(activities.docs[0]).toMatchObject({
+			run: run.id,
 			actor: "workflow:chat-query",
 			summary: `Chat response created for session ${session.id}`,
 			details: {
@@ -847,5 +865,89 @@ describe("chat realtime workflow contract", () => {
 				knowledgeResourceIds: ["knowledge-1"],
 			},
 		});
+	});
+
+	it("creates scheduled chat run links and waits on product run ids", async () => {
+		const app = setup!.app;
+		const createContext = createContextFactory(app);
+		const ctx = await createContext({ accessMode: "system" });
+		const schedule = await app.collections.schedules.create({
+			name: "Scheduled chat query",
+			cron: "0 9 * * *",
+			timezone: "UTC",
+			mode: "chat",
+			enabled: true,
+			chatPrompt: "Summarize the project.",
+			taskTemplate: {},
+		} as any);
+		const session = await app.collections.chat_sessions.create({
+			title: "Scheduled chat",
+			status: "active",
+			scopeType: "company",
+		} as any);
+		const message = await app.collections.chat_messages.create({
+			chatSession: session.id,
+			role: "user",
+			content: "Summarize the project.",
+		} as any);
+		const execution = await app.collections.schedule_executions.create({
+			schedule: schedule.id,
+			chatSession: session.id,
+			status: "triggered",
+			triggeredAt: new Date(),
+			metadata: { mode: "chat", messageId: message.id },
+		} as any);
+		const waitEvents: WaitEvent[] = [];
+
+		const result = await chatQueryWorkflow.handler({
+			input: {
+				chatSessionId: session.id,
+				messageId: message.id,
+				prompt: message.content,
+				scheduleExecutionId: execution.id,
+			},
+			step: fakeStep(
+				{
+					"run.claimed": { runId: "ignored", workerId: "w1" },
+					"run.completed": {
+						status: "completed",
+						summary: "Scheduled chat completed.",
+					},
+				},
+				{ waitEvents },
+			) as any,
+			ctx,
+			log: silentLog(),
+		});
+
+		const runLink = await app.collections.run_links.findOne({
+			where: { id: result.runId },
+		});
+		expect(runLink).toMatchObject({
+			chatSession: session.id,
+			chatMessage: message.id,
+			schedule: schedule.id,
+			scheduleExecution: execution.id,
+			initiatedBy: "chat",
+			status: "pending",
+		});
+		expect(relationId(runLink?.aiRun)).toBeTruthy();
+
+		const linkedExecution = await app.collections.schedule_executions.findOne({
+			where: { id: execution.id },
+		});
+		expect(relationId(linkedExecution?.run)).toBe(result.runId);
+		expect(waitEvents).toEqual([
+			{
+				name: "wait-run-claimed",
+				event: "run.claimed",
+				match: { runId: result.runId },
+			},
+			{
+				name: "wait-run-completed",
+				event: "run.completed",
+				match: { runId: result.runId },
+			},
+		]);
 	});
 });
