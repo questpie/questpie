@@ -47,7 +47,7 @@ interface ListItem {
 
 // --- Block parsing ---
 
-function parseBlocks(text: string, isStreaming?: boolean): Block[] {
+function parseBlocks(text: string, _isStreaming?: boolean): Block[] {
   const lines = text.split("\n");
   const blocks: Block[] = [];
   let i = 0;
