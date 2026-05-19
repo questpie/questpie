@@ -165,6 +165,7 @@ describe("schedule-tick job execution", () => {
 			data: {
 				taskId: result.results[0].taskId,
 				runReason: "schedule",
+				scheduleExecutionId: result.results[0].executionId,
 			},
 		});
 	});
@@ -215,6 +216,9 @@ describe("schedule-tick job execution", () => {
 		expect(workflowEvents).toHaveLength(1);
 		expect(workflowEvents[0]).toMatchObject({
 			event: "trigger:chat-query",
+			data: {
+				scheduleExecutionId: result.results[0].executionId,
+			},
 		});
 	});
 

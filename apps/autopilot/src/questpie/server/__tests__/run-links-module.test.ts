@@ -9,8 +9,10 @@ import { activity } from "../collections/activity";
 import { chatMessages } from "../collections/chat-messages";
 import { knowledge } from "../collections/knowledge";
 import { runLinks } from "../collections/run-links";
+import { scheduleExecutions } from "../collections/schedule-executions";
 import { taskRelations } from "../collections/task-relations";
 import backfillLegacyRunsMigration from "../migrations/20260519T142100_backfill_legacy_runs_into_run_links";
+import linkScheduleExecutionsMigration from "../migrations/20260519T145500_link_schedule_executions_to_run_links";
 import modules from "../modules";
 
 const runLinkMigration = readFileSync(
@@ -24,6 +26,14 @@ const runLinkMigration = readFileSync(
 const backfillLegacyRunsMigrationSource = readFileSync(
 	new URL(
 		"../migrations/20260519T142100_backfill_legacy_runs_into_run_links.ts",
+		import.meta.url,
+	),
+	"utf8",
+);
+
+const linkScheduleExecutionsMigrationSource = readFileSync(
+	new URL(
+		"../migrations/20260519T145500_link_schedule_executions_to_run_links.ts",
 		import.meta.url,
 	),
 	"utf8",
@@ -130,6 +140,9 @@ describe("Autopilot AI run links", () => {
 		expect(relationTarget(taskRelations.state.fieldDefinitions.originRun)).toBe(
 			"run_links",
 		);
+		expect(relationTarget(scheduleExecutions.state.fieldDefinitions.run)).toBe(
+			"run_links",
+		);
 	});
 
 	it("resolves product run reads through run_links", () => {
@@ -195,6 +208,23 @@ describe("Autopilot AI run links", () => {
 		expect(backfillLegacyRunsMigrationSource).toContain('r."targeting"');
 		expect(insertColumns).not.toContain('"preferredWorker"');
 		expect(insertColumns).not.toContain('"targeting"');
+	});
+
+	it("links schedule execution migration through exact task and chat matches", () => {
+		expect(linkScheduleExecutionsMigrationSource).toContain(
+			'ALTER TABLE "schedule_executions"',
+		);
+		expect(linkScheduleExecutionsMigrationSource).toContain(
+			"\"metadata\"->>'messageId'",
+		);
+		expect(linkScheduleExecutionsMigrationSource).toContain("chat_run_matches");
+		expect(linkScheduleExecutionsMigrationSource).toContain("task_run_matches");
+		expect(linkScheduleExecutionsMigrationSource).toContain(
+			'COUNT(DISTINCT "executionId") AS "executionCount"',
+		);
+		expect(linkScheduleExecutionsMigrationSource).toContain(
+			"COALESCE(se.\"metadata\"->>'mode', 'task') <> 'chat'",
+		);
 	});
 
 	it("runs the legacy backfill against postgres-compatible SQL", async () => {
@@ -397,6 +427,151 @@ describe("Autopilot AI run links", () => {
 				cost: null,
 				metadata: null,
 			});
+		} finally {
+			await client.close();
+		}
+	});
+
+	it("runs schedule execution run-link backfill only for exact matches", async () => {
+		const client = await PGlite.create();
+		const db = drizzle(client);
+
+		try {
+			await db.execute(sql`
+				CREATE TABLE "schedule_executions" (
+					"id" text PRIMARY KEY,
+					"schedule" varchar(255) NOT NULL,
+					"task" varchar(255),
+					"chatSession" varchar(255),
+					"status" varchar(255),
+					"metadata" jsonb
+				)
+			`);
+			await db.execute(sql`
+				CREATE TABLE "run_links" (
+					"id" text PRIMARY KEY,
+					"task" varchar(255),
+					"schedule" varchar(255),
+					"scheduleExecution" varchar(255),
+					"chatSession" varchar(255),
+					"chatMessage" varchar(255)
+				)
+			`);
+			await db.execute(sql`
+				CREATE TABLE "chat_messages" (
+					"id" text PRIMARY KEY,
+					"chatSession" varchar(255),
+					"run" varchar(255)
+				)
+			`);
+			await db.execute(sql`
+				INSERT INTO "run_links" (
+					"id",
+					"task",
+					"schedule",
+					"scheduleExecution",
+					"chatSession",
+					"chatMessage"
+				)
+				VALUES
+					('run-task', 'task-1', NULL, NULL, NULL, NULL),
+					('run-chat', NULL, NULL, NULL, NULL, NULL),
+					('run-shared-task', 'task-shared', NULL, NULL, NULL, NULL),
+					('run-shared-chat', NULL, NULL, NULL, NULL, NULL),
+					('run-ambiguous-a', 'task-ambiguous', NULL, NULL, NULL, NULL),
+					('run-ambiguous-b', 'task-ambiguous', NULL, NULL, NULL, NULL)
+			`);
+			await db.execute(sql`
+				INSERT INTO "chat_messages" ("id", "chatSession", "run")
+				VALUES
+					('msg-1', 'chat-1', 'run-chat'),
+					('msg-shared-a', 'chat-shared-a', 'run-shared-chat'),
+					('msg-shared-b', 'chat-shared-b', 'run-shared-chat'),
+					('msg-mismatch', 'chat-other', 'run-chat')
+			`);
+			await db.execute(sql`
+				INSERT INTO "schedule_executions" (
+					"id",
+					"schedule",
+					"task",
+					"chatSession",
+					"status",
+					"metadata"
+				)
+				VALUES
+					('exec-task', 'schedule-1', 'task-1', NULL, 'triggered', '{"mode": "task"}'::jsonb),
+					('exec-chat', 'schedule-2', NULL, 'chat-1', 'triggered', '{"mode": "chat", "messageId": "msg-1"}'::jsonb),
+					('exec-ambiguous', 'schedule-3', 'task-ambiguous', NULL, 'triggered', '{"mode": "task"}'::jsonb),
+					('exec-null', 'schedule-4', 'task-missing', NULL, 'triggered', '{"mode": "task"}'::jsonb),
+					('exec-shared-task-a', 'schedule-5', 'task-shared', NULL, 'triggered', '{"mode": "task"}'::jsonb),
+					('exec-shared-task-b', 'schedule-6', 'task-shared', NULL, 'triggered', '{"mode": "task"}'::jsonb),
+					('exec-shared-chat-a', 'schedule-7', NULL, 'chat-shared-a', 'triggered', '{"mode": "chat", "messageId": "msg-shared-a"}'::jsonb),
+					('exec-shared-chat-b', 'schedule-8', NULL, 'chat-shared-b', 'triggered', '{"mode": "chat", "messageId": "msg-shared-b"}'::jsonb),
+					('exec-chat-mismatch', 'schedule-9', NULL, 'chat-1', 'triggered', '{"mode": "chat", "messageId": "msg-mismatch"}'::jsonb)
+			`);
+
+			await linkScheduleExecutionsMigration.up({ db });
+			await linkScheduleExecutionsMigration.up({ db });
+
+			const executions = resultRows<{
+				id: string;
+				run: string | null;
+			}>(
+				await db.execute(sql`
+					SELECT "id", "run"
+					FROM "schedule_executions"
+					ORDER BY "id"
+				`),
+			);
+
+			expect(executions).toEqual([
+				{ id: "exec-ambiguous", run: null },
+				{ id: "exec-chat", run: "run-chat" },
+				{ id: "exec-chat-mismatch", run: null },
+				{ id: "exec-null", run: null },
+				{ id: "exec-shared-chat-a", run: null },
+				{ id: "exec-shared-chat-b", run: null },
+				{ id: "exec-shared-task-a", run: null },
+				{ id: "exec-shared-task-b", run: null },
+				{ id: "exec-task", run: "run-task" },
+			]);
+
+			const links = resultRows<{
+				id: string;
+				schedule: string | null;
+				scheduleExecution: string | null;
+				chatSession: string | null;
+				chatMessage: string | null;
+			}>(
+				await db.execute(sql`
+					SELECT
+						"id",
+						"schedule",
+						"scheduleExecution",
+						"chatSession",
+						"chatMessage"
+					FROM "run_links"
+					WHERE "id" IN ('run-task', 'run-chat')
+					ORDER BY "id"
+				`),
+			);
+
+			expect(links).toEqual([
+				{
+					id: "run-chat",
+					schedule: "schedule-2",
+					scheduleExecution: "exec-chat",
+					chatSession: "chat-1",
+					chatMessage: "msg-1",
+				},
+				{
+					id: "run-task",
+					schedule: "schedule-1",
+					scheduleExecution: "exec-task",
+					chatSession: null,
+					chatMessage: null,
+				},
+			]);
 		} finally {
 			await client.close();
 		}

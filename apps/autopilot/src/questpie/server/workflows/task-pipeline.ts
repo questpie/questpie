@@ -4,6 +4,7 @@ import { workflow } from "@questpie/workflows";
 
 import { classifyRunError, type RunErrorType } from "../lib/error-classifier";
 import { asRecord, mergeRecords, relationId } from "../lib/records";
+import { linkScheduleExecutionRun } from "../lib/schedule-run-links";
 import { workflowsFromContext } from "../lib/workflows";
 
 type Collections = Questpie.AppContext["collections"];
@@ -166,6 +167,7 @@ export default workflow({
 		taskId: z.string(),
 		runReason: z.string().optional(),
 		requestedBy: z.string().optional(),
+		scheduleExecutionId: z.string().optional(),
 	}),
 	timeout: "14d",
 	handler: async ({ input, step, ctx, log }) => {
@@ -245,6 +247,7 @@ export default workflow({
 					targeting: {
 						runReason: input.runReason ?? "task-pipeline",
 						requestedBy: input.requestedBy ?? "system",
+						scheduleExecutionId: input.scheduleExecutionId ?? null,
 						attempt,
 						toolPolicy: runtime.toolPolicy,
 						contextRefs: runtime.contextRefs,
@@ -254,6 +257,14 @@ export default workflow({
 				});
 			});
 			lastRunId = run.id;
+
+			await step.run(`link-schedule-execution-${attempt}`, async () => {
+				await linkScheduleExecutionRun({
+					ctx,
+					scheduleExecutionId: input.scheduleExecutionId,
+					runId: run.id,
+				});
+			});
 
 			await step.run(`mark-task-running-${attempt}`, async () => {
 				await ctx.collections.tasks.updateById({

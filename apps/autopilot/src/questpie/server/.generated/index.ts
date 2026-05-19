@@ -77,6 +77,7 @@ import _svc_workerManager from "../services/worker-manager";
 import _mig_20260507T095449_jolly_red_phoenix from "../migrations/20260507T095449_jolly_red_phoenix";
 import _mig_20260519T135407_add_run_links_and_ai_module from "../migrations/20260519T135407_add_run_links_and_ai_module";
 import _mig_20260519T142100_backfill_legacy_runs_into_run_links from "../migrations/20260519T142100_backfill_legacy_runs_into_run_links";
+import _mig_20260519T145500_link_schedule_executions_to_run_links from "../migrations/20260519T145500_link_schedule_executions_to_run_links";
 
 // ── Views ──────────────────────────────────────────────────
 import _view_knowledgeDetail from "../views/knowledge-detail";
@@ -450,7 +451,7 @@ export const app = await createApp(
 			providerRuntime: _svc_providerRuntime,
 			workerManager: _svc_workerManager,
 		},
-		migrations: [_mig_20260507T095449_jolly_red_phoenix, _mig_20260519T135407_add_run_links_and_ai_module, _mig_20260519T142100_backfill_legacy_runs_into_run_links],
+		migrations: [_mig_20260507T095449_jolly_red_phoenix, _mig_20260519T135407_add_run_links_and_ai_module, _mig_20260519T142100_backfill_legacy_runs_into_run_links, _mig_20260519T145500_link_schedule_executions_to_run_links],
 		views: {
 			knowledgeDetail: _view_knowledgeDetail,
 			taskDetail: _view_taskDetail,

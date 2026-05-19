@@ -186,6 +186,7 @@ async function triggerTaskSchedule(
 			taskId: task.id,
 			runReason: "schedule",
 			requestedBy: scheduleActor(schedule.id),
+			scheduleExecutionId: execution.id,
 		},
 		{ idempotencyKey: `schedule:${schedule.id}:${execution.id}:task` },
 	);
@@ -254,6 +255,7 @@ async function triggerChatSchedule(
 			prompt,
 			projectId: projectId ?? null,
 			taskId: taskId ?? null,
+			scheduleExecutionId: execution.id,
 			modelId:
 				typeof template.modelId === "string"
 					? template.modelId

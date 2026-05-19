@@ -3,6 +3,7 @@ import { z } from "zod";
 import { workflow } from "@questpie/workflows";
 
 import { mergeRecords, relationId } from "../lib/records";
+import { linkScheduleExecutionRun } from "../lib/schedule-run-links";
 
 type RunCompletion = {
 	status?: "completed" | "failed" | "cancelled";
@@ -31,6 +32,7 @@ export default workflow({
 		projectId: z.string().nullable().optional(),
 		taskId: z.string().nullable().optional(),
 		modelId: z.string().nullable().optional(),
+		scheduleExecutionId: z.string().optional(),
 	}),
 	timeout: "7d",
 	handler: async ({ input, step, ctx, log }) => {
@@ -74,7 +76,16 @@ export default workflow({
 					contextRefs: runtime.contextRefs,
 					promptRefs: runtime.promptRefs,
 					runtimeHints: runtime.runtimeHints,
+					scheduleExecutionId: input.scheduleExecutionId ?? null,
 				} as any,
+			});
+		});
+
+		await step.run("link-schedule-execution", async () => {
+			await linkScheduleExecutionRun({
+				ctx,
+				scheduleExecutionId: input.scheduleExecutionId,
+				runId: run.id,
 			});
 		});
 
