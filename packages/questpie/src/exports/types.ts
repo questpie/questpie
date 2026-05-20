@@ -115,6 +115,7 @@ export type {
 } from "#questpie/shared/type-utils.js";
 export type { CollectionAPI } from "#questpie/server/config/integrated/questpie-api.js";
 export type {
+	RouteDefinition,
 	RouteParamsFromKey,
 	RouteWithParams,
 } from "#questpie/server/routes/index.js";
@@ -123,19 +124,22 @@ export type {
 	ServiceLifecycle,
 	ServiceNamespace,
 } from "#questpie/server/services/define-service.js";
+export type { MailerService } from "#questpie/server/modules/core/integrated/mailer/service.js";
 export type {
-	MailerService,
-} from "#questpie/server/modules/core/integrated/mailer/service.js";
-export type {
+	JobDefinition,
 	PublishOptions,
 	QueueClient,
 	QueueConfig,
+	QueueJobType,
 } from "#questpie/server/modules/core/integrated/queue/types.js";
 export type {
 	AppStateConfig,
 	ResolvedAppStateConfig,
 } from "#questpie/server/config/app-state-config.js";
-export { CLOUD_ENV, isQuestpieCloud } from "#questpie/server/config/cloud-env.js";
+export {
+	CLOUD_ENV,
+	isQuestpieCloud,
+} from "#questpie/server/config/cloud-env.js";
 export * from "#questpie/server/i18n/types.js";
 export * from "#questpie/server/config/global-hooks-types.js";
 export type { LoggerConfig } from "#questpie/server/modules/core/integrated/logger/types.js";

@@ -19,6 +19,13 @@
  * @see RFC-MODULE-ARCHITECTURE §9.2 (Module — .generated/module.ts)
  */
 
+import {
+	categoryRecordEntry,
+	categoryTypeEntry,
+	importStatement,
+	safeKey,
+	sortedValues,
+} from "./category-emit.js";
 import type {
 	CategoryDeclaration,
 	DiscoveredFile,
@@ -178,7 +185,7 @@ export function generateModuleTemplate(
 
 		if (categoriesNeedingTypes.has("routes")) {
 			lines.push(
-				'import type { RouteParamsFromKey, RouteWithParams } from "questpie/types";',
+				'import type { RouteDefinition, RouteParamsFromKey } from "questpie/types";',
 			);
 			lines.push("");
 		}
@@ -206,7 +213,7 @@ export function generateModuleTemplate(
 			if (catName === "routes") {
 				emitSimpleRouteTypeInterface(lines, typeName, fileMap);
 			} else {
-				emitSimpleTypeInterface(lines, typeName, fileMap, decl);
+				emitSimpleTypeInterface(lines, typeName, fileMap, decl, catName);
 			}
 		}
 	}
@@ -288,25 +295,14 @@ export function generateModuleTemplate(
 		const hasNamedType = categoriesNeedingTypes.has(catName);
 
 		if (emitStrategy === "array") {
-			// Array emission (migrations, seeds)
 			const vars = sortedValues(fileMap)
 				.map((f) => f.varName)
 				.join(", ");
 			lines.push(`\t${safeKey(catName)}: [${vars}],`);
 		} else {
-			// Record emission (collections, globals, jobs, messages, etc.)
 			lines.push(`\t${safeKey(catName)}: {`);
 			for (const file of sortedValues(fileMap)) {
-				if (file.isBundle) {
-					// Bundle files are spread into the parent object
-					lines.push(`\t\t...${file.varName},`);
-				} else if (decl?.keyFromProperty) {
-					lines.push(
-						`\t\t[${file.varName}.${decl.keyFromProperty}]: ${file.varName},`,
-					);
-				} else {
-					lines.push(`\t\t${safeKey(file.key)}: ${file.varName},`);
-				}
+				lines.push(`\t\t${categoryRecordEntry(file, decl)},`);
 			}
 			if (hasNamedType && typeEmit !== "messages") {
 				lines.push(`\t} as ${typeName},`);
@@ -549,6 +545,7 @@ function emitSimpleTypeInterface(
 	typeName: string,
 	fileMap: Map<string, DiscoveredFile>,
 	decl: CategoryDeclaration | undefined,
+	catName: string,
 ): void {
 	const leafFiles = sortedValues(fileMap).filter((f) => !f.isBundle);
 	const bundleFiles = sortedValues(fileMap).filter((f) => f.isBundle);
@@ -557,8 +554,7 @@ function emitSimpleTypeInterface(
 		lines.push(`export type ${typeName} =`);
 		const parts = [
 			...leafFiles.map(
-				(file) =>
-					`{ [K in typeof ${file.varName}.${decl.keyFromProperty}]: typeof ${file.varName} }`,
+				(file) => `{ ${categoryTypeEntry(file, decl, catName)} }`,
 			),
 			...bundleFiles.map((bundle) => `typeof ${bundle.varName}`),
 		];
@@ -571,18 +567,16 @@ function emitSimpleTypeInterface(
 	}
 
 	if (bundleFiles.length === 0) {
-		// No bundles — simple interface
 		lines.push(`export interface ${typeName} {`);
 		for (const file of leafFiles) {
-			lines.push(`\t${safeKey(file.key)}: typeof ${file.varName};`);
+			lines.push(`\t${categoryTypeEntry(file, decl, catName)};`);
 		}
 		lines.push("}");
 	} else {
-		// Bundles present — use type alias with intersection to capture spread keys
 		const parts: string[] = [];
 		if (leafFiles.length > 0) {
 			parts.push(
-				`{ ${leafFiles.map((f) => `${safeKey(f.key)}: typeof ${f.varName}`).join("; ")} }`,
+				`{ ${leafFiles.map((f) => `${categoryTypeEntry(f, decl, catName)}`).join("; ")} }`,
 			);
 		}
 		for (const bundle of bundleFiles) {
@@ -605,7 +599,7 @@ function emitSimpleRouteTypeInterface(
 		lines.push(`export interface ${typeName} {`);
 		for (const file of leafFiles) {
 			lines.push(
-				`\t${safeKey(file.key)}: RouteWithParams<typeof ${file.varName}, RouteParamsFromKey<${JSON.stringify(file.key)}>>;`,
+				`\t${safeKey(file.key)}: RouteDefinition<unknown, unknown, RouteParamsFromKey<${JSON.stringify(file.key)}>>;`,
 			);
 		}
 		lines.push("}");
@@ -616,7 +610,7 @@ function emitSimpleRouteTypeInterface(
 				`{ ${leafFiles
 					.map(
 						(f) =>
-							`${safeKey(f.key)}: RouteWithParams<typeof ${f.varName}, RouteParamsFromKey<${JSON.stringify(f.key)}>>`,
+							`${safeKey(f.key)}: RouteDefinition<unknown, unknown, RouteParamsFromKey<${JSON.stringify(f.key)}>>`,
 					)
 					.join("; ")} }`,
 			);
@@ -632,21 +626,3 @@ function emitSimpleRouteTypeInterface(
 // ============================================================================
 // Nested structure builder (for emit: "nested" categories)
 // ============================================================================
-
-function sortedValues(map: Map<string, DiscoveredFile>): DiscoveredFile[] {
-	return [...map.values()].sort((a, b) => a.key.localeCompare(b.key));
-}
-
-function importStatement(file: DiscoveredFile): string {
-	if (file.exportType === "named" && file.namedExportName) {
-		return `import { ${file.namedExportName} as ${file.varName} } from "${file.importPath}";`;
-	}
-	return `import ${file.varName} from "${file.importPath}";`;
-}
-
-function safeKey(key: string): string {
-	if (/^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(key)) {
-		return key;
-	}
-	return `"${key}"`;
-}

@@ -21,3 +21,12 @@ export type {
 	CodegenOptions,
 	CallbackParamDefinition,
 } from "#questpie/cli/codegen/types.js";
+
+export {
+	categoryRecordEntry,
+	categoryTypeEntry,
+	importStatement,
+	safeKey,
+	sortedValues,
+	sourceBasename,
+} from "#questpie/cli/codegen/category-emit.js";

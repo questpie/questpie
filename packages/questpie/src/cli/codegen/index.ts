@@ -647,8 +647,8 @@ function validateGeneratedSyntax(code: string, filePath: string): void {
 	try {
 		const transpiler = new Bun.Transpiler({ loader: "ts" });
 		transpiler.transformSync(code);
-	} catch (err: any) {
-		const msg = err?.message ?? String(err);
+	} catch (err: unknown) {
+		const msg = err instanceof Error ? err.message : String(err);
 		const relPath = relative(process.cwd(), filePath);
 		throw new Error(
 			`[codegen] Generated code has syntax errors in ${relPath}:\n${msg}\n\n` +

@@ -3,7 +3,8 @@
 // Regenerate with: questpie generate
 
 import { createApp, createContextFactory } from "questpie/app";
-import type { AnyCollectionOrBuilder, AnyGlobalOrBuilder, AppDefinition, CollectionAPI, DrizzleClientFromQuestpieConfig, InferContextExtensionsFromAppConfig, InferSessionFromAuthConfig, MailerService, Questpie, QuestpieConfig, QueueClient, RouteParamsFromKey, RouteWithParams, TablesFromConfig } from "questpie/types";
+import type { AnyCollectionOrBuilder, AnyGlobalOrBuilder, AppDefinition, CollectionAPI, DrizzleClientFromQuestpieConfig, InferContextExtensionsFromAppConfig, InferSessionFromAuthConfig, MailerService, Questpie, QuestpieConfig, QueueClient, QueueJobType, RouteParamsFromKey, RouteWithParams, TablesFromConfig } from "questpie/types";
+import type { z } from "zod";
 
 // ── Runtime ────────────────────────────────────────────────
 import _runtime from "../questpie.config";
@@ -95,6 +96,7 @@ import _openapi from "../config/openapi";
 // ════════════════════════════════════════════════════════════
 
 import type { ServiceCustomNamespaceInstances, ServiceInstanceOf, ServiceInstancesInNamespace, ServiceTopLevelInstances, UnionToIntersection } from "questpie/types";
+type _RouteDefinitionWithoutHandler<T> = T extends { mode: "raw" } ? Omit<T, "handler"> & { handler: (args: unknown) => Response | Promise<Response> } : Omit<T, "handler"> & { handler: (args: unknown) => unknown | Promise<unknown> };
 type _Module = (typeof _modules)[number];
 type _MPRaw<K extends string> = UnionToIntersection<_Module extends infer M ? M extends Record<K, infer V> ? V : never : never>;
 type _MP<K extends string> = [_MPRaw<K>] extends [never] ? {} : _MPRaw<K>;
@@ -150,18 +152,18 @@ export type AppGlobals = _ModuleGlobals & {
 
 /** All jobs in the app (modules + user, user overrides) */
 export type AppJobs = _ModuleJobs & {
-	notifyBlogSubscribers: typeof _job_notifyBlogSubscribers;
-	sendAppointmentCancellation: typeof _job_sendAppointmentCancellation;
-	sendAppointmentConfirmation: typeof _job_sendAppointmentConfirmation;
-	sendAppointmentReminder: typeof _job_sendAppointmentReminder;
+	notifyBlogSubscribers: Omit<typeof _job_notifyBlogSubscribers, "handler"> & { handler: (args: unknown) => Promise<unknown> };
+	sendAppointmentCancellation: Omit<typeof _job_sendAppointmentCancellation, "handler"> & { handler: (args: unknown) => Promise<unknown> };
+	sendAppointmentConfirmation: Omit<typeof _job_sendAppointmentConfirmation, "handler"> & { handler: (args: unknown) => Promise<unknown> };
+	sendAppointmentReminder: Omit<typeof _job_sendAppointmentReminder, "handler"> & { handler: (args: unknown) => Promise<unknown> };
 };
 
 /** All routes in the app (modules + user, user overrides) */
 export type AppRoutes = _ModuleRoutes & {
-	createBooking: RouteWithParams<typeof _route_createBooking, RouteParamsFromKey<"createBooking">>;
-	getActiveBarbers: RouteWithParams<typeof _route_getActiveBarbers, RouteParamsFromKey<"getActiveBarbers">>;
-	getAvailableTimeSlots: RouteWithParams<typeof _route_getAvailableTimeSlots, RouteParamsFromKey<"getAvailableTimeSlots">>;
-	getRevenueStats: RouteWithParams<typeof _route_getRevenueStats, RouteParamsFromKey<"getRevenueStats">>;
+	createBooking: RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_createBooking>, RouteParamsFromKey<"createBooking">>;
+	getActiveBarbers: RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_getActiveBarbers>, RouteParamsFromKey<"getActiveBarbers">>;
+	getAvailableTimeSlots: RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_getAvailableTimeSlots>, RouteParamsFromKey<"getAvailableTimeSlots">>;
+	getRevenueStats: RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_getRevenueStats>, RouteParamsFromKey<"getRevenueStats">>;
 };
 
 /** All service definitions in the app (modules + user, user overrides). */
@@ -219,6 +221,35 @@ export type AppMcpTools = _ModuleMcpTools & {
 export type AppRouteKeys = "getAvailableTimeSlots" | "getRevenueStats" | "getActiveBarbers" | "createBooking";
 
 type _CollectionsAPI = { [K in keyof AppCollections]: CollectionAPI<AppCollections[K], AppCollections> };
+type _JobHandlerCollections = {
+	appointments: typeof _coll_appointments;
+	barber_services: typeof _coll_barber_services;
+	barbers: typeof _coll_barbers;
+	blog_posts: typeof _coll_blog_posts;
+	pages: typeof _coll_pages;
+	reviews: typeof _coll_reviews;
+	services: typeof _coll_services;
+};
+type _JobHandlerCollectionsAPI = {
+	appointments: CollectionAPI<typeof _coll_appointments, _JobHandlerCollections>;
+	barber_services: CollectionAPI<typeof _coll_barber_services, _JobHandlerCollections>;
+	barbers: CollectionAPI<typeof _coll_barbers, _JobHandlerCollections>;
+	blog_posts: CollectionAPI<typeof _coll_blog_posts, _JobHandlerCollections>;
+	pages: CollectionAPI<typeof _coll_pages, _JobHandlerCollections>;
+	reviews: CollectionAPI<typeof _coll_reviews, _JobHandlerCollections>;
+	services: CollectionAPI<typeof _coll_services, _JobHandlerCollections>;
+};
+type _ExecutionContextJob<T> = T extends { name: infer TName extends string; schema: z.ZodSchema<infer TPayload> } ? QueueJobType<TPayload, TName> : never;
+type _ExecutionContextJobs = {
+	notifyBlogSubscribers: _ExecutionContextJob<typeof _job_notifyBlogSubscribers>;
+	sendAppointmentCancellation: _ExecutionContextJob<typeof _job_sendAppointmentCancellation>;
+	sendAppointmentConfirmation: _ExecutionContextJob<typeof _job_sendAppointmentConfirmation>;
+	sendAppointmentReminder: _ExecutionContextJob<typeof _job_sendAppointmentReminder>;
+};
+type _ExecutionContextServiceDefinitions = {
+	blog: typeof _svc_blog;
+};
+type _ExecutionContextDefaultServices = ServiceInstancesInNamespace<_ExecutionContextServiceDefinitions, "services">;
 type _AppCollectionDefinitions = AppCollections & Record<string, AnyCollectionOrBuilder>;
 type _AppGlobalDefinitions = AppGlobals & Record<string, AnyGlobalOrBuilder>;
 type _AppQuestpieConfig = Omit<QuestpieConfig, "app" | "db" | "collections" | "globals" | "auth"> & {
@@ -265,6 +296,54 @@ declare global {
 			services: _AppDefaultServices;
 		}
 
+		interface JobHandlerContext {
+			// Infrastructure
+			db: unknown;
+			email: MailerService<AppEmailTemplates>;
+			queue: QueueClient<_ExecutionContextJobs>;
+			storage: unknown;
+			kv: unknown;
+			logger: unknown;
+			search: unknown;
+			realtime: unknown;
+
+			// Entity APIs
+			collections: _JobHandlerCollectionsAPI;
+			globals: Record<string, unknown>;
+			tables: Record<string, unknown>;
+
+			// Request-scoped
+			session: unknown;
+			t: (key: string, params?: Record<string, unknown>, locale?: string) => string;
+
+			// User services
+			services: _ExecutionContextDefaultServices;
+		}
+
+		interface WorkflowContext {
+			// Infrastructure
+			db: unknown;
+			email: MailerService<AppEmailTemplates>;
+			queue: QueueClient<_ExecutionContextJobs>;
+			storage: unknown;
+			kv: unknown;
+			logger: unknown;
+			search: unknown;
+			realtime: unknown;
+
+			// Entity APIs
+			collections: _JobHandlerCollectionsAPI;
+			globals: Record<string, unknown>;
+			tables: Record<string, unknown>;
+
+			// Request-scoped
+			session: unknown;
+			t: (key: string, params?: Record<string, unknown>, locale?: string) => string;
+
+			// User services
+			services: _ExecutionContextDefaultServices;
+		}
+
 		interface ServiceCreateContext extends AppContext {}
 
 		interface Registry {
@@ -289,8 +368,8 @@ declare global {
  * For handler context, use `AppContext` (auto-typed via module augmentation).
  */
 export type AppConfig = {
-	collections: AppCollections & Record<string, any>;
-	globals: AppGlobals & Record<string, any>;
+	collections: AppCollections & Record<string, AnyCollectionOrBuilder>;
+	globals: AppGlobals & Record<string, AnyGlobalOrBuilder>;
 	routes: AppRoutes;
 	auth: typeof _authConfig;
 };
@@ -357,15 +436,15 @@ export const app = await createApp(
 			"barbershop.checkAvailability": _mcpTool_barbershop_checkAvailability,
 		},
 		config: {
-			app: _appConfig as any,
-			auth: _authConfig as any,
-			admin: _adminConfig as any,
-			mcp: _mcpConfig as any,
-			openapi: _openapi as any,
+			app: _appConfig,
+			auth: _authConfig,
+			admin: _adminConfig,
+			mcp: _mcpConfig,
+			openapi: _openapi,
 		},
 	}) satisfies AppDefinition,
 	_runtime,
-) as _AppQuestpie;
+) as unknown as _AppQuestpie;
 
 /** Fully typed QUESTPIE app instance. */
 export type App = typeof app;
