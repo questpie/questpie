@@ -1,3 +1,6 @@
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+
 import { LIcon, Wordmark } from "./primitives";
 import { smoothScrollNavigate } from "./shared-nav";
 
@@ -79,19 +82,23 @@ export function SharedFooter() {
 						</p>
 						<div style={{ marginTop: 18, display: "flex", gap: 8 }}>
 							<a
-								className="landing-btn landing-btn-secondary landing-btn-sm"
+								className={cn(
+									buttonVariants({ variant: "outline", size: "sm" }),
+									"gap-1.5",
+								)}
 								href="https://github.com/questpie/questpie"
 								target="_blank"
 								rel="noreferrer"
-								style={{ gap: 6 }}
+								data-icon="inline-end"
 							>
 								<LIcon name="github-logo" size={13} />
 								Star on GitHub
 								<LIcon name="star" size={11} />
 							</a>
 							<a
-								className="landing-btn landing-btn-ghost landing-btn-sm"
+								className={buttonVariants({ variant: "ghost", size: "sm" })}
 								href="#"
+								data-icon="inline-start"
 							>
 								<LIcon name="chat-circle" size={13} />
 								Discord

@@ -506,6 +506,26 @@
 	--pillar-autopilot: #4ade80;
 }
 
+/* Shadow-as-border tokens. Layered transparent shadows that fake a 1px
+ * border and add a subtle lift. Adapt to any background since they use
+ * alpha — solid borders don't. */
+.light,
+:root.light {
+	--shadow-border:
+		0 0 0 1px rgba(0, 0, 0, 0.06),
+		0 1px 2px -1px rgba(0, 0, 0, 0.06),
+		0 2px 4px 0 rgba(0, 0, 0, 0.04);
+	--shadow-border-hover:
+		0 0 0 1px rgba(0, 0, 0, 0.09),
+		0 1px 2px -1px rgba(0, 0, 0, 0.08),
+		0 2px 4px 0 rgba(0, 0, 0, 0.06);
+}
+:root,
+.dark {
+	--shadow-border: 0 0 0 1px rgba(255, 255, 255, 0.08);
+	--shadow-border-hover: 0 0 0 1px rgba(255, 255, 255, 0.13);
+}
+
 /* Hairline grid overlay used in hero */
 .landing-grid-bg {
 	background-image: linear-gradient(
@@ -528,7 +548,9 @@
 	);
 }
 
-/* Landing buttons */
+/* Landing buttons. Tactile (active:scale 0.96), focus-visible ring,
+ * optical icon padding (right side 2px tighter when there's a trailing
+ * icon, opt-in via [data-icon-end]), no transition:all. */
 .landing-btn {
 	display: inline-flex;
 	align-items: center;
@@ -539,20 +561,36 @@
 	border-radius: var(--control-radius);
 	font-size: 14px;
 	font-weight: 500;
-	transition:
-		background-color var(--motion-duration-base) var(--motion-ease-standard),
-		color var(--motion-duration-base) var(--motion-ease-standard),
-		border-color var(--motion-duration-base) var(--motion-ease-standard),
-		transform var(--motion-duration-fast) var(--motion-ease-standard);
+	transition-property: background-color, color, box-shadow, scale, opacity;
+	transition-duration: var(--motion-duration-base);
+	transition-timing-function: var(--motion-ease-standard);
 	white-space: nowrap;
 	cursor: pointer;
+	user-select: none;
 }
-.landing-btn:active {
-	transform: scale(0.97);
+.landing-btn:active:not(:disabled) {
+	scale: 0.96;
+	transition-duration: var(--motion-duration-fast);
+}
+.landing-btn:focus-visible {
+	outline: none;
+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 35%, transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+	.landing-btn:active:not(:disabled) { scale: 1; }
+}
+.landing-btn[data-icon-end] {
+	padding-right: 14px; /* optical: icon side -2px */
+}
+.landing-btn[data-icon-start] {
+	padding-left: 14px;
 }
 .landing-btn-primary {
 	background: var(--primary);
 	color: var(--primary-foreground);
+	/* subtle inner highlight gives the primary a moulded feel */
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12),
+		0 1px 2px -1px rgba(0, 0, 0, 0.2);
 }
 .landing-btn-primary:hover {
 	background: color-mix(in srgb, var(--primary) 88%, white);
@@ -560,11 +598,11 @@
 .landing-btn-secondary {
 	background: var(--card);
 	color: var(--foreground);
-	border: 1px solid var(--border-subtle);
+	box-shadow: var(--shadow-border);
 }
 .landing-btn-secondary:hover {
 	background: var(--surface-mid);
-	border-color: var(--border);
+	box-shadow: var(--shadow-border-hover);
 }
 .landing-btn-ghost {
 	background: transparent;
@@ -580,17 +618,21 @@
 	font-size: 13px;
 	border-radius: var(--control-radius-inner);
 }
+.landing-btn-sm[data-icon-end] { padding-right: 10px; }
+.landing-btn-sm[data-icon-start] { padding-left: 10px; }
 
-/* Hairline panels */
+/* Hairline panels — shadow-as-border so the surface lifts off any
+ * background (dark hero, light surface, gradients) without a hard
+ * 1px line that picks up neighbouring colours. */
 .landing-panel {
 	background: var(--card);
-	border: 1px solid var(--border-subtle);
 	border-radius: var(--surface-radius);
+	box-shadow: var(--shadow-border);
 }
 .landing-panel-low {
 	background: var(--surface-low);
-	border: 1px solid var(--border-subtle);
 	border-radius: var(--surface-radius);
+	box-shadow: var(--shadow-border);
 }
 
 /* Meta uppercase label */

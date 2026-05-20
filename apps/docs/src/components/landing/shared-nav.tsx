@@ -5,6 +5,9 @@ import {
 	useState,
 } from "react";
 
+import { Button, buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+
 import { LIcon, Wordmark } from "./primitives";
 import { ThemeToggle as LandingThemeToggle } from "./theme-toggle";
 
@@ -161,11 +164,14 @@ export function SharedNav({ activeKey }: { activeKey?: NavKey }) {
 					}}
 				>
 					<a
-						className="landing-btn landing-btn-ghost landing-btn-sm landing-hide-md"
+						className={cn(
+							buttonVariants({ variant: "ghost", size: "sm" }),
+							"landing-hide-md gap-1.5",
+						)}
 						href="https://github.com/questpie/questpie"
 						target="_blank"
 						rel="noreferrer"
-						style={{ gap: 6 }}
+						data-icon="inline-end"
 					>
 						<LIcon name="github-logo" size={14} />
 						<span>Star on GitHub</span>
@@ -173,21 +179,27 @@ export function SharedNav({ activeKey }: { activeKey?: NavKey }) {
 					</a>
 					<LandingThemeToggle />
 					<a
-						className="landing-btn landing-btn-primary landing-btn-sm landing-hide-sm"
+						className={cn(
+							buttonVariants({ variant: "default", size: "sm" }),
+							"landing-hide-sm",
+						)}
 						href="/docs"
+						data-icon="inline-end"
 					>
 						Start free
 						<LIcon name="arrow-right" size={13} />
 					</a>
-					<button
+					<Button
 						type="button"
+						variant="ghost"
+						size="icon-sm"
 						onClick={() => setMobileOpen((v) => !v)}
-						className="landing-btn landing-btn-ghost landing-btn-sm landing-show-sm"
+						className="landing-show-sm"
 						aria-label="Toggle navigation"
-						style={{ width: 32, padding: 0, display: "none" }}
+						style={{ display: "none" }}
 					>
 						<LIcon name={mobileOpen ? "x" : "list"} size={16} />
-					</button>
+					</Button>
 				</div>
 			</div>
 
