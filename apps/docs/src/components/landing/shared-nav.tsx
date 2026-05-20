@@ -89,7 +89,10 @@ export function SharedNav({ activeKey }: { activeKey?: NavKey }) {
 		<header
 			style={{
 				position: "fixed",
-				inset: "0 0 auto 0",
+				top: 0,
+				left: 0,
+				right: 0,
+				width: "100%",
 				zIndex: 50,
 				height: 56,
 				backdropFilter: scrolled ? "blur(14px) saturate(1.05)" : "none",
@@ -107,6 +110,7 @@ export function SharedNav({ activeKey }: { activeKey?: NavKey }) {
 			<div
 				style={{
 					maxWidth: 1120,
+					width: "100%",
 					margin: "0 auto",
 					height: "100%",
 					display: "flex",

@@ -99,7 +99,7 @@ export function APHero() {
 							<h1
 								style={{
 									marginTop: 22,
-									fontSize: "clamp(38px, 2.4rem + 1.6vw, 52px)",
+									fontSize: "clamp(28px, 5.5vw + 14px, 52px)",
 									lineHeight: 1.0,
 									letterSpacing: "-0.025em",
 									color: "var(--foreground)",
@@ -240,7 +240,7 @@ export function APHero() {
 
 			<style>{`
 				@media (max-width: 1000px) {
-					.landing-ap-hero-grid { grid-template-columns: 1fr !important; gap: 40px !important; }
+					.landing-ap-hero-grid { grid-template-columns: minmax(0, 1fr) !important; gap: 40px !important; }
 				}
 			`}</style>
 		</section>
@@ -876,22 +876,22 @@ export function APPillars() {
 
 			<style>{`
 				@media (max-width: 1000px) {
-					.landing-ap-pillars-grid { grid-template-columns: repeat(2, 1fr) !important; }
+					.landing-ap-pillars-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
 					.landing-ap-pillar-cell:nth-child(2n) { border-right: none !important; }
 					.landing-ap-pillar-cell:nth-child(odd) { border-right: 1px solid var(--border-subtle) !important; }
 					.landing-ap-pillar-cell { border-bottom: 1px solid var(--border-subtle); }
 					.landing-ap-pillar-cell:nth-last-child(-n+2) { border-bottom: none; }
-					.landing-ap-plus-grid { grid-template-columns: repeat(2, 1fr) !important; }
+					.landing-ap-plus-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
 					.landing-ap-plus-cell:nth-child(2n) { border-right: none !important; }
 					.landing-ap-plus-cell:nth-child(odd) { border-right: 1px solid var(--border-subtle) !important; }
 					.landing-ap-plus-cell { border-bottom: 1px solid var(--border-subtle); }
 					.landing-ap-plus-cell:nth-last-child(-n+2) { border-bottom: none; }
 				}
 				@media (max-width: 560px) {
-					.landing-ap-pillars-grid { grid-template-columns: 1fr !important; }
+					.landing-ap-pillars-grid { grid-template-columns: minmax(0, 1fr) !important; }
 					.landing-ap-pillar-cell { border-right: none !important; border-bottom: 1px solid var(--border-subtle); }
 					.landing-ap-pillar-cell:last-child { border-bottom: none; }
-					.landing-ap-plus-grid { grid-template-columns: 1fr !important; }
+					.landing-ap-plus-grid { grid-template-columns: minmax(0, 1fr) !important; }
 					.landing-ap-plus-cell { border-right: none !important; border-bottom: 1px solid var(--border-subtle); }
 					.landing-ap-plus-cell:last-child { border-bottom: none; }
 				}
@@ -1406,7 +1406,7 @@ export function WorkflowsSection() {
 
 			<style>{`
 				@media (max-width: 980px) {
-					.landing-wf-grid { grid-template-columns: 1fr !important; gap: 24px !important; }
+					.landing-wf-grid { grid-template-columns: minmax(0, 1fr) !important; gap: 24px !important; }
 				}
 			`}</style>
 		</Section>
@@ -1853,7 +1853,7 @@ export function KnowledgeProjectsSection() {
 			</div>
 
 			<style>{`
-				@media (max-width: 880px) { .landing-kp-grid { grid-template-columns: 1fr !important; } }
+				@media (max-width: 880px) { .landing-kp-grid { grid-template-columns: minmax(0, 1fr) !important; } }
 			`}</style>
 		</Section>
 	);
@@ -2007,7 +2007,11 @@ export function APFinalCta() {
 								You're on the list. We'll be in touch.
 							</span>
 						) : (
-							<form onSubmit={submit} style={{ display: "flex", gap: 8 }}>
+							<form
+								onSubmit={submit}
+								className="landing-waitlist-form"
+								style={{ display: "flex", gap: 8 }}
+							>
 								<Input
 									type="email"
 									required

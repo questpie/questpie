@@ -111,7 +111,7 @@ export function BuilderSection() {
 
 			<style>{`
 				@media (max-width: 980px) {
-					.landing-builder-grid { grid-template-columns: 1fr !important; }
+					.landing-builder-grid { grid-template-columns: minmax(0, 1fr) !important; }
 				}
 			`}</style>
 		</Section>
@@ -642,12 +642,12 @@ export function IntegrationsSection() {
 
 			<style>{`
 				@media (max-width: 880px) {
-					.landing-integrations-grid { grid-template-columns: repeat(2, 1fr) !important; }
+					.landing-integrations-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
 					.landing-integrations-grid > div:nth-child(2n) { border-right: none !important; }
 					.landing-integrations-grid > div:nth-child(odd) { border-right: 1px solid var(--border-subtle) !important; }
 				}
 				@media (max-width: 560px) {
-					.landing-integrations-grid { grid-template-columns: 1fr !important; }
+					.landing-integrations-grid { grid-template-columns: minmax(0, 1fr) !important; }
 					.landing-integrations-grid > div { border-right: none !important; }
 				}
 			`}</style>
@@ -805,7 +805,7 @@ export function PacksSection() {
 			</Reveal>
 
 			<style>{`
-				@media (max-width: 720px) { .landing-packs-grid { grid-template-columns: 1fr !important; } }
+				@media (max-width: 720px) { .landing-packs-grid { grid-template-columns: minmax(0, 1fr) !important; } }
 			`}</style>
 		</Section>
 	);
@@ -1067,8 +1067,8 @@ export function RuntimeMCPSection() {
 
 			<style>{`
 				@media (max-width: 980px) {
-					.landing-rt-grid { grid-template-columns: 1fr !important; }
-					.landing-runtime-matrix { grid-template-columns: repeat(2, 1fr) !important; }
+					.landing-rt-grid { grid-template-columns: minmax(0, 1fr) !important; }
+					.landing-runtime-matrix { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
 				}
 			`}</style>
 		</Section>
@@ -1158,7 +1158,7 @@ export function QapCockpit() {
 
 			<style>{`
 				@media (max-width: 980px) {
-					.landing-qap-grid { grid-template-columns: 1fr !important; }
+					.landing-qap-grid { grid-template-columns: minmax(0, 1fr) !important; }
 				}
 			`}</style>
 		</Section>
@@ -1420,7 +1420,7 @@ export function OpenSourceSection() {
 			</Reveal>
 
 			<style>{`
-				@media (max-width: 980px) { .landing-oss-grid { grid-template-columns: 1fr !important; gap: 24px !important; } }
+				@media (max-width: 980px) { .landing-oss-grid { grid-template-columns: minmax(0, 1fr) !important; gap: 24px !important; } }
 			`}</style>
 		</Section>
 	);

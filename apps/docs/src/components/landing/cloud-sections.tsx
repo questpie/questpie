@@ -92,7 +92,7 @@ export function CloudHero() {
 							<h1
 								style={{
 									marginTop: 22,
-									fontSize: "clamp(38px, 2.4rem + 1.6vw, 52px)",
+									fontSize: "clamp(28px, 5.5vw + 14px, 52px)",
 									lineHeight: 1.0,
 									letterSpacing: "-0.025em",
 									color: "var(--foreground)",
@@ -224,7 +224,7 @@ export function CloudHero() {
 
 			<style>{`
 				@media (max-width: 980px) {
-					.landing-cloud-hero-grid { grid-template-columns: 1fr !important; gap: 40px !important; }
+					.landing-cloud-hero-grid { grid-template-columns: minmax(0, 1fr) !important; gap: 40px !important; }
 				}
 			`}</style>
 		</section>
@@ -686,7 +686,7 @@ export function CloudJourney() {
 
 			<style>{`
 				@media (max-width: 880px) {
-					.landing-journey-grid { grid-template-columns: 1fr !important; }
+					.landing-journey-grid { grid-template-columns: minmax(0, 1fr) !important; }
 					.landing-journey-cell { border-right: none !important; border-bottom: 1px solid var(--border-subtle); }
 					.landing-journey-cell:last-child { border-bottom: none; }
 					.landing-journey-arrow { display: none !important; }
@@ -1082,9 +1082,9 @@ export function DeployConsole() {
 
 			<style>{`
 				@media (max-width: 980px) {
-					.landing-console-grid { grid-template-columns: 1fr !important; }
+					.landing-console-grid { grid-template-columns: minmax(0, 1fr) !important; }
 					.landing-console-grid > div:first-child { border-right: none !important; border-bottom: 1px solid var(--border-subtle); }
-					.landing-console-foot { grid-template-columns: 1fr !important; }
+					.landing-console-foot { grid-template-columns: minmax(0, 1fr) !important; }
 				}
 			`}</style>
 		</Section>
@@ -1173,9 +1173,9 @@ export function TemplatesSection() {
 			</Reveal>
 
 			<style>{`
-				@media (max-width: 980px) { .landing-templates-grid { grid-template-columns: repeat(3, 1fr) !important; } }
-				@media (max-width: 720px) { .landing-templates-grid { grid-template-columns: repeat(2, 1fr) !important; } }
-				@media (max-width: 460px) { .landing-templates-grid { grid-template-columns: 1fr !important; } }
+				@media (max-width: 980px) { .landing-templates-grid { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; } }
+				@media (max-width: 720px) { .landing-templates-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; } }
+				@media (max-width: 460px) { .landing-templates-grid { grid-template-columns: minmax(0, 1fr) !important; } }
 			`}</style>
 		</Section>
 	);
@@ -1734,7 +1734,7 @@ export function HostedAutopilotSection() {
 
 			<style>{`
 				@media (max-width: 900px) {
-					.landing-hosted-grid { grid-template-columns: 1fr !important; }
+					.landing-hosted-grid { grid-template-columns: minmax(0, 1fr) !important; }
 					.landing-hosted-grid > div:nth-child(2) { border-left: none !important; border-top: 1px solid var(--border-subtle); }
 				}
 			`}</style>
@@ -2120,7 +2120,7 @@ export function MigrationSection() {
 			</Reveal>
 
 			<style>{`
-				@media (max-width: 880px) { .landing-migration-grid { grid-template-columns: 1fr !important; gap: 24px !important; } }
+				@media (max-width: 880px) { .landing-migration-grid { grid-template-columns: minmax(0, 1fr) !important; gap: 24px !important; } }
 			`}</style>
 		</Section>
 	);
@@ -2266,7 +2266,11 @@ export function CloudFinalCta() {
 								You're on the list. We'll be in touch.
 							</span>
 						) : (
-							<form onSubmit={submit} style={{ display: "flex", gap: 8 }}>
+							<form
+								onSubmit={submit}
+								className="landing-waitlist-form"
+								style={{ display: "flex", gap: 8 }}
+							>
 								<Input
 									type="email"
 									required
