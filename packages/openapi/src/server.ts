@@ -24,7 +24,7 @@
  * ```
  */
 
-import type { Questpie } from "questpie";
+import type { Questpie, RawRouteDefinition } from "questpie";
 import { module, route } from "questpie";
 
 import { openApiPlugin } from "./plugin.js";
@@ -150,7 +150,9 @@ function resolveOpenApiConfig(
  * export default openApiRoute();
  * ```
  */
-export function openApiRoute(config?: OpenApiConfig) {
+export function openApiRoute(
+	config?: OpenApiConfig,
+): RawRouteDefinition {
 	return route()
 		.get()
 		.raw()
@@ -186,7 +188,9 @@ export function openApiRoute(config?: OpenApiConfig) {
  * export default docsRoute();
  * ```
  */
-export function docsRoute(config?: OpenApiConfig & { scalar?: ScalarConfig }) {
+export function docsRoute(
+	config?: OpenApiConfig & { scalar?: ScalarConfig },
+): RawRouteDefinition {
 	const { scalar: scalarConfig, ...openApiConfig } = config ?? {};
 	return route()
 		.get()

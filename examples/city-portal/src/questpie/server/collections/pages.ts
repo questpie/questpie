@@ -4,7 +4,7 @@
  * app pages with hierarchical structure and block content.
  */
 
-import { uniqueIndex } from "drizzle-orm/pg-core";
+import { type AnyPgColumn, uniqueIndex } from "questpie/drizzle-pg-core";
 
 import { collection } from "#questpie/factories";
 import { slugify } from "@/questpie/server/utils";
@@ -36,8 +36,8 @@ export default collection("pages")
 	}))
 	.indexes(({ table }) => [
 		uniqueIndex("pages_city_slug_unique").on(
-			table.city as any,
-			table.slug as any,
+			table.city as AnyPgColumn,
+			table.slug as AnyPgColumn,
 		),
 	])
 	.title(({ f }) => f.title)
@@ -114,9 +114,10 @@ export default collection("pages")
 		enabled: true,
 		position: "right",
 		defaultWidth: 50,
-		url: ({ record }: { record: any }) => {
+		url: ({ record }) => {
 			// Build preview URL from the page's slug
-			const slug = record.slug || "home";
+			const slug =
+				typeof record.slug === "string" && record.slug ? record.slug : "home";
 			// In multi-tenant setup, we'd need the city slug too
 			return `/pages/${slug}?preview=true`;
 		},

@@ -44,7 +44,9 @@ function CityHomepage() {
 	return <HomepageWithPreview page={page} />;
 }
 
-function HomepageWithPreview({ page }: { page: any }) {
+type HomepagePage = NonNullable<ReturnType<typeof Route.useLoaderData>["page"]>;
+
+function HomepageWithPreview({ page }: { page: HomepagePage }) {
 	const router = useRouter();
 
 	const {

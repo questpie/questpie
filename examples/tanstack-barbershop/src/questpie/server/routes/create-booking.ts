@@ -43,12 +43,12 @@ export default route()
 
 		// Check for overlapping appointments
 		const activeAppointments = allAppointments.docs.filter(
-			(apt: any) => apt.status !== "cancelled",
+			(apt) => apt.status !== "cancelled",
 		);
 
 		// Get service durations for existing appointments
 		const serviceIds = [
-			...new Set(activeAppointments.map((apt: any) => apt.service)),
+			...new Set(activeAppointments.map((apt) => apt.service)),
 		];
 		const servicesMap = new Map<string, { duration: number }>();
 
@@ -64,7 +64,7 @@ export default route()
 		}
 
 		// Check for time slot conflicts
-		const hasConflict = activeAppointments.some((apt: any) => {
+		const hasConflict = activeAppointments.some((apt) => {
 			const aptStart = new Date(apt.scheduledAt);
 			const aptDuration =
 				servicesMap.get(apt.service as string)?.duration ?? service.duration;

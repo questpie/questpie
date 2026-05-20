@@ -4,7 +4,7 @@
  * This is the tenant collection - not scoped itself, but provides the scope for other collections.
  */
 
-import { uniqueIndex } from "drizzle-orm/pg-core";
+import { type AnyPgColumn, uniqueIndex } from "questpie/drizzle-pg-core";
 
 import { collection } from "#questpie/factories";
 
@@ -38,7 +38,7 @@ export default collection("cities")
 			.description("Whether this city portal is publicly accessible"),
 	}))
 	.indexes(({ table }) => [
-		uniqueIndex("cities_slug_unique").on(table.slug as any),
+		uniqueIndex("cities_slug_unique").on(table.slug as AnyPgColumn),
 	])
 	.title(({ f }) => f.name)
 	.admin(({ c }) => ({

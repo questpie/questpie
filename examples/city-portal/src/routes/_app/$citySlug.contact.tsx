@@ -139,7 +139,7 @@ function ContactPage() {
 						Departments
 					</h2>
 					<div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-						{contacts.map((contact: any) => (
+						{contacts.map((contact) => (
 							<div
 								key={contact.id}
 								className="rounded-lg border p-6 transition-shadow hover:shadow-md"

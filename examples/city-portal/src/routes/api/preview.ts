@@ -15,7 +15,9 @@ import { createFileRoute } from "@tanstack/react-router";
 import { createPreviewTokenVerifier } from "@questpie/admin/modules/admin";
 import { createDraftModeCookie } from "@questpie/admin/shared";
 
-const verifyPreviewToken = createPreviewTokenVerifier();
+const verifyPreviewToken = createPreviewTokenVerifier(
+	process.env.BETTER_AUTH_SECRET || "demo-secret-change-in-production",
+);
 
 export const Route = createFileRoute("/api/preview")({
 	server: {
@@ -43,7 +45,7 @@ export const Route = createFileRoute("/api/preview")({
 					return new Response("Missing token parameter", { status: 400 });
 				}
 
-				const payload = verifyPreviewToken(token);
+				const payload = await verifyPreviewToken(token);
 
 				if (!payload) {
 					return new Response("Invalid or expired preview token", {

@@ -6,7 +6,7 @@
 		"jsx": "react-jsx",
 		"module": "ESNext",
 		"lib": ["ES2022", "DOM", "DOM.Iterable"],
-		"types": ["vite/client"],
+		"types": ["bun-types", "vite/client"],
 		"moduleResolution": "bundler",
 		"resolveJsonModule": true,
 		"allowImportingTsExtensions": true,
@@ -23,7 +23,8 @@
 			"@/*": ["./src/*"],
 			"~/*": ["./src/*"],
 			"#questpie": ["./src/questpie/server/.generated/index.ts"],
-			"#questpie/*": ["./src/questpie/server/.generated/*"]
+			"#questpie/*": ["./src/questpie/server/.generated/*"],
+			"#questpie/admin/*": ["../../packages/admin/src/*"]
 		}
 	}
 }

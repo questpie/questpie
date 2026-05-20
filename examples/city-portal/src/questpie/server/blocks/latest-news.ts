@@ -34,14 +34,12 @@ export const latestNewsBlock = block("latest-news")
 			.default("grid"),
 	}))
 	.prefetch(async ({ values, ctx }) => {
-		const where: any = {};
-		if (values.category && values.category !== "all") {
-			where.category = values.category;
-		}
-
 		const res = await ctx.collections.news.find({
-			limit: (values.count as number) || 3,
-			where,
+			limit: values.count || 3,
+			where:
+				values.category && values.category !== "all"
+					? { category: values.category }
+					: {},
 			orderBy: values.showFeatured
 				? [{ isFeatured: "desc" }, { publishedAt: "desc" }]
 				: { publishedAt: "desc" },

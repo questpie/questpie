@@ -18,8 +18,7 @@ export const Route = createFileRoute("/_app/$citySlug/news/$slug")({
 
 	head: ({ loaderData }) => {
 		if (!loaderData) return { meta: [] };
-		const data = loaderData as { article: any };
-		const article = data.article;
+		const article = loaderData.article;
 		return {
 			meta: [
 				{ title: article ? `${article.title} - News` : "Article Not Found" },
@@ -33,6 +32,7 @@ export const Route = createFileRoute("/_app/$citySlug/news/$slug")({
 function NewsDetail() {
 	const { article } = Route.useLoaderData();
 	const { citySlug } = useParams({ from: "/_app/$citySlug" });
+	const imageUrl = (article.image as { url?: string } | undefined)?.url;
 
 	return (
 		<article className="container mx-auto px-4 py-12">
@@ -104,10 +104,10 @@ function NewsDetail() {
 			</header>
 
 			{/* Featured Image */}
-			{article.image?.url && (
+			{imageUrl && (
 				<div className="mb-8 max-w-4xl">
 					<img
-						src={article.image.url}
+						src={imageUrl}
 						alt={article.title}
 						className="max-h-[500px] w-full rounded-lg object-cover"
 					/>
@@ -117,7 +117,7 @@ function NewsDetail() {
 			{/* Article Content */}
 			{article.content && (
 				<div className="prose max-w-3xl">
-					<RichTextRenderer content={article.content as any} />
+					<RichTextRenderer content={article.content} />
 				</div>
 			)}
 		</article>

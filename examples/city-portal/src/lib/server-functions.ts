@@ -36,6 +36,7 @@ export const getCities = createServerFn({ method: "GET" }).handler(async () => {
 		{
 			where: { isActive: true },
 			orderBy: { name: "asc" },
+			with: { logo: true },
 		},
 		ctx,
 	);
@@ -157,19 +158,18 @@ export const getNewsList = createServerFn({ method: "GET" })
 		const city = cityResult.docs[0];
 		if (!city) throw notFound();
 
-		const where: any = {
-			city: city.id,
-			isPublished: true,
-		};
-		if (data.category && data.category !== "all") {
-			where.category = data.category;
-		}
-
 		const result = await app.collections.news.find(
 			{
-				where,
+				where: {
+					city: city.id,
+					isPublished: true,
+					...(data.category && data.category !== "all"
+						? { category: data.category }
+						: {}),
+				},
 				limit: data.limit || 20,
 				orderBy: { isFeatured: "desc", publishedAt: "desc" },
+				with: { image: true },
 			},
 			ctx,
 		);
@@ -220,14 +220,12 @@ export const getAnnouncementsList = createServerFn({ method: "GET" })
 		const city = cityResult.docs[0];
 		if (!city) throw notFound();
 
-		const where: any = { city: city.id };
-		if (!data.showExpired) {
-			where.validTo = { gte: new Date() };
-		}
-
 		const result = await app.collections.announcements.find(
 			{
-				where,
+				where: {
+					city: city.id,
+					...(data.showExpired ? {} : { validTo: { gte: new Date() } }),
+				},
 				orderBy: { isPinned: "desc", validFrom: "desc" },
 				limit: 50,
 			},
@@ -254,14 +252,15 @@ export const getDocumentsList = createServerFn({ method: "GET" })
 		const city = cityResult.docs[0];
 		if (!city) throw notFound();
 
-		const where: any = { city: city.id, isPublished: true };
-		if (data.category && data.category !== "all") {
-			where.category = data.category;
-		}
-
 		const result = await app.collections.documents.find(
 			{
-				where,
+				where: {
+					city: city.id,
+					isPublished: true,
+					...(data.category && data.category !== "all"
+						? { category: data.category }
+						: {}),
+				},
 				limit: data.limit || 50,
 				orderBy: { publishedDate: "desc" },
 				with: { file: true },

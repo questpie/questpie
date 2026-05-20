@@ -4,7 +4,7 @@
  * Links users to cities they can manage, with role-based access.
  */
 
-import { uniqueIndex } from "drizzle-orm/pg-core";
+import { type AnyPgColumn, uniqueIndex } from "questpie/drizzle-pg-core";
 
 import { collection } from "#questpie/factories";
 
@@ -26,7 +26,10 @@ export default collection("cityMembers")
 			),
 	}))
 	.indexes(({ table }) => [
-		uniqueIndex("city_members_unique").on(table.user as any, table.city as any),
+		uniqueIndex("city_members_unique").on(
+			table.user as AnyPgColumn,
+			table.city as AnyPgColumn,
+		),
 	])
 	.admin(({ c }) => ({
 		label: "City Members",

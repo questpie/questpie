@@ -43,11 +43,11 @@ export const Route = createFileRoute("/_app/$citySlug")({
 	},
 
 	head: ({ loaderData }) => {
-		const data = loaderData as { city: any; settings: any } | undefined;
-		const settings = data?.settings;
+		const settings = loaderData?.settings;
 		return {
 			title:
-				settings?.metaTitle || `${data?.city?.name ?? "City"} - City Council`,
+				settings?.metaTitle ||
+				`${loaderData?.city?.name ?? "City"} - City Council`,
 			meta: settings?.metaDescription
 				? [{ name: "description", content: settings.metaDescription }]
 				: [],

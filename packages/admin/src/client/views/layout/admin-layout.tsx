@@ -411,7 +411,7 @@ export function AdminLayout({
 					{secondaryRailConfig?.placement !== "right" && secondaryRail}
 
 					{/* Content Area */}
-					<SidebarInset className="qa-admin-layout__content bg-background flex h-svh flex-col overflow-hidden md:rounded-tl-2xl">
+					<SidebarInset className="qa-admin-layout__content bg-background flex h-svh scrollbar-none flex-col overflow-hidden md:rounded-t-2xl">
 						{/* Header (optional) */}
 						{shouldShowHeader && header && (
 							<header className="qa-admin-layout__header border-border-subtle border-b">

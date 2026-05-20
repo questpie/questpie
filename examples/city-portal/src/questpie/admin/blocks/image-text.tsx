@@ -6,8 +6,14 @@ import { RichTextRenderer } from "@questpie/admin/client";
 
 import type { BlockProps } from "../.generated/client";
 
+function getUrl(value: unknown): string | undefined {
+	if (!value || typeof value !== "object") return undefined;
+	const url = (value as Record<string, unknown>).url;
+	return typeof url === "string" ? url : undefined;
+}
+
 export function ImageTextRenderer({ values, data }: BlockProps<"image-text">) {
-	const imageUrl = (data?.image as any)?.url || values.image;
+	const imageUrl = getUrl(data?.image) || values.image;
 	const isImageLeft = values.imagePosition !== "right";
 
 	return (

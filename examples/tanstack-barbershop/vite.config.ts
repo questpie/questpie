@@ -1,24 +1,22 @@
 import babel from "@rolldown/plugin-babel";
-import { iconifyPreload } from "@questpie/vite-plugin-iconify";
 import tailwindcss from "@tailwindcss/vite";
 import { devtools } from "@tanstack/devtools-vite";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import viteReact, { reactCompilerPreset } from "@vitejs/plugin-react";
 import { nitro } from "nitro/vite";
-import { defineConfig } from "vite";
+import { defineConfig, type PluginOption } from "vite";
+
+import { iconifyPreload } from "@questpie/vite-plugin-iconify";
 
 const config = defineConfig(({ mode }) => ({
 	plugins: [
 		iconifyPreload({
-			scan: [
-				"src/**/*.{ts,tsx}",
-				"../../packages/admin/src/**/*.{ts,tsx}",
-			],
+			scan: ["src/**/*.{ts,tsx}", "../../packages/admin/src/**/*.{ts,tsx}"],
 		}),
 		devtools(),
 		nitro({
 			preset: "bun",
-		}) as any,
+		}) as unknown as PluginOption,
 		tailwindcss(),
 		tanstackStart(),
 		viteReact(),

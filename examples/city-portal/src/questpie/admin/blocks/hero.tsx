@@ -4,9 +4,14 @@
 
 import type { BlockProps } from "../.generated/client";
 
+function getUrl(value: unknown): string | undefined {
+	if (!value || typeof value !== "object") return undefined;
+	const url = (value as Record<string, unknown>).url;
+	return typeof url === "string" ? url : undefined;
+}
+
 export function HeroRenderer({ values, data, children }: BlockProps<"hero">) {
-	const bgImageUrl =
-		(data?.backgroundImage as any)?.url || values.backgroundImage;
+	const bgImageUrl = getUrl(data?.backgroundImage) || values.backgroundImage;
 
 	const heightClasses: Record<string, string> = {
 		small: "min-h-[40vh]",

@@ -9,11 +9,18 @@ import { type PgVarcharBuilder, varchar } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import type { DefaultFieldState } from "../../../fields/field-class-types.js";
-import { field } from "../../../fields/field-class.js";
+import { type Field, field } from "../../../fields/field-class.js";
 import { fieldType, wrapFieldComplete } from "../../../fields/field-type.js";
 import type { FieldWithMethods } from "../../../fields/field-with-methods.js";
-import { belongsToOps, multipleOps, toManyOps } from "../../../fields/operators/builtin.js";
-import type { ReferentialAction, RelationFieldMetadata } from "../../../fields/types.js";
+import {
+	belongsToOps,
+	multipleOps,
+	toManyOps,
+} from "../../../fields/operators/builtin.js";
+import type {
+	ReferentialAction,
+	RelationFieldMetadata,
+} from "../../../fields/types.js";
 
 declare global {
 	namespace Questpie {
@@ -93,44 +100,46 @@ export function upload<TTo extends string = "assets">(
 
 	const isM2M = !!through;
 
-	return wrapFieldComplete(field<UploadFieldState<TTo>>({
-		type: "upload",
-		columnFactory: isM2M ? null : (name) => varchar(name, { length: 36 }),
-		schemaFactory: () =>
-			isM2M ? z.array(z.string().uuid()) : z.string().uuid(),
-		operatorSet: isM2M ? toManyOps : belongsToOps,
-		notNull: false,
-		hasDefault: false,
-		localized: false,
-		virtual: isM2M,
-		input: true,
-		output: true,
-		isArray: false,
-		to,
-		through,
-		sourceField,
-		targetField,
-		metadataFactory: (state) =>
-			({
-				type: "relation",
-				label: state.label,
-				description: state.description,
-				required: state.notNull ?? false,
-				localized: state.localized ?? false,
-				readOnly: state.input === false,
-				writeOnly: state.output === false,
-				targetCollection: (state.to as string) ?? "assets",
-				relationType: state.through ? "manyToMany" : "belongsTo",
-				through: state.through as string | undefined,
-				sourceField: state.sourceField,
-				targetField: state.targetField,
-				isUpload: true,
-				meta: state.extensions?.admin,
-			}) as RelationFieldMetadata,
-	}), uploadFieldType.methods, {}) as any;
+	return wrapFieldComplete(
+		field<UploadFieldState<TTo>>({
+			type: "upload",
+			columnFactory: isM2M ? null : (name) => varchar(name, { length: 36 }),
+			schemaFactory: () =>
+				isM2M ? z.array(z.string().uuid()) : z.string().uuid(),
+			operatorSet: isM2M ? toManyOps : belongsToOps,
+			notNull: false,
+			hasDefault: false,
+			localized: false,
+			virtual: isM2M,
+			input: true,
+			output: true,
+			isArray: false,
+			to,
+			through,
+			sourceField,
+			targetField,
+			metadataFactory: (state) =>
+				({
+					type: "relation",
+					label: state.label,
+					description: state.description,
+					required: state.notNull ?? false,
+					localized: state.localized ?? false,
+					readOnly: state.input === false,
+					writeOnly: state.output === false,
+					targetCollection: (state.to as string) ?? "assets",
+					relationType: state.through ? "manyToMany" : "belongsTo",
+					through: state.through as string | undefined,
+					sourceField: state.sourceField,
+					targetField: state.targetField,
+					isUpload: true,
+					meta: state.extensions?.admin,
+				}) as RelationFieldMetadata,
+		}),
+		uploadFieldType.methods,
+		{},
+	) as any;
 }
-
-import type { Field } from "../../../fields/field-class.js";
 
 // ---- fieldType() definition (QUE-265) ----
 

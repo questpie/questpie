@@ -194,7 +194,7 @@ function BarberProfilePage() {
 										Services by {String(previewBarber.name).split(" ")[0]}
 									</h2>
 									<div className="space-y-4">
-										{previewBarber.services.map((service: any) => (
+										{previewBarber.services.map((service) => (
 											<div
 												key={service.id}
 												className="border-border bg-card hover:border-highlight/30 group flex flex-col justify-between border p-6 transition-all sm:flex-row sm:items-center"

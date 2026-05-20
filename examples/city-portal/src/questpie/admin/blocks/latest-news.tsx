@@ -8,7 +8,7 @@ export function LatestNewsRenderer({
 	values,
 	data,
 }: BlockProps<"latest-news">) {
-	const news = (data as any)?.news || [];
+	const news = data?.news ?? [];
 
 	return (
 		<section className="px-6 py-16">
@@ -32,7 +32,7 @@ export function LatestNewsRenderer({
 							: "grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3"
 					}
 				>
-					{news.map((article: any) => (
+					{news.map((article) => (
 						<article
 							key={article.id}
 							className="overflow-hidden rounded-lg border transition-shadow hover:shadow-md"

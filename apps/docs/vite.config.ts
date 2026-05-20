@@ -4,7 +4,7 @@ import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import viteReact, { reactCompilerPreset } from "@vitejs/plugin-react";
 import mdx from "fumadocs-mdx/vite";
 import { nitro } from "nitro/vite";
-import { defineConfig } from "vite";
+import { defineConfig, type PluginOption } from "vite";
 
 import { iconifyPreload } from "@questpie/vite-plugin-iconify";
 
@@ -17,7 +17,7 @@ export default defineConfig({
 			scan: ["src/**/*.{ts,tsx}", "../../packages/admin/src/**/*.{ts,tsx}"],
 		}),
 		mdx(await import("./source.config")),
-		nitro({ preset: "bun" }) as any,
+		nitro({ preset: "bun" }) as unknown as PluginOption,
 		tailwindcss(),
 		tanstackStart({
 			prerender: {
@@ -28,7 +28,7 @@ export default defineConfig({
 			sitemap: {
 				host: "https://questpie.com",
 			},
-		} as any),
+		} as Parameters<typeof tanstackStart>[0]),
 		viteReact(),
 		babel({
 			presets: [reactCompilerPreset()],

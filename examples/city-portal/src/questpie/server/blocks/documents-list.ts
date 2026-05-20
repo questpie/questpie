@@ -28,14 +28,14 @@ export const documentsListBlock = block("documents-list")
 		limit: f.number().label("Max Documents").default(10),
 	}))
 	.prefetch(async ({ values, ctx }) => {
-		const where: any = { isPublished: true };
-		if (values.category && values.category !== "all") {
-			where.category = values.category;
-		}
-
 		const res = await ctx.collections.documents.find({
-			limit: (values.limit as number) || 10,
-			where,
+			limit: values.limit || 10,
+			where: {
+				isPublished: true,
+				...(values.category && values.category !== "all"
+					? { category: values.category }
+					: {}),
+			},
 			orderBy: { publishedDate: "desc" },
 		});
 		return { documents: res.docs };

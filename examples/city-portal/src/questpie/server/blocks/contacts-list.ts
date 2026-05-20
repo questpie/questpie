@@ -18,16 +18,18 @@ export const contactsListBlock = block("contacts-list")
 			.description("Array of contact IDs (if not showing all)"),
 	}))
 	.prefetch(async ({ values, ctx }) => {
-		const findOptions: any = {
-			orderBy: { order: "asc" },
-		};
-
 		if (!values.showAll) {
 			const ids = (values.contactIds as string[]) || [];
 			if (ids.length === 0) return { contacts: [] };
-			findOptions.where = { id: { in: ids } };
+			const res = await ctx.collections.contacts.find({
+				orderBy: { order: "asc" },
+				where: { id: { in: ids } },
+			});
+			return { contacts: res.docs };
 		}
 
-		const res = await ctx.collections.contacts.find(findOptions);
+		const res = await ctx.collections.contacts.find({
+			orderBy: { order: "asc" },
+		});
 		return { contacts: res.docs };
 	});

@@ -17,7 +17,11 @@ import type { DefaultFieldState } from "../../../fields/field-class-types.js";
 import { Field, field } from "../../../fields/field-class.js";
 import { fieldType, wrapFieldComplete } from "../../../fields/field-type.js";
 import type { FieldWithMethods } from "../../../fields/field-with-methods.js";
-import { belongsToOps, multipleOps, toManyOps } from "../../../fields/operators/builtin.js";
+import {
+	belongsToOps,
+	multipleOps,
+	toManyOps,
+} from "../../../fields/operators/builtin.js";
 import type {
 	InferredRelationType,
 	ReferentialAction,
@@ -49,8 +53,17 @@ export type RelationFieldState<TTo extends string = string> =
 	};
 
 export interface RelationFieldMethods {
-	hasMany(config: { foreignKey: string; onDelete?: ReferentialAction; relationName?: string }): any;
-	manyToMany(config: { through: string; sourceField?: string; targetField?: string; relationName?: string }): any;
+	hasMany(config: {
+		foreignKey: string;
+		onDelete?: ReferentialAction;
+		relationName?: string;
+	}): any;
+	manyToMany(config: {
+		through: string;
+		sourceField?: string;
+		targetField?: string;
+		relationName?: string;
+	}): any;
 	multiple(): any;
 	onDelete(action: ReferentialAction): any;
 	onUpdate(action: ReferentialAction): any;
@@ -224,19 +237,42 @@ export function relation<TTo extends string>(
 		const typeNames = Object.keys(types);
 		const maxTypeLength = Math.max(...typeNames.map((t) => t.length), 50);
 
-		return wrapFieldComplete(field<RelationFieldState>({
+		return wrapFieldComplete(
+			field<RelationFieldState>({
+				type: "relation",
+				columnFactory: (name) => {
+					// Returns an array of column builders — collection builder handles multi-column
+					const typeCol = varchar(`${name}Type`, { length: maxTypeLength });
+					const idCol = varchar(`${name}Id`, { length: 36 });
+					return [typeCol, idCol] as any;
+				},
+				schemaFactory: () =>
+					z.object({
+						type: z.enum(typeNames as [string, ...string[]]),
+						id: z.string().uuid(),
+					}),
+				operatorSet: belongsToOps,
+				notNull: false,
+				hasDefault: false,
+				localized: false,
+				virtual: false,
+				input: true,
+				output: true,
+				isArray: false,
+				to: target,
+				metadataFactory: buildRelationMetadata,
+			}),
+			relationFieldType.methods,
+			{},
+		) as any;
+	}
+
+	// Default: belongsTo
+	return wrapFieldComplete(
+		field<RelationFieldState<TTo>>({
 			type: "relation",
-			columnFactory: (name) => {
-				// Returns an array of column builders — collection builder handles multi-column
-				const typeCol = varchar(`${name}Type`, { length: maxTypeLength });
-				const idCol = varchar(`${name}Id`, { length: 36 });
-				return [typeCol, idCol] as any;
-			},
-			schemaFactory: () =>
-				z.object({
-					type: z.enum(typeNames as [string, ...string[]]),
-					id: z.string().uuid(),
-				}),
+			columnFactory: (name) => varchar(name, { length: 36 }),
+			schemaFactory: () => z.string().uuid(),
 			operatorSet: belongsToOps,
 			notNull: false,
 			hasDefault: false,
@@ -247,25 +283,10 @@ export function relation<TTo extends string>(
 			isArray: false,
 			to: target,
 			metadataFactory: buildRelationMetadata,
-		}), relationFieldType.methods, {}) as any;
-	}
-
-	// Default: belongsTo
-	return wrapFieldComplete(field<RelationFieldState<TTo>>({
-		type: "relation",
-		columnFactory: (name) => varchar(name, { length: 36 }),
-		schemaFactory: () => z.string().uuid(),
-		operatorSet: belongsToOps,
-		notNull: false,
-		hasDefault: false,
-		localized: false,
-		virtual: false,
-		input: true,
-		output: true,
-		isArray: false,
-		to: target,
-		metadataFactory: buildRelationMetadata,
-	}), relationFieldType.methods, {}) as any;
+		}),
+		relationFieldType.methods,
+		{},
+	) as any;
 }
 
 // ============================================================================
@@ -291,7 +312,14 @@ export const relationFieldType = fieldType("relation", {
 		metadataFactory: buildRelationMetadata,
 	}),
 	methods: {
-		hasMany: (f: Field<any>, config: { foreignKey: string; onDelete?: ReferentialAction; relationName?: string }) =>
+		hasMany: (
+			f: Field<any>,
+			config: {
+				foreignKey: string;
+				onDelete?: ReferentialAction;
+				relationName?: string;
+			},
+		) =>
 			new Field({
 				...f._state,
 				hasMany: true,
@@ -302,7 +330,15 @@ export const relationFieldType = fieldType("relation", {
 				virtual: true,
 				operatorSet: toManyOps,
 			}),
-		manyToMany: (f: Field<any>, config: { through: string; sourceField?: string; targetField?: string; relationName?: string }) =>
+		manyToMany: (
+			f: Field<any>,
+			config: {
+				through: string;
+				sourceField?: string;
+				targetField?: string;
+				relationName?: string;
+			},
+		) =>
 			new Field({
 				...f._state,
 				hasMany: true,

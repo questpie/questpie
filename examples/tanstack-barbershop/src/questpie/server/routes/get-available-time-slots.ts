@@ -22,13 +22,13 @@ export default route()
 		const [barber, service] = await Promise.all([
 			collections.barbers
 				.findOne({ where: { id: barberId } })
-				.catch((e: any) => {
+				.catch((e: unknown) => {
 					console.log("Barber not found for ID:", barberId, e);
 					return null;
 				}),
 			collections.services
 				.findOne({ where: { id: serviceId } })
-				.catch((e: any) => {
+				.catch((e: unknown) => {
 					console.log("Service not found for ID:", serviceId, e);
 					return null;
 				}),
@@ -55,10 +55,10 @@ export default route()
 		const [year, month, day] = date.split("-").map(Number);
 		const dateObj = new Date(year, month - 1, day);
 		const dayKey = dayNames[dateObj.getDay()];
-		const workingHours = barber.workingHours as Record<string, any> | null;
+		const workingHours = barber.workingHours;
 		const daySchedule = workingHours?.[dayKey];
 
-		if (!daySchedule?.isOpen) {
+		if (!daySchedule?.isOpen || !daySchedule.start || !daySchedule.end) {
 			return { slots: [] };
 		}
 
@@ -78,11 +78,11 @@ export default route()
 		});
 
 		const activeAppointments = appointments.docs.filter(
-			(apt: any) => apt.status !== "cancelled",
+			(apt) => apt.status !== "cancelled",
 		);
 
 		const serviceIds = [
-			...new Set(activeAppointments.map((apt: any) => apt.service)),
+			...new Set(activeAppointments.map((apt) => apt.service)),
 		];
 		const servicesMap = new Map<string, { duration: number }>();
 
@@ -119,7 +119,7 @@ export default route()
 				slotTime.getTime() + service.duration * 60000,
 			);
 
-			const isOccupied = activeAppointments.some((apt: any) => {
+			const isOccupied = activeAppointments.some((apt) => {
 				const aptStart = new Date(apt.scheduledAt);
 				const aptDuration =
 					servicesMap.get(apt.service as string)?.duration ?? service.duration;

@@ -1,4 +1,5 @@
 import { and, eq, inArray, isNull, lte, or } from "questpie/drizzle";
+import type { AnyPgColumn } from "questpie/drizzle-pg-core";
 
 import type { WorkflowsConfigInput } from "../../../config.js";
 import type { WorkflowRuntimeLogger } from "../routes/_helpers.js";
@@ -72,6 +73,40 @@ const DEFAULT_LEASE_SECONDS = 300;
 const DEFAULT_RETRY_DELAY_SECONDS = 5;
 const MIN_SECONDS = 1;
 const EXECUTABLE_STATUSES = ["pending", "running", "suspended"] as const;
+
+type WorkflowInstanceTable = {
+	id: AnyPgColumn;
+	status: AnyPgColumn;
+	lockOwner: AnyPgColumn;
+	lockedAt: AnyPgColumn;
+	lockExpiresAt: AnyPgColumn;
+	updatedAt: AnyPgColumn;
+};
+
+type WorkflowInstanceRow = {
+	status?: unknown;
+	lockExpiresAt?: unknown;
+};
+
+type WorkflowLockDb = {
+	update(table: WorkflowInstanceTable): {
+		set(values: Record<string, unknown>): {
+			where(condition: unknown): {
+				returning(): Promise<WorkflowInstanceRow[]>;
+				returning<TSelection extends Record<string, unknown>>(
+					selection: TSelection,
+				): Promise<Array<Record<keyof TSelection, unknown>>>;
+			};
+		};
+	};
+	select(): {
+		from(table: WorkflowInstanceTable): {
+			where(condition: unknown): {
+				limit(count: number): Promise<WorkflowInstanceRow[]>;
+			};
+		};
+	};
+};
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -183,7 +218,10 @@ function getDbProvider(
 		);
 	}
 
-	return new DbWorkflowExecutionLockProvider(ctx.db, table as any);
+	return new DbWorkflowExecutionLockProvider(
+		ctx.db as WorkflowLockDb,
+		table as WorkflowInstanceTable,
+	);
 }
 
 function getProvider(
@@ -195,8 +233,8 @@ function getProvider(
 
 class DbWorkflowExecutionLockProvider implements WorkflowExecutionLockProvider {
 	constructor(
-		private readonly db: any,
-		private readonly table: any,
+		private readonly db: WorkflowLockDb,
+		private readonly table: WorkflowInstanceTable,
 	) {}
 
 	async claim(
@@ -237,7 +275,7 @@ class DbWorkflowExecutionLockProvider implements WorkflowExecutionLockProvider {
 
 		const currentStatus =
 			typeof existing.status === "string" ? existing.status : undefined;
-		if (!currentStatus || !EXECUTABLE_STATUSES.includes(currentStatus as any)) {
+		if (!currentStatus || !isExecutableStatus(currentStatus)) {
 			return {
 				status: "skipped",
 				reason: "not-executable",
@@ -286,7 +324,9 @@ class DbWorkflowExecutionLockProvider implements WorkflowExecutionLockProvider {
 			);
 	}
 
-	private async findInstance(instanceId: string): Promise<any | null> {
+	private async findInstance(
+		instanceId: string,
+	): Promise<WorkflowInstanceRow | null> {
 		const rows = await this.db
 			.select()
 			.from(this.table)
@@ -307,6 +347,12 @@ class DbWorkflowExecutionLockProvider implements WorkflowExecutionLockProvider {
 
 		return new Date(input.now.getTime() + input.retryDelayMs);
 	}
+}
+
+function isExecutableStatus(
+	status: string,
+): status is (typeof EXECUTABLE_STATUSES)[number] {
+	return (EXECUTABLE_STATUSES as readonly string[]).includes(status);
 }
 
 function toValidDate(value: unknown): Date | null {
