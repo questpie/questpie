@@ -361,10 +361,12 @@
 
 @utility control-surface {
 	height: var(--control-height);
-	border: 1px solid var(--control-border);
+	border: 1px solid var(--border-subtle);
 	border-radius: var(--control-radius);
-	background-color: var(--control-background);
-	box-shadow: var(--control-shadow);
+	background-color: var(--surface-low);
+	/* Per design.md §4b: inputs feel "pressed in" — inset shadow gives
+	 * controls the opposite depth direction to raised buttons. */
+	box-shadow: var(--control-depth-shadow, var(--control-shadow));
 	transition-property: background-color, border-color, color, box-shadow;
 	transition-duration: var(--motion-duration-base);
 	transition-timing-function: var(--motion-ease-standard);
@@ -492,86 +494,283 @@
 	display: none;
 }
 
-@keyframes landing-field-sweep {
-	from {
-		opacity: 0.34;
-		transform: translate3d(-3%, -1%, 0) scale(1.02);
-	}
-	to {
-		opacity: 0.52;
-		transform: translate3d(3%, 1%, 0) scale(1.04);
-	}
+/* ============================================================
+ * Landing pages — design tokens + utilities
+ * Used by /, /cloud, /autopilot pages and their section components
+ * ============================================================ */
+
+:root,
+.dark,
+.light,
+:root.light {
+	--pillar-framework: #b700ff;
+	--pillar-cloud: #60a5fa;
+	--pillar-autopilot: #4ade80;
 }
 
-@keyframes landing-trace-drift {
-	from {
-		transform: translate3d(-1rem, -0.75rem, 0);
-	}
-	to {
-		transform: translate3d(1rem, 0.75rem, 0);
-	}
+/* Design system tokens (design.md §4 shadow recipes). Three depth
+ * levels: 4a button (raised, gradient + inset + outer glow), 4b input
+ * (inset / pressed-in), 4c floating (popovers, dialogs only).
+ * Persistent surfaces (cards, tables, toolbars) stay flat with a
+ * hairline border. */
+
+/* 4a — primary button depth */
+:root, .dark, .light, :root.light {
+	--btn-primary-shadow:
+		inset 0 1px 0 0 color-mix(in srgb, white 22%, transparent),
+		inset 0 -1px 0 0 color-mix(in srgb, black 18%, transparent),
+		0 1px 2px -1px color-mix(in srgb, var(--primary) 60%, transparent),
+		0 2px 6px -2px rgba(0, 0, 0, 0.35);
+	--btn-primary-shadow-pressed:
+		inset 0 1px 2px 0 color-mix(in srgb, black 20%, transparent),
+		0 1px 1px -1px color-mix(in srgb, var(--primary) 40%, transparent);
+	--btn-primary-gradient: linear-gradient(
+		to bottom,
+		color-mix(in srgb, var(--primary) 100%, white 4%),
+		var(--primary)
+	);
+
+	/* 4a low-intensity — secondary button depth */
+	--btn-secondary-shadow:
+		inset 0 1px 0 0 color-mix(in srgb, white 6%, transparent),
+		inset 0 -1px 0 0 color-mix(in srgb, black 8%, transparent),
+		0 1px 2px -1px rgba(0, 0, 0, 0.15),
+		0 2px 4px -2px rgba(0, 0, 0, 0.18);
+	--btn-secondary-shadow-pressed:
+		inset 0 1px 2px 0 color-mix(in srgb, black 10%, transparent);
+	--btn-secondary-gradient: linear-gradient(
+		to bottom,
+		color-mix(in srgb, var(--card) 100%, white 6%),
+		var(--card)
+	);
+
+	/* 4b — input / control depth (pressed-in feel) */
+	--control-depth-shadow:
+		inset 0 1px 2px 0 color-mix(in srgb, black 14%, transparent),
+		inset 0 0 0 1px color-mix(in srgb, var(--foreground) 2%, transparent);
+}
+.light, :root.light {
+	/* Light mode wants weaker drops + lighter highlights */
+	--btn-secondary-shadow:
+		inset 0 1px 0 0 color-mix(in srgb, white 50%, transparent),
+		inset 0 -1px 0 0 color-mix(in srgb, black 4%, transparent),
+		0 1px 2px -1px rgba(0, 0, 0, 0.06),
+		0 2px 4px -2px rgba(0, 0, 0, 0.08);
+	--control-depth-shadow:
+		inset 0 1px 2px 0 color-mix(in srgb, black 7%, transparent),
+		inset 0 0 0 1px color-mix(in srgb, var(--foreground) 1%, transparent);
 }
 
-@keyframes landing-particle-drift {
-	from {
-		transform: translate3d(0, 0, 0);
-	}
-	to {
-		transform: translate3d(-5rem, -3rem, 0);
-	}
+/* Hairline grid overlay used in hero */
+.landing-grid-bg {
+	background-image: linear-gradient(
+			to right,
+			var(--border-subtle) 1px,
+			transparent 1px
+		),
+		linear-gradient(to bottom, var(--border-subtle) 1px, transparent 1px);
+	background-size: 56px 56px;
+	background-position: -1px -1px;
+	-webkit-mask-image: radial-gradient(
+		ellipse 60% 50% at 50% 0%,
+		black 30%,
+		transparent 80%
+	);
+	mask-image: radial-gradient(
+		ellipse 60% 50% at 50% 0%,
+		black 30%,
+		transparent 80%
+	);
 }
 
-@keyframes hero-panel-sheen {
-	0%,
-	46% {
-		opacity: 0;
-		transform: translateX(-72%);
-	}
-	58%,
-	72% {
-		opacity: var(--hero-shimmer-opacity, 0.2);
-	}
-	100% {
-		opacity: 0;
-		transform: translateX(72%);
-	}
+/* Buttons in landing use shadcn `Button` / `buttonVariants` from
+ * @/components/ui/button — a single source of truth that already
+ * implements the §4a depth recipe (gradient + inset highlight + outer
+ * tinted glow) for default, §4a low-intensity for outline, and flat
+ * for ghost, all with translateY(1px) press and neutral focus ring. */
+
+/* Hairline panels per design.md §3 — persistent surfaces are FLAT with
+ * a hairline border. No persistent drop shadows (§4 forbidden list). */
+.landing-panel {
+	background: var(--card);
+	border: 1px solid var(--border-subtle);
+	border-radius: var(--surface-radius);
+}
+.landing-panel-low {
+	background: var(--surface-low);
+	border: 1px solid var(--border-subtle);
+	border-radius: var(--surface-radius);
 }
 
-.admin-step-content {
-	animation: step-fade-in var(--motion-duration-slow) var(--motion-ease-enter);
+/* Meta uppercase label */
+.landing-eyebrow {
+	font-family: var(--font-mono);
+	font-size: 11px;
+	font-weight: 500;
+	color: var(--foreground-subtle);
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
 }
 
-.hero-carousel-slide {
-	animation: hero-carousel-enter 260ms var(--motion-ease-enter);
+/* Reveal-on-scroll */
+[data-reveal] {
+	opacity: 0;
+	transform: translateY(8px);
+	transition:
+		opacity 600ms var(--motion-ease-enter),
+		transform 600ms var(--motion-ease-enter);
 }
-
-@keyframes hero-carousel-enter {
-	from {
-		opacity: 0;
-		transform: translateY(6px);
-	}
-	to {
-		opacity: 1;
-		transform: translateY(0);
-	}
+[data-reveal][data-visible] {
+	opacity: 1;
+	transform: none;
 }
-
-@keyframes step-fade-in {
-	from {
-		opacity: 0;
-	}
-	to {
-		opacity: 1;
-	}
-}
-
 @media (prefers-reduced-motion: reduce) {
-	.admin-step-content {
-		animation: none !important;
+	[data-reveal] {
+		opacity: 1;
+		transform: none;
+		transition: none;
 	}
+}
 
-	.hero-carousel-slide {
-		animation: none !important;
+/* Thin scrollbar */
+.landing-thin-scroll::-webkit-scrollbar {
+	height: 6px;
+	width: 6px;
+}
+.landing-thin-scroll::-webkit-scrollbar-thumb {
+	background: color-mix(in srgb, var(--border) 60%, transparent);
+	border-radius: 6px;
+}
+
+.landing-mono {
+	font-family: var(--font-mono);
+	font-variant-numeric: tabular-nums;
+}
+.landing-tabular {
+	font-variant-numeric: tabular-nums;
+}
+.landing-balance {
+	text-wrap: balance;
+}
+
+/* Landing mobile-safety overrides. Hero h1 has long words
+ * ("infrastructure.") that overflow narrow columns; allow them to break.
+ * Code blocks and mock tables scroll horizontally so columns stay aligned.
+ * Section padding tightens at narrow viewports — most Section pad props
+ * are set inline so we override with !important. */
+main h1,
+main h2,
+main h3 {
+	overflow-wrap: break-word;
+}
+main h1 {
+	hyphens: auto;
+}
+.landing-panel,
+.landing-panel-low {
+	max-width: 100%;
+	overflow-x: auto;
+}
+/* Mock-table rows inside panels use grid-template-columns with fixed
+ * + 1fr widths that collapse the flexible column on narrow viewports.
+ * Force the inner grid to its natural width so the panel's overflow-x
+ * kicks in horizontal scrolling instead of squishing columns. */
+@media (max-width: 720px) {
+	.landing-panel > div[style*="grid-template-columns"],
+	.landing-panel-low > div[style*="grid-template-columns"] {
+		min-width: max-content;
+	}
+}
+
+@media (max-width: 720px) {
+	main > section {
+		padding-left: 16px !important;
+		padding-right: 16px !important;
+	}
+	/* Hero, footer, and SharedNav use a nested inner div with
+	 * `maxWidth: 1120, padding: "0 24px"` for the desktop layout. On
+	 * mobile that adds another 24px of inset on top of the section
+	 * padding. Override to 0 so the section's own padding governs
+	 * margins. (React serializes inline style without space after the
+	 * colon, so the selector must match `max-width:1120` not
+	 * `max-width: 1120`.) */
+	main > section > div[style*="max-width:1120"] {
+		padding-left: 0 !important;
+		padding-right: 0 !important;
+	}
+	header > div[style*="max-width:1120"] {
+		padding-left: 16px !important;
+		padding-right: 16px !important;
+	}
+	footer > div[style*="max-width:1120"] {
+		padding-left: 0 !important;
+		padding-right: 0 !important;
+	}
+	/* Hero stats strip: flatten 3 cols → 1, swap col dividers for row */
+	.landing-stats-strip {
+		grid-template-columns: 1fr !important;
+	}
+	.landing-stats-strip > .landing-stats-cell {
+		padding: 12px 0 !important;
+		border-right: none !important;
+	}
+	.landing-stats-strip > .landing-stats-cell + .landing-stats-cell {
+		border-top: 1px solid var(--border-subtle);
+	}
+	/* StarBanner stacks copy + repo link vertically. */
+	.landing-star-banner {
+		flex-direction: column !important;
+		align-items: flex-start !important;
+		gap: 12px !important;
+	}
+	/* Waitlist forms (index WaitlistRow + final CTAs) stack input + button. */
+	.landing-waitlist-form {
+		flex-direction: column !important;
+		width: 100%;
+	}
+	.landing-waitlist-form > input,
+	.landing-waitlist-form > button {
+		width: 100% !important;
+		min-width: 0 !important;
+	}
+}
+@media (max-width: 480px) {
+	main > section {
+		padding-top: clamp(48px, 12vw, 88px) !important;
+		padding-bottom: clamp(48px, 12vw, 88px) !important;
+		padding-left: 12px !important;
+		padding-right: 12px !important;
+	}
+	main > section:first-child {
+		padding-top: 96px !important;
+	}
+	header > div[style*="max-width:1120"] {
+		padding-left: 12px !important;
+		padding-right: 12px !important;
+	}
+	footer {
+		padding-left: 12px !important;
+		padding-right: 12px !important;
+	}
+}
+
+/* Global responsive grid breakpoints (per-page inline <style> blocks
+ * only apply on the page that mounts the component, so shared grids
+ * — pricing, footer, use cases — also need their rules here so they
+ * apply on every page that renders them). */
+@media (max-width: 1024px) {
+	.landing-pricing-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+	}
+}
+@media (max-width: 660px) {
+	.landing-uc-grid {
+		grid-template-columns: minmax(0, 1fr) !important;
+	}
+}
+@media (max-width: 560px) {
+	.landing-pricing-grid {
+		grid-template-columns: minmax(0, 1fr) !important;
 	}
 }
 

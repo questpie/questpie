@@ -7,7 +7,12 @@
  */
 
 import _modules from "../modules";
+const _mergedModules = Array.isArray(_modules)
+	? _modules.reduce((acc: any, m: any) => {
+		for (const [k, v] of Object.entries(m)) acc[k] = typeof v === "object" && v !== null && !Array.isArray(v) ? { ...acc[k], ...v } : v;
+		return acc;
+	}, {} as any) : _modules;
 
-const admin = _modules;
+const admin = _mergedModules;
 
 export default admin;

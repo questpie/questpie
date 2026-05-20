@@ -302,4 +302,4 @@ toast.error("Failed to save");
 
 6. **MEDIUM: Using `@phosphor-icons/react` or `lucide-react`** — use `@iconify/react` with `ph:` prefix for all icons.
 
-7. **LOW: Not using shadcn components** — prefer `<Button>`, `<Card>`, `<Input>` from the shadcn component library instead of raw HTML elements. The admin has a consistent brutalist design system.
+7. **LOW: Not using shadcn components** — prefer `<Button>`, `<Card>`, `<Input>` from the shadcn component library instead of raw HTML elements. The admin follows QUESTPIE Neutral Design.

@@ -110,11 +110,6 @@ async function generateSitemap(
 	const staticPages = [
 		{ path: "/cloud", priority: 0.9, changefreq: "weekly" },
 		{ path: "/autopilot", priority: 0.9, changefreq: "weekly" },
-		{ path: "/for/restaurants", priority: 0.7, changefreq: "monthly" },
-		{ path: "/for/ecommerce", priority: 0.7, changefreq: "monthly" },
-		{ path: "/for/agencies", priority: 0.7, changefreq: "monthly" },
-		{ path: "/for/real-estate", priority: 0.7, changefreq: "monthly" },
-		{ path: "/for/portfolios", priority: 0.7, changefreq: "monthly" },
 	];
 
 	for (const sp of staticPages) {

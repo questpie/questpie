@@ -34,7 +34,7 @@ import _adminConfig from "../config/admin";
 // TYPES — composed from typeof references (zero inference cost)
 // ════════════════════════════════════════════════════════════
 
-import type { RouteParamsFromKey, RouteWithParams } from "questpie";
+import type { RouteDefinition, RouteParamsFromKey } from "questpie/types";
 
 export interface WorkflowsCollections {
 	wf_event: typeof _coll_wf_event;
@@ -44,21 +44,21 @@ export interface WorkflowsCollections {
 }
 
 export interface WorkflowsJobs {
-	wfExecute: typeof _job_wfExecute;
-	wfMaintenance: typeof _job_wfMaintenance;
-	wfResume: typeof _job_wfResume;
+	wfExecute: Omit<typeof _job_wfExecute, "handler"> & { handler: (args: unknown) => Promise<unknown> };
+	wfMaintenance: Omit<typeof _job_wfMaintenance, "handler"> & { handler: (args: unknown) => Promise<unknown> };
+	wfResume: Omit<typeof _job_wfResume, "handler"> & { handler: (args: unknown) => Promise<unknown> };
 }
 
 export interface WorkflowsRoutes {
-	cancelAllWorkflowInstances: RouteWithParams<typeof _route_cancelAllWorkflowInstances, RouteParamsFromKey<"cancelAllWorkflowInstances">>;
-	cancelWorkflowInstance: RouteWithParams<typeof _route_cancelWorkflowInstance, RouteParamsFromKey<"cancelWorkflowInstance">>;
-	getWorkflowInstance: RouteWithParams<typeof _route_getWorkflowInstance, RouteParamsFromKey<"getWorkflowInstance">>;
-	listWorkflowDefinitions: RouteWithParams<typeof _route_listWorkflowDefinitions, RouteParamsFromKey<"listWorkflowDefinitions">>;
-	listWorkflowInstances: RouteWithParams<typeof _route_listWorkflowInstances, RouteParamsFromKey<"listWorkflowInstances">>;
-	retryAllWorkflowInstances: RouteWithParams<typeof _route_retryAllWorkflowInstances, RouteParamsFromKey<"retryAllWorkflowInstances">>;
-	retryWorkflowInstance: RouteWithParams<typeof _route_retryWorkflowInstance, RouteParamsFromKey<"retryWorkflowInstance">>;
-	sendWorkflowEvent: RouteWithParams<typeof _route_sendWorkflowEvent, RouteParamsFromKey<"sendWorkflowEvent">>;
-	triggerWorkflow: RouteWithParams<typeof _route_triggerWorkflow, RouteParamsFromKey<"triggerWorkflow">>;
+	cancelAllWorkflowInstances: RouteDefinition<unknown, unknown, RouteParamsFromKey<"cancelAllWorkflowInstances">>;
+	cancelWorkflowInstance: RouteDefinition<unknown, unknown, RouteParamsFromKey<"cancelWorkflowInstance">>;
+	getWorkflowInstance: RouteDefinition<unknown, unknown, RouteParamsFromKey<"getWorkflowInstance">>;
+	listWorkflowDefinitions: RouteDefinition<unknown, unknown, RouteParamsFromKey<"listWorkflowDefinitions">>;
+	listWorkflowInstances: RouteDefinition<unknown, unknown, RouteParamsFromKey<"listWorkflowInstances">>;
+	retryAllWorkflowInstances: RouteDefinition<unknown, unknown, RouteParamsFromKey<"retryAllWorkflowInstances">>;
+	retryWorkflowInstance: RouteDefinition<unknown, unknown, RouteParamsFromKey<"retryWorkflowInstance">>;
+	sendWorkflowEvent: RouteDefinition<unknown, unknown, RouteParamsFromKey<"sendWorkflowEvent">>;
+	triggerWorkflow: RouteDefinition<unknown, unknown, RouteParamsFromKey<"triggerWorkflow">>;
 }
 
 export interface WorkflowsServices {

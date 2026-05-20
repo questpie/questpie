@@ -15,6 +15,13 @@
  * @see RFC-MODULE-ARCHITECTURE §9.1 (Root App — .generated/index.ts)
  */
 
+import {
+	categoryRecordEntry,
+	categoryTypeEntry,
+	importStatement,
+	safeKey,
+	sortedValues,
+} from "./category-emit.js";
 import type {
 	CategoryDeclaration,
 	DiscoveredFile,
@@ -87,12 +94,11 @@ export function generateTemplate(options: TemplateOptions): string {
 	lines.push("");
 
 	// Import createApp + types
+	lines.push('import { createApp, createContextFactory } from "questpie/app";');
 	lines.push(
-		'import { createApp, createContextFactory } from "questpie/app";',
+		'import type { AnyCollectionOrBuilder, AnyGlobalOrBuilder, AppDefinition, CollectionAPI, DrizzleClientFromQuestpieConfig, InferContextExtensionsFromAppConfig, InferSessionFromAuthConfig, MailerService, Questpie, QuestpieConfig, QueueClient, QueueJobType, RouteParamsFromKey, RouteWithParams, TablesFromConfig } from "questpie/types";',
 	);
-	lines.push(
-		'import type { AnyCollectionOrBuilder, AnyGlobalOrBuilder, AppDefinition, CollectionAPI, DrizzleClientFromQuestpieConfig, InferContextExtensionsFromAppConfig, InferSessionFromAuthConfig, MailerService, Questpie, QuestpieConfig, QueueClient, RouteParamsFromKey, RouteWithParams, TablesFromConfig } from "questpie/types";',
-	);
+	lines.push('import type { z } from "zod";');
 	lines.push("");
 
 	// Import runtime config
@@ -207,6 +213,9 @@ export function generateTemplate(options: TemplateOptions): string {
 
 	lines.push(
 		'import type { ServiceCustomNamespaceInstances, ServiceInstanceOf, ServiceInstancesInNamespace, ServiceTopLevelInstances, UnionToIntersection } from "questpie/types";',
+	);
+	lines.push(
+		'type _RouteDefinitionWithoutHandler<T> = T extends { mode: "raw" } ? Omit<T, "handler"> & { handler: (args: unknown) => Response | Promise<Response> } : Omit<T, "handler"> & { handler: (args: unknown) => unknown | Promise<unknown> };',
 	);
 	lines.push(`type _Module = (typeof ${modulesFile.varName})[number];`);
 	lines.push(
@@ -398,7 +407,14 @@ export function generateTemplate(options: TemplateOptions): string {
 				if (catName === "routes") {
 					emitRouteTypeInterface(lines, appTypeName, moduleTypeName, fileMap);
 				} else {
-					emitTypeInterface(lines, appTypeName, moduleTypeName, fileMap, decl);
+					emitTypeInterface(
+						lines,
+						appTypeName,
+						moduleTypeName,
+						fileMap,
+						decl,
+						catName,
+					);
 				}
 				break;
 			}
@@ -498,6 +514,61 @@ export function generateTemplate(options: TemplateOptions): string {
 		lines.push(
 			"type _CollectionsAPI = { [K in keyof AppCollections]: CollectionAPI<AppCollections[K], AppCollections> };",
 		);
+		const localCollections = sortedValues(
+			discovered.categories.get("collections") ?? new Map(),
+		).filter((file) => !file.isBundle);
+		if (localCollections.length > 0) {
+			const collectionsDecl = allDecls.get("collections");
+			lines.push("type _JobHandlerCollections = {");
+			for (const file of localCollections) {
+				lines.push(
+					`\t${categoryTypeEntry(file, collectionsDecl, "collections")};`,
+				);
+			}
+			lines.push("};");
+			lines.push("type _JobHandlerCollectionsAPI = {");
+			for (const file of localCollections) {
+				lines.push(
+					`\t${safeKey(file.key)}: CollectionAPI<typeof ${file.varName}, _JobHandlerCollections>;`,
+				);
+			}
+			lines.push("};");
+		} else {
+			lines.push("type _JobHandlerCollections = {};");
+			lines.push("type _JobHandlerCollectionsAPI = {};");
+		}
+		const localJobs = sortedValues(
+			discovered.categories.get("jobs") ?? new Map(),
+		).filter((file) => !file.isBundle);
+		lines.push(
+			"type _ExecutionContextJob<T> = T extends { name: infer TName extends string; schema: z.ZodSchema<infer TPayload> } ? QueueJobType<TPayload, TName> : never;",
+		);
+		if (localJobs.length > 0) {
+			lines.push("type _ExecutionContextJobs = {");
+			for (const file of localJobs) {
+				lines.push(
+					`\t${safeKey(file.key)}: _ExecutionContextJob<typeof ${file.varName}>;`,
+				);
+			}
+			lines.push("};");
+		} else {
+			lines.push("type _ExecutionContextJobs = {};");
+		}
+		const localServices = sortedValues(
+			discovered.categories.get("services") ?? new Map(),
+		).filter((file) => !file.isBundle);
+		if (localServices.length > 0) {
+			lines.push("type _ExecutionContextServiceDefinitions = {");
+			for (const file of localServices) {
+				lines.push(`\t${safeKey(file.key)}: typeof ${file.varName};`);
+			}
+			lines.push("};");
+		} else {
+			lines.push("type _ExecutionContextServiceDefinitions = {};");
+		}
+		lines.push(
+			'type _ExecutionContextDefaultServices = ServiceInstancesInNamespace<_ExecutionContextServiceDefinitions, "services">;',
+		);
 		lines.push(
 			"type _AppCollectionDefinitions = AppCollections & Record<string, AnyCollectionOrBuilder>;",
 		);
@@ -580,6 +651,47 @@ export function generateTemplate(options: TemplateOptions): string {
 
 		lines.push("\t\t}");
 		lines.push("");
+		const emitNonRecursiveContext = (name: string) => {
+			lines.push(`\t\tinterface ${name} {`);
+			lines.push("\t\t\t// Infrastructure");
+			lines.push("\t\t\tdb: unknown;");
+			if (hasEmails) {
+				lines.push(`\t\t\temail: MailerService<${emailsTypeName}>;`);
+			} else {
+				lines.push("\t\t\temail: unknown;");
+			}
+			lines.push("\t\t\tqueue: QueueClient<_ExecutionContextJobs>;");
+			lines.push("\t\t\tstorage: unknown;");
+			lines.push("\t\t\tkv: unknown;");
+			lines.push("\t\t\tlogger: unknown;");
+			lines.push("\t\t\tsearch: unknown;");
+			lines.push("\t\t\trealtime: unknown;");
+			lines.push("");
+			lines.push("\t\t\t// Entity APIs");
+			lines.push("\t\t\tcollections: _JobHandlerCollectionsAPI;");
+			lines.push("\t\t\tglobals: Record<string, unknown>;");
+			lines.push("\t\t\ttables: Record<string, unknown>;");
+			lines.push("");
+			lines.push("\t\t\t// Request-scoped");
+			lines.push("\t\t\tsession: unknown;");
+			if (hasMessages) {
+				lines.push(
+					"\t\t\tt: (key: AppMessageKeys | (string & {}), params?: Record<string, unknown>, locale?: string) => string;",
+				);
+			} else {
+				lines.push(
+					"\t\t\tt: (key: string, params?: Record<string, unknown>, locale?: string) => string;",
+				);
+			}
+			lines.push("");
+			lines.push("\t\t\t// User services");
+			lines.push("\t\t\tservices: _ExecutionContextDefaultServices;");
+			lines.push("\t\t}");
+		};
+		emitNonRecursiveContext("JobHandlerContext");
+		lines.push("");
+		emitNonRecursiveContext("WorkflowContext");
+		lines.push("");
 		lines.push("\t\tinterface ServiceCreateContext extends AppContext {}");
 
 		// Registry — ALL registryKey categories + ~-prefixed singles augmented centrally.
@@ -639,8 +751,10 @@ export function generateTemplate(options: TemplateOptions): string {
 	);
 	lines.push(" */");
 	lines.push("export type AppConfig = {");
-	lines.push("\tcollections: AppCollections & Record<string, any>;");
-	lines.push("\tglobals: AppGlobals & Record<string, any>;");
+	lines.push(
+		"\tcollections: AppCollections & Record<string, AnyCollectionOrBuilder>;",
+	);
+	lines.push("\tglobals: AppGlobals & Record<string, AnyGlobalOrBuilder>;");
 	lines.push("\troutes: AppRoutes;");
 	if (authFile) {
 		lines.push(`\tauth: typeof ${authFile.varName};`);
@@ -742,13 +856,7 @@ function emitNewArchitectureRuntime(
 			case "record": {
 				lines.push(`\t\t${safeKey(createAppKey)}: {`);
 				for (const file of sortedValues(fileMap)) {
-					if (decl?.keyFromProperty) {
-						lines.push(
-							`\t\t\t[${file.varName}.${decl.keyFromProperty}]: ${file.varName},`,
-						);
-					} else {
-						lines.push(`\t\t\t${safeKey(file.key)}: ${file.varName},`);
-					}
+					lines.push(`\t\t\t${categoryRecordEntry(file, decl)},`);
 				}
 				lines.push("\t\t},");
 				break;
@@ -780,14 +888,14 @@ function emitNewArchitectureRuntime(
 	if (configEntries.length > 0) {
 		lines.push("\t\tconfig: {");
 		for (const { configKey, file } of configEntries) {
-			lines.push(`\t\t\t${safeKey(configKey)}: ${file.varName} as any,`);
+			lines.push(`\t\t\t${safeKey(configKey)}: ${file.varName},`);
 		}
 		lines.push("\t\t},");
 	}
 
 	// Plain singles (fields, etc.) — NOT config files
 	for (const file of plainSingles) {
-		lines.push(`\t\t${safeKey(file.key)}: ${file.varName} as any,`);
+		lines.push(`\t\t${safeKey(file.key)}: ${file.varName},`);
 	}
 
 	// Spread singles (sidebar, dashboard — mergeStrategy: "spread")
@@ -795,9 +903,7 @@ function emitNewArchitectureRuntime(
 	// the config bucket too. For now, keep spread emission for backward compat.
 	for (const [stateKey, files] of discovered.spreads) {
 		if (files.length > 0) {
-			const spread = files
-				.map((f) => `...(${f.varName} as any ?? [])`)
-				.join(", ");
+			const spread = files.map((f) => `...(${f.varName} ?? [])`).join(", ");
 			lines.push(`\t\t${safeKey(stateKey)}: [${spread}],`);
 		}
 	}
@@ -811,7 +917,7 @@ function emitNewArchitectureRuntime(
 
 	lines.push("\t}) satisfies AppDefinition,");
 	lines.push("\t_runtime,");
-	lines.push(") as _AppQuestpie;");
+	lines.push(") as unknown as _AppQuestpie;");
 	lines.push("");
 }
 
@@ -936,6 +1042,7 @@ function emitTypeInterface(
 	moduleTypeName: string,
 	fileMap: Map<string, DiscoveredFile>,
 	decl: CategoryDeclaration | undefined,
+	catName: string,
 ): void {
 	const label = typeName.replace(/^App/, "").toLowerCase();
 	const hasUser = fileMap.size > 0;
@@ -947,13 +1054,13 @@ function emitTypeInterface(
 			for (const [index, file] of files.entries()) {
 				const suffix = index === files.length - 1 ? ";" : "";
 				lines.push(
-					`	& { [K in typeof ${file.varName}.${decl.keyFromProperty}]: typeof ${file.varName} }${suffix}`,
+					`	& { ${categoryTypeEntry(file, decl, catName)} }${suffix}`,
 				);
 			}
 		} else {
 			lines.push(`export type ${typeName} = ${moduleTypeName} & {`);
 			for (const file of sortedValues(fileMap)) {
-				lines.push(`\t${safeKey(file.key)}: typeof ${file.varName};`);
+				lines.push(`\t${categoryTypeEntry(file, decl, catName)};`);
 			}
 			lines.push("};");
 		}
@@ -978,7 +1085,7 @@ function emitRouteTypeInterface(
 		lines.push(`export type ${typeName} = ${moduleTypeName} & {`);
 		for (const file of sortedValues(fileMap)) {
 			lines.push(
-				`\t${safeKey(file.key)}: RouteWithParams<typeof ${file.varName}, RouteParamsFromKey<${JSON.stringify(file.key)}>>;`,
+				`\t${safeKey(file.key)}: RouteWithParams<_RouteDefinitionWithoutHandler<typeof ${file.varName}>, RouteParamsFromKey<${JSON.stringify(file.key)}>>;`,
 			);
 		}
 		lines.push("};");
@@ -991,35 +1098,6 @@ function emitRouteTypeInterface(
 // ============================================================================
 // Utilities
 // ============================================================================
-
-/**
- * Sort discovered files by key for deterministic output.
- */
-function sortedValues(map: Map<string, DiscoveredFile>): DiscoveredFile[] {
-	return [...map.values()].sort((a, b) => a.key.localeCompare(b.key));
-}
-
-/**
- * Generate the import statement for a discovered file.
- * Uses default import for "default" exports, named import for "named" exports.
- */
-function importStatement(file: DiscoveredFile): string {
-	if (file.exportType === "named" && file.namedExportName) {
-		return `import { ${file.namedExportName} as ${file.varName} } from "${file.importPath}";`;
-	}
-	// default or unknown — use default import
-	return `import ${file.varName} from "${file.importPath}";`;
-}
-
-/**
- * Quote a key if it's not a valid identifier.
- */
-function safeKey(key: string): string {
-	if (/^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(key)) {
-		return key;
-	}
-	return `"${key}"`;
-}
 
 /**
  * Collect singleton discover patterns with ~-prefixed registryKeys.

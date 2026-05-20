@@ -51,3 +51,8 @@ yarn-error.log*
 
 **/*.tsbuildinfo
 tmp/
+
+# Private strategy / agent state
+.private/
+docs/private/
+.agent-board/
