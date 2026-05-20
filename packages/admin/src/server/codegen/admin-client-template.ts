@@ -39,12 +39,17 @@
  * @see PLAN-PLUGIN-CONSISTENCY.md §6.2 (admin-client target)
  */
 
+import {
+	categoryRecordEntry,
+	importStatement,
+	sortedValues,
+} from "questpie/codegen";
 import type {
 	CategoryDeclaration,
 	CodegenTargetGenerateContext,
 	CodegenTargetOutput,
 	DiscoveredFile,
-} from "questpie";
+} from "questpie/codegen";
 
 /**
  * Generate the admin client config file.
@@ -71,13 +76,9 @@ export function generateAdminClientTemplate(
 
 	// ── 1. Import modules (if discovered) ───────────────────────
 	if (modulesFile) {
-		lines.push(generateImportLine(modulesFile));
-		lines.push(
-			`const _mergedModules = Array.isArray(${modulesFile.varName})`,
-		);
-		lines.push(
-			`\t? ${modulesFile.varName}.reduce((acc: any, m: any) => {`,
-		);
+		lines.push(importStatement(modulesFile));
+		lines.push(`const _mergedModules = Array.isArray(${modulesFile.varName})`);
+		lines.push(`\t? ${modulesFile.varName}.reduce((acc: any, m: any) => {`);
 		lines.push(
 			'\t\tfor (const [k, v] of Object.entries(m)) acc[k] = typeof v === "object" && v !== null && !Array.isArray(v) ? { ...acc[k], ...v } : v;',
 		);
@@ -90,12 +91,10 @@ export function generateAdminClientTemplate(
 
 	for (const [cat, fileMap] of ctx.discovered.categories) {
 		if (fileMap.size > 0) {
-			const sorted = [...fileMap.values()].sort((a, b) =>
-				a.key.localeCompare(b.key),
-			);
+			const sorted = sortedValues(fileMap);
 			categoryFiles.set(cat, sorted);
 			for (const file of sorted) {
-				lines.push(generateImportLine(file));
+				lines.push(importStatement(file));
 			}
 		}
 	}
@@ -105,7 +104,7 @@ export function generateAdminClientTemplate(
 	for (const [key, file] of ctx.discovered.singles) {
 		if (key === "modules") continue; // Already handled above
 		singleFiles.set(key, file);
-		lines.push(generateImportLine(file));
+		lines.push(importStatement(file));
 	}
 
 	// ── 4. Import extras from transforms ────────────────────────
@@ -154,16 +153,18 @@ export function generateAdminClientTemplate(
 
 			if (modulesFile && files && files.length > 0) {
 				// Module base + user overrides
-				const entries = generateCategoryEntries(files, catDecl);
-				lines.push(
-					`\t${cat}: { ..._mergedModules.${cat}, ${entries} },`,
-				);
+				const entries = files
+					.map((f) => categoryRecordEntry(f, catDecl))
+					.join(", ");
+				lines.push(`\t${cat}: { ..._mergedModules.${cat}, ${entries} },`);
 			} else if (modulesFile && (!files || files.length === 0)) {
 				// Module base, no user overrides — spread module category
 				lines.push(`\t${cat}: { ..._mergedModules.${cat} },`);
 			} else if (files && files.length > 0) {
 				// No module, user files only
-				const entries = generateCategoryEntries(files, catDecl);
+				const entries = files
+					.map((f) => categoryRecordEntry(f, catDecl))
+					.join(", ");
 				lines.push(`\t${cat}: { ${entries} },`);
 			}
 		}
@@ -194,51 +195,4 @@ export function generateAdminClientTemplate(
 	lines.push("");
 
 	return { code: lines.join("\n") };
-}
-
-// ============================================================================
-// Helpers
-// ============================================================================
-
-/**
- * Generate category entries string based on the category's key strategy.
- *
- * When `keyFromProperty` is set (e.g., views with `keyFromProperty: "name"`),
- * uses runtime property as key: `[_view_kanban.name]: _view_kanban`.
- *
- * Otherwise uses the file-derived key: `"bookingCta": _block_bookingCta`.
- */
-function generateCategoryEntries(
-	files: DiscoveredFile[],
-	catDecl?: CategoryDeclaration,
-): string {
-	const keyProp = catDecl?.keyFromProperty;
-
-	return files
-		.map((f) => {
-			if (keyProp) {
-				return `[${f.varName}.${keyProp}]: ${f.varName}`;
-			}
-			if (catDecl?.keyFromSource === "basename") {
-				return `${JSON.stringify(getSourceBasename(f))}: ${f.varName}`;
-			}
-			return `${JSON.stringify(f.key)}: ${f.varName}`;
-		})
-		.join(", ");
-}
-
-function getSourceBasename(file: DiscoveredFile): string {
-	const source = file.source.replaceAll("\\", "/");
-	const filename = source.split("/").pop() ?? file.key;
-	return filename.replace(/\.[^.]+$/, "");
-}
-
-/**
- * Generate an import line for a discovered file.
- */
-function generateImportLine(file: DiscoveredFile): string {
-	if (file.exportType === "named" && file.namedExportName) {
-		return `import { ${file.namedExportName} as ${file.varName} } from "${file.importPath}";`;
-	}
-	return `import ${file.varName} from "${file.importPath}";`;
 }

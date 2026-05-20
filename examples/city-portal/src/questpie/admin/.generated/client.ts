@@ -23,7 +23,7 @@ import { SpacerRenderer as _block_spacer } from "../blocks/spacer";
 import { TextRenderer as _block_text } from "../blocks/text";
 import { VideoRenderer as _block_video } from "../blocks/video";
 import type { BlockRendererProps } from "@questpie/admin/client";
-import type { InferBlockValues, InferBlockData } from "@questpie/admin/server";
+import type { InferBlockValues, InferBlockData } from "@questpie/admin/factories";
 import type { accordionBlock } from "../../server/blocks/accordion";
 import type { announcementBannerBlock } from "../../server/blocks/announcement-banner";
 import type { columnsBlock } from "../../server/blocks/columns";

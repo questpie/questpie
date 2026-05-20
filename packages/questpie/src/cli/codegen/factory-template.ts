@@ -193,17 +193,18 @@ export function generateFactoryTemplate(
 			lines.push(
 				"// Wrap field factories so returned Field instances have extension methods",
 			);
+			lines.push("type _FieldFactory = (...args: never[]) => unknown;");
 			lines.push(
-				"function _wrapFieldFactory(fn: (...args: any[]) => any): (...args: any[]) => any {",
+				"function _wrapFieldFactory<TFactory extends _FieldFactory>(fn: TFactory): TFactory {",
 			);
 			lines.push(
-				"\treturn (...args: any[]) => wrapBuilderWithExtensions(fn(...args), _fieldExt, Field);",
+				"\treturn ((...args: Parameters<TFactory>) => wrapBuilderWithExtensions(fn(...args), _fieldExt, Field)) as unknown as TFactory;",
 			);
 			lines.push("}");
 			lines.push("");
 			lines.push("const _allFieldDefs = Object.fromEntries(");
 			lines.push(
-				"\tObject.entries(_rawFieldDefs).map(([k, v]) => [k, _wrapFieldFactory(v as any)])",
+				"\tObject.entries(_rawFieldDefs).map(([k, v]) => [k, _wrapFieldFactory(v)])",
 			);
 			lines.push(") as unknown as typeof _rawFieldDefs;");
 		} else {
@@ -488,7 +489,7 @@ export function generateFactoryTemplate(
 	);
 	if (collExtensions.size > 0) {
 		lines.push(
-			"\treturn wrapBuilderWithExtensions(CollectionBuilder.create<TName, _AllFieldTypes>(name, _allFieldDefs), _collExt, CollectionBuilder) as any;",
+			"\treturn wrapBuilderWithExtensions(CollectionBuilder.create<TName, _AllFieldTypes>(name, _allFieldDefs), _collExt, CollectionBuilder) as unknown as CollectionBuilder<EmptyCollectionState<TName, undefined, _AllFieldTypes>>;",
 		);
 	} else {
 		lines.push(
@@ -507,7 +508,7 @@ export function generateFactoryTemplate(
 	);
 	if (globalExtensions.size > 0) {
 		lines.push(
-			"\treturn wrapBuilderWithExtensions(GlobalBuilder.create<TName, _AllFieldTypes>(name, _allFieldDefs), _globExt, GlobalBuilder) as any;",
+			"\treturn wrapBuilderWithExtensions(GlobalBuilder.create<TName, _AllFieldTypes>(name, _allFieldDefs), _globExt, GlobalBuilder) as unknown as GlobalBuilder<EmptyGlobalState<TName, undefined, _AllFieldTypes>>;",
 		);
 	} else {
 		lines.push(
@@ -550,7 +551,7 @@ export function generateFactoryTemplate(
 				`export function ${name}${generic}(name: TName): ${returnType} {`,
 			);
 			lines.push(
-				`\treturn ${factory.builderClass}.${factory.createMethod}(name, _allFieldDefs) as any;`,
+				`\treturn ${factory.builderClass}.${factory.createMethod}(name, _allFieldDefs) as unknown as ${returnType};`,
 			);
 			lines.push("}");
 			lines.push("");
@@ -602,9 +603,9 @@ function emitSingletonFactory(
 			`export function ${name}<T extends ${configType}>(config: T): T;`,
 		);
 		lines.push(
-			`export function ${name}<T extends (...args: any[]) => ${configType}>(cb: T): T;`,
+			`export function ${name}<T extends (...args: never[]) => ${configType}>(cb: T): T;`,
 		);
-		lines.push(`export function ${name}(v: any): any { return v; }`);
+		lines.push(`export function ${name}<T>(v: T): T { return v; }`);
 	} else {
 		// Simple identity with type constraint
 		lines.push(`/** Typed factory for ${name} config. */`);
@@ -634,7 +635,7 @@ function buildPlaceholderMap(
 			const recordTypeName = `_${key.charAt(0).toUpperCase() + key.slice(1)}Record`;
 			map[decl.recordPlaceholder] = {
 				withModules: recordTypeName,
-				fallback: "Record<string, any>",
+				fallback: "Record<string, unknown>",
 			};
 		}
 	}
@@ -676,7 +677,7 @@ function emitExtensionRegistry(
 	callbackParams: Map<string, CallbackParamDefinition>,
 ): void {
 	lines.push(
-		`const ${varName}: Record<string, { stateKey: string; resolve: (v: any) => any }> = {`,
+		`const ${varName}: Record<string, { stateKey: string; resolve: (value: unknown) => unknown }> = {`,
 	);
 	for (const [name, ext] of extensions) {
 		const hasDefaults = ext.defaults && Object.keys(ext.defaults).length > 0;
@@ -685,12 +686,14 @@ function emitExtensionRegistry(
 		if (ext.isCallback) {
 			lines.push(`\t${name}: {`);
 			lines.push(`\t\tstateKey: "${ext.stateKey}",`);
-			lines.push("\t\tresolve(configOrFn: any) {");
+			lines.push("\t\tresolve(configOrFn: unknown) {");
 			if (hasDefaults) {
 				lines.push(
 					`\t\t\tconst resolved = typeof configOrFn === 'function' ? configOrFn(${emitCallbackContext(ext, callbackParams)}) : configOrFn;`,
 				);
-				lines.push(`\t\t\treturn { ...${defaultsJson}, ...resolved };`);
+				lines.push(
+					`\t\t\treturn { ...${defaultsJson}, ...(resolved && typeof resolved === 'object' ? resolved : {}) };`,
+				);
 			} else {
 				lines.push(
 					`\t\t\tif (typeof configOrFn === 'function') return configOrFn(${emitCallbackContext(ext, callbackParams)});`,
@@ -702,11 +705,11 @@ function emitExtensionRegistry(
 		} else {
 			if (hasDefaults) {
 				lines.push(
-					`\t${name}: { stateKey: "${ext.stateKey}", resolve: (v: any) => ({ ...${defaultsJson}, ...v }) },`,
+					`\t${name}: { stateKey: "${ext.stateKey}", resolve: (v: unknown) => ({ ...${defaultsJson}, ...(v && typeof v === 'object' ? v : {}) }) },`,
 				);
 			} else {
 				lines.push(
-					`\t${name}: { stateKey: "${ext.stateKey}", resolve: (v: any) => v },`,
+					`\t${name}: { stateKey: "${ext.stateKey}", resolve: (v: unknown) => v },`,
 				);
 			}
 		}
