@@ -16,11 +16,6 @@ import { Route as LlmsFullDottxtRouteImport } from './routes/llms-full[.]txt'
 import { Route as CloudRouteImport } from './routes/cloud'
 import { Route as AutopilotRouteImport } from './routes/autopilot'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as ForRestaurantsRouteImport } from './routes/for/restaurants'
-import { Route as ForRealEstateRouteImport } from './routes/for/real-estate'
-import { Route as ForPortfoliosRouteImport } from './routes/for/portfolios'
-import { Route as ForEcommerceRouteImport } from './routes/for/ecommerce'
-import { Route as ForAgenciesRouteImport } from './routes/for/agencies'
 import { Route as DocsSplatRouteImport } from './routes/docs/$'
 import { Route as ApiSearchRouteImport } from './routes/api/search'
 import { Route as LlmsDotmdxDocsSplatRouteImport } from './routes/llms[.]mdx.docs.$'
@@ -60,31 +55,6 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ForRestaurantsRoute = ForRestaurantsRouteImport.update({
-  id: '/for/restaurants',
-  path: '/for/restaurants',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ForRealEstateRoute = ForRealEstateRouteImport.update({
-  id: '/for/real-estate',
-  path: '/for/real-estate',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ForPortfoliosRoute = ForPortfoliosRouteImport.update({
-  id: '/for/portfolios',
-  path: '/for/portfolios',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ForEcommerceRoute = ForEcommerceRouteImport.update({
-  id: '/for/ecommerce',
-  path: '/for/ecommerce',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ForAgenciesRoute = ForAgenciesRouteImport.update({
-  id: '/for/agencies',
-  path: '/for/agencies',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const DocsSplatRoute = DocsSplatRouteImport.update({
   id: '/docs/$',
   path: '/docs/$',
@@ -111,11 +81,6 @@ export interface FileRoutesByFullPath {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/api/search': typeof ApiSearchRoute
   '/docs/$': typeof DocsSplatRoute
-  '/for/agencies': typeof ForAgenciesRoute
-  '/for/ecommerce': typeof ForEcommerceRoute
-  '/for/portfolios': typeof ForPortfoliosRoute
-  '/for/real-estate': typeof ForRealEstateRoute
-  '/for/restaurants': typeof ForRestaurantsRoute
   '/llms.mdx/docs/$': typeof LlmsDotmdxDocsSplatRoute
 }
 export interface FileRoutesByTo {
@@ -128,11 +93,6 @@ export interface FileRoutesByTo {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/api/search': typeof ApiSearchRoute
   '/docs/$': typeof DocsSplatRoute
-  '/for/agencies': typeof ForAgenciesRoute
-  '/for/ecommerce': typeof ForEcommerceRoute
-  '/for/portfolios': typeof ForPortfoliosRoute
-  '/for/real-estate': typeof ForRealEstateRoute
-  '/for/restaurants': typeof ForRestaurantsRoute
   '/llms.mdx/docs/$': typeof LlmsDotmdxDocsSplatRoute
 }
 export interface FileRoutesById {
@@ -146,11 +106,6 @@ export interface FileRoutesById {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/api/search': typeof ApiSearchRoute
   '/docs/$': typeof DocsSplatRoute
-  '/for/agencies': typeof ForAgenciesRoute
-  '/for/ecommerce': typeof ForEcommerceRoute
-  '/for/portfolios': typeof ForPortfoliosRoute
-  '/for/real-estate': typeof ForRealEstateRoute
-  '/for/restaurants': typeof ForRestaurantsRoute
   '/llms.mdx/docs/$': typeof LlmsDotmdxDocsSplatRoute
 }
 export interface FileRouteTypes {
@@ -165,11 +120,6 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/api/search'
     | '/docs/$'
-    | '/for/agencies'
-    | '/for/ecommerce'
-    | '/for/portfolios'
-    | '/for/real-estate'
-    | '/for/restaurants'
     | '/llms.mdx/docs/$'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -182,11 +132,6 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/api/search'
     | '/docs/$'
-    | '/for/agencies'
-    | '/for/ecommerce'
-    | '/for/portfolios'
-    | '/for/real-estate'
-    | '/for/restaurants'
     | '/llms.mdx/docs/$'
   id:
     | '__root__'
@@ -199,11 +144,6 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/api/search'
     | '/docs/$'
-    | '/for/agencies'
-    | '/for/ecommerce'
-    | '/for/portfolios'
-    | '/for/real-estate'
-    | '/for/restaurants'
     | '/llms.mdx/docs/$'
   fileRoutesById: FileRoutesById
 }
@@ -217,11 +157,6 @@ export interface RootRouteChildren {
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   ApiSearchRoute: typeof ApiSearchRoute
   DocsSplatRoute: typeof DocsSplatRoute
-  ForAgenciesRoute: typeof ForAgenciesRoute
-  ForEcommerceRoute: typeof ForEcommerceRoute
-  ForPortfoliosRoute: typeof ForPortfoliosRoute
-  ForRealEstateRoute: typeof ForRealEstateRoute
-  ForRestaurantsRoute: typeof ForRestaurantsRoute
   LlmsDotmdxDocsSplatRoute: typeof LlmsDotmdxDocsSplatRoute
 }
 
@@ -276,41 +211,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/for/restaurants': {
-      id: '/for/restaurants'
-      path: '/for/restaurants'
-      fullPath: '/for/restaurants'
-      preLoaderRoute: typeof ForRestaurantsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/for/real-estate': {
-      id: '/for/real-estate'
-      path: '/for/real-estate'
-      fullPath: '/for/real-estate'
-      preLoaderRoute: typeof ForRealEstateRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/for/portfolios': {
-      id: '/for/portfolios'
-      path: '/for/portfolios'
-      fullPath: '/for/portfolios'
-      preLoaderRoute: typeof ForPortfoliosRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/for/ecommerce': {
-      id: '/for/ecommerce'
-      path: '/for/ecommerce'
-      fullPath: '/for/ecommerce'
-      preLoaderRoute: typeof ForEcommerceRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/for/agencies': {
-      id: '/for/agencies'
-      path: '/for/agencies'
-      fullPath: '/for/agencies'
-      preLoaderRoute: typeof ForAgenciesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/docs/$': {
       id: '/docs/$'
       path: '/docs/$'
@@ -345,11 +245,6 @@ const rootRouteChildren: RootRouteChildren = {
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   ApiSearchRoute: ApiSearchRoute,
   DocsSplatRoute: DocsSplatRoute,
-  ForAgenciesRoute: ForAgenciesRoute,
-  ForEcommerceRoute: ForEcommerceRoute,
-  ForPortfoliosRoute: ForPortfoliosRoute,
-  ForRealEstateRoute: ForRealEstateRoute,
-  ForRestaurantsRoute: ForRestaurantsRoute,
   LlmsDotmdxDocsSplatRoute: LlmsDotmdxDocsSplatRoute,
 }
 export const routeTree = rootRouteImport
