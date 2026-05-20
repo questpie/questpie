@@ -492,87 +492,156 @@
 	display: none;
 }
 
-@keyframes landing-field-sweep {
-	from {
-		opacity: 0.34;
-		transform: translate3d(-3%, -1%, 0) scale(1.02);
-	}
-	to {
-		opacity: 0.52;
-		transform: translate3d(3%, 1%, 0) scale(1.04);
-	}
+/* ============================================================
+ * Landing pages — design tokens + utilities
+ * Used by /, /cloud, /autopilot pages and their section components
+ * ============================================================ */
+
+:root,
+.dark,
+.light,
+:root.light {
+	--pillar-framework: #b700ff;
+	--pillar-cloud: #60a5fa;
+	--pillar-autopilot: #4ade80;
 }
 
-@keyframes landing-trace-drift {
-	from {
-		transform: translate3d(-1rem, -0.75rem, 0);
-	}
-	to {
-		transform: translate3d(1rem, 0.75rem, 0);
-	}
+/* Hairline grid overlay used in hero */
+.landing-grid-bg {
+	background-image: linear-gradient(
+			to right,
+			var(--border-subtle) 1px,
+			transparent 1px
+		),
+		linear-gradient(to bottom, var(--border-subtle) 1px, transparent 1px);
+	background-size: 56px 56px;
+	background-position: -1px -1px;
+	-webkit-mask-image: radial-gradient(
+		ellipse 60% 50% at 50% 0%,
+		black 30%,
+		transparent 80%
+	);
+	mask-image: radial-gradient(
+		ellipse 60% 50% at 50% 0%,
+		black 30%,
+		transparent 80%
+	);
 }
 
-@keyframes landing-particle-drift {
-	from {
-		transform: translate3d(0, 0, 0);
-	}
-	to {
-		transform: translate3d(-5rem, -3rem, 0);
-	}
+/* Landing buttons */
+.landing-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	height: var(--control-height);
+	padding: 0 16px;
+	border-radius: var(--control-radius);
+	font-size: 14px;
+	font-weight: 500;
+	transition:
+		background-color var(--motion-duration-base) var(--motion-ease-standard),
+		color var(--motion-duration-base) var(--motion-ease-standard),
+		border-color var(--motion-duration-base) var(--motion-ease-standard),
+		transform var(--motion-duration-fast) var(--motion-ease-standard);
+	white-space: nowrap;
+	cursor: pointer;
+}
+.landing-btn:active {
+	transform: scale(0.97);
+}
+.landing-btn-primary {
+	background: var(--primary);
+	color: var(--primary-foreground);
+}
+.landing-btn-primary:hover {
+	background: color-mix(in srgb, var(--primary) 88%, white);
+}
+.landing-btn-secondary {
+	background: var(--card);
+	color: var(--foreground);
+	border: 1px solid var(--border-subtle);
+}
+.landing-btn-secondary:hover {
+	background: var(--surface-mid);
+	border-color: var(--border);
+}
+.landing-btn-ghost {
+	background: transparent;
+	color: var(--foreground-muted);
+}
+.landing-btn-ghost:hover {
+	color: var(--foreground);
+	background: var(--surface-mid);
+}
+.landing-btn-sm {
+	height: 32px;
+	padding: 0 12px;
+	font-size: 13px;
+	border-radius: var(--control-radius-inner);
 }
 
-@keyframes hero-panel-sheen {
-	0%,
-	46% {
-		opacity: 0;
-		transform: translateX(-72%);
-	}
-	58%,
-	72% {
-		opacity: var(--hero-shimmer-opacity, 0.2);
-	}
-	100% {
-		opacity: 0;
-		transform: translateX(72%);
-	}
+/* Hairline panels */
+.landing-panel {
+	background: var(--card);
+	border: 1px solid var(--border-subtle);
+	border-radius: var(--surface-radius);
+}
+.landing-panel-low {
+	background: var(--surface-low);
+	border: 1px solid var(--border-subtle);
+	border-radius: var(--surface-radius);
 }
 
-.admin-step-content {
-	animation: step-fade-in var(--motion-duration-slow) var(--motion-ease-enter);
+/* Meta uppercase label */
+.landing-eyebrow {
+	font-family: var(--font-mono);
+	font-size: 11px;
+	font-weight: 500;
+	color: var(--foreground-subtle);
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
 }
 
-.hero-carousel-slide {
-	animation: hero-carousel-enter 260ms var(--motion-ease-enter);
+/* Reveal-on-scroll */
+[data-reveal] {
+	opacity: 0;
+	transform: translateY(8px);
+	transition:
+		opacity 600ms var(--motion-ease-enter),
+		transform 600ms var(--motion-ease-enter);
 }
-
-@keyframes hero-carousel-enter {
-	from {
-		opacity: 0;
-		transform: translateY(6px);
-	}
-	to {
-		opacity: 1;
-		transform: translateY(0);
-	}
+[data-reveal][data-visible] {
+	opacity: 1;
+	transform: none;
 }
-
-@keyframes step-fade-in {
-	from {
-		opacity: 0;
-	}
-	to {
-		opacity: 1;
-	}
-}
-
 @media (prefers-reduced-motion: reduce) {
-	.admin-step-content {
-		animation: none !important;
+	[data-reveal] {
+		opacity: 1;
+		transform: none;
+		transition: none;
 	}
+}
 
-	.hero-carousel-slide {
-		animation: none !important;
-	}
+/* Thin scrollbar */
+.landing-thin-scroll::-webkit-scrollbar {
+	height: 6px;
+	width: 6px;
+}
+.landing-thin-scroll::-webkit-scrollbar-thumb {
+	background: color-mix(in srgb, var(--border) 60%, transparent);
+	border-radius: 6px;
+}
+
+.landing-mono {
+	font-family: var(--font-mono);
+	font-variant-numeric: tabular-nums;
+}
+.landing-tabular {
+	font-variant-numeric: tabular-nums;
+}
+.landing-balance {
+	text-wrap: balance;
 }
 
 /* Docs shell: neutral, flat, and targeted to Fumadocs surfaces. */
