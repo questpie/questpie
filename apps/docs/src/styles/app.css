@@ -686,6 +686,100 @@
 	text-wrap: balance;
 }
 
+/* Landing mobile-safety overrides. Hero h1 has long words
+ * ("infrastructure.") that overflow narrow columns; allow them to break.
+ * Code blocks and mock tables scroll horizontally so columns stay aligned.
+ * Section padding tightens at narrow viewports — most Section pad props
+ * are set inline so we override with !important. */
+main h1,
+main h2,
+main h3 {
+	overflow-wrap: break-word;
+}
+main h1 {
+	hyphens: auto;
+}
+.landing-panel,
+.landing-panel-low {
+	max-width: 100%;
+	overflow-x: auto;
+}
+/* Mock-table rows inside panels use grid-template-columns with fixed
+ * + 1fr widths that collapse the flexible column on narrow viewports.
+ * Force the inner grid to its natural width so the panel's overflow-x
+ * kicks in horizontal scrolling instead of squishing columns. */
+@media (max-width: 720px) {
+	.landing-panel > div[style*="grid-template-columns"],
+	.landing-panel-low > div[style*="grid-template-columns"] {
+		min-width: max-content;
+	}
+}
+
+@media (max-width: 720px) {
+	main > section {
+		padding-left: 18px !important;
+		padding-right: 18px !important;
+	}
+	/* Hero stats strip: flatten 3 cols → 1, swap col dividers for row */
+	.landing-stats-strip {
+		grid-template-columns: 1fr !important;
+	}
+	.landing-stats-strip > .landing-stats-cell {
+		padding: 12px 0 !important;
+		border-right: none !important;
+	}
+	.landing-stats-strip > .landing-stats-cell + .landing-stats-cell {
+		border-top: 1px solid var(--border-subtle);
+	}
+	/* StarBanner stacks copy + repo link vertically. */
+	.landing-star-banner {
+		flex-direction: column !important;
+		align-items: flex-start !important;
+		gap: 12px !important;
+	}
+	/* Waitlist forms (index WaitlistRow + final CTAs) stack input + button. */
+	.landing-waitlist-form {
+		flex-direction: column !important;
+		width: 100%;
+	}
+	.landing-waitlist-form > input,
+	.landing-waitlist-form > button {
+		width: 100% !important;
+		min-width: 0 !important;
+	}
+}
+@media (max-width: 480px) {
+	main > section {
+		padding-top: clamp(48px, 12vw, 88px) !important;
+		padding-bottom: clamp(48px, 12vw, 88px) !important;
+		padding-left: 14px !important;
+		padding-right: 14px !important;
+	}
+	main > section:first-child {
+		padding-top: 96px !important;
+	}
+}
+
+/* Global responsive grid breakpoints (per-page inline <style> blocks
+ * only apply on the page that mounts the component, so shared grids
+ * — pricing, footer, use cases — also need their rules here so they
+ * apply on every page that renders them). */
+@media (max-width: 1024px) {
+	.landing-pricing-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+	}
+}
+@media (max-width: 660px) {
+	.landing-uc-grid {
+		grid-template-columns: minmax(0, 1fr) !important;
+	}
+}
+@media (max-width: 560px) {
+	.landing-pricing-grid {
+		grid-template-columns: minmax(0, 1fr) !important;
+	}
+}
+
 /* Docs shell: neutral, flat, and targeted to Fumadocs surfaces. */
 #nd-docs-layout {
 	background: var(--background);

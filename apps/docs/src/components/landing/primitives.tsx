@@ -475,6 +475,7 @@ export function StarBanner({
 				href="https://github.com/questpie/questpie"
 				target="_blank"
 				rel="noreferrer"
+				className="landing-star-banner"
 				style={{
 					display: "flex",
 					alignItems: "center",

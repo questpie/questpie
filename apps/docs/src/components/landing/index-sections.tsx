@@ -75,8 +75,8 @@ export function Hero() {
 						<Reveal delay={60}>
 							<h1
 								style={{
-									fontSize: "clamp(38px, 2.4rem + 1.6vw, 52px)",
-									lineHeight: 1.0,
+									fontSize: "clamp(28px, 5.5vw + 14px, 52px)",
+									lineHeight: 1.05,
 									letterSpacing: "-0.025em",
 									margin: 0,
 									color: "var(--foreground)",
@@ -155,6 +155,7 @@ export function Hero() {
 						</Reveal>
 						<Reveal delay={240}>
 							<div
+								className="landing-stats-strip"
 								style={{
 									marginTop: 36,
 									display: "grid",
@@ -174,6 +175,7 @@ export function Hero() {
 								].map((stat, i) => (
 									<div
 										key={stat.k}
+										className="landing-stats-cell"
 										style={{
 											padding: "14px 14px 14px 0",
 											borderRight:
@@ -206,7 +208,7 @@ export function Hero() {
 
 			<style>{`
 				@media (max-width: 980px) {
-					.landing-hero-grid { grid-template-columns: 1fr !important; gap: 40px !important; }
+					.landing-hero-grid { grid-template-columns: minmax(0, 1fr) !important; gap: 40px !important; }
 				}
 			`}</style>
 		</section>
@@ -547,7 +549,7 @@ export function PillarsSection() {
 			</div>
 			<style>{`
 				@media (max-width: 880px) {
-					.landing-pillars-grid { grid-template-columns: 1fr !important; }
+					.landing-pillars-grid { grid-template-columns: minmax(0, 1fr) !important; }
 					.landing-pillar-cell { border-right: none !important; border-bottom: 1px solid var(--border-subtle) !important; }
 					.landing-pillar-cell:last-child { border-bottom: none !important; }
 				}
@@ -931,7 +933,7 @@ export function FrameworkSection() {
 
 			<style>{`
 				@media (max-width: 980px) {
-					.landing-framework-grid { grid-template-columns: 1fr !important; gap: 28px !important; }
+					.landing-framework-grid { grid-template-columns: minmax(0, 1fr) !important; gap: 28px !important; }
 				}
 			`}</style>
 		</Section>
@@ -1023,12 +1025,12 @@ function ProductionStrip() {
 			</div>
 			<style>{`
 				@media (max-width: 880px) {
-					.landing-production-grid { grid-template-columns: repeat(2, 1fr) !important; }
+					.landing-production-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
 					.landing-production-grid > div:nth-child(2n) { border-right: none !important; }
 					.landing-production-grid > div:nth-child(odd) { border-right: 1px solid var(--border-subtle) !important; }
 				}
 				@media (max-width: 540px) {
-					.landing-production-grid { grid-template-columns: 1fr !important; }
+					.landing-production-grid { grid-template-columns: minmax(0, 1fr) !important; }
 					.landing-production-grid > div { border-right: none !important; }
 				}
 			`}</style>
@@ -1494,7 +1496,7 @@ function SchemaOutputsMap() {
 			</div>
 			<style>{`
 				@media (max-width: 880px) {
-					.landing-som-grid { grid-template-columns: 1fr !important; }
+					.landing-som-grid { grid-template-columns: minmax(0, 1fr) !important; }
 					.landing-som-grid > div:first-child { border-right: none !important; border-bottom: 1px solid var(--border-subtle); }
 					.landing-som-arrows { display: none !important; }
 				}
@@ -1665,8 +1667,8 @@ export function CloudSection() {
 
 			<style>{`
 				@media (max-width: 980px) {
-					.landing-cloud-grid { grid-template-columns: 1fr !important; gap: 28px !important; }
-					.landing-features-grid-4 { grid-template-columns: repeat(2, 1fr) !important; }
+					.landing-cloud-grid { grid-template-columns: minmax(0, 1fr) !important; gap: 28px !important; }
+					.landing-features-grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
 					.landing-features-grid-4 > div:nth-child(2n) { border-right: none !important; }
 					.landing-features-grid-4 > div:nth-child(odd) { border-right: 1px solid var(--border-subtle) !important; }
 				}
@@ -2255,7 +2257,7 @@ export function AutopilotSection() {
 
 			<style>{`
 				@media (max-width: 980px) {
-					.landing-autopilot-grid { grid-template-columns: 1fr !important; gap: 28px !important; }
+					.landing-autopilot-grid { grid-template-columns: minmax(0, 1fr) !important; gap: 28px !important; }
 				}
 			`}</style>
 		</Section>
@@ -2610,7 +2612,7 @@ function RuntimeMatrix() {
 			</div>
 			<style>{`
 				@media (max-width: 760px) {
-					.landing-runtime-grid { grid-template-columns: repeat(3, 1fr) !important; }
+					.landing-runtime-grid { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
 					.landing-runtime-grid > div:nth-child(3n) { border-right: none !important; }
 					.landing-runtime-grid > div { border-bottom: 1px solid var(--border-subtle) !important; }
 					.landing-runtime-grid > div:nth-last-child(-n+3) { border-bottom: none !important; }
@@ -2676,7 +2678,11 @@ export function WaitlistRow({
 					You're on the list for {product}.
 				</span>
 			) : (
-				<form onSubmit={submit} style={{ display: "flex", gap: 8 }}>
+				<form
+					onSubmit={submit}
+					className="landing-waitlist-form"
+					style={{ display: "flex", gap: 8 }}
+				>
 					<Input
 						type="email"
 						required
@@ -2821,8 +2827,8 @@ export function UseCasesSection() {
 			</div>
 
 			<style>{`
-				@media (max-width: 980px) { .landing-uc-grid { grid-template-columns: repeat(2, 1fr) !important; } }
-				@media (max-width: 660px) { .landing-uc-grid { grid-template-columns: 1fr !important; } }
+				@media (max-width: 980px) { .landing-uc-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; } }
+				@media (max-width: 660px) { .landing-uc-grid { grid-template-columns: minmax(0, 1fr) !important; } }
 			`}</style>
 		</Section>
 	);
@@ -3251,9 +3257,9 @@ function StackRow({
 			</div>
 			<style>{`
 				@media (max-width: 880px) {
-					.landing-stack-row { grid-template-columns: 1fr !important; }
+					.landing-stack-row { grid-template-columns: minmax(0, 1fr) !important; }
 					.landing-stack-row > div:first-child, .landing-stack-row > a:first-child { border-right: none !important; border-bottom: 1px solid var(--border-subtle) !important; }
-					.landing-stack-items { grid-template-columns: repeat(2, 1fr) !important; }
+					.landing-stack-items { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
 					.landing-stack-items > div:nth-child(2n) { border-right: none !important; }
 					.landing-stack-items > div:nth-child(odd) { border-right: 1px solid var(--border-subtle) !important; }
 					.landing-stack-items > div:nth-last-child(-n+2) { border-bottom: none !important; }
@@ -3376,8 +3382,8 @@ export function PricingSection() {
 				))}
 			</div>
 			<style>{`
-				@media (max-width: 1024px) { .landing-pricing-grid { grid-template-columns: repeat(2, 1fr) !important; } }
-				@media (max-width: 560px) { .landing-pricing-grid { grid-template-columns: 1fr !important; } }
+				@media (max-width: 1024px) { .landing-pricing-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; } }
+				@media (max-width: 560px) { .landing-pricing-grid { grid-template-columns: minmax(0, 1fr) !important; } }
 			`}</style>
 		</Section>
 	);
@@ -3628,7 +3634,7 @@ export function FaqSection({
 			</div>
 
 			<style>{`
-				@media (max-width: 880px) { .landing-faq-grid { grid-template-columns: 1fr !important; gap: 24px !important; } }
+				@media (max-width: 880px) { .landing-faq-grid { grid-template-columns: minmax(0, 1fr) !important; gap: 24px !important; } }
 			`}</style>
 		</Section>
 	);
