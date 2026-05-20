@@ -6,20 +6,25 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-	"group/button text-foreground focus-visible:border-border focus-visible:ring-foreground/15 aria-invalid:border-border aria-invalid:ring-foreground/15 inline-flex shrink-0 cursor-pointer items-center justify-center rounded-[var(--control-radius,0.75rem)] border border-transparent bg-clip-padding text-sm font-[var(--font-chrome,var(--font-sans))] font-medium whitespace-nowrap transition-[background-color,color,border-color,box-shadow,transform,opacity] duration-150 ease-out outline-none select-none focus-visible:ring-[3px] active:scale-[0.96] disabled:pointer-events-none disabled:opacity-50 disabled:active:scale-100 aria-invalid:ring-[3px] motion-reduce:active:scale-100 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+	"group/button text-foreground focus-visible:border-border focus-visible:ring-foreground/15 aria-invalid:border-border aria-invalid:ring-foreground/15 inline-flex shrink-0 cursor-pointer items-center justify-center rounded-[var(--control-radius,0.75rem)] border border-transparent bg-clip-padding text-sm font-[var(--font-chrome,var(--font-sans))] font-medium whitespace-nowrap transition-[background-color,color,border-color,box-shadow,transform,opacity] duration-150 ease-out outline-none select-none focus-visible:ring-[3px] active:translate-y-px disabled:pointer-events-none disabled:opacity-50 disabled:active:translate-y-0 aria-invalid:ring-[3px] motion-reduce:active:translate-y-0 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
 	{
 		variants: {
 			variant: {
+				/* §4a primary depth recipe: gradient bg + inset top highlight +
+				 * inset bottom shade + outer tinted glow. Pressed swaps to
+				 * inset shadow. */
 				default:
-					"bg-primary text-primary-foreground shadow-[var(--control-shadow,none)] hover:opacity-95",
+					"text-primary-foreground bg-[image:var(--btn-primary-gradient,none)] bg-primary shadow-[var(--btn-primary-shadow,none)] hover:brightness-105 active:shadow-[var(--btn-primary-shadow-pressed,none)]",
+				/* §4a low-intensity */
 				outline:
-					"border-input bg-card text-foreground hover:bg-muted aria-expanded:bg-muted aria-expanded:text-foreground shadow-[var(--control-shadow,none)]",
+					"border-input bg-[image:var(--btn-secondary-gradient,none)] bg-card text-foreground shadow-[var(--btn-secondary-shadow,none)] hover:bg-muted active:shadow-[var(--btn-secondary-shadow-pressed,none)] aria-expanded:bg-muted aria-expanded:text-foreground",
 				secondary:
 					"bg-secondary text-secondary-foreground hover:bg-accent aria-expanded:bg-accent aria-expanded:text-secondary-foreground",
+				/* Ghost stays flat per §5 */
 				ghost:
 					"text-muted-foreground hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground",
 				destructive:
-					"bg-destructive text-destructive-foreground hover:bg-destructive/90 border-transparent shadow-[var(--control-shadow,none)]",
+					"bg-destructive text-destructive-foreground hover:bg-destructive/90 border-transparent shadow-[var(--btn-primary-shadow,none)]",
 				link: "text-foreground h-auto px-0 underline-offset-4 hover:underline",
 			},
 			size: {
