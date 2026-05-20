@@ -1,6 +1,8 @@
 import { Link } from "@tanstack/react-router";
 import { type FormEvent, useState } from "react";
 
+import { Input } from "@/components/ui/input";
+
 import { FaqSection } from "./index-sections";
 import {
 	CM,
@@ -2006,23 +2008,14 @@ export function APFinalCta() {
 							</span>
 						) : (
 							<form onSubmit={submit} style={{ display: "flex", gap: 8 }}>
-								<input
+								<Input
 									type="email"
 									required
 									placeholder="you@company.com"
 									value={email}
 									onChange={(e) => setEmail(e.target.value)}
-									style={{
-										height: 44,
-										padding: "0 16px",
-										borderRadius: "var(--control-radius)",
-										border: "1px solid var(--border-subtle)",
-										background: "var(--surface-low)",
-										color: "var(--foreground)",
-										fontSize: 14,
-										minWidth: 280,
-										outline: "none",
-									}}
+									className="h-11"
+									style={{ minWidth: 280 }}
 								/>
 								<button
 									type="submit"

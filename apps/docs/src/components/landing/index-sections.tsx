@@ -1,6 +1,8 @@
 import { Link } from "@tanstack/react-router";
 import { type FormEvent, type ReactNode, useState } from "react";
 
+import { Input } from "@/components/ui/input";
+
 import {
 	type CodeLine,
 	CodeBlock,
@@ -2675,23 +2677,13 @@ export function WaitlistRow({
 				</span>
 			) : (
 				<form onSubmit={submit} style={{ display: "flex", gap: 8 }}>
-					<input
+					<Input
 						type="email"
 						required
 						placeholder="you@company.com"
 						value={email}
 						onChange={(e) => setEmail(e.target.value)}
-						style={{
-							height: 40,
-							padding: "0 14px",
-							borderRadius: "var(--control-radius)",
-							border: "1px solid var(--border-subtle)",
-							background: "var(--surface-low)",
-							color: "var(--foreground)",
-							fontSize: 13,
-							minWidth: 240,
-							outline: "none",
-						}}
+						style={{ minWidth: 240 }}
 					/>
 					<button
 						type="submit"

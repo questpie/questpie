@@ -1,5 +1,7 @@
 import { useEffect, useSyncExternalStore } from "react";
 
+import { Button } from "@/components/ui/button";
+
 import { LIcon } from "./primitives";
 
 type Theme = "light" | "dark";
@@ -61,14 +63,14 @@ export function ThemeToggle() {
 	}, []);
 
 	return (
-		<button
+		<Button
 			type="button"
-			className="landing-btn landing-btn-ghost landing-btn-sm"
+			variant="ghost"
+			size="icon-sm"
 			onClick={() => applyTheme(theme === "light" ? "dark" : "light")}
 			aria-label="Toggle theme"
-			style={{ width: 32, padding: 0 }}
 		>
 			<LIcon name={theme === "light" ? "moon" : "sun"} size={14} />
-		</button>
+		</Button>
 	);
 }
