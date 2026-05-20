@@ -2,7 +2,7 @@
 # Build: docker build -f apps/docs/Dockerfile -t questpie-docs .
 # Run: docker run -p 3000:3000 questpie-docs
 
-FROM oven/bun:1.3.0-alpine AS base
+FROM oven/bun:1.3.14-alpine AS base
 
 # Prune stage - create minimal workspace for docs app
 FROM base AS pruner
