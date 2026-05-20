@@ -1,0 +1,17 @@
+[install]
+# Supply-chain defense: quarantine fresh package versions for 72h.
+#
+# Mini Shai-Hulud–class compromises (TanStack May 2026, SAP CAP April 2026,
+# Bitwarden CLI April 2026, etc.) are typically detected and unpublished
+# within hours of release. A 72-hour quarantine means `bun install` /
+# `bun add` / `bun update` will refuse to pick up versions younger than
+# that, so a maintainer running an update during the attacker's narrow
+# publish window won't pull the malicious version into bun.lock.
+#
+# CI is already protected separately via `bun install --frozen-lockfile`
+# (it only installs what's already in the lockfile). This setting protects
+# the developer machines that produce the lockfile.
+#
+# Trade-off: legitimate new releases also take ~3 days to land in our
+# tree. Accept that — supply-chain hygiene > 3-day update lag.
+minimumReleaseAge = 259200  # 72 hours
