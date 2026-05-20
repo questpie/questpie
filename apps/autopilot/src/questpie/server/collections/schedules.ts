@@ -45,23 +45,76 @@ export const schedules = collection("schedules")
 		v.collectionTable({
 			columns: [
 				f.name,
-				f.description,
-				f.enabled,
 				f.mode,
 				f.workflowConfig,
+				f.enabled,
 				f.nextRunAt,
 				f.lastRunAt,
 			],
 			searchable: [f.name, f.description, f.chatPrompt],
 			filterable: [f.enabled, f.mode, f.workflowConfig],
 			defaultSort: { field: f.nextRunAt, direction: "asc" },
+			quickFilters: [
+				{
+					id: "active",
+					label: { en: "Active" },
+					icon: { type: "icon", props: { name: "ph:check-circle" } },
+					filters: [
+						{
+							id: "schedules-active",
+							field: f.enabled,
+							operator: "equals",
+							value: true,
+						},
+					],
+				},
+				{
+					id: "disabled",
+					label: { en: "Disabled" },
+					icon: { type: "icon", props: { name: "ph:prohibit" } },
+					filters: [
+						{
+							id: "schedules-disabled",
+							field: f.enabled,
+							operator: "equals",
+							value: false,
+						},
+					],
+				},
+				{
+					id: "create-issue",
+					label: { en: "Create Issue" },
+					icon: { type: "icon", props: { name: "ph:ticket" } },
+					filters: [
+						{
+							id: "schedules-task-mode",
+							field: f.mode,
+							operator: "equals",
+							value: "task",
+						},
+					],
+				},
+				{
+					id: "run-workflow",
+					label: { en: "Run Workflow" },
+					icon: { type: "icon", props: { name: "ph:flow-arrow" } },
+					filters: [
+						{
+							id: "schedules-chat-mode",
+							field: f.mode,
+							operator: "equals",
+							value: "chat",
+						},
+					],
+				},
+			],
 		}),
 	)
 	.form(({ v, f }) =>
 		v.collectionForm({
 			sidebar: {
 				position: "right",
-				fields: [f.enabled, f.mode, f.concurrencyPolicy],
+				fields: [f.enabled, f.mode],
 			},
 			fields: [
 				{
@@ -73,7 +126,13 @@ export const schedules = collection("schedules")
 							fields: [
 								{
 									type: "section",
-									fields: [f.name, f.description, f.cron, f.timezone],
+									label: { en: "Schedule" },
+									fields: [f.name, f.description],
+								},
+								{
+									type: "section",
+									label: { en: "Timing" },
+									fields: [f.cron, f.timezone],
 								},
 							],
 						},
@@ -83,17 +142,13 @@ export const schedules = collection("schedules")
 							fields: [
 								{
 									type: "section",
-									fields: [f.mode, f.workflowConfig],
+									label: { en: "Issue Template" },
+									fields: [f.taskTemplate],
 								},
-							],
-						},
-						{
-							id: "template",
-							label: { en: "Template" },
-							fields: [
 								{
 									type: "section",
-									fields: [f.taskTemplate, f.chatPrompt],
+									label: { en: "Workflow" },
+									fields: [f.workflowConfig, f.chatPrompt],
 								},
 							],
 						},

@@ -17,12 +17,13 @@ import _view_knowledgeDetail from "../views/knowledge-detail";
 import _view_taskDetail from "../views/task-detail";
 import _comp_autopilotWorkRail from "../components/autopilot-work-rail";
 import _comp_filesViewComponent from "../components/files-view-component";
+import _comp_taskDetailComponent from "../components/task-detail-component";
 import _pg_projectInspection from "../pages/project-inspection";
 
 const admin = {
 	blocks: { ..._mergedModules.blocks },
 	views: { ..._mergedModules.views, [_view_filesView.name]: _view_filesView, [_view_knowledgeDetail.name]: _view_knowledgeDetail, [_view_taskDetail.name]: _view_taskDetail },
-	components: { ..._mergedModules.components, "autopilotWorkRail": _comp_autopilotWorkRail, "filesViewComponent": _comp_filesViewComponent },
+	components: { ..._mergedModules.components, "autopilotWorkRail": _comp_autopilotWorkRail, "filesViewComponent": _comp_filesViewComponent, "taskDetailComponent": _comp_taskDetailComponent },
 	fields: { ..._mergedModules.fields },
 	pages: { ..._mergedModules.pages, "projectInspection": _pg_projectInspection },
 	widgets: { ..._mergedModules.widgets },

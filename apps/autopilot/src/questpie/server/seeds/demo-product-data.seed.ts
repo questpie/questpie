@@ -113,7 +113,7 @@ export default seed({
 				contentType: "text/markdown",
 				renderer: "markdown",
 				source: "system",
-				sourceRef: "apps/autopilot/PRODUCT_PLAN.md",
+				sourceRef: "seed:autopilot-product-model",
 				body: [
 					"# Autopilot product model",
 					"",

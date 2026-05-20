@@ -37,13 +37,41 @@ export const workflowConfigs = collection("workflow_configs")
 			searchable: [f.name, f.description],
 			filterable: [f.enabled, f.project, f.defaultCapability],
 			defaultSort: { field: "updatedAt", direction: "desc" },
+			quickFilters: [
+				{
+					id: "active",
+					label: { en: "Active" },
+					icon: { type: "icon", props: { name: "ph:check-circle" } },
+					filters: [
+						{
+							id: "workflows-active",
+							field: f.enabled,
+							operator: "equals",
+							value: true,
+						},
+					],
+				},
+				{
+					id: "disabled",
+					label: { en: "Disabled" },
+					icon: { type: "icon", props: { name: "ph:prohibit" } },
+					filters: [
+						{
+							id: "workflows-disabled",
+							field: f.enabled,
+							operator: "equals",
+							value: false,
+						},
+					],
+				},
+			],
 		}),
 	)
 	.form(({ v, f }) =>
 		v.collectionForm({
 			sidebar: {
 				position: "right",
-				fields: [f.enabled, f.version],
+				fields: [f.enabled],
 			},
 			fields: [
 				{
@@ -55,7 +83,13 @@ export const workflowConfigs = collection("workflow_configs")
 							fields: [
 								{
 									type: "section",
+									label: { en: "Workflow" },
 									fields: [f.name, f.description],
+								},
+								{
+									type: "section",
+									label: { en: "Defaults" },
+									fields: [f.project, f.defaultCapability],
 								},
 							],
 						},
@@ -70,22 +104,12 @@ export const workflowConfigs = collection("workflow_configs")
 							],
 						},
 						{
-							id: "defaults",
-							label: { en: "Defaults" },
-							fields: [
-								{
-									type: "section",
-									fields: [f.project, f.defaultCapability],
-								},
-							],
-						},
-						{
 							id: "advanced",
 							label: { en: "Advanced" },
 							fields: [
 								{
 									type: "section",
-									fields: [f.config],
+									fields: [f.version, f.config],
 								},
 							],
 						},

@@ -478,7 +478,7 @@ export default seed({
 				contentType: "text/markdown",
 				renderer: "markdown",
 				source: "system",
-				sourceRef: "apps/autopilot/ADMIN_UI_GAPS.md",
+				sourceRef: "seed:admin-list-view-controls",
 				body: [
 					"# Admin list view controls",
 					"",
@@ -498,7 +498,7 @@ export default seed({
 				contentType: "text/markdown",
 				renderer: "markdown",
 				source: "system",
-				sourceRef: "apps/autopilot/SEED_TEST_MATRIX.md",
+				sourceRef: "seed:default-company-template",
 				body: [
 					"# Default company template",
 					"",

@@ -1,0 +1,455 @@
+{
+  "operations": [
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__activity__DOT__activity_task_idx",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "task",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "activity_task_idx",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "activity"
+      },
+      "timestamp": "2026-05-17T09:55:35.220Z",
+      "migrationId": "happyOrangeUnicorn20260517T095535"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__activity__DOT__activity_run_idx",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "run",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "activity_run_idx",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "activity"
+      },
+      "timestamp": "2026-05-17T09:55:35.220Z",
+      "migrationId": "happyOrangeUnicorn20260517T095535"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__activity__DOT__activity_type_idx",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "type",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "activity_type_idx",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "activity"
+      },
+      "timestamp": "2026-05-17T09:55:35.220Z",
+      "migrationId": "happyOrangeUnicorn20260517T095535"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__activity__DOT__activity_project_idx",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "project",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "activity_project_idx",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "activity"
+      },
+      "timestamp": "2026-05-17T09:55:35.220Z",
+      "migrationId": "happyOrangeUnicorn20260517T095535"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__capabilities__DOT__capabilities_project_idx",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "project",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "capabilities_project_idx",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "capabilities"
+      },
+      "timestamp": "2026-05-17T09:55:35.220Z",
+      "migrationId": "happyOrangeUnicorn20260517T095535"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__capabilities__DOT__capabilities_enabled_idx",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "enabled",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "capabilities_enabled_idx",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "capabilities"
+      },
+      "timestamp": "2026-05-17T09:55:35.220Z",
+      "migrationId": "happyOrangeUnicorn20260517T095535"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__environments__DOT__environments_project_idx",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "project",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "environments_project_idx",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "environments"
+      },
+      "timestamp": "2026-05-17T09:55:35.220Z",
+      "migrationId": "happyOrangeUnicorn20260517T095535"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__join_tokens__DOT__join_tokens_expires_at_idx",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "expiresAt",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "join_tokens_expires_at_idx",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "join_tokens"
+      },
+      "timestamp": "2026-05-17T09:55:35.220Z",
+      "migrationId": "happyOrangeUnicorn20260517T095535"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__providers__DOT__providers_type_enabled_idx",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "type",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          },
+          {
+            "value": "enabled",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "providers_type_enabled_idx",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "providers"
+      },
+      "timestamp": "2026-05-17T09:55:35.220Z",
+      "migrationId": "happyOrangeUnicorn20260517T095535"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__providers__DOT__providers_project_idx",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "project",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "providers_project_idx",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "providers"
+      },
+      "timestamp": "2026-05-17T09:55:35.220Z",
+      "migrationId": "happyOrangeUnicorn20260517T095535"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__schedules__DOT__schedules_enabled_next_run_idx",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "enabled",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          },
+          {
+            "value": "nextRunAt",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "schedules_enabled_next_run_idx",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "schedules"
+      },
+      "timestamp": "2026-05-17T09:55:35.220Z",
+      "migrationId": "happyOrangeUnicorn20260517T095535"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__schedules__DOT__schedules_mode_idx",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "mode",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "schedules_mode_idx",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "schedules"
+      },
+      "timestamp": "2026-05-17T09:55:35.220Z",
+      "migrationId": "happyOrangeUnicorn20260517T095535"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__scripts__DOT__scripts_project_idx",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "project",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "scripts_project_idx",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "scripts"
+      },
+      "timestamp": "2026-05-17T09:55:35.220Z",
+      "migrationId": "happyOrangeUnicorn20260517T095535"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__secrets__DOT__secrets_scope_idx",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "scope",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "secrets_scope_idx",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "secrets"
+      },
+      "timestamp": "2026-05-17T09:55:35.220Z",
+      "migrationId": "happyOrangeUnicorn20260517T095535"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__workflow_configs__DOT__workflow_configs_project_idx",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "project",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "workflow_configs_project_idx",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "workflow_configs"
+      },
+      "timestamp": "2026-05-17T09:55:35.220Z",
+      "migrationId": "happyOrangeUnicorn20260517T095535"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__workflow_configs__DOT__workflow_configs_enabled_idx",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "enabled",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "workflow_configs_enabled_idx",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "workflow_configs"
+      },
+      "timestamp": "2026-05-17T09:55:35.220Z",
+      "migrationId": "happyOrangeUnicorn20260517T095535"
+    }
+  ],
+  "metadata": {
+    "migrationId": "happyOrangeUnicorn20260517T095535",
+    "timestamp": "2026-05-17T09:55:35.288Z",
+    "prevId": "00000000-0000-0000-0000-000000000000"
+  }
+}

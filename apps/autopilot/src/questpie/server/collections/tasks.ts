@@ -5,7 +5,7 @@ import { collection } from "#questpie/factories";
 export const tasks = collection("tasks")
 	.fields(({ f }) => ({
 		title: f.text().required().label({ en: "Title" }),
-		description: f.textarea().label({ en: "Description" }),
+		description: f.richText({ mode: "markdown" }).label({ en: "Description" }),
 		type: f
 			.select([
 				{ value: "task", label: { en: "Task" } },
@@ -262,67 +262,52 @@ export const tasks = collection("tasks")
 		}),
 	)
 	.form(({ v, f }) =>
-		v.collectionForm({
+		v.taskDetail({
 			sidebar: {
 				position: "right",
-				fields: [f.status, f.priority, f.project],
+				fields: [
+					f.status,
+					f.priority,
+					f.project,
+					f.type,
+					f.scopeType,
+					f.capability,
+					f.model,
+				],
 			},
 			fields: [
 				{
-					type: "tabs",
-					tabs: [
-						{
-							id: "issue",
-							label: { en: "Issue" },
-							fields: [
-								{
-									type: "section",
-									fields: [f.title, f.description, f.priority],
-								},
-							],
-						},
-						{
-							id: "context",
-							label: { en: "Context" },
-							fields: [
-								{
-									type: "section",
-									fields: [f.project, f.scopeType, f.context],
-								},
-							],
-						},
-						{
-							id: "automation",
-							label: { en: "Automation" },
-							fields: [
-								{
-									type: "section",
-									fields: [
-										f.workflowConfig,
-										f.startAfter,
-										f.capability,
-										f.model,
-									],
-								},
-							],
-						},
-						{
-							id: "advanced",
-							label: { en: "Advanced" },
-							fields: [
-								{
-									type: "section",
-									fields: [
-										f.type,
-										f.workflowStep,
-										f.queue,
-										f.scheduledBy,
-										f.createdBy,
-										f.metadata,
-									],
-								},
-							],
-						},
+					type: "section",
+					fields: [f.title, f.description],
+				},
+				{
+					type: "section",
+					label: { en: "Context" },
+					wrapper: "collapsible",
+					defaultCollapsed: true,
+					fields: [f.context],
+				},
+				{
+					type: "section",
+					label: { en: "Automation" },
+					wrapper: "collapsible",
+					defaultCollapsed: true,
+					fields: [
+						f.workflowConfig,
+						f.startAfter,
+					],
+				},
+				{
+					type: "section",
+					label: { en: "Advanced" },
+					wrapper: "collapsible",
+					defaultCollapsed: true,
+					fields: [
+						f.workflowStep,
+						f.queue,
+						f.scheduledBy,
+						f.createdBy,
+						f.metadata,
 					],
 				},
 			],
