@@ -1,9 +1,12 @@
 import { Link } from "@tanstack/react-router";
 import { type FormEvent, type ReactNode, useState } from "react";
 
+import { buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 
 import {
+	accentButtonStyle,
 	type CodeLine,
 	CodeBlock,
 	Eyebrow,
@@ -132,18 +135,18 @@ export function Hero() {
 								}}
 							>
 								<a
-									className="landing-btn landing-btn-primary"
+									className={cn(buttonVariants({ variant: "default" }))}
 									href="/docs"
 								>
 									Start a project
 									<LIcon name="arrow-right" size={14} />
 								</a>
-								<Link className="landing-btn landing-btn-secondary" to="/cloud">
+								<Link className={cn(buttonVariants({ variant: "outline" }))} to="/cloud">
 									Try Cloud
 									<LIcon name="arrow-down" size={14} />
 								</Link>
 								<a
-									className="landing-btn landing-btn-ghost"
+									className={cn(buttonVariants({ variant: "ghost" }))}
 									href="https://github.com/questpie/questpie"
 									target="_blank"
 									rel="noreferrer"
@@ -905,12 +908,12 @@ export function FrameworkSection() {
 						flexWrap: "wrap",
 					}}
 				>
-					<a className="landing-btn landing-btn-primary" href="/docs">
+					<a className={cn(buttonVariants({ variant: "default" }))} href="/docs">
 						Start with the docs
 						<LIcon name="arrow-right" size={14} />
 					</a>
 					<a
-						className="landing-btn landing-btn-secondary"
+						className={cn(buttonVariants({ variant: "outline" }))}
 						href="https://github.com/questpie/questpie"
 						target="_blank"
 						rel="noreferrer"
@@ -2693,12 +2696,8 @@ export function WaitlistRow({
 					/>
 					<button
 						type="submit"
-						className="landing-btn"
-						style={{
-							background: accent,
-							color: "#0a0a0a",
-							fontWeight: 600,
-						}}
+						className={cn(buttonVariants({ variant: "default" }))}
+						style={accentButtonStyle(accent)}
 					>
 						{cta}
 						<LIcon name="arrow-right" size={14} />
@@ -3476,11 +3475,12 @@ function PricingCard({ tier }: { tier: Tier }) {
 
 			<a
 				href={tier.cta.href}
-				className={`landing-btn landing-btn-sm ${
-					tier.cta.tone === "primary"
-						? "landing-btn-primary"
-						: "landing-btn-secondary"
-				}`}
+				className={cn(
+					buttonVariants({
+						variant: tier.cta.tone === "primary" ? "default" : "outline",
+						size: "sm",
+					}),
+				)}
 				style={{ width: "100%", marginBottom: 18 }}
 			>
 				{tier.cta.label}
@@ -3766,12 +3766,12 @@ export function FinalCta() {
 							flexWrap: "wrap",
 						}}
 					>
-						<a className="landing-btn landing-btn-primary" href="/docs">
+						<a className={cn(buttonVariants({ variant: "default" }))} href="/docs">
 							Start building
 							<LIcon name="arrow-right" size={14} />
 						</a>
 						<a
-							className="landing-btn landing-btn-secondary"
+							className={cn(buttonVariants({ variant: "outline" }))}
 							href="https://github.com/questpie/questpie"
 							target="_blank"
 							rel="noreferrer"
@@ -3780,7 +3780,7 @@ export function FinalCta() {
 							Star on GitHub
 							<LIcon name="star" size={12} />
 						</a>
-						<a className="landing-btn landing-btn-ghost" href="#contact">
+						<a className={cn(buttonVariants({ variant: "ghost" }))} href="#contact">
 							Talk to the team
 						</a>
 					</div>

@@ -1,10 +1,13 @@
 import { Link } from "@tanstack/react-router";
 import { type FormEvent, useState } from "react";
 
+import { buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 
 import { FaqSection } from "./index-sections";
 import {
+	accentButtonStyle,
 	CM,
 	type CodeLine,
 	CodeBlock,
@@ -154,22 +157,18 @@ export function APHero() {
 								}}
 							>
 								<a
-									className="landing-btn"
+									className={cn(buttonVariants({ variant: "default" }))}
 									href="#waitlist"
 									onClick={(e) =>
 										smoothScrollNavigate("/autopilot#waitlist", e)
 									}
-									style={{
-										background: AP_ACCENT,
-										color: "#0a0a0a",
-										fontWeight: 600,
-									}}
+									style={accentButtonStyle(AP_ACCENT)}
 								>
 									Get early access
 									<LIcon name="arrow-right" size={14} />
 								</a>
 								<a
-									className="landing-btn landing-btn-secondary"
+									className={cn(buttonVariants({ variant: "outline" }))}
 									href="#issue"
 									onClick={(e) => smoothScrollNavigate("/autopilot#issue", e)}
 								>
@@ -177,7 +176,7 @@ export function APHero() {
 									<LIcon name="arrow-down" size={14} />
 								</a>
 								<a
-									className="landing-btn landing-btn-ghost"
+									className={cn(buttonVariants({ variant: "ghost" }))}
 									href="https://github.com/questpie/questpie"
 									target="_blank"
 									rel="noreferrer"
@@ -2023,13 +2022,8 @@ export function APFinalCta() {
 								/>
 								<button
 									type="submit"
-									className="landing-btn"
-									style={{
-										height: 44,
-										background: AP_ACCENT,
-										color: "#0a0a0a",
-										fontWeight: 600,
-									}}
+									className={cn(buttonVariants({ variant: "default" }))}
+									style={{ ...accentButtonStyle(AP_ACCENT), height: 44 }}
 								>
 									Get early access
 									<LIcon name="arrow-right" size={14} />

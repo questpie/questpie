@@ -1,10 +1,13 @@
 import { Link } from "@tanstack/react-router";
 import { type FormEvent, useState } from "react";
 
+import { buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 
 import { FaqSection } from "./index-sections";
 import {
+	accentButtonStyle,
 	Eyebrow,
 	LIcon,
 	Reveal,
@@ -149,20 +152,16 @@ export function CloudHero() {
 								}}
 							>
 								<a
-									className="landing-btn"
+									className={cn(buttonVariants({ variant: "default" }))}
 									href="#waitlist"
 									onClick={(e) => smoothScrollNavigate("/cloud#waitlist", e)}
-									style={{
-										background: CLOUD_ACCENT,
-										color: "#0a0a0a",
-										fontWeight: 600,
-									}}
+									style={accentButtonStyle(CLOUD_ACCENT)}
 								>
 									Reserve your spot
 									<LIcon name="arrow-right" size={14} />
 								</a>
 								<a
-									className="landing-btn landing-btn-secondary"
+									className={cn(buttonVariants({ variant: "outline" }))}
 									href="#console"
 									onClick={(e) => smoothScrollNavigate("/cloud#console", e)}
 								>
@@ -1003,14 +1002,14 @@ export function DeployConsole() {
 							}}
 						>
 							<span
-								className="landing-btn landing-btn-secondary landing-btn-sm"
+								className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
 								style={{ pointerEvents: "none" }}
 							>
 								<LIcon name="arrow-down" size={12} />
 								Rollback
 							</span>
 							<span
-								className="landing-btn landing-btn-secondary landing-btn-sm"
+								className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
 								style={{ pointerEvents: "none" }}
 							>
 								Redeploy
@@ -1584,14 +1583,14 @@ export function HostedAutopilotSection() {
 							}}
 						>
 							<Link
-								className="landing-btn landing-btn-secondary landing-btn-sm"
+								className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
 								to="/autopilot"
 							>
 								See Autopilot
 								<LIcon name="arrow-right" size={12} />
 							</Link>
 							<a
-								className="landing-btn landing-btn-ghost landing-btn-sm"
+								className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}
 								href="/#stack"
 								onClick={(e) => smoothScrollNavigate("/#stack", e)}
 							>
@@ -1948,7 +1947,7 @@ function CloudTierCard({ tier }: { tier: Tier }) {
 			<a
 				href={tier.cta.href}
 				onClick={(e) => smoothScrollNavigate(`/cloud${tier.cta.href}`, e)}
-				className="landing-btn landing-btn-sm"
+				className={cn(buttonVariants({ variant: "default", size: "sm" }))}
 				style={{
 					width: "100%",
 					marginBottom: 18,
@@ -2066,7 +2065,7 @@ export function MigrationSection() {
 							}}
 						>
 							<a
-								className="landing-btn landing-btn-secondary landing-btn-sm"
+								className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
 								href="https://github.com/questpie/questpie"
 								target="_blank"
 								rel="noreferrer"
@@ -2075,7 +2074,7 @@ export function MigrationSection() {
 								Read the source
 							</a>
 							<a
-								className="landing-btn landing-btn-ghost landing-btn-sm"
+								className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}
 								href="/docs"
 							>
 								Self-host guide
@@ -2282,13 +2281,8 @@ export function CloudFinalCta() {
 								/>
 								<button
 									type="submit"
-									className="landing-btn"
-									style={{
-										height: 44,
-										background: CLOUD_ACCENT,
-										color: "#0a0a0a",
-										fontWeight: 600,
-									}}
+									className={cn(buttonVariants({ variant: "default" }))}
+									style={{ ...accentButtonStyle(CLOUD_ACCENT), height: 44 }}
 								>
 									Reserve your spot
 									<LIcon name="arrow-right" size={14} />

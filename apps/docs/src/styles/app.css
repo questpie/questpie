@@ -583,96 +583,11 @@
 	);
 }
 
-/* Landing buttons. Depth recipe per design.md §4a / §5: gradient bg +
- * inset top highlight + inset bottom shade + outer tinted glow. Press
- * feedback is translateY(1px) NOT scale — buttons feel like physical
- * keys, not zoom controls. Focus uses neutral 2px ring (never primary
- * purple per §5). Hit area >= 40px. */
-.landing-btn {
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	gap: 8px;
-	height: var(--control-height);
-	min-width: 40px;
-	padding: 0 16px;
-	border-radius: var(--control-radius);
-	font-size: 14px;
-	font-weight: 500;
-	transition-property: background-color, color, box-shadow, transform, opacity;
-	transition-duration: var(--motion-duration-base);
-	transition-timing-function: var(--motion-ease-standard);
-	white-space: nowrap;
-	cursor: pointer;
-	user-select: none;
-	border: 0;
-}
-.landing-btn:active:not(:disabled) {
-	transform: translateY(1px);
-	transition-duration: var(--motion-duration-fast);
-}
-.landing-btn:focus-visible {
-	outline: 2px solid color-mix(in srgb, var(--ring) 38%, transparent);
-	outline-offset: 2px;
-}
-@media (prefers-reduced-motion: reduce) {
-	.landing-btn:active:not(:disabled) { transform: none; }
-}
-.landing-btn[data-icon-end],
-.landing-btn[data-icon="inline-end"] {
-	padding-right: 14px;
-}
-.landing-btn[data-icon-start],
-.landing-btn[data-icon="inline-start"] {
-	padding-left: 14px;
-}
-.landing-btn-primary {
-	background: var(--btn-primary-gradient);
-	color: var(--primary-foreground);
-	box-shadow: var(--btn-primary-shadow);
-}
-.landing-btn-primary:hover:not(:disabled) {
-	filter: brightness(1.05);
-}
-.landing-btn-primary:active:not(:disabled) {
-	box-shadow: var(--btn-primary-shadow-pressed);
-}
-.landing-btn-secondary {
-	background: var(--btn-secondary-gradient);
-	color: var(--foreground);
-	border: 1px solid var(--border-subtle);
-	box-shadow: var(--btn-secondary-shadow);
-}
-.landing-btn-secondary:hover:not(:disabled) {
-	border-color: var(--border);
-	background: linear-gradient(
-		to bottom,
-		color-mix(in srgb, var(--surface-mid) 100%, white 4%),
-		var(--surface-mid)
-	);
-}
-.landing-btn-secondary:active:not(:disabled) {
-	box-shadow: var(--btn-secondary-shadow-pressed);
-}
-/* Ghost stays flat per §5 — no depth recipe */
-.landing-btn-ghost {
-	background: transparent;
-	color: var(--foreground-muted);
-}
-.landing-btn-ghost:hover:not(:disabled) {
-	color: var(--foreground);
-	background: var(--surface-mid);
-}
-.landing-btn-sm {
-	height: var(--control-height-sm, 32px);
-	padding: 0 12px;
-	font-size: 13px;
-	border-radius: var(--control-radius-inner);
-}
-.landing-btn-sm[data-icon-end],
-.landing-btn-sm[data-icon="inline-end"] { padding-right: 10px; }
-.landing-btn-sm[data-icon-start],
-.landing-btn-sm[data-icon="inline-start"] { padding-left: 10px; }
+/* Buttons in landing use shadcn `Button` / `buttonVariants` from
+ * @/components/ui/button — a single source of truth that already
+ * implements the §4a depth recipe (gradient + inset highlight + outer
+ * tinted glow) for default, §4a low-intensity for outline, and flat
+ * for ghost, all with translateY(1px) press and neutral focus ring. */
 
 /* Hairline panels per design.md §3 — persistent surfaces are FLAT with
  * a hairline border. No persistent drop shadows (§4 forbidden list). */
@@ -776,17 +691,18 @@ main h1 {
 	 * `maxWidth: 1120, padding: "0 24px"` for the desktop layout. On
 	 * mobile that adds another 24px of inset on top of the section
 	 * padding. Override to 0 so the section's own padding governs
-	 * margins. */
-	main > section > div[style*="max-width: 1120"],
-	main > section > div[style*="maxWidth: 1120"] {
+	 * margins. (React serializes inline style without space after the
+	 * colon, so the selector must match `max-width:1120` not
+	 * `max-width: 1120`.) */
+	main > section > div[style*="max-width:1120"] {
 		padding-left: 0 !important;
 		padding-right: 0 !important;
 	}
-	header > div[style*="max-width: 1120"] {
+	header > div[style*="max-width:1120"] {
 		padding-left: 16px !important;
 		padding-right: 16px !important;
 	}
-	footer > div[style*="max-width: 1120"] {
+	footer > div[style*="max-width:1120"] {
 		padding-left: 0 !important;
 		padding-right: 0 !important;
 	}
@@ -828,7 +744,7 @@ main h1 {
 	main > section:first-child {
 		padding-top: 96px !important;
 	}
-	header > div[style*="max-width: 1120"] {
+	header > div[style*="max-width:1120"] {
 		padding-left: 12px !important;
 		padding-right: 12px !important;
 	}
