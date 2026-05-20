@@ -20,7 +20,8 @@ For the complete admin reference with all topics expanded: `AGENTS.md`
 - **@base-ui/react** primitives (NOT @radix-ui)
 - **@iconify/react** with Phosphor icon set (`ph:icon-name`)
 - **sonner** for toasts — `toast.error()`, `toast.success()`
-- Brutalist flat design: `--radius: 0px`, no shadows
+- QUESTPIE Neutral Design: flat surfaces, soft neutral geometry,
+  tokenized radius, and restrained floating shadows
 
 ## Setup
 
@@ -46,7 +47,8 @@ The admin module contributes the codegen plugin automatically. It discovers `con
 ### 3. Modules
 
 ```ts title="modules.ts"
-import { adminModule, auditModule } from "@questpie/admin/modules/admin";
+import { adminModule } from "@questpie/admin/modules/admin";
+import { auditModule } from "@questpie/admin/modules/audit";
 
 export default [adminModule, auditModule] as const;
 ```
@@ -148,44 +150,31 @@ export default adminConfig({
 
 The admin uses CSS variables for all theming. Override them in your own CSS file.
 
-### Light Theme (`:root`)
+The full source of truth is `packages/admin/DESIGN.md`. Key defaults:
 
-| Variable               | Default   | Purpose                          |
-| ---------------------- | --------- | -------------------------------- |
-| `--background`         | `#FFFFFF` | Page background                  |
-| `--foreground`         | `#0A0A0A` | Primary text                     |
-| `--card`               | `#F8F8F8` | Cards, panels, sidebar           |
-| `--popover`            | `#FFFFFF` | Dropdowns, tooltips, dialogs     |
-| `--muted`              | `#F0F0F0` | Hover states, table headers      |
-| `--muted-foreground`   | `#666666` | Secondary text, placeholders     |
-| `--primary`            | `#B700FF` | Brand accent (CTAs, focus rings) |
-| `--primary-foreground` | `#FFFFFF` | Text on primary backgrounds      |
-| `--destructive`        | `#FF3D57` | Errors, delete actions           |
-| `--success`            | `#00E676` | Positive states                  |
-| `--warning`            | `#FFB300` | Caution states                   |
-| `--info`               | `#40C4FF` | Informational emphasis           |
-| `--border`             | `#E0E0E0` | All structural borders           |
-| `--ring`               | `#B700FF` | Focus ring color                 |
-| `--radius`             | `0px`     | Border radius (0 = brutalist)    |
+| Role          | Dark      | Light     |
+| ------------- | --------- | --------- |
+| Background    | `#121212` | `#fafafa` |
+| Foreground    | `#ececec` | `#1c1c1c` |
+| Card          | `#1b1b1b` | `#ffffff` |
+| Surface high  | `#2a2a2a` | `#e8e8e8` |
+| Border        | `#343434` | `#e2e2e2` |
+| Border subtle | `#262626` | `#ebebeb` |
+| Brand primary | `#b700ff` | `#b700ff` |
 
-### Dark Theme (`.dark` class)
-
-Dark mode uses the `.dark` class on the root element. Key overrides:
-
-| Variable       | Dark Value |
-| -------------- | ---------- |
-| `--background` | `#0A0A0A`  |
-| `--foreground` | `#FFFFFF`  |
-| `--card`       | `#111111`  |
-| `--border`     | `#333333`  |
-| `--muted`      | `#1A1A1A`  |
+| Token                    | Default | Use                                         |
+| ------------------------ | ------- | ------------------------------------------- |
+| `--control-radius-inner` | `8px`   | Icon buttons/actions nested inside controls |
+| `--control-radius`       | `12px`  | Inputs, selects, buttons, compact controls  |
+| `--surface-radius`       | `14px`  | Cards, panels, grouped fields, docs blocks  |
+| `--floating-radius`      | `14px`  | Menus, popovers, dialogs, command panels    |
 
 ### Typography
 
 | Variable      | Value                                                               |
 | ------------- | ------------------------------------------------------------------- |
-| `--font-sans` | `"Geist Variable"` — body text, descriptions                        |
-| `--font-mono` | `"JetBrains Mono Variable"` — UI chrome: nav, buttons, tabs, badges |
+| `--font-sans` | `"Geist Variable"` — UI, prose, headings, labels, navigation        |
+| `--font-mono` | `"JetBrains Mono Variable"` — code, file paths, commands, IDs       |
 
 ### Sidebar Variables
 
@@ -1521,6 +1510,6 @@ toast.error("Failed to save");
 
 6. **MEDIUM: Using `@phosphor-icons/react` or `lucide-react`** — use `@iconify/react` with `ph:` prefix for all icons.
 
-7. **LOW: Not using shadcn components** — prefer `<Button>`, `<Card>`, `<Input>` from the shadcn component library instead of raw HTML elements. The admin has a consistent brutalist design system.
+7. **LOW: Not using shadcn components** — prefer `<Button>`, `<Card>`, `<Input>` from the shadcn component library instead of raw HTML elements. The admin follows QUESTPIE Neutral Design.
 
 ---
