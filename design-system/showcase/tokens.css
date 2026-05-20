@@ -1,0 +1,386 @@
+/* QUESTPIE Neutral Design System — tokens copied from packages/admin DESIGN.md */
+:root,
+.dark {
+  color-scheme: dark;
+  --background: #121212;
+  --foreground: #ececec;
+  --foreground-muted: #a0a0a0;
+  --foreground-subtle: #737373;
+  --foreground-disabled: #5a5a5a;
+  --surface: #161616;
+  --surface-low: #1b1b1b;
+  --surface-mid: #222222;
+  --surface-high: #2a2a2a;
+  --surface-highest: #333333;
+  --card: #1b1b1b;
+  --popover: #1b1b1b;
+  --input: #343434;
+  --muted: #222222;
+  --accent: #2a2a2a;
+  --primary: #b700ff;
+  --primary-foreground: #ffffff;
+  --destructive: #ff5f6d;
+  --success: #4ade80;
+  --info: #60a5fa;
+
+  --border-subtle: #262626;
+  --border: #343434;
+  --border-strong: #4a4a4a;
+  --ring: #737373;
+
+  --pillar-framework: #b700ff;
+  --pillar-cloud: #60a5fa;
+  --pillar-autopilot: #4ade80;
+
+  --syntax-string: #7ddf9e;
+  --syntax-function: #8fc8ff;
+  --syntax-number: #f2ca72;
+  --syntax-keyword: #c79bff;
+  --syntax-type: #aeb8ff;
+  --syntax-comment: #737373;
+  --syntax-punctuation: #a0a0a0;
+
+  --radius-control-inner: 8px;
+  --radius-control: 12px;
+  --radius-surface: 14px;
+  --radius-floating: 14px;
+
+  --control-height: 40px;
+  --control-height-sm: 32px;
+
+  --space-input: 12px;
+  --space-card: 16px;
+  --space-panel: 20px;
+  --space-section: 24px;
+
+  --motion-fast: 100ms;
+  --motion-base: 150ms;
+  --motion-slow: 200ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-enter: cubic-bezier(0.22, 1, 0.36, 1);
+
+  --floating-shadow: 0 18px 40px -28px rgba(0, 0, 0, 0.72);
+
+  --font-sans: "Geist", "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+.light {
+  color-scheme: light;
+  --background: #fafafa;
+  --foreground: #1c1c1c;
+  --foreground-muted: #616161;
+  --foreground-subtle: #858585;
+  --foreground-disabled: #a0a0a0;
+  --surface: #f7f7f7;
+  --surface-low: #ffffff;
+  --surface-mid: #f0f0f0;
+  --surface-high: #e8e8e8;
+  --surface-highest: #dedede;
+  --card: #ffffff;
+  --popover: #ffffff;
+  --input: #e2e2e2;
+  --muted: #f0f0f0;
+  --accent: #e8e8e8;
+  --primary: #b700ff;
+  --primary-foreground: #ffffff;
+  --destructive: #d92d3a;
+  --success: #16a34a;
+  --info: #2563eb;
+
+  --border-subtle: #ebebeb;
+  --border: #e2e2e2;
+  --border-strong: #c9c9c9;
+  --ring: #858585;
+
+  --syntax-string: #167c43;
+  --syntax-function: #1c6da8;
+  --syntax-number: #946800;
+  --syntax-keyword: #7b2fb5;
+  --syntax-type: #565fb5;
+  --syntax-comment: #858585;
+  --syntax-punctuation: #616161;
+
+  --floating-shadow: 0 16px 36px -30px rgba(0, 0, 0, 0.38);
+}
+
+* {
+  box-sizing: border-box;
+  border-color: var(--border-subtle);
+}
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+html {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: "ss01", "ss02", "cv11";
+}
+body {
+  font-size: 15px;
+  line-height: 1.55;
+  background: var(--background);
+  color: var(--foreground);
+  text-rendering: optimizeLegibility;
+}
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  text-wrap: balance;
+  margin: 0;
+  font-weight: 600;
+  letter-spacing: -0.012em;
+}
+p {
+  text-wrap: pretty;
+  margin: 0;
+}
+.lede,
+.balance {
+  text-wrap: balance;
+}
+a {
+  color: inherit;
+  text-decoration: none;
+}
+button {
+  font: inherit;
+  background: none;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+code,
+pre,
+kbd,
+.mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+::selection {
+  background: color-mix(in srgb, var(--primary) 28%, transparent);
+  color: var(--foreground);
+}
+
+/* hairline grid overlay used in hero. Extremely subtle */
+.grid-bg {
+  background-image: linear-gradient(
+      to right,
+      var(--border-subtle) 1px,
+      transparent 1px
+    ),
+    linear-gradient(to bottom, var(--border-subtle) 1px, transparent 1px);
+  background-size: 56px 56px;
+  background-position: -1px -1px;
+  -webkit-mask-image: radial-gradient(
+    ellipse 60% 50% at 50% 0%,
+    black 30%,
+    transparent 80%
+  );
+  mask-image: radial-gradient(
+    ellipse 60% 50% at 50% 0%,
+    black 30%,
+    transparent 80%
+  );
+}
+
+/* utility: button styles — flat per token, with subtle depth on primary + cards */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: var(--control-height);
+  padding: 0 16px;
+  border-radius: var(--radius-control);
+  font-size: 14px;
+  font-weight: 500;
+  transition: background-color var(--motion-base) var(--ease-standard),
+    color var(--motion-base) var(--ease-standard),
+    border-color var(--motion-base) var(--ease-standard),
+    box-shadow var(--motion-base) var(--ease-standard),
+    transform var(--motion-fast) var(--ease-standard);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.btn:active {
+  transform: translateY(1px);
+}
+.btn-primary {
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--primary) 100%, white 4%),
+    var(--primary)
+  );
+  color: var(--primary-foreground);
+  box-shadow:
+    inset 0 1px 0 0 color-mix(in srgb, white 22%, transparent),
+    inset 0 -1px 0 0 color-mix(in srgb, black 18%, transparent),
+    0 1px 2px -1px color-mix(in srgb, var(--primary) 60%, transparent),
+    0 2px 6px -2px rgba(0, 0, 0, 0.35);
+}
+.btn-primary:hover {
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--primary) 100%, white 10%),
+    color-mix(in srgb, var(--primary) 95%, white 0%)
+  );
+}
+.btn-primary:active {
+  box-shadow:
+    inset 0 1px 2px 0 color-mix(in srgb, black 28%, transparent),
+    0 1px 1px -1px color-mix(in srgb, var(--primary) 50%, transparent);
+}
+.btn-secondary {
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--card) 100%, var(--foreground) 2%),
+    var(--card)
+  );
+  color: var(--foreground);
+  border: 1px solid var(--border-subtle);
+  box-shadow:
+    inset 0 1px 0 0 color-mix(in srgb, var(--foreground) 6%, transparent),
+    0 1px 2px -1px rgba(0, 0, 0, 0.18);
+}
+.btn-secondary:hover {
+  background: var(--surface-mid);
+  border-color: var(--border);
+}
+.btn-secondary:active {
+  box-shadow:
+    inset 0 1px 2px 0 color-mix(in srgb, black 18%, transparent);
+}
+.btn-ghost {
+  background: transparent;
+  color: var(--foreground-muted);
+}
+.btn-ghost:hover {
+  color: var(--foreground);
+  background: var(--surface-mid);
+}
+.btn-sm {
+  height: var(--control-height-sm);
+  padding: 0 12px;
+  font-size: 13px;
+  border-radius: var(--radius-control-inner);
+}
+
+/* depth-surface — elevated CTAs / hero panels with the same shadow recipe */
+.depth-surface {
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--card) 100%, var(--foreground) 1.5%),
+    var(--card)
+  );
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-surface);
+  box-shadow:
+    inset 0 1px 0 0 color-mix(in srgb, var(--foreground) 4%, transparent),
+    0 1px 0 0 color-mix(in srgb, black 8%, transparent),
+    0 8px 24px -16px rgba(0, 0, 0, 0.4);
+}
+
+/* control-depth — inputs, textareas, selects. "Pressed in" feel, opposite to buttons. */
+.control-depth {
+  background: var(--surface-low);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  box-shadow:
+    inset 0 1px 2px 0 color-mix(in srgb, black 14%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--foreground) 2%, transparent);
+  transition:
+    background-color var(--motion-base) var(--ease-standard),
+    border-color var(--motion-base) var(--ease-standard),
+    box-shadow var(--motion-base) var(--ease-standard);
+}
+.control-depth:focus,
+.control-depth:focus-within {
+  border-color: var(--border-strong);
+  box-shadow:
+    inset 0 1px 2px 0 color-mix(in srgb, black 16%, transparent),
+    0 0 0 2px color-mix(in srgb, var(--ring) 38%, transparent);
+}
+
+/* hairline panel */
+.panel {
+  background: var(--card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-surface);
+}
+.panel-low {
+  background: var(--surface-low);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-surface);
+}
+
+/* meta uppercase label */
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--foreground-subtle);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* focus */
+*:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  border-radius: var(--radius-control-inner);
+}
+
+/* reveal-on-scroll */
+[data-reveal] {
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 600ms var(--ease-enter),
+    transform 600ms var(--ease-enter);
+}
+[data-reveal][data-visible] {
+  opacity: 1;
+  transform: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-reveal] {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
+
+/* scrollbar */
+.thin-scroll::-webkit-scrollbar {
+  height: 6px;
+  width: 6px;
+}
+.thin-scroll::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--border) 60%, transparent);
+  border-radius: 6px;
+}
+
+/* density */
+.density-compact {
+  --space-section: 18px;
+  --space-panel: 14px;
+  --space-card: 12px;
+}
