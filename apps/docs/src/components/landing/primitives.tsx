@@ -552,6 +552,28 @@ export function StarBanner({
 	);
 }
 
+/* ---------- Accent button style ---------- *
+ * Inline style helper for the §4a depth recipe parameterised by a pillar
+ * accent color (cloud blue, autopilot green). The shadcn Button default
+ * variant always tints toward --primary, so accent buttons compose the
+ * accent gradient + matching outer glow here. Apply as
+ * `style={accentButtonStyle("var(--pillar-cloud)")}` alongside
+ * `className={buttonVariants({ variant: "default" })}`. */
+export function accentButtonStyle(accent: string): CSSProperties {
+	return {
+		backgroundColor: accent,
+		backgroundImage: `linear-gradient(to bottom, color-mix(in srgb, ${accent} 100%, white 4%), ${accent})`,
+		color: "#0a0a0a",
+		fontWeight: 600,
+		boxShadow: [
+			"inset 0 1px 0 0 color-mix(in srgb, white 22%, transparent)",
+			"inset 0 -1px 0 0 color-mix(in srgb, black 18%, transparent)",
+			`0 1px 2px -1px color-mix(in srgb, ${accent} 60%, transparent)`,
+			"0 2px 6px -2px rgba(0, 0, 0, 0.35)",
+		].join(", "),
+	};
+}
+
 /* ---------- Iconify icon helper ---------- *
  * Thin wrapper that mirrors the design's <Icon name size stroke> API
  * but routes to @iconify/react with the project's Phosphor set. */

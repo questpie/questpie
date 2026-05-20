@@ -1,5 +1,8 @@
 import { Link } from "@tanstack/react-router";
 
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+
 import {
 	Eyebrow,
 	LIcon,
@@ -235,13 +238,13 @@ function BuilderChat() {
 					<span className="landing-mono">3 changes pending</span>
 					<span style={{ display: "inline-flex", gap: 6 }}>
 						<span
-							className="landing-btn landing-btn-secondary landing-btn-sm"
+							className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
 							style={{ pointerEvents: "none" }}
 						>
 							Discard
 						</span>
 						<span
-							className="landing-btn landing-btn-sm"
+							className={cn(buttonVariants({ variant: "default", size: "sm" }))}
 							style={{
 								pointerEvents: "none",
 								background: AP_ACCENT,
@@ -399,7 +402,7 @@ function BuilderPreview() {
 					</p>
 					<div style={{ marginTop: 14, display: "flex", gap: 8 }}>
 						<span
-							className="landing-btn landing-btn-sm"
+							className={cn(buttonVariants({ variant: "default", size: "sm" }))}
 							style={{
 								background: AP_ACCENT,
 								color: "#0a0a0a",
@@ -411,7 +414,7 @@ function BuilderPreview() {
 							<LIcon name="arrow-right" size={12} />
 						</span>
 						<span
-							className="landing-btn landing-btn-secondary landing-btn-sm"
+							className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
 							style={{ pointerEvents: "none" }}
 						>
 							See gallery
@@ -1359,7 +1362,7 @@ export function OpenSourceSection() {
 							}}
 						>
 							<a
-								className="landing-btn landing-btn-secondary landing-btn-sm"
+								className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
 								href="https://github.com/questpie/questpie"
 								target="_blank"
 								rel="noreferrer"
@@ -1368,7 +1371,7 @@ export function OpenSourceSection() {
 								View source
 							</a>
 							<a
-								className="landing-btn landing-btn-ghost landing-btn-sm"
+								className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}
 								href="/cloud#hosted-autopilot"
 								onClick={(e) =>
 									smoothScrollNavigate("/cloud#hosted-autopilot", e)
