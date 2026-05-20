@@ -361,10 +361,12 @@
 
 @utility control-surface {
 	height: var(--control-height);
-	border: 1px solid var(--control-border);
+	border: 1px solid var(--border-subtle);
 	border-radius: var(--control-radius);
-	background-color: var(--control-background);
-	box-shadow: var(--control-shadow);
+	background-color: var(--surface-low);
+	/* Per design.md §4b: inputs feel "pressed in" — inset shadow gives
+	 * controls the opposite depth direction to raised buttons. */
+	box-shadow: var(--control-depth-shadow, var(--control-shadow));
 	transition-property: background-color, border-color, color, box-shadow;
 	transition-duration: var(--motion-duration-base);
 	transition-timing-function: var(--motion-ease-standard);
@@ -506,24 +508,57 @@
 	--pillar-autopilot: #4ade80;
 }
 
-/* Shadow-as-border tokens. Layered transparent shadows that fake a 1px
- * border and add a subtle lift. Adapt to any background since they use
- * alpha — solid borders don't. */
-.light,
-:root.light {
-	--shadow-border:
-		0 0 0 1px rgba(0, 0, 0, 0.06),
-		0 1px 2px -1px rgba(0, 0, 0, 0.06),
-		0 2px 4px 0 rgba(0, 0, 0, 0.04);
-	--shadow-border-hover:
-		0 0 0 1px rgba(0, 0, 0, 0.09),
-		0 1px 2px -1px rgba(0, 0, 0, 0.08),
-		0 2px 4px 0 rgba(0, 0, 0, 0.06);
+/* Design system tokens (design.md §4 shadow recipes). Three depth
+ * levels: 4a button (raised, gradient + inset + outer glow), 4b input
+ * (inset / pressed-in), 4c floating (popovers, dialogs only).
+ * Persistent surfaces (cards, tables, toolbars) stay flat with a
+ * hairline border. */
+
+/* 4a — primary button depth */
+:root, .dark, .light, :root.light {
+	--btn-primary-shadow:
+		inset 0 1px 0 0 color-mix(in srgb, white 22%, transparent),
+		inset 0 -1px 0 0 color-mix(in srgb, black 18%, transparent),
+		0 1px 2px -1px color-mix(in srgb, var(--primary) 60%, transparent),
+		0 2px 6px -2px rgba(0, 0, 0, 0.35);
+	--btn-primary-shadow-pressed:
+		inset 0 1px 2px 0 color-mix(in srgb, black 20%, transparent),
+		0 1px 1px -1px color-mix(in srgb, var(--primary) 40%, transparent);
+	--btn-primary-gradient: linear-gradient(
+		to bottom,
+		color-mix(in srgb, var(--primary) 100%, white 4%),
+		var(--primary)
+	);
+
+	/* 4a low-intensity — secondary button depth */
+	--btn-secondary-shadow:
+		inset 0 1px 0 0 color-mix(in srgb, white 6%, transparent),
+		inset 0 -1px 0 0 color-mix(in srgb, black 8%, transparent),
+		0 1px 2px -1px rgba(0, 0, 0, 0.15),
+		0 2px 4px -2px rgba(0, 0, 0, 0.18);
+	--btn-secondary-shadow-pressed:
+		inset 0 1px 2px 0 color-mix(in srgb, black 10%, transparent);
+	--btn-secondary-gradient: linear-gradient(
+		to bottom,
+		color-mix(in srgb, var(--card) 100%, white 6%),
+		var(--card)
+	);
+
+	/* 4b — input / control depth (pressed-in feel) */
+	--control-depth-shadow:
+		inset 0 1px 2px 0 color-mix(in srgb, black 14%, transparent),
+		inset 0 0 0 1px color-mix(in srgb, var(--foreground) 2%, transparent);
 }
-:root,
-.dark {
-	--shadow-border: 0 0 0 1px rgba(255, 255, 255, 0.08);
-	--shadow-border-hover: 0 0 0 1px rgba(255, 255, 255, 0.13);
+.light, :root.light {
+	/* Light mode wants weaker drops + lighter highlights */
+	--btn-secondary-shadow:
+		inset 0 1px 0 0 color-mix(in srgb, white 50%, transparent),
+		inset 0 -1px 0 0 color-mix(in srgb, black 4%, transparent),
+		0 1px 2px -1px rgba(0, 0, 0, 0.06),
+		0 2px 4px -2px rgba(0, 0, 0, 0.08);
+	--control-depth-shadow:
+		inset 0 1px 2px 0 color-mix(in srgb, black 7%, transparent),
+		inset 0 0 0 1px color-mix(in srgb, var(--foreground) 1%, transparent);
 }
 
 /* Hairline grid overlay used in hero */
@@ -548,91 +583,108 @@
 	);
 }
 
-/* Landing buttons. Tactile (active:scale 0.96), focus-visible ring,
- * optical icon padding (right side 2px tighter when there's a trailing
- * icon, opt-in via [data-icon-end]), no transition:all. */
+/* Landing buttons. Depth recipe per design.md §4a / §5: gradient bg +
+ * inset top highlight + inset bottom shade + outer tinted glow. Press
+ * feedback is translateY(1px) NOT scale — buttons feel like physical
+ * keys, not zoom controls. Focus uses neutral 2px ring (never primary
+ * purple per §5). Hit area >= 40px. */
 .landing-btn {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
 	gap: 8px;
 	height: var(--control-height);
+	min-width: 40px;
 	padding: 0 16px;
 	border-radius: var(--control-radius);
 	font-size: 14px;
 	font-weight: 500;
-	transition-property: background-color, color, box-shadow, scale, opacity;
+	transition-property: background-color, color, box-shadow, transform, opacity;
 	transition-duration: var(--motion-duration-base);
 	transition-timing-function: var(--motion-ease-standard);
 	white-space: nowrap;
 	cursor: pointer;
 	user-select: none;
+	border: 0;
 }
 .landing-btn:active:not(:disabled) {
-	scale: 0.96;
+	transform: translateY(1px);
 	transition-duration: var(--motion-duration-fast);
 }
 .landing-btn:focus-visible {
-	outline: none;
-	box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 35%, transparent);
+	outline: 2px solid color-mix(in srgb, var(--ring) 38%, transparent);
+	outline-offset: 2px;
 }
 @media (prefers-reduced-motion: reduce) {
-	.landing-btn:active:not(:disabled) { scale: 1; }
+	.landing-btn:active:not(:disabled) { transform: none; }
 }
-.landing-btn[data-icon-end] {
-	padding-right: 14px; /* optical: icon side -2px */
+.landing-btn[data-icon-end],
+.landing-btn[data-icon="inline-end"] {
+	padding-right: 14px;
 }
-.landing-btn[data-icon-start] {
+.landing-btn[data-icon-start],
+.landing-btn[data-icon="inline-start"] {
 	padding-left: 14px;
 }
 .landing-btn-primary {
-	background: var(--primary);
+	background: var(--btn-primary-gradient);
 	color: var(--primary-foreground);
-	/* subtle inner highlight gives the primary a moulded feel */
-	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12),
-		0 1px 2px -1px rgba(0, 0, 0, 0.2);
+	box-shadow: var(--btn-primary-shadow);
 }
-.landing-btn-primary:hover {
-	background: color-mix(in srgb, var(--primary) 88%, white);
+.landing-btn-primary:hover:not(:disabled) {
+	filter: brightness(1.05);
+}
+.landing-btn-primary:active:not(:disabled) {
+	box-shadow: var(--btn-primary-shadow-pressed);
 }
 .landing-btn-secondary {
-	background: var(--card);
+	background: var(--btn-secondary-gradient);
 	color: var(--foreground);
-	box-shadow: var(--shadow-border);
+	border: 1px solid var(--border-subtle);
+	box-shadow: var(--btn-secondary-shadow);
 }
-.landing-btn-secondary:hover {
-	background: var(--surface-mid);
-	box-shadow: var(--shadow-border-hover);
+.landing-btn-secondary:hover:not(:disabled) {
+	border-color: var(--border);
+	background: linear-gradient(
+		to bottom,
+		color-mix(in srgb, var(--surface-mid) 100%, white 4%),
+		var(--surface-mid)
+	);
 }
+.landing-btn-secondary:active:not(:disabled) {
+	box-shadow: var(--btn-secondary-shadow-pressed);
+}
+/* Ghost stays flat per §5 — no depth recipe */
 .landing-btn-ghost {
 	background: transparent;
 	color: var(--foreground-muted);
 }
-.landing-btn-ghost:hover {
+.landing-btn-ghost:hover:not(:disabled) {
 	color: var(--foreground);
 	background: var(--surface-mid);
 }
 .landing-btn-sm {
-	height: 32px;
+	height: var(--control-height-sm, 32px);
 	padding: 0 12px;
 	font-size: 13px;
 	border-radius: var(--control-radius-inner);
 }
-.landing-btn-sm[data-icon-end] { padding-right: 10px; }
-.landing-btn-sm[data-icon-start] { padding-left: 10px; }
+.landing-btn-sm[data-icon-end],
+.landing-btn-sm[data-icon="inline-end"] { padding-right: 10px; }
+.landing-btn-sm[data-icon-start],
+.landing-btn-sm[data-icon="inline-start"] { padding-left: 10px; }
 
-/* Hairline panels — shadow-as-border so the surface lifts off any
- * background (dark hero, light surface, gradients) without a hard
- * 1px line that picks up neighbouring colours. */
+/* Hairline panels per design.md §3 — persistent surfaces are FLAT with
+ * a hairline border. No persistent drop shadows (§4 forbidden list). */
 .landing-panel {
 	background: var(--card);
+	border: 1px solid var(--border-subtle);
 	border-radius: var(--surface-radius);
-	box-shadow: var(--shadow-border);
 }
 .landing-panel-low {
 	background: var(--surface-low);
+	border: 1px solid var(--border-subtle);
 	border-radius: var(--surface-radius);
-	box-shadow: var(--shadow-border);
 }
 
 /* Meta uppercase label */
@@ -717,8 +769,26 @@ main h1 {
 
 @media (max-width: 720px) {
 	main > section {
-		padding-left: 18px !important;
-		padding-right: 18px !important;
+		padding-left: 16px !important;
+		padding-right: 16px !important;
+	}
+	/* Hero, footer, and SharedNav use a nested inner div with
+	 * `maxWidth: 1120, padding: "0 24px"` for the desktop layout. On
+	 * mobile that adds another 24px of inset on top of the section
+	 * padding. Override to 0 so the section's own padding governs
+	 * margins. */
+	main > section > div[style*="max-width: 1120"],
+	main > section > div[style*="maxWidth: 1120"] {
+		padding-left: 0 !important;
+		padding-right: 0 !important;
+	}
+	header > div[style*="max-width: 1120"] {
+		padding-left: 16px !important;
+		padding-right: 16px !important;
+	}
+	footer > div[style*="max-width: 1120"] {
+		padding-left: 0 !important;
+		padding-right: 0 !important;
 	}
 	/* Hero stats strip: flatten 3 cols → 1, swap col dividers for row */
 	.landing-stats-strip {
@@ -752,11 +822,19 @@ main h1 {
 	main > section {
 		padding-top: clamp(48px, 12vw, 88px) !important;
 		padding-bottom: clamp(48px, 12vw, 88px) !important;
-		padding-left: 14px !important;
-		padding-right: 14px !important;
+		padding-left: 12px !important;
+		padding-right: 12px !important;
 	}
 	main > section:first-child {
 		padding-top: 96px !important;
+	}
+	header > div[style*="max-width: 1120"] {
+		padding-left: 12px !important;
+		padding-right: 12px !important;
+	}
+	footer {
+		padding-left: 12px !important;
+		padding-right: 12px !important;
 	}
 }
 
