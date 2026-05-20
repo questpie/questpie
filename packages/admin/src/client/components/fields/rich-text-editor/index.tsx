@@ -30,18 +30,14 @@ import {
 } from "./image-upload";
 import { createLinkAttributes, isLikelyLinkHref } from "./link-utils";
 import { mergePresetFeatures } from "./presets";
-import { RichTextToolbar } from "./toolbar";
+import { TableControls } from "./table-controls";
+import { ToolbarButton } from "./toolbar";
 import {
 	defaultFeatures,
 	type OutputValue,
 	type RichTextEditorProps,
 } from "./types";
-import {
-	getCharacterCount,
-	getHeadingLevel,
-	getOutput,
-	isSameValue,
-} from "./utils";
+import { type OutputMode, getCharacterCount, getOutput, isSameValue } from "./utils";
 
 // Re-export types
 export type { RichTextEditorProps } from "./types";
@@ -50,35 +46,13 @@ export type { RichTextEditorProps } from "./types";
 // Outer component — async extension loading + shell
 // ============================================================================
 
-function RichTextToolbarSkeleton() {
-	return (
-		<div
-			className="qp-rich-text-editor__toolbar border-border-subtle bg-surface-low flex flex-nowrap items-center gap-1.5 overflow-hidden border-b p-1.5"
-			aria-hidden="true"
-		>
-			<div className="flex items-center gap-1" role="presentation">
-				<Skeleton className="size-8" />
-				<Skeleton className="size-8" />
-			</div>
-			<Skeleton className="h-8 min-w-[136px]" />
-			<div className="flex items-center gap-1" role="presentation">
-				<Skeleton className="size-8" />
-				<Skeleton className="size-8" />
-				<Skeleton className="size-8" />
-			</div>
-			<Skeleton className="size-8" />
-			<Skeleton className="size-8" />
-		</div>
-	);
-}
-
 function RichTextEditorContentSkeleton() {
 	return (
-		<div className="qp-rich-text-editor__content space-y-3" aria-hidden="true">
+		<div className="qp-rich-text-editor__content space-y-4" aria-hidden="true">
 			<Skeleton variant="text" className="h-4 w-full max-w-[92%]" />
 			<Skeleton variant="text" className="h-4 w-full max-w-[78%]" />
 			<Skeleton variant="text" className="h-4 w-full max-w-[86%]" />
-			<div className="pt-3">
+			<div className="pt-2">
 				<Skeleton variant="text" className="h-4 w-full max-w-[58%]" />
 			</div>
 		</div>
@@ -88,26 +62,20 @@ function RichTextEditorContentSkeleton() {
 function RichTextEditorLoadingSkeleton({
 	disabled,
 	readOnly,
-	error,
-	showToolbar,
 }: {
 	disabled?: boolean;
 	readOnly?: boolean;
-	error?: string;
-	showToolbar?: boolean;
 }) {
 	return (
 		<div
 			className={cn(
-				"qp-rich-text-editor control-surface h-auto min-h-[160px] overflow-hidden",
+				"qp-rich-text-editor",
 				disabled || readOnly ? "opacity-60" : "",
-				error ? "border-destructive" : "border-border",
 			)}
 			data-admin-rich-text-editor="root"
 			aria-busy="true"
 		>
 			<span className="sr-only">Loading editor</span>
-			{showToolbar && <RichTextToolbarSkeleton />}
 			<RichTextEditorContentSkeleton />
 		</div>
 	);
@@ -143,6 +111,7 @@ export function RichTextEditor({
 	onImageUpload,
 	imageCollection,
 	enableMediaLibrary,
+	outputMode,
 }: RichTextEditorProps) {
 	const { t } = useTranslation();
 	const resolveText = useResolveText();
@@ -197,6 +166,7 @@ export function RichTextEditor({
 				labels: extensionLabels,
 				placeholder: placeholder || t("editor.startWriting"),
 				maxCharacters,
+				outputMode,
 				customExtensions: extensions,
 			}),
 		[
@@ -204,6 +174,7 @@ export function RichTextEditor({
 			extensionLabels,
 			placeholder,
 			maxCharacters,
+			outputMode,
 			extensions,
 			t,
 		],
@@ -266,13 +237,12 @@ export function RichTextEditor({
 					onImageUpload={onImageUpload}
 					imageCollection={imageCollection}
 					enableMediaLibrary={enableMediaLibrary}
+					outputMode={outputMode}
 				/>
 			) : (
 				<RichTextEditorLoadingSkeleton
 					disabled={disabled}
 					readOnly={readOnly}
-					error={error}
-					showToolbar={resolvedFeatures.toolbar}
 				/>
 			)}
 
@@ -313,6 +283,7 @@ type RichTextEditorCoreProps = {
 	onImageUpload?: (file: File) => Promise<string>;
 	imageCollection?: string;
 	enableMediaLibrary?: boolean;
+	outputMode?: "json" | "markdown";
 };
 
 /**
@@ -338,6 +309,7 @@ function RichTextEditorCore({
 	onImageUpload,
 	imageCollection,
 	enableMediaLibrary,
+	outputMode,
 }: RichTextEditorCoreProps) {
 	const { t } = useTranslation();
 	// Popover states
@@ -350,7 +322,6 @@ function RichTextEditorCore({
 	const allowImages = features.image && (enableImages ?? true);
 	const allowLinks = features.link;
 	const allowBubbleMenu = features.bubbleMenu;
-	const allowToolbar = features.toolbar;
 	const allowCharacterCount =
 		features.characterCount && (showCharacterCount || maxCharacters);
 
@@ -513,7 +484,7 @@ function RichTextEditorCore({
 		editable: isEditable,
 		onUpdate: ({ editor: currentEditor }) => {
 			if (disabled || readOnly) return;
-			const nextValue = getOutput(currentEditor);
+			const nextValue = getOutput(currentEditor, outputMode);
 			lastEmittedValueRef.current = nextValue as OutputValue;
 			onChange?.(nextValue);
 		},
@@ -528,7 +499,6 @@ function RichTextEditorCore({
 		};
 	}, [editor]);
 
-	const headingValue = getHeadingLevel(editor);
 	const inTable = editor?.isActive("table") ?? false;
 
 	// Update editor editable state
@@ -565,54 +535,12 @@ function RichTextEditorCore({
 		<>
 			<div
 				className={cn(
-					"qp-rich-text-editor control-surface h-auto min-h-[160px] overflow-hidden",
+					"qp-rich-text-editor",
 					disabled || readOnly ? "opacity-60" : "",
-					error ? "border-destructive" : "border-border",
 				)}
 				data-admin-rich-text-editor="root"
 			>
-				{/* Toolbar */}
-				{editor && allowToolbar && (
-					<RichTextToolbar
-						editor={editor}
-						features={features}
-						disabled={!isEditable}
-						headingValue={headingValue}
-						onHeadingChange={(value) => {
-							if (!editor) return;
-							if (value === "paragraph") {
-								editor.chain().focus().setParagraph().run();
-								return;
-							}
-							editor
-								.chain()
-								.focus()
-								.toggleHeading({
-									level: Number(value) as 1 | 2 | 3 | 4 | 5 | 6,
-								})
-								.run();
-						}}
-						onLinkClick={() => setLinkOpen(true)}
-						onImageClick={() => setImageOpen(true)}
-						onTableClick={() => {
-							// Insert table directly when clicking toolbar button
-							if (!inTable) {
-								editor
-									.chain()
-									.focus()
-									.insertTable({
-										rows: 3,
-										cols: 3,
-										withHeaderRow: true,
-									})
-									.run();
-							}
-						}}
-						inTable={inTable}
-					/>
-				)}
-
-				{/* Bubble Menu */}
+				{/* Bubble Menu (floating toolbar on selection) */}
 				{editor && (allowBubbleMenu || linkOpen) && (
 					<RichTextBubbleMenu
 						editor={editor}
@@ -632,6 +560,25 @@ function RichTextEditorCore({
 					<RichTextEditorContentSkeleton />
 				)}
 
+				{/* Table Controls (floating, shown when cursor is in a table) */}
+				{editor && features.table && features.tableControls && inTable && (
+					<div className="flex justify-end px-2 py-1">
+						<TableControls
+							editor={editor}
+							disabled={!isEditable}
+							inTable={inTable}
+							triggerButton={
+								<ToolbarButton
+									icon="ph:table"
+									active={inTable}
+									disabled={!isEditable}
+									title={t("editor.table")}
+								/>
+							}
+						/>
+					</div>
+				)}
+
 				{uploadingInlineImage && (
 					<div
 						className="qp-rich-text-editor__upload-status"
@@ -644,7 +591,7 @@ function RichTextEditorCore({
 
 				{/* Character Count */}
 				{allowCharacterCount && showCharacterCount && (
-					<div className="bg-surface-low text-muted-foreground border-border-subtle flex items-center justify-between border-t px-2 py-1 text-xs">
+					<div className="text-muted-foreground flex items-center justify-between px-1.5 pt-2 text-xs">
 						<span>
 							{characterCount.words} word{characterCount.words === 1 ? "" : "s"}
 						</span>

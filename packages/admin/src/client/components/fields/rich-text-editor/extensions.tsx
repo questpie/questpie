@@ -21,6 +21,7 @@ import TableRow from "@tiptap/extension-table-row";
 import TextAlign from "@tiptap/extension-text-align";
 import Underline from "@tiptap/extension-underline";
 import StarterKit from "@tiptap/starter-kit";
+import { Markdown } from "tiptap-markdown";
 
 import { createSlashCommandExtension } from "./slash-commands";
 import type { RichTextFeatures, SlashCommandItem } from "./types";
@@ -62,6 +63,7 @@ type BuildExtensionsOptions = {
 	labels?: RichTextExtensionLabels;
 	placeholder?: string;
 	maxCharacters?: number;
+	outputMode?: "json" | "markdown";
 	customExtensions?: AnyExtension[];
 };
 
@@ -151,6 +153,7 @@ function buildBaseExtensions({
 	labels = defaultLabels,
 	placeholder,
 	maxCharacters,
+	outputMode,
 	customExtensions,
 }: BuildExtensionsOptions): AnyExtension[] {
 	const starterKitConfig: Record<string, any> = {
@@ -228,6 +231,7 @@ function buildBaseExtensions({
 							title: labels.heading(1),
 							description: labels.heading1Description,
 							icon: "ph:text-h-one",
+							group: "Headings",
 							keywords: ["h1"],
 							command: (cmdEditor) =>
 								cmdEditor.chain().focus().toggleHeading({ level: 1 }).run(),
@@ -236,6 +240,7 @@ function buildBaseExtensions({
 							title: labels.heading(2),
 							description: labels.heading2Description,
 							icon: "ph:text-h-two",
+							group: "Headings",
 							keywords: ["h2"],
 							command: (cmdEditor) =>
 								cmdEditor.chain().focus().toggleHeading({ level: 2 }).run(),
@@ -244,6 +249,7 @@ function buildBaseExtensions({
 							title: labels.heading(3),
 							description: labels.heading3Description,
 							icon: "ph:text-h-three",
+							group: "Headings",
 							keywords: ["h3"],
 							command: (cmdEditor) =>
 								cmdEditor.chain().focus().toggleHeading({ level: 3 }).run(),
@@ -255,6 +261,7 @@ function buildBaseExtensions({
 					title: labels.paragraph,
 					description: labels.paragraphDescription,
 					icon: "ph:text-align-left",
+					group: "Text",
 					keywords: ["text"],
 					command: (cmdEditor) =>
 						cmdEditor.chain().focus().setParagraph().run(),
@@ -265,6 +272,7 @@ function buildBaseExtensions({
 						title: labels.bulletList,
 						description: labels.bulletListDescription,
 						icon: "ph:list-bullets",
+						group: "Lists",
 						keywords: ["list", "ul"],
 						command: (cmdEditor) =>
 							cmdEditor.chain().focus().toggleBulletList().run(),
@@ -276,6 +284,7 @@ function buildBaseExtensions({
 						title: labels.orderedList,
 						description: labels.orderedListDescription,
 						icon: "ph:list-numbers",
+						group: "Lists",
 						keywords: ["list", "ol"],
 						command: (cmdEditor) =>
 							cmdEditor.chain().focus().toggleOrderedList().run(),
@@ -287,6 +296,7 @@ function buildBaseExtensions({
 						title: labels.quote,
 						description: labels.quoteDescription,
 						icon: "ph:quotes",
+						group: "Blocks",
 						keywords: ["blockquote"],
 						command: (cmdEditor) =>
 							cmdEditor.chain().focus().toggleBlockquote().run(),
@@ -298,6 +308,7 @@ function buildBaseExtensions({
 						title: labels.codeBlock,
 						description: labels.codeBlockDescription,
 						icon: "ph:code-block",
+						group: "Blocks",
 						keywords: ["code"],
 						command: (cmdEditor) =>
 							cmdEditor.chain().focus().toggleCodeBlock().run(),
@@ -309,6 +320,7 @@ function buildBaseExtensions({
 						title: labels.divider,
 						description: labels.dividerDescription,
 						icon: "ph:minus",
+						group: "Blocks",
 						keywords: ["hr"],
 						command: (cmdEditor) =>
 							cmdEditor.chain().focus().setHorizontalRule().run(),
@@ -320,6 +332,7 @@ function buildBaseExtensions({
 						title: labels.table,
 						description: labels.tableDescription,
 						icon: "ph:table",
+						group: "Blocks",
 						keywords: ["grid"],
 						command: (cmdEditor) =>
 							cmdEditor
@@ -331,6 +344,16 @@ function buildBaseExtensions({
 				}
 
 				return commands;
+			}),
+		);
+	}
+
+	if (outputMode === "markdown") {
+		extensions.push(
+			Markdown.configure({
+				html: true,
+				transformCopiedText: true,
+				transformPastedText: true,
 			}),
 		);
 	}
