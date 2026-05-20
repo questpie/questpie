@@ -1,44 +1,42 @@
 <svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="1200" height="630" fill="#0a0a0a"/>
-  <defs>
-    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#ffffff" stroke-width="0.5" stroke-opacity="0.05"/>
-    </pattern>
-  </defs>
-  <rect width="1200" height="630" fill="url(#grid)"/>
-  <rect x="0" y="620" width="1200" height="10" fill="#B700FF"/>
+  <rect width="1200" height="630" fill="#121212"/>
+  <rect x="72" y="72" width="1056" height="486" rx="28" fill="#1b1b1b"/>
+  <rect x="72.5" y="72.5" width="1055" height="485" rx="27.5" stroke="#343434"/>
 
-  <!-- Q Symbol (new brutalist) -->
-  <g transform="translate(100, 195) scale(10)">
-    <path d="M22 10V2H2V22H10" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="square"/>
-    <path d="M23 13H13V23H23V13Z" fill="#B700FF"/>
+  <g transform="translate(122, 128)">
+    <rect width="132" height="132" rx="24" fill="#242424"/>
+    <rect x="0.5" y="0.5" width="131" height="131" rx="23.5" stroke="#343434"/>
+    <g transform="translate(30, 30) scale(3)">
+      <path d="M22 10V2H2V22H10" fill="none" stroke="#ececec" stroke-width="2" stroke-linecap="square"/>
+      <path d="M23 13H13V23H23V13Z" fill="#b700ff"/>
+    </g>
   </g>
 
-  <!-- Text content -->
-  <text x="420" y="275" font-family="'JetBrains Mono', ui-monospace, monospace" font-size="64" font-weight="700" fill="#ffffff" letter-spacing="-0.03em">QUESTPIE</text>
-  <text x="420" y="340" font-family="'JetBrains Mono', ui-monospace, monospace" font-size="24" font-weight="400" fill="#ffffff" opacity="0.6">One backend. Ship everywhere.</text>
+  <text x="306" y="178" font-family="'Geist Variable', Geist, Inter, system-ui, -apple-system, sans-serif" font-size="72" font-weight="700" fill="#ececec">QUESTPIE</text>
+  <text x="310" y="234" font-family="'Geist Variable', Geist, Inter, system-ui, -apple-system, sans-serif" font-size="28" font-weight="400" fill="#a6a6a6">One backend. Ship everywhere.</text>
 
-  <!-- Feature badges (brutalist, no rounded corners) -->
-  <g transform="translate(420, 380)">
-    <rect x="0" y="0" width="120" height="32" fill="none" stroke="#B700FF" stroke-width="1"/>
-    <text x="60" y="21" font-family="'JetBrains Mono', ui-monospace, monospace" font-size="12" font-weight="600" fill="#B700FF" text-anchor="middle">TYPESCRIPT</text>
+  <g transform="translate(310, 304)" font-family="'Geist Variable', Geist, Inter, system-ui, -apple-system, sans-serif" font-size="18" font-weight="500" fill="#ececec">
+    <rect x="0" y="0" width="128" height="46" rx="12" fill="#242424" stroke="#343434"/>
+    <circle cx="24" cy="23" r="4" fill="#b700ff"/>
+    <text x="40" y="29">TypeScript</text>
 
-    <rect x="128" y="0" width="100" height="32" fill="none" stroke="#B700FF" stroke-width="1"/>
-    <text x="178" y="21" font-family="'JetBrains Mono', ui-monospace, monospace" font-size="12" font-weight="600" fill="#B700FF" text-anchor="middle">DRIZZLE</text>
+    <rect x="144" y="0" width="110" height="46" rx="12" fill="#242424" stroke="#343434"/>
+    <circle cx="168" cy="23" r="4" fill="#777777"/>
+    <text x="184" y="29">Drizzle</text>
 
-    <rect x="236" y="0" width="70" height="32" fill="none" stroke="#B700FF" stroke-width="1"/>
-    <text x="271" y="21" font-family="'JetBrains Mono', ui-monospace, monospace" font-size="12" font-weight="600" fill="#B700FF" text-anchor="middle">ZOD</text>
+    <rect x="270" y="0" width="78" height="46" rx="12" fill="#242424" stroke="#343434"/>
+    <circle cx="294" cy="23" r="4" fill="#777777"/>
+    <text x="310" y="29">Zod</text>
 
-    <rect x="314" y="0" width="130" height="32" fill="none" stroke="#B700FF" stroke-width="1"/>
-    <text x="379" y="21" font-family="'JetBrains Mono', ui-monospace, monospace" font-size="12" font-weight="600" fill="#B700FF" text-anchor="middle">BETTER AUTH</text>
+    <rect x="364" y="0" width="142" height="46" rx="12" fill="#242424" stroke="#343434"/>
+    <circle cx="388" cy="23" r="4" fill="#777777"/>
+    <text x="404" y="29">Better Auth</text>
 
-    <rect x="452" y="0" width="80" height="32" fill="none" stroke="#B700FF" stroke-width="1"/>
-    <text x="492" y="21" font-family="'JetBrains Mono', ui-monospace, monospace" font-size="12" font-weight="600" fill="#B700FF" text-anchor="middle">HONO</text>
+    <rect x="522" y="0" width="84" height="46" rx="12" fill="#242424" stroke="#343434"/>
+    <circle cx="546" cy="23" r="4" fill="#777777"/>
+    <text x="562" y="29">Hono</text>
   </g>
 
-  <!-- Tagline -->
-  <text x="420" y="480" font-family="system-ui, -apple-system, sans-serif" font-size="18" font-weight="400" fill="#ffffff" opacity="0.5">Server-first TypeScript framework. MIT license.</text>
-
-  <!-- URL -->
-  <text x="420" y="530" font-family="'JetBrains Mono', ui-monospace, monospace" font-size="16" font-weight="500" fill="#B700FF">npx create-questpie</text>
+  <text x="310" y="432" font-family="'Geist Variable', Geist, Inter, system-ui, -apple-system, sans-serif" font-size="22" font-weight="400" fill="#a6a6a6">Server-first TypeScript framework. MIT license.</text>
+  <text x="310" y="488" font-family="'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, monospace" font-size="20" font-weight="500" fill="#b700ff">npx create-questpie</text>
 </svg>

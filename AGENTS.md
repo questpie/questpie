@@ -560,5 +560,4 @@ city: f.relation("cities").label("City").admin({
 
 - Core package README: `packages/questpie/README.md`
 - Admin package README: `packages/admin/README.md`
-- Archived dependencies: `docs/archive/DEPENDENCIES.md`
 - Documentation source: `apps/docs/content/docs/`

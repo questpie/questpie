@@ -85,11 +85,10 @@ const serverLoader = createServerFn({ method: "GET" })
 
 		const title = page.data.title ?? "Documentation";
 		const description = page.data.description ?? siteConfig.description;
-		const pageData = page.data as Record<string, unknown>;
+		const lastModified =
+			"lastModified" in page.data ? page.data.lastModified : undefined;
 		const dateModified =
-			typeof pageData.lastModified === "string"
-				? pageData.lastModified
-				: undefined;
+			typeof lastModified === "string" ? lastModified : undefined;
 
 		return {
 			path: page.path,

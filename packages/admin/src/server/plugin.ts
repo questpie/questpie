@@ -161,7 +161,7 @@ export function adminPlugin(): CodegenPlugin {
 								},
 							],
 							configType:
-								'(ctx: ListViewConfigContext<TState extends { fieldDefinitions: infer F extends Record<string, any> } ? F : Record<string, any>, FilterViewsByKind<$VIEWS_RECORD, "list">>) => ListViewConfig',
+								'(ctx: ListViewConfigContext<TState extends { fieldDefinitions: infer F extends Record<string, unknown> } ? F : Record<string, unknown>, FilterViewsByKind<$VIEWS_RECORD, "list">>) => ListViewConfig',
 							isCallback: true,
 							callbackContextParams: ["v", "f", "a"],
 							defaults: {
@@ -188,7 +188,7 @@ export function adminPlugin(): CodegenPlugin {
 								},
 							],
 							configType:
-								'(ctx: FormViewConfigContext<TState extends { fieldDefinitions: infer F extends Record<string, any> } ? F : Record<string, any>, FilterViewsByKind<$VIEWS_RECORD, "form">>) => FormViewConfig',
+								'(ctx: FormViewConfigContext<TState extends { fieldDefinitions: infer F extends Record<string, unknown> } ? F : Record<string, unknown>, FilterViewsByKind<$VIEWS_RECORD, "form">>) => FormViewConfig',
 							isCallback: true,
 							callbackContextParams: ["v", "f"],
 							defaults: {
@@ -259,7 +259,7 @@ export function adminPlugin(): CodegenPlugin {
 								},
 							],
 							configType:
-								'(ctx: FormViewConfigContext<TState extends { fieldDefinitions: infer F extends Record<string, any> } ? F : Record<string, any>, FilterViewsByKind<$VIEWS_RECORD, "form">>) => FormViewConfig',
+								'(ctx: FormViewConfigContext<TState extends { fieldDefinitions: infer F extends Record<string, unknown> } ? F : Record<string, unknown>, FilterViewsByKind<$VIEWS_RECORD, "form">>) => FormViewConfig',
 							isCallback: true,
 							callbackContextParams: ["v", "f"],
 							defaults: {
