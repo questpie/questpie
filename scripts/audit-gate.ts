@@ -8,10 +8,11 @@
  */
 
 const KNOWN = new Map<string, string>([
-	// h3 middleware bypass — still present via @tanstack/start-server-core's
-	// h3-v2@2.0.0-beta.4 (aliased import). Clears when react-start is bumped
-	// from 1.136.x to 1.167.42+ across the monorepo (planned follow-up PR).
-	["GHSA-3vj8-jmxq-cgj5", "TODO: @tanstack/react-start bump PR"],
+	// h3 middleware bypass — still present in apps/autopilot via
+	// @tanstack/start-server-core@1.136.17's aliased h3-v2@2.0.0-beta.4
+	// (docs was already bumped to 1.168.x). Clears when autopilot's
+	// @tanstack/react-start is bumped from 1.136.x to 1.168.x+.
+	["GHSA-3vj8-jmxq-cgj5", "TODO: bump apps/autopilot @tanstack/react-start"],
 ]);
 
 type Advisory = {

@@ -29,7 +29,14 @@ COPY --from=pruner /app/out/bun.lock ./bun.lock
 COPY --from=pruner /app/out/full/ .
 
 # Install dependencies
-RUN bun install --frozen-lockfile
+# Note: `bun install` (not --frozen-lockfile) is intentional. `turbo prune`
+# leaves bun.lock referencing workspaces that are no longer in the pruned
+# tree, which makes bun log `warn: Ignoring lockfile` and then re-resolve
+# from scratch. Under --frozen-lockfile the re-resolution check then fails
+# the build. Reproducibility is still protected upstream: developers commit
+# a fully-resolved lockfile from the un-pruned monorepo, and bunfig.toml's
+# `minimumReleaseAge = 259200` blocks freshly-published packages here too.
+RUN bun install
 
 # Build workspace dependencies first (vite-plugin-iconify dist/ is gitignored)
 RUN bun run --filter @questpie/vite-plugin-iconify build
