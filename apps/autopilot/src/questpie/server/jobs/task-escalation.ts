@@ -49,7 +49,8 @@ export default job({
 			const lastEscalatedAt = dateOrNull(metadata.lastEscalatedAt);
 			if (lastEscalatedAt && lastEscalatedAt > cutoff) continue;
 
-			const nextStatus = status === "running" ? "waiting" : status;
+			const nextStatus =
+				status === "running" ? ("waiting" as const) : (status as import("../lib/app-types").TaskStatusValue);
 			await ctx.collections.tasks.updateById({
 				id: String(task.id),
 				data: {

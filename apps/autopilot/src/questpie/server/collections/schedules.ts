@@ -21,7 +21,17 @@ export const schedules = collection("schedules")
 			])
 			.label({ en: "Action" }),
 		workflowConfig: f.relation("workflow_configs").label({ en: "Workflow" }),
-		taskTemplate: f.json().label({ en: "Issue Template" }),
+		taskTemplate: f
+			.object({
+				title: f.text().label({ en: "Title" }),
+				description: f.textarea().label({ en: "Description" }),
+				type: f.text().label({ en: "Type" }),
+				priority: f.text().label({ en: "Priority" }),
+				projectId: f.text().label({ en: "Project ID" }),
+				project_id: f.text().label({ en: "Project ID (legacy)" }),
+				scopeType: f.text().label({ en: "Scope Type" }),
+			})
+			.label({ en: "Issue Template" }),
 		chatPrompt: f.textarea().label({ en: "Chat Prompt" }),
 		concurrencyPolicy: f
 			.select([

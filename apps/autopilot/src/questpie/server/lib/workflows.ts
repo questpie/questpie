@@ -1,18 +1,9 @@
-export type WorkflowsApi = {
-	trigger(
-		name: string,
-		input: unknown,
-		options?: { idempotencyKey?: string },
-	): Promise<{ instanceId: string; existing: boolean }>;
-	sendEvent(
-		event: string,
-		data?: unknown,
-		match?: Record<string, unknown>,
-	): Promise<void>;
-};
+export type WorkflowsApi = NonNullable<Questpie.AppContext["workflows"]>;
 
-export function workflowsFromContext(ctx: unknown): WorkflowsApi {
-	const workflows = (ctx as { workflows?: WorkflowsApi }).workflows;
+export function workflowsFromContext(ctx: {
+	workflows?: Questpie.AppContext["workflows"];
+}): WorkflowsApi {
+	const workflows = ctx.workflows;
 	if (!workflows) {
 		throw new Error("Workflow service is not available");
 	}

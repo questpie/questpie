@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { mcpTool } from "@questpie/mcp";
 
+import type { TaskPriorityValue, TaskTypeValue } from "../lib/app-types";
 import {
 	mcpJson,
 	parseJsonObject,
@@ -13,15 +14,15 @@ import { workflowsFromContext } from "../lib/workflows";
 const taskTypes = ["task", "feature", "bug", "research", "review", "approval"];
 const priorities = ["low", "medium", "high", "urgent"];
 
-function normalizeTaskType(value: string | undefined) {
+function normalizeTaskType(value: string | undefined): TaskTypeValue {
 	if (!value) return "task";
-	return taskTypes.includes(value) ? value : "task";
+	return taskTypes.includes(value) ? (value as TaskTypeValue) : "task";
 }
 
-function normalizePriority(value: string | undefined) {
+function normalizePriority(value: string | undefined): TaskPriorityValue {
 	if (value === "critical") return "urgent";
 	if (!value) return "medium";
-	return priorities.includes(value) ? value : "medium";
+	return priorities.includes(value) ? (value as TaskPriorityValue) : "medium";
 }
 
 const inputSchema = z.object({

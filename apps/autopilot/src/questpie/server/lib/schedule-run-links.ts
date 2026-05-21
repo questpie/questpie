@@ -1,7 +1,8 @@
+import type { WorkflowContextCollections } from "./app-types";
 import { relationId } from "./records";
 
 export async function linkScheduleExecutionRun(input: {
-	ctx: Pick<Questpie.WorkflowContext, "collections">;
+	ctx: WorkflowContextCollections;
 	scheduleExecutionId?: string | null;
 	runId: string;
 }) {

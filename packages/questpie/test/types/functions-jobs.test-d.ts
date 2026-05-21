@@ -407,7 +407,7 @@ type _testJobHasHandler = Expect<Equal<HasKey<TestJobType, "handler">, true>>;
 // Route type guards
 // ============================================================================
 
-const someRoute: RouteDefinition = testRoute;
+const someRoute = testRoute;
 if (isJsonRoute(someRoute)) {
 	type _isJson = Expect<
 		Extends<typeof someRoute, JsonRouteDefinition<any, any>>

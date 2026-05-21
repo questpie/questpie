@@ -4,7 +4,9 @@ import { basename, posix } from "node:path";
 import { ApiError } from "questpie/errors";
 import { service } from "questpie/services";
 
-type Collections = Questpie.AppContext["collections"];
+import type { AppCollections } from "../lib/app-types";
+
+type Collections = AppCollections;
 
 export type KnowledgeScopeType = "company" | "project" | "task";
 export type KnowledgeKind =

@@ -22,6 +22,7 @@ declare global {
 			tables?: any;
 			t?: any;
 			services?: Record<string, any>;
+			workflows?: any;
 		}
 	}
 }

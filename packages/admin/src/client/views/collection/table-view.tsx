@@ -105,6 +105,7 @@ import {
 	useCollectionRestore,
 	useCollectionUpdateBatch,
 } from "../../hooks/use-collection";
+import { adminCollectionKey } from "../../hooks/query-access";
 import { useCollectionFields } from "../../hooks/use-collection-fields";
 import { useSuspenseCollectionMeta } from "../../hooks/use-collection-meta";
 import { useSessionState } from "../../hooks/use-current-user";
@@ -814,6 +815,7 @@ function TableViewInner({
 	actionsConfig,
 }: TableViewProps): React.ReactElement {
 	"use no memo";
+	const collectionKey = adminCollectionKey(collection);
 	const globalRealtimeConfig = useAdminStore(selectRealtime);
 	const { fields: resolvedFields, schema } = useCollectionFields(collection, {
 		fallbackFields: (config as any)?.fields,
@@ -1305,7 +1307,7 @@ function TableViewInner({
 		isLoading: listLoading,
 		error: listError,
 	} = useCollectionList(
-		collection as any,
+		collectionKey,
 		queryOptions,
 		{ enabled: !isSearching },
 		{ realtime: effectiveRealtime },
@@ -1324,9 +1326,9 @@ function TableViewInner({
 	const deleteViewMutation = useDeleteSavedView(collection, user?.id);
 
 	// Delete mutation for bulk actions
-	const deleteMutation = useCollectionDelete(collection as any);
-	const restoreMutation = useCollectionRestore(collection as any);
-	const updateBatchMutation = useCollectionUpdateBatch(collection as any);
+	const deleteMutation = useCollectionDelete(collectionKey);
+	const restoreMutation = useCollectionRestore(collectionKey);
+	const updateBatchMutation = useCollectionUpdateBatch(collectionKey);
 
 	// Build available fields from config for column picker
 	// All fields are available in Options, but defaults come from .list() config

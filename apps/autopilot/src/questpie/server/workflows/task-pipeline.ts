@@ -4,19 +4,14 @@ import { workflow } from "@questpie/workflows";
 
 import { createAiRunLink } from "../lib/ai-run-links";
 import { classifyRunError, type RunErrorType } from "../lib/error-classifier";
+import type { AppCollections, WorkflowContextCollections, WorkflowServiceContext } from "../lib/app-types";
 import { asJsonValue, asRecord, mergeRecords, relationId } from "../lib/records";
+import type { RunCompletion } from "../lib/run-completion";
 import { resolveRuntimeSelection } from "../lib/runtime-selection";
 import { linkScheduleExecutionRun } from "../lib/schedule-run-links";
 import { workflowsFromContext } from "../lib/workflows";
 
-type Collections = Questpie.AppContext["collections"];
-
-type RunCompletion = {
-	status?: "completed" | "failed" | "cancelled";
-	summary?: string | null;
-	error?: string | null;
-	knowledgeResourceIds?: string[];
-};
+type Collections = AppCollections;
 
 interface RetryPolicy {
 	maxAttempts: number;
@@ -123,7 +118,7 @@ async function dependenciesMet(collections: Collections, taskId: string) {
 }
 
 async function releaseDependentTasks(
-	ctx: Pick<Questpie.WorkflowContext, "collections">,
+	ctx: WorkflowServiceContext,
 	taskId: string,
 ) {
 	const downstream = await ctx.collections.task_relations.find({

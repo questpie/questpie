@@ -88,7 +88,9 @@ function NewsListing() {
 			) : (
 				<div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
 					{news.map((article) => {
-						const imageUrl = getUploadUrl(article.image);
+						const imageUrl = getUploadUrl(
+							(article as Record<string, unknown>).image,
+						);
 
 						return (
 							<Link

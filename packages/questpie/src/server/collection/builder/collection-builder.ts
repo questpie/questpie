@@ -11,10 +11,12 @@ import type {
 import { Collection } from "#questpie/server/collection/builder/collection.js";
 import type {
 	CollectionAccess,
+	CollectionAccessStorage,
 	CollectionBuilderIndexesFn,
 	CollectionBuilderState,
 	CollectionBuilderTitleFn,
 	CollectionHooks,
+	CollectionHooksStorage,
 	CollectionOptions,
 	EmptyCollectionState,
 	RelationConfig,
@@ -547,9 +549,9 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 		>,
 	>(
 		hooks: TNewHooks,
-	): CollectionBuilder<Override<TState, { hooks: Record<string, any> }>> {
+	): CollectionBuilder<Override<TState, { hooks: CollectionHooksStorage }>> {
 		const existingHooks = this.state.hooks;
-		const mergedHooks: Record<string, any> = { ...(existingHooks || {}) };
+		const mergedHooks: CollectionHooksStorage = { ...(existingHooks || {}) };
 
 		for (const [hookName, hookValue] of Object.entries(hooks)) {
 			const current = mergedHooks[hookName];
@@ -593,7 +595,7 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 	 */
 	access<TNewAccess extends CollectionAccess<CollectionSelect<TState>>>(
 		access: TNewAccess,
-	): CollectionBuilder<Override<TState, { access: Record<string, any> }>> {
+	): CollectionBuilder<Override<TState, { access: CollectionAccessStorage }>> {
 		const newState = {
 			...this.state,
 			access,
@@ -945,8 +947,8 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 					? TState["title"]
 					: TOtherState["title"];
 				options: TState["options"] & TOtherState["options"];
-				hooks: Record<string, any>;
-				access: Record<string, any>;
+				hooks: CollectionHooksStorage;
+				access: CollectionAccessStorage;
 				searchable: TState["searchable"] | TOtherState["searchable"];
 				fieldDefinitions: MergeFieldDefinitions<
 					TState["fieldDefinitions"],

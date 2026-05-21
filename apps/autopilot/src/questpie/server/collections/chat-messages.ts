@@ -19,7 +19,16 @@ export const chatMessages = collection("chat_messages")
 			.label({ en: "Role" }),
 		content: f.textarea().label({ en: "Content" }),
 		run: f.relation("run_links").label({ en: "Run" }),
-		runStatus: f.text().label({ en: "Run Status" }),
+		runStatus: f
+			.select([
+				{ value: "pending", label: { en: "Pending" } },
+				{ value: "claimed", label: { en: "Claimed" } },
+				{ value: "running", label: { en: "Running" } },
+				{ value: "completed", label: { en: "Completed" } },
+				{ value: "failed", label: { en: "Failed" } },
+				{ value: "cancelled", label: { en: "Cancelled" } },
+			])
+			.label({ en: "Run Status" }),
 		model: f.relation("models").label({ en: "Model" }),
 		provider: f.relation("providers").label({ en: "Provider" }),
 		metadata: f.json().label({ en: "Metadata" }),

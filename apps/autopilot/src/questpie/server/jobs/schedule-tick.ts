@@ -160,11 +160,23 @@ async function triggerTaskSchedule(
 		description: template.description
 			? templateValue(template, "description", "", now)
 			: undefined,
-		type: String(template.type ?? "task"),
+		type: String(template.type ?? "task") as
+			| "task"
+			| "feature"
+			| "bug"
+			| "research"
+			| "review"
+			| "approval",
 		status: "pending",
-		priority: String(template.priority ?? "medium"),
+		priority: String(template.priority ?? "medium") as
+			| "low"
+			| "medium"
+			| "high"
+			| "urgent",
 		project: template.projectId ?? template.project_id ?? undefined,
-		scopeType: (template.projectId || template.project_id ? "project" : "company") as string,
+		scopeType: (template.projectId || template.project_id
+			? "project"
+			: "company") as "project" | "company",
 		workflowConfig:
 			template.workflowConfigId ??
 			template.workflow_config_id ??

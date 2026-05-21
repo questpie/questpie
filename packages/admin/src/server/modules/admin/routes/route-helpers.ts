@@ -9,21 +9,25 @@
  * Route handlers use these instead of inline `(ctx as any).app` casts.
  */
 
-import type { Questpie } from "questpie";
+import type { AppContext, Questpie } from "questpie";
 
 // ============================================================================
 // Route Handler Context
 // ============================================================================
 
 /**
- * Minimal typed shape for route handler context.
- * The actual context is `JsonRouteHandlerArgs<T>` which extends `AppContext`,
- * but AppContext is empty in the admin package (augmented by user's codegen).
- *
- * These helpers safely extract the known properties at runtime.
- * Uses Record<string, any> base to accept JsonRouteHandlerArgs without index signature issues.
+ * Minimal route handler context for admin helpers.
+ * Accepts full `JsonRouteHandlerArgs` and narrower resolver contexts (e.g. preview).
  */
-type RouteHandlerContext = Record<string, any>;
+type RouteHandlerContext = {
+	app?: unknown;
+	db?: unknown;
+	session?: unknown;
+	locale?: unknown;
+	input?: unknown;
+	request?: Request;
+	params?: Record<string, string>;
+};
 
 /**
  * Typed app instance type used throughout admin routes.
@@ -54,7 +58,7 @@ export function getSession(
 /**
  * Get database instance from route handler context.
  */
-export function getDb(ctx: RouteHandlerContext): any {
+export function getDb(ctx: RouteHandlerContext): unknown {
 	return ctx.db;
 }
 

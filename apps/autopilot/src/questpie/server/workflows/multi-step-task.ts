@@ -3,7 +3,9 @@ import { z } from "zod";
 import { workflow } from "@questpie/workflows";
 
 import { createAiRunLink } from "../lib/ai-run-links";
+import type { WorkflowContextCollections } from "../lib/app-types";
 import { asJsonValue, asRecord, mergeRecords, relationId, stringFrom } from "../lib/records";
+import type { RunCompletion } from "../lib/run-completion";
 import { resolveRuntimeSelection } from "../lib/runtime-selection";
 
 type Collections = Questpie.WorkflowContext["collections"];
@@ -19,13 +21,6 @@ type StepType =
 	| "join"
 	| "wait_for_children"
 	| "done";
-
-type RunCompletion = {
-	status?: "completed" | "failed" | "cancelled";
-	summary?: string | null;
-	error?: string | null;
-	knowledgeResourceIds?: string[];
-};
 
 interface StepConfig extends Record<string, unknown> {
 	id?: string;
@@ -143,7 +138,7 @@ async function recordProgress(
 }
 
 async function createRunForStep(
-	ctx: Pick<Questpie.WorkflowContext, "collections">,
+	ctx: WorkflowContextCollections,
 	task: Record<string, unknown>,
 	workflowConfig: Record<string, unknown>,
 	step: StepConfig,
@@ -194,7 +189,7 @@ async function createRunForStep(
 }
 
 async function childTaskFromStep(
-	ctx: Pick<Questpie.WorkflowContext, "collections">,
+	ctx: WorkflowContextCollections,
 	parentTask: Record<string, unknown>,
 	workflowConfig: Record<string, unknown>,
 	step: StepConfig,
@@ -205,11 +200,24 @@ async function childTaskFromStep(
 		description: String(
 			step.description ?? step.instructions ?? parentTask.description ?? "",
 		),
-		type: String(step.taskType ?? step.task_type ?? "task"),
+		type: String(step.taskType ?? step.task_type ?? "task") as
+			| "task"
+			| "feature"
+			| "bug"
+			| "research"
+			| "review"
+			| "approval",
 		status: "pending",
-		priority: stringFrom(step.priority ?? parentTask.priority) ?? undefined,
+		priority: (stringFrom(step.priority ?? parentTask.priority) ?? undefined) as
+			| "low"
+			| "medium"
+			| "high"
+			| "urgent"
+			| undefined,
 		project: relationId(parentTask.project) ?? undefined,
-		scopeType: stringFrom(parentTask.scopeType) ?? "company",
+		scopeType: (stringFrom(parentTask.scopeType) ?? "company") as
+			| "project"
+			| "company",
 		workflowConfig:
 			stepRef(step, "workflowConfigId", "workflow_config_id") ??
 			relationId(step.workflowConfig) ??

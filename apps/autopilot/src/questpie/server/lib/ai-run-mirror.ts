@@ -1,27 +1,13 @@
+import type { AiRunStatus } from "@questpie/ai";
 import type { GlobalCollectionHookContext } from "questpie";
 
-import { asRecord, hookCollections, mergeRecords, relationId } from "./records";
+import type { AppCollections } from "./app-types";
+import { asRecord, mergeRecords, relationId } from "./records";
 
-type HookContext = GlobalCollectionHookContext & {
-	services?: Questpie.AppContext["services"];
-	workflows?: Questpie.AppContext["workflows"];
-};
-
-type MirrorContext = {
-	collections: Questpie.AppContext["collections"];
-	services?: Questpie.AppContext["services"];
-	workflows?: Questpie.AppContext["workflows"];
-};
-
-type TerminalRunStatus = "completed" | "failed" | "cancelled";
-
-function mirrorContext(ctx: HookContext): MirrorContext {
-	return {
-		collections: hookCollections(ctx),
-		services: ctx.services,
-		workflows: ctx.workflows,
-	};
-}
+type TerminalRunStatus = Extract<
+	AiRunStatus,
+	"completed" | "failed" | "cancelled"
+>;
 
 function terminalTaskStatus(status: TerminalRunStatus) {
 	if (status === "completed") return "review";
@@ -43,6 +29,17 @@ function statusFrom(value: unknown) {
 	return typeof value === "string" ? value : null;
 }
 
+function isChatRunStatus(value: string): value is ChatRunStatus {
+	return (
+		value === "pending" ||
+		value === "claimed" ||
+		value === "running" ||
+		value === "completed" ||
+		value === "failed" ||
+		value === "cancelled"
+	);
+}
+
 function dateOrUndefined(value: unknown) {
 	if (!value) return undefined;
 	return value instanceof Date ? value : new Date(String(value));
@@ -57,7 +54,7 @@ function setIfPresent(
 }
 
 async function sendWorkflowEvent(
-	ctx: MirrorContext,
+	ctx: GlobalCollectionHookContext,
 	event: string,
 	runId: string,
 	data: Record<string, unknown>,
@@ -66,19 +63,24 @@ async function sendWorkflowEvent(
 	await ctx.workflows.sendEvent(event, { runId, ...data }, { runId });
 }
 
-async function runLinkForAiRun(
-	collections: Questpie.AppContext["collections"],
-	aiRunId: string,
-) {
+async function runLinkForAiRun(collections: AppCollections, aiRunId: string) {
 	return collections.run_links.findOne({
 		where: { aiRun: aiRunId },
 	});
 }
 
+type ChatRunStatus =
+	| "pending"
+	| "claimed"
+	| "running"
+	| "completed"
+	| "failed"
+	| "cancelled";
+
 async function mirrorChatRunStatus(
-	collections: Questpie.AppContext["collections"],
+	collections: AppCollections,
 	runId: string,
-	status: string,
+	status: ChatRunStatus,
 ) {
 	const messages = await collections.chat_messages.find({
 		where: { run: runId },
@@ -95,7 +97,7 @@ async function mirrorChatRunStatus(
 }
 
 async function createCompletionResources(input: {
-	ctx: MirrorContext;
+	ctx: GlobalCollectionHookContext;
 	runId: string;
 	summary?: string | null;
 }) {
@@ -115,7 +117,7 @@ async function createCompletionResources(input: {
 }
 
 async function mirrorTerminalSideEffects(input: {
-	ctx: MirrorContext;
+	ctx: GlobalCollectionHookContext;
 	runLink: Record<string, unknown>;
 	status: TerminalRunStatus;
 	summary?: string | null;
@@ -126,7 +128,9 @@ async function mirrorTerminalSideEffects(input: {
 		runId: String(input.runLink.id),
 		summary: input.summary,
 	});
-	const knowledgeResourceIds = resources.map((resource) => resource.id);
+	const knowledgeResourceIds = resources.map(
+		(resource: { id: string }) => resource.id,
+	);
 
 	const taskId = relationId(input.runLink.task);
 	const initiatedBy = input.runLink.initiatedBy;
@@ -154,12 +158,11 @@ async function mirrorTerminalSideEffects(input: {
 	);
 }
 
-export async function mirrorAiRunChange(ctx: HookContext) {
+export async function mirrorAiRunChange(ctx: GlobalCollectionHookContext) {
 	if (ctx.collection !== "ai_runs" || !ctx.data?.id) return;
 
-	const mirror = mirrorContext(ctx);
 	const aiRunId = String(ctx.data.id);
-	const runLink = await runLinkForAiRun(mirror.collections, aiRunId);
+	const runLink = await runLinkForAiRun(ctx.collections, aiRunId);
 	if (!runLink) return;
 
 	const status = statusFrom(ctx.data.status);
@@ -182,25 +185,25 @@ export async function mirrorAiRunChange(ctx: HookContext) {
 
 	const updated =
 		Object.keys(data).length > 0
-			? await mirror.collections.run_links.updateById({
+			? await ctx.collections.run_links.updateById({
 					id: String(runLink.id),
 					data,
 				})
 			: runLink;
 
-	if (status) {
-		await mirrorChatRunStatus(mirror.collections, String(runLink.id), status);
+	if (status && isChatRunStatus(status)) {
+		await mirrorChatRunStatus(ctx.collections, String(runLink.id), status);
 	}
 
 	if (status === "claimed" && originalStatus !== "claimed") {
-		await sendWorkflowEvent(mirror, "run.claimed", String(runLink.id), {
+		await sendWorkflowEvent(ctx, "run.claimed", String(runLink.id), {
 			workerId: relationId(ctx.data.worker),
 		});
 	}
 
 	if (isTerminalStatus(status) && originalStatus !== status) {
 		await mirrorTerminalSideEffects({
-			ctx: mirror,
+			ctx,
 			runLink: updated,
 			status,
 			summary: typeof ctx.data.summary === "string" ? ctx.data.summary : null,
@@ -209,7 +212,7 @@ export async function mirrorAiRunChange(ctx: HookContext) {
 	}
 }
 
-export async function mirrorAiRunEvent(ctx: HookContext) {
+export async function mirrorAiRunEvent(ctx: GlobalCollectionHookContext) {
 	if (
 		ctx.collection !== "ai_run_events" ||
 		ctx.operation !== "create" ||
@@ -218,11 +221,10 @@ export async function mirrorAiRunEvent(ctx: HookContext) {
 		return;
 	}
 
-	const mirror = mirrorContext(ctx);
 	const aiRunId = relationId(ctx.data.run);
 	if (!aiRunId) return;
 
-	const runLink = await runLinkForAiRun(mirror.collections, aiRunId);
+	const runLink = await runLinkForAiRun(ctx.collections, aiRunId);
 	if (!runLink) return;
 
 	const eventType =
@@ -233,17 +235,17 @@ export async function mirrorAiRunEvent(ctx: HookContext) {
 	const metadata = asRecord(ctx.data.meta);
 
 	if (eventType === "started" && activeRunStatus(runLink.status)) {
-		await mirror.collections.run_links.updateById({
+		await ctx.collections.run_links.updateById({
 			id: String(runLink.id),
 			data: {
 				status: "running",
 				startedAt: dateOrUndefined(runLink.startedAt) ?? new Date(),
 			},
 		});
-		await mirrorChatRunStatus(mirror.collections, String(runLink.id), "running");
+		await mirrorChatRunStatus(ctx.collections, String(runLink.id), "running");
 	}
 
-	await sendWorkflowEvent(mirror, "run.event", String(runLink.id), {
+	await sendWorkflowEvent(ctx, "run.event", String(runLink.id), {
 		type: eventType,
 		level,
 		summary,
@@ -251,18 +253,18 @@ export async function mirrorAiRunEvent(ctx: HookContext) {
 	});
 }
 
-export async function mirrorRunLinkChatStatus(ctx: HookContext) {
+export async function mirrorRunLinkChatStatus(ctx: GlobalCollectionHookContext) {
 	if (ctx.collection !== "run_links" || !ctx.data?.id) return;
 	const status = statusFrom(ctx.data.status);
 	if (!status) return;
-	await mirrorChatRunStatus(
-		mirrorContext(ctx).collections,
-		String(ctx.data.id),
-		status,
-	);
+	if (isChatRunStatus(status)) {
+		await mirrorChatRunStatus(ctx.collections, String(ctx.data.id), status);
+	}
 }
 
-export async function mirrorAiRunCollectionChange(ctx: HookContext) {
+export async function mirrorAiRunCollectionChange(
+	ctx: GlobalCollectionHookContext,
+) {
 	await mirrorAiRunChange(ctx);
 	await mirrorAiRunEvent(ctx);
 	await mirrorRunLinkChatStatus(ctx);

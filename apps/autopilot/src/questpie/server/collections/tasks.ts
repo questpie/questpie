@@ -19,6 +19,18 @@ export const tasks = collection("tasks")
 		status: f
 			.select([
 				{
+					value: "pending",
+					label: { en: "Pending" },
+				},
+				{
+					value: "waiting",
+					label: { en: "Waiting" },
+				},
+				{
+					value: "running",
+					label: { en: "Running" },
+				},
+				{
 					value: "backlog",
 					label: { en: "Backlog" },
 					icon: {
@@ -89,6 +101,12 @@ export const tasks = collection("tasks")
 						},
 					},
 				},
+				{ value: "pending", label: { en: "Pending" } },
+				{ value: "running", label: { en: "Running" } },
+				{ value: "waiting", label: { en: "Waiting" } },
+				{ value: "failed", label: { en: "Failed" } },
+				{ value: "review", label: { en: "Review" } },
+				{ value: "approved", label: { en: "Approved" } },
 			])
 			.default("backlog")
 			.label({ en: "Status" }),

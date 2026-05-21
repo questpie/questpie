@@ -103,8 +103,8 @@ export const knowledgeWrite = mcpTool("knowledge_write", {
 		scopeType: scope.scopeType,
 		project: scope.projectId,
 		task: scope.taskId,
-		kind: "document",
-		source: "mcp",
+		kind: "document" as const,
+		source: "mcp" as const,
 		sourceRef: ctx.session?.user?.id ?? "mcp",
 	};
 

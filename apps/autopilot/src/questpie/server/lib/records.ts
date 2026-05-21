@@ -1,4 +1,3 @@
-import type { GlobalCollectionHookContext } from "questpie";
 import type { JsonValue } from "questpie/builders";
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
@@ -23,12 +22,6 @@ export function mergeRecords(
 
 export function asJsonValue(value: unknown): JsonValue {
 	return value as JsonValue;
-}
-
-export function hookCollections(
-	ctx: GlobalCollectionHookContext,
-): Questpie.AppContext["collections"] {
-	return ctx.collections as Questpie.AppContext["collections"];
 }
 
 export function stringFrom(value: unknown): string | null {

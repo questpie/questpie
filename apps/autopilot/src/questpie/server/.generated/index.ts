@@ -3,7 +3,7 @@
 // Regenerate with: questpie generate
 
 import { createApp, createContextFactory } from "questpie/app";
-import type { AnyCollectionOrBuilder, AnyGlobalOrBuilder, AppDefinition, CollectionAPI, DrizzleClientFromQuestpieConfig, InferContextExtensionsFromAppConfig, InferSessionFromAuthConfig, MailerService, Questpie, QuestpieConfig, QueueClient, QueueJobType, RouteParamsFromKey, RouteWithParams, TablesFromConfig } from "questpie/types";
+import type { AnyCollectionOrBuilder, AnyGlobalOrBuilder, AppDefinition, CollectionAPI, CollectionSelect, DrizzleClientFromQuestpieConfig, InferContextExtensionsFromAppConfig, InferSessionFromAuthConfig, MailerService, Questpie, QuestpieConfig, QueueClient, QueueJobType, RouteParamsFromKey, RouteWithParams, TablesFromConfig } from "questpie/types";
 import type { z } from "zod";
 
 // ── Runtime ────────────────────────────────────────────────
@@ -315,31 +315,33 @@ type _AppQuestpie = Omit<_AppQuestpieBase, "collections" | "globals"> & {
 };
 
 // ── AppContext augmentation — auto-types ALL handlers ──────
+type _AppCoreContext = _AppContextExtensions & {
+	// Infrastructure
+	db: _AppDb;
+	email: _AppQuestpie["email"];
+	queue: QueueClient<AppJobs>;
+	storage: _AppStorage;
+	kv: _AppQuestpie["kv"];
+	logger: _AppQuestpie["logger"];
+	search: _AppQuestpie["search"];
+	realtime: _AppQuestpie["realtime"];
+
+	// Entity APIs
+	collections: _CollectionsAPI;
+	globals: _AppGlobalsAPI;
+	tables: _AppTables;
+
+	// Request-scoped
+	session: _AppSession;
+	t: (key: string, params?: Record<string, unknown>, locale?: string) => string;
+
+	// User services
+	services: _AppDefaultServices;
+} & _AppCustomServiceNamespaces;
+
 declare global {
 	namespace Questpie {
-		interface AppContext extends _AppTopLevelServices, _AppCustomServiceNamespaces, _AppContextExtensions {
-			// Infrastructure
-			db: _AppDb;
-			email: _AppQuestpie["email"];
-			queue: QueueClient<AppJobs>;
-			storage: _AppStorage;
-			kv: _AppQuestpie["kv"];
-			logger: _AppQuestpie["logger"];
-			search: _AppQuestpie["search"];
-			realtime: _AppQuestpie["realtime"];
-
-			// Entity APIs
-			collections: _CollectionsAPI;
-			globals: _AppGlobalsAPI;
-			tables: _AppTables;
-
-			// Request-scoped
-			session: _AppSession;
-			t: (key: string, params?: Record<string, unknown>, locale?: string) => string;
-
-			// User services
-			services: _AppDefaultServices;
-		}
+		interface AppContext extends _AppCoreContext, _AppTopLevelServices {}
 
 		interface JobHandlerContext {
 			// Infrastructure
@@ -360,6 +362,9 @@ declare global {
 			// Request-scoped
 			session: unknown;
 			t: (key: string, params?: Record<string, unknown>, locale?: string) => string;
+
+			// Top-level services (namespace: null)
+			workflows?: "workflows" extends keyof _AppTopLevelServices ? _AppTopLevelServices["workflows"] : never;
 
 			// User services
 			services: _ExecutionContextDefaultServices;
@@ -386,13 +391,13 @@ declare global {
 			t: (key: string, params?: Record<string, unknown>, locale?: string) => string;
 
 			// Top-level services (namespace: null)
-			workflows?: any;
+			workflows?: "workflows" extends keyof _AppTopLevelServices ? _AppTopLevelServices["workflows"] : never;
 
 			// User services
 			services: _ExecutionContextDefaultServices;
 		}
 
-		interface ServiceCreateContext extends AppContext {}
+		interface ServiceCreateContext extends _AppCoreContext {}
 
 		interface Registry {
 			collections: _Registry_Collections;
@@ -410,6 +415,11 @@ declare global {
 		}
 	}
 }
+
+/**
+ * Select/document type for a collection key — prefer over `Record<string, any>` for docs.
+ */
+export type CollectionDoc<K extends keyof AppCollections> = CollectionSelect<AppCollections[K]>;
 
 /**
  * Flat config type for client APIs.

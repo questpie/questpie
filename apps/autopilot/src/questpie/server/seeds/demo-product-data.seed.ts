@@ -153,9 +153,11 @@ export default seed({
 				workflowConfig: workflow.id,
 				taskTemplate: {
 					title: "Weekly Autopilot product triage",
+					description: "Review backlog and workflow health.",
 					type: "review",
 					priority: "medium",
-					project: project.id,
+					projectId: project.id,
+					project_id: project.id,
 					scopeType: "project",
 				},
 				concurrencyPolicy: "skip",

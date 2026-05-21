@@ -29,12 +29,23 @@ export interface SelectFieldMeta extends Questpie.SelectFieldMeta {
 	_?: never;
 }
 
-export type SelectFieldState = DefaultFieldState & {
-	type: "select";
-	data: string;
-	column: PgVarcharBuilder<[string, ...string[]]>;
-	operators: typeof selectSingleOps;
-};
+/** Infer stored select value union from static option literals. */
+export type SelectValuesFromOptions<T extends readonly SelectOption[]> =
+	T[number] extends { value: infer V }
+		? V extends string
+			? V
+			: V extends number
+				? `${V}`
+				: string
+		: string;
+
+export type SelectFieldState<TValue extends string = string> =
+	DefaultFieldState & {
+		type: "select";
+		data: TValue;
+		column: PgVarcharBuilder<[string, ...string[]]>;
+		operators: typeof selectSingleOps;
+	};
 
 export interface SelectFieldMethods {
 	enum(enumName: string): any;
@@ -118,6 +129,15 @@ function serializeOption(option: SelectOption): SelectOption {
  * priority: f.select([...]).enum("priority_enum")
  * ```
  */
+export function select<const T extends readonly SelectOption[]>(
+	options: T,
+): FieldWithMethods<
+	SelectFieldState<SelectValuesFromOptions<T>>,
+	SelectFieldMethods
+>;
+export function select(
+	options: readonly SelectOption[] | OptionsConfig,
+): FieldWithMethods<SelectFieldState, SelectFieldMethods>;
 export function select(
 	options: readonly SelectOption[] | OptionsConfig,
 ): FieldWithMethods<SelectFieldState, SelectFieldMethods> {
@@ -130,7 +150,7 @@ export function select(
 			: 255;
 
 	return wrapFieldComplete(
-		field<SelectFieldState>({
+		field<SelectFieldState<string>>({
 			type: "select",
 			columnFactory: (name) => varchar(name, { length: maxLength }),
 			schemaFactory: () => {

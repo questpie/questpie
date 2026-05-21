@@ -1,6 +1,9 @@
 import { job } from "questpie";
 import { z } from "zod";
 
+import type { AiRunStatus } from "../lib/execution-contract.js";
+import { asAiJobArgs } from "../lib/handler-context.js";
+
 export default job({
   name: "ai-worker-timeout",
   schema: z.object({}),
@@ -9,7 +12,7 @@ export default job({
     retryLimit: 1,
   },
   handler: async (ctx) => {
-    const collections = (ctx as any).collections;
+    const collections = asAiJobArgs(ctx).collections;
     const now = new Date();
     const staleThreshold = new Date(now.getTime() - 5 * 60 * 1000);
 
@@ -25,7 +28,7 @@ export default job({
         : null;
       if (!lastHeartbeat || lastHeartbeat < staleThreshold) {
         await collections.ai_workers.updateById({
-          id: worker.id,
+          id: String(worker.id),
           data: { status: "offline" },
         });
         markedOffline++;
@@ -49,10 +52,18 @@ export default job({
             ? lease.run
             : (lease.run as any)?.id;
         if (runId) {
-          await collections.ai_runs.update({
-            where: { id: runId, status: { in: ["claimed", "running"] } },
-            data: { status: "pending", worker: null },
+          const run = await collections.ai_runs.findOne({
+            where: { id: runId },
           });
+          if (
+            run &&
+            (run.status === "claimed" || run.status === "running")
+          ) {
+            await collections.ai_runs.updateById({
+              id: runId,
+              data: { status: "pending", worker: null },
+            });
+          }
         }
         expiredLeases++;
       }
