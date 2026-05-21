@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
 import { collection } from "../../src/exports/index.js";
+import { storageCollectionServe } from "../../src/server/adapters/routes/storage.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 import { createTestContext } from "../utils/test-context";
 import { runTestDbMigrations } from "../utils/test-db";
@@ -25,6 +26,15 @@ const services = collection("services").fields(({ f }) => ({
 	name: f.text(255).required(),
 	image: f.relation("assets").relationName("image"),
 }));
+
+const restrictedAssets = collection("restricted_assets")
+	.access({ read: false })
+	.fields(({ f }) => ({
+		alt: f.text(500),
+	}))
+	.upload({
+		visibility: "public",
+	});
 
 // ==============================================================================
 // TESTS
@@ -207,5 +217,50 @@ describe("collection upload URL generation", () => {
 			expect(typeof (fetchedPublic as any)?.url).toBe("string");
 			expect(typeof (fetchedPrivate as any)?.url).toBe("string");
 		});
+	});
+});
+
+describe("collection upload storage access", () => {
+	let setup: Awaited<ReturnType<typeof buildMockApp>>;
+
+	beforeEach(async () => {
+		setup = await buildMockApp({
+			collections: { restricted_assets: restrictedAssets },
+		});
+		await runTestDbMigrations(setup.app);
+	});
+
+	afterEach(async () => {
+		await setup.cleanup();
+	});
+
+	it("does not serve a storage object when the upload row is not readable", async () => {
+		const key = "uploads/restricted.png";
+		await setup.app.storage.use().put(key, new Uint8Array([1, 2, 3]), {
+			contentType: "image/png",
+		});
+
+		await setup.app.collections.restricted_assets.create(
+			{
+				id: crypto.randomUUID(),
+				key,
+				filename: "restricted.png",
+				mimeType: "image/png",
+				size: 3,
+				visibility: "public",
+				alt: "Restricted",
+			},
+			createTestContext(),
+		);
+
+		const response = await storageCollectionServe(
+			setup.app,
+			new Request(`http://localhost:3000/restricted_assets/files/${key}`),
+			{ collection: "restricted_assets", key },
+			undefined,
+			{ getSession: async () => null },
+		);
+
+		expect(response.status).toBe(403);
 	});
 });

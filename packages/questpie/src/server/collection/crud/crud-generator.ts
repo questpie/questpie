@@ -3043,7 +3043,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 		// Upload collections with public visibility get public read access by default
 		if (
 			operation === "read" &&
-			!this.state.access?.read &&
+			this.state.access?.read === undefined &&
 			this.state.upload?.visibility === "public"
 		) {
 			return true;

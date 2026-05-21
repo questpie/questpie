@@ -337,27 +337,18 @@ export class PostgresSearchAdapter implements SearchAdapter {
 				);
 			} else if (accessWhere === true) {
 				// Full access - just check existence and soft delete
-				if (softDelete) {
-					caseConditions.push(
-						sql`WHEN ${questpieSearchTable.collectionName} = ${collection} THEN (${sql.raw(`"${tableName}".id IS NOT NULL AND "${tableName}".deleted_at IS NULL`)})`,
-					);
-				} else {
-					caseConditions.push(
-						sql`WHEN ${questpieSearchTable.collectionName} = ${collection} THEN (${sql.raw(`"${tableName}".id IS NOT NULL`)})`,
-					);
-				}
+				caseConditions.push(
+					sql`WHEN ${questpieSearchTable.collectionName} = ${collection} THEN (${this.buildAccessRowExistsCondition(tableName, softDelete)})`,
+				);
 			} else {
 				// Conditional access - apply WHERE conditions
-				let condition = `"${tableName}".id IS NOT NULL`;
-				if (softDelete) {
-					condition += ` AND "${tableName}".deleted_at IS NULL`;
-				}
-				const accessConditions = this.accessWhereToSql(accessWhere, tableName);
-				if (accessConditions) {
-					condition += ` AND (${accessConditions})`;
-				}
+				const conditions = [
+					this.buildAccessRowExistsCondition(tableName, softDelete),
+				];
+				const accessCondition = this.accessWhereToSql(accessWhere, tableName);
+				if (accessCondition) conditions.push(accessCondition);
 				caseConditions.push(
-					sql`WHEN ${questpieSearchTable.collectionName} = ${collection} THEN (${sql.raw(condition)})`,
+					sql`WHEN ${questpieSearchTable.collectionName} = ${collection} THEN (${sql.join(conditions, sql` AND `)})`,
 				);
 			}
 		}
@@ -370,48 +361,62 @@ export class PostgresSearchAdapter implements SearchAdapter {
 		return sql`CASE ${sql.join(caseConditions, sql` `)} ELSE FALSE END`;
 	}
 
+	private buildAccessRowExistsCondition(
+		tableName: string,
+		softDelete?: boolean,
+	): ReturnType<typeof sql> {
+		const idColumn = sql`${sql.identifier(tableName)}.${sql.identifier("id")}`;
+		if (!softDelete) {
+			return sql`${idColumn} IS NOT NULL`;
+		}
+
+		const deletedAtColumn = sql`${sql.identifier(tableName)}.${sql.identifier("deleted_at")}`;
+		return sql`${idColumn} IS NOT NULL AND ${deletedAtColumn} IS NULL`;
+	}
+
 	/**
-	 * Convert AccessWhere object to SQL string
+	 * Convert AccessWhere object to a parameterized SQL fragment.
 	 */
 	private accessWhereToSql(
 		accessWhere: Record<string, any>,
 		tableName: string,
-	): string | null {
-		const conditions: string[] = [];
+	): ReturnType<typeof sql> | null {
+		const conditions: ReturnType<typeof sql>[] = [];
 
 		for (const [key, value] of Object.entries(accessWhere)) {
 			if (key === "AND" && Array.isArray(value)) {
 				const andConditions = value
 					.map((v) => this.accessWhereToSql(v, tableName))
-					.filter(Boolean);
+					.filter((condition): condition is ReturnType<typeof sql> =>
+						Boolean(condition),
+					);
 				if (andConditions.length > 0) {
-					conditions.push(`(${andConditions.join(" AND ")})`);
+					conditions.push(sql`(${sql.join(andConditions, sql` AND `)})`);
 				}
 			} else if (key === "OR" && Array.isArray(value)) {
 				const orConditions = value
 					.map((v) => this.accessWhereToSql(v, tableName))
-					.filter(Boolean);
+					.filter((condition): condition is ReturnType<typeof sql> =>
+						Boolean(condition),
+					);
 				if (orConditions.length > 0) {
-					conditions.push(`(${orConditions.join(" OR ")})`);
+					conditions.push(sql`(${sql.join(orConditions, sql` OR `)})`);
 				}
 			} else if (key === "NOT" && typeof value === "object") {
 				const notCondition = this.accessWhereToSql(value, tableName);
 				if (notCondition) {
-					conditions.push(`NOT (${notCondition})`);
+					conditions.push(sql`NOT (${notCondition})`);
 				}
 			} else {
 				// Simple field = value condition
-				const escapedValue =
-					typeof value === "string"
-						? `'${value.replace(/'/g, "''")}'`
-						: value === null
-							? "NULL"
-							: value;
-				conditions.push(`"${tableName}"."${key}" = ${escapedValue}`);
+				const column = sql`${sql.identifier(tableName)}.${sql.identifier(key)}`;
+				conditions.push(
+					value === null ? sql`${column} IS NULL` : sql`${column} = ${value}`,
+				);
 			}
 		}
 
-		return conditions.length > 0 ? conditions.join(" AND ") : null;
+		return conditions.length > 0 ? sql.join(conditions, sql` AND `) : null;
 	}
 
 	/**
@@ -430,8 +435,9 @@ export class PostgresSearchAdapter implements SearchAdapter {
 			const { collection, table } = filter;
 			const tableName =
 				(table as any)[Symbol.for("drizzle:Name")] || collection;
+			const idColumn = sql`${sql.identifier(tableName)}.${sql.identifier("id")}`;
 			joinParts.push(
-				sql`LEFT JOIN ${sql.raw(`"${tableName}"`)} ON ${questpieSearchTable.collectionName} = ${collection} AND ${questpieSearchTable.recordId} = ${sql.raw(`"${tableName}".id::text`)}`,
+				sql`LEFT JOIN ${sql.identifier(tableName)} ON ${questpieSearchTable.collectionName} = ${collection} AND ${questpieSearchTable.recordId} = ${idColumn}::text`,
 			);
 		}
 
