@@ -65,27 +65,7 @@ export interface AiServices {
 // MODULE DEFINITION — static plain object
 // ════════════════════════════════════════════════════════════
 
-export type AiModule = {
-	name: "questpie-ai";
-	collections: AiCollections;
-	jobs: AiJobs;
-	routes: AiRoutes;
-	services: AiServices;
-	globals: Record<string, never>;
-	messages: Record<string, never>;
-	emails: Record<string, never>;
-	migrations: readonly unknown[];
-	seeds: readonly unknown[];
-	fieldTypes: Record<string, never>;
-	views: Record<string, never>;
-	components: Record<string, never>;
-	blocks: Record<string, never>;
-	config: {
-		admin: typeof _adminConfig;
-	};
-};
-
-const _module: AiModule = {
+const _module = {
 	name: "questpie-ai" as const,
 	collections: {
 		ai_run_events: _coll_ai_run_events,
@@ -124,4 +104,5 @@ const _module: AiModule = {
 	},
 };
 
+export type AiModule = typeof _module;
 export default _module;

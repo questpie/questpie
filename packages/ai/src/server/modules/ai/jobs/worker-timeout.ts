@@ -1,6 +1,8 @@
 import { job } from "questpie";
 import { z } from "zod";
 
+import { asAiJobArgs } from "../lib/handler-context.js";
+
 export default job({
   name: "ai-worker-timeout",
   schema: z.object({}),
@@ -9,7 +11,7 @@ export default job({
     retryLimit: 1,
   },
   handler: async (ctx) => {
-    const collections = (ctx as any).collections;
+    const collections = asAiJobArgs(ctx).collections;
     const now = new Date();
     const staleThreshold = new Date(now.getTime() - 5 * 60 * 1000);
 
@@ -25,7 +27,7 @@ export default job({
         : null;
       if (!lastHeartbeat || lastHeartbeat < staleThreshold) {
         await collections.ai_workers.updateById({
-          id: worker.id,
+          id: String(worker.id),
           data: { status: "offline" },
         });
         markedOffline++;

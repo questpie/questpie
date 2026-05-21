@@ -1,6 +1,7 @@
 import { route } from "questpie";
 import { z } from "zod";
 
+import { asAiJsonRoute } from "../lib/handler-context.js";
 import { authenticateWorker, getAiServices } from "../lib/service-context.js";
 
 const eventSchema = z.object({
@@ -21,11 +22,12 @@ export default route()
 	.post()
 	.schema(eventSchema)
 	.handler(async (ctx) => {
-		await authenticateWorker(ctx);
-		const { workerManager } = getAiServices(ctx);
+		const routeCtx = asAiJsonRoute(ctx);
+		await authenticateWorker(routeCtx);
+		const { workerManager } = getAiServices(routeCtx);
 		await workerManager.reportRunEvent({
-			runId: ctx.input.runId,
-			event: ctx.input.event,
+			runId: routeCtx.input.runId,
+			event: routeCtx.input.event,
 		});
 		return { ok: true };
 	});

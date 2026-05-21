@@ -1,6 +1,7 @@
 import { route } from "questpie";
 import { z } from "zod";
 
+import { asAiJsonRoute } from "../lib/handler-context.js";
 import { getAiServices } from "../lib/service-context.js";
 
 const registerSchema = z.object({
@@ -15,6 +16,7 @@ export default route()
 	.post()
 	.schema(registerSchema)
 	.handler(async (ctx) => {
-		const { workerManager } = getAiServices(ctx);
-		return workerManager.registerWorker(ctx.input);
+		const routeCtx = asAiJsonRoute(ctx);
+		const { workerManager } = getAiServices(routeCtx);
+		return workerManager.registerWorker(routeCtx.input);
 	});

@@ -1,6 +1,7 @@
 import { route } from "questpie";
 import { z } from "zod";
 
+import { asAiJsonRoute } from "../lib/handler-context.js";
 import { authenticateWorker, getAiServices } from "../lib/service-context.js";
 
 const pollSchema = z.object({
@@ -13,12 +14,13 @@ export default route()
 	.post()
 	.schema(pollSchema)
 	.handler(async (ctx) => {
-		await authenticateWorker(ctx);
-		const { workerManager } = getAiServices(ctx);
+		const routeCtx = asAiJsonRoute(ctx);
+		await authenticateWorker(routeCtx);
+		const { workerManager } = getAiServices(routeCtx);
 		const claimed = await workerManager.claimRun({
-			workerId: ctx.input.workerId,
-			runtimes: ctx.input.runtimes,
-			limit: ctx.input.limit,
+			workerId: routeCtx.input.workerId,
+			runtimes: routeCtx.input.runtimes,
+			limit: routeCtx.input.limit,
 		});
 		return { run: claimed };
 	});

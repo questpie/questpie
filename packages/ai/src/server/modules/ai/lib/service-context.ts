@@ -1,9 +1,10 @@
 import { ApiError } from "questpie";
 
-export function getAiServices(ctx: unknown) {
-	const services = (ctx as any).services;
+import type { AiJsonRouteContext } from "./handler-context.js";
+
+export function getAiServices(ctx: AiJsonRouteContext) {
 	return {
-		workerManager: services.workerManager as any,
+		workerManager: ctx.services.workerManager,
 	};
 }
 
@@ -16,9 +17,9 @@ export function workerSecretFromRequest(request: Request): string | null {
 }
 
 export async function authenticateWorker(
-	ctx: unknown,
+	ctx: AiJsonRouteContext,
 ): Promise<{ id: string }> {
-	const secret = workerSecretFromRequest((ctx as any).request);
+	const secret = workerSecretFromRequest(ctx.request);
 	if (!secret) throw ApiError.unauthorized();
 	const { workerManager } = getAiServices(ctx);
 	const worker = await workerManager.authenticate(secret);

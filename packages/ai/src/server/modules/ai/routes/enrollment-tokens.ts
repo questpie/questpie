@@ -1,6 +1,7 @@
 import { route } from "questpie";
 import { z } from "zod";
 
+import { asAiJsonRoute } from "../lib/handler-context.js";
 import { generateSecret, hashSecret } from "../services/worker-manager.js";
 
 const tokenSchema = z.object({
@@ -12,7 +13,7 @@ export default route()
   .post()
   .schema(tokenSchema)
   .handler(async (ctx) => {
-    const collections = (ctx as any).collections;
+    const collections = asAiJsonRoute(ctx).collections;
     const secret = generateSecret();
     const expiresAt = new Date(Date.now() + ctx.input.ttlSeconds * 1000);
 
