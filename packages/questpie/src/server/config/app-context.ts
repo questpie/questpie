@@ -227,5 +227,5 @@ export function extractAppServices(
 		result.services = services;
 	}
 
-	return result as AppContext;
+	return result as unknown as AppContext;
 }
