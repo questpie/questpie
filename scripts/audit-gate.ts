@@ -8,10 +8,10 @@
  */
 
 const KNOWN = new Map<string, string>([
-	// h3 middleware bypass — fixed by nitro bump (separate PR).
-	["GHSA-3vj8-jmxq-cgj5", "TODO: nitro/h3 bump PR"],
-	// h3 SSE injection (bypass of earlier CVE fix) — fixed by same nitro bump.
-	["GHSA-22cc-p3c6-wpvm", "TODO: nitro/h3 bump PR"],
+	// h3 middleware bypass — still present via @tanstack/start-server-core's
+	// h3-v2@2.0.0-beta.4 (aliased import). Clears when react-start is bumped
+	// from 1.136.x to 1.167.42+ across the monorepo (planned follow-up PR).
+	["GHSA-3vj8-jmxq-cgj5", "TODO: @tanstack/react-start bump PR"],
 ]);
 
 type Advisory = {
