@@ -175,6 +175,12 @@ describe("generateTemplate — minimal (modules.ts only)", () => {
 		expect(code).toContain("export type AppCollections = _ModuleCollections;");
 	});
 
+	it("emits CollectionDoc helper from AppCollections", () => {
+		expect(code).toContain(
+			"export type CollectionDoc<K extends keyof AppCollections> = CollectionSelect<AppCollections[K]>;",
+		);
+	});
+
 	it("emits AppGlobals type alias (no user globals)", () => {
 		expect(code).toContain("export type AppGlobals = _ModuleGlobals;");
 	});

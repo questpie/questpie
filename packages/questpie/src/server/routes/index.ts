@@ -20,6 +20,7 @@ export type {
 	RouteAccessContext,
 	RouteAccessRule,
 	RouteDefinition,
+	StoredRouteDefinition,
 	RouteMcpMeta,
 	RouteMeta,
 	RouteParamsFromKey,

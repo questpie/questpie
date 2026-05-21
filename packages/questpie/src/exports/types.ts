@@ -94,6 +94,7 @@ export type {
 	InferSessionFromApp,
 } from "#questpie/server/config/context.js";
 export type {
+	CollectionDoc,
 	CollectionInfer,
 	CollectionInsert,
 	CollectionRelations,
@@ -116,9 +117,12 @@ export type {
 } from "#questpie/shared/type-utils.js";
 export type { CollectionAPI } from "#questpie/server/config/integrated/questpie-api.js";
 export type {
+	JsonRouteHandlerArgs,
+	RawRouteHandlerArgs,
 	RouteDefinition,
 	RouteParamsFromKey,
 	RouteWithParams,
+	StoredRouteDefinition,
 } from "#questpie/server/routes/index.js";
 export type {
 	ServiceInstanceOf,

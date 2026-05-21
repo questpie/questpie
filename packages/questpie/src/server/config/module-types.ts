@@ -69,7 +69,10 @@ import type {
 } from "#questpie/server/modules/core/integrated/queue/types.js";
 import type { RealtimeConfig } from "#questpie/server/modules/core/integrated/realtime/types.js";
 import type { SearchAdapter } from "#questpie/server/modules/core/integrated/search/types.js";
-import type { RouteDefinition } from "#questpie/server/routes/types.js";
+import type {
+	RouteDefinition,
+	StoredRouteDefinition,
+} from "#questpie/server/routes/types.js";
 import type { Seed, SeedCategory } from "#questpie/server/seed/types.js";
 
 // ============================================================================
@@ -391,7 +394,7 @@ export interface AppDefinition {
 	jobs?: Record<string, JobDefinition<any, any>>;
 
 	/** Routes discovered from `routes/` directory. */
-	routes?: Record<string, RouteDefinition<any, any, any>>;
+	routes?: Record<string, StoredRouteDefinition>;
 
 	/** Services discovered from `services/` directory. */
 	services?: Record<

@@ -30,6 +30,10 @@ export {
 	type TransactionContext,
 	withTransaction,
 } from "#questpie/server/collection/crud/shared/transaction.js";
+export type {
+	JsonRouteHandlerArgs,
+	RawRouteHandlerArgs,
+} from "#questpie/server/routes/types.js";
 export {
 	type AppContext,
 	extractAppServices,

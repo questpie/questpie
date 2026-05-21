@@ -990,6 +990,26 @@ export interface FormBuilderContext<TState extends CollectionBuilderState> {
 	f: FormFieldProxy<TState["fields"]>;
 }
 
+declare const __collectionHooksStorageBrand: unique symbol;
+declare const __collectionAccessStorageBrand: unique symbol;
+
+/**
+ * Opaque hook storage on builder state.
+ * `.hooks()` enforces full `CollectionHooks<…>` at the call site; this type avoids
+ * circular references through `AppContext` in the accumulated state.
+ */
+export type CollectionHooksStorage = Record<string, unknown> & {
+	readonly [__collectionHooksStorageBrand]?: never;
+};
+
+/**
+ * Opaque access storage on builder state.
+ * `.access()` enforces full `CollectionAccess<…>` at the call site.
+ */
+export type CollectionAccessStorage = Record<string, unknown> & {
+	readonly [__collectionAccessStorageBrand]?: never;
+};
+
 /**
  * Main builder state that accumulates configuration through the chain
  * Using Drizzle-style single generic pattern for better type performance
@@ -1013,19 +1033,13 @@ export interface CollectionBuilderState {
 	title: TitleExpression | undefined;
 	options: CollectionOptions;
 	/**
-	 * Lifecycle hooks — stored as Record<string, any> to avoid
-	 * circular type references through AppContext.
-	 * The `.hooks()` method provides full AppContext-typed constraints
-	 * at the call site while this storage type stays opaque.
+	 * Lifecycle hooks — opaque storage; see `CollectionHooksStorage`.
 	 */
-	hooks: Record<string, any>;
+	hooks: CollectionHooksStorage;
 	/**
-	 * Access control — stored as Record<string, any> to avoid
-	 * circular type references through AppContext.
-	 * The `.access()` method provides full AppContext-typed constraints
-	 * at the call site while this storage type stays opaque.
+	 * Access control — opaque storage; see `CollectionAccessStorage`.
 	 */
-	access: Record<string, any>;
+	access: CollectionAccessStorage;
 	/**
 	 * Search indexing configuration.
 	 * - undefined: auto-index with defaults (title + auto-generated content)
@@ -1104,8 +1118,8 @@ export type EmptyCollectionState<
 	indexes: {};
 	title: undefined;
 	options: {};
-	hooks: Record<string, any>;
-	access: {};
+	hooks: CollectionHooksStorage;
+	access: CollectionAccessStorage;
 	searchable: undefined;
 	validation: undefined;
 	output: undefined;

@@ -1202,7 +1202,7 @@ async function evaluateCollectionAccess(
 	context: CRUDContext,
 	app?: unknown,
 ): Promise<CollectionAccessInfo> {
-	const { access } = state;
+	const access = state.access as CollectionAccess | undefined;
 	// app is typed as unknown at the interface boundary, but at runtime
 	// it's a Questpie instance with defaultAccess
 	const appDefaultAccess = (

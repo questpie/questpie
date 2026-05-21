@@ -3,7 +3,7 @@
 // Regenerate with: questpie generate
 
 import { createApp, createContextFactory } from "questpie/app";
-import type { AnyCollectionOrBuilder, AnyGlobalOrBuilder, AppDefinition, CollectionAPI, DrizzleClientFromQuestpieConfig, InferContextExtensionsFromAppConfig, InferSessionFromAuthConfig, MailerService, Questpie, QuestpieConfig, QueueClient, QueueJobType, RouteParamsFromKey, RouteWithParams, TablesFromConfig } from "questpie/types";
+import type { AnyCollectionOrBuilder, AnyGlobalOrBuilder, AppDefinition, CollectionAPI, CollectionSelect, DrizzleClientFromQuestpieConfig, InferContextExtensionsFromAppConfig, InferSessionFromAuthConfig, MailerService, Questpie, QuestpieConfig, QueueClient, QueueJobType, RouteParamsFromKey, RouteWithParams, TablesFromConfig } from "questpie/types";
 import type { z } from "zod";
 
 // ── Runtime ────────────────────────────────────────────────
@@ -415,6 +415,11 @@ declare global {
 		}
 	}
 }
+
+/**
+ * Select/document type for a collection key — prefer over `Record<string, any>` for docs.
+ */
+export type CollectionDoc<K extends keyof AppCollections> = CollectionSelect<AppCollections[K]>;
 
 /**
  * Flat config type for client APIs.

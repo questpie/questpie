@@ -96,7 +96,7 @@ export function generateTemplate(options: TemplateOptions): string {
 	// Import createApp + types
 	lines.push('import { createApp, createContextFactory } from "questpie/app";');
 	lines.push(
-		'import type { AnyCollectionOrBuilder, AnyGlobalOrBuilder, AppDefinition, CollectionAPI, DrizzleClientFromQuestpieConfig, InferContextExtensionsFromAppConfig, InferSessionFromAuthConfig, MailerService, Questpie, QuestpieConfig, QueueClient, QueueJobType, RouteParamsFromKey, RouteWithParams, TablesFromConfig } from "questpie/types";',
+		'import type { AnyCollectionOrBuilder, AnyGlobalOrBuilder, AppDefinition, CollectionAPI, CollectionSelect, DrizzleClientFromQuestpieConfig, InferContextExtensionsFromAppConfig, InferSessionFromAuthConfig, MailerService, Questpie, QuestpieConfig, QueueClient, QueueJobType, RouteParamsFromKey, RouteWithParams, TablesFromConfig } from "questpie/types";',
 	);
 	lines.push('import type { z } from "zod";');
 	lines.push("");
@@ -724,6 +724,16 @@ export function generateTemplate(options: TemplateOptions): string {
 		lines.push("}");
 		lines.push("");
 	}
+
+	lines.push("/**");
+	lines.push(
+		" * Select/document type for a collection key — prefer over `Record<string, any>` for docs.",
+	);
+	lines.push(" */");
+	lines.push(
+		"export type CollectionDoc<K extends keyof AppCollections> = CollectionSelect<AppCollections[K]>;",
+	);
+	lines.push("");
 
 	// AppConfig — flat type for client APIs (createClient<AppConfig>(), createAdminAuthClient<AppConfig>())
 	lines.push("/**");
