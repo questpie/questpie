@@ -23,6 +23,7 @@ import {
 	mergeTranslationsConfig,
 } from "#questpie/server/i18n/translator.js";
 import coreModule from "#questpie/server/modules/core/.generated/module.js";
+import { mergeAdminConfig } from "#questpie/server/config/admin-sidebar-merge.js";
 import { mergeAuthOptions } from "#questpie/server/modules/core/integrated/auth/merge.js";
 
 // ============================================================================
@@ -271,15 +272,6 @@ const CONFIG_KEY_MERGE = new Map<string, Map<string, MergeFn>>([
 			["context", lastWins],
 		]),
 	],
-	[
-		"admin",
-		new Map<string, MergeFn>([
-			["sidebar", mergeDeepConcat],
-			["dashboard", mergeDeepConcat],
-			["branding", lastWins],
-			["locale", lastWins],
-		]),
-	],
 ]);
 
 /**
@@ -290,6 +282,10 @@ function mergeConfigKey(configKey: string, existing: any, incoming: any): any {
 	// Special case: auth is deep-merged as a whole via mergeAuthOptions
 	if (configKey === "auth") {
 		return mergeAuthOptions(existing ?? {}, incoming ?? {});
+	}
+
+	if (configKey === "admin") {
+		return mergeAdminConfig(existing ?? {}, incoming ?? {});
 	}
 
 	const subKeyMerges = CONFIG_KEY_MERGE.get(configKey);

@@ -35,6 +35,7 @@ import type {
 	ServerDashboardConfig,
 } from "./dashboard.js";
 import type { ServerAdminShellConfig } from "./shell.js";
+import type { AdminSidebarMode } from "questpie";
 import type { SidebarContribution } from "./sidebar.js";
 
 /**
@@ -56,6 +57,12 @@ import type { SidebarContribution } from "./sidebar.js";
  * ```
  */
 export interface AdminConfigInput {
+	/**
+	 * How module `sidebar` contributions combine with the app config.
+	 * `append` (default): merge module items into the app sidebar.
+	 * `replace`: keep only this file's `sidebar` (no module nav injection).
+	 */
+	sidebarMode?: AdminSidebarMode;
 	sidebar?: SidebarContribution;
 	dashboard?: DashboardContribution | ServerDashboardConfig;
 	shell?: ServerAdminShellConfig;

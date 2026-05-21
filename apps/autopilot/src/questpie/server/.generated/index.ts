@@ -14,6 +14,10 @@ import _modules from "../modules";
 
 // ── Collections ────────────────────────────────────────────
 import { activity as _coll_activity } from "../collections/activity";
+import _coll_admin_audit_log from "../collections/admin-audit-log";
+import _coll_ai_run_events from "../collections/ai-run-events";
+import _coll_ai_runs from "../collections/ai-runs";
+import _coll_assets from "../collections/assets";
 import { capabilities as _coll_capabilities } from "../collections/capabilities";
 import { chatMessages as _coll_chat_messages } from "../collections/chat-messages";
 import { chatSessions as _coll_chat_sessions } from "../collections/chat-sessions";
@@ -167,6 +171,10 @@ declare global {
 /** All collections in the app (modules + user, user overrides) */
 export type AppCollections = _ModuleCollections & {
 	activity: typeof _coll_activity;
+	admin_audit_log: typeof _coll_admin_audit_log;
+	ai_run_events: typeof _coll_ai_run_events;
+	ai_runs: typeof _coll_ai_runs;
+	assets: typeof _coll_assets;
 	capabilities: typeof _coll_capabilities;
 	chat_messages: typeof _coll_chat_messages;
 	chat_sessions: typeof _coll_chat_sessions;
@@ -278,44 +286,8 @@ export type AppMcpTools = _ModuleMcpTools & {
 };
 
 type _CollectionsAPI = { [K in keyof AppCollections]: CollectionAPI<AppCollections[K], AppCollections> };
-type _JobHandlerCollections = {
-	activity: typeof _coll_activity;
-	capabilities: typeof _coll_capabilities;
-	chat_messages: typeof _coll_chat_messages;
-	chat_sessions: typeof _coll_chat_sessions;
-	environments: typeof _coll_environments;
-	knowledge: typeof _coll_knowledge;
-	models: typeof _coll_models;
-	projects: typeof _coll_projects;
-	providers: typeof _coll_providers;
-	run_links: typeof _coll_run_links;
-	schedule_executions: typeof _coll_schedule_executions;
-	schedules: typeof _coll_schedules;
-	scripts: typeof _coll_scripts;
-	secrets: typeof _coll_secrets;
-	task_relations: typeof _coll_task_relations;
-	tasks: typeof _coll_tasks;
-	workflow_configs: typeof _coll_workflow_configs;
-};
-type _JobHandlerCollectionsAPI = {
-	activity: CollectionAPI<typeof _coll_activity, _JobHandlerCollections>;
-	capabilities: CollectionAPI<typeof _coll_capabilities, _JobHandlerCollections>;
-	chat_messages: CollectionAPI<typeof _coll_chat_messages, _JobHandlerCollections>;
-	chat_sessions: CollectionAPI<typeof _coll_chat_sessions, _JobHandlerCollections>;
-	environments: CollectionAPI<typeof _coll_environments, _JobHandlerCollections>;
-	knowledge: CollectionAPI<typeof _coll_knowledge, _JobHandlerCollections>;
-	models: CollectionAPI<typeof _coll_models, _JobHandlerCollections>;
-	projects: CollectionAPI<typeof _coll_projects, _JobHandlerCollections>;
-	providers: CollectionAPI<typeof _coll_providers, _JobHandlerCollections>;
-	run_links: CollectionAPI<typeof _coll_run_links, _JobHandlerCollections>;
-	schedule_executions: CollectionAPI<typeof _coll_schedule_executions, _JobHandlerCollections>;
-	schedules: CollectionAPI<typeof _coll_schedules, _JobHandlerCollections>;
-	scripts: CollectionAPI<typeof _coll_scripts, _JobHandlerCollections>;
-	secrets: CollectionAPI<typeof _coll_secrets, _JobHandlerCollections>;
-	task_relations: CollectionAPI<typeof _coll_task_relations, _JobHandlerCollections>;
-	tasks: CollectionAPI<typeof _coll_tasks, _JobHandlerCollections>;
-	workflow_configs: CollectionAPI<typeof _coll_workflow_configs, _JobHandlerCollections>;
-};
+type _JobHandlerCollections = AppCollections;
+type _JobHandlerCollectionsAPI = _CollectionsAPI;
 type _ExecutionContextJob<T> = T extends { name: infer TName extends string; schema: z.ZodSchema<infer TPayload> } ? QueueJobType<TPayload, TName> : never;
 type _ExecutionContextJobs = {
 	cleanup: _ExecutionContextJob<typeof _job_cleanup>;
@@ -461,6 +433,10 @@ export const app = await createApp(
 		modules: _modules,
 		collections: {
 			activity: _coll_activity,
+			admin_audit_log: _coll_admin_audit_log,
+			ai_run_events: _coll_ai_run_events,
+			ai_runs: _coll_ai_runs,
+			assets: _coll_assets,
 			capabilities: _coll_capabilities,
 			chat_messages: _coll_chat_messages,
 			chat_sessions: _coll_chat_sessions,

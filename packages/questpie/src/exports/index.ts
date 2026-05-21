@@ -77,6 +77,13 @@ export {
 	module,
 	runtimeConfig,
 } from "#questpie/server/config/create-app.js";
+export {
+	isAuthoritativeSidebar,
+	mergeAdminConfig,
+	mergeAdminSidebar,
+	shouldAutoAppendUnlistedSidebar,
+	type AdminSidebarMode,
+} from "#questpie/server/config/admin-sidebar-merge.js";
 export { createContextFactory } from "#questpie/server/config/create-context-factory.js";
 export * from "#questpie/server/config/global-hooks-types.js";
 export * from "#questpie/server/config/module-types.js";

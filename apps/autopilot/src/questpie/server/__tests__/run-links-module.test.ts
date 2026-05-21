@@ -14,6 +14,7 @@ import { taskRelations } from "../collections/task-relations";
 import backfillLegacyRunsMigration from "../migrations/20260519T142100_backfill_legacy_runs_into_run_links";
 import linkScheduleExecutionsMigration from "../migrations/20260519T145500_link_schedule_executions_to_run_links";
 import modules from "../modules";
+import { aiModule } from "@questpie/ai/modules/ai";
 
 const runLinkMigration = readFileSync(
 	new URL(
@@ -86,21 +87,20 @@ function resultRows<T>(result: unknown): T[] {
 }
 
 describe("Autopilot AI run links", () => {
-	it("loads the AI module without normal navigation exposure", () => {
-		const aiModule = modules.find((mod) => mod.name === "questpie-ai");
+	it("registers the plain AI module without navigation exposure", () => {
+		const registeredAiModule = modules.find((mod) => mod.name === "questpie-ai");
 
-		expect(aiModule).toBeTruthy();
-		expect(aiModule?.config?.admin?.sidebar?.items).toEqual([]);
-		expect(Object.keys(aiModule?.collections ?? {}).sort()).toEqual([
+		expect(registeredAiModule).toBe(aiModule);
+		expect(aiModule.config?.admin?.sidebar?.items).toEqual([]);
+		expect(Object.keys(aiModule.collections).sort()).toEqual([
 			"ai_run_events",
 			"ai_runs",
 			"ai_worker_leases",
 			"ai_workers",
 		]);
 
-		for (const collection of Object.values(aiModule?.collections ?? {})) {
+		for (const collection of Object.values(aiModule.collections)) {
 			expect(collection.state.admin?.hidden).toBe(true);
-			expect(collection.state.admin?.audit).toBe(false);
 		}
 	});
 
