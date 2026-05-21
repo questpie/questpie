@@ -1,5 +1,7 @@
 import { seed } from "questpie/services";
 
+import { asJsonValue } from "../lib/records";
+
 const DEMO_PROJECT_SLUG = "questpie-autopilot-demo";
 
 export default seed({
@@ -103,6 +105,15 @@ export default seed({
 		);
 
 		log("Creating Autopilot demo knowledge...");
+		const productModelBody = [
+			"# Autopilot product model",
+			"",
+			"Autopilot is a focused product for Issues, Workflows, Schedules, Knowledge, and Projects.",
+			"",
+			"Users should not need to understand workers, runs, leases, providers, models, queues, or raw workflow runtime internals.",
+			"",
+			"Creation should happen through product actions: prompt-driven AI issue creation and a manual Linear-like issue creator.",
+		].join("\n");
 		await collections.knowledge.create(
 			{
 				title: "Autopilot product model",
@@ -114,19 +125,15 @@ export default seed({
 				renderer: "markdown",
 				source: "system",
 				sourceRef: "seed:autopilot-product-model",
-				body: [
-					"# Autopilot product model",
-					"",
-					"Autopilot is a focused product for Issues, Workflows, Schedules, Knowledge, and Projects.",
-					"",
-					"Users should not need to understand workers, runs, leases, providers, models, queues, or raw workflow runtime internals.",
-					"",
-					"Creation should happen through product actions: prompt-driven AI issue creation and a manual Linear-like issue creator.",
-				].join("\n"),
+				body: productModelBody,
+				key: "company/autopilot/product-model.md",
+				filename: "product-model.md",
+				mimeType: "text/markdown",
+				size: Buffer.byteLength(productModelBody, "utf8"),
 				contentHash: "seed-autopilot-product-model",
-				metadata: {
+				metadata: asJsonValue({
 					seed: "autopilotDemoProductData",
-				},
+				}),
 			},
 			ctx,
 		);
@@ -246,18 +253,20 @@ export default seed({
 		] as const;
 
 		for (const issue of issues) {
+			const { context, ...issueData } = issue;
 			await collections.tasks.create(
 				{
-					...issue,
+					...issueData,
 					project: project.id,
 					scopeType: "project",
 					workflowConfig: workflow.id,
 					capability: capability.id,
 					queue: "default",
 					createdBy: "seed:autopilotDemoProductData",
-					metadata: {
+					context: asJsonValue(context),
+					metadata: asJsonValue({
 						seed: "autopilotDemoProductData",
-					},
+					}),
 				},
 				ctx,
 			);

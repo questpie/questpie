@@ -1,4 +1,5 @@
 import { ApiError, route } from "questpie";
+import type { RouteDefinition } from "questpie/types";
 
 function sse(event: string, data: unknown) {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
@@ -119,4 +120,4 @@ export default route()
         Connection: "keep-alive",
       },
     });
-  });
+  }) as unknown as RouteDefinition;

@@ -391,7 +391,7 @@ export interface AppDefinition {
 	jobs?: Record<string, JobDefinition<any, any>>;
 
 	/** Routes discovered from `routes/` directory. */
-	routes?: Record<string, RouteDefinition>;
+	routes?: Record<string, RouteDefinition<any, any, any>>;
 
 	/** Services discovered from `services/` directory. */
 	services?: Record<

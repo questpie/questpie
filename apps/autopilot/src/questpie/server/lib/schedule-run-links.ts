@@ -1,7 +1,7 @@
 import { relationId } from "./records";
 
 export async function linkScheduleExecutionRun(input: {
-	ctx: Questpie.AppContext;
+	ctx: Pick<Questpie.WorkflowContext, "collections">;
 	scheduleExecutionId?: string | null;
 	runId: string;
 }) {

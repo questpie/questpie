@@ -1,4 +1,6 @@
-export { aiModule } from "../../server/modules/ai/index.js";
+import { aiModule } from "../../server/modules/ai/index.js";
+
+export { aiModule };
 export type {
   AiCollections,
   AiJobs,

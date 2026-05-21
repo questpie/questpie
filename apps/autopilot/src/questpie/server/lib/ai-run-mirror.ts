@@ -1,10 +1,10 @@
+import type { GlobalCollectionHookContext } from "questpie";
+
 import { asRecord, mergeRecords, relationId } from "./records";
 
-type HookContext = Questpie.AppContext & {
-	collection: string;
-	data?: Record<string, unknown>;
-	original?: Record<string, unknown>;
-	operation: "create" | "update" | "delete";
+type HookContext = GlobalCollectionHookContext & {
+	services?: Questpie.AppContext["services"];
+	workflows?: Questpie.AppContext["workflows"];
 };
 
 type TerminalRunStatus = "completed" | "failed" | "cancelled";
@@ -90,6 +90,7 @@ async function createCompletionResources(input: {
 	summary?: string | null;
 }) {
 	if (!input.summary?.trim()) return [];
+	if (!input.ctx.services?.knowledgeResource) return [];
 
 	const existing = await input.ctx.collections.knowledge.findOne({
 		where: { run: input.runId, path: `runs/${input.runId}/summary.md` },

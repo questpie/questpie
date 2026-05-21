@@ -4,7 +4,7 @@ import { workflow } from "@questpie/workflows";
 
 import { createAiRunLink } from "../lib/ai-run-links";
 import { classifyRunError, type RunErrorType } from "../lib/error-classifier";
-import { asRecord, mergeRecords, relationId } from "../lib/records";
+import { asAppContext, asJsonValue, asRecord, mergeRecords, relationId } from "../lib/records";
 import { resolveRuntimeSelection } from "../lib/runtime-selection";
 import { linkScheduleExecutionRun } from "../lib/schedule-run-links";
 import { workflowsFromContext } from "../lib/workflows";
@@ -122,7 +122,10 @@ async function dependenciesMet(collections: Collections, taskId: string) {
 	return true;
 }
 
-async function releaseDependentTasks(ctx: Questpie.AppContext, taskId: string) {
+async function releaseDependentTasks(
+	ctx: Pick<Questpie.WorkflowContext, "collections">,
+	taskId: string,
+) {
 	const downstream = await ctx.collections.task_relations.find({
 		where: { targetTask: taskId, relationType: "depends_on" },
 		limit: 100,
@@ -201,9 +204,11 @@ export default workflow({
 					id: input.taskId,
 					data: {
 						status: "waiting",
-						metadata: mergeRecords(task.metadata, {
-							waitingReason: "dependencies",
-						}),
+						metadata: asJsonValue(
+							mergeRecords(task.metadata, {
+								waitingReason: "dependencies",
+							}),
+						),
 					},
 				});
 				await ctx.collections.activity.create({
@@ -228,7 +233,7 @@ export default workflow({
 
 		for (let attempt = 1; attempt <= retryPolicy.maxAttempts; attempt++) {
 			const runtime = await step.run(`resolve-runtime-${attempt}`, async () => {
-				return resolveRuntimeSelection(ctx, {
+				return resolveRuntimeSelection(asAppContext(ctx), {
 					modelId: relationId(task.model),
 					capabilityId: relationId(task.capability),
 					projectId: relationId(task.project),
@@ -237,7 +242,7 @@ export default workflow({
 
 			const run = await step.run(`create-run-${attempt}`, async () => {
 				return createAiRunLink({
-					ctx,
+					ctx: asAppContext(ctx),
 					runtime,
 					taskId: input.taskId,
 					projectId: relationId(task.project),
@@ -262,7 +267,7 @@ export default workflow({
 
 			await step.run(`link-schedule-execution-${attempt}`, async () => {
 				await linkScheduleExecutionRun({
-					ctx,
+					ctx: asAppContext(ctx),
 					scheduleExecutionId: input.scheduleExecutionId,
 					runId: run.id,
 				});
@@ -273,11 +278,13 @@ export default workflow({
 					id: input.taskId,
 					data: {
 						status: "running",
-						metadata: mergeRecords(task.metadata, {
-							workflow: "task-pipeline",
-							activeRunId: run.id,
-							attempt,
-						}),
+						metadata: asJsonValue(
+							mergeRecords(task.metadata, {
+								workflow: "task-pipeline",
+								activeRunId: run.id,
+								attempt,
+							}),
+						),
 					},
 				});
 			});
@@ -335,13 +342,15 @@ export default workflow({
 				id: input.taskId,
 				data: {
 					status,
-					metadata: mergeRecords(task.metadata, {
-						workflow: "task-pipeline",
-						runId: lastRunId,
-						status,
-						error: lastCompletion?.error ?? null,
-						knowledgeResourceIds: lastCompletion?.knowledgeResourceIds ?? [],
-					}),
+					metadata: asJsonValue(
+						mergeRecords(task.metadata, {
+							workflow: "task-pipeline",
+							runId: lastRunId,
+							status,
+							error: lastCompletion?.error ?? null,
+							knowledgeResourceIds: lastCompletion?.knowledgeResourceIds ?? [],
+						}),
+					),
 				},
 			});
 			await ctx.collections.activity.create({
@@ -361,7 +370,7 @@ export default workflow({
 		const releasedTaskIds =
 			status === "review"
 				? await step.run("release-dependent-tasks", async () =>
-						releaseDependentTasks(ctx, input.taskId),
+						releaseDependentTasks(asAppContext(ctx), input.taskId),
 					)
 				: [];
 
@@ -379,7 +388,7 @@ export default workflow({
 			id: input.taskId,
 			data: {
 				status: "failed",
-				metadata: { workflowError: error.message },
+				metadata: asJsonValue({ workflowError: error.message }),
 			},
 		});
 		await ctx.collections.activity.create({

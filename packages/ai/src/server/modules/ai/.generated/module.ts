@@ -32,7 +32,7 @@ import _adminConfig from "../config/admin";
 // TYPES — composed from typeof references (zero inference cost)
 // ════════════════════════════════════════════════════════════
 
-import type { RouteParamsFromKey, RouteWithParams } from "questpie/types";
+import type { RouteDefinition } from "questpie/types";
 
 export interface AiCollections {
 	ai_run_events: typeof _coll_ai_run_events;
@@ -46,26 +46,46 @@ export interface AiJobs {
 }
 
 export interface AiRoutes {
-	enrollmentEnroll: RouteWithParams<typeof _route_enrollmentEnroll, RouteParamsFromKey<"enrollmentEnroll">>;
-	enrollmentTokens: RouteWithParams<typeof _route_enrollmentTokens, RouteParamsFromKey<"enrollmentTokens">>;
-	runComplete: RouteWithParams<typeof _route_runComplete, RouteParamsFromKey<"runComplete">>;
-	runEvents: RouteWithParams<typeof _route_runEvents, RouteParamsFromKey<"runEvents">>;
-	runStream: RouteWithParams<typeof _route_runStream, RouteParamsFromKey<"runStream">>;
-	workerDeregister: RouteWithParams<typeof _route_workerDeregister, RouteParamsFromKey<"workerDeregister">>;
-	workerHeartbeat: RouteWithParams<typeof _route_workerHeartbeat, RouteParamsFromKey<"workerHeartbeat">>;
-	workerPoll: RouteWithParams<typeof _route_workerPoll, RouteParamsFromKey<"workerPoll">>;
-	workerRegister: RouteWithParams<typeof _route_workerRegister, RouteParamsFromKey<"workerRegister">>;
+	enrollmentEnroll: RouteDefinition;
+	enrollmentTokens: RouteDefinition;
+	runComplete: RouteDefinition;
+	runEvents: RouteDefinition;
+	runStream: RouteDefinition;
+	workerDeregister: RouteDefinition;
+	workerHeartbeat: RouteDefinition;
+	workerPoll: RouteDefinition;
+	workerRegister: RouteDefinition;
 }
 
 export interface AiServices {
 	workerManager: typeof _svc_workerManager;
 }
 
+export type AiModule = {
+	name: "questpie-ai";
+	collections: AiCollections;
+	jobs: AiJobs;
+	routes: AiRoutes;
+	services: AiServices;
+	globals: Record<string, never>;
+	messages: Record<string, never>;
+	emails: Record<string, never>;
+	migrations: readonly [];
+	seeds: readonly [];
+	fieldTypes: Record<string, never>;
+	views: Record<string, never>;
+	components: Record<string, never>;
+	blocks: Record<string, never>;
+	config: {
+		admin: typeof _adminConfig;
+	};
+};
+
 // ════════════════════════════════════════════════════════════
 // MODULE DEFINITION — static plain object
 // ════════════════════════════════════════════════════════════
 
-const _module = {
+const _module: AiModule = {
 	name: "questpie-ai" as const,
 	collections: {
 		ai_run_events: _coll_ai_run_events,
@@ -104,5 +124,4 @@ const _module = {
 	},
 };
 
-export type AiModule = typeof _module;
 export default _module;

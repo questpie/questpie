@@ -3,12 +3,7 @@ import { seed } from "questpie/services";
 const COVERAGE_SEED_ID = "autopilotDemoCoverageData";
 
 async function findFirst(
-	collection: {
-		find: (
-			args: { where: Record<string, unknown>; limit: number },
-			ctx: unknown,
-		) => Promise<{ docs: Array<Record<string, unknown>> }>;
-	},
+	collection: any,
 	where: Record<string, unknown>,
 	ctx: unknown,
 ) {
@@ -36,7 +31,7 @@ export default seed({
 				ctx,
 			);
 			if (existing) return existing;
-			return collections.projects.create(project, ctx);
+			return collections.projects.create(project as any, ctx);
 		};
 
 		const ensureCapability = async (capability: Record<string, unknown>) => {
@@ -46,7 +41,7 @@ export default seed({
 				ctx,
 			);
 			if (existing) return existing;
-			return collections.capabilities.create(capability, ctx);
+			return collections.capabilities.create(capability as any, ctx);
 		};
 
 		const ensureWorkflow = async (workflow: Record<string, unknown>) => {
@@ -56,7 +51,7 @@ export default seed({
 				ctx,
 			);
 			if (existing) return existing;
-			return collections.workflow_configs.create(workflow, ctx);
+			return collections.workflow_configs.create(workflow as any, ctx);
 		};
 
 		const ensureSchedule = async (schedule: Record<string, unknown>) => {
@@ -66,7 +61,7 @@ export default seed({
 				ctx,
 			);
 			if (existing) return existing;
-			return collections.schedules.create(schedule, ctx);
+			return collections.schedules.create(schedule as any, ctx);
 		};
 
 		const ensureIssue = async (issue: Record<string, unknown>) => {
@@ -76,7 +71,7 @@ export default seed({
 				ctx,
 			);
 			if (existing) return existing;
-			return collections.tasks.create(issue, ctx);
+			return collections.tasks.create(issue as any, ctx);
 		};
 
 		const ensureKnowledge = async (entry: Record<string, unknown>) => {
@@ -86,7 +81,7 @@ export default seed({
 				ctx,
 			);
 			if (existing) return existing;
-			return collections.knowledge.create(entry, ctx);
+			return collections.knowledge.create(entry as any, ctx);
 		};
 
 		log("Creating Autopilot coverage projects...");

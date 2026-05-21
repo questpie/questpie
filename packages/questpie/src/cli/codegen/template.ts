@@ -514,29 +514,8 @@ export function generateTemplate(options: TemplateOptions): string {
 		lines.push(
 			"type _CollectionsAPI = { [K in keyof AppCollections]: CollectionAPI<AppCollections[K], AppCollections> };",
 		);
-		const localCollections = sortedValues(
-			discovered.categories.get("collections") ?? new Map(),
-		).filter((file) => !file.isBundle);
-		if (localCollections.length > 0) {
-			const collectionsDecl = allDecls.get("collections");
-			lines.push("type _JobHandlerCollections = {");
-			for (const file of localCollections) {
-				lines.push(
-					`\t${categoryTypeEntry(file, collectionsDecl, "collections")};`,
-				);
-			}
-			lines.push("};");
-			lines.push("type _JobHandlerCollectionsAPI = {");
-			for (const file of localCollections) {
-				lines.push(
-					`\t${safeKey(file.key)}: CollectionAPI<typeof ${file.varName}, _JobHandlerCollections>;`,
-				);
-			}
-			lines.push("};");
-		} else {
-			lines.push("type _JobHandlerCollections = {};");
-			lines.push("type _JobHandlerCollectionsAPI = {};");
-		}
+		lines.push("type _JobHandlerCollections = AppCollections;");
+		lines.push("type _JobHandlerCollectionsAPI = _CollectionsAPI;");
 		const localJobs = sortedValues(
 			discovered.categories.get("jobs") ?? new Map(),
 		).filter((file) => !file.isBundle);

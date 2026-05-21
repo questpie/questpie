@@ -3,12 +3,7 @@ import { seed } from "questpie/services";
 const SEED_ID = "autopilotDemoStressData";
 
 async function findFirst(
-	collection: {
-		find: (
-			args: { where: Record<string, unknown>; limit: number },
-			ctx: unknown,
-		) => Promise<{ docs: Array<Record<string, unknown>> }>;
-	},
+	collection: any,
 	where: Record<string, unknown>,
 	ctx: unknown,
 ) {
@@ -411,7 +406,7 @@ export default seed({
 		const created: Record<string, unknown>[] = [];
 		for (const issue of issues) {
 			const doc = await collections.tasks.create(
-				{ ...base, ...issue },
+				{ ...base, ...issue } as any,
 				ctx,
 			);
 			created.push(doc);
@@ -457,7 +452,7 @@ export default seed({
 					dedupeKey: `${parent.id}:parent_of:${child.id}`,
 					createdBy: `seed:${SEED_ID}`,
 					metadata: { seed: SEED_ID },
-				},
+				} as any,
 				ctx,
 			);
 		}

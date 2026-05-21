@@ -3,7 +3,7 @@ import { z } from "zod";
 import { workflow } from "@questpie/workflows";
 
 import { createAiRunLink } from "../lib/ai-run-links";
-import { mergeRecords, relationId } from "../lib/records";
+import { asAppContext, asJsonValue, asRecord, mergeRecords, relationId } from "../lib/records";
 import { resolveRuntimeSelection } from "../lib/runtime-selection";
 import { linkScheduleExecutionRun } from "../lib/schedule-run-links";
 
@@ -56,12 +56,12 @@ export default workflow({
 				return existing;
 			}
 
-			const runtime = await resolveRuntimeSelection(ctx, {
+			const runtime = await resolveRuntimeSelection(asAppContext(ctx), {
 				modelId: input.modelId,
 				projectId: input.projectId ?? relationId(session.project),
 			});
 			return createAiRunLink({
-				ctx,
+				ctx: asAppContext(ctx),
 				runtime,
 				taskId: input.taskId ?? relationId(session.task),
 				projectId: input.projectId ?? relationId(session.project),
@@ -83,7 +83,7 @@ export default workflow({
 
 		await step.run("link-schedule-execution", async () => {
 			await linkScheduleExecutionRun({
-				ctx,
+				ctx: asAppContext(ctx),
 				scheduleExecutionId: input.scheduleExecutionId,
 				runId: run.id,
 			});
@@ -131,10 +131,10 @@ export default workflow({
 					runStatus: completion?.status ?? "failed",
 					model: relationId(finalRun?.model ?? run.model) ?? undefined,
 					provider: relationId(finalRun?.provider ?? run.provider) ?? undefined,
-					metadata: {
+					metadata: asJsonValue({
 						workflow: "chat-query",
 						knowledgeResourceIds: completion?.knowledgeResourceIds ?? [],
-					},
+					}),
 				});
 			},
 		);
@@ -151,11 +151,13 @@ export default workflow({
 						finalRun?.runtimeSessionRef ??
 						session.runtimeSessionRef ??
 						undefined,
-					metadata: mergeRecords(session.metadata, {
-						lastRunId: run.id,
-						lastMessageId: assistantMessage.id,
-						lastRunStatus: completion?.status ?? "failed",
-					}) as any,
+					metadata: asJsonValue(
+						mergeRecords(session.metadata, {
+							lastRunId: run.id,
+							lastMessageId: assistantMessage.id,
+							lastRunStatus: completion?.status ?? "failed",
+						}),
+					),
 				},
 			});
 			await ctx.collections.activity.create({

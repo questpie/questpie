@@ -3,10 +3,10 @@ import { z } from "zod";
 import { workflow } from "@questpie/workflows";
 
 import { createAiRunLink } from "../lib/ai-run-links";
-import { asRecord, mergeRecords, relationId, stringFrom } from "../lib/records";
+import { asAppContext, asJsonValue, asRecord, mergeRecords, relationId, stringFrom } from "../lib/records";
 import { resolveRuntimeSelection } from "../lib/runtime-selection";
 
-type Collections = Questpie.AppContext["collections"];
+type Collections = Questpie.WorkflowContext["collections"];
 
 type StepType =
 	| "run"
@@ -123,7 +123,7 @@ async function recordProgress(
 	await collections.tasks.updateById({
 		id: taskId,
 		data: {
-			metadata: {
+			metadata: asJsonValue({
 				...metadata,
 				workflowProgress: {
 					...progress,
@@ -137,7 +137,7 @@ async function recordProgress(
 						},
 					},
 				},
-			},
+			}),
 		},
 	});
 }
@@ -160,7 +160,7 @@ async function createRunForStep(
 		relationId(step.model) ??
 		relationId(task.model);
 
-	const runtime = await resolveRuntimeSelection(ctx, {
+	const runtime = await resolveRuntimeSelection(asAppContext(ctx), {
 		modelId,
 		capabilityId,
 		projectId: relationId(task.project),
@@ -168,7 +168,7 @@ async function createRunForStep(
 	});
 
 	return createAiRunLink({
-		ctx,
+		ctx: asAppContext(ctx),
 		runtime,
 		taskId: String(task.id),
 		projectId: relationId(task.project),
@@ -194,21 +194,22 @@ async function createRunForStep(
 }
 
 async function childTaskFromStep(
-	ctx: Questpie.AppContext,
+	ctx: Pick<Questpie.WorkflowContext, "collections">,
 	parentTask: Record<string, unknown>,
 	workflowConfig: Record<string, unknown>,
 	step: StepConfig,
 	stepIdValue: string,
 ) {
 	const child = await ctx.collections.tasks.create({
-		title: step.title ?? `${parentTask.title ?? "Task"}: ${stepIdValue}`,
-		description:
-			step.description ?? step.instructions ?? parentTask.description,
-		type: step.taskType ?? step.task_type ?? "task",
+		title: String(step.title ?? `${parentTask.title ?? "Task"}: ${stepIdValue}`),
+		description: String(
+			step.description ?? step.instructions ?? parentTask.description ?? "",
+		),
+		type: String(step.taskType ?? step.task_type ?? "task"),
 		status: "pending",
-		priority: step.priority ?? parentTask.priority,
+		priority: stringFrom(step.priority ?? parentTask.priority) ?? undefined,
 		project: relationId(parentTask.project) ?? undefined,
-		scopeType: parentTask.scopeType ?? "company",
+		scopeType: stringFrom(parentTask.scopeType) ?? "company",
 		workflowConfig:
 			stepRef(step, "workflowConfigId", "workflow_config_id") ??
 			relationId(step.workflowConfig) ??
@@ -223,30 +224,30 @@ async function childTaskFromStep(
 			relationId(step.model) ??
 			undefined,
 		createdBy: "workflow:multi-step-task",
-		context: mergeRecords(parentTask.context, asRecord(step.context)),
-		metadata: {
+		context: asJsonValue(mergeRecords(parentTask.context, asRecord(step.context))),
+		metadata: asJsonValue({
 			parentTaskId: parentTask.id,
 			workflowConfigId: workflowConfig.id,
 			workflowStepId: stepIdValue,
 			...asRecord(step.metadata),
-		},
+		}),
 	});
 
 	await ctx.collections.task_relations.create({
-		sourceTask: parentTask.id,
+		sourceTask: String(parentTask.id),
 		targetTask: child.id,
 		relationType: "parent_of",
-		dedupeKey: `${parentTask.id}:${child.id}:parent_of`,
+		dedupeKey: `${String(parentTask.id)}:${child.id}:parent_of`,
 		createdBy: "workflow:multi-step-task",
-		metadata: { workflowStepId: stepIdValue },
+		metadata: asJsonValue({ workflowStepId: stepIdValue }),
 	});
 	await ctx.collections.task_relations.create({
 		sourceTask: child.id,
-		targetTask: parentTask.id,
+		targetTask: String(parentTask.id),
 		relationType: "spawned_by",
-		dedupeKey: `${child.id}:${parentTask.id}:spawned_by`,
+		dedupeKey: `${child.id}:${String(parentTask.id)}:spawned_by`,
 		createdBy: "workflow:multi-step-task",
-		metadata: { workflowStepId: stepIdValue },
+		metadata: asJsonValue({ workflowStepId: stepIdValue }),
 	});
 
 	return child;
@@ -336,10 +337,12 @@ export default workflow({
 				id: input.taskId,
 				data: {
 					status: "running",
-					metadata: mergeRecords(loaded.task.metadata, {
-						workflow: "multi-step-task",
-						workflowConfigId: loaded.workflowConfig.id,
-					}),
+					metadata: asJsonValue(
+						mergeRecords(loaded.task.metadata, {
+							workflow: "multi-step-task",
+							workflowConfigId: loaded.workflowConfig.id,
+						}),
+					),
 				},
 			});
 		});
@@ -450,7 +453,7 @@ export default workflow({
 					`create-child-task-${safeName}`,
 					async () =>
 						childTaskFromStep(
-							ctx,
+							asAppContext(ctx),
 							loaded.task,
 							loaded.workflowConfig,
 							current,
@@ -513,7 +516,7 @@ export default workflow({
 						`create-fanout-child-${safeName}-${childIndex}`,
 						async () =>
 							childTaskFromStep(
-								ctx,
+								asAppContext(ctx),
 								loaded.task,
 								loaded.workflowConfig,
 								childStep,
@@ -639,7 +642,7 @@ export default workflow({
 
 			const run = await step.run(`create-run-${safeName}`, async () =>
 				createRunForStep(
-					ctx,
+					asAppContext(ctx),
 					loaded.task,
 					loaded.workflowConfig,
 					current,
@@ -719,12 +722,14 @@ export default workflow({
 				data: {
 					status: finalStatus,
 					workflowStep: "__done__",
-					metadata: mergeRecords(loaded.task.metadata, {
-						workflow: "multi-step-task",
-						workflowConfigId: loaded.workflowConfig.id,
-						lastRunId,
-						status: finalStatus,
-					}),
+					metadata: asJsonValue(
+						mergeRecords(loaded.task.metadata, {
+							workflow: "multi-step-task",
+							workflowConfigId: loaded.workflowConfig.id,
+							lastRunId,
+							status: finalStatus,
+						}),
+					),
 				},
 			});
 			await ctx.collections.activity.create({
@@ -734,10 +739,10 @@ export default workflow({
 				task: input.taskId,
 				run: lastRunId ?? undefined,
 				project: relationId(loaded.task.project) ?? undefined,
-				details: {
+				details: asJsonValue({
 					workflowConfigId: loaded.workflowConfig.id,
 					status: finalStatus,
-				},
+				}),
 			});
 		});
 
@@ -769,7 +774,10 @@ export default workflow({
 			id: input.taskId,
 			data: {
 				status: "failed",
-				metadata: { workflow: "multi-step-task", workflowError: error.message },
+				metadata: asJsonValue({
+					workflow: "multi-step-task",
+					workflowError: error.message,
+				}),
 			},
 		});
 		await ctx.collections.activity.create({

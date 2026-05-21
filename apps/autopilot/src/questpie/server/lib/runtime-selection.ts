@@ -1,6 +1,6 @@
 import { ApiError } from "questpie/errors";
 
-type Collections = Questpie.AppContext["collections"];
+type Collections = Questpie.WorkflowContext["collections"];
 
 export type RuntimeId = "claude-code" | "codex" | "opencode";
 
@@ -109,7 +109,7 @@ async function loadCapability(
 }
 
 export async function resolveRuntimeSelection(
-	ctx: Questpie.AppContext,
+	ctx: Pick<Questpie.WorkflowContext, "collections">,
 	input: ResolveRuntimeInput = {},
 ): Promise<RuntimeResolution> {
 	const capability = await loadCapability(ctx.collections, input.capabilityId);

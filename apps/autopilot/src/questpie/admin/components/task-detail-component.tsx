@@ -12,9 +12,8 @@ import {
 } from "@questpie/admin/client";
 import { adminClientModule } from "@questpie/admin/client/modules/admin";
 
-const FormView = React.lazy(
-	(adminClientModule.views as any)["collection-form"].component,
-);
+const CollectionFormView =
+	adminClientModule.views["collection-form"].component;
 
 type TimelineEntry = {
 	id: string;
@@ -30,6 +29,36 @@ type TimelineEntry = {
 	tokensInput?: number;
 	tokensOutput?: number;
 	initiatedBy?: string;
+};
+
+type ActivityDoc = {
+	id: string;
+	createdAt: string;
+	type?: string;
+	actor?: string;
+	summary?: string;
+};
+
+type RunDoc = {
+	id: string;
+	createdAt?: string;
+	startedAt?: string;
+	endedAt?: string;
+	status?: string;
+	runtime?: string;
+	summary?: string;
+	tokensInput?: number;
+	tokensOutput?: number;
+	initiatedBy?: string;
+};
+
+type KnowledgeDoc = {
+	id: string;
+	title?: string;
+	path?: string;
+	kind?: string;
+	source?: string;
+	createdAt?: string;
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -103,23 +132,12 @@ const SOURCE_LABELS: Record<string, string> = {
 	system: "System",
 };
 
-export default function TaskDetailComponent(props: Record<string, any>) {
-	const taskId = props.id as string | undefined;
+export default function TaskDetailComponent(props: Record<string, unknown>) {
+	const taskId = typeof props.id === "string" ? props.id : undefined;
 
 	return (
 		<div className="flex flex-col">
-			<React.Suspense
-				fallback={
-					<div className="text-muted-foreground flex items-center justify-center p-12">
-						<Icon
-							icon="ph:spinner"
-							className="size-5 animate-spin opacity-40"
-						/>
-					</div>
-				}
-			>
-				<FormView {...props} />
-			</React.Suspense>
+			<CollectionFormView {...props} />
 
 			{taskId && (
 				<div className="border-t">
@@ -133,7 +151,7 @@ export default function TaskDetailComponent(props: Record<string, any>) {
 
 function ActivityTimeline({ taskId }: { taskId: string }) {
 	const { data: activityData, isLoading: activityLoading } = useCollectionList(
-		"activity" as any,
+		"activity",
 		{
 			where: { task: taskId },
 			limit: 50,
@@ -142,7 +160,7 @@ function ActivityTimeline({ taskId }: { taskId: string }) {
 	);
 
 	const { data: runsData, isLoading: runsLoading } = useCollectionList(
-		"runs" as any,
+		"run_links",
 		{
 			where: { task: taskId },
 			limit: 50,
@@ -153,11 +171,11 @@ function ActivityTimeline({ taskId }: { taskId: string }) {
 	const isLoading = activityLoading || runsLoading;
 
 	const activityDocs = React.useMemo(
-		() => (activityData as any)?.docs ?? [],
+		() => ((activityData as { docs?: ActivityDoc[] } | undefined)?.docs ?? []),
 		[activityData],
 	);
 	const runsDocs = React.useMemo(
-		() => (runsData as any)?.docs ?? [],
+		() => ((runsData as { docs?: RunDoc[] } | undefined)?.docs ?? []),
 		[runsData],
 	);
 
@@ -179,7 +197,7 @@ function ActivityTimeline({ taskId }: { taskId: string }) {
 			items.push({
 				id: `run-${doc.id}`,
 				kind: "run",
-				timestamp: doc.startedAt ?? doc.createdAt,
+				timestamp: doc.startedAt ?? doc.createdAt ?? new Date().toISOString(),
 				status: doc.status,
 				runtime: doc.runtime,
 				summary: doc.summary,
@@ -261,9 +279,7 @@ function RunEntry({
 				<div className="flex items-center gap-2">
 					<span className="text-sm font-medium capitalize">{entry.status}</span>
 					{entry.runtime && (
-						<Badge variant="secondary" className="text-xs">
-							{entry.runtime}
-						</Badge>
+						<Badge text={entry.runtime} color="secondary" className="text-xs" />
 					)}
 					{entry.initiatedBy && (
 						<span className="text-muted-foreground text-xs">
@@ -330,7 +346,7 @@ function ArtifactsList({ taskId }: { taskId: string }) {
 	const navigate = useAdminStore(selectNavigate);
 	const basePath = useAdminStore(selectBasePath);
 
-	const { data, isLoading } = useCollectionList("knowledge" as any, {
+	const { data, isLoading } = useCollectionList("knowledge", {
 		where: {
 			task: taskId,
 			kind: { in: ["artifact", "result", "summary", "diff", "log"] },
@@ -339,7 +355,10 @@ function ArtifactsList({ taskId }: { taskId: string }) {
 		orderBy: { createdAt: "desc" },
 	});
 
-	const docs = React.useMemo(() => (data as any)?.docs ?? [], [data]);
+	const docs = React.useMemo(
+		() => ((data as { docs?: KnowledgeDoc[] } | undefined)?.docs ?? []),
+		[data],
+	);
 
 	if (isLoading) {
 		return (
@@ -361,9 +380,10 @@ function ArtifactsList({ taskId }: { taskId: string }) {
 				Artifacts
 			</h3>
 			<div className="divide-y">
-				{docs.map((doc: any) => {
-					const kindIcon = KIND_ICONS[doc.kind as string] ?? "ph:file";
-					const sourceLabel = SOURCE_LABELS[doc.source as string] ?? doc.source;
+				{docs.map((doc) => {
+					const kindIcon = KIND_ICONS[doc.kind ?? ""] ?? "ph:file";
+					const sourceLabel =
+						SOURCE_LABELS[doc.source ?? ""] ?? doc.source ?? "";
 
 					return (
 						<button
@@ -383,9 +403,11 @@ function ArtifactsList({ taskId }: { taskId: string }) {
 								</p>
 								<div className="text-muted-foreground mt-0.5 flex items-center gap-2 text-xs">
 									{doc.kind && (
-										<Badge variant="secondary" className="text-xs">
-											{doc.kind}
-										</Badge>
+										<Badge
+											text={doc.kind}
+											color="secondary"
+											className="text-xs"
+										/>
 									)}
 									{sourceLabel && <span>{sourceLabel}</span>}
 									{doc.createdAt && (

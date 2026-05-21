@@ -2,18 +2,7 @@ import { seed } from "questpie/services";
 
 const PARENT_SEED_ID = "autopilotDemoParentIssues";
 
-async function findIssue(
-	collections: {
-		tasks: {
-			find: (
-				args: { where: { title: string }; limit: number },
-				ctx: unknown,
-			) => Promise<{ docs: Array<Record<string, unknown>> }>;
-		};
-	},
-	title: string,
-	ctx: unknown,
-) {
+async function findIssue(collections: any, title: string, ctx: unknown) {
 	const result = await collections.tasks.find(
 		{ where: { title }, limit: 1 },
 		ctx,
@@ -22,22 +11,7 @@ async function findIssue(
 }
 
 async function ensureParentRelation(
-	collections: {
-		task_relations: {
-			find: (
-				args: {
-					where: {
-						sourceTask: unknown;
-						targetTask: unknown;
-						relationType: string;
-					};
-					limit: number;
-				},
-				ctx: unknown,
-			) => Promise<{ docs: Array<Record<string, unknown>> }>;
-			create: (data: Record<string, unknown>, ctx: unknown) => Promise<unknown>;
-		};
-	},
+	collections: any,
 	parent: Record<string, unknown>,
 	child: Record<string, unknown>,
 	ctx: unknown,
