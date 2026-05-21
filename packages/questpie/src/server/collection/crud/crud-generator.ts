@@ -2934,7 +2934,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				globalEntries,
 				hookName,
 				collectionKey,
-				ctx as any,
+				ctx,
 			);
 			await this.executeHooks(collectionHooks, ctx);
 		} else {
@@ -2944,7 +2944,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				globalEntries,
 				hookName,
 				collectionKey,
-				ctx as any,
+				ctx,
 			);
 		}
 	}
@@ -2981,7 +2981,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				globalEntries,
 				hookName,
 				collectionKey,
-				ctx as any,
+				ctx,
 			);
 			await this.executeTransitionHooks(collectionHooks, ctx);
 		} else {
@@ -2990,7 +2990,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				globalEntries,
 				hookName,
 				collectionKey,
-				ctx as any,
+				ctx,
 			);
 		}
 	}

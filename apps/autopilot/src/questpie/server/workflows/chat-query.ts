@@ -3,16 +3,10 @@ import { z } from "zod";
 import { workflow } from "@questpie/workflows";
 
 import { createAiRunLink } from "../lib/ai-run-links";
-import { asJsonValue, asRecord, hookCollections, mergeRecords, relationId } from "../lib/records";
+import { asJsonValue, asRecord, mergeRecords, relationId } from "../lib/records";
+import type { RunCompletion } from "../lib/run-completion";
 import { resolveRuntimeSelection } from "../lib/runtime-selection";
 import { linkScheduleExecutionRun } from "../lib/schedule-run-links";
-
-type RunCompletion = {
-	status?: "completed" | "failed" | "cancelled";
-	summary?: string | null;
-	error?: string | null;
-	knowledgeResourceIds?: string[];
-};
 
 function responseContent(completion: RunCompletion | null) {
 	if (completion?.status === "completed") {

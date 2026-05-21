@@ -1,9 +1,10 @@
 import { appConfig } from "questpie/app";
+import type { GlobalCollectionHookContext } from "questpie";
 
 import { mirrorAiRunCollectionChange } from "../lib/ai-run-mirror";
 
 async function publishCollectionChange(
-	ctx: any,
+	ctx: GlobalCollectionHookContext,
 	operation: "create" | "update" | "delete",
 ) {
 	const recordId =
@@ -43,7 +44,7 @@ export default appConfig({
 			afterChange: async (ctx) => {
 				await publishCollectionChange(ctx, ctx.operation);
 				ctx.onAfterCommit(async () => {
-					await mirrorAiRunCollectionChange(ctx as any);
+					await mirrorAiRunCollectionChange(ctx);
 				});
 			},
 			afterDelete: async (ctx) => {

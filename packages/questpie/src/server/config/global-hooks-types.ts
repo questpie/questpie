@@ -1,46 +1,22 @@
+import type { AppContextBase } from "#questpie/server/config/app-context-base.js";
 import type { AccessMode } from "#questpie/server/config/types.js";
 
 // ============================================================================
 // Global Collection Hook Types
 // ============================================================================
 
-/**
- * Context passed to global collection hooks.
- * Extends the standard HookContext with the collection name.
- */
-export interface GlobalCollectionHookContext<TData = any, TOriginal = any> {
+/** Hook-specific fields for global collection hooks. */
+export type GlobalCollectionHookContextFields<
+	TData = any,
+	TOriginal = any,
+> = {
 	/** The name/slug of the collection being operated on */
 	collection: string;
 	data: TData;
 	original: TOriginal | undefined;
-	/** @deprecated Use flat context properties instead */
-	app?: any;
-	session?: any | null;
 	locale?: string;
 	accessMode?: AccessMode;
 	operation: "create" | "update" | "delete";
-	db: any;
-	/** Queue client for publishing background jobs */
-	queue: any;
-	/** Email service */
-	email: any;
-	/** Storage service */
-	storage: any;
-	/** Key-value store */
-	kv: any;
-	/** Logger */
-	logger: any;
-	/** Search service */
-	search: any;
-	/** Realtime service */
-	realtime: any;
-	/** Collection CRUD APIs */
-	collections: Record<string, any>;
-	/** Global CRUD APIs */
-	globals: Record<string, any>;
-
-	// ---- Bulk metadata (present when operation is part of a batch) ----
-
 	/** True when this hook is invoked as part of a bulk operation (updateMany/deleteMany) */
 	isBatch?: boolean;
 	/** IDs of all affected records in the batch */
@@ -52,21 +28,31 @@ export interface GlobalCollectionHookContext<TData = any, TOriginal = any> {
 	records?: TData[];
 	/** Total number of affected records in the batch */
 	count?: number;
-
 	/**
 	 * Queue a callback to run after the current transaction commits.
 	 * If called outside a transaction, the callback runs immediately (fire-and-forget).
-	 *
-	 * Use this for side effects that should only happen when data is durable:
-	 * dispatching jobs, sending emails, search indexing, webhook calls.
 	 */
 	onAfterCommit: (callback: () => Promise<void>) => void;
-}
+};
 
 /**
- * Context passed to global collection transition hooks.
+ * Context passed to global collection hooks.
+ * Extends {@link AppContextBase}; generated apps augment full {@link AppContext} separately.
  */
-export interface GlobalCollectionTransitionHookContext<TData = any> {
+export type GlobalCollectionHookContext<TData = any, TOriginal = any> =
+	GlobalCollectionHookContextFields<TData, TOriginal> & AppContextBase;
+
+/**
+ * Context passed to global collection hooks before the collection name is injected.
+ */
+export type GlobalCollectionHookContextInput<
+	TData = any,
+	TOriginal = any,
+> = Omit<GlobalCollectionHookContextFields<TData, TOriginal>, "collection"> &
+	AppContextBase;
+
+/** Hook-specific fields for global collection transition hooks. */
+export type GlobalCollectionTransitionHookContextFields<TData = any> = {
 	/** The name/slug of the collection being operated on */
 	collection: string;
 	/** The record being transitioned */
@@ -77,31 +63,24 @@ export interface GlobalCollectionTransitionHookContext<TData = any> {
 	toStage: string;
 	/** When set, the transition should be scheduled for this future date instead of executing immediately */
 	scheduledAt?: Date;
-	/** @deprecated Use flat context properties instead */
-	app?: any;
-	session?: any | null;
 	locale?: string;
 	accessMode?: AccessMode;
-	db: any;
-	/** Queue client for publishing background jobs */
-	queue: any;
-	/** Email service */
-	email: any;
-	/** Storage service */
-	storage: any;
-	/** Key-value store */
-	kv: any;
-	/** Logger */
-	logger: any;
-	/** Search service */
-	search: any;
-	/** Realtime service */
-	realtime: any;
-	/** Collection CRUD APIs */
-	collections: Record<string, any>;
-	/** Global CRUD APIs */
-	globals: Record<string, any>;
-}
+};
+
+/**
+ * Context passed to global collection transition hooks.
+ */
+export type GlobalCollectionTransitionHookContext<TData = any> =
+	GlobalCollectionTransitionHookContextFields<TData> & AppContextBase;
+
+/**
+ * Context passed to global collection transition hooks before the collection name is injected.
+ */
+export type GlobalCollectionTransitionHookContextInput<TData = any> = Omit<
+	GlobalCollectionTransitionHookContextFields<TData>,
+	"collection"
+> &
+	AppContextBase;
 
 /**
  * A single global collection hook entry with optional include/exclude filters.
@@ -128,54 +107,38 @@ export interface GlobalCollectionHookEntry {
 // Global Global Hook Types
 // ============================================================================
 
-/**
- * Context passed to global global hooks.
- * Extends the standard GlobalHookContext with the global name.
- */
-export interface GlobalGlobalHookContext<TData = any> {
+/** Hook-specific fields for global global hooks. */
+export type GlobalGlobalHookContextFields<TData = any> = {
 	/** The name/slug of the global being operated on */
 	global: string;
 	data: TData;
-	input?: any;
-	/** @deprecated Use flat context properties instead */
-	app?: any;
-	session?: any | null;
+	input?: unknown;
 	locale?: string;
 	accessMode?: AccessMode;
-	db: any;
-	/** Queue client for publishing background jobs */
-	queue: any;
-	/** Email service */
-	email: any;
-	/** Storage service */
-	storage: any;
-	/** Key-value store */
-	kv: any;
-	/** Logger */
-	logger: any;
-	/** Search service */
-	search: any;
-	/** Realtime service */
-	realtime: any;
-	/** Collection CRUD APIs */
-	collections: Record<string, any>;
-	/** Global CRUD APIs */
-	globals: Record<string, any>;
-
 	/**
 	 * Queue a callback to run after the current transaction commits.
 	 * If called outside a transaction, the callback runs immediately (fire-and-forget).
-	 *
-	 * Use this for side effects that should only happen when data is durable:
-	 * dispatching jobs, sending emails, search indexing, webhook calls.
 	 */
 	onAfterCommit: (callback: () => Promise<void>) => void;
-}
+};
 
 /**
- * Context passed to global global transition hooks.
+ * Context passed to global global hooks.
  */
-export interface GlobalGlobalTransitionHookContext<TData = any> {
+export type GlobalGlobalHookContext<TData = any> =
+	GlobalGlobalHookContextFields<TData> & AppContextBase;
+
+/**
+ * Context passed to global global hooks before the global name is injected.
+ */
+export type GlobalGlobalHookContextInput<TData = any> = Omit<
+	GlobalGlobalHookContextFields<TData>,
+	"global"
+> &
+	AppContextBase;
+
+/** Hook-specific fields for global global transition hooks. */
+export type GlobalGlobalTransitionHookContextFields<TData = any> = {
 	/** The name/slug of the global being operated on */
 	global: string;
 	/** The record being transitioned */
@@ -184,31 +147,24 @@ export interface GlobalGlobalTransitionHookContext<TData = any> {
 	toStage: string;
 	/** When set, the transition should be scheduled for this future date instead of executing immediately */
 	scheduledAt?: Date;
-	/** @deprecated Use flat context properties instead */
-	app?: any;
-	session?: any | null;
 	locale?: string;
 	accessMode?: AccessMode;
-	db: any;
-	/** Queue client for publishing background jobs */
-	queue: any;
-	/** Email service */
-	email: any;
-	/** Storage service */
-	storage: any;
-	/** Key-value store */
-	kv: any;
-	/** Logger */
-	logger: any;
-	/** Search service */
-	search: any;
-	/** Realtime service */
-	realtime: any;
-	/** Collection CRUD APIs */
-	collections: Record<string, any>;
-	/** Global CRUD APIs */
-	globals: Record<string, any>;
-}
+};
+
+/**
+ * Context passed to global global transition hooks.
+ */
+export type GlobalGlobalTransitionHookContext<TData = any> =
+	GlobalGlobalTransitionHookContextFields<TData> & AppContextBase;
+
+/**
+ * Context passed to global global transition hooks before the global name is injected.
+ */
+export type GlobalGlobalTransitionHookContextInput<TData = any> = Omit<
+	GlobalGlobalTransitionHookContextFields<TData>,
+	"global"
+> &
+	AppContextBase;
 
 /**
  * A single global global hook entry with optional include/exclude filters.

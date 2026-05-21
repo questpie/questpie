@@ -581,54 +581,53 @@ export function generateTemplate(options: TemplateOptions): string {
 		lines.push(
 			"// ── AppContext augmentation — auto-types ALL handlers ──────",
 		);
+		lines.push("type _AppCoreContext = _AppContextExtensions & {");
+		lines.push("\t// Infrastructure");
+		lines.push("\tdb: _AppDb;");
+		if (hasEmails) {
+			lines.push(`\temail: MailerService<${emailsTypeName}>;`);
+		} else {
+			lines.push('\temail: _AppQuestpie["email"];');
+		}
+		lines.push("\tqueue: QueueClient<AppJobs>;");
+		lines.push("\tstorage: _AppStorage;");
+		lines.push('\tkv: _AppQuestpie["kv"];');
+		lines.push('\tlogger: _AppQuestpie["logger"];');
+		lines.push('\tsearch: _AppQuestpie["search"];');
+		lines.push('\trealtime: _AppQuestpie["realtime"];');
+		lines.push("");
+		lines.push("\t// Entity APIs");
+		lines.push("\tcollections: _CollectionsAPI;");
+		lines.push("\tglobals: _AppGlobalsAPI;");
+		lines.push("\ttables: _AppTables;");
+		lines.push("");
+		lines.push("\t// Request-scoped");
+		lines.push("\tsession: _AppSession;");
+		if (hasMessages) {
+			lines.push(
+				"\tt: (key: AppMessageKeys | (string & {}), params?: Record<string, unknown>, locale?: string) => string;",
+			);
+		} else {
+			lines.push(
+				"\tt: (key: string, params?: Record<string, unknown>, locale?: string) => string;",
+			);
+		}
+		if (hasServices) {
+			lines.push("");
+			lines.push("\t// User services");
+			lines.push("\tservices: _AppDefaultServices;");
+		}
+		lines.push("} & _AppCustomServiceNamespaces;");
+		lines.push("");
 		lines.push("declare global {");
 		lines.push("\tnamespace Questpie {");
 		if (hasServices) {
 			lines.push(
-				"\t\tinterface AppContext extends _AppTopLevelServices, _AppCustomServiceNamespaces, _AppContextExtensions {",
+				"\t\tinterface AppContext extends _AppCoreContext, _AppTopLevelServices {}",
 			);
 		} else {
-			lines.push("\t\tinterface AppContext extends _AppContextExtensions {");
+			lines.push("\t\tinterface AppContext extends _AppCoreContext {}");
 		}
-		lines.push("\t\t\t// Infrastructure");
-		lines.push("\t\t\tdb: _AppDb;");
-		if (hasEmails) {
-			lines.push(`\t\t\temail: MailerService<${emailsTypeName}>;`);
-		} else {
-			lines.push('\t\t\temail: _AppQuestpie["email"];');
-		}
-		lines.push("\t\t\tqueue: QueueClient<AppJobs>;");
-		lines.push("\t\t\tstorage: _AppStorage;");
-		lines.push('\t\t\tkv: _AppQuestpie["kv"];');
-		lines.push('\t\t\tlogger: _AppQuestpie["logger"];');
-		lines.push('\t\t\tsearch: _AppQuestpie["search"];');
-		lines.push('\t\t\trealtime: _AppQuestpie["realtime"];');
-		lines.push("");
-		lines.push("\t\t\t// Entity APIs");
-		lines.push("\t\t\tcollections: _CollectionsAPI;");
-		lines.push("\t\t\tglobals: _AppGlobalsAPI;");
-		lines.push("\t\t\ttables: _AppTables;");
-		lines.push("");
-		lines.push("\t\t\t// Request-scoped");
-		lines.push("\t\t\tsession: _AppSession;");
-		if (hasMessages) {
-			lines.push(
-				"\t\t\tt: (key: AppMessageKeys | (string & {}), params?: Record<string, unknown>, locale?: string) => string;",
-			);
-		} else {
-			lines.push(
-				"\t\t\tt: (key: string, params?: Record<string, unknown>, locale?: string) => string;",
-			);
-		}
-
-		// Services — default namespace under `services`
-		if (hasServices) {
-			lines.push("");
-			lines.push("\t\t\t// User services");
-			lines.push("\t\t\tservices: _AppDefaultServices;");
-		}
-
-		lines.push("\t\t}");
 		lines.push("");
 		const emitNonRecursiveContext = (name: string) => {
 			lines.push(`\t\tinterface ${name} {`);
@@ -663,6 +662,13 @@ export function generateTemplate(options: TemplateOptions): string {
 				);
 			}
 			lines.push("");
+			if (hasServices && (name === "WorkflowContext" || name === "JobHandlerContext")) {
+				lines.push("\t\t\t// Top-level services (namespace: null)");
+				lines.push(
+					'\t\t\tworkflows?: "workflows" extends keyof _AppTopLevelServices ? _AppTopLevelServices["workflows"] : never;',
+				);
+				lines.push("");
+			}
 			lines.push("\t\t\t// User services");
 			lines.push("\t\t\tservices: _ExecutionContextDefaultServices;");
 			lines.push("\t\t}");
@@ -671,7 +677,7 @@ export function generateTemplate(options: TemplateOptions): string {
 		lines.push("");
 		emitNonRecursiveContext("WorkflowContext");
 		lines.push("");
-		lines.push("\t\tinterface ServiceCreateContext extends AppContext {}");
+		lines.push("\t\tinterface ServiceCreateContext extends _AppCoreContext {}");
 
 		// Registry — ALL registryKey categories + ~-prefixed singles augmented centrally.
 		// This is the SINGLE place that augments Registry. Modules never augment it.

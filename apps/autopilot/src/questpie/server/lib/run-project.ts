@@ -1,9 +1,10 @@
 import { ApiError } from "questpie/errors";
 
+import type { AppCollections } from "./app-types";
 import { relationId } from "./records";
 
 export async function resolveRunProject(
-	collections: Questpie.AppContext["collections"],
+	collections: AppCollections,
 	runId: string,
 ) {
 	const run = await collections.run_links.findOne({

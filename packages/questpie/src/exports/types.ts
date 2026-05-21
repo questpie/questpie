@@ -1,4 +1,5 @@
 export { Questpie } from "#questpie/server/config/questpie.js";
+export type { AppContextBase } from "#questpie/server/config/app-context-base.js";
 export type {
 	AppContext,
 	KnownBlockNames,

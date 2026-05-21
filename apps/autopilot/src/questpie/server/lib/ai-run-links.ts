@@ -1,12 +1,13 @@
 import { randomUUID } from "node:crypto";
 
+import type { WorkflowContextCollections } from "./app-types";
 import { asJsonValue, asRecord } from "./records";
 import type { RuntimeResolution } from "./runtime-selection";
 
 type InitiatedBy = "chat" | "task" | "schedule" | "workflow" | "manual" | "mcp";
 
 type CreateAiRunLinkInput = {
-	ctx: Pick<Questpie.WorkflowContext, "collections">;
+	ctx: WorkflowContextCollections;
 	runtime: RuntimeResolution;
 	initiatedBy: InitiatedBy;
 	instructions: string;

@@ -273,7 +273,52 @@ export function generateModuleTemplate(
 		lines.push("");
 	}
 
-	lines.push("const _module = {");
+	const configSingles = singles.filter((f) => f.configKey);
+	const plainSingles = singles.filter((f) => !f.configKey);
+
+	lines.push(`export type ${typePrefix}Module = {`);
+	lines.push(`\tname: "${moduleName}";`);
+	if (modulesFile) {
+		lines.push(`\tmodules: typeof ${modulesFile.varName};`);
+	}
+	for (const catName of categoriesNeedingTypes) {
+		if (catName === "messages") continue;
+		const typeName = `${typePrefix}${catName.charAt(0).toUpperCase() + catName.slice(1)}`;
+		lines.push(`\t${safeKey(catName)}: ${typeName};`);
+	}
+	for (const [catName, decl] of categoryMeta) {
+		if (categoriesNeedingTypes.has(catName)) continue;
+		if (extraPropNames.has(catName)) continue;
+		const emitStrategy = decl.emit ?? "record";
+		if (emitStrategy === "array") {
+			lines.push(`\t${safeKey(catName)}: readonly unknown[];`);
+		} else {
+			lines.push(`\t${safeKey(catName)}: Record<string, never>;`);
+		}
+	}
+	if (configSingles.length > 0) {
+		lines.push("\tconfig: {");
+		for (const file of configSingles) {
+			lines.push(`\t\t${safeKey(file.configKey!)}: typeof ${file.varName};`);
+		}
+		lines.push("\t};");
+	}
+	for (const file of plainSingles) {
+		lines.push(`\t${safeKey(file.key)}: typeof ${file.varName};`);
+	}
+	if (extraModuleProperties && extraModuleProperties.length > 0) {
+		for (const prop of extraModuleProperties) {
+			const match = prop.match(/^(\w+)\s*:\s*(.+?),?\s*$/);
+			if (match) {
+				const [, propName, expression] = match;
+				lines.push(`\t${propName}: typeof ${expression};`);
+			}
+		}
+	}
+	lines.push("};");
+	lines.push("");
+
+	lines.push(`const _module: ${typePrefix}Module = {`);
 	lines.push(`\tname: "${moduleName}" as const,`);
 
 	// Sub-modules
@@ -326,10 +371,6 @@ export function generateModuleTemplate(
 		}
 	}
 
-	// Separate config-bucket singles from plain singles
-	const configSingles = singles.filter((f) => f.configKey);
-	const plainSingles = singles.filter((f) => !f.configKey);
-
 	// Config bucket — each config file = one key
 	if (configSingles.length > 0) {
 		lines.push("\tconfig: {");
@@ -366,8 +407,6 @@ export function generateModuleTemplate(
 	lines.push("};");
 	lines.push("");
 
-	// Export type and default
-	lines.push(`export type ${typePrefix}Module = typeof _module;`);
 	lines.push("export default _module;");
 	lines.push("");
 
