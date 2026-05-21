@@ -17,18 +17,8 @@ export const projects = collection("projects")
 			.label({ en: "Git Provider" }),
 		gitRemote: f.text().label({ en: "Git Remote URL" }),
 		defaultBranch: f.text().default("main").label({ en: "Default Branch" }),
-		providerConfig: f
-			.object({
-				connectionMode: f.text().label({ en: "Connection Mode" }),
-				repositoryScope: f.text().label({ en: "Repository Scope" }),
-			})
-			.label({ en: "Connection Settings" }),
-		metadata: f
-			.object({
-				seed: f.text().label({ en: "Seed" }),
-				template: f.text().label({ en: "Template" }),
-			})
-			.label({ en: "Metadata" }),
+		providerConfig: f.json().label({ en: "Connection Settings" }),
+		metadata: f.json().label({ en: "Metadata" }),
 	}))
 	.title(({ f }) => f.name)
 	.admin(({ c }) => ({

@@ -145,6 +145,77 @@ export const getPageBySlug = createServerFn({ method: "GET" })
 // News
 // ============================================================================
 
+const NEWS_CATEGORIES = [
+	"general",
+	"council",
+	"events",
+	"planning",
+	"community",
+	"transport",
+] as const;
+
+type NewsCategory = (typeof NEWS_CATEGORIES)[number];
+
+function narrowNewsCategory(
+	category: string | undefined,
+): NewsCategory | undefined {
+	if (!category || category === "all") {
+		return undefined;
+	}
+
+	return NEWS_CATEGORIES.includes(category as NewsCategory)
+		? (category as NewsCategory)
+		: undefined;
+}
+
+const DOCUMENT_CATEGORIES = [
+	"policy",
+	"minutes",
+	"budget",
+	"planning",
+	"strategy",
+	"report",
+	"form",
+	"guide",
+	"other",
+] as const;
+
+type DocumentCategory = (typeof DOCUMENT_CATEGORIES)[number];
+
+function narrowDocumentCategory(
+	category: string | undefined,
+): DocumentCategory | undefined {
+	if (!category || category === "all") {
+		return undefined;
+	}
+
+	return DOCUMENT_CATEGORIES.includes(category as DocumentCategory)
+		? (category as DocumentCategory)
+		: undefined;
+}
+
+const SUBMISSION_DEPARTMENTS = [
+	"general",
+	"planning",
+	"housing",
+	"environment",
+	"council-tax",
+	"benefits",
+	"parking",
+	"waste",
+	"other",
+] as const;
+
+type SubmissionDepartment = (typeof SUBMISSION_DEPARTMENTS)[number];
+
+function narrowSubmissionDepartment(
+	department: string,
+): SubmissionDepartment {
+	return SUBMISSION_DEPARTMENTS.includes(department as SubmissionDepartment)
+		? (department as SubmissionDepartment)
+		: "other";
+}
+
 export const getNewsList = createServerFn({ method: "GET" })
 	.inputValidator(
 		(data: { citySlug: string; category?: string; limit?: number }) => data,
@@ -158,14 +229,14 @@ export const getNewsList = createServerFn({ method: "GET" })
 		const city = cityResult.docs[0];
 		if (!city) throw notFound();
 
+		const newsCategory = narrowNewsCategory(data.category);
+
 		const result = await app.collections.news.find(
 			{
 				where: {
 					city: city.id,
 					isPublished: true,
-					...(data.category && data.category !== "all"
-						? { category: data.category }
-						: {}),
+					...(newsCategory ? { category: newsCategory } : {}),
 				},
 				limit: data.limit || 20,
 				orderBy: { isFeatured: "desc", publishedAt: "desc" },
@@ -252,14 +323,14 @@ export const getDocumentsList = createServerFn({ method: "GET" })
 		const city = cityResult.docs[0];
 		if (!city) throw notFound();
 
+		const documentCategory = narrowDocumentCategory(data.category);
+
 		const result = await app.collections.documents.find(
 			{
 				where: {
 					city: city.id,
 					isPublished: true,
-					...(data.category && data.category !== "all"
-						? { category: data.category }
-						: {}),
+					...(documentCategory ? { category: documentCategory } : {}),
 				},
 				limit: data.limit || 50,
 				orderBy: { publishedDate: "desc" },
@@ -327,7 +398,7 @@ export const submitContactForm = createServerFn({ method: "POST" })
 				name: data.name,
 				email: data.email,
 				phone: data.phone || undefined,
-				department: data.department,
+				department: narrowSubmissionDepartment(data.department),
 				subject: data.subject,
 				message: data.message,
 				status: "new",

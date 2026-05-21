@@ -175,16 +175,8 @@ export const tasks = collection("tasks")
 		startAfter: f.datetime().label({ en: "Start After" }),
 		scheduledBy: f.text().label({ en: "Scheduled By" }),
 		createdBy: f.text().label({ en: "Created By" }),
-		context: f
-			.object({
-				source: f.text().label({ en: "Source" }),
-			})
-			.label({ en: "Context" }),
-		metadata: f
-			.object({
-				seed: f.text().label({ en: "Seed" }),
-			})
-			.label({ en: "Metadata" }),
+		context: f.json().label({ en: "Context" }),
+		metadata: f.json().label({ en: "Metadata" }),
 	}))
 	.title(({ f }) => f.title)
 	.admin(({ c }) => ({
