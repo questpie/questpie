@@ -43,6 +43,7 @@
 		"@electric-sql/pglite": "^0.3.14",
 		"@iconify/json": ">=2",
 		"@iconify/react": "^6.0.2",
+		"@modelcontextprotocol/sdk": "^1.29.0",
 		"@questpie/vite-plugin-iconify": "workspace:*",
 		"@rolldown/plugin-babel": "^0.2.0",
 		"@types/node": "^22.10.2",

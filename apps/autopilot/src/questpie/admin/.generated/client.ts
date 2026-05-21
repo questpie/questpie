@@ -20,9 +20,9 @@ import _pg_projectInspection from "../pages/project-inspection";
 const admin = {
 	blocks: { ..._mergedModules.blocks },
 	views: { ..._mergedModules.views, [_view_knowledgeDetail.name]: _view_knowledgeDetail, [_view_taskDetail.name]: _view_taskDetail },
-	components: { ..._mergedModules.components, "autopilotWorkRail": _comp_autopilotWorkRail },
+	components: { ..._mergedModules.components, autopilotWorkRail: _comp_autopilotWorkRail },
 	fields: { ..._mergedModules.fields },
-	pages: { ..._mergedModules.pages, "projectInspection": _pg_projectInspection },
+	pages: { ..._mergedModules.pages, projectInspection: _pg_projectInspection },
 	widgets: { ..._mergedModules.widgets },
 };
 
