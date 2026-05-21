@@ -178,76 +178,88 @@ export async function storageCollectionServe(
 	const url = new URL(request.url);
 	const token = url.searchParams.get("token");
 
-	// Check if file exists
-	const exists = await app.storage.use().exists(key);
-	if (!exists) {
-		return errorResponse(
-			ApiError.notFound("File", key),
-			request,
-			resolved.appContext.locale,
-		);
-	}
-
-	// Get record metadata to check visibility
-	const crud = app.collections[collection as any];
-	const record = await crud.findOne({
-		where: { key } as any,
-	});
-
-	const visibility: StorageVisibility =
-		(record as any)?.visibility ||
-		app.config.storage?.defaultVisibility ||
-		"public";
-
-	// For private files, verify the signed token
-	if (visibility === "private") {
-		if (!token) {
-			return errorResponse(
-				ApiError.unauthorized(
-					"Token required for private files",
-					"upload.tokenRequired",
-				),
-				request,
-				resolved.appContext.locale,
-			);
-		}
-
-		const secret = app.config.secret;
-		if (!secret) {
-			return errorResponse(
-				ApiError.internal(
-					"Storage secret not configured. Set 'secret' in your app config to serve private files.",
-				),
-				request,
-				resolved.appContext.locale,
-			);
-		}
-		const payload = await verifySignedUrlToken(token, secret);
-
-		if (!payload) {
-			return errorResponse(
-				ApiError.unauthorized(
-					"Invalid or expired token",
-					"upload.tokenInvalid",
-				),
-				request,
-				resolved.appContext.locale,
-			);
-		}
-
-		if (payload.key !== key) {
-			return errorResponse(
-				ApiError.unauthorized(
-					"Token does not match requested file",
-					"upload.tokenMismatch",
-				),
-				request,
-				resolved.appContext.locale,
-			);
-		}
-	}
-
 	try {
+		// The upload row is the authorization anchor for storage objects. Do not
+		// serve orphaned keys, or keys hidden by collection read access.
+		const crud = app.collections[collection as any];
+		const record = await crud.findOne(
+			{
+				where: { key } as any,
+			},
+			resolved.appContext,
+		);
+
+		if (!record) {
+			return errorResponse(
+				ApiError.notFound("File", key),
+				request,
+				resolved.appContext.locale,
+			);
+		}
+
+		const visibility: StorageVisibility =
+			(record as any).visibility ||
+			collectionConfig.state.upload?.visibility ||
+			app.config.storage?.defaultVisibility ||
+			"public";
+
+		// For private files, verify the signed token after row access succeeds.
+		if (visibility === "private") {
+			if (!token) {
+				return errorResponse(
+					ApiError.unauthorized(
+						"Token required for private files",
+						"upload.tokenRequired",
+					),
+					request,
+					resolved.appContext.locale,
+				);
+			}
+
+			const secret = app.config.secret;
+			if (!secret) {
+				return errorResponse(
+					ApiError.internal(
+						"Storage secret not configured. Set 'secret' in your app config to serve private files.",
+					),
+					request,
+					resolved.appContext.locale,
+				);
+			}
+			const payload = await verifySignedUrlToken(token, secret);
+
+			if (!payload) {
+				return errorResponse(
+					ApiError.unauthorized(
+						"Invalid or expired token",
+						"upload.tokenInvalid",
+					),
+					request,
+					resolved.appContext.locale,
+				);
+			}
+
+			if (payload.key !== key) {
+				return errorResponse(
+					ApiError.unauthorized(
+						"Token does not match requested file",
+						"upload.tokenMismatch",
+					),
+					request,
+					resolved.appContext.locale,
+				);
+			}
+		}
+
+		const exists = await app.storage.use().exists(key);
+		if (!exists) {
+			return errorResponse(
+				ApiError.notFound("File", key),
+				request,
+				resolved.appContext.locale,
+			);
+		}
+
 		const fileBuffer = await app.storage.use().getBytes(key);
 		const metadata = await app.storage.use().getMetaData(key);
 

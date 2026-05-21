@@ -16,6 +16,7 @@ import type {
 	OperatorMap,
 	QueryContext,
 } from "../types.js";
+import { jsonbPathRef } from "./jsonb-sql.js";
 import type { JsonbCast, OperatorSetDefinition } from "./types.js";
 
 /**
@@ -33,11 +34,7 @@ export function buildJsonbRef(
 	path: string[],
 	preserveJsonb: boolean,
 ): ReturnType<typeof sql> {
-	const pathStr = path.join(",");
-	if (preserveJsonb) {
-		return sql`${column}#>'{${sql.raw(pathStr)}}'`;
-	}
-	return sql`${column}#>>'{${sql.raw(pathStr)}}'`;
+	return jsonbPathRef(column, path, preserveJsonb);
 }
 
 /**
