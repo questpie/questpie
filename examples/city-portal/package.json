@@ -26,7 +26,6 @@
 		"@tanstack/react-query": "^5.62.11",
 		"@tanstack/react-router": "^1.132.0",
 		"@tanstack/react-start": "^1.132.0",
-		"@tanstack/router-plugin": "^1.132.0",
 		"class-variance-authority": "^0.7.1",
 		"clsx": "^2.1.1",
 		"date-fns": "^4.1.0",
