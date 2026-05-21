@@ -19,6 +19,18 @@ export const tasks = collection("tasks")
 		status: f
 			.select([
 				{
+					value: "pending",
+					label: { en: "Pending" },
+				},
+				{
+					value: "waiting",
+					label: { en: "Waiting" },
+				},
+				{
+					value: "running",
+					label: { en: "Running" },
+				},
+				{
 					value: "backlog",
 					label: { en: "Backlog" },
 					icon: {
@@ -89,6 +101,12 @@ export const tasks = collection("tasks")
 						},
 					},
 				},
+				{ value: "pending", label: { en: "Pending" } },
+				{ value: "running", label: { en: "Running" } },
+				{ value: "waiting", label: { en: "Waiting" } },
+				{ value: "failed", label: { en: "Failed" } },
+				{ value: "review", label: { en: "Review" } },
+				{ value: "approved", label: { en: "Approved" } },
 			])
 			.default("backlog")
 			.label({ en: "Status" }),
@@ -157,8 +175,16 @@ export const tasks = collection("tasks")
 		startAfter: f.datetime().label({ en: "Start After" }),
 		scheduledBy: f.text().label({ en: "Scheduled By" }),
 		createdBy: f.text().label({ en: "Created By" }),
-		context: f.json().label({ en: "Context" }),
-		metadata: f.json().label({ en: "Metadata" }),
+		context: f
+			.object({
+				source: f.text().label({ en: "Source" }),
+			})
+			.label({ en: "Context" }),
+		metadata: f
+			.object({
+				seed: f.text().label({ en: "Seed" }),
+			})
+			.label({ en: "Metadata" }),
 	}))
 	.title(({ f }) => f.title)
 	.admin(({ c }) => ({

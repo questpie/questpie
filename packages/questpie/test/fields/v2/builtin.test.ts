@@ -387,12 +387,13 @@ describe("json()", () => {
 		expect(col).toBeDefined();
 	});
 
-	it("generates schema that accepts any JSON", () => {
+	it("generates schema that accepts JSON values but rejects non-JSON", () => {
 		const schema = json().toZodSchema();
 		expect(schema.safeParse({ foo: "bar" }).success).toBe(true);
 		expect(schema.safeParse([1, 2, 3]).success).toBe(true);
 		expect(schema.safeParse("string").success).toBe(true);
 		expect(schema.safeParse(42).success).toBe(true);
+		expect(schema.safeParse(() => {}).success).toBe(false);
 	});
 });
 

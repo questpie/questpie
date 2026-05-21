@@ -200,11 +200,24 @@ async function childTaskFromStep(
 		description: String(
 			step.description ?? step.instructions ?? parentTask.description ?? "",
 		),
-		type: String(step.taskType ?? step.task_type ?? "task"),
+		type: String(step.taskType ?? step.task_type ?? "task") as
+			| "task"
+			| "feature"
+			| "bug"
+			| "research"
+			| "review"
+			| "approval",
 		status: "pending",
-		priority: stringFrom(step.priority ?? parentTask.priority) ?? undefined,
+		priority: (stringFrom(step.priority ?? parentTask.priority) ?? undefined) as
+			| "low"
+			| "medium"
+			| "high"
+			| "urgent"
+			| undefined,
 		project: relationId(parentTask.project) ?? undefined,
-		scopeType: stringFrom(parentTask.scopeType) ?? "company",
+		scopeType: (stringFrom(parentTask.scopeType) ?? "company") as
+			| "project"
+			| "company",
 		workflowConfig:
 			stepRef(step, "workflowConfigId", "workflow_config_id") ??
 			relationId(step.workflowConfig) ??

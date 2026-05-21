@@ -29,6 +29,17 @@ function statusFrom(value: unknown) {
 	return typeof value === "string" ? value : null;
 }
 
+function isChatRunStatus(value: string): value is ChatRunStatus {
+	return (
+		value === "pending" ||
+		value === "claimed" ||
+		value === "running" ||
+		value === "completed" ||
+		value === "failed" ||
+		value === "cancelled"
+	);
+}
+
 function dateOrUndefined(value: unknown) {
 	if (!value) return undefined;
 	return value instanceof Date ? value : new Date(String(value));
@@ -58,10 +69,18 @@ async function runLinkForAiRun(collections: AppCollections, aiRunId: string) {
 	});
 }
 
+type ChatRunStatus =
+	| "pending"
+	| "claimed"
+	| "running"
+	| "completed"
+	| "failed"
+	| "cancelled";
+
 async function mirrorChatRunStatus(
 	collections: AppCollections,
 	runId: string,
-	status: string,
+	status: ChatRunStatus,
 ) {
 	const messages = await collections.chat_messages.find({
 		where: { run: runId },
@@ -172,7 +191,7 @@ export async function mirrorAiRunChange(ctx: GlobalCollectionHookContext) {
 				})
 			: runLink;
 
-	if (status) {
+	if (status && isChatRunStatus(status)) {
 		await mirrorChatRunStatus(ctx.collections, String(runLink.id), status);
 	}
 
@@ -238,7 +257,9 @@ export async function mirrorRunLinkChatStatus(ctx: GlobalCollectionHookContext) 
 	if (ctx.collection !== "run_links" || !ctx.data?.id) return;
 	const status = statusFrom(ctx.data.status);
 	if (!status) return;
-	await mirrorChatRunStatus(ctx.collections, String(ctx.data.id), status);
+	if (isChatRunStatus(status)) {
+		await mirrorChatRunStatus(ctx.collections, String(ctx.data.id), status);
+	}
 }
 
 export async function mirrorAiRunCollectionChange(

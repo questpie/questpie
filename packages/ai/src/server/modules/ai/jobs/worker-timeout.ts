@@ -1,6 +1,7 @@
 import { job } from "questpie";
 import { z } from "zod";
 
+import type { AiRunStatus } from "../lib/execution-contract.js";
 import { asAiJobArgs } from "../lib/handler-context.js";
 
 export default job({
@@ -51,10 +52,18 @@ export default job({
             ? lease.run
             : (lease.run as any)?.id;
         if (runId) {
-          await collections.ai_runs.update({
-            where: { id: runId, status: { in: ["claimed", "running"] } },
-            data: { status: "pending", worker: null },
+          const run = await collections.ai_runs.findOne({
+            where: { id: runId },
           });
+          if (
+            run &&
+            (run.status === "claimed" || run.status === "running")
+          ) {
+            await collections.ai_runs.updateById({
+              id: runId,
+              data: { status: "pending", worker: null },
+            });
+          }
         }
         expiredLeases++;
       }

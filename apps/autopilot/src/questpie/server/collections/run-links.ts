@@ -60,7 +60,11 @@ export const runLinks = collection("run_links")
 		runtimeSessionRef: f.text().label({ en: "Runtime Session" }),
 		resumedFromRun: f.relation("run_links").label({ en: "Resumed From" }),
 		resumable: f.boolean().default(false).label({ en: "Resumable" }),
-		metadata: f.json().label({ en: "Metadata" }),
+		metadata: f
+			.object({
+				source: f.text().label({ en: "Source" }),
+			})
+			.label({ en: "Metadata" }),
 	}))
 	.title(({ f }) => f.summary)
 	.admin(({ c }) => ({
