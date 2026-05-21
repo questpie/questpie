@@ -77,13 +77,16 @@ export function generateAdminClientTemplate(
 	// ── 1. Import modules (if discovered) ───────────────────────
 	if (modulesFile) {
 		lines.push(importStatement(modulesFile));
-		lines.push(`const _mergedModules = Array.isArray(${modulesFile.varName})`);
-		lines.push(`\t? ${modulesFile.varName}.reduce((acc: any, m: any) => {`);
+		lines.push("type _AdminModuleMergeAcc = Record<string, unknown>;");
+		lines.push(`const _mergedModules = (Array.isArray(${modulesFile.varName})`);
 		lines.push(
-			'\t\tfor (const [k, v] of Object.entries(m)) acc[k] = typeof v === "object" && v !== null && !Array.isArray(v) ? { ...acc[k], ...v } : v;',
+			`\t? ${modulesFile.varName}.reduce<_AdminModuleMergeAcc>((acc, mod) => {`,
+		);
+		lines.push(
+			'\t\tfor (const [k, v] of Object.entries(mod)) acc[k] = typeof v === "object" && v !== null && !Array.isArray(v) ? { ...(typeof acc[k] === "object" && acc[k] !== null && !Array.isArray(acc[k]) ? acc[k] as Record<string, unknown> : {}), ...(v as Record<string, unknown>) } : v;',
 		);
 		lines.push("\t\treturn acc;");
-		lines.push(`\t}, {} as any) : ${modulesFile.varName};`);
+		lines.push(`\t}, {}) : ${modulesFile.varName}) as _AdminModuleMergeAcc;`);
 	}
 
 	// ── 2. Import all user-discovered category files ────────────
@@ -156,10 +159,14 @@ export function generateAdminClientTemplate(
 				const entries = files
 					.map((f) => categoryRecordEntry(f, catDecl))
 					.join(", ");
-				lines.push(`\t${cat}: { ..._mergedModules.${cat}, ${entries} },`);
+				lines.push(
+					`\t${cat}: { ...(_mergedModules[${JSON.stringify(cat)}] as Record<string, unknown>), ${entries} },`,
+				);
 			} else if (modulesFile && (!files || files.length === 0)) {
 				// Module base, no user overrides — spread module category
-				lines.push(`\t${cat}: { ..._mergedModules.${cat} },`);
+				lines.push(
+					`\t${cat}: { ...(_mergedModules[${JSON.stringify(cat)}] as Record<string, unknown>) },`,
+				);
 			} else if (files && files.length > 0) {
 				// No module, user files only
 				const entries = files

@@ -7,11 +7,12 @@
  */
 
 import _modules from "../modules";
-const _mergedModules = Array.isArray(_modules)
-	? _modules.reduce((acc: any, m: any) => {
-		for (const [k, v] of Object.entries(m)) acc[k] = typeof v === "object" && v !== null && !Array.isArray(v) ? { ...acc[k], ...v } : v;
+type _AdminModuleMergeAcc = Record<string, unknown>;
+const _mergedModules = (Array.isArray(_modules)
+	? _modules.reduce<_AdminModuleMergeAcc>((acc, mod) => {
+		for (const [k, v] of Object.entries(mod)) acc[k] = typeof v === "object" && v !== null && !Array.isArray(v) ? { ...(typeof acc[k] === "object" && acc[k] !== null && !Array.isArray(acc[k]) ? acc[k] as Record<string, unknown> : {}), ...(v as Record<string, unknown>) } : v;
 		return acc;
-	}, {} as any) : _modules;
+	}, {}) : _modules) as _AdminModuleMergeAcc;
 import _view_filesView from "../views/files-view";
 import _view_knowledgeDetail from "../views/knowledge-detail";
 import _view_taskDetail from "../views/task-detail";
@@ -21,12 +22,12 @@ import _comp_taskDetailComponent from "../components/task-detail-component";
 import _pg_projectInspection from "../pages/project-inspection";
 
 const admin = {
-	blocks: { ..._mergedModules.blocks },
-	views: { ..._mergedModules.views, [_view_filesView.name]: _view_filesView, [_view_knowledgeDetail.name]: _view_knowledgeDetail, [_view_taskDetail.name]: _view_taskDetail },
-	components: { ..._mergedModules.components, autopilotWorkRail: _comp_autopilotWorkRail, filesViewComponent: _comp_filesViewComponent, taskDetailComponent: _comp_taskDetailComponent },
-	fields: { ..._mergedModules.fields },
-	pages: { ..._mergedModules.pages, projectInspection: _pg_projectInspection },
-	widgets: { ..._mergedModules.widgets },
+	blocks: { ...(_mergedModules["blocks"] as Record<string, unknown>) },
+	views: { ...(_mergedModules["views"] as Record<string, unknown>), [_view_filesView.name]: _view_filesView, [_view_knowledgeDetail.name]: _view_knowledgeDetail, [_view_taskDetail.name]: _view_taskDetail },
+	components: { ...(_mergedModules["components"] as Record<string, unknown>), autopilotWorkRail: _comp_autopilotWorkRail, filesViewComponent: _comp_filesViewComponent, taskDetailComponent: _comp_taskDetailComponent },
+	fields: { ...(_mergedModules["fields"] as Record<string, unknown>) },
+	pages: { ...(_mergedModules["pages"] as Record<string, unknown>), projectInspection: _pg_projectInspection },
+	widgets: { ...(_mergedModules["widgets"] as Record<string, unknown>) },
 };
 
 export default admin;
