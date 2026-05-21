@@ -9,10 +9,6 @@ import {
 	type LegacyArtifactInput,
 } from "./legacy-run-artifacts";
 import { asRecord, relationId } from "./records";
-import {
-	authenticatedRunWorker,
-	authorizeWorkerOrSession,
-} from "./worker-auth";
 
 export function mcpJson(value: unknown) {
 	const structuredContent =
@@ -42,12 +38,7 @@ export async function requireMcpCaller(input: {
 }) {
 	if (input.accessMode === "system") return { kind: "system" as const };
 	if (input.ctx.session) return { kind: "session" as const };
-	if (!input.request)
-		throw ApiError.unauthorized("MCP authentication required");
-	return authorizeWorkerOrSession({
-		...input.ctx,
-		request: input.request,
-	} as Questpie.AppContext & { request: Request });
+	throw ApiError.unauthorized("MCP authentication required");
 }
 
 export async function writableRunForMcp(input: {
@@ -56,29 +47,11 @@ export async function writableRunForMcp(input: {
 	accessMode: McpAccessMode;
 	runId: string;
 }) {
-	if (input.accessMode === "system" || input.ctx.session) {
-		const run = await input.ctx.collections.runs.findOne({
-			where: { id: input.runId },
-		});
-		if (!run) throw ApiError.notFound("Run", input.runId);
-		if (!activeRunStatus(run.status)) {
-			throw ApiError.badRequest(
-				`run ${input.runId} is ${String(
-					run.status,
-				)} - cannot add artifacts to a terminal run`,
-			);
-		}
-		return { run, worker: null };
-	}
-
-	if (!input.request)
-		throw ApiError.unauthorized("MCP authentication required");
-	const { run, worker } = await authenticatedRunWorker(
-		{ ...input.ctx, request: input.request } as Questpie.AppContext & {
-			request: Request;
-		},
-		input.runId,
-	);
+	await requireMcpCaller(input);
+	const run = await input.ctx.collections.run_links.findOne({
+		where: { id: input.runId },
+	});
+	if (!run) throw ApiError.notFound("Run", input.runId);
 	if (!activeRunStatus(run.status)) {
 		throw ApiError.badRequest(
 			`run ${input.runId} is ${String(
@@ -86,7 +59,7 @@ export async function writableRunForMcp(input: {
 			)} - cannot add artifacts to a terminal run`,
 		);
 	}
-	return { run, worker };
+	return { run, worker: null };
 }
 
 export function knowledgeScope(input: {

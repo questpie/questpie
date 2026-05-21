@@ -2,7 +2,9 @@ import { z } from "zod";
 
 import { workflow } from "@questpie/workflows";
 
+import { createAiRunLink } from "../lib/ai-run-links";
 import { asRecord, mergeRecords, relationId, stringFrom } from "../lib/records";
+import { resolveRuntimeSelection } from "../lib/runtime-selection";
 
 type Collections = Questpie.AppContext["collections"];
 
@@ -158,26 +160,24 @@ async function createRunForStep(
 		relationId(step.model) ??
 		relationId(task.model);
 
-	const runtime = await ctx.services.providerRuntime.resolve({
+	const runtime = await resolveRuntimeSelection(ctx, {
 		modelId,
 		capabilityId,
 		projectId: relationId(task.project),
 		runtime: step.runtime ?? null,
 	});
 
-	return ctx.collections.runs.create({
-		task: task.id,
-		project: relationId(task.project) ?? undefined,
-		status: "pending",
-		runtime: runtime.runtime,
-		provider: runtime.providerId ?? undefined,
-		model: runtime.modelId ?? undefined,
-		capability: capabilityId ?? undefined,
+	return createAiRunLink({
+		ctx,
+		runtime,
+		taskId: String(task.id),
+		projectId: relationId(task.project),
+		workflowConfigId: String(workflowConfig.id),
+		workflowStep: stepIdValue,
+		capabilityId,
 		initiatedBy: "workflow",
 		instructions: stepInstructions(task, step, priorSummaries),
-		targeting: {
-			workflowConfigId: workflowConfig.id,
-			workflowStepId: stepIdValue,
+		spawnMetadata: {
 			toolPolicy: runtime.toolPolicy,
 			contextRefs: runtime.contextRefs,
 			promptRefs: runtime.promptRefs,
@@ -186,6 +186,8 @@ async function createRunForStep(
 				...asRecord(step.runtimeHints),
 				...asRecord(step.runtime_hints),
 			},
+		},
+		linkMetadata: {
 			...asRecord(step.targeting),
 		},
 	});

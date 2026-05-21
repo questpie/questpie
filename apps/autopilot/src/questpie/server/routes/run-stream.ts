@@ -1,5 +1,7 @@
 import { route } from "questpie/services";
 
+import { relationId } from "../lib/records";
+
 function sse(event: string, data: unknown) {
 	return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
 }
@@ -40,6 +42,18 @@ function sortRunEvents<T extends RunEventRecord>(events: T[]) {
 	});
 }
 
+function productRunEvent(
+	event: Record<string, unknown>,
+	input: { runId: string; aiRunId: string },
+) {
+	return {
+		...event,
+		run: input.runId,
+		aiRun: input.aiRunId,
+		metadata: event.meta,
+	};
+}
+
 export default route()
 	.get()
 	.raw()
@@ -62,6 +76,7 @@ export default route()
 				let heartbeat: ReturnType<typeof setInterval> | null = null;
 				let unsubscribeRun: (() => void) | null = null;
 				let unsubscribeRunEvents: (() => void) | null = null;
+				let subscribedAiRunId: string | null = null;
 
 				const cleanup = () => {
 					if (closed) return false;
@@ -98,7 +113,7 @@ export default route()
 					refreshInFlight = true;
 
 					try {
-						const run = await collections.runs.findOne({
+						const run = await collections.run_links.findOne({
 							where: { id: runId },
 						});
 						if (!run) {
@@ -107,15 +122,36 @@ export default route()
 						}
 
 						write("run", { type: "run", run });
-						const events = await collections.run_events.find({
-							where: { run: runId },
+						const aiRunId = relationId(run.aiRun);
+						if (!aiRunId) {
+							unsubscribeRunEvents?.();
+							unsubscribeRunEvents = null;
+							subscribedAiRunId = null;
+							return;
+						}
+
+						if (subscribedAiRunId !== aiRunId) {
+							unsubscribeRunEvents?.();
+							unsubscribeRunEvents = realtime.subscribe(() => void refresh(), {
+								resourceType: "collection",
+								resource: "ai_run_events",
+								where: { run: aiRunId },
+							});
+							subscribedAiRunId = aiRunId;
+						}
+
+						const events = await collections.ai_run_events.find({
+							where: { run: aiRunId },
 							orderBy: { createdAt: "asc" },
 							limit: 500,
 						});
 						for (const event of sortRunEvents(events.docs)) {
 							if (seenEventIds.has(event.id)) continue;
 							seenEventIds.add(event.id);
-							write("run_event", { type: "run_event", event });
+							write("run_event", {
+								type: "run_event",
+								event: productRunEvent(event, { runId, aiRunId }),
+							});
 						}
 					} catch (error) {
 						write("stream_error", {
@@ -135,13 +171,8 @@ export default route()
 
 				unsubscribeRun = realtime.subscribe(() => void refresh(), {
 					resourceType: "collection",
-					resource: "runs",
+					resource: "run_links",
 					where: { id: runId },
-				});
-				unsubscribeRunEvents = realtime.subscribe(() => void refresh(), {
-					resourceType: "collection",
-					resource: "run_events",
-					where: { run: runId },
 				});
 
 				heartbeat = setInterval(() => {

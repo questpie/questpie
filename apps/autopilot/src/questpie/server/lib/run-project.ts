@@ -4,7 +4,7 @@ export async function resolveRunProject(
 	collections: Questpie.AppContext["collections"],
 	runId: string,
 ) {
-	const run = await collections.runs.findOne({
+	const run = await collections.run_links.findOne({
 		where: { id: runId },
 		with: { project: true },
 	});

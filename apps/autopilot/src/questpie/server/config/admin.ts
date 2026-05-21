@@ -122,7 +122,7 @@ export default adminConfig({
 						items: [
 							{
 								type: "collection",
-								collection: "runs",
+								collection: "run_links",
 								label: { en: "Executions" },
 								icon: { type: "icon", props: { name: "ph:terminal-window" } },
 							},
@@ -155,12 +155,6 @@ export default adminConfig({
 								collection: "scripts",
 								label: { en: "Scripts" },
 								icon: { type: "icon", props: { name: "ph:code" } },
-							},
-							{
-								type: "collection",
-								collection: "workers",
-								label: { en: "Workers" },
-								icon: { type: "icon", props: { name: "ph:desktop-tower" } },
 							},
 						],
 					},
@@ -238,7 +232,7 @@ export default adminConfig({
 				icon: { type: "icon", props: { name: "ph:play-circle" } },
 				span: 1,
 				loader: async (ctx: WidgetFetchContext) => ({
-					value: await countDocs(ctx, "runs", {
+					value: await countDocs(ctx, "run_links", {
 						status: { in: ["claimed", "running"] },
 					}),
 					subtitle: { en: "Workflows currently running" },
@@ -266,7 +260,7 @@ export default adminConfig({
 				loader: async (ctx: WidgetFetchContext) => {
 					const [failedTasks, failedRuns] = await Promise.all([
 						countDocs(ctx, "tasks", { status: "failed" }),
-						countDocs(ctx, "runs", { status: "failed" }),
+						countDocs(ctx, "run_links", { status: "failed" }),
 					]);
 
 					return {
@@ -337,7 +331,7 @@ export default adminConfig({
 						href: row.task
 							? `/admin/collections/tasks/${row.task}`
 							: row.run
-								? `/admin/collections/runs/${row.run}`
+								? `/admin/collections/run_links/${row.run}`
 								: undefined,
 					}));
 				},

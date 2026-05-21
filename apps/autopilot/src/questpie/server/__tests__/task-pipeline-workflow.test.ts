@@ -1,6 +1,8 @@
 import { createContextFactory } from "questpie/app";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { aiModule } from "@questpie/ai/modules/ai";
+
 import {
 	buildMockApp,
 	type MockApp,
@@ -11,29 +13,30 @@ import { capabilities } from "../collections/capabilities";
 import { chatMessages } from "../collections/chat-messages";
 import { chatSessions } from "../collections/chat-sessions";
 import { environments } from "../collections/environments";
-import { joinTokens } from "../collections/join-tokens";
 import { knowledge } from "../collections/knowledge";
 import { models } from "../collections/models";
 import { projects } from "../collections/projects";
 import { providers } from "../collections/providers";
-import { runEvents } from "../collections/run-events";
-import { runs } from "../collections/runs";
+import { runLinks } from "../collections/run-links";
 import { scheduleExecutions } from "../collections/schedule-executions";
 import { schedules } from "../collections/schedules";
 import { scripts } from "../collections/scripts";
 import { secrets } from "../collections/secrets";
 import { taskRelations } from "../collections/task-relations";
 import { tasks } from "../collections/tasks";
-import { workerLeases } from "../collections/worker-leases";
-import { workers } from "../collections/workers";
 import { workflowConfigs } from "../collections/workflow-configs";
-import providerRuntime from "../services/provider-runtime";
-import workerManager from "../services/worker-manager";
+import multiStepTask from "../workflows/multi-step-task";
 import taskPipeline from "../workflows/task-pipeline";
 
 type WorkflowEvent = {
 	event: string;
 	data?: unknown;
+};
+
+type WaitEvent = {
+	name: string;
+	event: string;
+	match?: Record<string, unknown>;
 };
 
 function silentLog() {
@@ -45,10 +48,20 @@ function silentLog() {
 	};
 }
 
+function relationId(value: unknown): string | null {
+	if (typeof value === "string") return value;
+	if (typeof value === "object" && value && "id" in value) {
+		const id = (value as { id?: unknown }).id;
+		return typeof id === "string" ? id : null;
+	}
+	return null;
+}
+
 function fakeStep(
 	events: Record<string, unknown>,
 	options?: {
 		invokeResult?: unknown;
+		waitEvents?: WaitEvent[];
 	},
 ) {
 	return {
@@ -57,7 +70,15 @@ function fakeStep(
 			if (typeof fn !== "function") throw new Error("Missing step callback");
 			return fn();
 		},
-		async waitForEvent(_name: string, opts: { event: string }) {
+		async waitForEvent(
+			name: string,
+			opts: { event: string; match?: Record<string, unknown> },
+		) {
+			options?.waitEvents?.push({
+				name,
+				event: opts.event,
+				match: opts.match,
+			});
 			return events[opts.event] ?? null;
 		},
 		async sleep() {},
@@ -83,32 +104,29 @@ describe("task-pipeline workflow", () => {
 
 		setup = await buildMockApp({
 			collections: {
+				ai_run_events: aiModule.collections.ai_run_events,
+				ai_runs: aiModule.collections.ai_runs,
+				ai_worker_leases: aiModule.collections.ai_worker_leases,
+				ai_workers: aiModule.collections.ai_workers,
 				activity,
 				capabilities,
 				chat_messages: chatMessages,
 				chat_sessions: chatSessions,
 				environments,
-				join_tokens: joinTokens,
 				knowledge,
 				models,
 				projects,
 				providers,
-				run_events: runEvents,
-				runs,
+				run_links: runLinks,
 				schedule_executions: scheduleExecutions,
 				schedules,
 				scripts,
 				secrets,
 				task_relations: taskRelations,
 				tasks,
-				worker_leases: workerLeases,
-				workers,
 				workflow_configs: workflowConfigs,
 			},
-			services: {
-				providerRuntime,
-				workerManager,
-			},
+			services: {},
 		});
 		await runTestDbMigrations(setup.app);
 	});
@@ -125,6 +143,8 @@ describe("task-pipeline workflow", () => {
 			requestedBy?: string;
 			runReason?: string;
 			invokeResult?: unknown;
+			scheduleExecutionId?: string;
+			waitEvents?: WaitEvent[];
 		},
 	) {
 		workflowEvents = [];
@@ -147,9 +167,11 @@ describe("task-pipeline workflow", () => {
 				taskId,
 				runReason: overrides?.runReason ?? "test",
 				requestedBy: overrides?.requestedBy ?? "test-runner",
+				scheduleExecutionId: overrides?.scheduleExecutionId,
 			},
 			step: fakeStep(events, {
 				invokeResult: overrides?.invokeResult,
+				waitEvents: overrides?.waitEvents,
 			}) as any,
 			ctx,
 			log: silentLog(),
@@ -166,14 +188,19 @@ describe("task-pipeline workflow", () => {
 			createdBy: "test",
 		} as any);
 
-		const result = await runPipeline(task.id, {
-			"run.claimed": { runId: "will-be-replaced", workerId: "w1" },
-			"run.completed": {
-				status: "completed",
-				summary: "All tests pass",
-				knowledgeResourceIds: ["kr-1"],
+		const waitEvents: WaitEvent[] = [];
+		const result = await runPipeline(
+			task.id,
+			{
+				"run.claimed": { runId: "will-be-replaced", workerId: "w1" },
+				"run.completed": {
+					status: "completed",
+					summary: "All tests pass",
+					knowledgeResourceIds: ["kr-1"],
+				},
 			},
-		});
+			{ waitEvents },
+		);
 
 		expect(result).toMatchObject({
 			taskId: task.id,
@@ -186,22 +213,53 @@ describe("task-pipeline workflow", () => {
 		});
 		expect(updatedTask?.status).toBe("review");
 
-		const createdRuns = await setup!.app.collections.runs.find({
+		const createdRunLinks = await setup!.app.collections.run_links.find({
 			where: { task: task.id },
 			limit: 10,
 		});
-		expect(createdRuns.docs).toHaveLength(1);
-		expect(createdRuns.docs[0]).toMatchObject({
+		expect(createdRunLinks.docs).toHaveLength(1);
+		expect(createdRunLinks.docs[0]).toMatchObject({
 			status: "pending",
 			runtime: "codex",
 			initiatedBy: "task",
 		});
+		expect(result.runId).toBe(createdRunLinks.docs[0].id);
+		expect(waitEvents).toEqual([
+			{
+				name: "wait-run-claimed-1",
+				event: "run.claimed",
+				match: { runId: result.runId },
+			},
+			{
+				name: "wait-run-completed-1",
+				event: "run.completed",
+				match: { runId: result.runId },
+			},
+		]);
+
+		const aiRunId = relationId(createdRunLinks.docs[0].aiRun);
+		expect(aiRunId).toBeTruthy();
+		const aiRun = await setup!.app.collections.ai_runs.findOne({
+			where: { id: aiRunId! },
+		});
+		expect(aiRun).toMatchObject({
+			status: "pending",
+			runtime: "codex",
+			prompt: "Successful task",
+		});
+		expect(aiRun).not.toHaveProperty("task");
+		expect(aiRun).not.toHaveProperty("provider");
+		expect(aiRun).not.toHaveProperty("model");
+		expect(
+			(aiRun?.meta as Record<string, unknown> | undefined)?.autopilot,
+		).toBe(undefined);
 
 		const reviewActivities = await setup!.app.collections.activity.find({
 			where: { task: task.id, type: "task.review" },
 			limit: 10,
 		});
 		expect(reviewActivities.docs).toHaveLength(1);
+		expect(relationId(reviewActivities.docs[0]?.run)).toBe(result.runId);
 	});
 
 	it("marks task as failed on non-retryable error", async () => {
@@ -313,11 +371,16 @@ describe("task-pipeline workflow", () => {
 		});
 		expect(attemptCount).toBe(2);
 
-		const createdRuns = await setup!.app.collections.runs.find({
+		const createdRunLinks = await setup!.app.collections.run_links.find({
 			where: { task: task.id },
 			limit: 10,
 		});
-		expect(createdRuns.docs.length).toBe(2);
+		expect(createdRunLinks.docs).toHaveLength(2);
+		expect(
+			createdRunLinks.docs.every(
+				(run) => relationId(run.aiRun) && run.initiatedBy === "task",
+			),
+		).toBe(true);
 
 		const retryActivities = await setup!.app.collections.activity.find({
 			where: { task: task.id, type: "task.retry" },
@@ -362,6 +425,141 @@ describe("task-pipeline workflow", () => {
 			where: { id: task.id },
 		});
 		expect(updatedTask?.status).toBe("waiting");
+	});
+
+	it("links schedule-triggered task runs to the schedule execution", async () => {
+		const schedule = await setup!.app.collections.schedules.create({
+			name: "Scheduled task",
+			cron: "* * * * *",
+			timezone: "UTC",
+			mode: "task",
+			enabled: true,
+			taskTemplate: {},
+		} as any);
+		const task = await setup!.app.collections.tasks.create({
+			title: "Scheduled pipeline task",
+			type: "task",
+			status: "pending",
+			priority: "medium",
+			scopeType: "company",
+			createdBy: "schedule",
+		} as any);
+		const execution = await setup!.app.collections.schedule_executions.create({
+			schedule: schedule.id,
+			task: task.id,
+			status: "triggered",
+			triggeredAt: new Date(),
+		} as any);
+
+		const result = await runPipeline(
+			task.id,
+			{
+				"run.claimed": { runId: "claimed", workerId: "w1" },
+				"run.completed": { status: "completed", summary: "Done" },
+			},
+			{ runReason: "schedule", scheduleExecutionId: execution.id },
+		);
+
+		const runLink = await setup!.app.collections.run_links.findOne({
+			where: { id: result.runId },
+		});
+		expect(runLink).toMatchObject({
+			task: task.id,
+			schedule: schedule.id,
+			scheduleExecution: execution.id,
+			initiatedBy: "task",
+		});
+
+		const updatedExecution =
+			await setup!.app.collections.schedule_executions.findOne({
+				where: { id: execution.id },
+			});
+		expect(relationId(updatedExecution?.run)).toBe(result.runId);
+	});
+
+	it("stores workflow provenance on run links for configured workflow steps", async () => {
+		const workflowConfig = await setup!.app.collections.workflow_configs.create(
+			{
+				name: "Single step workflow",
+				enabled: true,
+				steps: [
+					{
+						id: "implement",
+						type: "run",
+						instructions: "Implement the workflow step.",
+					},
+				],
+			} as any,
+		);
+		const task = await setup!.app.collections.tasks.create({
+			title: "Workflow task",
+			description: "Use the configured workflow.",
+			type: "feature",
+			status: "pending",
+			priority: "medium",
+			scopeType: "company",
+			workflowConfig: workflowConfig.id,
+			createdBy: "test",
+		} as any);
+
+		const createContext = createContextFactory(setup!.app);
+		const ctx = await createContext({ accessMode: "system" });
+		const waitEvents: WaitEvent[] = [];
+		const result = await multiStepTask.handler({
+			input: {
+				taskId: task.id,
+				workflowConfigId: workflowConfig.id,
+				requestedBy: "test-runner",
+			},
+			step: fakeStep(
+				{
+					"run.claimed": { runId: "claimed", workerId: "w1" },
+					"run.completed": {
+						status: "completed",
+						summary: "Workflow step done",
+					},
+				},
+				{ waitEvents },
+			) as any,
+			ctx,
+			log: silentLog(),
+		});
+
+		expect(result).toMatchObject({
+			taskId: task.id,
+			runId: expect.any(String),
+			status: "review",
+		});
+
+		const runLink = await setup!.app.collections.run_links.findOne({
+			where: { id: result.runId },
+		});
+		expect(runLink).toMatchObject({
+			task: task.id,
+			workflowConfig: workflowConfig.id,
+			workflowStep: "implement",
+			initiatedBy: "workflow",
+			runtime: "codex",
+		});
+		expect(relationId(runLink?.aiRun)).toBeTruthy();
+		expect(waitEvents).toEqual([
+			{
+				name: "wait-run-claimed-implement",
+				event: "run.claimed",
+				match: { runId: result.runId },
+			},
+			{
+				name: "wait-run-completed-implement",
+				event: "run.completed",
+				match: { runId: result.runId },
+			},
+		]);
+
+		const runLinks = await setup!.app.collections.run_links.find({
+			where: { task: task.id },
+			limit: 10,
+		});
+		expect(runLinks.docs).toHaveLength(1);
 	});
 
 	it("proceeds when dependencies are met", async () => {
@@ -467,8 +665,8 @@ describe("task-pipeline workflow", () => {
 	});
 
 	it("throws for non-existent task", async () => {
-		await expect(
-			runPipeline("non-existent-task-id", {}),
-		).rejects.toThrow("Task not found");
+		await expect(runPipeline("non-existent-task-id", {})).rejects.toThrow(
+			"Task not found",
+		);
 	});
 });

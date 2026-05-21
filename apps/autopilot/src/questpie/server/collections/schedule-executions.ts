@@ -7,6 +7,7 @@ export const scheduleExecutions = collection("schedule_executions")
 		schedule: f.relation("schedules").label({ en: "Schedule" }).required(),
 		task: f.relation("tasks").label({ en: "Task" }),
 		chatSession: f.relation("chat_sessions").label({ en: "Chat Session" }),
+		run: f.relation("run_links").label({ en: "Run" }),
 		status: f
 			.select([
 				{ value: "triggered", label: { en: "Triggered" } },
@@ -23,4 +24,5 @@ export const scheduleExecutions = collection("schedule_executions")
 	.set("admin", { hidden: true, audit: false })
 	.indexes(({ table }) => [
 		index("schedule_executions_schedule_idx").on(table.schedule as any),
+		index("schedule_executions_run_idx").on(table.run as any),
 	]);

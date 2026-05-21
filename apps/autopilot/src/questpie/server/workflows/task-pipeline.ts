@@ -2,8 +2,11 @@ import { z } from "zod";
 
 import { workflow } from "@questpie/workflows";
 
+import { createAiRunLink } from "../lib/ai-run-links";
 import { classifyRunError, type RunErrorType } from "../lib/error-classifier";
 import { asRecord, mergeRecords, relationId } from "../lib/records";
+import { resolveRuntimeSelection } from "../lib/runtime-selection";
+import { linkScheduleExecutionRun } from "../lib/schedule-run-links";
 import { workflowsFromContext } from "../lib/workflows";
 
 type Collections = Questpie.AppContext["collections"];
@@ -166,6 +169,7 @@ export default workflow({
 		taskId: z.string(),
 		runReason: z.string().optional(),
 		requestedBy: z.string().optional(),
+		scheduleExecutionId: z.string().optional(),
 	}),
 	timeout: "14d",
 	handler: async ({ input, step, ctx, log }) => {
@@ -224,7 +228,7 @@ export default workflow({
 
 		for (let attempt = 1; attempt <= retryPolicy.maxAttempts; attempt++) {
 			const runtime = await step.run(`resolve-runtime-${attempt}`, async () => {
-				return ctx.services.providerRuntime.resolve({
+				return resolveRuntimeSelection(ctx, {
 					modelId: relationId(task.model),
 					capabilityId: relationId(task.capability),
 					projectId: relationId(task.project),
@@ -232,28 +236,37 @@ export default workflow({
 			});
 
 			const run = await step.run(`create-run-${attempt}`, async () => {
-				return ctx.collections.runs.create({
-					task: input.taskId,
-					project: relationId(task.project) ?? undefined,
-					status: "pending",
-					runtime: runtime.runtime,
-					provider: runtime.providerId ?? undefined,
-					model: runtime.modelId ?? undefined,
-					capability: relationId(task.capability) ?? undefined,
+				return createAiRunLink({
+					ctx,
+					runtime,
+					taskId: input.taskId,
+					projectId: relationId(task.project),
+					capabilityId: relationId(task.capability),
 					initiatedBy: "task",
 					instructions: taskInstructions(task),
-					targeting: {
-						runReason: input.runReason ?? "task-pipeline",
-						requestedBy: input.requestedBy ?? "system",
-						attempt,
+					scheduleExecutionId: input.scheduleExecutionId,
+					spawnMetadata: {
 						toolPolicy: runtime.toolPolicy,
 						contextRefs: runtime.contextRefs,
 						promptRefs: runtime.promptRefs,
 						runtimeHints: runtime.runtimeHints,
 					},
+					linkMetadata: {
+						runReason: input.runReason ?? "task-pipeline",
+						requestedBy: input.requestedBy ?? "system",
+						attempt,
+					},
 				});
 			});
 			lastRunId = run.id;
+
+			await step.run(`link-schedule-execution-${attempt}`, async () => {
+				await linkScheduleExecutionRun({
+					ctx,
+					scheduleExecutionId: input.scheduleExecutionId,
+					runId: run.id,
+				});
+			});
 
 			await step.run(`mark-task-running-${attempt}`, async () => {
 				await ctx.collections.tasks.updateById({
@@ -301,18 +314,6 @@ export default workflow({
 
 			const delay = retryDelay(retryPolicy, attempt);
 			await step.run(`record-retry-${attempt}`, async () => {
-				await ctx.collections.run_events.create({
-					run: run.id,
-					type: "retry_scheduled",
-					level: "warn",
-					summary: `Retrying task after ${errorType} failure`,
-					metadata: {
-						errorType,
-						attempt,
-						nextAttempt: attempt + 1,
-						delaySeconds: delay,
-					},
-				});
 				await ctx.collections.activity.create({
 					actor: "workflow:task-pipeline",
 					type: "task.retry",

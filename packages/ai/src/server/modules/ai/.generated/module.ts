@@ -3,21 +3,15 @@
 // Regenerate with: questpie generate --module
 
 // ── Collections ────────────────────────────────────────────
-import { aiMessagesCollection as _coll_ai_messages } from "../collections/ai-messages";
-import { aiModelsCollection as _coll_ai_models } from "../collections/ai-models";
-import { aiProvidersCollection as _coll_ai_providers } from "../collections/ai-providers";
 import { aiRunEventsCollection as _coll_ai_run_events } from "../collections/ai-run-events";
 import { aiRunsCollection as _coll_ai_runs } from "../collections/ai-runs";
-import { aiSessionsCollection as _coll_ai_sessions } from "../collections/ai-sessions";
 import { aiWorkerLeasesCollection as _coll_ai_worker_leases } from "../collections/ai-worker-leases";
 import { aiWorkersCollection as _coll_ai_workers } from "../collections/ai-workers";
 
 // ── Jobs ────────────────────────────────────────────
-import _job_cleanup from "../jobs/cleanup";
 import _job_workerTimeout from "../jobs/worker-timeout";
 
 // ── Routes ────────────────────────────────────────────
-import _route_chat from "../routes/chat";
 import _route_enrollmentEnroll from "../routes/enrollment-enroll";
 import _route_enrollmentTokens from "../routes/enrollment-tokens";
 import _route_runComplete from "../routes/run-complete";
@@ -29,110 +23,85 @@ import _route_workerPoll from "../routes/worker-poll";
 import _route_workerRegister from "../routes/worker-register";
 
 // ── Services ────────────────────────────────────────────
-import _svc_aiChat from "../services/chat";
-import _svc_aiProviderRuntime from "../services/provider-runtime";
-import _svc_aiWorkerManager from "../services/worker-manager";
+import _svc_workerManager from "../services/worker-manager";
 
-// ── Components ────────────────────────────────────────────
-import _comp_aiChatRail from "../client/components/aiChatRail";
-
-// ── Config ────────────────────────────────────────────────
+// ── Singles ────────────────────────────────────────────────
 import _adminConfig from "../config/admin";
 
 // ════════════════════════════════════════════════════════════
-// TYPES
+// TYPES — composed from typeof references (zero inference cost)
 // ════════════════════════════════════════════════════════════
 
+import type { RouteParamsFromKey, RouteWithParams } from "questpie/types";
+
 export interface AiCollections {
-  ai_messages: typeof _coll_ai_messages;
-  ai_models: typeof _coll_ai_models;
-  ai_providers: typeof _coll_ai_providers;
-  ai_run_events: typeof _coll_ai_run_events;
-  ai_runs: typeof _coll_ai_runs;
-  ai_sessions: typeof _coll_ai_sessions;
-  ai_worker_leases: typeof _coll_ai_worker_leases;
-  ai_workers: typeof _coll_ai_workers;
+	ai_run_events: typeof _coll_ai_run_events;
+	ai_runs: typeof _coll_ai_runs;
+	ai_worker_leases: typeof _coll_ai_worker_leases;
+	ai_workers: typeof _coll_ai_workers;
 }
 
 export interface AiJobs {
-  cleanup: typeof _job_cleanup;
-  workerTimeout: typeof _job_workerTimeout;
+	workerTimeout: typeof _job_workerTimeout;
 }
 
 export interface AiRoutes {
-  chat: typeof _route_chat;
-  enrollmentEnroll: typeof _route_enrollmentEnroll;
-  enrollmentTokens: typeof _route_enrollmentTokens;
-  runComplete: typeof _route_runComplete;
-  runEvents: typeof _route_runEvents;
-  runStream: typeof _route_runStream;
-  workerDeregister: typeof _route_workerDeregister;
-  workerHeartbeat: typeof _route_workerHeartbeat;
-  workerPoll: typeof _route_workerPoll;
-  workerRegister: typeof _route_workerRegister;
-}
-
-export interface AiComponents {
-  aiChatRail: typeof _comp_aiChatRail;
+	enrollmentEnroll: RouteWithParams<typeof _route_enrollmentEnroll, RouteParamsFromKey<"enrollmentEnroll">>;
+	enrollmentTokens: RouteWithParams<typeof _route_enrollmentTokens, RouteParamsFromKey<"enrollmentTokens">>;
+	runComplete: RouteWithParams<typeof _route_runComplete, RouteParamsFromKey<"runComplete">>;
+	runEvents: RouteWithParams<typeof _route_runEvents, RouteParamsFromKey<"runEvents">>;
+	runStream: RouteWithParams<typeof _route_runStream, RouteParamsFromKey<"runStream">>;
+	workerDeregister: RouteWithParams<typeof _route_workerDeregister, RouteParamsFromKey<"workerDeregister">>;
+	workerHeartbeat: RouteWithParams<typeof _route_workerHeartbeat, RouteParamsFromKey<"workerHeartbeat">>;
+	workerPoll: RouteWithParams<typeof _route_workerPoll, RouteParamsFromKey<"workerPoll">>;
+	workerRegister: RouteWithParams<typeof _route_workerRegister, RouteParamsFromKey<"workerRegister">>;
 }
 
 export interface AiServices {
-  aiChat: typeof _svc_aiChat;
-  aiProviderRuntime: typeof _svc_aiProviderRuntime;
-  aiWorkerManager: typeof _svc_aiWorkerManager;
+	workerManager: typeof _svc_workerManager;
 }
 
 // ════════════════════════════════════════════════════════════
-// MODULE DEFINITION
+// MODULE DEFINITION — static plain object
 // ════════════════════════════════════════════════════════════
 
 const _module = {
-  name: "questpie-ai" as const,
-  collections: {
-    ai_messages: _coll_ai_messages,
-    ai_models: _coll_ai_models,
-    ai_providers: _coll_ai_providers,
-    ai_run_events: _coll_ai_run_events,
-    ai_runs: _coll_ai_runs,
-    ai_sessions: _coll_ai_sessions,
-    ai_worker_leases: _coll_ai_worker_leases,
-    ai_workers: _coll_ai_workers,
-  } as AiCollections,
-  jobs: {
-    cleanup: _job_cleanup,
-    workerTimeout: _job_workerTimeout,
-  } as AiJobs,
-  routes: {
-    chat: _route_chat,
-    enrollmentEnroll: _route_enrollmentEnroll,
-    enrollmentTokens: _route_enrollmentTokens,
-    runComplete: _route_runComplete,
-    runEvents: _route_runEvents,
-    runStream: _route_runStream,
-    workerDeregister: _route_workerDeregister,
-    workerHeartbeat: _route_workerHeartbeat,
-    workerPoll: _route_workerPoll,
-    workerRegister: _route_workerRegister,
-  } as AiRoutes,
-  services: {
-    aiChat: _svc_aiChat,
-    aiProviderRuntime: _svc_aiProviderRuntime,
-    aiWorkerManager: _svc_aiWorkerManager,
-  } as AiServices,
-  globals: {},
-  messages: {},
-  emails: {},
-  migrations: [] as const,
-  seeds: [] as const,
-  fieldTypes: {},
-  views: {},
-  components: {
-    aiChatRail: _comp_aiChatRail,
-  } as AiComponents,
-  blocks: {},
-  config: {
-    admin: _adminConfig,
-  },
+	name: "questpie-ai" as const,
+	collections: {
+		ai_run_events: _coll_ai_run_events,
+		ai_runs: _coll_ai_runs,
+		ai_worker_leases: _coll_ai_worker_leases,
+		ai_workers: _coll_ai_workers,
+	} as AiCollections,
+	jobs: {
+		workerTimeout: _job_workerTimeout,
+	} as AiJobs,
+	routes: {
+		enrollmentEnroll: _route_enrollmentEnroll,
+		enrollmentTokens: _route_enrollmentTokens,
+		runComplete: _route_runComplete,
+		runEvents: _route_runEvents,
+		runStream: _route_runStream,
+		workerDeregister: _route_workerDeregister,
+		workerHeartbeat: _route_workerHeartbeat,
+		workerPoll: _route_workerPoll,
+		workerRegister: _route_workerRegister,
+	} as AiRoutes,
+	services: {
+		workerManager: _svc_workerManager,
+	} as AiServices,
+	globals: {},
+	messages: {},
+	emails: {},
+	migrations: [] as const,
+	seeds: [] as const,
+	fieldTypes: {},
+	views: {},
+	components: {},
+	blocks: {},
+	config: {
+		admin: _adminConfig,
+	},
 };
 
 export type AiModule = typeof _module;

@@ -18,7 +18,7 @@ export const chatMessages = collection("chat_messages")
 			.required()
 			.label({ en: "Role" }),
 		content: f.textarea().label({ en: "Content" }),
-		run: f.relation("runs").label({ en: "Run" }),
+		run: f.relation("run_links").label({ en: "Run" }),
 		runStatus: f.text().label({ en: "Run Status" }),
 		model: f.relation("models").label({ en: "Model" }),
 		provider: f.relation("providers").label({ en: "Provider" }),

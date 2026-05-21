@@ -3,7 +3,8 @@
 // Regenerate with: questpie generate
 
 import { createApp, createContextFactory } from "questpie/app";
-import type { AnyCollectionOrBuilder, AnyGlobalOrBuilder, AppDefinition, CollectionAPI, DrizzleClientFromQuestpieConfig, InferContextExtensionsFromAppConfig, InferSessionFromAuthConfig, MailerService, Questpie, QuestpieConfig, QueueClient, RouteParamsFromKey, RouteWithParams, TablesFromConfig } from "questpie/types";
+import type { AnyCollectionOrBuilder, AnyGlobalOrBuilder, AppDefinition, CollectionAPI, DrizzleClientFromQuestpieConfig, InferContextExtensionsFromAppConfig, InferSessionFromAuthConfig, MailerService, Questpie, QuestpieConfig, QueueClient, QueueJobType, RouteParamsFromKey, RouteWithParams, TablesFromConfig } from "questpie/types";
+import type { z } from "zod";
 
 // ── Runtime ────────────────────────────────────────────────
 import _runtime from "../questpie.config";
@@ -17,50 +18,33 @@ import { capabilities as _coll_capabilities } from "../collections/capabilities"
 import { chatMessages as _coll_chat_messages } from "../collections/chat-messages";
 import { chatSessions as _coll_chat_sessions } from "../collections/chat-sessions";
 import { environments as _coll_environments } from "../collections/environments";
-import { joinTokens as _coll_join_tokens } from "../collections/join-tokens";
 import { knowledge as _coll_knowledge } from "../collections/knowledge";
 import { models as _coll_models } from "../collections/models";
 import { projects as _coll_projects } from "../collections/projects";
 import { providers as _coll_providers } from "../collections/providers";
-import { runEvents as _coll_run_events } from "../collections/run-events";
-import { runs as _coll_runs } from "../collections/runs";
+import { runLinks as _coll_run_links } from "../collections/run-links";
 import { scheduleExecutions as _coll_schedule_executions } from "../collections/schedule-executions";
 import { schedules as _coll_schedules } from "../collections/schedules";
 import { scripts as _coll_scripts } from "../collections/scripts";
 import { secrets as _coll_secrets } from "../collections/secrets";
 import { taskRelations as _coll_task_relations } from "../collections/task-relations";
 import { tasks as _coll_tasks } from "../collections/tasks";
-import { workerLeases as _coll_worker_leases } from "../collections/worker-leases";
-import { workers as _coll_workers } from "../collections/workers";
 import { workflowConfigs as _coll_workflow_configs } from "../collections/workflow-configs";
 
 // ── Jobs ───────────────────────────────────────────────────
 import _job_cleanup from "../jobs/cleanup";
 import _job_scheduleTick from "../jobs/schedule-tick";
 import _job_taskEscalation from "../jobs/task-escalation";
-import _job_workerTimeout from "../jobs/worker-timeout";
 
 // ── Routes ─────────────────────────────────────────────────
 import _route_chat from "../routes/chat";
-import _route_enrollment from "../routes/enrollment";
-import _route_enrollment_enroll from "../routes/enrollment/enroll";
-import _route_enrollment_tokens from "../routes/enrollment/tokens";
 import _route_events from "../routes/events";
 import _route_intake from "../routes/intake";
 import _route_runs_runId from "../routes/runs/[runId]";
 import _route_runs_runId_artifacts from "../routes/runs/[runId]/artifacts";
 import _route_runs_runId_artifacts_artifactId_content from "../routes/runs/[runId]/artifacts/[artifactId]/content";
-import _route_runs_runId_complete from "../routes/runs/[runId]/complete";
 import _route_runs_runId_events from "../routes/runs/[runId]/events";
 import _route_runStream from "../routes/run-stream";
-import _route_workerHeartbeat from "../routes/worker-heartbeat";
-import _route_workerPoll from "../routes/worker-poll";
-import _route_workerRunComplete from "../routes/worker-run-complete";
-import _route_workerRunEvent from "../routes/worker-run-event";
-import _route_workers_claim from "../routes/workers/claim";
-import _route_workers_deregister from "../routes/workers/deregister";
-import _route_workers_heartbeat from "../routes/workers/heartbeat";
-import _route_workers_register from "../routes/workers/register";
 import _route_workspaceInspection_content from "../routes/workspace-inspection/content";
 import _route_workspaceInspection_diff from "../routes/workspace-inspection/diff";
 import _route_workspaceInspection_list from "../routes/workspace-inspection/list";
@@ -69,13 +53,15 @@ import _route_workspaceInspection_read from "../routes/workspace-inspection/read
 // ── Services ───────────────────────────────────────────────
 import _svc_gitProviderAdapters from "../services/git-provider-adapters";
 import _svc_knowledgeResource from "../services/knowledge-resource";
-import _svc_providerRuntime from "../services/provider-runtime";
-import _svc_workerManager from "../services/worker-manager";
 
 // ── Migrations ─────────────────────────────────────────────
 import _mig_20260507T095449_jolly_red_phoenix from "../migrations/20260507T095449_jolly_red_phoenix";
 import _mig_20260516T185000_auth_user_admin_columns_repair from "../migrations/20260516T185000_auth_user_admin_columns_repair";
 import _mig_20260517T095535_happy_orange_unicorn from "../migrations/20260517T095535_happy_orange_unicorn";
+import _mig_20260519T135407_add_run_links_and_ai_module from "../migrations/20260519T135407_add_run_links_and_ai_module";
+import _mig_20260519T142100_backfill_legacy_runs_into_run_links from "../migrations/20260519T142100_backfill_legacy_runs_into_run_links";
+import _mig_20260519T145500_link_schedule_executions_to_run_links from "../migrations/20260519T145500_link_schedule_executions_to_run_links";
+import _mig_20260519T161500_drop_legacy_execution_infra from "../migrations/20260519T161500_drop_legacy_execution_infra";
 
 // ── Seeds ──────────────────────────────────────────────────
 import _seed_demoCoverageData_seed from "../seeds/demo-coverage-data.seed";
@@ -131,6 +117,7 @@ import _mcpConfig from "../config/mcp";
 // ════════════════════════════════════════════════════════════
 
 import type { ServiceCustomNamespaceInstances, ServiceInstanceOf, ServiceInstancesInNamespace, ServiceTopLevelInstances, UnionToIntersection } from "questpie/types";
+type _RouteDefinitionWithoutHandler<T> = T extends { mode: "raw" } ? Omit<T, "handler"> & { handler: (args: unknown) => Response | Promise<Response> } : Omit<T, "handler"> & { handler: (args: unknown) => unknown | Promise<unknown> };
 type _Module = (typeof _modules)[number];
 type _MPRaw<K extends string> = UnionToIntersection<_Module extends infer M ? M extends Record<K, infer V> ? V : never : never>;
 type _MP<K extends string> = [_MPRaw<K>] extends [never] ? {} : _MPRaw<K>;
@@ -184,21 +171,17 @@ export type AppCollections = _ModuleCollections & {
 	chat_messages: typeof _coll_chat_messages;
 	chat_sessions: typeof _coll_chat_sessions;
 	environments: typeof _coll_environments;
-	join_tokens: typeof _coll_join_tokens;
 	knowledge: typeof _coll_knowledge;
 	models: typeof _coll_models;
 	projects: typeof _coll_projects;
 	providers: typeof _coll_providers;
-	run_events: typeof _coll_run_events;
-	runs: typeof _coll_runs;
+	run_links: typeof _coll_run_links;
 	schedule_executions: typeof _coll_schedule_executions;
 	schedules: typeof _coll_schedules;
 	scripts: typeof _coll_scripts;
 	secrets: typeof _coll_secrets;
 	task_relations: typeof _coll_task_relations;
 	tasks: typeof _coll_tasks;
-	worker_leases: typeof _coll_worker_leases;
-	workers: typeof _coll_workers;
 	workflow_configs: typeof _coll_workflow_configs;
 };
 
@@ -207,46 +190,31 @@ export type AppGlobals = _ModuleGlobals;
 
 /** All jobs in the app (modules + user, user overrides) */
 export type AppJobs = _ModuleJobs & {
-	cleanup: typeof _job_cleanup;
-	scheduleTick: typeof _job_scheduleTick;
-	taskEscalation: typeof _job_taskEscalation;
-	workerTimeout: typeof _job_workerTimeout;
+	cleanup: Omit<typeof _job_cleanup, "handler"> & { handler: (args: unknown) => Promise<unknown> };
+	scheduleTick: Omit<typeof _job_scheduleTick, "handler"> & { handler: (args: unknown) => Promise<unknown> };
+	taskEscalation: Omit<typeof _job_taskEscalation, "handler"> & { handler: (args: unknown) => Promise<unknown> };
 };
 
 /** All routes in the app (modules + user, user overrides) */
 export type AppRoutes = _ModuleRoutes & {
-	chat: RouteWithParams<typeof _route_chat, RouteParamsFromKey<"chat">>;
-	enrollment: RouteWithParams<typeof _route_enrollment, RouteParamsFromKey<"enrollment">>;
-	"enrollment/enroll": RouteWithParams<typeof _route_enrollment_enroll, RouteParamsFromKey<"enrollment/enroll">>;
-	"enrollment/tokens": RouteWithParams<typeof _route_enrollment_tokens, RouteParamsFromKey<"enrollment/tokens">>;
-	events: RouteWithParams<typeof _route_events, RouteParamsFromKey<"events">>;
-	intake: RouteWithParams<typeof _route_intake, RouteParamsFromKey<"intake">>;
-	"runs/[runId]": RouteWithParams<typeof _route_runs_runId, RouteParamsFromKey<"runs/[runId]">>;
-	"runs/[runId]/artifacts": RouteWithParams<typeof _route_runs_runId_artifacts, RouteParamsFromKey<"runs/[runId]/artifacts">>;
-	"runs/[runId]/artifacts/[artifactId]/content": RouteWithParams<typeof _route_runs_runId_artifacts_artifactId_content, RouteParamsFromKey<"runs/[runId]/artifacts/[artifactId]/content">>;
-	"runs/[runId]/complete": RouteWithParams<typeof _route_runs_runId_complete, RouteParamsFromKey<"runs/[runId]/complete">>;
-	"runs/[runId]/events": RouteWithParams<typeof _route_runs_runId_events, RouteParamsFromKey<"runs/[runId]/events">>;
-	runStream: RouteWithParams<typeof _route_runStream, RouteParamsFromKey<"runStream">>;
-	workerHeartbeat: RouteWithParams<typeof _route_workerHeartbeat, RouteParamsFromKey<"workerHeartbeat">>;
-	workerPoll: RouteWithParams<typeof _route_workerPoll, RouteParamsFromKey<"workerPoll">>;
-	workerRunComplete: RouteWithParams<typeof _route_workerRunComplete, RouteParamsFromKey<"workerRunComplete">>;
-	workerRunEvent: RouteWithParams<typeof _route_workerRunEvent, RouteParamsFromKey<"workerRunEvent">>;
-	"workers/claim": RouteWithParams<typeof _route_workers_claim, RouteParamsFromKey<"workers/claim">>;
-	"workers/deregister": RouteWithParams<typeof _route_workers_deregister, RouteParamsFromKey<"workers/deregister">>;
-	"workers/heartbeat": RouteWithParams<typeof _route_workers_heartbeat, RouteParamsFromKey<"workers/heartbeat">>;
-	"workers/register": RouteWithParams<typeof _route_workers_register, RouteParamsFromKey<"workers/register">>;
-	"workspaceInspection/content": RouteWithParams<typeof _route_workspaceInspection_content, RouteParamsFromKey<"workspaceInspection/content">>;
-	"workspaceInspection/diff": RouteWithParams<typeof _route_workspaceInspection_diff, RouteParamsFromKey<"workspaceInspection/diff">>;
-	"workspaceInspection/list": RouteWithParams<typeof _route_workspaceInspection_list, RouteParamsFromKey<"workspaceInspection/list">>;
-	"workspaceInspection/read": RouteWithParams<typeof _route_workspaceInspection_read, RouteParamsFromKey<"workspaceInspection/read">>;
+	chat: RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_chat>, RouteParamsFromKey<"chat">>;
+	events: RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_events>, RouteParamsFromKey<"events">>;
+	intake: RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_intake>, RouteParamsFromKey<"intake">>;
+	"runs/[runId]": RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_runs_runId>, RouteParamsFromKey<"runs/[runId]">>;
+	"runs/[runId]/artifacts": RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_runs_runId_artifacts>, RouteParamsFromKey<"runs/[runId]/artifacts">>;
+	"runs/[runId]/artifacts/[artifactId]/content": RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_runs_runId_artifacts_artifactId_content>, RouteParamsFromKey<"runs/[runId]/artifacts/[artifactId]/content">>;
+	"runs/[runId]/events": RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_runs_runId_events>, RouteParamsFromKey<"runs/[runId]/events">>;
+	runStream: RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_runStream>, RouteParamsFromKey<"runStream">>;
+	"workspaceInspection/content": RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_workspaceInspection_content>, RouteParamsFromKey<"workspaceInspection/content">>;
+	"workspaceInspection/diff": RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_workspaceInspection_diff>, RouteParamsFromKey<"workspaceInspection/diff">>;
+	"workspaceInspection/list": RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_workspaceInspection_list>, RouteParamsFromKey<"workspaceInspection/list">>;
+	"workspaceInspection/read": RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_workspaceInspection_read>, RouteParamsFromKey<"workspaceInspection/read">>;
 };
 
 /** All service definitions in the app (modules + user, user overrides). */
 type _AppServiceDefinitions = _ModuleServices & {
 	gitProviderAdapters: typeof _svc_gitProviderAdapters;
 	knowledgeResource: typeof _svc_knowledgeResource;
-	providerRuntime: typeof _svc_providerRuntime;
-	workerManager: typeof _svc_workerManager;
 };
 
 /** All services in the app as resolved service instances. */
@@ -278,9 +246,9 @@ export type AppBlocks = _ModuleBlocks;
 
 /** All workflows in the app (modules + user, user overrides) */
 export type AppWorkflows = _ModuleWorkflows
-	& { [K in typeof _wf_chatQuery.name]: typeof _wf_chatQuery }
-	& { [K in typeof _wf_multiStepTask.name]: typeof _wf_multiStepTask }
-	& { [K in typeof _wf_taskPipeline.name]: typeof _wf_taskPipeline };
+	& { [K in typeof _wf_chatQuery.name]: Omit<typeof _wf_chatQuery, "handler" | "onFailure"> & { handler: (args: unknown) => Promise<unknown>; onFailure?: (args: unknown) => Promise<void> } }
+	& { [K in typeof _wf_multiStepTask.name]: Omit<typeof _wf_multiStepTask, "handler" | "onFailure"> & { handler: (args: unknown) => Promise<unknown>; onFailure?: (args: unknown) => Promise<void> } }
+	& { [K in typeof _wf_taskPipeline.name]: Omit<typeof _wf_taskPipeline, "handler" | "onFailure"> & { handler: (args: unknown) => Promise<unknown>; onFailure?: (args: unknown) => Promise<void> } };
 
 /** All mcptools in the app (modules + user, user overrides) */
 export type AppMcpTools = _ModuleMcpTools & {
@@ -310,6 +278,55 @@ export type AppMcpTools = _ModuleMcpTools & {
 };
 
 type _CollectionsAPI = { [K in keyof AppCollections]: CollectionAPI<AppCollections[K], AppCollections> };
+type _JobHandlerCollections = {
+	activity: typeof _coll_activity;
+	capabilities: typeof _coll_capabilities;
+	chat_messages: typeof _coll_chat_messages;
+	chat_sessions: typeof _coll_chat_sessions;
+	environments: typeof _coll_environments;
+	knowledge: typeof _coll_knowledge;
+	models: typeof _coll_models;
+	projects: typeof _coll_projects;
+	providers: typeof _coll_providers;
+	run_links: typeof _coll_run_links;
+	schedule_executions: typeof _coll_schedule_executions;
+	schedules: typeof _coll_schedules;
+	scripts: typeof _coll_scripts;
+	secrets: typeof _coll_secrets;
+	task_relations: typeof _coll_task_relations;
+	tasks: typeof _coll_tasks;
+	workflow_configs: typeof _coll_workflow_configs;
+};
+type _JobHandlerCollectionsAPI = {
+	activity: CollectionAPI<typeof _coll_activity, _JobHandlerCollections>;
+	capabilities: CollectionAPI<typeof _coll_capabilities, _JobHandlerCollections>;
+	chat_messages: CollectionAPI<typeof _coll_chat_messages, _JobHandlerCollections>;
+	chat_sessions: CollectionAPI<typeof _coll_chat_sessions, _JobHandlerCollections>;
+	environments: CollectionAPI<typeof _coll_environments, _JobHandlerCollections>;
+	knowledge: CollectionAPI<typeof _coll_knowledge, _JobHandlerCollections>;
+	models: CollectionAPI<typeof _coll_models, _JobHandlerCollections>;
+	projects: CollectionAPI<typeof _coll_projects, _JobHandlerCollections>;
+	providers: CollectionAPI<typeof _coll_providers, _JobHandlerCollections>;
+	run_links: CollectionAPI<typeof _coll_run_links, _JobHandlerCollections>;
+	schedule_executions: CollectionAPI<typeof _coll_schedule_executions, _JobHandlerCollections>;
+	schedules: CollectionAPI<typeof _coll_schedules, _JobHandlerCollections>;
+	scripts: CollectionAPI<typeof _coll_scripts, _JobHandlerCollections>;
+	secrets: CollectionAPI<typeof _coll_secrets, _JobHandlerCollections>;
+	task_relations: CollectionAPI<typeof _coll_task_relations, _JobHandlerCollections>;
+	tasks: CollectionAPI<typeof _coll_tasks, _JobHandlerCollections>;
+	workflow_configs: CollectionAPI<typeof _coll_workflow_configs, _JobHandlerCollections>;
+};
+type _ExecutionContextJob<T> = T extends { name: infer TName extends string; schema: z.ZodSchema<infer TPayload> } ? QueueJobType<TPayload, TName> : never;
+type _ExecutionContextJobs = {
+	cleanup: _ExecutionContextJob<typeof _job_cleanup>;
+	scheduleTick: _ExecutionContextJob<typeof _job_scheduleTick>;
+	taskEscalation: _ExecutionContextJob<typeof _job_taskEscalation>;
+};
+type _ExecutionContextServiceDefinitions = {
+	gitProviderAdapters: typeof _svc_gitProviderAdapters;
+	knowledgeResource: typeof _svc_knowledgeResource;
+};
+type _ExecutionContextDefaultServices = ServiceInstancesInNamespace<_ExecutionContextServiceDefinitions, "services">;
 type _AppCollectionDefinitions = AppCollections & Record<string, AnyCollectionOrBuilder>;
 type _AppGlobalDefinitions = AppGlobals & Record<string, AnyGlobalOrBuilder>;
 type _AppQuestpieConfig = Omit<QuestpieConfig, "app" | "db" | "collections" | "globals" | "auth"> & {
@@ -356,6 +373,54 @@ declare global {
 			services: _AppDefaultServices;
 		}
 
+		interface JobHandlerContext {
+			// Infrastructure
+			db: unknown;
+			email: unknown;
+			queue: QueueClient<_ExecutionContextJobs>;
+			storage: unknown;
+			kv: unknown;
+			logger: unknown;
+			search: unknown;
+			realtime: unknown;
+
+			// Entity APIs
+			collections: _JobHandlerCollectionsAPI;
+			globals: Record<string, unknown>;
+			tables: Record<string, unknown>;
+
+			// Request-scoped
+			session: unknown;
+			t: (key: string, params?: Record<string, unknown>, locale?: string) => string;
+
+			// User services
+			services: _ExecutionContextDefaultServices;
+		}
+
+		interface WorkflowContext {
+			// Infrastructure
+			db: unknown;
+			email: unknown;
+			queue: QueueClient<_ExecutionContextJobs>;
+			storage: unknown;
+			kv: unknown;
+			logger: unknown;
+			search: unknown;
+			realtime: unknown;
+
+			// Entity APIs
+			collections: _JobHandlerCollectionsAPI;
+			globals: Record<string, unknown>;
+			tables: Record<string, unknown>;
+
+			// Request-scoped
+			session: unknown;
+			t: (key: string, params?: Record<string, unknown>, locale?: string) => string;
+
+			// User services
+			services: _ExecutionContextDefaultServices;
+		}
+
 		interface ServiceCreateContext extends AppContext {}
 
 		interface Registry {
@@ -381,8 +446,8 @@ declare global {
  * For handler context, use `AppContext` (auto-typed via module augmentation).
  */
 export type AppConfig = {
-	collections: AppCollections & Record<string, any>;
-	globals: AppGlobals & Record<string, any>;
+	collections: AppCollections & Record<string, AnyCollectionOrBuilder>;
+	globals: AppGlobals & Record<string, AnyGlobalOrBuilder>;
 	routes: AppRoutes;
 	auth: typeof _authConfig;
 };
@@ -400,50 +465,33 @@ export const app = await createApp(
 			chat_messages: _coll_chat_messages,
 			chat_sessions: _coll_chat_sessions,
 			environments: _coll_environments,
-			join_tokens: _coll_join_tokens,
 			knowledge: _coll_knowledge,
 			models: _coll_models,
 			projects: _coll_projects,
 			providers: _coll_providers,
-			run_events: _coll_run_events,
-			runs: _coll_runs,
+			run_links: _coll_run_links,
 			schedule_executions: _coll_schedule_executions,
 			schedules: _coll_schedules,
 			scripts: _coll_scripts,
 			secrets: _coll_secrets,
 			task_relations: _coll_task_relations,
 			tasks: _coll_tasks,
-			worker_leases: _coll_worker_leases,
-			workers: _coll_workers,
 			workflow_configs: _coll_workflow_configs,
 		},
 		jobs: {
 			cleanup: _job_cleanup,
 			scheduleTick: _job_scheduleTick,
 			taskEscalation: _job_taskEscalation,
-			workerTimeout: _job_workerTimeout,
 		},
 		routes: {
 			chat: _route_chat,
-			enrollment: _route_enrollment,
-			"enrollment/enroll": _route_enrollment_enroll,
-			"enrollment/tokens": _route_enrollment_tokens,
 			events: _route_events,
 			intake: _route_intake,
 			"runs/[runId]": _route_runs_runId,
 			"runs/[runId]/artifacts": _route_runs_runId_artifacts,
 			"runs/[runId]/artifacts/[artifactId]/content": _route_runs_runId_artifacts_artifactId_content,
-			"runs/[runId]/complete": _route_runs_runId_complete,
 			"runs/[runId]/events": _route_runs_runId_events,
 			runStream: _route_runStream,
-			workerHeartbeat: _route_workerHeartbeat,
-			workerPoll: _route_workerPoll,
-			workerRunComplete: _route_workerRunComplete,
-			workerRunEvent: _route_workerRunEvent,
-			"workers/claim": _route_workers_claim,
-			"workers/deregister": _route_workers_deregister,
-			"workers/heartbeat": _route_workers_heartbeat,
-			"workers/register": _route_workers_register,
 			"workspaceInspection/content": _route_workspaceInspection_content,
 			"workspaceInspection/diff": _route_workspaceInspection_diff,
 			"workspaceInspection/list": _route_workspaceInspection_list,
@@ -452,10 +500,8 @@ export const app = await createApp(
 		services: {
 			gitProviderAdapters: _svc_gitProviderAdapters,
 			knowledgeResource: _svc_knowledgeResource,
-			providerRuntime: _svc_providerRuntime,
-			workerManager: _svc_workerManager,
 		},
-		migrations: [_mig_20260507T095449_jolly_red_phoenix, _mig_20260516T185000_auth_user_admin_columns_repair, _mig_20260517T095535_happy_orange_unicorn],
+		migrations: [_mig_20260507T095449_jolly_red_phoenix, _mig_20260516T185000_auth_user_admin_columns_repair, _mig_20260517T095535_happy_orange_unicorn, _mig_20260519T135407_add_run_links_and_ai_module, _mig_20260519T142100_backfill_legacy_runs_into_run_links, _mig_20260519T145500_link_schedule_executions_to_run_links, _mig_20260519T161500_drop_legacy_execution_infra],
 		seeds: [_seed_demoCoverageData_seed, _seed_demoParentIssues_seed, _seed_demoProductData_seed, _seed_demoStressData_seed],
 		views: {
 			filesView: _view_filesView,
@@ -493,14 +539,14 @@ export const app = await createApp(
 			task_update: _mcpTool_task_update,
 		},
 		config: {
-			app: _appConfig as any,
-			auth: _authConfig as any,
-			admin: _adminConfig as any,
-			mcp: _mcpConfig as any,
+			app: _appConfig,
+			auth: _authConfig,
+			admin: _adminConfig,
+			mcp: _mcpConfig,
 		},
 	}) satisfies AppDefinition,
 	_runtime,
-) as _AppQuestpie;
+) as unknown as _AppQuestpie;
 
 /** Fully typed QUESTPIE app instance. */
 export type App = typeof app;

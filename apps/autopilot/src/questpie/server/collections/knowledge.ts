@@ -17,7 +17,7 @@ export const knowledge = collection("knowledge")
 			.label({ en: "Applies To" }),
 		project: f.relation("projects").label({ en: "Project" }),
 		task: f.relation("tasks").label({ en: "Task" }),
-		run: f.relation("runs").label({ en: "Run" }),
+		run: f.relation("run_links").label({ en: "Run" }),
 		kind: f
 			.select([
 				{ value: "document", label: { en: "Document" } },

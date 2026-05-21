@@ -2,7 +2,10 @@ import { z } from "zod";
 
 import { workflow } from "@questpie/workflows";
 
+import { createAiRunLink } from "../lib/ai-run-links";
 import { mergeRecords, relationId } from "../lib/records";
+import { resolveRuntimeSelection } from "../lib/runtime-selection";
+import { linkScheduleExecutionRun } from "../lib/schedule-run-links";
 
 type RunCompletion = {
 	status?: "completed" | "failed" | "cancelled";
@@ -31,6 +34,7 @@ export default workflow({
 		projectId: z.string().nullable().optional(),
 		taskId: z.string().nullable().optional(),
 		modelId: z.string().nullable().optional(),
+		scheduleExecutionId: z.string().optional(),
 	}),
 	timeout: "7d",
 	handler: async ({ input, step, ctx, log }) => {
@@ -45,36 +49,43 @@ export default workflow({
 
 		const run = await step.run("resolve-chat-run", async () => {
 			if (input.runId) {
-				const existing = await ctx.collections.runs.findOne({
+				const existing = await ctx.collections.run_links.findOne({
 					where: { id: input.runId },
 				});
 				if (!existing) throw new Error(`Run not found: ${input.runId}`);
 				return existing;
 			}
 
-			const runtime = await ctx.services.providerRuntime.resolve({
+			const runtime = await resolveRuntimeSelection(ctx, {
 				modelId: input.modelId,
 				projectId: input.projectId ?? relationId(session.project),
 			});
-			return ctx.collections.runs.create({
-				task: input.taskId ?? relationId(session.task) ?? undefined,
-				project: input.projectId ?? relationId(session.project) ?? undefined,
-				status: "pending",
-				runtime: runtime.runtime,
-				provider: runtime.providerId ?? undefined,
-				model: runtime.modelId ?? undefined,
+			return createAiRunLink({
+				ctx,
+				runtime,
+				taskId: input.taskId ?? relationId(session.task),
+				projectId: input.projectId ?? relationId(session.project),
 				initiatedBy: "chat",
 				instructions: input.prompt,
-				preferredWorker: relationId(session.preferredWorker) ?? undefined,
-				runtimeSessionRef: session.runtimeSessionRef ?? undefined,
-				targeting: {
-					chatSessionId: input.chatSessionId,
-					messageId: input.messageId,
+				chatSessionId: input.chatSessionId,
+				chatMessageId: input.messageId,
+				scheduleExecutionId: input.scheduleExecutionId,
+				runtimeSessionRef: session.runtimeSessionRef,
+				spawnMetadata: {
 					toolPolicy: runtime.toolPolicy,
 					contextRefs: runtime.contextRefs,
 					promptRefs: runtime.promptRefs,
 					runtimeHints: runtime.runtimeHints,
-				} as any,
+				},
+				linkMetadata: {},
+			});
+		});
+
+		await step.run("link-schedule-execution", async () => {
+			await linkScheduleExecutionRun({
+				ctx,
+				scheduleExecutionId: input.scheduleExecutionId,
+				runId: run.id,
 			});
 		});
 
@@ -106,7 +117,7 @@ export default workflow({
 		);
 
 		const finalRun = await step.run("load-final-run", async () => {
-			return ctx.collections.runs.findOne({ where: { id: run.id } });
+			return ctx.collections.run_links.findOne({ where: { id: run.id } });
 		});
 
 		const assistantMessage = await step.run(
@@ -139,10 +150,6 @@ export default workflow({
 					runtimeSessionRef:
 						finalRun?.runtimeSessionRef ??
 						session.runtimeSessionRef ??
-						undefined,
-					preferredWorker:
-						relationId(finalRun?.worker) ??
-						relationId(session.preferredWorker) ??
 						undefined,
 					metadata: mergeRecords(session.metadata, {
 						lastRunId: run.id,

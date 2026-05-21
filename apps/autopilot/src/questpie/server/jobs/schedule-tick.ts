@@ -109,12 +109,12 @@ async function cancelActiveExecution(
 		id: taskId,
 		data: { status: "cancelled" },
 	});
-	const runs = await ctx.collections.runs.find({
+	const runs = await ctx.collections.run_links.find({
 		where: { task: taskId, status: { in: ["pending", "claimed", "running"] } },
 		limit: 100,
 	});
 	for (const run of runs.docs) {
-		await ctx.collections.runs.updateById({
+		await ctx.collections.run_links.updateById({
 			id: run.id,
 			data: {
 				status: "cancelled",
@@ -122,6 +122,17 @@ async function cancelActiveExecution(
 				error: `Cancelled by replacement schedule run ${schedule.id}`,
 			},
 		});
+		const aiRunId = relationId(run.aiRun);
+		if (aiRunId) {
+			await ctx.collections.ai_runs.updateById({
+				id: aiRunId,
+				data: {
+					status: "cancelled",
+					endedAt: new Date(),
+					error: `Cancelled by replacement schedule run ${schedule.id}`,
+				},
+			});
+		}
 	}
 	await ctx.collections.activity.create({
 		actor: "job:schedule-tick",
@@ -186,6 +197,7 @@ async function triggerTaskSchedule(
 			taskId: task.id,
 			runReason: "schedule",
 			requestedBy: scheduleActor(schedule.id),
+			scheduleExecutionId: execution.id,
 		},
 		{ idempotencyKey: `schedule:${schedule.id}:${execution.id}:task` },
 	);
@@ -254,6 +266,7 @@ async function triggerChatSchedule(
 			prompt,
 			projectId: projectId ?? null,
 			taskId: taskId ?? null,
+			scheduleExecutionId: execution.id,
 			modelId:
 				typeof template.modelId === "string"
 					? template.modelId

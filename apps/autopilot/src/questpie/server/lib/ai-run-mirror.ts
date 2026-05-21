@@ -1,0 +1,254 @@
+import { asRecord, mergeRecords, relationId } from "./records";
+
+type HookContext = Questpie.AppContext & {
+	collection: string;
+	data?: Record<string, unknown>;
+	original?: Record<string, unknown>;
+	operation: "create" | "update" | "delete";
+};
+
+type TerminalRunStatus = "completed" | "failed" | "cancelled";
+
+function terminalTaskStatus(status: TerminalRunStatus) {
+	if (status === "completed") return "review";
+	if (status === "cancelled") return "cancelled";
+	return "failed";
+}
+
+function isTerminalStatus(status: unknown): status is TerminalRunStatus {
+	return (
+		status === "completed" || status === "failed" || status === "cancelled"
+	);
+}
+
+function activeRunStatus(status: unknown) {
+	return status === "pending" || status === "claimed" || status === "running";
+}
+
+function statusFrom(value: unknown) {
+	return typeof value === "string" ? value : null;
+}
+
+function dateOrUndefined(value: unknown) {
+	if (!value) return undefined;
+	return value instanceof Date ? value : new Date(String(value));
+}
+
+function setIfPresent(
+	data: Record<string, unknown>,
+	key: string,
+	value: unknown,
+) {
+	if (value !== undefined && value !== null) data[key] = value;
+}
+
+function workflowApi(ctx: unknown) {
+	return (
+		ctx as { workflows?: { sendEvent?: (...args: any[]) => Promise<void> } }
+	).workflows;
+}
+
+async function sendWorkflowEvent(
+	ctx: Questpie.AppContext,
+	event: string,
+	runId: string,
+	data: Record<string, unknown>,
+) {
+	const workflows = workflowApi(ctx);
+	if (!workflows?.sendEvent) return;
+	await workflows.sendEvent(event, { runId, ...data }, { runId });
+}
+
+async function runLinkForAiRun(ctx: Questpie.AppContext, aiRunId: string) {
+	return ctx.collections.run_links.findOne({
+		where: { aiRun: aiRunId },
+	});
+}
+
+async function mirrorChatRunStatus(
+	ctx: Questpie.AppContext,
+	runId: string,
+	status: string,
+) {
+	const messages = await ctx.collections.chat_messages.find({
+		where: { run: runId },
+		limit: 100,
+	});
+	await Promise.all(
+		messages.docs.map((message: { id: string }) =>
+			ctx.collections.chat_messages.updateById({
+				id: message.id,
+				data: { runStatus: status },
+			}),
+		),
+	);
+}
+
+async function createCompletionResources(input: {
+	ctx: Questpie.AppContext;
+	runId: string;
+	summary?: string | null;
+}) {
+	if (!input.summary?.trim()) return [];
+
+	const existing = await input.ctx.collections.knowledge.findOne({
+		where: { run: input.runId, path: `runs/${input.runId}/summary.md` },
+	});
+	if (existing) return [existing];
+
+	return input.ctx.services.knowledgeResource.createRunOutputs({
+		runId: input.runId,
+		summary: input.summary,
+		source: "worker",
+	});
+}
+
+async function mirrorTerminalSideEffects(input: {
+	ctx: Questpie.AppContext;
+	runLink: Record<string, unknown>;
+	status: TerminalRunStatus;
+	summary?: string | null;
+	error?: string | null;
+}) {
+	const resources = await createCompletionResources({
+		ctx: input.ctx,
+		runId: String(input.runLink.id),
+		summary: input.summary,
+	});
+	const knowledgeResourceIds = resources.map(
+		(resource: { id: string }) => resource.id,
+	);
+
+	const taskId = relationId(input.runLink.task);
+	const initiatedBy = input.runLink.initiatedBy;
+	if (
+		taskId &&
+		initiatedBy !== "chat" &&
+		!relationId(input.runLink.workflowConfig)
+	) {
+		await input.ctx.collections.tasks.updateById({
+			id: taskId,
+			data: { status: terminalTaskStatus(input.status) },
+		});
+	}
+
+	await sendWorkflowEvent(
+		input.ctx,
+		"run.completed",
+		String(input.runLink.id),
+		{
+			status: input.status,
+			summary: input.summary ?? null,
+			error: input.error ?? null,
+			knowledgeResourceIds,
+		},
+	);
+}
+
+export async function mirrorAiRunChange(ctx: HookContext) {
+	if (ctx.collection !== "ai_runs" || !ctx.data?.id) return;
+
+	const aiRunId = String(ctx.data.id);
+	const runLink = await runLinkForAiRun(ctx, aiRunId);
+	if (!runLink) return;
+
+	const status = statusFrom(ctx.data.status);
+	const originalStatus = statusFrom(ctx.original?.status);
+	const data: Record<string, unknown> = {};
+	setIfPresent(data, "status", status);
+	setIfPresent(data, "summary", ctx.data.summary);
+	setIfPresent(data, "error", ctx.data.error);
+	setIfPresent(data, "tokensInput", ctx.data.tokensInput);
+	setIfPresent(data, "tokensOutput", ctx.data.tokensOutput);
+	setIfPresent(data, "cost", ctx.data.cost);
+	setIfPresent(data, "startedAt", dateOrUndefined(ctx.data.startedAt));
+	setIfPresent(data, "endedAt", dateOrUndefined(ctx.data.endedAt));
+	setIfPresent(data, "runtimeSessionRef", ctx.data.runtimeSessionRef);
+	if (status === "claimed") {
+		data.metadata = mergeRecords(runLink.metadata, {
+			workerId: relationId(ctx.data.worker),
+		});
+	}
+
+	const updated =
+		Object.keys(data).length > 0
+			? await ctx.collections.run_links.updateById({
+					id: String(runLink.id),
+					data,
+				})
+			: runLink;
+
+	if (status) {
+		await mirrorChatRunStatus(ctx, String(runLink.id), status);
+	}
+
+	if (status === "claimed" && originalStatus !== "claimed") {
+		await sendWorkflowEvent(ctx, "run.claimed", String(runLink.id), {
+			workerId: relationId(ctx.data.worker),
+		});
+	}
+
+	if (isTerminalStatus(status) && originalStatus !== status) {
+		await mirrorTerminalSideEffects({
+			ctx,
+			runLink: updated,
+			status,
+			summary: typeof ctx.data.summary === "string" ? ctx.data.summary : null,
+			error: typeof ctx.data.error === "string" ? ctx.data.error : null,
+		});
+	}
+}
+
+export async function mirrorAiRunEvent(ctx: HookContext) {
+	if (
+		ctx.collection !== "ai_run_events" ||
+		ctx.operation !== "create" ||
+		!ctx.data
+	) {
+		return;
+	}
+
+	const aiRunId = relationId(ctx.data.run);
+	if (!aiRunId) return;
+
+	const runLink = await runLinkForAiRun(ctx, aiRunId);
+	if (!runLink) return;
+
+	const eventType =
+		typeof ctx.data.type === "string" ? ctx.data.type : "unknown";
+	const level = typeof ctx.data.level === "string" ? ctx.data.level : "info";
+	const summary =
+		typeof ctx.data.summary === "string" ? ctx.data.summary : null;
+	const metadata = asRecord(ctx.data.meta);
+
+	if (eventType === "started" && activeRunStatus(runLink.status)) {
+		await ctx.collections.run_links.updateById({
+			id: String(runLink.id),
+			data: {
+				status: "running",
+				startedAt: dateOrUndefined(runLink.startedAt) ?? new Date(),
+			},
+		});
+		await mirrorChatRunStatus(ctx, String(runLink.id), "running");
+	}
+
+	await sendWorkflowEvent(ctx, "run.event", String(runLink.id), {
+		type: eventType,
+		level,
+		summary,
+		metadata: Object.keys(metadata).length > 0 ? metadata : null,
+	});
+}
+
+export async function mirrorRunLinkChatStatus(ctx: HookContext) {
+	if (ctx.collection !== "run_links" || !ctx.data?.id) return;
+	const status = statusFrom(ctx.data.status);
+	if (!status) return;
+	await mirrorChatRunStatus(ctx, String(ctx.data.id), status);
+}
+
+export async function mirrorAiRunCollectionChange(ctx: HookContext) {
+	await mirrorAiRunChange(ctx);
+	await mirrorAiRunEvent(ctx);
+	await mirrorRunLinkChatStatus(ctx);
+}
