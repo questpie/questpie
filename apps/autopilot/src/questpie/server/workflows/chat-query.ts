@@ -3,7 +3,7 @@ import { z } from "zod";
 import { workflow } from "@questpie/workflows";
 
 import { createAiRunLink } from "../lib/ai-run-links";
-import { asAppContext, asJsonValue, asRecord, mergeRecords, relationId } from "../lib/records";
+import { asJsonValue, asRecord, hookCollections, mergeRecords, relationId } from "../lib/records";
 import { resolveRuntimeSelection } from "../lib/runtime-selection";
 import { linkScheduleExecutionRun } from "../lib/schedule-run-links";
 
@@ -56,12 +56,12 @@ export default workflow({
 				return existing;
 			}
 
-			const runtime = await resolveRuntimeSelection(asAppContext(ctx), {
+			const runtime = await resolveRuntimeSelection(ctx, {
 				modelId: input.modelId,
 				projectId: input.projectId ?? relationId(session.project),
 			});
 			return createAiRunLink({
-				ctx: asAppContext(ctx),
+				ctx,
 				runtime,
 				taskId: input.taskId ?? relationId(session.task),
 				projectId: input.projectId ?? relationId(session.project),
@@ -83,7 +83,7 @@ export default workflow({
 
 		await step.run("link-schedule-execution", async () => {
 			await linkScheduleExecutionRun({
-				ctx: asAppContext(ctx),
+				ctx,
 				scheduleExecutionId: input.scheduleExecutionId,
 				runId: run.id,
 			});

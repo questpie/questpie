@@ -15,8 +15,6 @@ import _modules from "../modules";
 // ── Collections ────────────────────────────────────────────
 import { activity as _coll_activity } from "../collections/activity";
 import _coll_admin_audit_log from "../collections/admin-audit-log";
-import _coll_ai_run_events from "../collections/ai-run-events";
-import _coll_ai_runs from "../collections/ai-runs";
 import _coll_assets from "../collections/assets";
 import { capabilities as _coll_capabilities } from "../collections/capabilities";
 import { chatMessages as _coll_chat_messages } from "../collections/chat-messages";
@@ -172,8 +170,6 @@ declare global {
 export type AppCollections = _ModuleCollections & {
 	activity: typeof _coll_activity;
 	admin_audit_log: typeof _coll_admin_audit_log;
-	ai_run_events: typeof _coll_ai_run_events;
-	ai_runs: typeof _coll_ai_runs;
 	assets: typeof _coll_assets;
 	capabilities: typeof _coll_capabilities;
 	chat_messages: typeof _coll_chat_messages;
@@ -434,8 +430,6 @@ export const app = await createApp(
 		collections: {
 			activity: _coll_activity,
 			admin_audit_log: _coll_admin_audit_log,
-			ai_run_events: _coll_ai_run_events,
-			ai_runs: _coll_ai_runs,
 			assets: _coll_assets,
 			capabilities: _coll_capabilities,
 			chat_messages: _coll_chat_messages,

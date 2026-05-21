@@ -11,9 +11,56 @@ import {
 	useCollectionList,
 } from "@questpie/admin/client";
 import { adminClientModule } from "@questpie/admin/client/modules/admin";
+import type { MaybeLazyComponent } from "@questpie/admin/client";
 
-const CollectionFormView =
-	adminClientModule.views["collection-form"].component;
+function isLazyLoader(
+	loader: MaybeLazyComponent,
+): loader is () => Promise<{ default: React.ComponentType<Record<string, unknown>> }> {
+	return (
+		typeof loader === "function" &&
+		loader.length === 0 &&
+		!("prototype" in loader && loader.prototype?.isReactComponent)
+	);
+}
+
+function TaskDetailForm(props: Record<string, unknown>) {
+	const loader = adminClientModule.views["collection-form"].component;
+	const [Component, setComponent] = React.useState<React.ComponentType<
+		Record<string, unknown>
+	> | null>(null);
+
+	React.useEffect(() => {
+		let mounted = true;
+
+		if (!isLazyLoader(loader)) {
+			setComponent(loader as React.ComponentType<Record<string, unknown>>);
+			return;
+		}
+
+		void loader().then((module) => {
+			if (!mounted) return;
+			setComponent(
+				(module.default ?? module) as React.ComponentType<
+					Record<string, unknown>
+				>,
+			);
+		});
+
+		return () => {
+			mounted = false;
+		};
+	}, [loader]);
+
+	if (!Component) {
+		return (
+			<div className="text-muted-foreground flex items-center justify-center p-12">
+				<Icon icon="ph:spinner" className="size-5 animate-spin opacity-40" />
+			</div>
+		);
+	}
+
+	return <Component {...props} />;
+}
 
 type TimelineEntry = {
 	id: string;
@@ -137,7 +184,7 @@ export default function TaskDetailComponent(props: Record<string, unknown>) {
 
 	return (
 		<div className="flex flex-col">
-			<CollectionFormView {...props} />
+			<TaskDetailForm {...props} />
 
 			{taskId && (
 				<div className="border-t">

@@ -4,7 +4,7 @@ import { workflow } from "@questpie/workflows";
 
 import { createAiRunLink } from "../lib/ai-run-links";
 import { classifyRunError, type RunErrorType } from "../lib/error-classifier";
-import { asAppContext, asJsonValue, asRecord, mergeRecords, relationId } from "../lib/records";
+import { asJsonValue, asRecord, mergeRecords, relationId } from "../lib/records";
 import { resolveRuntimeSelection } from "../lib/runtime-selection";
 import { linkScheduleExecutionRun } from "../lib/schedule-run-links";
 import { workflowsFromContext } from "../lib/workflows";
@@ -233,7 +233,7 @@ export default workflow({
 
 		for (let attempt = 1; attempt <= retryPolicy.maxAttempts; attempt++) {
 			const runtime = await step.run(`resolve-runtime-${attempt}`, async () => {
-				return resolveRuntimeSelection(asAppContext(ctx), {
+				return resolveRuntimeSelection(ctx, {
 					modelId: relationId(task.model),
 					capabilityId: relationId(task.capability),
 					projectId: relationId(task.project),
@@ -242,7 +242,7 @@ export default workflow({
 
 			const run = await step.run(`create-run-${attempt}`, async () => {
 				return createAiRunLink({
-					ctx: asAppContext(ctx),
+					ctx: ctx,
 					runtime,
 					taskId: input.taskId,
 					projectId: relationId(task.project),
@@ -267,7 +267,7 @@ export default workflow({
 
 			await step.run(`link-schedule-execution-${attempt}`, async () => {
 				await linkScheduleExecutionRun({
-					ctx: asAppContext(ctx),
+					ctx: ctx,
 					scheduleExecutionId: input.scheduleExecutionId,
 					runId: run.id,
 				});
@@ -370,7 +370,7 @@ export default workflow({
 		const releasedTaskIds =
 			status === "review"
 				? await step.run("release-dependent-tasks", async () =>
-						releaseDependentTasks(asAppContext(ctx), input.taskId),
+						releaseDependentTasks(ctx, input.taskId),
 					)
 				: [];
 

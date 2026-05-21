@@ -3,7 +3,7 @@ import { z } from "zod";
 import { workflow } from "@questpie/workflows";
 
 import { createAiRunLink } from "../lib/ai-run-links";
-import { asAppContext, asJsonValue, asRecord, mergeRecords, relationId, stringFrom } from "../lib/records";
+import { asJsonValue, asRecord, mergeRecords, relationId, stringFrom } from "../lib/records";
 import { resolveRuntimeSelection } from "../lib/runtime-selection";
 
 type Collections = Questpie.WorkflowContext["collections"];
@@ -143,7 +143,7 @@ async function recordProgress(
 }
 
 async function createRunForStep(
-	ctx: Questpie.AppContext,
+	ctx: Pick<Questpie.WorkflowContext, "collections">,
 	task: Record<string, unknown>,
 	workflowConfig: Record<string, unknown>,
 	step: StepConfig,
@@ -160,7 +160,7 @@ async function createRunForStep(
 		relationId(step.model) ??
 		relationId(task.model);
 
-	const runtime = await resolveRuntimeSelection(asAppContext(ctx), {
+	const runtime = await resolveRuntimeSelection(ctx, {
 		modelId,
 		capabilityId,
 		projectId: relationId(task.project),
@@ -168,7 +168,7 @@ async function createRunForStep(
 	});
 
 	return createAiRunLink({
-		ctx: asAppContext(ctx),
+		ctx: ctx,
 		runtime,
 		taskId: String(task.id),
 		projectId: relationId(task.project),
@@ -304,14 +304,9 @@ export default workflow({
 				throw new Error(`Task has no workflow config: ${input.taskId}`);
 			}
 
-			const workflowConfig =
-				typeof task.workflowConfig === "object" &&
-				task.workflowConfig &&
-				relationId(task.workflowConfig) === workflowConfigId
-					? task.workflowConfig
-					: await ctx.collections.workflow_configs.findOne({
-							where: { id: workflowConfigId },
-						});
+			const workflowConfig = await ctx.collections.workflow_configs.findOne({
+				where: { id: workflowConfigId },
+			});
 			if (!workflowConfig) {
 				throw new Error(`Workflow config not found: ${workflowConfigId}`);
 			}
@@ -453,7 +448,7 @@ export default workflow({
 					`create-child-task-${safeName}`,
 					async () =>
 						childTaskFromStep(
-							asAppContext(ctx),
+							ctx,
 							loaded.task,
 							loaded.workflowConfig,
 							current,
@@ -516,7 +511,7 @@ export default workflow({
 						`create-fanout-child-${safeName}-${childIndex}`,
 						async () =>
 							childTaskFromStep(
-								asAppContext(ctx),
+								ctx,
 								loaded.task,
 								loaded.workflowConfig,
 								childStep,
@@ -642,7 +637,7 @@ export default workflow({
 
 			const run = await step.run(`create-run-${safeName}`, async () =>
 				createRunForStep(
-					asAppContext(ctx),
+					ctx,
 					loaded.task,
 					loaded.workflowConfig,
 					current,

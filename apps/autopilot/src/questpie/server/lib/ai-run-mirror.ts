@@ -1,13 +1,27 @@
 import type { GlobalCollectionHookContext } from "questpie";
 
-import { asRecord, mergeRecords, relationId } from "./records";
+import { asRecord, hookCollections, mergeRecords, relationId } from "./records";
 
 type HookContext = GlobalCollectionHookContext & {
 	services?: Questpie.AppContext["services"];
 	workflows?: Questpie.AppContext["workflows"];
 };
 
+type MirrorContext = {
+	collections: Questpie.AppContext["collections"];
+	services?: Questpie.AppContext["services"];
+	workflows?: Questpie.AppContext["workflows"];
+};
+
 type TerminalRunStatus = "completed" | "failed" | "cancelled";
+
+function mirrorContext(ctx: HookContext): MirrorContext {
+	return {
+		collections: hookCollections(ctx),
+		services: ctx.services,
+		workflows: ctx.workflows,
+	};
+}
 
 function terminalTaskStatus(status: TerminalRunStatus) {
 	if (status === "completed") return "review";
@@ -42,41 +56,37 @@ function setIfPresent(
 	if (value !== undefined && value !== null) data[key] = value;
 }
 
-function workflowApi(ctx: unknown) {
-	return (
-		ctx as { workflows?: { sendEvent?: (...args: any[]) => Promise<void> } }
-	).workflows;
-}
-
 async function sendWorkflowEvent(
-	ctx: Questpie.AppContext,
+	ctx: MirrorContext,
 	event: string,
 	runId: string,
 	data: Record<string, unknown>,
 ) {
-	const workflows = workflowApi(ctx);
-	if (!workflows?.sendEvent) return;
-	await workflows.sendEvent(event, { runId, ...data }, { runId });
+	if (!ctx.workflows?.sendEvent) return;
+	await ctx.workflows.sendEvent(event, { runId, ...data }, { runId });
 }
 
-async function runLinkForAiRun(ctx: Questpie.AppContext, aiRunId: string) {
-	return ctx.collections.run_links.findOne({
+async function runLinkForAiRun(
+	collections: Questpie.AppContext["collections"],
+	aiRunId: string,
+) {
+	return collections.run_links.findOne({
 		where: { aiRun: aiRunId },
 	});
 }
 
 async function mirrorChatRunStatus(
-	ctx: Questpie.AppContext,
+	collections: Questpie.AppContext["collections"],
 	runId: string,
 	status: string,
 ) {
-	const messages = await ctx.collections.chat_messages.find({
+	const messages = await collections.chat_messages.find({
 		where: { run: runId },
 		limit: 100,
 	});
 	await Promise.all(
-		messages.docs.map((message: { id: string }) =>
-			ctx.collections.chat_messages.updateById({
+		messages.docs.map((message) =>
+			collections.chat_messages.updateById({
 				id: message.id,
 				data: { runStatus: status },
 			}),
@@ -85,7 +95,7 @@ async function mirrorChatRunStatus(
 }
 
 async function createCompletionResources(input: {
-	ctx: Questpie.AppContext;
+	ctx: MirrorContext;
 	runId: string;
 	summary?: string | null;
 }) {
@@ -105,7 +115,7 @@ async function createCompletionResources(input: {
 }
 
 async function mirrorTerminalSideEffects(input: {
-	ctx: Questpie.AppContext;
+	ctx: MirrorContext;
 	runLink: Record<string, unknown>;
 	status: TerminalRunStatus;
 	summary?: string | null;
@@ -116,9 +126,7 @@ async function mirrorTerminalSideEffects(input: {
 		runId: String(input.runLink.id),
 		summary: input.summary,
 	});
-	const knowledgeResourceIds = resources.map(
-		(resource: { id: string }) => resource.id,
-	);
+	const knowledgeResourceIds = resources.map((resource) => resource.id);
 
 	const taskId = relationId(input.runLink.task);
 	const initiatedBy = input.runLink.initiatedBy;
@@ -149,8 +157,9 @@ async function mirrorTerminalSideEffects(input: {
 export async function mirrorAiRunChange(ctx: HookContext) {
 	if (ctx.collection !== "ai_runs" || !ctx.data?.id) return;
 
+	const mirror = mirrorContext(ctx);
 	const aiRunId = String(ctx.data.id);
-	const runLink = await runLinkForAiRun(ctx, aiRunId);
+	const runLink = await runLinkForAiRun(mirror.collections, aiRunId);
 	if (!runLink) return;
 
 	const status = statusFrom(ctx.data.status);
@@ -173,25 +182,25 @@ export async function mirrorAiRunChange(ctx: HookContext) {
 
 	const updated =
 		Object.keys(data).length > 0
-			? await ctx.collections.run_links.updateById({
+			? await mirror.collections.run_links.updateById({
 					id: String(runLink.id),
 					data,
 				})
 			: runLink;
 
 	if (status) {
-		await mirrorChatRunStatus(ctx, String(runLink.id), status);
+		await mirrorChatRunStatus(mirror.collections, String(runLink.id), status);
 	}
 
 	if (status === "claimed" && originalStatus !== "claimed") {
-		await sendWorkflowEvent(ctx, "run.claimed", String(runLink.id), {
+		await sendWorkflowEvent(mirror, "run.claimed", String(runLink.id), {
 			workerId: relationId(ctx.data.worker),
 		});
 	}
 
 	if (isTerminalStatus(status) && originalStatus !== status) {
 		await mirrorTerminalSideEffects({
-			ctx,
+			ctx: mirror,
 			runLink: updated,
 			status,
 			summary: typeof ctx.data.summary === "string" ? ctx.data.summary : null,
@@ -209,10 +218,11 @@ export async function mirrorAiRunEvent(ctx: HookContext) {
 		return;
 	}
 
+	const mirror = mirrorContext(ctx);
 	const aiRunId = relationId(ctx.data.run);
 	if (!aiRunId) return;
 
-	const runLink = await runLinkForAiRun(ctx, aiRunId);
+	const runLink = await runLinkForAiRun(mirror.collections, aiRunId);
 	if (!runLink) return;
 
 	const eventType =
@@ -223,17 +233,17 @@ export async function mirrorAiRunEvent(ctx: HookContext) {
 	const metadata = asRecord(ctx.data.meta);
 
 	if (eventType === "started" && activeRunStatus(runLink.status)) {
-		await ctx.collections.run_links.updateById({
+		await mirror.collections.run_links.updateById({
 			id: String(runLink.id),
 			data: {
 				status: "running",
 				startedAt: dateOrUndefined(runLink.startedAt) ?? new Date(),
 			},
 		});
-		await mirrorChatRunStatus(ctx, String(runLink.id), "running");
+		await mirrorChatRunStatus(mirror.collections, String(runLink.id), "running");
 	}
 
-	await sendWorkflowEvent(ctx, "run.event", String(runLink.id), {
+	await sendWorkflowEvent(mirror, "run.event", String(runLink.id), {
 		type: eventType,
 		level,
 		summary,
@@ -245,7 +255,11 @@ export async function mirrorRunLinkChatStatus(ctx: HookContext) {
 	if (ctx.collection !== "run_links" || !ctx.data?.id) return;
 	const status = statusFrom(ctx.data.status);
 	if (!status) return;
-	await mirrorChatRunStatus(ctx, String(ctx.data.id), status);
+	await mirrorChatRunStatus(
+		mirrorContext(ctx).collections,
+		String(ctx.data.id),
+		status,
+	);
 }
 
 export async function mirrorAiRunCollectionChange(ctx: HookContext) {
