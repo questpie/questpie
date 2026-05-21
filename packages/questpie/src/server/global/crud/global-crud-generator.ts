@@ -11,6 +11,7 @@ import {
 	executeGlobalGlobalHooks,
 	executeGlobalGlobalTransitionHooks,
 } from "#questpie/server/collection/crud/shared/global-hooks.js";
+import type { GlobalGlobalHookContextInput } from "#questpie/server/config/global-hooks-types.js";
 import {
 	executeAccessRule,
 	extractNestedLocalizationSchemas,
@@ -1573,7 +1574,7 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 		const isBefore = hookName.startsWith("before");
 
 		// Enrich context with onAfterCommit for global hooks
-		const enrichedCtx = { ...ctx, onAfterCommit } as any;
+		const enrichedCtx: GlobalGlobalHookContextInput = { ...ctx, onAfterCommit };
 
 		if (isBefore) {
 			// Global before* first, then entity-specific
@@ -1615,7 +1616,7 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 				globalEntries,
 				hookName,
 				this.state.name,
-				ctx as any,
+				ctx,
 			);
 			await this.executeTransitionHooks(entityHooks, ctx);
 		} else {
@@ -1624,7 +1625,7 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 				globalEntries,
 				hookName,
 				this.state.name,
-				ctx as any,
+				ctx,
 			);
 		}
 	}

@@ -663,6 +663,11 @@ export function generateTemplate(options: TemplateOptions): string {
 				);
 			}
 			lines.push("");
+			if (hasServices && name === "WorkflowContext") {
+				lines.push("\t\t\t// Top-level services (namespace: null)");
+				lines.push("\t\t\tworkflows?: any;");
+				lines.push("");
+			}
 			lines.push("\t\t\t// User services");
 			lines.push("\t\t\tservices: _ExecutionContextDefaultServices;");
 			lines.push("\t\t}");

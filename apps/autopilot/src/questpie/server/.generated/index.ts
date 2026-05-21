@@ -385,6 +385,9 @@ declare global {
 			session: unknown;
 			t: (key: string, params?: Record<string, unknown>, locale?: string) => string;
 
+			// Top-level services (namespace: null)
+			workflows?: any;
+
 			// User services
 			services: _ExecutionContextDefaultServices;
 		}

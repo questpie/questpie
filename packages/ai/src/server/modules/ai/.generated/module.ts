@@ -25,14 +25,11 @@ import _route_workerRegister from "../routes/worker-register";
 // ── Services ────────────────────────────────────────────
 import _svc_workerManager from "../services/worker-manager";
 
-// ── Singles ────────────────────────────────────────────────
-import _adminConfig from "../config/admin";
-
 // ════════════════════════════════════════════════════════════
 // TYPES — composed from typeof references (zero inference cost)
 // ════════════════════════════════════════════════════════════
 
-import type { RouteDefinition } from "questpie/types";
+import type { RouteDefinition, RouteParamsFromKey } from "questpie/types";
 
 export interface AiCollections {
 	ai_run_events: typeof _coll_ai_run_events;
@@ -42,50 +39,30 @@ export interface AiCollections {
 }
 
 export interface AiJobs {
-	workerTimeout: typeof _job_workerTimeout;
+	workerTimeout: Omit<typeof _job_workerTimeout, "handler"> & { handler: (args: unknown) => Promise<unknown> };
 }
 
 export interface AiRoutes {
-	enrollmentEnroll: RouteDefinition;
-	enrollmentTokens: RouteDefinition;
-	runComplete: RouteDefinition;
-	runEvents: RouteDefinition;
-	runStream: RouteDefinition;
-	workerDeregister: RouteDefinition;
-	workerHeartbeat: RouteDefinition;
-	workerPoll: RouteDefinition;
-	workerRegister: RouteDefinition;
+	enrollmentEnroll: RouteDefinition<unknown, unknown, RouteParamsFromKey<"enrollmentEnroll">>;
+	enrollmentTokens: RouteDefinition<unknown, unknown, RouteParamsFromKey<"enrollmentTokens">>;
+	runComplete: RouteDefinition<unknown, unknown, RouteParamsFromKey<"runComplete">>;
+	runEvents: RouteDefinition<unknown, unknown, RouteParamsFromKey<"runEvents">>;
+	runStream: RouteDefinition<unknown, unknown, RouteParamsFromKey<"runStream">>;
+	workerDeregister: RouteDefinition<unknown, unknown, RouteParamsFromKey<"workerDeregister">>;
+	workerHeartbeat: RouteDefinition<unknown, unknown, RouteParamsFromKey<"workerHeartbeat">>;
+	workerPoll: RouteDefinition<unknown, unknown, RouteParamsFromKey<"workerPoll">>;
+	workerRegister: RouteDefinition<unknown, unknown, RouteParamsFromKey<"workerRegister">>;
 }
 
 export interface AiServices {
 	workerManager: typeof _svc_workerManager;
 }
 
-export type AiModule = {
-	name: "questpie-ai";
-	collections: AiCollections;
-	jobs: AiJobs;
-	routes: AiRoutes;
-	services: AiServices;
-	globals: Record<string, never>;
-	messages: Record<string, never>;
-	emails: Record<string, never>;
-	migrations: readonly [];
-	seeds: readonly [];
-	fieldTypes: Record<string, never>;
-	views: Record<string, never>;
-	components: Record<string, never>;
-	blocks: Record<string, never>;
-	config: {
-		admin: typeof _adminConfig;
-	};
-};
-
 // ════════════════════════════════════════════════════════════
 // MODULE DEFINITION — static plain object
 // ════════════════════════════════════════════════════════════
 
-const _module: AiModule = {
+const _module = {
 	name: "questpie-ai" as const,
 	collections: {
 		ai_run_events: _coll_ai_run_events,
@@ -116,12 +93,7 @@ const _module: AiModule = {
 	migrations: [] as const,
 	seeds: [] as const,
 	fieldTypes: {},
-	views: {},
-	components: {},
-	blocks: {},
-	config: {
-		admin: _adminConfig,
-	},
 };
 
+export type AiModule = typeof _module;
 export default _module;
