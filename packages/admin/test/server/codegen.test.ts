@@ -150,7 +150,7 @@ describe("generateAdminClientTemplate", () => {
 		const output = generateAdminClientTemplate(ctx);
 
 		expect(output.code).toContain('import _mod from "../modules";');
-		expect(output.code).toContain("const admin = _mod;");
+		expect(output.code).toContain("const admin = _mergedModules;");
 		expect(output.code).toContain("export default admin;");
 	});
 
@@ -214,7 +214,7 @@ describe("generateAdminClientTemplate", () => {
 		expect(output.code).toContain('import _block_cta from "../blocks/cta";');
 		expect(output.code).toContain('import _block_hero from "../blocks/hero";');
 		// Merged object with module spread
-		expect(output.code).toContain("blocks: { ..._mod.blocks,");
+		expect(output.code).toContain("blocks: { ..._mergedModules.blocks,");
 		expect(output.code).toContain('"cta": _block_cta');
 		expect(output.code).toContain('"hero": _block_hero');
 	});
@@ -325,7 +325,7 @@ describe("generateAdminClientTemplate", () => {
 		const output = generateAdminClientTemplate(ctx);
 
 		// Should emit runtime key using keyFromProperty
-		expect(output.code).toContain("views: { ..._mod.views,");
+		expect(output.code).toContain("views: { ..._mergedModules.views,");
 		expect(output.code).toContain("[_view_kanban.name]: _view_kanban");
 	});
 
@@ -487,12 +487,12 @@ describe("generateAdminClientTemplate", () => {
 		});
 		const output = generateAdminClientTemplate(ctx);
 
-		expect(output.code).toContain("blocks: { ..._mod.blocks,");
-		expect(output.code).toContain("fields: { ..._mod.fields,");
-		expect(output.code).toContain("pages: { ..._mod.pages,");
+		expect(output.code).toContain("blocks: { ..._mergedModules.blocks,");
+		expect(output.code).toContain("fields: { ..._mergedModules.fields,");
+		expect(output.code).toContain("pages: { ..._mergedModules.pages,");
 		expect(output.code).toContain('"hero": _block_hero');
-		expect(output.code).toContain('"color": _fld_color');
-		expect(output.code).toContain('"analytics": _pg_analytics');
+		expect(output.code).toContain("color: _fld_color");
+		expect(output.code).toContain("analytics: _pg_analytics");
 	});
 
 	it("spreads module categories even when no user files exist for that category", () => {
@@ -548,10 +548,10 @@ describe("generateAdminClientTemplate", () => {
 		const output = generateAdminClientTemplate(ctx);
 
 		// Module-only categories should be spread
-		expect(output.code).toContain("fields: { ..._mod.fields },");
-		expect(output.code).toContain("views: { ..._mod.views },");
+		expect(output.code).toContain("fields: { ..._mergedModules.fields },");
+		expect(output.code).toContain("views: { ..._mergedModules.views },");
 		// User category should merge
-		expect(output.code).toContain("blocks: { ..._mod.blocks,");
+		expect(output.code).toContain("blocks: { ..._mergedModules.blocks,");
 	});
 });
 

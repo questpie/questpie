@@ -69,6 +69,7 @@ import {
 	useSidebarSearchParam,
 } from "../../hooks";
 import { useAdminConfig } from "../../hooks/use-admin-config";
+import { adminCollectionKey } from "../../hooks/query-access";
 import {
 	useCollectionCreate,
 	useCollectionDelete,
@@ -318,7 +319,7 @@ const FormFieldsContent = React.memo(function FormFieldsContent({
 	return (
 		<RenderProfiler id={`form.fields.${collection}`} minDurationMs={10}>
 			<AutoFormFields
-				collection={collection as any}
+				collection={adminCollectionKey(collection)}
 				config={config as any}
 				registry={registry}
 				allCollectionsConfig={allCollectionsConfig as any}
@@ -833,6 +834,7 @@ export default function FormView({
 	const { t } = useTranslation();
 	const resolveText = useResolveText();
 	const isEditMode = !!id;
+	const collectionKey = adminCollectionKey(collection);
 	const {
 		fields: resolvedFields,
 		schema,
@@ -916,7 +918,7 @@ export default function FormView({
 		isLoading,
 		error: itemError,
 	} = useCollectionItem(
-		collection as any,
+		collectionKey,
 		id ?? "",
 		hasManyToManyRelations(withRelations)
 			? { with: withRelations, localeFallback: false }
@@ -961,18 +963,18 @@ export default function FormView({
 	}, [item, withRelations]);
 
 	// Mutations
-	const createMutation = useCollectionCreate(collection as any);
-	const updateMutation = useCollectionUpdate(collection as any);
-	const deleteMutation = useCollectionDelete(collection as any);
-	const restoreMutation = useCollectionRestore(collection as any);
-	const revertVersionMutation = useCollectionRevertVersion(collection as any);
+	const createMutation = useCollectionCreate(collectionKey);
+	const updateMutation = useCollectionUpdate(collectionKey);
+	const deleteMutation = useCollectionDelete(collectionKey);
+	const restoreMutation = useCollectionRestore(collectionKey);
+	const revertVersionMutation = useCollectionRevertVersion(collectionKey);
 
 	const [pendingRevertVersion, setPendingRevertVersion] =
 		React.useState<any>(null);
 
 	const { data: versionsData, isLoading: versionsLoading } =
 		useCollectionVersions(
-			collection as any,
+			collectionKey,
 			id ?? "",
 			{ limit: 50 },
 			{
@@ -1005,7 +1007,7 @@ export default function FormView({
 	 * The full 50-version query is still lazy-loaded behind the History sidebar.
 	 */
 	const { data: latestVersionData } = useCollectionVersions(
-		collection as any,
+		collectionKey,
 		id ?? "",
 		{ limit: 1 },
 		{ enabled: workflowEnabled && isEditMode && !!id },
@@ -1498,7 +1500,7 @@ export default function FormView({
 	// Create query options proxy for key building (same as use-collection hooks)
 	const queryOpts = React.useMemo(
 		() =>
-			createQuestpieQueryOptions(client as any, {
+			createQuestpieQueryOptions(client, {
 				keyPrefix: QUERY_KEY_PREFIX,
 				locale: contentLocale,
 			}),

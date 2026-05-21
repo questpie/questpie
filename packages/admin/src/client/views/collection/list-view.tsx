@@ -54,6 +54,10 @@ import {
 	useCollectionList,
 	useCollectionRestore,
 } from "../../hooks/use-collection";
+import {
+	adminCollectionKey,
+	getCollectionQueryApi,
+} from "../../hooks/query-access";
 import { useCollectionFields } from "../../hooks/use-collection-fields";
 import { useSuspenseCollectionMeta } from "../../hooks/use-collection-meta";
 import { useSessionState } from "../../hooks/use-current-user";
@@ -382,6 +386,7 @@ function ListViewInner({
 	actionsConfig,
 }: ListViewProps): React.ReactElement {
 	"use no memo";
+	const collectionKey = adminCollectionKey(collection);
 	const globalRealtimeConfig = useAdminStore(selectRealtime);
 	const { fields: resolvedFields, schema } = useCollectionFields(collection, {
 		fallbackFields: (config as any)?.fields,
@@ -752,17 +757,9 @@ function ListViewInner({
 							...baseQueryOptions.where,
 							[firstFieldLevel!.field]: gv.value,
 						};
-						const collectionQueries = (queryOpts as any).collections?.[
-							collection as string
-						];
-						if (!collectionQueries?.find) {
-							return {
-								queryKey: ["questpie", "group-missing", collection, groupKey],
-								queryFn: async () => ({ docs: [], totalDocs: 0 }),
-								enabled: false,
-							};
-						}
-						return collectionQueries.find(
+						return (
+							getCollectionQueryApi(queryOpts, collectionKey).find as any
+						)(
 							{
 								...baseQueryOptions,
 								where: groupWhere,
@@ -781,7 +778,7 @@ function ListViewInner({
 		isLoading: listLoading,
 		error: listError,
 	} = useCollectionList(
-		collection as any,
+		collectionKey,
 		flatQueryOptions,
 		{ enabled: !isSearching && !isGrouped },
 		{ realtime: effectiveRealtime },
@@ -825,17 +822,12 @@ function ListViewInner({
 	);
 	const edgeQueries = useQueries({
 		queries: edgeLevels.map((level) => {
-			const collectionQueries = (queryOpts as any).collections?.[
-				level.collection
-			];
-			if (!collectionQueries?.find) {
-				return {
-					queryKey: ["questpie", "outline-edge-missing", level.collection],
-					queryFn: async () => ({ docs: [] }),
-					enabled: false,
-				};
-			}
-			return collectionQueries.find({
+			return (
+				getCollectionQueryApi(
+					queryOpts,
+					adminCollectionKey(level.collection),
+				).find as any
+			)({
 				where: level.where,
 				with: {
 					[level.parentField]: true,
@@ -986,8 +978,8 @@ function ListViewInner({
 		}
 		return map;
 	}, [table]);
-	const deleteMutation = useCollectionDelete(collection as any);
-	const restoreMutation = useCollectionRestore(collection as any);
+	const deleteMutation = useCollectionDelete(collectionKey);
+	const restoreMutation = useCollectionRestore(collectionKey);
 	const { data: savedViewsData, isLoading: savedViewsLoading } = useSavedViews(
 		collection,
 		user?.id,

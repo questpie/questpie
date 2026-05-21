@@ -31,11 +31,17 @@ import {
 	useQueryClient,
 } from "@tanstack/react-query";
 import type { QuestpieApp } from "questpie/client";
+import type { QuestpieQueryOptionsProxy } from "@questpie/tanstack-query";
 
 import { createQuestpieQueryOptions } from "@questpie/tanstack-query";
 
-import { selectClient, useAdminStore, useScopedLocale } from "../runtime";
-import { selectContentLocale } from "../runtime/provider";
+import { selectContentLocale, useAdminStore, useScopedLocale } from "../runtime";
+import {
+	type CollectionQueryKey,
+	getCollectionQueryApi,
+	getGlobalQueryApi,
+	useAppClient,
+} from "./query-access";
 
 // ============================================================================
 // Type Helpers
@@ -44,15 +50,12 @@ import { selectContentLocale } from "../runtime/provider";
 /**
  * Extract collection names from a QuestpieApp config
  */
-type CollectionNames<TApp extends QuestpieApp> = keyof TApp["collections"] &
-	string;
+type CollectionNames<TApp extends QuestpieApp> = CollectionQueryKey<TApp>;
 
 /**
  * Extract global names from a QuestpieApp config
  */
-type GlobalNames<TApp extends QuestpieApp> = keyof NonNullable<
-	TApp["globals"]
-> &
+type GlobalNames<TApp extends QuestpieApp> = keyof QuestpieQueryOptionsProxy<TApp>["globals"] &
 	string;
 
 // ============================================================================
@@ -214,29 +217,29 @@ export function createTypedHooks<TApp extends QuestpieApp>(): TypedHooks<TApp> {
 		options?: any,
 		queryOptions?: Omit<UseQueryOptions, "queryKey" | "queryFn">,
 	): any {
-		const client = useAdminStore(selectClient);
+		const client = useAppClient<TApp>();
 		const { locale: contentLocale } = useScopedLocale();
 		const keyPrefix = ["questpie", "collections"] as const;
-		const queryOpts = createQuestpieQueryOptions(
-			client as any,
-			{
-				keyPrefix,
-				locale: contentLocale,
-			} as any,
-		);
+		const queryOpts = createQuestpieQueryOptions<TApp>(client, {
+			keyPrefix,
+			locale: contentLocale,
+		});
 
 		const baseQuery = collection
-			? (queryOpts as any).collections[collection as string].find({
+			? getCollectionQueryApi(
+					queryOpts,
+					collection as CollectionQueryKey<TApp>,
+				).find({
 					...options,
 					locale: contentLocale,
-				} as any)
+				})
 			: {
 					queryKey: ["questpie", "collections", "__none__", "find"],
 					queryFn: () => ({ docs: [], totalDocs: 0 }),
 				};
 
 		return useQuery({
-			...baseQuery,
+			...(baseQuery as any),
 			enabled: !!collection && (queryOptions?.enabled ?? true),
 			...queryOptions,
 		});
@@ -248,19 +251,19 @@ export function createTypedHooks<TApp extends QuestpieApp>(): TypedHooks<TApp> {
 		options?: { where?: any; includeDeleted?: boolean },
 		queryOptions?: Omit<UseQueryOptions, "queryKey" | "queryFn">,
 	): any {
-		const client = useAdminStore(selectClient);
+		const client = useAppClient<TApp>();
 		const { locale: contentLocale } = useScopedLocale();
 		const keyPrefix = ["questpie", "collections"] as const;
-		const queryOpts = createQuestpieQueryOptions(
-			client as any,
-			{
-				keyPrefix,
-				locale: contentLocale,
-			} as any,
-		);
+		const queryOpts = createQuestpieQueryOptions<TApp>(client, {
+			keyPrefix,
+			locale: contentLocale,
+		});
 
 		const baseQuery = collection
-			? (queryOpts as any).collections[collection as string].count({
+			? getCollectionQueryApi(
+					queryOpts,
+					collection as CollectionQueryKey<TApp>,
+				).count({
 					...options,
 					locale: contentLocale,
 				} as any)
@@ -270,7 +273,7 @@ export function createTypedHooks<TApp extends QuestpieApp>(): TypedHooks<TApp> {
 				};
 
 		return useQuery({
-			...baseQuery,
+			...(baseQuery as any),
 			enabled: !!collection && (queryOptions?.enabled ?? true),
 			...queryOptions,
 		});
@@ -286,27 +289,30 @@ export function createTypedHooks<TApp extends QuestpieApp>(): TypedHooks<TApp> {
 		},
 		queryOptions?: Omit<UseQueryOptions, "queryKey" | "queryFn">,
 	): any {
-		const client = useAdminStore(selectClient);
+		const client = useAppClient<TApp>();
 		const { locale: contentLocale } = useScopedLocale();
 		const keyPrefix = ["questpie", "collections"] as const;
-		const queryOpts = createQuestpieQueryOptions(client as any, {
+		const queryOpts = createQuestpieQueryOptions<TApp>(client, {
 			keyPrefix,
 			locale: contentLocale,
 		});
 
 		const baseQuery = collection
-			? (queryOpts as any).collections[collection as string].findOne({
+			? getCollectionQueryApi(
+					queryOpts,
+					collection as CollectionQueryKey<TApp>,
+				).findOne({
 					where: { id },
 					locale: contentLocale,
 					...options,
-				})
+				} as any)
 			: {
 					queryKey: ["questpie", "collections", "__none__", "findOne"],
 					queryFn: () => null,
 				};
 
 		return useQuery({
-			...baseQuery,
+			...(baseQuery as any),
 			enabled: !!collection && (queryOptions?.enabled ?? true),
 			...queryOptions,
 		});
@@ -317,18 +323,16 @@ export function createTypedHooks<TApp extends QuestpieApp>(): TypedHooks<TApp> {
 		collection: K,
 		mutationOptions?: Omit<UseMutationOptions, "mutationFn">,
 	): any {
-		const client = useAdminStore(selectClient);
+		const client = useAppClient<TApp>();
 		const { locale: contentLocale } = useScopedLocale();
 		const queryClient = useQueryClient();
 		const keyPrefix = ["questpie", "collections"] as const;
-		const queryOpts = createQuestpieQueryOptions(client as any, {
+		const queryOpts = createQuestpieQueryOptions<TApp>(client, {
 			keyPrefix,
 			locale: contentLocale,
 		});
 
-		const baseOptions = (queryOpts.collections as any)[
-			collection as string
-		].create();
+		const baseOptions = getCollectionQueryApi(queryOpts, collection as CollectionQueryKey<TApp>).create();
 		const listQueryKey = queryOpts.key([
 			"collections",
 			collection as string,
@@ -348,12 +352,8 @@ export function createTypedHooks<TApp extends QuestpieApp>(): TypedHooks<TApp> {
 				(mutationOptions?.onSuccess as any)?.(data, variables, context);
 			},
 			onSettled: (data: any, error: any, variables: any, context: any) => {
-				queryClient.invalidateQueries({
-					queryKey: listQueryKey,
-				});
-				queryClient.invalidateQueries({
-					queryKey: countQueryKey,
-				});
+				queryClient.invalidateQueries({ queryKey: listQueryKey });
+				queryClient.invalidateQueries({ queryKey: countQueryKey });
 				(mutationOptions?.onSettled as any)?.(data, error, variables, context);
 			},
 			...mutationOptions,
@@ -365,18 +365,16 @@ export function createTypedHooks<TApp extends QuestpieApp>(): TypedHooks<TApp> {
 		collection: K,
 		mutationOptions?: Omit<UseMutationOptions, "mutationFn">,
 	): any {
-		const client = useAdminStore(selectClient);
+		const client = useAppClient<TApp>();
 		const { locale: contentLocale } = useScopedLocale();
 		const queryClient = useQueryClient();
 		const keyPrefix = ["questpie", "collections"] as const;
-		const queryOpts = createQuestpieQueryOptions(client as any, {
+		const queryOpts = createQuestpieQueryOptions<TApp>(client, {
 			keyPrefix,
 			locale: contentLocale,
 		});
 
-		const baseOptions = (queryOpts.collections as any)[
-			collection as string
-		].update();
+		const baseOptions = getCollectionQueryApi(queryOpts, collection as CollectionQueryKey<TApp>).update();
 		const listQueryKey = queryOpts.key([
 			"collections",
 			collection as string,
@@ -402,15 +400,9 @@ export function createTypedHooks<TApp extends QuestpieApp>(): TypedHooks<TApp> {
 				(mutationOptions?.onSuccess as any)?.(data, variables, context);
 			},
 			onSettled: (data: any, error: any, variables: any, context: any) => {
-				queryClient.invalidateQueries({
-					queryKey: listQueryKey,
-				});
-				queryClient.invalidateQueries({
-					queryKey: countQueryKey,
-				});
-				queryClient.invalidateQueries({
-					queryKey: itemQueryKey,
-				});
+				queryClient.invalidateQueries({ queryKey: listQueryKey });
+				queryClient.invalidateQueries({ queryKey: countQueryKey });
+				queryClient.invalidateQueries({ queryKey: itemQueryKey });
 				(mutationOptions?.onSettled as any)?.(data, error, variables, context);
 			},
 			...mutationOptions,
@@ -422,18 +414,16 @@ export function createTypedHooks<TApp extends QuestpieApp>(): TypedHooks<TApp> {
 		collection: K,
 		mutationOptions?: Omit<UseMutationOptions, "mutationFn">,
 	): any {
-		const client = useAdminStore(selectClient);
+		const client = useAppClient<TApp>();
 		const { locale: contentLocale } = useScopedLocale();
 		const queryClient = useQueryClient();
 		const keyPrefix = ["questpie", "collections"] as const;
-		const queryOpts = createQuestpieQueryOptions(client as any, {
+		const queryOpts = createQuestpieQueryOptions<TApp>(client, {
 			keyPrefix,
 			locale: contentLocale,
 		});
 
-		const baseOptions = (queryOpts.collections as any)[
-			collection as string
-		].delete();
+		const baseOptions = getCollectionQueryApi(queryOpts, collection as CollectionQueryKey<TApp>).delete();
 		const listQueryKey = queryOpts.key([
 			"collections",
 			collection as string,
@@ -459,15 +449,9 @@ export function createTypedHooks<TApp extends QuestpieApp>(): TypedHooks<TApp> {
 				(mutationOptions?.onSuccess as any)?.(data, variables, context);
 			},
 			onSettled: (data: any, error: any, variables: any, context: any) => {
-				queryClient.invalidateQueries({
-					queryKey: listQueryKey,
-				});
-				queryClient.invalidateQueries({
-					queryKey: countQueryKey,
-				});
-				queryClient.invalidateQueries({
-					queryKey: itemQueryKey,
-				});
+				queryClient.invalidateQueries({ queryKey: listQueryKey });
+				queryClient.invalidateQueries({ queryKey: countQueryKey });
+				queryClient.invalidateQueries({ queryKey: itemQueryKey });
 				(mutationOptions?.onSettled as any)?.(data, error, variables, context);
 			},
 			...mutationOptions,
@@ -479,18 +463,16 @@ export function createTypedHooks<TApp extends QuestpieApp>(): TypedHooks<TApp> {
 		collection: K,
 		mutationOptions?: Omit<UseMutationOptions, "mutationFn">,
 	): any {
-		const client = useAdminStore(selectClient);
+		const client = useAppClient<TApp>();
 		const { locale: contentLocale } = useScopedLocale();
 		const queryClient = useQueryClient();
 		const keyPrefix = ["questpie", "collections"] as const;
-		const queryOpts = createQuestpieQueryOptions(client as any, {
+		const queryOpts = createQuestpieQueryOptions<TApp>(client, {
 			keyPrefix,
 			locale: contentLocale,
 		});
 
-		const baseOptions = (queryOpts.collections as any)[
-			collection as string
-		].restore();
+		const baseOptions = getCollectionQueryApi(queryOpts, collection as CollectionQueryKey<TApp>).restore();
 		const listQueryKey = queryOpts.key([
 			"collections",
 			collection as string,
@@ -516,15 +498,9 @@ export function createTypedHooks<TApp extends QuestpieApp>(): TypedHooks<TApp> {
 				(mutationOptions?.onSuccess as any)?.(data, variables, context);
 			},
 			onSettled: (data: any, error: any, variables: any, context: any) => {
-				queryClient.invalidateQueries({
-					queryKey: listQueryKey,
-				});
-				queryClient.invalidateQueries({
-					queryKey: countQueryKey,
-				});
-				queryClient.invalidateQueries({
-					queryKey: itemQueryKey,
-				});
+				queryClient.invalidateQueries({ queryKey: listQueryKey });
+				queryClient.invalidateQueries({ queryKey: countQueryKey });
+				queryClient.invalidateQueries({ queryKey: itemQueryKey });
 				(mutationOptions?.onSettled as any)?.(data, error, variables, context);
 			},
 			...mutationOptions,
@@ -538,27 +514,27 @@ export function createTypedHooks<TApp extends QuestpieApp>(): TypedHooks<TApp> {
 		options?: { limit?: number; offset?: number },
 		queryOptions?: Omit<UseQueryOptions, "queryKey" | "queryFn">,
 	): any {
-		const client = useAdminStore(selectClient);
+		const client = useAppClient<TApp>();
 		const { locale: contentLocale } = useScopedLocale();
 		const keyPrefix = ["questpie", "collections"] as const;
-		const queryOpts = createQuestpieQueryOptions(client as any, {
+		const queryOpts = createQuestpieQueryOptions<TApp>(client, {
 			keyPrefix,
 			locale: contentLocale,
 		});
 
 		const baseQuery = collection
-			? (queryOpts as any).collections[collection as string].findVersions({
+			? getCollectionQueryApi(queryOpts, collection as CollectionQueryKey<TApp>).findVersions({
 					id,
 					...(options?.limit !== undefined ? { limit: options.limit } : {}),
 					...(options?.offset !== undefined ? { offset: options.offset } : {}),
-				})
+				} as any)
 			: {
 					queryKey: ["questpie", "collections", "__none__", "findVersions"],
 					queryFn: () => ({ docs: [], totalDocs: 0 }),
 				};
 
 		return useQuery({
-			...baseQuery,
+			...(baseQuery as any),
 			enabled: !!collection && !!id && (queryOptions?.enabled ?? true),
 			...queryOptions,
 		});
@@ -569,18 +545,17 @@ export function createTypedHooks<TApp extends QuestpieApp>(): TypedHooks<TApp> {
 		collection: K,
 		mutationOptions?: Omit<UseMutationOptions, "mutationFn">,
 	): any {
-		const client = useAdminStore(selectClient);
+		const client = useAppClient<TApp>();
 		const { locale: contentLocale } = useScopedLocale();
 		const queryClient = useQueryClient();
 		const keyPrefix = ["questpie", "collections"] as const;
-		const queryOpts = createQuestpieQueryOptions(client as any, {
+		const queryOpts = createQuestpieQueryOptions<TApp>(client, {
 			keyPrefix,
 			locale: contentLocale,
 		});
 
-		const baseOptions = (queryOpts.collections as any)[
-			collection as string
-		].revertToVersion();
+		const baseOptions =
+			getCollectionQueryApi(queryOpts, collection as CollectionQueryKey<TApp>).revertToVersion();
 		const listQueryKey = queryOpts.key([
 			"collections",
 			collection as string,
@@ -612,18 +587,10 @@ export function createTypedHooks<TApp extends QuestpieApp>(): TypedHooks<TApp> {
 				(mutationOptions?.onSuccess as any)?.(data, variables, context);
 			},
 			onSettled: (data: any, error: any, variables: any, context: any) => {
-				queryClient.invalidateQueries({
-					queryKey: listQueryKey,
-				});
-				queryClient.invalidateQueries({
-					queryKey: countQueryKey,
-				});
-				queryClient.invalidateQueries({
-					queryKey: itemQueryKey,
-				});
-				queryClient.invalidateQueries({
-					queryKey: versionsQueryKey,
-				});
+				queryClient.invalidateQueries({ queryKey: listQueryKey });
+				queryClient.invalidateQueries({ queryKey: countQueryKey });
+				queryClient.invalidateQueries({ queryKey: itemQueryKey });
+				queryClient.invalidateQueries({ queryKey: versionsQueryKey });
 				(mutationOptions?.onSettled as any)?.(data, error, variables, context);
 			},
 			...mutationOptions,
@@ -636,22 +603,19 @@ export function createTypedHooks<TApp extends QuestpieApp>(): TypedHooks<TApp> {
 		options?: any,
 		queryOptions?: Omit<UseQueryOptions, "queryKey" | "queryFn">,
 	): any {
-		const client = useAdminStore(selectClient);
+		const client = useAppClient<TApp>();
 		const contentLocale = useAdminStore(selectContentLocale);
 		const keyPrefix = ["questpie", "globals"] as const;
-		const queryOpts = createQuestpieQueryOptions(
-			client as any,
-			{
-				keyPrefix,
-				locale: contentLocale,
-			} as any,
-		);
+		const queryOpts = createQuestpieQueryOptions<TApp>(client, {
+			keyPrefix,
+			locale: contentLocale,
+		});
 
 		return useQuery({
-			...(queryOpts as any).globals[globalName as string].get({
+			...(getGlobalQueryApi(queryOpts, globalName as any).get({
 				...options,
 				locale: contentLocale,
-			} as any),
+			}) as any),
 			...queryOptions,
 		});
 	}
@@ -661,17 +625,14 @@ export function createTypedHooks<TApp extends QuestpieApp>(): TypedHooks<TApp> {
 		globalName: K,
 		mutationOptions?: Omit<UseMutationOptions, "mutationFn">,
 	): any {
-		const client = useAdminStore(selectClient);
+		const client = useAppClient<TApp>();
 		const contentLocale = useAdminStore(selectContentLocale);
 		const queryClient = useQueryClient();
 		const keyPrefix = ["questpie", "globals"] as const;
-		const queryOpts = createQuestpieQueryOptions(
-			client as any,
-			{
-				keyPrefix,
-				locale: contentLocale,
-			} as any,
-		);
+		const queryOpts = createQuestpieQueryOptions<TApp>(client, {
+			keyPrefix,
+			locale: contentLocale,
+		});
 
 		const globalQueryKey = queryOpts.key([
 			"globals",
@@ -681,14 +642,12 @@ export function createTypedHooks<TApp extends QuestpieApp>(): TypedHooks<TApp> {
 		]);
 
 		return useMutation({
-			...(queryOpts as any).globals[globalName as string].update(),
+			...getGlobalQueryApi(queryOpts, globalName as any).update(),
 			onSuccess: (data: any, variables: any, context: any) => {
 				(mutationOptions?.onSuccess as any)?.(data, variables, context);
 			},
 			onSettled: (data: any, error: any, variables: any, context: any) => {
-				queryClient.invalidateQueries({
-					queryKey: globalQueryKey,
-				});
+				queryClient.invalidateQueries({ queryKey: globalQueryKey });
 				(mutationOptions?.onSettled as any)?.(data, error, variables, context);
 			},
 			...mutationOptions,
@@ -701,24 +660,21 @@ export function createTypedHooks<TApp extends QuestpieApp>(): TypedHooks<TApp> {
 		options?: { id?: string; limit?: number; offset?: number },
 		queryOptions?: Omit<UseQueryOptions, "queryKey" | "queryFn">,
 	): any {
-		const client = useAdminStore(selectClient);
+		const client = useAppClient<TApp>();
 		const contentLocale = useAdminStore(selectContentLocale);
 		const keyPrefix = ["questpie", "globals"] as const;
-		const queryOpts = createQuestpieQueryOptions(
-			client as any,
-			{
-				keyPrefix,
-				locale: contentLocale,
-			} as any,
-		);
+		const queryOpts = createQuestpieQueryOptions<TApp>(client, {
+			keyPrefix,
+			locale: contentLocale,
+		});
 
 		return useQuery({
-			...(queryOpts as any).globals[globalName as string].findVersions({
+			...(getGlobalQueryApi(queryOpts, globalName as any).findVersions({
 				...options,
 				locale: contentLocale,
-			}),
+			} as any) as any),
 			...queryOptions,
-		});
+		} as any);
 	}
 
 	// Global revert version hook
@@ -726,17 +682,14 @@ export function createTypedHooks<TApp extends QuestpieApp>(): TypedHooks<TApp> {
 		globalName: K,
 		mutationOptions?: Omit<UseMutationOptions, "mutationFn">,
 	): any {
-		const client = useAdminStore(selectClient);
+		const client = useAppClient<TApp>();
 		const contentLocale = useAdminStore(selectContentLocale);
 		const queryClient = useQueryClient();
 		const keyPrefix = ["questpie", "globals"] as const;
-		const queryOpts = createQuestpieQueryOptions(
-			client as any,
-			{
-				keyPrefix,
-				locale: contentLocale,
-			} as any,
-		);
+		const queryOpts = createQuestpieQueryOptions<TApp>(client, {
+			keyPrefix,
+			locale: contentLocale,
+		});
 
 		const globalQueryKey = queryOpts.key([
 			"globals",
@@ -752,17 +705,13 @@ export function createTypedHooks<TApp extends QuestpieApp>(): TypedHooks<TApp> {
 		]);
 
 		return useMutation({
-			...(queryOpts as any).globals[globalName as string].revertToVersion(),
+			...getGlobalQueryApi(queryOpts, globalName as any).revertToVersion(),
 			onSuccess: (data: any, variables: any, context: any) => {
 				(mutationOptions?.onSuccess as any)?.(data, variables, context);
 			},
 			onSettled: (data: any, error: any, variables: any, context: any) => {
-				queryClient.invalidateQueries({
-					queryKey: globalQueryKey,
-				});
-				queryClient.invalidateQueries({
-					queryKey: versionsQueryKey,
-				});
+				queryClient.invalidateQueries({ queryKey: globalQueryKey });
+				queryClient.invalidateQueries({ queryKey: versionsQueryKey });
 				(mutationOptions?.onSettled as any)?.(data, error, variables, context);
 			},
 			...mutationOptions,

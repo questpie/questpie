@@ -41,6 +41,7 @@ import {
 	TabsList,
 	TabsTrigger,
 } from "../../components/ui/tabs";
+import { adminCollectionKey } from "../../hooks/query-access";
 import { useCollectionFields } from "../../hooks/use-collection-fields";
 import { useCollectionMeta } from "../../hooks/use-collection-meta";
 import { useGlobalFields } from "../../hooks/use-global-fields";
@@ -907,10 +908,13 @@ export function AutoFormFields<T extends QuestpieApp, K extends string>({
 	const globalResult = useGlobalFields(mode === "global" ? collection : "", {
 		schemaQueryOptions: { enabled: mode === "global" && shouldFetchSchema },
 	});
-	const { data: collectionMeta } = useCollectionMeta(collection as any, {
+	const { data: collectionMeta } = useCollectionMeta(
+		adminCollectionKey(collection),
+		{
 		enabled: mode === "collection" && !isActionForm,
-	});
-	const { data: globalMeta } = useGlobalMeta(collection as any, {
+		},
+	);
+	const { data: globalMeta } = useGlobalMeta(adminCollectionKey(collection), {
 		enabled: mode === "global",
 	});
 
