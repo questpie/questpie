@@ -1,7 +1,7 @@
 import { job } from "questpie/services";
 import { z } from "zod";
 
-import { asRecord, relationId } from "../lib/records";
+import { asJsonValue, asRecord, relationId } from "../lib/records";
 import {
 	computeNextRunAt,
 	dateOrNull,
@@ -10,6 +10,7 @@ import {
 import { workflowsFromContext } from "../lib/workflows";
 
 type ScheduleDoc = Record<string, unknown> & { id: string };
+type ScheduleTickContext = Questpie.JobHandlerContext;
 
 function isDue(schedule: ScheduleDoc, now: Date) {
 	const nextRunAt = dateOrNull(schedule.nextRunAt);
@@ -31,7 +32,7 @@ function templateValue(
 }
 
 async function advanceSchedule(
-	ctx: Questpie.AppContext,
+	ctx: ScheduleTickContext,
 	schedule: ScheduleDoc,
 	now: Date,
 ) {
@@ -59,13 +60,13 @@ async function advanceSchedule(
 		data: {
 			lastRunAt: now,
 			nextRunAt: nextRunAt ?? null,
-			enabled: nextRunAt ? schedule.enabled : false,
+			enabled: nextRunAt ? schedule.enabled === true : false,
 		},
 	});
 }
 
 async function hasActiveExecution(
-	ctx: Questpie.AppContext,
+	ctx: ScheduleTickContext,
 	scheduleId: string,
 ) {
 	const executions = await ctx.collections.schedule_executions.find({
@@ -95,7 +96,7 @@ async function hasActiveExecution(
 }
 
 async function cancelActiveExecution(
-	ctx: Questpie.AppContext,
+	ctx: ScheduleTickContext,
 	schedule: ScheduleDoc,
 	active: {
 		execution: Record<string, unknown>;
@@ -144,7 +145,7 @@ async function cancelActiveExecution(
 }
 
 async function triggerTaskSchedule(
-	ctx: Questpie.AppContext,
+	ctx: ScheduleTickContext,
 	schedule: ScheduleDoc,
 	now: Date,
 ) {
@@ -159,12 +160,11 @@ async function triggerTaskSchedule(
 		description: template.description
 			? templateValue(template, "description", "", now)
 			: undefined,
-		type: template.type ?? "task",
+		type: String(template.type ?? "task"),
 		status: "pending",
-		priority: template.priority ?? "medium",
+		priority: String(template.priority ?? "medium"),
 		project: template.projectId ?? template.project_id ?? undefined,
-		scopeType:
-			template.projectId || template.project_id ? "project" : "company",
+		scopeType: (template.projectId || template.project_id ? "project" : "company") as string,
 		workflowConfig:
 			template.workflowConfigId ??
 			template.workflow_config_id ??
@@ -172,10 +172,10 @@ async function triggerTaskSchedule(
 			undefined,
 		capability: template.capabilityId ?? template.capability_id ?? undefined,
 		model: template.modelId ?? template.model_id ?? undefined,
-		queue: template.queue ?? undefined,
+		queue: template.queue != null ? String(template.queue) : undefined,
 		scheduledBy: scheduleActor(schedule.id),
 		createdBy: scheduleActor(schedule.id),
-		context: asRecord(template.context),
+		context: asJsonValue(asRecord(template.context)),
 		metadata: {
 			...asRecord(template.metadata),
 			scheduleId: schedule.id,
@@ -219,7 +219,7 @@ async function triggerTaskSchedule(
 }
 
 async function triggerChatSchedule(
-	ctx: Questpie.AppContext,
+	ctx: ScheduleTickContext,
 	schedule: ScheduleDoc,
 	now: Date,
 ) {

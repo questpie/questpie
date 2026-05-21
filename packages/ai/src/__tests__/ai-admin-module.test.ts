@@ -12,22 +12,15 @@ describe("AI admin module registration", () => {
 			"ai_workers",
 		]);
 
-		const [group] = aiModule.config.admin.sidebar.items;
-		expect(group).toMatchObject({
-			type: "group",
-			label: { en: "AI" },
-			icon: { type: "icon", props: { name: "ph:brain" } },
-		});
-		expect(group.items).toEqual([
-			{ type: "collection", collection: "ai_runs" },
-			{ type: "collection", collection: "ai_workers" },
-		]);
+		expect(aiModule.config.admin.sidebar.items).toEqual([]);
 		expect(aiModule.config.admin).not.toHaveProperty("shell");
 	});
 
-	it("keeps internal event and lease collections hidden from default navigation", () => {
+	it("keeps AI infrastructure collections hidden from default navigation", () => {
 		expect(aiModule.collections.ai_run_events.state.admin.hidden).toBe(true);
 		expect(aiModule.collections.ai_worker_leases.state.admin.hidden).toBe(true);
+		expect(aiModule.collections.ai_runs.state.admin.hidden).toBe(true);
+		expect(aiModule.collections.ai_workers.state.admin.hidden).toBe(true);
 	});
 
 	it("does not register default AI admin components without server references", () => {

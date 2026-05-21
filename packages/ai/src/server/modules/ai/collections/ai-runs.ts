@@ -41,6 +41,8 @@ export const aiRunsCollection = collection("ai_runs")
 	.set("admin", {
 		label: { en: "AI Runs" },
 		icon: { type: "icon", props: { name: "ph:play" } },
+		hidden: true,
+		audit: false,
 	})
 	.set("adminList", {
 		view: "collection-table",
