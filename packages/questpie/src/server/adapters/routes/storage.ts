@@ -4,6 +4,8 @@
  * File upload and serving route handlers.
  */
 
+import { Readable } from "node:stream";
+
 import type { Questpie } from "../../config/questpie.js";
 import type { QuestpieConfig, StorageVisibility } from "../../config/types.js";
 import { ApiError } from "../../errors/index.js";
@@ -16,6 +18,121 @@ import { handleError, smartResponse } from "../utils/response.js";
 // ============================================================================
 // Standalone Handlers
 // ============================================================================
+
+type ByteRange = {
+	start: number;
+	end: number;
+	length: number;
+};
+
+const toUint8Array = (chunk: unknown): Uint8Array => {
+	if (chunk instanceof Uint8Array) return chunk;
+	if (chunk instanceof ArrayBuffer) return new Uint8Array(chunk);
+	if (ArrayBuffer.isView(chunk)) {
+		return new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength);
+	}
+	return new TextEncoder().encode(String(chunk));
+};
+
+const nodeReadableToWeb = (stream: Readable): ReadableStream<Uint8Array> =>
+	(Readable as any).toWeb(stream) as ReadableStream<Uint8Array>;
+
+const parseByteRange = (
+	rangeHeader: string,
+	totalSize: number,
+): ByteRange | "unsatisfiable" | null => {
+	const match = rangeHeader.match(/^bytes=(\d*)-(\d*)$/);
+	if (!match) return null;
+
+	const [, rawStart, rawEnd] = match;
+	if (rawStart === "" && rawEnd === "") return null;
+	if (totalSize <= 0) return "unsatisfiable";
+
+	let start: number;
+	let end: number;
+
+	if (rawStart === "") {
+		const suffixLength = Number.parseInt(rawEnd, 10);
+		if (!Number.isFinite(suffixLength) || suffixLength <= 0) return null;
+		start = Math.max(totalSize - suffixLength, 0);
+		end = totalSize - 1;
+	} else {
+		start = Number.parseInt(rawStart, 10);
+		end = rawEnd === "" ? totalSize - 1 : Number.parseInt(rawEnd, 10);
+	}
+
+	if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
+	if (start > end || start >= totalSize) return "unsatisfiable";
+
+	end = Math.min(end, totalSize - 1);
+	return { start, end, length: end - start + 1 };
+};
+
+const createRangeStream = (
+	stream: Readable,
+	start: number,
+	end: number,
+): ReadableStream<Uint8Array> => {
+	const iterator = stream[Symbol.asyncIterator]();
+	let offset = 0;
+	let closed = false;
+
+	const close = async () => {
+		if (closed) return;
+		closed = true;
+		await iterator.return?.();
+	};
+
+	return new ReadableStream<Uint8Array>({
+		async pull(controller) {
+			if (closed) {
+				controller.close();
+				return;
+			}
+
+			try {
+				while (true) {
+					const next = await iterator.next();
+					if (next.done) {
+						closed = true;
+						controller.close();
+						return;
+					}
+
+					const chunk = toUint8Array(next.value);
+					const chunkStart = offset;
+					const chunkEnd = offset + chunk.byteLength - 1;
+					offset += chunk.byteLength;
+
+					if (chunkEnd < start) continue;
+					if (chunkStart > end) {
+						await close();
+						controller.close();
+						return;
+					}
+
+					const sliceStart = Math.max(start - chunkStart, 0);
+					const sliceEnd = Math.min(end - chunkStart + 1, chunk.byteLength);
+					if (sliceEnd > sliceStart) {
+						controller.enqueue(chunk.subarray(sliceStart, sliceEnd));
+					}
+
+					if (chunkEnd >= end) {
+						await close();
+						controller.close();
+					}
+					return;
+				}
+			} catch (error) {
+				await close().catch(() => {});
+				controller.error(error);
+			}
+		},
+		async cancel() {
+			await close();
+		},
+	});
+};
 
 /**
  * Upload a file to a collection.
@@ -248,7 +365,6 @@ export async function storageCollectionServe(
 	}
 
 	try {
-		const fileBuffer = await app.storage.use().getBytes(key);
 		const metadata = await app.storage.use().getMetaData(key);
 
 		const contentType =
@@ -264,61 +380,59 @@ export async function storageCollectionServe(
 
 		// Security headers for SVG files — prevent embedded script execution
 		const isSvg = contentType.includes("svg");
-		const totalSize = fileBuffer.byteLength;
+		const recordSize = Number((record as any)?.size);
+		const metadataSize = Number(metadata.contentLength);
+		const totalSize = Number.isFinite(metadataSize) ? metadataSize : recordSize;
+		const hasKnownSize = Number.isFinite(totalSize) && totalSize >= 0;
+		const commonHeaders = {
+			"Content-Type": contentType,
+			"Accept-Ranges": "bytes",
+			"Cache-Control":
+				visibility === "public"
+					? "public, max-age=31536000, immutable"
+					: "private, no-cache",
+			...(isSvg && {
+				"Content-Security-Policy": "script-src 'none'",
+			}),
+		};
+		const filenameHeaders = sanitizedFilename
+			? { "Content-Disposition": `inline; filename="${sanitizedFilename}"` }
+			: {};
 
 		// HTTP Range request support (for video/audio seeking)
 		const rangeHeader = request.headers.get("range");
-		if (rangeHeader) {
-			const match = rangeHeader.match(/bytes=(\d+)-(\d*)/);
-			if (match) {
-				const start = Number.parseInt(match[1], 10);
-				const end = match[2] ? Number.parseInt(match[2], 10) : totalSize - 1;
+		if (rangeHeader && hasKnownSize) {
+			const range = parseByteRange(rangeHeader, totalSize);
+			if (range === "unsatisfiable") {
+				return new Response(null, {
+					status: 416,
+					headers: {
+						"Content-Range": `bytes */${totalSize}`,
+					},
+				});
+			}
 
-				if (start >= totalSize || end >= totalSize || start > end) {
-					return new Response(null, {
-						status: 416,
-						headers: {
-							"Content-Range": `bytes */${totalSize}`,
-						},
-					});
-				}
-
-				const slice = fileBuffer.slice(start, end + 1);
-				return new Response(slice.buffer as ArrayBuffer, {
+			if (range) {
+				const stream = await app.storage.use().getStream(key);
+				return new Response(createRangeStream(stream, range.start, range.end), {
 					status: 206,
 					headers: {
-						"Content-Type": contentType,
-						"Content-Range": `bytes ${start}-${end}/${totalSize}`,
-						"Content-Length": String(slice.byteLength),
-						"Accept-Ranges": "bytes",
-						"Cache-Control":
-							visibility === "public"
-								? "public, max-age=31536000, immutable"
-								: "private, no-cache",
-						...(isSvg && {
-							"Content-Security-Policy": "script-src 'none'",
-						}),
+						...commonHeaders,
+						...filenameHeaders,
+						"Content-Range": `bytes ${range.start}-${range.end}/${totalSize}`,
+						"Content-Length": String(range.length),
 					},
 				});
 			}
 		}
 
-		return new Response(fileBuffer.buffer as ArrayBuffer, {
+		const stream = await app.storage.use().getStream(key);
+		return new Response(nodeReadableToWeb(stream), {
 			status: 200,
 			headers: {
-				"Content-Type": contentType,
-				"Content-Length": String(totalSize),
-				"Accept-Ranges": "bytes",
-				"Cache-Control":
-					visibility === "public"
-						? "public, max-age=31536000, immutable"
-						: "private, no-cache",
-				...(sanitizedFilename && {
-					"Content-Disposition": `inline; filename="${sanitizedFilename}"`,
-				}),
-				...(isSvg && {
-					"Content-Security-Policy": "script-src 'none'",
-				}),
+				...commonHeaders,
+				...filenameHeaders,
+				...(hasKnownSize ? { "Content-Length": String(totalSize) } : {}),
 			},
 		});
 	} catch (error) {

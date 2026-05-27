@@ -113,6 +113,11 @@ export interface JobDefinition<
 	};
 }
 
+export type QueueJobType<
+	TPayload = any,
+	TName extends string = string,
+> = JobDefinition<TPayload, any, TName>;
+
 /**
  * Infer payload type from job definition
  */

@@ -3404,47 +3404,63 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			// Upload file to storage using streaming when available
 			// Normalize MIME type (remove charset etc)
 			const mimeType = file.type.split(";")[0]?.trim() || file.type;
+			let stored = false;
 
-			// Streaming is more memory-efficient for large files
-			if (file.stream) {
-				// Convert web ReadableStream to Node.js Readable for Flydrive
-				const { Readable } = await import("node:stream");
-				const webStream = file.stream();
-				// Web ReadableStream → Node.js stream type mismatch requires cast
-				// Readable.fromWeb exists in Node 17+ / Bun but may not be in all TS lib definitions
-				const nodeStream = (Readable as any).fromWeb(
-					webStream as unknown as import("node:stream/web").ReadableStream,
+			try {
+				// Streaming is more memory-efficient for large files
+				if (file.stream) {
+					// Convert web ReadableStream to Node.js Readable for Flydrive
+					const { Readable } = await import("node:stream");
+					const webStream = file.stream();
+					// Web ReadableStream → Node.js stream type mismatch requires cast
+					// Readable.fromWeb exists in Node 17+ / Bun but may not be in all TS lib definitions
+					const nodeStream = (Readable as any).fromWeb(
+						webStream as unknown as import("node:stream/web").ReadableStream,
+					);
+					await this.app.storage.use().putStream(key, nodeStream, {
+						contentType: file.type,
+						contentLength: file.size,
+						visibility,
+					});
+				} else if (file.arrayBuffer) {
+					// Fallback to buffer-based upload for files without stream support
+					const buffer = await file.arrayBuffer();
+					await this.app.storage.use().put(key, new Uint8Array(buffer), {
+						contentType: file.type,
+						contentLength: file.size,
+						visibility,
+					});
+				} else {
+					throw ApiError.badRequest(
+						"Uploaded file must provide a stream or arrayBuffer reader.",
+						undefined,
+						"upload.invalidFile",
+					);
+				}
+				stored = true;
+
+				// Create record using the existing create method
+				const createFn = this.createCreate();
+				return await createFn(
+					{
+						key,
+						filename: file.name,
+						mimeType,
+						size: file.size,
+						visibility,
+						...additionalData,
+					} as Record<string, unknown>,
+					context,
 				);
-				await this.app.storage.use().putStream(key, nodeStream, {
-					contentType: file.type,
-					contentLength: file.size,
-					visibility,
-				});
-			} else {
-				// Fallback to buffer-based upload for files without stream support
-				const buffer = await file.arrayBuffer();
-				await this.app.storage.use().put(key, new Uint8Array(buffer), {
-					contentType: file.type,
-					contentLength: file.size,
-					visibility,
-				});
+			} catch (error) {
+				if (stored) {
+					await this.app.storage
+						.use()
+						.delete(key)
+						.catch(() => {});
+				}
+				throw error;
 			}
-
-			// Create record using the existing create method
-			const createFn = this.createCreate();
-			const record = await createFn(
-				{
-					key,
-					filename: file.name,
-					mimeType,
-					size: file.size,
-					visibility,
-					...additionalData,
-				} as Record<string, unknown>,
-				context,
-			);
-
-			return record;
 		};
 	}
 
