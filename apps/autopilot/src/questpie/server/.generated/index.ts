@@ -70,6 +70,7 @@ import _seed_demoCoverageData_seed from "../seeds/demo-coverage-data.seed";
 import _seed_demoParentIssues_seed from "../seeds/demo-parent-issues.seed";
 import _seed_demoProductData_seed from "../seeds/demo-product-data.seed";
 import _seed_demoStressData_seed from "../seeds/demo-stress-data.seed";
+import _seed_runtimeDefaults_seed from "../seeds/runtime-defaults.seed";
 
 // ── Views ──────────────────────────────────────────────────
 import _view_filesView from "../views/files-view";
@@ -485,7 +486,7 @@ export const app = await createApp(
 			knowledgeResource: _svc_knowledgeResource,
 		},
 		migrations: [_mig_20260507T095449_jolly_red_phoenix, _mig_20260516T185000_auth_user_admin_columns_repair, _mig_20260517T095535_happy_orange_unicorn, _mig_20260519T135407_add_run_links_and_ai_module, _mig_20260519T142100_backfill_legacy_runs_into_run_links, _mig_20260519T145500_link_schedule_executions_to_run_links, _mig_20260519T161500_drop_legacy_execution_infra],
-		seeds: [_seed_demoCoverageData_seed, _seed_demoParentIssues_seed, _seed_demoProductData_seed, _seed_demoStressData_seed],
+		seeds: [_seed_demoCoverageData_seed, _seed_demoParentIssues_seed, _seed_demoProductData_seed, _seed_demoStressData_seed, _seed_runtimeDefaults_seed],
 		views: {
 			filesView: _view_filesView,
 			knowledgeDetail: _view_knowledgeDetail,

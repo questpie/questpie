@@ -11,6 +11,8 @@
 		"dev": "bun --bun vite dev",
 		"dev:worker": "bun --bun run --watch ./src/worker.ts",
 		"worker": "bun --bun run ./src/worker.ts",
+		"dev:ai-worker": "bun --bun run --watch ./src/ai-worker.ts",
+		"ai-worker": "bun --bun run ./src/ai-worker.ts",
 		"questpie": "bun --conditions=development ../../packages/questpie/src/cli/index.ts",
 		"generate": "bun run questpie generate -c src/questpie/server/questpie.config.ts",
 		"db:setup": "bun run generate && bun run migrate:status && bun run migrate && bun run db:dev-admin && bun run db:seed",
