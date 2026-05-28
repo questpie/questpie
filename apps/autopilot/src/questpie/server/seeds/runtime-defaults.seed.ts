@@ -18,11 +18,12 @@ export default seed({
 		}
 
 		log("Creating default Anthropic provider...");
+		// claude-code runtime authenticates via the host Claude subscription,
+		// so no API-key secret is configured here.
 		const provider = await collections.providers.create(
 			{
 				name: "Anthropic",
 				type: "anthropic",
-				secretRef: "ANTHROPIC_API_KEY",
 				enabled: true,
 			},
 			ctx,
