@@ -24,10 +24,20 @@ export const normalizeBasePath = (basePath: string) => {
 export const getQueryParams = (url: URL) =>
 	qs.parse(url.search.slice(1), { allowDots: true, comma: true });
 
-export const isFileLike = (value: unknown): value is UploadFile =>
-	!!value &&
-	typeof (value as UploadFile).name === "string" &&
-	typeof (value as UploadFile).arrayBuffer === "function";
+export const isFileLike = (value: unknown): value is UploadFile => {
+	if (!value) return false;
+
+	const file = value as UploadFile;
+	return (
+		typeof file.name === "string" &&
+		typeof file.type === "string" &&
+		typeof file.size === "number" &&
+		Number.isFinite(file.size) &&
+		file.size >= 0 &&
+		(typeof file.stream === "function" ||
+			typeof file.arrayBuffer === "function")
+	);
+};
 
 export const resolveUploadFile = async (
 	request: Request,

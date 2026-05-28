@@ -46,7 +46,7 @@ export interface UploadFile {
 	/** Size in bytes */
 	size: number;
 	/** Get file contents as ArrayBuffer (fallback for non-streaming) */
-	arrayBuffer: () => Promise<ArrayBuffer>;
+	arrayBuffer?: () => Promise<ArrayBuffer>;
 	/**
 	 * Get file contents as a ReadableStream (preferred for large files)
 	 * When available, this is used instead of arrayBuffer for efficient streaming

@@ -92,7 +92,8 @@ export type UploadFile = {
 	name: string;
 	type: string;
 	size: number;
-	arrayBuffer: () => Promise<ArrayBuffer>;
+	arrayBuffer?: () => Promise<ArrayBuffer>;
+	stream?: () => ReadableStream<Uint8Array>;
 };
 
 export type AdapterRoutes = {

@@ -1,7 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { Readable } from "node:stream";
 
-import { collection } from "../../src/exports/index.js";
 import { storageCollectionServe } from "../../src/server/adapters/routes/storage.js";
+import type {
+	DriverContract,
+	ObjectMetaData,
+	ObjectVisibility,
+	WriteOptions,
+} from "flydrive/types";
+
+import { Questpie, collection } from "../../src/exports/index.js";
+import { createFetchHandler } from "../../src/server/adapters/http.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 import { createTestContext } from "../utils/test-context";
 import { runTestDbMigrations } from "../utils/test-db";
@@ -35,6 +44,129 @@ const restrictedAssets = collection("restricted_assets")
 	.upload({
 		visibility: "public",
 	});
+const textEncoder = new TextEncoder();
+const textDecoder = new TextDecoder();
+
+const mergeChunks = (chunks: Uint8Array[]) => {
+	const total = chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
+	const result = new Uint8Array(total);
+	let offset = 0;
+	for (const chunk of chunks) {
+		result.set(chunk, offset);
+		offset += chunk.byteLength;
+	}
+	return result;
+};
+
+const normalizeChunk = (chunk: unknown) => {
+	if (chunk instanceof Uint8Array) return chunk;
+	if (chunk instanceof ArrayBuffer) return new Uint8Array(chunk);
+	if (ArrayBuffer.isView(chunk)) {
+		return new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength);
+	}
+	return textEncoder.encode(String(chunk));
+};
+
+const createInstrumentedStorageDriver = (
+	initialFiles: Record<string, Uint8Array> = {},
+) => {
+	const files = new Map(Object.entries(initialFiles));
+	const calls = {
+		put: 0,
+		putStream: 0,
+		getBytes: 0,
+		getStream: 0,
+		lastKey: "",
+		lastWriteOptions: undefined as WriteOptions | undefined,
+		lastWriteBody: new Uint8Array(),
+		deletedKeys: [] as string[],
+	};
+
+	const getFile = (key: string) => {
+		const file = files.get(key);
+		if (!file) throw new Error(`Missing file: ${key}`);
+		return file;
+	};
+
+	const driver: DriverContract = {
+		async exists(key) {
+			return files.has(key);
+		},
+		async get(key) {
+			return textDecoder.decode(getFile(key));
+		},
+		async getStream(key) {
+			calls.getStream++;
+			return Readable.from([getFile(key)]);
+		},
+		async getBytes() {
+			calls.getBytes++;
+			throw new Error("getBytes should not be used by storage routes");
+		},
+		async getMetaData(key): Promise<ObjectMetaData> {
+			const file = getFile(key);
+			return {
+				contentLength: file.byteLength,
+				contentType: key.endsWith(".pdf") ? "application/pdf" : "text/plain",
+				etag: `"${key}"`,
+				lastModified: new Date("2026-01-01T00:00:00.000Z"),
+			};
+		},
+		async getVisibility(): Promise<ObjectVisibility> {
+			return "public";
+		},
+		async getUrl(key) {
+			return `http://localhost:3000/assets/files/${encodeURIComponent(key)}`;
+		},
+		async getSignedUrl(key) {
+			return `http://localhost:3000/assets/files/${encodeURIComponent(key)}?token=test`;
+		},
+		async getSignedUploadUrl(key) {
+			return `http://localhost:3000/assets/files/${encodeURIComponent(key)}?upload=test`;
+		},
+		async setVisibility() {},
+		async put(key, contents, options) {
+			calls.put++;
+			calls.lastKey = key;
+			calls.lastWriteOptions = options;
+			calls.lastWriteBody =
+				typeof contents === "string" ? textEncoder.encode(contents) : contents;
+			files.set(key, calls.lastWriteBody);
+		},
+		async putStream(key, contents, options) {
+			calls.putStream++;
+			calls.lastKey = key;
+			calls.lastWriteOptions = options;
+			const chunks: Uint8Array[] = [];
+			for await (const chunk of contents) {
+				chunks.push(normalizeChunk(chunk));
+			}
+			calls.lastWriteBody = mergeChunks(chunks);
+			files.set(key, calls.lastWriteBody);
+		},
+		async copy(source, destination) {
+			files.set(destination, getFile(source));
+		},
+		async move(source, destination) {
+			files.set(destination, getFile(source));
+			files.delete(source);
+		},
+		async delete(key) {
+			calls.deletedKeys.push(key);
+			files.delete(key);
+		},
+		async deleteAll(prefix) {
+			for (const key of files.keys()) {
+				if (key.startsWith(prefix)) files.delete(key);
+			}
+		},
+		async listAll() {
+			return [] as any;
+		},
+	};
+
+	return { calls, driver, files };
+};
 
 // ==============================================================================
 // TESTS
@@ -262,5 +394,111 @@ describe("collection upload storage access", () => {
 		);
 
 		expect(response.status).toBe(403);
+	});
+});
+
+describe("collection storage route streaming", () => {
+	let setup: Awaited<ReturnType<typeof buildMockApp>>;
+	let app: (typeof setup)["app"];
+
+	afterEach(async () => {
+		await setup?.cleanup();
+	});
+
+	it("uploads form files through putStream with explicit content length", async () => {
+		const storage = createInstrumentedStorageDriver();
+		setup = await buildMockApp(
+			{ collections: { assets } },
+			{ storage: { driver: storage.driver } },
+		);
+		app = setup.app;
+		app.storage.restore(Questpie.__internal.storageDriverServiceName);
+		await runTestDbMigrations(app);
+
+		const handler = createFetchHandler(app, {
+			accessMode: "system",
+			basePath: "/api",
+			requestLogging: false,
+		});
+		const body = textEncoder.encode("%PDF-1.4\nmenu");
+		const formData = new FormData();
+		formData.append(
+			"file",
+			new File([body], "menu.pdf", { type: "application/pdf" }),
+		);
+
+		const response = await handler(
+			new Request("http://localhost/api/assets/upload", {
+				method: "POST",
+				body: formData,
+			}),
+		);
+		expect(response).not.toBeNull();
+		expect(response?.status).toBe(200);
+
+		const json = (await response!.json()) as any;
+		expect(json.filename).toBe("menu.pdf");
+		expect(json.size).toBe(body.byteLength);
+		expect(storage.calls.putStream).toBe(1);
+		expect(storage.calls.put).toBe(0);
+		expect(storage.calls.lastWriteOptions?.contentLength).toBe(body.byteLength);
+		expect(storage.calls.lastWriteOptions?.contentType).toBe("application/pdf");
+		expect(textDecoder.decode(storage.calls.lastWriteBody)).toBe(
+			"%PDF-1.4\nmenu",
+		);
+	});
+
+	it("serves full files and ranges from storage streams", async () => {
+		const fileBody = textEncoder.encode("abcdef");
+		const storage = createInstrumentedStorageDriver({
+			"file.txt": fileBody,
+		});
+		setup = await buildMockApp(
+			{ collections: { assets } },
+			{ storage: { driver: storage.driver } },
+		);
+		app = setup.app;
+		app.storage.restore(Questpie.__internal.storageDriverServiceName);
+		await runTestDbMigrations(app);
+
+		await app.collections.assets.create(
+			{
+				id: crypto.randomUUID(),
+				key: "file.txt",
+				filename: "file.txt",
+				mimeType: "text/plain",
+				size: fileBody.byteLength,
+				visibility: "public",
+			},
+			createTestContext(),
+		);
+
+		const handler = createFetchHandler(app, {
+			basePath: "/api",
+			requestLogging: false,
+		});
+
+		const full = await handler(
+			new Request("http://localhost/api/assets/files/file.txt"),
+		);
+		expect(full).not.toBeNull();
+		expect(full?.status).toBe(200);
+		expect(full?.headers.get("content-length")).toBe("6");
+		expect(await full!.text()).toBe("abcdef");
+		expect(storage.calls.getStream).toBe(1);
+		expect(storage.calls.getBytes).toBe(0);
+
+		const range = await handler(
+			new Request("http://localhost/api/assets/files/file.txt", {
+				headers: { Range: "bytes=2-4" },
+			}),
+		);
+		expect(range).not.toBeNull();
+		expect(range?.status).toBe(206);
+		expect(range?.headers.get("content-range")).toBe("bytes 2-4/6");
+		expect(range?.headers.get("content-length")).toBe("3");
+		expect(await range!.text()).toBe("cde");
+		expect(storage.calls.getStream).toBe(2);
+		expect(storage.calls.getBytes).toBe(0);
 	});
 });
