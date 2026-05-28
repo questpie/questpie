@@ -3,3 +3,4 @@ dist
 .output
 .turbo
 .env
+.questpie
