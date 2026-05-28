@@ -1,7 +1,11 @@
 import { startAIWorker } from "@questpie/ai/worker";
 
-import { app } from "#questpie";
+import { createContext } from "#questpie";
 
-await startAIWorker(app, {
+// startAIWorker needs resolved services (workerManager), which live on a
+// context, not the bare app instance — so run it within a system context.
+const ctx = await createContext({ accessMode: "system" });
+
+await startAIWorker(ctx, {
 	runtimes: [{ runtime: "claude-code" }],
 });
