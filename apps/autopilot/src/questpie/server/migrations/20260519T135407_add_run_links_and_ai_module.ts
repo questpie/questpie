@@ -127,36 +127,6 @@ export default migration({
 			sql`CREATE INDEX "ai_workers_status_idx" ON "ai_workers" ("status");`,
 		);
 		await db.execute(
-			sql`CREATE INDEX "activity_task_idx" ON "activity" ("task");`,
-		);
-		await db.execute(
-			sql`CREATE INDEX "activity_run_idx" ON "activity" ("run");`,
-		);
-		await db.execute(
-			sql`CREATE INDEX "activity_type_idx" ON "activity" ("type");`,
-		);
-		await db.execute(
-			sql`CREATE INDEX "activity_project_idx" ON "activity" ("project");`,
-		);
-		await db.execute(
-			sql`CREATE INDEX "capabilities_project_idx" ON "capabilities" ("project");`,
-		);
-		await db.execute(
-			sql`CREATE INDEX "capabilities_enabled_idx" ON "capabilities" ("enabled");`,
-		);
-		await db.execute(
-			sql`CREATE INDEX "environments_project_idx" ON "environments" ("project");`,
-		);
-		await db.execute(
-			sql`CREATE INDEX "join_tokens_expires_at_idx" ON "join_tokens" ("expiresAt");`,
-		);
-		await db.execute(
-			sql`CREATE INDEX "providers_type_enabled_idx" ON "providers" ("type","enabled");`,
-		);
-		await db.execute(
-			sql`CREATE INDEX "providers_project_idx" ON "providers" ("project");`,
-		);
-		await db.execute(
 			sql`CREATE UNIQUE INDEX "run_links_legacy_run_id_idx" ON "run_links" ("legacyRunId");`,
 		);
 		await db.execute(
@@ -180,24 +150,6 @@ export default migration({
 		await db.execute(
 			sql`CREATE INDEX "run_links_resumed_from_run_idx" ON "run_links" ("resumedFromRun");`,
 		);
-		await db.execute(
-			sql`CREATE INDEX "schedules_enabled_next_run_idx" ON "schedules" ("enabled","nextRunAt");`,
-		);
-		await db.execute(
-			sql`CREATE INDEX "schedules_mode_idx" ON "schedules" ("mode");`,
-		);
-		await db.execute(
-			sql`CREATE INDEX "scripts_project_idx" ON "scripts" ("project");`,
-		);
-		await db.execute(
-			sql`CREATE INDEX "secrets_scope_idx" ON "secrets" ("scope");`,
-		);
-		await db.execute(
-			sql`CREATE INDEX "workflow_configs_project_idx" ON "workflow_configs" ("project");`,
-		);
-		await db.execute(
-			sql`CREATE INDEX "workflow_configs_enabled_idx" ON "workflow_configs" ("enabled");`,
-		);
 	},
 	async down({ db }) {
 		await db.execute(sql`DROP TABLE "ai_run_events";`);
@@ -205,22 +157,6 @@ export default migration({
 		await db.execute(sql`DROP TABLE "ai_worker_leases";`);
 		await db.execute(sql`DROP TABLE "ai_workers";`);
 		await db.execute(sql`DROP TABLE "run_links";`);
-		await db.execute(sql`DROP INDEX "activity_task_idx";`);
-		await db.execute(sql`DROP INDEX "activity_run_idx";`);
-		await db.execute(sql`DROP INDEX "activity_type_idx";`);
-		await db.execute(sql`DROP INDEX "activity_project_idx";`);
-		await db.execute(sql`DROP INDEX "capabilities_project_idx";`);
-		await db.execute(sql`DROP INDEX "capabilities_enabled_idx";`);
-		await db.execute(sql`DROP INDEX "environments_project_idx";`);
-		await db.execute(sql`DROP INDEX "join_tokens_expires_at_idx";`);
-		await db.execute(sql`DROP INDEX "providers_type_enabled_idx";`);
-		await db.execute(sql`DROP INDEX "providers_project_idx";`);
-		await db.execute(sql`DROP INDEX "schedules_enabled_next_run_idx";`);
-		await db.execute(sql`DROP INDEX "schedules_mode_idx";`);
-		await db.execute(sql`DROP INDEX "scripts_project_idx";`);
-		await db.execute(sql`DROP INDEX "secrets_scope_idx";`);
-		await db.execute(sql`DROP INDEX "workflow_configs_project_idx";`);
-		await db.execute(sql`DROP INDEX "workflow_configs_enabled_idx";`);
 	},
 	snapshot,
 });
