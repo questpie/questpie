@@ -168,7 +168,7 @@ describe("generateModuleTemplate — minimal", () => {
 	});
 
 	it("emits module type export", () => {
-		expect(output).toContain("export type TestModule = typeof _module;");
+		expect(output).toContain("export type TestModule = {");
 	});
 
 	it("emits default export", () => {
@@ -187,7 +187,7 @@ describe("generateModuleTemplate — type prefix", () => {
 			discovered: emptyResult(),
 			categoryMeta: new Map(),
 		});
-		expect(output).toContain("export type AdminModule = typeof _module;");
+		expect(output).toContain("export type AdminModule = {");
 	});
 
 	it("derives Billing from billing (no questpie- prefix)", () => {
@@ -196,7 +196,7 @@ describe("generateModuleTemplate — type prefix", () => {
 			discovered: emptyResult(),
 			categoryMeta: new Map(),
 		});
-		expect(output).toContain("export type BillingModule = typeof _module;");
+		expect(output).toContain("export type BillingModule = {");
 	});
 
 	it("derives UserAuth from questpie-user-auth (multi-segment)", () => {
@@ -205,7 +205,7 @@ describe("generateModuleTemplate — type prefix", () => {
 			discovered: emptyResult(),
 			categoryMeta: new Map(),
 		});
-		expect(output).toContain("export type UserAuthModule = typeof _module;");
+		expect(output).toContain("export type UserAuthModule = {");
 	});
 });
 
@@ -296,13 +296,13 @@ describe("generateModuleTemplate — routes with slash-separated keys", () => {
 	it("emits flat type interface with camelCase slash keys", () => {
 		expect(output).toContain("export interface TestRoutes {");
 		expect(output).toContain(
-			'"admin/stats": RouteWithParams<typeof _route_admin_stats, RouteParamsFromKey<"admin/stats">>;',
+			'"admin/stats": RouteDefinition<unknown, unknown, RouteParamsFromKey<"admin/stats">>;',
 		);
 		expect(output).toContain(
-			'"admin/users/export": RouteWithParams<typeof _route_admin_users_export, RouteParamsFromKey<"admin/users/export">>;',
+			'"admin/users/export": RouteDefinition<unknown, unknown, RouteParamsFromKey<"admin/users/export">>;',
 		);
 		expect(output).toContain(
-			'getConfig: RouteWithParams<typeof _route_getConfig, RouteParamsFromKey<"getConfig">>;',
+			'getConfig: RouteDefinition<unknown, unknown, RouteParamsFromKey<"getConfig">>;',
 		);
 	});
 });
@@ -337,7 +337,7 @@ describe("generateModuleTemplate — bundle routes", () => {
 		// When bundles are present, type is emitted as intersection, not interface
 		expect(output).toContain("export type TestRoutes =");
 		expect(output).toContain(
-			'getConfig: RouteWithParams<typeof _route_getConfig, RouteParamsFromKey<"getConfig">>',
+			'getConfig: RouteDefinition<unknown, unknown, RouteParamsFromKey<"getConfig">>',
 		);
 		expect(output).toContain("typeof _route_setup");
 	});

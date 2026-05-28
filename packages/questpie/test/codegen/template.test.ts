@@ -160,7 +160,7 @@ describe("generateTemplate — minimal (modules.ts only)", () => {
 
 	it("imports createApp from questpie", () => {
 		expect(code).toContain("import { createApp");
-		expect(code).toContain('from "questpie"');
+		expect(code).toContain('from "questpie/app"');
 	});
 
 	it("imports runtime config", () => {
@@ -203,9 +203,11 @@ describe("generateTemplate — minimal (modules.ts only)", () => {
 	it("emits AppConfig type", () => {
 		expect(code).toContain("export type AppConfig = {");
 		expect(code).toContain(
-			"collections: AppCollections & Record<string, any>;",
+			"collections: AppCollections & Record<string, AnyCollectionOrBuilder>;",
 		);
-		expect(code).toContain("globals: AppGlobals & Record<string, any>;");
+		expect(code).toContain(
+			"globals: AppGlobals & Record<string, AnyGlobalOrBuilder>;",
+		);
 	});
 
 	it("emits createApp call with modules", () => {
@@ -272,7 +274,7 @@ describe("generateTemplate — minimal (modules.ts only)", () => {
 
 	it("extends AppContext with inferred app config context extensions", () => {
 		expect(code).toContain(
-			"interface AppContext extends _AppTopLevelServices, _AppCustomServiceNamespaces, _AppContextExtensions {",
+			"interface AppContext extends _AppCoreContext, _AppTopLevelServices {",
 		);
 	});
 
@@ -655,11 +657,11 @@ describe("generateTemplate — services", () => {
 			"type _AppCustomServiceNamespaces = ServiceCustomNamespaceInstances<_AppServiceDefinitions>;",
 		);
 		expect(code).toContain(
-			"interface AppContext extends _AppTopLevelServices, _AppCustomServiceNamespaces, _AppContextExtensions {",
+			"interface AppContext extends _AppCoreContext, _AppTopLevelServices {",
 		);
 		expect(code).toContain("services: _AppDefaultServices;");
 		expect(code).toContain(
-			"interface ServiceCreateContext extends AppContext {}",
+			"interface ServiceCreateContext extends _AppCoreContext {}",
 		);
 	});
 });
@@ -683,8 +685,8 @@ describe("generateTemplate — emails", () => {
 			singletonFactories: coreSingletonFactories(),
 		});
 
-		expect(code).toContain("type MailerService");
-		expect(code.match(/MailerService/g)?.length).toBe(2);
+		expect(code).toContain("MailerService<AppEmailTemplates>");
+		expect(code.match(/MailerService/g)?.length).toBe(4);
 	});
 
 	it("emits email: MailerService<AppEmailTemplates> in AppContext", () => {
@@ -747,7 +749,7 @@ describe("generateTemplate — routes (flat record)", () => {
 
 		expect(code).toContain("type AppRoutes = _ModuleRoutes & {");
 		expect(code).toContain(
-			'"apps/[appId]/install": RouteWithParams<typeof _route_apps_appId_install, RouteParamsFromKey<"apps/[appId]/install">>;',
+			'"apps/[appId]/install": RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_apps_appId_install>, RouteParamsFromKey<"apps/[appId]/install">>;',
 		);
 	});
 
@@ -871,7 +873,7 @@ describe("generateTemplate — auth", () => {
 		});
 
 		expect(code).toContain('import _auth from "../auth"');
-		expect(code).toContain("auth: _auth as any,");
+		expect(code).toContain("auth: _auth,");
 		expect(code).toContain("auth: typeof _auth;");
 	});
 });
@@ -908,8 +910,8 @@ describe("generateTemplate — plugin singles", () => {
 		});
 
 		expect(code).toContain('import _sidebar from "../sidebar"');
-		expect(code).toContain("sidebar: _sidebar as any,");
-		expect(code).toContain("branding: _branding as any,");
+		expect(code).toContain("sidebar: _sidebar,");
+		expect(code).toContain("branding: _branding,");
 	});
 });
 
@@ -936,7 +938,7 @@ describe("generateTemplate — core singles", () => {
 			singletonFactories: coreSingletonFactories(),
 		});
 
-		expect(code).toContain("locale: _locale as any,");
+		expect(code).toContain("locale: _locale,");
 	});
 });
 
@@ -992,7 +994,7 @@ describe("generateTemplate — spreads", () => {
 		});
 
 		expect(code).toContain(
-			"sidebar: [...(_sidebar_root as any ?? []), ...(_sidebar_admin as any ?? [])],",
+			"sidebar: [...(_sidebar_root ?? []), ...(_sidebar_admin ?? [])],",
 		);
 	});
 
@@ -1008,7 +1010,7 @@ describe("generateTemplate — spreads", () => {
 			singletonFactories: coreSingletonFactories(),
 		});
 
-		expect(code).toContain("sidebar: [...(_sidebar_root as any ?? [])],");
+		expect(code).toContain("sidebar: [...(_sidebar_root ?? [])],");
 	});
 
 	it("emits _Module<Key> type for module contributions", () => {
@@ -1080,9 +1082,9 @@ describe("generateTemplate — spreads", () => {
 			singletonFactories: coreSingletonFactories(),
 		});
 
-		expect(code).toContain("sidebar: [...(_sidebar_root as any ?? [])],");
+		expect(code).toContain("sidebar: [...(_sidebar_root ?? [])],");
 		expect(code).toContain(
-			"dashboard: [...(_dashboard_root as any ?? []), ...(_dashboard_admin as any ?? [])],",
+			"dashboard: [...(_dashboard_root ?? []), ...(_dashboard_admin ?? [])],",
 		);
 	});
 });
