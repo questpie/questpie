@@ -9,7 +9,6 @@ import {
 } from "../../../../../../packages/questpie/test/utils/mocks/mock-app-builder";
 import { runTestDbMigrations } from "../../../../../../packages/questpie/test/utils/test-db";
 import { activity } from "../collections/activity";
-import { capabilities } from "../collections/capabilities";
 import { chatMessages } from "../collections/chat-messages";
 import { chatSessions } from "../collections/chat-sessions";
 import { environments } from "../collections/environments";
@@ -24,8 +23,6 @@ import { scripts } from "../collections/scripts";
 import { secrets } from "../collections/secrets";
 import { taskRelations } from "../collections/task-relations";
 import { tasks } from "../collections/tasks";
-import { workflowConfigs } from "../collections/workflow-configs";
-import multiStepTask from "../workflows/multi-step-task";
 import taskPipeline from "../workflows/task-pipeline";
 
 type WorkflowEvent = {
@@ -109,7 +106,6 @@ describe("task-pipeline workflow", () => {
 				ai_worker_leases: aiModule.collections.ai_worker_leases,
 				ai_workers: aiModule.collections.ai_workers,
 				activity,
-				capabilities,
 				chat_messages: chatMessages,
 				chat_sessions: chatSessions,
 				environments,
@@ -124,7 +120,6 @@ describe("task-pipeline workflow", () => {
 				secrets,
 				task_relations: taskRelations,
 				tasks,
-				workflow_configs: workflowConfigs,
 			},
 			services: {},
 		});
@@ -475,91 +470,6 @@ describe("task-pipeline workflow", () => {
 				where: { id: execution.id },
 			});
 		expect(relationId(updatedExecution?.run)).toBe(result.runId);
-	});
-
-	it("stores workflow provenance on run links for configured workflow steps", async () => {
-		const workflowConfig = await setup!.app.collections.workflow_configs.create(
-			{
-				name: "Single step workflow",
-				enabled: true,
-				steps: [
-					{
-						id: "implement",
-						type: "run",
-						instructions: "Implement the workflow step.",
-					},
-				],
-			} as any,
-		);
-		const task = await setup!.app.collections.tasks.create({
-			title: "Workflow task",
-			description: "Use the configured workflow.",
-			type: "feature",
-			status: "pending",
-			priority: "medium",
-			scopeType: "company",
-			workflowConfig: workflowConfig.id,
-			createdBy: "test",
-		} as any);
-
-		const createContext = createContextFactory(setup!.app);
-		const ctx = await createContext({ accessMode: "system" });
-		const waitEvents: WaitEvent[] = [];
-		const result = await multiStepTask.handler({
-			input: {
-				taskId: task.id,
-				workflowConfigId: workflowConfig.id,
-				requestedBy: "test-runner",
-			},
-			step: fakeStep(
-				{
-					"run.claimed": { runId: "claimed", workerId: "w1" },
-					"run.completed": {
-						status: "completed",
-						summary: "Workflow step done",
-					},
-				},
-				{ waitEvents },
-			) as any,
-			ctx,
-			log: silentLog(),
-		});
-
-		expect(result).toMatchObject({
-			taskId: task.id,
-			runId: expect.any(String),
-			status: "review",
-		});
-
-		const runLink = await setup!.app.collections.run_links.findOne({
-			where: { id: result.runId },
-		});
-		expect(runLink).toMatchObject({
-			task: task.id,
-			workflowConfig: workflowConfig.id,
-			workflowStep: "implement",
-			initiatedBy: "workflow",
-			runtime: "codex",
-		});
-		expect(relationId(runLink?.aiRun)).toBeTruthy();
-		expect(waitEvents).toEqual([
-			{
-				name: "wait-run-claimed-implement",
-				event: "run.claimed",
-				match: { runId: result.runId },
-			},
-			{
-				name: "wait-run-completed-implement",
-				event: "run.completed",
-				match: { runId: result.runId },
-			},
-		]);
-
-		const runLinks = await setup!.app.collections.run_links.find({
-			where: { task: task.id },
-			limit: 10,
-		});
-		expect(runLinks.docs).toHaveLength(1);
 	});
 
 	it("proceeds when dependencies are met", async () => {

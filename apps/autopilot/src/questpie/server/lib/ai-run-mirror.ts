@@ -2,6 +2,7 @@ import type { AiRunStatus } from "@questpie/ai";
 import type { GlobalCollectionHookContext } from "questpie";
 
 import type { AppCollections } from "./app-types";
+import type { CollectionDoc } from "#questpie";
 import { asRecord, mergeRecords, relationId } from "./records";
 
 type TerminalRunStatus = Extract<
@@ -118,7 +119,7 @@ async function createCompletionResources(input: {
 
 async function mirrorTerminalSideEffects(input: {
 	ctx: GlobalCollectionHookContext;
-	runLink: Record<string, unknown>;
+	runLink: CollectionDoc<"run_links">;
 	status: TerminalRunStatus;
 	summary?: string | null;
 	error?: string | null;
@@ -134,11 +135,9 @@ async function mirrorTerminalSideEffects(input: {
 
 	const taskId = relationId(input.runLink.task);
 	const initiatedBy = input.runLink.initiatedBy;
-	if (
-		taskId &&
-		initiatedBy !== "chat" &&
-		!relationId(input.runLink.workflowConfig)
-	) {
+	// Chat runs can be linked to a task for context, but they are
+	// conversational — only task/schedule runs drive the task's status.
+	if (taskId && initiatedBy !== "chat") {
 		await input.ctx.collections.tasks.updateById({
 			id: taskId,
 			data: { status: terminalTaskStatus(input.status) },

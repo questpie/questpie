@@ -13,11 +13,8 @@ type CreateAiRunLinkInput = {
 	instructions: string;
 	taskId?: string | null;
 	projectId?: string | null;
-	capabilityId?: string | null;
 	chatSessionId?: string | null;
 	chatMessageId?: string | null;
-	workflowConfigId?: string | null;
-	workflowStep?: string | null;
 	workflowInstanceId?: string | null;
 	scheduleId?: string | null;
 	scheduleExecutionId?: string | null;
@@ -49,8 +46,6 @@ export async function createAiRunLink(input: CreateAiRunLinkInput) {
 		aiRun: aiRun.id,
 		task: input.taskId ?? undefined,
 		project: input.projectId ?? undefined,
-		workflowConfig: input.workflowConfigId ?? undefined,
-		workflowStep: input.workflowStep ?? undefined,
 		workflowInstanceId: input.workflowInstanceId ?? undefined,
 		schedule: input.scheduleId ?? undefined,
 		scheduleExecution: input.scheduleExecutionId ?? undefined,
@@ -59,7 +54,6 @@ export async function createAiRunLink(input: CreateAiRunLinkInput) {
 		initiatedBy: input.initiatedBy,
 		provider: input.runtime.providerId ?? undefined,
 		model: input.runtime.modelId ?? undefined,
-		capability: input.capabilityId ?? undefined,
 		runtime: input.runtime.runtime,
 		status: "pending",
 		instructions: input.instructions,

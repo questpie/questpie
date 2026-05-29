@@ -71,12 +71,6 @@ export default adminConfig({
 					},
 					{
 						type: "collection",
-						collection: "workflow_configs",
-						label: { en: "Workflows" },
-						icon: { type: "icon", props: { name: "ph:flow-arrow" } },
-					},
-					{
-						type: "collection",
 						collection: "schedules",
 						label: { en: "Schedules" },
 						icon: { type: "icon", props: { name: "ph:calendar-check" } },
@@ -84,7 +78,7 @@ export default adminConfig({
 					{
 						type: "collection",
 						collection: "knowledge",
-						label: { en: "Knowledge" },
+						label: { en: "Artifacts" },
 						icon: { type: "icon", props: { name: "ph:brain" } },
 					},
 					{
@@ -106,12 +100,6 @@ export default adminConfig({
 						collection: "user",
 						label: { en: "Team" },
 						icon: { type: "icon", props: { name: "ph:users" } },
-					},
-					{
-						type: "collection",
-						collection: "capabilities",
-						label: { en: "Skills" },
-						icon: { type: "icon", props: { name: "ph:sparkle" } },
 					},
 				],
 				sections: [
@@ -285,7 +273,7 @@ export default adminConfig({
 						action: { type: "create", collection: "tasks" },
 					},
 					{
-						label: { en: "Add knowledge" },
+						label: { en: "Add artifact" },
 						icon: { type: "icon", props: { name: "ph:brain" } },
 						variant: "secondary",
 						action: { type: "create", collection: "knowledge" },

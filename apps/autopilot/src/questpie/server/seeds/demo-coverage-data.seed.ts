@@ -34,26 +34,6 @@ export default seed({
 			return collections.projects.create(project as any, ctx);
 		};
 
-		const ensureCapability = async (capability: Record<string, unknown>) => {
-			const existing = await findFirst(
-				collections.capabilities,
-				{ name: capability.name },
-				ctx,
-			);
-			if (existing) return existing;
-			return collections.capabilities.create(capability as any, ctx);
-		};
-
-		const ensureWorkflow = async (workflow: Record<string, unknown>) => {
-			const existing = await findFirst(
-				collections.workflow_configs,
-				{ name: workflow.name },
-				ctx,
-			);
-			if (existing) return existing;
-			return collections.workflow_configs.create(workflow as any, ctx);
-		};
-
 		const ensureSchedule = async (schedule: Record<string, unknown>) => {
 			const existing = await findFirst(
 				collections.schedules,
@@ -136,109 +116,6 @@ export default seed({
 			},
 		});
 
-		log("Creating Autopilot coverage skills...");
-		const productAgent = await ensureCapability({
-			name: "Product Engineering Agent",
-			description:
-				"Handles issue triage, focused implementation, browser verification, and concise handoff notes.",
-			project: autopilot.id,
-			enabled: true,
-			allowedTools: ["shell", "browser", "agent-board"],
-			contextRefs: ["knowledge://company/autopilot/product-model"],
-			runtimeHints: {
-				mode: "surgical",
-				researchFirst: true,
-			},
-			config: {
-				defaultWorkflow: "research-plan-implement-verify",
-			},
-		});
-		const docsAgent = await ensureCapability({
-			name: "Documentation Research Agent",
-			description:
-				"Reads docs, product plans, and code references before proposing doc changes.",
-			project: website.id,
-			enabled: true,
-			allowedTools: ["shell", "browser"],
-			contextRefs: ["knowledge://company/design-system/admin-list-view"],
-			runtimeHints: {
-				mode: "research",
-				output: "gaps-and-task-list",
-			},
-			config: {
-				defaultWorkflow: "research-write-verify",
-			},
-		});
-		const releaseAgent = await ensureCapability({
-			name: "Release Operations Agent",
-			description:
-				"Coordinates release checklist issues and summarizes blocked rollout work.",
-			project: customerPortal.id,
-			enabled: false,
-			allowedTools: ["shell"],
-			contextRefs: ["knowledge://company/release/checklist"],
-			runtimeHints: {
-				mode: "approval-required",
-			},
-			config: {
-				requiresApproval: true,
-			},
-		});
-
-		log("Creating Autopilot coverage workflows...");
-		const implementationWorkflow = await ensureWorkflow({
-			name: "Research, implement, verify",
-			description:
-				"Default issue workflow for focused product engineering tasks.",
-			project: autopilot.id,
-			defaultCapability: productAgent.id,
-			enabled: true,
-			version: 2,
-			steps: [
-				{ id: "research", name: "Research", purpose: "Read source docs." },
-				{ id: "plan", name: "Plan", purpose: "Write success criteria." },
-				{ id: "implement", name: "Implement", purpose: "Edit surgically." },
-				{ id: "verify", name: "Verify", purpose: "Run checks." },
-			],
-			config: {
-				outputs: ["summary", "verification", "next-phase"],
-			},
-		});
-		const docsWorkflow = await ensureWorkflow({
-			name: "Research and document gaps",
-			description:
-				"Procedure for turning product and framework research into crisp docs and task gaps.",
-			project: website.id,
-			defaultCapability: docsAgent.id,
-			enabled: true,
-			version: 1,
-			steps: [
-				{ id: "read", name: "Read", purpose: "Inspect source material." },
-				{ id: "map", name: "Map", purpose: "Map UI controls to behavior." },
-				{ id: "write", name: "Write", purpose: "Update docs." },
-			],
-			config: {
-				outputs: ["gap-list", "test-matrix"],
-			},
-		});
-		const releaseWorkflow = await ensureWorkflow({
-			name: "Release readiness checklist",
-			description:
-				"Procedure for release-blocking issues that need explicit human approval.",
-			project: customerPortal.id,
-			defaultCapability: releaseAgent.id,
-			enabled: false,
-			version: 1,
-			steps: [
-				{ id: "collect", name: "Collect", purpose: "Collect blockers." },
-				{ id: "verify", name: "Verify", purpose: "Verify rollout state." },
-				{ id: "approve", name: "Approve", purpose: "Request approval." },
-			],
-			config: {
-				approval: "required",
-			},
-		});
-
 		log("Creating Autopilot coverage schedules...");
 		await ensureSchedule({
 			name: "Daily issue inbox sweep",
@@ -247,7 +124,6 @@ export default seed({
 			cron: "0 8 * * 1-5",
 			timezone: "Europe/Bratislava",
 			mode: "task",
-			workflowConfig: implementationWorkflow.id,
 			taskTemplate: {
 				title: "Daily Autopilot issue inbox sweep",
 				type: "review",
@@ -268,7 +144,6 @@ export default seed({
 			cron: "0 10 * * 1",
 			timezone: "Europe/Bratislava",
 			mode: "task",
-			workflowConfig: docsWorkflow.id,
 			taskTemplate: {
 				title: "Weekly docs gap report",
 				type: "task",
@@ -285,11 +160,10 @@ export default seed({
 		await ensureSchedule({
 			name: "Direct release readiness run",
 			description:
-				"Advanced schedule that runs a workflow directly instead of creating an issue.",
+				"Advanced schedule that runs a chat prompt directly instead of creating an issue.",
 			cron: "30 15 * * 5",
 			timezone: "UTC",
 			mode: "chat",
-			workflowConfig: releaseWorkflow.id,
 			chatPrompt:
 				"Review release readiness and summarize blocked work for human approval.",
 			concurrencyPolicy: "replace",
@@ -310,8 +184,6 @@ export default seed({
 				priority: "urgent",
 				project: autopilot.id,
 				scopeType: "project",
-				workflowConfig: implementationWorkflow.id,
-				capability: productAgent.id,
 				queue: "default",
 				createdBy: `seed:${COVERAGE_SEED_ID}`,
 				context: {
@@ -333,8 +205,6 @@ export default seed({
 				priority: "high",
 				project: autopilot.id,
 				scopeType: "project",
-				workflowConfig: implementationWorkflow.id,
-				capability: productAgent.id,
 				queue: "default",
 				createdBy: `seed:${COVERAGE_SEED_ID}`,
 				context: {
@@ -349,14 +219,12 @@ export default seed({
 			ensureIssue({
 				title: "Create manual Linear-like issue action",
 				description:
-					"Add a compact manual issue creator with title, markdown description, project, priority, and workflow.",
+					"Add a compact manual issue creator with title, markdown description, project, and priority.",
 				type: "feature",
 				status: "pending",
 				priority: "medium",
 				project: autopilot.id,
 				scopeType: "project",
-				workflowConfig: implementationWorkflow.id,
-				capability: productAgent.id,
 				queue: "default",
 				startAfter: tomorrow,
 				createdBy: `seed:${COVERAGE_SEED_ID}`,
@@ -379,8 +247,6 @@ export default seed({
 				priority: "medium",
 				project: website.id,
 				scopeType: "project",
-				workflowConfig: docsWorkflow.id,
-				capability: docsAgent.id,
 				queue: "default",
 				createdBy: `seed:${COVERAGE_SEED_ID}`,
 				context: {
@@ -401,8 +267,6 @@ export default seed({
 				priority: "low",
 				project: autopilot.id,
 				scopeType: "project",
-				workflowConfig: implementationWorkflow.id,
-				capability: productAgent.id,
 				queue: "default",
 				createdBy: `seed:${COVERAGE_SEED_ID}`,
 				context: {
@@ -423,8 +287,6 @@ export default seed({
 				priority: "medium",
 				project: autopilot.id,
 				scopeType: "project",
-				workflowConfig: implementationWorkflow.id,
-				capability: productAgent.id,
 				queue: "default",
 				createdBy: `seed:${COVERAGE_SEED_ID}`,
 				context: {
@@ -445,8 +307,6 @@ export default seed({
 				priority: "low",
 				project: customerPortal.id,
 				scopeType: "project",
-				workflowConfig: releaseWorkflow.id,
-				capability: releaseAgent.id,
 				queue: "default",
 				createdBy: `seed:${COVERAGE_SEED_ID}`,
 				context: {
@@ -497,7 +357,7 @@ export default seed({
 				body: [
 					"# Default company template",
 					"",
-					"Seed data should cover issues, workflows, schedules, knowledge, projects, nested outlines, relation cells, and advanced/internal metadata without surfacing runtime tables as product navigation.",
+					"Seed data should cover issues, schedules, knowledge, projects, nested outlines, relation cells, and advanced/internal metadata without surfacing runtime tables as product navigation.",
 				].join("\n"),
 				contentHash: "seed-default-company-template",
 				metadata: { seed: COVERAGE_SEED_ID },
@@ -571,7 +431,7 @@ export default seed({
 				body: [
 					"# Release checklist",
 					"",
-					"Release workflow test fixture for disabled skills, disabled workflows, and direct workflow schedules.",
+					"Release checklist fixture for disabled skills and direct chat schedules.",
 				].join("\n"),
 				contentHash: "seed-release-checklist",
 				metadata: { seed: COVERAGE_SEED_ID },

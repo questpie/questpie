@@ -19,18 +19,6 @@ export const tasks = collection("tasks")
 		status: f
 			.select([
 				{
-					value: "pending",
-					label: { en: "Pending" },
-				},
-				{
-					value: "waiting",
-					label: { en: "Waiting" },
-				},
-				{
-					value: "running",
-					label: { en: "Running" },
-				},
-				{
 					value: "backlog",
 					label: { en: "Backlog" },
 					icon: {
@@ -42,16 +30,16 @@ export const tasks = collection("tasks")
 					},
 				},
 				{
-					value: "todo",
-					label: { en: "Todo" },
+					value: "pending",
+					label: { en: "Pending" },
 					icon: {
 						type: "icon",
 						props: { name: "ph:circle", className: "text-muted-foreground" },
 					},
 				},
 				{
-					value: "in_progress",
-					label: { en: "In Progress" },
+					value: "running",
+					label: { en: "Running" },
 					icon: {
 						type: "icon",
 						props: {
@@ -61,11 +49,27 @@ export const tasks = collection("tasks")
 					},
 				},
 				{
-					value: "in_review",
-					label: { en: "In Review" },
+					value: "waiting",
+					label: { en: "Waiting" },
+					icon: {
+						type: "icon",
+						props: { name: "ph:clock", className: "text-muted-foreground" },
+					},
+				},
+				{
+					value: "review",
+					label: { en: "Review" },
 					icon: {
 						type: "icon",
 						props: { name: "ph:check-circle", className: "text-green-500" },
+					},
+				},
+				{
+					value: "approved",
+					label: { en: "Approved" },
+					icon: {
+						type: "icon",
+						props: { name: "ph:thumbs-up", className: "text-green-500" },
 					},
 				},
 				{
@@ -80,6 +84,14 @@ export const tasks = collection("tasks")
 					},
 				},
 				{
+					value: "failed",
+					label: { en: "Failed" },
+					icon: {
+						type: "icon",
+						props: { name: "ph:x-circle", className: "text-red-500" },
+					},
+				},
+				{
 					value: "cancelled",
 					label: { en: "Cancelled" },
 					icon: {
@@ -90,23 +102,6 @@ export const tasks = collection("tasks")
 						},
 					},
 				},
-				{
-					value: "duplicate",
-					label: { en: "Duplicate" },
-					icon: {
-						type: "icon",
-						props: {
-							name: "ph:x-circle-fill",
-							className: "text-muted-foreground",
-						},
-					},
-				},
-				{ value: "pending", label: { en: "Pending" } },
-				{ value: "running", label: { en: "Running" } },
-				{ value: "waiting", label: { en: "Waiting" } },
-				{ value: "failed", label: { en: "Failed" } },
-				{ value: "review", label: { en: "Review" } },
-				{ value: "approved", label: { en: "Approved" } },
 			])
 			.default("backlog")
 			.label({ en: "Status" }),
@@ -167,9 +162,6 @@ export const tasks = collection("tasks")
 			])
 			.default("company")
 			.label({ en: "Applies To" }),
-		workflowConfig: f.relation("workflow_configs").label({ en: "Workflow" }),
-		workflowStep: f.text().label({ en: "Current Step" }),
-		capability: f.relation("capabilities").label({ en: "Skill" }),
 		model: f.relation("models").label({ en: "AI Model" }),
 		queue: f.text().label({ en: "Work Queue" }),
 		startAfter: f.datetime().label({ en: "Start After" }),
@@ -185,23 +177,16 @@ export const tasks = collection("tasks")
 	}))
 	.list(({ v, f }) =>
 		v.listView({
-			columns: [
-				f.title,
-				f.status,
-				f.priority,
-				f.project,
-				f.workflowConfig,
-				"updatedAt",
-			],
+			columns: [f.title, f.status, f.priority, f.project, "updatedAt"],
 			searchable: [f.title, f.description],
-			filterable: [f.status, f.priority, f.project, f.workflowConfig],
+			filterable: [f.status, f.priority, f.project],
 			defaultSort: { field: "updatedAt", direction: "desc" },
 			defaultFilters: [
 				{
 					id: "issues-active",
 					field: f.status,
 					operator: "not_in",
-					value: ["done", "cancelled", "duplicate"],
+					value: ["done", "cancelled"],
 				},
 			],
 			quickFilters: [
@@ -214,7 +199,7 @@ export const tasks = collection("tasks")
 							id: "issues-active",
 							field: f.status,
 							operator: "not_in",
-							value: ["done", "cancelled", "duplicate"],
+							value: ["done", "cancelled"],
 						},
 					],
 				},
@@ -249,7 +234,7 @@ export const tasks = collection("tasks")
 				density: "compact",
 				titleField: f.title,
 				leadingFields: [f.priority, f.status],
-				metaFields: [f.project, f.workflowConfig, "updatedAt"],
+				metaFields: [f.project, "updatedAt"],
 			},
 			outline: {
 				defaultExpanded: "roots",
@@ -258,13 +243,15 @@ export const tasks = collection("tasks")
 						kind: "field",
 						field: f.status,
 						order: [
-							"in_progress",
-							"in_review",
-							"todo",
 							"backlog",
+							"pending",
+							"running",
+							"waiting",
+							"review",
+							"approved",
 							"done",
+							"failed",
 							"cancelled",
-							"duplicate",
 						],
 					},
 					{
@@ -283,15 +270,7 @@ export const tasks = collection("tasks")
 		v.taskDetail({
 			sidebar: {
 				position: "right",
-				fields: [
-					f.status,
-					f.priority,
-					f.project,
-					f.type,
-					f.scopeType,
-					f.capability,
-					f.model,
-				],
+				fields: [f.status, f.priority, f.project, f.type, f.scopeType, f.model],
 			},
 			fields: [
 				{
@@ -310,23 +289,14 @@ export const tasks = collection("tasks")
 					label: { en: "Automation" },
 					wrapper: "collapsible",
 					defaultCollapsed: true,
-					fields: [
-						f.workflowConfig,
-						f.startAfter,
-					],
+					fields: [f.startAfter],
 				},
 				{
 					type: "section",
 					label: { en: "Advanced" },
 					wrapper: "collapsible",
 					defaultCollapsed: true,
-					fields: [
-						f.workflowStep,
-						f.queue,
-						f.scheduledBy,
-						f.createdBy,
-						f.metadata,
-					],
+					fields: [f.queue, f.scheduledBy, f.createdBy, f.metadata],
 				},
 			],
 		}),

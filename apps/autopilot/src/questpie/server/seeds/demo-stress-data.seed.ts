@@ -21,7 +21,10 @@ export default seed({
 		const ctx = await createContext({ accessMode: "system", locale: "en" });
 
 		const existing = await collections.tasks.find(
-			{ where: { title: "Implement grouped list view data fetching" }, limit: 1 },
+			{
+				where: { title: "Implement grouped list view data fetching" },
+				limit: 1,
+			},
 			ctx,
 		);
 		if (existing.totalDocs > 0) {
@@ -49,22 +52,6 @@ export default seed({
 			return;
 		}
 
-		const workflow = await findFirst(
-			collections.workflow_configs,
-			{ name: "Research, implement, verify" },
-			ctx,
-		);
-		const docsWorkflow = await findFirst(
-			collections.workflow_configs,
-			{ name: "Research and document gaps" },
-			ctx,
-		);
-		const capability = await findFirst(
-			collections.capabilities,
-			{ name: "Product Engineering Agent" },
-			ctx,
-		);
-
 		const base = {
 			scopeType: "project" as const,
 			queue: "default",
@@ -77,65 +64,56 @@ export default seed({
 			{
 				title: "Implement grouped list view data fetching",
 				type: "feature",
-				status: "in_progress",
+				status: "running",
 				priority: "urgent",
 				project: autopilot!.id,
-				workflowConfig: workflow?.id,
-				capability: capability?.id,
 			},
 			{
 				title: "Build collection field introspection API",
 				type: "feature",
-				status: "in_progress",
+				status: "running",
 				priority: "high",
 				project: autopilot!.id,
-				workflowConfig: workflow?.id,
 			},
 			{
 				title: "Migrate sidebar navigation to product groups",
 				type: "task",
-				status: "in_progress",
+				status: "running",
 				priority: "high",
 				project: autopilot!.id,
-				workflowConfig: workflow?.id,
-				capability: capability?.id,
 			},
 			{
 				title: "Add per-group load more pagination",
 				type: "feature",
-				status: "in_progress",
+				status: "running",
 				priority: "medium",
 				project: autopilot!.id,
-				workflowConfig: workflow?.id,
 			},
 			{
 				title: "Fix relation cell display for nested docs",
 				type: "bug",
-				status: "in_progress",
+				status: "running",
 				priority: "urgent",
 				project: autopilot!.id,
-				workflowConfig: workflow?.id,
-				capability: capability?.id,
 			},
 			{
 				title: "Update landing page hero section",
 				type: "task",
-				status: "in_progress",
+				status: "running",
 				priority: "medium",
 				project: website!.id,
-				workflowConfig: docsWorkflow?.id,
 			},
 			{
 				title: "Implement dark mode token audit",
 				type: "task",
-				status: "in_progress",
+				status: "running",
 				priority: "low",
 				project: autopilot!.id,
 			},
 			{
 				title: "Portal SSO integration flow",
 				type: "feature",
-				status: "in_progress",
+				status: "running",
 				priority: "high",
 				project: portal!.id,
 			},
@@ -144,39 +122,35 @@ export default seed({
 			{
 				title: "Review outline expand/collapse animations",
 				type: "review",
-				status: "in_review",
+				status: "review",
 				priority: "medium",
 				project: autopilot!.id,
-				workflowConfig: workflow?.id,
 			},
 			{
 				title: "Review quick filter bar redesign",
 				type: "review",
-				status: "in_review",
+				status: "review",
 				priority: "high",
 				project: autopilot!.id,
-				workflowConfig: workflow?.id,
-				capability: capability?.id,
 			},
 			{
 				title: "Review docs site accessibility report",
 				type: "review",
-				status: "in_review",
+				status: "review",
 				priority: "medium",
 				project: website!.id,
-				workflowConfig: docsWorkflow?.id,
 			},
 			{
 				title: "Validate bulk action toolbar regressions",
 				type: "review",
-				status: "in_review",
+				status: "review",
 				priority: "high",
 				project: autopilot!.id,
 			},
 			{
 				title: "Review portal onboarding wizard copy",
 				type: "review",
-				status: "in_review",
+				status: "review",
 				priority: "low",
 				project: portal!.id,
 			},
@@ -185,75 +159,70 @@ export default seed({
 			{
 				title: "Add keyboard shortcuts for list navigation",
 				type: "feature",
-				status: "todo",
+				status: "pending",
 				priority: "medium",
 				project: autopilot!.id,
-				workflowConfig: workflow?.id,
 			},
 			{
 				title: "Implement saved views persistence",
 				type: "feature",
-				status: "todo",
+				status: "pending",
 				priority: "high",
 				project: autopilot!.id,
-				workflowConfig: workflow?.id,
-				capability: capability?.id,
 			},
 			{
 				title: "Build status transition validation",
 				type: "feature",
-				status: "todo",
+				status: "pending",
 				priority: "medium",
 				project: autopilot!.id,
 			},
 			{
 				title: "Create knowledge import from GitHub",
 				type: "feature",
-				status: "todo",
+				status: "pending",
 				priority: "high",
 				project: autopilot!.id,
-				workflowConfig: workflow?.id,
 			},
 			{
 				title: "Add real-time collaboration indicators",
 				type: "feature",
-				status: "todo",
+				status: "pending",
 				priority: "low",
 				project: autopilot!.id,
 			},
 			{
 				title: "Redesign project settings page",
 				type: "task",
-				status: "todo",
+				status: "pending",
 				priority: "medium",
 				project: autopilot!.id,
 			},
 			{
 				title: "Write API reference for collections SDK",
 				type: "task",
-				status: "todo",
+				status: "pending",
 				priority: "high",
 				project: website!.id,
-				workflowConfig: docsWorkflow?.id,
 			},
 			{
 				title: "Add changelog generation from commits",
 				type: "feature",
-				status: "todo",
+				status: "pending",
 				priority: "low",
 				project: website!.id,
 			},
 			{
 				title: "Portal webhook delivery retry logic",
 				type: "feature",
-				status: "todo",
+				status: "pending",
 				priority: "urgent",
 				project: portal!.id,
 			},
 			{
 				title: "Implement multi-tenant data isolation",
 				type: "feature",
-				status: "todo",
+				status: "pending",
 				priority: "urgent",
 				project: portal!.id,
 			},
@@ -293,7 +262,6 @@ export default seed({
 				status: "backlog",
 				priority: "high",
 				project: autopilot!.id,
-				workflowConfig: workflow?.id,
 			},
 			{
 				title: "Add Slack integration for issue updates",
@@ -324,7 +292,6 @@ export default seed({
 				status: "done",
 				priority: "high",
 				project: autopilot!.id,
-				workflowConfig: workflow?.id,
 			},
 			{
 				title: "Add admin sidebar navigation",
@@ -389,14 +356,14 @@ export default seed({
 			{
 				title: "Fix CSS loading in admin (duplicate of ship admin CSS fix)",
 				type: "bug",
-				status: "duplicate",
+				status: "cancelled",
 				priority: "medium",
 				project: autopilot!.id,
 			},
 			{
 				title: "Portal SSO setup (duplicate of SSO integration)",
 				type: "task",
-				status: "duplicate",
+				status: "cancelled",
 				priority: "low",
 				project: portal!.id,
 			},
@@ -457,6 +424,8 @@ export default seed({
 			);
 		}
 
-		log(`Stress test data created: ${created.length} issues, ${parentChildPairs.length} relations`);
+		log(
+			`Stress test data created: ${created.length} issues, ${parentChildPairs.length} relations`,
+		);
 	},
 });

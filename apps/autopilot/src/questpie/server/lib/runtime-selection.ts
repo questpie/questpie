@@ -1,14 +1,14 @@
 import { ApiError } from "questpie/errors";
 
 import type { AppCollections, WorkflowContextCollections } from "./app-types";
+import { asRecord, isRecord, relationId } from "./records";
 
 type Collections = AppCollections;
 
-export type RuntimeId = "claude-code" | "codex" | "opencode";
+export type RuntimeId = "claude-code" | "codex";
 
 export interface ResolveRuntimeInput {
 	modelId?: string | null;
-	capabilityId?: string | null;
 	projectId?: string | null;
 	runtime?: RuntimeId | null;
 }
@@ -17,32 +17,13 @@ export interface RuntimeResolution {
 	runtime: RuntimeId;
 	model: Record<string, unknown> | null;
 	provider: Record<string, unknown> | null;
-	capability: Record<string, unknown> | null;
 	modelId: string | null;
 	providerId: string | null;
 	providerConfig: Record<string, unknown>;
-	toolPolicy: unknown;
-	contextRefs: unknown;
-	promptRefs: unknown;
-	runtimeHints: Record<string, unknown>;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function asRecord(value: unknown): Record<string, unknown> {
-	return isRecord(value) ? value : {};
-}
-
-function relationId(value: unknown): string | null {
-	if (typeof value === "string") return value;
-	if (isRecord(value) && typeof value.id === "string") return value.id;
-	return null;
 }
 
 function runtimeFromValue(value: unknown): RuntimeId | null {
-	if (value === "claude-code" || value === "codex" || value === "opencode") {
+	if (value === "claude-code" || value === "codex") {
 		return value;
 	}
 	return null;
@@ -97,38 +78,17 @@ async function loadModel(
 	);
 }
 
-async function loadCapability(
-	collections: Collections,
-	capabilityId?: string | null,
-) {
-	if (!capabilityId) return null;
-	const capability = await collections.capabilities.findOne({
-		where: { id: capabilityId },
-		with: { defaultModel: true },
-	});
-	if (!capability) throw ApiError.notFound("Capability", capabilityId);
-	return capability as Record<string, unknown>;
-}
-
 export async function resolveRuntimeSelection(
 	ctx: WorkflowContextCollections,
 	input: ResolveRuntimeInput = {},
 ): Promise<RuntimeResolution> {
-	const capability = await loadCapability(ctx.collections, input.capabilityId);
-	const defaultModelId = relationId(capability?.defaultModel);
-	const explicitModelId = input.modelId ?? defaultModelId;
 	const model = await loadModel(
 		ctx.collections,
-		explicitModelId,
+		input.modelId,
 		input.projectId,
 	);
 	const provider = await loadProvider(ctx.collections, model);
-	const runtimeHints = asRecord(capability?.runtimeHints);
-	const runtime =
-		input.runtime ??
-		runtimeFromValue(model?.runtime) ??
-		runtimeFromValue(runtimeHints.runtime) ??
-		"codex";
+	const runtime = input.runtime ?? runtimeFromValue(model?.runtime) ?? "codex";
 	const providerConfig = {
 		...asRecord(provider?.config),
 		...asRecord(model?.config),
@@ -138,13 +98,8 @@ export async function resolveRuntimeSelection(
 		runtime,
 		model,
 		provider,
-		capability,
 		modelId: relationId(model),
 		providerId: relationId(provider),
 		providerConfig,
-		toolPolicy: capability?.allowedTools ?? null,
-		contextRefs: capability?.contextRefs ?? null,
-		promptRefs: capability?.promptRefs ?? null,
-		runtimeHints,
 	};
 }

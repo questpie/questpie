@@ -9,7 +9,6 @@ import {
 } from "../../../../../../packages/questpie/test/utils/mocks/mock-app-builder";
 import { runTestDbMigrations } from "../../../../../../packages/questpie/test/utils/test-db";
 import { activity } from "../collections/activity";
-import { capabilities } from "../collections/capabilities";
 import { chatMessages } from "../collections/chat-messages";
 import { chatSessions } from "../collections/chat-sessions";
 import { environments } from "../collections/environments";
@@ -24,7 +23,6 @@ import { scripts } from "../collections/scripts";
 import { secrets } from "../collections/secrets";
 import { taskRelations } from "../collections/task-relations";
 import { tasks } from "../collections/tasks";
-import { workflowConfigs } from "../collections/workflow-configs";
 import scheduleTick from "../jobs/schedule-tick";
 
 type WorkflowEvent = {
@@ -51,7 +49,6 @@ describe("schedule-tick job execution", () => {
 				ai_worker_leases: aiModule.collections.ai_worker_leases,
 				ai_workers: aiModule.collections.ai_workers,
 				activity,
-				capabilities,
 				chat_messages: chatMessages,
 				chat_sessions: chatSessions,
 				environments,
@@ -66,7 +63,6 @@ describe("schedule-tick job execution", () => {
 				secrets,
 				task_relations: taskRelations,
 				tasks,
-				workflow_configs: workflowConfigs,
 			},
 		});
 		await runTestDbMigrations(setup.app);

@@ -3,9 +3,14 @@ import { z } from "zod";
 import { workflow } from "@questpie/workflows";
 
 import { createAiRunLink } from "../lib/ai-run-links";
+import type { AppCollections, WorkflowServiceContext } from "../lib/app-types";
 import { classifyRunError, type RunErrorType } from "../lib/error-classifier";
-import type { AppCollections, WorkflowContextCollections, WorkflowServiceContext } from "../lib/app-types";
-import { asJsonValue, asRecord, mergeRecords, relationId } from "../lib/records";
+import {
+	asJsonValue,
+	asRecord,
+	mergeRecords,
+	relationId,
+} from "../lib/records";
 import type { RunCompletion } from "../lib/run-completion";
 import { resolveRuntimeSelection } from "../lib/runtime-selection";
 import { linkScheduleExecutionRun } from "../lib/schedule-run-links";
@@ -19,7 +24,6 @@ interface RetryPolicy {
 	backoffMultiplier: number;
 	maxDelaySeconds?: number;
 	retryOn: RunErrorType[];
-	onExhausted: "fail" | "waiting" | "cancel";
 }
 
 const DEFAULT_RETRY_POLICY: RetryPolicy = {
@@ -28,7 +32,6 @@ const DEFAULT_RETRY_POLICY: RetryPolicy = {
 	backoffMultiplier: 2,
 	maxDelaySeconds: 15 * 60,
 	retryOn: ["infra", "timeout", "rate_limit"],
-	onExhausted: "fail",
 };
 
 function retryPolicyFrom(value: unknown): RetryPolicy {
@@ -69,15 +72,6 @@ function retryPolicyFrom(value: unknown): RetryPolicy {
 				"unknown",
 			].includes(String(item)),
 		),
-		onExhausted:
-			raw.onExhausted === "waiting" ||
-			raw.on_exhausted === "waiting" ||
-			raw.onExhausted === "cancel" ||
-			raw.on_exhausted === "cancel"
-				? String(raw.onExhausted ?? raw.on_exhausted) === "cancel"
-					? "cancel"
-					: "waiting"
-				: "fail",
 	};
 }
 
@@ -176,19 +170,6 @@ export default workflow({
 		});
 		if (!task) throw new Error(`Task not found: ${input.taskId}`);
 
-		const workflowConfigId = relationId(task.workflowConfig);
-		if (workflowConfigId) {
-			return step.invoke("run-configured-workflow", {
-				workflow: "multi-step-task",
-				input: {
-					taskId: input.taskId,
-					workflowConfigId,
-					requestedBy: input.requestedBy ?? "system",
-				},
-				timeout: "14d",
-			});
-		}
-
 		if (
 			!(await step.run("check-dependencies", async () =>
 				dependenciesMet(ctx.collections, input.taskId),
@@ -230,7 +211,6 @@ export default workflow({
 			const runtime = await step.run(`resolve-runtime-${attempt}`, async () => {
 				return resolveRuntimeSelection(ctx, {
 					modelId: relationId(task.model),
-					capabilityId: relationId(task.capability),
 					projectId: relationId(task.project),
 				});
 			});
@@ -241,16 +221,9 @@ export default workflow({
 					runtime,
 					taskId: input.taskId,
 					projectId: relationId(task.project),
-					capabilityId: relationId(task.capability),
 					initiatedBy: "task",
 					instructions: taskInstructions(task),
 					scheduleExecutionId: input.scheduleExecutionId,
-					spawnMetadata: {
-						toolPolicy: runtime.toolPolicy,
-						contextRefs: runtime.contextRefs,
-						promptRefs: runtime.promptRefs,
-						runtimeHints: runtime.runtimeHints,
-					},
 					linkMetadata: {
 						runReason: input.runReason ?? "task-pipeline",
 						requestedBy: input.requestedBy ?? "system",

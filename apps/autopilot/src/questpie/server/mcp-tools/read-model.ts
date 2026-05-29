@@ -41,8 +41,6 @@ export const taskGet = mcpTool("task_get", {
 		where: { id: input.id },
 		with: {
 			project: true,
-			workflowConfig: true,
-			capability: true,
 			model: true,
 		},
 	});

@@ -11,7 +11,6 @@ import {
 } from "../../../../../../packages/questpie/test/utils/mocks/mock-app-builder";
 import { runTestDbMigrations } from "../../../../../../packages/questpie/test/utils/test-db";
 import { activity } from "../collections/activity";
-import { capabilities } from "../collections/capabilities";
 import { chatMessages } from "../collections/chat-messages";
 import { chatSessions } from "../collections/chat-sessions";
 import { environments } from "../collections/environments";
@@ -26,7 +25,6 @@ import { scripts } from "../collections/scripts";
 import { secrets } from "../collections/secrets";
 import { taskRelations } from "../collections/task-relations";
 import { tasks } from "../collections/tasks";
-import { workflowConfigs } from "../collections/workflow-configs";
 import { mirrorAiRunCollectionChange } from "../lib/ai-run-mirror";
 import chatRoute from "../routes/chat";
 import runStreamRoute from "../routes/run-stream";
@@ -277,7 +275,6 @@ describe("chat realtime workflow contract", () => {
 					ai_worker_leases: aiModule.collections.ai_worker_leases,
 					ai_workers: aiModule.collections.ai_workers,
 					activity,
-					capabilities,
 					chat_messages: chatMessages,
 					chat_sessions: chatSessions,
 					environments,
@@ -292,7 +289,6 @@ describe("chat realtime workflow contract", () => {
 					secrets,
 					task_relations: taskRelations,
 					tasks,
-					workflow_configs: workflowConfigs,
 				},
 				services: {
 					knowledgeResource,

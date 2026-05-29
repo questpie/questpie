@@ -3,7 +3,11 @@ import { z } from "zod";
 import { workflow } from "@questpie/workflows";
 
 import { createAiRunLink } from "../lib/ai-run-links";
-import { asJsonValue, asRecord, mergeRecords, relationId } from "../lib/records";
+import {
+	asJsonValue,
+	mergeRecords,
+	relationId,
+} from "../lib/records";
 import type { RunCompletion } from "../lib/run-completion";
 import { resolveRuntimeSelection } from "../lib/runtime-selection";
 import { linkScheduleExecutionRun } from "../lib/schedule-run-links";
@@ -65,12 +69,6 @@ export default workflow({
 				chatMessageId: input.messageId,
 				scheduleExecutionId: input.scheduleExecutionId,
 				runtimeSessionRef: session.runtimeSessionRef,
-				spawnMetadata: {
-					toolPolicy: runtime.toolPolicy,
-					contextRefs: runtime.contextRefs,
-					promptRefs: runtime.promptRefs,
-					runtimeHints: runtime.runtimeHints,
-				},
 				linkMetadata: {},
 			});
 		});

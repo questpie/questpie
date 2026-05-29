@@ -16,8 +16,6 @@ export default mcpConfig({
 			schedules: { read: true, write: true },
 			providers: { read: true },
 			models: { read: true },
-			capabilities: { read: true },
-			workflow_configs: { read: true },
 			environments: { read: true },
 			scripts: { read: true },
 		},

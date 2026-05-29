@@ -17,10 +17,9 @@ export const schedules = collection("schedules")
 		mode: f
 			.select([
 				{ value: "task", label: { en: "Create issue" } },
-				{ value: "chat", label: { en: "Run workflow directly" } },
+				{ value: "chat", label: { en: "Run chat prompt" } },
 			])
 			.label({ en: "Action" }),
-		workflowConfig: f.relation("workflow_configs").label({ en: "Workflow" }),
 		taskTemplate: f
 			.object({
 				title: f.text().label({ en: "Title" }),
@@ -53,16 +52,9 @@ export const schedules = collection("schedules")
 	}))
 	.list(({ v, f }) =>
 		v.collectionTable({
-			columns: [
-				f.name,
-				f.mode,
-				f.workflowConfig,
-				f.enabled,
-				f.nextRunAt,
-				f.lastRunAt,
-			],
+			columns: [f.name, f.mode, f.enabled, f.nextRunAt, f.lastRunAt],
 			searchable: [f.name, f.description, f.chatPrompt],
-			filterable: [f.enabled, f.mode, f.workflowConfig],
+			filterable: [f.enabled, f.mode],
 			defaultSort: { field: f.nextRunAt, direction: "asc" },
 			quickFilters: [
 				{
@@ -105,9 +97,9 @@ export const schedules = collection("schedules")
 					],
 				},
 				{
-					id: "run-workflow",
-					label: { en: "Run Workflow" },
-					icon: { type: "icon", props: { name: "ph:flow-arrow" } },
+					id: "run-chat",
+					label: { en: "Run Chat" },
+					icon: { type: "icon", props: { name: "ph:chat-circle" } },
 					filters: [
 						{
 							id: "schedules-chat-mode",
@@ -157,8 +149,8 @@ export const schedules = collection("schedules")
 								},
 								{
 									type: "section",
-									label: { en: "Workflow" },
-									fields: [f.workflowConfig, f.chatPrompt],
+									label: { en: "Chat Prompt" },
+									fields: [f.chatPrompt],
 								},
 							],
 						},

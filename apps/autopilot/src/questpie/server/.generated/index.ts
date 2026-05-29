@@ -16,7 +16,6 @@ import _modules from "../modules";
 import { activity as _coll_activity } from "../collections/activity";
 import _coll_admin_audit_log from "../collections/admin-audit-log";
 import _coll_assets from "../collections/assets";
-import { capabilities as _coll_capabilities } from "../collections/capabilities";
 import { chatMessages as _coll_chat_messages } from "../collections/chat-messages";
 import { chatSessions as _coll_chat_sessions } from "../collections/chat-sessions";
 import { environments as _coll_environments } from "../collections/environments";
@@ -31,7 +30,6 @@ import { scripts as _coll_scripts } from "../collections/scripts";
 import { secrets as _coll_secrets } from "../collections/secrets";
 import { taskRelations as _coll_task_relations } from "../collections/task-relations";
 import { tasks as _coll_tasks } from "../collections/tasks";
-import { workflowConfigs as _coll_workflow_configs } from "../collections/workflow-configs";
 
 // ── Jobs ───────────────────────────────────────────────────
 import _job_cleanup from "../jobs/cleanup";
@@ -64,6 +62,8 @@ import _mig_20260519T135407_add_run_links_and_ai_module from "../migrations/2026
 import _mig_20260519T142100_backfill_legacy_runs_into_run_links from "../migrations/20260519T142100_backfill_legacy_runs_into_run_links";
 import _mig_20260519T145500_link_schedule_executions_to_run_links from "../migrations/20260519T145500_link_schedule_executions_to_run_links";
 import _mig_20260519T161500_drop_legacy_execution_infra from "../migrations/20260519T161500_drop_legacy_execution_infra";
+import _mig_20260529T001500_drop_workflow_configs from "../migrations/20260529T001500_drop_workflow_configs";
+import _mig_20260529T003000_drop_capabilities from "../migrations/20260529T003000_drop_capabilities";
 
 // ── Seeds ──────────────────────────────────────────────────
 import _seed_demoCoverageData_seed from "../seeds/demo-coverage-data.seed";
@@ -79,7 +79,6 @@ import _view_taskDetail from "../views/task-detail";
 
 // ── Workflows ──────────────────────────────────────────────
 import _wf_chatQuery from "../workflows/chat-query";
-import _wf_multiStepTask from "../workflows/multi-step-task";
 import _wf_taskPipeline from "../workflows/task-pipeline";
 
 // ── McpTools ───────────────────────────────────────────────
@@ -172,7 +171,6 @@ export type AppCollections = _ModuleCollections & {
 	activity: typeof _coll_activity;
 	admin_audit_log: typeof _coll_admin_audit_log;
 	assets: typeof _coll_assets;
-	capabilities: typeof _coll_capabilities;
 	chat_messages: typeof _coll_chat_messages;
 	chat_sessions: typeof _coll_chat_sessions;
 	environments: typeof _coll_environments;
@@ -187,7 +185,6 @@ export type AppCollections = _ModuleCollections & {
 	secrets: typeof _coll_secrets;
 	task_relations: typeof _coll_task_relations;
 	tasks: typeof _coll_tasks;
-	workflow_configs: typeof _coll_workflow_configs;
 };
 
 /** All globals in the app (modules + user, user overrides) */
@@ -252,7 +249,6 @@ export type AppBlocks = _ModuleBlocks;
 /** All workflows in the app (modules + user, user overrides) */
 export type AppWorkflows = _ModuleWorkflows
 	& { [K in typeof _wf_chatQuery.name]: Omit<typeof _wf_chatQuery, "handler" | "onFailure"> & { handler: (args: unknown) => Promise<unknown>; onFailure?: (args: unknown) => Promise<void> } }
-	& { [K in typeof _wf_multiStepTask.name]: Omit<typeof _wf_multiStepTask, "handler" | "onFailure"> & { handler: (args: unknown) => Promise<unknown>; onFailure?: (args: unknown) => Promise<void> } }
 	& { [K in typeof _wf_taskPipeline.name]: Omit<typeof _wf_taskPipeline, "handler" | "onFailure"> & { handler: (args: unknown) => Promise<unknown>; onFailure?: (args: unknown) => Promise<void> } };
 
 /** All mcptools in the app (modules + user, user overrides) */
@@ -445,7 +441,6 @@ export const app = await createApp(
 			activity: _coll_activity,
 			admin_audit_log: _coll_admin_audit_log,
 			assets: _coll_assets,
-			capabilities: _coll_capabilities,
 			chat_messages: _coll_chat_messages,
 			chat_sessions: _coll_chat_sessions,
 			environments: _coll_environments,
@@ -460,7 +455,6 @@ export const app = await createApp(
 			secrets: _coll_secrets,
 			task_relations: _coll_task_relations,
 			tasks: _coll_tasks,
-			workflow_configs: _coll_workflow_configs,
 		},
 		jobs: {
 			cleanup: _job_cleanup,
@@ -485,7 +479,7 @@ export const app = await createApp(
 			gitProviderAdapters: _svc_gitProviderAdapters,
 			knowledgeResource: _svc_knowledgeResource,
 		},
-		migrations: [_mig_20260507T095449_jolly_red_phoenix, _mig_20260516T185000_auth_user_admin_columns_repair, _mig_20260517T095535_happy_orange_unicorn, _mig_20260519T135407_add_run_links_and_ai_module, _mig_20260519T142100_backfill_legacy_runs_into_run_links, _mig_20260519T145500_link_schedule_executions_to_run_links, _mig_20260519T161500_drop_legacy_execution_infra],
+		migrations: [_mig_20260507T095449_jolly_red_phoenix, _mig_20260516T185000_auth_user_admin_columns_repair, _mig_20260517T095535_happy_orange_unicorn, _mig_20260519T135407_add_run_links_and_ai_module, _mig_20260519T142100_backfill_legacy_runs_into_run_links, _mig_20260519T145500_link_schedule_executions_to_run_links, _mig_20260519T161500_drop_legacy_execution_infra, _mig_20260529T001500_drop_workflow_configs, _mig_20260529T003000_drop_capabilities],
 		seeds: [_seed_demoCoverageData_seed, _seed_demoParentIssues_seed, _seed_demoProductData_seed, _seed_demoStressData_seed, _seed_runtimeDefaults_seed],
 		views: {
 			filesView: _view_filesView,
@@ -494,7 +488,6 @@ export const app = await createApp(
 		},
 		workflows: {
 			[_wf_chatQuery.name]: _wf_chatQuery,
-			[_wf_multiStepTask.name]: _wf_multiStepTask,
 			[_wf_taskPipeline.name]: _wf_taskPipeline,
 		},
 		mcpTools: {

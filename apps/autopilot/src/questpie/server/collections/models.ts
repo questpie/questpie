@@ -11,11 +11,9 @@ export const models = collection("models")
 			.select([
 				{ value: "claude-code", label: { en: "Claude Code" } },
 				{ value: "codex", label: { en: "Codex" } },
-				{ value: "opencode", label: { en: "OpenCode" } },
 			])
 			.label({ en: "Runtime" }),
 		maxTokens: f.number().label({ en: "Token Limit" }),
-		capabilities: f.json().label({ en: "Supported Skills" }),
 		config: f.json().label({ en: "Advanced Settings" }),
 		enabled: f.boolean().label({ en: "Enabled" }).default(true),
 	}))
@@ -32,14 +30,7 @@ export const models = collection("models")
 				position: "right",
 				fields: [f.enabled, f.runtime],
 			},
-			fields: [
-				f.name,
-				f.provider,
-				f.modelId,
-				f.maxTokens,
-				f.capabilities,
-				f.config,
-			],
+			fields: [f.name, f.provider, f.modelId, f.maxTokens, f.config],
 		}),
 	)
 	.indexes(({ table }) => [

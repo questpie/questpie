@@ -8,8 +8,6 @@ export const runLinks = collection("run_links")
 		aiRun: f.relation("ai_runs").label({ en: "AI Run" }),
 		task: f.relation("tasks").label({ en: "Task" }),
 		project: f.relation("projects").label({ en: "Project" }),
-		workflowConfig: f.relation("workflow_configs").label({ en: "Workflow" }),
-		workflowStep: f.text().label({ en: "Workflow Step" }),
 		workflowInstanceId: f.text().label({ en: "Workflow Instance" }),
 		schedule: f.relation("schedules").label({ en: "Schedule" }),
 		scheduleExecution: f
@@ -29,12 +27,10 @@ export const runLinks = collection("run_links")
 			.label({ en: "Started By" }),
 		provider: f.relation("providers").label({ en: "Provider" }),
 		model: f.relation("models").label({ en: "Model" }),
-		capability: f.relation("capabilities").label({ en: "Skill" }),
 		runtime: f
 			.select([
 				{ value: "claude-code", label: { en: "Claude Code" } },
 				{ value: "codex", label: { en: "Codex" } },
-				{ value: "opencode", label: { en: "OpenCode" } },
 			])
 			.label({ en: "Runtime" }),
 		status: f

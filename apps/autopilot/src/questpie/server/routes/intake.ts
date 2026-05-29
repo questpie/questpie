@@ -13,8 +13,6 @@ const intakeSchema = z.object({
 		.enum(["task", "feature", "bug", "research", "review", "approval"])
 		.default("task"),
 	priority: z.enum(["low", "medium", "high", "urgent"]).default("medium"),
-	workflowConfigId: z.string().optional(),
-	capabilityId: z.string().optional(),
 	modelId: z.string().optional(),
 	queue: z.string().optional(),
 	context: z.record(z.string(), z.unknown()).optional(),
@@ -43,8 +41,6 @@ export default route()
 			priority: input.priority,
 			project: input.projectId,
 			scopeType: input.projectId ? "project" : "company",
-			workflowConfig: input.workflowConfigId,
-			capability: input.capabilityId,
 			model: input.modelId,
 			queue: input.queue,
 			createdBy: input.createdBy ?? ctx.session?.user?.id ?? "system",

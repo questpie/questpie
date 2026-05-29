@@ -19,18 +19,14 @@ export type TaskTypeValue =
 	| "review"
 	| "approval";
 export type TaskStatusValue =
-	| "pending"
-	| "waiting"
-	| "running"
 	| "backlog"
-	| "todo"
-	| "in_progress"
-	| "in_review"
-	| "done"
-	| "cancelled"
-	| "duplicate"
-	| "failed"
+	| "pending"
+	| "running"
+	| "waiting"
 	| "review"
-	| "approved";
+	| "approved"
+	| "done"
+	| "failed"
+	| "cancelled";
 export type TaskPriorityValue = "low" | "medium" | "high" | "urgent";
 export type TaskScopeTypeValue = "project" | "company";

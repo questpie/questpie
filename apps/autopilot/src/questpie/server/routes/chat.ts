@@ -93,11 +93,7 @@ export default route()
 			chatMessageId: message.id,
 			runtimeSessionRef: session.runtimeSessionRef,
 			spawnMetadata: {
-				toolPolicy: runtime.toolPolicy,
-				contextRefs: runtime.contextRefs,
 				attachments: input.attachments ?? [],
-				promptRefs: runtime.promptRefs,
-				runtimeHints: runtime.runtimeHints,
 			},
 			linkMetadata: { attachments: input.attachments ?? [] },
 		});

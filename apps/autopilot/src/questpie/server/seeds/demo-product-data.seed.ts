@@ -7,7 +7,7 @@ const DEMO_PROJECT_SLUG = "questpie-autopilot-demo";
 export default seed({
 	id: "autopilotDemoProductData",
 	description:
-		"Demo Autopilot product data for local testing: project, workflow, schedule, knowledge, and issues",
+		"Demo Autopilot product data for local testing: project, schedule, knowledge, and issues",
 	category: "dev",
 	async run({ collections, createContext, log }) {
 		const ctx = await createContext({ accessMode: "system", locale: "en" });
@@ -42,75 +42,13 @@ export default seed({
 			ctx,
 		);
 
-		log("Creating Autopilot demo skill...");
-		const capability = await collections.capabilities.create(
-			{
-				name: "Product Engineering Agent",
-				description:
-					"Handles issue triage, focused implementation, browser verification, and concise handoff notes.",
-				project: project.id,
-				enabled: true,
-				allowedTools: ["shell", "browser", "agent-board"],
-				contextRefs: ["knowledge://company/autopilot/product-model"],
-				runtimeHints: {
-					mode: "surgical",
-					researchFirst: true,
-					useAgentBoard: true,
-				},
-				config: {
-					defaultWorkflow: "research-plan-implement-verify",
-				},
-			},
-			ctx,
-		);
-
-		log("Creating Autopilot demo workflow...");
-		const workflow = await collections.workflow_configs.create(
-			{
-				name: "Research, implement, verify",
-				description:
-					"Default issue workflow for focused product engineering tasks.",
-				project: project.id,
-				defaultCapability: capability.id,
-				enabled: true,
-				version: 1,
-				steps: [
-					{
-						id: "research",
-						name: "Research",
-						purpose: "Read product plan, current code, primitives, and i18n.",
-					},
-					{
-						id: "plan",
-						name: "Plan",
-						purpose: "Write a small implementation plan with success criteria.",
-					},
-					{
-						id: "implement",
-						name: "Implement",
-						purpose:
-							"Make surgical changes through existing framework primitives.",
-					},
-					{
-						id: "verify",
-						name: "Verify",
-						purpose: "Run generation, lint, typecheck, and browser checks.",
-					},
-				],
-				config: {
-					requires: ["research-first", "i18n", "browser-verification"],
-				},
-			},
-			ctx,
-		);
-
 		log("Creating Autopilot demo knowledge...");
 		const productModelBody = [
 			"# Autopilot product model",
 			"",
-			"Autopilot is a focused product for Issues, Workflows, Schedules, Knowledge, and Projects.",
+			"Autopilot is a focused product for Issues, Automations, Knowledge, and Projects.",
 			"",
-			"Users should not need to understand workers, runs, leases, providers, models, queues, or raw workflow runtime internals.",
+			"Users should not need to understand workers, runs, leases, providers, models, queues, or raw durable runtime internals.",
 			"",
 			"Creation should happen through product actions: prompt-driven AI issue creation and a manual Linear-like issue creator.",
 		].join("\n");
@@ -146,14 +84,13 @@ export default seed({
 			{
 				name: "Weekly product triage",
 				description:
-					"Creates a review issue every Monday for product backlog and workflow health.",
+					"Creates a review issue every Monday for product backlog and automation health.",
 				cron: "0 9 * * 1",
 				timezone: "Europe/Bratislava",
 				mode: "task",
-				workflowConfig: workflow.id,
 				taskTemplate: {
 					title: "Weekly Autopilot product triage",
-					description: "Review backlog and workflow health.",
+					description: "Review backlog and automation health.",
 					type: "review",
 					priority: "medium",
 					projectId: project.id,
@@ -195,20 +132,20 @@ export default seed({
 				},
 			},
 			{
-				title: "Review workflow list columns",
+				title: "Review automation list columns",
 				description:
-					"Confirm workflows read as reusable procedures rather than engine configuration.",
+					"Confirm automations read as simple schedules rather than engine configuration.",
 				type: "review",
 				status: "review",
 				priority: "medium",
 				context: {
-					area: "workflows",
+					area: "automations",
 				},
 			},
 			{
 				title: "Investigate chat rail placement",
 				description:
-					"Decide whether chat belongs on Home, issue detail, workflow detail, or a persistent rail.",
+					"Decide whether chat belongs on Home, issue detail, automation detail, or a persistent rail.",
 				type: "research",
 				status: "waiting",
 				priority: "medium",
@@ -261,8 +198,6 @@ export default seed({
 					...issueData,
 					project: project.id,
 					scopeType: "project",
-					workflowConfig: workflow.id,
-					capability: capability.id,
 					queue: "default",
 					createdBy: "seed:autopilotDemoProductData",
 					context: asJsonValue(context),

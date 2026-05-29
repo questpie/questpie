@@ -177,12 +177,6 @@ async function triggerTaskSchedule(
 		scopeType: (template.projectId || template.project_id
 			? "project"
 			: "company") as "project" | "company",
-		workflowConfig:
-			template.workflowConfigId ??
-			template.workflow_config_id ??
-			relationId(schedule.workflowConfig) ??
-			undefined,
-		capability: template.capabilityId ?? template.capability_id ?? undefined,
 		model: template.modelId ?? template.model_id ?? undefined,
 		queue: template.queue != null ? String(template.queue) : undefined,
 		scheduledBy: scheduleActor(schedule.id),

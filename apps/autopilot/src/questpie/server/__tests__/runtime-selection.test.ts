@@ -9,7 +9,6 @@ import {
 } from "../../../../../../packages/questpie/test/utils/mocks/mock-app-builder";
 import { runTestDbMigrations } from "../../../../../../packages/questpie/test/utils/test-db";
 import { activity } from "../collections/activity";
-import { capabilities } from "../collections/capabilities";
 import { chatMessages } from "../collections/chat-messages";
 import { chatSessions } from "../collections/chat-sessions";
 import { environments } from "../collections/environments";
@@ -24,7 +23,6 @@ import { scripts } from "../collections/scripts";
 import { secrets } from "../collections/secrets";
 import { taskRelations } from "../collections/task-relations";
 import { tasks } from "../collections/tasks";
-import { workflowConfigs } from "../collections/workflow-configs";
 import {
 	resolveRuntimeSelection,
 	type RuntimeResolution,
@@ -40,9 +38,8 @@ describe("runtime selection", () => {
 
 	let resolve: (input?: {
 		modelId?: string | null;
-		capabilityId?: string | null;
 		projectId?: string | null;
-		runtime?: "claude-code" | "codex" | "opencode" | null;
+		runtime?: "claude-code" | "codex" | null;
 	}) => Promise<RuntimeResolution>;
 
 	beforeEach(async () => {
@@ -53,7 +50,6 @@ describe("runtime selection", () => {
 				ai_worker_leases: aiModule.collections.ai_worker_leases,
 				ai_workers: aiModule.collections.ai_workers,
 				activity,
-				capabilities,
 				chat_messages: chatMessages,
 				chat_sessions: chatSessions,
 				environments,
@@ -68,7 +64,6 @@ describe("runtime selection", () => {
 				secrets,
 				task_relations: taskRelations,
 				tasks,
-				workflow_configs: workflowConfigs,
 			},
 		});
 		await runTestDbMigrations(setup.app);
@@ -89,7 +84,6 @@ describe("runtime selection", () => {
 		expect(result.runtime).toBe("codex");
 		expect(result.model).toBeNull();
 		expect(result.provider).toBeNull();
-		expect(result.capability).toBeNull();
 	});
 
 	it("resolves an explicit model by ID", async () => {
@@ -119,41 +113,7 @@ describe("runtime selection", () => {
 		});
 	});
 
-	it("falls back through capability default model", async () => {
-		const provider = await setup!.app.collections.providers.create({
-			name: "OpenAI",
-			type: "openai",
-			enabled: true,
-		} as any);
-		const model = await setup!.app.collections.models.create({
-			name: "Codex Model",
-			provider: provider.id,
-			modelId: "gpt-5-codex",
-			runtime: "codex",
-			enabled: true,
-		} as any);
-		const capability = await setup!.app.collections.capabilities.create({
-			name: "Code Review",
-			defaultModel: model.id,
-			allowedTools: ["read", "write"],
-			contextRefs: ["repo:main"],
-			promptRefs: ["system:reviewer"],
-			runtimeHints: { workspace_mode: "worktree" },
-			enabled: true,
-		} as any);
-
-		const result = await resolve({ capabilityId: capability.id });
-
-		expect(result.runtime).toBe("codex");
-		expect(result.modelId).toBe(model.id);
-		expect(result.capability).toBeTruthy();
-		expect(result.toolPolicy).toEqual(["read", "write"]);
-		expect(result.contextRefs).toEqual(["repo:main"]);
-		expect(result.promptRefs).toEqual(["system:reviewer"]);
-		expect(result.runtimeHints).toMatchObject({ workspace_mode: "worktree" });
-	});
-
-	it("falls back to the first enabled model when no explicit model or capability", async () => {
+	it("falls back to the first enabled model when no explicit model", async () => {
 		const provider = await setup!.app.collections.providers.create({
 			name: "Default Provider",
 			type: "anthropic",
@@ -228,10 +188,10 @@ describe("runtime selection", () => {
 
 		const result = await resolve({
 			modelId: model.id,
-			runtime: "opencode",
+			runtime: "codex",
 		});
 
-		expect(result.runtime).toBe("opencode");
+		expect(result.runtime).toBe("codex");
 		expect(result.modelId).toBe(model.id);
 	});
 
@@ -241,9 +201,4 @@ describe("runtime selection", () => {
 		).rejects.toThrow();
 	});
 
-	it("throws when explicit capability ID is not found", async () => {
-		await expect(
-			resolve({ capabilityId: "non-existent-capability-id" }),
-		).rejects.toThrow();
-	});
 });
