@@ -1,11 +1,15 @@
 import { describe, expect, it, beforeEach } from "bun:test";
 import { randomUUID } from "node:crypto";
+import { mkdtemp, rm, stat } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import {
 	hashSecret,
 	generateSecret,
 } from "../server/modules/ai/services/worker-manager.js";
 import { executeRun } from "../server/worker/execute-run.js";
+import { prepareWorkerVolume } from "../server/worker/spawn-agent-runner.js";
 import { createFakeSpawnAgentRunner } from "../server/worker/testing.js";
 
 // ---------------------------------------------------------------------------
@@ -828,6 +832,28 @@ describe("Worker manager — lease expiry", () => {
 });
 
 describe("Embedded worker execution", () => {
+	it("prepares the filesystem skills directory for Claude Code runs", async () => {
+		const workerDir = await mkdtemp(join(tmpdir(), "questpie-ai-worker-"));
+
+		try {
+			const volume = await prepareWorkerVolume(workerDir);
+			const skillsDir = join(
+				workerDir,
+				"homes",
+				"claude-code",
+				".claude",
+				"skills",
+			);
+			const skillsStat = await stat(skillsDir);
+
+			expect(volume.workerDir).toBe(workerDir);
+			expect(volume.volumeId).toStartWith("vol_");
+			expect(skillsStat.isDirectory()).toBe(true);
+		} finally {
+			await rm(workerDir, { recursive: true, force: true });
+		}
+	});
+
 	it("calls failRun when spawn execution throws", async () => {
 		const error = new Error("spawn failed");
 		const failCalls: Array<{
