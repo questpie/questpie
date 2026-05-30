@@ -4,15 +4,37 @@
  * POST /[collection]/upload
  */
 
-import { createStorageRoutes } from "#questpie/server/adapters/routes/storage.js";
+import { storageCollectionUpload } from "#questpie/server/adapters/routes/storage.js";
+import type { AdapterContext } from "#questpie/server/adapters/types.js";
 import { route } from "#questpie/server/routes/define-route.js";
+
+type StorageRouteHandlerContext = AdapterContext["appContext"] &
+	Pick<
+		AdapterContext,
+		"locale" | "session" | "localeFallback" | "stage" | "requestId" | "traceId"
+	>;
 
 export default route()
 	.post()
 	.raw()
-	.handler(async ({ app, request, params }) => {
-		const routes = createStorageRoutes(app);
-		return routes.collectionUpload(request, {
-			collection: params.collection,
-		});
+	.handler(async (ctx) => {
+		const routeContext = ctx as unknown as StorageRouteHandlerContext;
+		const adapterContext: AdapterContext = {
+			appContext: routeContext,
+			locale: routeContext.locale,
+			session: routeContext.session,
+			localeFallback: routeContext.localeFallback,
+			stage: routeContext.stage,
+			requestId: routeContext.requestId,
+			traceId: routeContext.traceId,
+		};
+
+		return storageCollectionUpload(
+			ctx.app,
+			ctx.request,
+			{
+				collection: ctx.params.collection,
+			},
+			adapterContext,
+		);
 	});

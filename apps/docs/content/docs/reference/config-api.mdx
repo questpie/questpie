@@ -16,7 +16,8 @@ import { PlunkAdapter } from "questpie/adapters/plunk";
 import { redisStreamsAdapter } from "questpie/adapters/redis-streams";
 import { ResendAdapter } from "questpie/adapters/resend";
 import { SmtpAdapter } from "questpie/adapters/smtp";
-import { S3Driver } from "flydrive/drivers/s3";
+import { fs } from "files-sdk/fs";
+import { s3 } from "files-sdk/s3";
 
 export default runtimeConfig({
 	// Required
@@ -26,12 +27,15 @@ export default runtimeConfig({
 
 	// Infrastructure
 	storage: {
-		driver: new S3Driver({
+		adapter: s3({
 			bucket: process.env.S3_BUCKET!,
 			region: process.env.S3_REGION!,
-			accessKeyId: process.env.S3_ACCESS_KEY!,
-			secretAccessKey: process.env.S3_SECRET_KEY!,
+			credentials: {
+				accessKeyId: process.env.S3_ACCESS_KEY!,
+				secretAccessKey: process.env.S3_SECRET_KEY!,
+			},
 		}),
+		basePath: "/api",
 	},
 	email: {
 		adapter: new SmtpAdapter({
@@ -125,24 +129,29 @@ db: {
 
 ### `storage`
 
-File storage configuration using FlyDrive.
+File storage configuration using Files SDK adapters. QUESTPIE exposes the configured storage as a typed direct `Files` instance in route and service context.
 
 ```ts
 // Local filesystem (default)
 storage: {
-  location: "./uploads",
+  adapter: fs({
+    root: "./uploads",
+  }),
   basePath: "/api",
 }
 
 // Amazon S3 / S3-compatible
 storage: {
-  driver: new S3Driver({
+  adapter: s3({
     bucket: "my-bucket",
     region: "us-east-1",
-    accessKeyId: "...",
-    secretAccessKey: "...",
+    credentials: {
+      accessKeyId: "...",
+      secretAccessKey: "...",
+    },
     endpoint: "https://...",  // Optional, for S3-compatible providers
   }),
+  basePath: "/api",
 }
 ```
 

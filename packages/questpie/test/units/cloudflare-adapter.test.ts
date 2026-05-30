@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { memory } from "files-sdk/memory";
 import { z } from "zod";
 
 import {
@@ -54,7 +55,7 @@ function createApp(queueOverrides: Record<string, unknown> = {}) {
 			app: { url: "https://example.com" },
 			db: { create: () => ({ marker: "drizzle" }) },
 			collections: {},
-			storage: { driver: {} },
+			storage: { adapter: memory() },
 			queue: {
 				jobs: {
 					dailyDigest: {

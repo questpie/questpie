@@ -6,7 +6,7 @@
 	"scripts": {
 		"dev": "vite dev",
 		"build": "NODE_OPTIONS='--max-old-space-size=8192' vite build",
-		"start": "node .output/server/index.mjs",
+		"start": "bun .output/server/index.mjs",
 		"types:check": "fumadocs-mdx && tsc --noEmit",
 		"postinstall": "fumadocs-mdx"
 	},

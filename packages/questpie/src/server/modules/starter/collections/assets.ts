@@ -50,21 +50,4 @@ export default collection("assets")
 	.upload({
 		visibility: "public",
 	})
-	.hooks({
-		afterDelete: async (ctx) => {
-			const storage = (ctx as any).storage;
-			const logger = (ctx as any).logger;
-			const record = ctx.data as any;
-			if (!storage || !record?.key) return;
-
-			try {
-				await storage.use().delete(record.key);
-			} catch (error) {
-				logger?.warn?.("Failed to delete asset file from storage", {
-					key: record.key,
-					error: error instanceof Error ? error.message : String(error),
-				});
-			}
-		},
-	})
 	.title(({ f }) => f.filename);

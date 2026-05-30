@@ -7,14 +7,14 @@ Almost every infrastructure layer in QUESTPIE is swappable. Each subsystem defin
 
 ## Adapter types
 
-| Type | Contract | Config key | Default |
-|---|---|---|---|
-| [KV / Cache](./kv) | `KVAdapter` interface | `kv.adapter` | `MemoryKVAdapter` |
-| [Queue](./queue) | `QueueAdapter` interface | `queue.adapter` | `PgBossAdapter` |
-| [Search](./search) | `SearchAdapter` interface | `search` | `PostgresSearchAdapter` |
-| [Realtime](./realtime) | `RealtimeAdapter` interface | `realtime.adapter` | polling (no adapter) |
-| [Storage](./storage) | FlyDrive `DriverContract` | `storage.driver` | `FSDriver` (local disk) |
-| [Email](./email) | `MailAdapter` abstract class | `email.adapter` | `ConsoleAdapter` |
+| Type                   | Contract                     | Config key         | Default                 |
+| ---------------------- | ---------------------------- | ------------------ | ----------------------- |
+| [KV / Cache](./kv)     | `KVAdapter` interface        | `kv.adapter`       | `MemoryKVAdapter`       |
+| [Queue](./queue)       | `QueueAdapter` interface     | `queue.adapter`    | `PgBossAdapter`         |
+| [Search](./search)     | `SearchAdapter` interface    | `search`           | `PostgresSearchAdapter` |
+| [Realtime](./realtime) | `RealtimeAdapter` interface  | `realtime.adapter` | polling (no adapter)    |
+| [Storage](./storage)   | Files SDK adapter            | `storage.adapter`  | Filesystem adapter      |
+| [Email](./email)       | `MailAdapter` abstract class | `email.adapter`    | `ConsoleAdapter`        |
 
 ## Before you start
 

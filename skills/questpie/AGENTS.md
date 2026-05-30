@@ -57,7 +57,7 @@ QuestPie is a **headless CMS framework** for TypeScript. You define your content
 | Runtime  | **Bun**                                           |
 | Database | **PostgreSQL** via **Drizzle ORM**                |
 | Auth     | **Better Auth**                                   |
-| Storage  | **FlyDrive** (local FS, S3, R2, GCS)              |
+| Storage  | **Files SDK** (local FS, S3, R2, GCS)             |
 | Admin UI | **React** + **TanStack Router** + **Tailwind**    |
 | HTTP     | Custom trie-based router (no Express/Hono needed) |
 | Build    | **tsdown** (Rolldown-based) + **Turbo** monorepo  |
@@ -913,8 +913,9 @@ export default route()
 | `search`                      | POST   | Full-text search    |
 | `search/reindex/[collection]` | POST   | Reindex collection  |
 | `realtime`                    | POST   | SSE subscriptions   |
-| `storage/files/[...key]`      | GET    | Legacy file serving |
 | `health`                      | GET    | Health check        |
+
+File serving stays collection-scoped through QUESTPIE routes such as `/api/:collection/files/:key` or `/api/assets/files/:key`, so file reads remain behind collection access rules instead of a global storage namespace.
 
 ---
 
@@ -1173,14 +1174,27 @@ f.upload({
 ### Storage Adapters
 
 ```ts
+import { fs } from "files-sdk/fs";
+import { s3 } from "files-sdk/s3";
+
 // Local filesystem (default)
 runtimeConfig({
-	storage: { location: "./uploads", basePath: "/api" },
+	storage: { adapter: fs({ root: "./uploads" }), basePath: "/api" },
 });
 
 // S3-compatible (R2, Minio, etc.)
 runtimeConfig({
-	storage: { driver: myS3Driver },
+	storage: {
+		adapter: s3({
+			bucket: process.env.S3_BUCKET!,
+			region: process.env.S3_REGION!,
+			credentials: {
+				accessKeyId: process.env.S3_ACCESS_KEY!,
+				secretAccessKey: process.env.S3_SECRET_KEY!,
+			},
+		}),
+		basePath: "/api",
+	},
 });
 
 // Auto-detected from env vars:
@@ -1430,7 +1444,7 @@ interface AppContext {
 	globals: { [name]: GlobalAPI }; // typed CRUD for all globals
 	queue: QueueClient; // dispatch background jobs
 	email: MailerService; // send emails
-	storage: DriveManager; // file storage operations
+	storage: Files; // direct typed Files SDK storage operations
 	kv: KVService; // key-value store
 	logger: LoggerService; // structured logging
 	search: SearchService; // full-text search
@@ -2357,11 +2371,11 @@ Configure it through plugin-discovered `config/mcp.ts`, not `mcpModule(options)`
 
 ### Storage Adapters
 
-| Config                        | Driver                         |
-| ----------------------------- | ------------------------------ |
-| Default                       | `FSDriver` (local `./uploads`) |
-| `QUESTPIE_STORAGE_*` env vars | S3-compatible (auto-detected)  |
-| `{ driver: customDriver }`    | Any FlyDrive `DriverContract`  |
+| Config                              | Storage backend                  |
+| ----------------------------------- | -------------------------------- |
+| Default                             | Filesystem adapter (`./uploads`) |
+| `QUESTPIE_STORAGE_*` env vars       | S3-compatible (auto-detected)    |
+| `{ adapter: customAdapter }`        | Files SDK adapter instance       |
 
 ### Queue Adapters
 

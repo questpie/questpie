@@ -25,6 +25,14 @@ import {
 import coreModule from "#questpie/server/modules/core/.generated/module.js";
 import { mergeAuthOptions } from "#questpie/server/modules/core/integrated/auth/merge.js";
 
+type RuntimeConfigStorageInputGuard<TInput> = TInput extends {
+	storage?: infer TStorage;
+}
+	? TStorage extends StorageConfig | undefined
+		? unknown
+		: { storage?: never }
+	: unknown;
+
 // ============================================================================
 // module() — identity function for type inference
 // ============================================================================
@@ -75,7 +83,7 @@ export function module<T extends ModuleDefinition>(definition: T): T {
  *
  * When `QUESTPIE_STORAGE_ENDPOINT`, `QUESTPIE_STORAGE_BUCKET`,
  * `QUESTPIE_STORAGE_ACCESS_KEY`, and `QUESTPIE_STORAGE_SECRET_KEY` are all set,
- * an S3-compatible storage driver is auto-configured (requires `@aws-sdk/client-s3`).
+ * an S3-compatible Files SDK storage adapter is auto-configured (requires `@aws-sdk/client-s3`).
  *
  * @example Zero-config on QUESTPIE Cloud:
  * ```ts
@@ -97,15 +105,15 @@ export function module<T extends ModuleDefinition>(definition: T): T {
  *
  * @see RFC-MODULE-ARCHITECTURE §3.1 (Functions)
  */
-export function runtimeConfig<TInput extends RuntimeConfigInput>(
-	input: TInput,
+export function runtimeConfig<const TInput extends RuntimeConfigInput>(
+	input: TInput & RuntimeConfigStorageInputGuard<TInput>,
 ): ResolvedRuntimeConfig<TInput> {
 	const resolved = {
 		...input,
 		app: { url: resolveAppUrl(input.app?.url) },
 		db: resolveDbConfig(input.db),
 		secret: resolveSecret(input.secret as string | undefined),
-		storage: resolveStorageConfig(input.storage as StorageConfig | undefined),
+		storage: resolveStorageConfig(input.storage),
 	} as unknown as ResolvedRuntimeConfig<TInput>;
 
 	return resolved;

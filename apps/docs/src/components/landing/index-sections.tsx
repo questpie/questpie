@@ -119,9 +119,9 @@ export function Hero() {
 									maxWidth: 500,
 								}}
 							>
-								QUESTPIE replaces the SaaS patchwork with one open-source
-								stack: a typed backend framework, managed cloud, and AI agents
-								that run your business. You own the code. You own the data.
+								QUESTPIE replaces the SaaS patchwork with one open-source stack:
+								a typed backend framework, managed cloud, and AI agents that run
+								your business. You own the code. You own the data.
 							</p>
 						</Reveal>
 						<Reveal delay={180}>
@@ -141,7 +141,10 @@ export function Hero() {
 									Start a project
 									<LIcon name="arrow-right" size={14} />
 								</a>
-								<Link className={cn(buttonVariants({ variant: "outline" }))} to="/cloud">
+								<Link
+									className={cn(buttonVariants({ variant: "outline" }))}
+									to="/cloud"
+								>
 									Try Cloud
 									<LIcon name="arrow-down" size={14} />
 								</Link>
@@ -220,9 +223,25 @@ export function Hero() {
 
 function HeroProof() {
 	const collectionLines: CodeLine[] = [
-		[KW("export const "), TYP("posts"), " = ", FN("collection"), "(", STR('"posts"'), ")"],
+		[
+			KW("export const "),
+			TYP("posts"),
+			" = ",
+			FN("collection"),
+			"(",
+			STR('"posts"'),
+			")",
+		],
 		["  .", FN("fields"), "(({ f }) => ({"],
-		["    title:   f.", FN("text"), "(", NUM("255"), ").", FN("required"), "(),"],
+		[
+			"    title:   f.",
+			FN("text"),
+			"(",
+			NUM("255"),
+			").",
+			FN("required"),
+			"(),",
+		],
 		["    slug:    f.", FN("text"), "(", NUM("160"), "),"],
 		[
 			"    status:  f.",
@@ -543,11 +562,7 @@ export function PillarsSection() {
 				}}
 			>
 				{PILLARS.map((p, i) => (
-					<PillarCard
-						key={p.id}
-						pillar={p}
-						isLast={i === PILLARS.length - 1}
-					/>
+					<PillarCard key={p.id} pillar={p} isLast={i === PILLARS.length - 1} />
 				))}
 			</div>
 			<style>{`
@@ -743,12 +758,34 @@ const FRAMEWORK_FEATURES = [
 
 export function FrameworkSection() {
 	const lines: CodeLine[] = [
-		[KW("import "), "{ collection } ", KW("from "), STR('"#questpie/factories"'), ";"],
+		[
+			KW("import "),
+			"{ collection } ",
+			KW("from "),
+			STR('"#questpie/factories"'),
+			";",
+		],
 		[""],
-		[KW("export const "), TYP("posts"), " = ", FN("collection"), "(", STR('"posts"'), ")"],
+		[
+			KW("export const "),
+			TYP("posts"),
+			" = ",
+			FN("collection"),
+			"(",
+			STR('"posts"'),
+			")",
+		],
 		["  .", FN("options"), "({ versioning: { workflow: ", KW("true"), " } })"],
 		["  .", FN("fields"), "(({ f }) => ({"],
-		["    title:   f.", FN("text"), "(", NUM("255"), ").", FN("required"), "(),"],
+		[
+			"    title:   f.",
+			FN("text"),
+			"(",
+			NUM("255"),
+			").",
+			FN("required"),
+			"(),",
+		],
 		["    slug:    f.", FN("text"), "(", NUM("160"), "),"],
 		["    content: f.", FN("richText"), "().", FN("localized"), "(),"],
 		[
@@ -908,7 +945,10 @@ export function FrameworkSection() {
 						flexWrap: "wrap",
 					}}
 				>
-					<a className={cn(buttonVariants({ variant: "default" }))} href="/docs">
+					<a
+						className={cn(buttonVariants({ variant: "default" }))}
+						href="/docs"
+					>
 						Start with the docs
 						<LIcon name="arrow-right" size={14} />
 					</a>
@@ -1008,9 +1048,7 @@ function ProductionStrip() {
 									marginBottom: 12,
 								}}
 							/>
-							<div
-								style={{ fontSize: 14, fontWeight: 500, marginBottom: 4 }}
-							>
+							<div style={{ fontSize: 14, fontWeight: 500, marginBottom: 4 }}>
 								{f.title}
 							</div>
 							<div
@@ -1354,7 +1392,8 @@ function SchemaOutputsMap() {
 						}}
 					>
 						<span style={{ color: "var(--syntax-keyword)" }}>collection</span>(
-						<span style={{ color: "var(--syntax-string)" }}>"posts"</span>)<br />
+						<span style={{ color: "var(--syntax-string)" }}>"posts"</span>)
+						<br />
 						&nbsp;&nbsp;.
 						<span style={{ color: "var(--syntax-function)" }}>fields</span>(
 						{"{...}"})<br />
@@ -1621,9 +1660,7 @@ export function CloudSection() {
 										marginBottom: 12,
 									}}
 								/>
-								<div
-									style={{ fontSize: 14, fontWeight: 500, marginBottom: 4 }}
-								>
+								<div style={{ fontSize: 14, fontWeight: 500, marginBottom: 4 }}>
 									{f.title}
 								</div>
 								<div
@@ -1950,8 +1987,7 @@ function CloudBuilderMock() {
 							gridTemplateColumns: "auto 1fr 90px",
 							gap: 12,
 							padding: "9px 0",
-							borderTop:
-								i === 0 ? "none" : "1px dashed var(--border-subtle)",
+							borderTop: i === 0 ? "none" : "1px dashed var(--border-subtle)",
 							alignItems: "center",
 							fontSize: 12.5,
 						}}
@@ -1974,9 +2010,7 @@ function CloudBuilderMock() {
 							}}
 						/>
 						<span style={{ minWidth: 0 }}>
-							<code
-								style={{ fontSize: 11.5, color: "var(--foreground)" }}
-							>
+							<code style={{ fontSize: 11.5, color: "var(--foreground)" }}>
 								{e.name}
 							</code>{" "}
 							<span
@@ -2207,9 +2241,7 @@ export function AutopilotSection() {
 										marginBottom: 12,
 									}}
 								/>
-								<div
-									style={{ fontSize: 14, fontWeight: 500, marginBottom: 4 }}
-								>
+								<div style={{ fontSize: 14, fontWeight: 500, marginBottom: 4 }}>
 									{f.title}
 								</div>
 								<div
@@ -2350,14 +2382,10 @@ function WorkflowCode() {
 								alignItems: "center",
 							}}
 						>
-							<code
-								style={{ fontSize: 12, color: "var(--pillar-autopilot)" }}
-							>
+							<code style={{ fontSize: 12, color: "var(--pillar-autopilot)" }}>
 								{k}
 							</code>
-							<span
-								style={{ fontSize: 12, color: "var(--foreground-subtle)" }}
-							>
+							<span style={{ fontSize: 12, color: "var(--foreground-subtle)" }}>
 								{v}
 							</span>
 						</span>
@@ -2376,11 +2404,31 @@ function AgentInspector() {
 		t: string;
 		out: string;
 	}> = [
-		{ name: "draft-post", state: "done", t: "01.4s", out: "Generated 612 words" },
-		{ name: "fact-check", state: "done", t: "03.1s", out: "3 sources verified" },
-		{ name: "seo-pass", state: "done", t: "00.9s", out: "title + meta updated" },
+		{
+			name: "draft-post",
+			state: "done",
+			t: "01.4s",
+			out: "Generated 612 words",
+		},
+		{
+			name: "fact-check",
+			state: "done",
+			t: "03.1s",
+			out: "3 sources verified",
+		},
+		{
+			name: "seo-pass",
+			state: "done",
+			t: "00.9s",
+			out: "title + meta updated",
+		},
 		{ name: "human-review", state: "wait", t: "·", out: "Waiting for @marek" },
-		{ name: "publish", state: "queued", t: "·", out: "Will run after approval" },
+		{
+			name: "publish",
+			state: "queued",
+			t: "·",
+			out: "Will run after approval",
+		},
 	];
 	const dotColor = (s: StepState) =>
 		s === "done"
@@ -2445,8 +2493,7 @@ function AgentInspector() {
 								alignItems: "flex-start",
 								gap: 12,
 								padding: "10px 0",
-								borderTop:
-									i === 0 ? "none" : "1px dashed var(--border-subtle)",
+								borderTop: i === 0 ? "none" : "1px dashed var(--border-subtle)",
 							}}
 						>
 							<span
@@ -2471,9 +2518,7 @@ function AgentInspector() {
 										gap: 12,
 									}}
 								>
-									<code
-										style={{ fontSize: 12.5, color: "var(--foreground)" }}
-									>
+									<code style={{ fontSize: 12.5, color: "var(--foreground)" }}>
 										step.{s.name}
 									</code>
 									<span
@@ -3115,9 +3160,13 @@ export function StackSection() {
 						justifyContent: "center",
 					}}
 				>
-					<span className="landing-mono">PostgreSQL · Drizzle ORM · Zod v4</span>
+					<span className="landing-mono">
+						PostgreSQL · Drizzle ORM · Zod v4
+					</span>
 					<span>·</span>
-					<span className="landing-mono">Better Auth · pg-boss · Flydrive</span>
+					<span className="landing-mono">
+						Better Auth · pg-boss · Files SDK
+					</span>
 					<span>·</span>
 					<span className="landing-mono">React 19 · Tailwind v4 · shadcn</span>
 					<span>·</span>
@@ -3506,9 +3555,7 @@ function PricingCard({ tier }: { tier: Tier }) {
 							gap: 9,
 							alignItems: "flex-start",
 							fontSize: 12.5,
-							color: on
-								? "var(--foreground)"
-								: "var(--foreground-disabled)",
+							color: on ? "var(--foreground)" : "var(--foreground-disabled)",
 						}}
 					>
 						<LIcon
@@ -3752,8 +3799,7 @@ export function FinalCta() {
 						}}
 					>
 						Start with Framework today. It's free, open and ready to ship. Add
-						Cloud and Autopilot whenever you outgrow what you can run
-						yourself.
+						Cloud and Autopilot whenever you outgrow what you can run yourself.
 					</p>
 				</Reveal>
 				<Reveal delay={180}>
@@ -3766,7 +3812,10 @@ export function FinalCta() {
 							flexWrap: "wrap",
 						}}
 					>
-						<a className={cn(buttonVariants({ variant: "default" }))} href="/docs">
+						<a
+							className={cn(buttonVariants({ variant: "default" }))}
+							href="/docs"
+						>
 							Start building
 							<LIcon name="arrow-right" size={14} />
 						</a>
@@ -3780,7 +3829,10 @@ export function FinalCta() {
 							Star on GitHub
 							<LIcon name="star" size={12} />
 						</a>
-						<a className={cn(buttonVariants({ variant: "ghost" }))} href="#contact">
+						<a
+							className={cn(buttonVariants({ variant: "ghost" }))}
+							href="#contact"
+						>
 							Talk to the team
 						</a>
 					</div>

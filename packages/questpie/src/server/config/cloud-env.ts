@@ -1,3 +1,5 @@
+import type { Adapter } from "files-sdk";
+
 import type { DbConfig, StorageConfig } from "#questpie/server/config/types.js";
 import { getEnv } from "#questpie/server/utils/env.js";
 
@@ -33,6 +35,66 @@ const FALLBACK_ENV = {
 } as const;
 
 const DEFAULT_APP_URL = "http://localhost:3000";
+
+const STORAGE_CONFIG_KEYS = new Set([
+	"adapter",
+	"basePath",
+	"defaultVisibility",
+	"driver",
+	"files",
+	"location",
+	"signedUrlExpiration",
+]);
+
+const STORAGE_CONFIG_LEGACY_KEYS = new Set(["driver", "files"]);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+export function assertValidStorageConfig(
+	storage: unknown,
+): asserts storage is StorageConfig {
+	if (storage === undefined) return;
+
+	if (!isRecord(storage)) {
+		throw new Error(
+			"[questpie] Invalid storage config. Use `storage: { adapter }` or local storage options.",
+		);
+	}
+
+	const legacyKeys = Object.keys(storage).filter((key) =>
+		STORAGE_CONFIG_LEGACY_KEYS.has(key),
+	);
+	if (legacyKeys.length > 0) {
+		throw new Error(
+			`[questpie] Unsupported storage config key(s): ${legacyKeys.join(", ")}. Use ` +
+				"`storage: { adapter }` for Files SDK adapters or local storage options.",
+		);
+	}
+
+	const unknownKeys = Object.keys(storage).filter(
+		(key) => !STORAGE_CONFIG_KEYS.has(key),
+	);
+	if (unknownKeys.length > 0) {
+		throw new Error(
+			`[questpie] Unknown storage config key(s): ${unknownKeys.join(", ")}. Use ` +
+				"`storage: { adapter }` for Files SDK adapters or local storage options.",
+		);
+	}
+
+	if ("adapter" in storage && storage.adapter === undefined) {
+		throw new Error(
+			"[questpie] Invalid storage config. `adapter` must be a Files SDK adapter.",
+		);
+	}
+
+	if ("adapter" in storage && "location" in storage) {
+		throw new Error(
+			"[questpie] Invalid storage config. `adapter` and `location` cannot be configured together.",
+		);
+	}
+}
 
 // ============================================================================
 // Detection helpers
@@ -103,14 +165,19 @@ export function resolveSecret(explicit?: string): string | undefined {
  * Resolve storage config.
  * Priority: explicit → auto-detect from QUESTPIE_STORAGE_* → undefined (framework default)
  *
- * When QUESTPIE_STORAGE_* env vars are present, a lazy S3 driver is created.
- * The actual S3Driver import happens on first storage operation (requires
- * `@aws-sdk/client-s3` and `@aws-sdk/s3-request-presigner` to be installed).
+ * When QUESTPIE_STORAGE_* env vars are present, a lazy Files SDK S3 adapter is created.
+ * The actual S3 adapter import happens on first storage operation (requires
+ * `@aws-sdk/client-s3`, `@aws-sdk/lib-storage`,
+ * `@aws-sdk/s3-presigned-post`, and `@aws-sdk/s3-request-presigner` to be
+ * installed).
  */
 export function resolveStorageConfig(
-	explicit?: StorageConfig,
+	explicit?: unknown,
 ): StorageConfig | undefined {
-	if (explicit) return explicit;
+	if (explicit !== undefined) {
+		assertValidStorageConfig(explicit);
+		return explicit;
+	}
 
 	const endpoint = getEnv(CLOUD_ENV.STORAGE_ENDPOINT);
 	if (!endpoint) return undefined;
@@ -130,7 +197,7 @@ export function resolveStorageConfig(
 	}
 
 	return {
-		driver: createLazyS3Driver({
+		adapter: createLazyS3StorageAdapter({
 			endpoint,
 			bucket,
 			region,
@@ -141,10 +208,10 @@ export function resolveStorageConfig(
 }
 
 // ============================================================================
-// Lazy S3 driver — defers dynamic import until first storage operation
+// Lazy S3 adapter — defers dynamic import until first storage operation
 // ============================================================================
 
-interface S3DriverOptions {
+interface S3StorageOptions {
 	endpoint: string;
 	bucket: string;
 	region: string;
@@ -152,41 +219,56 @@ interface S3DriverOptions {
 	secretKey: string;
 }
 
+const S3_ADAPTER_METHODS = new Set([
+	"upload",
+	"download",
+	"head",
+	"exists",
+	"delete",
+	"deleteMany",
+	"copy",
+	"list",
+	"url",
+	"signedUploadUrl",
+]);
+
+const S3_ADAPTER_PROPERTIES = new Map<PropertyKey, unknown>([
+	["reportsUploadProgress", true],
+	["supportsRange", true],
+]);
+
 /**
- * Creates a DriverContract proxy that lazily loads `flydrive/drivers/s3`
+ * Creates a Files SDK adapter proxy that lazily loads `files-sdk/s3`
  * via dynamic import on first method call.
  *
- * All DriverContract methods are async, so the lazy init is transparent.
- * The S3Driver import requires `@aws-sdk/client-s3` to be installed.
+ * All adapter methods are async, so the lazy init is transparent.
+ * The S3 adapter import requires the AWS SDK peer dependencies to be installed.
  */
-function createLazyS3Driver(options: S3DriverOptions) {
-	type DriverContract = import("flydrive/types").DriverContract;
+function createLazyS3StorageAdapter(options: S3StorageOptions): Adapter {
+	let adapter: Adapter | undefined;
+	let initPromise: Promise<Adapter> | undefined;
 
-	let driver: DriverContract | undefined;
-	let initPromise: Promise<DriverContract> | undefined;
-
-	const ensureDriver = (): Promise<DriverContract> => {
-		if (driver) return Promise.resolve(driver);
+	const ensureAdapter = (): Promise<Adapter> => {
+		if (adapter) return Promise.resolve(adapter);
 		if (!initPromise) {
-			initPromise = import("flydrive/drivers/s3")
-				.then(({ S3Driver }) => {
-					driver = new S3Driver({
+			initPromise = import("files-sdk/s3")
+				.then(({ s3 }) => {
+					adapter = s3({
 						credentials: {
 							accessKeyId: options.accessKey,
 							secretAccessKey: options.secretKey,
 						},
 						region: options.region,
 						bucket: options.bucket,
-						visibility: "public",
 						endpoint: options.endpoint,
 						forcePathStyle: true,
 					});
-					return driver;
+					return adapter;
 				})
 				.catch((err) => {
 					throw new Error(
-						"[questpie] QUESTPIE_STORAGE_* env vars detected but S3 driver could not be loaded. " +
-							"Install @aws-sdk/client-s3 and @aws-sdk/s3-request-presigner as dependencies.\n" +
+						"[questpie] QUESTPIE_STORAGE_* env vars detected but Files SDK S3 adapter could not be loaded. " +
+							"Install @aws-sdk/client-s3, @aws-sdk/lib-storage, @aws-sdk/s3-presigned-post, and @aws-sdk/s3-request-presigner as dependencies.\n" +
 							`Cause: ${err instanceof Error ? err.message : String(err)}`,
 					);
 				});
@@ -200,8 +282,19 @@ function createLazyS3Driver(options: S3DriverOptions) {
 			if (prop === "then" || typeof prop === "symbol") {
 				return undefined;
 			}
+			if (adapter) {
+				return Reflect.get(adapter, prop);
+			}
+			if (prop === "name") return "s3";
+			if (prop === "raw") return undefined;
+			if (S3_ADAPTER_PROPERTIES.has(prop)) {
+				return S3_ADAPTER_PROPERTIES.get(prop);
+			}
+			if (!S3_ADAPTER_METHODS.has(prop as string)) {
+				return undefined;
+			}
 			return async (...args: unknown[]) => {
-				const d = await ensureDriver();
+				const d = await ensureAdapter();
 				const fn = (d as unknown as Record<string, unknown>)[prop as string];
 				if (typeof fn === "function") {
 					return fn.apply(d, args);
@@ -209,7 +302,18 @@ function createLazyS3Driver(options: S3DriverOptions) {
 				return fn;
 			};
 		},
+		has(_, prop) {
+			if (adapter) {
+				return prop in adapter;
+			}
+			return (
+				prop === "name" ||
+				prop === "raw" ||
+				S3_ADAPTER_PROPERTIES.has(prop) ||
+				S3_ADAPTER_METHODS.has(prop as string)
+			);
+		},
 	};
 
-	return new Proxy({}, handler) as DriverContract;
+	return new Proxy({}, handler) as Adapter;
 }

@@ -158,9 +158,9 @@ describe("generateTemplate — minimal (modules.ts only)", () => {
 		expect(code).toContain("DO NOT EDIT");
 	});
 
-	it("imports createApp from questpie", () => {
+	it("imports createApp from questpie/app", () => {
 		expect(code).toContain("import { createApp");
-		expect(code).toContain('from "questpie"');
+		expect(code).toContain('from "questpie/app"');
 	});
 
 	it("imports runtime config", () => {
@@ -197,9 +197,12 @@ describe("generateTemplate — minimal (modules.ts only)", () => {
 	it("emits AppConfig type", () => {
 		expect(code).toContain("export type AppConfig = {");
 		expect(code).toContain(
-			"collections: AppCollections & Record<string, any>;",
+			"collections: AppCollections & Record<string, AnyCollectionOrBuilder>;",
 		);
-		expect(code).toContain("globals: AppGlobals & Record<string, any>;");
+		expect(code).toContain(
+			"globals: AppGlobals & Record<string, AnyGlobalOrBuilder>;",
+		);
+		expect(code).toContain('storage: (typeof _runtime)["storage"];');
 	});
 
 	it("emits createApp call with modules", () => {
@@ -235,6 +238,9 @@ describe("generateTemplate — minimal (modules.ts only)", () => {
 			'type _AppQuestpie = Omit<_AppQuestpieBase, "collections" | "globals">',
 		);
 		expect(code).toContain("type _AppQuestpieConfig = Omit<QuestpieConfig");
+		expect(
+			code.match(/storage: \(typeof _runtime\)\["storage"\];/g)?.length,
+		).toBe(2);
 		expect(code).toContain(
 			"type _AppDb = DrizzleClientFromQuestpieConfig<_AppQuestpieConfig>;",
 		);
@@ -247,6 +253,7 @@ describe("generateTemplate — minimal (modules.ts only)", () => {
 		expect(code).toContain("db: _AppDb;");
 		expect(code).toContain('email: _AppQuestpie["email"];');
 		expect(code).toContain("storage: _AppStorage;");
+		expect(code).not.toContain("storage: unknown;");
 		expect(code).toContain('kv: _AppQuestpie["kv"];');
 		expect(code).toContain('logger: _AppQuestpie["logger"];');
 		expect(code).toContain('search: _AppQuestpie["search"];');
@@ -663,7 +670,7 @@ describe("generateTemplate — services", () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe("generateTemplate — emails", () => {
-	it("emits MailerService type only once when emails exist", () => {
+	it("emits MailerService import and typed email contexts", () => {
 		const result = minimalResult();
 		cat(result, "emails").set(
 			"welcome",
@@ -677,8 +684,8 @@ describe("generateTemplate — emails", () => {
 			singletonFactories: coreSingletonFactories(),
 		});
 
-		expect(code).toContain("type MailerService");
-		expect(code.match(/MailerService/g)?.length).toBe(2);
+		expect(code).toContain("MailerService, Questpie");
+		expect(code.match(/\bMailerService\b/g)?.length).toBe(4);
 	});
 
 	it("emits email: MailerService<AppEmailTemplates> in AppContext", () => {
@@ -741,7 +748,7 @@ describe("generateTemplate — routes (flat record)", () => {
 
 		expect(code).toContain("type AppRoutes = _ModuleRoutes & {");
 		expect(code).toContain(
-			'"apps/[appId]/install": RouteWithParams<typeof _route_apps_appId_install, RouteParamsFromKey<"apps/[appId]/install">>;',
+			'"apps/[appId]/install": RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_apps_appId_install>, RouteParamsFromKey<"apps/[appId]/install">>;',
 		);
 	});
 
@@ -865,7 +872,7 @@ describe("generateTemplate — auth", () => {
 		});
 
 		expect(code).toContain('import _auth from "../auth"');
-		expect(code).toContain("auth: _auth as any,");
+		expect(code).toContain("auth: _auth,");
 		expect(code).toContain("auth: typeof _auth;");
 	});
 });
@@ -902,8 +909,8 @@ describe("generateTemplate — plugin singles", () => {
 		});
 
 		expect(code).toContain('import _sidebar from "../sidebar"');
-		expect(code).toContain("sidebar: _sidebar as any,");
-		expect(code).toContain("branding: _branding as any,");
+		expect(code).toContain("sidebar: _sidebar,");
+		expect(code).toContain("branding: _branding,");
 	});
 });
 
@@ -930,7 +937,7 @@ describe("generateTemplate — core singles", () => {
 			singletonFactories: coreSingletonFactories(),
 		});
 
-		expect(code).toContain("locale: _locale as any,");
+		expect(code).toContain("locale: _locale,");
 	});
 });
 
@@ -986,7 +993,7 @@ describe("generateTemplate — spreads", () => {
 		});
 
 		expect(code).toContain(
-			"sidebar: [...(_sidebar_root as any ?? []), ...(_sidebar_admin as any ?? [])],",
+			"sidebar: [...(_sidebar_root ?? []), ...(_sidebar_admin ?? [])],",
 		);
 	});
 
@@ -1002,7 +1009,7 @@ describe("generateTemplate — spreads", () => {
 			singletonFactories: coreSingletonFactories(),
 		});
 
-		expect(code).toContain("sidebar: [...(_sidebar_root as any ?? [])],");
+		expect(code).toContain("sidebar: [...(_sidebar_root ?? [])],");
 	});
 
 	it("emits _Module<Key> type for module contributions", () => {
@@ -1032,8 +1039,8 @@ describe("generateTemplate — spreads", () => {
 			singletonFactories: coreSingletonFactories(),
 		});
 
-		// Spread singles should not appear as plain singles (no "sidebar: _sidebar_root as any,")
-		expect(code).not.toContain("sidebar: _sidebar_root as any,");
+		// Spread singles should not appear as plain singles.
+		expect(code).not.toContain("sidebar: _sidebar_root,");
 	});
 
 	it("emits spread section label in imports", () => {
@@ -1074,9 +1081,9 @@ describe("generateTemplate — spreads", () => {
 			singletonFactories: coreSingletonFactories(),
 		});
 
-		expect(code).toContain("sidebar: [...(_sidebar_root as any ?? [])],");
+		expect(code).toContain("sidebar: [...(_sidebar_root ?? [])],");
 		expect(code).toContain(
-			"dashboard: [...(_dashboard_root as any ?? []), ...(_dashboard_admin as any ?? [])],",
+			"dashboard: [...(_dashboard_root ?? []), ...(_dashboard_admin ?? [])],",
 		);
 	});
 });

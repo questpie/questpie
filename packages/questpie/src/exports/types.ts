@@ -64,7 +64,6 @@ export type {
 	StorageVisibility,
 	StorageBaseConfig,
 	StorageLocalConfig,
-	StorageDriverConfig,
 	StorageConfig,
 	AnyCollectionOrBuilder,
 	AnyGlobalOrBuilder,

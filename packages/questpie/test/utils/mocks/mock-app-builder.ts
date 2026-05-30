@@ -1,6 +1,7 @@
-import type { DriveManager } from "flydrive";
+import type { Adapter } from "files-sdk";
+import { memory } from "files-sdk/memory";
 
-import { Questpie, createApp, module } from "../../../src/exports/index.js";
+import { createApp, module } from "../../../src/exports/index.js";
 import type {
 	ModuleDefinition,
 	RuntimeConfig,
@@ -20,7 +21,7 @@ export type MockApp<TApp = any> = TApp & {
 		queue: MockQueueAdapter;
 		mailer: MockMailAdapter;
 		logger: MockLogger;
-		fakes: ReturnType<DriveManager<any>["fake"]>;
+		storage: Adapter;
 	};
 };
 
@@ -61,6 +62,10 @@ export async function buildMockApp(
 	const queueAdapter = new MockQueueAdapter();
 	const kvAdapter = new MockKVAdapter();
 	const logger = new MockLogger();
+	const storageAdapter =
+		runtimeOverrides.storage && "adapter" in runtimeOverrides.storage
+			? runtimeOverrides.storage.adapter
+			: memory();
 
 	const usesCustomDb = Boolean(runtimeOverrides.db);
 	const testDb = usesCustomDb ? null : await createTestDb();
@@ -102,7 +107,7 @@ export async function buildMockApp(
 	const app = await createApp({ modules: [normalizedDef] }, {
 		app: runtimeOverrides.app ?? { url: "http://localhost:3000" },
 		db: dbConfig,
-		storage: runtimeOverrides.storage,
+		storage: runtimeOverrides.storage ?? { adapter: storageAdapter },
 		email: {
 			...(runtimeOverrides.email ?? {}),
 			adapter: mailerAdapter,
@@ -131,7 +136,7 @@ export async function buildMockApp(
 		queue: queueAdapter,
 		mailer: mailerAdapter,
 		logger: logger,
-		fakes: app.storage.fake(Questpie.__internal.storageDriverServiceName),
+		storage: storageAdapter,
 	};
 
 	let cleanedUp = false;
@@ -143,7 +148,6 @@ export async function buildMockApp(
 			await mockApp.search?.flushPending?.();
 			await mockApp.destroy();
 		} finally {
-			mockApp.storage.restore(Questpie.__internal.storageDriverServiceName);
 			if (testDb) {
 				await testDb.close();
 			}

@@ -1,285 +1,126 @@
 ---
 title: Storage Adapter
-description: Implement a custom file storage driver for QUESTPIE using FlyDrive.
+description: Configure or implement a Files SDK adapter for QUESTPIE storage.
 ---
 
-Storage in QUESTPIE is backed by [FlyDrive](https://flydrive.dev). To use a custom cloud provider (S3, R2, GCS, Azure Blob, etc.), you provide a FlyDrive `DriverContract` instance. FlyDrive already ships drivers for popular providers -- you only need to write a custom driver if your provider is not supported.
+Storage in QUESTPIE is backed by [Files SDK](https://files-sdk.dev/). QUESTPIE creates one direct `Files` instance from your configured adapter and exposes it as `storage` in typed route, service, job, and hook context.
 
-## Interface
-
-QUESTPIE expects a FlyDrive `DriverContract`. The full interface:
-
-```ts
-interface DriverContract {
-	// Core operations
-	put(
-		key: string,
-		contents: string | Uint8Array,
-		options?: WriteOptions,
-	): Promise<void>;
-	get(key: string): Promise<string>;
-	getBytes(key: string): Promise<Uint8Array>;
-	getStream(key: string): Promise<ReadableStream<Uint8Array>>;
-	delete(key: string): Promise<void>;
-	exists(key: string): Promise<boolean>;
-
-	// URLs
-	getUrl(key: string): Promise<string>;
-	getSignedUrl(key: string, options?: SignedURLOptions): Promise<string>;
-
-	// Metadata & visibility
-	getMetaData(key: string): Promise<ObjectMetaData>;
-	getVisibility(key: string): Promise<ObjectVisibility>;
-	setVisibility(key: string, visibility: ObjectVisibility): Promise<void>;
-
-	// Streaming upload
-	putStream(
-		key: string,
-		contents: Readable,
-		options?: WriteOptions,
-	): Promise<void>;
-
-	// File operations
-	copy(
-		source: string,
-		destination: string,
-		options?: WriteOptions,
-	): Promise<void>;
-	move(
-		source: string,
-		destination: string,
-		options?: WriteOptions,
-	): Promise<void>;
-
-	// Bulk operations
-	deleteAll(prefix: string): Promise<void>;
-	listAll(
-		prefix: string,
-		options?: { recursive?: boolean; paginationToken?: string },
-	): Promise<{
-		paginationToken?: string;
-		objects: Iterable<DriveFile | DriveDirectory>;
-	}>;
-}
-```
-
-## Using an existing FlyDrive driver
-
-For most cloud providers, you do not need to write a driver at all. Install the FlyDrive package for your provider and pass it directly:
+For most providers, use one of the Files SDK adapters and pass it to `runtimeConfig({ storage: { adapter } })`.
 
 ```ts title="questpie.config.ts"
 import { runtimeConfig } from "questpie/app";
-import { S3Driver } from "flydrive/drivers/s3";
+import { s3 } from "files-sdk/s3";
 
 export default runtimeConfig({
-	// ...
+	app: { url: process.env.APP_URL! },
+	db: { url: process.env.DATABASE_URL! },
 	storage: {
-		driver: new S3Driver({
+		adapter: s3({
+			bucket: process.env.S3_BUCKET!,
+			region: process.env.S3_REGION!,
 			credentials: {
 				accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
 				secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
 			},
-			region: process.env.AWS_REGION!,
-			bucket: process.env.S3_BUCKET!,
 		}),
+		basePath: "/api",
 	},
 });
 ```
 
-FlyDrive ships drivers for S3, R2 (Cloudflare), GCS (Google Cloud Storage), and local filesystem. See the [FlyDrive drivers documentation](https://flydrive.dev/docs/drivers) for the full list.
+Use the same `s3()` adapter for S3-compatible providers such as Cloudflare R2, MinIO, DigitalOcean Spaces, and Wasabi by setting `endpoint` and `forcePathStyle` when required.
 
-## Writing a custom driver
-
-If your provider is not covered by FlyDrive, implement `DriverContract`. Start with the core four methods, then fill in the rest.
-
-### Priority order
-
-1. `put`, `get`, `delete`, `exists` -- basic CRUD
-2. `getSignedUrl`, `getUrl` -- URL generation for the admin UI
-3. `getBytes`, `getStream`, `putStream` -- binary/streaming support
-4. `copy`, `move`, `deleteAll`, `listAll` -- file management
-5. `getMetaData`, `getVisibility`, `setVisibility` -- metadata
-
-### Minimal example
-
-```ts title="my-storage-driver.ts"
-import type {
-	DriveDirectory,
-	DriveFile,
-	DriverContract,
-	ObjectMetaData,
-	ObjectVisibility,
-	SignedURLOptions,
-	WriteOptions,
-} from "flydrive/types";
-
-type ProviderClient = {
-	upload(bucket: string, key: string, body: Uint8Array): Promise<void>;
-	download(bucket: string, key: string): Promise<Uint8Array>;
-	remove(bucket: string, key: string): Promise<void>;
-	head(bucket: string, key: string): Promise<void>;
-	presign(bucket: string, key: string): Promise<string>;
-};
-
-export class MyCloudDriver implements DriverContract {
-	constructor(
-		private options: { apiKey: string; bucket: string },
-		private client: ProviderClient,
-	) {}
-
-	async put(
-		key: string,
-		contents: string | Uint8Array,
-		_options?: WriteOptions,
-	): Promise<void> {
-		const body =
-			typeof contents === "string"
-				? new TextEncoder().encode(contents)
-				: contents;
-		await this.client.upload(this.options.bucket, key, body);
-	}
-
-	async get(key: string): Promise<string> {
-		const bytes = await this.client.download(this.options.bucket, key);
-		return new TextDecoder().decode(bytes);
-	}
-
-	async getBytes(key: string): Promise<Uint8Array> {
-		return this.client.download(this.options.bucket, key);
-	}
-
-	async getStream(key: string): Promise<ReadableStream<Uint8Array>> {
-		const bytes = await this.getBytes(key);
-		return new ReadableStream({
-			start: (controller) => {
-				controller.enqueue(bytes);
-				controller.close();
-			},
-		});
-	}
-
-	async delete(key: string): Promise<void> {
-		await this.client.remove(this.options.bucket, key);
-	}
-
-	async exists(key: string): Promise<boolean> {
-		try {
-			await this.client.head(this.options.bucket, key);
-			return true;
-		} catch {
-			return false;
-		}
-	}
-
-	async getUrl(key: string): Promise<string> {
-		return `https://${this.options.bucket}.example.com/${key}`;
-	}
-
-	async getSignedUrl(
-		key: string,
-		_options?: SignedURLOptions,
-	): Promise<string> {
-		return this.client.presign(this.options.bucket, key);
-	}
-
-	async getMetaData(_key: string): Promise<ObjectMetaData> {
-		return {};
-	}
-
-	async getVisibility(_key: string): Promise<ObjectVisibility> {
-		return "public";
-	}
-
-	async setVisibility(
-		_key: string,
-		_visibility: ObjectVisibility,
-	): Promise<void> {
-		// Map to your provider's ACL system
-	}
-
-	async putStream(
-		_key: string,
-		_contents: ReadableStream<Uint8Array>,
-		_options?: WriteOptions,
-	): Promise<void> {
-		throw new Error("Implement stream uploads for production use");
-	}
-
-	async copy(
-		source: string,
-		destination: string,
-		_options?: WriteOptions,
-	): Promise<void> {
-		const data = await this.getBytes(source);
-		await this.put(destination, data);
-	}
-
-	async move(
-		source: string,
-		destination: string,
-		options?: WriteOptions,
-	): Promise<void> {
-		await this.copy(source, destination, options);
-		await this.delete(source);
-	}
-
-	async deleteAll(prefix: string): Promise<void> {
-		const list = await this.listAll(prefix);
-		for (const obj of list.objects) {
-			if ("key" in obj) await this.delete(obj.key);
-		}
-	}
-
-	async listAll(
-		_prefix: string,
-	): Promise<{ objects: Iterable<DriveFile | DriveDirectory> }> {
-		return { objects: [] };
-	}
-}
-```
-
-## Registration
+## Local Development
 
 ```ts title="questpie.config.ts"
 import { runtimeConfig } from "questpie/app";
-import { MyCloudDriver } from "./my-storage-driver";
+import { fs } from "files-sdk/fs";
 
 export default runtimeConfig({
-	// ...
+	app: { url: "http://localhost:3000" },
+	db: { url: process.env.DATABASE_URL! },
 	storage: {
-		driver: new MyCloudDriver({
-			apiKey: process.env.STORAGE_API_KEY!,
-			bucket: process.env.STORAGE_BUCKET!,
+		adapter: fs({
+			root: "./uploads",
 		}),
-		defaultVisibility: "public", // "public" | "private" (default: "public")
-		signedUrlExpiration: 3600, // seconds (default: 3600)
-		basePath: "/", // base path for serving (default: "/")
+		basePath: "/api",
 	},
 });
 ```
 
-### Config options
+If `storage` is omitted, QUESTPIE falls back to local filesystem storage at `./uploads`.
 
-| Option                | Default       | Description                                                                     |
-| --------------------- | ------------- | ------------------------------------------------------------------------------- |
-| `driver`              | --            | FlyDrive `DriverContract` instance. If omitted, QUESTPIE uses local `FSDriver`. |
-| `location`            | `"./uploads"` | Directory for local storage (only when `driver` is not set).                    |
-| `defaultVisibility`   | `"public"`    | Default visibility for uploaded files.                                          |
-| `signedUrlExpiration` | `3600`        | Token expiration for signed URLs (seconds).                                     |
-| `basePath`            | `"/"`         | Base path for serving storage files.                                            |
+## Direct API
 
-You must provide either `driver` (custom/cloud) or `location` (local), not both.
+The context `storage` value is the typed Files SDK instance for the configured adapter:
 
-## Testing tips
+```ts
+import { route, service } from "questpie";
 
-- Upload one file, read it back, then delete it -- basic round-trip.
-- Test both public URLs (`getUrl`) and signed URLs (`getSignedUrl`).
-- Do **not** normalize keys inside the driver -- FlyDrive expects keys to be stored exactly as received.
-- If your backend supports pagination, test `listAll()` pagination tokens explicitly.
-- Test `exists()` returns `false` after `delete()`.
+export default route().post().handler(async ({ storage }) => {
+	await storage.upload("exports/report.csv", "id,total\n1,42");
+	const file = await storage.download("exports/report.csv");
+	const publicUrl = await storage.url("exports/report.csv");
 
-## Reference implementations
+	return { exists: !!file, publicUrl };
+});
 
-- [QUESTPIE storage driver factory](https://github.com/questpie/questpie/blob/main/packages/questpie/src/server/modules/core/integrated/storage/create-driver.ts) -- shows how QUESTPIE creates the default FSDriver with signed URLs
-- [FlyDrive custom driver guide](https://flydrive.dev/docs/advanced/custom_drivers) -- official FlyDrive documentation for writing drivers
-- [FlyDrive S3 driver source](https://github.com/flydrive-js/flydrive/tree/main/drivers/s3) -- reference for a production driver
+export const exportsService = service().create(({ storage }) => ({
+	remove: (key: string) => storage.delete(key),
+}));
+```
+
+Upload collections still return QUESTPIE route URLs by default, such as `/api/assets/files/:key`, even when the object lives in S3 or R2. The route checks the upload collection row and collection read access before streaming the stored object.
+
+## Custom Providers
+
+If Files SDK does not include your provider, implement a Files SDK `Adapter` and pass the adapter instance to `storage.adapter`. Keep provider-specific signing, upload, download, metadata, and listing behavior inside that adapter so application code continues to use the same `storage.upload`, `storage.download`, `storage.url`, and `storage.delete` methods.
+
+```ts title="questpie.config.ts"
+import { runtimeConfig } from "questpie/app";
+import { myProviderAdapter } from "./my-provider-adapter";
+
+export default runtimeConfig({
+	app: { url: process.env.APP_URL! },
+	db: { url: process.env.DATABASE_URL! },
+	storage: {
+		adapter: myProviderAdapter({
+			apiKey: process.env.STORAGE_API_KEY!,
+			bucket: process.env.STORAGE_BUCKET!,
+		}),
+		basePath: "/api",
+	},
+});
+```
+
+## Config Options
+
+| Option                | Default       | Description                                                                 |
+| --------------------- | ------------- | --------------------------------------------------------------------------- |
+| `adapter`             | filesystem    | Files SDK adapter used to create QUESTPIE's direct `Files` instance.        |
+| `location`            | `"./uploads"` | Directory for implicit local storage when `adapter` is omitted.             |
+| `defaultVisibility`   | `"public"`    | Default visibility for uploaded files.                                      |
+| `signedUrlExpiration` | `3600`        | QUESTPIE route token expiration for private upload collection URLs, seconds. |
+| `basePath`            | `"/"`         | Base path for QUESTPIE upload and file-serving routes.                      |
+
+Provide either `adapter` or `location`, not both. Prefer `adapter` for all production storage.
+
+## Migration Notes
+
+- Replace the old `storage["files"] = new Files({ adapter })` shape with `storage.adapter`.
+- Replace custom QUESTPIE storage disks with Files SDK adapters.
+- Replace legacy storage selector calls with direct Files SDK methods on context `storage` or `app.storage`.
+- Keep existing object keys and upload collection rows; the generated QUESTPIE file route format is unchanged.
+
+## Testing Tips
+
+- Upload one file, read it back, then delete it.
+- Test both `storage.url(key)` and upload collection record `url` values.
+- Test private upload collection URLs with an expired signed token.
+- Test object listing when your provider uses pagination.
+
+## Reference Implementations
+
+- [Files SDK adapters](https://files-sdk.dev/adapters) -- built-in adapters for object and blob stores.
+- [QUESTPIE storage factory](https://github.com/questpie/questpie/blob/main/packages/questpie/src/server/modules/core/integrated/storage/create-driver.ts) -- shows local defaults and adapter construction.
+- [QUESTPIE upload routes](https://github.com/questpie/questpie/blob/main/packages/questpie/src/server/adapters/routes/storage.ts) -- shows how collection access controls file serving.

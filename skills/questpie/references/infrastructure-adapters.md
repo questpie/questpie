@@ -57,7 +57,7 @@ collection("posts")
 
 ## Storage
 
-File storage via [Flydrive](https://flydrive.dev/).
+File storage via [Files SDK](https://files-sdk.dev/).
 
 ### Local (Development)
 
@@ -76,16 +76,18 @@ export default runtimeConfig({
 Works with AWS S3, MinIO, DigitalOcean Spaces, Cloudflare R2:
 
 ```ts
-import { S3Driver } from "flydrive/drivers/s3";
+import { s3 } from "files-sdk/s3";
 
 export default runtimeConfig({
 	storage: {
 		basePath: "/api",
-		driver: new S3Driver({
+		adapter: s3({
 			bucket: process.env.S3_BUCKET,
 			region: process.env.S3_REGION,
-			accessKeyId: process.env.S3_ACCESS_KEY,
-			secretAccessKey: process.env.S3_SECRET_KEY,
+			credentials: {
+				accessKeyId: process.env.S3_ACCESS_KEY!,
+				secretAccessKey: process.env.S3_SECRET_KEY!,
+			},
 		}),
 	},
 });
@@ -524,7 +526,7 @@ import { runtimeConfig } from "questpie/app";
 import { pgBossAdapter } from "questpie/adapters/pg-boss";
 import { pgNotifyAdapter } from "questpie/adapters/pg-notify";
 import { SmtpAdapter } from "questpie/adapters/smtp";
-import { S3Driver } from "flydrive/drivers/s3";
+import { s3 } from "files-sdk/s3";
 
 export default runtimeConfig({
 	db: {
@@ -532,11 +534,13 @@ export default runtimeConfig({
 	},
 	storage: {
 		basePath: "/api",
-		driver: new S3Driver({
+		adapter: s3({
 			bucket: process.env.S3_BUCKET!,
 			region: process.env.S3_REGION!,
-			accessKeyId: process.env.S3_ACCESS_KEY!,
-			secretAccessKey: process.env.S3_SECRET_KEY!,
+			credentials: {
+				accessKeyId: process.env.S3_ACCESS_KEY!,
+				secretAccessKey: process.env.S3_SECRET_KEY!,
+			},
 		}),
 	},
 	queue: {
