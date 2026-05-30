@@ -39,7 +39,10 @@ export function useRunStream(options: UseRunStreamOptions) {
     { realtime: true },
   );
 
-  const events = (eventsQuery.data?.docs ?? []) as RunEvent[];
+  const events = useMemo(
+    () => (eventsQuery.data?.docs ?? []) as RunEvent[],
+    [eventsQuery.data?.docs],
+  );
   const status = (runQuery.data as any)?.status ?? "pending";
 
   const { text, tools } = useMemo(() => {

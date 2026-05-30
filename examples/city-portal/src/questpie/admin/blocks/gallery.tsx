@@ -9,8 +9,17 @@ type GalleryImage = {
 	caption?: string;
 };
 
+function getImageUrls(value: unknown): Record<string, string> {
+	if (!value || typeof value !== "object") return {};
+	return Object.fromEntries(
+		Object.entries(value as Record<string, unknown>).filter(
+			(entry): entry is [string, string] => typeof entry[1] === "string",
+		),
+	);
+}
+
 export function GalleryRenderer({ values, data }: BlockProps<"gallery">) {
-	const imageUrls = (data as Record<string, any>)?.imageUrls || {};
+	const imageUrls = getImageUrls(data?.imageUrls);
 	const images = (values.images as GalleryImage[] | null) || [];
 
 	const columnsClasses: Record<string, string> = {

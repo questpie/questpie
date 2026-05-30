@@ -1,4 +1,4 @@
-const _module = {
+const moduleDefinition = {
   name: "questpie-ai" as const,
   views: {},
   components: {},
@@ -8,5 +8,5 @@ const _module = {
   blocks: {},
 };
 
-export type AiClientModule = typeof _module;
-export default _module;
+export type AiClientModule = typeof moduleDefinition;
+export default moduleDefinition;

@@ -1,15 +1,6 @@
 import { job } from "questpie/services";
 import { z } from "zod";
 
-type MaterialRequirement = {
-	quantityPerUnit?: number;
-	wastePercent?: number;
-	material?: {
-		name?: string;
-		onHand?: number;
-	};
-};
-
 export default job({
 	name: "recalculate-material-plan",
 	schema: z.object({
@@ -32,14 +23,16 @@ export default job({
 				});
 
 		const results = [];
-		for (const order of orders.docs.filter(Boolean)) {
+		for (const order of orders.docs) {
+			if (!order) continue;
+
 			const requirements = await collections.toyMaterials.find({
 				where: { toy: order.toy },
 				with: { material: true },
 				limit: 100,
 			});
 
-			const shortages = (requirements.docs as MaterialRequirement[])
+			const shortages = requirements.docs
 				.map((row) => {
 					const required =
 						Number(order.quantity ?? 0) *

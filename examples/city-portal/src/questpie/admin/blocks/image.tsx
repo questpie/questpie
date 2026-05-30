@@ -4,8 +4,14 @@
 
 import type { BlockProps } from "../.generated/client";
 
+function getUrl(value: unknown): string | undefined {
+	if (!value || typeof value !== "object") return undefined;
+	const url = (value as Record<string, unknown>).url;
+	return typeof url === "string" ? url : undefined;
+}
+
 export function ImageRenderer({ values, data }: BlockProps<"image">) {
-	const imageUrl = (data?.image as any)?.url || values.image;
+	const imageUrl = getUrl(data?.image) || values.image;
 
 	const widthClasses: Record<string, string> = {
 		full: "max-w-none",

@@ -16,9 +16,7 @@
  * wf-execute job.
  */
 
-import type { AppContext } from "questpie";
-
-import type { WorkflowDefinition } from "../workflow/types.js";
+import type { WorkflowContext, WorkflowDefinition } from "../workflow/types.js";
 import type { CompensationEntry } from "./compensation.js";
 import { createCompletedStepsMap, runCompensations } from "./compensation.js";
 import { StepSuspendError } from "./errors.js";
@@ -82,7 +80,7 @@ export interface EngineContext {
 	externalLogger?: ExternalLogger;
 
 	/** App context passed to the workflow handler. */
-	appContext: AppContext;
+	appContext: WorkflowContext;
 
 	/** Event persistence operations (optional — for event matching). */
 	eventPersistence?: EventPersistence;

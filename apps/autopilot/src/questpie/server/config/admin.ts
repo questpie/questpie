@@ -54,59 +54,100 @@ export default adminConfig({
 	},
 	sidebar: {
 		sections: [
-			{ id: "work", title: { en: "Work" } },
-			{ id: "knowledge", title: { en: "Knowledge" } },
-			{ id: "automation", title: { en: "Automations" } },
-			{ id: "settings", title: { en: "Settings" }, collapsible: true },
-		],
-		items: [
 			{
-				sectionId: "work",
-				type: "link",
-				label: { en: "Home" },
-				href: "/admin",
-				icon: { type: "icon", props: { name: "ph:house" } },
-			},
-			{ sectionId: "work", type: "collection", collection: "tasks" },
-			{ sectionId: "work", type: "collection", collection: "runs" },
-			{ sectionId: "knowledge", type: "collection", collection: "knowledge" },
-			{
-				sectionId: "knowledge",
-				type: "link",
-				label: { en: "Project Inspection" },
-				href: "/admin/project-inspection",
-				icon: { type: "icon", props: { name: "ph:git-diff" } },
-			},
-			{ sectionId: "automation", type: "collection", collection: "schedules" },
-			{
-				sectionId: "automation",
-				type: "collection",
-				collection: "workflow_configs",
-			},
-			{
-				sectionId: "settings",
-				type: "collection",
-				collection: "projects",
-			},
-			{
-				sectionId: "settings",
-				type: "collection",
-				collection: "capabilities",
+				id: "product",
+				items: [
+					{
+						type: "link",
+						label: { en: "Home" },
+						href: "/admin",
+						icon: { type: "icon", props: { name: "ph:house" } },
+					},
+					{
+						type: "collection",
+						collection: "tasks",
+						label: { en: "Issues" },
+						icon: { type: "icon", props: { name: "ph:list-checks" } },
+					},
+					{
+						type: "collection",
+						collection: "schedules",
+						label: { en: "Schedules" },
+						icon: { type: "icon", props: { name: "ph:calendar-check" } },
+					},
+					{
+						type: "collection",
+						collection: "knowledge",
+						label: { en: "Artifacts" },
+						icon: { type: "icon", props: { name: "ph:brain" } },
+					},
+					{
+						type: "collection",
+						collection: "projects",
+						label: { en: "Projects" },
+						icon: { type: "icon", props: { name: "ph:folder-notch" } },
+					},
+				],
 			},
 			{
-				sectionId: "settings",
-				type: "collection",
-				collection: "providers",
+				id: "settings",
+				title: { en: "Settings" },
+				icon: { type: "icon", props: { name: "ph:gear-six" } },
+				collapsible: true,
+				items: [
+					{
+						type: "collection",
+						collection: "user",
+						label: { en: "Team" },
+						icon: { type: "icon", props: { name: "ph:users" } },
+					},
+				],
+				sections: [
+					{
+						id: "settings:advanced",
+						title: { en: "Advanced" },
+						collapsible: true,
+						items: [
+							{
+								type: "collection",
+								collection: "run_links",
+								label: { en: "Executions" },
+								icon: { type: "icon", props: { name: "ph:terminal-window" } },
+							},
+							{
+								type: "collection",
+								collection: "providers",
+								label: { en: "Connections" },
+								icon: { type: "icon", props: { name: "ph:plugs" } },
+							},
+							{
+								type: "collection",
+								collection: "models",
+								label: { en: "Models" },
+								icon: { type: "icon", props: { name: "ph:cpu" } },
+							},
+							{
+								type: "collection",
+								collection: "environments",
+								label: { en: "Environments" },
+								icon: { type: "icon", props: { name: "ph:tree-structure" } },
+							},
+							{
+								type: "collection",
+								collection: "secrets",
+								label: { en: "Secrets" },
+								icon: { type: "icon", props: { name: "ph:key" } },
+							},
+							{
+								type: "collection",
+								collection: "scripts",
+								label: { en: "Scripts" },
+								icon: { type: "icon", props: { name: "ph:code" } },
+							},
+						],
+					},
+				],
 			},
-			{
-				sectionId: "settings",
-				type: "collection",
-				collection: "models",
-			},
-			{ sectionId: "settings", type: "collection", collection: "environments" },
-			{ sectionId: "settings", type: "collection", collection: "scripts" },
-			{ sectionId: "settings", type: "collection", collection: "workers" },
-			{ sectionId: "settings", type: "collection", collection: "secrets" },
 		],
 	},
 	dashboard: {
@@ -120,8 +161,8 @@ export default adminConfig({
 		realtime: false,
 		actions: [
 			{
-				id: "new-task",
-				label: { en: "New task" },
+				id: "new-issue",
+				label: { en: "New issue" },
 				href: "/admin/collections/tasks/create",
 				icon: { type: "icon", props: { name: "ph:plus" } },
 				variant: "primary",
@@ -137,8 +178,10 @@ export default adminConfig({
 		sections: [
 			{
 				id: "work",
-				label: { en: "Work queue" },
-				description: { en: "Open work, active agent runs, and review items." },
+				label: { en: "Issue queue" },
+				description: {
+					en: "Open issues, review items, and automation health.",
+				},
 				columns: 4,
 				rowHeight: 132,
 			},
@@ -146,7 +189,7 @@ export default adminConfig({
 				id: "activity",
 				label: { en: "Recent activity" },
 				description: {
-					en: "Latest visible updates from tasks and agent runs.",
+					en: "Latest visible updates from issues and workflow executions.",
 				},
 				columns: 4,
 				rowHeight: 132,
@@ -155,9 +198,9 @@ export default adminConfig({
 		items: [
 			{
 				sectionId: "work",
-				id: "open-tasks",
+				id: "open-issues",
 				type: "value",
-				label: { en: "Open tasks" },
+				label: { en: "Open issues" },
 				icon: { type: "icon", props: { name: "ph:list-checks" } },
 				span: 1,
 				loader: async (ctx: WidgetFetchContext) => ({
@@ -171,16 +214,16 @@ export default adminConfig({
 			},
 			{
 				sectionId: "work",
-				id: "active-runs",
+				id: "active-executions",
 				type: "value",
-				label: { en: "Active runs" },
+				label: { en: "Active executions" },
 				icon: { type: "icon", props: { name: "ph:play-circle" } },
 				span: 1,
 				loader: async (ctx: WidgetFetchContext) => ({
-					value: await countDocs(ctx, "runs", {
+					value: await countDocs(ctx, "run_links", {
 						status: { in: ["claimed", "running"] },
 					}),
-					subtitle: { en: "Agents currently working" },
+					subtitle: { en: "Workflows currently running" },
 				}),
 			},
 			{
@@ -205,12 +248,12 @@ export default adminConfig({
 				loader: async (ctx: WidgetFetchContext) => {
 					const [failedTasks, failedRuns] = await Promise.all([
 						countDocs(ctx, "tasks", { status: "failed" }),
-						countDocs(ctx, "runs", { status: "failed" }),
+						countDocs(ctx, "run_links", { status: "failed" }),
 					]);
 
 					return {
 						value: failedTasks + failedRuns,
-						subtitle: { en: "Failed tasks or runs" },
+						subtitle: { en: "Failed issues or executions" },
 					};
 				},
 			},
@@ -224,19 +267,19 @@ export default adminConfig({
 				layout: "list",
 				actions: [
 					{
-						label: { en: "Create task" },
+						label: { en: "Create issue" },
 						icon: { type: "icon", props: { name: "ph:plus" } },
 						variant: "primary",
 						action: { type: "create", collection: "tasks" },
 					},
 					{
-						label: { en: "Add knowledge" },
+						label: { en: "Add artifact" },
 						icon: { type: "icon", props: { name: "ph:brain" } },
 						variant: "secondary",
 						action: { type: "create", collection: "knowledge" },
 					},
 					{
-						label: { en: "Create automation" },
+						label: { en: "Create schedule" },
 						icon: { type: "icon", props: { name: "ph:calendar-check" } },
 						variant: "secondary",
 						action: { type: "create", collection: "schedules" },
@@ -276,7 +319,7 @@ export default adminConfig({
 						href: row.task
 							? `/admin/collections/tasks/${row.task}`
 							: row.run
-								? `/admin/collections/runs/${row.run}`
+								? `/admin/collections/run_links/${row.run}`
 								: undefined,
 					}));
 				},

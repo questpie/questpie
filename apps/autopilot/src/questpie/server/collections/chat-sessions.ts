@@ -23,7 +23,6 @@ export const chatSessions = collection("chat_sessions")
 		project: f.relation("projects").label({ en: "Project" }),
 		task: f.relation("tasks").label({ en: "Task" }),
 		runtimeSessionRef: f.text().label({ en: "Runtime Session Ref" }),
-		preferredWorker: f.relation("workers").label({ en: "Preferred Worker" }),
 		metadata: f.json().label({ en: "Metadata" }),
 	}))
 	.title(({ f }) => f.title)

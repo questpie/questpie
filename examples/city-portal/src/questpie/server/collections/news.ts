@@ -4,7 +4,7 @@
  * News articles and updates for each city.
  */
 
-import { uniqueIndex } from "drizzle-orm/pg-core";
+import { type AnyPgColumn, uniqueIndex } from "questpie/drizzle-pg-core";
 
 import { collection } from "#questpie/factories";
 import { slugify } from "@/questpie/server/utils";
@@ -42,8 +42,8 @@ export default collection("news")
 	}))
 	.indexes(({ table }) => [
 		uniqueIndex("news_city_slug_unique").on(
-			table.city as any,
-			table.slug as any,
+			table.city as AnyPgColumn,
+			table.slug as AnyPgColumn,
 		),
 	])
 	.title(({ f }) => f.title)

@@ -61,7 +61,7 @@ function AnnouncementsListing() {
 				</div>
 			) : (
 				<div className="max-w-4xl space-y-4">
-					{announcements.map((announcement: any) => (
+					{announcements.map((announcement) => (
 						<div
 							key={announcement.id}
 							className={`rounded-lg border p-5 ${

@@ -3,6 +3,11 @@ import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 
 import { useTranslation } from "../../i18n/hooks.js";
+import {
+	cloneFilters,
+	filtersEqual,
+	sortConfigEqual,
+} from "../../lib/view-filter-utils.js";
 import { SelectSingle } from "../primitives/select-single.js";
 import { Button } from "../ui/button.js";
 import {
@@ -22,43 +27,15 @@ import type {
 	FilterBuilderProps,
 	FilterRule,
 	SavedView,
-	SortConfig,
 	ViewConfiguration,
+	FilterBuilderPanels,
 } from "./types.js";
 
 const NO_GROUPING_VALUE = "__none";
+const NO_SORT_VALUE = "__none";
 
 function arraysEqual<T>(a: T[], b: T[], eq: (x: T, y: T) => boolean): boolean {
 	return a.length === b.length && a.every((v, i) => eq(v, b[i]));
-}
-
-function filterValueEqual(
-	a: FilterRule["value"],
-	b: FilterRule["value"],
-): boolean {
-	if (a === b) return true;
-	if (Array.isArray(a) && Array.isArray(b)) {
-		return a.length === b.length && a.every((v, i) => v === b[i]);
-	}
-	return false;
-}
-
-function filtersEqual(a: FilterRule[], b: FilterRule[]): boolean {
-	return arraysEqual(
-		a,
-		b,
-		(x, y) =>
-			x.id === y.id &&
-			x.field === y.field &&
-			x.operator === y.operator &&
-			filterValueEqual(x.value, y.value),
-	);
-}
-
-function sortConfigEqual(a: SortConfig | null, b: SortConfig | null): boolean {
-	if (a === b) return true;
-	if (!a || !b) return false;
-	return a.field === b.field && a.direction === b.direction;
 }
 
 function viewConfigEqual(a: ViewConfiguration, b: ViewConfiguration): boolean {
@@ -145,6 +122,12 @@ interface FilterBuilderSheetProps extends FilterBuilderProps {
 
 	/** Default grouping field from list config */
 	defaultGroupBy?: string | null;
+
+	/** Default filters from list config */
+	defaultFilters?: FilterRule[];
+
+	/** Which panels to show. Defaults: all true. */
+	panels?: FilterBuilderPanels;
 }
 
 export function FilterBuilderSheet({
@@ -162,9 +145,16 @@ export function FilterBuilderSheet({
 	supportsSoftDelete = false,
 	groupableFields = EMPTY_GROUPABLE_FIELDS,
 	defaultGroupBy = null,
+	defaultFilters = [],
+	panels,
 }: FilterBuilderSheetProps) {
 	const resolvedSavedViews = savedViews ?? EMPTY_SAVED_VIEWS;
 	const { t } = useTranslation();
+	const {
+		columns: showColumns = true,
+		filters: showFilters = true,
+		savedViews: showSavedViews = true,
+	} = panels ?? {};
 
 	// Local state for pending changes - reset when sheet opens or config changes
 	const [localConfig, setLocalConfig] =
@@ -192,7 +182,7 @@ export function FilterBuilderSheet({
 
 	const handleReset = () => {
 		const resetConfig: ViewConfiguration = {
-			filters: [],
+			filters: cloneFilters(defaultFilters),
 			sortConfig: null,
 			visibleColumns: defaultColumns ?? availableFields.map((f) => f.name),
 			groupBy: defaultGroupBy,
@@ -218,6 +208,21 @@ export function FilterBuilderSheet({
 			})),
 		],
 		[groupableFields, t],
+	);
+	const sortOptions = useMemo(
+		() => [
+			{
+				value: NO_SORT_VALUE,
+				label: t("viewOptions.noSort"),
+				icon: <Icon icon="ph:sort-ascending" className="size-4 opacity-60" />,
+			},
+			...availableFields.map((field) => ({
+				value: field.name,
+				label: field.label,
+				icon: <Icon icon="ph:text-aa" className="size-4 opacity-60" />,
+			})),
+		],
+		[availableFields, t],
 	);
 
 	return (
@@ -297,63 +302,151 @@ export function FilterBuilderSheet({
 								}
 							/>
 						)}
+
+						<ViewOptionRow
+							title={t("viewOptions.sort")}
+							description={t("viewOptions.sortDescription")}
+							control={
+								<div className="flex items-center gap-2">
+									<SelectSingle
+										id="view-options-sort"
+										value={localConfig.sortConfig?.field ?? NO_SORT_VALUE}
+										onChange={(value) => {
+											const nextSortField =
+												!value || value === NO_SORT_VALUE ? null : value;
+											setLocalConfig((prevConfig) => ({
+												...prevConfig,
+												sortConfig: nextSortField
+													? {
+															field: nextSortField,
+															direction:
+																prevConfig.sortConfig?.direction ?? "asc",
+														}
+													: null,
+												pagination: {
+													...(prevConfig.pagination ?? { pageSize: 25 }),
+													page: 1,
+												},
+											}));
+										}}
+										options={sortOptions}
+										clearable={false}
+										emptyMessage={t("viewOptions.noFieldsAvailable")}
+										placeholder={t("viewOptions.noSort")}
+										drawerTitle={t("viewOptions.sort")}
+										className="h-9 w-48"
+									/>
+									<Button
+										variant="outline"
+										size="icon-sm"
+										disabled={!localConfig.sortConfig?.field}
+										aria-label={
+											localConfig.sortConfig?.direction === "asc"
+												? t("table.sortDesc")
+												: t("table.sortAsc")
+										}
+										onClick={() =>
+											setLocalConfig((prevConfig) => ({
+												...prevConfig,
+												sortConfig: prevConfig.sortConfig
+													? {
+															...prevConfig.sortConfig,
+															direction:
+																prevConfig.sortConfig.direction === "asc"
+																	? "desc"
+																	: "asc",
+														}
+													: null,
+												pagination: {
+													...(prevConfig.pagination ?? { pageSize: 25 }),
+													page: 1,
+												},
+											}))
+										}
+									>
+										<Icon
+											icon={
+												localConfig.sortConfig?.direction === "asc"
+													? "ph:sort-ascending"
+													: "ph:sort-descending"
+											}
+										/>
+									</Button>
+								</div>
+							}
+						/>
 					</div>
 
-					<Tabs defaultValue="columns" className="mt-4">
+					<Tabs
+						defaultValue={showColumns ? "columns" : "filters"}
+						className="mt-4"
+					>
 						<TabsList className="w-full">
-							<TabsTrigger value="columns" className="flex-1">
-								{t("viewOptions.columns")}
-							</TabsTrigger>
-							<TabsTrigger value="filters" className="flex-1">
-								{t("viewOptions.filters")}
-								{localConfig.filters.length > 0 && (
-									<span className="bg-foreground text-background ml-1.5 rounded-full px-1.5 py-0.5 text-xs tabular-nums">
-										{localConfig.filters.length}
-									</span>
-								)}
-							</TabsTrigger>
-							<TabsTrigger value="views" className="flex-1">
-								{t("viewOptions.savedViews")}
-							</TabsTrigger>
+							{showColumns && (
+								<TabsTrigger value="columns" className="flex-1">
+									{t("viewOptions.columns")}
+								</TabsTrigger>
+							)}
+							{showFilters && (
+								<TabsTrigger value="filters" className="flex-1">
+									{t("viewOptions.filters")}
+									{localConfig.filters.length > 0 && (
+										<span className="bg-foreground text-background ml-1.5 rounded-full px-1.5 py-0.5 text-xs tabular-nums">
+											{localConfig.filters.length}
+										</span>
+									)}
+								</TabsTrigger>
+							)}
+							{showSavedViews && (
+								<TabsTrigger value="views" className="flex-1">
+									{t("viewOptions.savedViews")}
+								</TabsTrigger>
+							)}
 						</TabsList>
 
-						<TabsContent value="columns">
-							<ColumnsTab
-								fields={availableFields}
-								visibleColumns={localConfig.visibleColumns}
-								onVisibleColumnsChange={(columns) =>
-									setLocalConfig((prevConfig) => ({
-										...prevConfig,
-										visibleColumns: columns,
-									}))
-								}
-							/>
-						</TabsContent>
+						{showColumns && (
+							<TabsContent value="columns">
+								<ColumnsTab
+									fields={availableFields}
+									visibleColumns={localConfig.visibleColumns}
+									onVisibleColumnsChange={(columns) =>
+										setLocalConfig((prevConfig) => ({
+											...prevConfig,
+											visibleColumns: columns,
+										}))
+									}
+								/>
+							</TabsContent>
+						)}
 
-						<TabsContent value="filters">
-							<FiltersTab
-								fields={availableFields}
-								filters={localConfig.filters}
-								onFiltersChange={(filters) =>
-									setLocalConfig((prevConfig) => ({
-										...prevConfig,
-										filters,
-									}))
-								}
-							/>
-						</TabsContent>
+						{showFilters && (
+							<TabsContent value="filters">
+								<FiltersTab
+									fields={availableFields}
+									filters={localConfig.filters}
+									onFiltersChange={(filters) =>
+										setLocalConfig((prevConfig) => ({
+											...prevConfig,
+											filters,
+										}))
+									}
+								/>
+							</TabsContent>
+						)}
 
-						<TabsContent value="views">
-							<SavedViewsTab
-								collection={collection}
-								currentConfig={localConfig}
-								savedViews={resolvedSavedViews}
-								isLoading={savedViewsLoading}
-								onLoadView={handleLoadView}
-								onSaveView={handleSaveView}
-								onDeleteView={onDeleteView || (() => {})}
-							/>
-						</TabsContent>
+						{showSavedViews && (
+							<TabsContent value="views">
+								<SavedViewsTab
+									collection={collection}
+									currentConfig={localConfig}
+									savedViews={resolvedSavedViews}
+									isLoading={savedViewsLoading}
+									onLoadView={handleLoadView}
+									onSaveView={handleSaveView}
+									onDeleteView={onDeleteView || (() => {})}
+								/>
+							</TabsContent>
+						)}
 					</Tabs>
 				</div>
 

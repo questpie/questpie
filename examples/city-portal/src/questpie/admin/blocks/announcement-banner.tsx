@@ -7,7 +7,7 @@ import type { BlockProps } from "../.generated/client";
 export function AnnouncementBannerRenderer({
 	data,
 }: BlockProps<"announcement-banner">) {
-	const announcements = (data as any)?.announcements || [];
+	const announcements = data?.announcements ?? [];
 
 	if (announcements.length === 0) return null;
 
@@ -24,7 +24,7 @@ export function AnnouncementBannerRenderer({
 	return (
 		<section className="px-6 py-4">
 			<div className="container mx-auto space-y-2">
-				{announcements.map((announcement: any) => (
+				{announcements.map((announcement) => (
 					<div
 						key={announcement.id}
 						className={`flex items-center gap-3 rounded-md border px-4 py-3 text-sm ${

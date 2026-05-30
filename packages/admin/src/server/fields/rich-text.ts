@@ -19,7 +19,8 @@ import {
 	jsonb,
 	sql,
 } from "questpie";
-import type { PgJsonbBuilder } from "questpie/drizzle-pg-core";
+import type { PgJsonbBuilder, PgTextBuilder } from "questpie/drizzle-pg-core";
+import { text as pgText } from "questpie/drizzle-pg-core";
 import { z } from "zod";
 
 // ============================================================================
@@ -186,27 +187,42 @@ function getRichTextOperators(): ContextualOperators {
 }
 
 // ============================================================================
-// Rich Text Field Factory
+// Markdown-mode operators (simple text column)
 // ============================================================================
 
-/**
- * Rich text field factory.
- * Creates a TipTap-based rich text editor field.
- *
- * @example
- * ```ts
- * // In collection fields callback:
- * content: f.richText().required().localized()
- * ```
- */
+const markdownOperators = {
+	contains: (col: any, value: any) => sql`${col} ILIKE ${"%" + value + "%"}`,
+	isEmpty: (col: any) =>
+		sql`(${col} IS NULL OR length(trim(${col})) = 0)`,
+	isNotEmpty: (col: any) =>
+		sql`(${col} IS NOT NULL AND length(trim(${col})) > 0)`,
+	isNull: (col: any) => isNull(col),
+	isNotNull: (col: any) => isNotNull(col),
+};
+
 // ============================================================================
-// Rich Text Field State & Factory
+// Rich Text Field Options & State
 // ============================================================================
 
-export type RichTextFieldState = DefaultFieldState & {
+export type RichTextMode = "json" | "markdown";
+
+export type RichTextOptions = {
+	mode?: RichTextMode;
+};
+
+type RichTextData<TMode extends RichTextMode> = TMode extends "markdown"
+	? string
+	: TipTapDocument;
+
+type RichTextColumn<TMode extends RichTextMode> = TMode extends "markdown"
+	? PgTextBuilder
+	: PgJsonbBuilder;
+
+export type RichTextFieldState<TMode extends RichTextMode = "json"> =
+	DefaultFieldState & {
 	type: "richText";
-	data: TipTapDocument;
-	column: PgJsonbBuilder;
+	data: RichTextData<TMode>;
+	column: RichTextColumn<TMode>;
 };
 
 /**
@@ -221,36 +237,45 @@ export type RichTextFieldState = DefaultFieldState & {
  * Rich text field runtime state factory.
  * Shared between the legacy `richText()` function and the new `richTextFieldType`.
  */
-function createRichTextState() {
+function createRichTextState(options?: RichTextOptions) {
+	const mode = options?.mode ?? "json";
+	const isMarkdown = mode === "markdown";
+
 	return {
 		type: "richText" as const,
-		columnFactory: (name: string) => jsonb(name) as any,
-		schemaFactory: () => {
-			const nodeSchema: z.ZodType<TipTapNode> = z.lazy(() =>
-				z.object({
-					type: z.string(),
-					attrs: z.record(z.string(), z.any()).optional(),
-					content: z.array(nodeSchema).optional(),
-					marks: z
-						.array(
-							z.object({
-								type: z.string(),
-								attrs: z.record(z.string(), z.any()).optional(),
-							}),
-						)
-						.optional(),
-					text: z.string().optional(),
-				}),
-			);
-			return z.object({
-				type: z.literal("doc"),
-				content: z.array(nodeSchema).optional(),
-			});
-		},
-		operatorSet: {
-			jsonbCast: null,
-			column: getRichTextOperators().column,
-		} as any,
+		columnFactory: isMarkdown
+			? (name: string) => pgText(name) as any
+			: (name: string) => jsonb(name) as any,
+		schemaFactory: isMarkdown
+			? () => z.string()
+			: () => {
+					const nodeSchema: z.ZodType<TipTapNode> = z.lazy(() =>
+						z.object({
+							type: z.string(),
+							attrs: z.record(z.string(), z.any()).optional(),
+							content: z.array(nodeSchema).optional(),
+							marks: z
+								.array(
+									z.object({
+										type: z.string(),
+										attrs: z.record(z.string(), z.any()).optional(),
+									}),
+								)
+								.optional(),
+							text: z.string().optional(),
+						}),
+					);
+					return z.object({
+						type: z.literal("doc"),
+						content: z.array(nodeSchema).optional(),
+					});
+				},
+		operatorSet: isMarkdown
+			? (markdownOperators as any)
+			: ({
+					jsonbCast: null,
+					column: getRichTextOperators().column,
+				} as any),
 		metadataFactory: (state: any) => ({
 			type: "richText" as const,
 			label: state.label,
@@ -260,6 +285,7 @@ function createRichTextState() {
 			readOnly: state.input === false ? true : undefined,
 			writeOnly: state.output === false ? true : undefined,
 			meta: state.extensions?.admin as any,
+			outputMode: mode,
 		}),
 		notNull: false,
 		hasDefault: false,
@@ -271,8 +297,12 @@ function createRichTextState() {
 	};
 }
 
-export function richText(): Field<RichTextFieldState> {
-	return field<RichTextFieldState>(createRichTextState());
+export function richText(): Field<RichTextFieldState<"json">>;
+export function richText<const TMode extends RichTextMode>(
+	options: { mode: TMode },
+): Field<RichTextFieldState<TMode>>;
+export function richText(options?: RichTextOptions): Field<RichTextFieldState> {
+	return field(createRichTextState(options));
 }
 
 /**
@@ -281,9 +311,9 @@ export function richText(): Field<RichTextFieldState> {
  * Use this with the `fieldType()` discovery system instead of the
  * legacy `richText()` factory function.
  */
-export const richTextFieldType: FieldTypeDefinition<"richText", []> = fieldType(
+export const richTextFieldType: FieldTypeDefinition<
 	"richText",
-	{
-		create: createRichTextState as any,
-	},
-);
+	[RichTextOptions?]
+> = fieldType("richText", {
+	create: createRichTextState,
+});

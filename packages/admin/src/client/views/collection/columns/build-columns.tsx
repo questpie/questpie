@@ -17,7 +17,7 @@ import { LocaleSwitcher } from "../../../components/locale-switcher";
 import { useResolveText } from "../../../i18n/hooks";
 import type { I18nText } from "../../../i18n/types";
 import { useSafeContentLocales, useScopedLocale } from "../../../runtime";
-import { DefaultCell, TextCell } from "../cells";
+import { DateCell, DateTimeCell, DefaultCell, TextCell } from "../cells";
 import { computeDefaultColumns, formatHeader } from "./column-defaults";
 import type { BuildColumnsOptions } from "./types";
 
@@ -250,8 +250,11 @@ export function buildColumns<TData extends Record<string, unknown>>(
 				row?: unknown;
 				fieldDef?: FieldInstance;
 			}>;
+		} else if (fieldType === "datetime") {
+			CellComponent = DateTimeCell;
+		} else if (fieldType === "date") {
+			CellComponent = DateCell;
 		} else {
-			// 3. Ultra-simple DefaultCell fallback
 			CellComponent = DefaultCell;
 		}
 

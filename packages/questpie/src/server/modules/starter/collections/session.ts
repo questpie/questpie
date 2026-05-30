@@ -10,4 +10,9 @@ export default collection("session")
 		userAgent: f.text(500),
 		impersonatedBy: f.text(255),
 	}))
-	.title(({ f }) => f.token);
+	.access({
+		fields: {
+			token: { read: false, create: false, update: false },
+		},
+	})
+	.title(({ f }) => f.userId);

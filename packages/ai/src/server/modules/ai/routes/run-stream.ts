@@ -1,5 +1,7 @@
 import { ApiError, route } from "questpie";
 
+import { asAiRawRoute } from "../lib/handler-context.js";
+
 function sse(event: string, data: unknown) {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
 }
@@ -7,7 +9,8 @@ function sse(event: string, data: unknown) {
 export default route()
   .get()
   .raw()
-  .handler(async ({ request, collections, realtime }: any) => {
+  .handler(async (ctx) => {
+    const { request, collections, realtime } = asAiRawRoute(ctx);
     const url = new URL(request.url);
     const runId = url.searchParams.get("runId") ?? url.searchParams.get("run_id");
     if (!runId) {

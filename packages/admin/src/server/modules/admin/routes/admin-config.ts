@@ -15,6 +15,7 @@
  */
 
 import { executeAccessRule, route } from "questpie";
+import { shouldAutoAppendUnlistedSidebar } from "questpie";
 import { z } from "zod";
 
 import type {
@@ -344,20 +345,38 @@ function filterSidebarConfig(
 	config: ServerSidebarConfig,
 	accessibleCollections: Set<string>,
 	accessibleGlobals: Set<string>,
+	hiddenCollections: Set<string>,
+	hiddenGlobals: Set<string>,
 ): ServerSidebarConfig {
+	function filterSection(s: ServerSidebarSection): ServerSidebarSection {
+		return {
+			...s,
+			items: (s.items ?? []).filter((item) => {
+				const rec = item as unknown as Record<string, unknown>;
+				if (item.type === "collection") {
+					const collection = rec.collection as string;
+					if (hiddenCollections.has(collection)) return false;
+					return accessibleCollections.has(collection);
+				}
+				if (item.type === "global") {
+					const global = rec.global as string;
+					if (hiddenGlobals.has(global)) return false;
+					return accessibleGlobals.has(global);
+				}
+				return true;
+			}),
+			sections: (s.sections ?? [])
+				.map(filterSection)
+				.filter(
+					(sub) =>
+						(sub.items?.length ?? 0) > 0 || (sub.sections?.length ?? 0) > 0,
+				),
+		};
+	}
+
 	return {
 		sections: config.sections
-			.map((s) => ({
-				...s,
-				items: (s.items ?? []).filter((item) => {
-					const rec = item as unknown as Record<string, unknown>;
-					if (item.type === "collection")
-						return accessibleCollections.has(rec.collection as string);
-					if (item.type === "global")
-						return accessibleGlobals.has(rec.global as string);
-					return true; // pages, links, dividers always pass
-				}),
-			}))
+			.map(filterSection)
 			.filter(
 				(s) => (s.items?.length ?? 0) > 0 || (s.sections?.length ?? 0) > 0,
 			),
@@ -867,6 +886,7 @@ const getAdminConfigOutputSchema = adminConfigDTOSchema;
  */
 const getAdminConfig = route()
 	.post()
+	.access((ctx) => !!(ctx as { session?: unknown }).session)
 	.schema(getAdminConfigSchema)
 	.outputSchema(getAdminConfigOutputSchema)
 	.handler(async (ctx) => {
@@ -986,48 +1006,70 @@ const getAdminConfig = route()
 				sidebarConfig = mergeSidebarContributions(contributions);
 			}
 
+			const hiddenCollections = new Set(
+				Object.entries(allCollectionsMeta)
+					.filter(([, meta]) => meta.hidden)
+					.map(([name]) => name),
+			);
+			const hiddenGlobals = new Set(
+				Object.entries(allGlobalsMeta)
+					.filter(([, meta]) => meta.hidden)
+					.map(([name]) => name),
+			);
+
 			const filteredSidebar = filterSidebarConfig(
 				sidebarConfig,
 				accessibleCollections,
 				accessibleGlobals,
+				hiddenCollections,
+				hiddenGlobals,
 			);
 
-			// Find collections/globals the user explicitly listed
-			const referenced = collectSidebarReferences(sidebarConfig);
-
-			// Find non-hidden accessible items NOT referenced in the explicit sidebar
-			const unlistedCollectionsMeta = Object.fromEntries(
-				Object.entries(filteredCollectionsMeta).filter(
-					([name, meta]) => !referenced.collections.has(name) && !meta.hidden,
-				),
-			);
-			const unlistedGlobalsMeta = Object.fromEntries(
-				Object.entries(filteredGlobalsMeta).filter(
-					([name, meta]) => !referenced.globals.has(name) && !meta.hidden,
-				),
+			const autoAppendUnlisted = shouldAutoAppendUnlistedSidebar(
+				adminCfg as Record<string, unknown>,
+				sidebarConfig,
 			);
 
-			// Auto-generate sections for unlisted items, append after explicit sections
-			const unlistedSidebar = buildAutoSidebar(
-				unlistedCollectionsMeta,
-				unlistedGlobalsMeta,
-			);
+			if (autoAppendUnlisted) {
+				// Find collections/globals the user explicitly listed
+				const referenced = collectSidebarReferences(sidebarConfig);
 
-			const mergedSections = [...filteredSidebar.sections];
-			for (const unlistedSection of unlistedSidebar.sections) {
-				const existing = mergedSections.find(
-					(s) => s.id === unlistedSection.id,
+				// Find non-hidden accessible items NOT referenced in the explicit sidebar
+				const unlistedCollectionsMeta = Object.fromEntries(
+					Object.entries(filteredCollectionsMeta).filter(
+						([name, meta]) => !referenced.collections.has(name) && !meta.hidden,
+					),
 				);
-				if (existing) {
-					existing.items = [
-						...(existing.items ?? []),
-						...(unlistedSection.items ?? []),
-					];
-				} else {
-					mergedSections.push(unlistedSection);
+				const unlistedGlobalsMeta = Object.fromEntries(
+					Object.entries(filteredGlobalsMeta).filter(
+						([name, meta]) => !referenced.globals.has(name) && !meta.hidden,
+					),
+				);
+
+				// Auto-generate sections for unlisted items, append after explicit sections
+				const unlistedSidebar = buildAutoSidebar(
+					unlistedCollectionsMeta,
+					unlistedGlobalsMeta,
+				);
+
+				const mergedSections = [...filteredSidebar.sections];
+				for (const unlistedSection of unlistedSidebar.sections) {
+					const existing = mergedSections.find(
+						(s) => s.id === unlistedSection.id,
+					);
+					if (existing) {
+						existing.items = [
+							...(existing.items ?? []),
+							...(unlistedSection.items ?? []),
+						];
+					} else {
+						mergedSections.push(unlistedSection);
+					}
 				}
+				response.sidebar = { sections: mergedSections };
+			} else {
+				response.sidebar = filteredSidebar;
 			}
-			response.sidebar = { sections: mergedSections };
 		} else {
 			response.sidebar = buildAutoSidebar(
 				filteredCollectionsMeta,
@@ -1035,8 +1077,12 @@ const getAdminConfig = route()
 			);
 		}
 
-		// 5. Blocks: unchanged (not access-controlled)
-		if (appState.blocks && Object.keys(appState.blocks).length > 0) {
+		// 5. Blocks
+		if (
+			accessCtx.session &&
+			appState.blocks &&
+			Object.keys(appState.blocks).length > 0
+		) {
 			response.blocks = introspectBlocks(
 				appState.blocks as Record<string, any>,
 			);

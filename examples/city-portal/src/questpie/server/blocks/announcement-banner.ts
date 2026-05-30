@@ -14,14 +14,11 @@ export const announcementBannerBlock = block("announcement-banner")
 		showExpired: f.boolean().label("Show Expired").default(false),
 	}))
 	.prefetch(async ({ values, ctx }) => {
-		const where: any = {};
-		if (!values.showExpired) {
-			where.validTo = { gte: new Date().toISOString() };
-		}
-
 		const res = await ctx.collections.announcements.find({
-			limit: (values.count as number) || 3,
-			where,
+			limit: values.count || 3,
+			where: values.showExpired
+				? {}
+				: { validTo: { gte: new Date().toISOString() } },
 			orderBy: { isPinned: "desc", validFrom: "desc" },
 		});
 		return { announcements: res.docs };

@@ -49,6 +49,7 @@ import type {
 import { ActionButton } from "../../components/actions/action-button";
 import { ActionDialog } from "../../components/actions/action-dialog";
 import { HeaderActions } from "../../components/actions/header-actions";
+import { resolveIconElement } from "../../components/component-renderer";
 import { sanitizeFilename } from "../../components/fields/field-utils";
 import { FilterBuilderSheet } from "../../components/filter-builder/filter-builder-sheet";
 import type {
@@ -104,6 +105,7 @@ import {
 	useCollectionRestore,
 	useCollectionUpdateBatch,
 } from "../../hooks/use-collection";
+import { adminCollectionKey } from "../../hooks/query-access";
 import { useCollectionFields } from "../../hooks/use-collection-fields";
 import { useSuspenseCollectionMeta } from "../../hooks/use-collection-meta";
 import { useSessionState } from "../../hooks/use-current-user";
@@ -142,6 +144,7 @@ import {
 	computeDefaultColumns,
 	getAllAvailableFields,
 } from "./columns";
+import { QuickFilterBar } from "./quick-filter-bar";
 import { TableViewSkeleton } from "./view-skeletons";
 
 // ============================================================================
@@ -464,6 +467,8 @@ export function mapListSchemaToConfig(list?: {
 	view?: string;
 	columns?: string[];
 	defaultSort?: { field: string; direction: "asc" | "desc" };
+	defaultFilters?: ListViewConfig["defaultFilters"];
+	quickFilters?: ListViewConfig["quickFilters"];
 	orderable?: ListViewConfig["orderable"];
 	searchable?: string[] | boolean;
 	filterable?: string[];
@@ -477,6 +482,8 @@ export function mapListSchemaToConfig(list?: {
 	const config: ListViewConfig = {};
 	if (list.columns?.length) config.columns = list.columns;
 	if (list.defaultSort) config.defaultSort = list.defaultSort as any;
+	if (list.defaultFilters?.length) config.defaultFilters = list.defaultFilters;
+	if (list.quickFilters?.length) config.quickFilters = list.quickFilters;
 	if (list.orderable) config.orderable = list.orderable;
 	if (Array.isArray(list.searchable) && list.searchable.length) {
 		config.searchFields = list.searchable as any;
@@ -808,6 +815,7 @@ function TableViewInner({
 	actionsConfig,
 }: TableViewProps): React.ReactElement {
 	"use no memo";
+	const collectionKey = adminCollectionKey(collection);
 	const globalRealtimeConfig = useAdminStore(selectRealtime);
 	const { fields: resolvedFields, schema } = useCollectionFields(collection, {
 		fallbackFields: (config as any)?.fields,
@@ -962,9 +970,21 @@ function TableViewInner({
 
 	// View state (filters, sort, visible columns, realtime) - with database persistence
 	// Uses Suspense internally for loading preferences
+	const defaultFilters = useMemo(
+		() => resolvedListConfig?.defaultFilters ?? [],
+		[resolvedListConfig?.defaultFilters],
+	);
+	const initialViewConfig = useMemo(
+		() => ({
+			realtime: resolvedRealtime,
+			groupBy: defaultGroupBy,
+			filters: defaultFilters,
+		}),
+		[resolvedRealtime, defaultGroupBy, defaultFilters],
+	);
 	const viewState = useViewState(
 		defaultColumns,
-		{ realtime: resolvedRealtime, groupBy: defaultGroupBy },
+		initialViewConfig,
 		collection,
 		user?.id,
 	);
@@ -994,7 +1014,11 @@ function TableViewInner({
 	);
 	const isKnownSortField = React.useCallback(
 		(field: string | undefined) =>
-			!!field && (field === "_title" || !!resolvedFields?.[field]),
+			!!field &&
+			(field === "_title" ||
+				field === "createdAt" ||
+				field === "updatedAt" ||
+				!!resolvedFields?.[field]),
 		[resolvedFields],
 	);
 	const hasOrderField = isKnownSortField(orderField);
@@ -1283,7 +1307,7 @@ function TableViewInner({
 		isLoading: listLoading,
 		error: listError,
 	} = useCollectionList(
-		collection as any,
+		collectionKey,
 		queryOptions,
 		{ enabled: !isSearching },
 		{ realtime: effectiveRealtime },
@@ -1302,9 +1326,9 @@ function TableViewInner({
 	const deleteViewMutation = useDeleteSavedView(collection, user?.id);
 
 	// Delete mutation for bulk actions
-	const deleteMutation = useCollectionDelete(collection as any);
-	const restoreMutation = useCollectionRestore(collection as any);
-	const updateBatchMutation = useCollectionUpdateBatch(collection as any);
+	const deleteMutation = useCollectionDelete(collectionKey);
+	const restoreMutation = useCollectionRestore(collectionKey);
+	const updateBatchMutation = useCollectionUpdateBatch(collectionKey);
 
 	// Build available fields from config for column picker
 	// All fields are available in Options, but defaults come from .list() config
@@ -1626,12 +1650,26 @@ function TableViewInner({
 	]);
 	const hasViewOptionsState =
 		hasActiveFilters ||
+		!!viewState.config.sortConfig ||
 		!!viewState.config.groupBy ||
 		viewState.config.visibleColumns.length !== defaultColumns.length ||
 		!!viewState.config.includeDeleted;
 	const clearFilters = () => {
 		viewState.setConfig({ ...viewState.config, filters: [] });
 	};
+	const applyQuickFilters = React.useCallback(
+		(filters: ViewConfiguration["filters"]) => {
+			viewState.setConfig((current) => ({
+				...current,
+				filters,
+				pagination: {
+					...(current.pagination ?? { pageSize: 25 }),
+					page: 1,
+				},
+			}));
+		},
+		[viewState],
+	);
 	const exitReorderMode = React.useCallback(() => {
 		setOptimisticOrderIds(null);
 		setIsReorderMode(false);
@@ -1781,6 +1819,17 @@ function TableViewInner({
 		const groupField = groupableFields.find((field) => field.name === groupBy);
 		const collapsedGroups = new Set(viewState.config.collapsedGroups ?? []);
 		const serverGroups = !isSearching ? listData?.groups : undefined;
+
+		const iconForValue = (value: unknown): React.ReactNode => {
+			if (groupField?.type !== "select") return null;
+			const options = groupField.options?.options;
+			if (!Array.isArray(options)) return null;
+			const flat = flattenOptions(options as any);
+			const option = flat.find((opt) => String(opt.value) === String(value));
+			if (!option?.icon) return null;
+			return resolveIconElement(option.icon as any);
+		};
+
 		if (serverGroups?.length) {
 			const rowsById = new Map(rows.map((row) => [row.id, row]));
 			return serverGroups.flatMap((group: any) => {
@@ -1803,6 +1852,7 @@ function TableViewInner({
 						type: "group" as const,
 						key: groupKey,
 						label,
+						icon: iconForValue(group.value),
 						count: group.count,
 						collapsed,
 					},
@@ -1815,12 +1865,18 @@ function TableViewInner({
 
 		const groups = new Map<
 			string,
-			{ label: string; rows: typeof rows; sortIndex: number }
+			{
+				label: string;
+				value: unknown;
+				rows: typeof rows;
+				sortIndex: number;
+			}
 		>();
 
 		for (const row of rows) {
+			const rawValue = (row.original as any)?.[groupBy];
 			const valueLabel = stringifyGroupValue(
-				(row.original as any)?.[groupBy],
+				rawValue,
 				groupField,
 				resolveText,
 				t,
@@ -1835,11 +1891,9 @@ function TableViewInner({
 			}
 			groups.set(groupKey, {
 				label: valueLabel,
+				value: rawValue,
 				rows: [row],
-				sortIndex: getGroupSortIndex(
-					(row.original as any)?.[groupBy],
-					groupField,
-				),
+				sortIndex: getGroupSortIndex(rawValue, groupField),
 			});
 		}
 
@@ -1852,6 +1906,7 @@ function TableViewInner({
 						type: "group" as const,
 						key,
 						label: group.label,
+						icon: iconForValue(group.value),
 						count: group.rows.length,
 						collapsed,
 					},
@@ -2150,6 +2205,12 @@ function TableViewInner({
 					</div>
 				)}
 
+				<QuickFilterBar
+					quickFilters={resolvedListConfig?.quickFilters}
+					currentFilters={viewState.config.filters}
+					onApply={applyQuickFilters}
+				/>
+
 				{isReorderMode && canUseOrderableSort && (
 					<div className="border-border/70 bg-muted/30 text-muted-foreground flex min-h-10 items-center justify-between gap-3 border-y px-3 py-2 font-mono text-xs">
 						<div className="flex min-w-0 items-center gap-2">
@@ -2317,22 +2378,26 @@ function TableViewInner({
 															<button
 																type="button"
 																aria-expanded={!entry.collapsed}
-																className="text-muted-foreground hover:text-foreground focus-visible:ring-ring/40 -ml-1 inline-flex min-h-8 items-center gap-2 rounded-md px-1 font-mono text-[11px] font-semibold tracking-[0.12em] uppercase transition-colors focus-visible:ring-2 focus-visible:outline-none"
+																className="text-muted-foreground hover:text-foreground focus-visible:ring-ring/40 -ml-1 inline-flex min-h-8 items-center gap-2 rounded-md px-1 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none"
 																onClick={() =>
 																	viewState.toggleCollapsedGroup(entry.key)
 																}
 															>
 																<Icon
-																	icon={
-																		entry.collapsed
-																			? "ph:caret-right"
-																			: "ph:caret-down"
-																	}
-																	className="size-3.5 shrink-0"
+																	icon="ph:caret-right-bold"
+																	className={cn(
+																		"size-3 shrink-0 transition-transform",
+																		!entry.collapsed && "rotate-90",
+																	)}
 																/>
+																{entry.icon && (
+																	<span className="size-4 shrink-0">
+																		{entry.icon}
+																	</span>
+																)}
 																<span>{entry.label}</span>
 																{groupingConfig?.showCounts !== false && (
-																	<span className="bg-muted text-muted-foreground inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] tracking-normal tabular-nums">
+																	<span className="text-muted-foreground/60 tabular-nums">
 																		{entry.count}
 																	</span>
 																)}
@@ -2666,6 +2731,7 @@ function TableViewInner({
 					onSaveView={handleSaveView}
 					onDeleteView={handleDeleteView}
 					supportsSoftDelete={collectionMeta?.softDelete ?? false}
+					defaultFilters={defaultFilters}
 				/>
 
 				{/* Action Dialog */}

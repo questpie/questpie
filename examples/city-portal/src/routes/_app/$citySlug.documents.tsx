@@ -20,6 +20,14 @@ const CATEGORIES = [
 	{ value: "guide", label: "Guide" },
 ];
 
+function getUploadUrl(upload: unknown): string | undefined {
+	if (!upload || typeof upload !== "object" || !("url" in upload)) {
+		return undefined;
+	}
+
+	return typeof upload.url === "string" ? upload.url : undefined;
+}
+
 export const Route = createFileRoute("/_app/$citySlug/documents")({
 	validateSearch: (search: Record<string, unknown>) => ({
 		category: (search.category as string) || "all",
@@ -79,68 +87,74 @@ function DocumentsListing() {
 				</div>
 			) : (
 				<div className="max-w-4xl divide-y rounded-lg border">
-					{documents.map((doc: any) => (
-						<div
-							key={doc.id}
-							className="hover:bg-muted/50 flex items-center justify-between p-4 transition-colors"
-						>
-							<div className="flex min-w-0 flex-1 items-center gap-4">
-								{/* Icon */}
-								<div className="bg-muted flex h-10 w-10 flex-shrink-0 items-center justify-center rounded">
-									<svg
-										className="text-muted-foreground h-5 w-5"
-										fill="none"
-										stroke="currentColor"
-										viewBox="0 0 24 24"
-										aria-hidden="true"
-									>
-										<path
-											strokeLinecap="round"
-											strokeLinejoin="round"
-											strokeWidth={2}
-											d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"
-										/>
-									</svg>
-								</div>
+					{documents.map((doc) => {
+						const fileUrl = getUploadUrl(
+							(doc as Record<string, unknown>).file,
+						);
 
-								<div className="min-w-0 flex-1">
-									<h3 className="truncate font-medium">{doc.title}</h3>
-									<div className="text-muted-foreground mt-1 flex items-center gap-3 text-sm">
-										{doc.category && (
-											<span className="bg-muted rounded px-2 py-0.5 text-xs capitalize">
-												{doc.category}
-											</span>
-										)}
-										{doc.version && (
-											<span className="text-xs">v{doc.version}</span>
-										)}
-										{doc.publishedDate && (
-											<time className="text-xs">
-												{new Date(doc.publishedDate).toLocaleDateString(
-													"en-GB",
-												)}
-											</time>
+						return (
+							<div
+								key={doc.id}
+								className="hover:bg-muted/50 flex items-center justify-between p-4 transition-colors"
+							>
+								<div className="flex min-w-0 flex-1 items-center gap-4">
+									{/* Icon */}
+									<div className="bg-muted flex h-10 w-10 flex-shrink-0 items-center justify-center rounded">
+										<svg
+											className="text-muted-foreground h-5 w-5"
+											fill="none"
+											stroke="currentColor"
+											viewBox="0 0 24 24"
+											aria-hidden="true"
+										>
+											<path
+												strokeLinecap="round"
+												strokeLinejoin="round"
+												strokeWidth={2}
+												d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"
+											/>
+										</svg>
+									</div>
+
+									<div className="min-w-0 flex-1">
+										<h3 className="truncate font-medium">{doc.title}</h3>
+										<div className="text-muted-foreground mt-1 flex items-center gap-3 text-sm">
+											{doc.category && (
+												<span className="bg-muted rounded px-2 py-0.5 text-xs capitalize">
+													{doc.category}
+												</span>
+											)}
+											{doc.version && (
+												<span className="text-xs">v{doc.version}</span>
+											)}
+											{doc.publishedDate && (
+												<time className="text-xs">
+													{new Date(doc.publishedDate).toLocaleDateString(
+														"en-GB",
+													)}
+												</time>
+											)}
+										</div>
+										{doc.description && (
+											<p className="text-muted-foreground mt-1 line-clamp-1 text-sm">
+												{doc.description}
+											</p>
 										)}
 									</div>
-									{doc.description && (
-										<p className="text-muted-foreground mt-1 line-clamp-1 text-sm">
-											{doc.description}
-										</p>
-									)}
 								</div>
-							</div>
 
-							{doc.file?.url && (
-								<a
-									href={doc.file.url}
-									className="text-primary ml-4 flex-shrink-0 text-sm font-medium hover:underline"
-									download
-								>
-									Download
-								</a>
-							)}
-						</div>
-					))}
+								{fileUrl && (
+									<a
+										href={fileUrl}
+										className="text-primary ml-4 flex-shrink-0 text-sm font-medium hover:underline"
+										download
+									>
+										Download
+									</a>
+								)}
+							</div>
+						);
+					})}
 				</div>
 			)}
 		</div>

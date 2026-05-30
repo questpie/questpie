@@ -6,7 +6,12 @@
 
 // Complex cells
 // Primitive cells
-export { DefaultCell, TextCell } from "./primitive-cells";
+export {
+	DateCell,
+	DateTimeCell,
+	DefaultCell,
+	TextCell,
+} from "./primitive-cells";
 // Relation cells
 // Shared components
 export { AssetThumbnail } from "./shared/asset-thumbnail";

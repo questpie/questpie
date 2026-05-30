@@ -58,6 +58,11 @@ declare global {
 }
 
 /**
+ * Base handler context — shared by global hooks and other pre-codegen handlers.
+ */
+export type { AppContextBase } from "#questpie/server/config/app-context-base.js";
+
+/**
  * AppContext — the extensible context interface.
  * Augment via `declare global { namespace Questpie { interface AppContext { ... } } }`
  */
@@ -118,6 +123,25 @@ export type KnownFormViewNames = RegistryNames<"views">;
 /** Known component names (from admin modules). @see Registry['components'] */
 export type KnownComponentNames = RegistryNames<"components">;
 
+/** Known runtime fields populated by extractAppServices before namespace projection. */
+type ExtractAppServicesBase = {
+	app: unknown;
+	db: unknown;
+	session: unknown;
+	services: Record<string, unknown>;
+	queue: unknown;
+	email: unknown;
+	storage: unknown;
+	kv: unknown;
+	logger: unknown;
+	search: unknown;
+	realtime: unknown;
+	collections: unknown;
+	globals: unknown;
+	tables?: unknown;
+	t: unknown;
+};
+
 /**
  * Extract flat AppContext services from a Questpie app instance.
  * Used internally by context creation functions (hooks, access, routes, jobs).
@@ -141,7 +165,7 @@ export function extractAppServices(
 	},
 ): AppContext {
 	if (!app) return { db: overrides?.db } as AppContext;
-	const result: Record<string, unknown> = {
+	const result: ExtractAppServicesBase & Record<string, unknown> = {
 		app,
 		db: overrides?.db ?? app.db,
 		session: overrides?.session ?? null,

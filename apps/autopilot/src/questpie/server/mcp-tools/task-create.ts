@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { mcpTool } from "@questpie/mcp";
 
+import type { TaskPriorityValue, TaskTypeValue } from "../lib/app-types";
 import {
 	mcpJson,
 	parseJsonObject,
@@ -13,15 +14,15 @@ import { workflowsFromContext } from "../lib/workflows";
 const taskTypes = ["task", "feature", "bug", "research", "review", "approval"];
 const priorities = ["low", "medium", "high", "urgent"];
 
-function normalizeTaskType(value: string | undefined) {
+function normalizeTaskType(value: string | undefined): TaskTypeValue {
 	if (!value) return "task";
-	return taskTypes.includes(value) ? value : "task";
+	return taskTypes.includes(value) ? (value as TaskTypeValue) : "task";
 }
 
-function normalizePriority(value: string | undefined) {
+function normalizePriority(value: string | undefined): TaskPriorityValue {
 	if (value === "critical") return "urgent";
 	if (!value) return "medium";
-	return priorities.includes(value) ? value : "medium";
+	return priorities.includes(value) ? (value as TaskPriorityValue) : "medium";
 }
 
 const inputSchema = z.object({
@@ -29,12 +30,10 @@ const inputSchema = z.object({
 	type: z.string().optional().describe("Task type"),
 	description: z.string().optional().describe("Task description"),
 	priority: z.string().optional().describe("Priority"),
-	assigned_to: z.string().optional().describe("Capability or agent id"),
 	project_id: z.string().optional().describe("Project id"),
 	queue: z.string().optional().describe("Named execution queue"),
 	start_after: z.string().optional().describe("ISO datetime"),
 	depends_on: z.array(z.string()).optional().describe("Dependency task ids"),
-	workflow_id: z.string().optional().describe("Workflow config id"),
 	context: z.string().optional().describe("Task context JSON object"),
 	metadata: z.string().optional().describe("Task metadata JSON object"),
 	start: z.boolean().optional().describe("Whether to start the task pipeline"),
@@ -66,8 +65,6 @@ export default mcpTool("task_create", {
 		priority: normalizePriority(input.priority),
 		project: input.project_id,
 		scopeType: input.project_id ? "project" : "company",
-		workflowConfig: input.workflow_id,
-		capability: input.assigned_to,
 		queue: input.queue,
 		startAfter: input.start_after ? new Date(input.start_after) : undefined,
 		createdBy: ctx.session?.user?.id ?? "mcp",

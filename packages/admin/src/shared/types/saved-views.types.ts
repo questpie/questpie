@@ -5,6 +5,8 @@
  * This file must NOT import any server-only dependencies like drizzle-orm.
  */
 
+import type { ComponentReference, I18nText } from "questpie/shared";
+
 /**
  * Filter operator types supported by the saved views filter builder
  */
@@ -45,6 +47,17 @@ export interface FilterRule {
 	field: string;
 	operator: FilterOperator;
 	value: FilterValue;
+}
+
+/**
+ * Serializable quick filter preset for collection list views.
+ */
+export interface QuickFilterConfig {
+	id: string;
+	label: I18nText;
+	description?: I18nText;
+	icon?: ComponentReference;
+	filters: FilterRule[];
 }
 
 /**

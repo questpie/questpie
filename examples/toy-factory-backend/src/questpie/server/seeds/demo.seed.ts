@@ -94,7 +94,7 @@ export default seed({
 				priority: "normal",
 				status: "draft",
 				materialStatus: "unknown",
-				dueDate: new Date(Date.now() + 1000 * 60 * 60 * 24 * 10),
+				dueDate: new Date(Date.now() + 1000 * 60 * 60 * 24 * 10).toISOString(),
 				notes: "Demo order for the workflow/admin example.",
 			},
 			ctx,

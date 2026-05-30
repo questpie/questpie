@@ -1,4 +1,5 @@
 import { seed } from "questpie/services";
+
 import { richText, richTextFormatted, uploadAllImages } from "./_helpers.js";
 
 export default seed({
@@ -338,7 +339,9 @@ export default seed({
 		// Barber-Service links
 		// ================================================================
 		log("Linking barbers and services...");
-		const links: [any, any[]][] = [
+		type BarberRecord = typeof barber1;
+		type ServiceRecord = typeof haircut;
+		const links: Array<[BarberRecord, ServiceRecord[]]> = [
 			[barber1, [haircut, shave, beardTrim, grooming]],
 			[barber2, [fade, haircut, beardTrim]],
 			[barber3, [haircut, shave, beardTrim, grooming]],

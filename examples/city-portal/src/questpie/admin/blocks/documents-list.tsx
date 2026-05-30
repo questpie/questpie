@@ -8,7 +8,7 @@ export function DocumentsListRenderer({
 	values,
 	data,
 }: BlockProps<"documents-list">) {
-	const documents = (data as any)?.documents || [];
+	const documents = data?.documents ?? [];
 
 	return (
 		<section className="px-6 py-16">
@@ -26,7 +26,7 @@ export function DocumentsListRenderer({
 				)}
 
 				<div className="divide-y rounded-lg border">
-					{documents.map((doc: any) => (
+					{documents.map((doc) => (
 						<div
 							key={doc.id}
 							className="hover:bg-muted/50 flex items-center justify-between p-4 transition-colors"

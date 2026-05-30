@@ -1,4 +1,4 @@
-# QUESTPIE Neutral Design System
+# QUESTPIE Neutral Design
 
 This document is the source of truth for the default QUESTPIE product UI:
 `@questpie/admin`, documentation, and marketing surfaces should all feel like the
@@ -121,8 +121,8 @@ over shadow.
 
 ## Radius System
 
-QUESTPIE uses soft neutral geometry, not brutalist square corners and not
-pill-heavy SaaS shapes.
+QUESTPIE uses soft neutral geometry with controlled corners, avoiding hard
+square corners and pill-heavy SaaS shapes.
 
 | Token                    | Default | Use                                                             |
 | ------------------------ | ------- | --------------------------------------------------------------- |

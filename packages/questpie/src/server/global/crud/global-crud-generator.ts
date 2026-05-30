@@ -31,6 +31,7 @@ import type {
 } from "#questpie/server/collection/crud/types.js";
 import { createVersionRecord } from "#questpie/server/collection/crud/versioning/index.js";
 import { extractAppServices } from "#questpie/server/config/app-context.js";
+import type { GlobalGlobalHookContextInput } from "#questpie/server/config/global-hooks-types.js";
 import { ApiError } from "#questpie/server/errors/index.js";
 import {
 	applyFieldInputHooks,
@@ -527,9 +528,7 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 								.values(insertValues)
 								.returning();
 							if (!inserted) {
-								throw ApiError.internal(
-									"Failed to auto-create global record",
-								);
+								throw ApiError.internal("Failed to auto-create global record");
 							}
 
 							await this.createVersion(tx, inserted, "create", normalized);
@@ -847,6 +846,7 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 					db,
 					existing ?? undefined,
 				);
+				await this.filterFieldsForRead(updatedRecord, normalized);
 			}
 
 			return updatedRecord;
@@ -1573,7 +1573,7 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 		const isBefore = hookName.startsWith("before");
 
 		// Enrich context with onAfterCommit for global hooks
-		const enrichedCtx = { ...ctx, onAfterCommit } as any;
+		const enrichedCtx: GlobalGlobalHookContextInput = { ...ctx, onAfterCommit };
 
 		if (isBefore) {
 			// Global before* first, then entity-specific
@@ -1615,7 +1615,7 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 				globalEntries,
 				hookName,
 				this.state.name,
-				ctx as any,
+				ctx,
 			);
 			await this.executeTransitionHooks(entityHooks, ctx);
 		} else {
@@ -1624,7 +1624,7 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 				globalEntries,
 				hookName,
 				this.state.name,
-				ctx as any,
+				ctx,
 			);
 		}
 	}

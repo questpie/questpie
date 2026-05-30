@@ -2,18 +2,21 @@ import { z } from "zod";
 
 import { workflow } from "@questpie/workflows";
 
+import { createAiRunLink } from "../lib/ai-run-links";
+import type { AppCollections, WorkflowServiceContext } from "../lib/app-types";
 import { classifyRunError, type RunErrorType } from "../lib/error-classifier";
-import { asRecord, mergeRecords, relationId } from "../lib/records";
+import {
+	asJsonValue,
+	asRecord,
+	mergeRecords,
+	relationId,
+} from "../lib/records";
+import type { RunCompletion } from "../lib/run-completion";
+import { resolveRuntimeSelection } from "../lib/runtime-selection";
+import { linkScheduleExecutionRun } from "../lib/schedule-run-links";
 import { workflowsFromContext } from "../lib/workflows";
 
-type Collections = Questpie.AppContext["collections"];
-
-type RunCompletion = {
-	status?: "completed" | "failed" | "cancelled";
-	summary?: string | null;
-	error?: string | null;
-	knowledgeResourceIds?: string[];
-};
+type Collections = AppCollections;
 
 interface RetryPolicy {
 	maxAttempts: number;
@@ -21,7 +24,6 @@ interface RetryPolicy {
 	backoffMultiplier: number;
 	maxDelaySeconds?: number;
 	retryOn: RunErrorType[];
-	onExhausted: "fail" | "waiting" | "cancel";
 }
 
 const DEFAULT_RETRY_POLICY: RetryPolicy = {
@@ -30,7 +32,6 @@ const DEFAULT_RETRY_POLICY: RetryPolicy = {
 	backoffMultiplier: 2,
 	maxDelaySeconds: 15 * 60,
 	retryOn: ["infra", "timeout", "rate_limit"],
-	onExhausted: "fail",
 };
 
 function retryPolicyFrom(value: unknown): RetryPolicy {
@@ -71,15 +72,6 @@ function retryPolicyFrom(value: unknown): RetryPolicy {
 				"unknown",
 			].includes(String(item)),
 		),
-		onExhausted:
-			raw.onExhausted === "waiting" ||
-			raw.on_exhausted === "waiting" ||
-			raw.onExhausted === "cancel" ||
-			raw.on_exhausted === "cancel"
-				? String(raw.onExhausted ?? raw.on_exhausted) === "cancel"
-					? "cancel"
-					: "waiting"
-				: "fail",
 	};
 }
 
@@ -119,7 +111,10 @@ async function dependenciesMet(collections: Collections, taskId: string) {
 	return true;
 }
 
-async function releaseDependentTasks(ctx: Questpie.AppContext, taskId: string) {
+async function releaseDependentTasks(
+	ctx: WorkflowServiceContext,
+	taskId: string,
+) {
 	const downstream = await ctx.collections.task_relations.find({
 		where: { targetTask: taskId, relationType: "depends_on" },
 		limit: 100,
@@ -166,6 +161,7 @@ export default workflow({
 		taskId: z.string(),
 		runReason: z.string().optional(),
 		requestedBy: z.string().optional(),
+		scheduleExecutionId: z.string().optional(),
 	}),
 	timeout: "14d",
 	handler: async ({ input, step, ctx, log }) => {
@@ -173,19 +169,6 @@ export default workflow({
 			return ctx.collections.tasks.findOne({ where: { id: input.taskId } });
 		});
 		if (!task) throw new Error(`Task not found: ${input.taskId}`);
-
-		const workflowConfigId = relationId(task.workflowConfig);
-		if (workflowConfigId) {
-			return step.invoke("run-configured-workflow", {
-				workflow: "multi-step-task",
-				input: {
-					taskId: input.taskId,
-					workflowConfigId,
-					requestedBy: input.requestedBy ?? "system",
-				},
-				timeout: "14d",
-			});
-		}
 
 		if (
 			!(await step.run("check-dependencies", async () =>
@@ -197,9 +180,11 @@ export default workflow({
 					id: input.taskId,
 					data: {
 						status: "waiting",
-						metadata: mergeRecords(task.metadata, {
-							waitingReason: "dependencies",
-						}),
+						metadata: asJsonValue(
+							mergeRecords(task.metadata, {
+								waitingReason: "dependencies",
+							}),
+						),
 					},
 				});
 				await ctx.collections.activity.create({
@@ -224,47 +209,50 @@ export default workflow({
 
 		for (let attempt = 1; attempt <= retryPolicy.maxAttempts; attempt++) {
 			const runtime = await step.run(`resolve-runtime-${attempt}`, async () => {
-				return ctx.services.providerRuntime.resolve({
+				return resolveRuntimeSelection(ctx, {
 					modelId: relationId(task.model),
-					capabilityId: relationId(task.capability),
 					projectId: relationId(task.project),
 				});
 			});
 
 			const run = await step.run(`create-run-${attempt}`, async () => {
-				return ctx.collections.runs.create({
-					task: input.taskId,
-					project: relationId(task.project) ?? undefined,
-					status: "pending",
-					runtime: runtime.runtime,
-					provider: runtime.providerId ?? undefined,
-					model: runtime.modelId ?? undefined,
-					capability: relationId(task.capability) ?? undefined,
+				return createAiRunLink({
+					ctx: ctx,
+					runtime,
+					taskId: input.taskId,
+					projectId: relationId(task.project),
 					initiatedBy: "task",
 					instructions: taskInstructions(task),
-					targeting: {
+					scheduleExecutionId: input.scheduleExecutionId,
+					linkMetadata: {
 						runReason: input.runReason ?? "task-pipeline",
 						requestedBy: input.requestedBy ?? "system",
 						attempt,
-						toolPolicy: runtime.toolPolicy,
-						contextRefs: runtime.contextRefs,
-						promptRefs: runtime.promptRefs,
-						runtimeHints: runtime.runtimeHints,
 					},
 				});
 			});
 			lastRunId = run.id;
+
+			await step.run(`link-schedule-execution-${attempt}`, async () => {
+				await linkScheduleExecutionRun({
+					ctx: ctx,
+					scheduleExecutionId: input.scheduleExecutionId,
+					runId: run.id,
+				});
+			});
 
 			await step.run(`mark-task-running-${attempt}`, async () => {
 				await ctx.collections.tasks.updateById({
 					id: input.taskId,
 					data: {
 						status: "running",
-						metadata: mergeRecords(task.metadata, {
-							workflow: "task-pipeline",
-							activeRunId: run.id,
-							attempt,
-						}),
+						metadata: asJsonValue(
+							mergeRecords(task.metadata, {
+								workflow: "task-pipeline",
+								activeRunId: run.id,
+								attempt,
+							}),
+						),
 					},
 				});
 			});
@@ -301,18 +289,6 @@ export default workflow({
 
 			const delay = retryDelay(retryPolicy, attempt);
 			await step.run(`record-retry-${attempt}`, async () => {
-				await ctx.collections.run_events.create({
-					run: run.id,
-					type: "retry_scheduled",
-					level: "warn",
-					summary: `Retrying task after ${errorType} failure`,
-					metadata: {
-						errorType,
-						attempt,
-						nextAttempt: attempt + 1,
-						delaySeconds: delay,
-					},
-				});
 				await ctx.collections.activity.create({
 					actor: "workflow:task-pipeline",
 					type: "task.retry",
@@ -334,13 +310,15 @@ export default workflow({
 				id: input.taskId,
 				data: {
 					status,
-					metadata: mergeRecords(task.metadata, {
-						workflow: "task-pipeline",
-						runId: lastRunId,
-						status,
-						error: lastCompletion?.error ?? null,
-						knowledgeResourceIds: lastCompletion?.knowledgeResourceIds ?? [],
-					}),
+					metadata: asJsonValue(
+						mergeRecords(task.metadata, {
+							workflow: "task-pipeline",
+							runId: lastRunId,
+							status,
+							error: lastCompletion?.error ?? null,
+							knowledgeResourceIds: lastCompletion?.knowledgeResourceIds ?? [],
+						}),
+					),
 				},
 			});
 			await ctx.collections.activity.create({
@@ -378,7 +356,7 @@ export default workflow({
 			id: input.taskId,
 			data: {
 				status: "failed",
-				metadata: { workflowError: error.message },
+				metadata: asJsonValue({ workflowError: error.message }),
 			},
 		});
 		await ctx.collections.activity.create({

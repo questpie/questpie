@@ -32,6 +32,18 @@ export type JsonValue =
 	| JsonValue[]
 	| { [key: string]: JsonValue };
 
+/** Recursive Zod schema for schema-less JSON fields (replaces `z.any()`). */
+export const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
+	z.union([
+		z.string(),
+		z.number(),
+		z.boolean(),
+		z.null(),
+		z.array(jsonValueSchema),
+		z.record(z.string(), jsonValueSchema),
+	]),
+);
+
 export type JsonFieldState = DefaultFieldState & {
 	type: "json";
 	data: JsonValue;
@@ -60,7 +72,7 @@ export function json(config?: {
 	return wrapFieldComplete(field<JsonFieldState>({
 		type: "json",
 		columnFactory: (name) => (mode === "json" ? pgJson(name) : jsonb(name)),
-		schemaFactory: () => z.any(),
+		schemaFactory: () => jsonValueSchema,
 		operatorSet: basicOps,
 		notNull: false,
 		hasDefault: false,
@@ -84,7 +96,7 @@ export const jsonFieldType = fieldType("json", {
 			type: "json",
 			columnFactory: (name: string) =>
 				mode === "json" ? pgJson(name) : jsonb(name),
-			schemaFactory: () => z.any(),
+			schemaFactory: () => jsonValueSchema,
 			operatorSet: basicOps,
 			notNull: false,
 			hasDefault: false,

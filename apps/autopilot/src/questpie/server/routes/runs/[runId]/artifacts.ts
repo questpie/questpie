@@ -9,10 +9,7 @@ import {
 	legacyArtifactRefKinds,
 	normalizeLegacyArtifact,
 } from "../../../lib/legacy-run-artifacts";
-import {
-	authenticatedRunWorker,
-	authorizeWorkerOrSession,
-} from "../../../lib/worker-auth";
+import { relationId } from "../../../lib/records";
 import { workflowsFromContext } from "../../../lib/workflows";
 
 const refKindSchema = z.enum(legacyArtifactRefKinds);
@@ -51,6 +48,12 @@ async function parseJson(request: Request) {
 	return text ? JSON.parse(text) : {};
 }
 
+function requestActor(ctx: Questpie.AppContext & { request: Request }) {
+	if (ctx.session?.user) return String(ctx.session.user.id);
+	if (ctx.request.headers.get("x-local-dev") === "true") return "local-dev";
+	throw ApiError.unauthorized("Authentication required");
+}
+
 export default route()
 	.get()
 	.post()
@@ -58,7 +61,7 @@ export default route()
 	.raw()
 	.handler(async (ctx) => {
 		if (ctx.request.method === "GET") {
-			await authorizeWorkerOrSession(ctx);
+			requestActor(ctx);
 			const resources = await ctx.collections.knowledge.find({
 				where: { run: ctx.params.runId },
 				limit: 500,
@@ -68,7 +71,11 @@ export default route()
 		}
 
 		const input = artifactSchema.parse(await parseJson(ctx.request));
-		const { worker, run } = await authenticatedRunWorker(ctx, ctx.params.runId);
+		const actor = requestActor(ctx);
+		const run = await ctx.collections.run_links.findOne({
+			where: { id: ctx.params.runId },
+		});
+		if (!run) throw ApiError.notFound("Run", ctx.params.runId);
 
 		if (!activeRunStatus(run.status)) {
 			return json(
@@ -87,19 +94,22 @@ export default route()
 		);
 		const previewUrl = artifactContentUrl(ctx.params.runId, resource.id);
 
-		const event = await ctx.collections.run_events.create({
-			run: ctx.params.runId,
-			type: "artifact",
-			level: "info",
-			summary: input.title,
-			metadata: {
-				workerId: worker.id,
-				artifactId: resource.id,
-				knowledgeResourceId: resource.id,
-				kind: input.kind,
-				previewUrl,
-			},
-		});
+		const aiRunId = relationId(run.aiRun);
+		const event = aiRunId
+			? await ctx.collections.ai_run_events.create({
+					run: aiRunId,
+					type: "artifact",
+					level: "info",
+					summary: input.title,
+					meta: {
+						actor,
+						artifactId: resource.id,
+						knowledgeResourceId: resource.id,
+						kind: input.kind,
+						previewUrl,
+					},
+				})
+			: null;
 
 		await workflowsFromContext(ctx).sendEvent(
 			"run.event",
@@ -123,7 +133,7 @@ export default route()
 				artifact_id: resource.id,
 				knowledge_resource_id: resource.id,
 				preview_url: previewUrl,
-				event_id: event.id,
+				event_id: event?.id ?? null,
 				artifact: legacyArtifactFromResource(resource),
 			},
 			{ status: 201 },

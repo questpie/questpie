@@ -14,6 +14,12 @@ import type {
 // Re-export QueueAdapter for external use
 export type { QueueAdapter } from "./adapter.js";
 
+declare global {
+	namespace Questpie {
+		interface JobHandlerContext {}
+	}
+}
+
 // ============================================================================
 // Job Handler Context
 // ============================================================================
@@ -38,7 +44,13 @@ export type { QueueAdapter } from "./adapter.js";
  * })
  * ```
  */
-export type JobHandlerArgs<TPayload = any> = AppContext & {
+export type JobHandlerContext = [keyof Questpie.JobHandlerContext] extends [
+	never,
+]
+	? AppContext
+	: Questpie.JobHandlerContext;
+
+export type JobHandlerArgs<TPayload = unknown> = JobHandlerContext & {
 	/** Validated job payload */
 	payload: TPayload;
 	/** Current locale */
@@ -113,16 +125,23 @@ export interface JobDefinition<
 	};
 }
 
-export type QueueJobType<
-	TPayload = any,
+export interface QueueJobType<
+	TPayload = unknown,
 	TName extends string = string,
-> = JobDefinition<TPayload, any, TName>;
+> {
+	name: TName;
+	__payload?: TPayload;
+}
 
 /**
  * Infer payload type from job definition
  */
 export type InferJobPayload<T> =
-	T extends JobDefinition<infer P, any, any> ? P : never;
+	T extends JobDefinition<infer P, any, any>
+		? P
+		: T extends QueueJobType<infer P, any>
+			? P
+			: never;
 
 /**
  * Infer result type from job definition
@@ -261,7 +280,11 @@ type LiteralJobDefinitionName<TJob> =
 		? string extends TName
 			? never
 			: TName
-		: never;
+		: TJob extends QueueJobType<any, infer TName>
+			? string extends TName
+				? never
+				: TName
+			: never;
 
 type LiteralJobNamesFromDefinitions<TJobs extends Record<string, any>> = {
 	[K in keyof TJobs]: LiteralJobDefinitionName<TJobs[K]>;

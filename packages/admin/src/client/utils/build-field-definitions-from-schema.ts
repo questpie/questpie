@@ -463,6 +463,9 @@ function applyRichTextConfig(
 	if (metadata.imageCollection !== undefined) {
 		config.imageCollection = metadata.imageCollection;
 	}
+	if (metadata.outputMode !== undefined) {
+		config.outputMode = metadata.outputMode;
+	}
 }
 
 function buildNestedFieldDefinitions(

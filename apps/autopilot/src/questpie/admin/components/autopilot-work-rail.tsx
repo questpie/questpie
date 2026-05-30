@@ -485,7 +485,7 @@ function RunStrip({
 			</div>
 			{runId ? (
 				<AdminLink
-					href={`${basePath}/collections/runs/${runId}`}
+					href={`${basePath}/collections/run_links/${runId}`}
 					className="text-muted-foreground hover:text-foreground mb-2 block truncate text-[11px]"
 				>
 					{runId}
@@ -581,8 +581,14 @@ export default function AutopilotWorkRail({
 		selectedMessagesWhere,
 	);
 
-	const sessions = sessionsQuery.data ?? [];
-	const messages = messagesQuery.data ?? [];
+	const sessions = React.useMemo(
+		() => sessionsQuery.data ?? [],
+		[sessionsQuery.data],
+	);
+	const messages = React.useMemo(
+		() => messagesQuery.data ?? [],
+		[messagesQuery.data],
+	);
 	const { run, events, error: runError } = useRunStream(client, activeRunId);
 
 	const contextAttachment = React.useMemo(

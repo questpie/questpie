@@ -17,7 +17,7 @@ export const knowledge = collection("knowledge")
 			.label({ en: "Applies To" }),
 		project: f.relation("projects").label({ en: "Project" }),
 		task: f.relation("tasks").label({ en: "Task" }),
-		run: f.relation("runs").label({ en: "Run" }),
+		run: f.relation("run_links").label({ en: "Run" }),
 		kind: f
 			.select([
 				{ value: "document", label: { en: "Document" } },
@@ -49,44 +49,21 @@ export const knowledge = collection("knowledge")
 	}))
 	.title(({ f }) => f.title)
 	.admin(({ c }) => ({
-		label: { en: "Knowledge Base" },
+		label: { en: "Artifacts" },
 		icon: c.icon("ph:brain"),
 	}))
 	.list(({ v, f }) =>
-		v.listView({
-			columns: [
-				f.title,
-				f.path,
-				f.kind,
-				f.scopeType,
-				f.project,
-				f.task,
-				f.source,
-			],
+		v.filesView({
+			pathField: f.path,
+			nameField: f.title,
+			contentField: f.body,
+			contentTypeField: f.contentType,
+			kindField: f.kind,
 			searchable: [f.title, f.path, f.body],
-			filterable: [f.scopeType, f.kind, f.project, f.task, f.source],
+			filterable: [f.scopeType, f.kind, f.project, f.source],
 			defaultSort: { field: f.path, direction: "asc" },
-			outline: {
-				defaultExpanded: "roots",
-				levels: [
-					{ kind: "field", field: f.scopeType },
-					{ kind: "relation-field", relation: f.project },
-					{
-						kind: "path",
-						field: f.path,
-						separator: "/",
-						syntheticFolders: true,
-						repeat: true,
-					},
-				],
-			},
-			layout: {
-				density: "compact",
-				titleField: f.title,
-				subtitleField: f.path,
-				badgeFields: [f.kind],
-				metaFields: [f.scopeType, f.contentType, f.source],
-			},
+			defaultLayout: "list",
+			showPreview: true,
 		}),
 	)
 	.form(({ v, f }) =>

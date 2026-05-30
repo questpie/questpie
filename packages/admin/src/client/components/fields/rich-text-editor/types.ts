@@ -38,7 +38,7 @@ export type RichTextFeatures = {
  * Default feature configuration (all enabled)
  */
 export const defaultFeatures: Required<RichTextFeatures> = {
-	toolbar: true,
+	toolbar: false,
 	bubbleMenu: true,
 	slashCommands: true,
 	history: true,
@@ -110,6 +110,11 @@ export interface RichTextEditorProps extends FieldComponentProps<any> {
 	 * Enable media library picker for images
 	 */
 	enableMediaLibrary?: boolean;
+
+	/**
+	 * Output mode: "json" (default TipTap JSON) or "markdown" (plain markdown string)
+	 */
+	outputMode?: "json" | "markdown";
 }
 
 /**
@@ -124,6 +129,7 @@ export type SlashCommandItem = {
 	title: string;
 	description?: string;
 	icon?: string;
+	group?: string;
 	keywords?: string[];
 	command: (editor: Editor) => void;
 };

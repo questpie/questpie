@@ -30,6 +30,10 @@ export {
 	type TransactionContext,
 	withTransaction,
 } from "#questpie/server/collection/crud/shared/transaction.js";
+export type {
+	JsonRouteHandlerArgs,
+	RawRouteHandlerArgs,
+} from "#questpie/server/routes/types.js";
 export {
 	type AppContext,
 	extractAppServices,
@@ -77,6 +81,13 @@ export {
 	module,
 	runtimeConfig,
 } from "#questpie/server/config/create-app.js";
+export {
+	isAuthoritativeSidebar,
+	mergeAdminConfig,
+	mergeAdminSidebar,
+	shouldAutoAppendUnlistedSidebar,
+	type AdminSidebarMode,
+} from "#questpie/server/config/admin-sidebar-merge.js";
 export { createContextFactory } from "#questpie/server/config/create-context-factory.js";
 export * from "#questpie/server/config/global-hooks-types.js";
 export * from "#questpie/server/config/module-types.js";

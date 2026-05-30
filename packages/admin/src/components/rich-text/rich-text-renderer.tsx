@@ -9,8 +9,8 @@ export type TipTapNode = {
 	type: string;
 	content?: TipTapNode[];
 	text?: string;
-	marks?: Array<{ type: string; attrs?: Record<string, any> }>;
-	attrs?: Record<string, any>;
+	marks?: Array<{ type: string; attrs?: Record<string, unknown> }>;
+	attrs?: Record<string, unknown>;
 };
 
 export type TipTapDoc = {
@@ -83,7 +83,7 @@ interface RichTextRendererProps {
 	/**
 	 * TipTap JSON content to render
 	 */
-	content: TipTapDoc | null | undefined;
+	content: unknown;
 	/**
 	 * Custom styles for elements
 	 */
@@ -92,6 +92,17 @@ interface RichTextRendererProps {
 	 * Additional className for the root element
 	 */
 	className?: string;
+}
+
+function isRenderableTipTapDoc(
+	content: unknown,
+): content is TipTapDoc & { content: TipTapNode[] } {
+	return (
+		!!content &&
+		typeof content === "object" &&
+		(content as Record<string, unknown>).type === "doc" &&
+		Array.isArray((content as Record<string, unknown>).content)
+	);
 }
 
 /**
@@ -174,7 +185,7 @@ function renderNode(
 	}
 
 	// Generate stable key for block nodes based on type, content, and index
-	const nodeKey = `${node.type}-${(node as any).text?.slice(0, 20) ?? ""}-${index}`;
+	const nodeKey = `${node.type}-${index}`;
 
 	// Block nodes
 	const children = node.content?.map((child, i) =>
@@ -367,7 +378,7 @@ export function RichTextRenderer({
 	styles: customStyles,
 	className,
 }: RichTextRendererProps) {
-	if (!content || !content.content || content.content.length === 0) {
+	if (!isRenderableTipTapDoc(content) || content.content.length === 0) {
 		return null;
 	}
 

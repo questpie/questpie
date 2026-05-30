@@ -154,6 +154,31 @@ describe("generateAdminClientTemplate", () => {
 		expect(output.code).toContain("export default admin;");
 	});
 
+	it("emits typed module merge reduce without any casts", () => {
+		const disc = emptyDiscovery();
+		disc.singles.set(
+			"modules",
+			makeFile("modules", {
+				varName: "_mod",
+				importPath: "../modules",
+				exportType: "default",
+			}),
+		);
+
+		const ctx = makeCtx(disc);
+		const output = generateAdminClientTemplate(ctx);
+
+		expect(output.code).toContain(
+			"type _AdminModuleMergeAcc = Record<string, unknown>;",
+		);
+		expect(output.code).toContain(".reduce<_AdminModuleMergeAcc>");
+		expect(output.code).toContain(") as _AdminModuleMergeAcc;");
+		expect(output.code).not.toContain("as any");
+		expect(output.code).not.toContain("acc: any");
+		expect(output.code).not.toContain("m: any");
+		expect(output.code).not.toContain("{} as any");
+	});
+
 	it("emits auto-generated header comment", () => {
 		const ctx = makeCtx(emptyDiscovery());
 		const output = generateAdminClientTemplate(ctx);
@@ -214,7 +239,9 @@ describe("generateAdminClientTemplate", () => {
 		expect(output.code).toContain('import _block_cta from "../blocks/cta";');
 		expect(output.code).toContain('import _block_hero from "../blocks/hero";');
 		// Merged object with module spread
-		expect(output.code).toContain("blocks: { ..._mergedModules.blocks,");
+		expect(output.code).toContain(
+			'blocks: { ...(_mergedModules["blocks"] as Record<string, unknown>),',
+		);
 		expect(output.code).toContain('"cta": _block_cta');
 		expect(output.code).toContain('"hero": _block_hero');
 	});
@@ -325,7 +352,9 @@ describe("generateAdminClientTemplate", () => {
 		const output = generateAdminClientTemplate(ctx);
 
 		// Should emit runtime key using keyFromProperty
-		expect(output.code).toContain("views: { ..._mergedModules.views,");
+		expect(output.code).toContain(
+			'views: { ...(_mergedModules["views"] as Record<string, unknown>),',
+		);
 		expect(output.code).toContain("[_view_kanban.name]: _view_kanban");
 	});
 
@@ -487,9 +516,15 @@ describe("generateAdminClientTemplate", () => {
 		});
 		const output = generateAdminClientTemplate(ctx);
 
-		expect(output.code).toContain("blocks: { ..._mergedModules.blocks,");
-		expect(output.code).toContain("fields: { ..._mergedModules.fields,");
-		expect(output.code).toContain("pages: { ..._mergedModules.pages,");
+		expect(output.code).toContain(
+			'blocks: { ...(_mergedModules["blocks"] as Record<string, unknown>),',
+		);
+		expect(output.code).toContain(
+			'fields: { ...(_mergedModules["fields"] as Record<string, unknown>),',
+		);
+		expect(output.code).toContain(
+			'pages: { ...(_mergedModules["pages"] as Record<string, unknown>),',
+		);
 		expect(output.code).toContain('"hero": _block_hero');
 		expect(output.code).toContain("color: _fld_color");
 		expect(output.code).toContain("analytics: _pg_analytics");
@@ -548,10 +583,16 @@ describe("generateAdminClientTemplate", () => {
 		const output = generateAdminClientTemplate(ctx);
 
 		// Module-only categories should be spread
-		expect(output.code).toContain("fields: { ..._mergedModules.fields },");
-		expect(output.code).toContain("views: { ..._mergedModules.views },");
+		expect(output.code).toContain(
+			'fields: { ...(_mergedModules["fields"] as Record<string, unknown>) },',
+		);
+		expect(output.code).toContain(
+			'views: { ...(_mergedModules["views"] as Record<string, unknown>) },',
+		);
 		// User category should merge
-		expect(output.code).toContain("blocks: { ..._mergedModules.blocks,");
+		expect(output.code).toContain(
+			'blocks: { ...(_mergedModules["blocks"] as Record<string, unknown>),',
+		);
 	});
 });
 

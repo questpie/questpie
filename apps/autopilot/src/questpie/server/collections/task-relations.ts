@@ -17,7 +17,7 @@ export const taskRelations = collection("task_relations")
 			.required()
 			.label({ en: "Relation Type" }),
 		dedupeKey: f.text().label({ en: "Dedupe Key" }),
-		originRun: f.relation("runs").label({ en: "Origin Run" }),
+		originRun: f.relation("run_links").label({ en: "Origin Run" }),
 		createdBy: f.text().label({ en: "Created By" }),
 		metadata: f.json().label({ en: "Metadata" }),
 	}))

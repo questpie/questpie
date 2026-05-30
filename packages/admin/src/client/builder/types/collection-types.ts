@@ -4,6 +4,10 @@
 
 import type { ComponentReference } from "#questpie/admin/server/augmentation.js";
 
+import type {
+	FilterRule,
+	QuickFilterConfig,
+} from "../../../shared/types/saved-views.types.js";
 import type { I18nText } from "../../i18n/types.js";
 import type { Admin } from "../admin";
 import type { FieldDefinition } from "../field/field";
@@ -182,6 +186,16 @@ export interface ListViewConfig<TFieldNames extends string = string> {
 		field: TFieldNames;
 		direction: "asc" | "desc";
 	};
+
+	/**
+	 * Initial filters used when the user has no saved view state.
+	 */
+	defaultFilters?: FilterRule[];
+
+	/**
+	 * Header-level quick filter presets.
+	 */
+	quickFilters?: QuickFilterConfig[];
 
 	/**
 	 * Enables reorder mode for this list.

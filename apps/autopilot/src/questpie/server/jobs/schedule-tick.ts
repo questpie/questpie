@@ -1,7 +1,7 @@
 import { job } from "questpie/services";
 import { z } from "zod";
 
-import { asRecord, relationId } from "../lib/records";
+import { asJsonValue, asRecord, relationId } from "../lib/records";
 import {
 	computeNextRunAt,
 	dateOrNull,
@@ -10,6 +10,7 @@ import {
 import { workflowsFromContext } from "../lib/workflows";
 
 type ScheduleDoc = Record<string, unknown> & { id: string };
+type ScheduleTickContext = Questpie.JobHandlerContext;
 
 function isDue(schedule: ScheduleDoc, now: Date) {
 	const nextRunAt = dateOrNull(schedule.nextRunAt);
@@ -31,7 +32,7 @@ function templateValue(
 }
 
 async function advanceSchedule(
-	ctx: Questpie.AppContext,
+	ctx: ScheduleTickContext,
 	schedule: ScheduleDoc,
 	now: Date,
 ) {
@@ -59,13 +60,13 @@ async function advanceSchedule(
 		data: {
 			lastRunAt: now,
 			nextRunAt: nextRunAt ?? null,
-			enabled: nextRunAt ? schedule.enabled : false,
+			enabled: nextRunAt ? schedule.enabled === true : false,
 		},
 	});
 }
 
 async function hasActiveExecution(
-	ctx: Questpie.AppContext,
+	ctx: ScheduleTickContext,
 	scheduleId: string,
 ) {
 	const executions = await ctx.collections.schedule_executions.find({
@@ -95,7 +96,7 @@ async function hasActiveExecution(
 }
 
 async function cancelActiveExecution(
-	ctx: Questpie.AppContext,
+	ctx: ScheduleTickContext,
 	schedule: ScheduleDoc,
 	active: {
 		execution: Record<string, unknown>;
@@ -109,12 +110,12 @@ async function cancelActiveExecution(
 		id: taskId,
 		data: { status: "cancelled" },
 	});
-	const runs = await ctx.collections.runs.find({
+	const runs = await ctx.collections.run_links.find({
 		where: { task: taskId, status: { in: ["pending", "claimed", "running"] } },
 		limit: 100,
 	});
 	for (const run of runs.docs) {
-		await ctx.collections.runs.updateById({
+		await ctx.collections.run_links.updateById({
 			id: run.id,
 			data: {
 				status: "cancelled",
@@ -122,6 +123,17 @@ async function cancelActiveExecution(
 				error: `Cancelled by replacement schedule run ${schedule.id}`,
 			},
 		});
+		const aiRunId = relationId(run.aiRun);
+		if (aiRunId) {
+			await ctx.collections.ai_runs.updateById({
+				id: aiRunId,
+				data: {
+					status: "cancelled",
+					endedAt: new Date(),
+					error: `Cancelled by replacement schedule run ${schedule.id}`,
+				},
+			});
+		}
 	}
 	await ctx.collections.activity.create({
 		actor: "job:schedule-tick",
@@ -133,7 +145,7 @@ async function cancelActiveExecution(
 }
 
 async function triggerTaskSchedule(
-	ctx: Questpie.AppContext,
+	ctx: ScheduleTickContext,
 	schedule: ScheduleDoc,
 	now: Date,
 ) {
@@ -148,23 +160,28 @@ async function triggerTaskSchedule(
 		description: template.description
 			? templateValue(template, "description", "", now)
 			: undefined,
-		type: template.type ?? "task",
+		type: String(template.type ?? "task") as
+			| "task"
+			| "feature"
+			| "bug"
+			| "research"
+			| "review"
+			| "approval",
 		status: "pending",
-		priority: template.priority ?? "medium",
+		priority: String(template.priority ?? "medium") as
+			| "low"
+			| "medium"
+			| "high"
+			| "urgent",
 		project: template.projectId ?? template.project_id ?? undefined,
-		scopeType:
-			template.projectId || template.project_id ? "project" : "company",
-		workflowConfig:
-			template.workflowConfigId ??
-			template.workflow_config_id ??
-			relationId(schedule.workflowConfig) ??
-			undefined,
-		capability: template.capabilityId ?? template.capability_id ?? undefined,
+		scopeType: (template.projectId || template.project_id
+			? "project"
+			: "company") as "project" | "company",
 		model: template.modelId ?? template.model_id ?? undefined,
-		queue: template.queue ?? undefined,
+		queue: template.queue != null ? String(template.queue) : undefined,
 		scheduledBy: scheduleActor(schedule.id),
 		createdBy: scheduleActor(schedule.id),
-		context: asRecord(template.context),
+		context: asJsonValue(asRecord(template.context)),
 		metadata: {
 			...asRecord(template.metadata),
 			scheduleId: schedule.id,
@@ -186,6 +203,7 @@ async function triggerTaskSchedule(
 			taskId: task.id,
 			runReason: "schedule",
 			requestedBy: scheduleActor(schedule.id),
+			scheduleExecutionId: execution.id,
 		},
 		{ idempotencyKey: `schedule:${schedule.id}:${execution.id}:task` },
 	);
@@ -207,7 +225,7 @@ async function triggerTaskSchedule(
 }
 
 async function triggerChatSchedule(
-	ctx: Questpie.AppContext,
+	ctx: ScheduleTickContext,
 	schedule: ScheduleDoc,
 	now: Date,
 ) {
@@ -254,6 +272,7 @@ async function triggerChatSchedule(
 			prompt,
 			projectId: projectId ?? null,
 			taskId: taskId ?? null,
+			scheduleExecutionId: execution.id,
 			modelId:
 				typeof template.modelId === "string"
 					? template.modelId

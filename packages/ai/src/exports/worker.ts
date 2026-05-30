@@ -1,173 +1,91 @@
-import type { RuntimeKind } from "../server/modules/ai/services/provider-runtime.js";
+import * as os from "node:os";
+
+import { executeRun } from "../server/worker/execute-run.js";
+import { generateSecret } from "../server/modules/ai/services/worker-manager.js";
+import {
+	createSpawnAgentRunner,
+	prepareWorkerVolume,
+	type DirectSpawnRuntime,
+} from "../server/worker/spawn-agent-runner.js";
 
 export interface EmbeddedWorkerConfig {
-  runtimes: { runtime: RuntimeKind; binaryPath?: string }[];
-  maxConcurrentRuns?: number;
-  workerDir?: string;
-  name?: string;
-  pollIntervalMs?: number;
+	runtimes: { runtime: DirectSpawnRuntime; binaryPath?: string }[];
+	maxConcurrentRuns?: number;
+	workerDir?: string;
+	mcpServers?: unknown[];
+	name?: string;
+	pollIntervalMs?: number;
 }
 
 export async function startAIWorker(
-  app: any,
-  config: EmbeddedWorkerConfig,
+	// A resolved system context — workerManager is read from ctx.services,
+	// which exists on a context but not on the bare app instance.
+	ctx: any,
+	config: EmbeddedWorkerConfig,
 ): Promise<{ stop(): Promise<void>; workerId: string }> {
-  const { createDaemon } = await import("@questpie/agent-runtime/worker");
-  const { generateSecret } = await import(
-    "../server/modules/ai/services/worker-manager.js"
-  );
-  const os = await import("node:os");
+	const workerDir = config.workerDir ?? ".questpie/ai-worker";
+	const volume = await prepareWorkerVolume(workerDir);
+	const runner = createSpawnAgentRunner({
+		workerDir,
+		runtimes: config.runtimes,
+		mcpServers: config.mcpServers,
+	});
 
-  const adapters = await Promise.all(
-    config.runtimes.map(async (r) => {
-      if (r.runtime === "codex") {
-        const { createCodexAdapter } = await import(
-          "@questpie/agent-runtime/adapters/codex"
-        );
-        return createCodexAdapter();
-      }
-      const { createClaudeCodeAdapter } = await import(
-        "@questpie/agent-runtime/adapters/claude-code"
-      );
-      return createClaudeCodeAdapter();
-    }),
-  );
+	const secret = generateSecret();
+	const hostname = config.name ?? os.hostname();
+	const workerManager = ctx.services?.workerManager;
 
-  const daemon = createDaemon(
-    {
-      workerDir: config.workerDir ?? ".questpie/ai-worker",
-      runtimes: config.runtimes.map((r) => ({
-        runtime: r.runtime,
-        binaryPath: r.binaryPath,
-      })),
-      pollIntervalMs: config.pollIntervalMs ?? 5000,
-    },
-    adapters,
-  );
+	let workerId = "embedded";
+	if (workerManager) {
+		const result = await workerManager.registerWorker({
+			deviceId: `embedded:${volume.volumeId}`,
+			name: typeof hostname === "string" ? hostname : "embedded",
+			volumeId: volume.volumeId,
+			capabilities: config.runtimes.map((r) => ({
+				runtime: r.runtime,
+				maxConcurrent: config.maxConcurrentRuns ?? 1,
+			})),
+			secret,
+		});
+		workerId = result.workerId;
+	}
 
-  await daemon.start();
+	let running = true;
+	const pollLoop = async () => {
+		while (true) {
+			if (!running || !workerManager) break;
+			try {
+				await workerManager.heartbeat(workerId);
+				const claimed = await workerManager.claimRun({
+					workerId,
+					runtimes: config.runtimes.map((r) => r.runtime),
+					limit: 1,
+				});
 
-  const secret = generateSecret();
-  const hostname = config.name ?? os.hostname();
-  const workerManager = app.services?.aiWorkerManager;
-  const aiChat = app.services?.aiChat;
+				if (claimed) {
+					await executeRun(runner, workerManager, claimed, workerId);
+				}
+			} catch {
+				// Transient heartbeat/claim/execute error — stay alive and
+				// retry on the next tick rather than killing the worker.
+			}
+			await new Promise((resolve) =>
+				setTimeout(resolve, config.pollIntervalMs ?? 5000),
+			);
+		}
+	};
 
-  let workerId = "embedded";
-  if (workerManager) {
-    const result = await workerManager.registerWorker({
-      deviceId: `embedded:${daemon.volumeId}`,
-      name: typeof hostname === "string" ? hostname : "embedded",
-      volumeId: daemon.volumeId,
-      capabilities: config.runtimes.map((r) => ({
-        runtime: r.runtime,
-        maxConcurrent: config.maxConcurrentRuns ?? 1,
-      })),
-      secret,
-    });
-    workerId = result.workerId;
-  }
+	void pollLoop();
 
-  let running = true;
-  const pollLoop = async () => {
-    while (running && workerManager) {
-      try {
-        await workerManager.heartbeat(workerId);
-        const claimed = await workerManager.claimRun({
-          workerId,
-          runtimes: config.runtimes.map((r) => r.runtime),
-          limit: 1,
-        });
-
-        if (claimed) {
-          await executeRun(daemon, workerManager, aiChat, claimed, workerId);
-        }
-      } catch {}
-      await new Promise((resolve) =>
-        setTimeout(resolve, config.pollIntervalMs ?? 5000),
-      );
-    }
-  };
-
-  void pollLoop();
-
-  return {
-    workerId,
-    async stop() {
-      running = false;
-      if (workerManager) {
-        await workerManager.deregister(workerId);
-      }
-      await daemon.stop();
-    },
-  };
+	return {
+		workerId,
+		async stop() {
+			running = false;
+			if (workerManager) {
+				await workerManager.deregister(workerId);
+			}
+		},
+	};
 }
 
-async function executeRun(
-  daemon: any,
-  workerManager: any,
-  aiChat: any,
-  claimed: any,
-  workerId: string,
-) {
-  const handle = await daemon.submit({
-    type: "message.send",
-    runtime: claimed.runtime,
-    prompt: claimed.prompt,
-    sessionRef: claimed.sessionRef,
-    priority: 100,
-    meta: { runId: claimed.runId },
-  });
-
-  let sequence = 0;
-  let accumulatedText = "";
-  const toolCalls: { toolCallId: string; toolName: string; args: unknown }[] = [];
-
-  for await (const event of handle.events) {
-    await workerManager.reportEvent({
-      runId: claimed.runId,
-      event: { ...event, sequence: sequence++ },
-    });
-
-    if (event.type === "text.delta") {
-      accumulatedText += event.text;
-    } else if (event.type === "tool.started") {
-      toolCalls.push({
-        toolCallId: event.commandId ?? `tc_${sequence}`,
-        toolName: event.tool,
-        args: event.input,
-      });
-    }
-  }
-
-  const result = await handle.completion;
-
-  if (aiChat && claimed.sessionId) {
-    const content =
-      toolCalls.length > 0
-        ? [
-            ...(accumulatedText
-              ? [{ type: "text" as const, text: accumulatedText }]
-              : []),
-            ...toolCalls.map((tc) => ({
-              type: "tool-call" as const,
-              toolCallId: tc.toolCallId,
-              toolName: tc.toolName,
-              args: tc.args,
-            })),
-          ]
-        : accumulatedText;
-
-    await aiChat.createAssistantMessage({
-      sessionId: claimed.sessionId,
-      runId: claimed.runId,
-      content,
-      model: claimed.modelId,
-    });
-  }
-
-  await workerManager.completeRun({
-    runId: claimed.runId,
-    workerId,
-    result,
-  });
-}
+export type { DirectSpawnRuntime };

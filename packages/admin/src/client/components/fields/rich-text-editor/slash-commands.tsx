@@ -66,47 +66,70 @@ const SlashCommandList = React.forwardRef<
 		},
 	}));
 
+	const grouped = React.useMemo(() => {
+		const groups: { label: string | undefined; items: { item: SlashCommandItem; globalIndex: number }[] }[] = [];
+		let currentLabel: string | undefined;
+		for (let i = 0; i < items.length; i++) {
+			const item = items[i];
+			if (item.group !== currentLabel || i === 0) {
+				currentLabel = item.group;
+				groups.push({ label: currentLabel, items: [] });
+			}
+			groups[groups.length - 1].items.push({ item, globalIndex: i });
+		}
+		return groups;
+	}, [items]);
+
 	return (
 		<div className="qp-rich-text-editor__slash" role="listbox">
 			{items.length === 0 && (
 				<div className="qp-rich-text-editor__slash-empty">No results</div>
 			)}
-			{items.map((item, index) => (
-				<button
-					key={item.title}
-					type="button"
-					aria-selected={index === safeIndex}
-					role="option"
-					tabIndex={-1}
-					className={cn(
-						"qp-rich-text-editor__slash-item",
-						index === safeIndex
-							? "qp-rich-text-editor__slash-item--active"
-							: "",
+			{grouped.map((group) => (
+				<div key={group.label ?? "ungrouped"}>
+					{group.label && (
+						<div className="qp-rich-text-editor__slash-group" aria-hidden="true">
+							{group.label}
+						</div>
 					)}
-					onMouseEnter={() => setSelectedIndex(index)}
-					onMouseDown={(event) => event.preventDefault()}
-					onClick={() => selectItem(index)}
-				>
-					{item.icon && (
-						<span
-							className="qp-rich-text-editor__slash-icon"
-							aria-hidden="true"
+					{group.items.map(({ item, globalIndex }) => (
+						<button
+							key={item.title}
+							type="button"
+							aria-selected={globalIndex === safeIndex}
+							role="option"
+							tabIndex={-1}
+							className={cn(
+								"qp-rich-text-editor__slash-item",
+								globalIndex === safeIndex
+									? "qp-rich-text-editor__slash-item--active"
+									: "",
+							)}
+							onMouseEnter={() => setSelectedIndex(globalIndex)}
+							onMouseDown={(event) => event.preventDefault()}
+							onClick={() => selectItem(globalIndex)}
 						>
-							<Icon icon={item.icon} width={16} height={16} />
-						</span>
-					)}
-					<span className="qp-rich-text-editor__slash-copy">
-						<span className="qp-rich-text-editor__slash-title">
-							{item.title}
-						</span>
-						{item.description && (
-							<span className="qp-rich-text-editor__slash-description">
-								{item.description}
+							{item.icon && (
+								<span
+									className="qp-rich-text-editor__slash-icon"
+									aria-hidden="true"
+								>
+									<Icon icon={item.icon} width={16} height={16} />
+								</span>
+							)}
+							<span className="qp-rich-text-editor__slash-copy">
+								<span className="qp-rich-text-editor__slash-title">
+									{item.title}
+								</span>
+								{item.description && (
+									<span className="qp-rich-text-editor__slash-description">
+										{item.description}
+									</span>
+								)}
 							</span>
-						)}
-					</span>
-				</button>
+						</button>
+					))}
+				</div>
 			))}
 		</div>
 	);
@@ -124,7 +147,7 @@ export function createSlashCommandExtension(
 			return {
 				suggestion: {
 					char: "/",
-					startOfLine: true,
+					startOfLine: false,
 					command: ({
 						editor,
 						range,

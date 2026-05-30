@@ -1,11 +1,33 @@
 import type {
 	GlobalCollectionHookContext,
+	GlobalCollectionHookContextInput,
 	GlobalCollectionHookEntry,
 	GlobalCollectionTransitionHookContext,
+	GlobalCollectionTransitionHookContextInput,
 	GlobalGlobalHookContext,
+	GlobalGlobalHookContextInput,
 	GlobalGlobalHookEntry,
 	GlobalGlobalTransitionHookContext,
+	GlobalGlobalTransitionHookContextInput,
 } from "#questpie/server/config/global-hooks-types.js";
+
+type ContextLogger = {
+	error: (message: string, ...args: unknown[]) => void;
+};
+
+function getContextLogger(ctx: object): ContextLogger | undefined {
+	if (
+		"logger" in ctx &&
+		ctx.logger &&
+		typeof ctx.logger === "object" &&
+		"error" in ctx.logger &&
+		typeof ctx.logger.error === "function"
+	) {
+		return ctx.logger as ContextLogger;
+	}
+
+	return undefined;
+}
 
 /**
  * Check if a global hook entry matches a given entity name
@@ -38,14 +60,17 @@ export async function executeGlobalCollectionHooks(
 	entries: GlobalCollectionHookEntry[] | undefined,
 	hookName: "beforeChange" | "afterChange" | "beforeDelete" | "afterDelete",
 	collectionName: string,
-	ctx: GlobalCollectionHookContext,
+	ctx: GlobalCollectionHookContextInput,
 ): Promise<void> {
 	if (!entries || entries.length === 0) return;
 
 	const isBefore = hookName.startsWith("before");
 
 	// Enrich context with collection name for global hooks
-	const enrichedCtx = { ...ctx, collection: collectionName };
+	const enrichedCtx: GlobalCollectionHookContext = {
+		...ctx,
+		collection: collectionName,
+	};
 
 	for (const entry of entries) {
 		const hookFn = entry[hookName];
@@ -57,7 +82,7 @@ export async function executeGlobalCollectionHooks(
 			try {
 				await hookFn(enrichedCtx);
 			} catch (err) {
-				enrichedCtx.logger.error(
+				getContextLogger(enrichedCtx)?.error(
 					`[QUESTPIE] Global collection hook "${hookName}" error for "${collectionName}":`,
 					err,
 				);
@@ -76,14 +101,17 @@ export async function executeGlobalCollectionTransitionHooks(
 	entries: GlobalCollectionHookEntry[] | undefined,
 	hookName: "beforeTransition" | "afterTransition",
 	collectionName: string,
-	ctx: GlobalCollectionTransitionHookContext,
+	ctx: GlobalCollectionTransitionHookContextInput,
 ): Promise<void> {
 	if (!entries || entries.length === 0) return;
 
 	const isBefore = hookName === "beforeTransition";
 
 	// Enrich context with collection name for global hooks
-	const enrichedCtx = { ...ctx, collection: collectionName };
+	const enrichedCtx: GlobalCollectionTransitionHookContext = {
+		...ctx,
+		collection: collectionName,
+	};
 
 	for (const entry of entries) {
 		const hookFn = entry[hookName];
@@ -95,7 +123,7 @@ export async function executeGlobalCollectionTransitionHooks(
 			try {
 				await hookFn(enrichedCtx);
 			} catch (err) {
-				enrichedCtx.logger.error(
+				getContextLogger(enrichedCtx)?.error(
 					`[QUESTPIE] Global collection hook "${hookName}" error for "${collectionName}":`,
 					err,
 				);
@@ -118,14 +146,14 @@ export async function executeGlobalGlobalHooks(
 	entries: GlobalGlobalHookEntry[] | undefined,
 	hookName: "beforeChange" | "afterChange",
 	globalName: string,
-	ctx: GlobalGlobalHookContext,
+	ctx: GlobalGlobalHookContextInput,
 ): Promise<void> {
 	if (!entries || entries.length === 0) return;
 
 	const isBefore = hookName === "beforeChange";
 
 	// Enrich context with global name for global hooks
-	const enrichedCtx = { ...ctx, global: globalName };
+	const enrichedCtx: GlobalGlobalHookContext = { ...ctx, global: globalName };
 
 	for (const entry of entries) {
 		const hookFn = entry[hookName];
@@ -137,7 +165,7 @@ export async function executeGlobalGlobalHooks(
 			try {
 				await hookFn(enrichedCtx);
 			} catch (err) {
-				enrichedCtx.logger.error(
+				getContextLogger(enrichedCtx)?.error(
 					`[QUESTPIE] Global global hook "${hookName}" error for "${globalName}":`,
 					err,
 				);
@@ -156,14 +184,17 @@ export async function executeGlobalGlobalTransitionHooks(
 	entries: GlobalGlobalHookEntry[] | undefined,
 	hookName: "beforeTransition" | "afterTransition",
 	globalName: string,
-	ctx: GlobalGlobalTransitionHookContext,
+	ctx: GlobalGlobalTransitionHookContextInput,
 ): Promise<void> {
 	if (!entries || entries.length === 0) return;
 
 	const isBefore = hookName === "beforeTransition";
 
 	// Enrich context with global name for global hooks
-	const enrichedCtx = { ...ctx, global: globalName };
+	const enrichedCtx: GlobalGlobalTransitionHookContext = {
+		...ctx,
+		global: globalName,
+	};
 
 	for (const entry of entries) {
 		const hookFn = entry[hookName];
@@ -175,7 +206,7 @@ export async function executeGlobalGlobalTransitionHooks(
 			try {
 				await hookFn(enrichedCtx);
 			} catch (err) {
-				enrichedCtx.logger.error(
+				getContextLogger(enrichedCtx)?.error(
 					`[QUESTPIE] Global global hook "${hookName}" error for "${globalName}":`,
 					err,
 				);

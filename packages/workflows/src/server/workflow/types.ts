@@ -1,6 +1,16 @@
 import type { AppContext } from "questpie";
 import type { z } from "zod";
 
+declare global {
+	namespace Questpie {
+		interface WorkflowContext {}
+	}
+}
+
+export type WorkflowContext = [keyof Questpie.WorkflowContext] extends [never]
+	? AppContext
+	: Questpie.WorkflowContext;
+
 // ============================================================================
 // Duration
 // ============================================================================
@@ -207,7 +217,7 @@ export interface WorkflowHandlerArgs<TInput = unknown> {
 	/** Structured workflow logger. */
 	log: WorkflowLogger;
 	/** Full app context (db, queue, collections, etc.). Populated at runtime. */
-	ctx: AppContext;
+	ctx: WorkflowContext;
 }
 
 /**
@@ -227,7 +237,7 @@ export interface WorkflowFailureArgs<TInput = unknown> {
 	/** Structured workflow logger. */
 	log: WorkflowLogger;
 	/** Full app context. */
-	ctx: AppContext;
+	ctx: WorkflowContext;
 }
 
 // ============================================================================

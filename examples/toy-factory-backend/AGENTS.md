@@ -384,7 +384,7 @@ If your blocks only use declarative prefetch (`{ with: { field: true } }`), you 
 
 Fields support reactive behaviors in `meta.admin`:
 
-- **`hidden`**: Conditionally hide — `({ data }: { data: Record<string, any> }) => !data.isPublished`
+- **`hidden`**: Conditionally hide — `({ data }: { data: Record<string, unknown> }) => !data.isPublished`
 - **`readOnly`**: Make read-only based on conditions
 - **`disabled`**: Disable conditionally
 - **`compute`**: Auto-compute values — `{ handler, deps, debounce }`

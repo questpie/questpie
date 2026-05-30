@@ -146,8 +146,8 @@ export type RawRouteHandlerArgs<
  * JSON route definition — schema-validated input/output with typed handler.
  */
 export type JsonRouteDefinition<
-	TInput = any,
-	TOutput = any,
+	TInput = unknown,
+	TOutput = unknown,
 	TParams extends JsonRouteParams = JsonRouteParams,
 > = {
 	readonly __brand: "route";
@@ -182,10 +182,16 @@ export type RawRouteDefinition<
  * Unified route definition — either JSON or raw.
  */
 export type RouteDefinition<
-	TInput = any,
-	TOutput = any,
+	TInput = unknown,
+	TOutput = unknown,
 	TParams extends JsonRouteParams = JsonRouteParams,
 > = JsonRouteDefinition<TInput, TOutput, TParams> | RawRouteDefinition<TParams>;
+
+/**
+ * Route definition for heterogeneous route maps (app state, modules).
+ * Uses `any` input/output so contravariant handler args remain assignable.
+ */
+export type StoredRouteDefinition = RouteDefinition<any, any, any>;
 
 // ============================================================================
 // Type Helpers
@@ -226,14 +232,18 @@ export type RouteWithParams<TDef, TParams extends JsonRouteParams> =
 /**
  * Type guard: check if a route is a JSON route.
  */
-export function isJsonRoute(def: RouteDefinition): def is JsonRouteDefinition {
+export function isJsonRoute(
+	def: StoredRouteDefinition,
+): def is JsonRouteDefinition {
 	return def.mode === "json";
 }
 
 /**
  * Type guard: check if a route is a raw route.
  */
-export function isRawRoute(def: RouteDefinition): def is RawRouteDefinition {
+export function isRawRoute(
+	def: StoredRouteDefinition,
+): def is RawRouteDefinition {
 	return def.mode === "raw";
 }
 
@@ -242,5 +252,5 @@ export function isRawRoute(def: RouteDefinition): def is RawRouteDefinition {
  * Supports nested namespaces for organized routing.
  */
 export type RoutesTree = {
-	[key: string]: RouteDefinition<any, any> | RoutesTree;
+	[key: string]: StoredRouteDefinition | RoutesTree;
 };

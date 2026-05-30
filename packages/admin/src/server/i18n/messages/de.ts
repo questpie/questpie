@@ -890,6 +890,9 @@ export default {
 		"Die aktuelle Seite nach einem konfigurierten Feld gruppieren.",
 	"viewOptions.noGrouping": "Keine Gruppierung",
 	"viewOptions.sort": "Sortierung",
+	"viewOptions.noSort": "Keine Sortierung",
+	"viewOptions.sortDescription":
+		"Wählen Sie Feld und Richtung für diese Ansicht.",
 
 	"version.history": "Versionsverlauf",
 	"version.historyDescription":

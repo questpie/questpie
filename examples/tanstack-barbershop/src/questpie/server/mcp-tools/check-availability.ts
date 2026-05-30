@@ -1,5 +1,6 @@
-import { mcpTool } from "@questpie/mcp";
 import { z } from "zod";
+
+import { mcpTool } from "@questpie/mcp";
 
 const inputSchema = z.object({
 	barberId: z.string().describe("ID of the barber"),
@@ -20,8 +21,13 @@ export default mcpTool("barbershop.check-availability", {
 
 	if (!barber || !barber.isActive) {
 		return {
-			structuredContent: { available: false, reason: "Barber not found or inactive" },
-			content: [{ type: "text" as const, text: "Barber not found or inactive." }],
+			structuredContent: {
+				available: false,
+				reason: "Barber not found or inactive",
+			},
+			content: [
+				{ type: "text" as const, text: "Barber not found or inactive." },
+			],
 		};
 	}
 
@@ -38,10 +44,10 @@ export default mcpTool("barbershop.check-availability", {
 	const [year, month, day] = date.split("-").map(Number);
 	const dateObj = new Date(year, month - 1, day);
 	const dayKey = dayNames[dateObj.getDay()];
-	const workingHours = barber.workingHours as Record<string, any> | null;
+	const workingHours = barber.workingHours;
 	const daySchedule = workingHours?.[dayKey];
 
-	if (!daySchedule?.isOpen) {
+	if (!daySchedule?.isOpen || !daySchedule.start || !daySchedule.end) {
 		return {
 			structuredContent: {
 				available: false,
@@ -66,8 +72,8 @@ export default mcpTool("barbershop.check-availability", {
 	});
 
 	const booked = appointments.docs
-		.filter((apt: any) => apt.status !== "cancelled")
-		.map((apt: any) => ({
+		.filter((apt) => apt.status !== "cancelled")
+		.map((apt) => ({
 			scheduledAt: apt.scheduledAt,
 			status: apt.status,
 		}));

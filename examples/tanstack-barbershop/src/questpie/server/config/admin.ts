@@ -4,7 +4,10 @@
  * Consolidates sidebar, dashboard, branding, and admin locale settings.
  */
 import getRevenueStats from "@/questpie/server/routes/get-revenue-stats";
-import { adminConfig, type WidgetFetchContext } from "@questpie/admin/factories";
+import {
+	adminConfig,
+	type WidgetFetchContext,
+} from "@questpie/admin/factories";
 export default adminConfig({
 	branding: {
 		name: { en: "Barbershop Control", sk: "Riadenie barbershopu" },
@@ -358,7 +361,7 @@ export default adminConfig({
 										orderBy: { updatedAt: "desc" },
 									});
 
-									return res.docs.map((apt: any) => ({
+									return res.docs.map((apt) => ({
 										id: apt.id,
 										title: apt.displayTitle || apt.id,
 										description: `Status: ${apt.status}`,

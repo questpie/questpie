@@ -8,7 +8,7 @@ export const activity = collection("activity")
 		type: f.text().required().label({ en: "Type" }),
 		summary: f.text().label({ en: "Summary" }),
 		task: f.relation("tasks").label({ en: "Task" }),
-		run: f.relation("runs").label({ en: "Run" }),
+		run: f.relation("run_links").label({ en: "Run" }),
 		project: f.relation("projects").label({ en: "Project" }),
 		details: f.json().label({ en: "Details" }),
 	}))

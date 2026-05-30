@@ -22,7 +22,7 @@ export const projects = collection("projects")
 	}))
 	.title(({ f }) => f.name)
 	.admin(({ c }) => ({
-		label: { en: "Workspaces" },
+		label: { en: "Projects" },
 		icon: c.icon("ph:folder-notch"),
 	}))
 	.list(({ v }) => v.collectionTable({}))

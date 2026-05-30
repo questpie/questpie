@@ -28,6 +28,8 @@ export const aiWorkersCollection = collection("ai_workers")
   .set("admin", {
     label: { en: "AI Workers" },
     icon: { type: "icon", props: { name: "ph:desktop-tower" } },
+    hidden: true,
+    audit: false,
   })
   .set("adminList", {
     view: "collection-table",

@@ -5,6 +5,8 @@
  * Usage: bun run seed.ts [--force]
  */
 
+import type { BlocksDocument } from "@questpie/admin/server";
+
 import { app } from "./src/questpie/server/app";
 
 // ============================================================================
@@ -20,6 +22,23 @@ function richText(paragraphs: string[]) {
 		})),
 	};
 }
+
+type NewsCategory =
+	| "general"
+	| "council"
+	| "events"
+	| "planning"
+	| "community"
+	| "transport";
+
+type AnnouncementCategory =
+	| "notice"
+	| "planning"
+	| "consultation"
+	| "tender"
+	| "job"
+	| "event"
+	| "emergency";
 
 // ============================================================================
 // City data
@@ -123,19 +142,13 @@ async function seed() {
 				"submissions",
 				() => app.collections.submissions.delete({ where: {} }, ctx),
 			],
-			[
-				"documents",
-				() => app.collections.documents.delete({ where: {} }, ctx),
-			],
+			["documents", () => app.collections.documents.delete({ where: {} }, ctx)],
 			[
 				"announcements",
 				() => app.collections.announcements.delete({ where: {} }, ctx),
 			],
 			["news", () => app.collections.news.delete({ where: {} }, ctx)],
-			[
-				"contacts",
-				() => app.collections.contacts.delete({ where: {} }, ctx),
-			],
+			["contacts", () => app.collections.contacts.delete({ where: {} }, ctx)],
 			["pages", () => app.collections.pages.delete({ where: {} }, ctx)],
 			[
 				"cityMembers",
@@ -303,7 +316,13 @@ async function seed() {
 	// ========================================
 	console.log("Creating news articles...");
 
-	const newsArticles = [
+	const newsArticles: Array<{
+		title: string;
+		category: NewsCategory;
+		excerpt: string;
+		isFeatured: boolean;
+		daysAgo: number;
+	}> = [
 		{
 			title: "New recycling scheme launches next month",
 			category: "community",
@@ -384,7 +403,7 @@ async function seed() {
 						.toLowerCase()
 						.replace(/[^a-z0-9]+/g, "-")
 						.replace(/^-|-$/g, ""),
-					category: article.category as any,
+					category: article.category,
 					excerpt: article.excerpt,
 					content: richText([
 						article.excerpt,
@@ -407,7 +426,12 @@ async function seed() {
 	// ========================================
 	console.log("Creating announcements...");
 
-	const announcements = [
+	const announcements: Array<{
+		title: string;
+		category: AnnouncementCategory;
+		body: string;
+		isPinned: boolean;
+	}> = [
 		{
 			title: "Road closure on Main Street",
 			category: "notice",
@@ -456,7 +480,7 @@ async function seed() {
 				{
 					city: cityId,
 					title: announcement.title,
-					category: announcement.category as any,
+					category: announcement.category,
 					content: richText([announcement.body]),
 					isPinned: announcement.isPinned,
 					validFrom: validFromStr,
@@ -524,7 +548,7 @@ async function seed() {
 							variant: "highlight",
 						},
 					},
-				} as any,
+				} satisfies BlocksDocument,
 				isPublished: true,
 				showInNav: false,
 				order: 0,
@@ -552,7 +576,7 @@ async function seed() {
 							padding: "large",
 						},
 					},
-				} as any,
+				} satisfies BlocksDocument,
 				isPublished: true,
 				showInNav: true,
 				order: 1,
@@ -583,7 +607,7 @@ async function seed() {
 							showAll: true,
 						},
 					},
-				} as any,
+				} satisfies BlocksDocument,
 				isPublished: true,
 				showInNav: true,
 				order: 2,

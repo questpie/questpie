@@ -175,6 +175,12 @@ describe("generateTemplate — minimal (modules.ts only)", () => {
 		expect(code).toContain("export type AppCollections = _ModuleCollections;");
 	});
 
+	it("emits CollectionDoc helper from AppCollections", () => {
+		expect(code).toContain(
+			"export type CollectionDoc<K extends keyof AppCollections> = CollectionSelect<AppCollections[K]>;",
+		);
+	});
+
 	it("emits AppGlobals type alias (no user globals)", () => {
 		expect(code).toContain("export type AppGlobals = _ModuleGlobals;");
 	});
@@ -273,7 +279,7 @@ describe("generateTemplate — minimal (modules.ts only)", () => {
 
 	it("extends AppContext with inferred app config context extensions", () => {
 		expect(code).toContain(
-			"interface AppContext extends _AppTopLevelServices, _AppCustomServiceNamespaces, _AppContextExtensions {",
+			"interface AppContext extends _AppCoreContext, _AppTopLevelServices {",
 		);
 	});
 
@@ -656,11 +662,11 @@ describe("generateTemplate — services", () => {
 			"type _AppCustomServiceNamespaces = ServiceCustomNamespaceInstances<_AppServiceDefinitions>;",
 		);
 		expect(code).toContain(
-			"interface AppContext extends _AppTopLevelServices, _AppCustomServiceNamespaces, _AppContextExtensions {",
+			"interface AppContext extends _AppCoreContext, _AppTopLevelServices {",
 		);
 		expect(code).toContain("services: _AppDefaultServices;");
 		expect(code).toContain(
-			"interface ServiceCreateContext extends AppContext {}",
+			"interface ServiceCreateContext extends _AppCoreContext {}",
 		);
 	});
 });

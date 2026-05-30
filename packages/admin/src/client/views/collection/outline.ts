@@ -12,6 +12,8 @@ export type OutlineRow =
 			count: number;
 			expandable?: boolean;
 			collapsed?: boolean;
+			icon?: unknown;
+			className?: string;
 	  }
 	| {
 			kind: "synthetic";
@@ -33,13 +35,27 @@ export type OutlineRow =
 			collapsed?: boolean;
 	  };
 
+export interface OutlineGroupMeta {
+	icon?: unknown;
+	className?: string;
+}
+
 export interface BuildOutlineRowsOptions {
 	docs: Record<string, unknown>[];
 	outline?: ListViewOutlineConfig;
 	edgesByCollection?: Record<string, Record<string, unknown>[]>;
+	/** Keys toggled away from their configured default expansion state. */
+	toggledKeys?: Iterable<string>;
+	/** @deprecated Use toggledKeys. */
 	collapsedKeys?: Iterable<string>;
 	labelForValue?: (value: unknown, field?: string) => string;
+	metaForValue?: (
+		value: unknown,
+		field?: string,
+	) => OutlineGroupMeta | undefined;
 	maxDepth?: number;
+	/** Docs from all groups — enables cross-group child resolution in grouped views. */
+	allDocs?: Record<string, unknown>[];
 }
 
 type EdgeLevel = Extract<ListViewOutlineLevel, { kind: "edge" }>;
@@ -101,13 +117,17 @@ function shouldExpand(
 	key: string,
 	depth: number,
 	outline: ListViewOutlineConfig | undefined,
-	collapsedKeys: Set<string>,
+	toggledKeys: Set<string>,
 ): boolean {
-	if (collapsedKeys.has(key)) return false;
 	const defaultExpanded = outline?.defaultExpanded ?? true;
-	if (defaultExpanded === true) return true;
-	if (defaultExpanded === false) return false;
-	return depth === 0;
+	const defaultValue =
+		defaultExpanded === true
+			? true
+			: defaultExpanded === false
+				? false
+				: depth === 0;
+	if (toggledKeys.has(key)) return !defaultValue;
+	return defaultValue;
 }
 
 function compareByOrder(
@@ -190,8 +210,9 @@ function buildFieldRows(
 				rowKey,
 				depth,
 				ctx.outline,
-				ctx.collapsedKeys,
+				ctx.toggledKeys,
 			);
+			const meta = ctx.metaForValue(group.value, level.field);
 			return [
 				{
 					kind: "group" as const,
@@ -201,6 +222,8 @@ function buildFieldRows(
 					count: group.docs.length,
 					expandable: true,
 					collapsed: !expanded,
+					...(meta?.icon != null && { icon: meta.icon }),
+					...(meta?.className && { className: meta.className }),
 				},
 				...(expanded
 					? buildLevelRows(group.docs, depth + 1, levelIndex + 1, ctx, rowKey)
@@ -250,7 +273,7 @@ function buildRelationFieldRows(
 				rowKey,
 				depth,
 				ctx.outline,
-				ctx.collapsedKeys,
+				ctx.toggledKeys,
 			);
 			return [
 				{
@@ -305,7 +328,24 @@ function buildEdgeRows(
 				const childId = getId(childValue);
 				if (!parentId || !childId || !docsById.has(childId)) continue;
 				if (docsById.has(parentId) || !isRecord(parentValue)) continue;
-				docsById.set(parentId, parentValue);
+				docsById.set(parentId, ctx.allDocsById?.get(parentId) ?? parentValue);
+				changed = true;
+			}
+			if (!changed) break;
+		}
+	}
+	if (ctx.allDocsById) {
+		for (let pass = 0; pass < ctx.maxDepth; pass++) {
+			let changed = false;
+			for (const edge of edgeDocs) {
+				const parentId = getId(getPathValue(edge, level.parentField));
+				const childId = getId(getPathValue(edge, level.childField));
+				if (!parentId || !childId) continue;
+				if (!docsById.has(parentId)) continue;
+				if (docsById.has(childId)) continue;
+				const childDoc = ctx.allDocsById.get(childId);
+				if (!childDoc) continue;
+				docsById.set(childId, childDoc);
 				changed = true;
 			}
 			if (!changed) break;
@@ -374,7 +414,7 @@ function buildEdgeRows(
 					rowKey,
 					nextDepth,
 					ctx.outline,
-					ctx.collapsedKeys,
+					ctx.toggledKeys,
 				);
 				rows.push({
 					kind: "group",
@@ -415,20 +455,15 @@ function buildEdgeRows(
 		const hasChildren = (childrenByParent.get(id) ?? []).some((child) =>
 			docsById.has(child.childId),
 		);
-		const expanded =
-			hasChildren &&
-			shouldExpand(rowKey, rowDepth, ctx.outline, ctx.collapsedKeys);
 		rows.push({
 			kind: "record",
 			key: rowKey,
 			id,
 			doc,
 			depth: rowDepth,
-			expandable: hasChildren,
-			collapsed: hasChildren ? !expanded : undefined,
 		});
 		visited.add(id);
-		if (hasChildren && expanded) {
+		if (hasChildren) {
 			const nextAncestors = new Set(ancestorIds);
 			nextAncestors.add(id);
 			pushChildRows(id, rowDepth + 1, branchDepth, nextAncestors);
@@ -539,7 +574,7 @@ function buildPathRows(
 				child.key,
 				rowDepth,
 				ctx.outline,
-				ctx.collapsedKeys,
+				ctx.toggledKeys,
 			);
 			rows.push({
 				kind: "synthetic",
@@ -585,9 +620,14 @@ interface BuildContext {
 	levels: ListViewOutlineLevel[];
 	outline?: ListViewOutlineConfig;
 	edgesByCollection: Record<string, Record<string, unknown>[]>;
-	collapsedKeys: Set<string>;
+	toggledKeys: Set<string>;
 	labelForValue: (value: unknown, field?: string) => string;
+	metaForValue: (
+		value: unknown,
+		field?: string,
+	) => OutlineGroupMeta | undefined;
 	maxDepth: number;
+	allDocsById?: Map<string, Record<string, unknown>>;
 }
 
 function buildLevelRows(
@@ -631,22 +671,37 @@ function buildLevelRows(
 	return buildPathRows(level, docs, depth, levelIndex, ctx, scopeKey);
 }
 
+const noMeta = () => undefined;
+
 export function buildOutlineRows({
 	docs,
 	outline,
 	edgesByCollection = {},
+	toggledKeys,
 	collapsedKeys,
 	labelForValue = defaultLabelForValue,
+	metaForValue = noMeta,
 	maxDepth,
+	allDocs,
 }: BuildOutlineRowsOptions): OutlineRow[] {
 	const levels = outline?.levels?.filter(Boolean) ?? [];
+	let allDocsById: Map<string, Record<string, unknown>> | undefined;
+	if (allDocs && allDocs.length > 0) {
+		allDocsById = new Map();
+		for (const doc of allDocs) {
+			const id = getId(doc);
+			if (id) allDocsById.set(id, doc);
+		}
+	}
 	const ctx: BuildContext = {
 		levels,
 		outline,
 		edgesByCollection,
-		collapsedKeys: new Set(collapsedKeys ?? []),
+		toggledKeys: new Set(toggledKeys ?? collapsedKeys ?? []),
 		labelForValue,
+		metaForValue,
 		maxDepth: maxDepth ?? outline?.maxDepth ?? DEFAULT_MAX_DEPTH,
+		allDocsById,
 	};
 
 	if (levels.length === 0) {

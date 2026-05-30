@@ -30,6 +30,7 @@ import type { DateInput } from "#questpie/shared/type-utils.js";
 
 import { operator } from "../types.js";
 import type { CollectionWherePlaceholder } from "../types.js";
+import { jsonbPathRef, textArray } from "./jsonb-sql.js";
 import { extendOperatorSet, operatorSet } from "./operator-set.js";
 
 // ============================================================================
@@ -173,17 +174,16 @@ export const emailOps = extendOperatorSet(stringOps, {
 	},
 	jsonbOverrides: {
 		domain: operator<string, unknown>((col, value, ctx) => {
-			const path = ctx.jsonbPath?.join(",") ?? "";
-			return sql`${col}#>>'{${sql.raw(path)}}' ILIKE ${"%" + "@" + value}`;
+			return sql`${jsonbPathRef(col, ctx.jsonbPath, false)} ILIKE ${"%" + "@" + value}`;
 		}),
 		domainIn: operator<string[], unknown>((col, values, ctx) => {
-			const path = ctx.jsonbPath?.join(",") ?? "";
 			if (values.length === 0) return sql`FALSE`;
 			if (values.length === 1)
-				return sql`${col}#>>'{${sql.raw(path)}}' ILIKE ${"%" + "@" + values[0]}`;
+				return sql`${jsonbPathRef(col, ctx.jsonbPath, false)} ILIKE ${"%" + "@" + values[0]}`;
 			return sql`(${sql.join(
 				values.map(
-					(d) => sql`${col}#>>'{${sql.raw(path)}}' ILIKE ${"%" + "@" + d}`,
+					(d) =>
+						sql`${jsonbPathRef(col, ctx.jsonbPath, false)} ILIKE ${"%" + "@" + d}`,
 				),
 				sql` OR `,
 			)})`;
@@ -218,24 +218,22 @@ export const urlOps = extendOperatorSet(stringOps, {
 	},
 	jsonbOverrides: {
 		host: operator<string, unknown>((col, value, ctx) => {
-			const path = ctx.jsonbPath?.join(",") ?? "";
-			return sql`${col}#>>'{${sql.raw(path)}}' ILIKE ${"%://" + value + "%"}`;
+			return sql`${jsonbPathRef(col, ctx.jsonbPath, false)} ILIKE ${"%://" + value + "%"}`;
 		}),
 		hostIn: operator<string[], unknown>((col, values, ctx) => {
-			const path = ctx.jsonbPath?.join(",") ?? "";
 			if (values.length === 0) return sql`FALSE`;
 			if (values.length === 1)
-				return sql`${col}#>>'{${sql.raw(path)}}' ILIKE ${"%://" + values[0] + "%"}`;
+				return sql`${jsonbPathRef(col, ctx.jsonbPath, false)} ILIKE ${"%://" + values[0] + "%"}`;
 			return sql`(${sql.join(
 				values.map(
-					(h) => sql`${col}#>>'{${sql.raw(path)}}' ILIKE ${"%://" + h + "%"}`,
+					(h) =>
+						sql`${jsonbPathRef(col, ctx.jsonbPath, false)} ILIKE ${"%://" + h + "%"}`,
 				),
 				sql` OR `,
 			)})`;
 		}),
 		protocol: operator<string, unknown>((col, value, ctx) => {
-			const path = ctx.jsonbPath?.join(",") ?? "";
-			return sql`${col}#>>'{${sql.raw(path)}}' LIKE ${value + "://%"}`;
+			return sql`${jsonbPathRef(col, ctx.jsonbPath, false)} LIKE ${value + "://%"}`;
 		}),
 	},
 });
@@ -303,43 +301,32 @@ export const selectMultiOps = operatorSet({
 	},
 	jsonbOverrides: {
 		containsAll: operator<string[], unknown>((col, values, ctx) => {
-			const path = ctx.jsonbPath?.join(",") ?? "";
-			return sql`${col}#>'{${sql.raw(path)}}' @> ${JSON.stringify(values)}::jsonb`;
+			return sql`${jsonbPathRef(col, ctx.jsonbPath, true)} @> ${JSON.stringify(values)}::jsonb`;
 		}),
 		containsAny: operator<string[], unknown>((col, values, ctx) => {
-			const path = ctx.jsonbPath?.join(",") ?? "";
-			return sql`${col}#>'{${sql.raw(path)}}' ?| ARRAY[${sql.join(
-				values.map((v) => sql`${v}`),
-				sql`, `,
-			)}]::text[]`;
+			return sql`${jsonbPathRef(col, ctx.jsonbPath, true)} ?| ${textArray(values)}`;
 		}),
 		eq: operator<string[], unknown>((col, values, ctx) => {
-			const path = ctx.jsonbPath?.join(",") ?? "";
-			return sql`${col}#>'{${sql.raw(path)}}' = ${JSON.stringify(values)}::jsonb`;
+			return sql`${jsonbPathRef(col, ctx.jsonbPath, true)} = ${JSON.stringify(values)}::jsonb`;
 		}),
 		isEmpty: operator<boolean, unknown>((col, _value, ctx) => {
-			const path = ctx.jsonbPath?.join(",") ?? "";
-			return sql`(${col}#>'{${sql.raw(path)}}' = '[]'::jsonb OR ${col}#>'{${sql.raw(path)}}' IS NULL)`;
+			return sql`(${jsonbPathRef(col, ctx.jsonbPath, true)} = '[]'::jsonb OR ${jsonbPathRef(col, ctx.jsonbPath, true)} IS NULL)`;
 		}),
 		isNotEmpty: operator<boolean, unknown>((col, _value, ctx) => {
-			const path = ctx.jsonbPath?.join(",") ?? "";
-			return sql`(${col}#>'{${sql.raw(path)}}' != '[]'::jsonb AND ${col}#>'{${sql.raw(path)}}' IS NOT NULL)`;
+			return sql`(${jsonbPathRef(col, ctx.jsonbPath, true)} != '[]'::jsonb AND ${jsonbPathRef(col, ctx.jsonbPath, true)} IS NOT NULL)`;
 		}),
 		length: operator<number, unknown>((col, value, ctx) => {
-			const path = ctx.jsonbPath?.join(",") ?? "";
-			return sql`jsonb_array_length(${col}#>'{${sql.raw(path)}}') = ${value}`;
+			return sql`jsonb_array_length(${jsonbPathRef(col, ctx.jsonbPath, true)}) = ${value}`;
 		}),
 		isNull: operator<boolean, unknown>((col, value, ctx) => {
-			const path = ctx.jsonbPath?.join(",") ?? "";
 			return value
-				? sql`${col}#>'{${sql.raw(path)}}' IS NULL`
-				: sql`${col}#>'{${sql.raw(path)}}' IS NOT NULL`;
+				? sql`${jsonbPathRef(col, ctx.jsonbPath, true)} IS NULL`
+				: sql`${jsonbPathRef(col, ctx.jsonbPath, true)} IS NOT NULL`;
 		}),
 		isNotNull: operator<boolean, unknown>((col, value, ctx) => {
-			const path = ctx.jsonbPath?.join(",") ?? "";
 			return value
-				? sql`${col}#>'{${sql.raw(path)}}' IS NOT NULL`
-				: sql`${col}#>'{${sql.raw(path)}}' IS NULL`;
+				? sql`${jsonbPathRef(col, ctx.jsonbPath, true)} IS NOT NULL`
+				: sql`${jsonbPathRef(col, ctx.jsonbPath, true)} IS NULL`;
 		}),
 	},
 });
@@ -363,16 +350,14 @@ export const objectOps = operatorSet({
 		),
 		hasKey: operator<string, unknown>((col, value) => sql`${col} ? ${value}`),
 		hasKeys: operator<string[], unknown>(
-			(col, values) =>
-				sql`${col} ?& ${sql.raw(`ARRAY[${values.map((v) => `'${v}'`).join(",")}]`)}`,
+			(col, values) => sql`${col} ?& ${textArray(values)}`,
 		),
 		hasAnyKeys: operator<string[], unknown>(
-			(col, values) =>
-				sql`${col} ?| ${sql.raw(`ARRAY[${values.map((v) => `'${v}'`).join(",")}]`)}`,
+			(col, values) => sql`${col} ?| ${textArray(values)}`,
 		),
 		pathEquals: operator<{ path: string[]; val: unknown }, unknown>(
 			(col, value) => {
-				return sql`${col}#>>'{${sql.raw(value.path.join(","))}}' = ${value.val}`;
+				return sql`${jsonbPathRef(col, value.path, false)} = ${value.val}`;
 			},
 		),
 		jsonPath: operator<string, unknown>(
@@ -393,57 +378,47 @@ export const objectOps = operatorSet({
 	},
 	jsonbOverrides: {
 		contains: operator<unknown, unknown>((col, value, ctx) => {
-			const path = ctx.jsonbPath?.join(",") ?? "";
-			return sql`${col}#>'{${sql.raw(path)}}' @> ${JSON.stringify(value)}::jsonb`;
+			return sql`${jsonbPathRef(col, ctx.jsonbPath, true)} @> ${JSON.stringify(value)}::jsonb`;
 		}),
 		containedBy: operator<unknown, unknown>((col, value, ctx) => {
-			const path = ctx.jsonbPath?.join(",") ?? "";
-			return sql`${col}#>'{${sql.raw(path)}}' <@ ${JSON.stringify(value)}::jsonb`;
+			return sql`${jsonbPathRef(col, ctx.jsonbPath, true)} <@ ${JSON.stringify(value)}::jsonb`;
 		}),
 		hasKey: operator<string, unknown>((col, value, ctx) => {
-			const path = ctx.jsonbPath?.join(",") ?? "";
-			return sql`${col}#>'{${sql.raw(path)}}' ? ${value}`;
+			return sql`${jsonbPathRef(col, ctx.jsonbPath, true)} ? ${value}`;
 		}),
 		hasKeys: operator<string[], unknown>((col, values, ctx) => {
-			const path = ctx.jsonbPath?.join(",") ?? "";
-			return sql`${col}#>'{${sql.raw(path)}}' ?& ${sql.raw(`ARRAY[${values.map((v) => `'${v}'`).join(",")}]`)}`;
+			return sql`${jsonbPathRef(col, ctx.jsonbPath, true)} ?& ${textArray(values)}`;
 		}),
 		hasAnyKeys: operator<string[], unknown>((col, values, ctx) => {
-			const path = ctx.jsonbPath?.join(",") ?? "";
-			return sql`${col}#>'{${sql.raw(path)}}' ?| ${sql.raw(`ARRAY[${values.map((v) => `'${v}'`).join(",")}]`)}`;
+			return sql`${jsonbPathRef(col, ctx.jsonbPath, true)} ?| ${textArray(values)}`;
 		}),
 		pathEquals: operator<{ path: string[]; val: unknown }, unknown>(
 			(col, value, ctx) => {
-				const basePath = ctx.jsonbPath?.join(",") ?? "";
-				const fullPath = basePath
-					? `${basePath},${value.path.join(",")}`
-					: value.path.join(",");
-				return sql`${col}#>>'{${sql.raw(fullPath)}}' = ${value.val}`;
+				return sql`${jsonbPathRef(
+					col,
+					[...(ctx.jsonbPath ?? []), ...value.path],
+					false,
+				)} = ${value.val}`;
 			},
 		),
 		jsonPath: operator<string, unknown>((col, value, ctx) => {
-			const path = ctx.jsonbPath?.join(",") ?? "";
-			return sql`${col}#>'{${sql.raw(path)}}' @@ ${value}::jsonpath`;
+			return sql`${jsonbPathRef(col, ctx.jsonbPath, true)} @@ ${value}::jsonpath`;
 		}),
 		isEmpty: operator<boolean, unknown>((col, _value, ctx) => {
-			const path = ctx.jsonbPath?.join(",") ?? "";
-			return sql`(${col}#>'{${sql.raw(path)}}' = '{}'::jsonb OR ${col}#>'{${sql.raw(path)}}' IS NULL)`;
+			return sql`(${jsonbPathRef(col, ctx.jsonbPath, true)} = '{}'::jsonb OR ${jsonbPathRef(col, ctx.jsonbPath, true)} IS NULL)`;
 		}),
 		isNotEmpty: operator<boolean, unknown>((col, _value, ctx) => {
-			const path = ctx.jsonbPath?.join(",") ?? "";
-			return sql`(${col}#>'{${sql.raw(path)}}' != '{}'::jsonb AND ${col}#>'{${sql.raw(path)}}' IS NOT NULL)`;
+			return sql`(${jsonbPathRef(col, ctx.jsonbPath, true)} != '{}'::jsonb AND ${jsonbPathRef(col, ctx.jsonbPath, true)} IS NOT NULL)`;
 		}),
 		isNull: operator<boolean, unknown>((col, value, ctx) => {
-			const path = ctx.jsonbPath?.join(",") ?? "";
 			return value
-				? sql`${col}#>'{${sql.raw(path)}}' IS NULL`
-				: sql`${col}#>'{${sql.raw(path)}}' IS NOT NULL`;
+				? sql`${jsonbPathRef(col, ctx.jsonbPath, true)} IS NULL`
+				: sql`${jsonbPathRef(col, ctx.jsonbPath, true)} IS NOT NULL`;
 		}),
 		isNotNull: operator<boolean, unknown>((col, value, ctx) => {
-			const path = ctx.jsonbPath?.join(",") ?? "";
 			return value
-				? sql`${col}#>'{${sql.raw(path)}}' IS NOT NULL`
-				: sql`${col}#>'{${sql.raw(path)}}' IS NULL`;
+				? sql`${jsonbPathRef(col, ctx.jsonbPath, true)} IS NOT NULL`
+				: sql`${jsonbPathRef(col, ctx.jsonbPath, true)} IS NULL`;
 		}),
 	},
 });
@@ -530,43 +505,32 @@ export const multipleOps = operatorSet({
 	},
 	jsonbOverrides: {
 		contains: operator<string, unknown>((col, value, ctx) => {
-			const path = ctx.jsonbPath?.join(",") ?? "";
-			return sql`${col}#>'{${sql.raw(path)}}' @> ${JSON.stringify([value])}::jsonb`;
+			return sql`${jsonbPathRef(col, ctx.jsonbPath, true)} @> ${JSON.stringify([value])}::jsonb`;
 		}),
 		containsAll: operator<string[], unknown>((col, values, ctx) => {
-			const path = ctx.jsonbPath?.join(",") ?? "";
-			return sql`${col}#>'{${sql.raw(path)}}' @> ${JSON.stringify(values)}::jsonb`;
+			return sql`${jsonbPathRef(col, ctx.jsonbPath, true)} @> ${JSON.stringify(values)}::jsonb`;
 		}),
 		containsAny: operator<string[], unknown>((col, values, ctx) => {
-			const path = ctx.jsonbPath?.join(",") ?? "";
-			return sql`${col}#>'{${sql.raw(path)}}' ?| ARRAY[${sql.join(
-				values.map((v) => sql`${v}`),
-				sql`, `,
-			)}]::text[]`;
+			return sql`${jsonbPathRef(col, ctx.jsonbPath, true)} ?| ${textArray(values)}`;
 		}),
 		isEmpty: operator<boolean, unknown>((col, _value, ctx) => {
-			const path = ctx.jsonbPath?.join(",") ?? "";
-			return sql`(${col}#>'{${sql.raw(path)}}' = '[]'::jsonb OR ${col}#>'{${sql.raw(path)}}' IS NULL)`;
+			return sql`(${jsonbPathRef(col, ctx.jsonbPath, true)} = '[]'::jsonb OR ${jsonbPathRef(col, ctx.jsonbPath, true)} IS NULL)`;
 		}),
 		isNotEmpty: operator<boolean, unknown>((col, _value, ctx) => {
-			const path = ctx.jsonbPath?.join(",") ?? "";
-			return sql`(${col}#>'{${sql.raw(path)}}' != '[]'::jsonb AND ${col}#>'{${sql.raw(path)}}' IS NOT NULL)`;
+			return sql`(${jsonbPathRef(col, ctx.jsonbPath, true)} != '[]'::jsonb AND ${jsonbPathRef(col, ctx.jsonbPath, true)} IS NOT NULL)`;
 		}),
 		count: operator<number, unknown>((col, value, ctx) => {
-			const path = ctx.jsonbPath?.join(",") ?? "";
-			return sql`jsonb_array_length(COALESCE(${col}#>'{${sql.raw(path)}}', '[]'::jsonb)) = ${value}`;
+			return sql`jsonb_array_length(COALESCE(${jsonbPathRef(col, ctx.jsonbPath, true)}, '[]'::jsonb)) = ${value}`;
 		}),
 		isNull: operator<boolean, unknown>((col, value, ctx) => {
-			const path = ctx.jsonbPath?.join(",") ?? "";
 			return value
-				? sql`${col}#>'{${sql.raw(path)}}' IS NULL`
-				: sql`${col}#>'{${sql.raw(path)}}' IS NOT NULL`;
+				? sql`${jsonbPathRef(col, ctx.jsonbPath, true)} IS NULL`
+				: sql`${jsonbPathRef(col, ctx.jsonbPath, true)} IS NOT NULL`;
 		}),
 		isNotNull: operator<boolean, unknown>((col, value, ctx) => {
-			const path = ctx.jsonbPath?.join(",") ?? "";
 			return value
-				? sql`${col}#>'{${sql.raw(path)}}' IS NOT NULL`
-				: sql`${col}#>'{${sql.raw(path)}}' IS NULL`;
+				? sql`${jsonbPathRef(col, ctx.jsonbPath, true)} IS NOT NULL`
+				: sql`${jsonbPathRef(col, ctx.jsonbPath, true)} IS NULL`;
 		}),
 	},
 });

@@ -424,6 +424,8 @@ export default {
 	"table.noItemsInCollection": "No items found in this collection",
 	"table.emptyDescription": "Records will appear here once they are created.",
 	"table.pagination": "Pagination",
+	"table.items": "items",
+	"table.loadMore": "Load more",
 	"table.editing": "Editing",
 
 	// Upload
@@ -747,6 +749,9 @@ export default {
 		"Group the current page by a configured field.",
 	"viewOptions.noGrouping": "No grouping",
 	"viewOptions.sort": "Sort",
+	"viewOptions.noSort": "No sorting",
+	"viewOptions.sortDescription":
+		"Choose the field and direction used by this view.",
 
 	// Versions
 	"version.history": "Version history",

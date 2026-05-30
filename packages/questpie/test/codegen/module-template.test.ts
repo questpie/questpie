@@ -168,7 +168,7 @@ describe("generateModuleTemplate — minimal", () => {
 	});
 
 	it("emits module type export", () => {
-		expect(output).toContain("export type TestModule = typeof _module;");
+		expect(output).toContain("export type TestModule = {");
 	});
 
 	it("emits default export", () => {
@@ -187,7 +187,7 @@ describe("generateModuleTemplate — type prefix", () => {
 			discovered: emptyResult(),
 			categoryMeta: new Map(),
 		});
-		expect(output).toContain("export type AdminModule = typeof _module;");
+		expect(output).toContain("export type AdminModule = {");
 	});
 
 	it("derives Billing from billing (no questpie- prefix)", () => {
@@ -196,7 +196,7 @@ describe("generateModuleTemplate — type prefix", () => {
 			discovered: emptyResult(),
 			categoryMeta: new Map(),
 		});
-		expect(output).toContain("export type BillingModule = typeof _module;");
+		expect(output).toContain("export type BillingModule = {");
 	});
 
 	it("derives UserAuth from questpie-user-auth (multi-segment)", () => {
@@ -205,7 +205,7 @@ describe("generateModuleTemplate — type prefix", () => {
 			discovered: emptyResult(),
 			categoryMeta: new Map(),
 		});
-		expect(output).toContain("export type UserAuthModule = typeof _module;");
+		expect(output).toContain("export type UserAuthModule = {");
 	});
 });
 

@@ -26,6 +26,7 @@ export const providers = collection("providers")
 	.admin(({ c }) => ({
 		label: { en: "Connections" },
 		icon: c.icon("ph:plugs-connected"),
+		hidden: true,
 	}))
 	.list(({ v }) => v.collectionTable({}))
 	.form(({ v, f }) =>

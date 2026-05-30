@@ -12,6 +12,7 @@ import type { I18nText } from "../../i18n/types.js";
 export type {
 	FilterOperator,
 	FilterRule,
+	QuickFilterConfig,
 	SortConfig,
 	ViewConfiguration,
 } from "../../../shared/types/saved-views.types.js";
@@ -42,6 +43,16 @@ export interface AvailableField {
 }
 
 /**
+ * Declares which configuration panels the sheet should render.
+ * Each view type passes its own declaration — no viewType branching needed.
+ */
+export interface FilterBuilderPanels {
+	columns?: boolean;
+	filters?: boolean;
+	savedViews?: boolean;
+}
+
+/**
  * Filter builder sheet props
  */
 export interface FilterBuilderProps {
@@ -62,4 +73,7 @@ export interface FilterBuilderProps {
 
 	/** Callback when open state changes */
 	onOpenChange: (open: boolean) => void;
+
+	/** Which panels to show. Defaults: all true. */
+	panels?: FilterBuilderPanels;
 }

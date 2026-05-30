@@ -21,13 +21,13 @@ import {
 } from "../lib/records";
 
 async function loadInspectableRuns(client: unknown) {
-	const api = (client as any)?.collections?.runs;
+	const api = (client as any)?.collections?.run_links;
 	if (!api?.find) return [];
 	return docsFromResult(
 		await api.find({
 			limit: 80,
 			orderBy: { updatedAt: "desc" },
-			with: { project: true, task: true, worker: true },
+			with: { project: true, task: true },
 		}),
 	).filter((run) => run.project);
 }
@@ -229,7 +229,7 @@ function DiffPanel({
 				</div>
 				{selectedRun ? (
 					<AdminLink
-						href={`${basePath}/collections/runs/${selectedRun.id}`}
+						href={`${basePath}/collections/run_links/${selectedRun.id}`}
 						className="text-primary text-xs"
 					>
 						Open Run
@@ -351,10 +351,10 @@ function ProjectInspectionPage() {
 		});
 	}, [queryClient]);
 
-	useCollectionRealtime(client, "runs", invalidateRuns);
+	useCollectionRealtime(client, "run_links", invalidateRuns);
 	useCollectionRealtime(client, "knowledge", invalidateRuns);
 
-	const runs = runsQuery.data ?? [];
+	const runs = React.useMemo(() => runsQuery.data ?? [], [runsQuery.data]);
 	const selectedRun =
 		runs.find((run) => run.id === selectedRunId) ?? runs[0] ?? null;
 

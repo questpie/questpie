@@ -19,10 +19,15 @@ export function getHeadingLevel(editor: Editor | null): string {
 	return "paragraph";
 }
 
+export type OutputMode = "json" | "markdown";
+
 /**
- * Get output as TipTap JSON.
+ * Get editor output in the configured format.
  */
-export function getOutput(editor: Editor): OutputValue {
+export function getOutput(editor: Editor, mode: OutputMode = "json"): OutputValue | string {
+	if (mode === "markdown") {
+		return (editor.storage as any).markdown?.getMarkdown?.() ?? "";
+	}
 	return editor.getJSON();
 }
 
@@ -30,11 +35,12 @@ export function getOutput(editor: Editor): OutputValue {
  * Compare two output values for equality
  */
 export function isSameValue(
-	a: OutputValue | undefined,
-	b: OutputValue | undefined,
+	a: OutputValue | string | undefined,
+	b: OutputValue | string | undefined,
 ): boolean {
 	if (a === b) return true;
-	if (!a || !b) return false;
+	if (a == null || b == null) return false;
+	if (typeof a === "string" || typeof b === "string") return a === b;
 	try {
 		return JSON.stringify(a) === JSON.stringify(b);
 	} catch {

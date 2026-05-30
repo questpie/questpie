@@ -96,7 +96,7 @@ export function generateTemplate(options: TemplateOptions): string {
 	// Import createApp + types
 	lines.push('import { createApp, createContextFactory } from "questpie/app";');
 	lines.push(
-		'import type { AnyCollectionOrBuilder, AnyGlobalOrBuilder, AppDefinition, CollectionAPI, DrizzleClientFromQuestpieConfig, InferContextExtensionsFromAppConfig, InferSessionFromAuthConfig, MailerService, Questpie, QuestpieConfig, QueueClient, QueueJobType, RouteParamsFromKey, RouteWithParams, TablesFromConfig } from "questpie/types";',
+		'import type { AnyCollectionOrBuilder, AnyGlobalOrBuilder, AppDefinition, CollectionAPI, CollectionSelect, DrizzleClientFromQuestpieConfig, InferContextExtensionsFromAppConfig, InferSessionFromAuthConfig, MailerService, Questpie, QuestpieConfig, QueueClient, QueueJobType, RouteParamsFromKey, RouteWithParams, TablesFromConfig } from "questpie/types";',
 	);
 	lines.push('import type { z } from "zod";');
 	lines.push("");
@@ -514,29 +514,8 @@ export function generateTemplate(options: TemplateOptions): string {
 		lines.push(
 			"type _CollectionsAPI = { [K in keyof AppCollections]: CollectionAPI<AppCollections[K], AppCollections> };",
 		);
-		const localCollections = sortedValues(
-			discovered.categories.get("collections") ?? new Map(),
-		).filter((file) => !file.isBundle);
-		if (localCollections.length > 0) {
-			const collectionsDecl = allDecls.get("collections");
-			lines.push("type _JobHandlerCollections = {");
-			for (const file of localCollections) {
-				lines.push(
-					`\t${categoryTypeEntry(file, collectionsDecl, "collections")};`,
-				);
-			}
-			lines.push("};");
-			lines.push("type _JobHandlerCollectionsAPI = {");
-			for (const file of localCollections) {
-				lines.push(
-					`\t${safeKey(file.key)}: CollectionAPI<typeof ${file.varName}, _JobHandlerCollections>;`,
-				);
-			}
-			lines.push("};");
-		} else {
-			lines.push("type _JobHandlerCollections = {};");
-			lines.push("type _JobHandlerCollectionsAPI = {};");
-		}
+		lines.push("type _JobHandlerCollections = AppCollections;");
+		lines.push("type _JobHandlerCollectionsAPI = _CollectionsAPI;");
 		const localJobs = sortedValues(
 			discovered.categories.get("jobs") ?? new Map(),
 		).filter((file) => !file.isBundle);
@@ -603,54 +582,53 @@ export function generateTemplate(options: TemplateOptions): string {
 		lines.push(
 			"// ── AppContext augmentation — auto-types ALL handlers ──────",
 		);
+		lines.push("type _AppCoreContext = _AppContextExtensions & {");
+		lines.push("\t// Infrastructure");
+		lines.push("\tdb: _AppDb;");
+		if (hasEmails) {
+			lines.push(`\temail: MailerService<${emailsTypeName}>;`);
+		} else {
+			lines.push('\temail: _AppQuestpie["email"];');
+		}
+		lines.push("\tqueue: QueueClient<AppJobs>;");
+		lines.push("\tstorage: _AppStorage;");
+		lines.push('\tkv: _AppQuestpie["kv"];');
+		lines.push('\tlogger: _AppQuestpie["logger"];');
+		lines.push('\tsearch: _AppQuestpie["search"];');
+		lines.push('\trealtime: _AppQuestpie["realtime"];');
+		lines.push("");
+		lines.push("\t// Entity APIs");
+		lines.push("\tcollections: _CollectionsAPI;");
+		lines.push("\tglobals: _AppGlobalsAPI;");
+		lines.push("\ttables: _AppTables;");
+		lines.push("");
+		lines.push("\t// Request-scoped");
+		lines.push("\tsession: _AppSession;");
+		if (hasMessages) {
+			lines.push(
+				"\tt: (key: AppMessageKeys | (string & {}), params?: Record<string, unknown>, locale?: string) => string;",
+			);
+		} else {
+			lines.push(
+				"\tt: (key: string, params?: Record<string, unknown>, locale?: string) => string;",
+			);
+		}
+		if (hasServices) {
+			lines.push("");
+			lines.push("\t// User services");
+			lines.push("\tservices: _AppDefaultServices;");
+		}
+		lines.push("} & _AppCustomServiceNamespaces;");
+		lines.push("");
 		lines.push("declare global {");
 		lines.push("\tnamespace Questpie {");
 		if (hasServices) {
 			lines.push(
-				"\t\tinterface AppContext extends _AppTopLevelServices, _AppCustomServiceNamespaces, _AppContextExtensions {",
+				"\t\tinterface AppContext extends _AppCoreContext, _AppTopLevelServices {}",
 			);
 		} else {
-			lines.push("\t\tinterface AppContext extends _AppContextExtensions {");
+			lines.push("\t\tinterface AppContext extends _AppCoreContext {}");
 		}
-		lines.push("\t\t\t// Infrastructure");
-		lines.push("\t\t\tdb: _AppDb;");
-		if (hasEmails) {
-			lines.push(`\t\t\temail: MailerService<${emailsTypeName}>;`);
-		} else {
-			lines.push('\t\t\temail: _AppQuestpie["email"];');
-		}
-		lines.push("\t\t\tqueue: QueueClient<AppJobs>;");
-		lines.push("\t\t\tstorage: _AppStorage;");
-		lines.push('\t\t\tkv: _AppQuestpie["kv"];');
-		lines.push('\t\t\tlogger: _AppQuestpie["logger"];');
-		lines.push('\t\t\tsearch: _AppQuestpie["search"];');
-		lines.push('\t\t\trealtime: _AppQuestpie["realtime"];');
-		lines.push("");
-		lines.push("\t\t\t// Entity APIs");
-		lines.push("\t\t\tcollections: _CollectionsAPI;");
-		lines.push("\t\t\tglobals: _AppGlobalsAPI;");
-		lines.push("\t\t\ttables: _AppTables;");
-		lines.push("");
-		lines.push("\t\t\t// Request-scoped");
-		lines.push("\t\t\tsession: _AppSession;");
-		if (hasMessages) {
-			lines.push(
-				"\t\t\tt: (key: AppMessageKeys | (string & {}), params?: Record<string, unknown>, locale?: string) => string;",
-			);
-		} else {
-			lines.push(
-				"\t\t\tt: (key: string, params?: Record<string, unknown>, locale?: string) => string;",
-			);
-		}
-
-		// Services — default namespace under `services`
-		if (hasServices) {
-			lines.push("");
-			lines.push("\t\t\t// User services");
-			lines.push("\t\t\tservices: _AppDefaultServices;");
-		}
-
-		lines.push("\t\t}");
 		lines.push("");
 		const emitNonRecursiveContext = (name: string) => {
 			lines.push(`\t\tinterface ${name} {`);
@@ -685,6 +663,13 @@ export function generateTemplate(options: TemplateOptions): string {
 				);
 			}
 			lines.push("");
+			if (hasServices && (name === "WorkflowContext" || name === "JobHandlerContext")) {
+				lines.push("			// Top-level services (namespace: null)");
+				lines.push(
+					'			workflows?: "workflows" extends keyof _AppTopLevelServices ? _AppTopLevelServices["workflows"] : never;',
+				);
+				lines.push("");
+			}
 			lines.push("\t\t\t// User services");
 			lines.push("\t\t\tservices: _ExecutionContextDefaultServices;");
 			lines.push("\t\t}");
@@ -693,7 +678,7 @@ export function generateTemplate(options: TemplateOptions): string {
 		lines.push("");
 		emitNonRecursiveContext("WorkflowContext");
 		lines.push("");
-		lines.push("\t\tinterface ServiceCreateContext extends AppContext {}");
+		lines.push("\t\tinterface ServiceCreateContext extends _AppCoreContext {}");
 
 		// Registry — ALL registryKey categories + ~-prefixed singles augmented centrally.
 		// This is the SINGLE place that augments Registry. Modules never augment it.
@@ -740,6 +725,16 @@ export function generateTemplate(options: TemplateOptions): string {
 		lines.push("}");
 		lines.push("");
 	}
+
+	lines.push("/**");
+	lines.push(
+		" * Select/document type for a collection key — prefer over `Record<string, any>` for docs.",
+	);
+	lines.push(" */");
+	lines.push(
+		"export type CollectionDoc<K extends keyof AppCollections> = CollectionSelect<AppCollections[K]>;",
+	);
+	lines.push("");
 
 	// AppConfig — flat type for client APIs (createClient<AppConfig>(), createAdminAuthClient<AppConfig>())
 	lines.push("/**");

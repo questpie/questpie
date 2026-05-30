@@ -358,6 +358,15 @@ export function RichTextBubbleMenu({
 							onClick={() => editor.chain().focus().toggleUnderline().run()}
 						/>
 					)}
+					{features.strike && (
+						<ToolbarButton
+							icon={EDITOR_ICONS.strikethrough}
+							active={editor.isActive("strike")}
+							disabled={!isEditable}
+							title={t("editor.strikethrough")}
+							onClick={() => editor.chain().focus().toggleStrike().run()}
+						/>
+					)}
 					{features.code && (
 						<ToolbarButton
 							icon={EDITOR_ICONS.code}

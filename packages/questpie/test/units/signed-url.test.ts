@@ -60,6 +60,21 @@ describe("signed-url", () => {
 			expect(payload?.expires).toBeGreaterThan(Math.floor(Date.now() / 1000));
 		});
 
+		test("binds tokens to a collection when expected", async () => {
+			const token = await generateSignedUrlToken(
+				"test-file.jpg",
+				testSecret,
+				3600,
+				"media",
+			);
+
+			const payload = await verifySignedUrlToken(token, testSecret, "media");
+			const reused = await verifySignedUrlToken(token, testSecret, "documents");
+
+			expect(payload?.collection).toBe("media");
+			expect(reused).toBeNull();
+		});
+
 		test("returns null for invalid token format", async () => {
 			const payload = await verifySignedUrlToken("invalid-token", testSecret);
 

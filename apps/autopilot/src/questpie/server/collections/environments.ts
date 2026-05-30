@@ -14,6 +14,7 @@ export const environments = collection("environments")
 	.admin(({ c }) => ({
 		label: { en: "Environment Settings" },
 		icon: c.icon("ph:tree-structure"),
+		hidden: true,
 	}))
 	.list(({ v }) => v.collectionTable({}))
 	.form(({ v, f }) =>

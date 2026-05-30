@@ -350,6 +350,15 @@ export type GetCollection<
 			? Collection<TState>
 			: never;
 
+/**
+ * Document type for a collection key in a collections map.
+ * @example type PostDoc = CollectionDoc<AppCollections, "posts">
+ */
+export type CollectionDoc<
+	TCollections extends Record<string, AnyCollectionOrBuilder>,
+	K extends keyof TCollections & string,
+> = CollectionSelect<GetCollection<TCollections, K>>;
+
 // ============================================================================
 // Global Name Extraction & Lookup
 // ============================================================================

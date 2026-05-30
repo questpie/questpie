@@ -18,6 +18,14 @@ const CATEGORIES = [
 	{ value: "transport", label: "Transport" },
 ];
 
+function getUploadUrl(upload: unknown): string | undefined {
+	if (!upload || typeof upload !== "object" || !("url" in upload)) {
+		return undefined;
+	}
+
+	return typeof upload.url === "string" ? upload.url : undefined;
+}
+
 export const Route = createFileRoute("/_app/$citySlug/news/")({
 	validateSearch: (search: Record<string, unknown>) => ({
 		category: (search.category as string) || "all",
@@ -79,59 +87,65 @@ function NewsListing() {
 				</div>
 			) : (
 				<div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-					{news.map((article: any) => (
-						<Link
-							key={article.id}
-							to="/$citySlug/news/$slug"
-							params={{ citySlug, slug: article.slug }}
-							className="group overflow-hidden rounded-lg border transition-shadow hover:shadow-md"
-						>
-							{article.image?.url && (
-								<img
-									src={article.image.url}
-									alt={article.title}
-									className="h-48 w-full object-cover"
-								/>
-							)}
-							<div className="p-6">
-								<div className="mb-2 flex items-center gap-2">
-									{article.category && (
-										<span className="text-primary text-xs font-medium tracking-wide uppercase">
-											{article.category}
-										</span>
-									)}
-									{article.isFeatured && (
-										<span className="bg-primary/10 text-primary rounded-full px-2 py-0.5 text-xs font-medium">
-											Featured
-										</span>
-									)}
-								</div>
-								<h3 className="group-hover:text-primary mb-2 text-lg font-semibold transition-colors">
-									{article.title}
-								</h3>
-								{article.excerpt && (
-									<p className="text-muted-foreground mb-3 line-clamp-2 text-sm">
-										{article.excerpt}
-									</p>
+					{news.map((article) => {
+						const imageUrl = getUploadUrl(
+							(article as Record<string, unknown>).image,
+						);
+
+						return (
+							<Link
+								key={article.id}
+								to="/$citySlug/news/$slug"
+								params={{ citySlug, slug: article.slug }}
+								className="group overflow-hidden rounded-lg border transition-shadow hover:shadow-md"
+							>
+								{imageUrl && (
+									<img
+										src={imageUrl}
+										alt={article.title}
+										className="h-48 w-full object-cover"
+									/>
 								)}
-								<div className="text-muted-foreground flex items-center gap-3 text-xs">
-									{article.publishedAt && (
-										<time>
-											{new Date(article.publishedAt).toLocaleDateString(
-												"en-GB",
-												{
-													day: "numeric",
-													month: "long",
-													year: "numeric",
-												},
-											)}
-										</time>
+								<div className="p-6">
+									<div className="mb-2 flex items-center gap-2">
+										{article.category && (
+											<span className="text-primary text-xs font-medium tracking-wide uppercase">
+												{article.category}
+											</span>
+										)}
+										{article.isFeatured && (
+											<span className="bg-primary/10 text-primary rounded-full px-2 py-0.5 text-xs font-medium">
+												Featured
+											</span>
+										)}
+									</div>
+									<h3 className="group-hover:text-primary mb-2 text-lg font-semibold transition-colors">
+										{article.title}
+									</h3>
+									{article.excerpt && (
+										<p className="text-muted-foreground mb-3 line-clamp-2 text-sm">
+											{article.excerpt}
+										</p>
 									)}
-									{article.author && <span>by {article.author}</span>}
+									<div className="text-muted-foreground flex items-center gap-3 text-xs">
+										{article.publishedAt && (
+											<time>
+												{new Date(article.publishedAt).toLocaleDateString(
+													"en-GB",
+													{
+														day: "numeric",
+														month: "long",
+														year: "numeric",
+													},
+												)}
+											</time>
+										)}
+										{article.author && <span>by {article.author}</span>}
+									</div>
 								</div>
-							</div>
-						</Link>
-					))}
+							</Link>
+						);
+					})}
 				</div>
 			)}
 		</div>

@@ -714,6 +714,9 @@ export default {
 		"Zoskupí aktuálnu stránku podľa nakonfigurovaného poľa.",
 	"viewOptions.noGrouping": "Bez zoskupenia",
 	"viewOptions.sort": "Zoradenie",
+	"viewOptions.noSort": "Bez zoradenia",
+	"viewOptions.sortDescription":
+		"Vyberte pole a smer zoradenia pre tento pohľad.",
 
 	// Saved Views Tab
 	"viewOptions.saveCurrentConfig": "Uložiť aktuálnu konfiguráciu",

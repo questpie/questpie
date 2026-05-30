@@ -15,6 +15,14 @@ import { getCities } from "@/lib/server-functions";
 
 import stylesCss from "@/styles.css?url";
 
+function getUploadUrl(upload: unknown): string | undefined {
+	if (!upload || typeof upload !== "object" || !("url" in upload)) {
+		return undefined;
+	}
+
+	return typeof upload.url === "string" ? upload.url : undefined;
+}
+
 export const Route = createFileRoute("/")({
 	loader: () => getCities(),
 
@@ -81,52 +89,56 @@ function CitiesLanding() {
 							)}
 
 							<div className="mx-auto grid max-w-5xl grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-								{cities.map((city: any) => (
-									<Link
-										key={city.id}
-										to="/$citySlug"
-										params={{ citySlug: city.slug }}
-										className="group hover:border-primary/30 block rounded-lg border p-6 transition-all hover:shadow-lg"
-									>
-										<div className="mb-4 flex items-center gap-4">
-											{city.logo?.url ? (
-												<img
-													src={city.logo.url}
-													alt={`${city.name} logo`}
-													className="h-14 w-14 rounded-full object-cover"
-												/>
-											) : (
-												<div className="bg-primary text-primary-foreground flex h-14 w-14 items-center justify-center rounded-full text-xl font-bold">
-													{city.name.charAt(0)}
+								{cities.map((city) => {
+									const logoUrl = getUploadUrl(city.logo);
+
+									return (
+										<Link
+											key={city.id}
+											to="/$citySlug"
+											params={{ citySlug: city.slug }}
+											className="group hover:border-primary/30 block rounded-lg border p-6 transition-all hover:shadow-lg"
+										>
+											<div className="mb-4 flex items-center gap-4">
+												{logoUrl ? (
+													<img
+														src={logoUrl}
+														alt={`${city.name} logo`}
+														className="h-14 w-14 rounded-full object-cover"
+													/>
+												) : (
+													<div className="bg-primary text-primary-foreground flex h-14 w-14 items-center justify-center rounded-full text-xl font-bold">
+														{city.name.charAt(0)}
+													</div>
+												)}
+												<div>
+													<h3 className="group-hover:text-primary text-lg font-semibold transition-colors">
+														{city.name}
+													</h3>
+													<p className="text-muted-foreground text-sm">
+														City Council
+													</p>
 												</div>
-											)}
-											<div>
-												<h3 className="group-hover:text-primary text-lg font-semibold transition-colors">
-													{city.name}
-												</h3>
-												<p className="text-muted-foreground text-sm">
-													City Council
-												</p>
 											</div>
-										</div>
 
-										{city.population && (
-											<p className="text-muted-foreground text-sm">
-												Population: {city.population.toLocaleString()}
-											</p>
-										)}
+											{city.population && (
+												<p className="text-muted-foreground text-sm">
+													Population: {city.population.toLocaleString()}
+												</p>
+											)}
 
-										{city.email && (
-											<p className="text-muted-foreground mt-1 truncate text-sm">
-												{city.email}
-											</p>
-										)}
+											{city.email && (
+												<p className="text-muted-foreground mt-1 truncate text-sm">
+													{city.email}
+												</p>
+											)}
 
-										<div className="text-primary mt-4 text-sm font-medium opacity-0 transition-opacity group-hover:opacity-100">
-											Visit Portal →
-										</div>
-									</Link>
-								))}
+											<div className="text-primary mt-4 text-sm font-medium opacity-0 transition-opacity group-hover:opacity-100">
+												Visit Portal →
+											</div>
+										</Link>
+									);
+								})}
 							</div>
 						</div>
 					</main>

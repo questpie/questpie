@@ -93,8 +93,10 @@ export function richTextFormatted(
 			return {
 				type: "paragraph",
 				content: block.map((part) => {
-					const marks: Array<{ type: string; attrs?: Record<string, any> }> =
-						[];
+					const marks: Array<{
+						type: string;
+						attrs?: Record<string, unknown>;
+					}> = [];
 					if (part.bold) marks.push({ type: "bold" });
 					if (part.italic) marks.push({ type: "italic" });
 					if (part.link)
@@ -113,11 +115,17 @@ export function richTextFormatted(
 // Upload Helper
 // ============================================================================
 
-async function uploadImage(
-	collections: any,
+type AssetUploadCollections<TContext> = {
+	assets: {
+		upload(file: File, ctx: TContext): Promise<{ id: string }>;
+	};
+};
+
+async function uploadImage<TContext>(
+	collections: AssetUploadCollections<TContext>,
 	url: string,
 	name: string,
-	ctx: any,
+	ctx: TContext,
 ) {
 	const response = await fetch(url);
 	if (!response.ok) {
@@ -138,9 +146,9 @@ async function uploadImage(
 /**
  * Upload all demo images and return a map of key -> asset ID.
  */
-export async function uploadAllImages(
-	collections: any,
-	ctx: any,
+export async function uploadAllImages<TContext>(
+	collections: AssetUploadCollections<TContext>,
+	ctx: TContext,
 	log: (msg: string) => void,
 ): Promise<Record<string, string>> {
 	const img: Record<string, string> = {};

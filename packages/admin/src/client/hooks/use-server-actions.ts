@@ -30,6 +30,7 @@ type ServerExecuteActionResponse = {
 	result?: {
 		type?: "success" | "error" | "redirect" | "download";
 		toast?: { message?: string };
+		errors?: Record<string, string>;
 		effects?: {
 			invalidate?: boolean | string[];
 			redirect?: string;
@@ -39,6 +40,16 @@ type ServerExecuteActionResponse = {
 	};
 	error?: string;
 };
+
+export class ServerActionValidationError extends Error {
+	constructor(
+		message: string,
+		public readonly fieldErrors: Record<string, string>,
+	) {
+		super(message);
+		this.name = "ServerActionValidationError";
+	}
+}
 
 function getActionErrorMessage(
 	response: ServerExecuteActionResponse,
@@ -240,7 +251,14 @@ function mapServerAction(
 					})) as ServerExecuteActionResponse;
 
 					if (!response.success || response.result?.type === "error") {
-						throw new Error(getActionErrorMessage(response, t));
+						const message = getActionErrorMessage(response, t);
+						if (response.result?.errors) {
+							throw new ServerActionValidationError(
+								message,
+								response.result.errors,
+							);
+						}
+						throw new Error(message);
 					}
 
 					await applyServerActionEffects(response.result, ctx);

@@ -158,9 +158,12 @@ function BookingPage() {
 			});
 			setStep("success");
 		},
-		onError: (error: any) => {
+		onError: (error: unknown) => {
 			toast.error(t("booking.error.failed"), {
-				description: error?.message || t("booking.error.failedDesc"),
+				description:
+					error instanceof Error
+						? error.message
+						: t("booking.error.failedDesc"),
 			});
 		},
 	});

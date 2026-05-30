@@ -17,6 +17,7 @@ export {
 export type {
 	FilterOperator,
 	FilterRule,
+	QuickFilterConfig,
 	SortConfig,
 	ViewConfiguration,
 } from "#questpie/admin/shared/types/index.js";

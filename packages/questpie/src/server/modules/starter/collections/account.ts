@@ -14,4 +14,12 @@ export default collection("account")
 		idToken: f.text(500),
 		password: f.text(255),
 	}))
+	.access({
+		fields: {
+			accessToken: { read: false, create: false, update: false },
+			refreshToken: { read: false, create: false, update: false },
+			idToken: { read: false, create: false, update: false },
+			password: { read: false, create: false, update: false },
+		},
+	})
 	.title(({ f }) => f.providerId);
