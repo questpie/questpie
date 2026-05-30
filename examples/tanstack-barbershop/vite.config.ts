@@ -48,7 +48,7 @@ const config = defineConfig(({ mode }) => ({
 				"bun",
 				// drizzle-kit and its optional dependencies (used only at dev/migration time)
 				/^drizzle-kit/,
-				// flydrive S3 driver imports @aws-sdk/client-s3 which is an optional peer dep
+				// Files SDK S3 adapters import @aws-sdk packages as optional peer deps
 				/^@aws-sdk\//,
 			],
 		},

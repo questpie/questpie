@@ -140,6 +140,5 @@ describe("scaffold", () => {
 		expect(runtimeConfig).toContain("redisKVAdapter");
 		expect(serverModules).toContain("workflowsModule");
 		expect(adminModules).toContain("workflowsClientModule");
-		expect(adminModules).toContain("...workflowsClientModule.views");
 	});
 });

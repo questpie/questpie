@@ -376,4 +376,3 @@ describe("generateTemplate — config bucket emission", () => {
 		expect(code).toContain("fields: _fields,");
 	});
 });
-

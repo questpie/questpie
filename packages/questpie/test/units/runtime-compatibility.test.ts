@@ -1,11 +1,17 @@
 import { describe, expect, test } from "bun:test";
 
+import { memory } from "files-sdk/memory";
+
 import {
 	cloudflareKVAdapter,
 	type CloudflareKVNamespace,
 } from "../../src/exports/adapters/cloudflare-kv.js";
 import { cloudflareQueuesAdapter } from "../../src/exports/adapters/cloudflare-queues.js";
 import { cloudflareRealtimeAdapter } from "../../src/exports/adapters/cloudflare-realtime.js";
+import {
+	CLOUD_ENV,
+	resolveStorageConfig,
+} from "../../src/server/config/cloud-env.js";
 import {
 	assertCloudflareCompatible,
 	CloudflareCompatibilityError,
@@ -39,7 +45,7 @@ function createCompatibleConfig() {
 		},
 		collections: {},
 		storage: {
-			driver: {} as any,
+			adapter: memory(),
 		},
 		queue: {
 			jobs: {},
@@ -56,6 +62,29 @@ function createCompatibleConfig() {
 			}),
 		},
 	} as any;
+}
+
+function withCloudStorageEnv<T>(run: () => T): T {
+	const keys = Object.values(CLOUD_ENV);
+	const previous = new Map(keys.map((key) => [key, process.env[key]]));
+
+	process.env[CLOUD_ENV.STORAGE_ENDPOINT] = "https://r2.example.com";
+	process.env[CLOUD_ENV.STORAGE_BUCKET] = "uploads";
+	process.env[CLOUD_ENV.STORAGE_ACCESS_KEY] = "access-key";
+	process.env[CLOUD_ENV.STORAGE_SECRET_KEY] = "secret-key";
+	delete process.env[CLOUD_ENV.STORAGE_REGION];
+
+	try {
+		return run();
+	} finally {
+		for (const [key, value] of previous) {
+			if (value === undefined) {
+				delete process.env[key];
+			} else {
+				process.env[key] = value;
+			}
+		}
+	}
 }
 
 describe("Cloudflare compatibility", () => {
@@ -108,5 +137,18 @@ describe("Cloudflare compatibility", () => {
 				collections: {},
 			} as any),
 		).toThrow(CloudflareCompatibilityError);
+	});
+
+	test("lazy cloud S3 storage adapter preserves Files SDK optional methods", () => {
+		const config = withCloudStorageEnv(() => resolveStorageConfig());
+		const adapter = config?.adapter as any;
+
+		expect(adapter.name).toBe("s3");
+		expect(adapter.raw).toBeUndefined();
+		expect(adapter.reportsUploadProgress).toBe(true);
+		expect(adapter.supportsRange).toBe(true);
+		expect(typeof adapter.deleteMany).toBe("function");
+		expect(adapter.move).toBeUndefined();
+		expect("move" in adapter).toBe(false);
 	});
 });

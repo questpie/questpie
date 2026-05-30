@@ -1,16 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { Readable } from "node:stream";
 
+import { Files, type Adapter, type Body, type UploadOptions } from "files-sdk";
+import { memory } from "files-sdk/memory";
+
+import { collection } from "../../src/exports/index.js";
+import {
+	createAdapterRoutes,
+	createFetchHandler,
+} from "../../src/server/adapters/http.js";
 import { storageCollectionServe } from "../../src/server/adapters/routes/storage.js";
-import type {
-	DriverContract,
-	ObjectMetaData,
-	ObjectVisibility,
-	WriteOptions,
-} from "flydrive/types";
-
-import { Questpie, collection } from "../../src/exports/index.js";
-import { createFetchHandler } from "../../src/server/adapters/http.js";
+import { generateSignedUrlToken } from "../../src/server/modules/core/integrated/storage/signed-url.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 import { createTestContext } from "../utils/test-context";
 import { runTestDbMigrations } from "../utils/test-db";
@@ -44,6 +43,34 @@ const restrictedAssets = collection("restricted_assets")
 	.upload({
 		visibility: "public",
 	});
+
+const throwingAfterChangeAssets = collection("throwing_after_change_assets")
+	.fields(({ f }) => ({
+		alt: f.text(500),
+	}))
+	.hooks({
+		afterChange: async ({ operation }) => {
+			if (operation === "update") {
+				throw new Error("afterChange failed");
+			}
+		},
+	})
+	.upload({
+		visibility: "public",
+	});
+
+const throwingAfterDeleteAssets = collection("throwing_after_delete_assets")
+	.fields(({ f }) => ({
+		alt: f.text(500),
+	}))
+	.hooks({
+		afterDelete: async () => {
+			throw new Error("afterDelete failed");
+		},
+	})
+	.upload({
+		visibility: "public",
+	});
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
 
@@ -67,105 +94,83 @@ const normalizeChunk = (chunk: unknown) => {
 	return textEncoder.encode(String(chunk));
 };
 
-const createInstrumentedStorageDriver = (
+const readStream = async (stream: ReadableStream<Uint8Array>) => {
+	const reader = stream.getReader();
+	const chunks: Uint8Array[] = [];
+	while (true) {
+		const next = await reader.read();
+		if (next.done) break;
+		chunks.push(normalizeChunk(next.value));
+	}
+	return mergeChunks(chunks);
+};
+
+const bodyToBytes = async (body: Body) => {
+	if (typeof body === "string") return textEncoder.encode(body);
+	if (body instanceof Uint8Array) return body;
+	if (body instanceof ArrayBuffer) return new Uint8Array(body);
+	if (ArrayBuffer.isView(body)) {
+		return new Uint8Array(body.buffer, body.byteOffset, body.byteLength);
+	}
+	if (body instanceof Blob) {
+		return new Uint8Array(await body.arrayBuffer());
+	}
+	return readStream(body);
+};
+
+const createInstrumentedStorageAdapter = (
 	initialFiles: Record<string, Uint8Array> = {},
 ) => {
-	const files = new Map(Object.entries(initialFiles));
+	const adapter = memory({
+		initial: Object.fromEntries(
+			Object.entries(initialFiles).map(([key, body]) => [
+				key,
+				{
+					body,
+					contentType: key.endsWith(".pdf") ? "application/pdf" : "text/plain",
+				},
+			]),
+		),
+	});
 	const calls = {
-		put: 0,
-		putStream: 0,
-		getBytes: 0,
-		getStream: 0,
+		upload: 0,
+		download: 0,
+		head: 0,
+		exists: 0,
 		lastKey: "",
-		lastWriteOptions: undefined as WriteOptions | undefined,
-		lastWriteBody: new Uint8Array(),
+		lastUploadOptions: undefined as UploadOptions | undefined,
+		lastUploadBody: new Uint8Array(),
 		deletedKeys: [] as string[],
 	};
 
-	const getFile = (key: string) => {
-		const file = files.get(key);
-		if (!file) throw new Error(`Missing file: ${key}`);
-		return file;
-	};
-
-	const driver: DriverContract = {
-		async exists(key) {
-			return files.has(key);
-		},
-		async get(key) {
-			return textDecoder.decode(getFile(key));
-		},
-		async getStream(key) {
-			calls.getStream++;
-			return Readable.from([getFile(key)]);
-		},
-		async getBytes() {
-			calls.getBytes++;
-			throw new Error("getBytes should not be used by storage routes");
-		},
-		async getMetaData(key): Promise<ObjectMetaData> {
-			const file = getFile(key);
-			return {
-				contentLength: file.byteLength,
-				contentType: key.endsWith(".pdf") ? "application/pdf" : "text/plain",
-				etag: `"${key}"`,
-				lastModified: new Date("2026-01-01T00:00:00.000Z"),
-			};
-		},
-		async getVisibility(): Promise<ObjectVisibility> {
-			return "public";
-		},
-		async getUrl(key) {
-			return `http://localhost:3000/assets/files/${encodeURIComponent(key)}`;
-		},
-		async getSignedUrl(key) {
-			return `http://localhost:3000/assets/files/${encodeURIComponent(key)}?token=test`;
-		},
-		async getSignedUploadUrl(key) {
-			return `http://localhost:3000/assets/files/${encodeURIComponent(key)}?upload=test`;
-		},
-		async setVisibility() {},
-		async put(key, contents, options) {
-			calls.put++;
+	const instrumented: Adapter = {
+		...adapter,
+		async upload(key, body, options) {
+			calls.upload++;
 			calls.lastKey = key;
-			calls.lastWriteOptions = options;
-			calls.lastWriteBody =
-				typeof contents === "string" ? textEncoder.encode(contents) : contents;
-			files.set(key, calls.lastWriteBody);
+			calls.lastUploadOptions = options;
+			calls.lastUploadBody = await bodyToBytes(body);
+			return adapter.upload(key, calls.lastUploadBody, options);
 		},
-		async putStream(key, contents, options) {
-			calls.putStream++;
-			calls.lastKey = key;
-			calls.lastWriteOptions = options;
-			const chunks: Uint8Array[] = [];
-			for await (const chunk of contents) {
-				chunks.push(normalizeChunk(chunk));
-			}
-			calls.lastWriteBody = mergeChunks(chunks);
-			files.set(key, calls.lastWriteBody);
+		async download(key, options) {
+			calls.download++;
+			return adapter.download(key, options);
 		},
-		async copy(source, destination) {
-			files.set(destination, getFile(source));
+		async head(key, options) {
+			calls.head++;
+			return adapter.head(key, options);
 		},
-		async move(source, destination) {
-			files.set(destination, getFile(source));
-			files.delete(source);
+		async exists(key, options) {
+			calls.exists++;
+			return adapter.exists(key, options);
 		},
 		async delete(key) {
 			calls.deletedKeys.push(key);
-			files.delete(key);
-		},
-		async deleteAll(prefix) {
-			for (const key of files.keys()) {
-				if (key.startsWith(prefix)) files.delete(key);
-			}
-		},
-		async listAll() {
-			return [] as any;
+			return adapter.delete(key);
 		},
 	};
 
-	return { calls, driver, files };
+	return { adapter: instrumented, calls, files: adapter.raw };
 };
 
 // ==============================================================================
@@ -368,9 +373,17 @@ describe("collection upload storage access", () => {
 
 	it("does not serve a storage object when the upload row is not readable", async () => {
 		const key = "uploads/restricted.png";
-		await setup.app.storage.use().put(key, new Uint8Array([1, 2, 3]), {
-			contentType: "image/png",
+		const storage = createInstrumentedStorageAdapter({
+			[key]: new Uint8Array([1, 2, 3]),
 		});
+		await setup.cleanup();
+		setup = await buildMockApp(
+			{
+				collections: { restricted_assets: restrictedAssets },
+			},
+			{ storage: { adapter: storage.adapter } },
+		);
+		await runTestDbMigrations(setup.app);
 
 		await setup.app.collections.restricted_assets.create(
 			{
@@ -394,6 +407,9 @@ describe("collection upload storage access", () => {
 		);
 
 		expect(response.status).toBe(403);
+		expect(storage.calls.exists).toBe(0);
+		expect(storage.calls.head).toBe(0);
+		expect(storage.calls.download).toBe(0);
 	});
 });
 
@@ -405,14 +421,13 @@ describe("collection storage route streaming", () => {
 		await setup?.cleanup();
 	});
 
-	it("uploads form files through putStream with explicit content length", async () => {
-		const storage = createInstrumentedStorageDriver();
+	it("uploads form files through the Files adapter", async () => {
+		const storage = createInstrumentedStorageAdapter();
 		setup = await buildMockApp(
 			{ collections: { assets } },
-			{ storage: { driver: storage.driver } },
+			{ storage: { adapter: storage.adapter } },
 		);
 		app = setup.app;
-		app.storage.restore(Questpie.__internal.storageDriverServiceName);
 		await runTestDbMigrations(app);
 
 		const handler = createFetchHandler(app, {
@@ -439,26 +454,287 @@ describe("collection storage route streaming", () => {
 		const json = (await response!.json()) as any;
 		expect(json.filename).toBe("menu.pdf");
 		expect(json.size).toBe(body.byteLength);
-		expect(storage.calls.putStream).toBe(1);
-		expect(storage.calls.put).toBe(0);
-		expect(storage.calls.lastWriteOptions?.contentLength).toBe(body.byteLength);
-		expect(storage.calls.lastWriteOptions?.contentType).toBe("application/pdf");
-		expect(textDecoder.decode(storage.calls.lastWriteBody)).toBe(
+		expect(storage.calls.upload).toBe(1);
+		expect(storage.calls.lastUploadOptions?.contentType).toBe(
+			"application/pdf",
+		);
+		expect(textDecoder.decode(storage.calls.lastUploadBody)).toBe(
 			"%PDF-1.4\nmenu",
 		);
 	});
 
+	it("removes the stored object when upload row creation fails", async () => {
+		const storage = createInstrumentedStorageAdapter();
+		setup = await buildMockApp(
+			{ collections: { assets } },
+			{ storage: { adapter: storage.adapter } },
+		);
+		app = setup.app;
+		await runTestDbMigrations(app);
+
+		const body = textEncoder.encode("private");
+		const file = new File([body], "private.txt", { type: "text/plain" });
+
+		await expect(
+			(app.collections.assets as any).upload(
+				file,
+				createTestContext({ accessMode: "user", session: null }),
+			),
+		).rejects.toThrow();
+
+		expect(storage.calls.upload).toBe(1);
+		expect(storage.calls.deletedKeys).toEqual([storage.calls.lastKey]);
+		expect(await app.storage.exists(storage.calls.lastKey)).toBe(false);
+		const rows = await app.collections.assets.find({}, createTestContext());
+		expect(rows.docs).toHaveLength(0);
+	});
+
+	it("removes the previous stored object after an upload row key update", async () => {
+		const oldBody = textEncoder.encode("old");
+		const newBody = textEncoder.encode("new");
+		const storage = createInstrumentedStorageAdapter({
+			"old.txt": oldBody,
+			"new.txt": newBody,
+		});
+		setup = await buildMockApp(
+			{ collections: { assets } },
+			{ storage: { adapter: storage.adapter } },
+		);
+		app = setup.app;
+		await runTestDbMigrations(app);
+
+		const asset = await app.collections.assets.create(
+			{
+				id: crypto.randomUUID(),
+				key: "old.txt",
+				filename: "old.txt",
+				mimeType: "text/plain",
+				size: oldBody.byteLength,
+				visibility: "public",
+			},
+			createTestContext(),
+		);
+
+		const updated = await app.collections.assets.updateById(
+			{
+				id: asset.id,
+				data: {
+					key: "new.txt",
+					filename: "new.txt",
+					size: newBody.byteLength,
+				},
+			},
+			createTestContext(),
+		);
+
+		expect(updated.key).toBe("new.txt");
+		expect(storage.calls.deletedKeys).toEqual(["old.txt"]);
+		expect(await app.storage.exists("old.txt")).toBe(false);
+		expect(await app.storage.exists("new.txt")).toBe(true);
+	});
+
+	it("removes the previous stored object when a user afterChange hook throws", async () => {
+		const oldBody = textEncoder.encode("old");
+		const newBody = textEncoder.encode("new");
+		const storage = createInstrumentedStorageAdapter({
+			"old-throwing-after-change.txt": oldBody,
+			"new-throwing-after-change.txt": newBody,
+		});
+		setup = await buildMockApp(
+			{ collections: { assets: throwingAfterChangeAssets } },
+			{ storage: { adapter: storage.adapter } },
+		);
+		app = setup.app;
+		await runTestDbMigrations(app);
+
+		const asset = await app.collections.assets.create(
+			{
+				id: crypto.randomUUID(),
+				key: "old-throwing-after-change.txt",
+				filename: "old-throwing-after-change.txt",
+				mimeType: "text/plain",
+				size: oldBody.byteLength,
+				visibility: "public",
+			},
+			createTestContext(),
+		);
+
+		const updated = await app.collections.assets.updateById(
+			{
+				id: asset.id,
+				data: {
+					key: "new-throwing-after-change.txt",
+					filename: "new-throwing-after-change.txt",
+					size: newBody.byteLength,
+				},
+			},
+			createTestContext(),
+		);
+
+		expect(updated.key).toBe("new-throwing-after-change.txt");
+		expect(storage.calls.deletedKeys).toEqual([
+			"old-throwing-after-change.txt",
+		]);
+		expect(await app.storage.exists("old-throwing-after-change.txt")).toBe(
+			false,
+		);
+		expect(await app.storage.exists("new-throwing-after-change.txt")).toBe(
+			true,
+		);
+	});
+
+	it("removes the stored object after an upload row delete", async () => {
+		const body = textEncoder.encode("delete me");
+		const storage = createInstrumentedStorageAdapter({
+			"delete.txt": body,
+		});
+		setup = await buildMockApp(
+			{ collections: { assets } },
+			{ storage: { adapter: storage.adapter } },
+		);
+		app = setup.app;
+		await runTestDbMigrations(app);
+
+		const asset = await app.collections.assets.create(
+			{
+				id: crypto.randomUUID(),
+				key: "delete.txt",
+				filename: "delete.txt",
+				mimeType: "text/plain",
+				size: body.byteLength,
+				visibility: "public",
+			},
+			createTestContext(),
+		);
+
+		const result = await app.collections.assets.deleteById(
+			{ id: asset.id },
+			createTestContext(),
+		);
+
+		expect(result.success).toBe(true);
+		expect(storage.calls.deletedKeys).toEqual(["delete.txt"]);
+		expect(await app.storage.exists("delete.txt")).toBe(false);
+		const deleted = await app.collections.assets.findOne(
+			{ where: { id: asset.id } },
+			createTestContext(),
+		);
+		expect(deleted).toBeNull();
+	});
+
+	it("removes the stored object when a user afterDelete hook throws", async () => {
+		const body = textEncoder.encode("delete me");
+		const storage = createInstrumentedStorageAdapter({
+			"delete-throwing-after-delete.txt": body,
+		});
+		setup = await buildMockApp(
+			{ collections: { assets: throwingAfterDeleteAssets } },
+			{ storage: { adapter: storage.adapter } },
+		);
+		app = setup.app;
+		await runTestDbMigrations(app);
+
+		const asset = await app.collections.assets.create(
+			{
+				id: crypto.randomUUID(),
+				key: "delete-throwing-after-delete.txt",
+				filename: "delete-throwing-after-delete.txt",
+				mimeType: "text/plain",
+				size: body.byteLength,
+				visibility: "public",
+			},
+			createTestContext(),
+		);
+
+		const result = await app.collections.assets.deleteById(
+			{ id: asset.id },
+			createTestContext(),
+		);
+
+		expect(result.success).toBe(true);
+		expect(storage.calls.deletedKeys).toEqual([
+			"delete-throwing-after-delete.txt",
+		]);
+		expect(await app.storage.exists("delete-throwing-after-delete.txt")).toBe(
+			false,
+		);
+		const deleted = await app.collections.assets.findOne(
+			{ where: { id: asset.id } },
+			createTestContext(),
+		);
+		expect(deleted).toBeNull();
+	});
+
+	it("removes stored objects for later bulk delete rows when a user afterDelete hook throws", async () => {
+		const bodyA = textEncoder.encode("delete me a");
+		const bodyB = textEncoder.encode("delete me b");
+		const storage = createInstrumentedStorageAdapter({
+			"bulk-delete-throwing-after-delete-a.txt": bodyA,
+			"bulk-delete-throwing-after-delete-b.txt": bodyB,
+		});
+		setup = await buildMockApp(
+			{ collections: { assets: throwingAfterDeleteAssets } },
+			{ storage: { adapter: storage.adapter } },
+		);
+		app = setup.app;
+		await runTestDbMigrations(app);
+
+		const first = await app.collections.assets.create(
+			{
+				id: crypto.randomUUID(),
+				key: "bulk-delete-throwing-after-delete-a.txt",
+				filename: "bulk-delete-throwing-after-delete-a.txt",
+				mimeType: "text/plain",
+				size: bodyA.byteLength,
+				visibility: "public",
+			},
+			createTestContext(),
+		);
+		const second = await app.collections.assets.create(
+			{
+				id: crypto.randomUUID(),
+				key: "bulk-delete-throwing-after-delete-b.txt",
+				filename: "bulk-delete-throwing-after-delete-b.txt",
+				mimeType: "text/plain",
+				size: bodyB.byteLength,
+				visibility: "public",
+			},
+			createTestContext(),
+		);
+
+		const result = await app.collections.assets.delete(
+			{ where: { id: { in: [first.id, second.id] } } },
+			createTestContext(),
+		);
+
+		expect(result).toEqual({ success: true, count: 2 });
+		expect([...storage.calls.deletedKeys].sort()).toEqual([
+			"bulk-delete-throwing-after-delete-a.txt",
+			"bulk-delete-throwing-after-delete-b.txt",
+		]);
+		expect(
+			await app.storage.exists("bulk-delete-throwing-after-delete-a.txt"),
+		).toBe(false);
+		expect(
+			await app.storage.exists("bulk-delete-throwing-after-delete-b.txt"),
+		).toBe(false);
+		const remaining = await app.collections.assets.find(
+			{ where: { id: { in: [first.id, second.id] } } },
+			createTestContext(),
+		);
+		expect(remaining.docs).toHaveLength(0);
+	});
+
 	it("serves full files and ranges from storage streams", async () => {
 		const fileBody = textEncoder.encode("abcdef");
-		const storage = createInstrumentedStorageDriver({
+		const storage = createInstrumentedStorageAdapter({
 			"file.txt": fileBody,
 		});
 		setup = await buildMockApp(
 			{ collections: { assets } },
-			{ storage: { driver: storage.driver } },
+			{ storage: { adapter: storage.adapter } },
 		);
 		app = setup.app;
-		app.storage.restore(Questpie.__internal.storageDriverServiceName);
 		await runTestDbMigrations(app);
 
 		await app.collections.assets.create(
@@ -483,10 +759,15 @@ describe("collection storage route streaming", () => {
 		);
 		expect(full).not.toBeNull();
 		expect(full?.status).toBe(200);
+		expect(full?.headers.get("content-type")).toBe("text/plain");
+		expect(full?.headers.get("content-disposition")).toBe(
+			'inline; filename="file.txt"',
+		);
 		expect(full?.headers.get("content-length")).toBe("6");
 		expect(await full!.text()).toBe("abcdef");
-		expect(storage.calls.getStream).toBe(1);
-		expect(storage.calls.getBytes).toBe(0);
+		expect(storage.calls.exists).toBe(1);
+		expect(storage.calls.download).toBe(1);
+		expect(storage.calls.head).toBe(1);
 
 		const range = await handler(
 			new Request("http://localhost/api/assets/files/file.txt", {
@@ -498,7 +779,162 @@ describe("collection storage route streaming", () => {
 		expect(range?.headers.get("content-range")).toBe("bytes 2-4/6");
 		expect(range?.headers.get("content-length")).toBe("3");
 		expect(await range!.text()).toBe("cde");
-		expect(storage.calls.getStream).toBe(2);
-		expect(storage.calls.getBytes).toBe(0);
+		expect(storage.calls.exists).toBe(2);
+		expect(storage.calls.download).toBe(2);
+		expect(storage.calls.head).toBe(2);
+	});
+
+	it("serves files through storage from the resolved handler context", async () => {
+		const fileBody = textEncoder.encode("context file");
+		const appStorage = createInstrumentedStorageAdapter();
+		const contextStorage = createInstrumentedStorageAdapter({
+			"context-file.txt": fileBody,
+		});
+		setup = await buildMockApp(
+			{ collections: { assets } },
+			{ storage: { adapter: appStorage.adapter } },
+		);
+		app = setup.app;
+		await runTestDbMigrations(app);
+
+		await app.collections.assets.create(
+			{
+				id: crypto.randomUUID(),
+				key: "context-file.txt",
+				filename: "context-file.txt",
+				mimeType: "text/plain",
+				size: fileBody.byteLength,
+				visibility: "public",
+			},
+			createTestContext(),
+		);
+
+		const appContext = await app.createContext({
+			accessMode: "system",
+			locale: "en",
+		});
+		const contextStorageClient = new Files({
+			adapter: contextStorage.adapter,
+		});
+
+		const response = await storageCollectionServe(
+			app,
+			new Request("http://localhost/assets/files/context-file.txt"),
+			{ collection: "assets", key: "context-file.txt" },
+			{
+				appContext: {
+					...appContext,
+					storage: contextStorageClient,
+				},
+				locale: appContext.locale,
+				session: appContext.session,
+			},
+		);
+
+		expect(response.status).toBe(200);
+		expect(await response.text()).toBe("context file");
+		expect(appStorage.calls.exists).toBe(0);
+		expect(contextStorage.calls.exists).toBe(1);
+		expect(contextStorage.calls.head).toBe(1);
+		expect(contextStorage.calls.download).toBe(1);
+	});
+
+	it("serves files through createAdapterRoutes compatibility when context is omitted", async () => {
+		const fileBody = textEncoder.encode("standalone route");
+		const storage = createInstrumentedStorageAdapter({
+			"standalone-file.txt": fileBody,
+		});
+		setup = await buildMockApp(
+			{ collections: { assets } },
+			{ storage: { adapter: storage.adapter } },
+		);
+		app = setup.app;
+		await runTestDbMigrations(app);
+
+		await app.collections.assets.create(
+			{
+				id: crypto.randomUUID(),
+				key: "standalone-file.txt",
+				filename: "standalone-file.txt",
+				mimeType: "text/plain",
+				size: fileBody.byteLength,
+				visibility: "public",
+			},
+			createTestContext(),
+		);
+
+		const routes = createAdapterRoutes(app, {
+			getSession: async () => null,
+		});
+		const response = await routes.collectionServe(
+			new Request("http://localhost/assets/files/standalone-file.txt"),
+			{ collection: "assets", key: "standalone-file.txt" },
+		);
+
+		expect(response.status).toBe(200);
+		expect(await response.text()).toBe("standalone route");
+		expect(storage.calls.exists).toBe(1);
+		expect(storage.calls.head).toBe(1);
+		expect(storage.calls.download).toBe(1);
+	});
+
+	it("checks private file tokens before accessing storage", async () => {
+		const fileBody = textEncoder.encode("secret file");
+		const storage = createInstrumentedStorageAdapter({
+			"private-file.txt": fileBody,
+		});
+		setup = await buildMockApp(
+			{ collections: { assets } },
+			{
+				secret: "test-secret",
+				storage: { adapter: storage.adapter },
+			},
+		);
+		app = setup.app;
+		await runTestDbMigrations(app);
+
+		await app.collections.assets.create(
+			{
+				id: crypto.randomUUID(),
+				key: "private-file.txt",
+				filename: "private-file.txt",
+				mimeType: "text/plain",
+				size: fileBody.byteLength,
+				visibility: "private",
+			},
+			createTestContext(),
+		);
+
+		const handler = createFetchHandler(app, {
+			basePath: "/api",
+			requestLogging: false,
+		});
+
+		const missingToken = await handler(
+			new Request("http://localhost/api/assets/files/private-file.txt"),
+		);
+		expect(missingToken).not.toBeNull();
+		expect(missingToken?.status).toBe(401);
+		expect(storage.calls.exists).toBe(0);
+		expect(storage.calls.head).toBe(0);
+		expect(storage.calls.download).toBe(0);
+
+		const token = await generateSignedUrlToken(
+			"private-file.txt",
+			"test-secret",
+			60,
+		);
+		const served = await handler(
+			new Request(
+				`http://localhost/api/assets/files/private-file.txt?token=${token}`,
+			),
+		);
+
+		expect(served).not.toBeNull();
+		expect(served?.status).toBe(200);
+		expect(await served!.text()).toBe("secret file");
+		expect(storage.calls.exists).toBe(1);
+		expect(storage.calls.head).toBe(1);
+		expect(storage.calls.download).toBe(1);
 	});
 });

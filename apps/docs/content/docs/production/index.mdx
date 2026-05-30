@@ -14,7 +14,7 @@ These are framework-level infrastructure services configured in `runtimeConfig()
 | [Database](/docs/production/database)             | PostgreSQL + Drizzle     | Primary data store  |
 | [Migrations](/docs/production/migrations)         | Built-in                 | Schema versioning   |
 | [Authentication](/docs/production/authentication) | Better Auth              | Sessions, providers |
-| [Storage](/docs/production/storage)               | FlyDrive (S3/local)      | File uploads        |
+| [Storage](/docs/production/storage)               | Files SDK (S3/local)     | File uploads        |
 | [Email](/docs/production/email)                   | Nodemailer               | Transactional email |
 | [Queue](/docs/production/queue)                   | pg-boss                  | Background jobs     |
 | [Search](/docs/production/search)                 | PG full-text search      | Text search         |
@@ -34,6 +34,7 @@ All services are configured in your `questpie.config.ts`:
 import { runtimeConfig } from "questpie/app";
 import { ConsoleAdapter } from "questpie/adapters/console";
 import { pgBossAdapter } from "questpie/adapters/pg-boss";
+import { fs } from "files-sdk/fs";
 
 export default runtimeConfig({
 	app: { url: process.env.APP_URL },
@@ -42,7 +43,7 @@ export default runtimeConfig({
 	queue: {
 		adapter: pgBossAdapter({ connectionString: process.env.DATABASE_URL }),
 	},
-	storage: { location: "./uploads", basePath: "/api" },
+	storage: { adapter: fs({ root: "./uploads" }), basePath: "/api" },
 	email: { adapter: new ConsoleAdapter() },
 });
 ```

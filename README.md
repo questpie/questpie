@@ -216,9 +216,14 @@ await app.collections.posts.deleteById({ id: post.id });
 File uploads work automatically when `adminModule` is included (it provides the `assets` collection). Configure storage in your config:
 
 ```typescript
+import { fs } from "files-sdk/fs";
+
 export default runtimeConfig({
 	db: { url: process.env.DATABASE_URL! },
-	storage: { basePath: "/api" },
+	storage: {
+		adapter: fs({ root: "./uploads" }),
+		basePath: "/api",
+	},
 });
 
 // Upload via API: POST /api/assets/upload
@@ -457,7 +462,7 @@ bun run dev --filter=docs
 - **Database**: PostgreSQL + [Drizzle ORM](https://orm.drizzle.team)
 - **Validation**: [Zod v4](https://zod.dev)
 - **Authentication**: [Better Auth](https://better-auth.com)
-- **Storage**: [Flydrive](https://flydrive.dev)
+- **Storage**: [Files SDK](https://files-sdk.dev)
 - **Queue**: [pg-boss](https://github.com/timgit/pg-boss)
 - **Email**: [Nodemailer](https://nodemailer.com) + [React Email](https://react.email)
 - **Logging**: [Pino](https://getpino.io)

@@ -27,10 +27,7 @@ import {
 	createCollectionValidationSchemas,
 	type ValidationSchemas,
 } from "#questpie/server/collection/builder/validation-helpers.js";
-import {
-	buildStorageFileUrl,
-	generateSignedUrlToken,
-} from "#questpie/server/modules/core/integrated/storage/signed-url.js";
+import { isInTransaction } from "#questpie/server/collection/crud/shared/transaction.js";
 import {
 	createFieldsCallbackContext,
 	type FieldsCallbackContext,
@@ -42,6 +39,10 @@ import {
 	builtinFields,
 } from "#questpie/server/modules/core/fields/index.js";
 import type { SearchableConfig } from "#questpie/server/modules/core/integrated/search/types.js";
+import {
+	buildStorageFileUrl,
+	generateSignedUrlToken,
+} from "#questpie/server/modules/core/integrated/storage/signed-url.js";
 import type { Override } from "#questpie/shared/type-utils.js";
 
 /**
@@ -742,6 +743,45 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 		const uploadFields = Collection.uploadCols();
 
 		const collectionSlug = this.state.name;
+		const logStorageCleanupError = (
+			logger: any,
+			message: string,
+			key: string,
+			error: unknown,
+		) => {
+			logger?.warn?.(message, {
+				key,
+				error: error instanceof Error ? error.message : String(error),
+			});
+		};
+		const deleteStorageObjectAfterCommit = async ({
+			app,
+			key,
+			logger,
+			onAfterCommit,
+			message,
+		}: {
+			app: any;
+			key: string;
+			logger: any;
+			onAfterCommit?: (callback: () => Promise<void>) => void;
+			message: string;
+		}) => {
+			const cleanup = async () => {
+				try {
+					await app.storage.delete(key);
+				} catch (error) {
+					logStorageCleanupError(logger, message, key, error);
+				}
+			};
+
+			if (onAfterCommit && isInTransaction()) {
+				onAfterCommit(cleanup);
+				return;
+			}
+
+			await cleanup();
+		};
 		const uploadAfterReadHook = async ({ data, app }: any) => {
 			if (!data?.key) return;
 
@@ -750,8 +790,7 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 
 			let token: string | undefined;
 			if ((data.visibility || "public") === "private") {
-				const secret: string =
-					app.config.secret || "questpie-default-secret";
+				const secret: string = app.config.secret || "questpie-default-secret";
 				const expiration: number =
 					app.config.storage?.signedUrlExpiration || 3600;
 				token = await generateSignedUrlToken(data.key, secret, expiration);
@@ -772,12 +811,37 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 			original,
 			app,
 			operation,
+			logger,
+			onAfterCommit,
 		}: any) => {
 			if (operation !== "update") return;
 			if (!app?.storage || !data?.key) return;
-			if (!original || original.visibility === data.visibility) return;
+			if (!original?.key || original.key === data.key) return;
 
-			await app.storage.use().setVisibility(data.key, data.visibility);
+			await deleteStorageObjectAfterCommit({
+				app,
+				key: original.key,
+				logger,
+				onAfterCommit,
+				message: "Failed to delete replaced upload file from storage",
+			});
+		};
+
+		const uploadAfterDeleteHook = async ({
+			data,
+			app,
+			logger,
+			onAfterCommit,
+		}: any) => {
+			if (!app?.storage || !data?.key) return;
+
+			await deleteStorageObjectAfterCommit({
+				app,
+				key: data.key,
+				logger,
+				onAfterCommit,
+				message: "Failed to delete upload file from storage",
+			});
 		};
 
 		// Merge existing afterRead hooks with upload hook
@@ -792,9 +856,15 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 		const existingAfterChange = this.state.hooks?.afterChange;
 		const mergedAfterChange = existingAfterChange
 			? Array.isArray(existingAfterChange)
-				? [...existingAfterChange, uploadAfterChangeHook]
-				: [existingAfterChange, uploadAfterChangeHook]
+				? [uploadAfterChangeHook, ...existingAfterChange]
+				: [uploadAfterChangeHook, existingAfterChange]
 			: uploadAfterChangeHook;
+		const existingAfterDelete = this.state.hooks?.afterDelete;
+		const mergedAfterDelete = existingAfterDelete
+			? Array.isArray(existingAfterDelete)
+				? [uploadAfterDeleteHook, ...existingAfterDelete]
+				: [uploadAfterDeleteHook, existingAfterDelete]
+			: uploadAfterDeleteHook;
 
 		const newState = {
 			...this.state,
@@ -810,6 +880,7 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 				...this.state.hooks,
 				afterRead: mergedAfterRead,
 				afterChange: mergedAfterChange,
+				afterDelete: mergedAfterDelete,
 			},
 			upload: options,
 		} as any;

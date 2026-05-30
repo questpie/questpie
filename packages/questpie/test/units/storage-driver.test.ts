@@ -1,141 +1,165 @@
-/**
- * Tests for storage driver creation and configuration
- */
-
 import { describe, expect, test } from "bun:test";
-import { resolve } from "node:path";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
-import type { QuestpieConfig } from "../../src/server/config/types.js";
-import {
-	createDiskDriver,
-	getStorageLocation,
-} from "../../src/server/modules/core/integrated/storage/create-driver.js";
+import { Files } from "files-sdk";
+import { memory } from "files-sdk/memory";
 
-// Minimal mock config
-const createMockConfig = (
-	overrides: Partial<QuestpieConfig> = {},
-): QuestpieConfig =>
-	({
-		app: { url: "http://localhost:3000", name: "test" },
-		db: { url: "postgres://localhost/test" },
-		secret: "test-secret",
-		...overrides,
-	}) as QuestpieConfig;
+import { runtimeConfig } from "../../src/server/config/create-app.js";
+import { createFilesStorage } from "../../src/server/modules/core/integrated/storage/create-driver.js";
+import { buildMockApp } from "../utils/mocks/mock-app-builder.js";
 
-describe("storage-driver", () => {
-	describe("getStorageLocation", () => {
-		test("returns null when custom driver is provided", () => {
-			const mockDriver = { put: () => {} } as any;
-			const config = createMockConfig({
-				storage: { driver: mockDriver },
-			});
+describe("storage public API contract", () => {
+	test("runtimeConfig accepts the adapter-first Files SDK storage shape", () => {
+		const adapter = memory();
 
-			const location = getStorageLocation(config);
-
-			expect(location).toBeNull();
+		const config = runtimeConfig({
+			app: { url: "http://localhost:3000" },
+			db: { url: "postgres://localhost/test" },
+			storage: {
+				adapter,
+				defaultVisibility: "private",
+				signedUrlExpiration: 120,
+			},
 		});
 
-		test("returns default ./uploads when no storage config", () => {
-			const config = createMockConfig();
-
-			const location = getStorageLocation(config);
-
-			expect(location).toBe(resolve(process.cwd(), "./uploads"));
-		});
-
-		test("returns custom location when specified", () => {
-			const config = createMockConfig({
-				storage: { location: "./my-uploads" },
-			});
-
-			const location = getStorageLocation(config);
-
-			expect(location).toBe(resolve(process.cwd(), "./my-uploads"));
-		});
-
-		test("resolves absolute path correctly", () => {
-			const config = createMockConfig({
-				storage: { location: "/var/data/uploads" },
-			});
-
-			const location = getStorageLocation(config);
-
-			expect(location).toBe("/var/data/uploads");
+		expect(config.storage).toEqual({
+			adapter,
+			defaultVisibility: "private",
+			signedUrlExpiration: 120,
 		});
 	});
 
-	describe("createDiskDriver", () => {
-		test("returns custom driver when provided", () => {
-			const mockDriver = { put: () => {}, get: () => {} } as any;
-			const config = createMockConfig({
-				storage: { driver: mockDriver },
-			});
+	test("runtimeConfig rejects removed storage registration shapes", () => {
+		expect(() =>
+			runtimeConfig({
+				app: { url: "http://localhost:3000" },
+				db: { url: "postgres://localhost/test" },
+				storage: { driver: {} } as any,
+			}),
+		).toThrow(/Unsupported storage config key/);
 
-			const driver = createDiskDriver(config);
+		expect(() =>
+			runtimeConfig({
+				app: { url: "http://localhost:3000" },
+				db: { url: "postgres://localhost/test" },
+				storage: { files: {} } as any,
+			}),
+		).toThrow(/Unsupported storage config key/);
+	});
 
-			expect(driver).toBe(mockDriver);
+	test("createFilesStorage rejects explicit unknown storage objects", async () => {
+		const config = runtimeConfig({
+			app: { url: "http://localhost:3000" },
+			db: { url: "postgres://localhost/test" },
+			storage: { location: "./uploads" },
 		});
 
-		test("creates FSDriver when no custom driver", () => {
-			const config = createMockConfig({
-				storage: { location: "./test-uploads" },
-			});
+		await expect(
+			createFilesStorage({
+				...config,
+				storage: { unexpected: true },
+			} as any),
+		).rejects.toThrow(/Unknown storage config key/);
+	});
 
-			const driver = createDiskDriver(config);
+	test("the storage target is a direct Files instance, not a disk manager", async () => {
+		const adapter = memory();
+		const storage = new Files({ adapter });
 
-			// FSDriver should have these methods
-			expect(typeof driver.put).toBe("function");
-			expect(typeof driver.get).toBe("function");
-			expect(typeof driver.delete).toBe("function");
-			expect(typeof driver.exists).toBe("function");
-			expect(typeof driver.getUrl).toBe("function");
-			expect(typeof driver.getSignedUrl).toBe("function");
+		await storage.upload("hello.txt", "hello", {
+			contentType: "text/plain",
 		});
 
-		test("FSDriver generates correct URLs", async () => {
-			const config = createMockConfig({
-				storage: { location: "./test-uploads" },
-			});
+		const file = await storage.download("hello.txt");
 
-			const driver = createDiskDriver(config);
+		expect(await file.text()).toBe("hello");
+		expect(await storage.exists("hello.txt")).toBe(true);
+		expect(typeof storage.upload).toBe("function");
+		expect(typeof storage.download).toBe("function");
+		expect(typeof storage.head).toBe("function");
+		expect(typeof storage.delete).toBe("function");
+		expect(typeof storage.copy).toBe("function");
+		expect(typeof storage.move).toBe("function");
+		expect(typeof storage.list).toBe("function");
+		expect(typeof storage.listAll).toBe("function");
+		expect(typeof storage.url).toBe("function");
+		expect(typeof storage.signedUploadUrl).toBe("function");
+		expect("use" in storage).toBe(false);
+	});
 
-			const url = await driver.getUrl("test-file.jpg");
-
-			expect(url).toBe("http://localhost:3000/files/test-file.jpg");
+	test("runtime storage adapter is sufficient to construct the app.storage target", async () => {
+		const adapter = memory();
+		const config = runtimeConfig({
+			app: { url: "http://localhost:3000" },
+			db: { url: "postgres://localhost/test" },
+			storage: { adapter },
 		});
 
-		test("FSDriver generates signed URLs with token", async () => {
-			const config = createMockConfig({
-				storage: { location: "./test-uploads" },
+		const appStorage = await createFilesStorage(config as any);
+
+		expect(appStorage).toBeInstanceOf(Files);
+		expect(appStorage.adapter).toBe(adapter);
+		expect("use" in appStorage).toBe(false);
+	});
+
+	test("app.storage performs direct Files SDK operations", async () => {
+		const setup = await buildMockApp({});
+
+		try {
+			await setup.app.storage.upload("direct.txt", "direct body", {
+				contentType: "text/plain",
 			});
 
-			const driver = createDiskDriver(config);
+			const file = await setup.app.storage.download("direct.txt");
+			const metadata = await setup.app.storage.head("direct.txt");
 
-			const signedUrl = await driver.getSignedUrl("secret.pdf");
+			expect(setup.app.storage).toBeInstanceOf(Files);
+			expect(await file.text()).toBe("direct body");
+			expect(metadata.key).toBe("direct.txt");
+			expect(metadata.type).toBe("text/plain");
+			expect(await setup.app.storage.exists("direct.txt")).toBe(true);
 
-			expect(signedUrl).toContain(
-				"http://localhost:3000/files/secret.pdf",
-			);
-			expect(signedUrl).toContain("?token=");
+			await setup.app.storage.delete("direct.txt");
+
+			expect(await setup.app.storage.exists("direct.txt")).toBe(false);
+			expect("use" in setup.app.storage).toBe(false);
+		} finally {
+			await setup.cleanup();
+		}
+	});
+
+	test("local storage config creates a direct Files SDK instance", async () => {
+		const location = await mkdtemp(join(tmpdir(), "questpie-storage-"));
+		const config = runtimeConfig({
+			app: { url: "http://localhost:3000" },
+			db: { url: "postgres://localhost/test" },
+			storage: { location },
 		});
 
-		test("uses custom expiration for signed URLs", async () => {
-			const config = createMockConfig({
-				storage: {
-					location: "./test-uploads",
-					signedUrlExpiration: 60, // 1 minute
-				},
+		try {
+			const appStorage = await createFilesStorage(config as any);
+
+			await appStorage.upload("local.txt", "local body", {
+				contentType: "text/plain",
 			});
 
-			const driver = createDiskDriver(config);
+			const file = await appStorage.download("local.txt");
+			const metadata = await appStorage.head("local.txt");
 
-			// Generate two URLs with default and custom expiration
-			const url1 = await driver.getSignedUrl("file.pdf");
-			const url2 = await driver.getSignedUrl("file.pdf");
+			expect(appStorage).toBeInstanceOf(Files);
+			expect(await file.text()).toBe("local body");
+			expect(metadata.key).toBe("local.txt");
+			expect(metadata.type).toBe("text/plain");
+			expect(await appStorage.exists("local.txt")).toBe(true);
 
-			// Both should have tokens (implementation detail: tokens include expiration)
-			expect(url1).toContain("?token=");
-			expect(url2).toContain("?token=");
-		});
+			await appStorage.delete("local.txt");
+
+			expect(await appStorage.exists("local.txt")).toBe(false);
+			expect("use" in appStorage).toBe(false);
+		} finally {
+			await rm(location, { force: true, recursive: true });
+		}
 	});
 });

@@ -32,6 +32,8 @@
 declare global {
 	namespace Questpie {
 		interface AppContext {}
+		interface JobHandlerContext {}
+		interface WorkflowContext {}
 		interface Registry {}
 		/**
 		 * Augmentable interface for view record types.

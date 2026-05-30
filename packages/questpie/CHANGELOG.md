@@ -1,5 +1,13 @@
 # questpie
 
+## 3.5.2
+
+### Patch Changes
+
+- [`bc0bc1d`](https://github.com/questpie/questpie/commit/bc0bc1dbfd24ddfa109218629fd97af52bcdf63e) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Preserve storage streams for upload and serve routes. Upload files can now be stream-only adapter inputs, storage writes keep explicit content length metadata, failed upload records clean up their written object, and collection file serving streams full and ranged responses without buffering the whole file.
+
+  Restore the public QueueJobType type export used by generated queue client typings.
+
 ## 3.5.1
 
 ## 3.5.0

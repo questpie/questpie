@@ -169,28 +169,34 @@ const results = await collections.posts.find({
 
 ## Storage
 
-File storage using FlyDrive with local or S3 backends.
+File storage uses the direct Files SDK API. Configure a Files SDK adapter in `runtimeConfig()`, then destructure the typed `storage` instance from route handlers, services, jobs, or hooks.
 
 ### Configuration
 
 ```ts title="questpie.config.ts"
-import { S3Driver } from "flydrive/drivers/s3";
+import { fs } from "files-sdk/fs";
+import { s3 } from "files-sdk/s3";
 
 // Local filesystem
 storage: {
-  location: "./uploads",
+  adapter: fs({
+    root: "./uploads",
+  }),
   basePath: "/api",
 }
 
 // S3 / S3-compatible
 storage: {
-  driver: new S3Driver({
+  adapter: s3({
     bucket: "my-bucket",
     region: "us-east-1",
-    accessKeyId: "...",
-    secretAccessKey: "...",
-    endpoint: "https://...",  // For S3-compatible providers
+    credentials: {
+      accessKeyId: "...",
+      secretAccessKey: "...",
+    },
+    endpoint: "https://...",  // Optional, for S3-compatible providers
   }),
+  basePath: "/api",
 }
 ```
 
@@ -215,21 +221,26 @@ Upload collections automatically:
 
 - Add storage fields (`key`, `filename`, `mimeType`, `size`, `visibility`)
 - Extend the output type with `{ url: string }`
-- Generate signed URLs for private files
+- Generate QUESTPIE route URLs such as `/api/media/files/:key`
+- Authorize file downloads through collection read access and private signed URL checks
 - Register HTTP upload and file-serving routes
 
 ### Using Storage Directly
 
 ```ts
-// Upload a file
-const disk = app.storage.use();
-await disk.put("path/to/file.txt", content);
+import { route, service } from "questpie";
 
-// Get URL
-const url = await disk.getUrl("path/to/file.txt");
+export default route().post().handler(async ({ storage }) => {
+	await storage.upload("path/to/file.txt", "hello");
+	const file = await storage.download("path/to/file.txt");
+	const url = await storage.url("path/to/file.txt");
 
-// Get signed URL (private files)
-const signedUrl = await disk.getSignedUrl("path/to/file.txt");
+	return { exists: !!file, url };
+});
+
+export const files = service().create(({ storage }) => ({
+	remove: (key: string) => storage.delete(key),
+}));
 ```
 
 ---

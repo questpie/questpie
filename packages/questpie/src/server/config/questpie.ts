@@ -1,7 +1,6 @@
 import type { BetterAuthOptions } from "better-auth";
 import { betterAuth } from "better-auth";
 import type { PgTable } from "drizzle-orm/pg-core";
-import type { DriveManager } from "flydrive";
 
 import {
 	type Collection,
@@ -23,6 +22,7 @@ import type {
 	DbCloseFn,
 	DrizzleClientFromQuestpieConfig,
 	Locale,
+	StorageFromQuestpieConfig,
 	TablesFromConfig,
 } from "#questpie/server/config/types.js";
 import { GlobalBuilder } from "#questpie/server/global/builder/global-builder.js";
@@ -58,10 +58,6 @@ interface ResolvedServiceDefinition {
 }
 
 export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
-	static readonly __internal = {
-		storageDriverServiceName: "appDefault",
-	};
-
 	private _collections: Record<string, Collection<AnyCollectionState>> = {};
 	private _globals: Record<string, AnyGlobal> = {};
 	private _singletonServices: Record<string, any> = {};
@@ -132,10 +128,7 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 	public auth!: TConfig["auth"] extends BetterAuthOptions
 		? ReturnType<typeof betterAuth<TConfig["auth"]>>
 		: ReturnType<typeof betterAuth<BetterAuthOptions>>;
-	public storage!: DriveManager<{
-		[Questpie.__internal
-			.storageDriverServiceName]: () => import("flydrive/types").DriverContract;
-	}>;
+	public storage!: StorageFromQuestpieConfig<TConfig>;
 	public queue!: QueueClient<NonNullable<TConfig["queue"]>["jobs"]>;
 	public email!: MailerService;
 	public kv!: KVService;

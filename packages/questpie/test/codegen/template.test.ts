@@ -158,7 +158,7 @@ describe("generateTemplate — minimal (modules.ts only)", () => {
 		expect(code).toContain("DO NOT EDIT");
 	});
 
-	it("imports createApp from questpie", () => {
+	it("imports createApp from questpie/app", () => {
 		expect(code).toContain("import { createApp");
 		expect(code).toContain('from "questpie/app"');
 	});
@@ -208,6 +208,7 @@ describe("generateTemplate — minimal (modules.ts only)", () => {
 		expect(code).toContain(
 			"globals: AppGlobals & Record<string, AnyGlobalOrBuilder>;",
 		);
+		expect(code).toContain('storage: (typeof _runtime)["storage"];');
 	});
 
 	it("emits createApp call with modules", () => {
@@ -243,6 +244,9 @@ describe("generateTemplate — minimal (modules.ts only)", () => {
 			'type _AppQuestpie = Omit<_AppQuestpieBase, "collections" | "globals">',
 		);
 		expect(code).toContain("type _AppQuestpieConfig = Omit<QuestpieConfig");
+		expect(
+			code.match(/storage: \(typeof _runtime\)\["storage"\];/g)?.length,
+		).toBe(2);
 		expect(code).toContain(
 			"type _AppDb = DrizzleClientFromQuestpieConfig<_AppQuestpieConfig>;",
 		);
@@ -255,6 +259,7 @@ describe("generateTemplate — minimal (modules.ts only)", () => {
 		expect(code).toContain("db: _AppDb;");
 		expect(code).toContain('email: _AppQuestpie["email"];');
 		expect(code).toContain("storage: _AppStorage;");
+		expect(code).not.toContain("storage: unknown;");
 		expect(code).toContain('kv: _AppQuestpie["kv"];');
 		expect(code).toContain('logger: _AppQuestpie["logger"];');
 		expect(code).toContain('search: _AppQuestpie["search"];');
@@ -671,7 +676,7 @@ describe("generateTemplate — services", () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe("generateTemplate — emails", () => {
-	it("emits MailerService type only once when emails exist", () => {
+	it("emits MailerService import and typed email contexts", () => {
 		const result = minimalResult();
 		cat(result, "emails").set(
 			"welcome",
@@ -685,8 +690,8 @@ describe("generateTemplate — emails", () => {
 			singletonFactories: coreSingletonFactories(),
 		});
 
-		expect(code).toContain("MailerService<AppEmailTemplates>");
-		expect(code.match(/MailerService/g)?.length).toBe(4);
+		expect(code).toContain("MailerService, Questpie");
+		expect(code.match(/\bMailerService\b/g)?.length).toBe(4);
 	});
 
 	it("emits email: MailerService<AppEmailTemplates> in AppContext", () => {
@@ -1040,8 +1045,8 @@ describe("generateTemplate — spreads", () => {
 			singletonFactories: coreSingletonFactories(),
 		});
 
-		// Spread singles should not appear as plain singles (no "sidebar: _sidebar_root as any,")
-		expect(code).not.toContain("sidebar: _sidebar_root as any,");
+		// Spread singles should not appear as plain singles.
+		expect(code).not.toContain("sidebar: _sidebar_root,");
 	});
 
 	it("emits spread section label in imports", () => {

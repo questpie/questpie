@@ -4,10 +4,10 @@
  * File upload and serving route handlers.
  */
 
-import { Readable } from "node:stream";
+import type { Files } from "files-sdk";
 
 import type { Questpie } from "../../config/questpie.js";
-import type { QuestpieConfig, StorageVisibility } from "../../config/types.js";
+import type { StorageVisibility } from "../../config/types.js";
 import { ApiError } from "../../errors/index.js";
 import { verifySignedUrlToken } from "../../modules/core/integrated/storage/signed-url.js";
 import type { AdapterConfig, AdapterContext, UploadFile } from "../types.js";
@@ -25,6 +25,23 @@ type ByteRange = {
 	length: number;
 };
 
+type StorageRouteContext = {
+	storage: Files;
+};
+
+const getStorageFromContext = (
+	context: AdapterContext["appContext"],
+	app: Questpie<any>,
+): Files => {
+	const storage =
+		(context as AdapterContext["appContext"] & Partial<StorageRouteContext>)
+			.storage ?? app.storage;
+	if (!storage) {
+		throw ApiError.internal("Storage not configured");
+	}
+	return storage as Files;
+};
+
 const toUint8Array = (chunk: unknown): Uint8Array => {
 	if (chunk instanceof Uint8Array) return chunk;
 	if (chunk instanceof ArrayBuffer) return new Uint8Array(chunk);
@@ -33,9 +50,6 @@ const toUint8Array = (chunk: unknown): Uint8Array => {
 	}
 	return new TextEncoder().encode(String(chunk));
 };
-
-const nodeReadableToWeb = (stream: Readable): ReadableStream<Uint8Array> =>
-	(Readable as any).toWeb(stream) as ReadableStream<Uint8Array>;
 
 const parseByteRange = (
 	rangeHeader: string,
@@ -69,18 +83,18 @@ const parseByteRange = (
 };
 
 const createRangeStream = (
-	stream: Readable,
+	stream: ReadableStream<Uint8Array>,
 	start: number,
 	end: number,
 ): ReadableStream<Uint8Array> => {
-	const iterator = stream[Symbol.asyncIterator]();
+	const reader = stream.getReader();
 	let offset = 0;
 	let closed = false;
 
 	const close = async () => {
 		if (closed) return;
 		closed = true;
-		await iterator.return?.();
+		await reader.cancel();
 	};
 
 	return new ReadableStream<Uint8Array>({
@@ -92,7 +106,7 @@ const createRangeStream = (
 
 			try {
 				while (true) {
-					const next = await iterator.next();
+					const next = await reader.read();
 					if (next.done) {
 						closed = true;
 						controller.close();
@@ -296,6 +310,8 @@ export async function storageCollectionServe(
 	const token = url.searchParams.get("token");
 
 	try {
+		const storage = getStorageFromContext(resolved.appContext, app);
+
 		// The upload row is the authorization anchor for storage objects. Do not
 		// serve orphaned keys, or keys hidden by collection read access.
 		const crud = app.collections[collection as any];
@@ -368,7 +384,7 @@ export async function storageCollectionServe(
 			}
 		}
 
-		const exists = await app.storage.use().exists(key);
+		const exists = await storage.exists(key);
 		if (!exists) {
 			return errorResponse(
 				ApiError.notFound("File", key),
@@ -377,12 +393,10 @@ export async function storageCollectionServe(
 			);
 		}
 
-		const metadata = await app.storage.use().getMetaData(key);
+		const metadata = await storage.head(key);
 
 		const contentType =
-			metadata.contentType ||
-			(record as any)?.mimeType ||
-			"application/octet-stream";
+			metadata.type || (record as any)?.mimeType || "application/octet-stream";
 
 		// Sanitize filename to prevent header injection
 		const rawFilename = (record as any)?.filename;
@@ -393,7 +407,7 @@ export async function storageCollectionServe(
 		// Security headers for SVG files — prevent embedded script execution
 		const isSvg = contentType.includes("svg");
 		const recordSize = Number((record as any)?.size);
-		const metadataSize = Number(metadata.contentLength);
+		const metadataSize = Number(metadata.size);
 		const totalSize = Number.isFinite(metadataSize) ? metadataSize : recordSize;
 		const hasKnownSize = Number.isFinite(totalSize) && totalSize >= 0;
 		const commonHeaders = {
@@ -425,7 +439,8 @@ export async function storageCollectionServe(
 			}
 
 			if (range) {
-				const stream = await app.storage.use().getStream(key);
+				const file = await storage.download(key, { as: "stream" });
+				const stream = file.stream();
 				return new Response(createRangeStream(stream, range.start, range.end), {
 					status: 206,
 					headers: {
@@ -438,8 +453,8 @@ export async function storageCollectionServe(
 			}
 		}
 
-		const stream = await app.storage.use().getStream(key);
-		return new Response(nodeReadableToWeb(stream), {
+		const file = await storage.download(key, { as: "stream" });
+		return new Response(file.stream(), {
 			status: 200,
 			headers: {
 				...commonHeaders,
@@ -451,43 +466,3 @@ export async function storageCollectionServe(
 		return errorResponse(error, request, resolved.appContext.locale);
 	}
 }
-
-// ============================================================================
-// Legacy closure factory (deprecated)
-// ============================================================================
-
-/**
- * @deprecated Use standalone `storageCollectionUpload` and `storageCollectionServe` instead.
- */
-export const createStorageRoutes = <
-	TConfig extends QuestpieConfig = QuestpieConfig,
->(
-	app: Questpie<TConfig>,
-	config: AdapterConfig<TConfig> = {},
-) => {
-	return {
-		collectionUpload: async (
-			request: Request,
-			params: { collection: string },
-			context?: AdapterContext,
-			file?: UploadFile | null,
-		): Promise<Response> => {
-			return storageCollectionUpload(
-				app,
-				request,
-				params,
-				context,
-				config,
-				file,
-			);
-		},
-
-		collectionServe: async (
-			request: Request,
-			params: { collection: string; key: string },
-			_context?: AdapterContext,
-		): Promise<Response> => {
-			return storageCollectionServe(app, request, params, _context, config);
-		},
-	};
-};
