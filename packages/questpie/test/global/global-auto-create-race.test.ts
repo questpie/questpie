@@ -10,8 +10,9 @@
  * `packages/questpie/src/server/global/crud/global-crud-generator.ts`.
  */
 
-import { sql } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+
+import { sql } from "drizzle-orm";
 
 import { global } from "../../src/exports/index.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
@@ -48,10 +49,30 @@ describe("globals auto-create race condition", () => {
 		const ctx = createTestContext({ accessMode: "system" });
 
 		const results = await Promise.all(
-			Array.from({ length: 20 }, () => app.globals.header_settings.get({}, ctx)),
+			Array.from({ length: 20 }, () =>
+				app.globals.header_settings.get({}, ctx),
+			),
 		);
 
 		// All callers see the auto-created row
+		expect(results.every((r) => r != null)).toBe(true);
+
+		const countResult = await app.db.execute(
+			sql`SELECT COUNT(*)::int AS c FROM header_settings`,
+		);
+		const row = (countResult.rows ?? countResult)[0];
+		expect(row.c).toBe(1);
+	});
+
+	it("produces exactly one row under N concurrent update() calls (plain branch)", async () => {
+		const ctx = createTestContext({ accessMode: "system" });
+
+		const results = await Promise.all(
+			Array.from({ length: 20 }, (_, index) =>
+				app.globals.header_settings.update({ title: `Header ${index}` }, ctx),
+			),
+		);
+
 		expect(results.every((r) => r != null)).toBe(true);
 
 		const countResult = await app.db.execute(

@@ -66,6 +66,37 @@ const writeResponseDocs = collection("write_response_docs")
 		},
 	});
 
+const profileDocs = collection("profile_docs")
+	.fields(({ f }) => ({
+		title: f.text(255).required(),
+		settings: f.object({
+			publicNote: f.text(255),
+			secret: f.text(255),
+		}),
+		auditEntries: f
+			.object({
+				label: f.text(255),
+				secret: f.text(255),
+			})
+			.array(),
+	}))
+	.access({
+		read: true,
+		create: true,
+		update: true,
+		delete: true,
+		fields: {
+			"settings.secret": {
+				create: false,
+				update: false,
+			},
+			"auditEntries.secret": {
+				create: false,
+				update: false,
+			},
+		},
+	});
+
 describe("field-level access control", () => {
 	let setup: Awaited<ReturnType<typeof buildMockApp>>;
 
@@ -75,6 +106,7 @@ describe("field-level access control", () => {
 				users,
 				public_posts: publicPosts,
 				write_response_docs: writeResponseDocs,
+				profile_docs: profileDocs,
 			},
 		});
 		await runTestDbMigrations(setup.app);
@@ -379,6 +411,120 @@ describe("field-level access control", () => {
 
 			expect(created.ssn).toBe("999-88-7777");
 			expect(created.salary).toBe("250000");
+		});
+
+		it("nested write access validation on create: throws if restricted nested field present", async () => {
+			const userCtx = createTestContext({
+				accessMode: "user",
+				role: "user",
+			});
+
+			await expect(
+				setup.app.collections.profile_docs.create(
+					{
+						id: crypto.randomUUID(),
+						title: "Profile",
+						settings: {
+							publicNote: "Visible",
+							secret: "Hidden",
+						},
+					},
+					userCtx,
+				),
+			).rejects.toThrow("Cannot write field 'settings.secret': access denied");
+		});
+
+		it("nested write access validation on update: throws if restricted nested field changes", async () => {
+			const userCtx = createTestContext({
+				accessMode: "user",
+				role: "user",
+			});
+			const systemCtx = createTestContext({ accessMode: "system" });
+
+			const created = await setup.app.collections.profile_docs.create(
+				{
+					id: crypto.randomUUID(),
+					title: "Profile",
+					settings: {
+						publicNote: "Visible",
+						secret: "Original",
+					},
+				},
+				systemCtx,
+			);
+
+			await expect(
+				setup.app.collections.profile_docs.updateById(
+					{
+						id: created.id,
+						data: {
+							settings: {
+								publicNote: "Still visible",
+								secret: "Changed",
+							},
+						},
+					},
+					userCtx,
+				),
+			).rejects.toThrow("Cannot write field 'settings.secret': access denied");
+		});
+
+		it("nested array write access validation: allows unchanged restricted fields but denies changes", async () => {
+			const userCtx = createTestContext({
+				accessMode: "user",
+				role: "user",
+			});
+			const systemCtx = createTestContext({ accessMode: "system" });
+
+			const created = await setup.app.collections.profile_docs.create(
+				{
+					id: crypto.randomUUID(),
+					title: "Profile",
+					auditEntries: [
+						{
+							label: "Visible",
+							secret: "Original",
+						},
+					],
+				},
+				systemCtx,
+			);
+
+			const unchanged = await setup.app.collections.profile_docs.updateById(
+				{
+					id: created.id,
+					data: {
+						auditEntries: [
+							{
+								label: "Still visible",
+								secret: "Original",
+							},
+						],
+					},
+				},
+				userCtx,
+			);
+
+			expect(unchanged.auditEntries?.[0]?.label).toBe("Still visible");
+
+			await expect(
+				setup.app.collections.profile_docs.updateById(
+					{
+						id: created.id,
+						data: {
+							auditEntries: [
+								{
+									label: "Still visible",
+									secret: "Changed",
+								},
+							],
+						},
+					},
+					userCtx,
+				),
+			).rejects.toThrow(
+				"Cannot write field 'auditEntries.secret': access denied",
+			);
 		});
 
 		it("partial updates: can update allowed fields while restricted fields exist on record", async () => {

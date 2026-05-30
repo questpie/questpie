@@ -284,6 +284,92 @@ export async function checkFieldWriteAccess(
 	);
 }
 
+const META_FIELD_NAMES = new Set(["id", "createdAt", "updatedAt", "deletedAt"]);
+
+function isRecord(value: unknown): value is Record<string, any> {
+	return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+function getPathValue(source: unknown, path: Array<string | number>): unknown {
+	let current = source;
+	for (const segment of path) {
+		if (!isRecord(current) && !Array.isArray(current)) return undefined;
+		current = (current as Record<string, unknown>)[segment];
+	}
+	return current;
+}
+
+async function validateFieldPathWriteAccess(params: {
+	data: unknown;
+	fieldAccess: Record<string, FieldAccess>;
+	context: CRUDContext;
+	options: { app?: Questpie<any>; db: any };
+	collectionName: string;
+	operation: "create" | "update";
+	existingRow?: any;
+	accessPath?: string[];
+	valuePath?: Array<string | number>;
+}): Promise<void> {
+	if (!isRecord(params.data) && !Array.isArray(params.data)) return;
+
+	if (Array.isArray(params.data)) {
+		for (const [index, item] of params.data.entries()) {
+			await validateFieldPathWriteAccess({
+				...params,
+				data: item,
+				valuePath: [...(params.valuePath ?? []), index],
+			});
+		}
+		return;
+	}
+
+	for (const [fieldName, value] of Object.entries(params.data)) {
+		if (!params.accessPath?.length && META_FIELD_NAMES.has(fieldName)) {
+			continue;
+		}
+
+		const accessPath = [...(params.accessPath ?? []), fieldName];
+		const valuePath = [...(params.valuePath ?? []), fieldName];
+		const fieldPath = accessPath.join(".");
+
+		if (
+			params.operation === "update" &&
+			params.existingRow &&
+			Object.is(value, getPathValue(params.existingRow, valuePath))
+		) {
+			continue;
+		}
+
+		const canWrite = await checkFieldWriteAccess(
+			fieldPath,
+			params.fieldAccess,
+			params.context,
+			params.options,
+			params.operation,
+			params.existingRow,
+		);
+
+		if (!canWrite) {
+			const { ApiError } = await import("#questpie/server/errors/index.js");
+			throw ApiError.forbidden({
+				operation: params.operation,
+				resource: params.collectionName,
+				reason: `Cannot write field '${fieldPath}': access denied`,
+				fieldPath,
+			});
+		}
+
+		if (isRecord(value) || Array.isArray(value)) {
+			await validateFieldPathWriteAccess({
+				...params,
+				data: value,
+				accessPath,
+				valuePath,
+			});
+		}
+	}
+}
+
 /**
  * Validate write access for all fields in input data
  * Throws ApiError if any field cannot be written
@@ -304,9 +390,6 @@ export async function validateFieldsWriteAccess(
 	operation: "create" | "update",
 	existingRow?: any,
 ): Promise<void> {
-	// Lazy import to avoid circular dependency
-	const { ApiError } = await import("#questpie/server/errors/index.js");
-
 	const normalized = normalizeContext(context);
 
 	// System mode bypasses field access control
@@ -314,46 +397,15 @@ export async function validateFieldsWriteAccess(
 
 	if (!fieldAccess) return;
 
-	for (const fieldName of Object.keys(data)) {
-		// Skip meta fields
-		if (
-			fieldName === "id" ||
-			fieldName === "createdAt" ||
-			fieldName === "updatedAt" ||
-			fieldName === "deletedAt"
-		) {
-			continue;
-		}
-
-		// Skip no-op writes on update: forms (especially admin) re-submit
-		// readOnly fields with their original value. Denying these breaks
-		// every form save even though nothing actually changed.
-		if (
-			operation === "update" &&
-			existingRow &&
-			Object.is(data[fieldName], (existingRow as any)[fieldName])
-		) {
-			continue;
-		}
-
-		const canWrite = await checkFieldWriteAccess(
-			fieldName,
-			fieldAccess,
-			context,
-			options,
-			operation,
-			existingRow,
-		);
-
-		if (!canWrite) {
-			throw ApiError.forbidden({
-				operation: "update",
-				resource: collectionName,
-				reason: `Cannot write field '${fieldName}': access denied`,
-				fieldPath: fieldName,
-			});
-		}
-	}
+	await validateFieldPathWriteAccess({
+		data,
+		fieldAccess,
+		context,
+		options,
+		collectionName,
+		operation,
+		existingRow,
+	});
 }
 
 /**

@@ -1,9 +1,9 @@
 ---
 title: Visibility Rules
-description: Reactive field visibility — show or hide fields based on other field values.
+description: Reactive field visibility and state — show, hide, disable, or lock fields based on other field values.
 ---
 
-Make form fields conditionally visible based on the current record data. Fields can be hidden or shown based on other field values.
+Make form fields conditionally visible or non-editable based on the current record data. Fields can be hidden, disabled, or made read-only from other field values.
 
 ## Basic Visibility
 
@@ -30,7 +30,7 @@ The `cancellationReason` field only appears when `status` is `"cancelled"`.
 
 ## Reactive
 
-Visibility rules are **reactive** — they re-evaluate as the user changes field values in the form. No page refresh needed.
+Visibility and state rules are **reactive** — they re-evaluate as the user changes field values in the form. No page refresh needed.
 
 ## Multiple Conditions
 
@@ -53,6 +53,19 @@ Make a field visible but non-editable based on conditions:
   readOnly: ({ data }) => !!data.customer,
 }
 ```
+
+## Disabled Fields
+
+Disable a field while keeping it visible in the form:
+
+```ts
+{
+  field: f.discountCode,
+  disabled: ({ data }) => data.status === "paid",
+}
+```
+
+`readOnly` is best for values the user may inspect but not edit. `disabled` is best for controls that should be temporarily unavailable because another value makes them irrelevant.
 
 ## Section Visibility
 

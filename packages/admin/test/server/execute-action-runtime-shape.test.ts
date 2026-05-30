@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
+import { tryGetContext } from "questpie";
 import { z } from "zod";
 
 import {
@@ -12,6 +13,7 @@ describe("admin execute action runtime shape", () => {
 		const collectionCruds = { user: { marker: "collections" } };
 		const globalCruds = { settings: { marker: "globals" } };
 		const calls: Array<Record<string, unknown>> = [];
+		const runtimeContexts: unknown[] = [];
 		const app = {
 			state: {},
 			collections: collectionCruds,
@@ -28,6 +30,7 @@ describe("admin execute action runtime shape", () => {
 										label: "Create user",
 										handler: (ctx: Record<string, unknown>) => {
 											calls.push(ctx);
+											runtimeContexts.push(tryGetContext());
 											return { type: "success" };
 										},
 									},
@@ -54,6 +57,7 @@ describe("admin execute action runtime shape", () => {
 		expect(calls).toHaveLength(1);
 		expect(calls[0]?.collections).toBe(collectionCruds);
 		expect(calls[0]?.globals).toBe(globalCruds);
+		expect((runtimeContexts[0] as any)?.accessMode).toBe("user");
 	});
 
 	it("runs built-in create through the collection CRUD API", async () => {
@@ -89,6 +93,7 @@ describe("admin execute action runtime shape", () => {
 		expect(result.success).toBe(true);
 		expect(createCall?.data).toEqual({ title: "Hello" });
 		expect(createCall?.context.db).toBe(app.db);
+		expect(createCall?.context.accessMode).toBe("user");
 		expect(result.result?.effects?.redirect).toBe(
 			"/admin/collections/posts/post-1",
 		);

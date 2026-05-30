@@ -16,7 +16,7 @@
  * ```
  */
 
-import { route } from "questpie";
+import { route, runWithContext } from "questpie";
 import { z } from "zod";
 
 import type {
@@ -280,7 +280,16 @@ export async function executeAction(
 			t,
 		};
 
-		const result = await customAction.handler(context);
+		const result = await runWithContext(
+			{
+				app,
+				db: appRec.db,
+				session,
+				locale,
+				accessMode: "user",
+			},
+			() => customAction.handler(context),
+		);
 
 		return {
 			success: result.type === "success" || result.type === "redirect",
@@ -327,6 +336,7 @@ async function executeBuiltinAction(
 		db: appRec.db,
 		session: params.session,
 		locale: params.locale,
+		accessMode: "user" as const,
 	};
 
 	try {
