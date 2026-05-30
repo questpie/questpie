@@ -1,5 +1,19 @@
 # questpie
 
+## 3.5.3
+
+### Patch Changes
+
+- [#83](https://github.com/questpie/questpie/pull/83) [`f678f70`](https://github.com/questpie/questpie/commit/f678f70121f8be87fd4a5be6a9b19a0ec3653d09) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Migrate QUESTPIE storage from Flydrive to the direct Files SDK API. Storage is now configured with `runtimeConfig({ storage: { adapter } })`, `app.storage` is the typed `Files` instance, and route, service, job, and hook contexts receive that same direct storage API.
+
+  Remove the legacy `app.storage.use`, `storage.files`, `storage.driver`, Flydrive, DriveManager, QUESTPIE storage-disk, and storage-specific `createStorageRoutes()` closure surfaces. Upload CRUD cleanup and storage routes now call Files SDK operations directly, including streaming upload/download behavior and typed adapter access; `createAdapterRoutes()` remains as the broader deprecated compatibility shim.
+
+- [#85](https://github.com/questpie/questpie/pull/85) [`ed73b91`](https://github.com/questpie/questpie/commit/ed73b917e4a1a59908e186171a4ab837edb3be9f) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Add declarative admin list view filters, quick filters, filter-panel controls, system-field default sorting, and nested sidebar access filtering.
+
+  Harden CRUD response field access, audit log route access, storage upload and private file serving, auth credential collection redaction, admin RPC authorization, admin action form validation, JSONB filtering, search access SQL generation, and upload file serving authorization.
+
+  Harden global update auto-create races, nested field write access validation, Redis KV clearing, Postgres search query sanitization, admin widget/action caller context propagation, and frontend reactive hidden/read-only/disabled field state handling.
+
 ## 3.5.2
 
 ### Patch Changes
