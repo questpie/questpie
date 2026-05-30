@@ -65,11 +65,11 @@ export function getCloudflareCompatibilityIssues(
 		});
 	}
 
-	if (!config.storage || !("driver" in config.storage)) {
+	if (!config.storage || !("adapter" in config.storage)) {
 		issues.push({
 			path: "storage",
 			message:
-				"Cloudflare Workers do not provide local filesystem storage. Provide storage: { driver: ... } backed by R2 or S3-compatible storage.",
+				"Cloudflare Workers do not provide local filesystem storage. Provide storage: { adapter: ... } backed by R2 or S3-compatible storage.",
 		});
 	}
 

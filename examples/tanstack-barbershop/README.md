@@ -34,7 +34,7 @@ A complete barbershop booking system built with **QUESTPIE** + **TanStack Start*
 **ONLY Postgres is required!** Everything else is batteries-included:
 
 - ✅ Auth (Better Auth)
-- ✅ Storage (Flydrive - local filesystem)
+- ✅ Storage (Files SDK - local filesystem)
 - ✅ Queue (pg-boss - uses Postgres)
 - ✅ Email (Console adapter - no SMTP needed)
 - ✅ Logging (Pino)

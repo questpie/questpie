@@ -14,7 +14,7 @@ Server-first TypeScript backend framework with a proxy-based field builder, coll
 - **Introspection** — Serializable field metadata, relation info, reactive config for admin consumption
 - **Background Jobs** — `job()` with Zod schema validation, pg-boss or Cloudflare Queues adapters
 - **Authentication** — Better Auth integration with plugins (admin, organization, 2FA, API keys)
-- **Storage** — Flydrive-based (S3, R2, GCS, local) with streaming uploads and typed upload collections
+- **Storage** — Files SDK-based (S3, R2, GCS, local) with streaming uploads and typed upload collections
 - **Realtime** — PostgreSQL NOTIFY/LISTEN, Redis Streams, or Cloudflare Durable Objects with SSE delivery
 - **Email** — SMTP + console adapters with template support
 - **Search** — Full-text search with reindex support
@@ -95,11 +95,16 @@ export const siteSettings = global("siteSettings")
 ```ts
 // src/questpie/server/questpie.config.ts
 import { runtimeConfig } from "questpie/app";
+import { fs } from "files-sdk/fs";
+
 export default runtimeConfig({
 	app: { url: process.env.APP_URL! },
 	db: { url: process.env.DATABASE_URL! },
 	secret: process.env.AUTH_SECRET!,
-	storage: { basePath: "/api" },
+	storage: {
+		adapter: fs({ root: "./uploads" }),
+		basePath: "/api",
+	},
 });
 ```
 

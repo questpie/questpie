@@ -583,6 +583,7 @@ export function generateTemplate(options: TemplateOptions): string {
 		lines.push("\tcollections: _AppCollectionDefinitions;");
 		lines.push("\tglobals: _AppGlobalDefinitions;");
 		lines.push("\tauth: _AppAuthConfig;");
+		lines.push('\tstorage: (typeof _runtime)["storage"];');
 		lines.push("};");
 		lines.push("type _AppQuestpieBase = Questpie<_AppQuestpieConfig>;");
 		lines.push(
@@ -661,7 +662,7 @@ export function generateTemplate(options: TemplateOptions): string {
 				lines.push("\t\t\temail: unknown;");
 			}
 			lines.push("\t\t\tqueue: QueueClient<_ExecutionContextJobs>;");
-			lines.push("\t\t\tstorage: unknown;");
+			lines.push("\t\t\tstorage: _AppStorage;");
 			lines.push("\t\t\tkv: unknown;");
 			lines.push("\t\t\tlogger: unknown;");
 			lines.push("\t\t\tsearch: unknown;");
@@ -756,6 +757,7 @@ export function generateTemplate(options: TemplateOptions): string {
 	);
 	lines.push("\tglobals: AppGlobals & Record<string, AnyGlobalOrBuilder>;");
 	lines.push("\troutes: AppRoutes;");
+	lines.push('\tstorage: (typeof _runtime)["storage"];');
 	if (authFile) {
 		lines.push(`\tauth: typeof ${authFile.varName};`);
 	}

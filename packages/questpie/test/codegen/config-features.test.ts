@@ -306,7 +306,7 @@ describe("generateTemplate — config bucket emission", () => {
 
 		// authConfig should be emitted inside config bucket
 		expect(code).toContain("config: {");
-		expect(code).toContain("auth: _authConfig as any,");
+		expect(code).toContain("auth: _authConfig,");
 		// Should NOT emit "authConfig:" as a flat createApp key
 		expect(code).not.toMatch(/\bauthConfig:\s*_authConfig\s+as\s+any/);
 	});
@@ -328,7 +328,7 @@ describe("generateTemplate — config bucket emission", () => {
 
 		// appConfig should be emitted as whole object in config bucket
 		expect(code).toContain("config: {");
-		expect(code).toContain("app: _appConfig as any,");
+		expect(code).toContain("app: _appConfig,");
 	});
 
 	it("multiple config singles are grouped in a single config bucket", () => {
@@ -349,8 +349,8 @@ describe("generateTemplate — config bucket emission", () => {
 
 		// Both should be inside config bucket
 		expect(code).toContain("config: {");
-		expect(code).toContain("auth: _authConfig as any,");
-		expect(code).toContain("app: _appConfig as any,");
+		expect(code).toContain("auth: _authConfig,");
+		expect(code).toContain("app: _appConfig,");
 	});
 
 	it("non-config singles are emitted as flat keys alongside config bucket", () => {
@@ -371,9 +371,8 @@ describe("generateTemplate — config bucket emission", () => {
 
 		// config bucket for configKey singles
 		expect(code).toContain("config: {");
-		expect(code).toContain("app: _appConfig as any,");
+		expect(code).toContain("app: _appConfig,");
 		// fields as flat key
-		expect(code).toContain("fields: _fields as any,");
+		expect(code).toContain("fields: _fields,");
 	});
 });
-

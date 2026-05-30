@@ -2308,18 +2308,26 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			// 4. Loop through afterDelete hooks
 			for (const record of records) {
 				// Execute afterDelete hooks
-				await this.executeCollectionHooksWithGlobal(
-					"afterDelete",
-					this.state.hooks?.afterDelete,
-					this.createHookContext({
-						data: record,
-						original: record,
-						operation: "delete",
-						context,
-						db,
-						bulk: deleteBulkMeta,
-					}),
-				);
+				try {
+					await this.executeCollectionHooksWithGlobal(
+						"afterDelete",
+						this.state.hooks?.afterDelete,
+						this.createHookContext({
+							data: record,
+							original: record,
+							operation: "delete",
+							context,
+							db,
+							bulk: deleteBulkMeta,
+						}),
+					);
+				} catch (err) {
+					// afterDelete hook errors are non-fatal — log and continue
+					console.error(
+						`[QUESTPIE] afterDelete hook error for "${this.state.name}":`,
+						err,
+					);
+				}
 			}
 
 			return { success: true, count: records.length };
@@ -3043,7 +3051,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 		// Upload collections with public visibility get public read access by default
 		if (
 			operation === "read" &&
-			!this.state.access?.read &&
+			this.state.access?.read === undefined &&
 			this.state.upload?.visibility === "public"
 		) {
 			return true;
@@ -3409,26 +3417,14 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			try {
 				// Streaming is more memory-efficient for large files
 				if (file.stream) {
-					// Convert web ReadableStream to Node.js Readable for Flydrive
-					const { Readable } = await import("node:stream");
-					const webStream = file.stream();
-					// Web ReadableStream → Node.js stream type mismatch requires cast
-					// Readable.fromWeb exists in Node 17+ / Bun but may not be in all TS lib definitions
-					const nodeStream = (Readable as any).fromWeb(
-						webStream as unknown as import("node:stream/web").ReadableStream,
-					);
-					await this.app.storage.use().putStream(key, nodeStream, {
+					await this.app.storage.upload(key, file.stream(), {
 						contentType: file.type,
-						contentLength: file.size,
-						visibility,
 					});
 				} else if (file.arrayBuffer) {
 					// Fallback to buffer-based upload for files without stream support
 					const buffer = await file.arrayBuffer();
-					await this.app.storage.use().put(key, new Uint8Array(buffer), {
+					await this.app.storage.upload(key, new Uint8Array(buffer), {
 						contentType: file.type,
-						contentLength: file.size,
-						visibility,
 					});
 				} else {
 					throw ApiError.badRequest(
@@ -3455,7 +3451,6 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			} catch (error) {
 				if (stored) {
 					await this.app.storage
-						.use()
 						.delete(key)
 						.catch(() => {});
 				}

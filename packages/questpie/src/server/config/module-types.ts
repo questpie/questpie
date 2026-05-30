@@ -1,4 +1,5 @@
 import type { BetterAuthOptions } from "better-auth";
+import type { Adapter } from "files-sdk";
 
 import type { CollectionAccess } from "#questpie/server/collection/builder/types.js";
 
@@ -230,7 +231,10 @@ export interface AppConfigInput {
  *
  * @see RFC-MODULE-ARCHITECTURE §3.1 (Functions), §8.1 (User Project)
  */
-export interface RuntimeConfig<TDb extends DbConfig = DbConfig> {
+export interface RuntimeConfig<
+	TDb extends DbConfig = DbConfig,
+	TStorage extends StorageConfig | undefined = StorageConfig | undefined,
+> {
 	/** Codegen plugins — discover additional file patterns and extend generated output. */
 	plugins?: CodegenPlugin[];
 
@@ -244,7 +248,7 @@ export interface RuntimeConfig<TDb extends DbConfig = DbConfig> {
 	secret?: string;
 
 	/** Storage configuration. */
-	storage?: StorageConfig;
+	storage?: TStorage;
 
 	/** Email configuration with adapter. */
 	email?: MailerConfig;
@@ -323,10 +327,13 @@ export interface RuntimeConfig<TDb extends DbConfig = DbConfig> {
  *
  * @see {@link RuntimeConfig} for the resolved output type.
  */
-export type RuntimeConfigInput<TDb extends DbConfig = DbConfig> = Partial<
-	Pick<RuntimeConfig<TDb>, "app" | "db">
+export type RuntimeConfigInput<
+	TDb extends DbConfig = DbConfig,
+	TStorage extends StorageConfig | undefined = StorageConfig | undefined,
+> = Partial<
+	Pick<RuntimeConfig<TDb, TStorage>, "app" | "db">
 > &
-	Omit<RuntimeConfig<TDb>, "app" | "db">;
+	Omit<RuntimeConfig<TDb, TStorage>, "app" | "db">;
 
 type DbFromRuntimeConfigInput<TInput> = TInput extends { db: infer TDb }
 	? TDb extends DbConfig
@@ -334,15 +341,28 @@ type DbFromRuntimeConfigInput<TInput> = TInput extends { db: infer TDb }
 		: DbConfig
 	: DbConfig;
 
-export type ResolvedRuntimeConfig<TInput extends RuntimeConfigInput> = Omit<
-	RuntimeConfig<DbFromRuntimeConfigInput<TInput>>,
+type StorageFromRuntimeConfigInput<TInput> = "storage" extends keyof TInput
+	? TInput extends { storage?: infer TStorage }
+		? TStorage extends StorageConfig | undefined
+			? TStorage
+			: StorageConfig<Adapter> | undefined
+		: StorageConfig<Adapter> | undefined
+	: StorageConfig | undefined;
+
+export type ResolvedRuntimeConfig<
+	TInput extends RuntimeConfigInput<any, any>,
+> = Omit<
+	RuntimeConfig<
+		DbFromRuntimeConfigInput<TInput>,
+		StorageFromRuntimeConfigInput<TInput>
+	>,
 	"app" | "db" | "secret" | "storage"
 > &
 	Omit<TInput, "app" | "db" | "secret" | "storage"> & {
 		app: { url: string };
 		db: DbFromRuntimeConfigInput<TInput>;
 		secret: string | undefined;
-		storage: StorageConfig | undefined;
+		storage: StorageFromRuntimeConfigInput<TInput>;
 	};
 
 // ============================================================================

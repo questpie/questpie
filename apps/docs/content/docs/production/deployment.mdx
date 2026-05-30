@@ -41,7 +41,7 @@ CMD ["bun", "run", ".output/server/index.mjs"]
 
 ## Cloudflare Workers
 
-Deploy QUESTPIE on Workers by wiring Cloudflare bindings into explicit adapters: Hyperdrive for PostgreSQL connections, FlyDrive `S3Driver` for R2, Workers KV, Cloudflare Queues, and Durable Object realtime. Configure Wrangler with the required bindings and `compatibility_flags = ["nodejs_compat"]` for the database driver.
+Deploy QUESTPIE on Workers by wiring Cloudflare bindings into explicit adapters: Hyperdrive for PostgreSQL connections, Files SDK S3 storage for R2, Workers KV, Cloudflare Queues, and Durable Object realtime. Configure Wrangler with the required bindings and `compatibility_flags = ["nodejs_compat"]` for the database driver.
 
 ### Runtime topology
 
@@ -54,7 +54,7 @@ A Cloudflare deployment is one Worker module with multiple platform entrypoints:
 | `scheduled()`        | Cron Trigger dispatcher for recurring jobs         |
 | Durable Object class | Realtime fanout hub                                |
 | Hyperdrive binding   | Connection layer to your existing PostgreSQL       |
-| R2 via S3 API        | Upload/media storage through FlyDrive `S3Driver`   |
+| R2 via S3 API        | Upload/media storage through Files SDK S3 adapter  |
 | Workers KV binding   | KV/cache adapter                                   |
 
 `createCloudflareWorkerHandlers(app)` exports `fetch`, `queue`, and `scheduled` from the same Worker object. You do not deploy a separate long-running queue worker and you do not call `app.queue.listen()` on Cloudflare. Cloudflare Queues invokes the exported `queue()` handler, and Cron Triggers invoke the exported `scheduled()` handler.
@@ -95,7 +95,7 @@ import {
 	type CloudflareKVNamespace,
 	type CloudflareQueueBinding,
 } from "questpie/adapters/cloudflare";
-import { S3Driver } from "flydrive/drivers/s3";
+import { s3 } from "files-sdk/s3";
 
 type CloudflareBindings = {
 	HYPERDRIVE: { connectionString: string };
@@ -141,7 +141,7 @@ export default runtimeConfig({
 		},
 	},
 	storage: {
-		driver: new S3Driver({
+		adapter: s3({
 			credentials: {
 				accessKeyId: process.env.R2_ACCESS_KEY_ID!,
 				secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
@@ -149,9 +149,9 @@ export default runtimeConfig({
 			bucket: process.env.R2_BUCKET!,
 			region: "auto",
 			endpoint: `https://${process.env.CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-			visibility: "public",
 			forcePathStyle: true,
 		}),
+		basePath: "/api",
 	},
 	kv: {
 		adapter: cloudflareKVAdapter({
@@ -238,7 +238,7 @@ CLOUDFLARE_ACCOUNT_ID = "..."
 R2_BUCKET = "my-questpie-assets"
 ```
 
-For R2 storage, configure FlyDrive `S3Driver` with the R2 endpoint and credentials. For KV, configure `cloudflareKVAdapter` with a Workers KV namespace binding.
+For R2 storage, configure the Files SDK S3 adapter with the R2 endpoint and credentials. For KV, configure `cloudflareKVAdapter` with a Workers KV namespace binding.
 
 For jobs, configure `cloudflareQueuesAdapter` with a Queues producer/consumer binding. For recurring jobs, add matching Cron Triggers and export `scheduled()` through `createCloudflareWorkerHandlers`. Do not configure `pgBossAdapter`, `pgNotifyAdapter`, or Redis Streams on Workers.
 
@@ -278,7 +278,7 @@ For CI, keep the migration connection string as a CI secret. Hyperdrive's runtim
 - Keep `job.options.cron` exactly equal to a `wrangler.toml` cron trigger when the job should run on Cloudflare.
 - For `@questpie/workflows`, add a Cron Trigger for `questpie-wf-maintenance`'s `*/5 * * * *` schedule. Workflow-level `cron` definitions are evaluated by that maintenance job.
 - Use Durable Objects for realtime. Do not configure `pgNotifyAdapter` or Redis Streams on Workers.
-- Use R2 through FlyDrive `S3Driver`.
+- Use R2 through the Files SDK S3 adapter.
 - Use an HTTP email adapter such as Resend or Plunk. SMTP is not supported on Workers.
 - Store secrets with `wrangler secret put`; keep only non-secret vars in `wrangler.toml`.
 - Keep the Durable Object class name stable after deployment; changing it requires a new Durable Object migration.
@@ -300,7 +300,7 @@ For CI, keep the migration connection string as a CI secret. Hyperdrive's runtim
 
 - [ ] Configure Hyperdrive for the origin PostgreSQL database
 - [ ] Set `QUESTPIE_CLI_DATABASE_URL` in CI for migrations
-- [ ] Configure R2 credentials for FlyDrive `S3Driver`
+- [ ] Configure R2 credentials for the Files SDK S3 adapter
 - [ ] Configure Workers KV, Cloudflare Queues, and Durable Object bindings
 - [ ] Add Durable Object migrations in `wrangler.toml`
 - [ ] Add Cron Triggers for every recurring QUESTPIE job

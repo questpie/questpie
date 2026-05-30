@@ -8,7 +8,8 @@ import {
 	createGlobalRoutes,
 	createRealtimeRoutes,
 	createSearchRoutes,
-	createStorageRoutes,
+	storageCollectionServe,
+	storageCollectionUpload,
 } from "./routes/index.js";
 import type { AdapterConfig, AdapterRoutes } from "./types.js";
 
@@ -23,14 +24,15 @@ export const createAdapterRoutes = (
 	const authRoute = createAuthRoute(app);
 	const collectionRoutes = createCollectionRoutes(app, config);
 	const globalRoutes = createGlobalRoutes(app, config);
-	const storageRoutes = createStorageRoutes(app, config);
 	const realtimeRoutes = createRealtimeRoutes(app, config);
 	const searchRoutes = createSearchRoutes(app, config);
 
 	return {
 		auth: authRoute,
-		collectionUpload: storageRoutes.collectionUpload,
-		collectionServe: storageRoutes.collectionServe,
+		collectionUpload: (request, params, context, file) =>
+			storageCollectionUpload(app, request, params, context, config, file),
+		collectionServe: (request, params, context) =>
+			storageCollectionServe(app, request, params, context, config),
 		realtime: realtimeRoutes,
 		collections: collectionRoutes,
 		globals: globalRoutes,

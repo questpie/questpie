@@ -82,7 +82,7 @@ export type {
 
 import type { BetterAuthOptions } from "better-auth";
 import type { PgDatabase } from "drizzle-orm/pg-core";
-import type { DriverContract } from "flydrive/types";
+import type { Adapter, Files } from "files-sdk";
 
 import type { Migration } from "../migration/types.js";
 import type { MailerConfig } from "../modules/core/integrated/mailer/types.js";
@@ -280,6 +280,8 @@ export type AccessMode = "user" | "system";
 
 export type StorageVisibility = "public" | "private";
 
+type IsAny<T> = 0 extends 1 & T ? true : false;
+
 /**
  * Base storage options shared by all storage configurations.
  */
@@ -303,11 +305,17 @@ export interface StorageBaseConfig {
 	 * @default "/"
 	 */
 	basePath?: string;
+
+	/** Disallow the removed storage registration shape. */
+	driver?: never;
+
+	/** Disallow the removed storage registration shape. */
+	files?: never;
 }
 
 /**
  * Local filesystem storage configuration.
- * QUESTPIE creates FSDriver and serves files at `/storage/files/:key`.
+ * QUESTPIE creates a Files SDK filesystem adapter and serves upload collection files at `/:collection/files/:key`.
  */
 export interface StorageLocalConfig extends StorageBaseConfig {
 	/**
@@ -319,31 +327,49 @@ export interface StorageLocalConfig extends StorageBaseConfig {
 	 * @default "./uploads"
 	 */
 	location?: string;
-	driver?: never;
+	adapter?: never;
 }
 
 /**
- * Custom driver storage configuration (S3, R2, GCS, etc.).
- * Cloud providers serve files directly - no local file serving.
+ * Files SDK adapter-first storage configuration.
  */
-export interface StorageDriverConfig extends StorageBaseConfig {
+export interface StorageAdapterConfig<
+	TAdapter extends Adapter = Adapter,
+> extends StorageBaseConfig {
 	/**
-	 * Custom FlyDrive driver instance.
+	 * Files SDK adapter used to construct QUESTPIE's direct `Files` instance.
 	 *
 	 * @example
 	 * ```ts
-	 * import { S3Driver } from "flydrive/drivers/s3";
-	 * storage: { driver: new S3Driver({ ... }) }
+	 * import { s3 } from "files-sdk/s3";
+	 *
+	 * storage: { adapter: s3({ bucket: "uploads" }) }
 	 * ```
 	 */
-	driver: DriverContract;
+	adapter: TAdapter;
 	location?: never;
 }
 
 /**
- * Storage configuration - either local filesystem or custom driver.
+ * Storage configuration - local filesystem or Files SDK adapter.
  */
-export type StorageConfig = StorageLocalConfig | StorageDriverConfig;
+export type StorageConfig<TAdapter extends Adapter = Adapter> =
+	| StorageLocalConfig
+	| StorageAdapterConfig<TAdapter>;
+
+export type StorageAdapterFromConfig<TStorage> =
+	NonNullable<TStorage> extends { adapter: infer TAdapter extends Adapter }
+		? TAdapter
+		: Adapter;
+
+export type StorageFromQuestpieConfig<TConfig> =
+	IsAny<TConfig> extends true
+		? any
+		: Files<
+				StorageAdapterFromConfig<
+					TConfig extends { storage?: infer TStorage } ? TStorage : undefined
+				>
+			>;
 
 export type DbCloseFn = () => void | Promise<void>;
 

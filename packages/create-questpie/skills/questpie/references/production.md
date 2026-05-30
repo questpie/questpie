@@ -1,7 +1,7 @@
 ---
 name: questpie-core/production
 description:
-  QUESTPIE production deployment authentication better-auth OAuth database PostgreSQL Drizzle storage S3 Flydrive queue pg-boss jobs realtime SSE pgNotify Redis migrations email SMTP KV key-value logger Pino OpenAPI Docker environment variables adapters infrastructure
+  QUESTPIE production deployment authentication better-auth OAuth database PostgreSQL Drizzle storage S3 Files SDK queue pg-boss jobs realtime SSE pgNotify Redis migrations email SMTP KV key-value logger Pino OpenAPI Docker environment variables adapters infrastructure
   - questpie-core
 ---
 
@@ -121,7 +121,7 @@ Configure migration and seed directories in `questpie.config.ts` under `cli.migr
 
 ## Storage
 
-QUESTPIE uses [Flydrive](https://flydrive.dev/) for file storage.
+QUESTPIE uses [Files SDK](https://files-sdk.dev/) for file storage.
 
 ### Local (Development Default)
 
@@ -136,16 +136,18 @@ export default runtimeConfig({
 ### S3 (Production)
 
 ```ts
-import { S3Driver } from "flydrive/drivers/s3";
+import { s3 } from "files-sdk/s3";
 
 export default runtimeConfig({
 	storage: {
 		basePath: "/api",
-		driver: new S3Driver({
+		adapter: s3({
 			bucket: process.env.S3_BUCKET,
 			region: process.env.S3_REGION,
-			accessKeyId: process.env.S3_ACCESS_KEY,
-			secretAccessKey: process.env.S3_SECRET_KEY,
+			credentials: {
+				accessKeyId: process.env.S3_ACCESS_KEY!,
+				secretAccessKey: process.env.S3_SECRET_KEY!,
+			},
 		}),
 	},
 });
@@ -466,15 +468,17 @@ The local storage adapter writes to the filesystem. In containerized deployments
 storage: { basePath: "/api" }
 
 // CORRECT -- persistent S3 storage
-import { S3Driver } from "flydrive/drivers/s3";
+import { s3 } from "files-sdk/s3";
 
 storage: {
   basePath: "/api",
-  driver: new S3Driver({
+  adapter: s3({
     bucket: process.env.S3_BUCKET,
     region: process.env.S3_REGION,
-    accessKeyId: process.env.S3_ACCESS_KEY,
-    secretAccessKey: process.env.S3_SECRET_KEY,
+    credentials: {
+      accessKeyId: process.env.S3_ACCESS_KEY!,
+      secretAccessKey: process.env.S3_SECRET_KEY!,
+    },
   }),
 }
 ```
