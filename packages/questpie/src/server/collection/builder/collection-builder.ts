@@ -790,10 +790,19 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 
 			let token: string | undefined;
 			if ((data.visibility || "public") === "private") {
-				const secret: string = app.config.secret || "questpie-default-secret";
+				const secret: string | undefined = app.config.secret;
+				if (!secret) {
+					data.url = undefined;
+					return;
+				}
 				const expiration: number =
 					app.config.storage?.signedUrlExpiration || 3600;
-				token = await generateSignedUrlToken(data.key, secret, expiration);
+				token = await generateSignedUrlToken(
+					data.key,
+					secret,
+					expiration,
+					collectionSlug,
+				);
 			}
 
 			data.url = buildStorageFileUrl(

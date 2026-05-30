@@ -643,7 +643,7 @@ export async function collectionAudit(
 					? { offset: Math.floor(offset) }
 					: {}),
 			},
-			{ ...resolved.appContext, accessMode: "system" },
+			resolved.appContext,
 		);
 		return smartResponse(result, request);
 	} catch (error) {

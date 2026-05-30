@@ -7,4 +7,9 @@ export default collection("verification")
 		value: f.text(255).required(),
 		expiresAt: f.datetime().required(),
 	}))
+	.access({
+		fields: {
+			value: { read: false, create: false, update: false },
+		},
+	})
 	.title(({ f }) => f.identifier);

@@ -14,7 +14,7 @@
 			"dependsOn": ["^check-types"]
 		},
 		"test": {
-			"dependsOn": ["^build"],
+			"dependsOn": ["^build", "build"],
 			"cache": false,
 			"env": ["QUESTPIE_MIGRATIONS_SILENT"]
 		},

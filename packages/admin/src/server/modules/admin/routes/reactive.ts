@@ -347,7 +347,8 @@ function getReactiveHandler(
 	type: "collection" | "global" = "collection",
 ): ((ctx: ReactiveContext) => any) | null {
 	const entity = getEntity(app, entityName, type);
-	const formConfig = (entity.state as unknown as Record<string, unknown>).adminForm;
+	const formConfig = (entity.state as unknown as Record<string, unknown>)
+		.adminForm;
 
 	const fieldEntry = findReactiveFieldEntry(formConfig, fieldPath);
 	if (!fieldEntry) {
@@ -380,9 +381,7 @@ function getReactiveHandler(
  * Coerce a `function | { handler }` config-like value to the underlying
  * handler function. Returns `null` for static values.
  */
-function unwrapHandler(
-	value: unknown,
-): ((ctx: ReactiveContext) => any) | null {
+function unwrapHandler(value: unknown): ((ctx: ReactiveContext) => any) | null {
 	if (typeof value === "function") {
 		return value as (ctx: ReactiveContext) => any;
 	}
@@ -429,7 +428,9 @@ function getReactivePropHandler(
 	}
 
 	// 2. Field-level — `f.<x>().admin({ [propPath]: ... })` default.
-	let fieldDef: { _state?: { extensions?: { admin?: Record<string, unknown> } } };
+	let fieldDef: {
+		_state?: { extensions?: { admin?: Record<string, unknown> } };
+	};
 	try {
 		fieldDef = getFieldDefinition(app, entityName, fieldPath, type);
 	} catch {
@@ -595,6 +596,7 @@ const optionsOutputSchema = z.object({
  */
 export const batchReactive = route()
 	.post()
+	.access((ctx) => !!(ctx as { session?: unknown }).session)
 	.schema(batchReactiveInputSchema)
 	.outputSchema(batchReactiveOutputSchema)
 	.handler(async (ctx) => {
@@ -715,6 +717,7 @@ export const batchReactive = route()
  */
 export const fieldOptions = route()
 	.post()
+	.access((ctx) => !!(ctx as { session?: unknown }).session)
 	.schema(optionsInputSchema)
 	.outputSchema(optionsOutputSchema)
 	.handler(async (ctx) => {

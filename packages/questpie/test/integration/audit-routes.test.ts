@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
-import { createFetchHandler } from "../../src/server/adapters/http.js";
 import { collection, global } from "../../src/exports/index.js";
+import { createFetchHandler } from "../../src/server/adapters/http.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 import { createTestContext } from "../utils/test-context";
 import { runTestDbMigrations } from "../utils/test-db";
@@ -55,6 +55,23 @@ const adminAuditLog = collection("admin_audit_log").fields(({ f }) => ({
 	metadata: f.json(),
 	title: f.text(),
 }));
+
+const unreadableAdminAuditLog = adminAuditLog.access({
+	read: false,
+	create: false,
+	update: false,
+	delete: false,
+});
+
+const redactedAdminAuditLog = adminAuditLog.access({
+	read: true,
+	create: false,
+	update: false,
+	delete: false,
+	fields: {
+		changes: { read: false },
+	},
+});
 
 describe("audit routes", () => {
 	let setup: Awaited<ReturnType<typeof buildMockApp>>;
@@ -275,6 +292,90 @@ describe("audit routes", () => {
 				await privateSetup.cleanup();
 			}
 		});
+
+		it("does not expose audit entries when audit log read access denies the caller", async () => {
+			const unreadableSetup = await buildMockApp({
+				collections: {
+					posts,
+					admin_audit_log: unreadableAdminAuditLog,
+				},
+				defaultAccess: { read: true, create: true, update: true, delete: true },
+			});
+			await runTestDbMigrations(unreadableSetup.app);
+
+			try {
+				const handler = createFetchHandler(unreadableSetup.app);
+				const systemCtx = createTestContext({ accessMode: "system" });
+				const post = await unreadableSetup.app.collections.posts.create(
+					{ title: "Audited Post" },
+					systemCtx,
+				);
+
+				await (unreadableSetup.app as any).collections.admin_audit_log.create(
+					{
+						action: "create",
+						resourceType: "collection",
+						resource: "posts",
+						resourceId: post.id,
+						title: "Created audited post",
+					},
+					systemCtx,
+				);
+
+				const response = await handler(
+					new Request(`http://localhost/posts/${post.id}/audit`),
+				);
+
+				expect(response?.status).toBe(403);
+			} finally {
+				await unreadableSetup.cleanup();
+			}
+		});
+
+		it("redacts read-restricted audit log fields", async () => {
+			const redactedSetup = await buildMockApp({
+				collections: {
+					posts,
+					admin_audit_log: redactedAdminAuditLog,
+				},
+				defaultAccess: { read: true, create: true, update: true, delete: true },
+			});
+			await runTestDbMigrations(redactedSetup.app);
+
+			try {
+				const handler = createFetchHandler(redactedSetup.app);
+				const systemCtx = createTestContext({ accessMode: "system" });
+				const post = await redactedSetup.app.collections.posts.create(
+					{ title: "Audited Post" },
+					systemCtx,
+				);
+
+				await (redactedSetup.app as any).collections.admin_audit_log.create(
+					{
+						action: "update",
+						resourceType: "collection",
+						resource: "posts",
+						resourceId: post.id,
+						title: "Updated audited post",
+						changes: { title: { from: "Old", to: "New" } },
+					},
+					systemCtx,
+				);
+
+				const response = await handler(
+					new Request(`http://localhost/posts/${post.id}/audit`),
+				);
+
+				expect(response?.status).toBe(200);
+				const body = (await response?.json()) as any;
+				const docs = body.docs ?? body;
+				expect(docs).toHaveLength(1);
+				expect(docs[0].title).toBe("Updated audited post");
+				expect(docs[0].changes).toBeUndefined();
+			} finally {
+				await redactedSetup.cleanup();
+			}
+		});
 	});
 
 	describe("global audit endpoint", () => {
@@ -401,6 +502,42 @@ describe("audit routes", () => {
 				expect(response?.status).toBe(403);
 			} finally {
 				await privateSetup.cleanup();
+			}
+		});
+
+		it("does not expose global audit entries when audit log read access denies the caller", async () => {
+			const unreadableSetup = await buildMockApp({
+				collections: { admin_audit_log: unreadableAdminAuditLog },
+				globals: { settings },
+				defaultAccess: { read: true, create: true, update: true, delete: true },
+			});
+			await runTestDbMigrations(unreadableSetup.app);
+
+			try {
+				const handler = createFetchHandler(unreadableSetup.app);
+				const systemCtx = createTestContext({ accessMode: "system" });
+
+				await unreadableSetup.app.globals.settings.update(
+					{ siteName: "Audited Settings" },
+					systemCtx,
+				);
+				await (unreadableSetup.app as any).collections.admin_audit_log.create(
+					{
+						action: "update",
+						resourceType: "global",
+						resource: "settings",
+						title: "Updated settings",
+					},
+					systemCtx,
+				);
+
+				const response = await handler(
+					new Request("http://localhost/globals/settings/audit"),
+				);
+
+				expect(response?.status).toBe(403);
+			} finally {
+				await unreadableSetup.cleanup();
 			}
 		});
 	});

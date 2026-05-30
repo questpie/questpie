@@ -1,6 +1,7 @@
 export interface SignedUrlPayload {
 	key: string;
 	expires: number;
+	collection?: string;
 }
 
 /**
@@ -48,9 +49,14 @@ export async function generateSignedUrlToken(
 	key: string,
 	secret: string,
 	expirationSeconds: number,
+	collection?: string,
 ): Promise<string> {
 	const expires = Math.floor(Date.now() / 1000) + expirationSeconds;
-	const payload: SignedUrlPayload = { key, expires };
+	const payload: SignedUrlPayload = {
+		key,
+		expires,
+		...(collection ? { collection } : {}),
+	};
 	const payloadStr = JSON.stringify(payload);
 	const signature = await generateSignature(payloadStr, secret);
 
@@ -69,15 +75,20 @@ export async function generateSignedUrlToken(
 export async function verifySignedUrlToken(
 	token: string,
 	secret: string,
+	expectedCollection?: string,
 ): Promise<SignedUrlPayload | null> {
 	try {
 		// Restore base64 padding
 		const padded = token.replace(/-/g, "+").replace(/_/g, "/");
 		const decoded = JSON.parse(atob(padded));
 
-		const { key, expires, sig } = decoded;
+		const { key, expires, collection, sig } = decoded;
 
 		if (!key || !expires || !sig) {
+			return null;
+		}
+
+		if (expectedCollection && collection !== expectedCollection) {
 			return null;
 		}
 
@@ -88,7 +99,11 @@ export async function verifySignedUrlToken(
 		}
 
 		// Verify signature
-		const payload: SignedUrlPayload = { key, expires };
+		const payload: SignedUrlPayload = {
+			key,
+			expires,
+			...(collection ? { collection } : {}),
+		};
 		const payloadStr = JSON.stringify(payload);
 		const isValid = await verifySignature(payloadStr, sig, secret);
 
