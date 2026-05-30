@@ -43,6 +43,13 @@ export interface RedisKVAdapterOptions {
 	 * @default 100
 	 */
 	scanCount?: number;
+	/**
+	 * Allow clear() to call Redis FLUSHDB when no keyPrefix is configured.
+	 * Disabled by default so a shared Redis database is not wiped by accident.
+	 *
+	 * @default false
+	 */
+	allowFlushDb?: boolean;
 }
 
 /**
@@ -54,12 +61,14 @@ export class RedisKVAdapter implements KVAdapter {
 	private readonly keyPrefix: string;
 	private readonly tagIndexPrefix: string;
 	private readonly scanCount: number;
+	private readonly allowFlushDb: boolean;
 
 	constructor(options: RedisKVAdapterOptions) {
 		this.clientInput = options.client;
 		this.keyPrefix = options.keyPrefix ?? "";
 		this.tagIndexPrefix = options.tagIndexPrefix ?? "__questpie_tag:";
 		this.scanCount = options.scanCount ?? 100;
+		this.allowFlushDb = options.allowFlushDb === true;
 	}
 
 	async get<T = unknown>(key: string): Promise<T | null> {
@@ -121,7 +130,7 @@ export class RedisKVAdapter implements KVAdapter {
 
 	async clear(): Promise<void> {
 		const client = await this.getClient();
-		if (!this.keyPrefix && client.flushDb) {
+		if (!this.keyPrefix && this.allowFlushDb && client.flushDb) {
 			await client.flushDb();
 			return;
 		}

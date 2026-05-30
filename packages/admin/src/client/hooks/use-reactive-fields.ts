@@ -77,6 +77,12 @@ export interface UseReactiveFieldsResult {
 
 type ReactiveType = "hidden" | "readOnly" | "disabled" | "compute";
 
+const EMPTY_REACTIVE_FIELD_STATE: ReactiveFieldState = {};
+
+const ReactiveFieldStatesContext = React.createContext<
+	Record<string, ReactiveFieldState>
+>({});
+
 type ReactiveRequestDescriptor = {
 	field: string;
 	type: ReactiveType;
@@ -190,6 +196,36 @@ function getChangedDeps(
 	}
 
 	return changed;
+}
+
+export function mergeReactiveFieldState(
+	base: ReactiveFieldState,
+	reactive: ReactiveFieldState | undefined,
+): ReactiveFieldState {
+	return {
+		hidden: base.hidden === true || reactive?.hidden === true,
+		readOnly: base.readOnly === true || reactive?.readOnly === true,
+		disabled: base.disabled === true || reactive?.disabled === true,
+	};
+}
+
+export function ReactiveFieldStatesProvider({
+	fieldStates,
+	children,
+}: {
+	fieldStates: Record<string, ReactiveFieldState>;
+	children: React.ReactNode;
+}) {
+	return React.createElement(
+		ReactiveFieldStatesContext.Provider,
+		{ value: fieldStates },
+		children,
+	);
+}
+
+export function useReactiveFieldState(fieldPath: string): ReactiveFieldState {
+	const fieldStates = React.useContext(ReactiveFieldStatesContext);
+	return fieldStates[fieldPath] ?? EMPTY_REACTIVE_FIELD_STATE;
 }
 
 // ============================================================================

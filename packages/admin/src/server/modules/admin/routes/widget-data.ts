@@ -5,7 +5,7 @@
  * Called by the client when a widget has `hasLoader: true`.
  */
 
-import { ApiError, route, tryGetContext } from "questpie";
+import { ApiError, route, runWithContext, tryGetContext } from "questpie";
 import { z } from "zod";
 
 import type { ServerDashboardItem } from "../../../augmentation.js";
@@ -75,8 +75,11 @@ export const fetchWidgetData = route()
 	.handler(async (ctx) => {
 		// Access dashboard config from the app's internal state
 		const stored = tryGetContext();
-		const appState = ((stored?.app as Record<string, any>)?.state ||
-			{}) as Record<string, any>;
+		const routeApp = (ctx as { app?: unknown }).app ?? stored?.app;
+		const appState = ((routeApp as Record<string, any>)?.state || {}) as Record<
+			string,
+			any
+		>;
 		const dashboard = appState.config?.admin?.dashboard ?? appState.dashboard;
 
 		if (!dashboard?.items) {
@@ -111,8 +114,19 @@ export const fetchWidgetData = route()
 			}
 		}
 
-		// Execute loader with server context
-		return widget.loader(widgetCtx);
+		// Execute loader inside an explicit user-mode context so nested CRUD calls
+		// inherit the admin caller session even when the route handler is invoked
+		// directly in tests or non-HTTP environments.
+		return runWithContext(
+			{
+				app: routeApp,
+				db: (ctx as { db?: unknown }).db,
+				session: (ctx as { session?: unknown }).session,
+				locale: (ctx as { locale?: string }).locale,
+				accessMode: "user",
+			},
+			() => widget.loader(widgetCtx),
+		);
 	});
 
 // ============================================================================

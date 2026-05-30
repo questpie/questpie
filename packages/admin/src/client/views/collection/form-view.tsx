@@ -68,8 +68,8 @@ import {
 	useSearchParamToggle,
 	useSidebarSearchParam,
 } from "../../hooks";
-import { useAdminConfig } from "../../hooks/use-admin-config";
 import { adminCollectionKey } from "../../hooks/query-access";
+import { useAdminConfig } from "../../hooks/use-admin-config";
 import {
 	useCollectionCreate,
 	useCollectionDelete,
@@ -81,7 +81,10 @@ import {
 } from "../../hooks/use-collection";
 import { useCollectionFields } from "../../hooks/use-collection-fields";
 import { getLockUser, useLock } from "../../hooks/use-locks";
-import { useReactiveFields } from "../../hooks/use-reactive-fields";
+import {
+	ReactiveFieldStatesProvider,
+	useReactiveFields,
+} from "../../hooks/use-reactive-fields";
 import { useServerActions } from "../../hooks/use-server-actions";
 import { useTransitionStage } from "../../hooks/use-transition-stage";
 import { useResolveText, useTranslation } from "../../i18n/hooks";
@@ -275,17 +278,19 @@ function ReactiveFieldsManager({
 	mode = "collection",
 	reactiveConfigs,
 	enabled,
+	children,
 }: {
 	collection: string;
 	mode?: "collection" | "global";
 	reactiveConfigs: Record<string, FieldReactiveSchema>;
 	enabled: boolean;
+	children: React.ReactNode;
 }) {
 	// This hook handles:
 	// 1. Watching form values for changes to reactive dependencies
 	// 2. Calling server /reactive endpoint to execute handlers
 	// 3. Setting computed values via form.setValue
-	useReactiveFields({
+	const { fieldStates } = useReactiveFields({
 		collection,
 		mode,
 		reactiveConfigs,
@@ -293,7 +298,11 @@ function ReactiveFieldsManager({
 		debounce: 300,
 	});
 
-	return null;
+	return (
+		<ReactiveFieldStatesProvider fieldStates={fieldStates}>
+			{children}
+		</ReactiveFieldStatesProvider>
+	);
 }
 
 type FormFieldsContentProps = {
@@ -2150,278 +2159,285 @@ export default function FormView({
 					collection={collection}
 					reactiveConfigs={reactiveConfigs}
 					enabled={!isBlocked && !isMutationPending}
-				/>
-				<RenderProfiler id={`form.shell.${collection}`} minDurationMs={12}>
-					<form
-						ref={formElementRef}
-						onSubmit={(e) => {
-							e.stopPropagation();
-							if (isBlocked) {
-								e.preventDefault();
-								toast.error(t("lock.cannotSave"));
-								return;
-							}
-							form.handleSubmit(onSubmit, (errors) => {
-								console.warn("[FormView] Validation errors:", errors);
-								toast.error(t("toast.validationFailed"), {
-									description: t("toast.validationDescription"),
-								});
-							})(e);
-						}}
-						className="qa-form-view__form space-y-4"
-					>
-						<AdminViewHeader
-							className="qa-form-view__header"
-							title={title}
-							titleAccessory={
-								<>
-									{localeOptions.length > 0 && (
-										<LocaleSwitcher
-											locales={localeOptions}
-											value={contentLocale}
-											onChange={setContentLocale}
-										/>
-									)}
-
-									{/* Autosave status indicator */}
-									<AutosaveIndicator
-										control={form.control}
-										enabled={autoSaveConfig.enabled}
-										indicator={autoSaveConfig.indicator}
-										isEditMode={isEditMode}
-										isSaving={isSaving}
-										lastSaved={lastSaved}
-										formatTimeAgo={formatTimeAgo}
-										t={t}
-									/>
-
-									{/* Workflow stage badge */}
-									{workflowEnabled && currentStage && (
-										<Badge variant="outline" className="gap-1.5">
-											<Icon icon="ph:git-branch" className="size-3" />
-											{currentStageLabel}
-										</Badge>
-									)}
-								</>
-							}
-							meta={
-								showMeta && item ? (
+				>
+					<RenderProfiler id={`form.shell.${collection}`} minDurationMs={12}>
+						<form
+							ref={formElementRef}
+							onSubmit={(e) => {
+								e.stopPropagation();
+								if (isBlocked) {
+									e.preventDefault();
+									toast.error(t("lock.cannotSave"));
+									return;
+								}
+								form.handleSubmit(onSubmit, (errors) => {
+									console.warn("[FormView] Validation errors:", errors);
+									toast.error(t("toast.validationFailed"), {
+										description: t("toast.validationDescription"),
+									});
+								})(e);
+							}}
+							className="qa-form-view__form space-y-4"
+						>
+							<AdminViewHeader
+								className="qa-form-view__header"
+								title={title}
+								titleAccessory={
 									<>
-										<span className="opacity-60">{t("form.id")}:</span>
-										<button
-											type="button"
-											className="hover:text-foreground cursor-pointer transition-colors"
-											onClick={() => {
-												navigator.clipboard.writeText(String(item.id)).then(
-													() => toast.success(t("toast.idCopied")),
-													() => toast.error(t("toast.copyFailed")),
-												);
-											}}
-											title={t("common.copy")}
-										>
-											{item.id}
-										</button>
-										{item.createdAt && (
-											<>
-												<span className="opacity-40">·</span>
-												<span>
-													<span className="opacity-60">
-														{t("form.created")}{" "}
-													</span>
-													{formatDate(item.createdAt)}
-												</span>
-											</>
+										{localeOptions.length > 0 && (
+											<LocaleSwitcher
+												locales={localeOptions}
+												value={contentLocale}
+												onChange={setContentLocale}
+											/>
 										)}
-										{item.updatedAt && (
-											<>
-												<span className="opacity-40">·</span>
-												<span>
-													<span className="opacity-60">
-														{t("form.updated")}{" "}
-													</span>
-													{formatDate(item.updatedAt)}
-												</span>
-											</>
+
+										{/* Autosave status indicator */}
+										<AutosaveIndicator
+											control={form.control}
+											enabled={autoSaveConfig.enabled}
+											indicator={autoSaveConfig.indicator}
+											isEditMode={isEditMode}
+											isSaving={isSaving}
+											lastSaved={lastSaved}
+											formatTimeAgo={formatTimeAgo}
+											t={t}
+										/>
+
+										{/* Workflow stage badge */}
+										{workflowEnabled && currentStage && (
+											<Badge variant="outline" className="gap-1.5">
+												<Icon icon="ph:git-branch" className="size-3" />
+												{currentStageLabel}
+											</Badge>
 										)}
 									</>
-								) : undefined
-							}
-							actions={
-								<>
-									{headerActions}
+								}
+								meta={
+									showMeta && item ? (
+										<>
+											<span className="opacity-60">{t("form.id")}:</span>
+											<button
+												type="button"
+												className="hover:text-foreground cursor-pointer transition-colors"
+												onClick={() => {
+													navigator.clipboard.writeText(String(item.id)).then(
+														() => toast.success(t("toast.idCopied")),
+														() => toast.error(t("toast.copyFailed")),
+													);
+												}}
+												title={t("common.copy")}
+											>
+												{item.id}
+											</button>
+											{item.createdAt && (
+												<>
+													<span className="opacity-40">·</span>
+													<span>
+														<span className="opacity-60">
+															{t("form.created")}{" "}
+														</span>
+														{formatDate(item.createdAt)}
+													</span>
+												</>
+											)}
+											{item.updatedAt && (
+												<>
+													<span className="opacity-40">·</span>
+													<span>
+														<span className="opacity-60">
+															{t("form.updated")}{" "}
+														</span>
+														{formatDate(item.updatedAt)}
+													</span>
+												</>
+											)}
+										</>
+									) : undefined
+								}
+								actions={
+									<>
+										{headerActions}
 
-									{/* Live Preview button */}
-									{canUseLivePreview && (
-										<Button
-											type="button"
-											variant="outline"
-											size="icon-sm"
-											onClick={() => setIsLivePreviewOpen(true)}
-											title={t("preview.livePreview")}
-										>
-											<Icon icon="ph:eye" className="size-4" />
-											<span className="sr-only">
-												{t("preview.livePreview")}
-											</span>
-										</Button>
-									)}
+										{/* Live Preview button */}
+										{canUseLivePreview && (
+											<Button
+												type="button"
+												variant="outline"
+												size="icon-sm"
+												onClick={() => setIsLivePreviewOpen(true)}
+												title={t("preview.livePreview")}
+											>
+												<Icon icon="ph:eye" className="size-4" />
+												<span className="sr-only">
+													{t("preview.livePreview")}
+												</span>
+											</Button>
+										)}
 
-									{/* History button — only show when versioning is enabled */}
-									{isEditMode && id && schema?.options?.versioning && (
-										<Button
-											type="button"
-											variant="outline"
-											size="icon-sm"
-											onClick={() => setIsHistoryOpen(true)}
-											title={t("history.title")}
-										>
-											<Icon
-												icon="ph:clock-counter-clockwise"
-												className="size-4"
+										{/* History button — only show when versioning is enabled */}
+										{isEditMode && id && schema?.options?.versioning && (
+											<Button
+												type="button"
+												variant="outline"
+												size="icon-sm"
+												onClick={() => setIsHistoryOpen(true)}
+												title={t("history.title")}
+											>
+												<Icon
+													icon="ph:clock-counter-clockwise"
+													className="size-4"
+												/>
+												<span className="sr-only">{t("history.title")}</span>
+											</Button>
+										)}
+
+										{/* Workflow transition dropdown */}
+										{workflowEnabled &&
+											isEditMode &&
+											id &&
+											allowedTransitions.length > 0 && (
+												<DropdownMenu>
+													<DropdownMenuTrigger
+														render={workflowTransitionTriggerRender}
+													>
+														<Icon
+															icon="ph:arrows-left-right"
+															className="size-4"
+														/>
+														{t("workflow.transition")}
+													</DropdownMenuTrigger>
+													<DropdownMenuContent align="end">
+														{allowedTransitions.map((stage) => (
+															<DropdownMenuItem
+																key={stage.name}
+																onClick={() =>
+																	setTransitionTarget({
+																		name: stage.name,
+																		label: stage.label,
+																	})
+																}
+															>
+																<Icon
+																	icon="ph:arrow-right"
+																	className="mr-2 size-4"
+																/>
+																{stage.label || stage.name}
+															</DropdownMenuItem>
+														))}
+													</DropdownMenuContent>
+												</DropdownMenu>
+											)}
+
+										{/* Primary form actions as buttons */}
+										{visiblePrimaryActions.map((action) => (
+											<ActionButton
+												key={action.id}
+												action={action}
+												collection={collection}
+												helpers={actionHelpers}
+												size="sm"
+												onOpenDialog={(a) => setDialogAction(a)}
 											/>
-											<span className="sr-only">{t("history.title")}</span>
-										</Button>
-									)}
+										))}
 
-									{/* Workflow transition dropdown */}
-									{workflowEnabled &&
-										isEditMode &&
-										id &&
-										allowedTransitions.length > 0 && (
+										{/* Save button */}
+										<SaveSubmitButton
+											control={form.control}
+											isMutationPending={isMutationPending}
+											t={t}
+										/>
+
+										{/* Secondary form actions in dropdown */}
+										{visibleSecondaryActions.length > 0 && (
 											<DropdownMenu>
 												<DropdownMenuTrigger
-													render={workflowTransitionTriggerRender}
+													render={secondaryActionsTriggerRender}
 												>
 													<Icon
-														icon="ph:arrows-left-right"
+														icon="ph:dots-three-vertical"
 														className="size-4"
 													/>
-													{t("workflow.transition")}
+													<span className="sr-only">
+														{t("common.moreActions")}
+													</span>
 												</DropdownMenuTrigger>
 												<DropdownMenuContent align="end">
-													{allowedTransitions.map((stage) => (
-														<DropdownMenuItem
-															key={stage.name}
-															onClick={() =>
-																setTransitionTarget({
-																	name: stage.name,
-																	label: stage.label,
-																})
-															}
-														>
-															<Icon
-																icon="ph:arrow-right"
-																className="mr-2 size-4"
-															/>
-															{stage.label || stage.name}
-														</DropdownMenuItem>
-													))}
+													{regularSecondary.map((action) => {
+														const iconElement = resolveIconElement(
+															action.icon,
+															{
+																className: "mr-2 size-4",
+															},
+														);
+														return (
+															<DropdownMenuItem
+																key={action.id}
+																onClick={() => handleActionClick(action)}
+																disabled={actionLoading}
+															>
+																{iconElement}
+																{resolveText(action.label)}
+															</DropdownMenuItem>
+														);
+													})}
+
+													{regularSecondary.length > 0 &&
+														destructiveSecondary.length > 0 && (
+															<DropdownMenuSeparator />
+														)}
+
+													{destructiveSecondary.map((action) => {
+														const iconElement = resolveIconElement(
+															action.icon,
+															{
+																className: "mr-2 size-4",
+															},
+														);
+														return (
+															<DropdownMenuItem
+																key={action.id}
+																variant="destructive"
+																onClick={() => handleActionClick(action)}
+																disabled={actionLoading}
+															>
+																{iconElement}
+																{resolveText(action.label)}
+															</DropdownMenuItem>
+														);
+													})}
 												</DropdownMenuContent>
 											</DropdownMenu>
 										)}
+									</>
+								}
+							/>
 
-									{/* Primary form actions as buttons */}
-									{visiblePrimaryActions.map((action) => (
-										<ActionButton
-											key={action.id}
-											action={action}
-											collection={collection}
-											helpers={actionHelpers}
-											size="sm"
-											onOpenDialog={(a) => setDialogAction(a)}
-										/>
-									))}
+							{/* Soft-deleted banner */}
+							{item?.deletedAt && (
+								<div className="qa-form-view__deleted-banner border-destructive/30 bg-destructive/5 text-destructive flex items-center gap-2 border px-4 py-3 text-sm">
+									<Icon icon="ph:trash" className="size-4 shrink-0" />
+									<span>
+										{t("form.deletedBanner", {
+											date: formatDate(item.deletedAt),
+											defaultValue: `This record was deleted on ${formatDate(item.deletedAt)}. Use the Restore action to make it active again.`,
+										})}
+									</span>
+								</div>
+							)}
 
-									{/* Save button */}
-									<SaveSubmitButton
-										control={form.control}
-										isMutationPending={isMutationPending}
-										t={t}
-									/>
-
-									{/* Secondary form actions in dropdown */}
-									{visibleSecondaryActions.length > 0 && (
-										<DropdownMenu>
-											<DropdownMenuTrigger
-												render={secondaryActionsTriggerRender}
-											>
-												<Icon
-													icon="ph:dots-three-vertical"
-													className="size-4"
-												/>
-												<span className="sr-only">
-													{t("common.moreActions")}
-												</span>
-											</DropdownMenuTrigger>
-											<DropdownMenuContent align="end">
-												{regularSecondary.map((action) => {
-													const iconElement = resolveIconElement(action.icon, {
-														className: "mr-2 size-4",
-													});
-													return (
-														<DropdownMenuItem
-															key={action.id}
-															onClick={() => handleActionClick(action)}
-															disabled={actionLoading}
-														>
-															{iconElement}
-															{resolveText(action.label)}
-														</DropdownMenuItem>
-													);
-												})}
-
-												{regularSecondary.length > 0 &&
-													destructiveSecondary.length > 0 && (
-														<DropdownMenuSeparator />
-													)}
-
-												{destructiveSecondary.map((action) => {
-													const iconElement = resolveIconElement(action.icon, {
-														className: "mr-2 size-4",
-													});
-													return (
-														<DropdownMenuItem
-															key={action.id}
-															variant="destructive"
-															onClick={() => handleActionClick(action)}
-															disabled={actionLoading}
-														>
-															{iconElement}
-															{resolveText(action.label)}
-														</DropdownMenuItem>
-													);
-												})}
-											</DropdownMenuContent>
-										</DropdownMenu>
-									)}
-								</>
-							}
-						/>
-
-						{/* Soft-deleted banner */}
-						{item?.deletedAt && (
-							<div className="qa-form-view__deleted-banner border-destructive/30 bg-destructive/5 text-destructive flex items-center gap-2 border px-4 py-3 text-sm">
-								<Icon icon="ph:trash" className="size-4 shrink-0" />
-								<span>
-									{t("form.deletedBanner", {
-										date: formatDate(item.deletedAt),
-										defaultValue: `This record was deleted on ${formatDate(item.deletedAt)}. Use the Restore action to make it active again.`,
-									})}
-								</span>
-							</div>
-						)}
-
-						{/* Main Content - Form Fields */}
-						<FormFieldsContent
-							collection={collection}
-							config={formConfigBridge}
-							registry={registry}
-							allCollectionsConfig={allCollectionsConfig}
-							resolvedFields={resolvedFields as any}
-							schema={schema}
-						/>
-					</form>
-				</RenderProfiler>
+							{/* Main Content - Form Fields */}
+							<FormFieldsContent
+								collection={collection}
+								config={formConfigBridge}
+								registry={registry}
+								allCollectionsConfig={allCollectionsConfig}
+								resolvedFields={resolvedFields as any}
+								schema={schema}
+							/>
+						</form>
+					</RenderProfiler>
+				</ReactiveFieldsManager>
 			</FormProvider>
 
 			{/* Locale Change Confirmation Dialog */}

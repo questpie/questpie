@@ -109,6 +109,8 @@ Custom-loaded value with trend indicator:
 }
 ```
 
+Widget loaders run on the server from the authenticated admin request. Nested CRUD calls made by the loader inherit the caller context, so collection and field access rules still apply. Return only serializable data that is safe for the admin client; do not return secrets or server-only configuration.
+
 ### Progress
 
 Progress bar toward a goal:
