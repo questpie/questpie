@@ -359,7 +359,11 @@ export async function storageCollectionServe(
 					resolved.appContext.locale,
 				);
 			}
-			const payload = await verifySignedUrlToken(token, secret);
+			const payload = await verifySignedUrlToken(
+				token,
+				secret,
+				params.collection,
+			);
 
 			if (!payload) {
 				return errorResponse(
@@ -401,28 +405,39 @@ export async function storageCollectionServe(
 		// Sanitize filename to prevent header injection
 		const rawFilename = (record as any)?.filename;
 		const sanitizedFilename = rawFilename
-			? rawFilename.replace(/[\r\n"\\]/g, "_")
+			? Array.from(String(rawFilename), (char) => {
+					const code = char.charCodeAt(0);
+					return code < 32 || code === 127 || char === '"' || char === "\\"
+						? "_"
+						: char;
+				}).join("")
 			: null;
 
-		// Security headers for SVG files — prevent embedded script execution
-		const isSvg = contentType.includes("svg");
+		const normalizedContentType = contentType.toLowerCase();
+		const isActiveContent =
+			normalizedContentType.includes("text/html") ||
+			normalizedContentType.includes("application/xhtml+xml") ||
+			normalizedContentType.includes("image/svg+xml");
 		const recordSize = Number((record as any)?.size);
 		const metadataSize = Number(metadata.size);
 		const totalSize = Number.isFinite(metadataSize) ? metadataSize : recordSize;
 		const hasKnownSize = Number.isFinite(totalSize) && totalSize >= 0;
 		const commonHeaders = {
 			"Content-Type": contentType,
+			"X-Content-Type-Options": "nosniff",
 			"Accept-Ranges": "bytes",
 			"Cache-Control":
 				visibility === "public"
 					? "public, max-age=31536000, immutable"
 					: "private, no-cache",
-			...(isSvg && {
-				"Content-Security-Policy": "script-src 'none'",
+			...(isActiveContent && {
+				"Content-Security-Policy": "sandbox",
 			}),
 		};
 		const filenameHeaders = sanitizedFilename
-			? { "Content-Disposition": `inline; filename="${sanitizedFilename}"` }
+			? {
+					"Content-Disposition": `${isActiveContent ? "attachment" : "inline"}; filename="${sanitizedFilename}"`,
+				}
 			: {};
 
 		// HTTP Range request support (for video/audio seeking)

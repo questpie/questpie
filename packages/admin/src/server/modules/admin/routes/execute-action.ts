@@ -257,7 +257,8 @@ export async function executeAction(
 				success: false,
 				result: {
 					type: "error",
-					toast: { message: validationError },
+					toast: { message: validationError.message },
+					errors: validationError.errors,
 				},
 			};
 		}
@@ -656,7 +657,7 @@ async function executeBuiltinAction(
  */
 function isFieldDefinition(
 	field: ServerActionFormField,
-): field is { state: any; getMetadata(): any; toZodSchema(): unknown } {
+): field is { state: any; getMetadata(): any; toZodSchema(): z.ZodType } {
 	return (
 		typeof (field as unknown as Record<string, unknown>).getMetadata ===
 		"function"
@@ -673,6 +674,11 @@ function isFieldRequired(field: ServerActionFormField): boolean {
 	return !!field.required;
 }
 
+type ActionFormValidationError = {
+	message: string;
+	errors: Record<string, string>;
+};
+
 /**
  * Validate form data against action form fields.
  * Returns error message if validation fails, null if valid.
@@ -681,13 +687,30 @@ function validateActionFormData(
 	fields: Record<string, ServerActionFormField>,
 	data: Record<string, unknown>,
 	t: (key: string, params?: Record<string, unknown>) => string,
-): string | null {
+): ActionFormValidationError | null {
+	const errors: Record<string, string> = {};
+
 	for (const [fieldName, fieldConfig] of Object.entries(fields)) {
-		if (isFieldRequired(fieldConfig) && !data[fieldName]) {
-			return t("action.fieldRequired", { field: fieldName });
+		if (isFieldDefinition(fieldConfig)) {
+			const result = fieldConfig.toZodSchema().safeParse(data[fieldName]);
+			if (!result.success) {
+				errors[fieldName] =
+					result.error.issues[0]?.message ||
+					t("action.fieldRequired", { field: fieldName });
+			}
+			continue;
+		}
+
+		if (
+			isFieldRequired(fieldConfig) &&
+			(data[fieldName] === undefined || data[fieldName] === null)
+		) {
+			errors[fieldName] = t("action.fieldRequired", { field: fieldName });
 		}
 	}
-	return null;
+
+	const firstError = Object.values(errors)[0];
+	return firstError ? { message: firstError, errors } : null;
 }
 
 // ============================================================================
@@ -739,6 +762,7 @@ const getActionsConfigResponseSchema = z
  */
 export const executeActionFn = route()
 	.post()
+	.access((ctx) => !!(ctx as { session?: unknown }).session)
 	.schema(executeActionRequestSchema)
 	.outputSchema(executeActionResponseSchema)
 	.handler(async (ctx) => {
@@ -753,6 +777,7 @@ export const executeActionFn = route()
  */
 export const getActionsConfigFn = route()
 	.post()
+	.access((ctx) => !!(ctx as { session?: unknown }).session)
 	.schema(getActionsConfigRequestSchema)
 	.outputSchema(getActionsConfigResponseSchema)
 	.handler((ctx) => {

@@ -182,7 +182,10 @@ describe("collection upload URL generation", () => {
 	let app: (typeof setup)["app"];
 
 	beforeEach(async () => {
-		setup = await buildMockApp({ collections: { assets, services } });
+		setup = await buildMockApp(
+			{ collections: { assets, services } },
+			{ secret: "test-secret" },
+		);
 		app = setup.app;
 		await runTestDbMigrations(app);
 	});
@@ -453,6 +456,9 @@ describe("collection storage route streaming", () => {
 
 		const json = (await response!.json()) as any;
 		expect(json.filename).toBe("menu.pdf");
+		expect(json.key).toMatch(
+			/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+		);
 		expect(json.size).toBe(body.byteLength);
 		expect(storage.calls.upload).toBe(1);
 		expect(storage.calls.lastUploadOptions?.contentType).toBe(
@@ -461,6 +467,64 @@ describe("collection storage route streaming", () => {
 		expect(textDecoder.decode(storage.calls.lastUploadBody)).toBe(
 			"%PDF-1.4\nmenu",
 		);
+	});
+
+	it("sanitizes uploaded filenames and keeps storage keys path-safe", async () => {
+		const storage = createInstrumentedStorageAdapter();
+		setup = await buildMockApp(
+			{ collections: { assets } },
+			{ storage: { adapter: storage.adapter } },
+		);
+		app = setup.app;
+		await runTestDbMigrations(app);
+
+		const body = textEncoder.encode("avatar");
+		const uploaded = await (app.collections.assets as any).upload(
+			{
+				name: "../../../avatar.txt",
+				type: "text/plain",
+				size: body.byteLength,
+				arrayBuffer: async () =>
+					body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength),
+			},
+			createTestContext({ accessMode: "system" }),
+		);
+
+		expect(uploaded.filename).toBe("avatar.txt");
+		expect(uploaded.key).toMatch(
+			/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+		);
+		expect(storage.calls.lastKey).toBe(uploaded.key);
+		expect(storage.calls.lastKey).not.toContain("/");
+		expect(storage.calls.lastKey).not.toContain("..");
+	});
+
+	it("rejects dangerous double-extension uploads", async () => {
+		const storage = createInstrumentedStorageAdapter();
+		setup = await buildMockApp(
+			{ collections: { assets } },
+			{ storage: { adapter: storage.adapter } },
+		);
+		app = setup.app;
+		await runTestDbMigrations(app);
+
+		const body = textEncoder.encode("image");
+		await expect(
+			(app.collections.assets as any).upload(
+				{
+					name: "shell.php.jpg",
+					type: "image/jpeg",
+					size: body.byteLength,
+					arrayBuffer: async () =>
+						body.buffer.slice(
+							body.byteOffset,
+							body.byteOffset + body.byteLength,
+						),
+				},
+				createTestContext({ accessMode: "system" }),
+			),
+		).rejects.toThrow('File extension ".php" is not allowed');
+		expect(storage.calls.upload).toBe(0);
 	});
 
 	it("removes the stored object when upload row creation fails", async () => {
@@ -760,6 +824,7 @@ describe("collection storage route streaming", () => {
 		expect(full).not.toBeNull();
 		expect(full?.status).toBe(200);
 		expect(full?.headers.get("content-type")).toBe("text/plain");
+		expect(full?.headers.get("x-content-type-options")).toBe("nosniff");
 		expect(full?.headers.get("content-disposition")).toBe(
 			'inline; filename="file.txt"',
 		);
@@ -776,6 +841,7 @@ describe("collection storage route streaming", () => {
 		);
 		expect(range).not.toBeNull();
 		expect(range?.status).toBe(206);
+		expect(range?.headers.get("x-content-type-options")).toBe("nosniff");
 		expect(range?.headers.get("content-range")).toBe("bytes 2-4/6");
 		expect(range?.headers.get("content-length")).toBe("3");
 		expect(await range!.text()).toBe("cde");
@@ -923,6 +989,7 @@ describe("collection storage route streaming", () => {
 			"private-file.txt",
 			"test-secret",
 			60,
+			"assets",
 		);
 		const served = await handler(
 			new Request(

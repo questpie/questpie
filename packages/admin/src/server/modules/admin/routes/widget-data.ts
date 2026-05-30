@@ -18,14 +18,21 @@ import type { ServerDashboardItem } from "../../../augmentation.js";
  * Find a widget by ID in the dashboard tree (searches raw server config
  * which still has loader attached).
  */
-function findWidgetById(items: ServerDashboardItem[], id: string): Record<string, any> | null {
+function findWidgetById(
+	items: ServerDashboardItem[],
+	id: string,
+): Record<string, any> | null {
 	for (const item of items) {
 		const rec = item as unknown as Record<string, any>;
 		if (item.type === "section") {
-			const found = findWidgetById((rec.items as ServerDashboardItem[]) || [], id);
+			const found = findWidgetById(
+				(rec.items as ServerDashboardItem[]) || [],
+				id,
+			);
 			if (found) return found;
 		} else if (item.type === "tabs") {
-			for (const tab of (rec.tabs as Array<{ items: ServerDashboardItem[] }>) || []) {
+			for (const tab of (rec.tabs as Array<{ items: ServerDashboardItem[] }>) ||
+				[]) {
 				const found = findWidgetById(tab.items || [], id);
 				if (found) return found;
 			}
@@ -62,12 +69,14 @@ const fetchWidgetDataSchema = z.object({
  */
 export const fetchWidgetData = route()
 	.post()
+	.access((ctx) => !!(ctx as { session?: unknown }).session)
 	.schema(fetchWidgetDataSchema)
 	.outputSchema(z.unknown())
 	.handler(async (ctx) => {
 		// Access dashboard config from the app's internal state
 		const stored = tryGetContext();
-		const appState = ((stored?.app as Record<string, any>)?.state || {}) as Record<string, any>;
+		const appState = ((stored?.app as Record<string, any>)?.state ||
+			{}) as Record<string, any>;
 		const dashboard = appState.config?.admin?.dashboard ?? appState.dashboard;
 
 		if (!dashboard?.items) {

@@ -22,4 +22,9 @@ export default collection("apikey")
 		permissions: f.textarea(),
 		metadata: f.textarea(),
 	}))
-	.title(({ f }) => f.key);
+	.access({
+		fields: {
+			key: { read: false, create: false, update: false },
+		},
+	})
+	.title(({ f }) => f.name);

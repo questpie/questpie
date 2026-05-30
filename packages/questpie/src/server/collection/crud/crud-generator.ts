@@ -1599,10 +1599,11 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						this.createHookContext({
 							data: record,
 							operation: "create",
-							context,
+							context: normalized,
 							db,
 						}),
 					);
+					await this.filterFieldsForRead(record, normalized);
 					return record;
 				},
 			);
@@ -1942,6 +1943,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					db,
 				}),
 			);
+			await this.filterFieldsForRead(updated, normalized);
 		}
 
 		return isBatch ? updatedRecords : updatedRecords[0];
@@ -1961,7 +1963,8 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 	 */
 	private createDelete() {
 		return async (params: DeleteParams, context: CRUDContext = {}) => {
-			const db = this.getDb(context);
+			const normalized = this.normalizeContext(context);
+			const db = this.getDb(normalized);
 			const { id } = params;
 
 			// Execute beforeOperation hook
@@ -1970,7 +1973,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				this.createHookContext({
 					data: params,
 					operation: "delete",
-					context,
+					context: normalized,
 					db,
 				}),
 			);
@@ -1991,7 +1994,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			// Enforce access control
 			const canDelete = await this.enforceAccessControl(
 				"delete",
-				context,
+				normalized,
 				existing,
 				params,
 			);
@@ -2025,17 +2028,19 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					data: existing,
 					original: existing,
 					operation: "delete",
-					context,
+					context: normalized,
 					db,
 				}),
 			);
 
-			// Handle cascade operations BEFORE delete
-			await this.handleCascadeDeleteInternal(id, existing, context);
 			// Use transaction for delete + version
 			await withTransaction(db, async (tx: any) => {
+				const txContext = { ...normalized, db: tx };
+
+				await this.handleCascadeDeleteInternal(id, existing, txContext);
+
 				// Create version BEFORE delete
-				await this.createVersion(tx, existing, "delete", context);
+				await this.createVersion(tx, existing, "delete", txContext);
 
 				// Soft delete or hard delete
 				if (this.state.options.softDelete) {
@@ -2058,7 +2063,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 							data: existing,
 							original: existing,
 							operation: "delete",
-							context,
+							context: txContext,
 							db: tx,
 						}),
 					);
@@ -2080,10 +2085,11 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					data: existing,
 					original: existing,
 					operation: "delete",
-					context,
+					context: normalized,
 					db,
 				}),
 			);
+			await this.filterFieldsForRead(existing, normalized);
 
 			return result;
 		};
@@ -2098,7 +2104,8 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				throw ApiError.notImplemented("Soft delete");
 			}
 
-			const db = this.getDb(context);
+			const normalized = this.normalizeContext(context);
+			const db = this.getDb(normalized);
 			const { id } = params;
 
 			const existingRows = await db
@@ -2114,7 +2121,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 
 			const canUpdate = await this.enforceAccessControl(
 				"update",
-				context,
+				normalized,
 				existing,
 				{ deletedAt: null },
 			);
@@ -2140,6 +2147,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			}
 
 			if (!existing.deletedAt) {
+				await this.filterFieldsForRead(existing, normalized);
 				return existing;
 			}
 
@@ -2149,7 +2157,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					id,
 					data: { deletedAt: null } as Record<string, unknown>,
 				},
-				context,
+				normalized,
 			);
 		};
 	}
@@ -2218,11 +2226,12 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 	 */
 	private createDeleteMany() {
 		return async (params: { where: Where }, context: CRUDContext = {}) => {
-			const db = this.getDb(context);
+			const normalized = this.normalizeContext(context);
+			const db = this.getDb(normalized);
 			const find = this.createFind();
 
 			// 1. Find all matching records (for hooks and access control)
-			const { docs: records } = await find({ where: params.where }, context);
+			const { docs: records } = await find({ where: params.where }, normalized);
 
 			if (records.length === 0) {
 				return { success: true, count: 0 };
@@ -2241,7 +2250,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				// Check access control per record
 				const canDelete = await this.enforceAccessControl(
 					"delete",
-					context,
+					normalized,
 					record,
 					params,
 				);
@@ -2274,22 +2283,24 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						data: record,
 						original: record,
 						operation: "delete",
-						context,
+						context: normalized,
 						db,
 						bulk: deleteBulkMeta,
 					}),
 				);
-
-				// Handle cascade operations per record
-				await this.handleCascadeDeleteInternal(record.id, record, context);
 			}
 			// 3. Batched DELETE query
 			await withTransaction(db, async (tx: any) => {
+				const txContext = { ...normalized, db: tx };
 				const recordIds = records.map((r: any) => r.id);
+
+				for (const record of records) {
+					await this.handleCascadeDeleteInternal(record.id, record, txContext);
+				}
 
 				// Create versions BEFORE delete
 				for (const record of records) {
-					await this.createVersion(tx, record, "delete", context);
+					await this.createVersion(tx, record, "delete", txContext);
 				}
 
 				// Batched soft delete or hard delete
@@ -2316,7 +2327,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 							data: record,
 							original: record,
 							operation: "delete",
-							context,
+							context: normalized,
 							db,
 							bulk: deleteBulkMeta,
 						}),
@@ -2685,6 +2696,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				return result;
 			});
 
+			await this.filterFieldsForRead(updated, normalized);
 			return updated;
 		};
 	}
@@ -2798,6 +2810,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			} catch (err) {
 				if (err instanceof Error && err.name === "TransitionScheduledError") {
 					// Transition was scheduled for future execution — return record unchanged
+					await this.filterFieldsForRead(existing, normalized);
 					return existing;
 				}
 				throw err;
@@ -2833,6 +2846,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				}
 			});
 
+			await this.filterFieldsForRead(existing, normalized);
 			return existing;
 		};
 	}
@@ -3319,6 +3333,20 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 		return splitLocalizedFields(input, localizedFieldNames, nestedSchemas);
 	}
 
+	private sanitizeUploadFilename(name: string | undefined): string {
+		const basename = (name || "file").split(/[\\/]/).pop() || "file";
+		const cleaned = Array.from(basename, (char) => {
+			const code = char.charCodeAt(0);
+			return code < 32 || code === 127 || '"\\/:*?<>|'.includes(char)
+				? "_"
+				: char;
+		})
+			.join("")
+			.replace(/\s+/g, " ")
+			.trim();
+		return cleaned || "file";
+	}
+
 	/**
 	 * Create upload operation for collections with .upload() configured
 	 * Handles file upload to storage and creates a record with metadata
@@ -3371,15 +3399,19 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				".msi",
 				".dll",
 			];
-			const fileExt = file.name
-				? `.${file.name.split(".").pop()?.toLowerCase()}`
-				: "";
-			if (BLOCKED_EXTENSIONS.includes(fileExt)) {
+			const filenameParts = (file.name || "").toLowerCase().split(".");
+			const extensionParts =
+				filenameParts.length > 1 ? filenameParts.slice(1) : filenameParts;
+			const blockedExt = extensionParts
+				.filter(Boolean)
+				.map((part) => `.${part}`)
+				.find((part) => BLOCKED_EXTENSIONS.includes(part));
+			if (blockedExt) {
 				throw ApiError.badRequest(
-					`File extension "${fileExt}" is not allowed`,
+					`File extension "${blockedExt}" is not allowed`,
 					undefined,
 					"upload.extensionNotAllowed",
-					{ extension: fileExt },
+					{ extension: blockedExt },
 				);
 			}
 
@@ -3405,7 +3437,8 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			}
 
 			// Generate unique storage key
-			const key = `${crypto.randomUUID()}-${file.name}`;
+			const sanitizedFilename = this.sanitizeUploadFilename(file.name);
+			const key = crypto.randomUUID();
 			const visibility: StorageVisibility =
 				uploadOptions.visibility || "public";
 
@@ -3418,13 +3451,13 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				// Streaming is more memory-efficient for large files
 				if (file.stream) {
 					await this.app.storage.upload(key, file.stream(), {
-						contentType: file.type,
+						contentType: mimeType,
 					});
 				} else if (file.arrayBuffer) {
 					// Fallback to buffer-based upload for files without stream support
 					const buffer = await file.arrayBuffer();
 					await this.app.storage.upload(key, new Uint8Array(buffer), {
-						contentType: file.type,
+						contentType: mimeType,
 					});
 				} else {
 					throw ApiError.badRequest(
@@ -3440,7 +3473,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				return await createFn(
 					{
 						key,
-						filename: file.name,
+						filename: sanitizedFilename,
 						mimeType,
 						size: file.size,
 						visibility,
@@ -3450,9 +3483,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				);
 			} catch (error) {
 				if (stored) {
-					await this.app.storage
-						.delete(key)
-						.catch(() => {});
+					await this.app.storage.delete(key).catch(() => {});
 				}
 				throw error;
 			}

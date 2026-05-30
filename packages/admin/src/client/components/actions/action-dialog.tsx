@@ -42,6 +42,10 @@ import {
 } from "../ui/responsive-dialog";
 import { Skeleton } from "../ui/skeleton";
 
+type ServerActionValidationErrorLike = Error & {
+	fieldErrors?: Record<string, string>;
+};
+
 interface ActionDialogProps<TItem = any> {
 	/** Whether the dialog is open */
 	open: boolean;
@@ -161,6 +165,14 @@ function FormDialogContent<TItem>({
 				return message || t("toast.actionSuccess");
 			},
 			error: (error) => {
+				const validationError = error as ServerActionValidationErrorLike;
+				if (validationError.fieldErrors) {
+					for (const [field, message] of Object.entries(
+						validationError.fieldErrors,
+					)) {
+						form.setError(field, { type: "server", message });
+					}
+				}
 				return error instanceof Error ? error.message : t("toast.actionFailed");
 			},
 			finally: () => {

@@ -369,8 +369,7 @@ function filterSidebarConfig(
 				.map(filterSection)
 				.filter(
 					(sub) =>
-						(sub.items?.length ?? 0) > 0 ||
-						(sub.sections?.length ?? 0) > 0,
+						(sub.items?.length ?? 0) > 0 || (sub.sections?.length ?? 0) > 0,
 				),
 		};
 	}
@@ -887,6 +886,7 @@ const getAdminConfigOutputSchema = adminConfigDTOSchema;
  */
 const getAdminConfig = route()
 	.post()
+	.access((ctx) => !!(ctx as { session?: unknown }).session)
 	.schema(getAdminConfigSchema)
 	.outputSchema(getAdminConfigOutputSchema)
 	.handler(async (ctx) => {
@@ -1037,8 +1037,7 @@ const getAdminConfig = route()
 				// Find non-hidden accessible items NOT referenced in the explicit sidebar
 				const unlistedCollectionsMeta = Object.fromEntries(
 					Object.entries(filteredCollectionsMeta).filter(
-						([name, meta]) =>
-							!referenced.collections.has(name) && !meta.hidden,
+						([name, meta]) => !referenced.collections.has(name) && !meta.hidden,
 					),
 				);
 				const unlistedGlobalsMeta = Object.fromEntries(
@@ -1078,8 +1077,12 @@ const getAdminConfig = route()
 			);
 		}
 
-		// 5. Blocks: unchanged (not access-controlled)
-		if (appState.blocks && Object.keys(appState.blocks).length > 0) {
+		// 5. Blocks
+		if (
+			accessCtx.session &&
+			appState.blocks &&
+			Object.keys(appState.blocks).length > 0
+		) {
 			response.blocks = introspectBlocks(
 				appState.blocks as Record<string, any>,
 			);

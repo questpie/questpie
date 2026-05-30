@@ -95,6 +95,38 @@ const comments = collection("comments").fields(({ f }) => ({
 		.hasMany({ foreignKey: "parent", relationName: "parent" }),
 }));
 
+const txParents = collection("tx_parents").fields(({ f }) => ({
+	name: f.text().required(),
+	children: f.relation("tx_children").hasMany({
+		foreignKey: "parent",
+		onDelete: "cascade",
+		relationName: "parent",
+	}),
+	blockers: f.relation("tx_blockers").hasMany({
+		foreignKey: "parent",
+		onDelete: "restrict",
+		relationName: "parent",
+	}),
+}));
+
+const txChildren = collection("tx_children").fields(({ f }) => ({
+	name: f.text().required(),
+	parent: f
+		.relation("tx_parents")
+		.required()
+		.onDelete("cascade")
+		.relationName("parent"),
+}));
+
+const txBlockers = collection("tx_blockers").fields(({ f }) => ({
+	name: f.text().required(),
+	parent: f
+		.relation("tx_parents")
+		.required()
+		.onDelete("restrict")
+		.relationName("parent"),
+}));
+
 // Products with restricted delete
 // NOTE: Collection name must match the key used in .collections({}) for relation lookups to work
 const restrictedCategories = collection("restrictedCategories").fields(
@@ -218,6 +250,9 @@ describe("collection relations", () => {
 				authors,
 				posts,
 				comments,
+				tx_parents: txParents,
+				tx_children: txChildren,
+				tx_blockers: txBlockers,
 				restrictedCategories,
 				restrictedProducts,
 				articles,
@@ -1126,6 +1161,46 @@ describe("collection relations", () => {
 			);
 
 			expect(remainingComment).toBeNull();
+		});
+
+		it("rolls back cascaded deletes when a later relation restricts parent delete", async () => {
+			const ctx = createTestContext();
+			const parent = await app.collections.tx_parents.create(
+				{ id: crypto.randomUUID(), name: "Parent" },
+				ctx,
+			);
+			const child = await app.collections.tx_children.create(
+				{
+					id: crypto.randomUUID(),
+					name: "Child",
+					parent: parent.id,
+				},
+				ctx,
+			);
+			await app.collections.tx_blockers.create(
+				{
+					id: crypto.randomUUID(),
+					name: "Blocker",
+					parent: parent.id,
+				},
+				ctx,
+			);
+
+			await expect(
+				app.collections.tx_parents.deleteById({ id: parent.id }, ctx),
+			).rejects.toThrow();
+
+			const remainingParent = await app.collections.tx_parents.findOne(
+				{ where: { id: parent.id } },
+				ctx,
+			);
+			const remainingChild = await app.collections.tx_children.findOne(
+				{ where: { id: child.id } },
+				ctx,
+			);
+
+			expect(remainingParent).not.toBeNull();
+			expect(remainingChild).not.toBeNull();
 		});
 	});
 

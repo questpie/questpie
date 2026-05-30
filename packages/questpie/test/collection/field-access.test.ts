@@ -44,12 +44,38 @@ const publicPosts = collection("public_posts")
 		timestamps: true,
 	});
 
+const writeResponseDocs = collection("write_response_docs")
+	.fields(({ f }) => ({
+		title: f.text(255).required(),
+		secret: f.text(255),
+	}))
+	.options({
+		timestamps: true,
+	})
+	.access({
+		read: true,
+		create: true,
+		update: true,
+		delete: true,
+		fields: {
+			secret: {
+				read: false,
+				create: true,
+				update: true,
+			},
+		},
+	});
+
 describe("field-level access control", () => {
 	let setup: Awaited<ReturnType<typeof buildMockApp>>;
 
 	beforeEach(async () => {
 		setup = await buildMockApp({
-			collections: { users, public_posts: publicPosts },
+			collections: {
+				users,
+				public_posts: publicPosts,
+				write_response_docs: writeResponseDocs,
+			},
 		});
 		await runTestDbMigrations(setup.app);
 	});
@@ -438,6 +464,113 @@ describe("field-level access control", () => {
 					userCtx,
 				),
 			).rejects.toThrow("Cannot write field 'ssn': access denied");
+		});
+	});
+
+	describe("write response read filtering", () => {
+		it("strips read-restricted fields from create responses", async () => {
+			const userCtx = createTestContext({ accessMode: "user" });
+
+			const created = await setup.app.collections.write_response_docs.create(
+				{
+					id: crypto.randomUUID(),
+					title: "Created",
+					secret: "create-secret",
+				},
+				userCtx,
+			);
+
+			expect(created.title).toBe("Created");
+			expect(created.secret).toBeUndefined();
+
+			const systemDoc = await setup.app.collections.write_response_docs.findOne(
+				{ where: { id: created.id } },
+				createTestContext({ accessMode: "system" }),
+			);
+			expect(systemDoc?.secret).toBe("create-secret");
+		});
+
+		it("strips read-restricted fields from update responses", async () => {
+			const systemCtx = createTestContext({ accessMode: "system" });
+			const userCtx = createTestContext({ accessMode: "user" });
+			const doc = await setup.app.collections.write_response_docs.create(
+				{
+					id: crypto.randomUUID(),
+					title: "Original",
+					secret: "update-secret",
+				},
+				systemCtx,
+			);
+
+			const updated =
+				await setup.app.collections.write_response_docs.updateById(
+					{
+						id: doc.id,
+						data: { title: "Updated" },
+					},
+					userCtx,
+				);
+
+			expect(updated.title).toBe("Updated");
+			expect(updated.secret).toBeUndefined();
+		});
+
+		it("strips read-restricted fields from updateMany responses", async () => {
+			const systemCtx = createTestContext({ accessMode: "system" });
+			const userCtx = createTestContext({ accessMode: "user" });
+			await setup.app.collections.write_response_docs.create(
+				{
+					id: crypto.randomUUID(),
+					title: "Bulk 1",
+					secret: "bulk-secret-1",
+				},
+				systemCtx,
+			);
+			await setup.app.collections.write_response_docs.create(
+				{
+					id: crypto.randomUUID(),
+					title: "Bulk 2",
+					secret: "bulk-secret-2",
+				},
+				systemCtx,
+			);
+
+			const updated = await setup.app.collections.write_response_docs.update(
+				{
+					where: {},
+					data: { title: "Bulk Updated" },
+				},
+				userCtx,
+			);
+
+			expect(updated).toHaveLength(2);
+			for (const doc of updated) {
+				expect(doc.title).toBe("Bulk Updated");
+				expect(doc.secret).toBeUndefined();
+			}
+		});
+
+		it("strips read-restricted fields from delete responses", async () => {
+			const systemCtx = createTestContext({ accessMode: "system" });
+			const userCtx = createTestContext({ accessMode: "user" });
+			const doc = await setup.app.collections.write_response_docs.create(
+				{
+					id: crypto.randomUUID(),
+					title: "Delete",
+					secret: "delete-secret",
+				},
+				systemCtx,
+			);
+
+			const deleted =
+				await setup.app.collections.write_response_docs.deleteById(
+					{ id: doc.id },
+					userCtx,
+				);
+
+			expect(deleted.success).toBe(true);
+			expect(deleted.data.title).toBe("Delete");
+			expect(deleted.data.secret).toBeUndefined();
 		});
 	});
 });

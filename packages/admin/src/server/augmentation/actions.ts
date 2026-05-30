@@ -6,6 +6,7 @@
  */
 
 import type { I18nText } from "questpie/shared";
+import type { ZodType } from "zod";
 
 import type { ComponentReference } from "./common.js";
 import type { ComponentFactory } from "./views.js";
@@ -174,7 +175,7 @@ export interface ServerActionFormFieldDefinition {
 		required?: boolean;
 	};
 	/** Generate Zod schema for validation */
-	toZodSchema(): unknown;
+	toZodSchema(): ZodType;
 }
 
 /**
