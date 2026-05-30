@@ -320,6 +320,7 @@ Override field behavior per-form:
 {
   field: f.slug,
   hidden: ({ data }) => !data.title,
+  disabled: ({ data }) => data.status === "archived",
   readOnly: ({ data }) => data.status === "published",
   compute: {
     handler: ({ data }) => slugify(data.title),

@@ -49,7 +49,10 @@ import {
 	useSidebarSearchParam,
 } from "../../hooks";
 import { useGlobalFields } from "../../hooks/use-global-fields";
-import { useReactiveFields } from "../../hooks/use-reactive-fields";
+import {
+	ReactiveFieldStatesProvider,
+	useReactiveFields,
+} from "../../hooks/use-reactive-fields";
 import { useGlobalServerValidation } from "../../hooks/use-server-validation";
 import { useTransitionStage } from "../../hooks/use-transition-stage";
 import { useResolveText, useTranslation } from "../../i18n/hooks";
@@ -555,7 +558,7 @@ export default function GlobalFormView({
 	);
 
 	// Use reactive fields hook for server-side compute/hidden/readOnly/disabled
-	useReactiveFields({
+	const { fieldStates: reactiveFieldStates } = useReactiveFields({
 		collection: globalName,
 		mode: "global",
 		reactiveConfigs,
@@ -797,14 +800,16 @@ export default function GlobalFormView({
 				/>
 
 				{/* Main Content - Form Fields */}
-				<AutoFormFields
-					collection={globalName}
-					mode="global"
-					config={resolvedConfig}
-					registry={registry}
-					resolvedFields={schemaFields as any}
-					schema={globalSchema}
-				/>
+				<ReactiveFieldStatesProvider fieldStates={reactiveFieldStates}>
+					<AutoFormFields
+						collection={globalName}
+						mode="global"
+						config={resolvedConfig}
+						registry={registry}
+						resolvedFields={schemaFields as any}
+						schema={globalSchema}
+					/>
+				</ReactiveFieldStatesProvider>
 			</form>
 
 			{isHistoryOpen && (

@@ -219,6 +219,25 @@ describe("PostgresSearchAdapter", () => {
 			expect(response.results[0].recordId).toBe("post-1");
 		});
 
+		it("should ignore tsquery operator characters in user search input", async () => {
+			await setup.app.search.index({
+				collection: "posts",
+				recordId: "post-1",
+				locale: "en",
+				title: "Hello World",
+				content: "This is my first blog post about programming",
+				metadata: { status: "published" },
+			});
+
+			const response = await setup.app.search.search({
+				query: "Hello:* '",
+				locale: "en",
+			});
+
+			expect(response.results.length).toBe(1);
+			expect(response.results[0].recordId).toBe("post-1");
+		});
+
 		it("should search with FTS", async () => {
 			// Index multiple records
 			await setup.app.search.index({

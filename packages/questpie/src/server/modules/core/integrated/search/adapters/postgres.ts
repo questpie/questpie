@@ -51,6 +51,18 @@ export interface PostgresSearchAdapterOptions {
 	ftsWeight?: number;
 }
 
+function buildPrefixTsQuery(query: string): string | null {
+	const words = query
+		.replace(/[^\p{L}\p{N}_]+/gu, " ")
+		.trim()
+		.split(/\s+/)
+		.filter(Boolean);
+
+	if (words.length === 0) return null;
+
+	return words.map((word) => `${word}:*`).join(" & ");
+}
+
 // ============================================================================
 // Adapter Implementation
 // ============================================================================
@@ -230,15 +242,8 @@ export class PostgresSearchAdapter implements SearchAdapter {
 		}
 
 		// Build query condition (for non-empty queries)
-		const hasQuery = query.trim().length > 0;
-		const prefixQuery = hasQuery
-			? query
-					.trim()
-					.split(/\s+/)
-					.filter(Boolean)
-					.map((word) => `${word}:*`)
-					.join(" & ")
-			: null;
+		const prefixQuery = buildPrefixTsQuery(query);
+		const hasQuery = prefixQuery !== null;
 		const tsQuery = prefixQuery
 			? sql`to_tsquery('simple', ${prefixQuery})`
 			: null;

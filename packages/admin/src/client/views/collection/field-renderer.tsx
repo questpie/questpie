@@ -13,6 +13,10 @@ import type { FieldInstance } from "../../builder/field/field";
 import { Skeleton } from "../../components/ui/skeleton";
 import { useAdminConfig } from "../../hooks/use-admin-config";
 import { useFieldHooks } from "../../hooks/use-field-hooks";
+import {
+	mergeReactiveFieldState,
+	useReactiveFieldState,
+} from "../../hooks/use-reactive-fields";
 import { useReactiveProps } from "../../hooks/use-reactive-prop";
 import { useResolveText } from "../../i18n/hooks";
 import { useScopedLocale } from "../../runtime";
@@ -349,6 +353,15 @@ export function FieldRenderer({
 		entityMeta: entityMetaProp,
 		formValues, // Pass pre-watched values to avoid calling form.watch() internally
 	});
+	const reactiveFieldState = useReactiveFieldState(fullFieldName);
+	const effectiveFieldState = mergeReactiveFieldState(
+		{
+			hidden: context.isHidden,
+			readOnly: context.isReadOnly,
+			disabled: context.isDisabled,
+		},
+		reactiveFieldState,
+	);
 
 	// Resolve lazy component (supports () => import(...) loaders)
 	const { Component: resolvedComponent, loading: componentLoading } =
@@ -405,11 +418,11 @@ export function FieldRenderer({
 		entityType: mode,
 		field: fullFieldName,
 		props: mergedFieldProps,
-		enabled: !context.isHidden && !!fieldDef,
+		enabled: !effectiveFieldState.hidden && !!fieldDef,
 	});
 
 	// Hidden fields are not rendered
-	if (context.isHidden) return null;
+	if (effectiveFieldState.hidden) return null;
 
 	// Field not found in config
 	if (!fieldDef) {
@@ -441,7 +454,8 @@ export function FieldRenderer({
 		// Pass loading state for async options
 		optionsLoading,
 		// Computed fields are always readonly
-		readOnly: rawComponentProps.readOnly || isComputed,
+		readOnly: effectiveFieldState.readOnly || isComputed,
+		disabled: effectiveFieldState.disabled === true,
 		label: resolveText(rawComponentProps.label, "", formValues),
 		description: resolveText(rawComponentProps.description, "", formValues),
 		placeholder: resolveText(rawComponentProps.placeholder, "", formValues),

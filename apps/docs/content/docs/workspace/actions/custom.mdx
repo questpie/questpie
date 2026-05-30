@@ -68,6 +68,12 @@ Custom actions can be added to collections with forms and handlers:
 | `handler` | `function`       | Server-side handler                   |
 | `bulk`    | `boolean`        | Available as bulk action in list view |
 
+## Security Model
+
+Custom action handlers run on the server in user mode for the authenticated admin request. Built-in actions call the collection CRUD API with the same caller context, and custom action form fields are validated on the server before the handler runs.
+
+Action results are returned to the client as data. If an action returns effects such as invalidation, redirect, or toast metadata, the client applies those effects; the server does not implicitly execute another action from an action result. To chain privileged work, call the required service or collection method explicitly inside the handler and rely on the normal access checks.
+
 ## Related Pages
 
 - [Built-in Actions](/docs/workspace/actions/builtin) — Default CRUD actions

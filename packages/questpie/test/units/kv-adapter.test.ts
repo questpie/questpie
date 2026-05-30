@@ -405,6 +405,20 @@ describe("RedisKVAdapter", () => {
 
 			expect(await adapter.get<string>("key1")).toBeNull();
 			expect(await adapter.get<string>("key2")).toBeNull();
+			expect(mockRedis.flushDbCalls).toBe(0);
+		});
+
+		test("should only call flushDb when explicitly allowed", async () => {
+			adapter = new RedisKVAdapter({
+				client: mockRedis,
+				allowFlushDb: true,
+			});
+
+			await adapter.set("key1", "value1");
+			await adapter.clear();
+
+			expect(await adapter.get<string>("key1")).toBeNull();
+			expect(mockRedis.flushDbCalls).toBe(1);
 		});
 
 		test("should handle objects as values", async () => {
@@ -630,6 +644,7 @@ class MockRedis {
 	store = new Map<string, string>();
 	sets = new Map<string, Set<string>>();
 	expirations = new Map<string, number>();
+	flushDbCalls = 0;
 
 	async get(key: string): Promise<string | null> {
 		return this.store.get(key) ?? null;
@@ -661,6 +676,7 @@ class MockRedis {
 	}
 
 	async flushDb(): Promise<"OK"> {
+		this.flushDbCalls += 1;
 		this.store.clear();
 		this.sets.clear();
 		this.expirations.clear();

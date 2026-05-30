@@ -39,6 +39,34 @@ Prefetch nested relations:
 })
 ```
 
+## Custom Loader
+
+Use a loader when the block needs computed data after declared relations are expanded:
+
+```ts
+.prefetch({
+  with: {
+    featuredPost: {
+      with: { author: true },
+    },
+  },
+  loader: async ({ values, expanded, ctx }) => {
+    const related = await ctx.collections.posts.find({
+      where: { status: "published" },
+      limit: 3,
+    });
+
+    return {
+      featuredPost: expanded.featuredPost,
+      related: related.docs,
+      heading: values.title,
+    };
+  },
+})
+```
+
+Custom prefetch functions and loaders run on the server in the current request context. Use `ctx.collections` and `ctx.globals` instead of importing the generated app, and return only data that is safe for the caller to read.
+
 ## Using Prefetched Data
 
 In the renderer, prefetched data appears in the `data` prop:

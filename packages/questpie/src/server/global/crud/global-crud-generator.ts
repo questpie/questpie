@@ -637,33 +637,10 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 				: normalized;
 			const isScoped = this.state.options.scoped !== undefined;
 			const scopeId = isScoped ? this.resolveScopeId(normalized) : undefined;
-			const existing = await this.getCurrentRow(db, normalized);
-
-			const canUpdate = await this.enforceAccessControl(
-				"update",
-				normalized,
-				existing,
-				data,
-			);
-			if (!canUpdate)
-				throw ApiError.forbidden({
-					operation: "update",
-					resource: this.state.name,
-					reason: "User does not have permission to update global settings",
-				});
-
-			await this.executeHooks(
-				this.state.hooks?.beforeUpdate,
-				this.createHookContext({
-					data: existing,
-					input: data,
-					context: normalized,
-					db,
-				}),
-			);
+			let existing = await this.getCurrentRow(db, normalized);
 
 			// Separate nested relation operations from regular fields
-			let { regularFields, nestedRelations } =
+			let { regularFields: baseRegularFields, nestedRelations } =
 				this.separateNestedRelationsInternal(data);
 
 			// Decode any pre-stringified jsonb values before any hook or write
@@ -671,45 +648,84 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 			// caller (legacy seed, RPC, etc.) passes an already-encoded JSON
 			// string for a jsonb column, double-encoding stores a jsonb string
 			// instead of the intended array/object.
-			regularFields = normalizeJsonbInput(
-				regularFields,
+			baseRegularFields = normalizeJsonbInput(
+				baseRegularFields,
 				this.state.fieldDefinitions,
 			);
 
-			// Validate field-level write access
-			await this.validateFieldWriteAccess(
-				regularFields,
-				normalized,
-				existing ? "update" : "create",
-				existing,
-			);
+			const prepareWrite = async (
+				currentExisting: any,
+				writeDb: any,
+			): Promise<Record<string, unknown>> => {
+				const canUpdate = await this.enforceAccessControl(
+					"update",
+					normalized,
+					currentExisting,
+					data,
+				);
+				if (!canUpdate) {
+					throw ApiError.forbidden({
+						operation: "update",
+						resource: this.state.name,
+						reason: "User does not have permission to update global settings",
+					});
+				}
 
-			regularFields = await this.runFieldInputHooks(
-				regularFields,
-				existing ? "update" : "create",
-				normalized,
-				db,
-				existing,
-			);
+				await this.executeHooks(
+					this.state.hooks?.beforeUpdate,
+					this.createHookContext({
+						data: currentExisting,
+						input: data,
+						context: normalized,
+						db: writeDb,
+					}),
+				);
 
-			await this.executeHooksWithGlobal(
-				"beforeChange",
-				this.state.hooks?.beforeChange,
-				this.createHookContext({
-					data: existing,
-					input: regularFields,
-					context: normalized,
-					db,
-				}),
-			);
+				const operation = currentExisting ? "update" : "create";
 
-			const updatedRecord = await withTransaction(db, async (tx: any) => {
+				// Validate field-level write access after any missing-row lock
+				// re-check, so a racing updater cannot pass create rules and then
+				// update a row that another request inserted first.
+				await this.validateFieldWriteAccess(
+					baseRegularFields,
+					normalized,
+					operation,
+					currentExisting,
+				);
+
+				const preparedFields = await this.runFieldInputHooks(
+					baseRegularFields,
+					operation,
+					normalized,
+					writeDb,
+					currentExisting,
+				);
+
+				await this.executeHooksWithGlobal(
+					"beforeChange",
+					this.state.hooks?.beforeChange,
+					this.createHookContext({
+						data: currentExisting,
+						input: preparedFields,
+						context: normalized,
+						db: writeDb,
+					}),
+				);
+
+				return preparedFields;
+			};
+
+			const writeRecord = async (
+				tx: any,
+				currentExisting: any,
+				preparedFields: Record<string, unknown>,
+			) => {
 				const { localized, nonLocalized } =
-					this.splitLocalizedFields(regularFields);
+					this.splitLocalizedFields(preparedFields);
 
-				let updatedId = existing?.id;
+				let updatedId = currentExisting?.id;
 
-				if (existing) {
+				if (currentExisting) {
 					if (Object.keys(nonLocalized).length > 0) {
 						await tx
 							.update(this.table)
@@ -719,7 +735,7 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 									? { updatedAt: new Date() }
 									: {}),
 							})
-							.where(eq((this.table as any).id, existing.id));
+							.where(eq((this.table as any).id, currentExisting.id));
 					}
 				} else {
 					// Include scope_id when creating new record for scoped globals
@@ -806,7 +822,7 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 				await this.createVersion(
 					tx,
 					baseRecord,
-					existing ? "update" : "create",
+					currentExisting ? "update" : "create",
 					workflowContext,
 				);
 
@@ -831,6 +847,19 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 				);
 
 				return updatedRecord;
+			};
+
+			const updatedRecord = await withTransaction(db, async (tx: any) => {
+				if (!existing) {
+					// Serialize concurrent update auto-creates the same way get()
+					// does: take the lock first, then re-check inside the locked
+					// transaction before deciding between INSERT and UPDATE.
+					await this.acquireAutoCreateLock(tx);
+					existing = await this.getCurrentRow(tx, normalized);
+				}
+
+				const preparedFields = await prepareWrite(existing, tx);
+				return writeRecord(tx, existing, preparedFields);
 			});
 
 			// Resolve relations if requested
