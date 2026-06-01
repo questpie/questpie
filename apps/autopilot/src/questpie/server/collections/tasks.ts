@@ -2,20 +2,72 @@ import { index } from "drizzle-orm/pg-core";
 
 import { collection } from "#questpie/factories";
 
+import { asJsonValue, relationId } from "../lib/records";
+import { workflowsFromContext } from "../lib/workflows";
+
+/** Issue type options — shared between the field definition and create actions. */
+const TASK_TYPE_OPTIONS = [
+	{ value: "task", label: { en: "Task" } },
+	{ value: "feature", label: { en: "Feature" } },
+	{ value: "bug", label: { en: "Bug" } },
+	{ value: "research", label: { en: "Research" } },
+	{ value: "review", label: { en: "Review" } },
+	{ value: "approval", label: { en: "Approval" } },
+];
+
+/** Priority options — shared between the field definition and create actions. */
+const TASK_PRIORITY_OPTIONS = [
+	{
+		value: "low",
+		label: { en: "Low" },
+		icon: {
+			type: "icon",
+			props: {
+				name: "ph:cell-signal-low-fill",
+				className: "text-muted-foreground",
+			},
+		},
+	},
+	{
+		value: "medium",
+		label: { en: "Medium" },
+		icon: {
+			type: "icon",
+			props: {
+				name: "ph:cell-signal-medium-fill",
+				className: "text-muted-foreground",
+			},
+		},
+	},
+	{
+		value: "high",
+		label: { en: "High" },
+		icon: {
+			type: "icon",
+			props: {
+				name: "ph:cell-signal-full-fill",
+				className: "text-muted-foreground",
+			},
+		},
+	},
+	{
+		value: "urgent",
+		label: { en: "Urgent" },
+		icon: {
+			type: "icon",
+			props: {
+				name: "ph:warning-fill",
+				className: "text-red-500",
+			},
+		},
+	},
+];
+
 export const tasks = collection("tasks")
 	.fields(({ f }) => ({
 		title: f.text().required().label({ en: "Title" }),
 		description: f.richText({ mode: "markdown" }).label({ en: "Description" }),
-		type: f
-			.select([
-				{ value: "task", label: { en: "Task" } },
-				{ value: "feature", label: { en: "Feature" } },
-				{ value: "bug", label: { en: "Bug" } },
-				{ value: "research", label: { en: "Research" } },
-				{ value: "review", label: { en: "Review" } },
-				{ value: "approval", label: { en: "Approval" } },
-			])
-			.label({ en: "Type" }),
+		type: f.select(TASK_TYPE_OPTIONS).label({ en: "Type" }),
 		status: f
 			.select([
 				{
@@ -106,52 +158,7 @@ export const tasks = collection("tasks")
 			.default("backlog")
 			.label({ en: "Status" }),
 		priority: f
-			.select([
-				{
-					value: "low",
-					label: { en: "Low" },
-					icon: {
-						type: "icon",
-						props: {
-							name: "ph:cell-signal-low-fill",
-							className: "text-muted-foreground",
-						},
-					},
-				},
-				{
-					value: "medium",
-					label: { en: "Medium" },
-					icon: {
-						type: "icon",
-						props: {
-							name: "ph:cell-signal-medium-fill",
-							className: "text-muted-foreground",
-						},
-					},
-				},
-				{
-					value: "high",
-					label: { en: "High" },
-					icon: {
-						type: "icon",
-						props: {
-							name: "ph:cell-signal-full-fill",
-							className: "text-muted-foreground",
-						},
-					},
-				},
-				{
-					value: "urgent",
-					label: { en: "Urgent" },
-					icon: {
-						type: "icon",
-						props: {
-							name: "ph:warning-fill",
-							className: "text-red-500",
-						},
-					},
-				},
-			])
+			.select(TASK_PRIORITY_OPTIONS)
 			.default("medium")
 			.label({ en: "Priority" }),
 		project: f.relation("projects").label({ en: "Project" }),
@@ -301,6 +308,138 @@ export const tasks = collection("tasks")
 			],
 		}),
 	)
+	.actions(({ a, c, f }) => ({
+		builtin: [a.save(), a.delete(), a.deleteMany(), a.duplicate()],
+		custom: [
+			a.headerAction({
+				id: "quickCreate",
+				label: { en: "New Issue" },
+				icon: c.icon("ph:plus"),
+				form: {
+					title: { en: "New Issue" },
+					width: "md",
+					submitLabel: { en: "Create" },
+					fields: {
+						title: f.text({ label: { en: "Title" }, required: true }),
+						type: f.select({
+							options: TASK_TYPE_OPTIONS,
+							default: "task",
+							label: { en: "Type" },
+						}),
+						priority: f.select({
+							options: TASK_PRIORITY_OPTIONS,
+							default: "medium",
+							label: { en: "Priority" },
+						}),
+						project: f.relation({
+							label: { en: "Project" },
+							options: { targetCollection: "projects", type: "single" },
+						}),
+						description: f.textarea({ label: { en: "Description" } }),
+					},
+				},
+				handler: async (ctx: any) => {
+					const { data, collections, session } = ctx;
+					const projectId = relationId(data.project);
+					const actor = session?.user?.id ?? "system";
+					const task = await collections.tasks.create({
+						title: data.title,
+						description: data.description,
+						type: data.type ?? "task",
+						priority: data.priority ?? "medium",
+						status: "backlog",
+						project: projectId ?? undefined,
+						scopeType: projectId ? "project" : "company",
+						createdBy: actor,
+					});
+					await collections.activity.create({
+						actor,
+						type: "task.create",
+						summary: `Created issue: ${task.title}`,
+						task: task.id,
+						project: projectId ?? undefined,
+						details: asJsonValue({ source: "admin-quick-create" }),
+					});
+					return {
+						type: "success",
+						toast: { message: `Issue "${task.title}" created` },
+						effects: { invalidate: ["tasks"] },
+					};
+				},
+			}),
+			a.headerAction({
+				id: "aiDispatch",
+				label: { en: "AI Dispatch" },
+				icon: c.icon("ph:sparkle"),
+				variant: "secondary",
+				form: {
+					title: { en: "Create with AI" },
+					description: {
+						en: "Describe what you need done. The AI creates and starts working on it.",
+					},
+					width: "md",
+					submitLabel: { en: "Dispatch" },
+					fields: {
+						prompt: f.textarea({
+							label: { en: "What do you need?" },
+							required: true,
+						}),
+						project: f.relation({
+							label: { en: "Project" },
+							options: { targetCollection: "projects", type: "single" },
+						}),
+						priority: f.select({
+							options: TASK_PRIORITY_OPTIONS,
+							default: "medium",
+							label: { en: "Priority" },
+						}),
+					},
+				},
+				handler: async (ctx: any) => {
+					const { data, collections, session } = ctx;
+					const prompt = String(data.prompt ?? "").trim();
+					if (!prompt) {
+						return {
+							type: "error",
+							toast: { message: "Describe what you need done." },
+						};
+					}
+					const requestedBy = session?.user?.id ?? "system";
+					const projectId = relationId(data.project);
+					const title = prompt.split("\n")[0].slice(0, 120);
+					const task = await collections.tasks.create({
+						title,
+						description: prompt,
+						type: "task",
+						priority: data.priority ?? "medium",
+						status: "pending",
+						project: projectId ?? undefined,
+						scopeType: projectId ? "project" : "company",
+						createdBy: requestedBy,
+						context: asJsonValue({ prompt }),
+					});
+					await collections.activity.create({
+						actor: requestedBy,
+						type: "task.dispatch",
+						summary: `Dispatched issue: ${task.title}`,
+						task: task.id,
+						project: projectId ?? undefined,
+						details: asJsonValue({ source: "admin-ai-dispatch" }),
+					});
+					await workflowsFromContext(ctx).trigger(
+						"task-pipeline",
+						{ taskId: task.id, runReason: "ai-dispatch", requestedBy },
+						{ idempotencyKey: `task-pipeline:${task.id}` },
+					);
+					return {
+						type: "success",
+						toast: { message: "Issue dispatched to AI" },
+						effects: { invalidate: ["tasks"] },
+					};
+				},
+			}),
+		],
+	}))
 	.indexes(({ table }) => [
 		index("tasks_status_idx").on(table.status as any),
 		index("tasks_project_idx").on(table.project as any),
