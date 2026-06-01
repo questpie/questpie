@@ -111,8 +111,8 @@ export interface FieldHookContext<TConfig = Record<string, unknown>> {
 	/** Operation type */
 	operation: "create" | "read" | "update";
 
-	/** Current request */
-	req: Request;
+	/** Current request, when the hook runs from an HTTP request */
+	req?: Request;
 
 	/** Authenticated user */
 	user?: unknown;

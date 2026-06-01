@@ -112,8 +112,8 @@ export type JsonRouteHandlerArgs<
 > = AppContext & {
 	/** Validated input data (from body or query string) */
 	input: TInput;
-	/** Raw incoming request */
-	request: Request;
+	/** Raw incoming request, when executed through HTTP */
+	request?: Request;
 	/** URL path parameters (if pattern-matched) */
 	params: TParams;
 	/** Current locale */

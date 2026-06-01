@@ -175,7 +175,7 @@ const jsonRouteWithRequestAndParams = route<RouteParamsFromKey<"pairing/[tokenId
 	.post()
 	.schema(z.object({ ok: z.boolean() }))
 	.handler(async ({ input, request, params }) => {
-		const requestUrl: string = request.url;
+		const requestUrl: string | undefined = request?.url;
 		const tokenId: string = params.tokenId;
 		return { ok: input.ok, requestUrl, tokenId };
 	});

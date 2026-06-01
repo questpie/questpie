@@ -198,7 +198,7 @@ export async function executeJsonRouteInternal<
 				...resolvedContext,
 				app,
 				input: parsed as TInput,
-				request: request ?? new Request("http://questpie.local/"),
+				...(request ? { request } : {}),
 				locale: resolvedContext.locale,
 				params: (params ?? {}) as TParams,
 			} as any),

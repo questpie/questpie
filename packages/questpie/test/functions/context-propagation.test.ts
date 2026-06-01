@@ -240,6 +240,31 @@ describe("executeJsonRoute — context propagation via runWithContext", () => {
 
 		expect(capturedSession).toBe(fakeSession);
 	});
+
+	it("does not synthesize a request for local JSON route execution", async () => {
+		let capturedRequest: Request | undefined;
+
+		const inspectRequest = route()
+			.post()
+			.schema(z.object({}))
+			.outputSchema(z.object({ hasRequest: z.boolean() }))
+			.handler(async ({ request }) => {
+				capturedRequest = request;
+				return { hasRequest: !!request };
+			});
+
+		const result = await executeJsonRoute(
+			setup.app,
+			inspectRequest,
+			{},
+			{
+				accessMode: "system",
+			},
+		);
+
+		expect(result.hasRequest).toBe(false);
+		expect(capturedRequest).toBeUndefined();
+	});
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -427,7 +452,7 @@ describe("Route via HTTP — custom app context extensions reach JSON handlers",
 		.handler(async (ctx) => {
 			return {
 				appId: ctx.params.appId,
-				method: ctx.request.method,
+				method: ctx.request?.method ?? "missing",
 				organizationId:
 					(ctx as { organizationId?: string | null }).organizationId ?? null,
 			};

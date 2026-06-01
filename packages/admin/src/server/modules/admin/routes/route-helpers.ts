@@ -263,14 +263,14 @@ export function getGlobalCruds(app: App): any {
 export function buildServerContext(ctx: RouteHandlerContext): {
 	db: any;
 	user: Record<string, any> | null;
-	req: Request;
+	req?: Request;
 	locale: string;
 } {
 	const session = getSession(ctx);
 	return {
 		db: getDb(ctx),
 		user: session?.user ?? null,
-		req: new Request("http://localhost"),
+		...(ctx.request ? { req: ctx.request } : {}),
 		locale: getLocale(ctx) ?? "en",
 	};
 }

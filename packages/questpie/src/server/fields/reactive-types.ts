@@ -17,7 +17,7 @@ import type { I18nText } from "#questpie/shared/i18n/types.js";
 export interface ReactiveServerContext {
 	db: unknown;
 	user: unknown | null;
-	req: Request;
+	req?: Request;
 	locale: string;
 }
 
