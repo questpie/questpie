@@ -36,6 +36,8 @@
  * ```
  */
 
+import { runWithContext, tryGetContext } from "questpie";
+
 import type { BlocksDocument } from "../../../fields/blocks.js";
 import type {
 	AnyBlockDefinition,
@@ -51,12 +53,58 @@ export interface BlocksPrefetchContext {
 	app: any;
 	/** Database client */
 	db: unknown;
+	/** Current session */
+	session?: unknown | null;
 	/** Current locale */
 	locale?: string;
+	/** Current CRUD access mode */
+	accessMode?: string;
+	/** Current workflow stage */
+	stage?: string;
 	/** Collections accessor */
 	collections?: unknown;
 	/** Globals accessor */
 	globals?: unknown;
+}
+
+function resolvePrefetchContext(
+	ctx: BlocksPrefetchContext,
+): BlocksPrefetchContext {
+	const stored = tryGetContext();
+	const app = ctx.app ?? stored?.app;
+
+	return {
+		...ctx,
+		app,
+		db: ctx.db ?? stored?.db,
+		session: ctx.session === null ? null : (ctx.session ?? stored?.session),
+		locale: ctx.locale ?? stored?.locale,
+		accessMode: ctx.accessMode ?? stored?.accessMode,
+		stage: ctx.stage ?? stored?.stage,
+		collections: ctx.collections ?? (app as any)?.collections,
+		globals: ctx.globals ?? (app as any)?.globals,
+	};
+}
+
+function toRuntimeContext(ctx: BlocksPrefetchContext) {
+	return {
+		app: ctx.app,
+		db: ctx.db,
+		session: ctx.session,
+		locale: ctx.locale,
+		accessMode: ctx.accessMode,
+		stage: ctx.stage,
+	};
+}
+
+function toCrudContext(ctx: BlocksPrefetchContext) {
+	return {
+		db: ctx.db,
+		session: ctx.session,
+		locale: ctx.locale,
+		accessMode: ctx.accessMode,
+		stage: ctx.stage,
+	};
 }
 
 // ============================================================================
@@ -203,7 +251,9 @@ async function expandDeclaredFields(
 				: groupKey;
 
 			try {
-				const collectionApi = (ctx.app as any)?.collections?.[collection];
+				const collectionApi =
+					(ctx.collections as Record<string, any> | undefined)?.[collection] ??
+					(ctx.app as any)?.collections?.[collection];
 				if (!collectionApi?.find) {
 					console.warn(
 						`[prefetch] Collection "${collection}" not found on app.collections, skipping`,
@@ -213,11 +263,14 @@ async function expandDeclaredFields(
 
 				// Pass nested `with` through to collection's find — reuses existing
 				// relation resolution machinery (same as find({ with: { ... } }))
-				const result = await collectionApi.find({
-					where: { id: { in: [...ids] } },
-					limit: ids.size,
-					...(nestedWith ? { with: nestedWith } : {}),
-				});
+				const result = await collectionApi.find(
+					{
+						where: { id: { in: [...ids] } },
+						limit: ids.size,
+						...(nestedWith ? { with: nestedWith } : {}),
+					},
+					toCrudContext(ctx),
+				);
 
 				const recordMap = new Map<string, unknown>();
 				for (const doc of result?.docs || []) {
@@ -290,58 +343,62 @@ export async function processBlocksDocument(
 		return blocks;
 	}
 
-	// Flatten the tree
-	const allNodes: Array<{ id: string; type: string; children: any[] }> = [];
-	const collectNodes = (
-		nodes: Array<{ id: string; type: string; children: any[] }>,
-	) => {
-		for (const node of nodes) {
-			allNodes.push(node);
-			if (node.children.length > 0) {
-				collectNodes(node.children);
+	const resolvedCtx = resolvePrefetchContext(ctx);
+
+	return runWithContext(toRuntimeContext(resolvedCtx), async () => {
+		// Flatten the tree
+		const allNodes: Array<{ id: string; type: string; children: any[] }> = [];
+		const collectNodes = (
+			nodes: Array<{ id: string; type: string; children: any[] }>,
+		) => {
+			for (const node of nodes) {
+				allNodes.push(node);
+				if (node.children.length > 0) {
+					collectNodes(node.children);
+				}
 			}
+		};
+		collectNodes(blocks._tree);
+
+		const normalizedBlockDefinitions =
+			normalizeBlockDefinitions(blockDefinitions);
+
+		// Step 1: Expand declared `with` fields (batch across all blocks)
+		const expandedData = await expandDeclaredFields(
+			allNodes,
+			blocks._values,
+			normalizedBlockDefinitions,
+			resolvedCtx,
+		);
+
+		// Step 2: Execute prefetch functions and loaders
+		const prefetchedData = await executePrefetchFunctions(
+			allNodes,
+			blocks._values,
+			normalizedBlockDefinitions,
+			resolvedCtx,
+			expandedData,
+		);
+
+		// Step 3: Merge expanded + prefetched (prefetched overrides on conflict)
+		const mergedData: Record<string, Record<string, {}>> = {};
+		const allBlockIds = new Set([
+			...Object.keys(expandedData),
+			...Object.keys(prefetchedData),
+		]);
+
+		for (const blockId of allBlockIds) {
+			mergedData[blockId] = {
+				...(expandedData[blockId] || {}),
+				...(prefetchedData[blockId] || {}),
+			} as Record<string, {}>;
 		}
-	};
-	collectNodes(blocks._tree);
 
-	const normalizedBlockDefinitions =
-		normalizeBlockDefinitions(blockDefinitions);
-
-	// Step 1: Expand declared `with` fields (batch across all blocks)
-	const expandedData = await expandDeclaredFields(
-		allNodes,
-		blocks._values,
-		normalizedBlockDefinitions,
-		ctx,
-	);
-
-	// Step 2: Execute prefetch functions and loaders
-	const prefetchedData = await executePrefetchFunctions(
-		allNodes,
-		blocks._values,
-		normalizedBlockDefinitions,
-		ctx,
-		expandedData,
-	);
-
-	// Step 3: Merge expanded + prefetched (prefetched overrides on conflict)
-	const mergedData: Record<string, Record<string, {}>> = {};
-	const allBlockIds = new Set([
-		...Object.keys(expandedData),
-		...Object.keys(prefetchedData),
-	]);
-
-	for (const blockId of allBlockIds) {
-		mergedData[blockId] = {
-			...(expandedData[blockId] || {}),
-			...(prefetchedData[blockId] || {}),
-		} as Record<string, {}>;
-	}
-
-	return {
-		...blocks,
-		_data: mergedData,
-	};
+		return {
+			...blocks,
+			_data: mergedData,
+		};
+	});
 }
 
 /**
@@ -497,7 +554,12 @@ export function createBlocksPrefetchHook() {
 		data: Record<string, unknown>;
 		app: any;
 		db: unknown;
+		session?: unknown | null;
 		locale?: string;
+		accessMode?: string;
+		stage?: string;
+		collections?: unknown;
+		globals?: unknown;
 	}) => {
 		const blocks = ctx.app?.state?.blocks;
 		if (!blocks || Object.keys(blocks).length === 0) {
@@ -510,7 +572,12 @@ export function createBlocksPrefetchHook() {
 				ctx.data[key] = await processBlocksDocument(value, blocks, {
 					app: ctx.app,
 					db: ctx.db,
+					session: ctx.session,
 					locale: ctx.locale,
+					accessMode: ctx.accessMode,
+					stage: ctx.stage,
+					collections: ctx.collections ?? ctx.app?.collections,
+					globals: ctx.globals ?? ctx.app?.globals,
 				});
 			}
 		}

@@ -237,13 +237,16 @@ function createBlocksState() {
 				const doc = value as BlocksDocument;
 				if (!doc._tree || !doc._values) return value;
 				try {
-					const { app, db, locale } = getContext();
+					const { app, db, locale, session, accessMode, stage } = getContext();
 					const blockDefs = (app as any).state?.blocks;
 					if (!blockDefs || Object.keys(blockDefs).length === 0) return value;
 					return await processBlocksDocument(doc, blockDefs, {
 						app,
 						db,
+						session,
 						locale,
+						accessMode,
+						stage,
 						collections: (app as any).collections,
 						globals: (app as any).globals,
 					});
