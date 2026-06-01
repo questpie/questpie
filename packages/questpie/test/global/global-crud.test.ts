@@ -52,6 +52,13 @@ const field_flag_config = global("field_flag_config")
 			hidden: f.text(100).outputFalse(),
 			serverOnly: f.text(100).inputFalse(),
 		}),
+		events: f
+			.object({
+				label: f.text(100),
+				hidden: f.text(100).outputFalse(),
+				serverOnly: f.text(100).inputFalse(),
+			})
+			.array(),
 	}))
 	.access({
 		read: true,
@@ -260,16 +267,35 @@ describe("global CRUD", () => {
 					publicNote: "visible",
 					hidden: "nested hidden",
 				},
+				events: [
+					{
+						label: "visible event",
+						hidden: "nested array hidden",
+					},
+				],
 			},
 			userCtx,
 		);
 
 		expect(updated).not.toHaveProperty("secret");
 		expect(updated?.profile).toEqual({ publicNote: "visible" });
+		expect(updated?.events).toEqual([{ label: "visible event" }]);
 
 		const retrieved = await app.globals.field_flag_config.get({}, userCtx);
 		expect(retrieved).not.toHaveProperty("secret");
 		expect(retrieved?.profile).toEqual({ publicNote: "visible" });
+		expect(retrieved?.events).toEqual([{ label: "visible event" }]);
+
+		const systemRetrieved = await app.globals.field_flag_config.get(
+			{},
+			createTestContext({ accessMode: "system" }),
+		);
+		expect(systemRetrieved?.events).toEqual([
+			{
+				label: "visible event",
+				hidden: "nested array hidden",
+			},
+		]);
 	});
 
 	it("allows system mode to write and read global input/output flagged fields", async () => {
@@ -285,6 +311,13 @@ describe("global CRUD", () => {
 					hidden: "nested hidden",
 					serverOnly: "nested server supplied",
 				},
+				events: [
+					{
+						label: "visible event",
+						hidden: "nested array hidden",
+						serverOnly: "nested array server supplied",
+					},
+				],
 			},
 			systemCtx,
 		);
@@ -296,6 +329,13 @@ describe("global CRUD", () => {
 			hidden: "nested hidden",
 			serverOnly: "nested server supplied",
 		});
+		expect(updated?.events).toEqual([
+			{
+				label: "visible event",
+				hidden: "nested array hidden",
+				serverOnly: "nested array server supplied",
+			},
+		]);
 	});
 
 	it("reads global snapshots from non-initial workflow stage", async () => {

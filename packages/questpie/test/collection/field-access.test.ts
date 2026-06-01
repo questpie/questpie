@@ -107,6 +107,13 @@ const fieldFlagDocs = collection("field_flag_docs")
 			hidden: f.text(255).outputFalse(),
 			serverOnly: f.text(255).inputFalse(),
 		}),
+		events: f
+			.object({
+				label: f.text(255),
+				hidden: f.text(255).outputFalse(),
+				serverOnly: f.text(255).inputFalse(),
+			})
+			.array(),
 	}))
 	.access({
 		read: true,
@@ -784,12 +791,19 @@ describe("field-level access control", () => {
 						publicNote: "visible",
 						hidden: "nested hidden",
 					},
+					events: [
+						{
+							label: "visible event",
+							hidden: "nested array hidden",
+						},
+					],
 				},
 				userCtx,
 			);
 
 			expect(created).not.toHaveProperty("secret");
 			expect(created.profile).toEqual({ publicNote: "visible" });
+			expect(created.events).toEqual([{ label: "visible event" }]);
 
 			const retrieved = await setup.app.collections.field_flag_docs.findOne(
 				{ where: { id: created.id } },
@@ -798,6 +812,19 @@ describe("field-level access control", () => {
 
 			expect(retrieved).not.toHaveProperty("secret");
 			expect(retrieved?.profile).toEqual({ publicNote: "visible" });
+			expect(retrieved?.events).toEqual([{ label: "visible event" }]);
+
+			const systemRetrieved =
+				await setup.app.collections.field_flag_docs.findOne(
+					{ where: { id: created.id } },
+					createTestContext({ accessMode: "system" }),
+				);
+			expect(systemRetrieved?.events).toEqual([
+				{
+					label: "visible event",
+					hidden: "nested array hidden",
+				},
+			]);
 		});
 
 		it("allows system mode to write and read input/output flagged fields", async () => {
@@ -813,6 +840,13 @@ describe("field-level access control", () => {
 						hidden: "nested hidden",
 						serverOnly: "nested server supplied",
 					},
+					events: [
+						{
+							label: "visible event",
+							hidden: "nested array hidden",
+							serverOnly: "nested array server supplied",
+						},
+					],
 				},
 				systemCtx,
 			);
@@ -824,6 +858,13 @@ describe("field-level access control", () => {
 				hidden: "nested hidden",
 				serverOnly: "nested server supplied",
 			});
+			expect(created.events).toEqual([
+				{
+					label: "visible event",
+					hidden: "nested array hidden",
+					serverOnly: "nested array server supplied",
+				},
+			]);
 		});
 	});
 });
