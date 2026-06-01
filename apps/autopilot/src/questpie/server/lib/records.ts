@@ -1,5 +1,3 @@
-import type { JsonValue } from "questpie/builders";
-
 export function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -18,10 +16,6 @@ export function mergeRecords(
 	...values: Array<unknown>
 ): Record<string, unknown> {
 	return Object.assign({}, ...values.map(asRecord));
-}
-
-export function asJsonValue(value: unknown): JsonValue {
-	return value as JsonValue;
 }
 
 export function stringFrom(value: unknown): string | null {

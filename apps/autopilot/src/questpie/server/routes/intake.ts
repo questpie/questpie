@@ -2,7 +2,6 @@ import { ApiError } from "questpie/errors";
 import { route } from "questpie/services";
 import { z } from "zod";
 
-import { asJsonValue } from "../lib/records";
 import { workflowsFromContext } from "../lib/workflows";
 
 const intakeSchema = z.object({
@@ -44,8 +43,8 @@ export default route()
 			model: input.modelId,
 			queue: input.queue,
 			createdBy: input.createdBy ?? ctx.session?.user?.id ?? "system",
-			context: asJsonValue(input.context),
-			metadata: asJsonValue(input.metadata),
+			context: input.context,
+			metadata: input.metadata,
 		});
 
 		await collections.activity.create({

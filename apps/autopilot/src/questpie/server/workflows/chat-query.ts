@@ -4,7 +4,6 @@ import { workflow } from "@questpie/workflows";
 
 import { createAiRunLink } from "../lib/ai-run-links";
 import {
-	asJsonValue,
 	mergeRecords,
 	relationId,
 } from "../lib/records";
@@ -123,10 +122,10 @@ export default workflow({
 					runStatus: completion?.status ?? "failed",
 					model: relationId(finalRun?.model ?? run.model) ?? undefined,
 					provider: relationId(finalRun?.provider ?? run.provider) ?? undefined,
-					metadata: asJsonValue({
+					metadata: {
 						workflow: "chat-query",
 						knowledgeResourceIds: completion?.knowledgeResourceIds ?? [],
-					}),
+					},
 				});
 			},
 		);
@@ -143,13 +142,11 @@ export default workflow({
 						finalRun?.runtimeSessionRef ??
 						session.runtimeSessionRef ??
 						undefined,
-					metadata: asJsonValue(
-						mergeRecords(session.metadata, {
-							lastRunId: run.id,
-							lastMessageId: assistantMessage.id,
-							lastRunStatus: completion?.status ?? "failed",
-						}),
-					),
+					metadata: mergeRecords(session.metadata, {
+						lastRunId: run.id,
+						lastMessageId: assistantMessage.id,
+						lastRunStatus: completion?.status ?? "failed",
+					}),
 				},
 			});
 			await ctx.collections.activity.create({

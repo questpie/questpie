@@ -1,7 +1,7 @@
 import { job } from "questpie/services";
 import { z } from "zod";
 
-import { asJsonValue, asRecord, relationId } from "../lib/records";
+import { asRecord, relationId } from "../lib/records";
 import {
 	computeNextRunAt,
 	dateOrNull,
@@ -181,7 +181,7 @@ async function triggerTaskSchedule(
 		queue: template.queue != null ? String(template.queue) : undefined,
 		scheduledBy: scheduleActor(schedule.id),
 		createdBy: scheduleActor(schedule.id),
-		context: asJsonValue(asRecord(template.context)),
+		context: asRecord(template.context),
 		metadata: {
 			...asRecord(template.metadata),
 			scheduleId: schedule.id,

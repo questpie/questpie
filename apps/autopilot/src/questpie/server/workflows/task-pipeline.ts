@@ -6,7 +6,6 @@ import { createAiRunLink } from "../lib/ai-run-links";
 import type { AppCollections, WorkflowServiceContext } from "../lib/app-types";
 import { classifyRunError, type RunErrorType } from "../lib/error-classifier";
 import {
-	asJsonValue,
 	asRecord,
 	mergeRecords,
 	relationId,
@@ -180,11 +179,9 @@ export default workflow({
 					id: input.taskId,
 					data: {
 						status: "waiting",
-						metadata: asJsonValue(
-							mergeRecords(task.metadata, {
+						metadata: mergeRecords(task.metadata, {
 								waitingReason: "dependencies",
 							}),
-						),
 					},
 				});
 				await ctx.collections.activity.create({
@@ -246,13 +243,11 @@ export default workflow({
 					id: input.taskId,
 					data: {
 						status: "running",
-						metadata: asJsonValue(
-							mergeRecords(task.metadata, {
+						metadata: mergeRecords(task.metadata, {
 								workflow: "task-pipeline",
 								activeRunId: run.id,
 								attempt,
 							}),
-						),
 					},
 				});
 			});
@@ -310,15 +305,13 @@ export default workflow({
 				id: input.taskId,
 				data: {
 					status,
-					metadata: asJsonValue(
-						mergeRecords(task.metadata, {
-							workflow: "task-pipeline",
-							runId: lastRunId,
-							status,
-							error: lastCompletion?.error ?? null,
-							knowledgeResourceIds: lastCompletion?.knowledgeResourceIds ?? [],
-						}),
-					),
+					metadata: mergeRecords(task.metadata, {
+						workflow: "task-pipeline",
+						runId: lastRunId,
+						status,
+						error: lastCompletion?.error ?? null,
+						knowledgeResourceIds: lastCompletion?.knowledgeResourceIds ?? [],
+					}),
 				},
 			});
 			await ctx.collections.activity.create({
@@ -356,7 +349,7 @@ export default workflow({
 			id: input.taskId,
 			data: {
 				status: "failed",
-				metadata: asJsonValue({ workflowError: error.message }),
+				metadata: { workflowError: error.message },
 			},
 		});
 		await ctx.collections.activity.create({

@@ -2,7 +2,7 @@ import { index } from "drizzle-orm/pg-core";
 
 import { collection } from "#questpie/factories";
 
-import { asJsonValue, relationId } from "../lib/records";
+import { relationId } from "../lib/records";
 import { workflowsFromContext } from "../lib/workflows";
 
 /** Issue type options — shared between the field definition and create actions. */
@@ -358,7 +358,7 @@ export const tasks = collection("tasks")
 						summary: `Created issue: ${task.title}`,
 						task: task.id,
 						project: projectId ?? undefined,
-						details: asJsonValue({ source: "admin-quick-create" }),
+						details: { source: "admin-quick-create" },
 					});
 					return {
 						type: "success",
@@ -416,7 +416,7 @@ export const tasks = collection("tasks")
 						project: projectId ?? undefined,
 						scopeType: projectId ? "project" : "company",
 						createdBy: requestedBy,
-						context: asJsonValue({ prompt }),
+						context: { prompt },
 					});
 					await collections.activity.create({
 						actor: requestedBy,
@@ -424,7 +424,7 @@ export const tasks = collection("tasks")
 						summary: `Dispatched issue: ${task.title}`,
 						task: task.id,
 						project: projectId ?? undefined,
-						details: asJsonValue({ source: "admin-ai-dispatch" }),
+						details: { source: "admin-ai-dispatch" },
 					});
 					await workflowsFromContext(ctx).trigger(
 						"task-pipeline",
