@@ -886,7 +886,11 @@ const getAdminConfigOutputSchema = adminConfigDTOSchema;
  */
 const getAdminConfig = route()
 	.post()
-	.access((ctx) => !!(ctx as { session?: unknown }).session)
+	.access(
+		(ctx): boolean =>
+			(ctx as { session?: { user?: { role?: unknown } } }).session?.user
+				?.role === "admin",
+	)
 	.schema(getAdminConfigSchema)
 	.outputSchema(getAdminConfigOutputSchema)
 	.handler(async (ctx) => {

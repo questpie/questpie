@@ -772,7 +772,11 @@ const getActionsConfigResponseSchema = z
  */
 export const executeActionFn = route()
 	.post()
-	.access((ctx) => !!(ctx as { session?: unknown }).session)
+	.access(
+		(ctx): boolean =>
+			(ctx as { session?: { user?: { role?: unknown } } }).session?.user
+				?.role === "admin",
+	)
 	.schema(executeActionRequestSchema)
 	.outputSchema(executeActionResponseSchema)
 	.handler(async (ctx) => {
@@ -787,7 +791,11 @@ export const executeActionFn = route()
  */
 export const getActionsConfigFn = route()
 	.post()
-	.access((ctx) => !!(ctx as { session?: unknown }).session)
+	.access(
+		(ctx): boolean =>
+			(ctx as { session?: { user?: { role?: unknown } } }).session?.user
+				?.role === "admin",
+	)
 	.schema(getActionsConfigRequestSchema)
 	.outputSchema(getActionsConfigResponseSchema)
 	.handler((ctx) => {

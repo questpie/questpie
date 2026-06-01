@@ -69,7 +69,11 @@ const fetchWidgetDataSchema = z.object({
  */
 export const fetchWidgetData = route()
 	.post()
-	.access((ctx) => !!(ctx as { session?: unknown }).session)
+	.access(
+		(ctx): boolean =>
+			(ctx as { session?: { user?: { role?: unknown } } }).session?.user
+				?.role === "admin",
+	)
 	.schema(fetchWidgetDataSchema)
 	.outputSchema(z.unknown())
 	.handler(async (ctx) => {
