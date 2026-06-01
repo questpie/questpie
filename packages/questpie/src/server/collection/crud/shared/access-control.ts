@@ -22,6 +22,7 @@ import { getDb, normalizeContext } from "./context.js";
 
 type FieldDefinitionLike = {
 	_state?: {
+		access?: FieldAccess;
 		input?: unknown;
 		output?: unknown;
 		nestedFields?: Record<string, unknown>;
@@ -154,12 +155,36 @@ export interface FilterFieldsForReadOptions {
 	fieldAccess?: Record<string, FieldAccess>;
 }
 
-export function deriveFieldAccessFromDefinitions(
-	fieldDefinitions: Record<string, unknown> | undefined,
+function mergeFieldAccessMaps(
+	...maps: Array<Record<string, FieldAccess> | undefined>
 ): Record<string, FieldAccess> | undefined {
-	if (!fieldDefinitions) return undefined;
+	const merged: Record<string, FieldAccess> = {};
 
-	const rules: Record<string, FieldAccess> = {};
+	for (const map of maps) {
+		if (!map) continue;
+		for (const [fieldPath, rule] of Object.entries(map)) {
+			merged[fieldPath] = {
+				...merged[fieldPath],
+				...rule,
+			};
+		}
+	}
+
+	return Object.keys(merged).length > 0 ? merged : undefined;
+}
+
+function deriveFieldAccessLayers(
+	fieldDefinitions: Record<string, unknown> | undefined,
+): {
+	fieldAccess?: Record<string, FieldAccess>;
+	fieldFlags?: Record<string, FieldAccess>;
+} {
+	const fieldAccess: Record<string, FieldAccess> = {};
+	const fieldFlags: Record<string, FieldAccess> = {};
+
+	if (!fieldDefinitions) {
+		return {};
+	}
 
 	const collect = (definitions: Record<string, unknown>, prefix?: string) => {
 		for (const [fieldName, fieldDefinition] of Object.entries(definitions)) {
@@ -167,16 +192,20 @@ export function deriveFieldAccessFromDefinitions(
 			const state = (fieldDefinition as FieldDefinitionLike)._state;
 			if (!state) continue;
 
-			const access: FieldAccess = {};
+			if (state.access) {
+				fieldAccess[fieldPath] = state.access;
+			}
+
+			const flags: FieldAccess = {};
 			if (state.output === false) {
-				access.read = false;
+				flags.read = false;
 			}
 			if (state.input === false) {
-				access.create = false;
-				access.update = false;
+				flags.create = false;
+				flags.update = false;
 			}
-			if (Object.keys(access).length > 0) {
-				rules[fieldPath] = access;
+			if (Object.keys(flags).length > 0) {
+				fieldFlags[fieldPath] = flags;
 			}
 
 			if (state.nestedFields) {
@@ -186,45 +215,48 @@ export function deriveFieldAccessFromDefinitions(
 	};
 
 	collect(fieldDefinitions);
-	return Object.keys(rules).length > 0 ? rules : undefined;
+	return {
+		fieldAccess: Object.keys(fieldAccess).length > 0 ? fieldAccess : undefined,
+		fieldFlags: Object.keys(fieldFlags).length > 0 ? fieldFlags : undefined,
+	};
+}
+
+export function deriveFieldAccessFromDefinitions(
+	fieldDefinitions: Record<string, unknown> | undefined,
+): Record<string, FieldAccess> | undefined {
+	const layers = deriveFieldAccessLayers(fieldDefinitions);
+	return mergeFieldAccessMaps(layers.fieldAccess, layers.fieldFlags);
 }
 
 export function mergeFieldAccessRules(
 	fieldAccess: Record<string, FieldAccess> | undefined,
 	fieldDefinitions: Record<string, unknown> | undefined,
 ): Record<string, FieldAccess> | undefined {
-	const derivedAccess = deriveFieldAccessFromDefinitions(fieldDefinitions);
-	if (!fieldAccess) return derivedAccess;
-	if (!derivedAccess) return fieldAccess;
-
-	const merged: Record<string, FieldAccess> = { ...fieldAccess };
-	for (const [fieldPath, derivedRule] of Object.entries(derivedAccess)) {
-		merged[fieldPath] = {
-			...merged[fieldPath],
-			...derivedRule,
-		};
-	}
-
-	return merged;
+	const layers = deriveFieldAccessLayers(fieldDefinitions);
+	return mergeFieldAccessMaps(
+		layers.fieldAccess,
+		fieldAccess,
+		layers.fieldFlags,
+	);
 }
 
-function createFieldAccessContext(params: {
+function getRequestFromContext(context: CRUDContext): Request | undefined {
+	const ctx = context as Record<string, unknown>;
+	const req = ctx.req ?? ctx.request;
+	return typeof Request !== "undefined" && req instanceof Request
+		? req
+		: undefined;
+}
+
+export function createFieldAccessContext(params: {
 	context: CRUDContext;
 	operation: "create" | "read" | "update" | "delete";
 	doc?: Record<string, unknown>;
 }): FieldAccessContext {
-	// CRUDContext uses an open index signature ([key: string]: unknown),
-	// so req/request may be present at runtime when set by the HTTP adapter.
-	const ctx = params.context as Record<string, unknown>;
-	const request =
-		(ctx.req as Request | undefined) ??
-		(ctx.request as Request | undefined) ??
-		(typeof Request !== "undefined"
-			? new Request("http://questpie.local")
-			: ({} as Request));
+	const req = getRequestFromContext(params.context);
 
 	return {
-		req: request,
+		...(req ? { req } : {}),
 		// session is typed as { user: User; session: Session } | null | undefined
 		user: params.context.session?.user,
 		doc: params.doc,

@@ -15,6 +15,10 @@ import type {
 	CollectionAccess,
 	CollectionBuilderState,
 } from "#questpie/server/collection/builder/types.js";
+import {
+	createFieldAccessContext,
+	mergeFieldAccessRules,
+} from "#questpie/server/collection/crud/shared/access-control.js";
 import type { CRUDContext } from "#questpie/server/collection/crud/types.js";
 import type { FieldState } from "#questpie/server/fields/field-class-types.js";
 import type { Field } from "#questpie/server/fields/field-class.js";
@@ -30,6 +34,8 @@ import {
 	serializeReactivePropsRecord,
 } from "#questpie/server/fields/reactive.js";
 import type {
+	FieldAccess,
+	FieldAccessContext,
 	FieldLocation,
 	FieldMetadata,
 	ReferentialAction,
@@ -748,6 +754,11 @@ export async function introspectCollection(
 	const fieldDefinitions = state.fieldDefinitions || {};
 	const adminState = state as CollectionBuilderState & AdminPluginState;
 	const formReactiveByField = extractFormReactiveConfigs(adminState.adminForm);
+	const resolvedFieldAccess = mergeFieldAccessRules(
+		(state.access as { fields?: Record<string, FieldAccess> } | undefined)
+			?.fields,
+		fieldDefinitions,
+	);
 
 	// Evaluate collection-level access
 	const access = await evaluateCollectionAccess(state, context, app);
@@ -755,8 +766,8 @@ export async function introspectCollection(
 	// Build field schemas — evaluate field access in parallel
 	const fieldEntries = Object.entries(fieldDefinitions);
 	const fieldAccessResults = await Promise.all(
-		fieldEntries.map(([, fieldDef]) =>
-			evaluateFieldAccess(fieldDef, context, app),
+		fieldEntries.map(([name]) =>
+			evaluateFieldAccess(resolvedFieldAccess?.[name], context),
 		),
 	);
 
@@ -1314,32 +1325,27 @@ async function evaluateAccessRule(
  * Evaluate field-level access for current user.
  */
 async function evaluateFieldAccess(
-	fieldDef: Field<FieldState>,
+	fieldAccess: FieldAccess | undefined,
 	context: CRUDContext,
-	app?: unknown,
 ): Promise<FieldAccessInfo | undefined> {
-	const fieldAccess = fieldDef._state.access;
-
 	// No field-level access config
 	if (!fieldAccess) {
 		return undefined;
 	}
 
-	const { extractAppServices } =
-		await import("#questpie/server/config/app-context.js");
-	const services = extractAppServices(app, {
-		db: context.db,
-		session: context.session,
-	});
-	const accessContext: AccessContext = {
-		...services,
-		locale: context.locale,
-	} as AccessContext;
-
 	return {
-		read: await evaluateFieldAccessRule(fieldAccess.read, accessContext),
-		create: await evaluateFieldAccessRule(fieldAccess.create, accessContext),
-		update: await evaluateFieldAccessRule(fieldAccess.update, accessContext),
+		read: await evaluateFieldAccessRule(
+			fieldAccess.read,
+			createFieldAccessContext({ context, operation: "read" }),
+		),
+		create: await evaluateFieldAccessRule(
+			fieldAccess.create,
+			createFieldAccessContext({ context, operation: "create" }),
+		),
+		update: await evaluateFieldAccessRule(
+			fieldAccess.update,
+			createFieldAccessContext({ context, operation: "update" }),
+		),
 	};
 }
 
@@ -1348,7 +1354,7 @@ async function evaluateFieldAccess(
  */
 async function evaluateFieldAccessRule(
 	rule: boolean | ((ctx: any) => boolean | Promise<boolean>) | undefined,
-	context: AccessContext,
+	context: FieldAccessContext,
 ): Promise<AccessResult> {
 	// No rule = allowed
 	if (rule === undefined || rule === true) {

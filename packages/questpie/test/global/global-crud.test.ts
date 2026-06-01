@@ -65,6 +65,41 @@ const field_flag_config = global("field_flag_config")
 		update: true,
 	});
 
+const field_level_config = global("field_level_config")
+	.fields(({ f }) => ({
+		title: f.text(100),
+		secret: f.text(100).access({
+			read: false,
+			create: false,
+			update: false,
+		}),
+	}))
+	.access({
+		read: true,
+		update: true,
+	});
+
+const field_override_config = global("field_override_config")
+	.fields(({ f }) => ({
+		title: f.text(100),
+		secret: f.text(100).access({
+			read: false,
+			create: false,
+			update: false,
+		}),
+	}))
+	.access({
+		read: true,
+		update: true,
+		fields: {
+			secret: {
+				read: true,
+				create: true,
+				update: true,
+			},
+		},
+	});
+
 const workflow_config = global("workflow_config")
 	.fields(({ f }) => ({
 		title: f.text().required(),
@@ -108,6 +143,8 @@ describe("global CRUD", () => {
 				auto_config,
 				read_only_config,
 				field_flag_config,
+				field_level_config,
+				field_override_config,
 				workflow_config,
 				guarded_workflow_config,
 			},
@@ -336,6 +373,48 @@ describe("global CRUD", () => {
 				serverOnly: "nested array server supplied",
 			},
 		]);
+	});
+
+	it("enforces global f.access() declarations for user-mode read and write", async () => {
+		const userCtx = createTestContext({ accessMode: "user" });
+		const systemCtx = createTestContext({ accessMode: "system" });
+
+		await expect(
+			app.globals.field_level_config.update(
+				{
+					title: "Field access",
+					secret: "client supplied",
+				},
+				userCtx,
+			),
+		).rejects.toThrow("Cannot write field 'secret': access denied");
+
+		await app.globals.field_level_config.update(
+			{
+				title: "Field access",
+				secret: "system supplied",
+			},
+			systemCtx,
+		);
+
+		const retrieved = await app.globals.field_level_config.get({}, userCtx);
+		expect(retrieved).not.toHaveProperty("secret");
+	});
+
+	it("lets global-level field access override field-level access declarations", async () => {
+		const userCtx = createTestContext({ accessMode: "user" });
+
+		const updated = await app.globals.field_override_config.update(
+			{
+				title: "Override",
+				secret: "allowed",
+			},
+			userCtx,
+		);
+		expect(updated?.secret).toBe("allowed");
+
+		const retrieved = await app.globals.field_override_config.get({}, userCtx);
+		expect(retrieved?.secret).toBe("allowed");
 	});
 
 	it("reads global snapshots from non-initial workflow stage", async () => {

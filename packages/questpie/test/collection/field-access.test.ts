@@ -122,6 +122,45 @@ const fieldFlagDocs = collection("field_flag_docs")
 		delete: true,
 	});
 
+const fieldLevelAccessDocs = collection("field_level_access_docs")
+	.fields(({ f }) => ({
+		title: f.text(255).required(),
+		secret: f.text(255).access({
+			read: false,
+			create: false,
+			update: false,
+		}),
+	}))
+	.access({
+		read: true,
+		create: true,
+		update: true,
+		delete: true,
+	});
+
+const fieldAccessOverrideDocs = collection("field_access_override_docs")
+	.fields(({ f }) => ({
+		title: f.text(255).required(),
+		secret: f.text(255).access({
+			read: false,
+			create: false,
+			update: false,
+		}),
+	}))
+	.access({
+		read: true,
+		create: true,
+		update: true,
+		delete: true,
+		fields: {
+			secret: {
+				read: true,
+				create: true,
+				update: true,
+			},
+		},
+	});
+
 describe("field-level access control", () => {
 	let setup: Awaited<ReturnType<typeof buildMockApp>>;
 
@@ -133,6 +172,8 @@ describe("field-level access control", () => {
 				write_response_docs: writeResponseDocs,
 				profile_docs: profileDocs,
 				field_flag_docs: fieldFlagDocs,
+				field_level_access_docs: fieldLevelAccessDocs,
+				field_access_override_docs: fieldAccessOverrideDocs,
 			},
 		});
 		await runTestDbMigrations(setup.app);
@@ -865,6 +906,70 @@ describe("field-level access control", () => {
 					serverOnly: "nested array server supplied",
 				},
 			]);
+		});
+	});
+
+	describe("field-level access declarations", () => {
+		it("enforces f.access() declarations for user-mode read and write", async () => {
+			const userCtx = createTestContext({ accessMode: "user" });
+			const systemCtx = createTestContext({ accessMode: "system" });
+
+			await expect(
+				setup.app.collections.field_level_access_docs.create(
+					{
+						title: "Field access",
+						secret: "client supplied",
+					},
+					userCtx,
+				),
+			).rejects.toThrow("Cannot write field 'secret': access denied");
+
+			const created =
+				await setup.app.collections.field_level_access_docs.create(
+					{
+						title: "Field access",
+						secret: "system supplied",
+					},
+					systemCtx,
+				);
+
+			const retrieved =
+				await setup.app.collections.field_level_access_docs.findOne(
+					{ where: { id: created.id } },
+					userCtx,
+				);
+			expect(retrieved).not.toHaveProperty("secret");
+
+			await expect(
+				setup.app.collections.field_level_access_docs.updateById(
+					{
+						id: created.id,
+						data: { secret: "changed" },
+					},
+					userCtx,
+				),
+			).rejects.toThrow("Cannot write field 'secret': access denied");
+		});
+
+		it("lets collection-level field access override field-level access declarations", async () => {
+			const userCtx = createTestContext({ accessMode: "user" });
+
+			const created =
+				await setup.app.collections.field_access_override_docs.create(
+					{
+						title: "Override",
+						secret: "allowed",
+					},
+					userCtx,
+				);
+			expect(created.secret).toBe("allowed");
+
+			const retrieved =
+				await setup.app.collections.field_access_override_docs.findOne(
+					{ where: { id: created.id } },
+					userCtx,
+				);
+			expect(retrieved?.secret).toBe("allowed");
 		});
 	});
 });
