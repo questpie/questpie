@@ -38,6 +38,8 @@ Every field supports these methods:
 | `.minItems(n)`       | Minimum items (for `.array()` fields)                                  |
 | `.maxItems(n)`       | Maximum items (for `.array()` fields)                                  |
 
+`inputFalse()` and `outputFalse()` are enforced as framework-level access primitives in user-mode CRUD. `inputFalse()` rejects create/update writes to that field, including nested object paths. `outputFalse()` redacts the field from read/create/update responses. System-mode CRUD still bypasses field access for server-side jobs, hooks, migrations, and seeds.
+
 ## Text Fields
 
 ### `f.text(maxLength?)`

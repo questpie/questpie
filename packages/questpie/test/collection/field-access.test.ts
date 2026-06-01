@@ -97,6 +97,24 @@ const profileDocs = collection("profile_docs")
 		},
 	});
 
+const fieldFlagDocs = collection("field_flag_docs")
+	.fields(({ f }) => ({
+		title: f.text(255).required(),
+		serverOnly: f.text(255).inputFalse(),
+		secret: f.text(255).outputFalse(),
+		profile: f.object({
+			publicNote: f.text(255),
+			hidden: f.text(255).outputFalse(),
+			serverOnly: f.text(255).inputFalse(),
+		}),
+	}))
+	.access({
+		read: true,
+		create: true,
+		update: true,
+		delete: true,
+	});
+
 describe("field-level access control", () => {
 	let setup: Awaited<ReturnType<typeof buildMockApp>>;
 
@@ -107,6 +125,7 @@ describe("field-level access control", () => {
 				public_posts: publicPosts,
 				write_response_docs: writeResponseDocs,
 				profile_docs: profileDocs,
+				field_flag_docs: fieldFlagDocs,
 			},
 		});
 		await runTestDbMigrations(setup.app);
@@ -717,6 +736,94 @@ describe("field-level access control", () => {
 			expect(deleted.success).toBe(true);
 			expect(deleted.data.title).toBe("Delete");
 			expect(deleted.data.secret).toBeUndefined();
+		});
+	});
+
+	describe("input/output field flags", () => {
+		it("rejects user writes to inputFalse fields", async () => {
+			const userCtx = createTestContext({ accessMode: "user" });
+
+			await expect(
+				setup.app.collections.field_flag_docs.create(
+					{
+						title: "Flags",
+						serverOnly: "client supplied",
+					},
+					userCtx,
+				),
+			).rejects.toThrow("Cannot write field 'serverOnly': access denied");
+		});
+
+		it("rejects user writes to nested inputFalse fields", async () => {
+			const userCtx = createTestContext({ accessMode: "user" });
+
+			await expect(
+				setup.app.collections.field_flag_docs.create(
+					{
+						title: "Flags",
+						profile: {
+							publicNote: "visible",
+							serverOnly: "client supplied",
+						},
+					},
+					userCtx,
+				),
+			).rejects.toThrow(
+				"Cannot write field 'profile.serverOnly': access denied",
+			);
+		});
+
+		it("redacts outputFalse fields from user-mode create and read responses", async () => {
+			const userCtx = createTestContext({ accessMode: "user" });
+
+			const created = await setup.app.collections.field_flag_docs.create(
+				{
+					title: "Flags",
+					secret: "hidden",
+					profile: {
+						publicNote: "visible",
+						hidden: "nested hidden",
+					},
+				},
+				userCtx,
+			);
+
+			expect(created).not.toHaveProperty("secret");
+			expect(created.profile).toEqual({ publicNote: "visible" });
+
+			const retrieved = await setup.app.collections.field_flag_docs.findOne(
+				{ where: { id: created.id } },
+				userCtx,
+			);
+
+			expect(retrieved).not.toHaveProperty("secret");
+			expect(retrieved?.profile).toEqual({ publicNote: "visible" });
+		});
+
+		it("allows system mode to write and read input/output flagged fields", async () => {
+			const systemCtx = createTestContext({ accessMode: "system" });
+
+			const created = await setup.app.collections.field_flag_docs.create(
+				{
+					title: "Flags",
+					serverOnly: "server supplied",
+					secret: "system visible",
+					profile: {
+						publicNote: "visible",
+						hidden: "nested hidden",
+						serverOnly: "nested server supplied",
+					},
+				},
+				systemCtx,
+			);
+
+			expect(created.serverOnly).toBe("server supplied");
+			expect(created.secret).toBe("system visible");
+			expect(created.profile).toEqual({
+				publicNote: "visible",
+				hidden: "nested hidden",
+				serverOnly: "nested server supplied",
+			});
 		});
 	});
 });

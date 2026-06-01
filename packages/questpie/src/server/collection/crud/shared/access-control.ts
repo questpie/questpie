@@ -20,6 +20,14 @@ import type {
 
 import { getDb, normalizeContext } from "./context.js";
 
+type FieldDefinitionLike = {
+	_state?: {
+		input?: unknown;
+		output?: unknown;
+		nestedFields?: Record<string, unknown>;
+	};
+};
+
 /**
  * Context for access rule evaluation
  */
@@ -146,6 +154,60 @@ export interface FilterFieldsForReadOptions {
 	fieldAccess?: Record<string, FieldAccess>;
 }
 
+export function deriveFieldAccessFromDefinitions(
+	fieldDefinitions: Record<string, unknown> | undefined,
+): Record<string, FieldAccess> | undefined {
+	if (!fieldDefinitions) return undefined;
+
+	const rules: Record<string, FieldAccess> = {};
+
+	const collect = (definitions: Record<string, unknown>, prefix?: string) => {
+		for (const [fieldName, fieldDefinition] of Object.entries(definitions)) {
+			const fieldPath = prefix ? `${prefix}.${fieldName}` : fieldName;
+			const state = (fieldDefinition as FieldDefinitionLike)._state;
+			if (!state) continue;
+
+			const access: FieldAccess = {};
+			if (state.output === false) {
+				access.read = false;
+			}
+			if (state.input === false) {
+				access.create = false;
+				access.update = false;
+			}
+			if (Object.keys(access).length > 0) {
+				rules[fieldPath] = access;
+			}
+
+			if (state.nestedFields) {
+				collect(state.nestedFields, fieldPath);
+			}
+		}
+	};
+
+	collect(fieldDefinitions);
+	return Object.keys(rules).length > 0 ? rules : undefined;
+}
+
+export function mergeFieldAccessRules(
+	fieldAccess: Record<string, FieldAccess> | undefined,
+	fieldDefinitions: Record<string, unknown> | undefined,
+): Record<string, FieldAccess> | undefined {
+	const derivedAccess = deriveFieldAccessFromDefinitions(fieldDefinitions);
+	if (!fieldAccess) return derivedAccess;
+	if (!derivedAccess) return fieldAccess;
+
+	const merged: Record<string, FieldAccess> = { ...fieldAccess };
+	for (const [fieldPath, derivedRule] of Object.entries(derivedAccess)) {
+		merged[fieldPath] = {
+			...merged[fieldPath],
+			...derivedRule,
+		};
+	}
+
+	return merged;
+}
+
 function createFieldAccessContext(params: {
 	context: CRUDContext;
 	operation: "create" | "read" | "update" | "delete";
@@ -207,7 +269,7 @@ export async function getRestrictedReadFields(
 
 	const fieldsToRemove: string[] = [];
 
-	for (const fieldName of Object.keys(result)) {
+	for (const [fieldName, access] of Object.entries(fieldAccess)) {
 		// Skip meta fields
 		if (
 			fieldName === "id" ||
@@ -219,7 +281,6 @@ export async function getRestrictedReadFields(
 			continue;
 		}
 
-		const access = fieldAccess[fieldName];
 		if (!access || access.read === undefined) {
 			// No access rule for this field - allow read
 			continue;
@@ -235,7 +296,10 @@ export async function getRestrictedReadFields(
 		);
 
 		if (!canRead) {
-			fieldsToRemove.push(fieldName);
+			const path = fieldName.split(".");
+			if (hasPathValue(result, path)) {
+				fieldsToRemove.push(fieldName);
+			}
 		}
 	}
 
@@ -297,6 +361,46 @@ function getPathValue(source: unknown, path: Array<string | number>): unknown {
 		current = (current as Record<string, unknown>)[segment];
 	}
 	return current;
+}
+
+function hasPathValue(source: unknown, path: string[]): boolean {
+	if (path.length === 0) return true;
+	if (Array.isArray(source)) {
+		return source.some((item) => hasPathValue(item, path));
+	}
+	if (!isRecord(source)) return false;
+
+	const [head, ...tail] = path;
+	if (!(head in source)) return false;
+	if (tail.length === 0) return true;
+	return hasPathValue(source[head], tail);
+}
+
+function deletePathValue(source: unknown, path: string[]): void {
+	if (path.length === 0) return;
+	if (Array.isArray(source)) {
+		for (const item of source) {
+			deletePathValue(item, path);
+		}
+		return;
+	}
+	if (!isRecord(source)) return;
+
+	const [head, ...tail] = path;
+	if (tail.length === 0) {
+		delete source[head];
+		return;
+	}
+	deletePathValue(source[head], tail);
+}
+
+export function removeRestrictedReadFields(
+	result: Record<string, any>,
+	fieldsToRemove: string[],
+): void {
+	for (const fieldName of fieldsToRemove) {
+		deletePathValue(result, fieldName.split("."));
+	}
 }
 
 async function validateFieldPathWriteAccess(params: {

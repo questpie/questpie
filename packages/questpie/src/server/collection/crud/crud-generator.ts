@@ -47,7 +47,9 @@ import {
 	executeAccessRule,
 	getRestrictedReadFields,
 	matchesAccessConditions,
+	mergeFieldAccessRules,
 	mergeWhereWithAccess,
+	removeRestrictedReadFields,
 	validateFieldsWriteAccess,
 } from "#questpie/server/collection/crud/shared/access-control.js";
 import {
@@ -347,7 +349,10 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 		const collectionAccess = this.state.access as
 			| { fields?: Record<string, FieldAccess> }
 			| undefined;
-		return collectionAccess?.fields;
+		return mergeFieldAccessRules(
+			collectionAccess?.fields,
+			this.state.fieldDefinitions,
+		);
 	}
 
 	private async runFieldInputHooks(
@@ -3118,10 +3123,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			fieldAccess,
 		});
 
-		// Remove restricted fields
-		for (const fieldName of fieldsToRemove) {
-			delete result[fieldName];
-		}
+		removeRestrictedReadFields(result, fieldsToRemove);
 	}
 
 	/**

@@ -16,11 +16,14 @@ import {
 	extractNestedLocalizationSchemas,
 	getDb,
 	getRestrictedReadFields,
+	mergeFieldAccessRules,
 	mergeI18nRows,
 	normalizeContext,
 	normalizeJsonbInput,
 	onAfterCommit,
+	removeRestrictedReadFields,
 	splitLocalizedFields,
+	validateFieldsWriteAccess,
 	withTransaction,
 } from "#questpie/server/collection/crud/shared/index.js";
 import type {
@@ -205,7 +208,10 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 		const globalAccess = this.state.access as
 			| { fields?: Record<string, FieldAccess> }
 			| undefined;
-		return globalAccess?.fields;
+		return mergeFieldAccessRules(
+			globalAccess?.fields,
+			this.state.fieldDefinitions,
+		);
 	}
 
 	private async runFieldInputHooks(
@@ -1791,46 +1797,7 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 			fieldAccess,
 		});
 
-		// Remove restricted fields
-		for (const fieldName of fieldsToRemove) {
-			delete result[fieldName];
-		}
-	}
-
-	/**
-	 * Check if user can write to a specific field
-	 */
-	private async canWriteField(
-		fieldName: string,
-		context: CRUDContext,
-		operation: "create" | "update",
-		row?: any,
-	): Promise<boolean> {
-		const fieldAccess = this.getFieldAccessRules();
-		const access = fieldAccess?.[fieldName];
-		if (!access) return true;
-
-		const rule = operation === "create" ? access.create : access.update;
-		if (rule === undefined || rule === true) return true;
-		if (rule === false) return false;
-		if (typeof rule === "function") {
-			const req =
-				(context as any).req ??
-				(context as any).request ??
-				(typeof Request !== "undefined"
-					? new Request("http://questpie.local")
-					: ({} as Request));
-			return (
-				(await rule({
-					req,
-					user: (context.session as any)?.user,
-					doc: row,
-					operation,
-				})) === true
-			);
-		}
-
-		return true;
+		removeRestrictedReadFields(result, fieldsToRemove);
 	}
 
 	/**
@@ -1847,35 +1814,15 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 		// System mode bypasses field access control
 		if (normalized.accessMode === "system") return;
 
-		const fieldAccess = this.getFieldAccessRules();
-		if (!fieldAccess) return; // No field-level access rules
-
-		// Check each field in the input
-		for (const fieldName of Object.keys(data)) {
-			// Skip meta fields
-			if (
-				fieldName === "id" ||
-				fieldName === "createdAt" ||
-				fieldName === "updatedAt"
-			) {
-				continue;
-			}
-
-			const canWrite = await this.canWriteField(
-				fieldName,
-				context,
-				operation,
-				existing,
-			);
-			if (!canWrite) {
-				throw ApiError.forbidden({
-					operation: "update",
-					resource: this.state.name,
-					reason: `Cannot write field '${fieldName}': access denied`,
-					fieldPath: fieldName,
-				});
-			}
-		}
+		await validateFieldsWriteAccess(
+			data,
+			this.getFieldAccessRules(),
+			context,
+			{ app: this.app, db: this.getDb(context) },
+			this.state.name,
+			operation,
+			existing,
+		);
 	}
 
 	/**

@@ -7,11 +7,14 @@
 export {
 	type AccessRuleEvaluationContext,
 	checkFieldWriteAccess,
+	deriveFieldAccessFromDefinitions,
 	executeAccessRule,
 	type FilterFieldsForReadOptions,
 	getRestrictedReadFields,
 	matchesAccessConditions,
+	mergeFieldAccessRules,
 	mergeWhereWithAccess,
+	removeRestrictedReadFields,
 	validateFieldsWriteAccess,
 } from "./access-control.js";
 export { getDb, type NormalizedContext, normalizeContext } from "./context.js";
