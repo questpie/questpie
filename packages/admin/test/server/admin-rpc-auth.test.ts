@@ -2,11 +2,16 @@ import { describe, expect, it } from "bun:test";
 
 import { adminConfigFunctions } from "#questpie/admin/server/modules/admin/routes/admin-config";
 import { actionFunctions } from "#questpie/admin/server/modules/admin/routes/execute-action";
+import { localeFunctions } from "#questpie/admin/server/modules/admin/routes/locales";
+import { previewFunctions } from "#questpie/admin/server/modules/admin/routes/preview";
 import { reactiveFunctions } from "#questpie/admin/server/modules/admin/routes/reactive";
 import { widgetDataFunctions } from "#questpie/admin/server/modules/admin/routes/widget-data";
 
 const guardedRoutes = {
 	getAdminConfig: adminConfigFunctions.getAdminConfig,
+	getContentLocales: localeFunctions.getContentLocales,
+	mintPreviewToken: previewFunctions.mintPreviewToken,
+	getPreviewUrl: previewFunctions.getPreviewUrl,
 	fetchWidgetData: widgetDataFunctions.fetchWidgetData,
 	batchReactive: reactiveFunctions.batchReactive,
 	fieldOptions: reactiveFunctions.fieldOptions,

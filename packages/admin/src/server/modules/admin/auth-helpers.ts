@@ -91,6 +91,16 @@ export interface GetAdminSessionOptions {
 }
 
 /**
+ * Check whether a route context belongs to an admin user.
+ */
+export function hasAdminRole(ctx: unknown): boolean {
+	return (
+		(ctx as { session?: { user?: { role?: unknown } } | null }).session?.user
+			?.role === "admin"
+	);
+}
+
+/**
  * Check if user is authenticated with required role on the server.
  * Returns a redirect Response if not authenticated, null if authenticated.
  *

@@ -71,7 +71,7 @@ export default adminConfig({
 
 The admin package depends on the admin-role Better Auth contract provided by `adminModule`. Apps can use the built-in starter auth model or an equivalent auth setup, but the active session must expose `session.user.role`.
 
-The admin panel, admin config RPC, widget loaders, action handlers, and reactive field handlers are available only when `session.user.role === "admin"`. A logged-in user with `role: "user"` or no role is not allowed into the admin surface.
+The admin panel, admin config RPC, content locale callbacks, preview URL/token generation, widget loaders, action handlers, and reactive field handlers are available only when `session.user.role === "admin"`. A logged-in user with `role: "user"` or no role is not allowed into the admin surface.
 
 The built-in setup route follows the same rule: it checks for an existing user with `role = "admin"` and creates the first admin account with that role. If an app customizes the Better Auth `user` collection, merge the starter user collection and keep role support instead of replacing the collection from scratch.
 

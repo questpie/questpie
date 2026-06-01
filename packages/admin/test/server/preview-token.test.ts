@@ -6,11 +6,11 @@ import {
 	verifyPreviewTokenDirect,
 } from "../../src/server/modules/admin/routes/preview.js";
 
-function routeContext(input: unknown, secret = "preview-secret") {
+function routeContext(input: unknown, secret = "preview-secret", role = "admin") {
 	return {
 		input,
 		app: { config: { secret } },
-		session: { user: { id: "admin_1" } },
+		session: { user: { id: "admin_1", role } },
 		locale: "en",
 		params: {},
 		request: new Request("http://localhost"),
@@ -46,5 +46,20 @@ describe("preview token helpers", () => {
 		const verify = createPreviewTokenVerifier("wrong-secret");
 
 		expect(await verify(token)).toBeNull();
+	});
+
+	it("requires admin role to mint preview tokens", async () => {
+		const preview = createPreviewFunctions();
+		const mintPreviewToken = preview.mintPreviewToken as any;
+		const userCtx = routeContext(
+			{ path: "/draft" },
+			"preview-secret",
+			"user",
+		);
+
+		expect(await mintPreviewToken.access(userCtx)).toBe(false);
+		await expect(mintPreviewToken.handler(userCtx)).rejects.toThrow(
+			"Admin session required",
+		);
 	});
 });

@@ -62,7 +62,7 @@ The `adminModule` includes the starter auth model and provides the canonical Bet
 
 This user contract includes `user.role` with at least `admin` and `user` values. The built-in admin setup route checks for an existing `role = "admin"` user, and the admin UI guard expects `session.user.role === "admin"`.
 
-Admin RPC routes that expose admin config, dashboard widget loaders, action handlers, and reactive field handlers use the same `session.user.role === "admin"` contract. A logged-in non-admin user is not enough for admin access.
+Admin RPC routes that expose admin config, content locale callbacks, preview URL/token generation, dashboard widget loaders, action handlers, and reactive field handlers use the same `session.user.role === "admin"` contract. A logged-in non-admin user is not enough for admin access.
 
 Do not replace `collection("user")` from scratch in an app that uses `adminModule`. If you need custom user fields or admin layout, merge the starter user collection and extend it:
 

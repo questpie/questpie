@@ -54,6 +54,11 @@ const getContentLocalesOutputSchema = z.object({
  */
 const getContentLocales = route()
 	.post()
+	.access(
+		(ctx): boolean =>
+			(ctx as { session?: { user?: { role?: unknown } } }).session?.user
+				?.role === "admin",
+	)
 	.schema(getContentLocalesSchema)
 	.outputSchema(getContentLocalesOutputSchema)
 	.handler(async (ctx) => {
