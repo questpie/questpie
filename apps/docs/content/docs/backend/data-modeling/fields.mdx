@@ -228,8 +228,12 @@ Every field supports these chain methods:
 | `.description(text)` | Help text (string or i18n object)                                       |
 | `.localized()`       | Store per-locale values in i18n table                                   |
 | `.inputOptional()`   | Always optional in input, even if NOT NULL (e.g., auto-generated slugs) |
+| `.inputFalse()`      | Reject user-mode create/update writes to this field                     |
+| `.outputFalse()`     | Redact this field from user-mode CRUD responses                         |
 | `.virtual(expr?)`    | No DB column; optional SQL expression for computed fields               |
 | `.array()`           | Wrap as JSONB array                                                     |
+
+Use `inputFalse()` for fields the server owns, such as generated slugs, ownership, counters, or audit values. Use `outputFalse()` for write-only values such as secrets or credentials. Both methods also apply inside `f.object()` fields using their nested path. System-mode CRUD still bypasses these field access rules for trusted server code.
 
 See [Field API Reference](/docs/reference/field-api) for the full list.
 

@@ -104,6 +104,17 @@ The spec is generated at runtime from your app's schema:
 
 Collection and global field schemas (from Zod) are automatically converted to JSON Schema in the spec. Route input/output schemas are included when defined.
 
+## Field Visibility
+
+OpenAPI schemas follow field input/output flags from your schema:
+
+| Field flag       | Request schema                                     | Response schema                                       |
+| ---------------- | -------------------------------------------------- | ----------------------------------------------------- |
+| `.inputFalse()`  | Field is omitted from create/update request bodies | Field is included with `readOnly: true`               |
+| `.outputFalse()` | Field is included with `writeOnly: true`           | Field is omitted from document/global response bodies |
+
+This mirrors user-mode CRUD behavior: `inputFalse()` rejects user writes, and `outputFalse()` redacts returned data. System-mode server code can still write/read those values.
+
 ## Manual Route Approach
 
 Instead of the module, you can create route files directly:
