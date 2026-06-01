@@ -38,10 +38,14 @@ CMD ["bun", "run", ".output/server/index.mjs"]
 | `S3_REGION`                         | No       | S3 region                    |
 | `S3_ACCESS_KEY`                     | No       | S3 access key                |
 | `S3_SECRET_KEY`                     | No       | S3 secret key                |
+| `R2_ACCOUNT_ID`                     | No       | Cloudflare account ID for R2 |
+| `R2_BUCKET`                         | No       | Cloudflare R2 bucket name    |
+| `R2_ACCESS_KEY_ID`                  | No       | Cloudflare R2 access key     |
+| `R2_SECRET_ACCESS_KEY`              | No       | Cloudflare R2 secret key     |
 
 ## Cloudflare Workers
 
-Deploy QUESTPIE on Workers by wiring Cloudflare bindings into explicit adapters: Hyperdrive for PostgreSQL connections, Files SDK S3 storage for R2, Workers KV, Cloudflare Queues, and Durable Object realtime. Configure Wrangler with the required bindings and `compatibility_flags = ["nodejs_compat"]` for the database driver.
+Deploy QUESTPIE on Workers by wiring Cloudflare bindings into explicit adapters: Hyperdrive for PostgreSQL connections, Files SDK R2 storage, Workers KV, Cloudflare Queues, and Durable Object realtime. Configure Wrangler with the required bindings and `compatibility_flags = ["nodejs_compat"]` for the database driver.
 
 ### Runtime topology
 
@@ -54,7 +58,7 @@ A Cloudflare deployment is one Worker module with multiple platform entrypoints:
 | `scheduled()`        | Cron Trigger dispatcher for recurring jobs         |
 | Durable Object class | Realtime fanout hub                                |
 | Hyperdrive binding   | Connection layer to your existing PostgreSQL       |
-| R2 via S3 API        | Upload/media storage through Files SDK S3 adapter  |
+| Cloudflare R2        | Upload/media storage through Files SDK R2 adapter  |
 | Workers KV binding   | KV/cache adapter                                   |
 
 `createCloudflareWorkerHandlers(app)` exports `fetch`, `queue`, and `scheduled` from the same Worker object. You do not deploy a separate long-running queue worker and you do not call `app.queue.listen()` on Cloudflare. Cloudflare Queues invokes the exported `queue()` handler, and Cron Triggers invoke the exported `scheduled()` handler.
@@ -95,7 +99,7 @@ import {
 	type CloudflareKVNamespace,
 	type CloudflareQueueBinding,
 } from "questpie/adapters/cloudflare";
-import { s3 } from "files-sdk/s3";
+import { r2 } from "files-sdk/r2";
 
 type CloudflareBindings = {
 	HYPERDRIVE: { connectionString: string };
@@ -141,15 +145,11 @@ export default runtimeConfig({
 		},
 	},
 	storage: {
-		adapter: s3({
-			credentials: {
-				accessKeyId: process.env.R2_ACCESS_KEY_ID!,
-				secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
-			},
+		adapter: r2({
 			bucket: process.env.R2_BUCKET!,
-			region: "auto",
-			endpoint: `https://${process.env.CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-			forcePathStyle: true,
+			accountId: process.env.R2_ACCOUNT_ID!,
+			accessKeyId: process.env.R2_ACCESS_KEY_ID!,
+			secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
 		}),
 		basePath: "/api",
 	},
@@ -234,11 +234,11 @@ crons = ["0 8 * * *"]
 
 [vars]
 APP_URL = "https://my-questpie-app.example.com"
-CLOUDFLARE_ACCOUNT_ID = "..."
+R2_ACCOUNT_ID = "..."
 R2_BUCKET = "my-questpie-assets"
 ```
 
-For R2 storage, configure the Files SDK S3 adapter with the R2 endpoint and credentials. For KV, configure `cloudflareKVAdapter` with a Workers KV namespace binding.
+For R2 storage, configure the Files SDK R2 adapter with HTTP credentials so `questpie.config.ts` stays importable by Bun CLI commands outside the Worker runtime. Files SDK also supports Worker `R2Bucket` binding and hybrid modes; use those only from Worker-only initialization code or after adding lazy adapter construction. For KV, configure `cloudflareKVAdapter` with a Workers KV namespace binding.
 
 For jobs, configure `cloudflareQueuesAdapter` with a Queues producer/consumer binding. For recurring jobs, add matching Cron Triggers and export `scheduled()` through `createCloudflareWorkerHandlers`. Do not configure `pgBossAdapter`, `pgNotifyAdapter`, or Redis Streams on Workers.
 

@@ -1175,6 +1175,7 @@ f.upload({
 
 ```ts
 import { fs } from "files-sdk/fs";
+import { r2 } from "files-sdk/r2";
 import { s3 } from "files-sdk/s3";
 
 // Local filesystem (default)
@@ -1182,7 +1183,7 @@ runtimeConfig({
 	storage: { adapter: fs({ root: "./uploads" }), basePath: "/api" },
 });
 
-// S3-compatible (R2, Minio, etc.)
+// S3-compatible (MinIO, Spaces, etc.)
 runtimeConfig({
 	storage: {
 		adapter: s3({
@@ -1192,6 +1193,19 @@ runtimeConfig({
 				accessKeyId: process.env.S3_ACCESS_KEY!,
 				secretAccessKey: process.env.S3_SECRET_KEY!,
 			},
+		}),
+		basePath: "/api",
+	},
+});
+
+// Cloudflare R2
+runtimeConfig({
+	storage: {
+		adapter: r2({
+			bucket: process.env.R2_BUCKET!,
+			accountId: process.env.R2_ACCOUNT_ID!,
+			accessKeyId: process.env.R2_ACCESS_KEY_ID!,
+			secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
 		}),
 		basePath: "/api",
 	},

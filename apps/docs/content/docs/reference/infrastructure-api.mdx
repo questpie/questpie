@@ -175,6 +175,7 @@ File storage uses the direct Files SDK API. Configure a Files SDK adapter in `ru
 
 ```ts title="questpie.config.ts"
 import { fs } from "files-sdk/fs";
+import { r2 } from "files-sdk/r2";
 import { s3 } from "files-sdk/s3";
 
 // Local filesystem
@@ -195,6 +196,17 @@ storage: {
       secretAccessKey: "...",
     },
     endpoint: "https://...",  // Optional, for S3-compatible providers
+  }),
+  basePath: "/api",
+}
+
+// Cloudflare R2
+storage: {
+  adapter: r2({
+    bucket: process.env.R2_BUCKET!,
+    accountId: process.env.R2_ACCOUNT_ID!,
+    accessKeyId: process.env.R2_ACCESS_KEY_ID!,
+    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
   }),
   basePath: "/api",
 }

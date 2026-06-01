@@ -11,15 +11,15 @@ This skill builds on questpie-core.
 
 QUESTPIE uses an adapter-based architecture for all infrastructure. Development defaults work out of the box; production requires explicit adapter configuration in `questpie.config.ts`.
 
-| Service  | Dev Default           | Production Adapter                    |
-| -------- | --------------------- | ------------------------------------- |
-| Database | PostgreSQL (local)    | PostgreSQL (remote, SSL)              |
-| Storage  | Local filesystem      | S3-compatible (`s3` driver)           |
-| Queue    | None (jobs skip)      | pg-boss (`pgBossAdapter`)             |
-| Realtime | pgNotify              | Redis Streams (`redisStreamsAdapter`) |
-| Email    | Console (logs output) | SMTP (`SmtpAdapter`)                  |
-| KV Store | In-memory             | Redis (`redisKVAdapter`)              |
-| Logger   | Pino (console)        | Pino (structured JSON)                |
+| Service  | Dev Default           | Production Adapter                              |
+| -------- | --------------------- | ----------------------------------------------- |
+| Database | PostgreSQL (local)    | PostgreSQL (remote, SSL)                        |
+| Storage  | Local filesystem      | Files SDK provider adapter (`s3`, `r2`, etc.)   |
+| Queue    | None (jobs skip)      | pg-boss (`pgBossAdapter`)                       |
+| Realtime | pgNotify              | Redis Streams (`redisStreamsAdapter`)           |
+| Email    | Console (logs output) | SMTP (`SmtpAdapter`)                            |
+| KV Store | In-memory             | Redis (`redisKVAdapter`)                        |
+| Logger   | Pino (console)        | Pino (structured JSON)                          |
 
 ## Authentication
 
@@ -148,6 +148,24 @@ export default runtimeConfig({
 				accessKeyId: process.env.S3_ACCESS_KEY!,
 				secretAccessKey: process.env.S3_SECRET_KEY!,
 			},
+		}),
+	},
+});
+```
+
+### Cloudflare R2 (Production)
+
+```ts
+import { r2 } from "files-sdk/r2";
+
+export default runtimeConfig({
+	storage: {
+		basePath: "/api",
+		adapter: r2({
+			bucket: process.env.R2_BUCKET!,
+			accountId: process.env.R2_ACCOUNT_ID!,
+			accessKeyId: process.env.R2_ACCESS_KEY_ID!,
+			secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
 		}),
 	},
 });
