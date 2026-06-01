@@ -294,6 +294,7 @@ export type EditViewFactory<
 export interface ListViewConfigContext<
 	TFields extends Record<string, any> = Record<string, any>,
 	TListViews extends Record<string, any> | string = string,
+	TComponents extends Record<string, any> | string = string,
 > {
 	/** View factory — per-view typed config extracted from ViewDefinition */
 	v: ListViewFactory<TListViews>;
@@ -314,6 +315,8 @@ export interface ListViewConfigContext<
 			config?: unknown,
 		) => { type: string; config?: unknown };
 	};
+	/** Component factory — produces ComponentReference objects */
+	c: ComponentFactory<TComponents>;
 }
 
 /**

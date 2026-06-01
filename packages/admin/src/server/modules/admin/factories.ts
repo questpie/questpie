@@ -25,7 +25,10 @@ import type {
 	PreviewConfig,
 	ServerActionsConfig,
 } from "../../augmentation.js";
-import { createActionCallbackProxy } from "../../proxy-factories.js";
+import {
+	createActionCallbackProxy,
+	createActionFieldBuilderProxy,
+} from "../../proxy-factories.js";
 
 // ── Type augmentation — gives CollectionBuilder/GlobalBuilder typed extension methods ──
 
@@ -92,54 +95,6 @@ const _componentProxy = new Proxy(
 
 const _fieldRefProxy = new Proxy({}, { get: (_, prop) => String(prop) });
 
-/**
- * Field builder proxy for actions context.
- * Supports `f.text().required().label({...})` chaining.
- * Each method call returns a new proxy with accumulated properties.
- */
-function _createFieldBuilderProxy(): any {
-	return new Proxy(
-		{},
-		{
-			get: (_, prop) => {
-				if (typeof prop !== "string") return undefined;
-				// f.text(...) → creates a field def with chainable methods
-				return (...args: any[]) => {
-					const def: Record<string, any> = { type: prop };
-					if (Array.isArray(args[0])) def.options = args[0];
-					else if (args[0] && typeof args[0] === "object")
-						Object.assign(def, args[0]);
-					else if (args[0] !== undefined) def.value = args[0];
-					return _chainable(def);
-				};
-			},
-		},
-	);
-}
-
-function _chainable(def: Record<string, any>): any {
-	return new Proxy(def, {
-		get: (target, prop) => {
-			if (typeof prop !== "string") return Reflect.get(target, prop);
-			if (prop in target) return target[prop];
-			if (prop === "set") {
-				return (key: string, value: unknown) =>
-					_chainable({
-						...target,
-						[key]: value,
-					});
-			}
-			// Chain method: .required() → { ...def, required: true }
-			// Chain method: .label({...}) → { ...def, label: {...} }
-			return (...args: any[]) =>
-				_chainable({
-					...target,
-					[prop]: args.length === 0 ? true : args[0],
-				});
-		},
-	});
-}
-
 const _actionBuilderProxy = createActionCallbackProxy();
 const _simpleActionProxy = createActionCallbackProxy();
 
@@ -167,6 +122,7 @@ const _collExt: Record<string, { stateKey: string; resolve: (v: any) => any }> =
 								}),
 								f: _fieldRefProxy,
 								a: _simpleActionProxy,
+								c: _componentProxy,
 							})
 						: configOrFn;
 				return {
@@ -202,7 +158,7 @@ const _collExt: Record<string, { stateKey: string; resolve: (v: any) => any }> =
 					return configOrFn({
 						a: _actionBuilderProxy,
 						c: _componentProxy,
-						f: _createFieldBuilderProxy(),
+						f: createActionFieldBuilderProxy(),
 					});
 				return configOrFn;
 			},

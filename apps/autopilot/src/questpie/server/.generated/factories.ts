@@ -33,7 +33,7 @@ const _allFieldDefs = Object.fromEntries(
 ) as unknown as typeof _rawFieldDefs;
 
 // ── Plugin Imports ─────────────────────────────────────────
-import { type AdminCollectionConfig, type AdminConfigContext, type ListViewConfig, type ListViewConfigContext, type FilterViewsByKind, type FormViewConfig, type FormViewConfigContext, type PreviewConfig, type ServerActionsConfig, type ActionsConfigContext, type AdminGlobalConfig, type AdminConfigInput, createViewCallbackProxy, createComponentCallbackProxy, createActionCallbackProxy } from "@questpie/admin/factories";
+import { type AdminCollectionConfig, type AdminConfigContext, type ListViewConfig, type ListViewConfigContext, type FilterViewsByKind, type FormViewConfig, type FormViewConfigContext, type PreviewConfig, type ServerActionsConfig, type ActionsConfigContext, type AdminGlobalConfig, type AdminConfigInput, createViewCallbackProxy, createComponentCallbackProxy, createActionCallbackProxy, createActionFieldBuilderProxy } from "@questpie/admin/factories";
 import { type AppConfigInput, type AuthConfig } from "questpie/types";
 import { type WorkflowsConfigInput } from "@questpie/workflows/server";
 import { type McpConfig } from "@questpie/mcp";
@@ -59,7 +59,7 @@ type _AllFieldTypes = Questpie.FieldTypesMap;
 declare module "questpie" {
 	interface CollectionBuilder<TState> {
 		admin(configFn: AdminCollectionConfig | ((ctx: AdminConfigContext<_ComponentsRecord>) => AdminCollectionConfig)): CollectionBuilder<TState>;
-		list(configFn: (ctx: ListViewConfigContext<TState extends { fieldDefinitions: infer F extends Record<string, unknown> } ? F : Record<string, unknown>, FilterViewsByKind<_ViewsRecord, "list">>) => ListViewConfig): CollectionBuilder<TState>;
+		list(configFn: (ctx: ListViewConfigContext<TState extends { fieldDefinitions: infer F extends Record<string, unknown> } ? F : Record<string, unknown>, FilterViewsByKind<_ViewsRecord, "list">, _ComponentsRecord>) => ListViewConfig): CollectionBuilder<TState>;
 		form(configFn: (ctx: FormViewConfigContext<TState extends { fieldDefinitions: infer F extends Record<string, unknown> } ? F : Record<string, unknown>, FilterViewsByKind<_ViewsRecord, "form">>) => FormViewConfig): CollectionBuilder<TState>;
 		preview(config: PreviewConfig): CollectionBuilder<TState>;
 		actions(configFn: (ctx: ActionsConfigContext<Record<string, unknown>, _ComponentsRecord>) => ServerActionsConfig): CollectionBuilder<TState>;
@@ -100,7 +100,7 @@ const _collExt: Record<string, { stateKey: string; resolve: (value: unknown) => 
 	list: {
 		stateKey: "adminList",
 		resolve(configOrFn: unknown) {
-			const resolved = typeof configOrFn === 'function' ? configOrFn({ v: createViewCallbackProxy(), f: createFieldNameProxy(), a: createActionCallbackProxy() }) : configOrFn;
+			const resolved = typeof configOrFn === 'function' ? configOrFn({ v: createViewCallbackProxy(), f: createFieldNameProxy(), a: createActionCallbackProxy(), c: createComponentCallbackProxy() }) : configOrFn;
 			return { ...{"view":"collection-table","showSearch":true,"showFilters":true,"showToolbar":true}, ...(resolved && typeof resolved === 'object' ? resolved : {}) };
 		},
 	},
@@ -115,7 +115,7 @@ const _collExt: Record<string, { stateKey: string; resolve: (value: unknown) => 
 	actions: {
 		stateKey: "adminActions",
 		resolve(configOrFn: unknown) {
-			if (typeof configOrFn === 'function') return configOrFn({ a: createActionCallbackProxy(), c: createComponentCallbackProxy(), f: createFieldNameProxy() });
+			if (typeof configOrFn === 'function') return configOrFn({ a: createActionCallbackProxy(), c: createComponentCallbackProxy(), f: createActionFieldBuilderProxy() });
 			return configOrFn;
 		},
 	},

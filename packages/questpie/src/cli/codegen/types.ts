@@ -778,6 +778,13 @@ export interface RegistryExtension {
 	callbackContextParams?: string[];
 
 	/**
+	 * Per-extension callback param overrides.
+	 * When a param key is present here, it takes precedence over the
+	 * plugin-level `callbackParams` for this extension only.
+	 */
+	callbackParams?: Record<string, CallbackParamDefinition>;
+
+	/**
 	 * Placeholder → category mapping for module-driven type extraction.
 	 * Codegen replaces placeholders in configType with type aliases
 	 * extracted from the module tree.

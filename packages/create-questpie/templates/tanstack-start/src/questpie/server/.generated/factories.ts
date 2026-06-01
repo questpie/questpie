@@ -98,7 +98,7 @@ const _collExt: Record<string, { stateKey: string; resolve: (v: any) => any }> =
 	list: {
 		stateKey: "adminList",
 		resolve(configOrFn: any) {
-			const resolved = typeof configOrFn === 'function' ? configOrFn({ v: createViewCallbackProxy(), f: createFieldNameProxy(), a: createActionCallbackProxy() }) : configOrFn;
+			const resolved = typeof configOrFn === 'function' ? configOrFn({ v: createViewCallbackProxy(), f: createFieldNameProxy(), a: createActionCallbackProxy(), c: createComponentCallbackProxy() }) : configOrFn;
 			return { ...{"view":"collection-table","showSearch":true,"showFilters":true,"showToolbar":true}, ...resolved };
 		},
 	},

@@ -100,7 +100,11 @@ export function generateFactoryTemplate(
 	const hasExtensions = collExtensions.size > 0 || globalExtensions.size > 0;
 	const hasFieldExtensions = fieldExtensions.size > 0;
 	if (hasExtensions || hasFieldExtensions) {
-		collectCallbackParamImports(callbackParams, allImports);
+		collectCallbackParamImports(callbackParams, allImports, [
+			...collExtensions.values(),
+			...globalExtensions.values(),
+			...fieldExtensions.values(),
+		]);
 	}
 
 	// Collect all configTypePlaceholders → category mappings
@@ -763,7 +767,7 @@ function emitCallbackContext(
 
 	const params: string[] = [];
 	for (const param of ext.callbackContextParams) {
-		const def = callbackParams.get(param);
+		const def = ext.callbackParams?.[param] ?? callbackParams.get(param);
 		if (def) {
 			params.push(`${param}: ${def.factory}()`);
 		} else {
@@ -780,6 +784,7 @@ function emitCallbackContext(
 function collectCallbackParamImports(
 	callbackParams: Map<string, CallbackParamDefinition>,
 	allImports: Map<string, Set<string>>,
+	extensions?: Iterable<RegistryExtension>,
 ): void {
 	for (const def of callbackParams.values()) {
 		let names = allImports.get(def.from);
@@ -788,5 +793,18 @@ function collectCallbackParamImports(
 			allImports.set(def.from, names);
 		}
 		names.add(def.factory);
+	}
+	if (extensions) {
+		for (const ext of extensions) {
+			if (!ext.callbackParams) continue;
+			for (const def of Object.values(ext.callbackParams)) {
+				let names = allImports.get(def.from);
+				if (!names) {
+					names = new Set();
+					allImports.set(def.from, names);
+				}
+				names.add(def.factory);
+			}
+		}
 	}
 }

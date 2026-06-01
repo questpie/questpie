@@ -16,7 +16,7 @@
  * ```
  */
 
-import { route, runWithContext } from "questpie";
+import { extractAppServices, route, runWithContext } from "questpie";
 import { z } from "zod";
 
 import type {
@@ -267,6 +267,13 @@ export async function executeAction(
 	// Execute custom action handler
 	try {
 		const appRec = app as Record<string, any>;
+		// Resolve module-contributed services (e.g. workflows) the same way route
+		// handler contexts do, so action handlers reach them via the same names.
+		const services = extractAppServices(app, {
+			db: appRec.db,
+			session,
+			locale,
+		}) as unknown as Record<string, unknown>;
 		const context: ServerActionContext = {
 			data: data || {},
 			itemId,
@@ -278,6 +285,7 @@ export async function executeAction(
 			session,
 			locale,
 			t,
+			workflows: services.workflows,
 		};
 
 		const result = await runWithContext(

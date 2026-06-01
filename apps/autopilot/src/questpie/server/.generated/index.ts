@@ -300,6 +300,7 @@ type _AppQuestpieConfig = Omit<QuestpieConfig, "app" | "db" | "collections" | "g
 	collections: _AppCollectionDefinitions;
 	globals: _AppGlobalDefinitions;
 	auth: _AppAuthConfig;
+	storage: (typeof _runtime)["storage"];
 };
 type _AppQuestpieBase = Questpie<_AppQuestpieConfig>;
 type _AppDb = DrizzleClientFromQuestpieConfig<_AppQuestpieConfig>;
@@ -345,7 +346,7 @@ declare global {
 			db: unknown;
 			email: unknown;
 			queue: QueueClient<_ExecutionContextJobs>;
-			storage: unknown;
+			storage: _AppStorage;
 			kv: unknown;
 			logger: unknown;
 			search: unknown;
@@ -372,7 +373,7 @@ declare global {
 			db: unknown;
 			email: unknown;
 			queue: QueueClient<_ExecutionContextJobs>;
-			storage: unknown;
+			storage: _AppStorage;
 			kv: unknown;
 			logger: unknown;
 			search: unknown;
@@ -427,6 +428,7 @@ export type AppConfig = {
 	collections: AppCollections & Record<string, AnyCollectionOrBuilder>;
 	globals: AppGlobals & Record<string, AnyGlobalOrBuilder>;
 	routes: AppRoutes;
+	storage: (typeof _runtime)["storage"];
 	auth: typeof _authConfig;
 };
 
