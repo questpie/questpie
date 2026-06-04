@@ -83,7 +83,7 @@ Use the `original` context property to compare old and new values so the email f
 ```
 
 <Callout type="info">
-In development, QUESTPIE uses a `ConsoleAdapter` by default — emails are printed to stdout instead of being delivered. Configure a real adapter in `.build({ email: { adapter: ... } })` for production.
+In development, QUESTPIE uses a `ConsoleAdapter` by default — emails are printed to stdout instead of being delivered. Configure a real adapter in `runtimeConfig({ email: { adapter: ... } })` inside `questpie.config.ts` for production.
 </Callout>
 
 ## Related Pages
