@@ -5,7 +5,8 @@ description: Build a working CRUD API with a server route in 5 minutes.
 
 Build a working API with a collection, a server route, and an HTTP handler. This takes about 5 minutes.
 
-## 1. Scaffold the project
+<Steps>
+<Step title="Scaffold the project">
 
 ```bash
 bunx create-questpie my-app
@@ -15,7 +16,8 @@ bun install
 
 This generates a project with the file-convention structure, a configured `questpie.config.ts`, and a working dev setup. See [Project Structure](/docs/getting-started/project-structure) for details on every directory.
 
-## 2. Define a collection
+</Step>
+<Step title="Define a collection">
 
 ```ts title="src/questpie/server/collections/tasks.ts"
 import { collection } from "#questpie/factories";
@@ -43,7 +45,8 @@ This defines:
 - Zod validation for create/update
 - Type-safe query operators for `where`, `orderBy`
 
-## 3. Add a server route
+</Step>
+<Step title="Add a server route">
 
 ```ts title="src/questpie/server/routes/get-overdue-tasks.ts"
 import { route } from "questpie/services";
@@ -65,7 +68,8 @@ export default route()
 
 Routes are typed server-side logic exposed as endpoints. The `collections` object is injected through context — fully typed from your schema.
 
-## 4. Run codegen
+</Step>
+<Step title="Run codegen">
 
 ```bash
 bunx questpie generate
@@ -77,32 +81,70 @@ This discovers your files and generates:
 - `AppConfig` type for the client SDK (includes collections, globals, and routes)
 - `AppContext` module augmentation
 
-## 5. Push to database
+</Step>
+<Step title="Push to database">
 
 ```bash
 bunx questpie push
 ```
 
-## 6. Wire up the HTTP handler
+</Step>
+<Step title="Wire up the HTTP handler">
 
-For TanStack Start:
+<Tabs items={["TanStack Start", "Hono", "Elysia", "Next.js"]}>
+  <Tab value="TanStack Start">
+    ```ts title="src/routes/api/$.ts"
+    import { createAPIFileRoute } from "@tanstack/react-start/api";
+    import { createFetchHandler } from "questpie/http";
+    import { app } from "#questpie";
 
-```ts title="src/routes/api/$.ts"
-import { createAPIFileRoute } from "@tanstack/react-start/api";
-import { createFetchHandler } from "questpie/http";
-import { app } from "#questpie";
+    const handler = createFetchHandler(app, { basePath: "/api" });
 
-const handler = createFetchHandler(app, { basePath: "/api" });
+    export const Route = createAPIFileRoute("/api/$")({
+      GET: ({ request }) => handler(request),
+      POST: ({ request }) => handler(request),
+      PATCH: ({ request }) => handler(request),
+      DELETE: ({ request }) => handler(request),
+    });
+    ```
+  </Tab>
+  <Tab value="Hono">
+    ```ts title="src/index.ts"
+    import { Hono } from "hono";
+    import { questpieHono } from "@questpie/hono/server";
+    import { app } from "#questpie";
 
-export const Route = createAPIFileRoute("/api/$")({
-	GET: ({ request }) => handler(request),
-	POST: ({ request }) => handler(request),
-	PATCH: ({ request }) => handler(request),
-	DELETE: ({ request }) => handler(request),
-});
-```
+    const server = new Hono();
+    server.route("/api", questpieHono(app));
 
-## 7. Test it
+    export default server;
+    ```
+  </Tab>
+  <Tab value="Elysia">
+    ```ts title="src/index.ts"
+    import { Elysia } from "elysia";
+    import { questpieElysia } from "@questpie/elysia/server";
+    import { app } from "#questpie";
+
+    const server = new Elysia()
+      .use(questpieElysia(app, { basePath: "/api" }))
+      .listen(3000);
+    ```
+  </Tab>
+  <Tab value="Next.js">
+    ```ts title="app/api/[...slug]/route.ts"
+    import { questpieNextRouteHandlers } from "@questpie/next";
+    import { app } from "#questpie";
+
+    export const { GET, POST, PATCH, DELETE } = questpieNextRouteHandlers(app, {
+      basePath: "/api",
+    });
+    ```
+  </Tab>
+</Tabs>
+
+</Step>
+<Step title="Test it">
 
 ```bash
 # List tasks
@@ -111,7 +153,7 @@ curl http://localhost:3000/api/tasks
 # Create a task
 curl -X POST http://localhost:3000/api/tasks \
   -H "Content-Type: application/json" \
-  -d '{"title": "Write docs", "priority": "high", "dueDate": "2025-03-01"}'
+  -d '{"title": "Write docs", "priority": "high", "dueDate": "2027-03-01"}'
 
 # Call a route
 curl -X POST http://localhost:3000/api/get-overdue-tasks \
@@ -119,7 +161,8 @@ curl -X POST http://localhost:3000/api/get-overdue-tasks \
   -d '{}'
 ```
 
-## 8. Use the typed client
+</Step>
+<Step title="Use the typed client">
 
 ```ts title="src/lib/client.ts"
 import { createClient } from "questpie/client";
@@ -142,6 +185,9 @@ const tasks = await client.collections.tasks.find({
 const overdue = await client.routes.getOverdueTasks({});
 ```
 
+</Step>
+</Steps>
+
 ## Adding the Admin Panel
 
 Want a visual interface? Add `@questpie/admin` and the admin module:
@@ -159,6 +205,8 @@ Run `bunx questpie generate` again, and navigate to `/admin` — your tasks coll
 
 ## What's Next
 
-- [Project Structure](/docs/getting-started/project-structure) — File convention layout and discovery rules
-- [Collections](/docs/collections) — Builder chain and server-side methods
-- [Fields](/docs/collections/fields) — All field types and options
+<Cards>
+  <Card title="Project Structure" href="/docs/getting-started/project-structure" description="File convention layout and discovery rules" />
+  <Card title="Collections" href="/docs/collections" description="Builder chain and server-side methods" />
+  <Card title="Fields" href="/docs/collections/fields" description="All field types and options" />
+</Cards>

@@ -70,9 +70,13 @@ export const pages = collection("pages")
 	);
 ```
 
+<Callout type="warn">
 Workflow stage is the publication source here. Do not add a duplicate page publication boolean for the same concern.
+</Callout>
 
+<Callout type="note">
 The `read` rule also protects direct public API reads. A normal frontend request without an editor session must ask for `stage: "published"`; trying to omit `stage` cannot load the working draft. Authorized admin/preview requests have a session, so draft-mode routes can read the working stage.
+</Callout>
 
 ## 2. Load Public And Preview Data
 
@@ -117,7 +121,9 @@ await client.collections.pages.findOne({
 });
 ```
 
+<Callout type="warn">
 Do not use `accessMode: "system"` in public loaders to get around this. System mode bypasses access rules and would make draft visibility depend on route code instead of the collection policy.
+</Callout>
 
 ## 3. Wire The Page Renderer
 

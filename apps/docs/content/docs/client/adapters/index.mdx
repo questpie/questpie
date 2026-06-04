@@ -3,4 +3,100 @@ title: HTTP Adapters
 description: Mount QUESTPIE on TanStack Start, Hono, Elysia, or Next.js.
 ---
 
-Coming soon.
+QUESTPIE needs an HTTP adapter to expose its collections, routes, and auth endpoints over HTTP. Choose the adapter that matches your server framework.
+
+<Cards>
+  <Card title="Hono Adapter" href="/docs/client/adapters/hono" description="Serve QUESTPIE APIs with Hono." />
+  <Card title="Elysia Adapter" href="/docs/client/adapters/elysia" description="Serve QUESTPIE APIs with Elysia." />
+  <Card title="Next.js Adapter" href="/docs/client/adapters/nextjs" description="Serve QUESTPIE APIs with Next.js API routes." />
+</Cards>
+
+| Adapter        | Package            | Use case               |
+| -------------- | ------------------ | ---------------------- |
+| TanStack Start | (none)             | Built-in fetch handler |
+| Hono           | `@questpie/hono`   | General purpose, fast  |
+| Elysia         | `@questpie/elysia` | Bun-native, validation |
+| Next.js        | `@questpie/next`   | Next.js App Router     |
+
+<Tabs items={["TanStack Start", "Hono", "Elysia", "Next.js"]}>
+  <Tab value="TanStack Start">
+    TanStack Start does not need an adapter package. Use the built-in `createFetchHandler` directly in an API catch-all route.
+
+    ```ts title="src/routes/api/$.ts"
+    import { createAPIFileRoute } from "@tanstack/react-start/api";
+    import { createFetchHandler } from "questpie/http";
+    import { app } from "#questpie";
+
+    const handler = createFetchHandler(app, { basePath: "/api" });
+
+    export const Route = createAPIFileRoute("/api/$")({
+      GET: ({ request }) => handler(request),
+      POST: ({ request }) => handler(request),
+      PATCH: ({ request }) => handler(request),
+      DELETE: ({ request }) => handler(request),
+    });
+    ```
+  </Tab>
+  <Tab value="Hono">
+    ```bash
+    bun add @questpie/hono hono
+    ```
+
+    ```ts title="src/index.ts"
+    import { Hono } from "hono";
+    import { questpieHono } from "@questpie/hono/server";
+    import { app } from "#questpie";
+
+    const server = new Hono();
+    server.route("/api", questpieHono(app));
+
+    export default server;
+    ```
+
+    See [Hono Adapter](/docs/client/adapters/hono) for OpenAPI integration and advanced options.
+  </Tab>
+  <Tab value="Elysia">
+    ```bash
+    bun add @questpie/elysia elysia
+    ```
+
+    ```ts title="src/index.ts"
+    import { Elysia } from "elysia";
+    import { questpieElysia } from "@questpie/elysia/server";
+    import { app } from "#questpie";
+
+    const server = new Elysia()
+      .use(questpieElysia(app, { basePath: "/api" }))
+      .listen(3000);
+
+    console.log(`Running at ${server.server?.url}`);
+    ```
+
+    See [Elysia Adapter](/docs/client/adapters/elysia) for Eden client setup and CORS configuration.
+  </Tab>
+  <Tab value="Next.js">
+    ```bash
+    bun add @questpie/next
+    ```
+
+    ```ts title="app/api/[...slug]/route.ts"
+    import { questpieNextRouteHandlers } from "@questpie/next";
+    import { app } from "#questpie";
+
+    export const { GET, POST, PATCH, DELETE } = questpieNextRouteHandlers(app, {
+      basePath: "/api",
+    });
+    ```
+
+    See [Next.js Adapter](/docs/client/adapters/nextjs) for full setup details.
+  </Tab>
+</Tabs>
+
+## Related Pages
+
+<Cards>
+  <Card title="Hono Adapter" href="/docs/client/adapters/hono" description="OpenAPI integration" />
+  <Card title="Elysia Adapter" href="/docs/client/adapters/elysia" description="Eden client, CORS" />
+  <Card title="Next.js Adapter" href="/docs/client/adapters/nextjs" description="App Router setup" />
+  <Card title="Installation" href="/docs/getting-started/installation" description="Getting started" />
+</Cards>

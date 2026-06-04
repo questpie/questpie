@@ -112,7 +112,9 @@ Field filtering applies to create/update input, tool results, list docs, global 
 
 ## Route Tools
 
+<Callout type="note">
 Only simple JSON routes become MCP tools. A simple route is a non-raw route with `.schema()`. Raw routes are never converted.
+</Callout>
 
 Annotate routes with `meta.mcp.expose: true`:
 
@@ -200,4 +202,6 @@ await startStdioServer(app, { accessMode: "user" });
 
 ## Security Notes
 
+<Callout type="warn">
 Do not expose HTTP MCP as a trusted system endpoint. The current HTTP transport is intentionally user/read-oriented and has no trusted-token or session-resumption mechanism. Use existing QUESTPIE auth/session context for HTTP access and use stdio only in trusted environments.
+</Callout>

@@ -85,7 +85,9 @@ export const services = collection("services")
 	);
 ```
 
-`orderable` uses the conventional `order` field. This is deliberate: reorder mode updates order values, so it must never point at domain data such as `price`.
+<Callout type="warn">
+`orderable` uses the conventional `order` field by design. Reorder mode updates order values and must never point at domain data such as `price`. Do not use `orderable` for computed, localized, relation, or business fields — add a dedicated `order` field instead.
+</Callout>
 
 The admin only enables reorder mode when the current list is safe to reorder:
 
@@ -107,10 +109,11 @@ You can customize direction and spacing between generated values:
 )
 ```
 
-Do not use `orderable` for computed, localized, relation, or business fields. Add a dedicated `order` field instead.
 
 ## Related Pages
 
-- [Form Views](/docs/admin/views/form-views) — Edit forms
-- [Filters](/docs/admin/filters) — Advanced filtering
-- [Collections](/docs/collections) — Collection builder
+<Cards>
+  <Card title="Form Views" href="/docs/admin/views/form-views" description="Edit forms" />
+  <Card title="Filters" href="/docs/admin/filters" description="Advanced filtering" />
+  <Card title="Collections" href="/docs/collections" description="Collection builder" />
+</Cards>

@@ -13,7 +13,9 @@ The canonical shape is:
 - The module's codegen plugin discovers `config/<module>.ts`.
 - The config file uses a small factory such as `mcpConfig()` or `openApiConfig()` for typing.
 
+<Callout type="note">
 Only use `myModule(options)` for runtime-only modules whose options do not affect generated identities, file discovery, builder APIs, or generated app state. Direct `runtimeConfig({ plugins })` is mainly for standalone/custom plugin setups that are not loaded from modules.
+</Callout>
 
 ## Module Structure
 
@@ -252,6 +254,8 @@ bun add questpie-notifications
 
 ## Related Pages
 
-- [Modules](/docs/concepts/modules-and-plugins) -- Module architecture
-- [Plugin API](/docs/reference/plugin-api) -- Codegen plugin reference
-- [Custom Fields](/docs/extend/custom-fields) -- Custom field types
+<Cards>
+  <Card title="Modules" href="/docs/concepts/modules-and-plugins" description="Module architecture" />
+  <Card title="Plugin API" href="/docs/reference/plugin-api" description="Codegen plugin reference" />
+  <Card title="Custom Fields" href="/docs/extend/custom-fields" description="Custom field types" />
+</Cards>

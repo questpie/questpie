@@ -43,7 +43,9 @@ If your Worker config lazily uses Hyperdrive at runtime, provide a direct connec
 QUESTPIE_CLI_DATABASE_URL="postgres://user:pass@host:5432/db" bunx questpie migrate:up
 ```
 
+<Callout type="warn">
 Do not point `pgNotifyAdapter` or `pgBossAdapter` at a PgBouncer transaction pool in production. On Cloudflare, use `cloudflareRealtimeAdapter` and `cloudflareQueuesAdapter`; migrations only need the direct PostgreSQL connection for schema changes.
+</Callout>
 
 ### Rollback
 
@@ -101,5 +103,7 @@ cli: {
 
 ## Related Pages
 
-- [Database](/docs/infrastructure/database) — PostgreSQL setup
-- [CLI](/docs/reference/cli) — All CLI commands
+<Cards>
+  <Card title="Database" href="/docs/infrastructure/database" description="PostgreSQL setup" />
+  <Card title="CLI" href="/docs/reference/cli" description="All CLI commands" />
+</Cards>

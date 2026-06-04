@@ -57,7 +57,11 @@ A Cloudflare deployment is one Worker module with multiple platform entrypoints:
 | R2 via S3 API        | Upload/media storage through Files SDK S3 adapter  |
 | Workers KV binding   | KV/cache adapter                                   |
 
-`createCloudflareWorkerHandlers(app)` exports `fetch`, `queue`, and `scheduled` from the same Worker object. You do not deploy a separate long-running queue worker and you do not call `app.queue.listen()` on Cloudflare. Cloudflare Queues invokes the exported `queue()` handler, and Cron Triggers invoke the exported `scheduled()` handler.
+`createCloudflareWorkerHandlers(app)` exports `fetch`, `queue`, and `scheduled` from the same Worker object.
+
+<Callout type="warn">
+Do not deploy a separate long-running queue worker and do not call `app.queue.listen()` on Cloudflare. Cloudflare Queues invokes the exported `queue()` handler, and Cron Triggers invoke the exported `scheduled()` handler.
+</Callout>
 
 The common deployment shapes are:
 
@@ -79,7 +83,9 @@ const worker = createCloudflareWorkerHandlers(app, {
 });
 ```
 
-Keep `questpie.config.ts` importable by Bun for `questpie generate` and migrations. Do not import `cloudflare:workers` at the top level. Import it lazily inside Cloudflare-only factory functions instead.
+<Callout type="warn">
+Keep `questpie.config.ts` importable by Bun for `questpie generate` and migrations. Do not import `cloudflare:workers` at the top level — import it lazily inside Cloudflare-only factory functions instead.
+</Callout>
 
 Use `process.env` for plain text vars and secrets. Use lazy `cloudflare:workers` providers for binding objects such as Hyperdrive, KV, Queues, and Durable Objects so Bun CLI commands can still import `questpie.config.ts`.
 
@@ -240,7 +246,11 @@ R2_BUCKET = "my-questpie-assets"
 
 For R2 storage, configure the Files SDK S3 adapter with the R2 endpoint and credentials. For KV, configure `cloudflareKVAdapter` with a Workers KV namespace binding.
 
-For jobs, configure `cloudflareQueuesAdapter` with a Queues producer/consumer binding. For recurring jobs, add matching Cron Triggers and export `scheduled()` through `createCloudflareWorkerHandlers`. Do not configure `pgBossAdapter`, `pgNotifyAdapter`, or Redis Streams on Workers.
+For jobs, configure `cloudflareQueuesAdapter` with a Queues producer/consumer binding. For recurring jobs, add matching Cron Triggers and export `scheduled()` through `createCloudflareWorkerHandlers`.
+
+<Callout type="warn">
+Do not configure `pgBossAdapter`, `pgNotifyAdapter`, or Redis Streams on Workers.
+</Callout>
 
 Set secrets with Wrangler, not in `wrangler.toml`:
 
@@ -328,5 +338,7 @@ export default route({
 
 ## Related Pages
 
-- [Database](/docs/infrastructure/database) — PostgreSQL setup
-- [Migrations](/docs/infrastructure/migrations) — Schema management
+<Cards>
+  <Card title="Database" href="/docs/infrastructure/database" description="PostgreSQL setup" />
+  <Card title="Migrations" href="/docs/infrastructure/migrations" description="Schema management" />
+</Cards>

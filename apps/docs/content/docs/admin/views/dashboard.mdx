@@ -109,7 +109,9 @@ Custom-loaded value with trend indicator:
 }
 ```
 
-Widget loaders run on the server from the authenticated admin request. Nested CRUD calls made by the loader inherit the caller context, so collection and field access rules still apply. Return only serializable data that is safe for the admin client; do not return secrets or server-only configuration.
+<Callout type="warn">
+Widget loaders run on the server from the authenticated admin request. Nested CRUD calls inherit the caller context so collection and field access rules still apply. Return only serializable data that is safe for the admin client — do not return secrets or server-only configuration.
+</Callout>
 
 ### Progress
 
@@ -203,5 +205,7 @@ Modules can contribute dashboard items. The `auditModule` automatically adds an 
 
 ## Related Pages
 
-- [Sidebar](/docs/admin/views/sidebar) — Navigation
-- [Setup](/docs/admin/setup) — Admin setup
+<Cards>
+  <Card title="Sidebar" href="/docs/admin/views/sidebar" description="Navigation" />
+  <Card title="Setup" href="/docs/admin/setup" description="Admin setup" />
+</Cards>

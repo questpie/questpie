@@ -22,27 +22,11 @@ export const { GET, POST, PATCH, DELETE } = questpieNextRouteHandlers(app, {
 });
 ```
 
-## TanStack Start
-
-TanStack Start does not have an adapter package. Use the generic fetch handler:
-
-```ts title="src/routes/api/$.ts"
-import { createAPIFileRoute } from "@tanstack/react-start/api";
-import { createFetchHandler } from "questpie/http";
-import { app } from "#questpie";
-
-const handler = createFetchHandler(app, { basePath: "/api" });
-
-export const Route = createAPIFileRoute("/api/$")({
-	GET: ({ request }) => handler(request),
-	POST: ({ request }) => handler(request),
-	PATCH: ({ request }) => handler(request),
-	DELETE: ({ request }) => handler(request),
-});
-```
-
 ## Related Pages
 
-- [Hono Adapter](/docs/client/adapters/hono)
-- [Elysia Adapter](/docs/client/adapters/elysia)
-- [First App](/docs/getting-started/quickstart) — Getting started
+<Cards>
+  <Card title="Hono Adapter" href="/docs/client/adapters/hono" />
+  <Card title="Elysia Adapter" href="/docs/client/adapters/elysia" />
+  <Card title="HTTP Adapters" href="/docs/client/adapters" description="All adapter options" />
+  <Card title="First App" href="/docs/getting-started/quickstart" description="Getting started" />
+</Cards>

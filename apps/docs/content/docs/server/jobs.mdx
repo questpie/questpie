@@ -165,7 +165,11 @@ export default job({
 });
 ```
 
-`app.queue.listen()` registers cron schedules automatically before starting workers. If you need a schedule-only setup step, call `await app.queue.registerSchedules()` and then `await app.queue.stop()`. Cron jobs must accept an empty payload because schedule registration validates `schema.parse({})`.
+`app.queue.listen()` registers cron schedules automatically before starting workers. If you need a schedule-only setup step, call `await app.queue.registerSchedules()` and then `await app.queue.stop()`.
+
+<Callout type="note">
+Cron jobs must accept an empty payload because schedule registration validates `schema.parse({})`.
+</Callout>
 
 ## Email Templates
 
@@ -255,7 +259,9 @@ export default job({
 
 ## Related Pages
 
-- [Hooks](/docs/collections/hooks) — Trigger jobs from collection hooks
-- [Typed Routes](/docs/server/routes) — Server-side logic
-- [Queue](/docs/infrastructure/queue) — Queue infrastructure setup
-- [Email](/docs/infrastructure/email) — Email adapter configuration
+<Cards>
+  <Card title="Hooks" href="/docs/collections/hooks" description="Trigger jobs from collection hooks" />
+  <Card title="Typed Routes" href="/docs/server/routes" description="Server-side logic" />
+  <Card title="Queue" href="/docs/infrastructure/queue" description="Queue infrastructure setup" />
+  <Card title="Email" href="/docs/infrastructure/email" description="Email adapter configuration" />
+</Cards>

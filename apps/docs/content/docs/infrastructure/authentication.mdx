@@ -62,7 +62,9 @@ The `adminModule` includes the starter auth model and provides the canonical Bet
 
 This user contract includes `user.role` with at least `admin` and `user` values. The built-in admin setup route checks for an existing `role = "admin"` user, and the admin UI guard expects `session.user.role === "admin"`.
 
-Do not replace `collection("user")` from scratch in an app that uses `adminModule`. If you need custom user fields or admin layout, merge the starter user collection and extend it:
+<Callout type="warn">
+Do not replace `collection("user")` from scratch in an app that uses `adminModule`. If you need custom user fields or admin layout, merge the starter user collection and extend it instead.
+</Callout>
 
 ```ts title="collections/user.ts"
 import { starterModule } from "questpie/app";
@@ -77,5 +79,7 @@ export default collection("user")
 
 ## Related Pages
 
-- [Access Control](/docs/collections/access-control) — Permission rules
-- [Admin Setup](/docs/admin/setup) — Admin auth pages
+<Cards>
+  <Card title="Access Control" href="/docs/collections/access-control" description="Permission rules" />
+  <Card title="Admin Setup" href="/docs/admin/setup" description="Admin auth pages" />
+</Cards>

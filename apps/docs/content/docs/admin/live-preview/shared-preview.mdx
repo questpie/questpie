@@ -36,8 +36,12 @@ flowchart LR
   Mobile --> Form
 ```
 
+<Callout type="note">
 The channel should be scoped by collection, record, locale, and active preview session. Messages must still be session-bound and validated before applying any edit request to the form.
+</Callout>
 
 ## Publication Reads
 
+<Callout type="warn">
 Shared preview must not make draft data public by default. Public routes read `stage: "published"` when workflow controls publishing. Preview routes read the working stage only when the request is authorized through the preview token or equivalent session-bound preview mechanism.
+</Callout>

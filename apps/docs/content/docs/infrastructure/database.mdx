@@ -42,7 +42,9 @@ db: {
 }
 ```
 
+<Callout type="warn">
 Do not use `db: { url }` on Workers. That path creates QUESTPIE's default Bun SQL driver and the Cloudflare adapter rejects it.
+</Callout>
 
 For `questpie migrate:*` commands, use a direct PostgreSQL connection from CI or your machine. Hyperdrive is a Worker binding, so it is not available to the Bun CLI unless you explicitly provide a CLI connection string in your config.
 
@@ -92,5 +94,7 @@ import { uniqueIndex, index } from "drizzle-orm/pg-core";
 
 ## Related Pages
 
-- [Migrations](/docs/infrastructure/migrations) — Schema versioning
-- [Collections](/docs/collections) — Data models
+<Cards>
+  <Card title="Migrations" href="/docs/infrastructure/migrations" description="Schema versioning" />
+  <Card title="Collections" href="/docs/collections" description="Data models" />
+</Cards>

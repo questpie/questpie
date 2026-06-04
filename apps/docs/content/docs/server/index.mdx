@@ -3,4 +3,14 @@ title: Server
 description: Routes, jobs, services, emails, seeds, and workflows.
 ---
 
-Coming soon.
+Server-side primitives live under `routes/`, `jobs/`, `services/`, `emails/`, and `seeds/`. Each file type is discovered automatically by the file convention and typed through codegen. Workflows add durable, replay-based orchestration on top.
+
+<Cards>
+  <Card title="Typed Routes" href="/docs/server/routes" description="Typed server routes — define input schema, handler logic, and call from the client." />
+  <Card title="Raw HTTP Routes" href="/docs/server/raw-routes" description="Raw HTTP routes for webhooks, custom APIs, and endpoints that need full request/response control." />
+  <Card title="Jobs" href="/docs/server/jobs" description="Background tasks with typed payloads — send emails, process data, schedule work." />
+  <Card title="Services" href="/docs/server/services" description="Singleton and request-scoped services — define once, inject everywhere via AppContext." />
+  <Card title="Emails" href="/docs/server/emails" description="Define email templates with Zod-validated input and send them from any handler." />
+  <Card title="Seeds" href="/docs/server/seeds" description="Database seeding for initial data, development fixtures, and test datasets." />
+  <Card title="Workflows" href="/docs/server/workflows" description="Durable, replay-based workflows — long-running processes that survive restarts and scale automatically." />
+</Cards>

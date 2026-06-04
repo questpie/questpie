@@ -73,7 +73,11 @@ flowchart TD
 	Messages --> Slovak
 ```
 
-Each file default-exports the flat message dictionary for that locale. The filename is the locale key; do not wrap the export in `{ en: ... }`.
+Each file default-exports the flat message dictionary for that locale. The filename is the locale key.
+
+<Callout type="warn">
+Do not wrap the export in `{ en: ... }`. Each file must default-export the flat dictionary directly, or the messages will not load.
+</Callout>
 
 ```ts title="messages/en.ts"
 export default {
@@ -187,7 +191,9 @@ registerDateFnsLocale("sk", sk);
 
 ## Related Pages
 
-- [Content Languages](/docs/collections/localization) — Configure localized record values
-- [Workspace Localization](/docs/admin/localization) — Editor-facing content locale switcher
-- [Admin API](/docs/reference/admin-api) — `adminConfig()` reference
-- [File Convention](/docs/concepts/file-convention) — `messages/` discovery
+<Cards>
+  <Card title="Content Languages" href="/docs/collections/localization" description="Configure localized record values" />
+  <Card title="Workspace Localization" href="/docs/admin/localization" description="Editor-facing content locale switcher" />
+  <Card title="Admin API" href="/docs/reference/admin-api" description="`adminConfig()` reference" />
+  <Card title="File Convention" href="/docs/concepts/file-convention" description="`messages/` discovery" />
+</Cards>

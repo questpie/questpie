@@ -285,7 +285,9 @@ The core module exposes transition routes under the app API base path:
 | Collection | `POST /:collection/:id/transition` | `{ stage: string, scheduledAt? }` |
 | Global     | `POST /globals/:name/transition`   | `{ stage: string, scheduledAt? }` |
 
-`scheduledAt` must be an ISO datetime string when calling the HTTP API directly:
+<Callout type="note">
+`scheduledAt` must be an ISO datetime string when calling the HTTP API directly.
+</Callout>
 
 ```ts
 await fetch("/api/posts/post_123/transition", {
@@ -368,7 +370,9 @@ When a collection or global has versioning with workflow:
 
 ## Related Pages
 
-- [Collections](/docs/collections) — Collection builder options
-- [Globals](/docs/collections/globals) — Global builder options
-- [Hooks API](/docs/reference/hooks-api) — Transition hook context
-- [Built-in Actions](/docs/admin/actions/builtin) — Admin toolbar actions
+<Cards>
+  <Card title="Collections" href="/docs/collections" description="Collection builder options" />
+  <Card title="Globals" href="/docs/collections/globals" description="Global builder options" />
+  <Card title="Hooks API" href="/docs/reference/hooks-api" description="Transition hook context" />
+  <Card title="Built-in Actions" href="/docs/admin/actions/builtin" description="Admin toolbar actions" />
+</Cards>

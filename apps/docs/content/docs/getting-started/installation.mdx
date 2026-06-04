@@ -14,7 +14,8 @@ This scaffolds a project with the file convention layout, runtime config, and a 
 
 ## Manual Setup
 
-### 1. Install packages
+<Steps>
+<Step title="Install packages">
 
 ```bash
 bun add questpie @questpie/hono
@@ -26,7 +27,8 @@ For the admin panel (optional):
 bun add @questpie/admin
 ```
 
-### 2. Create runtime config
+</Step>
+<Step title="Create runtime config">
 
 ```ts title="src/questpie/server/questpie.config.ts"
 import { runtimeConfig } from "questpie/app";
@@ -41,7 +43,8 @@ export default runtimeConfig({
 });
 ```
 
-### 3. Create CLI config
+</Step>
+<Step title="Create CLI config">
 
 ```ts title="questpie.config.ts"
 export { default } from "./src/questpie/server/questpie.config";
@@ -49,7 +52,8 @@ export { default } from "./src/questpie/server/questpie.config";
 
 The CLI resolves this file at the project root to find your config.
 
-### 4. Create your first collection
+</Step>
+<Step title="Create your first collection">
 
 ```ts title="src/questpie/server/collections/posts.ts"
 import { collection } from "#questpie/factories";
@@ -64,7 +68,8 @@ export default collection("posts").fields(({ f }) => ({
 }));
 ```
 
-### 5. Run codegen
+</Step>
+<Step title="Run codegen">
 
 ```bash
 bunx questpie generate
@@ -74,7 +79,8 @@ This scans your file convention directories, discovers collections/routes/jobs, 
 
 - `src/questpie/server/.generated/` — app instance, types, module augmentation
 
-### 6. Push schema to database
+</Step>
+<Step title="Push schema to database">
 
 ```bash
 bunx questpie push
@@ -82,11 +88,15 @@ bunx questpie push
 
 This syncs your Drizzle schema to the database without creating migration files. Use `questpie migrate:generate` for production migrations.
 
-### 7. Start development
+</Step>
+<Step title="Start development">
 
 ```bash
 bun dev
 ```
+
+</Step>
+</Steps>
 
 ## With Admin Panel
 
@@ -109,38 +119,76 @@ bunx questpie generate
 
 QUESTPIE needs an HTTP adapter to serve your API. Choose one:
 
-| Adapter | Package            | Use case               |
-| ------- | ------------------ | ---------------------- |
-| Hono    | `@questpie/hono`   | General purpose, fast  |
-| Elysia  | `@questpie/elysia` | Bun-native, validation |
-| Next.js | `@questpie/next`   | Next.js API routes     |
+| Adapter        | Package            | Use case               |
+| -------------- | ------------------ | ---------------------- |
+| Hono           | `@questpie/hono`   | General purpose, fast  |
+| Elysia         | `@questpie/elysia` | Bun-native, validation |
+| Next.js        | `@questpie/next`   | Next.js API routes     |
+| TanStack Start | (none)             | Built-in fetch handler |
 
-```ts title="API handler (Hono example)"
-import { questpieHono } from "@questpie/hono/server";
-import { app } from "#questpie";
-import { Hono } from "hono";
+<Tabs items={["TanStack Start", "Hono", "Elysia", "Next.js"]}>
+  <Tab value="TanStack Start">
+    ```ts title="src/routes/api/$.ts"
+    import { createAPIFileRoute } from "@tanstack/react-start/api";
+    import { createFetchHandler } from "questpie/http";
+    import { app } from "#questpie";
 
-const server = new Hono();
-server.route("/api", questpieHono(app));
+    const handler = createFetchHandler(app, { basePath: "/api" });
 
-export default server;
-```
+    export const Route = createAPIFileRoute("/api/$")({
+      GET: ({ request }) => handler(request),
+      POST: ({ request }) => handler(request),
+      PATCH: ({ request }) => handler(request),
+      DELETE: ({ request }) => handler(request),
+    });
+    ```
+  </Tab>
+  <Tab value="Hono">
+    ```bash
+    bun add @questpie/hono hono
+    ```
 
-For TanStack Start, use the generic fetch handler directly — there is no adapter package:
+    ```ts title="src/index.ts"
+    import { Hono } from "hono";
+    import { questpieHono } from "@questpie/hono/server";
+    import { app } from "#questpie";
 
-```ts title="src/routes/api/$.ts"
-import { createFetchHandler } from "questpie/http";
-import { app } from "#questpie";
+    const server = new Hono();
+    server.route("/api", questpieHono(app));
 
-const handler = createFetchHandler(app, { basePath: "/api" });
+    export default server;
+    ```
+  </Tab>
+  <Tab value="Elysia">
+    ```bash
+    bun add @questpie/elysia elysia
+    ```
 
-export const Route = createAPIFileRoute("/api/$")({
-	GET: ({ request }) => handler(request),
-	POST: ({ request }) => handler(request),
-	PATCH: ({ request }) => handler(request),
-	DELETE: ({ request }) => handler(request),
-});
-```
+    ```ts title="src/index.ts"
+    import { Elysia } from "elysia";
+    import { questpieElysia } from "@questpie/elysia/server";
+    import { app } from "#questpie";
+
+    const server = new Elysia()
+      .use(questpieElysia(app, { basePath: "/api" }))
+      .listen(3000);
+    ```
+  </Tab>
+  <Tab value="Next.js">
+    ```bash
+    bun add @questpie/next
+    ```
+
+    ```ts title="app/api/[...slug]/route.ts"
+    import { questpieNextRouteHandlers } from "@questpie/next";
+    import { app } from "#questpie";
+
+    export const { GET, POST, PATCH, DELETE } = questpieNextRouteHandlers(app, {
+      basePath: "/api",
+    });
+    ```
+  </Tab>
+</Tabs>
 
 ## Environment Variables
 
@@ -154,5 +202,7 @@ export const Route = createAPIFileRoute("/api/$")({
 
 ## What's Next
 
-- [First App](/docs/getting-started/quickstart) — Build a working CRUD API
-- [Project Structure](/docs/getting-started/project-structure) — File convention layout
+<Cards>
+  <Card title="First App" href="/docs/getting-started/quickstart" description="Build a working CRUD API" />
+  <Card title="Project Structure" href="/docs/getting-started/project-structure" description="File convention layout" />
+</Cards>

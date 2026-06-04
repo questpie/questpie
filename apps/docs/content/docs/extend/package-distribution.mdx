@@ -349,10 +349,14 @@ See [Building a Module](/docs/extend/building-a-module) for the full package-mod
 }
 ```
 
-Note: `include` explicitly adds `.generated/` directories so TypeScript processes them.
+<Callout type="note">
+`include` explicitly adds `.generated/` directories so TypeScript processes them. Without this, codegen output will not be type-checked.
+</Callout>
 
 ## Related Pages
 
-- [Building a Module](/docs/extend/building-a-module) — Create and publish module packages
-- [Building a Plugin](/docs/extend/building-a-plugin) — Create codegen plugins
-- [Codegen](/docs/concepts/codegen) — Generated output details
+<Cards>
+  <Card title="Building a Module" href="/docs/extend/building-a-module" description="Create and publish module packages" />
+  <Card title="Building a Plugin" href="/docs/extend/building-a-plugin" description="Create codegen plugins" />
+  <Card title="Codegen" href="/docs/concepts/codegen" description="Generated output details" />
+</Cards>

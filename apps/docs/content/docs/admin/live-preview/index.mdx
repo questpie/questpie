@@ -126,12 +126,16 @@ For a complete page setup, see [Prepare a Page](/docs/admin/live-preview/prepare
 
 When versioning workflow is enabled, workflow stage is the publication source. Public page loaders should read `stage: "published"`. Preview loaders should read the working stage when draft mode is active, and published content otherwise.
 
+<Callout type="warn">
 Do not add a duplicate `isPublished` field for page publication when workflow already controls publishing. If a project keeps a boolean named `isPublished`, treat it as a separate business flag.
+</Callout>
 
 ## Related Pages
 
-- [Prepare a Page](/docs/admin/live-preview/prepare-page) — collection config, loaders, frontend preview wiring, and annotations
-- [Architecture](/docs/admin/live-preview/architecture) — source-of-truth model and boundaries
-- [Protocol Reference](/docs/admin/live-preview/protocol) — message contract, diagrams, and security rules
-- [Blocks](/docs/admin/blocks) — block content and renderer annotations
-- [Versioning & Workflow](/docs/collections/versioning) — stage reads and transitions
+<Cards>
+  <Card title="Prepare a Page" href="/docs/admin/live-preview/prepare-page" description="Collection config, loaders, frontend preview wiring, and annotations" />
+  <Card title="Architecture" href="/docs/admin/live-preview/architecture" description="Source-of-truth model and boundaries" />
+  <Card title="Protocol Reference" href="/docs/admin/live-preview/protocol" description="Message contract, diagrams, and security rules" />
+  <Card title="Blocks" href="/docs/admin/blocks" description="Block content and renderer annotations" />
+  <Card title="Versioning & Workflow" href="/docs/collections/versioning" description="Stage reads and transitions" />
+</Cards>

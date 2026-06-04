@@ -5,6 +5,17 @@ description: Collections are database-backed data models with CRUD operations, h
 
 A collection is a data model backed by a database table. Each collection file defines fields, indexes, hooks, access rules, and admin UI in one place.
 
+<Cards>
+  <Card title="Fields" href="/docs/collections/fields" description="Fields are the single source of truth — they define database columns, API validation, query operators, and UI rendering." />
+  <Card title="Relations" href="/docs/collections/relations" description="Define relationships between collections — belongsTo, hasMany, and many-to-many through junction tables." />
+  <Card title="Globals" href="/docs/collections/globals" description="Globals are singleton data objects for site-wide configuration like settings, branding, and SEO." />
+  <Card title="Content Languages" href="/docs/collections/localization" description="Configure content locales, mark localized fields, and query translated content." />
+  <Card title="Versioning & Workflow" href="/docs/collections/versioning" description="Track record versions, read workflow stages, and transition drafts through publishing states." />
+  <Card title="Hooks" href="/docs/collections/hooks" description="Lifecycle hooks for collections — beforeValidate, beforeChange, afterChange, beforeDelete, afterDelete." />
+  <Card title="Access Control" href="/docs/collections/access-control" description="Control who can read, create, update, and delete records at the operation, row, and field level." />
+  <Card title="Validation" href="/docs/collections/validation" description="Field-level validation, Zod refinements, and custom validation rules." />
+</Cards>
+
 ## Defining a Collection
 
 ```ts title="collections/services.ts"
@@ -281,10 +292,9 @@ export const barbers = collection("barbers")
 
 ## Related Pages
 
-- [Fields](/docs/collections/fields) — All field types and options
-- [Versioning & Workflow](/docs/collections/versioning) — Version history and publishing stages
-- [Relations](/docs/collections/relations) — Relation field deep dive
-- [Hooks](/docs/collections/hooks) — Lifecycle hooks
-- [Access Control](/docs/collections/access-control) — Who can do what
-- [List Views](/docs/admin/views/list-views) — Admin list configuration
-- [Form Views](/docs/admin/views/form-views) — Admin form configuration
+<Cards>
+  <Card title="Fields" href="/docs/collections/fields" description="All field types and options" />
+  <Card title="Relations" href="/docs/collections/relations" description="Relation field deep dive" />
+  <Card title="Hooks" href="/docs/collections/hooks" description="Lifecycle hooks" />
+  <Card title="Access Control" href="/docs/collections/access-control" description="Who can do what" />
+</Cards>

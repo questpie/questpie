@@ -5,6 +5,23 @@ description: Infrastructure services — database, auth, storage, email, queue, 
 
 QUESTPIE provides pluggable adapters for common infrastructure services. Configure them in `runtimeConfig()` and access them through the typed context in hooks, routes, and jobs.
 
+<Cards>
+  <Card title="Database" href="/docs/infrastructure/database" description="PostgreSQL with Drizzle ORM — schema generation, raw queries, and transactions." />
+  <Card title="Migrations" href="/docs/infrastructure/migrations" description="Database migrations — generate, up, down, push, fresh, reset." />
+  <Card title="Authentication" href="/docs/infrastructure/authentication" description="Better Auth integration — email/password, OAuth providers, sessions." />
+  <Card title="Storage" href="/docs/infrastructure/storage" description="File storage with Files SDK — S3, R2, local filesystem, and upload configuration." />
+  <Card title="Email" href="/docs/infrastructure/email" description="Transactional email with Resend, Plunk, SMTP, console adapter, and email templates." />
+  <Card title="Queue" href="/docs/infrastructure/queue" description="Background job processing with pg-boss, BullMQ, or Cloudflare Queues." />
+  <Card title="Search" href="/docs/infrastructure/search" description="Full-text search with PostgreSQL FTS and pgvector embeddings." />
+  <Card title="Realtime Infrastructure" href="/docs/infrastructure/realtime" description="Realtime adapters — pgNotify, Redis Streams, and Cloudflare Durable Objects." />
+  <Card title="Key-Value Store" href="/docs/infrastructure/kv" description="In-memory or custom-adapter key-value store for caching and session data." />
+  <Card title="Logger" href="/docs/infrastructure/logger" description="Structured logging with Pino." />
+  <Card title="Multi-Tenancy" href="/docs/infrastructure/multi-tenancy" description="Scope-based multi-tenant architecture — isolate data per workspace, organization, or any entity using HTTP headers and typed context." />
+  <Card title="OpenAPI" href="/docs/infrastructure/openapi" description="Auto-generate OpenAPI 3.1 spec and interactive API docs from your schema." />
+  <Card title="MCP" href="/docs/infrastructure/mcp" description="Expose QUESTPIE data, routes, schemas, and custom tools through the Model Context Protocol." />
+  <Card title="Deployment" href="/docs/infrastructure/deployment" description="Docker deployment, environment variables, and production hardening." />
+</Cards>
+
 ## Infrastructure Services
 
 These are framework-level infrastructure services configured in `runtimeConfig()`. They are different from user-defined [Services](/docs/server/services), which wrap application-specific business logic and live under `ctx.services.*` by default.
@@ -24,7 +41,9 @@ These are framework-level infrastructure services configured in `runtimeConfig()
 | [OpenAPI](/docs/infrastructure/openapi)               | @questpie/openapi        | API documentation   |
 | [Deployment](/docs/infrastructure/deployment)         | Docker                   | Production setup    |
 
-Cloudflare Workers are supported through the explicit `questpie/adapters/cloudflare` entrypoint. A Cloudflare deploy must configure Hyperdrive-backed PostgreSQL, R2/S3 storage, Workers KV, Cloudflare Queues, and Durable Object realtime adapters; QUESTPIE does not fall back to Node/Bun defaults on Workers.
+<Callout type="warn">
+Cloudflare Workers are supported through the explicit `questpie/adapters/cloudflare` entrypoint. A Cloudflare deploy must configure Hyperdrive-backed PostgreSQL, R2/S3 storage, Workers KV, Cloudflare Queues, and Durable Object realtime adapters. QUESTPIE does not fall back to Node/Bun defaults on Workers.
+</Callout>
 
 ## Configuration
 

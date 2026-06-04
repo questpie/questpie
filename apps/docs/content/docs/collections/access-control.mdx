@@ -136,10 +136,14 @@ await client.collections.pages.findOne({
 });
 ```
 
+<Callout type="warn">
 Admin preview can omit `stage` only for authorized editor sessions. Do not use `accessMode: "system"` in public request handlers to bypass this check.
+</Callout>
 
 ## Related Pages
 
-- [Hooks](/docs/collections/hooks) — Lifecycle hooks for custom logic
-- [Validation](/docs/collections/validation) — Input validation
-- [Authentication](/docs/infrastructure/authentication) — Session and auth setup
+<Cards>
+  <Card title="Hooks" href="/docs/collections/hooks" description="Lifecycle hooks for custom logic" />
+  <Card title="Validation" href="/docs/collections/validation" description="Input validation" />
+  <Card title="Authentication" href="/docs/infrastructure/authentication" description="Session and auth setup" />
+</Cards>

@@ -111,7 +111,9 @@ Place one of these files in `questpie/admin/components/` to override specific ch
 
 These files use the standard `questpie/admin/components/` discovery pattern — they are plain React component files, **not** wrapped in a factory call.
 
-Important: the default export should be a React component (sync or `React.lazy(...)`). Do **not** default-export a raw `() => import("...")` loader function for these reserved override files.
+<Callout type="warn">
+The default export must be a React component (sync or `React.lazy(...)`). Do not default-export a raw `() => import("...")` loader function for these reserved override files.
+</Callout>
 
 **Example — custom sidebar brand:**
 

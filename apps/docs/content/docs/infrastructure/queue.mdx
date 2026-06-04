@@ -159,7 +159,9 @@ import { createCloudflareWorkerHandlers } from "questpie/adapters/cloudflare";
 export default createCloudflareWorkerHandlers(app, { basePath: "/api" });
 ```
 
-Cloudflare Queues call the exported `queue()` handler. You do not run `app.queue.listen()` on Workers, and `pgBossAdapter` is not a Cloudflare Worker adapter.
+<Callout type="warn">
+Cloudflare Queues call the exported `queue()` handler. Do not run `app.queue.listen()` on Workers — `pgBossAdapter` is not a Cloudflare Worker adapter.
+</Callout>
 
 ## Job Options
 
@@ -206,7 +208,9 @@ export default job({
 });
 ```
 
+<Callout type="note">
 Cron jobs must accept an empty payload because schedule registration validates the payload with `schema.parse({})`.
+</Callout>
 
 If you need a deploy step that only registers schedules, run:
 
@@ -244,7 +248,9 @@ States: `created` → `active` → `completed` / `failed` / `expired`
 
 ## Related Pages
 
-- [Jobs](/docs/server/jobs) — Defining job handlers
-- [Services](/docs/server/services) — Reusable business logic used by jobs
-- [Email](/docs/infrastructure/email) — Sending emails from jobs
-- [Config API](/docs/reference/config-api) — Queue adapter configuration
+<Cards>
+  <Card title="Jobs" href="/docs/server/jobs" description="Defining job handlers" />
+  <Card title="Services" href="/docs/server/services" description="Reusable business logic used by jobs" />
+  <Card title="Email" href="/docs/infrastructure/email" description="Sending emails from jobs" />
+  <Card title="Config API" href="/docs/reference/config-api" description="Queue adapter configuration" />
+</Cards>

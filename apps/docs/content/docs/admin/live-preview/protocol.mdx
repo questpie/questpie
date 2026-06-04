@@ -116,7 +116,9 @@ type FieldValueEditedMessage = {
 };
 ```
 
+<Callout type="warn">
 The admin must only call `form.setValue` after the message is validated against the active schema and supported editable field types.
+</Callout>
 
 ## Commit
 
@@ -184,4 +186,6 @@ Admin-side handlers must validate:
 - field type supports the requested inline edit kind
 - value is serializable and reasonably sized
 
+<Callout type="warn">
 Do not use wildcard `postMessage` targets when the preview origin can be resolved from `.preview({ url })`. Do not allow iframe messages to set arbitrary form paths.
+</Callout>

@@ -13,7 +13,7 @@ import {
 } from "@/lib/seo";
 
 const docsCompatRedirects = new Map<string, string>([
-	["getting-started/your-first-app", "/docs/start-here/first-app"],
+	["getting-started/your-first-app", "/docs/getting-started/quickstart"],
 ]);
 
 export const Route = createFileRoute("/docs/$")({
