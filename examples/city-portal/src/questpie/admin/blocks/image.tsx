@@ -11,7 +11,7 @@ function getUrl(value: unknown): string | undefined {
 }
 
 export function ImageRenderer({ values, data }: BlockProps<"image">) {
-	const imageUrl = getUrl(data?.image) || values.image;
+	const imageUrl = getUrl(data?.image);
 
 	const widthClasses: Record<string, string> = {
 		full: "max-w-none",

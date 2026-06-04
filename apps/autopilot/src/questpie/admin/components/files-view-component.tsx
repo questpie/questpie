@@ -4,10 +4,14 @@ import { Icon } from "@iconify/react";
 import * as React from "react";
 
 import {
+	AdminViewHeader,
+	AdminViewLayout,
+	SearchInput,
 	selectBasePath,
 	selectNavigate,
 	useAdminStore,
 	useCollectionList,
+	useResolveText,
 	type CollectionListViewProps,
 } from "@questpie/admin/client";
 
@@ -138,9 +142,11 @@ function formatDate(dateStr: string | undefined): string {
 }
 
 export default function FilesViewComponent(props: Props) {
-	const { collection, viewConfig, navigate } = props;
+	const { collection, config, viewConfig, navigate } = props;
 	const basePath = useAdminStore(selectBasePath);
 	const nav = useAdminStore(selectNavigate) ?? navigate;
+	const resolveText = useResolveText();
+	const title = resolveText((config as any)?.label, collection);
 
 	const cfg = (viewConfig ?? {}) as FilesViewConfig;
 	const pathField = cfg.pathField ?? "path";
@@ -239,31 +245,30 @@ export default function FilesViewComponent(props: Props) {
 	}
 
 	return (
-		<div className="flex h-full flex-col">
-			{/* Header */}
-			<div className="border-b px-4 py-3">
-				<div className="flex items-center gap-3">
-					{/* Search */}
-					<div className="relative max-w-xs flex-1">
-						<Icon
-							icon="ph:magnifying-glass"
-							className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2"
-						/>
-						<input
-							type="text"
-							value={searchTerm}
-							onChange={(e) => setSearchTerm(e.target.value)}
-							placeholder="Search files..."
-							className="border-input bg-background placeholder:text-muted-foreground focus:ring-ring h-9 w-full rounded-md border py-1 pr-3 pl-9 text-sm outline-none focus:ring-1"
-						/>
-					</div>
-					<div className="text-muted-foreground text-xs tabular-nums">
-						{entries.length} items
-					</div>
-				</div>
-			</div>
-
-			{/* Breadcrumb */}
+		<AdminViewLayout
+			header={
+				<AdminViewHeader
+					title={title}
+					actions={
+						<>
+							<div className="w-56 max-w-[60vw]">
+								<SearchInput
+									value={searchTerm}
+									onChange={(e) => setSearchTerm(e.target.value)}
+									onClear={() => setSearchTerm("")}
+									placeholder="Search files..."
+								/>
+							</div>
+							<span className="text-muted-foreground shrink-0 text-xs tabular-nums">
+								{entries.length} items
+							</span>
+						</>
+					}
+				/>
+			}
+		>
+			<div className="flex h-full min-h-0 flex-col">
+				{/* Breadcrumb */}
 			<div className="flex items-center gap-1 border-b px-4 py-2 text-sm">
 				<button
 					type="button"
@@ -365,5 +370,6 @@ export default function FilesViewComponent(props: Props) {
 				)}
 			</div>
 		</div>
+		</AdminViewLayout>
 	);
 }

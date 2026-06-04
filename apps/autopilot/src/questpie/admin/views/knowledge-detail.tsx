@@ -1,10 +1,9 @@
 import { view } from "@questpie/admin/client";
-import { adminClientModule } from "@questpie/admin/client/modules/admin";
-
-const collectionFormComponent =
-	adminClientModule.views["collection-form"].component;
 
 export default view("knowledge-detail", {
 	kind: "form",
-	component: collectionFormComponent,
+	component: () =>
+		import("../components/knowledge-detail-component.js") as Promise<{
+			default: React.ComponentType<any>;
+		}>,
 });

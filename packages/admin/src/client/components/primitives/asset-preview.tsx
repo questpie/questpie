@@ -19,6 +19,7 @@ import * as React from "react";
 
 import type { Asset } from "../../hooks/use-upload";
 import { cn } from "../../lib/utils";
+import { resolveAssetUrl } from "../../utils/asset-url";
 import { Button } from "../ui/button";
 import { Skeleton } from "../ui/skeleton";
 
@@ -209,6 +210,7 @@ export function AssetPreview({
 	const isImageType = isImage(mimeType);
 	const fileIconName = getFileIconName(mimeType);
 	const extension = getExtension(filename, mimeType);
+	const assetUrl = resolveAssetUrl(asset.url);
 
 	// Build thumbnail URL
 	const thumbnailUrl = React.useMemo(() => {
@@ -217,11 +219,11 @@ export function AssetPreview({
 			return URL.createObjectURL(pendingFile);
 		}
 		// If we have an asset URL and it's an image
-		if (asset.url && isImageType) {
-			return asset.url;
+		if (assetUrl && isImageType) {
+			return assetUrl;
 		}
 		return null;
-	}, [pendingFile, asset.url, isImageType]);
+	}, [pendingFile, assetUrl, isImageType]);
 
 	// Clean up object URL on unmount
 	React.useEffect(() => {

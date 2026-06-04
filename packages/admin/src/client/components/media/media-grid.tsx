@@ -27,6 +27,7 @@ import * as React from "react";
 import type { Asset } from "../../hooks/use-upload";
 import { useSafeI18n } from "../../i18n/hooks";
 import { cn } from "../../lib/utils";
+import { resolveAssetUrl } from "../../utils/asset-url";
 import { Skeleton } from "../ui/skeleton";
 
 // ============================================================================
@@ -155,7 +156,7 @@ function AssetItem({
 	onClick,
 }: AssetItemProps) {
 	const [imageError, setImageError] = React.useState(false);
-	const thumbnailUrl = asset.url;
+	const thumbnailUrl = resolveAssetUrl(asset.url);
 	const isImageType = isImage(asset.mimeType);
 	const showCheckbox = selectionMode !== "none";
 

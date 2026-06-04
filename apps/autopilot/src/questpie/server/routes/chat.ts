@@ -44,6 +44,7 @@ function titleFromContent(content: string): string {
 
 export default route()
 	.post()
+	.access(({ session }) => Boolean(session))
 	.schema(chatSchema)
 	.handler(async (ctx) => {
 		const { input, collections } = ctx;

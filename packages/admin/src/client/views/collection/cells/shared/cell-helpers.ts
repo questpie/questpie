@@ -5,6 +5,7 @@
 
 import type { FieldInstance } from "../../../../builder/field/field";
 import { formatLabel } from "../../../../lib/utils";
+import { resolveAssetUrl } from "../../../../utils/asset-url";
 
 function getNestedValue(item: unknown, path: string): unknown {
 	if (!item || typeof item !== "object") return undefined;
@@ -32,12 +33,12 @@ function toImageUrl(value: unknown): string | null {
 	const obj = value as Record<string, unknown>;
 	const url = obj.url;
 	if (typeof url === "string" && url.length > 0) {
-		return url;
+		return resolveAssetUrl(url) ?? null;
 	}
 
 	const src = obj.src;
 	if (typeof src === "string" && src.length > 0) {
-		return src;
+		return resolveAssetUrl(src) ?? null;
 	}
 
 	return null;

@@ -23,43 +23,38 @@ function isLazyLoader(
 	);
 }
 
-function TaskDetailForm(props: Record<string, unknown>) {
+// Resolve the admin's built-in collection-form view once, at module scope, as a
+// lazy component. Rendering it inside <Suspense> (below) gives FormView the
+// Suspense boundary its useSuspenseCollectionMeta hook requires — the previous
+// useState/useEffect manual-load mounted FormView with no Suspense ancestor,
+// so the suspended meta read resolved to null and crashed in a relation field.
+const CollectionFormView = React.lazy(async () => {
 	const loader = adminClientModule.views["collection-form"].component;
-	const [Component, setComponent] = React.useState<React.ComponentType<
-		Record<string, unknown>
-	> | null>(null);
-
-	React.useEffect(() => {
-		let mounted = true;
-
-		if (!isLazyLoader(loader)) {
-			setComponent(loader as React.ComponentType<Record<string, unknown>>);
-			return;
-		}
-
-		void loader().then((module) => {
-			if (!mounted) return;
-			setComponent(
-				(module.default ?? module) as React.ComponentType<
-					Record<string, unknown>
-				>,
-			);
-		});
-
-		return () => {
-			mounted = false;
+	if (isLazyLoader(loader)) {
+		const module = await loader();
+		return {
+			default: (module.default ?? module) as React.ComponentType<
+				Record<string, unknown>
+			>,
 		};
-	}, [loader]);
-
-	if (!Component) {
-		return (
-			<div className="text-muted-foreground flex items-center justify-center p-12">
-				<Icon icon="ph:spinner" className="size-5 animate-spin opacity-40" />
-			</div>
-		);
 	}
+	return {
+		default: loader as React.ComponentType<Record<string, unknown>>,
+	};
+});
 
-	return <Component {...props} />;
+function TaskDetailForm(props: Record<string, unknown>) {
+	return (
+		<React.Suspense
+			fallback={
+				<div className="text-muted-foreground flex items-center justify-center p-12">
+					<Icon icon="ph:spinner" className="size-5 animate-spin opacity-40" />
+				</div>
+			}
+		>
+			<CollectionFormView {...props} />
+		</React.Suspense>
+	);
 }
 
 type TimelineEntry = {

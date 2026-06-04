@@ -6,7 +6,7 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "../../lib/utils";
 
 const buttonVariants = cva(
-	"qa-button font-chrome group/button text-foreground focus-visible:border-border-strong focus-visible:ring-ring/20 aria-invalid:border-border-strong aria-invalid:ring-ring/20 inline-flex shrink-0 cursor-pointer items-center justify-center rounded-[var(--control-radius)] border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-[background-color,color,border-color,box-shadow,transform,opacity] duration-150 ease-out outline-none select-none focus-visible:ring-[3px] active:scale-[0.96] disabled:pointer-events-none disabled:opacity-50 disabled:active:scale-100 aria-invalid:ring-[3px] motion-reduce:active:scale-100 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+	"qa-button font-chrome group/button text-foreground focus-visible:border-border-strong focus-visible:ring-ring/20 aria-invalid:border-border-strong aria-invalid:ring-ring/20 inline-flex shrink-0 cursor-pointer items-center justify-center rounded-[var(--control-radius)] border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-[background-color,color,border-color,box-shadow,transform,opacity] duration-150 ease-out outline-none select-none focus-visible:ring-[3px] active:translate-y-px disabled:pointer-events-none disabled:opacity-50 disabled:active:translate-y-0 aria-invalid:ring-[3px] motion-reduce:active:translate-y-0 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
 	{
 		variants: {
 			variant: {
@@ -60,7 +60,7 @@ function Button({
 			type={type}
 			className={cn(
 				buttonVariants({ variant, size }),
-				staticPress && "active:scale-100",
+				staticPress && "active:translate-y-0",
 				className,
 			)}
 			{...props}

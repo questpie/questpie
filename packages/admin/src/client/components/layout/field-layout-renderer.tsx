@@ -213,14 +213,20 @@ function SectionRenderer({
 		const value = `section-${index}`;
 		const defaultOpen = section.defaultCollapsed !== true;
 		return (
-			<Accordion defaultValue={defaultOpen ? [value] : []} className="w-full">
-				<AccordionItem value={value} className="border-transparent px-4">
-					<AccordionTrigger className="hover:no-underline">
+			<Accordion
+				defaultValue={defaultOpen ? [value] : []}
+				className="qa-field-layout__section qa-field-layout__section--collapsible panel-surface bg-card overflow-hidden"
+			>
+				<AccordionItem
+					value={value}
+					className="border-none px-0 data-open:bg-transparent"
+				>
+					<AccordionTrigger className="hover:bg-surface-low aria-expanded:bg-surface-low min-h-12 px-4 py-3 hover:no-underline">
 						<span className="font-semibold">
 							{ctx.resolveText(section.label, "Section")}
 						</span>
 					</AccordionTrigger>
-					<AccordionContent className="pt-2 pb-4">
+					<AccordionContent className="border-border-subtle border-t px-4 pt-3 pb-4">
 						{section.description && (
 							<p className="text-muted-foreground mb-4 text-sm text-pretty">
 								{ctx.resolveText(section.description, "")}

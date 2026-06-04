@@ -49,7 +49,7 @@ export const knowledge = collection("knowledge")
 	}))
 	.title(({ f }) => f.title)
 	.admin(({ c }) => ({
-		label: { en: "Artifacts" },
+		label: { en: "Knowledge" },
 		icon: c.icon("ph:brain"),
 	}))
 	.list(({ v, f }) =>

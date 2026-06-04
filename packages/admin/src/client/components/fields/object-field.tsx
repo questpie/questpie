@@ -78,7 +78,8 @@ function ObjectFieldPanel({
 				type="button"
 				variant="ghost"
 				onClick={onToggle}
-				className="h-auto min-h-10 w-full justify-between rounded-none px-3 py-2 text-left"
+				className="hover:bg-surface-low aria-expanded:bg-surface-low h-auto min-h-12 w-full justify-between rounded-none px-4 py-3 text-left"
+				aria-expanded={!isCollapsed}
 				disabled={disabled}
 			>
 				<span className="flex min-w-0 items-center gap-2">

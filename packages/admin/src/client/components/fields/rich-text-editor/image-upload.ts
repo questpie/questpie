@@ -3,6 +3,7 @@ import * as React from "react";
 import { type Asset, useUpload } from "../../../hooks/use-upload";
 import { useUploadCollection } from "../../../hooks/use-upload-collection";
 import { useTranslation } from "../../../i18n/hooks";
+import { resolveAssetUrl } from "../../../utils/asset-url";
 import { sanitizeFilename } from "../field-utils";
 
 type RichTextImageUploadOptions = {
@@ -73,7 +74,7 @@ export function useRichTextImageUpload({
 				throw new Error(t("upload.error"));
 			}
 
-			return uploadedAsset.url;
+			return resolveAssetUrl(uploadedAsset.url) ?? uploadedAsset.url;
 		},
 		[collection, collections, onImageUpload, t, upload],
 	);

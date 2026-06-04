@@ -683,15 +683,18 @@ function SectionLayoutRenderer({
 			<Accordion
 				key={value}
 				defaultValue={defaultOpen ? [value] : []}
-				className="w-full"
+				className="qa-form-fields__section qa-form-fields__section--collapsible panel-surface bg-card overflow-hidden"
 			>
-				<AccordionItem value={value} className="border-transparent px-4">
-					<AccordionTrigger className="hover:no-underline">
+				<AccordionItem
+					value={value}
+					className="border-none px-0 data-open:bg-transparent"
+				>
+					<AccordionTrigger className="hover:bg-surface-low aria-expanded:bg-surface-low min-h-12 px-4 py-3 hover:no-underline">
 						<span className="font-semibold">
 							{resolveText(section.label, "Section", formValues)}
 						</span>
 					</AccordionTrigger>
-					<AccordionContent className="pt-2 pb-4">
+					<AccordionContent className="border-border-subtle border-t px-4 pt-3 pb-4">
 						{section.description && (
 							<p className="text-muted-foreground mb-4 text-sm text-pretty">
 								{resolveText(section.description, "", formValues)}

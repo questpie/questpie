@@ -8,7 +8,9 @@
 		"#questpie/*": "./src/questpie/server/.generated/*"
 	},
 	"scripts": {
-		"dev": "bun --bun vite dev",
+		"dev": "bun --conditions=development scripts/dev-all.ts",
+		"dev:web": "bun --bun vite dev",
+		"dev:all": "bun --conditions=development scripts/dev-all.ts",
 		"dev:worker": "bun --bun run --watch ./src/worker.ts",
 		"worker": "bun --bun run ./src/worker.ts",
 		"dev:ai-worker": "bun --bun run --watch ./src/ai-worker.ts",
@@ -60,9 +62,9 @@
 		"@types/node": "^22.10.2",
 		"@types/react": "^19.2.0",
 		"@types/react-dom": "^19.2.0",
-		"bun-types": "latest",
 		"@vitejs/plugin-react": "^6.0.1",
 		"babel-plugin-react-compiler": "^1.0.0",
+		"bun-types": "latest",
 		"typescript": "^5.9.2",
 		"vite": "^8.0.0",
 		"vitest": "^3.0.5"

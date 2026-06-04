@@ -11,7 +11,7 @@ function getUrl(value: unknown): string | undefined {
 }
 
 export function HeroRenderer({ values, data, children }: BlockProps<"hero">) {
-	const bgImageUrl = getUrl(data?.backgroundImage) || values.backgroundImage;
+	const bgImageUrl = getUrl(data?.backgroundImage);
 
 	const heightClasses: Record<string, string> = {
 		small: "min-h-[40vh]",

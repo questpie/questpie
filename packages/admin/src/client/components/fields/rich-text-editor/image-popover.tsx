@@ -10,6 +10,7 @@ import { toast } from "sonner";
 
 import type { Asset } from "../../../hooks/use-upload";
 import { useTranslation } from "../../../i18n/hooks";
+import { resolveAssetUrl } from "../../../utils/asset-url";
 import { MediaPickerDialog } from "../../media/media-picker-dialog";
 import { Button } from "../../ui/button";
 import { Input } from "../../ui/input";
@@ -113,7 +114,7 @@ export function ImagePopover({
 				.chain()
 				.focus()
 				.setImage({
-					src: asset.url,
+					src: resolveAssetUrl(asset.url) ?? asset.url,
 					alt: imageAlt || asset.alt || undefined,
 				})
 				.run();
@@ -138,7 +139,10 @@ export function ImagePopover({
 	return (
 		<>
 			<Popover open={open} onOpenChange={onOpenChange}>
-				<PopoverTrigger render={<div className="sr-only" />} />
+				<PopoverTrigger
+					nativeButton={false}
+					render={<div className="sr-only" />}
+				/>
 				<PopoverContent className="w-80">
 					<PopoverHeader>
 						<PopoverTitle>{t("editor.image")}</PopoverTitle>

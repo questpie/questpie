@@ -297,6 +297,11 @@ function matchRoute(
 	return { type: "not-found" };
 }
 
+function isAuthRoute(segments: string[]): boolean {
+	const [first] = segments;
+	return first ? AUTH_ROUTE_SEGMENTS.has(first) : false;
+}
+
 function formatDocumentTitle(pageTitle: string, appTitle: string): string {
 	const title = pageTitle.trim();
 	const app = appTitle.trim() || "Admin";
@@ -910,11 +915,39 @@ function LazyPageRenderer({ config }: { config: PageDefinition<string> }) {
  * Uses Suspense internally - shows skeleton while config loads.
  */
 export function AdminRouter(props: AdminRouterProps): React.ReactElement {
+	if (isAuthRoute(props.segments)) {
+		return (
+			<React.Suspense fallback={<AuthPageSkeleton />}>
+				<AdminAuthRouter {...props} />
+			</React.Suspense>
+		);
+	}
+
 	return (
 		<React.Suspense fallback={getFallbackForSegments(props.segments)}>
 			<AdminRouterInner {...props} />
 		</React.Suspense>
 	);
+}
+
+function AdminAuthRouter({
+	segments,
+	pages: pagesProp,
+	NotFoundComponent,
+}: AdminRouterProps) {
+	const admin = useAdminStore((state) => state.admin);
+	const pages = pagesProp ?? admin.getPages();
+	const route = React.useMemo(
+		() => matchRoute(segments, {}, {}, pages),
+		[segments, pages],
+	);
+
+	if (route.type === "page") {
+		return <LazyPageRenderer config={route.config} />;
+	}
+
+	const NotFound = NotFoundComponent || DefaultNotFound;
+	return <NotFound />;
 }
 
 /**

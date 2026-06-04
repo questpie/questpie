@@ -15,11 +15,13 @@ function FieldSelectTrigger({
 	className,
 	hasValue,
 	asInputGroupControl,
+	static: staticPress = true,
 	...props
 }: FieldSelectTriggerProps) {
 	return (
 		<Button
 			variant="outline"
+			static={staticPress}
 			data-slot={asInputGroupControl ? "input-group-control" : undefined}
 			className={cn(
 				"qa-field-select-control qa-select-single control-surface w-full justify-between px-3 py-2 font-normal",

@@ -69,7 +69,10 @@ export function LinkPopover({
 
 	return (
 		<Popover open={open} onOpenChange={onOpenChange}>
-			<PopoverTrigger render={<div className="sr-only" />} />
+			<PopoverTrigger
+				nativeButton={false}
+				render={<div className="sr-only" />}
+			/>
 			<PopoverContent className="w-72">
 				<PopoverHeader>
 					<PopoverTitle>{t("editor.link")}</PopoverTitle>

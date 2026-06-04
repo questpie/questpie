@@ -469,6 +469,64 @@ describe("collection storage route streaming", () => {
 		);
 	});
 
+	it("returns file URLs keyed by storage key and serves them through the API base path", async () => {
+		const storage = createInstrumentedStorageAdapter();
+		setup = await buildMockApp(
+			{ collections: { assets } },
+			{ storage: { adapter: storage.adapter, basePath: "/api" } },
+		);
+		app = setup.app;
+		await runTestDbMigrations(app);
+
+		const handler = createFetchHandler(app, {
+			accessMode: "system",
+			basePath: "/api",
+			requestLogging: false,
+		});
+		const body = textEncoder.encode("avatar-bytes");
+		const formData = new FormData();
+		formData.append(
+			"file",
+			new File([body], "avatar.png", { type: "image/png" }),
+		);
+
+		const uploadResponse = await handler(
+			new Request("http://localhost:3000/api/assets/upload", {
+				method: "POST",
+				body: formData,
+			}),
+		);
+		expect(uploadResponse).not.toBeNull();
+		expect(uploadResponse?.status).toBe(200);
+
+		const uploaded = (await uploadResponse!.json()) as any;
+		expect(uploaded.id).toBeString();
+		expect(uploaded.key).toBeString();
+		expect(uploaded.id).not.toBe(uploaded.key);
+		expect(uploaded.url).toBe(
+			`http://localhost:3000/api/assets/files/${uploaded.key}`,
+		);
+		expect(uploaded.url).not.toBe(
+			`http://localhost:3000/api/assets/files/${uploaded.id}`,
+		);
+
+		const served = await handler(new Request(uploaded.url));
+		expect(served).not.toBeNull();
+		expect(served?.status).toBe(200);
+		expect(await served!.text()).toBe("avatar-bytes");
+		expect(storage.calls.exists).toBe(1);
+		expect(storage.calls.head).toBe(1);
+		expect(storage.calls.download).toBe(1);
+
+		const idUrl = `http://localhost:3000/api/assets/files/${uploaded.id}`;
+		const servedById = await handler(new Request(idUrl));
+		expect(servedById).not.toBeNull();
+		expect(servedById?.status).toBe(404);
+		expect(storage.calls.exists).toBe(1);
+		expect(storage.calls.head).toBe(1);
+		expect(storage.calls.download).toBe(1);
+	});
+
 	it("sanitizes uploaded filenames and keeps storage keys path-safe", async () => {
 		const storage = createInstrumentedStorageAdapter();
 		setup = await buildMockApp(

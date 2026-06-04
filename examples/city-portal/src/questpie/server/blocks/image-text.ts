@@ -22,4 +22,5 @@ export const imageTextBlock = block("image-text")
 		content: f.richText().label("Content"),
 		ctaText: f.text().label("CTA Text"),
 		ctaLink: f.text().label("CTA Link"),
-	}));
+	}))
+	.prefetch({ with: { image: true } });

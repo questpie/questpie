@@ -63,7 +63,10 @@ import type * as React from "react";
 import type { AnyQuestpieClient } from "../../builder";
 import { Admin, type AdminInput } from "../../builder/admin";
 import { AuthGuard } from "../../components/auth";
-import { getAdminConfigQueryOptions } from "../../hooks/use-admin-config";
+import {
+	getAdminConfigQueryOptions,
+	getPublicAdminConfigQueryOptions,
+} from "../../hooks/use-admin-config";
 import { AdminProvider } from "../../runtime/provider";
 import {
 	getAdminLocalesQueryOptions,
@@ -399,6 +402,12 @@ export function AdminLayoutProvider({
 	const { theme: managedTheme, setTheme: setManagedTheme } =
 		useManagedAdminTheme(theme, setTheme);
 
+	// Check if current route is public
+	const currentPath =
+		activeRoute ??
+		(typeof window !== "undefined" ? window.location.pathname : undefined);
+	const isCurrentPathPublic = isPublicPath(currentPath, basePath, publicPaths);
+
 	// Prefetch critical data BEFORE any Suspense boundary in the tree.
 	// This eliminates the sequential waterfall:
 	//   TranslationsProvider suspends → AdminRouter suspends → View suspends
@@ -406,7 +415,11 @@ export function AdminLayoutProvider({
 	// cache instead of triggering a new network request.
 	// prefetchQuery is idempotent — skips if data is already cached or fetching.
 	if ((client as any)?.routes) {
-		qc.prefetchQuery(getAdminConfigQueryOptions(client));
+		if (isCurrentPathPublic) {
+			qc.prefetchQuery(getPublicAdminConfigQueryOptions(client));
+		} else {
+			qc.prefetchQuery(getAdminConfigQueryOptions(client));
+		}
 		if (useServerTranslations) {
 			const locale = initialUiLocale ?? getUiLocaleFromCookie() ?? "en";
 			qc.prefetchQuery(getAdminLocalesQueryOptions(client));
@@ -420,12 +433,6 @@ export function AdminLayoutProvider({
 	// Determine if auth guard should be enabled
 	// Default: enabled if authClient is provided
 	const shouldUseAuthGuard = enableAuthGuard ?? authClient != null;
-
-	// Check if current route is public
-	const currentPath =
-		activeRoute ??
-		(typeof window !== "undefined" ? window.location.pathname : undefined);
-	const isCurrentPathPublic = isPublicPath(currentPath, basePath, publicPaths);
 
 	// Determine content based on path type:
 	// - Public paths (login, setup, etc.): render children directly (no AdminLayout)

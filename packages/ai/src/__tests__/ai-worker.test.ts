@@ -832,23 +832,20 @@ describe("Worker manager — lease expiry", () => {
 });
 
 describe("Embedded worker execution", () => {
-	it("prepares the filesystem skills directory for Claude Code runs", async () => {
+	it("prepares the worker volume directory with a stable volume id", async () => {
 		const workerDir = await mkdtemp(join(tmpdir(), "questpie-ai-worker-"));
 
 		try {
 			const volume = await prepareWorkerVolume(workerDir);
-			const skillsDir = join(
-				workerDir,
-				"homes",
-				"claude-code",
-				".claude",
-				"skills",
-			);
-			const skillsStat = await stat(skillsDir);
+			const workerStat = await stat(join(workerDir, "worker"));
 
 			expect(volume.workerDir).toBe(workerDir);
 			expect(volume.volumeId).toStartWith("vol_");
-			expect(skillsStat.isDirectory()).toBe(true);
+			expect(workerStat.isDirectory()).toBe(true);
+
+			// Stable across calls (persisted to disk).
+			const again = await prepareWorkerVolume(workerDir);
+			expect(again.volumeId).toBe(volume.volumeId);
 		} finally {
 			await rm(workerDir, { recursive: true, force: true });
 		}

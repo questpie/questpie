@@ -13,6 +13,7 @@ import type * as React from "react";
 
 import { Button } from "../../../../components/ui/button";
 import { cn } from "../../../../lib/utils";
+import { resolveAssetUrl } from "../../../../utils/asset-url";
 
 // ============================================================================
 // Types
@@ -138,7 +139,7 @@ export function AssetThumbnail({
 
 	// Extract asset properties
 	const assetObj = asset as Record<string, unknown>;
-	const url = assetObj.url as string | undefined;
+	const url = resolveAssetUrl(assetObj.url as string | undefined);
 	const filename = assetObj.filename as string | undefined;
 	const mimeType = assetObj.mimeType as string | undefined;
 	const alt = assetObj.alt as string | undefined;

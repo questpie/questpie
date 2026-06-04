@@ -859,6 +859,20 @@ const getAdminConfigSchema = z.object({}).optional();
 // Output schema — typed DTO schema with discriminated shapes
 const getAdminConfigOutputSchema = adminConfigDTOSchema;
 
+export function buildPublicAdminConfig(
+	adminCfg: ReturnType<typeof getAdminCfg>,
+) {
+	const response: {
+		branding?: unknown;
+	} = {};
+
+	if (adminCfg.branding) {
+		response.branding = adminCfg.branding;
+	}
+
+	return stripUndefinedDeep(response);
+}
+
 // ============================================================================
 // Functions
 // ============================================================================
@@ -1099,6 +1113,20 @@ const getAdminConfig = route()
 		return stripUndefinedDeep(response);
 	});
 
+/**
+ * Get public admin bootstrap configuration for unauthenticated auth pages.
+ *
+ * This intentionally exposes only branding. Full admin config, sidebar,
+ * dashboard, blocks, upload collections, and resource metadata stay behind
+ * getAdminConfig's admin-session guard.
+ */
+const getPublicAdminConfig = route()
+	.post()
+	.access(true)
+	.schema(getAdminConfigSchema)
+	.outputSchema(getAdminConfigOutputSchema)
+	.handler(async (ctx) => buildPublicAdminConfig(getAdminCfg(getApp(ctx))));
+
 // ============================================================================
 // Export Bundle
 // ============================================================================
@@ -1109,4 +1137,5 @@ const getAdminConfig = route()
  */
 export const adminConfigFunctions = {
 	getAdminConfig,
+	getPublicAdminConfig,
 } as const;

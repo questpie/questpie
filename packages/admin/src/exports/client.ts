@@ -79,6 +79,12 @@ export {
 	type AdminShellRailProps,
 } from "#questpie/admin/client/views/layout/admin-layout.js";
 export { AdminLayoutProvider } from "#questpie/admin/client/views/layout/admin-layout-provider.js";
+export {
+	AdminViewLayout,
+	AdminViewHeader,
+} from "#questpie/admin/client/views/layout/admin-view-layout.js";
+export { SearchInput } from "#questpie/admin/client/components/ui/search-input.js";
+export { useResolveText } from "#questpie/admin/client/i18n/hooks.js";
 export type {
 	AdminSidebarBrandProps,
 	AdminSidebarNavItemProps,

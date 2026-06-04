@@ -44,7 +44,7 @@ function PopoverContent({
 				<PopoverPrimitive.Popup
 					data-slot="popover-content"
 					className={cn(
-						"qa-popover__content floating-surface motion-floating text-popover-foreground z-50 flex min-w-48 origin-(--transform-origin) flex-col gap-4 p-2.5 text-xs outline-hidden data-ending-style:scale-[var(--motion-scale-enter)] data-ending-style:opacity-0 data-starting-style:scale-[var(--motion-scale-enter)] data-starting-style:opacity-0",
+						"qa-popover__content floating-surface motion-floating text-popover-foreground z-50 flex min-w-48 origin-(--transform-origin) flex-col gap-4 overflow-hidden p-2.5 text-xs outline-hidden data-ending-style:scale-[var(--motion-scale-enter)] data-ending-style:opacity-0 data-starting-style:scale-[var(--motion-scale-enter)] data-starting-style:opacity-0",
 						className,
 					)}
 					{...props}
