@@ -3,14 +3,16 @@ title: Hooks API
 description: Complete lifecycle hooks reference — all hook types, contexts, and execution order.
 ---
 
+<Callout type="info">For usage examples and patterns, see the [Hooks Guide](/docs/collections/hooks).</Callout>
+
 ## Overview
 
-Hooks allow you to run custom logic at specific points in the collection/global lifecycle. Each hook can be a single function or an array of functions (executed in order).
+All available hook types and their signatures:
 
 ```ts
 collection("posts")
-  .fields(({ f }) => ({ ... }))
   .hooks({
+    beforeOperation: ({ data, operation }) => { ... },
     beforeValidate: ({ data, operation }) => { ... },
     beforeChange: ({ data, operation }) => { ... },
     afterChange: async ({ data, original, operation }) => { ... },
@@ -18,7 +20,6 @@ collection("posts")
     afterRead: ({ data }) => { ... },
     beforeDelete: async ({ data }) => { ... },
     afterDelete: async ({ data }) => { ... },
-    beforeOperation: ({ data, operation }) => { ... },
     beforeTransition: async ({ data, fromStage, toStage }) => { ... },
     afterTransition: async ({ data, fromStage, toStage }) => { ... },
   })
@@ -249,26 +250,3 @@ All hooks receive these properties in addition to their type-specific ones:
 | `app`         | `QuestpieApp`           | App instance              |
 | Custom        | `AppContext` extensions | Services from `services/` |
 
----
-
-## Multiple Hook Functions
-
-Each hook type accepts an array of functions. They execute in order:
-
-```ts
-.hooks({
-  afterChange: [
-    async ({ data }) => { /* first handler */ },
-    async ({ data }) => { /* second handler */ },
-  ],
-})
-```
-
-Multiple `.hooks()` calls on the same builder merge their handlers:
-
-```ts
-collection("posts")
-	.hooks({ afterChange: handler1 })
-	.hooks({ afterChange: handler2 });
-// Both handler1 and handler2 will run
-```

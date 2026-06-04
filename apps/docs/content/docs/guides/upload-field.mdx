@@ -1,0 +1,111 @@
+---
+title: Add File Uploads
+description: Configure an upload field with file type restrictions and storage.
+---
+
+An upload field stores a reference to a file in your storage collection. QUESTPIE handles upload routing, URL generation, and admin UI automatically — you declare the field and optional constraints.
+
+```ts title="collections/articles.ts"
+import { collection } from "#questpie/factories";
+
+export const articles = collection("articles")
+  .fields(({ f }) => ({
+    title: f.text(255).label("Title").required(),
+    // Single image, restricted to image MIME types
+    coverImage: f
+      .upload({
+        to: "assets",
+        mimeTypes: ["image/*"],
+        maxSize: 5_000_000, // 5 MB
+      })
+      .label("Cover Image")
+      .admin({ accept: "image/*", previewVariant: "card" }),
+    // PDF or Word documents only
+    attachment: f
+      .upload({
+        to: "assets",
+        mimeTypes: [
+          "application/pdf",
+          "application/msword",
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ],
+      })
+      .label("Attachment"),
+    // Multiple images (inline array, no junction table)
+    gallery: f
+      .upload({ mimeTypes: ["image/*"] })
+      .label("Gallery")
+      .multiple(),
+  }))
+  .title(({ f }) => f.title);
+```
+
+The `to` option names the upload collection to draw files from — it defaults to `"assets"` when omitted. `mimeTypes` accepts wildcards (`"image/*"`) or exact types. `maxSize` is in bytes and is enforced in the admin UI and on the upload route.
+
+Calling `.multiple()` stores an array of asset IDs as JSONB instead of a single foreign key column — no junction table needed.
+
+## Storage Configuration
+
+Add a `storage` block to your runtime config. Local filesystem is the default:
+
+```ts title="questpie.config.ts"
+import { runtimeConfig } from "questpie/app";
+
+export default runtimeConfig({
+  app: { url: process.env.APP_URL || "http://localhost:3000" },
+  db: { url: process.env.DATABASE_URL },
+  storage: {
+    location: "./uploads", // directory path, relative or absolute
+    basePath: "/api",      // prefix for served file URLs
+  },
+});
+```
+
+For production, swap `location` for an S3-compatible adapter:
+
+```ts title="questpie.config.ts"
+import { s3 } from "files-sdk/s3";
+
+export default runtimeConfig({
+  storage: {
+    adapter: s3({ bucket: "my-bucket" }),
+    basePath: "/api",
+  },
+});
+```
+
+## Upload Collection
+
+The upload field references a collection that has `.upload()` configured. The built-in `assets` collection is provided by QUESTPIE, but you can create a dedicated one:
+
+```ts title="collections/media.ts"
+import { collection } from "#questpie/factories";
+
+export const media = collection("media")
+  .upload({
+    allowedTypes: ["image/*", "application/pdf"],
+    maxSize: 20_000_000,
+    visibility: "public", // or "private" for signed URLs
+  })
+  .fields(({ f }) => ({
+    alt: f.text().label("Alt Text"),
+  }))
+  .title(({ f }) => f.filename);
+```
+
+Then point your field at it:
+
+```ts
+cover: f.upload({ to: "media", mimeTypes: ["image/*"] }),
+```
+
+<Callout type="info">
+  Private upload collections generate signed, expiring URLs automatically. Set `visibility: "private"` on the collection's `.upload()` call and configure `signedUrlExpiration` (seconds) on the storage block if you need a duration other than the default 3600.
+</Callout>
+
+## Related Pages
+
+<Cards>
+  <Card title="Media & Uploads" href="/docs/admin/media" description="Admin UI behavior for upload fields" />
+  <Card title="Fields" href="/docs/collections/fields" description="All available field types and options" />
+</Cards>

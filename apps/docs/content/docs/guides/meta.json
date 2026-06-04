@@ -1,4 +1,19 @@
 {
 	"title": "Guides",
-	"pages": ["index"]
+	"pages": [
+		"index",
+		"tanstack-start-setup",
+		"add-admin-panel",
+		"add-versioning",
+		"many-to-many-relation",
+		"slug-from-title",
+		"add-soft-delete",
+		"access-control-role",
+		"send-email-from-hook",
+		"background-job",
+		"cloudflare-workers",
+		"live-preview-setup",
+		"upload-field",
+		"build-page-builder"
+	]
 }

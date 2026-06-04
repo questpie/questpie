@@ -1,26 +1,24 @@
 ---
 title: HTTP Adapters
-description: Mount QUESTPIE on TanStack Start, Hono, Elysia, or Next.js.
+description: Mount QUESTPIE on TanStack Start, Hono, Elysia, or Next.js to expose your collections, routes, and auth endpoints over HTTP.
 ---
 
-QUESTPIE needs an HTTP adapter to expose its collections, routes, and auth endpoints over HTTP. Choose the adapter that matches your server framework.
+QUESTPIE's core is framework-agnostic. An adapter wires its internal request handler to whichever HTTP server you run. Four adapters ship out of the box.
 
-<Cards>
-  <Card title="Hono Adapter" href="/docs/client/adapters/hono" description="Serve QUESTPIE APIs with Hono." />
-  <Card title="Elysia Adapter" href="/docs/client/adapters/elysia" description="Serve QUESTPIE APIs with Elysia." />
-  <Card title="Next.js Adapter" href="/docs/client/adapters/nextjs" description="Serve QUESTPIE APIs with Next.js API routes." />
-</Cards>
+## Which adapter should I use?
 
-| Adapter        | Package            | Use case               |
-| -------------- | ------------------ | ---------------------- |
-| TanStack Start | (none)             | Built-in fetch handler |
-| Hono           | `@questpie/hono`   | General purpose, fast  |
-| Elysia         | `@questpie/elysia` | Bun-native, validation |
-| Next.js        | `@questpie/next`   | Next.js App Router     |
+| I need... | Use... |
+| --------- | ------ |
+| A standalone API server with the fastest cold-start | **Hono** — zero-dep, runs on Bun, Cloudflare Workers, Deno, Node |
+| End-to-end type safety with an Eden/treaty client | **Elysia** — Bun-native, full type inference from server to client |
+| QUESTPIE inside an existing Next.js App Router project | **Next.js** — drop-in catch-all route handler, no extra server process |
+| Full-stack app with TanStack Start (file-based routing) | **TanStack Start** — no extra package, use `createFetchHandler` directly |
+
+## Minimal setup
 
 <Tabs items={["TanStack Start", "Hono", "Elysia", "Next.js"]}>
   <Tab value="TanStack Start">
-    TanStack Start does not need an adapter package. Use the built-in `createFetchHandler` directly in an API catch-all route.
+    No adapter package needed. `createFetchHandler` from `questpie/http` produces a standard `Request → Response` function you drop into any API file route.
 
     ```ts title="src/routes/api/$.ts"
     import { createAPIFileRoute } from "@tanstack/react-start/api";
@@ -48,12 +46,11 @@ QUESTPIE needs an HTTP adapter to expose its collections, routes, and auth endpo
     import { app } from "#questpie";
 
     const server = new Hono();
+
     server.route("/api", questpieHono(app));
 
     export default server;
     ```
-
-    See [Hono Adapter](/docs/client/adapters/hono) for OpenAPI integration and advanced options.
   </Tab>
   <Tab value="Elysia">
     ```bash
@@ -71,8 +68,6 @@ QUESTPIE needs an HTTP adapter to expose its collections, routes, and auth endpo
 
     console.log(`Running at ${server.server?.url}`);
     ```
-
-    See [Elysia Adapter](/docs/client/adapters/elysia) for Eden client setup and CORS configuration.
   </Tab>
   <Tab value="Next.js">
     ```bash
@@ -87,16 +82,13 @@ QUESTPIE needs an HTTP adapter to expose its collections, routes, and auth endpo
       basePath: "/api",
     });
     ```
-
-    See [Next.js Adapter](/docs/client/adapters/nextjs) for full setup details.
   </Tab>
 </Tabs>
 
-## Related Pages
+## Adapter pages
 
 <Cards>
-  <Card title="Hono Adapter" href="/docs/client/adapters/hono" description="OpenAPI integration" />
-  <Card title="Elysia Adapter" href="/docs/client/adapters/elysia" description="Eden client, CORS" />
-  <Card title="Next.js Adapter" href="/docs/client/adapters/nextjs" description="App Router setup" />
-  <Card title="Installation" href="/docs/getting-started/installation" description="Getting started" />
+  <Card title="Hono Adapter" href="/docs/client/adapters/hono" description="OpenAPI integration and deployment options." />
+  <Card title="Elysia Adapter" href="/docs/client/adapters/elysia" description="Eden typed client, CORS, and Bun-native features." />
+  <Card title="Next.js Adapter" href="/docs/client/adapters/nextjs" description="App Router catch-all route handler." />
 </Cards>

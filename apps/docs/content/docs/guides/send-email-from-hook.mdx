@@ -1,0 +1,95 @@
+---
+title: Send an Email from a Hook
+description: Trigger a transactional email when a collection record is created or updated.
+---
+
+When a record is created or changes state, use `afterChange` to send a transactional email via a typed template. The hook receives `email` from the injected context — no imports needed at the call site.
+
+## 1. Define the email template
+
+```ts title="emails/order-confirmed.ts"
+import { email } from "questpie/services";
+import { z } from "zod";
+
+export default email({
+  name: "order-confirmed",
+  schema: z.object({
+    customerName: z.string(),
+    orderId: z.string(),
+    totalAmount: z.string(),
+  }),
+  handler: ({ input }) => ({
+    subject: `Order #${input.orderId.slice(0, 8).toUpperCase()} confirmed`,
+    html: `
+      <h1>Thanks, ${input.customerName}!</h1>
+      <p>Your order has been confirmed.</p>
+      <p><strong>Order ID:</strong> #${input.orderId.slice(0, 8).toUpperCase()}</p>
+      <p><strong>Total:</strong> ${input.totalAmount}</p>
+    `,
+  }),
+});
+```
+
+The filename `order-confirmed.ts` becomes the camelCase template key `orderConfirmed` used in `sendTemplate`.
+
+## 2. Call `sendTemplate` in `afterChange`
+
+```ts title="collections/orders.ts"
+import { collection } from "#questpie/factories";
+
+export default collection("orders")
+  .fields(/* ... */)
+  .hooks({
+    afterChange: async ({ data, operation, email }) => {
+      if (operation === "create") {
+        await email.sendTemplate({
+          template: "orderConfirmed",
+          to: data.customerEmail,
+          input: {
+            customerName: data.customerName,
+            orderId: data.id,
+            totalAmount: data.totalAmount,
+          },
+        });
+      }
+    },
+  });
+```
+
+## Sending only on a status transition
+
+Use the `original` context property to compare old and new values so the email fires exactly once:
+
+```ts title="collections/orders.ts"
+.hooks({
+  afterChange: async ({ data, operation, original, email }) => {
+    if (
+      operation === "update" &&
+      original?.status !== "shipped" &&
+      data.status === "shipped"
+    ) {
+      await email.sendTemplate({
+        template: "orderShipped",
+        to: data.customerEmail,
+        input: {
+          customerName: data.customerName,
+          orderId: data.id,
+          trackingNumber: data.trackingNumber,
+        },
+      });
+    }
+  },
+})
+```
+
+<Callout type="info">
+In development, QUESTPIE uses a `ConsoleAdapter` by default — emails are printed to stdout instead of being delivered. Configure a real adapter in `.build({ email: { adapter: ... } })` for production.
+</Callout>
+
+## Related Pages
+
+<Cards>
+  <Card title="Emails" href="/docs/server/emails" description="Defining templates and sending from any handler" />
+  <Card title="Hooks" href="/docs/collections/hooks" description="Full hook lifecycle and context properties" />
+  <Card title="Email Infrastructure" href="/docs/infrastructure/email" description="Mailer adapter configuration" />
+</Cards>

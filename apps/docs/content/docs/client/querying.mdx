@@ -71,14 +71,7 @@ where: { id: { in: ["id1", "id2", "id3"] } }
 
 ## Operators by Field Type
 
-| Field Type          | Operators                                            |
-| ------------------- | ---------------------------------------------------- |
-| `text`              | `equals`, `contains`, `startsWith`, `endsWith`, `in` |
-| `number`            | `equals`, `gt`, `gte`, `lt`, `lte`, `in`             |
-| `boolean`           | `equals`                                             |
-| `date` / `datetime` | `equals`, `gt`, `gte`, `lt`, `lte`                   |
-| `select`            | `equals`, `in`                                       |
-| `relation`          | `equals` (by ID)                                     |
+<Callout type="info">See [Query Operators Reference](/docs/reference/query-operators) for the complete per-field-type operator list.</Callout>
 
 ## OrderBy
 
@@ -158,6 +151,7 @@ handler: async ({ collections }) => {
 ## Related Pages
 
 <Cards>
+  <Card title="CRUD API" href="/docs/reference/crud-api" description="Full method reference — find, create, update, delete, versions" />
   <Card title="Fields" href="/docs/collections/fields" description="Field types determine available operators" />
   <Card title="Relations" href="/docs/collections/relations" description="Relation queries" />
   <Card title="Type Inference" href="/docs/client/type-inference" description="Query types" />

@@ -1,0 +1,83 @@
+---
+title: Set Up a Many-to-Many Relation
+description: Create a junction collection for many-to-many relationships between two collections.
+---
+
+A many-to-many relation requires a junction collection that holds the two foreign keys. QUESTPIE uses `f.relation().manyToMany()` on both sides to wire them together through that junction.
+
+```ts title="src/collections/barber-services.ts"
+import { collection } from "#questpie/factories";
+import { barbers } from "@/collections/barbers";
+import { services } from "@/collections/services";
+
+export const barberServices = collection("barber_services")
+  .fields(({ f }) => ({
+    barber: f
+      .relation(() => barbers)
+      .required()
+      .onDelete("cascade"),
+    service: f
+      .relation(() => services)
+      .required()
+      .onDelete("cascade"),
+  }))
+  .admin(({ c }) => ({
+    hidden: true, // keep the junction out of the admin sidebar
+  }));
+```
+
+Declare the `manyToMany` side on both collections, pointing `through` at the junction collection name:
+
+```ts title="src/collections/barbers.ts"
+import { collection } from "#questpie/factories";
+
+export const barbers = collection("barbers")
+  .fields(({ f }) => ({
+    name: f.text(255).required(),
+    services: f
+      .relation("services")
+      .manyToMany({
+        through: "barber_services",
+        sourceField: "barber",
+        targetField: "service",
+      }),
+  }));
+```
+
+```ts title="src/collections/services.ts"
+import { collection } from "#questpie/factories";
+
+export const services = collection("services")
+  .fields(({ f }) => ({
+    name: f.text(255).required(),
+    barbers: f
+      .relation("barbers")
+      .manyToMany({
+        through: "barber_services",
+        sourceField: "service",
+        targetField: "barber",
+      }),
+  }));
+```
+
+Query either side with `with` to include the related records:
+
+```ts title="src/routes/barbers/[id].ts"
+const barber = await collections.barbers.findOne({
+  where: { id: params.id },
+  with: { services: true },
+});
+// barber.services is Service[]
+```
+
+<Callout type="info">
+`sourceField` is the foreign key in the junction table that points **back** to the collection where you are declaring the relation. `targetField` points to the other side. Swap them when declaring from the opposite collection.
+</Callout>
+
+## Related Pages
+
+<Cards>
+  <Card title="Relations" href="/docs/collections/relations" description="Belongs-to, has-many, and many-to-many reference" />
+  <Card title="Collections" href="/docs/collections" description="Collection builder reference" />
+  <Card title="Querying" href="/docs/client/querying" description="Query operators and the with option" />
+</Cards>

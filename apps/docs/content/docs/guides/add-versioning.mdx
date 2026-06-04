@@ -1,0 +1,81 @@
+---
+title: Add Content Versioning
+description: Enable draft/published versioning workflow on a collection.
+---
+
+Content versioning lets editors work in a `draft` stage and publish explicitly. Public readers always see the `published` snapshot, while the admin and preview routes load the working draft.
+
+```ts title="src/collections/posts.ts"
+import { collection } from "#questpie/factories";
+
+export const posts = collection("posts")
+  .fields(({ f }) => ({
+    title: f.text(255).required(),
+    slug: f.text(255).required(),
+    content: f.richText(),
+  }))
+  .options({
+    versioning: {
+      maxVersions: 50,
+      workflow: {
+        initialStage: "draft",
+        stages: {
+          draft: {
+            label: "Draft",
+            transitions: ["published"],
+          },
+          published: {
+            label: "Published",
+            transitions: ["draft"],
+          },
+        },
+      },
+    },
+  })
+  .access({
+    read: ({ session, input }) => {
+      if (session?.user) return true;
+      return input?.stage === "published";
+    },
+    create: ({ session }) => !!session?.user,
+    update: ({ session }) => !!session?.user,
+    delete: ({ session }) => !!session?.user,
+    transition: ({ session }) => !!session?.user,
+  })
+  .hooks({
+    beforeTransition: ({ data, toStage }) => {
+      if (toStage === "published" && !data.title) {
+        throw new Error("Cannot publish without a title");
+      }
+    },
+  });
+```
+
+Read the published snapshot in public routes:
+
+```ts title="src/routes/blog/[slug].ts"
+const post = await collections.posts.findOne({
+  where: { slug: params.slug },
+  stage: "published",
+});
+```
+
+Publish a record programmatically:
+
+```ts title="src/routes/admin/publish.ts"
+await collections.posts.transitionStage({
+  id: postId,
+  stage: "published",
+});
+```
+
+<Callout type="info">
+Omitting `stage` on a read returns the working draft. Always pass `stage: "published"` in public-facing routes so visitors never see draft content.
+</Callout>
+
+## Related Pages
+
+<Cards>
+  <Card title="Versioning & Workflow" href="/docs/collections/versioning" description="Full workflow options, scheduled transitions, and hooks" />
+  <Card title="Collections" href="/docs/collections" description="Collection builder reference" />
+</Cards>

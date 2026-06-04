@@ -33,69 +33,23 @@ export const siteSettings = global("siteSettings")
 
 ## Builder Chain
 
-Globals share most methods with collections:
+Globals share most methods with collections. Globals do **not** support `.list()`, `.indexes()`, `.title()`, or `.preview()` since there's only ever one record.
 
-| Method                                     | Purpose                                  |
-| ------------------------------------------ | ---------------------------------------- |
-| `.fields(({ f }) => {...})`                | Define data fields                       |
-| `.admin(({ c }) => {...})`                 | Admin label and icon                     |
-| `.form(({ v, f }) => v.globalForm({...}))` | Form layout                              |
-| `.hooks({...})`                            | Lifecycle hooks                          |
-| `.access({...})`                           | Read/update access control               |
-| `.options({...})`                          | Schema, timestamps, versioning, workflow |
+<Callout type="info">See [Global API Reference](/docs/reference/global-api) for all builder methods and complete options.</Callout>
 
-Globals do **not** support `.list()`, `.indexes()`, `.title()`, or `.preview()` since there's only ever one record.
-
-### `.options()`
+## Reading and Updating
 
 ```ts
-.options({
-  schema: "web",     // optional Postgres schema (default: public)
-  timestamps: true,
-  versioning: true,
-})
-```
-
-Globals can also use workflow stages through `versioning.workflow`. See [Versioning & Workflow](/docs/collections/versioning).
-
-#### `schema`
-
-Places the global's tables (main, i18n, versions, i18n_versions) under a named
-Postgres schema instead of `public`. `migrate:generate` prepends
-`CREATE SCHEMA IF NOT EXISTS "<name>";` when the schema is first introduced.
-
-```ts
-global("site-settings")
-	.fields(({ f }) => ({ title: f.text(255) }))
-	.options({ schema: "web" });
-```
-
-When unset, tables live in `public` — backward-compatible.
-
-## Server-Side API
-
-```ts
-// Read
+// Server-side
 const settings = await globals.siteSettings.get();
+await globals.siteSettings.update({ shopName: "New Name" });
 
-// Update
-await globals.siteSettings.update({
-	shopName: "New Name",
-	tagline: "New tagline",
-});
-```
-
-## Client-Side API
-
-```ts
-// Read
+// Client-side
 const settings = await client.globals.siteSettings.get();
-
-// Update (requires access)
-await client.globals.siteSettings.update({
-	shopName: "New Name",
-});
+await client.globals.siteSettings.update({ shopName: "New Name" });
 ```
+
+<Callout type="info">See [Global API Reference](/docs/reference/global-api) for locale options, workflow stage variants, and the `transitionStage()` API.</Callout>
 
 ## Real-World Example
 

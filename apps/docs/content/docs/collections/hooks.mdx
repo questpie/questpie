@@ -5,29 +5,20 @@ description: Lifecycle hooks for collections — beforeValidate, beforeChange, a
 
 Hooks let you run logic at specific points in the collection lifecycle. They receive the full typed `AppContext` through context injection — no imports needed.
 
+<Callout type="info">For the complete hook execution order diagrams, all hook type signatures, and full context property tables, see the [Hooks API Reference](/docs/reference/hooks-api).</Callout>
+
 ## Hook Lifecycle
 
-```mermaid
-flowchart TD
-  Request["API Request"]
-  BeforeValidate["beforeValidate<br/>modify or validate data before schema validation"]
-  Schema["Schema Validation<br/>Zod validation from field definitions"]
-  BeforeChange["beforeChange<br/>transform data before database write"]
-  Write["Database Write<br/>insert or update"]
-  AfterChange["afterChange<br/>side effects after successful write"]
+For a create or update operation, hooks run in this order:
 
-  Request --> BeforeValidate --> Schema --> BeforeChange --> Write --> AfterChange
+```
+beforeOperation → beforeValidate → Schema Validation → beforeChange → DB Write → afterChange → afterRead
 ```
 
-For deletes:
+For a delete:
 
-```mermaid
-flowchart LR
-  BeforeDelete["beforeDelete"]
-  Delete["Database Delete"]
-  AfterDelete["afterDelete"]
-
-  BeforeDelete --> Delete --> AfterDelete
+```
+beforeOperation → beforeDelete → DB Delete → afterDelete
 ```
 
 ## Defining Hooks
@@ -41,12 +32,12 @@ flowchart LR
     }
   },
 
-  beforeChange: async ({ data, operation, original }) => {
+  beforeChange: async ({ data, operation }) => {
     if (operation === "create") {
       // Set defaults on create
     }
-    if (operation === "update" && original) {
-      // Compare with original data
+    if (operation === "update") {
+      // Mutate data before DB write
     }
   },
 
@@ -80,22 +71,9 @@ flowchart LR
 
 ## Hook Context
 
-Every hook receives the full `AppContext` via destructuring:
+Every hook receives the full `AppContext` via destructuring. Hook-specific properties (`data`, `operation`, `original`, `fromStage`, `toStage`, etc.) are available alongside shared context properties (`db`, `collections`, `globals`, `queue`, `email`, `session`, and any custom services from `services/`).
 
-| Property      | Available in                       | Description                      |
-| ------------- | ---------------------------------- | -------------------------------- |
-| `data`        | before/afterChange, beforeValidate | The record data being written    |
-| `operation`   | before/afterChange                 | `"create"` or `"update"`         |
-| `original`    | before/afterChange (update only)   | Previous record state            |
-| `id`          | before/afterDelete                 | ID of record being deleted       |
-| `collections` | All                                | Typed collection API             |
-| `globals`     | All                                | Typed globals API                |
-| `queue`       | All                                | Queue client for publishing jobs |
-| `email`       | All                                | Email service                    |
-| `db`          | All                                | Database instance                |
-| `session`     | All                                | Current auth session             |
-
-Plus any custom services defined in `services/`.
+<Callout type="info">See the [Hooks API Reference](/docs/reference/hooks-api) for the complete per-hook context property tables.</Callout>
 
 ## Context-First Pattern
 
@@ -173,6 +151,28 @@ Hooks use context-first injection. All dependencies are available through destru
     data.excerpt = services.blog.extractExcerpt(data.content);
   },
 })
+```
+
+## Multiple Hook Functions
+
+Each hook type accepts an array of functions. They execute in order:
+
+```ts
+.hooks({
+  afterChange: [
+    async ({ data }) => { /* first handler */ },
+    async ({ data }) => { /* second handler */ },
+  ],
+})
+```
+
+Multiple `.hooks()` calls on the same builder merge their handlers — useful for splitting concerns across mixins or plugins:
+
+```ts
+collection("posts")
+  .hooks({ afterChange: handler1 })
+  .hooks({ afterChange: handler2 });
+// Both handler1 and handler2 will run
 ```
 
 ## Related Pages

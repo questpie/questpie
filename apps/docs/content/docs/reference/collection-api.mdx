@@ -3,39 +3,11 @@ title: Collection API
 description: Complete reference for collection() builder methods.
 ---
 
+<Callout type="info">For usage examples and patterns, see the [Collections Guide](/docs/collections).</Callout>
+
 ## `collection(name)`
 
-Creates a new collection builder. Collections map to database tables and provide typed CRUD operations.
-
-```ts
-import { collection } from "#questpie/factories";
-
-const posts = collection("posts")
-	.fields(({ f }) => ({
-		title: f.text(255).required(),
-		content: f.richText().localized(),
-		status: f.select([
-			{ value: "draft", label: "Draft" },
-			{ value: "published", label: "Published" },
-		]),
-		author: f.relation("users"),
-	}))
-	.title(({ f }) => f.title)
-	.options({ timestamps: true, softDelete: true })
-	.hooks({
-		beforeChange: async ({ data, operation }) => {
-			if (operation === "create") {
-				data.slug = slugify(data.title);
-			}
-		},
-	})
-	.access({
-		read: true,
-		create: ({ session }) => !!session,
-		update: ({ session }) => session?.user?.role === "admin",
-		delete: ({ session }) => session?.user?.role === "admin",
-	});
-```
+Creates a new collection builder. `name` becomes the database table name and the key used to access the collection via `context.collections`.
 
 ## Builder Methods
 
@@ -86,6 +58,8 @@ Define collection fields using the field builder. The callback receives `{ f }` 
 
 The `f` proxy includes all built-in field types plus any custom types contributed by modules. After codegen runs, module-contributed fields (like `f.richText()` or `f.blocks()`) become available automatically.
 
+---
+
 ## `.title(callback)`
 
 Set which field is used as the record display title. The callback receives a field proxy where accessing a property returns its name.
@@ -96,16 +70,37 @@ Set which field is used as the record display title. The callback receives a fie
 
 The title field generates a computed `_title` column on every record, used for display in admin lists and relation selectors.
 
+---
+
 ## `.options(config)`
 
 Configure collection-level options.
 
+| Option        | Type                        | Default    | Description                                                  |
+| ------------- | --------------------------- | ---------- | ------------------------------------------------------------ |
+| `schema`      | `string`                    | `"public"` | Postgres schema to place the collection's tables under       |
+| `timestamps`  | `boolean`                   | `true`     | Adds `createdAt` and `updatedAt` columns                     |
+| `softDelete`  | `boolean`                   | `false`    | Adds `deletedAt`; records are marked deleted instead of removed |
+| `versioning`  | `boolean \| VersioningConfig` | `false`  | Creates a versions table for record history                  |
+
 ```ts
 .options({
+  schema: "auth",        // Places tables in the "auth" Postgres schema
   timestamps: true,      // Adds createdAt, updatedAt (default: true)
   softDelete: true,      // Adds deletedAt, records are soft-deleted
   versioning: true,      // Creates a versions table for history
 })
+```
+
+### `schema`
+
+Places all four collection tables (main, i18n, versions, i18n_versions) under a named Postgres schema instead of `public`. Cross-schema foreign keys are rendered as `REFERENCES "other_schema"."table"("id")`, making it safe to partition multiple QUESTPIE apps on one Postgres instance (e.g., `auth.*`, `web.*`, `brain.*`).
+
+```ts
+collection("user")
+	.fields(({ f }) => ({ email: f.text(255).required() }))
+	.options({ schema: "auth" });
+// → CREATE TABLE "auth"."user" (...)
 ```
 
 ### Versioning with Workflow
@@ -128,6 +123,8 @@ Versioning can include a publishing workflow with stage transitions:
 When `workflow` is set, versioning is automatically enabled.
 
 For stage reads, `transitionStage()`, scheduled transitions, and admin toolbar behavior, see [Versioning & Workflow](/docs/collections/versioning).
+
+---
 
 ## `.hooks(config)`
 
@@ -169,6 +166,8 @@ Attach lifecycle hooks. Each hook can be a single function or an array. Multiple
 
 See [Hooks API](/docs/reference/hooks-api) for the full hook reference.
 
+---
+
 ## `.access(config)`
 
 Set access control rules. Each rule can be a boolean or a function receiving the request context.
@@ -188,6 +187,8 @@ Set access control rules. Each rule can be a boolean or a function receiving the
 
 `transition` controls workflow stage transitions. If it is omitted, workflow transitions fall back to the `update` rule.
 
+---
+
 ## `.searchable(config)`
 
 Configure full-text search indexing with BM25 ranking and trigrams.
@@ -200,6 +201,8 @@ Configure full-text search indexing with BM25 ranking and trigrams.
 ```
 
 The `content` function extracts plain text for full-text indexing. The `metadata` function provides structured data for faceted filtering.
+
+---
 
 ## `.validation(options)`
 
@@ -214,6 +217,8 @@ Override or refine the auto-generated Zod validation schemas. By default, schema
   },
 })
 ```
+
+---
 
 ## `.upload(options)`
 
@@ -234,6 +239,8 @@ collection("media")
 
 Upload collections get additional CRUD methods: `upload()` and `uploadMany()`.
 
+---
+
 ## `.indexes(callback)`
 
 Define database indexes and constraints. The callback receives `{ table }` for column references.
@@ -245,6 +252,8 @@ Define database indexes and constraints. The callback receives `{ table }` for c
   index().on(table.status, table.publishedAt),
 ])
 ```
+
+---
 
 ## `.set(key, value)`
 

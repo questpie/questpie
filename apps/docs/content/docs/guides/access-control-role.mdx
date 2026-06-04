@@ -1,0 +1,76 @@
+---
+title: Restrict Access by User Role
+description: Configure collection access control based on user roles.
+---
+
+Use `.access()` on a collection to gate each operation behind a role check. The access function receives `session` from the request context — return `true` to allow, `false` to deny, or a where-clause object to scope results to matching rows.
+
+```ts title="src/collections/posts.ts"
+import { collection } from "#questpie/factories";
+
+export const posts = collection("posts")
+  .fields(({ f }) => ({
+    title: f.text(255).required(),
+    slug: f.text(255).required().unique(),
+    content: f.richText(),
+    authorId: f.text(255).required(),
+  }))
+  .title(({ f }) => f.title)
+  .access({
+    // Anyone can read published content
+    read: true,
+
+    // Any authenticated user can create
+    create: ({ session }) => !!session,
+
+    // Admins can update any post; editors can only update their own
+    update: ({ session }) => {
+      if (!session) return false;
+      if (session.user.role === "admin") return true;
+      if (session.user.role === "editor") return { authorId: session.user.id };
+      return false;
+    },
+
+    // Only admins can delete
+    delete: ({ session }) => session?.user?.role === "admin",
+  });
+```
+
+The `update` rule above returns a **where-clause** for editors — QUESTPIE merges it with the query so editors can only mutate records they own. Admins get unconditional access by returning `true`.
+
+<Callout type="info">
+When no access rule is defined for an operation, QUESTPIE defaults to requiring an authenticated session (`!!session`). To allow unauthenticated access you must explicitly set the rule to `true`.
+</Callout>
+
+## Field-Level Role Restrictions
+
+Scope individual fields with `fields` inside `.access()`:
+
+```ts title="src/collections/posts.ts"
+.access({
+  read: true,
+  create: ({ session }) => !!session,
+  update: ({ session }) => !!session,
+  delete: ({ session }) => session?.user?.role === "admin",
+
+  fields: {
+    // Only admins can read or write the internal notes field
+    internalNotes: {
+      read: ({ user }) => user?.role === "admin",
+      create: ({ user }) => user?.role === "admin",
+      update: ({ user }) => user?.role === "admin",
+    },
+  },
+})
+```
+
+<Callout type="info">
+Field-level access rules receive `{ user, doc, operation }` — not the full `AppContext`. Use `user.role` directly (no `session` wrapper).
+</Callout>
+
+## Related Pages
+
+<Cards>
+  <Card title="Access Control" href="/docs/collections/access-control" description="Full reference for operation-level and field-level access rules" />
+  <Card title="Hooks" href="/docs/collections/hooks" description="Lifecycle hooks for custom server-side logic" />
+</Cards>

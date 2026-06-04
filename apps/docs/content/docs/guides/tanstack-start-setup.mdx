@@ -1,0 +1,238 @@
+---
+title: Use with TanStack Start
+description: Set up QUESTPIE with TanStack Start as your frontend framework.
+---
+
+QUESTPIE runs inside TanStack Start as a catch-all API file route — no separate adapter package required. The built-in `createFetchHandler` from `questpie/http` wires directly into TanStack Start's server handlers.
+
+## 1. Install packages
+
+```bash
+bun add questpie @questpie/admin
+bun add @tanstack/react-start @tanstack/react-router @tanstack/react-query
+```
+
+## 2. Create the runtime config
+
+```ts title="src/questpie/server/questpie.config.ts"
+import { runtimeConfig } from "questpie/app";
+
+export default runtimeConfig({
+  app: {
+    url: process.env.APP_URL || "http://localhost:3000",
+  },
+  db: {
+    url: process.env.DATABASE_URL || "postgres://localhost/myapp",
+  },
+  secret: process.env.APP_SECRET || "change-me-in-production",
+});
+```
+
+## 3. Mount the API handler
+
+Create a catch-all API file route under `src/routes/api/$.ts`. TanStack Start's `server.handlers` runs on the server only — QUESTPIE never ships to the client bundle.
+
+```ts title="src/routes/api/$.ts"
+import { createFileRoute } from "@tanstack/react-router";
+import { createFetchHandler } from "questpie/http";
+import { app } from "#questpie";
+
+const handler = createFetchHandler(app, { basePath: "/api" });
+
+const handleRequest = async (request: Request) => {
+  const response = await handler(request);
+  return (
+    response ??
+    new Response(JSON.stringify({ error: "Not found" }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    })
+  );
+};
+
+export const Route = createFileRoute("/api/$")({
+  server: {
+    handlers: {
+      GET: ({ request }) => handleRequest(request),
+      POST: ({ request }) => handleRequest(request),
+      PUT: ({ request }) => handleRequest(request),
+      PATCH: ({ request }) => handleRequest(request),
+      DELETE: ({ request }) => handleRequest(request),
+    },
+  },
+});
+```
+
+## 4. Create the typed client
+
+```ts title="src/lib/client.ts"
+import { createClient } from "questpie/client";
+import type { AppConfig } from "#questpie";
+
+export const client = createClient<AppConfig>({
+  baseURL:
+    typeof window !== "undefined"
+      ? window.location.origin
+      : process.env.APP_URL || "http://localhost:3000",
+  basePath: "/api",
+});
+```
+
+## 5. Fetch data in server functions
+
+Use `createServerFn` from `@tanstack/react-start` to query collections on the server. Call `app.createContext` to get a locale- and session-aware context, then pass it as the second argument to collection methods.
+
+```ts title="src/lib/posts.function.ts"
+import { createServerFn } from "@tanstack/react-start";
+import { app } from "#questpie";
+
+export const getPosts = createServerFn({ method: "GET" }).handler(async () => {
+  const ctx = await app.createContext({ accessMode: "system" });
+  const result = await app.collections.posts.find(
+    { where: { status: "published" }, limit: 20 },
+    ctx,
+  );
+  return { posts: result.docs };
+});
+```
+
+Load the server function from a route loader:
+
+```tsx title="src/routes/_app/blog.index.tsx"
+import { createFileRoute } from "@tanstack/react-router";
+import { getPosts } from "@/lib/posts.function";
+
+export const Route = createFileRoute("/_app/blog/")({
+  loader: async () => {
+    const result = await getPosts({ data: undefined });
+    return { posts: result.posts };
+  },
+  component: BlogPage,
+});
+
+function BlogPage() {
+  const { posts } = Route.useLoaderData();
+  return (
+    <ul>
+      {posts.map((post) => (
+        <li key={post.id}>{post.title}</li>
+      ))}
+    </ul>
+  );
+}
+```
+
+## 6. Mount the admin panel (optional)
+
+Add the admin module to `src/questpie/server/modules.ts`:
+
+```ts title="src/questpie/server/modules.ts"
+import { adminModule } from "@questpie/admin/modules/admin";
+
+export default [adminModule] as const;
+```
+
+Create an admin layout route that wraps `AdminLayoutProvider`:
+
+```tsx title="src/routes/admin.tsx"
+import { createFileRoute, Link, Outlet, useLocation } from "@tanstack/react-router";
+import { AdminLayoutProvider } from "@questpie/admin/client";
+import { client } from "@/lib/client";
+import { authClient } from "@/lib/auth-client";
+import { queryClient } from "@/lib/query-client";
+import admin from "@/questpie/admin/.generated/client";
+
+import adminCss from "../admin.css?url";
+
+export const Route = createFileRoute("/admin")({
+  head: () => ({
+    links: [{ rel: "stylesheet", href: adminCss }],
+  }),
+  component: AdminLayout,
+});
+
+function AdminLayout() {
+  const location = useLocation();
+  return (
+    <AdminLayoutProvider
+      admin={admin}
+      client={client}
+      queryClient={queryClient}
+      authClient={authClient}
+      LinkComponent={({ to, ...props }) => <Link to={to} {...props} />}
+      activeRoute={location.pathname}
+      basePath="/admin"
+      useServerTranslations
+      theme="dark"
+    >
+      <Outlet />
+    </AdminLayoutProvider>
+  );
+}
+```
+
+Create a catch-all admin route that renders `AdminRouter`:
+
+```tsx title="src/routes/admin/$.tsx"
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { AdminRouter } from "@questpie/admin/client";
+
+export const Route = createFileRoute("/admin/$")({
+  component: AdminCatchAll,
+});
+
+function AdminCatchAll() {
+  const navigate = useNavigate();
+  const { _splat } = Route.useParams();
+  const segments = _splat ? _splat.split("/").filter(Boolean) : [];
+  return (
+    <AdminRouter
+      segments={segments}
+      navigate={(path) => void navigate({ to: path })}
+      basePath="/admin"
+    />
+  );
+}
+```
+
+Create the auth client used by `AdminLayoutProvider`:
+
+```ts title="src/lib/auth-client.ts"
+import { createAdminAuthClient } from "@questpie/admin/client";
+import type { AppConfig } from "#questpie";
+
+export const authClient = createAdminAuthClient<AppConfig>({
+  baseURL:
+    typeof window !== "undefined"
+      ? window.location.origin
+      : process.env.APP_URL || "http://localhost:3000",
+  basePath: "/api/auth",
+});
+```
+
+After adding the admin module, re-run codegen to generate `src/questpie/admin/.generated/client.ts`:
+
+```bash
+bunx questpie generate
+```
+
+<Callout type="info">
+  The `#questpie` import alias resolves to the codegen output at `src/questpie/server/.generated/index.ts`. Add it to your `package.json` imports map:
+
+  ```json title="package.json"
+  {
+    "imports": {
+      "#questpie": "./src/questpie/server/.generated/index.ts",
+      "#questpie/*": "./src/questpie/server/.generated/*"
+    }
+  }
+  ```
+</Callout>
+
+## Related Pages
+
+<Cards>
+  <Card title="Installation" href="/docs/getting-started/installation" description="Manual setup steps and environment variables" />
+  <Card title="Quickstart" href="/docs/getting-started/quickstart" description="Build a working CRUD API from scratch" />
+  <Card title="Admin Setup" href="/docs/admin/setup" description="Configure the admin panel sidebar, branding, and locale" />
+</Cards>

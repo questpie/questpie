@@ -1,0 +1,62 @@
+---
+title: Add Soft Delete
+description: Enable soft delete on a collection so records are archived instead of permanently removed.
+---
+
+Soft delete adds a `deletedAt` timestamp column. When a record is deleted, QUESTPIE sets `deletedAt` to the current time instead of issuing a `DELETE` statement. Normal queries automatically filter out soft-deleted records; you opt in to see them when needed.
+
+```ts title="collections/posts.ts"
+import { collection } from "#questpie/factories";
+
+export const posts = collection("posts")
+  .fields(({ f }) => ({
+    title: f.text(255).required(),
+    body: f.richText(),
+  }))
+  .title(({ f }) => f.title)
+  .options({ softDelete: true });
+```
+
+The `deletedAt` column is indexed automatically. No migration beyond adding it is required.
+
+## Querying
+
+Soft-deleted records are excluded from `find`, `findOne`, and `count` by default:
+
+```ts title="routes/posts.ts"
+import { route } from "questpie/routes";
+
+export default route("/posts", ({ app }) => ({
+  GET: async (ctx) => {
+    // Only live records
+    const { docs } = await app.collections.posts.find();
+
+    // Include soft-deleted records
+    const { docs: all } = await app.collections.posts.find({
+      includeDeleted: true,
+    });
+
+    return Response.json({ docs });
+  },
+}));
+```
+
+## Restoring a Record
+
+Use `restoreById` to clear `deletedAt` and bring a record back:
+
+```ts title="routes/posts.ts"
+const restored = await app.collections.posts.restoreById({ id: "abc123" });
+```
+
+<Callout type="info">
+  `restoreById` throws if the record does not exist or was never soft-deleted.
+  Use `includeDeleted: true` in a `findOne` call first if you need to confirm the record exists before restoring.
+</Callout>
+
+## Related Pages
+
+<Cards>
+  <Card title="Collection API" href="/docs/reference/collection-api" description="Full .options() reference including softDelete, timestamps, and versioning" />
+  <Card title="History & Versions" href="/docs/admin/history" description="Audit trail and version snapshots in the admin UI" />
+</Cards>

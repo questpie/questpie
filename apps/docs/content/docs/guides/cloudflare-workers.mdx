@@ -1,0 +1,195 @@
+---
+title: Deploy to Cloudflare Workers
+description: Deploy your QUESTPIE app to Cloudflare Workers with D1, R2, and KV.
+---
+
+Wire Cloudflare platform bindings into QUESTPIE adapters and export the Worker handlers — your app runs as a single Worker module with HTTP, queue, and cron entrypoints.
+
+## 1. Configure adapters
+
+Replace Node/Redis adapters with Cloudflare-native equivalents. Lazy-import `cloudflare:workers` inside provider functions so `questpie generate` and migrations still run under Bun.
+
+```ts title="questpie.config.ts"
+import postgres from "postgres";
+import { drizzle } from "drizzle-orm/postgres-js";
+import { runtimeConfig } from "questpie/app";
+import {
+  cloudflareKVAdapter,
+  cloudflareQueuesAdapter,
+  cloudflareRealtimeAdapter,
+  type CloudflareDurableObjectNamespace,
+  type CloudflareKVNamespace,
+  type CloudflareQueueBinding,
+} from "questpie/adapters/cloudflare";
+import { s3 } from "files-sdk/s3";
+
+type CloudflareBindings = {
+  HYPERDRIVE: { connectionString: string };
+  QUESTPIE_KV: CloudflareKVNamespace;
+  QUESTPIE_QUEUE: CloudflareQueueBinding;
+  QUESTPIE_REALTIME: CloudflareDurableObjectNamespace;
+};
+
+async function getCloudflareEnv(): Promise<CloudflareBindings> {
+  const { env } = await import("cloudflare:workers");
+  return env as CloudflareBindings;
+}
+
+async function getDatabaseConnectionString(): Promise<string> {
+  const workerEnv = await getCloudflareEnv().catch(() => null);
+  if (workerEnv) return workerEnv.HYPERDRIVE.connectionString;
+
+  const cliUrl = process.env.QUESTPIE_CLI_DATABASE_URL;
+  if (!cliUrl) {
+    throw new Error(
+      "Set QUESTPIE_CLI_DATABASE_URL when running QUESTPIE CLI commands outside Cloudflare Workers.",
+    );
+  }
+  return cliUrl;
+}
+
+export default runtimeConfig({
+  app: { url: process.env.APP_URL! },
+  secret: process.env.AUTH_SECRET!,
+  db: {
+    create: async ({ schema }) => {
+      const connectionString = await getDatabaseConnectionString();
+      const sql = postgres(connectionString, {
+        max: 5,
+        fetch_types: false,
+        prepare: true,
+      });
+      return { drizzle: drizzle(sql, { schema }), close: () => sql.end() };
+    },
+  },
+  storage: {
+    adapter: s3({
+      credentials: {
+        accessKeyId: process.env.R2_ACCESS_KEY_ID!,
+        secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
+      },
+      bucket: process.env.R2_BUCKET!,
+      region: "auto",
+      endpoint: `https://${process.env.CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+      forcePathStyle: true,
+    }),
+    basePath: "/api",
+  },
+  kv: {
+    adapter: cloudflareKVAdapter({
+      namespace: async () => (await getCloudflareEnv()).QUESTPIE_KV,
+    }),
+    defaultTtl: 3600,
+  },
+  queue: {
+    adapter: cloudflareQueuesAdapter({
+      queue: async () => (await getCloudflareEnv()).QUESTPIE_QUEUE,
+    }),
+  },
+  realtime: {
+    adapter: cloudflareRealtimeAdapter({
+      namespace: async () => (await getCloudflareEnv()).QUESTPIE_REALTIME,
+    }),
+  },
+});
+```
+
+## 2. Export Worker handlers
+
+`createCloudflareWorkerHandlers` exports `fetch`, `queue`, and `scheduled` from one object. The Durable Object class handles realtime fanout.
+
+```ts title="src/worker.ts"
+import { app } from "#questpie";
+import {
+  createCloudflareRealtimeDurableObjectHandler,
+  createCloudflareWorkerHandlers,
+} from "questpie/adapters/cloudflare";
+
+const worker = createCloudflareWorkerHandlers(app, { basePath: "/api" });
+const realtimeDurableObject = createCloudflareRealtimeDurableObjectHandler(app, {
+  basePath: "/api",
+});
+
+export default worker;
+
+export class QuestpieRealtimeDurableObject {
+  fetch(request: Request) {
+    return realtimeDurableObject(request);
+  }
+}
+```
+
+<Callout type="warn">
+Do not call `app.queue.listen()` on Workers. Cloudflare Queues invokes the exported `queue()` handler directly, and Cron Triggers invoke `scheduled()`.
+</Callout>
+
+## 3. Configure Wrangler
+
+```toml title="wrangler.toml"
+name = "my-questpie-app"
+main = "src/worker.ts"
+compatibility_date = "2026-05-06"
+compatibility_flags = ["nodejs_compat"]
+
+[[hyperdrive]]
+binding = "HYPERDRIVE"
+id = "..."
+
+[[queues.producers]]
+binding = "QUESTPIE_QUEUE"
+queue = "questpie-jobs"
+
+[[queues.consumers]]
+queue = "questpie-jobs"
+
+[[kv_namespaces]]
+binding = "QUESTPIE_KV"
+id = "..."
+
+[[durable_objects.bindings]]
+name = "QUESTPIE_REALTIME"
+class_name = "QuestpieRealtimeDurableObject"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["QuestpieRealtimeDurableObject"]
+
+[triggers]
+crons = ["0 8 * * *"]
+
+[vars]
+APP_URL = "https://my-questpie-app.example.com"
+CLOUDFLARE_ACCOUNT_ID = "..."
+R2_BUCKET = "my-questpie-assets"
+```
+
+## 4. Set secrets and deploy
+
+Store secrets with Wrangler — do not put them in `wrangler.toml`:
+
+```bash
+bunx wrangler secret put AUTH_SECRET
+bunx wrangler secret put R2_ACCESS_KEY_ID
+bunx wrangler secret put R2_SECRET_ACCESS_KEY
+```
+
+Run codegen, migrate against the origin PostgreSQL database (Hyperdrive's connection string is only available inside the Worker at runtime), then deploy:
+
+```bash
+bunx questpie generate
+bun run build
+QUESTPIE_CLI_DATABASE_URL="postgres://user:pass@host:5432/db" bunx questpie migrate:up
+bunx wrangler deploy
+```
+
+<Callout type="info">
+Use an HTTP email adapter such as Resend or Plunk for Workers — SMTP is not supported in the Cloudflare runtime.
+</Callout>
+
+## Related Pages
+
+<Cards>
+  <Card title="Deployment" href="/docs/infrastructure/deployment" description="Docker, environment variables, and production hardening" />
+  <Card title="Jobs" href="/docs/server/jobs" description="Defining jobs, cron schedules, and retry options" />
+  <Card title="Infrastructure API" href="/docs/reference/infrastructure-api" description="Queue, KV, storage, realtime, and email service APIs" />
+</Cards>

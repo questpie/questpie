@@ -1,0 +1,92 @@
+---
+title: Auto-generate Slugs from Titles
+description: Use a beforeValidate hook to auto-generate URL slugs from a title field.
+---
+
+When a user saves a record without filling in the slug, generate one automatically from the title. The slug stays editable — the hook only fills it when it's absent.
+
+```ts title="src/questpie/server/utils.ts"
+/**
+ * Convert a string to a URL-friendly slug.
+ * Handles diacritics: "Holič" → "holic"
+ */
+export function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "") // remove diacritics
+    .replace(/[^a-z0-9]+/g, "-")     // non-alphanumeric → hyphen
+    .replace(/^-+|-+$/g, "")          // trim leading/trailing hyphens
+    .slice(0, 255);
+}
+```
+
+```ts title="src/questpie/server/collections/articles.ts"
+import { uniqueIndex } from "questpie/drizzle-pg-core";
+import { collection } from "#questpie/factories";
+import { slugify } from "@/questpie/server/utils";
+
+export const articles = collection("articles")
+  .fields(({ f }) => ({
+    title: f.text().required().label("Title"),
+    slug: f
+      .text(255)
+      .required()
+      .inputOptional() // optional in the form — hook fills it if blank
+      .label("Slug"),
+    content: f.richText().label("Content"),
+  }))
+  .indexes(({ table }) => [
+    uniqueIndex("articles_slug_unique").on(table.slug),
+  ])
+  .hooks({
+    beforeValidate: async (ctx) => {
+      if (ctx.data.title && !ctx.data.slug) {
+        ctx.data.slug = slugify(ctx.data.title);
+      }
+    },
+  });
+```
+
+`beforeValidate` runs before schema validation, so the slug is present by the time QUESTPIE checks the `required()` constraint on the field.
+
+## Live preview in the admin form
+
+Pair the hook with a `compute` handler on the slug field so the admin form shows the generated slug as the user types the title — without waiting for a save:
+
+```ts title="src/questpie/server/collections/articles.ts"
+.form(({ v, f }) =>
+  v.collectionForm({
+    fields: [
+      f.title,
+      {
+        field: f.slug,
+        compute: {
+          handler: ({ data }) => {
+            if (data.title && typeof data.title === "string" &&
+                (!data.slug || !data.slug.trim())) {
+              return slugify(data.title);
+            }
+            return undefined; // keep user's value if already set
+          },
+          deps: ({ data }) => [data.title, data.slug],
+          debounce: 300,
+        },
+      },
+      f.content,
+    ],
+  }),
+)
+```
+
+<Callout type="info">
+`compute` is client-side only — it drives the form UI. The `beforeValidate` hook is the authoritative server-side guard and handles API writes that bypass the admin form.
+</Callout>
+
+## Related Pages
+
+<Cards>
+  <Card title="Hooks" href="/docs/collections/hooks" description="Full lifecycle hook reference" />
+  <Card title="Hooks API Reference" href="/docs/reference/hooks-api" description="Per-hook context properties" />
+  <Card title="Fields" href="/docs/collections/fields" description="Field types and options" />
+</Cards>

@@ -1,0 +1,128 @@
+---
+title: Add the Admin Panel
+description: Mount the QUESTPIE admin panel on your existing server.
+---
+
+Install `@questpie/admin`, register the modules, create the config file, and wire up the routes. The panel is served at `/admin` and includes auth, a setup wizard, and a dashboard out of the box.
+
+## 1. Install
+
+```bash
+bun add @questpie/admin
+```
+
+## 2. Register the Server Modules
+
+```ts title="src/questpie/server/modules.ts"
+import { adminModule } from "@questpie/admin/modules/admin";
+import { auditModule } from "@questpie/admin/modules/audit";
+
+export default [adminModule, auditModule] as const;
+```
+
+`adminModule` provides the user collection, auth pages, and the admin UI. `auditModule` adds the audit log collection and timeline widget — include it to get edit history.
+
+<Callout type="warn">
+Do not create a replacement `collection("user")` from scratch when using `adminModule`. The setup wizard and auth guard both expect `session.user.role === "admin"`. If you need custom user fields, extend the built-in user collection rather than replacing it.
+</Callout>
+
+## 3. Create the Admin Config
+
+```ts title="src/questpie/server/config/admin.ts"
+import { adminConfig } from "#questpie/factories";
+
+export default adminConfig({
+  branding: {
+    name: { en: "My App" },
+  },
+  sidebar: {
+    sections: [
+      {
+        id: "content",
+        title: { en: "Content" },
+        items: [
+          {
+            type: "link",
+            label: { en: "Dashboard" },
+            href: "/admin",
+            icon: { type: "icon", props: { name: "ph:house" } },
+          },
+          {
+            type: "collection",
+            collection: "posts",
+          },
+        ],
+      },
+    ],
+  },
+});
+```
+
+## 4. Register the Client Module
+
+```ts title="src/questpie/admin/modules.ts"
+import { adminClientModule } from "@questpie/admin/client/modules/admin";
+
+export default [adminClientModule] as const;
+```
+
+## 5. Run Codegen
+
+```bash
+bunx questpie generate
+```
+
+This emits `src/questpie/admin/.generated/client.ts` — the assembled admin config object.
+
+## 6. Mount the Routes
+
+Add two route files so TanStack Router covers both `/admin` (dashboard) and `/admin/*` (all sub-pages):
+
+```tsx title="src/routes/admin/index.tsx"
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useMemo } from "react";
+import { AdminRouter } from "@questpie/admin/client";
+
+function AdminDashboard() {
+  const navigate = useNavigate();
+  const handleNavigate = useMemo(
+    () => (path: string) => { void navigate({ to: path }); },
+    [navigate],
+  );
+  return <AdminRouter segments={[]} navigate={handleNavigate} basePath="/admin" />;
+}
+
+export const Route = createFileRoute("/admin/")({ component: AdminDashboard });
+```
+
+```tsx title="src/routes/admin/$.tsx"
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useMemo } from "react";
+import { AdminRouter } from "@questpie/admin/client";
+
+function AdminCatchAll() {
+  const navigate = useNavigate();
+  const params = Route.useParams();
+  const segments = (params._splat as string ?? "").split("/").filter(Boolean);
+  const handleNavigate = useMemo(
+    () => (path: string) => { void navigate({ to: path }); },
+    [navigate],
+  );
+  return <AdminRouter segments={segments} navigate={handleNavigate} basePath="/admin" />;
+}
+
+export const Route = createFileRoute("/admin/$")({ component: AdminCatchAll });
+```
+
+<Callout type="info">
+On first visit to `/admin`, QUESTPIE detects that no admin user exists and shows the setup wizard. Fill in the form to create the first admin account and proceed to the dashboard.
+</Callout>
+
+## Related Pages
+
+<Cards>
+  <Card title="Admin Setup" href="/docs/admin/setup" description="Full setup reference including runtime config and codegen options" />
+  <Card title="Sidebar" href="/docs/admin/views/sidebar" description="Sidebar sections, items, icons, and nesting" />
+  <Card title="Branding" href="/docs/admin/branding" description="Name, logo, favicon, and theme" />
+  <Card title="Dashboard" href="/docs/admin/views/dashboard" description="Dashboard widgets and layout" />
+</Cards>

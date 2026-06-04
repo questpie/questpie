@@ -5,6 +5,10 @@ description: Collection CRUD operations — find, findOne, create, update, delet
 
 Collections expose typed CRUD operations on the server runtime and through `questpie/client`. Server code receives collection APIs from handler context; client code calls the generated client.
 
+<Callout type="info">For usage examples and patterns, see [Querying Guide](/docs/client/querying).</Callout>
+
+---
+
 ## `find(options)`
 
 ```ts
@@ -20,6 +24,18 @@ const result = await collections.posts.find({
 
 **Returns:** `{ docs: T[], totalDocs: number }`
 
+| Option | Type | Description |
+| --- | --- | --- |
+| `where` | `WhereInput` | Filter conditions. See [Query Operators](/docs/reference/query-operators) for available operators per field type. |
+| `orderBy` | `Record<string, "asc" \| "desc">` | Sort by one or more fields. |
+| `limit` | `number` | Maximum number of records to return. |
+| `offset` | `number` | Number of records to skip for pagination. |
+| `with` | `Record<string, true \| WithInput>` | Include related records. Supports nested `with`. |
+| `select` | `Record<string, true>` | Return only the specified fields. |
+| `stage` | `string` | Read a specific workflow stage snapshot. Omit to read the working stage. |
+
+---
+
 ## `findOne(options)`
 
 ```ts
@@ -34,6 +50,8 @@ const record = await collections.posts.findOne({
 
 When versioning workflow is enabled, `stage` reads the latest version snapshot for that stage. Omit it to read the working stage.
 
+---
+
 ## `create(data)`
 
 ```ts
@@ -47,6 +65,8 @@ const record = await collections.posts.create(
 ```
 
 **Returns:** `T` (created record)
+
+---
 
 ## `updateById(options)`
 
@@ -74,11 +94,15 @@ const updated = await client.collections.posts.update(
 );
 ```
 
+---
+
 ## `deleteById(options)`
 
 ```ts
 await collections.posts.deleteById({ id: "post_123" });
 ```
+
+---
 
 ## `count(options)`
 
@@ -89,6 +113,8 @@ const count = await collections.posts.count({
 ```
 
 **Returns:** `number`
+
+---
 
 ## `update(options)`
 
@@ -101,6 +127,8 @@ await collections.posts.update({
 
 Server `update()` updates every record matching `where`. On the client SDK this operation is named `updateMany()`.
 
+---
+
 ## `delete(options)`
 
 ```ts
@@ -110,6 +138,8 @@ await collections.posts.delete({
 ```
 
 Server `delete()` deletes every record matching `where`. On the client SDK this operation is named `deleteMany()`.
+
+---
 
 ## `findVersions(options)`
 
@@ -122,6 +152,8 @@ const versions = await collections.posts.findVersions({
 
 **Returns:** version rows with `versionId`, `versionNumber`, `versionOperation`, `versionUserId`, and `versionCreatedAt`.
 
+---
+
 ## `revertToVersion(options)`
 
 ```ts
@@ -132,6 +164,8 @@ const restored = await collections.posts.revertToVersion({
 ```
 
 Pass `versionId` instead of `version` when you already have the version row ID.
+
+---
 
 ## `transitionStage(options)`
 
@@ -153,6 +187,8 @@ await collections.posts.transitionStage({
 ```
 
 `transitionStage()` requires `versioning.workflow`, validates the target stage and transition graph, checks `access.transition` with fallback to `access.update`, runs transition hooks, and creates a version snapshot without mutating the working row.
+
+---
 
 ## Client API
 
@@ -179,6 +215,8 @@ await client.collections.posts.transitionStage({
 });
 ```
 
+---
+
 ## Upload Methods
 
 For upload collections:
@@ -196,3 +234,105 @@ const assets = await client.collections.assets.uploadMany(files, {
 	},
 });
 ```
+
+---
+
+## TypeScript Interfaces
+
+<Accordions>
+<Accordion title="FindOptions">
+
+```ts
+interface FindOptions<T> {
+  where?: WhereInput<T>;
+  orderBy?: { [K in keyof T]?: "asc" | "desc" };
+  limit?: number;
+  offset?: number;
+  with?: WithInput<T>;
+  select?: { [K in keyof T]?: true };
+  stage?: string;
+}
+```
+
+</Accordion>
+<Accordion title="FindOneOptions">
+
+```ts
+interface FindOneOptions<T> {
+  where: WhereInput<T>;
+  with?: WithInput<T>;
+  select?: { [K in keyof T]?: true };
+  stage?: string;
+}
+```
+
+</Accordion>
+<Accordion title="CreateOptions">
+
+```ts
+interface CreateOptions {
+  stage?: string;
+}
+```
+
+</Accordion>
+<Accordion title="UpdateByIdOptions">
+
+```ts
+interface UpdateByIdOptions<T> {
+  id: string;
+  data: Partial<T>;
+}
+
+interface UpdateByIdMeta {
+  stage?: string;
+}
+```
+
+</Accordion>
+<Accordion title="BulkUpdateOptions">
+
+```ts
+interface BulkUpdateOptions<T> {
+  where: WhereInput<T>;
+  data: Partial<T>;
+}
+```
+
+</Accordion>
+<Accordion title="TransitionStageOptions">
+
+```ts
+interface TransitionStageOptions {
+  id: string;
+  stage: string;
+  scheduledAt?: Date | string;
+}
+```
+
+</Accordion>
+<Accordion title="FindVersionsOptions">
+
+```ts
+interface FindVersionsOptions {
+  id: string;
+  limit?: number;
+  offset?: number;
+}
+```
+
+</Accordion>
+<Accordion title="RevertToVersionOptions">
+
+```ts
+interface RevertToVersionOptions {
+  id: string;
+  /** Version number (1-based). */
+  version?: number;
+  /** Version row ID — alternative to version number. */
+  versionId?: string;
+}
+```
+
+</Accordion>
+</Accordions>

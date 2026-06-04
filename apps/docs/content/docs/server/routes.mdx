@@ -70,19 +70,9 @@ export default route()
 
 ## Handler Context
 
-Route handlers receive the full `AppContext`:
+Route handlers receive the full `AppContext` — `input`, `collections`, `globals`, `db`, `session`, `queue`, `email`, `logger`, `kv`, `app`, and any custom services defined in `services/`.
 
-```ts
-handler: async ({ input, collections, queue, email, db, session, blog }) => {
-	// input — validated data matching the Zod schema
-	// collections — typed collection API
-	// queue — publish background jobs
-	// email — send emails
-	// db — raw database access
-	// session — current auth session
-	// blog — custom service from services/blog.ts
-};
-```
+<Callout type="info">See [Routes API Reference](/docs/reference/routes-api) for the complete handler context properties and types.</Callout>
 
 ## Calling Typed Routes
 

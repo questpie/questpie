@@ -3,57 +3,33 @@ title: Global API
 description: Complete reference for global() builder methods.
 ---
 
+<Callout type="info">For usage examples and patterns, see the [Globals Guide](/docs/collections/globals).</Callout>
+
 ## `global(name)`
 
-Creates a new global builder. Globals are singleton records (one row per global) used for site settings, configuration, and other single-instance data.
+Creates a new global builder. A global is a singleton record — one row per global, used for site settings, configuration, and other single-instance data.
 
-```ts
-import { global } from "#questpie/factories";
-
-const siteSettings = global("siteSettings")
-	.fields(({ f }) => ({
-		siteName: f.text(255).required(),
-		tagline: f.text(255).localized(),
-		logo: f.upload(),
-		maintenanceMode: f.boolean().default(false),
-		socialLinks: f.object(),
-	}))
-	.options({ timestamps: true })
-	.hooks({
-		afterChange: async ({ data, kv }) => {
-			await kv.delete("site-settings-cache");
-		},
-	})
-	.access({
-		read: true,
-		update: ({ session }) => session?.user?.role === "admin",
-	});
-```
+---
 
 ## Builder Methods
 
-All methods are chainable and return a new builder instance.
+All methods are chainable and return a new builder instance. Globals do **not** support `.list()`, `.indexes()`, `.title()`, or `.preview()`.
 
-| Method       | Description                                   |
-| ------------ | --------------------------------------------- |
-| `.fields()`  | Define data fields using the field builder    |
-| `.options()` | Configure timestamps, versioning, scoped mode |
-| `.hooks()`   | Attach lifecycle hooks                        |
-| `.access()`  | Set access control rules                      |
-| `.set()`     | Generic extension point for plugins           |
-
-With `@questpie/admin` installed:
-
-| Method     | Description                     |
-| ---------- | ------------------------------- |
-| `.admin()` | Admin UI metadata (label, icon) |
-| `.form()`  | Configure the form view         |
+| Method       | Description                                             |
+| ------------ | ------------------------------------------------------- |
+| `.fields()`  | Define data fields using the field builder              |
+| `.options()` | Configure schema, timestamps, versioning, scoped mode   |
+| `.hooks()`   | Attach lifecycle hooks                                  |
+| `.access()`  | Set access control rules                                |
+| `.set()`     | Generic extension point for plugins                     |
+| `.admin()`   | Admin UI metadata (label, icon) — requires `@questpie/admin` |
+| `.form()`    | Configure the admin form view — requires `@questpie/admin`   |
 
 ---
 
 ## `.fields(callback)`
 
-Define global fields using the field builder. Works identically to collection fields.
+Define global fields using the field builder. See [Field API](/docs/reference/field-api) for all field types and chain methods.
 
 ```ts
 .fields(({ f }) => ({
@@ -69,23 +45,31 @@ Define global fields using the field builder. Works identically to collection fi
 }))
 ```
 
+---
+
 ## `.options(config)`
 
 Configure global-level options.
 
 ```ts
 .options({
+  schema: "web",          // Postgres schema for all tables (default: public)
   timestamps: true,       // Adds createdAt, updatedAt (default: true)
   versioning: true,       // Creates a versions table for history
   scoped: true,           // Scope globals by scope_id (multi-tenant)
 })
 ```
 
+| Option         | Type                        | Default    | Description                                                          |
+| -------------- | --------------------------- | ---------- | -------------------------------------------------------------------- |
+| `schema`       | `string`                    | `"public"` | Postgres schema for the global's tables. `migrate:generate` emits `CREATE SCHEMA IF NOT EXISTS` on first use. |
+| `timestamps`   | `boolean`                   | `true`     | Adds `createdAt` and `updatedAt` columns.                            |
+| `versioning`   | `boolean \| VersioningConfig` | `false`  | Creates a versions table. Pass an object to configure workflow.      |
+| `scoped`       | `boolean`                   | `false`    | Stores one row per `scope_id` instead of a single global row.        |
+
 When `scoped` is enabled, the global stores one row per scope instead of a single global row.
 
 ### Versioning with Workflow
-
-Like collections, globals support versioning with optional publishing workflow:
 
 ```ts
 .options({
@@ -99,9 +83,11 @@ Like collections, globals support versioning with optional publishing workflow:
 })
 ```
 
+---
+
 ## `.hooks(config)`
 
-Attach lifecycle hooks. Globals support the same hook types as collections.
+Attach lifecycle hooks. See [Hooks API](/docs/reference/hooks-api) for all hook types and context properties.
 
 ```ts
 .hooks({
@@ -117,6 +103,8 @@ Attach lifecycle hooks. Globals support the same hook types as collections.
 })
 ```
 
+---
+
 ## `.access(config)`
 
 Set access control rules. Globals support `read` and `update` operations (no create/delete since they are singletons).
@@ -130,6 +118,8 @@ Set access control rules. Globals support `read` and `update` operations (no cre
 ```
 
 `transition` controls workflow stage transitions. If it is omitted, workflow transitions fall back to the `update` rule.
+
+---
 
 ## `.set(key, value)`
 
@@ -176,17 +166,13 @@ Configure the admin form view.
 
 ## Server API
 
-Read and update globals through the runtime API:
-
 ```ts
-// Read the global value
 const settings = await globals.siteSettings.get();
 console.log(settings.siteName);
 
-// Update the global
 await globals.siteSettings.update({
 	siteName: "New Site Name",
-	maintenanceMode: true,
+	theme: "dark",
 });
 ```
 
@@ -197,9 +183,9 @@ const settings = await globals.siteSettings.get({ locale: "sk" });
 await globals.siteSettings.update({ tagline: "Novy slogan" }, { locale: "sk" });
 ```
 
-## Client API
+---
 
-Access globals from the client using the typed API client:
+## Client API
 
 ```ts
 const settings = await client.globals.siteSettings.get();
@@ -219,9 +205,11 @@ await client.globals.siteSettings.update(
 );
 ```
 
+---
+
 ## Workflow Transition API
 
-Use `transitionStage()` to move a global to a target workflow stage without mutating the working row:
+`transitionStage()` moves a global to a target workflow stage without mutating the working row.
 
 ```ts
 await globals.siteSettings.transitionStage({
@@ -238,7 +226,9 @@ await client.globals.siteSettings.transitionStage({
 });
 ```
 
-Transition validation matches collections: the target stage must exist, the transition graph must allow the move, `access.transition` must pass or fall back to `access.update`, and transition hooks run around the version snapshot.
+Validation rules: target stage must exist, the transition graph must allow the move, `access.transition` must pass (or falls back to `access.update`), and transition hooks run around the version snapshot.
+
+---
 
 ## Type Inference
 
@@ -249,3 +239,65 @@ type SettingsSelect = typeof siteSettings.$infer.select;
 type SettingsInsert = typeof siteSettings.$infer.insert;
 type SettingsUpdate = typeof siteSettings.$infer.update;
 ```
+
+---
+
+## TypeScript Interfaces
+
+<Accordions>
+<Accordion title="GlobalOptions">
+```ts
+interface GlobalOptions {
+  /** Postgres schema for all tables. Defaults to "public". */
+  schema?: string;
+  /** Add createdAt and updatedAt columns. Defaults to true. */
+  timestamps?: boolean;
+  /** Enable version history. Pass true or a VersioningConfig object. */
+  versioning?: boolean | VersioningConfig;
+  /** Store one row per scope_id instead of a single global row. */
+  scoped?: boolean;
+}
+
+interface VersioningConfig {
+  enabled: boolean;
+  workflow?: {
+    stages: string[];
+    initialStage: string;
+    transitions?: Record<string, string[]>;
+  };
+}
+```
+</Accordion>
+<Accordion title="GlobalAccessConfig">
+```ts
+interface GlobalAccessConfig {
+  /** Allow/deny read. Use a function for session-based rules. */
+  read?: boolean | ((ctx: AccessContext) => boolean | Promise<boolean>);
+  /** Allow/deny update. */
+  update?: boolean | ((ctx: AccessContext) => boolean | Promise<boolean>);
+  /** Allow/deny workflow stage transitions. Falls back to update if omitted. */
+  transition?: boolean | ((ctx: AccessContext) => boolean | Promise<boolean>);
+}
+
+interface AccessContext {
+  session: Session | null;
+  req: Request;
+}
+```
+</Accordion>
+<Accordion title="GlobalRuntime — get / update / transitionStage">
+```ts
+interface GlobalRuntime<T> {
+  /** Read the current global value. */
+  get(options?: { locale?: string; stage?: string }): Promise<T>;
+  /** Update the global value. Returns the updated record. */
+  update(data: Partial<T>, options?: { locale?: string; stage?: string }): Promise<T>;
+  /** Transition the global to a workflow stage. */
+  transitionStage(options: {
+    stage: string;
+    scheduledAt?: Date;
+  }): Promise<void>;
+}
+```
+</Accordion>
+</Accordions>

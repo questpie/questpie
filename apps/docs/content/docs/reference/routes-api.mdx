@@ -3,22 +3,11 @@ title: Routes API
 description: Complete reference for route(), job(), service(), and email() factories.
 ---
 
+<Callout type="info">For usage examples and patterns, see the [Typed Routes Guide](/docs/server/routes).</Callout>
+
 ## `route()`
 
-Define server routes using the immutable route builder. Each method returns a new frozen instance.
-
-```ts
-import { route } from "questpie/services";
-import { z } from "zod";
-
-export default route()
-	.post()
-	.schema(z.object({ title: z.string(), content: z.string() }))
-	.handler(async ({ input, db, collections, session }) => {
-		const post = await collections.posts.create(input);
-		return { id: post.id };
-	});
-```
+The `route()` factory creates an immutable route builder. Each method returns a new frozen instance.
 
 ### File Convention
 

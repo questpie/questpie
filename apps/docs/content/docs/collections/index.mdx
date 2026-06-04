@@ -38,86 +38,13 @@ export const services = collection("services")
 
 ## Builder Chain
 
-Collections use a chainable builder API. Each method adds a layer:
+Collections use a chainable builder API — each method adds a layer of configuration and returns a new immutable builder instance.
 
-| Method                                          | Purpose                                               |
-| ----------------------------------------------- | ----------------------------------------------------- |
-| `.fields(({ f }) => {...})`                     | Define data fields                                    |
-| `.title(({ f }) => f.name)`                     | Record display title                                  |
-| `.admin(({ c }) => {...})`                      | Admin UI metadata (label, icon)                       |
-| `.indexes(({ table }) => [...])`                | Database indexes                                      |
-| `.list(({ v, f }) => v.collectionTable({...}))` | List view config                                      |
-| `.form(({ v, f }) => v.collectionForm({...}))`  | Form view config                                      |
-| `.hooks({...})`                                 | Lifecycle hooks                                       |
-| `.access({...})`                                | Access control rules                                  |
-| `.preview({...})`                               | Live preview config                                   |
-| `.options({...})`                               | Schema, timestamps, versioning, workflow, soft delete |
-
-### `.title()`
-
-Sets which field is used as the display title for records:
-
-```ts
-.title(({ f }) => f.name)
-```
-
-### `.admin()`
-
-Configures how the collection appears in the admin panel:
-
-```ts
-.admin(({ c }) => ({
-  label: { en: "Barbers", sk: "Holiči" },
-  icon: c.icon("ph:users"),
-  hidden: false, // hide from sidebar
-}))
-```
-
-### `.indexes()`
-
-Add database indexes using Drizzle:
-
-```ts
-import { uniqueIndex } from "drizzle-orm/pg-core";
-
-.indexes(({ table }) => [
-  uniqueIndex("barbers_slug_unique").on(table.slug),
-  uniqueIndex("barbers_email_unique").on(table.email),
-])
-```
-
-### `.preview()`
-
-Enable live preview for frontend rendering:
-
-```ts
-.preview({
-  enabled: true,
-  position: "right",
-  defaultWidth: 50,
-  url: ({ record }) => `/barbers/${record.slug}?preview=true`,
-})
-```
+<Callout type="info">See [Collection API Reference](/docs/reference/collection-api) for the complete list of builder methods and all option properties.</Callout>
 
 ### `.options()`
 
-Configure collection-level behavior:
-
-```ts
-.options({
-  schema: "auth",      // optional Postgres schema (default: public)
-  timestamps: true,    // adds createdAt, updatedAt
-  versioning: true,    // track content versions
-  softDelete: true,    // mark as deleted instead of removing
-})
-```
-
-For publishing stages such as draft, review, and published, see [Versioning & Workflow](/docs/collections/versioning).
-
-#### `schema`
-
-Places the collection's tables under a named Postgres schema instead of `public`.
-Applies to all four tables: main, i18n, versions, and i18n_versions.
+The most commonly configured option is `schema`, which places tables under a named Postgres schema instead of `public`:
 
 ```ts
 collection("user")
@@ -132,59 +59,15 @@ CREATE SCHEMA IF NOT EXISTS "auth";
 CREATE TABLE "auth"."user" (...);
 ```
 
-Cross-schema relations render as `REFERENCES "other_schema"."table"("id")` —
-useful when multiple QUESTPIE apps share one Postgres instance and partition
-tables by schema (`auth.*`, `web.*`, `brain.*`).
+Cross-schema relations render as `REFERENCES "other_schema"."table"("id")` — useful when multiple QUESTPIE apps share one Postgres instance and partition tables by schema (`auth.*`, `web.*`, `brain.*`).
 
-When unset, tables live in `public` — fully backward-compatible.
+Other common options: `timestamps: true` (adds `createdAt`, `updatedAt`), `softDelete: true` (marks records deleted instead of removing them), `versioning: true` (creates a versions table). For publishing stages and workflow, see [Versioning & Workflow](/docs/collections/versioning).
 
 ## CRUD Operations
 
-Collections provide typed CRUD methods on the server side:
+Collections provide typed CRUD methods — `find`, `findOne`, `create`, `update`, `delete`, `count` — accessed via `context.collections` inside any hook, route, or job handler.
 
-```ts
-// In a function/hook handler via context
-const { collections } = context;
-
-// Find many
-const results = await collections.services.find({
-	where: { isActive: true },
-	orderBy: { name: "asc" },
-	limit: 10,
-	offset: 0,
-});
-// results.docs: Service[]
-// results.totalDocs: number
-
-// Find one
-const service = await collections.services.findOne({
-	where: { id: "abc123" },
-});
-
-// Create
-const newService = await collections.services.create({
-	name: "Haircut",
-	duration: 30,
-	price: 2500,
-	isActive: true,
-});
-
-// Update
-const updated = await collections.services.update({
-	where: { id: "abc123" },
-	data: { price: 3000 },
-});
-
-// Delete
-await collections.services.delete({
-	where: { id: "abc123" },
-});
-
-// Count
-const count = await collections.services.count({
-	where: { isActive: true },
-});
-```
+<Callout type="info">See [CRUD API Reference](/docs/reference/crud-api) for all method signatures, filter options, and return types.</Callout>
 
 ## Real-World Example
 

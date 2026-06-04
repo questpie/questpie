@@ -32,32 +32,22 @@ export default collection("posts").fields(({ f }) => ({
 
 ## Field Types
 
-### Text Fields
+<Callout type="info">See [Field API Reference](/docs/reference/field-api) for modes, config options, and per-type chain methods on text, number, date/time, select, object, relation, upload, and custom fields.</Callout>
 
-| Field          | DB Type            | Use case                              |
-| -------------- | ------------------ | ------------------------------------- |
-| `f.text()`     | `varchar` / `text` | Short strings, titles, slugs          |
-| `f.textarea()` | `text`             | Long text, descriptions, rich content |
-| `f.email()`    | `varchar`          | Email addresses (validated)           |
-| `f.url()`      | `varchar`          | URLs (validated)                      |
+### Text Fields
 
 ```ts
 name: f.text(255).required(),
 bio: f.textarea().localized(),
-content: f.textarea(),
 email: f.email().required(),
 website: f.url(),
 ```
 
 ### Numeric Fields
 
-| Field        | DB Type               | Use case                   |
-| ------------ | --------------------- | -------------------------- |
-| `f.number()` | `integer` / `numeric` | Counts, prices, quantities |
-
 ```ts
 duration: f.number().required().label("Duration (minutes)"),
-price: f.number().required().label("Price (cents)"),
+price: f.number({ mode: "decimal", precision: 10, scale: 2 }).required(),
 ```
 
 ### Boolean
@@ -67,12 +57,6 @@ isActive: f.boolean().default(true).required(),
 ```
 
 ### Date/Time Fields
-
-| Field          | DB Type     | Use case       |
-| -------------- | ----------- | -------------- |
-| `f.date()`     | `date`      | Calendar dates |
-| `f.time()`     | `time`      | Time of day    |
-| `f.datetime()` | `timestamp` | Date + time    |
 
 ```ts
 publishedAt: f.date(),
@@ -218,20 +202,7 @@ Virtual fields appear in queries but cannot be written to.
 
 ## Common Chain Methods
 
-Every field supports these chain methods:
-
-| Method               | Description                                                             |
-| -------------------- | ----------------------------------------------------------------------- |
-| `.required()`        | Mark as NOT NULL                                                        |
-| `.default(value)`    | Set default value (makes input optional)                                |
-| `.label(text)`       | Display label (string or i18n object)                                   |
-| `.description(text)` | Help text (string or i18n object)                                       |
-| `.localized()`       | Store per-locale values in i18n table                                   |
-| `.inputOptional()`   | Always optional in input, even if NOT NULL (e.g., auto-generated slugs) |
-| `.virtual(expr?)`    | No DB column; optional SQL expression for computed fields               |
-| `.array()`           | Wrap as JSONB array                                                     |
-
-See [Field API Reference](/docs/reference/field-api) for the full list.
+Every field supports chain methods for constraints, transforms, and metadata. See [Field API Reference](/docs/reference/field-api) for the complete list.
 
 ### Labels and Descriptions
 

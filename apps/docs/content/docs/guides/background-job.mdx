@@ -1,0 +1,103 @@
+---
+title: Run a Background Job
+description: Define and dispatch a background job using the queue adapter.
+---
+
+Background jobs let you offload slow or asynchronous work — sending emails, processing uploads, syncing external APIs — without blocking the HTTP response.
+
+```ts title="src/jobs/send-welcome-email.ts"
+import { job } from "questpie/services";
+import z from "zod";
+
+export default job({
+  name: "sendWelcomeEmail",
+  schema: z.object({
+    userId: z.string(),
+    email: z.string().email(),
+  }),
+  options: {
+    retryLimit: 3,
+    retryBackoff: true,
+  },
+  handler: async ({ payload, email }) => {
+    await email.send({
+      to: payload.email,
+      subject: "Welcome!",
+      html: "<p>Thanks for signing up.</p>",
+    });
+  },
+});
+```
+
+Place the file in `jobs/`. The filename becomes the queue key: `send-welcome-email.ts` → `sendWelcomeEmail`.
+
+Publish the job from a collection hook, route, or another job via the typed `queue` context:
+
+```ts title="src/collections/users.ts"
+import { collection } from "#questpie/factories";
+
+export const users = collection("users")
+  .fields(({ f }) => ({
+    email: f.email().required(),
+    name: f.text(255).required(),
+  }))
+  .hooks({
+    afterChange: async ({ data, operation, queue }) => {
+      if (operation === "create") {
+        await queue.sendWelcomeEmail.publish({
+          userId: data.id,
+          email: data.email,
+        });
+      }
+    },
+  });
+```
+
+Start a worker process that consumes queued jobs:
+
+```ts title="src/worker.ts"
+import { app } from "#questpie";
+
+await app.queue.listen({
+  teamSize: 5,
+  batchSize: 3,
+});
+```
+
+Add a script to run it alongside the web server:
+
+```json title="package.json"
+{
+  "scripts": {
+    "dev": "bun --bun vite dev",
+    "dev:worker": "bun --bun run --watch ./src/worker.ts"
+  }
+}
+```
+
+Configure the queue adapter in your runtime config:
+
+```ts title="questpie.config.ts"
+import { runtimeConfig } from "questpie/app";
+import { pgBossAdapter } from "questpie/adapters/pg-boss";
+
+export default runtimeConfig({
+  queue: {
+    adapter: pgBossAdapter({
+      connectionString: process.env.DATABASE_URL,
+    }),
+  },
+});
+```
+
+<Callout type="info">
+Publishing a job only writes it to the queue. The handler runs in the separate worker process — make sure the worker is running in both development and production.
+</Callout>
+
+## Related Pages
+
+<Cards>
+  <Card title="Jobs" href="/docs/server/jobs" description="Full jobs reference including cron, retries, and one-off processing" />
+  <Card title="Hooks" href="/docs/collections/hooks" description="Trigger jobs from collection lifecycle events" />
+  <Card title="Queue Adapter" href="/docs/infrastructure/queue" description="Queue infrastructure setup and adapter options" />
+</Cards>
