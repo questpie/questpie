@@ -1,0 +1,185 @@
+---
+title: Modules
+description: Static modules that contribute entities — collections, jobs, sidebar items, dashboard widgets.
+---
+
+Modules are **static objects** that contribute entities to your app. They're pre-built packages (like admin, audit) or custom bundles you create.
+
+## Using Modules
+
+List your module dependencies in `modules.ts`:
+
+```ts title="modules.ts"
+import { adminModule } from "@questpie/admin/modules/admin";
+import { auditModule } from "@questpie/admin/modules/audit";
+export default [adminModule, auditModule] as const;
+```
+
+Codegen merges module contributions with your project-level entities. The admin module contributes:
+
+- `user` collection (for authentication)
+- Administration sidebar section
+- Audit log entries (via audit module)
+
+Keep `modules.ts` statically discoverable. Codegen imports it before runtime app creation, so codegen-aware modules should not be hidden behind environment checks or configured through `module(options)` calls.
+
+## Configuration Pattern
+
+Codegen-aware modules use a two-file pattern:
+
+```ts title="modules.ts"
+import mcpModule from "@questpie/mcp";
+import { adminModule } from "@questpie/admin/modules/admin";
+import { openApiModule } from "@questpie/openapi/modules/openapi";
+
+export default [adminModule, openApiModule, mcpModule] as const;
+```
+
+```ts title="config/mcp.ts"
+import { mcpConfig } from "@questpie/mcp";
+
+export default mcpConfig({
+	crud: {
+		defaults: {
+			collections: { read: true, write: false, delete: false },
+		},
+	},
+});
+```
+
+Use this rule of thumb:
+
+- `modules.ts` declares static module identity and must be codegen-discoverable.
+- `config/*.ts` holds runtime options for modules that need codegen discovery.
+- `runtimeConfig({ plugins })` is for standalone or custom plugin setups that are not loaded through modules.
+- `module(options)` is only appropriate for runtime-only modules whose options do not change file conventions, generated factories, type registries, builder extensions, or generated app state.
+
+This keeps the generated app deterministic. Codegen can always see the same module graph, while environment-specific or project-specific settings live in config files discovered by the module plugin.
+
+## What Modules Contribute
+
+A module is a plain object of entities:
+
+```ts
+const myModule = module({
+	name: "my-module",
+
+	// Entity contributions
+	collections: {
+		/* ... */
+	},
+	globals: {
+		/* ... */
+	},
+	jobs: {
+		/* ... */
+	},
+	routes: {
+		/* ... */
+	},
+	services: {
+		/* ... */
+	},
+	fields: {
+		/* ... */
+	},
+
+	// Admin contributions (when admin plugin is active)
+	sidebar: {
+		/* ... */
+	},
+	dashboard: {
+		/* ... */
+	},
+
+	// Infrastructure
+	auth: {
+		/* ... */
+	},
+	migrations: [
+		/* ... */
+	],
+	seeds: [
+		/* ... */
+	],
+	messages: {
+		en: {
+			/* ... */
+		},
+		sk: {
+			/* ... */
+		},
+	},
+});
+```
+
+## Merging Rules
+
+When codegen merges modules with your project:
+
+1. **Your project wins** — Project-level entities override module contributions with the same key
+2. **Sidebar merges** — Module sidebar sections/items are added alongside project sidebar
+3. **Dashboard merges** — Module dashboard items are added to project dashboard
+4. **Collections merge** — Module collections are added to the app
+
+## Module Composition
+
+Modules can depend on other modules:
+
+```ts
+const auditModule = module({
+	name: "audit",
+	modules: [adminModule], // Depends on admin
+	collections: {
+		auditLog: auditLogCollection,
+	},
+	sidebar: {
+		items: [
+			{
+				sectionId: "administration",
+				type: "collection",
+				collection: "auditLog",
+			},
+		],
+	},
+});
+```
+
+## Built-in Modules
+
+| Module        | Package                  | Provides                              |
+| ------------- | ------------------------ | ------------------------------------- |
+| `adminModule` | `@questpie/admin/server` | User collection, admin UI, auth pages |
+| `auditModule` | `@questpie/admin/server` | Audit log collection, timeline widget |
+
+`adminModule` includes the starter auth model and owns the canonical Better Auth `user` collection shape used by admin setup and login guards. That contract includes `user.role` (`admin` or `user`). If you customize users, merge `starterModule.collections.user` and extend it instead of replacing `collection("user")` from scratch.
+
+## Creating Custom Modules
+
+```ts
+import { module } from "questpie/app";
+export const notificationsModule = module({
+	name: "notifications",
+	collections: {
+		notifications: notificationsCollection,
+	},
+	jobs: {
+		sendPushNotification: pushJob,
+	},
+	sidebar: {
+		items: [
+			{
+				sectionId: "operations",
+				type: "collection",
+				collection: "notifications",
+			},
+		],
+	},
+});
+```
+
+## Related Pages
+
+- [Plugins](/docs/concepts/modules-and-plugins) — Plugin declarations
+- [Building a Module](/docs/extend/building-a-module) — Create reusable modules
+- [File Convention](/docs/concepts/file-convention) — Project-level entities

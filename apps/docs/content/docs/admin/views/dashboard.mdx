@@ -1,0 +1,207 @@
+---
+title: Dashboard
+description: Configure the admin dashboard — stats, charts, progress bars, recent items, and activity timelines.
+---
+
+The dashboard is the admin landing page. Configure it in `config/admin.ts` under the `dashboard` key.
+
+## Basic Setup
+
+```ts title="config/admin.ts"
+import { adminConfig } from "#questpie/factories";
+
+export default adminConfig({
+	dashboard: {
+		title: { en: "Dashboard" },
+		description: { en: "Overview of your app" },
+		columns: 4,
+	},
+});
+```
+
+## Actions
+
+Quick-action buttons at the top of the dashboard:
+
+```ts
+actions: [
+  {
+    id: "new-appointment",
+    href: "/admin/collections/appointments?create=true",
+    label: { en: "New Appointment" },
+    icon: { type: "icon", props: { name: "ph:calendar-plus" } },
+    variant: "primary",
+  },
+  {
+    id: "add-barber",
+    href: "/admin/collections/barbers?create=true",
+    label: { en: "Add Barber" },
+    icon: { type: "icon", props: { name: "ph:user-plus" } },
+    variant: "outline",
+  },
+],
+```
+
+## Sections
+
+Group widgets into labeled sections:
+
+```ts
+sections: [
+  {
+    id: "today",
+    label: { en: "Today" },
+    layout: "grid",
+    columns: 4,
+  },
+  {
+    id: "business",
+    label: { en: "Business" },
+    layout: "grid",
+    columns: 4,
+  },
+],
+```
+
+## Widget Types
+
+### Stats
+
+Count records with optional filters:
+
+```ts
+{
+  sectionId: "today",
+  id: "pending-appointments",
+  type: "stats",
+  collection: "appointments",
+  label: { en: "Pending" },
+  filter: { status: "pending" },
+  span: 1,
+}
+```
+
+### Value
+
+Custom-loaded value with trend indicator:
+
+```ts
+{
+  sectionId: "business",
+  id: "monthly-revenue",
+  type: "value",
+  span: 2,
+  refreshInterval: 1000 * 60 * 5,
+  loader: async ({ app }) => {
+    const stats = await getRevenueStats.handler({
+      input: { startDate, endDate, completedOnly: true },
+      app,
+    });
+
+    return {
+      value: stats.totalRevenue / 100,
+      formatted: `${(stats.totalRevenue / 100).toLocaleString()} €`,
+      label: { en: "Monthly Revenue" },
+      subtitle: { en: `${stats.appointmentCount} completed` },
+      trend: { value: "+12%" },
+    };
+  },
+}
+```
+
+Widget loaders run on the server from the authenticated admin request. Nested CRUD calls made by the loader inherit the caller context, so collection and field access rules still apply. Return only serializable data that is safe for the admin client; do not return secrets or server-only configuration.
+
+### Progress
+
+Progress bar toward a goal:
+
+```ts
+{
+  sectionId: "business",
+  id: "revenue-goal",
+  type: "progress",
+  span: 1,
+  showPercentage: true,
+  label: { en: "Monthly Goal" },
+  loader: async ({ app }) => ({
+    current: currentRevenue,
+    target: 500000,
+    label: `${current} / ${target}`,
+  }),
+}
+```
+
+### Chart
+
+Chart from field values:
+
+```ts
+{
+  sectionId: "business",
+  id: "appointments-by-status",
+  type: "chart",
+  collection: "appointments",
+  field: "status",
+  chartType: "pie",
+  label: { en: "Appointments by Status" },
+  span: 1,
+}
+```
+
+### Recent Items
+
+List recent records from a collection:
+
+```ts
+{
+  sectionId: "operations",
+  id: "recent-appointments",
+  type: "recentItems",
+  collection: "appointments",
+  label: { en: "Recent Appointments" },
+  limit: 6,
+  dateField: "scheduledAt",
+  span: 2,
+}
+```
+
+### Timeline
+
+Activity stream with custom loader:
+
+```ts
+{
+  sectionId: "operations",
+  id: "activity-stream",
+  type: "timeline",
+  label: { en: "Activity" },
+  maxItems: 8,
+  showTimestamps: true,
+  timestampFormat: "relative",
+  loader: async ({ app }) => {
+    const res = await app.collections.appointments.find({
+      limit: 8,
+      orderBy: { updatedAt: "desc" },
+    });
+
+    return res.docs.map((apt) => ({
+      id: apt.id,
+      title: apt.displayTitle,
+      description: `Status: ${apt.status}`,
+      timestamp: apt.updatedAt,
+      variant: apt.status === "completed" ? "success" : "warning",
+      href: `/admin/collections/appointments/${apt.id}`,
+    }));
+  },
+  span: 2,
+}
+```
+
+## Module Contributions
+
+Modules can contribute dashboard items. The `auditModule` automatically adds an audit timeline widget to the dashboard.
+
+## Related Pages
+
+- [Sidebar](/docs/admin/views/sidebar) — Navigation
+- [Setup](/docs/admin/setup) — Admin setup

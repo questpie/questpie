@@ -1,0 +1,145 @@
+---
+title: Access Control
+description: Control who can read, create, update, and delete records at the operation, row, and field level.
+---
+
+Access control determines who can perform operations on your collections and globals. Rules are defined per-collection and receive the full request context.
+
+## Basic Access Rules
+
+```ts title="collections/posts.ts"
+.access({
+  read: true,                                           // Public read
+  create: ({ session }) => !!session,                   // Authenticated users
+  update: ({ session }) => session?.user?.role === "admin",  // Admin only
+  delete: ({ session }) => session?.user?.role === "admin",
+})
+```
+
+Each operation accepts either:
+
+- `boolean` — Static allow/deny
+- `(context) => boolean` — Dynamic function receiving the request context
+
+## Operations
+
+| Operation | When checked                 |
+| --------- | ---------------------------- |
+| `read`    | Listing and fetching records |
+| `create`  | Creating new records         |
+| `update`  | Updating existing records    |
+| `delete`  | Deleting records             |
+
+## Context
+
+Access functions receive the full `AppContext`:
+
+```ts
+.access({
+  update: ({ session, db }) => {
+    if (!session) return false;
+    return session.user.role === "admin";
+  },
+})
+```
+
+Available context properties:
+
+- `session` — Current auth session (null if unauthenticated)
+- `db` — Database instance
+- `collections` — Typed collection API
+- Any custom services injected via `AppContext`
+
+## Global Access
+
+Globals support `read` and `update` (no create/delete since they're singletons):
+
+```ts title="globals/site-settings.ts"
+.access({
+  read: true,
+  update: ({ session }) => session?.user?.role === "admin",
+})
+```
+
+## System Access Mode
+
+Server-side code can bypass access control using `accessMode: "system"`:
+
+```ts
+const ctx = await app.createContext({ accessMode: "system" });
+const allPosts = await app.collections.posts.find({}, ctx);
+// No access checks — useful for server-side scripts, jobs, seeds
+```
+
+HTTP requests from clients always use the session-based access mode.
+
+## Real-World Patterns
+
+### Public read, admin write
+
+```ts
+.access({
+  read: true,
+  create: ({ session }) => session?.user?.role === "admin",
+  update: ({ session }) => session?.user?.role === "admin",
+  delete: ({ session }) => session?.user?.role === "admin",
+})
+```
+
+### Authenticated-only
+
+```ts
+.access({
+  read: ({ session }) => !!session,
+  create: ({ session }) => !!session,
+  update: ({ session }) => !!session,
+  delete: false,  // Never allow deletion
+})
+```
+
+### Owner-only updates
+
+```ts
+.access({
+  read: true,
+  update: ({ session }) => {
+    if (!session) return false;
+    // Return a where clause to limit updates to own records
+    return { author: session.user.id };
+  },
+})
+```
+
+### Published-stage public reads
+
+For workflow-published pages, `read: true` allows any public client to omit `stage` and read the working draft. Instead, allow anonymous reads only when the request explicitly asks for the published stage:
+
+```ts title="collections/pages.ts"
+.access({
+	read: ({ session, input }) => {
+		if (session?.user) return true;
+		return input?.stage === "published";
+	},
+	create: ({ session }) => !!session?.user,
+	update: ({ session }) => !!session?.user,
+	delete: ({ session }) => !!session?.user,
+	transition: ({ session }) => !!session?.user,
+})
+```
+
+Public frontend code should then call:
+
+```ts
+await client.collections.pages.findOne({
+	where: { slug },
+	stage: "published",
+});
+```
+
+Admin preview can omit `stage` only for authorized editor sessions. Do not use `accessMode: "system"` in public request handlers to bypass this check.
+
+## Related Pages
+
+- [Hooks](/docs/collections/hooks) — Lifecycle hooks for custom logic
+- [Validation](/docs/collections/validation) — Input validation
+- [Authentication](/docs/infrastructure/authentication) — Session and auth setup

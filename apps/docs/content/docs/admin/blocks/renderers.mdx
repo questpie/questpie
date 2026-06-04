@@ -1,0 +1,140 @@
+---
+title: Block Renderers
+description: Client-side React components that render block content and participate in Live Preview annotations.
+---
+
+Block renderers are React components that receive block values, prefetched data, and nested children, then return JSX. Use the same renderers on the public frontend and inside preview.
+
+## Defining a Renderer
+
+```tsx title="src/questpie/admin/blocks/hero.tsx"
+import { PreviewField } from "@questpie/admin/client";
+import type { BlockProps } from "../.generated/client";
+
+export function HeroRenderer({ values, data }: BlockProps<"hero">) {
+	return (
+		<section className="relative flex min-h-[60vh] items-center justify-center">
+			{data?.backgroundImage?.url && (
+				<img
+					src={data.backgroundImage.url}
+					alt=""
+					className="absolute inset-0 h-full w-full object-cover"
+				/>
+			)}
+			<div className="relative text-center">
+				<PreviewField field="title" editable="text" as="h1">
+					{values.title}
+				</PreviewField>
+				{values.subtitle && (
+					<PreviewField field="subtitle" editable="textarea" as="p">
+						{values.subtitle}
+					</PreviewField>
+				)}
+				{values.ctaText && (
+					<a href={values.ctaLink} className="btn mt-6 inline-block">
+						{values.ctaText}
+					</a>
+				)}
+			</div>
+		</section>
+	);
+}
+```
+
+## BlockProps
+
+| Property   | Type        | Description                                               |
+| ---------- | ----------- | --------------------------------------------------------- |
+| `values`   | `object`    | Block field values, stored under `_values.<blockId>`      |
+| `data`     | `object`    | Prefetched relation and upload data, stored under `_data` |
+| `children` | `ReactNode` | Nested block content                                      |
+
+## Registering Renderers
+
+Export renderers from an index file:
+
+```tsx title="src/questpie/admin/blocks/index.tsx"
+import { CTARenderer } from "./cta";
+import { GalleryRenderer } from "./gallery";
+import { HeroRenderer } from "./hero";
+
+export const renderers = {
+	hero: HeroRenderer,
+	gallery: GalleryRenderer,
+	cta: CTARenderer,
+};
+```
+
+## Frontend Rendering
+
+Render page content with `BlockRenderer` from `@questpie/admin/client`. It walks the block tree, finds the right renderer for each block type, passes `values` and `data`, and provides the block scope used by `PreviewField`.
+
+```tsx title="src/components/pages/page-renderer.tsx"
+import {
+	BlockRenderer,
+	PreviewProvider,
+	useCollectionPreview,
+} from "@questpie/admin/client";
+import { useRouter } from "@tanstack/react-router";
+import { admin } from "@/questpie/admin/admin";
+
+export function PageRenderer({ page }) {
+	const router = useRouter();
+	const preview = useCollectionPreview({
+		initialData: page,
+		onRefresh: () => router.invalidate(),
+	});
+
+	return (
+		<PreviewProvider preview={preview}>
+			<BlockRenderer
+				content={preview.data.content}
+				renderers={admin.blocks}
+				data={preview.data.content?._data}
+				selectedBlockId={preview.selectedBlockId}
+				onBlockClick={
+					preview.isPreviewMode ? preview.handleBlockClick : undefined
+				}
+			/>
+		</PreviewProvider>
+	);
+}
+```
+
+## Preview Annotations
+
+Inside a block renderer, use `PreviewField field="..."` for scalar block values that should support focus sync or inline editing.
+
+```tsx
+<PreviewField field="heading" editable="text" as="h2">
+	{values.heading}
+</PreviewField>
+```
+
+When rendered inside `BlockRenderer`, the active block scope resolves this to:
+
+```txt
+content._values.<blockId>.heading
+```
+
+For nested values, pass the nested path relative to the block values object:
+
+```tsx
+<PreviewField field="cta.label" editable="text" as="span">
+	{values.cta?.label}
+</PreviewField>
+```
+
+This resolves to:
+
+```txt
+content._values.<blockId>.cta.label
+```
+
+Tree operations such as add, remove, reorder, and nesting remain in the existing block editor. Preview annotations should target scalar values that can be mirrored into the iframe and committed back into the form.
+
+## Related Pages
+
+- [Defining Blocks](/docs/admin/blocks/defining-blocks) — Server-side definitions
+- [Prefetch](/docs/admin/blocks/prefetch) — Loading relation data
+- [Live Preview](/docs/admin/live-preview) — FormView, iframe, and protocol overview

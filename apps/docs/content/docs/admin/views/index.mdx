@@ -1,0 +1,38 @@
+---
+title: Views
+description: Server-configured views — list views, form views, dashboard, and sidebar.
+---
+
+Views control how data appears in the admin panel. They're configured server-side on your collections and globals, then rendered by the admin client via registries.
+
+```mermaid
+flowchart LR
+  List[".list(({ v }) => v.collectionTable({}))"]
+  Form[".form(({ v, f }) => v.collectionForm({}))"]
+  Sidebar["sidebar({ ... })"]
+  Dashboard["dashboard({ ... })"]
+  Table["Table<br/>columns, sort, search"]
+  FormUi["Form<br/>sections, sidebar, tabs"]
+  Nav["Navigation sidebar"]
+  Widgets["Dashboard widgets"]
+
+  List --> Table
+  Form --> FormUi
+  Sidebar --> Nav
+  Dashboard --> Widgets
+```
+
+## How Views Work
+
+1. **You configure** views on collections using `.list()` and `.form()`
+2. **Codegen** includes the view config in the generated types
+3. **Admin client** reads the config and renders the appropriate UI
+
+The admin never defines its own schema — it always reads from the server.
+
+## Sections
+
+- [List Views](/docs/admin/views/list-views) — Tables, columns, sorting, search
+- [Form Views](/docs/admin/views/form-views) — Forms, sections, sidebar, reactive fields
+- [Dashboard](/docs/admin/views/dashboard) — Widgets, stats, charts, activity
+- [Sidebar](/docs/admin/views/sidebar) — Navigation sections and items

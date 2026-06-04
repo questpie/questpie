@@ -1,0 +1,4 @@
+{
+	"title": "Collections",
+	"pages": ["index", "fields", "relations", "globals", "localization", "versioning", "hooks", "access-control", "validation"]
+}

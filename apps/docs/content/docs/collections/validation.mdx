@@ -1,0 +1,73 @@
+---
+title: Validation
+description: Field-level validation, Zod refinements, and custom validation rules.
+---
+
+QUESTPIE validates data at multiple levels: field constraints, Zod schemas, and custom validation hooks.
+
+## Field-Level Constraints
+
+Built-in constraints on field definitions:
+
+```ts
+.fields(({ f }) => ({
+  name: f.text(255).required(),
+  email: f.email().required(),     // Validates email format
+  website: f.url(),                       // Validates URL format
+  rating: f.number().min(1).max(5),
+  tags: f.text().array().maxItems(10),
+}))
+```
+
+| Chain Method          | Fields             | Description                     |
+| --------------------- | ------------------ | ------------------------------- |
+| `.required()`         | All                | Field must have a value         |
+| `.max(n)`             | `text`, `textarea` | Maximum string length           |
+| `.min(n)` / `.max(n)` | `number`           | Numeric range                   |
+| `.maxItems(n)`        | `.array()`         | Maximum array length            |
+| `mimeTypes`           | `upload`           | Allowed file types (config)     |
+| `maxSize`             | `upload`           | Max file size in bytes (config) |
+
+These constraints are automatically enforced in the API validation layer (Zod schemas generated from field definitions).
+
+## Input Modifier
+
+The `.inputOptional()` chain method controls how a field behaves during creation:
+
+```ts
+slug: f.text().required().inputOptional(),
+```
+
+This is useful for fields that are required in the database but computed by hooks (like slugs, reading times, etc.).
+
+## Custom Validation via Hooks
+
+Use `beforeValidate` for custom validation logic:
+
+```ts
+.hooks({
+  beforeValidate: async ({ data, operation }) => {
+    if (operation === "create" && !data.slug) {
+      data.slug = slugify(data.name);
+    }
+  },
+})
+```
+
+For validation that should reject the operation, throw an error:
+
+```ts
+.hooks({
+  beforeValidate: async ({ data }) => {
+    if (data.scheduledAt && new Date(data.scheduledAt) < new Date()) {
+      throw new Error("Cannot schedule appointments in the past");
+    }
+  },
+})
+```
+
+## Related Pages
+
+- [Fields](/docs/collections/fields) — Field types and constraints
+- [Hooks](/docs/collections/hooks) — Lifecycle hooks
+- [Access Control](/docs/collections/access-control) — Operation-level rules

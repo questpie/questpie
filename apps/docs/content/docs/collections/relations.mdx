@@ -1,0 +1,123 @@
+---
+title: Relations
+description: Define relationships between collections — belongsTo, hasMany, and many-to-many through junction tables.
+---
+
+Relations link collections together. QUESTPIE supports belongs-to, has-many, and many-to-many relationships.
+
+## Belongs-To (Single Relation)
+
+A field that references one record from another collection:
+
+```ts title="collections/appointments.ts"
+import { collection } from "#questpie/factories";
+
+export const appointments = collection("appointments").fields(({ f }) => ({
+	customer: f.relation("user").required(),
+	barber: f.relation("barbers").required(),
+	service: f.relation("services").required(),
+	// ...
+}));
+```
+
+This creates a foreign key column `customer` → `user.id`, `barber` → `barbers.id`, etc.
+
+### Options
+
+| Option     | Type                                    | Description                      |
+| ---------- | --------------------------------------- | -------------------------------- |
+| `to`       | `string`                                | Target collection name           |
+| `required` | `boolean`                               | Whether the relation is required |
+| `label`    | `string \| i18n`                        | Display label                    |
+| `onDelete` | `"cascade" \| "set null" \| "restrict"` | Foreign key behavior             |
+
+## Has-Many (Reverse Relation)
+
+Define the reverse side of a belongs-to — one record has many related records:
+
+```ts title="collections/services.ts"
+import { collection } from "#questpie/factories";
+
+export const services = collection("services").fields(({ f }) => ({
+	name: f.text().required(),
+	// Reverse: this service has many barbers (via barberServices junction)
+	barbers: f.relation("barbers").manyToMany({
+		through: "barberServices",
+		sourceField: "service",
+		targetField: "barber",
+	}),
+}));
+```
+
+## Many-to-Many (Through Junction)
+
+Many-to-many requires a junction collection:
+
+```ts title="collections/barber-services.ts"
+import { collection } from "#questpie/factories";
+
+export const barberServices = collection("barberServices")
+	.fields(({ f }) => ({
+		barber: f.relation("barbers").required().onDelete("cascade"),
+		service: f.relation("services").required().onDelete("cascade"),
+	}))
+	.admin(({ c }) => ({ hidden: true })); // Hide from admin sidebar
+```
+
+Then reference it from both sides:
+
+```ts title="collections/barbers.ts"
+services: f.relation("services").manyToMany({ through: "barberServices", sourceField: "barber", targetField: "service" }),
+```
+
+```ts title="collections/services.ts"
+barbers: f.relation("barbers").manyToMany({ through: "barberServices", sourceField: "service", targetField: "barber" }),
+```
+
+### Through Options
+
+| Option        | Type     | Description                        |
+| ------------- | -------- | ---------------------------------- |
+| `through`     | `string` | Junction collection name           |
+| `sourceField` | `string` | FK in junction → this collection   |
+| `targetField` | `string` | FK in junction → target collection |
+
+## Querying Relations
+
+### Include related data
+
+```ts
+const barber = await collections.barbers.findOne({
+	where: { id: "abc" },
+	with: {
+		services: true, // Include related services
+	},
+});
+// barber.services: Service[]
+```
+
+### Filter by relation
+
+```ts
+const appointments = await collections.appointments.find({
+	where: {
+		barber: barberId, // Filter by relation ID
+		status: "pending",
+	},
+});
+```
+
+### Client-side
+
+```ts
+const barbers = await client.collections.barbers.find({
+	with: { services: true },
+	where: { isActive: true },
+});
+```
+
+## Related Pages
+
+- [Fields](/docs/collections/fields) — All field types
+- [Collections](/docs/collections) — Collection builder
+- [Querying](/docs/client/querying) — Query operators and patterns

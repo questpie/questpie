@@ -1,0 +1,81 @@
+---
+title: Authentication
+description: Better Auth integration — email/password, OAuth providers, sessions.
+---
+
+QUESTPIE uses [Better Auth](https://www.better-auth.com/) for authentication. Configure it with the `auth.ts` file convention.
+
+## Configuration
+
+```ts title="auth.ts"
+import type { AuthConfig } from "questpie/app";
+export default {
+	emailAndPassword: {
+		enabled: true,
+		requireEmailVerification: false,
+	},
+	baseURL: process.env.APP_URL || "http://localhost:3000",
+	basePath: "/api/auth",
+	secret: process.env.BETTER_AUTH_SECRET || "change-me",
+} satisfies AuthConfig;
+```
+
+## Auth Options
+
+| Option                                      | Type      | Description                 |
+| ------------------------------------------- | --------- | --------------------------- |
+| `emailAndPassword.enabled`                  | `boolean` | Enable email/password login |
+| `emailAndPassword.requireEmailVerification` | `boolean` | Require email verification  |
+| `baseURL`                                   | `string`  | App URL                     |
+| `basePath`                                  | `string`  | Auth API path               |
+| `secret`                                    | `string`  | Session secret              |
+
+## Session in Handlers
+
+Access the current session in hooks, routes, and access rules:
+
+```ts
+handler: async ({ session }) => {
+	if (!session) throw new Error("Not authenticated");
+
+	const user = session.user;
+	// user.id, user.email, user.name, etc.
+};
+```
+
+## Access Control
+
+Use session data in access rules:
+
+```ts
+.access({
+  read: true,
+  create: ({ session }) => !!session,
+  update: ({ session }) => session?.user?.role === "admin",
+  delete: ({ session }) => session?.user?.role === "admin",
+})
+```
+
+## User Collection
+
+The `adminModule` includes the starter auth model and provides the canonical Better Auth `user` collection for storing user accounts. It is automatically created when you add the admin module.
+
+This user contract includes `user.role` with at least `admin` and `user` values. The built-in admin setup route checks for an existing `role = "admin"` user, and the admin UI guard expects `session.user.role === "admin"`.
+
+Do not replace `collection("user")` from scratch in an app that uses `adminModule`. If you need custom user fields or admin layout, merge the starter user collection and extend it:
+
+```ts title="collections/user.ts"
+import { starterModule } from "questpie/app";
+import { collection } from "#questpie/factories";
+
+export default collection("user")
+	.merge(starterModule.collections.user)
+	.fields(({ f }) => ({
+		internalNotes: f.textarea(),
+	}));
+```
+
+## Related Pages
+
+- [Access Control](/docs/collections/access-control) — Permission rules
+- [Admin Setup](/docs/admin/setup) — Admin auth pages

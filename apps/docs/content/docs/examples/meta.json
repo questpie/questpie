@@ -1,4 +1,7 @@
 {
 	"title": "Examples",
-	"pages": ["barbershop"]
+	"pages": [
+		"index",
+		"barbershop"
+	]
 }

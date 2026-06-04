@@ -1,0 +1,4 @@
+{
+	"title": "Infrastructure",
+	"pages": ["index", "database", "migrations", "authentication", "storage", "email", "queue", "search", "realtime", "kv", "logger", "multi-tenancy", "openapi", "mcp", "deployment"]
+}

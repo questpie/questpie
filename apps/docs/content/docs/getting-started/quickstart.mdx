@@ -1,0 +1,164 @@
+---
+title: First App
+description: Build a working CRUD API with a server route in 5 minutes.
+---
+
+Build a working API with a collection, a server route, and an HTTP handler. This takes about 5 minutes.
+
+## 1. Scaffold the project
+
+```bash
+bunx create-questpie my-app
+cd my-app
+bun install
+```
+
+This generates a project with the file-convention structure, a configured `questpie.config.ts`, and a working dev setup. See [Project Structure](/docs/getting-started/project-structure) for details on every directory.
+
+## 2. Define a collection
+
+```ts title="src/questpie/server/collections/tasks.ts"
+import { collection } from "#questpie/factories";
+
+export default collection("tasks").fields(({ f }) => ({
+	title: f.text(255).required(),
+	description: f.textarea(),
+	priority: f
+		.select([
+			{ value: "low", label: "Low" },
+			{ value: "medium", label: "Medium" },
+			{ value: "high", label: "High" },
+		])
+		.required()
+		.default("medium"),
+	dueDate: f.date(),
+	completed: f.boolean().default(false).required(),
+}));
+```
+
+This defines:
+
+- A `tasks` database table with 5 columns
+- CRUD API endpoints at `/:collection` (e.g., `/tasks`)
+- Zod validation for create/update
+- Type-safe query operators for `where`, `orderBy`
+
+## 3. Add a server route
+
+```ts title="src/questpie/server/routes/get-overdue-tasks.ts"
+import { route } from "questpie/services";
+import z from "zod";
+
+export default route()
+	.post()
+	.schema(z.object({}))
+	.handler(async ({ collections }) => {
+		return await collections.tasks.find({
+			where: {
+				completed: false,
+				dueDate: { lt: new Date() },
+			},
+			orderBy: { dueDate: "asc" },
+		});
+	});
+```
+
+Routes are typed server-side logic exposed as endpoints. The `collections` object is injected through context — fully typed from your schema.
+
+## 4. Run codegen
+
+```bash
+bunx questpie generate
+```
+
+This discovers your files and generates:
+
+- `src/questpie/server/.generated/index.ts` — app instance with typed collections and routes
+- `AppConfig` type for the client SDK (includes collections, globals, and routes)
+- `AppContext` module augmentation
+
+## 5. Push to database
+
+```bash
+bunx questpie push
+```
+
+## 6. Wire up the HTTP handler
+
+For TanStack Start:
+
+```ts title="src/routes/api/$.ts"
+import { createAPIFileRoute } from "@tanstack/react-start/api";
+import { createFetchHandler } from "questpie/http";
+import { app } from "#questpie";
+
+const handler = createFetchHandler(app, { basePath: "/api" });
+
+export const Route = createAPIFileRoute("/api/$")({
+	GET: ({ request }) => handler(request),
+	POST: ({ request }) => handler(request),
+	PATCH: ({ request }) => handler(request),
+	DELETE: ({ request }) => handler(request),
+});
+```
+
+## 7. Test it
+
+```bash
+# List tasks
+curl http://localhost:3000/api/tasks
+
+# Create a task
+curl -X POST http://localhost:3000/api/tasks \
+  -H "Content-Type: application/json" \
+  -d '{"title": "Write docs", "priority": "high", "dueDate": "2025-03-01"}'
+
+# Call a route
+curl -X POST http://localhost:3000/api/get-overdue-tasks \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+## 8. Use the typed client
+
+```ts title="src/lib/client.ts"
+import { createClient } from "questpie/client";
+import type { AppConfig } from "#questpie";
+
+export const client = createClient<AppConfig>({
+	baseURL: "http://localhost:3000",
+	basePath: "/api",
+});
+```
+
+```ts title="src/routes/index.tsx"
+// Fully typed — autocomplete on collection names, fields, operators
+const tasks = await client.collections.tasks.find({
+	where: { completed: false },
+	orderBy: { priority: "desc" },
+});
+
+// Call routes
+const overdue = await client.routes.getOverdueTasks({});
+```
+
+## Adding the Admin Panel
+
+Want a visual interface? Add `@questpie/admin` and the admin module:
+
+```bash
+bun add @questpie/admin
+```
+
+```ts title="src/questpie/server/modules.ts"
+import { adminModule } from "@questpie/admin/modules/admin";
+export default [adminModule] as const;
+```
+
+Run `bunx questpie generate` again, and navigate to `/admin` — your tasks collection is already there with a list view and form, generated from the same field definitions.
+
+## What's Next
+
+- [Project Structure](/docs/getting-started/project-structure) — File convention layout and discovery rules
+- [Collections](/docs/collections) — Builder chain and server-side methods
+- [Fields](/docs/collections/fields) — All field types and options

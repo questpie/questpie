@@ -1,0 +1,4 @@
+{
+	"title": "Server",
+	"pages": ["index", "routes", "raw-routes", "jobs", "services", "emails", "seeds", "workflows"]
+}

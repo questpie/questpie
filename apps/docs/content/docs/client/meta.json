@@ -1,0 +1,11 @@
+{
+	"title": "Client SDK",
+	"pages": [
+		"index",
+		"querying",
+		"tanstack-query",
+		"realtime",
+		"type-inference",
+		"adapters"
+	]
+}

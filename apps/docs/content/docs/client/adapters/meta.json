@@ -1,0 +1,4 @@
+{
+	"title": "HTTP Adapters",
+	"pages": ["index", "hono", "elysia", "nextjs"]
+}

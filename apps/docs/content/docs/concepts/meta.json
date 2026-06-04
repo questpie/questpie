@@ -1,0 +1,12 @@
+{
+	"title": "Concepts",
+	"pages": [
+		"index",
+		"how-it-works",
+		"single-source-of-truth",
+		"file-convention",
+		"codegen",
+		"modules-and-plugins",
+		"plugins"
+	]
+}

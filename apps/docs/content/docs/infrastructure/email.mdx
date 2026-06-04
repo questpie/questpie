@@ -1,0 +1,125 @@
+---
+title: Email
+description: Transactional email with Resend, Plunk, SMTP, console adapter, and email templates.
+---
+
+QUESTPIE supports sending transactional emails with typed templates.
+
+## Configuration
+
+```ts title="questpie.config.ts"
+import { runtimeConfig } from "questpie/app";
+import { ConsoleAdapter } from "questpie/adapters/console";
+import { ResendAdapter } from "questpie/adapters/resend";
+
+export default runtimeConfig({
+	email: {
+		adapter:
+			process.env.NODE_ENV === "development"
+				? new ConsoleAdapter({ logHtml: false })
+				: new ResendAdapter({
+						apiKey: process.env.RESEND_API_KEY!,
+					}),
+		defaults: {
+			from: "Acme <noreply@example.com>",
+		},
+	},
+});
+```
+
+Use `SmtpAdapter` when you need SMTP:
+
+```ts
+import { SmtpAdapter } from "questpie/adapters/smtp";
+
+new SmtpAdapter({
+	transport: {
+		host: process.env.SMTP_HOST,
+		port: parseInt(process.env.SMTP_PORT || "587"),
+		secure: true,
+	},
+});
+```
+
+Use `PlunkAdapter` for Plunk:
+
+```ts
+import { PlunkAdapter } from "questpie/adapters/plunk";
+
+new PlunkAdapter({
+	apiKey: process.env.PLUNK_SECRET_KEY!,
+});
+```
+
+`ResendAdapter` also supports Resend-compatible APIs:
+
+```ts
+new ResendAdapter({
+	apiKey: process.env.EMAIL_API_KEY!,
+	baseUrl: "https://api.aisend.app/v1",
+});
+```
+
+On Cloudflare Workers, use an HTTP-based email adapter such as `ResendAdapter` or `PlunkAdapter`. `SmtpAdapter` requires SMTP/TCP access and is rejected by the Cloudflare adapter compatibility check.
+
+## Email Templates
+
+Define templates in `emails/`:
+
+```ts title="emails/appointment-confirmation.ts"
+import { email } from "questpie/services";
+import z from "zod";
+
+export default email({
+	name: "appointmentConfirmation",
+	schema: z.object({
+		customerName: z.string(),
+		barberName: z.string(),
+		serviceName: z.string(),
+		scheduledAt: z.string(),
+	}),
+	handler: ({ input }) => ({
+		subject: "Appointment Confirmed",
+		html: `
+      <h1>Hi ${input.customerName}!</h1>
+      <p>Your appointment has been confirmed.</p>
+      <p><strong>Barber:</strong> ${input.barberName}</p>
+      <p><strong>Service:</strong> ${input.serviceName}</p>
+      <p><strong>When:</strong> ${input.scheduledAt}</p>
+    `,
+	}),
+});
+```
+
+## Sending Emails
+
+From jobs, hooks, or routes via the `email` context:
+
+```ts
+handler: async ({ email }) => {
+	await email.sendTemplate({
+		template: "appointmentConfirmation",
+		input: {
+			customerName: "John",
+			barberName: "Mike",
+			serviceName: "Haircut",
+			scheduledAt: "2025-03-15 10:00",
+		},
+		to: "john@example.com",
+	});
+};
+```
+
+## Adapters
+
+| Adapter          | Description                                    |
+| ---------------- | ---------------------------------------------- |
+| `ResendAdapter`  | Send through Resend or a Resend-compatible API |
+| `PlunkAdapter`   | Send through Plunk's transactional API         |
+| `SmtpAdapter`    | Send through SMTP                              |
+| `ConsoleAdapter` | Log to console in development                  |
+
+## Related Pages
+
+- [Jobs](/docs/server/jobs) — Background email sending
+- [Hooks](/docs/collections/hooks) — Trigger emails from hooks

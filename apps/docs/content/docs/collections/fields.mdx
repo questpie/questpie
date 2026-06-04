@@ -1,0 +1,261 @@
+---
+title: Fields
+description: Fields are the single source of truth — they define database columns, API validation, query operators, and UI rendering.
+---
+
+Fields are the foundation of QUESTPIE. Each field definition drives:
+
+- **Database column** — Drizzle column type, nullable, default
+- **API validation** — Zod schema for create/update
+- **Query operators** — Type-safe `where` clause operators
+- **Client types** — End-to-end TypeScript inference
+- **Admin UI** — Form widget, list column, filter (when admin is installed)
+
+## Defining Fields
+
+Fields are defined inside `.fields()` using the `f` field builder:
+
+```ts title="collections/posts.ts"
+import { collection } from "#questpie/factories";
+
+export default collection("posts").fields(({ f }) => ({
+	title: f.text(255).required(),
+	body: f.textarea().localized(),
+	cover: f.upload({ to: "assets", mimeTypes: ["image/*"] }),
+	status: f.select([
+		{ value: "draft", label: "Draft" },
+		{ value: "published", label: "Published" },
+	]),
+	publishedAt: f.date(),
+}));
+```
+
+## Field Types
+
+### Text Fields
+
+| Field          | DB Type            | Use case                              |
+| -------------- | ------------------ | ------------------------------------- |
+| `f.text()`     | `varchar` / `text` | Short strings, titles, slugs          |
+| `f.textarea()` | `text`             | Long text, descriptions, rich content |
+| `f.email()`    | `varchar`          | Email addresses (validated)           |
+| `f.url()`      | `varchar`          | URLs (validated)                      |
+
+```ts
+name: f.text(255).required(),
+bio: f.textarea().localized(),
+content: f.textarea(),
+email: f.email().required(),
+website: f.url(),
+```
+
+### Numeric Fields
+
+| Field        | DB Type               | Use case                   |
+| ------------ | --------------------- | -------------------------- |
+| `f.number()` | `integer` / `numeric` | Counts, prices, quantities |
+
+```ts
+duration: f.number().required().label("Duration (minutes)"),
+price: f.number().required().label("Price (cents)"),
+```
+
+### Boolean
+
+```ts
+isActive: f.boolean().default(true).required(),
+```
+
+### Date/Time Fields
+
+| Field          | DB Type     | Use case       |
+| -------------- | ----------- | -------------- |
+| `f.date()`     | `date`      | Calendar dates |
+| `f.time()`     | `time`      | Time of day    |
+| `f.datetime()` | `timestamp` | Date + time    |
+
+```ts
+publishedAt: f.date(),
+startTime: f.time().label("Start"),
+scheduledAt: f.datetime().required(),
+```
+
+### Select
+
+Single value from a predefined list:
+
+```ts
+// Basic options
+status: f.select([
+    { value: "draft", label: "Draft" },
+    { value: "published", label: "Published" },
+    { value: "archived", label: "Archived" },
+]).required().default("draft"),
+
+// Options with labels
+status: f.select([
+    { value: "pending", label: { en: "Pending", sk: "Čakajúce" } },
+    { value: "confirmed", label: { en: "Confirmed", sk: "Potvrdené" } },
+    { value: "completed", label: { en: "Completed", sk: "Dokončené" } },
+  ]).required().default("pending"),
+```
+
+### Relation
+
+References to other collections:
+
+```ts
+author: f.relation("users"),
+barber: f.relation("barbers").required(),
+```
+
+See [Relations](/docs/collections/relations) for `hasMany`, `through`, and other options.
+
+### Upload
+
+File uploads linked to a storage collection:
+
+```ts
+avatar: f.upload({
+  to: "assets",
+  mimeTypes: ["image/*"],
+  maxSize: 5_000_000,  // 5MB
+}),
+```
+
+### Object
+
+Nested structured data stored as JSON:
+
+```ts
+workingHours: f.object({
+  monday: f.object({
+    isOpen: f.boolean().default(true),
+    start: f.time(),
+    end: f.time(),
+  }),
+  tuesday: f.object({
+    isOpen: f.boolean().default(true),
+    start: f.time(),
+    end: f.time(),
+  }),
+  // ...
+}).label("Working Hours"),
+```
+
+You can use helper functions to avoid repetition:
+
+```ts title="collections/barbers.ts"
+.fields(({ f }) => {
+  const daySchedule = {
+    isOpen: f.boolean().default(true),
+    start: f.time(),
+    end: f.time(),
+  };
+
+  return {
+    workingHours: f.object({
+      monday: f.object(daySchedule),
+      tuesday: f.object(daySchedule),
+      // ...
+    }),
+  };
+})
+```
+
+### Array
+
+Repeatable items:
+
+```ts
+// Array of primitives
+tags: f.text().array(),
+
+// Array of objects
+socialLinks: f.object({
+  platform: f.select([
+    { value: "instagram", label: "Instagram" },
+    { value: "facebook", label: "Facebook" },
+    { value: "twitter", label: "Twitter" },
+    { value: "linkedin", label: "LinkedIn" },
+  ]),
+  url: f.url(),
+}).array().maxItems(5),
+```
+
+### Blocks
+
+Content blocks for page builders. See [Blocks](/docs/admin/blocks).
+
+```ts
+content: f.blocks().localized(),
+```
+
+### JSON
+
+Raw JSON data:
+
+```ts
+metadata: f.json(),
+```
+
+### Virtual
+
+SQL-computed fields (read-only, not stored):
+
+```ts
+import { sql } from "questpie/builders";
+displayTitle: f.text().virtual(sql<string>`(
+  SELECT COALESCE(
+    (SELECT name FROM "user" WHERE id = appointments.customer),
+    'Customer'
+  ) || ' - ' ||
+  TO_CHAR(appointments."scheduledAt", 'YYYY-MM-DD HH24:MI')
+)`),
+```
+
+Virtual fields appear in queries but cannot be written to.
+
+## Common Chain Methods
+
+Every field supports these chain methods:
+
+| Method               | Description                                                             |
+| -------------------- | ----------------------------------------------------------------------- |
+| `.required()`        | Mark as NOT NULL                                                        |
+| `.default(value)`    | Set default value (makes input optional)                                |
+| `.label(text)`       | Display label (string or i18n object)                                   |
+| `.description(text)` | Help text (string or i18n object)                                       |
+| `.localized()`       | Store per-locale values in i18n table                                   |
+| `.inputOptional()`   | Always optional in input, even if NOT NULL (e.g., auto-generated slugs) |
+| `.virtual(expr?)`    | No DB column; optional SQL expression for computed fields               |
+| `.array()`           | Wrap as JSONB array                                                     |
+
+See [Field API Reference](/docs/reference/field-api) for the full list.
+
+### Labels and Descriptions
+
+Labels and descriptions support i18n objects:
+
+```ts
+name: f.text().label({ en: "Full Name", sk: "Celé meno" }).description({
+  en: "The barber's full display name",
+  sk: "Celé zobrazovacie meno holiča",
+}),
+```
+
+### Admin Metadata
+
+The `meta.admin` object controls how the field renders in the admin panel:
+
+```ts
+isActive: f.boolean().default(true),
+// Admin rendering hints are configured via the admin module, not on field definitions
+```
+
+## Related Pages
+
+- [Collections](/docs/collections) — Builder chain and CRUD methods
+- [Relations](/docs/collections/relations) — Relation field deep dive
+- [Localized Fields](/docs/collections/localization) — Multi-language support
+- [Validation](/docs/collections/validation) — Field-level validation

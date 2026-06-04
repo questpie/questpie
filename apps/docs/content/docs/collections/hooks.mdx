@@ -1,0 +1,183 @@
+---
+title: Hooks
+description: Lifecycle hooks for collections — beforeValidate, beforeChange, afterChange, beforeDelete, afterDelete.
+---
+
+Hooks let you run logic at specific points in the collection lifecycle. They receive the full typed `AppContext` through context injection — no imports needed.
+
+## Hook Lifecycle
+
+```mermaid
+flowchart TD
+  Request["API Request"]
+  BeforeValidate["beforeValidate<br/>modify or validate data before schema validation"]
+  Schema["Schema Validation<br/>Zod validation from field definitions"]
+  BeforeChange["beforeChange<br/>transform data before database write"]
+  Write["Database Write<br/>insert or update"]
+  AfterChange["afterChange<br/>side effects after successful write"]
+
+  Request --> BeforeValidate --> Schema --> BeforeChange --> Write --> AfterChange
+```
+
+For deletes:
+
+```mermaid
+flowchart LR
+  BeforeDelete["beforeDelete"]
+  Delete["Database Delete"]
+  AfterDelete["afterDelete"]
+
+  BeforeDelete --> Delete --> AfterDelete
+```
+
+## Defining Hooks
+
+```ts title="collections/appointments.ts"
+.hooks({
+  beforeValidate: async (ctx) => {
+    // Modify data before validation
+    if (ctx.data.name && !ctx.data.slug) {
+      ctx.data.slug = slugify(ctx.data.name);
+    }
+  },
+
+  beforeChange: async ({ data, operation, original }) => {
+    if (operation === "create") {
+      // Set defaults on create
+    }
+    if (operation === "update" && original) {
+      // Compare with original data
+    }
+  },
+
+  afterChange: async ({ data, operation, original, queue }) => {
+    if (operation === "create") {
+      await queue.sendAppointmentConfirmation.publish({
+        appointmentId: data.id,
+        customerId: data.customer,
+      });
+    }
+
+    if (operation === "update" && original) {
+      if (data.status === "cancelled") {
+        await queue.sendAppointmentCancellation.publish({
+          appointmentId: data.id,
+          customerId: data.customer,
+        });
+      }
+    }
+  },
+
+  beforeDelete: async ({ id }) => {
+    // Prevent deletion or clean up
+  },
+
+  afterDelete: async ({ id }) => {
+    // Clean up related data
+  },
+})
+```
+
+## Hook Context
+
+Every hook receives the full `AppContext` via destructuring:
+
+| Property      | Available in                       | Description                      |
+| ------------- | ---------------------------------- | -------------------------------- |
+| `data`        | before/afterChange, beforeValidate | The record data being written    |
+| `operation`   | before/afterChange                 | `"create"` or `"update"`         |
+| `original`    | before/afterChange (update only)   | Previous record state            |
+| `id`          | before/afterDelete                 | ID of record being deleted       |
+| `collections` | All                                | Typed collection API             |
+| `globals`     | All                                | Typed globals API                |
+| `queue`       | All                                | Queue client for publishing jobs |
+| `email`       | All                                | Email service                    |
+| `db`          | All                                | Database instance                |
+| `session`     | All                                | Current auth session             |
+
+Plus any custom services defined in `services/`.
+
+## Context-First Pattern
+
+Hooks use context-first injection. All dependencies are available through destructuring — no need to import the app instance:
+
+```ts title="collections/blog-posts.ts"
+.hooks({
+  beforeChange: async ({ data, services }) => {
+    // `services.blog` is a custom service from services/blog.ts
+    const { blog } = services;
+    data.slug = blog.generateSlug(data.title);
+    data.readingTime = blog.computeReadingTime(data.content);
+    data.excerpt = blog.extractExcerpt(data.content);
+  },
+
+  afterChange: async ({ data, operation, original, queue }) => {
+    // Publish job when status transitions to "published"
+    if (
+      operation === "update" &&
+      original?.status !== "published" &&
+      data.status === "published"
+    ) {
+      await queue.notifyBlogSubscribers.publish({
+        postId: data.id,
+        title: data.title,
+        excerpt: data.excerpt,
+        slug: data.slug,
+      });
+    }
+  },
+})
+```
+
+## Real-World Examples
+
+### Auto-generate slug
+
+```ts
+.hooks({
+  beforeValidate: async (ctx) => {
+    if (ctx.data.name && !ctx.data.slug) {
+      ctx.data.slug = slugify(ctx.data.name);
+    }
+  },
+})
+```
+
+### Send email on status change
+
+```ts
+.hooks({
+  afterChange: async ({ data, operation, original, queue }) => {
+    if (operation === "create") {
+      await queue.sendAppointmentConfirmation.publish({
+        appointmentId: data.id,
+        customerId: data.customer,
+      });
+    }
+    if (operation === "update" && data.status === "cancelled") {
+      await queue.sendAppointmentCancellation.publish({
+        appointmentId: data.id,
+        customerId: data.customer,
+      });
+    }
+  },
+})
+```
+
+### Compute derived fields
+
+```ts
+.hooks({
+  beforeChange: async ({ data, services }) => {
+    data.readingTime = services.blog.computeReadingTime(data.content);
+    data.excerpt = services.blog.extractExcerpt(data.content);
+  },
+})
+```
+
+## Related Pages
+
+- [Validation](/docs/collections/validation) — Field-level validation
+- [Access Control](/docs/collections/access-control) — Operation permissions
+- [Jobs](/docs/server/jobs) — Background tasks triggered by hooks
+- [Typed Routes](/docs/server/routes) — Server-side business logic

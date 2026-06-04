@@ -1,0 +1,332 @@
+---
+title: Deployment
+description: Docker deployment, environment variables, and production hardening.
+---
+
+## Docker
+
+QUESTPIE apps can be containerized with Docker:
+
+```dockerfile title="Dockerfile"
+FROM oven/bun:1 AS base
+WORKDIR /app
+
+FROM base AS build
+COPY package.json bun.lockb ./
+RUN bun install --frozen-lockfile
+COPY . .
+RUN bunx questpie generate
+RUN bun run build
+
+FROM base AS production
+COPY --from=build /app/.output /app/.output
+EXPOSE 3000
+CMD ["bun", "run", ".output/server/index.mjs"]
+```
+
+## Environment Variables
+
+| Variable                            | Required | Description                  |
+| ----------------------------------- | -------- | ---------------------------- |
+| `DATABASE_URL`                      | Yes      | PostgreSQL connection string |
+| `APP_URL`                           | Yes      | Public URL                   |
+| `APP_SECRET` / `BETTER_AUTH_SECRET` | Yes      | Session secret               |
+| `SMTP_HOST`                         | No       | Email SMTP host              |
+| `SMTP_PORT`                         | No       | Email SMTP port              |
+| `REDIS_URL`                         | No       | Redis URL (for KV, realtime) |
+| `S3_BUCKET`                         | No       | S3 bucket name               |
+| `S3_REGION`                         | No       | S3 region                    |
+| `S3_ACCESS_KEY`                     | No       | S3 access key                |
+| `S3_SECRET_KEY`                     | No       | S3 secret key                |
+
+## Cloudflare Workers
+
+Deploy QUESTPIE on Workers by wiring Cloudflare bindings into explicit adapters: Hyperdrive for PostgreSQL connections, Files SDK S3 storage for R2, Workers KV, Cloudflare Queues, and Durable Object realtime. Configure Wrangler with the required bindings and `compatibility_flags = ["nodejs_compat"]` for the database driver.
+
+### Runtime topology
+
+A Cloudflare deployment is one Worker module with multiple platform entrypoints:
+
+| Entrypoint / binding | QUESTPIE role                                      |
+| -------------------- | -------------------------------------------------- |
+| `fetch()`            | HTTP API, admin routes, uploads, realtime endpoint |
+| `queue()`            | Cloudflare Queues push consumer for jobs           |
+| `scheduled()`        | Cron Trigger dispatcher for recurring jobs         |
+| Durable Object class | Realtime fanout hub                                |
+| Hyperdrive binding   | Connection layer to your existing PostgreSQL       |
+| R2 via S3 API        | Upload/media storage through Files SDK S3 adapter  |
+| Workers KV binding   | KV/cache adapter                                   |
+
+`createCloudflareWorkerHandlers(app)` exports `fetch`, `queue`, and `scheduled` from the same Worker object. You do not deploy a separate long-running queue worker and you do not call `app.queue.listen()` on Cloudflare. Cloudflare Queues invokes the exported `queue()` handler, and Cron Triggers invoke the exported `scheduled()` handler.
+
+The common deployment shapes are:
+
+| Shape                        | Use when                                                         | Routing model                                                                     |
+| ---------------------------- | ---------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| API/server only              | QUESTPIE is only backend/admin/API                               | Deploy the Worker and mount QUESTPIE under `/api` or on an API subdomain          |
+| Static web + QUESTPIE Worker | Frontend is a static SPA/site                                    | Deploy static web separately, point its client SDK at the Worker `basePath`       |
+| Full app Worker              | Your framework can run its web renderer on Workers               | Route non-QUESTPIE requests to the app renderer and QUESTPIE requests to `/api/*` |
+| Hybrid                       | Web runs on another platform, QUESTPIE infrastructure on Workers | Keep `APP_URL` public, use CORS/session settings appropriate for your domain      |
+
+For a server-only QUESTPIE deployment, the Worker example below is enough. For a web app, keep QUESTPIE mounted at a stable API base path such as `/api` and make the frontend client use the same `basePath`.
+
+When one Worker also serves the web app, pass a `fallback` handler. QUESTPIE handles matching `/api/*` requests and delegates everything else to your renderer:
+
+```ts
+const worker = createCloudflareWorkerHandlers(app, {
+	basePath: "/api",
+	fallback: (request, context) => renderWebApp(request, context),
+});
+```
+
+Keep `questpie.config.ts` importable by Bun for `questpie generate` and migrations. Do not import `cloudflare:workers` at the top level. Import it lazily inside Cloudflare-only factory functions instead.
+
+Use `process.env` for plain text vars and secrets. Use lazy `cloudflare:workers` providers for binding objects such as Hyperdrive, KV, Queues, and Durable Objects so Bun CLI commands can still import `questpie.config.ts`.
+
+```ts title="questpie.config.ts"
+import postgres from "postgres";
+import { drizzle } from "drizzle-orm/postgres-js";
+import { runtimeConfig } from "questpie/app";
+import {
+	cloudflareKVAdapter,
+	cloudflareQueuesAdapter,
+	cloudflareRealtimeAdapter,
+	type CloudflareDurableObjectNamespace,
+	type CloudflareKVNamespace,
+	type CloudflareQueueBinding,
+} from "questpie/adapters/cloudflare";
+import { s3 } from "files-sdk/s3";
+
+type CloudflareBindings = {
+	HYPERDRIVE: { connectionString: string };
+	QUESTPIE_KV: CloudflareKVNamespace;
+	QUESTPIE_QUEUE: CloudflareQueueBinding;
+	QUESTPIE_REALTIME: CloudflareDurableObjectNamespace;
+};
+
+async function getCloudflareEnv(): Promise<CloudflareBindings> {
+	const { env } = await import("cloudflare:workers");
+	return env as CloudflareBindings;
+}
+
+async function getDatabaseConnectionString(): Promise<string> {
+	const workerEnv = await getCloudflareEnv().catch(() => null);
+	if (workerEnv) return workerEnv.HYPERDRIVE.connectionString;
+
+	const cliUrl = process.env.QUESTPIE_CLI_DATABASE_URL;
+	if (!cliUrl) {
+		throw new Error(
+			"Set QUESTPIE_CLI_DATABASE_URL when running QUESTPIE CLI commands outside Cloudflare Workers.",
+		);
+	}
+	return cliUrl;
+}
+
+export default runtimeConfig({
+	app: { url: process.env.APP_URL! },
+	secret: process.env.AUTH_SECRET!,
+	db: {
+		create: async ({ schema }) => {
+			const connectionString = await getDatabaseConnectionString();
+			const sql = postgres(connectionString, {
+				max: 5,
+				fetch_types: false,
+				prepare: true,
+			});
+
+			return {
+				drizzle: drizzle(sql, { schema }),
+				close: () => sql.end(),
+			};
+		},
+	},
+	storage: {
+		adapter: s3({
+			credentials: {
+				accessKeyId: process.env.R2_ACCESS_KEY_ID!,
+				secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
+			},
+			bucket: process.env.R2_BUCKET!,
+			region: "auto",
+			endpoint: `https://${process.env.CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+			forcePathStyle: true,
+		}),
+		basePath: "/api",
+	},
+	kv: {
+		adapter: cloudflareKVAdapter({
+			namespace: async () => (await getCloudflareEnv()).QUESTPIE_KV,
+		}),
+		defaultTtl: 3600,
+	},
+	queue: {
+		adapter: cloudflareQueuesAdapter({
+			queue: async () => (await getCloudflareEnv()).QUESTPIE_QUEUE,
+		}),
+	},
+	realtime: {
+		adapter: cloudflareRealtimeAdapter({
+			namespace: async () => (await getCloudflareEnv()).QUESTPIE_REALTIME,
+		}),
+	},
+});
+```
+
+Run `bunx wrangler types` after changing `wrangler.toml`. The example above uses the minimal QUESTPIE binding types directly; generated Wrangler types can be used instead in application code.
+
+Use the Cloudflare adapter entrypoint for the Worker. This is where QUESTPIE validates that the app has explicit Cloudflare-compatible database, storage, queue, KV, and realtime adapters. If one is missing, the Worker fails immediately instead of falling back to a Node/Bun default.
+
+```ts title="worker.ts"
+import { app } from "#questpie";
+import {
+	createCloudflareRealtimeDurableObjectHandler,
+	createCloudflareWorkerHandlers,
+} from "questpie/adapters/cloudflare";
+
+const worker = createCloudflareWorkerHandlers(app, { basePath: "/api" });
+const realtimeDurableObject = createCloudflareRealtimeDurableObjectHandler(
+	app,
+	{
+		basePath: "/api",
+	},
+);
+
+export default worker;
+
+export class QuestpieRealtimeDurableObject {
+	fetch(request: Request) {
+		return realtimeDurableObject(request);
+	}
+}
+```
+
+```toml title="wrangler.toml"
+name = "my-questpie-app"
+main = "src/worker.ts"
+compatibility_date = "2026-05-06"
+compatibility_flags = ["nodejs_compat"]
+
+[[hyperdrive]]
+binding = "HYPERDRIVE"
+id = "..."
+
+[[queues.producers]]
+binding = "QUESTPIE_QUEUE"
+queue = "questpie-jobs"
+
+[[queues.consumers]]
+queue = "questpie-jobs"
+
+[[kv_namespaces]]
+binding = "QUESTPIE_KV"
+id = "..."
+
+[[durable_objects.bindings]]
+name = "QUESTPIE_REALTIME"
+class_name = "QuestpieRealtimeDurableObject"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["QuestpieRealtimeDurableObject"]
+
+[triggers]
+crons = ["0 8 * * *"]
+
+[vars]
+APP_URL = "https://my-questpie-app.example.com"
+CLOUDFLARE_ACCOUNT_ID = "..."
+R2_BUCKET = "my-questpie-assets"
+```
+
+For R2 storage, configure the Files SDK S3 adapter with the R2 endpoint and credentials. For KV, configure `cloudflareKVAdapter` with a Workers KV namespace binding.
+
+For jobs, configure `cloudflareQueuesAdapter` with a Queues producer/consumer binding. For recurring jobs, add matching Cron Triggers and export `scheduled()` through `createCloudflareWorkerHandlers`. Do not configure `pgBossAdapter`, `pgNotifyAdapter`, or Redis Streams on Workers.
+
+Set secrets with Wrangler, not in `wrangler.toml`:
+
+```bash
+bunx wrangler secret put AUTH_SECRET
+bunx wrangler secret put R2_ACCESS_KEY_ID
+bunx wrangler secret put R2_SECRET_ACCESS_KEY
+```
+
+Migrations run outside the Worker against the same PostgreSQL database through a direct connection string:
+
+```bash
+QUESTPIE_CLI_DATABASE_URL="postgres://user:pass@host:5432/db" bunx questpie migrate:up
+```
+
+### Cloudflare deployment flow
+
+Run codegen and build before deploying, run migrations against the origin PostgreSQL database, then deploy the Worker:
+
+```bash
+bunx questpie generate
+bun run build
+QUESTPIE_CLI_DATABASE_URL="postgres://user:pass@host:5432/db" bunx questpie migrate:up
+bunx wrangler deploy
+```
+
+For CI, keep the migration connection string as a CI secret. Hyperdrive's runtime connection string is available only inside Workers.
+
+### Cloudflare best practices
+
+- Use `db.create()` with Hyperdrive for Worker runtime database access.
+- Keep `questpie.config.ts` importable by Bun; lazy-import `cloudflare:workers` only inside provider functions.
+- Use `questpie/adapters/cloudflare` for Worker deployment. Do not add a `target` flag to `runtimeConfig`.
+- Use Cloudflare Queues for jobs and Cron Triggers for recurring jobs.
+- Keep `job.options.cron` exactly equal to a `wrangler.toml` cron trigger when the job should run on Cloudflare.
+- For `@questpie/workflows`, add a Cron Trigger for `questpie-wf-maintenance`'s `*/5 * * * *` schedule. Workflow-level `cron` definitions are evaluated by that maintenance job.
+- Use Durable Objects for realtime. Do not configure `pgNotifyAdapter` or Redis Streams on Workers.
+- Use R2 through the Files SDK S3 adapter.
+- Use an HTTP email adapter such as Resend or Plunk. SMTP is not supported on Workers.
+- Store secrets with `wrangler secret put`; keep only non-secret vars in `wrangler.toml`.
+- Keep the Durable Object class name stable after deployment; changing it requires a new Durable Object migration.
+- Do not configure local filesystem storage, `pgBossAdapter`, or `app.queue.listen()` on Workers.
+
+## Docker / Node Checklist
+
+- [ ] Set strong `APP_SECRET` (min 32 characters)
+- [ ] Use production `DATABASE_URL` with SSL
+- [ ] Run `questpie migrate:up` before deploying
+- [ ] Configure SMTP for transactional email
+- [ ] Set `APP_URL` to your public domain
+- [ ] Enable HTTPS
+- [ ] Configure S3 or persistent storage for uploads
+- [ ] Use `redisStreamsAdapter` if running multiple instances
+- [ ] Set up health checks
+
+## Cloudflare Checklist
+
+- [ ] Configure Hyperdrive for the origin PostgreSQL database
+- [ ] Set `QUESTPIE_CLI_DATABASE_URL` in CI for migrations
+- [ ] Configure R2 credentials for the Files SDK S3 adapter
+- [ ] Configure Workers KV, Cloudflare Queues, and Durable Object bindings
+- [ ] Add Durable Object migrations in `wrangler.toml`
+- [ ] Add Cron Triggers for every recurring QUESTPIE job
+- [ ] Use `createCloudflareWorkerHandlers(app, { basePath: "/api" })`
+- [ ] Use `createCloudflareRealtimeDurableObjectHandler(app, { basePath: "/api" })`
+- [ ] Set `AUTH_SECRET`, R2 keys, and other secrets with `wrangler secret put`
+- [ ] Confirm the frontend client points to the same `basePath`
+
+## Health Check
+
+Add a health check endpoint:
+
+```ts title="routes/health.ts"
+import { route } from "questpie/services";
+export default route({
+	method: "GET",
+	handler: async ({ db }) => {
+		await db.execute(sql`SELECT 1`);
+		return new Response(JSON.stringify({ status: "ok" }), {
+			headers: { "Content-Type": "application/json" },
+		});
+	},
+});
+```
+
+## Related Pages
+
+- [Database](/docs/infrastructure/database) — PostgreSQL setup
+- [Migrations](/docs/infrastructure/migrations) — Schema management

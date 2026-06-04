@@ -1,0 +1,87 @@
+---
+title: Elysia Adapter
+description: Serve QUESTPIE APIs with Elysia.
+---
+
+The Elysia adapter connects QUESTPIE to the [Elysia](https://elysiajs.com) framework, optimized for Bun.
+
+## Install
+
+```bash
+bun add @questpie/elysia elysia
+```
+
+## Server Setup
+
+Mount QUESTPIE as a catch-all route handler:
+
+```ts title="src/index.ts"
+import { Elysia } from "elysia";
+import { questpieElysia } from "@questpie/elysia/server";
+import { app } from "#questpie";
+
+const server = new Elysia()
+	.use(questpieElysia(app, { basePath: "/api" }))
+	.listen(3000);
+
+console.log(`Running at ${server.server?.url}`);
+```
+
+This mounts all QUESTPIE routes under `/api/`:
+
+- Collections: `GET /api/collections/:name`, `POST /api/collections/:name`, etc.
+- Globals: `GET /api/globals/:name`, `PUT /api/globals/:name`
+- Auth: `POST /api/auth/*`
+- Custom routes: `GET|POST /api/:routeName`
+
+## Client Setup
+
+Create a typed client for frontend use:
+
+```ts title="src/lib/client.ts"
+import { createClientFromEden } from "@questpie/elysia/client";
+import type { App, AppConfig } from "#questpie";
+
+export const client = createClientFromEden<App, AppConfig>({
+	server: "localhost:3000",
+	basePath: "/api",
+});
+```
+
+The client is fully typed — autocompletion for collections, fields, query operators, and custom routes.
+
+## Type Inference
+
+The Elysia adapter provides end-to-end type safety:
+
+```ts
+// Typed collection queries
+const posts = await client.collections.posts.find({
+	where: { status: { equals: "published" } },
+	orderBy: { createdAt: "desc" },
+	limit: 10,
+});
+
+// Typed custom routes
+const stats = await client.routes.getDashboardStats.call({});
+```
+
+## CORS
+
+Configure CORS using Elysia's built-in plugin:
+
+```ts
+import { cors } from "@elysiajs/cors";
+
+const server = new Elysia()
+	.use(cors({ origin: "http://localhost:5173" }))
+	.all("/api/*", ({ request }) => handler(request))
+	.listen(3000);
+```
+
+## Related Pages
+
+- [Hono Adapter](/docs/client/adapters/hono) — Hono framework integration
+- [Next.js Adapter](/docs/client/adapters/nextjs) — Next.js App Router integration
+- [Type Inference](/docs/client/type-inference) — How type safety works end-to-end
+- [Querying](/docs/client/querying) — Query operators and pagination
