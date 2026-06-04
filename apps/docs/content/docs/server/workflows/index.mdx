@@ -202,9 +202,9 @@ flowchart TD
   Codegen["Codegen discovery"]
   Module["workflowsModule registration"]
   Jobs["Workflow jobs"]
-  Execute["wf-execute<br/>replay execution"]
-  Resume["wf-resume<br/>events + sleep"]
-  Maintenance["wf-maintenance<br/>cron, timeout, cleanup"]
+  Execute["wf-execute<br>replay execution"]
+  Resume["wf-resume<br>events + sleep"]
+  Maintenance["wf-maintenance<br>cron, timeout, cleanup"]
 
   Definition --> Codegen --> Module --> Jobs
   Jobs --> Execute

@@ -9,10 +9,10 @@ Registries are the mechanism that connects server-side schema to client-side ren
 
 ```mermaid
 flowchart TD
-  Server["Server<br/>f.text()"]
-  Generated["Generated schema<br/>{ type: \"text\", options: { ... } }"]
-  Registry["Admin client<br/>fieldRegistry.get(\"text\")"]
-  React["React<br/>&lt;TextFieldRenderer value={...} onChange={...} /&gt;"]
+  Server["Server<br>f.text()"]
+  Generated["Generated schema<br>{ type: \"text\", options: { ... } }"]
+  Registry["Admin client<br>fieldRegistry.get(\"text\")"]
+  React["React<br>#lt;TextFieldRenderer value={...} onChange={...} /#gt;"]
 
   Server --> Generated --> Registry --> React
 ```
@@ -64,10 +64,10 @@ Register custom renderers by placing files in the admin directory. Codegen disco
 flowchart TD
 	Admin["questpie/admin/"]
 	Fields["fields/"]
-	Color["color.tsx<br/>Custom color field renderer"]
-	Currency["currency.tsx<br/>Custom currency field renderer"]
+	Color["color.tsx<br>Custom color field renderer"]
+	Currency["currency.tsx<br>Custom currency field renderer"]
 	Views["views/"]
-	Kanban["kanban.tsx<br/>Custom kanban list view"]
+	Kanban["kanban.tsx<br>Custom kanban list view"]
 
 	Admin --> Fields
 	Fields --> Color

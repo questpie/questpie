@@ -62,11 +62,11 @@ Traditional approaches require you to define schema in multiple places:
 
 ```mermaid
 flowchart TD
-  Without["Without QUESTPIE<br/>same data defined 3+ times"]
-  Migration["Database migration<br/>INTEGER price NOT NULL"]
-  Validation["API validation<br/>z.object({ price: z.number() })"]
-  Type["TypeScript type<br/>interface Post { price: number }"]
-  Form["Form component<br/>&lt;NumberInput name=\"price\" required /&gt;"]
+  Without["Without QUESTPIE<br>same data defined 3+ times"]
+  Migration["Database migration<br>INTEGER price NOT NULL"]
+  Validation["API validation<br>z.object({ price: z.number() })"]
+  Type["TypeScript type<br>interface Post { price: number }"]
+  Form["Form component<br>#lt;NumberInput name=\"price\" required /#gt;"]
 
   Without --> Migration
   Without --> Validation
@@ -79,7 +79,7 @@ With QUESTPIE:
 ```mermaid
 flowchart LR
   Field["f.number().required().label(\"Price\")"]
-  Outputs["Database, validation, types, and UI<br/>derived automatically"]
+  Outputs["Database, validation, types, and UI<br>derived automatically"]
 
   Field --> Outputs
 ```
