@@ -12,6 +12,8 @@ const KNOWN = new Map<string, string>([
 	// h3-v2@2.0.0-beta.4 (aliased import). Clears when react-start is bumped
 	// from 1.136.x to 1.167.42+ across the monorepo (planned follow-up PR).
 	["GHSA-3vj8-jmxq-cgj5", "TODO: @tanstack/react-start bump PR"],
+	// vitest UI arbitrary file read — affects <4.1.0. Dev dependency only.
+	["GHSA-5xrq-8626-4rwp", "TODO: vitest bump to 4.1.0+"],
 ]);
 
 type Advisory = {

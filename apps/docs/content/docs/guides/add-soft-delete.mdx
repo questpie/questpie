@@ -24,10 +24,11 @@ The `deletedAt` column is indexed automatically. No migration beyond adding it i
 Soft-deleted records are excluded from `find`, `findOne`, and `count` by default:
 
 ```ts title="routes/posts.ts"
-import { route } from "questpie/routes";
+import { route } from "#questpie/factories";
 
-export default route("/posts", ({ app }) => ({
-  GET: async (ctx) => {
+export default route()
+  .path("/posts")
+  .get(async ({ app }) => {
     // Only live records
     const { docs } = await app.collections.posts.find();
 
@@ -37,8 +38,7 @@ export default route("/posts", ({ app }) => ({
     });
 
     return Response.json({ docs });
-  },
-}));
+  });
 ```
 
 ## Restoring a Record
