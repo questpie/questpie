@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { collection, global, route } from "questpie";
+import { collection, global, route, starterModule } from "questpie";
 import { z } from "zod";
 
 import { buildMockApp } from "../../questpie/test/utils/mocks/mock-app-builder.js";
@@ -135,6 +135,17 @@ const requestHeaderTool = mcpTool("custom.request-header", {
 	],
 }));
 
+const principalTool = mcpTool("custom.principal", {
+	description: "Return the authenticated principal.",
+	inputSchema: z.object({}),
+	access: ({ ctx }) => typeof ctx.session?.user?.id === "string",
+}).handler(async ({ ctx }) => ({
+	structuredContent: {
+		userId: ctx.session?.user.id,
+	},
+	content: [{ type: "text", text: ctx.session?.user.id ?? "" }],
+}));
+
 async function connect(server: McpServer) {
 	const [clientTransport, serverTransport] =
 		InMemoryTransport.createLinkedPair();
@@ -232,6 +243,71 @@ describe("@questpie/mcp server", () => {
 			);
 		} finally {
 			await close();
+		}
+	});
+
+	it("resolves Better Auth request sessions for programmatic HTTP MCP tools", async () => {
+		const authSetup = await buildMockApp(
+			{
+				modules: [starterModule],
+				auth: {
+					emailAndPassword: {
+						enabled: true,
+						requireEmailVerification: false,
+					},
+				},
+				mcpTools: {
+					principal: principalTool,
+				},
+			},
+			{
+				secret: "test-auth-secret-with-more-than-32-chars",
+			},
+		);
+
+		try {
+			await runTestDbMigrations(authSetup.app);
+			const signUpResponse = await authSetup.app.auth.api.signUpEmail({
+				body: {
+					email: "mcp-principal@example.test",
+					password: "password123",
+					name: "MCP Principal",
+				},
+				asResponse: true,
+			});
+			const signUpBody = await signUpResponse.json();
+			const sessionCookie = signUpResponse.headers
+				.get("set-cookie")
+				?.split(";")[0];
+			expect(sessionCookie).toBeTruthy();
+
+			const server = await createMcpServer(authSetup.app, {
+				transport: "http",
+				request: new Request("http://localhost/api/mcp", {
+					headers: { cookie: sessionCookie! },
+				}),
+			});
+			const { client, close } = await connect(server);
+
+			try {
+				const tools = await client.listTools();
+				expect(tools.tools.map((tool) => tool.name)).toContain(
+					"custom.principal",
+				);
+
+				const result = await client.callTool({
+					name: "custom.principal",
+					arguments: {},
+				});
+				expect(result.isError).toBeUndefined();
+				expect(result.structuredContent).toEqual({
+					userId: signUpBody.user.id,
+				});
+			} finally {
+				await close();
+			}
+		} finally {
+			await authSetup.cleanup();
 		}
 	});
 

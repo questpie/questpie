@@ -64,6 +64,7 @@ import _mig_20260519T145500_link_schedule_executions_to_run_links from "../migra
 import _mig_20260519T161500_drop_legacy_execution_infra from "../migrations/20260519T161500_drop_legacy_execution_infra";
 import _mig_20260529T001500_drop_workflow_configs from "../migrations/20260529T001500_drop_workflow_configs";
 import _mig_20260529T003000_drop_capabilities from "../migrations/20260529T003000_drop_capabilities";
+import _mig_20260604T111500_add_api_key_config_id from "../migrations/20260604T111500_add_api_key_config_id";
 
 // ── Seeds ──────────────────────────────────────────────────
 import _seed_demoCoverageData_seed from "../seeds/demo-coverage-data.seed";
@@ -481,7 +482,7 @@ export const app = await createApp(
 			gitProviderAdapters: _svc_gitProviderAdapters,
 			knowledgeResource: _svc_knowledgeResource,
 		},
-		migrations: [_mig_20260507T095449_jolly_red_phoenix, _mig_20260516T185000_auth_user_admin_columns_repair, _mig_20260517T095535_happy_orange_unicorn, _mig_20260519T135407_add_run_links_and_ai_module, _mig_20260519T142100_backfill_legacy_runs_into_run_links, _mig_20260519T145500_link_schedule_executions_to_run_links, _mig_20260519T161500_drop_legacy_execution_infra, _mig_20260529T001500_drop_workflow_configs, _mig_20260529T003000_drop_capabilities],
+		migrations: [_mig_20260507T095449_jolly_red_phoenix, _mig_20260516T185000_auth_user_admin_columns_repair, _mig_20260517T095535_happy_orange_unicorn, _mig_20260519T135407_add_run_links_and_ai_module, _mig_20260519T142100_backfill_legacy_runs_into_run_links, _mig_20260519T145500_link_schedule_executions_to_run_links, _mig_20260519T161500_drop_legacy_execution_infra, _mig_20260529T001500_drop_workflow_configs, _mig_20260529T003000_drop_capabilities, _mig_20260604T111500_add_api_key_config_id],
 		seeds: [_seed_demoCoverageData_seed, _seed_demoParentIssues_seed, _seed_demoProductData_seed, _seed_demoStressData_seed, _seed_runtimeDefaults_seed],
 		views: {
 			filesView: _view_filesView,

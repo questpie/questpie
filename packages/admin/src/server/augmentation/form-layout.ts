@@ -175,6 +175,11 @@ export interface ListViewConfig {
 	searchable?: string[];
 	/** Filterable fields */
 	filterable?: string[];
+	/**
+	 * Enable realtime invalidation for list queries.
+	 * Falls back to AdminProvider realtime config when undefined.
+	 */
+	realtime?: boolean;
 	/** Client-side grouping options for the current fetched page */
 	grouping?: {
 		/** Fields users can group by */

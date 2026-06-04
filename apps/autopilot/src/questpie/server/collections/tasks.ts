@@ -184,6 +184,7 @@ export const tasks = collection("tasks")
 	}))
 	.list(({ v, f }) =>
 		v.listView({
+			realtime: true,
 			columns: [f.title, f.status, f.priority, f.project, "updatedAt"],
 			searchable: [f.title, f.description],
 			filterable: [f.status, f.priority, f.project],

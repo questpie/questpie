@@ -61,11 +61,18 @@ function parseCapabilities(value: unknown): WorkerRuntime[] {
 	}
 }
 
-function maxConcurrentFromCapabilities(capabilities: WorkerRuntime[]): number {
+function maxConcurrentForRuntime(
+	capabilities: WorkerRuntime[],
+	runtime: string,
+): number | null {
 	if (capabilities.length === 0) return 1;
+	const matches = capabilities.filter(
+		(capability) => capability.runtime === runtime,
+	);
+	if (matches.length === 0) return null;
 	return Math.max(
 		1,
-		...capabilities.map((c) =>
+		...matches.map((c) =>
 			Number.isFinite(c.maxConcurrent) ? Number(c.maxConcurrent) : 1,
 		),
 	);
@@ -101,6 +108,28 @@ export default service()
 				limit: 1000,
 			});
 			return result.docs.length;
+		}
+
+		async function activeLeaseCountForRuntime(
+			workerId: string,
+			runtime: string,
+		): Promise<number> {
+			const result = await collections.ai_worker_leases.find({
+				where: { worker: workerId, status: "active" },
+				limit: 1000,
+			});
+			let count = 0;
+			await Promise.all(
+				result.docs.map(async (lease: Record<string, unknown>) => {
+					const runId = relationId(lease.run);
+					if (!runId) return;
+					const run = await collections.ai_runs.findOne({
+						where: { id: runId },
+					});
+					if (run?.runtime === runtime) count++;
+				}),
+			);
+			return count;
 		}
 
 		async function setWorkerStatus(workerId: string, status: AiWorkerStatus) {
@@ -199,9 +228,17 @@ export default service()
 					return null;
 
 				const capabilities = parseCapabilities(worker.capabilities);
-				const maxConcurrent = maxConcurrentFromCapabilities(capabilities);
-				const active = await activeLeaseCount(input.workerId);
-				if (active >= maxConcurrent) return null;
+				const activeByRuntime = new Map<string, number>();
+				const activeForRuntime = async (runtime: string) => {
+					const cached = activeByRuntime.get(runtime);
+					if (cached !== undefined) return cached;
+					const active = await activeLeaseCountForRuntime(
+						input.workerId,
+						runtime,
+					);
+					activeByRuntime.set(runtime, active);
+					return active;
+				};
 
 				const pending = await collections.ai_runs.find({
 					where: { status: "pending" },
@@ -215,6 +252,13 @@ export default service()
 				>) {
 					const runRuntime = candidate.runtime as string | undefined;
 					if (!runRuntime || !runtimeSet.has(runRuntime)) continue;
+					const maxConcurrent = maxConcurrentForRuntime(
+						capabilities,
+						runRuntime,
+					);
+					if (!maxConcurrent) continue;
+					const active = await activeForRuntime(runRuntime);
+					if (active >= maxConcurrent) continue;
 
 					const updated = await collections.ai_runs.update({
 						where: { id: candidate.id, status: "pending" },

@@ -57,9 +57,19 @@ export async function startAIWorker(
 	}
 
 	let running = true;
-	const activeRuns = new Set<Promise<void>>();
+	const activeRuns = new Map<Promise<void>, DirectSpawnRuntime>();
+	const runtimes = Array.from(new Set(config.runtimes.map((r) => r.runtime)));
+	const activeRunsForRuntime = (runtime: DirectSpawnRuntime) => {
+		let count = 0;
+		for (const activeRuntime of activeRuns.values()) {
+			if (activeRuntime === runtime) count++;
+		}
+		return count;
+	};
 	const startExecution = (claimed: any) => {
 		if (!claimed || !workerManager) return;
+		const runtime = claimed.spawn?.runtime as DirectSpawnRuntime | undefined;
+		if (!runtime) return;
 		const execution = executeRun(
 			runner,
 			workerManager,
@@ -68,21 +78,23 @@ export async function startAIWorker(
 		).finally(() => {
 			activeRuns.delete(execution);
 		});
-		activeRuns.add(execution);
+		activeRuns.set(execution, runtime);
 	};
 	const pollLoop = async () => {
 		while (true) {
 			if (!running || !workerManager) break;
 			try {
 				await workerManager.heartbeat(workerId);
-				while (running && activeRuns.size < maxConcurrentRuns) {
-					const claimed = await workerManager.claimRun({
-						workerId,
-						runtimes: config.runtimes.map((r) => r.runtime),
-						limit: 1,
-					});
-					if (!claimed) break;
-					startExecution(claimed);
+				for (const runtime of runtimes) {
+					while (running && activeRunsForRuntime(runtime) < maxConcurrentRuns) {
+						const claimed = await workerManager.claimRun({
+							workerId,
+							runtimes: [runtime],
+							limit: 1,
+						});
+						if (!claimed) break;
+						startExecution(claimed);
+					}
 				}
 			} catch {
 				// Transient heartbeat/claim/execute error — stay alive and

@@ -10,6 +10,7 @@ import {
 	normalizeLegacyArtifact,
 } from "../../../lib/legacy-run-artifacts";
 import { relationId } from "../../../lib/records";
+import { sessionOnly } from "../../../lib/route-access";
 import { workflowsFromContext } from "../../../lib/workflows";
 
 const refKindSchema = z.enum(legacyArtifactRefKinds);
@@ -49,14 +50,14 @@ async function parseJson(request: Request) {
 }
 
 function requestActor(ctx: Questpie.AppContext & { request: Request }) {
-	if (ctx.session?.user) return String(ctx.session.user.id);
-	if (ctx.request.headers.get("x-local-dev") === "true") return "local-dev";
+	if (ctx.session?.user?.id) return String(ctx.session.user.id);
 	throw ApiError.unauthorized("Authentication required");
 }
 
 export default route()
 	.get()
 	.post()
+	.access(sessionOnly)
 	.params<{ runId: string }>()
 	.raw()
 	.handler(async (ctx) => {

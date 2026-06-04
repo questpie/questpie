@@ -1,21 +1,23 @@
 "use client";
 
 import { Icon } from "@iconify/react";
+import { useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 
 import {
 	Badge,
 	selectBasePath,
+	selectClient,
 	selectNavigate,
 	useAdminStore,
 	useCollectionList,
 } from "@questpie/admin/client";
-import { adminClientModule } from "@questpie/admin/client/modules/admin";
 import type { MaybeLazyComponent } from "@questpie/admin/client";
+import { adminClientModule } from "@questpie/admin/client/modules/admin";
 
-function isLazyLoader(
-	loader: MaybeLazyComponent,
-): loader is () => Promise<{ default: React.ComponentType<Record<string, unknown>> }> {
+function isLazyLoader(loader: MaybeLazyComponent): loader is () => Promise<{
+	default: React.ComponentType<Record<string, unknown>>;
+}> {
 	return (
 		typeof loader === "function" &&
 		loader.length === 0 &&
@@ -177,6 +179,8 @@ const SOURCE_LABELS: Record<string, string> = {
 export default function TaskDetailComponent(props: Record<string, unknown>) {
 	const taskId = typeof props.id === "string" ? props.id : undefined;
 
+	useTaskDetailRealtime(taskId);
+
 	return (
 		<div className="flex flex-col">
 			<TaskDetailForm {...props} />
@@ -191,6 +195,60 @@ export default function TaskDetailComponent(props: Record<string, unknown>) {
 	);
 }
 
+function useTaskDetailRealtime(taskId: string | undefined) {
+	const client = useAdminStore(selectClient);
+	const queryClient = useQueryClient();
+
+	const invalidateCollection = React.useCallback(
+		(collection: string) => {
+			void queryClient.invalidateQueries({
+				queryKey: ["questpie", "collections", "collections", collection],
+			});
+		},
+		[queryClient],
+	);
+
+	React.useEffect(() => {
+		if (!taskId) return;
+		const realtime = (client as any)?.realtime;
+		if (!realtime?.subscribe) return;
+
+		const subscriptions = [
+			{
+				collection: "tasks",
+				where: { id: taskId },
+			},
+			{
+				collection: "run_links",
+				where: { task: taskId },
+			},
+			{
+				collection: "activity",
+				where: { task: taskId },
+			},
+			{
+				collection: "knowledge",
+				where: { task: taskId },
+			},
+		];
+
+		const unsubscribes = subscriptions.map(({ collection, where }) =>
+			realtime.subscribe(
+				{ resourceType: "collection", resource: collection, where },
+				() => invalidateCollection(collection),
+				undefined,
+				`task-detail:${taskId}:${collection}`,
+			),
+		);
+
+		return () => {
+			for (const unsubscribe of unsubscribes) {
+				unsubscribe?.();
+			}
+		};
+	}, [client, invalidateCollection, taskId]);
+}
+
 function ActivityTimeline({ taskId }: { taskId: string }) {
 	const { data: activityData, isLoading: activityLoading } = useCollectionList(
 		"activity",
@@ -199,6 +257,8 @@ function ActivityTimeline({ taskId }: { taskId: string }) {
 			limit: 50,
 			orderBy: { createdAt: "desc" },
 		},
+		undefined,
+		{ realtime: true },
 	);
 
 	const { data: runsData, isLoading: runsLoading } = useCollectionList(
@@ -208,16 +268,18 @@ function ActivityTimeline({ taskId }: { taskId: string }) {
 			limit: 50,
 			orderBy: { startedAt: "desc" },
 		},
+		undefined,
+		{ realtime: true },
 	);
 
 	const isLoading = activityLoading || runsLoading;
 
 	const activityDocs = React.useMemo(
-		() => ((activityData as { docs?: ActivityDoc[] } | undefined)?.docs ?? []),
+		() => (activityData as { docs?: ActivityDoc[] } | undefined)?.docs ?? [],
 		[activityData],
 	);
 	const runsDocs = React.useMemo(
-		() => ((runsData as { docs?: RunDoc[] } | undefined)?.docs ?? []),
+		() => (runsData as { docs?: RunDoc[] } | undefined)?.docs ?? [],
 		[runsData],
 	);
 
@@ -273,7 +335,7 @@ function ActivityTimeline({ taskId }: { taskId: string }) {
 
 	return (
 		<div className="px-6 py-4">
-			<h3 className="text-muted-foreground mb-3 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider">
+			<h3 className="text-muted-foreground mb-3 flex items-center gap-1.5 text-xs font-medium tracking-wider uppercase">
 				<Icon icon="ph:clock-counter-clockwise" className="size-3.5" />
 				Activity
 			</h3>
@@ -388,17 +450,22 @@ function ArtifactsList({ taskId }: { taskId: string }) {
 	const navigate = useAdminStore(selectNavigate);
 	const basePath = useAdminStore(selectBasePath);
 
-	const { data, isLoading } = useCollectionList("knowledge", {
-		where: {
-			task: taskId,
-			kind: { in: ["artifact", "result", "summary", "diff", "log"] },
+	const { data, isLoading } = useCollectionList(
+		"knowledge",
+		{
+			where: {
+				task: taskId,
+				kind: { in: ["artifact", "result", "summary", "diff", "log"] },
+			},
+			limit: 100,
+			orderBy: { createdAt: "desc" },
 		},
-		limit: 100,
-		orderBy: { createdAt: "desc" },
-	});
+		undefined,
+		{ realtime: true },
+	);
 
 	const docs = React.useMemo(
-		() => ((data as { docs?: KnowledgeDoc[] } | undefined)?.docs ?? []),
+		() => (data as { docs?: KnowledgeDoc[] } | undefined)?.docs ?? [],
 		[data],
 	);
 
@@ -417,7 +484,7 @@ function ArtifactsList({ taskId }: { taskId: string }) {
 
 	return (
 		<div className="border-t px-6 py-4">
-			<h3 className="text-muted-foreground mb-3 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider">
+			<h3 className="text-muted-foreground mb-3 flex items-center gap-1.5 text-xs font-medium tracking-wider uppercase">
 				<Icon icon="ph:cube" className="size-3.5" />
 				Artifacts
 			</h3>
@@ -437,7 +504,10 @@ function ArtifactsList({ taskId }: { taskId: string }) {
 							}
 						>
 							<div className="bg-muted flex size-7 shrink-0 items-center justify-center rounded">
-								<Icon icon={kindIcon} className="text-muted-foreground size-3.5" />
+								<Icon
+									icon={kindIcon}
+									className="text-muted-foreground size-3.5"
+								/>
 							</div>
 							<div className="min-w-0 flex-1">
 								<p className="truncate text-sm font-medium">

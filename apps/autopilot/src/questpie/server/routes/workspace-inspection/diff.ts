@@ -1,6 +1,7 @@
 import { route } from "questpie/services";
 import { z } from "zod";
 
+import { sessionOnly } from "../../lib/route-access";
 import { resolveRunProject } from "../../lib/run-project";
 import {
 	diffWorkspace,
@@ -15,6 +16,7 @@ const schema = z.object({
 
 export default route()
 	.post()
+	.access(sessionOnly)
 	.schema(schema)
 	.handler(async (ctx) => {
 		const { input, collections, services } = ctx;

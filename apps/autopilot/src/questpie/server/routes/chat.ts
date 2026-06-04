@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { createAiRunLink } from "../lib/ai-run-links";
 import { mergeRecords, relationId } from "../lib/records";
+import { sessionOnly } from "../lib/route-access";
 import { resolveRuntimeSelection } from "../lib/runtime-selection";
 import { workflowsFromContext } from "../lib/workflows";
 
@@ -44,7 +45,7 @@ function titleFromContent(content: string): string {
 
 export default route()
 	.post()
-	.access(({ session }) => Boolean(session))
+	.access(sessionOnly)
 	.schema(chatSchema)
 	.handler(async (ctx) => {
 		const { input, collections } = ctx;

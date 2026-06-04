@@ -58,7 +58,7 @@ export const taskCancel = mcpTool("task_cancel", {
 	}),
 	annotations: { destructiveHint: true, idempotentHint: true },
 }).handler(async ({ input, ctx, request, accessMode }) => {
-	await requireMcpCaller({ ctx, request, accessMode });
+	const caller = await requireMcpCaller({ ctx, request, accessMode });
 
 	const task = await ctx.collections.tasks.findOne({
 		where: { id: input.id },
@@ -78,7 +78,7 @@ export const taskCancel = mcpTool("task_cancel", {
 	});
 
 	await ctx.collections.activity.create({
-		actor: ctx.session?.user?.id ?? "mcp",
+		actor: caller.actorId,
 		type: "task.cancelled",
 		summary: input.reason ?? `Task cancelled`,
 		task: input.id,
@@ -98,7 +98,7 @@ export const taskRetry = mcpTool("task_retry", {
 	}),
 	annotations: { destructiveHint: false, idempotentHint: false },
 }).handler(async ({ input, ctx, request, accessMode }) => {
-	await requireMcpCaller({ ctx, request, accessMode });
+	const caller = await requireMcpCaller({ ctx, request, accessMode });
 
 	const task = await ctx.collections.tasks.findOne({
 		where: { id: input.id },
@@ -118,7 +118,7 @@ export const taskRetry = mcpTool("task_retry", {
 	});
 
 	await ctx.collections.activity.create({
-		actor: ctx.session?.user?.id ?? "mcp",
+		actor: caller.actorId,
 		type: "task.retry",
 		summary: `Task retried via MCP`,
 		task: input.id,
@@ -131,7 +131,7 @@ export const taskRetry = mcpTool("task_retry", {
 		{
 			taskId: input.id,
 			runReason: "retry",
-			requestedBy: ctx.session?.user?.id ?? "mcp",
+			requestedBy: caller.actorId,
 		},
 		{ idempotencyKey: `task-pipeline:${input.id}` },
 	);

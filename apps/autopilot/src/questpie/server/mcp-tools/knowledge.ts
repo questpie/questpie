@@ -88,7 +88,7 @@ export const knowledgeWrite = mcpTool("knowledge_write", {
 	description: "Create or update a knowledge resource.",
 	inputSchema: writeSchema,
 }).handler(async ({ input, ctx, request, accessMode }) => {
-	await requireMcpCaller({ ctx, request, accessMode });
+	const caller = await requireMcpCaller({ ctx, request, accessMode });
 
 	const scope = knowledgeScope(input);
 	const existing = await ctx.collections.knowledge.findOne({
@@ -105,7 +105,7 @@ export const knowledgeWrite = mcpTool("knowledge_write", {
 		task: scope.taskId,
 		kind: "document" as const,
 		source: "mcp" as const,
-		sourceRef: ctx.session?.user?.id ?? "mcp",
+		sourceRef: caller.actorId,
 	};
 
 	const resource = existing

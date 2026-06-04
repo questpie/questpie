@@ -1,11 +1,14 @@
 import { route } from "questpie/services";
 
+import { sessionOnly } from "../lib/route-access";
+
 function sse(data: unknown) {
 	return `data: ${JSON.stringify(data)}\n\n`;
 }
 
 export default route()
 	.get()
+	.access(sessionOnly)
 	.raw()
 	.handler(async ({ request, collections }) => {
 		const stream = new ReadableStream<Uint8Array>({

@@ -5,6 +5,9 @@ import {
 	useQuery,
 } from "@tanstack/react-query";
 import type { Questpie } from "questpie";
+import { useEffect } from "react";
+
+import { buildCollectionTopic } from "@questpie/tanstack-query";
 
 import type { AnyQuestpieClient } from "../builder";
 import type {
@@ -16,6 +19,38 @@ import { useQuestpieQueryOptions } from "./use-questpie-query-options";
 type CollectionRealtimeOptions = {
 	realtime?: boolean;
 };
+
+function useCollectionRealtimeInvalidation({
+	client,
+	collection,
+	options,
+	realtime,
+	queryClient,
+}: {
+	client: any;
+	collection: string | undefined;
+	options: any;
+	realtime: boolean | undefined;
+	queryClient: ReturnType<typeof useQuestpieQueryOptions>["queryClient"];
+}) {
+	const topicSignature = JSON.stringify(
+		collection ? buildCollectionTopic(collection, options) : null,
+	);
+
+	useEffect(() => {
+		if (!collection || !realtime) return;
+		const realtimeApi = client?.realtime;
+		if (!realtimeApi?.subscribe) return;
+		const topic = JSON.parse(topicSignature);
+		if (!topic) return;
+
+		return realtimeApi.subscribe(topic, () => {
+			void queryClient.invalidateQueries({
+				queryKey: ["questpie", "collections", "collections", collection],
+			});
+		});
+	}, [client, collection, queryClient, realtime, topicSignature]);
+}
 
 // ============================================================================
 // Type Helpers
@@ -53,7 +88,7 @@ export function useCollectionList<K extends ResolvedCollectionNames>(
 	queryOptions?: Omit<UseQueryOptions, "queryKey" | "queryFn">,
 	realtimeOptions?: CollectionRealtimeOptions,
 ): any {
-	const { queryOpts, locale } = useQuestpieQueryOptions();
+	const { queryOpts, queryClient, locale, client } = useQuestpieQueryOptions();
 
 	const findOptions = {
 		...options,
@@ -70,6 +105,14 @@ export function useCollectionList<K extends ResolvedCollectionNames>(
 				queryKey: ["questpie", "collections", "__none__", "find"],
 				queryFn: () => ({ docs: [], totalDocs: 0 }),
 			};
+
+	useCollectionRealtimeInvalidation({
+		client,
+		collection: collection ? String(collection) : undefined,
+		options: findOptions,
+		realtime: realtimeOptions?.realtime,
+		queryClient,
+	});
 
 	return useQuery({
 		...baseQuery,
@@ -101,7 +144,7 @@ export function useCollectionCount<K extends ResolvedCollectionNames>(
 	queryOptions?: Omit<UseQueryOptions, "queryKey" | "queryFn">,
 	realtimeOptions?: CollectionRealtimeOptions,
 ): any {
-	const { queryOpts, locale } = useQuestpieQueryOptions();
+	const { queryOpts, queryClient, locale, client } = useQuestpieQueryOptions();
 
 	const countOptions = {
 		...options,
@@ -119,6 +162,14 @@ export function useCollectionCount<K extends ResolvedCollectionNames>(
 				queryKey: ["questpie", "collections", "__none__", "count"],
 				queryFn: () => 0,
 			};
+
+	useCollectionRealtimeInvalidation({
+		client,
+		collection: collection ? String(collection) : undefined,
+		options: countOptions,
+		realtime: realtimeOptions?.realtime,
+		queryClient,
+	});
 
 	return useQuery({
 		...baseQuery,

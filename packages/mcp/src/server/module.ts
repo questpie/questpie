@@ -14,7 +14,7 @@ function withCors(response: Response, request: Request): Response {
 	headers.set("Access-Control-Allow-Methods", "POST, GET, DELETE, OPTIONS");
 	headers.set(
 		"Access-Control-Allow-Headers",
-		"Content-Type, Authorization, Mcp-Session-Id, Last-Event-ID",
+		"Content-Type, Authorization, x-api-key, Mcp-Session-Id, Last-Event-ID",
 	);
 	return new Response(response.body, {
 		status: response.status,

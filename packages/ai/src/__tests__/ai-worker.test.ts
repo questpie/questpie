@@ -4,6 +4,7 @@ import { mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { startAIWorker } from "../exports/worker.js";
 import {
 	hashSecret,
 	generateSecret,
@@ -124,6 +125,28 @@ function buildWorkerManager(
 		return result.docs.length;
 	}
 
+	async function activeLeaseCountForRuntime(
+		workerId: string,
+		runtime: string,
+	): Promise<number> {
+		const result = await collections.ai_worker_leases.find({
+			where: { worker: workerId, status: "active" },
+			limit: 1000,
+		});
+		let count = 0;
+		await Promise.all(
+			result.docs.map(async (lease) => {
+				const runId = relationId(lease.run);
+				if (!runId) return;
+				const run = await collections.ai_runs.findOne({
+					where: { id: runId },
+				});
+				if (run?.runtime === runtime) count++;
+			}),
+		);
+		return count;
+	}
+
 	async function setWorkerStatus(workerId: string, status: string) {
 		await collections.ai_workers.updateById({ id: workerId, data: { status } });
 	}
@@ -151,13 +174,16 @@ function buildWorkerManager(
 		}
 	}
 
-	function maxConcurrentFromCapabilities(
-		caps: Array<{ maxConcurrent?: number }>,
-	): number {
+	function maxConcurrentForRuntime(
+		caps: Array<{ runtime?: string; maxConcurrent?: number }>,
+		runtime: string,
+	): number | null {
 		if (caps.length === 0) return 1;
+		const matches = caps.filter((capability) => capability.runtime === runtime);
+		if (matches.length === 0) return null;
 		return Math.max(
 			1,
-			...caps.map((c) =>
+			...matches.map((c) =>
 				Number.isFinite(c.maxConcurrent) ? Number(c.maxConcurrent) : 1,
 			),
 		);
@@ -276,9 +302,17 @@ function buildWorkerManager(
 				return null;
 
 			const capabilities = parseCapabilities(worker.capabilities);
-			const maxConcurrent = maxConcurrentFromCapabilities(capabilities);
-			const active = await activeLeaseCount(input.workerId);
-			if (active >= maxConcurrent) return null;
+			const activeByRuntime = new Map<string, number>();
+			const activeForRuntime = async (runtime: string) => {
+				const cached = activeByRuntime.get(runtime);
+				if (cached !== undefined) return cached;
+				const active = await activeLeaseCountForRuntime(
+					input.workerId,
+					runtime,
+				);
+				activeByRuntime.set(runtime, active);
+				return active;
+			};
 
 			const pending = await collections.ai_runs.find({
 				where: { status: "pending" },
@@ -290,6 +324,10 @@ function buildWorkerManager(
 			for (const candidate of pending.docs) {
 				const runRuntime = candidate.runtime as string | undefined;
 				if (!runRuntime || !runtimeSet.has(runRuntime)) continue;
+				const maxConcurrent = maxConcurrentForRuntime(capabilities, runRuntime);
+				if (!maxConcurrent) continue;
+				const active = await activeForRuntime(runRuntime);
+				if (active >= maxConcurrent) continue;
 
 				const updated = await collections.ai_runs.update({
 					where: { id: candidate.id, status: "pending" },
@@ -665,6 +703,70 @@ describe("Worker manager — claim / complete / heartbeat", () => {
 		expect(r3).toBeNull(); // maxConcurrent=2 hit
 	});
 
+	it("applies maxConcurrent per runtime capability instead of globally", async () => {
+		const { workerId: multiRuntimeWorkerId } = await wm.registerWorker({
+			deviceId: "multi-runtime",
+			name: "multi-runtime-worker",
+			volumeId: "vol_multi",
+			capabilities: [
+				{ runtime: "claude-code", maxConcurrent: 1 },
+				{ runtime: "codex", maxConcurrent: 1 },
+			],
+			secret: generateSecret(),
+		});
+		await collections.ai_runs.create({
+			status: "pending",
+			runtime: "claude-code",
+			prompt: "long background task",
+			createdAt: new Date(),
+		});
+		await collections.ai_runs.create({
+			status: "pending",
+			runtime: "codex",
+			prompt: "chat response",
+			createdAt: new Date(),
+		});
+		await collections.ai_runs.create({
+			status: "pending",
+			runtime: "codex",
+			prompt: "second chat response",
+			createdAt: new Date(),
+		});
+
+		const background = await wm.claimRun({
+			workerId: multiRuntimeWorkerId,
+			runtimes: ["claude-code"],
+		});
+		expect(background).not.toBeNull();
+		expect(background!.spawn.runtime).toBe("claude-code");
+
+		const chat = await wm.claimRun({
+			workerId: multiRuntimeWorkerId,
+			runtimes: ["codex"],
+		});
+		expect(chat).not.toBeNull();
+		expect(chat!.spawn.runtime).toBe("codex");
+		expect(chat!.spawn.prompt).toBe("chat response");
+
+		const saturatedCodex = await wm.claimRun({
+			workerId: multiRuntimeWorkerId,
+			runtimes: ["codex"],
+		});
+		expect(saturatedCodex).toBeNull();
+	});
+
+	it("does not claim a runtime outside the worker capabilities", async () => {
+		await collections.ai_runs.create({
+			status: "pending",
+			runtime: "codex",
+			prompt: "unsupported runtime",
+			createdAt: new Date(),
+		});
+
+		const claimed = await wm.claimRun({ workerId, runtimes: ["codex"] });
+		expect(claimed).toBeNull();
+	});
+
 	it("won't claim if worker is offline", async () => {
 		await wm.deregister(workerId);
 		await collections.ai_runs.create({
@@ -847,6 +949,60 @@ describe("Embedded worker execution", () => {
 			const again = await prepareWorkerVolume(workerDir);
 			expect(again.volumeId).toBe(volume.volumeId);
 		} finally {
+			await rm(workerDir, { recursive: true, force: true });
+		}
+	});
+
+	it("polls each configured runtime independently", async () => {
+		const workerDir = await mkdtemp(join(tmpdir(), "questpie-ai-worker-"));
+		const claims: string[][] = [];
+		const worker = await startAIWorker(
+			{
+				services: {
+					workerManager: {
+						async registerWorker() {
+							return { workerId: "worker-runtime-poll" };
+						},
+						async heartbeat() {
+							return { activeLeases: 0, status: "online" };
+						},
+						async claimRun(input: { runtimes: string[] }) {
+							claims.push(input.runtimes);
+							return null;
+						},
+						async deregister() {},
+					},
+				},
+			},
+			{
+				workerDir,
+				runtimes: [{ runtime: "codex" }, { runtime: "claude-code" }],
+				maxConcurrentRuns: 1,
+				pollIntervalMs: 10,
+			},
+		);
+
+		try {
+			const deadline = Date.now() + 500;
+			while (
+				Date.now() < deadline &&
+				!(
+					claims.some(
+						(runtimes) => runtimes.length === 1 && runtimes[0] === "codex",
+					) &&
+					claims.some(
+						(runtimes) =>
+							runtimes.length === 1 && runtimes[0] === "claude-code",
+					)
+				)
+			) {
+				await new Promise((resolve) => setTimeout(resolve, 5));
+			}
+
+			expect(claims).toContainEqual(["codex"]);
+			expect(claims).toContainEqual(["claude-code"]);
+		} finally {
+			await worker.stop();
 			await rm(workerDir, { recursive: true, force: true });
 		}
 	});

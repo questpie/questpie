@@ -13,11 +13,7 @@ await startAIWorker(ctx, {
 	pollIntervalMs: 1000,
 	// Register the ACP-capable agent CLIs available on this host; the run's
 	// requested runtime (default codex) is matched against this set.
-	runtimes: [
-		{ runtime: "codex" },
-		{ runtime: "opencode" },
-		{ runtime: "claude-code" },
-	],
+	runtimes: [{ runtime: "codex" }, { runtime: "claude-code" }],
 	mcpServers: [
 		{
 			name: "questpie-autopilot",

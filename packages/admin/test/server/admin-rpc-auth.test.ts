@@ -46,6 +46,16 @@ describe("admin RPC auth guards", () => {
 		}
 	});
 
+	it("keeps authenticated non-admin users out of guarded admin RPC routes", async () => {
+		for (const route of Object.values(guardedRoutes)) {
+			expect(
+				await evaluateAccess(route, {
+					session: { user: { id: "u1", role: "user" } },
+				}),
+			).toBe(false);
+		}
+	});
+
 	it("allows unauthenticated access only for public admin bootstrap routes", async () => {
 		for (const route of Object.values(publicBootstrapRoutes)) {
 			expect(await evaluateAccess(route, { session: null })).toBe(true);

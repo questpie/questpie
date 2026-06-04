@@ -2,6 +2,7 @@ import { ApiError } from "questpie/errors";
 import { route } from "questpie/services";
 import { z } from "zod";
 
+import { sessionOnly } from "../lib/route-access";
 import { workflowsFromContext } from "../lib/workflows";
 
 const intakeSchema = z.object({
@@ -22,6 +23,7 @@ const intakeSchema = z.object({
 
 export default route()
 	.post()
+	.access(sessionOnly)
 	.schema(intakeSchema)
 	.handler(async (ctx) => {
 		const { input, collections } = ctx;

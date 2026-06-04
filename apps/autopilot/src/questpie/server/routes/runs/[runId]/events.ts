@@ -1,13 +1,7 @@
-import { ApiError } from "questpie/errors";
 import { route } from "questpie/services";
 
 import { relationId } from "../../../lib/records";
-
-function authorizeRequest(ctx: Questpie.AppContext & { request: Request }) {
-	if (ctx.session?.user) return;
-	if (ctx.request.headers.get("x-local-dev") === "true") return;
-	throw ApiError.unauthorized("Authentication required");
-}
+import { sessionOnly } from "../../../lib/route-access";
 
 function json(data: unknown, init?: ResponseInit) {
 	return new Response(JSON.stringify(data), {
@@ -21,10 +15,10 @@ function json(data: unknown, init?: ResponseInit) {
 
 export default route()
 	.get()
+	.access(sessionOnly)
 	.params<{ runId: string }>()
 	.raw()
 	.handler(async (ctx) => {
-		authorizeRequest(ctx);
 		const url = new URL(ctx.request.url);
 		const limit = Number(url.searchParams.get("limit") ?? 100);
 		const run = await ctx.collections.run_links.findOne({

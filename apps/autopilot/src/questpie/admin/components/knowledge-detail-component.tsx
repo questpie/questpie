@@ -13,6 +13,17 @@ import {
 } from "@questpie/admin/client";
 import { adminClientModule } from "@questpie/admin/client/modules/admin";
 
+import {
+	dispatchChatAttachment,
+	setChatAttachmentDragData,
+} from "../lib/chat-attachments";
+import {
+	createKnowledgeChatAttachment,
+	knowledgeMetadataEntries,
+	knowledgeSourceLine,
+	knowledgeSummary,
+} from "../lib/knowledge-attachments";
+
 type KnowledgeDoc = {
 	id: string;
 	title?: string | null;
@@ -32,11 +43,16 @@ type KnowledgeDoc = {
 	updatedAt?: string | Date | null;
 };
 
-type RelationValue = string | { id?: string; title?: string; name?: string } | null;
+type RelationValue =
+	| string
+	| { id?: string; title?: string; name?: string }
+	| null;
 
 function isLazyLoader(
 	loader: MaybeLazyComponent,
-): loader is () => Promise<{ default: React.ComponentType<Record<string, unknown>> }> {
+): loader is () => Promise<{
+	default: React.ComponentType<Record<string, unknown>>;
+}> {
 	return (
 		typeof loader === "function" &&
 		loader.length === 0 &&
@@ -79,16 +95,10 @@ function formatDate(value: KnowledgeDoc["createdAt"]) {
 	}).format(date);
 }
 
-function metadataEntries(value: unknown) {
-	if (!value || typeof value !== "object" || Array.isArray(value)) return [];
-	return Object.entries(value as Record<string, unknown>).filter(
-		([, item]) => item !== undefined && item !== null && item !== "",
-	);
-}
-
 function metadataValue(value: unknown) {
 	if (typeof value === "string") return value;
-	if (typeof value === "number" || typeof value === "boolean") return String(value);
+	if (typeof value === "number" || typeof value === "boolean")
+		return String(value);
 	try {
 		return JSON.stringify(value, null, 2);
 	} catch {
@@ -155,11 +165,7 @@ function MarkdownBlock({ value }: { value: string }) {
 		if (level === 1) return <h2 className={className}>{heading[2]}</h2>;
 		if (level === 2) return <h3 className={className}>{heading[2]}</h3>;
 		if (level === 3) return <h4 className={className}>{heading[2]}</h4>;
-		return (
-			<h5 className={className}>
-				{heading[2]}
-			</h5>
-		);
+		return <h5 className={className}>{heading[2]}</h5>;
 	}
 
 	const lines = trimmed.split("\n");
@@ -184,7 +190,7 @@ function MarkdownBlock({ value }: { value: string }) {
 	}
 
 	return (
-		<p className="text-foreground whitespace-pre-wrap text-sm leading-relaxed">
+		<p className="text-foreground text-sm leading-relaxed whitespace-pre-wrap">
 			{trimmed}
 		</p>
 	);
@@ -213,7 +219,9 @@ function BodyPreview({ doc }: { doc: KnowledgeDoc }) {
 					/>
 				</div>
 				<details className="border-border-subtle bg-muted/30 border p-3">
-					<summary className="cursor-pointer text-xs font-medium">Source</summary>
+					<summary className="cursor-pointer text-xs font-medium">
+						Source
+					</summary>
 					<pre className="mt-3 max-h-[24rem] overflow-auto text-xs leading-relaxed whitespace-pre-wrap">
 						{body}
 					</pre>
@@ -231,7 +239,13 @@ function BodyPreview({ doc }: { doc: KnowledgeDoc }) {
 	);
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+	label,
+	children,
+}: {
+	label: string;
+	children: React.ReactNode;
+}) {
 	if (!children) return null;
 	return (
 		<div className="min-w-0">
@@ -266,6 +280,118 @@ function RelationLink({
 	);
 }
 
+function KnowledgeChatContextAction({ doc }: { doc: KnowledgeDoc }) {
+	const [attached, setAttached] = React.useState(false);
+	const attachment = React.useMemo(
+		() => createKnowledgeChatAttachment(doc),
+		[doc],
+	);
+
+	const attach = React.useCallback(() => {
+		dispatchChatAttachment(attachment);
+		setAttached(true);
+		window.setTimeout(() => setAttached(false), 1200);
+	}, [attachment]);
+
+	return (
+		<button
+			type="button"
+			onClick={attach}
+			draggable
+			onDragStart={(event) =>
+				setChatAttachmentDragData(event.dataTransfer, attachment)
+			}
+			className="control-surface text-muted-foreground hover:text-foreground inline-flex h-8 shrink-0 items-center gap-2 px-2.5 text-xs transition-colors"
+			title="Attach this knowledge record to Autopilot chat"
+		>
+			<Icon
+				icon={attached ? "ph:check" : "ph:crosshair"}
+				className="size-3.5"
+			/>
+			<span>{attached ? "Attached" : "Attach"}</span>
+		</button>
+	);
+}
+
+function KnowledgeSummary({
+	doc,
+	basePath,
+}: {
+	doc: KnowledgeDoc;
+	basePath: string;
+}) {
+	const summary = knowledgeSummary(doc);
+	const sourceLine = knowledgeSourceLine(doc);
+	const projectId = relationId(doc.project ?? null);
+	const taskId = relationId(doc.task ?? null);
+	const runId = relationId(doc.run ?? null);
+
+	return (
+		<section className="border-border-subtle bg-card border p-4">
+			<div className="flex min-w-0 items-start gap-3">
+				<div className="bg-primary/10 text-primary mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md">
+					<Icon icon="ph:book-open-text" className="size-4" />
+				</div>
+				<div className="min-w-0 flex-1">
+					<div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+						{sourceLine ? (
+							<span className="text-muted-foreground">{sourceLine}</span>
+						) : (
+							<span className="text-muted-foreground">knowledge</span>
+						)}
+						{doc.path ? (
+							<>
+								<span className="text-muted-foreground/50">/</span>
+								<span className="text-muted-foreground min-w-0 truncate">
+									{doc.path}
+								</span>
+							</>
+						) : null}
+					</div>
+					{summary ? (
+						<p className="text-foreground mt-2 max-w-4xl text-sm leading-relaxed">
+							{summary}
+						</p>
+					) : (
+						<p className="text-muted-foreground mt-2 text-sm">
+							No summary available.
+						</p>
+					)}
+					{projectId || taskId || runId ? (
+						<div className="mt-3 flex flex-wrap gap-2">
+							{projectId ? (
+								<RelationLink
+									basePath={basePath}
+									collection="projects"
+									value={doc.project ?? null}
+									fallback="Project"
+								/>
+							) : null}
+							{taskId ? (
+								<RelationLink
+									basePath={basePath}
+									collection="tasks"
+									value={doc.task ?? null}
+									fallback="Task"
+								/>
+							) : null}
+							{runId ? (
+								<RelationLink
+									basePath={basePath}
+									collection="run_links"
+									value={doc.run ?? null}
+									fallback="Run"
+								/>
+							) : null}
+						</div>
+					) : null}
+				</div>
+				<KnowledgeChatContextAction doc={doc} />
+			</div>
+		</section>
+	);
+}
+
 function KnowledgeInspector({
 	doc,
 	basePath,
@@ -275,83 +401,95 @@ function KnowledgeInspector({
 }) {
 	const created = formatDate(doc.createdAt);
 	const updated = formatDate(doc.updatedAt);
-	const entries = metadataEntries(doc.metadata);
+	const entries = knowledgeMetadataEntries(doc.metadata);
 
 	return (
-		<div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
-			<section className="border-border-subtle bg-card min-w-0 border p-4">
-				<div className="mb-4 flex min-w-0 items-center gap-2">
-					<Icon icon="ph:file-text" className="text-muted-foreground size-4" />
-					<h2 className="truncate text-sm font-semibold">Content</h2>
-				</div>
-				<BodyPreview doc={doc} />
-			</section>
+		<div className="space-y-4">
+			<KnowledgeSummary doc={doc} basePath={basePath} />
 
-			<aside className="space-y-4">
-				<section className="border-border-subtle bg-card border p-4">
-					<h2 className="mb-3 text-sm font-semibold">Provenance</h2>
-					<div className="space-y-3">
-						<Field label="Scope">
-							<span>{doc.scopeType ?? "-"}</span>
-						</Field>
-						<Field label="Project">
-							<RelationLink
-								basePath={basePath}
-								collection="projects"
-								value={doc.project ?? null}
-								fallback="Project"
-							/>
-						</Field>
-						<Field label="Task">
-							<RelationLink
-								basePath={basePath}
-								collection="tasks"
-								value={doc.task ?? null}
-								fallback="Task"
-							/>
-						</Field>
-						<Field label="Run">
-							<RelationLink
-								basePath={basePath}
-								collection="run_links"
-								value={doc.run ?? null}
-								fallback="Run"
-							/>
-						</Field>
-						<Field label="Source ref">
-							<span className="break-all">{doc.sourceRef ?? "-"}</span>
-						</Field>
+			<div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
+				<section className="border-border-subtle bg-card min-w-0 border p-4">
+					<div className="mb-4 flex min-w-0 items-center gap-2">
+						<Icon
+							icon="ph:file-text"
+							className="text-muted-foreground size-4"
+						/>
+						<h2 className="truncate text-sm font-semibold">Content</h2>
 					</div>
+					<BodyPreview doc={doc} />
 				</section>
 
-				<section className="border-border-subtle bg-card border p-4">
-					<h2 className="mb-3 text-sm font-semibold">Metadata</h2>
-					<div className="space-y-3">
-						<Field label="Created">
-							<span>{created ?? "-"}</span>
-						</Field>
-						<Field label="Updated">
-							<span>{updated ?? "-"}</span>
-						</Field>
-						{entries.length === 0 ? (
-							<p className="text-muted-foreground text-sm">No metadata.</p>
-						) : (
-							<div className="space-y-2">
-								{entries.map(([key, value]) => (
-									<div key={key} className="min-w-0">
-										<div className="text-muted-foreground text-[11px] font-medium uppercase">
-											{key}
+				<aside className="space-y-4">
+					<section className="border-border-subtle bg-card border p-4">
+						<h2 className="mb-3 text-sm font-semibold">Provenance</h2>
+						<div className="space-y-3">
+							<Field label="Scope">
+								<span>{doc.scopeType ?? "-"}</span>
+							</Field>
+							<Field label="Source">
+								<span>{doc.source ?? "-"}</span>
+							</Field>
+							<Field label="Project">
+								<RelationLink
+									basePath={basePath}
+									collection="projects"
+									value={doc.project ?? null}
+									fallback="Project"
+								/>
+							</Field>
+							<Field label="Task">
+								<RelationLink
+									basePath={basePath}
+									collection="tasks"
+									value={doc.task ?? null}
+									fallback="Task"
+								/>
+							</Field>
+							<Field label="Run">
+								<RelationLink
+									basePath={basePath}
+									collection="run_links"
+									value={doc.run ?? null}
+									fallback="Run"
+								/>
+							</Field>
+							<Field label="Source ref">
+								<span className="break-all">{doc.sourceRef ?? "-"}</span>
+							</Field>
+						</div>
+					</section>
+
+					<section className="border-border-subtle bg-card border p-4">
+						<h2 className="mb-3 text-sm font-semibold">Metadata</h2>
+						<div className="space-y-3">
+							<Field label="Created">
+								<span>{created ?? "-"}</span>
+							</Field>
+							<Field label="Updated">
+								<span>{updated ?? "-"}</span>
+							</Field>
+							{entries.length === 0 ? (
+								<p className="text-muted-foreground text-sm">
+									No useful metadata.
+								</p>
+							) : (
+								<div className="space-y-2">
+									{entries.map(([key, value]) => (
+										<div key={key} className="min-w-0">
+											<div className="text-muted-foreground text-[11px] font-medium uppercase">
+												{key}
+											</div>
+											<pre className="mt-1 overflow-auto text-xs whitespace-pre-wrap">
+												{metadataValue(value)}
+											</pre>
 										</div>
-										<pre className="mt-1 overflow-auto text-xs whitespace-pre-wrap">
-											{metadataValue(value)}
-										</pre>
-									</div>
-								))}
-							</div>
-						)}
-					</div>
-				</section>
-			</aside>
+									))}
+								</div>
+							)}
+						</div>
+					</section>
+				</aside>
+			</div>
 		</div>
 	);
 }
@@ -454,7 +592,9 @@ export default function KnowledgeDetailComponent(
 						</div>
 					) : error ? (
 						<div className="border-destructive/30 bg-destructive/10 text-destructive border p-4 text-sm">
-							{error instanceof Error ? error.message : "Failed to load knowledge"}
+							{error instanceof Error
+								? error.message
+								: "Failed to load knowledge"}
 						</div>
 					) : doc ? (
 						<KnowledgeInspector doc={doc} basePath={basePath} />

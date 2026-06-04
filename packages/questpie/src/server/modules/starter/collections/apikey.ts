@@ -3,6 +3,7 @@ import { collection } from "#questpie/server/collection/builder/collection-build
 export default collection("apikey")
 	.options({ timestamps: true })
 	.fields(({ f }) => ({
+		configId: f.text(255).default("default").required(),
 		name: f.text(255),
 		start: f.text(255),
 		prefix: f.text(255),
