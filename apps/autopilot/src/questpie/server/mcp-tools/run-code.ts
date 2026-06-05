@@ -189,6 +189,7 @@ export const runCode = mcpTool("run_code", {
 					input?: unknown;
 					isolation: "trusted";
 					capabilities?: { timeoutMs?: number };
+					bindings?: Record<string, unknown>;
 				}) => Promise<{
 					ok: boolean;
 					output?: unknown;
@@ -210,39 +211,36 @@ export const runCode = mcpTool("run_code", {
 		});
 	}
 
-	// Inject the scoped API on globalThis (mirrors the executor's `__secrets`
-	// convention) BEFORE the guest module imports — the trusted in-process
-	// adapter sets up the run, then dynamically imports the source, so the guest
-	// reads `globalThis.questpie` at call time. Restored in `finally`.
+	// Expose the scoped API to the guest as `globalThis.questpie` (mirrors the
+	// executor's `__secrets` convention) — the guest reads it at call time. We
+	// pass it as `bindings` so the trusted in-process adapter sets AND restores it
+	// INSIDE its serialization mutex; that way concurrent trusted runs (the
+	// multi-agent worker fleet / `schedule-tick` cron) never read each other's
+	// `questpie` ctx — see in-process.ts. Setting it here on globalThis would be
+	// OUTSIDE the lock and would re-introduce the cross-contamination race.
 	//
 	// NOTE: the trusted in-process soft timeout (Promise.race) cannot preempt a
 	// synchronous infinite loop — acceptable for trusted, agent-authored code in
 	// MVP. Real preemption is the untrusted-sandbox concern tracked in
 	// `executor-prod-gate-hardening`.
 	const api = buildCodeModeApi(ctx, caller.actorId);
-	const globalRef = globalThis as Record<string, unknown>;
-	const prev = globalRef.questpie;
-	globalRef.questpie = api;
 
-	try {
-		const result = await executor.run({
-			source: input.source,
-			input: input.input,
-			isolation: "trusted",
-			capabilities: input.timeout_ms
-				? { timeoutMs: input.timeout_ms }
-				: undefined,
-		});
+	const result = await executor.run({
+		source: input.source,
+		input: input.input,
+		isolation: "trusted",
+		capabilities: input.timeout_ms
+			? { timeoutMs: input.timeout_ms }
+			: undefined,
+		bindings: { questpie: api },
+	});
 
-		return mcpJson({
-			ok: result.ok,
-			output: result.output,
-			logs: result.logs,
-			error: result.error,
-			timed_out: result.timedOut ?? false,
-			ms: result.ms,
-		});
-	} finally {
-		globalRef.questpie = prev;
-	}
+	return mcpJson({
+		ok: result.ok,
+		output: result.output,
+		logs: result.logs,
+		error: result.error,
+		timed_out: result.timedOut ?? false,
+		ms: result.ms,
+	});
 });

@@ -76,6 +76,15 @@ export interface ExecutorRunOptions {
 	/** Secrets injected into the guest (never embedded in source). */
 	secrets?: Record<string, string>;
 	/**
+	 * Extra globals injected on `globalThis` for the duration of the run, then
+	 * restored. ONLY honored by the trusted in-process adapter (the guest shares
+	 * the host realm), where they are set/restored INSIDE the run's serialization
+	 * mutex so concurrent trusted runs can't read each other's bindings. The
+	 * sandboxed (Deno) path ignores this — its guest has no access to host globals.
+	 * Code-mode uses this to expose `globalThis.questpie` to the script.
+	 */
+	bindings?: Record<string, unknown>;
+	/**
 	 * Isolation mode. Defaults to `"sandboxed"` — untrusted-by-default is the
 	 * safe default; trusted callers (code-mode) opt in explicitly.
 	 */

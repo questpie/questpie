@@ -66,3 +66,73 @@ describe("ExecutorService — trusted dispatch (unit, no app)", () => {
 		expect(r.output).toEqual({ sum: 5 });
 	});
 });
+
+// The trusted in-process adapter imports the guest as a `data:text/typescript`
+// module, which only Bun executes natively — so this suite (run under `bun test`)
+// is Bun-only. It is skipped elsewhere for parity with the run-code-tool suite.
+const isBun = typeof (globalThis as { Bun?: unknown }).Bun !== "undefined";
+
+describe.skipIf(!isBun)(
+	"ExecutorService — trusted in-process concurrency (mutex)",
+	() => {
+		// A guest that (1) reads its injected binding + secret, (2) yields across
+		// several macrotasks so two overlapping runs' critical sections interleave,
+		// then (3) reads them AGAIN. If the trusted runs were NOT serialized, the
+		// second run would overwrite `globalThis.questpie` / `__secrets` while the
+		// first is parked at a yield, so the first run's second read (and its "end"
+		// log) would observe the OTHER run's marker.
+		const guest = [
+			"export default async function () {",
+			"  const read = () => ({",
+			"    binding: globalThis.questpie.marker,",
+			"    secret: globalThis.__secrets.marker,",
+			"  });",
+			"  const before = read();",
+			"  console.log('start ' + globalThis.questpie.marker);",
+			"  for (let i = 0; i < 5; i++) await new Promise((r) => setTimeout(r, 5));",
+			"  const after = read();",
+			"  console.log('end ' + globalThis.questpie.marker);",
+			"  return { before, after };",
+			"}",
+		].join("\n");
+
+		const runMarked = (svc: ExecutorService, marker: string) =>
+			svc.run({
+				source: guest,
+				isolation: "trusted",
+				secrets: { marker },
+				bindings: { questpie: { marker } },
+			});
+
+		it("serializes overlapping trusted runs — no binding/secret/log bleed", async () => {
+			const svc = new ExecutorService({});
+
+			// Start BOTH runs in the same tick so their critical sections overlap.
+			const [a, b] = await Promise.all([
+				runMarked(svc, "A"),
+				runMarked(svc, "B"),
+			]);
+
+			expect(a.ok).toBe(true);
+			expect(b.ok).toBe(true);
+
+			// Each run reads ONLY its own marker, both before and after the yields.
+			expect(a.output).toEqual({
+				before: { binding: "A", secret: "A" },
+				after: { binding: "A", secret: "A" },
+			});
+			expect(b.output).toEqual({
+				before: { binding: "B", secret: "B" },
+				after: { binding: "B", secret: "B" },
+			});
+
+			// Console logs are not cross-attributed: each buffer holds only its run.
+			expect(a.logs).toEqual(["log: start A", "log: end A"]);
+			expect(b.logs).toEqual(["log: start B", "log: end B"]);
+
+			// Globals are fully torn down once both runs complete (no dangling state).
+			expect((globalThis as Record<string, unknown>).questpie).toBeUndefined();
+			expect((globalThis as Record<string, unknown>).__secrets).toBeUndefined();
+		});
+	},
+);
