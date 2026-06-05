@@ -20,8 +20,6 @@
  * Design: `.private/knowledge-miniapps-mvp.md` §8 (M4), §13, §14.
  */
 
-import { Buffer } from "node:buffer";
-
 import { ApiError } from "questpie/errors";
 import type { ExecutorRunResult } from "questpie/executor";
 import { route } from "questpie/services";
@@ -34,67 +32,18 @@ import {
 	buildMiniAppBindingTarget,
 	type MiniAppBindingCtx,
 } from "../../../apps/mini-app-bindings";
+import {
+	buildEntrySource,
+	resolveBrokerUrl,
+	resolveCollectionRelationFields,
+} from "../../../apps/mini-app-runner";
 import { sessionOnly } from "../../../lib/route-access";
 
 /**
- * Broker endpoint path the SUPERVISOR (not the guest) reaches server-to-server.
- * Used ONLY to build the safe loopback fallback when no broker URL is configured;
- * the host part NEVER comes from the inbound request (see {@link resolveBrokerUrl}).
+ * @deprecated Re-exported from `apps/mini-app-runner` (shared with the M5 cron
+ * runner). Kept here as a named export for the existing route test import.
  */
-const BROKER_PATH = "/api/sandbox/rpc";
-
-/**
- * Loopback fallback used when neither `config.executor.brokerUrl` nor
- * `SANDBOX_BROKER_URL` is set. The supervisor is trusted and CAN reach loopback;
- * this keeps single-host dev working while NEVER trusting the request `Host`.
- */
-const DEFAULT_LOOPBACK_BROKER_URL = `http://127.0.0.1:${
-	process.env.PORT ?? "3000"
-}${BROKER_PATH}`;
-
-/**
- * Resolve the TRUSTED broker URL the supervisor uses to reach this app's
- * `/api/sandbox/rpc`. Sourced from CONFIG / ENV ONLY — NEVER from the inbound
- * request's `Host`/origin (which an attacker controls; a spoofed `Host` would
- * redirect the supervisor — carrying the per-run token — to an attacker host).
- *
- * Precedence: `config.executor.brokerUrl` → `SANDBOX_BROKER_URL` → loopback.
- */
-function resolveBrokerUrl(app: { config?: { executor?: { brokerUrl?: string } } }): string {
-	const fromConfig = app.config?.executor?.brokerUrl;
-	if (typeof fromConfig === "string" && fromConfig.length > 0) return fromConfig;
-	const fromEnv = process.env.SANDBOX_BROKER_URL;
-	if (typeof fromEnv === "string" && fromEnv.length > 0) return fromEnv;
-	return DEFAULT_LOOPBACK_BROKER_URL;
-}
-
-/**
- * Resolve the relation FIELD NAMES of a collection from runtime metadata (the
- * SAME `state.relations` set the CRUD where-builder routes to its raw EXISTS
- * subquery — `query-builders/where-builder.ts`). Used by the G3 guard to reject a
- * `where`/`orderBy` that NAMES a relation (a blind boolean exfiltration oracle on
- * an ungranted collection).
- *
- * Returns `null` when the collection's relation set cannot be determined — the
- * guard then FAILS CLOSED (denies all `where`/`orderBy` keys it can't prove are
- * scalar) rather than risk leaking a relation reference.
- */
-function resolveCollectionRelationFields(
-	app: AppRouteContext["app"],
-	name: string,
-): Set<string> | null {
-	const getCfg = app.getCollectionConfig;
-	if (typeof getCfg !== "function") return null;
-	try {
-		const meta = getCfg(name)?.getMeta?.();
-		const relations = meta?.relations;
-		if (!Array.isArray(relations)) return null;
-		return new Set(relations);
-	} catch {
-		// Unknown collection / metadata unavailable → fail closed.
-		return null;
-	}
-}
+export const buildEndpointEntrySource = buildEntrySource;
 
 /** The narrow executor surface the runner needs (typed loosely; `ctx.executor` is `unknown`). */
 interface RunnerExecutor {
@@ -125,55 +74,6 @@ type AppRouteContext = Questpie.AppContext & {
 		};
 	};
 };
-
-/**
- * Compose the guest entry source that invokes the REQUESTED export of the app
- * entry as the run's `export default`.
- *
- * The executor contract is fixed: the guest must `export default` a
- * `function(input)`. An app entry, however, may expose SEVERAL endpoints (Val
- * Town semantics: `export default` + named exports). To dispatch a specific
- * `{fn}` we wrap — WITHOUT parsing or rewriting the untrusted source — by
- * importing the app module intact from a `data:` URL and selecting the export by
- * name at runtime:
- *
- *   - `data:` imports are runtime-portable: the in-process adapter already loads
- *     the guest via a `data:text/typescript` URL, and Deno permits `data:`
- *     imports WITHOUT `--allow-import` (they are not remote network fetches), so
- *     the nested import works in both isolation modes.
- *   - The app source is base64-encoded HOST-SIDE (full UTF-8 via `Buffer`), so no
- *     escaping/`btoa` Latin-1 pitfalls and the source is embedded verbatim.
- *
- * A wrong `{fn}` (not a function on the module) throws inside the guest, which
- * surfaces as a structured `{ ok:false }` — it cannot escalate privilege (the
- * security boundary is the bindings target + the sandbox, independent of which
- * function runs).
- */
-export function buildEndpointEntrySource(
-	appSource: string,
-	fnName: string,
-): string {
-	const appDataUrl = `data:application/typescript;base64,${Buffer.from(
-		appSource,
-		"utf8",
-	).toString("base64")}`;
-	// `fnName` came from the resolver's inferred endpoint list (already validated
-	// against `[A-Za-z0-9_-]`-ish export names), but JSON-encode defensively.
-	const fnLiteral = JSON.stringify(fnName);
-	const urlLiteral = JSON.stringify(appDataUrl);
-	return [
-		`const __APP_URL = ${urlLiteral};`,
-		`const __FN = ${fnLiteral};`,
-		`export default async function __qpEndpoint(input) {`,
-		`  const __mod = await import(__APP_URL);`,
-		`  const __fn = __FN === "default" ? __mod.default : __mod[__FN];`,
-		`  if (typeof __fn !== "function") {`,
-		`    throw new Error("mini-app endpoint '" + __FN + "' is not an exported function");`,
-		`  }`,
-		`  return await __fn(input);`,
-		`}`,
-	].join("\n");
-}
 
 /**
  * Request headers NEVER forwarded into the UNTRUSTED guest's `input` — they
