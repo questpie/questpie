@@ -85,6 +85,33 @@ export interface ExecutorRunOptions {
 	 */
 	bindings?: Record<string, unknown>;
 	/**
+	 * UNTRUSTED app-bindings target — the capability-scoped primitive surface
+	 * (`{ knowledge, collections, … }`, mirroring `buildCodeModeApi`) the guest's
+	 * `globalThis.questpie` proxy resolves to via the broker. ONLY meaningful for
+	 * `isolation: "sandboxed"`: when present, `ExecutorService.run` mints a per-run
+	 * scoped token bound to (`capabilities`, this target) and the supervisor brokers
+	 * the guest's RPCs to it (the guest never imports the app). The mini-app RUNNER
+	 * builds this from `ctx`; the executor service does NOT (it has no request `ctx`).
+	 *
+	 * Typed as `unknown` here so the core adapter interface does not depend on the
+	 * broker's `BindingTarget` shape; the service narrows it when minting.
+	 */
+	appBindings?: unknown;
+	/**
+	 * Absolute URL the SANDBOX SUPERVISOR uses to reach the host broker endpoint
+	 * (`…/sandbox/rpc`) — server-to-server, NOT the guest. Required (with
+	 * `appBindings`) to enable the untrusted bindings path; without it the
+	 * sandboxed run executes compute-only (no `questpie` proxy).
+	 */
+	brokerUrl?: string;
+	/**
+	 * INTERNAL — set by `ExecutorService` after it mints the per-run token, and
+	 * read by the sandboxed adapter to forward to the sandbox `/run` as `bindings`.
+	 * The token is OPAQUE and supervisor-only; it is never injected into the guest.
+	 * Callers should NOT set this directly (use `appBindings` + `brokerUrl`).
+	 */
+	sandboxBindings?: { url: string; token: string };
+	/**
 	 * Isolation mode. Defaults to `"sandboxed"` — untrusted-by-default is the
 	 * safe default; trusted callers (code-mode) opt in explicitly.
 	 */

@@ -22,7 +22,21 @@ export {
 } from "../net-validation.js";
 
 export type {
+	GuestMessage,
+	GuestResultMessage,
+	GuestRpcMessage,
+	HostRpcResultMessage,
+	SandboxBindings,
+	SandboxBindingError,
 	SandboxCapabilities,
 	SandboxRunRequest,
 	SandboxRunResult,
 } from "../types.js";
+export { BINDINGS_TOKEN_HEADER, FRAME_MARKER } from "../types.js";
+
+export {
+	buildGuestBindings,
+	type GuestBindings,
+	type GuestCollection,
+	type HostCall,
+} from "../guest-bindings.js";

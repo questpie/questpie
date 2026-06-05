@@ -54,6 +54,7 @@
 // @ts-nocheck — Deno runtime file; not part of the Bun/tsc typecheck graph.
 
 import { validateEgressHosts } from "./net-validation.ts";
+import { BINDINGS_TOKEN_HEADER, FRAME_MARKER } from "./types.ts";
 import type {
 	SandboxCapabilities,
 	SandboxRunRequest,
@@ -61,6 +62,8 @@ import type {
 } from "./types.ts";
 
 const RESULT_MARKER = "__QP_SANDBOX_RESULT__";
+/** Bound on a single binding RPC round-trip to the host broker. */
+const BROKER_FETCH_TIMEOUT_MS = 10_000;
 
 const DEFAULT_TIMEOUT_MS = 5_000;
 const MAX_TIMEOUT_MS = 30_000;
@@ -122,6 +125,203 @@ function importFlags(hosts: string[]): string[] {
 }
 
 interface RunOutcome extends Omit<SandboxRunResult, "ms"> {}
+
+/**
+ * Relay ONE binding RPC to the host broker (supervisor → app, server-to-server),
+ * carrying the per-run scoped token. NEVER throws — a broker/network failure is
+ * surfaced to the guest as a structured `rpc-result` error, so the guest's call
+ * rejects cleanly instead of hanging.
+ *
+ * This is the ONLY component that knows the token + broker URL; guest code never
+ * sees them. The broker is reached over the network HERE (trusted host↔host),
+ * which is distinct from the GUEST's egress (the guest cannot fetch the broker —
+ * its allowlist rejects loopback/private IPs by design).
+ */
+async function brokerCall(
+	bindings: { url: string; token: string },
+	method: string,
+	args: unknown,
+): Promise<{ ok: boolean; value?: unknown; error?: { code: string; message: string } }> {
+	const controller = new AbortController();
+	const t = setTimeout(() => controller.abort(), BROKER_FETCH_TIMEOUT_MS);
+	try {
+		const res = await fetch(bindings.url, {
+			method: "POST",
+			headers: {
+				"content-type": "application/json",
+				[BINDINGS_TOKEN_HEADER]: bindings.token,
+			},
+			body: JSON.stringify({ method, args }),
+			signal: controller.signal,
+		});
+		const text = await res.text();
+		try {
+			return JSON.parse(text);
+		} catch {
+			return {
+				ok: false,
+				error: {
+					code: "execution_error",
+					message: `broker returned non-JSON (HTTP ${res.status})`,
+				},
+			};
+		}
+	} catch (err) {
+		return {
+			ok: false,
+			error: {
+				code: "execution_error",
+				message: `broker request failed: ${err instanceof Error ? err.message : String(err)}`,
+			},
+		};
+	} finally {
+		clearTimeout(t);
+	}
+}
+
+/**
+ * Drive a BINDINGS run: feed the framed envelope, stream the guest's stdout,
+ * demultiplex `rpc` (relay to the broker, reply on the guest's stdin) vs the
+ * final `result`. Returns the run outcome (without `ms`).
+ *
+ * Multiplexing contract: the guest writes one JSON line per message, each
+ * prefixed by {@link FRAME_MARKER}. The supervisor:
+ *   - `rpc`     → `brokerCall()` → write a framed `rpc-result` to stdin.
+ *   - `result`  → capture as the run outcome and stop.
+ * Non-framed stdout lines (stray guest prints) are ignored.
+ */
+async function relayBindingsRun(
+	child: Deno.ChildProcess,
+	req: SandboxRunRequest,
+	timedOut: () => boolean,
+): Promise<RunOutcome> {
+	const bindings = req.bindings as { url: string; token: string };
+	const encoder = new TextEncoder();
+	const decoder = new TextDecoder();
+	const stdinWriter = child.stdin.getWriter();
+
+	let stdinOpen = true;
+	const closeStdin = async () => {
+		if (!stdinOpen) return;
+		stdinOpen = false;
+		try {
+			await stdinWriter.close();
+		} catch {
+			/* already closed */
+		}
+	};
+	const writeLine = async (obj: unknown) => {
+		if (!stdinOpen) return;
+		try {
+			await stdinWriter.write(encoder.encode(FRAME_MARKER + JSON.stringify(obj) + "\n"));
+		} catch {
+			/* guest gone */
+		}
+	};
+
+	// 1. Send the envelope as the FIRST framed line (note: `bindings:true` is a
+	//    boolean FLAG to the guest — the token/url are NEVER sent into the guest).
+	await writeLine({
+		source: req.source,
+		input: req.input,
+		secrets: req.secrets ?? {},
+		bindings: true,
+	});
+
+	// 2. Stream stdout, demuxing frames. Outstanding RPCs run concurrently so a
+	//    slow broker call doesn't block reading further frames.
+	let outcome: RunOutcome | null = null;
+	let pending = "";
+	const inflight: Array<Promise<void>> = [];
+
+	const handleLine = async (line: string) => {
+		if (!line.startsWith(FRAME_MARKER)) return; // stray output → ignore
+		let msg: {
+			type?: string;
+			id?: number;
+			method?: string;
+			args?: unknown;
+			ok?: boolean;
+			output?: unknown;
+			error?: string;
+			logs?: string[];
+		};
+		try {
+			msg = JSON.parse(line.slice(FRAME_MARKER.length));
+		} catch {
+			return;
+		}
+		if (msg.type === "rpc" && typeof msg.id === "number" && typeof msg.method === "string") {
+			const id = msg.id;
+			const p = (async () => {
+				const r = await brokerCall(bindings, msg.method as string, msg.args);
+				await writeLine({
+					type: "rpc-result",
+					id,
+					ok: !!r.ok,
+					value: r.value,
+					error: r.error,
+				});
+			})();
+			inflight.push(p);
+		} else if (msg.type === "result") {
+			outcome = {
+				ok: !!msg.ok,
+				output: msg.output,
+				error: msg.error,
+				logs: Array.isArray(msg.logs) ? msg.logs : [],
+			};
+		}
+	};
+
+	try {
+		const reader = child.stdout.getReader();
+		while (true) {
+			const { value, done } = await reader.read();
+			if (done) break;
+			pending += decoder.decode(value, { stream: true });
+			let idx: number;
+			while ((idx = pending.indexOf("\n")) !== -1) {
+				const line = pending.slice(0, idx);
+				pending = pending.slice(idx + 1);
+				await handleLine(line);
+			}
+			if (outcome) break; // final result seen
+			if (timedOut()) break;
+		}
+		// Flush a trailing line without newline (the final result frame may not
+		// be newline-terminated before exit).
+		if (!outcome && pending.length > 0) {
+			await handleLine(pending.trim());
+		}
+	} catch {
+		/* stdout closed abruptly — fall through to the no-result handling */
+	}
+
+	// Settle outstanding broker relays, then close the guest's stdin so its drain
+	// loop ends and the process can exit.
+	await Promise.allSettled(inflight);
+	await closeStdin();
+
+	// Drain remaining stdout + collect stderr for diagnostics, then reap.
+	let stderrText = "";
+	try {
+		const { stderr } = await child.output();
+		stderrText = decoder.decode(stderr).trim();
+	} catch {
+		/* already consumed/killed */
+	}
+
+	if (outcome) return outcome;
+	return {
+		ok: false,
+		error:
+			stderrText.length > 0
+				? `subprocess exited without result: ${stderrText.slice(0, 800)}`
+				: "subprocess exited without producing a result",
+		logs: [],
+	};
+}
 
 /**
  * Execute one untrusted request in a fresh, hardened Deno subprocess.
@@ -192,17 +392,8 @@ async function runInSubprocess(req: SandboxRunRequest): Promise<SandboxRunResult
 	let graceTimer: number | undefined;
 
 	try {
-		// Write the request envelope to the child's stdin, then close it.
-		const envelope = JSON.stringify({
-			source: req.source,
-			input: req.input,
-			secrets: req.secrets ?? {},
-		});
-		const writer = child.stdin.getWriter();
-		await writer.write(new TextEncoder().encode(envelope));
-		await writer.close();
-
-		// HARD wall-time: SIGTERM, then SIGKILL after a grace period.
+		// HARD wall-time: SIGTERM, then SIGKILL after a grace period. Shared by
+		// both the legacy and the bindings I/O paths.
 		killTimer = setTimeout(() => {
 			timedOut = true;
 			try {
@@ -218,6 +409,32 @@ async function runInSubprocess(req: SandboxRunRequest): Promise<SandboxRunResult
 				}
 			}, KILL_GRACE_MS);
 		}, timeoutMs);
+
+		// ── BINDINGS PATH: framed stdio relay to the host broker. ──
+		if (req.bindings) {
+			const outcome = await relayBindingsRun(child, req, () => timedOut);
+			clearTimeout(killTimer);
+			if (graceTimer !== undefined) clearTimeout(graceTimer);
+			if (timedOut) {
+				return finish({
+					ok: false,
+					timedOut: true,
+					error: `wall-time exceeded (${timeoutMs}ms)`,
+					logs: outcome?.logs ?? [],
+				});
+			}
+			return finish(outcome);
+		}
+
+		// ── LEGACY PATH: one envelope in, one result line out (M2 behavior). ──
+		const envelope = JSON.stringify({
+			source: req.source,
+			input: req.input,
+			secrets: req.secrets ?? {},
+		});
+		const writer = child.stdin.getWriter();
+		await writer.write(new TextEncoder().encode(envelope));
+		await writer.close();
 
 		const { stdout, stderr } = await child.output();
 		clearTimeout(killTimer);

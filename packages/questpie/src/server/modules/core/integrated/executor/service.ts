@@ -5,6 +5,7 @@ import type {
 	ExecutorRunResult,
 } from "./adapter.js";
 import { InProcessExecutorAdapter } from "./adapters/in-process.js";
+import { type BindingTarget, SandboxBroker } from "./bindings/broker.js";
 import type { ExecutorConfig } from "./types.js";
 
 /**
@@ -29,6 +30,15 @@ export class ExecutorService {
 	private readonly sandboxedAdapter: ExecutorAdapter | undefined;
 	private readonly enabled: boolean;
 
+	/**
+	 * Per-process bindings broker for the UNTRUSTED path: mints per-run scoped
+	 * tokens, authenticates binding RPCs, and enforces capabilities per call.
+	 * Always present (even when the executor is disabled) so the `/api/_sandbox/rpc`
+	 * endpoint has a single, stable instance; with no tokens minted it rejects
+	 * every call as `unauthorized`. See {@link SandboxBroker}.
+	 */
+	readonly broker: SandboxBroker;
+
 	constructor(config?: ExecutorConfig) {
 		this.config = config;
 		this.enabled = config !== undefined;
@@ -36,6 +46,7 @@ export class ExecutorService {
 			config?.trusted ??
 			new InProcessExecutorAdapter(config?.defaultTimeoutMs);
 		this.sandboxedAdapter = config?.sandboxed;
+		this.broker = new SandboxBroker();
 	}
 
 	/** Whether the executor is configured at all. */
@@ -70,6 +81,31 @@ export class ExecutorService {
 					"to run untrusted code, or pass `isolation: \"trusted\"` for trusted code.",
 			);
 		}
+
+		// UNTRUSTED app-bindings: when the caller (mini-app runner) provides a
+		// capability-scoped primitive target AND a broker URL, mint a SHORT-LIVED
+		// per-run token bound to (capabilities, target) and hand the supervisor the
+		// broker coordinates. The token is opaque + server-side-mapped; it is always
+		// revoked once the run settles, so a leaked token cannot outlive the run.
+		if (options.appBindings && options.brokerUrl) {
+			const minted = this.broker.mint({
+				capabilities: options.capabilities ?? {},
+				target: options.appBindings as BindingTarget,
+				ttlMs: options.capabilities?.timeoutMs
+					? options.capabilities.timeoutMs + 30_000
+					: undefined,
+			});
+			try {
+				return await this.sandboxedAdapter.run({
+					...options,
+					isolation,
+					sandboxBindings: { url: options.brokerUrl, token: minted.token },
+				});
+			} finally {
+				minted.revoke();
+			}
+		}
+
 		return this.sandboxedAdapter.run({ ...options, isolation });
 	}
 }

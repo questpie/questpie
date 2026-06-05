@@ -93,6 +93,12 @@ export class HttpSandboxAdapter implements ExecutorAdapter {
 		const abortTimer = setTimeout(() => controller.abort(), fetchTimeoutMs);
 
 		try {
+			// Untrusted app-bindings: when the executor service minted a per-run
+			// token, forward the broker coordinates so the supervisor can relay the
+			// guest's `questpie.*` RPCs. The token is supervisor-only (never reaches
+			// guest code). Absent → the guest runs compute-only (no proxy).
+			const bindings = options.sandboxBindings;
+
 			const res = await this.fetchImpl(`${base}/run`, {
 				method: "POST",
 				headers: { "content-type": "application/json" },
@@ -101,6 +107,7 @@ export class HttpSandboxAdapter implements ExecutorAdapter {
 					input: options.input ?? null,
 					capabilities: sandboxCaps,
 					secrets: options.secrets ?? {},
+					...(bindings ? { bindings } : {}),
 				}),
 				signal: controller.signal,
 			});

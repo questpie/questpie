@@ -18,15 +18,32 @@
  * Process-level hardening (memory cap, fs/env/run/ffi denial, scoped net/import)
  * is applied by the SUPERVISOR via Deno CLI flags — see `sandbox-server.ts`.
  *
- * I/O protocol (stdin → stdout, single JSON line each):
- *   stdin  : { source: string, input: unknown, secrets?: Record<string,string> }
- *   stdout : { ok, output?, logs, error? }   (prefixed by RESULT_MARKER)
+ * I/O — TWO modes, selected by the request envelope's `bindings` flag:
+ *
+ *   (A) LEGACY compute-only (no bindings): stdin carries ONE envelope; stdout
+ *       carries ONE result line (prefixed by RESULT_MARKER). Unchanged from M2.
+ *
+ *   (B) BINDINGS path (`bindings:true` in the envelope): the guest gets a
+ *       capability-scoped `globalThis.questpie` proxy. stdin/stdout become a
+ *       newline-delimited FRAMED channel (prefixed by FRAME_MARKER):
+ *         - the FIRST stdin line is the envelope;
+ *         - subsequent stdin lines are `{type:"rpc-result", id, ...}` replies;
+ *         - the guest writes `{type:"rpc", id, method, args}` to stdout for each
+ *           binding call and the FINAL `{type:"result", ...}` when done.
+ *       The proxy NEVER sees the per-run token or a broker URL — it only writes
+ *       method+args frames; the SUPERVISOR holds the token and brokers the call
+ *       over stdio (NOT the network — the broker is unreachable by guest fetch by
+ *       design: the egress allowlist rejects loopback/private IPs).
  */
 
 // @ts-nocheck — Deno runtime file; not part of the Bun/tsc typecheck graph.
 
+import { buildGuestBindings } from "./guest-bindings.ts";
+
 /** Marker so the supervisor can pick the result line out of guest stdout noise. */
 const RESULT_MARKER = "__QP_SANDBOX_RESULT__";
+/** Marker prefixing each FRAMED protocol message (bindings path). */
+const FRAME_MARKER = "__QP_SANDBOX_MSG__";
 
 // ── 1. HARDEN GLOBALS (must happen before importing/eval'ing guest source) ──
 
@@ -85,30 +102,83 @@ for (const level of ["log", "error", "warn", "info"] as const) {
 	};
 }
 
-// ── 3. READ THE REQUEST FROM STDIN ──
+// ── 3. STDIN READERS ──
 
-async function readStdin(): Promise<string> {
-	const chunks: Uint8Array[] = [];
+const decoder = new TextDecoder();
+const encoder = new TextEncoder();
+
+/**
+ * A line-buffered stdin reader. Yields complete
+ * `\n`-delimited lines as they arrive, keeping stdin OPEN for back-and-forth.
+ */
+function createLineReader() {
 	// deno-lint-ignore no-explicit-any
 	const stdin = (Deno as any).stdin;
 	const buf = new Uint8Array(65536);
-	while (true) {
-		const n = await stdin.read(buf);
-		if (n === null) break;
-		chunks.push(buf.slice(0, n));
+	let pending = "";
+	const queue: string[] = [];
+	let resolveWaiter: ((line: string | null) => void) | null = null;
+	let eof = false;
+
+	async function pump() {
+		while (true) {
+			const n = await stdin.read(buf);
+			if (n === null) {
+				eof = true;
+				if (pending.length > 0) {
+					queue.push(pending);
+					pending = "";
+				}
+				if (resolveWaiter) {
+					const r = resolveWaiter;
+					resolveWaiter = null;
+					r(queue.shift() ?? null);
+				}
+				return;
+			}
+			pending += decoder.decode(buf.subarray(0, n), { stream: true });
+			let idx: number;
+			while ((idx = pending.indexOf("\n")) !== -1) {
+				const line = pending.slice(0, idx);
+				pending = pending.slice(idx + 1);
+				if (resolveWaiter) {
+					const r = resolveWaiter;
+					resolveWaiter = null;
+					r(line);
+				} else {
+					queue.push(line);
+				}
+			}
+		}
 	}
-	let total = 0;
-	for (const c of chunks) total += c.length;
-	const merged = new Uint8Array(total);
-	let off = 0;
-	for (const c of chunks) {
-		merged.set(c, off);
-		off += c.length;
-	}
-	return new TextDecoder().decode(merged);
+	void pump();
+
+	return {
+		/** Next line, or null at EOF. */
+		next(): Promise<string | null> {
+			if (queue.length > 0) return Promise.resolve(queue.shift() as string);
+			if (eof) return Promise.resolve(null);
+			return new Promise((resolve) => {
+				resolveWaiter = resolve;
+			});
+		},
+	};
 }
 
-function emit(result: { ok: boolean; output?: unknown; logs: string[]; error?: string }) {
+/** Write one framed message line to stdout. */
+function writeFrame(msg: unknown) {
+	let payload: string;
+	try {
+		payload = JSON.stringify(msg);
+	} catch {
+		payload = JSON.stringify({ type: "result", ok: false, error: "frame not serializable", logs });
+	}
+	// deno-lint-ignore no-explicit-any
+	(Deno as any).stdout.writeSync(encoder.encode(FRAME_MARKER + payload + "\n"));
+}
+
+/** Emit the LEGACY single-line result (no bindings). */
+function emitLegacy(result: { ok: boolean; output?: unknown; logs: string[]; error?: string }) {
 	let payload: string;
 	try {
 		payload = JSON.stringify(result);
@@ -119,48 +189,141 @@ function emit(result: { ok: boolean; output?: unknown; logs: string[]; error?: s
 			logs: result.logs ?? [],
 		});
 	}
-	// Single marked line to stdout. The supervisor scans for the marker.
 	orig.log(RESULT_MARKER + payload);
 }
 
-async function main() {
-	let req: { source: string; input: unknown; secrets?: Record<string, string> };
-	try {
-		const raw = await readStdin();
-		req = JSON.parse(raw);
-	} catch (err) {
-		emit({ ok: false, error: "failed to read/parse request envelope", logs });
-		return;
-	}
+// ── 4. IMPORT + INVOKE THE GUEST ──
 
-	// Expose injected secrets to the guest (NOT embedded in source).
+/** Dynamic-import the guest source as a blob module and return its default fn. */
+async function loadGuestEntry(source: string): Promise<(input: unknown) => unknown> {
+	const guestUrl = URL.createObjectURL(
+		new Blob([source], { type: "application/typescript" }),
+	);
+	const mod = await import(guestUrl);
+	const entry = mod.default;
+	if (typeof entry !== "function") {
+		throw new Error("guest must 'export default' a function(input)");
+	}
+	return entry;
+}
+
+type Envelope = {
+	source: string;
+	input: unknown;
+	secrets?: Record<string, string>;
+	/** When true, run the FRAMED bindings protocol and inject `globalThis.questpie`. */
+	bindings?: boolean;
+};
+
+/** BINDINGS run — framed channel + `globalThis.questpie` proxy. */
+async function runWithBindings(envelope: Envelope, reader: { next(): Promise<string | null> }) {
+	// Pending host calls keyed by correlation id.
+	const pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: unknown) => void }>();
+	let nextId = 1;
+
+	// The injected transport: write an `rpc` frame, await its `rpc-result`.
+	const hostCall = (method: string, args: unknown): Promise<unknown> => {
+		const id = nextId++;
+		return new Promise<unknown>((resolve, reject) => {
+			pending.set(id, { resolve, reject });
+			writeFrame({ type: "rpc", id, method, args });
+		});
+	};
+
+	// Background loop: consume `rpc-result` frames and settle pending calls. It
+	// runs until stdin EOF (the supervisor closes it after the run ends).
+	const drain = (async () => {
+		while (true) {
+			const line = await reader.next();
+			if (line === null) break;
+			if (line.length === 0) continue;
+			const json = line.startsWith(FRAME_MARKER) ? line.slice(FRAME_MARKER.length) : line;
+			let msg: { type?: string; id?: number; ok?: boolean; value?: unknown; error?: { message?: string } };
+			try {
+				msg = JSON.parse(json);
+			} catch {
+				continue;
+			}
+			if (msg?.type === "rpc-result" && typeof msg.id === "number") {
+				const p = pending.get(msg.id);
+				if (!p) continue;
+				pending.delete(msg.id);
+				if (msg.ok) {
+					p.resolve(msg.value);
+				} else {
+					const m = msg.error?.message ?? "binding call rejected";
+					p.reject(new Error(m));
+				}
+			}
+		}
+		// Stdin closed: reject any still-pending calls so the guest can't hang.
+		for (const [, p] of pending) p.reject(new Error("host channel closed"));
+		pending.clear();
+	})();
+
 	try {
 		// deno-lint-ignore no-explicit-any
-		(globalThis as any).__secrets = req.secrets ?? {};
+		(globalThis as any).__secrets = envelope.secrets ?? {};
+		// deno-lint-ignore no-explicit-any
+		(globalThis as any).questpie = buildGuestBindings(hostCall);
 	} catch {
 		/* noop */
 	}
 
 	try {
-		// Import the guest as a blob module so its own top-level remote imports are
-		// governed by the subprocess's scoped `--allow-import`. blob: URLs are not
-		// remote hosts and need no import permission.
-		const guestUrl = URL.createObjectURL(
-			new Blob([req.source], { type: "application/typescript" }),
-		);
-		const mod = await import(guestUrl);
-		const entry = mod.default;
-		if (typeof entry !== "function") {
-			throw new Error("guest must 'export default' a function(input)");
-		}
-		const output = await entry(req.input);
-		emit({ ok: true, output, logs });
+		const entry = await loadGuestEntry(envelope.source);
+		const output = await entry(envelope.input);
+		writeFrame({ type: "result", ok: true, output, logs });
 	} catch (err) {
-		emit({
+		writeFrame({
+			type: "result",
 			ok: false,
 			error: err instanceof Error ? err.message : String(err),
 			logs,
 		});
+	}
+	// Surface unexpected drain failures (best effort; the result is already out).
+	void drain.catch(() => {});
+}
+
+async function main() {
+	// Peek the envelope to choose the protocol. For the bindings path we need a
+	// line reader (stdin stays open); for legacy we read all of stdin. We always
+	// read the FIRST line via the line reader, then branch.
+	const reader = createLineReader();
+	const firstLine = await reader.next();
+	if (firstLine === null) {
+		emitLegacy({ ok: false, error: "empty request envelope", logs });
+		return;
+	}
+	let envelope: Envelope;
+	try {
+		const json = firstLine.startsWith(FRAME_MARKER)
+			? firstLine.slice(FRAME_MARKER.length)
+			: firstLine;
+		envelope = JSON.parse(json);
+	} catch {
+		emitLegacy({ ok: false, error: "failed to read/parse request envelope", logs });
+		return;
+	}
+
+	if (envelope.bindings) {
+		await runWithBindings(envelope, reader);
+	} else {
+		// Legacy path: the envelope was the whole stdin (single line). Run it.
+		try {
+			// deno-lint-ignore no-explicit-any
+			(globalThis as any).__secrets = envelope.secrets ?? {};
+		} catch {
+			/* noop */
+		}
+		try {
+			const entry = await loadGuestEntry(envelope.source);
+			const output = await entry(envelope.input);
+			emitLegacy({ ok: true, output, logs });
+		} catch (err) {
+			emitLegacy({ ok: false, error: err instanceof Error ? err.message : String(err), logs });
+		}
 	}
 }
 
