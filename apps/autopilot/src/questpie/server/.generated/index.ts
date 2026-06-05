@@ -73,6 +73,7 @@ import _seed_demoCoverageData_seed from "../seeds/demo-coverage-data.seed";
 import _seed_demoParentIssues_seed from "../seeds/demo-parent-issues.seed";
 import _seed_demoProductData_seed from "../seeds/demo-product-data.seed";
 import _seed_demoStressData_seed from "../seeds/demo-stress-data.seed";
+import _seed_makeAMiniappSkill_seed from "../seeds/make-a-miniapp-skill.seed";
 import _seed_runtimeDefaults_seed from "../seeds/runtime-defaults.seed";
 import _seed_socialSchedulerApp_seed from "../seeds/social-scheduler-app.seed";
 
@@ -492,7 +493,7 @@ export const app = await createApp(
 			knowledgeResource: _svc_knowledgeResource,
 		},
 		migrations: [_mig_20260507T095449_jolly_red_phoenix, _mig_20260516T185000_auth_user_admin_columns_repair, _mig_20260517T095535_happy_orange_unicorn, _mig_20260519T135407_add_run_links_and_ai_module, _mig_20260519T142100_backfill_legacy_runs_into_run_links, _mig_20260519T145500_link_schedule_executions_to_run_links, _mig_20260519T161500_drop_legacy_execution_infra, _mig_20260529T001500_drop_workflow_configs, _mig_20260529T003000_drop_capabilities, _mig_20260604T111500_add_api_key_config_id],
-		seeds: [_seed_demoCoverageData_seed, _seed_demoParentIssues_seed, _seed_demoProductData_seed, _seed_demoStressData_seed, _seed_runtimeDefaults_seed, _seed_socialSchedulerApp_seed],
+		seeds: [_seed_demoCoverageData_seed, _seed_demoParentIssues_seed, _seed_demoProductData_seed, _seed_demoStressData_seed, _seed_makeAMiniappSkill_seed, _seed_runtimeDefaults_seed, _seed_socialSchedulerApp_seed],
 		views: {
 			fileDetail: _view_fileDetail,
 			filesView: _view_filesView,

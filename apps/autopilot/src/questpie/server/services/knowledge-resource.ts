@@ -18,7 +18,8 @@ export type KnowledgeKind =
 	| "preview"
 	| "log"
 	| "diff"
-	| "miniapp";
+	| "miniapp"
+	| "skill";
 export type KnowledgeSource =
 	| "human"
 	| "assistant"

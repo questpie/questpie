@@ -10,6 +10,7 @@ import {
 import type { RunCompletion } from "../lib/run-completion";
 import { resolveRuntimeSelection } from "../lib/runtime-selection";
 import { linkScheduleExecutionRun } from "../lib/schedule-run-links";
+import { injectSkillsIntoInstructions } from "../lib/skill-discovery";
 
 function responseContent(completion: RunCompletion | null) {
 	if (completion?.status === "completed") {
@@ -53,17 +54,26 @@ export default workflow({
 				return existing;
 			}
 
+			const projectId = input.projectId ?? relationId(session.project);
 			const runtime = await resolveRuntimeSelection(ctx, {
 				modelId: input.modelId,
-				projectId: input.projectId ?? relationId(session.project),
+				projectId,
 			});
+			// Run-start progressive disclosure (§8.3): prepend the published-skills L1
+			// block to the user's prompt so the agent can discover + load skills on
+			// demand. Drafts are excluded; descriptions are injected as delimited DATA.
+			const instructions = await injectSkillsIntoInstructions(
+				ctx.collections,
+				input.prompt,
+				{ projectId },
+			);
 			return createAiRunLink({
 				ctx,
 				runtime,
 				taskId: input.taskId ?? relationId(session.task),
-				projectId: input.projectId ?? relationId(session.project),
+				projectId,
 				initiatedBy: "chat",
-				instructions: input.prompt,
+				instructions,
 				chatSessionId: input.chatSessionId,
 				chatMessageId: input.messageId,
 				scheduleExecutionId: input.scheduleExecutionId,

@@ -2,6 +2,8 @@ import { index } from "drizzle-orm/pg-core";
 
 import { collection } from "#questpie/factories";
 
+import { parseSkillFrontmatter } from "../lib/skill-frontmatter";
+
 /**
  * Unified `assets` collection — the Google-Drive-like company FILE STORE.
  *
@@ -88,6 +90,11 @@ export default collection("assets")
 				// A mini-app `.app` bundle file (server.ts/index.html/*.jsx). The
 				// `renderer:"miniapp"` row mounts the KnowledgeHost iframe (M7).
 				{ value: "miniapp", label: { en: "Mini-app" } },
+				// An autopilot SKILL.md file (progressive-disclosure procedural
+				// knowledge). `renderer:"markdown"`; the YAML frontmatter is parsed to
+				// a `metadata.skill` mirror by the write-time validator hook below
+				// (§8.2) so discovery never re-parses bodies.
+				{ value: "skill", label: { en: "Skill" } },
 			])
 			.label({ en: "Kind" }),
 		contentType: f.text().label({ en: "Content Type" }),
@@ -127,14 +134,42 @@ export default collection("assets")
 		 * sources (no `key`) keep the private default.
 		 */
 		beforeChange: ({ data, operation }) => {
-			if (operation !== "create") return;
-			const row = data as { key?: unknown; visibility?: unknown };
-			if (
-				(row.visibility === undefined || row.visibility === null) &&
-				typeof row.key === "string" &&
-				row.key.length > 0
-			) {
-				row.visibility = "public";
+			const row = data as {
+				key?: unknown;
+				visibility?: unknown;
+				kind?: unknown;
+				path?: unknown;
+				body?: unknown;
+				metadata?: unknown;
+			};
+
+			if (operation === "create") {
+				if (
+					(row.visibility === undefined || row.visibility === null) &&
+					typeof row.key === "string" &&
+					row.key.length > 0
+				) {
+					row.visibility = "public";
+				}
+			}
+
+			// Write-time SKILL.md validator (§8.2): a `kind:"skill"` row (or any write
+			// of a `.../SKILL.md` body) MUST carry valid YAML frontmatter. Parse it to a
+			// MIRROR in `metadata.skill` so DISCOVERY never re-parses bodies, and ENFORCE
+			// the Anthropic limits — a malformed/over-budget skill is rejected fail-closed
+			// (`parseSkillFrontmatter` throws). Runs on create AND on a body-changing
+			// update so the mirror always reflects the stored body.
+			const isSkillKind = row.kind === "skill";
+			const isSkillPath =
+				typeof row.path === "string" && row.path.endsWith("/SKILL.md");
+			const hasBody = typeof row.body === "string";
+			if ((isSkillKind || isSkillPath) && hasBody) {
+				const mirror = parseSkillFrontmatter(row.body as string);
+				const prior =
+					row.metadata && typeof row.metadata === "object"
+						? (row.metadata as Record<string, unknown>)
+						: {};
+				row.metadata = { ...prior, skill: mirror };
 			}
 		},
 	})

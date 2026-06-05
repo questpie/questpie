@@ -13,6 +13,7 @@ import {
 import type { RunCompletion } from "../lib/run-completion";
 import { resolveRuntimeSelection } from "../lib/runtime-selection";
 import { linkScheduleExecutionRun } from "../lib/schedule-run-links";
+import { injectSkillsIntoInstructions } from "../lib/skill-discovery";
 import { workflowsFromContext } from "../lib/workflows";
 
 type Collections = AppCollections;
@@ -213,13 +214,21 @@ export default workflow({
 			});
 
 			const run = await step.run(`create-run-${attempt}`, async () => {
+				// Run-start progressive disclosure (§8.3): prepend the published-skills
+				// L1 block to the task instructions. Drafts excluded; descriptions are
+				// injected as delimited DATA, not trusted instructions (§8.7).
+				const instructions = await injectSkillsIntoInstructions(
+					ctx.collections,
+					taskInstructions(task),
+					{ projectId: relationId(task.project) },
+				);
 				return createAiRunLink({
 					ctx: ctx,
 					runtime,
 					taskId: input.taskId,
 					projectId: relationId(task.project),
 					initiatedBy: "task",
-					instructions: taskInstructions(task),
+					instructions,
 					scheduleExecutionId: input.scheduleExecutionId,
 					linkMetadata: {
 						runReason: input.runReason ?? "task-pipeline",
