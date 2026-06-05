@@ -37,6 +37,7 @@ import _job_scheduleTick from "../jobs/schedule-tick";
 import _job_taskEscalation from "../jobs/task-escalation";
 
 // ── Routes ─────────────────────────────────────────────────
+import _route_apps_appId_fs_spread_path from "../routes/apps/[appId]/fs/[...path]";
 import _route_chat from "../routes/chat";
 import _route_events from "../routes/events";
 import _route_intake from "../routes/intake";
@@ -200,6 +201,7 @@ export type AppJobs = _ModuleJobs & {
 
 /** All routes in the app (modules + user, user overrides) */
 export type AppRoutes = _ModuleRoutes & {
+	"apps/[appId]/fs/[...path]": RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_apps_appId_fs_spread_path>, RouteParamsFromKey<"apps/[appId]/fs/[...path]">>;
 	chat: RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_chat>, RouteParamsFromKey<"chat">>;
 	events: RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_events>, RouteParamsFromKey<"events">>;
 	intake: RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_intake>, RouteParamsFromKey<"intake">>;
@@ -465,6 +467,7 @@ export const app = await createApp(
 			taskEscalation: _job_taskEscalation,
 		},
 		routes: {
+			"apps/[appId]/fs/[...path]": _route_apps_appId_fs_spread_path,
 			chat: _route_chat,
 			events: _route_events,
 			intake: _route_intake,

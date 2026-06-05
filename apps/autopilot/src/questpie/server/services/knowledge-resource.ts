@@ -65,6 +65,38 @@ export interface CreateRunOutputInput {
 	source?: KnowledgeSource;
 }
 
+/** A knowledge resource read back by path (format-agnostic file-as-DB read). */
+export interface KnowledgeResourceRecord {
+	id: string;
+	path: string;
+	title: string | null;
+	body: string;
+	contentType: string | null;
+	metadata: Record<string, unknown> | null;
+}
+
+/** Single entry returned by a by-prefix listing. */
+export interface KnowledgeResourceEntry {
+	path: string;
+	title: string | null;
+	contentType: string | null;
+}
+
+export interface WriteResourceByPathInput {
+	path: string;
+	body: string;
+	title?: string | null;
+	contentType?: string | null;
+	scopeType?: KnowledgeScopeType | null;
+	projectId?: string | null;
+	taskId?: string | null;
+	runId?: string | null;
+	kind?: KnowledgeKind | null;
+	source?: KnowledgeSource | null;
+	sourceRef?: string | null;
+	metadata?: Record<string, unknown> | null;
+}
+
 export function normalizeKnowledgePath(path: string): string {
 	const trimmed = path.trim().replace(/^\/+/, "");
 	const normalized = posix.normalize(trimmed);
@@ -185,6 +217,111 @@ export default service({
 					contentHash,
 					metadata: (input.metadata ?? undefined) as any,
 				} as any);
+			},
+
+			/**
+			 * Read a single knowledge resource by its exact (normalized) path.
+			 * Format-agnostic: returns the stored bytes-as-text plus content-type
+			 * and metadata; the caller decides how to interpret them.
+			 */
+			async readByPath(
+				rawPath: string,
+			): Promise<KnowledgeResourceRecord | null> {
+				const path = normalizeKnowledgePath(rawPath);
+				const resource = await collections.knowledge.findOne({
+					where: { path },
+				});
+				if (!resource) return null;
+				const row = resource as Record<string, unknown>;
+				return {
+					id: String(row.id),
+					path: typeof row.path === "string" ? row.path : path,
+					title: typeof row.title === "string" ? row.title : null,
+					body: typeof row.body === "string" ? row.body : "",
+					contentType:
+						typeof row.contentType === "string" ? row.contentType : null,
+					metadata:
+						row.metadata && typeof row.metadata === "object"
+							? (row.metadata as Record<string, unknown>)
+							: null,
+				};
+			},
+
+			/**
+			 * Create-or-overwrite a knowledge resource at an exact path
+			 * (upsert by path). Content-agnostic: `body`/`contentType` are stored
+			 * verbatim — no format parsing.
+			 */
+			async writeByPath(
+				input: WriteResourceByPathInput,
+			): Promise<KnowledgeResourceRecord> {
+				const path = normalizeKnowledgePath(input.path);
+				const contentHash = hashContent(input.body);
+				const existing = await collections.knowledge.findOne({
+					where: { path },
+				});
+
+				const data = {
+					title: input.title ?? basename(path),
+					path,
+					scopeType: input.scopeType ?? "company",
+					project: input.projectId ?? undefined,
+					task: input.taskId ?? undefined,
+					run: input.runId ?? undefined,
+					kind: input.kind ?? "document",
+					contentType: input.contentType ?? inferContentType(path),
+					body: input.body,
+					source: input.source ?? "system",
+					sourceRef: input.sourceRef ?? undefined,
+					contentHash,
+					metadata: (input.metadata ?? undefined) as any,
+				};
+
+				const saved = existing
+					? await collections.knowledge.updateById({
+							id: (existing as Record<string, unknown>).id as string,
+							data: data as any,
+						})
+					: await collections.knowledge.create(data as any);
+
+				const row = saved as Record<string, unknown>;
+				return {
+					id: String(row.id),
+					path: typeof row.path === "string" ? row.path : path,
+					title: typeof row.title === "string" ? row.title : null,
+					body: typeof row.body === "string" ? row.body : input.body,
+					contentType:
+						typeof row.contentType === "string"
+							? row.contentType
+							: (data.contentType ?? null),
+					metadata:
+						row.metadata && typeof row.metadata === "object"
+							? (row.metadata as Record<string, unknown>)
+							: ((input.metadata ?? null) as Record<string, unknown> | null),
+				};
+			},
+
+			/**
+			 * List knowledge resources whose path starts with `prefix`
+			 * (already normalized by the caller). Returns lightweight entries
+			 * (no bodies) ordered by path.
+			 */
+			async listByPrefix(prefix: string): Promise<KnowledgeResourceEntry[]> {
+				const result = await collections.knowledge.find({
+					where: { path: { startsWith: prefix } },
+					limit: 1000,
+					orderBy: { path: "asc" },
+				});
+				const docs = (result as { docs?: unknown[] }).docs ?? [];
+				return docs
+					.map((doc) => doc as Record<string, unknown>)
+					.filter((row) => typeof row.path === "string")
+					.map((row) => ({
+						path: row.path as string,
+						title: typeof row.title === "string" ? row.title : null,
+						contentType:
+							typeof row.contentType === "string" ? row.contentType : null,
+					}));
 			},
 
 			async createRunArtifact(runId: string, artifact: WorkerArtifactInput) {
