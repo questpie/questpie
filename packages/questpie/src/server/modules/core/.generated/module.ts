@@ -36,7 +36,6 @@ import _route_globals_name_transition from "../routes/globals/[name]/transition"
 import _route_globals_name_versions from "../routes/globals/[name]/versions";
 import _route_health from "../routes/health";
 import _route_realtime from "../routes/realtime";
-import _route_sandbox_rpc from "../routes/sandbox/rpc";
 import _route_search from "../routes/search";
 import _route_search_reindex_collection from "../routes/search/reindex/[collection]";
 // ── Services ────────────────────────────────────────────
@@ -115,7 +114,6 @@ export interface CoreRoutes {
 	"globals/[name]/versions": RouteWithParams<typeof _route_globals_name_versions, RouteParamsFromKey<"globals/[name]/versions">>;
 	health: RouteWithParams<typeof _route_health, RouteParamsFromKey<"health">>;
 	realtime: RouteWithParams<typeof _route_realtime, RouteParamsFromKey<"realtime">>;
-	"sandbox/rpc": RouteWithParams<typeof _route_sandbox_rpc, RouteParamsFromKey<"sandbox/rpc">>;
 	search: RouteWithParams<typeof _route_search, RouteParamsFromKey<"search">>;
 	"search/reindex/[collection]": RouteWithParams<typeof _route_search_reindex_collection, RouteParamsFromKey<"search/reindex/[collection]">>;
 }
@@ -194,7 +192,6 @@ const _module = {
 		"globals/[name]/versions": _route_globals_name_versions,
 		health: _route_health,
 		realtime: _route_realtime,
-		"sandbox/rpc": _route_sandbox_rpc,
 		search: _route_search,
 		"search/reindex/[collection]": _route_search_reindex_collection,
 	} as CoreRoutes,

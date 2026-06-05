@@ -39,6 +39,7 @@
 		"@better-auth/api-key": "1.6.10",
 		"@questpie/admin": "workspace:*",
 		"@questpie/ai": "workspace:*",
+		"@questpie/executor": "workspace:*",
 		"@questpie/mcp": "workspace:*",
 		"@questpie/sandbox": "workspace:*",
 		"@questpie/workflows": "workspace:*",

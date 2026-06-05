@@ -1,5 +1,5 @@
 /**
- * Sandbox bindings broker endpoint — `POST /_sandbox/rpc`.
+ * Sandbox bindings broker endpoint — `POST /api/sandbox/rpc`.
  *
  * The TRUSTED host side of the UNTRUSTED bindings path (design §13/§14). The
  * sandbox SUPERVISOR (the `@questpie/sandbox` Deno service), on a guest binding
@@ -7,6 +7,12 @@
  * endpoint authenticates the token, enforces the run's capabilities PER CALL
  * (default-deny), executes via the run's bound primitive target, and returns the
  * structured result/error.
+ *
+ * This route used to live in `packages/questpie` CORE (baked into every app). It
+ * now ships in the OPT-IN `@questpie/executor` module so the sandbox capability —
+ * including its security route — is enabled explicitly, like every other module
+ * (`mcpModule`/`workflowsModule`). The handler is UNCHANGED: it adapts HTTP ⇄ the
+ * core `SandboxBroker` (`app.executor.broker`) and never throws a bare 500.
  *
  * SECURITY NOTES:
  *   - This is reached by the SUPERVISOR, never by guest code directly. The guest
@@ -25,10 +31,9 @@
  * `unauthorized`, so an unauthenticated caller gets a structured 401-style body.
  */
 
-import type { BrokerRpcResponse } from "#questpie/server/modules/core/integrated/executor/bindings/protocol.js";
-import { BINDINGS_TOKEN_HEADER } from "#questpie/server/modules/core/integrated/executor/bindings/protocol.js";
-import type { ExecutorService } from "#questpie/server/modules/core/integrated/executor/service.js";
-import { route } from "#questpie/server/routes/define-route.js";
+import { route } from "questpie";
+import type { BrokerRpcResponse, ExecutorService } from "questpie/executor";
+import { BINDINGS_TOKEN_HEADER } from "questpie/executor";
 
 function json(body: BrokerRpcResponse, status: number): Response {
 	return new Response(JSON.stringify(body), {
@@ -37,7 +42,7 @@ function json(body: BrokerRpcResponse, status: number): Response {
 	});
 }
 
-export default route()
+export const sandboxRpcRoute = route()
 	.post()
 	.raw()
 	.handler(async ({ request, app }) => {
@@ -97,3 +102,5 @@ export default route()
 
 		return json(result, status);
 	});
+
+export default sandboxRpcRoute;
