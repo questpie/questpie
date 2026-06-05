@@ -1,3 +1,4 @@
+import { httpSandboxAdapter } from "@questpie/sandbox/adapter";
 import { runtimeConfig } from "questpie/app";
 import { ConsoleAdapter } from "questpie/adapters/console";
 import { pgBossAdapter } from "questpie/adapters/pg-boss";
@@ -20,4 +21,12 @@ export default runtimeConfig({
 		adapter: new ConsoleAdapter({ logHtml: false }),
 	},
 	queue: { adapter: pgBossAdapter({ connectionString: DATABASE_URL }) },
+	executor: {
+		sandboxed: httpSandboxAdapter({
+			url: process.env.SANDBOX_URL ?? "http://127.0.0.1:8787",
+		}),
+		brokerUrl:
+			process.env.SANDBOX_BROKER_URL ??
+			"http://127.0.0.1:3000/api/sandbox/rpc",
+	},
 });
