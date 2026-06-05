@@ -93,6 +93,7 @@ import { knowledgeWrite as _mcpTool_knowledge_write } from "../mcp-tools/knowled
 import { runArtifactContent as _mcpTool_run_artifact_content } from "../mcp-tools/run-artifacts";
 import { runArtifactCreate as _mcpTool_run_artifact_create } from "../mcp-tools/run-artifacts";
 import { runArtifacts as _mcpTool_run_artifacts } from "../mcp-tools/run-artifacts";
+import { runCode as _mcpTool_run_code } from "../mcp-tools/run-code";
 import { runEvents as _mcpTool_run_events } from "../mcp-tools/read-model";
 import { runGet as _mcpTool_run_get } from "../mcp-tools/read-model";
 import { runList as _mcpTool_run_list } from "../mcp-tools/read-model";
@@ -265,6 +266,7 @@ export type AppMcpTools = _ModuleMcpTools & {
 	run_artifact_content: typeof _mcpTool_run_artifact_content;
 	run_artifact_create: typeof _mcpTool_run_artifact_create;
 	run_artifacts: typeof _mcpTool_run_artifacts;
+	run_code: typeof _mcpTool_run_code;
 	run_events: typeof _mcpTool_run_events;
 	run_get: typeof _mcpTool_run_get;
 	run_list: typeof _mcpTool_run_list;
@@ -506,6 +508,7 @@ export const app = await createApp(
 			run_artifact_content: _mcpTool_run_artifact_content,
 			run_artifact_create: _mcpTool_run_artifact_create,
 			run_artifacts: _mcpTool_run_artifacts,
+			run_code: _mcpTool_run_code,
 			run_events: _mcpTool_run_events,
 			run_get: _mcpTool_run_get,
 			run_list: _mcpTool_run_list,

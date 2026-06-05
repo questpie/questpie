@@ -684,6 +684,7 @@ async function createAppFromDefinition(
 		realtime: runtime.realtime,
 		logger: runtime.logger,
 		kv: runtime.kv,
+		executor: runtime.executor,
 		migrations: {
 			migrations: [...merged.migrations],
 		},
