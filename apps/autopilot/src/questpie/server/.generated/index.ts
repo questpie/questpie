@@ -41,6 +41,7 @@ import _job_taskEscalation from "../jobs/task-escalation";
 // ── Routes ─────────────────────────────────────────────────
 import _route_apps_appId_fn from "../routes/apps/[appId]/[fn]";
 import _route_apps_appId_fs_spread_path from "../routes/apps/[appId]/fs/[...path]";
+import _route_apps_appId_token from "../routes/apps/[appId]/token";
 import _route_chat from "../routes/chat";
 import _route_events from "../routes/events";
 import _route_intake from "../routes/intake";
@@ -212,6 +213,7 @@ export type AppJobs = _ModuleJobs & {
 export type AppRoutes = _ModuleRoutes & {
 	"apps/[appId]/[fn]": RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_apps_appId_fn>, RouteParamsFromKey<"apps/[appId]/[fn]">>;
 	"apps/[appId]/fs/[...path]": RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_apps_appId_fs_spread_path>, RouteParamsFromKey<"apps/[appId]/fs/[...path]">>;
+	"apps/[appId]/token": RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_apps_appId_token>, RouteParamsFromKey<"apps/[appId]/token">>;
 	chat: RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_chat>, RouteParamsFromKey<"chat">>;
 	events: RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_events>, RouteParamsFromKey<"events">>;
 	intake: RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_intake>, RouteParamsFromKey<"intake">>;
@@ -482,6 +484,7 @@ export const app = await createApp(
 		routes: {
 			"apps/[appId]/[fn]": _route_apps_appId_fn,
 			"apps/[appId]/fs/[...path]": _route_apps_appId_fs_spread_path,
+			"apps/[appId]/token": _route_apps_appId_token,
 			chat: _route_chat,
 			events: _route_events,
 			intake: _route_intake,

@@ -23,6 +23,7 @@ import {
 	knowledgeSourceLine,
 	knowledgeSummary,
 } from "../lib/knowledge-attachments";
+import { KnowledgeHost } from "./knowledge-host";
 
 type KnowledgeDoc = {
 	id: string;
@@ -35,6 +36,10 @@ type KnowledgeDoc = {
 	source?: string | null;
 	sourceRef?: string | null;
 	scopeType?: string | null;
+	/** Upload-blob fields (present when the row carries an uploaded file). */
+	url?: string | null;
+	key?: string | null;
+	filename?: string | null;
 	project?: RelationValue;
 	task?: RelationValue;
 	run?: RelationValue;
@@ -48,9 +53,7 @@ type RelationValue =
 	| { id?: string; title?: string; name?: string }
 	| null;
 
-function isLazyLoader(
-	loader: MaybeLazyComponent,
-): loader is () => Promise<{
+function isLazyLoader(loader: MaybeLazyComponent): loader is () => Promise<{
 	default: React.ComponentType<Record<string, unknown>>;
 }> {
 	return (
@@ -115,8 +118,57 @@ function looksHtml(doc: KnowledgeDoc) {
 	);
 }
 
+/**
+ * A row is a mini-app when its `kind`/`renderer` says so. The `.app` bundle is a
+ * SUBTREE; any of its rows (`server.ts`/`index.html`/`*.jsx`) carries
+ * `kind:"miniapp"`, so opening ANY of them resolves to the same app id and mounts
+ * the KnowledgeHost for the whole bundle.
+ */
+function isMiniApp(doc: KnowledgeDoc) {
+	return doc.kind === "miniapp" || doc.renderer === "miniapp";
+}
+
+/**
+ * Extract the `{appId}` from a `.app` bundle row path:
+ * `company/apps/{appId}.app/...` → `{appId}`. Returns `null` when the path is not
+ * inside an `.app` bundle.
+ */
+function appIdFromPath(path: string | null | undefined): string | null {
+	if (typeof path !== "string") return null;
+	const match = path.match(/(?:^|\/)apps\/([a-z0-9][a-z0-9-]*)\.app\//);
+	return match ? match[1] : null;
+}
+
+/** PDF detection (content-type or extension) → the in-browser pdf viewer. */
+function looksPdf(doc: KnowledgeDoc) {
+	const contentType = doc.contentType?.toLowerCase() ?? "";
+	return (
+		doc.renderer === "pdf" ||
+		contentType.includes("pdf") ||
+		/\.pdf$/i.test(doc.path ?? "")
+	);
+}
+
+/** Office-document detection (doc/docx/xls/xlsx/ppt/pptx) → the office viewer. */
+function looksOffice(doc: KnowledgeDoc) {
+	const contentType = doc.contentType?.toLowerCase() ?? "";
+	return (
+		doc.renderer === "office" ||
+		/officedocument|msword|ms-excel|ms-powerpoint/.test(contentType) ||
+		/\.(docx?|xlsx?|pptx?)$/i.test(doc.path ?? "")
+	);
+}
+
+/** A row that carries an uploaded blob (a `key`) rather than a text `body`. */
+function hasUploadBlob(doc: KnowledgeDoc) {
+	return typeof (doc as { key?: unknown }).key === "string";
+}
+
 function bodyKind(doc: KnowledgeDoc) {
 	const contentType = doc.contentType?.toLowerCase() ?? "";
+	if (isMiniApp(doc)) return "miniapp";
+	if (looksPdf(doc)) return "pdf";
+	if (looksOffice(doc)) return "office";
 	if (looksHtml(doc)) return "html";
 	if (
 		doc.renderer === "markdown" ||
@@ -196,9 +248,109 @@ function MarkdownBlock({ value }: { value: string }) {
 	);
 }
 
+/** Resolve a same-origin-friendly blob URL for an upload row (or undefined). */
+function resolveBlobUrl(doc: KnowledgeDoc): string | undefined {
+	const url = doc.url;
+	if (typeof url !== "string" || url.trim().length === 0) return undefined;
+	return url.trim();
+}
+
+function DownloadFallback({ doc }: { doc: KnowledgeDoc }) {
+	const url = resolveBlobUrl(doc);
+	const name = doc.filename ?? doc.title ?? doc.path ?? "file";
+	return (
+		<div className="border-border-subtle bg-card flex flex-col items-center justify-center gap-3 border px-4 py-12 text-center">
+			<Icon
+				icon="ph:file-arrow-down"
+				className="text-muted-foreground size-8"
+			/>
+			<div className="text-sm font-medium">{name}</div>
+			{doc.contentType ? (
+				<div className="text-muted-foreground text-xs">{doc.contentType}</div>
+			) : null}
+			{url ? (
+				<a
+					href={url}
+					download={doc.filename ?? undefined}
+					className="control-surface text-foreground inline-flex h-8 items-center gap-2 px-3 text-xs"
+				>
+					<Icon icon="ph:download-simple" className="size-3.5" />
+					Download
+				</a>
+			) : (
+				<div className="text-muted-foreground text-xs">
+					No downloadable file on this record.
+				</div>
+			)}
+		</div>
+	);
+}
+
 function BodyPreview({ doc }: { doc: KnowledgeDoc }) {
+	const kind = bodyKind(doc);
+
+	// Mini-app: mount the KnowledgeHost iframe runtime (it reads the `.app` bundle
+	// itself — no `body` on the opened row is required).
+	if (kind === "miniapp") {
+		const appId = appIdFromPath(doc.path);
+		if (!appId) {
+			return (
+				<div className="text-muted-foreground border-border-subtle border px-4 py-8 text-center text-sm">
+					This mini-app row is not inside a `.app` bundle path.
+				</div>
+			);
+		}
+		return (
+			<div className="border-border-subtle bg-background overflow-hidden border">
+				<KnowledgeHost appId={appId} className="h-[36rem] w-full" />
+			</div>
+		);
+	}
+
+	// PDF: browsers render application/pdf natively in an <iframe>.
+	if (kind === "pdf") {
+		const url = resolveBlobUrl(doc);
+		if (!url) return <DownloadFallback doc={doc} />;
+		return (
+			<div className="border-border-subtle bg-background overflow-hidden border">
+				<iframe
+					title={doc.title ?? doc.path ?? "PDF preview"}
+					src={url}
+					className="h-[40rem] w-full bg-white"
+				/>
+			</div>
+		);
+	}
+
+	// Office docs: embed via the Microsoft Office Online viewer when the blob is at
+	// a publicly reachable absolute URL; otherwise fall back to download.
+	if (kind === "office") {
+		const url = resolveBlobUrl(doc);
+		const isAbsolute = !!url && /^https?:\/\//i.test(url);
+		if (url && isAbsolute) {
+			const viewer = `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(
+				url,
+			)}`;
+			return (
+				<div className="space-y-2">
+					<div className="border-border-subtle bg-background overflow-hidden border">
+						<iframe
+							title={doc.title ?? doc.path ?? "Document preview"}
+							src={viewer}
+							className="h-[40rem] w-full bg-white"
+						/>
+					</div>
+					<DownloadFallback doc={doc} />
+				</div>
+			);
+		}
+		return <DownloadFallback doc={doc} />;
+	}
+
 	const body = doc.body ?? "";
 	if (!body.trim()) {
+		// A blob upload with no text body → offer a download.
+		if (hasUploadBlob(doc)) return <DownloadFallback doc={doc} />;
 		return (
 			<div className="text-muted-foreground border-border-subtle border px-4 py-8 text-center text-sm">
 				No body content.
@@ -206,7 +358,6 @@ function BodyPreview({ doc }: { doc: KnowledgeDoc }) {
 		);
 	}
 
-	const kind = bodyKind(doc);
 	if (kind === "html") {
 		return (
 			<div className="space-y-3">

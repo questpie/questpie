@@ -38,7 +38,17 @@ import {
 	resolveCollectionRelationFields,
 	resolveCollectionWriteRule,
 } from "../../../apps/mini-app-runner";
-import { sessionOnly } from "../../../lib/route-access";
+import { miniAppTokenAccess } from "../../../lib/route-access";
+
+/**
+ * Access for the named-action route: an authenticated admin AND a valid
+ * `x-miniapp-token` bound to `{appId, action:fn, session, user}` (§3.3). This
+ * REPLACES the old `sessionOnly` (which let ANY logged-in admin POST here — the
+ * gap §3.3 flagged). The action authorized is the `{fn}` path segment.
+ */
+const miniAppActionAccess = miniAppTokenAccess(
+	(ctx) => (ctx.params as { fn?: string } | undefined)?.fn,
+);
 
 /**
  * @deprecated Re-exported from `apps/mini-app-runner` (shared with the M5 cron
@@ -172,7 +182,7 @@ export default route()
 	.put()
 	.patch()
 	.delete()
-	.access(sessionOnly)
+	.access(miniAppActionAccess)
 	.params<{ appId: string; fn: string }>()
 	.raw()
 	.handler(async (ctx) => {

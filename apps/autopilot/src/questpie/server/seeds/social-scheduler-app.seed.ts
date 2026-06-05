@@ -31,6 +31,8 @@ const APP_ID = "social-scheduler";
 const BUNDLE_PREFIX = `company/apps/${APP_ID}.app`;
 const DATA_PREFIX = `company/apps/${APP_ID}/data`;
 const ENTRY_PATH = `${BUNDLE_PREFIX}/server.ts`;
+const INDEX_PATH = `${BUNDLE_PREFIX}/index.html`;
+const APP_JSX_PATH = `${BUNDLE_PREFIX}/app.jsx`;
 const QUEUE_PATH = `${DATA_PREFIX}/queue.json`;
 
 /**
@@ -161,6 +163,102 @@ export const cron = async function (input) {
 export const actions = { status };
 `;
 
+/**
+ * `index.html` — the UI shell. The KnowledgeHost host-controls the load order: it
+ * inlines the host-fixed React/ReactDOM/@babel/standalone CDN + the `window.app`
+ * bridge, then this shell's BODY markup, then the `*.jsx` files in the order this
+ * shell declares them via `<script type="text/babel" src="…">` (§6). The shell's
+ * own `<script>` tags are stripped by the host (scripts come from the CDN list +
+ * the bundle's jsx only); the `src="app.jsx"` here is used ONLY to sequence the
+ * jsx load order.
+ */
+const INDEX_HTML = `<!doctype html>
+<html>
+  <head><meta charset="utf-8" /></head>
+  <body>
+    <div id="root"></div>
+    <script type="text/babel" data-presets="env,react" src="app.jsx"></script>
+  </body>
+</html>`;
+
+/**
+ * `app.jsx` — the no-build UI entry (§6 convention): NO ES imports; pulls hooks off
+ * the global \`React\`; calls the injected \`window.app.status()\` bridge; publishes
+ * \`App\` onto \`window\` and mounts it. This is the component the live e2e exercises —
+ * clicking "Run status" round-trips \`window.app.status()\` → the parent's bridge →
+ * \`POST /api/apps/social-scheduler/status\` → the Deno sandbox → back into the frame.
+ */
+const APP_JSX = `const { useState, useCallback } = React;
+
+function App() {
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const run = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      // window.app.<action> is injected by the KnowledgeHost bridge.
+      const out = await window.app.status({});
+      setResult(out);
+    } catch (err) {
+      setError(String((err && err.message) || err));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  return (
+    <div style={{ fontFamily: "system-ui, sans-serif", padding: 16, color: "#111" }}>
+      <h2 style={{ margin: "0 0 12px" }}>Social Scheduler</h2>
+      <button
+        data-testid="run-status"
+        onClick={run}
+        disabled={loading}
+        style={{
+          padding: "8px 14px",
+          fontSize: 14,
+          cursor: loading ? "default" : "pointer",
+          border: "1px solid #ccc",
+          borderRadius: 6,
+          background: loading ? "#eee" : "#fff",
+        }}
+      >
+        {loading ? "Running…" : "Run status"}
+      </button>
+      {error ? (
+        <pre data-testid="status-error" style={{ color: "#b00", marginTop: 12 }}>
+          {error}
+        </pre>
+      ) : null}
+      {result ? (
+        <pre
+          data-testid="status-result"
+          style={{
+            marginTop: 12,
+            padding: 12,
+            background: "#f6f6f6",
+            borderRadius: 6,
+            fontSize: 12,
+            overflow: "auto",
+          }}
+        >
+          {JSON.stringify(result, null, 2)}
+        </pre>
+      ) : null}
+    </div>
+  );
+}
+
+Object.assign(window, { App });
+
+const rootEl = document.getElementById("root");
+if (rootEl && window.ReactDOM) {
+  // React 18 UMD exposes ReactDOM.createRoot.
+  ReactDOM.createRoot(rootEl).render(<App />);
+}`;
+
 /** Initial queue.json — a few scheduled "posts". */
 const QUEUE = [
 	{
@@ -204,7 +302,7 @@ export default seed({
 			// (admin-module + app intersection in codegen), so the `where` is cast.
 			{
 				where: {
-					path: { in: [ENTRY_PATH, QUEUE_PATH] },
+					path: { in: [ENTRY_PATH, INDEX_PATH, APP_JSX_PATH, QUEUE_PATH] },
 				} as any,
 			},
 			ctx,
@@ -221,6 +319,38 @@ export default seed({
 			scopeType: "company",
 			kind: "miniapp",
 			contentType: "text/typescript",
+			renderer: "miniapp",
+			source: "system",
+			sourceRef: `seed:${APP_ID}`,
+			metadata: { seed: "socialSchedulerApp", app: APP_ID },
+		});
+
+		// The `.app` bundle's UI shell + entry component (no-build JSX, §6). These
+		// give the KnowledgeHost a real UI to inline + run in the browser, so the
+		// `window.app.status()` bridge round-trip is exercised end-to-end. Both are
+		// `kind:"miniapp"` so opening ANY bundle row mounts the host for the app.
+		log("Seeding social-scheduler .app UI shell...");
+		await services.knowledgeResource.createTextResource({
+			title: "Social Scheduler UI shell",
+			path: INDEX_PATH,
+			body: INDEX_HTML,
+			scopeType: "company",
+			kind: "miniapp",
+			contentType: "text/html",
+			renderer: "miniapp",
+			source: "system",
+			sourceRef: `seed:${APP_ID}`,
+			metadata: { seed: "socialSchedulerApp", app: APP_ID },
+		});
+
+		log("Seeding social-scheduler .app UI component...");
+		await services.knowledgeResource.createTextResource({
+			title: "Social Scheduler UI component",
+			path: APP_JSX_PATH,
+			body: APP_JSX,
+			scopeType: "company",
+			kind: "miniapp",
+			contentType: "text/jsx",
 			renderer: "miniapp",
 			source: "system",
 			sourceRef: `seed:${APP_ID}`,

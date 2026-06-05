@@ -27,7 +27,18 @@ import {
 	encodeBodyForStorage,
 	resolveAppDataPath,
 } from "../../../../apps/app-fs";
-import { sessionOnly } from "../../../../lib/route-access";
+import {
+	fsPseudoAction,
+	miniAppTokenAccess,
+} from "../../../../lib/route-access";
+
+/**
+ * Access for the file-as-DB bridge route: an authenticated admin AND a valid
+ * `x-miniapp-token` bound to `{appId, session, user}` whose allowlist grants the
+ * `fs:read` (GET) / `fs:write` (PUT) pseudo-action (§3.3). REPLACES the old
+ * `sessionOnly`.
+ */
+const miniAppFsAccess = miniAppTokenAccess(fsPseudoAction);
 
 type FsContext = Questpie.AppContext & {
 	request: Request;
@@ -35,7 +46,11 @@ type FsContext = Questpie.AppContext & {
 };
 
 /** Whether the request is asking for a directory listing rather than a file. */
-function isListRequest(url: URL, scopedPath: string, dataPrefix: string): boolean {
+function isListRequest(
+	url: URL,
+	scopedPath: string,
+	dataPrefix: string,
+): boolean {
 	if (url.searchParams.has("list")) return true;
 	// The data root itself, or any trailing-slash path, is a directory.
 	return scopedPath === dataPrefix.slice(0, -1) || scopedPath.endsWith("/");
@@ -102,7 +117,11 @@ async function handlePut(ctx: FsContext) {
 	});
 
 	return Response.json(
-		{ path: saved.path, contentType: saved.contentType, size: bytes.byteLength },
+		{
+			path: saved.path,
+			contentType: saved.contentType,
+			size: bytes.byteLength,
+		},
 		{ status: 201 },
 	);
 }
@@ -110,7 +129,7 @@ async function handlePut(ctx: FsContext) {
 export default route()
 	.get()
 	.put()
-	.access(sessionOnly)
+	.access(miniAppFsAccess)
 	.params<{ appId: string; path: string }>()
 	.raw()
 	.handler(async (ctx) => {
