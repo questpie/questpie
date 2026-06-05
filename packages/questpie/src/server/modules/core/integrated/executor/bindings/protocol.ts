@@ -26,14 +26,22 @@
  * names (consistent-naming principle). Methods are addressed as dotted strings
  * so the wire protocol stays a flat `{ method, args }`.
  *
- * ENFORCED + DISPATCHED:
+ * ENFORCED + DISPATCHED (the READ surface):
  *   - `knowledge.read` | `knowledge.write` | `knowledge.list`
- *   - `collections.<name>.find|findOne|create|update|delete`
- *   - `globals.<name>.get|set`
+ *   - `collections.<name>.find|findOne`
+ *   - `globals.<name>.get`
  *
- * Typed + capability-CHECKED here but DISPATCH deferred (no target handler yet —
- * the broker rejects them as `not_implemented` until a future task wires them):
- *   - `services.<name>.<fn>`, `jobs.enqueue`, `workflows.trigger`, `email.send`.
+ * Typed + capability-CHECKED here but DISPATCH deferred (the broker rejects them
+ * as `not_implemented`):
+ *   - `collections.<name>.create|update|delete` and `globals.<name>.set` — guest
+ *     WRITES have no §7 tenant-write boundary yet (no `document_store`, no
+ *     `store`-grant row-filter clamp, no force-stamp / reject-client-`id`/`app`/
+ *     `createdAt`, no blast-radius containment), so they fail closed until that
+ *     boundary lands with its own adversarial pass (`.private/miniapps-v2-design.md`
+ *     §7 + Decision 8). The capability vocabulary keeps the verbs so the manifest
+ *     and the check are ready; only DISPATCH is gated.
+ *   - `services.<name>.<fn>`, `jobs.enqueue`, `workflows.trigger`, `email.send` —
+ *     no target handler yet.
  */
 export type BindingMethod = string;
 

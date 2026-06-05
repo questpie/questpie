@@ -39,6 +39,13 @@
  *     set cannot be determined for a collection we FAIL CLOSED and reject every
  *     `where`/`orderBy` key on it.
  *
+ * SCOPE — this target dispatches the READ surface only: `knowledge.read|write|
+ * list` (own-subtree file-as-DB, G1) and `collections.X.find|findOne` (G2/G3).
+ * Guest COLLECTION/GLOBAL WRITES (`create|update|delete`, `globals.set`) are NOT
+ * dispatched — they have no §7 tenant-write boundary yet and so fail closed at
+ * both the broker (`not_implemented`) and this target (no write handler wired).
+ * See `buildMiniAppBindingTarget` + `.private/miniapps-v2-design.md` §7.
+ *
  * This helper is SHARED: the named-endpoint runner (M4) and the cron runner (M5)
  * both build the target through here, so the enforcement lives in ONE place.
  *
@@ -88,10 +95,12 @@ const KNOWLEDGE_SYSTEM_CONTEXT: KnowledgeByPathContext = {
  */
 export interface MiniAppBindingCtx {
 	/**
-	 * Per-collection CRUD accessors. `find|findOne` are reads; `create|update|
-	 * delete` are the WRITE half. All take an optional CRUD context. `update` and
-	 * `delete` are the by-`where` variants (`ctx.collections.X.update|delete`), NOT
-	 * the `*ById` ones — the binding op vocabulary is `create|update|delete`.
+	 * Per-collection CRUD accessors. `find|findOne` are the reads the target
+	 * dispatches today. `create|update|delete` (the by-`where` variants, NOT the
+	 * `*ById` ones) are typed here because the real `ctx` exposes them and the §7
+	 * write boundary will wire them — but {@link buildMiniAppBindingTarget} does NOT
+	 * wire the write half yet (guest writes fail closed; see that function + the
+	 * broker). All take an optional CRUD context.
 	 */
 	collections: Record<
 		string,
@@ -385,79 +394,17 @@ function assertNoRelationExpansion(
 }
 
 /**
- * Reject a WRITE `data` payload that names a relation field as a top-level key
- * (G3, write side). A relation key in `data` is a NESTED RELATION MUTATION
- * (`{ author: { connect:… } }` / `{ tags: { create:… } }`) — the CRUD pipeline
- * would write THROUGH it into the related collection, which the mini-app was
- * never granted. The MVP does not independently grant-check the related
- * collection here, so (mirroring the read-side oracle guard) we forbid relation
- * keys in the payload entirely and FAIL CLOSED when the relation set is unknown.
- *
- * `data` is a plain object (`{ field: value }`); a non-object payload has no
- * relation keys to smuggle, so it is left to the underlying CRUD to validate.
- *
- * @param relationFields - the target collection's relation field names, or `null`
- *   to FAIL CLOSED (treat the relation set as "unknown" → reject ANY key, since
- *   we cannot prove a key is not a relation).
+ * NOTE: the G3 WRITE-side guards (reject a relation key smuggled into a `create`/
+ * `update` payload, and the `update`/`delete` `where`-oracle) intentionally do NOT
+ * live here yet. Guest collection writes are not dispatched at all until the §7
+ * tenant-write boundary lands (the broker returns `not_implemented` for
+ * create/update/delete and this target wires no write handler — see
+ * `buildMiniAppBindingTarget`). When §7 is built, the write boundary must add the
+ * relation-payload guard ALONGSIDE the row-filter clamp + meta/identity-field
+ * rejection (`id`/`createdAt`/`updatedAt`/`deletedAt`/the namespace key) + blast-
+ * radius containment — NOT the bare relation check alone.
+ * See `.private/miniapps-v2-design.md` §7 + Decision 8.
  */
-function assertNoRelationInPayload(
-	data: unknown,
-	relationFields: Set<string> | null,
-): void {
-	if (!data || typeof data !== "object" || Array.isArray(data)) return;
-	const keys = Object.keys(data as Record<string, unknown>);
-	if (keys.length === 0) return;
-
-	if (relationFields === null) {
-		// Unknown relation set → cannot prove any key is a scalar; fail closed.
-		throw new MiniAppBindingError(
-			"data access denied: the collection's relation set could not be " +
-				"determined, so a write payload cannot be relation-checked",
-			"relation_forbidden",
-		);
-	}
-	for (const key of keys) {
-		if (relationFields.has(key)) {
-			throw new MiniAppBindingError(
-				`relation mutation via write payload field "${key}" is not permitted ` +
-					"for mini-app data access",
-				"relation_forbidden",
-			);
-		}
-	}
-}
-
-/**
- * Guard a WRITE op's arguments (G3, write side). Rejects:
- *   - `create`: a relation key in the row payload (`args` itself is the row).
- *   - `update`: a relation key in `args.data` AND a relation in `args.where`
- *     (the where-oracle).
- *   - `delete`: a relation in `args.where` (the where-oracle).
- *
- * Reuses {@link assertNoRelationExpansion} for the `where`/`orderBy` oracle (it
- * also rejects `with`/`populate`, harmless on a write arg) and
- * {@link assertNoRelationInPayload} for the mutation payload.
- */
-function assertNoRelationWrite(
-	op: "create" | "update" | "delete",
-	args: unknown,
-	relationFields: Set<string> | null,
-): void {
-	if (op === "create") {
-		// For create, the argument IS the row payload.
-		assertNoRelationInPayload(args, relationFields);
-		return;
-	}
-	// update / delete carry a `where` (oracle) — guard it.
-	assertNoRelationExpansion(args, relationFields);
-	if (op === "update") {
-		const data =
-			args && typeof args === "object" && !Array.isArray(args)
-				? (args as Record<string, unknown>).data
-				: undefined;
-		assertNoRelationInPayload(data, relationFields);
-	}
-}
 
 /** Own-property collection lookup (prototype-safe; never reaches up the chain). */
 function ownCollection(
@@ -589,13 +536,27 @@ export function buildMiniAppBindingTarget(
 		},
 	};
 
-	// Per-collection CRUD surface. The broker dispatches `find|findOne` (reads) AND
-	// `create|update|delete` (writes), but only for collections+verbs the manifest
-	// granted (its default-deny capability check runs BEFORE dispatch). Each
-	// accessor here adds the HOST-SIDE invariants the manifest cannot express:
-	// user-mode + the run's non-privileged principal (G2 — NEVER system) and the
-	// relation guard (G3 — applied to reads' `where`/`orderBy` AND writes' payload +
-	// the update/delete `where` oracle).
+	// Per-collection surface — READS ONLY (`find|findOne`). The broker dispatches
+	// only the read half; each accessor adds the HOST-SIDE invariants the manifest
+	// cannot express: user-mode + the run's non-privileged principal (G2 — NEVER
+	// system) and the relation guard (G3 — `where`/`orderBy`/relation-expansion).
+	//
+	// WRITES (`create|update|delete`) are DELIBERATELY NOT wired here. A generic
+	// collection write has NO §7 tenant-write boundary yet (no `document_store`, no
+	// `store`-grant row-filter clamp, no force-stamp / reject-client-`id`/`app`/
+	// `createdAt` guard, no blast-radius containment on the update/delete `where`).
+	// Without that clamp a granted, write-rule-less collection would be fully
+	// writable/deletable by the synthesized app-principal (the framework access
+	// fallback for an absent write rule is `!!session`, which the principal
+	// satisfies; and CRUD field-write-access intentionally SKIPS the `id/createdAt/
+	// updatedAt/deletedAt` meta fields, so the host must reject those itself). So
+	// the write half fails closed at TWO layers: the broker returns
+	// `not_implemented` for create/update/delete BEFORE dispatch, and this target
+	// exposes no write handler for it to reach. Re-enable both together ONLY when
+	// the §7 write boundary lands with its own adversarial pass — wiring the
+	// payload/meta-stamp clamp + blast-radius containment, NOT the bare
+	// pass-through that shipped here before.
+	// See `.private/miniapps-v2-design.md` §7 + Decision 8.
 	//
 	// IMPORTANT: this is a PLAIN object with OWN properties — NOT a Proxy. The
 	// broker gates dispatch with `Object.prototype.hasOwnProperty.call(cols, name)`
@@ -608,9 +569,6 @@ export function buildMiniAppBindingTarget(
 		{
 			find?: (args: unknown) => Promise<unknown>;
 			findOne?: (args: unknown) => Promise<unknown>;
-			create?: (args: unknown) => Promise<unknown>;
-			update?: (args: unknown) => Promise<unknown>;
-			delete?: (args: unknown) => Promise<unknown>;
 		}
 	>;
 	for (const name of Object.keys(ctx.collections)) {
@@ -634,29 +592,6 @@ export function buildMiniAppBindingTarget(
 				? async (args: unknown) => {
 						assertNoRelationExpansion(args, relationFields);
 						return col.findOne!(args ?? {}, dispatchContext);
-					}
-				: undefined,
-			// Writes. The broker's default-deny capability check already gated the
-			// create/update/delete VERB before dispatch; these add the SAME host-side
-			// invariants the reads have — G2 (NEVER system-mode; user-mode + the run's
-			// non-privileged principal) + G3 (no relation smuggled via the write
-			// payload or the update/delete `where` oracle).
-			create: col.create
-				? async (args: unknown) => {
-						assertNoRelationWrite("create", args, relationFields);
-						return col.create!(args ?? {}, dispatchContext);
-					}
-				: undefined,
-			update: col.update
-				? async (args: unknown) => {
-						assertNoRelationWrite("update", args, relationFields);
-						return col.update!(args ?? {}, dispatchContext);
-					}
-				: undefined,
-			delete: col.delete
-				? async (args: unknown) => {
-						assertNoRelationWrite("delete", args, relationFields);
-						return col.delete!(args ?? {}, dispatchContext);
 					}
 				: undefined,
 		};

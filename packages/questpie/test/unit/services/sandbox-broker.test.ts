@@ -383,7 +383,9 @@ function fakeTarget() {
 					return { id: "o1" };
 				},
 			},
-			// A collection with the full WRITE surface, used by the write-dispatch tests.
+			// A collection exposing the full WRITE surface. The write-deferral tests use
+			// it to PROVE these handlers are NEVER invoked (the broker returns
+			// not_implemented for create/update/delete before reaching them).
 			posts: {
 				find: async (args) => {
 					calls.push({ method: "collections.posts.find", args });
@@ -619,12 +621,17 @@ describe("SandboxBroker — per-call enforcement + dispatch (THE security bounda
 });
 
 // ──────────────────────────────────────────────────────────────────────────
-// SandboxBroker — WRITE-half dispatch (create/update/delete + globals get/set).
+// SandboxBroker — WRITE half is DEFERRED (no §7 tenant-write boundary yet).
 //
-// The headline invariant: EVERY write op flows through the SAME default-deny
-// capability chokepoint as reads (it runs in `handleRpc` BEFORE `dispatch`), so
-// an ungranted collection/verb is `forbidden` and the bound target is NEVER
-// invoked — there is NO write-path bypass.
+// Guest collection writes (`create|update|delete`) and `globals.set` are NOT
+// dispatched: there is no §7 row-filter clamp / force-stamp / blast-radius
+// containment, so a bare write pass-through would let a granted, write-rule-less
+// collection be fully writable/deletable by the synthesized app-principal. They
+// fail closed as `not_implemented` for a GRANTED verb (DISPATCH deferred) while
+// the SAME default-deny capability chokepoint still rejects an UNGRANTED verb as
+// `forbidden` BEFORE dispatch (the check runs in `handleRpc` first). The bound
+// target's write handler is NEVER invoked either way — no write-path bypass.
+// See `.private/miniapps-v2-design.md` §7 + Decision 8.
 // ──────────────────────────────────────────────────────────────────────────
 
 /** A run scoped for the FULL write surface on `posts` + globals `settings`. */
@@ -635,39 +642,32 @@ const WRITE_SCOPE: ExecutorCapabilities = {
 	},
 };
 
-describe("SandboxBroker — collection write dispatch (create/update/delete)", () => {
-	it("dispatches each GRANTED write verb to the bound target and returns its value", async () => {
+describe("SandboxBroker — collection writes are NOT dispatched (deferred §7)", () => {
+	it("a GRANTED write verb returns not_implemented; the target write handler is NEVER called", async () => {
 		const broker = new SandboxBroker();
 		const { target, calls } = fakeTarget();
 		const { token } = broker.mint({ capabilities: WRITE_SCOPE, target });
 
-		const created = await broker.handleRpc(token, "collections.posts.create", {
-			data: { title: "hi" },
-		});
-		expect(created).toEqual({ ok: true, value: { id: "p1", created: true } });
+		for (const op of ["create", "update", "delete"] as const) {
+			const r = await broker.handleRpc(token, `collections.posts.${op}`, {
+				data: { title: "hi" },
+				where: { id: "p1" },
+			});
+			expect(r.ok).toBe(false);
+			if (!r.ok) expect(r.error.code).toBe("not_implemented");
+		}
+		// Reads still dispatch — prove the chokepoint is intact, not globally broken.
+		const read = await broker.handleRpc(token, "collections.posts.find", {});
+		expect(read.ok).toBe(true);
 
-		const updated = await broker.handleRpc(token, "collections.posts.update", {
-			where: { id: "p1" },
-			data: { title: "bye" },
-		});
-		expect(updated).toEqual({ ok: true, value: [{ id: "p1", updated: true }] });
-
-		const deleted = await broker.handleRpc(token, "collections.posts.delete", {
-			where: { id: "p1" },
-		});
-		expect(deleted).toEqual({ ok: true, value: { success: true, count: 1 } });
-
-		expect(calls.map((c) => c.method)).toEqual([
-			"collections.posts.create",
-			"collections.posts.update",
-			"collections.posts.delete",
-		]);
+		// No WRITE handler ran; only the read reached the target.
+		expect(calls.map((c) => c.method)).toEqual(["collections.posts.find"]);
 	});
 
-	it("FAILS CLOSED: an ungranted write verb is forbidden, target NEVER called", async () => {
+	it("FAILS CLOSED: an ungranted write verb is forbidden (capability check first), target NEVER called", async () => {
 		const broker = new SandboxBroker();
 		const { target, calls } = fakeTarget();
-		// Grant ONLY read on posts — every write verb must be denied.
+		// Grant ONLY read on posts — every write verb is denied at the chokepoint.
 		const readOnly: ExecutorCapabilities = {
 			data: { collections: { posts: ["read"] } },
 		};
@@ -680,11 +680,11 @@ describe("SandboxBroker — collection write dispatch (create/update/delete)", (
 			});
 			expect(r.ok).toBe(false);
 			if (!r.ok) {
+				// forbidden (capability), NOT not_implemented — the check runs upstream.
 				expect(r.error.code).toBe("forbidden");
 				expect(r.error.message).toContain(op);
 			}
 		}
-		// The chokepoint denied BEFORE dispatch — no write handler ran.
 		expect(calls.length).toBe(0);
 	});
 
@@ -701,61 +701,19 @@ describe("SandboxBroker — collection write dispatch (create/update/delete)", (
 		expect(calls.length).toBe(0);
 	});
 
-	it("partial grant: create allowed, delete denied (per-verb granularity)", async () => {
+	it("a granted destructive delete with a broad `where` is not dispatched (blast-radius vector)", async () => {
+		// The exact critical-issue vector: a granted delete with a broad scalar
+		// `where` would — without the §7 clamp — delete arbitrary rows. It must fail
+		// closed as not_implemented; the delete handler is never reached.
 		const broker = new SandboxBroker();
-		const { target } = fakeTarget();
-		const caps: ExecutorCapabilities = {
-			data: { collections: { posts: ["create"] } },
-		};
-		const { token } = broker.mint({ capabilities: caps, target });
-
-		const ok = await broker.handleRpc(token, "collections.posts.create", {
-			data: {},
-		});
-		expect(ok.ok).toBe(true);
-
-		const denied = await broker.handleRpc(token, "collections.posts.delete", {
-			where: {},
-		});
-		expect(denied.ok).toBe(false);
-		if (!denied.ok) expect(denied.error.code).toBe("forbidden");
-	});
-
-	it("granted verb but NO target handler → not_implemented (honest deferral)", async () => {
-		const broker = new SandboxBroker();
-		// `orders` is granted create but its target exposes only find/findOne.
-		const { target } = fakeTarget();
-		const caps: ExecutorCapabilities = {
-			data: { collections: { orders: ["read", "create"] } },
-		};
-		const { token } = broker.mint({ capabilities: caps, target });
-		const r = await broker.handleRpc(token, "collections.orders.create", {
-			data: {},
+		const { target, calls } = fakeTarget();
+		const { token } = broker.mint({ capabilities: WRITE_SCOPE, target });
+		const r = await broker.handleRpc(token, "collections.posts.delete", {
+			where: { archived: true },
 		});
 		expect(r.ok).toBe(false);
 		if (!r.ok) expect(r.error.code).toBe("not_implemented");
-	});
-
-	it("a write target throw surfaces as execution_error (never throws)", async () => {
-		const broker = new SandboxBroker();
-		const target: BindingTarget = {
-			collections: {
-				posts: {
-					create: async () => {
-						throw new Error("constraint violation");
-					},
-				},
-			},
-		};
-		const { token } = broker.mint({ capabilities: WRITE_SCOPE, target });
-		const r = await broker.handleRpc(token, "collections.posts.create", {
-			data: {},
-		});
-		expect(r.ok).toBe(false);
-		if (!r.ok) {
-			expect(r.error.code).toBe("execution_error");
-			expect(r.error.message).toContain("constraint violation");
-		}
+		expect(calls.length).toBe(0);
 	});
 
 	it("a prototype-chain collection name on a write is forbidden (no crash)", async () => {
@@ -770,8 +728,8 @@ describe("SandboxBroker — collection write dispatch (create/update/delete)", (
 	});
 });
 
-describe("SandboxBroker — global dispatch (get/set)", () => {
-	it("dispatches a GRANTED globals.get and globals.set", async () => {
+describe("SandboxBroker — global dispatch: get reads, set is deferred", () => {
+	it("dispatches a GRANTED globals.get but returns not_implemented for globals.set", async () => {
 		const broker = new SandboxBroker();
 		const { target, calls } = fakeTarget();
 		const { token } = broker.mint({ capabilities: WRITE_SCOPE, target });
@@ -782,17 +740,14 @@ describe("SandboxBroker — global dispatch (get/set)", () => {
 		const set = await broker.handleRpc(token, "globals.settings.set", {
 			data: { theme: "light" },
 		});
-		expect(set).toEqual({
-			ok: true,
-			value: { theme: "light", updated: true },
-		});
-		expect(calls.map((c) => c.method)).toEqual([
-			"globals.settings.get",
-			"globals.settings.set",
-		]);
+		expect(set.ok).toBe(false);
+		if (!set.ok) expect(set.error.code).toBe("not_implemented");
+
+		// Only the read reached the target; the set handler was never invoked.
+		expect(calls.map((c) => c.method)).toEqual(["globals.settings.get"]);
 	});
 
-	it("FAILS CLOSED: globals.set with only read granted is forbidden", async () => {
+	it("FAILS CLOSED: globals.set with only read granted is forbidden (capability first)", async () => {
 		const broker = new SandboxBroker();
 		const { target, calls } = fakeTarget();
 		const caps: ExecutorCapabilities = {
@@ -821,7 +776,7 @@ describe("SandboxBroker — global dispatch (get/set)", () => {
 		expect(calls.length).toBe(0);
 	});
 
-	it("granted global but NO handler → not_implemented", async () => {
+	it("granted global but NO get handler → not_implemented", async () => {
 		const broker = new SandboxBroker();
 		// target with no globals at all.
 		const target: BindingTarget = { collections: {} };

@@ -670,16 +670,24 @@ describe("G3: relation expansion is denied", () => {
 	});
 });
 
-// ─────────────────── WRITE dispatch: G2 + G3 on create/update/delete ─────────
+// ─────────────────── WRITE dispatch is DEFERRED (no §7 boundary) ─────────────
 //
-// The broker (packages/questpie core) now dispatches the WRITE half. These tests
-// drive it through the REAL `SandboxBroker.handleRpc` chokepoint with a fake ctx
-// and assert the HOST-SIDE runner invariants on writes: G2 (user-mode + the run's
-// non-privileged principal, NEVER system) and G3 (no relation smuggled via the
-// create/update payload OR the update/delete `where` oracle). The capability check
-// (default-deny, per-verb) is also re-exercised end-to-end.
+// Guest collection writes (`create|update|delete`) are NOT dispatched: there is
+// no §7 tenant-write boundary yet (no `document_store`, no `store`-grant
+// row-filter clamp, no force-stamp / reject-client-`id`/`app`/`createdAt`, no
+// blast-radius containment). Shipping a bare write pass-through would make a
+// granted, write-rule-less collection fully writable/deletable by the synthesized
+// app-principal (the framework access fallback for an absent write rule is
+// `!!session`, which the principal satisfies). So writes fail closed at BOTH
+// layers, asserted here through the REAL `SandboxBroker.handleRpc` chokepoint:
+//   1. the runner's target wires NO write handler (`target.collections.X.create`
+//      is `undefined`), and
+//   2. the broker returns `not_implemented` for a GRANTED write verb (and still
+//      `forbidden` for an UNGRANTED one — the capability check fires first).
+// The underlying collection is NEVER called for any write.
+// See `.private/miniapps-v2-design.md` §7 + Decision 8.
 
-describe("WRITE: per-verb capability gating through the real broker", () => {
+describe("WRITE: guest collection writes are NOT dispatched (deferred §7 boundary)", () => {
 	function wire(
 		grants: Array<"read" | "create" | "update" | "delete">,
 		relationFieldsFor: (name: string) => Set<string> | null = noRelations,
@@ -693,45 +701,62 @@ describe("WRITE: per-verb capability gating through the real broker", () => {
 		const target = buildMiniAppBindingTarget(APP, ctx, caps, relationFieldsFor);
 		const broker = new SandboxBroker();
 		const { token } = broker.mint({ capabilities: caps, target });
-		return { rec, broker, token };
+		return { rec, target, broker, token };
 	}
 
-	it("GRANTED create dispatches under user-mode + the run's principal (G2)", async () => {
-		const { rec, broker, token } = wire(["create"]);
-		const res = await broker.handleRpc(token, "collections.posts.create", {
-			title: "hello",
-		});
-		expect(res.ok).toBe(true);
-		expect(rec.calls).toHaveLength(1);
-		const ctxArg = rec.calls[0]!.context as {
-			accessMode?: string;
-			session?: { user?: { id?: string } };
-		};
-		// G2: NEVER system; carries the run's real principal.
-		expect(ctxArg.accessMode).toBe("user");
-		expect(ctxArg.accessMode).not.toBe("system");
-		expect(ctxArg.session?.user?.id).toBe("user_123");
+	it("the runner wires NO create/update/delete handler on the target", () => {
+		const { rec, target } = wire(["read", "create", "update", "delete"]);
+		const posts = target.collections!.posts!;
+		// Reads ARE wired; writes are deliberately absent (broker → not_implemented).
+		expect(typeof posts.find).toBe("function");
+		expect(typeof posts.findOne).toBe("function");
+		expect(posts.create).toBeUndefined();
+		expect(posts.update).toBeUndefined();
+		expect(posts.delete).toBeUndefined();
+		expect(rec.calls).toHaveLength(0);
 	});
 
-	it("GRANTED update / delete dispatch (by-where) under user-mode", async () => {
-		const { rec, broker, token } = wire(["update", "delete"]);
-		const upd = await broker.handleRpc(token, "collections.posts.update", {
+	it("a GRANTED write verb returns not_implemented; the collection is NEVER written", async () => {
+		// Full write grant — the capability check passes, but dispatch is deferred.
+		const { rec, broker, token } = wire(["read", "create", "update", "delete"]);
+		const create = await broker.handleRpc(token, "collections.posts.create", {
+			title: "hello",
+		});
+		expect(create.ok).toBe(false);
+		expect(create.ok === false && create.error.code).toBe("not_implemented");
+
+		const update = await broker.handleRpc(token, "collections.posts.update", {
 			where: { id: "p1" },
 			data: { title: "x" },
 		});
-		expect(upd.ok).toBe(true);
+		expect(update.ok).toBe(false);
+		expect(update.ok === false && update.error.code).toBe("not_implemented");
+
 		const del = await broker.handleRpc(token, "collections.posts.delete", {
 			where: { id: "p1" },
 		});
-		expect(del.ok).toBe(true);
-		expect(rec.calls.map((c) => c.method)).toEqual(["update", "delete"]);
-		for (const call of rec.calls) {
-			expect((call.context as { accessMode?: string }).accessMode).toBe("user");
-		}
+		expect(del.ok).toBe(false);
+		expect(del.ok === false && del.error.code).toBe("not_implemented");
+
+		// No write ever reached the underlying collection.
+		expect(rec.calls).toHaveLength(0);
 	});
 
-	it("FAILS CLOSED: a write verb NOT granted is forbidden, collection never called", async () => {
-		// read-only grant → every write verb denied at the broker chokepoint.
+	it("a destructive broad-`where` delete (the blast-radius vector) is NOT dispatched", async () => {
+		// The exact critical-issue vector: a granted delete with a broad scalar
+		// `where` would, without the §7 clamp, delete arbitrary rows. It must fail
+		// closed as not_implemented (no live delete primitive), collection untouched.
+		const { rec, broker, token } = wire(["delete"]);
+		const del = await broker.handleRpc(token, "collections.posts.delete", {
+			where: { archived: true },
+		});
+		expect(del.ok).toBe(false);
+		expect(del.ok === false && del.error.code).toBe("not_implemented");
+		expect(rec.calls).toHaveLength(0);
+	});
+
+	it("FAILS CLOSED: a write verb NOT granted is forbidden BEFORE not_implemented", async () => {
+		// read-only grant → the capability check denies every write verb first.
 		const { rec, broker, token } = wire(["read"]);
 		for (const op of ["create", "update", "delete"] as const) {
 			const res = await broker.handleRpc(token, `collections.posts.${op}`, {
@@ -739,124 +764,26 @@ describe("WRITE: per-verb capability gating through the real broker", () => {
 				where: {},
 			});
 			expect(res.ok).toBe(false);
+			// forbidden (capability), NOT not_implemented — the check runs upstream.
 			expect(res.ok === false && res.error.code).toBe("forbidden");
 		}
 		expect(rec.calls).toHaveLength(0);
 	});
-});
 
-describe("WRITE G3: relation smuggling on writes is rejected", () => {
-	function wire(relationFieldsFor: (name: string) => Set<string> | null) {
-		const rec = recordingCollection([{ id: "p1" }]);
-		const ctx = makeCtx({ collections: { posts: rec.collection } });
-		const caps = {
-			data: {
-				collections: {
-					posts: ["read", "create", "update", "delete"] as Array<
-						"read" | "create" | "update" | "delete"
-					>,
-				},
-			},
-		};
-		const target = buildMiniAppBindingTarget(APP, ctx, caps, relationFieldsFor);
-		const broker = new SandboxBroker();
-		const { token } = broker.mint({ capabilities: caps, target });
-		return { rec, broker, token };
-	}
-
-	it("create with a relation key in the payload is REJECTED (nested mutation)", async () => {
-		const { rec, broker, token } = wire(relations({ posts: ["author"] }));
+	it("client-supplied id/createdAt/app on a granted create cannot land (write not dispatched)", async () => {
+		// The high-severity spoofing vector: a payload carrying `id`/`createdAt`/`app`.
+		// With no write dispatch + no write handler, it never reaches the insert at
+		// all — there is no path for the spoofed meta to be persisted.
+		const { rec, broker, token } = wire(["create"]);
 		const res = await broker.handleRpc(token, "collections.posts.create", {
-			title: "hi",
-			author: { connect: { id: "secret-user" } },
-		});
-		expect(res.ok).toBe(false);
-		expect(res.ok === false && res.error.code).toBe("execution_error");
-		// the underlying create (→ would write into the related collection) NEVER ran.
-		expect(rec.calls).toHaveLength(0);
-	});
-
-	it("create with only SCALAR payload fields still works", async () => {
-		const { rec, broker, token } = wire(relations({ posts: ["author"] }));
-		const res = await broker.handleRpc(token, "collections.posts.create", {
-			title: "hi",
-			views: 0,
-		});
-		expect(res.ok).toBe(true);
-		expect(rec.calls).toHaveLength(1);
-	});
-
-	it("update with a relation in `data` is REJECTED", async () => {
-		const { rec, broker, token } = wire(relations({ posts: ["author"] }));
-		const res = await broker.handleRpc(token, "collections.posts.update", {
-			where: { id: "p1" },
-			data: { author: { connect: { id: "x" } } },
-		});
-		expect(res.ok).toBe(false);
-		expect(rec.calls).toHaveLength(0);
-	});
-
-	it("update with a relation in `where` (oracle) is REJECTED", async () => {
-		const { rec, broker, token } = wire(relations({ posts: ["author"] }));
-		const res = await broker.handleRpc(token, "collections.posts.update", {
-			where: { author: { id: "secret-user" } },
-			data: { title: "x" },
-		});
-		expect(res.ok).toBe(false);
-		expect(rec.calls).toHaveLength(0);
-	});
-
-	it("delete with a relation in `where` (oracle) is REJECTED", async () => {
-		const { rec, broker, token } = wire(relations({ posts: ["author"] }));
-		const res = await broker.handleRpc(token, "collections.posts.delete", {
-			where: { author: { id: "secret-user" } },
-		});
-		expect(res.ok).toBe(false);
-		expect(rec.calls).toHaveLength(0);
-	});
-
-	it("a scalar update/delete `where` + `data` still works", async () => {
-		const { rec, broker, token } = wire(relations({ posts: ["author"] }));
-		const upd = await broker.handleRpc(token, "collections.posts.update", {
-			where: { title: "old" },
-			data: { title: "new" },
-		});
-		expect(upd.ok).toBe(true);
-		const del = await broker.handleRpc(token, "collections.posts.delete", {
-			where: { archived: true },
-		});
-		expect(del.ok).toBe(true);
-		expect(rec.calls.map((c) => c.method)).toEqual(["update", "delete"]);
-	});
-
-	it("FAILS CLOSED: an unknown relation set rejects every write payload/where", async () => {
-		const { rec, broker, token } = wire(unknownRelations);
-		// create with ANY payload key is rejected (can't prove a key isn't a relation).
-		const create = await broker.handleRpc(token, "collections.posts.create", {
+			id: "forged-pk",
+			createdAt: "1970-01-01T00:00:00.000Z",
+			app: "victim-tenant",
 			title: "hi",
 		});
-		expect(create.ok).toBe(false);
-		// update/delete with ANY where field is rejected.
-		const update = await broker.handleRpc(token, "collections.posts.update", {
-			where: { title: "x" },
-			data: { title: "y" },
-		});
-		expect(update.ok).toBe(false);
-		const del = await broker.handleRpc(token, "collections.posts.delete", {
-			where: { title: "x" },
-		});
-		expect(del.ok).toBe(false);
+		expect(res.ok).toBe(false);
+		expect(res.ok === false && res.error.code).toBe("not_implemented");
 		expect(rec.calls).toHaveLength(0);
-	});
-
-	it("FAILS CLOSED: an empty-where delete is still allowed (nothing to leak)…", async () => {
-		// With a KNOWN (empty) relation set, a no-field delete has no oracle to smuggle.
-		const { rec, broker, token } = wire(noRelations);
-		const del = await broker.handleRpc(token, "collections.posts.delete", {
-			where: {},
-		});
-		expect(del.ok).toBe(true);
-		expect(rec.calls).toHaveLength(1);
 	});
 });
 

@@ -47,10 +47,13 @@ export interface BindingTarget {
 	};
 	/**
 	 * Per-collection accessor mirroring the binding op vocabulary
-	 * (`collections.<name>.<op>`). The broker dispatches the read half
-	 * (`find`/`findOne`) AND the write half (`create`/`update`/`delete`); each is
-	 * OPTIONAL, so a target may expose only the ops a run is scoped for. A method
-	 * that is in-scope but has no handler resolves to `not_implemented`.
+	 * (`collections.<name>.<op>`). The broker dispatches ONLY the read half
+	 * (`find`/`findOne`). The write half (`create`/`update`/`delete`) is typed here
+	 * for the eventual §7 write boundary, but the broker `dispatch` currently
+	 * returns `not_implemented` for those verbs (no §7 tenant-write clamp exists),
+	 * so a write handler placed here is NEVER invoked until that boundary ships.
+	 * Each handler is OPTIONAL; an in-scope read with no handler resolves to
+	 * `not_implemented`.
 	 *
 	 * The op names are the BINDING ops, not the underlying `ctx` CRUD names: the
 	 * runner maps `update`→by-`where` update and `delete`→by-`where` delete when it
@@ -69,9 +72,10 @@ export interface BindingTarget {
 	>;
 	/**
 	 * Per-global accessor mirroring the binding op vocabulary
-	 * (`globals.<name>.<op>`): `get` (read) + `set` (write). As with collections
-	 * the op names are the BINDING ops — the runner maps `set` to the real global
-	 * `update` when it builds the target. Handlers are OPTIONAL.
+	 * (`globals.<name>.<op>`): `get` (read) + `set` (write). The broker dispatches
+	 * ONLY `get`; `set` returns `not_implemented` (it rides the same deferred §7
+	 * write boundary as collection writes). As with collections the op names are
+	 * the BINDING ops. Handlers are OPTIONAL.
 	 */
 	globals?: Record<
 		string,
@@ -207,8 +211,10 @@ export class SandboxBroker {
 			);
 		}
 
-		// 3. DISPATCH to the bound primitive surface (knowledge + collection
-		//    read/write + globals get/set). In-scope methods without a handler are an
+		// 3. DISPATCH to the bound primitive surface (knowledge + collection reads +
+		//    globals.get). Guest WRITES (collection create/update/delete + globals.set)
+		//    are NOT dispatched yet — they fail closed as `not_implemented` until the
+		//    §7 tenant-write boundary lands. In-scope methods without a handler are an
 		//    honest deferral.
 		const parsed = parseBindingMethod(method);
 		// `parsed` is non-null here (the check passed), but guard for the type.
@@ -244,11 +250,31 @@ export class SandboxBroker {
 		}
 
 		if (parsed.kind === "collection") {
-			// Read AND write ops (`find/findOne/create/update/delete`) all dispatch
-			// here. The per-call capability check (default-deny) ran in `handleRpc`
-			// BEFORE this method, so an ungranted collection/verb never reaches the
-			// target — including every write op (defense: enforcement is upstream of
-			// dispatch, with NO write-path bypass).
+			// WRITE ops (`create/update/delete`) are NOT dispatched: a generic
+			// collection write has NO §7 tenant-write boundary yet (no
+			// `document_store`, no `store`-grant row-filter clamp, no force-stamp /
+			// reject-client-id-app-createdAt guard, no blast-radius containment on the
+			// update/delete `where`). Without that clamp a granted, write-rule-less
+			// collection would be fully writable/deletable by the guest (the framework
+			// access fallback for an absent write rule is `!!session`, which the
+			// synthesized app-principal satisfies). So writes FAIL CLOSED as an honest
+			// deferral until the §7 write boundary lands with its own adversarial pass.
+			// (The capability CHECK already supports the verbs — only DISPATCH is
+			// deferred.) See `.private/miniapps-v2-design.md` §7 + Decision 8.
+			if (
+				parsed.op === "create" ||
+				parsed.op === "update" ||
+				parsed.op === "delete"
+			) {
+				return brokerError(
+					"not_implemented",
+					`collections.${parsed.name}.${parsed.op} (guest write) is not ` +
+						"dispatched: the §7 tenant-write boundary is not implemented",
+				);
+			}
+			// Read ops (`find/findOne`). The per-call capability check (default-deny)
+			// ran in `handleRpc` BEFORE this method, so an ungranted collection/verb
+			// never reaches the target.
 			//
 			// Own-property lookup so a `__proto__`/`constructor` name can never reach
 			// up the prototype chain (the capability check already denied it, but the
@@ -269,8 +295,19 @@ export class SandboxBroker {
 		}
 
 		if (parsed.kind === "global") {
-			// `get` (read) + `set` (write); both are capability-checked upstream in
-			// `handleRpc`. Same prototype-safe own-property lookup as collections.
+			// `set` (write) is NOT dispatched: a global write is an unclamped singleton
+			// write to a host global, gated only by the same `!!session` access
+			// fallback the §7 boundary must replace. It FAILS CLOSED as an honest
+			// deferral alongside collection writes (see the collection branch above).
+			if (parsed.op === "set") {
+				return brokerError(
+					"not_implemented",
+					`globals.${parsed.name}.set (guest write) is not dispatched: the §7 ` +
+						"tenant-write boundary is not implemented",
+				);
+			}
+			// `get` (read) is capability-checked upstream in `handleRpc`. Same
+			// prototype-safe own-property lookup as collections.
 			const globals = target.globals;
 			const glob =
 				globals && Object.prototype.hasOwnProperty.call(globals, parsed.name)
