@@ -5,7 +5,7 @@ import {
 } from "questpie/executor";
 import { describe, expect, it } from "vitest";
 
-import { appPathPrefix } from "../apps/app-resolver";
+import { appBundlePrefix, appDataPrefix } from "../apps/app-resolver";
 import { pickCronExport, triggerAppSchedule } from "../jobs/schedule-tick";
 
 // ---------------------------------------------------------------------------
@@ -25,30 +25,40 @@ import { pickCronExport, triggerAppSchedule } from "../jobs/schedule-tick";
 // ---------------------------------------------------------------------------
 
 const APP = "social";
-const PREFIX = appPathPrefix(APP);
+const BUNDLE = appBundlePrefix(APP);
+const DATA = appDataPrefix(APP);
 
-const MANIFEST = {
-	name: "Social",
-	entry: "server.ts",
-	capabilities: {
-		data: { collections: { posts: ["read"] } },
-		files: {
-			read: [`${PREFIX}data/**`],
-			write: [`${PREFIX}data/**`],
-		},
-		timeoutMs: 5000,
-	},
-};
+/** Inline manifest source prepended into every seeded `.app` `server.ts`. */
+const MANIFEST_SRC = [
+	`export const manifest = {`,
+	`  name: "Social",`,
+	`  capabilities: {`,
+	`    data: { collections: { posts: ["read"] } },`,
+	`    files: { read: ["${BUNDLE}**", "${DATA}**"], write: ["${DATA}**"] },`,
+	`    timeoutMs: 5000,`,
+	`  },`,
+	`};`,
+].join("\n");
+
+/**
+ * The opt-in `actions` registry the resolver requires (cron apps still need one,
+ * even if empty — the HTTP surface is opt-in). A single `noop` action keeps the
+ * resolver happy without exposing the cron handlers as HTTP.
+ */
+const ACTIONS_SRC = [
+	"async function noop(){ return null; }",
+	"export const actions = { noop };",
+].join("\n");
 
 interface KRow {
 	path: string;
 	body: string;
 }
 
+/** Build a `.app` bundle from a cron-defining body (manifest + actions prepended). */
 function seed(entry: string): KRow[] {
 	return [
-		{ path: `${PREFIX}_app/manifest.json`, body: JSON.stringify(MANIFEST) },
-		{ path: `${PREFIX}_app/server.ts`, body: entry },
+		{ path: `${BUNDLE}server.ts`, body: `${MANIFEST_SRC}\n${entry}\n${ACTIONS_SRC}` },
 	];
 }
 
@@ -306,9 +316,9 @@ describe("triggerAppSchedule", () => {
 			capabilities: (call.capabilities as never) ?? {},
 			target: call.appBindings as never,
 		});
-		// another app's _app/ is rejected (host bound forbids escaping the subtree).
+		// another app's .app bundle is rejected (host bound forbids escaping the tenant).
 		const evil = await broker.handleRpc(token, "files.write", {
-			path: "company/apps/other/_app/manifest.json",
+			path: "company/apps/other.app/server.ts",
 			body: "x",
 		});
 		expect(evil.ok).toBe(false);

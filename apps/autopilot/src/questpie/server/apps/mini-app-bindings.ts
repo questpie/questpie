@@ -12,12 +12,16 @@
  * here is enforced HOST-SIDE and NEVER trusts the manifest:
  *
  *   - **G1 — files tenant outer-bound.** Every `files.read|write|list`
- *     call is clamped to the app's own subtree `company/apps/{appId}/`. WRITES
- *     are additionally forbidden anywhere under `_app/` (the app's code +
- *     manifest are NOT app-writable). A manifest glob like `**` or `company/**`
- *     therefore CANNOT widen beyond the app's own subtree — the broker's
- *     per-glob capability check narrows WITHIN the manifest scope, and this bound
- *     intersects it down to the tenant subtree. (Mirrors M6 `app-fs.ts`.)
+ *     call is clamped to the app's own surfaces: the guest-READ-ONLY `.app`
+ *     bundle `company/apps/{appId}.app/` (code/manifest/UI) and the WRITABLE data
+ *     subtree `company/apps/{appId}/data/`. WRITES are confined to the data
+ *     subtree ONLY — the `.app` bundle (the app's code + the INLINE manifest, the
+ *     capability source on the next run) is NOT app-writable, so a hostile guest
+ *     cannot self-escalate by rewriting its own `manifest`. A manifest glob like
+ *     `**` or `company/**` therefore CANNOT widen beyond the app's own surfaces —
+ *     the broker's per-glob capability check narrows WITHIN the manifest scope,
+ *     and this bound intersects it down to the tenant. (Mirrors M6 `app-fs.ts`.
+ *     ★ RESOLVED re-keyed the write-ban from `_app/` to the `.app/` bundle.)
  *
  *   - **G2 — non-privileged dispatch.** `collections.X.find|findOne` are
  *     dispatched with `accessMode:"user"` + a principal, NEVER the framework
@@ -62,13 +66,18 @@ import {
 	type KnowledgeResourceEntry,
 	type KnowledgeResourceRecord,
 } from "../services/knowledge-resource.js";
-import { appPathPrefix, assertValidAppId } from "./app-resolver.js";
+import {
+	appBundlePrefix,
+	appDataPrefix,
+	assertValidAppId,
+} from "./app-resolver.js";
 
 /**
  * The access context the knowledge bindings dispatch the file-as-DB primitives
- * under. The HOST has ALREADY clamped every path to the app's OWN subtree
- * (`company/apps/{appId}/`, writes excluding `_app/`) BEFORE the primitive is
- * called — that clamp (G1) IS the tenant authorization. So the primitive runs in
+ * under. The HOST has ALREADY clamped every path to the app's OWN surfaces (the
+ * read-only `.app` bundle + the writable `…/{appId}/data/` subtree; writes to the
+ * data subtree only) BEFORE the primitive is called — that clamp (G1) IS the
+ * tenant authorization. So the primitive runs in
  * `accessMode:"system"` to read/write the app's OWN already-authorized data
  * WITHOUT the `assets` collection's per-row visibility read rule additionally
  * gating it (that rule filters anonymous reads to `visibility:"public"` rows; the
@@ -169,11 +178,6 @@ export class MiniAppBindingError extends Error {
 	}
 }
 
-/** `company/apps/{appId}/_app/` — the app's code/manifest dir (never writable). */
-function appCodePrefix(appId: string): string {
-	return `${appPathPrefix(appId)}_app/`;
-}
-
 /**
  * Normalize an app-supplied knowledge path and reject traversal/absolute paths.
  *
@@ -212,37 +216,46 @@ export function normalizeAppPath(raw: unknown): string | null {
 }
 
 /**
- * Clamp a normalized path to the app's READ bound: it MUST live under
- * `company/apps/{appId}/`. Returns the path when in-bound, else `null`.
+ * Clamp a normalized path to the app's READ bound: it MUST live under EITHER the
+ * guest-READ-ONLY `.app` bundle (`company/apps/{appId}.app/`) OR the writable
+ * data subtree (`company/apps/{appId}/data/`). Returns the path when in-bound,
+ * else `null`.
  *
  * This is the G1 outer-bound for reads. The broker's per-glob capability check
  * runs FIRST (narrowing within the manifest's declared globs); this bound then
- * intersects that down to the tenant's own subtree, so a manifest `read:["**"]`
- * cannot reach another tenant's tree or company-wide knowledge.
+ * intersects that down to the tenant's own surfaces, so a manifest `read:["**"]`
+ * cannot reach another tenant's bundle/data or company-wide knowledge. The two
+ * allowed roots themselves are also listable (no trailing slash).
  */
 export function clampReadPath(appId: string, raw: unknown): string | null {
 	const pathn = normalizeAppPath(raw);
 	if (pathn === null) return null;
-	const prefix = appPathPrefix(appId); // company/apps/{appId}/
-	// The subtree root itself (no trailing slash) is allowed for listing.
-	if (pathn === prefix.slice(0, -1)) return pathn;
-	return pathn.startsWith(prefix) ? pathn : null;
+	const bundle = appBundlePrefix(appId); // company/apps/{appId}.app/
+	const data = appDataPrefix(appId); // company/apps/{appId}/data/
+	// Each root itself (no trailing slash) is allowed for listing.
+	if (pathn === bundle.slice(0, -1) || pathn === data.slice(0, -1)) return pathn;
+	if (pathn.startsWith(bundle) || pathn.startsWith(data)) return pathn;
+	return null;
 }
 
 /**
  * Clamp a normalized path to the app's WRITE bound: under
- * `company/apps/{appId}/` AND NOT under `company/apps/{appId}/_app/`.
+ * `company/apps/{appId}/data/` ONLY.
  *
- * This is the G1 outer-bound for writes — the app's code/manifest (`_app/`) are
+ * This is the G1 outer-bound for writes — the `.app` bundle (the app's code + the
+ * INLINE manifest, which is the capability source on the next run) is
  * deliberately NOT app-writable, so a compromised/hostile guest cannot rewrite
- * its own (or, combined with the read bound, any other app's) code or manifest.
+ * its own (or, combined with the read bound, any other app's) code/manifest to
+ * self-escalate. The data subtree (`{appId}/data/`) and the bundle
+ * (`{appId}.app/`) are DISJOINT prefixes, so confining writes to the data subtree
+ * structurally bans every `.app/` write. The data-root itself is not writable
+ * (only paths strictly under it).
  */
 export function clampWritePath(appId: string, raw: unknown): string | null {
-	const pathn = clampReadPath(appId, raw);
+	const pathn = normalizeAppPath(raw);
 	if (pathn === null) return null;
-	if (pathn === appCodePrefix(appId).slice(0, -1)) return null; // the _app dir itself
-	if (pathn.startsWith(appCodePrefix(appId))) return null; // anything under _app/
-	return pathn;
+	const data = appDataPrefix(appId); // company/apps/{appId}/data/
+	return pathn.startsWith(data) ? pathn : null;
 }
 
 /**
@@ -459,7 +472,8 @@ export function buildMiniAppBindingTarget(
 			const path = clampReadPath(appId, a.path);
 			if (path === null) {
 				throw new MiniAppBindingError(
-					`files.read path is outside the app's tenant scope (company/apps/${appId}/)`,
+					`files.read path is outside the app's scope ` +
+						`(company/apps/${appId}.app/ or company/apps/${appId}/data/)`,
 					"out_of_scope",
 				);
 			}
@@ -484,7 +498,7 @@ export function buildMiniAppBindingTarget(
 			if (path === null) {
 				throw new MiniAppBindingError(
 					`files.write path is outside the app's writable scope ` +
-						`(company/apps/${appId}/, excluding _app/)`,
+						`(company/apps/${appId}/data/ only; the .app bundle is read-only)`,
 					"out_of_scope",
 				);
 			}
@@ -516,15 +530,16 @@ export function buildMiniAppBindingTarget(
 
 		async list(args: unknown) {
 			const a = (args ?? {}) as { path?: unknown };
-			// Default to the app's data root when no path is given.
+			// Default to the app's writable data root when no path is given.
 			const requested =
 				a.path === undefined || a.path === null || a.path === ""
-					? appPathPrefix(appId)
+					? appDataPrefix(appId)
 					: a.path;
 			const path = clampReadPath(appId, requested);
 			if (path === null) {
 				throw new MiniAppBindingError(
-					`files.list path is outside the app's tenant scope (company/apps/${appId}/)`,
+					`files.list path is outside the app's scope ` +
+						`(company/apps/${appId}.app/ or company/apps/${appId}/data/)`,
 					"out_of_scope",
 				);
 			}

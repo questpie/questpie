@@ -85,6 +85,9 @@ export default collection("assets")
 				{ value: "preview", label: { en: "Preview" } },
 				{ value: "log", label: { en: "Log" } },
 				{ value: "diff", label: { en: "Diff" } },
+				// A mini-app `.app` bundle file (server.ts/index.html/*.jsx). The
+				// `renderer:"miniapp"` row mounts the KnowledgeHost iframe (M7).
+				{ value: "miniapp", label: { en: "Mini-app" } },
 			])
 			.label({ en: "Kind" }),
 		contentType: f.text().label({ en: "Content Type" }),

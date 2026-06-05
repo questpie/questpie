@@ -3,7 +3,7 @@ import { Buffer } from "node:buffer";
 import { ApiError } from "questpie/errors";
 
 import { normalizeKnowledgePath } from "../services/knowledge-resource.js";
-import { appPathPrefix } from "./app-resolver.js";
+import { appDataPrefix as resolverAppDataPrefix } from "./app-resolver.js";
 
 /**
  * App file-as-DB scoping + format-agnostic (de)serialization helpers.
@@ -26,9 +26,14 @@ import { appPathPrefix } from "./app-resolver.js";
  * §11 (decision 5: read/write/list, no DELETE).
  */
 
-/** The Knowledge sub-prefix under which an app stores its data files. */
+/**
+ * The Knowledge sub-prefix under which an app stores its data files:
+ * `company/apps/{appId}/data/`. Delegates to the resolver's canonical
+ * {@link resolverAppDataPrefix} so the fs route, the resolver, and the bindings
+ * clamp all agree on the one writable-data root.
+ */
 export function appDataPrefix(appId: string): string {
-	return `${appPathPrefix(appId)}data/`;
+	return resolverAppDataPrefix(appId);
 }
 
 /**

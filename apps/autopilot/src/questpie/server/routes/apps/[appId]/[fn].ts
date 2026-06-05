@@ -192,11 +192,13 @@ export default route()
 			c.collections as unknown as AppResolverCollections,
 		);
 
-		// 2. Confirm `{fn}` is a statically-inferred endpoint export (default-deny).
-		//    Cron exports are NOT addressable as HTTP endpoints.
+		// 2. Confirm `{fn}` is in the app's OPT-IN `actions` registry (default-deny;
+		//    the registry is the only HTTP surface). A non-registered export, a
+		//    reserved framework name (rejected at resolve time), and cron exports
+		//    are all NOT addressable as HTTP actions.
 		const endpoint = resolved.endpoints.find((e) => e.name === fn);
 		if (!endpoint) {
-			throw ApiError.notFound("Mini-app endpoint", `${appId}/${fn}`);
+			throw ApiError.notFound("Mini-app action", `${appId}/${fn}`);
 		}
 
 		// 3. Build the HOST-SIDE, tenant-scoped, non-privileged bindings target

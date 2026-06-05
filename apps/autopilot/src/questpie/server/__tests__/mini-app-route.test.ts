@@ -7,7 +7,7 @@ import {
 } from "questpie/executor";
 import { describe, expect, it } from "vitest";
 
-import { appPathPrefix } from "../apps/app-resolver";
+import { appBundlePrefix, appDataPrefix } from "../apps/app-resolver";
 import appRoute, {
 	buildEndpointEntrySource,
 } from "../routes/apps/[appId]/[fn]";
@@ -83,41 +83,46 @@ function recordingExecutor(result?: Partial<ExecutorRunResult>) {
 }
 
 const APP = "social";
-const PREFIX = appPathPrefix(APP);
+const BUNDLE = appBundlePrefix(APP);
+const DATA = appDataPrefix(APP);
 
-const MANIFEST = {
-	name: "Social",
-	entry: "server.ts",
-	capabilities: {
-		data: { collections: { posts: ["read"] } },
-		files: {
-			read: [`${PREFIX}data/**`],
-			write: [`${PREFIX}data/**`],
-		},
-		timeoutMs: 5000,
-	},
-};
+/** Inline manifest source prepended into every seeded `server.ts`. */
+const MANIFEST_SRC = [
+	`export const manifest = {`,
+	`  name: "Social",`,
+	`  capabilities: {`,
+	`    data: { collections: { posts: ["read"] } },`,
+	`    files: { read: ["${BUNDLE}**", "${DATA}**"], write: ["${DATA}**"] },`,
+	`    timeoutMs: 5000,`,
+	`  },`,
+	`};`,
+].join("\n");
 
-function seed(entry: string): KRow[] {
+/**
+ * Build a `.app` bundle from a body that defines the action handlers + the opt-in
+ * `actions` registry. The inline manifest is prepended automatically.
+ */
+function seed(body: string): KRow[] {
 	return [
 		{
-			id: "m",
-			path: `${PREFIX}_app/manifest.json`,
-			title: null,
-			body: JSON.stringify(MANIFEST),
-			contentType: "application/json",
-			metadata: null,
-		},
-		{
 			id: "s",
-			path: `${PREFIX}_app/server.ts`,
+			path: `${BUNDLE}server.ts`,
 			title: null,
-			body: entry,
+			body: `${MANIFEST_SRC}\n${body}`,
 			contentType: "text/typescript",
 			metadata: null,
 		},
 	];
 }
+
+/**
+ * A minimal opt-in registry exposing a single `run` action (v2 has no `default`
+ * HTTP action — `default` is reserved). Most tests just need ONE callable action.
+ */
+const RUN_ACTION = [
+	"async function run(input){ return input?.method ?? 1; }",
+	"export const actions = { run };",
+].join("\n");
 
 function callRoute(opts: {
 	rows: KRow[];
@@ -218,15 +223,16 @@ describe("buildEndpointEntrySource", () => {
 describe("named-endpoint route", () => {
 	it("calls executor.run with sandboxed isolation, caps, target, broker URL", async () => {
 		const entry = [
-			"export default async function(){ return 1; }",
+			"async function run(input){ return input?.body; }",
 			"export const cron = async () => {};",
+			"export const actions = { run };",
 		].join("\n");
 		const stub = recordingExecutor();
 		const res = await callRoute({
 			rows: seed(entry),
 			executor: stub.executor,
 			appId: APP,
-			fn: "default",
+			fn: "run",
 			body: JSON.stringify({ a: 1 }),
 			contentType: "application/json",
 			brokerUrl: "http://127.0.0.1:3000/api/sandbox/rpc",
@@ -260,16 +266,17 @@ describe("named-endpoint route", () => {
 			method?: string;
 		};
 		expect(input.body).toEqual({ a: 1 });
-		expect(input.fn).toBe("default");
+		expect(input.fn).toBe("run");
 		expect(input.method).toBe("POST");
-		// the composed source selects the default endpoint.
-		expect(call.source).toContain('__FN === "default"');
+		// the composed source selects the requested action by name.
+		expect(call.source).toContain('"run"');
 	});
 
-	it("dispatches a NAMED endpoint (source selects it)", async () => {
+	it("dispatches a NAMED action (source selects it)", async () => {
 		const entry = [
-			"export default async function(){ return 'DEFAULT'; }",
-			"export async function webhook(input){ return input.method; }",
+			"async function status(){ return 'STATUS'; }",
+			"async function webhook(input){ return input.method; }",
+			"export const actions = { status, webhook };",
 		].join("\n");
 		const stub = recordingExecutor();
 		const res = await callRoute({
@@ -285,10 +292,10 @@ describe("named-endpoint route", () => {
 	it("STRIPS the caller's credential headers from the guest input", async () => {
 		const stub = recordingExecutor();
 		await callRoute({
-			rows: seed("export default async function(){ return 1; }"),
+			rows: seed(RUN_ACTION),
 			executor: stub.executor,
 			appId: APP,
-			fn: "default",
+			fn: "run",
 			extraHeaders: {
 				authorization: "Bearer SECRET",
 				cookie: "session=SECRET",
@@ -308,13 +315,12 @@ describe("named-endpoint route", () => {
 	});
 
 	it("the target handed to the run enforces G1 via the real broker", async () => {
-		const entry = "export default async function(){ return 1; }";
 		const stub = recordingExecutor();
 		await callRoute({
-			rows: seed(entry),
+			rows: seed(RUN_ACTION),
 			executor: stub.executor,
 			appId: APP,
-			fn: "default",
+			fn: "run",
 		});
 		const call = stub.calls[0]!;
 		const broker = new SandboxBroker();
@@ -323,9 +329,9 @@ describe("named-endpoint route", () => {
 			target: call.appBindings as never,
 		});
 		// manifest write glob is the app's OWN data/, but the host bound also forbids
-		// escaping the tenant subtree: another app's _app/ is rejected.
+		// escaping the tenant: another app's .app bundle is rejected.
 		const evil = await broker.handleRpc(token, "files.write", {
-			path: "company/apps/other/_app/manifest.json",
+			path: "company/apps/other.app/server.ts",
 			body: "x",
 		});
 		expect(evil.ok).toBe(false);
@@ -335,10 +341,10 @@ describe("named-endpoint route", () => {
 	it("ignores a spoofed Host header — brokerUrl comes from CONFIG", async () => {
 		const stub = recordingExecutor();
 		await callRoute({
-			rows: seed("export default async function(){ return 1; }"),
+			rows: seed(RUN_ACTION),
 			executor: stub.executor,
 			appId: APP,
-			fn: "default",
+			fn: "run",
 			host: "evil.example", // attacker-controlled Host on the request URL
 			brokerUrl: "http://127.0.0.1:3000/api/sandbox/rpc",
 		});
@@ -352,10 +358,10 @@ describe("named-endpoint route", () => {
 	it("falls back to loopback (never the request Host) when no config/env is set", async () => {
 		const stub = recordingExecutor();
 		await callRoute({
-			rows: seed("export default async function(){ return 1; }"),
+			rows: seed(RUN_ACTION),
 			executor: stub.executor,
 			appId: APP,
-			fn: "default",
+			fn: "run",
 			host: "evil.example",
 			// no brokerUrl config, and SANDBOX_BROKER_URL unset in this test env.
 		});
@@ -368,10 +374,10 @@ describe("named-endpoint route", () => {
 	it("the target rejects a `where` that names a relation (oracle)", async () => {
 		const stub = recordingExecutor();
 		await callRoute({
-			rows: seed("export default async function(){ return 1; }"),
+			rows: seed(RUN_ACTION),
 			executor: stub.executor,
 			appId: APP,
-			fn: "default",
+			fn: "run",
 			relationFields: { posts: ["author"] },
 		});
 		const call = stub.calls[0]!;
@@ -395,10 +401,13 @@ describe("named-endpoint route", () => {
 	// Resolution/validation failures THROW `ApiError` (the HTTP adapter maps them
 	// to statuses uniformly, like the sibling fs route); calling the handler
 	// directly surfaces the rejection, so we assert on the error code.
-	it("rejects NOT_FOUND when fn is a cron export (not an HTTP endpoint)", async () => {
+	it("rejects NOT_FOUND when fn is a cron export (not an HTTP action)", async () => {
+		// The app resolves (it has an opt-in `actions` registry) but `cron` is NOT in
+		// it — cron is inferred-by-name and is never HTTP-addressable.
 		const entry = [
-			"export default async function(){ return 1; }",
+			"async function run(){ return 1; }",
 			"export const cron = async () => {};",
+			"export const actions = { run };",
 		].join("\n");
 		const stub = recordingExecutor();
 		await expect(
@@ -412,11 +421,11 @@ describe("named-endpoint route", () => {
 		expect(stub.calls).toHaveLength(0);
 	});
 
-	it("rejects NOT_FOUND for an unknown endpoint name", async () => {
+	it("rejects NOT_FOUND for an unknown action name", async () => {
 		const stub = recordingExecutor();
 		await expect(
 			callRoute({
-				rows: seed("export default async function(){ return 1; }"),
+				rows: seed(RUN_ACTION),
 				executor: stub.executor,
 				appId: APP,
 				fn: "nope",
@@ -429,10 +438,10 @@ describe("named-endpoint route", () => {
 		const stub = recordingExecutor();
 		await expect(
 			callRoute({
-				rows: seed("export default async function(){ return 1; }"),
+				rows: seed(RUN_ACTION),
 				executor: stub.executor,
 				appId: APP,
-				fn: "default",
+				fn: "run",
 				method: "POST",
 				body: "{not json",
 				contentType: "application/json",
@@ -448,10 +457,10 @@ describe("named-endpoint route", () => {
 			logs: [],
 		});
 		const res = await callRoute({
-			rows: seed("export default async function(){ return 1; }"),
+			rows: seed(RUN_ACTION),
 			executor: stub.executor,
 			appId: APP,
-			fn: "default",
+			fn: "run",
 		});
 		expect(res.status).toBe(500);
 		const json = (await res.json()) as { ok: boolean; error: string };
@@ -467,10 +476,10 @@ describe("named-endpoint route", () => {
 			logs: [],
 		});
 		const res = await callRoute({
-			rows: seed("export default async function(){ return 1; }"),
+			rows: seed(RUN_ACTION),
 			executor: stub.executor,
 			appId: APP,
-			fn: "default",
+			fn: "run",
 		});
 		expect(res.status).toBe(504);
 	});
@@ -478,10 +487,10 @@ describe("named-endpoint route", () => {
 	it("rejects BAD_REQUEST when the executor is not configured", async () => {
 		await expect(
 			callRoute({
-				rows: seed("export default async function(){ return 1; }"),
+				rows: seed(RUN_ACTION),
 				executor: { isEnabled: false, run: async () => ({}) as never },
 				appId: APP,
-				fn: "default",
+				fn: "run",
 			}),
 		).rejects.toMatchObject({ code: "BAD_REQUEST" });
 	});

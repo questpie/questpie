@@ -155,7 +155,12 @@ function makeCtx(opts: {
 }
 
 const APP = "social";
+/** The app home (its writable data lives under `${PREFIX}data/`). */
 const PREFIX = `company/apps/${APP}/`;
+/** The guest-READ-ONLY `.app` bundle prefix (code/manifest/UI). */
+const BUNDLE = `company/apps/${APP}.app/`;
+/** The WRITABLE data prefix (OUTSIDE the bundle), == `${PREFIX}data/`. */
+const DATA = `${PREFIX}data/`;
 
 /**
  * Relation-field resolvers for the G3 `where`/`orderBy` guard. The LIVE runner
@@ -186,67 +191,60 @@ describe("G1: knowledge path clamps", () => {
 		expect(normalizeAppPath("data//x.json")).toBe("data/x.json");
 	});
 
-	it("clampReadPath confines reads to the app subtree", () => {
-		expect(clampReadPath(APP, `${PREFIX}data/posts.json`)).toBe(
-			`${PREFIX}data/posts.json`,
-		);
-		// reads of the app's own _app/ ARE allowed (manifest/code is readable).
-		expect(clampReadPath(APP, `${PREFIX}_app/manifest.json`)).toBe(
-			`${PREFIX}_app/manifest.json`,
-		);
-		// the subtree root itself is allowed (for listing).
-		expect(clampReadPath(APP, `${PREFIX.slice(0, -1)}`)).toBe(
-			PREFIX.slice(0, -1),
-		);
-		// another app, or company-wide knowledge, are OUT.
+	it("clampReadPath confines reads to the .app bundle + the data subtree", () => {
+		// data files are readable.
+		expect(clampReadPath(APP, `${DATA}posts.json`)).toBe(`${DATA}posts.json`);
+		// the app's own .app bundle (code/manifest/UI) IS readable (read-only).
+		expect(clampReadPath(APP, `${BUNDLE}server.ts`)).toBe(`${BUNDLE}server.ts`);
+		expect(clampReadPath(APP, `${BUNDLE}index.html`)).toBe(`${BUNDLE}index.html`);
+		// each root itself is allowed (for listing).
+		expect(clampReadPath(APP, `${BUNDLE.slice(0, -1)}`)).toBe(BUNDLE.slice(0, -1));
+		expect(clampReadPath(APP, `${DATA.slice(0, -1)}`)).toBe(DATA.slice(0, -1));
+		// the app HOME root (`company/apps/social/`) is NOT a read root — only the
+		// .app bundle + the data subtree are (a stray file at the home root is OUT).
+		expect(clampReadPath(APP, `${PREFIX.slice(0, -1)}`)).toBeNull();
+		expect(clampReadPath(APP, `${PREFIX}stray.json`)).toBeNull();
+		// another app, its .app bundle, or company-wide knowledge, are OUT.
 		expect(clampReadPath(APP, "company/apps/other/data/x.json")).toBeNull();
+		expect(clampReadPath(APP, "company/apps/other.app/server.ts")).toBeNull();
 		expect(clampReadPath(APP, "company/secrets/x")).toBeNull();
 		// a glob-ish escape never widens.
 		expect(clampReadPath(APP, "..")).toBeNull();
 	});
 
-	it("clampWritePath confines writes to the subtree AND forbids _app/", () => {
-		expect(clampWritePath(APP, `${PREFIX}data/foo.json`)).toBe(
-			`${PREFIX}data/foo.json`,
-		);
-		// _app/ (code + manifest) is NOT writable, even though it's in-subtree.
-		expect(clampWritePath(APP, `${PREFIX}_app/manifest.json`)).toBeNull();
-		expect(clampWritePath(APP, `${PREFIX}_app/server.ts`)).toBeNull();
-		expect(clampWritePath(APP, `${PREFIX.slice(0, -1)}/_app`)).toBeNull();
-		// other apps' _app/ + company knowledge are OUT.
-		expect(
-			clampWritePath(APP, "company/apps/other/_app/manifest.json"),
-		).toBeNull();
+	it("clampWritePath confines writes to the data subtree AND bans the .app bundle", () => {
+		expect(clampWritePath(APP, `${DATA}foo.json`)).toBe(`${DATA}foo.json`);
+		// the .app bundle (code + the INLINE manifest) is NOT writable.
+		expect(clampWritePath(APP, `${BUNDLE}server.ts`)).toBeNull();
+		expect(clampWritePath(APP, `${BUNDLE}index.html`)).toBeNull();
+		expect(clampWritePath(APP, `${BUNDLE.slice(0, -1)}`)).toBeNull();
+		// the app HOME root (non-data) is NOT writable either — data subtree only.
+		expect(clampWritePath(APP, `${PREFIX}stray.json`)).toBeNull();
+		expect(clampWritePath(APP, `${DATA.slice(0, -1)}`)).toBeNull(); // the data dir itself
+		// other apps' bundles/data + company knowledge are OUT.
+		expect(clampWritePath(APP, "company/apps/other.app/server.ts")).toBeNull();
+		expect(clampWritePath(APP, "company/apps/other/data/x.json")).toBeNull();
 		expect(clampWritePath(APP, "company/secrets/x")).toBeNull();
 	});
 
-	// ── `_app/` write-ban bypass via mid-path `./` / `..` (the G1 normalize fix) ──
-	it("clampWritePath rejects _app/ reached via a MID-PATH ./ (normalize match)", () => {
-		// The attack: `./` mid-path survived the OLD normalizer (leading-only strip)
-		// so the `_app/` ban missed it, yet Knowledge `posix.normalize`s on write and
-		// persisted under _app/. The clamp now normalizes identically → REJECT.
-		expect(clampWritePath(APP, `${PREFIX}./_app/server.ts`)).toBeNull();
-		expect(clampWritePath(APP, `${PREFIX}data/../_app/x`)).toBeNull();
-		expect(
-			clampWritePath(APP, `${PREFIX}data/./../_app/manifest.json`),
-		).toBeNull();
-		// direct _app/ is still rejected.
-		expect(clampWritePath(APP, `${PREFIX}_app/x`)).toBeNull();
-		// and a benign `./`-prefixed in-scope data path normalizes + is accepted.
-		expect(clampWritePath(APP, `${PREFIX}./data/foo.json`)).toBe(
-			`${PREFIX}data/foo.json`,
-		);
+	// ── `.app/` write-ban bypass via mid-path `./` / `..` (the G1 normalize fix) ──
+	it("clampWritePath rejects the .app bundle reached via a MID-PATH ./ or .. (normalize match)", () => {
+		// The attack: a `./`/`..` mid-path could try to climb out of `data/` into the
+		// sibling `.app` bundle. The clamp normalizes FIRST (exactly as Knowledge
+		// stores) so the escape is collapsed and then rejected.
+		expect(clampWritePath(APP, `${DATA}../../${APP}.app/server.ts`)).toBeNull();
+		expect(clampWritePath(APP, `${DATA}./../../${APP}.app/x`)).toBeNull();
+		// climbing to the app home root (out of data/) is rejected.
+		expect(clampWritePath(APP, `${DATA}../stray.json`)).toBeNull();
+		// a benign `./`-prefixed in-scope data path normalizes + is accepted.
+		expect(clampWritePath(APP, `${PREFIX}data/./foo.json`)).toBe(`${DATA}foo.json`);
 	});
 
 	it("normalizeAppPath collapses `.`/`..` exactly like Knowledge's stored form", () => {
-		// mid-path `.` collapses (was the bypass).
-		expect(normalizeAppPath(`${PREFIX}./_app/server.ts`)).toBe(
-			`${PREFIX}_app/server.ts`,
-		);
-		// `..` that escapes the subtree is rejected outright.
-		expect(normalizeAppPath(`${PREFIX}data/../../other/x`)).toBe(
-			"company/apps/other/x",
-		);
+		// mid-path `.` collapses.
+		expect(normalizeAppPath(`${DATA}./foo.json`)).toBe(`${DATA}foo.json`);
+		// `..` that escapes the subtree is collapsed (then the clamp rejects it).
+		expect(normalizeAppPath(`${DATA}../../other/x`)).toBe("company/apps/other/x");
 		// a pure escape is null.
 		expect(normalizeAppPath("a/../../b")).toBeNull();
 	});
@@ -305,10 +303,10 @@ describe("G1: broker dispatch is clamped to the tenant subtree", () => {
 		).toBe(true);
 	});
 
-	it("writing ANOTHER app's _app/manifest.json is REJECTED (clamped)", async () => {
+	it("writing ANOTHER app's .app bundle is REJECTED (clamped)", async () => {
 		const { knowledge, broker, token } = wire();
 		const res = await broker.handleRpc(token, "files.write", {
-			path: "company/apps/other/_app/manifest.json",
+			path: "company/apps/other.app/server.ts",
 			body: "HOSTILE",
 		});
 		expect(res.ok).toBe(false);
@@ -326,13 +324,17 @@ describe("G1: broker dispatch is clamped to the tenant subtree", () => {
 		expect(knowledge.rows.length).toBe(0);
 	});
 
-	it("writing its OWN _app/ (code/manifest) is REJECTED (data-only)", async () => {
+	it("writing its OWN .app bundle (code/inline manifest) is REJECTED (data-only)", async () => {
 		const { knowledge, broker, token } = wire();
-		const res = await broker.handleRpc(token, "files.write", {
-			path: `${PREFIX}_app/manifest.json`,
-			body: "HOSTILE",
-		});
-		expect(res.ok).toBe(false);
+		// The self-escalation vector: a hostile guest rewriting its own server.ts
+		// (which holds the INLINE manifest — the next run's capability source).
+		for (const path of [`${BUNDLE}server.ts`, `${BUNDLE}index.html`]) {
+			const res = await broker.handleRpc(token, "files.write", {
+				path,
+				body: "HOSTILE",
+			});
+			expect(res.ok).toBe(false);
+		}
 		expect(knowledge.rows.length).toBe(0);
 	});
 
@@ -468,14 +470,14 @@ describe("knowledge: own-subtree authorized via the G1 clamp (system-mode dispat
 		expect(knowledge.ctxCalls).toHaveLength(0);
 	});
 
-	it("`..` traversal + own `_app/` write are clamp-rejected before any system-mode call", async () => {
+	it("`..` traversal + own .app bundle write are clamp-rejected before any system-mode call", async () => {
 		const { knowledge, broker, token } = wire();
 		const traversal = await broker.handleRpc(token, "files.read", {
 			path: `${PREFIX}../other/x.json`,
 		});
 		expect(traversal.ok).toBe(false);
 		const appWrite = await broker.handleRpc(token, "files.write", {
-			path: `${PREFIX}_app/manifest.json`,
+			path: `${BUNDLE}server.ts`,
 			body: "HOSTILE",
 		});
 		expect(appWrite.ok).toBe(false);
