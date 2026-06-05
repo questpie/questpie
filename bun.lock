@@ -514,6 +514,20 @@
         "pg-boss",
       ],
     },
+    "packages/sandbox": {
+      "name": "@questpie/sandbox",
+      "version": "3.0.0",
+      "dependencies": {
+        "questpie": "workspace:*",
+      },
+      "devDependencies": {
+        "bun-types": "latest",
+        "tsdown": "^0.18.3",
+      },
+      "peerDependencies": {
+        "questpie": "^3.0.0",
+      },
+    },
     "packages/tanstack-query": {
       "name": "@questpie/tanstack-query",
       "version": "3.5.3",
@@ -1154,6 +1168,8 @@
     "@questpie/next": ["@questpie/next@workspace:packages/next"],
 
     "@questpie/openapi": ["@questpie/openapi@workspace:packages/openapi"],
+
+    "@questpie/sandbox": ["@questpie/sandbox@workspace:packages/sandbox"],
 
     "@questpie/tanstack-query": ["@questpie/tanstack-query@workspace:packages/tanstack-query"],
 

@@ -133,6 +133,7 @@ type ExtractAppServicesBase = {
 	email: unknown;
 	storage: unknown;
 	kv: unknown;
+	executor: unknown;
 	logger: unknown;
 	search: unknown;
 	realtime: unknown;
@@ -174,6 +175,7 @@ export function extractAppServices(
 		email: app.email,
 		storage: app.storage,
 		kv: app.kv,
+		executor: app.executor,
 		logger: app.logger,
 		search: app.search,
 		realtime: app.realtime,
