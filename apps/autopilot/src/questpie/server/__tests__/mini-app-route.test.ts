@@ -49,6 +49,16 @@ function knowledgeCollections(rows: KRow[]) {
 				return { docs: rows.filter((r) => r.path.startsWith(prefix)) };
 			},
 		},
+		// A granted data collection (manifest grants `posts: ["read"]`) so the target
+		// builds a `posts` accessor — used by the route-level G3 oracle proof.
+		posts: {
+			async find() {
+				return { docs: [] };
+			},
+			async findOne() {
+				return null;
+			},
+		},
 	};
 }
 
@@ -118,9 +128,16 @@ function callRoute(opts: {
 	body?: string;
 	contentType?: string;
 	extraHeaders?: Record<string, string>;
+	/** Host header to spoof (the request URL host); proves it does NOT drive brokerUrl. */
+	host?: string;
+	/** `config.executor.brokerUrl` the app exposes (the TRUSTED broker URL source). */
+	brokerUrl?: string;
+	/** Relation field names per collection (drives the G3 where/orderBy guard). */
+	relationFields?: Record<string, string[]>;
 }): Promise<Response> {
 	const method = opts.method ?? "POST";
-	const url = `https://app.test/api/apps/${opts.appId}/${opts.fn}`;
+	const host = opts.host ?? "app.test";
+	const url = `https://${host}/api/apps/${opts.appId}/${opts.fn}`;
 	const headers: Record<string, string> = { ...(opts.extraHeaders ?? {}) };
 	if (opts.contentType) headers["content-type"] = opts.contentType;
 	const request = new Request(url, {
@@ -131,7 +148,15 @@ function callRoute(opts: {
 			: {}),
 	});
 	const ctx = {
-		app: { executor: opts.executor },
+		app: {
+			executor: opts.executor,
+			config: opts.brokerUrl
+				? { executor: { brokerUrl: opts.brokerUrl } }
+				: undefined,
+			getCollectionConfig: (name: string) => ({
+				getMeta: () => ({ relations: opts.relationFields?.[name] ?? [] }),
+			}),
+		},
 		collections: knowledgeCollections(opts.rows),
 		services: {
 			knowledgeResource: {
@@ -204,6 +229,7 @@ describe("named-endpoint route", () => {
 			fn: "default",
 			body: JSON.stringify({ a: 1 }),
 			contentType: "application/json",
+			brokerUrl: "http://127.0.0.1:3000/api/sandbox/rpc",
 		});
 		expect(res.status).toBe(200);
 
@@ -225,8 +251,8 @@ describe("named-endpoint route", () => {
 		};
 		expect(target.knowledge).toBeTruthy();
 		expect(target.collections).toBeTruthy();
-		// broker URL derived from request origin → /api/sandbox/rpc.
-		expect(call.brokerUrl).toBe("https://app.test/api/sandbox/rpc");
+		// broker URL comes from CONFIG, NOT the request origin.
+		expect(call.brokerUrl).toBe("http://127.0.0.1:3000/api/sandbox/rpc");
 		// the JSON body reached the guest input.
 		const input = call.input as {
 			body?: unknown;
@@ -303,6 +329,67 @@ describe("named-endpoint route", () => {
 			body: "x",
 		});
 		expect(evil.ok).toBe(false);
+	});
+
+	// ── FIX #1: a SPOOFED `Host` must NOT drive the broker URL (token exfiltration) ──
+	it("ignores a spoofed Host header — brokerUrl comes from CONFIG", async () => {
+		const stub = recordingExecutor();
+		await callRoute({
+			rows: seed("export default async function(){ return 1; }"),
+			executor: stub.executor,
+			appId: APP,
+			fn: "default",
+			host: "evil.example", // attacker-controlled Host on the request URL
+			brokerUrl: "http://127.0.0.1:3000/api/sandbox/rpc",
+		});
+		const call = stub.calls[0]!;
+		// the supervisor would mail the per-run token here — it MUST be the config
+		// value, never the spoofed origin.
+		expect(call.brokerUrl).toBe("http://127.0.0.1:3000/api/sandbox/rpc");
+		expect(call.brokerUrl).not.toContain("evil.example");
+	});
+
+	it("falls back to loopback (never the request Host) when no config/env is set", async () => {
+		const stub = recordingExecutor();
+		await callRoute({
+			rows: seed("export default async function(){ return 1; }"),
+			executor: stub.executor,
+			appId: APP,
+			fn: "default",
+			host: "evil.example",
+			// no brokerUrl config, and SANDBOX_BROKER_URL unset in this test env.
+		});
+		const call = stub.calls[0]!;
+		expect(call.brokerUrl).toContain("127.0.0.1");
+		expect(call.brokerUrl).not.toContain("evil.example");
+	});
+
+	// ── FIX #3 (route-level): a relation-referencing `where` is rejected end-to-end ──
+	it("the target rejects a `where` that names a relation (oracle)", async () => {
+		const stub = recordingExecutor();
+		await callRoute({
+			rows: seed("export default async function(){ return 1; }"),
+			executor: stub.executor,
+			appId: APP,
+			fn: "default",
+			relationFields: { posts: ["author"] },
+		});
+		const call = stub.calls[0]!;
+		const broker = new SandboxBroker();
+		const { token } = broker.mint({
+			capabilities: (call.capabilities as never) ?? {},
+			target: call.appBindings as never,
+		});
+		// a relation reference in `where` → denied (would be a raw EXISTS oracle).
+		const oracle = await broker.handleRpc(token, "collections.posts.find", {
+			where: { author: { id: "secret" } },
+		});
+		expect(oracle.ok).toBe(false);
+		// a plain scalar `where` on the same collection still works.
+		const ok = await broker.handleRpc(token, "collections.posts.find", {
+			where: { title: "hi" },
+		});
+		expect(ok.ok).toBe(true);
 	});
 
 	// Resolution/validation failures THROW `ApiError` (the HTTP adapter maps them

@@ -36,8 +36,65 @@ import {
 } from "../../../apps/mini-app-bindings";
 import { sessionOnly } from "../../../lib/route-access";
 
-/** Broker endpoint path the SUPERVISOR (not the guest) reaches server-to-server. */
+/**
+ * Broker endpoint path the SUPERVISOR (not the guest) reaches server-to-server.
+ * Used ONLY to build the safe loopback fallback when no broker URL is configured;
+ * the host part NEVER comes from the inbound request (see {@link resolveBrokerUrl}).
+ */
 const BROKER_PATH = "/api/sandbox/rpc";
+
+/**
+ * Loopback fallback used when neither `config.executor.brokerUrl` nor
+ * `SANDBOX_BROKER_URL` is set. The supervisor is trusted and CAN reach loopback;
+ * this keeps single-host dev working while NEVER trusting the request `Host`.
+ */
+const DEFAULT_LOOPBACK_BROKER_URL = `http://127.0.0.1:${
+	process.env.PORT ?? "3000"
+}${BROKER_PATH}`;
+
+/**
+ * Resolve the TRUSTED broker URL the supervisor uses to reach this app's
+ * `/api/sandbox/rpc`. Sourced from CONFIG / ENV ONLY — NEVER from the inbound
+ * request's `Host`/origin (which an attacker controls; a spoofed `Host` would
+ * redirect the supervisor — carrying the per-run token — to an attacker host).
+ *
+ * Precedence: `config.executor.brokerUrl` → `SANDBOX_BROKER_URL` → loopback.
+ */
+function resolveBrokerUrl(app: { config?: { executor?: { brokerUrl?: string } } }): string {
+	const fromConfig = app.config?.executor?.brokerUrl;
+	if (typeof fromConfig === "string" && fromConfig.length > 0) return fromConfig;
+	const fromEnv = process.env.SANDBOX_BROKER_URL;
+	if (typeof fromEnv === "string" && fromEnv.length > 0) return fromEnv;
+	return DEFAULT_LOOPBACK_BROKER_URL;
+}
+
+/**
+ * Resolve the relation FIELD NAMES of a collection from runtime metadata (the
+ * SAME `state.relations` set the CRUD where-builder routes to its raw EXISTS
+ * subquery — `query-builders/where-builder.ts`). Used by the G3 guard to reject a
+ * `where`/`orderBy` that NAMES a relation (a blind boolean exfiltration oracle on
+ * an ungranted collection).
+ *
+ * Returns `null` when the collection's relation set cannot be determined — the
+ * guard then FAILS CLOSED (denies all `where`/`orderBy` keys it can't prove are
+ * scalar) rather than risk leaking a relation reference.
+ */
+function resolveCollectionRelationFields(
+	app: AppRouteContext["app"],
+	name: string,
+): Set<string> | null {
+	const getCfg = app.getCollectionConfig;
+	if (typeof getCfg !== "function") return null;
+	try {
+		const meta = getCfg(name)?.getMeta?.();
+		const relations = meta?.relations;
+		if (!Array.isArray(relations)) return null;
+		return new Set(relations);
+	} catch {
+		// Unknown collection / metadata unavailable → fail closed.
+		return null;
+	}
+}
 
 /** The narrow executor surface the runner needs (typed loosely; `ctx.executor` is `unknown`). */
 interface RunnerExecutor {
@@ -55,8 +112,18 @@ interface RunnerExecutor {
 type AppRouteContext = Questpie.AppContext & {
 	request: Request;
 	params: { appId: string; fn: string };
-	/** The app instance (typed `any` on raw route args) — exposes `executor`. */
-	app: { executor?: RunnerExecutor };
+	/**
+	 * The app instance (typed `any` on raw route args). Exposes `executor`, the
+	 * resolved `config` (for the trusted broker URL), and `getCollectionConfig`
+	 * (for host-side relation-field detection — G3).
+	 */
+	app: {
+		executor?: RunnerExecutor;
+		config?: { executor?: { brokerUrl?: string } };
+		getCollectionConfig?: (name: string) => {
+			getMeta(): { relations?: string[] };
+		};
+	};
 };
 
 /**
@@ -234,17 +301,22 @@ export default route()
 
 		// 3. Build the HOST-SIDE, tenant-scoped, non-privileged bindings target
 		//    (G1 knowledge clamp, G2 user-mode principal, G3 relation guard). This
-		//    is the security boundary — never trusts the manifest.
+		//    is the security boundary — never trusts the manifest. The per-collection
+		//    relation-field names (for the G3 where/orderBy guard) are read from the
+		//    runtime collection metadata, not from the untrusted request.
 		const target = buildMiniAppBindingTarget(
 			appId,
 			c as unknown as MiniAppBindingCtx,
 			resolved.capabilities,
+			(name) => resolveCollectionRelationFields(c.app, name),
 		);
 
-		// 4. Build the guest input (request payload + meta) and the broker URL the
-		//    SUPERVISOR uses to reach the host broker (server-to-server).
+		// 4. Build the guest input (request payload + meta) and resolve the broker
+		//    URL the SUPERVISOR uses to reach the host broker (server-to-server).
+		//    The broker URL comes from CONFIG/ENV ONLY — NEVER from `request.url`,
+		//    whose `Host` an attacker controls (token-exfiltration vector).
 		const input = await buildEndpointInput(c.request, appId, fn);
-		const brokerUrl = new URL(c.request.url).origin + BROKER_PATH;
+		const brokerUrl = resolveBrokerUrl(c.app);
 
 		// 5. Run sandboxed: the executor service mints the per-run scoped token bound
 		//    to (capabilities, target) and the supervisor brokers the guest's RPCs.

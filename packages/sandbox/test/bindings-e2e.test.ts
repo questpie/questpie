@@ -249,6 +249,75 @@ describe.if(!!denoPath)(
 			}
 		}, 20_000);
 
+		it("DEFENSE-IN-DEPTH: supervisor with SANDBOX_BROKER_URL rejects a stray bindings.url", async () => {
+			// Spawn a SECOND supervisor pinned (via env) to the trusted broker URL.
+			// A bindings run whose `bindings.url` does NOT match must be rejected
+			// BEFORE any relay — so the per-run token is never mailed to a stray host.
+			const pinnedProc = Bun.spawn(
+				[
+					denoPath as string,
+					"run",
+					"--allow-net",
+					"--allow-env",
+					"--allow-run",
+					"--allow-read",
+					SERVER_ENTRY,
+				],
+				{
+					env: {
+						...process.env,
+						PORT: "0",
+						SANDBOX_BROKER_URL: brokerUrl, // the ONLY broker URL it will relay to
+					},
+					stdout: "pipe",
+					stderr: "pipe",
+				},
+			);
+			try {
+				const port = await waitForListen(pinnedProc);
+				const pinned = httpSandboxAdapter({ url: `http://127.0.0.1:${port}` });
+
+				// (a) a MATCHING bindings.url is relayed normally.
+				const okRun = mint();
+				try {
+					const r = await pinned.run({
+						source: `export default async () => {
+							const res = await globalThis.questpie.collections.orders.find({});
+							return res.docs.map((d) => d.id);
+						}`,
+						isolation: "sandboxed",
+						capabilities: { net: [], import: [], timeoutMs: 8000, memoryMb: 128 },
+						sandboxBindings: { url: brokerUrl, token: okRun.token },
+					} as never);
+					expect(r.ok).toBe(true);
+					expect(r.output).toEqual(["o1"]);
+				} finally {
+					okRun.revoke();
+				}
+
+				// (b) a SPOOFED bindings.url (attacker host) is REJECTED before relay.
+				const evilRun = mint();
+				try {
+					const r = await pinned.run({
+						source: `export default async () => "should-not-run"`,
+						isolation: "sandboxed",
+						capabilities: { net: [], import: [], timeoutMs: 8000, memoryMb: 128 },
+						sandboxBindings: {
+							url: "http://evil.example/rpc",
+							token: evilRun.token,
+						},
+					} as never);
+					expect(r.ok).toBe(false);
+					expect(String(r.error)).toContain("bindings rejected");
+				} finally {
+					evilRun.revoke();
+				}
+			} finally {
+				pinnedProc.kill();
+				await pinnedProc.exited;
+			}
+		}, 30_000);
+
 		it("rejects an expired/revoked token even on the wire (supervisor relays, broker denies)", async () => {
 			const { token, revoke } = mint();
 			revoke(); // token no longer valid before the run

@@ -96,6 +96,33 @@ export class AppResolutionError extends Error {
 	}
 }
 
+/**
+ * Allowed `appId` charset: a lowercase DNS-label-like slug. MUST start with an
+ * alphanumeric and contain only `[a-z0-9-]` thereafter.
+ *
+ * Constraining this is security-relevant: `appId` is interpolated into the
+ * Knowledge path prefix (`company/apps/{appId}/`) AND into the synthesized,
+ * unprivileged dispatch principal id (`app:{appId}` — see
+ * `mini-app-bindings.ts` `buildAppPrincipalSession`). A loose charset could let a
+ * crafted `appId` (uppercase, `:`/`/`, path tricks) collide with or inject a real
+ * user id, or smuggle path segments. The slug form makes `app:{appId}` a
+ * disjoint, non-resolvable namespace.
+ */
+const APP_ID_RE = /^[a-z0-9][a-z0-9-]*$/;
+
+/**
+ * Validate an `appId` against {@link APP_ID_RE}. Throws {@link AppResolutionError}
+ * on a malformed id. Call this BEFORE using `appId` to build paths or principals.
+ */
+export function assertValidAppId(appId: unknown): asserts appId is string {
+	if (typeof appId !== "string" || !APP_ID_RE.test(appId)) {
+		throw new AppResolutionError(
+			`Invalid appId: ${JSON.stringify(appId)} (must match ${APP_ID_RE})`,
+			typeof appId === "string" ? appId : String(appId),
+		);
+	}
+}
+
 /** Knowledge path prefix for an app's subtree: `company/apps/{appId}/`. */
 export function appPathPrefix(appId: string): string {
 	return `company/apps/${appId}/`;
@@ -140,9 +167,7 @@ export async function resolveApp(
 	appId: string,
 	collections: AppResolverCollections,
 ): Promise<ResolvedApp> {
-	if (!appId || appId.includes("/") || appId === "." || appId === "..") {
-		throw new AppResolutionError(`Invalid appId: ${JSON.stringify(appId)}`, appId);
-	}
+	assertValidAppId(appId);
 
 	const pathPrefix = appPathPrefix(appId);
 	const result = await collections.knowledge.find({

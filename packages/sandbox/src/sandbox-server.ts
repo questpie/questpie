@@ -77,6 +77,48 @@ const GUEST_ENTRY_URL = new URL("./guest-entry.ts", import.meta.url);
 const GUEST_ENTRY_PATH = GUEST_ENTRY_URL.pathname;
 const DENO_BIN = Deno.env.get("DENO_BIN") ?? Deno.execPath();
 
+/**
+ * DEFENSE-IN-DEPTH for the bindings path: the TRUSTED broker URL the supervisor
+ * is willing to relay a guest's binding RPCs to (carrying the per-run scoped
+ * token). The runner already sources this from CONFIG (never the request `Host`),
+ * but if a future/spoofed caller hands a stray `bindings.url`, the supervisor
+ * must NOT mail the token to it. Set this env to the SAME trusted internal broker
+ * URL the app uses; any `bindings.url` that does not match is rejected before any
+ * relay. When UNSET, this check is skipped (back-compat) — set it in production.
+ */
+const EXPECTED_BROKER_URL = Deno.env.get("SANDBOX_BROKER_URL")?.trim();
+
+/** Normalize a broker URL for comparison (drop a trailing slash; ignore case of origin). */
+function normalizeBrokerUrl(raw: string): string | null {
+	try {
+		const u = new URL(raw);
+		// Compare origin (lowercased by URL) + pathname without a trailing slash.
+		const path = u.pathname.replace(/\/$/, "");
+		return `${u.origin}${path}`;
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * Reject a guest's bindings target URL unless it matches the supervisor's
+ * configured {@link EXPECTED_BROKER_URL}. Returns an error string to surface, or
+ * `null` when the URL is acceptable (or no expectation is configured).
+ */
+function brokerUrlRejection(url: unknown): string | null {
+	if (!EXPECTED_BROKER_URL) return null; // not configured → skip (back-compat)
+	if (typeof url !== "string" || url.length === 0) {
+		return "bindings.url is missing";
+	}
+	const got = normalizeBrokerUrl(url);
+	const want = normalizeBrokerUrl(EXPECTED_BROKER_URL);
+	if (got === null) return `bindings.url is not a valid URL: ${url}`;
+	if (got !== want) {
+		return `bindings.url does not match the configured broker URL`;
+	}
+	return null;
+}
+
 function clampInt(v: unknown, def: number, min: number, max: number): number {
 	const n = Number(v);
 	if (!Number.isFinite(n)) return def;
@@ -349,6 +391,22 @@ async function runInSubprocess(req: SandboxRunRequest): Promise<SandboxRunResult
 	const egress = await validateEgressHosts([...netHosts, ...importHosts]);
 	if (!egress.ok) {
 		return finish({ ok: false, error: `egress blocked: ${egress.reason}`, logs: [] });
+	}
+
+	// BINDINGS URL VALIDATION (token-exfiltration defense) — before spawn.
+	// A bindings run mails the per-run token to `bindings.url`; never relay to a
+	// URL the supervisor was not configured to trust (see brokerUrlRejection).
+	if (req.bindings) {
+		const bindingsRejection = brokerUrlRejection(
+			(req.bindings as { url?: unknown }).url,
+		);
+		if (bindingsRejection !== null) {
+			return finish({
+				ok: false,
+				error: `bindings rejected: ${bindingsRejection}`,
+				logs: [],
+			});
+		}
 	}
 
 	// ── BUILD THE HARDENED SUBPROCESS COMMAND. ──

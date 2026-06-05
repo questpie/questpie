@@ -27,13 +27,17 @@
  *     unprivileged app-principal (see {@link buildAppPrincipalSession}).
  *
  *   - **G3 — relation guard.** `find|findOne` REJECT any `with` / `populate`
- *     argument. Relation expansion traverses into other collections; in the MVP
- *     the per-relation target collection is not independently grant-checked here,
- *     so we fail closed and forbid expansion entirely rather than risk an allowed
- *     collection's relations leaking a forbidden one. (User-mode dispatch is also
- *     in force, so even were a relation resolved it would carry access control —
- *     but a public-read collection NOT in the manifest could still leak, hence the
- *     outright deny.)
+ *     argument AND any `where` / `orderBy` that NAMES a relation field of the
+ *     target collection. Relation expansion (and a relation-referencing
+ *     `where`/`orderBy`, which the CRUD where-builder turns into a raw EXISTS
+ *     subquery on the related table with NO access control — a blind boolean
+ *     exfiltration ORACLE on an ungranted collection) traverses into other
+ *     collections; in the MVP the per-relation target collection is not
+ *     independently grant-checked here, so we fail closed and forbid relation
+ *     references entirely. The relation field names come from runtime collection
+ *     metadata (the SAME `state.relations` set the where-builder keys on); if that
+ *     set cannot be determined for a collection we FAIL CLOSED and reject every
+ *     `where`/`orderBy` key on it.
  *
  * This helper is SHARED: the named-endpoint runner (M4) and the cron runner (M5)
  * both build the target through here, so the enforcement lives in ONE place.
@@ -42,13 +46,15 @@
  * `mini-app-runner-must-impose-tenant-bound-and-non-privileged-principal`.
  */
 
+import { posix } from "node:path";
+
 import type { BindingTarget } from "questpie/executor";
 
 import {
 	type KnowledgeResourceEntry,
 	type KnowledgeResourceRecord,
 } from "../services/knowledge-resource.js";
-import { appPathPrefix } from "./app-resolver.js";
+import { appPathPrefix, assertValidAppId } from "./app-resolver.js";
 
 /**
  * The minimal `ctx` surface the target needs to dispatch primitive calls. The
@@ -120,11 +126,17 @@ function appCodePrefix(appId: string): string {
 /**
  * Normalize an app-supplied knowledge path and reject traversal/absolute paths.
  *
- * Mirrors the broker's `normalizeKnowledgePath` semantics (reject `..`, leading
- * `/`, NUL, backslash) WITHOUT resolving `..` (which would mask an escape). We
- * keep a local copy rather than importing the broker's so this module owns its
- * own containment invariant explicitly (defense in depth — the broker's
- * capability check already runs its own normalize before glob-matching).
+ * CRITICAL: this MUST produce the SAME final path that Knowledge will STORE
+ * (`knowledge-resource.ts` `normalizeKnowledgePath`, which runs `posix.normalize`
+ * and so collapses `.`/`..` segments). Previously this stripped only a LEADING
+ * `./` and rejected `..` WITHOUT `posix.normalize`, so a MID-PATH `./` (e.g.
+ * `company/apps/{appId}/./_app/server.ts`) survived the `_app/` write-ban here
+ * yet Knowledge collapsed it and persisted under `_app/` (a normalize-here-
+ * write-there mismatch — the clamp saw a different path than Knowledge stored).
+ *
+ * Now we `posix.normalize` FIRST (collapsing every `.`/`..` exactly as Knowledge
+ * does) and then re-reject any residual escape, so the clamp + `_app/` ban see
+ * the FINAL stored path.
  *
  * @returns the normalized POSIX path, or `null` when unsafe (caller DENIES).
  */
@@ -132,11 +144,20 @@ export function normalizeAppPath(raw: unknown): string | null {
 	if (typeof raw !== "string" || raw.length === 0) return null;
 	if (raw.includes("\0") || raw.includes("\\")) return null;
 	if (raw.startsWith("/")) return null;
-	const collapsed = raw.replace(/\/{2,}/g, "/").replace(/^\.\//, "");
-	for (const segment of collapsed.split("/")) {
-		if (segment === "..") return null;
+	// Collapse `.`/`..`/duplicate-slash exactly as Knowledge's stored form does.
+	const normalized = posix.normalize(raw.replace(/\/{2,}/g, "/"));
+	// Re-reject anything that normalized to an escape or absolute/dot path.
+	if (
+		!normalized ||
+		normalized === "." ||
+		normalized === ".." ||
+		normalized.startsWith("/") ||
+		normalized.startsWith("../") ||
+		normalized.includes("/../")
+	) {
+		return null;
 	}
-	return collapsed;
+	return normalized;
 }
 
 /**
@@ -210,19 +231,112 @@ export function buildAppPrincipalSession(
 	};
 }
 
-/** Reject `find|findOne` args that request relation expansion (G3). */
-function assertNoRelationExpansion(args: unknown): void {
-	if (args && typeof args === "object" && !Array.isArray(args)) {
-		const a = args as Record<string, unknown>;
-		if ("with" in a && a.with !== undefined) {
+/**
+ * Resolver for a collection's relation FIELD NAMES. Returns the set of relation
+ * field names of `collectionName` (the SAME `state.relations` keys the CRUD
+ * where-builder routes to its raw EXISTS subquery), or `null` when the set cannot
+ * be determined — in which case the G3 guard FAILS CLOSED (rejects all
+ * `where`/`orderBy` keys on that collection).
+ */
+export type RelationFieldsResolver = (
+	collectionName: string,
+) => Set<string> | null;
+
+/**
+ * Collect the field keys referenced by an `orderBy` argument. `orderBy` is either
+ * an object (`{ field: "asc" }`) or an array of such objects; both are reachable
+ * from a JSON guest. (A function form cannot be JSON-serialized by the guest.)
+ */
+function orderByKeys(orderBy: unknown): string[] {
+	if (!orderBy || typeof orderBy !== "object") return [];
+	if (Array.isArray(orderBy)) {
+		const out: string[] = [];
+		for (const entry of orderBy) {
+			if (entry && typeof entry === "object" && !Array.isArray(entry)) {
+				out.push(...Object.keys(entry as Record<string, unknown>));
+			}
+		}
+		return out;
+	}
+	return Object.keys(orderBy as Record<string, unknown>);
+}
+
+/** Logical `where` combinators whose VALUES are nested `where` clauses to recurse into. */
+const WHERE_COMBINATORS = new Set(["AND", "OR", "NOT", "and", "or", "not"]);
+
+/**
+ * Walk a `where` clause collecting every field key it references, descending into
+ * logical combinators (AND/OR/NOT — array or object form). Combinator keys
+ * themselves are not field references.
+ */
+function collectWhereFieldRefs(where: unknown, out: Set<string>): void {
+	if (!where || typeof where !== "object") return;
+	if (Array.isArray(where)) {
+		for (const entry of where) collectWhereFieldRefs(entry, out);
+		return;
+	}
+	for (const [key, val] of Object.entries(where as Record<string, unknown>)) {
+		if (WHERE_COMBINATORS.has(key)) {
+			collectWhereFieldRefs(val, out);
+			continue;
+		}
+		out.add(key);
+	}
+}
+
+/**
+ * Reject `find|findOne` args that request relation expansion OR reference a
+ * relation field in `where`/`orderBy` (G3).
+ *
+ * @param relationFields - the target collection's relation field names, or `null`
+ *   to FAIL CLOSED (treat the relation set as "unknown" → reject any `where`/
+ *   `orderBy` field reference rather than risk a relation-backed oracle).
+ */
+function assertNoRelationExpansion(
+	args: unknown,
+	relationFields: Set<string> | null,
+): void {
+	if (!args || typeof args !== "object" || Array.isArray(args)) return;
+	const a = args as Record<string, unknown>;
+
+	if ("with" in a && a.with !== undefined) {
+		throw new MiniAppBindingError(
+			"relation expansion via `with` is not permitted for mini-app data access",
+			"relation_forbidden",
+		);
+	}
+	if ("populate" in a && a.populate !== undefined) {
+		throw new MiniAppBindingError(
+			"relation expansion via `populate` is not permitted for mini-app data access",
+			"relation_forbidden",
+		);
+	}
+
+	// `where`/`orderBy` that NAME a relation route to a raw EXISTS subquery with no
+	// access control (oracle). Reject any relation reference; fail closed when the
+	// relation set is unknown.
+	const whereRefs = new Set<string>();
+	if ("where" in a) collectWhereFieldRefs(a.where, whereRefs);
+	const orderByRefs = orderByKeys(a.orderBy);
+	const referenced = [...whereRefs, ...orderByRefs];
+
+	if (relationFields === null) {
+		// Unknown relation set → fail closed: forbid any field reference at all.
+		if (referenced.length > 0) {
 			throw new MiniAppBindingError(
-				"relation expansion via `with` is not permitted for mini-app data access",
+				"data access denied: the collection's relation set could not be " +
+					"determined, so `where`/`orderBy` field references are not permitted",
 				"relation_forbidden",
 			);
 		}
-		if ("populate" in a && a.populate !== undefined) {
+		return;
+	}
+
+	for (const key of referenced) {
+		if (relationFields.has(key)) {
 			throw new MiniAppBindingError(
-				"relation expansion via `populate` is not permitted for mini-app data access",
+				`relation reference via \`where\`/\`orderBy\` field "${key}" is not ` +
+					"permitted for mini-app data access",
 				"relation_forbidden",
 			);
 		}
@@ -254,12 +368,21 @@ function ownCollection(
  *   symmetry with the broker/M5 and to document that enforcement is by-call; the
  *   per-glob/per-collection grant check is the broker's job, so this is not read
  *   here. The HOST bound (G1/G2/G3) is independent of it and always applied.
+ * @param relationFieldsFor - resolves a collection's relation field names for the
+ *   G3 `where`/`orderBy` guard. When omitted, OR when it returns `null` for a
+ *   collection, the guard FAILS CLOSED (rejects any `where`/`orderBy` field
+ *   reference on that collection). The live runner supplies a resolver backed by
+ *   runtime collection metadata.
  */
 export function buildMiniAppBindingTarget(
 	appId: string,
 	ctx: MiniAppBindingCtx,
 	_capabilities?: unknown,
+	relationFieldsFor?: RelationFieldsResolver,
 ): BindingTarget {
+	// Defense-in-depth: never build a tenant scope / principal from a malformed
+	// `appId` (the route validates via `resolveApp`, but M5/cron reuse this helper).
+	assertValidAppId(appId);
 	const principal = buildAppPrincipalSession(appId, ctx);
 	const dispatchContext: MiniAppDispatchContext = {
 		accessMode: "user",
@@ -356,16 +479,22 @@ export function buildMiniAppBindingTarget(
 	for (const name of Object.keys(ctx.collections)) {
 		const col = ownCollection(ctx.collections, name);
 		if (!col) continue;
+		// Resolve the collection's relation field set ONCE (closed over below). A
+		// missing resolver or an unresolved set (`null`) makes the G3 guard fail
+		// closed for this collection.
+		const relationFields: Set<string> | null = relationFieldsFor
+			? relationFieldsFor(name)
+			: null;
 		collections[name] = {
 			find: col.find
 				? async (args: unknown) => {
-						assertNoRelationExpansion(args);
+						assertNoRelationExpansion(args, relationFields);
 						return col.find!(args ?? {}, dispatchContext);
 					}
 				: undefined,
 			findOne: col.findOne
 				? async (args: unknown) => {
-						assertNoRelationExpansion(args);
+						assertNoRelationExpansion(args, relationFields);
 						return col.findOne!(args ?? {}, dispatchContext);
 					}
 				: undefined,

@@ -109,6 +109,21 @@ function makeCtx(opts: {
 const APP = "social";
 const PREFIX = `company/apps/${APP}/`;
 
+/**
+ * Relation-field resolvers for the G3 `where`/`orderBy` guard. The LIVE runner
+ * always supplies one (backed by runtime collection metadata); these mirror that.
+ */
+/** No collection has any relation field (scalar `where`/`orderBy` always allowed). */
+const noRelations = () => new Set<string>();
+/** Build a resolver from an explicit `{ collection: [relationField, …] }` map. */
+function relations(
+	map: Record<string, string[]>,
+): (name: string) => Set<string> | null {
+	return (name) => (name in map ? new Set(map[name]) : new Set<string>());
+}
+/** A resolver that ALWAYS fails to determine the relation set (fail-closed path). */
+const unknownRelations = () => null;
+
 // ───────────────────────────── path clamps (G1) ─────────────────────────────
 
 describe("G1: knowledge path clamps", () => {
@@ -155,6 +170,55 @@ describe("G1: knowledge path clamps", () => {
 			clampWritePath(APP, "company/apps/other/_app/manifest.json"),
 		).toBeNull();
 		expect(clampWritePath(APP, "company/secrets/x")).toBeNull();
+	});
+
+	// ── `_app/` write-ban bypass via mid-path `./` / `..` (the G1 normalize fix) ──
+	it("clampWritePath rejects _app/ reached via a MID-PATH ./ (normalize match)", () => {
+		// The attack: `./` mid-path survived the OLD normalizer (leading-only strip)
+		// so the `_app/` ban missed it, yet Knowledge `posix.normalize`s on write and
+		// persisted under _app/. The clamp now normalizes identically → REJECT.
+		expect(clampWritePath(APP, `${PREFIX}./_app/server.ts`)).toBeNull();
+		expect(clampWritePath(APP, `${PREFIX}data/../_app/x`)).toBeNull();
+		expect(clampWritePath(APP, `${PREFIX}data/./../_app/manifest.json`)).toBeNull();
+		// direct _app/ is still rejected.
+		expect(clampWritePath(APP, `${PREFIX}_app/x`)).toBeNull();
+		// and a benign `./`-prefixed in-scope data path normalizes + is accepted.
+		expect(clampWritePath(APP, `${PREFIX}./data/foo.json`)).toBe(
+			`${PREFIX}data/foo.json`,
+		);
+	});
+
+	it("normalizeAppPath collapses `.`/`..` exactly like Knowledge's stored form", () => {
+		// mid-path `.` collapses (was the bypass).
+		expect(normalizeAppPath(`${PREFIX}./_app/server.ts`)).toBe(
+			`${PREFIX}_app/server.ts`,
+		);
+		// `..` that escapes the subtree is rejected outright.
+		expect(normalizeAppPath(`${PREFIX}data/../../other/x`)).toBe(
+			"company/apps/other/x",
+		);
+		// a pure escape is null.
+		expect(normalizeAppPath("a/../../b")).toBeNull();
+	});
+});
+
+// ───────────────────── appId charset (synthetic-principal) ──────────────────
+
+describe("appId charset is constrained (no principal collision/injection)", () => {
+	const ctx = () => makeCtx({});
+	it("buildMiniAppBindingTarget rejects a malformed appId", () => {
+		// uppercase, `:` (would collide with the `app:{id}` principal namespace),
+		// `/` (path injection), empty, leading dash.
+		for (const bad of ["Social", "a:b", "a/b", "", "-x", "app:admin", ".."]) {
+			expect(() =>
+				buildMiniAppBindingTarget(bad, ctx(), undefined, noRelations),
+			).toThrow();
+		}
+	});
+	it("accepts a normal slug appId", () => {
+		expect(() =>
+			buildMiniAppBindingTarget("social-app-1", ctx(), undefined, noRelations),
+		).not.toThrow();
 	});
 });
 
@@ -280,7 +344,7 @@ describe("G2: collections dispatch as user-mode with a principal", () => {
 		const caps = {
 			data: { collections: { posts: ["read"] as Array<"read"> } },
 		};
-		const target = buildMiniAppBindingTarget(APP, ctx, caps);
+		const target = buildMiniAppBindingTarget(APP, ctx, caps, noRelations);
 		const broker = new SandboxBroker();
 		const { token } = broker.mint({ capabilities: caps, target });
 
@@ -306,7 +370,7 @@ describe("G2: collections dispatch as user-mode with a principal", () => {
 		const caps = {
 			data: { collections: { posts: ["read"] as Array<"read"> } },
 		};
-		const target = buildMiniAppBindingTarget(APP, ctx, caps);
+		const target = buildMiniAppBindingTarget(APP, ctx, caps, noRelations);
 		const broker = new SandboxBroker();
 		const { token } = broker.mint({ capabilities: caps, target });
 
@@ -325,13 +389,20 @@ describe("G2: collections dispatch as user-mode with a principal", () => {
 // ───────────────────────────── G3: relation guard ──────────────────────────
 
 describe("G3: relation expansion is denied", () => {
-	function wire() {
+	function wire(
+		relationFieldsFor: (name: string) => Set<string> | null = noRelations,
+	) {
 		const rec = recordingCollection([{ id: "p1" }]);
 		const ctx = makeCtx({ collections: { posts: rec.collection } });
 		const caps = {
 			data: { collections: { posts: ["read"] as Array<"read"> } },
 		};
-		const target = buildMiniAppBindingTarget(APP, ctx, caps);
+		const target = buildMiniAppBindingTarget(
+			APP,
+			ctx,
+			caps,
+			relationFieldsFor,
+		);
 		const broker = new SandboxBroker();
 		const { token } = broker.mint({ capabilities: caps, target });
 		return { rec, broker, token };
@@ -366,10 +437,72 @@ describe("G3: relation expansion is denied", () => {
 		expect(rec.calls).toHaveLength(1);
 	});
 
+	// ── relation `where`/`orderBy` ORACLE (the G3 fix) ──
+	it("find({ where: { <relation> } }) is denied (EXISTS-subquery oracle)", async () => {
+		const { rec, broker, token } = wire(relations({ posts: ["author"] }));
+		const res = await broker.handleRpc(token, "collections.posts.find", {
+			where: { author: { id: "secret-user" } },
+		});
+		expect(res.ok).toBe(false);
+		expect(res.ok === false && res.error.code).toBe("execution_error");
+		// the underlying collection (→ raw EXISTS subquery) was NEVER reached.
+		expect(rec.calls).toHaveLength(0);
+	});
+
+	it("a relation named inside an AND/OR combinator is still denied", async () => {
+		const { rec, broker, token } = wire(relations({ posts: ["author"] }));
+		const res = await broker.handleRpc(token, "collections.posts.find", {
+			where: { AND: [{ title: "hi" }, { author: { some: { id: "x" } } }] },
+		});
+		expect(res.ok).toBe(false);
+		expect(rec.calls).toHaveLength(0);
+	});
+
+	it("find({ orderBy: { <relation> } }) is denied", async () => {
+		const { rec, broker, token } = wire(relations({ posts: ["author"] }));
+		const res = await broker.handleRpc(token, "collections.posts.find", {
+			orderBy: { author: "asc" },
+		});
+		expect(res.ok).toBe(false);
+		expect(rec.calls).toHaveLength(0);
+	});
+
+	it("find({ orderBy: [ { <relation> } ] }) (array form) is also denied", async () => {
+		const { rec, broker, token } = wire(relations({ posts: ["author"] }));
+		const res = await broker.handleRpc(token, "collections.posts.find", {
+			orderBy: [{ title: "asc" }, { author: "desc" }],
+		});
+		expect(res.ok).toBe(false);
+		expect(rec.calls).toHaveLength(0);
+	});
+
+	it("a scalar `where`/`orderBy` still works when relations exist", async () => {
+		const { rec, broker, token } = wire(relations({ posts: ["author"] }));
+		const res = await broker.handleRpc(token, "collections.posts.find", {
+			where: { title: "hi" },
+			orderBy: { createdAt: "desc" },
+		});
+		expect(res.ok).toBe(true);
+		expect(rec.calls).toHaveLength(1);
+	});
+
+	it("FAILS CLOSED: an unresolved relation set rejects ANY where/orderBy ref", async () => {
+		const { rec, broker, token } = wire(unknownRelations);
+		const res = await broker.handleRpc(token, "collections.posts.find", {
+			where: { title: "hi" },
+		});
+		expect(res.ok).toBe(false);
+		expect(rec.calls).toHaveLength(0);
+
+		// …but a no-arg / empty find (nothing to leak) still works.
+		const ok = await broker.handleRpc(token, "collections.posts.find", {});
+		expect(ok.ok).toBe(true);
+	});
+
 	it("the target throws a typed MiniAppBindingError on relation args (unit)", async () => {
 		const rec = recordingCollection([]);
 		const ctx = makeCtx({ collections: { posts: rec.collection } });
-		const target = buildMiniAppBindingTarget(APP, ctx);
+		const target = buildMiniAppBindingTarget(APP, ctx, undefined, noRelations);
 		await expect(
 			target.collections!.posts!.find!({ with: { x: true } }),
 		).rejects.toBeInstanceOf(MiniAppBindingError);
