@@ -140,7 +140,7 @@ export async function resolveApp(
 	appId: string,
 	collections: AppResolverCollections,
 ): Promise<ResolvedApp> {
-	if (!appId || appId.includes("/")) {
+	if (!appId || appId.includes("/") || appId === "." || appId === "..") {
 		throw new AppResolutionError(`Invalid appId: ${JSON.stringify(appId)}`, appId);
 	}
 

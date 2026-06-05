@@ -78,8 +78,20 @@ export const appManifestSchema = z
 		 * Knowledge path of the server entry, relative to `_app/` (e.g.
 		 * `"server.ts"`). When omitted the resolver falls back to a conventional
 		 * default entry. The entry's exports drive endpoint/cron inference.
+		 *
+		 * Must stay within `_app/`: no leading `/` (absolute) and no `..` path
+		 * segment (parent-directory escape).
 		 */
-		entry: z.string().min(1).optional(),
+		entry: z
+			.string()
+			.min(1)
+			.refine((value) => !value.startsWith("/"), {
+				message: "entry must be relative (no leading '/')",
+			})
+			.refine((value) => !value.split("/").includes(".."), {
+				message: "entry must not contain a '..' path segment",
+			})
+			.optional(),
 		/** Human-readable app name (display only). */
 		name: z.string().min(1).optional(),
 		/** Default-deny capability scope. */

@@ -11,8 +11,9 @@
  *     `Object.defineProperty(exports, ...)`, re-exports resolved at load time)
  *     are NOT detected — only statically written `export` keywords.
  *   - `export * from "..."` is ignored (no concrete local names).
- *   - Names inside strings/comments could in theory false-positive; the patterns
- *     anchor on the `export` keyword at a statement boundary to minimize this.
+ *   - The patterns match `export` on a word boundary only (`\bexport`), NOT a
+ *     statement boundary, so an `export` written inside a string or comment can
+ *     yield a phantom export name. This is acceptable for the trusted-guest MVP.
  * For the MVP guest contract (a single entry that `export default`s a handler and
  * optionally `export const cron = ...`) this is exact.
  */

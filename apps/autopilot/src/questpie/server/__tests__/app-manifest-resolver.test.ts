@@ -94,6 +94,26 @@ describe("app manifest schema", () => {
 			parseAppManifest({ capabilities: {}, endpoints: ["x"] }),
 		).toThrow(z.ZodError);
 	});
+
+	it("rejects an entry with a parent-directory traversal segment (zod error)", () => {
+		expect(() =>
+			parseAppManifest({ capabilities: {}, entry: "../data/x.json" }),
+		).toThrow(z.ZodError);
+	});
+
+	it("rejects an absolute entry path (zod error)", () => {
+		expect(() =>
+			parseAppManifest({ capabilities: {}, entry: "/etc/passwd" }),
+		).toThrow(z.ZodError);
+	});
+
+	it("accepts a valid relative entry within _app/", () => {
+		const parsed = parseAppManifest({
+			capabilities: {},
+			entry: "handlers/server.ts",
+		});
+		expect(parsed.entry).toBe("handlers/server.ts");
+	});
 });
 
 describe("export scan", () => {
@@ -205,6 +225,18 @@ describe("resolveApp", () => {
 	it("rejects an appId containing a path separator", async () => {
 		await expect(
 			resolveApp("a/b", knowledgeDouble([])),
+		).rejects.toBeInstanceOf(AppResolutionError);
+	});
+
+	it("rejects an appId with a parent-directory traversal segment", async () => {
+		await expect(
+			resolveApp("../foo", knowledgeDouble([])),
+		).rejects.toBeInstanceOf(AppResolutionError);
+	});
+
+	it("rejects an appId that is a bare current-directory segment", async () => {
+		await expect(
+			resolveApp(".", knowledgeDouble([])),
 		).rejects.toBeInstanceOf(AppResolutionError);
 	});
 });
