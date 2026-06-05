@@ -20,7 +20,8 @@ import { seed } from "questpie/services";
  * app-principal can read it), and the guest query passes no `where`/`orderBy`
  * (so the relation guard is a no-op).
  *
- * Idempotent: skips entirely when the manifest already exists.
+ * Re-runnable: deletes this app's three Knowledge entries by path and
+ * re-creates them on every run, so `db:seed` overwrites in place.
  */
 
 const APP_ID = "social-scheduler";
@@ -85,15 +86,27 @@ export default async function (input) {
   const dataFiles = Array.isArray(listed) ? listed.map((e) => e.path) : [];
 
   // Query a granted collection (non-privileged principal, no relation refs).
-  const projectsResult = await questpie.collections.projects.find({ limit: 1 });
-  const projectDocs =
-    projectsResult && Array.isArray(projectsResult.docs)
-      ? projectsResult.docs
-      : [];
-  const sample =
-    projectDocs.length > 0
-      ? { id: projectDocs[0].id, name: projectDocs[0].name }
-      : null;
+  // We ALWAYS attempt this to exercise the collection binding + show the
+  // access boundary, but a denial must NOT abort the run — record it and
+  // keep going through the rest of the app's paths.
+  let sample = null;
+  let projectsAccess = "ok";
+  try {
+    const projectsResult = await questpie.collections.projects.find({
+      limit: 1,
+    });
+    const projectDocs =
+      projectsResult && Array.isArray(projectsResult.docs)
+        ? projectsResult.docs
+        : [];
+    sample =
+      projectDocs.length > 0
+        ? { id: projectDocs[0].id, name: projectDocs[0].name }
+        : null;
+  } catch (err) {
+    sample = null;
+    projectsAccess = "denied: " + String((err && err.message) || err);
+  }
 
   // Allowlisted egress.
   const res = await fetch("https://jsonplaceholder.typicode.com/todos/1");
@@ -117,6 +130,7 @@ export default async function (input) {
     dataFiles,
     sample,
     fetchedTitle,
+    projectsAccess,
   };
 }
 
@@ -175,14 +189,15 @@ export default seed({
 	async run({ services, collections, createContext, log }) {
 		const ctx = await createContext({ accessMode: "system", locale: "en" });
 
-		const existing = await collections.knowledge.findOne(
-			{ where: { path: MANIFEST_PATH } },
+		// Re-runnable: hard-delete any prior rows for this app's three entries by
+		// path, then re-create them below. This lets `db:seed` overwrite on
+		// re-run (the manifest/server/queue bodies + renderers are re-asserted by
+		// the `createTextResource` calls). `knowledge` has no soft-delete, so the
+		// rows are physically removed — no unique-path collision on re-create.
+		await collections.knowledge.delete(
+			{ where: { path: { in: [MANIFEST_PATH, ENTRY_PATH, QUEUE_PATH] } } },
 			ctx,
 		);
-		if (existing) {
-			log("social-scheduler mini-app already seeded, skipping");
-			return;
-		}
 
 		log("Seeding social-scheduler mini-app manifest...");
 		await services.knowledgeResource.createTextResource({
