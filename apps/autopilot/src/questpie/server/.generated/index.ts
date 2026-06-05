@@ -15,11 +15,13 @@ import _modules from "../modules";
 // ── Collections ────────────────────────────────────────────
 import { activity as _coll_activity } from "../collections/activity";
 import _coll_admin_audit_log from "../collections/admin-audit-log";
+import _coll_agent_memory from "../collections/agent-memory";
 import _coll_assets from "../collections/assets";
 import { chatMessages as _coll_chat_messages } from "../collections/chat-messages";
 import { chatSessions as _coll_chat_sessions } from "../collections/chat-sessions";
 import _coll_document_store from "../collections/document-store";
 import { environments as _coll_environments } from "../collections/environments";
+import _coll_memory_settings from "../collections/memory-settings";
 import { models as _coll_models } from "../collections/models";
 import { projects as _coll_projects } from "../collections/projects";
 import { providers as _coll_providers } from "../collections/providers";
@@ -67,6 +69,7 @@ import _mig_20260519T161500_drop_legacy_execution_infra from "../migrations/2026
 import _mig_20260529T001500_drop_workflow_configs from "../migrations/20260529T001500_drop_workflow_configs";
 import _mig_20260529T003000_drop_capabilities from "../migrations/20260529T003000_drop_capabilities";
 import _mig_20260604T111500_add_api_key_config_id from "../migrations/20260604T111500_add_api_key_config_id";
+import _mig_20260606T004300_autopilot_memories from "../migrations/20260606T004300_autopilot_memories";
 
 // ── Seeds ──────────────────────────────────────────────────
 import _seed_demoCoverageData_seed from "../seeds/demo-coverage-data.seed";
@@ -176,11 +179,13 @@ declare global {
 export type AppCollections = _ModuleCollections & {
 	activity: typeof _coll_activity;
 	admin_audit_log: typeof _coll_admin_audit_log;
+	agent_memory: typeof _coll_agent_memory;
 	assets: typeof _coll_assets;
 	chat_messages: typeof _coll_chat_messages;
 	chat_sessions: typeof _coll_chat_sessions;
 	document_store: typeof _coll_document_store;
 	environments: typeof _coll_environments;
+	memory_settings: typeof _coll_memory_settings;
 	models: typeof _coll_models;
 	projects: typeof _coll_projects;
 	providers: typeof _coll_providers;
@@ -451,11 +456,13 @@ export const app = await createApp(
 		collections: {
 			activity: _coll_activity,
 			admin_audit_log: _coll_admin_audit_log,
+			agent_memory: _coll_agent_memory,
 			assets: _coll_assets,
 			chat_messages: _coll_chat_messages,
 			chat_sessions: _coll_chat_sessions,
 			document_store: _coll_document_store,
 			environments: _coll_environments,
+			memory_settings: _coll_memory_settings,
 			models: _coll_models,
 			projects: _coll_projects,
 			providers: _coll_providers,
@@ -492,7 +499,7 @@ export const app = await createApp(
 			gitProviderAdapters: _svc_gitProviderAdapters,
 			knowledgeResource: _svc_knowledgeResource,
 		},
-		migrations: [_mig_20260507T095449_jolly_red_phoenix, _mig_20260516T185000_auth_user_admin_columns_repair, _mig_20260517T095535_happy_orange_unicorn, _mig_20260519T135407_add_run_links_and_ai_module, _mig_20260519T142100_backfill_legacy_runs_into_run_links, _mig_20260519T145500_link_schedule_executions_to_run_links, _mig_20260519T161500_drop_legacy_execution_infra, _mig_20260529T001500_drop_workflow_configs, _mig_20260529T003000_drop_capabilities, _mig_20260604T111500_add_api_key_config_id],
+		migrations: [_mig_20260507T095449_jolly_red_phoenix, _mig_20260516T185000_auth_user_admin_columns_repair, _mig_20260517T095535_happy_orange_unicorn, _mig_20260519T135407_add_run_links_and_ai_module, _mig_20260519T142100_backfill_legacy_runs_into_run_links, _mig_20260519T145500_link_schedule_executions_to_run_links, _mig_20260519T161500_drop_legacy_execution_infra, _mig_20260529T001500_drop_workflow_configs, _mig_20260529T003000_drop_capabilities, _mig_20260604T111500_add_api_key_config_id, _mig_20260606T004300_autopilot_memories],
 		seeds: [_seed_demoCoverageData_seed, _seed_demoParentIssues_seed, _seed_demoProductData_seed, _seed_demoStressData_seed, _seed_makeAMiniappSkill_seed, _seed_runtimeDefaults_seed, _seed_socialSchedulerApp_seed],
 		views: {
 			fileDetail: _view_fileDetail,

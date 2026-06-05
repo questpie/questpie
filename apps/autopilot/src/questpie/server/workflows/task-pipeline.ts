@@ -5,6 +5,8 @@ import { workflow } from "@questpie/workflows";
 import { createAiRunLink } from "../lib/ai-run-links";
 import type { AppCollections, WorkflowServiceContext } from "../lib/app-types";
 import { classifyRunError, type RunErrorType } from "../lib/error-classifier";
+import { injectMemoriesIntoInstructions } from "../lib/memory-injection";
+import { runReflectionStep } from "../lib/memory-reflect-step";
 import {
 	asRecord,
 	mergeRecords,
@@ -217,10 +219,27 @@ export default workflow({
 				// Run-start progressive disclosure (§8.3): prepend the published-skills
 				// L1 block to the task instructions. Drafts excluded; descriptions are
 				// injected as delimited DATA, not trusted instructions (§8.7).
-				const instructions = await injectSkillsIntoInstructions(
+				const baseInstructions = taskInstructions(task);
+				const withSkills = await injectSkillsIntoInstructions(
 					ctx.collections,
-					taskInstructions(task),
+					baseInstructions,
 					{ projectId: relationId(task.project) },
+				);
+				// Run-start memory RECALL (sibling of the skills block): prepend the
+				// scoped active-memory DATA block so the agent recalls lessons from
+				// prior runs on this task/project/company. DELIMITED DATA, never
+				// instructions. Best-effort (degrades to `withSkills` on no-backend or
+				// error). The query is the task's own instructions = this run's intent.
+				const instructions = await injectMemoriesIntoInstructions(
+					{
+						search: ctx.search,
+						collections: ctx.collections,
+						projectId: relationId(task.project),
+						taskId: input.taskId,
+					},
+					withSkills,
+					baseInstructions,
+					log,
 				);
 				return createAiRunLink({
 					ctx: ctx,
@@ -336,6 +355,40 @@ export default workflow({
 				details: lastCompletion ?? {},
 			});
 		});
+
+		// Memory WRITE (Reflexion, §9.2): async reflection AFTER the run reaches its
+		// terminal status. Off-path — its result never changes the task outcome; a
+		// failure is logged and swallowed. Gated by the per-scope "agent may write
+		// memory" toggle inside `runReflectionStep`. The model boundary is not wired
+		// to a live LLM yet (server has no model client) so this writes nothing today
+		// but exercises the full gate/dedupe/persist path (see memory-reflect-step.ts).
+		if (lastRunId) {
+			await step.run("memory-reflection", async () => {
+				await runReflectionStep(ctx.collections, {
+					runId: lastRunId as string,
+					input: {
+						instructions: taskInstructions(task),
+						summary: lastCompletion?.summary ?? null,
+						outcome:
+							lastCompletion?.status === "completed"
+								? "completed"
+								: lastCompletion?.status === "cancelled"
+									? "cancelled"
+									: "failed",
+						error: lastCompletion?.error ?? null,
+						scope: {
+							projectId: relationId(task.project),
+							taskId: input.taskId,
+						},
+					},
+					scope: {
+						projectId: relationId(task.project),
+						taskId: input.taskId,
+					},
+					log,
+				});
+			});
+		}
 
 		const releasedTaskIds =
 			status === "review"

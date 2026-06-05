@@ -3,6 +3,8 @@ import { z } from "zod";
 import { workflow } from "@questpie/workflows";
 
 import { createAiRunLink } from "../lib/ai-run-links";
+import { injectMemoriesIntoInstructions } from "../lib/memory-injection";
+import { runReflectionStep } from "../lib/memory-reflect-step";
 import {
 	mergeRecords,
 	relationId,
@@ -45,6 +47,12 @@ export default workflow({
 			throw new Error(`Chat session not found: ${input.chatSessionId}`);
 		}
 
+		// Handler-scope active scope (used by run-start recall + end-of-run
+		// reflection). The chat session carries the project/task it belongs to;
+		// `input` may override the project.
+		const scopeProjectId = input.projectId ?? relationId(session.project);
+		const scopeTaskId = input.taskId ?? relationId(session.task);
+
 		const run = await step.run("resolve-chat-run", async () => {
 			if (input.runId) {
 				const existing = await ctx.collections.run_links.findOne({
@@ -54,7 +62,7 @@ export default workflow({
 				return existing;
 			}
 
-			const projectId = input.projectId ?? relationId(session.project);
+			const projectId = scopeProjectId;
 			const runtime = await resolveRuntimeSelection(ctx, {
 				modelId: input.modelId,
 				projectId,
@@ -62,15 +70,30 @@ export default workflow({
 			// Run-start progressive disclosure (§8.3): prepend the published-skills L1
 			// block to the user's prompt so the agent can discover + load skills on
 			// demand. Drafts are excluded; descriptions are injected as delimited DATA.
-			const instructions = await injectSkillsIntoInstructions(
+			const withSkills = await injectSkillsIntoInstructions(
 				ctx.collections,
 				input.prompt,
 				{ projectId },
 			);
+			// Run-start memory RECALL: prepend the scoped active-memory DATA block (a
+			// SIBLING of the skills block) so the agent recalls lessons from past runs.
+			// Injected as DELIMITED DATA, never instructions (untrusted / self-poisoning
+			// channel). Best-effort: degrades to `withSkills` if no semantic-search
+			// backend is configured or recall errors.
+			const instructions = await injectMemoriesIntoInstructions(
+				{
+					search: ctx.search,
+					collections: ctx.collections,
+					projectId,
+					taskId: scopeTaskId,
+				},
+				withSkills,
+				input.prompt,
+			);
 			return createAiRunLink({
 				ctx,
 				runtime,
-				taskId: input.taskId ?? relationId(session.task),
+				taskId: scopeTaskId,
 				projectId,
 				initiatedBy: "chat",
 				instructions,
@@ -172,6 +195,30 @@ export default workflow({
 					status: completion?.status ?? "failed",
 					knowledgeResourceIds: completion?.knowledgeResourceIds ?? [],
 				},
+			});
+		});
+
+		// Memory WRITE (Reflexion, §9.2): async reflection AFTER the run completes.
+		// Off-path — never changes the chat result; failure is logged + swallowed.
+		// Gated by the per-scope toggle inside `runReflectionStep`. The model boundary
+		// is not wired to a live LLM yet (writes nothing today; full path is tested).
+		await step.run("memory-reflection", async () => {
+			await runReflectionStep(ctx.collections, {
+				runId: run.id,
+				input: {
+					instructions: input.prompt,
+					summary: completion?.summary ?? null,
+					outcome:
+						completion?.status === "completed"
+							? "completed"
+							: completion?.status === "cancelled"
+								? "cancelled"
+								: "failed",
+					error: completion?.error ?? null,
+					scope: { projectId: scopeProjectId, taskId: scopeTaskId },
+				},
+				scope: { projectId: scopeProjectId, taskId: scopeTaskId },
+				log,
 			});
 		});
 
