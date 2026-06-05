@@ -235,6 +235,70 @@ describe("checkBindingCapability — collections", () => {
 	});
 });
 
+// `document_store` is gated by the per-namespace `data.stores` axis (Decision 8),
+// NOT by a blanket `data.collections.document_store` grant. The coarse check here:
+// a read op needs SOME store granted `read`; a write op needs SOME store granted
+// `write`. (The broker's row-filter clamp then narrows to the specific stores.)
+describe("checkBindingCapability — document_store (data.stores axis)", () => {
+	it("ALLOWS find/findOne when a store grants `read`", () => {
+		const caps: ExecutorCapabilities = {
+			data: { stores: { invoices: ["read"] } },
+		};
+		expect(
+			checkBindingCapability("collections.document_store.find", {}, caps).allowed,
+		).toBe(true);
+		expect(
+			checkBindingCapability("collections.document_store.findOne", {}, caps)
+				.allowed,
+		).toBe(true);
+		// …but a WRITE needs a store granted `write` — read-only stores deny it.
+		expect(
+			checkBindingCapability("collections.document_store.create", {}, caps)
+				.allowed,
+		).toBe(false);
+	});
+
+	it("ALLOWS create/update/delete when a store grants `write`", () => {
+		const caps: ExecutorCapabilities = {
+			data: { stores: { posts: ["read", "write"] } },
+		};
+		for (const op of ["create", "update", "delete"] as const) {
+			expect(
+				checkBindingCapability(`collections.document_store.${op}`, {}, caps)
+					.allowed,
+			).toBe(true);
+		}
+	});
+
+	it("DENIES document_store with NO store grants (default-deny), even with a collections.document_store grant", () => {
+		// A blanket `collections.document_store` grant does NOT unlock it — only
+		// `data.stores` does (so the axis can't be bypassed via the collections map).
+		const caps: ExecutorCapabilities = {
+			data: { collections: { document_store: ["read", "create"] } },
+		};
+		expect(
+			checkBindingCapability("collections.document_store.find", {}, caps).allowed,
+		).toBe(false);
+		expect(
+			checkBindingCapability("collections.document_store.create", {}, caps)
+				.allowed,
+		).toBe(false);
+	});
+
+	it("DENIES document_store when data.stores is empty/absent", () => {
+		expect(
+			checkBindingCapability("collections.document_store.find", {}, {}).allowed,
+		).toBe(false);
+		expect(
+			checkBindingCapability(
+				"collections.document_store.find",
+				{},
+				{ data: { stores: {} } },
+			).allowed,
+		).toBe(false);
+	});
+});
+
 describe("checkBindingCapability — knowledge", () => {
 	const caps: ExecutorCapabilities = {
 		files: {
@@ -621,17 +685,17 @@ describe("SandboxBroker — per-call enforcement + dispatch (THE security bounda
 });
 
 // ──────────────────────────────────────────────────────────────────────────
-// SandboxBroker — WRITE half is DEFERRED (no §7 tenant-write boundary yet).
+// SandboxBroker — collection WRITE dispatch (the §7 boundary, Decision 8).
 //
-// Guest collection writes (`create|update|delete`) and `globals.set` are NOT
-// dispatched: there is no §7 row-filter clamp / force-stamp / blast-radius
-// containment, so a bare write pass-through would let a granted, write-rule-less
-// collection be fully writable/deletable by the synthesized app-principal. They
-// fail closed as `not_implemented` for a GRANTED verb (DISPATCH deferred) while
-// the SAME default-deny capability chokepoint still rejects an UNGRANTED verb as
-// `forbidden` BEFORE dispatch (the check runs in `handleRpc` first). The bound
-// target's write handler is NEVER invoked either way — no write-path bypass.
-// See `.private/miniapps-v2-design.md` §7 + Decision 8.
+// The broker is GENERIC infra: it dispatches a granted `create|update|delete` to
+// whatever handler the bound target WIRED, and returns `not_implemented` when the
+// target wired NONE. The §7 safety (which collections get a wired write handler —
+// `document_store` via the store-grant clamp, or a collection with an explicit
+// `.access()` rule) lives in the TARGET (`mini-app-bindings.ts`), NOT here. So at
+// the broker layer: a wired write IS called; an UNWIRED write fails closed; an
+// UNGRANTED write is `forbidden` (capability check first); and `globals.set` is
+// DENIED outright (a singleton has no per-tenant boundary), regardless of a wired
+// handler. See `.private/miniapps-v2-design.md` §7 + Decision 8.
 // ──────────────────────────────────────────────────────────────────────────
 
 /** A run scoped for the FULL write surface on `posts` + globals `settings`. */
@@ -642,9 +706,11 @@ const WRITE_SCOPE: ExecutorCapabilities = {
 	},
 };
 
-describe("SandboxBroker — collection writes are NOT dispatched (deferred §7)", () => {
-	it("a GRANTED write verb returns not_implemented; the target write handler is NEVER called", async () => {
+describe("SandboxBroker — collection write dispatch (§7 boundary)", () => {
+	it("a GRANTED write to a WIRED handler IS dispatched (the target owns §7 safety)", async () => {
 		const broker = new SandboxBroker();
+		// `fakeTarget` wires posts.create/update/delete (it stands in for a target
+		// the §7 boundary DID wire — e.g. a collection with an explicit write rule).
 		const { target, calls } = fakeTarget();
 		const { token } = broker.mint({ capabilities: WRITE_SCOPE, target });
 
@@ -653,15 +719,37 @@ describe("SandboxBroker — collection writes are NOT dispatched (deferred §7)"
 				data: { title: "hi" },
 				where: { id: "p1" },
 			});
+			expect(r.ok).toBe(true);
+		}
+		// Each wired write handler actually ran.
+		expect(calls.map((c) => c.method)).toEqual([
+			"collections.posts.create",
+			"collections.posts.update",
+			"collections.posts.delete",
+		]);
+	});
+
+	it("a GRANTED write to an UNWIRED handler fails closed as not_implemented", async () => {
+		const broker = new SandboxBroker();
+		// `orders` exposes ONLY reads (no write handler wired) — the §7 boundary
+		// leaves a write-rule-less / unclamped collection unwired, so its write here
+		// fails closed (the WS-2 critical: no rule-less `!!session` write reaches it).
+		const { target, calls } = fakeTarget();
+		const ordersWrite: ExecutorCapabilities = {
+			data: { collections: { orders: ["read", "create", "update", "delete"] } },
+		};
+		const { token } = broker.mint({ capabilities: ordersWrite, target });
+
+		for (const op of ["create", "update", "delete"] as const) {
+			const r = await broker.handleRpc(token, `collections.orders.${op}`, {
+				data: {},
+				where: {},
+			});
 			expect(r.ok).toBe(false);
 			if (!r.ok) expect(r.error.code).toBe("not_implemented");
 		}
-		// Reads still dispatch — prove the chokepoint is intact, not globally broken.
-		const read = await broker.handleRpc(token, "collections.posts.find", {});
-		expect(read.ok).toBe(true);
-
-		// No WRITE handler ran; only the read reached the target.
-		expect(calls.map((c) => c.method)).toEqual(["collections.posts.find"]);
+		// No write reached the (read-only) orders accessor.
+		expect(calls.length).toBe(0);
 	});
 
 	it("FAILS CLOSED: an ungranted write verb is forbidden (capability check first), target NEVER called", async () => {
@@ -692,27 +780,12 @@ describe("SandboxBroker — collection writes are NOT dispatched (deferred §7)"
 		const broker = new SandboxBroker();
 		const { target, calls } = fakeTarget();
 		const { token } = broker.mint({ capabilities: WRITE_SCOPE, target });
-		// `orders` is not in WRITE_SCOPE at all.
-		const r = await broker.handleRpc(token, "collections.orders.create", {
+		// `media` is not in WRITE_SCOPE at all (and unwired in the target).
+		const r = await broker.handleRpc(token, "collections.media.create", {
 			data: {},
 		});
 		expect(r.ok).toBe(false);
 		if (!r.ok) expect(r.error.code).toBe("forbidden");
-		expect(calls.length).toBe(0);
-	});
-
-	it("a granted destructive delete with a broad `where` is not dispatched (blast-radius vector)", async () => {
-		// The exact critical-issue vector: a granted delete with a broad scalar
-		// `where` would — without the §7 clamp — delete arbitrary rows. It must fail
-		// closed as not_implemented; the delete handler is never reached.
-		const broker = new SandboxBroker();
-		const { target, calls } = fakeTarget();
-		const { token } = broker.mint({ capabilities: WRITE_SCOPE, target });
-		const r = await broker.handleRpc(token, "collections.posts.delete", {
-			where: { archived: true },
-		});
-		expect(r.ok).toBe(false);
-		if (!r.ok) expect(r.error.code).toBe("not_implemented");
 		expect(calls.length).toBe(0);
 	});
 
@@ -728,8 +801,8 @@ describe("SandboxBroker — collection writes are NOT dispatched (deferred §7)"
 	});
 });
 
-describe("SandboxBroker — global dispatch: get reads, set is deferred", () => {
-	it("dispatches a GRANTED globals.get but returns not_implemented for globals.set", async () => {
+describe("SandboxBroker — global dispatch: get reads, set is DENIED", () => {
+	it("dispatches a GRANTED globals.get but DENIES globals.set even with a wired handler", async () => {
 		const broker = new SandboxBroker();
 		const { target, calls } = fakeTarget();
 		const { token } = broker.mint({ capabilities: WRITE_SCOPE, target });

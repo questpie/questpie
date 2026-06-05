@@ -35,6 +35,9 @@ const collectionAccessSchema = z.array(
 /** Data-access verbs for a global (matches `ExecutorCapabilities.data`). */
 const globalAccessSchema = z.array(z.enum(["read", "write"]));
 
+/** Data-access verbs for a `document_store` namespace (matches `ExecutorCapabilities.data`). */
+const storeAccessSchema = z.array(z.enum(["read", "write"]));
+
 /**
  * Capability manifest (default-deny). Every axis is optional; an omitted axis
  * grants nothing. Structurally compatible with {@link ExecutorCapabilities}.
@@ -54,11 +57,19 @@ export const appCapabilitiesSchema = z
 			})
 			.optional(),
 
-		/** Collections/globals data access (default-deny per collection/global). */
+		/** Collections/globals/stores data access (default-deny per entity). */
 		data: z
 			.object({
 				collections: z.record(z.string(), collectionAccessSchema).optional(),
 				globals: z.record(z.string(), globalAccessSchema).optional(),
+				/**
+				 * `document_store` namespaced access (Decision 8) — a per-STORE axis,
+				 * `{ <store>: ["read"|"write"] }`. Finer than a blanket
+				 * `collections.document_store` grant; a mini-app touches a store IFF it
+				 * is granted here. Cross-app sharing = the SAME store name granted on
+				 * both manifests. Broker-enforced via the row-filter store-grant clamp.
+				 */
+				stores: z.record(z.string(), storeAccessSchema).optional(),
 			})
 			.optional(),
 

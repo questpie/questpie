@@ -672,26 +672,110 @@ describe("G3: relation expansion is denied", () => {
 	});
 });
 
-// ─────────────────── WRITE dispatch is DEFERRED (no §7 boundary) ─────────────
+// ───────── G4: NON-document_store collection writes (explicit-rule gate) ──────
 //
-// Guest collection writes (`create|update|delete`) are NOT dispatched: there is
-// no §7 tenant-write boundary yet (no `document_store`, no `store`-grant
-// row-filter clamp, no force-stamp / reject-client-`id`/`app`/`createdAt`, no
-// blast-radius containment). Shipping a bare write pass-through would make a
-// granted, write-rule-less collection fully writable/deletable by the synthesized
-// app-principal (the framework access fallback for an absent write rule is
-// `!!session`, which the principal satisfies). So writes fail closed at BOTH
-// layers, asserted here through the REAL `SandboxBroker.handleRpc` chokepoint:
-//   1. the runner's target wires NO write handler (`target.collections.X.create`
-//      is `undefined`), and
-//   2. the broker returns `not_implemented` for a GRANTED write verb (and still
-//      `forbidden` for an UNGRANTED one — the capability check fires first).
-// The underlying collection is NEVER called for any write.
-// See `.private/miniapps-v2-design.md` §7 + Decision 8.
+// The §7 write boundary (Decision 8) re-enables guest collection writes — but a
+// NON-`document_store` collection write is dispatched ONLY where the collection has
+// its OWN explicit `.access().create/update/delete` rule (evaluated under the
+// non-privileged app-principal). A collection that relies on the framework's
+// rule-less `!!session` fallback gets NO write handler — the WS-2 CRITICAL: the
+// synthesized app-principal satisfies `!!session`, so a bare pass-through would
+// make a write-rule-less collection fully writable/deletable. The host wires the
+// write ONLY when `collectionWriteRuleFor(name, op)` proves an explicit rule, so a
+// rule-less collection's write fails closed (`not_implemented`) at the broker.
+// All asserted through the REAL `SandboxBroker.handleRpc` chokepoint.
 
-describe("WRITE: guest collection writes are NOT dispatched (deferred §7 boundary)", () => {
+/** A write-rule resolver: report which (collection, op) pairs have explicit rules. */
+function writeRules(
+	map: Record<string, Array<"create" | "update" | "delete">>,
+): (name: string, op: "create" | "update" | "delete") => boolean {
+	return (name, op) => (map[name] ?? []).includes(op);
+}
+/** No collection declares any explicit write rule (the rule-less / fail-closed path). */
+const noWriteRules = () => false;
+
+describe("G4: a write-rule-less collection write is DENIED (the WS-2 critical)", () => {
 	function wire(
 		grants: Array<"read" | "create" | "update" | "delete">,
+		writeRuleFor: (name: string, op: "create" | "update" | "delete") => boolean,
+	) {
+		const rec = recordingCollection([{ id: "p1" }]);
+		const ctx = makeCtx({
+			collections: { posts: rec.collection },
+			// A REAL logged-in invoker → the synthesized principal is NOT even needed;
+			// this is the user whose `!!session` the rule-less fallback would satisfy.
+			session: { user: { id: "user_123" } },
+		});
+		const caps = { data: { collections: { posts: grants } } };
+		const target = buildMiniAppBindingTarget(
+			APP,
+			ctx,
+			caps,
+			noRelations,
+			writeRuleFor,
+		);
+		const broker = new SandboxBroker();
+		const { token } = broker.mint({ capabilities: caps, target });
+		return { rec, target, broker, token };
+	}
+
+	it("wires NO write handler for a collection with NO explicit write rule", () => {
+		const { rec, target } = wire(
+			["read", "create", "update", "delete"],
+			noWriteRules,
+		);
+		const posts = target.collections!.posts!;
+		// Reads ARE wired; writes stay unwired (→ broker not_implemented).
+		expect(typeof posts.find).toBe("function");
+		expect(posts.create).toBeUndefined();
+		expect(posts.update).toBeUndefined();
+		expect(posts.delete).toBeUndefined();
+		expect(rec.calls).toHaveLength(0);
+	});
+
+	it("a GRANTED write to a rule-less collection returns not_implemented; the collection is NEVER written", async () => {
+		// Capability check passes (the verb is granted) but there is no explicit
+		// access rule, so the host wires no handler → fail closed. THIS is the WS-2
+		// critical: without this the app-principal's `!!session` would let the write
+		// through against a write-rule-less collection.
+		const { rec, broker, token } = wire(
+			["read", "create", "update", "delete"],
+			noWriteRules,
+		);
+		const create = await broker.handleRpc(token, "collections.posts.create", {
+			title: "hello",
+		});
+		expect(create.ok).toBe(false);
+		expect(create.ok === false && create.error.code).toBe("not_implemented");
+
+		const del = await broker.handleRpc(token, "collections.posts.delete", {
+			where: { archived: true }, // the blast-radius vector
+		});
+		expect(del.ok).toBe(false);
+		expect(del.ok === false && del.error.code).toBe("not_implemented");
+
+		expect(rec.calls).toHaveLength(0);
+	});
+
+	it("FAILS CLOSED: a write verb NOT granted is forbidden BEFORE the rule check", async () => {
+		// read-only grant → the capability check denies every write verb first.
+		const { rec, broker, token } = wire(["read"], writeRules({ posts: ["create"] }));
+		for (const op of ["create", "update", "delete"] as const) {
+			const res = await broker.handleRpc(token, `collections.posts.${op}`, {
+				data: {},
+				where: {},
+			});
+			expect(res.ok).toBe(false);
+			expect(res.ok === false && res.error.code).toBe("forbidden");
+		}
+		expect(rec.calls).toHaveLength(0);
+	});
+});
+
+describe("G4: a write to a collection WITH an explicit rule IS dispatched (user-mode + G3)", () => {
+	function wire(
+		grants: Array<"read" | "create" | "update" | "delete">,
+		writeRuleFor: (name: string, op: "create" | "update" | "delete") => boolean,
 		relationFieldsFor: (name: string) => Set<string> | null = noRelations,
 	) {
 		const rec = recordingCollection([{ id: "p1" }]);
@@ -700,91 +784,87 @@ describe("WRITE: guest collection writes are NOT dispatched (deferred §7 bounda
 			session: { user: { id: "user_123" } },
 		});
 		const caps = { data: { collections: { posts: grants } } };
-		const target = buildMiniAppBindingTarget(APP, ctx, caps, relationFieldsFor);
+		const target = buildMiniAppBindingTarget(
+			APP,
+			ctx,
+			caps,
+			relationFieldsFor,
+			writeRuleFor,
+		);
 		const broker = new SandboxBroker();
 		const { token } = broker.mint({ capabilities: caps, target });
 		return { rec, target, broker, token };
 	}
 
-	it("the runner wires NO create/update/delete handler on the target", () => {
-		const { rec, target } = wire(["read", "create", "update", "delete"]);
-		const posts = target.collections!.posts!;
-		// Reads ARE wired; writes are deliberately absent (broker → not_implemented).
-		expect(typeof posts.find).toBe("function");
-		expect(typeof posts.findOne).toBe("function");
-		expect(posts.create).toBeUndefined();
-		expect(posts.update).toBeUndefined();
-		expect(posts.delete).toBeUndefined();
-		expect(rec.calls).toHaveLength(0);
-	});
-
-	it("a GRANTED write verb returns not_implemented; the collection is NEVER written", async () => {
-		// Full write grant — the capability check passes, but dispatch is deferred.
-		const { rec, broker, token } = wire(["read", "create", "update", "delete"]);
-		const create = await broker.handleRpc(token, "collections.posts.create", {
+	it("create dispatches under accessMode:'user' + the run's principal (so the rule actually gates it)", async () => {
+		const { rec, broker, token } = wire(
+			["create"],
+			writeRules({ posts: ["create"] }),
+		);
+		const res = await broker.handleRpc(token, "collections.posts.create", {
 			title: "hello",
 		});
-		expect(create.ok).toBe(false);
-		expect(create.ok === false && create.error.code).toBe("not_implemented");
+		expect(res.ok).toBe(true);
+		expect(rec.calls).toHaveLength(1);
+		const ctxArg = rec.calls[0]!.context as {
+			accessMode?: string;
+			session?: { user?: { id?: string } };
+		};
+		// The collection's OWN rule is evaluated under user-mode + the principal —
+		// NEVER system (which would bypass the very rule that authorizes the write).
+		expect(ctxArg.accessMode).toBe("user");
+		expect(ctxArg.accessMode).not.toBe("system");
+		expect(ctxArg.session?.user?.id).toBe("user_123");
+	});
 
-		const update = await broker.handleRpc(token, "collections.posts.update", {
+	it("update/delete reach the collection by-`where` when the op has an explicit rule", async () => {
+		const { rec, broker, token } = wire(
+			["update", "delete"],
+			writeRules({ posts: ["update", "delete"] }),
+		);
+		const upd = await broker.handleRpc(token, "collections.posts.update", {
 			where: { id: "p1" },
 			data: { title: "x" },
 		});
-		expect(update.ok).toBe(false);
-		expect(update.ok === false && update.error.code).toBe("not_implemented");
-
+		expect(upd.ok).toBe(true);
 		const del = await broker.handleRpc(token, "collections.posts.delete", {
 			where: { id: "p1" },
 		});
-		expect(del.ok).toBe(false);
-		expect(del.ok === false && del.error.code).toBe("not_implemented");
-
-		// No write ever reached the underlying collection.
-		expect(rec.calls).toHaveLength(0);
+		expect(del.ok).toBe(true);
+		expect(rec.calls.map((c) => c.method)).toEqual(["update", "delete"]);
 	});
 
-	it("a destructive broad-`where` delete (the blast-radius vector) is NOT dispatched", async () => {
-		// The exact critical-issue vector: a granted delete with a broad scalar
-		// `where` would, without the §7 clamp, delete arbitrary rows. It must fail
-		// closed as not_implemented (no live delete primitive), collection untouched.
-		const { rec, broker, token } = wire(["delete"]);
-		const del = await broker.handleRpc(token, "collections.posts.delete", {
-			where: { archived: true },
+	it("only the ops WITH an explicit rule are wired (per-op granularity)", async () => {
+		// create has an explicit rule; update/delete do NOT → only create dispatches.
+		const { rec, broker, token } = wire(
+			["create", "update", "delete"],
+			writeRules({ posts: ["create"] }),
+		);
+		const create = await broker.handleRpc(token, "collections.posts.create", {
+			title: "ok",
 		});
-		expect(del.ok).toBe(false);
-		expect(del.ok === false && del.error.code).toBe("not_implemented");
-		expect(rec.calls).toHaveLength(0);
+		expect(create.ok).toBe(true);
+		const update = await broker.handleRpc(token, "collections.posts.update", {
+			where: { id: "p1" },
+			data: {},
+		});
+		expect(update.ok === false && update.error.code).toBe("not_implemented");
+		expect(rec.calls.map((c) => c.method)).toEqual(["create"]);
 	});
 
-	it("FAILS CLOSED: a write verb NOT granted is forbidden BEFORE not_implemented", async () => {
-		// read-only grant → the capability check denies every write verb first.
-		const { rec, broker, token } = wire(["read"]);
-		for (const op of ["create", "update", "delete"] as const) {
-			const res = await broker.handleRpc(token, `collections.posts.${op}`, {
-				data: {},
-				where: {},
-			});
-			expect(res.ok).toBe(false);
-			// forbidden (capability), NOT not_implemented — the check runs upstream.
-			expect(res.ok === false && res.error.code).toBe("forbidden");
-		}
-		expect(rec.calls).toHaveLength(0);
-	});
-
-	it("client-supplied id/createdAt/app on a granted create cannot land (write not dispatched)", async () => {
-		// The high-severity spoofing vector: a payload carrying `id`/`createdAt`/`app`.
-		// With no write dispatch + no write handler, it never reaches the insert at
-		// all — there is no path for the spoofed meta to be persisted.
-		const { rec, broker, token } = wire(["create"]);
-		const res = await broker.handleRpc(token, "collections.posts.create", {
-			id: "forged-pk",
-			createdAt: "1970-01-01T00:00:00.000Z",
-			app: "victim-tenant",
-			title: "hi",
+	it("G3 write-side guard: a relation `where` on an explicit-rule update is REJECTED (oracle)", async () => {
+		const { rec, broker, token } = wire(
+			["update"],
+			writeRules({ posts: ["update"] }),
+			relations({ posts: ["author"] }),
+		);
+		const res = await broker.handleRpc(token, "collections.posts.update", {
+			where: { author: { id: "secret-user" } },
+			data: { title: "x" },
 		});
 		expect(res.ok).toBe(false);
-		expect(res.ok === false && res.error.code).toBe("not_implemented");
+		expect(res.ok === false && res.error.code).toBe("execution_error");
+		// The relation-referencing write never reached the collection.
 		expect(rec.calls).toHaveLength(0);
 	});
 });
@@ -833,5 +913,361 @@ describe("defense in depth: broker capability check fires before the host bound"
 			body: "x",
 		});
 		expect(ok.ok).toBe(true);
+	});
+});
+
+// ─────────────────── G4: document_store row-filter store-grant clamp ─────────
+//
+// `document_store` is the namespaced jsonb record store (Decision 8 + §7). The
+// store-grant clamp (a ROW-FILTER mechanism, NOT the G1 string-prefix path clamp)
+// confines every CRUD to the run's GRANTED stores (`capabilities.data.stores`):
+//   READ   → inject `where.store ∈ grantedRead` (+ the G3 where/orderBy guard);
+//   CREATE → row `store` MUST be granted `write`; stamp `createdByApp`; reject a
+//            client-supplied `store`/`id`/`createdAt`/`createdByApp`;
+//   UPDATE/DELETE → blast-radius-contain the `where` to granted stores; strip any
+//            identity/`store` mutation from the patch.
+// Dispatched accessMode:'system' — the clamp IS the authorization (mirrors G1).
+// Cross-app sharing = the SAME store name granted on two apps. All asserted via
+// the REAL `SandboxBroker.handleRpc` chokepoint against an in-memory store.
+
+interface DocRow {
+	id: string;
+	store: string;
+	key: string;
+	data: unknown;
+	createdByApp: string;
+	createdAt: string;
+}
+
+/**
+ * An in-memory `document_store` double modeling the real CRUD semantics the clamp
+ * relies on: by-`where` find/update/delete keyed on a `store` filter (`{ in: [] }`
+ * and a literal `store`), nested under an `AND` combinator (how the clamp wraps the
+ * guest `where`). It records the CRUD context + args so the clamp can be asserted.
+ */
+function makeDocumentStore(seed: DocRow[] = []) {
+	const rows: DocRow[] = [...seed];
+	const calls: Array<{ method: string; args: unknown; context: unknown }> = [];
+	let seq = 0;
+
+	/** Resolve the effective store filter the clamp injected (the `{ in: [...] }`). */
+	function allowedStores(where: unknown): string[] | null {
+		// The clamp shape is `{ AND: [guestWhere, { store: { in: granted } }] }` OR,
+		// when the guest passed no where, just `{ store: { in: granted } }`.
+		const find = (w: unknown): string[] | null => {
+			if (!w || typeof w !== "object") return null;
+			const o = w as Record<string, unknown>;
+			if (Array.isArray(o.AND)) {
+				for (const part of o.AND) {
+					const r = find(part);
+					if (r) return r;
+				}
+			}
+			const s = o.store as { in?: unknown } | string | undefined;
+			if (s && typeof s === "object" && Array.isArray((s as { in?: unknown }).in)) {
+				return (s as { in: string[] }).in;
+			}
+			return null;
+		};
+		return find(where);
+	}
+	/** A literal `store: "x"` the guest narrowed to (under AND), if any. */
+	function literalStore(where: unknown): string | undefined {
+		const find = (w: unknown): string | undefined => {
+			if (!w || typeof w !== "object") return undefined;
+			const o = w as Record<string, unknown>;
+			if (Array.isArray(o.AND)) {
+				for (const part of o.AND) {
+					const r = find(part);
+					if (r) return r;
+				}
+			}
+			return typeof o.store === "string" ? o.store : undefined;
+		};
+		return find(where);
+	}
+
+	function matches(row: DocRow, where: unknown): boolean {
+		const allowed = allowedStores(where);
+		if (allowed && !allowed.includes(row.store)) return false;
+		const lit = literalStore(where);
+		if (lit !== undefined && row.store !== lit) return false;
+		return true;
+	}
+
+	return {
+		rows,
+		calls,
+		collection: {
+			async find(args: unknown, context?: unknown) {
+				calls.push({ method: "find", args, context });
+				const where = (args as { where?: unknown })?.where;
+				return { docs: rows.filter((r) => matches(r, where)) };
+			},
+			async findOne(args: unknown, context?: unknown) {
+				calls.push({ method: "findOne", args, context });
+				const where = (args as { where?: unknown })?.where;
+				return rows.find((r) => matches(r, where)) ?? null;
+			},
+			async create(args: unknown, context?: unknown) {
+				calls.push({ method: "create", args, context });
+				const row = args as Omit<DocRow, "id" | "createdAt">;
+				const created: DocRow = {
+					id: `d${++seq}`,
+					store: row.store,
+					key: row.key,
+					data: row.data,
+					createdByApp: row.createdByApp,
+					createdAt: new Date(0).toISOString(),
+				};
+				rows.push(created);
+				return created;
+			},
+			async update(args: unknown, context?: unknown) {
+				calls.push({ method: "update", args, context });
+				const { where, data } = args as { where: unknown; data: Record<string, unknown> };
+				const hit = rows.filter((r) => matches(r, where));
+				for (const r of hit) Object.assign(r, data);
+				return hit;
+			},
+			async delete(args: unknown, context?: unknown) {
+				calls.push({ method: "delete", args, context });
+				const { where } = args as { where: unknown };
+				const before = rows.length;
+				for (let i = rows.length - 1; i >= 0; i--) {
+					if (matches(rows[i]!, where)) rows.splice(i, 1);
+				}
+				return { success: true, count: before - rows.length };
+			},
+		},
+	};
+}
+
+const DS = "document_store";
+/** Build a run whose target wires the document_store clamp for `stores` grants. */
+function wireDocStore(
+	stores: Record<string, Array<"read" | "write">>,
+	seed: DocRow[] = [],
+	appId = APP,
+) {
+	const ds = makeDocumentStore(seed);
+	const ctx = makeCtx({
+		collections: { document_store: ds.collection },
+		session: { user: { id: "user_123" } },
+	});
+	const caps = { data: { stores } };
+	// Pass a relation resolver + a write-rule resolver; neither should affect
+	// document_store (it has its own dedicated accessor).
+	const target = buildMiniAppBindingTarget(
+		appId,
+		ctx,
+		caps,
+		noRelations,
+		noWriteRules,
+	);
+	const broker = new SandboxBroker();
+	const { token } = broker.mint({ capabilities: caps, target });
+	return { ds, broker, token };
+}
+
+describe("G4 document_store: READ is clamped to granted-read stores", () => {
+	const seed: DocRow[] = [
+		{ id: "a", store: "posts", key: "p1", data: { t: 1 }, createdByApp: APP, createdAt: "x" },
+		{ id: "b", store: "posts", key: "p2", data: { t: 2 }, createdByApp: APP, createdAt: "x" },
+		{ id: "c", store: "secrets", key: "s1", data: { t: 9 }, createdByApp: APP, createdAt: "x" },
+	];
+
+	it("find returns ONLY rows in a granted-read store; dispatches system-mode", async () => {
+		const { ds, broker, token } = wireDocStore({ posts: ["read"] }, seed);
+		const res = await broker.handleRpc(token, `collections.${DS}.find`, {});
+		expect(res.ok).toBe(true);
+		const docs = res.ok ? (res.value as { docs: DocRow[] }).docs : [];
+		expect(docs.map((d) => d.id).sort()).toEqual(["a", "b"]);
+		// the `secrets` store (NOT granted) never appears.
+		expect(docs.some((d) => d.store === "secrets")).toBe(false);
+		// dispatched accessMode:'system' (the clamp is the authorization).
+		expect((ds.calls[0]!.context as { accessMode?: string }).accessMode).toBe(
+			"system",
+		);
+	});
+
+	it("a guest `where` targeting an UNGRANTED store yields nothing (AND with store∈granted)", async () => {
+		const { broker, token } = wireDocStore({ posts: ["read"] }, seed);
+		// The guest tries to read `secrets` directly — the injected store filter ANDs
+		// it down to the empty intersection.
+		const res = await broker.handleRpc(token, `collections.${DS}.find`, {
+			where: { store: "secrets" },
+		});
+		expect(res.ok).toBe(true);
+		expect(res.ok && (res.value as { docs: DocRow[] }).docs).toHaveLength(0);
+	});
+
+	it("write-only grant cannot READ (no read store) — denied", async () => {
+		const { ds, broker, token } = wireDocStore({ posts: ["write"] }, seed);
+		const res = await broker.handleRpc(token, `collections.${DS}.find`, {});
+		expect(res.ok).toBe(false);
+		expect(res.ok === false && res.error.code).toBe("forbidden"); // capability gate
+		expect(ds.calls).toHaveLength(0);
+	});
+
+	it("rejects relation expansion via `with` (G3 still applies to document_store)", async () => {
+		const { ds, broker, token } = wireDocStore({ posts: ["read"] }, seed);
+		const res = await broker.handleRpc(token, `collections.${DS}.find`, {
+			with: { author: true },
+		});
+		expect(res.ok).toBe(false);
+		expect(ds.calls).toHaveLength(0);
+	});
+});
+
+describe("G4 document_store: CREATE forces store + stamps provenance + rejects spoof", () => {
+	it("create into a granted-write store stamps createdByApp and drops client meta", async () => {
+		const { ds, broker, token } = wireDocStore({ posts: ["write"] });
+		const res = await broker.handleRpc(token, `collections.${DS}.create`, {
+			store: "posts",
+			key: "k1",
+			data: { hello: "world" },
+			// spoof attempts — all must be DROPPED:
+			id: "forged-pk",
+			createdAt: "1970-01-01T00:00:00.000Z",
+			createdByApp: "victim-app",
+		});
+		expect(res.ok).toBe(true);
+		expect(ds.rows).toHaveLength(1);
+		const row = ds.rows[0]!;
+		expect(row.store).toBe("posts");
+		expect(row.key).toBe("k1");
+		expect(row.data).toEqual({ hello: "world" });
+		// createdByApp is STAMPED to the writing app, NOT the client value.
+		expect(row.createdByApp).toBe(APP);
+		expect(row.createdByApp).not.toBe("victim-app");
+		// the forged id never reached the insert payload.
+		const created = ds.calls.find((c) => c.method === "create")!;
+		expect((created.args as Record<string, unknown>).id).toBeUndefined();
+		expect((created.args as Record<string, unknown>).createdAt).toBeUndefined();
+	});
+
+	it("create into an UNGRANTED store is REJECTED (store-spoof on write)", async () => {
+		const { ds, broker, token } = wireDocStore({ posts: ["write"] });
+		const res = await broker.handleRpc(token, `collections.${DS}.create`, {
+			store: "secrets", // not granted
+			key: "k1",
+			data: {},
+		});
+		expect(res.ok).toBe(false);
+		expect(res.ok === false && res.error.code).toBe("execution_error");
+		expect(ds.rows).toHaveLength(0);
+	});
+
+	it("create with NO store is rejected (cannot infer a target namespace)", async () => {
+		const { ds, broker, token } = wireDocStore({ posts: ["write"] });
+		const res = await broker.handleRpc(token, `collections.${DS}.create`, {
+			key: "k1",
+			data: {},
+		});
+		expect(res.ok).toBe(false);
+		expect(ds.rows).toHaveLength(0);
+	});
+});
+
+describe("G4 document_store: UPDATE/DELETE blast-radius containment", () => {
+	function seed(): DocRow[] {
+		return [
+			{ id: "a", store: "posts", key: "p1", data: { v: 1 }, createdByApp: APP, createdAt: "x" },
+			{ id: "b", store: "drafts", key: "d1", data: { v: 1 }, createdByApp: APP, createdAt: "x" },
+			{ id: "c", store: "secrets", key: "s1", data: { v: 1 }, createdByApp: "other", createdAt: "x" },
+		];
+	}
+
+	it("a broad update (empty where) only touches GRANTED-write stores", async () => {
+		const { ds, broker, token } = wireDocStore({ posts: ["write"] }, seed());
+		// No where at all → the clamp confines it to `{ store: { in: ["posts"] } }`.
+		// The patch sets the row's jsonb `data` field.
+		const res = await broker.handleRpc(token, `collections.${DS}.update`, {
+			data: { data: { v: 999 } },
+		});
+		expect(res.ok).toBe(true);
+		// ONLY the posts row changed; drafts + secrets are untouched.
+		expect(ds.rows.find((r) => r.id === "a")!.data).toEqual({ v: 999 });
+		expect(ds.rows.find((r) => r.id === "b")!.data).toEqual({ v: 1 });
+		expect(ds.rows.find((r) => r.id === "c")!.data).toEqual({ v: 1 });
+	});
+
+	it("a broad delete (where: {}) only removes GRANTED-write store rows", async () => {
+		const { ds, broker, token } = wireDocStore({ posts: ["write"] }, seed());
+		const res = await broker.handleRpc(token, `collections.${DS}.delete`, {
+			where: {},
+		});
+		expect(res.ok).toBe(true);
+		// posts row gone; drafts + secrets survive (blast-radius contained).
+		expect(ds.rows.map((r) => r.id).sort()).toEqual(["b", "c"]);
+	});
+
+	it("an update patch CANNOT move a row across stores or forge identity", async () => {
+		const { ds, broker, token } = wireDocStore({ posts: ["write"] }, seed());
+		const res = await broker.handleRpc(token, `collections.${DS}.update`, {
+			where: { key: "p1" },
+			data: {
+				data: { v: 2 }, // the only legit field
+				store: "secrets", // cross-store move attempt — STRIPPED
+				id: "forged", // identity forge — STRIPPED
+				createdByApp: "thief", // provenance forge — STRIPPED
+			},
+		});
+		expect(res.ok).toBe(true);
+		const row = ds.rows.find((r) => r.key === "p1")!;
+		expect(row.store).toBe("posts"); // NOT moved
+		expect(row.id).toBe("a"); // NOT forged
+		expect(row.createdByApp).toBe(APP); // NOT forged
+		expect(row.data).toEqual({ v: 2 }); // the only legit field applied
+		// the protected keys were stripped from the patch BEFORE it reached the CRUD.
+		const updateArg = ds.calls.find((c) => c.method === "update")!.args as {
+			data: Record<string, unknown>;
+		};
+		expect(updateArg.data.store).toBeUndefined();
+		expect(updateArg.data.id).toBeUndefined();
+		expect(updateArg.data.createdByApp).toBeUndefined();
+		expect(updateArg.data.data).toEqual({ v: 2 });
+	});
+
+	it("delete targeting an UNGRANTED store deletes nothing (AND store∈granted)", async () => {
+		const { ds, broker, token } = wireDocStore({ posts: ["write"] }, seed());
+		const res = await broker.handleRpc(token, `collections.${DS}.delete`, {
+			where: { store: "secrets" }, // not granted → empty intersection
+		});
+		expect(res.ok).toBe(true);
+		expect(res.ok && (res.value as { count: number }).count).toBe(0);
+		expect(ds.rows.some((r) => r.id === "c")).toBe(true);
+	});
+});
+
+describe("G4 document_store: cross-app sharing via a shared store name", () => {
+	it("app B granted a shared store READS rows app A created in it", async () => {
+		// App A created the row in the `invoices` store; app B (analytics) is granted
+		// `invoices:["read"]` — provenance (`createdByApp:"app-a"`) does NOT gate access.
+		const seed: DocRow[] = [
+			{ id: "i1", store: "invoices", key: "INV-1", data: { total: 100 }, createdByApp: "app-a", createdAt: "x" },
+			{ id: "x1", store: "private-b", key: "p", data: {}, createdByApp: "app-b", createdAt: "x" },
+		];
+		const { broker, token } = wireDocStore({ invoices: ["read"] }, seed, "app-b");
+		const res = await broker.handleRpc(token, `collections.${DS}.find`, {});
+		expect(res.ok).toBe(true);
+		const docs = res.ok ? (res.value as { docs: DocRow[] }).docs : [];
+		expect(docs.map((d) => d.id)).toEqual(["i1"]); // sees the shared invoice…
+		// …and NOT app-b's own private store (not granted on this run).
+		expect(docs.some((d) => d.store === "private-b")).toBe(false);
+	});
+
+	it("a non-shared store remains invisible to an app that lacks the grant", async () => {
+		const seed: DocRow[] = [
+			{ id: "i1", store: "invoices", key: "INV-1", data: {}, createdByApp: "app-a", createdAt: "x" },
+		];
+		// app-b granted a DIFFERENT store → cannot read invoices.
+		const { broker, token } = wireDocStore({ other: ["read"] }, seed, "app-b");
+		const res = await broker.handleRpc(token, `collections.${DS}.find`, {
+			where: { store: "invoices" },
+		});
+		expect(res.ok).toBe(true);
+		expect(res.ok && (res.value as { docs: DocRow[] }).docs).toHaveLength(0);
 	});
 });

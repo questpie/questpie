@@ -36,6 +36,7 @@ import {
 	buildEntrySource,
 	resolveBrokerUrl,
 	resolveCollectionRelationFields,
+	resolveCollectionWriteRule,
 } from "../../../apps/mini-app-runner";
 import { sessionOnly } from "../../../lib/route-access";
 
@@ -71,6 +72,8 @@ type AppRouteContext = Questpie.AppContext & {
 		config?: { executor?: { brokerUrl?: string } };
 		getCollectionConfig?: (name: string) => {
 			getMeta(): { relations?: string[] };
+			/** Builder state — `state.access` backs the G4 explicit-write-rule check. */
+			state?: { access?: Record<string, unknown> };
 		};
 	};
 };
@@ -211,6 +214,7 @@ export default route()
 			c as unknown as MiniAppBindingCtx,
 			resolved.capabilities,
 			(name) => resolveCollectionRelationFields(c.app, name),
+			(name, op) => resolveCollectionWriteRule(c.app, name, op),
 		);
 
 		// 4. Build the guest input (request payload + meta) and resolve the broker

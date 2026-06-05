@@ -12,6 +12,7 @@ export type { ExecutorConfig } from "#questpie/server/modules/core/integrated/ex
 // ── Untrusted-path bindings broker (capability-scoped app primitives) ──
 export {
 	checkBindingCapability,
+	DOCUMENT_STORE_COLLECTION,
 	knowledgePathMatches,
 	normalizeKnowledgePath,
 } from "#questpie/server/modules/core/integrated/executor/bindings/capability-check.js";

@@ -23,10 +23,35 @@
 /** Transport: send one binding RPC, resolve with its brokered value or reject. */
 export type HostCall = (method: string, args: unknown) => Promise<unknown>;
 
-/** Read-query surface for a single collection (MVP). */
+/**
+ * Per-collection access surface. Reads (`find`/`findOne`) are always available;
+ * writes (`create`/`update`/`delete`) are dispatched ONLY where the host wires a
+ * safe handler (the `document_store` store-grant clamp, or a collection with an
+ * explicit write rule — Decision 8 / §7). An ungranted/unwired call rejects host-side.
+ */
 export interface GuestCollection {
 	find(args?: unknown): Promise<unknown>;
 	findOne(args?: unknown): Promise<unknown>;
+	create(args?: unknown): Promise<unknown>;
+	update(args?: unknown): Promise<unknown>;
+	delete(args?: unknown): Promise<unknown>;
+}
+
+/**
+ * Sugar surface for ONE `document_store` namespace. Every op auto-injects
+ * `store: <name>`; the host still clamps to the run's granted stores (the sugar is
+ * a convenience, NOT a second enforcement path — `questpie.store.posts.create(x)`
+ * is exactly `questpie.collections.document_store.create({ ...x, store:"posts" })`).
+ */
+export interface GuestStore {
+	find(args?: Record<string, unknown>): Promise<unknown>;
+	findOne(args?: Record<string, unknown>): Promise<unknown>;
+	create(args: { key: string; data?: unknown }): Promise<unknown>;
+	update(args: {
+		where?: unknown;
+		data?: Record<string, unknown>;
+	}): Promise<unknown>;
+	delete(args?: { where?: unknown }): Promise<unknown>;
 }
 
 /** The `globalThis.questpie` surface handed to untrusted guest code. */
@@ -43,8 +68,14 @@ export interface GuestBindings {
 		}): Promise<unknown>;
 		list(args?: { path?: string; scope?: unknown }): Promise<unknown>;
 	};
-	/** Per-collection read access, scoped by `capabilities.data.collections`. */
+	/** Per-collection read/write access, scoped by `capabilities.data.collections`. */
 	collections: Record<string, GuestCollection>;
+	/**
+	 * Per-namespace `document_store` sugar, scoped by `capabilities.data.stores`.
+	 * `questpie.store.<name>.<op>` injects `store:<name>` onto the underlying
+	 * `collections.document_store.<op>` call.
+	 */
+	store: Record<string, GuestStore>;
 }
 
 /**
@@ -72,10 +103,44 @@ export function buildGuestBindings(hostCall: HostCall): GuestBindings {
 					find: (args) => hostCall(`collections.${name}.find`, args ?? {}),
 					findOne: (args) =>
 						hostCall(`collections.${name}.findOne`, args ?? {}),
+					create: (args) => hostCall(`collections.${name}.create`, args ?? {}),
+					update: (args) => hostCall(`collections.${name}.update`, args ?? {}),
+					delete: (args) => hostCall(`collections.${name}.delete`, args ?? {}),
 				};
 			},
 		},
 	) as Record<string, GuestCollection>;
 
-	return { files, collections };
+	// `store.<name>` sugar → `collections.document_store.<op>` scoped to ONE store.
+	// CREATE injects a top-level `store` (the row field the host stamps/validates);
+	// FIND/UPDATE/DELETE inject `where.store` (so the call targets only that store —
+	// the host then ANDs it with `store ∈ granted`). Enforcement stays HOST-SIDE
+	// (the store-grant clamp); this is a pure convenience, so an ungranted store
+	// still rejects host-side.
+	const store = new Proxy(
+		{},
+		{
+			get(_t, name: string | symbol): GuestStore | undefined {
+				if (typeof name !== "string") return undefined;
+				const withStoreWhere = (args: Record<string, unknown>) => {
+					const where =
+						args.where && typeof args.where === "object"
+							? { ...(args.where as Record<string, unknown>), store: name }
+							: { store: name };
+					return { ...args, where };
+				};
+				const ds = (op: string, args: unknown) =>
+					hostCall(`collections.document_store.${op}`, args);
+				return {
+					find: (args = {}) => ds("find", withStoreWhere(args)),
+					findOne: (args = {}) => ds("findOne", withStoreWhere(args)),
+					create: (args) => ds("create", { ...(args ?? {}), store: name }),
+					update: (args) => ds("update", withStoreWhere(args ?? {})),
+					delete: (args = {}) => ds("delete", withStoreWhere(args)),
+				};
+			},
+		},
+	) as Record<string, GuestStore>;
+
+	return { files, collections, store };
 }

@@ -14,6 +14,7 @@ import {
 	buildEntrySource,
 	resolveBrokerUrl,
 	resolveCollectionRelationFields,
+	resolveCollectionWriteRule,
 } from "../apps/mini-app-runner";
 import { asRecord, relationId } from "../lib/records";
 import {
@@ -339,6 +340,8 @@ interface ScheduleRunnerApp {
 	config?: { executor?: { brokerUrl?: string } };
 	getCollectionConfig?: (name: string) => {
 		getMeta(): { relations?: string[] };
+		/** Builder state — `state.access` backs the G4 explicit-write-rule check. */
+		state?: { access?: Record<string, unknown> };
 	};
 }
 
@@ -438,6 +441,7 @@ export async function triggerAppSchedule(
 		ctx as unknown as MiniAppBindingCtx,
 		resolved.capabilities,
 		(name) => resolveCollectionRelationFields(app, name),
+		(name, op) => resolveCollectionWriteRule(app, name, op),
 	);
 
 	// 4. The cron "tick" payload handed to the guest export as `input`.

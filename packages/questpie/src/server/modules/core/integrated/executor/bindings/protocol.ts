@@ -26,20 +26,22 @@
  * names (consistent-naming principle). Methods are addressed as dotted strings
  * so the wire protocol stays a flat `{ method, args }`.
  *
- * ENFORCED + DISPATCHED (the READ surface):
+ * ENFORCED + DISPATCHED:
  *   - `files.read` | `files.write` | `files.list`
- *   - `collections.<name>.find|findOne`
+ *   - `collections.<name>.find|findOne` (the READ surface)
+ *   - `collections.<name>.create|update|delete` — the §7 tenant-write boundary
+ *     (`mini-app-bindings.ts` + Decision 8). Dispatched ONLY through a safe path:
+ *     `document_store` via its `store`-grant row-filter clamp (force-stamp the
+ *     `store`, reject client `store`/`id`/`createdAt`, blast-radius-contain the
+ *     update/delete `where`), OR an OTHER collection that has its OWN explicit
+ *     `.access().create/update/delete` rule (never the rule-less `!!session`
+ *     fallback). A write whose target wires no safe handler still fails closed as
+ *     `not_implemented`.
  *   - `globals.<name>.get`
  *
- * Typed + capability-CHECKED here but DISPATCH deferred (the broker rejects them
- * as `not_implemented`):
- *   - `collections.<name>.create|update|delete` and `globals.<name>.set` — guest
- *     WRITES have no §7 tenant-write boundary yet (no `document_store`, no
- *     `store`-grant row-filter clamp, no force-stamp / reject-client-`id`/`app`/
- *     `createdAt`, no blast-radius containment), so they fail closed until that
- *     boundary lands with its own adversarial pass (`.private/miniapps-v2-design.md`
- *     §7 + Decision 8). The capability vocabulary keeps the verbs so the manifest
- *     and the check are ready; only DISPATCH is gated.
+ * DENIED / NOT DISPATCHED:
+ *   - `globals.<name>.set` — a global is a singleton with no per-tenant boundary,
+ *     so a guest set is denied outright (no namespaced clamp can confine it).
  *   - `services.<name>.<fn>`, `jobs.enqueue`, `workflows.trigger`, `email.send` —
  *     no target handler yet.
  */

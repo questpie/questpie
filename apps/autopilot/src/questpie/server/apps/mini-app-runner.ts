@@ -118,6 +118,49 @@ export interface RelationMetaAppLike {
 	};
 }
 
+/** The minimal app shape {@link resolveCollectionWriteRule} reads. */
+export interface AccessMetaAppLike {
+	getCollectionConfig?: (name: string) => {
+		/** Builder state — `state.access` holds the declared `.access()` rules. */
+		state?: { access?: Record<string, unknown> };
+	};
+}
+
+/**
+ * Resolve whether collection `name` declares an OWN explicit `.access()` rule for
+ * the write `op` (the G4 non-document_store gate). Returns `true` ONLY when the
+ * rule is explicitly present (a boolean, a function, or even `false` — the point
+ * is the author DECIDED, vs the framework falling back to the rule-less
+ * `!!session` default, which the synthesized app-principal satisfies — the WS-2
+ * critical). FAILS CLOSED (`false`) when the access state cannot be read or the
+ * rule is absent, so a guest write to a write-rule-less collection is denied.
+ *
+ * NOTE: returning `true` for an explicit `false` rule is correct — a `false` rule
+ * makes the collection's own access deny the write under the app-principal, so the
+ * write is wired but the framework's access layer then rejects it. What we must
+ * NEVER do is wire a write whose rule is ABSENT (→ `!!session` allow).
+ */
+export function resolveCollectionWriteRule(
+	app: AccessMetaAppLike,
+	name: string,
+	op: "create" | "update" | "delete",
+): boolean {
+	const getCfg = app.getCollectionConfig;
+	if (typeof getCfg !== "function") return false;
+	try {
+		const access = getCfg(name)?.state?.access;
+		if (!access || typeof access !== "object") return false;
+		// Explicit presence = the author declared a rule for this op (fail-closed if absent).
+		return (
+			Object.prototype.hasOwnProperty.call(access, op) &&
+			(access as Record<string, unknown>)[op] !== undefined
+		);
+	} catch {
+		// Unknown collection / state unavailable → fail closed.
+		return false;
+	}
+}
+
 /**
  * Resolve the relation FIELD NAMES of a collection from runtime metadata (the
  * SAME `state.relations` set the CRUD where-builder routes to its raw EXISTS

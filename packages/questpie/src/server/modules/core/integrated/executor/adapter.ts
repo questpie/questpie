@@ -47,10 +47,19 @@ export interface ExecutorCapabilities {
 		read?: string[];
 		write?: string[];
 	};
-	/** Collections/globals data access. Declared now; broker-enforced later. */
+	/** Collections/globals/stores data access. Default-deny per entity. */
 	data?: {
 		collections?: Record<string, Array<"read" | "create" | "update" | "delete">>;
 		globals?: Record<string, Array<"read" | "write">>;
+		/**
+		 * `document_store` namespaced data access (Decision 8). A per-STORE axis,
+		 * finer than a blanket `collections.document_store` grant: a mini-app reads
+		 * /writes a `store` namespace IFF it is granted here. The same default-deny +
+		 * human-approved model as `collections`. Cross-app sharing = the SAME store
+		 * name granted on both apps' manifests. Enforced by the broker's row-filter
+		 * clamp (`mini-app-bindings.ts`).
+		 */
+		stores?: Record<string, Array<"read" | "write">>;
 	};
 	/** Allowed service names. Declared now; broker-enforced later. */
 	services?: string[];

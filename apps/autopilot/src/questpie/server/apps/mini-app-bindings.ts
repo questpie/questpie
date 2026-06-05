@@ -43,12 +43,25 @@
  *     set cannot be determined for a collection we FAIL CLOSED and reject every
  *     `where`/`orderBy` key on it.
  *
- * SCOPE — this target dispatches the READ surface only: `files.read|write|
- * list` (own-subtree file-as-DB, G1) and `collections.X.find|findOne` (G2/G3).
- * Guest COLLECTION/GLOBAL WRITES (`create|update|delete`, `globals.set`) are NOT
- * dispatched — they have no §7 tenant-write boundary yet and so fail closed at
- * both the broker (`not_implemented`) and this target (no write handler wired).
- * See `buildMiniAppBindingTarget` + `.private/miniapps-v2-design.md` §7.
+ *   - **G4 — the §7 WRITE boundary (Decision 8).** Guest collection WRITES
+ *     (`create|update|delete`) are dispatched, but ONLY through a SAFE path:
+ *       (a) `document_store` — the namespaced jsonb record store — through a
+ *           ROW-FILTER store-grant clamp (NOT the G1 string-prefix path clamp):
+ *           every call is confined to the run's GRANTED stores
+ *           (`capabilities.data.stores`). READ injects `where.store ∈ grantedRead`;
+ *           CREATE forces `store ∈ grantedWrite` + stamps `createdByApp`, rejecting
+ *           a client-supplied `store`/`id`/`createdAt`/`createdByApp`; UPDATE/DELETE
+ *           blast-radius-contain the `where` to granted stores and strip any
+ *           identity/`store` mutation from the patch. Dispatched `accessMode:
+ *           "system"` — the store-grant clamp IS the authorization (mirrors G1).
+ *       (b) an OTHER collection — ONLY where it has its OWN explicit
+ *           `.access().create/update/delete` rule, evaluated under the
+ *           non-privileged app-principal (G2 user-mode). A collection that relies
+ *           on the framework's rule-less `!!session` fallback gets NO write handler
+ *           (the WS-2 critical: the synthesized app-principal satisfies `!!session`,
+ *           which would make a write-rule-less collection fully writable). The
+ *           explicit-rule check is supplied by `collectionWriteRuleFor`.
+ *     `globals.set` stays DENIED (a singleton has no per-tenant boundary).
  *
  * This helper is SHARED: the named-endpoint runner (M4) and the cron runner (M5)
  * both build the target through here, so the enforcement lives in ONE place.
@@ -59,7 +72,7 @@
 
 import { posix } from "node:path";
 
-import type { BindingTarget } from "questpie/executor";
+import { type BindingTarget, DOCUMENT_STORE_COLLECTION } from "questpie/executor";
 
 import {
 	type KnowledgeByPathContext,
@@ -94,6 +107,19 @@ import {
  * access-controlled.
  */
 const KNOWLEDGE_SYSTEM_CONTEXT: KnowledgeByPathContext = {
+	accessMode: "system",
+};
+
+/**
+ * The CRUD context the `document_store` accessor dispatches under (G4). Like the
+ * G1 file-as-DB path, `document_store` runs `accessMode:"system"` BECAUSE the
+ * store-grant row-filter clamp (forced `where.store ∈ granted`, forced `store`
+ * stamp on create, blast-radius containment on update/delete) IS the tenant
+ * authorization. The collection's own `.access()` rules gate only the non-mini-app
+ * surface and must NOT additionally apply to the already-clamped guest call. This
+ * is sound ONLY because every dispatched call here passes through the clamp first.
+ */
+const DOCUMENT_STORE_SYSTEM_CONTEXT: { accessMode: "system" } = {
 	accessMode: "system",
 };
 
@@ -167,11 +193,18 @@ export interface MiniAppDispatchContext {
 	session: { user: { id: string }; session: Record<string, unknown> } | null;
 }
 
-/** Error thrown by the target on a host-side policy violation (G1/G3). */
+/** Error thrown by the target on a host-side policy violation (G1/G3/G4). */
 export class MiniAppBindingError extends Error {
 	constructor(
 		message: string,
-		readonly code: "out_of_scope" | "relation_forbidden" | "bad_args",
+		readonly code:
+			| "out_of_scope"
+			| "relation_forbidden"
+			| "bad_args"
+			/** A `document_store` row/where targets a store NOT granted (G4 row-filter). */
+			| "store_forbidden"
+			/** A non-document_store write to a collection with NO explicit write rule (G4). */
+			| "write_forbidden",
 	) {
 		super(message);
 		this.name = "MiniAppBindingError";
@@ -407,18 +440,198 @@ function assertNoRelationExpansion(
 	}
 }
 
+// ─────────────────── G4: the §7 document_store WRITE boundary ────────────────
+//
+// `document_store` is the namespaced jsonb record store (Decision 8 + §7). Every
+// guest CRUD here is confined to the run's GRANTED stores via a ROW-FILTER clamp
+// — a DIFFERENT mechanism from the G1 string-prefix path clamp. The store grants
+// come from `capabilities.data.stores`; the broker's coarse check already proved
+// SOME store carries the verb before dispatch, so an app with no store grants at
+// all never reaches these handlers. Here we narrow to the SPECIFIC granted stores.
+
+/** Resolve the set of `document_store` namespaces granted `verb` to this run. */
+function grantedStores(
+	stores: Record<string, Array<"read" | "write">> | undefined,
+	verb: "read" | "write",
+): string[] {
+	if (!stores) return [];
+	const out: string[] = [];
+	for (const name of Object.keys(stores)) {
+		// Own-property + array guard (prototype-safe; a `__proto__` key is inert).
+		if (!Object.prototype.hasOwnProperty.call(stores, name)) continue;
+		const grants = stores[name];
+		if (Array.isArray(grants) && grants.includes(verb)) out.push(name);
+	}
+	return out;
+}
+
+/** Meta/identity fields a guest may NEVER set or mutate on a `document_store` row. */
+const STORE_PROTECTED_FIELDS = new Set([
+	"id",
+	"createdAt",
+	"updatedAt",
+	"deletedAt",
+	"createdByApp",
+]);
+
 /**
- * NOTE: the G3 WRITE-side guards (reject a relation key smuggled into a `create`/
- * `update` payload, and the `update`/`delete` `where`-oracle) intentionally do NOT
- * live here yet. Guest collection writes are not dispatched at all until the §7
- * tenant-write boundary lands (the broker returns `not_implemented` for
- * create/update/delete and this target wires no write handler — see
- * `buildMiniAppBindingTarget`). When §7 is built, the write boundary must add the
- * relation-payload guard ALONGSIDE the row-filter clamp + meta/identity-field
- * rejection (`id`/`createdAt`/`updatedAt`/`deletedAt`/the namespace key) + blast-
- * radius containment — NOT the bare relation check alone.
- * See `.private/miniapps-v2-design.md` §7 + Decision 8.
+ * AND the guest `where` with a forced `{ store: { in: granted } }` containment so
+ * the call can NEVER read/update/delete a row in an ungranted store, regardless of
+ * what the guest passed. A `where` that references `store` itself is still ANDed
+ * with this clamp, so it can only NARROW within granted stores, never widen.
  */
+function clampStoreWhere(
+	where: unknown,
+	granted: string[],
+): Record<string, unknown> {
+	const storeFilter = { store: { in: granted } };
+	if (where === undefined || where === null) return storeFilter;
+	return { AND: [where, storeFilter] };
+}
+
+/** A plain object guard (rejects arrays / primitives) for guest-supplied args. */
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+	return !!v && typeof v === "object" && !Array.isArray(v);
+}
+
+/**
+ * Build the `document_store` accessor — the G4 row-filter store-grant clamp.
+ *
+ * Dispatched `accessMode:"system"` (via {@link DOCUMENT_STORE_SYSTEM_CONTEXT}): the
+ * store-grant clamp IS the tenant authorization, exactly as the G1 path clamp is
+ * for own-subtree files. The collection's own `.access()` rules gate only the
+ * non-mini-app surface, so they must NOT additionally apply here.
+ *
+ * @param appId - the app whose grants apply (also the `createdByApp` provenance).
+ * @param col - the real `document_store` CRUD accessor from `ctx.collections`.
+ * @param stores - the run's `capabilities.data.stores` (the granted namespaces).
+ */
+function buildDocumentStoreAccessor(
+	appId: string,
+	col: MiniAppBindingCtx["collections"][string],
+	stores: Record<string, Array<"read" | "write">> | undefined,
+): NonNullable<BindingTarget["collections"]>[string] {
+	const readStores = grantedStores(stores, "read");
+	const writeStores = grantedStores(stores, "write");
+
+	/** Reject `with`/`populate` (document_store has no relations → empty set). */
+	const guardArgs = (args: unknown) =>
+		assertNoRelationExpansion(args, new Set<string>());
+
+	const read = (find: NonNullable<typeof col.find>) => async (args: unknown) => {
+		if (readStores.length === 0) {
+			throw new MiniAppBindingError(
+				"document_store read denied: no store granted `read`",
+				"store_forbidden",
+			);
+		}
+		const a = isPlainObject(args) ? args : {};
+		guardArgs(a);
+		// Force the granted-store row filter (overriding any guest `store` in `where`).
+		const where = clampStoreWhere(a.where, readStores);
+		return find({ ...a, where }, DOCUMENT_STORE_SYSTEM_CONTEXT);
+	};
+
+	return {
+		find: col.find ? read(col.find) : undefined,
+		findOne: col.findOne ? read(col.findOne) : undefined,
+
+		create: col.create
+			? async (args: unknown) => {
+					if (!isPlainObject(args)) {
+						throw new MiniAppBindingError(
+							"document_store.create requires an object body",
+							"bad_args",
+						);
+					}
+					const store = args.store;
+					if (typeof store !== "string" || !writeStores.includes(store)) {
+						throw new MiniAppBindingError(
+							`document_store.create store "${String(store)}" is not granted ` +
+								`\`write\` (granted: ${writeStores.join(",") || "none"})`,
+							"store_forbidden",
+						);
+					}
+					if (typeof args.key !== "string" || args.key.length === 0) {
+						throw new MiniAppBindingError(
+							"document_store.create requires a string `key`",
+							"bad_args",
+						);
+					}
+					// Build a CLEAN row: only the four guest-owned fields. Any client
+					// `id`/`createdAt`/`createdByApp`/etc. is DROPPED (never spoofable);
+					// `createdByApp` is stamped to the writing app (provenance only).
+					const row = {
+						store,
+						key: args.key,
+						data: args.data ?? null,
+						createdByApp: appId,
+					};
+					return col.create!(row, DOCUMENT_STORE_SYSTEM_CONTEXT);
+				}
+			: undefined,
+
+		update: col.update
+			? async (args: unknown) => {
+					if (writeStores.length === 0) {
+						throw new MiniAppBindingError(
+							"document_store update denied: no store granted `write`",
+							"store_forbidden",
+						);
+					}
+					if (!isPlainObject(args)) {
+						throw new MiniAppBindingError(
+							"document_store.update requires { where, data }",
+							"bad_args",
+						);
+					}
+					guardArgs(args);
+					// Strip protected/identity fields AND `store` from the patch so an
+					// update can never move a row across stores or forge identity/provenance.
+					const patch = isPlainObject(args.data) ? args.data : {};
+					const data: Record<string, unknown> = {};
+					for (const [k, v] of Object.entries(patch)) {
+						if (STORE_PROTECTED_FIELDS.has(k) || k === "store") continue;
+						data[k] = v;
+					}
+					// Blast-radius containment: AND the where with the granted-store filter.
+					const where = clampStoreWhere(args.where, writeStores);
+					return col.update!({ where, data }, DOCUMENT_STORE_SYSTEM_CONTEXT);
+				}
+			: undefined,
+
+		delete: col.delete
+			? async (args: unknown) => {
+					if (writeStores.length === 0) {
+						throw new MiniAppBindingError(
+							"document_store delete denied: no store granted `write`",
+							"store_forbidden",
+						);
+					}
+					const a = isPlainObject(args) ? args : {};
+					guardArgs(a);
+					// Blast-radius containment: a broad/empty `where` can still only reach
+					// rows inside the granted stores.
+					const where = clampStoreWhere(a.where, writeStores);
+					return col.delete!({ where }, DOCUMENT_STORE_SYSTEM_CONTEXT);
+				}
+			: undefined,
+	};
+}
+
+/**
+ * Resolve whether collection `name` has its OWN explicit `.access()` rule for the
+ * write `op` (G4, the non-document_store path). Returns `true` ONLY when an
+ * explicit rule is declared — `false`/absent means the framework would fall back
+ * to the rule-less `!!session` default, which the synthesized app-principal
+ * satisfies (the WS-2 critical), so the write MUST be denied. Returning `false`
+ * when the rule set cannot be determined FAILS CLOSED. The live runner backs this
+ * with `app.getCollectionConfig(name).state.access[op]`.
+ */
+export type CollectionWriteRuleResolver = (
+	collectionName: string,
+	op: "create" | "update" | "delete",
+) => boolean;
 
 /** Own-property collection lookup (prototype-safe; never reaches up the chain). */
 function ownCollection(
@@ -437,25 +650,33 @@ function ownCollection(
  * The broker has ALREADY authenticated the per-run token and enforced the
  * manifest `capabilities` (default-deny) BEFORE it ever calls a handler here.
  * These handlers add the HOST-SIDE invariants the manifest cannot be trusted to
- * express (G1/G2/G3) and then perform the real primitive call via `ctx`.
+ * express (G1/G2/G3/G4) and then perform the real primitive call via `ctx`.
  *
  * @param appId - validated app identifier (the `{appId}` path segment).
  * @param ctx - the request app-context (or a structural double).
- * @param _capabilities - the run's declared scope. Accepted for signature
- *   symmetry with the broker/M5 and to document that enforcement is by-call; the
- *   per-glob/per-collection grant check is the broker's job, so this is not read
- *   here. The HOST bound (G1/G2/G3) is independent of it and always applied.
+ * @param capabilities - the run's declared scope. READ here for the G4 write
+ *   boundary: `data.stores` supplies the `document_store` namespaces granted to
+ *   this run (the row-filter clamp keys on them). The per-glob/per-collection
+ *   grant check itself is still the broker's job; the HOST bounds (G1/G2/G3) are
+ *   independent of it. A loose/absent value grants no stores (default-deny).
  * @param relationFieldsFor - resolves a collection's relation field names for the
  *   G3 `where`/`orderBy` guard. When omitted, OR when it returns `null` for a
  *   collection, the guard FAILS CLOSED (rejects any `where`/`orderBy` field
  *   reference on that collection). The live runner supplies a resolver backed by
  *   runtime collection metadata.
+ * @param collectionWriteRuleFor - resolves whether a NON-`document_store`
+ *   collection has its OWN explicit `.access()` rule for a write op (G4). A write
+ *   handler is wired ONLY when this returns `true`; absent/`false` ⇒ no write
+ *   handler ⇒ the broker fails closed (`not_implemented`), so the rule-less
+ *   `!!session` fallback can never be exploited (the WS-2 critical). When omitted,
+ *   NO non-document_store write is ever wired (the safe default).
  */
 export function buildMiniAppBindingTarget(
 	appId: string,
 	ctx: MiniAppBindingCtx,
-	_capabilities?: unknown,
+	capabilities?: unknown,
 	relationFieldsFor?: RelationFieldsResolver,
+	collectionWriteRuleFor?: CollectionWriteRuleResolver,
 ): BindingTarget {
 	// Defense-in-depth: never build a tenant scope / principal from a malformed
 	// `appId` (the route validates via `resolveApp`, but M5/cron reuse this helper).
@@ -465,6 +686,17 @@ export function buildMiniAppBindingTarget(
 		accessMode: "user",
 		session: principal,
 	};
+
+	// The run's granted `document_store` namespaces (G4). Read defensively — a
+	// non-object capabilities value yields no stores (default-deny).
+	const storeGrants =
+		capabilities && typeof capabilities === "object"
+			? (capabilities as { data?: { stores?: unknown } }).data?.stores
+			: undefined;
+	const stores =
+		storeGrants && typeof storeGrants === "object"
+			? (storeGrants as Record<string, Array<"read" | "write">>)
+			: undefined;
 
 	const files: NonNullable<BindingTarget["files"]> = {
 		async read(args: unknown) {
@@ -552,27 +784,20 @@ export function buildMiniAppBindingTarget(
 		},
 	};
 
-	// Per-collection surface — READS ONLY (`find|findOne`). The broker dispatches
-	// only the read half; each accessor adds the HOST-SIDE invariants the manifest
-	// cannot express: user-mode + the run's non-privileged principal (G2 — NEVER
-	// system) and the relation guard (G3 — `where`/`orderBy`/relation-expansion).
-	//
-	// WRITES (`create|update|delete`) are DELIBERATELY NOT wired here. A generic
-	// collection write has NO §7 tenant-write boundary yet (no `document_store`, no
-	// `store`-grant row-filter clamp, no force-stamp / reject-client-`id`/`app`/
-	// `createdAt` guard, no blast-radius containment on the update/delete `where`).
-	// Without that clamp a granted, write-rule-less collection would be fully
-	// writable/deletable by the synthesized app-principal (the framework access
-	// fallback for an absent write rule is `!!session`, which the principal
-	// satisfies; and CRUD field-write-access intentionally SKIPS the `id/createdAt/
-	// updatedAt/deletedAt` meta fields, so the host must reject those itself). So
-	// the write half fails closed at TWO layers: the broker returns
-	// `not_implemented` for create/update/delete BEFORE dispatch, and this target
-	// exposes no write handler for it to reach. Re-enable both together ONLY when
-	// the §7 write boundary lands with its own adversarial pass — wiring the
-	// payload/meta-stamp clamp + blast-radius containment, NOT the bare
-	// pass-through that shipped here before.
-	// See `.private/miniapps-v2-design.md` §7 + Decision 8.
+	// Per-collection surface. Reads (`find|findOne`) carry the HOST-SIDE invariants
+	// the manifest cannot express: user-mode + the run's non-privileged principal
+	// (G2 — NEVER system) and the relation guard (G3 — `where`/`orderBy`/relation-
+	// expansion). WRITES (`create|update|delete`) are the G4 §7 write boundary
+	// (Decision 8) and are wired ONLY through a SAFE path:
+	//   • `document_store` → the row-filter store-grant clamp ({@link
+	//     buildDocumentStoreAccessor}, system-mode, the clamp IS the authorization).
+	//   • an OTHER collection → ONLY when `collectionWriteRuleFor` proves it has its
+	//     OWN explicit `.access()` write rule (user-mode + the app-principal, so the
+	//     collection's rule actually gates it). A rule-less collection gets NO write
+	//     handler → the broker fails closed (`not_implemented`) → the `!!session`
+	//     fallback (which the synthesized app-principal satisfies) is NEVER reached.
+	//     The G3 guards also apply: reject `with`/`populate` + a relation `where`/
+	//     `orderBy` on the create payload / update-delete where.
 	//
 	// IMPORTANT: this is a PLAIN object with OWN properties — NOT a Proxy. The
 	// broker gates dispatch with `Object.prototype.hasOwnProperty.call(cols, name)`
@@ -580,22 +805,47 @@ export function buildMiniAppBindingTarget(
 	// not its `get`/`has` traps; a bare Proxy would report no own keys and the
 	// broker would never dispatch. We build a null-prototype map of own keys so the
 	// hasOwnProperty gate passes for real collections and nothing leaks up a chain.
-	const collections = Object.create(null) as Record<
-		string,
-		{
-			find?: (args: unknown) => Promise<unknown>;
-			findOne?: (args: unknown) => Promise<unknown>;
-		}
+	const collections = Object.create(null) as NonNullable<
+		BindingTarget["collections"]
 	>;
 	for (const name of Object.keys(ctx.collections)) {
 		const col = ownCollection(ctx.collections, name);
 		if (!col) continue;
+
+		// `document_store` gets the dedicated G4 row-filter store-grant accessor
+		// (its own read+write clamp), NOT the generic per-collection read accessor.
+		if (name === DOCUMENT_STORE_COLLECTION) {
+			collections[name] = buildDocumentStoreAccessor(appId, col, stores);
+			continue;
+		}
+
 		// Resolve the collection's relation field set ONCE (closed over below). A
 		// missing resolver or an unresolved set (`null`) makes the G3 guard fail
 		// closed for this collection.
 		const relationFields: Set<string> | null = relationFieldsFor
 			? relationFieldsFor(name)
 			: null;
+
+		/** Wire a write op ONLY if the collection has an explicit `.access()` rule. */
+		const wireWrite = (
+			op: "create" | "update" | "delete",
+			fn: ((args: unknown, ctx?: unknown) => Promise<unknown>) | undefined,
+		) => {
+			if (!fn) return undefined;
+			if (!collectionWriteRuleFor || !collectionWriteRuleFor(name, op)) {
+				// No explicit write rule → DENY (fail closed): leaving it unwired makes
+				// the broker return `not_implemented`, so the rule-less `!!session`
+				// fallback can never make a write-rule-less collection writable.
+				return undefined;
+			}
+			return async (args: unknown) => {
+				// G3 write-side guard: reject relation expansion / a relation `where`/
+				// `orderBy` smuggled into the write args (same oracle surface as reads).
+				assertNoRelationExpansion(args, relationFields);
+				return fn(args ?? {}, dispatchContext);
+			};
+		};
+
 		collections[name] = {
 			// Reads (G2 user-mode + G3 `where`/`orderBy`/relation-expansion guard).
 			find: col.find
@@ -610,11 +860,15 @@ export function buildMiniAppBindingTarget(
 						return col.findOne!(args ?? {}, dispatchContext);
 					}
 				: undefined,
+			// Writes (G4 — wired only with an explicit access rule; user-mode + G3).
+			create: wireWrite("create", col.create),
+			update: wireWrite("update", col.update),
+			delete: wireWrite("delete", col.delete),
 		};
 	}
 
 	return {
 		files,
-		collections: collections as NonNullable<BindingTarget["collections"]>,
+		collections,
 	};
 }

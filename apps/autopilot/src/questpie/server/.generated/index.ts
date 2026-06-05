@@ -18,6 +18,7 @@ import _coll_admin_audit_log from "../collections/admin-audit-log";
 import _coll_assets from "../collections/assets";
 import { chatMessages as _coll_chat_messages } from "../collections/chat-messages";
 import { chatSessions as _coll_chat_sessions } from "../collections/chat-sessions";
+import _coll_document_store from "../collections/document-store";
 import { environments as _coll_environments } from "../collections/environments";
 import { models as _coll_models } from "../collections/models";
 import { projects as _coll_projects } from "../collections/projects";
@@ -177,6 +178,7 @@ export type AppCollections = _ModuleCollections & {
 	assets: typeof _coll_assets;
 	chat_messages: typeof _coll_chat_messages;
 	chat_sessions: typeof _coll_chat_sessions;
+	document_store: typeof _coll_document_store;
 	environments: typeof _coll_environments;
 	models: typeof _coll_models;
 	projects: typeof _coll_projects;
@@ -451,6 +453,7 @@ export const app = await createApp(
 			assets: _coll_assets,
 			chat_messages: _coll_chat_messages,
 			chat_sessions: _coll_chat_sessions,
+			document_store: _coll_document_store,
 			environments: _coll_environments,
 			models: _coll_models,
 			projects: _coll_projects,

@@ -183,11 +183,62 @@ const COLLECTION_OP_VERB: Record<
 	delete: "delete",
 };
 
+/**
+ * The `document_store` collection name. Its capability is the per-namespace
+ * `data.stores` axis (Decision 8), NOT a blanket `data.collections.document_store`
+ * grant — so it is gated separately (see {@link checkCollection}). A read op
+ * needs SOME store granted `read`; a write op needs SOME store granted `write`.
+ * The broker's row-filter clamp then confines the call to the SPECIFIC granted
+ * stores (`mini-app-bindings.ts`). This coarse gate just rejects an app with NO
+ * store grants at all before any dispatch.
+ */
+export const DOCUMENT_STORE_COLLECTION = "document_store";
+
+/** Map a `document_store` op to the per-store verb (`read` | `write`) it requires. */
+const STORE_OP_VERB: Record<
+	Extract<ParsedBindingMethod, { kind: "collection" }>["op"],
+	"read" | "write"
+> = {
+	find: "read",
+	findOne: "read",
+	create: "write",
+	update: "write",
+	delete: "write",
+};
+
+/** True if ANY store in `data.stores` grants `verb` (the coarse document_store gate). */
+function anyStoreGrants(
+	stores: Record<string, Array<"read" | "write">> | undefined,
+	verb: "read" | "write",
+): boolean {
+	if (!stores) return false;
+	for (const name of Object.keys(stores)) {
+		const grants = ownGrants(stores, name);
+		if (grants?.includes(verb)) return true;
+	}
+	return false;
+}
+
 /** Decide a parsed `collections.<name>.<op>` call. */
 function checkCollection(
 	parsed: Extract<ParsedBindingMethod, { kind: "collection" }>,
 	caps: ExecutorCapabilities,
 ): CapabilityDecision {
+	// `document_store` is gated by the per-namespace `data.stores` axis, not by a
+	// blanket `data.collections.document_store` grant (Decision 8). The coarse
+	// check here: does ANY granted store carry the required verb? The broker's
+	// row-filter clamp narrows to the specific granted stores after this passes.
+	if (parsed.name === DOCUMENT_STORE_COLLECTION) {
+		const verb = STORE_OP_VERB[parsed.op];
+		if (!anyStoreGrants(caps.data?.stores, verb)) {
+			return deny(
+				`document_store op "${parsed.op}" requires a store granted "${verb}" ` +
+					"in data.stores (default-deny)",
+			);
+		}
+		return ALLOW;
+	}
+
 	const grants = ownGrants(caps.data?.collections, parsed.name);
 	if (!grants || grants.length === 0) {
 		return deny(`collection "${parsed.name}" not in data scope`);
