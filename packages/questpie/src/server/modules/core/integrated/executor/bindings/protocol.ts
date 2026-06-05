@@ -27,7 +27,7 @@
  * so the wire protocol stays a flat `{ method, args }`.
  *
  * ENFORCED + DISPATCHED (the READ surface):
- *   - `knowledge.read` | `knowledge.write` | `knowledge.list`
+ *   - `files.read` | `files.write` | `files.list`
  *   - `collections.<name>.find|findOne`
  *   - `globals.<name>.get`
  *
@@ -47,7 +47,7 @@ export type BindingMethod = string;
 
 /** A parsed binding method, classified by primitive family. */
 export type ParsedBindingMethod =
-	| { kind: "knowledge"; op: "read" | "write" | "list" }
+	| { kind: "files"; op: "read" | "write" | "list" }
 	| {
 			kind: "collection";
 			name: string;
@@ -151,7 +151,7 @@ export type BrokerRpcResponse =
  * consult capabilities (that is {@link checkBindingCapability}'s job).
  *
  * Grammar (segments split on `.`):
- *   knowledge.(read|write|list)
+ *   files.(read|write|list)
  *   collections.<name>.(find|findOne|create|update|delete)
  *   globals.<name>.(get|set)
  *   services.<name>.<fn>
@@ -170,11 +170,11 @@ export function parseBindingMethod(method: string): ParsedBindingMethod | null {
 
 	const [head, ...rest] = parts;
 
-	if (head === "knowledge") {
+	if (head === "files") {
 		if (rest.length !== 1) return null;
 		const op = rest[0];
 		if (op === "read" || op === "write" || op === "list") {
-			return { kind: "knowledge", op };
+			return { kind: "files", op };
 		}
 		return null;
 	}

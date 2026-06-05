@@ -30,7 +30,7 @@ export type ExecutorIsolation = "trusted" | "sandboxed";
  * Capability manifest for one execution. `net` and `import` are INDEPENDENT
  * egress axes (fetch vs module-import; Deno enforces them separately).
  *
- * `data` / `services` / `jobs` / `workflows` / `knowledge` declare the app-API
+ * `data` / `services` / `jobs` / `workflows` / `files` declare the app-API
  * surface the guest may touch. These are TYPED here but ENFORCED by the later
  * bindings-broker task (`sandbox-app-bindings-broker`) — M2 does not enforce
  * them. The sandbox engine in M2 enforces only `net`, `import`, `timeoutMs`,
@@ -42,8 +42,8 @@ export interface ExecutorCapabilities {
 	/** Module-import host allowlist (`host[:port]`). Empty/omitted = no remote imports. */
 	import?: string[];
 
-	/** Knowledge (file-as-DB) scoped path globs. Declared now; broker-enforced later. */
-	knowledge?: {
+	/** Files (file-as-DB) scoped path globs. Declared now; broker-enforced later. */
+	files?: {
 		read?: string[];
 		write?: string[];
 	};
@@ -86,7 +86,7 @@ export interface ExecutorRunOptions {
 	bindings?: Record<string, unknown>;
 	/**
 	 * UNTRUSTED app-bindings target — the capability-scoped primitive surface
-	 * (`{ knowledge, collections, … }`, mirroring `buildCodeModeApi`) the guest's
+	 * (`{ files, collections, … }`, mirroring `buildCodeModeApi`) the guest's
 	 * `globalThis.questpie` proxy resolves to via the broker. ONLY meaningful for
 	 * `isolation: "sandboxed"`: when present, `ExecutorService.run` mints a per-run
 	 * scoped token bound to (`capabilities`, this target) and the supervisor brokers

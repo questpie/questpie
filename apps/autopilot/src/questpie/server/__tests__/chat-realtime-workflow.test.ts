@@ -14,7 +14,7 @@ import { activity } from "../collections/activity";
 import { chatMessages } from "../collections/chat-messages";
 import { chatSessions } from "../collections/chat-sessions";
 import { environments } from "../collections/environments";
-import { knowledge } from "../collections/knowledge";
+import assets from "../collections/assets";
 import { models } from "../collections/models";
 import { projects } from "../collections/projects";
 import { providers } from "../collections/providers";
@@ -278,7 +278,7 @@ describe("chat realtime workflow contract", () => {
 					chat_messages: chatMessages,
 					chat_sessions: chatSessions,
 					environments,
-					knowledge,
+					assets,
 					models,
 					projects,
 					providers,
@@ -738,7 +738,7 @@ describe("chat realtime workflow contract", () => {
 				where: { id: chat.message.id },
 			});
 			expect(completedMessage?.runStatus).toBe("completed");
-			const resources = await app.collections.knowledge.find({
+			const resources = await app.collections.assets.find({
 				where: { run: chat.runId },
 				limit: 10,
 			});

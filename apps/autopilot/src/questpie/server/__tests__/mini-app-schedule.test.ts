@@ -32,7 +32,7 @@ const MANIFEST = {
 	entry: "server.ts",
 	capabilities: {
 		data: { collections: { posts: ["read"] } },
-		knowledge: {
+		files: {
 			read: [`${PREFIX}data/**`],
 			write: [`${PREFIX}data/**`],
 		},
@@ -112,7 +112,7 @@ function buildCtx(opts: {
 			}),
 		},
 		collections: {
-			knowledge: {
+			assets: {
 				async find({ where }: { where: { path: { startsWith: string } } }) {
 					const prefix = where.path.startsWith;
 					return { docs: opts.rows.filter((r) => r.path.startsWith(prefix)) };
@@ -194,10 +194,10 @@ describe("triggerAppSchedule", () => {
 				.data?.collections,
 		).toHaveProperty("posts");
 		const target = call.appBindings as {
-			knowledge?: object;
+			files?: object;
 			collections?: object;
 		};
-		expect(target.knowledge).toBeTruthy();
+		expect(target.files).toBeTruthy();
 		expect(target.collections).toBeTruthy();
 		// broker URL comes from CONFIG, never the request (a cron has no request).
 		expect(call.brokerUrl).toBe("http://127.0.0.1:3000/api/sandbox/rpc");
@@ -307,7 +307,7 @@ describe("triggerAppSchedule", () => {
 			target: call.appBindings as never,
 		});
 		// another app's _app/ is rejected (host bound forbids escaping the subtree).
-		const evil = await broker.handleRpc(token, "knowledge.write", {
+		const evil = await broker.handleRpc(token, "files.write", {
 			path: "company/apps/other/_app/manifest.json",
 			body: "x",
 		});

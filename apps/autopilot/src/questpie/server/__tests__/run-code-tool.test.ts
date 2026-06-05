@@ -16,7 +16,7 @@ import { activity } from "../collections/activity";
 import { chatMessages } from "../collections/chat-messages";
 import { chatSessions } from "../collections/chat-sessions";
 import { environments } from "../collections/environments";
-import { knowledge } from "../collections/knowledge";
+import assets from "../collections/assets";
 import { models } from "../collections/models";
 import { projects } from "../collections/projects";
 import { providers } from "../collections/providers";
@@ -73,7 +73,7 @@ describe.skipIf(!isBun)("run_code code-mode tool (trusted executor path)", () =>
 				chat_messages: chatMessages,
 				chat_sessions: chatSessions,
 				environments,
-				knowledge,
+				assets,
 				models,
 				projects,
 				providers,
@@ -138,13 +138,13 @@ describe.skipIf(!isBun)("run_code code-mode tool (trusted executor path)", () =>
 				"  const titles = tasks.docs.map((t) => t.title);",
 				"  console.log('found', titles.length, 'tasks');",
 				"  const lines = titles.map((t, i) => `${i + 1}. ${t}`).join('\\n');",
-				"  await q.knowledge.write({",
+				"  await q.files.write({",
 				"    path: 'company/digests/backlog.md',",
 				"    title: 'Backlog digest',",
 				"    content: `# Backlog\\n${lines}`,",
 				"    scope: { scope_type: 'company' },",
 				"  });",
-				"  const back = await q.knowledge.read({ path: 'company/digests/backlog.md', scope: { scope_type: 'company' } });",
+				"  const back = await q.files.read({ path: 'company/digests/backlog.md', scope: { scope_type: 'company' } });",
 				"  console.log('wrote digest at', back.path);",
 				"  return { count: titles.length, titles, digestPath: back.path };",
 				"}",
@@ -176,10 +176,10 @@ describe.skipIf(!isBun)("run_code code-mode tool (trusted executor path)", () =>
 				"log: wrote digest at company/digests/backlog.md",
 			]);
 
-			// The side effect (knowledge write) actually persisted via the real ctx.
-			const stored = await app.collections.knowledge.findOne({
+			// The side effect (file write) actually persisted via the real ctx.
+			const stored = (await app.collections.assets.findOne({
 				where: { path: "company/digests/backlog.md" },
-			});
+			})) as { body?: string; sourceRef?: string } | null;
 			expect(stored?.body).toBe("# Backlog\n1. Fix login bug\n2. Ship onboarding");
 			expect(stored?.sourceRef).toBe("system");
 		} finally {

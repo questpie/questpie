@@ -56,12 +56,12 @@ export default seed({
 
 		const ensureKnowledge = async (entry: Record<string, unknown>) => {
 			const existing = await findFirst(
-				collections.knowledge,
+				collections.assets,
 				{ path: entry.path },
 				ctx,
 			);
 			if (existing) return existing;
-			return collections.knowledge.create(entry as any, ctx);
+			return collections.assets.create(entry as any, ctx);
 		};
 
 		log("Creating Autopilot coverage projects...");

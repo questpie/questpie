@@ -50,7 +50,7 @@ export default seed({
 			"",
 			"Creation should happen through product actions: prompt-driven AI issue creation and a manual Linear-like issue creator.",
 		].join("\n");
-		await collections.knowledge.create(
+		await collections.assets.create(
 			{
 				title: "Autopilot product model",
 				path: "company/autopilot/product-model",

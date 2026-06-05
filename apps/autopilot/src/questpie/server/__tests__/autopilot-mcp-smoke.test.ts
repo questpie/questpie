@@ -16,7 +16,7 @@ import { activity } from "../collections/activity";
 import { chatMessages } from "../collections/chat-messages";
 import { chatSessions } from "../collections/chat-sessions";
 import { environments } from "../collections/environments";
-import { knowledge } from "../collections/knowledge";
+import assets from "../collections/assets";
 import { models } from "../collections/models";
 import { projects } from "../collections/projects";
 import { providers } from "../collections/providers";
@@ -136,7 +136,7 @@ describe("Autopilot MCP smoke", () => {
 				chat_messages: chatMessages,
 				chat_sessions: chatSessions,
 				environments,
-				knowledge,
+				assets,
 				models,
 				projects,
 				providers,
@@ -290,8 +290,8 @@ describe("Autopilot MCP smoke", () => {
 			expect(artifactResult.isError).toBeUndefined();
 			const artifactId = (artifactResult.structuredContent as any).id as string;
 			expect(artifactId).toBeTruthy();
-			const resource = await app.collections.knowledge.findOne({
-				where: { id: artifactId },
+			const resource = await app.collections.assets.findOne({
+				where: { id: artifactId } as any,
 			});
 			expect(resource).toMatchObject({
 				title: "note.md",
@@ -606,9 +606,11 @@ describe("Autopilot MCP smoke", () => {
 			});
 			expect(written.isError).toBeUndefined();
 			const resourceId = (written.structuredContent as any).id as string;
-			const stored = await app.collections.knowledge.findOne({
-				where: { id: resourceId },
-			});
+			const stored = (await app.collections.assets.findOne({
+				where: { id: resourceId } as any,
+			})) as
+				| { scopeType?: string; project?: unknown; sourceRef?: string }
+				| null;
 			expect(stored?.scopeType).toBe("project");
 			expect(relationId(stored?.project)).toBe(project.id);
 			expect(stored?.sourceRef).toBe("system");
@@ -633,7 +635,9 @@ describe("Autopilot MCP smoke", () => {
 			});
 			expect((deleted.structuredContent as any).deleted).toBe(true);
 			expect(
-				await app.collections.knowledge.findOne({ where: { id: resourceId } }),
+				await app.collections.assets.findOne({
+					where: { id: resourceId } as any,
+				}),
 			).toBeFalsy();
 		} finally {
 			await close();

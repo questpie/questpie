@@ -11,10 +11,10 @@ import {
 import { scanExports } from "../apps/export-scan";
 import { parseAppManifest } from "../apps/manifest";
 
-/** In-memory Knowledge double: `find` filters seeded rows by path prefix. */
+/** In-memory `assets` double: `find` filters seeded rows by path prefix. */
 function knowledgeDouble(rows: KnowledgeRecordLike[]): AppResolverCollections {
 	return {
-		knowledge: {
+		assets: {
 			async find({ where }) {
 				const prefix = where.path.startsWith;
 				return {
@@ -37,7 +37,7 @@ const VALID_MANIFEST = {
 			collections: { posts: ["read", "create", "update"], orders: ["read"] },
 			globals: { settings: ["read"] },
 		},
-		knowledge: {
+		files: {
 			read: ["company/apps/social/data/**"],
 			write: ["company/apps/social/data/**"],
 		},

@@ -40,7 +40,7 @@ import {
  * handler never widens access.
  */
 export interface BindingTarget {
-	knowledge?: {
+	files?: {
 		read?(args: unknown): Promise<unknown>;
 		write?(args: unknown): Promise<unknown>;
 		list?(args: unknown): Promise<unknown>;
@@ -238,12 +238,12 @@ export class SandboxBroker {
 		args: unknown,
 		target: BindingTarget,
 	): Promise<BrokerRpcResponse> {
-		if (parsed.kind === "knowledge") {
-			const fn = target.knowledge?.[parsed.op];
+		if (parsed.kind === "files") {
+			const fn = target.files?.[parsed.op];
 			if (!fn) {
 				return brokerError(
 					"not_implemented",
-					`knowledge.${parsed.op} has no host handler`,
+					`files.${parsed.op} has no host handler`,
 				);
 			}
 			return { ok: true, value: await fn(args ?? {}) };

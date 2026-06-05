@@ -10,7 +10,7 @@ export default mcpConfig({
 			tasks: { read: true, write: true },
 			task_relations: { read: true, write: true },
 			run_links: { read: true },
-			knowledge: { read: true, write: true, delete: true },
+			assets: { read: true, write: true, delete: true },
 			chat_sessions: { read: true },
 			chat_messages: { read: true },
 			schedules: { read: true, write: true },

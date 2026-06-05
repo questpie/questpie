@@ -75,6 +75,17 @@ export interface KnowledgeResourceRecord {
 	metadata: Record<string, unknown> | null;
 }
 
+/**
+ * A created/updated `assets` row as returned by the create helpers. Typed
+ * explicitly (`id` + open record) because the unified `assets` collection's
+ * generated row type collapses to `{}` for consumers — `assets` is defined by
+ * BOTH the admin module and this app, and codegen intersects the two
+ * (`_ModuleCollections["assets"] & typeof _coll_assets`), which erases field
+ * inference. Annotating the service return restores `.id` (and the row) for the
+ * artifact/MCP callers without each one re-casting the collapsed result.
+ */
+export type KnowledgeRowResult = { id: string } & Record<string, unknown>;
+
 /** Single entry returned by a by-prefix listing. */
 export interface KnowledgeResourceEntry {
 	path: string;
@@ -105,16 +116,16 @@ export interface WriteResourceByPathInput {
  * their own host-side path authorization (the mini-app bindings clamp every path
  * to the app's own subtree BEFORE calling — see
  * `apps/mini-app-bindings.ts` G1). Such a caller passes `accessMode:"system"` so
- * the `knowledge` collection's user-access rule does NOT additionally gate the
- * already-clamped own-data access.
+ * the `assets` collection's per-row visibility read rule does NOT additionally
+ * gate the already-clamped own-data access.
  *
  * Omitting it (the default) preserves the previous behavior exactly: the
- * underlying `collections.knowledge.*` calls inherit `accessMode`/`session` from
+ * underlying `collections.assets.*` calls inherit `accessMode`/`session` from
  * the surrounding `runWithContext` (ALS) scope. A `system` mode is ONLY ever
  * sound when the caller has independently authorized the exact path.
  *
  * Structurally a partial CRUD/request context (all fields optional, extra keys
- * allowed) so it threads straight into `collections.knowledge.*`; in practice
+ * allowed) so it threads straight into `collections.assets.*`; in practice
  * only `accessMode` is set here.
  */
 export interface KnowledgeByPathContext {
@@ -221,12 +232,14 @@ export default service({
 			normalizePath: normalizeKnowledgePath,
 			hashContent,
 
-			async createTextResource(input: CreateTextResourceInput) {
+			async createTextResource(
+				input: CreateTextResourceInput,
+			): Promise<KnowledgeRowResult> {
 				const path = normalizeKnowledgePath(input.path);
 				const scopeType = validateScope(input);
 				const contentHash = hashContent(input.body);
 
-				return collections.knowledge.create({
+				return (await collections.assets.create({
 					title: input.title ?? basename(path),
 					path,
 					scopeType,
@@ -241,7 +254,7 @@ export default service({
 					sourceRef: input.sourceRef ?? undefined,
 					contentHash,
 					metadata: (input.metadata ?? undefined) as any,
-				} as any);
+				} as any)) as KnowledgeRowResult;
 			},
 
 			/**
@@ -254,7 +267,7 @@ export default service({
 				context?: KnowledgeByPathContext,
 			): Promise<KnowledgeResourceRecord | null> {
 				const path = normalizeKnowledgePath(rawPath);
-				const resource = await collections.knowledge.findOne(
+				const resource = await collections.assets.findOne(
 					{ where: { path } },
 					context,
 				);
@@ -285,7 +298,7 @@ export default service({
 			): Promise<KnowledgeResourceRecord> {
 				const path = normalizeKnowledgePath(input.path);
 				const contentHash = hashContent(input.body);
-				const existing = await collections.knowledge.findOne(
+				const existing = await collections.assets.findOne(
 					{ where: { path } },
 					context,
 				);
@@ -307,14 +320,14 @@ export default service({
 				};
 
 				const saved = existing
-					? await collections.knowledge.updateById(
+					? await collections.assets.updateById(
 							{
 								id: (existing as Record<string, unknown>).id as string,
 								data: data as any,
 							},
 							context,
 						)
-					: await collections.knowledge.create(data as any, context);
+					: await collections.assets.create(data as any, context);
 
 				const row = saved as Record<string, unknown>;
 				return {
@@ -342,7 +355,7 @@ export default service({
 				prefix: string,
 				context?: KnowledgeByPathContext,
 			): Promise<KnowledgeResourceEntry[]> {
-				const result = await collections.knowledge.find(
+				const result = await collections.assets.find(
 					{
 						where: { path: { startsWith: prefix } },
 						limit: 1000,

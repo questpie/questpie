@@ -37,7 +37,7 @@ interface KnowledgeCtxArg {
  * In-memory `knowledgeResource`-shaped service over an array of rows.
  *
  * It MODELS THE REAL ACCESS-CONTROL GATE the live `knowledgeResource` hits: its
- * underlying `collections.knowledge.*` calls run under the context it is handed,
+ * underlying `collections.assets.*` calls run under the context it is handed,
  * and the shared `knowledge` collection has NO public `read`/`write` rule — so a
  * `user`-mode call (the run's invoker / synthesized app-principal) is DENIED,
  * while a `system`-mode call (the mini-app bindings, AFTER the G1 clamp) is
@@ -280,7 +280,7 @@ describe("G1: broker dispatch is clamped to the tenant subtree", () => {
 	 * to read+write ANY knowledge path. The HOST bound must clamp it regardless.
 	 */
 	const HOSTILE_CAPS = {
-		knowledge: { read: ["**"], write: ["**"] },
+		files: { read: ["**"], write: ["**"] },
 		data: { collections: { posts: ["read"] as Array<"read"> } },
 	};
 
@@ -295,7 +295,7 @@ describe("G1: broker dispatch is clamped to the tenant subtree", () => {
 
 	it("writing its OWN data/ file succeeds", async () => {
 		const { knowledge, broker, token } = wire();
-		const res = await broker.handleRpc(token, "knowledge.write", {
+		const res = await broker.handleRpc(token, "files.write", {
 			path: `${PREFIX}data/foo.json`,
 			body: '{"ok":true}',
 		});
@@ -307,7 +307,7 @@ describe("G1: broker dispatch is clamped to the tenant subtree", () => {
 
 	it("writing ANOTHER app's _app/manifest.json is REJECTED (clamped)", async () => {
 		const { knowledge, broker, token } = wire();
-		const res = await broker.handleRpc(token, "knowledge.write", {
+		const res = await broker.handleRpc(token, "files.write", {
 			path: "company/apps/other/_app/manifest.json",
 			body: "HOSTILE",
 		});
@@ -318,7 +318,7 @@ describe("G1: broker dispatch is clamped to the tenant subtree", () => {
 
 	it("writing company-wide secrets is REJECTED (clamped)", async () => {
 		const { knowledge, broker, token } = wire();
-		const res = await broker.handleRpc(token, "knowledge.write", {
+		const res = await broker.handleRpc(token, "files.write", {
 			path: "company/secrets/x",
 			body: "HOSTILE",
 		});
@@ -328,7 +328,7 @@ describe("G1: broker dispatch is clamped to the tenant subtree", () => {
 
 	it("writing its OWN _app/ (code/manifest) is REJECTED (data-only)", async () => {
 		const { knowledge, broker, token } = wire();
-		const res = await broker.handleRpc(token, "knowledge.write", {
+		const res = await broker.handleRpc(token, "files.write", {
 			path: `${PREFIX}_app/manifest.json`,
 			body: "HOSTILE",
 		});
@@ -356,13 +356,13 @@ describe("G1: broker dispatch is clamped to the tenant subtree", () => {
 			},
 		]);
 
-		const own = await broker.handleRpc(token, "knowledge.read", {
+		const own = await broker.handleRpc(token, "files.read", {
 			path: `${PREFIX}data/posts.json`,
 		});
 		expect(own.ok).toBe(true);
 		expect(own.ok && (own.value as { body: string }).body).toBe("[1,2]");
 
-		const other = await broker.handleRpc(token, "knowledge.read", {
+		const other = await broker.handleRpc(token, "files.read", {
 			path: "company/apps/other/data/secret.json",
 		});
 		expect(other.ok).toBe(false);
@@ -383,7 +383,7 @@ describe("G1: broker dispatch is clamped to the tenant subtree", () => {
 
 describe("knowledge: own-subtree authorized via the G1 clamp (system-mode dispatch)", () => {
 	const CAPS = {
-		knowledge: { read: ["**"], write: ["**"] },
+		files: { read: ["**"], write: ["**"] },
 	};
 	function wire(seed: KnowledgeRow[] = []) {
 		const knowledge = makeKnowledgeResource(seed);
@@ -411,7 +411,7 @@ describe("knowledge: own-subtree authorized via the G1 clamp (system-mode dispat
 				metadata: null,
 			},
 		]);
-		const res = await broker.handleRpc(token, "knowledge.read", {
+		const res = await broker.handleRpc(token, "files.read", {
 			path: `${PREFIX}data/posts.json`,
 		});
 		expect(res.ok).toBe(true);
@@ -424,7 +424,7 @@ describe("knowledge: own-subtree authorized via the G1 clamp (system-mode dispat
 
 	it("write of OWN clamped path PERSISTS under system-mode", async () => {
 		const { knowledge, broker, token } = wire();
-		const res = await broker.handleRpc(token, "knowledge.write", {
+		const res = await broker.handleRpc(token, "files.write", {
 			path: `${PREFIX}data/foo.json`,
 			body: '{"ok":true}',
 		});
@@ -448,7 +448,7 @@ describe("knowledge: own-subtree authorized via the G1 clamp (system-mode dispat
 				metadata: null,
 			},
 		]);
-		const res = await broker.handleRpc(token, "knowledge.list", {
+		const res = await broker.handleRpc(token, "files.list", {
 			path: `${PREFIX}data`,
 		});
 		expect(res.ok).toBe(true);
@@ -460,7 +460,7 @@ describe("knowledge: own-subtree authorized via the G1 clamp (system-mode dispat
 
 	it("OUT-OF-SCOPE read is rejected by the CLAMP and NEVER reaches the primitive", async () => {
 		const { knowledge, broker, token } = wire();
-		const res = await broker.handleRpc(token, "knowledge.read", {
+		const res = await broker.handleRpc(token, "files.read", {
 			path: "company/apps/other/data/secret.json",
 		});
 		expect(res.ok).toBe(false);
@@ -470,11 +470,11 @@ describe("knowledge: own-subtree authorized via the G1 clamp (system-mode dispat
 
 	it("`..` traversal + own `_app/` write are clamp-rejected before any system-mode call", async () => {
 		const { knowledge, broker, token } = wire();
-		const traversal = await broker.handleRpc(token, "knowledge.read", {
+		const traversal = await broker.handleRpc(token, "files.read", {
 			path: `${PREFIX}../other/x.json`,
 		});
 		expect(traversal.ok).toBe(false);
-		const appWrite = await broker.handleRpc(token, "knowledge.write", {
+		const appWrite = await broker.handleRpc(token, "files.write", {
 			path: `${PREFIX}_app/manifest.json`,
 			body: "HOSTILE",
 		});
@@ -810,14 +810,14 @@ describe("defense in depth: broker capability check fires before the host bound"
 		const ctx = makeCtx({ knowledge });
 		// manifest only allows writing under data/reports/, host bound allows all data/.
 		const caps = {
-			knowledge: { write: [`${PREFIX}data/reports/**`] },
+			files: { write: [`${PREFIX}data/reports/**`] },
 		};
 		const target = buildMiniAppBindingTarget(APP, ctx, caps);
 		const broker = new SandboxBroker();
 		const { token } = broker.mint({ capabilities: caps, target });
 
 		// in-bound but not in the manifest glob → broker forbids.
-		const res = await broker.handleRpc(token, "knowledge.write", {
+		const res = await broker.handleRpc(token, "files.write", {
 			path: `${PREFIX}data/other.json`,
 			body: "x",
 		});
@@ -826,7 +826,7 @@ describe("defense in depth: broker capability check fires before the host bound"
 		expect(knowledge.rows.length).toBe(0);
 
 		// in the manifest glob AND in-bound → succeeds.
-		const ok = await broker.handleRpc(token, "knowledge.write", {
+		const ok = await broker.handleRpc(token, "files.write", {
 			path: `${PREFIX}data/reports/q1.json`,
 			body: "x",
 		});

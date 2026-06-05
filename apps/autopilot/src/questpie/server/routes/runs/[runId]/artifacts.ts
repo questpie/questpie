@@ -63,7 +63,7 @@ export default route()
 	.handler(async (ctx) => {
 		if (ctx.request.method === "GET") {
 			requestActor(ctx);
-			const resources = await ctx.collections.knowledge.find({
+			const resources = await ctx.collections.assets.find({
 				where: { run: ctx.params.runId },
 				limit: 500,
 				orderBy: { createdAt: "asc" },

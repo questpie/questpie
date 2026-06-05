@@ -4,18 +4,19 @@ import { type AppManifest, parseAppManifest } from "./manifest.js";
 import { scanExports } from "./export-scan.js";
 
 /**
- * App resolver — derives a mini-app from the Knowledge tree.
+ * App resolver — derives a mini-app from the unified `assets` file store.
  *
  * An "app" is NOT a collection; it is the subtree under
- * `company/apps/{appId}/` in Knowledge (file-as-DB). The resolver reads that
- * subtree, parses `_app/manifest.json`, loads the server entry source, and
- * infers the endpoint/cron surface from the entry's exports.
+ * `company/apps/{appId}/` in the `assets` file store (file-as-DB). The resolver
+ * reads that subtree, parses `_app/manifest.json`, loads the server entry source,
+ * and infers the endpoint/cron surface from the entry's exports.
  *
  * Design: `.private/knowledge-miniapps-mvp.md` §8 (M3), §11.4, §14 and
- * `.private/knowledge-path-conventions.md` §2.
+ * `.private/knowledge-path-conventions.md` §2. (WS-5 re-keys this to the `.app`
+ * folder + inline manifest; WS-4 only retargets the read off `knowledge`→`assets`.)
  *
- * Reads use the EXISTING knowledge read path
- * (`collections.knowledge.find({ where: { path: { startsWith } } })`) — this
+ * Reads use the file-store read path
+ * (`collections.assets.find({ where: { path: { startsWith } } })`) — this
  * module does NOT touch `services/knowledge-resource.ts` (owned elsewhere).
  */
 
@@ -26,26 +27,26 @@ const DEFAULT_ENTRY = "server.ts";
 const MANIFEST_FILE = "manifest.json";
 
 /**
- * Minimal structural shape of a Knowledge record the resolver consumes. The
- * real `ctx.collections.knowledge.find` returns wider rows; this is the subset
- * we read, so test doubles only need to provide these fields.
+ * Minimal structural shape of an `assets` file-store record the resolver
+ * consumes. The real `ctx.collections.assets.find` returns wider rows; this is
+ * the subset we read, so test doubles only need to provide these fields.
  */
 export interface KnowledgeRecordLike {
 	path?: string | null;
 	body?: string | null;
 }
 
-/** Result shape of `collections.knowledge.find(...)`. */
+/** Result shape of `collections.assets.find(...)`. */
 export interface KnowledgeFindResult {
 	docs: KnowledgeRecordLike[];
 }
 
 /**
- * The dependency the resolver needs: just `knowledge.find`. `ctx.collections`
+ * The dependency the resolver needs: just `assets.find`. `ctx.collections`
  * structurally satisfies this, and a test double can provide it directly.
  */
 export interface AppResolverCollections {
-	knowledge: {
+	assets: {
 		find(args: {
 			where: { path: { startsWith: string } };
 			limit?: number;
@@ -170,7 +171,7 @@ export async function resolveApp(
 	assertValidAppId(appId);
 
 	const pathPrefix = appPathPrefix(appId);
-	const result = await collections.knowledge.find({
+	const result = await collections.assets.find({
 		where: { path: { startsWith: pathPrefix } },
 	});
 

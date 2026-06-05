@@ -34,10 +34,10 @@ const SERVER_ENTRY = new URL("../src/sandbox-server.ts", import.meta.url)
 const broker = new SandboxBroker();
 const SCOPE = {
 	data: { collections: { orders: ["read"] as Array<"read"> } },
-	knowledge: { read: ["company/data/**"] },
+	files: { read: ["company/data/**"] },
 };
 const target = {
-	knowledge: {
+	files: {
 		read: async (args: unknown) => ({
 			path: (args as { path: string }).path,
 			body: "secret-note",
@@ -153,7 +153,7 @@ describe.if(!!denoPath)(
 			try {
 				const r = await adapter().run({
 					source: `export default async () => {
-					const note = await globalThis.questpie.knowledge.read({ path: "company/data/a.md" });
+					const note = await globalThis.questpie.files.read({ path: "company/data/a.md" });
 					return note.body;
 				}`,
 					isolation: "sandboxed",
@@ -199,7 +199,7 @@ describe.if(!!denoPath)(
 				const r = await adapter().run({
 					source: `export default async () => {
 					try {
-						await globalThis.questpie.knowledge.read({ path: "company/SECRETS/keys.md" });
+						await globalThis.questpie.files.read({ path: "company/SECRETS/keys.md" });
 						return { reached: true };
 					} catch (e) {
 						return { reached: false, message: String(e && e.message || e) };

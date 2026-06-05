@@ -38,8 +38,8 @@ export const appCapabilitiesSchema = z
 		/** Module-import host allowlist (`host[:port]`). Empty/omitted = no remote imports. */
 		import: z.array(z.string()).optional(),
 
-		/** Knowledge (file-as-DB) scoped path globs. */
-		knowledge: z
+		/** Files (file-as-DB) scoped path globs. */
+		files: z
 			.object({
 				read: z.array(z.string()).optional(),
 				write: z.array(z.string()).optional(),

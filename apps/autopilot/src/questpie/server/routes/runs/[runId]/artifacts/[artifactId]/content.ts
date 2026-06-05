@@ -10,7 +10,7 @@ export default route()
 	.params<{ runId: string; artifactId: string }>()
 	.raw()
 	.handler(async (ctx) => {
-		const resource = await ctx.collections.knowledge.findOne({
+		const resource = await ctx.collections.assets.findOne({
 			where: {
 				id: ctx.params.artifactId,
 				run: ctx.params.runId,

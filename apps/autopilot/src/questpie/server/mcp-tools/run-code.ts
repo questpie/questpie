@@ -15,7 +15,7 @@ import {
  *
  * Replaces N discrete MCP tool calls with ONE: the agent writes a short
  * TypeScript script that calls the framework API directly (query a collection,
- * transform, write a knowledge note, …) and gets back the script's return value
+ * transform, write a file note, …) and gets back the script's return value
  * plus its console logs in a single round-trip. This is the Anthropic/Cloudflare
  * "code execution with MCP" / "code mode" pattern — fewer tokens (1 turn vs N),
  * and expressive (loops / joins / conditionals the discrete tools can't do).
@@ -26,7 +26,7 @@ import {
  * NOT the Deno sandbox / bindings broker (those are the untrusted mini-app path).
  *
  * Exposed surface (MVP, names mirror server-side `ctx` per design §14):
- *   globalThis.questpie.knowledge.read/write/list   (file-as-DB)
+ *   globalThis.questpie.files.read/write/list   (file-as-DB)
  *   globalThis.questpie.collections.<name>.find/findOne   (query)
  * Each method delegates to the SAME business logic as the discrete MCP tools
  * (no duplicated logic). The script reads `globalThis.questpie` at call time and
@@ -64,10 +64,10 @@ function buildCodeModeApi(
 		}
 	>;
 
-	const knowledge = {
+	const files = {
 		async list(args?: { path?: string; scope?: ScopeArg }) {
 			const scope = args?.scope ?? {};
-			const result = await ctx.collections.knowledge.find({
+			const result = await ctx.collections.assets.find({
 				where: knowledgeWhere(scope),
 				limit: 500,
 				orderBy: { path: "asc" },
@@ -79,7 +79,7 @@ function buildCodeModeApi(
 		},
 
 		async read(args: { path: string; scope?: ScopeArg }) {
-			return ctx.collections.knowledge.findOne({
+			return ctx.collections.assets.findOne({
 				where: knowledgeWhere({ ...(args.scope ?? {}), path: args.path }),
 			});
 		},
@@ -92,7 +92,7 @@ function buildCodeModeApi(
 			scope?: ScopeArg;
 		}) {
 			const scope = knowledgeScope(args.scope ?? {});
-			const existing = await ctx.collections.knowledge.findOne({
+			const existing = await ctx.collections.assets.findOne({
 				where: knowledgeWhere({ ...(args.scope ?? {}), path: args.path }),
 			});
 
@@ -110,7 +110,7 @@ function buildCodeModeApi(
 			};
 
 			return existing
-				? ctx.collections.knowledge.updateById({
+				? ctx.collections.assets.updateById({
 						id: (existing as { id: string }).id,
 						data,
 					})
@@ -130,7 +130,7 @@ function buildCodeModeApi(
 	};
 
 	// Read-only collection query surface (MVP). Mutations go through the typed
-	// services / knowledge above; broad write access is deferred to the
+	// services / files above; broad write access is deferred to the
 	// capability broker on the untrusted path.
 	const collectionsProxy = new Proxy(
 		{},
@@ -146,7 +146,7 @@ function buildCodeModeApi(
 		},
 	);
 
-	return { knowledge, collections: collectionsProxy };
+	return { files, collections: collectionsProxy };
 }
 
 export const runCode = mcpTool("run_code", {
@@ -154,7 +154,7 @@ export const runCode = mcpTool("run_code", {
 	description:
 		"Execute a short TypeScript script in ONE call instead of chaining many " +
 		"tool calls. The script `export default`s an async function(input) and may " +
-		"call `globalThis.questpie.knowledge.{read,write,list}` and " +
+		"call `globalThis.questpie.files.{read,write,list}` and " +
 		"`globalThis.questpie.collections.<name>.{find,findOne}`. Returns the " +
 		"script's return value plus its console logs. Use this to query, transform, " +
 		"and write data together (loops/joins/conditionals) without round-tripping.",
@@ -164,7 +164,7 @@ export const runCode = mcpTool("run_code", {
 			.min(1)
 			.describe(
 				"TypeScript that `export default`s an async function(input). Access the " +
-					"app via `globalThis.questpie` (knowledge, collections).",
+					"app via `globalThis.questpie` (files, collections).",
 			),
 		input: z
 			.unknown()

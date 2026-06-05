@@ -19,7 +19,6 @@ import _coll_assets from "../collections/assets";
 import { chatMessages as _coll_chat_messages } from "../collections/chat-messages";
 import { chatSessions as _coll_chat_sessions } from "../collections/chat-sessions";
 import { environments as _coll_environments } from "../collections/environments";
-import { knowledge as _coll_knowledge } from "../collections/knowledge";
 import { models as _coll_models } from "../collections/models";
 import { projects as _coll_projects } from "../collections/projects";
 import { providers as _coll_providers } from "../collections/providers";
@@ -77,8 +76,8 @@ import _seed_runtimeDefaults_seed from "../seeds/runtime-defaults.seed";
 import _seed_socialSchedulerApp_seed from "../seeds/social-scheduler-app.seed";
 
 // ── Views ──────────────────────────────────────────────────
+import _view_fileDetail from "../views/file-detail";
 import _view_filesView from "../views/files-view";
-import _view_knowledgeDetail from "../views/knowledge-detail";
 import _view_taskDetail from "../views/task-detail";
 
 // ── Workflows ──────────────────────────────────────────────
@@ -167,7 +166,7 @@ type _AllModuleFields = ExtractModuleProp<{ modules: typeof _modules }, "fields"
 // Augment factory registries with user-defined files
 declare global {
 	namespace Questpie {
-		interface ViewsRegistry { filesView: typeof _view_filesView; knowledgeDetail: typeof _view_knowledgeDetail; taskDetail: typeof _view_taskDetail; }
+		interface ViewsRegistry { fileDetail: typeof _view_fileDetail; filesView: typeof _view_filesView; taskDetail: typeof _view_taskDetail; }
 	}
 }
 
@@ -179,7 +178,6 @@ export type AppCollections = _ModuleCollections & {
 	chat_messages: typeof _coll_chat_messages;
 	chat_sessions: typeof _coll_chat_sessions;
 	environments: typeof _coll_environments;
-	knowledge: typeof _coll_knowledge;
 	models: typeof _coll_models;
 	projects: typeof _coll_projects;
 	providers: typeof _coll_providers;
@@ -242,8 +240,8 @@ export type AppFieldTypes = _ModuleFieldTypes;
 
 /** All views in the app (modules + user, user overrides) */
 export type AppViews = _ModuleViews & {
+	fileDetail: typeof _view_fileDetail;
 	filesView: typeof _view_filesView;
-	knowledgeDetail: typeof _view_knowledgeDetail;
 	taskDetail: typeof _view_taskDetail;
 };
 
@@ -454,7 +452,6 @@ export const app = await createApp(
 			chat_messages: _coll_chat_messages,
 			chat_sessions: _coll_chat_sessions,
 			environments: _coll_environments,
-			knowledge: _coll_knowledge,
 			models: _coll_models,
 			projects: _coll_projects,
 			providers: _coll_providers,
@@ -494,8 +491,8 @@ export const app = await createApp(
 		migrations: [_mig_20260507T095449_jolly_red_phoenix, _mig_20260516T185000_auth_user_admin_columns_repair, _mig_20260517T095535_happy_orange_unicorn, _mig_20260519T135407_add_run_links_and_ai_module, _mig_20260519T142100_backfill_legacy_runs_into_run_links, _mig_20260519T145500_link_schedule_executions_to_run_links, _mig_20260519T161500_drop_legacy_execution_infra, _mig_20260529T001500_drop_workflow_configs, _mig_20260529T003000_drop_capabilities, _mig_20260604T111500_add_api_key_config_id],
 		seeds: [_seed_demoCoverageData_seed, _seed_demoParentIssues_seed, _seed_demoProductData_seed, _seed_demoStressData_seed, _seed_runtimeDefaults_seed, _seed_socialSchedulerApp_seed],
 		views: {
+			fileDetail: _view_fileDetail,
 			filesView: _view_filesView,
-			knowledgeDetail: _view_knowledgeDetail,
 			taskDetail: _view_taskDetail,
 		},
 		workflows: {

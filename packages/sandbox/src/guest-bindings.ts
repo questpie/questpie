@@ -7,7 +7,7 @@
  * principle) so guest code reads like a server handler:
  *
  *   const orders = await globalThis.questpie.collections.orders.find({ where });
- *   const note   = await globalThis.questpie.knowledge.read({ path });
+ *   const note   = await globalThis.questpie.files.read({ path });
  *
  * Every method just does `await hostCall(method, args)`. `hostCall` is INJECTED
  * (it writes a framed RPC to the supervisor over stdio and awaits the brokered
@@ -31,8 +31,8 @@ export interface GuestCollection {
 
 /** The `globalThis.questpie` surface handed to untrusted guest code. */
 export interface GuestBindings {
-	/** Knowledge (file-as-DB), scoped by the run's `capabilities.knowledge`. */
-	knowledge: {
+	/** Files (file-as-DB), scoped by the run's `capabilities.files`. */
+	files: {
 		read(args: { path: string; scope?: unknown }): Promise<unknown>;
 		write(args: {
 			path: string;
@@ -57,10 +57,10 @@ export interface GuestBindings {
  * when the host denies it.
  */
 export function buildGuestBindings(hostCall: HostCall): GuestBindings {
-	const knowledge: GuestBindings["knowledge"] = {
-		read: (args) => hostCall("knowledge.read", args),
-		write: (args) => hostCall("knowledge.write", args),
-		list: (args) => hostCall("knowledge.list", args ?? {}),
+	const files: GuestBindings["files"] = {
+		read: (args) => hostCall("files.read", args),
+		write: (args) => hostCall("files.write", args),
+		list: (args) => hostCall("files.list", args ?? {}),
 	};
 
 	const collections = new Proxy(
@@ -77,5 +77,5 @@ export function buildGuestBindings(hostCall: HostCall): GuestBindings {
 		},
 	) as Record<string, GuestCollection>;
 
-	return { knowledge, collections };
+	return { files, collections };
 }

@@ -11,7 +11,7 @@
  * RUNNER that builds the `BindingTarget` the broker dispatches to. Everything
  * here is enforced HOST-SIDE and NEVER trusts the manifest:
  *
- *   - **G1 — knowledge tenant outer-bound.** Every `knowledge.read|write|list`
+ *   - **G1 — files tenant outer-bound.** Every `files.read|write|list`
  *     call is clamped to the app's own subtree `company/apps/{appId}/`. WRITES
  *     are additionally forbidden anywhere under `_app/` (the app's code +
  *     manifest are NOT app-writable). A manifest glob like `**` or `company/**`
@@ -39,7 +39,7 @@
  *     set cannot be determined for a collection we FAIL CLOSED and reject every
  *     `where`/`orderBy` key on it.
  *
- * SCOPE — this target dispatches the READ surface only: `knowledge.read|write|
+ * SCOPE — this target dispatches the READ surface only: `files.read|write|
  * list` (own-subtree file-as-DB, G1) and `collections.X.find|findOne` (G2/G3).
  * Guest COLLECTION/GLOBAL WRITES (`create|update|delete`, `globals.set`) are NOT
  * dispatched — they have no §7 tenant-write boundary yet and so fail closed at
@@ -70,9 +70,10 @@ import { appPathPrefix, assertValidAppId } from "./app-resolver.js";
  * (`company/apps/{appId}/`, writes excluding `_app/`) BEFORE the primitive is
  * called — that clamp (G1) IS the tenant authorization. So the primitive runs in
  * `accessMode:"system"` to read/write the app's OWN already-authorized data
- * WITHOUT the `knowledge` collection's user-access rule additionally gating it
- * (the rule would otherwise deny, since neither the run's invoker nor the
- * synthesized app-principal holds `read` on the shared `knowledge` collection).
+ * WITHOUT the `assets` collection's per-row visibility read rule additionally
+ * gating it (that rule filters anonymous reads to `visibility:"public"` rows; the
+ * app's own data defaults to `visibility:"private"`, so the synthesized
+ * app-principal would otherwise not see it on the shared `assets` collection).
  *
  * This is sound ONLY because every reachable call site here passes a CLAMPED
  * path; an unclamped path NEVER reaches a system-mode dispatch — the clamp
@@ -452,18 +453,18 @@ export function buildMiniAppBindingTarget(
 		session: principal,
 	};
 
-	const knowledge: NonNullable<BindingTarget["knowledge"]> = {
+	const files: NonNullable<BindingTarget["files"]> = {
 		async read(args: unknown) {
 			const a = (args ?? {}) as { path?: unknown };
 			const path = clampReadPath(appId, a.path);
 			if (path === null) {
 				throw new MiniAppBindingError(
-					`knowledge.read path is outside the app's tenant scope (company/apps/${appId}/)`,
+					`files.read path is outside the app's tenant scope (company/apps/${appId}/)`,
 					"out_of_scope",
 				);
 			}
 			// G1 clamp passed → the path is the app's OWN data; dispatch system-mode
-			// (the clamp IS the authorization; the knowledge collection's user rule
+			// (the clamp IS the authorization; the assets collection's user rule
 			// must not additionally gate the app's own already-clamped data).
 			return ctx.services.knowledgeResource.readByPath(
 				path,
@@ -482,7 +483,7 @@ export function buildMiniAppBindingTarget(
 			const path = clampWritePath(appId, a.path);
 			if (path === null) {
 				throw new MiniAppBindingError(
-					`knowledge.write path is outside the app's writable scope ` +
+					`files.write path is outside the app's writable scope ` +
 						`(company/apps/${appId}/, excluding _app/)`,
 					"out_of_scope",
 				);
@@ -490,7 +491,7 @@ export function buildMiniAppBindingTarget(
 			const body = a.body ?? a.content;
 			if (typeof body !== "string") {
 				throw new MiniAppBindingError(
-					"knowledge.write requires a string `body`",
+					"files.write requires a string `body`",
 					"bad_args",
 				);
 			}
@@ -523,7 +524,7 @@ export function buildMiniAppBindingTarget(
 			const path = clampReadPath(appId, requested);
 			if (path === null) {
 				throw new MiniAppBindingError(
-					`knowledge.list path is outside the app's tenant scope (company/apps/${appId}/)`,
+					`files.list path is outside the app's tenant scope (company/apps/${appId}/)`,
 					"out_of_scope",
 				);
 			}
@@ -598,7 +599,7 @@ export function buildMiniAppBindingTarget(
 	}
 
 	return {
-		knowledge,
+		files,
 		collections: collections as NonNullable<BindingTarget["collections"]>,
 	};
 }

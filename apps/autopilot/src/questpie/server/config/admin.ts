@@ -87,9 +87,9 @@ export default adminConfig({
 					},
 					{
 						type: "collection",
-						collection: "knowledge",
-						label: { en: "Knowledge" },
-						icon: { type: "icon", props: { name: "ph:brain" } },
+						collection: "assets",
+						label: { en: "Files" },
+						icon: { type: "icon", props: { name: "ph:folders" } },
 					},
 					{
 						type: "collection",

@@ -30,8 +30,8 @@ import { parseBindingMethod } from "#questpie/server/modules/core/integrated/exe
 // ──────────────────────────────────────────────────────────────────────────
 describe("parseBindingMethod", () => {
 	it("classifies the MVP surface", () => {
-		expect(parseBindingMethod("knowledge.read")).toEqual({
-			kind: "knowledge",
+		expect(parseBindingMethod("files.read")).toEqual({
+			kind: "files",
 			op: "read",
 		});
 		expect(parseBindingMethod("collections.orders.find")).toEqual({
@@ -150,7 +150,7 @@ describe("checkBindingCapability — default-deny", () => {
 				checkBindingCapability("collections.orders.find", {}, caps).allowed,
 			).toBe(false);
 			expect(
-				checkBindingCapability("knowledge.read", { path: "a/b" }, caps).allowed,
+				checkBindingCapability("files.read", { path: "a/b" }, caps).allowed,
 			).toBe(false);
 			expect(checkBindingCapability("globals.s.get", {}, caps).allowed).toBe(
 				false,
@@ -237,7 +237,7 @@ describe("checkBindingCapability — collections", () => {
 
 describe("checkBindingCapability — knowledge", () => {
 	const caps: ExecutorCapabilities = {
-		knowledge: {
+		files: {
 			read: ["company/apps/x/data/**"],
 			write: ["company/apps/x/data/out/**"],
 		},
@@ -246,7 +246,7 @@ describe("checkBindingCapability — knowledge", () => {
 	it("ALLOWS a read within the read glob", () => {
 		expect(
 			checkBindingCapability(
-				"knowledge.read",
+				"files.read",
 				{ path: "company/apps/x/data/a.json" },
 				caps,
 			).allowed,
@@ -255,7 +255,7 @@ describe("checkBindingCapability — knowledge", () => {
 
 	it("DENIES a read OUTSIDE the read glob (out-of-scope rejection)", () => {
 		const d = checkBindingCapability(
-			"knowledge.read",
+			"files.read",
 			{ path: "company/apps/y/data/a.json" },
 			caps,
 		);
@@ -265,7 +265,7 @@ describe("checkBindingCapability — knowledge", () => {
 
 	it("DENIES a path-traversal escape even if it 'looks' in-scope", () => {
 		const d = checkBindingCapability(
-			"knowledge.read",
+			"files.read",
 			{ path: "company/apps/x/data/../../../secret" },
 			caps,
 		);
@@ -276,7 +276,7 @@ describe("checkBindingCapability — knowledge", () => {
 	it("DENIES a write outside the write glob (read scope is wider — must not leak)", () => {
 		// Path is within READ scope but NOT within WRITE scope → write denied.
 		const d = checkBindingCapability(
-			"knowledge.write",
+			"files.write",
 			{ path: "company/apps/x/data/a.json", content: "x" },
 			caps,
 		);
@@ -287,7 +287,7 @@ describe("checkBindingCapability — knowledge", () => {
 	it("ALLOWS a write within the write glob", () => {
 		expect(
 			checkBindingCapability(
-				"knowledge.write",
+				"files.write",
 				{ path: "company/apps/x/data/out/result.json", content: "x" },
 				caps,
 			).allowed,
@@ -295,24 +295,24 @@ describe("checkBindingCapability — knowledge", () => {
 	});
 
 	it("list requires a read scope; a prefix must be in-scope", () => {
-		expect(checkBindingCapability("knowledge.list", {}, caps).allowed).toBe(
+		expect(checkBindingCapability("files.list", {}, caps).allowed).toBe(
 			true,
 		);
 		expect(
 			checkBindingCapability(
-				"knowledge.list",
+				"files.list",
 				{ path: "company/apps/x/data/sub" },
 				caps,
 			).allowed,
 		).toBe(true);
 		// A prefix outside the read scope is rejected (no cross-scope enumeration).
 		expect(
-			checkBindingCapability("knowledge.list", { path: "company/apps/y" }, caps)
+			checkBindingCapability("files.list", { path: "company/apps/y" }, caps)
 				.allowed,
 		).toBe(false);
 		// No read scope at all → list denied.
 		expect(
-			checkBindingCapability("knowledge.list", {}, { knowledge: {} }).allowed,
+			checkBindingCapability("files.list", {}, { files: {} }).allowed,
 		).toBe(false);
 	});
 });
@@ -362,13 +362,13 @@ describe("checkBindingCapability — services / jobs / workflows allowlists", ()
 function fakeTarget() {
 	const calls: Array<{ method: string; args: unknown }> = [];
 	const target: BindingTarget = {
-		knowledge: {
+		files: {
 			read: async (args) => {
-				calls.push({ method: "knowledge.read", args });
+				calls.push({ method: "files.read", args });
 				return { path: (args as { path: string }).path, body: "hello" };
 			},
 			list: async (args) => {
-				calls.push({ method: "knowledge.list", args });
+				calls.push({ method: "files.list", args });
 				return [{ path: "company/apps/x/data/a.json" }];
 			},
 		},
@@ -423,7 +423,7 @@ function fakeTarget() {
 
 const SCOPE: ExecutorCapabilities = {
 	data: { collections: { orders: ["read"] } },
-	knowledge: { read: ["company/apps/x/data/**"] },
+	files: { read: ["company/apps/x/data/**"] },
 };
 
 describe("SandboxBroker — token auth", () => {
@@ -507,7 +507,7 @@ describe("SandboxBroker — per-call enforcement + dispatch (THE security bounda
 		});
 		expect(find).toEqual({ ok: true, value: { docs: [{ id: "o1" }] } });
 
-		const read = await broker.handleRpc(token, "knowledge.read", {
+		const read = await broker.handleRpc(token, "files.read", {
 			path: "company/apps/x/data/a.json",
 		});
 		expect(read).toEqual({
@@ -517,7 +517,7 @@ describe("SandboxBroker — per-call enforcement + dispatch (THE security bounda
 
 		expect(calls.map((c) => c.method)).toEqual([
 			"collections.orders.find",
-			"knowledge.read",
+			"files.read",
 		]);
 	});
 
@@ -552,13 +552,13 @@ describe("SandboxBroker — per-call enforcement + dispatch (THE security bounda
 		const { target, calls } = fakeTarget();
 		const { token } = broker.mint({ capabilities: SCOPE, target });
 
-		const outside = await broker.handleRpc(token, "knowledge.read", {
+		const outside = await broker.handleRpc(token, "files.read", {
 			path: "company/apps/EVIL/data/a.json",
 		});
 		expect(outside.ok).toBe(false);
 		if (!outside.ok) expect(outside.error.code).toBe("forbidden");
 
-		const traversal = await broker.handleRpc(token, "knowledge.read", {
+		const traversal = await broker.handleRpc(token, "files.read", {
 			path: "company/apps/x/data/../../../../etc/passwd",
 		});
 		expect(traversal.ok).toBe(false);

@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 
 import { activity } from "../collections/activity";
 import { chatMessages } from "../collections/chat-messages";
-import { knowledge } from "../collections/knowledge";
+import assets from "../collections/assets";
 import { runLinks } from "../collections/run-links";
 import { scheduleExecutions } from "../collections/schedule-executions";
 import { taskRelations } from "../collections/task-relations";
@@ -146,7 +146,7 @@ describe("Autopilot AI run links", () => {
 		expect(relationTarget(chatMessages.state.fieldDefinitions.run)).toBe(
 			"run_links",
 		);
-		expect(relationTarget(knowledge.state.fieldDefinitions.run)).toBe(
+		expect(relationTarget(assets.state.fieldDefinitions.run)).toBe(
 			"run_links",
 		);
 		expect(relationTarget(activity.state.fieldDefinitions.run)).toBe(

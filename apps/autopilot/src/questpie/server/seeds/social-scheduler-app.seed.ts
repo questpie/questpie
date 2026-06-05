@@ -1,15 +1,15 @@
 import { seed } from "questpie/services";
 
 /**
- * DEV seed: a runnable `social-scheduler` Knowledge mini-app.
+ * DEV seed: a runnable `social-scheduler` mini-app (in the `assets` file store).
  *
  * Writes the app subtree under `company/apps/social-scheduler/` so the M3 app
- * resolver (`apps/app-resolver.ts`) can read the manifest + entry from Knowledge
- * and the M4 named-endpoint runner / M5 cron runner can execute it in the
+ * resolver (`apps/app-resolver.ts`) can read the manifest + entry from the
+ * `assets` file store and the M4 named-endpoint runner / M5 cron runner can run it in the
  * SANDBOXED executor against the real bindings broker. This exists to drive a
  * live backend e2e of the mini-app runtime — it exercises the REAL paths:
  *   - net egress allowlist (`fetch` to jsonplaceholder),
- *   - knowledge read/write/list via the capability-scoped `questpie.knowledge.*`
+ *   - files read/write/list via the capability-scoped `questpie.files.*`
  *     bindings (clamped host-side to the app's own subtree),
  *   - a granted collection read via `questpie.collections.projects.find` (the G2
  *     non-privileged principal + G3 relation guard).
@@ -20,7 +20,7 @@ import { seed } from "questpie/services";
  * app-principal can read it), and the guest query passes no `where`/`orderBy`
  * (so the relation guard is a no-op).
  *
- * Re-runnable: deletes this app's three Knowledge entries by path and
+ * Re-runnable: deletes this app's three `assets` entries by path and
  * re-creates them on every run, so `db:seed` overwrites in place.
  */
 
@@ -36,7 +36,7 @@ const MANIFEST = {
 	entry: "server.ts",
 	capabilities: {
 		net: ["esm.sh", "jsonplaceholder.typicode.com"],
-		knowledge: {
+		files: {
 			read: [`${APP_PREFIX}/**`],
 			write: [`${APP_PREFIX}/**`],
 		},
@@ -67,7 +67,7 @@ const DATA_DIR = "company/apps/social-scheduler/data";
 
 /** Read the queue.json array (returns [] when absent or unparseable). */
 async function readQueue() {
-  const rec = await questpie.knowledge.read({ path: QUEUE_PATH });
+  const rec = await questpie.files.read({ path: QUEUE_PATH });
   if (!rec || typeof rec.body !== "string") return [];
   try {
     const parsed = JSON.parse(rec.body);
@@ -82,7 +82,7 @@ export default async function (input) {
   const queue = await readQueue();
 
   // List the app's own data dir via the scoped bindings.
-  const listed = await questpie.knowledge.list({ path: DATA_DIR });
+  const listed = await questpie.files.list({ path: DATA_DIR });
   const dataFiles = Array.isArray(listed) ? listed.map((e) => e.path) : [];
 
   // Query a granted collection (non-privileged principal, no relation refs).
@@ -114,7 +114,7 @@ export default async function (input) {
   const fetchedTitle = todo && typeof todo.title === "string" ? todo.title : null;
 
   // Write a run marker back into the app's writable subtree.
-  await questpie.knowledge.write({
+  await questpie.files.write({
     path: LAST_RUN_PATH,
     title: "Last run",
     content: JSON.stringify(
@@ -146,7 +146,7 @@ export const cron = async function (input) {
     return post;
   });
 
-  await questpie.knowledge.write({
+  await questpie.files.write({
     path: QUEUE_PATH,
     title: "Post queue",
     content: JSON.stringify(updated, null, 2),
@@ -192,10 +192,16 @@ export default seed({
 		// Re-runnable: hard-delete any prior rows for this app's three entries by
 		// path, then re-create them below. This lets `db:seed` overwrite on
 		// re-run (the manifest/server/queue bodies + renderers are re-asserted by
-		// the `createTextResource` calls). `knowledge` has no soft-delete, so the
+		// the `createTextResource` calls). `assets` has no soft-delete, so the
 		// rows are physically removed — no unique-path collision on re-create.
-		await collections.knowledge.delete(
-			{ where: { path: { in: [MANIFEST_PATH, ENTRY_PATH, QUEUE_PATH] } } },
+		await collections.assets.delete(
+			// The unified `assets` row type collapses to `{}` for consumers
+			// (admin-module + app intersection in codegen), so the `where` is cast.
+			{
+				where: {
+					path: { in: [MANIFEST_PATH, ENTRY_PATH, QUEUE_PATH] },
+				} as any,
+			},
 			ctx,
 		);
 

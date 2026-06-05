@@ -43,7 +43,7 @@ interface KRow {
 
 function knowledgeCollections(rows: KRow[]) {
 	return {
-		knowledge: {
+		assets: {
 			async find({ where }: { where: { path: { startsWith: string } } }) {
 				const prefix = where.path.startsWith;
 				return { docs: rows.filter((r) => r.path.startsWith(prefix)) };
@@ -90,7 +90,7 @@ const MANIFEST = {
 	entry: "server.ts",
 	capabilities: {
 		data: { collections: { posts: ["read"] } },
-		knowledge: {
+		files: {
 			read: [`${PREFIX}data/**`],
 			write: [`${PREFIX}data/**`],
 		},
@@ -246,10 +246,10 @@ describe("named-endpoint route", () => {
 		).toHaveProperty("posts");
 		// the bindings TARGET (security boundary object) is present + shaped.
 		const target = call.appBindings as {
-			knowledge?: object;
+			files?: object;
 			collections?: object;
 		};
-		expect(target.knowledge).toBeTruthy();
+		expect(target.files).toBeTruthy();
 		expect(target.collections).toBeTruthy();
 		// broker URL comes from CONFIG, NOT the request origin.
 		expect(call.brokerUrl).toBe("http://127.0.0.1:3000/api/sandbox/rpc");
@@ -324,7 +324,7 @@ describe("named-endpoint route", () => {
 		});
 		// manifest write glob is the app's OWN data/, but the host bound also forbids
 		// escaping the tenant subtree: another app's _app/ is rejected.
-		const evil = await broker.handleRpc(token, "knowledge.write", {
+		const evil = await broker.handleRpc(token, "files.write", {
 			path: "company/apps/other/_app/manifest.json",
 			body: "x",
 		});

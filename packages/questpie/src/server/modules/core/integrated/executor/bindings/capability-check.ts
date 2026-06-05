@@ -125,14 +125,14 @@ function ownGrants<T>(
 	return Array.isArray(value) ? (value as T[]) : undefined;
 }
 
-/** Decide a parsed `knowledge.*` call. */
-function checkKnowledge(
-	parsed: Extract<ParsedBindingMethod, { kind: "knowledge" }>,
+/** Decide a parsed `files.*` call. */
+function checkFiles(
+	parsed: Extract<ParsedBindingMethod, { kind: "files" }>,
 	args: unknown,
 	caps: ExecutorCapabilities,
 ): CapabilityDecision {
-	const scope = caps.knowledge;
-	if (!scope) return deny("knowledge access not granted");
+	const scope = caps.files;
+	if (!scope) return deny("files access not granted");
 
 	const a = (args ?? {}) as { path?: unknown };
 
@@ -141,13 +141,13 @@ function checkKnowledge(
 		// is configured; if a prefix is given it must itself be safe + in a read
 		// glob, otherwise the listing could enumerate outside scope.
 		if (!scope.read || scope.read.length === 0) {
-			return deny("knowledge.list requires a knowledge.read scope");
+			return deny("files.list requires a files.read scope");
 		}
 		if (a.path !== undefined && a.path !== null) {
 			const pathn = normalizeKnowledgePath(a.path);
-			if (pathn === null) return deny("knowledge.list path is unsafe");
+			if (pathn === null) return deny("files.list path is unsafe");
 			if (!anyGlobMatches(pathn, scope.read)) {
-				return deny(`knowledge.list path "${pathn}" is outside read scope`);
+				return deny(`files.list path "${pathn}" is outside read scope`);
 			}
 		}
 		return ALLOW;
@@ -155,18 +155,18 @@ function checkKnowledge(
 
 	// read / write both require a concrete path.
 	const pathn = normalizeKnowledgePath(a.path);
-	if (pathn === null) return deny("knowledge path is missing or unsafe");
+	if (pathn === null) return deny("files path is missing or unsafe");
 
 	if (parsed.op === "read") {
 		if (!anyGlobMatches(pathn, scope.read)) {
-			return deny(`knowledge.read path "${pathn}" is outside read scope`);
+			return deny(`files.read path "${pathn}" is outside read scope`);
 		}
 		return ALLOW;
 	}
 
 	// write
 	if (!anyGlobMatches(pathn, scope.write)) {
-		return deny(`knowledge.write path "${pathn}" is outside write scope`);
+		return deny(`files.write path "${pathn}" is outside write scope`);
 	}
 	return ALLOW;
 }
@@ -235,8 +235,8 @@ export function checkBindingCapability(
 	if (!parsed) return deny(`unrecognized method "${String(method)}"`);
 
 	switch (parsed.kind) {
-		case "knowledge":
-			return checkKnowledge(parsed, args, scope);
+		case "files":
+			return checkFiles(parsed, args, scope);
 		case "collection":
 			return checkCollection(parsed, scope);
 		case "global":
