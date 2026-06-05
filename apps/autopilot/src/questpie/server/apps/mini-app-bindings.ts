@@ -51,10 +51,34 @@ import { posix } from "node:path";
 import type { BindingTarget } from "questpie/executor";
 
 import {
+	type KnowledgeByPathContext,
 	type KnowledgeResourceEntry,
 	type KnowledgeResourceRecord,
 } from "../services/knowledge-resource.js";
 import { appPathPrefix, assertValidAppId } from "./app-resolver.js";
+
+/**
+ * The access context the knowledge bindings dispatch the file-as-DB primitives
+ * under. The HOST has ALREADY clamped every path to the app's OWN subtree
+ * (`company/apps/{appId}/`, writes excluding `_app/`) BEFORE the primitive is
+ * called — that clamp (G1) IS the tenant authorization. So the primitive runs in
+ * `accessMode:"system"` to read/write the app's OWN already-authorized data
+ * WITHOUT the `knowledge` collection's user-access rule additionally gating it
+ * (the rule would otherwise deny, since neither the run's invoker nor the
+ * synthesized app-principal holds `read` on the shared `knowledge` collection).
+ *
+ * This is sound ONLY because every reachable call site here passes a CLAMPED
+ * path; an unclamped path NEVER reaches a system-mode dispatch — the clamp
+ * returns `null` and the handler rejects with `out_of_scope` first.
+ *
+ * NOTE: this is DELIBERATELY scoped to the knowledge (own file-as-DB) primitives.
+ * The `collections.X.find|findOne` bindings (G2) keep `accessMode:"user"` + the
+ * app-principal — those reach ARBITRARY host collections and MUST stay
+ * access-controlled.
+ */
+const KNOWLEDGE_SYSTEM_CONTEXT: KnowledgeByPathContext = {
+	accessMode: "system",
+};
 
 /**
  * The minimal `ctx` surface the target needs to dispatch primitive calls. The
@@ -74,19 +98,28 @@ export interface MiniAppBindingCtx {
 	/** Knowledge file-as-DB service (the M6 by-path read/write/list helpers). */
 	services: {
 		knowledgeResource: {
-			readByPath(path: string): Promise<KnowledgeResourceRecord | null>;
-			writeByPath(input: {
-				path: string;
-				body: string;
-				title?: string | null;
-				contentType?: string | null;
-				scopeType?: string | null;
-				kind?: string | null;
-				source?: string | null;
-				sourceRef?: string | null;
-				metadata?: Record<string, unknown> | null;
-			}): Promise<KnowledgeResourceRecord>;
-			listByPrefix(prefix: string): Promise<KnowledgeResourceEntry[]>;
+			readByPath(
+				path: string,
+				context?: KnowledgeByPathContext,
+			): Promise<KnowledgeResourceRecord | null>;
+			writeByPath(
+				input: {
+					path: string;
+					body: string;
+					title?: string | null;
+					contentType?: string | null;
+					scopeType?: string | null;
+					kind?: string | null;
+					source?: string | null;
+					sourceRef?: string | null;
+					metadata?: Record<string, unknown> | null;
+				},
+				context?: KnowledgeByPathContext,
+			): Promise<KnowledgeResourceRecord>;
+			listByPrefix(
+				prefix: string,
+				context?: KnowledgeByPathContext,
+			): Promise<KnowledgeResourceEntry[]>;
 		};
 	};
 	/**
@@ -399,7 +432,13 @@ export function buildMiniAppBindingTarget(
 					"out_of_scope",
 				);
 			}
-			return ctx.services.knowledgeResource.readByPath(path);
+			// G1 clamp passed → the path is the app's OWN data; dispatch system-mode
+			// (the clamp IS the authorization; the knowledge collection's user rule
+			// must not additionally gate the app's own already-clamped data).
+			return ctx.services.knowledgeResource.readByPath(
+				path,
+				KNOWLEDGE_SYSTEM_CONTEXT,
+			);
 		},
 
 		async write(args: unknown) {
@@ -425,18 +464,23 @@ export function buildMiniAppBindingTarget(
 					"bad_args",
 				);
 			}
-			return ctx.services.knowledgeResource.writeByPath({
-				path,
-				body,
-				title: typeof a.title === "string" ? a.title : undefined,
-				contentType:
-					typeof a.contentType === "string" ? a.contentType : undefined,
-				scopeType: "company",
-				kind: "document",
-				source: "system",
-				sourceRef: `app:${appId}`,
-				metadata: { app: appId },
-			});
+			// G1 write-clamp passed (in-subtree AND not under `_app/`) → dispatch
+			// system-mode on the app's OWN already-authorized data (see read above).
+			return ctx.services.knowledgeResource.writeByPath(
+				{
+					path,
+					body,
+					title: typeof a.title === "string" ? a.title : undefined,
+					contentType:
+						typeof a.contentType === "string" ? a.contentType : undefined,
+					scopeType: "company",
+					kind: "document",
+					source: "system",
+					sourceRef: `app:${appId}`,
+					metadata: { app: appId },
+				},
+				KNOWLEDGE_SYSTEM_CONTEXT,
+			);
 		},
 
 		async list(args: unknown) {
@@ -454,7 +498,11 @@ export function buildMiniAppBindingTarget(
 				);
 			}
 			const prefix = path.endsWith("/") ? path : `${path}/`;
-			return ctx.services.knowledgeResource.listByPrefix(prefix);
+			// G1 clamp passed → list the app's OWN subtree under system-mode.
+			return ctx.services.knowledgeResource.listByPrefix(
+				prefix,
+				KNOWLEDGE_SYSTEM_CONTEXT,
+			);
 		},
 	};
 

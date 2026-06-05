@@ -28,23 +28,58 @@ interface KnowledgeRow {
 	metadata: Record<string, unknown> | null;
 }
 
-/** In-memory `knowledgeResource`-shaped service over an array of rows. */
+/** The access context the bindings thread into the knowledge primitives. */
+interface KnowledgeCtxArg {
+	accessMode?: "user" | "system";
+}
+
+/**
+ * In-memory `knowledgeResource`-shaped service over an array of rows.
+ *
+ * It MODELS THE REAL ACCESS-CONTROL GATE the live `knowledgeResource` hits: its
+ * underlying `collections.knowledge.*` calls run under the context it is handed,
+ * and the shared `knowledge` collection has NO public `read`/`write` rule — so a
+ * `user`-mode call (the run's invoker / synthesized app-principal) is DENIED,
+ * while a `system`-mode call (the mini-app bindings, AFTER the G1 clamp) is
+ * allowed. We reproduce that exactly: any non-`system` context → throw the same
+ * "does not have permission" shape the LIVE e2e saw (`crud-generator.ts:469`).
+ *
+ * Every call also RECORDS the context arg so a test can assert the bindings now
+ * dispatch knowledge under `accessMode:"system"` (the fix), not user-mode.
+ */
 function makeKnowledgeResource(seed: KnowledgeRow[] = []) {
 	const rows: KnowledgeRow[] = [...seed];
+	const ctxCalls: Array<{
+		method: string;
+		context: KnowledgeCtxArg | undefined;
+	}> = [];
 	let seq = 0;
+	/** Mirror the live `knowledge` collection: deny anything but system-mode. */
+	function enforce(method: string, context: KnowledgeCtxArg | undefined) {
+		ctxCalls.push({ method, context });
+		if (context?.accessMode !== "system") {
+			throw new Error("User does not have permission to read records");
+		}
+	}
 	return {
 		rows,
+		ctxCalls,
 		service: {
-			async readByPath(path: string) {
+			async readByPath(path: string, context?: KnowledgeCtxArg) {
+				enforce("readByPath", context);
 				return rows.find((r) => r.path === path) ?? null;
 			},
-			async writeByPath(input: {
-				path: string;
-				body: string;
-				title?: string | null;
-				contentType?: string | null;
-				metadata?: Record<string, unknown> | null;
-			}) {
+			async writeByPath(
+				input: {
+					path: string;
+					body: string;
+					title?: string | null;
+					contentType?: string | null;
+					metadata?: Record<string, unknown> | null;
+				},
+				context?: KnowledgeCtxArg,
+			) {
+				enforce("writeByPath", context);
 				const existing = rows.find((r) => r.path === input.path);
 				if (existing) {
 					existing.body = input.body;
@@ -62,7 +97,8 @@ function makeKnowledgeResource(seed: KnowledgeRow[] = []) {
 				rows.push(row);
 				return row;
 			},
-			async listByPrefix(prefix: string) {
+			async listByPrefix(prefix: string, context?: KnowledgeCtxArg) {
+				enforce("listByPrefix", context);
 				return rows
 					.filter((r) => r.path.startsWith(prefix))
 					.map((r) => ({
@@ -179,7 +215,9 @@ describe("G1: knowledge path clamps", () => {
 		// persisted under _app/. The clamp now normalizes identically → REJECT.
 		expect(clampWritePath(APP, `${PREFIX}./_app/server.ts`)).toBeNull();
 		expect(clampWritePath(APP, `${PREFIX}data/../_app/x`)).toBeNull();
-		expect(clampWritePath(APP, `${PREFIX}data/./../_app/manifest.json`)).toBeNull();
+		expect(
+			clampWritePath(APP, `${PREFIX}data/./../_app/manifest.json`),
+		).toBeNull();
 		// direct _app/ is still rejected.
 		expect(clampWritePath(APP, `${PREFIX}_app/x`)).toBeNull();
 		// and a benign `./`-prefixed in-scope data path normalizes + is accepted.
@@ -319,6 +357,122 @@ describe("G1: broker dispatch is clamped to the tenant subtree", () => {
 	});
 });
 
+// ───────── knowledge authorization model: clamp (G1) → system-mode ───────────
+//
+// The LIVE e2e bug: the knowledge primitive ran user-mode (inherited from the
+// request ALS) and the shared `knowledge` collection's access rule DENIED the
+// app's read/write of its OWN data ("does not have permission",
+// crud-generator.ts:469). The fix: the bindings dispatch the file-as-DB
+// primitive under `accessMode:"system"` AFTER the G1 clamp — the clamp IS the
+// tenant authorization, so the collection rule must not additionally gate the
+// app's own already-clamped data. The `makeKnowledgeResource` double here MODELS
+// that gate (non-system → throw the same permission error), so these tests fail
+// closed if the dispatch ever reverts to user-mode.
+
+describe("knowledge: own-subtree authorized via the G1 clamp (system-mode dispatch)", () => {
+	const CAPS = {
+		knowledge: { read: ["**"], write: ["**"] },
+	};
+	function wire(seed: KnowledgeRow[] = []) {
+		const knowledge = makeKnowledgeResource(seed);
+		const ctx = makeCtx({
+			knowledge,
+			// A REAL logged-in invoker is present (the named-endpoint case). Even so,
+			// the invoker holds NO `read`/`write` on the shared `knowledge` collection
+			// — only system-mode (post-clamp) may touch the app's own data.
+			session: { user: { id: "user_123" } },
+		});
+		const target = buildMiniAppBindingTarget(APP, ctx, CAPS);
+		const broker = new SandboxBroker();
+		const { token } = broker.mint({ capabilities: CAPS, target });
+		return { knowledge, broker, token };
+	}
+
+	it("read of OWN clamped path SUCCEEDS and dispatches accessMode:'system'", async () => {
+		const { knowledge, broker, token } = wire([
+			{
+				id: "own",
+				path: `${PREFIX}data/posts.json`,
+				title: null,
+				body: "[1,2]",
+				contentType: "application/json",
+				metadata: null,
+			},
+		]);
+		const res = await broker.handleRpc(token, "knowledge.read", {
+			path: `${PREFIX}data/posts.json`,
+		});
+		expect(res.ok).toBe(true);
+		expect(res.ok && (res.value as { body: string }).body).toBe("[1,2]");
+		// the primitive ran under system-mode (NOT the user's denied principal).
+		expect(knowledge.ctxCalls).toEqual([
+			{ method: "readByPath", context: { accessMode: "system" } },
+		]);
+	});
+
+	it("write of OWN clamped path PERSISTS under system-mode", async () => {
+		const { knowledge, broker, token } = wire();
+		const res = await broker.handleRpc(token, "knowledge.write", {
+			path: `${PREFIX}data/foo.json`,
+			body: '{"ok":true}',
+		});
+		expect(res.ok).toBe(true);
+		expect(
+			knowledge.rows.some((r) => r.path === `${PREFIX}data/foo.json`),
+		).toBe(true);
+		expect(
+			knowledge.ctxCalls.every((c) => c.context?.accessMode === "system"),
+		).toBe(true);
+	});
+
+	it("list of OWN subtree SUCCEEDS under system-mode", async () => {
+		const { knowledge, broker, token } = wire([
+			{
+				id: "own",
+				path: `${PREFIX}data/a.json`,
+				title: null,
+				body: "1",
+				contentType: "application/json",
+				metadata: null,
+			},
+		]);
+		const res = await broker.handleRpc(token, "knowledge.list", {
+			path: `${PREFIX}data`,
+		});
+		expect(res.ok).toBe(true);
+		expect(res.ok && (res.value as unknown[]).length).toBe(1);
+		expect(knowledge.ctxCalls).toEqual([
+			{ method: "listByPrefix", context: { accessMode: "system" } },
+		]);
+	});
+
+	it("OUT-OF-SCOPE read is rejected by the CLAMP and NEVER reaches the primitive", async () => {
+		const { knowledge, broker, token } = wire();
+		const res = await broker.handleRpc(token, "knowledge.read", {
+			path: "company/apps/other/data/secret.json",
+		});
+		expect(res.ok).toBe(false);
+		// the clamp returned null → no system-mode call was ever made.
+		expect(knowledge.ctxCalls).toHaveLength(0);
+	});
+
+	it("`..` traversal + own `_app/` write are clamp-rejected before any system-mode call", async () => {
+		const { knowledge, broker, token } = wire();
+		const traversal = await broker.handleRpc(token, "knowledge.read", {
+			path: `${PREFIX}../other/x.json`,
+		});
+		expect(traversal.ok).toBe(false);
+		const appWrite = await broker.handleRpc(token, "knowledge.write", {
+			path: `${PREFIX}_app/manifest.json`,
+			body: "HOSTILE",
+		});
+		expect(appWrite.ok).toBe(false);
+		// neither out-of-scope path ever reached the (system-mode) primitive.
+		expect(knowledge.ctxCalls).toHaveLength(0);
+		expect(knowledge.rows).toHaveLength(0);
+	});
+});
+
 // ─────────────────────── G2: non-privileged dispatch ────────────────────────
 
 describe("G2: collections dispatch as user-mode with a principal", () => {
@@ -397,12 +551,7 @@ describe("G3: relation expansion is denied", () => {
 		const caps = {
 			data: { collections: { posts: ["read"] as Array<"read"> } },
 		};
-		const target = buildMiniAppBindingTarget(
-			APP,
-			ctx,
-			caps,
-			relationFieldsFor,
-		);
+		const target = buildMiniAppBindingTarget(APP, ctx, caps, relationFieldsFor);
 		const broker = new SandboxBroker();
 		const { token } = broker.mint({ capabilities: caps, target });
 		return { rec, broker, token };

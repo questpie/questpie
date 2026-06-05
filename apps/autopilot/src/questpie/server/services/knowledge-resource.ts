@@ -97,6 +97,31 @@ export interface WriteResourceByPathInput {
 	metadata?: Record<string, unknown> | null;
 }
 
+/**
+ * Optional access context for the by-path file-as-DB primitives
+ * ({@link readByPath}/{@link writeByPath}/{@link listByPrefix}).
+ *
+ * These primitives are the storage layer for callers that have ALREADY imposed
+ * their own host-side path authorization (the mini-app bindings clamp every path
+ * to the app's own subtree BEFORE calling — see
+ * `apps/mini-app-bindings.ts` G1). Such a caller passes `accessMode:"system"` so
+ * the `knowledge` collection's user-access rule does NOT additionally gate the
+ * already-clamped own-data access.
+ *
+ * Omitting it (the default) preserves the previous behavior exactly: the
+ * underlying `collections.knowledge.*` calls inherit `accessMode`/`session` from
+ * the surrounding `runWithContext` (ALS) scope. A `system` mode is ONLY ever
+ * sound when the caller has independently authorized the exact path.
+ *
+ * Structurally a partial CRUD/request context (all fields optional, extra keys
+ * allowed) so it threads straight into `collections.knowledge.*`; in practice
+ * only `accessMode` is set here.
+ */
+export interface KnowledgeByPathContext {
+	accessMode?: "user" | "system";
+	[key: string]: unknown;
+}
+
 export function normalizeKnowledgePath(path: string): string {
 	const trimmed = path.trim().replace(/^\/+/, "");
 	const normalized = posix.normalize(trimmed);
@@ -226,11 +251,13 @@ export default service({
 			 */
 			async readByPath(
 				rawPath: string,
+				context?: KnowledgeByPathContext,
 			): Promise<KnowledgeResourceRecord | null> {
 				const path = normalizeKnowledgePath(rawPath);
-				const resource = await collections.knowledge.findOne({
-					where: { path },
-				});
+				const resource = await collections.knowledge.findOne(
+					{ where: { path } },
+					context,
+				);
 				if (!resource) return null;
 				const row = resource as Record<string, unknown>;
 				return {
@@ -254,12 +281,14 @@ export default service({
 			 */
 			async writeByPath(
 				input: WriteResourceByPathInput,
+				context?: KnowledgeByPathContext,
 			): Promise<KnowledgeResourceRecord> {
 				const path = normalizeKnowledgePath(input.path);
 				const contentHash = hashContent(input.body);
-				const existing = await collections.knowledge.findOne({
-					where: { path },
-				});
+				const existing = await collections.knowledge.findOne(
+					{ where: { path } },
+					context,
+				);
 
 				const data = {
 					title: input.title ?? basename(path),
@@ -278,11 +307,14 @@ export default service({
 				};
 
 				const saved = existing
-					? await collections.knowledge.updateById({
-							id: (existing as Record<string, unknown>).id as string,
-							data: data as any,
-						})
-					: await collections.knowledge.create(data as any);
+					? await collections.knowledge.updateById(
+							{
+								id: (existing as Record<string, unknown>).id as string,
+								data: data as any,
+							},
+							context,
+						)
+					: await collections.knowledge.create(data as any, context);
 
 				const row = saved as Record<string, unknown>;
 				return {
@@ -306,12 +338,18 @@ export default service({
 			 * (already normalized by the caller). Returns lightweight entries
 			 * (no bodies) ordered by path.
 			 */
-			async listByPrefix(prefix: string): Promise<KnowledgeResourceEntry[]> {
-				const result = await collections.knowledge.find({
-					where: { path: { startsWith: prefix } },
-					limit: 1000,
-					orderBy: { path: "asc" },
-				});
+			async listByPrefix(
+				prefix: string,
+				context?: KnowledgeByPathContext,
+			): Promise<KnowledgeResourceEntry[]> {
+				const result = await collections.knowledge.find(
+					{
+						where: { path: { startsWith: prefix } },
+						limit: 1000,
+						orderBy: { path: "asc" },
+					},
+					context,
+				);
 				const docs = (result as { docs?: unknown[] }).docs ?? [];
 				return docs
 					.map((doc) => doc as Record<string, unknown>)
