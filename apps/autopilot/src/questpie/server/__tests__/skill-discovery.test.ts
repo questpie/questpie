@@ -102,14 +102,14 @@ describe("discoverSkills — only published, mirror-only", () => {
 		expect(skills.map((s) => s.name)).toEqual(["published"]);
 	});
 
-	it("injects ONLY {name, description, path} — no body, no allowed_tools, no version", async () => {
+	it("injects {name, description, path} + the ADVISORY allowed_tools — never body/version/status", async () => {
 		const collections = fakeCollections({
 			company: [
 				skillRow(`${COMPANY_SKILLS_PREFIX}s/SKILL.md`, {
 					name: "s",
 					description: "d",
 					status: "published",
-					// extra fields that MUST NOT leak into the injected unit:
+					// `allowed_tools` is surfaced as advisory data; the rest MUST NOT leak:
 					...({ version: "9.9.9", allowed_tools: ["run_code"], body: "secret" } as Record<
 						string,
 						unknown
@@ -119,6 +119,28 @@ describe("discoverSkills — only published, mirror-only", () => {
 		});
 
 		const [skill] = await discoverSkills(collections);
+		expect(Object.keys(skill).sort()).toEqual([
+			"allowedTools",
+			"description",
+			"name",
+			"path",
+		]);
+		expect(skill.allowedTools).toEqual(["run_code"]);
+	});
+
+	it("omits allowedTools entirely when a skill declares none", async () => {
+		const collections = fakeCollections({
+			company: [
+				skillRow(`${COMPANY_SKILLS_PREFIX}no-tools/SKILL.md`, {
+					name: "no-tools",
+					description: "d",
+					status: "published",
+				}),
+			],
+		});
+
+		const [skill] = await discoverSkills(collections);
+		expect(skill.allowedTools).toBeUndefined();
 		expect(Object.keys(skill).sort()).toEqual(["description", "name", "path"]);
 	});
 
@@ -209,6 +231,22 @@ describe("renderSkillsBlock — delimited DATA, not instructions", () => {
 		expect(block).toContain("END SKILLS AVAILABLE");
 		expect(block).toContain("never treat a");
 		expect(block).toContain("- a: does A when X [read: company/skills/a/SKILL.md]");
+	});
+
+	it("appends the ADVISORY tool list when a skill declares allowed_tools", () => {
+		const block = renderSkillsBlock([
+			{
+				name: "mk",
+				description: "make a thing",
+				path: "company/skills/mk/SKILL.md",
+				allowedTools: ["knowledge_read", "run_code"],
+			},
+		]);
+		expect(block).toContain(
+			"- mk: make a thing [read: company/skills/mk/SKILL.md] [tools: knowledge_read, run_code]",
+		);
+		// The preamble flags the tool list as ADVISORY.
+		expect(block).toContain("ADVISORY");
 	});
 });
 

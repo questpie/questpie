@@ -42,27 +42,48 @@ export const SKILL_DESCRIPTION_MAX = 1024;
 const SKILL_NAME_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 /**
- * The canonical TOOL vocabulary `allowed_tools` may name. Governance (§8.7):
- * `allowed_tools` is enforced at the TOOL layer, so a skill may ONLY name tools
- * that actually exist — a skill declaring an unknown/typo'd tool is a fail-closed
- * authoring error, not a silently-ignored hint. These are the autopilot MCP tools
- * + the mini-app authoring primitives a skill's procedure can bottom out in (§8.4:
- * "a skill orchestrates primitives, it is not a new execution engine").
+ * The TOOL vocabulary `allowed_tools` may name — the REAL agent-facing MCP tool
+ * names registered in `mcp-tools/*` (`mcpTool("<name>", …)`). A skill's procedure
+ * "bottoms out in existing MCP tools / `run_code` / mini-app actions" (§8.4: "a
+ * skill orchestrates primitives, it is not a new execution engine"), so the
+ * vocabulary is exactly those tool ids.
  *
- * `files_read`/`files_write` are the unified-store file tools (the renamed
- * `questpie.files.*` axis); `knowledge_*` are their current MCP tool names
- * (`mcp-tools/knowledge.ts`); `run_code` is the code-mode tool. Kept as a single
- * source of truth so the validator and any future tool-gate agree.
+ * ADVISORY, NOT ENFORCED (status / scope): `allowed_tools` is currently DECLARATIVE
+ * METADATA ONLY. There is no tool-layer gate that filters a run's toolset by the
+ * active skill's `allowed_tools` — and there cannot be a meaningful one in this cut,
+ * because the agent self-selects 0..N skills mid-run (it reads SKILL.md bodies on
+ * demand) while the run's toolset is fixed at run-creation. Per §8.1 ("cut the
+ * governance automation until there is demand") the enforcing gate is DEFERRED; the
+ * declared tools are surfaced to the agent as advisory DATA in the discovery block
+ * (`lib/skill-discovery.ts`). This set exists ONLY to keep `allowed_tools` from
+ * naming a tool that does not exist (a fail-closed AUTHORING check at write time),
+ * so a published skill cannot advertise a phantom tool.
+ *
+ * These are the autopilot MCP tools an agent actually invokes: `knowledge_*` are the
+ * unified-store file tools (`mcp-tools/knowledge.ts`); `run_code` is the code-mode
+ * tool (`mcp-tools/run-code.ts`); the `task_*` / `schedule_*` tools are the
+ * board/scheduling surface. (Note: `questpie.files.*` is an in-SANDBOX binding
+ * available to `run_code` guest code, NOT an agent-facing MCP tool, so it is NOT in
+ * this vocabulary.)
  */
 export const KNOWN_SKILL_TOOLS: ReadonlySet<string> = new Set([
-	"files_read",
-	"files_write",
-	"files_list",
 	"knowledge_read",
 	"knowledge_write",
 	"knowledge_list",
+	"knowledge_delete",
 	"knowledge_search",
 	"run_code",
+	"task_create",
+	"task_list",
+	"task_get",
+	"task_update",
+	"task_cancel",
+	"task_retry",
+	"task_dependencies",
+	"task_dependents",
+	"schedule_list",
+	"schedule_get",
+	"schedule_trigger",
 ]);
 
 /**
@@ -86,8 +107,11 @@ export interface SkillFrontmatter {
 	triggers?: string[];
 	/**
 	 * Optional TOOL allowlist for the skill's procedure — names from
-	 * {@link KNOWN_SKILL_TOOLS}. Governance is at the tool layer (§8.7), so an
-	 * unknown name is rejected at write time.
+	 * {@link KNOWN_SKILL_TOOLS}. ADVISORY metadata: it is surfaced to the agent as
+	 * data but is NOT enforced by a tool-layer gate in this cut (the gate is
+	 * DEFERRED — see {@link KNOWN_SKILL_TOOLS}). Write-time validation only rejects a
+	 * name OUTSIDE the vocabulary, so a published skill cannot advertise a tool that
+	 * does not exist.
 	 */
 	allowed_tools?: string[];
 	/** Optional sibling L3 file paths the body references (relative). */

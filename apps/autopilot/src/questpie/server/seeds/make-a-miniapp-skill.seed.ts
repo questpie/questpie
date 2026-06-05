@@ -37,7 +37,7 @@ name: make-a-miniapp
 description: Build a mini-app inside Autopilot — an executable file (server.ts opt-in actions + optional index.html/app.jsx UI) with an inline capability manifest, cron and/or named actions. Use when the user asks to create an automation, tool, scheduler, dashboard, or any in-Autopilot app that runs code or persists data.
 version: 1.0.0
 status: published
-allowed_tools: [files_read, files_write, run_code]
+allowed_tools: [knowledge_read, knowledge_write, run_code]
 references:
   - server.template.ts
   - manifest.reference.md
@@ -61,19 +61,22 @@ it at \`company/apps/{appId}/data/\`. There is no build step.
    \`index.html\` + an \`app.jsx\` (no-build JSX, see \`references/jsx-convention.md\`).
 
 3. **Write \`server.ts\`** (the REQUIRED entry — read \`server.template.ts\` for a full
-   copy-paste skeleton). It MUST contain, as top-level exports:
+   copy-paste skeleton). The module runs SANDBOXED and is loaded INTACT — it must
+   NOT import anything from \`questpie\` (the host injects \`globalThis.questpie\`; there
+   is no \`questpie/miniapp\` module). It MUST contain, as top-level exports:
    - \`export const manifest = { … }\` — the INLINE, default-deny capability scope.
      It is a STATIC object literal (no variables/calls — it is re-parsed without
      running your code on EVERY request). See \`manifest.reference.md\` for the axes.
-   - the \`defineAction({ input?, handler })\` handlers (import \`defineAction\` from
-     \`questpie/miniapp\`), assigned to top-level \`const\`s.
+   - the action handlers as plain async functions assigned to top-level \`const\`s:
+     \`const status = async function (input) { … }\` (or \`async (input) => { … }\`).
    - \`export const actions = { … }\` — the OPT-IN HTTP surface. ONLY the keys of this
      object are callable at \`/api/apps/{appId}/{action}\`. An export NOT in this
      object is never HTTP-reachable (this is the security boundary — opt-in, never
      "every export").
-   - optional \`export const cron = async () => { … }\` — a scheduled handler. Cron is
-     inferred BY NAME (\`cron\` or \`cron\`-prefixed like \`cronDigest\`); it has NO HTTP
-     exposure. \`export default\` is RESERVED (treated as cron, never an action).
+   - optional \`export const cron = async function (input) { … }\` — a scheduled
+     handler. Cron is inferred BY NAME (\`cron\` or \`cron\`-prefixed like \`cronDigest\`);
+     it has NO HTTP exposure. \`export default\` is RESERVED (treated as cron, never an
+     action).
 
    Reserved names you may NOT use as an action key or cron name: \`manifest\`,
    \`actions\`, \`cron\`, \`fetch\`, \`default\` — a collision FAILS CLOSED.
@@ -108,16 +111,16 @@ queued-posts file "sent", and the opt-in \`actions = { status }\` registry.
 
 /**
  * L3: a copy-paste `server.ts` skeleton. Kept faithful to the resolver contract
- * (inline static manifest + `defineAction` + opt-in `actions` + optional cron).
+ * (inline static manifest + plain async handlers + opt-in `actions` + optional
+ * cron; NO imports — the guest module is loaded intact and never imports `questpie`).
  */
 const SERVER_TEMPLATE = `// {appId}.app/server.ts — a mini-app server entry skeleton.
 //
 // Runs SANDBOXED. The host injects \`globalThis.questpie\` (capability-scoped to your
-// manifest); you NEVER import the app. The manifest is re-parsed + re-validated
-// WITHOUT running this file on every request, so it MUST be a static object literal.
-
-import { defineAction } from "questpie/miniapp";
-import { z } from "zod";
+// manifest) + the allowlisted \`fetch\`; you NEVER import anything (the module is
+// loaded intact — there is no \`questpie/miniapp\` package). The manifest is re-parsed
+// + re-validated WITHOUT running this file on every request, so it MUST be a static
+// object literal.
 
 // 1) INLINE capability manifest (default-deny; every axis optional). STATIC literal.
 export const manifest = {
@@ -136,16 +139,14 @@ export const manifest = {
   },
 };
 
-// 2) Action handlers — assign each to a top-level const. \`input\` is optional.
-const ping = defineAction({
-  input: z.object({ message: z.string() }),
-  handler: async (input) => {
-    return { ok: true, echo: input.message };
-  },
-});
+// 2) Action handlers — plain async functions, each assigned to a top-level const.
+//    \`input\` is the (already-parsed) request body; validate it yourself if needed.
+const ping = async function (input) {
+  return { ok: true, echo: input && input.message };
+};
 
 // 3) Optional cron (inferred by name; NO HTTP exposure).
-export const cron = async () => {
+export const cron = async function (input) {
   // periodic work — e.g. read/write the app's data/ subtree via questpie.files.*
   return { ok: true };
 };
@@ -237,10 +238,12 @@ at \`company/apps/social-scheduler/data/\`.
 
 ## \`company/apps/social-scheduler.app/server.ts\`
 
-\`\`\`ts
-import { defineAction } from "questpie/miniapp";
-import { z } from "zod";
+The module is loaded INTACT and runs sandboxed — it imports NOTHING (no
+\`questpie/miniapp\`); the host injects \`globalThis.questpie\` + the allowlisted
+\`fetch\`. Handlers are plain async functions; the opt-in \`actions\` registry is the
+HTTP surface.
 
+\`\`\`ts
 export const manifest = {
   name: "Social Scheduler",
   capabilities: {
@@ -272,18 +275,15 @@ async function readQueue() {
 }
 
 // ACTION (opt-in below): GET|POST /api/apps/social-scheduler/status
-const status = defineAction({
-  input: z.object({}).optional(),
-  handler: async () => {
-    const queue = await readQueue();
-    const res = await fetch("https://jsonplaceholder.typicode.com/todos/1");
-    const todo = await res.json();
-    return { ok: true, queueCount: queue.length, fetchedTitle: todo.title };
-  },
-});
+async function status(input) {
+  const queue = await readQueue();
+  const res = await fetch("https://jsonplaceholder.typicode.com/todos/1");
+  const todo = await res.json();
+  return { ok: true, queueCount: queue.length, fetchedTitle: todo.title };
+}
 
 // CRON (inferred by name; not HTTP): mark queued posts "sent".
-export const cron = async () => {
+export const cron = async function (input) {
   const queue = await readQueue();
   let sent = 0;
   const updated = queue.map((post) => {
