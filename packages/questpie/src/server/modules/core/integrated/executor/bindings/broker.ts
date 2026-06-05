@@ -46,14 +46,38 @@ export interface BindingTarget {
 		list?(args: unknown): Promise<unknown>;
 	};
 	/**
-	 * Per-collection accessor. The broker only calls `find`/`findOne` in the MVP;
-	 * the target may expose more, but the broker will not dispatch them yet.
+	 * Per-collection accessor mirroring the binding op vocabulary
+	 * (`collections.<name>.<op>`). The broker dispatches the read half
+	 * (`find`/`findOne`) AND the write half (`create`/`update`/`delete`); each is
+	 * OPTIONAL, so a target may expose only the ops a run is scoped for. A method
+	 * that is in-scope but has no handler resolves to `not_implemented`.
+	 *
+	 * The op names are the BINDING ops, not the underlying `ctx` CRUD names: the
+	 * runner maps `update`→by-`where` update and `delete`→by-`where` delete when it
+	 * builds the target (see the mini-app bindings runner), so the broker never
+	 * needs to know the real CRUD signatures.
 	 */
 	collections?: Record<
 		string,
 		{
 			find?(args: unknown): Promise<unknown>;
 			findOne?(args: unknown): Promise<unknown>;
+			create?(args: unknown): Promise<unknown>;
+			update?(args: unknown): Promise<unknown>;
+			delete?(args: unknown): Promise<unknown>;
+		}
+	>;
+	/**
+	 * Per-global accessor mirroring the binding op vocabulary
+	 * (`globals.<name>.<op>`): `get` (read) + `set` (write). As with collections
+	 * the op names are the BINDING ops — the runner maps `set` to the real global
+	 * `update` when it builds the target. Handlers are OPTIONAL.
+	 */
+	globals?: Record<
+		string,
+		{
+			get?(args: unknown): Promise<unknown>;
+			set?(args: unknown): Promise<unknown>;
 		}
 	>;
 }
@@ -183,8 +207,9 @@ export class SandboxBroker {
 			);
 		}
 
-		// 3. DISPATCH to the bound primitive surface (MVP: knowledge + collection
-		//    reads). In-scope methods without a handler are an honest deferral.
+		// 3. DISPATCH to the bound primitive surface (knowledge + collection
+		//    read/write + globals get/set). In-scope methods without a handler are an
+		//    honest deferral.
 		const parsed = parseBindingMethod(method);
 		// `parsed` is non-null here (the check passed), but guard for the type.
 		if (!parsed) {
@@ -219,12 +244,12 @@ export class SandboxBroker {
 		}
 
 		if (parsed.kind === "collection") {
-			if (parsed.op !== "find" && parsed.op !== "findOne") {
-				return brokerError(
-					"not_implemented",
-					`collections.${parsed.name}.${parsed.op} is not dispatched in this MVP`,
-				);
-			}
+			// Read AND write ops (`find/findOne/create/update/delete`) all dispatch
+			// here. The per-call capability check (default-deny) ran in `handleRpc`
+			// BEFORE this method, so an ungranted collection/verb never reaches the
+			// target — including every write op (defense: enforcement is upstream of
+			// dispatch, with NO write-path bypass).
+			//
 			// Own-property lookup so a `__proto__`/`constructor` name can never reach
 			// up the prototype chain (the capability check already denied it, but the
 			// dispatch target stays prototype-safe too — defense in depth).
@@ -243,8 +268,26 @@ export class SandboxBroker {
 			return { ok: true, value: await fn(args ?? {}) };
 		}
 
-		// globals / services / jobs / workflows / email: capability-checkable but
-		// not dispatched in the MVP. Fail closed as a clear deferral.
+		if (parsed.kind === "global") {
+			// `get` (read) + `set` (write); both are capability-checked upstream in
+			// `handleRpc`. Same prototype-safe own-property lookup as collections.
+			const globals = target.globals;
+			const glob =
+				globals && Object.prototype.hasOwnProperty.call(globals, parsed.name)
+					? globals[parsed.name]
+					: undefined;
+			const fn = glob?.[parsed.op];
+			if (!fn) {
+				return brokerError(
+					"not_implemented",
+					`globals.${parsed.name}.${parsed.op} has no host handler`,
+				);
+			}
+			return { ok: true, value: await fn(args ?? {}) };
+		}
+
+		// services / jobs / workflows / email: capability-checkable but not
+		// dispatched in this MVP. Fail closed as a clear deferral.
 		return brokerError(
 			"not_implemented",
 			`${parsed.kind} dispatch is not implemented in this MVP`,

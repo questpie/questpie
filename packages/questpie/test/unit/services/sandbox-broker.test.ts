@@ -383,6 +383,37 @@ function fakeTarget() {
 					return { id: "o1" };
 				},
 			},
+			// A collection with the full WRITE surface, used by the write-dispatch tests.
+			posts: {
+				find: async (args) => {
+					calls.push({ method: "collections.posts.find", args });
+					return { docs: [] };
+				},
+				create: async (args) => {
+					calls.push({ method: "collections.posts.create", args });
+					return { id: "p1", created: true };
+				},
+				update: async (args) => {
+					calls.push({ method: "collections.posts.update", args });
+					return [{ id: "p1", updated: true }];
+				},
+				delete: async (args) => {
+					calls.push({ method: "collections.posts.delete", args });
+					return { success: true, count: 1 };
+				},
+			},
+		},
+		globals: {
+			settings: {
+				get: async (args) => {
+					calls.push({ method: "globals.settings.get", args });
+					return { theme: "dark" };
+				},
+				set: async (args) => {
+					calls.push({ method: "globals.settings.set", args });
+					return { theme: "light", updated: true };
+				},
+			},
 		},
 	};
 	return { target, calls };
@@ -536,13 +567,14 @@ describe("SandboxBroker — per-call enforcement + dispatch (THE security bounda
 
 	it("returns not_implemented for an in-scope method with no dispatch handler", async () => {
 		const broker = new SandboxBroker();
-		// Grant globals.read, but the target has no globals handler (MVP defers it).
+		// Grant a service (capability-checkable) — but services are NOT dispatched in
+		// this MVP, so an in-scope service call is an honest `not_implemented`.
 		const { target } = fakeTarget();
 		const { token } = broker.mint({
-			capabilities: { data: { globals: { settings: ["read"] } } },
+			capabilities: { services: ["postToSocial"] },
 			target,
 		});
-		const r = await broker.handleRpc(token, "globals.settings.get", {});
+		const r = await broker.handleRpc(token, "services.postToSocial.run", {});
 		expect(r.ok).toBe(false);
 		if (!r.ok) expect(r.error.code).toBe("not_implemented");
 	});
@@ -583,5 +615,222 @@ describe("SandboxBroker — per-call enforcement + dispatch (THE security bounda
 			expect(r.error.code).toBe("execution_error");
 			expect(r.error.message).toContain("db exploded");
 		}
+	});
+});
+
+// ──────────────────────────────────────────────────────────────────────────
+// SandboxBroker — WRITE-half dispatch (create/update/delete + globals get/set).
+//
+// The headline invariant: EVERY write op flows through the SAME default-deny
+// capability chokepoint as reads (it runs in `handleRpc` BEFORE `dispatch`), so
+// an ungranted collection/verb is `forbidden` and the bound target is NEVER
+// invoked — there is NO write-path bypass.
+// ──────────────────────────────────────────────────────────────────────────
+
+/** A run scoped for the FULL write surface on `posts` + globals `settings`. */
+const WRITE_SCOPE: ExecutorCapabilities = {
+	data: {
+		collections: { posts: ["read", "create", "update", "delete"] },
+		globals: { settings: ["read", "write"] },
+	},
+};
+
+describe("SandboxBroker — collection write dispatch (create/update/delete)", () => {
+	it("dispatches each GRANTED write verb to the bound target and returns its value", async () => {
+		const broker = new SandboxBroker();
+		const { target, calls } = fakeTarget();
+		const { token } = broker.mint({ capabilities: WRITE_SCOPE, target });
+
+		const created = await broker.handleRpc(token, "collections.posts.create", {
+			data: { title: "hi" },
+		});
+		expect(created).toEqual({ ok: true, value: { id: "p1", created: true } });
+
+		const updated = await broker.handleRpc(token, "collections.posts.update", {
+			where: { id: "p1" },
+			data: { title: "bye" },
+		});
+		expect(updated).toEqual({ ok: true, value: [{ id: "p1", updated: true }] });
+
+		const deleted = await broker.handleRpc(token, "collections.posts.delete", {
+			where: { id: "p1" },
+		});
+		expect(deleted).toEqual({ ok: true, value: { success: true, count: 1 } });
+
+		expect(calls.map((c) => c.method)).toEqual([
+			"collections.posts.create",
+			"collections.posts.update",
+			"collections.posts.delete",
+		]);
+	});
+
+	it("FAILS CLOSED: an ungranted write verb is forbidden, target NEVER called", async () => {
+		const broker = new SandboxBroker();
+		const { target, calls } = fakeTarget();
+		// Grant ONLY read on posts — every write verb must be denied.
+		const readOnly: ExecutorCapabilities = {
+			data: { collections: { posts: ["read"] } },
+		};
+		const { token } = broker.mint({ capabilities: readOnly, target });
+
+		for (const op of ["create", "update", "delete"] as const) {
+			const r = await broker.handleRpc(token, `collections.posts.${op}`, {
+				data: {},
+				where: {},
+			});
+			expect(r.ok).toBe(false);
+			if (!r.ok) {
+				expect(r.error.code).toBe("forbidden");
+				expect(r.error.message).toContain(op);
+			}
+		}
+		// The chokepoint denied BEFORE dispatch — no write handler ran.
+		expect(calls.length).toBe(0);
+	});
+
+	it("FAILS CLOSED: a write to an UNGRANTED collection is forbidden", async () => {
+		const broker = new SandboxBroker();
+		const { target, calls } = fakeTarget();
+		const { token } = broker.mint({ capabilities: WRITE_SCOPE, target });
+		// `orders` is not in WRITE_SCOPE at all.
+		const r = await broker.handleRpc(token, "collections.orders.create", {
+			data: {},
+		});
+		expect(r.ok).toBe(false);
+		if (!r.ok) expect(r.error.code).toBe("forbidden");
+		expect(calls.length).toBe(0);
+	});
+
+	it("partial grant: create allowed, delete denied (per-verb granularity)", async () => {
+		const broker = new SandboxBroker();
+		const { target } = fakeTarget();
+		const caps: ExecutorCapabilities = {
+			data: { collections: { posts: ["create"] } },
+		};
+		const { token } = broker.mint({ capabilities: caps, target });
+
+		const ok = await broker.handleRpc(token, "collections.posts.create", {
+			data: {},
+		});
+		expect(ok.ok).toBe(true);
+
+		const denied = await broker.handleRpc(token, "collections.posts.delete", {
+			where: {},
+		});
+		expect(denied.ok).toBe(false);
+		if (!denied.ok) expect(denied.error.code).toBe("forbidden");
+	});
+
+	it("granted verb but NO target handler → not_implemented (honest deferral)", async () => {
+		const broker = new SandboxBroker();
+		// `orders` is granted create but its target exposes only find/findOne.
+		const { target } = fakeTarget();
+		const caps: ExecutorCapabilities = {
+			data: { collections: { orders: ["read", "create"] } },
+		};
+		const { token } = broker.mint({ capabilities: caps, target });
+		const r = await broker.handleRpc(token, "collections.orders.create", {
+			data: {},
+		});
+		expect(r.ok).toBe(false);
+		if (!r.ok) expect(r.error.code).toBe("not_implemented");
+	});
+
+	it("a write target throw surfaces as execution_error (never throws)", async () => {
+		const broker = new SandboxBroker();
+		const target: BindingTarget = {
+			collections: {
+				posts: {
+					create: async () => {
+						throw new Error("constraint violation");
+					},
+				},
+			},
+		};
+		const { token } = broker.mint({ capabilities: WRITE_SCOPE, target });
+		const r = await broker.handleRpc(token, "collections.posts.create", {
+			data: {},
+		});
+		expect(r.ok).toBe(false);
+		if (!r.ok) {
+			expect(r.error.code).toBe("execution_error");
+			expect(r.error.message).toContain("constraint violation");
+		}
+	});
+
+	it("a prototype-chain collection name on a write is forbidden (no crash)", async () => {
+		const broker = new SandboxBroker();
+		const { target } = fakeTarget();
+		const { token } = broker.mint({ capabilities: WRITE_SCOPE, target });
+		const r = await broker.handleRpc(token, "collections.__proto__.create", {
+			data: {},
+		});
+		expect(r.ok).toBe(false);
+		if (!r.ok) expect(r.error.code).toBe("forbidden");
+	});
+});
+
+describe("SandboxBroker — global dispatch (get/set)", () => {
+	it("dispatches a GRANTED globals.get and globals.set", async () => {
+		const broker = new SandboxBroker();
+		const { target, calls } = fakeTarget();
+		const { token } = broker.mint({ capabilities: WRITE_SCOPE, target });
+
+		const got = await broker.handleRpc(token, "globals.settings.get", {});
+		expect(got).toEqual({ ok: true, value: { theme: "dark" } });
+
+		const set = await broker.handleRpc(token, "globals.settings.set", {
+			data: { theme: "light" },
+		});
+		expect(set).toEqual({
+			ok: true,
+			value: { theme: "light", updated: true },
+		});
+		expect(calls.map((c) => c.method)).toEqual([
+			"globals.settings.get",
+			"globals.settings.set",
+		]);
+	});
+
+	it("FAILS CLOSED: globals.set with only read granted is forbidden", async () => {
+		const broker = new SandboxBroker();
+		const { target, calls } = fakeTarget();
+		const caps: ExecutorCapabilities = {
+			data: { globals: { settings: ["read"] } },
+		};
+		const { token } = broker.mint({ capabilities: caps, target });
+		const r = await broker.handleRpc(token, "globals.settings.set", {
+			data: {},
+		});
+		expect(r.ok).toBe(false);
+		if (!r.ok) expect(r.error.code).toBe("forbidden");
+		// get is allowed though.
+		const ok = await broker.handleRpc(token, "globals.settings.get", {});
+		expect(ok.ok).toBe(true);
+		// only the allowed get reached the target.
+		expect(calls.map((c) => c.method)).toEqual(["globals.settings.get"]);
+	});
+
+	it("FAILS CLOSED: an UNGRANTED global is forbidden", async () => {
+		const broker = new SandboxBroker();
+		const { target, calls } = fakeTarget();
+		const { token } = broker.mint({ capabilities: WRITE_SCOPE, target });
+		const r = await broker.handleRpc(token, "globals.secrets.get", {});
+		expect(r.ok).toBe(false);
+		if (!r.ok) expect(r.error.code).toBe("forbidden");
+		expect(calls.length).toBe(0);
+	});
+
+	it("granted global but NO handler → not_implemented", async () => {
+		const broker = new SandboxBroker();
+		// target with no globals at all.
+		const target: BindingTarget = { collections: {} };
+		const caps: ExecutorCapabilities = {
+			data: { globals: { settings: ["read"] } },
+		};
+		const { token } = broker.mint({ capabilities: caps, target });
+		const r = await broker.handleRpc(token, "globals.settings.get", {});
+		expect(r.ok).toBe(false);
+		if (!r.ok) expect(r.error.code).toBe("not_implemented");
 	});
 });

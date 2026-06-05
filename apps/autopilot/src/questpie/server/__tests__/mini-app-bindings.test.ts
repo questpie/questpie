@@ -125,6 +125,18 @@ function recordingCollection(returnDocs: unknown[]) {
 				calls.push({ method: "findOne", args, context });
 				return returnDocs[0] ?? null;
 			},
+			async create(args: unknown, context?: unknown) {
+				calls.push({ method: "create", args, context });
+				return { id: "new", ...(args as Record<string, unknown>) };
+			},
+			async update(args: unknown, context?: unknown) {
+				calls.push({ method: "update", args, context });
+				return [{ id: "p1", updated: true }];
+			},
+			async delete(args: unknown, context?: unknown) {
+				calls.push({ method: "delete", args, context });
+				return { success: true, count: 1 };
+			},
 		},
 	};
 }
@@ -655,6 +667,196 @@ describe("G3: relation expansion is denied", () => {
 		await expect(
 			target.collections!.posts!.find!({ with: { x: true } }),
 		).rejects.toBeInstanceOf(MiniAppBindingError);
+	});
+});
+
+// ─────────────────── WRITE dispatch: G2 + G3 on create/update/delete ─────────
+//
+// The broker (packages/questpie core) now dispatches the WRITE half. These tests
+// drive it through the REAL `SandboxBroker.handleRpc` chokepoint with a fake ctx
+// and assert the HOST-SIDE runner invariants on writes: G2 (user-mode + the run's
+// non-privileged principal, NEVER system) and G3 (no relation smuggled via the
+// create/update payload OR the update/delete `where` oracle). The capability check
+// (default-deny, per-verb) is also re-exercised end-to-end.
+
+describe("WRITE: per-verb capability gating through the real broker", () => {
+	function wire(
+		grants: Array<"read" | "create" | "update" | "delete">,
+		relationFieldsFor: (name: string) => Set<string> | null = noRelations,
+	) {
+		const rec = recordingCollection([{ id: "p1" }]);
+		const ctx = makeCtx({
+			collections: { posts: rec.collection },
+			session: { user: { id: "user_123" } },
+		});
+		const caps = { data: { collections: { posts: grants } } };
+		const target = buildMiniAppBindingTarget(APP, ctx, caps, relationFieldsFor);
+		const broker = new SandboxBroker();
+		const { token } = broker.mint({ capabilities: caps, target });
+		return { rec, broker, token };
+	}
+
+	it("GRANTED create dispatches under user-mode + the run's principal (G2)", async () => {
+		const { rec, broker, token } = wire(["create"]);
+		const res = await broker.handleRpc(token, "collections.posts.create", {
+			title: "hello",
+		});
+		expect(res.ok).toBe(true);
+		expect(rec.calls).toHaveLength(1);
+		const ctxArg = rec.calls[0]!.context as {
+			accessMode?: string;
+			session?: { user?: { id?: string } };
+		};
+		// G2: NEVER system; carries the run's real principal.
+		expect(ctxArg.accessMode).toBe("user");
+		expect(ctxArg.accessMode).not.toBe("system");
+		expect(ctxArg.session?.user?.id).toBe("user_123");
+	});
+
+	it("GRANTED update / delete dispatch (by-where) under user-mode", async () => {
+		const { rec, broker, token } = wire(["update", "delete"]);
+		const upd = await broker.handleRpc(token, "collections.posts.update", {
+			where: { id: "p1" },
+			data: { title: "x" },
+		});
+		expect(upd.ok).toBe(true);
+		const del = await broker.handleRpc(token, "collections.posts.delete", {
+			where: { id: "p1" },
+		});
+		expect(del.ok).toBe(true);
+		expect(rec.calls.map((c) => c.method)).toEqual(["update", "delete"]);
+		for (const call of rec.calls) {
+			expect((call.context as { accessMode?: string }).accessMode).toBe("user");
+		}
+	});
+
+	it("FAILS CLOSED: a write verb NOT granted is forbidden, collection never called", async () => {
+		// read-only grant → every write verb denied at the broker chokepoint.
+		const { rec, broker, token } = wire(["read"]);
+		for (const op of ["create", "update", "delete"] as const) {
+			const res = await broker.handleRpc(token, `collections.posts.${op}`, {
+				data: {},
+				where: {},
+			});
+			expect(res.ok).toBe(false);
+			expect(res.ok === false && res.error.code).toBe("forbidden");
+		}
+		expect(rec.calls).toHaveLength(0);
+	});
+});
+
+describe("WRITE G3: relation smuggling on writes is rejected", () => {
+	function wire(relationFieldsFor: (name: string) => Set<string> | null) {
+		const rec = recordingCollection([{ id: "p1" }]);
+		const ctx = makeCtx({ collections: { posts: rec.collection } });
+		const caps = {
+			data: {
+				collections: {
+					posts: ["read", "create", "update", "delete"] as Array<
+						"read" | "create" | "update" | "delete"
+					>,
+				},
+			},
+		};
+		const target = buildMiniAppBindingTarget(APP, ctx, caps, relationFieldsFor);
+		const broker = new SandboxBroker();
+		const { token } = broker.mint({ capabilities: caps, target });
+		return { rec, broker, token };
+	}
+
+	it("create with a relation key in the payload is REJECTED (nested mutation)", async () => {
+		const { rec, broker, token } = wire(relations({ posts: ["author"] }));
+		const res = await broker.handleRpc(token, "collections.posts.create", {
+			title: "hi",
+			author: { connect: { id: "secret-user" } },
+		});
+		expect(res.ok).toBe(false);
+		expect(res.ok === false && res.error.code).toBe("execution_error");
+		// the underlying create (→ would write into the related collection) NEVER ran.
+		expect(rec.calls).toHaveLength(0);
+	});
+
+	it("create with only SCALAR payload fields still works", async () => {
+		const { rec, broker, token } = wire(relations({ posts: ["author"] }));
+		const res = await broker.handleRpc(token, "collections.posts.create", {
+			title: "hi",
+			views: 0,
+		});
+		expect(res.ok).toBe(true);
+		expect(rec.calls).toHaveLength(1);
+	});
+
+	it("update with a relation in `data` is REJECTED", async () => {
+		const { rec, broker, token } = wire(relations({ posts: ["author"] }));
+		const res = await broker.handleRpc(token, "collections.posts.update", {
+			where: { id: "p1" },
+			data: { author: { connect: { id: "x" } } },
+		});
+		expect(res.ok).toBe(false);
+		expect(rec.calls).toHaveLength(0);
+	});
+
+	it("update with a relation in `where` (oracle) is REJECTED", async () => {
+		const { rec, broker, token } = wire(relations({ posts: ["author"] }));
+		const res = await broker.handleRpc(token, "collections.posts.update", {
+			where: { author: { id: "secret-user" } },
+			data: { title: "x" },
+		});
+		expect(res.ok).toBe(false);
+		expect(rec.calls).toHaveLength(0);
+	});
+
+	it("delete with a relation in `where` (oracle) is REJECTED", async () => {
+		const { rec, broker, token } = wire(relations({ posts: ["author"] }));
+		const res = await broker.handleRpc(token, "collections.posts.delete", {
+			where: { author: { id: "secret-user" } },
+		});
+		expect(res.ok).toBe(false);
+		expect(rec.calls).toHaveLength(0);
+	});
+
+	it("a scalar update/delete `where` + `data` still works", async () => {
+		const { rec, broker, token } = wire(relations({ posts: ["author"] }));
+		const upd = await broker.handleRpc(token, "collections.posts.update", {
+			where: { title: "old" },
+			data: { title: "new" },
+		});
+		expect(upd.ok).toBe(true);
+		const del = await broker.handleRpc(token, "collections.posts.delete", {
+			where: { archived: true },
+		});
+		expect(del.ok).toBe(true);
+		expect(rec.calls.map((c) => c.method)).toEqual(["update", "delete"]);
+	});
+
+	it("FAILS CLOSED: an unknown relation set rejects every write payload/where", async () => {
+		const { rec, broker, token } = wire(unknownRelations);
+		// create with ANY payload key is rejected (can't prove a key isn't a relation).
+		const create = await broker.handleRpc(token, "collections.posts.create", {
+			title: "hi",
+		});
+		expect(create.ok).toBe(false);
+		// update/delete with ANY where field is rejected.
+		const update = await broker.handleRpc(token, "collections.posts.update", {
+			where: { title: "x" },
+			data: { title: "y" },
+		});
+		expect(update.ok).toBe(false);
+		const del = await broker.handleRpc(token, "collections.posts.delete", {
+			where: { title: "x" },
+		});
+		expect(del.ok).toBe(false);
+		expect(rec.calls).toHaveLength(0);
+	});
+
+	it("FAILS CLOSED: an empty-where delete is still allowed (nothing to leak)…", async () => {
+		// With a KNOWN (empty) relation set, a no-field delete has no oracle to smuggle.
+		const { rec, broker, token } = wire(noRelations);
+		const del = await broker.handleRpc(token, "collections.posts.delete", {
+			where: {},
+		});
+		expect(del.ok).toBe(true);
+		expect(rec.calls).toHaveLength(1);
 	});
 });
 

@@ -26,15 +26,14 @@
  * names (consistent-naming principle). Methods are addressed as dotted strings
  * so the wire protocol stays a flat `{ method, args }`.
  *
- * MVP (this task) ENFORCES + DISPATCHES:
+ * ENFORCED + DISPATCHED:
  *   - `knowledge.read` | `knowledge.write` | `knowledge.list`
- *   - `collections.<name>.find` | `collections.<name>.findOne`
+ *   - `collections.<name>.find|findOne|create|update|delete`
+ *   - `globals.<name>.get|set`
  *
  * Typed + capability-CHECKED here but DISPATCH deferred (no target handler yet —
  * the broker rejects them as `not_implemented` until a future task wires them):
- *   - `collections.<name>.create|update|delete`, `globals.<name>.get|set`,
- *     `services.<name>.<fn>`, `jobs.enqueue`, `workflows.trigger`,
- *     `email.send`.
+ *   - `services.<name>.<fn>`, `jobs.enqueue`, `workflows.trigger`, `email.send`.
  */
 export type BindingMethod = string;
 
