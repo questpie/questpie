@@ -102,6 +102,16 @@ export {
 	TooltipContent,
 	TooltipTrigger,
 } from "#questpie/admin/client/components/ui/tooltip.js";
+// Drag-and-drop upload primitive — so custom views (e.g. the autopilot Files
+// browser) reuse the exact upload affordance + validation as the built-in fields.
+export { Dropzone } from "#questpie/admin/client/components/primitives/dropzone.js";
+// Filename sanitizer used before writing/uploading a dropped file.
+export { sanitizeFilename } from "#questpie/admin/client/components/fields/field-utils.js";
+// Class-name merge helper (clsx + tailwind-merge) for custom views.
+export { cn } from "#questpie/admin/client/lib/utils.js";
+// Toast — the same instance the admin shell's mounted <Toaster> listens to, so
+// custom views surface feedback through the admin's notification surface.
+export { toast } from "sonner";
 export { useResolveText } from "#questpie/admin/client/i18n/hooks.js";
 export type {
 	AdminSidebarBrandProps,

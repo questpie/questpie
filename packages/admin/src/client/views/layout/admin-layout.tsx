@@ -329,7 +329,7 @@ function AdminShellRail({
 				<button
 					type="button"
 					onClick={() => setCollapsed(false)}
-					className="text-muted-foreground hover:bg-muted hover:text-foreground mt-3 flex size-8 items-center justify-center rounded-md transition-colors"
+					className="text-muted-foreground hover:bg-surface-high hover:text-foreground focus-visible:ring-ring/40 mt-2.5 flex size-8 shrink-0 items-center justify-center rounded-[var(--control-radius-inner)] transition-[background-color,color,box-shadow] duration-[var(--motion-duration-base)] ease-[var(--motion-ease-standard)] focus-visible:ring-2 focus-visible:outline-none motion-reduce:transition-none"
 					title="Expand panel"
 					aria-label="Expand panel"
 				>
@@ -360,7 +360,7 @@ function AdminShellRail({
 				aria-orientation="vertical"
 				aria-label="Resize panel"
 			>
-				<div className="bg-border-subtle group-hover/resize:bg-primary/50 h-full w-px transition-colors" />
+				<div className="bg-border-subtle group-hover/resize:bg-border-strong h-full w-px transition-[background-color] duration-[var(--motion-duration-base)] ease-[var(--motion-ease-standard)] motion-reduce:transition-none" />
 			</div>
 
 			{/* Collapse toggle */}
@@ -368,7 +368,7 @@ function AdminShellRail({
 				type="button"
 				onClick={() => setCollapsed(true)}
 				className={cn(
-					"text-muted-foreground hover:bg-muted hover:text-foreground absolute top-2.5 z-20 flex size-7 items-center justify-center rounded-md transition-colors",
+					"text-muted-foreground hover:bg-surface-high hover:text-foreground focus-visible:ring-ring/40 absolute top-2.5 z-20 flex size-7 shrink-0 items-center justify-center rounded-[var(--control-radius-inner)] transition-[background-color,color,box-shadow] duration-[var(--motion-duration-base)] ease-[var(--motion-ease-standard)] focus-visible:ring-2 focus-visible:outline-none motion-reduce:transition-none",
 					isRight ? "left-2.5" : "right-2.5",
 				)}
 				title="Collapse panel"
