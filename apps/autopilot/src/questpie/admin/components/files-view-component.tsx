@@ -269,7 +269,7 @@ export default function FilesViewComponent(props: Props) {
 		>
 			<div className="flex h-full min-h-0 flex-col">
 				{/* Breadcrumb */}
-			<div className="flex items-center gap-1 border-b px-4 py-2 text-sm">
+			<div className="border-border-subtle flex items-center gap-1 border-b px-4 py-2.5 text-sm">
 				<button
 					type="button"
 					onClick={() => handleBreadcrumbClick(-1)}
@@ -314,7 +314,7 @@ export default function FilesViewComponent(props: Props) {
 						</p>
 					</div>
 				) : (
-					<div className="divide-y">
+					<div className="space-y-0.5 px-2 py-1.5">
 						{entries.map((entry) => (
 							<button
 								key={entry.path}
@@ -324,35 +324,28 @@ export default function FilesViewComponent(props: Props) {
 										? handleFolderClick(entry.path)
 										: handleFileClick(entry)
 								}
-								className="hover:bg-muted/50 flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors"
+								className="group/row hover:bg-muted/60 flex w-full items-center gap-3 rounded-md px-3 py-2 text-left transition-colors"
 							>
 								<Icon
 									icon={getIcon(entry)}
-									className={`h-5 w-5 shrink-0 ${getIconColor(entry)}`}
+									className={`size-[18px] shrink-0 ${getIconColor(entry)}`}
 								/>
-								<div className="min-w-0 flex-1">
-									<div className="truncate text-sm font-medium">
-										{entry.name}
-										{entry.kind === "folder" && "/"}
-									</div>
-								</div>
-								{entry.contentType && (
-									<span className="text-muted-foreground shrink-0 text-xs">
-										{entry.contentType}
-									</span>
-								)}
+								<span className="min-w-0 flex-1 truncate text-sm font-medium">
+									{entry.name}
+									{entry.kind === "folder" && "/"}
+								</span>
 								{entry.fileKind && (
-									<span className="bg-muted text-muted-foreground shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium uppercase">
+									<span className="bg-muted text-muted-foreground shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium tracking-wide uppercase">
 										{entry.fileKind}
 									</span>
 								)}
 								{entry.kind === "folder" && entry.childCount != null && (
-									<span className="text-muted-foreground text-xs tabular-nums">
+									<span className="text-muted-foreground shrink-0 text-xs tabular-nums">
 										{entry.childCount}
 									</span>
 								)}
 								{entry.updatedAt && (
-									<span className="text-muted-foreground shrink-0 text-xs">
+									<span className="text-muted-foreground shrink-0 text-xs tabular-nums">
 										{formatDate(entry.updatedAt)}
 									</span>
 								)}
@@ -362,7 +355,7 @@ export default function FilesViewComponent(props: Props) {
 											? "ph:caret-right"
 											: "ph:arrow-square-out"
 									}
-									className="text-muted-foreground/50 h-4 w-4 shrink-0"
+									className="text-muted-foreground/40 group-hover/row:text-muted-foreground size-4 shrink-0 transition-colors"
 								/>
 							</button>
 						))}
