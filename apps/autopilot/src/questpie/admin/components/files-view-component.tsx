@@ -1,12 +1,16 @@
 "use client";
 
 import { Icon } from "@iconify/react";
+import { useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 
 import {
 	AdminViewHeader,
 	AdminViewLayout,
 	Button,
+	cn,
+	Dropzone,
+	sanitizeFilename,
 	SearchInput,
 	Table,
 	TableBody,
@@ -14,10 +18,12 @@ import {
 	TableHead,
 	TableHeader,
 	TableRow,
+	toast,
 	Tooltip,
 	TooltipContent,
 	TooltipTrigger,
 	selectBasePath,
+	selectClient,
 	selectNavigate,
 	useAdminStore,
 	useCollectionList,
@@ -52,13 +58,25 @@ interface FileEntry {
 
 type Props = CollectionListViewProps;
 
-function getIcon(entry: FileEntry): string {
+/**
+ * Neutral file icon resolution.
+ *
+ * Mirrors the canonical `getFileIcon` from
+ * `packages/admin/.../cells/shared/asset-thumbnail.tsx` (MIME-based Phosphor set)
+ * and extends it with the path/extension cases this Drive view needs (markdown,
+ * json, yaml, diff). Every icon is rendered neutral — folders included — per the
+ * design system's neutral-first rule. No semantic color (no amber folders).
+ */
+function getEntryIcon(entry: FileEntry): string {
 	if (entry.kind === "folder") return "ph:folder";
-	const ct = entry.contentType ?? "";
+
+	const ct = (entry.contentType ?? "").toLowerCase();
 	const ext = entry.name.split(".").pop()?.toLowerCase() ?? "";
-	if (ct.includes("markdown") || ext === "md") return "ph:file-md";
+
+	// Path/extension-specific cases (text-document store)
+	if (ct.includes("markdown") || ext === "md" || ext === "mdx")
+		return "ph:file-md";
 	if (ct.includes("json") || ext === "json") return "ph:brackets-curly";
-	if (ct.includes("text") || ext === "txt") return "ph:file-text";
 	if (ct.includes("diff") || ext === "diff" || ext === "patch")
 		return "ph:git-diff";
 	if (
@@ -68,12 +86,31 @@ function getIcon(entry: FileEntry): string {
 		ext === "yml"
 	)
 		return "ph:file-code";
-	return "ph:file";
-}
 
-function getIconColor(entry: FileEntry): string {
-	if (entry.kind === "folder") return "text-amber-500";
-	return "text-muted-foreground";
+	// Canonical MIME-based set (matches asset-thumbnail.getFileIcon)
+	if (ct.startsWith("image/")) return "ph:file-image";
+	if (ct.startsWith("video/")) return "ph:file-video";
+	if (ct.startsWith("audio/")) return "ph:file-audio";
+	if (ct === "application/pdf") return "ph:file-pdf";
+	if (ct.includes("zip") || ct.includes("compressed") || ct.includes("archive"))
+		return "ph:file-zip";
+	if (ct.includes("csv") || ct.includes("spreadsheet")) return "ph:file-csv";
+	if (
+		ct.includes("word") ||
+		ct.includes("document") ||
+		ct === "application/rtf"
+	)
+		return "ph:file-doc";
+	if (ct.includes("text") || ext === "txt") return "ph:file-text";
+	if (
+		ct.includes("javascript") ||
+		ct.includes("typescript") ||
+		ct.includes("xml") ||
+		ct.includes("html")
+	)
+		return "ph:file-code";
+
+	return "ph:file";
 }
 
 function deriveEntries(
@@ -155,6 +192,8 @@ export default function FilesViewComponent(props: Props) {
 	const { collection, config, viewConfig, navigate } = props;
 	const basePath = useAdminStore(selectBasePath);
 	const nav = useAdminStore(selectNavigate) ?? navigate;
+	const client = useAdminStore(selectClient);
+	const queryClient = useQueryClient();
 	const resolveText = useResolveText();
 	const title = resolveText((config as any)?.label, collection);
 
@@ -244,12 +283,99 @@ export default function FilesViewComponent(props: Props) {
 		[breadcrumbs],
 	);
 
+	// ── Drag-and-drop upload from the desktop ────────────────────────────────
+	// Drop files (or click to browse) → add each one to the Drive at
+	// `<currentFolder>/<filename>` so it lands in the folder the user is viewing.
+	//
+	// IMPORTANT: this writes document rows directly via `.create()` (with the
+	// folder `path`) rather than the blob `.upload()` route. The `assets.path`
+	// column is NOT NULL, but the framework upload route accepts only the binary
+	// `file` (no extra fields), so a blob upload cannot place a file into a folder.
+	// Reading the dropped file as text and creating a `body` document is the
+	// faithful "add a file to this folder" for this document store and sets the
+	// required `path` at create time. Binary blobs (images/pdf) are out of scope
+	// here — see the field's edit form / upload-field for blob attachments.
+	// Disabled while searching (there is no active folder to drop into).
+	const [isUploading, setIsUploading] = React.useState(false);
+
+	const handleUploadDrop = React.useCallback(
+		async (files: File[]) => {
+			if (files.length === 0) return;
+			const collectionApi = (client as any)?.collections?.[collection];
+			if (!collectionApi?.create) {
+				toast.error("This collection does not support creating files.");
+				return;
+			}
+
+			const prefix = currentPath ? `${currentPath}/` : "";
+			setIsUploading(true);
+			let created = 0;
+			try {
+				for (const file of files) {
+					const filename = sanitizeFilename(file.name);
+					const text = await file.text();
+					// Client `create(data)` takes the record data directly.
+					await collectionApi.create({
+						[pathField]: `${prefix}${filename}`,
+						...(nameField ? { [nameField]: filename } : {}),
+						...(contentTypeField
+							? { [contentTypeField]: file.type || "text/plain" }
+							: {}),
+						...(kindField ? { [kindField]: "document" } : {}),
+						[cfg.contentField ?? "body"]: text,
+					});
+					created += 1;
+				}
+
+				await queryClient.invalidateQueries({
+					queryKey: ["questpie", "collections", collection],
+				});
+				toast.success(
+					created === 1 ? "Added 1 file" : `Added ${created} files`,
+				);
+			} catch (error) {
+				await queryClient.invalidateQueries({
+					queryKey: ["questpie", "collections", collection],
+				});
+				toast.error(
+					error instanceof Error ? error.message : "Upload failed",
+				);
+			} finally {
+				setIsUploading(false);
+			}
+		},
+		[
+			cfg.contentField,
+			client,
+			collection,
+			contentTypeField,
+			currentPath,
+			kindField,
+			nameField,
+			pathField,
+			queryClient,
+		],
+	);
+
+	const handleUploadValidationError = React.useCallback(
+		(errors: { message: string }[]) => {
+			for (const validationError of errors) {
+				toast.error(validationError.message);
+			}
+		},
+		[],
+	);
+
+	const uploadHint = currentPath
+		? `Adds text files to ${currentPath}/`
+		: "Adds text files to the root folder";
+
 	if (isLoading) {
 		return (
 			<div className="flex h-64 items-center justify-center">
 				<Icon
 					icon="ph:spinner"
-					className="text-muted-foreground h-6 w-6 animate-spin"
+					className="text-foreground-muted h-6 w-6 animate-spin"
 				/>
 			</div>
 		);
@@ -302,11 +428,11 @@ export default function FilesViewComponent(props: Props) {
 				)}
 
 				{/* Breadcrumb */}
-				<div className="text-muted-foreground flex items-center gap-1 text-sm">
+				<div className="text-foreground-muted flex items-center gap-1 text-sm">
 					<button
 						type="button"
 						onClick={() => handleBreadcrumbClick(-1)}
-						className="hover:text-foreground hover:bg-muted flex items-center gap-1 rounded-md px-1.5 py-0.5 transition-colors"
+						className="hover:text-foreground hover:bg-surface-mid flex items-center gap-1 rounded-md px-1.5 py-0.5 transition-colors"
 					>
 						<Icon icon="ph:house" className="size-3.5" />
 						<span>Root</span>
@@ -315,16 +441,17 @@ export default function FilesViewComponent(props: Props) {
 						<React.Fragment key={i}>
 							<Icon
 								icon="ph:caret-right"
-								className="text-muted-foreground/50 size-3 shrink-0"
+								className="text-foreground-subtle size-3 shrink-0"
 							/>
 							<button
 								type="button"
 								onClick={() => handleBreadcrumbClick(i)}
-								className={`rounded-md px-1.5 py-0.5 transition-colors ${
+								className={cn(
+									"rounded-md px-1.5 py-0.5 transition-colors",
 									i === breadcrumbs.length - 1
 										? "text-foreground font-medium"
-										: "hover:text-foreground hover:bg-muted"
-								}`}
+										: "hover:text-foreground hover:bg-surface-mid",
+								)}
 							>
 								{segment}
 							</button>
@@ -332,14 +459,42 @@ export default function FilesViewComponent(props: Props) {
 					))}
 				</div>
 
-				{/* Files table — same primitives as the collection table view */}
+				{/* Drag-and-drop upload — desktop drop or click to browse. Reuses the
+				    canonical Dropzone primitive (neutral drag-over affordance). Hidden
+				    while searching because there is no active folder to upload into. */}
+				{!searchTerm && (
+					<Dropzone
+						onDrop={handleUploadDrop}
+						multiple
+						accept={[
+							"text/*",
+							".md",
+							".mdx",
+							".txt",
+							".json",
+							".yaml",
+							".yml",
+							".csv",
+							".diff",
+							".patch",
+						]}
+						loading={isUploading}
+						variant="compact"
+						label="Drop files here or click to upload"
+						hint={uploadHint}
+						onValidationError={handleUploadValidationError}
+					/>
+				)}
+
+				{/* Files table — same primitives + neutral row/header treatment as the
+				    built-in collection table view. */}
 				{entries.length === 0 ? (
 					<div className="flex h-48 flex-col items-center justify-center gap-2">
 						<Icon
 							icon="ph:folder-open"
-							className="text-muted-foreground/50 size-10"
+							className="text-foreground-subtle size-10"
 						/>
-						<p className="text-muted-foreground text-sm">
+						<p className="text-foreground-muted text-sm">
 							{searchTerm
 								? "No files match your search"
 								: "This folder is empty"}
@@ -370,8 +525,8 @@ export default function FilesViewComponent(props: Props) {
 										<TableCell className="text-foreground font-medium">
 											<div className="flex min-w-0 items-center gap-2.5">
 												<Icon
-													icon={getIcon(entry)}
-													className={`size-[18px] shrink-0 ${getIconColor(entry)}`}
+													icon={getEntryIcon(entry)}
+													className="text-foreground-muted size-[18px] shrink-0"
 												/>
 												<span className="truncate">
 													{entry.name}
@@ -379,17 +534,17 @@ export default function FilesViewComponent(props: Props) {
 												</span>
 											</div>
 										</TableCell>
-										<TableCell className="text-muted-foreground">
+										<TableCell className="text-foreground-muted">
 											{entry.kind === "folder"
 												? "Folder"
 												: (entry.fileKind ?? "File")}
 										</TableCell>
-										<TableCell className="text-muted-foreground text-right">
+										<TableCell className="text-foreground-muted text-right">
 											{entry.kind === "folder" && entry.childCount != null
 												? entry.childCount
 												: "—"}
 										</TableCell>
-										<TableCell className="text-muted-foreground text-right">
+										<TableCell className="text-foreground-muted text-right">
 											{formatDate(entry.updatedAt) || "—"}
 										</TableCell>
 									</TableRow>

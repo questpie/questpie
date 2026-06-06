@@ -21,8 +21,6 @@ import {
 import {
 	createKnowledgeChatAttachment,
 	knowledgeMetadataEntries,
-	knowledgeSourceLine,
-	knowledgeSummary,
 } from "../lib/knowledge-attachments";
 import { KnowledgeHost } from "./knowledge-host";
 
@@ -181,17 +179,38 @@ function bodyKind(doc: KnowledgeDoc) {
 	return "text";
 }
 
+/**
+ * Neutral file glyph for the document. Mirrors the canonical `getFileIcon`
+ * (asset-preview / asset-thumbnail): always a neutral Phosphor file icon, never
+ * a colored/brand mark. Drives off the resolved body kind + content type since a
+ * knowledge row carries `renderer`/`contentType` rather than a bare MIME string.
+ */
+function getFileIcon(doc: KnowledgeDoc): string {
+	const kind = bodyKind(doc);
+	if (kind === "miniapp") return "ph:app-window";
+	if (kind === "pdf") return "ph:file-pdf";
+	if (kind === "office") return "ph:file-doc";
+	if (kind === "html") return "ph:file-html";
+	if (kind === "markdown") return "ph:file-text";
+	const contentType = doc.contentType?.toLowerCase() ?? "";
+	if (contentType.startsWith("image/")) return "ph:file-image";
+	if (contentType.startsWith("video/")) return "ph:file-video";
+	if (contentType.startsWith("audio/")) return "ph:file-audio";
+	if (/json|javascript|typescript|xml/.test(contentType)) return "ph:file-code";
+	return "ph:file";
+}
+
 function MarkdownPreview({ body }: { body: string }) {
 	const blocks = body.split(/(```[\s\S]*?```)/g);
 	return (
-		<div className="space-y-3">
+		<div className="space-y-4">
 			{blocks.map((block, index) => {
 				const fence = block.match(/^```([\w-]*)\n?([\s\S]*?)```$/);
 				if (fence) {
 					return (
 						<pre
 							key={index}
-							className="bg-muted/60 border-border-subtle max-h-[38rem] overflow-auto border p-3 text-xs leading-relaxed"
+							className="bg-card border-border-subtle max-h-[38rem] overflow-auto rounded-[var(--surface-radius)] border p-4 font-mono text-xs leading-relaxed tabular-nums"
 						>
 							<code>{fence[2]}</code>
 						</pre>
@@ -214,19 +233,44 @@ function MarkdownBlock({ value }: { value: string }) {
 	const heading = trimmed.match(/^(#{1,4})\s+(.+)$/);
 	if (heading) {
 		const level = heading[1].length;
-		const className = "text-foreground mt-4 text-sm font-semibold first:mt-0";
-		if (level === 1) return <h2 className={className}>{heading[2]}</h2>;
-		if (level === 2) return <h3 className={className}>{heading[2]}</h3>;
-		if (level === 3) return <h4 className={className}>{heading[2]}</h4>;
-		return <h5 className={className}>{heading[2]}</h5>;
+		// Real type scale: H1/H2 read as subsection headings (18-20px), H3/H4
+		// step down toward body. Headings balance their wrap (DESIGN §Typography).
+		if (level === 1) {
+			return (
+				<h2 className="text-foreground mt-8 text-xl font-semibold tracking-tight text-balance first:mt-0">
+					{heading[2]}
+				</h2>
+			);
+		}
+		if (level === 2) {
+			return (
+				<h3 className="text-foreground mt-7 text-lg font-semibold tracking-tight text-balance first:mt-0">
+					{heading[2]}
+				</h3>
+			);
+		}
+		if (level === 3) {
+			return (
+				<h4 className="text-foreground mt-6 text-base font-semibold text-balance first:mt-0">
+					{heading[2]}
+				</h4>
+			);
+		}
+		return (
+			<h5 className="text-foreground mt-5 text-sm font-semibold text-balance first:mt-0">
+				{heading[2]}
+			</h5>
+		);
 	}
 
 	const lines = trimmed.split("\n");
 	if (lines.every((line) => /^\s*[-*]\s+/.test(line))) {
 		return (
-			<ul className="text-foreground list-disc space-y-1 pl-5 text-sm leading-relaxed">
+			<ul className="text-foreground marker:text-foreground-subtle list-disc space-y-1.5 pl-5 text-sm leading-relaxed">
 				{lines.map((line, index) => (
-					<li key={index}>{line.replace(/^\s*[-*]\s+/, "")}</li>
+					<li key={index} className="text-pretty">
+						{line.replace(/^\s*[-*]\s+/, "")}
+					</li>
 				))}
 			</ul>
 		);
@@ -234,16 +278,18 @@ function MarkdownBlock({ value }: { value: string }) {
 
 	if (lines.every((line) => /^\s*\d+\.\s+/.test(line))) {
 		return (
-			<ol className="text-foreground list-decimal space-y-1 pl-5 text-sm leading-relaxed">
+			<ol className="text-foreground marker:text-foreground-subtle list-decimal space-y-1.5 pl-5 text-sm leading-relaxed tabular-nums">
 				{lines.map((line, index) => (
-					<li key={index}>{line.replace(/^\s*\d+\.\s+/, "")}</li>
+					<li key={index} className="text-pretty">
+						{line.replace(/^\s*\d+\.\s+/, "")}
+					</li>
 				))}
 			</ol>
 		);
 	}
 
 	return (
-		<p className="text-foreground text-sm leading-relaxed whitespace-pre-wrap">
+		<p className="text-foreground text-sm leading-relaxed text-pretty whitespace-pre-wrap">
 			{trimmed}
 		</p>
 	);
@@ -260,26 +306,29 @@ function DownloadFallback({ doc }: { doc: KnowledgeDoc }) {
 	const url = resolveBlobUrl(doc);
 	const name = doc.filename ?? doc.title ?? doc.path ?? "file";
 	return (
-		<div className="border-border-subtle bg-card flex flex-col items-center justify-center gap-3 border px-4 py-12 text-center">
+		<div className="border-border-subtle bg-card flex flex-col items-center justify-center gap-3 rounded-[var(--surface-radius)] border px-4 py-12 text-center">
 			<Icon
-				icon="ph:file-arrow-down"
-				className="text-muted-foreground size-8"
+				icon={getFileIcon(doc)}
+				className="text-foreground-subtle size-8"
 			/>
 			<div className="text-sm font-medium">{name}</div>
 			{doc.contentType ? (
-				<div className="text-muted-foreground text-xs">{doc.contentType}</div>
+				<div className="text-foreground-muted font-mono text-xs">
+					{doc.contentType}
+				</div>
 			) : null}
 			{url ? (
-				<a
-					href={url}
-					download={doc.filename ?? undefined}
-					className="control-surface text-foreground inline-flex h-8 items-center gap-2 px-3 text-xs"
+				<Button
+					variant="outline"
+					size="sm"
+					nativeButton={false}
+					render={<a href={url} download={doc.filename ?? undefined} />}
 				>
-					<Icon icon="ph:download-simple" className="size-3.5" />
+					<Icon icon="ph:download-simple" data-icon="inline-start" />
 					Download
-				</a>
+				</Button>
 			) : (
-				<div className="text-muted-foreground text-xs">
+				<div className="text-foreground-muted text-xs">
 					No downloadable file on this record.
 				</div>
 			)}
@@ -296,13 +345,13 @@ function BodyPreview({ doc }: { doc: KnowledgeDoc }) {
 		const appId = appIdFromPath(doc.path);
 		if (!appId) {
 			return (
-				<div className="text-muted-foreground border-border-subtle border px-4 py-8 text-center text-sm">
+				<div className="text-foreground-muted border-border-subtle rounded-[var(--surface-radius)] border px-4 py-8 text-center text-sm">
 					This mini-app row is not inside a `.app` bundle path.
 				</div>
 			);
 		}
 		return (
-			<div className="border-border-subtle bg-background overflow-hidden border">
+			<div className="border-border-subtle bg-background overflow-hidden rounded-[var(--surface-radius)] border">
 				<KnowledgeHost appId={appId} className="h-[36rem] w-full" />
 			</div>
 		);
@@ -313,7 +362,7 @@ function BodyPreview({ doc }: { doc: KnowledgeDoc }) {
 		const url = resolveBlobUrl(doc);
 		if (!url) return <DownloadFallback doc={doc} />;
 		return (
-			<div className="border-border-subtle bg-background overflow-hidden border">
+			<div className="border-border-subtle bg-background overflow-hidden rounded-[var(--surface-radius)] border">
 				<iframe
 					title={doc.title ?? doc.path ?? "PDF preview"}
 					src={url}
@@ -333,8 +382,8 @@ function BodyPreview({ doc }: { doc: KnowledgeDoc }) {
 				url,
 			)}`;
 			return (
-				<div className="space-y-2">
-					<div className="border-border-subtle bg-background overflow-hidden border">
+				<div className="space-y-3">
+					<div className="border-border-subtle bg-background overflow-hidden rounded-[var(--surface-radius)] border">
 						<iframe
 							title={doc.title ?? doc.path ?? "Document preview"}
 							src={viewer}
@@ -353,7 +402,7 @@ function BodyPreview({ doc }: { doc: KnowledgeDoc }) {
 		// A blob upload with no text body → offer a download.
 		if (hasUploadBlob(doc)) return <DownloadFallback doc={doc} />;
 		return (
-			<div className="text-muted-foreground border-border-subtle border px-4 py-8 text-center text-sm">
+			<div className="text-foreground-muted border-border-subtle rounded-[var(--surface-radius)] border px-4 py-8 text-center text-sm">
 				No body content.
 			</div>
 		);
@@ -362,7 +411,7 @@ function BodyPreview({ doc }: { doc: KnowledgeDoc }) {
 	if (kind === "html") {
 		return (
 			<div className="space-y-3">
-				<div className="border-border-subtle bg-background overflow-hidden border">
+				<div className="border-border-subtle bg-background overflow-hidden rounded-[var(--surface-radius)] border">
 					<iframe
 						title={doc.title ?? doc.path ?? "Knowledge preview"}
 						sandbox=""
@@ -370,11 +419,11 @@ function BodyPreview({ doc }: { doc: KnowledgeDoc }) {
 						className="h-[28rem] w-full bg-white"
 					/>
 				</div>
-				<details className="border-border-subtle bg-muted/30 border p-3">
-					<summary className="cursor-pointer text-xs font-medium">
+				<details className="border-border-subtle bg-card rounded-[var(--surface-radius)] border p-3">
+					<summary className="text-foreground-muted hover:text-foreground cursor-pointer text-xs font-medium">
 						Source
 					</summary>
-					<pre className="mt-3 max-h-[24rem] overflow-auto text-xs leading-relaxed whitespace-pre-wrap">
+					<pre className="mt-3 max-h-[24rem] overflow-auto font-mono text-xs leading-relaxed tabular-nums whitespace-pre-wrap">
 						{body}
 					</pre>
 				</details>
@@ -385,27 +434,9 @@ function BodyPreview({ doc }: { doc: KnowledgeDoc }) {
 	if (kind === "markdown") return <MarkdownPreview body={body} />;
 
 	return (
-		<pre className="bg-muted/40 border-border-subtle max-h-[42rem] overflow-auto border p-4 text-xs leading-relaxed whitespace-pre-wrap">
+		<pre className="bg-card border-border-subtle max-h-[42rem] overflow-auto rounded-[var(--surface-radius)] border p-4 font-mono text-xs leading-relaxed tabular-nums whitespace-pre-wrap">
 			{body}
 		</pre>
-	);
-}
-
-function Field({
-	label,
-	children,
-}: {
-	label: string;
-	children: React.ReactNode;
-}) {
-	if (!children) return null;
-	return (
-		<div className="min-w-0">
-			<div className="text-muted-foreground text-[11px] font-medium uppercase">
-				{label}
-			</div>
-			<div className="mt-1 min-w-0 text-sm">{children}</div>
-		</div>
 	);
 }
 
@@ -446,101 +477,23 @@ function KnowledgeChatContextAction({ doc }: { doc: KnowledgeDoc }) {
 	}, [attachment]);
 
 	return (
-		<button
-			type="button"
+		<Button
+			variant="ghost"
+			size="sm"
 			onClick={attach}
 			draggable
 			onDragStart={(event) =>
 				setChatAttachmentDragData(event.dataTransfer, attachment)
 			}
-			className="control-surface text-muted-foreground hover:text-foreground inline-flex h-8 shrink-0 items-center gap-2 px-2.5 text-xs transition-colors"
+			className="shrink-0"
 			title="Attach this knowledge record to Autopilot chat"
 		>
 			<Icon
 				icon={attached ? "ph:check" : "ph:crosshair"}
-				className="size-3.5"
+				data-icon="inline-start"
 			/>
 			<span>{attached ? "Attached" : "Attach"}</span>
-		</button>
-	);
-}
-
-function KnowledgeSummary({
-	doc,
-	basePath,
-}: {
-	doc: KnowledgeDoc;
-	basePath: string;
-}) {
-	const summary = knowledgeSummary(doc);
-	const sourceLine = knowledgeSourceLine(doc);
-	const projectId = relationId(doc.project ?? null);
-	const taskId = relationId(doc.task ?? null);
-	const runId = relationId(doc.run ?? null);
-
-	return (
-		<section className="border-border-subtle bg-card border p-4">
-			<div className="flex min-w-0 items-start gap-3">
-				<div className="bg-primary/10 text-primary mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md">
-					<Icon icon="ph:book-open-text" className="size-4" />
-				</div>
-				<div className="min-w-0 flex-1">
-					<div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs">
-						{sourceLine ? (
-							<span className="text-muted-foreground">{sourceLine}</span>
-						) : (
-							<span className="text-muted-foreground">knowledge</span>
-						)}
-						{doc.path ? (
-							<>
-								<span className="text-muted-foreground/50">/</span>
-								<span className="text-muted-foreground min-w-0 truncate">
-									{doc.path}
-								</span>
-							</>
-						) : null}
-					</div>
-					{summary ? (
-						<p className="text-foreground mt-2 max-w-4xl text-sm leading-relaxed">
-							{summary}
-						</p>
-					) : (
-						<p className="text-muted-foreground mt-2 text-sm">
-							No summary available.
-						</p>
-					)}
-					{projectId || taskId || runId ? (
-						<div className="mt-3 flex flex-wrap gap-2">
-							{projectId ? (
-								<RelationLink
-									basePath={basePath}
-									collection="projects"
-									value={doc.project ?? null}
-									fallback="Project"
-								/>
-							) : null}
-							{taskId ? (
-								<RelationLink
-									basePath={basePath}
-									collection="tasks"
-									value={doc.task ?? null}
-									fallback="Task"
-								/>
-							) : null}
-							{runId ? (
-								<RelationLink
-									basePath={basePath}
-									collection="run_links"
-									value={doc.run ?? null}
-									fallback="Run"
-								/>
-							) : null}
-						</div>
-					) : null}
-				</div>
-				<KnowledgeChatContextAction doc={doc} />
-			</div>
-		</section>
+		</Button>
 	);
 }
 
@@ -554,9 +507,12 @@ function PropertyRow({
 	children: React.ReactNode;
 }) {
 	return (
-		<div className="hover:bg-muted/40 flex items-start gap-3 rounded-md px-2 py-1.5 transition-colors">
-			<div className="text-muted-foreground flex w-28 shrink-0 items-center gap-2 pt-0.5">
-				<Icon icon={icon} className="size-3.5 shrink-0" />
+		<div className="hover:bg-surface-mid flex items-start gap-3 rounded-[var(--control-radius-inner)] px-2 py-1.5 transition-colors duration-150">
+			<div className="text-foreground-muted flex w-28 shrink-0 items-center gap-2 pt-0.5">
+				<Icon
+					icon={icon}
+					className="text-foreground-subtle size-3.5 shrink-0"
+				/>
 				<span className="truncate text-xs">{label}</span>
 			</div>
 			<div className="text-foreground min-w-0 flex-1 text-sm">{children}</div>
@@ -629,17 +585,17 @@ function KnowledgeInspector({
 				) : null}
 				{created ? (
 					<PropertyRow icon="ph:calendar-blank" label="Created">
-						<span className="text-muted-foreground">{created}</span>
+						<span className="text-foreground-muted tabular-nums">{created}</span>
 					</PropertyRow>
 				) : null}
 				{updated ? (
 					<PropertyRow icon="ph:clock-counter-clockwise" label="Updated">
-						<span className="text-muted-foreground">{updated}</span>
+						<span className="text-foreground-muted tabular-nums">{updated}</span>
 					</PropertyRow>
 				) : null}
 				{entries.map(([key, value]) => (
 					<PropertyRow key={key} icon="ph:tag" label={key}>
-						<pre className="font-mono text-xs break-words whitespace-pre-wrap">
+						<pre className="font-mono text-xs break-words tabular-nums whitespace-pre-wrap">
 							{metadataValue(value)}
 						</pre>
 					</PropertyRow>
@@ -660,8 +616,8 @@ function CollectionForm(props: CollectionFormViewProps) {
 	return (
 		<React.Suspense
 			fallback={
-				<div className="text-muted-foreground flex items-center justify-center p-12">
-					<Icon icon="ph:spinner" className="size-5 animate-spin opacity-40" />
+				<div className="text-foreground-muted flex items-center justify-center p-12">
+					<Icon icon="ph:spinner" className="size-5 animate-spin" />
 				</div>
 			}
 		>
@@ -693,19 +649,31 @@ export default function KnowledgeDetailComponent(
 			contentClassName="overflow-y-auto"
 			header={
 				<AdminViewHeader
-					title={title}
+					title={
+						<span className="flex min-w-0 items-center gap-2">
+							<Icon
+								icon={doc ? getFileIcon(doc) : "ph:file"}
+								className="text-foreground-subtle size-5 shrink-0"
+							/>
+							<span className="min-w-0 truncate">{title}</span>
+						</span>
+					}
 					titleAccessory={
 						doc?.kind ? (
-							<span className="border-border text-muted-foreground inline-flex h-5 items-center border px-2 text-[0.625rem] font-medium">
+							<span className="border-border-subtle bg-surface-mid text-foreground-muted inline-flex h-5 items-center rounded-[var(--control-radius-inner)] border px-2 text-[0.6875rem] font-medium">
 								{doc.kind}
 							</span>
 						) : null
 					}
 					meta={
 						<>
-							{path ? <span className="truncate">{path}</span> : null}
+							{path ? (
+								<span className="truncate font-mono">{path}</span>
+							) : null}
 							{doc?.source ? <span>{doc.source}</span> : null}
-							{doc?.contentType ? <span>{doc.contentType}</span> : null}
+							{doc?.contentType ? (
+								<span className="font-mono">{doc.contentType}</span>
+							) : null}
 						</>
 					}
 					actions={
@@ -721,7 +689,7 @@ export default function KnowledgeDetailComponent(
 							>
 								<Icon
 									icon={mode === "edit" ? "ph:eye" : "ph:pencil-simple"}
-									className="size-3.5"
+									data-icon="inline-start"
 								/>
 								{mode === "edit" ? "Done" : "Edit"}
 							</Button>
@@ -735,14 +703,11 @@ export default function KnowledgeDetailComponent(
 			) : (
 				<div className="p-4">
 					{isLoading ? (
-						<div className="text-muted-foreground flex items-center justify-center p-12">
-							<Icon
-								icon="ph:spinner"
-								className="size-5 animate-spin opacity-40"
-							/>
+						<div className="text-foreground-muted flex items-center justify-center p-12">
+							<Icon icon="ph:spinner" className="size-5 animate-spin" />
 						</div>
 					) : error ? (
-						<div className="border-destructive/30 bg-destructive/10 text-destructive border p-4 text-sm">
+						<div className="border-destructive bg-card text-destructive rounded-[var(--surface-radius)] border p-4 text-sm">
 							{error instanceof Error
 								? error.message
 								: "Failed to load knowledge"}
@@ -750,7 +715,7 @@ export default function KnowledgeDetailComponent(
 					) : doc ? (
 						<KnowledgeInspector doc={doc} basePath={basePath} />
 					) : (
-						<div className="text-muted-foreground border-border-subtle border p-8 text-center text-sm">
+						<div className="text-foreground-muted border-border-subtle rounded-[var(--surface-radius)] border p-8 text-center text-sm">
 							Knowledge resource not found.
 						</div>
 					)}
