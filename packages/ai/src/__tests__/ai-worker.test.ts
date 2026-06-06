@@ -216,12 +216,14 @@ function buildWorkerManager(
 			prompt: string;
 			runtime?: string | null;
 			runtimeSessionRef?: string | null;
+			systemPrompt?: string | null;
 			metadata?: Record<string, unknown>;
 		}) {
 			const run = await collections.ai_runs.create({
 				status: "pending",
 				runtime: input.runtime ?? undefined,
 				prompt: input.prompt,
+				systemPrompt: input.systemPrompt ?? undefined,
 				runtimeSessionRef: input.runtimeSessionRef ?? undefined,
 				meta: input.metadata,
 			});
@@ -359,6 +361,8 @@ function buildWorkerManager(
 					},
 					spawn: {
 						prompt: (run.prompt as string) ?? "",
+						systemPrompt:
+							(run.systemPrompt as string | null | undefined) ?? undefined,
 						runtime: runRuntime,
 						runtimeSessionRef: run.runtimeSessionRef as string | undefined,
 						metadata: isRecord(run.meta) ? run.meta : undefined,
@@ -586,6 +590,27 @@ describe("Worker manager — spawn run", () => {
 		expect(run!.meta).toEqual({ source: "test" });
 	});
 
+	it("persists systemPrompt and maps it into the claimed spawn request", async () => {
+		const { workerId } = await wm.registerWorker({
+			deviceId: "cc-dev",
+			name: "cc-worker",
+			volumeId: "vol",
+			capabilities: [{ runtime: "claude-code", maxConcurrent: 1 }],
+			secret: generateSecret(),
+		});
+		const { runId } = await wm.spawnRun({
+			prompt: "do the work",
+			runtime: "claude-code",
+			systemPrompt: "You are a careful agent.",
+		});
+
+		const run = await collections.ai_runs.findOne({ where: { id: runId } });
+		expect(run!.systemPrompt).toBe("You are a careful agent.");
+
+		const claimed = await wm.claimRun({ workerId, runtimes: ["claude-code"] });
+		expect(claimed!.spawn.systemPrompt).toBe("You are a careful agent.");
+	});
+
 	it("does not let a Codex-only worker claim a runtime-less spawned run", async () => {
 		const { workerId } = await wm.registerWorker({
 			deviceId: "codex-dev",
@@ -635,6 +660,7 @@ describe("Worker manager — claim / complete / heartbeat", () => {
 		const claimed = await wm.claimRun({ workerId, runtimes: ["claude-code"] });
 		expect(claimed).not.toBeNull();
 		expect(claimed!.spawn.prompt).toBe("do something");
+		expect(claimed!.spawn.systemPrompt).toBeUndefined();
 		expect(claimed!.spawn.runtime).toBe("claude-code");
 		expect(claimed!.lease.id).toBeTruthy();
 		expect(claimed!.lease.runId).toBeTruthy();

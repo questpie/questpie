@@ -148,6 +148,7 @@ export default service()
 					status: "pending",
 					runtime: input.runtime ?? undefined,
 					prompt: input.prompt,
+					systemPrompt: input.systemPrompt ?? undefined,
 					runtimeSessionRef: input.runtimeSessionRef ?? undefined,
 					meta: input.metadata,
 				});
@@ -292,6 +293,8 @@ export default service()
 						},
 						spawn: {
 							prompt: (run.prompt as string) ?? "",
+							systemPrompt:
+								(run.systemPrompt as string | null | undefined) ?? undefined,
 							runtime: runRuntime,
 							runtimeSessionRef: run.runtimeSessionRef as string | undefined,
 							metadata: isRecord(run.meta) ? run.meta : undefined,
