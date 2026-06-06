@@ -47,9 +47,13 @@ interface ReflectStepLogger {
  */
 export const noopReflect: ReflectFn = async (): Promise<RawMemoryCandidate[]> => [];
 
-/** The collections surface the reflection step needs (gate + write). */
+/**
+ * The collections surface the reflection step needs (gate + write). `memory_settings`
+ * is OPTIONAL — when a runtime omits it, the gate fails closed (no write) rather than
+ * crashing the run (see `lib/memory-gate.ts`).
+ */
 export type ReflectStepCollections = MemoryWriteCollections & {
-	memory_settings: {
+	memory_settings?: {
 		findOne(args: {
 			where: Record<string, unknown>;
 		}): Promise<{ agentMayWrite?: boolean | null } | null>;

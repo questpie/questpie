@@ -90,4 +90,12 @@ describe("agentMayWriteMemory — most-specific-first, default-allow", () => {
 		const allowed = await agentMayWriteMemory(settings, {});
 		expect(allowed).toBe(true);
 	});
+
+	it("fails CLOSED when the memory_settings collection is absent at runtime", async () => {
+		const allowed = await agentMayWriteMemory(
+			{} as MemorySettingsCollections,
+			{ projectId: "p1", taskId: "t1" },
+		);
+		expect(allowed).toBe(false);
+	});
 });
