@@ -146,7 +146,14 @@ function checkFiles(
 		if (a.path !== undefined && a.path !== null) {
 			const pathn = normalizeKnowledgePath(a.path);
 			if (pathn === null) return deny("files.list path is unsafe");
-			if (!anyGlobMatches(pathn, scope.read)) {
+			// A directory is listable if it MATCHES a read glob OR a granted read
+			// glob lives UNDER it (so listing reveals content the app may read).
+			// NOTE: with a PARTIAL grant under `pathn`, the raw listing can still
+			// surface sibling names not under a granted glob — the list handler must
+			// filter results to the granted globs (tracked follow-up).
+			const __listPrefix = pathn.endsWith("/") ? pathn : `${pathn}/`;
+			const __grantsUnder = scope.read.some((g) => g.startsWith(__listPrefix));
+			if (!anyGlobMatches(pathn, scope.read) && !__grantsUnder) {
 				return deny(`files.list path "${pathn}" is outside read scope`);
 			}
 		}
