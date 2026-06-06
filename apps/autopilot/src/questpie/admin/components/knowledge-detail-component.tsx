@@ -7,6 +7,7 @@ import {
 	AdminLink,
 	AdminViewHeader,
 	AdminViewLayout,
+	Button,
 	useCollectionItem,
 	type CollectionFormViewProps,
 	type MaybeLazyComponent,
@@ -543,6 +544,26 @@ function KnowledgeSummary({
 	);
 }
 
+function PropertyRow({
+	icon,
+	label,
+	children,
+}: {
+	icon: string;
+	label: string;
+	children: React.ReactNode;
+}) {
+	return (
+		<div className="hover:bg-muted/40 flex items-start gap-3 rounded-md px-2 py-1.5 transition-colors">
+			<div className="text-muted-foreground flex w-28 shrink-0 items-center gap-2 pt-0.5">
+				<Icon icon={icon} className="size-3.5 shrink-0" />
+				<span className="truncate text-xs">{label}</span>
+			</div>
+			<div className="text-foreground min-w-0 flex-1 text-sm">{children}</div>
+		</div>
+	);
+}
+
 function KnowledgeInspector({
 	doc,
 	basePath,
@@ -553,93 +574,83 @@ function KnowledgeInspector({
 	const created = formatDate(doc.createdAt);
 	const updated = formatDate(doc.updatedAt);
 	const entries = knowledgeMetadataEntries(doc.metadata);
+	const projectId = relationId(doc.project ?? null);
+	const taskId = relationId(doc.task ?? null);
+	const runId = relationId(doc.run ?? null);
 
 	return (
-		<div className="space-y-4">
-			<KnowledgeSummary doc={doc} basePath={basePath} />
-
-			<div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
-				<section className="border-border-subtle bg-card min-w-0 border p-4">
-					<div className="mb-4 flex min-w-0 items-center gap-2">
-						<Icon
-							icon="ph:file-text"
-							className="text-muted-foreground size-4"
+		<div className="mx-auto max-w-3xl px-6 py-8">
+			{/* Page properties — Notion-style key/value rows */}
+			<div className="mb-7 space-y-px">
+				{doc.scopeType ? (
+					<PropertyRow icon="ph:stack-simple" label="Scope">
+						<span className="capitalize">{doc.scopeType}</span>
+					</PropertyRow>
+				) : null}
+				{doc.source ? (
+					<PropertyRow icon="ph:plug" label="Source">
+						<span>{doc.source}</span>
+					</PropertyRow>
+				) : null}
+				{projectId ? (
+					<PropertyRow icon="ph:folder" label="Project">
+						<RelationLink
+							basePath={basePath}
+							collection="projects"
+							value={doc.project ?? null}
+							fallback="Project"
 						/>
-						<h2 className="truncate text-sm font-semibold">Content</h2>
-					</div>
-					<BodyPreview doc={doc} />
-				</section>
+					</PropertyRow>
+				) : null}
+				{taskId ? (
+					<PropertyRow icon="ph:check-square" label="Task">
+						<RelationLink
+							basePath={basePath}
+							collection="tasks"
+							value={doc.task ?? null}
+							fallback="Task"
+						/>
+					</PropertyRow>
+				) : null}
+				{runId ? (
+					<PropertyRow icon="ph:play-circle" label="Run">
+						<RelationLink
+							basePath={basePath}
+							collection="run_links"
+							value={doc.run ?? null}
+							fallback="Run"
+						/>
+					</PropertyRow>
+				) : null}
+				{doc.sourceRef ? (
+					<PropertyRow icon="ph:hash" label="Source ref">
+						<span className="font-mono text-xs break-all">{doc.sourceRef}</span>
+					</PropertyRow>
+				) : null}
+				{created ? (
+					<PropertyRow icon="ph:calendar-blank" label="Created">
+						<span className="text-muted-foreground">{created}</span>
+					</PropertyRow>
+				) : null}
+				{updated ? (
+					<PropertyRow icon="ph:clock-counter-clockwise" label="Updated">
+						<span className="text-muted-foreground">{updated}</span>
+					</PropertyRow>
+				) : null}
+				{entries.map(([key, value]) => (
+					<PropertyRow key={key} icon="ph:tag" label={key}>
+						<pre className="font-mono text-xs break-words whitespace-pre-wrap">
+							{metadataValue(value)}
+						</pre>
+					</PropertyRow>
+				))}
+			</div>
 
-				<aside className="space-y-4">
-					<section className="border-border-subtle bg-card border p-4">
-						<h2 className="mb-3 text-sm font-semibold">Provenance</h2>
-						<div className="space-y-3">
-							<Field label="Scope">
-								<span>{doc.scopeType ?? "-"}</span>
-							</Field>
-							<Field label="Source">
-								<span>{doc.source ?? "-"}</span>
-							</Field>
-							<Field label="Project">
-								<RelationLink
-									basePath={basePath}
-									collection="projects"
-									value={doc.project ?? null}
-									fallback="Project"
-								/>
-							</Field>
-							<Field label="Task">
-								<RelationLink
-									basePath={basePath}
-									collection="tasks"
-									value={doc.task ?? null}
-									fallback="Task"
-								/>
-							</Field>
-							<Field label="Run">
-								<RelationLink
-									basePath={basePath}
-									collection="run_links"
-									value={doc.run ?? null}
-									fallback="Run"
-								/>
-							</Field>
-							<Field label="Source ref">
-								<span className="break-all">{doc.sourceRef ?? "-"}</span>
-							</Field>
-						</div>
-					</section>
+			<div className="border-border-subtle mb-8 border-t" />
 
-					<section className="border-border-subtle bg-card border p-4">
-						<h2 className="mb-3 text-sm font-semibold">Metadata</h2>
-						<div className="space-y-3">
-							<Field label="Created">
-								<span>{created ?? "-"}</span>
-							</Field>
-							<Field label="Updated">
-								<span>{updated ?? "-"}</span>
-							</Field>
-							{entries.length === 0 ? (
-								<p className="text-muted-foreground text-sm">
-									No useful metadata.
-								</p>
-							) : (
-								<div className="space-y-2">
-									{entries.map(([key, value]) => (
-										<div key={key} className="min-w-0">
-											<div className="text-muted-foreground text-[11px] font-medium uppercase">
-												{key}
-											</div>
-											<pre className="mt-1 overflow-auto text-xs whitespace-pre-wrap">
-												{metadataValue(value)}
-											</pre>
-										</div>
-									))}
-								</div>
-							)}
-						</div>
-					</section>
-				</aside>
+			{/* Document body — content front and center */}
+			<div className="min-w-0">
+				<BodyPreview doc={doc} />
 			</div>
 		</div>
 	);
@@ -698,33 +709,22 @@ export default function KnowledgeDetailComponent(
 						</>
 					}
 					actions={
-						<div className="border-border-subtle bg-muted/50 flex overflow-hidden border">
-							<button
+						<div className="flex items-center gap-2">
+							{doc ? <KnowledgeChatContextAction doc={doc} /> : null}
+							<Button
 								type="button"
-								onClick={() => setMode("preview")}
-								className={[
-									"flex h-8 items-center gap-1.5 px-3 text-xs font-medium",
-									mode === "preview"
-										? "bg-background text-foreground"
-										: "text-muted-foreground hover:text-foreground",
-								].join(" ")}
+								variant="outline"
+								size="sm"
+								onClick={() =>
+									setMode((m) => (m === "edit" ? "preview" : "edit"))
+								}
 							>
-								<Icon icon="ph:eye" className="size-3.5" />
-								Preview
-							</button>
-							<button
-								type="button"
-								onClick={() => setMode("edit")}
-								className={[
-									"border-border-subtle flex h-8 items-center gap-1.5 border-l px-3 text-xs font-medium",
-									mode === "edit"
-										? "bg-background text-foreground"
-										: "text-muted-foreground hover:text-foreground",
-								].join(" ")}
-							>
-								<Icon icon="ph:pencil-simple" className="size-3.5" />
-								Edit
-							</button>
+								<Icon
+									icon={mode === "edit" ? "ph:eye" : "ph:pencil-simple"}
+									className="size-3.5"
+								/>
+								{mode === "edit" ? "Done" : "Edit"}
+							</Button>
 						</div>
 					}
 				/>
