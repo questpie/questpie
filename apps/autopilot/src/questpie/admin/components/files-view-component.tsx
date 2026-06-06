@@ -6,7 +6,17 @@ import * as React from "react";
 import {
 	AdminViewHeader,
 	AdminViewLayout,
+	Button,
 	SearchInput,
+	Table,
+	TableBody,
+	TableCell,
+	TableHead,
+	TableHeader,
+	TableRow,
+	Tooltip,
+	TooltipContent,
+	TooltipTrigger,
 	selectBasePath,
 	selectNavigate,
 	useAdminStore,
@@ -156,6 +166,7 @@ export default function FilesViewComponent(props: Props) {
 
 	const [currentPath, setCurrentPath] = React.useState("");
 	const [searchTerm, setSearchTerm] = React.useState("");
+	const [searchOpen, setSearchOpen] = React.useState(false);
 
 	const sortField = cfg.defaultSort?.field ?? pathField;
 	const sortDir = cfg.defaultSort?.direction ?? "asc";
@@ -249,63 +260,84 @@ export default function FilesViewComponent(props: Props) {
 			header={
 				<AdminViewHeader
 					title={title}
+					description={`${entries.length} ${entries.length === 1 ? "item" : "items"}`}
 					actions={
-						<>
-							<div className="w-56 max-w-[60vw]">
-								<SearchInput
-									value={searchTerm}
-									onChange={(e) => setSearchTerm(e.target.value)}
-									onClear={() => setSearchTerm("")}
-									placeholder="Search files..."
-								/>
-							</div>
-							<span className="text-muted-foreground shrink-0 text-xs tabular-nums">
-								{entries.length} items
-							</span>
-						</>
+						<Tooltip>
+							<TooltipTrigger
+								render={
+									<Button
+										variant="outline"
+										size="icon-sm"
+										className="relative"
+										onClick={() => setSearchOpen((open) => !open)}
+										aria-label="Search files"
+									>
+										<Icon icon="ph:magnifying-glass" />
+										{searchTerm && (
+											<span className="bg-foreground absolute top-1 right-1 size-1.5 rounded-full" />
+										)}
+									</Button>
+								}
+							/>
+							<TooltipContent side="bottom" align="end">
+								Search files
+							</TooltipContent>
+						</Tooltip>
 					}
 				/>
 			}
+			contentClassName="overflow-y-auto pb-3"
 		>
-			<div className="flex h-full min-h-0 flex-col">
-				{/* Breadcrumb */}
-			<div className="border-border-subtle flex items-center gap-1 border-b px-4 py-2.5 text-sm">
-				<button
-					type="button"
-					onClick={() => handleBreadcrumbClick(-1)}
-					className="text-muted-foreground hover:text-foreground hover:bg-muted flex items-center gap-1 rounded px-1.5 py-0.5"
-				>
-					<Icon icon="ph:house" className="h-3.5 w-3.5" />
-					<span>Root</span>
-				</button>
-				{breadcrumbs.map((segment, i) => (
-					<React.Fragment key={i}>
-						<Icon
-							icon="ph:caret-right"
-							className="text-muted-foreground/60 h-3 w-3 shrink-0"
+			<div className="qa-table-view min-w-0 space-y-4">
+				{(searchOpen || searchTerm) && (
+					<div className="max-w-xl">
+						<SearchInput
+							value={searchTerm}
+							onChange={(e) => setSearchTerm(e.target.value)}
+							onClear={() => setSearchTerm("")}
+							placeholder="Search files..."
+							containerClassName="h-10"
 						/>
-						<button
-							type="button"
-							onClick={() => handleBreadcrumbClick(i)}
-							className={`rounded px-1.5 py-0.5 ${
-								i === breadcrumbs.length - 1
-									? "text-foreground font-medium"
-									: "text-muted-foreground hover:text-foreground hover:bg-muted"
-							}`}
-						>
-							{segment}
-						</button>
-					</React.Fragment>
-				))}
-			</div>
+					</div>
+				)}
 
-			{/* File list */}
-			<div className="flex-1 overflow-auto">
+				{/* Breadcrumb */}
+				<div className="text-muted-foreground flex items-center gap-1 text-sm">
+					<button
+						type="button"
+						onClick={() => handleBreadcrumbClick(-1)}
+						className="hover:text-foreground hover:bg-muted flex items-center gap-1 rounded-md px-1.5 py-0.5 transition-colors"
+					>
+						<Icon icon="ph:house" className="size-3.5" />
+						<span>Root</span>
+					</button>
+					{breadcrumbs.map((segment, i) => (
+						<React.Fragment key={i}>
+							<Icon
+								icon="ph:caret-right"
+								className="text-muted-foreground/50 size-3 shrink-0"
+							/>
+							<button
+								type="button"
+								onClick={() => handleBreadcrumbClick(i)}
+								className={`rounded-md px-1.5 py-0.5 transition-colors ${
+									i === breadcrumbs.length - 1
+										? "text-foreground font-medium"
+										: "hover:text-foreground hover:bg-muted"
+								}`}
+							>
+								{segment}
+							</button>
+						</React.Fragment>
+					))}
+				</div>
+
+				{/* Files table — same primitives as the collection table view */}
 				{entries.length === 0 ? (
 					<div className="flex h-48 flex-col items-center justify-center gap-2">
 						<Icon
 							icon="ph:folder-open"
-							className="text-muted-foreground/50 h-10 w-10"
+							className="text-muted-foreground/50 size-10"
 						/>
 						<p className="text-muted-foreground text-sm">
 							{searchTerm
@@ -314,55 +346,59 @@ export default function FilesViewComponent(props: Props) {
 						</p>
 					</div>
 				) : (
-					<div className="space-y-0.5 px-2 py-1.5">
-						{entries.map((entry) => (
-							<button
-								key={entry.path}
-								type="button"
-								onClick={() =>
-									entry.kind === "folder"
-										? handleFolderClick(entry.path)
-										: handleFileClick(entry)
-								}
-								className="group/row hover:bg-muted/60 flex w-full items-center gap-3 rounded-md px-3 py-2 text-left transition-colors"
-							>
-								<Icon
-									icon={getIcon(entry)}
-									className={`size-[18px] shrink-0 ${getIconColor(entry)}`}
-								/>
-								<span className="min-w-0 flex-1 truncate text-sm font-medium">
-									{entry.name}
-									{entry.kind === "folder" && "/"}
-								</span>
-								{entry.fileKind && (
-									<span className="bg-muted text-muted-foreground shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium tracking-wide uppercase">
-										{entry.fileKind}
-									</span>
-								)}
-								{entry.kind === "folder" && entry.childCount != null && (
-									<span className="text-muted-foreground shrink-0 text-xs tabular-nums">
-										{entry.childCount}
-									</span>
-								)}
-								{entry.updatedAt && (
-									<span className="text-muted-foreground shrink-0 text-xs tabular-nums">
-										{formatDate(entry.updatedAt)}
-									</span>
-								)}
-								<Icon
-									icon={
-										entry.kind === "folder"
-											? "ph:caret-right"
-											: "ph:arrow-square-out"
-									}
-									className="text-muted-foreground/40 group-hover/row:text-muted-foreground size-4 shrink-0 transition-colors"
-								/>
-							</button>
-						))}
+					<div className="qa-table-view__table-wrapper min-w-0">
+						<Table>
+							<TableHeader>
+								<TableRow className="hover:bg-transparent">
+									<TableHead>Name</TableHead>
+									<TableHead className="w-40">Kind</TableHead>
+									<TableHead className="w-24 text-right">Items</TableHead>
+									<TableHead className="w-36 text-right">Modified</TableHead>
+								</TableRow>
+							</TableHeader>
+							<TableBody>
+								{entries.map((entry) => (
+									<TableRow
+										key={entry.path}
+										onClick={() =>
+											entry.kind === "folder"
+												? handleFolderClick(entry.path)
+												: handleFileClick(entry)
+										}
+										className="cursor-pointer"
+									>
+										<TableCell className="text-foreground font-medium">
+											<div className="flex min-w-0 items-center gap-2.5">
+												<Icon
+													icon={getIcon(entry)}
+													className={`size-[18px] shrink-0 ${getIconColor(entry)}`}
+												/>
+												<span className="truncate">
+													{entry.name}
+													{entry.kind === "folder" && "/"}
+												</span>
+											</div>
+										</TableCell>
+										<TableCell className="text-muted-foreground">
+											{entry.kind === "folder"
+												? "Folder"
+												: (entry.fileKind ?? "File")}
+										</TableCell>
+										<TableCell className="text-muted-foreground text-right">
+											{entry.kind === "folder" && entry.childCount != null
+												? entry.childCount
+												: "—"}
+										</TableCell>
+										<TableCell className="text-muted-foreground text-right">
+											{formatDate(entry.updatedAt) || "—"}
+										</TableCell>
+									</TableRow>
+								))}
+							</TableBody>
+						</Table>
 					</div>
 				)}
 			</div>
-		</div>
 		</AdminViewLayout>
 	);
 }

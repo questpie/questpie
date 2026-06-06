@@ -84,6 +84,24 @@ export {
 	AdminViewHeader,
 } from "#questpie/admin/client/views/layout/admin-view-layout.js";
 export { SearchInput } from "#questpie/admin/client/components/ui/search-input.js";
+// UI primitives — so custom views (e.g. the autopilot Files browser) render with
+// the exact same table/button/tooltip design language as the built-in views.
+export { Button } from "#questpie/admin/client/components/ui/button.js";
+export {
+	Table,
+	TableBody,
+	TableCaption,
+	TableCell,
+	TableFooter,
+	TableHead,
+	TableHeader,
+	TableRow,
+} from "#questpie/admin/client/components/ui/table.js";
+export {
+	Tooltip,
+	TooltipContent,
+	TooltipTrigger,
+} from "#questpie/admin/client/components/ui/tooltip.js";
 export { useResolveText } from "#questpie/admin/client/i18n/hooks.js";
 export type {
 	AdminSidebarBrandProps,
