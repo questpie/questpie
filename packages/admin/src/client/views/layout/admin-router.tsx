@@ -804,7 +804,17 @@ function LazyPageRenderer({ config }: { config: PageDefinition<string> }) {
 				}
 
 				if (typeof component === "function") {
-					const result = (component as () => any)();
+					// NEVER call a static component to "probe" it — invoking a React
+					// component outside render runs its hooks with no dispatcher and
+					// throws "Invalid hook call". Only lazy loaders may be invoked here;
+					// in this admin they are async functions (`async () => import(...)` /
+					// `async () => ({ default })`), so gate the call on AsyncFunction.
+					// A static component falls through (result == null) and is rendered
+					// directly as `<Component />` by the branch below.
+					const __isLazyLoader =
+						(component as { constructor?: { name?: string } }).constructor
+							?.name === "AsyncFunction";
+					const result = __isLazyLoader ? (component as () => any)() : null;
 					let isThenable = false;
 					if (result != null) {
 						if (typeof result.then === "function") {
