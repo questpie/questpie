@@ -1,0 +1,2500 @@
+{
+  "operations": [
+    {
+      "type": "remove",
+      "path": "ddl.table__COLON__public__DOT__capabilities",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.table__COLON__public__DOT__join_tokens",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.table__COLON__public__DOT__knowledge",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.table__COLON__public__DOT__run_events",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.table__COLON__public__DOT__runs",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.table__COLON__public__DOT__worker_leases",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.table__COLON__public__DOT__workers",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.table__COLON__public__DOT__workflow_configs",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__assets__DOT__key",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__assets__DOT__filename",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__assets__DOT__mime_type",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__assets__DOT__size",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__assets__DOT__visibility",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__capabilities__DOT__id",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__capabilities__DOT__name",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__capabilities__DOT__description",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__capabilities__DOT__defaultModel",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__capabilities__DOT__allowedProviders",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__capabilities__DOT__allowedTools",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__capabilities__DOT__contextRefs",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__capabilities__DOT__promptRefs",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__capabilities__DOT__runtimeHints",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__capabilities__DOT__project",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__capabilities__DOT__enabled",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__capabilities__DOT__config",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__capabilities__DOT__created_at",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__capabilities__DOT__updated_at",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__chat_sessions__DOT__preferredWorker",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__join_tokens__DOT__id",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__join_tokens__DOT__secretHash",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__join_tokens__DOT__description",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__join_tokens__DOT__createdBy",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__join_tokens__DOT__expiresAt",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__join_tokens__DOT__usedAt",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__join_tokens__DOT__usedByWorker",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__join_tokens__DOT__created_at",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__join_tokens__DOT__updated_at",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__knowledge__DOT__id",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__knowledge__DOT__title",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__knowledge__DOT__path",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__knowledge__DOT__scopeType",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__knowledge__DOT__project",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__knowledge__DOT__task",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__knowledge__DOT__run",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__knowledge__DOT__kind",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__knowledge__DOT__contentType",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__knowledge__DOT__body",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__knowledge__DOT__renderer",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__knowledge__DOT__source",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__knowledge__DOT__sourceRef",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__knowledge__DOT__contentHash",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__knowledge__DOT__metadata",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__knowledge__DOT__created_at",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__knowledge__DOT__updated_at",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__models__DOT__capabilities",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__run_events__DOT__id",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__run_events__DOT__run",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__run_events__DOT__type",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__run_events__DOT__level",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__run_events__DOT__summary",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__run_events__DOT__sequence",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__run_events__DOT__metadata",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__run_events__DOT__created_at",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__run_events__DOT__updated_at",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__runs__DOT__id",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__runs__DOT__task",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__runs__DOT__project",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__runs__DOT__worker",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__runs__DOT__status",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__runs__DOT__runtime",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__runs__DOT__provider",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__runs__DOT__model",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__runs__DOT__capability",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__runs__DOT__initiatedBy",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__runs__DOT__instructions",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__runs__DOT__summary",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__runs__DOT__error",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__runs__DOT__tokensInput",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__runs__DOT__tokensOutput",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__runs__DOT__startedAt",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__runs__DOT__endedAt",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__runs__DOT__runtimeSessionRef",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__runs__DOT__resumedFromRun",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__runs__DOT__preferredWorker",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__runs__DOT__resumable",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__runs__DOT__targeting",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__runs__DOT__metadata",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__runs__DOT__created_at",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__runs__DOT__updated_at",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__schedules__DOT__workflowConfig",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__tasks__DOT__workflowConfig",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__tasks__DOT__workflowStep",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__tasks__DOT__capability",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__worker_leases__DOT__id",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__worker_leases__DOT__worker",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__worker_leases__DOT__run",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__worker_leases__DOT__claimedAt",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__worker_leases__DOT__expiresAt",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__worker_leases__DOT__status",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__worker_leases__DOT__metadata",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__worker_leases__DOT__created_at",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__worker_leases__DOT__updated_at",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__workers__DOT__id",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__workers__DOT__deviceId",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__workers__DOT__name",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__workers__DOT__status",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__workers__DOT__capabilities",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__workers__DOT__lastHeartbeat",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__workers__DOT__machineSecretHash",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__workers__DOT__metadata",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__workers__DOT__created_at",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__workers__DOT__updated_at",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__workflow_configs__DOT__id",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__workflow_configs__DOT__name",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__workflow_configs__DOT__description",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__workflow_configs__DOT__steps",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__workflow_configs__DOT__defaultCapability",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__workflow_configs__DOT__project",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__workflow_configs__DOT__enabled",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__workflow_configs__DOT__version",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__workflow_configs__DOT__config",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__workflow_configs__DOT__created_at",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__workflow_configs__DOT__updated_at",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.index__COLON__public__DOT__knowledge__DOT__knowledge_scope_type_idx",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.index__COLON__public__DOT__knowledge__DOT__knowledge_project_idx",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.index__COLON__public__DOT__knowledge__DOT__knowledge_task_idx",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.index__COLON__public__DOT__knowledge__DOT__knowledge_run_idx",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.index__COLON__public__DOT__knowledge__DOT__knowledge_kind_idx",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.index__COLON__public__DOT__knowledge__DOT__knowledge_content_hash_idx",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.index__COLON__public__DOT__run_events__DOT__run_events_run_idx",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.index__COLON__public__DOT__run_events__DOT__run_events_run_sequence_idx",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.index__COLON__public__DOT__runs__DOT__runs_status_idx",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.index__COLON__public__DOT__runs__DOT__runs_worker_idx",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.index__COLON__public__DOT__runs__DOT__runs_task_idx",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.index__COLON__public__DOT__runs__DOT__runs_project_idx",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.index__COLON__public__DOT__runs__DOT__runs_runtime_idx",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.index__COLON__public__DOT__worker_leases__DOT__worker_leases_worker_idx",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.index__COLON__public__DOT__worker_leases__DOT__worker_leases_run_idx",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.index__COLON__public__DOT__worker_leases__DOT__worker_leases_status_idx",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.index__COLON__public__DOT__workers__DOT__workers_device_id_unique",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.index__COLON__public__DOT__workers__DOT__workers_status_idx",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.pk__COLON__public__DOT__capabilities__DOT__capabilities_pkey",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.pk__COLON__public__DOT__join_tokens__DOT__join_tokens_pkey",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.pk__COLON__public__DOT__knowledge__DOT__knowledge_pkey",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.pk__COLON__public__DOT__run_events__DOT__run_events_pkey",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.pk__COLON__public__DOT__runs__DOT__runs_pkey",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.pk__COLON__public__DOT__worker_leases__DOT__worker_leases_pkey",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.pk__COLON__public__DOT__workers__DOT__workers_pkey",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.pk__COLON__public__DOT__workflow_configs__DOT__workflow_configs_pkey",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.index__COLON__public__DOT__capabilities__DOT__capabilities_project_idx",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.index__COLON__public__DOT__capabilities__DOT__capabilities_enabled_idx",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.index__COLON__public__DOT__join_tokens__DOT__join_tokens_expires_at_idx",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.index__COLON__public__DOT__workflow_configs__DOT__workflow_configs_project_idx",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.index__COLON__public__DOT__workflow_configs__DOT__workflow_configs_enabled_idx",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__run_links__DOT__workflowConfig",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__run_links__DOT__workflowStep",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__run_links__DOT__capability",
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__agent_memory",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "agent_memory",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__document_store",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "document_store",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__memory_settings",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "memory_settings",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__apikey__DOT__configId",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "'default'",
+        "generated": null,
+        "identity": null,
+        "name": "configId",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "apikey"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__assets__DOT__title",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "title",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "assets"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__assets__DOT__path",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "path",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "assets"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__assets__DOT__scopeType",
+      "value": {
+        "type": "varchar(50)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'company'",
+        "generated": null,
+        "identity": null,
+        "name": "scopeType",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "assets"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__assets__DOT__project",
+      "value": {
+        "type": "varchar(36)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "project",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "assets"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__assets__DOT__task",
+      "value": {
+        "type": "varchar(36)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "task",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "assets"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__assets__DOT__run",
+      "value": {
+        "type": "varchar(36)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "run",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "assets"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__assets__DOT__kind",
+      "value": {
+        "type": "varchar(50)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "kind",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "assets"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__assets__DOT__contentType",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "contentType",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "assets"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__assets__DOT__body",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "body",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "assets"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__assets__DOT__renderer",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "renderer",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "assets"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__assets__DOT__source",
+      "value": {
+        "type": "varchar(50)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "source",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "assets"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__assets__DOT__sourceRef",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "sourceRef",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "assets"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__assets__DOT__contentHash",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "contentHash",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "assets"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__assets__DOT__metadata",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "metadata",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "assets"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__agent_memory__DOT__id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "name": "id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "agent_memory"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__agent_memory__DOT__type",
+      "value": {
+        "type": "varchar(50)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "'episodic'",
+        "generated": null,
+        "identity": null,
+        "name": "type",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "agent_memory"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__agent_memory__DOT__scopeType",
+      "value": {
+        "type": "varchar(50)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "'company'",
+        "generated": null,
+        "identity": null,
+        "name": "scopeType",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "agent_memory"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__agent_memory__DOT__scopeRef",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "scopeRef",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "agent_memory"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__agent_memory__DOT__content",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "content",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "agent_memory"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__agent_memory__DOT__importance",
+      "value": {
+        "type": "integer",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "5",
+        "generated": null,
+        "identity": null,
+        "name": "importance",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "agent_memory"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__agent_memory__DOT__confidence",
+      "value": {
+        "type": "integer",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "confidence",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "agent_memory"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__agent_memory__DOT__status",
+      "value": {
+        "type": "varchar(50)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "'active'",
+        "generated": null,
+        "identity": null,
+        "name": "status",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "agent_memory"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__agent_memory__DOT__supersedes",
+      "value": {
+        "type": "varchar(36)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "supersedes",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "agent_memory"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__agent_memory__DOT__sourceRun",
+      "value": {
+        "type": "varchar(36)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "sourceRun",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "agent_memory"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__agent_memory__DOT__source",
+      "value": {
+        "type": "varchar(50)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "'reflection'",
+        "generated": null,
+        "identity": null,
+        "name": "source",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "agent_memory"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__agent_memory__DOT__contentHash",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "contentHash",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "agent_memory"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__agent_memory__DOT__lastAccessedAt",
+      "value": {
+        "type": "timestamp(3) with time zone",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "lastAccessedAt",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "agent_memory"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__agent_memory__DOT__accessCount",
+      "value": {
+        "type": "integer",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "0",
+        "generated": null,
+        "identity": null,
+        "name": "accessCount",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "agent_memory"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__agent_memory__DOT__metadata",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "metadata",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "agent_memory"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__agent_memory__DOT__created_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "agent_memory"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__agent_memory__DOT__updated_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "agent_memory"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__chat_messages__DOT__runStatus",
+      "value": {
+        "type": "varchar(50)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "runStatus",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "chat_messages"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__document_store__DOT__id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "name": "id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "document_store"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__document_store__DOT__store",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "store",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "document_store"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__document_store__DOT__key",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "key",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "document_store"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__document_store__DOT__data",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "data",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "document_store"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__document_store__DOT__createdByApp",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "createdByApp",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "document_store"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__document_store__DOT__created_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "document_store"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__document_store__DOT__updated_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "document_store"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__memory_settings__DOT__id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "name": "id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "memory_settings"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__memory_settings__DOT__scopeType",
+      "value": {
+        "type": "varchar(50)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "'company'",
+        "generated": null,
+        "identity": null,
+        "name": "scopeType",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "memory_settings"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__memory_settings__DOT__scopeRef",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "scopeRef",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "memory_settings"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__memory_settings__DOT__agentMayWrite",
+      "value": {
+        "type": "boolean",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "true",
+        "generated": null,
+        "identity": null,
+        "name": "agentMayWrite",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "memory_settings"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__memory_settings__DOT__created_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "memory_settings"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__memory_settings__DOT__updated_at",
+      "value": {
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "memory_settings"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__schedule_executions__DOT__run",
+      "value": {
+        "type": "varchar(36)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "run",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "schedule_executions"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__schedules__DOT__appId",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "appId",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "schedules"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__schedules__DOT__appFn",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "appFn",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "schedules"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__assets__DOT__assets_path_idx",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "path",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "assets_path_idx",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "assets"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__assets__DOT__assets_scope_type_idx",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "scopeType",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "assets_scope_type_idx",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "assets"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__assets__DOT__assets_project_idx",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "project",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "assets_project_idx",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "assets"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__assets__DOT__assets_task_idx",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "task",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "assets_task_idx",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "assets"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__assets__DOT__assets_run_idx",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "run",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "assets_run_idx",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "assets"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__assets__DOT__assets_kind_idx",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "kind",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "assets_kind_idx",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "assets"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__assets__DOT__assets_content_hash_idx",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "contentHash",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "assets_content_hash_idx",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "assets"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__agent_memory__DOT__agent_memory_status_idx",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "status",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "agent_memory_status_idx",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "agent_memory"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__agent_memory__DOT__agent_memory_scope_idx",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "scopeType",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          },
+          {
+            "value": "scopeRef",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "agent_memory_scope_idx",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "agent_memory"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__agent_memory__DOT__agent_memory_type_idx",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "type",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "agent_memory_type_idx",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "agent_memory"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__agent_memory__DOT__agent_memory_content_hash_idx",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "contentHash",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "agent_memory_content_hash_idx",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "agent_memory"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__agent_memory__DOT__agent_memory_source_run_idx",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "sourceRun",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "agent_memory_source_run_idx",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "agent_memory"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__agent_memory__DOT__agent_memory_supersedes_idx",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "supersedes",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "agent_memory_supersedes_idx",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "agent_memory"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__document_store__DOT__document_store_store_key_idx",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "store",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          },
+          {
+            "value": "key",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": true,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "document_store_store_key_idx",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "document_store"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__document_store__DOT__document_store_store_idx",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "store",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "document_store_store_idx",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "document_store"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__document_store__DOT__document_store_data_gin_idx",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "data",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "gin",
+        "concurrently": false,
+        "name": "document_store_data_gin_idx",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "document_store"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__memory_settings__DOT__memory_settings_scope_idx",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "scopeType",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          },
+          {
+            "value": "scopeRef",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": true,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "memory_settings_scope_idx",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "memory_settings"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__memory_settings__DOT__memory_settings_scope_type_idx",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "scopeType",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "memory_settings_scope_type_idx",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "memory_settings"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__schedule_executions__DOT__schedule_executions_run_idx",
+      "value": {
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "run",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "schedule_executions_run_idx",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "schedule_executions"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__agent_memory__DOT__agent_memory_pkey",
+      "value": {
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "name": "agent_memory_pkey",
+        "schema": "public",
+        "table": "agent_memory",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__document_store__DOT__document_store_pkey",
+      "value": {
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "name": "document_store_pkey",
+        "schema": "public",
+        "table": "document_store",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__memory_settings__DOT__memory_settings_pkey",
+      "value": {
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "name": "memory_settings_pkey",
+        "schema": "public",
+        "table": "memory_settings",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-06-06T00:35:09.446Z",
+      "migrationId": "v2Schema20260606T003509"
+    }
+  ],
+  "metadata": {
+    "migrationId": "v2Schema20260606T003509",
+    "timestamp": "2026-06-06T00:35:11.216Z",
+    "prevId": "00000000-0000-0000-0000-000000000000"
+  }
+}
