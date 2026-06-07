@@ -77,6 +77,62 @@ const CollectionFormView = React.lazy(async () => {
 	};
 });
 
+/**
+ * The framework `document` view primitive (Notion-style, immediately editable,
+ * autosaving). Lazy-loaded the SAME way as `CollectionFormView` above — both are
+ * registered admin views keyed by name in `adminClientModule.views`. A text/
+ * markdown knowledge row mounts this directly so editing reuses the primitive
+ * (no bespoke editor, no edit/preview mode).
+ */
+const DocumentView = React.lazy(async () => {
+	const loader = adminClientModule.views["collection-document"].component;
+	if (isLazyLoader(loader)) {
+		const module = await loader();
+		return {
+			default: (module.default ?? module) as React.ComponentType<
+				Record<string, unknown>
+			>,
+		};
+	}
+	return {
+		default: loader as React.ComponentType<Record<string, unknown>>,
+	};
+});
+
+/**
+ * Declarative `document` config for a text/markdown knowledge row: the `body`
+ * field is the dominant rich-text column; a CURATED set of meaningful knowledge
+ * fields show as inline-editable property rows; edits autosave. Property names
+ * absent from the resolved field map are silently dropped by the primitive.
+ *
+ * Only fields that carry signal are listed — scope, source provenance, and the
+ * timestamps. The redundant/implied fields (`path`, `kind`, `contentType`,
+ * `renderer`) and the usually-empty refs (`sourceRef`, `project`, `task`, `run`,
+ * `metadata`) are intentionally omitted so the page reads like a clean document,
+ * not a raw record dump.
+ */
+const KNOWLEDGE_DOCUMENT_CONFIG = {
+	document: {
+		body: "body",
+		title: "title",
+		save: "autosave",
+		properties: ["scopeType", "source", "createdAt", "updatedAt"],
+	},
+} as const;
+
+/**
+ * Human page title for a knowledge doc. Prefer an explicit `title`; otherwise
+ * the file's display name (last path segment, e.g. `text-doc-test.md`) so the
+ * document page never shows a raw record id. Falls back to the full path.
+ */
+function documentTitle(doc: KnowledgeDoc): string | undefined {
+	if (doc.title && doc.title.trim()) return doc.title.trim();
+	const path = doc.path?.trim();
+	if (!path) return undefined;
+	const segment = path.split("/").filter(Boolean).pop();
+	return segment || path;
+}
+
 function relationId(value: RelationValue): string | null {
 	if (typeof value === "string") return value;
 	return value?.id ?? null;
@@ -161,6 +217,16 @@ function looksOffice(doc: KnowledgeDoc) {
 /** A row that carries an uploaded blob (a `key`) rather than a text `body`. */
 function hasUploadBlob(doc: KnowledgeDoc) {
 	return typeof (doc as { key?: unknown }).key === "string";
+}
+
+/**
+ * An EDITABLE text/markdown row: a `body`-backed knowledge doc that is neither a
+ * mini-app nor a blob upload. These render with the framework document-view
+ * primitive (directly editable). Mini-app + blob rows (pdf/office/image) are
+ * type-appropriate VIEWER/host renders, not an editable document.
+ */
+function isEditableTextRow(doc: KnowledgeDoc) {
+	return !isMiniApp(doc) && !hasUploadBlob(doc);
 }
 
 function bodyKind(doc: KnowledgeDoc) {
@@ -626,11 +692,36 @@ function CollectionForm(props: CollectionFormViewProps) {
 	);
 }
 
+/**
+ * Mount the framework `document` view primitive for a text/markdown knowledge
+ * row. Reuses the form-view props (the primitive is a drop-in with the same
+ * `CollectionFormViewProps`); the `viewConfig.document` declares which field is
+ * the body, which are property rows, and that edits autosave. The primitive
+ * brings its OWN page shell (centered layout + title + autosave indicator), so
+ * it is returned directly — not wrapped in the autopilot viewer chrome.
+ */
+function DocumentDetail({ title, ...props }: CollectionFormViewProps) {
+	return (
+		<React.Suspense
+			fallback={
+				<div className="text-foreground-muted flex items-center justify-center p-12">
+					<Icon icon="ph:spinner" className="size-5 animate-spin" />
+				</div>
+			}
+		>
+			<DocumentView
+				{...props}
+				viewConfig={KNOWLEDGE_DOCUMENT_CONFIG}
+				title={title}
+			/>
+		</React.Suspense>
+	);
+}
+
 export default function KnowledgeDetailComponent(
 	props: CollectionFormViewProps,
 ) {
 	const { collection, id, basePath = "/admin" } = props;
-	const [mode, setMode] = React.useState<"preview" | "edit">("preview");
 	const { data, isLoading, error } = useCollectionItem(
 		collection as any,
 		id ?? "",
@@ -641,6 +732,16 @@ export default function KnowledgeDetailComponent(
 
 	if (!id) return <CollectionForm {...props} />;
 
+	// A text/markdown row (no blob `key`, not a mini-app) is an editable
+	// document: hand it straight to the framework document-view primitive, which
+	// renders the Notion-style page (title + property rows + rich-text body) and
+	// autosaves — no edit/preview mode. The primitive owns its own page shell.
+	if (doc && isEditableTextRow(doc)) {
+		return <DocumentDetail {...props} title={documentTitle(doc)} />;
+	}
+
+	// Blob (pdf/office/image) + mini-app rows are type-appropriate VIEWER/host
+	// renders, not an editable document. Keep the autopilot inspector chrome.
 	const title = doc?.title ?? doc?.path ?? props.title ?? "Knowledge";
 	const path = doc?.path ?? "";
 
@@ -677,50 +778,30 @@ export default function KnowledgeDetailComponent(
 						</>
 					}
 					actions={
-						<div className="flex items-center gap-2">
-							{doc ? <KnowledgeChatContextAction doc={doc} /> : null}
-							<Button
-								type="button"
-								variant="outline"
-								size="sm"
-								onClick={() =>
-									setMode((m) => (m === "edit" ? "preview" : "edit"))
-								}
-							>
-								<Icon
-									icon={mode === "edit" ? "ph:eye" : "ph:pencil-simple"}
-									data-icon="inline-start"
-								/>
-								{mode === "edit" ? "Done" : "Edit"}
-							</Button>
-						</div>
+						doc ? <KnowledgeChatContextAction doc={doc} /> : null
 					}
 				/>
 			}
 		>
-			{mode === "edit" ? (
-				<CollectionForm {...props} />
-			) : (
-				<div className="p-4">
-					{isLoading ? (
-						<div className="text-foreground-muted flex items-center justify-center p-12">
-							<Icon icon="ph:spinner" className="size-5 animate-spin" />
-						</div>
-					) : error ? (
-						<div className="border-destructive bg-card text-destructive rounded-[var(--surface-radius)] border p-4 text-sm">
-							{error instanceof Error
-								? error.message
-								: "Failed to load knowledge"}
-						</div>
-					) : doc ? (
-						<KnowledgeInspector doc={doc} basePath={basePath} />
-					) : (
-						<div className="text-foreground-muted border-border-subtle rounded-[var(--surface-radius)] border p-8 text-center text-sm">
-							Knowledge resource not found.
-						</div>
-					)}
-				</div>
-			)}
+			<div className="p-4">
+				{isLoading ? (
+					<div className="text-foreground-muted flex items-center justify-center p-12">
+						<Icon icon="ph:spinner" className="size-5 animate-spin" />
+					</div>
+				) : error ? (
+					<div className="border-destructive bg-card text-destructive rounded-[var(--surface-radius)] border p-4 text-sm">
+						{error instanceof Error
+							? error.message
+							: "Failed to load knowledge"}
+					</div>
+				) : doc ? (
+					<KnowledgeInspector doc={doc} basePath={basePath} />
+				) : (
+					<div className="text-foreground-muted border-border-subtle rounded-[var(--surface-radius)] border p-8 text-center text-sm">
+						Knowledge resource not found.
+					</div>
+				)}
+			</div>
 		</AdminViewLayout>
 	);
 }

@@ -105,7 +105,11 @@ export default collection("assets")
 			])
 			.label({ en: "Kind" }),
 		contentType: f.text().label({ en: "Content Type" }),
-		body: f.textarea().label({ en: "Body" }),
+		// Markdown-mode rich text: stores a plain `text` column (same as the former
+		// `f.textarea()`, so no DB migration), keeps the body human-readable markdown
+		// (SKILL.md / knowledge files are markdown by contract, consumed by workers as
+		// markdown), and lets the admin document view render it with the WYSIWYG editor.
+		body: f.richText({ mode: "markdown" }).label({ en: "Body" }),
 		renderer: f.text().label({ en: "Renderer" }),
 		source: f
 			.select([
