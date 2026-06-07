@@ -258,6 +258,28 @@ describe("hostFetch — SSRF denials (structured error, never throws)", () => {
 		expect(res.ok).toBe(false);
 	});
 
+	it("DENIES a host that RESOLVES to an IPv6 metadata / IPv4-mapped / 0.0.0.0 / non-decimal address (resolution path, not just literal)", async () => {
+		// Each of these reaches the validator via the RESOLVER (not a URL literal),
+		// proving `resolveAndValidate` classifies every resolved record — the IPv6
+		// metadata convention (fd00:ec2::254), an IPv4-mapped loopback
+		// (::ffff:127.0.0.1), this-host (0.0.0.0), and a non-canonical IPv4 literal a
+		// resolver might hand back (decimal 2130706433 = 127.0.0.1).
+		for (const resolved of [
+			"fd00:ec2::254",
+			"::ffff:127.0.0.1",
+			"0.0.0.0",
+			"2130706433",
+		]) {
+			const res = await hostFetch(
+				{ url: "http://allowed.test/" },
+				{ resolve: resolverFrom({ "allowed.test": [resolved] }) },
+			);
+			expect(res.ok).toBe(false);
+			if (!res.ok)
+				expect(res.error.message.toLowerCase()).toContain("blocked");
+		}
+	});
+
 	it("DENIES a direct private IP literal in the URL (no DNS needed)", async () => {
 		for (const target of [
 			"http://127.0.0.1/",
