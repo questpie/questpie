@@ -31,21 +31,29 @@ import { parseSkillFrontmatter } from "../lib/skill-frontmatter";
  * and re-declares the admin display fields (`width`/`height`/`alt`/`caption`) inline.
  *
  * PER-FILE VISIBILITY (the unification's real design point): the former `knowledge`
- * was collection-level private; `assets` mixes PUBLIC field-uploads (profile photos
- * served anonymously) with PRIVATE docs/mini-app sources/artifacts (a private
- * mini-app source must NEVER be publicly served). We resolve this PER-ROW via the
- * `.upload()` `visibility` field:
- *   - the collection default is `.upload({ visibility: "private" })` — secure by
- *     default for the dominant content (docs, mini-app sources, artifacts);
+ * was collection-level private; `assets` mixes PRIVATE-by-default content (docs,
+ * mini-app sources, artifacts, AND every Drive/folder upload) with the rare PUBLIC
+ * field-upload that explicitly opts in. A private mini-app source or a confidential
+ * file dragged into a folder must NEVER be publicly served. We resolve this PER-ROW
+ * via the `.upload()` `visibility` field:
+ *   - secure-by-default applies to BOTH write paths, via TWO complementary stamps:
+ *     (a) BLOB uploads -- `.upload({ visibility: "private" })` makes the upload route
+ *     stamp every uploaded row PRIVATE (an explicit `visibility:"public"` opt-in is
+ *     the only way out); (b) TEXT-body rows -- the synthetic `visibility` column is
+ *     `create.allowed:false`, so `knowledgeResource.createTextResource`/`writeByPath`
+ *     cannot supply it and a bare `.create()` would otherwise fall through to the DB
+ *     default `'public'`; the `beforeChange` hook (below) stamps `'private'` on create
+ *     when unset, so a doc / mini-app source / skill / artifact also lands PRIVATE;
  *   - an explicit `.access({ read })` rule (below) gates reads PER-ROW on
  *     `visibility`: an anonymous caller sees ONLY `visibility:"public"` rows (e.g.
  *     a profile photo explicitly published), an authenticated session sees the full
  *     library. This replaces the framework's implicit "public upload ⇒ public read";
- *   - a `beforeChange` hook stamps `visibility:"public"` on field-UPLOAD rows (rows
- *     that carry a blob `key` but no explicit visibility) so profile photos stay
- *     publicly servable, while text-`body` docs/artifacts/mini-app sources keep the
- *     private default. The storage blob-serving route already keys on the per-row
- *     `visibility`, so a private source blob is never served without a signed token.
+ *   - a field-upload that genuinely needs anonymous serving (a published profile
+ *     photo) must opt in explicitly by passing `visibility:"public"` in the upload's
+ *     additionalData — it is never implicitly public. The storage blob-serving route
+ *     keys on the per-row `visibility`, so a private blob is never served without a
+ *     signed token, and the admin detail view renders private blobs through the
+ *     framework's signed `url` (the upload `afterRead` hook).
  *   - the mini-app G1 own-subtree dispatch runs `accessMode:"system"`, which bypasses
  *     access entirely (`crud-generator` line ~3068) — preserved exactly, so an app
  *     still reads/writes its own clamped subtree regardless of `visibility`.
@@ -55,7 +63,6 @@ import { parseSkillFrontmatter } from "../lib/skill-frontmatter";
  * name) reading/writing THIS collection.
  */
 export default collection("assets")
-	.upload({ visibility: "private" })
 	.fields(({ f }) => ({
 		// Admin asset display fields (formerly contributed by the admin `assets`
 		// collection) — kept inline so the photo-upload use case is unchanged.
@@ -114,6 +121,14 @@ export default collection("assets")
 		contentHash: f.text().label({ en: "Content Hash" }),
 		metadata: f.json().label({ en: "Metadata" }),
 	}))
+	// `.upload()` MUST come AFTER `.fields()`: `.fields()` REPLACES the field map
+	// (it does not merge), so the synthetic upload columns (`key`/`filename`/
+	// `mimeType`/`size`/`visibility`) only survive when `.upload()` is the later
+	// call. With the reverse order the upload columns are dropped from the table —
+	// a blob upload stores its object but records no `key`, leaving the row
+	// unservable AND the blob orphaned, and `visibility` never persists. Mirrors
+	// the starter/admin `assets` collections, which both declare fields first.
+	.upload({ visibility: "private" })
 	.access({
 		/**
 		 * Per-file read visibility. Authenticated callers see the whole library;
@@ -127,30 +142,39 @@ export default collection("assets")
 	})
 	.hooks({
 		/**
-		 * Stamp field-UPLOAD rows public; leave text/doc rows private. The
-		 * collection default is `private`; a blob upload (a row carrying a storage
-		 * `key`) that does not explicitly set `visibility` should be publicly
-		 * servable (profile photos), while text-`body` docs/artifacts/mini-app
-		 * sources (no `key`) keep the private default.
+		 * Secure-by-default visibility stamp + write-time SKILL.md validator.
+		 *
+		 * BLOB uploads carry `visibility` in their create input already (the upload route
+		 * stamps the collection's `private` default, or an explicit `'public'` opt-in for
+		 * a published profile photo), so for them the stamp below is a no-op. TEXT-body
+		 * rows go through a bare `.create()` that CANNOT carry `visibility` (the synthetic
+		 * column is `create.allowed:false`) and would otherwise inherit the DB default
+		 * `'public'`; the stamp closes that gap so they land PRIVATE too.
 		 */
 		beforeChange: ({ data, operation }) => {
 			const row = data as {
-				key?: unknown;
-				visibility?: unknown;
 				kind?: unknown;
 				path?: unknown;
 				body?: unknown;
 				metadata?: unknown;
+				visibility?: unknown;
 			};
 
-			if (operation === "create") {
-				if (
-					(row.visibility === undefined || row.visibility === null) &&
-					typeof row.key === "string" &&
-					row.key.length > 0
-				) {
-					row.visibility = "public";
-				}
+			// Secure-by-default visibility stamp. The synthetic `visibility` column is
+			// `NOT NULL DEFAULT 'public'` AND `create.allowed:false`, so a normal
+			// `.create()` (e.g. `knowledgeResource.createTextResource` / `writeByPath`)
+			// neither does nor can supply it; without this stamp every TEXT-body row
+			// (docs, mini-app sources, skills, artifacts, run summaries/results/logs/
+			// diffs) would fall through to the DB default `'public'` and become
+			// anonymously readable via the per-row `read` rule above. This hook runs
+			// AFTER field-write-access validation (crud-generator: validate ->
+			// beforeChange -> insert), so writing the `create.allowed:false` column here
+			// is sound and overrides the DB default before insert. Gated to create so an
+			// admin editing visibility on UPDATE is never clobbered, and skipped when
+			// already set so the blob-upload route's explicit `'public'` opt-in (a
+			// published profile photo) survives.
+			if (operation === "create" && row.visibility == null) {
+				row.visibility = "private";
 			}
 
 			// Write-time SKILL.md validator (§8.2): a `kind:"skill"` row (or any write
