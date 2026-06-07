@@ -19,6 +19,7 @@ type CreateAiRunLinkInput = {
 	scheduleId?: string | null;
 	scheduleExecutionId?: string | null;
 	runtimeSessionRef?: string | null;
+	systemPrompt?: string | null;
 	resumedFromRunId?: string | null;
 	resumable?: boolean;
 	spawnMetadata?: Record<string, unknown>;
@@ -37,6 +38,7 @@ export async function createAiRunLink(input: CreateAiRunLinkInput) {
 		status: "pending",
 		runtime,
 		prompt: input.instructions,
+		systemPrompt: input.systemPrompt ?? undefined,
 		runtimeSessionRef: input.runtimeSessionRef ?? undefined,
 		meta: asRecord(input.spawnMetadata),
 	});

@@ -1,7 +1,7 @@
 /**
  * Memory injection at run start — the workflow-facing entry point.
  *
- * The SIBLING of `injectSkillsIntoInstructions` (`lib/skill-discovery.ts`):
+ * The SIBLING of `buildSkillsSystemPrompt` (`lib/skill-discovery.ts`):
  * `chat-query` + `task-pipeline` call this to PREPEND the recalled-memory DATA block
  * to a run's instructions. It wires the pure recall core (`lib/memory-recall.ts`) to
  * the real I/O: the framework semantic search (`app.search`, backed by the pgvector

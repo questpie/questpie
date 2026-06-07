@@ -12,7 +12,7 @@ import {
 import type { RunCompletion } from "../lib/run-completion";
 import { resolveRuntimeSelection } from "../lib/runtime-selection";
 import { linkScheduleExecutionRun } from "../lib/schedule-run-links";
-import { injectSkillsIntoInstructions } from "../lib/skill-discovery";
+import { buildSkillsSystemPrompt } from "../lib/skill-discovery";
 
 function responseContent(completion: RunCompletion | null) {
 	if (completion?.status === "completed") {
@@ -67,19 +67,20 @@ export default workflow({
 				modelId: input.modelId,
 				projectId,
 			});
-			// Run-start progressive disclosure (§8.3): prepend the published-skills L1
-			// block to the user's prompt so the agent can discover + load skills on
-			// demand. Drafts are excluded; descriptions are injected as delimited DATA.
-			const withSkills = await injectSkillsIntoInstructions(
+			// Run-start progressive disclosure (§8.3): the published-skills L1 block
+			// now rides the run's `systemPrompt` channel (system-level context, not
+			// the user turn) instead of being prepended to the prompt. Drafts are
+			// excluded; descriptions stay delimited DATA (§8.7). Empty when nothing
+			// is published.
+			const skillsSystemPrompt = await buildSkillsSystemPrompt(
 				ctx.collections,
-				input.prompt,
 				{ projectId },
 			);
-			// Run-start memory RECALL: prepend the scoped active-memory DATA block (a
-			// SIBLING of the skills block) so the agent recalls lessons from past runs.
-			// Injected as DELIMITED DATA, never instructions (untrusted / self-poisoning
-			// channel). Best-effort: degrades to `withSkills` if no semantic-search
-			// backend is configured or recall errors.
+			// Run-start memory RECALL: prepend the scoped active-memory DATA block to
+			// the user prompt so the agent recalls lessons from past runs. Injected as
+			// DELIMITED DATA, never instructions (untrusted / self-poisoning channel).
+			// Best-effort: degrades to `input.prompt` if no semantic-search backend is
+			// configured or recall errors.
 			const instructions = await injectMemoriesIntoInstructions(
 				{
 					search: ctx.search,
@@ -87,7 +88,7 @@ export default workflow({
 					projectId,
 					taskId: scopeTaskId,
 				},
-				withSkills,
+				input.prompt,
 				input.prompt,
 			);
 			return createAiRunLink({
@@ -97,6 +98,7 @@ export default workflow({
 				projectId,
 				initiatedBy: "chat",
 				instructions,
+				systemPrompt: skillsSystemPrompt || undefined,
 				chatSessionId: input.chatSessionId,
 				chatMessageId: input.messageId,
 				scheduleExecutionId: input.scheduleExecutionId,

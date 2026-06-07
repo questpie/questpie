@@ -15,7 +15,7 @@ import {
 import type { RunCompletion } from "../lib/run-completion";
 import { resolveRuntimeSelection } from "../lib/runtime-selection";
 import { linkScheduleExecutionRun } from "../lib/schedule-run-links";
-import { injectSkillsIntoInstructions } from "../lib/skill-discovery";
+import { buildSkillsSystemPrompt } from "../lib/skill-discovery";
 import { workflowsFromContext } from "../lib/workflows";
 
 type Collections = AppCollections;
@@ -216,20 +216,20 @@ export default workflow({
 			});
 
 			const run = await step.run(`create-run-${attempt}`, async () => {
-				// Run-start progressive disclosure (§8.3): prepend the published-skills
-				// L1 block to the task instructions. Drafts excluded; descriptions are
-				// injected as delimited DATA, not trusted instructions (§8.7).
+				// Run-start progressive disclosure (§8.3): the published-skills L1 block
+				// rides the run's `systemPrompt` channel (system-level context), not the
+				// task prompt. Drafts excluded; descriptions stay delimited DATA (§8.7).
+				// Empty when nothing is published.
 				const baseInstructions = taskInstructions(task);
-				const withSkills = await injectSkillsIntoInstructions(
+				const skillsSystemPrompt = await buildSkillsSystemPrompt(
 					ctx.collections,
-					baseInstructions,
 					{ projectId: relationId(task.project) },
 				);
-				// Run-start memory RECALL (sibling of the skills block): prepend the
-				// scoped active-memory DATA block so the agent recalls lessons from
-				// prior runs on this task/project/company. DELIMITED DATA, never
-				// instructions. Best-effort (degrades to `withSkills` on no-backend or
-				// error). The query is the task's own instructions = this run's intent.
+				// Run-start memory RECALL: prepend the scoped active-memory DATA block to
+				// the task instructions so the agent recalls lessons from prior runs on
+				// this task/project/company. DELIMITED DATA, never instructions.
+				// Best-effort (degrades to `baseInstructions` on no-backend or error).
+				// The query is the task's own instructions = this run's intent.
 				const instructions = await injectMemoriesIntoInstructions(
 					{
 						search: ctx.search,
@@ -237,7 +237,7 @@ export default workflow({
 						projectId: relationId(task.project),
 						taskId: input.taskId,
 					},
-					withSkills,
+					baseInstructions,
 					baseInstructions,
 					log,
 				);
@@ -248,6 +248,7 @@ export default workflow({
 					projectId: relationId(task.project),
 					initiatedBy: "task",
 					instructions,
+					systemPrompt: skillsSystemPrompt || undefined,
 					scheduleExecutionId: input.scheduleExecutionId,
 					linkMetadata: {
 						runReason: input.runReason ?? "task-pipeline",

@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
+	buildSkillsSystemPrompt,
 	COMPANY_SKILLS_PREFIX,
 	discoverSkills,
-	injectSkillsIntoInstructions,
 	renderSkillsBlock,
 	type SkillDiscoveryCollections,
 	type SkillRowLike,
@@ -250,8 +250,8 @@ describe("renderSkillsBlock — delimited DATA, not instructions", () => {
 	});
 });
 
-describe("injectSkillsIntoInstructions", () => {
-	it("prepends the published-skills block to the base instructions", async () => {
+describe("buildSkillsSystemPrompt", () => {
+	it("returns the published-skills block for the systemPrompt channel", async () => {
 		const collections = fakeCollections({
 			company: [
 				skillRow(`${COMPANY_SKILLS_PREFIX}a/SKILL.md`, {
@@ -262,12 +262,12 @@ describe("injectSkillsIntoInstructions", () => {
 			],
 		});
 
-		const out = await injectSkillsIntoInstructions(collections, "Do the task.");
+		const out = await buildSkillsSystemPrompt(collections);
 		expect(out.startsWith("===== BEGIN SKILLS AVAILABLE")).toBe(true);
-		expect(out.endsWith("Do the task.")).toBe(true);
+		expect(out.endsWith("===== END SKILLS AVAILABLE =====")).toBe(true);
 	});
 
-	it("returns the base instructions UNCHANGED when nothing is published", async () => {
+	it("returns an empty string when nothing is published", async () => {
 		const collections = fakeCollections({
 			company: [
 				skillRow(`${COMPANY_SKILLS_PREFIX}d/SKILL.md`, {
@@ -278,7 +278,7 @@ describe("injectSkillsIntoInstructions", () => {
 			],
 		});
 
-		const out = await injectSkillsIntoInstructions(collections, "Just the task.");
-		expect(out).toBe("Just the task.");
+		const out = await buildSkillsSystemPrompt(collections);
+		expect(out).toBe("");
 	});
 });

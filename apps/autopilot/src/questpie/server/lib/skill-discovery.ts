@@ -198,20 +198,19 @@ export function renderSkillsBlock(skills: DiscoveredSkill[]): string {
 }
 
 /**
- * Build the run-start instructions: the published-skills block PREPENDED to the
- * caller's base instructions. When no skills are published the base instructions
- * are returned unchanged.
+ * Build the run-start system prompt: the published-skills L1 block, or `""` when
+ * nothing is published.
  *
- * This is the single injection helper both workflows call (`chat-query`,
- * `task-pipeline`) so the L1 surface is identical across run kinds.
+ * This is the single skills-injection helper both workflows call (`chat-query`,
+ * `task-pipeline`) so the L1 surface is identical across run kinds. The block now
+ * rides the run's dedicated `systemPrompt` channel (a cleaner home for system-level
+ * injected context) instead of being prepended to the user-turn prompt — it is
+ * still DELIMITED DATA (§8.7), just on a system channel rather than the user turn.
  */
-export async function injectSkillsIntoInstructions(
+export async function buildSkillsSystemPrompt(
 	collections: SkillDiscoveryCollections,
-	baseInstructions: string,
 	options: DiscoverSkillsOptions = {},
 ): Promise<string> {
 	const skills = await discoverSkills(collections, options);
-	const block = renderSkillsBlock(skills);
-	if (!block) return baseInstructions;
-	return `${block}\n\n${baseInstructions}`;
+	return renderSkillsBlock(skills);
 }
