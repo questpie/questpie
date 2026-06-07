@@ -24,9 +24,11 @@
 
 import type { ExecutorCapabilities } from "../adapter.js";
 import { checkBindingCapability } from "./capability-check.js";
+import { type HostFetchOptions, hostFetch } from "./host-fetch.js";
 import {
 	type BindingError,
 	type BrokerRpcResponse,
+	type HttpFetchRequest,
 	parseBindingMethod,
 } from "./protocol.js";
 
@@ -86,6 +88,20 @@ export interface BindingTarget {
 			set?(args: unknown): Promise<unknown>;
 		}
 	>;
+	/**
+	 * Brokered HTTP egress (`http.fetch`). UNLIKE the other families, the dispatch
+	 * is TRUSTED HOST LOGIC, not a per-run business handler: the broker always
+	 * runs the SSRF-safe {@link hostFetch} (resolve → validate ALL ips → pin →
+	 * re-validate every redirect) — the per-app `net` allowlist was already
+	 * enforced by the capability check. This member only supplies OPTIONS to that
+	 * fetch (e.g. an injected DNS resolver for tests, or per-run timeout/redirect
+	 * tuning). Absent → safe defaults. There is no way to wire a handler that
+	 * BYPASSES the pin; the broker never calls a guest-supplied fetch function.
+	 */
+	http?: {
+		/** Options forwarded to {@link hostFetch} (resolver, timeout, caps). */
+		fetchOptions?: HostFetchOptions;
+	};
 }
 
 /** A registered run: its capability scope, bound target, and expiry. */
@@ -311,6 +327,22 @@ export class SandboxBroker {
 				);
 			}
 			return { ok: true, value: await fn(args ?? {}) };
+		}
+
+		if (parsed.kind === "http") {
+			// Brokered, SSRF-safe egress. The per-app `net` allowlist already passed
+			// the capability check; here we ALWAYS run the trusted host fetch that
+			// resolves → validates ALL ips → PINS the socket to a validated ip →
+			// re-validates every redirect hop. `hostFetch` never throws; it returns
+			// a structured error that maps straight onto BrokerRpcResponse. The
+			// target only contributes OPTIONS (injected resolver / timeouts).
+			const result = await hostFetch(
+				(args ?? {}) as HttpFetchRequest,
+				target.http?.fetchOptions,
+			);
+			return result.ok
+				? { ok: true, value: result.value }
+				: { ok: false, error: result.error };
 		}
 
 		// services / jobs / workflows / email: capability-checkable but not

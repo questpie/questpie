@@ -20,6 +20,7 @@
  */
 
 import type { ExecutorCapabilities } from "../adapter.js";
+import { parseHostEntry } from "./net-validation.js";
 import { type ParsedBindingMethod, parseBindingMethod } from "./protocol.js";
 
 /** Result of a capability decision. `reason` is populated only when denied. */
@@ -259,6 +260,92 @@ function checkCollection(
 	return ALLOW;
 }
 
+/**
+ * Decide a parsed `http.fetch` call against the run's `net` allowlist
+ * (`host[:port]` entries, Deno `--allow-net` syntax). DEFAULT-DENY: an absent /
+ * empty `net` axis grants no egress at all.
+ *
+ * This is a purely SYNTACTIC host/port allowlist match — it does NOT resolve DNS
+ * or validate the resolved IPs (that connect-time SSRF defense lives in the
+ * broker's host fetch, which must resolve + validate + PIN). Here we only gate
+ * the destination host the guest asked for:
+ *   - The URL must be an absolute `http:`/`https:` URL.
+ *   - Its hostname must equal an allowlisted entry's host (case-insensitive),
+ *     either an exact match or a `*.`-suffix wildcard (`*.example.com` matches
+ *     `api.example.com` but NOT the apex `example.com`).
+ *   - If an allowlist entry pins a port, the URL's effective port must match it;
+ *     a portless entry allows any port.
+ * A userinfo (`user:pass@`) in the URL is rejected (it can mask the real host).
+ */
+function checkHttpFetch(
+	args: unknown,
+	caps: ExecutorCapabilities,
+): CapabilityDecision {
+	const allow = caps.net;
+	if (!Array.isArray(allow) || allow.length === 0) {
+		return deny("http.fetch requires a `net` host allowlist (default-deny)");
+	}
+
+	const a = (args ?? {}) as { url?: unknown };
+	if (typeof a.url !== "string" || a.url.length === 0) {
+		return deny("http.fetch requires a string `url`");
+	}
+
+	let parsed: URL;
+	try {
+		parsed = new URL(a.url);
+	} catch {
+		return deny(`http.fetch url is not a valid URL: ${String(a.url)}`);
+	}
+
+	if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+		return deny(
+			`http.fetch only allows http(s) URLs, got "${parsed.protocol}"`,
+		);
+	}
+	// Embedded credentials can mask the true host from a human reviewer — reject.
+	if (parsed.username.length > 0 || parsed.password.length > 0) {
+		return deny("http.fetch url must not contain userinfo (user:pass@)");
+	}
+
+	// URL.hostname strips brackets from IPv6 already; lowercase for matching.
+	const host = parsed.hostname.toLowerCase();
+	if (host.length === 0) {
+		return deny("http.fetch url has no host");
+	}
+	// Effective port: explicit, else the scheme default.
+	const port = parsed.port
+		? Number(parsed.port)
+		: parsed.protocol === "https:"
+			? 443
+			: 80;
+
+	for (const entry of allow) {
+		const { host: allowHost, port: allowPort } = parseHostEntry(entry);
+		const ah = allowHost.toLowerCase();
+		if (ah.length === 0) continue;
+		if (allowPort !== undefined && allowPort !== port) continue;
+		if (hostMatchesAllowEntry(host, ah)) return ALLOW;
+	}
+
+	return deny(`http.fetch host "${host}:${port}" is not in the net allowlist`);
+}
+
+/**
+ * Match a request host against ONE allowlist host. Exact (case-insensitive) or a
+ * leading-`*.` wildcard that matches any single-or-multi label SUBDOMAIN but not
+ * the apex (`*.example.com` ⊃ `a.example.com`, `a.b.example.com`; ⊅ `example.com`,
+ * `evilexample.com`).
+ */
+function hostMatchesAllowEntry(host: string, allowHost: string): boolean {
+	if (allowHost.startsWith("*.")) {
+		const suffix = allowHost.slice(1); // ".example.com"
+		// Must end with ".example.com" AND have a non-empty label before it.
+		return host.length > suffix.length && host.endsWith(suffix);
+	}
+	return host === allowHost;
+}
+
 /** Decide a parsed `globals.<name>.<op>` call. */
 function checkGlobal(
 	parsed: Extract<ParsedBindingMethod, { kind: "global" }>,
@@ -317,6 +404,8 @@ export function checkBindingCapability(
 			return deny(
 				"email.send is not grantable in the current capability model",
 			);
+		case "http":
+			return checkHttpFetch(args, scope);
 		default: {
 			// Exhaustiveness guard — if a new `kind` is added, this assignment fails
 			// to typecheck until it is handled (and we still default-deny at runtime).

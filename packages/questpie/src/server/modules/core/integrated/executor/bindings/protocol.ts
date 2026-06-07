@@ -38,6 +38,10 @@
  *     fallback). A write whose target wires no safe handler still fails closed as
  *     `not_implemented`.
  *   - `globals.<name>.get`
+ *   - `http.fetch` — brokered, SSRF-safe egress. The guest has NO direct network
+ *     (`--allow-net=[]`); this RPC relays to the trusted host, which resolves +
+ *     validates + PINS the connection (DNS-rebind-safe) per the run's `net`
+ *     allowlist. See `host-fetch.ts`.
  *
  * DENIED / NOT DISPATCHED:
  *   - `globals.<name>.set` — a global is a singleton with no per-tenant boundary,
@@ -59,7 +63,8 @@ export type ParsedBindingMethod =
 	| { kind: "service"; name: string; fn: string }
 	| { kind: "job"; op: "enqueue"; name: string }
 	| { kind: "workflow"; op: "trigger"; name: string }
-	| { kind: "email"; op: "send" };
+	| { kind: "email"; op: "send" }
+	| { kind: "http"; op: "fetch" };
 
 /** Stable error codes returned to the guest (structured, never a bare throw). */
 export type BindingErrorCode =
@@ -147,6 +152,55 @@ export type BrokerRpcResponse =
 	| { ok: true; value: unknown }
 	| { ok: false; error: BindingError };
 
+// ──────────────────────────────────────────────────────────────────────────
+// `http.fetch` over-relay contract (S1 spike `http-over-relay-contract-for-
+// brokered-fetch`). The relay is line-framed, fully-buffered, JSON-only, so an
+// HTTP exchange must be BUFFERED (no streaming), JSON-serializable, with binary
+// bodies base64-encoded, and SIZE-CAPPED. One request frame, one response frame
+// — rides the existing `rpc`/`rpc-result` envelope, NO new frame types.
+// ──────────────────────────────────────────────────────────────────────────
+
+/**
+ * Decoded body cap for a brokered `http.fetch`, enforced HOST-SIDE in the broker
+ * with a running byte counter (the `Content-Length` header is NOT trusted).
+ * Applies to BOTH the request `bodyBase64` (reject oversize guest uploads before
+ * fetching) and the response body (abort the upstream read on overflow). 5 MiB
+ * stays comfortably under the guest's 16-128 MiB heap even with base64 inflation
+ * (~+33%) and the relay's multi-hop buffering.
+ */
+export const HTTP_FETCH_BODY_CAP_BYTES = 5 * 1024 * 1024;
+
+/** `args` of an `http.fetch` RPC (guest → broker). */
+export interface HttpFetchRequest {
+	/** Absolute `http:`/`https:` URL. Other schemes are rejected. */
+	url: string;
+	/** HTTP method. Defaults to `GET`. */
+	method?: string;
+	/** Request headers (any case; the broker forwards them verbatim). */
+	headers?: Record<string, string>;
+	/** base64 of the raw request body. Omit for no body. */
+	bodyBase64?: string;
+}
+
+/**
+ * `value` returned by an `http.fetch` RPC (broker → guest). Buffered, base64,
+ * capped — the guest shim reconstructs a `Response` from this. A network
+ * failure / oversize / blocked target rides the {@link BindingError} channel
+ * instead (so guest `fetch` rejects, rather than seeing a fake 5xx `Response`).
+ */
+export interface HttpFetchResponse {
+	/** HTTP status code. */
+	status: number;
+	/** Reason phrase (`""` if unknown). */
+	statusText: string;
+	/** Response headers: lowercased keys, multi-values joined with `", "`. */
+	headers: Record<string, string>;
+	/** base64 of the raw response bytes (`""` for an empty body). */
+	bodyBase64: string;
+	/** True if the body hit the cap and was cut (the broker rejects by default). */
+	truncated: boolean;
+}
+
 /**
  * Parse a dotted {@link BindingMethod} into a classified shape, or `null` when
  * it does not name a known primitive. Parsing is purely syntactic — it does NOT
@@ -160,6 +214,7 @@ export type BrokerRpcResponse =
  *   jobs.enqueue.<name>          (job name as a trailing segment)
  *   workflows.trigger.<name>
  *   email.send
+ *   http.fetch                   (brokered, SSRF-safe egress; net allowlist)
  *
  * `<name>`/`<fn>` must be a single non-empty segment of `[A-Za-z0-9_-]` (no
  * dots, no path traversal) so a malicious method string can't smuggle extra
@@ -229,6 +284,11 @@ export function parseBindingMethod(method: string): ParsedBindingMethod | null {
 	if (head === "email") {
 		if (rest.length !== 1 || rest[0] !== "send") return null;
 		return { kind: "email", op: "send" };
+	}
+
+	if (head === "http") {
+		if (rest.length !== 1 || rest[0] !== "fetch") return null;
+		return { kind: "http", op: "fetch" };
 	}
 
 	return null;
