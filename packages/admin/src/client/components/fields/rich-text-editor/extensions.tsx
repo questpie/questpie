@@ -121,6 +121,7 @@ export function buildExtensions({
 	labels,
 	placeholder,
 	maxCharacters,
+	outputMode,
 	customExtensions,
 }: BuildExtensionsOptions): AnyExtension[] | Promise<AnyExtension[]> {
 	const base = buildBaseExtensions({
@@ -128,6 +129,7 @@ export function buildExtensions({
 		labels,
 		placeholder,
 		maxCharacters,
+		outputMode,
 		customExtensions,
 	});
 

@@ -70,6 +70,7 @@ import {
 } from "../../hooks";
 import { adminCollectionKey } from "../../hooks/query-access";
 import { useAdminConfig } from "../../hooks/use-admin-config";
+import { useAutosave } from "../../hooks/use-autosave";
 import {
 	useCollectionCreate,
 	useCollectionDelete,
@@ -482,129 +483,6 @@ const PreviewPatchBridge = React.memo(function PreviewPatchBridge({
 			unsubscribe();
 		};
 	}, [blocks, enabled, form, previewRef, schema, subscribedFieldNames]);
-
-	return null;
-});
-
-type AutosaveManagerProps = {
-	form: ReturnType<typeof useForm>;
-	formElementRef: React.RefObject<HTMLFormElement | null>;
-	isEditMode: boolean;
-	id?: string;
-	enabled: boolean;
-	debounce: number;
-	isDirtyRef: React.MutableRefObject<boolean>;
-	isSubmittingRef: React.MutableRefObject<boolean>;
-	updateMutation: { mutateAsync: (args: any) => Promise<any> };
-	onPreviewRefresh?: () => void;
-	onPreviewCommit?: (data: unknown) => void;
-	onSavingChange: (isSaving: boolean) => void;
-	onSaved: (savedAt: Date) => void;
-};
-
-const AutosaveManager = React.memo(function AutosaveManager({
-	form,
-	formElementRef,
-	isEditMode,
-	id,
-	enabled,
-	debounce,
-	isDirtyRef,
-	isSubmittingRef,
-	updateMutation,
-	onPreviewRefresh,
-	onPreviewCommit,
-	onSavingChange,
-	onSaved,
-}: AutosaveManagerProps) {
-	const { t } = useTranslation();
-	const timerRef = React.useRef<NodeJS.Timeout | null>(null);
-
-	const runAutosave = React.useCallback(async () => {
-		if (!id || !isDirtyRef.current || isSubmittingRef.current) {
-			return;
-		}
-
-		try {
-			onSavingChange(true);
-
-			await form.handleSubmit(
-				async (data) => {
-					const result = await updateMutation.mutateAsync({
-						id,
-						data,
-					});
-
-					form.reset(result as any, { keepTouched: true });
-
-					onPreviewCommit?.(result);
-					onPreviewRefresh?.();
-
-					onSaved(new Date());
-					onSavingChange(false);
-				},
-				() => {
-					onSavingChange(false);
-				},
-			)();
-		} catch (error) {
-			onSavingChange(false);
-			console.error("Autosave failed:", error);
-			toast.error(t("error.autosaveFailed"), {
-				description: error instanceof Error ? error.message : undefined,
-			});
-		}
-	}, [
-		form,
-		id,
-		isDirtyRef,
-		isSubmittingRef,
-		onSaved,
-		onSavingChange,
-		onPreviewCommit,
-		onPreviewRefresh,
-		t,
-		updateMutation,
-	]);
-
-	React.useEffect(() => {
-		if (timerRef.current) {
-			clearTimeout(timerRef.current);
-		}
-
-		if (!enabled || !isEditMode || !id) {
-			return;
-		}
-
-		const target = formElementRef.current;
-		if (!target) {
-			return;
-		}
-
-		const scheduleAutosave = () => {
-			if (timerRef.current) {
-				clearTimeout(timerRef.current);
-			}
-
-			timerRef.current = setTimeout(() => {
-				void runAutosave();
-			}, debounce);
-		};
-
-		target.addEventListener("input", scheduleAutosave, { capture: true });
-		target.addEventListener("change", scheduleAutosave, { capture: true });
-
-		return () => {
-			target.removeEventListener("input", scheduleAutosave, { capture: true });
-			target.removeEventListener("change", scheduleAutosave, {
-				capture: true,
-			});
-
-			if (timerRef.current) {
-				clearTimeout(timerRef.current);
-			}
-		};
-	}, [debounce, enabled, formElementRef, id, isEditMode, runAutosave]);
 
 	return null;
 });
@@ -1234,6 +1112,22 @@ export default function FormView({
 			preventNavigation: cfg.preventNavigation !== false,
 		};
 	}, [config]);
+
+	// Debounced autosave — value-subscription trigger (catches rich-text/TipTap
+	// edits that DOM input/change listeners miss). Edit mode only (gated on id).
+	useAutosave({
+		form,
+		id,
+		enabled: autoSaveConfig.enabled,
+		debounce: autoSaveConfig.debounce,
+		isDirtyRef: formIsDirtyRef,
+		isSubmittingRef: formIsSubmittingRef,
+		updateMutation,
+		onPreviewCommit: commitPreviewSnapshot,
+		onPreviewRefresh: triggerPreviewRefresh,
+		onSavingChange: setIsSaving,
+		onSaved: setLastSaved,
+	});
 
 	// Track content locale changes to warn about unsaved changes
 	// Uses scoped locale (isolated in ResourceSheet) or global locale
@@ -2131,21 +2025,6 @@ export default function FormView({
 					control={form.control}
 					onDirtyChange={handleFormDirtyChange}
 					onSubmittingChange={handleFormSubmittingChange}
-				/>
-				<AutosaveManager
-					form={form}
-					formElementRef={formElementRef}
-					isEditMode={isEditMode}
-					id={id}
-					enabled={autoSaveConfig.enabled}
-					debounce={autoSaveConfig.debounce}
-					isDirtyRef={formIsDirtyRef}
-					isSubmittingRef={formIsSubmittingRef}
-					updateMutation={updateMutation}
-					onPreviewCommit={commitPreviewSnapshot}
-					onPreviewRefresh={triggerPreviewRefresh}
-					onSavingChange={setIsSaving}
-					onSaved={setLastSaved}
 				/>
 				<PreviewPatchBridge
 					form={form}

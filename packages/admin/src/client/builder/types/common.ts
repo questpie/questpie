@@ -48,6 +48,11 @@ export type BaseFieldProps = {
 	required?: boolean;
 	localized?: boolean;
 	locale?: string;
+	/**
+	 * Render the control WITHOUT its own label/description. Used by compact
+	 * layouts (e.g. Notion-style property rows) that supply the label themselves.
+	 */
+	hideLabel?: boolean;
 	control?: any;
 	className?: string;
 };

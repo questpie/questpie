@@ -42,6 +42,7 @@ import type { FormViewConfig, ListViewConfig } from "./form-layout.js";
 export interface ViewKindRegistry {
 	list: {};
 	form: {};
+	document: {};
 }
 
 /**

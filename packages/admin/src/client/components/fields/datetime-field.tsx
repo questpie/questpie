@@ -21,6 +21,7 @@ export function DatetimeField({
 	disabled,
 	localized,
 	locale,
+	hideLabel,
 	control,
 	className,
 	minDate,
@@ -46,6 +47,7 @@ export function DatetimeField({
 						disabled={disabled}
 						localized={localized}
 						locale={locale}
+						hideLabel={hideLabel}
 						error={fieldState.error?.message}
 					>
 						<DateTimeInput

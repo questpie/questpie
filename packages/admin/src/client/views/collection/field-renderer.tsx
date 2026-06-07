@@ -66,6 +66,12 @@ interface FieldRendererProps {
 	 * Entity metadata from backend (for inferring localized fields)
 	 */
 	entityMeta?: { localizedFields?: string[] };
+	/**
+	 * Render the field control WITHOUT its own label/description. Used by compact
+	 * layouts (e.g. the document view's Notion-style property rows) that supply
+	 * the label themselves.
+	 */
+	hideLabel?: boolean;
 }
 
 // ============================================================================
@@ -296,6 +302,7 @@ export function FieldRenderer({
 	className,
 	entityMeta: entityMetaProp,
 	extraProps,
+	hideLabel,
 }: FieldRendererProps) {
 	const form = useFormContext() as any;
 	// Use scoped locale (from LocaleScopeProvider in ResourceSheet) or global locale
@@ -396,7 +403,7 @@ export function FieldRenderer({
 	const resolvedOptions = hookOptions ?? context.options;
 
 	// Build props and resolve I18nText labels to strings
-	const rawComponentProps = buildComponentProps(context);
+	const rawComponentProps = buildComponentProps(context, { hideLabel });
 
 	// Merge field-instance admin meta (e.g. `f.relation(...).admin({ filter })`)
 	// with layout-level escape-hatch `extraProps` from the form layout. Layout

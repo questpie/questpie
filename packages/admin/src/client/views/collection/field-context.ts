@@ -260,13 +260,17 @@ type RawComponentProps = {
 	error?: string;
 	localized: boolean;
 	locale?: string;
+	hideLabel?: boolean;
 };
 
 /**
  * Build props for a FieldInstance component (field.component).
  * Returns raw props with I18nText - resolve before passing to component.
  */
-export function buildComponentProps(context: FieldContext): RawComponentProps {
+export function buildComponentProps(
+	context: FieldContext,
+	overrides?: { hideLabel?: boolean },
+): RawComponentProps {
 	return {
 		name: context.fullFieldName,
 		value: context.fieldValue,
@@ -280,5 +284,6 @@ export function buildComponentProps(context: FieldContext): RawComponentProps {
 		error: context.fieldError,
 		localized: context.isLocalized,
 		locale: context.locale,
+		hideLabel: overrides?.hideLabel,
 	};
 }

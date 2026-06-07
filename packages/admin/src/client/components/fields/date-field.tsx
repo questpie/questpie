@@ -21,6 +21,7 @@ export function DateField({
 	disabled,
 	localized,
 	locale,
+	hideLabel,
 	control,
 	className,
 	minDate,
@@ -45,6 +46,7 @@ export function DateField({
 						disabled={disabled}
 						localized={localized}
 						locale={locale}
+						hideLabel={hideLabel}
 						error={fieldState.error?.message}
 					>
 						<DateInput

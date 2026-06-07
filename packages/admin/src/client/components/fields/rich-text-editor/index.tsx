@@ -102,6 +102,7 @@ export function RichTextEditor({
 	error,
 	localized,
 	locale,
+	hideLabel,
 	extensions,
 	preset,
 	features,
@@ -208,7 +209,7 @@ export function RichTextEditor({
 
 	return (
 		<div className="space-y-2" data-disabled={disabled || readOnly}>
-			{resolvedLabel && (
+			{!hideLabel && resolvedLabel && (
 				<div className="flex items-center gap-2">
 					<Label htmlFor={name}>
 						{resolvedLabel}
@@ -316,7 +317,12 @@ function RichTextEditorCore({
 	const [linkOpen, setLinkOpen] = React.useState(false);
 	const [imageOpen, setImageOpen] = React.useState(false);
 	const [uploadingInlineImage, setUploadingInlineImage] = React.useState(false);
-	const lastEmittedValueRef = React.useRef<OutputValue | undefined>(undefined);
+	// Seed with the mount-time value so the no-op guard in `onUpdate` is armed
+	// from the very first render — before the value-sync effect commits — and a
+	// settle transaction over the initial content can never emit/dirty the form.
+	const lastEmittedValueRef = React.useRef<OutputValue | undefined>(
+		value as OutputValue | undefined,
+	);
 	const editorRef = React.useRef<Editor | null>(null);
 
 	const allowImages = features.image && (enableImages ?? true);
@@ -485,6 +491,11 @@ function RichTextEditorCore({
 		onUpdate: ({ editor: currentEditor }) => {
 			if (disabled || readOnly) return;
 			const nextValue = getOutput(currentEditor, outputMode);
+			// Suppress no-op emits: a settle/normalization transaction that
+			// re-produces the value we just applied (initial content or a
+			// programmatic `setContent`) must NOT mark the form dirty or trigger
+			// autosave. Only real edits, which change the value, propagate.
+			if (isSameValue(nextValue, lastEmittedValueRef.current)) return;
 			lastEmittedValueRef.current = nextValue as OutputValue;
 			onChange?.(nextValue);
 		},

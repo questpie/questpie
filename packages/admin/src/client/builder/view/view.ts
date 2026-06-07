@@ -15,9 +15,10 @@ import type { MaybeLazyComponent } from "../types/common";
 // ============================================================================
 
 /**
- * View kind discriminant — "list" for collection list pages, "form" for edit/create pages.
+ * View kind discriminant — "list" for collection list pages, "form" for edit/create pages,
+ * "document" for Notion-style document pages (dominant rich-text body + property rows).
  */
-export type ViewKind = "list" | "form";
+export type ViewKind = "list" | "form" | "document";
 
 // ============================================================================
 // View Definition (plain frozen object)
@@ -57,6 +58,12 @@ export type FormViewDefinition<TName extends string = string> = ViewDefinition<
 	TName,
 	"form"
 >;
+
+/**
+ * Document view definition (Notion-style page: dominant rich-text body + property rows)
+ */
+export type DocumentViewDefinition<TName extends string = string> =
+	ViewDefinition<TName, "document">;
 
 // ============================================================================
 // Factory Function
