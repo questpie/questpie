@@ -215,6 +215,117 @@ type Envelope = {
 	bindings?: boolean;
 };
 
+// ── 4b. BROKERED `fetch` SHIM ──
+//
+// The guest has NO direct network (`--allow-net=[]`), so the native `fetch`
+// can't open a socket. We REPLACE `globalThis.fetch` with a shim that relays an
+// `http.fetch` RPC over the SAME framed stdio channel as the `questpie.*` proxy
+// (one `rpc` frame out, one `rpc-result` frame back — no new frame types). The
+// trusted host broker does the SSRF-safe resolve→validate→pin→redirect fetch and
+// returns a buffered, base64, capped `HttpFetchResponse`; we reconstruct a real
+// `Response` from it. A structured broker error rejects as a `TypeError` (so
+// guest code can `try/catch` a brokered fetch just like a native one).
+
+/** Encode raw bytes to base64 (works for arbitrary binary; no Buffer in Deno). */
+function bytesToBase64(bytes: Uint8Array): string {
+	let binary = "";
+	const chunk = 0x8000; // chunk to avoid arg-count limits on String.fromCharCode
+	for (let i = 0; i < bytes.length; i += chunk) {
+		binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+	}
+	return btoa(binary);
+}
+
+/** Decode base64 to raw bytes (inverse of {@link bytesToBase64}). */
+function base64ToBytes(b64: string): Uint8Array {
+	const binary = atob(b64);
+	const out = new Uint8Array(binary.length);
+	for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i);
+	return out;
+}
+
+/**
+ * Install a `globalThis.fetch` that relays through `hostCall("http.fetch", …)`.
+ * Accepts the standard `(input, init)` signature; normalizes via the web
+ * `Request` constructor so url/method/headers/body are parsed exactly like a real
+ * fetch (any body shape → bytes), then frames the {@link HttpFetchRequest} and
+ * rebuilds a `Response` from the {@link HttpFetchResponse}.
+ */
+function installFetchShim(hostCall: (method: string, args: unknown) => Promise<unknown>) {
+	const brokeredFetch = async (
+		input: unknown,
+		init?: unknown,
+	): Promise<Response> => {
+		// Normalize the (input, init) pair into a concrete request via the web
+		// Request API (handles string/URL/Request input + every body encoding).
+		let req: Request;
+		try {
+			req = new Request(input as never, init as never);
+		} catch (e) {
+			throw new TypeError(
+				`Failed to construct fetch request: ${e instanceof Error ? e.message : String(e)}`,
+			);
+		}
+
+		const headers: Record<string, string> = {};
+		req.headers.forEach((value: string, key: string) => {
+			headers[key] = value;
+		});
+
+		// Read the (already-buffered) request body as bytes → base64. GET/HEAD have
+		// no body; `arrayBuffer()` yields an empty buffer which we omit.
+		let bodyBase64: string | undefined;
+		const buf = await req.arrayBuffer();
+		if (buf.byteLength > 0) bodyBase64 = bytesToBase64(new Uint8Array(buf));
+
+		const request: HttpFetchRequest = {
+			url: req.url,
+			method: req.method,
+			headers,
+			...(bodyBase64 !== undefined ? { bodyBase64 } : {}),
+		};
+
+		// Relay over the existing stdio RPC channel. A structured broker error
+		// (network failure / blocked target / oversize) arrives as a rejected
+		// hostCall — surface it as a fetch-like TypeError, NOT a fake 5xx Response.
+		let value: HttpFetchResponse;
+		try {
+			value = (await hostCall("http.fetch", request)) as HttpFetchResponse;
+		} catch (e) {
+			throw new TypeError(e instanceof Error ? e.message : String(e));
+		}
+
+		const status = typeof value?.status === "number" ? value.status : 0;
+		const body = value?.bodyBase64 ? base64ToBytes(value.bodyBase64) : undefined;
+		// `Response` forbids a body for 101/204/205/304 and for null-body statuses;
+		// guard so reconstruction never throws on those.
+		const nullBody = status === 204 || status === 205 || status === 304 || status < 200;
+		return new Response(nullBody ? null : (body ?? null), {
+			status,
+			statusText: typeof value?.statusText === "string" ? value.statusText : "",
+			headers: value?.headers ?? {},
+		});
+	};
+
+	// deno-lint-ignore no-explicit-any
+	(globalThis as any).fetch = brokeredFetch;
+}
+
+/** Wire types for the brokered `http.fetch` RPC (mirrors host `protocol.ts`). */
+interface HttpFetchRequest {
+	url: string;
+	method?: string;
+	headers?: Record<string, string>;
+	bodyBase64?: string;
+}
+interface HttpFetchResponse {
+	status: number;
+	statusText: string;
+	headers: Record<string, string>;
+	bodyBase64: string;
+	truncated: boolean;
+}
+
 /** BINDINGS run — framed channel + `globalThis.questpie` proxy. */
 async function runWithBindings(envelope: Envelope, reader: { next(): Promise<string | null> }) {
 	// Pending host calls keyed by correlation id.
@@ -266,6 +377,8 @@ async function runWithBindings(envelope: Envelope, reader: { next(): Promise<str
 		(globalThis as any).__secrets = envelope.secrets ?? {};
 		// deno-lint-ignore no-explicit-any
 		(globalThis as any).questpie = buildGuestBindings(hostCall);
+		// Replace native fetch with the brokered shim (guest has no direct net).
+		installFetchShim(hostCall);
 	} catch {
 		/* noop */
 	}
