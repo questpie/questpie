@@ -12,7 +12,7 @@ import { ApiError } from "../../errors/index.js";
 import { verifySignedUrlToken } from "../../modules/core/integrated/storage/signed-url.js";
 import type { AdapterConfig, AdapterContext, UploadFile } from "../types.js";
 import { resolveContext } from "../utils/context.js";
-import { resolveUploadFile } from "../utils/request.js";
+import { resolveUpload } from "../utils/request.js";
 import { handleError, smartResponse } from "../utils/response.js";
 
 // ============================================================================
@@ -209,7 +209,10 @@ export async function storageCollectionUpload(
 		);
 	}
 
-	const uploadFile = await resolveUploadFile(request, file);
+	const { file: uploadFile, path: uploadPath } = await resolveUpload(
+		request,
+		file,
+	);
 
 	if (!uploadFile) {
 		return errorResponse(
@@ -239,7 +242,11 @@ export async function storageCollectionUpload(
 			);
 		}
 
-		const result = await crud.upload(uploadFile, resolved.appContext);
+		const result = await crud.upload(
+			uploadFile,
+			resolved.appContext,
+			uploadPath ? { path: uploadPath } : undefined,
+		);
 		return smartResponse(result, request);
 	} catch (error) {
 		return errorResponse(error, request, resolved.appContext.locale);

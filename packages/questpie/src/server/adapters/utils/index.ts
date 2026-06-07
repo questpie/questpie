@@ -23,7 +23,7 @@ export {
 	normalizeMimeType,
 	parseBoolean,
 	parseRouteBody,
-	resolveUploadFile,
+	resolveUpload,
 } from "./request.js";
 export {
 	type HandleErrorOptions,

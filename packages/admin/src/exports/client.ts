@@ -105,6 +105,28 @@ export {
 // Drag-and-drop upload primitive — so custom views (e.g. the autopilot Files
 // browser) reuse the exact upload affordance + validation as the built-in fields.
 export { Dropzone } from "#questpie/admin/client/components/primitives/dropzone.js";
+// Sheet (right-side drawer) — so custom views reuse the same upload/detail drawer
+// surface as the built-in collection table view's bulk-upload sheet.
+export {
+	Sheet,
+	SheetContent,
+	SheetDescription,
+	SheetFooter,
+	SheetHeader,
+	SheetTitle,
+} from "#questpie/admin/client/components/ui/sheet.js";
+// Dropdown menu — so custom views reuse the same header "Create" menu surface as
+// the built-in admin chrome.
+export {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuGroup,
+	DropdownMenuItem,
+	DropdownMenuLabel,
+	DropdownMenuSeparator,
+	DropdownMenuShortcut,
+	DropdownMenuTrigger,
+} from "#questpie/admin/client/components/ui/dropdown-menu.js";
 // Filename sanitizer used before writing/uploading a dropped file.
 export { sanitizeFilename } from "#questpie/admin/client/components/fields/field-utils.js";
 // Class-name merge helper (clsx + tailwind-merge) for custom views.
@@ -272,6 +294,13 @@ export {
 	useCollectionUpdate,
 	useCollectionVersions,
 } from "#questpie/admin/client/hooks/use-collection.js";
+// Upload hook — so custom views (e.g. the autopilot Files browser) reuse the
+// exact same upload flow (uploadMany + progress + query invalidation) as the
+// built-in collection table view's bulk-upload sheet.
+export {
+	type Asset,
+	useUpload,
+} from "#questpie/admin/client/hooks/use-upload.js";
 // User hooks
 export { useCurrentUser } from "#questpie/admin/client/hooks/use-current-user.js";
 // Branding hook

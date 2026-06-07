@@ -1353,7 +1353,7 @@ function ListViewInner({
 								key={outlineRow.key}
 								data-state={isSelected ? "selected" : undefined}
 								className={cn(
-									"group/list-row hover:bg-surface-mid data-[state=selected]:bg-surface-high relative flex min-w-0 cursor-pointer items-center gap-2 rounded-md px-4 text-sm transition-colors",
+									"group/list-row hover:bg-accent data-[state=selected]:bg-muted relative flex min-w-0 cursor-pointer items-center gap-2 rounded-md px-4 text-sm transition-colors",
 									density === "compact" ? "min-h-9 py-1" : "min-h-11 py-2",
 									isHighlighted(item.id) && "animate-realtime-pulse",
 									isGroupMismatch && "opacity-45",

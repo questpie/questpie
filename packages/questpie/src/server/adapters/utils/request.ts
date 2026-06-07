@@ -39,17 +39,29 @@ export const isFileLike = (value: unknown): value is UploadFile => {
 	);
 };
 
-export const resolveUploadFile = async (
+/**
+ * Resolve an uploaded file together with an optional destination `path` from the
+ * same form-data parse (the body can only be read once). `path` is forwarded to
+ * the collection's upload as additional record data so a blob upload can land
+ * inside a folder (e.g. an `assets` row's required `path`). When the caller
+ * supplies a pre-parsed `file`, the form-data is not consumed and `path` is
+ * undefined.
+ */
+export const resolveUpload = async (
 	request: Request,
 	file?: UploadFile | null,
-): Promise<UploadFile | null> => {
+): Promise<{ file: UploadFile | null; path?: string }> => {
 	if (file && isFileLike(file)) {
-		return file;
+		return { file };
 	}
 
 	const formData = await request.formData();
 	const formFile = formData.get("file");
-	return isFileLike(formFile) ? formFile : null;
+	const formPath = formData.get("path");
+	return {
+		file: isFileLike(formFile) ? formFile : null,
+		path: typeof formPath === "string" && formPath ? formPath : undefined,
+	};
 };
 
 export const normalizeMimeType = (value: string) =>
