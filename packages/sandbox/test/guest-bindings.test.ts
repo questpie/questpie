@@ -91,3 +91,125 @@ describe("store.<name> sugar → collections.document_store.<op> with store inje
 		expect(calls[1]!.args).toEqual({ where: { store: "drafts" } });
 	});
 });
+
+describe("guest files: dotted method names + args forwarding", () => {
+	it("maps read/write/list to dotted methods", async () => {
+		const { calls, hostCall } = recorder();
+		const q = buildGuestBindings(hostCall);
+
+		await q.files.read({ path: "company/data/note.md" });
+		await q.files.write({ path: "company/out/x.md", content: "hi" });
+		await q.files.list({ path: "company/data" });
+
+		expect(calls.map((c) => c.method)).toEqual([
+			"files.read",
+			"files.write",
+			"files.list",
+		]);
+	});
+
+	it("read forwards its args verbatim to hostCall", async () => {
+		const { calls, hostCall } = recorder();
+		const q = buildGuestBindings(hostCall);
+
+		const args = { path: "company/data/note.md", scope: { kind: "company" } };
+		await q.files.read(args);
+
+		expect(calls).toHaveLength(1);
+		expect(calls[0]!.method).toBe("files.read");
+		expect(calls[0]!.args).toEqual(args);
+	});
+
+	it("write forwards its full payload verbatim to hostCall", async () => {
+		const { calls, hostCall } = recorder();
+		const q = buildGuestBindings(hostCall);
+
+		const args = {
+			path: "company/out/report.md",
+			content: "# hi",
+			title: "Report",
+			mime_type: "text/markdown",
+		};
+		await q.files.write(args);
+
+		expect(calls).toHaveLength(1);
+		expect(calls[0]!.method).toBe("files.write");
+		expect(calls[0]!.args).toEqual(args);
+	});
+
+	it("list forwards its args verbatim when provided", async () => {
+		const { calls, hostCall } = recorder();
+		const q = buildGuestBindings(hostCall);
+
+		const args = { path: "company/data", scope: { kind: "company" } };
+		await q.files.list(args);
+
+		expect(calls).toHaveLength(1);
+		expect(calls[0]!.method).toBe("files.list");
+		expect(calls[0]!.args).toEqual(args);
+	});
+
+	it("list with undefined args falls back to {}", async () => {
+		const { calls, hostCall } = recorder();
+		const q = buildGuestBindings(hostCall);
+
+		// exercise the no-arg call → the `args ?? {}` fallback (list's arg is optional).
+		await q.files.list();
+
+		expect(calls).toHaveLength(1);
+		expect(calls[0]!.method).toBe("files.list");
+		expect(calls[0]!.args).toEqual({});
+	});
+});
+
+describe("error propagation: a rejecting hostCall rejects the proxied call", () => {
+	/** A hostCall that always rejects — mirrors a host-side default-deny. */
+	function rejector(err: unknown) {
+		const calls: Array<{ method: string; args: unknown }> = [];
+		const hostCall = async (method: string, args: unknown) => {
+			calls.push({ method, args });
+			throw err;
+		};
+		return { calls, hostCall };
+	}
+
+	it("files.read rejects with the host error", async () => {
+		const denied = new Error("denied: files.read");
+		const { hostCall } = rejector(denied);
+		const q = buildGuestBindings(hostCall);
+
+		await expect(q.files.read({ path: "secret/x" })).rejects.toBe(denied);
+	});
+
+	it("files.write rejects with the host error", async () => {
+		const denied = new Error("denied: files.write");
+		const { hostCall } = rejector(denied);
+		const q = buildGuestBindings(hostCall);
+
+		await expect(
+			q.files.write({ path: "secret/x", content: "x" }),
+		).rejects.toBe(denied);
+	});
+
+	it("collections.<name>.find rejects with the host error (out-of-scope deny)", async () => {
+		const denied = new Error("denied: collection not granted");
+		const { calls, hostCall } = rejector(denied);
+		const q = buildGuestBindings(hostCall);
+
+		await expect(q.collections.secrets.find({ where: { a: 1 } })).rejects.toBe(
+			denied,
+		);
+		// the deny happens host-side: the proxy still forwarded the call.
+		expect(calls[0]!.method).toBe("collections.secrets.find");
+	});
+
+	it("store.<name>.create rejects with the host error (ungranted store)", async () => {
+		const denied = new Error("denied: store not granted");
+		const { hostCall } = rejector(denied);
+		const q = buildGuestBindings(hostCall);
+
+		await expect(
+			q.store.posts.create({ key: "k1", data: { v: 1 } }),
+		).rejects.toBe(denied);
+	});
+});

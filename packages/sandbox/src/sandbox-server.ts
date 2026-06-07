@@ -54,6 +54,15 @@
 // @ts-nocheck — Deno runtime file; not part of the Bun/tsc typecheck graph.
 
 import { validateEgressHosts } from "./net-validation.ts";
+import {
+	RESULT_MARKER,
+	brokerUrlRejection,
+	clampInt,
+	extractResult,
+	importFlags,
+	netFlag,
+	type RunOutcome,
+} from "./server-internals.ts";
 import { BINDINGS_TOKEN_HEADER, FRAME_MARKER } from "./types.ts";
 import type {
 	SandboxCapabilities,
@@ -61,7 +70,6 @@ import type {
 	SandboxRunResult,
 } from "./types.ts";
 
-const RESULT_MARKER = "__QP_SANDBOX_RESULT__";
 /** Bound on a single binding RPC round-trip to the host broker. */
 const BROKER_FETCH_TIMEOUT_MS = 10_000;
 
@@ -87,86 +95,6 @@ const DENO_BIN = Deno.env.get("DENO_BIN") ?? Deno.execPath();
  * relay. When UNSET, this check is skipped (back-compat) — set it in production.
  */
 const EXPECTED_BROKER_URL = Deno.env.get("SANDBOX_BROKER_URL")?.trim();
-
-/** Normalize a broker URL for comparison (drop a trailing slash; ignore case of origin). */
-function normalizeBrokerUrl(raw: string): string | null {
-	try {
-		const u = new URL(raw);
-		// Compare origin (lowercased by URL) + pathname without a trailing slash.
-		const path = u.pathname.replace(/\/$/, "");
-		return `${u.origin}${path}`;
-	} catch {
-		return null;
-	}
-}
-
-/**
- * Reject a guest's bindings target URL unless it matches the supervisor's
- * configured {@link EXPECTED_BROKER_URL}. Returns an error string to surface, or
- * `null` when the URL is acceptable (or no expectation is configured).
- */
-function brokerUrlRejection(url: unknown): string | null {
-	if (!EXPECTED_BROKER_URL) return null; // not configured → skip (back-compat)
-	if (typeof url !== "string" || url.length === 0) {
-		return "bindings.url is missing";
-	}
-	const got = normalizeBrokerUrl(url);
-	const want = normalizeBrokerUrl(EXPECTED_BROKER_URL);
-	if (got === null) return `bindings.url is not a valid URL: ${url}`;
-	if (got !== want) {
-		return `bindings.url does not match the configured broker URL`;
-	}
-	return null;
-}
-
-function clampInt(v: unknown, def: number, min: number, max: number): number {
-	const n = Number(v);
-	if (!Number.isFinite(n)) return def;
-	return Math.min(Math.max(Math.round(n), min), max);
-}
-
-/**
- * Deno's BUILT-IN default `--allow-import` allowlist, applied when the flag is
- * OMITTED. Omitting `--allow-import` does NOT mean "deny" — it silently grants
- * these 7 hosts (incl. esm.sh). So when a guest's import allowlist is empty we
- * must EXPLICITLY `--deny-import` these, or the guest could import from them.
- * (Verified on Deno 2.7.8: bare `--deny-import` is a no-op; the value form works.)
- */
-const DENO_DEFAULT_IMPORT_HOSTS = [
-	"deno.land:443",
-	"jsr.io:443",
-	"esm.sh:443",
-	"raw.esm.sh:443",
-	"cdn.jsdelivr.net:443",
-	"raw.githubusercontent.com:443",
-	"gist.githubusercontent.com:443",
-];
-
-/**
- * Build the `--allow-net` flag for a guest's net allowlist.
- * Omitting it = no network (verified: NotCapable), so empty → no flag.
- */
-function netFlag(hosts: string[]): string[] {
-	const cleaned = hosts.map((h) => h.trim()).filter((h) => h.length > 0);
-	return cleaned.length ? [`--allow-net=${cleaned.join(",")}`] : [];
-}
-
-/**
- * Build the import-permission flags for a guest's import allowlist.
- * - Non-empty: `--allow-import=<hosts>` — an explicit value REPLACES Deno's
- *   defaults (verified), so only these hosts are importable.
- * - Empty: omit `--allow-import` AND `--deny-import=<defaults>` to neutralize
- *   the implicit default hosts → no remote imports at all.
- */
-function importFlags(hosts: string[]): string[] {
-	const cleaned = hosts.map((h) => h.trim()).filter((h) => h.length > 0);
-	if (cleaned.length) {
-		return [`--allow-import=${cleaned.join(",")}`];
-	}
-	return [`--deny-import=${DENO_DEFAULT_IMPORT_HOSTS.join(",")}`];
-}
-
-interface RunOutcome extends Omit<SandboxRunResult, "ms"> {}
 
 /**
  * Relay ONE binding RPC to the host broker (supervisor → app, server-to-server),
@@ -399,6 +327,7 @@ async function runInSubprocess(req: SandboxRunRequest): Promise<SandboxRunResult
 	if (req.bindings) {
 		const bindingsRejection = brokerUrlRejection(
 			(req.bindings as { url?: unknown }).url,
+			EXPECTED_BROKER_URL,
 		);
 		if (bindingsRejection !== null) {
 			return finish({
@@ -508,7 +437,7 @@ async function runInSubprocess(req: SandboxRunRequest): Promise<SandboxRunResult
 		}
 
 		const stdoutText = new TextDecoder().decode(stdout);
-		const result = extractResult(stdoutText);
+		const result = extractResult(stdoutText, RESULT_MARKER);
 		if (result) return finish(result);
 
 		// No marker line → the guest crashed hard (e.g. OOM in its OWN process,
@@ -535,26 +464,6 @@ async function runInSubprocess(req: SandboxRunRequest): Promise<SandboxRunResult
 			error: `sandbox IO error: ${err instanceof Error ? err.message : String(err)}`,
 			logs: [],
 		});
-	}
-}
-
-/** Pull the marked JSON result line out of the guest's stdout. */
-function extractResult(stdout: string): RunOutcome | null {
-	const idx = stdout.lastIndexOf(RESULT_MARKER);
-	if (idx === -1) return null;
-	const after = stdout.slice(idx + RESULT_MARKER.length);
-	const newline = after.indexOf("\n");
-	const json = newline === -1 ? after : after.slice(0, newline);
-	try {
-		const parsed = JSON.parse(json);
-		return {
-			ok: !!parsed.ok,
-			output: parsed.output,
-			error: parsed.error,
-			logs: Array.isArray(parsed.logs) ? parsed.logs : [],
-		};
-	} catch {
-		return null;
 	}
 }
 

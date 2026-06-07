@@ -1,0 +1,244 @@
+/**
+ * UNIT tests for `adapter-http.ts` ERROR PATHS — no Deno, no real sandbox.
+ *
+ * The HTTP adapter is just a JSON-over-HTTP client; its failure handling can be
+ * exercised entirely against a tiny `Bun.serve` stub (or a dead port / a custom
+ * `fetch`) standing in for the Deno sandbox service. None of these cases spawn a
+ * guest, so — unlike `bindings-e2e.test.ts` — they need no `deno` on PATH and run
+ * unconditionally in CI.
+ *
+ * Covered (exact error strings asserted against the adapter source):
+ *   1. fetch timeout      — server never responds + small `fetchTimeoutMs` →
+ *                           "sandbox request timed out after <ms>ms" (no hang).
+ *   2. network failure    — dead port → "sandbox request failed: ..." (structured).
+ *   3. non-JSON response  — HTML/empty body → "sandbox returned non-JSON (HTTP <status>): ...".
+ *   4. URL normalization  — base url WITH and WITHOUT a trailing slash both POST
+ *                           to exactly one `/run` (no `//run`).
+ *   5. custom `fetch`     — `options.fetch` is honored over `globalThis.fetch`.
+ */
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "bun:test";
+
+import { httpSandboxAdapter } from "../src/adapter-http.js";
+
+// Capabilities with empty net/import so egress validation is a no-op
+// (validateEgressHosts([]) → { ok: true }) and the adapter proceeds to fetch.
+const BASE_CAPS = { net: [], import: [], timeoutMs: 5000, memoryMb: 128 };
+
+/** A minimal run() invocation. Cast `as never` like the sibling e2e test. */
+function runOnce(
+	adapter: ReturnType<typeof httpSandboxAdapter>,
+	overrides: Record<string, unknown> = {},
+) {
+	return adapter.run({
+		source: "export default async () => 1",
+		isolation: "sandboxed",
+		capabilities: BASE_CAPS,
+		...overrides,
+	} as never);
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// 1. fetch timeout — server that never responds is bounded by fetchTimeoutMs.
+// ──────────────────────────────────────────────────────────────────────────
+describe("HttpSandboxAdapter — fetch timeout (server never responds)", () => {
+	let server: ReturnType<typeof Bun.serve> | undefined;
+	let baseUrl = "";
+	// Track hanging handler resolvers so teardown never leaves a dangling promise.
+	const release: Array<() => void> = [];
+
+	beforeAll(() => {
+		server = Bun.serve({
+			port: 0,
+			fetch() {
+				// Never resolve on its own — only the AbortController (client) or
+				// teardown should end this request, simulating a hung sandbox.
+				return new Promise<Response>((resolve) => {
+					release.push(() => resolve(new Response("late")));
+				});
+			},
+		});
+		baseUrl = `http://127.0.0.1:${server.port}`;
+	});
+
+	afterAll(() => {
+		for (const fn of release) fn();
+		server?.stop(true);
+	});
+
+	it("aborts and surfaces a clean timeout error instead of hanging", async () => {
+		// Tiny fetchTimeoutMs → the AbortController fires well before any response.
+		const adapter = httpSandboxAdapter({ url: baseUrl, fetchTimeoutMs: 150 });
+		const started = Date.now();
+		const r = await runOnce(adapter);
+		const elapsed = Date.now() - started;
+
+		expect(r.ok).toBe(false);
+		expect(r.error).toBe("sandbox request timed out after 150ms");
+		expect(r.logs).toEqual([]);
+		// It actually returned promptly (bounded by the timeout, not the server).
+		expect(elapsed).toBeLessThan(5000);
+	}, 10_000);
+});
+
+// ──────────────────────────────────────────────────────────────────────────
+// 2. network failure — a dead port yields a structured "request failed" error.
+// ──────────────────────────────────────────────────────────────────────────
+describe("HttpSandboxAdapter — network failure (dead port)", () => {
+	it("returns a structured error (not an AbortError) when the host is unreachable", async () => {
+		// Bind+close a server to obtain a port that is now guaranteed closed.
+		const tmp = Bun.serve({ port: 0, fetch: () => new Response("ok") });
+		const deadPort = tmp.port;
+		tmp.stop(true);
+
+		const adapter = httpSandboxAdapter({
+			url: `http://127.0.0.1:${deadPort}`,
+			fetchTimeoutMs: 5000,
+		});
+		const r = await runOnce(adapter);
+
+		expect(r.ok).toBe(false);
+		expect(r.error).toMatch(/^sandbox request failed: /);
+		// Must NOT be misreported as a timeout — the abort timer never fired.
+		expect(r.error).not.toContain("timed out");
+		expect(r.logs).toEqual([]);
+	}, 10_000);
+});
+
+// ──────────────────────────────────────────────────────────────────────────
+// 3. non-JSON response — HTML / empty body → "sandbox returned non-JSON".
+// ──────────────────────────────────────────────────────────────────────────
+describe("HttpSandboxAdapter — non-JSON server response", () => {
+	let server: ReturnType<typeof Bun.serve> | undefined;
+	let baseUrl = "";
+	// Per-test response config (status + body) the stub echoes back.
+	let next: { status: number; body: string } = { status: 200, body: "" };
+
+	beforeAll(() => {
+		server = Bun.serve({
+			port: 0,
+			fetch() {
+				return new Response(next.body, {
+					status: next.status,
+					headers: { "content-type": "text/html" },
+				});
+			},
+		});
+		baseUrl = `http://127.0.0.1:${server.port}`;
+	});
+
+	afterAll(() => {
+		server?.stop(true);
+	});
+
+	it("surfaces 'non-JSON (HTTP <status>)' for an HTML 500 body", async () => {
+		next = { status: 500, body: "<html><body>Bad Gateway</body></html>" };
+		const adapter = httpSandboxAdapter({ url: baseUrl });
+		const r = await runOnce(adapter);
+
+		expect(r.ok).toBe(false);
+		expect(r.error).toContain("sandbox returned non-JSON (HTTP 500)");
+		// The raw body prefix is included to aid debugging.
+		expect(r.error).toContain("Bad Gateway");
+		expect(r.logs).toEqual([]);
+	});
+
+	it("surfaces 'non-JSON (HTTP 200)' for an empty body", async () => {
+		next = { status: 200, body: "" };
+		const adapter = httpSandboxAdapter({ url: baseUrl });
+		const r = await runOnce(adapter);
+
+		expect(r.ok).toBe(false);
+		expect(r.error).toContain("sandbox returned non-JSON (HTTP 200)");
+		expect(r.logs).toEqual([]);
+	});
+});
+
+// ──────────────────────────────────────────────────────────────────────────
+// 4. URL trailing-slash normalization — POST lands on a single `/run`.
+// ──────────────────────────────────────────────────────────────────────────
+describe("HttpSandboxAdapter — URL trailing-slash normalization", () => {
+	let server: ReturnType<typeof Bun.serve> | undefined;
+	let host = "";
+	const seenPaths: string[] = [];
+
+	beforeAll(() => {
+		server = Bun.serve({
+			port: 0,
+			fetch(req) {
+				seenPaths.push(new URL(req.url).pathname);
+				// A valid JSON result so the adapter parses cleanly (ok path).
+				return new Response(JSON.stringify({ ok: true, output: 42, logs: [] }), {
+					headers: { "content-type": "application/json" },
+				});
+			},
+		});
+		host = `http://127.0.0.1:${server.port}`;
+	});
+
+	afterEach(() => {
+		seenPaths.length = 0;
+	});
+
+	afterAll(() => {
+		server?.stop(true);
+	});
+
+	it("hits exactly /run when the base url has NO trailing slash", async () => {
+		const adapter = httpSandboxAdapter({ url: host });
+		const r = await runOnce(adapter);
+
+		expect(r.ok).toBe(true);
+		expect(r.output).toBe(42);
+		expect(seenPaths).toEqual(["/run"]);
+	});
+
+	it("hits exactly /run (not //run) when the base url HAS a trailing slash", async () => {
+		const adapter = httpSandboxAdapter({ url: `${host}/` });
+		const r = await runOnce(adapter);
+
+		expect(r.ok).toBe(true);
+		expect(r.output).toBe(42);
+		expect(seenPaths).toEqual(["/run"]);
+	});
+});
+
+// ──────────────────────────────────────────────────────────────────────────
+// 5. custom `fetch` — options.fetch is honored over globalThis.fetch.
+// ──────────────────────────────────────────────────────────────────────────
+describe("HttpSandboxAdapter — custom fetch option", () => {
+	it("uses the injected fetch (with its url + payload) instead of globalThis.fetch", async () => {
+		const seen: Array<{ url: string; body: unknown; hadSignal: boolean }> = [];
+		// A stub fetch that never touches the network — proves the adapter routes
+		// through options.fetch and forwards the request it built.
+		const customFetch = (async (
+			input: RequestInfo | URL,
+			init?: RequestInit,
+		) => {
+			seen.push({
+				url: String(input),
+				body: init?.body ? JSON.parse(String(init.body)) : undefined,
+				hadSignal: !!init?.signal,
+			});
+			return new Response(JSON.stringify({ ok: true, output: "via-custom", logs: [] }), {
+				headers: { "content-type": "application/json" },
+			});
+		}) as unknown as typeof fetch;
+
+		const adapter = httpSandboxAdapter({
+			url: "http://sandbox.invalid",
+			fetch: customFetch,
+		});
+		const r = await runOnce(adapter, { input: { n: 7 } });
+
+		expect(r.ok).toBe(true);
+		expect(r.output).toBe("via-custom");
+		expect(seen).toHaveLength(1);
+		expect(seen[0]!.url).toBe("http://sandbox.invalid/run");
+		// The adapter built the documented JSON body and an abort signal.
+		expect((seen[0]!.body as { input: unknown }).input).toEqual({ n: 7 });
+		expect((seen[0]!.body as { source: string }).source).toBe(
+			"export default async () => 1",
+		);
+		expect(seen[0]!.hadSignal).toBe(true);
+	});
+});
