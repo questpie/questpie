@@ -609,7 +609,7 @@ function getUploadSystemFieldSchemas(): Record<string, FieldSchema> {
 			metadata: {
 				type: "text",
 				label: "Key",
-				required: true,
+				required: false,
 				localized: false,
 				readOnly: true,
 				validation: {
@@ -631,7 +631,7 @@ function getUploadSystemFieldSchemas(): Record<string, FieldSchema> {
 					key: "defaults.assets.fields.filename.description",
 					fallback: "Original filename of the uploaded file",
 				},
-				required: true,
+				required: false,
 				localized: false,
 				readOnly: true,
 				validation: {
@@ -653,7 +653,7 @@ function getUploadSystemFieldSchemas(): Record<string, FieldSchema> {
 					key: "defaults.assets.fields.mimeType.description",
 					fallback: "MIME type of the file",
 				},
-				required: true,
+				required: false,
 				localized: false,
 				readOnly: true,
 				validation: {
@@ -675,7 +675,7 @@ function getUploadSystemFieldSchemas(): Record<string, FieldSchema> {
 					key: "defaults.assets.fields.size.description",
 					fallback: "File size in bytes",
 				},
-				required: true,
+				required: false,
 				localized: false,
 				readOnly: true,
 				validation: {

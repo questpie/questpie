@@ -531,11 +531,14 @@ export class Collection<TState extends CollectionBuilderState> {
 		_localized: jsonb("_localized"),
 	});
 
+	// key/filename/mimeType/size are populated by crud.upload (the storage
+	// upload route) and are intentionally optional so mixed blob+text upload
+	// collections accept bodyless rows. visibility stays notNull+default.
 	static readonly uploadCols = () => ({
-		key: varchar("key", { length: 255 }).notNull(),
-		filename: varchar("filename", { length: 255 }).notNull(),
-		mimeType: varchar("mime_type", { length: 100 }).notNull(),
-		size: integer("size").notNull(),
+		key: varchar("key", { length: 255 }),
+		filename: varchar("filename", { length: 255 }),
+		mimeType: varchar("mime_type", { length: 100 }),
+		size: integer("size"),
 		visibility: varchar("visibility", {
 			length: 20,
 			enum: ["public", "private"] as const,
