@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import {
 	classifyIpLiteral,
 	parseHostEntry,
+	resolveAllowedEndpoints,
 	validateEgressHosts,
 	validateHostEgress,
 } from "../src/net-validation.js";
@@ -134,6 +135,47 @@ describe("validateEgressHosts", () => {
 			resolve: fakeResolver({ "esm.sh": ["104.16.0.1"] }),
 		});
 		expect(r.ok).toBe(true);
+	});
+});
+
+describe("resolveAllowedEndpoints — kernel-firewall accept set (public IPs only)", () => {
+	it("passes through a public IP literal with its port", async () => {
+		const eps = await resolveAllowedEndpoints(["1.1.1.1:443"]);
+		expect(eps).toEqual([{ ip: "1.1.1.1", port: 443 }]);
+	});
+
+	it("resolves a hostname to its public addresses", async () => {
+		const eps = await resolveAllowedEndpoints(["good.example.com:443"], {
+			resolve: fakeResolver({ "good.example.com": ["93.184.216.34", "2606:4700::1"] }),
+		});
+		expect(eps).toContainEqual({ ip: "93.184.216.34", port: 443 });
+		expect(eps).toContainEqual({ ip: "2606:4700::1", port: 443 });
+	});
+
+	it("SKIPS private/metadata results (drop rules cover them; never an accept)", async () => {
+		const eps = await resolveAllowedEndpoints(["mixed.example.com:80"], {
+			resolve: fakeResolver({ "mixed.example.com": ["8.8.8.8", "169.254.169.254", "127.0.0.1"] }),
+		});
+		expect(eps).toEqual([{ ip: "8.8.8.8", port: 80 }]);
+	});
+
+	it("skips loopback/mDNS names and unresolvable hosts without throwing", async () => {
+		const eps = await resolveAllowedEndpoints(
+			["localhost:80", "foo.local:80", "nope.example.com:443"],
+			{ resolve: fakeResolver({}) },
+		);
+		expect(eps).toEqual([]);
+	});
+
+	it("dedupes repeated ip|port pairs", async () => {
+		const eps = await resolveAllowedEndpoints(["a.example:443", "b.example:443"], {
+			resolve: fakeResolver({ "a.example": ["5.6.7.8"], "b.example": ["5.6.7.8"] }),
+		});
+		expect(eps).toEqual([{ ip: "5.6.7.8", port: 443 }]);
+	});
+
+	it("returns an empty set for an empty host list (pure default-deny)", async () => {
+		expect(await resolveAllowedEndpoints([])).toEqual([]);
 	});
 });
 
