@@ -1,4 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { Buffer } from "node:buffer";
+import { createServer, type Server } from "node:http";
+
+import { classifyIpLiteral, SandboxBroker } from "questpie/executor";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { scanServerModule } from "../apps/actions-scan";
@@ -402,5 +406,161 @@ describe("export scan (cron classifier source)", () => {
 		].join("\n");
 		const scanned = scanExports(src);
 		expect(scanned.named.sort()).toEqual(["cron", "cronDigest"]);
+	});
+});
+
+// ──────────────────────────────────────────────────────────────────────────
+// S5 — declarative per-app HTTP allowlist (manifest `net` → run scope → broker).
+//
+// Proves the FULL declarative chain end-to-end, purely from manifest DATA (no
+// per-app code, no hardcoded host list): an inline `export const manifest`
+// declares a `net` allowlist → `resolveApp` derives `capabilities.net` → the
+// SAME `SandboxBroker.mint({ capabilities })` the route/cron use → `handleRpc`
+// enforces it default-deny on `http.fetch`. An in-list host is permitted (it is
+// dispatched through the SSRF-safe host fetch and reaches a loopback origin); an
+// out-of-list host is DENIED (`forbidden`) and the host fetch never runs.
+//
+// This closes the gap the sibling broker test left open: `broker-http-fetch.test`
+// constructs `{ net: [...] }` BY HAND, whereas here the allowlist is SOURCED from
+// the declared manifest — the declarative wiring is what S5 verifies.
+// ──────────────────────────────────────────────────────────────────────────
+describe("S5: manifest `net` allowlist flows to the broker (declarative, end-to-end)", () => {
+	// A loopback origin standing in for the allowlisted PUBLIC host. The injected
+	// resolver maps the allowlisted hostnames onto it and the injected validator
+	// permits 127.0.0.1 — exactly as the sibling broker test drives the OK path —
+	// so the in-list call exercises the real dispatch without real DNS/network.
+	let origin: Server;
+	let port = 0;
+	beforeAll(async () => {
+		origin = createServer((_req, res) => {
+			res.writeHead(200, { "content-type": "text/plain" });
+			res.end("egress-ok");
+		});
+		await new Promise<void>((r) => origin.listen(0, "127.0.0.1", r));
+		port = (origin.address() as { port: number }).port;
+	});
+	afterAll(() => origin.close());
+
+	/**
+	 * Seed a `.app` whose inline manifest declares the given `net` allowlist (the
+	 * ONLY app-specific input — everything else is identical boilerplate).
+	 */
+	function seedNetApp(appId: string, net: string[] | undefined): AppResolverCollections {
+		const bundle = appBundlePrefix(appId);
+		const netLiteral =
+			net === undefined ? "" : `    net: ${JSON.stringify(net)},\n`;
+		const server = [
+			`export const manifest = {`,
+			`  capabilities: {`,
+			netLiteral.length > 0 ? netLiteral.replace(/\n$/, "") : `    /* no net */`,
+			`  },`,
+			`};`,
+			`async function run(){ return 1; }`,
+			`export const actions = { run };`,
+		].join("\n");
+		return knowledgeDouble([{ path: `${bundle}server.ts`, body: server }]);
+	}
+
+	/**
+	 * Mint a per-run token from the manifest-DERIVED capabilities (the same mint
+	 * the route/cron perform) with a host-fetch target that maps the allowlisted
+	 * hostnames onto the loopback origin (so an in-scope call can actually return).
+	 */
+	function mintFromManifest(
+		broker: SandboxBroker,
+		capabilities: { net?: string[] },
+		hostToIp: Record<string, string[]>,
+	) {
+		return broker.mint({
+			capabilities,
+			target: {
+				http: {
+					fetchOptions: {
+						resolve: async (h: string) => {
+							if (h in hostToIp) return hostToIp[h]!;
+							throw new Error(`NXDOMAIN: ${h}`);
+						},
+						// Permit loopback ONLY for these tests (production never overrides
+						// the validator → the real SSRF policy runs). A non-loopback ip
+						// still goes through the real `classifyIpLiteral`.
+						validateIp: (ip) =>
+							ip === "127.0.0.1" ? { ok: true } : classifyIpLiteral(ip),
+					},
+				},
+			},
+		});
+	}
+
+	it("PERMITS an in-allowlist host (exact + wildcard) sourced from the manifest", async () => {
+		const resolved = await resolveApp(
+			"netapp",
+			seedNetApp("netapp", [`api.allowed.test:${port}`, "*.allowed.test"]),
+		);
+		// The allowlist came from the DECLARED manifest, not hand-built caps.
+		expect(resolved.capabilities.net).toEqual([
+			`api.allowed.test:${port}`,
+			"*.allowed.test",
+		]);
+
+		const broker = new SandboxBroker();
+		const { token } = mintFromManifest(broker, resolved.capabilities, {
+			"api.allowed.test": ["127.0.0.1"],
+			"cdn.allowed.test": ["127.0.0.1"],
+		});
+
+		// Exact in-list host → allowed → dispatched through the SSRF host fetch → 200.
+		const exact = await broker.handleRpc(token, "http.fetch", {
+			url: `http://api.allowed.test:${port}/`,
+		});
+		expect(exact.ok).toBe(true);
+		if (exact.ok) {
+			const v = exact.value as { status: number; bodyBase64: string };
+			expect(v.status).toBe(200);
+			expect(Buffer.from(v.bodyBase64, "base64").toString()).toBe("egress-ok");
+		}
+
+		// A subdomain matched by the manifest's `*.allowed.test` wildcard → allowed.
+		const wild = await broker.handleRpc(token, "http.fetch", {
+			url: `http://cdn.allowed.test:${port}/`,
+		});
+		expect(wild.ok).toBe(true);
+	});
+
+	it("DENIES an out-of-allowlist host as `forbidden` (host fetch never runs)", async () => {
+		const resolved = await resolveApp(
+			"netapp2",
+			seedNetApp("netapp2", ["api.allowed.test"]),
+		);
+		const broker = new SandboxBroker();
+		// The target WOULD resolve evil.test to the loopback origin, but the manifest
+		// allowlist check runs FIRST and forbids it before any fetch is attempted.
+		const { token } = mintFromManifest(broker, resolved.capabilities, {
+			"evil.test": ["127.0.0.1"],
+		});
+
+		const denied = await broker.handleRpc(token, "http.fetch", {
+			url: "https://evil.test/steal",
+		});
+		expect(denied.ok).toBe(false);
+		if (!denied.ok) {
+			expect(denied.error.code).toBe("forbidden");
+			expect(denied.error.message).toContain("not in the net allowlist");
+		}
+	});
+
+	it("DEFAULT-DENY: a manifest with NO `net` axis forbids all egress", async () => {
+		const resolved = await resolveApp("netapp3", seedNetApp("netapp3", undefined));
+		// The manifest declared no `net` → the derived capability has none.
+		expect(resolved.capabilities.net).toBeUndefined();
+
+		const broker = new SandboxBroker();
+		const { token } = mintFromManifest(broker, resolved.capabilities, {
+			"api.allowed.test": ["127.0.0.1"],
+		});
+		const denied = await broker.handleRpc(token, "http.fetch", {
+			url: "https://api.allowed.test/x",
+		});
+		expect(denied.ok).toBe(false);
+		if (!denied.ok) expect(denied.error.code).toBe("forbidden");
 	});
 });
