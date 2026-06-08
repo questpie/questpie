@@ -12,6 +12,14 @@ const KNOWN = new Map<string, string>([
 	// h3-v2@2.0.0-beta.4 (aliased import). Clears when react-start is bumped
 	// from 1.136.x to 1.167.42+ across the monorepo (planned follow-up PR).
 	["GHSA-3vj8-jmxq-cgj5", "TODO: @tanstack/react-start bump PR"],
+	// Vitest UI-server arbitrary file read/exec — only reachable when `vitest --ui`
+	// is listening (a dev convenience; never run in CI or prod). Fix is vitest
+	// >=3.2.6, which crosses the 3->4 major + transitive pins → deps-hygiene PR.
+	["GHSA-5xrq-8626-4rwp", "TODO: vitest 3->4 upgrade PR (dev-only --ui vuln)"],
+	// Better Auth device-authorization approve/deny accepts any authenticated
+	// session while the user code is pending. Fix is better-auth >=1.6.11 → tracked
+	// in the same deps-hygiene follow-up PR.
+	["GHSA-cq3f-vc6p-68fh", "TODO: better-auth >=1.6.11 bump PR (device-auth flow)"],
 ]);
 
 type Advisory = {
