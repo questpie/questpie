@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -12,6 +12,21 @@ import {
 const tmpDirs: string[] = [];
 const originalFetch = globalThis.fetch;
 const originalCwd = process.cwd();
+// Env that would otherwise leak the CI runner's git context into the CLI's
+// metadata probes — these fixtures assert the EMPTY-repo result, but a GitHub
+// runner executes them inside the checkout (GITHUB_*/CI_* + git walk-up resolve
+// the runner branch + repo URL). Cleared per-test, restored in afterEach.
+const GIT_ENV_KEYS = [
+	"GIT_DIR",
+	"GITHUB_REPOSITORY",
+	"GITHUB_REF_NAME",
+	"GITHUB_SHA",
+	"CI_REPO_CLONE_URL",
+	"CI_REPO_URL",
+	"CI_COMMIT_BRANCH",
+	"CI_COMMIT_SHA",
+] as const;
+const savedGitEnv = new Map<string, string | undefined>();
 
 async function createTempProject(): Promise<string> {
 	const dir = await mkdtemp(join(tmpdir(), "questpie-cloud-cli-"));
@@ -21,7 +36,22 @@ async function createTempProject(): Promise<string> {
 }
 
 describe("Questpie Cloud CLI", () => {
+	beforeEach(() => {
+		// Fail every git/CI probe closed so the temp project resolves to no repo
+		// (branch -> "main" default, no repoUrl) deterministically on CI + locally.
+		for (const key of GIT_ENV_KEYS) {
+			savedGitEnv.set(key, process.env[key]);
+			delete process.env[key];
+		}
+		process.env.GIT_DIR = "/questpie-cloud-cli-no-git";
+	});
+
 	afterEach(async () => {
+		for (const [key, value] of savedGitEnv) {
+			if (value === undefined) delete process.env[key];
+			else process.env[key] = value;
+		}
+		savedGitEnv.clear();
 		globalThis.fetch = originalFetch;
 		process.chdir(originalCwd);
 		for (const dir of tmpDirs.splice(0)) {
