@@ -447,12 +447,14 @@ describe("S5: manifest `net` allowlist flows to the broker (declarative, end-to-
 	 */
 	function seedNetApp(appId: string, net: string[] | undefined): AppResolverCollections {
 		const bundle = appBundlePrefix(appId);
-		const netLiteral =
-			net === undefined ? "" : `    net: ${JSON.stringify(net)},\n`;
+		const netLine =
+			net === undefined
+				? `    /* no net */`
+				: `    net: ${JSON.stringify(net)},`;
 		const server = [
 			`export const manifest = {`,
 			`  capabilities: {`,
-			netLiteral.length > 0 ? netLiteral.replace(/\n$/, "") : `    /* no net */`,
+			netLine,
 			`  },`,
 			`};`,
 			`async function run(){ return 1; }`,

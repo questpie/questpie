@@ -242,7 +242,12 @@ async function fetchHop(
 
 	const isHttps = url.protocol === "https:";
 	const requestFn = isHttps ? httpsRequest : httpRequest;
-	const port = url.port ? Number(url.port) : isHttps ? 443 : 80;
+	let port: number;
+	if (url.port) {
+		port = Number(url.port);
+	} else {
+		port = isHttps ? 443 : 80;
+	}
 
 	// Build per-hop headers: force a correct Host (vhost) and drop hop-by-hop /
 	// guest-supplied Host so the guest can't desync the routed host from the

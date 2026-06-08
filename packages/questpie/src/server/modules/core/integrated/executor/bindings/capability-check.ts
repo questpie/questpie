@@ -314,11 +314,12 @@ function checkHttpFetch(
 		return deny("http.fetch url has no host");
 	}
 	// Effective port: explicit, else the scheme default.
-	const port = parsed.port
-		? Number(parsed.port)
-		: parsed.protocol === "https:"
-			? 443
-			: 80;
+	let port: number;
+	if (parsed.port) {
+		port = Number(parsed.port);
+	} else {
+		port = parsed.protocol === "https:" ? 443 : 80;
+	}
 
 	for (const entry of allow) {
 		const { host: allowHost, port: allowPort } = parseHostEntry(entry);
