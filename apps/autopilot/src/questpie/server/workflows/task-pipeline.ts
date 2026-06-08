@@ -5,8 +5,9 @@ import { workflow } from "@questpie/workflows";
 import { createAiRunLink } from "../lib/ai-run-links";
 import type { AppCollections, WorkflowServiceContext } from "../lib/app-types";
 import { classifyRunError, type RunErrorType } from "../lib/error-classifier";
+import { injectMemoriesIntoInstructions } from "../lib/memory-injection";
+import { runReflectionStep } from "../lib/memory-reflect-step";
 import {
-	asJsonValue,
 	asRecord,
 	mergeRecords,
 	relationId,
@@ -14,6 +15,7 @@ import {
 import type { RunCompletion } from "../lib/run-completion";
 import { resolveRuntimeSelection } from "../lib/runtime-selection";
 import { linkScheduleExecutionRun } from "../lib/schedule-run-links";
+import { buildSkillsSystemPrompt } from "../lib/skill-discovery";
 import { workflowsFromContext } from "../lib/workflows";
 
 type Collections = AppCollections;
@@ -180,11 +182,9 @@ export default workflow({
 					id: input.taskId,
 					data: {
 						status: "waiting",
-						metadata: asJsonValue(
-							mergeRecords(task.metadata, {
+						metadata: mergeRecords(task.metadata, {
 								waitingReason: "dependencies",
 							}),
-						),
 					},
 				});
 				await ctx.collections.activity.create({
@@ -216,13 +216,39 @@ export default workflow({
 			});
 
 			const run = await step.run(`create-run-${attempt}`, async () => {
+				// Run-start progressive disclosure (§8.3): the published-skills L1 block
+				// rides the run's `systemPrompt` channel (system-level context), not the
+				// task prompt. Drafts excluded; descriptions stay delimited DATA (§8.7).
+				// Empty when nothing is published.
+				const baseInstructions = taskInstructions(task);
+				const skillsSystemPrompt = await buildSkillsSystemPrompt(
+					ctx.collections,
+					{ projectId: relationId(task.project) },
+				);
+				// Run-start memory RECALL: prepend the scoped active-memory DATA block to
+				// the task instructions so the agent recalls lessons from prior runs on
+				// this task/project/company. DELIMITED DATA, never instructions.
+				// Best-effort (degrades to `baseInstructions` on no-backend or error).
+				// The query is the task's own instructions = this run's intent.
+				const instructions = await injectMemoriesIntoInstructions(
+					{
+						search: ctx.search,
+						collections: ctx.collections,
+						projectId: relationId(task.project),
+						taskId: input.taskId,
+					},
+					baseInstructions,
+					baseInstructions,
+					log,
+				);
 				return createAiRunLink({
 					ctx: ctx,
 					runtime,
 					taskId: input.taskId,
 					projectId: relationId(task.project),
 					initiatedBy: "task",
-					instructions: taskInstructions(task),
+					instructions,
+					systemPrompt: skillsSystemPrompt || undefined,
 					scheduleExecutionId: input.scheduleExecutionId,
 					linkMetadata: {
 						runReason: input.runReason ?? "task-pipeline",
@@ -246,13 +272,11 @@ export default workflow({
 					id: input.taskId,
 					data: {
 						status: "running",
-						metadata: asJsonValue(
-							mergeRecords(task.metadata, {
+						metadata: mergeRecords(task.metadata, {
 								workflow: "task-pipeline",
 								activeRunId: run.id,
 								attempt,
 							}),
-						),
 					},
 				});
 			});
@@ -310,15 +334,13 @@ export default workflow({
 				id: input.taskId,
 				data: {
 					status,
-					metadata: asJsonValue(
-						mergeRecords(task.metadata, {
-							workflow: "task-pipeline",
-							runId: lastRunId,
-							status,
-							error: lastCompletion?.error ?? null,
-							knowledgeResourceIds: lastCompletion?.knowledgeResourceIds ?? [],
-						}),
-					),
+					metadata: mergeRecords(task.metadata, {
+						workflow: "task-pipeline",
+						runId: lastRunId,
+						status,
+						error: lastCompletion?.error ?? null,
+						knowledgeResourceIds: lastCompletion?.knowledgeResourceIds ?? [],
+					}),
 				},
 			});
 			await ctx.collections.activity.create({
@@ -334,6 +356,40 @@ export default workflow({
 				details: lastCompletion ?? {},
 			});
 		});
+
+		// Memory WRITE (Reflexion, §9.2): async reflection AFTER the run reaches its
+		// terminal status. Off-path — its result never changes the task outcome; a
+		// failure is logged and swallowed. Gated by the per-scope "agent may write
+		// memory" toggle inside `runReflectionStep`. The model boundary is not wired
+		// to a live LLM yet (server has no model client) so this writes nothing today
+		// but exercises the full gate/dedupe/persist path (see memory-reflect-step.ts).
+		if (lastRunId) {
+			await step.run("memory-reflection", async () => {
+				await runReflectionStep(ctx.collections, {
+					runId: lastRunId as string,
+					input: {
+						instructions: taskInstructions(task),
+						summary: lastCompletion?.summary ?? null,
+						outcome:
+							lastCompletion?.status === "completed"
+								? "completed"
+								: lastCompletion?.status === "cancelled"
+									? "cancelled"
+									: "failed",
+						error: lastCompletion?.error ?? null,
+						scope: {
+							projectId: relationId(task.project),
+							taskId: input.taskId,
+						},
+					},
+					scope: {
+						projectId: relationId(task.project),
+						taskId: input.taskId,
+					},
+					log,
+				});
+			});
+		}
 
 		const releasedTaskIds =
 			status === "review"
@@ -356,7 +412,7 @@ export default workflow({
 			id: input.taskId,
 			data: {
 				status: "failed",
-				metadata: asJsonValue({ workflowError: error.message }),
+				metadata: { workflowError: error.message },
 			},
 		});
 		await ctx.collections.activity.create({

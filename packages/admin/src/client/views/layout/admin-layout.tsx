@@ -9,6 +9,7 @@
  * Automatically reads from AdminProvider context when props are not provided.
  */
 
+import { Icon } from "@iconify/react";
 import * as React from "react";
 
 import type { ServerAdminShellRailConfig } from "#questpie/admin/server/augmentation.js";
@@ -226,9 +227,45 @@ function shouldRenderShellRail(
 	);
 }
 
-function toCssLength(value: number | string | undefined): string | undefined {
-	if (value === undefined) return undefined;
-	return typeof value === "number" ? `${value}px` : value;
+const RAIL_WIDTH_KEY = "qa-admin-secondary-rail-width";
+const RAIL_COLLAPSED_KEY = "qa-admin-secondary-rail-collapsed";
+
+/**
+ * Client-side width + collapsed state for the secondary rail, persisted to
+ * localStorage. The server config provides the DEFAULT width and the min/max
+ * bounds; the user can resize within those bounds and collapse the rail, and the
+ * choice survives reloads.
+ */
+function useRailState(defaultWidth: number, minWidth: number, maxWidth: number) {
+	const clamp = React.useCallback(
+		(w: number) => Math.min(maxWidth, Math.max(minWidth, Math.round(w))),
+		[minWidth, maxWidth],
+	);
+	const [width, setWidthState] = React.useState<number>(() => {
+		if (typeof window === "undefined") return defaultWidth;
+		const saved = Number(window.localStorage.getItem(RAIL_WIDTH_KEY));
+		return Number.isFinite(saved) && saved > 0 ? clamp(saved) : defaultWidth;
+	});
+	const [collapsed, setCollapsedState] = React.useState<boolean>(
+		() =>
+			typeof window !== "undefined" &&
+			window.localStorage.getItem(RAIL_COLLAPSED_KEY) === "1",
+	);
+	const setWidth = React.useCallback(
+		(w: number) => {
+			const next = clamp(w);
+			setWidthState(next);
+			if (typeof window !== "undefined")
+				window.localStorage.setItem(RAIL_WIDTH_KEY, String(next));
+		},
+		[clamp],
+	);
+	const setCollapsed = React.useCallback((c: boolean) => {
+		setCollapsedState(c);
+		if (typeof window !== "undefined")
+			window.localStorage.setItem(RAIL_COLLAPSED_KEY, c ? "1" : "0");
+	}, []);
+	return { width, setWidth, collapsed, setCollapsed };
 }
 
 function AdminShellRail({
@@ -243,26 +280,107 @@ function AdminShellRail({
 	navigate: (path: string) => void;
 }) {
 	const placement = config.placement ?? "left";
-	const width = toCssLength(config.width ?? 320);
-	const style = {
-		width,
-		minWidth: toCssLength(config.minWidth ?? config.width ?? 280),
-		maxWidth: toCssLength(config.maxWidth),
-	} as React.CSSProperties;
+	const isRight = placement === "right";
+	const defaultWidth = typeof config.width === "number" ? config.width : 320;
+	const minWidth = typeof config.minWidth === "number" ? config.minWidth : 280;
+	const maxWidth = typeof config.maxWidth === "number" ? config.maxWidth : 560;
+	const { width, setWidth, collapsed, setCollapsed } = useRailState(
+		defaultWidth,
+		minWidth,
+		maxWidth,
+	);
+
+	const onResizeStart = React.useCallback(
+		(e: React.PointerEvent) => {
+			e.preventDefault();
+			const startX = e.clientX;
+			const startWidth = width;
+			document.body.style.cursor = "col-resize";
+			document.body.style.userSelect = "none";
+			const onMove = (ev: PointerEvent) => {
+				const dx = ev.clientX - startX;
+				setWidth(isRight ? startWidth - dx : startWidth + dx);
+			};
+			const onUp = () => {
+				document.body.style.cursor = "";
+				document.body.style.userSelect = "";
+				window.removeEventListener("pointermove", onMove);
+				window.removeEventListener("pointerup", onUp);
+			};
+			window.addEventListener("pointermove", onMove);
+			window.addEventListener("pointerup", onUp);
+		},
+		[width, isRight, setWidth],
+	);
+
+	const baseClass = cn(
+		"qa-admin-layout__secondary-rail bg-background h-svh min-h-0 shrink-0 overflow-hidden border-border-subtle",
+		isRight ? "border-l" : "border-r",
+		config.hiddenOnMobile === false ? "flex" : "hidden md:flex",
+	);
+
+	if (collapsed) {
+		return (
+			<aside
+				className={cn(baseClass, "w-11 flex-col items-center")}
+				data-placement={placement}
+				data-collapsed="true"
+			>
+				<button
+					type="button"
+					onClick={() => setCollapsed(false)}
+					className="text-muted-foreground hover:bg-surface-high hover:text-foreground focus-visible:ring-ring/40 mt-2.5 flex size-8 shrink-0 items-center justify-center rounded-[var(--control-radius-inner)] transition-[background-color,color,box-shadow] duration-[var(--motion-duration-base)] ease-[var(--motion-ease-standard)] focus-visible:ring-2 focus-visible:outline-none motion-reduce:transition-none"
+					title="Expand panel"
+					aria-label="Expand panel"
+				>
+					<Icon
+						icon={isRight ? "ph:caret-left" : "ph:caret-right"}
+						width={16}
+						height={16}
+					/>
+				</button>
+			</aside>
+		);
+	}
 
 	return (
 		<aside
-			className={cn(
-				"qa-admin-layout__secondary-rail bg-background h-svh min-h-0 shrink-0 flex-col overflow-hidden",
-				config.hiddenOnMobile === false ? "flex" : "hidden md:flex",
-				placement === "left"
-					? "border-border-subtle border-r"
-					: "border-border-subtle border-l",
-				config.className,
-			)}
+			className={cn(baseClass, "relative flex-col", config.className)}
 			data-placement={placement}
-			style={style}
+			style={{ width: `${width}px` }}
 		>
+			{/* Drag-to-resize handle straddling the inner edge */}
+			<div
+				onPointerDown={onResizeStart}
+				className={cn(
+					"group/resize absolute inset-y-0 z-20 flex w-2 cursor-col-resize items-center justify-center",
+					isRight ? "left-0 -translate-x-1/2" : "right-0 translate-x-1/2",
+				)}
+				role="separator"
+				aria-orientation="vertical"
+				aria-label="Resize panel"
+			>
+				<div className="bg-border-subtle group-hover/resize:bg-border-strong h-full w-px transition-[background-color] duration-[var(--motion-duration-base)] ease-[var(--motion-ease-standard)] motion-reduce:transition-none" />
+			</div>
+
+			{/* Collapse toggle */}
+			<button
+				type="button"
+				onClick={() => setCollapsed(true)}
+				className={cn(
+					"text-muted-foreground hover:bg-surface-high hover:text-foreground focus-visible:ring-ring/40 absolute top-2.5 z-20 flex size-7 shrink-0 items-center justify-center rounded-[var(--control-radius-inner)] transition-[background-color,color,box-shadow] duration-[var(--motion-duration-base)] ease-[var(--motion-ease-standard)] focus-visible:ring-2 focus-visible:outline-none motion-reduce:transition-none",
+					isRight ? "left-2.5" : "right-2.5",
+				)}
+				title="Collapse panel"
+				aria-label="Collapse panel"
+			>
+				<Icon
+					icon={isRight ? "ph:caret-right" : "ph:caret-left"}
+					width={15}
+					height={15}
+				/>
+			</button>
+
 			<ComponentRenderer
 				reference={config.component}
 				additionalProps={

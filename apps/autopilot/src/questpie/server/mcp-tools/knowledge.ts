@@ -54,7 +54,7 @@ export const knowledgeList = mcpTool("knowledge_list", {
 	await requireMcpCaller({ ctx, request, accessMode });
 
 	const { path, ...scopeInput } = input;
-	const result = await ctx.collections.knowledge.find({
+	const result = await ctx.collections.assets.find({
 		where: knowledgeWhere(scopeInput),
 		limit: 500,
 		orderBy: { path: "asc" },
@@ -76,7 +76,7 @@ export const knowledgeRead = mcpTool("knowledge_read", {
 }).handler(async ({ input, ctx, request, accessMode }) => {
 	await requireMcpCaller({ ctx, request, accessMode });
 
-	const resource = await ctx.collections.knowledge.findOne({
+	const resource = await ctx.collections.assets.findOne({
 		where: knowledgeWhere(input),
 	});
 	if (!resource) throw ApiError.notFound("Knowledge", input.path);
@@ -88,12 +88,15 @@ export const knowledgeWrite = mcpTool("knowledge_write", {
 	description: "Create or update a knowledge resource.",
 	inputSchema: writeSchema,
 }).handler(async ({ input, ctx, request, accessMode }) => {
-	await requireMcpCaller({ ctx, request, accessMode });
+	const caller = await requireMcpCaller({ ctx, request, accessMode });
 
 	const scope = knowledgeScope(input);
-	const existing = await ctx.collections.knowledge.findOne({
+	// The unified `assets` row type collapses to `{}` for consumers (admin-module
+	// + app intersection in codegen), so cast to read `.id`. See
+	// `services/knowledge-resource.ts` `KnowledgeRowResult`.
+	const existing = (await ctx.collections.assets.findOne({
 		where: knowledgeWhere({ ...input, path: input.path }),
-	});
+	})) as { id: string } | null;
 
 	const data = {
 		title: input.title ?? input.path.split("/").at(-1) ?? input.path,
@@ -105,11 +108,11 @@ export const knowledgeWrite = mcpTool("knowledge_write", {
 		task: scope.taskId,
 		kind: "document" as const,
 		source: "mcp" as const,
-		sourceRef: ctx.session?.user?.id ?? "mcp",
+		sourceRef: caller.actorId,
 	};
 
 	const resource = existing
-		? await ctx.collections.knowledge.updateById({
+		? await ctx.collections.assets.updateById({
 				id: existing.id,
 				data,
 			})
@@ -137,12 +140,12 @@ export const knowledgeDelete = mcpTool("knowledge_delete", {
 }).handler(async ({ input, ctx, request, accessMode }) => {
 	await requireMcpCaller({ ctx, request, accessMode });
 
-	const resource = await ctx.collections.knowledge.findOne({
+	const resource = (await ctx.collections.assets.findOne({
 		where: knowledgeWhere(input),
-	});
+	})) as { id: string } | null;
 	if (!resource) return mcpJson({ deleted: false });
 
-	await ctx.collections.knowledge.deleteById({ id: resource.id });
+	await ctx.collections.assets.deleteById({ id: resource.id });
 	return mcpJson({ deleted: true, id: resource.id });
 });
 
@@ -154,7 +157,7 @@ export const knowledgeSearch = mcpTool("knowledge_search", {
 }).handler(async ({ input, ctx, request, accessMode }) => {
 	await requireMcpCaller({ ctx, request, accessMode });
 
-	const result = await ctx.collections.knowledge.find({
+	const result = await ctx.collections.assets.find({
 		where: knowledgeWhere(input),
 		limit: 50,
 		orderBy: { updatedAt: "desc" },

@@ -1,6 +1,7 @@
 import { route } from "questpie/services";
 
 import { relationId } from "../lib/records";
+import { sessionOnly } from "../lib/route-access";
 
 function sse(event: string, data: unknown) {
 	return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
@@ -56,6 +57,7 @@ function productRunEvent(
 
 export default route()
 	.get()
+	.access(sessionOnly)
 	.raw()
 	.handler(async ({ request, collections, realtime }) => {
 		const url = new URL(request.url);

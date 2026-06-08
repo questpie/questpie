@@ -35,6 +35,39 @@ const services = collection("services").fields(({ f }) => ({
 	image: f.relation("assets").relationName("image"),
 }));
 
+// Mirrors the autopilot `assets` Drive store: custom fields, a PRIVATE upload
+// default, a per-row read rule, and a beforeChange hook that stamps key-bearing
+// rows public only when visibility is unset. `.upload()` MUST come after
+// `.fields()` — `.fields()` replaces the field map, so the reverse order drops
+// the synthetic upload columns (key/visibility/...), which would silently store
+// blobs with no recorded key (orphaned + unservable) and never persist
+// visibility. This guards that a folder/Drive upload stays private and is not
+// anonymously servable.
+const driveAssets = collection("drive_assets")
+	.options({ timestamps: true })
+	.fields(({ f }) => ({
+		title: f.text(),
+		path: f.text().required(),
+		body: f.textarea(),
+	}))
+	.upload({ visibility: "private" })
+	.access({
+		read: ({ session }) => (session ? true : { visibility: "public" }),
+	})
+	.hooks({
+		beforeChange: ({ data, operation }) => {
+			const row = data as { key?: unknown; visibility?: unknown };
+			if (
+				operation === "create" &&
+				(row.visibility === undefined || row.visibility === null) &&
+				typeof row.key === "string" &&
+				row.key.length > 0
+			) {
+				row.visibility = "public";
+			}
+		},
+	});
+
 const restrictedAssets = collection("restricted_assets")
 	.access({ read: false })
 	.fields(({ f }) => ({
@@ -467,6 +500,64 @@ describe("collection storage route streaming", () => {
 		expect(textDecoder.decode(storage.calls.lastUploadBody)).toBe(
 			"%PDF-1.4\nmenu",
 		);
+	});
+
+	it("returns file URLs keyed by storage key and serves them through the API base path", async () => {
+		const storage = createInstrumentedStorageAdapter();
+		setup = await buildMockApp(
+			{ collections: { assets } },
+			{ storage: { adapter: storage.adapter, basePath: "/api" } },
+		);
+		app = setup.app;
+		await runTestDbMigrations(app);
+
+		const handler = createFetchHandler(app, {
+			accessMode: "system",
+			basePath: "/api",
+			requestLogging: false,
+		});
+		const body = textEncoder.encode("avatar-bytes");
+		const formData = new FormData();
+		formData.append(
+			"file",
+			new File([body], "avatar.png", { type: "image/png" }),
+		);
+
+		const uploadResponse = await handler(
+			new Request("http://localhost:3000/api/assets/upload", {
+				method: "POST",
+				body: formData,
+			}),
+		);
+		expect(uploadResponse).not.toBeNull();
+		expect(uploadResponse?.status).toBe(200);
+
+		const uploaded = (await uploadResponse!.json()) as any;
+		expect(uploaded.id).toBeString();
+		expect(uploaded.key).toBeString();
+		expect(uploaded.id).not.toBe(uploaded.key);
+		expect(uploaded.url).toBe(
+			`http://localhost:3000/api/assets/files/${uploaded.key}`,
+		);
+		expect(uploaded.url).not.toBe(
+			`http://localhost:3000/api/assets/files/${uploaded.id}`,
+		);
+
+		const served = await handler(new Request(uploaded.url));
+		expect(served).not.toBeNull();
+		expect(served?.status).toBe(200);
+		expect(await served!.text()).toBe("avatar-bytes");
+		expect(storage.calls.exists).toBe(1);
+		expect(storage.calls.head).toBe(1);
+		expect(storage.calls.download).toBe(1);
+
+		const idUrl = `http://localhost:3000/api/assets/files/${uploaded.id}`;
+		const servedById = await handler(new Request(idUrl));
+		expect(servedById).not.toBeNull();
+		expect(servedById?.status).toBe(404);
+		expect(storage.calls.exists).toBe(1);
+		expect(storage.calls.head).toBe(1);
+		expect(storage.calls.download).toBe(1);
 	});
 
 	it("sanitizes uploaded filenames and keeps storage keys path-safe", async () => {
@@ -1003,5 +1094,58 @@ describe("collection storage route streaming", () => {
 		expect(storage.calls.exists).toBe(1);
 		expect(storage.calls.head).toBe(1);
 		expect(storage.calls.download).toBe(1);
+	});
+});
+
+describe("private-default Drive upload visibility", () => {
+	let setup: Awaited<ReturnType<typeof buildMockApp>>;
+	let app: (typeof setup)["app"];
+
+	beforeEach(async () => {
+		setup = await buildMockApp(
+			{ collections: { drive_assets: driveAssets } },
+			{ secret: "test-secret" },
+		);
+		app = setup.app;
+		await runTestDbMigrations(app);
+	});
+
+	afterEach(async () => {
+		await setup.cleanup();
+	});
+
+	it("a folder upload stays private, records its key, and is not anonymously served", async () => {
+		const body = textEncoder.encode("confidential pdf");
+		const uploaded = await (app.collections.drive_assets as any).upload(
+			{
+				name: "secret.pdf",
+				type: "application/pdf",
+				size: body.byteLength,
+				arrayBuffer: async () =>
+					body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength),
+			},
+			createTestContext({ accessMode: "system" }),
+			{ path: "company/confidential/secret.pdf" },
+		);
+
+		// The synthetic upload columns survive: the blob row records its key and
+		// keeps the collection's private default (the public-stamp hook only fires
+		// when visibility is unset, which never happens once the column exists).
+		expect((uploaded as any).key).toBeString();
+		expect((uploaded as any).visibility).toBe("private");
+		expect((uploaded as any).path).toBe("company/confidential/secret.pdf");
+
+		// Anonymous serve must never return the bytes. The per-row read rule hides
+		// the private row from anonymous callers, so the route 404s before touching
+		// storage — a private blob is indistinguishable from a missing one.
+		const handler = createFetchHandler(app, {
+			basePath: "/api",
+			requestLogging: false,
+		});
+		const key = (uploaded as any).key as string;
+		const anon = await handler(
+			new Request(`http://localhost/api/drive_assets/files/${key}`),
+		);
+		expect(anon?.status).not.toBe(200);
 	});
 });

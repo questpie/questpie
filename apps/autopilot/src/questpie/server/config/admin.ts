@@ -52,6 +52,16 @@ export default adminConfig({
 		locales: ["en"],
 		defaultLocale: "en",
 	},
+	shell: {
+		secondaryRail: {
+			component: { type: "autopilotWorkRail", props: {} },
+			placement: "right",
+			width: 420,
+			minWidth: 360,
+			maxWidth: 480,
+			hiddenOnMobile: true,
+		},
+	},
 	sidebar: {
 		sections: [
 			{
@@ -77,9 +87,9 @@ export default adminConfig({
 					},
 					{
 						type: "collection",
-						collection: "knowledge",
-						label: { en: "Artifacts" },
-						icon: { type: "icon", props: { name: "ph:brain" } },
+						collection: "assets",
+						label: { en: "Files" },
+						icon: { type: "icon", props: { name: "ph:folders" } },
 					},
 					{
 						type: "collection",
@@ -256,35 +266,6 @@ export default adminConfig({
 						subtitle: { en: "Failed issues or executions" },
 					};
 				},
-			},
-			{
-				sectionId: "work",
-				id: "quick-actions",
-				type: "quickActions",
-				label: { en: "Quick actions" },
-				span: 1,
-				rowSpan: 2,
-				layout: "list",
-				actions: [
-					{
-						label: { en: "Create issue" },
-						icon: { type: "icon", props: { name: "ph:plus" } },
-						variant: "primary",
-						action: { type: "create", collection: "tasks" },
-					},
-					{
-						label: { en: "Add artifact" },
-						icon: { type: "icon", props: { name: "ph:brain" } },
-						variant: "secondary",
-						action: { type: "create", collection: "knowledge" },
-					},
-					{
-						label: { en: "Create schedule" },
-						icon: { type: "icon", props: { name: "ph:calendar-check" } },
-						variant: "secondary",
-						action: { type: "create", collection: "schedules" },
-					},
-				],
 			},
 			{
 				sectionId: "activity",

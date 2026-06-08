@@ -161,9 +161,9 @@ export function adminPlugin(): CodegenPlugin {
 								},
 							],
 							configType:
-								'(ctx: ListViewConfigContext<TState extends { fieldDefinitions: infer F extends Record<string, unknown> } ? F : Record<string, unknown>, FilterViewsByKind<$VIEWS_RECORD, "list">>) => ListViewConfig',
+								'(ctx: ListViewConfigContext<TState extends { fieldDefinitions: infer F extends Record<string, unknown> } ? F : Record<string, unknown>, FilterViewsByKind<$VIEWS_RECORD, "list">, $COMPONENTS>) => ListViewConfig',
 							isCallback: true,
-							callbackContextParams: ["v", "f", "a"],
+							callbackContextParams: ["v", "f", "a", "c"],
 							defaults: {
 								view: "collection-table",
 								showSearch: true,
@@ -222,6 +222,12 @@ export function adminPlugin(): CodegenPlugin {
 								"(ctx: ActionsConfigContext<Record<string, unknown>, $COMPONENTS>) => ServerActionsConfig",
 							isCallback: true,
 							callbackContextParams: ["a", "c", "f"],
+							callbackParams: {
+								f: {
+									factory: "createActionFieldBuilderProxy",
+									from: "@questpie/admin/factories",
+								},
+							},
 						},
 					},
 					globalExtensions: {

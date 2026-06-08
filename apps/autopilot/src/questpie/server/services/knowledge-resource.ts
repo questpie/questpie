@@ -17,7 +17,9 @@ export type KnowledgeKind =
 	| "summary"
 	| "preview"
 	| "log"
-	| "diff";
+	| "diff"
+	| "miniapp"
+	| "skill";
 export type KnowledgeSource =
 	| "human"
 	| "assistant"
@@ -63,6 +65,74 @@ export interface CreateRunOutputInput {
 	outputs?: unknown;
 	artifacts?: WorkerArtifactInput[];
 	source?: KnowledgeSource;
+}
+
+/** A knowledge resource read back by path (format-agnostic file-as-DB read). */
+export interface KnowledgeResourceRecord {
+	id: string;
+	path: string;
+	title: string | null;
+	body: string;
+	contentType: string | null;
+	metadata: Record<string, unknown> | null;
+}
+
+/**
+ * A created/updated `assets` row as returned by the create helpers. Typed
+ * explicitly (`id` + open record) because the unified `assets` collection's
+ * generated row type collapses to `{}` for consumers — `assets` is defined by
+ * BOTH the admin module and this app, and codegen intersects the two
+ * (`_ModuleCollections["assets"] & typeof _coll_assets`), which erases field
+ * inference. Annotating the service return restores `.id` (and the row) for the
+ * artifact/MCP callers without each one re-casting the collapsed result.
+ */
+export type KnowledgeRowResult = { id: string } & Record<string, unknown>;
+
+/** Single entry returned by a by-prefix listing. */
+export interface KnowledgeResourceEntry {
+	path: string;
+	title: string | null;
+	contentType: string | null;
+}
+
+export interface WriteResourceByPathInput {
+	path: string;
+	body: string;
+	title?: string | null;
+	contentType?: string | null;
+	scopeType?: KnowledgeScopeType | null;
+	projectId?: string | null;
+	taskId?: string | null;
+	runId?: string | null;
+	kind?: KnowledgeKind | null;
+	source?: KnowledgeSource | null;
+	sourceRef?: string | null;
+	metadata?: Record<string, unknown> | null;
+}
+
+/**
+ * Optional access context for the by-path file-as-DB primitives
+ * ({@link readByPath}/{@link writeByPath}/{@link listByPrefix}).
+ *
+ * These primitives are the storage layer for callers that have ALREADY imposed
+ * their own host-side path authorization (the mini-app bindings clamp every path
+ * to the app's own subtree BEFORE calling — see
+ * `apps/mini-app-bindings.ts` G1). Such a caller passes `accessMode:"system"` so
+ * the `assets` collection's per-row visibility read rule does NOT additionally
+ * gate the already-clamped own-data access.
+ *
+ * Omitting it (the default) preserves the previous behavior exactly: the
+ * underlying `collections.assets.*` calls inherit `accessMode`/`session` from
+ * the surrounding `runWithContext` (ALS) scope. A `system` mode is ONLY ever
+ * sound when the caller has independently authorized the exact path.
+ *
+ * Structurally a partial CRUD/request context (all fields optional, extra keys
+ * allowed) so it threads straight into `collections.assets.*`; in practice
+ * only `accessMode` is set here.
+ */
+export interface KnowledgeByPathContext {
+	accessMode?: "user" | "system";
+	[key: string]: unknown;
 }
 
 export function normalizeKnowledgePath(path: string): string {
@@ -164,12 +234,14 @@ export default service({
 			normalizePath: normalizeKnowledgePath,
 			hashContent,
 
-			async createTextResource(input: CreateTextResourceInput) {
+			async createTextResource(
+				input: CreateTextResourceInput,
+			): Promise<KnowledgeRowResult> {
 				const path = normalizeKnowledgePath(input.path);
 				const scopeType = validateScope(input);
 				const contentHash = hashContent(input.body);
 
-				return collections.knowledge.create({
+				return (await collections.assets.create({
 					title: input.title ?? basename(path),
 					path,
 					scopeType,
@@ -184,7 +256,125 @@ export default service({
 					sourceRef: input.sourceRef ?? undefined,
 					contentHash,
 					metadata: (input.metadata ?? undefined) as any,
-				} as any);
+				} as any)) as KnowledgeRowResult;
+			},
+
+			/**
+			 * Read a single knowledge resource by its exact (normalized) path.
+			 * Format-agnostic: returns the stored bytes-as-text plus content-type
+			 * and metadata; the caller decides how to interpret them.
+			 */
+			async readByPath(
+				rawPath: string,
+				context?: KnowledgeByPathContext,
+			): Promise<KnowledgeResourceRecord | null> {
+				const path = normalizeKnowledgePath(rawPath);
+				const resource = await collections.assets.findOne(
+					{ where: { path } },
+					context,
+				);
+				if (!resource) return null;
+				const row = resource as Record<string, unknown>;
+				return {
+					id: String(row.id),
+					path: typeof row.path === "string" ? row.path : path,
+					title: typeof row.title === "string" ? row.title : null,
+					body: typeof row.body === "string" ? row.body : "",
+					contentType:
+						typeof row.contentType === "string" ? row.contentType : null,
+					metadata:
+						row.metadata && typeof row.metadata === "object"
+							? (row.metadata as Record<string, unknown>)
+							: null,
+				};
+			},
+
+			/**
+			 * Create-or-overwrite a knowledge resource at an exact path
+			 * (upsert by path). Content-agnostic: `body`/`contentType` are stored
+			 * verbatim — no format parsing.
+			 */
+			async writeByPath(
+				input: WriteResourceByPathInput,
+				context?: KnowledgeByPathContext,
+			): Promise<KnowledgeResourceRecord> {
+				const path = normalizeKnowledgePath(input.path);
+				const contentHash = hashContent(input.body);
+				const existing = await collections.assets.findOne(
+					{ where: { path } },
+					context,
+				);
+
+				const data = {
+					title: input.title ?? basename(path),
+					path,
+					scopeType: input.scopeType ?? "company",
+					project: input.projectId ?? undefined,
+					task: input.taskId ?? undefined,
+					run: input.runId ?? undefined,
+					kind: input.kind ?? "document",
+					contentType: input.contentType ?? inferContentType(path),
+					body: input.body,
+					source: input.source ?? "system",
+					sourceRef: input.sourceRef ?? undefined,
+					contentHash,
+					metadata: (input.metadata ?? undefined) as any,
+				};
+
+				const saved = existing
+					? await collections.assets.updateById(
+							{
+								id: (existing as Record<string, unknown>).id as string,
+								data: data as any,
+							},
+							context,
+						)
+					: await collections.assets.create(data as any, context);
+
+				const row = saved as Record<string, unknown>;
+				return {
+					id: String(row.id),
+					path: typeof row.path === "string" ? row.path : path,
+					title: typeof row.title === "string" ? row.title : null,
+					body: typeof row.body === "string" ? row.body : input.body,
+					contentType:
+						typeof row.contentType === "string"
+							? row.contentType
+							: (data.contentType ?? null),
+					metadata:
+						row.metadata && typeof row.metadata === "object"
+							? (row.metadata as Record<string, unknown>)
+							: ((input.metadata ?? null) as Record<string, unknown> | null),
+				};
+			},
+
+			/**
+			 * List knowledge resources whose path starts with `prefix`
+			 * (already normalized by the caller). Returns lightweight entries
+			 * (no bodies) ordered by path.
+			 */
+			async listByPrefix(
+				prefix: string,
+				context?: KnowledgeByPathContext,
+			): Promise<KnowledgeResourceEntry[]> {
+				const result = await collections.assets.find(
+					{
+						where: { path: { startsWith: prefix } },
+						limit: 1000,
+						orderBy: { path: "asc" },
+					},
+					context,
+				);
+				const docs = (result as { docs?: unknown[] }).docs ?? [];
+				return docs
+					.map((doc) => doc as Record<string, unknown>)
+					.filter((row) => typeof row.path === "string")
+					.map((row) => ({
+						path: row.path as string,
+						title: typeof row.title === "string" ? row.title : null,
+						contentType:
+							typeof row.contentType === "string" ? row.contentType : null,
+					}));
 			},
 
 			async createRunArtifact(runId: string, artifact: WorkerArtifactInput) {

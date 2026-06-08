@@ -16,7 +16,7 @@ import { activity } from "../collections/activity";
 import { chatMessages } from "../collections/chat-messages";
 import { chatSessions } from "../collections/chat-sessions";
 import { environments } from "../collections/environments";
-import { knowledge } from "../collections/knowledge";
+import assets from "../collections/assets";
 import { models } from "../collections/models";
 import { projects } from "../collections/projects";
 import { providers } from "../collections/providers";
@@ -136,7 +136,7 @@ describe("Autopilot MCP smoke", () => {
 				chat_messages: chatMessages,
 				chat_sessions: chatSessions,
 				environments,
-				knowledge,
+				assets,
 				models,
 				projects,
 				providers,
@@ -243,6 +243,10 @@ describe("Autopilot MCP smoke", () => {
 			expect(taskResult.isError).toBeUndefined();
 			const taskId = (taskResult.structuredContent as any).task_id as string;
 			expect(taskId).toBeTruthy();
+			expect(
+				(await app.collections.tasks.findOne({ where: { id: taskId } }))
+					?.createdBy,
+			).toBe("system");
 
 			const fetchedTask = await client.callTool({
 				name: "task_get",
@@ -257,7 +261,7 @@ describe("Autopilot MCP smoke", () => {
 					input: expect.objectContaining({
 						taskId,
 						runReason: "mcp",
-						requestedBy: "mcp",
+						requestedBy: "system",
 					}),
 					options: expect.objectContaining({
 						idempotencyKey: `task-pipeline:${taskId}`,
@@ -286,8 +290,8 @@ describe("Autopilot MCP smoke", () => {
 			expect(artifactResult.isError).toBeUndefined();
 			const artifactId = (artifactResult.structuredContent as any).id as string;
 			expect(artifactId).toBeTruthy();
-			const resource = await app.collections.knowledge.findOne({
-				where: { id: artifactId },
+			const resource = await app.collections.assets.findOne({
+				where: { id: artifactId } as any,
 			});
 			expect(resource).toMatchObject({
 				title: "note.md",
@@ -399,6 +403,7 @@ describe("Autopilot MCP smoke", () => {
 			});
 			expect((read.structuredContent as any).body).toBe("# Smoke artifact");
 			expect((read.structuredContent as any).title).toBe("Smoke note");
+			expect((read.structuredContent as any).sourceRef).toBe("system");
 
 			const listed = await client.callTool({
 				name: "knowledge_list",
@@ -449,9 +454,9 @@ describe("Autopilot MCP smoke", () => {
 				name: "run_list",
 				arguments: { task_id: taskId },
 			});
-			expect(
-				arrayValue<{ id: string }>(runs).map((item) => item.id),
-			).toContain(run.id);
+			expect(arrayValue<{ id: string }>(runs).map((item) => item.id)).toContain(
+				run.id,
+			);
 
 			const got = await client.callTool({
 				name: "run_get",
@@ -493,7 +498,8 @@ describe("Autopilot MCP smoke", () => {
 				name: "task_create",
 				arguments: { title: "Cancel me", start: false },
 			});
-			const cancelId = (cancelTarget.structuredContent as any).task_id as string;
+			const cancelId = (cancelTarget.structuredContent as any)
+				.task_id as string;
 			await client.callTool({
 				name: "task_cancel",
 				arguments: { id: cancelId, reason: "obsolete" },
@@ -537,7 +543,11 @@ describe("Autopilot MCP smoke", () => {
 				mode: "task",
 				enabled: true,
 				concurrencyPolicy: "allow",
-				taskTemplate: { title: "Daily review", type: "review", priority: "medium" },
+				taskTemplate: {
+					title: "Daily review",
+					type: "review",
+					priority: "medium",
+				},
 			} as any);
 
 			const listed = await client.callTool({
@@ -558,10 +568,15 @@ describe("Autopilot MCP smoke", () => {
 				name: "schedule_trigger",
 				arguments: { id: schedule.id },
 			});
-			expect((triggered.structuredContent as any).schedule_id).toBe(schedule.id);
+			expect((triggered.structuredContent as any).schedule_id).toBe(
+				schedule.id,
+			);
 			expect(
-				(await app.collections.schedules.findOne({ where: { id: schedule.id } }))
-					?.nextRunAt,
+				(
+					await app.collections.schedules.findOne({
+						where: { id: schedule.id },
+					})
+				)?.nextRunAt,
 			).toBeTruthy();
 		} finally {
 			await close();
@@ -591,11 +606,14 @@ describe("Autopilot MCP smoke", () => {
 			});
 			expect(written.isError).toBeUndefined();
 			const resourceId = (written.structuredContent as any).id as string;
-			const stored = await app.collections.knowledge.findOne({
-				where: { id: resourceId },
-			});
+			const stored = (await app.collections.assets.findOne({
+				where: { id: resourceId } as any,
+			})) as
+				| { scopeType?: string; project?: unknown; sourceRef?: string }
+				| null;
 			expect(stored?.scopeType).toBe("project");
 			expect(relationId(stored?.project)).toBe(project.id);
+			expect(stored?.sourceRef).toBe("system");
 
 			const read = await client.callTool({
 				name: "knowledge_read",
@@ -617,8 +635,102 @@ describe("Autopilot MCP smoke", () => {
 			});
 			expect((deleted.structuredContent as any).deleted).toBe(true);
 			expect(
-				await app.collections.knowledge.findOne({ where: { id: resourceId } }),
+				await app.collections.assets.findOne({
+					where: { id: resourceId } as any,
+				}),
 			).toBeFalsy();
+		} finally {
+			await close();
+		}
+	});
+
+	it("attributes authenticated MCP session mutations to the session user id", async () => {
+		const app = setup!.app;
+		const triggeredWorkflows: Array<{
+			name: string;
+			input: Record<string, unknown>;
+			options?: Record<string, unknown>;
+		}> = [];
+		const createContext = createContextFactory(app);
+		const ctx = await createContext({ accessMode: "user" });
+		(ctx as any).session = {
+			user: { id: "agent-user-1" },
+			session: { id: "agent-session-1" },
+		};
+		(ctx as any).workflows = {
+			async trigger(
+				name: string,
+				input: Record<string, unknown>,
+				options?: Record<string, unknown>,
+			) {
+				triggeredWorkflows.push({ name, input, options });
+				return {
+					instanceId: `wf-${triggeredWorkflows.length}`,
+					existing: false,
+				};
+			},
+			async sendEvent() {},
+		};
+		const server = await createMcpServer(app, {
+			transport: "http",
+			ctx: ctx as any,
+		});
+		const { client, close } = await connect(server);
+
+		try {
+			const created = await client.callTool({
+				name: "task_create",
+				arguments: { title: "Agent-authored task", start: true },
+			});
+			expect(created.isError).toBeUndefined();
+			const taskId = (created.structuredContent as any).task_id as string;
+			const task = await app.collections.tasks.findOne({
+				where: { id: taskId },
+			});
+			expect(task?.createdBy).toBe("agent-user-1");
+			expect(triggeredWorkflows[0]?.input).toMatchObject({
+				taskId,
+				requestedBy: "agent-user-1",
+			});
+			const activity = await app.collections.activity.findOne({
+				where: { task: taskId, type: "task.intake" },
+			});
+			expect(activity?.actor).toBe("agent-user-1");
+
+			const written = await client.callTool({
+				name: "knowledge_write",
+				arguments: {
+					path: "company/agent-authored-note.md",
+					content: "agent body",
+					scope_type: "company",
+				},
+			});
+			expect(written.isError).toBeUndefined();
+			expect((written.structuredContent as any).sourceRef).toBe("agent-user-1");
+		} finally {
+			await close();
+		}
+	});
+
+	it("rejects HTTP MCP mutations when no authenticated principal is present", async () => {
+		const app = setup!.app;
+		const createContext = createContextFactory(app);
+		const ctx = await createContext({ accessMode: "user" });
+		const server = await createMcpServer(app, {
+			transport: "http",
+			ctx: ctx as any,
+		});
+		const { client, close } = await connect(server);
+
+		try {
+			const result = await client.callTool({
+				name: "task_create",
+				arguments: { title: "Unauthenticated task" },
+			});
+			expect(result.isError).toBe(true);
+			expect(result.content?.[0]?.text).toContain(
+				"MCP authentication required",
+			);
 		} finally {
 			await close();
 		}

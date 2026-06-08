@@ -248,19 +248,60 @@ export interface AdminConfigDTO {
 	sidebar?: SidebarConfigDTO;
 	shell?: AdminShellConfigDTO;
 	branding?: BrandingConfigDTO;
-	blocks?: Record<string, Record<string, unknown>>;
+	blocks?: Record<string, BlockSchemaDTO>;
 	collections?: Record<string, CollectionMetaDTO>;
 	globals?: Record<string, GlobalMetaDTO>;
 	uploads?: UploadsConfigDTO;
+}
+
+export interface BlockSchemaDTO {
+	name: string;
+	admin?: {
+		label?: unknown;
+		description?: unknown;
+		icon?: ComponentReferenceDTO;
+		category?: {
+			label: unknown;
+			icon?: ComponentReferenceDTO;
+			order?: number;
+		};
+		order?: number;
+		hidden?: boolean;
+	};
+	allowChildren?: boolean;
+	maxChildren?: number;
+	hasPrefetch: boolean;
+	fields: Record<string, unknown>;
+	form?: { fields: unknown[] };
 }
 
 // ============================================================================
 // Zod Schemas for DTO validation
 // ============================================================================
 
+function containsFunction(
+	value: unknown,
+	seen = new WeakSet<object>(),
+): boolean {
+	if (typeof value === "function") return true;
+	if (!value || typeof value !== "object") return false;
+	if (seen.has(value)) return false;
+	seen.add(value);
+	if (Array.isArray(value)) {
+		return value.some((item) => containsFunction(item, seen));
+	}
+	return Object.values(value).some((item) => containsFunction(item, seen));
+}
+
+const serializableUnknownSchema = z
+	.unknown()
+	.refine((value) => !containsFunction(value), {
+		message: "Functions cannot be serialized in admin config DTOs",
+	});
+
 const componentReferenceSchema = z.object({
 	type: z.string(),
-	props: z.record(z.string(), z.any()).optional(),
+	props: z.record(z.string(), serializableUnknownSchema).optional(),
 });
 
 const sidebarItemSchema = z.discriminatedUnion("type", [
@@ -365,8 +406,8 @@ const dashboardConfigSchema = z.object({
 	rowHeight: z.union([z.number(), z.string()]).optional(),
 	gap: z.number().optional(),
 	realtime: z.boolean().optional(),
-	actions: z.array(z.any()).optional(),
-	items: z.array(z.record(z.string(), z.any())).optional(),
+	actions: z.array(serializableUnknownSchema).optional(),
+	items: z.array(z.record(z.string(), serializableUnknownSchema)).optional(),
 });
 
 const brandLogoSchema = z.union([
@@ -390,6 +431,35 @@ const brandingConfigSchema = z.object({
 	favicon: z.string().optional(),
 });
 
+const blockAdminSchema = z.object({
+	label: serializableUnknownSchema.optional(),
+	description: serializableUnknownSchema.optional(),
+	icon: componentReferenceSchema.optional(),
+	category: z
+		.object({
+			label: serializableUnknownSchema,
+			icon: componentReferenceSchema.optional(),
+			order: z.number().optional(),
+		})
+		.optional(),
+	order: z.number().optional(),
+	hidden: z.boolean().optional(),
+});
+
+const blockSchema = z.object({
+	name: z.string(),
+	admin: blockAdminSchema.optional(),
+	allowChildren: z.boolean().optional(),
+	maxChildren: z.number().optional(),
+	hasPrefetch: z.boolean(),
+	fields: z.record(z.string(), serializableUnknownSchema),
+	form: z
+		.object({
+			fields: z.array(serializableUnknownSchema),
+		})
+		.optional(),
+});
+
 /**
  * Zod schema for the complete AdminConfigDTO.
  * Can be used as the outputSchema for the getAdminConfig route.
@@ -399,7 +469,7 @@ export const adminConfigDTOSchema = z.object({
 	sidebar: sidebarConfigSchema.optional(),
 	shell: adminShellConfigSchema.optional(),
 	branding: brandingConfigSchema.optional(),
-	blocks: z.record(z.string(), z.record(z.string(), z.any())).optional(),
+	blocks: z.record(z.string(), blockSchema).optional(),
 	collections: z.record(z.string(), collectionMetaSchema).optional(),
 	globals: z.record(z.string(), collectionMetaSchema).optional(),
 	uploads: uploadsConfigSchema.optional(),

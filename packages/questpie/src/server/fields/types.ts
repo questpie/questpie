@@ -47,8 +47,8 @@ export type FieldType = [keyof FieldTypeRegistry] extends [never]
  * Context provided to field-level access control functions.
  */
 export interface FieldAccessContext {
-	/** Current request */
-	req: Request;
+	/** Current request, when field access runs from an HTTP request */
+	req?: Request;
 
 	/** Authenticated user (if any) */
 	user?: unknown;
@@ -111,8 +111,8 @@ export interface FieldHookContext<TConfig = Record<string, unknown>> {
 	/** Operation type */
 	operation: "create" | "read" | "update";
 
-	/** Current request */
-	req: Request;
+	/** Current request, when the hook runs from an HTTP request */
+	req?: Request;
 
 	/** Authenticated user */
 	user?: unknown;

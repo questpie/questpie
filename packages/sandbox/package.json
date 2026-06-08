@@ -1,0 +1,67 @@
+{
+	"name": "@questpie/sandbox",
+	"version": "3.0.0",
+	"private": true,
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/questpie/questpie.git",
+		"directory": "packages/sandbox"
+	},
+	"files": [
+		"dist",
+		"src/sandbox-server.ts",
+		"src/guest-entry.ts",
+		"src/net-validation.ts"
+	],
+	"type": "module",
+	"sideEffects": false,
+	"main": "./dist/index.mjs",
+	"module": "./dist/index.mjs",
+	"types": "./dist/index.d.mts",
+	"exports": {
+		".": {
+			"types": "./src/exports/index.ts",
+			"default": "./src/exports/index.ts"
+		},
+		"./adapter": {
+			"types": "./src/exports/adapter.ts",
+			"default": "./src/exports/adapter.ts"
+		},
+		"./package.json": {
+			"types": "./package.json",
+			"default": "./package.json"
+		}
+	},
+	"publishConfig": {
+		"access": "public",
+		"exports": {
+			".": {
+				"types": "./dist/index.d.mts",
+				"default": "./dist/index.mjs"
+			},
+			"./adapter": {
+				"types": "./dist/adapter.d.mts",
+				"default": "./dist/adapter.mjs"
+			},
+			"./package.json": {
+				"types": "./package.json",
+				"default": "./package.json"
+			}
+		}
+	},
+	"scripts": {
+		"build": "tsdown",
+		"check-types": "tsc --noEmit",
+		"test": "bun test"
+	},
+	"dependencies": {
+		"questpie": "workspace:*"
+	},
+	"devDependencies": {
+		"bun-types": "latest",
+		"tsdown": "^0.18.3"
+	},
+	"peerDependencies": {
+		"questpie": "^3.0.0"
+	}
+}

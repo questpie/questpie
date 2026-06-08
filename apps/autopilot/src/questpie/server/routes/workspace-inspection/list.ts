@@ -1,6 +1,7 @@
 import { route } from "questpie/services";
 import { z } from "zod";
 
+import { sessionOnly } from "../../lib/route-access";
 import { resolveRunProject } from "../../lib/run-project";
 import {
 	listWorkspace,
@@ -14,6 +15,7 @@ const schema = z.object({
 
 export default route()
 	.post()
+	.access(sessionOnly)
 	.schema(schema)
 	.handler(async ({ input, collections }) => {
 		const { project } = await resolveRunProject(collections, input.runId);

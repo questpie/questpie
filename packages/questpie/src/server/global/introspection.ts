@@ -8,18 +8,22 @@
 import { z } from "zod";
 
 import { buildFieldBasedSchema } from "#questpie/server/collection/builder/field-schema-builder.js";
+import {
+	createFieldAccessContext,
+	mergeFieldAccessRules,
+} from "#questpie/server/collection/crud/shared/access-control.js";
 import type { CRUDContext } from "#questpie/server/collection/crud/types.js";
 import {
 	extractFieldReactiveConfig,
 	extractFormReactiveConfigs,
 	type FieldReactiveSchema,
 } from "#questpie/server/collection/introspection.js";
+import type { FieldState } from "#questpie/server/fields/field-class-types.js";
+import type { Field } from "#questpie/server/fields/field-class.js";
 import {
 	serializeFormLayoutProps,
 	serializeReactivePropsRecord,
 } from "#questpie/server/fields/reactive.js";
-import type { FieldState } from "#questpie/server/fields/field-class-types.js";
-import type { Field } from "#questpie/server/fields/field-class.js";
 import type {
 	FieldAccess,
 	FieldLocation,
@@ -309,6 +313,11 @@ export async function introspectGlobal(
 	const formReactiveByField = extractFormReactiveConfigs(
 		(state as any).adminForm,
 	);
+	const resolvedFieldAccess = mergeFieldAccessRules(
+		(state.access as { fields?: Record<string, FieldAccess> } | undefined)
+			?.fields,
+		fieldDefinitions,
+	);
 
 	// Evaluate global-level access
 	const access = await evaluateGlobalAccess(state, context, app);
@@ -323,7 +332,10 @@ export async function introspectGlobal(
 				metadata.meta as Record<string, unknown>,
 			) as typeof metadata.meta;
 		}
-		const fieldAccess = await evaluateGlobalFieldAccess(fieldDef, context, app);
+		const fieldAccess = await evaluateGlobalFieldAccess(
+			resolvedFieldAccess?.[name],
+			context,
+		);
 
 		// Generate field-level JSON Schema if possible
 		let validation: unknown;
@@ -534,23 +546,13 @@ async function evaluateAccessRule(
  * Evaluate field-level access for current user.
  */
 async function evaluateGlobalFieldAccess(
-	fieldDef: Field<FieldState>,
+	fieldAccess: FieldAccess | undefined,
 	context: CRUDContext,
-	app?: unknown,
 ): Promise<GlobalFieldAccessInfo | undefined> {
-	const fieldAccess = fieldDef._state.access as FieldAccess | undefined;
-
 	// No field-level access config
 	if (!fieldAccess) {
 		return undefined;
 	}
-
-	const req =
-		(context as any).req ??
-		(context as any).request ??
-		(typeof Request !== "undefined"
-			? new Request("http://questpie.local")
-			: ({} as Request));
 
 	const read = fieldAccess.read;
 	const update = fieldAccess.update;
@@ -568,12 +570,9 @@ async function evaluateGlobalFieldAccess(
 		}
 
 		try {
-			const allowed = await rule({
-				req,
-				user: (context.session as any)?.user,
-				doc: undefined,
-				operation,
-			});
+			const allowed = await rule(
+				createFieldAccessContext({ context, operation }),
+			);
 			return allowed ? { allowed: true } : { allowed: false };
 		} catch (error) {
 			return {

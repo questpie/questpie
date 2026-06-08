@@ -20,8 +20,8 @@ export const activity = collection("activity")
 	}))
 	.list(({ v }) => v.collectionTable({}))
 	.indexes(({ table }) => [
-		index("activity_task_idx").on(table.task as any),
-		index("activity_run_idx").on(table.run as any),
-		index("activity_type_idx").on(table.type as any),
-		index("activity_project_idx").on(table.project as any),
+		index("activity_task_idx").on(table.task),
+		index("activity_run_idx").on(table.run),
+		index("activity_type_idx").on(table.type),
+		index("activity_project_idx").on(table.project),
 	]);

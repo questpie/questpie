@@ -11,7 +11,7 @@ export const authClient = createAdminAuthClient<AppConfig>({
 	baseURL:
 		typeof window !== "undefined"
 			? window.location.origin
-			: process.env.APP_URL || "http://localhost:3000",
+			: process.env.APP_URL || "http://localhost:3001",
 	basePath: "/api/auth",
 });
 

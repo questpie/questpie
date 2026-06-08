@@ -7,6 +7,10 @@ import { z } from "zod";
 
 import type { OpenApiConfig, PathOperation } from "../types.js";
 import {
+	applyRequestFieldFlags,
+	buildFieldDefinitionSchemas,
+} from "./field-schema-flags.js";
+import {
 	jsonRequestBody,
 	jsonResponse,
 	listQueryParameters,
@@ -48,17 +52,19 @@ export function generateCollectionPaths(
 		const documentSchemaName = `${pascalName}Document`;
 		const insertSchemaName = `${pascalName}Insert`;
 		const updateSchemaName = `${pascalName}Update`;
-		const fieldDefinitionSchema = buildSchemaFromFieldDefinitions(
+		const fieldDefinitionSchema = buildFieldDefinitionSchemas(
 			state.fieldDefinitions,
 		);
 
-		// Document schema (response shape) — from validation.insertSchema or field definitions
+		// Request schemas preserve custom validation when present, then apply
+		// field input/output flags from field definitions.
 		if (state.validation?.insertSchema) {
 			try {
-				schemas[insertSchemaName] = z.toJSONSchema(
-					state.validation.insertSchema,
-					{ unrepresentable: "any" },
-				);
+				const insertSchema = z.toJSONSchema(state.validation.insertSchema, {
+					unrepresentable: "any",
+				});
+				applyRequestFieldFlags(insertSchema, state.fieldDefinitions);
+				schemas[insertSchemaName] = insertSchema;
 			} catch {
 				schemas[insertSchemaName] = {
 					type: "object",
@@ -76,10 +82,11 @@ export function generateCollectionPaths(
 
 		if (state.validation?.updateSchema) {
 			try {
-				schemas[updateSchemaName] = z.toJSONSchema(
-					state.validation.updateSchema,
-					{ unrepresentable: "any" },
-				);
+				const updateSchema = z.toJSONSchema(state.validation.updateSchema, {
+					unrepresentable: "any",
+				});
+				applyRequestFieldFlags(updateSchema, state.fieldDefinitions);
+				schemas[updateSchemaName] = updateSchema;
 			} catch {
 				schemas[updateSchemaName] = {
 					type: "object",
@@ -100,6 +107,7 @@ export function generateCollectionPaths(
 			name,
 			state,
 			insertSchemaName,
+			fieldDefinitionSchema?.response,
 		);
 
 		const prefix = `${basePath}/${name}`;
@@ -391,6 +399,7 @@ function buildDocumentSchema(
 	name: string,
 	state: any,
 	insertSchemaName: string,
+	documentFieldsSchema?: unknown,
 ) {
 	const properties: Record<string, unknown> = {
 		id: { type: "string" },
@@ -411,7 +420,7 @@ function buildDocumentSchema(
 	return {
 		allOf: [
 			{ type: "object", properties, required: ["id"] },
-			ref(insertSchemaName),
+			documentFieldsSchema ?? ref(insertSchemaName),
 		],
 		description: `${name} document`,
 	};
@@ -421,45 +430,4 @@ function toPascalCase(str: string): string {
 	return str
 		.replace(/[-_](.)/g, (_, c) => c.toUpperCase())
 		.replace(/^(.)/, (_, c) => c.toUpperCase());
-}
-
-function buildSchemaFromFieldDefinitions(fieldDefinitions: unknown): {
-	insert: unknown;
-	update: unknown;
-} | null {
-	if (!fieldDefinitions || typeof fieldDefinitions !== "object") {
-		return null;
-	}
-
-	const shape: Record<string, z.ZodTypeAny> = {};
-
-	for (const [fieldName, fieldDefinition] of Object.entries(
-		fieldDefinitions as Record<string, unknown>,
-	)) {
-		const fd = fieldDefinition as { toZodSchema?: () => unknown };
-		if (typeof fd.toZodSchema !== "function") {
-			continue;
-		}
-
-		try {
-			const schema = fd.toZodSchema();
-			if (schema && typeof schema === "object" && "_def" in schema) {
-				shape[fieldName] = schema as z.ZodTypeAny;
-			}
-		} catch {
-			// Ignore fields that cannot be converted; keep generating the rest.
-		}
-	}
-
-	if (Object.keys(shape).length === 0) {
-		return null;
-	}
-
-	const insertSchema = z.object(shape);
-	const updateSchema = insertSchema.partial();
-
-	return {
-		insert: z.toJSONSchema(insertSchema, { unrepresentable: "any" }),
-		update: z.toJSONSchema(updateSchema, { unrepresentable: "any" }),
-	};
 }

@@ -157,6 +157,52 @@ export function createComponentCallbackProxy(): Record<
 	) as Record<string, (...args: unknown[]) => Record<string, unknown>>;
 }
 
+/**
+ * Create a field builder proxy for action form contexts.
+ *
+ * Returns a chainable builder: `f.text().required().label({en: "Title"})` → `{ type: "text", required: true, label: {en: "Title"} }`.
+ * Used as the `f` callback param in `.actions()` for defining form fields.
+ */
+export function createActionFieldBuilderProxy(): Record<
+	string,
+	(...args: unknown[]) => Record<string, unknown>
+> {
+	function chainable(def: Record<string, unknown>): Record<string, unknown> {
+		return new Proxy(def, {
+			get: (target, prop) => {
+				if (typeof prop !== "string") return Reflect.get(target, prop);
+				if (prop in target) return target[prop];
+				if (prop === "set") {
+					return (key: string, value: unknown) =>
+						chainable({ ...target, [key]: value });
+				}
+				return (...args: unknown[]) =>
+					chainable({
+						...target,
+						[prop]: args.length === 0 ? true : args[0],
+					});
+			},
+		});
+	}
+
+	return new Proxy(
+		{},
+		{
+			get: (_, prop) => {
+				if (typeof prop !== "string") return undefined;
+				return (...args: unknown[]) => {
+					const def: Record<string, unknown> = { type: prop };
+					if (Array.isArray(args[0])) def.options = args[0];
+					else if (args[0] && typeof args[0] === "object")
+						Object.assign(def, args[0]);
+					else if (args[0] !== undefined) def.value = args[0];
+					return chainable(def);
+				};
+			},
+		},
+	) as Record<string, (...args: unknown[]) => Record<string, unknown>>;
+}
+
 function createBuiltinActionReference(name: string): unknown {
 	const ref = (() => name) as (() => string) & {
 		type: string;

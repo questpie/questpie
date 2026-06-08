@@ -18,6 +18,7 @@ export const schedules = collection("schedules")
 			.select([
 				{ value: "task", label: { en: "Create issue" } },
 				{ value: "chat", label: { en: "Run chat prompt" } },
+				{ value: "app", label: { en: "Run mini-app" } },
 			])
 			.label({ en: "Action" }),
 		taskTemplate: f
@@ -32,6 +33,18 @@ export const schedules = collection("schedules")
 			})
 			.label({ en: "Issue Template" }),
 		chatPrompt: f.textarea().label({ en: "Chat Prompt" }),
+		appId: f
+			.text()
+			.label({ en: "Mini-app ID" })
+			.description({
+				en: "Knowledge mini-app to run (the {appId} under company/apps/).",
+			}),
+		appFn: f
+			.text()
+			.label({ en: "Cron Export" })
+			.description({
+				en: "Name of the cron export to invoke. Optional when the app declares exactly one.",
+			}),
 		concurrencyPolicy: f
 			.select([
 				{ value: "allow", label: { en: "Allow Overlap" } },
@@ -109,6 +122,19 @@ export const schedules = collection("schedules")
 						},
 					],
 				},
+				{
+					id: "run-app",
+					label: { en: "Run Mini-app" },
+					icon: { type: "icon", props: { name: "ph:cube" } },
+					filters: [
+						{
+							id: "schedules-app-mode",
+							field: f.mode,
+							operator: "equals",
+							value: "app",
+						},
+					],
+				},
 			],
 		}),
 	)
@@ -151,6 +177,11 @@ export const schedules = collection("schedules")
 									type: "section",
 									label: { en: "Chat Prompt" },
 									fields: [f.chatPrompt],
+								},
+								{
+									type: "section",
+									label: { en: "Mini-app" },
+									fields: [f.appId, f.appFn],
 								},
 							],
 						},

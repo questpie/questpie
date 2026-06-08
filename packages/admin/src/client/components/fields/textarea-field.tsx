@@ -15,6 +15,7 @@ export function TextareaField({
 	disabled,
 	localized,
 	locale,
+	hideLabel,
 	control,
 	className,
 	rows,
@@ -36,6 +37,7 @@ export function TextareaField({
 					disabled={disabled}
 					localized={localized}
 					locale={locale}
+					hideLabel={hideLabel}
 					error={fieldState.error?.message}
 				>
 					<TextareaInput

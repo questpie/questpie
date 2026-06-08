@@ -14,7 +14,7 @@ import { activity } from "../collections/activity";
 import { chatMessages } from "../collections/chat-messages";
 import { chatSessions } from "../collections/chat-sessions";
 import { environments } from "../collections/environments";
-import { knowledge } from "../collections/knowledge";
+import assets from "../collections/assets";
 import { models } from "../collections/models";
 import { projects } from "../collections/projects";
 import { providers } from "../collections/providers";
@@ -278,7 +278,7 @@ describe("chat realtime workflow contract", () => {
 					chat_messages: chatMessages,
 					chat_sessions: chatSessions,
 					environments,
-					knowledge,
+					assets,
 					models,
 					projects,
 					providers,
@@ -391,14 +391,14 @@ describe("chat realtime workflow contract", () => {
 				method: "GET",
 			}),
 		);
-		expect(runResponse?.status).toBe(401);
+		expect(runResponse?.status).toBe(403);
 
 		const eventsResponse = await unauthenticatedHandler(
 			new Request(`http://localhost/api/runs/${run.id}/events`, {
 				method: "GET",
 			}),
 		);
-		expect(eventsResponse?.status).toBe(401);
+		expect(eventsResponse?.status).toBe(403);
 	});
 
 	it("orders initial AI run events by sequence before falling back to creation order", async () => {
@@ -654,12 +654,23 @@ describe("chat realtime workflow contract", () => {
 				sequence: 2,
 				meta: { phase: "start" },
 			} as any);
+			const textDelta = await app.collections.ai_run_events.create({
+				run: aiRunId,
+				type: "text.delta",
+				level: "info",
+				summary: "**Realtime** markdown delta",
+				sequence: 3,
+				meta: {
+					type: "text.delta",
+					text: "**Realtime** workflow path\n\n- streamed as markdown",
+				},
+			} as any);
 			const progressB = await app.collections.ai_run_events.create({
 				run: aiRunId,
 				type: "progress",
 				level: "info",
 				summary: "Streaming progress",
-				sequence: 3,
+				sequence: 4,
 				meta: { phase: "progress" },
 			} as any);
 			await app.collections.ai_runs.updateById({
@@ -684,6 +695,7 @@ describe("chat realtime workflow contract", () => {
 				return (
 					completedRun &&
 					runEventTypes.has("started") &&
+					runEventTypes.has("text.delta") &&
 					runEventTypes.has("progress")
 				);
 			});
@@ -695,11 +707,20 @@ describe("chat realtime workflow contract", () => {
 				(event) => event.data.event.id as string,
 			);
 			expect(streamedIds).toContain(progressA.id);
+			expect(streamedIds).toContain(textDelta.id);
 			expect(streamedIds).toContain(progressB.id);
 			expect(new Set(streamedIds).size).toBe(streamedIds.length);
+			expect(
+				streamedRunEvents.find((event) => event.data.event.id === textDelta.id)
+					?.data.event.metadata,
+			).toMatchObject({
+				type: "text.delta",
+				text: "**Realtime** workflow path\n\n- streamed as markdown",
+			});
 			expect(workflowEvents.map((event) => event.event)).toEqual([
 				"trigger:chat-query",
 				"run.claimed",
+				"run.event",
 				"run.event",
 				"run.event",
 				"run.completed",
@@ -717,7 +738,7 @@ describe("chat realtime workflow contract", () => {
 				where: { id: chat.message.id },
 			});
 			expect(completedMessage?.runStatus).toBe("completed");
-			const resources = await app.collections.knowledge.find({
+			const resources = await app.collections.assets.find({
 				where: { run: chat.runId },
 				limit: 10,
 			});
@@ -777,7 +798,7 @@ describe("chat realtime workflow contract", () => {
 				"run.completed": {
 					runId: run.id,
 					status: "completed",
-					summary: "The worker finished cleanly.",
+					summary: "## Result\n\n- The worker finished **cleanly**.",
 					knowledgeResourceIds: ["knowledge-1"],
 				},
 			}) as any,
@@ -800,7 +821,7 @@ describe("chat realtime workflow contract", () => {
 			(message: { role?: string }) => message.role === "assistant",
 		);
 		expect(assistantMessage).toMatchObject({
-			content: "The worker finished cleanly.",
+			content: "## Result\n\n- The worker finished **cleanly**.",
 			run: run.id,
 			runStatus: "completed",
 			metadata: {

@@ -30,7 +30,8 @@ export type JsonValue =
 	| boolean
 	| null
 	| JsonValue[]
-	| { [key: string]: JsonValue };
+	| { [key: string]: JsonValue }
+	| Record<string, unknown>;
 
 /** Recursive Zod schema for schema-less JSON fields (replaces `z.any()`). */
 export const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>

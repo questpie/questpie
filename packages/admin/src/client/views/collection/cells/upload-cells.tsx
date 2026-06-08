@@ -14,6 +14,7 @@ import type { FieldInstance } from "../../../builder/field/field";
 import { Badge } from "../../../components/ui/badge";
 import { useCollectionItem } from "../../../hooks/use-collection";
 import { useTranslation } from "../../../i18n/hooks";
+import { resolveAssetUrl } from "../../../utils/asset-url";
 import { AssetThumbnail } from "./shared/asset-thumbnail";
 
 // ============================================================================
@@ -138,7 +139,7 @@ export function UploadManyCell({
 					{imageAssets.map((asset, index) => (
 						<img
 							key={(asset.id as string) || index}
-							src={asset.url as string}
+							src={resolveAssetUrl(asset.url as string) ?? ""}
 							alt={(asset.filename as string) || "Asset"}
 							className={`image-outline bg-background size-6 rounded object-cover${index > 0 ? " -ms-2" : ""}`}
 						/>

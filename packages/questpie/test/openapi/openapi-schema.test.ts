@@ -108,6 +108,38 @@ describe("OpenAPI schema generation", () => {
 			expect(insertSchema.properties.author).toBeDefined();
 		});
 
+		it("separates inputFalse and outputFalse fields in collection schemas", () => {
+			const credentials = collection("credentials").fields(({ f }) => ({
+				title: f.text(255).required(),
+				serverOnly: f.text(255).inputFalse(),
+				secret: f.text(255).outputFalse(),
+			}));
+
+			const mockCms = {
+				getCollections: () => ({ credentials }),
+				getGlobals: () => ({}),
+			};
+
+			const spec = generateOpenApiSpec(mockCms as any, undefined, {
+				info: { title: "Test API", version: "1.0.0" },
+				basePath: "/",
+			});
+
+			const insertSchema = spec.components?.schemas?.CredentialsInsert as any;
+			const updateSchema = spec.components?.schemas?.CredentialsUpdate as any;
+			const documentSchema = spec.components?.schemas
+				?.CredentialsDocument as any;
+			const documentFields = documentSchema.allOf[1];
+
+			expect(insertSchema.properties.title).toBeDefined();
+			expect(insertSchema.properties.serverOnly).toBeUndefined();
+			expect(insertSchema.properties.secret.writeOnly).toBe(true);
+			expect(updateSchema.properties.serverOnly).toBeUndefined();
+			expect(updateSchema.properties.secret.writeOnly).toBe(true);
+			expect(documentFields.properties.serverOnly.readOnly).toBe(true);
+			expect(documentFields.properties.secret).toBeUndefined();
+		});
+
 		it("does not generate empty schemas", () => {
 			const posts = collection("posts").fields(({ f }) => ({
 				title: f.text(100).required(),
@@ -221,6 +253,34 @@ describe("OpenAPI schema generation", () => {
 			expect(updateSchema.properties.siteName).toBeDefined();
 			expect(updateSchema.properties.siteDescription).toBeDefined();
 			expect(updateSchema.properties.maintenanceMode).toBeDefined();
+		});
+
+		it("separates inputFalse and outputFalse fields in global schemas", () => {
+			const settings = global("settings").fields(({ f }) => ({
+				siteName: f.text(100).required(),
+				serverOnly: f.text(100).inputFalse(),
+				secret: f.text(100).outputFalse(),
+			}));
+
+			const mockCms = {
+				getCollections: () => ({}),
+				getGlobals: () => ({ settings }),
+			};
+
+			const spec = generateOpenApiSpec(mockCms as any, undefined, {
+				info: { title: "Test API", version: "1.0.0" },
+			});
+
+			const updateSchema = spec.components?.schemas
+				?.SettingsGlobalUpdate as any;
+			const valueSchema = spec.components?.schemas?.SettingsGlobal as any;
+			const valueFields = valueSchema.allOf[1];
+
+			expect(updateSchema.properties.siteName).toBeDefined();
+			expect(updateSchema.properties.serverOnly).toBeUndefined();
+			expect(updateSchema.properties.secret.writeOnly).toBe(true);
+			expect(valueFields.properties.serverOnly.readOnly).toBe(true);
+			expect(valueFields.properties.secret).toBeUndefined();
 		});
 
 		it("generates global versioning paths", () => {

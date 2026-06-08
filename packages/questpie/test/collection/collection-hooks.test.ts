@@ -170,6 +170,24 @@ const createEnrichmentModule = (enrichmentData: Map<string, any>) => ({
 	},
 });
 
+const createFieldHookRequestModule = (
+	capturedRequests: Array<Request | undefined>,
+) => ({
+	collections: {
+		articles: collection("articles").fields(({ f }) => ({
+			title: f
+				.textarea()
+				.required()
+				.hooks({
+					beforeChange: (value, ctx) => {
+						capturedRequests.push(ctx.req);
+						return value;
+					},
+				}),
+		})),
+	},
+});
+
 describe("collection-hooks", () => {
 	describe("beforeChange/afterChange hooks", () => {
 		let setup: Awaited<ReturnType<typeof buildMockApp>>;
@@ -223,6 +241,31 @@ describe("collection-hooks", () => {
 			});
 
 			expect(hookCallOrder).toEqual(["before-update", "after-update"]);
+		});
+	});
+
+	describe("field hooks request context", () => {
+		let setup: Awaited<ReturnType<typeof buildMockApp>>;
+		let capturedRequests: Array<Request | undefined>;
+
+		beforeEach(async () => {
+			capturedRequests = [];
+			setup = await buildMockApp(
+				createFieldHookRequestModule(capturedRequests),
+			);
+			await runTestDbMigrations(setup.app);
+		});
+
+		afterEach(async () => {
+			await setup.cleanup();
+		});
+
+		it("does not synthesize a request for local CRUD execution", async () => {
+			await setup.app.collections.articles.create({
+				title: "Local API",
+			});
+
+			expect(capturedRequests).toEqual([undefined]);
 		});
 	});
 

@@ -1,7 +1,5 @@
 import { seed } from "questpie/services";
 
-import { asJsonValue } from "../lib/records";
-
 const DEMO_PROJECT_SLUG = "questpie-autopilot-demo";
 
 export default seed({
@@ -52,7 +50,7 @@ export default seed({
 			"",
 			"Creation should happen through product actions: prompt-driven AI issue creation and a manual Linear-like issue creator.",
 		].join("\n");
-		await collections.knowledge.create(
+		await collections.assets.create(
 			{
 				title: "Autopilot product model",
 				path: "company/autopilot/product-model",
@@ -69,9 +67,9 @@ export default seed({
 				mimeType: "text/markdown",
 				size: Buffer.byteLength(productModelBody, "utf8"),
 				contentHash: "seed-autopilot-product-model",
-				metadata: asJsonValue({
+				metadata: {
 					seed: "autopilotDemoProductData",
-				}),
+				},
 			},
 			ctx,
 		);
@@ -200,10 +198,10 @@ export default seed({
 					scopeType: "project",
 					queue: "default",
 					createdBy: "seed:autopilotDemoProductData",
-					context: asJsonValue(context),
-					metadata: asJsonValue({
+					context,
+					metadata: {
 						seed: "autopilotDemoProductData",
-					}),
+					},
 				},
 				ctx,
 			);

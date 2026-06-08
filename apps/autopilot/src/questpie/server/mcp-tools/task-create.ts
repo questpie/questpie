@@ -45,7 +45,7 @@ export default mcpTool("task_create", {
 	inputSchema,
 	annotations: { destructiveHint: false, idempotentHint: false },
 }).handler(async ({ input, ctx, request, accessMode }) => {
-	await requireMcpCaller({ ctx, request, accessMode });
+	const caller = await requireMcpCaller({ ctx, request, accessMode });
 
 	const project = input.project_id
 		? await ctx.collections.projects.findOne({
@@ -67,7 +67,7 @@ export default mcpTool("task_create", {
 		scopeType: input.project_id ? "project" : "company",
 		queue: input.queue,
 		startAfter: input.start_after ? new Date(input.start_after) : undefined,
-		createdBy: ctx.session?.user?.id ?? "mcp",
+		createdBy: caller.actorId,
 		context: parseJsonObject(input.context) as any,
 		metadata: parseJsonObject(input.metadata) as any,
 	});
@@ -78,12 +78,12 @@ export default mcpTool("task_create", {
 			targetTask: dependencyId,
 			relationType: "depends_on",
 			dedupeKey: `${task.id}:depends_on:${dependencyId}`,
-			createdBy: ctx.session?.user?.id ?? "mcp",
+			createdBy: caller.actorId,
 		});
 	}
 
 	await ctx.collections.activity.create({
-		actor: ctx.session?.user?.id ?? "mcp",
+		actor: caller.actorId,
 		type: "task.intake",
 		summary: `Created task: ${task.title}`,
 		task: task.id,
@@ -100,7 +100,7 @@ export default mcpTool("task_create", {
 				{
 					taskId: task.id,
 					runReason: "mcp",
-					requestedBy: ctx.session?.user?.id ?? "mcp",
+					requestedBy: caller.actorId,
 				},
 				{ idempotencyKey: `task-pipeline:${task.id}` },
 			)

@@ -43,6 +43,7 @@ import _svc_auth from "../services/auth";
 import _svc_collectionsApi from "../services/collections-api";
 import _svc_db from "../services/db";
 import _svc_email from "../services/email";
+import _svc_executor from "../services/executor";
 import _svc_globalsApi from "../services/globals-api";
 import _svc_i18n from "../services/i18n";
 import _svc_kv from "../services/kv";
@@ -122,6 +123,7 @@ export interface CoreServices {
 	collectionsApi: typeof _svc_collectionsApi;
 	db: typeof _svc_db;
 	email: typeof _svc_email;
+	executor: typeof _svc_executor;
 	globalsApi: typeof _svc_globalsApi;
 	i18n: typeof _svc_i18n;
 	kv: typeof _svc_kv;
@@ -198,6 +200,7 @@ const _module = {
 		collectionsApi: _svc_collectionsApi,
 		db: _svc_db,
 		email: _svc_email,
+		executor: _svc_executor,
 		globalsApi: _svc_globalsApi,
 		i18n: _svc_i18n,
 		kv: _svc_kv,

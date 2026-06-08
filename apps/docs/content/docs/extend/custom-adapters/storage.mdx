@@ -9,6 +9,7 @@ For most providers, use one of the Files SDK adapters and pass it to `runtimeCon
 
 ```ts title="questpie.config.ts"
 import { runtimeConfig } from "questpie/app";
+import { r2 } from "files-sdk/r2";
 import { s3 } from "files-sdk/s3";
 
 export default runtimeConfig({
@@ -28,7 +29,20 @@ export default runtimeConfig({
 });
 ```
 
-Use the same `s3()` adapter for S3-compatible providers such as Cloudflare R2, MinIO, DigitalOcean Spaces, and Wasabi by setting `endpoint` and `forcePathStyle` when required.
+Use `s3()` for AWS S3 and S3-compatible providers that do not have a dedicated
+Files SDK adapter. For Cloudflare R2, prefer the dedicated `r2()` adapter:
+
+```ts title="questpie.config.ts"
+storage: {
+	adapter: r2({
+		bucket: process.env.R2_BUCKET!,
+		accountId: process.env.R2_ACCOUNT_ID!,
+		accessKeyId: process.env.R2_ACCESS_KEY_ID!,
+		secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
+	}),
+	basePath: "/api",
+}
+```
 
 ## Local Development
 

@@ -40,6 +40,7 @@ export function SelectField<TValue extends string = string>({
 	disabled,
 	localized,
 	locale,
+	hideLabel,
 	control,
 	className,
 	options,
@@ -74,6 +75,7 @@ export function SelectField<TValue extends string = string>({
 					disabled={disabled}
 					localized={localized}
 					locale={locale}
+					hideLabel={hideLabel}
 					error={fieldState.error?.message}
 				>
 					{multiple ? (

@@ -54,6 +54,13 @@ export interface UploadOptions {
 	 * Abort signal for cancellation
 	 */
 	signal?: AbortSignal;
+
+	/**
+	 * Optional destination path/folder for the uploaded file. Sent alongside the
+	 * binary in form-data; the server spreads it onto the created record (e.g. an
+	 * `assets` row's required `path`) so a blob upload can land inside a folder.
+	 */
+	path?: string;
 }
 
 /**
@@ -1197,6 +1204,9 @@ export function createClient<TApp extends QuestpieApp>(
 						// Prepare form data
 						const formData = new FormData();
 						formData.append("file", file);
+						if (options?.path) {
+							formData.append("path", options.path);
+						}
 
 						// Send request with credentials (cookies)
 						xhr.open("POST", url);
@@ -1226,6 +1236,7 @@ export function createClient<TApp extends QuestpieApp>(
 
 						const result = await base.upload(file, {
 							signal: options?.signal,
+							path: options?.path,
 							onProgress: (fileProgress: number) => {
 								// Calculate overall progress
 								const baseProgress = (i / totalFiles) * 100;

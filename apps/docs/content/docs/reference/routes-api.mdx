@@ -49,19 +49,22 @@ Routes are discovered by file convention. The file path determines the URL:
 
 The handler function receives a typed context object:
 
-| Property        | Type                    | Description               |
-| --------------- | ----------------------- | ------------------------- |
-| `input`         | `z.infer<schema>`       | Validated input           |
-| `collections`   | `AppCollections`        | Typed collection API      |
-| `globals`       | `AppGlobals`            | Typed globals API         |
-| `db`            | `Database`              | Drizzle database instance |
-| `session`       | `Session \| null`       | Auth session              |
-| `queue`         | `QueueClient`           | Job queue client          |
-| `email`         | `MailerService`         | Email service             |
-| `logger`        | `Logger`                | Pino logger               |
-| `kv`            | `KVStore`               | Key-value store           |
-| `app`           | `QuestpieApp`           | App instance              |
-| Custom services | `AppContext` extensions | Services from `services/` |
+| Property        | Type                    | Description                                                       |
+| --------------- | ----------------------- | ----------------------------------------------------------------- |
+| `input`         | `z.infer<schema>`       | Validated input                                                   |
+| `collections`   | `AppCollections`        | Typed collection API                                              |
+| `globals`       | `AppGlobals`            | Typed globals API                                                 |
+| `db`            | `Database`              | Drizzle database instance                                         |
+| `session`       | `Session \| null`       | Auth session                                                      |
+| `queue`         | `QueueClient`           | Job queue client                                                  |
+| `email`         | `MailerService`         | Email service                                                     |
+| `logger`        | `Logger`                | Pino logger                                                       |
+| `kv`            | `KVStore`               | Key-value store                                                   |
+| `app`           | `QuestpieApp`           | App instance                                                      |
+| `request`       | `Request \| undefined`  | Present for HTTP execution, absent for local API/worker execution |
+| Custom services | `AppContext` extensions | Services from `services/`                                         |
+
+Typed JSON routes can run through HTTP or directly from server-side code. Use `request` only when present. Raw routes always receive a `Request` because they are direct HTTP handlers.
 
 ### Example: GET with Query Params
 

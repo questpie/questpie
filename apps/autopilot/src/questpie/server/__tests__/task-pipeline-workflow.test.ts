@@ -12,7 +12,7 @@ import { activity } from "../collections/activity";
 import { chatMessages } from "../collections/chat-messages";
 import { chatSessions } from "../collections/chat-sessions";
 import { environments } from "../collections/environments";
-import { knowledge } from "../collections/knowledge";
+import assets from "../collections/assets";
 import { models } from "../collections/models";
 import { projects } from "../collections/projects";
 import { providers } from "../collections/providers";
@@ -109,7 +109,7 @@ describe("task-pipeline workflow", () => {
 				chat_messages: chatMessages,
 				chat_sessions: chatSessions,
 				environments,
-				knowledge,
+				assets,
 				models,
 				projects,
 				providers,

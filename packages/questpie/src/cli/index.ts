@@ -13,6 +13,7 @@ import {
 	getCloudErrorExitCode,
 	cloudInitCommand,
 	cloudLoginCommand,
+	cloudRollbackCommand,
 	isSilentCloudError,
 } from "./commands/cloud.js";
 import { devCommand, generateCommand } from "./commands/codegen.js";
@@ -455,6 +456,7 @@ cloud
 	)
 	.option("--cloud-url <url>", "Questpie Cloud base URL")
 	.option("--token <token>", "Questpie Cloud API token")
+	.option("--account <slug>", "Questpie Cloud account/workspace slug")
 	.option("--project <slug>", "Project slug")
 	.option("--name <name>", "Project display name")
 	.option("--environment <slug>", "Environment slug", "production")
@@ -476,6 +478,7 @@ cloud
 				config: options.config,
 				cloudUrl: options.cloudUrl,
 				token: options.token,
+				account: options.account,
 				project: options.project,
 				name: options.name,
 				environment: options.environment,
@@ -511,6 +514,7 @@ cloudEnv
 	)
 	.option("--cloud-url <url>", "Questpie Cloud base URL")
 	.option("--token <token>", "Questpie Cloud API token")
+	.option("--account <slug>", "Questpie Cloud account/workspace slug")
 	.option("--service <name>", "Import vars for one service")
 	.option("--dry-run", "Validate without changing Cloud state")
 	.option("--json", "Print machine-readable output")
@@ -520,6 +524,7 @@ cloudEnv
 				config: options.config,
 				cloudUrl: options.cloudUrl,
 				token: options.token,
+				account: options.account,
 				service: options.service,
 				dryRun: options.dryRun,
 				json: options.json,
@@ -543,6 +548,7 @@ cloud
 	.option("--cloud-url <url>", "Questpie Cloud base URL")
 	.option("--dry-run", "Validate the deployment request without applying it")
 	.option("--token <token>", "Questpie Cloud API token")
+	.option("--account <slug>", "Questpie Cloud account/workspace slug")
 	.option("--follow", "Follow deployment progress")
 	.option("--json", "Print machine-readable output")
 	.option("--yes", "Confirm non-interactive deploy")
@@ -559,6 +565,7 @@ cloud
 				cloudUrl: options.cloudUrl,
 				dryRun: options.dryRun,
 				token: options.token,
+				account: options.account,
 				follow: options.follow,
 				json: options.json,
 				yes: options.yes,
@@ -577,6 +584,36 @@ cloud
 			});
 		} catch (error) {
 			handleCloudCommandError("Failed to deploy through Questpie Cloud", error);
+		}
+	});
+
+cloud
+	.command("rollback <deployment-id>")
+	.description("Roll back an environment to a previous successful deployment")
+	.option("--cloud-url <url>", "Questpie Cloud base URL")
+	.option("--token <token>", "Questpie Cloud API token")
+	.option("--follow", "Follow rollback deployment progress")
+	.option("--json", "Print machine-readable output")
+	.option("--timeout <seconds>", "Follow timeout in seconds", "900")
+	.option("--poll-interval <seconds>", "Follow poll interval in seconds", "5")
+	.action(async (deploymentId, options) => {
+		try {
+			await cloudRollbackCommand(deploymentId, {
+				cloudUrl: options.cloudUrl,
+				token: options.token,
+				follow: options.follow,
+				json: options.json,
+				timeoutSeconds: parsePositiveIntegerOption(
+					options.timeout,
+					"--timeout",
+				),
+				pollIntervalSeconds: parsePositiveIntegerOption(
+					options.pollInterval,
+					"--poll-interval",
+				),
+			});
+		} catch (error) {
+			handleCloudCommandError("Failed to roll back through Questpie Cloud", error);
 		}
 	});
 

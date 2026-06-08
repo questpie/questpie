@@ -15,6 +15,7 @@ export function EmailField({
 	disabled,
 	localized,
 	locale,
+	hideLabel,
 	control,
 	className,
 }: BaseFieldProps) {
@@ -33,6 +34,7 @@ export function EmailField({
 					disabled={disabled}
 					localized={localized}
 					locale={locale}
+					hideLabel={hideLabel}
 					error={fieldState.error?.message}
 				>
 					<TextInput

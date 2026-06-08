@@ -596,7 +596,11 @@ const optionsOutputSchema = z.object({
  */
 export const batchReactive = route()
 	.post()
-	.access((ctx) => !!(ctx as { session?: unknown }).session)
+	.access(
+		(ctx): boolean =>
+			(ctx as { session?: { user?: { role?: unknown } } }).session?.user
+				?.role === "admin",
+	)
 	.schema(batchReactiveInputSchema)
 	.outputSchema(batchReactiveOutputSchema)
 	.handler(async (ctx) => {
@@ -717,7 +721,11 @@ export const batchReactive = route()
  */
 export const fieldOptions = route()
 	.post()
-	.access((ctx) => !!(ctx as { session?: unknown }).session)
+	.access(
+		(ctx): boolean =>
+			(ctx as { session?: { user?: { role?: unknown } } }).session?.user
+				?.role === "admin",
+	)
 	.schema(optionsInputSchema)
 	.outputSchema(optionsOutputSchema)
 	.handler(async (ctx) => {

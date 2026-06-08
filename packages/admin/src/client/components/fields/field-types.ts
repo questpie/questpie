@@ -41,6 +41,12 @@ export type BaseFieldProps = {
 	localized?: boolean;
 	/** Current locale code for localized fields */
 	locale?: string;
+	/**
+	 * Render the control WITHOUT its own label (and description) — for compact
+	 * contexts (e.g. Notion-style property rows) where the label is supplied by
+	 * the surrounding layout.
+	 */
+	hideLabel?: boolean;
 	/** Form control from react-hook-form (optional if using FormProvider) */
 	control?: Control<any>;
 	/** Additional className for the field wrapper */

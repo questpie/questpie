@@ -23,6 +23,7 @@ export const aiRunsCollection = collection("ai_runs")
 			.label({ en: "Runtime" }),
 		worker: f.relation("ai_workers").label({ en: "Worker" }),
 		prompt: f.textarea().label({ en: "Prompt" }),
+		systemPrompt: f.textarea().label({ en: "System Prompt" }),
 		summary: f.textarea().label({ en: "Summary" }),
 		error: f.textarea().label({ en: "Error" }),
 		runtimeSessionRef: f.text().label({ en: "Runtime Session Ref" }),

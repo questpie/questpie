@@ -1,7 +1,7 @@
 import * as os from "node:os";
 
-import { executeRun } from "../server/worker/execute-run.js";
 import { generateSecret } from "../server/modules/ai/services/worker-manager.js";
+import { executeRun } from "../server/worker/execute-run.js";
 import {
 	createSpawnAgentRunner,
 	prepareWorkerVolume,
@@ -36,6 +36,12 @@ export async function startAIWorker(
 	const workerManager = ctx.services?.workerManager;
 
 	let workerId = "embedded";
+	const maxConcurrentRuns =
+		typeof config.maxConcurrentRuns === "number" &&
+		Number.isFinite(config.maxConcurrentRuns) &&
+		config.maxConcurrentRuns > 0
+			? Math.floor(config.maxConcurrentRuns)
+			: 1;
 	if (workerManager) {
 		const result = await workerManager.registerWorker({
 			deviceId: `embedded:${volume.volumeId}`,
@@ -43,7 +49,7 @@ export async function startAIWorker(
 			volumeId: volume.volumeId,
 			capabilities: config.runtimes.map((r) => ({
 				runtime: r.runtime,
-				maxConcurrent: config.maxConcurrentRuns ?? 1,
+				maxConcurrent: maxConcurrentRuns,
 			})),
 			secret,
 		});
@@ -51,19 +57,44 @@ export async function startAIWorker(
 	}
 
 	let running = true;
+	const activeRuns = new Map<Promise<void>, DirectSpawnRuntime>();
+	const runtimes = Array.from(new Set(config.runtimes.map((r) => r.runtime)));
+	const activeRunsForRuntime = (runtime: DirectSpawnRuntime) => {
+		let count = 0;
+		for (const activeRuntime of activeRuns.values()) {
+			if (activeRuntime === runtime) count++;
+		}
+		return count;
+	};
+	const startExecution = (claimed: any) => {
+		if (!claimed || !workerManager) return;
+		const runtime = claimed.spawn?.runtime as DirectSpawnRuntime | undefined;
+		if (!runtime) return;
+		const execution = executeRun(
+			runner,
+			workerManager,
+			claimed,
+			workerId,
+		).finally(() => {
+			activeRuns.delete(execution);
+		});
+		activeRuns.set(execution, runtime);
+	};
 	const pollLoop = async () => {
 		while (true) {
 			if (!running || !workerManager) break;
 			try {
 				await workerManager.heartbeat(workerId);
-				const claimed = await workerManager.claimRun({
-					workerId,
-					runtimes: config.runtimes.map((r) => r.runtime),
-					limit: 1,
-				});
-
-				if (claimed) {
-					await executeRun(runner, workerManager, claimed, workerId);
+				for (const runtime of runtimes) {
+					while (running && activeRunsForRuntime(runtime) < maxConcurrentRuns) {
+						const claimed = await workerManager.claimRun({
+							workerId,
+							runtimes: [runtime],
+							limit: 1,
+						});
+						if (!claimed) break;
+						startExecution(claimed);
+					}
 				}
 			} catch {
 				// Transient heartbeat/claim/execute error — stay alive and

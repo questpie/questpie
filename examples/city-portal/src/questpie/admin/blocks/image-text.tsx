@@ -13,7 +13,7 @@ function getUrl(value: unknown): string | undefined {
 }
 
 export function ImageTextRenderer({ values, data }: BlockProps<"image-text">) {
-	const imageUrl = getUrl(data?.image) || values.image;
+	const imageUrl = getUrl(data?.image);
 	const isImageLeft = values.imagePosition !== "right";
 
 	return (

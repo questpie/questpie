@@ -37,6 +37,11 @@ export interface Asset {
 
 interface UploadOptions {
 	to?: string;
+	/**
+	 * Optional destination path/folder forwarded to the collection's upload so a
+	 * blob upload lands inside a folder (e.g. an `assets` row's required `path`).
+	 */
+	path?: string;
 	onProgress?: (progress: number) => void;
 	signal?: AbortSignal;
 }
@@ -100,7 +105,7 @@ export function useUpload(): UseUploadReturn {
 			file: File;
 			options?: UploadOptions;
 		}) => {
-			const { to, onProgress, signal } = options ?? {};
+			const { to, path, onProgress, signal } = options ?? {};
 			const targetCollection = resolveTargetCollection(to);
 
 			if (!targetCollection) {
@@ -119,6 +124,7 @@ export function useUpload(): UseUploadReturn {
 
 			const result = await collectionApi.upload(file, {
 				signal,
+				path,
 				onProgress: (p: number) => {
 					setProgress(p);
 					onProgress?.(p);
@@ -142,7 +148,7 @@ export function useUpload(): UseUploadReturn {
 			files: File[];
 			options?: UploadManyOptions;
 		}) => {
-			const { to, onProgress, signal } = options ?? {};
+			const { to, path, onProgress, signal } = options ?? {};
 			const targetCollection = resolveTargetCollection(to);
 
 			if (!targetCollection) {
@@ -165,6 +171,7 @@ export function useUpload(): UseUploadReturn {
 
 			const results = await collectionApi.uploadMany(files, {
 				signal,
+				path,
 				onProgress: (p: number, fileIndex?: number) => {
 					setProgress(p);
 					onProgress?.(p, fileIndex);

@@ -27,6 +27,7 @@ export function BooleanField({
 	disabled,
 	localized,
 	locale,
+	hideLabel,
 	control,
 	className,
 	displayAs = "checkbox",
@@ -46,6 +47,7 @@ export function BooleanField({
 					disabled={disabled}
 					localized={localized}
 					locale={locale}
+					hideLabel={hideLabel}
 					error={fieldState.error?.message}
 				>
 					{displayAs === "switch" ? (

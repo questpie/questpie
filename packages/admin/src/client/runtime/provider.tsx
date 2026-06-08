@@ -49,6 +49,14 @@ const LOCALE_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 // Legacy cookie name for backwards compatibility
 const LEGACY_LOCALE_COOKIE = "questpie_locale";
 
+const PUBLIC_BRANDING_PATHS = [
+	"/login",
+	"/forgot-password",
+	"/reset-password",
+	"/accept-invite",
+	"/setup",
+];
+
 // ============================================================================
 // Cookie Helpers
 // ============================================================================
@@ -543,15 +551,36 @@ function applyFavicon(href: string | null) {
 	link.href = href;
 }
 
+function isPublicBrandingPath(basePath: string): boolean {
+	if (typeof window === "undefined") return false;
+
+	const currentPath = window.location.pathname.replace(/\/+$/, "");
+	const normalizedBase = basePath.replace(/\/+$/, "");
+
+	return PUBLIC_BRANDING_PATHS.some((path) => {
+		const fullPath = `${normalizedBase}${path}`.replace(/\/+$/, "");
+		return currentPath === fullPath || currentPath.startsWith(`${fullPath}/`);
+	});
+}
+
 function BrandingSync() {
 	const store = useContext(AdminStoreContext);
 	useEffect(() => {
 		if (!store) return;
-		const client = store.getState().client;
-		if (!client || !(client as any).routes?.getAdminConfig) return;
+		const state = store.getState();
+		const client = state.client;
+		const routes = (client as any)?.routes;
+		if (!routes) return;
 
-		(client as any).routes
-			.getAdminConfig()
+		const configRequest =
+			isPublicBrandingPath(state.basePath) &&
+			typeof routes.getPublicAdminConfig === "function"
+				? routes.getPublicAdminConfig()
+				: routes.getAdminConfig?.();
+
+		if (!configRequest) return;
+
+		configRequest
 			.then((config: any) => {
 				const branding = config?.branding;
 				if (!branding) return;

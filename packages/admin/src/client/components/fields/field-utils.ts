@@ -25,7 +25,12 @@ export function sanitizeFilename(filename: string): string {
 		.replace(/^-|-$/g, "") // Remove leading/trailing hyphens
 		.toLowerCase();
 
-	return (sanitized || "file") + ext.toLowerCase();
+	// Sanitize the extension too: keep the leading dot + alphanumerics, drop any
+	// other char (notably "/", which would otherwise leak a path separator into a
+	// `<folder>/<filename>` Drive path, e.g. "a.b/c").
+	const safeExt = ext.toLowerCase().replace(/[^a-z0-9.]/g, "");
+
+	return (sanitized || "file") + safeExt;
 }
 
 /**

@@ -20,6 +20,15 @@ import type {
 
 import { getDb, normalizeContext } from "./context.js";
 
+type FieldDefinitionLike = {
+	_state?: {
+		access?: FieldAccess;
+		input?: unknown;
+		output?: unknown;
+		nestedFields?: Record<string, unknown>;
+	};
+};
+
 /**
  * Context for access rule evaluation
  */
@@ -146,23 +155,108 @@ export interface FilterFieldsForReadOptions {
 	fieldAccess?: Record<string, FieldAccess>;
 }
 
-function createFieldAccessContext(params: {
+function mergeFieldAccessMaps(
+	...maps: Array<Record<string, FieldAccess> | undefined>
+): Record<string, FieldAccess> | undefined {
+	const merged: Record<string, FieldAccess> = {};
+
+	for (const map of maps) {
+		if (!map) continue;
+		for (const [fieldPath, rule] of Object.entries(map)) {
+			merged[fieldPath] = {
+				...merged[fieldPath],
+				...rule,
+			};
+		}
+	}
+
+	return Object.keys(merged).length > 0 ? merged : undefined;
+}
+
+function deriveFieldAccessLayers(
+	fieldDefinitions: Record<string, unknown> | undefined,
+): {
+	fieldAccess?: Record<string, FieldAccess>;
+	fieldFlags?: Record<string, FieldAccess>;
+} {
+	const fieldAccess: Record<string, FieldAccess> = {};
+	const fieldFlags: Record<string, FieldAccess> = {};
+
+	if (!fieldDefinitions) {
+		return {};
+	}
+
+	const collect = (definitions: Record<string, unknown>, prefix?: string) => {
+		for (const [fieldName, fieldDefinition] of Object.entries(definitions)) {
+			const fieldPath = prefix ? `${prefix}.${fieldName}` : fieldName;
+			const state = (fieldDefinition as FieldDefinitionLike)._state;
+			if (!state) continue;
+
+			if (state.access) {
+				fieldAccess[fieldPath] = state.access;
+			}
+
+			const flags: FieldAccess = {};
+			if (state.output === false) {
+				flags.read = false;
+			}
+			if (state.input === false) {
+				flags.create = false;
+				flags.update = false;
+			}
+			if (Object.keys(flags).length > 0) {
+				fieldFlags[fieldPath] = flags;
+			}
+
+			if (state.nestedFields) {
+				collect(state.nestedFields, fieldPath);
+			}
+		}
+	};
+
+	collect(fieldDefinitions);
+	return {
+		fieldAccess: Object.keys(fieldAccess).length > 0 ? fieldAccess : undefined,
+		fieldFlags: Object.keys(fieldFlags).length > 0 ? fieldFlags : undefined,
+	};
+}
+
+export function deriveFieldAccessFromDefinitions(
+	fieldDefinitions: Record<string, unknown> | undefined,
+): Record<string, FieldAccess> | undefined {
+	const layers = deriveFieldAccessLayers(fieldDefinitions);
+	return mergeFieldAccessMaps(layers.fieldAccess, layers.fieldFlags);
+}
+
+export function mergeFieldAccessRules(
+	fieldAccess: Record<string, FieldAccess> | undefined,
+	fieldDefinitions: Record<string, unknown> | undefined,
+): Record<string, FieldAccess> | undefined {
+	const layers = deriveFieldAccessLayers(fieldDefinitions);
+	return mergeFieldAccessMaps(
+		layers.fieldAccess,
+		fieldAccess,
+		layers.fieldFlags,
+	);
+}
+
+function getRequestFromContext(context: CRUDContext): Request | undefined {
+	const ctx = context as Record<string, unknown>;
+	const req = ctx.req ?? ctx.request;
+	return typeof Request !== "undefined" && req instanceof Request
+		? req
+		: undefined;
+}
+
+export function createFieldAccessContext(params: {
 	context: CRUDContext;
 	operation: "create" | "read" | "update" | "delete";
 	doc?: Record<string, unknown>;
 }): FieldAccessContext {
-	// CRUDContext uses an open index signature ([key: string]: unknown),
-	// so req/request may be present at runtime when set by the HTTP adapter.
-	const ctx = params.context as Record<string, unknown>;
-	const request =
-		(ctx.req as Request | undefined) ??
-		(ctx.request as Request | undefined) ??
-		(typeof Request !== "undefined"
-			? new Request("http://questpie.local")
-			: ({} as Request));
+	const req = getRequestFromContext(params.context);
 
 	return {
-		req: request,
+		...(req ? { req } : {}),
 		// session is typed as { user: User; session: Session } | null | undefined
 		user: params.context.session?.user,
 		doc: params.doc,
@@ -207,7 +301,7 @@ export async function getRestrictedReadFields(
 
 	const fieldsToRemove: string[] = [];
 
-	for (const fieldName of Object.keys(result)) {
+	for (const [fieldName, access] of Object.entries(fieldAccess)) {
 		// Skip meta fields
 		if (
 			fieldName === "id" ||
@@ -219,7 +313,6 @@ export async function getRestrictedReadFields(
 			continue;
 		}
 
-		const access = fieldAccess[fieldName];
 		if (!access || access.read === undefined) {
 			// No access rule for this field - allow read
 			continue;
@@ -235,7 +328,10 @@ export async function getRestrictedReadFields(
 		);
 
 		if (!canRead) {
-			fieldsToRemove.push(fieldName);
+			const path = fieldName.split(".");
+			if (hasPathValue(result, path)) {
+				fieldsToRemove.push(fieldName);
+			}
 		}
 	}
 
@@ -297,6 +393,46 @@ function getPathValue(source: unknown, path: Array<string | number>): unknown {
 		current = (current as Record<string, unknown>)[segment];
 	}
 	return current;
+}
+
+function hasPathValue(source: unknown, path: string[]): boolean {
+	if (path.length === 0) return true;
+	if (Array.isArray(source)) {
+		return source.some((item) => hasPathValue(item, path));
+	}
+	if (!isRecord(source)) return false;
+
+	const [head, ...tail] = path;
+	if (!(head in source)) return false;
+	if (tail.length === 0) return true;
+	return hasPathValue(source[head], tail);
+}
+
+function deletePathValue(source: unknown, path: string[]): void {
+	if (path.length === 0) return;
+	if (Array.isArray(source)) {
+		for (const item of source) {
+			deletePathValue(item, path);
+		}
+		return;
+	}
+	if (!isRecord(source)) return;
+
+	const [head, ...tail] = path;
+	if (tail.length === 0) {
+		delete source[head];
+		return;
+	}
+	deletePathValue(source[head], tail);
+}
+
+export function removeRestrictedReadFields(
+	result: Record<string, any>,
+	fieldsToRemove: string[],
+): void {
+	for (const fieldName of fieldsToRemove) {
+		deletePathValue(result, fieldName.split("."));
+	}
 }
 
 async function validateFieldPathWriteAccess(params: {

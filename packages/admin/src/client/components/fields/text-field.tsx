@@ -15,6 +15,7 @@ export function TextField({
 	disabled,
 	localized,
 	locale,
+	hideLabel,
 	control,
 	className,
 	type = "text",
@@ -36,6 +37,7 @@ export function TextField({
 					disabled={disabled}
 					localized={localized}
 					locale={locale}
+					hideLabel={hideLabel}
 					error={fieldState.error?.message}
 				>
 					<TextInput

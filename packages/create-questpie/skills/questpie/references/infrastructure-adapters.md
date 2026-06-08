@@ -73,7 +73,8 @@ export default runtimeConfig({
 
 ### S3-Compatible (Production)
 
-Works with AWS S3, MinIO, DigitalOcean Spaces, Cloudflare R2:
+Works with AWS S3, MinIO, DigitalOcean Spaces, and other S3-compatible
+providers that do not have a dedicated Files SDK adapter:
 
 ```ts
 import { s3 } from "files-sdk/s3";
@@ -88,6 +89,26 @@ export default runtimeConfig({
 				accessKeyId: process.env.S3_ACCESS_KEY!,
 				secretAccessKey: process.env.S3_SECRET_KEY!,
 			},
+		}),
+	},
+});
+```
+
+### Cloudflare R2 (Production)
+
+Use Files SDK's dedicated R2 adapter:
+
+```ts
+import { r2 } from "files-sdk/r2";
+
+export default runtimeConfig({
+	storage: {
+		basePath: "/api",
+		adapter: r2({
+			bucket: process.env.R2_BUCKET!,
+			accountId: process.env.R2_ACCOUNT_ID!,
+			accessKeyId: process.env.R2_ACCESS_KEY_ID!,
+			secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
 		}),
 	},
 });

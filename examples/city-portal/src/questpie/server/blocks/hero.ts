@@ -36,4 +36,5 @@ export const heroBlock = block("hero")
 			])
 			.label("Height")
 			.default("medium"),
-	}));
+	}))
+	.prefetch({ with: { backgroundImage: true } });

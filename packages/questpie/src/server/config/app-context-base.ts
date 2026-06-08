@@ -14,6 +14,7 @@ declare global {
 			email?: any;
 			storage?: any;
 			kv?: any;
+			executor?: any;
 			logger?: any;
 			search?: any;
 			realtime?: any;

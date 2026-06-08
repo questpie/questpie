@@ -784,6 +784,51 @@ export interface FormViewActionsConfig<TItem = any> {
 }
 
 // ============================================================================
+// Document View Configuration
+// ============================================================================
+
+/**
+ * Document view configuration — a Notion-style page with a dominant rich-text
+ * body and inline-editable property rows.
+ *
+ * No hardcoded field names: the consumer declares which field is the body, the
+ * (optional) title field, and which fields appear as properties. Defaults are
+ * data-driven (`properties: "auto"` derives from the schema).
+ *
+ * @example
+ * ```ts
+ * .form(({ v, f }) => v.collectionDocument({
+ *   document: {
+ *     body: f.body,
+ *     title: f.name,
+ *     properties: [f.scopeType, f.path, f.createdAt],
+ *     save: "autosave",
+ *   },
+ * }))
+ * ```
+ */
+export interface DocumentViewConfig {
+	document: {
+		/** The dominant long-form field, rendered with the rich-text editor. */
+		body: string;
+		/**
+		 * Property fields shown as inline-editable rows.
+		 * - `"auto"` (default): all schema fields except body/title, in schema order.
+		 * - `string[]`: an explicit, ordered list.
+		 */
+		properties?: "auto" | string[];
+		/**
+		 * Save behavior.
+		 * - `"autosave"` (default): debounced autosave with a "Saved"/"Saving" indicator.
+		 * - `"manual"`: a Save affordance with dirty tracking.
+		 */
+		save?: "autosave" | "manual";
+		/** Optional page-title field; falls back to the record id/path. */
+		title?: string;
+	};
+}
+
+// ============================================================================
 // Component Registry
 // ============================================================================
 

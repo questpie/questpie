@@ -54,6 +54,7 @@ const getContentLocalesOutputSchema = z.object({
  */
 const getContentLocales = route()
 	.post()
+	.access(true)
 	.schema(getContentLocalesSchema)
 	.outputSchema(getContentLocalesOutputSchema)
 	.handler(async (ctx) => {

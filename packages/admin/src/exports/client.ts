@@ -79,6 +79,69 @@ export {
 	type AdminShellRailProps,
 } from "#questpie/admin/client/views/layout/admin-layout.js";
 export { AdminLayoutProvider } from "#questpie/admin/client/views/layout/admin-layout-provider.js";
+export {
+	AdminViewLayout,
+	AdminViewHeader,
+} from "#questpie/admin/client/views/layout/admin-view-layout.js";
+// The framework `document` view primitive (Notion-style, immediately editable,
+// autosaving) — so a custom dispatcher view can mount it directly for editable
+// text/markdown records instead of string-keying the view registry.
+export { default as DocumentView } from "#questpie/admin/client/views/collection/document-view.js";
+// Canonical file-type → Phosphor icon mapper (the unified asset thumbnail's
+// helper) — so custom views reuse the exact same neutral file glyphs.
+export { getFileIcon } from "#questpie/admin/client/views/collection/cells/shared/asset-thumbnail.js";
+export { SearchInput } from "#questpie/admin/client/components/ui/search-input.js";
+// UI primitives — so custom views (e.g. the autopilot Files browser) render with
+// the exact same table/button/tooltip design language as the built-in views.
+export { Button } from "#questpie/admin/client/components/ui/button.js";
+export {
+	Table,
+	TableBody,
+	TableCaption,
+	TableCell,
+	TableFooter,
+	TableHead,
+	TableHeader,
+	TableRow,
+} from "#questpie/admin/client/components/ui/table.js";
+export {
+	Tooltip,
+	TooltipContent,
+	TooltipTrigger,
+} from "#questpie/admin/client/components/ui/tooltip.js";
+// Drag-and-drop upload primitive — so custom views (e.g. the autopilot Files
+// browser) reuse the exact upload affordance + validation as the built-in fields.
+export { Dropzone } from "#questpie/admin/client/components/primitives/dropzone.js";
+// Sheet (right-side drawer) — so custom views reuse the same upload/detail drawer
+// surface as the built-in collection table view's bulk-upload sheet.
+export {
+	Sheet,
+	SheetContent,
+	SheetDescription,
+	SheetFooter,
+	SheetHeader,
+	SheetTitle,
+} from "#questpie/admin/client/components/ui/sheet.js";
+// Dropdown menu — so custom views reuse the same header "Create" menu surface as
+// the built-in admin chrome.
+export {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuGroup,
+	DropdownMenuItem,
+	DropdownMenuLabel,
+	DropdownMenuSeparator,
+	DropdownMenuShortcut,
+	DropdownMenuTrigger,
+} from "#questpie/admin/client/components/ui/dropdown-menu.js";
+// Filename sanitizer used before writing/uploading a dropped file.
+export { sanitizeFilename } from "#questpie/admin/client/components/fields/field-utils.js";
+// Class-name merge helper (clsx + tailwind-merge) for custom views.
+export { cn } from "#questpie/admin/client/lib/utils.js";
+// Toast — the same instance the admin shell's mounted <Toaster> listens to, so
+// custom views surface feedback through the admin's notification surface.
+export { toast } from "sonner";
+export { useResolveText } from "#questpie/admin/client/i18n/hooks.js";
 export type {
 	AdminSidebarBrandProps,
 	AdminSidebarNavItemProps,
@@ -238,6 +301,13 @@ export {
 	useCollectionUpdate,
 	useCollectionVersions,
 } from "#questpie/admin/client/hooks/use-collection.js";
+// Upload hook — so custom views (e.g. the autopilot Files browser) reuse the
+// exact same upload flow (uploadMany + progress + query invalidation) as the
+// built-in collection table view's bulk-upload sheet.
+export {
+	type Asset,
+	useUpload,
+} from "#questpie/admin/client/hooks/use-upload.js";
 // User hooks
 export { useCurrentUser } from "#questpie/admin/client/hooks/use-current-user.js";
 // Branding hook
@@ -386,6 +456,7 @@ export type {
 } from "#questpie/admin/client/builder/types/common.js";
 export type {
 	ComponentRegistry,
+	DocumentViewConfig,
 	FieldComponentProps,
 	FormViewConfig,
 } from "#questpie/admin/client/builder/types/field-types.js";

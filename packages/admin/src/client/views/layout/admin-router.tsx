@@ -297,6 +297,11 @@ function matchRoute(
 	return { type: "not-found" };
 }
 
+function isAuthRoute(segments: string[]): boolean {
+	const [first] = segments;
+	return first ? AUTH_ROUTE_SEGMENTS.has(first) : false;
+}
+
 function formatDocumentTitle(pageTitle: string, appTitle: string): string {
 	const title = pageTitle.trim();
 	const app = appTitle.trim() || "Admin";
@@ -329,7 +334,7 @@ function setDocumentMetaDescription(description: string): void {
  */
 function findDefaultView(
 	views: Record<string, any>,
-	kind: "list" | "form",
+	kind: "list" | "form" | "document",
 ): string | undefined {
 	for (const [name, def] of Object.entries(views)) {
 		if (def && typeof def === "object" && def.kind === kind) {
@@ -415,7 +420,11 @@ function cacheComponent(
 	componentLoaderCache.set(loader, Component);
 }
 
-function ViewLoadingState({ viewKind }: { viewKind: "list" | "form" }) {
+function ViewLoadingState({
+	viewKind,
+}: {
+	viewKind: "list" | "form" | "document";
+}) {
 	return viewKind === "list" ? <TableViewSkeleton /> : <FormViewSkeleton />;
 }
 
@@ -423,7 +432,7 @@ function UnknownViewState({
 	viewKind,
 	viewId,
 }: {
-	viewKind: "list" | "form";
+	viewKind: "list" | "form" | "document";
 	viewId: string;
 }) {
 	const { t } = useTranslation();
@@ -549,13 +558,13 @@ function areRegistryViewRendererPropsEqual(
 	prev: {
 		loader?: MaybeLazyComponent;
 		componentProps: Record<string, unknown>;
-		viewKind: "list" | "form";
+		viewKind: "list" | "form" | "document";
 		viewId: string;
 	},
 	next: {
 		loader?: MaybeLazyComponent;
 		componentProps: Record<string, unknown>;
-		viewKind: "list" | "form";
+		viewKind: "list" | "form" | "document";
 		viewId: string;
 	},
 ): boolean {
@@ -574,7 +583,7 @@ const RegistryViewRenderer = React.memo(function RegistryViewRenderer({
 }: {
 	loader?: MaybeLazyComponent;
 	componentProps: Record<string, unknown>;
-	viewKind: "list" | "form";
+	viewKind: "list" | "form" | "document";
 	viewId: string;
 }) {
 	const loaderIsDynamic = isDynamicImportLoader(loader);
@@ -799,7 +808,17 @@ function LazyPageRenderer({ config }: { config: PageDefinition<string> }) {
 				}
 
 				if (typeof component === "function") {
-					const result = (component as () => any)();
+					// NEVER call a static component to "probe" it — invoking a React
+					// component outside render runs its hooks with no dispatcher and
+					// throws "Invalid hook call". Only lazy loaders may be invoked here;
+					// in this admin they are async functions (`async () => import(...)` /
+					// `async () => ({ default })`), so gate the call on AsyncFunction.
+					// A static component falls through (result == null) and is rendered
+					// directly as `<Component />` by the branch below.
+					const __isLazyLoader =
+						(component as { constructor?: { name?: string } }).constructor
+							?.name === "AsyncFunction";
+					const result = __isLazyLoader ? (component as () => any)() : null;
 					let isThenable = false;
 					if (result != null) {
 						if (typeof result.then === "function") {
@@ -910,11 +929,39 @@ function LazyPageRenderer({ config }: { config: PageDefinition<string> }) {
  * Uses Suspense internally - shows skeleton while config loads.
  */
 export function AdminRouter(props: AdminRouterProps): React.ReactElement {
+	if (isAuthRoute(props.segments)) {
+		return (
+			<React.Suspense fallback={<AuthPageSkeleton />}>
+				<AdminAuthRouter {...props} />
+			</React.Suspense>
+		);
+	}
+
 	return (
 		<React.Suspense fallback={getFallbackForSegments(props.segments)}>
 			<AdminRouterInner {...props} />
 		</React.Suspense>
 	);
+}
+
+function AdminAuthRouter({
+	segments,
+	pages: pagesProp,
+	NotFoundComponent,
+}: AdminRouterProps) {
+	const admin = useAdminStore((state) => state.admin);
+	const pages = pagesProp ?? admin.getPages();
+	const route = React.useMemo(
+		() => matchRoute(segments, {}, {}, pages),
+		[segments, pages],
+	);
+
+	if (route.type === "page") {
+		return <LazyPageRenderer config={route.config} />;
+	}
+
+	const NotFound = NotFoundComponent || DefaultNotFound;
+	return <NotFound />;
 }
 
 /**
@@ -1257,14 +1304,23 @@ function AdminRouterInner({
 
 		const formViewLoader = getViewLoader(selectedFormViewDefinition);
 
-		// Kind validation
+		// Resolve the configured view's actual kind so a collection can open as a
+		// "document" (Notion-style) view instead of the default "form". Both are
+		// edit-route views with the identical CollectionFormViewProps contract.
+		const resolvedEditViewKind: "form" | "document" =
+			(selectedFormViewDefinition as any)?.kind === "document"
+				? "document"
+				: "form";
+
+		// Kind validation — edit route serves "form" and "document" views.
 		if (
 			selectedFormViewDefinition &&
 			(selectedFormViewDefinition as any).kind !== "form" &&
+			(selectedFormViewDefinition as any).kind !== "document" &&
 			process.env.NODE_ENV !== "production"
 		) {
 			console.warn(
-				`View "${selectedFormView}" kind "${(selectedFormViewDefinition as any).kind}" != expected "form"`,
+				`View "${selectedFormView}" kind "${(selectedFormViewDefinition as any).kind}" != expected "form" | "document"`,
 			);
 		}
 
@@ -1296,7 +1352,7 @@ function AdminRouterInner({
 			<RegistryViewRenderer
 				key={`${name}-${id ?? "create"}`}
 				loader={formViewLoader}
-				viewKind="form"
+				viewKind={resolvedEditViewKind}
 				viewId={selectedFormView}
 				componentProps={editComponentProps}
 			/>

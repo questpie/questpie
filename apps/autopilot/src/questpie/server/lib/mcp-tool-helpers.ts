@@ -10,6 +10,20 @@ import {
 } from "./legacy-run-artifacts";
 import { asRecord, relationId } from "./records";
 
+export type McpCaller =
+	| { kind: "system"; actorId: "system" }
+	| { kind: "session"; actorId: string };
+
+function sessionUserId(session: unknown) {
+	if (!session || typeof session !== "object" || !("user" in session)) {
+		return null;
+	}
+	const user = (session as { user?: unknown }).user;
+	if (!user || typeof user !== "object" || !("id" in user)) return null;
+	const id = (user as { id?: unknown }).id;
+	return typeof id === "string" && id.trim() ? id : null;
+}
+
 export function mcpJson(value: unknown) {
 	const structuredContent =
 		value && typeof value === "object" && !Array.isArray(value)
@@ -35,9 +49,12 @@ export async function requireMcpCaller(input: {
 	ctx: Questpie.AppContext & { session?: unknown };
 	request?: Request;
 	accessMode: McpAccessMode;
-}) {
-	if (input.accessMode === "system") return { kind: "system" as const };
-	if (input.ctx.session) return { kind: "session" as const };
+}): Promise<McpCaller> {
+	if (input.accessMode === "system") {
+		return { kind: "system" as const, actorId: "system" as const };
+	}
+	const actorId = sessionUserId(input.ctx.session);
+	if (actorId) return { kind: "session" as const, actorId };
 	throw ApiError.unauthorized("MCP authentication required");
 }
 
@@ -47,7 +64,7 @@ export async function writableRunForMcp(input: {
 	accessMode: McpAccessMode;
 	runId: string;
 }) {
-	await requireMcpCaller(input);
+	const caller = await requireMcpCaller(input);
 	const run = await input.ctx.collections.run_links.findOne({
 		where: { id: input.runId },
 	});
@@ -59,7 +76,7 @@ export async function writableRunForMcp(input: {
 			)} - cannot add artifacts to a terminal run`,
 		);
 	}
-	return { run, worker: null };
+	return { run, worker: null, caller };
 }
 
 export function knowledgeScope(input: {
@@ -115,10 +132,18 @@ export async function createRunArtifactForMcp(input: {
 	runId: string;
 	artifact: LegacyArtifactInput;
 }) {
-	await writableRunForMcp(input);
+	const { caller } = await writableRunForMcp(input);
 	const resource = await input.ctx.services.knowledgeResource.createRunArtifact(
 		input.runId,
-		normalizeLegacyArtifact({ ...input.artifact, source: "mcp" }),
+		normalizeLegacyArtifact({
+			...input.artifact,
+			metadata: {
+				...(input.artifact.metadata ?? {}),
+				mcpActorId: caller.actorId,
+				mcpCallerKind: caller.kind,
+			},
+			source: "mcp",
+		}),
 	);
 	return {
 		id: resource.id,

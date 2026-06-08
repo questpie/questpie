@@ -82,6 +82,7 @@
 		"@agentclientprotocol/sdk": "0.22.1",
 		"@iconify/react": "^6.0.2",
 		"@questpie/admin": "workspace:*",
+		"ai": "^6.0.0",
 		"questpie": "workspace:*",
 		"spawn-agent": "0.0.1"
 	},

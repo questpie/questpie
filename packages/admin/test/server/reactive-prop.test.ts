@@ -18,6 +18,7 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { collection, isReactivePropPlaceholder } from "questpie";
 
 import { reactiveFunctions } from "../../src/server/modules/admin/routes/reactive.js";
+import { buildServerContext } from "../../src/server/modules/admin/routes/route-helpers.js";
 import { introspectCollection } from "../../../questpie/src/server/collection/introspection.js";
 import { buildMockApp } from "../../../questpie/test/utils/mocks/mock-app-builder.js";
 import { createTestContext } from "../../../questpie/test/utils/test-context.js";
@@ -107,6 +108,15 @@ describe("/admin/reactive — prop type", () => {
 
 	afterEach(async () => {
 		await setup.cleanup();
+	});
+
+	it("does not synthesize req when route context has no request", () => {
+		const ctx = makeRouteCtx(setup.app, {});
+		delete ctx.request;
+
+		const serverCtx = buildServerContext(ctx);
+
+		expect(serverCtx.req).toBeUndefined();
 	});
 
 	it("evaluates a function-valued layout prop with current form data", async () => {

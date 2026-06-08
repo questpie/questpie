@@ -19,6 +19,7 @@
 
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
+import { collection } from "../../src/exports/index.js";
 import {
 	type CollectionSchema,
 	extractFormReactiveConfigs,
@@ -26,7 +27,6 @@ import {
 	introspectCollection,
 	introspectCollections,
 } from "../../src/server/collection/introspection.js";
-import { collection } from "../../src/exports/index.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 import { createTestContext } from "../utils/test-context";
 import { runTestDbMigrations } from "../utils/test-db";
@@ -122,6 +122,25 @@ const field_access = collection("field_access").fields(({ f }) => ({
 	}),
 }));
 
+const collection_field_access = collection("collection_field_access")
+	.fields(({ f }) => ({
+		name: f.text().required(),
+		secret: f.text(),
+	}))
+	.access({
+		read: true,
+		create: true,
+		update: true,
+		delete: true,
+		fields: {
+			secret: {
+				read: false,
+				create: false,
+				update: false,
+			},
+		},
+	});
+
 const with_relations = collection("with_relations").fields(({ f }) => ({
 	title: f.text().required(),
 	author: f.relation("authors"),
@@ -170,6 +189,7 @@ describe("collection introspection", () => {
 				with_workflow,
 				restricted,
 				field_access,
+				collection_field_access,
 				with_relations,
 				authors,
 				tags,
@@ -460,11 +480,29 @@ describe("collection introspection", () => {
 				ctxEditor,
 				setup.app,
 			);
-			// admin_only: non-admin -> denied (field access ctx.user comes from AccessContext, not CRUDContext)
-			// The field access function receives an AccessContext which may not have user.role
-			// depending on how extractAppServices resolves. Just verify access object exists.
-			expect(schemaEditor.fields.admin_only.access).toBeDefined();
-			expect(schemaEditor.fields.admin_only.access?.read).toBeDefined();
+			expect(schemaEditor.fields.admin_only.access?.read.allowed).toBe(false);
+
+			const ctxAdmin = createTestContext({ role: "admin" });
+			const schemaAdmin = await introspectCollection(
+				field_access as any,
+				ctxAdmin,
+				setup.app,
+			);
+			expect(schemaAdmin.fields.admin_only.access?.read.allowed).toBe(true);
+		});
+
+		it("evaluates collection-level field access from the resolved field access map", async () => {
+			const ctx = createTestContext({ role: "editor" });
+			const schema = await introspectCollection(
+				collection_field_access as any,
+				ctx,
+				setup.app,
+			);
+
+			const secret = schema.fields.secret;
+			expect(secret.access?.read.allowed).toBe(false);
+			expect(secret.access?.create.allowed).toBe(false);
+			expect(secret.access?.update.allowed).toBe(false);
 		});
 	});
 

@@ -42,6 +42,7 @@ export type CloudInitOptions = {
 	config: string;
 	cloudUrl?: string;
 	token?: string;
+	account?: string;
 	project?: string;
 	name?: string;
 	environment?: string;
@@ -63,6 +64,7 @@ export type CloudEnvImportOptions = {
 	config: string;
 	cloudUrl?: string;
 	token?: string;
+	account?: string;
 	service?: string;
 	dryRun?: boolean;
 	json?: boolean;
@@ -77,6 +79,7 @@ export type CloudDeployOptions = {
 	imageDigest?: string;
 	dryRun?: boolean;
 	token?: string;
+	account?: string;
 	json?: boolean;
 	follow?: boolean;
 	yes?: boolean;
@@ -88,6 +91,15 @@ export type CloudDeployOptions = {
 	commit?: string;
 	printPayload?: boolean;
 	noRequest?: boolean;
+};
+
+export type CloudRollbackOptions = {
+	cloudUrl?: string;
+	token?: string;
+	json?: boolean;
+	follow?: boolean;
+	timeoutSeconds?: number;
+	pollIntervalSeconds?: number;
 };
 
 type LoadedCloudConfig = {
@@ -126,12 +138,15 @@ type GitMetadata = {
 
 type ThinService = {
 	name: string;
+	processType: "web" | "worker" | "cron" | "job" | "release";
 	port: number;
-	readiness?: string;
+	readinessMode?: "http" | "tcp" | "none";
+	readinessPath?: string;
 	command?: string;
 };
 
 type ThinCloudConfig = {
+	account?: string;
 	project: string;
 	environment: string;
 	build: {
@@ -139,6 +154,7 @@ type ThinCloudConfig = {
 		context: string;
 	};
 	services: ThinService[];
+	resources: AnyRecord;
 };
 
 type DeployPayload = AnyRecord & {
@@ -342,6 +358,14 @@ function profileToken(profile: CloudProfile, option?: string) {
 	return option ?? process.env.QUESTPIE_CLOUD_TOKEN ?? profile.token;
 }
 
+function profileAccountSlug(profile: CloudProfile, option?: string) {
+	return (
+		asString(option) ??
+		asString(process.env.QUESTPIE_CLOUD_ACCOUNT) ??
+		asString(profile.client?.slug)
+	);
+}
+
 async function promptForToken() {
 	if (!stdin.isTTY) {
 		throw authError(
@@ -458,6 +482,9 @@ async function loadCloudConfig(configPath: string): Promise<LoadedCloudConfig> {
 
 function normalizeThinConfig(loaded: LoadedCloudConfig): ThinCloudConfig {
 	const data = loaded.data;
+	const account =
+		asString(data.account) ??
+		(isRecord(data.account) ? asString(data.account.slug) : undefined);
 	const project =
 		asString(data.project) ??
 		(isRecord(data.project) ? asString(data.project.slug) : undefined);
@@ -467,19 +494,33 @@ function normalizeThinConfig(loaded: LoadedCloudConfig): ThinCloudConfig {
 		DEFAULT_ENVIRONMENT;
 	const build = isRecord(data.build) ? data.build : {};
 	const dockerfile =
-		asString(build.dockerfile) ??
 		asString(build.dockerfilePath) ??
+		asString(build.dockerfile) ??
 		"Dockerfile";
-	const context = asString(build.context) ?? ".";
+	const context = asString(build.contextPath) ?? asString(build.context) ?? ".";
 	const services = records(data.services).map((service): ThinService => ({
 		name: slugify(asString(service.name), "web"),
+		processType:
+			asString(service.processType) === "worker" ||
+			asString(service.processType) === "cron" ||
+			asString(service.processType) === "job" ||
+			asString(service.processType) === "release"
+				? (asString(service.processType) as ThinService["processType"])
+				: "web",
 		port:
 			asNumber(service.port) ??
 			asNumber(service.containerPort) ??
 			DEFAULT_PORT,
-		readiness: asString(service.readiness) ?? asString(service.readinessPath),
+		readinessMode:
+			asString(service.readinessMode) === "tcp" ||
+			asString(service.readinessMode) === "none"
+				? (asString(service.readinessMode) as ThinService["readinessMode"])
+				: "http",
+		readinessPath:
+			asString(service.readinessPath) ?? asString(service.readiness),
 		command: asString(service.command),
 	}));
+	const resources = isRecord(data.resources) ? data.resources : {};
 
 	if (!project) throw localError(`${loaded.path} is missing project`);
 	if (services.length === 0) {
@@ -487,10 +528,12 @@ function normalizeThinConfig(loaded: LoadedCloudConfig): ThinCloudConfig {
 	}
 
 	return {
+		account: account ? slugify(account) : undefined,
 		project: slugify(project),
 		environment: slugify(environment, DEFAULT_ENVIRONMENT),
 		build: { dockerfile, context },
 		services,
+		resources,
 	};
 }
 
@@ -676,6 +719,14 @@ function printDeployResult(result: AnyRecord, dryRun?: boolean) {
 	}
 }
 
+function printRollbackResult(result: AnyRecord) {
+	console.log("Rollback submitted");
+	console.log(`Deployment: ${String(result.deploymentId ?? "unknown")}`);
+	if (result.previousDeploymentId) {
+		console.log(`Previous:   ${String(result.previousDeploymentId)}`);
+	}
+}
+
 function printFollowEvents(status: AnyRecord, seenEventIds: Set<string>) {
 	const events = Array.isArray(status.events) ? status.events.filter(isRecord) : [];
 	for (const event of events) {
@@ -698,17 +749,25 @@ async function importEnvFileForConfig(input: {
 	envFile: string;
 	cloudUrl: string;
 	token: string;
+	account?: string;
 	service?: string;
 	dryRun?: boolean;
 }) {
 	const loaded = await loadCloudConfig(input.configPath);
 	const config = normalizeThinConfig(loaded);
+	const account = input.account ?? config.account;
+	if (!account) {
+		throw localError(
+			`${input.configPath} is missing account. Run questpie cloud init again or pass --account.`,
+		);
+	}
 	const parsed = await loadEnvFile(input.envFile);
 	const result = await requestCloud<AnyRecord>({
 		cloudUrl: input.cloudUrl,
 		token: input.token,
 		path: "/api/cloud/env-vars/import",
 		body: {
+			account: { slug: account },
 			project: config.project,
 			environment: config.environment,
 			service: input.service,
@@ -788,6 +847,12 @@ export async function cloudInitCommand(options: CloudInitOptions) {
 	if (!token) {
 		throw authError("Questpie Cloud login is required. Run questpie cloud login.");
 	}
+	const account = profileAccountSlug(profile, options.account);
+	if (!account) {
+		throw authError(
+			"Questpie Cloud account is required. Pass --account, set QUESTPIE_CLOUD_ACCOUNT, or run questpie cloud login for a workspace.",
+		);
+	}
 
 	const configPath = resolveCliPath(options.config ?? DEFAULT_CONFIG_PATH);
 	if (!options.dryRun && !options.force && !options.yes && (await pathExists(configPath))) {
@@ -821,6 +886,9 @@ export async function cloudInitCommand(options: CloudInitOptions) {
 		token,
 		path: "/api/cloud/projects/init",
 		body: {
+			account: {
+				slug: slugify(account),
+			},
 			project: {
 				slug: projectSlug,
 				name: options.name ?? inferredName,
@@ -833,16 +901,20 @@ export async function cloudInitCommand(options: CloudInitOptions) {
 				region: "eu-main",
 			},
 			build: {
-				dockerfile,
-				context,
+				strategy: "dockerfile",
+				dockerfilePath: dockerfile,
+				contextPath: context,
 			},
 			services: [
 				{
 					name: serviceName,
-					port,
-					readiness,
+					processType: "web",
+					containerPort: port,
+					readinessMode: readiness ? "http" : "tcp",
+					readinessPath: readiness,
 				},
 			],
+			resources: {},
 			dryRun: Boolean(options.dryRun),
 		},
 	});
@@ -866,12 +938,13 @@ export async function cloudInitCommand(options: CloudInitOptions) {
 					parserWarnings: parsed.warnings,
 				}))
 			: await importEnvFileForConfig({
-					configPath,
-					envFile: options.envFile,
-					cloudUrl,
-					token,
-					dryRun: false,
-				});
+				configPath,
+				envFile: options.envFile,
+				cloudUrl,
+				token,
+				account: slugify(account),
+				dryRun: false,
+			});
 		envImport = imported.result;
 		parserWarnings = imported.parserWarnings;
 	}
@@ -902,12 +975,14 @@ export async function cloudEnvImportCommand(
 	if (!token) {
 		throw authError("Questpie Cloud login is required. Run questpie cloud login.");
 	}
+	const account = profileAccountSlug(profile, options.account);
 
 	const imported = await importEnvFileForConfig({
 		configPath: options.config,
 		envFile,
 		cloudUrl,
 		token,
+		account,
 		service: options.service,
 		dryRun: Boolean(options.dryRun),
 	});
@@ -937,13 +1012,13 @@ function createDeployServices(config: ThinCloudConfig, imageTag?: string) {
 	return config.services.map((service) =>
 		definedRecord({
 			name: service.name,
-			processType: service.name === "web" ? "web" : "worker",
+			processType: service.processType,
 			imageTag,
 			containerPort: service.port,
 			replicas: 1,
 			command: service.command,
-			readinessMode: service.readiness ? "http" : "tcp",
-			readinessPath: service.readiness,
+			readinessMode: service.readinessMode,
+			readinessPath: service.readinessPath,
 		}),
 	);
 }
@@ -953,6 +1028,7 @@ export async function createCloudDeployPayload(
 ): Promise<DeployPayload> {
 	const loaded = await loadCloudConfig(options.config);
 	const config = normalizeThinConfig(loaded);
+	const account = profileAccountSlug({}, options.account) ?? config.account;
 	const gitMetadata = await readGitMetadata(options);
 	const imageTag =
 		options.imageTag ??
@@ -961,6 +1037,7 @@ export async function createCloudDeployPayload(
 
 	return definedRecord({
 		dryRun: Boolean(options.dryRun),
+		account: account ? { slug: slugify(account) } : undefined,
 		project: {
 			slug: config.project,
 		},
@@ -978,6 +1055,8 @@ export async function createCloudDeployPayload(
 			imageDigest: options.imageDigest,
 		}),
 		services: createDeployServices(config, imageTag),
+		resources: config.resources,
+		trigger: "cli",
 		config: {
 			path: loaded.path,
 			format: loaded.format,
@@ -1094,6 +1173,82 @@ export async function cloudDeployCommand(options: CloudDeployOptions) {
 	if (failed) {
 		throw new CloudCliError(
 			`Deployment failed: ${sanitizeInternalTerms(String(finalDeployment.summary ?? finalStatus))}`,
+			3,
+		);
+	}
+}
+
+export async function cloudRollbackCommand(
+	deploymentId: string,
+	options: CloudRollbackOptions,
+) {
+	const profile = await readCloudProfile();
+	const cloudUrl = profileCloudUrl(profile, options.cloudUrl);
+	const token = profileToken(profile, options.token);
+	if (!token) {
+		throw authError("Questpie Cloud login is required. Run questpie cloud login.");
+	}
+
+	const result = await requestCloud<AnyRecord>({
+		cloudUrl,
+		token,
+		path: "/api/cloud/deployments/rollback",
+		body: { deploymentId },
+	});
+	const rollbackDeploymentId = asString(result.deploymentId);
+	let followStatus: AnyRecord | undefined;
+	if (options.follow && rollbackDeploymentId) {
+		followStatus = await followDeployment({
+			cloudUrl,
+			token,
+			deploymentId: rollbackDeploymentId,
+			json: Boolean(options.json),
+			timeoutSeconds:
+				options.timeoutSeconds ?? DEFAULT_FOLLOW_TIMEOUT_SECONDS,
+			pollIntervalSeconds:
+				options.pollIntervalSeconds ?? DEFAULT_POLL_INTERVAL_SECONDS,
+		});
+	}
+
+	const finalDeployment = isRecord(followStatus?.deployment)
+		? followStatus.deployment
+		: result;
+	const finalStatus = String(finalDeployment.status ?? result.status ?? "");
+	const failed = finalStatus === "failed" || finalStatus === "cancelled";
+
+	if (options.json) {
+		printJson({
+			ok: !failed,
+			rollback: {
+				ok: result.ok === true,
+				deploymentId: result.deploymentId ?? null,
+				previousDeploymentId: result.previousDeploymentId ?? null,
+				buildId: result.buildId ?? null,
+				statusUrl: result.statusUrl ?? null,
+			},
+			follow: followStatus,
+		});
+		if (failed) {
+			throw new CloudCliError("Rollback failed", 3, { silent: true });
+		}
+		return;
+	}
+
+	printRollbackResult(result);
+	if (followStatus) {
+		const deployment = isRecord(followStatus.deployment)
+			? followStatus.deployment
+			: {};
+		console.log(`Final status: ${statusLabel(deployment.status)}`);
+		const environment = isRecord(followStatus.environment)
+			? followStatus.environment
+			: {};
+		if (environment.appUrl) console.log(`URL:          ${String(environment.appUrl)}`);
+	}
+
+	if (failed) {
+		throw new CloudCliError(
+			`Rollback failed: ${sanitizeInternalTerms(String(finalDeployment.summary ?? finalStatus))}`,
 			3,
 		);
 	}

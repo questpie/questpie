@@ -1,6 +1,9 @@
 import { describe, expect, it } from "bun:test";
 
-import { stripUndefinedDeep } from "#questpie/admin/server/modules/admin/routes/admin-config";
+import {
+	buildPublicAdminConfig,
+	stripUndefinedDeep,
+} from "#questpie/admin/server/modules/admin/routes/admin-config";
 
 function containsUndefined(value: unknown): boolean {
 	if (value === undefined) return true;
@@ -81,5 +84,26 @@ describe("admin config response serialization", () => {
 		}) as any;
 
 		expect(result).toEqual({ branding: { logo: null } });
+	});
+
+	it("exposes only branding in public admin bootstrap config", () => {
+		const result = buildPublicAdminConfig({
+			branding: {
+				name: { en: "Acme Admin" },
+				tagline: { en: "Operate clearly" },
+				favicon: "/favicon.ico",
+			},
+			sidebar: { sections: [{ id: "secret" }] },
+			dashboard: { items: [{ id: "secret-widget" }] },
+			shell: { secondaryRail: { component: { type: "secret" } } },
+		} as any) as any;
+
+		expect(result).toEqual({
+			branding: {
+				name: { en: "Acme Admin" },
+				tagline: { en: "Operate clearly" },
+				favicon: "/favicon.ico",
+			},
+		});
 	});
 });

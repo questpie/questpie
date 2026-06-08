@@ -10,17 +10,13 @@ type RuntimeOperation = "create" | "read" | "update";
 
 type FieldDefinitionsMap = Record<string, Field<FieldState>>;
 
-function getRequest(context: RequestContext): Request {
+function getRequest(context: RequestContext): Request | undefined {
 	const maybeReq = (context as any).req ?? (context as any).request;
 	if (maybeReq instanceof Request) {
 		return maybeReq;
 	}
 
-	if (typeof Request !== "undefined") {
-		return new Request("http://questpie.local");
-	}
-
-	return {} as Request;
+	return undefined;
 }
 
 function createFieldHookContext(params: {
@@ -33,11 +29,13 @@ function createFieldHookContext(params: {
 	document: Record<string, unknown>;
 	originalValue?: unknown;
 }): FieldHookContext {
+	const req = getRequest(params.context);
+
 	return {
 		field: params.fieldName,
 		collection: params.collectionName,
 		operation: params.operation,
-		req: getRequest(params.context),
+		...(req ? { req } : {}),
 		user: (params.context.session as any)?.user,
 		doc: params.document,
 		originalValue: params.originalValue,

@@ -6,7 +6,7 @@
  */
 
 import { Icon } from "@iconify/react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 import { toast } from "sonner";
 
@@ -58,6 +58,7 @@ import { useSafeContentLocales } from "../../runtime/content-locales-provider";
 import {
 	selectAdmin,
 	selectBasePath,
+	selectClient,
 	selectContentLocale,
 	selectNavigate,
 	selectSetContentLocale,
@@ -70,6 +71,7 @@ import type {
 	NavigationItem,
 } from "../../runtime/routes";
 import type { BrandLogoConfig } from "../../types/admin-config";
+import { resolveAssetUrl } from "../../utils/asset-url";
 import { getFlagUrl } from "../../utils/locale-to-flag";
 import { useLazyComponent } from "../../utils/use-lazy-component.js";
 
@@ -117,6 +119,33 @@ export interface AdminSidebarNavItemProps {
 }
 
 type AdminSidebarTheme = "light" | "dark" | "system";
+
+function getStringValue(value: unknown, key: string): string | null {
+	if (!value || typeof value !== "object") return null;
+	const candidate = (value as Record<string, unknown>)[key];
+	return typeof candidate === "string" && candidate.length > 0
+		? candidate
+		: null;
+}
+
+function getAssetUrl(value: unknown): string | null {
+	if (!value || typeof value !== "object") return null;
+	const url = getStringValue(value, "url") ?? getStringValue(value, "src");
+	return resolveAssetUrl(url) ?? null;
+}
+
+function getUserAvatarUrl(user: unknown): string | null {
+	if (!user || typeof user !== "object") return null;
+	const obj = user as Record<string, unknown>;
+
+	const avatarUrl = getAssetUrl(obj.avatar);
+	if (avatarUrl) return avatarUrl;
+
+	const imageUrl = getStringValue(obj, "image") ?? getAssetUrl(obj.image);
+	if (imageUrl) return resolveAssetUrl(imageUrl) ?? null;
+
+	return getAssetUrl(obj.photo) ?? getAssetUrl(obj.profileImage);
+}
 
 /**
  * AdminSidebar props
@@ -903,6 +932,7 @@ function UserFooter({
 	// Get auth client and session state
 	const authClient = useAuthClientSafe();
 	const { user, isPending } = useSessionState();
+	const client = useAdminStore(selectClient);
 	const navigate = useAdminStore(selectNavigate);
 	const basePath = useAdminStore(selectBasePath);
 	const admin = useAdminStore(selectAdmin);
@@ -929,6 +959,31 @@ function UserFooter({
 	const contentLocale = useAdminStore(selectContentLocale);
 	const setContentLocale = useAdminStore(selectSetContentLocale);
 	const hasMultipleContentLocales = (contentLocales?.locales?.length ?? 0) > 1;
+	const userProfileQuery = useQuery({
+		queryKey: [
+			"questpie",
+			"collections",
+			"user",
+			"findOne",
+			contentLocale,
+			"current-profile",
+			user?.id,
+		],
+		queryFn: async () => {
+			if (!user?.id) return null;
+			const userApi = (client.collections as Record<string, any>)?.user;
+			if (!userApi?.findOne) return null;
+
+			return userApi.findOne({
+				where: { id: user.id },
+				locale: contentLocale,
+				with: { avatar: true },
+			});
+		},
+		enabled: !!authClient && !!user?.id,
+		staleTime: 30_000,
+	});
+	const profileUser = userProfileQuery.data ?? user;
 	const shouldShowThemeToggle = !!setTheme && showThemeToggle !== false;
 	const themeOptions = React.useMemo(
 		() =>
@@ -990,8 +1045,10 @@ function UserFooter({
 	}
 
 	// Get display values
-	const displayName = user.name || user.email?.split("@")[0] || "User";
-	const displayEmail = user.email || "";
+	const displayName =
+		profileUser.name || profileUser.email?.split("@")[0] || "User";
+	const displayEmail = profileUser.email || "";
+	const avatarUrl = getUserAvatarUrl(profileUser) ?? getUserAvatarUrl(user);
 
 	return (
 		<SidebarFooter className="qa-sidebar__footer border-sidebar-border/70 border-t p-2">
@@ -1008,9 +1065,9 @@ function UserFooter({
 							)}
 						>
 							<div className="qa-sidebar__user-avatar border-sidebar-border bg-sidebar-accent text-sidebar-accent-foreground flex size-8 shrink-0 items-center justify-center rounded-md border">
-								{user.image ? (
+								{avatarUrl ? (
 									<img
-										src={user.image}
+										src={avatarUrl}
 										alt=""
 										className="image-outline size-full rounded-md object-cover"
 									/>

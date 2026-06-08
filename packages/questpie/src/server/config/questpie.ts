@@ -27,6 +27,7 @@ import type {
 } from "#questpie/server/config/types.js";
 import { GlobalBuilder } from "#questpie/server/global/builder/global-builder.js";
 import type { Global } from "#questpie/server/global/builder/global.js";
+import type { ExecutorService } from "#questpie/server/modules/core/integrated/executor/service.js";
 import type { KVService } from "#questpie/server/modules/core/integrated/kv/service.js";
 import type { LoggerService } from "#questpie/server/modules/core/integrated/logger/service.js";
 import type { MailerService } from "#questpie/server/modules/core/integrated/mailer/service.js";
@@ -132,6 +133,7 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 	public queue!: QueueClient<NonNullable<TConfig["queue"]>["jobs"]>;
 	public email!: MailerService;
 	public kv!: KVService;
+	public executor!: ExecutorService;
 	public logger!: LoggerService;
 	public search!: SearchService;
 	public realtime!: RealtimeService;
@@ -406,6 +408,7 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 		["i18n", "t"],
 		["logger", "logger"],
 		["kv", "kv"],
+		["executor", "executor"],
 		["db", "db"],
 		["email", "email"],
 		["storage", "storage"],
@@ -513,6 +516,7 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 			queue: this.queue,
 			storage: this.storage,
 			kv: this.kv,
+			executor: this.executor,
 			logger: this.logger,
 			search: this.search,
 			realtime: this.realtime,

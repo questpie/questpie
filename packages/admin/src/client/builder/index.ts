@@ -21,6 +21,7 @@ export type { IconComponent } from "./types/common";
 
 export type {
 	ComponentRegistry,
+	DocumentViewConfig,
 	FieldComponentProps,
 	FieldLayoutItem,
 	FormSidebarConfig,

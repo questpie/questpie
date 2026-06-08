@@ -3,6 +3,7 @@ import { describe, expect, it } from "bun:test";
 import adminUserCollection from "../../src/server/modules/admin/collections/user";
 import {
 	createActionCallbackProxy,
+	createActionFieldBuilderProxy,
 	createViewCallbackProxy,
 } from "../../src/server/proxy-factories";
 
@@ -28,6 +29,63 @@ describe("createActionCallbackProxy", () => {
 				handler: () => ({ type: "success" }),
 			}),
 		).toMatchObject({ id: "resetPassword", scope: "single" });
+	});
+});
+
+describe("createActionFieldBuilderProxy", () => {
+	it("builds a flat field config from an object argument", () => {
+		const f = createActionFieldBuilderProxy();
+		expect(f.text({ label: { en: "Title" }, required: true })).toMatchObject({
+			type: "text",
+			label: { en: "Title" },
+			required: true,
+		});
+	});
+
+	it("treats an array argument as select options", () => {
+		const f = createActionFieldBuilderProxy();
+		const options = [
+			{ value: "low", label: { en: "Low" } },
+			{ value: "high", label: { en: "High" } },
+		];
+		expect(f.select(options)).toMatchObject({ type: "select", options });
+	});
+
+	it("supports chained modifier methods", () => {
+		const f = createActionFieldBuilderProxy();
+		const def = f.text().required().label({ en: "Name" }) as Record<
+			string,
+			unknown
+		>;
+		expect(def).toMatchObject({
+			type: "text",
+			required: true,
+			label: { en: "Name" },
+		});
+	});
+
+	it("supports textarea and richText field types", () => {
+		const f = createActionFieldBuilderProxy();
+		expect(f.textarea({ label: { en: "Body" } })).toMatchObject({
+			type: "textarea",
+		});
+		expect(f.richText()).toMatchObject({ type: "richText" });
+	});
+
+	it("nests relation cardinality under options to avoid the type discriminator collision", () => {
+		const f = createActionFieldBuilderProxy();
+		// Relation cardinality is also named `type` on the client RelationField,
+		// which collides with the field-type discriminator. Nest it under
+		// `options` so the discriminator survives serialization.
+		const def = f.relation({
+			label: { en: "Project" },
+			options: { targetCollection: "projects", type: "single" },
+		}) as Record<string, any>;
+		expect(def.type).toBe("relation");
+		expect(def.options).toEqual({
+			targetCollection: "projects",
+			type: "single",
+		});
 	});
 });
 

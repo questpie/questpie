@@ -13,6 +13,10 @@ import type {
 	ComponentReference,
 	FieldLayoutItem,
 } from "../../../augmentation.js";
+import {
+	serializeFormLayoutProps,
+	serializeReactivePropsRecord,
+} from "../../../fields/reactive-runtime.js";
 import type { AnyBlockDefinition, BlockBuilderState } from "./block-builder.js";
 
 // ============================================================================
@@ -94,6 +98,43 @@ function normalizeBlockDef(blockDef: any): AnyBlockDefinition {
 	return blockDef;
 }
 
+function serializeBlockAdmin(
+	admin: AdminBlockConfig | undefined,
+): AdminBlockConfig | undefined {
+	if (!admin) return undefined;
+	return {
+		label: admin.label,
+		description: admin.description,
+		icon: admin.icon,
+		category: admin.category,
+		order: admin.order,
+		hidden: admin.hidden,
+	};
+}
+
+function serializeBlockFields(
+	fields: Record<string, FieldSchema>,
+): Record<string, FieldSchema> {
+	const serialized: Record<string, FieldSchema> = {};
+
+	for (const [name, field] of Object.entries(fields)) {
+		const metadata = { ...field.metadata };
+
+		if (metadata.meta && typeof metadata.meta === "object") {
+			metadata.meta = serializeReactivePropsRecord(
+				metadata.meta as Record<string, unknown>,
+			) as typeof metadata.meta;
+		}
+
+		serialized[name] = {
+			...field,
+			metadata,
+		};
+	}
+
+	return serialized;
+}
+
 /**
  * Introspect a single block definition.
  * Handles both server BlockBuilder definitions and client BlockDefinition objects
@@ -105,12 +146,17 @@ export function introspectBlock(blockDef: AnyBlockDefinition): BlockSchema {
 
 	return {
 		name: state.name ?? resolved.name,
-		admin: state.admin,
+		admin: serializeBlockAdmin(state.admin),
 		allowChildren: state.allowChildren,
 		maxChildren: state.maxChildren,
-		hasPrefetch: typeof state.prefetch === "function",
-		fields: resolved.getFieldMetadata(),
-		form: state.form,
+		hasPrefetch:
+			typeof state.prefetch === "function" ||
+			Boolean(state.prefetchWith) ||
+			typeof state._prefetchLoader === "function",
+		fields: serializeBlockFields(resolved.getFieldMetadata()),
+		form: state.form
+			? { fields: serializeFormLayoutProps(state.form.fields) }
+			: undefined,
 	};
 }
 

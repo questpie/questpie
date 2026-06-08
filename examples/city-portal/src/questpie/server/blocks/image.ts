@@ -36,4 +36,5 @@ export const imageBlock = block("image")
 			])
 			.label("Width")
 			.default("full"),
-	}));
+	}))
+	.prefetch({ with: { image: true } });

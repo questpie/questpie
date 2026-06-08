@@ -15,6 +15,7 @@ export function NumberField({
 	disabled,
 	localized,
 	locale,
+	hideLabel,
 	control,
 	className,
 	min,
@@ -37,6 +38,7 @@ export function NumberField({
 					disabled={disabled}
 					localized={localized}
 					locale={locale}
+					hideLabel={hideLabel}
 					error={fieldState.error?.message}
 				>
 					<NumberInput

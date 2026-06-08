@@ -8,6 +8,7 @@ import type { ComponentReference } from "#questpie/admin/server/augmentation.js"
 
 import type { FieldInstance } from "../../../../builder/field/field";
 import { formatLabel } from "../../../../lib/utils";
+import { resolveAssetUrl } from "../../../../utils/asset-url";
 import { DefaultCell } from "../../../../views/collection/cells";
 
 /**
@@ -156,9 +157,8 @@ export function formatCellValue(value: unknown): string {
 export function getImageUrl(item: any, imageField?: string): string | null {
 	if (!imageField) return null;
 	const imageValue = item[imageField];
-	if (typeof imageValue === "string") return imageValue;
-	if (imageValue?.url) return imageValue.url;
-	if (imageValue?.key) return imageValue.key;
+	if (typeof imageValue === "string") return resolveAssetUrl(imageValue) ?? null;
+	if (imageValue?.url) return resolveAssetUrl(imageValue.url) ?? null;
 	return null;
 }
 

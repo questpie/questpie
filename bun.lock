@@ -24,9 +24,12 @@
       "name": "autopilot",
       "version": "0.0.7",
       "dependencies": {
+        "@better-auth/api-key": "^1.6.11",
         "@questpie/admin": "workspace:*",
         "@questpie/ai": "workspace:*",
+        "@questpie/executor": "workspace:*",
         "@questpie/mcp": "workspace:*",
+        "@questpie/sandbox": "workspace:*",
         "@questpie/workflows": "workspace:*",
         "@tailwindcss/vite": "^4.0.6",
         "@tanstack/react-query": "^5.62.11",
@@ -331,6 +334,7 @@
         "@agentclientprotocol/sdk": "0.22.1",
         "@iconify/react": "^6.0.2",
         "@questpie/admin": "workspace:*",
+        "ai": "^6.0.0",
         "questpie": "workspace:*",
         "spawn-agent": "0.0.1",
       },
@@ -390,6 +394,20 @@
       },
       "devDependencies": {
         "@types/qs": "^6.9.17",
+        "bun-types": "latest",
+        "tsdown": "^0.18.3",
+      },
+      "peerDependencies": {
+        "questpie": "^3.0.0",
+      },
+    },
+    "packages/executor": {
+      "name": "@questpie/executor",
+      "version": "3.0.0",
+      "dependencies": {
+        "questpie": "workspace:*",
+      },
+      "devDependencies": {
         "bun-types": "latest",
         "tsdown": "^0.18.3",
       },
@@ -511,6 +529,20 @@
         "pg",
         "pg-boss",
       ],
+    },
+    "packages/sandbox": {
+      "name": "@questpie/sandbox",
+      "version": "3.0.0",
+      "dependencies": {
+        "questpie": "workspace:*",
+      },
+      "devDependencies": {
+        "bun-types": "latest",
+        "tsdown": "^0.18.3",
+      },
+      "peerDependencies": {
+        "questpie": "^3.0.0",
+      },
     },
     "packages/tanstack-query": {
       "name": "@questpie/tanstack-query",
@@ -721,6 +753,8 @@
     "@base-ui/react": ["@base-ui/react@1.4.1", "", { "dependencies": { "@babel/runtime": "^7.29.2", "@base-ui/utils": "0.2.8", "@floating-ui/react-dom": "^2.1.8", "@floating-ui/utils": "^0.2.11", "use-sync-external-store": "^1.6.0" }, "peerDependencies": { "@date-fns/tz": "^1.2.0", "@types/react": "^17 || ^18 || ^19", "date-fns": "^4.0.0", "react": "^17 || ^18 || ^19", "react-dom": "^17 || ^18 || ^19" }, "optionalPeers": ["@date-fns/tz", "@types/react", "date-fns"] }, "sha512-Ab5/LIhcmL8BQcsBUYiOfkSDRdLpvgUBzMK30cu684JPcLclYlztharvCZyNNgzJtbAiREzI9q0pI5erHCMgCw=="],
 
     "@base-ui/utils": ["@base-ui/utils@0.2.8", "", { "dependencies": { "@babel/runtime": "^7.29.2", "@floating-ui/utils": "^0.2.11", "reselect": "^5.1.1", "use-sync-external-store": "^1.6.0" }, "peerDependencies": { "@types/react": "^17 || ^18 || ^19", "react": "^17 || ^18 || ^19", "react-dom": "^17 || ^18 || ^19" }, "optionalPeers": ["@types/react"] }, "sha512-jvOi+c+ftGlGotNcKnzPVg2IhCaDTB6/6R3JeqdjdXktuAJi3wKH9T7+svuaKh1mmfVU11UWzUZVH74JDfi/wQ=="],
+
+    "@better-auth/api-key": ["@better-auth/api-key@1.6.14", "", { "dependencies": { "zod": "^4.3.6" }, "peerDependencies": { "@better-auth/core": "^1.6.14", "@better-auth/utils": "0.4.1", "better-auth": "^1.6.14", "better-call": "1.3.5" } }, "sha512-iMLRcjpGyegI5yy375ZIw83HZGSZe6TwjtCKWdFTYy1PQ0bUcD0H61uKcvO82Co4jJmjakI3POR6lDy5W1OOew=="],
 
     "@better-auth/core": ["@better-auth/core@1.6.14", "", { "dependencies": { "@opentelemetry/semantic-conventions": "^1.39.0", "@standard-schema/spec": "^1.1.0", "zod": "^4.3.6" }, "peerDependencies": { "@better-auth/utils": "0.4.1", "@better-fetch/fetch": "1.1.21", "@cloudflare/workers-types": ">=4", "@opentelemetry/api": "^1.9.0", "better-call": "1.3.5", "jose": "^6.1.0", "kysely": "^0.28.5 || ^0.29.0", "nanostores": "^1.0.1" }, "optionalPeers": ["@cloudflare/workers-types", "@opentelemetry/api"] }, "sha512-12cA7tnR4Wyb3nLpPmeq/Id7QNB+4OhjbzuX7sIhqglgXGjyT5iiNpe2lx/8FF532sHC450Yx1850salCYbkzw=="],
 
@@ -1186,6 +1220,8 @@
 
     "@questpie/elysia": ["@questpie/elysia@workspace:packages/elysia"],
 
+    "@questpie/executor": ["@questpie/executor@workspace:packages/executor"],
+
     "@questpie/hono": ["@questpie/hono@workspace:packages/hono"],
 
     "@questpie/mcp": ["@questpie/mcp@workspace:packages/mcp"],
@@ -1193,6 +1229,8 @@
     "@questpie/next": ["@questpie/next@workspace:packages/next"],
 
     "@questpie/openapi": ["@questpie/openapi@workspace:packages/openapi"],
+
+    "@questpie/sandbox": ["@questpie/sandbox@workspace:packages/sandbox"],
 
     "@questpie/tanstack-query": ["@questpie/tanstack-query@workspace:packages/tanstack-query"],
 

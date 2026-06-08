@@ -1,7 +1,7 @@
 import { job } from "questpie/services";
 import { z } from "zod";
 
-import { asJsonValue, asRecord, mergeRecords, relationId } from "../lib/records";
+import { asRecord, mergeRecords, relationId } from "../lib/records";
 import { dateOrNull } from "../lib/schedules";
 
 function minutesAgo(minutes: number, now = new Date()) {
@@ -49,19 +49,15 @@ export default job({
 			const lastEscalatedAt = dateOrNull(metadata.lastEscalatedAt);
 			if (lastEscalatedAt && lastEscalatedAt > cutoff) continue;
 
-			const nextStatus =
-				status === "running" ? ("waiting" as const) : (status as import("../lib/app-types").TaskStatusValue);
 			await ctx.collections.tasks.updateById({
 				id: String(task.id),
 				data: {
-					status: nextStatus,
-					metadata: asJsonValue(
-						mergeRecords(metadata, {
+					...(status === "running" && { status: "waiting" }),
+					metadata: mergeRecords(metadata, {
 							lastEscalatedAt: now.toISOString(),
 							escalationReason:
 								status === "running" ? "stale_running" : `stale_${status}`,
 						}),
-					),
 				},
 			});
 			await ctx.collections.activity.create({
@@ -72,7 +68,7 @@ export default job({
 				project: relationId(task.project) ?? undefined,
 				details: {
 					status,
-					nextStatus,
+					nextStatus: status === "running" ? "waiting" : status,
 					staleRunningMinutes: ctx.payload.staleRunningMinutes,
 					staleWaitingMinutes: ctx.payload.staleWaitingMinutes,
 				},

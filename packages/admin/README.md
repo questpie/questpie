@@ -65,6 +65,14 @@ export default adminConfig({
 
 Collections, globals, routes, and jobs are auto-discovered via file convention. Codegen produces a `.generated/index.ts` with the fully-typed `App` and runtime `app` instance.
 
+### Admin Auth Contract
+
+`@questpie/admin` expects the app to use `adminModule`'s starter Better Auth model, or an equivalent auth setup that exposes `session.user.role` on the active session.
+
+Access to the admin panel and admin RPC routes is granted only when `session.user.role === "admin"`. This includes admin config, content locale callbacks, preview URL/token generation, actions, widgets, and reactive field handlers. Authenticated users with `role: "user"` or a missing role are not admin users. The built-in setup route uses the same contract when checking for and creating the first admin user with `role = "admin"`.
+
+If you extend the Better Auth `user` collection, merge the starter user collection instead of replacing it from scratch. Custom user collections must preserve the role field and session role propagation used by the admin guard.
+
 ### Collection Admin Config
 
 Admin metadata, list views, and form views are defined on the collection itself:

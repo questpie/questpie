@@ -15,6 +15,7 @@ export function TimeField({
 	disabled,
 	localized,
 	locale,
+	hideLabel,
 	control,
 	className,
 	precision,
@@ -35,6 +36,7 @@ export function TimeField({
 						disabled={disabled}
 						localized={localized}
 						locale={locale}
+						hideLabel={hideLabel}
 						error={fieldState.error?.message}
 					>
 						<TimeInput

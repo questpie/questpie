@@ -2,7 +2,7 @@ import { ApiError } from "questpie/errors";
 import { route } from "questpie/services";
 import { z } from "zod";
 
-import { asJsonValue } from "../lib/records";
+import { sessionOnly } from "../lib/route-access";
 import { workflowsFromContext } from "../lib/workflows";
 
 const intakeSchema = z.object({
@@ -23,6 +23,7 @@ const intakeSchema = z.object({
 
 export default route()
 	.post()
+	.access(sessionOnly)
 	.schema(intakeSchema)
 	.handler(async (ctx) => {
 		const { input, collections } = ctx;
@@ -44,8 +45,8 @@ export default route()
 			model: input.modelId,
 			queue: input.queue,
 			createdBy: input.createdBy ?? ctx.session?.user?.id ?? "system",
-			context: asJsonValue(input.context),
-			metadata: asJsonValue(input.metadata),
+			context: input.context,
+			metadata: input.metadata,
 		});
 
 		await collections.activity.create({

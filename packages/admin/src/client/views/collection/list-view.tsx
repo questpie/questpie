@@ -1080,7 +1080,7 @@ function ListViewInner({
 	const renderMetaField = React.useCallback(
 		(field: string, value: unknown): React.ReactNode => {
 			if (value === null || value === undefined || value === "") {
-				return <span className="text-muted-foreground/40">-</span>;
+				return <span className="text-foreground-subtle">-</span>;
 			}
 			const fieldDef = fieldByName.get(field);
 			const isDate =
@@ -1225,10 +1225,7 @@ function ListViewInner({
 											<Button
 												variant="outline"
 												size="icon-sm"
-												className={cn(
-													"relative",
-													hasViewOptionsState && "border-foreground",
-												)}
+												className="relative"
 												onClick={() => setIsSheetOpen(true)}
 												aria-label={t("viewOptions.title")}
 											>
@@ -1264,15 +1261,16 @@ function ListViewInner({
 				/>
 			}
 		>
-			<div className="space-y-3">
+			<div className="space-y-4">
 				{showSearch && isSearchPanelOpen && (
-					<div className="border-border-subtle bg-muted/20 rounded-md border p-3">
+					<div className="max-w-xl">
 						<SearchInput
 							value={searchTerm}
 							onChange={(event) => setSearchTerm(event.target.value)}
 							onClear={() => setSearchTerm("")}
 							placeholder={t("collectionSearch.placeholder")}
 							isLoading={isSearchActive}
+							containerClassName="h-10"
 						/>
 					</div>
 				)}
@@ -1355,15 +1353,15 @@ function ListViewInner({
 								key={outlineRow.key}
 								data-state={isSelected ? "selected" : undefined}
 								className={cn(
-									"group/list-row hover:bg-muted/40 data-[state=selected]:bg-muted/60 relative flex min-w-0 cursor-pointer items-center gap-2 rounded-md px-4 text-sm transition-colors",
+									"group/list-row hover:bg-accent data-[state=selected]:bg-muted relative flex min-w-0 cursor-pointer items-center gap-2 rounded-md px-4 text-sm transition-colors",
 									density === "compact" ? "min-h-9 py-1" : "min-h-11 py-2",
-									isHighlighted(item.id) && "bg-info/10",
+									isHighlighted(item.id) && "animate-realtime-pulse",
 									isGroupMismatch && "opacity-45",
 								)}
 							>
 								{outlineRow.depth > 0 && (
 									<span
-										className="bg-border/40 absolute top-0 bottom-0 w-px"
+										className="bg-border-subtle absolute top-0 bottom-0 w-px"
 										style={{
 											left: `${52 + (outlineRow.depth - 1) * 18}px`,
 										}}
@@ -1389,7 +1387,7 @@ function ListViewInner({
 								{outlineRow.expandable ? (
 									<button
 										type="button"
-										className="text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-ring/40 -ml-1 flex size-7 shrink-0 items-center justify-center rounded-[var(--control-radius-inner)] transition-[background-color,color,box-shadow] focus-visible:ring-2 focus-visible:outline-none"
+										className="text-muted-foreground hover:bg-surface-high hover:text-foreground focus-visible:ring-ring/40 -ml-1 flex size-7 shrink-0 items-center justify-center rounded-[var(--control-radius-inner)] transition-[background-color,color,box-shadow] focus-visible:ring-2 focus-visible:outline-none"
 										onClick={(event) => {
 											event.stopPropagation();
 											toggleOutlineKey(outlineRow.key);
@@ -1469,9 +1467,11 @@ function ListViewInner({
 											);
 										})}
 										{locked && (
-											<span className="text-warning inline-flex items-center gap-1 text-xs">
+											<span className="text-muted-foreground bg-muted inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-xs">
 												<Icon icon="ph:lock-key" className="size-3" />
-												{lockUser?.name ?? t("collection.locked")}
+												<span className="max-w-20 truncate">
+													{lockUser?.name ?? t("collection.locked")}
+												</span>
 											</span>
 										)}
 									</div>
@@ -1549,7 +1549,7 @@ function ListViewInner({
 										<div key={groupKey} className="flex flex-col">
 											<button
 												type="button"
-												className="bg-muted/[0.06] hover:bg-muted/20 flex min-h-8 items-center gap-2 rounded-md px-3 py-1 text-left transition-colors"
+												className="hover:bg-surface-mid focus-visible:ring-ring/40 flex min-h-8 items-center gap-2 rounded-md px-3 py-1 text-left transition-colors focus-visible:ring-2 focus-visible:outline-none"
 												onClick={() => toggleOutlineKey(groupToggleKey)}
 												aria-expanded={!isGroupCollapsed}
 											>
@@ -1602,7 +1602,7 @@ function ListViewInner({
 														{totalDocs > loadedCount && (
 															<button
 																type="button"
-																className="text-muted-foreground hover:text-foreground hover:bg-muted/50 flex w-full items-center justify-center gap-2 rounded-md py-2 text-xs transition-colors"
+																className="text-muted-foreground hover:text-foreground hover:bg-surface-mid focus-visible:ring-ring/40 flex w-full items-center justify-center gap-2 rounded-md py-2 text-xs transition-colors focus-visible:ring-2 focus-visible:outline-none"
 																onClick={() => loadMoreInGroup(groupKey)}
 															>
 																<Icon icon="ph:caret-down" className="size-3" />
@@ -1853,7 +1853,7 @@ function OutlineHeaderRow({
 	return (
 		<button
 			type="button"
-			className="hover:bg-muted/50 focus-visible:ring-ring/40 flex min-h-8 w-full items-center gap-2 px-3 py-1 text-left transition-[background-color,color,box-shadow] focus-visible:ring-2 focus-visible:outline-none"
+			className="hover:bg-surface-mid focus-visible:ring-ring/40 flex min-h-8 w-full items-center gap-2 rounded-md px-3 py-1 text-left transition-[background-color,color,box-shadow] focus-visible:ring-2 focus-visible:outline-none"
 			onClick={() => onToggle(row.key)}
 			aria-expanded={!row.collapsed}
 		>
@@ -1880,7 +1880,7 @@ function OutlineHeaderRow({
 				{row.label}
 			</span>
 			{showCounts && (
-				<span className="text-muted-foreground/70 ml-1 text-xs tabular-nums">
+				<span className="text-muted-foreground/60 ml-1 text-xs tabular-nums">
 					{row.count}
 				</span>
 			)}

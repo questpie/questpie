@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import type { WorkflowContextCollections } from "./app-types";
-import { asJsonValue, asRecord } from "./records";
+import { asRecord } from "./records";
 import type { RuntimeResolution } from "./runtime-selection";
 
 type InitiatedBy = "chat" | "task" | "schedule" | "workflow" | "manual" | "mcp";
@@ -19,6 +19,7 @@ type CreateAiRunLinkInput = {
 	scheduleId?: string | null;
 	scheduleExecutionId?: string | null;
 	runtimeSessionRef?: string | null;
+	systemPrompt?: string | null;
 	resumedFromRunId?: string | null;
 	resumable?: boolean;
 	spawnMetadata?: Record<string, unknown>;
@@ -37,8 +38,9 @@ export async function createAiRunLink(input: CreateAiRunLinkInput) {
 		status: "pending",
 		runtime,
 		prompt: input.instructions,
+		systemPrompt: input.systemPrompt ?? undefined,
 		runtimeSessionRef: input.runtimeSessionRef ?? undefined,
-		meta: asJsonValue(asRecord(input.spawnMetadata)),
+		meta: asRecord(input.spawnMetadata),
 	});
 
 	return input.ctx.collections.run_links.create({
@@ -60,6 +62,6 @@ export async function createAiRunLink(input: CreateAiRunLinkInput) {
 		runtimeSessionRef: input.runtimeSessionRef ?? undefined,
 		resumedFromRun: input.resumedFromRunId ?? undefined,
 		resumable: input.resumable ?? false,
-		metadata: asJsonValue(asRecord(input.linkMetadata)),
+		metadata: asRecord(input.linkMetadata),
 	});
 }

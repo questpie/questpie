@@ -108,6 +108,7 @@ export {
 
 export {
 	createActionCallbackProxy,
+	createActionFieldBuilderProxy,
 	createActionProxy,
 	createComponentCallbackProxy,
 	createComponentProxy,

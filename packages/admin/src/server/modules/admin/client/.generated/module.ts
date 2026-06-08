@@ -3,6 +3,7 @@
 // Regenerate with: questpie generate --module
 
 // ── Views ────────────────────────────────────────────
+import _view_collectionDocument from "../views/collection-document";
 import _view_collectionForm from "../views/collection-form";
 import _view_collectionTable from "../views/collection-table";
 import _view_globalForm from "../views/global-form";
@@ -54,6 +55,7 @@ import _wgt_value from "../widgets/value";
 // ════════════════════════════════════════════════════════════
 
 export type AdminViews =
+	{ [K in typeof _view_collectionDocument.name]: typeof _view_collectionDocument } &
 	{ [K in typeof _view_collectionForm.name]: typeof _view_collectionForm } &
 	{ [K in typeof _view_collectionTable.name]: typeof _view_collectionTable } &
 	{ [K in typeof _view_globalForm.name]: typeof _view_globalForm } &
@@ -111,6 +113,7 @@ export interface AdminWidgets {
 const _module = {
 	name: "questpie-admin" as const,
 	views: {
+		[_view_collectionDocument.name]: _view_collectionDocument,
 		[_view_collectionForm.name]: _view_collectionForm,
 		[_view_collectionTable.name]: _view_collectionTable,
 		[_view_globalForm.name]: _view_globalForm,

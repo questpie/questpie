@@ -42,6 +42,64 @@ const read_only_config = global("read_only_config")
 		update: false,
 	});
 
+const field_flag_config = global("field_flag_config")
+	.fields(({ f }) => ({
+		title: f.text(100),
+		serverOnly: f.text(100).inputFalse(),
+		secret: f.text(100).outputFalse(),
+		profile: f.object({
+			publicNote: f.text(100),
+			hidden: f.text(100).outputFalse(),
+			serverOnly: f.text(100).inputFalse(),
+		}),
+		events: f
+			.object({
+				label: f.text(100),
+				hidden: f.text(100).outputFalse(),
+				serverOnly: f.text(100).inputFalse(),
+			})
+			.array(),
+	}))
+	.access({
+		read: true,
+		update: true,
+	});
+
+const field_level_config = global("field_level_config")
+	.fields(({ f }) => ({
+		title: f.text(100),
+		secret: f.text(100).access({
+			read: false,
+			create: false,
+			update: false,
+		}),
+	}))
+	.access({
+		read: true,
+		update: true,
+	});
+
+const field_override_config = global("field_override_config")
+	.fields(({ f }) => ({
+		title: f.text(100),
+		secret: f.text(100).access({
+			read: false,
+			create: false,
+			update: false,
+		}),
+	}))
+	.access({
+		read: true,
+		update: true,
+		fields: {
+			secret: {
+				read: true,
+				create: true,
+				update: true,
+			},
+		},
+	});
+
 const workflow_config = global("workflow_config")
 	.fields(({ f }) => ({
 		title: f.text().required(),
@@ -84,6 +142,9 @@ describe("global CRUD", () => {
 				localized_config,
 				auto_config,
 				read_only_config,
+				field_flag_config,
+				field_level_config,
+				field_override_config,
 				workflow_config,
 				guarded_workflow_config,
 			},
@@ -201,6 +262,161 @@ describe("global CRUD", () => {
 		expect(created?.mode).toBe("read");
 	});
 
+	it("rejects user writes to global inputFalse fields", async () => {
+		const userCtx = createTestContext({ accessMode: "user" });
+
+		await expect(
+			app.globals.field_flag_config.update(
+				{
+					title: "Flags",
+					serverOnly: "client supplied",
+				},
+				userCtx,
+			),
+		).rejects.toThrow("Cannot write field 'serverOnly': access denied");
+	});
+
+	it("rejects user writes to nested global inputFalse fields", async () => {
+		const userCtx = createTestContext({ accessMode: "user" });
+
+		await expect(
+			app.globals.field_flag_config.update(
+				{
+					title: "Flags",
+					profile: {
+						publicNote: "visible",
+						serverOnly: "client supplied",
+					},
+				},
+				userCtx,
+			),
+		).rejects.toThrow("Cannot write field 'profile.serverOnly': access denied");
+	});
+
+	it("redacts global outputFalse fields from user-mode update and get responses", async () => {
+		const userCtx = createTestContext({ accessMode: "user" });
+
+		const updated = await app.globals.field_flag_config.update(
+			{
+				title: "Flags",
+				secret: "hidden",
+				profile: {
+					publicNote: "visible",
+					hidden: "nested hidden",
+				},
+				events: [
+					{
+						label: "visible event",
+						hidden: "nested array hidden",
+					},
+				],
+			},
+			userCtx,
+		);
+
+		expect(updated).not.toHaveProperty("secret");
+		expect(updated?.profile).toEqual({ publicNote: "visible" });
+		expect(updated?.events).toEqual([{ label: "visible event" }]);
+
+		const retrieved = await app.globals.field_flag_config.get({}, userCtx);
+		expect(retrieved).not.toHaveProperty("secret");
+		expect(retrieved?.profile).toEqual({ publicNote: "visible" });
+		expect(retrieved?.events).toEqual([{ label: "visible event" }]);
+
+		const systemRetrieved = await app.globals.field_flag_config.get(
+			{},
+			createTestContext({ accessMode: "system" }),
+		);
+		expect(systemRetrieved?.events).toEqual([
+			{
+				label: "visible event",
+				hidden: "nested array hidden",
+			},
+		]);
+	});
+
+	it("allows system mode to write and read global input/output flagged fields", async () => {
+		const systemCtx = createTestContext({ accessMode: "system" });
+
+		const updated = await app.globals.field_flag_config.update(
+			{
+				title: "Flags",
+				serverOnly: "server supplied",
+				secret: "system visible",
+				profile: {
+					publicNote: "visible",
+					hidden: "nested hidden",
+					serverOnly: "nested server supplied",
+				},
+				events: [
+					{
+						label: "visible event",
+						hidden: "nested array hidden",
+						serverOnly: "nested array server supplied",
+					},
+				],
+			},
+			systemCtx,
+		);
+
+		expect(updated?.serverOnly).toBe("server supplied");
+		expect(updated?.secret).toBe("system visible");
+		expect(updated?.profile).toEqual({
+			publicNote: "visible",
+			hidden: "nested hidden",
+			serverOnly: "nested server supplied",
+		});
+		expect(updated?.events).toEqual([
+			{
+				label: "visible event",
+				hidden: "nested array hidden",
+				serverOnly: "nested array server supplied",
+			},
+		]);
+	});
+
+	it("enforces global f.access() declarations for user-mode read and write", async () => {
+		const userCtx = createTestContext({ accessMode: "user" });
+		const systemCtx = createTestContext({ accessMode: "system" });
+
+		await expect(
+			app.globals.field_level_config.update(
+				{
+					title: "Field access",
+					secret: "client supplied",
+				},
+				userCtx,
+			),
+		).rejects.toThrow("Cannot write field 'secret': access denied");
+
+		await app.globals.field_level_config.update(
+			{
+				title: "Field access",
+				secret: "system supplied",
+			},
+			systemCtx,
+		);
+
+		const retrieved = await app.globals.field_level_config.get({}, userCtx);
+		expect(retrieved).not.toHaveProperty("secret");
+	});
+
+	it("lets global-level field access override field-level access declarations", async () => {
+		const userCtx = createTestContext({ accessMode: "user" });
+
+		const updated = await app.globals.field_override_config.update(
+			{
+				title: "Override",
+				secret: "allowed",
+			},
+			userCtx,
+		);
+		expect(updated?.secret).toBe("allowed");
+
+		const retrieved = await app.globals.field_override_config.get({}, userCtx);
+		expect(retrieved?.secret).toBe("allowed");
+	});
+
 	it("reads global snapshots from non-initial workflow stage", async () => {
 		const ctx = createTestContext({ accessMode: "system" });
 
@@ -224,10 +440,7 @@ describe("global CRUD", () => {
 	it("enforces global workflow stage transitions", async () => {
 		const ctx = createTestContext({ accessMode: "system" });
 
-		await app.globals.guarded_workflow_config.update(
-			{ title: "Draft" },
-			ctx,
-		);
+		await app.globals.guarded_workflow_config.update({ title: "Draft" }, ctx);
 
 		await expect(
 			app.globals.guarded_workflow_config.update(

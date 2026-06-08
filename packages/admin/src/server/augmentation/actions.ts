@@ -112,6 +112,11 @@ export interface ServerActionContext<TData = Record<string, unknown>> {
 	locale?: string;
 	/** Translation function for admin messages */
 	t: (key: string, params?: Record<string, unknown>) => string;
+	/**
+	 * Workflows API — present when a workflows plugin is registered.
+	 * Resolved from the app like route handler contexts.
+	 */
+	workflows?: unknown;
 }
 
 /**

@@ -19,7 +19,10 @@ export function workerSecretFromRequest(request: Request): string | null {
 export async function authenticateWorker(
 	ctx: AiJsonRouteContext,
 ): Promise<{ id: string }> {
-	const secret = workerSecretFromRequest(ctx.request);
+	const request = ctx.request;
+	if (!request) throw ApiError.unauthorized();
+
+	const secret = workerSecretFromRequest(request);
 	if (!secret) throw ApiError.unauthorized();
 	const { workerManager } = getAiServices(ctx);
 	const worker = await workerManager.authenticate(secret);

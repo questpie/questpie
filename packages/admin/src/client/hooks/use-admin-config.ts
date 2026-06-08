@@ -13,6 +13,11 @@ import type { AdminConfigResponse } from "../types/admin-config";
 
 /** Query key for admin config */
 const adminConfigQueryKey = ["questpie", "admin", "config"] as const;
+const publicAdminConfigQueryKey = [
+	"questpie",
+	"admin",
+	"public-config",
+] as const;
 
 /** Query options factory for admin config — can be used for prefetching in loaders */
 export function getAdminConfigQueryOptions(client: unknown) {
@@ -23,6 +28,25 @@ export function getAdminConfigQueryOptions(client: unknown) {
 				return {};
 			}
 			return (client as any).routes.getAdminConfig();
+		},
+		staleTime: 5 * 60 * 1000,
+		gcTime: 30 * 60 * 1000,
+	};
+}
+
+/** Query options for auth-page-safe public branding/bootstrap config. */
+export function getPublicAdminConfigQueryOptions(client: unknown) {
+	return {
+		queryKey: publicAdminConfigQueryKey,
+		queryFn: async (): Promise<AdminConfigResponse> => {
+			if (!client || !(client as any).routes) {
+				return {};
+			}
+			const routes = (client as any).routes;
+			if (typeof routes.getPublicAdminConfig === "function") {
+				return routes.getPublicAdminConfig();
+			}
+			return {};
 		},
 		staleTime: 5 * 60 * 1000,
 		gcTime: 30 * 60 * 1000,

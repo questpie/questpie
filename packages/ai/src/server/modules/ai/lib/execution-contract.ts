@@ -16,6 +16,7 @@ export interface SpawnRunInput {
 	prompt: string;
 	runtime?: string | null;
 	runtimeSessionRef?: string | null;
+	systemPrompt?: string | null;
 	metadata?: Record<string, unknown>;
 }
 

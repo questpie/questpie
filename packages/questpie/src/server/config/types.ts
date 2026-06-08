@@ -553,6 +553,12 @@ export interface QuestpieConfig {
 	kv?: import("../modules/core/integrated/kv/types.js").KVConfig;
 
 	/**
+	 * Executor configuration (sandboxed / trusted code execution).
+	 * Unconfigured = disabled (`ctx.executor.run` throws a clear error).
+	 */
+	executor?: import("../modules/core/integrated/executor/types.js").ExecutorConfig;
+
+	/**
 	 * Migration configuration
 	 */
 	migrations?: {

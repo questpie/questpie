@@ -11,12 +11,16 @@
 
 import { describe, expect, mock, test } from "bun:test";
 
+import { runWithContext, tryGetContext } from "questpie";
+
 import {
 	BlockBuilder,
 	block,
 } from "#questpie/admin/server/block/block-builder.js";
+import { introspectBlock } from "#questpie/admin/server/block/introspection.js";
 import { processBlocksDocument } from "#questpie/admin/server/block/prefetch.js";
 import type { BlocksDocument } from "#questpie/admin/server/fields/blocks.js";
+import { adminConfigDTOSchema } from "#questpie/admin/server/modules/admin/dto/admin-config.dto.js";
 
 // ============================================================================
 // Block Builder - Prefetch Configuration
@@ -315,6 +319,212 @@ describe("processBlocksDocument - Declarative Expansion", () => {
 // ============================================================================
 
 describe("processBlocksDocument - With Loader", () => {
+	test("passes caller CRUD context to declared field expansion", async () => {
+		const db = { marker: "db" };
+		const session = { user: { id: "admin-1", role: "admin" } };
+		const findContexts: any[] = [];
+		const findAssets = mock(async (_options: any, context: any) => {
+			findContexts.push(context);
+			return {
+				docs: [{ id: "asset-123", url: "http://test.com/asset-123" }],
+			};
+		});
+
+		const blockDefs = {
+			hero: {
+				name: "hero",
+				state: {
+					name: "hero",
+					prefetchWith: { image: true },
+					fields: {
+						image: {
+							getMetadata: () => ({
+								type: "relation",
+								targetCollection: "assets",
+							}),
+						},
+					},
+				},
+				getFieldMetadata: () => ({}),
+				executePrefetch: async () => ({}),
+			},
+		};
+
+		const blocksDoc: BlocksDocument = {
+			_tree: [{ id: "hero-1", type: "hero", children: [] }],
+			_values: { "hero-1": { image: "asset-123" } },
+		};
+
+		const result = await processBlocksDocument(blocksDoc, blockDefs, {
+			app: {},
+			db,
+			session,
+			locale: "sk",
+			accessMode: "user",
+			collections: { assets: { find: findAssets } },
+		});
+
+		expect(findAssets).toHaveBeenCalled();
+		expect(findContexts[0]).toMatchObject({
+			accessMode: "user",
+			locale: "sk",
+			session,
+			db,
+		});
+		expect(result?._data?.["hero-1"]?.image).toEqual({
+			id: "asset-123",
+			url: "http://test.com/asset-123",
+		});
+	});
+
+	test("runs loader inside caller user context", async () => {
+		const session = { user: { id: "admin-1", role: "admin" } };
+		const runtimeContexts: unknown[] = [];
+		const loaderFn = mock(async ({ ctx }: any) => {
+			runtimeContexts.push(tryGetContext());
+			return {
+				accessMode: ctx.accessMode,
+				session: ctx.session,
+			};
+		});
+
+		const blockDefs = {
+			hero: {
+				name: "hero",
+				state: {
+					name: "hero",
+					_prefetchLoader: loaderFn,
+					fields: {},
+				},
+				getFieldMetadata: () => ({}),
+				executePrefetch: async () => ({}),
+			},
+		};
+
+		const blocksDoc: BlocksDocument = {
+			_tree: [{ id: "hero-1", type: "hero", children: [] }],
+			_values: { "hero-1": {} },
+		};
+
+		const result = await processBlocksDocument(blocksDoc, blockDefs, {
+			app: {},
+			db: { marker: "db" },
+			session,
+			locale: "en",
+			accessMode: "user",
+		});
+
+		expect(loaderFn).toHaveBeenCalled();
+		expect(result?._data?.["hero-1"]).toEqual({
+			accessMode: "user",
+			session,
+		});
+		expect((runtimeContexts[0] as any)?.accessMode).toBe("user");
+		expect((runtimeContexts[0] as any)?.session).toBe(session);
+	});
+
+	test("preserves explicit unauthenticated session over parent context", async () => {
+		const parentSession = { user: { id: "admin-1", role: "admin" } };
+		const runtimeContexts: unknown[] = [];
+		const loaderFn = mock(async () => {
+			runtimeContexts.push(tryGetContext());
+			return { ok: true };
+		});
+		const blockDefs = {
+			hero: {
+				name: "hero",
+				state: {
+					name: "hero",
+					_prefetchLoader: loaderFn,
+					fields: {},
+				},
+				getFieldMetadata: () => ({}),
+				executePrefetch: async () => ({}),
+			},
+		};
+		const blocksDoc: BlocksDocument = {
+			_tree: [{ id: "hero-1", type: "hero", children: [] }],
+			_values: { "hero-1": {} },
+		};
+
+		await runWithContext(
+			{
+				app: {},
+				db: {},
+				session: parentSession,
+				accessMode: "user",
+			},
+			() =>
+				processBlocksDocument(blocksDoc, blockDefs, {
+					app: {},
+					db: {},
+					session: null,
+					accessMode: "user",
+				}),
+		);
+
+		expect((runtimeContexts[0] as any)?.session).toBeNull();
+		expect((runtimeContexts[0] as any)?.accessMode).toBe("user");
+	});
+
+	test("propagates caller context to nested loader collection and global reads", async () => {
+		const session = { user: { id: "admin-1", role: "admin" } };
+		const collectionContexts: unknown[] = [];
+		const globalContexts: unknown[] = [];
+		const collections = {
+			restrictedPosts: {
+				find: mock(async () => {
+					collectionContexts.push(tryGetContext());
+					return { docs: [] };
+				}),
+			},
+		};
+		const globals = {
+			restrictedSettings: {
+				get: mock(async () => {
+					globalContexts.push(tryGetContext());
+					return { id: "settings" };
+				}),
+			},
+		};
+		const loaderFn = mock(async ({ ctx }: any) => {
+			await ctx.collections.restrictedPosts.find({});
+			await ctx.globals.restrictedSettings.get({});
+			return { ok: true };
+		});
+
+		const blockDefs = {
+			hero: {
+				name: "hero",
+				state: {
+					name: "hero",
+					_prefetchLoader: loaderFn,
+					fields: {},
+				},
+				getFieldMetadata: () => ({}),
+				executePrefetch: async () => ({}),
+			},
+		};
+
+		const blocksDoc: BlocksDocument = {
+			_tree: [{ id: "hero-1", type: "hero", children: [] }],
+			_values: { "hero-1": {} },
+		};
+
+		const result = await processBlocksDocument(blocksDoc, blockDefs, {
+			app: { collections, globals },
+			db: { marker: "db" },
+			session,
+			accessMode: "user",
+		});
+
+		expect(result?._data?.["hero-1"]).toEqual({ ok: true });
+		expect((collectionContexts[0] as any)?.accessMode).toBe("user");
+		expect((collectionContexts[0] as any)?.session).toBe(session);
+		expect((globalContexts[0] as any)?.accessMode).toBe("user");
+		expect((globalContexts[0] as any)?.session).toBe(session);
+	});
+
 	test("should call loader with expanded data", async () => {
 		const loaderFn = mock(async ({ expanded }: any) => ({
 			processed: true,
@@ -344,16 +554,14 @@ describe("processBlocksDocument - With Loader", () => {
 
 		// Mock app with assets collection
 		const mockApp = {
-			api: {
-				collections: {
-					assets: {
-						find: async ({ where }: any) => ({
-							docs: where.id.in.map((id: string) => ({
-								id,
-								url: `http://test.com/${id}`,
-							})),
-						}),
-					},
+			collections: {
+				assets: {
+					find: async ({ where }: any) => ({
+						docs: where.id.in.map((id: string) => ({
+							id,
+							url: `http://test.com/${id}`,
+						})),
+					}),
 				},
 			},
 		};
@@ -372,6 +580,48 @@ describe("processBlocksDocument - With Loader", () => {
 		expect(loaderFn).toHaveBeenCalled();
 		// Result should include loader output
 		expect(result?._data?.["hero-1"]?.processed).toBe(true);
+		expect(result?._data?.["hero-1"]?.expandedKeys).toEqual(["image"]);
+	});
+
+	test("introspection redacts server prefetch implementation details", () => {
+		const loader = async () => ({ processed: true });
+		const def = block("hero")
+			.fields(({ f }) => ({
+				image: f.text().set("admin", {
+					filter: ({ data }: any) => ({ owner: data.owner }),
+				}),
+			}))
+			.form(({ f }) => ({
+				fields: [
+					{
+						field: f.image,
+						props: {
+							filter: ({ data }: any) => ({ owner: data.owner }),
+						},
+					},
+				],
+			}))
+			.prefetch({ with: { image: true }, loader })
+			.build();
+
+		const schema = introspectBlock(def) as Record<string, unknown>;
+
+		expect(schema.hasPrefetch).toBe(true);
+		expect(schema.prefetch).toBeUndefined();
+		expect(schema.prefetchWith).toBeUndefined();
+		expect(schema._prefetchLoader).toBeUndefined();
+		expect((schema.fields as any).image.metadata.meta.filter).toMatchObject({
+			"~reactive": "prop",
+			watch: ["owner"],
+		});
+		expect((schema.form as any).fields[0].props.filter).toMatchObject({
+			"~reactive": "prop",
+			watch: ["owner"],
+		});
+		expect(JSON.stringify(schema)).not.toContain("_prefetchLoader");
+		expect(
+			adminConfigDTOSchema.parse({ blocks: { hero: schema } }).blocks,
+		).toBeDefined();
 	});
 });
 

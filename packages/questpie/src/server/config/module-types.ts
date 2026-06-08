@@ -61,6 +61,7 @@ import type {
 } from "#questpie/server/config/types.js";
 import type { TranslationsConfig } from "#questpie/server/i18n/types.js";
 import type { Migration } from "#questpie/server/migration/types.js";
+import type { ExecutorConfig } from "#questpie/server/modules/core/integrated/executor/types.js";
 import type { KVConfig } from "#questpie/server/modules/core/integrated/kv/types.js";
 import type { LoggerConfig } from "#questpie/server/modules/core/integrated/logger/types.js";
 import type { MailerConfig } from "#questpie/server/modules/core/integrated/mailer/types.js";
@@ -270,6 +271,9 @@ export interface RuntimeConfig<
 
 	/** KV store configuration. */
 	kv?: KVConfig;
+
+	/** Executor configuration (sandboxed / trusted code execution). */
+	executor?: ExecutorConfig;
 
 	/** I18n translations config (backend messages). */
 	translations?: TranslationsConfig;
@@ -512,6 +516,9 @@ export interface AppConfig {
 
 	/** KV store configuration. */
 	kv?: KVConfig;
+
+	/** Executor configuration (sandboxed / trusted code execution). */
+	executor?: ExecutorConfig;
 
 	/** Auth configuration — deep-merged with module auth contributions. */
 	auth?: BetterAuthOptions | Record<string, any>;

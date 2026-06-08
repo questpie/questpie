@@ -91,7 +91,7 @@ export const runArtifacts = mcpTool("run_artifacts", {
 }).handler(async ({ input, ctx, request, accessMode }) => {
 	await requireMcpCaller({ ctx, request, accessMode });
 
-	const resources = await ctx.collections.knowledge.find({
+	const resources = await ctx.collections.assets.find({
 		where: { run: input.run_id },
 		limit: 500,
 		orderBy: { createdAt: "asc" },
@@ -107,7 +107,7 @@ export const runArtifactContent = mcpTool("run_artifact_content", {
 }).handler(async ({ input, ctx, request, accessMode }) => {
 	await requireMcpCaller({ ctx, request, accessMode });
 
-	const resource = await ctx.collections.knowledge.findOne({
+	const resource = await ctx.collections.assets.findOne({
 		where: { id: input.artifact_id, run: input.run_id },
 	});
 	if (!resource) throw ApiError.notFound("Artifact", input.artifact_id);

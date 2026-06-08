@@ -105,7 +105,7 @@ async function createCompletionResources(input: {
 	if (!input.summary?.trim()) return [];
 	if (!input.ctx.services?.knowledgeResource) return [];
 
-	const existing = await input.ctx.collections.knowledge.findOne({
+	const existing = await input.ctx.collections.assets.findOne({
 		where: { run: input.runId, path: `runs/${input.runId}/summary.md` },
 	});
 	if (existing) return [existing];

@@ -3,7 +3,7 @@
 // Regenerate with: questpie generate
 
 import { createApp, createContextFactory } from "questpie/app";
-import type { AnyCollectionOrBuilder, AnyGlobalOrBuilder, AppDefinition, CollectionAPI, DrizzleClientFromQuestpieConfig, InferContextExtensionsFromAppConfig, InferSessionFromAuthConfig, MailerService, Questpie, QuestpieConfig, QueueClient, QueueJobType, RouteParamsFromKey, RouteWithParams, TablesFromConfig } from "questpie/types";
+import type { AnyCollectionOrBuilder, AnyGlobalOrBuilder, AppDefinition, CollectionAPI, CollectionSelect, DrizzleClientFromQuestpieConfig, InferContextExtensionsFromAppConfig, InferSessionFromAuthConfig, MailerService, Questpie, QuestpieConfig, QueueClient, QueueJobType, RouteParamsFromKey, RouteWithParams, TablesFromConfig } from "questpie/types";
 import type { z } from "zod";
 
 // ── Runtime ────────────────────────────────────────────────
@@ -158,26 +158,8 @@ export type AppBlocks = _ModuleBlocks
 	& { [K in typeof _bloc_video.state.name]: typeof _bloc_video };
 
 type _CollectionsAPI = { [K in keyof AppCollections]: CollectionAPI<AppCollections[K], AppCollections> };
-type _JobHandlerCollections = {
-	announcements: typeof _coll_announcements;
-	cities: typeof _coll_cities;
-	cityMembers: typeof _coll_cityMembers;
-	contacts: typeof _coll_contacts;
-	documents: typeof _coll_documents;
-	news: typeof _coll_news;
-	pages: typeof _coll_pages;
-	submissions: typeof _coll_submissions;
-};
-type _JobHandlerCollectionsAPI = {
-	announcements: CollectionAPI<typeof _coll_announcements, _JobHandlerCollections>;
-	cities: CollectionAPI<typeof _coll_cities, _JobHandlerCollections>;
-	cityMembers: CollectionAPI<typeof _coll_cityMembers, _JobHandlerCollections>;
-	contacts: CollectionAPI<typeof _coll_contacts, _JobHandlerCollections>;
-	documents: CollectionAPI<typeof _coll_documents, _JobHandlerCollections>;
-	news: CollectionAPI<typeof _coll_news, _JobHandlerCollections>;
-	pages: CollectionAPI<typeof _coll_pages, _JobHandlerCollections>;
-	submissions: CollectionAPI<typeof _coll_submissions, _JobHandlerCollections>;
-};
+type _JobHandlerCollections = AppCollections;
+type _JobHandlerCollectionsAPI = _CollectionsAPI;
 type _ExecutionContextJob<T> = T extends { name: infer TName extends string; schema: z.ZodSchema<infer TPayload> } ? QueueJobType<TPayload, TName> : never;
 type _ExecutionContextJobs = {};
 type _ExecutionContextServiceDefinitions = {};
@@ -190,6 +172,7 @@ type _AppQuestpieConfig = Omit<QuestpieConfig, "app" | "db" | "collections" | "g
 	collections: _AppCollectionDefinitions;
 	globals: _AppGlobalDefinitions;
 	auth: _AppAuthConfig;
+	storage: (typeof _runtime)["storage"];
 };
 type _AppQuestpieBase = Questpie<_AppQuestpieConfig>;
 type _AppDb = DrizzleClientFromQuestpieConfig<_AppQuestpieConfig>;
@@ -202,38 +185,40 @@ type _AppQuestpie = Omit<_AppQuestpieBase, "collections" | "globals"> & {
 };
 
 // ── AppContext augmentation — auto-types ALL handlers ──────
+type _AppCoreContext = _AppContextExtensions & {
+	// Infrastructure
+	db: _AppDb;
+	email: _AppQuestpie["email"];
+	queue: QueueClient<AppJobs>;
+	storage: _AppStorage;
+	kv: _AppQuestpie["kv"];
+	logger: _AppQuestpie["logger"];
+	search: _AppQuestpie["search"];
+	realtime: _AppQuestpie["realtime"];
+
+	// Entity APIs
+	collections: _CollectionsAPI;
+	globals: _AppGlobalsAPI;
+	tables: _AppTables;
+
+	// Request-scoped
+	session: _AppSession;
+	t: (key: string, params?: Record<string, unknown>, locale?: string) => string;
+
+	// User services
+	services: _AppDefaultServices;
+} & _AppCustomServiceNamespaces;
+
 declare global {
 	namespace Questpie {
-		interface AppContext extends _AppTopLevelServices, _AppCustomServiceNamespaces, _AppContextExtensions {
-			// Infrastructure
-			db: _AppDb;
-			email: _AppQuestpie["email"];
-			queue: QueueClient<AppJobs>;
-			storage: _AppStorage;
-			kv: _AppQuestpie["kv"];
-			logger: _AppQuestpie["logger"];
-			search: _AppQuestpie["search"];
-			realtime: _AppQuestpie["realtime"];
-
-			// Entity APIs
-			collections: _CollectionsAPI;
-			globals: _AppGlobalsAPI;
-			tables: _AppTables;
-
-			// Request-scoped
-			session: _AppSession;
-			t: (key: string, params?: Record<string, unknown>, locale?: string) => string;
-
-			// User services
-			services: _AppDefaultServices;
-		}
+		interface AppContext extends _AppCoreContext, _AppTopLevelServices {}
 
 		interface JobHandlerContext {
 			// Infrastructure
 			db: unknown;
 			email: unknown;
 			queue: QueueClient<_ExecutionContextJobs>;
-			storage: unknown;
+			storage: _AppStorage;
 			kv: unknown;
 			logger: unknown;
 			search: unknown;
@@ -247,6 +232,9 @@ declare global {
 			// Request-scoped
 			session: unknown;
 			t: (key: string, params?: Record<string, unknown>, locale?: string) => string;
+
+			// Top-level services (namespace: null)
+			workflows?: "workflows" extends keyof _AppTopLevelServices ? _AppTopLevelServices["workflows"] : never;
 
 			// User services
 			services: _ExecutionContextDefaultServices;
@@ -257,7 +245,7 @@ declare global {
 			db: unknown;
 			email: unknown;
 			queue: QueueClient<_ExecutionContextJobs>;
-			storage: unknown;
+			storage: _AppStorage;
 			kv: unknown;
 			logger: unknown;
 			search: unknown;
@@ -272,11 +260,14 @@ declare global {
 			session: unknown;
 			t: (key: string, params?: Record<string, unknown>, locale?: string) => string;
 
+			// Top-level services (namespace: null)
+			workflows?: "workflows" extends keyof _AppTopLevelServices ? _AppTopLevelServices["workflows"] : never;
+
 			// User services
 			services: _ExecutionContextDefaultServices;
 		}
 
-		interface ServiceCreateContext extends AppContext {}
+		interface ServiceCreateContext extends _AppCoreContext {}
 
 		interface Registry {
 			collections: _Registry_Collections;
@@ -294,6 +285,11 @@ declare global {
 }
 
 /**
+ * Select/document type for a collection key — prefer over `Record<string, any>` for docs.
+ */
+export type CollectionDoc<K extends keyof AppCollections> = CollectionSelect<AppCollections[K]>;
+
+/**
  * Flat config type for client APIs.
  * Use with `createClient<AppConfig>()` and `createAdminAuthClient<AppConfig>()`.
  * For handler context, use `AppContext` (auto-typed via module augmentation).
@@ -302,6 +298,7 @@ export type AppConfig = {
 	collections: AppCollections & Record<string, AnyCollectionOrBuilder>;
 	globals: AppGlobals & Record<string, AnyGlobalOrBuilder>;
 	routes: AppRoutes;
+	storage: (typeof _runtime)["storage"];
 	auth: typeof _authConfig;
 };
 

@@ -1,7 +1,7 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import {
+	createAdapterContext,
 	createContextFactory,
-	extractAppServices,
 	type AppContext,
 	type RequestContext,
 } from "questpie";
@@ -30,6 +30,9 @@ export function createRuntimeScope(
 	const accessMode =
 		options.accessMode ?? (transport === "stdio" ? "system" : "user");
 	const createContext = createContextFactory(app);
+	let requestContextPromise:
+		| Promise<AppContext & Partial<RequestContext>>
+		| undefined;
 
 	return {
 		app,
@@ -39,20 +42,16 @@ export function createRuntimeScope(
 		async getContext() {
 			if (options.ctx) return options.ctx;
 			if (options.request) {
-				const requestContext = await app.createContext({
+				requestContextPromise ??= createAdapterContext(app, options.request, {
 					accessMode,
-					request: options.request,
-				});
-				const services = extractAppServices(app, {
-					db: requestContext.db ?? app.db,
-					session: requestContext.session,
-					locale: requestContext.locale,
-				});
-				return {
-					...services,
-					...requestContext,
-					request: options.request,
-				} as AppContext & Partial<RequestContext>;
+				}).then(
+					(adapterContext) =>
+						({
+							...adapterContext.appContext,
+							request: options.request,
+						}) as unknown as AppContext & Partial<RequestContext>,
+				);
+				return requestContextPromise;
 			}
 			return createContext({
 				accessMode,

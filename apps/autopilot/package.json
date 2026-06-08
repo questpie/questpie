@@ -8,11 +8,14 @@
 		"#questpie/*": "./src/questpie/server/.generated/*"
 	},
 	"scripts": {
-		"dev": "bun --bun vite dev",
+		"dev": "bun --conditions=development scripts/dev-all.ts",
+		"dev:web": "bun --bun vite dev",
+		"dev:all": "bun --conditions=development scripts/dev-all.ts",
 		"dev:worker": "bun --bun run --watch ./src/worker.ts",
 		"worker": "bun --bun run ./src/worker.ts",
 		"dev:ai-worker": "bun --bun run --watch ./src/ai-worker.ts",
 		"ai-worker": "bun --bun run ./src/ai-worker.ts",
+		"dev:sandbox": "SANDBOX_BROKER_URL=http://127.0.0.1:3000/api/sandbox/rpc PORT=8787 deno run --allow-net --allow-env --allow-run --allow-read ../../packages/sandbox/src/sandbox-server.ts",
 		"questpie": "bun --conditions=development ../../packages/questpie/src/cli/index.ts",
 		"generate": "bun run questpie generate -c src/questpie/server/questpie.config.ts",
 		"db:setup": "bun run generate && bun run migrate:status && bun run migrate && bun run db:dev-admin && bun run db:seed",
@@ -33,9 +36,12 @@
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
+		"@better-auth/api-key": "^1.6.11",
 		"@questpie/admin": "workspace:*",
 		"@questpie/ai": "workspace:*",
+		"@questpie/executor": "workspace:*",
 		"@questpie/mcp": "workspace:*",
+		"@questpie/sandbox": "workspace:*",
 		"@questpie/workflows": "workspace:*",
 		"@tailwindcss/vite": "^4.0.6",
 		"@tanstack/react-query": "^5.62.11",
@@ -60,9 +66,9 @@
 		"@types/node": "^22.10.2",
 		"@types/react": "^19.2.0",
 		"@types/react-dom": "^19.2.0",
-		"bun-types": "latest",
 		"@vitejs/plugin-react": "^6.0.1",
 		"babel-plugin-react-compiler": "^1.0.0",
+		"bun-types": "latest",
 		"typescript": "^5.9.2",
 		"vite": "^8.0.0",
 		"vitest": "^3.2.6"

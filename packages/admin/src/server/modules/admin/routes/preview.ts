@@ -11,10 +11,10 @@ import { ApiError, route } from "questpie";
 import { z } from "zod";
 
 import type { PreviewConfig } from "../../../augmentation.js";
+import { hasAdminRole } from "../auth-helpers.js";
 import { translateAdminMessage } from "./i18n-helpers.js";
 import {
 	getApp,
-	getSession,
 	getCollectionState,
 	getLocale,
 } from "./route-helpers.js";
@@ -228,6 +228,11 @@ export function createPreviewFunctions(
 	 */
 	const mintPreviewToken = route()
 		.post()
+		.access(
+			(ctx): boolean =>
+				(ctx as { session?: { user?: { role?: unknown } } }).session?.user
+					?.role === "admin",
+		)
 		.schema(mintPreviewTokenSchema)
 		.outputSchema(mintPreviewTokenOutputSchema)
 		.handler(async (ctx) => {
@@ -235,9 +240,8 @@ export function createPreviewFunctions(
 			const locale = getLocale(ctx);
 			const t = (key: string, params?: Record<string, unknown>) =>
 				translateAdminMessage(locale, key, params);
-			const session = getSession(ctx);
-			// Require authenticated admin session
-			if (!session) {
+			// Require authenticated admin session even for direct handler calls.
+			if (!hasAdminRole(ctx)) {
 				throw ApiError.unauthorized(t("preview.adminSessionRequired"));
 			}
 
@@ -405,6 +409,11 @@ const getPreviewUrlOutputSchema = z.object({
  */
 const getPreviewUrl = route()
 	.post()
+	.access(
+		(ctx): boolean =>
+			(ctx as { session?: { user?: { role?: unknown } } }).session?.user
+				?.role === "admin",
+	)
 	.schema(getPreviewUrlSchema)
 	.outputSchema(getPreviewUrlOutputSchema)
 	.handler(async (ctx) => {
@@ -412,9 +421,8 @@ const getPreviewUrl = route()
 		const messageLocale = getLocale(ctx) ?? input.locale;
 		const t = (key: string, params?: Record<string, unknown>) =>
 			translateAdminMessage(messageLocale, key, params);
-		const session = getSession(ctx);
-		// Require authenticated admin session
-		if (!session) {
+		// Require authenticated admin session even for direct handler calls.
+		if (!hasAdminRole(ctx)) {
 			return { url: null, error: t("preview.adminSessionRequired") };
 		}
 

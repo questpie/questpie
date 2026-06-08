@@ -23,6 +23,8 @@ type FieldWrapperProps = {
 	error?: string;
 	localized?: boolean;
 	locale?: string;
+	/** Suppress the label + description (label is supplied by the surrounding layout). */
+	hideLabel?: boolean;
 	children: React.ReactNode;
 	/** Field path for preview click-to-focus */
 	fieldPath?: string;
@@ -101,15 +103,15 @@ export function FieldWrapper({
 	error,
 	localized,
 	locale,
+	hideLabel,
 	children,
 	fieldPath,
 }: FieldWrapperProps): React.ReactElement {
 	const resolveText = useResolveText();
 
-	const resolvedLabel = label ? resolveText(label) : undefined;
-	const resolvedDescription = description
-		? resolveText(description)
-		: undefined;
+	const resolvedLabel = hideLabel || !label ? undefined : resolveText(label);
+	const resolvedDescription =
+		hideLabel || !description ? undefined : resolveText(description);
 
 	return (
 		<Field

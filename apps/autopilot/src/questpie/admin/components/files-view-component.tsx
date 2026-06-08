@@ -1,13 +1,44 @@
 "use client";
 
 import { Icon } from "@iconify/react";
+import { useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 
 import {
+	AdminViewHeader,
+	AdminViewLayout,
+	Button,
+	cn,
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+	Dropzone,
+	sanitizeFilename,
+	SearchInput,
+	Sheet,
+	SheetContent,
+	SheetDescription,
+	SheetFooter,
+	SheetHeader,
+	SheetTitle,
+	Table,
+	TableBody,
+	TableCell,
+	TableHead,
+	TableHeader,
+	TableRow,
+	toast,
+	Tooltip,
+	TooltipContent,
+	TooltipTrigger,
 	selectBasePath,
+	selectClient,
 	selectNavigate,
 	useAdminStore,
 	useCollectionList,
+	useResolveText,
+	useUpload,
 	type CollectionListViewProps,
 } from "@questpie/admin/client";
 
@@ -38,13 +69,25 @@ interface FileEntry {
 
 type Props = CollectionListViewProps;
 
-function getIcon(entry: FileEntry): string {
+/**
+ * Neutral file icon resolution.
+ *
+ * Mirrors the canonical `getFileIcon` from
+ * `packages/admin/.../cells/shared/asset-thumbnail.tsx` (MIME-based Phosphor set)
+ * and extends it with the path/extension cases this Drive view needs (markdown,
+ * json, yaml, diff). Every icon is rendered neutral — folders included — per the
+ * design system's neutral-first rule. No semantic color (no amber folders).
+ */
+function getEntryIcon(entry: FileEntry): string {
 	if (entry.kind === "folder") return "ph:folder";
-	const ct = entry.contentType ?? "";
+
+	const ct = (entry.contentType ?? "").toLowerCase();
 	const ext = entry.name.split(".").pop()?.toLowerCase() ?? "";
-	if (ct.includes("markdown") || ext === "md") return "ph:file-md";
+
+	// Path/extension-specific cases (text-document store)
+	if (ct.includes("markdown") || ext === "md" || ext === "mdx")
+		return "ph:file-md";
 	if (ct.includes("json") || ext === "json") return "ph:brackets-curly";
-	if (ct.includes("text") || ext === "txt") return "ph:file-text";
 	if (ct.includes("diff") || ext === "diff" || ext === "patch")
 		return "ph:git-diff";
 	if (
@@ -54,12 +97,31 @@ function getIcon(entry: FileEntry): string {
 		ext === "yml"
 	)
 		return "ph:file-code";
-	return "ph:file";
-}
 
-function getIconColor(entry: FileEntry): string {
-	if (entry.kind === "folder") return "text-amber-500";
-	return "text-muted-foreground";
+	// Canonical MIME-based set (matches asset-thumbnail.getFileIcon)
+	if (ct.startsWith("image/")) return "ph:file-image";
+	if (ct.startsWith("video/")) return "ph:file-video";
+	if (ct.startsWith("audio/")) return "ph:file-audio";
+	if (ct === "application/pdf") return "ph:file-pdf";
+	if (ct.includes("zip") || ct.includes("compressed") || ct.includes("archive"))
+		return "ph:file-zip";
+	if (ct.includes("csv") || ct.includes("spreadsheet")) return "ph:file-csv";
+	if (
+		ct.includes("word") ||
+		ct.includes("document") ||
+		ct === "application/rtf"
+	)
+		return "ph:file-doc";
+	if (ct.includes("text") || ext === "txt") return "ph:file-text";
+	if (
+		ct.includes("javascript") ||
+		ct.includes("typescript") ||
+		ct.includes("xml") ||
+		ct.includes("html")
+	)
+		return "ph:file-code";
+
+	return "ph:file";
 }
 
 function deriveEntries(
@@ -138,9 +200,13 @@ function formatDate(dateStr: string | undefined): string {
 }
 
 export default function FilesViewComponent(props: Props) {
-	const { collection, viewConfig, navigate } = props;
+	const { collection, config, viewConfig, navigate } = props;
 	const basePath = useAdminStore(selectBasePath);
 	const nav = useAdminStore(selectNavigate) ?? navigate;
+	const client = useAdminStore(selectClient);
+	const queryClient = useQueryClient();
+	const resolveText = useResolveText();
+	const title = resolveText((config as any)?.label, collection);
 
 	const cfg = (viewConfig ?? {}) as FilesViewConfig;
 	const pathField = cfg.pathField ?? "path";
@@ -150,6 +216,10 @@ export default function FilesViewComponent(props: Props) {
 
 	const [currentPath, setCurrentPath] = React.useState("");
 	const [searchTerm, setSearchTerm] = React.useState("");
+	const [searchOpen, setSearchOpen] = React.useState(false);
+	const [uploadSheetOpen, setUploadSheetOpen] = React.useState(false);
+
+	const { upload, isUploading, progress } = useUpload();
 
 	const sortField = cfg.defaultSort?.field ?? pathField;
 	const sortDir = cfg.defaultSort?.direction ?? "asc";
@@ -227,143 +297,468 @@ export default function FilesViewComponent(props: Props) {
 		[breadcrumbs],
 	);
 
+	// Folder the user is viewing — uploads + new documents land under this prefix.
+	const currentPrefix = currentPath ? `${currentPath}/` : "";
+
+	// ── New markdown file ────────────────────────────────────────────────────
+	// Create an empty markdown document row in the current folder, then open it.
+	// This stays a `.create()` (a text `body` row, no blob → keeps the private
+	// default) rather than the blob upload route — the latter is for files the
+	// user brings in from their desktop. The filename is auto-deduped against the
+	// current folder's entries so repeated clicks don't collide on `path`.
+	const handleCreateMarkdown = React.useCallback(async () => {
+		const collectionApi = (client as any)?.collections?.[collection];
+		if (!collectionApi?.create) {
+			toast.error("This collection does not support creating files.");
+			return;
+		}
+
+		const existing = new Set(
+			entries.map((entry) => entry.name.toLowerCase()),
+		);
+		let filename = "Untitled.md";
+		let counter = 2;
+		while (existing.has(filename.toLowerCase())) {
+			filename = `Untitled-${counter}.md`;
+			counter += 1;
+		}
+
+		try {
+			const created = await collectionApi.create({
+				[pathField]: `${currentPrefix}${filename}`,
+				...(nameField ? { [nameField]: filename } : {}),
+				...(contentTypeField ? { [contentTypeField]: "text/markdown" } : {}),
+				...(kindField ? { [kindField]: "document" } : {}),
+				[cfg.contentField ?? "body"]: "",
+			});
+
+			await queryClient.invalidateQueries({
+				queryKey: ["questpie", "collections", collection],
+			});
+
+			const newId = String((created as any)?.id ?? "");
+			if (newId && nav) {
+				nav(`${basePath}/collections/${collection}/${newId}`);
+			}
+		} catch (error) {
+			toast.error(
+				error instanceof Error ? error.message : "Could not create file",
+			);
+		}
+	}, [
+		basePath,
+		cfg.contentField,
+		client,
+		collection,
+		contentTypeField,
+		currentPrefix,
+		entries,
+		kindField,
+		nameField,
+		nav,
+		pathField,
+		queryClient,
+	]);
+
+	// ── Upload files from the desktop ────────────────────────────────────────
+	// Reuses the standard assets upload flow (`useUpload().upload`) — the same blob
+	// upload + progress + query-invalidation the built-in collection table view
+	// uses. Each file gets its own per-file `path` (`<currentFolder>/<filename>`),
+	// which the server spreads onto the `assets` row's required `path`. These Drive
+	// blobs land with the collection's PRIVATE upload default (a confidential file
+	// dragged into a folder is never anonymously servable — the storage route gates
+	// it on the per-row `visibility` and the detail view reads the signed `url`).
+	// Drives both the table-wide drop target and the "Upload files" sheet. Files are
+	// uploaded one at a time (path is per-file, so the batch helper's single
+	// shared path can't be used).
+	const handleUpload = React.useCallback(
+		async (files: File[]) => {
+			if (files.length === 0 || isUploading) return;
+
+			let uploaded = 0;
+			try {
+				for (const file of files) {
+					const filename = sanitizeFilename(file.name);
+					await upload(
+						new File([file], filename, {
+							type: file.type,
+							lastModified: file.lastModified,
+						}),
+						{ to: collection, path: `${currentPrefix}${filename}` },
+					);
+					uploaded += 1;
+				}
+				toast.success(
+					uploaded === 1
+						? "Uploaded 1 file"
+						: `Uploaded ${uploaded} files`,
+				);
+			} catch (error) {
+				toast.error(
+					error instanceof Error ? error.message : "Upload failed",
+				);
+			}
+		},
+		[collection, currentPrefix, isUploading, upload],
+	);
+
+	const handleUploadValidationError = React.useCallback(
+		(errors: { message: string }[]) => {
+			for (const validationError of errors) {
+				toast.error(validationError.message);
+			}
+		},
+		[],
+	);
+
+	// Table-wide drop target — drag files anywhere over the list to upload into the
+	// current folder (Drive-style). Replicates the Dropzone primitive's drag-counter
+	// pattern (enter/leave nesting) so the neutral overlay only clears on true exit.
+	// Disabled while searching (no active folder to drop into).
+	const [isDragging, setIsDragging] = React.useState(false);
+	const dragCounterRef = React.useRef(0);
+	const dropDisabled = Boolean(searchTerm);
+
+	// Create (new markdown / upload sheet) writes into `currentPrefix`, which a
+	// search flattens away from — disable it while searching, same as the drop
+	// target, so a write can't land in a folder the user isn't currently viewing.
+	const createDisabled = Boolean(searchTerm);
+
+	const handleTableDragEnter = React.useCallback(
+		(e: React.DragEvent) => {
+			if (dropDisabled) return;
+			e.preventDefault();
+			dragCounterRef.current += 1;
+			if (e.dataTransfer.types.includes("Files")) {
+				setIsDragging(true);
+			}
+		},
+		[dropDisabled],
+	);
+
+	const handleTableDragOver = React.useCallback(
+		(e: React.DragEvent) => {
+			if (dropDisabled) return;
+			e.preventDefault();
+		},
+		[dropDisabled],
+	);
+
+	const handleTableDragLeave = React.useCallback((e: React.DragEvent) => {
+		e.preventDefault();
+		dragCounterRef.current -= 1;
+		if (dragCounterRef.current <= 0) {
+			dragCounterRef.current = 0;
+			setIsDragging(false);
+		}
+	}, []);
+
+	const handleTableDrop = React.useCallback(
+		(e: React.DragEvent) => {
+			if (dropDisabled) return;
+			e.preventDefault();
+			dragCounterRef.current = 0;
+			setIsDragging(false);
+			if (e.dataTransfer.files.length > 0) {
+				void handleUpload(Array.from(e.dataTransfer.files));
+			}
+		},
+		[dropDisabled, handleUpload],
+	);
+
+	const uploadHint = currentPath
+		? `Uploads to ${currentPath}/`
+		: "Uploads to the root folder";
+
 	if (isLoading) {
 		return (
 			<div className="flex h-64 items-center justify-center">
 				<Icon
 					icon="ph:spinner"
-					className="text-muted-foreground h-6 w-6 animate-spin"
+					className="text-foreground-muted h-6 w-6 animate-spin"
 				/>
 			</div>
 		);
 	}
 
 	return (
-		<div className="flex h-full flex-col">
-			{/* Header */}
-			<div className="border-b px-4 py-3">
-				<div className="flex items-center gap-3">
-					{/* Search */}
-					<div className="relative max-w-xs flex-1">
-						<Icon
-							icon="ph:magnifying-glass"
-							className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2"
-						/>
-						<input
-							type="text"
+		<AdminViewLayout
+			header={
+				<AdminViewHeader
+					title={title}
+					description={`${entries.length} ${entries.length === 1 ? "item" : "items"}`}
+					actions={
+						<div className="flex items-center gap-2">
+							<Tooltip>
+								<TooltipTrigger
+									render={
+										<Button
+											variant="outline"
+											size="icon-sm"
+											className="relative"
+											onClick={() => setSearchOpen((open) => !open)}
+											aria-label="Search files"
+										>
+											<Icon icon="ph:magnifying-glass" />
+											{searchTerm && (
+												<span className="bg-foreground absolute top-1 right-1 size-1.5 rounded-full" />
+											)}
+										</Button>
+									}
+								/>
+								<TooltipContent side="bottom" align="end">
+									Search files
+								</TooltipContent>
+							</Tooltip>
+							{/* Create writes into `currentPrefix` (the open folder), but a search
+							    flattens the view to the root — so the visible entries and the
+							    new-md dedup set would be computed against a different folder than
+							    the write target. Disable Create while searching (mirrors the
+							    table-wide drop target's `dropDisabled`) so a write can't land in a
+							    folder the user isn't looking at. */}
+							<DropdownMenu>
+								<DropdownMenuTrigger
+									disabled={createDisabled}
+									render={
+										<Button
+											variant="default"
+											size="sm"
+											className="gap-2"
+											disabled={createDisabled}
+											title={
+												createDisabled
+													? "Clear the search to create files in a folder"
+													: undefined
+											}
+										>
+											<Icon icon="ph:plus" className="size-3.5" />
+											Create
+											<Icon
+												icon="ph:caret-down"
+												className="text-primary-foreground/70 size-3"
+											/>
+										</Button>
+									}
+								/>
+								<DropdownMenuContent align="end" className="min-w-52">
+									<DropdownMenuItem
+										onClick={() => {
+											void handleCreateMarkdown();
+										}}
+									>
+										<Icon icon="ph:file-md" className="size-4" />
+										New markdown file
+									</DropdownMenuItem>
+									<DropdownMenuItem onClick={() => setUploadSheetOpen(true)}>
+										<Icon icon="ph:cloud-arrow-up" className="size-4" />
+										Upload files
+									</DropdownMenuItem>
+								</DropdownMenuContent>
+							</DropdownMenu>
+						</div>
+					}
+				/>
+			}
+			contentClassName="overflow-y-auto pb-3"
+		>
+			<div className="qa-table-view min-w-0 space-y-4">
+				{(searchOpen || searchTerm) && (
+					<div className="max-w-xl">
+						<SearchInput
 							value={searchTerm}
 							onChange={(e) => setSearchTerm(e.target.value)}
+							onClear={() => setSearchTerm("")}
 							placeholder="Search files..."
-							className="border-input bg-background placeholder:text-muted-foreground focus:ring-ring h-9 w-full rounded-md border py-1 pr-3 pl-9 text-sm outline-none focus:ring-1"
+							containerClassName="h-10"
 						/>
 					</div>
-					<div className="text-muted-foreground text-xs tabular-nums">
-						{entries.length} items
-					</div>
+				)}
+
+				{/* Breadcrumb */}
+				<div className="text-foreground-muted flex items-center gap-1 text-sm">
+					<button
+						type="button"
+						onClick={() => handleBreadcrumbClick(-1)}
+						className="hover:text-foreground hover:bg-surface-mid flex items-center gap-1 rounded-md px-1.5 py-0.5 transition-colors"
+					>
+						<Icon icon="ph:house" className="size-3.5" />
+						<span>Root</span>
+					</button>
+					{breadcrumbs.map((segment, i) => (
+						<React.Fragment key={i}>
+							<Icon
+								icon="ph:caret-right"
+								className="text-foreground-subtle size-3 shrink-0"
+							/>
+							<button
+								type="button"
+								onClick={() => handleBreadcrumbClick(i)}
+								className={cn(
+									"rounded-md px-1.5 py-0.5 transition-colors",
+									i === breadcrumbs.length - 1
+										? "text-foreground font-medium"
+										: "hover:text-foreground hover:bg-surface-mid",
+								)}
+							>
+								{segment}
+							</button>
+						</React.Fragment>
+					))}
+				</div>
+
+				{/* List area is a single table-wide drop target (Drive-style): drag
+				    files anywhere over it to upload into the current folder. No
+				    standalone dropzone box — explicit picking lives in the header
+				    "Create → Upload files" sheet. A neutral overlay appears while a
+				    file is dragged over. The drop target wraps both the empty state and
+				    the table so dropping into an empty folder works too. */}
+				<div
+					className="relative min-w-0"
+					onDragEnter={handleTableDragEnter}
+					onDragOver={handleTableDragOver}
+					onDragLeave={handleTableDragLeave}
+					onDrop={handleTableDrop}
+				>
+					{/* Files table — same primitives + neutral row/header treatment as
+					    the built-in collection table view. */}
+					{entries.length === 0 ? (
+						<div className="flex h-48 flex-col items-center justify-center gap-2">
+							<Icon
+								icon="ph:folder-open"
+								className="text-foreground-subtle size-10"
+							/>
+							<p className="text-foreground-muted text-sm">
+								{searchTerm
+									? "No files match your search"
+									: "This folder is empty"}
+							</p>
+						</div>
+					) : (
+						<div className="qa-table-view__table-wrapper min-w-0">
+							<Table>
+								<TableHeader>
+									<TableRow className="hover:bg-transparent">
+										<TableHead>Name</TableHead>
+										<TableHead className="w-40">Kind</TableHead>
+										<TableHead className="w-24 text-right">Items</TableHead>
+										<TableHead className="w-36 text-right">Modified</TableHead>
+									</TableRow>
+								</TableHeader>
+								<TableBody>
+									{entries.map((entry) => (
+										<TableRow
+											key={entry.path}
+											onClick={() =>
+												entry.kind === "folder"
+													? handleFolderClick(entry.path)
+													: handleFileClick(entry)
+											}
+											className="cursor-pointer"
+										>
+											<TableCell className="text-foreground font-medium">
+												<div className="flex min-w-0 items-center gap-2.5">
+													<Icon
+														icon={getEntryIcon(entry)}
+														className="text-foreground-muted size-[18px] shrink-0"
+													/>
+													<span className="truncate">
+														{entry.name}
+														{entry.kind === "folder" && "/"}
+													</span>
+												</div>
+											</TableCell>
+											<TableCell className="text-foreground-muted">
+												{entry.kind === "folder"
+													? "Folder"
+													: (entry.fileKind ?? "File")}
+											</TableCell>
+											<TableCell className="text-foreground-muted text-right">
+												{entry.kind === "folder" && entry.childCount != null
+													? entry.childCount
+													: "—"}
+											</TableCell>
+											<TableCell className="text-foreground-muted text-right">
+												{formatDate(entry.updatedAt) || "—"}
+											</TableCell>
+										</TableRow>
+									))}
+								</TableBody>
+							</Table>
+						</div>
+					)}
+
+					{/* Neutral drag-over overlay — surface-high tint + dashed border,
+					    no primary purple (design system: neutral-first). */}
+					{isDragging && (
+						<div className="border-border-strong bg-surface-high/80 pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 rounded-[var(--surface-radius)] border-2 border-dashed backdrop-blur-sm">
+							<Icon
+								icon="ph:cloud-arrow-up"
+								className="text-foreground-muted size-8"
+							/>
+							<p className="text-foreground text-sm font-medium">
+								Drop to upload
+							</p>
+							<p className="text-foreground-muted text-xs">{uploadHint}</p>
+						</div>
+					)}
 				</div>
 			</div>
 
-			{/* Breadcrumb */}
-			<div className="flex items-center gap-1 border-b px-4 py-2 text-sm">
-				<button
-					type="button"
-					onClick={() => handleBreadcrumbClick(-1)}
-					className="text-muted-foreground hover:text-foreground hover:bg-muted flex items-center gap-1 rounded px-1.5 py-0.5"
+			{/* Upload files — right side sheet replicating the built-in collection
+			    table view's bulk-upload sheet (Sheet + Dropzone + useUpload). Reuses
+			    the standard assets upload flow; files land in the current folder. */}
+			<Sheet
+				open={uploadSheetOpen}
+				onOpenChange={setUploadSheetOpen}
+				modal={false}
+			>
+				<SheetContent
+					side="right"
+					showOverlay={false}
+					className="qa-upload-sheet w-full p-0 data-[side=right]:sm:max-w-xl"
 				>
-					<Icon icon="ph:house" className="h-3.5 w-3.5" />
-					<span>Root</span>
-				</button>
-				{breadcrumbs.map((segment, i) => (
-					<React.Fragment key={i}>
-						<Icon
-							icon="ph:caret-right"
-							className="text-muted-foreground/60 h-3 w-3 shrink-0"
-						/>
-						<button
-							type="button"
-							onClick={() => handleBreadcrumbClick(i)}
-							className={`rounded px-1.5 py-0.5 ${
-								i === breadcrumbs.length - 1
-									? "text-foreground font-medium"
-									: "text-muted-foreground hover:text-foreground hover:bg-muted"
-							}`}
-						>
-							{segment}
-						</button>
-					</React.Fragment>
-				))}
-			</div>
+					<SheetHeader className="border-b px-6 py-5">
+						<SheetTitle>Upload files</SheetTitle>
+						<SheetDescription>{uploadHint}</SheetDescription>
+					</SheetHeader>
 
-			{/* File list */}
-			<div className="flex-1 overflow-auto">
-				{entries.length === 0 ? (
-					<div className="flex h-48 flex-col items-center justify-center gap-2">
-						<Icon
-							icon="ph:folder-open"
-							className="text-muted-foreground/50 h-10 w-10"
+					<div className="flex flex-1 flex-col gap-5 overflow-y-auto px-6 py-5">
+						<Dropzone
+							onDrop={handleUpload}
+							multiple
+							loading={isUploading}
+							progress={isUploading ? progress : undefined}
+							accept={[
+								"image/*",
+								"application/pdf",
+								"text/*",
+								".md",
+								".mdx",
+								".txt",
+								".json",
+								".yaml",
+								".yml",
+								".csv",
+								".diff",
+								".patch",
+							]}
+							label="Drop files here or click to browse"
+							hint={uploadHint}
+							onValidationError={handleUploadValidationError}
 						/>
-						<p className="text-muted-foreground text-sm">
-							{searchTerm
-								? "No files match your search"
-								: "This folder is empty"}
-						</p>
 					</div>
-				) : (
-					<div className="divide-y">
-						{entries.map((entry) => (
-							<button
-								key={entry.path}
-								type="button"
-								onClick={() =>
-									entry.kind === "folder"
-										? handleFolderClick(entry.path)
-										: handleFileClick(entry)
-								}
-								className="hover:bg-muted/50 flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors"
-							>
-								<Icon
-									icon={getIcon(entry)}
-									className={`h-5 w-5 shrink-0 ${getIconColor(entry)}`}
-								/>
-								<div className="min-w-0 flex-1">
-									<div className="truncate text-sm font-medium">
-										{entry.name}
-										{entry.kind === "folder" && "/"}
-									</div>
-								</div>
-								{entry.contentType && (
-									<span className="text-muted-foreground shrink-0 text-xs">
-										{entry.contentType}
-									</span>
-								)}
-								{entry.fileKind && (
-									<span className="bg-muted text-muted-foreground shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium uppercase">
-										{entry.fileKind}
-									</span>
-								)}
-								{entry.kind === "folder" && entry.childCount != null && (
-									<span className="text-muted-foreground text-xs tabular-nums">
-										{entry.childCount}
-									</span>
-								)}
-								{entry.updatedAt && (
-									<span className="text-muted-foreground shrink-0 text-xs">
-										{formatDate(entry.updatedAt)}
-									</span>
-								)}
-								<Icon
-									icon={
-										entry.kind === "folder"
-											? "ph:caret-right"
-											: "ph:arrow-square-out"
-									}
-									className="text-muted-foreground/50 h-4 w-4 shrink-0"
-								/>
-							</button>
-						))}
-					</div>
-				)}
-			</div>
-		</div>
+
+					<SheetFooter className="border-t px-6 py-4">
+						<Button
+							variant="outline"
+							onClick={() => setUploadSheetOpen(false)}
+							disabled={isUploading}
+						>
+							Close
+						</Button>
+					</SheetFooter>
+				</SheetContent>
+			</Sheet>
+		</AdminViewLayout>
 	);
 }
