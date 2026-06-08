@@ -122,7 +122,7 @@
 	},
 	"dependencies": {
 		"@drepkovsky/tinydi": "^2.3.0",
-		"better-auth": "^1.4.9",
+		"better-auth": "^1.6.11",
 		"commander": "^14.0.2",
 		"drizzle-orm": "1.0.0-beta.6-4414a19",
 		"files-sdk": "^1.6.0",
