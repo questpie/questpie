@@ -321,15 +321,30 @@ function checkHttpFetch(
 		port = parsed.protocol === "https:" ? 443 : 80;
 	}
 
+	if (isHttpHostAllowed(allow, host, port)) return ALLOW;
+
+	return deny(`http.fetch host "${host}:${port}" is not in the net allowlist`);
+}
+
+/**
+ * True if `host:port` matches the `net` allowlist (`host[:port]` entries, Deno
+ * `--allow-net` syntax). Exported because the broker re-checks EVERY redirect hop
+ * in `hostFetch` against the SAME allowlist — a 3xx to a non-allowlisted host must
+ * be blocked, not just IP-validated. Empty allowlist → nothing allowed.
+ */
+export function isHttpHostAllowed(
+	allow: readonly string[],
+	host: string,
+	port: number,
+): boolean {
 	for (const entry of allow) {
 		const { host: allowHost, port: allowPort } = parseHostEntry(entry);
 		const ah = allowHost.toLowerCase();
 		if (ah.length === 0) continue;
 		if (allowPort !== undefined && allowPort !== port) continue;
-		if (hostMatchesAllowEntry(host, ah)) return ALLOW;
+		if (hostMatchesAllowEntry(host, ah)) return true;
 	}
-
-	return deny(`http.fetch host "${host}:${port}" is not in the net allowlist`);
+	return false;
 }
 
 /**

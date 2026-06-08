@@ -23,7 +23,7 @@
  */
 
 import type { ExecutorCapabilities } from "../adapter.js";
-import { checkBindingCapability } from "./capability-check.js";
+import { checkBindingCapability, isHttpHostAllowed } from "./capability-check.js";
 import { type HostFetchOptions, hostFetch } from "./host-fetch.js";
 import {
 	type BindingError,
@@ -243,7 +243,7 @@ export class SandboxBroker {
 		}
 
 		try {
-			return await this.dispatch(parsed, args, run.target);
+			return await this.dispatch(parsed, args, run.target, run.capabilities);
 		} catch (err) {
 			return brokerError(
 				"execution_error",
@@ -257,6 +257,7 @@ export class SandboxBroker {
 		parsed: NonNullable<ReturnType<typeof parseBindingMethod>>,
 		args: unknown,
 		target: BindingTarget,
+		caps: ExecutorCapabilities,
 	): Promise<BrokerRpcResponse> {
 		if (parsed.kind === "files") {
 			const fn = target.files?.[parsed.op];
@@ -336,10 +337,11 @@ export class SandboxBroker {
 			// re-validates every redirect hop. `hostFetch` never throws; it returns
 			// a structured error that maps straight onto BrokerRpcResponse. The
 			// target only contributes OPTIONS (injected resolver / timeouts).
-			const result = await hostFetch(
-				(args ?? {}) as HttpFetchRequest,
-				target.http?.fetchOptions,
-			);
+			const allow = Array.isArray(caps.net) ? caps.net : [];
+			const result = await hostFetch((args ?? {}) as HttpFetchRequest, {
+				...target.http?.fetchOptions,
+				isHostAllowed: (host, port) => isHttpHostAllowed(allow, host, port),
+			});
 			return result.ok
 				? { ok: true, value: result.value }
 				: { ok: false, error: result.error };

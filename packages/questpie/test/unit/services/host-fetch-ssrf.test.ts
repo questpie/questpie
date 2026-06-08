@@ -129,6 +129,10 @@ describe("classifyIpLiteral — SSRF bypass encodings", () => {
 			"::1",
 			"::ffff:127.0.0.1",
 			"::ffff:169.254.169.254",
+			// Bun's `URL.hostname` HEX-compresses IPv4-mapped literals
+			// (::ffff:127.0.0.1 → ::ffff:7f00:1); the classifier must still catch them.
+			"::ffff:7f00:1",
+			"::ffff:a9fe:a9fe",
 			"fd00:ec2::254",
 			"fe80::1",
 		]) {
@@ -198,6 +202,45 @@ describe("hostFetch — allowed host OK, pinned to validated IP", () => {
 		// Two hops hit the origin: the redirect, then /final.
 		expect(seen.map((s) => s.url)).toEqual(["/redirect-ok", "/final"]);
 		expect(seen[1]?.host).toBe(`hop2.test:${port}`);
+	});
+
+	it("BLOCKS a redirect to a host OUTSIDE the net allowlist (open-redirect egress)", async () => {
+		seen.length = 0;
+		const res = await hostFetch(
+			{ url: `http://hop1.test:${port}/redirect-ok` }, // 302 → hop2.test/final
+			{
+				resolve: resolverFrom({
+					"hop1.test": ["127.0.0.1"],
+					"hop2.test": ["127.0.0.1"],
+				}),
+				validateIp: allowLoopback,
+				// hop2.test resolves to a reachable ip but is NOT in the allowlist — an
+				// open redirect on hop1.test must not turn into egress to it.
+				isHostAllowed: (host) => host === "hop1.test",
+			},
+		);
+		expect(res.ok).toBe(false);
+		if (!res.ok)
+			expect(res.error.message).toContain("not in the net allowlist");
+		// Only the first hop reached the origin; hop2 was blocked pre-connect.
+		expect(seen.map((s) => s.url)).toEqual(["/redirect-ok"]);
+	});
+
+	it("FOLLOWS a cross-host redirect when BOTH hops are allowlisted", async () => {
+		seen.length = 0;
+		const res = await hostFetch(
+			{ url: `http://hop1.test:${port}/redirect-ok` },
+			{
+				resolve: resolverFrom({
+					"hop1.test": ["127.0.0.1"],
+					"hop2.test": ["127.0.0.1"],
+				}),
+				validateIp: allowLoopback,
+				isHostAllowed: (host) => host === "hop1.test" || host === "hop2.test",
+			},
+		);
+		expect(res.ok).toBe(true);
+		expect(seen.map((s) => s.url)).toEqual(["/redirect-ok", "/final"]);
 	});
 
 	it("REJECTS a response that exceeds the body cap (host-side byte counter, not Content-Length)", async () => {
@@ -280,11 +323,14 @@ describe("hostFetch — SSRF denials (structured error, never throws)", () => {
 		}
 	});
 
-	it("DENIES a direct private IP literal in the URL (no DNS needed)", async () => {
+	it("DENIES a direct private IP literal in the URL with a POLICY block (no DNS, no connect)", async () => {
 		for (const target of [
 			"http://127.0.0.1/",
 			"http://169.254.169.254/",
 			"http://[::1]/",
+			// Bracketed IPv6 + IPv4-mapped (Bun normalizes to [::ffff:7f00:1]) — the
+			// bracket-order + hex-mapped bypasses must BOTH classify, not get pinned.
+			"http://[::ffff:127.0.0.1]/",
 			"http://2130706433/",
 		]) {
 			const res = await hostFetch(
@@ -292,6 +338,38 @@ describe("hostFetch — SSRF denials (structured error, never throws)", () => {
 				{ resolve: resolverFrom({}) },
 			);
 			expect(res.ok).toBe(false);
+			// Must be the POLICY block, NOT a connection failure: the pre-fix `[::1]`
+			// only "passed" because nothing was listening (ECONNREFUSED). A `blocked
+			// target` message proves resolveAndValidate rejected it BEFORE connecting.
+			if (!res.ok)
+				expect(res.error.message.toLowerCase()).toContain("blocked");
+		}
+	});
+
+	it("BLOCKS a bracketed IPv6 loopback pre-connect even with a real listener on [::1]", async () => {
+		// A REAL listener on [::1] proves the policy rejects BEFORE connecting — not
+		// that the socket merely failed (the cause the old [::1] assertion relied on).
+		let hits = 0;
+		const v6 = createServer((_req, res) => {
+			hits++;
+			res.writeHead(200).end("loopback-reached");
+		});
+		await new Promise<void>((resolve, reject) => {
+			v6.once("error", reject);
+			v6.listen(0, "::1", resolve);
+		});
+		const v6Port = (v6.address() as { port: number }).port;
+		try {
+			// REAL validator (no override) — must reject `[::1]` before any connect.
+			const res = await hostFetch({ url: `http://[::1]:${v6Port}/` });
+			expect(res.ok).toBe(false);
+			if (!res.ok) {
+				expect(res.error.message.toLowerCase()).toContain("blocked");
+				expect(res.error.message).toContain("::1");
+			}
+			expect(hits).toBe(0); // policy blocked it — nothing reached the listener
+		} finally {
+			v6.close();
 		}
 	});
 

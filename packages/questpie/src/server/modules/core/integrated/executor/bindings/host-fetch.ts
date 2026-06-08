@@ -85,6 +85,15 @@ export interface HostFetchOptions {
 	timeoutMs?: number;
 	/** Decoded body cap (bytes). Default {@link HTTP_FETCH_BODY_CAP_BYTES}. */
 	maxBodyBytes?: number;
+	/**
+	 * Per-hop host allowlist gate. The INITIAL host was already allowlist-checked by
+	 * the capability check, but a 3xx `Location` can redirect to a host OUTSIDE the
+	 * run's `net` allowlist — turning an open redirect on an allowlisted host into
+	 * arbitrary egress. The broker passes the run's allowlist matcher here so EVERY
+	 * hop (initial + each redirect) is re-gated. Absent → not enforced (test-only;
+	 * production always supplies it).
+	 */
+	isHostAllowed?: (host: string, port: number) => boolean;
 }
 
 function err(code: BindingError["code"], message: string): HostFetchResult {
@@ -144,18 +153,23 @@ async function resolveAndValidate(
 	validateIp: IpValidator,
 ): Promise<{ ip: string; family: 4 | 6 } | { error: BindingError }> {
 	// Direct IP literal → classify without DNS (covers octal/hex/decimal v4,
-	// IPv4-mapped v6, etc. via the validator).
-	const literal = validateIp(host);
-	if (!literal.ok) {
-		return {
-			error: {
-				code: "execution_error",
-				message: `blocked target: ${literal.reason}`,
-			},
-		};
-	}
+	// IPv4-mapped v6, etc. via the validator). Strip brackets FIRST: `url.hostname`
+	// can hand back a BRACKETED IPv6 literal (`[::1]`), and the classifier expects a
+	// bare ip — validating `[::1]` slips past the private-range patterns, then the
+	// shape check below strips the brackets and pins `::1` (loopback). So normalize,
+	// THEN classify the bare form.
 	if (isIpLiteralShape(host)) {
-		return { ip: stripBrackets(host), family: host.includes(":") ? 6 : 4 };
+		const bare = stripBrackets(host);
+		const literal = validateIp(bare);
+		if (!literal.ok) {
+			return {
+				error: {
+					code: "execution_error",
+					message: `blocked target: ${literal.reason}`,
+				},
+			};
+		}
+		return { ip: bare, family: bare.includes(":") ? 6 : 4 };
 	}
 
 	let addrs: string[];
@@ -424,6 +438,7 @@ export async function hostFetch(
 	const maxRedirects = opts.maxRedirects ?? DEFAULT_MAX_REDIRECTS;
 	const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 	const maxBodyBytes = opts.maxBodyBytes ?? HTTP_FETCH_BODY_CAP_BYTES;
+	const isHostAllowed = opts.isHostAllowed;
 
 	// Validate request shape.
 	if (!req || typeof req.url !== "string" || req.url.length === 0) {
@@ -465,6 +480,24 @@ export async function hostFetch(
 		let currentMethod = method;
 		let currentBody = body;
 		for (let hop = 0; hop <= maxRedirects; hop++) {
+			// Re-gate EVERY hop against the net allowlist (not only the IPs): a
+			// redirect to an allowlisted host's open-redirect target must be blocked
+			// even when it resolves to a public ip. The capability check only saw the
+			// initial url.
+			if (isHostAllowed) {
+				let hopPort: number;
+				if (current.port) {
+					hopPort = Number(current.port);
+				} else {
+					hopPort = current.protocol === "https:" ? 443 : 80;
+				}
+				if (!isHostAllowed(current.hostname.toLowerCase(), hopPort)) {
+					return err(
+						"execution_error",
+						`blocked target: host "${current.hostname}" is not in the net allowlist`,
+					);
+				}
+			}
 			const r = await fetchHop(
 				current,
 				currentMethod,

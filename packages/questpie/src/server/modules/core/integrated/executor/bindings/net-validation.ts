@@ -181,6 +181,20 @@ function isPrivateIpv6(raw: string): boolean {
 		if (canon && ip.startsWith("::")) return isPrivateIpv4Canonical(canon);
 	}
 
+	// IPv4-mapped with a HEX-COMPRESSED tail. Bun's `URL.hostname` normalizes
+	// `::ffff:127.0.0.1` → `::ffff:7f00:1` (and `::ffff:169.254.169.254` →
+	// `::ffff:a9fe:a9fe`), so the dotted match above misses loopback/metadata
+	// smuggled as a mapped literal. Rebuild the 32-bit v4 from the two embedded
+	// hextets and classify it (each derived octet is already in 0-255).
+	const mapped = ip.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
+	if (mapped) {
+		const hi = Number.parseInt(mapped[1], 16) & 0xffff;
+		const lo = Number.parseInt(mapped[2], 16) & 0xffff;
+		return isPrivateIpv4Canonical(
+			`${hi >> 8}.${hi & 0xff}.${lo >> 8}.${lo & 0xff}`,
+		);
+	}
+
 	// fc00::/7 unique-local (fc.. and fd..).
 	if (
 		/^f[cd][0-9a-f]{0,2}:/.test(ip) ||
