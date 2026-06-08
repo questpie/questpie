@@ -98,6 +98,21 @@ function inferRenderer(doc: KnowledgeDoc): string {
 	) {
 		return "office";
 	}
+	// Media content-type is AUTHORITATIVE — checked before the html/markdown
+	// path-extension rules so an image/video isn't misrouted by an incidental
+	// `.md`/`.html` name (e.g. an svg stored under a `.md` knowledge path).
+	if (
+		contentType.startsWith("image/") ||
+		/\.(png|jpe?g|gif|webp|svg|avif|bmp|ico)$/i.test(path)
+	) {
+		return "image";
+	}
+	if (
+		contentType.startsWith("video/") ||
+		/\.(mp4|webm|mov|m4v|ogv)$/i.test(path)
+	) {
+		return "video";
+	}
 	if (contentType.includes("html") || /\.html?$/i.test(path)) return "html";
 	if (contentType.includes("markdown") || /\.mdx?$/i.test(path)) return "markdown";
 	return "blob";
