@@ -8,6 +8,9 @@ import {
 	AdminViewHeader,
 	AdminViewLayout,
 	Button,
+	getFileIcon,
+	selectAdmin,
+	useAdminStore,
 	useCollectionItem,
 	type CollectionFormViewProps,
 	type MaybeLazyComponent,
@@ -19,38 +22,14 @@ import {
 	setChatAttachmentDragData,
 } from "../lib/chat-attachments";
 import {
+	hasUploadBlob,
+	type KnowledgeDoc,
+	type RelationValue,
+} from "../lib/knowledge-doc";
+import {
 	createKnowledgeChatAttachment,
 	knowledgeMetadataEntries,
 } from "../lib/knowledge-attachments";
-import { KnowledgeHost } from "./knowledge-host";
-
-type KnowledgeDoc = {
-	id: string;
-	title?: string | null;
-	path?: string | null;
-	kind?: string | null;
-	contentType?: string | null;
-	body?: string | null;
-	renderer?: string | null;
-	source?: string | null;
-	sourceRef?: string | null;
-	scopeType?: string | null;
-	/** Upload-blob fields (present when the row carries an uploaded file). */
-	url?: string | null;
-	key?: string | null;
-	filename?: string | null;
-	project?: RelationValue;
-	task?: RelationValue;
-	run?: RelationValue;
-	metadata?: unknown;
-	createdAt?: string | Date | null;
-	updatedAt?: string | Date | null;
-};
-
-type RelationValue =
-	| string
-	| { id?: string; title?: string; name?: string }
-	| null;
 
 function isLazyLoader(loader: MaybeLazyComponent): loader is () => Promise<{
 	default: React.ComponentType<Record<string, unknown>>;
@@ -77,60 +56,51 @@ const CollectionFormView = React.lazy(async () => {
 	};
 });
 
-/**
- * The framework `document` view primitive (Notion-style, immediately editable,
- * autosaving). Lazy-loaded the SAME way as `CollectionFormView` above — both are
- * registered admin views keyed by name in `adminClientModule.views`. A text/
- * markdown knowledge row mounts this directly so editing reuses the primitive
- * (no bespoke editor, no edit/preview mode).
- */
-const DocumentView = React.lazy(async () => {
-	const loader = adminClientModule.views["collection-document"].component;
-	if (isLazyLoader(loader)) {
-		const module = await loader();
-		return {
-			default: (module.default ?? module) as React.ComponentType<
-				Record<string, unknown>
-			>,
-		};
-	}
-	return {
-		default: loader as React.ComponentType<Record<string, unknown>>,
-	};
-});
+/** Capitalize the first letter of a renderer name → `pdf` → `Pdf`. */
+function cap(value: string): string {
+	return value ? value[0].toUpperCase() + value.slice(1) : value;
+}
 
 /**
- * Declarative `document` config for a text/markdown knowledge row: the `body`
- * field is the dominant rich-text column; a CURATED set of meaningful knowledge
- * fields show as inline-editable property rows; edits autosave. Property names
- * absent from the resolved field map are silently dropped by the primitive.
+ * Resolve the `file-render-<x>` renderer key for a row. Dispatch matches the
+ * legacy two-level logic exactly (so the refactor is behavior-identical):
  *
- * Only fields that carry signal are listed — scope, source provenance, and the
- * timestamps. The redundant/implied fields (`path`, `kind`, `contentType`,
- * `renderer`) and the usually-empty refs (`sourceRef`, `project`, `task`, `run`,
- * `metadata`) are intentionally omitted so the page reads like a clean document,
- * not a raw record dump.
+ *   - a mini-app row (`kind`/`renderer` says so) → the KnowledgeHost host render;
+ *   - a TEXT-resource row (no blob `key`) → the editable framework `document`
+ *     view, REGARDLESS of its format tag (`renderer:"markdown"/"json"/…`) — a
+ *     text resource was always editable, never dispatched by the format string;
+ *   - a BLOB row → a type-appropriate VIEWER, selected by its declarative
+ *     `renderer` when present (so a drop-in viewer like a future `csv` needs only
+ *     a `file-render-csv.tsx` + rows with `renderer:"csv"`), else inferred from
+ *     content-type/extension. The content inspection below is the ONLY remaining
+ *     sniff, scoped to legacy blob rows that carry no `renderer`.
+ *
+ * The returned name is `cap()`-ed and looked up in the discovered `components`
+ * registry (`getComponents()["fileRender<X>"]`), defaulting to `fileRenderBlob`.
  */
-const KNOWLEDGE_DOCUMENT_CONFIG = {
-	document: {
-		body: "body",
-		title: "title",
-		save: "autosave",
-		properties: ["scopeType", "source", "createdAt", "updatedAt"],
-	},
-} as const;
+function resolveRendererKey(doc: KnowledgeDoc): string {
+	if (doc.kind === "miniapp" || doc.renderer === "miniapp") return "miniapp";
+	if (!hasUploadBlob(doc)) return "document";
+	return doc.renderer ?? inferRenderer(doc);
+}
 
 /**
- * Human page title for a knowledge doc. Prefer an explicit `title`; otherwise
- * the file's display name (last path segment, e.g. `text-doc-test.md`) so the
- * document page never shows a raw record id. Falls back to the full path.
+ * Infer a blob row's VIEWER renderer from its content-type/extension — the lone
+ * content sniff, reached only when a blob row carries no declarative `renderer`.
  */
-function documentTitle(doc: KnowledgeDoc): string | undefined {
-	if (doc.title && doc.title.trim()) return doc.title.trim();
-	const path = doc.path?.trim();
-	if (!path) return undefined;
-	const segment = path.split("/").filter(Boolean).pop();
-	return segment || path;
+function inferRenderer(doc: KnowledgeDoc): string {
+	const contentType = doc.contentType?.toLowerCase() ?? "";
+	const path = doc.path ?? "";
+	if (contentType.includes("pdf") || /\.pdf$/i.test(path)) return "pdf";
+	if (
+		/officedocument|msword|ms-excel|ms-powerpoint/.test(contentType) ||
+		/\.(docx?|xlsx?|pptx?)$/i.test(path)
+	) {
+		return "office";
+	}
+	if (contentType.includes("html") || /\.html?$/i.test(path)) return "html";
+	if (contentType.includes("markdown") || /\.mdx?$/i.test(path)) return "markdown";
+	return "blob";
 }
 
 function relationId(value: RelationValue): string | null {
@@ -162,348 +132,6 @@ function metadataValue(value: unknown) {
 	} catch {
 		return String(value);
 	}
-}
-
-function looksHtml(doc: KnowledgeDoc) {
-	const contentType = doc.contentType?.toLowerCase() ?? "";
-	return (
-		doc.renderer === "html" ||
-		contentType.includes("html") ||
-		/\.html?$/i.test(doc.path ?? "")
-	);
-}
-
-/**
- * A row is a mini-app when its `kind`/`renderer` says so. The `.app` bundle is a
- * SUBTREE; any of its rows (`server.ts`/`index.html`/`*.jsx`) carries
- * `kind:"miniapp"`, so opening ANY of them resolves to the same app id and mounts
- * the KnowledgeHost for the whole bundle.
- */
-function isMiniApp(doc: KnowledgeDoc) {
-	return doc.kind === "miniapp" || doc.renderer === "miniapp";
-}
-
-/**
- * Extract the `{appId}` from a `.app` bundle row path:
- * `company/apps/{appId}.app/...` → `{appId}`. Returns `null` when the path is not
- * inside an `.app` bundle.
- */
-function appIdFromPath(path: string | null | undefined): string | null {
-	if (typeof path !== "string") return null;
-	const match = path.match(/(?:^|\/)apps\/([a-z0-9][a-z0-9-]*)\.app\//);
-	return match ? match[1] : null;
-}
-
-/** PDF detection (content-type or extension) → the in-browser pdf viewer. */
-function looksPdf(doc: KnowledgeDoc) {
-	const contentType = doc.contentType?.toLowerCase() ?? "";
-	return (
-		doc.renderer === "pdf" ||
-		contentType.includes("pdf") ||
-		/\.pdf$/i.test(doc.path ?? "")
-	);
-}
-
-/** Office-document detection (doc/docx/xls/xlsx/ppt/pptx) → the office viewer. */
-function looksOffice(doc: KnowledgeDoc) {
-	const contentType = doc.contentType?.toLowerCase() ?? "";
-	return (
-		doc.renderer === "office" ||
-		/officedocument|msword|ms-excel|ms-powerpoint/.test(contentType) ||
-		/\.(docx?|xlsx?|pptx?)$/i.test(doc.path ?? "")
-	);
-}
-
-/** A row that carries an uploaded blob (a `key`) rather than a text `body`. */
-function hasUploadBlob(doc: KnowledgeDoc) {
-	return typeof (doc as { key?: unknown }).key === "string";
-}
-
-/**
- * An EDITABLE text/markdown row: a `body`-backed knowledge doc that is neither a
- * mini-app nor a blob upload. These render with the framework document-view
- * primitive (directly editable). Mini-app + blob rows (pdf/office/image) are
- * type-appropriate VIEWER/host renders, not an editable document.
- */
-function isEditableTextRow(doc: KnowledgeDoc) {
-	return !isMiniApp(doc) && !hasUploadBlob(doc);
-}
-
-function bodyKind(doc: KnowledgeDoc) {
-	const contentType = doc.contentType?.toLowerCase() ?? "";
-	if (isMiniApp(doc)) return "miniapp";
-	if (looksPdf(doc)) return "pdf";
-	if (looksOffice(doc)) return "office";
-	if (looksHtml(doc)) return "html";
-	if (
-		doc.renderer === "markdown" ||
-		contentType.includes("markdown") ||
-		/\.mdx?$/i.test(doc.path ?? "")
-	) {
-		return "markdown";
-	}
-	return "text";
-}
-
-/**
- * Neutral file glyph for the document. Mirrors the canonical `getFileIcon`
- * (asset-preview / asset-thumbnail): always a neutral Phosphor file icon, never
- * a colored/brand mark. Drives off the resolved body kind + content type since a
- * knowledge row carries `renderer`/`contentType` rather than a bare MIME string.
- */
-function getFileIcon(doc: KnowledgeDoc): string {
-	const kind = bodyKind(doc);
-	if (kind === "miniapp") return "ph:app-window";
-	if (kind === "pdf") return "ph:file-pdf";
-	if (kind === "office") return "ph:file-doc";
-	if (kind === "html") return "ph:file-html";
-	if (kind === "markdown") return "ph:file-text";
-	const contentType = doc.contentType?.toLowerCase() ?? "";
-	if (contentType.startsWith("image/")) return "ph:file-image";
-	if (contentType.startsWith("video/")) return "ph:file-video";
-	if (contentType.startsWith("audio/")) return "ph:file-audio";
-	if (/json|javascript|typescript|xml/.test(contentType)) return "ph:file-code";
-	return "ph:file";
-}
-
-function MarkdownPreview({ body }: { body: string }) {
-	const blocks = body.split(/(```[\s\S]*?```)/g);
-	return (
-		<div className="space-y-4">
-			{blocks.map((block, index) => {
-				const fence = block.match(/^```([\w-]*)\n?([\s\S]*?)```$/);
-				if (fence) {
-					return (
-						<pre
-							key={index}
-							className="bg-card border-border-subtle max-h-[38rem] overflow-auto rounded-[var(--surface-radius)] border p-4 font-mono text-xs leading-relaxed tabular-nums"
-						>
-							<code>{fence[2]}</code>
-						</pre>
-					);
-				}
-
-				return block
-					.split(/\n{2,}/)
-					.filter((part) => part.trim())
-					.map((part, partIndex) => (
-						<MarkdownBlock key={`${index}-${partIndex}`} value={part} />
-					));
-			})}
-		</div>
-	);
-}
-
-function MarkdownBlock({ value }: { value: string }) {
-	const trimmed = value.trim();
-	const heading = trimmed.match(/^(#{1,4})\s+(.+)$/);
-	if (heading) {
-		const level = heading[1].length;
-		// Real type scale: H1/H2 read as subsection headings (18-20px), H3/H4
-		// step down toward body. Headings balance their wrap (DESIGN §Typography).
-		if (level === 1) {
-			return (
-				<h2 className="text-foreground mt-8 text-xl font-semibold tracking-tight text-balance first:mt-0">
-					{heading[2]}
-				</h2>
-			);
-		}
-		if (level === 2) {
-			return (
-				<h3 className="text-foreground mt-7 text-lg font-semibold tracking-tight text-balance first:mt-0">
-					{heading[2]}
-				</h3>
-			);
-		}
-		if (level === 3) {
-			return (
-				<h4 className="text-foreground mt-6 text-base font-semibold text-balance first:mt-0">
-					{heading[2]}
-				</h4>
-			);
-		}
-		return (
-			<h5 className="text-foreground mt-5 text-sm font-semibold text-balance first:mt-0">
-				{heading[2]}
-			</h5>
-		);
-	}
-
-	const lines = trimmed.split("\n");
-	if (lines.every((line) => /^\s*[-*]\s+/.test(line))) {
-		return (
-			<ul className="text-foreground marker:text-foreground-subtle list-disc space-y-1.5 pl-5 text-sm leading-relaxed">
-				{lines.map((line, index) => (
-					<li key={index} className="text-pretty">
-						{line.replace(/^\s*[-*]\s+/, "")}
-					</li>
-				))}
-			</ul>
-		);
-	}
-
-	if (lines.every((line) => /^\s*\d+\.\s+/.test(line))) {
-		return (
-			<ol className="text-foreground marker:text-foreground-subtle list-decimal space-y-1.5 pl-5 text-sm leading-relaxed tabular-nums">
-				{lines.map((line, index) => (
-					<li key={index} className="text-pretty">
-						{line.replace(/^\s*\d+\.\s+/, "")}
-					</li>
-				))}
-			</ol>
-		);
-	}
-
-	return (
-		<p className="text-foreground text-sm leading-relaxed text-pretty whitespace-pre-wrap">
-			{trimmed}
-		</p>
-	);
-}
-
-/** Resolve a same-origin-friendly blob URL for an upload row (or undefined). */
-function resolveBlobUrl(doc: KnowledgeDoc): string | undefined {
-	const url = doc.url;
-	if (typeof url !== "string" || url.trim().length === 0) return undefined;
-	return url.trim();
-}
-
-function DownloadFallback({ doc }: { doc: KnowledgeDoc }) {
-	const url = resolveBlobUrl(doc);
-	const name = doc.filename ?? doc.title ?? doc.path ?? "file";
-	return (
-		<div className="border-border-subtle bg-card flex flex-col items-center justify-center gap-3 rounded-[var(--surface-radius)] border px-4 py-12 text-center">
-			<Icon
-				icon={getFileIcon(doc)}
-				className="text-foreground-subtle size-8"
-			/>
-			<div className="text-sm font-medium">{name}</div>
-			{doc.contentType ? (
-				<div className="text-foreground-muted font-mono text-xs">
-					{doc.contentType}
-				</div>
-			) : null}
-			{url ? (
-				<Button
-					variant="outline"
-					size="sm"
-					nativeButton={false}
-					render={<a href={url} download={doc.filename ?? undefined} />}
-				>
-					<Icon icon="ph:download-simple" data-icon="inline-start" />
-					Download
-				</Button>
-			) : (
-				<div className="text-foreground-muted text-xs">
-					No downloadable file on this record.
-				</div>
-			)}
-		</div>
-	);
-}
-
-function BodyPreview({ doc }: { doc: KnowledgeDoc }) {
-	const kind = bodyKind(doc);
-
-	// Mini-app: mount the KnowledgeHost iframe runtime (it reads the `.app` bundle
-	// itself — no `body` on the opened row is required).
-	if (kind === "miniapp") {
-		const appId = appIdFromPath(doc.path);
-		if (!appId) {
-			return (
-				<div className="text-foreground-muted border-border-subtle rounded-[var(--surface-radius)] border px-4 py-8 text-center text-sm">
-					This mini-app row is not inside a `.app` bundle path.
-				</div>
-			);
-		}
-		return (
-			<div className="border-border-subtle bg-background overflow-hidden rounded-[var(--surface-radius)] border">
-				<KnowledgeHost appId={appId} className="h-[36rem] w-full" />
-			</div>
-		);
-	}
-
-	// PDF: browsers render application/pdf natively in an <iframe>.
-	if (kind === "pdf") {
-		const url = resolveBlobUrl(doc);
-		if (!url) return <DownloadFallback doc={doc} />;
-		return (
-			<div className="border-border-subtle bg-background overflow-hidden rounded-[var(--surface-radius)] border">
-				<iframe
-					title={doc.title ?? doc.path ?? "PDF preview"}
-					src={url}
-					className="h-[40rem] w-full bg-white"
-				/>
-			</div>
-		);
-	}
-
-	// Office docs: embed via the Microsoft Office Online viewer when the blob is at
-	// a publicly reachable absolute URL; otherwise fall back to download.
-	if (kind === "office") {
-		const url = resolveBlobUrl(doc);
-		const isAbsolute = !!url && /^https?:\/\//i.test(url);
-		if (url && isAbsolute) {
-			const viewer = `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(
-				url,
-			)}`;
-			return (
-				<div className="space-y-3">
-					<div className="border-border-subtle bg-background overflow-hidden rounded-[var(--surface-radius)] border">
-						<iframe
-							title={doc.title ?? doc.path ?? "Document preview"}
-							src={viewer}
-							className="h-[40rem] w-full bg-white"
-						/>
-					</div>
-					<DownloadFallback doc={doc} />
-				</div>
-			);
-		}
-		return <DownloadFallback doc={doc} />;
-	}
-
-	const body = doc.body ?? "";
-	if (!body.trim()) {
-		// A blob upload with no text body → offer a download.
-		if (hasUploadBlob(doc)) return <DownloadFallback doc={doc} />;
-		return (
-			<div className="text-foreground-muted border-border-subtle rounded-[var(--surface-radius)] border px-4 py-8 text-center text-sm">
-				No body content.
-			</div>
-		);
-	}
-
-	if (kind === "html") {
-		return (
-			<div className="space-y-3">
-				<div className="border-border-subtle bg-background overflow-hidden rounded-[var(--surface-radius)] border">
-					<iframe
-						title={doc.title ?? doc.path ?? "Knowledge preview"}
-						sandbox=""
-						srcDoc={body}
-						className="h-[28rem] w-full bg-white"
-					/>
-				</div>
-				<details className="border-border-subtle bg-card rounded-[var(--surface-radius)] border p-3">
-					<summary className="text-foreground-muted hover:text-foreground cursor-pointer text-xs font-medium">
-						Source
-					</summary>
-					<pre className="mt-3 max-h-[24rem] overflow-auto font-mono text-xs leading-relaxed tabular-nums whitespace-pre-wrap">
-						{body}
-					</pre>
-				</details>
-			</div>
-		);
-	}
-
-	if (kind === "markdown") return <MarkdownPreview body={body} />;
-
-	return (
-		<pre className="bg-card border-border-subtle max-h-[42rem] overflow-auto rounded-[var(--surface-radius)] border p-4 font-mono text-xs leading-relaxed tabular-nums whitespace-pre-wrap">
-			{body}
-		</pre>
-	);
 }
 
 function RelationLink({
@@ -589,9 +217,11 @@ function PropertyRow({
 function KnowledgeInspector({
 	doc,
 	basePath,
+	children,
 }: {
 	doc: KnowledgeDoc;
 	basePath: string;
+	children: React.ReactNode;
 }) {
 	const created = formatDate(doc.createdAt);
 	const updated = formatDate(doc.updatedAt);
@@ -671,9 +301,7 @@ function KnowledgeInspector({
 			<div className="border-border-subtle mb-8 border-t" />
 
 			{/* Document body — content front and center */}
-			<div className="min-w-0">
-				<BodyPreview doc={doc} />
-			</div>
+			<div className="min-w-0">{children}</div>
 		</div>
 	);
 }
@@ -692,36 +320,11 @@ function CollectionForm(props: CollectionFormViewProps) {
 	);
 }
 
-/**
- * Mount the framework `document` view primitive for a text/markdown knowledge
- * row. Reuses the form-view props (the primitive is a drop-in with the same
- * `CollectionFormViewProps`); the `viewConfig.document` declares which field is
- * the body, which are property rows, and that edits autosave. The primitive
- * brings its OWN page shell (centered layout + title + autosave indicator), so
- * it is returned directly — not wrapped in the autopilot viewer chrome.
- */
-function DocumentDetail({ title, ...props }: CollectionFormViewProps) {
-	return (
-		<React.Suspense
-			fallback={
-				<div className="text-foreground-muted flex items-center justify-center p-12">
-					<Icon icon="ph:spinner" className="size-5 animate-spin" />
-				</div>
-			}
-		>
-			<DocumentView
-				{...props}
-				viewConfig={KNOWLEDGE_DOCUMENT_CONFIG}
-				title={title}
-			/>
-		</React.Suspense>
-	);
-}
-
 export default function KnowledgeDetailComponent(
 	props: CollectionFormViewProps,
 ) {
 	const { collection, id, basePath = "/admin" } = props;
+	const admin = useAdminStore(selectAdmin);
 	const { data, isLoading, error } = useCollectionItem(
 		collection as any,
 		id ?? "",
@@ -732,12 +335,30 @@ export default function KnowledgeDetailComponent(
 
 	if (!id) return <CollectionForm {...props} />;
 
-	// A text/markdown row (no blob `key`, not a mini-app) is an editable
-	// document: hand it straight to the framework document-view primitive, which
-	// renders the Notion-style page (title + property rows + rich-text body) and
-	// autosaves — no edit/preview mode. The primitive owns its own page shell.
-	if (doc && isEditableTextRow(doc)) {
-		return <DocumentDetail {...props} title={documentTitle(doc)} />;
+	// Resolve the body renderer purely from the DISCOVERED `components` registry,
+	// keyed by the row's renderer (+ a localized content-type fallback). Adding a
+	// file type is a new `file-render-<x>.tsx` + rows with `renderer:"x"` — zero
+	// edits here. Defaults to the download fallback for an unknown renderer.
+	const components = (admin?.getComponents() ?? {}) as Record<
+		string,
+		MaybeLazyComponent
+	>;
+	const rendererKey = doc ? resolveRendererKey(doc) : null;
+	const Renderer = (rendererKey
+		? (components[`fileRender${cap(rendererKey)}`] ?? components.fileRenderBlob)
+		: components.fileRenderBlob) as React.ComponentType<{
+		doc: KnowledgeDoc;
+	}>;
+
+	// A text/markdown row resolves to the framework `document` view (own page
+	// shell: title + property rows + rich-text body, autosaving). Hand it the
+	// form-view props directly — the primitive is a drop-in — and skip the
+	// autopilot viewer chrome (the document renderer brings its own).
+	if (doc && rendererKey === "document") {
+		const DocumentRenderer = Renderer as React.ComponentType<
+			{ doc: KnowledgeDoc } & CollectionFormViewProps
+		>;
+		return <DocumentRenderer doc={doc} {...props} />;
 	}
 
 	// Blob (pdf/office/image) + mini-app rows are type-appropriate VIEWER/host
@@ -753,7 +374,7 @@ export default function KnowledgeDetailComponent(
 					title={
 						<span className="flex min-w-0 items-center gap-2">
 							<Icon
-								icon={doc ? getFileIcon(doc) : "ph:file"}
+								icon={getFileIcon(doc?.contentType ?? undefined)}
 								className="text-foreground-subtle size-5 shrink-0"
 							/>
 							<span className="min-w-0 truncate">{title}</span>
@@ -777,9 +398,7 @@ export default function KnowledgeDetailComponent(
 							) : null}
 						</>
 					}
-					actions={
-						doc ? <KnowledgeChatContextAction doc={doc} /> : null
-					}
+					actions={doc ? <KnowledgeChatContextAction doc={doc} /> : null}
 				/>
 			}
 		>
@@ -795,7 +414,9 @@ export default function KnowledgeDetailComponent(
 							: "Failed to load knowledge"}
 					</div>
 				) : doc ? (
-					<KnowledgeInspector doc={doc} basePath={basePath} />
+					<KnowledgeInspector doc={doc} basePath={basePath}>
+						<Renderer doc={doc} />
+					</KnowledgeInspector>
 				) : (
 					<div className="text-foreground-muted border-border-subtle rounded-[var(--surface-radius)] border p-8 text-center text-sm">
 						Knowledge resource not found.

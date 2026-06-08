@@ -83,6 +83,13 @@ export {
 	AdminViewLayout,
 	AdminViewHeader,
 } from "#questpie/admin/client/views/layout/admin-view-layout.js";
+// The framework `document` view primitive (Notion-style, immediately editable,
+// autosaving) — so a custom dispatcher view can mount it directly for editable
+// text/markdown records instead of string-keying the view registry.
+export { default as DocumentView } from "#questpie/admin/client/views/collection/document-view.js";
+// Canonical file-type → Phosphor icon mapper (the unified asset thumbnail's
+// helper) — so custom views reuse the exact same neutral file glyphs.
+export { getFileIcon } from "#questpie/admin/client/views/collection/cells/shared/asset-thumbnail.js";
 export { SearchInput } from "#questpie/admin/client/components/ui/search-input.js";
 // UI primitives — so custom views (e.g. the autopilot Files browser) render with
 // the exact same table/button/tooltip design language as the built-in views.
@@ -449,6 +456,7 @@ export type {
 } from "#questpie/admin/client/builder/types/common.js";
 export type {
 	ComponentRegistry,
+	DocumentViewConfig,
 	FieldComponentProps,
 	FormViewConfig,
 } from "#questpie/admin/client/builder/types/field-types.js";

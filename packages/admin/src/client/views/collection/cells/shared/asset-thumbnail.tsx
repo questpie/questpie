@@ -58,7 +58,7 @@ interface AssetThumbnailProps {
 // Helpers
 // ============================================================================
 
-function getFileIcon(mimeType?: string): string {
+export function getFileIcon(mimeType?: string): string {
 	if (!mimeType) return "ph:file";
 
 	const type = mimeType.toLowerCase();
