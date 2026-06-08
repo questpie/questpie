@@ -32,28 +32,41 @@
  *
  * EGRESS / SSRF: net + import hosts are validated against the private-IP policy
  * (`net-validation.ts`) at request time — a host that IS or RESOLVES TO a
- * private/link-local/loopback/metadata IP is rejected before spawn.
+ * private/link-local/loopback/metadata IP is rejected before spawn. The BASELINE
+ * runtime defense is the brokered `http.fetch` path (guest runs `--allow-net=[]`,
+ * so it cannot open sockets at all → no DNS-rebind surface).
  *
- * TODO(security): connect-time DNS-rebind PINNING is NOT implemented. We reject
- * private IPs at request/manifest time, but a hostname that passes validation
- * and then re-resolves to a private IP at fetch()/redirect time (TOCTOU rebind)
- * is not yet re-checked per-connect. Closing this needs a connect-time hook or
- * an egress proxy that re-validates the resolved IP on every connect/redirect.
- * Until then: untrusted prod NEEDS-HUMAN-SIGNOFF (see task flag).
+ * DEFENSE-IN-DEPTH (LINUX cloud workers only): on a capable Linux host the guest
+ * subprocess is additionally wrapped in a NETWORK NAMESPACE with an nftables
+ * egress firewall (`egress-firewall.ts`) that DROPS all traffic to private/link-
+ * local/loopback/metadata ranges at the KERNEL and permits only the resolved
+ * per-run allowlist — a second, independent boundary that also covers a
+ * hypothetical low-level escape. It is GRACEFULLY ABSENT off Linux (and on Linux
+ * without `unshare`/`nft`/`ip` or CAP_NET_ADMIN): a one-line notice is logged and
+ * the guest spawns exactly as before, with the baseline staying safe via the
+ * brokered fetch. The kernel-drop behavior is verified manually on a Linux worker
+ * (it cannot be exercised on macOS/Windows). See `egress-firewall.ts`.
  *
  * Run:
- *   deno run --allow-net --allow-env --allow-run --allow-read \
+ *   deno run --allow-net --allow-env --allow-run --allow-read --allow-write=$TMPDIR \
  *     src/sandbox-server.ts
  *
  *   (The SERVER needs: net to bind + spawn children that inherit nothing from it;
- *    run to spawn `deno`; read to load guest-entry.ts; env to read PORT/DENO_BIN.
+ *    run to spawn `deno` — and, on Linux, `unshare`/`nft`/`ip` for the egress
+ *    firewall; read to load guest-entry.ts; env to read PORT/DENO_BIN; write to a
+ *    temp dir to stage the per-run nft ruleset (Linux only — harmless elsewhere).
  *    These are the SUPERVISOR's perms — each GUEST subprocess gets only the
  *    scoped flags above and inherits none of the supervisor's grants.)
  */
 
 // @ts-nocheck — Deno runtime file; not part of the Bun/tsc typecheck graph.
 
-import { validateEgressHosts } from "./net-validation.ts";
+import {
+	type EgressFirewallPlan,
+	planEgressFirewall,
+	wrapWithNetns,
+} from "./egress-firewall.ts";
+import { resolveAllowedEndpoints, validateEgressHosts } from "./net-validation.ts";
 import {
 	RESULT_MARKER,
 	brokerUrlRejection,
@@ -95,6 +108,125 @@ const DENO_BIN = Deno.env.get("DENO_BIN") ?? Deno.execPath();
  * relay. When UNSET, this check is skipped (back-compat) — set it in production.
  */
 const EXPECTED_BROKER_URL = Deno.env.get("SANDBOX_BROKER_URL")?.trim();
+
+// ──────────────────────────────────────────────────────────────────────────
+// DEFENSE-IN-DEPTH: kernel egress firewall (LINUX-ONLY, cloud workers). S6 of
+// spec `sandbox-brokered-http-egress`. The pure planning/ruleset/argv logic
+// lives in `egress-firewall.ts` (typechecked + unit-tested under bun). The
+// Deno-only PROBING (platform, tool presence, capabilities) + the real spawn
+// wrap live here. On non-Linux — or Linux without the tools/caps — the firewall
+// NO-OPS with a one-line notice and the guest spawns exactly as before, so the
+// macOS/Windows local workers are untouched (baseline safe via brokered fetch).
+//
+// HONESTY: the kernel-drop guarantee is UNVERIFIABLE off Linux; it is verified
+// manually on a Linux worker (see the repro in `egress-firewall.ts`).
+//
+// Off-switch: set SANDBOX_DISABLE_NETNS_FIREWALL=1 to force the no-op path even
+// on a capable Linux host (e.g. when the orchestrator already provides netns).
+// ──────────────────────────────────────────────────────────────────────────
+
+const NETNS_FIREWALL_DISABLED = Deno.env.get("SANDBOX_DISABLE_NETNS_FIREWALL") === "1";
+
+/** Probe PATH for a tool by exec'ing `<tool> --version` (no shell). Never throws. */
+async function hasTool(tool: string, versionArg = "--version"): Promise<boolean> {
+	try {
+		const out = await new Deno.Command(tool, {
+			args: [versionArg],
+			stdin: "null",
+			stdout: "null",
+			stderr: "null",
+		}).output();
+		// `unshare --version` / `nft --version` / `ip -V` all exit 0 when present.
+		return out.success;
+	} catch {
+		return false; // ENOENT (not on PATH) or spawn denied
+	}
+}
+
+/**
+ * Probe whether the supervisor can actually CREATE a filtered netns. We don't
+ * parse capability bitmasks — we just attempt the real operation cheaply:
+ * `unshare --net --map-root-user true`. If it exits 0 the host supports an
+ * (unprivileged-userns or root) network namespace; if it EPERMs, we no-op.
+ * This is the most honest probe: it tests the exact syscall path we'll use.
+ */
+async function canCreateNetns(): Promise<boolean> {
+	try {
+		const out = await new Deno.Command("unshare", {
+			args: ["--net", "--map-root-user", "true"],
+			stdin: "null",
+			stdout: "null",
+			stderr: "null",
+		}).output();
+		return out.success;
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * Build the per-run egress-firewall plan: probe the platform/tools/caps and
+ * resolve the guest's allowlist (net+import hosts) to the PUBLIC IPs that become
+ * the kernel `accept` rules. Pure decision logic is delegated to
+ * `planEgressFirewall`; this only feeds it real probe results. Never throws.
+ */
+async function buildEgressFirewallPlan(
+	netHosts: string[],
+	importHosts: string[],
+): Promise<EgressFirewallPlan> {
+	if (NETNS_FIREWALL_DISABLED) {
+		return { applied: false, reason: "disabled via SANDBOX_DISABLE_NETNS_FIREWALL=1" };
+	}
+	const os = Deno.build.os; // "linux" | "darwin" | "windows" — Deno's vocabulary
+	// Cheap OS gate FIRST: skip the (slowish) tool/cap probes entirely off Linux.
+	if (os !== "linux") {
+		return planEgressFirewall({ os, allow: [], tools: { unshare: false, nft: false, ip: false }, hasCaps: false });
+	}
+	const [unshare, nft, ip] = await Promise.all([
+		hasTool("unshare"),
+		hasTool("nft"),
+		hasTool("ip", "-V"),
+	]);
+	const hasCaps = unshare ? await canCreateNetns() : false;
+	// Resolve the allowlist to public IPs (best-effort; never throws). For the
+	// brokered path netHosts is [] → pure default-deny netns.
+	const allow = await resolveAllowedEndpoints([...netHosts, ...importHosts]);
+	return planEgressFirewall({ os, allow, tools: { unshare, nft, ip }, hasCaps });
+}
+
+/**
+ * Write the per-run nft ruleset to a temp file and return `{ cmd, args, cleanup }`
+ * wrapping the guest argv with `unshare`. The temp file is read by `nft -f` inside
+ * the new netns, then removed by `cleanup()` after the run. Never throws — on any
+ * IO failure it returns `null` so the caller falls back to the un-wrapped spawn.
+ */
+async function applyEgressFirewall(
+	guestArgv: string[],
+	ruleset: string,
+): Promise<{ cmd: string; args: string[]; cleanup: () => Promise<void> } | null> {
+	let rulesetPath: string;
+	try {
+		rulesetPath = await Deno.makeTempFile({ prefix: "qp-sandbox-egress-", suffix: ".nft" });
+		await Deno.writeTextFile(rulesetPath, ruleset);
+	} catch (err) {
+		console.warn(
+			`[sandbox] egress firewall: failed to stage ruleset (${err instanceof Error ? err.message : String(err)}); spawning without netns`,
+		);
+		return null;
+	}
+	const { cmd, args } = wrapWithNetns(guestArgv, rulesetPath);
+	return {
+		cmd,
+		args,
+		cleanup: async () => {
+			try {
+				await Deno.remove(rulesetPath);
+			} catch {
+				/* best-effort */
+			}
+		},
+	};
+}
 
 /**
  * Relay ONE binding RPC to the host broker (supervisor → app, server-to-server),
@@ -299,10 +431,20 @@ async function relayBindingsRun(
  */
 async function runInSubprocess(req: SandboxRunRequest): Promise<SandboxRunResult> {
 	const started = performance.now();
-	const finish = (r: RunOutcome): SandboxRunResult => ({
-		...r,
-		ms: Math.round(performance.now() - started),
-	});
+	// Best-effort teardown for any per-run resource (e.g. the egress-firewall
+	// ruleset temp file). Set when the firewall is applied; fired on every return.
+	let onFinish: (() => void) | undefined;
+	const finish = (r: RunOutcome): SandboxRunResult => {
+		if (onFinish) {
+			try {
+				onFinish();
+			} catch {
+				/* best-effort cleanup */
+			}
+			onFinish = undefined;
+		}
+		return { ...r, ms: Math.round(performance.now() - started) };
+	};
 
 	const caps: SandboxCapabilities = req.capabilities ?? {
 		net: [],
@@ -353,10 +495,42 @@ async function runInSubprocess(req: SandboxRunRequest): Promise<SandboxRunResult
 		GUEST_ENTRY_PATH,
 	];
 
+	// ── DEFENSE-IN-DEPTH: wrap the spawn in a filtered netns on capable Linux. ──
+	// The guest argv is `[DENO_BIN, ...args]`. On Linux+tools+caps we prefix it
+	// with `unshare --net … nft -f <ruleset> … exec <guest>` so the kernel DROPS
+	// egress to private/metadata ranges. Everywhere else this is a logged no-op
+	// and `spawnCmd`/`spawnArgs` stay the un-wrapped guest command.
+	let spawnCmd = DENO_BIN;
+	let spawnArgs = args;
+	try {
+		const plan = await buildEgressFirewallPlan(netHosts, importHosts);
+		if (plan.applied) {
+			const wrapped = await applyEgressFirewall([DENO_BIN, ...args], plan.nftRuleset);
+			if (wrapped) {
+				spawnCmd = wrapped.cmd;
+				spawnArgs = wrapped.args;
+				onFinish = () => void wrapped.cleanup();
+				console.log(
+					`[sandbox] egress firewall: ACTIVE (netns + nftables, ${plan.allowCount} allow rule(s))`,
+				);
+			}
+			// wrapped === null → staging failed; fall through to the un-wrapped spawn.
+		} else {
+			// One-line notice so operators see WHY it's off (non-Linux, missing
+			// tool, no caps, or disabled). Not an error — the baseline is safe.
+			console.log(`[sandbox] egress firewall: skipped — ${plan.reason}`);
+		}
+	} catch (err) {
+		// The firewall is additive: never let a probe error block a run.
+		console.warn(
+			`[sandbox] egress firewall: probe failed (${err instanceof Error ? err.message : String(err)}); spawning without netns`,
+		);
+	}
+
 	let child: Deno.ChildProcess;
 	try {
-		const command = new Deno.Command(DENO_BIN, {
-			args,
+		const command = new Deno.Command(spawnCmd, {
+			args: spawnArgs,
 			stdin: "piped",
 			stdout: "piped",
 			stderr: "piped",

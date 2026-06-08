@@ -284,3 +284,64 @@ export async function validateEgressHosts(
 	}
 	return { ok: true };
 }
+
+/** A resolved, validated PUBLIC egress endpoint (IP + optional port). */
+export interface ResolvedEndpoint {
+	/** Public IP literal (v4 or v6) the host resolved to / is. */
+	ip: string;
+	/** Port from the `host[:port]` entry, if any. */
+	port?: number;
+}
+
+/**
+ * Resolve a `host[:port]` allowlist to the concrete PUBLIC IPs it points at, for
+ * the defense-in-depth kernel firewall (`egress-firewall.ts`) which can only
+ * match IPs — never hostnames. This is the resolution half of `validateHostEgress`:
+ * IP literals pass through; hostnames are DNS-resolved; any PRIVATE/metadata
+ * address is SKIPPED (the request-time validator has already rejected such hosts,
+ * so a private result here is a rebind/inconsistency and must NOT become an
+ * `accept` rule). The drop rules cover the private space regardless.
+ *
+ * Best-effort + fail-OPEN-on-resolution-error by design: a host that fails to
+ * resolve simply yields no `accept` rule (the guest can't reach it → still safe);
+ * this never throws so it cannot break the spawn path. The SECURITY guarantee is
+ * carried by the DROP rules + the default-deny policy, not by this function.
+ */
+export async function resolveAllowedEndpoints(
+	hosts: readonly string[],
+	opts: { resolve?: DnsResolver } = {},
+): Promise<ResolvedEndpoint[]> {
+	const out: ResolvedEndpoint[] = [];
+	const seen = new Set<string>();
+	const push = (ip: string, port?: number) => {
+		const key = `${ip}|${port ?? ""}`;
+		if (seen.has(key)) return;
+		seen.add(key);
+		out.push(port === undefined ? { ip } : { ip, port });
+	};
+	const resolver = opts.resolve ?? defaultResolver;
+
+	for (const entry of hosts) {
+		const { host, port } = parseHostEntry(entry);
+		const lower = host.toLowerCase();
+		if (lower.length === 0 || lower === "localhost" || lower.endsWith(".localhost") || lower.endsWith(".local")) {
+			continue;
+		}
+		// IP literal → accept only if it classifies as PUBLIC.
+		if (isIpv4Literal(host) || isIpv6Literal(host)) {
+			if (classifyIpLiteral(host).ok) push(host, port);
+			continue;
+		}
+		// Hostname → resolve; pin each PUBLIC address.
+		let addrs: string[];
+		try {
+			addrs = await resolver(host);
+		} catch {
+			continue; // unresolvable → no accept rule (guest can't reach it anyway)
+		}
+		for (const addr of addrs) {
+			if (classifyIpLiteral(addr).ok) push(addr, port);
+		}
+	}
+	return out;
+}
