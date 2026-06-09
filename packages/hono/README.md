@@ -13,12 +13,15 @@ bun add @questpie/hono questpie hono
 ```ts
 import { Hono } from "hono";
 import { questpieHono } from "@questpie/hono/server";
-import { app } from "./questpie";
+import { app as questpieApp } from "./questpie";
 
-const app = new Hono().route("/", questpieHono(app, { basePath: "/api" }));
+const server = new Hono().route(
+	"/",
+	questpieHono(questpieApp, { basePath: "/api" }),
+);
 
-export default { port: 3000, fetch: app.fetch };
-export type AppType = typeof app;
+export default { port: 3000, fetch: server.fetch };
+export type AppType = typeof server;
 ```
 
 ## Client Setup

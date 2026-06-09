@@ -96,9 +96,8 @@ export function generateTemplate(options: TemplateOptions): string {
 	// Import createApp + types
 	lines.push('import { createApp, createContextFactory } from "questpie/app";');
 	lines.push(
-		'import type { AnyCollectionOrBuilder, AnyGlobalOrBuilder, AppDefinition, CollectionAPI, CollectionSelect, DrizzleClientFromQuestpieConfig, InferContextExtensionsFromAppConfig, InferSessionFromAuthConfig, MailerService, Questpie, QuestpieConfig, QueueClient, QueueJobType, RouteParamsFromKey, RouteWithParams, TablesFromConfig } from "questpie/types";',
+		'import type { AnyCollectionOrBuilder, AnyGlobalOrBuilder, AppDefinition, CollectionAPI, CollectionSelect, DrizzleClientFromQuestpieConfig, InferContextExtensionsFromAppConfig, InferSessionFromAuthConfig, MailerService, Questpie, QuestpieConfig, QueueClient, QueueJobType, RouteParamsFromKey, RouteWithParams, TablesFromConfig, z } from "questpie/types";',
 	);
-	lines.push('import type { z } from "zod";');
 	lines.push("");
 
 	// Import runtime config
@@ -222,7 +221,7 @@ export function generateTemplate(options: TemplateOptions): string {
 		"type _MPRaw<K extends string> = UnionToIntersection<_Module extends infer M ? M extends Record<K, infer V> ? V : never : never>;",
 	);
 	lines.push(
-		"type _MP<K extends string> = [_MPRaw<K>] extends [never] ? {} : _MPRaw<K>;",
+		"type _MP<K extends string> = [_MPRaw<K>] extends [never] ? {} : unknown extends _MPRaw<K> ? {} : _MPRaw<K>;",
 	);
 	lines.push('type _ModuleConfig = _MP<"config">;');
 	const appConfigFile = discovered.singles.get("appConfig");
@@ -663,10 +662,13 @@ export function generateTemplate(options: TemplateOptions): string {
 				);
 			}
 			lines.push("");
-			if (hasServices && (name === "WorkflowContext" || name === "JobHandlerContext")) {
+			if (
+				hasServices &&
+				(name === "WorkflowContext" || name === "JobHandlerContext")
+			) {
 				lines.push("			// Top-level services (namespace: null)");
 				lines.push(
-					'			workflows?: "workflows" extends keyof _AppTopLevelServices ? _AppTopLevelServices["workflows"] : never;',
+					"			workflows?: _AppTopLevelServices extends { workflows: infer W } ? W : never;",
 				);
 				lines.push("");
 			}
