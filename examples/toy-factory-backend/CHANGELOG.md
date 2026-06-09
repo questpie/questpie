@@ -1,5 +1,16 @@
 # toy-factory-backend-example
 
+## 0.0.10
+
+### Patch Changes
+
+- Updated dependencies [[`24c0f0e`](https://github.com/questpie/questpie/commit/24c0f0edcc22dd21da3070139e96cb9bab7601e0)]:
+  - questpie@3.5.5
+  - @questpie/admin@3.5.5
+  - @questpie/openapi@3.0.27
+  - @questpie/workflows@3.5.5
+  - @questpie/tanstack-query@3.5.5
+
 ## 0.0.9
 
 ### Patch Changes

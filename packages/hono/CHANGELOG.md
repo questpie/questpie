@@ -1,5 +1,14 @@
 # @questpie/hono
 
+## 3.5.5
+
+### Patch Changes
+
+- [#93](https://github.com/questpie/questpie/pull/93) [`24c0f0e`](https://github.com/questpie/questpie/commit/24c0f0edcc22dd21da3070139e96cb9bab7601e0) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Fix minimal app scaffolding type output by collapsing empty module intersections, guarding workflow service context access, importing generated zod types through QuestPie public types, and accepting generated app instances in the Hono adapter.
+
+- Updated dependencies [[`24c0f0e`](https://github.com/questpie/questpie/commit/24c0f0edcc22dd21da3070139e96cb9bab7601e0)]:
+  - questpie@3.5.5
+
 ## 3.5.4
 
 ### Patch Changes
