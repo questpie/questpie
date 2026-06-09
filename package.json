@@ -43,6 +43,7 @@
 		"typescript": "5.9.2"
 	},
 	"overrides": {
+		"shell-quote": "^1.8.4",
 		"vitest": "^3.2.6"
 	},
 	"engines": {

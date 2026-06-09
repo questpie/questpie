@@ -13,12 +13,12 @@
  */
 import { describe, expect, it } from "bun:test";
 
+import { generateFactoryTemplate } from "../../src/cli/codegen/factory-template.js";
 import {
 	coreCodegenPlugin,
 	resolveTargetGraph,
 	runAllTargets,
 } from "../../src/cli/codegen/index.js";
-import { generateFactoryTemplate } from "../../src/cli/codegen/factory-template.js";
 import { generateTemplate } from "../../src/cli/codegen/template.js";
 import type {
 	CategoryDeclaration,
@@ -170,6 +170,17 @@ describe("generateTemplate — minimal (modules.ts only)", () => {
 
 	it("imports modules file", () => {
 		expect(code).toContain('import _modules from "../modules"');
+	});
+
+	it("imports zod types through questpie public types", () => {
+		expect(code).toContain('TablesFromConfig, z } from "questpie/types";');
+		expect(code).not.toContain('from "zod"');
+	});
+
+	it("collapses empty module prop intersections to empty objects", () => {
+		expect(code).toContain(
+			"type _MP<K extends string> = [_MPRaw<K>] extends [never] ? {} : unknown extends _MPRaw<K> ? {} : _MPRaw<K>;",
+		);
 	});
 
 	it("emits AppCollections type alias (no user collections)", () => {
@@ -749,6 +760,32 @@ describe("generateTemplate — services", () => {
 		expect(code).toContain("services: _AppDefaultServices;");
 		expect(code).toContain(
 			"interface ServiceCreateContext extends _AppCoreContext {}",
+		);
+	});
+
+	it("guards workflows service access without indexed conditional access", () => {
+		const result = minimalResult();
+		cat(result, "services").set(
+			"stripe",
+			makeFile("stripe", {
+				varName: "_svc_stripe",
+				exportType: "named",
+				namedExportName: "stripe",
+			}),
+		);
+
+		const code = generateTemplate({
+			configImportPath: "../questpie.config",
+			discovered: result,
+			categories: coreCategories(),
+			singletonFactories: coreSingletonFactories(),
+		});
+
+		expect(code).toContain(
+			"workflows?: _AppTopLevelServices extends { workflows: infer W } ? W : never;",
+		);
+		expect(code).not.toContain(
+			'"workflows" extends keyof _AppTopLevelServices ? _AppTopLevelServices["workflows"] : never',
 		);
 	});
 });

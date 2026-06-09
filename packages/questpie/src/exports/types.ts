@@ -22,6 +22,7 @@ export type {
 	BaseRequestContext,
 	StoredContext,
 } from "#questpie/server/config/context.js";
+export type { z } from "zod";
 export {
 	getContext,
 	runWithContext,

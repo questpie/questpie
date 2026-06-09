@@ -12,12 +12,11 @@ import {
 /**
  * Variables stored in Hono context
  */
-export type QuestpieVariables<TQuestpie extends Questpie<any> = Questpie<any>> =
-	{
-		app: TQuestpie;
-		appContext: RequestContext;
-		user: any;
-	};
+export type QuestpieVariables<TQuestpie = Questpie<any>> = {
+	app: TQuestpie;
+	appContext: RequestContext;
+	user: any;
+};
 
 /**
  * Hono adapter configuration
@@ -31,16 +30,16 @@ export type HonoAdapterConfig = Pick<AdapterConfig, "requestLogging"> & {
 	basePath?: string;
 };
 
-export function questpieMiddleware<TQuestpie extends Questpie<any>>(
-	app: TQuestpie,
-) {
+export function questpieMiddleware<TQuestpie = Questpie<any>>(app: TQuestpie) {
 	return createMiddleware<{
 		Variables: QuestpieVariables<TQuestpie>;
 	}>(async (c, next) => {
 		c.set("app", app);
-		const adapterContext = await createAdapterContext(app, c.req.raw, {
-			accessMode: "user",
-		});
+		const adapterContext = await createAdapterContext(
+			app as Questpie<any>,
+			c.req.raw,
+			{ accessMode: "user" },
+		);
 
 		c.set("user", adapterContext.session?.user ?? null);
 		c.set("appContext", adapterContext.appContext);
@@ -55,11 +54,11 @@ export function questpieMiddleware<TQuestpie extends Questpie<any>>(
  * @example
  * ```ts
  * import { Hono } from 'hono'
- * import { questpieHono } from '@questpie/hono'
- * import { app } from './app'
+ * import { questpieHono } from '@questpie/hono/server'
+ * import { app as questpieApp } from './app'
  *
  * const server = new Hono()
- * server.route('/', questpieHono(app))
+ * server.route('/', questpieHono(questpieApp))
  *
  * export default server
  * ```
@@ -67,21 +66,17 @@ export function questpieMiddleware<TQuestpie extends Questpie<any>>(
  * @example
  * ```ts
  * // With custom config
- * server.route('/', questpieHono(app, {
- *   basePath: '/api',
- *   cors: {
- *     origin: 'https://example.com',
- *     credentials: true
- *   }
+ * server.route('/', questpieHono(questpieApp, {
+ *   basePath: '/api'
  * }))
  * ```
  */
-export function questpieHono<TQuestpie extends Questpie<any>>(
+export function questpieHono<TQuestpie = Questpie<any>>(
 	app: TQuestpie,
 	config: HonoAdapterConfig = {},
 ) {
 	const basePath = config.basePath || "/";
-	const handler = createFetchHandler(app, {
+	const handler = createFetchHandler(app as Questpie<any>, {
 		basePath,
 		accessMode: "user",
 		requestLogging: config.requestLogging,
