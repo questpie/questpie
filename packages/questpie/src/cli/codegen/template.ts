@@ -792,7 +792,19 @@ export function generateTemplate(options: TemplateOptions): string {
 	lines.push(" * const posts = await ctx.collections.posts.find({});");
 	lines.push(" * ```");
 	lines.push(" */");
-	lines.push("export const createContext = createContextFactory(app);");
+	lines.push("export async function createContext(");
+	lines.push(
+		"\toptions?: Parameters<ReturnType<typeof createContextFactory>>[0],",
+	);
+	lines.push(") {");
+	lines.push("\twhile (!_appPromise) {");
+	lines.push("\t\tawait new Promise((resolve) => setTimeout(resolve, 0));");
+	lines.push("\t}");
+	lines.push("");
+	lines.push(
+		"\treturn createContextFactory((await _appPromise) as _AppQuestpie)(options);",
+	);
+	lines.push("}");
 	lines.push("");
 
 	// Factories are available via #questpie/factories (separate entry to avoid circular deps)
@@ -835,7 +847,9 @@ function emitNewArchitectureRuntime(
 	}
 	const coreSingles = getCategorizedSingles(discovered.singles, allDecls);
 
-	lines.push("export const app = await createApp(");
+	lines.push("var _appPromise: Promise<unknown> | undefined;");
+	lines.push("");
+	lines.push("_appPromise = createApp(");
 	lines.push("\t({");
 
 	// Modules — preserve the concrete exported module types directly.
@@ -914,7 +928,11 @@ function emitNewArchitectureRuntime(
 
 	lines.push("\t}) satisfies AppDefinition,");
 	lines.push("\t_runtime,");
-	lines.push(") as unknown as _AppQuestpie;");
+	lines.push(");");
+	lines.push("");
+	lines.push(
+		"export const app = (await _appPromise) as unknown as _AppQuestpie;",
+	);
 	lines.push("");
 }
 

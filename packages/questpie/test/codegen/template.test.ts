@@ -18,6 +18,7 @@ import {
 	resolveTargetGraph,
 	runAllTargets,
 } from "../../src/cli/codegen/index.js";
+import { generateFactoryTemplate } from "../../src/cli/codegen/factory-template.js";
 import { generateTemplate } from "../../src/cli/codegen/template.js";
 import type {
 	CategoryDeclaration,
@@ -212,7 +213,10 @@ describe("generateTemplate — minimal (modules.ts only)", () => {
 	});
 
 	it("emits createApp call with modules", () => {
-		expect(code).toContain("export const app = await createApp(");
+		expect(code).toContain("_appPromise = createApp(");
+		expect(code).toContain(
+			"export const app = (await _appPromise) as unknown as _AppQuestpie;",
+		);
 		expect(code).toContain("modules: _modules,");
 		expect(code).not.toContain("ModuleDefinition[]");
 	});
@@ -284,8 +288,9 @@ describe("generateTemplate — minimal (modules.ts only)", () => {
 	});
 
 	it("emits createContext helper", () => {
+		expect(code).toContain("export async function createContext(");
 		expect(code).toContain(
-			"export const createContext = createContextFactory(app);",
+			"return createContextFactory((await _appPromise) as _AppQuestpie)(options);",
 		);
 	});
 
@@ -299,6 +304,83 @@ describe("generateTemplate — minimal (modules.ts only)", () => {
 
 	it("does not emit seeds section when no seeds", () => {
 		expect(code).not.toContain("seeds:");
+	});
+});
+
+describe("generateFactoryTemplate — builder module augmentation", () => {
+	it("augments questpie/builders with matching builder state constraints", () => {
+		const target = serverTarget([
+			{
+				name: "test-builder-extensions",
+				targets: {
+					server: {
+						root: ".",
+						outputFile: "index.ts",
+						registries: {
+							collectionExtensions: {
+								admin: {
+									stateKey: "admin",
+									configType: "AdminCollectionConfig<TState>",
+									imports: [
+										{
+											name: "AdminCollectionConfig",
+											from: "@questpie/admin/server",
+										},
+									],
+								},
+							},
+							globalExtensions: {
+								admin: {
+									stateKey: "admin",
+									configType: "AdminGlobalConfig<TState>",
+									imports: [
+										{
+											name: "AdminGlobalConfig",
+											from: "@questpie/admin/server",
+										},
+									],
+								},
+							},
+							fieldExtensions: {
+								admin: {
+									stateKey: "admin",
+									configType: "AdminFieldConfig<TState>",
+									imports: [
+										{
+											name: "AdminFieldConfig",
+											from: "@questpie/admin/server",
+										},
+									],
+								},
+							},
+						},
+					},
+				},
+			},
+		]);
+
+		const code = generateFactoryTemplate({
+			target,
+			hasModules: true,
+		});
+
+		expect(code).toContain('declare module "questpie/builders" {');
+		expect(code).not.toContain('declare module "questpie" {');
+		expect(code).toContain("type CollectionBuilderState");
+		expect(code).toContain("type GlobalBuilderState");
+		expect(code).toContain("type FieldState");
+		expect(code).toContain(
+			"interface CollectionBuilder<TState$1 extends CollectionBuilderState>",
+		);
+		expect(code).toContain(
+			"admin(config: AdminCollectionConfig<TState$1>): CollectionBuilder<TState$1>;",
+		);
+		expect(code).toContain(
+			"interface GlobalBuilder<TState extends GlobalBuilderState>",
+		);
+		expect(code).toContain(
+			"interface Field<TState extends FieldState = FieldState>",
+		);
 	});
 });
 
