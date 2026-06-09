@@ -166,7 +166,7 @@ export const posts = collection("posts")
 				{ value: "tutorial", label: "Tutorial" },
 			])
 			.label("Category")
-		author: f.relation("users").label("Author"),
+		author: f.relation("user").label("Author"),
 		image: f.upload().label("Cover Image"),
 	}))
 	.title(({ f }) => f.title)

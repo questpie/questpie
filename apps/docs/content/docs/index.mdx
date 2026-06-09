@@ -34,7 +34,7 @@ export default collection("posts").fields(({ f }) => ({
 	title: f.text(255).required(),
 	body: f.textarea().localized(),
 	cover: f.upload({ to: "assets", mimeTypes: ["image/*"] }),
-	author: f.relation("users"),
+	author: f.relation("user"),
 	status: f.select([
 		{ value: "draft", label: "Draft" },
 		{ value: "published", label: "Published" },

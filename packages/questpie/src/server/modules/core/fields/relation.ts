@@ -211,7 +211,7 @@ function buildRelationMetadata(
  * @example
  * ```ts
  * // BelongsTo (default)
- * author: f.relation("users").required()
+ * author: f.relation("user").required()
  *
  * // HasMany
  * posts: f.relation("posts").hasMany({ foreignKey: "authorId" })

@@ -206,7 +206,7 @@ Reference to another collection.
 Belongs-to (single):
 
 ```ts
-author: f.relation("users").required(),
+author: f.relation("user").required(),
 category: f.relation("categories").onDelete("set null"),
 ```
 

@@ -26,7 +26,7 @@ export default collection("posts")
 	.fields(({ f }) => ({
 		title: f.text().label("Title").required(),
 		content: f.richText().label("Content"),
-		author: f.relation("users"),
+		author: f.relation("user"),
 	}))
 	.access({
 		read: true, // Public read
@@ -179,7 +179,7 @@ import { collection } from "#questpie/factories";
 
 export default collection("appointments")
 	.fields(({ f }) => ({
-		customer: f.relation("users"),
+		customer: f.relation("user"),
 		barber: f.relation("barbers"),
 		service: f.relation("services"),
 		scheduledAt: f.datetime().required(),

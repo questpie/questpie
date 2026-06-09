@@ -294,12 +294,12 @@ export interface RelationFieldAdminMeta extends BaseAdminMeta {
 	 *
 	 * @example Static
 	 * ```ts
-	 * f.relation("users").admin({ filter: { role: "admin" } })
+	 * f.relation("user").admin({ filter: { role: "admin" } })
 	 * ```
 	 *
 	 * @example Reactive — depends on form state
 	 * ```ts
-	 * f.relation("users").admin({
+	 * f.relation("user").admin({
 	 *   filter: ({ data }) => ({ role: "admin", team: data.team }),
 	 * })
 	 * ```

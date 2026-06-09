@@ -175,7 +175,7 @@ const posts = collection("posts").fields(({ f }) => ({
 			{ value: "blog", label: "Blog" },
 		])
 		.label("Category"),
-	author: f.relation("users").label("Author"),
+	author: f.relation("user").label("Author"),
 	image: f.upload().label("Cover Image"),
 }));
 ```

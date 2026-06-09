@@ -48,7 +48,7 @@ export const posts = collection("posts")
 			])
 			.label("Category"),
 		cover: f.upload({ to: "assets", mimeTypes: ["image/*"] }),
-		author: f.relation("users").required(),
+		author: f.relation("user").required(),
 		publishedAt: f.date(),
 	}))
 	.title(({ f }) => f.title)
@@ -211,7 +211,7 @@ socialLinks: f.object({
 
 ```ts
 // Belongs-to
-author: f.relation("users").required().onDelete("cascade");
+author: f.relation("user").required().onDelete("cascade");
 
 // Has-many through junction
 services: f.relation("services").manyToMany({

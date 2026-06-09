@@ -159,7 +159,7 @@ export default collection("posts")
 	.fields(({ f }) => ({
 		title: f.text().required(),
 		status: f.select([{ value: "draft", label: "Draft" }]),
-		author: f.relation("users").required(),
+		author: f.relation("user").required(),
 	}))
 	.access({
 		read: true,

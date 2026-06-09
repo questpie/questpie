@@ -29,7 +29,7 @@ const notifications = collection("notifications")
 		title: f.text().required(),
 		body: f.textarea(),
 		read: f.boolean().default(false),
-		userId: f.relation("users"),
+		userId: f.relation("user"),
 	}))
 	.hooks({
 		afterCreate: async ({ data, queue }) => {

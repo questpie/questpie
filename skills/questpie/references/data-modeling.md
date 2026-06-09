@@ -259,7 +259,7 @@ All relations are defined via `f.relation()` inside `.fields()`.
 ### Belongs-To (Single)
 
 ```ts
-author: f.relation("users").required(),
+author: f.relation("user").required(),
 barber: f.relation("barbers").required().onDelete("cascade"),
 ```
 
@@ -448,7 +448,7 @@ collection("posts").relations({ author: belongsTo("users") });
 
 // CORRECT -- use f.relation() inside .fields()
 collection("posts").fields(({ f }) => ({
-	author: f.relation("users"),
+	author: f.relation("user"),
 }));
 ```
 

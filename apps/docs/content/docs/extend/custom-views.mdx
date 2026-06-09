@@ -109,7 +109,7 @@ collection("tasks")
 			{ value: "in-progress", label: "In Progress" },
 			{ value: "done", label: "Done" },
 		]),
-		assignee: f.relation("users"),
+		assignee: f.relation("user"),
 	}))
 	.list(({ v }) =>
 		v.kanban({

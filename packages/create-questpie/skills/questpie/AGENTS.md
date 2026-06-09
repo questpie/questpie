@@ -299,7 +299,7 @@ export const posts = collection("posts")
 		slug: f.text(255).required(),
 		content: f.richText().localized(),
 		status: f.select(["internal", "featured"]).default("internal"),
-		author: f.relation("users"),
+		author: f.relation("user"),
 		tags: f.relation("tags").manyToMany({ through: "post_tags" }),
 		cover: f.upload(),
 	}))
@@ -556,8 +556,8 @@ All relationships are expressed via `f.relation(target)` with chain methods:
 
 ```ts
 // belongsTo (default) — FK on this table
-f.relation("users");
-// Column: authorId varchar(36) → FK to users.id
+f.relation("user");
+// Column: authorId varchar(36) → FK to user.id
 
 // hasMany — virtual, FK lives on the target table
 f.relation("comments").hasMany({
@@ -584,7 +584,7 @@ f.relation({ users: "users", teams: "teams" });
 ### Relation Targets
 
 ```ts
-f.relation("users"); // string (collection name)
+f.relation("user"); // string (collection name)
 f.relation(() => users); // lazy reference (avoids circular imports)
 f.relation({ users: "users", teams: "teams" }); // polymorphic map
 ```
@@ -592,7 +592,7 @@ f.relation({ users: "users", teams: "teams" }); // polymorphic map
 ### Additional Config
 
 ```ts
-f.relation("users")
+f.relation("user")
   .onDelete("cascade" | "set null" | "restrict" | "no action")
   .onUpdate("cascade" | ...)
   .relationName("postAuthor")  // disambiguate multiple relations to same target

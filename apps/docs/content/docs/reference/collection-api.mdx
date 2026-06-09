@@ -18,7 +18,7 @@ const posts = collection("posts")
 			{ value: "draft", label: "Draft" },
 			{ value: "published", label: "Published" },
 		]),
-		author: f.relation("users"),
+		author: f.relation("user"),
 	}))
 	.title(({ f }) => f.title)
 	.options({ timestamps: true, softDelete: true })
@@ -79,7 +79,7 @@ Define collection fields using the field builder. The callback receives `{ f }` 
   views: f.number().default(0),
   featured: f.boolean().default(false),
   tags: f.text().array(),
-  author: f.relation("users"),
+  author: f.relation("user"),
   category: f.relation("categories"),
 }))
 ```

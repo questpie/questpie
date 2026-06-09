@@ -348,7 +348,7 @@ References to other collections. Creates a `varchar(36)` foreign key column.
 
 ```ts
 // Simple belongs-to
-author: f.relation("users"),
+author: f.relation("user"),
 barber: f.relation("barbers").required(),
 ```
 
@@ -377,7 +377,7 @@ services: f.relation("services").manyToMany({
 Stores an array of FK UUIDs in a JSONB column:
 
 ```ts
-assignees: f.relation("users").multiple(),
+assignees: f.relation("user").multiple(),
 ```
 
 ### Polymorphic Relations
@@ -407,7 +407,7 @@ Creates two columns: `commentableType` (varchar) and `commentableId` (varchar FK
 **Referential actions:** `"cascade"`, `"set null"`, `"set default"`, `"restrict"`, `"no action"`
 
 ```ts
-author: f.relation("users").required().onDelete("set null"),
+author: f.relation("user").required().onDelete("set null"),
 category: f.relation("categories").onDelete("cascade"),
 ```
 

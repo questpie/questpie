@@ -119,6 +119,36 @@ export default collection("user")
 	}));
 ```
 
+`.fields()` is cumulative -- it adds to the merged starter fields and overrides them by key, never wipes them, so this recipe keeps the full starter user model.
+
+### Anonymous Users (Better Auth plugin)
+
+Better Auth plugins that extend the user model follow the same recipe. For the anonymous plugin, register it in `auth.ts` (merged after the built-in plugins) and extend the starter user with the `isAnonymous` field the plugin expects:
+
+```ts
+// auth.ts
+import { anonymous } from "better-auth/plugins";
+import type { AuthConfig } from "questpie/app";
+
+export default {
+	plugins: [anonymous()],
+} satisfies AuthConfig;
+```
+
+```ts
+// collections/user.ts
+import { starterModule } from "questpie/app";
+import { collection } from "#questpie/factories";
+
+export default collection("user")
+	.merge(starterModule.collections.user)
+	.fields(({ f }) => ({
+		isAnonymous: f.boolean().default(false),
+	}));
+```
+
+Run `questpie generate` and apply migrations to add the column. Anonymous sign-in (`authClient.signIn.anonymous()` on the client) creates throwaway users that Better Auth can later link to real accounts.
+
 ## Environment Variables
 
 | Variable             | Required   | Description                                               |
