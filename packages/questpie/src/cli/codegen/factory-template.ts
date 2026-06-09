@@ -139,7 +139,7 @@ export function generateFactoryTemplate(
 	if (hasExtensions || hasFieldExtensions) {
 		const fieldImport = hasFieldExtensions ? ", Field" : "";
 		lines.push(
-			`import { CollectionBuilder, GlobalBuilder, wrapBuilderWithExtensions, builtinFields, type EmptyCollectionState, type EmptyGlobalState, type BuiltinFields${fieldImport} } from "questpie/builders";`,
+			`import { CollectionBuilder, GlobalBuilder, wrapBuilderWithExtensions, builtinFields, type EmptyCollectionState, type EmptyGlobalState, type BuiltinFields, type CollectionBuilderState, type GlobalBuilderState, type FieldState${fieldImport} } from "questpie/builders";`,
 		);
 	} else {
 		lines.push(
@@ -321,16 +321,19 @@ export function generateFactoryTemplate(
 
 		const placeholderMap = buildPlaceholderMap(registryCategories);
 
-		// Builder interface augmentations — keep declare module "questpie" for class merging
+		// Builder interface augmentations — generated factories import builders from
+		// questpie/builders, so augment that public subpath instead of the root barrel.
 		if (
 			collExtensions.size > 0 ||
 			globalExtensions.size > 0 ||
 			fieldExtensions.size > 0
 		) {
-			lines.push('declare module "questpie" {');
+			lines.push('declare module "questpie/builders" {');
 
 			if (collExtensions.size > 0) {
-				lines.push("\tinterface CollectionBuilder<TState> {");
+				lines.push(
+					"\tinterface CollectionBuilder<TState$1 extends CollectionBuilderState> {",
+				);
 				for (const [name, ext] of collExtensions) {
 					const paramName = ext.isCallback ? "configFn" : "config";
 					let paramType = ext.configType ?? "any";
@@ -339,15 +342,18 @@ export function generateFactoryTemplate(
 						hasModules,
 						placeholderMap,
 					);
+					paramType = paramType.replace(/\bTState\b/g, "TState$1");
 					lines.push(
-						`\t\t${name}(${paramName}: ${paramType}): CollectionBuilder<TState>;`,
+						`\t\t${name}(${paramName}: ${paramType}): CollectionBuilder<TState$1>;`,
 					);
 				}
 				lines.push("\t}");
 			}
 
 			if (globalExtensions.size > 0) {
-				lines.push("\tinterface GlobalBuilder<TState> {");
+				lines.push(
+					"\tinterface GlobalBuilder<TState extends GlobalBuilderState> {",
+				);
 				for (const [name, ext] of globalExtensions) {
 					const paramName = ext.isCallback ? "configFn" : "config";
 					let paramType = ext.configType ?? "any";
@@ -364,7 +370,9 @@ export function generateFactoryTemplate(
 			}
 
 			if (fieldExtensions.size > 0) {
-				lines.push("\tinterface Field<TState> {");
+				lines.push(
+					"\tinterface Field<TState extends FieldState = FieldState> {",
+				);
 				for (const [name, ext] of fieldExtensions) {
 					const paramName = ext.isCallback ? "configFn" : "config";
 					let paramType = ext.configType ?? "any";
