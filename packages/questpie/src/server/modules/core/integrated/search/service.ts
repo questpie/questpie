@@ -65,6 +65,14 @@ export class SearchServiceWrapper implements SearchService {
 	}
 
 	/**
+	 * Whether the adapter finished initializing.
+	 * Consumed by the health route to report search status.
+	 */
+	isInitialized(): boolean {
+		return this.initialized;
+	}
+
+	/**
 	 * Get the underlying adapter
 	 */
 	getAdapter(): SearchAdapter {
