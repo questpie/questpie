@@ -1,5 +1,18 @@
 # autopilot
 
+## 0.0.10
+
+### Patch Changes
+
+- Updated dependencies [[`ea701dd`](https://github.com/questpie/questpie/commit/ea701ddaa32f85056bbbcb7ba77099af349d6480)]:
+  - questpie@3.5.6
+  - @questpie/admin@3.5.6
+  - @questpie/ai@3.0.0
+  - @questpie/executor@3.0.3
+  - @questpie/mcp@3.2.7
+  - @questpie/sandbox@3.0.3
+  - @questpie/workflows@3.5.6
+
 ## 0.0.9
 
 ### Patch Changes

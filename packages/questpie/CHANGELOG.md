@@ -1,5 +1,11 @@
 # questpie
 
+## 3.5.6
+
+### Patch Changes
+
+- [#95](https://github.com/questpie/questpie/pull/95) [`ea701dd`](https://github.com/questpie/questpie/commit/ea701ddaa32f85056bbbcb7ba77099af349d6480) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Allow `runtimeConfig({ plugins: [...] })` results to be passed directly to `createApp` when TypeScript infers the plugins list as a readonly tuple.
+
 ## 3.5.5
 
 ### Patch Changes
