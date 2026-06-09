@@ -1,8 +1,9 @@
 import type { Adapter, Files } from "files-sdk";
 import { memory } from "files-sdk/memory";
 
-import { runtimeConfig } from "#questpie/server/config/create-app.js";
+import { createApp, runtimeConfig } from "#questpie/server/config/create-app.js";
 import type {
+	CodegenPlugin,
 	ResolvedRuntimeConfig,
 	RuntimeConfig,
 	RuntimeConfigInput,
@@ -24,6 +25,15 @@ const runtime = runtimeConfig({
 	db: { url: "postgres://localhost/test" },
 	storage: { adapter },
 });
+
+declare const plugin: CodegenPlugin;
+const runtimeWithPlugin = runtimeConfig({
+	app: { url: "http://localhost:3000" },
+	db: { url: "postgres://localhost/test" },
+	plugins: [plugin],
+});
+
+createApp({ modules: [] as const }, runtimeWithPlugin);
 
 const legacyDriverRuntimeConfig = {
 	app: { url: "http://localhost:3000" },

@@ -240,7 +240,7 @@ export interface RuntimeConfig<
 	TStorage extends StorageConfig | undefined = StorageConfig | undefined,
 > {
 	/** Codegen plugins — discover additional file patterns and extend generated output. */
-	plugins?: CodegenPlugin[];
+	plugins?: readonly CodegenPlugin[];
 
 	/** Application URL (required). */
 	app: { url: string };
