@@ -55,10 +55,15 @@ type ExtractColumnsFromFieldDefinitions<TFields extends Record<string, any>> = {
 		: FieldColumn<TFields[K]>;
 };
 
+// NOTE: the infer parameter must NOT be named TState — the dts bundler
+// dedupes type-param names per emitted file, and a collision here renames
+// the CollectionBuilder class param to TState$1 in the published d.ts,
+// which breaks declaration merging with every generated augmentation
+// (TS2428 → collections degrade to any for npm consumers).
 type FieldColumn<TField> = TField extends {
-	readonly _: infer TState extends FieldState;
+	readonly _: infer TFieldState extends FieldState;
 }
-	? TState["column"]
+	? TFieldState["column"]
 	: TField extends { $types: { column: infer TColumn } }
 		? TColumn
 		: never;
