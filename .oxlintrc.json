@@ -24,5 +24,16 @@
 		"jsx-a11y/label-has-associated-control": "warn",
 		"jsx-a11y/iframe-has-title": "warn"
 	},
-	"ignorePatterns": ["dist", ".next", ".generated", "node_modules", "*.min.js"]
+	"ignorePatterns": ["dist", ".next", ".generated", "node_modules", "*.min.js"],
+	"overrides": [
+		{
+			// Zero-any packages stay zero-any (see scripts/any-census.ts).
+			// hono/elysia/next still carry generic `<any>` wildcard
+			// instantiations — add them here once those are typed.
+			"files": ["packages/workflows/src/**"],
+			"rules": {
+				"typescript/no-explicit-any": "error"
+			}
+		}
+	]
 }
