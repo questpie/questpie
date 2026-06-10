@@ -1604,7 +1604,7 @@ const post = await app.collections.posts.findOne({
     author: true,
     tags: { columns: { name: true } },
   },
-  orderBy: { createdAt: "desc" },
+  orderBy: { createdAt: "desc" },             // or multi-field: [{ status: "desc" }, { createdAt: "desc" }]
   limit: 10,
   offset: 0,
   search: "keyword",                          // full-text ILIKE on title

@@ -4,6 +4,7 @@ import { withTransaction } from "#questpie/server/collection/crud/shared/transac
 import { extractAppServices } from "#questpie/server/config/app-context.js";
 import { runWithContext } from "#questpie/server/config/context.js";
 import type { Questpie } from "#questpie/server/config/questpie.js";
+import { rowsOf } from "#questpie/server/db/driver-result.js";
 import { getEnv, getNodeEnv } from "#questpie/server/utils/env.js";
 
 import type {
@@ -388,7 +389,7 @@ export class SeedRunner {
 			),
 		);
 
-		return (result.rows || result || []).map((row: any) => ({
+		return rowsOf<any>(result).map((row: any) => ({
 			id: row.id,
 			category: row.category as SeedCategory,
 			executedAt: new Date(row.executed_at),

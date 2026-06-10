@@ -15,7 +15,6 @@ import {
 	pgTable,
 	smallint,
 	text,
-	timestamp,
 	uniqueIndex,
 	uuid,
 	varchar,
@@ -27,6 +26,7 @@ import type {
 	I18nFieldAccessor,
 	InferSQLType,
 } from "#questpie/server/collection/builder/types.js";
+import { systemTimestamp } from "#questpie/server/db/system-columns.js";
 import type {
 	GlobalBuilderState,
 	InferGlobalTableWithColumns,
@@ -382,7 +382,7 @@ export class Global<TState extends GlobalBuilderState> {
 			versionStage: text("version_stage"),
 			versionFromStage: text("version_from_stage"),
 			versionUserId: text("version_user_id"),
-			versionCreatedAt: timestamp("version_created_at", { mode: "date" })
+			versionCreatedAt: systemTimestamp("version_created_at")
 				.defaultNow()
 				.notNull(),
 		};
