@@ -78,15 +78,18 @@ export default route()
 
 Route handlers receive the full `AppContext`:
 
-| Property      | Description                            |
-| ------------- | -------------------------------------- |
-| `input`       | Validated data matching the Zod schema |
-| `collections` | Typed collection API                   |
-| `queue`       | Publish background jobs                |
-| `email`       | Send emails                            |
-| `db`          | Raw database access                    |
-| `session`     | Current auth session                   |
-| `services`    | Custom services from `services/`       |
+| Property      | Description                                                |
+| ------------- | ---------------------------------------------------------- |
+| `input`       | Validated data matching the Zod schema                     |
+| `collections` | Typed collection API                                       |
+| `queue`       | Publish background jobs                                    |
+| `email`       | Send emails                                                |
+| `db`          | Raw database access                                        |
+| `session`     | Current auth session                                       |
+| `services`    | Custom services from `services/`                           |
+| _extensions_  | `appConfig({ context })` result, flat (e.g. `workspaceId`) |
+
+Derived request context (from `appConfig({ context })`) reaches route access rules and handlers alike — destructure the keys directly. Inside any nested code, `getContext<App>()` exposes the same keys (see `references/multi-tenancy.md`).
 
 ### Calling Routes
 
@@ -254,17 +257,18 @@ Supported: `GET`, `POST`, `PUT`, `DELETE`, `PATCH`, `HEAD`, `OPTIONS`.
 
 ### Route Handler Context
 
-| Property      | Type                     | Description              |
-| ------------- | ------------------------ | ------------------------ |
-| `request`     | `Request`                | Standard Web API Request |
-| `params`      | `Record<string, string>` | URL path parameters      |
-| `locale`      | `string`                 | Current locale           |
-| `db`          | `Database`               | Database instance        |
-| `session`     | `Session \| null`        | Current auth session     |
-| `collections` | `CollectionsAPI`         | Typed collection API     |
-| `queue`       | `QueueClient`            | Queue client             |
-| `email`       | `MailerService`          | Email service            |
-| `services`    |                          | User-defined services    |
+| Property      | Type                     | Description                                  |
+| ------------- | ------------------------ | -------------------------------------------- |
+| `request`     | `Request`                | Standard Web API Request                     |
+| `params`      | `Record<string, string>` | URL path parameters                          |
+| `locale`      | `string`                 | Current locale                               |
+| `db`          | `Database`               | Database instance                            |
+| `session`     | `Session \| null`        | Current auth session                         |
+| `collections` | `CollectionsAPI`         | Typed collection API                         |
+| `queue`       | `QueueClient`            | Queue client                                 |
+| `email`       | `MailerService`          | Email service                                |
+| `services`    |                          | User-defined services                        |
+| _extensions_  |                          | `appConfig({ context })` result, flat        |
 
 Route handlers must return a `Response` object.
 

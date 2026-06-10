@@ -298,6 +298,27 @@ describe("generateTemplate — minimal (modules.ts only)", () => {
 		);
 	});
 
+	it("emits ContextResolverContext and the ~contextExtensions config phantom", () => {
+		// Typed service surface for appConfig({ context }) resolvers
+		expect(code).toContain("interface ContextResolverContext {");
+		// Reuses computed aliases, excludes _AppContextExtensions (no self-reference)
+		const resolverBlock = code.slice(
+			code.indexOf("interface ContextResolverContext {"),
+		);
+		const resolverInterface = resolverBlock.slice(
+			0,
+			resolverBlock.indexOf("}"),
+		);
+		expect(resolverInterface).toContain("collections: _CollectionsAPI;");
+		expect(resolverInterface).toContain("globals: _AppGlobalsAPI;");
+		expect(resolverInterface).toContain("queue: QueueClient<AppJobs>;");
+		expect(resolverInterface).not.toContain("_AppContextExtensions");
+
+		// Phantom on the generated config powers getContext<App>() inference
+		expect(code).toContain('"~contextExtensions": _AppContextExtensions;');
+		expect(code).toContain('| "~contextExtensions">');
+	});
+
 	it("emits createContext helper", () => {
 		expect(code).toContain("export async function createContext(");
 		expect(code).toContain(

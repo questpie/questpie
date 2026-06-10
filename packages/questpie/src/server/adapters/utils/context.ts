@@ -100,31 +100,19 @@ export const createAdapterContext = async <
 		...(observability?.traceId ? { traceId: observability.traceId } : {}),
 	};
 
-	// 1. Apply adapter-level extension (from adapter config)
+	// Apply adapter-level extension (from adapter config) — transport-level,
+	// flat-merged only. Derived context that must reach access rules and hooks
+	// belongs in `appConfig({ context })`, which `app.createContext` resolves.
 	const adapterExtension = config.extendContext
 		? await config.extendContext({ request, app, context: baseContext })
 		: undefined;
 
-	// 2. Apply app-level context extension (from config.app.context in the user's config/app.ts).
-	// This replaced the old `contextResolver` concept — the function signature is the same,
-	// but it now lives under config.app.context (see QuestpieAppConfig.context).
-	let cmsExtension: Record<string, any> | undefined;
-	const appContextFn = (app.state as any)?.config?.app?.context;
-	if (typeof appContextFn === "function") {
-		cmsExtension = await appContextFn({
-			request,
-			session: sessionData,
-			db: app.db,
-		});
-	}
-
-	// Merge all extensions into context
 	// Pass `request` through so access functions can branch on URL/headers
-	// (e.g. distinguish admin vs frontend calls).
+	// (e.g. distinguish admin vs frontend calls). `createContext` is the single
+	// derivation point for the appConfig({ context }) resolver.
 	const appContext = await app.createContext({
 		...baseContext,
 		...(adapterExtension ?? {}),
-		...(cmsExtension ?? {}),
 		request,
 	});
 

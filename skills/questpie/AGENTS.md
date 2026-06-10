@@ -838,6 +838,26 @@ await collections.posts.find({}, { accessMode: "user", session });
 await collections.posts.find({}, { accessMode: "system" });
 ```
 
+### Derived Request Context
+
+`appConfig({ context })` derives per-request context (tenant, role, memberships) **once per HTTP request**; the result travels with the request and arrives **flat** on access rules, hooks, route handlers, field access, and `getContext()`:
+
+```ts
+// config/app.ts
+appConfig({
+	context: async ({ request, session, collections }) => ({
+		workspaceId: request.headers.get("x-workspace") || null,
+	}),
+});
+
+// Any access rule — typed by inference, narrow before use (absent in jobs/seeds)
+access: {
+	read: ({ workspaceId }) => (workspaceId ? { workspace: workspaceId } : false),
+}
+```
+
+The resolver receives the typed system-mode service surface (`collections`, `globals`, `logger`, `kv`, `queue`, `t`, `services`). Throwing from it fails the request before any rule runs. See `references/multi-tenancy.md`.
+
 ---
 
 ## 11. Routes
@@ -2698,7 +2718,7 @@ module()                 Packaging unit (groups related entities)
   ├── block()            Content builder block         ← admin plugin
   ├── migration()        DB schema change
   ├── seed()             DB seed data
-  ├── appConfig()        App-level config (locale, access, hooks)
+  ├── appConfig()        App-level config (locale, access, hooks, context)
   ├── authConfig()       Auth config (Better Auth options)
   └── adminConfig()      Admin config (sidebar, dashboard, branding)  ← admin plugin
 ```
@@ -2738,7 +2758,7 @@ module()                 Packaging unit (groups related entities)
 | Seed           | `seed({...})`                        | `questpie`                 | DB seed data                 |
 | Module         | `module({...})`                      | `questpie`                 | Packaging unit               |
 | Runtime Config | `runtimeConfig({...})`               | `questpie`                 | Infrastructure config        |
-| App Config     | `appConfig({...})`                   | `questpie`                 | Locale, access, hooks        |
+| App Config     | `appConfig({...})`                   | `questpie`                 | Locale, access, hooks, context |
 | Auth Config    | `authConfig({...})`                  | `questpie`                 | Better Auth options          |
 | Admin Config   | `adminConfig({...})`                 | `#questpie/factories`      | Sidebar, dashboard, branding |
 | View           | `view(name, {kind, component})`      | `@questpie/admin/client`   | Admin view component         |

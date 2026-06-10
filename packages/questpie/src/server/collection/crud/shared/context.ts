@@ -7,9 +7,10 @@
  * ## Context Propagation
  *
  * `normalizeContext()` automatically inherits `locale`, `accessMode`, `session`,
- * `db`, and `stage` from the current `runWithContext` scope (via AsyncLocalStorage)
- * when not explicitly provided. This enables implicit context propagation in
- * nested API calls without manual threading.
+ * `db`, `stage`, and the `"~contextExtensions"` bundle from the current
+ * `runWithContext` scope (via AsyncLocalStorage) when not explicitly provided.
+ * This enables implicit context propagation in nested API calls without manual
+ * threading.
  *
  * ### Propagation priority (highest → lowest):
  * 1. **Explicit param** — values passed directly to `normalizeContext(ctx)`
@@ -109,6 +110,10 @@ export function normalizeContext(context: CRUDContext = {}): NormalizedContext {
 			DEFAULT_LOCALE,
 		defaultLocale: context.defaultLocale ?? DEFAULT_LOCALE,
 		stage: context.stage ?? stored?.stage,
+		// Request-context extensions travel as one bundle, inherited exactly
+		// like session/db: explicit param → ALS → undefined.
+		"~contextExtensions":
+			context["~contextExtensions"] ?? stored?.["~contextExtensions"],
 	};
 }
 

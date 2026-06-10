@@ -577,7 +577,7 @@ export function generateTemplate(options: TemplateOptions): string {
 			"type _AppGlobalDefinitions = AppGlobals & Record<string, AnyGlobalOrBuilder>;",
 		);
 		lines.push(
-			'type _AppQuestpieConfig = Omit<QuestpieConfig, "app" | "db" | "collections" | "globals" | "auth"> & {',
+			'type _AppQuestpieConfig = Omit<QuestpieConfig, "app" | "db" | "collections" | "globals" | "auth" | "~contextExtensions"> & {',
 		);
 		lines.push('\tapp: (typeof _runtime)["app"];');
 		lines.push('\tdb: (typeof _runtime)["db"];');
@@ -585,6 +585,7 @@ export function generateTemplate(options: TemplateOptions): string {
 		lines.push("\tglobals: _AppGlobalDefinitions;");
 		lines.push("\tauth: _AppAuthConfig;");
 		lines.push('\tstorage: (typeof _runtime)["storage"];');
+		lines.push('\t"~contextExtensions": _AppContextExtensions;');
 		lines.push("};");
 		lines.push("type _AppQuestpieBase = Questpie<_AppQuestpieConfig>;");
 		lines.push(
@@ -704,6 +705,32 @@ export function generateTemplate(options: TemplateOptions): string {
 		emitNonRecursiveContext("WorkflowContext");
 		lines.push("");
 		lines.push("\t\tinterface ServiceCreateContext extends _AppCoreContext {}");
+		lines.push("");
+		lines.push(
+			"\t\t// Typed service surface for appConfig({ context }) resolvers.",
+		);
+		lines.push(
+			"\t\t// Excludes _AppContextExtensions — the resolver produces them.",
+		);
+		lines.push("\t\tinterface ContextResolverContext {");
+		lines.push("\t\t\tcollections: _CollectionsAPI;");
+		lines.push("\t\t\tglobals: _AppGlobalsAPI;");
+		lines.push('\t\t\tlogger: _AppQuestpie["logger"];');
+		lines.push('\t\t\tkv: _AppQuestpie["kv"];');
+		lines.push("\t\t\tqueue: QueueClient<AppJobs>;");
+		if (hasMessages) {
+			lines.push(
+				"\t\t\tt: (key: AppMessageKeys | (string & {}), params?: Record<string, unknown>, locale?: string) => string;",
+			);
+		} else {
+			lines.push(
+				"\t\t\tt: (key: string, params?: Record<string, unknown>, locale?: string) => string;",
+			);
+		}
+		if (hasServices) {
+			lines.push("\t\t\tservices: _AppDefaultServices;");
+		}
+		lines.push("\t\t}");
 
 		// Registry — ALL registryKey categories + ~-prefixed singles augmented centrally.
 		// This is the SINGLE place that augments Registry. Modules never augment it.

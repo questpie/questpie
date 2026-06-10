@@ -1265,6 +1265,7 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 					request:
 						((context as any).req as Request | undefined) ??
 						((context as any).request as Request | undefined),
+					contextExtensions: normalized["~contextExtensions"],
 				});
 				// Globals only support boolean access rules
 				if (result !== true) {
@@ -1300,6 +1301,7 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 			});
 			const transitionCtx: GlobalTransitionHookContext = {
 				...transitionServices,
+				...(normalized["~contextExtensions"] ?? {}),
 				data: existing,
 				fromStage,
 				toStage,
@@ -1560,6 +1562,7 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 		});
 		return {
 			...services,
+			...(normalized["~contextExtensions"] ?? {}),
 			data: params.data,
 			input: params.input,
 			locale: normalized.locale,
@@ -1703,6 +1706,7 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 			request:
 				((context as any).req as Request | undefined) ??
 				((context as any).request as Request | undefined),
+			contextExtensions: normalized["~contextExtensions"],
 		});
 		// Globals only support boolean access rules (not AccessWhere)
 		return result === true;

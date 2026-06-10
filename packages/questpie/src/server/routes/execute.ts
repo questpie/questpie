@@ -74,6 +74,7 @@ function createRouteStoreContext(
 			locale: resolvedContext.locale,
 			accessMode: resolvedContext.accessMode ?? "system",
 			stage: resolvedContext.stage,
+			"~contextExtensions": resolvedContext["~contextExtensions"],
 			...(resolvedContext.requestId
 				? { requestId: resolvedContext.requestId }
 				: {}),
@@ -178,6 +179,7 @@ export async function executeJsonRouteInternal<
 	// Access control — reject before handler runs
 	const allowed = await evaluateRouteAccess(definition.access, {
 		...services,
+		...(resolvedContext["~contextExtensions"] ?? {}),
 		locale: resolvedContext.locale,
 		request,
 		params,
@@ -257,6 +259,7 @@ export async function executeRawRouteInternal(
 	// Access control — reject before handler runs
 	const allowed = await evaluateRouteAccess(definition.access, {
 		...services,
+		...(resolvedContext["~contextExtensions"] ?? {}),
 		locale: resolvedContext.locale,
 		request,
 		params,

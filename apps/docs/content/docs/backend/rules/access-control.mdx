@@ -72,7 +72,33 @@ Available context properties:
 - `session` — Current auth session (null if unauthenticated)
 - `db` — Database instance
 - `collections` — Typed collection API
+- `request` — Current HTTP `Request` (headers, URL)
 - Any custom services injected via `AppContext`
+- Keys returned by `appConfig({ context })`, flat (see below)
+
+## Derived Request Context
+
+`appConfig({ context })` derives per-request context (tenant, role, memberships) once per HTTP request. The result travels with the request and arrives flat on every access rule, typed by inference:
+
+```ts title="config/app.ts"
+import { appConfig } from "questpie/app";
+
+export default appConfig({
+	context: async ({ request }) => ({
+		workspaceId: request.headers.get("x-workspace") || null,
+	}),
+});
+```
+
+```ts title="collections/projects.ts"
+.access({
+  // Destructure flat — no wrapper object
+  read: ({ workspaceId }) =>
+    workspaceId ? { workspace: workspaceId } : false,
+})
+```
+
+Extensions are typed `Partial<…>` — they're absent for non-HTTP contexts (jobs, seeds, system scripts), so always narrow before use. The same keys reach hooks, route handlers, field access rules, and `getContext()`. See [Multi-Tenancy](/docs/production/multi-tenancy) for the full pattern.
 
 ## Global Access
 

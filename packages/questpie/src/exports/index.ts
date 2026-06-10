@@ -70,6 +70,7 @@ export type {
 export type {
 	InferAppFromApp,
 	InferDbFromApp,
+	InferContextExtensionsFromApp,
 	InferContextExtensionsFromAppConfig,
 	InferSessionFromAuthConfig,
 	InferSessionFromApp,

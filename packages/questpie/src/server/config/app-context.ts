@@ -54,6 +54,14 @@ declare global {
 		 * Used by `.fields(({ f }) => ...)` for autocomplete on `f.*`.
 		 */
 		interface FieldTypesMap {}
+
+		/**
+		 * Extra parameters available to `appConfig({ context })` resolvers.
+		 * Empty by default — the root codegen template augments it with the
+		 * typed service surface (collections, globals, logger, kv, queue, t,
+		 * services) so resolvers get full inference without `typeof app`.
+		 */
+		interface ContextResolverContext {}
 	}
 }
 

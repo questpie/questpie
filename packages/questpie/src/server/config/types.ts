@@ -650,6 +650,14 @@ export interface QuestpieConfig {
 	 * @internal
 	 */
 	"~messageKeys"?: unknown;
+
+	/**
+	 * Phantom type for tracking request-context extensions resolved by
+	 * `appConfig({ context })`. Not used at runtime - purely for type inference
+	 * (e.g. `getContext<App>()` exposing resolver-derived keys).
+	 * @internal
+	 */
+	"~contextExtensions"?: unknown;
 }
 
 /**
@@ -682,6 +690,11 @@ export interface ContextExtensions {
 
 /**
  * Parameters passed to the context resolver function.
+ *
+ * At runtime the resolver also receives the full system-mode service surface
+ * (`collections`, `globals`, `logger`, `kv`, `queue`, `t`, user services).
+ * Those extras are typed via the codegen-emitted
+ * `Questpie.ContextResolverContext` global augmentation.
  */
 export interface ContextResolverParams {
 	/** The incoming HTTP request */
@@ -693,31 +706,36 @@ export interface ContextResolverParams {
 }
 
 /**
- * Context resolver function type.
- * Returns custom context properties that will be merged into RequestContext.
+ * Context resolver function type — `appConfig({ context })`.
+ *
+ * Runs once per HTTP request. The returned object travels with the request:
+ * it is merged flat into the `RequestContext` and reaches access rules, hooks,
+ * route handlers, field access, and `getContext()`.
+ *
+ * Collections/globals called inside the resolver run in system mode —
+ * the resolver IS trusted derivation.
  *
  * @example
  * ```ts
- * .context(async ({ request, session, db }) => {
- *   const tenantId = request.headers.get('x-tenant-id')
+ * // config/app.ts
+ * export default appConfig({
+ *   context: async ({ request, session, collections }) => {
+ *     const tenantId = request.headers.get("x-tenant-id");
  *
- *   if (tenantId && session?.user) {
- *     // Validate access
- *     const hasAccess = await db.query.tenantMembers.findFirst({
- *       where: and(
- *         eq(tenantMembers.tenantId, tenantId),
- *         eq(tenantMembers.userId, session.user.id)
- *       )
- *     })
- *     if (!hasAccess) {
- *       throw new Error('No access to this tenant')
+ *     if (tenantId && session?.user) {
+ *       const member = await collections.tenant_members.findOne({
+ *         where: { tenant: tenantId, user: session.user.id },
+ *       });
+ *       if (!member) throw new Error("No access to this tenant");
  *     }
- *   }
  *
- *   return { tenantId }
- * })
+ *     return { tenantId };
+ *   },
+ * });
  * ```
  */
 export type ContextResolver<
 	T extends Record<string, any> = Record<string, any>,
-> = (params: ContextResolverParams) => Promise<T> | T;
+> = (
+	params: ContextResolverParams & Questpie.ContextResolverContext,
+) => Promise<T> | T;
