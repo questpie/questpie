@@ -62,6 +62,24 @@ export default collection("posts")
 | `.options({...})`                               | Timestamps, versioning, soft delete     |
 | `.search({...})`                                | Search indexing                         |
 | `.searchable(string[])`                         | Searchable fields                       |
+| `.merge(other)`                                 | Extend a same-name builder (see below)  |
+
+### Extending Collections — `.merge()`
+
+To extend a collection a module already provides, merge its builder — never redefine the collection from scratch (same-key registration replaces the module's collection wholesale):
+
+```ts
+import { starterModule } from "questpie/app";
+import { collection } from "#questpie/factories";
+
+export default collection("user")
+	.merge(starterModule.collections.user)
+	.fields(({ f }) => ({
+		internalNotes: f.textarea(),
+	}));
+```
+
+Fields/options/extension keys combine by key (merged-in side wins), hooks concatenate, and `.fields()` after `.merge()` is cumulative — it never wipes merged fields. The result stays fully typed.
 
 ### Collection Options
 

@@ -175,6 +175,21 @@ export default collection("posts")
 	.options({ versioning: true, timestamps: true });
 ```
 
+### Extend a Module Collection (don't redefine!)
+
+```ts
+import { starterModule } from "questpie/app";
+import { collection } from "#questpie/factories";
+
+// Registering the same key from scratch REPLACES the module's collection
+// (drops its fields/hooks/auth wiring). Merge instead — fully typed:
+export default collection("user")
+	.merge(starterModule.collections.user)
+	.fields(({ f }) => ({
+		isAnonymous: f.boolean().default(false),
+	}));
+```
+
 ### Route
 
 ```ts
@@ -244,6 +259,7 @@ await queue.sendReminder.publish({ userId: "abc" });
 | CRITICAL | Files in wrong directory                               | Collections in `collections/`, routes in `routes/`, etc.                              |
 | CRITICAL | Missing `export default` on convention files           | Codegen silently ignores files without default export                                 |
 | CRITICAL | Importing route/job/service from `#questpie/factories` | Use `"questpie"` — only collection/global/block/adminConfig use `#questpie/factories` |
+| CRITICAL | Redefining a module collection (e.g. starter `user`) from scratch | `.merge(starterModule.collections.user)` then add fields — see Extend pattern        |
 | HIGH     | Forgetting `questpie generate` after adding files      | Re-run codegen on any file add/remove in convention dirs                              |
 | HIGH     | Job handler uses `input` instead of `payload`          | Jobs destructure `{ payload }`, routes destructure `{ input }`                        |
 | HIGH     | `queue.send("name", data)`                             | Use `queue.jobName.publish(data)`                                                     |

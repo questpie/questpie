@@ -19,6 +19,7 @@ import type {
 	FieldRuntimeState,
 } from "#questpie/server/fields/field-class-types.js";
 import { Field, field } from "#questpie/server/fields/field-class.js";
+import { json } from "#questpie/server/modules/core/fields/json.js";
 import {
 	booleanOps,
 	numberOps,
@@ -339,5 +340,40 @@ describe("Field — runtime accessors", () => {
 	it("virtual fields have location 'virtual'", () => {
 		const f = createTestTextField().virtual();
 		expect(f.getLocation()).toBe("virtual");
+	});
+});
+
+describe("Field V2 — $type() and typed zod()", () => {
+	it("$type() is a runtime no-op (column and schema unchanged)", () => {
+		const plain = json();
+		const typed = json().$type<{ rows: number[] }>();
+
+		// Column generation identical
+		const plainCol = plain.toColumn("layout") as any;
+		const typedCol = typed.toColumn("layout") as any;
+		expect(typedCol.config?.dataType ?? typedCol.dataType).toEqual(
+			plainCol.config?.dataType ?? plainCol.dataType,
+		);
+
+		// Schema behavior identical
+		expect(typed.toZodSchema().safeParse({ rows: [1] }).success).toBe(true);
+		expect(plain.toZodSchema().safeParse({ rows: [1] }).success).toBe(true);
+	});
+
+	it("zod() schema replacement applies at runtime", () => {
+		const settings = json().zod(() =>
+			z.object({ theme: z.enum(["light", "dark"]) }),
+		);
+		const schema = settings.toZodSchema();
+
+		expect(schema.safeParse({ theme: "dark" }).success).toBe(true);
+		expect(schema.safeParse({ theme: "blue" }).success).toBe(false);
+		expect(schema.safeParse("nonsense").success).toBe(false);
+	});
+
+	it("$type() preserves builder chaining", () => {
+		const f = createTestTextField().$type<"a" | "b">().required();
+		expect(f._state.notNull).toBe(true);
+		expect(f.toColumn("kind")).toBeDefined();
 	});
 });

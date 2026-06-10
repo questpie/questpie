@@ -404,7 +404,7 @@ export const posts = collection("posts")
 | `.validation({...})`             | Zod validation overrides                                          |
 | `.upload({...})`                 | Turn into upload collection (see [Uploads](#16-uploads--storage)) |
 | `.set(key, value)`               | Plugin extension point                                            |
-| `.merge(other)`                  | Combine two builders                                              |
+| `.merge(other)`                  | Extend another builder of the same name (see below)               |
 | `.admin({...})`                  | Admin panel metadata (label, icon, group)                         |
 | `.list({...})`                   | List view config                                                  |
 | `.form({...})`                   | Form view config                                                  |
@@ -412,6 +412,24 @@ export const posts = collection("posts")
 | `.actions({...})`                | Custom server actions                                             |
 
 > `.admin()`, `.list()`, `.form()`, `.preview()`, `.actions()` are added by the admin plugin — they're not available without `@questpie/admin`.
+
+### Extending Collections — `.merge()`
+
+Collections compose. To extend a collection a module already provides (starter `user`, `assets`, ...), **merge the module's builder — never redefine the collection from scratch** (registering the same key replaces the module's collection wholesale, dropping its fields, hooks, and auth wiring):
+
+```ts
+// collections/user.ts — extend the starter user
+import { starterModule } from "questpie/app";
+import { collection } from "#questpie/factories";
+
+export default collection("user")
+	.merge(starterModule.collections.user)
+	.fields(({ f }) => ({
+		internalNotes: f.textarea(),
+	}));
+```
+
+Semantics: fields/virtuals/relations/indexes/options/extension keys combine by key (merged-in builder wins on conflict); hooks concatenate (both run); `title`/`searchable`/`upload` take the merged-in value when set. `.fields()` after `.merge()` is cumulative — adds and overrides by key, never wipes. Everything stays fully typed (`$infer`, CRUD types include both sides).
 
 ---
 
@@ -518,12 +536,31 @@ f.text(255)
 		update: ({ session }) => session?.user.role === "admin",
 	})
 	.operators(ops) // override WHERE operator set for queries
-	.drizzle((col) => col) // escape hatch: modify Drizzle column
-	.zod((schema) => schema) // escape hatch: modify Zod schema
+	.drizzle((col) => col.$type<Cents>()) // extend Drizzle column ($type narrows value type)
+	.zod((schema) => schema.refine(check)) // extend/replace Zod schema (output narrows value type)
+	.$type<Layout>() // explicitly set TS value type (type-level only; mainly for json)
 	.fromDb((value) => value) // transform after reading from DB
 	.toDb((value) => value) // transform before writing to DB
 	.set(key, value) // plugin extension point (e.g. admin, form config)
 	.derive(extra); // derive additional runtime state
+```
+
+### Extending Fields — typed escape hatches
+
+Built-in fields don't box you in. All three hatches propagate types into CRUD select/insert types:
+
+```ts
+// extend Zod validation (type unchanged)
+slug: f.text().zod((s) => s.refine(isKebabCase, "must be kebab-case")),
+
+// replace the Zod schema — value type narrows to the schema output
+settings: f.json().zod(() => z.object({ theme: z.enum(["light", "dark"]) })),
+
+// extend the Drizzle column
+total: f.number().drizzle((col) => col.$type<Cents>()),
+
+// explicitly type a json field (no runtime validation; pair with .zod() if needed)
+layout: f.json().$type<{ rows: { id: string; span: number }[] }>(),
 ```
 
 ### Custom Field Types

@@ -31,14 +31,37 @@ Every field supports these methods:
 | `.hooks(h)`          | Field-level lifecycle hooks                                            |
 | `.access(a)`         | Field-level access control                                             |
 | `.operators(ops)`    | Override the operator set for queries                                  |
-| `.drizzle(fn)`       | Escape hatch: modify the Drizzle column builder                        |
-| `.zod(fn)`           | Escape hatch: modify the auto-derived Zod schema                       |
+| `.drizzle(fn)`       | Extend the Drizzle column builder (`$type` narrows the value type)     |
+| `.zod(fn)`           | Extend or replace the Zod schema (output narrows the value type)       |
+| `.$type<T>()`        | Explicitly set the TS value type (type-level only; mainly for json)    |
 | `.fromDb(fn)`        | Transform value after reading from DB                                  |
 | `.toDb(fn)`          | Transform value before writing to DB                                   |
 | `.minItems(n)`       | Minimum items (for `.array()` fields)                                  |
 | `.maxItems(n)`       | Maximum items (for `.array()` fields)                                  |
 
 `inputFalse()`, `outputFalse()`, and field `.access()` rules are enforced as framework-level access primitives in user-mode CRUD. `inputFalse()` rejects create/update writes to that field, including nested object paths. `outputFalse()` redacts the field from read/create/update responses. Field access handlers and field hooks receive `req` only when the operation runs from an HTTP request; local API calls, workers, jobs, migrations, and seeds do not synthesize one. System-mode CRUD still bypasses field access for server-side jobs, hooks, migrations, and seeds. OpenAPI request/response schemas use the same flags: `inputFalse()` becomes response-only/read-only, and `outputFalse()` becomes request-only/write-only.
+
+## Extending Fields
+
+Built-in fields don't box you in — every field exposes typed extension hatches, and the narrowed types flow into CRUD select/insert types automatically:
+
+```ts
+// 1. Extend the Zod schema — refine validation, type unchanged
+slug: f.text().zod((s) => s.refine(isKebabCase, "must be kebab-case")),
+
+// 2. Replace the Zod schema — value type narrows to the schema output
+settings: f.json().zod(() =>
+	z.object({ theme: z.enum(["light", "dark"]), perPage: z.number() }),
+),
+
+// 3. Extend the Drizzle column — full column-builder access
+total: f.number().drizzle((col) => col.$type<Cents>()),
+
+// 4. Explicitly type a json field — type-level only, no runtime change
+layout: f.json().$type<{ rows: { id: string; span: number }[] }>(),
+```
+
+`.zod()` transforms run after the auto-derived schema is built, so `.required()`, length limits, and array wrapping still apply. `.$type<T>()` asserts the type without validation — pair it with `.zod()` when you also want runtime guarantees.
 
 ## Text Fields
 
@@ -338,6 +361,17 @@ Raw JSON data stored as JSONB. For structured data, prefer `f.object()`.
 ```ts
 metadata: f.json(),
 config: f.json({ mode: "json" }),  // use PG json instead of jsonb
+```
+
+By default the value types as a loose `JsonValue`. To type it explicitly — for shapes `f.object()` can't express, like recursive or union-heavy structures — use `.$type<T>()` (type only) or `.zod()` (type + runtime validation):
+
+```ts
+type Layout = { rows: { id: string; span: number; blocks: string[] }[] };
+
+layout: f.json().$type<Layout>(),                 // typed, no runtime validation
+settings: f.json().zod(() =>                       // typed AND validated
+	z.object({ theme: z.enum(["light", "dark"]) }),
+),
 ```
 
 ## Relation
