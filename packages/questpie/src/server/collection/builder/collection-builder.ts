@@ -730,12 +730,16 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 			}
 		}
 
-		// Generate validation schemas
+		// Generate validation schemas (field definitions drive the per-field
+		// schema overlay — see createCollectionValidationSchemas)
 		const validationSchemas = createCollectionValidationSchemas(
 			this.state.name,
 			mainFields,
 			localizedFields,
-			options,
+			{
+				...options,
+				fieldDefinitions: this.state.fieldDefinitions as any,
+			},
 		);
 
 		const newState = {

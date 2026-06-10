@@ -215,6 +215,8 @@ Override or refine the auto-generated Zod validation schemas. By default, schema
 })
 ```
 
+Create and update enforce these schemas server-side. Each field's own schema (including `.zod()` transforms, email format, select enums, array shapes) is the source of truth for its key; system fields (`id`, timestamps) and relation/upload foreign keys validate against their column shape. `refine` applies on top of the field schema, `exclude` removes the key from validation entirely.
+
 ## `.upload(options)`
 
 Enable file upload support. Automatically adds storage fields (`key`, `filename`, `mimeType`, `size`, `visibility`), extends the output type with `{ url: string }`, and registers upload HTTP routes.

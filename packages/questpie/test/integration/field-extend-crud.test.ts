@@ -10,14 +10,9 @@ import { runTestDbMigrations } from "../utils/test-db";
 /**
  * End-to-end coverage for the typed field extension hatches:
  * .$type<T>() and schema-replacing .zod() round-trip through real CRUD,
- * and the field-level schema (consumed by admin validation + OpenAPI)
- * reflects the replacement.
- *
- * NOTE: server-side create/update currently validates with the
- * column-derived schema (crud-generator insertSchema), which does not
- * run field-level zod — tracked on the board as
- * `server-crud-should-enforce-field-based-zod-schemas`. These tests pin
- * only the behavior that must hold regardless.
+ * and field-level schemas are enforced server-side — collection insert/
+ * update schemas overlay each field's toZodSchema() (incl. .zod()
+ * transforms) on top of the column-derived base.
  */
 
 type Layout = { rows: { id: string; span: number }[] };
@@ -65,6 +60,39 @@ describe("field extension through CRUD", () => {
 			ctx,
 		);
 		expect(w2.layout).toBeNull();
+	});
+
+	it("server-side create enforces the replaced field schema", async () => {
+		const ctx = createTestContext();
+
+		// invalid enum value → rejected by the .zod() schema through create()
+		await expect(
+			setup.app.collections.widgets.create(
+				{ name: "w-bad", settings: { theme: "blue" } },
+				ctx,
+			),
+		).rejects.toThrow();
+	});
+
+	it("server-side update enforces the replaced field schema", async () => {
+		const ctx = createTestContext();
+		const w = await setup.app.collections.widgets.create(
+			{ name: "w-upd", settings: { theme: "light" } },
+			ctx,
+		);
+
+		await expect(
+			setup.app.collections.widgets.update(
+				{ where: { id: w.id }, data: { settings: { theme: "blue" } } },
+				ctx,
+			),
+		).rejects.toThrow();
+
+		const updated = await setup.app.collections.widgets.update(
+			{ where: { id: w.id }, data: { settings: { theme: "dark" } } },
+			ctx,
+		);
+		expect((updated as any)[0]?.settings?.theme ?? (updated as any).settings?.theme).toBe("dark");
 	});
 
 	it("replaced field schema validates (admin/OpenAPI surface)", () => {

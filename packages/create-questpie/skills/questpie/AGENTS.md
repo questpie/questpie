@@ -563,6 +563,9 @@ total: f.number().drizzle((col) => col.$type<Cents>()),
 layout: f.json().$type<{ rows: { id: string; span: number }[] }>(),
 ```
 
+Field schemas are enforced server-side: create/update validates each input key against its field's schema (incl. `.zod()` transforms, email format, select enums). System fields and relation/upload FKs validate against their column shape.
+
+
 ### Custom Field Types
 
 Define reusable field types with `fieldType()`:

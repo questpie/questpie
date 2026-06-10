@@ -63,6 +63,8 @@ layout: f.json().$type<{ rows: { id: string; span: number }[] }>(),
 
 `.zod()` transforms run after the auto-derived schema is built, so `.required()`, length limits, and array wrapping still apply. `.$type<T>()` asserts the type without validation — pair it with `.zod()` when you also want runtime guarantees.
 
+Field schemas are enforced **server-side**: collection create/update validates each input key against its field's schema (the column-derived shape only covers system fields and relation/upload foreign keys). The same schemas drive admin form validation and OpenAPI.
+
 ## Text Fields
 
 ### `f.text(maxLength?)`
