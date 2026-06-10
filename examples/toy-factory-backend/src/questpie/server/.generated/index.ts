@@ -188,13 +188,14 @@ type _ExecutionContextServiceDefinitions = {
 type _ExecutionContextDefaultServices = ServiceInstancesInNamespace<_ExecutionContextServiceDefinitions, "services">;
 type _AppCollectionDefinitions = AppCollections & Record<string, AnyCollectionOrBuilder>;
 type _AppGlobalDefinitions = AppGlobals & Record<string, AnyGlobalOrBuilder>;
-type _AppQuestpieConfig = Omit<QuestpieConfig, "app" | "db" | "collections" | "globals" | "auth"> & {
+type _AppQuestpieConfig = Omit<QuestpieConfig, "app" | "db" | "collections" | "globals" | "auth" | "~contextExtensions"> & {
 	app: (typeof _runtime)["app"];
 	db: (typeof _runtime)["db"];
 	collections: _AppCollectionDefinitions;
 	globals: _AppGlobalDefinitions;
 	auth: _AppAuthConfig;
 	storage: (typeof _runtime)["storage"];
+	"~contextExtensions": _AppContextExtensions;
 };
 type _AppQuestpieBase = Questpie<_AppQuestpieConfig>;
 type _AppDb = DrizzleClientFromQuestpieConfig<_AppQuestpieConfig>;
@@ -290,6 +291,18 @@ declare global {
 		}
 
 		interface ServiceCreateContext extends _AppCoreContext {}
+
+		// Typed service surface for appConfig({ context }) resolvers.
+		// Excludes _AppContextExtensions — the resolver produces them.
+		interface ContextResolverContext {
+			collections: _CollectionsAPI;
+			globals: _AppGlobalsAPI;
+			logger: _AppQuestpie["logger"];
+			kv: _AppQuestpie["kv"];
+			queue: QueueClient<AppJobs>;
+			t: (key: string, params?: Record<string, unknown>, locale?: string) => string;
+			services: _AppDefaultServices;
+		}
 
 		interface Registry {
 			collections: _Registry_Collections;
