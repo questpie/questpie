@@ -591,6 +591,7 @@ export async function runCodegen(
 			target,
 			hasModules,
 			userFieldsImportPath: userFieldsFile?.importPath,
+			discoveredCategories: discovered.categories,
 		});
 	}
 

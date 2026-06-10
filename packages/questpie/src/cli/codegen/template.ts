@@ -96,7 +96,7 @@ export function generateTemplate(options: TemplateOptions): string {
 	// Import createApp + types
 	lines.push('import { createApp, createContextFactory } from "questpie/app";');
 	lines.push(
-		'import type { AnyCollectionOrBuilder, AnyGlobalOrBuilder, AppDefinition, CollectionAPI, CollectionSelect, DrizzleClientFromQuestpieConfig, InferContextExtensionsFromAppConfig, InferSessionFromAuthConfig, MailerService, Questpie, QuestpieConfig, QueueClient, QueueJobType, RouteParamsFromKey, RouteWithParams, TablesFromConfig, z } from "questpie/types";',
+		'import type { AccessContext, AnyCollectionOrBuilder, AnyGlobalOrBuilder, AppDefinition, CollectionAPI, CollectionSelect, DrizzleClientFromQuestpieConfig, GlobalSelect, HookContext, InferContextExtensionsFromAppConfig, InferSessionFromAuthConfig, MailerService, Questpie, QuestpieConfig, QueueClient, QueueJobType, RouteParamsFromKey, RouteWithParams, TablesFromConfig, z } from "questpie/types";',
 	);
 	lines.push("");
 
@@ -627,6 +627,7 @@ export function generateTemplate(options: TemplateOptions): string {
 		);
 		lines.push("type _AppCoreContext = _AppContextExtensions & {");
 		lines.push("\t// Infrastructure");
+		lines.push("\tapp: _AppQuestpie;");
 		lines.push("\tdb: _AppDb;");
 		if (hasEmails) {
 			lines.push(`\temail: MailerService<${emailsTypeName}>;`);
@@ -805,6 +806,62 @@ export function generateTemplate(options: TemplateOptions): string {
 	lines.push(" */");
 	lines.push(
 		"export type CollectionDoc<K extends keyof AppCollections> = CollectionSelect<AppCollections[K]>;",
+	);
+	lines.push("");
+	lines.push("/**");
+	lines.push(" * Select/document type for a global key.");
+	lines.push(" */");
+	lines.push(
+		"export type GlobalDoc<K extends keyof AppGlobals> = GlobalSelect<AppGlobals[K]>;",
+	);
+	lines.push("");
+	lines.push(
+		"/** Resolved auth session for this app (`{ user, session } | null`). */",
+	);
+	lines.push("export type AppSession = _AppSession;");
+	lines.push("");
+	lines.push("/** Authenticated user shape from the app session. */");
+	lines.push('export type AppSessionUser = NonNullable<_AppSession>["user"];');
+	lines.push("");
+	lines.push("/**");
+	lines.push(
+		" * Access-rule ctx for shared helpers. `K` narrows `data` to that collection's row.",
+	);
+	lines.push(" *");
+	lines.push(" * CYCLE RULE: import these only from files NOT imported by a collection");
+	lines.push(" * (routes, services, jobs, scripts). Helpers imported by collections take");
+	lines.push(' * the package-level `AccessContext` from "questpie" instead — see the');
+	lines.push(" * type-inference reference.");
+	lines.push(" *");
+	lines.push(" * @example");
+	lines.push(" * ```ts");
+	lines.push(
+		' * export async function isOwner(ctx: AccessRuleContext<"posts">) {',
+	);
+	lines.push(
+		" *   return ctx.data?.authorId === ctx.session?.user.id; // ctx.collections typed",
+	);
+	lines.push(" * }");
+	lines.push(" * ```");
+	lines.push(" */");
+	lines.push(
+		"export type AccessRuleContext<K extends keyof AppCollections | unknown = unknown> =",
+	);
+	lines.push(
+		"\tAccessContext<K extends keyof AppCollections ? CollectionDoc<K> : unknown>;",
+	);
+	lines.push("");
+	lines.push("/**");
+	lines.push(
+		" * Hook ctx for shared helpers. `K` narrows `data` to that collection's row.",
+	);
+	lines.push(" * Same cycle rule as `AccessRuleContext`.");
+	lines.push(" */");
+	lines.push(
+		"export type HookRuleContext<K extends keyof AppCollections | unknown = unknown> =",
+	);
+	lines.push(
+		"\tHookContext<K extends keyof AppCollections ? CollectionDoc<K> : unknown>;",
 	);
 	lines.push("");
 

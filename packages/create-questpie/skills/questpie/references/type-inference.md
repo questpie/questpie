@@ -8,11 +8,11 @@ The schema is the single source of types. If you are hand-writing a type that re
 | --- | --- | --- | --- |
 | 1 | Row of **another** collection | `import type { CollectionDoc } from "#questpie"` → `CollectionDoc<"toys">` | Type-only import. See cycle rules below |
 | 2 | Own row inside `.access()` / `.hooks()` | Nothing — `ctx.data` / `ctx.input` are already typed by the builder | Never name your own doc type inside the defining collection |
-| 3 | Shared access-helper parameter | `import type { AccessContext } from "questpie"` | Cycle-safe even when the helper is imported by a collection |
-| 4 | Shared hook-helper parameter | `import type { HookContext } from "questpie"` | Same shape rules as #3 |
+| 3 | Shared access-helper parameter | Collection-imported helper: `AccessContext` from `"questpie"`. Anywhere else: `AccessRuleContext<"posts">` from `#questpie` (narrows `ctx.data`) | See cycle rules below |
+| 4 | Shared hook-helper parameter | `HookContext` from `"questpie"` (collection-imported) or `HookRuleContext<"posts">` from `#questpie` | Same rules as #3 |
 | 5 | App/services in a function without a ctx param | `getContext<App>()` with `import type { App } from "#questpie"` | Type-only `App` import — no runtime cycle |
-| 6 | Global doc | `GlobalSelect<AppGlobals["siteSettings"]>` — `GlobalSelect` from `questpie/types`, `AppGlobals` from `#questpie` | No `GlobalDoc<K>` alias is emitted yet |
-| 7 | Session / user shape | In handlers: `ctx.session?.user` is typed. Standalone: `NonNullable<AccessContext["session"]>["user"]` | No exported `AppSession` alias yet |
+| 6 | Global doc | `import type { GlobalDoc } from "#questpie"` → `GlobalDoc<"siteSettings">` | Same cycle rules as `CollectionDoc` |
+| 7 | Session / user shape | In handlers: `ctx.session?.user` is typed. Standalone: `import type { AppSession, AppSessionUser } from "#questpie"` | Generated from the app auth config |
 | 8 | Route input/output in the handler | Nothing — inferred from `.schema()` / return type | |
 | 9 | Route input/output standalone | `InferRouteInput<typeof def>` / `InferRouteOutput<typeof def>` / `InferRouteParams<typeof def>` from `questpie/types` | tRPC-style; `def` is the route file's default export |
 | 10 | Client-side types | `createClient<AppConfig>()` — everything flows from the generic | See `references/tanstack-query.md` |
@@ -20,7 +20,7 @@ The schema is the single source of types. If you are hand-writing a type that re
 | 12 | Job payload standalone | `InferJobPayload<typeof jobDef>` from `questpie/queue` (or `z.infer<typeof jobDef.schema>`) | |
 | 13 | `db` / `session` inside job/workflow handlers | Honest gap: generated job context types them `unknown` today | Use `collections` (typed) or narrow explicitly; do not restate schemas |
 | 14 | Publishing jobs outside job files | `ctx.queue.<name>.publish(payload)` — payload typed | |
-| 15 | Relation target autocomplete | Augment `Questpie.CollectionKeys` (advanced, optional — see Key Registries) | Plain strings always compile |
+| 15 | Relation target autocomplete | Nothing — codegen populates `Questpie.CollectionKeys` from discovered files; `f.relation("…")` autocompletes after `questpie generate` | Plain strings always compile |
 | 16 | Realtime payloads | `live()` / `liveIter()` snapshots are typed; raw `client.realtime.subscribe` data is untyped — annotate with `CollectionDoc<"posts">` | Typed realtime contract is planned |
 | 17 | Env vars | `env.ts` / `env.client.ts` with `env()` — see `references/env.md` | Never `process.env.X!` |
 | 18 | Field-level rule ctx (`.access({ fields })`) | `doc` is typed as the row, `user` is typed from the generated session — destructure, don't annotate | |
@@ -63,7 +63,7 @@ export function canCancelOrder(ctx: AccessContext<{ priority?: string | null }>)
 }
 ```
 
-`ctx.collections` and `ctx.session` are fully typed on `AccessContext` through the (lazily merged) AppContext augmentation. `ctx.app` is **not** available on `AccessContext` yet — reach the app instance via `getContext<App>()` when a helper genuinely needs it (map row 5).
+`ctx.app`, `ctx.collections`, and `ctx.session` are fully typed on `AccessContext` through the (lazily merged) AppContext augmentation — the explicit return annotation stays mandatory in collection-imported helpers (it cuts the inference loop).
 
 Helpers **not** imported by any collection (scripts, routes, services, jobs) may freely use `CollectionDoc<K>` in parameters and locals — Rule 2 only binds files that collections import.
 
