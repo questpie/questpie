@@ -26,6 +26,8 @@ const widgets = collection("widgets").fields(({ f }) => ({
 		.required(),
 	// .drizzle() reaches the real column builder — generated default proves it
 	source: f.text(50).drizzle((col) => col.$defaultFn(() => "from-drizzle")),
+	// .drizzle() column constraints land in the DDL — unique proves it
+	slug: f.text(255).drizzle((col) => col.unique()),
 }));
 
 describe("field extension through CRUD", () => {
@@ -60,6 +62,24 @@ describe("field extension through CRUD", () => {
 			ctx,
 		);
 		expect(w2.layout).toBeNull();
+	});
+
+	it(".drizzle() column constraints reach the database DDL", async () => {
+		const ctx = createTestContext();
+
+		await setup.app.collections.widgets.create(
+			{ name: "u1", slug: "same-slug", settings: { theme: "dark" } },
+			ctx,
+		);
+
+		// second insert with the same slug violates the .unique() constraint
+		// added purely via the .drizzle() escape hatch
+		await expect(
+			setup.app.collections.widgets.create(
+				{ name: "u2", slug: "same-slug", settings: { theme: "dark" } },
+				ctx,
+			),
+		).rejects.toThrow();
 	});
 
 	it("server-side create enforces the replaced field schema", async () => {

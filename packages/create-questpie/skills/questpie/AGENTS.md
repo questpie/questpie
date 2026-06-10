@@ -536,7 +536,7 @@ f.text(255)
 		update: ({ session }) => session?.user.role === "admin",
 	})
 	.operators(ops) // override WHERE operator set for queries
-	.drizzle((col) => col.$type<Cents>()) // extend Drizzle column ($type narrows value type)
+	.drizzle((col) => col.unique()) // raw Drizzle column builder — constraints/defaults land in DDL; $type<T>() narrows value type
 	.zod((schema) => schema.refine(check)) // extend/replace Zod schema (output narrows value type)
 	.$type<Layout>() // explicitly set TS value type (type-level only; mainly for json)
 	.fromDb((value) => value) // transform after reading from DB
@@ -556,8 +556,10 @@ slug: f.text().zod((s) => s.refine(isKebabCase, "must be kebab-case")),
 // replace the Zod schema — value type narrows to the schema output
 settings: f.json().zod(() => z.object({ theme: z.enum(["light", "dark"]) })),
 
-// extend the Drizzle column
-total: f.number().drizzle((col) => col.$type<Cents>()),
+// extend the underlying Drizzle column — raw builder access, lands in DDL/migrations
+slug: f.text(255).drizzle((col) => col.unique()),
+viewCount: f.number().drizzle((col) => col.default(sql`0`)),
+total: f.number().drizzle((col) => col.$type<Cents>()), // narrows value type
 
 // explicitly type a json field (no runtime validation; pair with .zod() if needed)
 layout: f.json().$type<{ rows: { id: string; span: number }[] }>(),

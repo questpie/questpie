@@ -15,7 +15,7 @@ Complete configuration patterns for built-in QUESTPIE field types. Fields use fl
 | `.admin(config)`     | Admin UI rendering hints                    |
 | `.virtual(sql)`      | SQL expression for computed read-only field |
 | `.zod(fn)`           | Extend/replace Zod schema (output narrows value type) |
-| `.drizzle(fn)`       | Extend Drizzle column (`$type` narrows value type) |
+| `.drizzle(fn)`       | Raw Drizzle column builder — constraints/SQL defaults land in DDL; `$type` narrows value type |
 | `.$type<T>()`        | Explicitly set TS value type (type-level; mainly json) |
 
 ## `f.text(options?)`
