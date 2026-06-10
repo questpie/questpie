@@ -5,6 +5,9 @@
 import { createApp, createContextFactory } from "questpie/app";
 import type { AnyCollectionOrBuilder, AnyGlobalOrBuilder, AppDefinition, CollectionAPI, CollectionSelect, DrizzleClientFromQuestpieConfig, InferContextExtensionsFromAppConfig, InferSessionFromAuthConfig, MailerService, Questpie, QuestpieConfig, QueueClient, QueueJobType, RouteParamsFromKey, RouteWithParams, TablesFromConfig, z } from "questpie/types";
 
+// ── Env (validated before everything else) ─────────────────
+import _env from "../env";
+
 // ── Runtime ────────────────────────────────────────────────
 import _runtime from "../questpie.config";
 
@@ -235,23 +238,23 @@ type _ExecutionContextServiceDefinitions = {
 type _ExecutionContextDefaultServices = ServiceInstancesInNamespace<_ExecutionContextServiceDefinitions, "services">;
 type _AppCollectionDefinitions = AppCollections & Record<string, AnyCollectionOrBuilder>;
 type _AppGlobalDefinitions = AppGlobals & Record<string, AnyGlobalOrBuilder>;
-type _AppQuestpieConfig = Omit<QuestpieConfig, "app" | "db" | "collections" | "globals" | "auth" | "~contextExtensions"> & {
+type _AppQuestpieConfig = Omit<QuestpieConfig, "app" | "db" | "collections" | "globals" | "auth"> & {
 	app: (typeof _runtime)["app"];
 	db: (typeof _runtime)["db"];
 	collections: _AppCollectionDefinitions;
 	globals: _AppGlobalDefinitions;
 	auth: _AppAuthConfig;
 	storage: (typeof _runtime)["storage"];
-	"~contextExtensions": _AppContextExtensions;
 };
 type _AppQuestpieBase = Questpie<_AppQuestpieConfig>;
 type _AppDb = DrizzleClientFromQuestpieConfig<_AppQuestpieConfig>;
 type _AppGlobalsAPI = _AppQuestpieBase["globals"];
 type _AppStorage = _AppQuestpieBase["storage"];
 type _AppTables = TablesFromConfig<_AppQuestpieConfig>;
-type _AppQuestpie = Omit<_AppQuestpieBase, "collections" | "globals"> & {
+type _AppQuestpie = Omit<_AppQuestpieBase, "collections" | "globals" | "env"> & {
 	collections: _CollectionsAPI;
 	globals: _AppGlobalsAPI;
+	env: typeof _env;
 };
 
 // ── AppContext augmentation — auto-types ALL handlers ──────
@@ -339,18 +342,6 @@ declare global {
 
 		interface ServiceCreateContext extends _AppCoreContext {}
 
-		// Typed service surface for appConfig({ context }) resolvers.
-		// Excludes _AppContextExtensions — the resolver produces them.
-		interface ContextResolverContext {
-			collections: _CollectionsAPI;
-			globals: _AppGlobalsAPI;
-			logger: _AppQuestpie["logger"];
-			kv: _AppQuestpie["kv"];
-			queue: QueueClient<AppJobs>;
-			t: (key: string, params?: Record<string, unknown>, locale?: string) => string;
-			services: _AppDefaultServices;
-		}
-
 		interface Registry {
 			collections: _Registry_Collections;
 			globals: _Registry_Globals;
@@ -394,6 +385,7 @@ var _appPromise: Promise<unknown> | undefined;
 _appPromise = createApp(
 	({
 		modules: _modules,
+		env: _env,
 		collections: {
 			appointments: _coll_appointments,
 			barber_services: _coll_barber_services,
@@ -460,6 +452,9 @@ _appPromise = createApp(
 );
 
 export const app = (await _appPromise) as unknown as _AppQuestpie;
+
+/** Validated app environment (from env.ts). */
+export const env = _env;
 
 /** Fully typed QUESTPIE app instance. */
 export type App = typeof app;

@@ -10,6 +10,8 @@
 import { job } from "questpie/services";
 import { z } from "zod";
 
+import env from "../env";
+
 export default job({
 	name: "notify-blog-subscribers",
 	schema: z.object({
@@ -27,7 +29,7 @@ export default job({
 		const users = result.docs ?? [];
 		if (users.length === 0) return;
 
-		const postUrl = `${process.env.APP_URL ?? ""}/blog/${payload.slug || payload.postId}`;
+		const postUrl = `${env.APP_URL}/blog/${payload.slug || payload.postId}`;
 
 		await Promise.allSettled(
 			users.map((user) =>

@@ -14,6 +14,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
 
 import { discoverFiles } from "./discover.js";
+import { generateClientEnvModules } from "./env-client-template.js";
 import { generateFactoryTemplate } from "./factory-template.js";
 import { generateModuleTemplate } from "./module-template.js";
 import { generateTemplate } from "./template.js";
@@ -139,6 +140,8 @@ export function coreCodegenPlugin(): CodegenPlugin {
 				discover: {
 					modules: "modules.ts",
 					plugin: "plugin.ts",
+					env: "env.ts",
+					envClient: "env.client.ts",
 					fields: { pattern: "fields.ts", registryKey: "~fieldTypes" },
 					authConfig: { pattern: "config/auth.ts", configKey: "auth" },
 					appConfig: { pattern: "config/app.ts", configKey: "app" },
@@ -607,6 +610,21 @@ export async function runCodegen(
 			path: join(outDir, "factories.ts"),
 			code: factoriesCode,
 		});
+	}
+
+	// Client env modules — one per consumer declared in env.client.ts.
+	// Root app mode only (module-contributed env is a separate concern).
+	if (!options.module) {
+		const envClientFile = discovered.singles.get("envClient");
+		if (envClientFile) {
+			const clientEnvModules = await generateClientEnvModules(envClientFile);
+			for (const mod of clientEnvModules) {
+				filesToWrite.push({
+					path: join(outDir, mod.fileName),
+					code: mod.code,
+				});
+			}
+		}
 	}
 
 	for (const file of filesToWrite) {

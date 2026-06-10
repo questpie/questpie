@@ -173,6 +173,12 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 		config?: import("./app-state-config.js").ResolvedAppStateConfig;
 	} & Record<string, unknown>;
 
+	/**
+	 * Validated app environment (from `env.ts`, via `AppDefinition.env`).
+	 * The generated app type narrows this to the inferred env shape.
+	 */
+	public env: Readonly<Record<string, unknown>> = {};
+
 	public migrations!: QuestpieMigrationsAPI<TConfig>;
 	public seeds!: QuestpieSeedsAPI<TConfig>;
 	private _api: QuestpieApi<TConfig>;
