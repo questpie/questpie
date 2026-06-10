@@ -1,5 +1,11 @@
 # questpie
 
+## 3.6.1
+
+### Patch Changes
+
+- [#99](https://github.com/questpie/questpie/pull/99) [`c8c4a84`](https://github.com/questpie/questpie/commit/c8c4a845b4f7442ff92123391b2636a9f15d9727) Thanks [@drepkovsky](https://github.com/drepkovsky)! - HOTFIX: the published 3.6.0 `.d.ts` broke declaration merging for every npm consumer — the dts bundler renamed `CollectionBuilder`'s type parameter to `TState$1` (name collision with a module-private `infer TState` in the same emitted file), so the generated `interface CollectionBuilder<TState extends CollectionBuilderState>` augmentation no longer merged (TS2428) and all collections degraded to `any` in published-package consumers. The colliding infer is renamed, and a new CI dist-types gate typechecks a real example against the BUILT `.d.mts` output (plus declaration-shape assertions on all augmentation-target classes) so dts-emit regressions of this class can never ship again.
+
 ## 3.6.0
 
 ### Minor Changes
