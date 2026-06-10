@@ -1,5 +1,0 @@
----
-"questpie": minor
----
-
-Infer-first foundations. Access rules are typed per operation — `create` rules get `input: TInsert`, `update` rules get `data: TSelect` (non-optional) + `input: TUpdate` via the new `RowAccessRule`, so casts inside `.access()` are never needed. `AccessContext`/`HookContext` are re-exported from `questpie/types` as sanctioned helper-param types, with the verified cycle rules: a collection-imported helper takes `AccessContext`, dereferences `ctx.collections` cross-collection, and cuts the inference loop with an explicit return annotation (type-only `CollectionDoc<"other">`). New names-only key registries (`Questpie.CollectionKeys`/`GlobalKeys`/`JobKeys`) with `KnownCollectionKey` & friends — `f.relation()` targets get autocomplete from augmentations while plain strings keep compiling (`(string & {})` fallback). The automatic codegen population of the registries and typed `app` on route handlers are deferred — both currently re-enter the generated module graph (TS2456/TS2310 verified on toy-factory) and need the lazy-emission redesign first.
