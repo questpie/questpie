@@ -331,8 +331,11 @@ export function generateFactoryTemplate(
 			lines.push('declare module "questpie/builders" {');
 
 			if (collExtensions.size > 0) {
+				// Declaration merging requires an IDENTICAL type parameter list to
+				// the class (name + constraint) — a renamed param (TState$1) makes
+				// tsc treat the merged symbol as two-generic (TS2428/TS2314).
 				lines.push(
-					"\tinterface CollectionBuilder<TState$1 extends CollectionBuilderState> {",
+					"\tinterface CollectionBuilder<TState extends CollectionBuilderState> {",
 				);
 				for (const [name, ext] of collExtensions) {
 					const paramName = ext.isCallback ? "configFn" : "config";
@@ -342,9 +345,8 @@ export function generateFactoryTemplate(
 						hasModules,
 						placeholderMap,
 					);
-					paramType = paramType.replace(/\bTState\b/g, "TState$1");
 					lines.push(
-						`\t\t${name}(${paramName}: ${paramType}): CollectionBuilder<TState$1>;`,
+						`\t\t${name}(${paramName}: ${paramType}): CollectionBuilder<TState>;`,
 					);
 				}
 				lines.push("\t}");
