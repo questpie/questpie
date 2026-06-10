@@ -439,6 +439,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				locale: normalized.locale,
 				accessMode: normalized.accessMode,
 				stage: normalized.stage,
+				"~contextExtensions": normalized["~contextExtensions"],
 				_hookDepth,
 			},
 			async () => {
@@ -1362,6 +1363,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					locale: normalized.locale,
 					accessMode: normalized.accessMode,
 					stage: normalized.stage,
+					"~contextExtensions": normalized["~contextExtensions"],
 					_hookDepth,
 				},
 				async () => {
@@ -2761,6 +2763,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					request:
 						((context as any).req as Request | undefined) ??
 						((context as any).request as Request | undefined),
+					contextExtensions: normalized["~contextExtensions"],
 				});
 				if (canTransition === false) {
 					throw ApiError.forbidden({
@@ -2795,6 +2798,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			});
 			const transitionCtx: TransitionHookContext = {
 				...transitionServices,
+				...(normalized["~contextExtensions"] ?? {}),
 				data: existing,
 				recordId: id,
 				fromStage,
@@ -3089,6 +3093,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			request:
 				((context as any).req as Request | undefined) ??
 				((context as any).request as Request | undefined),
+			contextExtensions: normalized["~contextExtensions"],
 		});
 	}
 

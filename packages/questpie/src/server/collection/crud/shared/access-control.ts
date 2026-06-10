@@ -41,6 +41,11 @@ export interface AccessRuleEvaluationContext {
 	input?: any;
 	/** Incoming HTTP request when called via an HTTP adapter */
 	request?: Request;
+	/**
+	 * Request-context extensions resolved by `appConfig({ context })` —
+	 * spread flat into the rule ctx (after services, before per-op keys).
+	 */
+	contextExtensions?: Record<string, unknown>;
 }
 
 /**
@@ -89,6 +94,7 @@ export async function executeAccessRule(
 		});
 		const result = await rule({
 			...services,
+			...(context.contextExtensions ?? {}),
 			data: context.row,
 			input: context.input,
 			locale: context.locale,
@@ -256,6 +262,8 @@ export function createFieldAccessContext(params: {
 	const req = getRequestFromContext(params.context);
 
 	return {
+		// Request-context extensions (appConfig({ context })) — flat, runtime-only
+		...(params.context["~contextExtensions"] ?? {}),
 		...(req ? { req } : {}),
 		// session is typed as { user: User; session: Session } | null | undefined
 		user: params.context.session?.user,

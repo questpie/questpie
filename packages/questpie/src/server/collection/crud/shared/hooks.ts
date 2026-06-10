@@ -86,6 +86,7 @@ export function createHookContext(
 
 	const ctx: HookContext<any, any, any> = {
 		...services,
+		...(normalized["~contextExtensions"] ?? {}),
 		data: params.data,
 		original: params.original,
 		locale: normalized.locale,

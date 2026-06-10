@@ -119,7 +119,7 @@ Factory modules are acceptable only for simple runtime-only modules whose plugin
 | Quickstart        | `references/quickstart.md`      | Scaffold, configure, codegen, migrate, serve — zero to running app |
 | Data Modeling     | `references/data-modeling.md`   | Collections, globals, fields, relations, options, localization     |
 | Field Types       | `references/field-types.md`     | All built-in field types with options and operators                |
-| Rules             | `references/rules.md`           | Access control (row/field level), hooks lifecycle, validation      |
+| Rules             | `references/rules.md`           | Access control (row/field level), hooks lifecycle, validation, derived request context |
 | Business Logic    | `references/business-logic.md`  | Routes, jobs, services, email templates, context injection         |
 | Durable Workflows | `references/workflows.md`       | Long-running workflows, steps, events, cron, admin UI              |
 | CRUD API          | `references/crud-api.md`        | Server-side `find`, `create`, `update`, `delete`, globals API      |
@@ -140,7 +140,7 @@ Factory modules are acceptable only for simple runtime-only modules whose plugin
 | ------------------ | ---------------------------------- | ------------------------------------------------------------ |
 | Extend             | `references/extend.md`             | Custom modules, fields, operators, adapters, codegen plugins |
 | Codegen Plugin API | `references/codegen-plugin-api.md` | Plugin architecture, category declarations, templates        |
-| Multi-Tenancy      | `references/multi-tenancy.md`      | Scope isolation, workspace filtering, ScopeProvider          |
+| Multi-Tenancy      | `references/multi-tenancy.md`      | `appConfig({ context })` resolver, scope isolation, ScopeProvider |
 
 ### Client
 

@@ -1,6 +1,6 @@
 ---
 name: questpie-core-multi-tenancy
-description: QUESTPIE multi-tenant scope context resolver header-based tenant isolation ScopeProvider ScopePicker request-scoped services data filtering access control workspace organization property
+description: QUESTPIE multi-tenant scope context resolver header-based tenant isolation appConfig context ScopeProvider ScopePicker request-scoped derived context data filtering access control workspace organization property
   - questpie-core
   - questpie-core-rules
   - questpie-core-business-logic
@@ -10,20 +10,19 @@ description: QUESTPIE multi-tenant scope context resolver header-based tenant is
 
 QUESTPIE supports multi-tenant applications through a **scope-based** architecture. A "scope" can represent anything: organizations, workspaces, properties, cities, brands — any entity that partitions data.
 
-The pattern is simple: **HTTP header carries a scope ID, server extracts it into typed context, access rules filter data**.
+The pattern is simple: **HTTP header carries a scope ID, the `appConfig({ context })` resolver derives typed context once per request, access rules filter data**.
 
 ## Architecture Overview
 
 ```text
 Client                          Server
 ──────                          ──────
-ScopeProvider                   context.ts (file convention)
-  ↓ stores scopeId                ↓ extracts header → typed context
-ScopePicker (UI)                appConfig({ context }) (types)
-  ↓ user selects scope            ↓ available in every handler
-useScopedFetch()                access rules / hooks
-  ↓ injects HTTP header           ↓ filter data by scope
-fetch("x-selected-city: id")   AsyncLocalStorage → getContext()
+ScopeProvider                   config/app.ts → appConfig({ context })
+  ↓ stores scopeId                ↓ resolver runs ONCE per HTTP request
+ScopePicker (UI)                  ↓ result travels with the request
+useScopedFetch()                access rules / hooks / routes / getContext()
+  ↓ injects HTTP header           ↓ read it flat: ({ workspaceId }) => ...
+fetch("x-selected-city: id")    AsyncLocalStorage carries it into nested CRUD
 ```
 
 ## Step 1: Define the Scope Collection
@@ -53,47 +52,87 @@ export default collection("projects").fields(({ f }) => ({
 }));
 ```
 
-## Step 2: Create the Context Resolver
+## Step 2: Derive Context in `appConfig({ context })`
 
-The `context.ts` file convention is a singleton that extracts custom properties from each incoming request. Codegen discovers it automatically.
+The context resolver lives in `config/app.ts`. It runs **once per HTTP request** at the single derivation point (`app.createContext()`), and the returned object travels with the request — flat-merged into every access rule ctx, hook ctx, route handler args, field access ctx, and `getContext()`.
 
 ```ts
-// src/questpie/server/context.ts
-import { context } from "#questpie";
+// config/app.ts
+import { appConfig } from "questpie/app";
 
-export default context(async ({ request, session, db }) => {
-	const workspaceId = request.headers.get("x-selected-workspace");
+export default appConfig({
+	context: async ({ request, session, collections }) => {
+		const workspaceId = request.headers.get("x-selected-workspace");
 
-	// Optional: validate that the user has access to this workspace
-	// if (workspaceId && session?.user) {
-	//   const membership = await db.query.workspaceMembers.findFirst({
-	//     where: and(
-	//       eq(workspaceMembers.workspaceId, workspaceId),
-	//       eq(workspaceMembers.userId, session.user.id),
-	//     ),
-	//   });
-	//   if (!membership) throw new Error("No access to this workspace");
-	// }
+		// Validate membership with the typed collections API (system mode)
+		if (workspaceId && session?.user) {
+			const member = await collections.workspace_members.findOne({
+				where: { workspace: workspaceId, user: session.user.id },
+			});
+			if (!member) throw new Error("No access to this workspace");
+		}
 
-	return {
-		workspaceId: workspaceId || null,
-	};
+		return { workspaceId: workspaceId || null };
+	},
 });
 ```
 
 ### Context Resolver Parameters
 
-| Parameter | Type                        | Description                                     |
-| --------- | --------------------------- | ----------------------------------------------- |
-| `request` | `Request`                   | The incoming HTTP request (Web API)             |
-| `session` | `{ user, session } \| null` | Resolved auth session (null if unauthenticated) |
-| `db`      | `Database`                  | Database client for validation queries          |
+The resolver receives the base request params plus the full system-mode service surface (typed via codegen — `Questpie.ContextResolverContext`):
 
-The object you return is merged into the request context and becomes available in **every** handler, hook, and access rule.
+| Parameter     | Type                        | Description                                      |
+| ------------- | --------------------------- | ------------------------------------------------ |
+| `request`     | `Request`                   | The incoming HTTP request (Web API)              |
+| `session`     | `{ user, session } \| null` | Resolved auth session (null if unauthenticated)  |
+| `db`          | `Database`                  | Raw database client                              |
+| `collections` | `CollectionsAPI`            | Typed collections (system mode, hooks/i18n run)  |
+| `globals`     | `GlobalsAPI`                | Typed globals                                    |
+| `logger`      | `LoggerService`             | App logger                                       |
+| `kv`          | `KVService`                 | Key-value store                                  |
+| `queue`       | `QueueClient`               | Queue client                                     |
+| `t`           | `(key, params?) => string`  | Translations                                     |
+| `services`    |                             | User services from `services/`                   |
+
+### Lifecycle Rules
+
+- **Once per HTTP request.** Admin and REST calls alike. Nested CRUD, relation hydration, and hooks within the same request never re-run the resolver.
+- **No request → no resolver.** Jobs, workflows, seeds, and `createContext()` without a `request` skip it. Extension types are `Partial<…>` — **always narrow** (`if (!workspaceId) return false`).
+- **Collections inside the resolver run system mode** — the resolver IS trusted derivation. If you explicitly pass `accessMode: "user"` to a CRUD call inside the resolver, rules evaluated from there see no extensions (they don't exist yet) — rules must already tolerate absence.
+- **Throwing fails the request** before any rule or handler runs. Throw `ApiError.*` for structured error responses (the tenant-validation case).
+- **Reserved keys warn in dev.** Returning `session`, `db`, `locale`, `accessMode`, `collections`, … from the resolver logs a warning — framework keys cannot be shadowed.
+
+### Request-Level Memoization = Closures
+
+The resolver's closure scope lives exactly one request — expensive lookups become lazy functions, no `WeakMap`, no cache keys, no framework machinery:
+
+```ts
+// config/app.ts
+export default appConfig({
+	context: async ({ session, collections }) => {
+		const userId = session?.user?.id ?? null;
+
+		// Resolved at most once per request, only when first awaited
+		let memberships: Promise<string[]> | null = null;
+		const loadMemberships = () =>
+			(memberships ??= (async () => {
+				if (!userId) return [];
+				const rows = await collections.workspace_members.find({
+					where: { user: userId },
+				});
+				return rows.docs.map((r) => r.workspace);
+			})());
+
+		return { userId, memberships: loadMemberships };
+	},
+});
+```
+
+Rules then call `await memberships()` — the underlying query runs once per request no matter how many rules, hooks, and relation hydrations evaluate.
 
 ## Step 3: Filter Data with Access Rules
 
-Use the typed context in access rules and hooks to enforce data isolation:
+The resolved context arrives **flat** on the rule ctx — destructure it directly (no `ctx` wrapper). Extensions are optional types: narrow before use.
 
 ```ts
 // collections/projects.ts
@@ -106,38 +145,52 @@ export default collection("projects")
 	}))
 	.access({
 		// Only allow reads when a workspace is selected
-		read: ({ ctx }) => {
-			if (!ctx.workspaceId) return false;
-			return { workspace: ctx.workspaceId };
+		read: ({ workspaceId }) => {
+			if (!workspaceId) return false;
+			return { workspace: workspaceId };
 		},
-		create: ({ ctx }) => !!ctx.workspaceId,
-		update: ({ ctx }) => {
-			if (!ctx.workspaceId) return false;
-			return { workspace: ctx.workspaceId };
+		create: ({ workspaceId }) => !!workspaceId,
+		update: ({ workspaceId }) => {
+			if (!workspaceId) return false;
+			return { workspace: workspaceId };
 		},
-		delete: ({ ctx }) => {
-			if (!ctx.workspaceId) return false;
-			return { workspace: ctx.workspaceId };
+		delete: ({ workspaceId }) => {
+			if (!workspaceId) return false;
+			return { workspace: workspaceId };
 		},
 	})
 	.hooks({
-		// Auto-assign workspace on create
-		beforeChange: async ({ data, operation, ctx }) => {
-			if (operation === "create" && ctx.workspaceId) {
-				data.workspace = ctx.workspaceId;
+		// Auto-assign workspace on create — extensions are flat on hook ctx too
+		beforeChange: async ({ data, operation, workspaceId }) => {
+			if (operation === "create" && workspaceId) {
+				data.workspace = workspaceId;
 			}
-			return data;
 		},
 	});
 ```
 
 ### Access Rule Return Values
 
-| Return                         | Meaning                                  |
-| ------------------------------ | ---------------------------------------- |
-| `true`                         | Allow all records                        |
-| `false`                        | Deny all records                         |
+| Return             | Meaning                                  |
+| ------------------ | ---------------------------------------- |
+| `true`             | Allow all records                        |
+| `false`            | Deny all records                         |
 | `{ field: value }` | Where-clause filter (row-level security) |
+
+## Step 4: Read Derived Context Anywhere
+
+Inside any code running within the request (hooks, services, utils), `getContext()` exposes the resolved extensions flat and typed:
+
+```ts
+import { getContext } from "questpie";
+import type { App } from "#questpie";
+
+async function currentWorkspaceOrThrow() {
+	const { workspaceId } = getContext<App>(); // typed: string | null | undefined
+	if (!workspaceId) throw new Error("No workspace selected");
+	return workspaceId;
+}
+```
 
 ## Step 5: Set Up the Admin UI
 
@@ -272,23 +325,6 @@ const scopedFetch = createScopedFetch(
 );
 ```
 
-## Request-Scoped Services
-
-For advanced cases, create a request-scoped service that provides a tenant-aware database connection:
-
-```ts
-// services/scoped-db.ts
-import { service } from "questpie/services";
-export default service({
-	lifecycle: "request",
-	deps: ["db", "session"] as const,
-	create: ({ db, session }) => {
-		return createScopedDb(db, session?.user?.tenantId);
-	},
-	dispose: (scopedDb) => scopedDb.release(),
-});
-```
-
 ## Full Request Flow
 
 ```text
@@ -296,61 +332,64 @@ export default service({
 2. ScopeProvider stores scopeId = "ws_123" in state + localStorage
 3. useScopedFetch() creates fetch that adds header: x-selected-workspace: ws_123
 4. Client makes API call → POST /api/collections/projects/find
-5. Server: createAdapterContext() receives Request
-6. Server: context.ts resolver extracts workspaceId = "ws_123" from header
-7. Server: RequestContext created with { workspaceId: "ws_123", session, locale, ... }
-8. Server: runWithContext() stores in AsyncLocalStorage
-9. Server: Access rules evaluate → return { workspace: "ws_123" }
-10. Server: Query filtered to workspace = "ws_123"
+5. Server: app.createContext() runs the appConfig({ context }) resolver ONCE
+6. Server: resolver extracts workspaceId = "ws_123", validates membership
+7. Server: result travels with the request (flat keys + internal bundle)
+8. Server: access rules read ({ workspaceId }) → return { workspace: "ws_123" }
+9. Server: hooks, nested CRUD, getContext() all see the same workspaceId
+10. Server: query filtered to workspace = "ws_123"
 11. Response: Only Acme Corp's projects returned
 ```
 
 ## Common Mistakes
 
-### HIGH: Forgetting module augmentation
+### HIGH: Wrapping context access in `ctx`
 
-Without a `context` function in `appConfig()`, your custom context properties won't be available in handlers. Make sure to define `context` in your `config/app.ts`.
+Extensions arrive **flat** on rule and hook contexts. There is no `ctx` sub-object:
+
+```ts
+// WRONG — there is no ctx wrapper
+read: ({ ctx }) => ({ workspace: ctx.workspaceId })
+
+// RIGHT — destructure flat
+read: ({ workspaceId }) => (workspaceId ? { workspace: workspaceId } : false)
+```
 
 ### HIGH: Not filtering in access rules
 
-The context resolver only **extracts** the scope. You must still enforce isolation in `.access()` rules or `.hooks()`. Without access rules, all data is returned regardless of scope.
+The context resolver only **derives** the scope. You must still enforce isolation in `.access()` rules or `.hooks()`. Without access rules, all data is returned regardless of scope.
+
+### HIGH: Not narrowing optional extensions
+
+Extensions are typed `Partial<…>` because non-HTTP contexts (jobs, seeds, scripts) never run the resolver. Always handle absence:
+
+```ts
+read: ({ workspaceId }) => {
+	if (!workspaceId) return false; // job/script/no-header case
+	return { workspace: workspaceId };
+};
+```
 
 ### MEDIUM: Hardcoding header names
 
-Use the same header name in `ScopeProvider.headerName` and `context.ts`. A mismatch means the server never sees the scope ID.
+Use the same header name in `ScopeProvider.headerName` and the resolver. A mismatch means the server never sees the scope ID.
 
 ```ts
 // These MUST match:
 // Client:
 <ScopeProvider headerName="x-selected-workspace" />
 
-// Server (context.ts):
+// Server (config/app.ts):
 request.headers.get("x-selected-workspace")
 ```
 
 ### MEDIUM: Not validating scope access
 
-In production, validate that the authenticated user actually belongs to the selected scope. Otherwise any user can access any scope by sending the header manually.
+In production, validate that the authenticated user actually belongs to the selected scope — otherwise any user can access any scope by sending the header manually. Throw from the resolver to fail the request before any handler runs (see Step 2).
 
-```ts
-export default context(async ({ request, session, db }) => {
-	const workspaceId = request.headers.get("x-selected-workspace");
+### MEDIUM: Using `extendContext` for tenant scope
 
-	if (workspaceId && session?.user) {
-		const isMember = await db.query.workspaceMembers.findFirst({
-			where: and(
-				eq(workspaceMembers.workspaceId, workspaceId),
-				eq(workspaceMembers.userId, session.user.id),
-			),
-		});
-		if (!isMember) {
-			throw new Error("Unauthorized access to workspace");
-		}
-	}
-
-	return { workspaceId: workspaceId || null };
-});
-```
+`AdapterConfig.extendContext` is a transport-level hook: its result is flat-merged for route handlers and the CRUD context param only — it does NOT reach access rules or hooks. Derived context that rules must see belongs in `appConfig({ context })`.
 
 ## Reference Example
 
@@ -358,6 +397,6 @@ See the **city-portal** example for a complete working implementation:
 
 ```text
 examples/city-portal/
-  src/questpie/server/context.ts       # Context resolver (x-selected-city header)
+  src/questpie/server/config/app.ts    # appConfig({ context }) — x-selected-city header
   src/routes/admin/$.tsx               # Admin with ScopeProvider + ScopePicker
 ```

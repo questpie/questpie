@@ -83,12 +83,34 @@ Return a where clause object instead of a boolean to restrict operations to matc
 
 Access functions receive `AppContext` with these properties:
 
-| Property      | Description                             |
-| ------------- | --------------------------------------- |
-| `session`     | Current auth session (null if unauthed) |
-| `db`          | Database instance                       |
-| `collections` | Typed collection API                    |
-| `request`     | Current HTTP `Request` (headers, URL)   |
+| Property      | Description                                                  |
+| ------------- | ------------------------------------------------------------ |
+| `session`     | Current auth session (null if unauthed)                      |
+| `db`          | Database instance                                            |
+| `collections` | Typed collection API                                         |
+| `request`     | Current HTTP `Request` (headers, URL)                        |
+| _extensions_  | Keys returned by `appConfig({ context })`, flat (see below)  |
+
+### Derived Request Context in Rules
+
+`appConfig({ context })` runs once per HTTP request; its result arrives **flat** on every access rule ctx (collections, globals, routes, field access, transitions), typed by inference:
+
+```ts
+// config/app.ts
+export default appConfig({
+	context: async ({ request }) => ({
+		workspaceId: request.headers.get("x-workspace") || null,
+	}),
+});
+
+// collections/projects.ts — destructure flat, narrow before use
+.access({
+	read: ({ workspaceId }) =>
+		workspaceId ? { workspace: workspaceId } : false,
+})
+```
+
+Extensions are typed `Partial<…>` — absent for non-HTTP contexts (jobs, seeds, system scripts), so rules must handle `undefined`. See `references/multi-tenancy.md` for the full pattern (membership validation, closure memoization, scope UI).
 
 Access functions may be async. Use `request` for request-scoped checks such as headers, tenant scope, CAPTCHA tokens, or signed public form tokens:
 
@@ -247,6 +269,17 @@ export default collection("appointments")
 | `db`          | All hooks                                 | Database instance                |
 | `session`     | All hooks                                 | Current auth session             |
 | `services`    | All hooks                                 | Custom services from `services/` |
+| _extensions_  | All hooks                                 | `appConfig({ context })` result, flat (HTTP requests only) |
+
+Derived request context also reaches hooks and any nested code via `getContext<App>()` — including CRUD calls a hook triggers (AsyncLocalStorage carries it):
+
+```ts
+.hooks({
+  beforeChange: async ({ data, operation, workspaceId }) => {
+    if (operation === "create" && workspaceId) data.workspace = workspaceId;
+  },
+})
+```
 
 ### Context-First Pattern
 

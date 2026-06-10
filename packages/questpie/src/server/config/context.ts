@@ -49,6 +49,19 @@ export type InferContextExtensionsFromAppConfig<TAppConfig> =
 		: {};
 
 /**
+ * Infer request-context extensions from a generated app instance.
+ *
+ * Reads the `"~contextExtensions"` phantom that codegen sets on the app's
+ * `QuestpieConfig` — a single shallow conditional, no deep inference.
+ * Used by `getContext<App>()` to expose resolver-derived keys.
+ */
+export type InferContextExtensionsFromApp<TApp> = TApp extends {
+	config: { "~contextExtensions"?: infer T };
+}
+	? NonNullable<T>
+	: {};
+
+/**
  * Infer the Session type from a Better Auth config object.
  *
  * Used by generated code to avoid recursive `typeof app` references while still
@@ -104,6 +117,7 @@ const appContextStorage = new AsyncLocalStorage<
 		requestId?: string;
 		traceId?: string;
 		_hookDepth?: number;
+		"~contextExtensions"?: Record<string, unknown>;
 	} & InternalContextStore
 >();
 
@@ -123,6 +137,12 @@ export interface StoredContext {
 	requestId?: string;
 	traceId?: string;
 	_hookDepth?: number;
+	/**
+	 * Request-context extensions resolved by `appConfig({ context })`.
+	 * Carried as one bundle so nested CRUD inherits it like `session`/`db`.
+	 * @internal
+	 */
+	"~contextExtensions"?: Record<string, unknown>;
 }
 
 /**
@@ -194,6 +214,7 @@ export function runWithContext<T>(
 		requestId?: string;
 		traceId?: string;
 		_hookDepth?: number;
+		"~contextExtensions"?: Record<string, unknown>;
 	},
 	fn: () => T | Promise<T>,
 ): Promise<T> {
@@ -249,7 +270,7 @@ export function runWithContext<T>(
  *
  * @throws Error if called outside runWithContext scope
  */
-export function getContext<TApp>(): {
+export function getContext<TApp>(): InferContextExtensionsFromApp<TApp> & {
 	app: InferAppFromApp<TApp>;
 	session: InferSessionFromApp<TApp> | null | undefined;
 	db: InferDbFromApp<TApp>;
@@ -264,7 +285,12 @@ export function getContext<TApp>(): {
 				"Either call within runWithContext() scope, or use tryGetContext() for safe access.",
 		);
 	}
-	return stored as any;
+	const extensions = stored["~contextExtensions"];
+	if (!extensions) {
+		return stored as any;
+	}
+	// Extensions flat on the result; base keys win.
+	return { ...extensions, ...stored } as any;
 }
 
 // ============================================================================
@@ -355,6 +381,15 @@ export interface BaseRequestContext {
 	 * ```
 	 */
 	db?: any;
+
+	/**
+	 * Request-context extensions resolved by `appConfig({ context })`,
+	 * carried as one bundle alongside the flat-merged keys. The bundle is what
+	 * travels (into access rules, hooks, ALS); the flat keys are what handlers
+	 * read.
+	 * @internal
+	 */
+	"~contextExtensions"?: Record<string, unknown>;
 }
 
 /**

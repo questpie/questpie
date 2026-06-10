@@ -3,8 +3,7 @@
 // Regenerate with: questpie generate
 
 import { createApp, createContextFactory } from "questpie/app";
-import type { AnyCollectionOrBuilder, AnyGlobalOrBuilder, AppDefinition, CollectionAPI, DrizzleClientFromQuestpieConfig, InferContextExtensionsFromAppConfig, InferSessionFromAuthConfig, MailerService, Questpie, QuestpieConfig, QueueClient, QueueJobType, RouteParamsFromKey, RouteWithParams, TablesFromConfig } from "questpie/types";
-import type { z } from "zod";
+import type { AnyCollectionOrBuilder, AnyGlobalOrBuilder, AppDefinition, CollectionAPI, CollectionSelect, DrizzleClientFromQuestpieConfig, InferContextExtensionsFromAppConfig, InferSessionFromAuthConfig, MailerService, Questpie, QuestpieConfig, QueueClient, QueueJobType, RouteParamsFromKey, RouteWithParams, TablesFromConfig, z } from "questpie/types";
 
 // ── Runtime ────────────────────────────────────────────────
 import _runtime from "../questpie.config";
@@ -99,7 +98,7 @@ import type { ServiceCustomNamespaceInstances, ServiceInstanceOf, ServiceInstanc
 type _RouteDefinitionWithoutHandler<T> = T extends { mode: "raw" } ? Omit<T, "handler"> & { handler: (args: unknown) => Response | Promise<Response> } : Omit<T, "handler"> & { handler: (args: unknown) => unknown | Promise<unknown> };
 type _Module = (typeof _modules)[number];
 type _MPRaw<K extends string> = UnionToIntersection<_Module extends infer M ? M extends Record<K, infer V> ? V : never : never>;
-type _MP<K extends string> = [_MPRaw<K>] extends [never] ? {} : _MPRaw<K>;
+type _MP<K extends string> = [_MPRaw<K>] extends [never] ? {} : unknown extends _MPRaw<K> ? {} : _MPRaw<K>;
 type _ModuleConfig = _MP<"config">;
 type _AppAppConfig = (_ModuleConfig extends { app: infer TApp } ? TApp : {}) & typeof _appConfig;
 type _AppContextExtensions = Partial<InferContextExtensionsFromAppConfig<_AppAppConfig>>;
@@ -221,24 +220,8 @@ export type AppMcpTools = _ModuleMcpTools & {
 export type AppRouteKeys = "getAvailableTimeSlots" | "getRevenueStats" | "getActiveBarbers" | "createBooking";
 
 type _CollectionsAPI = { [K in keyof AppCollections]: CollectionAPI<AppCollections[K], AppCollections> };
-type _JobHandlerCollections = {
-	appointments: typeof _coll_appointments;
-	barber_services: typeof _coll_barber_services;
-	barbers: typeof _coll_barbers;
-	blog_posts: typeof _coll_blog_posts;
-	pages: typeof _coll_pages;
-	reviews: typeof _coll_reviews;
-	services: typeof _coll_services;
-};
-type _JobHandlerCollectionsAPI = {
-	appointments: CollectionAPI<typeof _coll_appointments, _JobHandlerCollections>;
-	barber_services: CollectionAPI<typeof _coll_barber_services, _JobHandlerCollections>;
-	barbers: CollectionAPI<typeof _coll_barbers, _JobHandlerCollections>;
-	blog_posts: CollectionAPI<typeof _coll_blog_posts, _JobHandlerCollections>;
-	pages: CollectionAPI<typeof _coll_pages, _JobHandlerCollections>;
-	reviews: CollectionAPI<typeof _coll_reviews, _JobHandlerCollections>;
-	services: CollectionAPI<typeof _coll_services, _JobHandlerCollections>;
-};
+type _JobHandlerCollections = AppCollections;
+type _JobHandlerCollectionsAPI = _CollectionsAPI;
 type _ExecutionContextJob<T> = T extends { name: infer TName extends string; schema: z.ZodSchema<infer TPayload> } ? QueueJobType<TPayload, TName> : never;
 type _ExecutionContextJobs = {
 	notifyBlogSubscribers: _ExecutionContextJob<typeof _job_notifyBlogSubscribers>;
@@ -252,12 +235,14 @@ type _ExecutionContextServiceDefinitions = {
 type _ExecutionContextDefaultServices = ServiceInstancesInNamespace<_ExecutionContextServiceDefinitions, "services">;
 type _AppCollectionDefinitions = AppCollections & Record<string, AnyCollectionOrBuilder>;
 type _AppGlobalDefinitions = AppGlobals & Record<string, AnyGlobalOrBuilder>;
-type _AppQuestpieConfig = Omit<QuestpieConfig, "app" | "db" | "collections" | "globals" | "auth"> & {
+type _AppQuestpieConfig = Omit<QuestpieConfig, "app" | "db" | "collections" | "globals" | "auth" | "~contextExtensions"> & {
 	app: (typeof _runtime)["app"];
 	db: (typeof _runtime)["db"];
 	collections: _AppCollectionDefinitions;
 	globals: _AppGlobalDefinitions;
 	auth: _AppAuthConfig;
+	storage: (typeof _runtime)["storage"];
+	"~contextExtensions": _AppContextExtensions;
 };
 type _AppQuestpieBase = Questpie<_AppQuestpieConfig>;
 type _AppDb = DrizzleClientFromQuestpieConfig<_AppQuestpieConfig>;
@@ -270,38 +255,40 @@ type _AppQuestpie = Omit<_AppQuestpieBase, "collections" | "globals"> & {
 };
 
 // ── AppContext augmentation — auto-types ALL handlers ──────
+type _AppCoreContext = _AppContextExtensions & {
+	// Infrastructure
+	db: _AppDb;
+	email: MailerService<AppEmailTemplates>;
+	queue: QueueClient<AppJobs>;
+	storage: _AppStorage;
+	kv: _AppQuestpie["kv"];
+	logger: _AppQuestpie["logger"];
+	search: _AppQuestpie["search"];
+	realtime: _AppQuestpie["realtime"];
+
+	// Entity APIs
+	collections: _CollectionsAPI;
+	globals: _AppGlobalsAPI;
+	tables: _AppTables;
+
+	// Request-scoped
+	session: _AppSession;
+	t: (key: string, params?: Record<string, unknown>, locale?: string) => string;
+
+	// User services
+	services: _AppDefaultServices;
+} & _AppCustomServiceNamespaces;
+
 declare global {
 	namespace Questpie {
-		interface AppContext extends _AppTopLevelServices, _AppCustomServiceNamespaces, _AppContextExtensions {
-			// Infrastructure
-			db: _AppDb;
-			email: MailerService<AppEmailTemplates>;
-			queue: QueueClient<AppJobs>;
-			storage: _AppStorage;
-			kv: _AppQuestpie["kv"];
-			logger: _AppQuestpie["logger"];
-			search: _AppQuestpie["search"];
-			realtime: _AppQuestpie["realtime"];
-
-			// Entity APIs
-			collections: _CollectionsAPI;
-			globals: _AppGlobalsAPI;
-			tables: _AppTables;
-
-			// Request-scoped
-			session: _AppSession;
-			t: (key: string, params?: Record<string, unknown>, locale?: string) => string;
-
-			// User services
-			services: _AppDefaultServices;
-		}
+		interface AppContext extends _AppCoreContext, _AppTopLevelServices {}
 
 		interface JobHandlerContext {
 			// Infrastructure
 			db: unknown;
 			email: MailerService<AppEmailTemplates>;
 			queue: QueueClient<_ExecutionContextJobs>;
-			storage: unknown;
+			storage: _AppStorage;
 			kv: unknown;
 			logger: unknown;
 			search: unknown;
@@ -315,6 +302,9 @@ declare global {
 			// Request-scoped
 			session: unknown;
 			t: (key: string, params?: Record<string, unknown>, locale?: string) => string;
+
+			// Top-level services (namespace: null)
+			workflows?: _AppTopLevelServices extends { workflows: infer W } ? W : never;
 
 			// User services
 			services: _ExecutionContextDefaultServices;
@@ -325,7 +315,7 @@ declare global {
 			db: unknown;
 			email: MailerService<AppEmailTemplates>;
 			queue: QueueClient<_ExecutionContextJobs>;
-			storage: unknown;
+			storage: _AppStorage;
 			kv: unknown;
 			logger: unknown;
 			search: unknown;
@@ -340,11 +330,26 @@ declare global {
 			session: unknown;
 			t: (key: string, params?: Record<string, unknown>, locale?: string) => string;
 
+			// Top-level services (namespace: null)
+			workflows?: _AppTopLevelServices extends { workflows: infer W } ? W : never;
+
 			// User services
 			services: _ExecutionContextDefaultServices;
 		}
 
-		interface ServiceCreateContext extends AppContext {}
+		interface ServiceCreateContext extends _AppCoreContext {}
+
+		// Typed service surface for appConfig({ context }) resolvers.
+		// Excludes _AppContextExtensions — the resolver produces them.
+		interface ContextResolverContext {
+			collections: _CollectionsAPI;
+			globals: _AppGlobalsAPI;
+			logger: _AppQuestpie["logger"];
+			kv: _AppQuestpie["kv"];
+			queue: QueueClient<AppJobs>;
+			t: (key: string, params?: Record<string, unknown>, locale?: string) => string;
+			services: _AppDefaultServices;
+		}
 
 		interface Registry {
 			collections: _Registry_Collections;
@@ -363,6 +368,11 @@ declare global {
 }
 
 /**
+ * Select/document type for a collection key — prefer over `Record<string, any>` for docs.
+ */
+export type CollectionDoc<K extends keyof AppCollections> = CollectionSelect<AppCollections[K]>;
+
+/**
  * Flat config type for client APIs.
  * Use with `createClient<AppConfig>()` and `createAdminAuthClient<AppConfig>()`.
  * For handler context, use `AppContext` (auto-typed via module augmentation).
@@ -371,6 +381,7 @@ export type AppConfig = {
 	collections: AppCollections & Record<string, AnyCollectionOrBuilder>;
 	globals: AppGlobals & Record<string, AnyGlobalOrBuilder>;
 	routes: AppRoutes;
+	storage: (typeof _runtime)["storage"];
 	auth: typeof _authConfig;
 };
 
@@ -378,7 +389,9 @@ export type AppConfig = {
 // RUNTIME — create the app instance
 // ════════════════════════════════════════════════════════════
 
-export const app = await createApp(
+var _appPromise: Promise<unknown> | undefined;
+
+_appPromise = createApp(
 	({
 		modules: _modules,
 		collections: {
@@ -444,7 +457,9 @@ export const app = await createApp(
 		},
 	}) satisfies AppDefinition,
 	_runtime,
-) as unknown as _AppQuestpie;
+);
+
+export const app = (await _appPromise) as unknown as _AppQuestpie;
 
 /** Fully typed QUESTPIE app instance. */
 export type App = typeof app;
@@ -462,6 +477,14 @@ export type App = typeof app;
  * const posts = await ctx.collections.posts.find({});
  * ```
  */
-export const createContext = createContextFactory(app);
+export async function createContext(
+	options?: Parameters<ReturnType<typeof createContextFactory>>[0],
+) {
+	while (!_appPromise) {
+		await new Promise((resolve) => setTimeout(resolve, 0));
+	}
+
+	return createContextFactory((await _appPromise) as _AppQuestpie)(options);
+}
 
 // Factories: import { collection, global, ... } from '#questpie/factories';
