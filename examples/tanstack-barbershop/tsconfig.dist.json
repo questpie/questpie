@@ -1,0 +1,21 @@
+{
+	"extends": "./tsconfig.json",
+	"compilerOptions": {
+		"paths": {
+			"@/*": ["./src/*"],
+			"#questpie/*": ["./src/questpie/server/.generated/*"],
+			"questpie": ["../../packages/questpie/dist/index.d.mts"],
+			"questpie/*": ["../../packages/questpie/dist/*.d.mts"],
+			"@questpie/admin": ["../../packages/admin/dist/index.d.mts"],
+			"@questpie/admin/*": ["../../packages/admin/dist/*.d.mts"],
+			"@questpie/openapi": ["../../packages/openapi/dist/index.d.mts"],
+			"@questpie/openapi/*": ["../../packages/openapi/dist/*.d.mts"],
+			"@questpie/mcp": ["../../packages/mcp/dist/index.d.mts"],
+			"@questpie/mcp/*": ["../../packages/mcp/dist/*.d.mts"],
+			"@questpie/workflows": ["../../packages/workflows/dist/index.d.mts"],
+			"@questpie/workflows/*": ["../../packages/workflows/dist/*.d.mts"],
+			"@questpie/tanstack-query": ["../../packages/tanstack-query/dist/index.d.mts"],
+			"@questpie/tanstack-query/*": ["../../packages/tanstack-query/dist/*.d.mts"]
+		}
+	}
+}
