@@ -68,6 +68,17 @@ function isPrivatePathEntry(name: string): boolean {
 }
 
 /**
+ * Test/spec files are never convention entries. A `foo.test.tsx` inside a
+ * convention dir (e.g. admin/blocks/) would otherwise be discovered as an
+ * entity — and its dotted key generates invalid TypeScript identifiers in
+ * emitted imports (`fooTest.testBlock` → parse error).
+ */
+const TEST_FILE_RE = /\.(test|spec)\.[^.]+$/;
+function isTestFileEntry(name: string): boolean {
+	return TEST_FILE_RE.test(name);
+}
+
+/**
  * Recursively scan a directory for TypeScript files.
  * Returns relative paths from the base directory.
  */
@@ -87,7 +98,7 @@ async function scanDir(
 		const name = String(entry.name);
 		const fullPath = join(dir, name);
 		if (entry.isDirectory()) {
-			if (isPrivatePathEntry(name)) continue;
+			if (isPrivatePathEntry(name) || name === "__tests__") continue;
 			if (recursive) {
 				const nested = await scanDir(fullPath, base, true);
 				results.push(...nested);
@@ -99,7 +110,8 @@ async function scanDir(
 				!name.endsWith(".d.ts") &&
 				!name.endsWith(".d.mts") &&
 				!IGNORE_FILES.has(name) &&
-				!isPrivatePathEntry(name)
+				!isPrivatePathEntry(name) &&
+				!isTestFileEntry(name)
 			) {
 				results.push(relative(base, fullPath).replaceAll("\\", "/"));
 			}

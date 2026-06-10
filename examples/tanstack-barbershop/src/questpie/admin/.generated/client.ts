@@ -7,11 +7,12 @@
  */
 
 import { default as _modules } from "../modules";
-const _mergedModules = Array.isArray(_modules)
-	? _modules.reduce((acc: any, m: any) => {
-		for (const [k, v] of Object.entries(m)) acc[k] = typeof v === "object" && v !== null && !Array.isArray(v) ? { ...acc[k], ...v } : v;
+type _AdminModuleMergeAcc = Record<string, unknown>;
+const _mergedModules = (Array.isArray(_modules)
+	? _modules.reduce<_AdminModuleMergeAcc>((acc, mod) => {
+		for (const [k, v] of Object.entries(mod)) acc[k] = typeof v === "object" && v !== null && !Array.isArray(v) ? { ...(typeof acc[k] === "object" && acc[k] !== null && !Array.isArray(acc[k]) ? acc[k] as Record<string, unknown> : {}), ...(v as Record<string, unknown>) } : v;
 		return acc;
-	}, {} as any) : _modules;
+	}, {}) : _modules) as _AdminModuleMergeAcc;
 import { BookingCtaRenderer as _block_bookingCta } from "../blocks/booking-cta";
 import _block_columns from "../blocks/columns";
 import { ContactInfoRenderer as _block_contactInfo } from "../blocks/contact-info";
@@ -48,12 +49,12 @@ import type { teamBlock } from "../../server/blocks/team";
 import type { textBlock } from "../../server/blocks/text";
 
 const admin = {
-	blocks: { ..._mergedModules.blocks, "booking-cta": _block_bookingCta, "columns": _block_columns, "contact-info": _block_contactInfo, "cta": _block_cta, "divider": _block_divider, "gallery": _block_gallery, "heading": _block_heading, "hero": _block_hero, "hours": _block_hours, "image-text": _block_imageText, "reviews": _block_reviews, "services": _block_services, "spacer": _block_spacer, "stats": _block_stats, "team": _block_team, "text": _block_text },
-	views: { ..._mergedModules.views },
-	components: { ..._mergedModules.components },
-	fields: { ..._mergedModules.fields },
-	pages: { ..._mergedModules.pages },
-	widgets: { ..._mergedModules.widgets },
+	blocks: { ...(_mergedModules["blocks"] as Record<string, unknown>), "booking-cta": _block_bookingCta, "columns": _block_columns, "contact-info": _block_contactInfo, "cta": _block_cta, "divider": _block_divider, "gallery": _block_gallery, "heading": _block_heading, "hero": _block_hero, "hours": _block_hours, "image-text": _block_imageText, "reviews": _block_reviews, "services": _block_services, "spacer": _block_spacer, "stats": _block_stats, "team": _block_team, "text": _block_text },
+	views: { ...(_mergedModules["views"] as Record<string, unknown>) },
+	components: { ...(_mergedModules["components"] as Record<string, unknown>) },
+	fields: { ...(_mergedModules["fields"] as Record<string, unknown>) },
+	pages: { ...(_mergedModules["pages"] as Record<string, unknown>) },
+	widgets: { ...(_mergedModules["widgets"] as Record<string, unknown>) },
 };
 
 type _ServerBlocks = { "booking-cta": typeof bookingCtaBlock; "columns": typeof columnsBlock; "contact-info": typeof contactInfoBlock; "cta": typeof ctaBlock; "divider": typeof dividerBlock; "gallery": typeof galleryBlock; "heading": typeof headingBlock; "hero": typeof heroBlock; "hours": typeof hoursBlock; "image-text": typeof imageTextBlock; "reviews": typeof reviewsBlock; "services": typeof servicesBlock; "spacer": typeof spacerBlock; "stats": typeof statsBlock; "team": typeof teamBlock; "text": typeof textBlock };

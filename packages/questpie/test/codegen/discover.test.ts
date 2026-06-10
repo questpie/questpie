@@ -223,6 +223,21 @@ describe("discoverFiles", () => {
 
 	// ── Empty project ──────────────────────────────────────────────────────────
 
+	it("skips test/spec files and __tests__ dirs in convention dirs", async () => {
+		await write(
+			"collections/posts.ts",
+			"export const posts = collection('posts');",
+		);
+		await write("collections/posts.test.ts");
+		await write("collections/posts.spec.tsx");
+		await write("collections/__tests__/helpers.ts");
+
+		const result = await discoverFiles(rootDir, outDir, coreDiscoverOptions());
+		const collections = cat(result, "collections");
+		expect(collections.size).toBe(1);
+		expect(collections.has("posts")).toBe(true);
+	});
+
 	it("returns empty maps for an empty directory", async () => {
 		const result = await discoverFiles(rootDir, outDir, coreDiscoverOptions());
 		// All core categories exist but are empty

@@ -380,11 +380,15 @@ describe("generateFactoryTemplate — builder module augmentation", () => {
 		expect(code).toContain("type CollectionBuilderState");
 		expect(code).toContain("type GlobalBuilderState");
 		expect(code).toContain("type FieldState");
+		// The augmentation's type parameter list must be IDENTICAL to the class
+		// (name + constraint) — a renamed param (TState$1) breaks declaration
+		// merging (TS2428) and makes the merged symbol two-generic (TS2314).
 		expect(code).toContain(
-			"interface CollectionBuilder<TState$1 extends CollectionBuilderState>",
+			"interface CollectionBuilder<TState extends CollectionBuilderState>",
 		);
+		expect(code).not.toContain("TState$1");
 		expect(code).toContain(
-			"admin(config: AdminCollectionConfig<TState$1>): CollectionBuilder<TState$1>;",
+			"admin(config: AdminCollectionConfig<TState>): CollectionBuilder<TState>;",
 		);
 		expect(code).toContain(
 			"interface GlobalBuilder<TState extends GlobalBuilderState>",

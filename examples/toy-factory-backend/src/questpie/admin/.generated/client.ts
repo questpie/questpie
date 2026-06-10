@@ -7,11 +7,12 @@
  */
 
 import _modules from "../modules";
-const _mergedModules = Array.isArray(_modules)
-	? _modules.reduce((acc: any, m: any) => {
-		for (const [k, v] of Object.entries(m)) acc[k] = typeof v === "object" && v !== null && !Array.isArray(v) ? { ...acc[k], ...v } : v;
+type _AdminModuleMergeAcc = Record<string, unknown>;
+const _mergedModules = (Array.isArray(_modules)
+	? _modules.reduce<_AdminModuleMergeAcc>((acc, mod) => {
+		for (const [k, v] of Object.entries(mod)) acc[k] = typeof v === "object" && v !== null && !Array.isArray(v) ? { ...(typeof acc[k] === "object" && acc[k] !== null && !Array.isArray(acc[k]) ? acc[k] as Record<string, unknown> : {}), ...(v as Record<string, unknown>) } : v;
 		return acc;
-	}, {} as any) : _modules;
+	}, {}) : _modules) as _AdminModuleMergeAcc;
 
 const admin = _mergedModules;
 

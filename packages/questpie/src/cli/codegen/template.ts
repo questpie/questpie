@@ -513,8 +513,31 @@ export function generateTemplate(options: TemplateOptions): string {
 		lines.push(
 			"type _CollectionsAPI = { [K in keyof AppCollections]: CollectionAPI<AppCollections[K], AppCollections> };",
 		);
-		lines.push("type _JobHandlerCollections = AppCollections;");
-		lines.push("type _JobHandlerCollectionsAPI = _CollectionsAPI;");
+		// Job handler collections must be EXPLICIT literal maps of the local
+		// collection imports. Routing through AppCollections (typeof _modules)
+		// creates a type cycle when a job file is part of the module graph:
+		// JobHandlerContext -> AppCollections -> modules.ts -> the job file
+		// being checked — tsc silently collapses the mapped type (TS2339).
+		const localCollections = sortedValues(
+			discovered.categories.get("collections") ?? new Map(),
+		).filter((file) => !file.isBundle);
+		if (localCollections.length > 0) {
+			lines.push("type _JobHandlerCollections = {");
+			for (const file of localCollections) {
+				lines.push(`\t${safeKey(file.key)}: typeof ${file.varName};`);
+			}
+			lines.push("};");
+			lines.push("type _JobHandlerCollectionsAPI = {");
+			for (const file of localCollections) {
+				lines.push(
+					`\t${safeKey(file.key)}: CollectionAPI<typeof ${file.varName}, _JobHandlerCollections>;`,
+				);
+			}
+			lines.push("};");
+		} else {
+			lines.push("type _JobHandlerCollections = AppCollections;");
+			lines.push("type _JobHandlerCollectionsAPI = _CollectionsAPI;");
+		}
 		const localJobs = sortedValues(
 			discovered.categories.get("jobs") ?? new Map(),
 		).filter((file) => !file.isBundle);
