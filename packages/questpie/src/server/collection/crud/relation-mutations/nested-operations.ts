@@ -579,7 +579,7 @@ async function handleManyToManySet(
 
 	// Disconnect removed relations
 	for (const targetId of toDisconnect) {
-		await junctionCrud.delete(
+		await junctionCrud.deleteMany(
 			{
 				where: {
 					AND: [

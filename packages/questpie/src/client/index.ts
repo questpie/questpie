@@ -369,6 +369,22 @@ type CollectionAPI<
 	) => Promise<CollectionSelect<TCollection>>;
 	/**
 	 * Update a single record by ID
+	 * Canonical name — same vocabulary as server CRUD.
+	 */
+	updateById: (
+		params: {
+			id: string;
+			data: UpdateInput<
+				CollectionUpdate<TCollection>,
+				ResolveRelationsDeep<CollectionRelations<TCollection>, TCollections>
+			>;
+		},
+		options?: LocaleOptions,
+	) => Promise<CollectionSelect<TCollection>>;
+
+	/**
+	 * Update a single record by ID
+	 * Alias of {@link updateById} (note: server CRUD `update` is bulk-by-where).
 	 */
 	update: (
 		params: {
@@ -383,6 +399,16 @@ type CollectionAPI<
 
 	/**
 	 * Delete a single record by ID
+	 * Canonical name — same vocabulary as server CRUD.
+	 */
+	deleteById: (
+		params: { id: string },
+		options?: LocaleOptions,
+	) => Promise<{ success: boolean }>;
+
+	/**
+	 * Delete a single record by ID
+	 * Alias of {@link deleteById} (note: server CRUD `delete` is bulk-by-where).
 	 */
 	delete: (
 		params: { id: string },
@@ -391,6 +417,16 @@ type CollectionAPI<
 
 	/**
 	 * Restore a soft-deleted record by ID
+	 * Canonical name — same vocabulary as server CRUD.
+	 */
+	restoreById: (
+		params: { id: string },
+		options?: LocaleOptions,
+	) => Promise<CollectionSelect<TCollection>>;
+
+	/**
+	 * Restore a soft-deleted record by ID
+	 * Alias of {@link restoreById}.
 	 */
 	restore: (
 		params: { id: string },
@@ -1213,6 +1249,29 @@ export function createClient<TApp extends QuestpieApp>(
 						xhr.withCredentials = true;
 						xhr.send(formData);
 					});
+				},
+
+				// Canonical by-id aliases — one CRUD vocabulary across server
+				// and client (server `update`/`delete` are bulk-by-where).
+				updateById: async (
+					params: { id: string; data: any },
+					options: LocaleOptions = {},
+				) => {
+					return base.update(params, options);
+				},
+
+				deleteById: async (
+					params: { id: string },
+					options: LocaleOptions = {},
+				) => {
+					return base.delete(params, options);
+				},
+
+				restoreById: async (
+					params: { id: string },
+					options: LocaleOptions = {},
+				) => {
+					return base.restore(params, options);
 				},
 
 				uploadMany: async (

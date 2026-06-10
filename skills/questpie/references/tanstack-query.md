@@ -402,11 +402,11 @@ const post = await client.collections.posts.findOne({
 	with: { author: true },
 });
 await client.collections.posts.create({ title: "Hello", status: "draft" });
-await client.collections.posts.update({
+await client.collections.posts.updateById({
 	id: "abc",
 	data: { status: "published" },
 });
-await client.collections.posts.delete({ id: "abc" });
+await client.collections.posts.deleteById({ id: "abc" });
 const settings = await client.globals.siteSettings.get();
 const result = await client.routes.createBooking({
 	barberId: "abc",

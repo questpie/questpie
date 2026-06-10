@@ -67,6 +67,7 @@ import {
 	createHookContext,
 	executeHooks,
 	getDb,
+	guardCrudMethods,
 	mergeI18nRows,
 	normalizeContext,
 	normalizeJsonbInput,
@@ -115,6 +116,17 @@ import {
 	type ResolvedWorkflowConfig,
 	resolveWorkflowConfig,
 } from "#questpie/server/modules/core/workflow/config.js";
+
+/**
+ * True when a where clause constrains nothing but `id`.
+ * Ids are immutable, so an id-only predicate that matched at pre-SELECT time
+ * still matches any row that exists at lock time — no recheck query needed.
+ */
+function isIdOnlyWhere(where: Where | undefined): boolean {
+	if (!where || typeof where !== "object") return false;
+	const keys = Object.keys(where);
+	return keys.length === 1 && keys[0] === "id";
+}
 
 export class CRUDGenerator<TState extends CollectionBuilderState> {
 	private readonly workflowConfig: ResolvedWorkflowConfig | undefined;
@@ -301,9 +313,13 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			count: this.wrapWithAppContext(this.createCount()),
 			create: this.wrapWithAppContext(this.createCreate()),
 			updateById: this.wrapWithAppContext(this.createUpdate()),
+			updateMany,
+			// Deprecated alias of updateMany (removed in v4)
 			update: updateMany,
 			updateBatch,
 			deleteById: this.wrapWithAppContext(this.createDelete()),
+			deleteMany,
+			// Deprecated alias of deleteMany (removed in v4)
 			delete: deleteMany,
 			restoreById,
 			findVersions: this.wrapWithAppContext(this.createFindVersions()),
@@ -320,7 +336,9 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 		crud["~internalState"] = this.state;
 		crud["~internalRelatedTable"] = this.table;
 		crud["~internalI18nTable"] = this.i18nTable;
-		return crud;
+
+		// Fail loud on unknown method access (e.g. typos in untyped glue code)
+		return guardCrudMethods(crud, this.state.name);
 	}
 
 	private getDb(context?: CRUDContext) {
@@ -1216,14 +1234,32 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 
 			const mergedWhere = this.mergeWhere(options.where, accessWhere);
 
+			// i18n joins mirror the find query so localized fields are usable in
+			// `where`. Joining on (parentId, locale) is unique per main row, so
+			// the LEFT JOINs never change count cardinality.
+			const useI18n = !!this.i18nTable;
+			const needsFallback =
+				useI18n &&
+				normalized.localeFallback !== false &&
+				normalized.locale !== normalized.defaultLocale;
+			const i18nCurrentTable = useI18n
+				? alias(this.i18nTable!, "i18n_current")
+				: null;
+			const i18nFallbackTable = needsFallback
+				? alias(this.i18nTable!, "i18n_fallback")
+				: null;
+
 			// Build WHERE clause (with soft delete filter)
 			let whereClause: SQL<unknown> | undefined;
 			if (mergedWhere) {
 				whereClause = this.buildWhereClause(
 					mergedWhere,
-					false,
+					useI18n,
 					undefined,
-					context,
+					normalized,
+					undefined,
+					i18nCurrentTable,
+					i18nFallbackTable,
 				);
 			}
 
@@ -1239,7 +1275,36 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			}
 
 			// Build count query
-			let query = db.select({ count: count() }).from(this.table);
+			let query: any = db.select({ count: count() }).from(this.table);
+
+			if (useI18n && i18nCurrentTable) {
+				query = query.leftJoin(
+					i18nCurrentTable,
+					and(
+						eq(
+							getColumn(i18nCurrentTable, "parentId")!,
+							getColumn(this.table, "id")!,
+						),
+						eq(getColumn(i18nCurrentTable, "locale")!, normalized.locale!),
+					),
+				);
+
+				if (needsFallback && i18nFallbackTable) {
+					query = query.leftJoin(
+						i18nFallbackTable,
+						and(
+							eq(
+								getColumn(i18nFallbackTable, "parentId")!,
+								getColumn(this.table, "id")!,
+							),
+							eq(
+								getColumn(i18nFallbackTable, "locale")!,
+								normalized.defaultLocale!,
+							),
+						),
+					);
+				}
+			}
 
 			if (whereClause) {
 				query = query.where(whereClause);
@@ -1630,8 +1695,80 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 	}
 
 	/**
+	 * Claim-checked writes: lock candidate rows and re-assert the caller's
+	 * predicate at write time, inside the write transaction.
+	 *
+	 * The write pipeline evaluates `where` in a pre-SELECT and then mutates by
+	 * id — without this step, two parallel conditional writes (claims,
+	 * optimistic-version checks, state transitions) could both "win" (TOCTOU).
+	 *
+	 * 1. `SELECT id … WHERE id IN (candidates) ORDER BY id FOR UPDATE` locks
+	 *    surviving candidate rows in deterministic order. Competing writers on
+	 *    the same rows serialize on these locks, so the recheck below cannot be
+	 *    invalidated before our transaction commits. Rows deleted by a
+	 *    committed competitor are simply absent.
+	 * 2. Unless the predicate is id-only (ids are immutable — locked ⇒ still
+	 *    matching), re-evaluate the caller's original `where` as a fresh
+	 *    statement through the find pipeline on the tx connection. Under READ
+	 *    COMMITTED a fresh statement gets a fresh snapshot, so every committed
+	 *    competing write is visible — uniform across predicate shapes (i18n
+	 *    fallbacks, relation quantifiers, RAW SQL).
+	 *
+	 * Returns the ids of rows that still match ("winners"). Every mutation
+	 * step must be scoped to these ids.
+	 */
+	private async claimRecords(args: {
+		tx: any;
+		txContext: CRUDContext;
+		candidateIds: Array<string | number>;
+		/** Caller's original where (bulk ops). Omit for by-id operations. */
+		where?: Where;
+		/** Soft-delete visibility the candidate pre-SELECT used. */
+		includeDeleted?: boolean;
+		/** Stage the candidate pre-SELECT was evaluated at. */
+		stage?: string;
+	}): Promise<Array<string | number>> {
+		const { tx, txContext, candidateIds, where } = args;
+		if (candidateIds.length === 0) return [];
+
+		const idColumn = getColumn(this.table, "id")!;
+		const lockedRows: Array<{ id: string | number }> = await tx
+			.select({ id: idColumn })
+			.from(this.table)
+			.where(inArray(idColumn, candidateIds))
+			.orderBy(asc(idColumn))
+			.for("update");
+		const lockedIds = lockedRows.map((row) => row.id);
+
+		if (lockedIds.length === 0 || !where || isIdOnlyWhere(where)) {
+			return lockedIds;
+		}
+
+		const recheckResult = (await this._executeFind(
+			{
+				where: { AND: [where, { id: { in: lockedIds } }] } as Where,
+				includeDeleted: args.includeDeleted === true,
+			},
+			{ ...txContext, accessMode: "system", stage: args.stage },
+			"many",
+			{ skipOutputHooks: true },
+		)) as PaginatedResult<any>;
+
+		const matched = new Set(recheckResult.docs.map((doc: any) => doc.id));
+		return lockedIds.filter((id) => matched.has(id));
+	}
+
+	/**
 	 * Shared core update handler for updateById and updateMany
 	 * Ensures consistency in access control, hooks, validation, and re-fetching.
+	 *
+	 * Hook semantics for conditional (bulk where) updates:
+	 * - `beforeValidate`/`beforeChange` run BEFORE the transaction on
+	 *   pre-images — they are *intent* hooks and may fire for rows that lose
+	 *   the write-time claim check.
+	 * - `afterChange`, versioning, and the return value are driven by the
+	 *   in-transaction re-fetch of claimed rows — they are *fact* hooks and
+	 *   fire for winners only.
 	 */
 	private async _executeUpdate(
 		params:
@@ -1801,6 +1938,33 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			updatedRecords = await withTransaction(db, async (tx: any) => {
 				const txContext = { ...normalized, db: tx };
 
+				// Claim check: lock candidate rows and re-assert the caller's
+				// predicate at write time. Rows that no longer match (lost a
+				// concurrent claim, vanished, ...) are excluded from every
+				// mutation below.
+				const recordIds = await this.claimRecords({
+					tx,
+					txContext,
+					candidateIds: records.map((r: any) => r.id),
+					where: isBatch ? (params as { where: Where }).where : undefined,
+					includeDeleted: true,
+					stage: this.workflowConfig?.initialStage,
+				});
+
+				if (recordIds.length === 0) {
+					if (!isBatch) {
+						// Row vanished between the pre-SELECT and the row lock
+						throw ApiError.notFound(
+							"Record",
+							String((params as { id: string | number }).id),
+						);
+					}
+					return [];
+				}
+
+				const winnerIds = new Set(recordIds);
+				const winners = records.filter((r: any) => winnerIds.has(r.id));
+
 				// Apply belongsTo relations
 				({ regularFields, nestedRelations } =
 					await this.applyBelongsToRelationsInternal(
@@ -1813,7 +1977,6 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				// Split localized vs non-localized fields
 				const { localized, nonLocalized, nestedLocalized } =
 					this.splitLocalizedFields(regularFields);
-				const recordIds = records.map((r: any) => r.id);
 
 				// Update main table
 				if (
@@ -1860,8 +2023,8 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					}
 				}
 
-				// Process nested relation operations
-				for (const existing of records) {
+				// Process nested relation operations (winners only)
+				for (const existing of winners) {
 					await this.processNestedRelationsInternal(
 						existing,
 						nestedRelations,
@@ -2055,6 +2218,17 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			// Use transaction for delete + version
 			await withTransaction(db, async (tx: any) => {
 				const txContext = { ...normalized, db: tx };
+
+				// Claim check: lock the row; if it vanished since the pre-SELECT,
+				// fail loud instead of silently deleting nothing.
+				const claimed = await this.claimRecords({
+					tx,
+					txContext,
+					candidateIds: [id],
+				});
+				if (claimed.length === 0) {
+					throw ApiError.notFound("Record", id);
+				}
 
 				await this.handleCascadeDeleteInternal(id, existing, txContext);
 
@@ -2309,16 +2483,30 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				);
 			}
 			// 3. Batched DELETE query
-			await withTransaction(db, async (tx: any) => {
+			// Claim check inside the tx: only rows that STILL match the caller's
+			// where at delete time are deleted ("winners").
+			const winners: any[] = await withTransaction(db, async (tx: any) => {
 				const txContext = { ...normalized, db: tx };
-				const recordIds = records.map((r: any) => r.id);
 
-				for (const record of records) {
+				const winnerIdList = await this.claimRecords({
+					tx,
+					txContext,
+					candidateIds: records.map((r: any) => r.id),
+					where: params.where,
+					includeDeleted: false,
+					stage: normalized.stage,
+				});
+				if (winnerIdList.length === 0) return [];
+
+				const winnerIds = new Set(winnerIdList);
+				const claimedRecords = records.filter((r: any) => winnerIds.has(r.id));
+
+				for (const record of claimedRecords) {
 					await this.handleCascadeDeleteInternal(record.id, record, txContext);
 				}
 
 				// Create versions BEFORE delete
-				for (const record of records) {
+				for (const record of claimedRecords) {
 					await this.createVersion(tx, record, "delete", txContext);
 				}
 
@@ -2327,16 +2515,26 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					await tx
 						.update(this.table)
 						.set({ deletedAt: new Date() })
-						.where(inArray(getColumn(this.table, "id")!, recordIds));
+						.where(inArray(getColumn(this.table, "id")!, winnerIdList));
 				} else {
 					await tx
 						.delete(this.table)
-						.where(inArray(getColumn(this.table, "id")!, recordIds));
+						.where(inArray(getColumn(this.table, "id")!, winnerIdList));
 				}
+
+				return claimedRecords;
 			});
 
-			// 4. Loop through afterDelete hooks
-			for (const record of records) {
+			// Bulk metadata for afterDelete: winners only (fact hooks)
+			const afterDeleteBulkMeta = {
+				isBatch: true as const,
+				recordIds: winners.map((r: any) => r.id),
+				records: winners,
+				count: winners.length,
+			};
+
+			// 4. Loop through afterDelete hooks (winners only)
+			for (const record of winners) {
 				// Execute afterDelete hooks
 				try {
 					await this.executeCollectionHooksWithGlobal(
@@ -2348,7 +2546,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 							operation: "delete",
 							context: normalized,
 							db,
-							bulk: deleteBulkMeta,
+							bulk: afterDeleteBulkMeta,
 						}),
 					);
 				} catch (err) {
@@ -2360,7 +2558,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				}
 			}
 
-			return { success: true, count: records.length };
+			return { success: true, count: winners.length };
 		};
 	}
 

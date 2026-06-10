@@ -494,7 +494,7 @@ export async function collectionUpdateMany(
 
 	try {
 		const { where, data } = body as { where: any; data: any };
-		const result = await crud.update({ where, data }, resolved.appContext);
+		const result = await crud.updateMany({ where, data }, resolved.appContext);
 		return smartResponse(result, request);
 	} catch (error) {
 		return errorResponse(app, error, request, resolved.appContext.locale);
@@ -580,7 +580,7 @@ export async function collectionDeleteMany(
 
 	try {
 		const { where } = body as { where: any };
-		const result = await crud.delete({ where }, resolved.appContext);
+		const result = await crud.deleteMany({ where }, resolved.appContext);
 		return smartResponse(result, request);
 	} catch (error) {
 		return errorResponse(app, error, request, resolved.appContext.locale);
