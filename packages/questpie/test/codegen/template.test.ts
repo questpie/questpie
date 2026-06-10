@@ -319,7 +319,7 @@ describe("generateTemplate — minimal (modules.ts only)", () => {
 });
 
 describe("generateFactoryTemplate — builder module augmentation", () => {
-	it("augments questpie with unconstrained TState params (class-merge safe)", () => {
+	it("augments questpie/builders with class-identical type parameter lists", () => {
 		const target = serverTarget([
 			{
 				name: "test-builder-extensions",
@@ -375,20 +375,24 @@ describe("generateFactoryTemplate — builder module augmentation", () => {
 			hasModules: true,
 		});
 
-		// `declare module "questpie"` with unconstrained `<TState>` is the ONLY
-		// shape that declaration-merges cleanly with the builder classes in
-		// workspace programs (renamed `TState$1` or constrained params hit
-		// TS2428; the "questpie/builders" specifier fails to merge in some
-		// programs). Must match @questpie/admin's hand-written augmentation.
-		expect(code).toContain('declare module "questpie" {');
-		expect(code).not.toContain('declare module "questpie/builders" {');
+expect(code).toContain('declare module "questpie/builders" {');
+		expect(code).not.toContain('declare module "questpie" {');
+		// The augmentation's type parameter list must be IDENTICAL to the class
+		// (name + constraint) — a renamed param (TState$1) breaks declaration
+		// merging (TS2428) and makes the merged symbol two-generic (TS2314).
+		expect(code).toContain(
+			"interface CollectionBuilder<TState extends CollectionBuilderState>",
+		);
 		expect(code).not.toContain("TState$1");
-		expect(code).toContain("interface CollectionBuilder<TState> {");
 		expect(code).toContain(
 			"admin(config: AdminCollectionConfig<TState>): CollectionBuilder<TState>;",
 		);
-		expect(code).toContain("interface GlobalBuilder<TState> {");
-		expect(code).toContain("interface Field<TState> {");
+		expect(code).toContain(
+			"interface GlobalBuilder<TState extends GlobalBuilderState>",
+		);
+		expect(code).toContain(
+			"interface Field<TState extends FieldState = FieldState>",
+		);
 	});
 });
 

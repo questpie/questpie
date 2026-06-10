@@ -513,11 +513,11 @@ export function generateTemplate(options: TemplateOptions): string {
 		lines.push(
 			"type _CollectionsAPI = { [K in keyof AppCollections]: CollectionAPI<AppCollections[K], AppCollections> };",
 		);
-		// Job/workflow contexts get an EXPLICIT per-collection map (user files
-		// only) instead of aliasing AppCollections/_CollectionsAPI. The aliases
-		// resolve through _ModuleCollections (typeof _modules) inside the
-		// JobHandlerContext ↔ typeof-job-file cycle and silently degrade
-		// (collections lose their keys in the defining job files).
+		// Job handler collections must be EXPLICIT literal maps of the local
+		// collection imports. Routing through AppCollections (typeof _modules)
+		// creates a type cycle when a job file is part of the module graph:
+		// JobHandlerContext -> AppCollections -> modules.ts -> the job file
+		// being checked — tsc silently collapses the mapped type (TS2339).
 		const localCollections = sortedValues(
 			discovered.categories.get("collections") ?? new Map(),
 		).filter((file) => !file.isBundle);
@@ -538,6 +538,8 @@ export function generateTemplate(options: TemplateOptions): string {
 			}
 			lines.push("};");
 		} else {
+			// Empty maps, NOT AppCollections aliases — the alias re-opens the
+			// modules-graph cycle for apps with module collections + local jobs.
 			lines.push("type _JobHandlerCollections = {};");
 			lines.push("type _JobHandlerCollectionsAPI = {};");
 		}

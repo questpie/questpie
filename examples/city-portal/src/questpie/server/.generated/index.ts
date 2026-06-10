@@ -3,7 +3,7 @@
 // Regenerate with: questpie generate
 
 import { createApp, createContextFactory } from "questpie/app";
-import type { AccessContext, AnyCollectionOrBuilder, AnyGlobalOrBuilder, AppDefinition, CollectionAPI, CollectionSelect, DrizzleClientFromQuestpieConfig, GlobalSelect, HookContext, InferContextExtensionsFromAppConfig, InferSessionFromAuthConfig, MailerService, Questpie, QuestpieConfig, QueueClient, QueueJobType, RouteParamsFromKey, RouteWithParams, TablesFromConfig, z } from "questpie/types";
+import type { AnyCollectionOrBuilder, AnyGlobalOrBuilder, AppDefinition, CollectionAPI, CollectionSelect, DrizzleClientFromQuestpieConfig, InferContextExtensionsFromAppConfig, InferSessionFromAuthConfig, MailerService, Questpie, QuestpieConfig, QueueClient, QueueJobType, RouteParamsFromKey, RouteWithParams, TablesFromConfig, z } from "questpie/types";
 
 // ── Runtime ────────────────────────────────────────────────
 import _runtime from "../questpie.config";
@@ -204,7 +204,6 @@ type _AppQuestpie = Omit<_AppQuestpieBase, "collections" | "globals"> & {
 // ── AppContext augmentation — auto-types ALL handlers ──────
 type _AppCoreContext = _AppContextExtensions & {
 	// Infrastructure
-	app: _AppQuestpie;
 	db: _AppDb;
 	email: _AppQuestpie["email"];
 	queue: QueueClient<AppJobs>;
@@ -233,22 +232,22 @@ declare global {
 
 		interface JobHandlerContext {
 			// Infrastructure
-			db: _AppDb;
-			email: _AppQuestpie["email"];
+			db: unknown;
+			email: unknown;
 			queue: QueueClient<_ExecutionContextJobs>;
 			storage: _AppStorage;
-			kv: _AppQuestpie["kv"];
-			logger: _AppQuestpie["logger"];
-			search: _AppQuestpie["search"];
-			realtime: _AppQuestpie["realtime"];
+			kv: unknown;
+			logger: unknown;
+			search: unknown;
+			realtime: unknown;
 
 			// Entity APIs
 			collections: _JobHandlerCollectionsAPI;
 			globals: Record<string, unknown>;
-			tables: _AppTables;
+			tables: Record<string, unknown>;
 
 			// Request-scoped
-			session: _AppSession;
+			session: unknown;
 			t: (key: string, params?: Record<string, unknown>, locale?: string) => string;
 
 			// Top-level services (namespace: null)
@@ -260,22 +259,22 @@ declare global {
 
 		interface WorkflowContext {
 			// Infrastructure
-			db: _AppDb;
-			email: _AppQuestpie["email"];
+			db: unknown;
+			email: unknown;
 			queue: QueueClient<_ExecutionContextJobs>;
 			storage: _AppStorage;
-			kv: _AppQuestpie["kv"];
-			logger: _AppQuestpie["logger"];
-			search: _AppQuestpie["search"];
-			realtime: _AppQuestpie["realtime"];
+			kv: unknown;
+			logger: unknown;
+			search: unknown;
+			realtime: unknown;
 
 			// Entity APIs
 			collections: _JobHandlerCollectionsAPI;
 			globals: Record<string, unknown>;
-			tables: _AppTables;
+			tables: Record<string, unknown>;
 
 			// Request-scoped
-			session: _AppSession;
+			session: unknown;
 			t: (key: string, params?: Record<string, unknown>, locale?: string) => string;
 
 			// Top-level services (namespace: null)
@@ -306,36 +305,6 @@ declare global {
  * Select/document type for a collection key — prefer over `Record<string, any>` for docs.
  */
 export type CollectionDoc<K extends keyof AppCollections> = CollectionSelect<AppCollections[K]>;
-
-/**
- * Select/document type for a global key.
- */
-export type GlobalDoc<K extends keyof AppGlobals> = GlobalSelect<AppGlobals[K]>;
-
-/** Resolved auth session for this app (`{ user, session } | null`). */
-export type AppSession = _AppSession;
-
-/** Authenticated user shape from the app session. */
-export type AppSessionUser = NonNullable<_AppSession>["user"];
-
-/**
- * Access-rule ctx for shared helpers. `K` narrows `data` to that collection's row.
- *
- * @example
- * ```ts
- * export async function isOwner(ctx: AccessRuleContext<"posts">) {
- *   return ctx.data?.authorId === ctx.session?.user.id; // ctx.app, ctx.collections typed
- * }
- * ```
- */
-export type AccessRuleContext<K extends keyof AppCollections | unknown = unknown> =
-	AccessContext<K extends keyof AppCollections ? CollectionDoc<K> : unknown>;
-
-/**
- * Hook ctx for shared helpers. `K` narrows `data` to that collection's row.
- */
-export type HookRuleContext<K extends keyof AppCollections | unknown = unknown> =
-	HookContext<K extends keyof AppCollections ? CollectionDoc<K> : unknown>;
 
 /**
  * Flat config type for client APIs.

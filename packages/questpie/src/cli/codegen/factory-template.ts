@@ -336,21 +336,25 @@ export function generateFactoryTemplate(
 
 		const placeholderMap = buildPlaceholderMap(registryCategories);
 
-		// Builder interface augmentations — `declare module "questpie"` with
-		// UNCONSTRAINED `<TState>` params, matching the hand-written module
-		// augmentations (e.g. @questpie/admin's factories.ts). Augmenting a
-		// different specifier ("questpie/builders") or renaming/constraining
-		// the params makes TypeScript see mismatched type parameter lists for
-		// the merged class (TS2428) in workspace programs.
+		// Builder interface augmentations target the class's home module
+		// (questpie/builders) with type parameter lists IDENTICAL to the class
+		// declarations — the hand-written module augmentations (e.g.
+		// @questpie/admin's factories.ts) use the same form, so all
+		// declarations merge cleanly in workspace programs.
 		if (
 			collExtensions.size > 0 ||
 			globalExtensions.size > 0 ||
 			fieldExtensions.size > 0
 		) {
-			lines.push('declare module "questpie" {');
+			lines.push('declare module "questpie/builders" {');
 
 			if (collExtensions.size > 0) {
-				lines.push("\tinterface CollectionBuilder<TState> {");
+				// Declaration merging requires an IDENTICAL type parameter list to
+				// the class (name + constraint) — a renamed param (TState$1) makes
+				// tsc treat the merged symbol as two-generic (TS2428/TS2314).
+				lines.push(
+					"\tinterface CollectionBuilder<TState extends CollectionBuilderState> {",
+				);
 				for (const [name, ext] of collExtensions) {
 					const paramName = ext.isCallback ? "configFn" : "config";
 					let paramType = ext.configType ?? "any";
@@ -367,7 +371,9 @@ export function generateFactoryTemplate(
 			}
 
 			if (globalExtensions.size > 0) {
-				lines.push("\tinterface GlobalBuilder<TState> {");
+				lines.push(
+					"\tinterface GlobalBuilder<TState extends GlobalBuilderState> {",
+				);
 				for (const [name, ext] of globalExtensions) {
 					const paramName = ext.isCallback ? "configFn" : "config";
 					let paramType = ext.configType ?? "any";
@@ -384,7 +390,9 @@ export function generateFactoryTemplate(
 			}
 
 			if (fieldExtensions.size > 0) {
-				lines.push("\tinterface Field<TState> {");
+				lines.push(
+					"\tinterface Field<TState extends FieldState = FieldState> {",
+				);
 				for (const [name, ext] of fieldExtensions) {
 					const paramName = ext.isCallback ? "configFn" : "config";
 					let paramType = ext.configType ?? "any";

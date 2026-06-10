@@ -12,6 +12,10 @@
  */
 
 import { CollectionBuilder, GlobalBuilder } from "questpie";
+import type {
+	CollectionBuilderState,
+	GlobalBuilderState,
+} from "questpie/builders";
 
 import type {
 	ActionsConfigContext,
@@ -32,8 +36,11 @@ import {
 
 // ── Type augmentation — gives CollectionBuilder/GlobalBuilder typed extension methods ──
 
-declare module "questpie" {
-	interface CollectionBuilder<TState> {
+// Declaration merging requires an IDENTICAL type parameter list to the class
+// (name + constraint), and the augmentation must target the class's home
+// module (questpie/builders) so it merges with user-generated augmentations.
+declare module "questpie/builders" {
+	interface CollectionBuilder<TState extends CollectionBuilderState> {
 		admin(
 			config:
 				| AdminCollectionConfig
@@ -53,7 +60,7 @@ declare module "questpie" {
 		): CollectionBuilder<TState>;
 	}
 
-	interface GlobalBuilder<TState> {
+	interface GlobalBuilder<TState extends GlobalBuilderState> {
 		admin(
 			config:
 				| AdminGlobalConfig
