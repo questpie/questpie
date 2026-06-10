@@ -11,7 +11,7 @@ import {
 import { storageCollectionServe } from "../../src/server/adapters/routes/storage.js";
 import { generateSignedUrlToken } from "../../src/server/modules/core/integrated/storage/signed-url.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
-import { createTestContext } from "../utils/test-context";
+import { createMockSession, createTestContext } from "../utils/test-context";
 import { runTestDbMigrations } from "../utils/test-db";
 
 // ==============================================================================
@@ -75,6 +75,26 @@ const restrictedAssets = collection("restricted_assets")
 	}))
 	.upload({
 		visibility: "public",
+	});
+
+// read/serve split: rows are world-listable, bytes are not servable.
+const splitAssets = collection("split_assets")
+	.access({ read: true, serve: false })
+	.fields(({ f }) => ({
+		alt: f.text(500),
+	}))
+	.upload({
+		visibility: "public",
+	});
+
+// Private files where the signed token AND a serve rule are both required.
+const privateServeAssets = collection("private_serve_assets")
+	.fields(({ f }) => ({
+		alt: f.text(500),
+	}))
+	.upload({ visibility: "private" })
+	.access({
+		serve: ({ session }) => !!session,
 	});
 
 const throwingAfterChangeAssets = collection("throwing_after_change_assets")
@@ -1135,9 +1155,8 @@ describe("private-default Drive upload visibility", () => {
 		expect((uploaded as any).visibility).toBe("private");
 		expect((uploaded as any).path).toBe("company/confidential/secret.pdf");
 
-		// Anonymous serve must never return the bytes. The per-row read rule hides
-		// the private row from anonymous callers, so the route 404s before touching
-		// storage — a private blob is indistinguishable from a missing one.
+		// Anonymous serve must never return the bytes. The row is private, so the
+		// signed-token requirement rejects the request before touching storage.
 		const handler = createFetchHandler(app, {
 			basePath: "/api",
 			requestLogging: false,
@@ -1147,5 +1166,178 @@ describe("private-default Drive upload visibility", () => {
 			new Request(`http://localhost/api/drive_assets/files/${key}`),
 		);
 		expect(anon?.status).not.toBe(200);
+	});
+});
+
+describe("serve access chain", () => {
+	let setup: Awaited<ReturnType<typeof buildMockApp>>;
+	let app: (typeof setup)["app"];
+
+	afterEach(async () => {
+		await setup?.cleanup();
+	});
+
+	it("deny-all app: serves public bytes by key but denies anonymous row listing", async () => {
+		const fileBody = textEncoder.encode("public bytes");
+		const storage = createInstrumentedStorageAdapter({
+			"deny-all-file.txt": fileBody,
+		});
+		setup = await buildMockApp(
+			{
+				collections: { assets },
+				defaultAccess: {
+					read: false,
+					create: false,
+					update: false,
+					delete: false,
+				},
+			},
+			{ storage: { adapter: storage.adapter } },
+		);
+		app = setup.app;
+		await runTestDbMigrations(app);
+
+		await app.collections.assets.create(
+			{
+				id: crypto.randomUUID(),
+				key: "deny-all-file.txt",
+				filename: "deny-all-file.txt",
+				mimeType: "text/plain",
+				size: fileBody.byteLength,
+				visibility: "public",
+			},
+			createTestContext({ accessMode: "system" }),
+		);
+
+		const handler = createFetchHandler(app, {
+			basePath: "/api",
+			requestLogging: false,
+		});
+
+		// Bytes by key still serve: visibility "public" means servable
+		const served = await handler(
+			new Request("http://localhost/api/assets/files/deny-all-file.txt"),
+		);
+		expect(served?.status).toBe(200);
+		expect(await served!.text()).toBe("public bytes");
+
+		// Rows are NOT world-listable: defaultAccess.read = false applies
+		// (the old public-upload read short-circuit allowed this)
+		const list = await handler(new Request("http://localhost/api/assets"));
+		expect(list?.status).toBe(403);
+	});
+
+	it("serve: false blocks file serving even when rows are world-readable", async () => {
+		const key = "split-file.txt";
+		const storage = createInstrumentedStorageAdapter({
+			[key]: textEncoder.encode("split"),
+		});
+		setup = await buildMockApp(
+			{ collections: { split_assets: splitAssets } },
+			{ storage: { adapter: storage.adapter } },
+		);
+		app = setup.app;
+		await runTestDbMigrations(app);
+
+		await app.collections.split_assets.create(
+			{
+				id: crypto.randomUUID(),
+				key,
+				filename: key,
+				mimeType: "text/plain",
+				size: 5,
+				visibility: "public",
+				alt: "Split",
+			},
+			createTestContext({ accessMode: "system" }),
+		);
+
+		// Listing works anonymously (read: true)
+		const { docs } = await app.collections.split_assets.find(
+			{},
+			createTestContext({ accessMode: "user", session: null }),
+		);
+		expect(docs).toHaveLength(1);
+
+		// Serving is denied (serve: false beats the read fallback)
+		const response = await storageCollectionServe(
+			app,
+			new Request(`http://localhost:3000/split_assets/files/${key}`),
+			{ collection: "split_assets", key },
+			undefined,
+			{ getSession: async () => null },
+		);
+		expect(response.status).toBe(403);
+		expect(storage.calls.exists).toBe(0);
+		expect(storage.calls.head).toBe(0);
+		expect(storage.calls.download).toBe(0);
+	});
+
+	it("private files enforce the signed token AND the serve rule", async () => {
+		const key = "private-serve.txt";
+		const storage = createInstrumentedStorageAdapter({
+			[key]: textEncoder.encode("private serve"),
+		});
+		setup = await buildMockApp(
+			{ collections: { private_serve_assets: privateServeAssets } },
+			{ secret: "test-secret", storage: { adapter: storage.adapter } },
+		);
+		app = setup.app;
+		await runTestDbMigrations(app);
+
+		await app.collections.private_serve_assets.create(
+			{
+				id: crypto.randomUUID(),
+				key,
+				filename: key,
+				mimeType: "text/plain",
+				size: 13,
+				visibility: "private",
+				alt: "Private",
+			},
+			createTestContext({ accessMode: "system" }),
+		);
+
+		const token = await generateSignedUrlToken(
+			key,
+			"test-secret",
+			60,
+			"private_serve_assets",
+		);
+		const url = `http://localhost:3000/private_serve_assets/files/${key}`;
+
+		// Valid token but anonymous → serve rule denies
+		const anonWithToken = await storageCollectionServe(
+			app,
+			new Request(`${url}?token=${token}`),
+			{ collection: "private_serve_assets", key },
+			undefined,
+			{ getSession: async () => null },
+		);
+		expect(anonWithToken.status).toBe(403);
+		expect(storage.calls.download).toBe(0);
+
+		// Session but no token → token requirement is unconditional
+		const session = createMockSession({ role: "user" });
+		const sessionNoToken = await storageCollectionServe(
+			app,
+			new Request(url),
+			{ collection: "private_serve_assets", key },
+			undefined,
+			{ getSession: async () => session },
+		);
+		expect(sessionNoToken.status).toBe(401);
+		expect(storage.calls.download).toBe(0);
+
+		// Valid token + session → both gates pass
+		const allowed = await storageCollectionServe(
+			app,
+			new Request(`${url}?token=${token}`),
+			{ collection: "private_serve_assets", key },
+			undefined,
+			{ getSession: async () => session },
+		);
+		expect(allowed.status).toBe(200);
+		expect(await allowed.text()).toBe("private serve");
 	});
 });

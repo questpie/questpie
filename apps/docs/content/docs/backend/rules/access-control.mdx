@@ -23,12 +23,36 @@ Each operation accepts either:
 
 ## Operations
 
-| Operation | When checked                 |
-| --------- | ---------------------------- |
-| `read`    | Listing and fetching records |
-| `create`  | Creating new records         |
-| `update`  | Updating existing records    |
-| `delete`  | Deleting records             |
+| Operation    | When checked                                                       |
+| ------------ | ------------------------------------------------------------------ |
+| `read`       | Listing and fetching records                                       |
+| `create`     | Creating new records                                               |
+| `update`     | Updating existing records                                          |
+| `delete`     | Deleting records                                                   |
+| `transition` | Workflow stage transitions (falls back to `update`)                |
+| `serve`      | Serving upload file bytes by key (`GET /:collection/files/:key`)   |
+| `introspect` | Schema/meta introspection (`GET /:collection/{schema,meta}`)       |
+
+## Resolution Order
+
+Every operation resolves through the same chain — there are no hidden
+framework grants above your config:
+
+1. The collection/global's own `.access()` rule for that operation
+2. App-level `defaultAccess` (from `appConfig({ access })`)
+3. Framework fallback: require an authenticated session (`!!session`)
+
+Two operations have specialized chains:
+
+- **`serve`** — `serve` → explicit collection `read` (row-aware) →
+  `defaultAccess.serve` → allow. App-level `defaultAccess.read` is
+  deliberately NOT consulted: listing rows and fetching file bytes by key are
+  distinct permissions (like S3's `ListBucket` vs `GetObject`). Files with
+  `visibility: "private"` always require a signed token in addition.
+- **`introspect`** — `introspect` → `defaultAccess.introspect` → visible iff
+  at least one CRUD operation is allowed for the current user. A deny-all app
+  exposes no schemas; a public contact form (`create: true`) keeps its
+  validation schema readable.
 
 ## Context
 
@@ -108,6 +132,63 @@ HTTP requests from clients always use the session-based access mode.
     return { author: session.user.id };
   },
 })
+```
+
+### Deny-all app with public files
+
+Deny-all means deny-all. Set `access` in your app config and the entire REST
+surface closes — including upload-row listing and schema/meta introspection:
+
+```ts title="config/app.ts"
+import { appConfig } from "questpie/app";
+
+export default appConfig({
+	access: { read: false, create: false, update: false, delete: false },
+});
+```
+
+With this config and an `assets` collection using
+`.upload({ visibility: "public" })`:
+
+- `GET /api/assets` → 403 (rows are not listable)
+- `GET /api/assets/schema` → 401/403 (no operation allowed ⇒ not introspectable)
+- `GET /api/assets/files/<key>` → 200 (public visibility means bytes are servable by key)
+- `f.upload()` fields populate through the parent row's read decision — a
+  gallery with `read: true` shows its assets (with `url`) to anonymous
+  readers, while the assets collection itself stays unlistable. Field-level
+  read rules on the upload collection still apply inside population.
+
+### Tenant-scoped file serving
+
+`serve` is row-aware — `ctx.data` is the upload row:
+
+```ts
+collection("documents")
+	.upload({ visibility: "private" })
+	.access({
+		read: ({ session }) => ({ tenant: session?.user?.tenantId }),
+		serve: ({ session, data }) => data?.tenant === session?.user?.tenantId,
+	});
+```
+
+For `visibility: "private"` the signed token is always required as well — the
+serve rule is an additional gate, not a replacement.
+
+### Hide the schema, keep the data API
+
+```ts
+collection("audit_log").access({
+	read: ({ session }) => (session?.user as any)?.role === "admin",
+	introspect: ({ session }) => (session?.user as any)?.role === "admin",
+});
+```
+
+Or the inverse — expose only the shape (e.g. for a public form builder):
+
+```ts
+collection("form_submissions")
+	.access({ read: false, create: true });
+// Schema stays readable because `create` is allowed — no extra knob needed
 ```
 
 ### Published-stage public reads

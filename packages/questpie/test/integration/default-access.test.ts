@@ -45,6 +45,32 @@ const adminSettings = global("admin_settings")
 		update: ({ session }) => (session?.user as any)?.role === "admin",
 	});
 
+// Upload collection with public visibility and NO explicit access — rows must
+// resolve through the normal chain (collection rule → defaultAccess → session).
+// Public visibility governs file bytes only, never row listing.
+const mediaAssets = collection("media_assets")
+	.fields(({ f }) => ({
+		alt: f.text(500),
+		internalNote: f.text(500),
+	}))
+	.upload({ visibility: "public" })
+	.access({
+		fields: {
+			internalNote: {
+				read: (ctx) => !!ctx.user,
+			},
+		},
+	});
+
+// Publicly readable parent that composes an upload field — `f.upload()`
+// populates through the PARENT row's read decision (inheritAccess).
+const galleries = collection("galleries")
+	.fields(({ f }) => ({
+		name: f.text(255).required(),
+		cover: f.upload({ to: "media_assets" }),
+	}))
+	.access({ read: true });
+
 describe("default access control", () => {
 	let setup: Awaited<ReturnType<typeof buildMockApp>>;
 
@@ -54,6 +80,8 @@ describe("default access control", () => {
 				public_posts: publicPosts,
 				admin_notes: adminNotes,
 				partial_access_posts: partialAccessPosts,
+				media_assets: mediaAssets,
+				galleries,
 			},
 			globals: {
 				site_settings: siteSettings,
@@ -434,6 +462,103 @@ describe("default access control", () => {
 			);
 			expect(settings).toBeDefined();
 			expect(settings?.secretKey).toBe("secret123");
+		});
+	});
+
+	describe("public-visibility upload collections", () => {
+		const createAsset = async (overrides: Record<string, unknown> = {}) => {
+			const systemCtx = createTestContext({ accessMode: "system" });
+			return setup.app.collections.media_assets.create(
+				{
+					id: crypto.randomUUID(),
+					key: `uploads/${crypto.randomUUID()}.png`,
+					filename: "image.png",
+					mimeType: "image/png",
+					size: 100,
+					visibility: "public",
+					alt: "An image",
+					internalNote: "internal-only",
+					...overrides,
+				},
+				systemCtx,
+			);
+		};
+
+		it("denies anonymous find/count despite public visibility (defaultAccess applies)", async () => {
+			const noSessionCtx = createTestContext({
+				accessMode: "user",
+				session: null,
+			});
+
+			await createAsset();
+
+			// Regression: the old public-upload read short-circuit allowed this
+			await expect(
+				setup.app.collections.media_assets.find({}, noSessionCtx),
+			).rejects.toThrow();
+			await expect(
+				setup.app.collections.media_assets.count({}, noSessionCtx),
+			).rejects.toThrow();
+		});
+
+		it("allows authenticated find per defaultAccess", async () => {
+			const userCtx = createTestContext({ accessMode: "user", role: "user" });
+
+			await createAsset();
+
+			const { docs } = await setup.app.collections.media_assets.find(
+				{},
+				userCtx,
+			);
+			expect(docs.length).toBeGreaterThan(0);
+		});
+
+		it("populates f.upload() fields through a readable parent for anonymous readers", async () => {
+			const systemCtx = createTestContext({ accessMode: "system" });
+			const noSessionCtx = createTestContext({
+				accessMode: "user",
+				session: null,
+			});
+
+			const asset = await createAsset();
+			const gallery = await setup.app.collections.galleries.create(
+				{ id: crypto.randomUUID(), name: "Public gallery", cover: asset.id },
+				systemCtx,
+			);
+
+			// galleries.read = true — anonymous reads the parent, and the upload
+			// field populates through the parent's read decision (inheritAccess)
+			const found = (await setup.app.collections.galleries.findOne(
+				{ where: { id: gallery.id }, with: { cover: true } },
+				noSessionCtx,
+			)) as any;
+
+			expect(found).not.toBeNull();
+			expect(found?.cover?.id).toBe(asset.id);
+			expect(typeof found?.cover?.url).toBe("string");
+
+			// Field-level read rules on the upload collection still apply inside
+			// population — inheritAccess skips only the collection-level check
+			expect(found?.cover?.internalNote).toBeUndefined();
+			expect(found?.cover?.alt).toBe("An image");
+		});
+
+		it("keeps field-level rules readable for authenticated users inside population", async () => {
+			const systemCtx = createTestContext({ accessMode: "system" });
+			const userCtx = createTestContext({ accessMode: "user", role: "user" });
+
+			const asset = await createAsset();
+			const gallery = await setup.app.collections.galleries.create(
+				{ id: crypto.randomUUID(), name: "Members gallery", cover: asset.id },
+				systemCtx,
+			);
+
+			const found = (await setup.app.collections.galleries.findOne(
+				{ where: { id: gallery.id }, with: { cover: true } },
+				userCtx,
+			)) as any;
+
+			expect(found?.cover?.internalNote).toBe("internal-only");
 		});
 	});
 });

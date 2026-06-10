@@ -312,6 +312,83 @@ describe("processBlocksDocument - Declarative Expansion", () => {
 		// Should have error marker instead of crashing
 		expect(result?._data?.["broken-1"]).toEqual({ _error: "Prefetch failed" });
 	});
+
+	test("stamps inherit-access marker on upload field expansion only", async () => {
+		// Upload fields populate through the parent row's read decision (the
+		// blocks doc came from a readable row); plain relations keep normal
+		// target-collection access. The marker is the internal questpie symbol.
+		const INHERIT_ACCESS = Symbol.for("questpie.internal.inheritAccess");
+
+		const findAssets = mock(async (_options: any) => ({
+			docs: [{ id: "asset-1", url: "/api/assets/files/key-1" }],
+		}));
+		const findPosts = mock(async (_options: any) => ({
+			docs: [{ id: "post-1" }],
+		}));
+
+		const uploadBlockDefs = {
+			hero: {
+				name: "hero",
+				state: {
+					name: "hero",
+					prefetchWith: { image: true, related: true },
+					fields: {
+						image: {
+							getMetadata: () => ({
+								type: "relation",
+								targetCollection: "assets",
+								relationType: "belongsTo",
+								isUpload: true,
+							}),
+						},
+						related: {
+							getMetadata: () => ({
+								type: "relation",
+								targetCollection: "posts",
+								relationType: "belongsTo",
+							}),
+						},
+					},
+				},
+				getFieldMetadata: () => ({}),
+				executePrefetch: async () => ({}),
+			},
+		};
+
+		const blocksDoc: BlocksDocument = {
+			_tree: [{ id: "hero-1", type: "hero", children: [] }],
+			_values: { "hero-1": { image: "asset-1", related: "post-1" } },
+		};
+
+		const result = await processBlocksDocument(
+			blocksDoc,
+			uploadBlockDefs as any,
+			{
+				app: {
+					collections: {
+						assets: { find: findAssets },
+						posts: { find: findPosts },
+					},
+				} as any,
+				db: {},
+				session: null,
+				accessMode: "user",
+			},
+		);
+
+		expect(findAssets).toHaveBeenCalledTimes(1);
+		expect(findPosts).toHaveBeenCalledTimes(1);
+
+		const assetOptions = findAssets.mock.calls[0][0];
+		const postOptions = findPosts.mock.calls[0][0];
+		expect((assetOptions as any)[INHERIT_ACCESS]).toBe(true);
+		expect((postOptions as any)[INHERIT_ACCESS]).toBeUndefined();
+
+		expect(result?._data?.["hero-1"]?.image).toEqual({
+			id: "asset-1",
+			url: "/api/assets/files/key-1",
+		});
+	});
 });
 
 // ============================================================================

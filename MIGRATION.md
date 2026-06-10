@@ -61,3 +61,63 @@ via `app.collections` and `app.globals`.
 
 **Migration:** Find-and-replace `app.api.collections.` with `app.collections.`
 and `app.api.globals.` with `app.globals.` across your codebase.
+
+### 3.6.0 — Access honesty for uploads and introspection (SECURITY)
+
+Deny-all now means deny-all. Two implicit grants were removed and replaced
+with explicit, declarative access kinds (`serve`, `introspect`).
+
+#### Anonymous listing of public-visibility upload collections no longer works by default
+
+Previously, a hard-coded short-circuit granted public READ access to any
+upload collection with `visibility: "public"` (the default) — ABOVE app-level
+`defaultAccess`. A deny-all app still exposed `GET /api/assets` to anonymous
+enumeration. That short-circuit is gone: upload-row reads resolve through the
+normal chain (collection `.access()` → `defaultAccess` → session required).
+
+What still works without any change:
+
+- `GET /:collection/files/:key` — public-visibility file BYTES are still
+  servable by key (serving is now its own `serve` access kind:
+  `serve` → explicit collection `read` → `defaultAccess.serve` → visibility).
+- Populated `f.upload()` fields — upload relations populate through the
+  PARENT row's read decision, so e.g. a publicly readable gallery still shows
+  its assets (including `url`) to anonymous readers. Field-level read rules on
+  the upload collection still apply. Block prefetch declared-`with` expansion
+  of upload fields inherits the same way. (Custom block prefetch FUNCTIONS run
+  with the caller's access — fetch editor-curated asset ids with an explicit
+  `{ accessMode: "system" }` context if anonymous pages need them.)
+- Explicit `read: false` on an upload collection still blocks serving
+  (back-compat: serve falls back to an explicitly defined collection `read`).
+
+To restore the old world-listable behavior, say it explicitly:
+
+```ts
+collection("assets")
+	.upload({ visibility: "public" })
+	.access({ read: true });
+```
+
+#### Schema/meta introspection is gated through the access system
+
+`GET /api/<collection>/{schema,meta}` (and the globals equivalents) were
+anonymous-readable with no off-switch — deny-all apps leaked their entire
+data-model shape. They are now visible iff at least one CRUD operation is
+allowed for the current user (`401` anonymous / `403` authenticated
+otherwise). A public contact form (`create: true`) keeps its validation schema
+readable; a deny-all app exposes nothing.
+
+Override per collection/global or app-wide with the new `introspect` kind:
+
+```ts
+collection("catalog").access({ introspect: true });   // shape public, data closed
+collection("audit_log").access({
+	read: ({ session }) => (session?.user as any)?.role === "admin",
+	introspect: ({ session }) => (session?.user as any)?.role === "admin",
+});
+```
+
+The admin UI is unaffected — it fetches schema/meta only with an
+authenticated session, and authenticated admin users have allowed operations.
+If you proxied these routes with your own auth middleware as a workaround, you
+can delete it.
