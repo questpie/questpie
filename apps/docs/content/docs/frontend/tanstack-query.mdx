@@ -99,6 +99,25 @@ function SiteSettings() {
 }
 ```
 
+## Realtime Queries
+
+`find()`, `count()`, and `get()` accept a typed `{ realtime: true }` second argument. The query fetches normally, then auto-updates as the server pushes live snapshots over SSE:
+
+```tsx
+function LiveServiceList() {
+	const { data } = useQuery(
+		q.collections.services.find(
+			{ where: { isActive: true }, limit: 20 },
+			{ realtime: true },
+		),
+	);
+
+	return <ul>{data?.docs.map((s) => <li key={s.id}>{s.name}</li>)}</ul>;
+}
+```
+
+See [Realtime Client](/docs/frontend/realtime) for how snapshots work, the wire protocol, and the vanilla `live()` API.
+
 ## Direct Client Usage
 
 You can also use the client directly with TanStack Query:

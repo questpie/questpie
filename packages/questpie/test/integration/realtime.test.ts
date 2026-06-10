@@ -1664,6 +1664,52 @@ describe("realtime", () => {
 	});
 
 	// ==========================================================================
+	// Keepalive
+	// ==========================================================================
+
+	describe("keepalive", () => {
+		it("honors realtime.keepAliveIntervalMs for SSE pings", async () => {
+			const adapter = new MockRealtimeAdapter();
+			const items = collection("items")
+				.fields(({ f }) => ({
+					name: f.textarea().required(),
+				}))
+				.access({ read: true });
+
+			setup = await buildMockApp(
+				{ collections: { items } },
+				{ realtime: { adapter, keepAliveIntervalMs: 50 } },
+			);
+			await runTestDbMigrations(setup.app);
+
+			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
+			const controller = new AbortController();
+			const request = createRealtimeRequest(
+				[collectionTopic("items")],
+				controller.signal,
+			);
+			const response = await routes.realtime.subscribe(request, {}, undefined);
+			expect(response.ok).toBe(true);
+
+			const reader = createSSEReader(response.body!);
+			const initial = await reader.readSnapshot();
+			expect(initial.event).toBe("snapshot");
+
+			// With a 50ms keepalive, two pings must arrive well within the
+			// 2s default timeout (default cadence of 8s would time out here).
+			const firstPing = await reader.readEvent();
+			expect(firstPing.event).toBe("ping");
+			expect(typeof firstPing.data.ts).toBe("number");
+
+			const secondPing = await reader.readEvent();
+			expect(secondPing.event).toBe("ping");
+
+			controller.abort();
+			reader.close();
+		});
+	});
+
+	// ==========================================================================
 	// E2E SSE Tests
 	// ==========================================================================
 

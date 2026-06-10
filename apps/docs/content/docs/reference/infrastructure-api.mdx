@@ -308,16 +308,26 @@ kv: {
 
 ## Realtime
 
-Event broadcasting for live updates.
+Live updates. Broadcasts are automatic — every collection/global create/update/delete emits a change event without any hook code; do not write custom emit hooks.
 
-### Broadcasting
+### Server-Side Subscription
+
+Subscribe to change events from services or routes (listener first, then optional query-shaped topics):
 
 ```ts
-await realtime.broadcast("posts", {
-	type: "post.updated",
-	data: { id: post.id, title: post.title },
-});
+const unsubscribe = realtime.subscribe(
+	(event) => {
+		// event: { seq, resourceType, resource, operation, recordId?, payload? }
+	},
+	{
+		resourceType: "collection",
+		resource: "posts",
+		where: { status: "published" },
+	},
+);
 ```
+
+Clients consume access-controlled snapshots instead of raw events — see [Realtime Client](/docs/frontend/realtime) for `live()` / `{ realtime: true }` and the wire protocol.
 
 ### Configuration
 
