@@ -90,6 +90,8 @@ A QuestPie project follows a **convention-over-configuration** file layout. The 
     questpie/
       server/                       ← Server root (all data + behavior)
         questpie.config.ts          ← runtimeConfig({ db, app, storage, ... })
+        env.ts                      ← env({ server, client?, refine? }) — boot-validated
+        env.client.ts               ← clientEnv({ consumers, vars }) — client-safe vars
         modules.ts                  ← export default [adminModule, ...] as const
         app.ts                      ← re-export of .generated/index (stable import)
         config/
@@ -116,6 +118,7 @@ A QuestPie project follows a **convention-over-configuration** file layout. The 
         .generated/                 ← DO NOT EDIT (codegen output)
           index.ts
           factories.ts
+          env.client.<consumer>.ts  ← per-consumer typed client env (when env.client.ts exists)
       admin/                        ← Admin client config
         admin.ts
         modules.ts
@@ -146,6 +149,8 @@ A QuestPie project follows a **convention-over-configuration** file layout. The 
 | `blocks/`      | **named** export          | `block("name")`      |
 | `migrations/`  | **default** export        | `migration({...})`   |
 | `seeds/`       | **default** export        | `seed({...})`        |
+| `env.ts`       | **default** export        | `env({...})`         |
+| `env.client.ts`| **default** export        | `clientEnv({...})`   |
 
 ---
 
@@ -157,19 +162,34 @@ A QuestPie project follows a **convention-over-configuration** file layout. The 
 questpie.config.ts  →  modules.ts  →  codegen  →  .generated/index.ts  →  createApp()
 ```
 
-**Step 1** — `questpie.config.ts` declares infrastructure (DB, storage, email, etc.):
+**Step 1** — `env.ts` declares + validates environment variables (optional but recommended; see `references/env.md`), and `questpie.config.ts` declares infrastructure (DB, storage, email, etc.):
 
 ```ts
+// env.ts
+import { env } from "questpie/env";
+import { z } from "zod";
+
+export default env({
+	server: { DATABASE_URL: z.url() },
+});
+```
+
+```ts
+// questpie.config.ts
 import { runtimeConfig } from "questpie/app";
 import { ConsoleAdapter } from "questpie/adapters/console";
 
+import env from "./env";
+
 export default runtimeConfig({
 	app: { url: "http://localhost:3000" },
-	db: { url: process.env.DATABASE_URL },
+	db: { url: env.DATABASE_URL },
 	storage: { basePath: "/api" },
 	email: { adapter: new ConsoleAdapter() },
 });
 ```
+
+When `env.ts` exists, the generated app imports it FIRST — a misconfigured environment fails boot before adapters/auth/db init, with every offending var named (values never logged).
 
 **Step 2** — `modules.ts` declares which module packages to use:
 
@@ -2740,6 +2760,8 @@ module()                 Packaging unit (groups related entities)
 | Runtime Config | `runtimeConfig({...})`               | `questpie`                 | Infrastructure config        |
 | App Config     | `appConfig({...})`                   | `questpie`                 | Locale, access, hooks        |
 | Auth Config    | `authConfig({...})`                  | `questpie`                 | Better Auth options          |
+| Env            | `env({...})`                         | `questpie/env`             | Boot-validated typed env     |
+| Client Env     | `clientEnv({...})`                   | `questpie/env`             | Client-safe env definition   |
 | Admin Config   | `adminConfig({...})`                 | `#questpie/factories`      | Sidebar, dashboard, branding |
 | View           | `view(name, {kind, component})`      | `@questpie/admin/client`   | Admin view component         |
 | Widget         | `widget(name, {component})`          | `@questpie/admin/client`   | Dashboard widget             |

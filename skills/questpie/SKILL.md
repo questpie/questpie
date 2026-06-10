@@ -41,6 +41,8 @@ Reference these guidelines when:
 | `runtimeConfig({...})`         | `"questpie"`                 | No             |
 | `appConfig({...})`             | `"questpie"`                 | No             |
 | `authConfig({...})`            | `"questpie"`                 | No             |
+| `env({...})`                   | `"questpie/env"`             | No             |
+| `clientEnv({...})`             | `"questpie/env"`             | No             |
 | `createClient<AppConfig>()`    | `"questpie/client"`          | No             |
 | `createQuestpieQueryOptions()` | `"@questpie/tanstack-query"` | No             |
 
@@ -130,6 +132,7 @@ Factory modules are acceptable only for simple runtime-only modules whose plugin
 | Topic      | File                                    | Covers                                                       |
 | ---------- | --------------------------------------- | ------------------------------------------------------------ |
 | Production | `references/production.md`              | Queue, search, realtime, storage, email, KV adapter setup    |
+| Environment | `references/env.md`                    | `env.ts` + `env.client.ts`: boot-validated, typed env, generated client modules |
 | Auth       | `references/auth.md`                    | Better Auth integration, session, providers, access patterns |
 | Adapters   | `references/infrastructure-adapters.md` | All adapter configs: pg-boss, S3, SMTP, pgNotify, Redis      |
 | MCP        | `references/mcp.md`                     | MCP setup, CRUD tools, route tools, custom tools, security   |
@@ -228,12 +231,11 @@ export default job({
 ```ts
 import { createClient } from "questpie/client";
 import type { AppConfig } from "#questpie";
+import { env } from "#questpie/env.client.vite"; // generated from env.client.ts
 
 const client = createClient<AppConfig>({
 	baseURL:
-		typeof window !== "undefined"
-			? window.location.origin
-			: process.env.APP_URL,
+		typeof window !== "undefined" ? window.location.origin : env.APP_URL,
 	basePath: "/api",
 });
 
@@ -263,6 +265,7 @@ await queue.sendReminder.publish({ userId: "abc" });
 | HIGH     | Forgetting `questpie generate` after adding files      | Re-run codegen on any file add/remove in convention dirs                              |
 | HIGH     | Job handler uses `input` instead of `payload`          | Jobs destructure `{ payload }`, routes destructure `{ input }`                        |
 | HIGH     | `queue.send("name", data)`                             | Use `queue.jobName.publish(data)`                                                     |
+| HIGH     | Raw `process.env.X` / `process.env.X!` in app code     | Declare in `env.ts` with `env()` — typed, boot-validated (see `references/env.md`)    |
 | HIGH     | `beforeCreate` / `afterCreate` hook names              | Use `beforeChange` / `afterChange` with `operation === "create"` guard                |
 | HIGH     | Runtime options in codegen-aware modules               | Use static `module({...})` + plugin-discovered `config/*.ts` factory                  |
 | HIGH     | Exposing MCP HTTP as trusted system access             | HTTP MCP is user mode only; use stdio only in trusted local/system contexts           |
