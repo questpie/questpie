@@ -92,21 +92,33 @@ export interface FieldCommonMethods<TState extends FieldState> {
  * @template TState - Accumulated type state
  * @template TMethods - Type-specific methods interface (e.g., TextMethods)
  */
+type FieldCommonMethodsWrapped<
+	in out TState extends FieldState,
+	in out TMethods,
+> = {
+	// Re-wrap common methods: preserve TMethods across chain
+	[K in keyof FieldCommonMethods<TState>]: FieldCommonMethods<TState>[K] extends (
+		...args: infer A
+	) => Field<infer R extends FieldState>
+		? (...args: A) => FieldWithMethods<R, TMethods>
+		: FieldCommonMethods<TState>[K];
+};
+
+type FieldTypeMethodsWrapped<
+	in out TState extends FieldState,
+	in out TMethods,
+> = {
+	// Re-wrap type-specific methods: return FieldWithMethods<TState, TMethods>
+	[K in keyof TMethods]: TMethods[K] extends (...args: infer A) => any
+		? (...args: A) => FieldWithMethods<TState, TMethods>
+		: TMethods[K];
+};
+
 export type FieldWithMethods<TState extends FieldState, TMethods> =
 	// Method override maps must come BEFORE Field<TState> in the intersection.
 	// TypeScript resolves method calls on intersections using the FIRST matching
 	// overload, so placing the override maps first ensures the re-wrapped return
 	// types are used rather than Field<TState>'s own return types.
-	{
-		// Re-wrap common methods: preserve TMethods across chain
-		[K in keyof FieldCommonMethods<TState>]: FieldCommonMethods<TState>[K] extends (
-			...args: infer A
-		) => Field<infer R extends FieldState>
-			? (...args: A) => FieldWithMethods<R, TMethods>
-			: FieldCommonMethods<TState>[K];
-	} & {
-		// Re-wrap type-specific methods: return FieldWithMethods<TState, TMethods>
-		[K in keyof TMethods]: TMethods[K] extends (...args: infer A) => any
-			? (...args: A) => FieldWithMethods<TState, TMethods>
-			: TMethods[K];
-	} & Field<TState>;
+	FieldCommonMethodsWrapped<TState, TMethods> &
+		FieldTypeMethodsWrapped<TState, TMethods> &
+		Field<TState>;
