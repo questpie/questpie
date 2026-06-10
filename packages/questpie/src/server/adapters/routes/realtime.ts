@@ -336,10 +336,13 @@ export async function realtimeSubscribe(
 				sendTopicError(error.id, error.message);
 			}
 
-			// Ping timer to keep connection alive (15s < most proxy timeouts of 30-60s)
+			// Ping timer to keep the connection alive. Default 8s — strictly under
+			// Bun's default 10s idleTimeout and typical proxy timeouts of 30-60s.
+			const keepAliveIntervalMs =
+				app.config?.realtime?.keepAliveIntervalMs ?? 8000;
 			const pingTimer = setInterval(() => {
 				send("ping", { ts: Date.now() });
-			}, 15000);
+			}, keepAliveIntervalMs);
 
 			// Cleanup function
 			const close = () => {

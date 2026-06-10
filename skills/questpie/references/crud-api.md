@@ -402,6 +402,23 @@ const count = await client.collections.posts.count({
 });
 ```
 
+### Live Queries (Client Only)
+
+Every read has a live form — `live()` mirrors `find()` (same options, same snapshot type) and pushes access-controlled snapshots over SSE. Globals mirror `get()`: `client.globals.<name>.live(...)`. See AGENTS.md §19 Realtime:
+
+```ts
+const stop = client.collections.posts.live(
+	{ where: { status: "published" }, with: { author: true } },
+	(snap) => render(snap.docs), // typed find() result
+);
+stop(); // unsubscribe
+
+// AsyncGenerator form (workers, agents, tests)
+for await (const snap of client.collections.posts.liveIter({ limit: 10 })) {
+	render(snap.docs);
+}
+```
+
 ### Upload (Client Only)
 
 For upload collections:

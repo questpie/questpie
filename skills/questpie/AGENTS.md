@@ -1416,27 +1416,70 @@ await ctx.queue.indexRecords.publish({ collection: "posts" });
 
 ## 19. Realtime
 
-Server-sent events for live data updates.
+Live queries over SSE. **Broadcasts are automatic** — every collection/global create/update/delete already writes a change event to the `questpie_realtime_log` outbox and notifies subscribers. Do NOT write `afterChange` hooks that "emit" realtime events; a custom emitter double-fires against the built-in broadcast hook.
 
 ### How It Works
 
-1. Every create/update/delete writes a change event to `questpie_realtime_log` (outbox pattern)
-2. An adapter (pg_notify or Redis Streams) notifies connected clients
-3. Clients subscribe via SSE to specific resources
+1. Every CRUD write appends a change event to the outbox; an adapter (pg_notify / Redis Streams) or 2s polling wakes subscribers
+2. The server **re-runs the subscribed query under the subscriber's auth** and pushes the full result as a `snapshot` — clients never receive raw change events (no `operation`/`recordId` on the client; snapshots are access-controlled)
+3. One SSE connection multiplexes all topics (`POST /realtime`)
+
+Snapshots are idempotent state, not diffs — filtered subscriptions may receive unchanged snapshots on update/delete (over-refresh by design). Always render from the snapshot.
 
 ### Client-Side Usage
 
 ```ts
-// With TanStack Query (automatic)
-const { data } = useQuery(qp.collections.posts.find({}, { realtime: true }));
-
-// Manual subscription
-const unsub = client.realtime.subscribe(
-	{ resourceType: "collection", resource: "posts" },
-	(event) => {
-		console.log("Change:", event.operation, event.recordId);
-	},
+// React + TanStack Query — typed second arg, no casts needed
+const { data } = useQuery(
+	qp.collections.posts.find({ where: { event: eventId }, limit: 50 }, { realtime: true }),
 );
+
+// Vanilla TS — live() is the live form of find(): same options in, same result type out
+const stop = client.collections.posts.live(
+	{ where: { event: eventId }, with: { author: true }, orderBy: { createdAt: "desc" } },
+	(snap) => render(snap.docs), // snap.docs[i].author is typed
+	{ onError: (e) => console.error(e) },
+);
+stop(); // unsubscribe
+
+// Async-iterable form (workers, agents, tests) — terminate via AbortSignal
+for await (const snap of client.collections.posts.liveIter(
+	{ where: { event: eventId } },
+	{ signal: controller.signal },
+)) {
+	render(snap.docs);
+}
+
+// Globals mirror get()
+client.globals.siteSettings.live(undefined, (settings) => applyTheme(settings));
+
+// Low-level escape hatch — topic objects, never channel strings; data is untyped
+client.realtime.subscribe(
+	{ resourceType: "collection", resource: "posts", where: { event: eventId } },
+	(data) => {}, // unknown — prefer the typed live() wrappers
+);
+```
+
+Live options carry exactly what the wire protocol supports: `where`, `with`, `limit`, `offset`, `orderBy`, `locale` (no `columns`/`groupBy`/`search` — compile error).
+
+### Wire Protocol (stable contract)
+
+`POST <basePath>/realtime` body `{ topics: [{ id, resourceType: "collection" | "global", resource, where?, with?, limit?, offset?, orderBy?, locale? }] }` → SSE events:
+
+| Event      | Payload                  | Meaning                                                |
+| ---------- | ------------------------ | ------------------------------------------------------ |
+| `snapshot` | `{ topicId, seq, data }` | Full `find()`/`get()` result under subscriber's auth   |
+| `error`    | `{ topicId, message }`   | Topic-level failure (unknown resource, access denied)  |
+| `ping`     | `{ ts }`                 | Keep-alive (default every 8s)                          |
+
+Ignore unknown SSE event types (forward compat).
+
+### Keepalive (Bun)
+
+The stream pings every 8s by default (`realtime.keepAliveIntervalMs`). Bun's default `idleTimeout` is 10s — the default ping survives it, but set headroom explicitly in the server entry:
+
+```ts
+export default { port: 3000, idleTimeout: 30, fetch: server.fetch };
 ```
 
 ### Realtime Adapters
@@ -1544,7 +1587,7 @@ interface AppContext {
 	kv: KVService; // key-value store
 	logger: LoggerService; // structured logging
 	search: SearchService; // full-text search
-	realtime: RealtimeService; // publish realtime events
+	realtime: RealtimeService; // server-side change-event subscription (broadcasts are automatic)
 	t: (key, params?, locale?) => string; // i18n translator
 	services: Record<string, unknown>; // user-defined services
 }

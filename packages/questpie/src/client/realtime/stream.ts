@@ -12,12 +12,19 @@ import { RealtimeMultiplexer, type TopicConfig } from "./multiplexer.js";
 // ============================================================================
 
 export type RealtimeAPI = {
-	/** Subscribe to a topic. Returns unsubscribe function. */
-	subscribe: (
+	/**
+	 * Subscribe to a topic. Returns unsubscribe function.
+	 *
+	 * `TData` is the snapshot type pushed for the topic — prefer the typed
+	 * `collections.<name>.live()` / `globals.<name>.live()` wrappers, which
+	 * infer it from the query options.
+	 */
+	subscribe: <TData = unknown>(
 		topic: TopicConfig,
-		callback: (data: unknown) => void,
+		callback: (data: TData) => void,
 		signal?: AbortSignal,
 		customId?: string,
+		onError?: (error: Error) => void,
 	) => () => void;
 
 	/** Create an AsyncGenerator stream for a topic */
@@ -194,8 +201,20 @@ export function createRealtimeAPI(opts: {
 	};
 
 	return {
-		subscribe(topic, callback, signal?, customId?) {
-			return getOrCreate().subscribe(topic, callback, signal, customId);
+		subscribe<TData = unknown>(
+			topic: TopicConfig,
+			callback: (data: TData) => void,
+			signal?: AbortSignal,
+			customId?: string,
+			onError?: (error: Error) => void,
+		) {
+			return getOrCreate().subscribe(
+				topic,
+				callback as (data: unknown) => void,
+				signal,
+				customId,
+				onError,
+			);
 		},
 		stream<TData>(topic: TopicConfig, signal?: AbortSignal, customId?: string) {
 			return sseSnapshotStream<TData>({

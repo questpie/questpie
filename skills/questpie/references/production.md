@@ -306,6 +306,26 @@ export default runtimeConfig({
 
 > **Warning:** `pgNotifyAdapter` and `pgBossAdapter` both rely on PostgreSQL `LISTEN/NOTIFY`. They will silently fail behind PgBouncer in transaction pool mode. See "PgBouncer Compatibility" below.
 
+### SSE Keepalive & Timeouts
+
+The `POST /realtime` SSE stream sends a `ping` every **8s** by default (`realtime.keepAliveIntervalMs`). Every layer between browser and server must tolerate at least that idle window, or subscriptions die and reconnect in a loop:
+
+| Layer                      | Setting                            | Recommendation                                                            |
+| -------------------------- | ---------------------------------- | ------------------------------------------------------------------------- |
+| Bun (`Bun.serve`)          | `idleTimeout` (default 10s)        | Default ping survives it; set `idleTimeout: 30` for headroom              |
+| nginx                      | `proxy_read_timeout` (default 60s) | Keep >= 60s; disable SSE response buffering (`proxy_buffering off`)       |
+| Load balancers (ALB, etc.) | idle timeout (often 60s)           | Keep above `keepAliveIntervalMs`                                          |
+| Serverless platforms       | response buffering / max duration  | SSE needs streaming responses; buffered platforms break realtime entirely |
+
+```ts
+// Bun server entry — the app owns Bun.serve options, not the framework
+export default {
+	port: 3000,
+	idleTimeout: 30, // seconds
+	fetch: server.fetch,
+};
+```
+
 ## PgBouncer Compatibility
 
 PgBouncer in `transaction` pool mode reassigns sessions per-transaction, so persistent listeners are impossible. Once `LISTEN` returns, the connection is handed to a different client and notifications are dropped. This breaks any feature that depends on session-bound state.
