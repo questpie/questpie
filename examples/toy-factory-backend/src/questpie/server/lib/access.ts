@@ -12,7 +12,7 @@
  * the (lazily merged) AppContext augmentation.
  *
  * Helpers NOT imported by collections (scripts, routes, services, jobs) may
- * freely use the generated `AccessRuleContext<K>` / `CollectionDoc<K>`.
+ * freely use the generated `CollectionDoc<K>` and friends.
  */
 
 import type { AccessContext } from "questpie";
