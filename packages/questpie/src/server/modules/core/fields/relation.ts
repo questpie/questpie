@@ -13,6 +13,7 @@
 import { jsonb, type PgVarcharBuilder, varchar } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
+import type { KnownCollectionKey } from "../../../config/app-context.js";
 import type { DefaultFieldState } from "../../../fields/field-class-types.js";
 import { Field, field } from "../../../fields/field-class.js";
 import { fieldType, wrapFieldComplete } from "../../../fields/field-type.js";
@@ -59,7 +60,7 @@ export interface RelationFieldMethods {
 		relationName?: string;
 	}): any;
 	manyToMany(config: {
-		through: string;
+		through: KnownCollectionKey;
 		sourceField?: string;
 		targetField?: string;
 		relationName?: string;
@@ -98,18 +99,23 @@ export type MultipleRelationFieldState<TTo extends string = string> =
 /**
  * Relation target — accepts collection name, factory function, or polymorphic map.
  *
- * Uses plain `string` (with autocomplete hint via `string & {}`) instead of
- * `KnownCollectionNames` to avoid a circular type dependency:
+ * Collection names come from `KnownCollectionKey` — the names-only key
+ * registry (`Questpie.CollectionKeys`) emitted by codegen from file discovery
+ * alone. It is acyclic by construction (the interface references nothing) and
+ * keeps a `(string & {})` fallback so plain strings still compile.
+ *
+ * Do NOT switch to `KnownCollectionNames` (builder-typed Registry) — that
+ * recreates the documented cycle:
  *   relation() → KnownCollectionNames → RegistryNames → Registry
  *   → _Registry_Collections → _MP<"collections"> → _Module → typeof _modules
  *   → adminModule → collections → CollectionBuilder (uses relation()) → CYCLE
  */
 type RelationTarget =
-	| (string & {})
+	| KnownCollectionKey
 	| (() => { name: string; table?: { id: unknown } })
-	| Record<string, (string & {}) | (() => { name: string })>;
+	| { [K in KnownCollectionKey]?: KnownCollectionKey | (() => { name: string }) };
 
-type JunctionTarget = (string & {}) | (() => { name: string });
+type JunctionTarget = KnownCollectionKey | (() => { name: string });
 
 // ============================================================================
 // Helper Functions
@@ -226,7 +232,7 @@ function buildRelationMetadata(
  * subject: f.relation({ users: "users", posts: "posts" }).required()
  * ```
  */
-export function relation<TTo extends string>(
+export function relation<TTo extends KnownCollectionKey & string>(
 	target: TTo | Exclude<RelationTarget, string>,
 ): FieldWithMethods<RelationFieldState<TTo>, RelationFieldMethods> {
 	const isPoly = isPolymorphicTarget(target);

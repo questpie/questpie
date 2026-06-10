@@ -14,6 +14,7 @@ import type {
 	AccessRule,
 	CollectionAccess,
 	CollectionBuilderState,
+	RowAccessRule,
 } from "#questpie/server/collection/builder/types.js";
 import {
 	createFieldAccessContext,
@@ -1301,7 +1302,7 @@ export async function resolveIntrospectionAccess(
  * When no rule is defined, requires session (secure by default).
  */
 async function evaluateAccessRule(
-	rule: AccessRule | undefined,
+	rule: AccessRule | RowAccessRule | undefined,
 	context: AccessContext,
 ): Promise<AccessResult> {
 	// No rule = require session (secure by default)
@@ -1324,7 +1325,9 @@ async function evaluateAccessRule(
 	// Function = evaluate
 	if (typeof rule === "function") {
 		try {
-			const result = await rule(context);
+			// Introspection probes rules without a loaded row — cast past the
+			// non-optional `data` that RowAccessRule (update/delete) declares.
+			const result = await rule(context as AccessContext & { data: any });
 
 			// Boolean result
 			if (typeof result === "boolean") {

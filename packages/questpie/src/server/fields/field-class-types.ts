@@ -189,7 +189,10 @@ export interface FieldRuntimeState {
 
 	// ---- Relation-specific ----
 	/** Relation target collection name */
-	to?: string | Record<string, string | (() => unknown)> | (() => unknown);
+	to?:
+		| string
+		| Record<string, string | (() => unknown) | undefined>
+		| (() => unknown);
 	/** Has many flag */
 	hasMany?: boolean;
 	/** Multiple (jsonb array) flag */

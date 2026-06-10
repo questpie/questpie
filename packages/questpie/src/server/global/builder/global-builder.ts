@@ -319,7 +319,12 @@ export class GlobalBuilder<TState extends GlobalBuilderState> {
 	/**
 	 * Set access control rules
 	 */
-	access<TNewAccess extends GlobalAccess<any>>(
+	access<
+		TNewAccess extends GlobalAccess<
+			Global<TState>["$infer"]["select"],
+			Global<TState>["$infer"]["update"]
+		>,
+	>(
 		access: TNewAccess,
 	): GlobalBuilder<Override<TState, { access: Record<string, any> }>> {
 		const newState = {
