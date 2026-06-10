@@ -203,6 +203,20 @@ const result = await collections.posts.find({
 });
 ```
 
+Multi-field sorting: order determines priority (first = primary sort). All
+three syntaxes work, including inside relation `with` options:
+
+```ts
+// Array syntax (preferred for explicit priority)
+orderBy: [{ status: "desc" }, { createdAt: "desc" }]
+
+// Object syntax (key order = priority)
+orderBy: { status: "desc", createdAt: "desc" }
+
+// Function syntax
+orderBy: (table, { asc, desc }) => [desc(table.status), asc(table.title)]
+```
+
 ## Pagination
 
 Use `limit` and `offset`:
@@ -214,6 +228,38 @@ const page2 = await collections.posts.find({
 });
 // page2.totalDocs = total count across all pages
 ```
+
+### Keyset (cursor) pagination
+
+For stable pagination over changing data, use a tuple cursor of
+`(createdAt, id)` with a matching multi-field `orderBy`. System timestamps
+are stored with millisecond precision (`timestamp(3)`), so a `Date` you read
+back equals the stored value exactly — cursor comparisons are exact:
+
+```ts
+const page = await collections.posts.find({
+	where: cursor
+		? {
+				OR: [
+					{ createdAt: { lt: cursor.createdAt } },
+					{
+						AND: [
+							{ createdAt: { eq: cursor.createdAt } },
+							{ id: { lt: cursor.id } },
+						],
+					},
+				],
+			}
+		: undefined,
+	orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+	limit: 20,
+});
+const last = page.docs.at(-1);
+const nextCursor = last ? { createdAt: last.createdAt, id: last.id } : null;
+```
+
+Always use the explicit `{ eq: ... }` operator for `Date` cursor values —
+do not pass a bare `Date` as an equality shorthand.
 
 ## Relations
 

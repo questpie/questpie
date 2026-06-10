@@ -12,6 +12,7 @@
 import { and, asc, desc, eq, inArray, or, sql } from "drizzle-orm";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 
+import { rowsOf } from "#questpie/server/db/driver-result.js";
 import { DEFAULT_LOCALE } from "#questpie/shared/constants.js";
 
 import {
@@ -515,7 +516,7 @@ export class PostgresSearchAdapter implements SearchAdapter {
 		`;
 
 		const result = await this.db!.execute(query);
-		return (result as any).rows ?? result;
+		return rowsOf(result);
 	}
 
 	/**
@@ -567,7 +568,7 @@ export class PostgresSearchAdapter implements SearchAdapter {
 		`;
 
 		const result = await this.db!.execute(query);
-		const rows = (result as any).rows ?? result;
+		const rows = rowsOf<{ count: unknown }>(result);
 		return Number(rows[0]?.count) || 0;
 	}
 
@@ -751,7 +752,7 @@ export class PostgresSearchAdapter implements SearchAdapter {
 		`;
 
 		const result = await this.db!.execute(query);
-		return (result as any).rows ?? result;
+		return rowsOf(result);
 	}
 
 	/**
@@ -861,7 +862,7 @@ export class PostgresSearchAdapter implements SearchAdapter {
 		`;
 
 		const result = await this.db!.execute(sqlQuery);
-		return (result as any).rows ?? result;
+		return rowsOf(result);
 	}
 
 	/**

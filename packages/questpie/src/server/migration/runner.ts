@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 
+import { rowsOf } from "#questpie/server/db/driver-result.js";
 import { getEnv, getNodeEnv } from "#questpie/server/utils/env.js";
 
 import type {
@@ -366,7 +367,7 @@ export class MigrationRunner {
 			sql`SELECT id, name, batch, executed_at FROM ${sql.identifier(this.tableName)} ORDER BY executed_at ASC`,
 		);
 
-		return (result.rows || result || []).map((row: any) => ({
+		return rowsOf<any>(result).map((row: any) => ({
 			id: row.id,
 			name: row.name,
 			batch: row.batch,
@@ -384,7 +385,7 @@ export class MigrationRunner {
 			sql`SELECT id, name, batch, executed_at FROM ${sql.identifier(this.tableName)} WHERE batch = ${batch} ORDER BY executed_at ASC`,
 		);
 
-		return (result.rows || result || []).map((row: any) => ({
+		return rowsOf<any>(result).map((row: any) => ({
 			id: row.id,
 			name: row.name,
 			batch: row.batch,
@@ -400,7 +401,7 @@ export class MigrationRunner {
 			sql`SELECT MAX(batch) as max_batch FROM ${sql.identifier(this.tableName)}`,
 		);
 
-		const rows = result.rows || result || [];
+		const rows = rowsOf<any>(result);
 		const maxBatch = rows[0]?.max_batch;
 		return maxBatch ? Number.parseInt(maxBatch, 10) : 0;
 	}

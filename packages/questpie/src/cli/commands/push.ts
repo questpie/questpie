@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
 
+import { toKitDb } from "../../server/db/driver-result.js";
 import { loadQuestpieConfig } from "../config.js";
 import { resolveCliPath } from "../utils.js";
 
@@ -48,53 +49,51 @@ export async function pushCommand(options: PushOptions): Promise<void> {
 	// Import drizzle-kit push API
 	const { pushSchema } = await import("drizzle-kit/api-postgres");
 
+	if (typeof pushSchema !== "function") {
+		console.log("⚠️  drizzle-kit push API not available in this version");
+		console.log(
+			"   Please use migrations instead: bun questpie migrate:generate && bun questpie migrate:up",
+		);
+		return;
+	}
+
 	console.log("⏳ Analyzing schema changes...\n");
 
-	try {
-		// Use drizzle-kit push API
-		// pushSchema(imports, drizzleInstance, casing?, entitiesConfig?)
-		const result = await pushSchema(schema, app.db as any);
+	// Use drizzle-kit push API
+	// pushSchema(imports, drizzleInstance, casing?, entitiesConfig?)
+	// drizzle-kit assumes node-postgres result shape (`execute().rows`);
+	// toKitDb normalizes driver-native results (bun-sql/postgres-js return
+	// bare arrays) so push works against any configured driver.
+	const result = await pushSchema(schema, toKitDb(app.db) as any);
 
-		if (result.sqlStatements.length === 0) {
-			console.log("✅ Schema is already up to date!");
-			return;
-		}
-
-		console.log(
-			`📝 Found ${result.sqlStatements.length} statements to execute:`,
-		);
-
-		if (options.verbose) {
-			for (const stmt of result.sqlStatements) {
-				console.log(`   ${stmt}`);
-			}
-			console.log("");
-		}
-
-		// Show hints if any
-		if (result.hints.length > 0) {
-			console.log("\n⚠️  Hints:");
-			for (const hint of result.hints) {
-				console.log(`   - ${hint.hint}`);
-				if (hint.statement) {
-					console.log(`     Statement: ${hint.statement}`);
-				}
-			}
-			console.log("");
-		}
-
-		// Execute statements
-		console.log("⏳ Applying changes...");
-		await result.apply();
-		console.log("\n✅ Schema pushed successfully!");
-	} catch (error: any) {
-		if (error.message?.includes("is not a function")) {
-			console.log("⚠️  drizzle-kit push API not available in this version");
-			console.log(
-				"   Please use migrations instead: bun questpie migrate:generate && bun questpie migrate:up",
-			);
-			return;
-		}
-		throw error;
+	if (result.sqlStatements.length === 0) {
+		console.log("✅ Schema is already up to date!");
+		return;
 	}
+
+	console.log(`📝 Found ${result.sqlStatements.length} statements to execute:`);
+
+	if (options.verbose) {
+		for (const stmt of result.sqlStatements) {
+			console.log(`   ${stmt}`);
+		}
+		console.log("");
+	}
+
+	// Show hints if any
+	if (result.hints.length > 0) {
+		console.log("\n⚠️  Hints:");
+		for (const hint of result.hints) {
+			console.log(`   - ${hint.hint}`);
+			if (hint.statement) {
+				console.log(`     Statement: ${hint.statement}`);
+			}
+		}
+		console.log("");
+	}
+
+	// Execute statements
+	console.log("⏳ Applying changes...");
+	await result.apply();
+	console.log("\n✅ Schema pushed successfully!");
 }

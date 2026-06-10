@@ -900,6 +900,8 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				}
 
 				// ORDER BY
+				// Drizzle's .orderBy(...) REPLACES previous clauses (assignment, not
+				// append), so multi-field ordering must go through a single variadic call.
 				if (options.orderBy) {
 					const orderClauses = this.buildOrderByClauses(
 						options.orderBy,
@@ -908,8 +910,8 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						i18nFallbackTable,
 						readTable,
 					);
-					for (const clause of orderClauses) {
-						query = query.orderBy(clause);
+					if (orderClauses.length > 0) {
+						query = query.orderBy(...orderClauses);
 					}
 				}
 

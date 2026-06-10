@@ -266,6 +266,7 @@ await queue.sendReminder.publish({ userId: "abc" });
 | HIGH     | `beforeCreate` / `afterCreate` hook names              | Use `beforeChange` / `afterChange` with `operation === "create"` guard                |
 | HIGH     | Runtime options in codegen-aware modules               | Use static `module({...})` + plugin-discovered `config/*.ts` factory                  |
 | HIGH     | Exposing MCP HTTP as trusted system access             | HTTP MCP is user mode only; use stdio only in trusted local/system contexts           |
+| HIGH     | Bare `Date` as where-equality (`{ createdAt: someDate }`) | Use the explicit operator: `{ createdAt: { eq: someDate } }` — see `references/crud-api.md` keyset recipe |
 | MEDIUM   | Using npm/yarn instead of Bun                          | QUESTPIE requires Bun as package manager                                              |
 | MEDIUM   | Editing `.generated/` files                            | Never edit — re-run `questpie generate`                                               |
 
