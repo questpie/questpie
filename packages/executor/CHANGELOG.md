@@ -1,5 +1,12 @@
 # @questpie/executor
 
+## 3.0.4
+
+### Patch Changes
+
+- Updated dependencies [[`13aad6f`](https://github.com/questpie/questpie/commit/13aad6f57cfd8a6678b7c34d3e33ea324f954a81)]:
+  - questpie@3.6.0
+
 ## 3.0.3
 
 ### Patch Changes
