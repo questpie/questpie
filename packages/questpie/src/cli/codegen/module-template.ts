@@ -569,6 +569,8 @@ function getNonModuleSingles(
 	const result: DiscoveredFile[] = [];
 	for (const [key, file] of singles) {
 		if (key === "modules") continue;
+		// env is a root-app convention — module-contributed env is not supported yet.
+		if (key === "env" || key === "envClient") continue;
 		result.push(file);
 	}
 	return result.sort((a, b) => a.key.localeCompare(b.key));

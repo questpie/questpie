@@ -408,6 +408,13 @@ export interface AppDefinition {
 	/** Modules from `modules.ts` — static module imports. */
 	modules?: readonly AppModuleInput[];
 
+	/**
+	 * Validated env object from `env.ts` (the `env()` factory).
+	 * Stored on the instance as `app.env`; the generated app type
+	 * narrows it to the inferred env shape.
+	 */
+	env?: Readonly<Record<string, unknown>>;
+
 	/** Collections discovered from `collections/` directory. */
 	collections?: Record<string, AnyCollectionOrBuilder>;
 

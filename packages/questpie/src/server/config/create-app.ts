@@ -391,6 +391,8 @@ const CONFIG_CONSUMED_KEYS = new Set([
 	"translations",
 	// Definition-only keys (used directly in config construction, not merged)
 	"emailTemplates",
+	// Validated env (from env.ts) — stored as `app.env`, not extension state
+	"env",
 	// Structural
 	"name",
 	"modules",
@@ -702,6 +704,11 @@ async function createAppFromDefinition(
 
 	// 6. Create Questpie instance
 	const instance = new Questpie(cmsConfig);
+
+	// 6b. Validated env (from env.ts) — typed via the generated app type.
+	if (merged.env && typeof merged.env === "object") {
+		instance.env = merged.env as Readonly<Record<string, unknown>>;
+	}
 
 	// 7. Store extension state + config bucket on instance.state
 	const runtimeExtensions = extractRuntimeExtensions(

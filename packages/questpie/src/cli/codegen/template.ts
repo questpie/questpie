@@ -100,6 +100,16 @@ export function generateTemplate(options: TemplateOptions): string {
 	);
 	lines.push("");
 
+	// Import env FIRST — env.ts validates at module evaluation, so importing
+	// it before the runtime config guarantees env validation fails boot before
+	// runtimeConfig() resolution, adapters, auth, and db init.
+	const envFile = discovered.singles.get("env") ?? null;
+	if (envFile) {
+		lines.push("// ── Env (validated before everything else) ─────────────────");
+		lines.push(importStatement(envFile));
+		lines.push("");
+	}
+
 	// Import runtime config
 	lines.push("// ── Runtime ────────────────────────────────────────────────");
 	lines.push(`import _runtime from "${configImportPath}";`);
@@ -570,12 +580,22 @@ export function generateTemplate(options: TemplateOptions): string {
 		lines.push('type _AppGlobalsAPI = _AppQuestpieBase["globals"];');
 		lines.push('type _AppStorage = _AppQuestpieBase["storage"];');
 		lines.push("type _AppTables = TablesFromConfig<_AppQuestpieConfig>;");
-		lines.push(
-			'type _AppQuestpie = Omit<_AppQuestpieBase, "collections" | "globals"> & {',
-		);
-		lines.push("\tcollections: _CollectionsAPI;");
-		lines.push("\tglobals: _AppGlobalsAPI;");
-		lines.push("};");
+		if (envFile) {
+			lines.push(
+				'type _AppQuestpie = Omit<_AppQuestpieBase, "collections" | "globals" | "env"> & {',
+			);
+			lines.push("\tcollections: _CollectionsAPI;");
+			lines.push("\tglobals: _AppGlobalsAPI;");
+			lines.push(`\tenv: typeof ${envFile.varName};`);
+			lines.push("};");
+		} else {
+			lines.push(
+				'type _AppQuestpie = Omit<_AppQuestpieBase, "collections" | "globals"> & {',
+			);
+			lines.push("\tcollections: _CollectionsAPI;");
+			lines.push("\tglobals: _AppGlobalsAPI;");
+			lines.push("};");
+		}
 		lines.push("");
 
 		lines.push(
@@ -847,6 +867,7 @@ function emitNewArchitectureRuntime(
 	if (!modulesFile) {
 		throw new Error("emitNewArchitectureRuntime called without modules.ts");
 	}
+	const envFile = discovered.singles.get("env") ?? null;
 	const coreSingles = getCategorizedSingles(discovered.singles, allDecls);
 
 	lines.push("var _appPromise: Promise<unknown> | undefined;");
@@ -856,6 +877,11 @@ function emitNewArchitectureRuntime(
 
 	// Modules — preserve the concrete exported module types directly.
 	lines.push(`\t\tmodules: ${modulesFile.varName},`);
+
+	// Validated env (from env.ts) — stored on the instance as app.env.
+	if (envFile) {
+		lines.push(`\t\tenv: ${envFile.varName},`);
+	}
 
 	// ── Emit all categories ──────────────────────────────────────
 	for (const [catName, fileMap] of discovered.categories) {
@@ -936,6 +962,11 @@ function emitNewArchitectureRuntime(
 		"export const app = (await _appPromise) as unknown as _AppQuestpie;",
 	);
 	lines.push("");
+	if (envFile) {
+		lines.push("/** Validated app environment (from env.ts). */");
+		lines.push(`export const env = ${envFile.varName};`);
+		lines.push("");
+	}
 }
 
 // ============================================================================
@@ -1030,6 +1061,8 @@ function getCategorizedSingles(
 	for (const [key, file] of singles) {
 		if (key === "modules") continue; // handled separately
 		if (key === "plugin") continue; // codegen-only, not passed to createApp
+		if (key === "env") continue; // imported first + emitted explicitly
+		if (key === "envClient") continue; // consumed by client env emission only
 		if (coreSingleKeys.has(key)) {
 			core.push(file);
 		} else {
