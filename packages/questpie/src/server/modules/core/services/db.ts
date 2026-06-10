@@ -1,7 +1,4 @@
-import type {
-	DbCreateResult,
-	QuestpieConfig,
-} from "#questpie/server/config/types.js";
+import type { DbCreateResult } from "#questpie/server/config/types.js";
 import { service } from "#questpie/server/services/define-service.js";
 
 function isWrappedDbCreateResult(
@@ -20,10 +17,7 @@ export default service({
 	namespace: null,
 	lifecycle: "singleton",
 	create: async ({ app }) => {
-		// Widen to the general config union — this service must handle EVERY
-		// DbConfig variant at runtime, while the generated `app.config.db` is
-		// narrowed to the app's concrete shape (breaking the `in` guards below).
-		const config = app.config as QuestpieConfig;
+		const config = app.config;
 		const schema = app.getSchema();
 
 		if ("drizzle" in config.db) {

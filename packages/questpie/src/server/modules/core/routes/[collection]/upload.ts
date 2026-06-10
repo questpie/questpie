@@ -30,7 +30,7 @@ export default route()
 		};
 
 		return storageCollectionUpload(
-			ctx.app as any,
+			ctx.app,
 			ctx.request,
 			{
 				collection: ctx.params.collection,

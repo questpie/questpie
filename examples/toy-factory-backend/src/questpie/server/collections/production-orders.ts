@@ -1,5 +1,7 @@
 import { collection } from "#questpie/factories";
 
+import { resolveOrderToy } from "../lib/access";
+
 export const productionOrders = collection("productionOrders")
 	.fields(({ f }) => ({
 		orderNo: f.text(64).label("Order no.").required(),
@@ -96,8 +98,10 @@ export const productionOrders = collection("productionOrders")
 		// Cycle-regression fixture: this rule's helper lives in a file imported
 		// BY this collection and uses the package-level AccessContext — must
 		// typecheck without TS2456 (see lib/access.ts header).
-		update: async (ctx) => {
-			return !!ctx.data;
+		update: async (ctx): Promise<boolean> => {
+			if (!ctx.data?.toy) return true;
+			const { toy } = await resolveOrderToy(ctx, ctx.data.toy);
+			return toy !== null;
 		},
 		delete: true,
 	})

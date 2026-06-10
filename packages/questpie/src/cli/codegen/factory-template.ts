@@ -13,12 +13,10 @@
  * @see QUE-163 — Codegen Simplification
  */
 
-import { emitKeyRegistryAugmentation } from "./category-emit.js";
 import type {
 	BuilderFactory,
 	CallbackParamDefinition,
 	CategoryDeclaration,
-	DiscoveredFile,
 	RegistryExtension,
 	ResolvedTarget,
 	SingletonFactory,
@@ -39,13 +37,6 @@ export interface FactoryTemplateOptions {
 	 * When present, the default export is spread into _allFieldDefs.
 	 */
 	userFieldsImportPath?: string;
-	/**
-	 * Discovered category files — used to emit the names-only entity key
-	 * registry (Questpie.CollectionKeys/GlobalKeys/JobKeys). factories.ts is
-	 * the host because every collection file imports it, so the augmentation
-	 * is loaded wherever `relation()` & friends are used.
-	 */
-	discoveredCategories?: Map<string, Map<string, DiscoveredFile>>;
 }
 
 /**
@@ -56,8 +47,7 @@ export interface FactoryTemplateOptions {
 export function generateFactoryTemplate(
 	options: FactoryTemplateOptions,
 ): string {
-	const { target, hasModules, userFieldsImportPath, discoveredCategories } =
-		options;
+	const { target, hasModules, userFieldsImportPath } = options;
 
 	// Extract merged registries and callback params from the resolved target
 	const collExtensions = new Map<string, RegistryExtension>();
@@ -149,7 +139,7 @@ export function generateFactoryTemplate(
 	if (hasExtensions || hasFieldExtensions) {
 		const fieldImport = hasFieldExtensions ? ", Field" : "";
 		lines.push(
-			`import { CollectionBuilder, GlobalBuilder, wrapBuilderWithExtensions, builtinFields, type EmptyCollectionState, type EmptyGlobalState, type BuiltinFields${fieldImport} } from "questpie/builders";`,
+			`import { CollectionBuilder, GlobalBuilder, wrapBuilderWithExtensions, builtinFields, type EmptyCollectionState, type EmptyGlobalState, type BuiltinFields, type CollectionBuilderState, type GlobalBuilderState, type FieldState${fieldImport} } from "questpie/builders";`,
 		);
 	} else {
 		lines.push(
@@ -231,11 +221,6 @@ export function generateFactoryTemplate(
 	// to avoid circular references. Type information flows through augmentable
 	// interfaces (Questpie.ViewsRegistry, Questpie.ComponentsRegistry, Questpie.FieldTypesMap)
 	// which are populated by each module's codegen output independently.
-
-	// ── Entity key registry — names only, zero imports ─────────
-	if (discoveredCategories) {
-		emitKeyRegistryAugmentation(lines, discoveredCategories);
-	}
 
 	// Plugin imports (only types needed for signatures)
 	if (allImports.size > 0) {
@@ -336,11 +321,8 @@ export function generateFactoryTemplate(
 
 		const placeholderMap = buildPlaceholderMap(registryCategories);
 
-		// Builder interface augmentations target the class's home module
-		// (questpie/builders) with type parameter lists IDENTICAL to the class
-		// declarations — the hand-written module augmentations (e.g.
-		// @questpie/admin's factories.ts) use the same form, so all
-		// declarations merge cleanly in workspace programs.
+		// Builder interface augmentations — generated factories import builders from
+		// questpie/builders, so augment that public subpath instead of the root barrel.
 		if (
 			collExtensions.size > 0 ||
 			globalExtensions.size > 0 ||

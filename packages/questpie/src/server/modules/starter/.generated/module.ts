@@ -23,14 +23,6 @@ import _appConfig from "../config/app";
 import _authConfig from "../config/auth";
 import _fields from "../fields";
 
-// ── Entity key registry (names only — acyclic by construction) ─────
-declare global {
-	namespace Questpie {
-		interface CollectionKeys { account: unknown; apikey: unknown; assets: unknown; session: unknown; user: unknown; verification: unknown }
-		interface JobKeys { realtimeCleanup: unknown }
-	}
-}
-
 // ════════════════════════════════════════════════════════════
 // TYPES — composed from typeof references (zero inference cost)
 // ════════════════════════════════════════════════════════════
@@ -45,33 +37,14 @@ export interface StarterCollections {
 }
 
 export interface StarterJobs {
-	realtimeCleanup: Omit<typeof _job_realtimeCleanup, "handler"> & { handler: (args: unknown) => Promise<unknown> };
+	realtimeCleanup: typeof _job_realtimeCleanup;
 }
 
 // ════════════════════════════════════════════════════════════
 // MODULE DEFINITION — static plain object
 // ════════════════════════════════════════════════════════════
 
-export type StarterModule = {
-	name: "questpie-starter";
-	collections: StarterCollections;
-	jobs: StarterJobs;
-	globals: {};
-	routes: {};
-	messages: { en: typeof _msg_en };
-	services: {};
-	emails: {};
-	migrations: readonly unknown[];
-	seeds: readonly unknown[];
-	fieldTypes: {};
-	config: {
-		app: typeof _appConfig;
-		auth: typeof _authConfig;
-	};
-	fields: typeof _fields;
-};
-
-const _module: StarterModule = {
+const _module = {
 	name: "questpie-starter" as const,
 	collections: {
 		account: _coll_account,
@@ -101,4 +74,5 @@ const _module: StarterModule = {
 	fields: _fields,
 };
 
+export type StarterModule = typeof _module;
 export default _module;

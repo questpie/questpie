@@ -294,17 +294,15 @@ describe("generateModuleTemplate — routes with slash-separated keys", () => {
 	});
 
 	it("emits flat type interface with camelCase slash keys", () => {
-		// Route files may export non-route helpers — only branded routes get
-		// the handler-erased RouteDefinition, everything else passes through.
 		expect(output).toContain("export interface TestRoutes {");
 		expect(output).toContain(
-			'"admin/stats": typeof _route_admin_stats extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"admin/stats">> : typeof _route_admin_stats;',
+			'"admin/stats": RouteDefinition<unknown, unknown, RouteParamsFromKey<"admin/stats">>;',
 		);
 		expect(output).toContain(
-			'"admin/users/export": typeof _route_admin_users_export extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"admin/users/export">> : typeof _route_admin_users_export;',
+			'"admin/users/export": RouteDefinition<unknown, unknown, RouteParamsFromKey<"admin/users/export">>;',
 		);
 		expect(output).toContain(
-			'getConfig: typeof _route_getConfig extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"getConfig">> : typeof _route_getConfig;',
+			'getConfig: RouteDefinition<unknown, unknown, RouteParamsFromKey<"getConfig">>;',
 		);
 	});
 });
@@ -339,7 +337,7 @@ describe("generateModuleTemplate — bundle routes", () => {
 		// When bundles are present, type is emitted as intersection, not interface
 		expect(output).toContain("export type TestRoutes =");
 		expect(output).toContain(
-			'getConfig: typeof _route_getConfig extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"getConfig">> : typeof _route_getConfig',
+			'getConfig: RouteDefinition<unknown, unknown, RouteParamsFromKey<"getConfig">>',
 		);
 		expect(output).toContain("typeof _route_setup");
 	});
@@ -525,15 +523,7 @@ describe("generateModuleTemplate — no Registry augmentation", () => {
 
 	it("does NOT emit Registry augmentation (handled by root template)", () => {
 		expect(output).not.toContain("interface Registry {");
-	});
-
-	it("emits ONLY the names-only key registry in declare global", () => {
-		// The key registry is the single allowed declare-global block in
-		// module.ts — names only (all values `unknown`), so interface merging
-		// across modules cannot conflict and no type reference can cycle.
-		expect(output).toContain("interface CollectionKeys { posts: unknown }");
-		const declareGlobalCount = output.match(/declare global \{/g)?.length;
-		expect(declareGlobalCount).toBe(1);
+		expect(output).not.toContain("declare global {");
 	});
 });
 

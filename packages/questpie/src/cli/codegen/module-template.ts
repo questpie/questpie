@@ -22,7 +22,6 @@
 import {
 	categoryRecordEntry,
 	categoryTypeEntry,
-	emitKeyRegistryAugmentation,
 	importStatement,
 	safeKey,
 	sortedValues,
@@ -155,11 +154,6 @@ export function generateModuleTemplate(
 		}
 		lines.push("");
 	}
-
-	// Entity key registry — names only (no type references), so it cannot
-	// participate in the module.ts circular-reference chains. Merges with the
-	// root app's registry and other modules' via interface merging.
-	emitKeyRegistryAugmentation(lines, discovered.categories);
 
 	// ════════════════════════════════════════════════════════════
 	// TYPES — module type extraction
@@ -298,32 +292,8 @@ export function generateModuleTemplate(
 		const emitStrategy = decl.emit ?? "record";
 		if (emitStrategy === "array") {
 			lines.push(`\t${safeKey(catName)}: readonly unknown[];`);
-			continue;
-		}
-		// Categories with discovered files but no named type (e.g. messages)
-		// still need a typeof-based record — `Record<string, never>` would
-		// reject the populated runtime object.
-		const fileMap = discovered.categories.get(catName);
-		const files = fileMap ? sortedValues(fileMap) : [];
-		if (files.length > 0) {
-			const leafFiles = files.filter((f) => !f.isBundle);
-			const bundleFiles = files.filter((f) => f.isBundle);
-			const parts: string[] = [];
-			if (leafFiles.length > 0) {
-				parts.push(
-					`{ ${leafFiles.map((f) => `${safeKey(f.key)}: typeof ${f.varName}`).join("; ")} }`,
-				);
-			}
-			for (const bundle of bundleFiles) {
-				parts.push(`typeof ${bundle.varName}`);
-			}
-			lines.push(`\t${safeKey(catName)}: ${parts.join(" & ")};`);
 		} else {
-			// Empty stub MUST be `{}` — `Record<string, never>` carries a
-			// `[string]: never` index signature that poisons every `_MP<>`
-			// intersection in consuming apps (AppCollections/AppServices keys
-			// degrade to `never`, AppContext gets an index signature).
-			lines.push(`\t${safeKey(catName)}: {};`);
+			lines.push(`\t${safeKey(catName)}: Record<string, never>;`);
 		}
 	}
 	if (configSingles.length > 0) {
@@ -664,22 +634,25 @@ function emitSimpleRouteTypeInterface(
 	const leafFiles = sortedValues(fileMap).filter((f) => !f.isBundle);
 	const bundleFiles = sortedValues(fileMap).filter((f) => f.isBundle);
 
-	// Route files may export non-route helpers (e.g. shared route utilities).
-	// Only actual routes (branded) get the handler-erased RouteDefinition —
-	// everything else passes through as its own type.
-	const routeEntry = (file: DiscoveredFile) =>
-		`${safeKey(file.key)}: typeof ${file.varName} extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<${JSON.stringify(file.key)}>> : typeof ${file.varName}`;
-
 	if (bundleFiles.length === 0) {
 		lines.push(`export interface ${typeName} {`);
 		for (const file of leafFiles) {
-			lines.push(`\t${routeEntry(file)};`);
+			lines.push(
+				`\t${safeKey(file.key)}: RouteDefinition<unknown, unknown, RouteParamsFromKey<${JSON.stringify(file.key)}>>;`,
+			);
 		}
 		lines.push("}");
 	} else {
 		const parts: string[] = [];
 		if (leafFiles.length > 0) {
-			parts.push(`{ ${leafFiles.map((f) => routeEntry(f)).join("; ")} }`);
+			parts.push(
+				`{ ${leafFiles
+					.map(
+						(f) =>
+							`${safeKey(f.key)}: RouteDefinition<unknown, unknown, RouteParamsFromKey<${JSON.stringify(f.key)}>>`,
+					)
+					.join("; ")} }`,
+			);
 		}
 		for (const bundle of bundleFiles) {
 			parts.push(`typeof ${bundle.varName}`);

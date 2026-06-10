@@ -12,9 +12,7 @@ export default service({
 	lifecycle: "singleton",
 	create: ({ app }) => {
 		const realtime = new RealtimeService(
-			// Widen — RealtimeService takes the general client type; the generated
-			// `app.db` is narrowed to the app's concrete drizzle schema.
-			app.db as any,
+			app.db,
 			app.config.realtime,
 			app._pgConnectionString,
 		);

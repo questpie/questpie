@@ -11,6 +11,6 @@ export default route()
 	.patch()
 	.raw()
 	.handler(async ({ app, request, params }) => {
-		const routes = createCollectionRoutes(app as any);
+		const routes = createCollectionRoutes(app);
 		return routes.updateMany(request, { collection: params.collection });
 	});

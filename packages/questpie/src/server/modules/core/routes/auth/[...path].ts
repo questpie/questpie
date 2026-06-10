@@ -18,7 +18,7 @@ export default route()
 		if (!app.auth) {
 			return handleError(ApiError.notImplemented("Authentication"), {
 				request,
-				app: app as any,
+				app,
 			});
 		}
 		return app.auth.handler(request);

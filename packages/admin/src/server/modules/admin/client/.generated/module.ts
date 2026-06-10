@@ -110,17 +110,7 @@ export interface AdminWidgets {
 // MODULE DEFINITION — static plain object
 // ════════════════════════════════════════════════════════════
 
-export type AdminModule = {
-	name: "questpie-admin";
-	views: AdminViews;
-	components: AdminComponents;
-	fields: AdminFields;
-	pages: AdminPages;
-	widgets: AdminWidgets;
-	blocks: {};
-};
-
-const _module: AdminModule = {
+const _module = {
 	name: "questpie-admin" as const,
 	views: {
 		[_view_collectionDocument.name]: _view_collectionDocument,
@@ -173,4 +163,5 @@ const _module: AdminModule = {
 	blocks: {},
 };
 
+export type AdminModule = typeof _module;
 export default _module;

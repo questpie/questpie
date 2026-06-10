@@ -319,7 +319,7 @@ describe("generateTemplate — minimal (modules.ts only)", () => {
 });
 
 describe("generateFactoryTemplate — builder module augmentation", () => {
-	it("augments questpie/builders with class-identical type parameter lists", () => {
+	it("augments questpie/builders with matching builder state constraints", () => {
 		const target = serverTarget([
 			{
 				name: "test-builder-extensions",
@@ -375,8 +375,11 @@ describe("generateFactoryTemplate — builder module augmentation", () => {
 			hasModules: true,
 		});
 
-expect(code).toContain('declare module "questpie/builders" {');
+		expect(code).toContain('declare module "questpie/builders" {');
 		expect(code).not.toContain('declare module "questpie" {');
+		expect(code).toContain("type CollectionBuilderState");
+		expect(code).toContain("type GlobalBuilderState");
+		expect(code).toContain("type FieldState");
 		// The augmentation's type parameter list must be IDENTICAL to the class
 		// (name + constraint) — a renamed param (TState$1) breaks declaration
 		// merging (TS2428) and makes the merged symbol two-generic (TS2314).

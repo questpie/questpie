@@ -36,55 +36,6 @@ export function categoryRecordEntry(
 	return `${safeKey(file.key)}: ${file.varName}`;
 }
 
-/**
- * Emit the names-only entity key registry augmentation
- * (`Questpie.CollectionKeys` / `GlobalKeys` / `JobKeys`).
- *
- * Keys come from file discovery alone and the emitted interfaces reference
- * nothing, so the augmentation is acyclic by construction. Interface merging
- * across generated files (root app + each module) tolerates duplicate keys.
- *
- * Consumed by `KnownCollectionKey` & friends (e.g. `relation()` target
- * autocomplete) with a `(string & {})` fallback — names only, never strict.
- */
-export function emitKeyRegistryAugmentation(
-	lines: string[],
-	discoveredCategories: Map<string, Map<string, DiscoveredFile>>,
-): void {
-	const registries: Array<{ interfaceName: string; catName: string }> = [
-		{ interfaceName: "CollectionKeys", catName: "collections" },
-		{ interfaceName: "GlobalKeys", catName: "globals" },
-		{ interfaceName: "JobKeys", catName: "jobs" },
-	];
-
-	const entries: string[] = [];
-	for (const { interfaceName, catName } of registries) {
-		const fileMap = discoveredCategories.get(catName);
-		if (!fileMap || fileMap.size === 0) continue;
-		// Bundles re-export another module's entities — that module's own
-		// codegen emits their keys, so skip them here.
-		const keys = sortedValues(fileMap)
-			.filter((file) => !file.isBundle)
-			.map((file) => `${safeKey(file.key)}: unknown`);
-		if (keys.length === 0) continue;
-		entries.push(`\t\tinterface ${interfaceName} { ${keys.join("; ")} }`);
-	}
-
-	if (entries.length === 0) return;
-
-	lines.push(
-		"// ── Entity key registry (names only — acyclic by construction) ─────",
-	);
-	lines.push("declare global {");
-	lines.push("\tnamespace Questpie {");
-	for (const entry of entries) {
-		lines.push(entry);
-	}
-	lines.push("\t}");
-	lines.push("}");
-	lines.push("");
-}
-
 export function categoryTypeEntry(
 	file: DiscoveredFile,
 	decl: CategoryDeclaration | undefined,

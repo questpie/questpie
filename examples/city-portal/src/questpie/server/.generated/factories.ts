@@ -32,14 +32,6 @@ const _allFieldDefs = Object.fromEntries(
 	Object.entries(_rawFieldDefs).map(([k, v]) => [k, _wrapFieldFactory(v)])
 ) as unknown as typeof _rawFieldDefs;
 
-// ── Entity key registry (names only — acyclic by construction) ─────
-declare global {
-	namespace Questpie {
-		interface CollectionKeys { announcements: unknown; cities: unknown; cityMembers: unknown; contacts: unknown; documents: unknown; news: unknown; pages: unknown; submissions: unknown }
-		interface GlobalKeys { site_settings: unknown }
-	}
-}
-
 // ── Plugin Imports ─────────────────────────────────────────
 import { type AdminCollectionConfig, type AdminConfigContext, type ListViewConfig, type ListViewConfigContext, type FilterViewsByKind, type FormViewConfig, type FormViewConfigContext, type PreviewConfig, type ServerActionsConfig, type ActionsConfigContext, type AdminGlobalConfig, type AdminConfigInput, createViewCallbackProxy, createComponentCallbackProxy, createActionCallbackProxy, createActionFieldBuilderProxy } from "@questpie/admin/factories";
 import { type AppConfigInput, type AuthConfig } from "questpie/types";

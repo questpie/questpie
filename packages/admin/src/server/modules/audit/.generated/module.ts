@@ -3,7 +3,7 @@
 // Regenerate with: questpie generate --module
 
 // ── Collections ────────────────────────────────────────────
-import { auditLogCollection as _coll_auditLogCollection } from "../collections/audit-log";
+import { auditLogCollection as _coll_admin_audit_log } from "../collections/audit-log";
 
 // ── Jobs ────────────────────────────────────────────
 import { auditCleanupJob as _job_auditCleanup } from "../jobs/audit-cleanup";
@@ -12,55 +12,26 @@ import { auditCleanupJob as _job_auditCleanup } from "../jobs/audit-cleanup";
 import _adminConfig from "../config/admin";
 import _appConfig from "../config/app";
 
-// ── Entity key registry (names only — acyclic by construction) ─────
-declare global {
-	namespace Questpie {
-		interface CollectionKeys { auditLogCollection: unknown }
-		interface JobKeys { auditCleanup: unknown }
-	}
-}
-
 // ════════════════════════════════════════════════════════════
 // TYPES — composed from typeof references (zero inference cost)
 // ════════════════════════════════════════════════════════════
 
 export interface AuditCollections {
-	auditLogCollection: typeof _coll_auditLogCollection;
+	admin_audit_log: typeof _coll_admin_audit_log;
 }
 
 export interface AuditJobs {
-	auditCleanup: Omit<typeof _job_auditCleanup, "handler"> & { handler: (args: unknown) => Promise<unknown> };
+	auditCleanup: typeof _job_auditCleanup;
 }
 
 // ════════════════════════════════════════════════════════════
 // MODULE DEFINITION — static plain object
 // ════════════════════════════════════════════════════════════
 
-export type AuditModule = {
-	name: "questpie-audit";
-	collections: AuditCollections;
-	jobs: AuditJobs;
-	globals: {};
-	routes: {};
-	messages: {};
-	services: {};
-	emails: {};
-	migrations: readonly unknown[];
-	seeds: readonly unknown[];
-	fieldTypes: {};
-	views: {};
-	components: {};
-	blocks: {};
-	config: {
-		admin: typeof _adminConfig;
-		app: typeof _appConfig;
-	};
-};
-
-const _module: AuditModule = {
+const _module = {
 	name: "questpie-audit" as const,
 	collections: {
-		auditLogCollection: _coll_auditLogCollection,
+		admin_audit_log: _coll_admin_audit_log,
 	} as AuditCollections,
 	jobs: {
 		auditCleanup: _job_auditCleanup,
@@ -82,4 +53,5 @@ const _module: AuditModule = {
 	},
 };
 
+export type AuditModule = typeof _module;
 export default _module;

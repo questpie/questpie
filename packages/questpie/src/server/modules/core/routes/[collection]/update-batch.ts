@@ -11,6 +11,6 @@ export default route()
 	.post()
 	.raw()
 	.handler(async ({ app, request, params }) => {
-		const routes = createCollectionRoutes(app as any);
+		const routes = createCollectionRoutes(app);
 		return routes.updateBatch(request, { collection: params.collection });
 	});
