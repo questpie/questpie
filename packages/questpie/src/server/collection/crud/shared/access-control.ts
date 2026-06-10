@@ -69,10 +69,13 @@ export interface AccessRuleEvaluationContext {
  * @returns true (allow), false (deny), or AccessWhere (conditional access)
  */
 export async function executeAccessRule(
+	// Accepts both plain AccessRule and RowAccessRule callbacks — row-aware
+	// rules type ctx.data as non-optional, but every caller that evaluates one
+	// passes the loaded row, so the runtime contract holds.
 	rule:
 		| boolean
 		| ((
-				ctx: AccessContext,
+				ctx: AccessContext & { data: any },
 		  ) => boolean | AccessWhere | Promise<boolean | AccessWhere>)
 		| undefined,
 	context: AccessRuleEvaluationContext,
@@ -92,14 +95,16 @@ export async function executeAccessRule(
 			db: context.db,
 			session: context.session,
 		});
+		// data is non-optional for RowAccessRule callers (they always pass the
+		// loaded row); plain rules tolerate undefined — widen via the cast.
 		const result = await rule({
 			...services,
 			...(context.contextExtensions ?? {}),
-			data: context.row,
+			data: context.row as any,
 			input: context.input,
 			locale: context.locale,
 			request: context.request,
-		} as AccessContext);
+		} as AccessContext & { data: any });
 
 		return result;
 	}
