@@ -49,6 +49,18 @@ import { tryGetContext } from "#questpie/server/config/context.js";
 import { DEFAULT_LOCALE } from "#questpie/shared/constants.js";
 
 /**
+ * Internal marker for nested finds that populate upload relations
+ * (`RelationConfig.inheritAccess`).
+ *
+ * Stamped on nested find options by the relation dispatcher — never by user
+ * input (JSON cannot carry symbols, so the HTTP `with` parameter cannot inject
+ * it). When present, collection-level read access is inherited from the parent
+ * row's read decision; field-level read rules still apply. Not exported from
+ * the package.
+ */
+export const INHERIT_ACCESS = Symbol.for("questpie.internal.inheritAccess");
+
+/**
  * Normalized context with required fields
  */
 export type NormalizedContext = Required<

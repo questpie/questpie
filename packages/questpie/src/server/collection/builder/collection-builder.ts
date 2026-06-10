@@ -398,6 +398,10 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 			? targetCollection[0]
 			: targetCollection;
 
+		// Upload fields (f.upload) populate through the parent row's read
+		// decision — see RelationConfig.inheritAccess.
+		const inheritAccess = metadata.isUpload === true ? true : undefined;
+
 		switch (relationType) {
 			case "belongsTo": {
 				// FK column is stored under field name (e.g., "author")
@@ -410,6 +414,7 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 					relationName: metadata.relationName,
 					onDelete: metadata.onDelete,
 					onUpdate: metadata.onUpdate,
+					inheritAccess,
 				};
 			}
 
@@ -436,6 +441,7 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 					targetField: metadata.targetField,
 					onDelete: metadata.onDelete,
 					onUpdate: metadata.onUpdate,
+					inheritAccess,
 				};
 			}
 
@@ -447,6 +453,7 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 					collection: targetName,
 					references: ["id"],
 					relationName: metadata.relationName,
+					inheritAccess,
 				};
 			}
 

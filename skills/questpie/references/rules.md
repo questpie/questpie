@@ -16,6 +16,14 @@ Access rules are defined per-collection via `.access()`. Each operation accepts 
 
 When no `.access()` is defined, all operations default to `({ session }) => !!session` — **authenticated users only**. You must explicitly set `read: true` for public collections.
 
+Every operation resolves through the same chain, with no hidden framework grants above your config:
+
+1. Collection/global `.access()` rule for that operation
+2. App-level `defaultAccess` (`appConfig({ access })` in `config/app.ts`)
+3. Framework fallback: require session
+
+A deny-all `defaultAccess` (`{ read: false, create: false, update: false, delete: false }`) closes the entire REST surface — including upload-row listing and schema/meta introspection — until collections opt in.
+
 ### Collection Access
 
 ```ts
@@ -38,12 +46,34 @@ export default collection("posts")
 
 ### Operations
 
-| Operation | When checked                 |
-| --------- | ---------------------------- |
-| `read`    | Listing and fetching records |
-| `create`  | Creating new records         |
-| `update`  | Updating existing records    |
-| `delete`  | Deleting records             |
+| Operation    | When checked                                                     |
+| ------------ | ---------------------------------------------------------------- |
+| `read`       | Listing and fetching records                                      |
+| `create`     | Creating new records                                              |
+| `update`     | Updating existing records                                         |
+| `delete`     | Deleting records                                                  |
+| `transition` | Workflow stage transitions (falls back to `update`)               |
+| `serve`      | Upload file bytes by key (`GET /:collection/files/:key`)          |
+| `introspect` | Schema/meta routes (`GET /:collection/{schema,meta}`)             |
+
+Two operations have specialized chains:
+
+- **`serve`** (upload collections): `serve` → explicit collection `read`
+  (row-aware, `ctx.data` is the upload row) → `defaultAccess.serve` → allow.
+  `defaultAccess.read` is deliberately NOT consulted — listing rows and
+  fetching bytes by key are distinct permissions. `visibility: "public"`
+  means bytes are servable by key; `"private"` files always require the
+  signed token in addition to any serve rule.
+- **`introspect`**: `introspect` → `defaultAccess.introspect` → visible iff
+  at least one CRUD operation is allowed for the current user. Create-only
+  public collections keep their validation schema readable; deny-all apps
+  expose no schemas. Denied requests get 401 (anonymous) or 403
+  (authenticated).
+
+`f.upload()` fields populate through the PARENT row's read decision — a
+publicly readable gallery shows its assets (with `url`) to anonymous readers
+even when the assets collection itself is unlistable. Field-level read rules
+on the upload collection still apply inside population.
 
 ### Global Access
 

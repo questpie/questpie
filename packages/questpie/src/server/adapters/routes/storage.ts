@@ -6,6 +6,11 @@
 
 import type { Files } from "files-sdk";
 
+import type { CollectionAccess } from "../../collection/builder/types.js";
+import {
+	executeAccessRule,
+	matchesAccessConditions,
+} from "../../collection/crud/shared/access-control.js";
 import type { Questpie } from "../../config/questpie.js";
 import type { StorageVisibility } from "../../config/types.js";
 import { ApiError } from "../../errors/index.js";
@@ -256,6 +261,11 @@ export async function storageCollectionUpload(
 /**
  * Serve a file from a collection's storage.
  * GET /:collection/files/:key
+ *
+ * Authorization is the `serve` access chain, not row read access:
+ * `access.serve` → explicit collection `access.read` (row-aware) →
+ * `defaultAccess.serve` → allow. Files with `visibility: "private"`
+ * additionally always require a valid signed token.
  */
 export async function storageCollectionServe(
 	app: Questpie<any>,
@@ -319,14 +329,16 @@ export async function storageCollectionServe(
 	try {
 		const storage = getStorageFromContext(resolved.appContext, app);
 
-		// The upload row is the authorization anchor for storage objects. Do not
-		// serve orphaned keys, or keys hidden by collection read access.
+		// The upload row is the authorization ANCHOR for storage objects
+		// (orphaned keys still 404), not the authorization decision. Fetch it in
+		// system mode — whether the bytes may be served is decided by the serve
+		// access chain below, never by list/read access defaults.
 		const crud = app.collections[collection as any];
 		const record = await crud.findOne(
 			{
 				where: { key } as any,
 			},
-			resolved.appContext,
+			{ ...resolved.appContext, accessMode: "system" },
 		);
 
 		if (!record) {
@@ -343,7 +355,8 @@ export async function storageCollectionServe(
 			app.config.storage?.defaultVisibility ||
 			"public";
 
-		// For private files, verify the signed token after row access succeeds.
+		// For private files, verify the signed token first. The token is the
+		// capability mechanism — a serve rule cannot disable it.
 		if (visibility === "private") {
 			if (!token) {
 				return errorResponse(
@@ -392,6 +405,51 @@ export async function storageCollectionServe(
 					request,
 					resolved.appContext.locale,
 				);
+			}
+		}
+
+		// Serve access chain: `access.serve` → explicit collection `access.read`
+		// (row-aware, back-compat) → `defaultAccess.serve` → allow. App-level
+		// `defaultAccess.read` is deliberately NOT consulted — it governs the
+		// list/read API surface, while `visibility` declares whether file bytes
+		// are servable by key (private bytes are already token-gated above).
+		if (resolved.appContext.accessMode !== "system") {
+			const collectionAccess = collectionConfig.state.access as
+				| CollectionAccess
+				| undefined;
+			const serveRule =
+				collectionAccess?.serve ??
+				collectionAccess?.read ??
+				(app.defaultAccess as CollectionAccess | undefined)?.serve;
+
+			if (serveRule !== undefined) {
+				const decision = await executeAccessRule(serveRule, {
+					app,
+					db: resolved.appContext.db ?? app.db,
+					session: resolved.appContext.session,
+					locale: resolved.appContext.locale,
+					row: record,
+					request,
+				});
+				const allowed =
+					decision === true ||
+					(typeof decision === "object" &&
+						(await matchesAccessConditions(
+							decision,
+							record as Record<string, any>,
+						)));
+
+				if (!allowed) {
+					return errorResponse(
+						ApiError.forbidden({
+							operation: "read",
+							resource: collection,
+							reason: "User does not have permission to serve this file",
+						}),
+						request,
+						resolved.appContext.locale,
+					);
+				}
 			}
 		}
 

@@ -127,6 +127,37 @@ When workflow is the publication source for pages, public reads use `stage: "pub
 })
 ```
 
+All access kinds and when each is checked:
+
+| Kind         | Gates                                                              |
+| ------------ | ------------------------------------------------------------------ |
+| `read`       | Listing and fetching records                                       |
+| `create`     | Creating records                                                   |
+| `update`     | Updating records                                                   |
+| `delete`     | Deleting records                                                   |
+| `transition` | Workflow stage transitions (falls back to `update`)                |
+| `serve`      | Upload file bytes by key (`GET /:collection/files/:key`)           |
+| `introspect` | Schema/meta routes (`GET /:collection/{schema,meta}`)              |
+
+Resolution chain for every kind: collection `.access()` → app `defaultAccess`
+(from `appConfig({ access })`) → require session. No hidden framework grants —
+deny-all `defaultAccess` really closes the whole REST surface. Two kinds have
+specialized fallbacks:
+
+- `serve`: `serve` → explicit collection `read` (row-aware, `ctx.data` = upload
+  row) → `defaultAccess.serve` → allow. `visibility: "public"` means bytes are
+  servable by key; it never makes rows listable. Private files additionally
+  always require the signed token.
+- `introspect`: `introspect` → `defaultAccess.introspect` → visible iff at
+  least one CRUD operation is allowed (so `create: true` form collections keep
+  their validation schema readable; deny-all apps expose no schemas).
+
+Upload population: `f.upload()` fields populate through the PARENT row's read
+decision — a public gallery (`read: true`) shows its assets (with `url`) to
+anonymous readers even when the assets collection itself is unlistable.
+Field-level read rules on the upload collection still apply inside population.
+Hand-written `f.relation()` fields keep normal target-collection access.
+
 ### CRUD Operations (Server-Side)
 
 ```ts

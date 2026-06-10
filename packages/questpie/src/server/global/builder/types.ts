@@ -211,6 +211,14 @@ export interface GlobalAccess<TRow = any> {
 	 */
 	transition?: GlobalAccessRule<TRow>;
 	/**
+	 * Access rule for schema/meta introspection
+	 * (`GET /globals/:name/{schema,meta}`).
+	 *
+	 * Resolution: `introspect` → `defaultAccess.introspect` → visible iff at
+	 * least one operation (read/update) is allowed for the current user.
+	 */
+	introspect?: GlobalAccessRule<TRow>;
+	/**
 	 * Field-scoped access rules.
 	 * Source-of-truth for per-field authorization in globals.
 	 */

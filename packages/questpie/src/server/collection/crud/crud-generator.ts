@@ -52,6 +52,7 @@ import {
 	removeRestrictedReadFields,
 	validateFieldsWriteAccess,
 } from "#questpie/server/collection/crud/shared/access-control.js";
+import { INHERIT_ACCESS } from "#questpie/server/collection/crud/shared/context.js";
 import {
 	extractLocalizedFieldNames,
 	extractNestedLocalizationSchemas,
@@ -453,13 +454,16 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					}),
 				);
 
-				// Enforce access control
-				const accessWhere = await this.enforceAccessControl(
-					"read",
-					normalized,
-					null,
-					options,
-				);
+				// Enforce access control. Upload relations populate through the
+				// PARENT row's read decision: the relation dispatcher stamps nested
+				// options with an internal symbol (never user input — JSON cannot
+				// carry symbols), which skips the collection-level read check while
+				// field-level read filtering below stays active.
+				const inheritAccess =
+					(options as Record<PropertyKey, unknown>)[INHERIT_ACCESS] === true;
+				const accessWhere = inheritAccess
+					? true
+					: await this.enforceAccessControl("read", normalized, null, options);
 
 				// Access explicitly denied
 				if (accessWhere === false) {
@@ -1104,8 +1108,16 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					relationOptionKeys.has(key),
 				);
 				nestedOptions = hasQueryKey
-					? (relationOptions as Record<string, any>)
+					? { ...(relationOptions as Record<string, any>) }
 					: { with: relationOptions };
+			}
+
+			// Upload relations (f.upload) populate through the parent row's read
+			// decision — the parent's access already authorized this content.
+			// Field-level read rules on the target still apply. The symbol cannot
+			// be injected via HTTP `with` input (JSON cannot carry symbols).
+			if (relation.inheritAccess) {
+				(nestedOptions as Record<PropertyKey, unknown>)[INHERIT_ACCESS] = true;
 			}
 
 			const hasFieldConfig =
@@ -3068,15 +3080,6 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 
 		// System mode bypasses all access control
 		if (normalized.accessMode === "system") return true;
-
-		// Upload collections with public visibility get public read access by default
-		if (
-			operation === "read" &&
-			this.state.access?.read === undefined &&
-			this.state.upload?.visibility === "public"
-		) {
-			return true;
-		}
 
 		// Use collection's access rule, or fall back to app defaultAccess
 		const accessRule =

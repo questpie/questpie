@@ -5,6 +5,7 @@
  */
 
 import type { RelationConfig } from "#questpie/server/collection/builder/types.js";
+import { INHERIT_ACCESS } from "#questpie/server/collection/crud/shared/context.js";
 import type {
 	CRUD,
 	CRUDContext,
@@ -70,11 +71,17 @@ export async function resolveManyToManyRelation(
 
 	if (sourceIds.size === 0) return;
 
-	// Fetch junction records
+	// Fetch junction records. Inherit-access relations (f.upload through a
+	// junction) read the join rows through the parent's read decision too —
+	// the junction rows are pure composition, not user-facing data.
+	const junctionOptions: Record<string, any> = {
+		where: { [sourceField]: { in: Array.from(sourceIds) } },
+	};
+	if ((nestedOptions as Record<PropertyKey, unknown>)[INHERIT_ACCESS] === true) {
+		(junctionOptions as Record<PropertyKey, unknown>)[INHERIT_ACCESS] = true;
+	}
 	const { docs: junctionRows } = await junctionCrud.find(
-		{
-			where: { [sourceField]: { in: Array.from(sourceIds) } },
-		},
+		junctionOptions,
 		context,
 	);
 

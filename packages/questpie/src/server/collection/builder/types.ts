@@ -84,8 +84,12 @@ export interface WorkflowOptions {
 export interface UploadOptions {
 	/**
 	 * Default visibility for uploaded files
-	 * - "public": Files are accessible without authentication
+	 * - "public": File BYTES are servable by key without authentication
 	 * - "private": Files require signed URLs with token
+	 *
+	 * Visibility governs file serving only — listing/reading upload ROWS goes
+	 * through the normal access chain (`.access()` → `defaultAccess` → session).
+	 * Use `access.serve` to override the serving rule.
 	 * @default "public"
 	 */
 	visibility?: "public" | "private";
@@ -187,6 +191,13 @@ export interface RelationConfig {
 	sourceField?: string; // Foreign key column in junction table pointing to source
 	targetKey?: string; // Primary key on target table (default: "id")
 	targetField?: string; // Foreign key column in junction table pointing to target
+	/**
+	 * Populate this relation through the PARENT row's read decision instead of
+	 * the target collection's read access. Set by the framework for `f.upload()`
+	 * fields — an asset attached to a readable row is part of that row's
+	 * content. Field-level read rules on the target still apply.
+	 */
+	inheritAccess?: boolean;
 }
 
 export type InferRelationConfigsFromFields<
@@ -845,6 +856,25 @@ export interface CollectionAccess<TRow = any> {
 	 * Falls back to `update` if not specified.
 	 */
 	transition?: AccessRule<TRow>;
+	/**
+	 * Access rule for serving upload bytes by key
+	 * (`GET /:collection/files/:key`). Row-aware: `ctx.data` is the upload row.
+	 *
+	 * Resolution: `serve` → explicit collection `read` → `defaultAccess.serve`
+	 * → allow. App-level `defaultAccess.read` is deliberately NOT in the chain —
+	 * listing rows and fetching bytes by key are distinct permissions.
+	 * For `visibility: "private"` files the signed-token check always applies
+	 * in addition to this rule.
+	 */
+	serve?: AccessRule<TRow>;
+	/**
+	 * Access rule for schema/meta introspection
+	 * (`GET /:collection/{schema,meta}`).
+	 *
+	 * Resolution: `introspect` → `defaultAccess.introspect` → visible iff at
+	 * least one CRUD operation is allowed for the current user.
+	 */
+	introspect?: AccessRule<TRow>;
 
 	/**
 	 * Field-scoped access rules.

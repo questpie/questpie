@@ -236,6 +236,13 @@ collection("media")
 
 Upload collections get additional CRUD methods: `upload()` and `uploadMany()`.
 
+`visibility` governs file serving only — `"public"` means the file BYTES are
+servable by key without authentication, `"private"` requires a signed-token
+URL. Listing and reading the upload ROWS always resolves through the normal
+access chain (`.access()` → `defaultAccess` → session required). Use the
+`serve` access kind to override the serving rule — see
+[Access Control](/docs/backend/rules/access-control).
+
 ## `.indexes(callback)`
 
 Define database indexes and constraints. The callback receives `{ table }` for column references.

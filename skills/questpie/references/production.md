@@ -74,6 +74,27 @@ handler: async ({ session }) => {
 
 The `adminModule` provides the canonical Better Auth `user` collection for storing user accounts. That contract includes `user.role` (`admin` or `user`), which built-in admin setup and login guards depend on. Do not replace `collection("user")` from scratch in apps that use `adminModule`; merge `starterModule.collections.user` and extend it instead.
 
+### Locking Down the REST Surface
+
+Deny-all is actually deny-all — there are no implicit framework grants above
+`defaultAccess`:
+
+```ts title="config/app.ts"
+export default appConfig({
+	access: { read: false, create: false, update: false, delete: false },
+});
+```
+
+With this config, anonymous and authenticated callers get nothing unless a
+collection opts in via `.access()`: no row listing (including
+public-visibility upload collections like `assets`), and no schema/meta
+introspection (gated by the same access system — visible iff at least one
+operation is allowed, overridable with the `introspect` access kind). Public
+upload files still serve by key (`GET /:collection/files/:key`) because
+`visibility: "public"` declares the BYTES public — override with the `serve`
+access kind. Do not wrap schema/meta routes in custom auth middleware; use
+`introspect` rules instead.
+
 ## Database
 
 PostgreSQL with Drizzle ORM. Schema is generated from your collection and global definitions.
