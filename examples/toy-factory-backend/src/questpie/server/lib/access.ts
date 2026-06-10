@@ -3,12 +3,14 @@
  * fixture).
  *
  * CYCLE RULE: this file is imported by a collection (production-orders),
- * which the generated index imports — so it must NOT import types from
- * `#questpie` (the generated index). Generated aliases (`AccessRuleContext`,
- * `CollectionDoc`, …) resolve through the index's type graph and re-enter it
- * (TS2456) when pulled in from a collection-imported file. The package-level
+ * which the generated index imports — so its PARAMETER types must be the
+ * package-level `AccessContext` (not the generated `AccessRuleContext<K>`,
+ * whose contextual resolution re-enters the index graph from here), and the
+ * RETURN type must be annotated explicitly (cross-collection type-only
+ * `CollectionDoc<K>` is fine in that declaration position) to cut the
+ * inference loop (TS7022/TS2502 without it). The package-level
  * `AccessContext` from `questpie` is the cycle-safe helper param here:
- * `ctx.collections` / `ctx.session` are still fully typed through
+ * `ctx.app` / `ctx.collections` / `ctx.session` are still fully typed through
  * the (lazily merged) AppContext augmentation.
  *
  * Helpers NOT imported by collections (scripts, routes, services, jobs) may
@@ -32,7 +34,7 @@ export async function resolveOrderToy(
 	ctx: AccessContext,
 	toyId: string,
 ): Promise<{ toy: CollectionDoc<"toys"> | null; userId: string | null }> {
-	const toy = await ctx.collections.toys.findOne(
+	const toy = await ctx.app.collections.toys.findOne(
 		{ where: { id: toyId } },
 		{ accessMode: "system" },
 	);

@@ -3,7 +3,7 @@
 // Regenerate with: questpie generate
 
 import { createApp, createContextFactory } from "questpie/app";
-import type { AnyCollectionOrBuilder, AnyGlobalOrBuilder, AppDefinition, CollectionAPI, CollectionSelect, DrizzleClientFromQuestpieConfig, InferContextExtensionsFromAppConfig, InferSessionFromAuthConfig, MailerService, Questpie, QuestpieConfig, QueueClient, QueueJobType, RouteParamsFromKey, RouteWithParams, TablesFromConfig, z } from "questpie/types";
+import type { AccessContext, AnyCollectionOrBuilder, AnyGlobalOrBuilder, AppDefinition, CollectionAPI, CollectionSelect, DrizzleClientFromQuestpieConfig, GlobalSelect, HookContext, InferContextExtensionsFromAppConfig, InferSessionFromAuthConfig, MailerService, Questpie, QuestpieConfig, QueueClient, QueueJobType, RouteParamsFromKey, RouteWithParams, TablesFromConfig, z } from "questpie/types";
 
 // ── Runtime ────────────────────────────────────────────────
 import _runtime from "../questpie.config";
@@ -205,6 +205,7 @@ type _AppQuestpie = Omit<_AppQuestpieBase, "collections" | "globals"> & {
 // ── AppContext augmentation — auto-types ALL handlers ──────
 type _AppCoreContext = _AppContextExtensions & {
 	// Infrastructure
+	app: _AppQuestpie;
 	db: _AppDb;
 	email: _AppQuestpie["email"];
 	queue: QueueClient<AppJobs>;
@@ -318,6 +319,42 @@ declare global {
  * Select/document type for a collection key — prefer over `Record<string, any>` for docs.
  */
 export type CollectionDoc<K extends keyof AppCollections> = CollectionSelect<AppCollections[K]>;
+
+/**
+ * Select/document type for a global key.
+ */
+export type GlobalDoc<K extends keyof AppGlobals> = GlobalSelect<AppGlobals[K]>;
+
+/** Resolved auth session for this app (`{ user, session } | null`). */
+export type AppSession = _AppSession;
+
+/** Authenticated user shape from the app session. */
+export type AppSessionUser = NonNullable<_AppSession>["user"];
+
+/**
+ * Access-rule ctx for shared helpers. `K` narrows `data` to that collection's row.
+ *
+ * CYCLE RULE: import these only from files NOT imported by a collection
+ * (routes, services, jobs, scripts). Helpers imported by collections take
+ * the package-level `AccessContext` from "questpie" instead — see the
+ * type-inference reference.
+ *
+ * @example
+ * ```ts
+ * export async function isOwner(ctx: AccessRuleContext<"posts">) {
+ *   return ctx.data?.authorId === ctx.session?.user.id; // ctx.collections typed
+ * }
+ * ```
+ */
+export type AccessRuleContext<K extends keyof AppCollections | unknown = unknown> =
+	AccessContext<K extends keyof AppCollections ? CollectionDoc<K> : unknown>;
+
+/**
+ * Hook ctx for shared helpers. `K` narrows `data` to that collection's row.
+ * Same cycle rule as `AccessRuleContext`.
+ */
+export type HookRuleContext<K extends keyof AppCollections | unknown = unknown> =
+	HookContext<K extends keyof AppCollections ? CollectionDoc<K> : unknown>;
 
 /**
  * Flat config type for client APIs.
