@@ -95,7 +95,17 @@ Every hook receives the full `AppContext` via destructuring:
 | `db`          | All                                | Database instance                |
 | `session`     | All                                | Current auth session             |
 
-Plus any custom services defined in `services/`.
+Plus any custom services defined in `services/`, and — on HTTP requests — the keys returned by `appConfig({ context })`, flat:
+
+```ts title="collections/projects.ts"
+.hooks({
+  beforeChange: async ({ data, operation, workspaceId }) => {
+    if (operation === "create" && workspaceId) data.workspace = workspaceId;
+  },
+})
+```
+
+The same derived context reaches nested CRUD calls a hook triggers, and `getContext()` anywhere inside the request. Extensions are absent in non-HTTP contexts (jobs, seeds) — narrow before use. See [Multi-Tenancy](/docs/production/multi-tenancy).
 
 ## Context-First Pattern
 

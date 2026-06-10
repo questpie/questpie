@@ -96,9 +96,19 @@ export function generateTemplate(options: TemplateOptions): string {
 	// Import createApp + types
 	lines.push('import { createApp, createContextFactory } from "questpie/app";');
 	lines.push(
-		'import type { AnyCollectionOrBuilder, AnyGlobalOrBuilder, AppDefinition, CollectionAPI, CollectionSelect, DrizzleClientFromQuestpieConfig, InferContextExtensionsFromAppConfig, InferSessionFromAuthConfig, MailerService, Questpie, QuestpieConfig, QueueClient, QueueJobType, RouteParamsFromKey, RouteWithParams, TablesFromConfig, z } from "questpie/types";',
+		'import type { AccessContext, AnyCollectionOrBuilder, AnyGlobalOrBuilder, AppDefinition, CollectionAPI, CollectionSelect, DrizzleClientFromQuestpieConfig, GlobalSelect, HookContext, InferContextExtensionsFromAppConfig, InferSessionFromAuthConfig, MailerService, Questpie, QuestpieConfig, QueueClient, QueueJobType, RouteParamsFromKey, RouteWithParams, TablesFromConfig, z } from "questpie/types";',
 	);
 	lines.push("");
+
+	// Import env FIRST — env.ts validates at module evaluation, so importing
+	// it before the runtime config guarantees env validation fails boot before
+	// runtimeConfig() resolution, adapters, auth, and db init.
+	const envFile = discovered.singles.get("env") ?? null;
+	if (envFile) {
+		lines.push("// ── Env (validated before everything else) ─────────────────");
+		lines.push(importStatement(envFile));
+		lines.push("");
+	}
 
 	// Import runtime config
 	lines.push("// ── Runtime ────────────────────────────────────────────────");
@@ -513,8 +523,31 @@ export function generateTemplate(options: TemplateOptions): string {
 		lines.push(
 			"type _CollectionsAPI = { [K in keyof AppCollections]: CollectionAPI<AppCollections[K], AppCollections> };",
 		);
-		lines.push("type _JobHandlerCollections = AppCollections;");
-		lines.push("type _JobHandlerCollectionsAPI = _CollectionsAPI;");
+		// Job handler collections must be EXPLICIT literal maps of the local
+		// collection imports. Routing through AppCollections (typeof _modules)
+		// creates a type cycle when a job file is part of the module graph:
+		// JobHandlerContext -> AppCollections -> modules.ts -> the job file
+		// being checked — tsc silently collapses the mapped type (TS2339).
+		const localCollections = sortedValues(
+			discovered.categories.get("collections") ?? new Map(),
+		).filter((file) => !file.isBundle);
+		if (localCollections.length > 0) {
+			lines.push("type _JobHandlerCollections = {");
+			for (const file of localCollections) {
+				lines.push(`\t${safeKey(file.key)}: typeof ${file.varName};`);
+			}
+			lines.push("};");
+			lines.push("type _JobHandlerCollectionsAPI = {");
+			for (const file of localCollections) {
+				lines.push(
+					`\t${safeKey(file.key)}: CollectionAPI<typeof ${file.varName}, _JobHandlerCollections>;`,
+				);
+			}
+			lines.push("};");
+		} else {
+			lines.push("type _JobHandlerCollections = AppCollections;");
+			lines.push("type _JobHandlerCollectionsAPI = _CollectionsAPI;");
+		}
 		const localJobs = sortedValues(
 			discovered.categories.get("jobs") ?? new Map(),
 		).filter((file) => !file.isBundle);
@@ -554,7 +587,7 @@ export function generateTemplate(options: TemplateOptions): string {
 			"type _AppGlobalDefinitions = AppGlobals & Record<string, AnyGlobalOrBuilder>;",
 		);
 		lines.push(
-			'type _AppQuestpieConfig = Omit<QuestpieConfig, "app" | "db" | "collections" | "globals" | "auth"> & {',
+			'type _AppQuestpieConfig = Omit<QuestpieConfig, "app" | "db" | "collections" | "globals" | "auth" | "~contextExtensions"> & {',
 		);
 		lines.push('\tapp: (typeof _runtime)["app"];');
 		lines.push('\tdb: (typeof _runtime)["db"];');
@@ -562,6 +595,7 @@ export function generateTemplate(options: TemplateOptions): string {
 		lines.push("\tglobals: _AppGlobalDefinitions;");
 		lines.push("\tauth: _AppAuthConfig;");
 		lines.push('\tstorage: (typeof _runtime)["storage"];');
+		lines.push('\t"~contextExtensions": _AppContextExtensions;');
 		lines.push("};");
 		lines.push("type _AppQuestpieBase = Questpie<_AppQuestpieConfig>;");
 		lines.push(
@@ -570,12 +604,22 @@ export function generateTemplate(options: TemplateOptions): string {
 		lines.push('type _AppGlobalsAPI = _AppQuestpieBase["globals"];');
 		lines.push('type _AppStorage = _AppQuestpieBase["storage"];');
 		lines.push("type _AppTables = TablesFromConfig<_AppQuestpieConfig>;");
-		lines.push(
-			'type _AppQuestpie = Omit<_AppQuestpieBase, "collections" | "globals"> & {',
-		);
-		lines.push("\tcollections: _CollectionsAPI;");
-		lines.push("\tglobals: _AppGlobalsAPI;");
-		lines.push("};");
+		if (envFile) {
+			lines.push(
+				'type _AppQuestpie = Omit<_AppQuestpieBase, "collections" | "globals" | "env"> & {',
+			);
+			lines.push("\tcollections: _CollectionsAPI;");
+			lines.push("\tglobals: _AppGlobalsAPI;");
+			lines.push(`\tenv: typeof ${envFile.varName};`);
+			lines.push("};");
+		} else {
+			lines.push(
+				'type _AppQuestpie = Omit<_AppQuestpieBase, "collections" | "globals"> & {',
+			);
+			lines.push("\tcollections: _CollectionsAPI;");
+			lines.push("\tglobals: _AppGlobalsAPI;");
+			lines.push("};");
+		}
 		lines.push("");
 
 		lines.push(
@@ -583,6 +627,7 @@ export function generateTemplate(options: TemplateOptions): string {
 		);
 		lines.push("type _AppCoreContext = _AppContextExtensions & {");
 		lines.push("\t// Infrastructure");
+		lines.push("\tapp: _AppQuestpie;");
 		lines.push("\tdb: _AppDb;");
 		if (hasEmails) {
 			lines.push(`\temail: MailerService<${emailsTypeName}>;`);
@@ -681,6 +726,32 @@ export function generateTemplate(options: TemplateOptions): string {
 		emitNonRecursiveContext("WorkflowContext");
 		lines.push("");
 		lines.push("\t\tinterface ServiceCreateContext extends _AppCoreContext {}");
+		lines.push("");
+		lines.push(
+			"\t\t// Typed service surface for appConfig({ context }) resolvers.",
+		);
+		lines.push(
+			"\t\t// Excludes _AppContextExtensions — the resolver produces them.",
+		);
+		lines.push("\t\tinterface ContextResolverContext {");
+		lines.push("\t\t\tcollections: _CollectionsAPI;");
+		lines.push("\t\t\tglobals: _AppGlobalsAPI;");
+		lines.push('\t\t\tlogger: _AppQuestpie["logger"];');
+		lines.push('\t\t\tkv: _AppQuestpie["kv"];');
+		lines.push("\t\t\tqueue: QueueClient<AppJobs>;");
+		if (hasMessages) {
+			lines.push(
+				"\t\t\tt: (key: AppMessageKeys | (string & {}), params?: Record<string, unknown>, locale?: string) => string;",
+			);
+		} else {
+			lines.push(
+				"\t\t\tt: (key: string, params?: Record<string, unknown>, locale?: string) => string;",
+			);
+		}
+		if (hasServices) {
+			lines.push("\t\t\tservices: _AppDefaultServices;");
+		}
+		lines.push("\t\t}");
 
 		// Registry — ALL registryKey categories + ~-prefixed singles augmented centrally.
 		// This is the SINGLE place that augments Registry. Modules never augment it.
@@ -735,6 +806,62 @@ export function generateTemplate(options: TemplateOptions): string {
 	lines.push(" */");
 	lines.push(
 		"export type CollectionDoc<K extends keyof AppCollections> = CollectionSelect<AppCollections[K]>;",
+	);
+	lines.push("");
+	lines.push("/**");
+	lines.push(" * Select/document type for a global key.");
+	lines.push(" */");
+	lines.push(
+		"export type GlobalDoc<K extends keyof AppGlobals> = GlobalSelect<AppGlobals[K]>;",
+	);
+	lines.push("");
+	lines.push(
+		"/** Resolved auth session for this app (`{ user, session } | null`). */",
+	);
+	lines.push("export type AppSession = _AppSession;");
+	lines.push("");
+	lines.push("/** Authenticated user shape from the app session. */");
+	lines.push('export type AppSessionUser = NonNullable<_AppSession>["user"];');
+	lines.push("");
+	lines.push("/**");
+	lines.push(
+		" * Access-rule ctx for shared helpers. `K` narrows `data` to that collection's row.",
+	);
+	lines.push(" *");
+	lines.push(" * CYCLE RULE: import these only from files NOT imported by a collection");
+	lines.push(" * (routes, services, jobs, scripts). Helpers imported by collections take");
+	lines.push(' * the package-level `AccessContext` from "questpie" instead — see the');
+	lines.push(" * type-inference reference.");
+	lines.push(" *");
+	lines.push(" * @example");
+	lines.push(" * ```ts");
+	lines.push(
+		' * export async function isOwner(ctx: AccessRuleContext<"posts">) {',
+	);
+	lines.push(
+		" *   return ctx.data?.authorId === ctx.session?.user.id; // ctx.collections typed",
+	);
+	lines.push(" * }");
+	lines.push(" * ```");
+	lines.push(" */");
+	lines.push(
+		"export type AccessRuleContext<K extends keyof AppCollections | unknown = unknown> =",
+	);
+	lines.push(
+		"\tAccessContext<K extends keyof AppCollections ? CollectionDoc<K> : unknown>;",
+	);
+	lines.push("");
+	lines.push("/**");
+	lines.push(
+		" * Hook ctx for shared helpers. `K` narrows `data` to that collection's row.",
+	);
+	lines.push(" * Same cycle rule as `AccessRuleContext`.");
+	lines.push(" */");
+	lines.push(
+		"export type HookRuleContext<K extends keyof AppCollections | unknown = unknown> =",
+	);
+	lines.push(
+		"\tHookContext<K extends keyof AppCollections ? CollectionDoc<K> : unknown>;",
 	);
 	lines.push("");
 
@@ -847,6 +974,7 @@ function emitNewArchitectureRuntime(
 	if (!modulesFile) {
 		throw new Error("emitNewArchitectureRuntime called without modules.ts");
 	}
+	const envFile = discovered.singles.get("env") ?? null;
 	const coreSingles = getCategorizedSingles(discovered.singles, allDecls);
 
 	lines.push("var _appPromise: Promise<unknown> | undefined;");
@@ -856,6 +984,11 @@ function emitNewArchitectureRuntime(
 
 	// Modules — preserve the concrete exported module types directly.
 	lines.push(`\t\tmodules: ${modulesFile.varName},`);
+
+	// Validated env (from env.ts) — stored on the instance as app.env.
+	if (envFile) {
+		lines.push(`\t\tenv: ${envFile.varName},`);
+	}
 
 	// ── Emit all categories ──────────────────────────────────────
 	for (const [catName, fileMap] of discovered.categories) {
@@ -936,6 +1069,11 @@ function emitNewArchitectureRuntime(
 		"export const app = (await _appPromise) as unknown as _AppQuestpie;",
 	);
 	lines.push("");
+	if (envFile) {
+		lines.push("/** Validated app environment (from env.ts). */");
+		lines.push(`export const env = ${envFile.varName};`);
+		lines.push("");
+	}
 }
 
 // ============================================================================
@@ -1030,6 +1168,8 @@ function getCategorizedSingles(
 	for (const [key, file] of singles) {
 		if (key === "modules") continue; // handled separately
 		if (key === "plugin") continue; // codegen-only, not passed to createApp
+		if (key === "env") continue; // imported first + emitted explicitly
+		if (key === "envClient") continue; // consumed by client env emission only
 		if (coreSingleKeys.has(key)) {
 			core.push(file);
 		} else {

@@ -28,6 +28,14 @@ import _svc_workerManager from "../services/worker-manager";
 // ── Singles ────────────────────────────────────────────────
 import _adminConfig from "../config/admin";
 
+// ── Entity key registry (names only — acyclic by construction) ─────
+declare global {
+	namespace Questpie {
+		interface CollectionKeys { ai_run_events: unknown; ai_runs: unknown; ai_worker_leases: unknown; ai_workers: unknown }
+		interface JobKeys { workerTimeout: unknown }
+	}
+}
+
 // ════════════════════════════════════════════════════════════
 // TYPES — composed from typeof references (zero inference cost)
 // ════════════════════════════════════════════════════════════
@@ -46,15 +54,15 @@ export interface AiJobs {
 }
 
 export interface AiRoutes {
-	enrollmentEnroll: RouteDefinition<unknown, unknown, RouteParamsFromKey<"enrollmentEnroll">>;
-	enrollmentTokens: RouteDefinition<unknown, unknown, RouteParamsFromKey<"enrollmentTokens">>;
-	runComplete: RouteDefinition<unknown, unknown, RouteParamsFromKey<"runComplete">>;
-	runEvents: RouteDefinition<unknown, unknown, RouteParamsFromKey<"runEvents">>;
-	runStream: RouteDefinition<unknown, unknown, RouteParamsFromKey<"runStream">>;
-	workerDeregister: RouteDefinition<unknown, unknown, RouteParamsFromKey<"workerDeregister">>;
-	workerHeartbeat: RouteDefinition<unknown, unknown, RouteParamsFromKey<"workerHeartbeat">>;
-	workerPoll: RouteDefinition<unknown, unknown, RouteParamsFromKey<"workerPoll">>;
-	workerRegister: RouteDefinition<unknown, unknown, RouteParamsFromKey<"workerRegister">>;
+	enrollmentEnroll: typeof _route_enrollmentEnroll extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"enrollmentEnroll">> : typeof _route_enrollmentEnroll;
+	enrollmentTokens: typeof _route_enrollmentTokens extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"enrollmentTokens">> : typeof _route_enrollmentTokens;
+	runComplete: typeof _route_runComplete extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"runComplete">> : typeof _route_runComplete;
+	runEvents: typeof _route_runEvents extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"runEvents">> : typeof _route_runEvents;
+	runStream: typeof _route_runStream extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"runStream">> : typeof _route_runStream;
+	workerDeregister: typeof _route_workerDeregister extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"workerDeregister">> : typeof _route_workerDeregister;
+	workerHeartbeat: typeof _route_workerHeartbeat extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"workerHeartbeat">> : typeof _route_workerHeartbeat;
+	workerPoll: typeof _route_workerPoll extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"workerPoll">> : typeof _route_workerPoll;
+	workerRegister: typeof _route_workerRegister extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"workerRegister">> : typeof _route_workerRegister;
 }
 
 export interface AiServices {
@@ -71,15 +79,15 @@ export type AiModule = {
 	jobs: AiJobs;
 	routes: AiRoutes;
 	services: AiServices;
-	globals: Record<string, never>;
-	messages: Record<string, never>;
-	emails: Record<string, never>;
+	globals: {};
+	messages: {};
+	emails: {};
 	migrations: readonly unknown[];
 	seeds: readonly unknown[];
-	fieldTypes: Record<string, never>;
-	views: Record<string, never>;
-	components: Record<string, never>;
-	blocks: Record<string, never>;
+	fieldTypes: {};
+	views: {};
+	components: {};
+	blocks: {};
 	config: {
 		admin: typeof _adminConfig;
 	};

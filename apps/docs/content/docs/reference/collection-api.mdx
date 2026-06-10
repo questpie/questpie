@@ -18,7 +18,7 @@ const posts = collection("posts")
 			{ value: "draft", label: "Draft" },
 			{ value: "published", label: "Published" },
 		]),
-		author: f.relation("users"),
+		author: f.relation("user"),
 	}))
 	.title(({ f }) => f.title)
 	.options({ timestamps: true, softDelete: true })
@@ -79,7 +79,7 @@ Define collection fields using the field builder. The callback receives `{ f }` 
   views: f.number().default(0),
   featured: f.boolean().default(false),
   tags: f.text().array(),
-  author: f.relation("users"),
+  author: f.relation("user"),
   category: f.relation("categories"),
 }))
 ```
@@ -215,6 +215,8 @@ Override or refine the auto-generated Zod validation schemas. By default, schema
 })
 ```
 
+Create and update enforce these schemas server-side. Each field's own schema (including `.zod()` transforms, email format, select enums, array shapes) is the source of truth for its key; system fields (`id`, timestamps) and relation/upload foreign keys validate against their column shape. `refine` applies on top of the field schema, `exclude` removes the key from validation entirely.
+
 ## `.upload(options)`
 
 Enable file upload support. Automatically adds storage fields (`key`, `filename`, `mimeType`, `size`, `visibility`), extends the output type with `{ url: string }`, and registers upload HTTP routes.
@@ -233,6 +235,13 @@ collection("media")
 ```
 
 Upload collections get additional CRUD methods: `upload()` and `uploadMany()`.
+
+`visibility` governs file serving only — `"public"` means the file BYTES are
+servable by key without authentication, `"private"` requires a signed-token
+URL. Listing and reading the upload ROWS always resolves through the normal
+access chain (`.access()` → `defaultAccess` → session required). Use the
+`serve` access kind to override the serving rule — see
+[Access Control](/docs/backend/rules/access-control).
 
 ## `.indexes(callback)`
 
@@ -254,6 +263,31 @@ Generic extension point used by plugins to attach metadata without monkey-patchi
 .set("admin", { icon: { type: "icon", props: { name: "ph:article" } } })
 .set("adminList", { view: "collection-table", columns: ["title", "status"] })
 ```
+
+## `.merge(other)`
+
+Merge another builder for the **same collection name** into this one. This is the way to extend a collection a module already provides — don't redefine it from scratch (registering the same key replaces the module's collection wholesale, dropping its fields, hooks, and auth wiring).
+
+```ts title="collections/user.ts"
+import { starterModule } from "questpie/app";
+import { collection } from "#questpie/factories";
+
+export default collection("user")
+	.merge(starterModule.collections.user)
+	.fields(({ f }) => ({
+		internalNotes: f.textarea(),
+	}));
+```
+
+Merge semantics:
+
+- **Fields, virtuals, relations, indexes, options, extension keys** — combine by key; the merged-in builder wins on conflicts. Unresolved relation fields from both sides are preserved.
+- **Hooks** — concatenate; both builders' hooks run.
+- **Access** — merges by rule key; the merged-in builder's rules win.
+- **`title`, `searchable`, `upload`, `validation`** — the merged-in builder's value wins when set.
+- **`.fields()` after `.merge()`** is cumulative — it adds to and overrides merged fields by key, never wipes them, so merge-first recipes are safe.
+
+The result is fully typed: field types from both builders flow into `$infer` and CRUD types.
 
 ---
 

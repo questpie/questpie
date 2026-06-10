@@ -1,5 +1,6 @@
 import type { CollectionBuilder } from "#questpie/server/collection/builder/collection-builder.js";
 import type { Collection } from "#questpie/server/collection/builder/collection.js";
+import type { AppContext } from "#questpie/server/config/app-context.js";
 import type {
 	CollectionAccess,
 	ExtractFieldsByLocation,
@@ -650,6 +651,14 @@ export interface QuestpieConfig {
 	 * @internal
 	 */
 	"~messageKeys"?: unknown;
+
+	/**
+	 * Phantom type for tracking request-context extensions resolved by
+	 * `appConfig({ context })`. Not used at runtime - purely for type inference
+	 * (e.g. `getContext<App>()` exposing resolver-derived keys).
+	 * @internal
+	 */
+	"~contextExtensions"?: unknown;
 }
 
 /**
@@ -671,6 +680,11 @@ export type GetMessageKeys<T extends QuestpieConfig> =
 			: never
 		: never;
 
+/**
+ * @deprecated The `[key: string]: any` index signature is a type-lie.
+ * Context extensions are inferred from the app config resolver instead —
+ * see `InferContextExtensionsFromAppConfig` in `questpie/types`.
+ */
 export interface ContextExtensions {
 	// To be extended by plugins or user config
 	[key: string]: any;
@@ -682,42 +696,58 @@ export interface ContextExtensions {
 
 /**
  * Parameters passed to the context resolver function.
+ *
+ * At runtime the resolver also receives the full system-mode service surface
+ * (`collections`, `globals`, `logger`, `kv`, `queue`, `t`, user services).
+ * Those extras are typed via the codegen-emitted
+ * `Questpie.ContextResolverContext` global augmentation.
+ *
+ * `session` and `db` resolve lazily off the generated AppContext augmentation,
+ * so resolvers are fully typed once codegen ran. Pre-codegen (library/module
+ * compilation) they degrade to the loose fallback shapes.
  */
 export interface ContextResolverParams {
 	/** The incoming HTTP request */
 	request: Request;
 	/** The resolved session (may be null if unauthenticated) */
-	session: { user: any; session: any } | null | undefined;
+	session: AppContext extends { session: infer S }
+		? S
+		: { user: any; session: any } | null | undefined;
 	/** Database client for queries */
-	db: any;
+	db: AppContext extends { db: infer D } ? D : any;
 }
 
 /**
- * Context resolver function type.
- * Returns custom context properties that will be merged into RequestContext.
+ * Context resolver function type — `appConfig({ context })`.
+ *
+ * Runs once per HTTP request. The returned object travels with the request:
+ * it is merged flat into the `RequestContext` and reaches access rules, hooks,
+ * route handlers, field access, and `getContext()`.
+ *
+ * Collections/globals called inside the resolver run in system mode —
+ * the resolver IS trusted derivation.
  *
  * @example
  * ```ts
- * .context(async ({ request, session, db }) => {
- *   const tenantId = request.headers.get('x-tenant-id')
+ * // config/app.ts
+ * export default appConfig({
+ *   context: async ({ request, session, collections }) => {
+ *     const tenantId = request.headers.get("x-tenant-id");
  *
- *   if (tenantId && session?.user) {
- *     // Validate access
- *     const hasAccess = await db.query.tenantMembers.findFirst({
- *       where: and(
- *         eq(tenantMembers.tenantId, tenantId),
- *         eq(tenantMembers.userId, session.user.id)
- *       )
- *     })
- *     if (!hasAccess) {
- *       throw new Error('No access to this tenant')
+ *     if (tenantId && session?.user) {
+ *       const member = await collections.tenant_members.findOne({
+ *         where: { tenant: tenantId, user: session.user.id },
+ *       });
+ *       if (!member) throw new Error("No access to this tenant");
  *     }
- *   }
  *
- *   return { tenantId }
- * })
+ *     return { tenantId };
+ *   },
+ * });
  * ```
  */
 export type ContextResolver<
 	T extends Record<string, any> = Record<string, any>,
-> = (params: ContextResolverParams) => Promise<T> | T;
+> = (
+	params: ContextResolverParams & Questpie.ContextResolverContext,
+) => Promise<T> | T;

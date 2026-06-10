@@ -2,7 +2,10 @@ import { describe, expect, it } from "bun:test";
 
 import { QueryClient } from "@tanstack/react-query";
 
-import { createQuestpieQueryOptions } from "./index.js";
+import {
+	createQuestpieQueryOptions,
+	type QuestpieQueryOptionsProxy,
+} from "./index.js";
 
 async function waitFor(assertion: () => boolean) {
 	for (let i = 0; i < 50; i++) {
@@ -46,7 +49,8 @@ describe("realtime query options", () => {
 		const queryClient = new QueryClient();
 		const abortController = new AbortController();
 		const queryOptions = createQuestpieQueryOptions(client);
-		const query = (queryOptions.collections.posts.find as any)(
+		// `{ realtime: true }` is part of the public builder type — no cast.
+		const query = queryOptions.collections.posts.find(
 			{ limit: 10 },
 			{ realtime: true },
 		);
@@ -67,5 +71,22 @@ describe("realtime query options", () => {
 
 		abortController.abort();
 		await expect(queryPromise).resolves.toBe(initialData);
+	});
+
+	it("types the realtime second argument on find/count/get only", () => {
+		const q = {} as QuestpieQueryOptionsProxy;
+
+		// Compile-time contract: find/count/get accept { realtime }.
+		const builders = [
+			() => q.collections.posts.find({}, { realtime: true }),
+			() => q.collections.posts.count({}, { realtime: true }),
+			() => q.globals.settings.get({}, { realtime: true }),
+		];
+		expect(builders.length).toBe(3);
+
+		// findOne has no live form — second argument must be rejected.
+		// @ts-expect-error findOne does not accept a realtime config
+		const reject = () => q.collections.posts.findOne({}, { realtime: true });
+		expect(typeof reject).toBe("function");
 	});
 });

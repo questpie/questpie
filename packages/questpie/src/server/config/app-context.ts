@@ -54,6 +54,30 @@ declare global {
 		 * Used by `.fields(({ f }) => ...)` for autocomplete on `f.*`.
 		 */
 		interface FieldTypesMap {}
+
+		/**
+		 * Extra parameters available to `appConfig({ context })` resolvers.
+		 * Empty by default — the root codegen template augments it with the
+		 * typed service surface (collections, globals, logger, kv, queue, t,
+		 * services) so resolvers get full inference without `typeof app`.
+		 */
+		interface ContextResolverContext {}
+
+		/**
+		 * Names-only collection key registry — acyclic by construction.
+		 *
+		 * Codegen emits `interface CollectionKeys { posts: unknown; ... }` from
+		 * file discovery alone (zero imports, zero type references), so consumers
+		 * like `relation()` can offer key autocomplete without touching builder
+		 * types (which would recreate the Registry cycle).
+		 */
+		interface CollectionKeys {}
+
+		/** Names-only global key registry. @see CollectionKeys */
+		interface GlobalKeys {}
+
+		/** Names-only job key registry. @see CollectionKeys */
+		interface JobKeys {}
 	}
 }
 
@@ -122,6 +146,25 @@ export type KnownFormViewNames = RegistryNames<"views">;
 
 /** Known component names (from admin modules). @see Registry['components'] */
 export type KnownComponentNames = RegistryNames<"components">;
+
+/**
+ * Collection keys from the names-only key registry.
+ * Union of generated keys + `(string & {})` so plain strings keep working
+ * (autocomplete, not strictness). Falls back to plain string pre-codegen.
+ */
+export type KnownCollectionKey = [keyof Questpie.CollectionKeys] extends [never]
+	? string & {}
+	: (keyof Questpie.CollectionKeys & string) | (string & {});
+
+/** Global keys from the names-only key registry. @see KnownCollectionKey */
+export type KnownGlobalKey = [keyof Questpie.GlobalKeys] extends [never]
+	? string & {}
+	: (keyof Questpie.GlobalKeys & string) | (string & {});
+
+/** Job keys from the names-only key registry. @see KnownCollectionKey */
+export type KnownJobKey = [keyof Questpie.JobKeys] extends [never]
+	? string & {}
+	: (keyof Questpie.JobKeys & string) | (string & {});
 
 /** Known runtime fields populated by extractAppServices before namespace projection. */
 type ExtractAppServicesBase = {

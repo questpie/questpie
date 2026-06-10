@@ -58,6 +58,23 @@ export const smartResponse = (
 };
 
 /**
+ * Error for a denied schema/meta introspection request.
+ * 401 when anonymous, 403 when authenticated (matches CRUD conventions).
+ */
+export const introspectionDeniedError = (
+	resource: string,
+	session: unknown,
+): ApiError => {
+	return session
+		? ApiError.forbidden({
+				operation: "read",
+				resource,
+				reason: "User does not have permission to introspect this resource",
+			})
+		: ApiError.unauthorized();
+};
+
+/**
  * Detect if we're in development mode
  */
 export const isDevelopment = () => {

@@ -1420,7 +1420,14 @@ export type FindResult<
 
 /**
  * CRUD operations interface
- * Clear naming: find/findOne for reads, updateById/update for updates, deleteById/delete for deletes
+ *
+ * One vocabulary across server and client:
+ * - by id: `updateById` / `deleteById` / `restoreById`
+ * - bulk by where: `updateMany` / `deleteMany` (claim-checked — see method docs)
+ * - per-record batch: `updateBatch`
+ *
+ * `update`/`delete` are deprecated aliases of the bulk operations (the same
+ * names mean by-id on the client SDK); they will be removed in v4.
  */
 export interface CRUD<
 	TSelect = any,
@@ -1477,6 +1484,32 @@ export interface CRUD<
 	/**
 	 * Update multiple records matching where clause
 	 * Uses batched SQL operation for efficiency
+	 *
+	 * Atomic conditional update (claim-checked): inside the write transaction
+	 * the matched rows are locked and `where` is re-evaluated, so a row is
+	 * only written if it STILL matches at write time. The returned array
+	 * contains exactly the rows that were written ("winners") — `[]` means
+	 * nothing matched at write time, e.g. you lost a concurrent claim:
+	 *
+	 * ```ts
+	 * const claimed = await collections.event_members.updateMany(
+	 *   { where: { id, user: { isNull: true } }, data: { user: userId } },
+	 *   { accessMode: "system" },
+	 * );
+	 * if (claimed.length === 0) {
+	 *   // lost the race — observable, not silent
+	 * }
+	 * ```
+	 */
+	updateMany(
+		params: UpdateManyParams<TUpdate, TSelect, TRelations>,
+		context?: CRUDContext,
+	): Promise<TSelect[]>;
+
+	/**
+	 * @deprecated Ambiguous across surfaces — server `update` is bulk while
+	 * the client SDK `update` is by-id. Use {@link CRUD.updateMany} (bulk) or
+	 * {@link CRUD.updateById} (single). Will be removed in v4.
 	 */
 	update(
 		params: UpdateManyParams<TUpdate, TSelect, TRelations>,
@@ -1511,6 +1544,20 @@ export interface CRUD<
 	/**
 	 * Delete multiple records matching where clause
 	 * Uses batched SQL operation for efficiency
+	 *
+	 * Claim-checked like {@link CRUD.updateMany}: rows are locked and `where`
+	 * is re-evaluated inside the transaction — `count` reports exactly the
+	 * rows that still matched at delete time.
+	 */
+	deleteMany(
+		params: DeleteManyParams<TSelect, TRelations>,
+		context?: CRUDContext,
+	): Promise<{ success: boolean; count: number }>;
+
+	/**
+	 * @deprecated Ambiguous across surfaces — server `delete` is bulk while
+	 * the client SDK `delete` is by-id. Use {@link CRUD.deleteMany} (bulk) or
+	 * {@link CRUD.deleteById} (single). Will be removed in v4.
 	 */
 	delete(
 		params: DeleteManyParams<TSelect, TRelations>,

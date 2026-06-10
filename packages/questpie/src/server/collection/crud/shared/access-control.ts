@@ -41,6 +41,11 @@ export interface AccessRuleEvaluationContext {
 	input?: any;
 	/** Incoming HTTP request when called via an HTTP adapter */
 	request?: Request;
+	/**
+	 * Request-context extensions resolved by `appConfig({ context })` —
+	 * spread flat into the rule ctx (after services, before per-op keys).
+	 */
+	contextExtensions?: Record<string, unknown>;
 }
 
 /**
@@ -64,10 +69,13 @@ export interface AccessRuleEvaluationContext {
  * @returns true (allow), false (deny), or AccessWhere (conditional access)
  */
 export async function executeAccessRule(
+	// Accepts both plain AccessRule and RowAccessRule callbacks — row-aware
+	// rules type ctx.data as non-optional, but every caller that evaluates one
+	// passes the loaded row, so the runtime contract holds.
 	rule:
 		| boolean
 		| ((
-				ctx: AccessContext,
+				ctx: AccessContext & { data: any },
 		  ) => boolean | AccessWhere | Promise<boolean | AccessWhere>)
 		| undefined,
 	context: AccessRuleEvaluationContext,
@@ -87,13 +95,16 @@ export async function executeAccessRule(
 			db: context.db,
 			session: context.session,
 		});
+		// data is non-optional for RowAccessRule callers (they always pass the
+		// loaded row); plain rules tolerate undefined — widen via the cast.
 		const result = await rule({
 			...services,
-			data: context.row,
+			...(context.contextExtensions ?? {}),
+			data: context.row as any,
 			input: context.input,
 			locale: context.locale,
 			request: context.request,
-		} as AccessContext);
+		} as AccessContext & { data: any });
 
 		return result;
 	}
@@ -256,6 +267,8 @@ export function createFieldAccessContext(params: {
 	const req = getRequestFromContext(params.context);
 
 	return {
+		// Request-context extensions (appConfig({ context })) — flat, runtime-only
+		...(params.context["~contextExtensions"] ?? {}),
 		...(req ? { req } : {}),
 		// session is typed as { user: User; session: Session } | null | undefined
 		user: params.context.session?.user,

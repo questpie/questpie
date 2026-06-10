@@ -26,6 +26,8 @@ CMD ["bun", "run", ".output/server/index.mjs"]
 
 ## Environment Variables
 
+Declare and validate these with the [env primitive](/docs/production/environment) (`env.ts` + `env()`) so a misconfigured deployment fails at boot with every offending variable named — instead of crashing mid-request.
+
 | Variable                            | Required | Description                  |
 | ----------------------------------- | -------- | ---------------------------- |
 | `DATABASE_URL`                      | Yes      | PostgreSQL connection string |

@@ -1,6 +1,6 @@
 ---
 name: questpie-core/crud-api
-description: QUESTPIE CRUD API find findOne create update delete count updateMany deleteMany query operators where filter sort orderBy pagination limit offset with select relations depth context accessMode collections globals client server typesafe
+description: QUESTPIE CRUD API find findOne create updateById updateMany updateBatch deleteById deleteMany restoreById count atomic conditional update claim optimistic locking query operators where filter sort orderBy pagination limit offset with select relations depth context accessMode collections globals client server typesafe
   - questpie-core
 ---
 
@@ -46,6 +46,23 @@ const result = await app.collections.posts.find(
 
 ## Collection Operations
 
+One vocabulary on both surfaces (server CRUD and client SDK):
+
+| Concept | Method | Returns |
+| --- | --- | --- |
+| list (paginated) | `find(options)` | `{ docs: T[], totalDocs: number }` |
+| single by query | `findOne(options)` | `T \| null` |
+| count | `count(options)` | `number` |
+| create | `create(data)` | `T` |
+| update by id | `updateById({ id, data })` | `T` (throws notFound) |
+| bulk update by where | `updateMany({ where, data })` | `T[]` (winners) |
+| per-record batch | `updateBatch({ updates })` | `T[]` |
+| delete by id | `deleteById({ id })` | `{ success }` (throws notFound) |
+| bulk delete by where | `deleteMany({ where })` | `{ success, count }` |
+| restore by id | `restoreById({ id })` | `T` (softDelete only) |
+
+Deprecated aliases (removed in v4): server `update`/`delete` = bulk (`updateMany`/`deleteMany`); client `update`/`delete`/`restore` = by-id (`updateById`/`deleteById`/`restoreById`). Avoid them — the same names mean different things on each surface. Accessing a method that does not exist on server CRUD throws a `TypeError` listing valid methods (it does NOT return `undefined`).
+
 ### `find(options)`
 
 List documents with filtering, sorting, and pagination.
@@ -90,26 +107,100 @@ const post = await collections.posts.create({
 // post: T (created record with id)
 ```
 
-### `update(options)`
+### `updateById(options)`
 
-Update a document matching `where`. Pass changed fields in `data`.
+Update a single document by id. Returns the updated record; throws `notFound` if the record does not exist (or vanished concurrently).
 
 ```ts
-const updated = await collections.posts.update({
-	where: { id: "abc-123" },
+const updated = await collections.posts.updateById({
+	id: "abc-123",
 	data: { status: "published" },
 });
 // updated: T (updated record)
 ```
 
-### `delete(options)`
+### `updateMany(options)`
 
-Delete documents matching `where`.
+Bulk update all documents matching `where`. Returns an **array** of the updated records — never a single object.
 
 ```ts
-await collections.posts.delete({
-	where: { id: "abc-123" },
+const updated = await collections.posts.updateMany({
+	where: { status: "draft" },
+	data: { status: "archived" },
 });
+// updated: T[] — exactly the rows that were written
+```
+
+`updateMany` is claim-checked: inside the write transaction the matched rows are locked and `where` is re-evaluated, so rows changed by a concurrent writer are skipped instead of silently overwritten. The returned array reports exactly the winners.
+
+#### Atomic conditional updates (claims, optimistic locking)
+
+Use a conditional `where` + the array length as the win/lose signal:
+
+```ts
+// Claim: of two parallel claims, EXACTLY ONE wins
+const claimed = await collections.event_members.updateMany(
+	{
+		where: { id: memberId, user: { isNull: true } },
+		data: { user: newUserId },
+	},
+	{ accessMode: "system" },
+);
+if (claimed.length === 0) {
+	// Lost the race (or row vanished) — handle explicitly
+}
+
+// Optimistic concurrency: write only if the revision is unchanged
+const bumped = await collections.documents.updateMany(
+	{ where: { id, revision: doc.revision }, data: { body, revision: doc.revision + 1 } },
+	ctx,
+);
+if (bumped.length === 0) throw new Error("Conflict — reload and retry");
+```
+
+Hook timing: `beforeValidate`/`beforeChange` run before the transaction on candidates (intent — may fire for losers); `afterChange`, versioning, and the return value are winners-only (fact).
+
+### `updateBatch(options)`
+
+Distinct data per record, one transaction.
+
+```ts
+const updated = await collections.posts.updateBatch({
+	updates: [
+		{ id: "a", data: { order: 1 } },
+		{ id: "b", data: { order: 2 } },
+	],
+});
+// updated: T[]
+```
+
+### `deleteById(options)`
+
+Delete a single document by id (soft delete when enabled). Throws `notFound` if missing.
+
+```ts
+await collections.posts.deleteById({ id: "abc-123" });
+// { success: true }
+```
+
+### `deleteMany(options)`
+
+Bulk delete all documents matching `where`. Claim-checked like `updateMany` — `count` is the number of rows that still matched at delete time.
+
+```ts
+const result = await collections.posts.deleteMany({
+	where: { status: "archived" },
+});
+// result: { success: true, count: number }
+```
+
+### `restoreById(options)`
+
+Restore a soft-deleted document (collections with `softDelete: true`).
+
+```ts
+const restored = await collections.posts.restoreById({ id: "abc-123" });
+// restored: T
 ```
 
 ### `count(options)`
@@ -121,27 +212,6 @@ const total = await collections.posts.count({
 	where: { status: "published" },
 });
 // total: number
-```
-
-### `updateMany(options)`
-
-Bulk update all documents matching `where`.
-
-```ts
-await collections.posts.updateMany({
-	where: { status: "draft" },
-	data: { status: "archived" },
-});
-```
-
-### `deleteMany(options)`
-
-Bulk delete all documents matching `where`.
-
-```ts
-await collections.posts.deleteMany({
-	where: { status: "archived" },
-});
 ```
 
 ## Global Operations
@@ -203,6 +273,20 @@ const result = await collections.posts.find({
 });
 ```
 
+Multi-field sorting: order determines priority (first = primary sort). All
+three syntaxes work, including inside relation `with` options:
+
+```ts
+// Array syntax (preferred for explicit priority)
+orderBy: [{ status: "desc" }, { createdAt: "desc" }]
+
+// Object syntax (key order = priority)
+orderBy: { status: "desc", createdAt: "desc" }
+
+// Function syntax
+orderBy: (table, { asc, desc }) => [desc(table.status), asc(table.title)]
+```
+
 ## Pagination
 
 Use `limit` and `offset`:
@@ -214,6 +298,38 @@ const page2 = await collections.posts.find({
 });
 // page2.totalDocs = total count across all pages
 ```
+
+### Keyset (cursor) pagination
+
+For stable pagination over changing data, use a tuple cursor of
+`(createdAt, id)` with a matching multi-field `orderBy`. System timestamps
+are stored with millisecond precision (`timestamp(3)`), so a `Date` you read
+back equals the stored value exactly — cursor comparisons are exact:
+
+```ts
+const page = await collections.posts.find({
+	where: cursor
+		? {
+				OR: [
+					{ createdAt: { lt: cursor.createdAt } },
+					{
+						AND: [
+							{ createdAt: { eq: cursor.createdAt } },
+							{ id: { lt: cursor.id } },
+						],
+					},
+				],
+			}
+		: undefined,
+	orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+	limit: 20,
+});
+const last = page.docs.at(-1);
+const nextCursor = last ? { createdAt: last.createdAt, id: last.id } : null;
+```
+
+Always use the explicit `{ eq: ... }` operator for `Date` cursor values —
+do not pass a bare `Date` as an equality shorthand.
 
 ## Relations
 
@@ -251,9 +367,46 @@ export default route()
 	});
 ```
 
+### Partial Overrides (Inside Request Scope)
+
+The optional second argument of every CRUD call merges with the ambient request scope. Priority: **explicit param → ALS scope (`runWithContext`) → defaults** (`accessMode: "system"`, `locale: "en"`). A bare `{ accessMode: "system" }` elevates only the mode — the request's `session`, `db`, and `locale` ride along automatically. The inverse holds too:
+
+```ts
+// Inside any handler / hook / Better Auth callback:
+await collections.posts.updateMany(
+	{ where: { author: oldId }, data: { author: newId } },
+	{ accessMode: "system" }, // mode elevated; session/db/locale inherited
+);
+
+await collections.posts.find({}, { accessMode: "user" }); // rules re-enabled against inherited session
+```
+
+Never re-thread `session`/`locale` by hand when you only want a different access mode.
+
+### Transactions
+
+`withTransaction(db, fn)` (from `questpie`) runs multiple CRUD calls atomically — calls inside the callback inherit the transaction connection through the ALS scope, and nested `withTransaction` calls reuse the open transaction. Queue side effects for after COMMIT with `onAfterCommit`:
+
+```ts
+import { onAfterCommit, withTransaction } from "questpie";
+
+await withTransaction(db, async () => {
+	const order = await collections.orders.create({ ... });
+	await collections.inventory.updateMany({
+		where: { sku: order.sku, status: "available" },
+		data: { status: "reserved" },
+	});
+	onAfterCommit(async () => {
+		await queue.notifyWarehouse.publish({ orderId: order.id });
+	});
+});
+```
+
+Do not run output-hook-heavy reads (blocks/upload `afterRead`) inside an open transaction unless necessary — they inherit the tx connection too.
+
 ### In Scripts / Seeds
 
-Create an explicit context with `app.createContext()`:
+Outside any request scope, create an explicit context with `app.createContext()`:
 
 ```ts
 // System mode -- bypasses all access control
@@ -265,20 +418,42 @@ const ctx = await app.createContext({ accessMode: "user" });
 
 ## Client API
 
-The client SDK mirrors server operations:
+The client SDK uses the same vocabulary:
 
 ```ts
 const posts = await client.collections.posts.find({ limit: 10 });
 const post = await client.collections.posts.findOne({ where: { id: "abc" } });
 const created = await client.collections.posts.create({ title: "New" });
-const updated = await client.collections.posts.update({
+const updated = await client.collections.posts.updateById({
 	id: "abc",
 	data: { title: "Updated" },
 });
-await client.collections.posts.delete({ id: "abc" });
+await client.collections.posts.deleteById({ id: "abc" });
+const many = await client.collections.posts.updateMany({
+	where: { status: "draft" },
+	data: { status: "review" },
+});
+await client.collections.posts.deleteMany({ where: { status: "archived" } });
 const count = await client.collections.posts.count({
 	where: { status: "draft" },
 });
+```
+
+### Live Queries (Client Only)
+
+Every read has a live form — `live()` mirrors `find()` (same options, same snapshot type) and pushes access-controlled snapshots over SSE. Globals mirror `get()`: `client.globals.<name>.live(...)`. See AGENTS.md §19 Realtime:
+
+```ts
+const stop = client.collections.posts.live(
+	{ where: { status: "published" }, with: { author: true } },
+	(snap) => render(snap.docs), // typed find() result
+);
+stop(); // unsubscribe
+
+// AsyncGenerator form (workers, agents, tests)
+for await (const snap of client.collections.posts.liveIter({ limit: 10 })) {
+	render(snap.docs);
+}
 ```
 
 ### Upload (Client Only)
@@ -362,6 +537,34 @@ export default route()
 	});
 ```
 
+### HIGH: Expecting updateMany() to return a single record
+
+Server bulk update returns an **array** of updated records:
+
+```ts
+// WRONG -- updateMany returns T[], not T
+const updated = await collections.posts.updateMany({
+	where: { id: "abc" },
+	data: { status: "published" },
+});
+console.log(updated.status); // undefined!
+
+// CORRECT
+const [updated] = await collections.posts.updateMany({
+	where: { id: "abc" },
+	data: { status: "published" },
+});
+// or, for a single record by id:
+const updated2 = await collections.posts.updateById({
+	id: "abc",
+	data: { status: "published" },
+});
+```
+
+### HIGH: `update`/`delete` mean different things on server vs client
+
+On server CRUD, `update`/`delete` are deprecated aliases of the BULK operations (`{ where, data }` → `T[]`). On the client SDK they are by-id operations (`{ id, data }` → `T`). Always use the unambiguous names: `updateById`/`deleteById`/`restoreById` for single records, `updateMany`/`deleteMany` for bulk. Calling a method that does not exist (e.g. a typo) on server CRUD throws a `TypeError` listing the valid methods.
+
 ### MEDIUM: Wrong create() signature
 
 `create()` takes a flat data object, NOT `{ data: {...} }`:
@@ -374,4 +577,4 @@ await collections.posts.create({ data: { title: "Hello" } });
 await collections.posts.create({ title: "Hello", body: "World" });
 ```
 
-Note: `update()` DOES use `{ where, data }` -- only `create()` is flat.
+Note: `updateById()`/`updateMany()` DO use `{ id/where, data }` -- only `create()` is flat.

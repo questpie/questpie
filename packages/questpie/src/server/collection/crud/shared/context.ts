@@ -7,9 +7,10 @@
  * ## Context Propagation
  *
  * `normalizeContext()` automatically inherits `locale`, `accessMode`, `session`,
- * `db`, and `stage` from the current `runWithContext` scope (via AsyncLocalStorage)
- * when not explicitly provided. This enables implicit context propagation in
- * nested API calls without manual threading.
+ * `db`, `stage`, and the `"~contextExtensions"` bundle from the current
+ * `runWithContext` scope (via AsyncLocalStorage) when not explicitly provided.
+ * This enables implicit context propagation in nested API calls without manual
+ * threading.
  *
  * ### Propagation priority (highest → lowest):
  * 1. **Explicit param** — values passed directly to `normalizeContext(ctx)`
@@ -47,6 +48,18 @@
 import type { CRUDContext } from "#questpie/server/collection/crud/types.js";
 import { tryGetContext } from "#questpie/server/config/context.js";
 import { DEFAULT_LOCALE } from "#questpie/shared/constants.js";
+
+/**
+ * Internal marker for nested finds that populate upload relations
+ * (`RelationConfig.inheritAccess`).
+ *
+ * Stamped on nested find options by the relation dispatcher — never by user
+ * input (JSON cannot carry symbols, so the HTTP `with` parameter cannot inject
+ * it). When present, collection-level read access is inherited from the parent
+ * row's read decision; field-level read rules still apply. Not exported from
+ * the package.
+ */
+export const INHERIT_ACCESS = Symbol.for("questpie.internal.inheritAccess");
 
 /**
  * Normalized context with required fields
@@ -97,6 +110,10 @@ export function normalizeContext(context: CRUDContext = {}): NormalizedContext {
 			DEFAULT_LOCALE,
 		defaultLocale: context.defaultLocale ?? DEFAULT_LOCALE,
 		stage: context.stage ?? stored?.stage,
+		// Request-context extensions travel as one bundle, inherited exactly
+		// like session/db: explicit param → ALS → undefined.
+		"~contextExtensions":
+			context["~contextExtensions"] ?? stored?.["~contextExtensions"],
 	};
 }
 

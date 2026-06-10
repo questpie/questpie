@@ -14,6 +14,9 @@ Complete configuration patterns for built-in QUESTPIE field types. Fields use fl
 | `.inputOptional()`   | Optional in API input but required in DB    |
 | `.admin(config)`     | Admin UI rendering hints                    |
 | `.virtual(sql)`      | SQL expression for computed read-only field |
+| `.zod(fn)`           | Extend/replace Zod schema (output narrows value type) |
+| `.drizzle(fn)`       | Raw Drizzle column builder — constraints/SQL defaults land in DDL; `$type` narrows value type |
+| `.$type<T>()`        | Explicitly set TS value type (type-level; mainly json) |
 
 ## `f.text(options?)`
 
@@ -206,7 +209,7 @@ Reference to another collection.
 Belongs-to (single):
 
 ```ts
-author: f.relation("users").required(),
+author: f.relation("user").required(),
 category: f.relation("categories").onDelete("set null"),
 ```
 
@@ -355,11 +358,20 @@ pageContent: f.blocks(),
 
 ## `f.json(options?)`
 
-Raw JSON data. No schema validation.
+Raw JSON data. No schema validation by default; value types as loose `JsonValue`.
 
 ```ts
 metadata: f.json(),
 rawConfig: f.json().label("Configuration"),
+```
+
+Type it explicitly with `.$type<T>()` (type only) or `.zod()` (type + runtime validation) — the type flows into CRUD select/insert types:
+
+```ts
+type Layout = { rows: { id: string; span: number }[] };
+
+layout: f.json().$type<Layout>(),
+settings: f.json().zod(() => z.object({ theme: z.enum(["light", "dark"]) })),
 ```
 
 ## Admin Meta Options

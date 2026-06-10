@@ -21,6 +21,31 @@ QUESTPIE uses an adapter-based architecture for all infrastructure. Development 
 | KV Store | In-memory             | Redis (`redisKVAdapter`)                        |
 | Logger   | Pino (console)        | Pino (structured JSON)                          |
 
+## Environment
+
+Declare every env var once in `env.ts` (beside `questpie.config.ts`) — schema-validated at boot, typed everywhere. Never use raw `process.env.X` / `process.env.X!` in app code. Full reference: `references/env.md`.
+
+```ts
+// src/questpie/server/env.ts
+import { env } from "questpie/env";
+import { z } from "zod";
+
+export default env({
+	server: {
+		DATABASE_URL: z.url(),
+		BETTER_AUTH_SECRET: z.string().min(32),
+		S3_BUCKET: z.string().optional(),
+		S3_REGION: z.string().optional(),
+		S3_ACCESS_KEY: z.string().optional(),
+		S3_SECRET_KEY: z.string().optional(),
+		SMTP_HOST: z.string().optional(),
+		REDIS_URL: z.url().optional(),
+	},
+});
+```
+
+All snippets below assume `import env from "./env"` at the top of `questpie.config.ts`.
+
 ## Authentication
 
 QUESTPIE uses [Better Auth](https://www.better-auth.com/). Configure via `config/auth.ts`:
@@ -28,14 +53,17 @@ QUESTPIE uses [Better Auth](https://www.better-auth.com/). Configure via `config
 ```ts
 // src/questpie/server/config/auth.ts
 import { authConfig } from "questpie/app";
+
+import env from "../env";
+
 export default authConfig({
 	emailAndPassword: {
 		enabled: true,
 		requireEmailVerification: false,
 	},
-	baseURL: process.env.APP_URL || "http://localhost:3000",
+	baseURL: env.APP_URL ?? "http://localhost:3000",
 	basePath: "/api/auth",
-	secret: process.env.BETTER_AUTH_SECRET || "change-me",
+	secret: env.BETTER_AUTH_SECRET,
 });
 ```
 
@@ -74,6 +102,27 @@ handler: async ({ session }) => {
 
 The `adminModule` provides the canonical Better Auth `user` collection for storing user accounts. That contract includes `user.role` (`admin` or `user`), which built-in admin setup and login guards depend on. Do not replace `collection("user")` from scratch in apps that use `adminModule`; merge `starterModule.collections.user` and extend it instead.
 
+### Locking Down the REST Surface
+
+Deny-all is actually deny-all — there are no implicit framework grants above
+`defaultAccess`:
+
+```ts title="config/app.ts"
+export default appConfig({
+	access: { read: false, create: false, update: false, delete: false },
+});
+```
+
+With this config, anonymous and authenticated callers get nothing unless a
+collection opts in via `.access()`: no row listing (including
+public-visibility upload collections like `assets`), and no schema/meta
+introspection (gated by the same access system — visible iff at least one
+operation is allowed, overridable with the `introspect` access kind). Public
+upload files still serve by key (`GET /:collection/files/:key`) because
+`visibility: "public"` declares the BYTES public — override with the `serve`
+access kind. Do not wrap schema/meta routes in custom auth middleware; use
+`introspect` rules instead.
+
 ## Database
 
 PostgreSQL with Drizzle ORM. Schema is generated from your collection and global definitions.
@@ -81,7 +130,7 @@ PostgreSQL with Drizzle ORM. Schema is generated from your collection and global
 ```ts
 export default runtimeConfig({
 	db: {
-		url: process.env.DATABASE_URL || "postgres://localhost/myapp",
+		url: env.DATABASE_URL,
 	},
 });
 ```
@@ -142,11 +191,11 @@ export default runtimeConfig({
 	storage: {
 		basePath: "/api",
 		adapter: s3({
-			bucket: process.env.S3_BUCKET,
-			region: process.env.S3_REGION,
+			bucket: env.S3_BUCKET,
+			region: env.S3_REGION,
 			credentials: {
-				accessKeyId: process.env.S3_ACCESS_KEY!,
-				secretAccessKey: process.env.S3_SECRET_KEY!,
+				accessKeyId: env.S3_ACCESS_KEY,
+				secretAccessKey: env.S3_SECRET_KEY,
 			},
 		}),
 	},
@@ -162,10 +211,10 @@ export default runtimeConfig({
 	storage: {
 		basePath: "/api",
 		adapter: r2({
-			bucket: process.env.R2_BUCKET!,
-			accountId: process.env.R2_ACCOUNT_ID!,
-			accessKeyId: process.env.R2_ACCESS_KEY_ID!,
-			secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
+			bucket: env.R2_BUCKET,
+			accountId: env.R2_ACCOUNT_ID,
+			accessKeyId: env.R2_ACCESS_KEY_ID,
+			secretAccessKey: env.R2_SECRET_ACCESS_KEY,
 		}),
 	},
 });
@@ -192,7 +241,7 @@ import { pgBossAdapter } from "questpie/adapters/pg-boss";
 export default runtimeConfig({
 	queue: {
 		adapter: pgBossAdapter({
-			connectionString: process.env.DATABASE_URL,
+			connectionString: env.DATABASE_URL,
 		}),
 	},
 });
@@ -232,7 +281,7 @@ import { pgNotifyAdapter } from "questpie/adapters/pg-notify";
 export default runtimeConfig({
 	realtime: {
 		adapter: pgNotifyAdapter({
-			connectionString: process.env.DATABASE_URL,
+			connectionString: env.DATABASE_URL,
 		}),
 	},
 });
@@ -249,13 +298,33 @@ import { redisStreamsAdapter } from "questpie/adapters/redis-streams";
 export default runtimeConfig({
 	realtime: {
 		adapter: redisStreamsAdapter({
-			url: process.env.REDIS_URL,
+			url: env.REDIS_URL,
 		}),
 	},
 });
 ```
 
 > **Warning:** `pgNotifyAdapter` and `pgBossAdapter` both rely on PostgreSQL `LISTEN/NOTIFY`. They will silently fail behind PgBouncer in transaction pool mode. See "PgBouncer Compatibility" below.
+
+### SSE Keepalive & Timeouts
+
+The `POST /realtime` SSE stream sends a `ping` every **8s** by default (`realtime.keepAliveIntervalMs`). Every layer between browser and server must tolerate at least that idle window, or subscriptions die and reconnect in a loop:
+
+| Layer                      | Setting                            | Recommendation                                                            |
+| -------------------------- | ---------------------------------- | ------------------------------------------------------------------------- |
+| Bun (`Bun.serve`)          | `idleTimeout` (default 10s)        | Default ping survives it; set `idleTimeout: 30` for headroom              |
+| nginx                      | `proxy_read_timeout` (default 60s) | Keep >= 60s; disable SSE response buffering (`proxy_buffering off`)       |
+| Load balancers (ALB, etc.) | idle timeout (often 60s)           | Keep above `keepAliveIntervalMs`                                          |
+| Serverless platforms       | response buffering / max duration  | SSE needs streaming responses; buffered platforms break realtime entirely |
+
+```ts
+// Bun server entry — the app owns Bun.serve options, not the framework
+export default {
+	port: 3000,
+	idleTimeout: 30, // seconds
+	fetch: server.fetch,
+};
+```
 
 ## PgBouncer Compatibility
 
@@ -293,10 +362,10 @@ import { SmtpAdapter } from "questpie/adapters/smtp";
 export default runtimeConfig({
 	email: {
 		adapter:
-			process.env.NODE_ENV === "development"
+			env.NODE_ENV === "development"
 				? new ConsoleAdapter({ logHtml: false })
 				: new SmtpAdapter({
-						transport: { host: process.env.SMTP_HOST, port: 587, secure: true },
+						transport: { host: env.SMTP_HOST, port: 587, secure: true },
 					}),
 	},
 });
@@ -331,7 +400,7 @@ import { createClient } from "redis";
 import { redisKVAdapter } from "questpie/adapters/redis-kv";
 
 async function getRedis() {
-	const redis = createClient({ url: process.env.REDIS_URL! });
+	const redis = createClient({ url: env.REDIS_URL });
 	await redis.connect();
 	return redis;
 }
@@ -438,16 +507,17 @@ CMD ["bun", "run", ".output/server/index.mjs"]
 
 ```ts
 // routes/health.ts
+import { sql } from "questpie/drizzle";
 import { route } from "questpie/services";
-export default route({
-	method: "GET",
-	handler: async ({ db }) => {
+
+export default route()
+	.get()
+	.raw()
+	.access(true)
+	.handler(async ({ db }) => {
 		await db.execute(sql`SELECT 1`);
-		return new Response(JSON.stringify({ status: "ok" }), {
-			headers: { "Content-Type": "application/json" },
-		});
-	},
-});
+		return Response.json({ status: "ok" });
+	});
 ```
 
 ## Common Mistakes
@@ -460,8 +530,8 @@ Without a strong secret, sessions can be forged. The default `"change-me"` is fo
 // WRONG -- in production
 secret: "change-me";
 
-// CORRECT -- strong random secret from environment
-secret: process.env.BETTER_AUTH_SECRET; // min 32 chars
+// CORRECT -- declared in env.ts as z.string().min(32), validated at boot
+secret: env.BETTER_AUTH_SECRET;
 ```
 
 ### HIGH: Not running migrations after schema changes
@@ -491,11 +561,11 @@ import { s3 } from "files-sdk/s3";
 storage: {
   basePath: "/api",
   adapter: s3({
-    bucket: process.env.S3_BUCKET,
-    region: process.env.S3_REGION,
+    bucket: env.S3_BUCKET,
+    region: env.S3_REGION,
     credentials: {
-      accessKeyId: process.env.S3_ACCESS_KEY!,
-      secretAccessKey: process.env.S3_SECRET_KEY!,
+      accessKeyId: env.S3_ACCESS_KEY,
+      secretAccessKey: env.S3_SECRET_KEY,
     },
   }),
 }
@@ -509,7 +579,7 @@ Without pg-boss configured, job `.publish()` calls silently do nothing. Jobs def
 // REQUIRED for jobs to actually execute
 queue: {
   adapter: pgBossAdapter({
-    connectionString: process.env.DATABASE_URL,
+    connectionString: env.DATABASE_URL,
   }),
 }
 ```
@@ -528,16 +598,16 @@ Fix:
 ```ts
 // WRONG -- QUESTPIE_DB points at PgBouncer (transaction mode)
 realtime: {
-	adapter: pgNotifyAdapter({ connectionString: process.env.QUESTPIE_DB });
+	adapter: pgNotifyAdapter({ connectionString: env.QUESTPIE_DB });
 }
 queue: {
-	adapter: pgBossAdapter({ connectionString: process.env.QUESTPIE_DB });
+	adapter: pgBossAdapter({ connectionString: env.QUESTPIE_DB });
 }
 
 // CORRECT -- direct PG connection (Bun SQL pools internally)
 // Or switch to redisStreamsAdapter for realtime in multi-instance deployments
 realtime: {
-	adapter: redisStreamsAdapter({ url: process.env.REDIS_URL });
+	adapter: redisStreamsAdapter({ url: env.REDIS_URL });
 }
 ```
 

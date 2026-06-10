@@ -1,11 +1,6 @@
-import {
-	bigserial,
-	index,
-	jsonb,
-	pgTable,
-	text,
-	timestamp,
-} from "drizzle-orm/pg-core";
+import { bigserial, index, jsonb, pgTable, text } from "drizzle-orm/pg-core";
+
+import { systemTimestamp } from "#questpie/server/db/system-columns.js";
 
 /**
  * Realtime outbox log table
@@ -21,7 +16,7 @@ export const questpieRealtimeLogTable = pgTable(
 		recordId: text("record_id"),
 		locale: text("locale"),
 		payload: jsonb("payload").default({}),
-		createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+		createdAt: systemTimestamp("created_at").defaultNow().notNull(),
 	},
 	(t) => [
 		index("idx_realtime_log_seq").on(t.seq),

@@ -247,3 +247,89 @@ describe("upload + through (many-to-many)", () => {
 		});
 	});
 });
+
+// ==============================================================================
+// M2M upload population through parent access (inheritAccess)
+// ==============================================================================
+
+const publicPostAssets = collection("public_post_assets").fields(({ f }) => ({
+	post: f.relation("public_posts").required(),
+	asset: f.relation("assets").required(),
+}));
+
+const publicPosts = collection("public_posts")
+	.fields(({ f }) => ({
+		title: f.text().required(),
+		gallery: f.upload({
+			to: "assets",
+			through: "public_post_assets",
+			sourceField: "post",
+			targetField: "asset",
+		}),
+	}))
+	.access({ read: true });
+
+describe("upload + through population inherits parent access", () => {
+	let setup: Awaited<ReturnType<typeof buildMockApp>>;
+	let app: (typeof setup)["app"];
+
+	beforeEach(async () => {
+		setup = await buildMockApp({
+			collections: {
+				assets,
+				public_posts: publicPosts,
+				public_post_assets: publicPostAssets,
+			},
+		});
+		app = setup.app;
+		await runTestDbMigrations(app);
+	});
+
+	afterEach(async () => {
+		await setup.cleanup();
+	});
+
+	it("populates the gallery for anonymous readers of a public parent", async () => {
+		const systemCtx = createTestContext({ accessMode: "system" });
+		const anonCtx = createTestContext({ accessMode: "user", session: null });
+
+		const asset = await app.collections.assets.create(
+			{
+				id: crypto.randomUUID(),
+				key: "uploads/gallery-image.png",
+				filename: "gallery-image.png",
+				mimeType: "image/png",
+				size: 1000,
+				visibility: "public",
+			},
+			systemCtx,
+		);
+
+		const post = await app.collections.public_posts.create(
+			{
+				title: "Public Post",
+				gallery: { set: [{ id: asset.id }] },
+			},
+			systemCtx,
+		);
+
+		// Neither the assets nor the junction collection is anonymously listable
+		// (no .access() → session required)
+		await expect(app.collections.assets.find({}, anonCtx)).rejects.toThrow();
+		await expect(
+			app.collections.public_post_assets.find({}, anonCtx),
+		).rejects.toThrow();
+
+		// But the gallery populates through the parent's read decision —
+		// junction AND target reads inherit access from the readable parent
+		const found = (await app.collections.public_posts.findOne(
+			{ where: { id: post.id }, with: { gallery: true } },
+			anonCtx,
+		)) as any;
+
+		expect(found).not.toBeNull();
+		expect(found?.gallery).toHaveLength(1);
+		expect(found?.gallery[0]?.id).toBe(asset.id);
+		expect(typeof found?.gallery[0]?.url).toBe("string");
+	});
+});

@@ -30,6 +30,14 @@ import _svc_workflows from "../services/workflows";
 // ── Singles ────────────────────────────────────────────────
 import _adminConfig from "../config/admin";
 
+// ── Entity key registry (names only — acyclic by construction) ─────
+declare global {
+	namespace Questpie {
+		interface CollectionKeys { wf_event: unknown; wf_instance: unknown; wf_log: unknown; wf_step: unknown }
+		interface JobKeys { wfExecute: unknown; wfMaintenance: unknown; wfResume: unknown }
+	}
+}
+
 // ════════════════════════════════════════════════════════════
 // TYPES — composed from typeof references (zero inference cost)
 // ════════════════════════════════════════════════════════════
@@ -50,15 +58,15 @@ export interface WorkflowsJobs {
 }
 
 export interface WorkflowsRoutes {
-	cancelAllWorkflowInstances: RouteDefinition<unknown, unknown, RouteParamsFromKey<"cancelAllWorkflowInstances">>;
-	cancelWorkflowInstance: RouteDefinition<unknown, unknown, RouteParamsFromKey<"cancelWorkflowInstance">>;
-	getWorkflowInstance: RouteDefinition<unknown, unknown, RouteParamsFromKey<"getWorkflowInstance">>;
-	listWorkflowDefinitions: RouteDefinition<unknown, unknown, RouteParamsFromKey<"listWorkflowDefinitions">>;
-	listWorkflowInstances: RouteDefinition<unknown, unknown, RouteParamsFromKey<"listWorkflowInstances">>;
-	retryAllWorkflowInstances: RouteDefinition<unknown, unknown, RouteParamsFromKey<"retryAllWorkflowInstances">>;
-	retryWorkflowInstance: RouteDefinition<unknown, unknown, RouteParamsFromKey<"retryWorkflowInstance">>;
-	sendWorkflowEvent: RouteDefinition<unknown, unknown, RouteParamsFromKey<"sendWorkflowEvent">>;
-	triggerWorkflow: RouteDefinition<unknown, unknown, RouteParamsFromKey<"triggerWorkflow">>;
+	cancelAllWorkflowInstances: typeof _route_cancelAllWorkflowInstances extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"cancelAllWorkflowInstances">> : typeof _route_cancelAllWorkflowInstances;
+	cancelWorkflowInstance: typeof _route_cancelWorkflowInstance extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"cancelWorkflowInstance">> : typeof _route_cancelWorkflowInstance;
+	getWorkflowInstance: typeof _route_getWorkflowInstance extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"getWorkflowInstance">> : typeof _route_getWorkflowInstance;
+	listWorkflowDefinitions: typeof _route_listWorkflowDefinitions extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"listWorkflowDefinitions">> : typeof _route_listWorkflowDefinitions;
+	listWorkflowInstances: typeof _route_listWorkflowInstances extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"listWorkflowInstances">> : typeof _route_listWorkflowInstances;
+	retryAllWorkflowInstances: typeof _route_retryAllWorkflowInstances extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"retryAllWorkflowInstances">> : typeof _route_retryAllWorkflowInstances;
+	retryWorkflowInstance: typeof _route_retryWorkflowInstance extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"retryWorkflowInstance">> : typeof _route_retryWorkflowInstance;
+	sendWorkflowEvent: typeof _route_sendWorkflowEvent extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"sendWorkflowEvent">> : typeof _route_sendWorkflowEvent;
+	triggerWorkflow: typeof _route_triggerWorkflow extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"triggerWorkflow">> : typeof _route_triggerWorkflow;
 }
 
 export interface WorkflowsServices {
@@ -69,7 +77,27 @@ export interface WorkflowsServices {
 // MODULE DEFINITION — static plain object
 // ════════════════════════════════════════════════════════════
 
-const _module = {
+export type WorkflowsModule = {
+	name: "questpie-workflows";
+	collections: WorkflowsCollections;
+	jobs: WorkflowsJobs;
+	routes: WorkflowsRoutes;
+	services: WorkflowsServices;
+	globals: {};
+	messages: {};
+	emails: {};
+	migrations: readonly unknown[];
+	seeds: readonly unknown[];
+	fieldTypes: {};
+	views: {};
+	components: {};
+	blocks: {};
+	config: {
+		admin: typeof _adminConfig;
+	};
+};
+
+const _module: WorkflowsModule = {
 	name: "questpie-workflows" as const,
 	collections: {
 		wf_event: _coll_wf_event,
@@ -110,5 +138,4 @@ const _module = {
 	},
 };
 
-export type WorkflowsModule = typeof _module;
 export default _module;

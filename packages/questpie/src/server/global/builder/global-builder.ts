@@ -30,6 +30,22 @@ type ExtractColumnsFromFieldDefinitions<TFields extends Record<string, any>> = {
 };
 
 /**
+ * Merge field definitions from two global states without introducing a
+ * string index signature (twin of the CollectionBuilder helper). When one
+ * side has no fields (keyof resolves to string from the state base), use
+ * the other side only.
+ */
+type MergeFieldDefinitions<A, B> = keyof A extends never
+	? B
+	: keyof B extends never
+		? A
+		: string extends keyof A
+			? B
+			: string extends keyof B
+				? A
+				: A & B;
+
+/**
  * Extract field types from GlobalBuilderState.
  * Falls back to BuiltinFields if not available.
  *
@@ -100,6 +116,10 @@ export class GlobalBuilder<TState extends GlobalBuilderState> {
 	/**
 	 * Define fields using Field Builder.
 	 *
+	 * Cumulative: fields add to whatever the builder already has from earlier
+	 * `.fields()` calls and override existing fields by key — they never wipe
+	 * prior state (same semantics as CollectionBuilder.fields()).
+	 *
 	 * @example
 	 * ```ts
 	 * global("settings").fields(({ f }) => ({
@@ -115,9 +135,15 @@ export class GlobalBuilder<TState extends GlobalBuilderState> {
 		Override<
 			TState,
 			{
-				fields: ExtractColumnsFromFieldDefinitions<TNewFields>;
+				fields: MergeFieldDefinitions<
+					TState["fields"],
+					ExtractColumnsFromFieldDefinitions<TNewFields>
+				>;
 				localized: [];
-				fieldDefinitions: TNewFields;
+				fieldDefinitions: MergeFieldDefinitions<
+					TState["fieldDefinitions"],
+					TNewFields
+				>;
 			}
 		>
 	>;
@@ -132,9 +158,9 @@ export class GlobalBuilder<TState extends GlobalBuilderState> {
 		Override<
 			TState,
 			{
-				fields: TNewFields;
+				fields: MergeFieldDefinitions<TState["fields"], TNewFields>;
 				localized: [];
-				fieldDefinitions: undefined;
+				fieldDefinitions: TState["fieldDefinitions"];
 			}
 		>
 	>;
@@ -202,24 +228,58 @@ export class GlobalBuilder<TState extends GlobalBuilderState> {
 				}
 			}
 
+			// Cumulative semantics: merge with prior virtuals, but drop entries
+			// for keys redefined in this call (they may no longer be virtual).
+			const prevVirtuals = { ...(this.state.virtuals || {}) };
+			for (const name of Object.keys(fieldDefs)) {
+				delete prevVirtuals[name];
+			}
 			virtuals = {
-				...(this.state.virtuals || {}),
+				...prevVirtuals,
 				...virtuals,
 			};
 		} else {
 			// Raw Drizzle columns
 			columns = fieldsOrFactory;
-			virtuals = this.state.virtuals || {};
+			virtuals = { ...(this.state.virtuals || {}) };
+			for (const name of Object.keys(columns)) {
+				delete virtuals[name];
+			}
 			fieldDefinitions = undefined;
+		}
+
+		// Cumulative semantics (same as CollectionBuilder.fields()): keep prior
+		// fields and override by key. A redefined key fully replaces that field,
+		// so its stale per-key state (localized/relation/definition) is dropped.
+		const incomingFieldNames = fieldDefinitions
+			? Object.keys(fieldDefinitions)
+			: Object.keys(columns);
+		const prevLocalized = (this.state.localized || []).filter(
+			(name) => !incomingFieldNames.includes(name),
+		);
+		const prevPendingRelations = (
+			((this.state as any)._pendingRelations as
+				| Array<{ name: string; metadata: RelationFieldMetadata }>
+				| undefined) ?? []
+		).filter((rel) => !incomingFieldNames.includes(rel.name));
+		const prevFieldDefinitions = {
+			...(this.state.fieldDefinitions || {}),
+		} as Record<string, any>;
+		for (const name of incomingFieldNames) {
+			delete prevFieldDefinitions[name];
 		}
 
 		const newState = {
 			...this.state,
-			fields: columns,
-			localized: localizedFields,
+			fields: { ...this.state.fields, ...columns },
+			localized: [...prevLocalized, ...localizedFields],
 			virtuals,
-			fieldDefinitions,
-			_pendingRelations: pendingRelations,
+			fieldDefinitions: fieldDefinitions
+				? { ...prevFieldDefinitions, ...fieldDefinitions }
+				: this.state.fieldDefinitions
+					? prevFieldDefinitions
+					: undefined,
+			_pendingRelations: [...prevPendingRelations, ...pendingRelations],
 		} as any;
 
 		const newBuilder = new GlobalBuilder(newState);
@@ -259,7 +319,12 @@ export class GlobalBuilder<TState extends GlobalBuilderState> {
 	/**
 	 * Set access control rules
 	 */
-	access<TNewAccess extends GlobalAccess<any>>(
+	access<
+		TNewAccess extends GlobalAccess<
+			Global<TState>["$infer"]["select"],
+			Global<TState>["$infer"]["update"]
+		>,
+	>(
 		access: TNewAccess,
 	): GlobalBuilder<Override<TState, { access: Record<string, any> }>> {
 		const newState = {

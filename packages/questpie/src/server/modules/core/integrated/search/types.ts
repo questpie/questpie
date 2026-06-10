@@ -816,6 +816,12 @@ export interface SearchService {
 	initialize(): Promise<void>;
 
 	/**
+	 * Whether the adapter finished initializing.
+	 * Consumed by the health route to report search status.
+	 */
+	isInitialized(): boolean;
+
+	/**
 	 * Get underlying adapter
 	 */
 	getAdapter(): SearchAdapter;

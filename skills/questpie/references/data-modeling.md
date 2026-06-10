@@ -62,6 +62,24 @@ export default collection("posts")
 | `.options({...})`                               | Timestamps, versioning, soft delete     |
 | `.search({...})`                                | Search indexing                         |
 | `.searchable(string[])`                         | Searchable fields                       |
+| `.merge(other)`                                 | Extend a same-name builder (see below)  |
+
+### Extending Collections — `.merge()`
+
+To extend a collection a module already provides, merge its builder — never redefine the collection from scratch (same-key registration replaces the module's collection wholesale):
+
+```ts
+import { starterModule } from "questpie/app";
+import { collection } from "#questpie/factories";
+
+export default collection("user")
+	.merge(starterModule.collections.user)
+	.fields(({ f }) => ({
+		internalNotes: f.textarea(),
+	}));
+```
+
+Fields/options/extension keys combine by key (merged-in side wins), hooks concatenate, and `.fields()` after `.merge()` is cumulative — it never wipes merged fields. The result stays fully typed.
 
 ### Collection Options
 
@@ -109,6 +127,37 @@ When workflow is the publication source for pages, public reads use `stage: "pub
 })
 ```
 
+All access kinds and when each is checked:
+
+| Kind         | Gates                                                              |
+| ------------ | ------------------------------------------------------------------ |
+| `read`       | Listing and fetching records                                       |
+| `create`     | Creating records                                                   |
+| `update`     | Updating records                                                   |
+| `delete`     | Deleting records                                                   |
+| `transition` | Workflow stage transitions (falls back to `update`)                |
+| `serve`      | Upload file bytes by key (`GET /:collection/files/:key`)           |
+| `introspect` | Schema/meta routes (`GET /:collection/{schema,meta}`)              |
+
+Resolution chain for every kind: collection `.access()` → app `defaultAccess`
+(from `appConfig({ access })`) → require session. No hidden framework grants —
+deny-all `defaultAccess` really closes the whole REST surface. Two kinds have
+specialized fallbacks:
+
+- `serve`: `serve` → explicit collection `read` (row-aware, `ctx.data` = upload
+  row) → `defaultAccess.serve` → allow. `visibility: "public"` means bytes are
+  servable by key; it never makes rows listable. Private files additionally
+  always require the signed token.
+- `introspect`: `introspect` → `defaultAccess.introspect` → visible iff at
+  least one CRUD operation is allowed (so `create: true` form collections keep
+  their validation schema readable; deny-all apps expose no schemas).
+
+Upload population: `f.upload()` fields populate through the PARENT row's read
+decision — a public gallery (`read: true`) shows its assets (with `url`) to
+anonymous readers even when the assets collection itself is unlistable.
+Field-level read rules on the upload collection still apply inside population.
+Hand-written `f.relation()` fields keep normal target-collection access.
+
 ### CRUD Operations (Server-Side)
 
 ```ts
@@ -133,14 +182,23 @@ const newPost = await collections.posts.create({
 	status: "draft",
 });
 
-// Update
-await collections.posts.update({
-	where: { id: "abc" },
+// Update by id (returns T, throws notFound)
+await collections.posts.updateById({
+	id: "abc",
 	data: { status: "published" },
 });
 
-// Delete
-await collections.posts.delete({ where: { id: "abc" } });
+// Bulk update by where (returns T[] — the rows actually written)
+await collections.posts.updateMany({
+	where: { status: "draft" },
+	data: { status: "archived" },
+});
+
+// Delete by id
+await collections.posts.deleteById({ id: "abc" });
+
+// Bulk delete by where (returns { success, count })
+await collections.posts.deleteMany({ where: { status: "archived" } });
 
 // Count
 const count = await collections.posts.count({ where: { status: "published" } });
@@ -259,7 +317,7 @@ All relations are defined via `f.relation()` inside `.fields()`.
 ### Belongs-To (Single)
 
 ```ts
-author: f.relation("users").required(),
+author: f.relation("user").required(),
 barber: f.relation("barbers").required().onDelete("cascade"),
 ```
 
@@ -448,7 +506,7 @@ collection("posts").relations({ author: belongsTo("users") });
 
 // CORRECT -- use f.relation() inside .fields()
 collection("posts").fields(({ f }) => ({
-	author: f.relation("users"),
+	author: f.relation("user"),
 }));
 ```
 

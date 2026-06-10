@@ -13,10 +13,12 @@
  * @see QUE-163 — Codegen Simplification
  */
 
+import { emitKeyRegistryAugmentation } from "./category-emit.js";
 import type {
 	BuilderFactory,
 	CallbackParamDefinition,
 	CategoryDeclaration,
+	DiscoveredFile,
 	RegistryExtension,
 	ResolvedTarget,
 	SingletonFactory,
@@ -37,6 +39,13 @@ export interface FactoryTemplateOptions {
 	 * When present, the default export is spread into _allFieldDefs.
 	 */
 	userFieldsImportPath?: string;
+	/**
+	 * Discovered category files — used to emit the names-only entity key
+	 * registry (Questpie.CollectionKeys/GlobalKeys/JobKeys). factories.ts is
+	 * the host because every collection file imports it, so the augmentation
+	 * is loaded wherever `relation()` & friends are used.
+	 */
+	discoveredCategories?: Map<string, Map<string, DiscoveredFile>>;
 }
 
 /**
@@ -47,7 +56,8 @@ export interface FactoryTemplateOptions {
 export function generateFactoryTemplate(
 	options: FactoryTemplateOptions,
 ): string {
-	const { target, hasModules, userFieldsImportPath } = options;
+	const { target, hasModules, userFieldsImportPath, discoveredCategories } =
+		options;
 
 	// Extract merged registries and callback params from the resolved target
 	const collExtensions = new Map<string, RegistryExtension>();
@@ -222,6 +232,11 @@ export function generateFactoryTemplate(
 	// interfaces (Questpie.ViewsRegistry, Questpie.ComponentsRegistry, Questpie.FieldTypesMap)
 	// which are populated by each module's codegen output independently.
 
+	// ── Entity key registry — names only, zero imports ─────────
+	if (discoveredCategories) {
+		emitKeyRegistryAugmentation(lines, discoveredCategories);
+	}
+
 	// Plugin imports (only types needed for signatures)
 	if (allImports.size > 0) {
 		lines.push(
@@ -331,8 +346,11 @@ export function generateFactoryTemplate(
 			lines.push('declare module "questpie/builders" {');
 
 			if (collExtensions.size > 0) {
+				// Declaration merging requires an IDENTICAL type parameter list to
+				// the class (name + constraint) — a renamed param (TState$1) makes
+				// tsc treat the merged symbol as two-generic (TS2428/TS2314).
 				lines.push(
-					"\tinterface CollectionBuilder<TState$1 extends CollectionBuilderState> {",
+					"\tinterface CollectionBuilder<TState extends CollectionBuilderState> {",
 				);
 				for (const [name, ext] of collExtensions) {
 					const paramName = ext.isCallback ? "configFn" : "config";
@@ -342,9 +360,8 @@ export function generateFactoryTemplate(
 						hasModules,
 						placeholderMap,
 					);
-					paramType = paramType.replace(/\bTState\b/g, "TState$1");
 					lines.push(
-						`\t\t${name}(${paramName}: ${paramType}): CollectionBuilder<TState$1>;`,
+						`\t\t${name}(${paramName}: ${paramType}): CollectionBuilder<TState>;`,
 					);
 				}
 				lines.push("\t}");

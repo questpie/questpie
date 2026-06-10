@@ -165,6 +165,12 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 	 * Define fields using Field Builder.
 	 * Provides type-safe field definitions with validation, metadata, and operators.
 	 *
+	 * Cumulative: fields add to whatever the builder already has (from earlier
+	 * `.fields()` calls or `.merge()`) and override existing fields by key —
+	 * they never wipe prior state. This makes the documented extension recipe
+	 * safe: `collection("user").merge(starterModule.collections.user).fields(...)`
+	 * keeps all starter fields and adds yours.
+	 *
 	 * @example
 	 * ```ts
 	 * collection("posts").fields(({ f }) => ({
@@ -182,9 +188,15 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 		Override<
 			TState,
 			{
-				fields: ExtractColumnsFromFieldDefinitions<TNewFields>;
+				fields: MergeFieldDefinitions<
+					TState["fields"],
+					ExtractColumnsFromFieldDefinitions<TNewFields>
+				>;
 				localized: readonly string[];
-				fieldDefinitions: TNewFields;
+				fieldDefinitions: MergeFieldDefinitions<
+					TState["fieldDefinitions"],
+					TNewFields
+				>;
 			}
 		>
 	>;
@@ -201,9 +213,9 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 		Override<
 			TState,
 			{
-				fields: TNewFields;
+				fields: MergeFieldDefinitions<TState["fields"], TNewFields>;
 				localized: readonly string[];
-				fieldDefinitions: {};
+				fieldDefinitions: TState["fieldDefinitions"];
 			}
 		>
 	>;
@@ -283,20 +295,39 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 				metadata: RelationFieldMetadata;
 			}> = relationFields;
 
+			// Cumulative semantics: keep prior fields (from earlier .fields() or
+			// .merge()) and override by key. A redefined key fully replaces that
+			// field, so its stale per-key state (localized/virtual/relation) is
+			// dropped before merging.
+			const prevPendingRelations = (
+				((this.state as any)._pendingRelations as
+					| Array<{ name: string; metadata: RelationFieldMetadata }>
+					| undefined) ?? []
+			).filter((rel) => !(rel.name in fieldDefs));
+			const prevLocalized = (this.state.localized || []).filter(
+				(name) => !(name in fieldDefs),
+			);
+			const prevVirtuals = { ...(this.state.virtuals || {}) };
+			for (const name of Object.keys(fieldDefs)) {
+				delete prevVirtuals[name];
+			}
+			const mergedVirtuals = { ...prevVirtuals, ...sqlVirtuals };
+
 			const newState = {
 				...this.state,
-				fields: columns,
-				localized: localizedFields,
-				fieldDefinitions: fieldDefs,
+				fields: { ...this.state.fields, ...columns },
+				localized: [...prevLocalized, ...localizedFields],
+				fieldDefinitions: {
+					...(this.state.fieldDefinitions || {}),
+					...fieldDefs,
+				},
 				virtuals:
-					Object.keys(sqlVirtuals).length > 0
-						? {
-								...(this.state.virtuals || {}),
-								...sqlVirtuals,
-							}
-						: this.state.virtuals,
+					this.state.virtuals === undefined &&
+					Object.keys(mergedVirtuals).length === 0
+						? undefined
+						: mergedVirtuals,
 				// Store pending relations for deferred resolution in build()
-				_pendingRelations: pendingRelations,
+				_pendingRelations: [...prevPendingRelations, ...pendingRelations],
 			} as any;
 
 			const newBuilder = new CollectionBuilder(newState);
@@ -310,11 +341,27 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 		// Legacy pattern: raw Drizzle columns object
 		const columns = factoryOrColumns as Record<string, AnyPgColumn>;
 
+		// Cumulative like the factory overload. Raw columns are never localized
+		// and carry no field definition, so redefined keys drop both.
+		const prevFieldDefinitions = {
+			...(this.state.fieldDefinitions || {}),
+		} as Record<string, any>;
+		for (const name of Object.keys(columns)) {
+			delete prevFieldDefinitions[name];
+		}
+
 		const newState = {
 			...this.state,
-			fields: columns,
-			localized: [],
-			fieldDefinitions: {},
+			fields: { ...this.state.fields, ...columns },
+			localized: (this.state.localized || []).filter(
+				(name) => !(name in columns),
+			),
+			fieldDefinitions: prevFieldDefinitions,
+			_pendingRelations: (
+				((this.state as any)._pendingRelations as
+					| Array<{ name: string; metadata: RelationFieldMetadata }>
+					| undefined) ?? []
+			).filter((rel) => !(rel.name in columns)),
 		} as any;
 
 		const newBuilder = new CollectionBuilder(newState);
@@ -351,6 +398,10 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 			? targetCollection[0]
 			: targetCollection;
 
+		// Upload fields (f.upload) populate through the parent row's read
+		// decision — see RelationConfig.inheritAccess.
+		const inheritAccess = metadata.isUpload === true ? true : undefined;
+
 		switch (relationType) {
 			case "belongsTo": {
 				// FK column is stored under field name (e.g., "author")
@@ -363,6 +414,7 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 					relationName: metadata.relationName,
 					onDelete: metadata.onDelete,
 					onUpdate: metadata.onUpdate,
+					inheritAccess,
 				};
 			}
 
@@ -389,6 +441,7 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 					targetField: metadata.targetField,
 					onDelete: metadata.onDelete,
 					onUpdate: metadata.onUpdate,
+					inheritAccess,
 				};
 			}
 
@@ -400,6 +453,7 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 					collection: targetName,
 					references: ["id"],
 					relationName: metadata.relationName,
+					inheritAccess,
 				};
 			}
 
@@ -588,13 +642,19 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 	 *   .fields(({ f }) => ({ ... }))
 	 *   .access({
 	 *     read: true,
-	 *     create: ({ user }) => user?.role === "admin",
-	 *     update: ({ user, id }) => user?.id === id,
-	 *     delete: ({ user }) => user?.role === "admin",
+	 *     create: ({ session }) => session?.user.role === "admin",
+	 *     update: ({ session, data }) => session?.user.id === data.authorId,
+	 *     delete: ({ session }) => session?.user.role === "admin",
 	 *   })
 	 * ```
 	 */
-	access<TNewAccess extends CollectionAccess<CollectionSelect<TState>>>(
+	access<
+		TNewAccess extends CollectionAccess<
+			CollectionSelect<TState>,
+			CollectionInsert<TState>,
+			CollectionUpdate<TState>
+		>,
+	>(
 		access: TNewAccess,
 	): CollectionBuilder<Override<TState, { access: CollectionAccessStorage }>> {
 		const newState = {
@@ -683,12 +743,16 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 			}
 		}
 
-		// Generate validation schemas
+		// Generate validation schemas (field definitions drive the per-field
+		// schema overlay — see createCollectionValidationSchemas)
 		const validationSchemas = createCollectionValidationSchemas(
 			this.state.name,
 			mainFields,
 			localizedFields,
-			options,
+			{
+				...options,
+				fieldDefinitions: this.state.fieldDefinitions as any,
+			},
 		);
 
 		const newState = {
@@ -1059,6 +1123,29 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 			...other.state.access,
 		};
 
+		// Merge pending (unresolved) relations by field name — the plain state
+		// spread below would otherwise clobber this side's pending relations
+		// with other's. Fields other redefines drop this side's pending entry.
+		const thisPendingRelations = (((this.state as any)._pendingRelations as
+			| Array<{ name: string; metadata: RelationFieldMetadata }>
+			| undefined) ?? []) as Array<{
+			name: string;
+			metadata: RelationFieldMetadata;
+		}>;
+		const otherPendingRelations = (((other.state as any)._pendingRelations as
+			| Array<{ name: string; metadata: RelationFieldMetadata }>
+			| undefined) ?? []) as Array<{
+			name: string;
+			metadata: RelationFieldMetadata;
+		}>;
+		const otherFieldKeys = new Set(
+			Object.keys(other.state.fieldDefinitions || {}),
+		);
+		const mergedPendingRelations = [
+			...thisPendingRelations.filter((rel) => !otherFieldKeys.has(rel.name)),
+			...otherPendingRelations,
+		];
+
 		// Spread both states first to preserve extension-set keys (admin, adminList,
 		// adminForm, adminActions, adminPreview, etc.) added via .set() — without this
 		// they are lost on merge. Then override the explicit merged keys below.
@@ -1096,6 +1183,7 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 				...(other.state.localized || []),
 			],
 			validation: other.state.validation ?? this.state.validation,
+			_pendingRelations: mergedPendingRelations,
 		} as any;
 
 		const newBuilder = new CollectionBuilder(mergedState);

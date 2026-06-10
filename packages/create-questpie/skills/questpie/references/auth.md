@@ -119,6 +119,107 @@ export default collection("user")
 	}));
 ```
 
+`.fields()` is cumulative -- it adds to the merged starter fields and overrides them by key, never wipes them, so this recipe keeps the full starter user model.
+
+### Anonymous Users (Better Auth plugin)
+
+Better Auth plugins that extend the user model follow the same recipe. For the anonymous plugin, register it in `auth.ts` (merged after the built-in plugins) and extend the starter user with the `isAnonymous` field the plugin expects:
+
+```ts
+// auth.ts
+import { anonymous } from "better-auth/plugins";
+import type { AuthConfig } from "questpie/app";
+
+export default {
+	plugins: [anonymous()],
+} satisfies AuthConfig;
+```
+
+```ts
+// collections/user.ts
+import { starterModule } from "questpie/app";
+import { collection } from "#questpie/factories";
+
+export default collection("user")
+	.merge(starterModule.collections.user)
+	.fields(({ f }) => ({
+		isAnonymous: f.boolean().default(false),
+	}));
+```
+
+Run `questpie generate` and apply migrations to add the column. Anonymous sign-in (`authClient.signIn.anonymous()` on the client) creates throwaway users that Better Auth can later link to real accounts.
+
+## Reaching the App from Better Auth Callbacks
+
+The `/auth/*` catch-all is a plain **raw route**, and raw routes execute their handler inside `runWithContext()` (the request's AsyncLocalStorage scope). That means every Better Auth callback — `onLinkAccount`, `databaseHooks`, `sendMagicLink`, plugin hooks — already runs inside the request scope, and `getContext<App>()` returns the live app, session, db, and locale.
+
+**Never build a module-level app singleton or a hand-rolled context bridge for auth callbacks.** The `App` import stays type-only, so there is no circular import:
+
+```ts
+// config/auth.ts
+import { anonymous } from "better-auth/plugins";
+import { getContext } from "questpie";
+import { authConfig } from "questpie/app";
+import type { App } from "#questpie"; // type-only — no runtime cycle
+
+export default authConfig({
+	plugins: [
+		anonymous({
+			// Fires when an anonymous user signs in with a real account —
+			// re-point the guest's rows onto the new user before the plugin
+			// deletes the anonymous user.
+			onLinkAccount: async ({ anonymousUser, newUser }) => {
+				const { app } = getContext<App>();
+				// Bare { accessMode: "system" } elevates ONLY the mode —
+				// session, db, and locale inherit from the request scope (ALS).
+				await app.collections.memberships.updateMany(
+					{
+						where: { user: anonymousUser.user.id },
+						data: { user: newUser.user.id },
+					},
+					{ accessMode: "system" },
+				);
+			},
+		}),
+	],
+});
+```
+
+### Partial Context Overrides
+
+CRUD context normalization merges what you pass with the ambient request scope — priority: explicit param → ALS scope → defaults (`accessMode: "system"`, `locale: "en"`). Passing only `{ accessMode: "system" }` elevates the mode while the request's session/db/locale ride along. The inverse also holds: `{ accessMode: "user" }` inside system-scoped code re-enables access rules against the inherited session without re-threading it:
+
+```ts
+// Inside any handler — session comes from the request ALS scope
+await app.collections.posts.find({}, { accessMode: "user" }); // rules enforced for the current user
+await app.collections.posts.find({}, { accessMode: "system" }); // rules bypassed, same session/locale
+```
+
+## Client-Side Auth (authClient)
+
+For session state and sign-in/out on the frontend, create a typed Better Auth client. In admin-equipped apps use the typed wrapper (session includes your merged user fields):
+
+```ts
+// src/lib/auth-client.ts
+import { createAdminAuthClient } from "@questpie/admin/client";
+import type { AppConfig } from "#questpie";
+import { env } from "#questpie/env.client.vite"; // generated from env.client.ts
+
+export const authClient = createAdminAuthClient<AppConfig>({
+	baseURL: typeof window !== "undefined" ? window.location.origin : env.APP_URL,
+	basePath: "/api/auth",
+});
+```
+
+```tsx
+const { data: session, isPending } = authClient.useSession();
+await authClient.signIn.email({ email, password });
+await authClient.signIn.anonymous(); // with the anonymous plugin
+await authClient.signOut();
+```
+
+Apps without `@questpie/admin` use Better Auth's own `createAuthClient` from `better-auth/react` pointed at `${APP_URL}/api/auth` — same call surface, without the app-inferred session typing.
+
 ## Environment Variables
 
 | Variable             | Required   | Description                                               |

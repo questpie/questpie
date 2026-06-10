@@ -37,6 +37,7 @@ async function canReindexCollection(
 		session?: { user: any; session: any } | null;
 		db: unknown;
 		locale?: string;
+		contextExtensions?: Record<string, unknown>;
 	},
 ): Promise<boolean> {
 	const customAccess = config.search?.reindexAccess;
@@ -70,6 +71,7 @@ async function canReindexCollection(
 		db: params.db,
 		session: params.session,
 		locale: params.locale,
+		contextExtensions: params.contextExtensions,
 	});
 
 	return updateAccessResult !== false;
@@ -151,6 +153,7 @@ export async function searchSearch(
 				db: resolved.appContext.db ?? app.db,
 				session: resolved.appContext.session,
 				locale: resolved.appContext.locale,
+				contextExtensions: resolved.appContext["~contextExtensions"],
 			});
 
 			// Skip collections with no access
@@ -355,6 +358,7 @@ export async function searchReindex(
 		session: resolved.appContext.session,
 		db,
 		locale: resolved.appContext.locale,
+		contextExtensions: resolved.appContext["~contextExtensions"],
 	});
 
 	if (!hasReindexAccess) {

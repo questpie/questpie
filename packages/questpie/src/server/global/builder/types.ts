@@ -7,6 +7,7 @@ import type { Collection } from "#questpie/server/collection/builder/collection.
 import type {
 	CollectionVersioningOptions,
 	ExtractFieldsByLocation,
+	FieldAccess,
 	I18nFieldAccessor,
 	InferTableWithColumns,
 	RelationConfig,
@@ -15,7 +16,6 @@ import type {
 import type { AppContext } from "#questpie/server/config/app-context.js";
 import type { BaseRequestContext } from "#questpie/server/config/context.js";
 import type { AccessMode } from "#questpie/server/config/types.js";
-import type { FieldAccess } from "#questpie/server/fields/types.js";
 
 /**
  * Scope resolver function type for globals.
@@ -127,12 +127,13 @@ export type GlobalHookContext<TData = any> = AppContext & {
  * Access control context for global operations.
  *
  * @template TData - The global data type
+ * @template TInput - The input data type (update: the patch)
  */
-export type GlobalAccessContext<TData = any> = AppContext & {
-	/** The global data */
+export type GlobalAccessContext<TData = any, TInput = unknown> = AppContext & {
+	/** The global data (update: the existing record, or undefined on first write) */
 	data?: TData;
 	/** Input data for update */
-	input?: unknown;
+	input?: TInput;
 	/** Current locale */
 	locale?: string;
 };
@@ -195,26 +196,39 @@ export type GlobalTransitionHook<TData = any> = (
  * Access control function can return:
  * - boolean: true (allow) or false (deny)
  */
-export type GlobalAccessRule<TRow = any> =
+export type GlobalAccessRule<TRow = any, TInput = unknown> =
 	| boolean
-	| ((ctx: GlobalAccessContext<TRow>) => boolean | Promise<boolean>);
+	| ((ctx: GlobalAccessContext<TRow, TInput>) => boolean | Promise<boolean>);
 
 /**
- * Global access control configuration
+ * Global access control configuration.
+ *
+ * Per-operation contexts:
+ * - `read` — `data` is not loaded
+ * - `update` — `data` is the existing record (undefined on first write),
+ *   `input` is the patch
  */
-export interface GlobalAccess<TRow = any> {
+export interface GlobalAccess<TRow = any, TUpdate = any> {
 	read?: GlobalAccessRule<TRow>;
-	update?: GlobalAccessRule<TRow>;
+	update?: GlobalAccessRule<TRow, TUpdate>;
 	/**
 	 * Access rule for workflow stage transitions.
 	 * Falls back to `update` if not specified.
 	 */
 	transition?: GlobalAccessRule<TRow>;
 	/**
+	 * Access rule for schema/meta introspection
+	 * (`GET /globals/:name/{schema,meta}`).
+	 *
+	 * Resolution: `introspect` → `defaultAccess.introspect` → visible iff at
+	 * least one operation (read/update) is allowed for the current user.
+	 */
+	introspect?: GlobalAccessRule<TRow>;
+	/**
 	 * Field-scoped access rules.
 	 * Source-of-truth for per-field authorization in globals.
 	 */
-	fields?: Record<string, Pick<FieldAccess, "read" | "update">>;
+	fields?: Record<string, Pick<FieldAccess<TRow>, "read" | "update">>;
 }
 
 export type GlobalBuilderRelationFn<

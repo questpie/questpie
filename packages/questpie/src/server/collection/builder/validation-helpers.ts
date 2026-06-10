@@ -190,8 +190,61 @@ export function createCollectionValidationSchemas<
 		}
 	}
 
+	// Overlay field-level schemas — the field definition is the validation
+	// source of truth wherever one exists (.zod() transforms, email format,
+	// select enums, array shapes). Column-derived schemas remain for system
+	// fields (id, timestamps), legacy raw columns, and the carve-outs below,
+	// preserving DB-shape semantics (date coercion, defaults).
+	const insertOverrides: Record<string, z.ZodTypeAny> = {};
+	const updateOverrides: Record<string, z.ZodTypeAny> = {};
+
+	if (options?.fieldDefinitions) {
+		const columnKeys = new Set([
+			...Object.keys(mainFields),
+			...Object.keys(localizedFields),
+		]);
+
+		for (const [key, fieldDef] of Object.entries(options.fieldDefinitions)) {
+			// Only keys that actually have a column (skips virtual/hasMany)
+			if (!columnKeys.has(key)) continue;
+			// Excluded keys stay excluded
+			if (options.exclude?.[key]) continue;
+			// input:false fields are system-written — keep column semantics
+			if (fieldDef._state?.input === false) continue;
+			// Relation/upload FK formats are app-defined (custom ids, auth
+			// providers) — the field schema's uuid check would reject them.
+			const meta = fieldDef.getMetadata?.() as
+				| { type?: string; isUpload?: boolean }
+				| undefined;
+			if (meta?.type === "relation" || meta?.type === "upload") continue;
+
+			let schema: z.ZodTypeAny = fieldDef.toZodSchema();
+
+			// .validation({ refine }) applies on top of the field schema too
+			const refineFn = options.refine?.[key];
+			if (refineFn) {
+				schema = refineFn(schema);
+			}
+
+			// inputOptional fields are always optional in input
+			insertOverrides[key] =
+				fieldDef._state?.input === "optional" &&
+				!(schema instanceof z.ZodOptional)
+					? schema.optional()
+					: schema;
+			updateOverrides[key] =
+				schema instanceof z.ZodOptional ? schema : schema.optional();
+		}
+	}
+
 	return {
-		insertSchema: baseInsertSchema,
-		updateSchema: baseUpdateSchema,
+		insertSchema:
+			Object.keys(insertOverrides).length > 0
+				? baseInsertSchema.extend(insertOverrides)
+				: baseInsertSchema,
+		updateSchema:
+			Object.keys(updateOverrides).length > 0
+				? baseUpdateSchema.extend(updateOverrides)
+				: baseUpdateSchema,
 	};
 }

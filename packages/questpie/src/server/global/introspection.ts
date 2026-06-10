@@ -497,11 +497,39 @@ async function evaluateGlobalAccess(
 		(r) => r.allowed === true,
 	);
 
+	// Introspection gate: an explicit `introspect` rule overrides the default
+	// "visible iff at least one operation is allowed". `visible` is what the
+	// schema/meta routes enforce and what batch introspection filters on.
+	const introspectRule = access?.introspect ?? appDefaultAccess?.introspect;
+	const visible =
+		introspectRule !== undefined
+			? (await evaluateAccessRule(introspectRule, accessContext)).allowed !==
+				false
+			: hasAnyAccess;
+
 	return {
-		visible: hasAnyAccess,
+		visible,
 		level: hasFullAccess ? "full" : "none",
 		operations,
 	};
+}
+
+/**
+ * Resolve whether the current user may introspect a global
+ * (`GET /globals/:name/{schema,meta}`).
+ *
+ * Chain: `access.introspect` → `defaultAccess.introspect` → visible iff at
+ * least one operation is allowed. Same computation embedded in
+ * `GlobalSchema.access.visible` — exported for routes (meta) that need the
+ * gate without building the full schema.
+ */
+export async function resolveGlobalIntrospectionAccess(
+	state: GlobalBuilderState,
+	context: CRUDContext,
+	app?: unknown,
+): Promise<boolean> {
+	const access = await evaluateGlobalAccess(state, context, app);
+	return access.visible;
 }
 
 /**

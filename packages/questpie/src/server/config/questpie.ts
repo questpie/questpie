@@ -10,6 +10,7 @@ import type {
 	AnyCollectionState,
 	RelationConfig,
 } from "#questpie/server/collection/builder/types.js";
+import { extractAppServices } from "#questpie/server/config/app-context.js";
 import type { RequestContext } from "#questpie/server/config/context.js";
 import { QuestpieMigrationsAPI } from "#questpie/server/config/integrated/migrations-api.js";
 import {
@@ -58,12 +59,42 @@ interface ResolvedServiceDefinition {
 	namespace: string | null;
 }
 
+/**
+ * Context keys a `appConfig({ context })` resolver should not return.
+ * Base request keys (`session`, `db`, …) and per-operation keys (`data`,
+ * `input`, …) are set by the framework after the extension merge — a
+ * resolver-returned value never lands. `collections`/`globals` would shadow
+ * the typed entity APIs in rule/hook contexts — almost certainly a mistake.
+ */
+const RESERVED_CONTEXT_KEYS = new Set([
+	"session",
+	"db",
+	"locale",
+	"defaultLocale",
+	"localeFallback",
+	"accessMode",
+	"stage",
+	"request",
+	"requestId",
+	"traceId",
+	"data",
+	"input",
+	"original",
+	"operation",
+	"params",
+	"app",
+	"collections",
+	"globals",
+	"~contextExtensions",
+]);
+
 export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 	private _collections: Record<string, Collection<AnyCollectionState>> = {};
 	private _globals: Record<string, AnyGlobal> = {};
 	private _singletonServices: Record<string, any> = {};
 	private _serviceDefs: Record<string, ResolvedServiceDefinition> = {};
 	private _customServiceNamespaces = new Set<string>();
+	private _warnedContextExtensionKeys = new Set<string>();
 	public readonly config: TConfig;
 	private resolvedLocales: Locale[] | null = null;
 
@@ -141,6 +172,12 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 	public state?: {
 		config?: import("./app-state-config.js").ResolvedAppStateConfig;
 	} & Record<string, unknown>;
+
+	/**
+	 * Validated app environment (from `env.ts`, via `AppDefinition.env`).
+	 * The generated app type narrows this to the inferred env shape.
+	 */
+	public env: Readonly<Record<string, unknown>> = {};
 
 	public migrations!: QuestpieMigrationsAPI<TConfig>;
 	public seeds!: QuestpieSeedsAPI<TConfig>;
@@ -911,6 +948,13 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 	 * Create request context
 	 * Returns minimal context with session, locale, accessMode
 	 * Services are accessed via app.* not context.*
+	 *
+	 * Single derivation point for `appConfig({ context })`: when a `request` is
+	 * present and extensions haven't been resolved yet, the resolver runs here
+	 * (once per HTTP request). The result is merged flat AND carried as the
+	 * `"~contextExtensions"` bundle so it travels into access rules, hooks,
+	 * and `getContext()`.
+	 *
 	 * @default accessMode: 'system' - API is backend-only by default
 	 */
 	public async createContext(
@@ -948,14 +992,75 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 		const accessMode: AccessMode =
 			userCtx.accessMode ?? (userCtx.request ? "user" : "system");
 
+		// Resolve context extensions exactly once per request.
+		// Idempotence by presence: contexts that already carry the bundle
+		// (e.g. re-entering createContext) skip resolution.
+		let extensions = userCtx["~contextExtensions"] as
+			| Record<string, unknown>
+			| undefined;
+		if (extensions === undefined && userCtx.request) {
+			extensions = await this.resolveContextExtensions({
+				request: userCtx.request,
+				session: userCtx.session,
+				db: userCtx.db ?? this.db,
+			});
+		}
+
 		return {
 			...userCtx,
+			// Flat merge for handler/ctx reads — never shadows base keys below.
+			...(extensions ?? {}),
 			session: userCtx.session,
 			locale,
 			defaultLocale,
 			accessMode,
 			db: userCtx.db ?? this.db,
+			...(extensions !== undefined ? { "~contextExtensions": extensions } : {}),
 		};
+	}
+
+	/**
+	 * Run the `appConfig({ context })` resolver with the full system-mode
+	 * service surface. Returns `undefined` when no resolver is configured.
+	 */
+	private async resolveContextExtensions(params: {
+		request: Request;
+		session: { user: any; session: any } | null | undefined;
+		db: any;
+	}): Promise<Record<string, unknown> | undefined> {
+		// Loose call signature on purpose: the static `ContextResolver` params
+		// type is the USER-facing contract (augmented per-app by codegen); the
+		// framework passes the full runtime service surface regardless.
+		const resolver = this.state?.config?.app?.context as
+			| ((params: Record<string, unknown>) => unknown)
+			| undefined;
+		if (typeof resolver !== "function") return undefined;
+
+		const services = extractAppServices(this, {
+			db: params.db,
+			session: params.session,
+		});
+
+		const result = await resolver({
+			...services,
+			request: params.request,
+			session: params.session,
+			db: params.db,
+		});
+		const extensions = (result ?? {}) as Record<string, unknown>;
+
+		if (getNodeEnv() !== "production") {
+			for (const key of Object.keys(extensions)) {
+				if (!RESERVED_CONTEXT_KEYS.has(key)) continue;
+				if (this._warnedContextExtensionKeys.has(key)) continue;
+				this._warnedContextExtensionKeys.add(key);
+				this.logger.warn(
+					`[QUESTPIE] appConfig({ context }) returned reserved key "${key}" — framework-set context keys cannot be shadowed by resolver results.`,
+				);
+			}
+		}
+
+		return extensions;
 	}
 
 	public getCollections(): {

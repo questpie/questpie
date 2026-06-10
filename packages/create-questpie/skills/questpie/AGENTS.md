@@ -90,6 +90,8 @@ A QuestPie project follows a **convention-over-configuration** file layout. The 
     questpie/
       server/                       ← Server root (all data + behavior)
         questpie.config.ts          ← runtimeConfig({ db, app, storage, ... })
+        env.ts                      ← env({ server, client?, refine? }) — boot-validated
+        env.client.ts               ← clientEnv({ consumers, vars }) — client-safe vars
         modules.ts                  ← export default [adminModule, ...] as const
         app.ts                      ← re-export of .generated/index (stable import)
         config/
@@ -116,6 +118,7 @@ A QuestPie project follows a **convention-over-configuration** file layout. The 
         .generated/                 ← DO NOT EDIT (codegen output)
           index.ts
           factories.ts
+          env.client.<consumer>.ts  ← per-consumer typed client env (when env.client.ts exists)
       admin/                        ← Admin client config
         admin.ts
         modules.ts
@@ -146,6 +149,8 @@ A QuestPie project follows a **convention-over-configuration** file layout. The 
 | `blocks/`      | **named** export          | `block("name")`      |
 | `migrations/`  | **default** export        | `migration({...})`   |
 | `seeds/`       | **default** export        | `seed({...})`        |
+| `env.ts`       | **default** export        | `env({...})`         |
+| `env.client.ts`| **default** export        | `clientEnv({...})`   |
 
 ---
 
@@ -157,19 +162,34 @@ A QuestPie project follows a **convention-over-configuration** file layout. The 
 questpie.config.ts  →  modules.ts  →  codegen  →  .generated/index.ts  →  createApp()
 ```
 
-**Step 1** — `questpie.config.ts` declares infrastructure (DB, storage, email, etc.):
+**Step 1** — `env.ts` declares + validates environment variables (optional but recommended; see `references/env.md`), and `questpie.config.ts` declares infrastructure (DB, storage, email, etc.):
 
 ```ts
+// env.ts
+import { env } from "questpie/env";
+import { z } from "zod";
+
+export default env({
+	server: { DATABASE_URL: z.url() },
+});
+```
+
+```ts
+// questpie.config.ts
 import { runtimeConfig } from "questpie/app";
 import { ConsoleAdapter } from "questpie/adapters/console";
 
+import env from "./env";
+
 export default runtimeConfig({
 	app: { url: "http://localhost:3000" },
-	db: { url: process.env.DATABASE_URL },
+	db: { url: env.DATABASE_URL },
 	storage: { basePath: "/api" },
 	email: { adapter: new ConsoleAdapter() },
 });
 ```
+
+When `env.ts` exists, the generated app imports it FIRST — a misconfigured environment fails boot before adapters/auth/db init, with every offending var named (values never logged).
 
 **Step 2** — `modules.ts` declares which module packages to use:
 
@@ -299,7 +319,7 @@ export const posts = collection("posts")
 		slug: f.text(255).required(),
 		content: f.richText().localized(),
 		status: f.select(["internal", "featured"]).default("internal"),
-		author: f.relation("users"),
+		author: f.relation("user"),
 		tags: f.relation("tags").manyToMany({ through: "post_tags" }),
 		cover: f.upload(),
 	}))
@@ -404,7 +424,7 @@ export const posts = collection("posts")
 | `.validation({...})`             | Zod validation overrides                                          |
 | `.upload({...})`                 | Turn into upload collection (see [Uploads](#16-uploads--storage)) |
 | `.set(key, value)`               | Plugin extension point                                            |
-| `.merge(other)`                  | Combine two builders                                              |
+| `.merge(other)`                  | Extend another builder of the same name (see below)               |
 | `.admin({...})`                  | Admin panel metadata (label, icon, group)                         |
 | `.list({...})`                   | List view config                                                  |
 | `.form({...})`                   | Form view config                                                  |
@@ -412,6 +432,24 @@ export const posts = collection("posts")
 | `.actions({...})`                | Custom server actions                                             |
 
 > `.admin()`, `.list()`, `.form()`, `.preview()`, `.actions()` are added by the admin plugin — they're not available without `@questpie/admin`.
+
+### Extending Collections — `.merge()`
+
+Collections compose. To extend a collection a module already provides (starter `user`, `assets`, ...), **merge the module's builder — never redefine the collection from scratch** (registering the same key replaces the module's collection wholesale, dropping its fields, hooks, and auth wiring):
+
+```ts
+// collections/user.ts — extend the starter user
+import { starterModule } from "questpie/app";
+import { collection } from "#questpie/factories";
+
+export default collection("user")
+	.merge(starterModule.collections.user)
+	.fields(({ f }) => ({
+		internalNotes: f.textarea(),
+	}));
+```
+
+Semantics: fields/virtuals/relations/indexes/options/extension keys combine by key (merged-in builder wins on conflict); hooks concatenate (both run); `title`/`searchable`/`upload` take the merged-in value when set. `.fields()` after `.merge()` is cumulative — adds and overrides by key, never wipes. Everything stays fully typed (`$infer`, CRUD types include both sides).
 
 ---
 
@@ -518,13 +556,37 @@ f.text(255)
 		update: ({ session }) => session?.user.role === "admin",
 	})
 	.operators(ops) // override WHERE operator set for queries
-	.drizzle((col) => col) // escape hatch: modify Drizzle column
-	.zod((schema) => schema) // escape hatch: modify Zod schema
+	.drizzle((col) => col.unique()) // raw Drizzle column builder — constraints/defaults land in DDL; $type<T>() narrows value type
+	.zod((schema) => schema.refine(check)) // extend/replace Zod schema (output narrows value type)
+	.$type<Layout>() // explicitly set TS value type (type-level only; mainly for json)
 	.fromDb((value) => value) // transform after reading from DB
 	.toDb((value) => value) // transform before writing to DB
 	.set(key, value) // plugin extension point (e.g. admin, form config)
 	.derive(extra); // derive additional runtime state
 ```
+
+### Extending Fields — typed escape hatches
+
+Built-in fields don't box you in. All three hatches propagate types into CRUD select/insert types:
+
+```ts
+// extend Zod validation (type unchanged)
+slug: f.text().zod((s) => s.refine(isKebabCase, "must be kebab-case")),
+
+// replace the Zod schema — value type narrows to the schema output
+settings: f.json().zod(() => z.object({ theme: z.enum(["light", "dark"]) })),
+
+// extend the underlying Drizzle column — raw builder access, lands in DDL/migrations
+slug: f.text(255).drizzle((col) => col.unique()),
+viewCount: f.number().drizzle((col) => col.default(sql`0`)),
+total: f.number().drizzle((col) => col.$type<Cents>()), // narrows value type
+
+// explicitly type a json field (no runtime validation; pair with .zod() if needed)
+layout: f.json().$type<{ rows: { id: string; span: number }[] }>(),
+```
+
+Field schemas are enforced server-side: create/update validates each input key against its field's schema (incl. `.zod()` transforms, email format, select enums). System fields and relation/upload FKs validate against their column shape.
+
 
 ### Custom Field Types
 
@@ -556,8 +618,8 @@ All relationships are expressed via `f.relation(target)` with chain methods:
 
 ```ts
 // belongsTo (default) — FK on this table
-f.relation("users");
-// Column: authorId varchar(36) → FK to users.id
+f.relation("user");
+// Column: authorId varchar(36) → FK to user.id
 
 // hasMany — virtual, FK lives on the target table
 f.relation("comments").hasMany({
@@ -584,7 +646,7 @@ f.relation({ users: "users", teams: "teams" });
 ### Relation Targets
 
 ```ts
-f.relation("users"); // string (collection name)
+f.relation("user"); // string (collection name)
 f.relation(() => users); // lazy reference (avoids circular imports)
 f.relation({ users: "users", teams: "teams" }); // polymorphic map
 ```
@@ -592,7 +654,7 @@ f.relation({ users: "users", teams: "teams" }); // polymorphic map
 ### Additional Config
 
 ```ts
-f.relation("users")
+f.relation("user")
   .onDelete("cascade" | "set null" | "restrict" | "no action")
   .onUpdate("cascade" | ...)
   .relationName("postAuthor")  // disambiguate multiple relations to same target
@@ -795,6 +857,26 @@ await collections.posts.find({}, { accessMode: "user", session });
 // Force system mode explicitly (the default for server code):
 await collections.posts.find({}, { accessMode: "system" });
 ```
+
+### Derived Request Context
+
+`appConfig({ context })` derives per-request context (tenant, role, memberships) **once per HTTP request**; the result travels with the request and arrives **flat** on access rules, hooks, route handlers, field access, and `getContext()`:
+
+```ts
+// config/app.ts
+appConfig({
+	context: async ({ request, session, collections }) => ({
+		workspaceId: request.headers.get("x-workspace") || null,
+	}),
+});
+
+// Any access rule — typed by inference, narrow before use (absent in jobs/seeds)
+access: {
+	read: ({ workspaceId }) => (workspaceId ? { workspace: workspaceId } : false),
+}
+```
+
+The resolver receives the typed system-mode service surface (`collections`, `globals`, `logger`, `kv`, `queue`, `t`, `services`). Throwing from it fails the request before any rule runs. See `references/multi-tenancy.md`.
 
 ---
 
@@ -1008,11 +1090,31 @@ await ctx.queue.sendWelcomeEmail.publish({
 
 The queue client exposes jobs as typed properties: `queue[jobName].publish(payload, options?)`. This gives you full type safety on the payload.
 
+### Recurring Jobs (Cron)
+
+Jobs accept a job-level `options.cron`; schedules are registered automatically when the queue worker starts (`app.queue.listen()`):
+
+```ts
+export default job({
+	name: "cleanupExpired",
+	schema: z.object({}),
+	options: { cron: "0 3 * * *" },
+	handler: async ({ collections }) => {
+		await collections.sessions.deleteMany({
+			where: { expiresAt: { lt: new Date() } },
+		});
+	},
+});
+```
+
+Programmatic control: `queue.jobName.schedule(payload, cron)` / `queue.jobName.unschedule()`. Use job cron for simple recurring tasks; reserve **workflow-level cron** (`@questpie/workflows`) for recurring processes that need steps, waits, or replay.
+
 ### Queue Adapters
 
 | Adapter                     | Use Case                                         |
 | --------------------------- | ------------------------------------------------ |
 | `pgBossAdapter()`           | PostgreSQL-based (default, great for most cases) |
+| `bullMQAdapter()`           | Redis-based (BullMQ)                             |
 | `cloudflareQueuesAdapter()` | Cloudflare Workers Queues push consumers         |
 
 ---
@@ -1052,11 +1154,13 @@ await ctx.email.send("welcome", {
 
 ### Email Adapters
 
-| Adapter                       | Description                      |
-| ----------------------------- | -------------------------------- |
-| `ConsoleAdapter`              | Logs to console (dev)            |
-| `SmtpAdapter`                 | SMTP via Nodemailer              |
-| `createEtherealSmtpAdapter()` | Auto-generated test SMTP account |
+| Adapter                       | Import                       | Description                      |
+| ----------------------------- | ---------------------------- | -------------------------------- |
+| `ConsoleAdapter`              | `questpie/adapters/console`  | Logs to console (dev)            |
+| `SmtpAdapter`                 | `questpie/adapters/smtp`     | SMTP via Nodemailer              |
+| `resendAdapter()`             | `questpie/adapters/resend`   | Resend HTTP API (and compatible) |
+| `plunkAdapter()`              | `questpie/adapters/plunk`    | Plunk transactional HTTP API     |
+| `createEtherealSmtpAdapter()` | `questpie/adapters/smtp`     | Auto-generated test SMTP account |
 
 ---
 
@@ -1334,27 +1438,70 @@ await ctx.queue.indexRecords.publish({ collection: "posts" });
 
 ## 19. Realtime
 
-Server-sent events for live data updates.
+Live queries over SSE. **Broadcasts are automatic** — every collection/global create/update/delete already writes a change event to the `questpie_realtime_log` outbox and notifies subscribers. Do NOT write `afterChange` hooks that "emit" realtime events; a custom emitter double-fires against the built-in broadcast hook.
 
 ### How It Works
 
-1. Every create/update/delete writes a change event to `questpie_realtime_log` (outbox pattern)
-2. An adapter (pg_notify or Redis Streams) notifies connected clients
-3. Clients subscribe via SSE to specific resources
+1. Every CRUD write appends a change event to the outbox; an adapter (pg_notify / Redis Streams) or 2s polling wakes subscribers
+2. The server **re-runs the subscribed query under the subscriber's auth** and pushes the full result as a `snapshot` — clients never receive raw change events (no `operation`/`recordId` on the client; snapshots are access-controlled)
+3. One SSE connection multiplexes all topics (`POST /realtime`)
+
+Snapshots are idempotent state, not diffs — filtered subscriptions may receive unchanged snapshots on update/delete (over-refresh by design). Always render from the snapshot.
 
 ### Client-Side Usage
 
 ```ts
-// With TanStack Query (automatic)
-const { data } = useQuery(qp.collections.posts.find({}, { realtime: true }));
-
-// Manual subscription
-const unsub = client.realtime.subscribe(
-	{ resourceType: "collection", resource: "posts" },
-	(event) => {
-		console.log("Change:", event.operation, event.recordId);
-	},
+// React + TanStack Query — typed second arg, no casts needed
+const { data } = useQuery(
+	qp.collections.posts.find({ where: { event: eventId }, limit: 50 }, { realtime: true }),
 );
+
+// Vanilla TS — live() is the live form of find(): same options in, same result type out
+const stop = client.collections.posts.live(
+	{ where: { event: eventId }, with: { author: true }, orderBy: { createdAt: "desc" } },
+	(snap) => render(snap.docs), // snap.docs[i].author is typed
+	{ onError: (e) => console.error(e) },
+);
+stop(); // unsubscribe
+
+// Async-iterable form (workers, agents, tests) — terminate via AbortSignal
+for await (const snap of client.collections.posts.liveIter(
+	{ where: { event: eventId } },
+	{ signal: controller.signal },
+)) {
+	render(snap.docs);
+}
+
+// Globals mirror get()
+client.globals.siteSettings.live(undefined, (settings) => applyTheme(settings));
+
+// Low-level escape hatch — topic objects, never channel strings; data is untyped
+client.realtime.subscribe(
+	{ resourceType: "collection", resource: "posts", where: { event: eventId } },
+	(data) => {}, // unknown — prefer the typed live() wrappers
+);
+```
+
+Live options carry exactly what the wire protocol supports: `where`, `with`, `limit`, `offset`, `orderBy`, `locale` (no `columns`/`groupBy`/`search` — compile error).
+
+### Wire Protocol (stable contract)
+
+`POST <basePath>/realtime` body `{ topics: [{ id, resourceType: "collection" | "global", resource, where?, with?, limit?, offset?, orderBy?, locale? }] }` → SSE events:
+
+| Event      | Payload                  | Meaning                                                |
+| ---------- | ------------------------ | ------------------------------------------------------ |
+| `snapshot` | `{ topicId, seq, data }` | Full `find()`/`get()` result under subscriber's auth   |
+| `error`    | `{ topicId, message }`   | Topic-level failure (unknown resource, access denied)  |
+| `ping`     | `{ ts }`                 | Keep-alive (default every 8s)                          |
+
+Ignore unknown SSE event types (forward compat).
+
+### Keepalive (Bun)
+
+The stream pings every 8s by default (`realtime.keepAliveIntervalMs`). Bun's default `idleTimeout` is 10s — the default ping survives it, but set headroom explicitly in the server entry:
+
+```ts
+export default { port: 3000, idleTimeout: 30, fetch: server.fetch };
 ```
 
 ### Realtime Adapters
@@ -1462,7 +1609,7 @@ interface AppContext {
 	kv: KVService; // key-value store
 	logger: LoggerService; // structured logging
 	search: SearchService; // full-text search
-	realtime: RealtimeService; // publish realtime events
+	realtime: RealtimeService; // server-side change-event subscription (broadcasts are automatic)
 	t: (key, params?, locale?) => string; // i18n translator
 	services: Record<string, unknown>; // user-defined services
 }
@@ -1479,20 +1626,30 @@ interface AppContext {
 | Access rules     | Destructure: `({ session, data }) => boolean`                    |
 | Seeds            | `async ({ collections, log }) => { ... }`                        |
 | Services         | `create: ({ app }) => ...` (app instance only, not full context) |
+| Better Auth callbacks (`onLinkAccount`, `databaseHooks`, `sendMagicLink`, plugin hooks) | `getContext<App>()` — `/auth/*` is a raw route executed inside `runWithContext`, so the request scope is live there (see `references/auth.md`) |
 
 ### Getting Context Programmatically
 
 ```ts
 import { getContext, tryGetContext } from "questpie/types";
-const ctx = getContext(); // throws if outside a request scope
-const ctx = tryGetContext(); // returns null if outside scope
+import type { App } from "#questpie"; // type-only — no runtime cycle
+
+const ctx = getContext<App>(); // typed app/session/extensions; throws outside a request scope
+const maybe = tryGetContext(); // returns null if outside scope
 
 // Create a fresh context manually:
-const ctx = await app.createContext({
+const fresh = await app.createContext({
 	session: null,
 	locale: "en",
 	accessMode: "system",
 });
+```
+
+**Partial context overrides:** the second argument of every CRUD call merges with the ambient request scope (priority: explicit param → ALS scope → defaults). A bare `{ accessMode: "system" }` elevates **only** the mode — `session`, `db`, and `locale` inherit from the request automatically. The inverse works too: `{ accessMode: "user" }` inside system-scoped code re-enables access rules against the inherited session. Never re-thread session/locale by hand:
+
+```ts
+await app.collections.posts.find({}, { accessMode: "system" }); // mode elevated, request session/locale ride along
+await app.collections.posts.find({}, { accessMode: "user" }); // rules enforced for the inherited session
 ```
 
 ---
@@ -1530,9 +1687,10 @@ const post = await app.collections.posts.findOne({
 // WRITE
 .create(data)                      → T
 .updateById({ id, data })          → T
-.update({ where, data })           → T[]       (batch)
+.updateMany({ where, data })       → T[]       (batch; deprecated alias: update)
+.updateBatch({ updates })          → T[]       (per-record batch)
 .deleteById({ id })                → { success }
-.delete({ where })                 → { success, count }  (batch)
+.deleteMany({ where })             → { success, count }  (batch; deprecated alias: delete)
 .restoreById({ id })               → T          (soft-delete)
 
 // VERSIONING
@@ -1562,7 +1720,7 @@ const post = await app.collections.posts.findOne({
     author: true,
     tags: { columns: { name: true } },
   },
-  orderBy: { createdAt: "desc" },
+  orderBy: { createdAt: "desc" },             // or multi-field: [{ status: "desc" }, { createdAt: "desc" }]
   limit: 10,
   offset: 0,
   search: "keyword",                          // full-text ILIKE on title
@@ -2396,14 +2554,15 @@ Configure it through plugin-discovered `config/mcp.ts`, not `mcpModule(options)`
 | Adapter                     | Description                          |
 | --------------------------- | ------------------------------------ |
 | `pgBossAdapter()`           | PostgreSQL-based job queue (pg-boss) |
+| `bullMQAdapter()`           | Redis-based job queue (BullMQ)       |
 | `cloudflareQueuesAdapter()` | Cloudflare Workers Queues            |
 
 ### Search Adapters
 
-| Adapter                 | Description                       |
-| ----------------------- | --------------------------------- |
-| `PostgresSearchAdapter` | pg_trgm + full-text search        |
-| `PgVectorSearchAdapter` | Hybrid semantic search (pgvector) |
+| Adapter                          | Description                       |
+| -------------------------------- | --------------------------------- |
+| `createPostgresSearchAdapter()`  | pg_trgm + full-text search        |
+| `createPgVectorSearchAdapter()`  | Hybrid semantic search (pgvector + embedding provider — see `references/infrastructure-adapters.md`) |
 
 ### Realtime Adapters
 
@@ -2424,11 +2583,13 @@ Configure it through plugin-discovered `config/mcp.ts`, not `mcpModule(options)`
 
 ### Email Adapters
 
-| Adapter                       | Description                 |
-| ----------------------------- | --------------------------- |
-| `ConsoleAdapter`              | Logs to console             |
-| `SmtpAdapter`                 | Nodemailer SMTP             |
-| `createEtherealSmtpAdapter()` | Auto-generated test account |
+| Adapter                       | Description                      |
+| ----------------------------- | -------------------------------- |
+| `ConsoleAdapter`              | Logs to console                  |
+| `SmtpAdapter`                 | Nodemailer SMTP                  |
+| `resendAdapter()`             | Resend HTTP API (and compatible) |
+| `plunkAdapter()`              | Plunk transactional HTTP API     |
+| `createEtherealSmtpAdapter()` | Auto-generated test account      |
 
 ### Logger
 
@@ -2656,7 +2817,7 @@ module()                 Packaging unit (groups related entities)
   ├── block()            Content builder block         ← admin plugin
   ├── migration()        DB schema change
   ├── seed()             DB seed data
-  ├── appConfig()        App-level config (locale, access, hooks)
+  ├── appConfig()        App-level config (locale, access, hooks, context)
   ├── authConfig()       Auth config (Better Auth options)
   └── adminConfig()      Admin config (sidebar, dashboard, branding)  ← admin plugin
 ```
@@ -2696,8 +2857,10 @@ module()                 Packaging unit (groups related entities)
 | Seed           | `seed({...})`                        | `questpie`                 | DB seed data                 |
 | Module         | `module({...})`                      | `questpie`                 | Packaging unit               |
 | Runtime Config | `runtimeConfig({...})`               | `questpie`                 | Infrastructure config        |
-| App Config     | `appConfig({...})`                   | `questpie`                 | Locale, access, hooks        |
+| App Config     | `appConfig({...})`                   | `questpie`                 | Locale, access, hooks, context |
 | Auth Config    | `authConfig({...})`                  | `questpie`                 | Better Auth options          |
+| Env            | `env({...})`                         | `questpie/env`             | Boot-validated typed env     |
+| Client Env     | `clientEnv({...})`                   | `questpie/env`             | Client-safe env definition   |
 | Admin Config   | `adminConfig({...})`                 | `#questpie/factories`      | Sidebar, dashboard, branding |
 | View           | `view(name, {kind, component})`      | `@questpie/admin/client`   | Admin view component         |
 | Widget         | `widget(name, {component})`          | `@questpie/admin/client`   | Dashboard widget             |

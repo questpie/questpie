@@ -51,6 +51,7 @@ export {
 	mergeI18nRow,
 	mergeI18nRows,
 } from "./i18n-merge.js";
+export { guardCrudMethods } from "./method-guard.js";
 export {
 	autoMergeNestedLocalizedFields,
 	hasI18nMarkers,

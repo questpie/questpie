@@ -4,7 +4,10 @@
  * Collection CRUD route handlers.
  */
 
-import { introspectCollection } from "../../collection/introspection.js";
+import {
+	introspectCollection,
+	resolveIntrospectionAccess,
+} from "../../collection/introspection.js";
 import type { Questpie } from "../../config/questpie.js";
 import type { QuestpieConfig } from "../../config/types.js";
 import { ApiError } from "../../errors/index.js";
@@ -12,7 +15,11 @@ import type { AdapterConfig, AdapterContext } from "../types.js";
 import { resolveContext } from "../utils/context.js";
 import { parseFindOneOptions, parseFindOptions } from "../utils/parsers.js";
 import { parseRouteBody } from "../utils/request.js";
-import { handleError, smartResponse } from "../utils/response.js";
+import {
+	handleError,
+	introspectionDeniedError,
+	smartResponse,
+} from "../utils/response.js";
 
 // ============================================================================
 // Helper
@@ -487,7 +494,7 @@ export async function collectionUpdateMany(
 
 	try {
 		const { where, data } = body as { where: any; data: any };
-		const result = await crud.update({ where, data }, resolved.appContext);
+		const result = await crud.updateMany({ where, data }, resolved.appContext);
 		return smartResponse(result, request);
 	} catch (error) {
 		return errorResponse(app, error, request, resolved.appContext.locale);
@@ -573,7 +580,7 @@ export async function collectionDeleteMany(
 
 	try {
 		const { where } = body as { where: any };
-		const result = await crud.delete({ where }, resolved.appContext);
+		const result = await crud.deleteMany({ where }, resolved.appContext);
 		return smartResponse(result, request);
 	} catch (error) {
 		return errorResponse(app, error, request, resolved.appContext.locale);
@@ -673,6 +680,24 @@ export async function collectionMeta(
 	}
 
 	try {
+		// Gate through the access system: introspect rule, falling back to
+		// "visible iff any CRUD operation is allowed for the current user".
+		const visible = await resolveIntrospectionAccess(
+			collection.state,
+			{
+				session: resolved.appContext.session,
+				db: app.db,
+				locale: resolved.appContext.locale,
+			},
+			app,
+		);
+		if (!visible) {
+			throw introspectionDeniedError(
+				params.collection,
+				resolved.appContext.session,
+			);
+		}
+
 		const meta = collection.getMeta();
 		return smartResponse(meta, request);
 	} catch (error) {
@@ -712,6 +737,14 @@ export async function collectionSchema(
 			},
 			app,
 		);
+		// Gate through the already-computed access info: introspect rule,
+		// falling back to "visible iff any CRUD operation is allowed".
+		if (!schema.access.visible) {
+			throw introspectionDeniedError(
+				params.collection,
+				resolved.appContext.session,
+			);
+		}
 		return smartResponse(schema, request);
 	} catch (error) {
 		return errorResponse(app, error, request, resolved.appContext.locale);

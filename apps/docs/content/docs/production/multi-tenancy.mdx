@@ -5,35 +5,57 @@ description: Scope-based multi-tenant architecture — isolate data per workspac
 
 QUESTPIE supports multi-tenant applications through a **scope-based** architecture. A "scope" can represent anything: organizations, workspaces, properties, cities, brands — any entity that partitions data.
 
-The pattern: **HTTP header carries a scope ID → server extracts it into typed context → access rules filter data**.
+The pattern: **HTTP header carries a scope ID → `appConfig({ context })` derives typed context once per request → access rules filter data**.
 
 ## Context Resolver
 
-The `context.ts` file convention extracts custom properties from each incoming request. Place it in `src/questpie/server/context.ts` and codegen discovers it automatically.
+The context resolver lives in `config/app.ts`. It runs **once per HTTP request**, and the returned object travels with the request — it arrives flat on every access rule, hook, route handler, and `getContext()` call.
 
 ```ts title="src/questpie/server/config/app.ts"
 import { appConfig } from "questpie/app";
+
 export default appConfig({
-	context: async ({ request, session, db }) => {
+	context: async ({ request, session, collections }) => {
 		const workspaceId = request.headers.get("x-selected-workspace");
+
+		// Validate membership with the typed collections API (system mode)
+		if (workspaceId && session?.user) {
+			const member = await collections.workspace_members.findOne({
+				where: { workspace: workspaceId, user: session.user.id },
+			});
+			if (!member) throw new Error("No access to this workspace");
+		}
+
 		return { workspaceId: workspaceId || null };
 	},
 });
 ```
 
-The resolver receives:
+The resolver receives the base request params plus the full system-mode service surface (typed via codegen):
 
-| Parameter | Type                        | Description                            |
-| --------- | --------------------------- | -------------------------------------- |
-| `request` | `Request`                   | Incoming HTTP request (Web API)        |
-| `session` | `{ user, session } \| null` | Resolved auth session                  |
-| `db`      | `Database`                  | Database client for validation queries |
+| Parameter     | Type                        | Description                                     |
+| ------------- | --------------------------- | ----------------------------------------------- |
+| `request`     | `Request`                   | Incoming HTTP request (Web API)                 |
+| `session`     | `{ user, session } \| null` | Resolved auth session                           |
+| `db`          | `Database`                  | Raw database client                             |
+| `collections` | `CollectionsAPI`            | Typed collections (system mode, hooks run)      |
+| `globals`     | `GlobalsAPI`                | Typed globals                                   |
+| `logger`      | `LoggerService`             | App logger                                      |
+| `kv`          | `KVService`                 | Key-value store                                 |
+| `queue`       | `QueueClient`               | Queue client                                    |
+| `t`           | `(key, params?) => string`  | Translations                                    |
+| `services`    |                             | User services from `services/`                  |
 
-The returned object merges into the request context and is available in every handler, hook, and access rule.
+Lifecycle rules:
+
+- **Once per HTTP request** — nested CRUD, relation hydration, and hooks never re-run it.
+- **No request → no resolver.** Jobs, seeds, and scripts skip it; extension types are `Partial<…>`, so always narrow.
+- **Throwing fails the request** before any rule or handler runs — ideal for tenant validation.
+- **Expensive lookups become lazy closures** — the resolver's closure scope lives exactly one request, so a memoized `async` function gives per-request caching with zero framework machinery.
 
 ## Data Isolation
 
-Use the typed context in access rules to enforce tenant isolation:
+Read the derived context **flat** in access rules to enforce tenant isolation:
 
 ```ts title="collections/projects.ts"
 import { collection } from "#questpie/factories";
@@ -44,24 +66,24 @@ export default collection("projects")
 		workspace: f.relation("workspaces").required(),
 	}))
 	.access({
-		read: ({ ctx }) => {
-			if (!ctx.workspaceId) return false;
-			return { workspace: { equals: ctx.workspaceId } };
+		read: ({ workspaceId }) => {
+			if (!workspaceId) return false;
+			return { workspace: workspaceId };
 		},
-		create: ({ ctx }) => !!ctx.workspaceId,
-		update: ({ ctx }) => {
-			if (!ctx.workspaceId) return false;
-			return { workspace: { equals: ctx.workspaceId } };
+		create: ({ workspaceId }) => !!workspaceId,
+		update: ({ workspaceId }) => {
+			if (!workspaceId) return false;
+			return { workspace: workspaceId };
 		},
-		delete: ({ ctx }) => {
-			if (!ctx.workspaceId) return false;
-			return { workspace: { equals: ctx.workspaceId } };
+		delete: ({ workspaceId }) => {
+			if (!workspaceId) return false;
+			return { workspace: workspaceId };
 		},
 	})
 	.hooks({
-		beforeCreate: async ({ data, ctx }) => {
-			if (ctx.workspaceId) {
-				data.workspace = ctx.workspaceId;
+		beforeChange: async ({ data, operation, workspaceId }) => {
+			if (operation === "create" && workspaceId) {
+				data.workspace = workspaceId;
 			}
 		},
 	});
@@ -71,7 +93,22 @@ Access rules can return:
 
 - `true` — allow all records
 - `false` — deny all records
-- `{ field: { equals: value } }` — where-clause filter (row-level security)
+- `{ field: value }` — where-clause filter (row-level security)
+
+## Reading Context Anywhere
+
+Inside any code running within the request (hooks, services, utils), `getContext()` exposes the resolved extensions flat and typed:
+
+```ts
+import { getContext } from "questpie";
+import type { App } from "#questpie";
+
+function currentWorkspaceOrThrow() {
+	const { workspaceId } = getContext<App>(); // typed: string | null | undefined
+	if (!workspaceId) throw new Error("No workspace selected");
+	return workspaceId;
+}
+```
 
 ## Admin Scope UI
 
@@ -99,11 +136,11 @@ function AdminPage() {
 }
 ```
 
-| Prop           | Type             | Required | Description                                        |
-| -------------- | ---------------- | -------- | -------------------------------------------------- |
-| `headerName`   | `string`         | Yes      | HTTP header for scope ID (must match `context.ts`) |
-| `storageKey`   | `string`         | No       | localStorage key for persistence                   |
-| `defaultScope` | `string \| null` | No       | Default scope if none stored                       |
+| Prop           | Type             | Required | Description                                            |
+| -------------- | ---------------- | -------- | ------------------------------------------------------ |
+| `headerName`   | `string`         | Yes      | HTTP header for scope ID (must match the resolver)     |
+| `storageKey`   | `string`         | No       | localStorage key for persistence                       |
+| `defaultScope` | `string \| null` | No       | Default scope if none stored                           |
 
 ### ScopePicker
 
@@ -172,23 +209,29 @@ function AdminContent() {
 
 ## Validating Access
 
-In production, verify the user belongs to the selected scope:
+In production, verify the user belongs to the selected scope — throw from the resolver to fail the request before any handler or rule runs (see the resolver example above). Throwing an `ApiError` maps to a structured HTTP error response:
 
-```ts title="src/questpie/server/context.ts"
-export default context(async ({ request, session, db }) => {
-	const workspaceId = request.headers.get("x-selected-workspace");
+```ts title="src/questpie/server/config/app.ts"
+import { appConfig } from "questpie/app";
+import { ApiError } from "questpie/errors";
 
-	if (workspaceId && session?.user) {
-		const isMember = await db.query.workspaceMembers.findFirst({
-			where: and(
-				eq(workspaceMembers.workspaceId, workspaceId),
-				eq(workspaceMembers.userId, session.user.id),
-			),
-		});
-		if (!isMember) throw new Error("Unauthorized");
-	}
+export default appConfig({
+	context: async ({ request, session, collections }) => {
+		const workspaceId = request.headers.get("x-selected-workspace");
 
-	return { workspaceId: workspaceId || null };
+		if (workspaceId && session?.user) {
+			const member = await collections.workspace_members.findOne({
+				where: { workspace: workspaceId, user: session.user.id },
+			});
+			if (!member) throw ApiError.forbidden({
+				operation: "read",
+				resource: "workspaces",
+				reason: "Not a member of the selected workspace",
+			});
+		}
+
+		return { workspaceId: workspaceId || null };
+	},
 });
 ```
 
@@ -214,7 +257,7 @@ sequenceDiagram
 	participant ScopePicker
 	participant ScopeProvider
 	participant Client as "useScopedFetch()"
-	participant Server as "context.ts"
+	participant Server as "appConfig({ context })"
 	participant Access as "Access rules"
 	participant Data as "Collections"
 
@@ -222,8 +265,8 @@ sequenceDiagram
 	ScopePicker->>ScopeProvider: Store scopeId in state + localStorage
 	ScopeProvider->>Client: Provide scopeId
 	Client->>Server: Send x-selected-workspace: ws_123
-	Server->>Access: Expose workspaceId in typed context
-	Access->>Data: Apply { workspace: { equals: "ws_123" } }
+	Server->>Access: Resolve once, expose workspaceId flat in typed context
+	Access->>Data: Apply { workspace: "ws_123" }
 	Data-->>User: Return only Acme Corp data
 ```
 

@@ -45,6 +45,16 @@ import type {
 } from "./block-builder.js";
 
 /**
+ * Internal questpie marker (global symbol registry): upload-field expansions
+ * populate through the PARENT row's read decision — the blocks document came
+ * from a row the caller could already read, and the asset ids are
+ * editor-curated content stored on that row. Collection-level read access is
+ * inherited; field-level read rules on the upload collection still apply.
+ * JSON cannot carry symbols, so HTTP input can never inject this.
+ */
+const INHERIT_ACCESS = Symbol.for("questpie.internal.inheritAccess");
+
+/**
  * Context for blocks prefetch processing.
  * Use `typedApp<App>(ctx.app)` for typed access.
  */
@@ -161,13 +171,15 @@ async function expandDeclaredFields(
 	ctx: BlocksPrefetchContext,
 ): Promise<Record<string, Record<string, unknown>>> {
 	// Group expansion requirements by target collection for batch fetching
-	// Key: "collection:nestedWithHash" to separate different with configs
+	// Key: "collection:kind[:nestedWithHash]" to separate different with
+	// configs and upload vs plain-relation fields (uploads inherit access)
 	const expansionsByCollection = new Map<
 		string,
 		{
 			ids: Set<string>;
 			targets: ExpansionTarget[];
 			nestedWith?: Record<string, unknown>;
+			inheritAccess?: boolean;
 		}
 	>();
 
@@ -215,16 +227,21 @@ async function expandDeclaredFields(
 					? (fieldConfig.with as Record<string, unknown>)
 					: undefined;
 
-			// Group by collection + nested with config
-			const groupKey = nestedWith
-				? `${targetCollection}:${JSON.stringify(nestedWith)}`
-				: targetCollection;
+			// Upload fields (f.upload) populate through the parent row's read
+			// decision; plain relations keep normal target-collection access
+			const isUpload = (metadata as { isUpload?: boolean }).isUpload === true;
+
+			// Group by collection + field kind + nested with config
+			const groupKey = `${targetCollection}:${isUpload ? "upload" : "relation"}${
+				nestedWith ? `:${JSON.stringify(nestedWith)}` : ""
+			}`;
 
 			if (!expansionsByCollection.has(groupKey)) {
 				expansionsByCollection.set(groupKey, {
 					ids: new Set(),
 					targets: [],
 					nestedWith,
+					inheritAccess: isUpload,
 				});
 			}
 			const entry = expansionsByCollection.get(groupKey)!;
@@ -244,7 +261,7 @@ async function expandDeclaredFields(
 	const fetchedByGroup = new Map<string, Map<string, unknown>>();
 
 	const fetchPromises = [...expansionsByCollection.entries()].map(
-		async ([groupKey, { ids, nestedWith }]) => {
+		async ([groupKey, { ids, nestedWith, inheritAccess }]) => {
 			// Extract collection name from group key
 			const collection = groupKey.includes(":")
 				? groupKey.slice(0, groupKey.indexOf(":"))
@@ -263,12 +280,16 @@ async function expandDeclaredFields(
 
 				// Pass nested `with` through to collection's find — reuses existing
 				// relation resolution machinery (same as find({ with: { ... } }))
+				const findOptions: Record<string, any> = {
+					where: { id: { in: [...ids] } },
+					limit: ids.size,
+					...(nestedWith ? { with: nestedWith } : {}),
+				};
+				if (inheritAccess) {
+					(findOptions as Record<PropertyKey, unknown>)[INHERIT_ACCESS] = true;
+				}
 				const result = await collectionApi.find(
-					{
-						where: { id: { in: [...ids] } },
-						limit: ids.size,
-						...(nestedWith ? { with: nestedWith } : {}),
-					},
+					findOptions,
 					toCrudContext(ctx),
 				);
 

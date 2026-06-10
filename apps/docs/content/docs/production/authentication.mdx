@@ -77,6 +77,74 @@ export default collection("user")
 	}));
 ```
 
+`.fields()` is cumulative: it adds to the merged starter fields and overrides them by key — it never wipes them, so this recipe keeps the full starter user model.
+
+### Anonymous Users
+
+Better Auth plugins that extend the user model follow the same recipe. For the [anonymous plugin](https://www.better-auth.com/docs/plugins/anonymous), register the plugin in `auth.ts` — it is merged after the built-in plugins — and extend the starter user with the `isAnonymous` field the plugin expects:
+
+```ts title="auth.ts"
+import { anonymous } from "better-auth/plugins";
+import type { AuthConfig } from "questpie/app";
+
+export default {
+	plugins: [anonymous()],
+} satisfies AuthConfig;
+```
+
+```ts title="collections/user.ts"
+import { starterModule } from "questpie/app";
+import { collection } from "#questpie/factories";
+
+export default collection("user")
+	.merge(starterModule.collections.user)
+	.fields(({ f }) => ({
+		isAnonymous: f.boolean().default(false),
+	}));
+```
+
+Run `questpie generate` and apply migrations to add the column. Anonymous sign-in (`authClient.signIn.anonymous()` on the client) then creates throwaway users that Better Auth can later link to real accounts.
+
+## Reaching the App from Better Auth Callbacks
+
+The `/auth/*` catch-all is a plain raw route, and raw routes execute their handlers inside `runWithContext()` — the request's AsyncLocalStorage scope. Every Better Auth callback (`onLinkAccount`, `databaseHooks`, `sendMagicLink`, plugin hooks) therefore runs inside the request scope, and `getContext<App>()` returns the live app, session, db, and locale.
+
+Do **not** build a module-level app singleton or a hand-rolled context bridge for auth callbacks. The `App` import stays type-only, so there is no circular import:
+
+```ts title="config/auth.ts"
+import { anonymous } from "better-auth/plugins";
+import { getContext } from "questpie";
+import { authConfig } from "questpie/app";
+import type { App } from "#questpie"; // type-only — no runtime cycle
+
+export default authConfig({
+	plugins: [
+		anonymous({
+			// Fires when an anonymous user signs in with a real account —
+			// re-point the guest's rows onto the new user before the plugin
+			// deletes the anonymous user.
+			onLinkAccount: async ({ anonymousUser, newUser }) => {
+				const { app } = getContext<App>();
+				// Bare { accessMode: "system" } elevates ONLY the mode —
+				// session, db, and locale inherit from the request scope.
+				await app.collections.memberships.updateMany(
+					{
+						where: { user: anonymousUser.user.id },
+						data: { user: newUser.user.id },
+					},
+					{ accessMode: "system" },
+				);
+			},
+		}),
+	],
+});
+```
+
+Two facts make this pattern work:
+
+1. **`getContext<App>()` is available in auth callbacks** because the auth handler runs inside the request's context scope — the same mechanism hooks and route handlers use.
+2. **Partial context overrides inherit the rest.** Passing only `{ accessMode: "system" }` to a CRUD call elevates the access mode; `session`, `db`, and `locale` are inherited from the request automatically. See [CRUD API — context inheritance](/docs/reference/crud-api#context-and-inheritance).
+
 ## Related Pages
 
 - [Access Control](/docs/backend/rules/access-control) — Permission rules

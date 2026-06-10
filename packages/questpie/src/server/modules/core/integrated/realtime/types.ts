@@ -89,4 +89,16 @@ export interface RealtimeConfig {
 	 * additional time-based safety window.
 	 */
 	retentionDays?: number;
+
+	/**
+	 * Interval in ms between `ping` keep-alive events on `POST /realtime`
+	 * SSE streams.
+	 *
+	 * Default is 8000 — strictly under Bun's default 10s `idleTimeout` (so
+	 * streams survive on an untuned `Bun.serve`) and far under common proxy
+	 * read timeouts (30-60s).
+	 *
+	 * @default 8000
+	 */
+	keepAliveIntervalMs?: number;
 }

@@ -9,7 +9,7 @@ description: QUESTPIE error codes and their meanings.
 import { QuestpieClientError } from "questpie/client";
 
 try {
-  await client.collections.posts.update({ ... });
+  await client.collections.posts.updateById({ ... });
 } catch (error) {
   if (error instanceof QuestpieClientError) {
     error.status;       // HTTP status code

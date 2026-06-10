@@ -131,6 +131,10 @@ export async function loadConfigForCodegen(
  * - Package: `packageConfig({ modulesDir: "..." })` → iterates module subdirectories
  */
 export async function generateCommand(options: GenerateOptions): Promise<void> {
+	// Codegen imports user code (questpie.config.ts → env.ts, modules.ts,
+	// env.client.ts) — it must never require a populated environment.
+	process.env.QUESTPIE_SKIP_ENV_VALIDATION ??= "1";
+
 	const rawConfigPath = resolveCliPath(options.configPath);
 	const { configPath, rootDir } = await resolveConfigRoot(rawConfigPath);
 
@@ -486,6 +490,9 @@ export interface DevOptions {
  * @see PLAN-PLUGIN-CONSISTENCY.md §5 (Codegen Orchestration Model)
  */
 export async function devCommand(options: DevOptions): Promise<void> {
+	// Codegen imports user code — it must never require a populated environment.
+	process.env.QUESTPIE_SKIP_ENV_VALIDATION ??= "1";
+
 	// Run initial generation
 	await generateCommand({
 		configPath: options.configPath,

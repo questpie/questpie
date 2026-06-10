@@ -99,6 +99,37 @@ export class QuestpieRealtimeDurableObject {
 | `redisStreamsAdapter`       | Multiple servers, horizontal scaling           |
 | `cloudflareRealtimeAdapter` | Cloudflare Workers + Durable Objects           |
 
+## Keepalive & Timeouts
+
+The `POST /realtime` SSE stream sends a `ping` event every **8 seconds** by default. Every layer between browser and server must tolerate at least that much idle time, or subscriptions silently die and reconnect in a loop.
+
+Tune the interval if your infrastructure needs it:
+
+```ts title="questpie.config.ts"
+export default runtimeConfig({
+	realtime: {
+		keepAliveIntervalMs: 8000, // default
+	},
+});
+```
+
+| Layer                       | Setting                                  | Recommendation                                                                |
+| --------------------------- | ---------------------------------------- | ----------------------------------------------------------------------------- |
+| Bun (`Bun.serve`)           | `idleTimeout` (default 10s)              | Default ping survives it; set `idleTimeout: 30` for headroom                  |
+| nginx                       | `proxy_read_timeout` (default 60s)       | Keep ≥ 60s and disable response buffering for SSE (`proxy_buffering off`)     |
+| Load balancers (ALB, etc.)  | idle timeout (often 60s)                 | Keep above `keepAliveIntervalMs`                                              |
+| Serverless platforms        | response buffering / max duration        | SSE requires streaming responses; buffered platforms break realtime entirely  |
+
+**Bun recipe** — the framework only ships a fetch handler, so the server entry owns `idleTimeout`:
+
+```ts title="src/index.ts"
+export default {
+	port: 3000,
+	idleTimeout: 30, // seconds
+	fetch: server.fetch,
+};
+```
+
 ## Related Pages
 
-- [Realtime (Frontend)](/docs/frontend/realtime) — Client subscriptions
+- [Realtime (Frontend)](/docs/frontend/realtime) — Live queries, wire protocol contract

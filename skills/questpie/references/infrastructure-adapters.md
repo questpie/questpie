@@ -136,6 +136,32 @@ const assets = await client.collections.assets.uploadMany(files, {
 });
 ```
 
+Failed uploads reject with `UploadError` (from `questpie/client`) carrying the HTTP status and server message.
+
+### Signed URLs (Private Files)
+
+Upload rows carry a `url` populated automatically on read: `visibility: "public"` files get a plain collection-scoped URL (`{basePath}/{collection}/files/{key}`); `"private"` files get an HMAC-signed token appended (`?token=...`), signed with `app.config.secret` and expiring after `storage.signedUrlExpiration` (default `3600` seconds):
+
+```ts
+export default runtimeConfig({
+	storage: {
+		basePath: "/api",
+		signedUrlExpiration: 900, // 15 minutes
+	},
+});
+```
+
+Serving stays collection-scoped — the file route verifies the token **and** the collection's `serve` access rule. To mint URLs manually (custom emails, server-rendered pages):
+
+```ts
+import { buildStorageFileUrl, generateSignedUrlToken } from "questpie/storage";
+
+const token = await generateSignedUrlToken(asset.key, app.config.secret!, 900, "assets");
+const url = buildStorageFileUrl(app.config.app.url, "/api", "assets", asset.key, token);
+```
+
+(`verifySignedUrlToken` is the verification half the serve route runs — you rarely call it yourself.)
+
 ## Queue
 
 Background jobs via [pg-boss](https://github.com/timgit/pg-boss), BullMQ, or a custom queue adapter.
@@ -231,6 +257,48 @@ export default runtimeConfig({
 | `pgNotifyAdapter`     | Single server, development, simple deployments        |
 | `redisStreamsAdapter` | Multiple servers, horizontal scaling, high throughput |
 
+## Search
+
+Full-text search via PostgreSQL (no extra service). The adapter goes directly on the `search` key:
+
+```ts
+import { runtimeConfig } from "questpie/app";
+import { createPostgresSearchAdapter } from "questpie/adapters/postgres-search";
+
+export default runtimeConfig({
+	search: createPostgresSearchAdapter(), // pg_trgm + tsvector FTS
+});
+```
+
+### Semantic Search (pgvector + Embeddings)
+
+`createPgVectorSearchAdapter` wraps the Postgres adapter and adds an `embedding` vector column + cosine-distance search. It needs the `pgvector` extension (`CREATE EXTENSION "vector";` — the adapter ships its own migrations) and an embedding provider:
+
+```ts
+import { runtimeConfig } from "questpie/app";
+import {
+	createOpenAIEmbeddingProvider,
+	createPgVectorSearchAdapter,
+} from "questpie/adapters/pgvector-search";
+
+export default runtimeConfig({
+	search: createPgVectorSearchAdapter({
+		embeddingProvider: createOpenAIEmbeddingProvider({
+			apiKey: process.env.OPENAI_API_KEY!,
+			model: "text-embedding-3-small",
+		}),
+		// Hybrid scoring weights (defaults shown)
+		lexicalWeight: 0.4,
+		semanticWeight: 0.6,
+		indexType: "ivfflat", // or "hnsw"
+	}),
+});
+```
+
+Search modes: `lexical` (FTS + trigram), `semantic` (pure vector similarity), `hybrid` (weighted combination). Embeddings are generated on `index()`; if generation fails, the row still indexes for lexical search.
+
+For non-OpenAI providers, `createCustomEmbeddingProvider({ name, model, dimensions, generate })` wraps any embedding function.
+
 ## Email
 
 Transactional email with typed templates.
@@ -268,6 +336,46 @@ export default runtimeConfig({
 	},
 });
 ```
+
+### Resend (HTTP API)
+
+For [Resend](https://resend.com) and Resend-compatible providers — no SMTP credentials needed:
+
+```ts
+import { runtimeConfig } from "questpie/app";
+import { resendAdapter } from "questpie/adapters/resend";
+
+export default runtimeConfig({
+	email: {
+		adapter: resendAdapter({
+			apiKey: process.env.RESEND_API_KEY!,
+			// baseUrl: "https://api.resend.com",  // override for compatible providers
+		}),
+	},
+});
+```
+
+### Plunk (HTTP API)
+
+For [Plunk](https://www.useplunk.com) transactional email (also self-hosted):
+
+```ts
+import { runtimeConfig } from "questpie/app";
+import { plunkAdapter } from "questpie/adapters/plunk";
+
+export default runtimeConfig({
+	email: {
+		adapter: plunkAdapter({
+			apiKey: process.env.PLUNK_API_KEY!, // secret key — public keys only track events
+			// baseUrl: "https://next-api.useplunk.com",  // override for self-hosted
+		}),
+	},
+});
+```
+
+### Custom Mail Adapter
+
+For any other provider, extend the `MailAdapter` base class from `questpie/mailer` (implement `send(options)`) and pass an instance as `email.adapter`.
 
 ### Environment-Based Switching
 
@@ -437,6 +545,8 @@ import { openApiModule } from "@questpie/openapi/modules/openapi";
 
 export default [adminModule, openApiModule] as const;
 ```
+
+`openApiModule` carries its codegen plugin — do not also add `openApiPlugin()` to `questpie.config.ts` unless you deliberately omit the module.
 
 Configure it in `config/openapi.ts`:
 

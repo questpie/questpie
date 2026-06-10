@@ -53,7 +53,13 @@ export type QuestpieQueryOptionsConfig = {
 type AnyAsyncFn = (...args: any[]) => Promise<any>;
 type QueryData<TFn extends AnyAsyncFn> = Awaited<ReturnType<TFn>>;
 type FirstArg<TFn extends AnyAsyncFn> =
-	Parameters<TFn> extends [infer TFirst, ...any[]] ? TFirst : never;
+	Parameters<TFn> extends [infer TFirst, ...any[]]
+		? TFirst
+		: // Optional first parameter — `[options?: X]` does not match the
+			// required-element pattern above, so match it as optional.
+			Parameters<TFn> extends [(infer TFirst)?, ...any[]]
+			? TFirst | undefined
+			: never;
 type HasArgs<TFn extends AnyAsyncFn> =
 	Parameters<TFn> extends [] ? false : true;
 
@@ -63,6 +69,33 @@ type QueryBuilder<TFn extends AnyAsyncFn> =
 		: undefined extends FirstArg<TFn>
 			? (options?: FirstArg<TFn>) => UseQueryOptions<QueryData<TFn>>
 			: (options: FirstArg<TFn>) => UseQueryOptions<QueryData<TFn>>;
+
+/**
+ * Per-query realtime flag — the second argument to `find` / `count` / `get`.
+ */
+export type RealtimeQueryConfig = {
+	/**
+	 * Subscribe the query to live snapshots over the multiplexed SSE stream.
+	 * Initial data comes from a normal fetch; afterwards the server pushes
+	 * full snapshots on every matching change (via `experimental_streamedQuery`).
+	 */
+	realtime?: boolean;
+};
+
+/**
+ * Builder for reads that also have a live form — same as `QueryBuilder`
+ * plus the optional `{ realtime }` second argument.
+ */
+type LiveQueryBuilder<TFn extends AnyAsyncFn> =
+	undefined extends FirstArg<TFn>
+		? (
+				options?: FirstArg<TFn>,
+				queryConfig?: RealtimeQueryConfig,
+			) => UseQueryOptions<QueryData<TFn>>
+		: (
+				options: FirstArg<TFn>,
+				queryConfig?: RealtimeQueryConfig,
+			) => UseQueryOptions<QueryData<TFn>>;
 
 type KeyBuilder<TFn extends AnyAsyncFn> =
 	HasArgs<TFn> extends false
@@ -208,8 +241,8 @@ type CollectionQueryOptionsAPI<
 	TApp extends QuestpieApp,
 	K extends CollectionKeys<TApp>,
 > = {
-	find: QueryBuilder<CollectionFind<TApp, K>>;
-	count: QueryBuilder<CollectionCount<TApp, K>>;
+	find: LiveQueryBuilder<CollectionFind<TApp, K>>;
+	count: LiveQueryBuilder<CollectionCount<TApp, K>>;
 	findOne: QueryBuilder<CollectionFindOne<TApp, K>>;
 	create: MutationBuilder<
 		FirstArg<CollectionCreate<TApp, K>>,
@@ -250,7 +283,7 @@ type GlobalQueryOptionsAPI<
 	TApp extends QuestpieApp,
 	K extends GlobalKeys<TApp>,
 > = {
-	get: QueryBuilder<GlobalGet<TApp, K>>;
+	get: LiveQueryBuilder<GlobalGet<TApp, K>>;
 	update: MutationBuilder<
 		{
 			data: Parameters<GlobalUpdate<TApp, K>>[0];
@@ -460,7 +493,7 @@ export function createQuestpieQueryOptions<
 				const baseKey: QueryKey = ["collections", collectionName];
 
 				return {
-					find: (options?: any, queryConfig?: { realtime?: boolean }) => {
+					find: (options?: any, queryConfig?: RealtimeQueryConfig) => {
 						const qKey = buildKey(keyPrefix, [
 							...baseKey,
 							"find",
@@ -494,7 +527,7 @@ export function createQuestpieQueryOptions<
 							queryFn: wrapQueryFn(() => collection.find(options), errorMap),
 						});
 					},
-					count: (options?: any, queryConfig?: { realtime?: boolean }) => {
+					count: (options?: any, queryConfig?: RealtimeQueryConfig) => {
 						const qKey = buildKey(keyPrefix, [
 							...baseKey,
 							"count",
@@ -762,7 +795,7 @@ export function createQuestpieQueryOptions<
 			const baseKey: QueryKey = ["globals", globalName];
 
 			return {
-				get: (options?: any, queryConfig?: { realtime?: boolean }) => {
+				get: (options?: any, queryConfig?: RealtimeQueryConfig) => {
 					const qKey = buildKey(keyPrefix, [
 						...baseKey,
 						"get",

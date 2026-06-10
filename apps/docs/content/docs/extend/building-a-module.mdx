@@ -29,7 +29,7 @@ const notifications = collection("notifications")
 		title: f.text().required(),
 		body: f.textarea(),
 		read: f.boolean().default(false),
-		userId: f.relation("users"),
+		userId: f.relation("user"),
 	}))
 	.hooks({
 		afterCreate: async ({ data, queue }) => {
@@ -211,6 +211,19 @@ When multiple modules contribute to the same key, the merge behavior depends on 
 | `seeds`       | Concatenated (all seeds run)              |
 | `messages`    | Deep-merged per locale                    |
 | `hooks`       | Concatenated (all hooks run in order)     |
+
+Override-by-name means registering a collection key that a module already provides **replaces that collection wholesale** — its fields, hooks, and wiring are gone. To extend instead of replace, merge the module's builder into yours with [`.merge()`](/docs/reference/collection-api#merge-other):
+
+```ts title="collections/user.ts"
+import { starterModule } from "questpie/app";
+import { collection } from "#questpie/factories";
+
+export default collection("user")
+	.merge(starterModule.collections.user)
+	.fields(({ f }) => ({
+		internalNotes: f.textarea(),
+	}));
+```
 
 ---
 

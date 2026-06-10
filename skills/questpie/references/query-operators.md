@@ -42,10 +42,20 @@ Applies to: `date`, `dateTime`
 | Operator | Example                           | Description  |
 | -------- | --------------------------------- | ------------ |
 | equality | `{ date: "2025-03-01" }`          | Exact match  |
+| `eq`     | `{ date: { eq: someDate } }`      | Exact match  |
 | `gt`     | `{ date: { gt: "2025-01-01" } }`  | After        |
 | `gte`    | `{ date: { gte: "2025-01-01" } }` | On or after  |
 | `lt`     | `{ date: { lt: "2025-12-31" } }`  | Before       |
 | `lte`    | `{ date: { lte: "2025-12-31" } }` | On or before |
+
+For `Date` instance values, always use the explicit `{ eq: someDate }`
+operator — the bare equality shorthand only works for string/primitive
+values.
+
+System timestamps (`createdAt`, `updatedAt`, `deletedAt`) are stored as
+`timestamp(3)` (millisecond precision), so a `Date` returned by a query
+compares exactly against the stored value — safe for keyset cursors
+(`lt`/`gt`/`eq` with a previously returned timestamp).
 
 ## Select Fields
 

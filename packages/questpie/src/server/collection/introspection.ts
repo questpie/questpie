@@ -14,6 +14,7 @@ import type {
 	AccessRule,
 	CollectionAccess,
 	CollectionBuilderState,
+	RowAccessRule,
 } from "#questpie/server/collection/builder/types.js";
 import {
 	createFieldAccessContext,
@@ -1261,11 +1262,39 @@ async function evaluateCollectionAccess(
 		(r) => r.allowed === true,
 	);
 
+	// Introspection gate: an explicit `introspect` rule overrides the default
+	// "visible iff at least one CRUD operation is allowed". `visible` is what
+	// the schema/meta routes enforce and what batch introspection filters on.
+	const introspectRule = access?.introspect ?? appDefaultAccess?.introspect;
+	const visible =
+		introspectRule !== undefined
+			? (await evaluateAccessRule(introspectRule, accessContext)).allowed !==
+				false
+			: hasAnyAccess;
+
 	return {
-		visible: hasAnyAccess,
+		visible,
 		level: hasFullAccess ? "full" : hasFilteredAccess ? "filtered" : "none",
 		operations,
 	};
+}
+
+/**
+ * Resolve whether the current user may introspect a collection
+ * (`GET /:collection/{schema,meta}`).
+ *
+ * Chain: `access.introspect` → `defaultAccess.introspect` → visible iff at
+ * least one CRUD operation is allowed. This is the same computation embedded
+ * in `CollectionSchema.access.visible` — exported for routes (meta) that need
+ * the gate without building the full schema.
+ */
+export async function resolveIntrospectionAccess(
+	state: CollectionBuilderState,
+	context: CRUDContext,
+	app?: unknown,
+): Promise<boolean> {
+	const access = await evaluateCollectionAccess(state, context, app);
+	return access.visible;
 }
 
 /**
@@ -1273,7 +1302,7 @@ async function evaluateCollectionAccess(
  * When no rule is defined, requires session (secure by default).
  */
 async function evaluateAccessRule(
-	rule: AccessRule | undefined,
+	rule: AccessRule | RowAccessRule | undefined,
 	context: AccessContext,
 ): Promise<AccessResult> {
 	// No rule = require session (secure by default)
@@ -1296,7 +1325,9 @@ async function evaluateAccessRule(
 	// Function = evaluate
 	if (typeof rule === "function") {
 		try {
-			const result = await rule(context);
+			// Introspection probes rules without a loaded row — cast past the
+			// non-optional `data` that RowAccessRule (update/delete) declares.
+			const result = await rule(context as AccessContext & { data: any });
 
 			// Boolean result
 			if (typeof result === "boolean") {

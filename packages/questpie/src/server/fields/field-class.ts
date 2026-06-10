@@ -222,9 +222,49 @@ export class Field<TState extends FieldState = FieldState> {
 	/**
 	 * Escape hatch: modify the auto-derived Zod schema.
 	 * Applied after auto-derivation when toZodSchema() is called.
+	 *
+	 * The returned schema's output type propagates to the field's `data`
+	 * type (and therefore select/insert types). Returning a plain `ZodType`
+	 * (output `unknown`) leaves the field's existing `data` in place.
+	 *
+	 * @example
+	 * ```ts
+	 * // Refine validation without changing the type
+	 * slug: f.text().zod((s) => s.refine(isKebabCase, "must be kebab-case"))
+	 *
+	 * // Replace the schema — field value type narrows to the schema output
+	 * settings: f.json().zod(() => z.object({ theme: z.enum(["light", "dark"]) }))
+	 * ```
 	 */
-	zod(fn: (schema: ZodType) => ZodType): Field<TState> {
-		return this._clone<{}>({ zodTransform: fn });
+	zod<TSchema extends ZodType = ZodType>(
+		fn: (schema: ZodType) => TSchema,
+	): Field<
+		Omit<TState, "data"> & {
+			data: unknown extends z.output<TSchema>
+				? TState["data"]
+				: z.output<TSchema>;
+		}
+	> {
+		return this._clone({ zodTransform: fn }) as any;
+	}
+
+	/**
+	 * Explicitly set the field's TypeScript value type — type-level only,
+	 * no runtime effect (mirrors Drizzle's `$type`). The type flows to
+	 * select/insert types and `$types.value`.
+	 *
+	 * Mainly for `f.json()` fields, whose value otherwise types as the
+	 * loose `JsonValue`. For runtime validation on top of the type, pair
+	 * with `.zod()`.
+	 *
+	 * @example
+	 * ```ts
+	 * type Layout = { rows: { id: string; span: number }[] };
+	 * layout: f.json().$type<Layout>()
+	 * ```
+	 */
+	$type<T>(): Field<Omit<TState, "data"> & { data: T }> {
+		return this._clone({}) as any;
 	}
 
 	/** Transform value after reading from DB. */

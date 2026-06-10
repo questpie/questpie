@@ -7,7 +7,10 @@
 import type { Questpie } from "../../config/questpie.js";
 import type { QuestpieConfig } from "../../config/types.js";
 import { ApiError } from "../../errors/index.js";
-import { introspectGlobal } from "../../global/introspection.js";
+import {
+	introspectGlobal,
+	resolveGlobalIntrospectionAccess,
+} from "../../global/introspection.js";
 import type { AdapterConfig, AdapterContext } from "../types.js";
 import { resolveContext } from "../utils/context.js";
 import {
@@ -15,7 +18,11 @@ import {
 	parseGlobalUpdateOptions,
 } from "../utils/parsers.js";
 import { parseRouteBody } from "../utils/request.js";
-import { handleError, smartResponse } from "../utils/response.js";
+import {
+	handleError,
+	introspectionDeniedError,
+	smartResponse,
+} from "../utils/response.js";
 
 // ============================================================================
 // Helper
@@ -244,6 +251,14 @@ export async function globalSchema(
 			},
 			app,
 		);
+		// Gate through the already-computed access info: introspect rule,
+		// falling back to "visible iff any operation is allowed".
+		if (!schema.access.visible) {
+			throw introspectionDeniedError(
+				params.global,
+				resolved.appContext.session,
+			);
+		}
 		return smartResponse(schema, request);
 	} catch (error) {
 		return errorResponse(app, error, request, resolved.appContext.locale);
@@ -304,6 +319,24 @@ export async function globalMeta(
 	}
 
 	try {
+		// Gate through the access system: introspect rule, falling back to
+		// "visible iff any operation is allowed for the current user".
+		const visible = await resolveGlobalIntrospectionAccess(
+			globalInstance.state,
+			{
+				session: resolved.appContext.session,
+				db: app.db,
+				locale: resolved.appContext.locale,
+			},
+			app,
+		);
+		if (!visible) {
+			throw introspectionDeniedError(
+				params.global,
+				resolved.appContext.session,
+			);
+		}
+
 		const meta = globalInstance.getMeta();
 		return smartResponse(meta, request);
 	} catch (error) {

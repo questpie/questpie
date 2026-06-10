@@ -158,15 +158,24 @@ const newService = await collections.services.create({
 	isActive: true,
 });
 
-// Update
-const updated = await collections.services.update({
-	where: { id: "abc123" },
+// Update by id (returns the updated record, throws notFound if missing)
+const updated = await collections.services.updateById({
+	id: "abc123",
 	data: { price: 3000 },
 });
 
-// Delete
-await collections.services.delete({
-	where: { id: "abc123" },
+// Bulk update by where (returns the array of updated records)
+const discounted = await collections.services.updateMany({
+	where: { isActive: false },
+	data: { price: 0 },
+});
+
+// Delete by id
+await collections.services.deleteById({ id: "abc123" });
+
+// Bulk delete by where (returns { success, count })
+await collections.services.deleteMany({
+	where: { isActive: false },
 });
 
 // Count

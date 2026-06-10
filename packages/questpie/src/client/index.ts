@@ -30,12 +30,18 @@ import type {
 	FindResult,
 	FindManyOptions,
 	FindOneOptionsBase,
+	OrderBy,
 	UpdateInput,
 	Where,
 	With,
 } from "../server/collection/crud/types.js";
 import type { GlobalUpdateInput } from "../server/global/crud/types.js";
-import { createRealtimeAPI, type RealtimeAPI } from "./realtime/index.js";
+import {
+	buildCollectionTopic,
+	buildGlobalTopic,
+	createRealtimeAPI,
+	type RealtimeAPI,
+} from "./realtime/index.js";
 
 // ============================================================================
 // Upload Types
@@ -299,6 +305,42 @@ type RouteCallerFromDef<TDef> =
 			: (input?: any) => Promise<any>;
 
 /**
+ * Options accepted by `live()` / `liveIter()` on collections — the subset of
+ * `find()` options that the realtime wire protocol carries as topic fields
+ * (`POST /realtime`). Same `where`/`with`/`orderBy` aliases as `find()`.
+ *
+ * Notably excludes `columns`, `groupBy`, `search`, etc. — snapshots are always
+ * full query results re-run server-side from these fields.
+ */
+export type LiveQueryOptions<TSelect, TRelations> = {
+	where?: Where<TSelect, TRelations>;
+	with?: With<TRelations>;
+	limit?: number;
+	offset?: number;
+	orderBy?: OrderBy<TSelect>;
+	locale?: string;
+};
+
+/**
+ * Options accepted by `live()` / `liveIter()` on globals — the subset of
+ * `get()` options that the realtime wire protocol carries as topic fields.
+ */
+export type GlobalLiveQueryOptions<TRelations> = {
+	with?: With<TRelations>;
+	locale?: string;
+};
+
+/**
+ * Lifecycle options for `live()` subscriptions.
+ */
+export type LiveSubscribeOptions = {
+	/** Abort signal — unsubscribes when aborted. */
+	signal?: AbortSignal;
+	/** Called when the underlying SSE connection fails. */
+	onError?: (error: Error) => void;
+};
+
+/**
  * Type-safe collection API for a single collection
  */
 type CollectionAPI<
@@ -321,6 +363,55 @@ type CollectionAPI<
 			ResolveRelationsDeep<CollectionRelations<TCollection>, TCollections>,
 			TQuery
 		>
+	>;
+
+	/**
+	 * Live form of `find()` — subscribes to access-controlled query snapshots
+	 * pushed over the multiplexed SSE stream (`POST /realtime`). The first
+	 * snapshot arrives immediately on connect; later snapshots whenever a
+	 * matching record changes. Snapshot type equals the `find()` result type.
+	 *
+	 * Returns an unsubscribe function.
+	 */
+	live: <
+		TQuery extends
+			| LiveQueryOptions<
+					CollectionSelect<TCollection>,
+					ResolveRelationsDeep<CollectionRelations<TCollection>, TCollections>
+			  >
+			| undefined,
+	>(
+		options: TQuery,
+		onSnapshot: (
+			snapshot: FindResult<
+				CollectionSelect<TCollection>,
+				ResolveRelationsDeep<CollectionRelations<TCollection>, TCollections>,
+				TQuery
+			>,
+		) => void,
+		opts?: LiveSubscribeOptions,
+	) => () => void;
+
+	/**
+	 * Async-iterable form of `live()` — yields the same snapshots as an
+	 * AsyncGenerator (for workers, agents, tests). Terminate via `opts.signal`.
+	 */
+	liveIter: <
+		TQuery extends LiveQueryOptions<
+			CollectionSelect<TCollection>,
+			ResolveRelationsDeep<CollectionRelations<TCollection>, TCollections>
+		>,
+	>(
+		options?: TQuery,
+		opts?: { signal?: AbortSignal },
+	) => AsyncGenerator<
+		FindResult<
+			CollectionSelect<TCollection>,
+			ResolveRelationsDeep<CollectionRelations<TCollection>, TCollections>,
+			TQuery
+		>,
+		void,
+		unknown
 	>;
 
 	/**
@@ -369,6 +460,22 @@ type CollectionAPI<
 	) => Promise<CollectionSelect<TCollection>>;
 	/**
 	 * Update a single record by ID
+	 * Canonical name — same vocabulary as server CRUD.
+	 */
+	updateById: (
+		params: {
+			id: string;
+			data: UpdateInput<
+				CollectionUpdate<TCollection>,
+				ResolveRelationsDeep<CollectionRelations<TCollection>, TCollections>
+			>;
+		},
+		options?: LocaleOptions,
+	) => Promise<CollectionSelect<TCollection>>;
+
+	/**
+	 * Update a single record by ID
+	 * Alias of {@link updateById} (note: server CRUD `update` is bulk-by-where).
 	 */
 	update: (
 		params: {
@@ -383,6 +490,16 @@ type CollectionAPI<
 
 	/**
 	 * Delete a single record by ID
+	 * Canonical name — same vocabulary as server CRUD.
+	 */
+	deleteById: (
+		params: { id: string },
+		options?: LocaleOptions,
+	) => Promise<{ success: boolean }>;
+
+	/**
+	 * Delete a single record by ID
+	 * Alias of {@link deleteById} (note: server CRUD `delete` is bulk-by-where).
 	 */
 	delete: (
 		params: { id: string },
@@ -391,6 +508,16 @@ type CollectionAPI<
 
 	/**
 	 * Restore a soft-deleted record by ID
+	 * Canonical name — same vocabulary as server CRUD.
+	 */
+	restoreById: (
+		params: { id: string },
+		options?: LocaleOptions,
+	) => Promise<CollectionSelect<TCollection>>;
+
+	/**
+	 * Restore a soft-deleted record by ID
+	 * Alias of {@link restoreById}.
 	 */
 	restore: (
 		params: { id: string },
@@ -539,6 +666,52 @@ type GlobalAPI<
 			ResolveRelationsDeep<GlobalRelations<TGlobal>, TCollections>,
 			TQuery
 		>
+	>;
+
+	/**
+	 * Live form of `get()` — subscribes to access-controlled snapshots of the
+	 * global pushed over the multiplexed SSE stream (`POST /realtime`).
+	 * Snapshot type equals the `get()` result type.
+	 *
+	 * Returns an unsubscribe function.
+	 */
+	live: <
+		TQuery extends
+			| GlobalLiveQueryOptions<
+					ResolveRelationsDeep<GlobalRelations<TGlobal>, TCollections>
+			  >
+			| undefined,
+	>(
+		options: TQuery,
+		onSnapshot: (
+			snapshot: ApplyQuery<
+				GlobalSelect<TGlobal>,
+				ResolveRelationsDeep<GlobalRelations<TGlobal>, TCollections>,
+				TQuery
+			>,
+		) => void,
+		opts?: LiveSubscribeOptions,
+	) => () => void;
+
+	/**
+	 * Async-iterable form of `live()` — yields the same snapshots as an
+	 * AsyncGenerator. Terminate via `opts.signal`.
+	 */
+	liveIter: <
+		TQuery extends GlobalLiveQueryOptions<
+			ResolveRelationsDeep<GlobalRelations<TGlobal>, TCollections>
+		>,
+	>(
+		options?: TQuery,
+		opts?: { signal?: AbortSignal },
+	) => AsyncGenerator<
+		ApplyQuery<
+			GlobalSelect<TGlobal>,
+			ResolveRelationsDeep<GlobalRelations<TGlobal>, TCollections>,
+			TQuery
+		>,
+		void,
+		unknown
 	>;
 
 	/**
@@ -886,6 +1059,12 @@ export function createClient<TApp extends QuestpieApp>(
 			: JSON.parse(text);
 	}
 
+	const realtimeApi = createRealtimeAPI({
+		baseUrl: `${config.baseURL}${apiBasePath}`,
+		withCredentials: true,
+		debounceMs: 50,
+	});
+
 	/**
 	 * Collections API
 	 */
@@ -902,6 +1081,27 @@ export function createClient<TApp extends QuestpieApp>(
 					const path = `${apiBasePath}/${collectionName}${queryString ? `?${queryString}` : ""}`;
 
 					return request(path);
+				},
+
+				live: (
+					options: any,
+					onSnapshot: (snapshot: any) => void,
+					opts?: LiveSubscribeOptions,
+				) => {
+					return realtimeApi.subscribe(
+						buildCollectionTopic(collectionName, options),
+						onSnapshot,
+						opts?.signal,
+						undefined,
+						opts?.onError,
+					);
+				},
+
+				liveIter: (options?: any, opts?: { signal?: AbortSignal }) => {
+					return realtimeApi.stream(
+						buildCollectionTopic(collectionName, options),
+						opts?.signal,
+					);
 				},
 
 				count: async (options: any = {}) => {
@@ -1215,6 +1415,29 @@ export function createClient<TApp extends QuestpieApp>(
 					});
 				},
 
+				// Canonical by-id aliases — one CRUD vocabulary across server
+				// and client (server `update`/`delete` are bulk-by-where).
+				updateById: async (
+					params: { id: string; data: any },
+					options: LocaleOptions = {},
+				) => {
+					return base.update(params, options);
+				},
+
+				deleteById: async (
+					params: { id: string },
+					options: LocaleOptions = {},
+				) => {
+					return base.delete(params, options);
+				},
+
+				restoreById: async (
+					params: { id: string },
+					options: LocaleOptions = {},
+				) => {
+					return base.restore(params, options);
+				},
+
 				uploadMany: async (
 					files: File[],
 					options?: UploadManyOptions,
@@ -1287,6 +1510,27 @@ export function createClient<TApp extends QuestpieApp>(
 					);
 					const path = `${apiBasePath}/globals/${globalName}${queryString ? `?${queryString}` : ""}`;
 					return request(path);
+				},
+
+				live: (
+					options: any,
+					onSnapshot: (snapshot: any) => void,
+					opts?: LiveSubscribeOptions,
+				) => {
+					return realtimeApi.subscribe(
+						buildGlobalTopic(globalName, options),
+						onSnapshot,
+						opts?.signal,
+						undefined,
+						opts?.onError,
+					);
+				},
+
+				liveIter: (options?: any, opts?: { signal?: AbortSignal }) => {
+					return realtimeApi.stream(
+						buildGlobalTopic(globalName, options),
+						opts?.signal,
+					);
 				},
 
 				update: async (
@@ -1504,12 +1748,6 @@ export function createClient<TApp extends QuestpieApp>(
 			if (typeof prop !== "string") return undefined;
 			return createRouteProxy([prop]);
 		},
-	});
-
-	const realtimeApi = createRealtimeAPI({
-		baseUrl: `${config.baseURL}${apiBasePath}`,
-		withCredentials: true,
-		debounceMs: 50,
 	});
 
 	return {

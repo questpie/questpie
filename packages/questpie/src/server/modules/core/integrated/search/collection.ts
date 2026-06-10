@@ -6,9 +6,10 @@ import {
 	numeric,
 	pgTable,
 	text,
-	timestamp,
 	unique,
 } from "drizzle-orm/pg-core";
+
+import { systemTimestamp } from "#questpie/server/db/system-columns.js";
 
 /**
  * Custom tsvector type for PostgreSQL full-text search
@@ -87,12 +88,12 @@ export const questpieSearchTable = pgTable(
 		/**
 		 * Created timestamp
 		 */
-		createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+		createdAt: systemTimestamp("created_at").defaultNow().notNull(),
 
 		/**
 		 * Updated timestamp
 		 */
-		updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),
+		updatedAt: systemTimestamp("updated_at").defaultNow().notNull(),
 	},
 	(t) => [
 		// GIN index for full-text search on tsvector column
@@ -168,7 +169,7 @@ export const questpieSearchFacetsTable = pgTable(
 		/**
 		 * Created timestamp
 		 */
-		createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+		createdAt: systemTimestamp("created_at").defaultNow().notNull(),
 	},
 	(t) => [
 		/**

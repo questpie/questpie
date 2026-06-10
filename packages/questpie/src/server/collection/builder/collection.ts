@@ -22,7 +22,6 @@ import {
 	smallint,
 	smallserial,
 	text,
-	timestamp,
 	uniqueIndex,
 	uuid,
 	varchar,
@@ -46,6 +45,7 @@ import type {
 import { createCollectionValidationSchemas } from "#questpie/server/collection/builder/validation-helpers.js";
 import { CRUDGenerator } from "#questpie/server/collection/crud/index.js";
 import type { CRUD } from "#questpie/server/collection/crud/types.js";
+import { systemTimestamp } from "#questpie/server/db/system-columns.js";
 import type { FieldState } from "#questpie/server/fields/field-class-types.js";
 import type { FieldSelect } from "#questpie/server/fields/field-types.js";
 import {
@@ -469,12 +469,12 @@ export class Collection<TState extends CollectionBuilderState> {
 	});
 
 	static readonly timestampsCols = () => ({
-		createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
-		updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),
+		createdAt: systemTimestamp("created_at").defaultNow().notNull(),
+		updatedAt: systemTimestamp("updated_at").defaultNow().notNull(),
 	});
 
 	static readonly softDeleteCols = () => ({
-		deletedAt: timestamp("deleted_at", { mode: "date" }),
+		deletedAt: systemTimestamp("deleted_at"),
 	});
 
 	/**
@@ -495,7 +495,7 @@ export class Collection<TState extends CollectionBuilderState> {
 		versionStage: text("version_stage"),
 		versionFromStage: text("version_from_stage"),
 		versionUserId: text("version_user_id"), // Nullable if unknown
-		versionCreatedAt: timestamp("version_created_at", { mode: "date" })
+		versionCreatedAt: systemTimestamp("version_created_at")
 			.defaultNow()
 			.notNull(),
 	});

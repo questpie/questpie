@@ -1,5 +1,5 @@
 {
 	"title": "Build Your Backend",
 	"defaultOpen": true,
-	"pages": ["data-modeling", "rules", "business-logic", "architecture"]
+	"pages": ["data-modeling", "rules", "business-logic", "type-inference", "architecture"]
 }

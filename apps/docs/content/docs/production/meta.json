@@ -1,6 +1,7 @@
 {
 	"title": "Production",
 	"pages": [
+		"environment",
 		"database",
 		"migrations",
 		"authentication",
