@@ -1267,15 +1267,18 @@ export function IssuesSection() {
 export function WorkflowsSection() {
 	const lines: CodeLine[] = [
 		[CM("// workflows/review-content.ts. Durable, restartable")],
-		[KW("export default "), FN("workflow"), "("],
-		["  ", STR('"review-content"'), ","],
-		["  ", KW("async"), " (step, { issueId }) => {"],
+		[KW("export default "), FN("workflow"), "({"],
+		["  name: ", STR('"review-content"'), ","],
+		["  schema: z.", FN("object"), "({ issueId: z.", FN("string"), "() }),"],
+		["  handler: ", KW("async"), " ({ input, step, ctx }) => {"],
 		["    ", KW("const"), " issue = ", KW("await"), " step.", FN("run"), "("],
 		[
 			"      ",
 			STR('"load"'),
-			", () => ctx.collections.tasks.findById(issueId)",
+			", () => ctx.collections.tasks.findOne({",
 		],
+		["        where: { id: input.issueId },"],
+		["      })"],
 		["    );"],
 		[""],
 		["    ", KW("const"), " draft = ", KW("await"), " step.", FN("run"), "("],
@@ -1312,8 +1315,10 @@ export function WorkflowsSection() {
 			" step.",
 			FN("waitForEvent"),
 			"(",
+			STR('"review"'),
+			", { event: ",
 			STR('"human-approval"'),
-			");",
+			" });",
 		],
 		[
 			"    ",
@@ -1322,12 +1327,16 @@ export function WorkflowsSection() {
 			FN("run"),
 			"(",
 			STR('"publish"'),
-			", () => ctx.collections.tasks.update({ id: issueId, status: ",
-			STR('"done"'),
-			" }));",
+			", () => ctx.collections.tasks.updateById({",
 		],
-		["  }"],
-		[");"],
+		[
+			"      id: input.issueId, data: { status: ",
+			STR('"done"'),
+			" },",
+		],
+		["    }));"],
+		["  },"],
+		["});"],
 	];
 	return (
 		<Section id="workflows" pad="48px 24px 96px">
@@ -1364,11 +1373,11 @@ export function WorkflowsSection() {
 							desc="Pause hours, days, weeks."
 						/>
 						<PrimitiveRow
-							code="step.waitForEvent('approval')"
+							code="step.waitForEvent(name, { event })"
 							desc="Block until a signal arrives."
 						/>
 						<PrimitiveRow
-							code="step.invoke('sub-flow', input)"
+							code="step.invoke(name, { workflow, input })"
 							desc="Compose workflows."
 						/>
 						<PrimitiveRow

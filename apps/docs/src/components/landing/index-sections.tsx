@@ -71,7 +71,7 @@ export function Hero() {
 						<Reveal>
 							<div style={{ marginBottom: 22 }}>
 								<Eyebrow dot color="var(--success)">
-									v0.3.0 · MIT · TypeScript · Bun + Node
+									v3.6 · MIT · TypeScript · Bun + Node
 								</Eyebrow>
 							</div>
 						</Reveal>
@@ -243,17 +243,24 @@ function HeroProof() {
 			"(),",
 		],
 		["    slug:    f.", FN("text"), "(", NUM("160"), "),"],
+		["    status:  f.", FN("select"), "(["],
 		[
-			"    status:  f.",
-			FN("select"),
-			"([",
+			"      { value: ",
 			STR('"draft"'),
-			", ",
-			STR('"published"'),
-			"]),",
+			", label: ",
+			STR('"Draft"'),
+			" },",
 		],
+		[
+			"      { value: ",
+			STR('"published"'),
+			", label: ",
+			STR('"Published"'),
+			" },",
+		],
+		["    ]),"],
 		["    content: f.", FN("richText"), "().", FN("localized"), "(),"],
-		["    author:  f.", FN("relation"), "(", STR('"users"'), "),"],
+		["    author:  f.", FN("relation"), "(", STR('"user"'), "),"],
 		["  }))"],
 		[
 			"  .",
@@ -792,23 +799,31 @@ export function FrameworkSection() {
 			"    author:  f.",
 			FN("relation"),
 			"(",
-			STR('"users"'),
+			STR('"user"'),
 			").",
 			FN("required"),
 			"(),",
 		],
+		["    status:  f.", FN("select"), "(["],
 		[
-			"    status:  f.",
-			FN("select"),
-			"([",
+			"      { value: ",
 			STR('"draft"'),
-			", ",
-			STR('"published"'),
-			"]),",
+			", label: ",
+			STR('"Draft"'),
+			" },",
 		],
+		[
+			"      { value: ",
+			STR('"published"'),
+			", label: ",
+			STR('"Published"'),
+			" },",
+		],
+		["    ]),"],
 		["  }))"],
 		["  .", FN("access"), "({"],
-		["    update: ({ session, d }) => d.authorId === session?.user.id,"],
+		["    read: ", KW("true"), ","],
+		["    update: ({ session, data }) => data.author === session?.user.id,"],
 		[
 			"    delete: ({ session }) => session?.user.role === ",
 			STR('"admin"'),
@@ -816,8 +831,15 @@ export function FrameworkSection() {
 		],
 		["  })"],
 		["  .", FN("hooks"), "({"],
-		["    beforeChange: ({ data }) =>"],
-		["      ({ ...data, slug: ", FN("slugify"), "(data.title) }),"],
+		["    beforeChange: ({ data }) => {"],
+		[
+			"      ",
+			KW("if"),
+			" (data.title) data.slug = ",
+			FN("slugify"),
+			"(data.title);",
+		],
+		["    },"],
 		["  })"],
 		[
 			"  .",
@@ -969,7 +991,7 @@ export function FrameworkSection() {
 							color: "var(--foreground-subtle)",
 						}}
 					>
-						$ bun add questpie drizzle-orm zod
+						$ bun create questpie my-app
 					</span>
 				</div>
 			</Reveal>
@@ -991,8 +1013,8 @@ const PRODUCTION_FEATURES = [
 	},
 	{
 		icon: "lightning",
-		title: "Realtime SSE",
-		desc: "Every mutation writes to an outbox. Subscribers get live updates via pg_notify or Redis Streams. TanStack Query picks it up automatically.",
+		title: "Typed live queries",
+		desc: "Every mutation writes to an outbox; pg_notify or Redis Streams fan out. Subscribe with typed `live()` snapshots, or pass `{ realtime: true }` to a TanStack Query and it streams.",
 	},
 	{
 		icon: "shield",
@@ -1003,6 +1025,26 @@ const PRODUCTION_FEATURES = [
 		icon: "layout",
 		title: "Blocks · page builder",
 		desc: "`f.blocks()` field type. Define block schemas server-side, register React renderers client-side. Server prefetches data for SSR.",
+	},
+	{
+		icon: "lock",
+		title: "Boot-validated env",
+		desc: "Declare vars once in `env.ts`. Validation runs at boot, before adapters, auth or the DB initialize. Client-safe vars ship via codegen — server keys physically absent.",
+	},
+	{
+		icon: "git-branch",
+		title: "Atomic claims",
+		desc: "`updateMany` re-checks `where` under row locks and returns exactly the rows it wrote. Losing a concurrent claim is an empty array, not silent corruption.",
+	},
+	{
+		icon: "check",
+		title: "Server-enforced validation",
+		desc: "`.required()`, `.min()`, custom `.zod()` refinements — every field rule is enforced in the API layer on every write, not just in the admin UI.",
+	},
+	{
+		icon: "brackets-curly",
+		title: "Typed escape hatches",
+		desc: "`.zod()`, `.$type<T>()` and `.drizzle()` tweak the schema, the TypeScript type and the column per field without leaving the field DSL.",
 	},
 ];
 
@@ -1135,7 +1177,15 @@ const ADAPTERS: Array<{
 			[KW("import "), "{ app } ", KW("from "), STR('"#questpie"'), ";"],
 			[""],
 			[KW("const "), TYP("server"), " = ", KW("new "), FN("Elysia"), "()"],
-			["  .", FN("use"), "(", FN("questpieElysia"), "(app))"],
+			[
+				"  .",
+				FN("use"),
+				"(",
+				FN("questpieElysia"),
+				"(app, { basePath: ",
+				STR('"/api"'),
+				" }))",
+			],
 			["  .", FN("listen"), "(", NUM("3000"), ");"],
 			[""],
 			[KW("export type "), TYP("AppServer"), " = ", KW("typeof "), "server;"],
@@ -1174,16 +1224,16 @@ const ADAPTERS: Array<{
 		lines: [
 			[
 				KW("import "),
-				"{ createFetchHandler } ",
+				"{ createFileRoute } ",
 				KW("from "),
-				STR('"questpie/http"'),
+				STR('"@tanstack/react-router"'),
 				";",
 			],
 			[
 				KW("import "),
-				"{ createAPIFileRoute } ",
+				"{ createFetchHandler } ",
 				KW("from "),
-				STR('"@tanstack/react-start/api"'),
+				STR('"questpie/http"'),
 				";",
 			],
 			[KW("import "), "{ app } ", KW("from "), STR('"#questpie"'), ";"],
@@ -1200,15 +1250,19 @@ const ADAPTERS: Array<{
 			[""],
 			[
 				KW("export const "),
-				TYP("APIRoute"),
+				TYP("Route"),
 				" = ",
-				FN("createAPIFileRoute"),
+				FN("createFileRoute"),
 				"(",
 				STR('"/api/$"'),
 				")({",
 			],
-			["  GET: ({ request }) => ", FN("handler"), "(request),"],
-			["  POST: ({ request }) => ", FN("handler"), "(request),"],
+			["  server: {"],
+			["    handlers: {"],
+			["      GET: ({ request }) => ", FN("handler"), "(request),"],
+			["      POST: ({ request }) => ", FN("handler"), "(request),"],
+			["    },"],
+			["  },"],
 			["});"],
 		],
 	},
@@ -1304,7 +1358,7 @@ const SCHEMA_OUTPUTS = [
 	{
 		icon: "shield",
 		title: "Zod validators",
-		desc: "Input + output schemas. Field-level overrides honored.",
+		desc: "Input + output schemas, enforced server-side on every write.",
 	},
 	{
 		icon: "layout",
@@ -1328,8 +1382,8 @@ const SCHEMA_OUTPUTS = [
 	},
 	{
 		icon: "lightning",
-		title: "Realtime feed",
-		desc: "Every mutation publishes to SSE. TanStack Query auto-refetches.",
+		title: "Live queries",
+		desc: "Typed live() snapshots over SSE. `{ realtime: true }` streams into TanStack Query.",
 	},
 ];
 
@@ -2302,11 +2356,12 @@ export function AutopilotSection() {
 function WorkflowCode() {
 	const lines: CodeLine[] = [
 		[CM("// workflows/onboard-customer.ts · durable, restartable")],
-		[KW("export default "), FN("workflow"), "("],
-		["  ", STR('"onboard-customer"'), ","],
-		["  ", KW("async"), " (step, { email }) => {"],
+		[KW("export default "), FN("workflow"), "({"],
+		["  name: ", STR('"onboard-customer"'), ","],
+		["  schema: z.", FN("object"), "({ email: z.", FN("string"), "() }),"],
+		["  handler: ", KW("async"), " ({ input, step }) => {"],
 		["    ", KW("const"), " user = ", KW("await"), " step.", FN("run"), "("],
-		["      ", STR('"create-account"'), ", () => createUser(email)"],
+		["      ", STR('"create-account"'), ", () => createUser(input.email)"],
 		["    );"],
 		[""],
 		[
@@ -2335,20 +2390,16 @@ function WorkflowCode() {
 			" step.",
 			FN("waitForEvent"),
 			"(",
-			STR('"trial-end-action"'),
-			");",
+			STR('"decision"'),
+			", { event: ",
+			STR('"trial-end"'),
+			" });",
 		],
-		[
-			"    ",
-			KW("await"),
-			" step.",
-			FN("invoke"),
-			"(",
-			STR('"send-renewal"'),
-			", { user });",
-		],
-		["  }"],
-		[");"],
+		["    ", KW("await"), " step.", FN("invoke"), "(", STR('"renewal"'), ", {"],
+		["      workflow: ", STR('"send-renewal"'), ", input: { user },"],
+		["    });"],
+		["  },"],
+		["});"],
 	];
 	return (
 		<div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -3170,7 +3221,7 @@ export function StackSection() {
 					<span>·</span>
 					<span className="landing-mono">React 19 · Tailwind v4 · shadcn</span>
 					<span>·</span>
-					<span className="landing-mono">Bun / Node 18+</span>
+					<span className="landing-mono">Bun / Node</span>
 				</div>
 			</Reveal>
 		</Section>
