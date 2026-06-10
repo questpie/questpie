@@ -1,9 +1,26 @@
 ---
 title: CRUD API
-description: Collection CRUD operations — find, findOne, create, update, delete, count, versions, and workflow transitions.
+description: Collection CRUD operations — find, findOne, create, updateById, updateMany, deleteById, deleteMany, count, versions, and workflow transitions.
 ---
 
 Collections expose typed CRUD operations on the server runtime and through `questpie/client`. Server code receives collection APIs from handler context; client code calls the generated client.
+
+Both surfaces share one vocabulary:
+
+| Concept | Method | Server | Client |
+| --- | --- | --- | --- |
+| List (paginated) | `find(options)` | ✓ | ✓ |
+| Single by query | `findOne(options)` | ✓ | ✓ |
+| Count | `count(options)` | ✓ | ✓ |
+| Create | `create(data)` | ✓ | ✓ |
+| Update by id | `updateById({ id, data })` | ✓ | ✓ |
+| Bulk update by where | `updateMany({ where, data })` | ✓ | ✓ |
+| Per-record batch update | `updateBatch({ updates })` | ✓ | ✓ |
+| Delete by id | `deleteById({ id })` | ✓ | ✓ |
+| Bulk delete by where | `deleteMany({ where })` | ✓ | ✓ |
+| Restore by id | `restoreById({ id })` | ✓ | ✓ |
+
+Deprecated aliases kept for backwards compatibility (removed in v4): on the **server**, `update`/`delete` are aliases of `updateMany`/`deleteMany`; on the **client**, `update`/`delete`/`restore` are aliases of `updateById`/`deleteById`/`restoreById`. Avoid the ambiguous names in new code — the same name means bulk on one surface and by-id on the other.
 
 ## `find(options)`
 
@@ -60,25 +77,15 @@ const record = await collections.posts.updateById(
 );
 ```
 
-**Returns:** `T` (updated record)
-
-On the client SDK, the same operation is exposed as `update({ id, data })`:
-
-```ts
-const updated = await client.collections.posts.update(
-	{
-		id: "post_123",
-		data: { title: "Updated title" },
-	},
-	{ stage: "draft" },
-);
-```
+**Returns:** `T` (updated record). Throws `notFound` when the record does not exist — including when it vanishes concurrently between the lookup and the write.
 
 ## `deleteById(options)`
 
 ```ts
 await collections.posts.deleteById({ id: "post_123" });
 ```
+
+**Returns:** `{ success: boolean }`. Throws `notFound` when the record does not exist.
 
 ## `count(options)`
 
@@ -90,26 +97,79 @@ const count = await collections.posts.count({
 
 **Returns:** `number`
 
-## `update(options)`
+## `updateMany(options)`
 
 ```ts
-await collections.posts.update({
+const updated = await collections.posts.updateMany({
 	where: { status: "draft" },
 	data: { title: "Needs review" },
 });
 ```
 
-Server `update()` updates every record matching `where`. On the client SDK this operation is named `updateMany()`.
+**Returns:** `T[]` — exactly the records that were written. `updateMany` updates every record matching `where` **at write time**: inside the write transaction the matched rows are locked and the predicate is re-evaluated, so rows changed by a concurrent writer in the meantime are skipped instead of silently overwritten.
 
-## `delete(options)`
+### Atomic conditional updates
+
+Because the result reports exactly the rows that still matched, the bulk-update primitive doubles as an atomic conditional write — no extra locking required:
 
 ```ts
-await collections.posts.delete({
+// Claim a row: of two parallel claims, EXACTLY ONE wins
+const claimed = await collections.event_members.updateMany(
+	{
+		where: { id: memberId, user: { isNull: true } },
+		data: { user: newUserId },
+	},
+	{ accessMode: "system" },
+);
+if (claimed.length === 0) {
+	// Lost the race (or the row vanished) — observable, not silent
+}
+```
+
+```ts
+// Optimistic concurrency: only write if nobody changed the row since we read it
+const bumped = await collections.documents.updateMany(
+	{
+		where: { id, revision: doc.revision },
+		data: { body, revision: doc.revision + 1 },
+	},
+	ctx,
+);
+if (bumped.length === 0) throw new Error("Conflict — reload and retry");
+```
+
+Hook timing for conditional updates: `beforeValidate`/`beforeChange` run before the transaction on the candidate rows (*intent* hooks — they may fire for rows that end up losing the write-time check). `afterChange`, versioning, and the returned array reflect winners only (*fact* hooks).
+
+## `updateBatch(options)`
+
+```ts
+const updated = await collections.posts.updateBatch({
+	updates: [
+		{ id: "post_1", data: { title: "First" } },
+		{ id: "post_2", data: { title: "Second" } },
+	],
+});
+```
+
+**Returns:** `T[]`. Runs each update through the normal update pipeline in one transaction — distinct data per record.
+
+## `deleteMany(options)`
+
+```ts
+const result = await collections.posts.deleteMany({
 	where: { status: "archived" },
 });
 ```
 
-Server `delete()` deletes every record matching `where`. On the client SDK this operation is named `deleteMany()`.
+**Returns:** `{ success: boolean, count: number }` — `count` is the number of records that still matched `where` at delete time (same claim-checked semantics as `updateMany`).
+
+## `restoreById(options)`
+
+```ts
+const restored = await collections.posts.restoreById({ id: "post_123" });
+```
+
+**Returns:** `T`. Only available on collections with `softDelete` enabled.
 
 ## `findVersions(options)`
 
@@ -154,9 +214,23 @@ await collections.posts.transitionStage({
 
 `transitionStage()` requires `versioning.workflow`, validates the target stage and transition graph, checks `access.transition` with fallback to `access.update`, runs transition hooks, and creates a version snapshot without mutating the working row.
 
+## Unknown method access fails loud
+
+Server CRUD objects throw an instructive `TypeError` when an unknown method is accessed — typos in untyped glue (auth callbacks, seeds, scripts) can no longer become silent no-ops:
+
+```ts
+await (app.collections.event_members as any).updateMnay({ ... });
+// TypeError: collections.event_members.updateMnay is not a CRUD method.
+// Did you mean "updateMany"? Available: find, findOne, count, create,
+// updateById, updateMany, updateBatch, deleteById, deleteMany, restoreById,
+// findVersions, revertToVersion, transitionStage (deprecated: update, delete)
+```
+
+Feature detection stays safe with the `in` operator (never throws): `"upload" in crud`. The `crud.upload` capability probe also keeps returning `undefined` on non-upload collections.
+
 ## Client API
 
-The client SDK mirrors the same resource behavior with browser-friendly method names:
+The client SDK uses the same vocabulary:
 
 ```ts
 const posts = await client.collections.posts.find({ stage: "published" });
@@ -164,11 +238,19 @@ const post = await client.collections.posts.findOne({
 	where: { id: "post_123" },
 });
 const created = await client.collections.posts.create({ title: "Hello" });
-const updated = await client.collections.posts.update({
+const updated = await client.collections.posts.updateById({
 	id: "post_123",
 	data: { title: "Updated title" },
 });
-await client.collections.posts.delete({ id: "post_123" });
+await client.collections.posts.deleteById({ id: "post_123" });
+const restored = await client.collections.posts.restoreById({
+	id: "post_123",
+});
+const many = await client.collections.posts.updateMany({
+	where: { status: "draft" },
+	data: { status: "review" },
+});
+await client.collections.posts.deleteMany({ where: { status: "archived" } });
 const count = await client.collections.posts.count({
 	where: { status: "published" },
 });

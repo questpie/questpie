@@ -49,13 +49,13 @@ const newPost = await client.collections.posts.create({
 });
 
 // Update
-const updated = await client.collections.posts.update({
+const updated = await client.collections.posts.updateById({
 	id: "abc",
 	data: { status: "published" },
 });
 
 // Delete
-await client.collections.posts.delete({ id: "abc" });
+await client.collections.posts.deleteById({ id: "abc" });
 
 // Count
 const count = await client.collections.posts.count({

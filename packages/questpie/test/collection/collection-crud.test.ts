@@ -127,6 +127,42 @@ describe("collection CRUD", () => {
 		expect(deRow?.name).toBe("Name EN");
 	});
 
+	it("filters by localized fields in find and count", async () => {
+		const ctx = createTestContext();
+
+		await setup.app.collections.products.create(
+			{ id: crypto.randomUUID(), sku: "loc-1", name: "Localized Match" },
+			ctx,
+		);
+		await setup.app.collections.products.create(
+			{ id: crypto.randomUUID(), sku: "loc-2", name: "Other" },
+			ctx,
+		);
+
+		// find runs a count query for totalDocs — both must support the
+		// localized field's i18n join in where
+		const found = await setup.app.collections.products.find(
+			{ where: { name: "Localized Match" } },
+			ctx,
+		);
+		expect(found.docs.length).toBe(1);
+		expect(found.totalDocs).toBe(1);
+		expect(found.docs[0].sku).toBe("loc-1");
+
+		const counted = await setup.app.collections.products.count(
+			{ where: { name: "Localized Match" } },
+			ctx,
+		);
+		expect(counted).toBe(1);
+
+		// Fallback locale: sk has no translation, falls back to en
+		const fallbackCount = await setup.app.collections.products.count(
+			{ where: { name: "Localized Match" } },
+			createTestContext({ locale: "sk" }),
+		);
+		expect(fallbackCount).toBe(1);
+	});
+
 	it("soft delete hides rows from find", async () => {
 		const ctx = createTestContext();
 
@@ -139,10 +175,7 @@ describe("collection CRUD", () => {
 			ctx,
 		);
 
-		await setup.app.collections.products.deleteById(
-			{ id: created.id },
-			ctx,
-		);
+		await setup.app.collections.products.deleteById({ id: created.id }, ctx);
 
 		const rows = await setup.app.collections.products.find({}, ctx);
 		expect(rows.docs.length).toBe(0);
@@ -194,10 +227,7 @@ describe("collection CRUD", () => {
 			ctx,
 		);
 
-		await setup.app.collections.products.deleteById(
-			{ id: created.id },
-			ctx,
-		);
+		await setup.app.collections.products.deleteById({ id: created.id }, ctx);
 
 		const versions = await setup.app.collections.products.findVersions(
 			{ id: created.id },
@@ -434,14 +464,13 @@ describe("collection CRUD", () => {
 	it("enforces configured workflow stage transitions", async () => {
 		const ctx = createTestContext({ accessMode: "system" });
 
-		const created =
-			await setup.app.collections.guarded_workflow_posts.create(
-				{
-					id: crypto.randomUUID(),
-					title: "Draft",
-				},
-				ctx,
-			);
+		const created = await setup.app.collections.guarded_workflow_posts.create(
+			{
+				id: crypto.randomUUID(),
+				title: "Draft",
+			},
+			ctx,
+		);
 
 		await expect(
 			setup.app.collections.guarded_workflow_posts.updateById(

@@ -151,14 +151,23 @@ const newPost = await collections.posts.create({
 	status: "draft",
 });
 
-// Update
-await collections.posts.update({
-	where: { id: "abc" },
+// Update by id (returns T, throws notFound)
+await collections.posts.updateById({
+	id: "abc",
 	data: { status: "published" },
 });
 
-// Delete
-await collections.posts.delete({ where: { id: "abc" } });
+// Bulk update by where (returns T[] — the rows actually written)
+await collections.posts.updateMany({
+	where: { status: "draft" },
+	data: { status: "archived" },
+});
+
+// Delete by id
+await collections.posts.deleteById({ id: "abc" });
+
+// Bulk delete by where (returns { success, count })
+await collections.posts.deleteMany({ where: { status: "archived" } });
 
 // Count
 const count = await collections.posts.count({ where: { status: "published" } });

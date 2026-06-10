@@ -186,7 +186,7 @@ async function cascadeDeleteHasMany(
 	else if (relation.onDelete === "set null") {
 		// Update related records to set FK to null
 		// We use updateMany which triggers hooks
-		await relatedCrud.update(
+		await relatedCrud.updateMany(
 			{
 				where: { [foreignKeyField]: { eq: record[primaryKeyField] } },
 				data: { [foreignKeyField]: null },

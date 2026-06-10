@@ -19,12 +19,10 @@ Custom actions can be added to collections with forms and handlers:
       label: { en: "Mark as Completed" },
       icon: c.icon("ph:check-circle"),
       handler: async ({ ids, collections }) => {
-        for (const id of ids) {
-          await collections.appointments.update({
-            where: { id },
-            data: { status: "completed" },
-          });
-        }
+        await collections.appointments.updateMany({
+          where: { id: { in: ids } },
+          data: { status: "completed" },
+        });
       },
     },
     {
@@ -40,16 +38,14 @@ Custom actions can be added to collections with forms and handlers:
         },
       },
       handler: async ({ ids, formData, collections }) => {
-        for (const id of ids) {
-          await collections.appointments.update({
-            where: { id },
-            data: {
-              status: "cancelled",
-              cancellationReason: formData.reason,
-              cancelledAt: new Date(),
-            },
-          });
-        }
+        await collections.appointments.updateMany({
+          where: { id: { in: ids } },
+          data: {
+            status: "cancelled",
+            cancellationReason: formData.reason,
+            cancelledAt: new Date(),
+          },
+        });
       },
     },
   ],
