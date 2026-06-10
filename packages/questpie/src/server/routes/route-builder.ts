@@ -221,16 +221,16 @@ export class RouteBuilder<
 	 * - If `.raw()` was called → `RawRouteDefinition`
 	 * - Otherwise → defaults to `RawRouteDefinition` with POST method
 	 */
-	handler(
+	handler<THandlerResult = any>(
 		handler: TMode extends RawMode
 			? (args: RawRouteHandlerArgs<TParams>) => Response | Promise<Response>
 			: TSchema extends HasSchema<infer TInput>
-				? (args: JsonRouteHandlerArgs<TInput, TParams>) => any
+				? (args: JsonRouteHandlerArgs<TInput, TParams>) => THandlerResult
 				: (args: RawRouteHandlerArgs<TParams>) => Response | Promise<Response>,
 	): TMode extends RawMode
 		? RawRouteDefinition<TParams>
 		: TSchema extends HasSchema<infer TInput>
-			? JsonRouteDefinition<TInput, any, TParams>
+			? JsonRouteDefinition<TInput, Awaited<THandlerResult>, TParams>
 			: RawRouteDefinition<TParams> {
 		const method = this._config.method ?? "POST";
 

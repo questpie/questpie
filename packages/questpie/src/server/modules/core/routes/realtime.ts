@@ -11,6 +11,6 @@ export default route()
 	.post()
 	.raw()
 	.handler(async ({ app, request }) => {
-		const routes = createRealtimeRoutes(app);
+		const routes = createRealtimeRoutes(app as any);
 		return routes.subscribe(request, {});
 	});

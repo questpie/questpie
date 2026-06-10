@@ -104,6 +104,16 @@ export type RouteParamsFromKey<TKey extends string> =
 		: RouteParamsFromSegment<TKey>;
 
 /**
+ * App instance type for route handler args.
+ *
+ * Resolves to the generated typed app once codegen augments AppContext with
+ * `app` (so `app.collections.*` etc. are fully typed in route handlers).
+ * Falls back to `any` pre-codegen (library/module compilation) — an `app: any`
+ * literal here would override the typed app from the AppContext intersection.
+ */
+type RouteApp = AppContext extends { app: infer TApp } ? TApp : any;
+
+/**
  * Context passed to JSON route handlers.
  */
 export type JsonRouteHandlerArgs<
@@ -119,7 +129,7 @@ export type JsonRouteHandlerArgs<
 	/** Current locale */
 	locale?: string;
 	/** App instance — for accessing collections, globals, auth, etc. */
-	app: any;
+	app: RouteApp;
 };
 
 /**
@@ -135,7 +145,7 @@ export type RawRouteHandlerArgs<
 	/** URL path parameters (if pattern-matched) */
 	params: TParams;
 	/** App instance — for accessing collections, globals, auth, etc. */
-	app: any;
+	app: RouteApp;
 };
 
 // ============================================================================

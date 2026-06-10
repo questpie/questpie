@@ -13,10 +13,12 @@
  * @see QUE-163 — Codegen Simplification
  */
 
+import { emitKeyRegistryAugmentation } from "./category-emit.js";
 import type {
 	BuilderFactory,
 	CallbackParamDefinition,
 	CategoryDeclaration,
+	DiscoveredFile,
 	RegistryExtension,
 	ResolvedTarget,
 	SingletonFactory,
@@ -37,6 +39,13 @@ export interface FactoryTemplateOptions {
 	 * When present, the default export is spread into _allFieldDefs.
 	 */
 	userFieldsImportPath?: string;
+	/**
+	 * Discovered category files — used to emit the names-only entity key
+	 * registry (Questpie.CollectionKeys/GlobalKeys/JobKeys). factories.ts is
+	 * the host because every collection file imports it, so the augmentation
+	 * is loaded wherever `relation()` & friends are used.
+	 */
+	discoveredCategories?: Map<string, Map<string, DiscoveredFile>>;
 }
 
 /**
@@ -47,7 +56,8 @@ export interface FactoryTemplateOptions {
 export function generateFactoryTemplate(
 	options: FactoryTemplateOptions,
 ): string {
-	const { target, hasModules, userFieldsImportPath } = options;
+	const { target, hasModules, userFieldsImportPath, discoveredCategories } =
+		options;
 
 	// Extract merged registries and callback params from the resolved target
 	const collExtensions = new Map<string, RegistryExtension>();
@@ -139,7 +149,7 @@ export function generateFactoryTemplate(
 	if (hasExtensions || hasFieldExtensions) {
 		const fieldImport = hasFieldExtensions ? ", Field" : "";
 		lines.push(
-			`import { CollectionBuilder, GlobalBuilder, wrapBuilderWithExtensions, builtinFields, type EmptyCollectionState, type EmptyGlobalState, type BuiltinFields, type CollectionBuilderState, type GlobalBuilderState, type FieldState${fieldImport} } from "questpie/builders";`,
+			`import { CollectionBuilder, GlobalBuilder, wrapBuilderWithExtensions, builtinFields, type EmptyCollectionState, type EmptyGlobalState, type BuiltinFields${fieldImport} } from "questpie/builders";`,
 		);
 	} else {
 		lines.push(
@@ -221,6 +231,11 @@ export function generateFactoryTemplate(
 	// to avoid circular references. Type information flows through augmentable
 	// interfaces (Questpie.ViewsRegistry, Questpie.ComponentsRegistry, Questpie.FieldTypesMap)
 	// which are populated by each module's codegen output independently.
+
+	// ── Entity key registry — names only, zero imports ─────────
+	if (discoveredCategories) {
+		emitKeyRegistryAugmentation(lines, discoveredCategories);
+	}
 
 	// Plugin imports (only types needed for signatures)
 	if (allImports.size > 0) {
@@ -321,19 +336,21 @@ export function generateFactoryTemplate(
 
 		const placeholderMap = buildPlaceholderMap(registryCategories);
 
-		// Builder interface augmentations — generated factories import builders from
-		// questpie/builders, so augment that public subpath instead of the root barrel.
+		// Builder interface augmentations — `declare module "questpie"` with
+		// UNCONSTRAINED `<TState>` params, matching the hand-written module
+		// augmentations (e.g. @questpie/admin's factories.ts). Augmenting a
+		// different specifier ("questpie/builders") or renaming/constraining
+		// the params makes TypeScript see mismatched type parameter lists for
+		// the merged class (TS2428) in workspace programs.
 		if (
 			collExtensions.size > 0 ||
 			globalExtensions.size > 0 ||
 			fieldExtensions.size > 0
 		) {
-			lines.push('declare module "questpie/builders" {');
+			lines.push('declare module "questpie" {');
 
 			if (collExtensions.size > 0) {
-				lines.push(
-					"\tinterface CollectionBuilder<TState$1 extends CollectionBuilderState> {",
-				);
+				lines.push("\tinterface CollectionBuilder<TState> {");
 				for (const [name, ext] of collExtensions) {
 					const paramName = ext.isCallback ? "configFn" : "config";
 					let paramType = ext.configType ?? "any";
@@ -342,18 +359,15 @@ export function generateFactoryTemplate(
 						hasModules,
 						placeholderMap,
 					);
-					paramType = paramType.replace(/\bTState\b/g, "TState$1");
 					lines.push(
-						`\t\t${name}(${paramName}: ${paramType}): CollectionBuilder<TState$1>;`,
+						`\t\t${name}(${paramName}: ${paramType}): CollectionBuilder<TState>;`,
 					);
 				}
 				lines.push("\t}");
 			}
 
 			if (globalExtensions.size > 0) {
-				lines.push(
-					"\tinterface GlobalBuilder<TState extends GlobalBuilderState> {",
-				);
+				lines.push("\tinterface GlobalBuilder<TState> {");
 				for (const [name, ext] of globalExtensions) {
 					const paramName = ext.isCallback ? "configFn" : "config";
 					let paramType = ext.configType ?? "any";
@@ -370,9 +384,7 @@ export function generateFactoryTemplate(
 			}
 
 			if (fieldExtensions.size > 0) {
-				lines.push(
-					"\tinterface Field<TState extends FieldState = FieldState> {",
-				);
+				lines.push("\tinterface Field<TState> {");
 				for (const [name, ext] of fieldExtensions) {
 					const paramName = ext.isCallback ? "configFn" : "config";
 					let paramType = ext.configType ?? "any";

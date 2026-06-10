@@ -44,11 +44,18 @@ import _comp_icon from "../components/icon";
 import _adminConfig from "../config/admin";
 import _plugin from "../plugin";
 
+// ── Entity key registry (names only — acyclic by construction) ─────
+declare global {
+	namespace Questpie {
+		interface CollectionKeys { account: unknown; admin_locks: unknown; admin_preferences: unknown; admin_saved_views: unknown; apikey: unknown; assets: unknown; session: unknown; user: unknown; verification: unknown }
+	}
+}
+
 // ════════════════════════════════════════════════════════════
 // TYPES — composed from typeof references (zero inference cost)
 // ════════════════════════════════════════════════════════════
 
-import type { RouteParamsFromKey, RouteWithParams } from "questpie";
+import type { RouteDefinition, RouteParamsFromKey } from "questpie/types";
 
 export interface AdminCollections {
 	account: typeof _coll_account;
@@ -62,7 +69,7 @@ export interface AdminCollections {
 	verification: typeof _coll_verification;
 }
 
-export type AdminRoutes = { i18nHelpers: RouteWithParams<typeof _route_i18nHelpers, RouteParamsFromKey<"i18nHelpers">>; routeHelpers: RouteWithParams<typeof _route_routeHelpers, RouteParamsFromKey<"routeHelpers">> } & typeof _route_adminConfig & typeof _route_executeAction & typeof _route_locales & typeof _route_preview & typeof _route_reactive & typeof _route_setup & typeof _route_translations & typeof _route_widgetData;
+export type AdminRoutes = { i18nHelpers: typeof _route_i18nHelpers extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"i18nHelpers">> : typeof _route_i18nHelpers; routeHelpers: typeof _route_routeHelpers extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"routeHelpers">> : typeof _route_routeHelpers } & typeof _route_adminConfig & typeof _route_executeAction & typeof _route_locales & typeof _route_preview & typeof _route_reactive & typeof _route_setup & typeof _route_translations & typeof _route_widgetData;
 
 export interface AdminViews {
 	collectionForm: typeof _view_collectionForm;
@@ -80,7 +87,29 @@ export interface AdminComponents {
 // MODULE DEFINITION — static plain object
 // ════════════════════════════════════════════════════════════
 
-const _module = {
+export type AdminModule = {
+	name: "questpie-admin";
+	modules: typeof _modules;
+	collections: AdminCollections;
+	routes: AdminRoutes;
+	views: AdminViews;
+	components: AdminComponents;
+	globals: {};
+	jobs: {};
+	messages: {};
+	services: {};
+	emails: {};
+	migrations: readonly unknown[];
+	seeds: readonly unknown[];
+	fieldTypes: {};
+	blocks: {};
+	config: {
+		admin: typeof _adminConfig;
+	};
+	plugin: typeof _plugin;
+};
+
+const _module: AdminModule = {
 	name: "questpie-admin" as const,
 	modules: _modules,
 	collections: {
@@ -131,5 +160,4 @@ const _module = {
 	plugin: _plugin,
 };
 
-export type AdminModule = typeof _module;
 export default _module;

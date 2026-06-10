@@ -11,6 +11,6 @@ export default route()
 	.get()
 	.raw()
 	.handler(async ({ app, request, params }) => {
-		const routes = createGlobalRoutes(app);
+		const routes = createGlobalRoutes(app as any);
 		return routes.schema(request, { global: params.name });
 	});

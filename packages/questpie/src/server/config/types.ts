@@ -1,5 +1,6 @@
 import type { CollectionBuilder } from "#questpie/server/collection/builder/collection-builder.js";
 import type { Collection } from "#questpie/server/collection/builder/collection.js";
+import type { AppContext } from "#questpie/server/config/app-context.js";
 import type {
 	CollectionAccess,
 	ExtractFieldsByLocation,
@@ -671,6 +672,11 @@ export type GetMessageKeys<T extends QuestpieConfig> =
 			: never
 		: never;
 
+/**
+ * @deprecated The `[key: string]: any` index signature is a type-lie.
+ * Context extensions are inferred from the app config resolver instead —
+ * see `InferContextExtensionsFromAppConfig` in `questpie/types`.
+ */
 export interface ContextExtensions {
 	// To be extended by plugins or user config
 	[key: string]: any;
@@ -682,14 +688,20 @@ export interface ContextExtensions {
 
 /**
  * Parameters passed to the context resolver function.
+ *
+ * `session` and `db` resolve lazily off the generated AppContext augmentation,
+ * so resolvers are fully typed once codegen ran. Pre-codegen (library/module
+ * compilation) they degrade to the loose fallback shapes.
  */
 export interface ContextResolverParams {
 	/** The incoming HTTP request */
 	request: Request;
 	/** The resolved session (may be null if unauthenticated) */
-	session: { user: any; session: any } | null | undefined;
+	session: AppContext extends { session: infer S }
+		? S
+		: { user: any; session: any } | null | undefined;
 	/** Database client for queries */
-	db: any;
+	db: AppContext extends { db: infer D } ? D : any;
 }
 
 /**

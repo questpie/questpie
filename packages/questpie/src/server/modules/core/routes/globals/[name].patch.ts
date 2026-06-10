@@ -11,6 +11,6 @@ export default route()
 	.patch()
 	.raw()
 	.handler(async ({ app, request, params }) => {
-		const routes = createGlobalRoutes(app);
+		const routes = createGlobalRoutes(app as any);
 		return routes.update(request, { global: params.name });
 	});

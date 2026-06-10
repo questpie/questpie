@@ -31,7 +31,7 @@ export default route()
 		};
 
 		return storageCollectionServe(
-			ctx.app,
+			ctx.app as any,
 			ctx.request,
 			{
 				collection: ctx.params.collection,

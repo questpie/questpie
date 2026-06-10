@@ -319,7 +319,7 @@ describe("generateTemplate — minimal (modules.ts only)", () => {
 });
 
 describe("generateFactoryTemplate — builder module augmentation", () => {
-	it("augments questpie/builders with matching builder state constraints", () => {
+	it("augments questpie with unconstrained TState params (class-merge safe)", () => {
 		const target = serverTarget([
 			{
 				name: "test-builder-extensions",
@@ -375,23 +375,20 @@ describe("generateFactoryTemplate — builder module augmentation", () => {
 			hasModules: true,
 		});
 
-		expect(code).toContain('declare module "questpie/builders" {');
-		expect(code).not.toContain('declare module "questpie" {');
-		expect(code).toContain("type CollectionBuilderState");
-		expect(code).toContain("type GlobalBuilderState");
-		expect(code).toContain("type FieldState");
+		// `declare module "questpie"` with unconstrained `<TState>` is the ONLY
+		// shape that declaration-merges cleanly with the builder classes in
+		// workspace programs (renamed `TState$1` or constrained params hit
+		// TS2428; the "questpie/builders" specifier fails to merge in some
+		// programs). Must match @questpie/admin's hand-written augmentation.
+		expect(code).toContain('declare module "questpie" {');
+		expect(code).not.toContain('declare module "questpie/builders" {');
+		expect(code).not.toContain("TState$1");
+		expect(code).toContain("interface CollectionBuilder<TState> {");
 		expect(code).toContain(
-			"interface CollectionBuilder<TState$1 extends CollectionBuilderState>",
+			"admin(config: AdminCollectionConfig<TState>): CollectionBuilder<TState>;",
 		);
-		expect(code).toContain(
-			"admin(config: AdminCollectionConfig<TState$1>): CollectionBuilder<TState$1>;",
-		);
-		expect(code).toContain(
-			"interface GlobalBuilder<TState extends GlobalBuilderState>",
-		);
-		expect(code).toContain(
-			"interface Field<TState extends FieldState = FieldState>",
-		);
+		expect(code).toContain("interface GlobalBuilder<TState> {");
+		expect(code).toContain("interface Field<TState> {");
 	});
 });
 

@@ -3,11 +3,14 @@ export type { AppContextBase } from "#questpie/server/config/app-context-base.js
 export type {
 	AppContext,
 	KnownBlockNames,
+	KnownCollectionKey,
 	KnownCollectionNames,
 	KnownComponentNames,
 	KnownEmailNames,
 	KnownFormViewNames,
+	KnownGlobalKey,
 	KnownGlobalNames,
+	KnownJobKey,
 	KnownJobNames,
 	KnownListViewNames,
 	KnownRouteNames,
@@ -16,6 +19,23 @@ export type {
 	Registry,
 	RegistryNames,
 } from "#questpie/server/config/app-context.js";
+export type {
+	AccessContext,
+	AccessRule,
+	AccessWhere,
+	CollectionAccess,
+	FieldAccess,
+	FieldAccessRule,
+	FieldAccessRuleContext,
+	HookContext,
+	RowAccessRule,
+} from "#questpie/server/collection/builder/types.js";
+export type {
+	GlobalAccess,
+	GlobalAccessContext,
+	GlobalAccessRule,
+	GlobalHookContext,
+} from "#questpie/server/global/builder/types.js";
 export { extractAppServices } from "#questpie/server/config/app-context.js";
 export type {
 	RequestContext,
@@ -117,6 +137,9 @@ export type {
 } from "#questpie/shared/type-utils.js";
 export type { CollectionAPI } from "#questpie/server/config/integrated/questpie-api.js";
 export type {
+	InferRouteInput,
+	InferRouteOutput,
+	InferRouteParams,
 	JsonRouteHandlerArgs,
 	RawRouteHandlerArgs,
 	RouteDefinition,

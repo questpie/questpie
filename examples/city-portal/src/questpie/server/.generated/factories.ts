@@ -32,8 +32,16 @@ const _allFieldDefs = Object.fromEntries(
 	Object.entries(_rawFieldDefs).map(([k, v]) => [k, _wrapFieldFactory(v)])
 ) as unknown as typeof _rawFieldDefs;
 
+// ── Entity key registry (names only — acyclic by construction) ─────
+declare global {
+	namespace Questpie {
+		interface CollectionKeys { announcements: unknown; cities: unknown; cityMembers: unknown; contacts: unknown; documents: unknown; news: unknown; pages: unknown; submissions: unknown }
+		interface GlobalKeys { site_settings: unknown }
+	}
+}
+
 // ── Plugin Imports ─────────────────────────────────────────
-import { type AdminCollectionConfig, type AdminConfigContext, type ListViewConfig, type ListViewConfigContext, type FilterViewsByKind, type FormViewConfig, type FormViewConfigContext, type PreviewConfig, type ServerActionsConfig, type ActionsConfigContext, type AdminGlobalConfig, type AdminConfigInput, createViewCallbackProxy, createComponentCallbackProxy, createActionCallbackProxy } from "@questpie/admin/factories";
+import { type AdminCollectionConfig, type AdminConfigContext, type ListViewConfig, type ListViewConfigContext, type FilterViewsByKind, type FormViewConfig, type FormViewConfigContext, type PreviewConfig, type ServerActionsConfig, type ActionsConfigContext, type AdminGlobalConfig, type AdminConfigInput, createViewCallbackProxy, createComponentCallbackProxy, createActionCallbackProxy, createActionFieldBuilderProxy } from "@questpie/admin/factories";
 import { type AppConfigInput, type AuthConfig } from "questpie/types";
 import { type OpenApiModuleConfig } from "@questpie/openapi";
 import { createFieldNameProxy } from "questpie/builders";
@@ -114,7 +122,7 @@ const _collExt: Record<string, { stateKey: string; resolve: (value: unknown) => 
 	actions: {
 		stateKey: "adminActions",
 		resolve(configOrFn: unknown) {
-			if (typeof configOrFn === 'function') return configOrFn({ a: createActionCallbackProxy(), c: createComponentCallbackProxy(), f: createFieldNameProxy() });
+			if (typeof configOrFn === 'function') return configOrFn({ a: createActionCallbackProxy(), c: createComponentCallbackProxy(), f: createActionFieldBuilderProxy() });
 			return configOrFn;
 		},
 	},

@@ -96,7 +96,7 @@ export function generateTemplate(options: TemplateOptions): string {
 	// Import createApp + types
 	lines.push('import { createApp, createContextFactory } from "questpie/app";');
 	lines.push(
-		'import type { AnyCollectionOrBuilder, AnyGlobalOrBuilder, AppDefinition, CollectionAPI, CollectionSelect, DrizzleClientFromQuestpieConfig, InferContextExtensionsFromAppConfig, InferSessionFromAuthConfig, MailerService, Questpie, QuestpieConfig, QueueClient, QueueJobType, RouteParamsFromKey, RouteWithParams, TablesFromConfig, z } from "questpie/types";',
+		'import type { AccessContext, AnyCollectionOrBuilder, AnyGlobalOrBuilder, AppDefinition, CollectionAPI, CollectionSelect, DrizzleClientFromQuestpieConfig, GlobalSelect, HookContext, InferContextExtensionsFromAppConfig, InferSessionFromAuthConfig, MailerService, Questpie, QuestpieConfig, QueueClient, QueueJobType, RouteParamsFromKey, RouteWithParams, TablesFromConfig, z } from "questpie/types";',
 	);
 	lines.push("");
 
@@ -513,8 +513,34 @@ export function generateTemplate(options: TemplateOptions): string {
 		lines.push(
 			"type _CollectionsAPI = { [K in keyof AppCollections]: CollectionAPI<AppCollections[K], AppCollections> };",
 		);
-		lines.push("type _JobHandlerCollections = AppCollections;");
-		lines.push("type _JobHandlerCollectionsAPI = _CollectionsAPI;");
+		// Job/workflow contexts get an EXPLICIT per-collection map (user files
+		// only) instead of aliasing AppCollections/_CollectionsAPI. The aliases
+		// resolve through _ModuleCollections (typeof _modules) inside the
+		// JobHandlerContext ↔ typeof-job-file cycle and silently degrade
+		// (collections lose their keys in the defining job files).
+		const localCollections = sortedValues(
+			discovered.categories.get("collections") ?? new Map(),
+		).filter((file) => !file.isBundle);
+		if (localCollections.length > 0) {
+			const collectionsDecl = allDecls.get("collections");
+			lines.push("type _JobHandlerCollections = {");
+			for (const file of localCollections) {
+				lines.push(
+					`\t${categoryTypeEntry(file, collectionsDecl, "collections")};`,
+				);
+			}
+			lines.push("};");
+			lines.push("type _JobHandlerCollectionsAPI = {");
+			for (const file of localCollections) {
+				lines.push(
+					`\t${safeKey(file.key)}: CollectionAPI<typeof ${file.varName}, _JobHandlerCollections>;`,
+				);
+			}
+			lines.push("};");
+		} else {
+			lines.push("type _JobHandlerCollections = {};");
+			lines.push("type _JobHandlerCollectionsAPI = {};");
+		}
 		const localJobs = sortedValues(
 			discovered.categories.get("jobs") ?? new Map(),
 		).filter((file) => !file.isBundle);
@@ -583,6 +609,7 @@ export function generateTemplate(options: TemplateOptions): string {
 		);
 		lines.push("type _AppCoreContext = _AppContextExtensions & {");
 		lines.push("\t// Infrastructure");
+		lines.push("\tapp: _AppQuestpie;");
 		lines.push("\tdb: _AppDb;");
 		if (hasEmails) {
 			lines.push(`\temail: MailerService<${emailsTypeName}>;`);
@@ -632,26 +659,26 @@ export function generateTemplate(options: TemplateOptions): string {
 		const emitNonRecursiveContext = (name: string) => {
 			lines.push(`\t\tinterface ${name} {`);
 			lines.push("\t\t\t// Infrastructure");
-			lines.push("\t\t\tdb: unknown;");
+			lines.push("\t\t\tdb: _AppDb;");
 			if (hasEmails) {
 				lines.push(`\t\t\temail: MailerService<${emailsTypeName}>;`);
 			} else {
-				lines.push("\t\t\temail: unknown;");
+				lines.push('\t\t\temail: _AppQuestpie["email"];');
 			}
 			lines.push("\t\t\tqueue: QueueClient<_ExecutionContextJobs>;");
 			lines.push("\t\t\tstorage: _AppStorage;");
-			lines.push("\t\t\tkv: unknown;");
-			lines.push("\t\t\tlogger: unknown;");
-			lines.push("\t\t\tsearch: unknown;");
-			lines.push("\t\t\trealtime: unknown;");
+			lines.push('\t\t\tkv: _AppQuestpie["kv"];');
+			lines.push('\t\t\tlogger: _AppQuestpie["logger"];');
+			lines.push('\t\t\tsearch: _AppQuestpie["search"];');
+			lines.push('\t\t\trealtime: _AppQuestpie["realtime"];');
 			lines.push("");
 			lines.push("\t\t\t// Entity APIs");
 			lines.push("\t\t\tcollections: _JobHandlerCollectionsAPI;");
 			lines.push("\t\t\tglobals: Record<string, unknown>;");
-			lines.push("\t\t\ttables: Record<string, unknown>;");
+			lines.push("\t\t\ttables: _AppTables;");
 			lines.push("");
 			lines.push("\t\t\t// Request-scoped");
-			lines.push("\t\t\tsession: unknown;");
+			lines.push("\t\t\tsession: _AppSession;");
 			if (hasMessages) {
 				lines.push(
 					"\t\t\tt: (key: AppMessageKeys | (string & {}), params?: Record<string, unknown>, locale?: string) => string;",
@@ -735,6 +762,58 @@ export function generateTemplate(options: TemplateOptions): string {
 	lines.push(" */");
 	lines.push(
 		"export type CollectionDoc<K extends keyof AppCollections> = CollectionSelect<AppCollections[K]>;",
+	);
+	lines.push("");
+	lines.push("/**");
+	lines.push(" * Select/document type for a global key.");
+	lines.push(" */");
+	lines.push(
+		"export type GlobalDoc<K extends keyof AppGlobals> = GlobalSelect<AppGlobals[K]>;",
+	);
+	lines.push("");
+	lines.push(
+		"/** Resolved auth session for this app (`{ user, session } | null`). */",
+	);
+	lines.push("export type AppSession = _AppSession;");
+	lines.push("");
+	lines.push("/** Authenticated user shape from the app session. */");
+	lines.push(
+		'export type AppSessionUser = NonNullable<_AppSession>["user"];',
+	);
+	lines.push("");
+	lines.push("/**");
+	lines.push(
+		" * Access-rule ctx for shared helpers. `K` narrows `data` to that collection's row.",
+	);
+	lines.push(" *");
+	lines.push(" * @example");
+	lines.push(" * ```ts");
+	lines.push(
+		' * export async function isOwner(ctx: AccessRuleContext<"posts">) {',
+	);
+	lines.push(
+		" *   return ctx.data?.authorId === ctx.session?.user.id; // ctx.app, ctx.collections typed",
+	);
+	lines.push(" * }");
+	lines.push(" * ```");
+	lines.push(" */");
+	lines.push(
+		"export type AccessRuleContext<K extends keyof AppCollections | unknown = unknown> =",
+	);
+	lines.push(
+		"\tAccessContext<K extends keyof AppCollections ? CollectionDoc<K> : unknown>;",
+	);
+	lines.push("");
+	lines.push("/**");
+	lines.push(
+		" * Hook ctx for shared helpers. `K` narrows `data` to that collection's row.",
+	);
+	lines.push(" */");
+	lines.push(
+		"export type HookRuleContext<K extends keyof AppCollections | unknown = unknown> =",
+	);
+	lines.push(
+		"\tHookContext<K extends keyof AppCollections ? CollectionDoc<K> : unknown>;",
 	);
 	lines.push("");
 

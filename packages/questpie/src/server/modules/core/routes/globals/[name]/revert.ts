@@ -11,6 +11,6 @@ export default route()
 	.post()
 	.raw()
 	.handler(async ({ app, request, params }) => {
-		const routes = createGlobalRoutes(app);
+		const routes = createGlobalRoutes(app as any);
 		return routes.revert(request, { global: params.name });
 	});

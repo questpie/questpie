@@ -7,6 +7,13 @@ import { locksCollection as _coll_admin_locks } from "../collections/locks.colle
 import { adminPreferencesCollection as _coll_admin_preferences } from "../collections/admin-preferences";
 import { savedViewsCollection as _coll_admin_saved_views } from "../collections/saved-views";
 
+// ── Entity key registry (names only — acyclic by construction) ─────
+declare global {
+	namespace Questpie {
+		interface CollectionKeys { admin_locks: unknown; admin_preferences: unknown; admin_saved_views: unknown }
+	}
+}
+
 // ════════════════════════════════════════════════════════════
 // TYPES — composed from typeof references (zero inference cost)
 // ════════════════════════════════════════════════════════════
@@ -21,7 +28,24 @@ export interface AdminPreferencesCollections {
 // MODULE DEFINITION — static plain object
 // ════════════════════════════════════════════════════════════
 
-const _module = {
+export type AdminPreferencesModule = {
+	name: "questpie-admin-preferences";
+	collections: AdminPreferencesCollections;
+	globals: {};
+	jobs: {};
+	routes: {};
+	messages: {};
+	services: {};
+	emails: {};
+	migrations: readonly unknown[];
+	seeds: readonly unknown[];
+	fieldTypes: {};
+	views: {};
+	components: {};
+	blocks: {};
+};
+
+const _module: AdminPreferencesModule = {
 	name: "questpie-admin-preferences" as const,
 	collections: {
 		admin_locks: _coll_admin_locks,
@@ -42,5 +66,4 @@ const _module = {
 	blocks: {},
 };
 
-export type AdminPreferencesModule = typeof _module;
 export default _module;

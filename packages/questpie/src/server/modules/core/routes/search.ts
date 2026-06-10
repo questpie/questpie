@@ -11,6 +11,6 @@ export default route()
 	.post()
 	.raw()
 	.handler(async ({ app, request }) => {
-		const routes = createSearchRoutes(app);
+		const routes = createSearchRoutes(app as any);
 		return routes.search(request, {} as Record<string, never>);
 	});

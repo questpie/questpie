@@ -635,13 +635,19 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 	 *   .fields(({ f }) => ({ ... }))
 	 *   .access({
 	 *     read: true,
-	 *     create: ({ user }) => user?.role === "admin",
-	 *     update: ({ user, id }) => user?.id === id,
-	 *     delete: ({ user }) => user?.role === "admin",
+	 *     create: ({ session }) => session?.user.role === "admin",
+	 *     update: ({ session, data }) => session?.user.id === data.authorId,
+	 *     delete: ({ session }) => session?.user.role === "admin",
 	 *   })
 	 * ```
 	 */
-	access<TNewAccess extends CollectionAccess<CollectionSelect<TState>>>(
+	access<
+		TNewAccess extends CollectionAccess<
+			CollectionSelect<TState>,
+			CollectionInsert<TState>,
+			CollectionUpdate<TState>
+		>,
+	>(
 		access: TNewAccess,
 	): CollectionBuilder<Override<TState, { access: CollectionAccessStorage }>> {
 		const newState = {

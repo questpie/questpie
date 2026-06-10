@@ -11,6 +11,6 @@ export default route()
 	.post()
 	.raw()
 	.handler(async ({ app, request, params }) => {
-		const routes = createCollectionRoutes(app);
+		const routes = createCollectionRoutes(app as any);
 		return routes.create(request, { collection: params.collection });
 	});

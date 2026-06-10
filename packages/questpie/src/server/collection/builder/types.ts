@@ -13,10 +13,7 @@ import type { ValidationSchemas } from "#questpie/server/collection/builder/vali
 import type { AppContext } from "#questpie/server/config/app-context.js";
 import type { AccessMode } from "#questpie/server/config/types.js";
 import type { FieldState } from "#questpie/server/fields/field-class-types.js";
-import type {
-	FieldAccess as FieldDefinitionAccess,
-	FieldLocation,
-} from "#questpie/server/fields/types.js";
+import type { FieldLocation } from "#questpie/server/fields/types.js";
 import type { SearchableConfig } from "#questpie/server/modules/core/integrated/search/types.js";
 
 /**
@@ -414,23 +411,29 @@ export type HookContext<
 /**
  * Access control context for collection operations.
  *
- * @template TData - The record data type
+ * Prefer the generated `AccessRuleContext<K>` alias (from `#questpie`) in
+ * shared helper files — it narrows `data` to a collection's row type and
+ * resolves `ctx.app`/`ctx.collections`/`ctx.session` through the generated
+ * AppContext augmentation.
+ *
+ * @template TData - The record data type (update/delete: the existing row)
+ * @template TInput - The input data type (create: raw input, update: patch)
  *
  * @example
  * ```ts
  * .access({
- *   read: ({ session, data }) => {
- *     // session is typed via generated AppContext
+ *   update: ({ session, data }) => {
+ *     // session is typed via generated AppContext, data is the existing row
  *     return data.userId === session?.user.id || session?.user.role === 'admin'
  *   }
  * })
  * ```
  */
-export type AccessContext<TData = any> = AppContext & {
-	/** The record being accessed (for read/update/delete) */
+export type AccessContext<TData = any, TInput = unknown> = AppContext & {
+	/** The record being accessed (update/delete: always loaded; read/create: not available) */
 	data?: TData;
-	/** Input data (for create/update) */
-	input?: unknown;
+	/** Input data (create: raw input pre-validation; update: the patch) */
+	input?: TInput;
 	/** Current locale */
 	locale?: string;
 	/**
@@ -812,47 +815,100 @@ export type AccessWhere<TFields = any> =
  * - boolean: true (allow all) or false (deny all)
  * - AccessWhere: query conditions to filter results (TYPE-SAFE!)
  */
-export type AccessRule<TRow = any, TFields = any> =
+export type AccessRule<TRow = any, TFields = any, TInput = unknown> =
 	| boolean
 	| ((
-			ctx: AccessContext<TRow>,
+			ctx: AccessContext<TRow, TInput>,
 	  ) =>
 			| boolean
 			| AccessWhere<TFields>
 			| Promise<boolean | AccessWhere<TFields>>);
 
 /**
+ * Access rule for operations where the existing row is always loaded before
+ * the rule runs (update / delete / transition) — `ctx.data` is non-optional.
+ */
+export type RowAccessRule<TRow = any, TFields = any, TInput = unknown> =
+	| boolean
+	| ((
+			ctx: AccessContext<TRow, TInput> & { data: TRow },
+	  ) =>
+			| boolean
+			| AccessWhere<TFields>
+			| Promise<boolean | AccessWhere<TFields>>);
+
+/**
+ * Context for collection-level field access rules (`.access({ fields })`).
+ *
+ * Matches the runtime shape — field rules receive a slim context, NOT the
+ * full AppContext. `user` is typed via the generated session once codegen
+ * has augmented AppContext.
+ */
+export type FieldAccessRuleContext<TRow = any> = {
+	/** Incoming HTTP request (when invoked via an HTTP adapter) */
+	req?: Request;
+	/** Authenticated user — typed via the generated AppContext session */
+	user?: AppContext extends { session: infer S }
+		? NonNullable<S> extends { user: infer U }
+			? U
+			: unknown
+		: unknown;
+	/** The document being accessed (read/update/delete: the row; create: undefined) */
+	doc?: TRow;
+	/** Operation being performed */
+	operation: "create" | "read" | "update" | "delete";
+};
+
+/**
+ * Field-level access rule — boolean or predicate over the slim field context.
+ * Field rules only allow/deny (no AccessWhere filtering).
+ */
+export type FieldAccessRule<TRow = any> =
+	| boolean
+	| ((ctx: FieldAccessRuleContext<TRow>) => boolean | Promise<boolean>);
+
+/**
  * Field-level access control
  */
 export interface FieldAccess<TRow = any> {
-	read?: AccessRule<TRow>;
-	create?: AccessRule<TRow>;
-	update?: AccessRule<TRow>;
+	read?: FieldAccessRule<TRow>;
+	create?: FieldAccessRule<TRow>;
+	update?: FieldAccessRule<TRow>;
 }
 
 /**
- * Collection access control configuration
+ * Collection access control configuration.
+ *
+ * Per-operation contexts (mirrors what the CRUD layer passes at runtime):
+ * - `read` — `data` is never loaded (return `AccessWhere` to filter rows)
+ * - `create` — `input` is the raw input (pre-validation); no row exists yet
+ * - `update` — `data` is the existing row, `input` is the patch
+ * - `delete`/`transition` — `data` is the existing row
  */
-export interface CollectionAccess<TRow = any> {
+export interface CollectionAccess<TSelect = any, TInsert = any, TUpdate = any> {
 	// Operation-level access
 	// Can return boolean OR where conditions to filter results
-	read?: AccessRule<TRow>;
-	create?: AccessRule<TRow>;
-	update?: AccessRule<TRow>;
-	delete?: AccessRule<TRow>;
+	read?: AccessRule<TSelect, TSelect>;
+	create?: AccessRule<undefined, TSelect, TInsert>;
+	update?: RowAccessRule<TSelect, TSelect, TUpdate>;
+	delete?: RowAccessRule<TSelect, TSelect>;
 	/**
 	 * Access rule for workflow stage transitions.
 	 * Falls back to `update` if not specified.
 	 */
-	transition?: AccessRule<TRow>;
+	transition?: RowAccessRule<TSelect, TSelect>;
 
 	/**
 	 * Field-scoped access rules.
 	 *
 	 * This is the source-of-truth for per-field authorization.
 	 * Field-level access in field config is deprecated and removed from runtime.
+	 *
+	 * Single typed shape (no union with the field-definition-level FieldAccess)
+	 * so inline rules get a contextually typed ctx — the weak field-definition
+	 * shape stays assignable structurally.
 	 */
-	fields?: Record<string, FieldDefinitionAccess | FieldAccess<TRow>>;
+	fields?: Record<string, FieldAccess<TSelect>>;
 }
 
 // ============================================================================

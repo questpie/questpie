@@ -11,7 +11,7 @@ export default route()
 	.get()
 	.raw()
 	.handler(async ({ app, request, params }) => {
-		const routes = createCollectionRoutes(app);
+		const routes = createCollectionRoutes(app as any);
 		return routes.findOne(request, {
 			collection: params.collection,
 			id: params.id,

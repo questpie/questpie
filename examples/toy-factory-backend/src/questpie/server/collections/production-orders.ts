@@ -90,6 +90,17 @@ export const productionOrders = collection("productionOrders")
 			],
 		}),
 	)
+	.access({
+		read: true,
+		create: true,
+		// Cycle-regression fixture: this rule's helper lives in a file imported
+		// BY this collection and uses the package-level AccessContext — must
+		// typecheck without TS2456 (see lib/access.ts header).
+		update: async (ctx) => {
+			return !!ctx.data;
+		},
+		delete: true,
+	})
 	.hooks({
 		afterChange: async ({ data, operation, queue }) => {
 			if (operation !== "create") return;
