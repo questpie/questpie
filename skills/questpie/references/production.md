@@ -507,16 +507,17 @@ CMD ["bun", "run", ".output/server/index.mjs"]
 
 ```ts
 // routes/health.ts
+import { sql } from "questpie/drizzle";
 import { route } from "questpie/services";
-export default route({
-	method: "GET",
-	handler: async ({ db }) => {
+
+export default route()
+	.get()
+	.raw()
+	.access(true)
+	.handler(async ({ db }) => {
 		await db.execute(sql`SELECT 1`);
-		return new Response(JSON.stringify({ status: "ok" }), {
-			headers: { "Content-Type": "application/json" },
-		});
-	},
-});
+		return Response.json({ status: "ok" });
+	});
 ```
 
 ## Common Mistakes

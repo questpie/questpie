@@ -186,6 +186,31 @@ Publish from hooks, routes, or other jobs via the typed `queue` context:
 
 The `queue` object provides full autocompletion for all jobs and their payloads.
 
+### Recurring Jobs (Cron)
+
+Jobs accept a job-level cron expression in `options.cron`. Schedules are registered automatically when the queue worker starts (`app.queue.listen()` calls `registerSchedules()`):
+
+```ts
+// jobs/cleanup-expired.ts
+import { job } from "questpie/services";
+import z from "zod";
+
+export default job({
+	name: "cleanupExpired",
+	schema: z.object({}),
+	options: { cron: "0 3 * * *" }, // every day at 03:00
+	handler: async ({ collections }) => {
+		await collections.sessions.deleteMany({
+			where: { expiresAt: { lt: new Date() } },
+		});
+	},
+});
+```
+
+Programmatic scheduling from any handler: `queue.cleanupExpired.schedule({}, "0 3 * * *")` and `queue.cleanupExpired.unschedule()`.
+
+Use job-level cron for simple recurring tasks (cleanup, digests, syncs). Reach for **workflow-level cron** (`references/workflows.md`) only when the recurring process needs steps, durable waits, or replay — a workflow is the heavier primitive.
+
 ### Job Handler Context
 
 | Property      | Description                            |
@@ -214,25 +239,28 @@ export default runtimeConfig({
 });
 ```
 
-## Routes
+## Raw Routes
 
-Routes give raw HTTP request/response handling for webhooks, OAuth callbacks, health checks, file downloads, and streaming.
+Raw routes (`route().raw()`) give raw HTTP request/response handling for webhooks, OAuth callbacks, health checks, file downloads, and streaming. The handler receives the standard `Request` and must return a `Response`.
 
-### Defining a Route
+### Defining a Raw Route
 
 ```ts
 // routes/health.ts
+import { sql } from "questpie/drizzle";
 import { route } from "questpie/services";
-export default route({
-	method: "GET",
-	handler: async ({ db }) => {
+
+export default route()
+	.get()
+	.raw()
+	.access(true)
+	.handler(async ({ db }) => {
 		const healthy = await db
 			.execute(sql`SELECT 1`)
 			.then(() => true)
 			.catch(() => false);
 		return Response.json({ status: healthy ? "ok" : "degraded" });
-	},
-});
+	});
 ```
 
 Place files in `routes/`. The file path maps to a flat URL under your `basePath` (`/api` by default):
@@ -247,13 +275,14 @@ routes/
 
 ### Route Methods
 
+Chain HTTP method calls on the builder (multiple methods = multiple calls):
+
 ```ts
-route({ method: "POST", handler: ... })           // Single method
-route({ method: ["GET", "POST"], handler: ... })   // Multiple methods
-route({ handler: ... })                            // All methods (default)
+route().post().raw().handler(...)          // POST only
+route().get().post().raw().handler(...)    // GET + POST
 ```
 
-Supported: `GET`, `POST`, `PUT`, `DELETE`, `PATCH`, `HEAD`, `OPTIONS`.
+Supported: `.get()`, `.post()`, `.put()`, `.delete()`, `.patch()`. The built-in `/auth/*` catch-all is itself a raw route (`route().get().post().raw()` delegating to Better Auth) — raw handlers run inside `runWithContext`, so the full request context is live in any code they call.
 
 ### Route Handler Context
 
@@ -284,26 +313,66 @@ Route handlers must return a `Response` object.
 
 **Rule of thumb**: Use JSON routes for typed input/output with automatic validation. Use raw routes for HTTP-level control (custom headers, binary data, streams, signature verification).
 
-### Webhook Example
+### Webhook Example (Signature Verification)
+
+Webhooks need the raw body for signature verification — exactly what `.raw()` is for:
 
 ```ts
 // routes/webhooks/stripe.ts
 import { route } from "questpie/services";
-export default route({
-	method: "POST",
-	handler: async ({ request, db }) => {
+
+export default route()
+	.post()
+	.raw()
+	.access(true) // signature IS the auth — verify it yourself below
+	.handler(async ({ request, collections, queue }) => {
 		const body = await request.text();
 		const signature = request.headers.get("stripe-signature");
-		const event = verifyStripeWebhook(body, signature);
+		const event = verifyStripeWebhook(body, signature); // throws on bad signature
+		if (!event) return new Response("Invalid signature", { status: 401 });
 
-		await db.insert(webhookEvents).values({
+		await collections.webhook_events.create({
 			type: event.type,
 			payload: body,
 		});
+		await queue.processStripeEvent.publish({ eventId: event.id });
 
 		return new Response("OK", { status: 200 });
-	},
-});
+	});
+```
+
+### Streamed Response Example
+
+Raw routes can return any `Response`, including streams — CSV exports, server-sent progress, large file proxies:
+
+```ts
+// routes/export.ts
+import { route } from "questpie/services";
+
+export default route()
+	.get()
+	.raw()
+	.access(({ session }) => !!session)
+	.handler(async ({ collections }) => {
+		const { docs } = await collections.orders.find({ limit: 10_000 });
+
+		const stream = new ReadableStream({
+			start(controller) {
+				controller.enqueue("id,total,createdAt\n");
+				for (const order of docs) {
+					controller.enqueue(`${order.id},${order.total},${order.createdAt.toISOString()}\n`);
+				}
+				controller.close();
+			},
+		});
+
+		return new Response(stream, {
+			headers: {
+				"Content-Type": "text/csv; charset=utf-8",
+				"Content-Disposition": 'attachment; filename="orders.csv"',
+			},
+		});
+	});
 ```
 
 ## Services

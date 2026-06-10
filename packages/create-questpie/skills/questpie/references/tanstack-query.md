@@ -402,11 +402,11 @@ const post = await client.collections.posts.findOne({
 	with: { author: true },
 });
 await client.collections.posts.create({ title: "Hello", status: "draft" });
-await client.collections.posts.update({
+await client.collections.posts.updateById({
 	id: "abc",
 	data: { status: "published" },
 });
-await client.collections.posts.delete({ id: "abc" });
+await client.collections.posts.deleteById({ id: "abc" });
 const settings = await client.globals.siteSettings.get();
 const result = await client.routes.createBooking({
 	barberId: "abc",
@@ -417,7 +417,18 @@ client.setLocale("sk"); // Set locale for localized content
 
 ## Realtime
 
-Pass `{ realtime: true }` as the second argument to `find()`, `count()`, or `get()` to enable SSE-based live updates. Requires a realtime adapter in `questpie.config.ts`:
+Pass `{ realtime: true }` as the **typed** second argument (`RealtimeQueryConfig`) to `find()`, `count()`, or `get()` — initial data via a normal fetch, then the server pushes full access-controlled snapshots on every matching change. `findOne()` and `findVersions()` have no realtime form (a second argument there is a compile error).
+
+```tsx
+const { data } = useQuery(
+	q.collections.posts.find(
+		{ where: { status: "published" }, limit: 20 },
+		{ realtime: true },
+	),
+);
+```
+
+Works zero-config (2s polling); add a realtime adapter for instant push:
 
 ```ts
 import { runtimeConfig } from "questpie/app";
@@ -430,7 +441,16 @@ export default runtimeConfig({
 });
 ```
 
-Channel patterns: `collections:<name>:*` (all changes), `collections:<name>:<id>` (specific record), `globals:<name>`.
+Subscriptions are query-shaped topic objects (`{ resourceType, resource, where?, with? }`) — there are no channel strings. Outside React, use the typed live form of the same query: `client.collections.posts.live(options, onSnapshot)` / `liveIter(options)` (see AGENTS.md §19 Realtime).
+
+To build those topic objects yourself — e.g. manual cache invalidation or a raw `client.realtime.subscribe` call that must match the topic a query subscribed with — use the exported builders instead of hand-writing the shape:
+
+```ts
+import { buildCollectionTopic, buildGlobalTopic } from "@questpie/tanstack-query"; // re-exported from questpie/client
+
+const topic = buildCollectionTopic("posts", { where: { status: "published" }, limit: 20 });
+const settingsTopic = buildGlobalTopic("siteSettings");
+```
 
 For multi-instance deployments, create a Redis client and use `redisStreamsAdapter({ client })`.
 
@@ -449,11 +469,13 @@ export const Route = createAPIFileRoute("/api/$")({
 });
 ```
 
-**Next.js**: `import { questpieNextRouteHandlers } from "@questpie/next"` -- export `GET`, `POST`, `PATCH`, `DELETE` from `app/api/[...slug]/route.ts`.
+**Next.js**: `import { questpieNextRouteHandlers } from "@questpie/next"` -- export `GET`, `POST`, `PATCH`, `DELETE` from `app/api/[...slug]/route.ts`. The lower-level `questpieNext(app, config)` returns a single fetch-style handler.
 
 **Hono**: `import { questpieHono } from "@questpie/hono/server"` -- `server.route("/api", questpieHono(app))`.
 
 **Elysia**: `import { questpieElysia } from "@questpie/elysia/server"` -- `.use(questpieElysia(app, { basePath: "/api" }))`.
+
+For server-side calls in the same process (SSR loaders, tests), `createClientFromHono` (`@questpie/hono/client`) and `createClientFromEden` (`@questpie/elysia/client`) build the typed client over the live server instance instead of HTTP.
 
 ## Common Mistakes
 

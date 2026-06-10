@@ -5,12 +5,17 @@ description: Run untrusted or dynamically-authored code safely in an isolated sa
 
 # Code Execution
 
-`ctx.sandbox` runs **untrusted or dynamically-authored code** — agent-written scripts, user plugins, knowledge mini-apps — in an **isolated process**, under a **default-deny capability model** that decides exactly what each run may touch.
+`ctx.executor` runs **untrusted or dynamically-authored code** — agent-written scripts, user plugins, knowledge mini-apps — under a **default-deny capability model** that decides exactly what each run may touch.
 
-`@questpie/sandbox` is a separate package that integrates with QUESTPIE via the standard module system. The code runs in a standalone **Deno** process (a fresh subprocess per request, with zero ambient permissions); your app holds no Deno and talks to it over HTTP. Untrusted code never imports your app — it reaches your data only through a capability-scoped **broker** you control.
+The executor is a core, opt-in service: without an `executor` key in `questpie.config.ts`, `ctx.executor.run` throws a clear "not configured" error — an app that never runs dynamic code never exposes the surface. Two isolation modes exist:
+
+- **`"sandboxed"`** (the default — untrusted-by-default): the code runs in a standalone **Deno** process provided by the `@questpie/sandbox` package — a fresh, hardened subprocess per request with zero ambient permissions. Your app holds no Deno and talks to it over HTTP.
+- **`"trusted"`**: in-process execution with a soft timeout, for code you already own (code-mode agents, scheduled scripts). No sandbox — opt in explicitly.
+
+Untrusted code never imports your app — it reaches your data only through a capability-scoped **broker** you control.
 
 <Callout type="info">
-	The sandbox is the primitive behind Autopilot's knowledge **mini-apps** — executable `.app` files whose `server.ts` actions run here. This page documents the framework primitive; the mini-app product layer is in the Autopilot docs.
+	The executor is the primitive behind Autopilot's knowledge **mini-apps** — executable `.app` files whose `server.ts` actions run here. This page documents the framework primitive; the mini-app product layer is in the Autopilot docs.
 </Callout>
 
 ## Installation
@@ -19,42 +24,47 @@ description: Run untrusted or dynamically-authored code safely in an isolated sa
 bun add @questpie/sandbox
 ```
 
-Register the module — it mounts the broker callback route and provides `ctx.sandbox`. An app that never runs sandboxed code simply does not register it, and never exposes the endpoint.
+Wire the sandboxed adapter into the executor config and point it at the Deno engine (deployed as its own service — see [Deployment](#deployment)):
 
-```ts title="server/modules.ts"
-import { sandboxModule } from "@questpie/sandbox/modules/sandbox";
+```ts title="questpie.config.ts"
+import { httpSandboxAdapter } from "@questpie/sandbox/adapter";
+import { runtimeConfig } from "questpie/app";
 
-export default [sandboxModule /* , mcpModule, workflowsModule, ... */] as const;
-```
-
-Point it at the Deno engine (deployed as its own service — see [Deployment](#deployment)):
-
-```ts title="server/config/sandbox.ts"
-export default {
-	url: process.env.SANDBOX_URL,
-};
+export default runtimeConfig({
+	executor: {
+		sandboxed: httpSandboxAdapter({
+			url: process.env.SANDBOX_URL ?? "http://127.0.0.1:8787",
+		}),
+		// Trusted internal URL of this app's own broker endpoint — required only
+		// for the untrusted app-bindings path. Never derive it from a request.
+		brokerUrl: process.env.SANDBOX_BROKER_URL,
+	},
+});
 ```
 
 ## Quick start
 
+The guest source must `export default` a function of `input`:
+
 ```ts
-const result = await ctx.sandbox.run({
+const result = await ctx.executor.run({
 	source: `export default async function (input) {
-		const res = await fetch("https://api.example.com/data");
+		const res = await fetch("https://api.example.com/data?since=" + input.since);
 		const data = await res.json();
 		return { count: data.length };
 	}`,
 	capabilities: {
 		net: ["api.example.com"], // egress allowlist
-		data: { collections: { posts: ["read"] } },
+		timeoutMs: 5_000,
+		memoryMb: 128,
 	},
 	input: { since: "2026-01-01" },
 });
 
-// → { ok: true, output: { count: 42 }, logs: [...] }
+// → { ok: true, output: { count: 42 }, logs: [...], ms: 312 }
 ```
 
-Inside the sandboxed `source`, the host injects a `globalThis.questpie` proxy — the **only** way back to your app:
+When the host wires app bindings for a run (see below), the guest gets a `globalThis.questpie` proxy — the **only** way back to your app:
 
 ```ts
 // only the granted surface resolves; everything else is denied
@@ -68,14 +78,19 @@ Every run declares a **manifest** of capabilities. Anything not granted is denie
 
 | Axis | Grants |
 | --- | --- |
-| `net` | egress host allowlist — the only hosts the run may `fetch` |
-| `knowledge` / `files` | read/write globs into the file store, clamped to the granted subtree |
-| `data.collections` | per-collection verbs (`read`; writes gated by the tenant-write boundary) |
-| `data.stores` | per-namespace access to `document_store` (the queryable jsonb app-data store), grantable across apps |
+| `net` | `fetch()` egress host allowlist — the only hosts the run may call |
+| `import` | remote module-import host allowlist (independent of `net`) |
+| `timeoutMs` / `memoryMb` | hard wall-clock and per-guest memory bounds |
+| `files` | read/write globs into the file store, clamped to the granted subtree |
+| `data.collections` | per-collection verbs (`read`/`create`/`update`/`delete`; writes gated by the tenant-write boundary) |
+| `data.globals` / `data.stores` | per-global and per-namespace access to `document_store` (the queryable jsonb app-data store), grantable across apps |
+| `services` / `jobs` / `workflows` | allowed service names, enqueueable jobs, triggerable workflows |
+
+`secrets` injects secret values into the guest without embedding them in the source.
 
 ## Bindings
 
-The `questpie.*` surface a run sees mirrors your real data API, capability-scoped:
+A plain `ctx.executor.run` is compute-only (plus granted `net`). When the caller passes an `appBindings` target and `brokerUrl`, the executor mints a per-run scoped token and the guest's `questpie.*` surface mirrors your real data API, capability-scoped:
 
 - `questpie.collections.<name>.find / findOne` (reads), plus the write verbs once they are granted **and** the tenant-write boundary applies.
 - `questpie.files.read / write / list` — the company file store, clamped to the granted subtree.
@@ -83,13 +98,14 @@ The `questpie.*` surface a run sees mirrors your real data API, capability-scope
 
 ## Security model
 
-- **Process isolation** — each run is a fresh Deno subprocess with no ambient permissions; a crash or a memory bomb is bounded to that subprocess, never the host.
-- **The broker** — untrusted code cannot reach your app directly. Every binding call goes over IPC to a host **broker** that enforces capabilities per call and dispatches under a **non-privileged principal** (never `system`).
+- **Process isolation** — each sandboxed run is a fresh Deno subprocess with no ambient permissions; a crash or a memory bomb is bounded to that subprocess, never the host.
+- **The broker** — untrusted code cannot reach your app directly. Every binding call goes through a host **broker** that enforces capabilities per call and dispatches under a **non-privileged principal** (never `system`).
 - **Tenant boundary** — reads are clamped to the granted scope; relation expansion to non-granted collections is rejected; guest **writes** are gated by a dedicated row-filter boundary so a run can only touch the rows it owns.
+- **Trusted mode is not a sandbox** — `isolation: "trusted"` runs in-process with full host access. Never use it for code you did not author.
 
 ## Deployment
 
-The sandbox engine runs as a **standalone Deno service** — its own container — that your app reaches at `SANDBOX_URL`. The main app image ships no Deno. The opt-in module mounts the broker callback route on the host; the supervisor is pinned to a trusted **internal** broker address (never request-derived).
+The sandbox engine runs as a **standalone Deno service** — its own container — that your app reaches at `SANDBOX_URL`. The main app image ships no Deno. The broker callback URL (`executor.brokerUrl`) is pinned to a trusted **internal** address (never request-derived).
 
 ```bash
 # the sandbox service (its own process / container)

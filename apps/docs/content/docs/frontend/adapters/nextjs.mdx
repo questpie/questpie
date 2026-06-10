@@ -27,17 +27,33 @@ export const { GET, POST, PATCH, DELETE } = questpieNextRouteHandlers(app, {
 TanStack Start does not have an adapter package. Use the generic fetch handler:
 
 ```ts title="src/routes/api/$.ts"
-import { createAPIFileRoute } from "@tanstack/react-start/api";
+import { createFileRoute } from "@tanstack/react-router";
 import { createFetchHandler } from "questpie/http";
 import { app } from "#questpie";
 
 const handler = createFetchHandler(app, { basePath: "/api" });
 
-export const Route = createAPIFileRoute("/api/$")({
-	GET: ({ request }) => handler(request),
-	POST: ({ request }) => handler(request),
-	PATCH: ({ request }) => handler(request),
-	DELETE: ({ request }) => handler(request),
+const handleCmsRequest = async (request: Request) => {
+	const response = await handler(request);
+	return (
+		response ??
+		new Response(JSON.stringify({ error: "Not found" }), {
+			status: 404,
+			headers: { "Content-Type": "application/json" },
+		})
+	);
+};
+
+export const Route = createFileRoute("/api/$")({
+	server: {
+		handlers: {
+			GET: ({ request }) => handleCmsRequest(request),
+			POST: ({ request }) => handleCmsRequest(request),
+			PATCH: ({ request }) => handleCmsRequest(request),
+			PUT: ({ request }) => handleCmsRequest(request),
+			DELETE: ({ request }) => handleCmsRequest(request),
+		},
+	},
 });
 ```
 

@@ -1090,11 +1090,31 @@ await ctx.queue.sendWelcomeEmail.publish({
 
 The queue client exposes jobs as typed properties: `queue[jobName].publish(payload, options?)`. This gives you full type safety on the payload.
 
+### Recurring Jobs (Cron)
+
+Jobs accept a job-level `options.cron`; schedules are registered automatically when the queue worker starts (`app.queue.listen()`):
+
+```ts
+export default job({
+	name: "cleanupExpired",
+	schema: z.object({}),
+	options: { cron: "0 3 * * *" },
+	handler: async ({ collections }) => {
+		await collections.sessions.deleteMany({
+			where: { expiresAt: { lt: new Date() } },
+		});
+	},
+});
+```
+
+Programmatic control: `queue.jobName.schedule(payload, cron)` / `queue.jobName.unschedule()`. Use job cron for simple recurring tasks; reserve **workflow-level cron** (`@questpie/workflows`) for recurring processes that need steps, waits, or replay.
+
 ### Queue Adapters
 
 | Adapter                     | Use Case                                         |
 | --------------------------- | ------------------------------------------------ |
 | `pgBossAdapter()`           | PostgreSQL-based (default, great for most cases) |
+| `bullMQAdapter()`           | Redis-based (BullMQ)                             |
 | `cloudflareQueuesAdapter()` | Cloudflare Workers Queues push consumers         |
 
 ---
@@ -1134,11 +1154,13 @@ await ctx.email.send("welcome", {
 
 ### Email Adapters
 
-| Adapter                       | Description                      |
-| ----------------------------- | -------------------------------- |
-| `ConsoleAdapter`              | Logs to console (dev)            |
-| `SmtpAdapter`                 | SMTP via Nodemailer              |
-| `createEtherealSmtpAdapter()` | Auto-generated test SMTP account |
+| Adapter                       | Import                       | Description                      |
+| ----------------------------- | ---------------------------- | -------------------------------- |
+| `ConsoleAdapter`              | `questpie/adapters/console`  | Logs to console (dev)            |
+| `SmtpAdapter`                 | `questpie/adapters/smtp`     | SMTP via Nodemailer              |
+| `resendAdapter()`             | `questpie/adapters/resend`   | Resend HTTP API (and compatible) |
+| `plunkAdapter()`              | `questpie/adapters/plunk`    | Plunk transactional HTTP API     |
+| `createEtherealSmtpAdapter()` | `questpie/adapters/smtp`     | Auto-generated test SMTP account |
 
 ---
 
@@ -1604,20 +1626,30 @@ interface AppContext {
 | Access rules     | Destructure: `({ session, data }) => boolean`                    |
 | Seeds            | `async ({ collections, log }) => { ... }`                        |
 | Services         | `create: ({ app }) => ...` (app instance only, not full context) |
+| Better Auth callbacks (`onLinkAccount`, `databaseHooks`, `sendMagicLink`, plugin hooks) | `getContext<App>()` — `/auth/*` is a raw route executed inside `runWithContext`, so the request scope is live there (see `references/auth.md`) |
 
 ### Getting Context Programmatically
 
 ```ts
 import { getContext, tryGetContext } from "questpie/types";
-const ctx = getContext(); // throws if outside a request scope
-const ctx = tryGetContext(); // returns null if outside scope
+import type { App } from "#questpie"; // type-only — no runtime cycle
+
+const ctx = getContext<App>(); // typed app/session/extensions; throws outside a request scope
+const maybe = tryGetContext(); // returns null if outside scope
 
 // Create a fresh context manually:
-const ctx = await app.createContext({
+const fresh = await app.createContext({
 	session: null,
 	locale: "en",
 	accessMode: "system",
 });
+```
+
+**Partial context overrides:** the second argument of every CRUD call merges with the ambient request scope (priority: explicit param → ALS scope → defaults). A bare `{ accessMode: "system" }` elevates **only** the mode — `session`, `db`, and `locale` inherit from the request automatically. The inverse works too: `{ accessMode: "user" }` inside system-scoped code re-enables access rules against the inherited session. Never re-thread session/locale by hand:
+
+```ts
+await app.collections.posts.find({}, { accessMode: "system" }); // mode elevated, request session/locale ride along
+await app.collections.posts.find({}, { accessMode: "user" }); // rules enforced for the inherited session
 ```
 
 ---
@@ -1655,9 +1687,10 @@ const post = await app.collections.posts.findOne({
 // WRITE
 .create(data)                      → T
 .updateById({ id, data })          → T
-.update({ where, data })           → T[]       (batch)
+.updateMany({ where, data })       → T[]       (batch; deprecated alias: update)
+.updateBatch({ updates })          → T[]       (per-record batch)
 .deleteById({ id })                → { success }
-.delete({ where })                 → { success, count }  (batch)
+.deleteMany({ where })             → { success, count }  (batch; deprecated alias: delete)
 .restoreById({ id })               → T          (soft-delete)
 
 // VERSIONING
@@ -2521,14 +2554,15 @@ Configure it through plugin-discovered `config/mcp.ts`, not `mcpModule(options)`
 | Adapter                     | Description                          |
 | --------------------------- | ------------------------------------ |
 | `pgBossAdapter()`           | PostgreSQL-based job queue (pg-boss) |
+| `bullMQAdapter()`           | Redis-based job queue (BullMQ)       |
 | `cloudflareQueuesAdapter()` | Cloudflare Workers Queues            |
 
 ### Search Adapters
 
-| Adapter                 | Description                       |
-| ----------------------- | --------------------------------- |
-| `PostgresSearchAdapter` | pg_trgm + full-text search        |
-| `PgVectorSearchAdapter` | Hybrid semantic search (pgvector) |
+| Adapter                          | Description                       |
+| -------------------------------- | --------------------------------- |
+| `createPostgresSearchAdapter()`  | pg_trgm + full-text search        |
+| `createPgVectorSearchAdapter()`  | Hybrid semantic search (pgvector + embedding provider — see `references/infrastructure-adapters.md`) |
 
 ### Realtime Adapters
 
@@ -2549,11 +2583,13 @@ Configure it through plugin-discovered `config/mcp.ts`, not `mcpModule(options)`
 
 ### Email Adapters
 
-| Adapter                       | Description                 |
-| ----------------------------- | --------------------------- |
-| `ConsoleAdapter`              | Logs to console             |
-| `SmtpAdapter`                 | Nodemailer SMTP             |
-| `createEtherealSmtpAdapter()` | Auto-generated test account |
+| Adapter                       | Description                      |
+| ----------------------------- | -------------------------------- |
+| `ConsoleAdapter`              | Logs to console                  |
+| `SmtpAdapter`                 | Nodemailer SMTP                  |
+| `resendAdapter()`             | Resend HTTP API (and compatible) |
+| `plunkAdapter()`              | Plunk transactional HTTP API     |
+| `createEtherealSmtpAdapter()` | Auto-generated test account      |
 
 ### Logger
 

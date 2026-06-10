@@ -16,6 +16,14 @@ Access rules are defined per-collection via `.access()`. Each operation accepts 
 
 When no `.access()` is defined, all operations default to `({ session }) => !!session` — **authenticated users only**. You must explicitly set `read: true` for public collections.
 
+Every operation resolves through the same chain, with no hidden framework grants above your config:
+
+1. Collection/global `.access()` rule for that operation
+2. App-level `defaultAccess` (`appConfig({ access })` in `config/app.ts`)
+3. Framework fallback: require session
+
+A deny-all `defaultAccess` (`{ read: false, create: false, update: false, delete: false }`) closes the entire REST surface — including upload-row listing and schema/meta introspection — until collections opt in.
+
 ### Collection Access
 
 ```ts
@@ -38,12 +46,34 @@ export default collection("posts")
 
 ### Operations
 
-| Operation | When checked                 |
-| --------- | ---------------------------- |
-| `read`    | Listing and fetching records |
-| `create`  | Creating new records         |
-| `update`  | Updating existing records    |
-| `delete`  | Deleting records             |
+| Operation    | When checked                                                     |
+| ------------ | ---------------------------------------------------------------- |
+| `read`       | Listing and fetching records                                      |
+| `create`     | Creating new records                                              |
+| `update`     | Updating existing records                                         |
+| `delete`     | Deleting records                                                  |
+| `transition` | Workflow stage transitions (falls back to `update`)               |
+| `serve`      | Upload file bytes by key (`GET /:collection/files/:key`)          |
+| `introspect` | Schema/meta routes (`GET /:collection/{schema,meta}`)             |
+
+Two operations have specialized chains:
+
+- **`serve`** (upload collections): `serve` → explicit collection `read`
+  (row-aware, `ctx.data` is the upload row) → `defaultAccess.serve` → allow.
+  `defaultAccess.read` is deliberately NOT consulted — listing rows and
+  fetching bytes by key are distinct permissions. `visibility: "public"`
+  means bytes are servable by key; `"private"` files always require the
+  signed token in addition to any serve rule.
+- **`introspect`**: `introspect` → `defaultAccess.introspect` → visible iff
+  at least one CRUD operation is allowed for the current user. Create-only
+  public collections keep their validation schema readable; deny-all apps
+  expose no schemas. Denied requests get 401 (anonymous) or 403
+  (authenticated).
+
+`f.upload()` fields populate through the PARENT row's read decision — a
+publicly readable gallery shows its assets (with `url`) to anonymous readers
+even when the assets collection itself is unlistable. Field-level read rules
+on the upload collection still apply inside population.
 
 ### Global Access
 
@@ -83,25 +113,49 @@ Return a where clause object instead of a boolean to restrict operations to matc
 
 Access functions receive `AppContext` with these properties:
 
-| Property      | Description                             |
-| ------------- | --------------------------------------- |
-| `session`     | Current auth session (null if unauthed) |
-| `db`          | Database instance                       |
-| `collections` | Typed collection API                    |
-| `request`     | Current HTTP `Request` (headers, URL)   |
+| Property      | Description                                                  |
+| ------------- | ------------------------------------------------------------ |
+| `session`     | Current auth session (null if unauthed)                      |
+| `db`          | Database instance                                            |
+| `collections` | Typed collection API                                         |
+| `request`     | Current HTTP `Request` (headers, URL)                        |
+| `data`        | The existing row — typed, non-optional in `update`/`delete` rules |
+| `input`       | Typed insert shape in `create` rules; typed patch in `update` rules |
+| _extensions_  | Keys returned by `appConfig({ context })`, flat (see below)  |
+
+`data`/`input` are typed **per operation** by the builder — no casts, no annotations inside the defining collection. For shared rule helpers and every other "I need type X" case, see `references/type-inference.md`.
+
+### Derived Request Context in Rules
+
+`appConfig({ context })` runs once per HTTP request; its result arrives **flat** on every access rule ctx (collections, globals, routes, field access, transitions), typed by inference:
+
+```ts
+// config/app.ts
+export default appConfig({
+	context: async ({ request }) => ({
+		workspaceId: request.headers.get("x-workspace") || null,
+	}),
+});
+
+// collections/projects.ts — destructure flat, narrow before use
+.access({
+	read: ({ workspaceId }) =>
+		workspaceId ? { workspace: workspaceId } : false,
+})
+```
+
+Extensions are typed `Partial<…>` — absent for non-HTTP contexts (jobs, seeds, system scripts), so rules must handle `undefined`. See `references/multi-tenancy.md` for the full pattern (membership validation, closure memoization, scope UI).
 
 Access functions may be async. Use `request` for request-scoped checks such as headers, tenant scope, CAPTCHA tokens, or signed public form tokens:
 
 ```ts
+import type { AccessContext } from "questpie";
 import { ApiError } from "questpie/errors";
 import { isAdminRequest } from "@questpie/admin/shared";
 
-type AccessCtx = {
-	request?: Request | null;
-	session?: { user?: unknown | null } | null;
-};
-
-async function canCreatePublicSubmission({ request, session }: AccessCtx) {
+// AccessContext is the sanctioned shared-helper param — never hand-roll a
+// structural ctx type (see references/type-inference.md)
+async function canCreatePublicSubmission({ request, session }: AccessContext) {
 	if (session?.user) return true;
 	if (request && isAdminRequest(request)) {
 		throw ApiError.unauthorized();
@@ -247,6 +301,17 @@ export default collection("appointments")
 | `db`          | All hooks                                 | Database instance                |
 | `session`     | All hooks                                 | Current auth session             |
 | `services`    | All hooks                                 | Custom services from `services/` |
+| _extensions_  | All hooks                                 | `appConfig({ context })` result, flat (HTTP requests only) |
+
+Derived request context also reaches hooks and any nested code via `getContext<App>()` — including CRUD calls a hook triggers (AsyncLocalStorage carries it):
+
+```ts
+.hooks({
+  beforeChange: async ({ data, operation, workspaceId }) => {
+    if (operation === "create" && workspaceId) data.workspace = workspaceId;
+  },
+})
+```
 
 ### Context-First Pattern
 

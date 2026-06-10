@@ -237,6 +237,31 @@ export const notificationsModule = module({
 | `seeds`       | `Seed[]`      | Seed data                |
 | `messages`    | `Record`      | i18n translations        |
 
+### How Module Contributions Merge
+
+When several modules (and the app) contribute the same key, `createApp()` merges them deterministically — later modules win per entry:
+
+| Key | Strategy |
+| --- | --- |
+| `collections`, `globals`, `jobs`, `routes`, `fields`, `services` | record spread-merge — same key: later wins |
+| `messages` | deep-merge by locale — same message key: later wins |
+| `migrations`, `seeds` | array concatenation |
+| `config.*` (app, auth, admin, plugin config keys) | per-key strategies; `auth`/`admin` deep-merge; unknown keys: incoming replaces existing |
+| anything else | auto-detect: object+object → spread, array+array → concat, otherwise incoming wins |
+
+The merge helpers behind these strategies are exported from `questpie/app` for module authors combining config fragments of their own:
+
+```ts
+import { lastWins, mergeConcat, mergeDeepConcat, mergeRecord, type MergeFn } from "questpie/app";
+
+mergeRecord(a, b); // { ...a, ...b }
+mergeConcat(a, b); // [...a, ...b]
+mergeDeepConcat(a, b); // spread objects, concat array-valued props
+lastWins(a, b); // b
+```
+
+Use them (instead of hand-rolled spreads) when a module exposes its own "combine these contributions" surface — the semantics then match what the framework does for built-in keys.
+
 ### Using a Module
 
 ```ts title="modules.ts"

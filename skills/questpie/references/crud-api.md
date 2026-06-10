@@ -367,9 +367,46 @@ export default route()
 	});
 ```
 
+### Partial Overrides (Inside Request Scope)
+
+The optional second argument of every CRUD call merges with the ambient request scope. Priority: **explicit param → ALS scope (`runWithContext`) → defaults** (`accessMode: "system"`, `locale: "en"`). A bare `{ accessMode: "system" }` elevates only the mode — the request's `session`, `db`, and `locale` ride along automatically. The inverse holds too:
+
+```ts
+// Inside any handler / hook / Better Auth callback:
+await collections.posts.updateMany(
+	{ where: { author: oldId }, data: { author: newId } },
+	{ accessMode: "system" }, // mode elevated; session/db/locale inherited
+);
+
+await collections.posts.find({}, { accessMode: "user" }); // rules re-enabled against inherited session
+```
+
+Never re-thread `session`/`locale` by hand when you only want a different access mode.
+
+### Transactions
+
+`withTransaction(db, fn)` (from `questpie`) runs multiple CRUD calls atomically — calls inside the callback inherit the transaction connection through the ALS scope, and nested `withTransaction` calls reuse the open transaction. Queue side effects for after COMMIT with `onAfterCommit`:
+
+```ts
+import { onAfterCommit, withTransaction } from "questpie";
+
+await withTransaction(db, async () => {
+	const order = await collections.orders.create({ ... });
+	await collections.inventory.updateMany({
+		where: { sku: order.sku, status: "available" },
+		data: { status: "reserved" },
+	});
+	onAfterCommit(async () => {
+		await queue.notifyWarehouse.publish({ orderId: order.id });
+	});
+});
+```
+
+Do not run output-hook-heavy reads (blocks/upload `afterRead`) inside an open transaction unless necessary — they inherit the tx connection too.
+
 ### In Scripts / Seeds
 
-Create an explicit context with `app.createContext()`:
+Outside any request scope, create an explicit context with `app.createContext()`:
 
 ```ts
 // System mode -- bypasses all access control

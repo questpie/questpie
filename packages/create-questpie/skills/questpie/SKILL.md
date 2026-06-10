@@ -41,6 +41,8 @@ Reference these guidelines when:
 | `runtimeConfig({...})`         | `"questpie"`                 | No             |
 | `appConfig({...})`             | `"questpie"`                 | No             |
 | `authConfig({...})`            | `"questpie"`                 | No             |
+| `env({...})`                   | `"questpie/env"`             | No             |
+| `clientEnv({...})`             | `"questpie/env"`             | No             |
 | `createClient<AppConfig>()`    | `"questpie/client"`          | No             |
 | `createQuestpieQueryOptions()` | `"@questpie/tanstack-query"` | No             |
 
@@ -119,10 +121,12 @@ Factory modules are acceptable only for simple runtime-only modules whose plugin
 | Quickstart        | `references/quickstart.md`      | Scaffold, configure, codegen, migrate, serve — zero to running app |
 | Data Modeling     | `references/data-modeling.md`   | Collections, globals, fields, relations, options, localization     |
 | Field Types       | `references/field-types.md`     | All built-in field types with options and operators                |
-| Rules             | `references/rules.md`           | Access control (row/field level), hooks lifecycle, validation      |
+| Type Inference    | `references/type-inference.md`  | The infer-first map: `CollectionDoc`, `AccessContext` helpers, per-op rule typing, cycle rules |
+| Rules             | `references/rules.md`           | Access control (row/field level), hooks lifecycle, validation, derived request context |
 | Business Logic    | `references/business-logic.md`  | Routes, jobs, services, email templates, context injection         |
 | Durable Workflows | `references/workflows.md`       | Long-running workflows, steps, events, cron, admin UI              |
-| CRUD API          | `references/crud-api.md`        | Server-side `find`, `create`, `update`, `delete`, globals API      |
+| Sandboxed Code    | `references/sandbox.md`         | `ctx.executor.run()`, isolation modes, capability model, Deno engine deployment |
+| CRUD API          | `references/crud-api.md`        | `find`, `create`, `updateById`/`updateMany`, `deleteById`/`deleteMany`, atomic conditional updates, globals API |
 | Query Operators   | `references/query-operators.md` | `where` clause operators by field type                             |
 
 ### Infrastructure
@@ -130,6 +134,7 @@ Factory modules are acceptable only for simple runtime-only modules whose plugin
 | Topic      | File                                    | Covers                                                       |
 | ---------- | --------------------------------------- | ------------------------------------------------------------ |
 | Production | `references/production.md`              | Queue, search, realtime, storage, email, KV adapter setup    |
+| Environment | `references/env.md`                    | `env.ts` + `env.client.ts`: boot-validated, typed env, generated client modules |
 | Auth       | `references/auth.md`                    | Better Auth integration, session, providers, access patterns |
 | Adapters   | `references/infrastructure-adapters.md` | All adapter configs: pg-boss, S3, SMTP, pgNotify, Redis      |
 | MCP        | `references/mcp.md`                     | MCP setup, CRUD tools, route tools, custom tools, security   |
@@ -140,7 +145,7 @@ Factory modules are acceptable only for simple runtime-only modules whose plugin
 | ------------------ | ---------------------------------- | ------------------------------------------------------------ |
 | Extend             | `references/extend.md`             | Custom modules, fields, operators, adapters, codegen plugins |
 | Codegen Plugin API | `references/codegen-plugin-api.md` | Plugin architecture, category declarations, templates        |
-| Multi-Tenancy      | `references/multi-tenancy.md`      | Scope isolation, workspace filtering, ScopeProvider          |
+| Multi-Tenancy      | `references/multi-tenancy.md`      | `appConfig({ context })` resolver, scope isolation, ScopeProvider |
 
 ### Client
 
@@ -164,7 +169,8 @@ export default collection("posts")
 	.access({
 		read: true,
 		create: ({ session }) => !!session,
-		update: ({ session, doc }) => doc.authorId === session?.user?.id,
+		// update rules get the existing row as `data` (typed, non-optional)
+		update: ({ session, data }) => data.author === session?.user?.id,
 	})
 	.hooks({
 		beforeChange: async ({ data, operation }) => {
@@ -228,12 +234,11 @@ export default job({
 ```ts
 import { createClient } from "questpie/client";
 import type { AppConfig } from "#questpie";
+import { env } from "#questpie/env.client.vite"; // generated from env.client.ts
 
 const client = createClient<AppConfig>({
 	baseURL:
-		typeof window !== "undefined"
-			? window.location.origin
-			: process.env.APP_URL,
+		typeof window !== "undefined" ? window.location.origin : env.APP_URL,
 	basePath: "/api",
 });
 
@@ -263,9 +268,13 @@ await queue.sendReminder.publish({ userId: "abc" });
 | HIGH     | Forgetting `questpie generate` after adding files      | Re-run codegen on any file add/remove in convention dirs                              |
 | HIGH     | Job handler uses `input` instead of `payload`          | Jobs destructure `{ payload }`, routes destructure `{ input }`                        |
 | HIGH     | `queue.send("name", data)`                             | Use `queue.jobName.publish(data)`                                                     |
+| HIGH     | Raw `process.env.X` / `process.env.X!` in app code     | Declare in `env.ts` with `env()` — typed, boot-validated (see `references/env.md`)    |
 | HIGH     | `beforeCreate` / `afterCreate` hook names              | Use `beforeChange` / `afterChange` with `operation === "create"` guard                |
+| HIGH     | Module-level app singleton for Better Auth callbacks   | `getContext<App>()` works inside `onLinkAccount`/`databaseHooks`/plugin hooks — see `references/auth.md` |
+| HIGH     | Hand-writing a type the schema already knows           | Use the inference one-liner (`CollectionDoc`, `AccessContext`, `ctx.data`, …) — see `references/type-inference.md` |
 | HIGH     | Runtime options in codegen-aware modules               | Use static `module({...})` + plugin-discovered `config/*.ts` factory                  |
 | HIGH     | Exposing MCP HTTP as trusted system access             | HTTP MCP is user mode only; use stdio only in trusted local/system contexts           |
+| HIGH     | Bare `Date` as where-equality (`{ createdAt: someDate }`) | Use the explicit operator: `{ createdAt: { eq: someDate } }` — see `references/crud-api.md` keyset recipe |
 | MEDIUM   | Using npm/yarn instead of Bun                          | QUESTPIE requires Bun as package manager                                              |
 | MEDIUM   | Editing `.generated/` files                            | Never edit — re-run `questpie generate`                                               |
 

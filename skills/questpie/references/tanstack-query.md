@@ -443,6 +443,15 @@ export default runtimeConfig({
 
 Subscriptions are query-shaped topic objects (`{ resourceType, resource, where?, with? }`) — there are no channel strings. Outside React, use the typed live form of the same query: `client.collections.posts.live(options, onSnapshot)` / `liveIter(options)` (see AGENTS.md §19 Realtime).
 
+To build those topic objects yourself — e.g. manual cache invalidation or a raw `client.realtime.subscribe` call that must match the topic a query subscribed with — use the exported builders instead of hand-writing the shape:
+
+```ts
+import { buildCollectionTopic, buildGlobalTopic } from "@questpie/tanstack-query"; // re-exported from questpie/client
+
+const topic = buildCollectionTopic("posts", { where: { status: "published" }, limit: 20 });
+const settingsTopic = buildGlobalTopic("siteSettings");
+```
+
 For multi-instance deployments, create a Redis client and use `redisStreamsAdapter({ client })`.
 
 ## Framework Adapters
@@ -460,11 +469,13 @@ export const Route = createAPIFileRoute("/api/$")({
 });
 ```
 
-**Next.js**: `import { questpieNextRouteHandlers } from "@questpie/next"` -- export `GET`, `POST`, `PATCH`, `DELETE` from `app/api/[...slug]/route.ts`.
+**Next.js**: `import { questpieNextRouteHandlers } from "@questpie/next"` -- export `GET`, `POST`, `PATCH`, `DELETE` from `app/api/[...slug]/route.ts`. The lower-level `questpieNext(app, config)` returns a single fetch-style handler.
 
 **Hono**: `import { questpieHono } from "@questpie/hono/server"` -- `server.route("/api", questpieHono(app))`.
 
 **Elysia**: `import { questpieElysia } from "@questpie/elysia/server"` -- `.use(questpieElysia(app, { basePath: "/api" }))`.
+
+For server-side calls in the same process (SSR loaders, tests), `createClientFromHono` (`@questpie/hono/client`) and `createClientFromEden` (`@questpie/elysia/client`) build the typed client over the live server instance instead of HTTP.
 
 ## Common Mistakes
 

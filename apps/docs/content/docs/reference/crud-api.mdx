@@ -228,6 +228,29 @@ await (app.collections.event_members as any).updateMnay({ ... });
 
 Feature detection stays safe with the `in` operator (never throws): `"upload" in crud`. The `crud.upload` capability probe also keeps returning `undefined` on non-upload collections.
 
+## Context and inheritance
+
+Every server CRUD method accepts an optional context as its last argument: `{ accessMode?, session?, db?, locale?, stage? }`. What you pass merges with the ambient request scope. Propagation priority, highest first:
+
+1. **Explicit param** — values passed directly to the call
+2. **Request scope** — values set by the nearest `runWithContext()` ancestor (every HTTP request, route handler, hook, and Better Auth callback runs inside one)
+3. **Defaults** — `accessMode: "system"`, `locale: "en"`
+
+The practical consequence: **partial overrides inherit everything else**. A bare `{ accessMode: "system" }` elevates only the mode — the request's session, db connection (including an open transaction), and locale ride along:
+
+```ts
+// Inside a handler, hook, or auth callback:
+await app.collections.event_members.updateMany(
+	{ where: { user: anonId }, data: { user: newId } },
+	{ accessMode: "system" }, // mode elevated; session/db/locale inherited
+);
+
+// The inverse also works — re-enable rules against the inherited session:
+await app.collections.posts.find({}, { accessMode: "user" });
+```
+
+Never re-thread `session` or `locale` by hand when you only want a different access mode. Outside any request scope (scripts, seeds), create a context explicitly with `app.createContext({ accessMode: "system" })` and pass it to calls.
+
 ## Client API
 
 The client SDK uses the same vocabulary:

@@ -17,19 +17,30 @@ bun add @questpie/workflows
 
 ```ts title="modules.ts"
 import { workflowsModule } from "@questpie/workflows/modules/workflows";
-
 export default [workflowsModule] as const;
 ```
 
 `workflowsModule` carries its codegen plugin. Do not also add `workflowsPlugin()` to `questpie.config.ts` unless you are doing a custom module setup that deliberately omits `workflowsModule`.
 
+Runtime options (route access rule — default admin-only — and execution-lease settings) go in plugin-discovered `config/workflows.ts` using the `workflowsConfig()` factory from `@questpie/workflows/server`.
+
 For admin UI pages/widgets, register the client module:
 
 ```ts title="questpie/admin/modules.ts"
-import { adminClientModule } from "@questpie/admin/client/modules/admin";
+import adminClientModule from "@questpie/admin/client-module";
 import { workflowsClientModule } from "@questpie/workflows/client/modules/workflows";
-
-export default [adminClientModule, workflowsClientModule] as const;
+export default {
+	name: "app-admin" as const,
+	views: { ...adminClientModule.views, ...workflowsClientModule.views },
+	components: {
+		...adminClientModule.components,
+		...workflowsClientModule.components,
+	},
+	fields: { ...adminClientModule.fields, ...workflowsClientModule.fields },
+	pages: { ...adminClientModule.pages, ...workflowsClientModule.pages },
+	widgets: { ...adminClientModule.widgets, ...workflowsClientModule.widgets },
+	blocks: { ...adminClientModule.blocks, ...workflowsClientModule.blocks },
+};
 ```
 
 ## Define A Workflow

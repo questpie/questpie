@@ -119,7 +119,11 @@ Access functions receive `AppContext` with these properties:
 | `db`          | Database instance                                            |
 | `collections` | Typed collection API                                         |
 | `request`     | Current HTTP `Request` (headers, URL)                        |
+| `data`        | The existing row — typed, non-optional in `update`/`delete` rules |
+| `input`       | Typed insert shape in `create` rules; typed patch in `update` rules |
 | _extensions_  | Keys returned by `appConfig({ context })`, flat (see below)  |
+
+`data`/`input` are typed **per operation** by the builder — no casts, no annotations inside the defining collection. For shared rule helpers and every other "I need type X" case, see `references/type-inference.md`.
 
 ### Derived Request Context in Rules
 
@@ -145,15 +149,13 @@ Extensions are typed `Partial<…>` — absent for non-HTTP contexts (jobs, seed
 Access functions may be async. Use `request` for request-scoped checks such as headers, tenant scope, CAPTCHA tokens, or signed public form tokens:
 
 ```ts
+import type { AccessContext } from "questpie";
 import { ApiError } from "questpie/errors";
 import { isAdminRequest } from "@questpie/admin/shared";
 
-type AccessCtx = {
-	request?: Request | null;
-	session?: { user?: unknown | null } | null;
-};
-
-async function canCreatePublicSubmission({ request, session }: AccessCtx) {
+// AccessContext is the sanctioned shared-helper param — never hand-roll a
+// structural ctx type (see references/type-inference.md)
+async function canCreatePublicSubmission({ request, session }: AccessContext) {
 	if (session?.user) return true;
 	if (request && isAdminRequest(request)) {
 		throw ApiError.unauthorized();

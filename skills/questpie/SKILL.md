@@ -121,9 +121,11 @@ Factory modules are acceptable only for simple runtime-only modules whose plugin
 | Quickstart        | `references/quickstart.md`      | Scaffold, configure, codegen, migrate, serve — zero to running app |
 | Data Modeling     | `references/data-modeling.md`   | Collections, globals, fields, relations, options, localization     |
 | Field Types       | `references/field-types.md`     | All built-in field types with options and operators                |
+| Type Inference    | `references/type-inference.md`  | The infer-first map: `CollectionDoc`, `AccessContext` helpers, per-op rule typing, cycle rules |
 | Rules             | `references/rules.md`           | Access control (row/field level), hooks lifecycle, validation, derived request context |
 | Business Logic    | `references/business-logic.md`  | Routes, jobs, services, email templates, context injection         |
 | Durable Workflows | `references/workflows.md`       | Long-running workflows, steps, events, cron, admin UI              |
+| Sandboxed Code    | `references/sandbox.md`         | `ctx.executor.run()`, isolation modes, capability model, Deno engine deployment |
 | CRUD API          | `references/crud-api.md`        | `find`, `create`, `updateById`/`updateMany`, `deleteById`/`deleteMany`, atomic conditional updates, globals API |
 | Query Operators   | `references/query-operators.md` | `where` clause operators by field type                             |
 
@@ -167,7 +169,8 @@ export default collection("posts")
 	.access({
 		read: true,
 		create: ({ session }) => !!session,
-		update: ({ session, doc }) => doc.authorId === session?.user?.id,
+		// update rules get the existing row as `data` (typed, non-optional)
+		update: ({ session, data }) => data.author === session?.user?.id,
 	})
 	.hooks({
 		beforeChange: async ({ data, operation }) => {
@@ -267,6 +270,8 @@ await queue.sendReminder.publish({ userId: "abc" });
 | HIGH     | `queue.send("name", data)`                             | Use `queue.jobName.publish(data)`                                                     |
 | HIGH     | Raw `process.env.X` / `process.env.X!` in app code     | Declare in `env.ts` with `env()` — typed, boot-validated (see `references/env.md`)    |
 | HIGH     | `beforeCreate` / `afterCreate` hook names              | Use `beforeChange` / `afterChange` with `operation === "create"` guard                |
+| HIGH     | Module-level app singleton for Better Auth callbacks   | `getContext<App>()` works inside `onLinkAccount`/`databaseHooks`/plugin hooks — see `references/auth.md` |
+| HIGH     | Hand-writing a type the schema already knows           | Use the inference one-liner (`CollectionDoc`, `AccessContext`, `ctx.data`, …) — see `references/type-inference.md` |
 | HIGH     | Runtime options in codegen-aware modules               | Use static `module({...})` + plugin-discovered `config/*.ts` factory                  |
 | HIGH     | Exposing MCP HTTP as trusted system access             | HTTP MCP is user mode only; use stdio only in trusted local/system contexts           |
 | HIGH     | Bare `Date` as where-equality (`{ createdAt: someDate }`) | Use the explicit operator: `{ createdAt: { eq: someDate } }` — see `references/crud-api.md` keyset recipe |
