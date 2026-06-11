@@ -164,15 +164,17 @@ type CollectionOutputExtensions<TCollection> =
 
 /**
  * Try to infer RelationConfig map from field definitions.
- * Returns the inferred map if it has specific keys, else falls back to empty.
+ * Returns the inferred map when field definitions are introspectable —
+ * including the EMPTY map for collections with no relation fields, so
+ * relation machinery stays inert (`create({})` keeps required-field checks
+ * instead of optionalizing every key through a broad Record fallback).
+ * Falls back to the permissive Record only when defs can't be introspected.
  */
 type InferRelationsFromFieldDefs<TFieldDefs> =
 	TFieldDefs extends Record<string, AnyFieldDefinition>
 		? InferRelationConfigsFromFields<TFieldDefs> extends infer TInferred
 			? TInferred extends Record<string, RelationConfig>
-				? keyof TInferred extends never
-					? Record<string, RelationConfig>
-					: TInferred
+				? TInferred
 				: Record<string, RelationConfig>
 			: Record<string, RelationConfig>
 		: Record<string, RelationConfig>;
@@ -485,12 +487,34 @@ type RelationWhereFromTarget<
 		>;
 
 /**
+ * To-many quantifiers (some/none/every/count) for relation fields.
+ *
+ * Runtime supports these on hasMany/manyToMany relations (toManyOps), but
+ * `.hasMany()`/`.manyToMany()` cannot transition the field's type state yet
+ * (type-specific methods are state-preserving — audit F4), so the field state
+ * always carries belongsTo operators. Offered at the where-composition layer
+ * for every relation field until state transitions land; values are fully
+ * typed against the target collection's where.
+ */
+type RelationQuantifierWhere<
+	TTo extends string,
+	TApp,
+	Depth extends unknown[],
+> = {
+	some?: RelationWhereFromTarget<TTo, TApp, Depth>;
+	none?: RelationWhereFromTarget<TTo, TApp, Depth>;
+	every?: RelationWhereFromTarget<TTo, TApp, Depth>;
+	count?: number;
+};
+
+/**
  * Build the complete where input type for a single field definition.
  *
  * For ALL fields: union of FieldWhere (operators) and FieldSelect (direct value).
  * For relation fields: CollectionWherePlaceholder in FieldWhere is resolved to
  * Where<TargetCollection, TApp>. Also includes a shorthand form where the user
- * can pass the target's Where directly (without a quantifier key).
+ * can pass the target's Where directly (without a quantifier key), plus
+ * to-many quantifiers (see RelationQuantifierWhere).
  *
  * No field types are special-cased — the field's operators drive everything.
  */
@@ -511,6 +535,7 @@ type V2RelationWhereResolved<
 					Depth
 			  >
 			| RelationWhereFromTarget<TTo, TApp, Depth>
+			| RelationQuantifierWhere<TTo, TApp, Depth>
 	: FieldSelect<TFieldDef, TApp> | FieldWhere<TFieldDef, TApp>;
 
 type ResolveWherePlaceholdersV2<
@@ -1299,18 +1324,34 @@ type GroupValueFromQuery<TSelect, TQuery> =
 		? TSelect[TField]
 		: unknown;
 
+/** Keys of a columns map explicitly set to `true`. */
+type TrueKeys<C> = {
+	[K in keyof C]-?: C[K] extends true ? K : never;
+}[keyof C];
+
+/** Keys of a columns map explicitly set to `false`. */
+type FalseKeys<C> = {
+	[K in keyof C]-?: C[K] extends false ? K : never;
+}[keyof C];
+
 /**
  * Type Helper for Partial Selection
- * Picks fields based on 'columns' option. Always includes 'id'.
+ * Mirrors the runtime `columns` semantics:
+ * - any key `true` → inclusion mode: only true keys (plus pinned `id`)
+ * - all keys `false` → omission mode: every field EXCEPT the false keys
+ *   (`id` is always included regardless of selection)
+ * - non-literal booleans (dynamic queries) → full select
  */
 export type SelectResult<TSelect, TQuery> = [TQuery] extends [never]
 	? TSelect
-	: TQuery extends { columns: Record<string, boolean> }
-		? Pick<
-				TSelect,
-				| Extract<keyof TQuery["columns"], keyof TSelect>
-				| ("id" extends keyof TSelect ? "id" : never)
-			>
+	: TQuery extends { columns: infer C extends Record<string, boolean> }
+		? [TrueKeys<C>] extends [never]
+			? Omit<TSelect, Exclude<FalseKeys<C>, "id">>
+			: Pick<
+					TSelect,
+					| (TrueKeys<C> & keyof TSelect)
+					| ("id" extends keyof TSelect ? "id" : never)
+				>
 		: TSelect;
 
 /**
@@ -1376,8 +1417,13 @@ export type RelationResult<TRelations, TQuery> = [TQuery] extends [never]
  * Extract keys loaded via `with` clause.
  * Used to omit FK columns from base select when the relation is being loaded,
  * so the resolved relation type replaces the FK type instead of intersecting.
+ *
+ * Requires an actually-present `with` key (non-optional pattern): when TQuery
+ * is the unfilled generic CONSTRAINT (no-arg calls, ReturnType<> of the
+ * generic method), the optional `with?: With<TRelations>` member must NOT
+ * cause every relation key to be omitted from the base select.
  */
-type WithKeys<TQuery> = TQuery extends { with?: infer W }
+type WithKeys<TQuery> = TQuery extends { with: infer W }
 	? W extends Record<string, any>
 		? keyof W & string
 		: never

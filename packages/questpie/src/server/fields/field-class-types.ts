@@ -15,6 +15,7 @@ import type { ZodType } from "zod";
 
 import type { I18nText } from "#questpie/shared/i18n/types.js";
 
+import type { selectMultiOps } from "./operators/builtin.js";
 import type { OperatorSetDefinition } from "./operators/types.js";
 import type {
 	FieldAccess,
@@ -105,7 +106,9 @@ export type ArrayFieldState<TInner extends FieldState> = Omit<
 	isArray: true;
 	notNull: false;
 	hasDefault: false;
-	operators: OperatorSetDefinition;
+	// Runtime array() switches the operator set to selectMultiOps — mirror it
+	// here so where-maps get exact operator keys (no broad index signature).
+	operators: typeof selectMultiOps;
 	innerState: TInner;
 };
 

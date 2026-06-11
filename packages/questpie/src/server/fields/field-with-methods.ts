@@ -41,7 +41,7 @@ export interface FieldCommonMethods<TState extends FieldState> {
 			column: NotNull<TState["column"]>;
 		}
 	>;
-	default<V>(value: V | (() => V)): Field<
+	default(value: TState["data"] | (() => TState["data"]) | SQL): Field<
 		Omit<TState, "hasDefault" | "column"> & {
 			hasDefault: true;
 			column: HasDefault<TState["column"]>;
@@ -59,7 +59,9 @@ export interface FieldCommonMethods<TState extends FieldState> {
 	): Field<
 		Omit<TState, "virtual" | "column"> & { virtual: true; column: null }
 	>;
-	hooks<H extends FieldHooks>(h: H): Field<TState & { hooks: H }>;
+	hooks<H extends FieldHooks<TState["data"]>>(
+		h: H,
+	): Field<TState & { hooks: H }>;
 	access(a: FieldAccess): Field<TState & { access: FieldAccess }>;
 	array(): Field<ArrayFieldState<TState>>;
 	operators<TOps extends OperatorSetDefinition>(

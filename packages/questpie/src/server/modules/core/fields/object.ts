@@ -36,7 +36,7 @@ type InferObjectData<TFields extends Record<string, Field<any>>> = {
 };
 
 export type ObjectFieldState<TData = Record<string, unknown>> =
-	DefaultFieldState & {
+	Omit<DefaultFieldState, "operators"> & {
 		type: "object";
 		data: TData;
 		column: PgJsonbBuilder;

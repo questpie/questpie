@@ -29,7 +29,7 @@ export interface NumberFieldMeta extends Questpie.NumberFieldMeta {
 	_?: never;
 }
 
-export type NumberFieldState = DefaultFieldState & {
+export type NumberFieldState = Omit<DefaultFieldState, "operators"> & {
 	type: "number";
 	data: number;
 	column: PgIntegerBuilder;

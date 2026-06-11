@@ -21,7 +21,7 @@ export interface UrlFieldMeta extends Questpie.UrlFieldMeta {
 	_?: never;
 }
 
-export type UrlFieldState = DefaultFieldState & {
+export type UrlFieldState = Omit<DefaultFieldState, "operators"> & {
 	type: "url";
 	data: string;
 	column: PgVarcharBuilder<[string, ...string[]]>;

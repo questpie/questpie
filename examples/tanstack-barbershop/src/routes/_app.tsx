@@ -20,10 +20,7 @@ import {
 	type SocialLink,
 } from "../components/layout/Footer";
 import { Header } from "../components/layout/Header";
-import {
-	getSiteSettings,
-	type SiteSettingsData,
-} from "../lib/getSiteSettings.function";
+import { getSiteSettings } from "../lib/getSiteSettings.function";
 import { LocaleProvider } from "../lib/providers/locale-provider";
 import { ThemeProvider } from "../lib/providers/theme-provider";
 import { queryClient } from "../lib/query-client";
@@ -33,9 +30,9 @@ import stylesCss from "../styles.css?url";
 export const Route = createFileRoute("/_app")({
 	loader: async () => {
 		// Fetch site settings for layout
-		const siteSettings = (await getSiteSettings({
+		const siteSettings = await getSiteSettings({
 			data: { locale: undefined },
-		})) as SiteSettingsData;
+		});
 		return { siteSettings };
 	},
 
@@ -66,7 +63,7 @@ function AppLayout() {
 					<div className="flex min-h-screen flex-col">
 						<Header
 							shopName={siteSettings.shopName}
-							logo={siteSettings.logo || undefined}
+							logo={siteSettings.logo?.url || undefined}
 							navigation={siteSettings.navigation ?? []}
 							ctaButtonText={siteSettings.ctaButtonText || undefined}
 							ctaButtonLink={siteSettings.ctaButtonLink || undefined}

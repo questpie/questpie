@@ -7,17 +7,14 @@
 import { Icon } from "@iconify/react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 
-import {
-	getSiteSettings,
-	type SiteSettingsData,
-} from "@/lib/getSiteSettings.function";
+import { getSiteSettings } from "@/lib/getSiteSettings.function";
 import { useTranslation } from "@/lib/providers/locale-provider";
 
 export const Route = createFileRoute("/_app/contact")({
 	loader: async () => {
-		const settings = (await getSiteSettings({
+		const settings = await getSiteSettings({
 			data: { locale: undefined },
-		})) as SiteSettingsData;
+		});
 		return { settings };
 	},
 	component: ContactPage,
@@ -169,7 +166,7 @@ function ContactPage() {
 										<span className="text-lg font-medium">
 											{t(day.labelKey)}
 										</span>
-										{hours.isOpen ? (
+										{hours?.isOpen ? (
 											<span className="text-muted-foreground font-medium">
 												{hours.start} — {hours.end}
 											</span>
