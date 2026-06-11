@@ -260,16 +260,26 @@ type RawRouteCaller = (options?: RouteCallOptions) => Promise<Response>;
 /**
  * Type-safe routes client API.
  *
- * Flat route keys like `"admin/stats"` are expanded into nested dot notation:
- * ```ts
- * client.routes.admin.stats.post({ period: "week" })
- * ```
+ * Flat route keys like `"admin/stats"` are expanded into nested dot notation
+ * (`client.routes.admin.stats({ period: "week" })`) with literal keys only —
+ * unknown route names are compile errors.
  *
- * For routes with `:METHOD` suffix in key (multi-export), only that method is available.
+ * Untyped apps (`routes: Record<string, any>`) degrade to a permissive index
+ * signature; apps without routes get `{}`.
  */
-type RoutesClientAPI<TRoutes extends Record<string, any>> = {
-	[K in keyof TRoutes & string]: RouteCallerFromDef<TRoutes[K]>;
-};
+type RoutesClient<TRoutes> = [NonNullable<TRoutes>] extends [never]
+	? {}
+	: // No keys (apps without routes / missing `routes` member) → empty surface.
+		// Guarded before ExpandRoutes: `UnionToIntersection<never>` is `unknown`.
+		[keyof NonNullable<TRoutes>] extends [never]
+		? {}
+		: // Non-literal keys (untyped apps, `QuestpieClient<any>`) → permissive
+			// surface that typed clients stay assignable to.
+			string extends keyof NonNullable<TRoutes>
+			? { [routeKey: string]: any }
+			: [NonNullable<TRoutes>] extends [Record<string, any>]
+				? ExpandRoutes<NonNullable<TRoutes>>
+				: {};
 
 /**
  * Expand flat route keys into nested structure.
@@ -924,7 +934,7 @@ type RouteCallOptions = Omit<RequestInit, "method"> & {
 export type QuestpieClient<TApp extends QuestpieApp> = {
 	collections: CollectionsAPI<TApp>;
 	globals: GlobalsAPI<TApp>;
-	routes: RoutesClientAPI<NonNullable<TApp["routes"]> & Record<string, any>>;
+	routes: RoutesClient<TApp["routes"]>;
 	search: SearchAPI;
 	realtime: RealtimeAPI;
 	setLocale?: (locale?: string) => void;
@@ -947,8 +957,8 @@ export type QuestpieClient<TApp extends QuestpieApp> = {
  * // Type-safe collections
  * const posts = await client.collections.posts.find({ limit: 10 })
  *
- * // Type-safe routes
- * const result = await client.routes.admin.stats.post({ period: "week" })
+ * // Type-safe routes — nested keys from flat route files
+ * const result = await client.routes.admin.stats({ period: "week" })
  * ```
  */
 export function createClient<TApp extends QuestpieApp>(
@@ -1814,3 +1824,29 @@ export type { GlobalMeta } from "#questpie/shared/global-meta.js";
 // Re-export realtime types and helpers
 export type { RealtimeAPI, TopicConfig, TopicInput } from "./realtime/index.js";
 export { buildCollectionTopic, buildGlobalTopic } from "./realtime/index.js";
+// Re-export the query-surface types the client's own method signatures are
+// built from, so consumers (e.g. @questpie/tanstack-query) can derive
+// per-call generics without reaching into server internals.
+export type {
+	ApplyQuery,
+	FindManyOptions,
+	FindOneOptionsBase,
+	FindResult,
+	GroupedPaginatedResult,
+	OrderBy,
+	PaginatedResult,
+	Where,
+	With,
+} from "../server/collection/crud/types.js";
+export type {
+	AnyCollection,
+	AnyCollectionOrBuilder,
+	AnyGlobal,
+	CollectionRelations,
+	CollectionSelect,
+	GetCollection,
+	GetGlobal,
+	GlobalRelations,
+	GlobalSelect,
+	ResolveRelationsDeep,
+} from "#questpie/shared/type-utils.js";
