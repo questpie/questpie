@@ -72,12 +72,18 @@ export async function pushCommand(options: PushOptions): Promise<void> {
 	// adapter-owned schemas (pg-boss) — see push-scope.ts for the incident
 	// this guards against.
 	const entities = computePushEntities(schema);
-	const result = await pushSchema(schema, toKitDb(app.db) as any, undefined, {
+	const entitiesConfig: Parameters<typeof pushSchema>[3] = {
 		schemas: entities.schemas,
 		tables: entities.tables,
 		entities: undefined,
 		extensions: undefined,
-	} as any);
+	};
+	const result = await pushSchema(
+		schema,
+		toKitDb(app.db) as any,
+		undefined,
+		entitiesConfig,
+	);
 
 	if (result.sqlStatements.length === 0) {
 		console.log("✅ Schema is already up to date!");
