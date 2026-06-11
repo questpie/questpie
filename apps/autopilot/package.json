@@ -16,7 +16,7 @@
 		"dev:ai-worker": "bun --bun run --watch ./src/ai-worker.ts",
 		"ai-worker": "bun --bun run ./src/ai-worker.ts",
 		"dev:sandbox": "SANDBOX_BROKER_URL=http://127.0.0.1:3000/api/sandbox/rpc PORT=8787 deno run --allow-net --allow-env --allow-run --allow-read ../../packages/sandbox/src/sandbox-server.ts",
-		"questpie": "bun --conditions=development ../../packages/questpie/src/cli/index.ts",
+		"questpie": "bun --conditions=development ../../packages/questpie/src/exports/cli.ts",
 		"generate": "bun run questpie generate -c src/questpie/server/questpie.config.ts",
 		"db:setup": "bun run generate && bun run migrate:status && bun run migrate && bun run db:dev-admin && bun run db:seed",
 		"db:dev-admin": "bun --conditions=development scripts/ensure-dev-admin.ts",
