@@ -61,12 +61,12 @@ export type AdminViews =
 	{ [K in typeof _view_globalForm.name]: typeof _view_globalForm } &
 	{ [K in typeof _view_listView.name]: typeof _view_listView };
 
-export interface AdminComponents {
+export type AdminComponents = {
 	badge: typeof _comp_badge;
 	icon: typeof _comp_icon;
-}
+};
 
-export interface AdminFields {
+export type AdminFields = {
 	array: typeof _fld_array;
 	assetPreview: typeof _fld_assetPreview;
 	blocks: typeof _fld_blocks;
@@ -85,17 +85,17 @@ export interface AdminFields {
 	time: typeof _fld_time;
 	upload: typeof _fld_upload;
 	url: typeof _fld_url;
-}
+};
 
-export interface AdminPages {
+export type AdminPages = {
 	dashboard: typeof _pg_dashboard;
 	forgotPassword: typeof _pg_forgotPassword;
 	login: typeof _pg_login;
 	resetPassword: typeof _pg_resetPassword;
 	setup: typeof _pg_setup;
-}
+};
 
-export interface AdminWidgets {
+export type AdminWidgets = {
 	chart: typeof _wgt_chart;
 	progress: typeof _wgt_progress;
 	quickActions: typeof _wgt_quickActions;
@@ -104,13 +104,23 @@ export interface AdminWidgets {
 	table: typeof _wgt_table;
 	timeline: typeof _wgt_timeline;
 	value: typeof _wgt_value;
-}
+};
 
 // ════════════════════════════════════════════════════════════
 // MODULE DEFINITION — static plain object
 // ════════════════════════════════════════════════════════════
 
-const _module = {
+export type AdminModule = {
+	name: "questpie-admin";
+	views: AdminViews;
+	components: AdminComponents;
+	fields: AdminFields;
+	pages: AdminPages;
+	widgets: AdminWidgets;
+	blocks: Record<never, never>;
+};
+
+const _module: AdminModule = {
 	name: "questpie-admin" as const,
 	views: {
 		[_view_collectionDocument.name]: _view_collectionDocument,
@@ -163,5 +173,4 @@ const _module = {
 	blocks: {},
 };
 
-export type AdminModule = typeof _module;
 export default _module;

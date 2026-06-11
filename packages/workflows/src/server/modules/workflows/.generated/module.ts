@@ -30,34 +30,26 @@ import _svc_workflows from "../services/workflows";
 // ── Singles ────────────────────────────────────────────────
 import _adminConfig from "../config/admin";
 
-// ── Entity key registry (names only — acyclic by construction) ─────
-declare global {
-	namespace Questpie {
-		interface CollectionKeys { wf_event: unknown; wf_instance: unknown; wf_log: unknown; wf_step: unknown }
-		interface JobKeys { wfExecute: unknown; wfMaintenance: unknown; wfResume: unknown }
-	}
-}
-
 // ════════════════════════════════════════════════════════════
 // TYPES — composed from typeof references (zero inference cost)
 // ════════════════════════════════════════════════════════════
 
 import type { RouteDefinition, RouteParamsFromKey } from "questpie/types";
 
-export interface WorkflowsCollections {
+export type WorkflowsCollections = {
 	wf_event: typeof _coll_wf_event;
 	wf_instance: typeof _coll_wf_instance;
 	wf_log: typeof _coll_wf_log;
 	wf_step: typeof _coll_wf_step;
-}
+};
 
-export interface WorkflowsJobs {
+export type WorkflowsJobs = {
 	wfExecute: Omit<typeof _job_wfExecute, "handler"> & { handler: (args: unknown) => Promise<unknown> };
 	wfMaintenance: Omit<typeof _job_wfMaintenance, "handler"> & { handler: (args: unknown) => Promise<unknown> };
 	wfResume: Omit<typeof _job_wfResume, "handler"> & { handler: (args: unknown) => Promise<unknown> };
-}
+};
 
-export interface WorkflowsRoutes {
+export type WorkflowsRoutes = {
 	cancelAllWorkflowInstances: typeof _route_cancelAllWorkflowInstances extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"cancelAllWorkflowInstances">> : typeof _route_cancelAllWorkflowInstances;
 	cancelWorkflowInstance: typeof _route_cancelWorkflowInstance extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"cancelWorkflowInstance">> : typeof _route_cancelWorkflowInstance;
 	getWorkflowInstance: typeof _route_getWorkflowInstance extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"getWorkflowInstance">> : typeof _route_getWorkflowInstance;
@@ -67,11 +59,11 @@ export interface WorkflowsRoutes {
 	retryWorkflowInstance: typeof _route_retryWorkflowInstance extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"retryWorkflowInstance">> : typeof _route_retryWorkflowInstance;
 	sendWorkflowEvent: typeof _route_sendWorkflowEvent extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"sendWorkflowEvent">> : typeof _route_sendWorkflowEvent;
 	triggerWorkflow: typeof _route_triggerWorkflow extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"triggerWorkflow">> : typeof _route_triggerWorkflow;
-}
+};
 
-export interface WorkflowsServices {
+export type WorkflowsServices = {
 	workflows: typeof _svc_workflows;
-}
+};
 
 // ════════════════════════════════════════════════════════════
 // MODULE DEFINITION — static plain object
@@ -83,15 +75,15 @@ export type WorkflowsModule = {
 	jobs: WorkflowsJobs;
 	routes: WorkflowsRoutes;
 	services: WorkflowsServices;
-	globals: {};
-	messages: {};
-	emails: {};
+	globals: Record<never, never>;
+	messages: Record<never, never>;
+	emails: Record<never, never>;
 	migrations: readonly unknown[];
 	seeds: readonly unknown[];
-	fieldTypes: {};
-	views: {};
-	components: {};
-	blocks: {};
+	fieldTypes: Record<never, never>;
+	views: Record<never, never>;
+	components: Record<never, never>;
+	blocks: Record<never, never>;
 	config: {
 		admin: typeof _adminConfig;
 	};

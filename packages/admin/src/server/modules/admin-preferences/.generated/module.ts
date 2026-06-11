@@ -11,17 +11,34 @@ import { savedViewsCollection as _coll_admin_saved_views } from "../collections/
 // TYPES — composed from typeof references (zero inference cost)
 // ════════════════════════════════════════════════════════════
 
-export interface AdminPreferencesCollections {
+export type AdminPreferencesCollections = {
 	admin_locks: typeof _coll_admin_locks;
 	admin_preferences: typeof _coll_admin_preferences;
 	admin_saved_views: typeof _coll_admin_saved_views;
-}
+};
 
 // ════════════════════════════════════════════════════════════
 // MODULE DEFINITION — static plain object
 // ════════════════════════════════════════════════════════════
 
-const _module = {
+export type AdminPreferencesModule = {
+	name: "questpie-admin-preferences";
+	collections: AdminPreferencesCollections;
+	globals: Record<never, never>;
+	jobs: Record<never, never>;
+	routes: Record<never, never>;
+	messages: Record<never, never>;
+	services: Record<never, never>;
+	emails: Record<never, never>;
+	migrations: readonly unknown[];
+	seeds: readonly unknown[];
+	fieldTypes: Record<never, never>;
+	views: Record<never, never>;
+	components: Record<never, never>;
+	blocks: Record<never, never>;
+};
+
+const _module: AdminPreferencesModule = {
 	name: "questpie-admin-preferences" as const,
 	collections: {
 		admin_locks: _coll_admin_locks,
@@ -42,5 +59,4 @@ const _module = {
 	blocks: {},
 };
 
-export type AdminPreferencesModule = typeof _module;
 export default _module;

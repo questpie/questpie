@@ -38,6 +38,7 @@ import _route_health from "../routes/health";
 import _route_realtime from "../routes/realtime";
 import _route_search from "../routes/search";
 import _route_search_reindex_collection from "../routes/search/reindex/[collection]";
+
 // ── Services ────────────────────────────────────────────
 import _svc_auth from "../services/auth";
 import _svc_collectionsApi from "../services/collections-api";
@@ -77,48 +78,48 @@ import _appConfig from "../config/app";
 // TYPES — composed from typeof references (zero inference cost)
 // ════════════════════════════════════════════════════════════
 
-import type { RouteParamsFromKey, RouteWithParams } from "questpie";
+import type { RouteDefinition, RouteParamsFromKey } from "questpie/types";
 
-export interface CoreJobs {
-	indexRecords: typeof _job_indexRecords;
-	scheduledTransition: typeof _job_scheduledTransition;
-}
+export type CoreJobs = {
+	indexRecords: Omit<typeof _job_indexRecords, "handler"> & { handler: (args: unknown) => Promise<unknown> };
+	scheduledTransition: Omit<typeof _job_scheduledTransition, "handler"> & { handler: (args: unknown) => Promise<unknown> };
+};
 
-export interface CoreRoutes {
-	"[collection]": RouteWithParams<typeof _route_collection, RouteParamsFromKey<"[collection]">>;
-	"[collection]:PATCH": RouteWithParams<typeof _route_collection_PATCH, RouteParamsFromKey<"[collection]:PATCH">>;
-	"[collection]:POST": RouteWithParams<typeof _route_collection_POST, RouteParamsFromKey<"[collection]:POST">>;
-	"[collection]/[id]": RouteWithParams<typeof _route_collection_id, RouteParamsFromKey<"[collection]/[id]">>;
-	"[collection]/[id]:DELETE": RouteWithParams<typeof _route_collection_id_DELETE, RouteParamsFromKey<"[collection]/[id]:DELETE">>;
-	"[collection]/[id]:PATCH": RouteWithParams<typeof _route_collection_id_PATCH, RouteParamsFromKey<"[collection]/[id]:PATCH">>;
-	"[collection]/[id]/audit": RouteWithParams<typeof _route_collection_id_audit, RouteParamsFromKey<"[collection]/[id]/audit">>;
-	"[collection]/[id]/restore": RouteWithParams<typeof _route_collection_id_restore, RouteParamsFromKey<"[collection]/[id]/restore">>;
-	"[collection]/[id]/revert": RouteWithParams<typeof _route_collection_id_revert, RouteParamsFromKey<"[collection]/[id]/revert">>;
-	"[collection]/[id]/transition": RouteWithParams<typeof _route_collection_id_transition, RouteParamsFromKey<"[collection]/[id]/transition">>;
-	"[collection]/[id]/versions": RouteWithParams<typeof _route_collection_id_versions, RouteParamsFromKey<"[collection]/[id]/versions">>;
-	"[collection]/count": RouteWithParams<typeof _route_collection_count, RouteParamsFromKey<"[collection]/count">>;
-	"[collection]/deleteMany": RouteWithParams<typeof _route_collection_deleteMany, RouteParamsFromKey<"[collection]/deleteMany">>;
-	"[collection]/files/[...key]": RouteWithParams<typeof _route_collection_files_spread_key, RouteParamsFromKey<"[collection]/files/[...key]">>;
-	"[collection]/meta": RouteWithParams<typeof _route_collection_meta, RouteParamsFromKey<"[collection]/meta">>;
-	"[collection]/schema": RouteWithParams<typeof _route_collection_schema, RouteParamsFromKey<"[collection]/schema">>;
-	"[collection]/updateBatch": RouteWithParams<typeof _route_collection_updateBatch, RouteParamsFromKey<"[collection]/updateBatch">>;
-	"[collection]/upload": RouteWithParams<typeof _route_collection_upload, RouteParamsFromKey<"[collection]/upload">>;
-	"auth/[...path]": RouteWithParams<typeof _route_auth_spread_path, RouteParamsFromKey<"auth/[...path]">>;
-	"globals/[name]": RouteWithParams<typeof _route_globals_name, RouteParamsFromKey<"globals/[name]">>;
-	"globals/[name]:PATCH": RouteWithParams<typeof _route_globals_name_PATCH, RouteParamsFromKey<"globals/[name]:PATCH">>;
-	"globals/[name]/audit": RouteWithParams<typeof _route_globals_name_audit, RouteParamsFromKey<"globals/[name]/audit">>;
-	"globals/[name]/meta": RouteWithParams<typeof _route_globals_name_meta, RouteParamsFromKey<"globals/[name]/meta">>;
-	"globals/[name]/revert": RouteWithParams<typeof _route_globals_name_revert, RouteParamsFromKey<"globals/[name]/revert">>;
-	"globals/[name]/schema": RouteWithParams<typeof _route_globals_name_schema, RouteParamsFromKey<"globals/[name]/schema">>;
-	"globals/[name]/transition": RouteWithParams<typeof _route_globals_name_transition, RouteParamsFromKey<"globals/[name]/transition">>;
-	"globals/[name]/versions": RouteWithParams<typeof _route_globals_name_versions, RouteParamsFromKey<"globals/[name]/versions">>;
-	health: RouteWithParams<typeof _route_health, RouteParamsFromKey<"health">>;
-	realtime: RouteWithParams<typeof _route_realtime, RouteParamsFromKey<"realtime">>;
-	search: RouteWithParams<typeof _route_search, RouteParamsFromKey<"search">>;
-	"search/reindex/[collection]": RouteWithParams<typeof _route_search_reindex_collection, RouteParamsFromKey<"search/reindex/[collection]">>;
-}
+export type CoreRoutes = {
+	"[collection]": typeof _route_collection extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"[collection]">> : typeof _route_collection;
+	"[collection]:PATCH": typeof _route_collection_PATCH extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"[collection]:PATCH">> : typeof _route_collection_PATCH;
+	"[collection]:POST": typeof _route_collection_POST extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"[collection]:POST">> : typeof _route_collection_POST;
+	"[collection]/[id]": typeof _route_collection_id extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"[collection]/[id]">> : typeof _route_collection_id;
+	"[collection]/[id]:DELETE": typeof _route_collection_id_DELETE extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"[collection]/[id]:DELETE">> : typeof _route_collection_id_DELETE;
+	"[collection]/[id]:PATCH": typeof _route_collection_id_PATCH extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"[collection]/[id]:PATCH">> : typeof _route_collection_id_PATCH;
+	"[collection]/[id]/audit": typeof _route_collection_id_audit extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"[collection]/[id]/audit">> : typeof _route_collection_id_audit;
+	"[collection]/[id]/restore": typeof _route_collection_id_restore extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"[collection]/[id]/restore">> : typeof _route_collection_id_restore;
+	"[collection]/[id]/revert": typeof _route_collection_id_revert extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"[collection]/[id]/revert">> : typeof _route_collection_id_revert;
+	"[collection]/[id]/transition": typeof _route_collection_id_transition extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"[collection]/[id]/transition">> : typeof _route_collection_id_transition;
+	"[collection]/[id]/versions": typeof _route_collection_id_versions extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"[collection]/[id]/versions">> : typeof _route_collection_id_versions;
+	"[collection]/count": typeof _route_collection_count extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"[collection]/count">> : typeof _route_collection_count;
+	"[collection]/deleteMany": typeof _route_collection_deleteMany extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"[collection]/deleteMany">> : typeof _route_collection_deleteMany;
+	"[collection]/files/[...key]": typeof _route_collection_files_spread_key extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"[collection]/files/[...key]">> : typeof _route_collection_files_spread_key;
+	"[collection]/meta": typeof _route_collection_meta extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"[collection]/meta">> : typeof _route_collection_meta;
+	"[collection]/schema": typeof _route_collection_schema extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"[collection]/schema">> : typeof _route_collection_schema;
+	"[collection]/updateBatch": typeof _route_collection_updateBatch extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"[collection]/updateBatch">> : typeof _route_collection_updateBatch;
+	"[collection]/upload": typeof _route_collection_upload extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"[collection]/upload">> : typeof _route_collection_upload;
+	"auth/[...path]": typeof _route_auth_spread_path extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"auth/[...path]">> : typeof _route_auth_spread_path;
+	"globals/[name]": typeof _route_globals_name extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"globals/[name]">> : typeof _route_globals_name;
+	"globals/[name]:PATCH": typeof _route_globals_name_PATCH extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"globals/[name]:PATCH">> : typeof _route_globals_name_PATCH;
+	"globals/[name]/audit": typeof _route_globals_name_audit extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"globals/[name]/audit">> : typeof _route_globals_name_audit;
+	"globals/[name]/meta": typeof _route_globals_name_meta extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"globals/[name]/meta">> : typeof _route_globals_name_meta;
+	"globals/[name]/revert": typeof _route_globals_name_revert extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"globals/[name]/revert">> : typeof _route_globals_name_revert;
+	"globals/[name]/schema": typeof _route_globals_name_schema extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"globals/[name]/schema">> : typeof _route_globals_name_schema;
+	"globals/[name]/transition": typeof _route_globals_name_transition extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"globals/[name]/transition">> : typeof _route_globals_name_transition;
+	"globals/[name]/versions": typeof _route_globals_name_versions extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"globals/[name]/versions">> : typeof _route_globals_name_versions;
+	health: typeof _route_health extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"health">> : typeof _route_health;
+	realtime: typeof _route_realtime extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"realtime">> : typeof _route_realtime;
+	search: typeof _route_search extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"search">> : typeof _route_search;
+	"search/reindex/[collection]": typeof _route_search_reindex_collection extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"search/reindex/[collection]">> : typeof _route_search_reindex_collection;
+};
 
-export interface CoreServices {
+export type CoreServices = {
 	auth: typeof _svc_auth;
 	collectionsApi: typeof _svc_collectionsApi;
 	db: typeof _svc_db;
@@ -132,9 +133,9 @@ export interface CoreServices {
 	realtime: typeof _svc_realtime;
 	search: typeof _svc_search;
 	storage: typeof _svc_storage;
-}
+};
 
-export interface CoreFieldTypes {
+export type CoreFieldTypes = {
 	boolean: typeof _ftype_boolean;
 	custom: typeof _ftype_custom;
 	date: typeof _ftype_date;
@@ -150,13 +151,30 @@ export interface CoreFieldTypes {
 	time: typeof _ftype_time;
 	upload: typeof _ftype_upload;
 	url: typeof _ftype_url;
-}
+};
 
 // ════════════════════════════════════════════════════════════
 // MODULE DEFINITION — static plain object
 // ════════════════════════════════════════════════════════════
 
-const _module = {
+export type CoreModule = {
+	name: "questpie-core";
+	jobs: CoreJobs;
+	routes: CoreRoutes;
+	services: CoreServices;
+	fieldTypes: CoreFieldTypes;
+	collections: Record<never, never>;
+	globals: Record<never, never>;
+	messages: Record<never, never>;
+	emails: Record<never, never>;
+	migrations: readonly unknown[];
+	seeds: readonly unknown[];
+	config: {
+		app: typeof _appConfig;
+	};
+};
+
+const _module: CoreModule = {
 	name: "questpie-core" as const,
 	jobs: {
 		indexRecords: _job_indexRecords,
@@ -238,5 +256,4 @@ const _module = {
 	},
 };
 
-export type CoreModule = typeof _module;
 export default _module;

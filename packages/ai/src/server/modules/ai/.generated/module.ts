@@ -28,32 +28,24 @@ import _svc_workerManager from "../services/worker-manager";
 // ── Singles ────────────────────────────────────────────────
 import _adminConfig from "../config/admin";
 
-// ── Entity key registry (names only — acyclic by construction) ─────
-declare global {
-	namespace Questpie {
-		interface CollectionKeys { ai_run_events: unknown; ai_runs: unknown; ai_worker_leases: unknown; ai_workers: unknown }
-		interface JobKeys { workerTimeout: unknown }
-	}
-}
-
 // ════════════════════════════════════════════════════════════
 // TYPES — composed from typeof references (zero inference cost)
 // ════════════════════════════════════════════════════════════
 
 import type { RouteDefinition, RouteParamsFromKey } from "questpie/types";
 
-export interface AiCollections {
+export type AiCollections = {
 	ai_run_events: typeof _coll_ai_run_events;
 	ai_runs: typeof _coll_ai_runs;
 	ai_worker_leases: typeof _coll_ai_worker_leases;
 	ai_workers: typeof _coll_ai_workers;
-}
+};
 
-export interface AiJobs {
+export type AiJobs = {
 	workerTimeout: Omit<typeof _job_workerTimeout, "handler"> & { handler: (args: unknown) => Promise<unknown> };
-}
+};
 
-export interface AiRoutes {
+export type AiRoutes = {
 	enrollmentEnroll: typeof _route_enrollmentEnroll extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"enrollmentEnroll">> : typeof _route_enrollmentEnroll;
 	enrollmentTokens: typeof _route_enrollmentTokens extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"enrollmentTokens">> : typeof _route_enrollmentTokens;
 	runComplete: typeof _route_runComplete extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"runComplete">> : typeof _route_runComplete;
@@ -63,11 +55,11 @@ export interface AiRoutes {
 	workerHeartbeat: typeof _route_workerHeartbeat extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"workerHeartbeat">> : typeof _route_workerHeartbeat;
 	workerPoll: typeof _route_workerPoll extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"workerPoll">> : typeof _route_workerPoll;
 	workerRegister: typeof _route_workerRegister extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"workerRegister">> : typeof _route_workerRegister;
-}
+};
 
-export interface AiServices {
+export type AiServices = {
 	workerManager: typeof _svc_workerManager;
-}
+};
 
 // ════════════════════════════════════════════════════════════
 // MODULE DEFINITION — static plain object
@@ -79,15 +71,15 @@ export type AiModule = {
 	jobs: AiJobs;
 	routes: AiRoutes;
 	services: AiServices;
-	globals: {};
-	messages: {};
-	emails: {};
+	globals: Record<never, never>;
+	messages: Record<never, never>;
+	emails: Record<never, never>;
 	migrations: readonly unknown[];
 	seeds: readonly unknown[];
-	fieldTypes: {};
-	views: {};
-	components: {};
-	blocks: {};
+	fieldTypes: Record<never, never>;
+	views: Record<never, never>;
+	components: Record<never, never>;
+	blocks: Record<never, never>;
 	config: {
 		admin: typeof _adminConfig;
 	};

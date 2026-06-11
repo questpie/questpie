@@ -12,6 +12,11 @@ import { localizeAuditTitle } from "../config/localize-title.js";
  * The collection slug used by the audit log.
  * Exported so hooks and jobs can reference the collection dynamically
  * instead of hardcoding the name.
+ *
+ * Must stay in sync with the string literal passed to `collection()` below —
+ * codegen discovery reads the factory's string-literal argument to derive the
+ * module registry key (`admin_audit_log`); an identifier argument would fall
+ * back to the export name and re-key the collection at runtime.
  */
 export const AUDIT_LOG_COLLECTION = "admin_audit_log" as const;
 
@@ -26,7 +31,7 @@ export const AUDIT_LOG_COLLECTION = "admin_audit_log" as const;
  * - update: disallowed
  * - read: allowed (for admin UI display)
  */
-export const auditLogCollection = collection(AUDIT_LOG_COLLECTION)
+export const auditLogCollection = collection("admin_audit_log")
 	.fields(({ f }) => ({
 		/** Action performed: create, update, delete, transition, custom */
 		action: f.text(50).required().label("Action"),

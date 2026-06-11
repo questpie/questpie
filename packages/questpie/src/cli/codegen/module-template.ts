@@ -293,7 +293,11 @@ export function generateModuleTemplate(
 		if (emitStrategy === "array") {
 			lines.push(`\t${safeKey(catName)}: readonly unknown[];`);
 		} else {
-			lines.push(`\t${safeKey(catName)}: Record<string, never>;`);
+			// Record<never, never> (NOT Record<string, never>) — a string index
+			// signature here poisons `keyof` to `string` once the root template
+			// intersects module maps via UnionToIntersection (_MP), which turns
+			// service/collection aggregates into never-indexed maps app-wide.
+			lines.push(`\t${safeKey(catName)}: Record<never, never>;`);
 		}
 	}
 	if (configSingles.length > 0) {
@@ -577,9 +581,17 @@ function getNonModuleSingles(
 }
 
 /**
- * Emit a plain type interface for a module category (no sub-module extends).
+ * Emit a plain named type for a module category (no sub-module extends).
  * Always emit named types to prevent TS7056 ("inferred type exceeds maximum
  * length") when collection builder types are deeply nested via .merge().set().
+ *
+ * IMPORTANT: emitted as `type X = { ... }` — NOT `interface`. Interfaces have
+ * no implicit index signature, so an interface-typed category map makes the
+ * app-level intersection (e.g. `AppCollections`) fail
+ * `extends Record<string, AnyCollectionOrBuilder>` constraints. That silently
+ * degrades `GetCollection` to `never` and every `with`-populated relation to
+ * `{}` in every consuming app. Type aliases get implicit index signatures and
+ * keep the constraint satisfied.
  */
 function emitSimpleTypeInterface(
 	lines: string[],
@@ -608,11 +620,11 @@ function emitSimpleTypeInterface(
 	}
 
 	if (bundleFiles.length === 0) {
-		lines.push(`export interface ${typeName} {`);
+		lines.push(`export type ${typeName} = {`);
 		for (const file of leafFiles) {
 			lines.push(`\t${categoryTypeEntry(file, decl, catName)};`);
 		}
-		lines.push("}");
+		lines.push("};");
 	} else {
 		const parts: string[] = [];
 		if (leafFiles.length > 0) {
@@ -636,25 +648,24 @@ function emitSimpleRouteTypeInterface(
 	const leafFiles = sortedValues(fileMap).filter((f) => !f.isBundle);
 	const bundleFiles = sortedValues(fileMap).filter((f) => f.isBundle);
 
+	// Leaf entries guard on the `__brand: "route"` marker: convention dirs may
+	// contain helper files whose default/named export is NOT a route definition
+	// (e.g. admin's routes/i18n-helpers.ts) — erasing those to RouteDefinition
+	// breaks the `as ${typeName}` cast on the module object.
+	const leafEntry = (f: DiscoveredFile) =>
+		`${safeKey(f.key)}: typeof ${f.varName} extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<${JSON.stringify(f.key)}>> : typeof ${f.varName}`;
+
 	if (bundleFiles.length === 0) {
-		lines.push(`export interface ${typeName} {`);
+		// `type` (not `interface`) — see emitSimpleTypeInterface for why.
+		lines.push(`export type ${typeName} = {`);
 		for (const file of leafFiles) {
-			lines.push(
-				`\t${safeKey(file.key)}: RouteDefinition<unknown, unknown, RouteParamsFromKey<${JSON.stringify(file.key)}>>;`,
-			);
+			lines.push(`\t${leafEntry(file)};`);
 		}
-		lines.push("}");
+		lines.push("};");
 	} else {
 		const parts: string[] = [];
 		if (leafFiles.length > 0) {
-			parts.push(
-				`{ ${leafFiles
-					.map(
-						(f) =>
-							`${safeKey(f.key)}: RouteDefinition<unknown, unknown, RouteParamsFromKey<${JSON.stringify(f.key)}>>`,
-					)
-					.join("; ")} }`,
-			);
+			parts.push(`{ ${leafFiles.map((f) => leafEntry(f)).join("; ")} }`);
 		}
 		for (const bundle of bundleFiles) {
 			parts.push(`typeof ${bundle.varName}`);
