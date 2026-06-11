@@ -10,7 +10,7 @@
  * @see RFC-MODULE-ARCHITECTURE §9 (Generated Code)
  */
 
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, rename, writeFile } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
 
 import { discoverFiles } from "./discover.js";
@@ -636,7 +636,7 @@ export async function runCodegen(
 	if (!dryRun) {
 		await mkdir(outDir, { recursive: true });
 		for (const file of filesToWrite) {
-			await writeFile(file.path, file.code, "utf-8");
+			await atomicWriteFile(file.path, file.code);
 		}
 	}
 
@@ -646,6 +646,17 @@ export async function runCodegen(
 		outputPath,
 		discovered,
 	};
+}
+
+/**
+ * Write via temp file + rename so a concurrent or killed run can never leave
+ * a truncated/interleaved .generated file behind (rename is atomic within
+ * the same directory).
+ */
+async function atomicWriteFile(path: string, code: string): Promise<void> {
+	const tmpPath = `${path}.${process.pid}.tmp`;
+	await writeFile(tmpPath, code, "utf-8");
+	await rename(tmpPath, path);
 }
 
 // ============================================================================
@@ -787,14 +798,14 @@ export async function runAllTargets(
 
 				if (!dryRun) {
 					await mkdir(targetOutDir, { recursive: true });
-					await writeFile(outputPath, output.code, "utf-8");
+					await atomicWriteFile(outputPath, output.code);
 
 					if (output.additionalFiles) {
 						for (const [relPath, content] of Object.entries(
 							output.additionalFiles,
 						)) {
 							const absPath = join(targetOutDir, relPath);
-							await writeFile(absPath, content, "utf-8");
+							await atomicWriteFile(absPath, content);
 						}
 					}
 				}

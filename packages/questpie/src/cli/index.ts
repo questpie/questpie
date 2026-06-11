@@ -613,8 +613,16 @@ cloud
 				),
 			});
 		} catch (error) {
-			handleCloudCommandError("Failed to roll back through Questpie Cloud", error);
+			handleCloudCommandError(
+				"Failed to roll back through Questpie Cloud",
+				error,
+			);
 		}
 	});
 
-program.parse();
+// Parsing happens in src/exports/cli.ts (the bin entry), guarded by
+// import.meta.main. Importing this module must never execute a command:
+// questpie.config.ts files import "questpie/cli" for packageConfig, and in
+// the workspace that resolves to a second module instance (src vs dist) —
+// a top-level parse here would run the in-flight command twice and corrupt
+// generated output.
