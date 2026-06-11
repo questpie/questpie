@@ -244,8 +244,9 @@ describe("generateModuleTemplate — collections", () => {
 		expect(output).toContain('import _coll_posts from "../collections/posts";');
 	});
 
-	it("emits type interface for collections", () => {
-		expect(output).toContain("export interface BlogCollections {");
+	it("emits named type alias for collections (NOT interface — interfaces lack implicit index signatures and break Record constraints app-wide)", () => {
+		expect(output).toContain("export type BlogCollections = {");
+		expect(output).not.toContain("export interface BlogCollections");
 		expect(output).toContain("comments: typeof _coll_comments;");
 		expect(output).toContain("posts: typeof _coll_posts;");
 	});
@@ -293,16 +294,16 @@ describe("generateModuleTemplate — routes with slash-separated keys", () => {
 		expect(output).toContain("getConfig: _route_getConfig,");
 	});
 
-	it("emits flat type interface with camelCase slash keys", () => {
-		expect(output).toContain("export interface TestRoutes {");
+	it("emits flat type alias with camelCase slash keys and __brand-guarded entries", () => {
+		expect(output).toContain("export type TestRoutes = {");
 		expect(output).toContain(
-			'"admin/stats": RouteDefinition<unknown, unknown, RouteParamsFromKey<"admin/stats">>;',
+			'"admin/stats": typeof _route_admin_stats extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"admin/stats">> : typeof _route_admin_stats;',
 		);
 		expect(output).toContain(
-			'"admin/users/export": RouteDefinition<unknown, unknown, RouteParamsFromKey<"admin/users/export">>;',
+			'"admin/users/export": typeof _route_admin_users_export extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"admin/users/export">> : typeof _route_admin_users_export;',
 		);
 		expect(output).toContain(
-			'getConfig: RouteDefinition<unknown, unknown, RouteParamsFromKey<"getConfig">>;',
+			'getConfig: typeof _route_getConfig extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"getConfig">> : typeof _route_getConfig;',
 		);
 	});
 });
@@ -337,7 +338,7 @@ describe("generateModuleTemplate — bundle routes", () => {
 		// When bundles are present, type is emitted as intersection, not interface
 		expect(output).toContain("export type TestRoutes =");
 		expect(output).toContain(
-			'getConfig: RouteDefinition<unknown, unknown, RouteParamsFromKey<"getConfig">>',
+			'getConfig: typeof _route_getConfig extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"getConfig">> : typeof _route_getConfig',
 		);
 		expect(output).toContain("typeof _route_setup");
 	});

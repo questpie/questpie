@@ -201,15 +201,16 @@ type HasSpecificKeys<T extends Record<string, any>> = string extends keyof T
 
 /**
  * Infer relation configs from field definitions.
+ * Returns the inferred map when field definitions are introspectable —
+ * including the EMPTY map for collections with no relation fields (inert,
+ * keeps relation machinery from optionalizing unrelated keys).
  * Falls back to generic Record when fieldDefinitions doesn't have specific fields.
  */
 type InferRelationsFromFieldDefs<TFieldDefs> =
 	TFieldDefs extends Record<string, { readonly _: FieldState }>
 		? InferRelationConfigsFromFields<TFieldDefs> extends infer TInferred
 			? TInferred extends Record<string, RelationConfig>
-				? keyof TInferred extends never
-					? Record<string, RelationConfig>
-					: TInferred
+				? TInferred
 				: Record<string, RelationConfig>
 			: Record<string, RelationConfig>
 		: Record<string, RelationConfig>;

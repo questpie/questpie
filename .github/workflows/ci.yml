@@ -114,6 +114,16 @@ jobs:
       - name: Dist types gate
         run: bun run scripts/check-dist-types.ts
 
+      # Deterministic tsc metrics (Types/Instantiations) vs committed budget —
+      # fails on >10% instantiation regression. Re-baseline with --update.
+      - name: Type budget gate
+        run: bun run scripts/type-budget.ts
+
+      # Per-package type-escape counts (": any", "as any", ...) must never
+      # increase. Re-baseline with --update when counts go down.
+      - name: any-census ratchet
+        run: bun run scripts/any-census.ts
+
   docs:
     name: Docs
     runs-on: ubuntu-latest

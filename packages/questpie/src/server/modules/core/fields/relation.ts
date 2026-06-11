@@ -44,7 +44,7 @@ export interface RelationFieldMeta extends Questpie.RelationFieldMeta {
 // ============================================================================
 
 export type RelationFieldState<TTo extends string = string> =
-	DefaultFieldState & {
+	Omit<DefaultFieldState, "operators"> & {
 		type: "relation";
 		data: string;
 		column: PgVarcharBuilder<[string, ...string[]]>;
@@ -72,7 +72,7 @@ export interface RelationFieldMethods {
 }
 
 export type ToManyRelationFieldState<TTo extends string = string> =
-	DefaultFieldState & {
+	Omit<DefaultFieldState, "operators"> & {
 		type: "relation";
 		data: string[];
 		virtual: true;
@@ -81,14 +81,14 @@ export type ToManyRelationFieldState<TTo extends string = string> =
 		relationKind: "many";
 	};
 
-export type MorphToFieldState = DefaultFieldState & {
+export type MorphToFieldState = Omit<DefaultFieldState, "operators"> & {
 	type: "relation";
 	data: { type: string; id: string };
 	operators: typeof belongsToOps;
 };
 
 export type MultipleRelationFieldState<TTo extends string = string> =
-	DefaultFieldState & {
+	Omit<DefaultFieldState, "operators"> & {
 		type: "relation";
 		data: string[];
 		operators: typeof multipleOps;

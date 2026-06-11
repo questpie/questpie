@@ -96,23 +96,33 @@ handler: async ({ input, collections, queue, email, blog }) => {
 
 ## Route Return Types
 
-Route return types are inferred from the handler:
+Route return types come from `.outputSchema()`. The schema both validates the
+response at runtime and types the client call — and the handler's return is
+checked against it at compile time:
 
 ```ts
 // Server
 export default route()
 	.post()
 	.schema(z.object({ barberId: z.string() }))
+	.outputSchema(z.object({ name: z.string(), isActive: z.boolean() }))
 	.handler(async ({ input, collections }) => {
-		return await collections.barbers.findOne({
+		const barber = await collections.barbers.findOne({
 			where: { id: input.barberId },
 		});
+		if (!barber) throw new Error("Not found");
+		return { name: barber.name, isActive: barber.isActive };
 	});
 
-// Client — return type is inferred
+// Client — typed from the output schema
 const barber = await client.routes.getBarber({ barberId: "abc" });
-// barber is typed as the barber record
+// barber: { name: string; isActive: boolean }
 ```
+
+Routes without an output schema return `any` on the client. Handler-return
+inference is intentionally not used for the route's type — it would make the
+route definition's type depend on the handler body, which circularly
+references the app context inside modules.
 
 ## Related Pages
 

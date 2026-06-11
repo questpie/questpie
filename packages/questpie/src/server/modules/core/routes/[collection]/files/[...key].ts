@@ -7,6 +7,7 @@
 import { storageCollectionServe } from "#questpie/server/adapters/routes/storage.js";
 import type { AdapterContext } from "#questpie/server/adapters/types.js";
 import { route } from "#questpie/server/routes/define-route.js";
+import { routeApp } from "#questpie/server/routes/route-app.js";
 
 type StorageRouteHandlerContext = AdapterContext["appContext"] &
 	Pick<
@@ -31,7 +32,7 @@ export default route()
 		};
 
 		return storageCollectionServe(
-			ctx.app,
+			routeApp(ctx),
 			ctx.request,
 			{
 				collection: ctx.params.collection,

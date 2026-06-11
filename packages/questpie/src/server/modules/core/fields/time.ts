@@ -20,7 +20,7 @@ export interface TimeFieldMeta extends Questpie.TimeFieldMeta {
 	_?: never;
 }
 
-export type TimeFieldState = DefaultFieldState & {
+export type TimeFieldState = Omit<DefaultFieldState, "operators"> & {
 	type: "time";
 	data: string;
 	column: PgTimeBuilder;

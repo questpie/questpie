@@ -1,14 +1,6 @@
 import { route } from "questpie/services";
 import { z } from "zod";
 
-type WorkflowsApi = {
-	sendEvent(
-		event: "production.materials-ready",
-		data: { materialId: string; quantity: number },
-		match: { orderId: string },
-	): Promise<void>;
-};
-
 export default route()
 	.post()
 	.schema(
@@ -20,9 +12,7 @@ export default route()
 		}),
 	)
 	.handler(async (ctx) => {
-		const { input, collections } = ctx;
-		const workflows = (ctx as typeof ctx & { workflows: WorkflowsApi })
-			.workflows;
+		const { input, collections, workflows } = ctx;
 		const material = await collections.materials.findOne(
 			{
 				where: { id: input.materialId },

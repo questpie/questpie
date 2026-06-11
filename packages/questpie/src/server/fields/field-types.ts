@@ -17,15 +17,15 @@ import type {
 	CollectionOptions,
 	UploadOptions,
 } from "#questpie/server/collection/builder/types.js";
-import { datetime } from "#questpie/server/modules/core/fields/datetime.js";
-import { number } from "#questpie/server/modules/core/fields/number.js";
-import { text } from "#questpie/server/modules/core/fields/text.js";
 import type { FieldState } from "#questpie/server/fields/field-class-types.js";
 import type { Field } from "#questpie/server/fields/field-class.js";
 import type {
-	ExtractOperatorParamType,
 	OperatorMap,
+	OperatorsToWhereInput,
 } from "#questpie/server/fields/types.js";
+import { datetime } from "#questpie/server/modules/core/fields/datetime.js";
+import { number } from "#questpie/server/modules/core/fields/number.js";
+import { text } from "#questpie/server/modules/core/fields/text.js";
 
 // ============================================================================
 // Field Select — dispatch via accumulated state properties
@@ -53,13 +53,16 @@ type V2FieldSelect<TState extends FieldState> =
 /**
  * Extract where clause type from Field<TState>.
  * Reads operators from the OperatorSetDefinition on TState.
+ *
+ * Delegates the mapped expansion to OperatorsToWhereInput so the (exact-key)
+ * operator→input map is instantiated once per distinct operator SET (~10 exist)
+ * instead of once per field state — sealed operator maps would otherwise
+ * re-expand the full property list for every field × chain variant × depth.
  */
 type V2FieldWhere<TState extends FieldState> = TState extends {
 	operators: { column: infer TColumnOps extends OperatorMap };
 }
-	? {
-			[K in keyof TColumnOps]?: ExtractOperatorParamType<TColumnOps[K]>;
-		}
+	? OperatorsToWhereInput<TColumnOps>
 	: never;
 
 // ============================================================================

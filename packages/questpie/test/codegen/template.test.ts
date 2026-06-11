@@ -212,13 +212,14 @@ describe("generateTemplate — minimal (modules.ts only)", () => {
 		expect(code).toContain("collections: _CollectionsAPI;");
 	});
 
-	it("emits AppConfig type", () => {
+	it("emits AppConfig type without key-poisoning Record intersections", () => {
 		expect(code).toContain("export type AppConfig = {");
-		expect(code).toContain(
+		expect(code).toContain("\tcollections: AppCollections;");
+		expect(code).toContain("\tglobals: AppGlobals;");
+		// `& Record<string, …>` widens keyof to string — phantom collection
+		// keys would silently compile on createClient<AppConfig>().
+		expect(code).not.toContain(
 			"collections: AppCollections & Record<string, AnyCollectionOrBuilder>;",
-		);
-		expect(code).toContain(
-			"globals: AppGlobals & Record<string, AnyGlobalOrBuilder>;",
 		);
 		expect(code).toContain('storage: (typeof _runtime)["storage"];');
 	});

@@ -16,19 +16,40 @@ import _appConfig from "../config/app";
 // TYPES — composed from typeof references (zero inference cost)
 // ════════════════════════════════════════════════════════════
 
-export interface AuditCollections {
+export type AuditCollections = {
 	admin_audit_log: typeof _coll_admin_audit_log;
-}
+};
 
-export interface AuditJobs {
-	auditCleanup: typeof _job_auditCleanup;
-}
+export type AuditJobs = {
+	auditCleanup: Omit<typeof _job_auditCleanup, "handler"> & { handler: (args: unknown) => Promise<unknown> };
+};
 
 // ════════════════════════════════════════════════════════════
 // MODULE DEFINITION — static plain object
 // ════════════════════════════════════════════════════════════
 
-const _module = {
+export type AuditModule = {
+	name: "questpie-audit";
+	collections: AuditCollections;
+	jobs: AuditJobs;
+	globals: Record<never, never>;
+	routes: Record<never, never>;
+	messages: Record<never, never>;
+	services: Record<never, never>;
+	emails: Record<never, never>;
+	migrations: readonly unknown[];
+	seeds: readonly unknown[];
+	fieldTypes: Record<never, never>;
+	views: Record<never, never>;
+	components: Record<never, never>;
+	blocks: Record<never, never>;
+	config: {
+		admin: typeof _adminConfig;
+		app: typeof _appConfig;
+	};
+};
+
+const _module: AuditModule = {
 	name: "questpie-audit" as const,
 	collections: {
 		admin_audit_log: _coll_admin_audit_log,
@@ -53,5 +74,4 @@ const _module = {
 	},
 };
 
-export type AuditModule = typeof _module;
 export default _module;

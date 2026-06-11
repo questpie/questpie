@@ -27,24 +27,43 @@ import _fields from "../fields";
 // TYPES — composed from typeof references (zero inference cost)
 // ════════════════════════════════════════════════════════════
 
-export interface StarterCollections {
+export type StarterCollections = {
 	account: typeof _coll_account;
 	apikey: typeof _coll_apikey;
 	assets: typeof _coll_assets;
 	session: typeof _coll_session;
 	user: typeof _coll_user;
 	verification: typeof _coll_verification;
-}
+};
 
-export interface StarterJobs {
-	realtimeCleanup: typeof _job_realtimeCleanup;
-}
+export type StarterJobs = {
+	realtimeCleanup: Omit<typeof _job_realtimeCleanup, "handler"> & { handler: (args: unknown) => Promise<unknown> };
+};
 
 // ════════════════════════════════════════════════════════════
 // MODULE DEFINITION — static plain object
 // ════════════════════════════════════════════════════════════
 
-const _module = {
+export type StarterModule = {
+	name: "questpie-starter";
+	collections: StarterCollections;
+	jobs: StarterJobs;
+	globals: Record<never, never>;
+	routes: Record<never, never>;
+	messages: Record<never, never>;
+	services: Record<never, never>;
+	emails: Record<never, never>;
+	migrations: readonly unknown[];
+	seeds: readonly unknown[];
+	fieldTypes: Record<never, never>;
+	config: {
+		app: typeof _appConfig;
+		auth: typeof _authConfig;
+	};
+	fields: typeof _fields;
+};
+
+const _module: StarterModule = {
 	name: "questpie-starter" as const,
 	collections: {
 		account: _coll_account,
@@ -74,5 +93,4 @@ const _module = {
 	fields: _fields,
 };
 
-export type StarterModule = typeof _module;
 export default _module;

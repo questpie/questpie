@@ -4,9 +4,8 @@ import { z } from "zod";
 import { app } from "#questpie";
 import { createRequestContext } from "@/lib/server-helpers";
 
-export type SiteSettingsData = Awaited<
-	ReturnType<typeof app.globals.site_settings.get>
->;
+/** Resolved site settings as returned by getSiteSettings (logo populated). */
+export type SiteSettingsData = Awaited<ReturnType<typeof getSiteSettings>>;
 
 const localeInputSchema = z
 	.object({ locale: z.string().optional() })
@@ -21,6 +20,9 @@ export const getSiteSettings = createServerFn({ method: "GET" })
 			{ with: { logo: true } },
 			ctx,
 		);
+		if (!settings) {
+			throw new Error("site_settings global is not available");
+		}
 
 		return settings;
 	});

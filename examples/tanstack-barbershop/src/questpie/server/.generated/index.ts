@@ -306,22 +306,22 @@ declare global {
 
 		interface JobHandlerContext {
 			// Infrastructure
-			db: unknown;
+			db: _AppDb;
 			email: MailerService<AppEmailTemplates>;
 			queue: QueueClient<_ExecutionContextJobs>;
 			storage: _AppStorage;
-			kv: unknown;
-			logger: unknown;
-			search: unknown;
-			realtime: unknown;
+			kv: _AppQuestpie["kv"];
+			logger: _AppQuestpie["logger"];
+			search: _AppQuestpie["search"];
+			realtime: _AppQuestpie["realtime"];
 
 			// Entity APIs
 			collections: _JobHandlerCollectionsAPI;
-			globals: Record<string, unknown>;
-			tables: Record<string, unknown>;
+			globals: _AppGlobalsAPI;
+			tables: _AppTables;
 
 			// Request-scoped
-			session: unknown;
+			session: _AppSession;
 			t: (key: string, params?: Record<string, unknown>, locale?: string) => string;
 
 			// Top-level services (namespace: null)
@@ -333,22 +333,22 @@ declare global {
 
 		interface WorkflowContext {
 			// Infrastructure
-			db: unknown;
+			db: _AppDb;
 			email: MailerService<AppEmailTemplates>;
 			queue: QueueClient<_ExecutionContextJobs>;
 			storage: _AppStorage;
-			kv: unknown;
-			logger: unknown;
-			search: unknown;
-			realtime: unknown;
+			kv: _AppQuestpie["kv"];
+			logger: _AppQuestpie["logger"];
+			search: _AppQuestpie["search"];
+			realtime: _AppQuestpie["realtime"];
 
 			// Entity APIs
 			collections: _JobHandlerCollectionsAPI;
-			globals: Record<string, unknown>;
-			tables: Record<string, unknown>;
+			globals: _AppGlobalsAPI;
+			tables: _AppTables;
 
 			// Request-scoped
-			session: unknown;
+			session: _AppSession;
 			t: (key: string, params?: Record<string, unknown>, locale?: string) => string;
 
 			// Top-level services (namespace: null)
@@ -359,6 +359,10 @@ declare global {
 		}
 
 		interface ServiceCreateContext extends _AppCoreContext {}
+		// Names-only marker — the `ServiceCreateContext` fallback conditional
+		// probes THIS interface's keys instead of the real one (whose base
+		// resolves through module service definitions and would cycle).
+		interface ServiceCreateContextGenerated { generated: unknown }
 
 		// Typed service surface for appConfig({ context }) resolvers.
 		// Excludes _AppContextExtensions — the resolver produces them.
@@ -435,8 +439,8 @@ export type HookRuleContext<K extends keyof AppCollections | unknown = unknown> 
  * For handler context, use `AppContext` (auto-typed via module augmentation).
  */
 export type AppConfig = {
-	collections: AppCollections & Record<string, AnyCollectionOrBuilder>;
-	globals: AppGlobals & Record<string, AnyGlobalOrBuilder>;
+	collections: AppCollections;
+	globals: AppGlobals;
 	routes: AppRoutes;
 	storage: (typeof _runtime)["storage"];
 	auth: typeof _authConfig;

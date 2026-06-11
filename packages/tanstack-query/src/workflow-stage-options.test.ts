@@ -1,6 +1,15 @@
 import { describe, expect, it } from "bun:test";
 
+import type { MutationFunctionContext } from "@tanstack/react-query";
+import { QueryClient } from "@tanstack/react-query";
+import type { QuestpieApp, QuestpieClient } from "questpie/client";
+
 import { createQuestpieQueryOptions } from "./index.js";
+
+const mutationContext: MutationFunctionContext = {
+	client: new QueryClient(),
+	meta: undefined,
+};
 
 describe("tanstack query workflow stage config", () => {
 	it("includes stage in keys and forwards stage for mutations", async () => {
@@ -34,22 +43,25 @@ describe("tanstack query workflow stage config", () => {
 			},
 			rpc: {},
 			realtime: undefined,
-		} as any;
+		} as unknown as QuestpieClient<QuestpieApp>;
 
-		const queryOptions = createQuestpieQueryOptions(client as any, {
+		const queryOptions = createQuestpieQueryOptions(client, {
 			keyPrefix: ["questpie"],
 			locale: "sk",
 			stage: "review",
-		}) as any;
+		});
 
 		const findQuery = queryOptions.collections.posts.find({ limit: 5 });
 		expect(findQuery.queryKey).toContain("review");
 
 		const createMutation = queryOptions.collections.posts.create();
-		await createMutation.mutationFn?.({ title: "New" });
+		await createMutation.mutationFn?.({ title: "New" }, mutationContext);
 
 		const updateGlobalMutation = queryOptions.globals.siteSettings.update();
-		await updateGlobalMutation.mutationFn?.({ data: { siteName: "Site" } });
+		await updateGlobalMutation.mutationFn?.(
+			{ data: { siteName: "Site" } },
+			mutationContext,
+		);
 
 		expect(createOptionsCalls[0]).toEqual({ locale: "sk", stage: "review" });
 		expect(globalUpdateOptionsCalls[0]).toEqual({
@@ -81,18 +93,21 @@ describe("tanstack query workflow stage config", () => {
 			},
 			rpc: {},
 			realtime: undefined,
-		} as any;
+		} as unknown as QuestpieClient<QuestpieApp>;
 
-		const queryOptions = createQuestpieQueryOptions(client as any, {
+		const queryOptions = createQuestpieQueryOptions(client, {
 			keyPrefix: ["questpie"],
 			locale: "en",
 			stage: "draft",
-		}) as any;
+		});
 
 		// Collection transitionStage mutation
 		const collMutation = queryOptions.collections.posts.transitionStage();
 		expect(collMutation.mutationKey).toContain("transitionStage");
-		await collMutation.mutationFn?.({ id: "post-1", stage: "published" });
+		await collMutation.mutationFn?.(
+			{ id: "post-1", stage: "published" },
+			mutationContext,
+		);
 		expect(collTransitionCalls[0]?.params).toEqual({
 			id: "post-1",
 			stage: "published",
@@ -105,9 +120,10 @@ describe("tanstack query workflow stage config", () => {
 		// Global transitionStage mutation
 		const globalMutation = queryOptions.globals.siteSettings.transitionStage();
 		expect(globalMutation.mutationKey).toContain("transitionStage");
-		await globalMutation.mutationFn?.({
-			params: { stage: "published" },
-		});
+		await globalMutation.mutationFn?.(
+			{ params: { stage: "published" } },
+			mutationContext,
+		);
 		expect(globalTransitionCalls[0]?.params).toEqual({
 			stage: "published",
 		});

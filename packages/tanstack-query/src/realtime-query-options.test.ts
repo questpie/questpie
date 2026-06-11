@@ -2,6 +2,8 @@ import { describe, expect, it } from "bun:test";
 
 import { QueryClient } from "@tanstack/react-query";
 
+import type { QuestpieApp, QuestpieClient } from "questpie/client";
+
 import {
 	createQuestpieQueryOptions,
 	type QuestpieQueryOptionsProxy,
@@ -44,7 +46,7 @@ describe("realtime query options", () => {
 				topicCount: 0,
 				subscriberCount: 0,
 			},
-		} as any;
+		} as unknown as QuestpieClient<QuestpieApp>;
 
 		const queryClient = new QueryClient();
 		const abortController = new AbortController();

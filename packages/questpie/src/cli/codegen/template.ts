@@ -223,6 +223,14 @@ export function generateTemplate(options: TemplateOptions): string {
 	lines.push(
 		'import type { ServiceCustomNamespaceInstances, ServiceInstanceOf, ServiceInstancesInNamespace, ServiceTopLevelInstances, UnionToIntersection } from "questpie/types";',
 	);
+	// Workflows plugin present → the generated contexts expose a typed
+	// `workflows` client keyed by AppWorkflows (name + schema preserved).
+	const hasWorkflows = allDecls.has("workflows");
+	if (hasWorkflows) {
+		lines.push(
+			'import type { WorkflowClient } from "@questpie/workflows/server";',
+		);
+	}
 	lines.push(
 		'type _RouteDefinitionWithoutHandler<T> = T extends { mode: "raw" } ? Omit<T, "handler"> & { handler: (args: unknown) => Response | Promise<Response> } : Omit<T, "handler"> & { handler: (args: unknown) => unknown | Promise<unknown> };',
 	);
@@ -666,7 +674,17 @@ export function generateTemplate(options: TemplateOptions): string {
 		lines.push("");
 		lines.push("declare global {");
 		lines.push("\tnamespace Questpie {");
-		if (hasServices) {
+		if (hasServices && hasWorkflows) {
+			// Redeclare `workflows` with the AppWorkflows-keyed client. The
+			// service-inferred member from _AppTopLevelServices is the blind
+			// `WorkflowClient<Record<string, WorkflowDefinition>>` — the
+			// redeclaration restores key + payload checking on trigger().
+			lines.push(
+				"\t\tinterface AppContext extends _AppCoreContext, _AppTopLevelServices {",
+			);
+			lines.push("\t\t\tworkflows: WorkflowClient<AppWorkflows>;");
+			lines.push("\t\t}");
+		} else if (hasServices) {
 			lines.push(
 				"\t\tinterface AppContext extends _AppCoreContext, _AppTopLevelServices {}",
 			);
@@ -674,29 +692,35 @@ export function generateTemplate(options: TemplateOptions): string {
 			lines.push("\t\tinterface AppContext extends _AppCoreContext {}");
 		}
 		lines.push("");
+		// Execution contexts (jobs, workflows) are emitted as plain interfaces
+		// with lazy members referencing the app-level aliases. Interface-member
+		// laziness keeps this safe even when a job/workflow file is part of the
+		// module graph (the historical collapse was specific to routing the
+		// `collections` MAPPED type through AppCollections — collections stays
+		// the literal local map below).
 		const emitNonRecursiveContext = (name: string) => {
 			lines.push(`\t\tinterface ${name} {`);
 			lines.push("\t\t\t// Infrastructure");
-			lines.push("\t\t\tdb: unknown;");
+			lines.push("\t\t\tdb: _AppDb;");
 			if (hasEmails) {
 				lines.push(`\t\t\temail: MailerService<${emailsTypeName}>;`);
 			} else {
-				lines.push("\t\t\temail: unknown;");
+				lines.push('\t\t\temail: _AppQuestpie["email"];');
 			}
 			lines.push("\t\t\tqueue: QueueClient<_ExecutionContextJobs>;");
 			lines.push("\t\t\tstorage: _AppStorage;");
-			lines.push("\t\t\tkv: unknown;");
-			lines.push("\t\t\tlogger: unknown;");
-			lines.push("\t\t\tsearch: unknown;");
-			lines.push("\t\t\trealtime: unknown;");
+			lines.push('\t\t\tkv: _AppQuestpie["kv"];');
+			lines.push('\t\t\tlogger: _AppQuestpie["logger"];');
+			lines.push('\t\t\tsearch: _AppQuestpie["search"];');
+			lines.push('\t\t\trealtime: _AppQuestpie["realtime"];');
 			lines.push("");
 			lines.push("\t\t\t// Entity APIs");
 			lines.push("\t\t\tcollections: _JobHandlerCollectionsAPI;");
-			lines.push("\t\t\tglobals: Record<string, unknown>;");
-			lines.push("\t\t\ttables: Record<string, unknown>;");
+			lines.push("\t\t\tglobals: _AppGlobalsAPI;");
+			lines.push("\t\t\ttables: _AppTables;");
 			lines.push("");
 			lines.push("\t\t\t// Request-scoped");
-			lines.push("\t\t\tsession: unknown;");
+			lines.push("\t\t\tsession: _AppSession;");
 			if (hasMessages) {
 				lines.push(
 					"\t\t\tt: (key: AppMessageKeys | (string & {}), params?: Record<string, unknown>, locale?: string) => string;",
@@ -707,7 +731,13 @@ export function generateTemplate(options: TemplateOptions): string {
 				);
 			}
 			lines.push("");
-			if (
+			if (hasWorkflows) {
+				lines.push(
+					"\t\t\t// Workflows client — typed by AppWorkflows (name + schema preserved)",
+				);
+				lines.push("\t\t\tworkflows: WorkflowClient<AppWorkflows>;");
+				lines.push("");
+			} else if (
 				hasServices &&
 				(name === "WorkflowContext" || name === "JobHandlerContext")
 			) {
@@ -726,6 +756,18 @@ export function generateTemplate(options: TemplateOptions): string {
 		emitNonRecursiveContext("WorkflowContext");
 		lines.push("");
 		lines.push("\t\tinterface ServiceCreateContext extends _AppCoreContext {}");
+		lines.push(
+			"\t\t// Names-only marker — the `ServiceCreateContext` fallback conditional",
+		);
+		lines.push(
+			"\t\t// probes THIS interface's keys instead of the real one (whose base",
+		);
+		lines.push(
+			"\t\t// resolves through module service definitions and would cycle).",
+		);
+		lines.push(
+			"\t\tinterface ServiceCreateContextGenerated { generated: unknown }",
+		);
 		lines.push("");
 		lines.push(
 			"\t\t// Typed service surface for appConfig({ context }) resolvers.",
@@ -875,11 +917,14 @@ export function generateTemplate(options: TemplateOptions): string {
 		" * For handler context, use `AppContext` (auto-typed via module augmentation).",
 	);
 	lines.push(" */");
+	// NOTE: no `& Record<string, …>` intersections here — they widen `keyof`
+	// to `string`, so phantom collection/global keys compile on the client
+	// (`createClient<AppConfig>().collections.nope`). Module category maps are
+	// emitted as type aliases (implicit index signatures), so the plain
+	// aggregates already satisfy the SDK's `QuestpieApp` constraint.
 	lines.push("export type AppConfig = {");
-	lines.push(
-		"\tcollections: AppCollections & Record<string, AnyCollectionOrBuilder>;",
-	);
-	lines.push("\tglobals: AppGlobals & Record<string, AnyGlobalOrBuilder>;");
+	lines.push("\tcollections: AppCollections;");
+	lines.push("\tglobals: AppGlobals;");
 	lines.push("\troutes: AppRoutes;");
 	lines.push('\tstorage: (typeof _runtime)["storage"];');
 	if (authFile) {

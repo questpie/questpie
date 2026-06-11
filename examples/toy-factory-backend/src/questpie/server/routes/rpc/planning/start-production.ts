@@ -1,14 +1,6 @@
 import { route } from "questpie/services";
 import { z } from "zod";
 
-type WorkflowsApi = {
-	trigger(
-		name: "production-order-plan",
-		input: { orderId: string },
-		options?: { idempotencyKey?: string },
-	): Promise<{ instanceId: string; existing: boolean }>;
-};
-
 export default route()
 	.post()
 	.schema(
@@ -17,9 +9,7 @@ export default route()
 		}),
 	)
 	.handler(async (ctx) => {
-		const { input } = ctx;
-		const workflows = (ctx as typeof ctx & { workflows: WorkflowsApi })
-			.workflows;
+		const { input, workflows } = ctx;
 		const result = await workflows.trigger(
 			"production-order-plan",
 			{ orderId: input.orderId },

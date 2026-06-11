@@ -40,7 +40,7 @@ export type SelectValuesFromOptions<T extends readonly SelectOption[]> =
 		: string;
 
 export type SelectFieldState<TValue extends string = string> =
-	DefaultFieldState & {
+	Omit<DefaultFieldState, "operators"> & {
 		type: "select";
 		data: TValue;
 		column: PgVarcharBuilder<[string, ...string[]]>;

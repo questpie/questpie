@@ -1,0 +1,47 @@
+{
+	"$comment": "any-census baseline (per-package type-escape counts, non-test src). Regenerate with `bun run scripts/any-census.ts --update` — only commit decreases unless the increase was explicitly approved. CI fails on any increase.",
+	"packages": {
+		"questpie": {
+			": any": 561,
+			"as any": 478,
+			"as unknown as": 44,
+			"@ts-expect-error": 0
+		},
+		"admin": {
+			": any": 451,
+			"as any": 457,
+			"as unknown as": 27,
+			"@ts-expect-error": 0
+		},
+		"tanstack-query": {
+			": any": 30,
+			"as any": 3,
+			"as unknown as": 0,
+			"@ts-expect-error": 0
+		},
+		"workflows": {
+			": any": 0,
+			"as any": 0,
+			"as unknown as": 0,
+			"@ts-expect-error": 0
+		},
+		"hono": {
+			": any": 2,
+			"as any": 0,
+			"as unknown as": 0,
+			"@ts-expect-error": 0
+		},
+		"elysia": {
+			": any": 1,
+			"as any": 0,
+			"as unknown as": 0,
+			"@ts-expect-error": 0
+		},
+		"next": {
+			": any": 0,
+			"as any": 0,
+			"as unknown as": 0,
+			"@ts-expect-error": 0
+		}
+	}
+}

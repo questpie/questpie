@@ -25,7 +25,7 @@ export interface TextFieldMeta extends Questpie.TextFieldMeta {
 	_?: never;
 }
 
-export type TextFieldState = DefaultFieldState & {
+export type TextFieldState = Omit<DefaultFieldState, "operators"> & {
 	type: "text";
 	data: string;
 	column: PgVarcharBuilder<[string, ...string[]]>;
