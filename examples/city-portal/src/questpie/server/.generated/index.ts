@@ -234,22 +234,22 @@ declare global {
 
 		interface JobHandlerContext {
 			// Infrastructure
-			db: unknown;
-			email: unknown;
+			db: _AppDb;
+			email: _AppQuestpie["email"];
 			queue: QueueClient<_ExecutionContextJobs>;
 			storage: _AppStorage;
-			kv: unknown;
-			logger: unknown;
-			search: unknown;
-			realtime: unknown;
+			kv: _AppQuestpie["kv"];
+			logger: _AppQuestpie["logger"];
+			search: _AppQuestpie["search"];
+			realtime: _AppQuestpie["realtime"];
 
 			// Entity APIs
 			collections: _JobHandlerCollectionsAPI;
-			globals: Record<string, unknown>;
-			tables: Record<string, unknown>;
+			globals: _AppGlobalsAPI;
+			tables: _AppTables;
 
 			// Request-scoped
-			session: unknown;
+			session: _AppSession;
 			t: (key: string, params?: Record<string, unknown>, locale?: string) => string;
 
 			// Top-level services (namespace: null)
@@ -261,22 +261,22 @@ declare global {
 
 		interface WorkflowContext {
 			// Infrastructure
-			db: unknown;
-			email: unknown;
+			db: _AppDb;
+			email: _AppQuestpie["email"];
 			queue: QueueClient<_ExecutionContextJobs>;
 			storage: _AppStorage;
-			kv: unknown;
-			logger: unknown;
-			search: unknown;
-			realtime: unknown;
+			kv: _AppQuestpie["kv"];
+			logger: _AppQuestpie["logger"];
+			search: _AppQuestpie["search"];
+			realtime: _AppQuestpie["realtime"];
 
 			// Entity APIs
 			collections: _JobHandlerCollectionsAPI;
-			globals: Record<string, unknown>;
-			tables: Record<string, unknown>;
+			globals: _AppGlobalsAPI;
+			tables: _AppTables;
 
 			// Request-scoped
-			session: unknown;
+			session: _AppSession;
 			t: (key: string, params?: Record<string, unknown>, locale?: string) => string;
 
 			// Top-level services (namespace: null)
@@ -362,8 +362,8 @@ export type HookRuleContext<K extends keyof AppCollections | unknown = unknown> 
  * For handler context, use `AppContext` (auto-typed via module augmentation).
  */
 export type AppConfig = {
-	collections: AppCollections & Record<string, AnyCollectionOrBuilder>;
-	globals: AppGlobals & Record<string, AnyGlobalOrBuilder>;
+	collections: AppCollections;
+	globals: AppGlobals;
 	routes: AppRoutes;
 	storage: (typeof _runtime)["storage"];
 	auth: typeof _authConfig;

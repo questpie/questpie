@@ -56,6 +56,7 @@ import _openapi from "../config/openapi";
 // ════════════════════════════════════════════════════════════
 
 import type { ServiceCustomNamespaceInstances, ServiceInstanceOf, ServiceInstancesInNamespace, ServiceTopLevelInstances, UnionToIntersection } from "questpie/types";
+import type { WorkflowClient } from "@questpie/workflows/server";
 type _RouteDefinitionWithoutHandler<T> = T extends { mode: "raw" } ? Omit<T, "handler"> & { handler: (args: unknown) => Response | Promise<Response> } : Omit<T, "handler"> & { handler: (args: unknown) => unknown | Promise<unknown> };
 type _Module = (typeof _modules)[number];
 type _MPRaw<K extends string> = UnionToIntersection<_Module extends infer M ? M extends Record<K, infer V> ? V : never : never>;
@@ -235,30 +236,32 @@ type _AppCoreContext = _AppContextExtensions & {
 
 declare global {
 	namespace Questpie {
-		interface AppContext extends _AppCoreContext, _AppTopLevelServices {}
+		interface AppContext extends _AppCoreContext, _AppTopLevelServices {
+			workflows: WorkflowClient<AppWorkflows>;
+		}
 
 		interface JobHandlerContext {
 			// Infrastructure
-			db: unknown;
+			db: _AppDb;
 			email: MailerService<AppEmailTemplates>;
 			queue: QueueClient<_ExecutionContextJobs>;
 			storage: _AppStorage;
-			kv: unknown;
-			logger: unknown;
-			search: unknown;
-			realtime: unknown;
+			kv: _AppQuestpie["kv"];
+			logger: _AppQuestpie["logger"];
+			search: _AppQuestpie["search"];
+			realtime: _AppQuestpie["realtime"];
 
 			// Entity APIs
 			collections: _JobHandlerCollectionsAPI;
-			globals: Record<string, unknown>;
-			tables: Record<string, unknown>;
+			globals: _AppGlobalsAPI;
+			tables: _AppTables;
 
 			// Request-scoped
-			session: unknown;
+			session: _AppSession;
 			t: (key: string, params?: Record<string, unknown>, locale?: string) => string;
 
-			// Top-level services (namespace: null)
-			workflows?: _AppTopLevelServices extends { workflows: infer W } ? W : never;
+			// Workflows client — typed by AppWorkflows (name + schema preserved)
+			workflows: WorkflowClient<AppWorkflows>;
 
 			// User services
 			services: _ExecutionContextDefaultServices;
@@ -266,26 +269,26 @@ declare global {
 
 		interface WorkflowContext {
 			// Infrastructure
-			db: unknown;
+			db: _AppDb;
 			email: MailerService<AppEmailTemplates>;
 			queue: QueueClient<_ExecutionContextJobs>;
 			storage: _AppStorage;
-			kv: unknown;
-			logger: unknown;
-			search: unknown;
-			realtime: unknown;
+			kv: _AppQuestpie["kv"];
+			logger: _AppQuestpie["logger"];
+			search: _AppQuestpie["search"];
+			realtime: _AppQuestpie["realtime"];
 
 			// Entity APIs
 			collections: _JobHandlerCollectionsAPI;
-			globals: Record<string, unknown>;
-			tables: Record<string, unknown>;
+			globals: _AppGlobalsAPI;
+			tables: _AppTables;
 
 			// Request-scoped
-			session: unknown;
+			session: _AppSession;
 			t: (key: string, params?: Record<string, unknown>, locale?: string) => string;
 
-			// Top-level services (namespace: null)
-			workflows?: _AppTopLevelServices extends { workflows: infer W } ? W : never;
+			// Workflows client — typed by AppWorkflows (name + schema preserved)
+			workflows: WorkflowClient<AppWorkflows>;
 
 			// User services
 			services: _ExecutionContextDefaultServices;
@@ -368,8 +371,8 @@ export type HookRuleContext<K extends keyof AppCollections | unknown = unknown> 
  * For handler context, use `AppContext` (auto-typed via module augmentation).
  */
 export type AppConfig = {
-	collections: AppCollections & Record<string, AnyCollectionOrBuilder>;
-	globals: AppGlobals & Record<string, AnyGlobalOrBuilder>;
+	collections: AppCollections;
+	globals: AppGlobals;
 	routes: AppRoutes;
 	storage: (typeof _runtime)["storage"];
 	auth: typeof _authConfig;
