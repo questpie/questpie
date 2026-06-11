@@ -39,6 +39,7 @@ import type { SearchService } from "#questpie/server/modules/core/integrated/sea
 import { resolveAutoSeedCategories } from "#questpie/server/seed/types.js";
 import {
 	ServiceBuilder,
+	type ServiceCreateContext,
 	type ServiceLifecycle,
 } from "#questpie/server/services/define-service.js";
 import { getNodeEnv } from "#questpie/server/utils/env.js";
@@ -54,7 +55,7 @@ import type { GetMessageKeys, QuestpieConfig } from "./types.js";
 
 interface ResolvedServiceDefinition {
 	lifecycle: ServiceLifecycle;
-	create: (ctx: Questpie.ServiceCreateContext) => unknown | Promise<unknown>;
+	create: (ctx: ServiceCreateContext) => unknown | Promise<unknown>;
 	dispose?: (instance: unknown) => void | Promise<void>;
 	namespace: string | null;
 }
@@ -419,7 +420,7 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 			this._serviceDefs[name] = {
 				lifecycle,
 				create: state.create as (
-					ctx: Questpie.ServiceCreateContext,
+					ctx: ServiceCreateContext,
 				) => unknown | Promise<unknown>,
 				dispose: state.dispose as
 					| ((instance: unknown) => void | Promise<void>)
@@ -511,7 +512,7 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 	private _createServiceContext(options: {
 		requestDeps?: Record<string, any>;
 		stack: string[];
-	}): Questpie.ServiceCreateContext {
+	}): ServiceCreateContext {
 		const namespaceProxyCache = new Map<string, Record<string, unknown>>();
 		const { requestDeps, stack } = options;
 
@@ -598,7 +599,7 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 				const topLevelDef = this._serviceDefs[prop];
 				return !!topLevelDef && topLevelDef.namespace === null;
 			},
-		}) as Questpie.ServiceCreateContext;
+		}) as unknown as ServiceCreateContext;
 	}
 
 	private _resolveServiceFromProxy(

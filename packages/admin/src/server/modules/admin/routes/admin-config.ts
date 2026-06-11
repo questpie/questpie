@@ -859,9 +859,16 @@ const getAdminConfigSchema = z.object({}).optional();
 // Output schema — typed DTO schema with discriminated shapes
 const getAdminConfigOutputSchema = adminConfigDTOSchema;
 
+/**
+ * Handler-side output type. The responses are assembled from loosely typed
+ * app state; conformance is enforced at runtime by `outputSchema` (zod parse),
+ * so the builders assert this type at their return.
+ */
+type AdminConfigOutput = z.infer<typeof getAdminConfigOutputSchema>;
+
 export function buildPublicAdminConfig(
 	adminCfg: ReturnType<typeof getAdminCfg>,
-) {
+): AdminConfigOutput {
 	const response: {
 		branding?: unknown;
 	} = {};
@@ -870,7 +877,7 @@ export function buildPublicAdminConfig(
 		response.branding = adminCfg.branding;
 	}
 
-	return stripUndefinedDeep(response);
+	return stripUndefinedDeep(response) as AdminConfigOutput;
 }
 
 // ============================================================================
@@ -1110,7 +1117,7 @@ const getAdminConfig = route()
 		response.collections = filteredCollectionsMeta;
 		response.globals = filteredGlobalsMeta;
 
-		return stripUndefinedDeep(response);
+		return stripUndefinedDeep(response) as AdminConfigOutput;
 	});
 
 /**

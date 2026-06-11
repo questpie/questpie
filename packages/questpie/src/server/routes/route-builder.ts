@@ -44,6 +44,11 @@ type RawMode = { __mode: "raw" };
 type NoSchema = { __schema: false };
 type HasSchema<T = any> = { __schema: T };
 
+// Explicit discriminant (`__output: true/false`) — a structural
+// `{ __output: T }` would make NoOutput match `HasOutput<infer O>` as O=false.
+type NoOutput = { __output: false };
+type HasOutput<T = unknown> = { __output: true; __outputType: T };
+
 // ============================================================================
 // Internal config shape
 // ============================================================================
@@ -73,6 +78,7 @@ export class RouteBuilder<
 	_TMethod extends NoMethod | HasMethod = NoMethod,
 	TMode extends NoMode | JsonMode | RawMode = NoMode,
 	TSchema extends NoSchema | HasSchema = NoSchema,
+	TOutput extends NoOutput | HasOutput = NoOutput,
 > {
 	/** @internal */
 	private readonly _config: Readonly<BuilderConfig>;
@@ -92,49 +98,49 @@ export class RouteBuilder<
 		return arr.includes(m) ? arr : [...arr, m];
 	}
 
-	get(): RouteBuilder<TParams, HasMethod<"GET">, TMode, TSchema> {
+	get(): RouteBuilder<TParams, HasMethod<"GET">, TMode, TSchema, TOutput> {
 		return new RouteBuilder({
 			...this._config,
 			method: this._addMethod("GET"),
 		});
 	}
 
-	post(): RouteBuilder<TParams, HasMethod<"POST">, TMode, TSchema> {
+	post(): RouteBuilder<TParams, HasMethod<"POST">, TMode, TSchema, TOutput> {
 		return new RouteBuilder({
 			...this._config,
 			method: this._addMethod("POST"),
 		});
 	}
 
-	put(): RouteBuilder<TParams, HasMethod<"PUT">, TMode, TSchema> {
+	put(): RouteBuilder<TParams, HasMethod<"PUT">, TMode, TSchema, TOutput> {
 		return new RouteBuilder({
 			...this._config,
 			method: this._addMethod("PUT"),
 		});
 	}
 
-	delete(): RouteBuilder<TParams, HasMethod<"DELETE">, TMode, TSchema> {
+	delete(): RouteBuilder<TParams, HasMethod<"DELETE">, TMode, TSchema, TOutput> {
 		return new RouteBuilder({
 			...this._config,
 			method: this._addMethod("DELETE"),
 		});
 	}
 
-	patch(): RouteBuilder<TParams, HasMethod<"PATCH">, TMode, TSchema> {
+	patch(): RouteBuilder<TParams, HasMethod<"PATCH">, TMode, TSchema, TOutput> {
 		return new RouteBuilder({
 			...this._config,
 			method: this._addMethod("PATCH"),
 		});
 	}
 
-	head(): RouteBuilder<TParams, HasMethod<"HEAD">, TMode, TSchema> {
+	head(): RouteBuilder<TParams, HasMethod<"HEAD">, TMode, TSchema, TOutput> {
 		return new RouteBuilder({
 			...this._config,
 			method: this._addMethod("HEAD"),
 		});
 	}
 
-	options(): RouteBuilder<TParams, HasMethod<"OPTIONS">, TMode, TSchema> {
+	options(): RouteBuilder<TParams, HasMethod<"OPTIONS">, TMode, TSchema, TOutput> {
 		return new RouteBuilder({
 			...this._config,
 			method: this._addMethod("OPTIONS"),
@@ -147,7 +153,7 @@ export class RouteBuilder<
 	 * Mark this route as raw — handler receives `(request, ctx)` and returns `Response`.
 	 * Cannot be combined with `.schema()`.
 	 */
-	raw(): RouteBuilder<TParams, _TMethod, RawMode, NoSchema> {
+	raw(): RouteBuilder<TParams, _TMethod, RawMode, NoSchema, NoOutput> {
 		return new RouteBuilder({
 			...this._config,
 			mode: "raw",
@@ -164,16 +170,20 @@ export class RouteBuilder<
 	 */
 	schema<TInput>(
 		schema: z.ZodSchema<TInput>,
-	): RouteBuilder<TParams, _TMethod, JsonMode, HasSchema<TInput>> {
+	): RouteBuilder<TParams, _TMethod, JsonMode, HasSchema<TInput>, TOutput> {
 		return new RouteBuilder({ ...this._config, mode: "json", schema });
 	}
 
 	/**
 	 * Set output validation schema (optional).
+	 *
+	 * Besides runtime response validation, the schema becomes the route's
+	 * output type and `.handler()` constrains the handler's return type
+	 * against it — a mismatch is a compile error.
 	 */
-	outputSchema<TOutput>(
-		schema: z.ZodSchema<TOutput>,
-	): RouteBuilder<TParams, _TMethod, TMode, TSchema> {
+	outputSchema<TNextOutput>(
+		schema: z.ZodSchema<TNextOutput>,
+	): RouteBuilder<TParams, _TMethod, TMode, TSchema, HasOutput<TNextOutput>> {
 		return new RouteBuilder({ ...this._config, outputSchema: schema }) as any;
 	}
 
@@ -188,7 +198,8 @@ export class RouteBuilder<
 		TNextParams,
 		_TMethod,
 		TMode,
-		TSchema
+		TSchema,
+		TOutput
 	> {
 		return new RouteBuilder({ ...this._config }) as any;
 	}
@@ -198,7 +209,7 @@ export class RouteBuilder<
 	/**
 	 * Set access control for this route.
 	 */
-	access(access: RouteAccess): RouteBuilder<TParams, _TMethod, TMode, TSchema> {
+	access(access: RouteAccess): RouteBuilder<TParams, _TMethod, TMode, TSchema, TOutput> {
 		return new RouteBuilder({ ...this._config, access }) as any;
 	}
 
@@ -207,7 +218,7 @@ export class RouteBuilder<
 	/**
 	 * Attach serializable metadata for introspection and integrations.
 	 */
-	meta(meta: RouteMeta): RouteBuilder<TParams, _TMethod, TMode, TSchema> {
+	meta(meta: RouteMeta): RouteBuilder<TParams, _TMethod, TMode, TSchema, TOutput> {
 		return new RouteBuilder({ ...this._config, meta }) as any;
 	}
 
@@ -220,17 +231,34 @@ export class RouteBuilder<
 	 * - If `.schema()` was called → `JsonRouteDefinition`
 	 * - If `.raw()` was called → `RawRouteDefinition`
 	 * - Otherwise → defaults to `RawRouteDefinition` with POST method
+	 *
+	 * When `.outputSchema()` was set, the schema type becomes the route's
+	 * output type (`InferRouteOutput<typeof def>`, surviving codegen) and the
+	 * handler's return is checked against it — a mismatch is a compile error.
+	 *
+	 * Deliberately NOT generic over the handler's return type: per-call
+	 * inference here makes `typeof routeConst` depend on the handler arrow,
+	 * which cycles through the app's module type graph (module routes →
+	 * AppContext augmentation → modules → module routes, TS2456). Outputs are
+	 * therefore only captured from `.outputSchema()` until codegen emits
+	 * resolved route signatures.
 	 */
 	handler(
 		handler: TMode extends RawMode
 			? (args: RawRouteHandlerArgs<TParams>) => Response | Promise<Response>
 			: TSchema extends HasSchema<infer TInput>
-				? (args: JsonRouteHandlerArgs<TInput, TParams>) => any
+				? TOutput extends HasOutput<infer O>
+					? (args: JsonRouteHandlerArgs<TInput, TParams>) => O | Promise<O>
+					: (args: JsonRouteHandlerArgs<TInput, TParams>) => any
 				: (args: RawRouteHandlerArgs<TParams>) => Response | Promise<Response>,
 	): TMode extends RawMode
 		? RawRouteDefinition<TParams>
 		: TSchema extends HasSchema<infer TInput>
-			? JsonRouteDefinition<TInput, any, TParams>
+			? JsonRouteDefinition<
+					TInput,
+					TOutput extends HasOutput<infer O> ? O : any,
+					TParams
+				>
 			: RawRouteDefinition<TParams> {
 		const method = this._config.method ?? "POST";
 

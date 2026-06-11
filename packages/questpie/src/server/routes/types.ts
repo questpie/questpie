@@ -107,7 +107,7 @@ export type RouteParamsFromKey<TKey extends string> =
  * Context passed to JSON route handlers.
  */
 export type JsonRouteHandlerArgs<
-	TInput = any,
+	TInput = unknown,
 	TParams extends JsonRouteParams = JsonRouteParams,
 > = AppContext & {
 	/** Validated input data (from body or query string) */
@@ -118,8 +118,6 @@ export type JsonRouteHandlerArgs<
 	params: TParams;
 	/** Current locale */
 	locale?: string;
-	/** App instance — for accessing collections, globals, auth, etc. */
-	app: any;
 };
 
 /**
@@ -134,8 +132,6 @@ export type RawRouteHandlerArgs<
 	locale?: string;
 	/** URL path parameters (if pattern-matched) */
 	params: TParams;
-	/** App instance — for accessing collections, globals, auth, etc. */
-	app: any;
 };
 
 // ============================================================================
@@ -207,9 +203,20 @@ export type InferRouteOutput<T> = T extends {
 	outputSchema: z.ZodSchema<infer Output>;
 }
 	? Output
-	: T extends { handler: (args: any) => infer Result }
-		? Awaited<Result>
-		: never;
+	: T extends {
+				mode: "json";
+				outputSchema?: z.ZodSchema<infer Output> | undefined;
+			}
+		? // JSON route definitions carry their output type on the (optional)
+			// `outputSchema` member even when no runtime schema was provided —
+			// `route().handler()` threads the inferred handler return type into
+			// `JsonRouteDefinition<TInput, TOutput, TParams>`. Reading it from here
+			// keeps outputs intact through codegen, which erases `handler` (and only
+			// `handler`) for heterogeneous route-map assignability.
+			Output
+		: T extends { handler: (args: any) => infer Result }
+			? Awaited<Result>
+			: never;
 
 export type InferRouteParams<T> =
 	T extends JsonRouteDefinition<any, any, infer TParams>
@@ -219,9 +226,12 @@ export type InferRouteParams<T> =
 			: JsonRouteParams;
 
 export type RouteWithParams<TDef, TParams extends JsonRouteParams> =
-	TDef extends JsonRouteDefinition<infer TInput, infer TOutput, any>
-		? JsonRouteDefinition<TInput, TOutput, TParams>
-		: TDef extends RawRouteDefinition<any>
+	TDef extends { mode: "json" }
+		? // Rebuild from the schema members instead of inferring the generics
+			// wholesale: codegen-erased handlers (`(args: unknown) => unknown`)
+			// would otherwise poison the inferred `TOutput` with `unknown`.
+			JsonRouteDefinition<InferRouteInput<TDef>, InferRouteOutput<TDef>, TParams>
+		: TDef extends { mode: "raw" }
 			? RawRouteDefinition<TParams>
 			: TDef;
 

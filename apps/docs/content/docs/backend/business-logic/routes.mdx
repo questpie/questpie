@@ -91,7 +91,7 @@ handler: async ({ input, collections, queue, email, db, session, blog }) => {
 ```ts
 import { client } from "@/lib/client";
 
-// Fully typed — input and return type inferred from the route definition
+// Typed input from the route's schema; return type from .outputSchema()
 const result = await client.routes.createBooking({
 	barberId: "abc",
 	serviceId: "def",

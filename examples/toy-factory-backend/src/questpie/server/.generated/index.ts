@@ -295,6 +295,10 @@ declare global {
 		}
 
 		interface ServiceCreateContext extends _AppCoreContext {}
+		// Names-only marker — the `ServiceCreateContext` fallback conditional
+		// probes THIS interface's keys instead of the real one (whose base
+		// resolves through module service definitions and would cycle).
+		interface ServiceCreateContextGenerated { generated: unknown }
 
 		// Typed service surface for appConfig({ context }) resolvers.
 		// Excludes _AppContextExtensions — the resolver produces them.

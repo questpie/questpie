@@ -756,6 +756,18 @@ export function generateTemplate(options: TemplateOptions): string {
 		emitNonRecursiveContext("WorkflowContext");
 		lines.push("");
 		lines.push("\t\tinterface ServiceCreateContext extends _AppCoreContext {}");
+		lines.push(
+			"\t\t// Names-only marker — the `ServiceCreateContext` fallback conditional",
+		);
+		lines.push(
+			"\t\t// probes THIS interface's keys instead of the real one (whose base",
+		);
+		lines.push(
+			"\t\t// resolves through module service definitions and would cycle).",
+		);
+		lines.push(
+			"\t\tinterface ServiceCreateContextGenerated { generated: unknown }",
+		);
 		lines.push("");
 		lines.push(
 			"\t\t// Typed service surface for appConfig({ context }) resolvers.",
