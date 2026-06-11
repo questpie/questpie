@@ -66,10 +66,11 @@ describe("relation() — belongsTo", () => {
 		expect(f._state.relationName).toBe("author");
 	});
 
-	it("has belongsTo operators (eq, ne, in, notIn, is, isNot)", () => {
+	it("has belongsTo operators (eq, ne, not, in, notIn, is, isNot)", () => {
 		const ops = relation("users").getOperators();
 		expect(ops.column.eq).toBeDefined();
 		expect(ops.column.ne).toBeDefined();
+		expect(ops.column.not).toBeDefined();
 		expect(ops.column.in).toBeDefined();
 		expect(ops.column.is).toBeDefined();
 		expect(ops.column.isNot).toBeDefined();

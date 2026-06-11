@@ -53,8 +53,14 @@ type DateOps = WhereOperators<Date>;
 
 type _stringEq = Expect<Equal<HasKey<StringOps, "eq">, true>>;
 type _stringNe = Expect<Equal<HasKey<StringOps, "ne">, true>>;
+type _stringNot = Expect<Equal<HasKey<StringOps, "not">, true>>;
+type _stringNotValue = Expect<
+	Equal<StringOps["not"], string | null | undefined>
+>;
 type _numberEq = Expect<Equal<HasKey<NumberOps, "eq">, true>>;
+type _numberNot = Expect<Equal<HasKey<NumberOps, "not">, true>>;
 type _dateEq = Expect<Equal<HasKey<DateOps, "eq">, true>>;
+type _dateNot = Expect<Equal<HasKey<DateOps, "not">, true>>;
 
 // Numbers support gt, gte, lt, lte
 type _numberGt = Expect<Extends<NumberOps["gt"], number | undefined>>;
@@ -98,6 +104,10 @@ const _where2: PostWhere = { views: 100 };
 const _where3: PostWhere = { title: { like: "%hello%" } };
 const _where4: PostWhere = { views: { gt: 100 } };
 const _where5: PostWhere = { publishedAt: { gte: new Date() } };
+const _whereNotAliasText: PostWhere = { title: { not: "Archived" } };
+const _whereNotAliasNumber: PostWhere = { views: { not: 0 } };
+const _whereNotAliasDate: PostWhere = { publishedAt: { not: null } };
+const _whereNotAliasRelation: PostWhere = { author: { not: "user-1" } };
 
 // Logical operators
 const _whereAnd: PostWhere = {

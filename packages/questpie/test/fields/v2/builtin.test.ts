@@ -121,6 +121,7 @@ describe("email()", () => {
 
 	it("has email-specific operators (domain)", () => {
 		const ops = email().getOperators();
+		expect(ops.column.not).toBeDefined();
 		expect(ops.column.domain).toBeDefined();
 		expect(ops.column.domainIn).toBeDefined();
 	});
@@ -145,6 +146,7 @@ describe("url()", () => {
 
 	it("has url-specific operators (host, protocol)", () => {
 		const ops = url().getOperators();
+		expect(ops.column.not).toBeDefined();
 		expect(ops.column.host).toBeDefined();
 		expect(ops.column.hostIn).toBeDefined();
 		expect(ops.column.protocol).toBeDefined();
@@ -563,15 +565,15 @@ describe("Cross-cutting field behavior", () => {
 	});
 
 	it("all fields produce operators", () => {
-		expect(text().getOperators().column).toBeDefined();
-		expect(number().getOperators().column).toBeDefined();
-		expect(boolean().getOperators().column).toBeDefined();
-		expect(date().getOperators().column).toBeDefined();
-		expect(datetime().getOperators().column).toBeDefined();
-		expect(email().getOperators().column).toBeDefined();
-		expect(url().getOperators().column).toBeDefined();
+		expect(text().getOperators().column.not).toBeDefined();
+		expect(number().getOperators().column.not).toBeDefined();
+		expect(boolean().getOperators().column.not).toBeDefined();
+		expect(date().getOperators().column.not).toBeDefined();
+		expect(datetime().getOperators().column.not).toBeDefined();
+		expect(email().getOperators().column.not).toBeDefined();
+		expect(url().getOperators().column.not).toBeDefined();
 		expect(
-			select([{ value: "a", label: { en: "A" } }]).getOperators().column,
+			select([{ value: "a", label: { en: "A" } }]).getOperators().column.not,
 		).toBeDefined();
 	});
 

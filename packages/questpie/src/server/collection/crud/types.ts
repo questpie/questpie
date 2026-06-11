@@ -68,6 +68,7 @@ export type CRUDContext = RequestContext;
 export interface WhereOperatorsLegacy<T> {
 	eq?: T;
 	ne?: T;
+	not?: T | null;
 	gt?: T extends Date ? Date | string : T extends number | string ? T : never;
 	gte?: T extends Date ? Date | string : T extends number | string ? T : never;
 	lt?: T extends Date ? Date | string : T extends number | string ? T : never;

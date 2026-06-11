@@ -728,6 +728,32 @@ describe("collection query operations", () => {
 			expect(posts.length).toBe(5);
 			expect(posts.every((p: any) => p.status !== "draft")).toBe(true);
 		});
+
+		it("filters with not alias", async () => {
+			const ctx = createTestContext();
+
+			const result = await setup.app.collections.posts.find(
+				{ where: { id: { not: testPosts[0].id } } },
+				ctx,
+			);
+			const posts = result.docs;
+
+			expect(posts.length).toBe(5);
+			expect(posts.some((p: any) => p.id === testPosts[0].id)).toBe(false);
+		});
+
+		it("filters null values with not alias", async () => {
+			const ctx = createTestContext();
+
+			const result = await setup.app.collections.posts.find(
+				{ where: { publishedAt: { not: null } } },
+				ctx,
+			);
+			const posts = result.docs;
+
+			expect(posts.length).toBe(5);
+			expect(posts.every((p: any) => p.publishedAt !== null)).toBe(true);
+		});
 	});
 
 	describe("batch operations", () => {
