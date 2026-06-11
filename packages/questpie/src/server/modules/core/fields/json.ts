@@ -45,7 +45,7 @@ export const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
 	]),
 );
 
-export type JsonFieldState = DefaultFieldState & {
+export type JsonFieldState = Omit<DefaultFieldState, "operators"> & {
 	type: "json";
 	data: JsonValue;
 	column: PgJsonbBuilder;

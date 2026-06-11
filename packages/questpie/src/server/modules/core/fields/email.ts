@@ -21,7 +21,7 @@ export interface EmailFieldMeta extends Questpie.EmailFieldMeta {
 	_?: never;
 }
 
-export type EmailFieldState = DefaultFieldState & {
+export type EmailFieldState = Omit<DefaultFieldState, "operators"> & {
 	type: "email";
 	data: string;
 	column: PgVarcharBuilder<[string, ...string[]]>;

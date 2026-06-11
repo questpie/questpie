@@ -23,7 +23,7 @@ export interface BooleanFieldMeta extends Questpie.BooleanFieldMeta {
 	_?: never;
 }
 
-export type BooleanFieldState = DefaultFieldState & {
+export type BooleanFieldState = Omit<DefaultFieldState, "operators"> & {
 	type: "boolean";
 	data: boolean;
 	column: PgBooleanBuilder;

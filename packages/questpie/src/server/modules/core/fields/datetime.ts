@@ -21,7 +21,7 @@ export interface DatetimeFieldMeta extends Questpie.DatetimeFieldMeta {
 	_?: never;
 }
 
-export type DatetimeFieldState = DefaultFieldState & {
+export type DatetimeFieldState = Omit<DefaultFieldState, "operators"> & {
 	type: "datetime";
 	data: Date;
 	column: PgTimestampBuilder;

@@ -572,9 +572,12 @@ const _whereCommentsSome: PostsWhereType = {
 // E) Where clause: nested relation (depth 2) — comments.some.author.is.name
 // ============================================================================
 
+// `contains` is not a belongsTo operator — sealed operator maps reject it
+// (use `author: { is: { name: { contains: ... } } }` instead, tested below)
 const _whereCommentsAuthor: PostsWhereType = {
 	comments: {
 		some: {
+			// @ts-expect-error — contains does not exist on belongsTo relation operators
 			author: { contains: "Admin" },
 		},
 	},
@@ -1146,17 +1149,21 @@ type _myDatetimeWhereGt = Expect<
 // ============================================================================
 
 // These prove that the where clause REJECTS invalid operators.
-// TODO: EPC doesn't fire in deeply nested conditional types — needs runtime validation
+// (fixed by sealing operator maps — Omit<DefaultFieldState, "operators">)
 // title is a text field — should NOT accept gt (numeric operator)
+// @ts-expect-error — gt is not a string operator
 const _badTitleGt: PostsWhereCheck = { title: { gt: 100 } };
 
 // views is a number field — should NOT accept contains (string operator)
+// @ts-expect-error — contains is not a number operator
 const _badViewsContains: PostsWhereCheck = { views: { contains: "abc" } };
 
 // published is a boolean field — should NOT accept like (string operator)
+// @ts-expect-error — like is not a boolean operator
 const _badPublishedLike: PostsWhereCheck = { published: { like: "%test%" } };
 
 // createdAt is a datetime field — should NOT accept contains
 const _badCreatedAtContains: PostsWhereCheck = {
+	// @ts-expect-error — contains is not a date operator
 	createdAt: { contains: "2024" },
 };

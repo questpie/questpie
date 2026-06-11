@@ -100,8 +100,15 @@ export class Field<TState extends FieldState = FieldState> {
 		return new Field({ ...this._state, notNull: true }) as any;
 	}
 
-	/** Set a default value. Makes input optional. */
-	default<V>(value: V | (() => V)): Field<
+	/**
+	 * Set a default value. Makes input optional.
+	 *
+	 * The value is constrained to the field's data type (Drizzle-identical):
+	 * `f.boolean().default(true)` compiles, `f.boolean().default("yes")` does not.
+	 * Accepts a literal value, a factory, or a raw SQL expression.
+	 * For column-level SQL defaults use `.drizzle((c) => c.default(...))`.
+	 */
+	default(value: TState["data"] | (() => TState["data"]) | SQL): Field<
 		Omit<TState, "hasDefault" | "column"> & {
 			hasDefault: true;
 			column: HasDefault<TState["column"]>;
@@ -161,9 +168,11 @@ export class Field<TState extends FieldState = FieldState> {
 		return new Field({ ...this._state, virtual: expr ?? true }) as any;
 	}
 
-	/** Set field-level hooks. */
-	hooks<H extends FieldHooks>(h: H): Field<TState & { hooks: H }> {
-		return this._clone<{ hooks: H }>({ hooks: h });
+	/** Set field-level hooks. Hook values are typed to the field's data type. */
+	hooks<H extends FieldHooks<TState["data"]>>(
+		h: H,
+	): Field<TState & { hooks: H }> {
+		return this._clone<{ hooks: H }>({ hooks: h as FieldHooks });
 	}
 
 	/** Set field-level access control. */
@@ -204,9 +213,7 @@ export class Field<TState extends FieldState = FieldState> {
 	 * the field's `data` type. A column whose `_.data` is still `unknown`
 	 * leaves the field's existing `data` in place.
 	 */
-	drizzle<TNewCol>(
-		fn: (col: TState["column"]) => TNewCol,
-	): Field<
+	drizzle<TNewCol>(fn: (col: TState["column"]) => TNewCol): Field<
 		Omit<TState, "column" | "data"> & {
 			column: TNewCol;
 			data: TNewCol extends { _: { data: infer D } }

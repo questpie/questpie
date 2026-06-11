@@ -656,12 +656,13 @@ type _commentsAggHasContent = Expect<
 type AWhere = WhereType<typeof articles, TAppManual>;
 
 // Text field should NOT accept numeric operator gt
-// TODO: EPC doesn't fire in deeply nested conditional types — needs runtime validation
+// (fixed by sealing operator maps — Omit<DefaultFieldState, "operators">)
+// @ts-expect-error — gt is not a string operator
 const _badTitleGt: AWhere = { title: { gt: 100 } };
 
 // Datetime field should NOT accept contains
 const _badDateContains: AWhere = {
-	// TODO: EPC doesn't fire in deeply nested conditional types — needs runtime validation
+	// @ts-expect-error — contains is not a date operator
 	publishedAt: { contains: "2024" },
 };
 
