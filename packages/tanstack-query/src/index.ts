@@ -344,7 +344,7 @@ type GlobalQueryOptionsAPI<
 		TQuery extends
 			| {
 					with?: With<GlobalRelationsOf<TApp, K>>;
-					columns?: any;
+					columns?: Record<string, boolean>;
 					locale?: string;
 					localeFallback?: boolean;
 					stage?: string;

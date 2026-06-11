@@ -663,7 +663,7 @@ type GlobalAPI<
 	get: <
 		TQuery extends {
 			with?: With<ResolveRelationsDeep<GlobalRelations<TGlobal>, TCollections>>;
-			columns?: any;
+			columns?: Record<string, boolean>;
 			locale?: string;
 			localeFallback?: boolean;
 			stage?: string;
@@ -1502,7 +1502,7 @@ export function createClient<TApp extends QuestpieApp>(
 				get: async (
 					options: {
 						with?: any;
-						columns?: any;
+						columns?: Record<string, boolean>;
 						locale?: string;
 						localeFallback?: boolean;
 						stage?: string;

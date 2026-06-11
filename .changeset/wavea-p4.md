@@ -1,5 +1,0 @@
----
-"questpie": patch
----
-
-Type-perf: declared `in out` variance on the CRUD/field hot-path generics so tsc skips structural variance measurement. `FieldWithMethods`' two mapped conjuncts are split into standalone annotated aliases (its variance measurement alone cost 3.7s — billed to whichever app file first compares field-bearing types, e.g. a `Promise.all` over two `findOne`s), and `WhereFields`/`With`/`UpdateManyParams`/`FindManyOptionsBase`/`UpdateBatchParams`/`DeleteManyParams`/`CRUD`/`GlobalCRUD` carry explicit annotations (TId parameters stay measured — bare `CRUD` defaults TId to `unknown` and relies on the structural fallback annotations would forbid). Measured on the flagship examples: −39%/−42% tsc instantiations and ~−30% check time (barbershop/city-portal), zero error-set diff everywhere. Two new CI ratchets lock the wins in: `scripts/type-budget.ts` fails on >10% instantiation regression against a committed budget, and `scripts/any-census.ts` fails when per-package type-escape counts (`: any`, `as any`, `as unknown as`, `@ts-expect-error`) increase; `@questpie/workflows` is additionally pinned at zero `any` via oxlint `no-explicit-any`.
