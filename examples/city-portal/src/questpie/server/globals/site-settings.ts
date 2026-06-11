@@ -57,10 +57,10 @@ export default global("site_settings")
 			.array()
 			.label("Main Navigation")
 			.default([
-				{ label: "Home", href: "/" },
-				{ label: "News", href: "/news" },
-				{ label: "Services", href: "/services" },
-				{ label: "Contact", href: "/contact" },
+				{ label: "Home", href: "/", isExternal: false },
+				{ label: "News", href: "/news", isExternal: false },
+				{ label: "Services", href: "/services", isExternal: false },
+				{ label: "Contact", href: "/contact", isExternal: false },
 			] satisfies NavItem[]),
 
 		// Footer
@@ -77,9 +77,9 @@ export default global("site_settings")
 			.array()
 			.label("Footer Links")
 			.default([
-				{ label: "Privacy Policy", href: "/privacy" },
-				{ label: "Accessibility", href: "/accessibility" },
-				{ label: "Contact Us", href: "/contact" },
+				{ label: "Privacy Policy", href: "/privacy", isExternal: false },
+				{ label: "Accessibility", href: "/accessibility", isExternal: false },
+				{ label: "Contact Us", href: "/contact", isExternal: false },
 			] satisfies FooterLink[]),
 		copyrightText: f
 			.text()

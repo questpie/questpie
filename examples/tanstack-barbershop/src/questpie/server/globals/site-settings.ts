@@ -54,10 +54,10 @@ export const siteSettings = global("site_settings")
 			.label({ en: "Navigation", sk: "Navigácia" })
 			.localized()
 			.default([
-				{ label: "Home", href: "/" },
-				{ label: "Services", href: "/services" },
-				{ label: "Our Team", href: "/barbers" },
-				{ label: "Contact", href: "/contact" },
+				{ label: "Home", href: "/", isExternal: false },
+				{ label: "Services", href: "/services", isExternal: false },
+				{ label: "Our Team", href: "/barbers", isExternal: false },
+				{ label: "Contact", href: "/contact", isExternal: false },
 			] satisfies NavItem[]),
 		ctaButtonText: f
 			.text()
@@ -87,10 +87,10 @@ export const siteSettings = global("site_settings")
 			.label({ en: "Footer Links", sk: "Odkazy v päte" })
 			.localized()
 			.default([
-				{ label: "Services", href: "/services" },
-				{ label: "Our Team", href: "/barbers" },
-				{ label: "Contact", href: "/contact" },
-				{ label: "Privacy Policy", href: "/privacy" },
+				{ label: "Services", href: "/services", isExternal: false },
+				{ label: "Our Team", href: "/barbers", isExternal: false },
+				{ label: "Contact", href: "/contact", isExternal: false },
+				{ label: "Privacy Policy", href: "/privacy", isExternal: false },
 			] satisfies FooterLink[]),
 		copyrightText: f
 			.text()

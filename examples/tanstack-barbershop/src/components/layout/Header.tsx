@@ -35,7 +35,7 @@ import { useTheme } from "@/lib/providers/theme-provider";
 interface NavItem {
 	label: string;
 	href: string;
-	isExternal?: boolean;
+	isExternal?: boolean | null;
 }
 
 interface HeaderProps {

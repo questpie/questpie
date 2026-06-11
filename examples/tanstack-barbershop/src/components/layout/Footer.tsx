@@ -30,7 +30,7 @@ export interface SocialLink {
 interface FooterLink {
 	label: string;
 	href: string;
-	isExternal?: boolean;
+	isExternal?: boolean | null;
 }
 
 export interface BusinessHours {
