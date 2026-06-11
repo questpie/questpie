@@ -8,10 +8,22 @@ import {
 	type UseQueryOptions,
 } from "@tanstack/react-query";
 import type {
+	ApplyQuery,
+	CollectionRelations,
+	CollectionSelect,
+	FindManyOptions,
+	FindOneOptionsBase,
+	FindResult,
+	GetCollection,
+	GetGlobal,
+	GlobalRelations,
+	GlobalSelect,
 	QuestpieApp,
 	QuestpieClient,
 	RealtimeAPI,
+	ResolveRelationsDeep,
 	TopicConfig,
+	With,
 } from "questpie/client";
 
 // ============================================================================
@@ -129,19 +141,37 @@ type GlobalKeys<TApp extends QuestpieApp> = Extract<
 	string
 >;
 
-// Collection method type extractors
-type CollectionFind<
+// Per-collection select/relations — the same derivation the client's own
+// method signatures use, so per-call generics below produce results identical
+// to direct `client.collections.<k>.find(...)` calls.
+type CollectionSelectOf<
 	TApp extends QuestpieApp,
 	K extends CollectionKeys<TApp>,
-> = QuestpieClient<TApp>["collections"][K]["find"];
+> = CollectionSelect<GetCollection<TApp["collections"], K>>;
+type CollectionRelationsOf<
+	TApp extends QuestpieApp,
+	K extends CollectionKeys<TApp>,
+> = ResolveRelationsDeep<
+	CollectionRelations<GetCollection<TApp["collections"], K>>,
+	TApp["collections"]
+>;
+type GlobalSelectOf<
+	TApp extends QuestpieApp,
+	K extends GlobalKeys<TApp>,
+> = GlobalSelect<GetGlobal<NonNullable<TApp["globals"]>, K>>;
+type GlobalRelationsOf<
+	TApp extends QuestpieApp,
+	K extends GlobalKeys<TApp>,
+> = ResolveRelationsDeep<
+	GlobalRelations<GetGlobal<NonNullable<TApp["globals"]>, K>>,
+	TApp["collections"]
+>;
+
+// Collection method type extractors
 type CollectionCount<
 	TApp extends QuestpieApp,
 	K extends CollectionKeys<TApp>,
 > = QuestpieClient<TApp>["collections"][K]["count"];
-type CollectionFindOne<
-	TApp extends QuestpieApp,
-	K extends CollectionKeys<TApp>,
-> = QuestpieClient<TApp>["collections"][K]["findOne"];
 type CollectionCreate<
 	TApp extends QuestpieApp,
 	K extends CollectionKeys<TApp>,
@@ -172,14 +202,6 @@ type CollectionTransitionStage<
 > = QuestpieClient<TApp>["collections"][K]["transitionStage"];
 
 // Global method type extractors
-type GlobalGet<
-	TApp extends QuestpieApp,
-	K extends GlobalKeys<TApp>,
-> = QuestpieClient<TApp>["globals"][K] extends { get: infer TGet }
-	? TGet extends AnyAsyncFn
-		? TGet
-		: never
-	: never;
 type GlobalUpdate<
 	TApp extends QuestpieApp,
 	K extends GlobalKeys<TApp>,
@@ -241,9 +263,43 @@ type CollectionQueryOptionsAPI<
 	TApp extends QuestpieApp,
 	K extends CollectionKeys<TApp>,
 > = {
-	find: LiveQueryBuilder<CollectionFind<TApp, K>>;
+	/**
+	 * Generic per call — `TQuery` narrows the result exactly like the direct
+	 * client's `find()` (a `ReturnType`-based extraction would instantiate the
+	 * client generic at its constraint and collapse docs to `{}`).
+	 */
+	find: <
+		TQuery extends
+			| FindManyOptions<
+					CollectionSelectOf<TApp, K>,
+					CollectionRelationsOf<TApp, K>
+			  >
+			| undefined = undefined,
+	>(
+		options?: TQuery,
+		queryConfig?: RealtimeQueryConfig,
+	) => UseQueryOptions<
+		FindResult<
+			CollectionSelectOf<TApp, K>,
+			CollectionRelationsOf<TApp, K>,
+			TQuery
+		>
+	>;
 	count: LiveQueryBuilder<CollectionCount<TApp, K>>;
-	findOne: QueryBuilder<CollectionFindOne<TApp, K>>;
+	findOne: <
+		TQuery extends
+			| FindOneOptionsBase<
+					CollectionSelectOf<TApp, K>,
+					CollectionRelationsOf<TApp, K>
+			  >
+			| undefined = undefined,
+	>(
+		options?: TQuery,
+	) => UseQueryOptions<ApplyQuery<
+		CollectionSelectOf<TApp, K>,
+		CollectionRelationsOf<TApp, K>,
+		TQuery
+	> | null>;
 	create: MutationBuilder<
 		FirstArg<CollectionCreate<TApp, K>>,
 		QueryData<CollectionCreate<TApp, K>>
@@ -283,7 +339,23 @@ type GlobalQueryOptionsAPI<
 	TApp extends QuestpieApp,
 	K extends GlobalKeys<TApp>,
 > = {
-	get: LiveQueryBuilder<GlobalGet<TApp, K>>;
+	/** Generic per call — mirrors the direct client's `get()` narrowing. */
+	get: <
+		TQuery extends
+			| {
+					with?: With<GlobalRelationsOf<TApp, K>>;
+					columns?: any;
+					locale?: string;
+					localeFallback?: boolean;
+					stage?: string;
+			  }
+			| undefined = undefined,
+	>(
+		options?: TQuery,
+		queryConfig?: RealtimeQueryConfig,
+	) => UseQueryOptions<
+		ApplyQuery<GlobalSelectOf<TApp, K>, GlobalRelationsOf<TApp, K>, TQuery>
+	>;
 	update: MutationBuilder<
 		{
 			data: Parameters<GlobalUpdate<TApp, K>>[0];
@@ -456,9 +528,9 @@ async function* streamRealtimeQuery<TInitialData>(options: {
  * ```ts
  * import { createQuestpieQueryOptions } from "@questpie/tanstack-query"
  * import { createClient } from "questpie/client"
- * import type { App, AppRpc } from "@/app"
+ * import type { AppConfig } from "@/questpie/server/.generated"
  *
- * const client = createClient<App, AppRpc>({ baseURL: "http://localhost:3000" })
+ * const client = createClient<AppConfig>({ baseURL: "http://localhost:3000" })
  * const cmsQueries = createQuestpieQueryOptions(client)
  *
  * // Use with useQuery
