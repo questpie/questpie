@@ -2,7 +2,6 @@
 "questpie": minor
 "@questpie/tanstack-query": minor
 "@questpie/admin": patch
-"@questpie/workflows": patch
 ---
 
 Routes/client/TanStack Query type de-poisoning (Wave A, lane A):
