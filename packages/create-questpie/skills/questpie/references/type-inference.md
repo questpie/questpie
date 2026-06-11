@@ -24,7 +24,7 @@ The schema is the single source of types. If you are hand-writing a type that re
 | 16 | Realtime payloads | `live()` / `liveIter()` snapshots are typed; raw `client.realtime.subscribe` data is untyped — annotate with `CollectionDoc<"posts">` | Typed realtime contract is planned |
 | 17 | Env vars | `env.ts` / `env.client.ts` with `env()` — see `references/env.md` | Never `process.env.X!` |
 | 18 | Field-level rule ctx (`.access({ fields })`) | `doc` is typed as the row, `user` is typed from the generated session — destructure, don't annotate | |
-| 19 | Derived request context (tenant, role) | `appConfig({ context })` result is inferred and arrives flat on rules — see `references/rules.md` | |
+| 19 | Derived request context (tenant, role) | `appConfig({ context })` result is inferred and arrives flat on rules — **annotate the resolver return with a self-contained DTO** (inferring it from `.find().docs` re-enters the generated index) | App-level `access` rules get the base ctx (`session`/`db`), not extensions — by design, cycle-free |
 | 20 | Select-option unions | `CollectionDoc<"events">["type"]` (server-side) | No client-safe union export yet; clients infer from SDK responses |
 
 ## The Two Cycle Rules

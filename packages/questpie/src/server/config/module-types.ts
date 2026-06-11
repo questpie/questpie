@@ -199,12 +199,80 @@ export interface AppModuleInput {
  * });
  * ```
  */
+/**
+ * App-level default access rule — ctx is the PRE-CODEGEN base context
+ * (`AppContextBase`), NOT the augmented `AccessContext`. Contextual typing
+ * of a function here must not route through the merged AppContext: the
+ * augmentation lives in the generated index, which consumes
+ * `typeof config/app.ts` — any function whose params resolve through the
+ * augmentation collapses the whole chain (TS2456). Collection-level
+ * `.access()` rules keep the fully augmented ctx; app-level defaults trade
+ * extension visibility for being cycle-free by construction.
+ */
+export type AppDefaultAccessRule =
+	| boolean
+	| ((
+			ctx: import("#questpie/server/config/app-context-base.js").AppContextBase & {
+				data?: unknown;
+				input?: unknown;
+				locale?: string;
+				request?: Request;
+			},
+	  ) =>
+			| boolean
+			| Record<string, unknown>
+			| Promise<boolean | Record<string, unknown>>);
+
+/** App-level default access map — see {@link AppDefaultAccessRule}. */
+export interface AppDefaultAccess {
+	read?: AppDefaultAccessRule;
+	create?: AppDefaultAccessRule;
+	update?: AppDefaultAccessRule;
+	delete?: AppDefaultAccessRule;
+	transition?: AppDefaultAccessRule;
+	serve?: AppDefaultAccessRule;
+	introspect?: AppDefaultAccessRule;
+}
+
 export interface AppConfigInput {
 	locale?: LocaleConfig;
-	access?: CollectionAccess;
+	access?: AppDefaultAccess;
 	hooks?: import("#questpie/server/config/global-hooks-types.js").GlobalHooksInput;
 	context?: ContextResolver;
 }
+
+declare const __appAccessStorageBrand: unique symbol;
+/**
+ * Opaque storage for app-level default access rules on the `appConfig()`
+ * RETURN type. Function-valued rules must not survive into
+ * `typeof appConfig-file` — their parameter types (AccessContext) re-enter
+ * the generated index through the `_ModuleConfig` extraction and collapse
+ * the whole AppContext augmentation (TS2456). Same erasure precedent as
+ * `CollectionAccessStorage` on the collection builder.
+ */
+export type AppAccessStorage = Record<string, unknown> & {
+	readonly [__appAccessStorageBrand]?: never;
+};
+
+declare const __appHooksStorageBrand: unique symbol;
+/** Opaque storage for app-level hooks on the `appConfig()` return type. @see AppAccessStorage */
+export type AppHooksStorage = Record<string, unknown> & {
+	readonly [__appHooksStorageBrand]?: never;
+};
+
+/**
+ * The `appConfig()` RETURN shape: access/hooks erased to opaque storage
+ * (nothing downstream consumes their types), `context` preserved verbatim
+ * (its return type drives the generated context-extension inference — which
+ * is why resolver returns must be explicitly annotated, never inferred from
+ * CRUD results).
+ */
+export type AppConfigResolved<T extends AppConfigInput> = {
+	locale?: T["locale"];
+	context?: T["context"];
+	access?: AppAccessStorage;
+	hooks?: AppHooksStorage;
+};
 
 // ============================================================================
 // Runtime Config — what questpie.config.ts exports (new architecture)

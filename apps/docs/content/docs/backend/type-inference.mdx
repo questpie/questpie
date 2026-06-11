@@ -27,7 +27,7 @@ The schema is the single source of types. If you find yourself hand-writing a ty
 | 16 | Realtime payloads | `live()` / `liveIter()` snapshots are typed; raw `subscribe` data is untyped — annotate with `CollectionDoc<"posts">` | |
 | 17 | Env vars | `env.ts` / `env.client.ts` with `env()` — see [Environment](/docs/production/environment) | |
 | 18 | Field-level rule ctx (`.access({ fields })`) | `doc` is typed as the row, `user` from the generated session — destructure, don't annotate | |
-| 19 | Derived request context (tenant, role) | `appConfig({ context })` result is inferred and arrives flat on rules — see [Access Control](/docs/backend/rules/access-control) | |
+| 19 | Derived request context (tenant, role) | `appConfig({ context })` result is inferred and arrives flat on rules — **annotate the resolver return with a self-contained DTO** (inferring from `.find().docs` re-enters the generated index) | App-level `access` rules get the base ctx, not extensions — cycle-free by design |
 | 20 | Select-option unions | `CollectionDoc<"events">["type"]` (server-side) | No client-safe union export yet |
 
 ## The two cycle rules
