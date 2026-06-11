@@ -671,7 +671,7 @@ export type RawWhereOperator = (args: RawWhereArgs) => SQL;
  * WHERE clause for filtering
  * Supports field conditions, logical operators, and relations
  */
-type WhereFields<TFields, TRelations> = {
+type WhereFields<in out TFields, in out TRelations> = {
 	[K in keyof TFields]?: K extends RelationKeys<TRelations>
 		?
 				| RelationFilter<
@@ -823,7 +823,7 @@ type RelationApp<T> = ExtractRelationApp<RelationValue<T>>;
  *
  * @template TRelations - The resolved relations map (contains RelationShape entries)
  */
-export type With<TRelations = any> = {
+export type With<in out TRelations = any> = {
 	[K in keyof TRelations]?: boolean | WithRelationOptions<TRelations[K]>;
 };
 
@@ -865,7 +865,10 @@ type WithRelationOptions<TRelation> =
 /**
  * Options for findMany query (Drizzle RQB v2-like)
  */
-export interface FindManyOptionsBase<TFields = any, TRelations = any> {
+export interface FindManyOptionsBase<
+	in out TFields = any,
+	in out TRelations = any,
+> {
 	where?: Where<TFields, TRelations>;
 	columns?: Columns<TFields>;
 	with?: With<TRelations>;
@@ -1199,9 +1202,9 @@ export interface UpdateParams<TUpdate = any, TRelations = any, TId = string> {
  * Update many records params
  */
 export interface UpdateManyParams<
-	TUpdate = any,
-	TFields = any,
-	TRelations = any,
+	in out TUpdate = any,
+	in out TFields = any,
+	in out TRelations = any,
 > {
 	where: Where<TFields, TRelations>;
 	data: UpdateInput<TUpdate, TRelations>;
@@ -1211,8 +1214,8 @@ export interface UpdateManyParams<
  * Update multiple records with distinct data per record.
  */
 export interface UpdateBatchParams<
-	TUpdate = any,
-	TRelations = any,
+	in out TUpdate = any,
+	in out TRelations = any,
 	TId = string,
 > {
 	updates: Array<{
@@ -1238,7 +1241,10 @@ export interface RestoreParams<TId = string> {
 /**
  * Delete many records params
  */
-export interface DeleteManyParams<TFields = any, TRelations = any> {
+export interface DeleteManyParams<
+	in out TFields = any,
+	in out TRelations = any,
+> {
 	where: Where<TFields, TRelations>;
 }
 
@@ -1476,10 +1482,10 @@ export type FindResult<
  * names mean by-id on the client SDK); they will be removed in v4.
  */
 export interface CRUD<
-	TSelect = any,
-	TInsert = any,
-	TUpdate = any,
-	TRelations = any,
+	in out TSelect = any,
+	in out TInsert = any,
+	in out TUpdate = any,
+	in out TRelations = any,
 	TId = ExtractIdType<TSelect>,
 > {
 	/**

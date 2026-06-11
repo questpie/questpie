@@ -208,10 +208,10 @@ export type GlobalSelectFromApp<TGlobal, TApp> =
  * Similar to Collection CRUD but adapted for singleton pattern
  */
 export interface GlobalCRUD<
-	TSelect = any,
-	_TInsert = any,
-	TUpdate = any,
-	TRelations = any,
+	in out TSelect = any,
+	in out _TInsert = any,
+	in out TUpdate = any,
+	in out TRelations = any,
 > {
 	/**
 	 * Get the global record (singleton)
