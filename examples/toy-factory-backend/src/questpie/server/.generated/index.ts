@@ -45,6 +45,7 @@ import _wf_nightlyCapacityReview from "../workflows/nightly-capacity-review";
 import _wf_productionOrderPlan from "../workflows/production-order-plan";
 
 // ── Core Singles ───────────────────────────────────────────
+import _appConfig from "../config/app";
 import _authConfig from "../config/auth";
 
 // ── Plugin Singles ─────────────────────────────────────────
@@ -62,7 +63,7 @@ type _Module = (typeof _modules)[number];
 type _MPRaw<K extends string> = UnionToIntersection<_Module extends infer M ? M extends Record<K, infer V> ? V : never : never>;
 type _MP<K extends string> = [_MPRaw<K>] extends [never] ? {} : unknown extends _MPRaw<K> ? {} : _MPRaw<K>;
 type _ModuleConfig = _MP<"config">;
-type _AppAppConfig = _ModuleConfig extends { app: infer TApp } ? TApp : {};
+type _AppAppConfig = (_ModuleConfig extends { app: infer TApp } ? TApp : {}) & typeof _appConfig;
 type _AppContextExtensions = Partial<InferContextExtensionsFromAppConfig<_AppAppConfig>>;
 type _AppAuthConfig = (_ModuleConfig extends { auth: infer TAuth } ? TAuth : {}) & typeof _authConfig;
 type _AppSession = NonNullable<InferSessionFromAuthConfig<_AppAuthConfig>> | null;
@@ -423,6 +424,7 @@ _appPromise = createApp(
 			[_wf_productionOrderPlan.name]: _wf_productionOrderPlan,
 		},
 		config: {
+			app: _appConfig,
 			auth: _authConfig,
 			admin: _adminConfig,
 			openapi: _openapi,
