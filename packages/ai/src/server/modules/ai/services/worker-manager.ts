@@ -108,7 +108,7 @@ function allowsAutomaticRetry(run: Record<string, unknown> | null | undefined) {
 export default service()
 	.lifecycle("singleton")
 	.create((ctx) => {
-		const collections = ctx.collections as any;
+		const collections = ctx.app.collections as any;
 
 		async function activeLeaseCount(workerId: string): Promise<number> {
 			const result = await collections.ai_worker_leases.find({
