@@ -549,8 +549,11 @@ export default job({
 			if (!isDue(schedule, now)) continue;
 
 			try {
-				const active = await hasActiveExecution(ctx, schedule.id);
 				const policy = String(schedule.concurrencyPolicy ?? "allow");
+				const active =
+					policy === "skip" || policy === "replace"
+						? await hasActiveExecution(ctx, schedule.id)
+						: null;
 				if (active && policy === "skip") {
 					const execution = await ctx.collections.schedule_executions.create({
 						schedule: schedule.id,

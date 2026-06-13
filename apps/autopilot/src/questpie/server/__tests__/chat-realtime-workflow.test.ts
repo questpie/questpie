@@ -526,6 +526,21 @@ describe("chat realtime workflow contract", () => {
 			runtime: "codex",
 			enabled: true,
 		} as any);
+		await app.collections.assets.create({
+			title: "Chat helper skill",
+			path: "company/skills/chat-helper/SKILL.md",
+			kind: "skill",
+			source: "human",
+			contentType: "text/markdown",
+			body: [
+				"---",
+				"name: chat-helper",
+				"description: Use this when answering chat requests.",
+				"status: published",
+				"---",
+				"# Chat helper",
+			].join("\n"),
+		} as any);
 
 		const chat = await callJson("/api/chat", {
 			body: {
@@ -562,6 +577,9 @@ describe("chat realtime workflow contract", () => {
 			runtime: "codex",
 			prompt: "Create a run link for this chat.",
 		});
+		expect(aiRun?.systemPrompt).toContain(
+			"- chat-helper: Use this when answering chat requests. [read: company/skills/chat-helper/SKILL.md]",
+		);
 		expect(aiRun).not.toHaveProperty("provider");
 		expect(aiRun).not.toHaveProperty("model");
 		expect(

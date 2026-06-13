@@ -6,15 +6,15 @@ import { streamText } from "ai";
 import { createSpawnAgentSession } from "spawn-agent";
 
 import type {
-	SpawnAgentRunHandle,
-	SpawnAgentRunner,
-	SpawnAgentRunRequest,
+	AgentRuntimeRunHandle,
+	AgentRuntimeRunner,
+	AgentRuntimeRunRequest,
 } from "../modules/ai/lib/execution-contract.js";
 
-// One execution surface: the Vercel AI SDK `spawn-agent` provider, which speaks
-// the Agent Client Protocol to whatever agent CLI is installed on the host
-// (claude / codex / opencode). No hand-rolled ACP client, no env isolation —
-// the agent uses the host's own auth (~/.codex, ~/.claude, opencode creds).
+// Legacy fallback execution surface: the Vercel AI SDK `spawn-agent` provider,
+// which speaks Agent Client Protocol to the host-installed agent CLI
+// (claude / codex / opencode). Harness-backed runners should implement the
+// same AgentRuntimeRunner contract without depending on local CLI materialization.
 
 export type DirectSpawnRuntime = "claude-code" | "codex" | "opencode";
 
@@ -76,9 +76,9 @@ export async function prepareWorkerVolume(
 
 export function createSpawnAgentRunner(
 	config: DirectSpawnRunnerConfig,
-): SpawnAgentRunner {
+): AgentRuntimeRunner {
 	return {
-		async run(input: SpawnAgentRunRequest): Promise<SpawnAgentRunHandle> {
+		async run(input: AgentRuntimeRunRequest): Promise<AgentRuntimeRunHandle> {
 			const commandId = `cmd_${randomUUID().slice(0, 12)}`;
 			const stream = createEventStream();
 			const completion = runViaProvider({
@@ -97,7 +97,7 @@ export function createSpawnAgentRunner(
 }
 
 async function runViaProvider(args: {
-	input: SpawnAgentRunRequest;
+	input: AgentRuntimeRunRequest;
 	commandId: string;
 	workerDir: string;
 	mcpServers: unknown[];

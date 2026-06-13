@@ -3,9 +3,12 @@ import { route } from "questpie/services";
 import { z } from "zod";
 
 import { createAiRunLink } from "../lib/ai-run-links";
+import { injectMemoriesIntoInstructions } from "../lib/memory-injection";
+import { projectWorkspacePath } from "../lib/project-workspace";
 import { mergeRecords, relationId } from "../lib/records";
 import { sessionOnly } from "../lib/route-access";
 import { resolveRuntimeSelection } from "../lib/runtime-selection";
+import { buildSkillsSystemPrompt } from "../lib/skill-discovery";
 import { workflowsFromContext } from "../lib/workflows";
 
 const attachmentSchema = z
@@ -49,6 +52,13 @@ export default route()
 	.schema(chatSchema)
 	.handler(async (ctx) => {
 		const { input, collections } = ctx;
+		const inputProject = input.projectId
+			? await collections.projects.findOne({ where: { id: input.projectId } })
+			: null;
+		if (input.projectId && !inputProject) {
+			throw ApiError.notFound("Project", input.projectId);
+		}
+
 		const existingSession = input.chatSessionId
 			? await collections.chat_sessions.findOne({
 					where: { id: input.chatSessionId },
@@ -80,22 +90,41 @@ export default route()
 			) as any,
 		});
 
+		const projectId = input.projectId ?? relationId(session.project);
+		const taskId = input.taskId ?? relationId(session.task);
 		const runtime = await resolveRuntimeSelection(ctx, {
 			modelId: input.modelId,
-			projectId: input.projectId ?? relationId(session.project),
+			projectId,
 		});
+		const cwd = await projectWorkspacePath(collections, projectId);
+		const skillsSystemPrompt = await buildSkillsSystemPrompt(collections, {
+			projectId,
+		});
+		const instructions = await injectMemoriesIntoInstructions(
+			{
+				search: ctx.search,
+				collections,
+				projectId,
+				taskId,
+			},
+			input.content,
+			input.content,
+			ctx.logger,
+		);
 		const run = await createAiRunLink({
 			ctx,
 			runtime,
-			taskId: input.taskId ?? relationId(session.task),
-			projectId: input.projectId ?? relationId(session.project),
+			taskId,
+			projectId,
 			initiatedBy: "chat",
-			instructions: input.content,
+			instructions,
+			systemPrompt: skillsSystemPrompt || undefined,
 			chatSessionId: session.id,
 			chatMessageId: message.id,
 			runtimeSessionRef: session.runtimeSessionRef,
 			spawnMetadata: {
 				attachments: input.attachments ?? [],
+				...(cwd ? { cwd } : {}),
 			},
 			linkMetadata: { attachments: input.attachments ?? [] },
 		});
@@ -117,7 +146,7 @@ export default route()
 				messageId: message.id,
 				runId: run.id,
 				prompt: input.content,
-				projectId: input.projectId ?? null,
+				projectId: projectId ?? null,
 				taskId: input.taskId ?? null,
 				modelId: input.modelId ?? null,
 			},

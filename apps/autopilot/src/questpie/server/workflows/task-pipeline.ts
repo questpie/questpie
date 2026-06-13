@@ -7,6 +7,7 @@ import type { AppCollections, WorkflowServiceContext } from "../lib/app-types";
 import { classifyRunError, type RunErrorType } from "../lib/error-classifier";
 import { injectMemoriesIntoInstructions } from "../lib/memory-injection";
 import { runReflectionStep } from "../lib/memory-reflect-step";
+import { projectWorkspacePath } from "../lib/project-workspace";
 import {
 	asRecord,
 	mergeRecords,
@@ -241,15 +242,18 @@ export default workflow({
 					baseInstructions,
 					log,
 				);
+				const projectId = relationId(task.project);
+				const cwd = await projectWorkspacePath(ctx.collections, projectId);
 				return createAiRunLink({
 					ctx: ctx,
 					runtime,
 					taskId: input.taskId,
-					projectId: relationId(task.project),
+					projectId,
 					initiatedBy: "task",
 					instructions,
 					systemPrompt: skillsSystemPrompt || undefined,
 					scheduleExecutionId: input.scheduleExecutionId,
+					spawnMetadata: cwd ? { cwd } : undefined,
 					linkMetadata: {
 						runReason: input.runReason ?? "task-pipeline",
 						requestedBy: input.requestedBy ?? "system",

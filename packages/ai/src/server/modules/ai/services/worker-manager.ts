@@ -15,6 +15,9 @@ import type {
 } from "../lib/execution-contract.js";
 
 export type {
+	AgentRuntimeRunHandle,
+	AgentRuntimeRunner,
+	AgentRuntimeRunRequest,
 	AiRunEventLevel,
 	AiRunStatus,
 	AiLeaseStatus,
@@ -97,6 +100,11 @@ function eventLevel(value: unknown) {
 		: "info";
 }
 
+function allowsAutomaticRetry(run: Record<string, unknown> | null | undefined) {
+	const meta = isRecord(run?.meta) ? run.meta : null;
+	return meta?.automaticRetry !== false;
+}
+
 export default service()
 	.lifecycle("singleton")
 	.create((ctx) => {
@@ -121,6 +129,16 @@ export default service()
 			let count = 0;
 			await Promise.all(
 				result.docs.map(async (lease: Record<string, unknown>) => {
+					const metadata = isRecord(lease.metadata) ? lease.metadata : null;
+					const leaseRuntime =
+						typeof metadata?.runtime === "string"
+							? metadata.runtime
+							: undefined;
+					if (leaseRuntime) {
+						if (leaseRuntime === runtime) count++;
+						return;
+					}
+
 					const runId = relationId(lease.run);
 					if (!runId) return;
 					const run = await collections.ai_runs.findOne({
@@ -281,9 +299,16 @@ export default service()
 						claimedAt: new Date(),
 						expiresAt,
 						status: "active",
+						metadata: { runtime: runRuntime },
 					});
 
 					await setWorkerStatus(input.workerId, "busy");
+
+					const metadata = isRecord(run.meta) ? run.meta : undefined;
+					const cwd =
+						typeof metadata?.cwd === "string"
+							? metadata.cwd.trim() || undefined
+							: undefined;
 
 					return {
 						lease: {
@@ -297,7 +322,8 @@ export default service()
 								(run.systemPrompt as string | null | undefined) ?? undefined,
 							runtime: runRuntime,
 							runtimeSessionRef: run.runtimeSessionRef as string | undefined,
-							metadata: isRecord(run.meta) ? run.meta : undefined,
+							cwd,
+							metadata,
 						},
 					};
 				}
@@ -397,6 +423,21 @@ export default service()
 						data: { status: "expired" },
 					});
 					if (runId) {
+						const run = await collections.ai_runs.findOne({
+							where: { id: runId },
+						});
+						if (!allowsAutomaticRetry(run)) {
+							await collections.ai_runs.update({
+								where: { id: runId, status: { in: ["claimed", "running"] } },
+								data: {
+									status: "failed",
+									worker: null as any,
+									endedAt: now,
+									error: "Worker lease expired; automatic retry disabled",
+								},
+							});
+							continue;
+						}
 						await collections.ai_runs.update({
 							where: { id: runId, status: { in: ["claimed", "running"] } },
 							data: { status: "pending", worker: null as any },

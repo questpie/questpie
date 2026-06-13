@@ -233,7 +233,10 @@ export async function mirrorAiRunEvent(ctx: GlobalCollectionHookContext) {
 		typeof ctx.data.summary === "string" ? ctx.data.summary : null;
 	const metadata = asRecord(ctx.data.meta);
 
-	if (eventType === "started" && activeRunStatus(runLink.status)) {
+	if (
+		(eventType === "started" || eventType === "command.started") &&
+		activeRunStatus(runLink.status)
+	) {
 		await ctx.collections.run_links.updateById({
 			id: String(runLink.id),
 			data: {

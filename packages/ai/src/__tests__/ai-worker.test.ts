@@ -9,6 +9,7 @@ import {
 	hashSecret,
 	generateSecret,
 } from "../server/modules/ai/services/worker-manager.js";
+import type { ClaimedRun } from "../server/modules/ai/services/worker-manager.js";
 import { executeRun } from "../server/worker/execute-run.js";
 import { prepareWorkerVolume } from "../server/worker/spawn-agent-runner.js";
 import { createFakeSpawnAgentRunner } from "../server/worker/testing.js";
@@ -208,6 +209,11 @@ function buildWorkerManager(
 			: "info";
 	}
 
+	function allowsAutomaticRetry(run: MockDoc | null | undefined) {
+		const meta = isRecord(run?.meta) ? run.meta : null;
+		return meta?.automaticRetry !== false;
+	}
+
 	return {
 		hashSecret,
 		generateSecret,
@@ -295,7 +301,7 @@ function buildWorkerManager(
 			workerId: string;
 			runtimes: string[];
 			limit?: number;
-		}) {
+		}): Promise<ClaimedRun | null> {
 			const worker = await collections.ai_workers.findOne({
 				where: { id: input.workerId },
 			});
@@ -353,6 +359,12 @@ function buildWorkerManager(
 
 				await setWorkerStatus(input.workerId, "busy");
 
+				const metadata = isRecord(run.meta) ? run.meta : undefined;
+				const cwd =
+					typeof metadata?.cwd === "string"
+						? metadata.cwd.trim() || undefined
+						: undefined;
+
 				return {
 					lease: {
 						id: lease.id,
@@ -365,7 +377,8 @@ function buildWorkerManager(
 							(run.systemPrompt as string | null | undefined) ?? undefined,
 						runtime: runRuntime,
 						runtimeSessionRef: run.runtimeSessionRef as string | undefined,
-						metadata: isRecord(run.meta) ? run.meta : undefined,
+						cwd,
+						metadata,
 					},
 				};
 			}
@@ -459,6 +472,21 @@ function buildWorkerManager(
 					data: { status: "expired" },
 				});
 				if (runId) {
+					const run = await collections.ai_runs.findOne({
+						where: { id: runId },
+					});
+					if (!allowsAutomaticRetry(run)) {
+						await collections.ai_runs.update({
+							where: { id: runId, status: { in: ["claimed", "running"] } },
+							data: {
+								status: "failed",
+								worker: null,
+								endedAt: now,
+								error: "Worker lease expired; automatic retry disabled",
+							},
+						});
+						continue;
+					}
 					await collections.ai_runs.update({
 						where: { id: runId, status: { in: ["claimed", "running"] } },
 						data: { status: "pending", worker: null },
@@ -654,6 +682,7 @@ describe("Worker manager — claim / complete / heartbeat", () => {
 			status: "pending",
 			runtime: "claude-code",
 			prompt: "do something",
+			meta: { cwd: "/tmp/project-a", source: "test" },
 			createdAt: new Date(),
 		});
 
@@ -662,6 +691,11 @@ describe("Worker manager — claim / complete / heartbeat", () => {
 		expect(claimed!.spawn.prompt).toBe("do something");
 		expect(claimed!.spawn.systemPrompt).toBeUndefined();
 		expect(claimed!.spawn.runtime).toBe("claude-code");
+		expect(claimed!.spawn.cwd).toBe("/tmp/project-a");
+		expect(claimed!.spawn.metadata).toEqual({
+			cwd: "/tmp/project-a",
+			source: "test",
+		});
 		expect(claimed!.lease.id).toBeTruthy();
 		expect(claimed!.lease.runId).toBeTruthy();
 		expect(claimed!.lease.expiresAt).toBeInstanceOf(Date);
@@ -951,6 +985,41 @@ describe("Worker manager — lease expiry", () => {
 			where: { id: claimed!.lease.runId },
 		});
 		expect(run!.status).toBe("pending");
+
+		const updatedLease = await collections.ai_worker_leases.findOne({
+			where: { id: lease!.id },
+		});
+		expect(updatedLease!.status).toBe("expired");
+	});
+
+	it("does not requeue stale leases when automatic retry is disabled", async () => {
+		await collections.ai_runs.create({
+			status: "pending",
+			runtime: "claude-code",
+			prompt: "recover me through owner",
+			createdAt: new Date(),
+			meta: { automaticRetry: false },
+		});
+		const claimed = await wm.claimRun({ workerId, runtimes: ["claude-code"] });
+
+		const lease = await collections.ai_worker_leases.findOne({
+			where: { run: claimed!.lease.runId },
+		});
+		await collections.ai_worker_leases.updateById({
+			id: lease!.id,
+			data: { expiresAt: new Date(Date.now() - 60_000).toISOString() },
+		});
+
+		const { expiredCount } = await wm.expireStaleLeases();
+		expect(expiredCount).toBe(1);
+
+		const run = await collections.ai_runs.findOne({
+			where: { id: claimed!.lease.runId },
+		});
+		expect(run!.status).toBe("failed");
+		expect(run!.worker).toBe(null);
+		expect(run!.error).toBe("Worker lease expired; automatic retry disabled");
+		expect(run!.endedAt).toBeInstanceOf(Date);
 
 		const updatedLease = await collections.ai_worker_leases.findOne({
 			where: { id: lease!.id },

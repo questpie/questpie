@@ -41,7 +41,7 @@ export interface ClaimedRun {
 		runId: string;
 		expiresAt: Date;
 	};
-	spawn: SpawnAgentRunRequest;
+	spawn: AgentRuntimeRunRequest;
 }
 
 export interface CompleteRunInput {
@@ -68,7 +68,7 @@ export interface ReportRunEventInput {
 	event: Record<string, unknown>;
 }
 
-export interface SpawnAgentRunRequest {
+export interface AgentRuntimeRunRequest {
 	runtime: string;
 	prompt: string;
 	runtimeSessionRef?: string;
@@ -78,11 +78,27 @@ export interface SpawnAgentRunRequest {
 	metadata?: Record<string, unknown>;
 }
 
-export interface SpawnAgentRunHandle {
+export interface AgentRuntimeRunHandle {
 	events: AsyncIterable<Record<string, unknown>>;
 	completion: Promise<Record<string, unknown>>;
 }
 
-export interface SpawnAgentRunner {
-	run(input: SpawnAgentRunRequest): Promise<SpawnAgentRunHandle>;
+export interface AgentRuntimeRunner {
+	run(input: AgentRuntimeRunRequest): Promise<AgentRuntimeRunHandle>;
 }
+
+/**
+ * @deprecated Use AgentRuntimeRunRequest. The worker runtime is no longer
+ * assumed to be spawn-agent; spawn-agent remains one fallback implementation.
+ */
+export type SpawnAgentRunRequest = AgentRuntimeRunRequest;
+
+/**
+ * @deprecated Use AgentRuntimeRunHandle.
+ */
+export type SpawnAgentRunHandle = AgentRuntimeRunHandle;
+
+/**
+ * @deprecated Use AgentRuntimeRunner.
+ */
+export type SpawnAgentRunner = AgentRuntimeRunner;

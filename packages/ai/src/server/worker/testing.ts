@@ -1,17 +1,17 @@
 import { randomUUID } from "node:crypto";
 
-import type { SpawnAgentRunner } from "../modules/ai/lib/execution-contract.js";
+import type { AgentRuntimeRunner } from "../modules/ai/lib/execution-contract.js";
 
-export interface FakeSpawnAgentRunnerOptions {
+export interface FakeAgentRuntimeRunnerOptions {
 	responseText?: string;
 	sessionRef?: string;
 	shouldFail?: boolean;
 	failMessage?: string;
 }
 
-export function createFakeSpawnAgentRunner(
-	options: FakeSpawnAgentRunnerOptions = {},
-): SpawnAgentRunner {
+export function createFakeAgentRuntimeRunner(
+	options: FakeAgentRuntimeRunnerOptions = {},
+): AgentRuntimeRunner {
 	return {
 		async run(input) {
 			const commandId = `cmd_${randomUUID().slice(0, 12)}`;
@@ -81,6 +81,16 @@ export function createFakeSpawnAgentRunner(
 		},
 	};
 }
+
+/**
+ * @deprecated Use FakeAgentRuntimeRunnerOptions.
+ */
+export type FakeSpawnAgentRunnerOptions = FakeAgentRuntimeRunnerOptions;
+
+/**
+ * @deprecated Use createFakeAgentRuntimeRunner.
+ */
+export const createFakeSpawnAgentRunner = createFakeAgentRuntimeRunner;
 
 async function* eventsFrom(events: Record<string, unknown>[]) {
 	for (const event of events) {

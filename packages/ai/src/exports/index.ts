@@ -4,6 +4,9 @@ export type { AiModuleConfig, RunInjection } from "../server/config.js";
 export { aiPlugin } from "../server/plugin.js";
 
 export type {
+	AgentRuntimeRunner,
+	AgentRuntimeRunHandle,
+	AgentRuntimeRunRequest,
 	AiLeaseStatus,
 	AiRunEventLevel,
 	AiRunStatus,

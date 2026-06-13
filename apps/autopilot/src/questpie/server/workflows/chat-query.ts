@@ -5,6 +5,7 @@ import { workflow } from "@questpie/workflows";
 import { createAiRunLink } from "../lib/ai-run-links";
 import { injectMemoriesIntoInstructions } from "../lib/memory-injection";
 import { runReflectionStep } from "../lib/memory-reflect-step";
+import { projectWorkspacePath } from "../lib/project-workspace";
 import {
 	mergeRecords,
 	relationId,
@@ -91,6 +92,7 @@ export default workflow({
 				input.prompt,
 				input.prompt,
 			);
+			const cwd = await projectWorkspacePath(ctx.collections, projectId);
 			return createAiRunLink({
 				ctx,
 				runtime,
@@ -103,6 +105,7 @@ export default workflow({
 				chatMessageId: input.messageId,
 				scheduleExecutionId: input.scheduleExecutionId,
 				runtimeSessionRef: session.runtimeSessionRef,
+				spawnMetadata: cwd ? { cwd } : undefined,
 				linkMetadata: {},
 			});
 		});

@@ -1,7 +1,7 @@
 import type {
+	AgentRuntimeRunner,
 	ClaimedRun,
 	CompleteRunInput,
-	SpawnAgentRunner,
 } from "../modules/ai/lib/execution-contract.js";
 
 interface WorkerManagerForExecution {
@@ -18,7 +18,7 @@ interface WorkerManagerForExecution {
 }
 
 export async function executeRun(
-	runner: SpawnAgentRunner,
+	runner: AgentRuntimeRunner,
 	workerManager: WorkerManagerForExecution,
 	claimed: ClaimedRun,
 	workerId: string,
