@@ -82,16 +82,6 @@ export function createFakeAgentRuntimeRunner(
 	};
 }
 
-/**
- * @deprecated Use FakeAgentRuntimeRunnerOptions.
- */
-export type FakeSpawnAgentRunnerOptions = FakeAgentRuntimeRunnerOptions;
-
-/**
- * @deprecated Use createFakeAgentRuntimeRunner.
- */
-export const createFakeSpawnAgentRunner = createFakeAgentRuntimeRunner;
-
 async function* eventsFrom(events: Record<string, unknown>[]) {
 	for (const event of events) {
 		yield event;

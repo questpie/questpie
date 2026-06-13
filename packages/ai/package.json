@@ -77,14 +77,14 @@
 		"questpie:generate": "bun questpie generate --verbose"
 	},
 	"dependencies": {
-		"@agentclientprotocol/claude-agent-acp": "0.37.0",
-		"@agentclientprotocol/codex-acp": "0.0.44",
-		"@agentclientprotocol/sdk": "0.22.1",
+		"@ai-sdk/harness": "1.0.0-canary.9",
+		"@ai-sdk/harness-claude-code": "1.0.0-canary.5",
+		"@ai-sdk/provider-utils": "5.0.0-canary.48",
 		"@iconify/react": "^6.0.2",
 		"@questpie/admin": "workspace:*",
-		"ai": "^6.0.0",
+		"ai": "7.0.0-canary.173",
 		"questpie": "workspace:*",
-		"spawn-agent": "0.0.1"
+		"ws": "^8.20.1"
 	},
 	"devDependencies": {
 		"@tanstack/react-query": "^5.x",

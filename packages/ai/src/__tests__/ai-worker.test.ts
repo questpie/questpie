@@ -11,8 +11,8 @@ import {
 } from "../server/modules/ai/services/worker-manager.js";
 import type { ClaimedRun } from "../server/modules/ai/services/worker-manager.js";
 import { executeRun } from "../server/worker/execute-run.js";
-import { prepareWorkerVolume } from "../server/worker/spawn-agent-runner.js";
-import { createFakeSpawnAgentRunner } from "../server/worker/testing.js";
+import { prepareWorkerVolume } from "../server/worker/worker-volume.js";
+import { createFakeAgentRuntimeRunner } from "../server/worker/testing.js";
 
 // ---------------------------------------------------------------------------
 // In-memory mock collection store
@@ -618,7 +618,7 @@ describe("Worker manager — spawn run", () => {
 		expect(run!.meta).toEqual({ source: "test" });
 	});
 
-	it("persists systemPrompt and maps it into the claimed spawn request", async () => {
+	it("persists systemPrompt and maps it into the claimed agent request", async () => {
 		const { workerId } = await wm.registerWorker({
 			deviceId: "cc-dev",
 			name: "cc-worker",
@@ -885,14 +885,14 @@ describe("Worker manager — claim / complete / heartbeat", () => {
 		await wm.failRun({
 			runId: claimed!.lease.runId,
 			workerId,
-			error: new Error("spawn failed"),
+			error: new Error("execution failed"),
 		});
 
 		const run = await collections.ai_runs.findOne({
 			where: { id: claimed!.lease.runId },
 		});
 		expect(run!.status).toBe("failed");
-		expect(run!.error).toBe("spawn failed");
+		expect(run!.error).toBe("execution failed");
 		expect(run!.endedAt).toBeInstanceOf(Date);
 
 		const lease = await collections.ai_worker_leases.findOne({
@@ -1048,7 +1048,7 @@ describe("Embedded worker execution", () => {
 		}
 	});
 
-	it("polls each configured runtime independently", async () => {
+	it("polls the configured harness runtime", async () => {
 		const workerDir = await mkdtemp(join(tmpdir(), "questpie-ai-worker-"));
 		const claims: string[][] = [];
 		const worker = await startAIWorker(
@@ -1071,7 +1071,7 @@ describe("Embedded worker execution", () => {
 			},
 			{
 				workerDir,
-				runtimes: [{ runtime: "codex" }, { runtime: "claude-code" }],
+				runtimes: [{ runtime: "claude-code" }],
 				maxConcurrentRuns: 1,
 				pollIntervalMs: 10,
 			},
@@ -1083,9 +1083,6 @@ describe("Embedded worker execution", () => {
 				Date.now() < deadline &&
 				!(
 					claims.some(
-						(runtimes) => runtimes.length === 1 && runtimes[0] === "codex",
-					) &&
-					claims.some(
 						(runtimes) =>
 							runtimes.length === 1 && runtimes[0] === "claude-code",
 					)
@@ -1094,7 +1091,6 @@ describe("Embedded worker execution", () => {
 				await new Promise((resolve) => setTimeout(resolve, 5));
 			}
 
-			expect(claims).toContainEqual(["codex"]);
 			expect(claims).toContainEqual(["claude-code"]);
 		} finally {
 			await worker.stop();
@@ -1102,8 +1098,8 @@ describe("Embedded worker execution", () => {
 		}
 	});
 
-	it("calls failRun when spawn execution throws", async () => {
-		const error = new Error("spawn failed");
+	it("calls failRun when agent execution throws", async () => {
+		const error = new Error("execution failed");
 		const failCalls: Array<{
 			runId: string;
 			workerId: string;
@@ -1154,8 +1150,8 @@ describe("Embedded worker execution", () => {
 	});
 });
 
-describe("End-to-end: run → worker → spawn-agent runner → completion", () => {
-	it("full flow with fake spawn-agent runner", async () => {
+describe("End-to-end: run → worker → harness agent runner → completion", () => {
+	it("full flow with fake harness agent runner", async () => {
 		const collections = createMockCollections();
 		const wm = buildWorkerManager(collections);
 
@@ -1181,8 +1177,8 @@ describe("End-to-end: run → worker → spawn-agent runner → completion", () 
 		expect(claimed!.lease.runId).toBe(runId);
 		expect(claimed!.spawn.prompt).toBe("write tests");
 
-		// 4. Execute through the AI-owned spawn-agent runner seam
-		const runner = createFakeSpawnAgentRunner({
+		// 4. Execute through the AI-owned harness agent runner seam
+		const runner = createFakeAgentRuntimeRunner({
 			responseText: "Tests written successfully",
 		});
 		await executeRun(runner, wm, claimed!, workerId);

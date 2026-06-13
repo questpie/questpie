@@ -15,13 +15,10 @@ function maxConcurrentRuns() {
 // context, not the bare app instance — so run it within a system context.
 const ctx = await createContext({ accessMode: "system" });
 
-// TODO: this should be auto-detectable from the array of supported cli's
 await startAIWorker(ctx, {
 	maxConcurrentRuns: maxConcurrentRuns(),
 	pollIntervalMs: 1000,
-	// Register the ACP-capable agent CLIs available on this host; the run's
-	// requested runtime (default codex) is matched against this set.
-	runtimes: [{ runtime: "codex" }, { runtime: "claude-code" }],
+	runtimes: [{ runtime: "claude-code" }],
 	mcpServers: [
 		{
 			name: "questpie-autopilot",

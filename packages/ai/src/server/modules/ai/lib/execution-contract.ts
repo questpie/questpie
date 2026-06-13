@@ -86,19 +86,3 @@ export interface AgentRuntimeRunHandle {
 export interface AgentRuntimeRunner {
 	run(input: AgentRuntimeRunRequest): Promise<AgentRuntimeRunHandle>;
 }
-
-/**
- * @deprecated Use AgentRuntimeRunRequest. The worker runtime is no longer
- * assumed to be spawn-agent; spawn-agent remains one fallback implementation.
- */
-export type SpawnAgentRunRequest = AgentRuntimeRunRequest;
-
-/**
- * @deprecated Use AgentRuntimeRunHandle.
- */
-export type SpawnAgentRunHandle = AgentRuntimeRunHandle;
-
-/**
- * @deprecated Use AgentRuntimeRunner.
- */
-export type SpawnAgentRunner = AgentRuntimeRunner;

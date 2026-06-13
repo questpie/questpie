@@ -3,13 +3,13 @@ import * as os from "node:os";
 import { generateSecret } from "../server/modules/ai/services/worker-manager.js";
 import { executeRun } from "../server/worker/execute-run.js";
 import {
-	createSpawnAgentRunner,
-	prepareWorkerVolume,
-	type DirectSpawnRuntime,
-} from "../server/worker/spawn-agent-runner.js";
+	createHarnessAgentRunner,
+	type HarnessRuntime,
+} from "../server/worker/harness-agent-runner.js";
+import { prepareWorkerVolume } from "../server/worker/worker-volume.js";
 
 export interface EmbeddedWorkerConfig {
-	runtimes: { runtime: DirectSpawnRuntime; binaryPath?: string }[];
+	runtimes: { runtime: HarnessRuntime; binaryPath?: string }[];
 	maxConcurrentRuns?: number;
 	workerDir?: string;
 	mcpServers?: unknown[];
@@ -25,7 +25,7 @@ export async function startAIWorker(
 ): Promise<{ stop(): Promise<void>; workerId: string }> {
 	const workerDir = config.workerDir ?? ".questpie/ai-worker";
 	const volume = await prepareWorkerVolume(workerDir);
-	const runner = createSpawnAgentRunner({
+	const runner = createHarnessAgentRunner({
 		workerDir,
 		runtimes: config.runtimes,
 		mcpServers: config.mcpServers,
@@ -57,9 +57,9 @@ export async function startAIWorker(
 	}
 
 	let running = true;
-	const activeRuns = new Map<Promise<void>, DirectSpawnRuntime>();
+	const activeRuns = new Map<Promise<void>, HarnessRuntime>();
 	const runtimes = Array.from(new Set(config.runtimes.map((r) => r.runtime)));
-	const activeRunsForRuntime = (runtime: DirectSpawnRuntime) => {
+	const activeRunsForRuntime = (runtime: HarnessRuntime) => {
 		let count = 0;
 		for (const activeRuntime of activeRuns.values()) {
 			if (activeRuntime === runtime) count++;
@@ -68,7 +68,7 @@ export async function startAIWorker(
 	};
 	const startExecution = (claimed: any) => {
 		if (!claimed || !workerManager) return;
-		const runtime = claimed.spawn?.runtime as DirectSpawnRuntime | undefined;
+		const runtime = claimed.spawn?.runtime as HarnessRuntime | undefined;
 		if (!runtime) return;
 		const execution = executeRun(
 			runner,
@@ -119,4 +119,4 @@ export async function startAIWorker(
 	};
 }
 
-export type { DirectSpawnRuntime };
+export type { HarnessRuntime };
