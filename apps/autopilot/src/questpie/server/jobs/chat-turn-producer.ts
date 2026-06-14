@@ -135,18 +135,35 @@ export default job({
 				prompt: payload.prompt,
 			});
 
-			// Pipe UIMessage chunks into the resumable sink
-			const uiStream = toUIMessages(result as any);
+			// Pipe UIMessage chunks into the resumable sink, ACCUMULATING the
+			// assistant text as it streams. result.text does not aggregate for the
+			// harness once result.stream has been consumed by toUIMessages, so we
+			// collect text-delta chunks here instead.
+			let assistantText = "";
+			const uiStream = (
+				toUIMessages(result as any) as ReadableStream<any>
+			).pipeThrough(
+				new TransformStream({
+					transform(chunk, controller) {
+						if (chunk && chunk.type === "text-delta") {
+							assistantText +=
+								typeof chunk.delta === "string"
+									? chunk.delta
+									: typeof chunk.text === "string"
+										? chunk.text
+										: "";
+						}
+						controller.enqueue(chunk);
+					},
+				}),
+			);
 			await sink({ stream: uiStream as any });
 
 			// ── 7. Persist harness resume state ─────────────────────
 			const resumeState = await resumed.detachAndPersist();
 
-			// ── 8. Collect final text from the stream result ────────
-			const finalText =
-				typeof (result as any).text === "string"
-					? (result as any).text
-					: "Done.";
+			// ── 8. Final assistant text accumulated from the stream ──
+			const finalText = assistantText.trim() || "Done.";
 
 			// ── 9. Create assistant message with the final content ──
 			await collections.chat_messages.create({

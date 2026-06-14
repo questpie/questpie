@@ -252,63 +252,72 @@ function resolveHomeDir(settings: LocalHostSandboxSettings, sessionId: string) {
 export function createLocalHostSandbox(
 	settings: LocalHostSandboxSettings,
 ): HarnessV1SandboxProvider {
+	const buildSession = async (
+		id: string,
+	): Promise<HarnessV1NetworkSandboxSession> => {
+		const port = await freePort();
+		const cwd = settings.workRoot;
+		const homeDir = resolveHomeDir(settings, id);
+		await mkdir(cwd, { recursive: true });
+		await mkdir(homeDir, { recursive: true });
+
+		const children = new Set<ChildProcess>();
+		let destroyed = false;
+		const cleanup = async () => {
+			if (destroyed) return;
+			destroyed = true;
+			for (const child of children) killChild(child);
+			children.clear();
+		};
+		const base = makeBaseSession({
+			cwd,
+			homeDir,
+			envAllowlist: [...DEFAULT_ENV_ALLOWLIST, ...(settings.envAllowlist ?? [])],
+			baseEnv: settings.env,
+			trackChild: (child) => {
+				children.add(child);
+				child.once("close", () => children.delete(child));
+				child.once("error", () => children.delete(child));
+				if (destroyed) killChild(child);
+			},
+		});
+		return {
+			...base,
+			id,
+			defaultWorkingDirectory: cwd,
+			ports: [port],
+			async getPortUrl({ port: requestedPort, protocol }) {
+				const scheme = protocol === "ws" ? "ws" : "http";
+				return `${scheme}://127.0.0.1:${requestedPort}`;
+			},
+			stop: cleanup,
+			destroy: cleanup,
+			restricted() {
+				return base;
+			},
+		};
+	};
+
 	return {
 		specificationVersion: "harness-sandbox-v1",
 		providerId: "questpie-local-host",
 		async createSession(options) {
-			const port = await freePort();
 			const id = options?.sessionId ?? `local_${randomUUID().slice(0, 8)}`;
-			const cwd = settings.workRoot;
-			const homeDir = resolveHomeDir(settings, id);
-			await mkdir(cwd, { recursive: true });
-			await mkdir(homeDir, { recursive: true });
-
-			const children = new Set<ChildProcess>();
-			let destroyed = false;
-			const cleanup = async () => {
-				if (destroyed) return;
-				destroyed = true;
-				for (const child of children) killChild(child);
-				children.clear();
-			};
-			const base = makeBaseSession({
-				cwd,
-				homeDir,
-				envAllowlist: [
-					...DEFAULT_ENV_ALLOWLIST,
-					...(settings.envAllowlist ?? []),
-				],
-				baseEnv: settings.env,
-				trackChild: (child) => {
-					children.add(child);
-					child.once("close", () => children.delete(child));
-					child.once("error", () => children.delete(child));
-					if (destroyed) killChild(child);
-				},
-			});
-			const session: HarnessV1NetworkSandboxSession = {
-				...base,
-				id,
-				defaultWorkingDirectory: cwd,
-				ports: [port],
-				async getPortUrl({ port: requestedPort, protocol }) {
-					const scheme = protocol === "ws" ? "ws" : "http";
-					return `${scheme}://127.0.0.1:${requestedPort}`;
-				},
-				stop: cleanup,
-				destroy: cleanup,
-				restricted() {
-					return base;
-				},
-			};
-
+			const session = await buildSession(id);
 			if (options?.onFirstCreate) {
-				await options.onFirstCreate(base, {
+				await options.onFirstCreate(session.restricted(), {
 					abortSignal: options.abortSignal,
 				});
 			}
-
 			return session;
+		},
+		// Multi-turn resume: reuse the deterministic per-sessionId workdir + HOME
+		// (resolveHomeDir keys on sessionId), so the on-disk claude-code conversation
+		// persists and the bridge RERUNs/replays from it. The prior bridge process is
+		// gone once a turn's job ends, so live ATTACH is impossible by design — the
+		// harness adapter falls back to replay/rerun against the persisted home.
+		async resumeSession(options) {
+			return buildSession(options.sessionId);
 		},
 	};
 }
