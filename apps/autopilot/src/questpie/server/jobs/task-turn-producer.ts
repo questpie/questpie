@@ -1,20 +1,25 @@
 /**
- * Task turn BACKGROUND PRODUCER (harness migration: durable-tasks).
+ * Task turn BACKGROUND PRODUCER (harness migration).
  *
  * Runs a task's AI turn via the HarnessAgent in a background job and reports
  * completion back to the durable `task-pipeline` workflow over the workflow
  * engine event bus (`run.claimed` / `run.completed`) — replacing the old
  * ai_runs / worker-claim relay for the task EXECUTION path. The relay
- * (ai-run-mirror + ai_run_events) stays for now; tasks simply no longer depend
- * on it, which unblocks a later delete-legacy pass.
+ * (ai-run-mirror + ai_run_events) stays for now; tasks no longer depend on it.
  *
- * Contract with task-pipeline: the workflow creates the `run_links` row (its id
- * is the `runId` both sides match on), enqueues this job, and waits for
- * `run.completed`. This producer:
- *   1. Loads the run_links row (instructions, skills systemPrompt and cwd ride it)
- *   2. Marks it running + emits run.claimed
- *   3. Runs the harness turn (createHarnessAgent -> resumeOrCreateSession -> stream)
- *   4. Persists the outcome on run_links + emits run.completed (RunCompletion)
+ * Re-homed from ai-run-mirror (the relay no longer fires for producer runs,
+ * which never create an ai_runs row):
+ *   - run.claimed / run.completed engine events (durable-tasks)
+ *   - knowledge-resource creation on successful terminal (mirrorTerminalSideEffects)
+ *
+ * Robustness:
+ *   - Atomic pending->running CAS claim so a workflow-restart re-enqueue (or a
+ *     duplicate delivery) can't start a second concurrent harness turn in the
+ *     same workspace.
+ *   - AbortController wired to a run_links.status poll so a cancellation
+ *     (e.g. schedule replacement) aborts the in-flight turn instead of letting
+ *     it run to completion.
+ *   - Never clobbers a terminal status set during the run.
  *
  * retryLimit: 0 — the WORKFLOW owns retry/backoff. Any thrown error still emits
  * run.completed{failed} so the workflow never hangs to its event timeout.
@@ -87,12 +92,49 @@ export default job({
 				? runLink.harnessSessionId
 				: runId;
 
-		// ── 2. Mark running + signal the workflow the run started ──
-		await collections.run_links.updateById({
-			id: runId,
+		// ── 2. Atomic claim (pending -> running) ──────────────────
+		// Only the invocation that wins this compare-and-swap runs the turn; a
+		// workflow-restart re-enqueue (or duplicate delivery) loses it and bails,
+		// preventing two concurrent harness turns in the same workspace.
+		const updated = await collections.run_links.update({
+			where: { id: runId, status: "pending" },
 			data: { status: "running", startedAt: new Date(), harnessSessionId },
 		});
+		const claimedRow = (updated as any)?.[0] as
+			| Record<string, unknown>
+			| undefined;
+		if (!claimedRow) {
+			// Lost the claim. If the run is already terminal, re-emit its completion;
+			// otherwise the owning invocation is mid-flight and will emit it.
+			const current = await collections.run_links.findOne({
+				where: { id: runId },
+			});
+			if (current && TERMINAL_STATUSES.includes(String(current.status))) {
+				await sendEvent("run.completed", {
+					status: current.status,
+					summary: (current.summary as string | null) ?? null,
+					error: (current.error as string | null) ?? null,
+					knowledgeResourceIds: [],
+				});
+			}
+			return { status: "not-claimed", runId };
+		}
 		await sendEvent("run.claimed", { workerId: "harness:inline" });
+
+		// Abort the in-flight turn if the run is cancelled while it runs (e.g. a
+		// schedule replacement flips run_links.status -> cancelled). Cleared in the
+		// `finally` below so the timer never outlives the job.
+		const abort = new AbortController();
+		const cancelPoll = setInterval(() => {
+			void collections.run_links
+				.findOne({ where: { id: runId } })
+				.then((row) => {
+					if (row && TERMINAL_STATUSES.includes(String(row.status))) {
+						abort.abort();
+					}
+				})
+				.catch(() => {});
+		}, 2000);
 
 		// ── 3. Run the harness turn ────────────────────────────────
 		try {
@@ -106,6 +148,7 @@ export default job({
 			const resumed = await resumeOrCreateSession({
 				agent,
 				id: harnessSessionId,
+				abortSignal: abort.signal,
 				loadResumeState: async () =>
 					runLink.harnessResumeState &&
 					typeof runLink.harnessResumeState === "object"
@@ -116,6 +159,10 @@ export default job({
 			const result = await agent.stream({
 				session: resumed.session,
 				prompt: instructions,
+				// The TURN's abort signal — this is what actually interrupts the
+				// in-flight harness run (createSession's signal only covers session
+				// construction). Wired to the cancellation poll above.
+				abortSignal: abort.signal,
 			});
 
 			// Drain the UIMessage stream to run the turn to completion, accumulating
@@ -169,11 +216,40 @@ export default job({
 				return { status: "superseded", runId, finalStatus: afterRun.status };
 			}
 
+			// Re-home mirrorTerminalSideEffects: create knowledge resources from the
+			// run summary (idempotent — skip if the summary asset already exists).
+			// createRunOutputs resolves task/project scope from the run_links row.
+			// BEST-EFFORT: a knowledge-write failure must NOT flip a successful turn
+			// to "failed", so it is isolated from the run's terminal outcome.
+			let knowledgeResourceIds: string[] = [];
+			const knowledgeService = (ctx.services as any)?.knowledgeResource;
+			if (summary && knowledgeService) {
+				try {
+					const existing = await collections.assets.findOne({
+						where: { run: runId, path: `runs/${runId}/summary.md` },
+					});
+					const resources = existing
+						? [existing]
+						: await knowledgeService.createRunOutputs({ runId, summary });
+					knowledgeResourceIds = (resources ?? []).map(
+						(resource: { id: string }) => resource.id,
+					);
+				} catch (knowledgeError) {
+					logger.warn?.("Knowledge-resource creation failed (best-effort)", {
+						runId,
+						error:
+							knowledgeError instanceof Error
+								? knowledgeError.message
+								: String(knowledgeError),
+					});
+				}
+			}
+
 			const completion: RunCompletion = {
 				status: "completed",
 				summary,
 				error: null,
-				knowledgeResourceIds: [],
+				knowledgeResourceIds,
 			};
 
 			await collections.run_links.updateById({
@@ -188,7 +264,11 @@ export default job({
 			});
 			await sendEvent("run.completed", completion as Record<string, unknown>);
 
-			logger.info("Task turn completed", { runId, taskId: payload.taskId });
+			logger.info("Task turn completed", {
+				runId,
+				taskId: payload.taskId,
+				knowledgeResources: knowledgeResourceIds.length,
+			});
 			return { status: "completed", runId };
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
@@ -223,6 +303,8 @@ export default job({
 				knowledgeResourceIds: [],
 			});
 			return { status: "failed", runId, error: message };
+		} finally {
+			clearInterval(cancelPoll);
 		}
 	},
 });
