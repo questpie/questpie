@@ -16,7 +16,6 @@ import {
 import type { RunCompletion } from "../lib/run-completion";
 import { resolveRuntimeSelection } from "../lib/runtime-selection";
 import { linkScheduleExecutionRun } from "../lib/schedule-run-links";
-import { buildSkillsSystemPrompt } from "../lib/skill-discovery";
 import { workflowsFromContext } from "../lib/workflows";
 
 type Collections = AppCollections;
@@ -218,15 +217,11 @@ export default workflow({
 			});
 
 			const run = await step.run(`create-run-${attempt}`, async () => {
-				// Run-start progressive disclosure (§8.3): the published-skills L1 block
-				// rides the run's `systemPrompt` channel (system-level context), not the
-				// task prompt. Drafts excluded; descriptions stay delimited DATA (§8.7).
-				// Empty when nothing is published.
+				// Published skills are now harness-NATIVE: task-turn-producer maps them
+				// to ~/.claude/skills/<name>/SKILL.md in the run sandbox (the model
+				// discovers them itself), so the workflow no longer bakes an L1 skills
+				// text block onto the run.
 				const baseInstructions = taskInstructions(task);
-				const skillsSystemPrompt = await buildSkillsSystemPrompt(
-					ctx.collections,
-					{ projectId: relationId(task.project) },
-				);
 				// Run-start memory RECALL: prepend the scoped active-memory DATA block to
 				// the task instructions so the agent recalls lessons from prior runs on
 				// this task/project/company. DELIMITED DATA, never instructions.
@@ -255,7 +250,6 @@ export default workflow({
 					projectId,
 					initiatedBy: "task",
 					instructions,
-					systemPrompt: skillsSystemPrompt || undefined,
 					scheduleExecutionId: input.scheduleExecutionId,
 					spawnMetadata: cwd ? { cwd } : undefined,
 					linkMetadata: {

@@ -18,13 +18,17 @@
  *     are fenced inside an explicit block whose preamble tells the agent to treat
  *     the contents as a catalog, not as commands (indirect-prompt-injection guard).
  *
- * DISCOVERY READS THE MIRROR, NEVER THE BODY: the write-time validator
- * (`collections/assets.ts`) parsed each skill's frontmatter into `metadata.skill`,
- * so this lists rows and reads `name`/`description`/`status` straight off the
- * mirror — no body parsing on the hot path.
+ * DISCOVERY READS THE MIRROR: the write-time validator (`collections/assets.ts`)
+ * parsed each skill's frontmatter into `metadata.skill`, so discovery lists rows
+ * and reads `name`/`description`/`status` straight off the mirror — no body parsing
+ * for the L1 catalog. (The harness-NATIVE path `buildHarnessSkills` additionally
+ * reads each row's `body` to materialise SKILL.md files into the run sandbox.)
  */
 
-import type { SkillFrontmatter } from "./skill-frontmatter";
+import {
+	skillBodyWithoutFrontmatter,
+	type SkillFrontmatter,
+} from "./skill-frontmatter";
 
 /** Company-scope skills root: `company/skills/{skill-id}/SKILL.md`. */
 export const COMPANY_SKILLS_PREFIX = "company/skills/";
@@ -35,6 +39,8 @@ export interface SkillRowLike {
 	kind?: string | null;
 	scopeType?: string | null;
 	metadata?: unknown;
+	/** The SKILL.md text body (frontmatter + markdown) — read for native skills. */
+	body?: string | null;
 }
 
 /** Result shape of `collections.assets.find(...)` used here. */
@@ -68,6 +74,8 @@ export interface DiscoveredSkill {
 	 * the agent at least knows which tools the skill's procedure expects to use.
 	 */
 	allowedTools?: string[];
+	/** The raw SKILL.md body (frontmatter + markdown), when read for native skills. */
+	body?: string;
 }
 
 /** Options for {@link discoverSkills}. */
@@ -148,6 +156,7 @@ export async function discoverSkills(
 			name: mirror.name,
 			description: mirror.description,
 			path: row.path,
+			...(typeof row.body === "string" ? { body: row.body } : {}),
 		};
 		// Surface the ADVISORY tool list only when the skill declares a non-empty one
 		// (so the injected unit stays {name, description, path} otherwise).
@@ -213,4 +222,51 @@ export async function buildSkillsSystemPrompt(
 ): Promise<string> {
 	const skills = await discoverSkills(collections, options);
 	return renderSkillsBlock(skills);
+}
+
+/** A harness-NATIVE skill — structurally compatible with HarnessAgentSkill. */
+export interface HarnessSkill {
+	name: string;
+	description: string;
+	content: string;
+}
+
+/**
+ * Map the published QUESTPIE skills to harness-NATIVE skills. Each becomes a
+ * `{ name, description, content }` the claude-code adapter materialises as
+ * `~/.claude/skills/<name>/SKILL.md` in the run sandbox; the model then discovers
+ * them itself (name+description up front, body read on demand — native progressive
+ * disclosure), REPLACING the injected text-block catalog ({@link buildSkillsSystemPrompt}).
+ *
+ * `content` is the body WITHOUT frontmatter — the adapter re-adds its own
+ * name/description fence, so carrying the QUESTPIE frontmatter in would double it.
+ *
+ * Governance is preserved: this builds on {@link discoverSkills}, which yields ONLY
+ * `status:"published"` skills. A skill with a missing body or no valid frontmatter
+ * fence is skipped (published skills always have one — this only guards malformed data).
+ */
+export async function buildHarnessSkills(
+	collections: SkillDiscoveryCollections,
+	options: DiscoverSkillsOptions = {},
+): Promise<HarnessSkill[]> {
+	const discovered = await discoverSkills(collections, options);
+	const skills: HarnessSkill[] = [];
+	for (const skill of discovered) {
+		if (typeof skill.body !== "string" || !skill.body.trim()) continue;
+		let content: string;
+		try {
+			content = skillBodyWithoutFrontmatter(skill.body);
+		} catch {
+			continue;
+		}
+		skills.push({
+			name: skill.name,
+			// Collapse whitespace/newlines: the claude-code adapter writes
+			// `description: <value>` RAW into the materialised SKILL.md YAML
+			// frontmatter, so a newline in the description would break the fence.
+			description: skill.description.replace(/\s+/g, " ").trim(),
+			content,
+		});
+	}
+	return skills;
 }

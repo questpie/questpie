@@ -19,7 +19,6 @@ type CreateAiRunLinkInput = {
 	scheduleId?: string | null;
 	scheduleExecutionId?: string | null;
 	runtimeSessionRef?: string | null;
-	systemPrompt?: string | null;
 	resumedFromRunId?: string | null;
 	resumable?: boolean;
 	spawnMetadata?: Record<string, unknown>;
@@ -32,9 +31,9 @@ export async function createAiRunLink(input: CreateAiRunLinkInput) {
 	const cwd = typeof spawn.cwd === "string" ? spawn.cwd : undefined;
 
 	// Harness producer path: the run_links row is the single execution record —
-	// there is no ai_runs row and no worker-claim relay for tasks anymore. The
-	// skills systemPrompt and cwd ride `metadata` so task-turn-producer can run
-	// the harness turn straight from the link. `aiRun` is intentionally unset.
+	// there is no ai_runs row and no worker-claim relay for tasks anymore. `cwd`
+	// rides `metadata` so task-turn-producer can run the harness turn straight from
+	// the link (skills are harness-native, not baked here). `aiRun` is unset.
 	return input.ctx.collections.run_links.create({
 		id: linkId,
 		task: input.taskId ?? undefined,
@@ -55,7 +54,6 @@ export async function createAiRunLink(input: CreateAiRunLinkInput) {
 		resumable: input.resumable ?? false,
 		metadata: {
 			...asRecord(input.linkMetadata),
-			systemPrompt: input.systemPrompt ?? null,
 			cwd: cwd ?? null,
 		},
 	});

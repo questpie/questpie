@@ -36,6 +36,7 @@ import {
 
 import { asRecord } from "../lib/records";
 import type { RunCompletion } from "../lib/run-completion";
+import { buildHarnessSkills } from "../lib/skill-discovery";
 
 const taskTurnSchema = z.object({
 	runLinkId: z.string(),
@@ -82,8 +83,6 @@ export default job({
 		const meta = asRecord(runLink.metadata);
 		const instructions =
 			typeof runLink.instructions === "string" ? runLink.instructions : "";
-		const systemPrompt =
-			typeof meta.systemPrompt === "string" ? meta.systemPrompt : "";
 		const cwd =
 			typeof meta.cwd === "string" && meta.cwd ? meta.cwd : process.cwd();
 		const harnessSessionId =
@@ -138,10 +137,16 @@ export default job({
 
 		// ── 3. Run the harness turn ────────────────────────────────
 		try {
+			// Published skills are harness-NATIVE (materialised as
+			// ~/.claude/skills/<name>/SKILL.md in the sandbox; the model discovers
+			// them itself), scoped to the task's project.
+			const skills = await buildHarnessSkills(collections as any, {
+				projectId: payload.projectId ?? undefined,
+			});
 			const agent = createHarnessAgent({
 				runtime: "claude-code",
 				workRoot: cwd,
-				instructions: systemPrompt || undefined,
+				skills,
 				permissionMode: "allow-all",
 			});
 

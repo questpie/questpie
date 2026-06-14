@@ -28,7 +28,7 @@ import { injectMemoriesIntoInstructions } from "../lib/memory-injection";
 import { projectWorkspacePath } from "../lib/project-workspace";
 import { relationId } from "../lib/records";
 import { resolveRuntimeSelection } from "../lib/runtime-selection";
-import { buildSkillsSystemPrompt } from "../lib/skill-discovery";
+import { buildHarnessSkills } from "../lib/skill-discovery";
 
 const chatTurnSchema = z.object({
 	chatSessionId: z.string(),
@@ -70,10 +70,13 @@ export default job({
 			{ modelId: payload.modelId, projectId: scopeProjectId },
 		);
 		const cwd = await projectWorkspacePath(collections as any, scopeProjectId);
-		const skillsSystemPrompt = await buildSkillsSystemPrompt(
-			collections as any,
-			{ projectId: scopeProjectId },
-		);
+		// Published skills are now harness-NATIVE: the claude-code adapter writes
+		// each as ~/.claude/skills/<name>/SKILL.md in the run sandbox and the model
+		// discovers them itself (progressive disclosure), replacing the old injected
+		// text-block catalog.
+		const skills = await buildHarnessSkills(collections as any, {
+			projectId: scopeProjectId,
+		});
 		const instructions = await injectMemoriesIntoInstructions(
 			{
 				search: ctx.search,
@@ -90,9 +93,8 @@ export default job({
 		const agent = createHarnessAgent({
 			runtime: "claude-code",
 			workRoot: cwd ?? process.cwd(),
-			instructions: [skillsSystemPrompt, instructions]
-				.filter(Boolean)
-				.join("\n\n"),
+			instructions: instructions || undefined,
+			skills,
 			permissionMode: "allow-all",
 		});
 
