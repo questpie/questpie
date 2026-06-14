@@ -7,6 +7,7 @@ import type {
 import { appConfig, tryGetContext } from "questpie";
 
 import { AUDIT_LOG_COLLECTION } from "../collections/audit-log.js";
+import { toAuditJsonSafe } from "../json-safe.js";
 
 /**
  * Check if a collection/global has `audit: false` in its `.admin()` config.
@@ -53,10 +54,11 @@ function makeFieldChangeMap(
 		const value = data[key];
 		if (value == null) continue;
 
+		const safeValue = toAuditJsonSafe(value);
 		changes[key] =
 			direction === "create"
-				? { from: null, to: value }
-				: { from: value, to: null };
+				? { from: null, to: safeValue }
+				: { from: safeValue, to: null };
 	}
 
 	return Object.keys(changes).length > 0 ? changes : null;
@@ -81,7 +83,10 @@ function computeChanges(
 
 		// Use JSON.stringify for deep comparison
 		if (JSON.stringify(fromVal) !== JSON.stringify(toVal)) {
-			changes[key] = { from: fromVal ?? null, to: toVal ?? null };
+			changes[key] = {
+				from: toAuditJsonSafe(fromVal ?? null),
+				to: toAuditJsonSafe(toVal ?? null),
+			};
 		}
 	}
 
