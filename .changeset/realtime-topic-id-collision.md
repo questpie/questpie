@@ -1,0 +1,5 @@
+---
+"questpie": patch
+---
+
+**Realtime: concurrent `{ realtime: true }` / `live()` queries no longer cross-wire.** The client multiplexer derived each subscription's topic id from a hash truncated to 24 base64 characters. Because the normalized topic is key-sorted, that window only captured `{"resource":"` plus the first ~5 characters of the resource name — `where`/`with`/`limit`/`offset`/`orderBy`/`locale` never affected the id. Two live queries whose resource names shared a 5-character prefix (e.g. `events` and `event_members`), or that differed only in `where`, collapsed onto one id: the second topic was dropped from the subscription request, and the server's snapshot for the surviving topic was delivered to both queries — silently overwriting one query's data with the other's. Topic ids now encode the full normalized topic, so every distinct query gets a distinct id. This also fixes a latent crash on non-Latin1 `where` values (the browser path used `btoa()`, which is Latin1-only). Found dogfooding the Jubli guest feed.
