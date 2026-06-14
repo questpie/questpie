@@ -129,14 +129,34 @@ export class RealtimeMultiplexer {
 	}
 
 	/**
-	 * Generate a deterministic hash for a topic config using stable stringify.
+	 * Generate a deterministic id for a topic config.
+	 *
+	 * The id must be a 1:1 function of the *entire* normalized topic so distinct
+	 * subscriptions never share an id. The previous implementation truncated the
+	 * encoded topic to 24 base64 chars (~18 bytes); since `stableStringify` sorts
+	 * keys, that window captured only `{"resource":"` plus the first ~5 chars of
+	 * the resource name, dropping `where`/`with`/`limit`/`offset`/`orderBy`/
+	 * `locale` entirely. Concurrent realtime queries whose resource names shared
+	 * a 5-char prefix (e.g. `events` and `event_members`) — or that differed only
+	 * in `where` — collapsed onto one id, dropped the loser's topic from the POST
+	 * payload (first-writer-wins), and cross-wired each other's snapshots. We now
+	 * encode the full normalized topic (no truncation): collision-free by
+	 * construction, and unicode-safe.
 	 */
 	private hashTopic(topic: TopicConfig): string {
 		const normalized = stableStringify(topic);
-		if (typeof btoa === "function") {
-			return btoa(normalized).replace(/[+/=]/g, "").slice(0, 24);
+		if (typeof Buffer !== "undefined") {
+			return Buffer.from(normalized, "utf8").toString("base64url");
 		}
-		return Buffer.from(normalized).toString("base64url").slice(0, 24);
+		// Browser: utf-8 encode before base64 — btoa() is Latin1-only and throws
+		// on unicode (e.g. accented `where` values).
+		const bytes = new TextEncoder().encode(normalized);
+		let binary = "";
+		for (const byte of bytes) binary += String.fromCharCode(byte);
+		return btoa(binary)
+			.replace(/\+/g, "-")
+			.replace(/\//g, "_")
+			.replace(/=+$/, "");
 	}
 
 	/**
