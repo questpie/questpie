@@ -31,6 +31,8 @@ export const chatMessages = collection("chat_messages")
 			.label({ en: "Run Status" }),
 		model: f.relation("models").label({ en: "Model" }),
 		provider: f.relation("providers").label({ en: "Provider" }),
+		uiMessageId: f.text().label({ en: "UI Message ID" }),
+		uiMessage: f.json().label({ en: "UI Message" }),
 		metadata: f.json().label({ en: "Metadata" }),
 	}))
 	.admin(({ c }) => ({

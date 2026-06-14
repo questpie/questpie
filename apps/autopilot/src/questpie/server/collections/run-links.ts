@@ -56,6 +56,11 @@ export const runLinks = collection("run_links")
 		runtimeSessionRef: f.text().label({ en: "Runtime Session" }),
 		resumedFromRun: f.relation("run_links").label({ en: "Resumed From" }),
 		resumable: f.boolean().default(false).label({ en: "Resumable" }),
+		activeStreamId: f.text().label({ en: "Active Stream ID" }),
+		harnessSessionId: f.text().label({ en: "Harness Session ID" }),
+		harnessResumeState: f.json().label({ en: "Harness Resume State" }),
+		uiMessages: f.json().label({ en: "UI Messages" }),
+		producerLease: f.json().label({ en: "Producer Lease" }),
 		metadata: f.json().label({ en: "Metadata" }),
 	}))
 	.title(({ f }) => f.summary)

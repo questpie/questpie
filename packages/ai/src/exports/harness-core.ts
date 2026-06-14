@@ -15,3 +15,17 @@ export type {
 	HarnessStreamTurnResult,
 	ResumedHarnessSession,
 } from "../server/modules/ai/lib/harness-core.js";
+
+export { ResumableUIMessageStore } from "../server/modules/ai/lib/resumable-uimessage-store.js";
+export type {
+	ResumableStreamStore,
+} from "../server/modules/ai/lib/resumable-uimessage-store.js";
+
+export {
+	QuestpieResumableStreamStore,
+	createQuestpieResumableStreamStore,
+} from "../server/modules/ai/lib/questpie-resumable-streams.js";
+export type {
+	QuestpieKVLike,
+	QuestpieResumableStreamStoreOptions,
+} from "../server/modules/ai/lib/questpie-resumable-streams.js";

@@ -3,8 +3,7 @@
 // Regenerate with: questpie generate
 
 import { createApp, createContextFactory } from "questpie/app";
-import type { AnyCollectionOrBuilder, AnyGlobalOrBuilder, AppDefinition, CollectionAPI, CollectionSelect, DrizzleClientFromQuestpieConfig, InferContextExtensionsFromAppConfig, InferSessionFromAuthConfig, MailerService, Questpie, QuestpieConfig, QueueClient, QueueJobType, RouteParamsFromKey, RouteWithParams, TablesFromConfig } from "questpie/types";
-import type { z } from "zod";
+import type { AccessContext, AnyCollectionOrBuilder, AnyGlobalOrBuilder, AppDefinition, CollectionAPI, CollectionSelect, DrizzleClientFromQuestpieConfig, GlobalSelect, HookContext, InferContextExtensionsFromAppConfig, InferSessionFromAuthConfig, MailerService, Questpie, QuestpieConfig, QueueClient, QueueJobType, RouteParamsFromKey, RouteWithParams, TablesFromConfig, z } from "questpie/types";
 
 // ── Runtime ────────────────────────────────────────────────
 import _runtime from "../questpie.config";
@@ -75,6 +74,7 @@ import _mig_20260606T004300_autopilot_memories from "../migrations/20260606T0043
 import _mig_20260606T170505_calm_yellow_panda from "../migrations/20260606T170505_calm_yellow_panda";
 import _mig_20260607T120000_add_ai_runs_system_prompt from "../migrations/20260607T120000_add_ai_runs_system_prompt";
 import _mig_20260607T130000_make_assets_upload_cols_nullable from "../migrations/20260607T130000_make_assets_upload_cols_nullable";
+import _mig_20260614T120000_add_harness_resumable_fields from "../migrations/20260614T120000_add_harness_resumable_fields";
 
 // ── Seeds ──────────────────────────────────────────────────
 import _seed_demoCoverageData_seed from "../seeds/demo-coverage-data.seed";
@@ -133,10 +133,11 @@ import _mcpConfig from "../config/mcp";
 // ════════════════════════════════════════════════════════════
 
 import type { ServiceCustomNamespaceInstances, ServiceInstanceOf, ServiceInstancesInNamespace, ServiceTopLevelInstances, UnionToIntersection } from "questpie/types";
+import type { WorkflowClient } from "@questpie/workflows/server";
 type _RouteDefinitionWithoutHandler<T> = T extends { mode: "raw" } ? Omit<T, "handler"> & { handler: (args: unknown) => Response | Promise<Response> } : Omit<T, "handler"> & { handler: (args: unknown) => unknown | Promise<unknown> };
 type _Module = (typeof _modules)[number];
 type _MPRaw<K extends string> = UnionToIntersection<_Module extends infer M ? M extends Record<K, infer V> ? V : never : never>;
-type _MP<K extends string> = [_MPRaw<K>] extends [never] ? {} : _MPRaw<K>;
+type _MP<K extends string> = [_MPRaw<K>] extends [never] ? {} : unknown extends _MPRaw<K> ? {} : _MPRaw<K>;
 type _ModuleConfig = _MP<"config">;
 type _AppAppConfig = (_ModuleConfig extends { app: infer TApp } ? TApp : {}) & typeof _appConfig;
 type _AppContextExtensions = Partial<InferContextExtensionsFromAppConfig<_AppAppConfig>>;
@@ -299,8 +300,48 @@ export type AppMcpTools = _ModuleMcpTools & {
 };
 
 type _CollectionsAPI = { [K in keyof AppCollections]: CollectionAPI<AppCollections[K], AppCollections> };
-type _JobHandlerCollections = AppCollections;
-type _JobHandlerCollectionsAPI = _CollectionsAPI;
+type _JobHandlerCollections = {
+	activity: typeof _coll_activity;
+	admin_audit_log: typeof _coll_admin_audit_log;
+	agent_memory: typeof _coll_agent_memory;
+	assets: typeof _coll_assets;
+	chat_messages: typeof _coll_chat_messages;
+	chat_sessions: typeof _coll_chat_sessions;
+	document_store: typeof _coll_document_store;
+	environments: typeof _coll_environments;
+	memory_settings: typeof _coll_memory_settings;
+	models: typeof _coll_models;
+	projects: typeof _coll_projects;
+	providers: typeof _coll_providers;
+	run_links: typeof _coll_run_links;
+	schedule_executions: typeof _coll_schedule_executions;
+	schedules: typeof _coll_schedules;
+	scripts: typeof _coll_scripts;
+	secrets: typeof _coll_secrets;
+	task_relations: typeof _coll_task_relations;
+	tasks: typeof _coll_tasks;
+};
+type _JobHandlerCollectionsAPI = {
+	activity: CollectionAPI<typeof _coll_activity, _JobHandlerCollections>;
+	admin_audit_log: CollectionAPI<typeof _coll_admin_audit_log, _JobHandlerCollections>;
+	agent_memory: CollectionAPI<typeof _coll_agent_memory, _JobHandlerCollections>;
+	assets: CollectionAPI<typeof _coll_assets, _JobHandlerCollections>;
+	chat_messages: CollectionAPI<typeof _coll_chat_messages, _JobHandlerCollections>;
+	chat_sessions: CollectionAPI<typeof _coll_chat_sessions, _JobHandlerCollections>;
+	document_store: CollectionAPI<typeof _coll_document_store, _JobHandlerCollections>;
+	environments: CollectionAPI<typeof _coll_environments, _JobHandlerCollections>;
+	memory_settings: CollectionAPI<typeof _coll_memory_settings, _JobHandlerCollections>;
+	models: CollectionAPI<typeof _coll_models, _JobHandlerCollections>;
+	projects: CollectionAPI<typeof _coll_projects, _JobHandlerCollections>;
+	providers: CollectionAPI<typeof _coll_providers, _JobHandlerCollections>;
+	run_links: CollectionAPI<typeof _coll_run_links, _JobHandlerCollections>;
+	schedule_executions: CollectionAPI<typeof _coll_schedule_executions, _JobHandlerCollections>;
+	schedules: CollectionAPI<typeof _coll_schedules, _JobHandlerCollections>;
+	scripts: CollectionAPI<typeof _coll_scripts, _JobHandlerCollections>;
+	secrets: CollectionAPI<typeof _coll_secrets, _JobHandlerCollections>;
+	task_relations: CollectionAPI<typeof _coll_task_relations, _JobHandlerCollections>;
+	tasks: CollectionAPI<typeof _coll_tasks, _JobHandlerCollections>;
+};
 type _ExecutionContextJob<T> = T extends { name: infer TName extends string; schema: z.ZodSchema<infer TPayload> } ? QueueJobType<TPayload, TName> : never;
 type _ExecutionContextJobs = {
 	cleanup: _ExecutionContextJob<typeof _job_cleanup>;
@@ -314,13 +355,14 @@ type _ExecutionContextServiceDefinitions = {
 type _ExecutionContextDefaultServices = ServiceInstancesInNamespace<_ExecutionContextServiceDefinitions, "services">;
 type _AppCollectionDefinitions = AppCollections & Record<string, AnyCollectionOrBuilder>;
 type _AppGlobalDefinitions = AppGlobals & Record<string, AnyGlobalOrBuilder>;
-type _AppQuestpieConfig = Omit<QuestpieConfig, "app" | "db" | "collections" | "globals" | "auth"> & {
+type _AppQuestpieConfig = Omit<QuestpieConfig, "app" | "db" | "collections" | "globals" | "auth" | "~contextExtensions"> & {
 	app: (typeof _runtime)["app"];
 	db: (typeof _runtime)["db"];
 	collections: _AppCollectionDefinitions;
 	globals: _AppGlobalDefinitions;
 	auth: _AppAuthConfig;
 	storage: (typeof _runtime)["storage"];
+	"~contextExtensions": _AppContextExtensions;
 };
 type _AppQuestpieBase = Questpie<_AppQuestpieConfig>;
 type _AppDb = DrizzleClientFromQuestpieConfig<_AppQuestpieConfig>;
@@ -335,6 +377,7 @@ type _AppQuestpie = Omit<_AppQuestpieBase, "collections" | "globals"> & {
 // ── AppContext augmentation — auto-types ALL handlers ──────
 type _AppCoreContext = _AppContextExtensions & {
 	// Infrastructure
+	app: _AppQuestpie;
 	db: _AppDb;
 	email: _AppQuestpie["email"];
 	queue: QueueClient<AppJobs>;
@@ -359,30 +402,32 @@ type _AppCoreContext = _AppContextExtensions & {
 
 declare global {
 	namespace Questpie {
-		interface AppContext extends _AppCoreContext, _AppTopLevelServices {}
+		interface AppContext extends _AppCoreContext, _AppTopLevelServices {
+			workflows: WorkflowClient<AppWorkflows>;
+		}
 
 		interface JobHandlerContext {
 			// Infrastructure
-			db: unknown;
-			email: unknown;
+			db: _AppDb;
+			email: _AppQuestpie["email"];
 			queue: QueueClient<_ExecutionContextJobs>;
 			storage: _AppStorage;
-			kv: unknown;
-			logger: unknown;
-			search: unknown;
-			realtime: unknown;
+			kv: _AppQuestpie["kv"];
+			logger: _AppQuestpie["logger"];
+			search: _AppQuestpie["search"];
+			realtime: _AppQuestpie["realtime"];
 
 			// Entity APIs
 			collections: _JobHandlerCollectionsAPI;
-			globals: Record<string, unknown>;
-			tables: Record<string, unknown>;
+			globals: _AppGlobalsAPI;
+			tables: _AppTables;
 
 			// Request-scoped
-			session: unknown;
+			session: _AppSession;
 			t: (key: string, params?: Record<string, unknown>, locale?: string) => string;
 
-			// Top-level services (namespace: null)
-			workflows?: "workflows" extends keyof _AppTopLevelServices ? _AppTopLevelServices["workflows"] : never;
+			// Workflows client — typed by AppWorkflows (name + schema preserved)
+			workflows: WorkflowClient<AppWorkflows>;
 
 			// User services
 			services: _ExecutionContextDefaultServices;
@@ -390,32 +435,48 @@ declare global {
 
 		interface WorkflowContext {
 			// Infrastructure
-			db: unknown;
-			email: unknown;
+			db: _AppDb;
+			email: _AppQuestpie["email"];
 			queue: QueueClient<_ExecutionContextJobs>;
 			storage: _AppStorage;
-			kv: unknown;
-			logger: unknown;
-			search: unknown;
-			realtime: unknown;
+			kv: _AppQuestpie["kv"];
+			logger: _AppQuestpie["logger"];
+			search: _AppQuestpie["search"];
+			realtime: _AppQuestpie["realtime"];
 
 			// Entity APIs
 			collections: _JobHandlerCollectionsAPI;
-			globals: Record<string, unknown>;
-			tables: Record<string, unknown>;
+			globals: _AppGlobalsAPI;
+			tables: _AppTables;
 
 			// Request-scoped
-			session: unknown;
+			session: _AppSession;
 			t: (key: string, params?: Record<string, unknown>, locale?: string) => string;
 
-			// Top-level services (namespace: null)
-			workflows?: "workflows" extends keyof _AppTopLevelServices ? _AppTopLevelServices["workflows"] : never;
+			// Workflows client — typed by AppWorkflows (name + schema preserved)
+			workflows: WorkflowClient<AppWorkflows>;
 
 			// User services
 			services: _ExecutionContextDefaultServices;
 		}
 
 		interface ServiceCreateContext extends _AppCoreContext {}
+		// Names-only marker — the `ServiceCreateContext` fallback conditional
+		// probes THIS interface's keys instead of the real one (whose base
+		// resolves through module service definitions and would cycle).
+		interface ServiceCreateContextGenerated { generated: unknown }
+
+		// Typed service surface for appConfig({ context }) resolvers.
+		// Excludes _AppContextExtensions — the resolver produces them.
+		interface ContextResolverContext {
+			collections: _CollectionsAPI;
+			globals: _AppGlobalsAPI;
+			logger: _AppQuestpie["logger"];
+			kv: _AppQuestpie["kv"];
+			queue: QueueClient<AppJobs>;
+			t: (key: string, params?: Record<string, unknown>, locale?: string) => string;
+			services: _AppDefaultServices;
+		}
 
 		interface Registry {
 			collections: _Registry_Collections;
@@ -440,13 +501,49 @@ declare global {
 export type CollectionDoc<K extends keyof AppCollections> = CollectionSelect<AppCollections[K]>;
 
 /**
+ * Select/document type for a global key.
+ */
+export type GlobalDoc<K extends keyof AppGlobals> = GlobalSelect<AppGlobals[K]>;
+
+/** Resolved auth session for this app (`{ user, session } | null`). */
+export type AppSession = _AppSession;
+
+/** Authenticated user shape from the app session. */
+export type AppSessionUser = NonNullable<_AppSession>["user"];
+
+/**
+ * Access-rule ctx for shared helpers. `K` narrows `data` to that collection's row.
+ *
+ * CYCLE RULE: import these only from files NOT imported by a collection
+ * (routes, services, jobs, scripts). Helpers imported by collections take
+ * the package-level `AccessContext` from "questpie" instead — see the
+ * type-inference reference.
+ *
+ * @example
+ * ```ts
+ * export async function isOwner(ctx: AccessRuleContext<"posts">) {
+ *   return ctx.data?.authorId === ctx.session?.user.id; // ctx.collections typed
+ * }
+ * ```
+ */
+export type AccessRuleContext<K extends keyof AppCollections | unknown = unknown> =
+	AccessContext<K extends keyof AppCollections ? CollectionDoc<K> : unknown>;
+
+/**
+ * Hook ctx for shared helpers. `K` narrows `data` to that collection's row.
+ * Same cycle rule as `AccessRuleContext`.
+ */
+export type HookRuleContext<K extends keyof AppCollections | unknown = unknown> =
+	HookContext<K extends keyof AppCollections ? CollectionDoc<K> : unknown>;
+
+/**
  * Flat config type for client APIs.
  * Use with `createClient<AppConfig>()` and `createAdminAuthClient<AppConfig>()`.
  * For handler context, use `AppContext` (auto-typed via module augmentation).
  */
 export type AppConfig = {
-	collections: AppCollections & Record<string, AnyCollectionOrBuilder>;
-	globals: AppGlobals & Record<string, AnyGlobalOrBuilder>;
+	collections: AppCollections;
+	globals: AppGlobals;
 	routes: AppRoutes;
 	storage: (typeof _runtime)["storage"];
 	auth: typeof _authConfig;
@@ -456,7 +553,9 @@ export type AppConfig = {
 // RUNTIME — create the app instance
 // ════════════════════════════════════════════════════════════
 
-export const app = await createApp(
+var _appPromise: Promise<unknown> | undefined;
+
+_appPromise = createApp(
 	({
 		modules: _modules,
 		collections: {
@@ -506,7 +605,7 @@ export const app = await createApp(
 			gitProviderAdapters: _svc_gitProviderAdapters,
 			knowledgeResource: _svc_knowledgeResource,
 		},
-		migrations: [_mig_20260507T095449_jolly_red_phoenix, _mig_20260516T185000_auth_user_admin_columns_repair, _mig_20260517T095535_happy_orange_unicorn, _mig_20260519T135407_add_run_links_and_ai_module, _mig_20260519T142100_backfill_legacy_runs_into_run_links, _mig_20260519T145500_link_schedule_executions_to_run_links, _mig_20260519T161500_drop_legacy_execution_infra, _mig_20260529T001500_drop_workflow_configs, _mig_20260529T003000_drop_capabilities, _mig_20260604T111500_add_api_key_config_id, _mig_20260606T003509_v2_schema, _mig_20260606T004300_autopilot_memories, _mig_20260606T170505_calm_yellow_panda, _mig_20260607T120000_add_ai_runs_system_prompt, _mig_20260607T130000_make_assets_upload_cols_nullable],
+		migrations: [_mig_20260507T095449_jolly_red_phoenix, _mig_20260516T185000_auth_user_admin_columns_repair, _mig_20260517T095535_happy_orange_unicorn, _mig_20260519T135407_add_run_links_and_ai_module, _mig_20260519T142100_backfill_legacy_runs_into_run_links, _mig_20260519T145500_link_schedule_executions_to_run_links, _mig_20260519T161500_drop_legacy_execution_infra, _mig_20260529T001500_drop_workflow_configs, _mig_20260529T003000_drop_capabilities, _mig_20260604T111500_add_api_key_config_id, _mig_20260606T003509_v2_schema, _mig_20260606T004300_autopilot_memories, _mig_20260606T170505_calm_yellow_panda, _mig_20260607T120000_add_ai_runs_system_prompt, _mig_20260607T130000_make_assets_upload_cols_nullable, _mig_20260614T120000_add_harness_resumable_fields],
 		seeds: [_seed_demoCoverageData_seed, _seed_demoParentIssues_seed, _seed_demoProductData_seed, _seed_demoStressData_seed, _seed_makeAMiniappSkill_seed, _seed_runtimeDefaults_seed, _seed_socialSchedulerApp_seed],
 		views: {
 			fileDetail: _view_fileDetail,
@@ -551,7 +650,9 @@ export const app = await createApp(
 		},
 	}) satisfies AppDefinition,
 	_runtime,
-) as unknown as _AppQuestpie;
+);
+
+export const app = (await _appPromise) as unknown as _AppQuestpie;
 
 /** Fully typed QUESTPIE app instance. */
 export type App = typeof app;
@@ -569,6 +670,14 @@ export type App = typeof app;
  * const posts = await ctx.collections.posts.find({});
  * ```
  */
-export const createContext = createContextFactory(app);
+export async function createContext(
+	options?: Parameters<ReturnType<typeof createContextFactory>>[0],
+) {
+	while (!_appPromise) {
+		await new Promise((resolve) => setTimeout(resolve, 0));
+	}
+
+	return createContextFactory((await _appPromise) as _AppQuestpie)(options);
+}
 
 // Factories: import { collection, global, ... } from '#questpie/factories';
