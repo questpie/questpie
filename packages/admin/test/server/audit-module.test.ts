@@ -10,6 +10,7 @@ import {
 	auditModule,
 	logAuditEntry,
 } from "../../src/server/modules/audit/index.js";
+import { toAuditJsonSafe } from "../../src/server/modules/audit/json-safe.js";
 
 const posts = collection("posts")
 	.fields(({ f }) => ({
@@ -43,12 +44,19 @@ const skipped = collection("skipped")
 	}))
 	.set("admin", { audit: false });
 
+// A collection with a `datetime` field — its audit diff carries a raw Date (the
+// shape that broke the JSON-primitive audit schema, e.g. ai_workers.lastHeartbeat).
+const events = collection("events").fields(({ f }) => ({
+	title: f.text().required(),
+	when: f.datetime(),
+}));
+
 describe("audit module e2e", () => {
 	let setup: Awaited<ReturnType<typeof buildMockApp>>;
 
 	beforeEach(async () => {
 		setup = await buildMockApp({
-			collections: { posts, skipped },
+			collections: { posts, skipped, events },
 			globals: { settings },
 			modules: [auditModule],
 			defaultAccess: { read: true, create: true, update: true, delete: true },
@@ -260,6 +268,43 @@ describe("audit module e2e", () => {
 		expect(logs.docs).toHaveLength(0);
 	});
 
+	it("records a Date-field update as a JSON-safe audit entry (no ApiError)", async () => {
+		// Regression: a raw Date in the audit diff (e.g. ai_workers.lastHeartbeat)
+		// failed the JSON-primitive audit schema, so the entry was swallowed and the
+		// server log spammed `[Audit] Failed to log update ... received Date`.
+		const ctx = createTestContext({ accessMode: "system" });
+		const id = crypto.randomUUID();
+
+		await setup.app.collections.events.create(
+			{ id, title: "Heartbeat", when: new Date("2026-06-14T12:00:00.000Z") },
+			ctx,
+		);
+		await setup.app.collections.events.updateById(
+			{ id, data: { when: new Date("2026-06-14T12:00:05.000Z") } },
+			ctx,
+		);
+
+		const logs = await setup.app.collections[AUDIT_LOG_COLLECTION].find(
+			{
+				where: { resource: "events", resourceId: id },
+				sort: { createdAt: "asc" },
+			},
+			ctx,
+		);
+
+		// Both entries were written — pre-fix the raw Date threw an ApiError and the
+		// create + update audit entries were swallowed.
+		expect(logs.docs.map((entry: any) => entry.action)).toEqual([
+			"create",
+			"update",
+		]);
+		// The Date was coerced to an ISO string; `changes` survives a JSON round-trip.
+		expect(logs.docs[1].changes.when.to).toBe("2026-06-14T12:00:05.000Z");
+		expect(JSON.parse(JSON.stringify(logs.docs[1].changes))).toEqual(
+			logs.docs[1].changes,
+		);
+	});
+
 	describe("logAuditEntry — public API", () => {
 		it("writes a custom audit entry with explicit actor", async () => {
 			const ctx = createTestContext({
@@ -411,5 +456,76 @@ describe("audit module e2e", () => {
 				schema: { from: "v2", to: "v3" },
 			});
 		});
+	});
+});
+
+describe("toAuditJsonSafe — JSON-safe audit changes/metadata", () => {
+	it("coerces a Date to an ISO string", () => {
+		expect(toAuditJsonSafe(new Date("2026-06-14T12:00:00.000Z"))).toBe(
+			"2026-06-14T12:00:00.000Z",
+		);
+	});
+
+	it("coerces the ai_workers heartbeat change shape (the reported bug)", () => {
+		// computeChanges produced { lastHeartbeat: { from: Date, to: Date } }, which
+		// the JSON-primitive audit schema rejected on every heartbeat (ApiError spam).
+		const changes = {
+			lastHeartbeat: {
+				from: new Date("2026-06-14T12:00:00.000Z"),
+				to: new Date("2026-06-14T12:00:05.000Z"),
+			},
+			status: { from: "idle", to: "busy" },
+		};
+
+		const safe = toAuditJsonSafe(changes);
+
+		expect(safe).toEqual({
+			lastHeartbeat: {
+				from: "2026-06-14T12:00:00.000Z",
+				to: "2026-06-14T12:00:05.000Z",
+			},
+			status: { from: "idle", to: "busy" },
+		});
+		// JSON-safety invariant: survives a JSON round-trip unchanged (only
+		// string|number|boolean|null|array|record — what jsonValueSchema accepts).
+		expect(JSON.parse(JSON.stringify(safe))).toEqual(safe);
+	});
+
+	it("normalizes undefined, bigint, non-finite numbers, and nested arrays", () => {
+		const safe = toAuditJsonSafe({
+			a: undefined,
+			b: 10n,
+			c: Number.POSITIVE_INFINITY,
+			d: Number.NaN,
+			e: [new Date("2026-01-01T00:00:00.000Z"), { f: undefined }],
+			g: "ok",
+			h: true,
+			i: 42,
+		});
+
+		expect(safe).toEqual({
+			a: null,
+			b: "10",
+			c: null,
+			d: null,
+			e: ["2026-01-01T00:00:00.000Z", { f: null }],
+			g: "ok",
+			h: true,
+			i: 42,
+		});
+		expect(JSON.parse(JSON.stringify(safe))).toEqual(safe);
+	});
+
+	it("passes primitives/null through and honours a custom toJSON", () => {
+		expect(toAuditJsonSafe(null)).toBeNull();
+		expect(toAuditJsonSafe(undefined)).toBeNull();
+		expect(toAuditJsonSafe("x")).toBe("x");
+		expect(toAuditJsonSafe(0)).toBe(0);
+		expect(toAuditJsonSafe(false)).toBe(false);
+		expect(
+			toAuditJsonSafe({
+				toJSON: () => ({ when: new Date("2026-01-01T00:00:00.000Z") }),
+			}),
+		).toEqual({ when: "2026-01-01T00:00:00.000Z" });
 	});
 });
