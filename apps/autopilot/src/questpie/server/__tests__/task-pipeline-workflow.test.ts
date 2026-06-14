@@ -95,6 +95,7 @@ describe("task-pipeline workflow", () => {
 		  }
 		| undefined;
 	let workflowEvents: WorkflowEvent[];
+	let producerPublishes: unknown[] = [];
 
 	beforeEach(async () => {
 		workflowEvents = [];
@@ -156,6 +157,14 @@ describe("task-pipeline workflow", () => {
 		const createContext = createContextFactory(setup!.app);
 		const ctx = await createContext({ accessMode: "system" });
 		(ctx as any).workflows = workflows;
+		producerPublishes = [];
+		(ctx as any).queue = {
+			taskTurnProducer: {
+				async publish(payload: unknown) {
+					producerPublishes.push(payload);
+				},
+			},
+		};
 
 		return taskPipeline.handler({
 			input: {
@@ -232,22 +241,14 @@ describe("task-pipeline workflow", () => {
 			},
 		]);
 
-		const aiRunId = relationId(createdRunLinks.docs[0].aiRun);
-		expect(aiRunId).toBeTruthy();
-		const aiRun = await setup!.app.collections.ai_runs.findOne({
-			where: { id: aiRunId! },
+		// Task execution now runs via the harness producer (task-turn-producer),
+		// not an ai_runs row + worker claim — no ai_runs row is created.
+		expect(relationId(createdRunLinks.docs[0].aiRun)).toBeFalsy();
+		expect(producerPublishes).toHaveLength(1);
+		expect(producerPublishes[0]).toMatchObject({
+			runLinkId: result.runId,
+			taskId: task.id,
 		});
-		expect(aiRun).toMatchObject({
-			status: "pending",
-			runtime: "codex",
-			prompt: "Successful task",
-		});
-		expect(aiRun).not.toHaveProperty("task");
-		expect(aiRun).not.toHaveProperty("provider");
-		expect(aiRun).not.toHaveProperty("model");
-		expect(
-			(aiRun?.meta as Record<string, unknown> | undefined)?.autopilot,
-		).toBe(undefined);
 
 		const reviewActivities = await setup!.app.collections.activity.find({
 			where: { task: task.id, type: "task.review" },
@@ -348,6 +349,9 @@ describe("task-pipeline workflow", () => {
 
 		const createContext = createContextFactory(setup!.app);
 		const ctx = await createContext({ accessMode: "system" });
+		(ctx as any).queue = {
+			taskTurnProducer: { async publish() {} },
+		};
 
 		const result = await taskPipeline.handler({
 			input: {
@@ -372,9 +376,7 @@ describe("task-pipeline workflow", () => {
 		});
 		expect(createdRunLinks.docs).toHaveLength(2);
 		expect(
-			createdRunLinks.docs.every(
-				(run) => relationId(run.aiRun) && run.initiatedBy === "task",
-			),
+			createdRunLinks.docs.every((run) => run.initiatedBy === "task"),
 		).toBe(true);
 
 		const retryActivities = await setup!.app.collections.activity.find({
@@ -543,6 +545,9 @@ describe("task-pipeline workflow", () => {
 			},
 		};
 		(ctx as any).workflows = workflows;
+		(ctx as any).queue = {
+			taskTurnProducer: { async publish() {} },
+		};
 		workflowEvents = [];
 
 		const result = await taskPipeline.handler({

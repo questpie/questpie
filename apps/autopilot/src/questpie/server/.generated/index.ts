@@ -37,6 +37,7 @@ import _job_chatTurnProducer from "../jobs/chat-turn-producer";
 import _job_cleanup from "../jobs/cleanup";
 import _job_scheduleTick from "../jobs/schedule-tick";
 import _job_taskEscalation from "../jobs/task-escalation";
+import _job_taskTurnProducer from "../jobs/task-turn-producer";
 
 // ── Routes ─────────────────────────────────────────────────
 import _route_apps_appId_fn from "../routes/apps/[appId]/[fn]";
@@ -216,6 +217,7 @@ export type AppJobs = _ModuleJobs & {
 	cleanup: Omit<typeof _job_cleanup, "handler"> & { handler: (args: unknown) => Promise<unknown> };
 	scheduleTick: Omit<typeof _job_scheduleTick, "handler"> & { handler: (args: unknown) => Promise<unknown> };
 	taskEscalation: Omit<typeof _job_taskEscalation, "handler"> & { handler: (args: unknown) => Promise<unknown> };
+	taskTurnProducer: Omit<typeof _job_taskTurnProducer, "handler"> & { handler: (args: unknown) => Promise<unknown> };
 };
 
 /** All routes in the app (modules + user, user overrides) */
@@ -354,6 +356,7 @@ type _ExecutionContextJobs = {
 	cleanup: _ExecutionContextJob<typeof _job_cleanup>;
 	scheduleTick: _ExecutionContextJob<typeof _job_scheduleTick>;
 	taskEscalation: _ExecutionContextJob<typeof _job_taskEscalation>;
+	taskTurnProducer: _ExecutionContextJob<typeof _job_taskTurnProducer>;
 };
 type _ExecutionContextServiceDefinitions = {
 	gitProviderAdapters: typeof _svc_gitProviderAdapters;
@@ -591,6 +594,7 @@ _appPromise = createApp(
 			cleanup: _job_cleanup,
 			scheduleTick: _job_scheduleTick,
 			taskEscalation: _job_taskEscalation,
+			taskTurnProducer: _job_taskTurnProducer,
 		},
 		routes: {
 			"apps/[appId]/[fn]": _route_apps_appId_fn,

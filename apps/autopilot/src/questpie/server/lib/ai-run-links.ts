@@ -26,26 +26,17 @@ type CreateAiRunLinkInput = {
 	linkMetadata?: Record<string, unknown>;
 };
 
-function aiRuntime(runtime: RuntimeResolution["runtime"]) {
-	if (runtime === "claude-code" || runtime === "codex") return runtime;
-	throw new Error(`Unsupported AI runtime for ai_runs: ${runtime}`);
-}
-
 export async function createAiRunLink(input: CreateAiRunLinkInput) {
 	const linkId = randomUUID();
-	const runtime = aiRuntime(input.runtime.runtime);
-	const aiRun = await input.ctx.collections.ai_runs.create({
-		status: "pending",
-		runtime,
-		prompt: input.instructions,
-		systemPrompt: input.systemPrompt ?? undefined,
-		runtimeSessionRef: input.runtimeSessionRef ?? undefined,
-		meta: asRecord(input.spawnMetadata),
-	});
+	const spawn = asRecord(input.spawnMetadata);
+	const cwd = typeof spawn.cwd === "string" ? spawn.cwd : undefined;
 
+	// Harness producer path: the run_links row is the single execution record —
+	// there is no ai_runs row and no worker-claim relay for tasks anymore. The
+	// skills systemPrompt and cwd ride `metadata` so task-turn-producer can run
+	// the harness turn straight from the link. `aiRun` is intentionally unset.
 	return input.ctx.collections.run_links.create({
 		id: linkId,
-		aiRun: aiRun.id,
 		task: input.taskId ?? undefined,
 		project: input.projectId ?? undefined,
 		workflowInstanceId: input.workflowInstanceId ?? undefined,
@@ -62,6 +53,10 @@ export async function createAiRunLink(input: CreateAiRunLinkInput) {
 		runtimeSessionRef: input.runtimeSessionRef ?? undefined,
 		resumedFromRun: input.resumedFromRunId ?? undefined,
 		resumable: input.resumable ?? false,
-		metadata: asRecord(input.linkMetadata),
+		metadata: {
+			...asRecord(input.linkMetadata),
+			systemPrompt: input.systemPrompt ?? null,
+			cwd: cwd ?? null,
+		},
 	});
 }

@@ -137,7 +137,8 @@ async function releaseDependentTasks(
 		) {
 			continue;
 		}
-		if (!(await dependenciesMet(ctx.collections, dependentTaskId))) continue;
+		if (!(await dependenciesMet(ctx.collections as any, dependentTaskId)))
+			continue;
 
 		await ctx.collections.tasks.updateById({
 			id: dependentTaskId,
@@ -175,7 +176,7 @@ export default workflow({
 
 		if (
 			!(await step.run("check-dependencies", async () =>
-				dependenciesMet(ctx.collections, input.taskId),
+				dependenciesMet(ctx.collections as any, input.taskId),
 			))
 		) {
 			await step.run("mark-waiting-on-dependencies", async () => {
@@ -243,7 +244,10 @@ export default workflow({
 					log,
 				);
 				const projectId = relationId(task.project);
-				const cwd = await projectWorkspacePath(ctx.collections, projectId);
+				const cwd = await projectWorkspacePath(
+					ctx.collections as any,
+					projectId,
+				);
 				return createAiRunLink({
 					ctx: ctx,
 					runtime,
@@ -282,6 +286,14 @@ export default workflow({
 								attempt,
 							}),
 					},
+				});
+			});
+
+			await step.run(`enqueue-task-turn-${attempt}`, async () => {
+				await (ctx.queue as any).taskTurnProducer.publish({
+					runLinkId: run.id,
+					taskId: input.taskId,
+					projectId: relationId(task.project),
 				});
 			});
 
