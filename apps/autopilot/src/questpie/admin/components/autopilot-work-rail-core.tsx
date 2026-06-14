@@ -441,7 +441,10 @@ function SessionRow({
 				].join(" ")}
 			/>
 			<span className="min-w-0 flex-1">
-				<span className="block truncate text-xs font-medium">
+				<span
+					title={itemTitle(session, "Untitled chat")}
+					className="block truncate text-xs font-medium"
+				>
 					{itemTitle(session, "Untitled chat")}
 				</span>
 				<span className="text-muted-foreground mt-0.5 block truncate text-[11px]">
@@ -843,9 +846,16 @@ export function AutopilotWorkRailCore({
 				) : (
 					<div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
 						{chat.messages.length === 0 ? (
-							<div className="flex h-full min-h-52 items-center justify-center text-center">
-								<div className="text-primary bg-primary/10 flex size-8 items-center justify-center rounded-xl">
-									<Icon icon="ph:sparkle" className="size-4" />
+							<div className="flex h-full min-h-52 flex-col items-center justify-center gap-3 px-6 text-center">
+								<div className="text-primary bg-primary/10 ring-primary/10 flex size-11 items-center justify-center rounded-2xl ring-1">
+									<Icon icon="ph:sparkle" className="size-5" />
+								</div>
+								<div className="max-w-[15rem] space-y-1">
+									<p className="text-sm font-semibold">Ask Autopilot anything</p>
+									<p className="text-muted-foreground text-xs leading-relaxed">
+										Create work, ask about a task, or drop a file or record to
+										add context.
+									</p>
 								</div>
 							</div>
 						) : (
@@ -914,7 +924,7 @@ export function AutopilotWorkRailCore({
 								}}
 								placeholder="Ask anything or create work..."
 								rows={1}
-								className="placeholder:text-muted-foreground field-sizing-content max-h-32 min-h-9 w-full resize-none bg-transparent px-3 pt-2 pb-1 text-sm leading-relaxed outline-none disabled:cursor-not-allowed disabled:opacity-50"
+								className="placeholder:text-muted-foreground field-sizing-content max-h-32 min-h-9 w-full resize-none bg-transparent px-3 pt-2 pb-1 text-base leading-relaxed outline-none disabled:cursor-not-allowed disabled:opacity-50"
 								disabled={chat.isSending}
 							/>
 							<div className="border-border-subtle bg-muted/20 flex min-h-8 items-center gap-1 border-t px-2 py-1">
@@ -922,14 +932,14 @@ export function AutopilotWorkRailCore({
 									type="button"
 									onClick={openFilePicker}
 									disabled={chat.isSending}
-									className="text-muted-foreground hover:bg-muted hover:text-foreground flex size-6 shrink-0 items-center justify-center rounded-md transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+									className="text-muted-foreground hover:bg-muted hover:text-foreground flex size-7 shrink-0 items-center justify-center rounded-md transition-colors disabled:cursor-not-allowed disabled:opacity-50"
 									title="Attach file"
 								>
 									<Icon icon="ph:paperclip" className="size-3.5" />
 								</button>
 								{contextAttachments.length > 0 ? (
 									<span
-										className="text-muted-foreground flex size-6 items-center justify-center"
+										className="text-muted-foreground flex size-7 items-center justify-center"
 										title="Current page context is attached"
 									>
 										<Icon icon="ph:crosshair" className="size-3.5" />
@@ -945,7 +955,7 @@ export function AutopilotWorkRailCore({
 									type="button"
 									disabled={!canSend}
 									onClick={send}
-									className="bg-primary text-primary-foreground hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground inline-flex h-7 items-center gap-1 rounded-md px-2 text-xs font-medium transition-colors disabled:cursor-not-allowed"
+									className="bg-primary text-primary-foreground hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors disabled:cursor-not-allowed"
 									title="Send"
 								>
 									<Icon

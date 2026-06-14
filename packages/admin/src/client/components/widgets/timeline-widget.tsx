@@ -203,7 +203,14 @@ export default function TimelineWidget({
 
 							{/* Content */}
 							<div className="min-w-0 flex-1 pt-0.5 text-left">
-								<p className="truncate text-sm font-medium">{item.title}</p>
+								<p
+										title={
+											typeof item.title === "string" ? item.title : undefined
+										}
+										className="truncate text-sm font-medium"
+									>
+										{item.title}
+									</p>
 								{item.description && (
 									<p className="text-muted-foreground mt-0.5 line-clamp-2 text-xs">
 										{item.description}
