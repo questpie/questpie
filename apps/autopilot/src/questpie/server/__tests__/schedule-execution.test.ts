@@ -85,9 +85,22 @@ describe("schedule-tick job execution", () => {
 			},
 		};
 
+		const mockQueue = {
+			chatTurnProducer: {
+				async publish(payload: unknown) {
+					workflowEvents.push({
+						event: "queue:chat-turn-producer",
+						data: payload,
+					});
+					return "mock-job-id";
+				},
+			},
+		};
+
 		const createContext = createContextFactory(setup!.app);
 		const ctx = await createContext({ accessMode: "system" });
 		(ctx as any).workflows = workflows;
+		(ctx as any).queue = mockQueue;
 
 		return scheduleTick.handler({
 			...ctx,
@@ -201,9 +214,9 @@ describe("schedule-tick job execution", () => {
 
 		expect(workflowEvents).toHaveLength(1);
 		expect(workflowEvents[0]).toMatchObject({
-			event: "trigger:chat-query",
+			event: "queue:chat-turn-producer",
 			data: {
-				scheduleExecutionId: result.results[0].executionId,
+				chatSessionId: result.results[0].chatSessionId,
 			},
 		});
 	});

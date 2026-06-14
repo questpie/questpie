@@ -29,6 +29,10 @@
 			"types": "./src/exports/client/modules/ai.ts",
 			"default": "./src/exports/client/modules/ai.ts"
 		},
+		"./harness-core": {
+			"types": "./src/exports/harness-core.ts",
+			"default": "./src/exports/harness-core.ts"
+		},
 		"./modules/ai": {
 			"types": "./src/exports/modules/ai.ts",
 			"default": "./src/exports/modules/ai.ts"
@@ -56,6 +60,10 @@
 			"./client/modules/ai": {
 				"types": "./dist/client/modules/ai.d.mts",
 				"default": "./dist/client/modules/ai.mjs"
+			},
+			"./harness-core": {
+				"types": "./dist/harness-core.d.mts",
+				"default": "./dist/harness-core.mjs"
 			},
 			"./modules/ai": {
 				"types": "./dist/modules/ai.d.mts",

@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import type { ExecutorRunResult } from "questpie/executor";
 import { job } from "questpie/services";
 import { z } from "zod";
@@ -279,24 +281,27 @@ async function triggerChatSchedule(
 		metadata: { mode: "chat", messageId: message.id },
 	});
 
-	const workflow = await workflowsFromContext(ctx).trigger(
-		"chat-query",
-		{
-			chatSessionId: session.id,
-			messageId: message.id,
-			prompt,
-			projectId: projectId ?? null,
-			taskId: taskId ?? null,
-			scheduleExecutionId: execution.id,
-			modelId:
-				typeof template.modelId === "string"
-					? template.modelId
-					: typeof template.model_id === "string"
-						? template.model_id
-						: null,
-		},
-		{ idempotencyKey: `schedule:${schedule.id}:${execution.id}:chat` },
-	);
+	// Enqueue the background chat-turn-producer (replaces the old chat-query workflow)
+	const streamId = `chat-stream:${session.id}:${randomUUID()}`;
+	await ctx.collections.chat_sessions.updateById({
+		id: session.id,
+		data: { activeStreamId: streamId },
+	});
+	await (ctx.queue as any).chatTurnProducer.publish({
+		chatSessionId: session.id,
+		messageId: message.id,
+		streamId,
+		prompt,
+		projectId: projectId ?? null,
+		taskId: taskId ?? null,
+		modelId:
+			typeof template.modelId === "string"
+				? template.modelId
+				: typeof template.model_id === "string"
+					? template.model_id
+					: null,
+		attachments: [],
+	});
 
 	await ctx.collections.activity.create({
 		actor: "job:schedule-tick",
@@ -307,7 +312,7 @@ async function triggerChatSchedule(
 		details: {
 			scheduleId: schedule.id,
 			executionId: execution.id,
-			workflowInstanceId: workflow.instanceId,
+			streamId,
 			chatSessionId: session.id,
 			messageId: message.id,
 		},

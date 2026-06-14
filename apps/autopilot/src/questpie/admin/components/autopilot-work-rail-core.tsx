@@ -1,5 +1,5 @@
 import { Icon } from "@iconify/react";
-import { useMutation, useQuery, type QueryClient } from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
 import * as React from "react";
 
 import {
@@ -9,14 +9,9 @@ import {
 	chatAttachmentLabel as attachmentLabel,
 	type ChatAttachment,
 } from "../lib/chat-attachments";
+import { useAutopilotChat } from "../hooks/use-autopilot-chat";
 
 type Doc = Record<string, any>;
-
-type RunStreamEvent =
-	| { type: "run"; run: Doc }
-	| { type: "run_event"; event: Doc }
-	| { type: "stream_error"; error: string }
-	| { type: "heartbeat"; ts: string };
 
 export interface AutopilotWorkRailCoreProps {
 	activeRoute?: string;
@@ -24,17 +19,7 @@ export interface AutopilotWorkRailCoreProps {
 	queryClient: QueryClient;
 }
 
-function docsFromResult(result: unknown): Doc[] {
-	if (Array.isArray(result)) return result as Doc[];
-	if (
-		result &&
-		typeof result === "object" &&
-		Array.isArray((result as any).docs)
-	) {
-		return (result as any).docs as Doc[];
-	}
-	return [];
-}
+// ── Helpers ───────────────────────────────────────────────────
 
 function relationId(value: unknown): string | null {
 	if (typeof value === "string") return value;
@@ -82,30 +67,7 @@ function statusTone(status: unknown): string {
 	}
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function eventMeta(event: Doc): Record<string, unknown> {
-	if (isRecord(event.meta)) return event.meta;
-	if (isRecord(event.metadata)) return event.metadata;
-	return {};
-}
-
-function textFromRunEvents(events: Doc[]): string {
-	let text = "";
-	for (const event of events) {
-		const meta = eventMeta(event);
-		if (meta.type === "text.delta" && typeof meta.text === "string") {
-			text += meta.text;
-		}
-	}
-	return text;
-}
-
-function isActiveStatus(status: unknown): boolean {
-	return status === "pending" || status === "claimed" || status === "running";
-}
+// ── Markdown rendering ────────────────────────────────────────
 
 function InlineMarkdown({ text }: { text: string }) {
 	const nodes: React.ReactNode[] = [];
@@ -277,104 +239,7 @@ function MarkdownContent({ content }: { content: string }) {
 	return <div className="text-sm leading-relaxed break-words">{blocks}</div>;
 }
 
-async function loadSessions(client: unknown) {
-	const api = (client as any)?.collections?.chat_sessions;
-	if (!api?.find) return [];
-	try {
-		return docsFromResult(
-			await api.find({
-				limit: 40,
-				orderBy: { updatedAt: "desc" },
-			}),
-		);
-	} catch {
-		return docsFromResult(await api.find({ limit: 40 }));
-	}
-}
-
-async function loadMessages(client: unknown, sessionId: string | null) {
-	if (!sessionId) return [];
-	const api = (client as any)?.collections?.chat_messages;
-	if (!api?.find) return [];
-	return docsFromResult(
-		await api.find({
-			where: { chatSession: sessionId },
-			limit: 200,
-			orderBy: { createdAt: "asc" },
-		}),
-	);
-}
-
-function useCollectionRealtime(
-	client: unknown,
-	collection: string,
-	onChange: () => void,
-	where?: Record<string, unknown>,
-) {
-	React.useEffect(() => {
-		const realtime = (client as any)?.realtime;
-		if (!realtime?.subscribe) return;
-
-		return realtime.subscribe(
-			{
-				resourceType: "collection",
-				resource: collection,
-				...(where ? { where } : {}),
-			},
-			onChange,
-			undefined,
-			`autopilot-rail:${collection}:${JSON.stringify(where ?? {})}`,
-		);
-	}, [client, collection, onChange, where]);
-}
-
-function useRunStream(client: unknown, runId: string | null) {
-	const [run, setRun] = React.useState<Doc | null>(null);
-	const [events, setEvents] = React.useState<Doc[]>([]);
-	const [error, setError] = React.useState<string | null>(null);
-
-	React.useEffect(() => {
-		setRun(null);
-		setEvents([]);
-		setError(null);
-		if (!runId || typeof window === "undefined") return;
-
-		const apiBasePath = (client as any)?.getBasePath?.() ?? "/api";
-		const source = new EventSource(
-			`${apiBasePath}/run-stream?runId=${encodeURIComponent(runId)}`,
-		);
-
-		const handle = (event: Event) => {
-			try {
-				const raw = event as MessageEvent<string>;
-				const data = JSON.parse(raw.data) as RunStreamEvent;
-				if (data.type === "run") setRun(data.run);
-				if (data.type === "run_event") {
-					setEvents((prev) => {
-						if (prev.some((item) => item.id === data.event.id)) return prev;
-						return [...prev, data.event].slice(-100);
-					});
-				}
-				if (data.type === "stream_error") setError(data.error);
-			} catch (err) {
-				setError(err instanceof Error ? err.message : String(err));
-			}
-		};
-
-		source.addEventListener("run", handle);
-		source.addEventListener("run_event", handle);
-		source.addEventListener("stream_error", handle);
-		source.onerror = () => {
-			if (source.readyState === EventSource.CLOSED) {
-				setError("Run stream closed.");
-			}
-		};
-
-		return () => source.close();
-	}, [client, runId]);
-
-	return { run, events, error };
-}
+// ── Attachment helpers ────────────────────────────────────────
 
 function routeAttachment(activeRoute?: string): ChatAttachment | null {
 	if (!activeRoute) return null;
@@ -484,6 +349,8 @@ async function attachmentsFromDrop(dataTransfer: DataTransfer) {
 
 	return [];
 }
+
+// ── UI components ─────────────────────────────────────────────
 
 function AttachmentChip({
 	attachment,
@@ -643,115 +510,64 @@ function StreamingMessage({
 	);
 }
 
-function RunStrip({
-	runId,
-	run,
-	events,
-	error,
+function StreamStrip({
+	isStreaming,
+	streamError,
+	onCancel,
 }: {
-	runId: string | null;
-	run: Doc | null;
-	events: Doc[];
-	error: string | null;
+	isStreaming: boolean;
+	streamError: string | null;
+	onCancel: () => void;
 }) {
-	if (!runId && events.length === 0 && !error) return null;
-
-	const status = String(run?.status ?? "");
-	const latest =
-		[...events].reverse().find((event) => {
-			const meta = eventMeta(event);
-			return meta.type !== "text.delta" && meta.type !== "thinking.delta";
-		}) ?? null;
-
-	if (!error && status === "completed") return null;
+	if (!isStreaming && !streamError) return null;
 
 	return (
 		<div className="text-muted-foreground mx-3 mb-2 flex items-center gap-2 text-[11px]">
 			<span
 				className={[
 					"size-1.5 shrink-0 rounded-full",
-					error ? "bg-destructive" : statusTone(run?.status),
+					streamError ? "bg-destructive" : "bg-info",
 				].join(" ")}
 			/>
-			{error ? (
-				<span className="text-destructive min-w-0 truncate">{error}</span>
+			{streamError ? (
+				<span className="text-destructive min-w-0 truncate">{streamError}</span>
 			) : (
-				<span className="min-w-0 truncate">
-					{latest?.summary ?? (status ? `Run ${status}` : "Working")}
-				</span>
+				<span className="min-w-0 truncate">Working...</span>
 			)}
+			{isStreaming ? (
+				<button
+					type="button"
+					onClick={onCancel}
+					className="text-muted-foreground hover:text-foreground ml-auto text-[10px] underline"
+				>
+					Cancel
+				</button>
+			) : null}
 		</div>
 	);
 }
+
+// ── Main component ────────────────────────────────────────────
 
 export function AutopilotWorkRailCore({
 	activeRoute,
 	client,
 	queryClient,
 }: AutopilotWorkRailCoreProps) {
-	const [activeSessionId, setActiveSessionId] = React.useState<string | null>(
-		null,
-	);
+	const chat = useAutopilotChat({ client, queryClient, activeRoute });
 	const [historyOpen, setHistoryOpen] = React.useState(false);
 	const [sessionSearch, setSessionSearch] = React.useState("");
 	const [composer, setComposer] = React.useState("");
 	const [attachments, setAttachments] = React.useState<ChatAttachment[]>([]);
-	const [activeRunId, setActiveRunId] = React.useState<string | null>(null);
 	const [isDropActive, setIsDropActive] = React.useState(false);
 	const [dropError, setDropError] = React.useState<string | null>(null);
 	const messagesEndRef = React.useRef<HTMLDivElement | null>(null);
 	const fileInputRef = React.useRef<HTMLInputElement | null>(null);
 
-	const sessionsQuery = useQuery({
-		queryKey: ["autopilot", "rail-chat", "sessions"],
-		queryFn: () => loadSessions(client),
-		enabled: !!client,
-		staleTime: 20_000,
-	});
-
-	const messagesQuery = useQuery({
-		queryKey: ["autopilot", "rail-chat", "messages", activeSessionId],
-		queryFn: () => loadMessages(client, activeSessionId),
-		enabled: !!client && !!activeSessionId,
-	});
-
-	const invalidateSessions = React.useCallback(() => {
-		void queryClient.invalidateQueries({
-			queryKey: ["autopilot", "rail-chat", "sessions"],
-		});
-	}, [queryClient]);
-
-	const invalidateMessages = React.useCallback(() => {
-		void queryClient.invalidateQueries({
-			queryKey: ["autopilot", "rail-chat", "messages", activeSessionId],
-		});
-	}, [queryClient, activeSessionId]);
-
-	const selectedMessagesWhere = React.useMemo(
-		() => (activeSessionId ? { chatSession: activeSessionId } : undefined),
-		[activeSessionId],
-	);
-
-	useCollectionRealtime(client, "chat_sessions", invalidateSessions);
-	useCollectionRealtime(
-		client,
-		"chat_messages",
-		invalidateMessages,
-		selectedMessagesWhere,
-	);
-
-	const sessions = React.useMemo(
-		() => sessionsQuery.data ?? [],
-		[sessionsQuery.data],
-	);
-	const messages = React.useMemo(
-		() => messagesQuery.data ?? [],
-		[messagesQuery.data],
-	);
 	const filteredSessions = React.useMemo(() => {
 		const query = sessionSearch.trim().toLowerCase();
-		if (!query) return sessions;
-		return sessions.filter((session) =>
+		if (!query) return chat.sessions;
+		return chat.sessions.filter((session) =>
 			[
 				itemTitle(session, "Untitled chat"),
 				String(session.status ?? ""),
@@ -761,12 +577,7 @@ export function AutopilotWorkRailCore({
 				.toLowerCase()
 				.includes(query),
 		);
-	}, [sessions, sessionSearch]);
-	const { run, events, error: runError } = useRunStream(client, activeRunId);
-	const streamingText = React.useMemo(
-		() => textFromRunEvents(events),
-		[events],
-	);
+	}, [chat.sessions, sessionSearch]);
 
 	const contextAttachment = React.useMemo(
 		() => routeAttachment(activeRoute),
@@ -876,90 +687,45 @@ export function AutopilotWorkRailCore({
 
 	React.useEffect(() => {
 		messagesEndRef.current?.scrollIntoView({ block: "end" });
-	}, [messages.length, streamingText]);
+	}, [chat.messages.length, chat.streamingText]);
 
-	React.useEffect(() => {
-		if (activeRunId || messages.length === 0) return;
-		const lastRunId = [...messages]
-			.reverse()
-			.map((message) => relationId(message.run))
-			.find(Boolean);
-		if (lastRunId) setActiveRunId(lastRunId);
-	}, [activeRunId, messages]);
-
-	const sendMutation = useMutation({
-		mutationFn: async () => {
-			const content =
-				composer.trim() ||
-				(outgoingAttachments.length > 0 ? "Use the attached context." : "");
-			return (client as any).routes.chat({
-				chatSessionId: activeSessionId ?? undefined,
-				content,
-				attachments: outgoingAttachments,
-				metadata: {
-					source: "admin-rail",
-					activeRoute: activeRoute ?? null,
-				},
-			});
-		},
-		onSuccess: (result: Doc) => {
-			const sessionId = result.session?.id ?? result.message?.chatSession;
-			if (sessionId) {
-				setActiveSessionId(String(sessionId));
-				setHistoryOpen(false);
-			}
-			if (result.runId) setActiveRunId(String(result.runId));
-			setComposer("");
-			setAttachments([]);
-			invalidateSessions();
-			invalidateMessages();
-		},
-	});
-
-	const activeSession = sessions.find(
-		(session) => session.id === activeSessionId,
+	const activeSession = chat.sessions.find(
+		(session) => session.id === chat.activeSessionId,
 	);
 	const canSend =
 		(composer.trim().length > 0 || outgoingAttachments.length > 0) &&
-		!sendMutation.isPending;
+		!chat.isSending;
 	const isNewChatEmpty =
 		!historyOpen &&
 		!activeSession &&
 		composer.trim().length === 0 &&
 		attachments.length === 0;
 	const showNewButton = historyOpen || !!activeSession || !isNewChatEmpty;
-	const hasAssistantForActiveRun =
-		!!activeRunId &&
-		messages.some(
-			(message) =>
-				String(message.role ?? "") === "assistant" &&
-				relationId(message.run) === activeRunId,
-		);
 	const showStreamingMessage =
-		!!activeRunId &&
-		!hasAssistantForActiveRun &&
-		(streamingText.trim().length > 0 || !run || isActiveStatus(run.status));
-	const isStreaming = !!activeRunId && (!run || isActiveStatus(run.status));
+		chat.streamingText.trim().length > 0 || chat.isStreaming;
 
 	function startNewChat() {
-		setActiveSessionId(null);
+		chat.setActiveSessionId(null);
 		setHistoryOpen(false);
 		setComposer("");
 		setAttachments([]);
-		setActiveRunId(null);
 		setDropError(null);
 	}
 
 	function selectSession(id: string) {
-		setActiveSessionId(id);
+		chat.setActiveSessionId(id);
 		setHistoryOpen(false);
-		setActiveRunId(null);
 		setDropError(null);
 	}
 
 	function send() {
 		if (!canSend) return;
-		sendMutation.mutate();
+		const content =
+			composer.trim() ||
+			(outgoingAttachments.length > 0 ? "Use the attached context." : "");
+		chat.send(content, outgoingAttachments);
+		setComposer("");
+		setAttachments([]);
 	}
 
 	const title = historyOpen
@@ -1050,11 +816,11 @@ export function AutopilotWorkRailCore({
 							</div>
 						</div>
 						<div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
-							{sessionsQuery.isLoading ? (
+							{chat.sessionsLoading ? (
 								<div className="text-muted-foreground px-2 py-6 text-center text-xs">
 									Loading chats...
 								</div>
-							) : sessions.length === 0 ? (
+							) : chat.sessions.length === 0 ? (
 								<div className="text-muted-foreground px-2 py-6 text-center text-xs">
 									No chat sessions.
 								</div>
@@ -1067,7 +833,7 @@ export function AutopilotWorkRailCore({
 									<SessionRow
 										key={session.id}
 										session={session}
-										active={session.id === activeSessionId}
+										active={session.id === chat.activeSessionId}
 										onSelect={() => selectSession(session.id)}
 									/>
 								))
@@ -1076,7 +842,7 @@ export function AutopilotWorkRailCore({
 					</div>
 				) : (
 					<div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
-						{messages.length === 0 ? (
+						{chat.messages.length === 0 ? (
 							<div className="flex h-full min-h-52 items-center justify-center text-center">
 								<div className="text-primary bg-primary/10 flex size-8 items-center justify-center rounded-xl">
 									<Icon icon="ph:sparkle" className="size-4" />
@@ -1084,13 +850,13 @@ export function AutopilotWorkRailCore({
 							</div>
 						) : (
 							<div className="flex flex-col gap-3">
-								{messages.map((message) => (
+								{chat.messages.map((message) => (
 									<MessageBubble key={message.id} message={message} />
 								))}
 								{showStreamingMessage ? (
 									<StreamingMessage
-										text={streamingText}
-										isStreaming={isStreaming}
+										text={chat.streamingText}
+										isStreaming={chat.isStreaming}
 									/>
 								) : null}
 								<div ref={messagesEndRef} />
@@ -1100,11 +866,10 @@ export function AutopilotWorkRailCore({
 				)}
 
 				{!historyOpen ? (
-					<RunStrip
-						runId={activeRunId}
-						run={run}
-						events={events}
-						error={runError}
+					<StreamStrip
+						isStreaming={chat.isStreaming}
+						streamError={chat.streamError}
+						onCancel={chat.cancel}
 					/>
 				) : null}
 
@@ -1150,13 +915,13 @@ export function AutopilotWorkRailCore({
 								placeholder="Ask anything or create work..."
 								rows={1}
 								className="placeholder:text-muted-foreground field-sizing-content max-h-32 min-h-9 w-full resize-none bg-transparent px-3 pt-2 pb-1 text-sm leading-relaxed outline-none disabled:cursor-not-allowed disabled:opacity-50"
-								disabled={sendMutation.isPending}
+								disabled={chat.isSending}
 							/>
 							<div className="border-border-subtle bg-muted/20 flex min-h-8 items-center gap-1 border-t px-2 py-1">
 								<button
 									type="button"
 									onClick={openFilePicker}
-									disabled={sendMutation.isPending}
+									disabled={chat.isSending}
 									className="text-muted-foreground hover:bg-muted hover:text-foreground flex size-6 shrink-0 items-center justify-center rounded-md transition-colors disabled:cursor-not-allowed disabled:opacity-50"
 									title="Attach file"
 								>
@@ -1171,11 +936,9 @@ export function AutopilotWorkRailCore({
 									</span>
 								) : null}
 								<div className="flex-1" />
-								{sendMutation.isError ? (
+								{chat.sendError ? (
 									<span className="text-destructive max-w-36 truncate text-[11px]">
-										{sendMutation.error instanceof Error
-											? sendMutation.error.message
-											: "Message failed"}
+										{chat.sendError}
 									</span>
 								) : null}
 								<button
@@ -1186,13 +949,13 @@ export function AutopilotWorkRailCore({
 									title="Send"
 								>
 									<Icon
-										icon={sendMutation.isPending ? "ph:spinner" : "ph:arrow-up"}
+										icon={chat.isSending ? "ph:spinner" : "ph:arrow-up"}
 										className={[
 											"size-3.5",
-											sendMutation.isPending ? "animate-spin" : "",
+											chat.isSending ? "animate-spin" : "",
 										].join(" ")}
 									/>
-									<span>{sendMutation.isPending ? "Sending" : "Send"}</span>
+									<span>{chat.isSending ? "Sending" : "Send"}</span>
 								</button>
 							</div>
 						</div>

@@ -1,15 +1,21 @@
+/**
+ * POST /api/chat — create a chat turn.
+ *
+ * Architecture B (background producer): validates input, creates/finds the
+ * chat session, persists the user message, sets `activeStreamId` on the
+ * session, and enqueues the `chat-turn-producer` job. Returns the session +
+ * message + streamId synchronously — the client then GETs
+ * `/api/chat/{chatId}/stream` to consume the resumable SSE.
+ */
+
+import { randomUUID } from "node:crypto";
+
 import { ApiError } from "questpie/errors";
 import { route } from "questpie/services";
 import { z } from "zod";
 
-import { createAiRunLink } from "../lib/ai-run-links";
-import { injectMemoriesIntoInstructions } from "../lib/memory-injection";
-import { projectWorkspacePath } from "../lib/project-workspace";
 import { mergeRecords, relationId } from "../lib/records";
 import { sessionOnly } from "../lib/route-access";
-import { resolveRuntimeSelection } from "../lib/runtime-selection";
-import { buildSkillsSystemPrompt } from "../lib/skill-discovery";
-import { workflowsFromContext } from "../lib/workflows";
 
 const attachmentSchema = z
 	.object({
@@ -51,7 +57,9 @@ export default route()
 	.access(sessionOnly)
 	.schema(chatSchema)
 	.handler(async (ctx) => {
-		const { input, collections } = ctx;
+		const { input, collections, queue } = ctx;
+
+		// ── Validate project ────────────────────────────────────
 		const inputProject = input.projectId
 			? await collections.projects.findOne({ where: { id: input.projectId } })
 			: null;
@@ -59,6 +67,7 @@ export default route()
 			throw ApiError.notFound("Project", input.projectId);
 		}
 
+		// ── Find or create chat session ─────────────────────────
 		const existingSession = input.chatSessionId
 			? await collections.chat_sessions.findOne({
 					where: { id: input.chatSessionId },
@@ -79,86 +88,44 @@ export default route()
 				metadata: input.metadata as any,
 			}));
 
+		// ── Create user message ─────────────────────────────────
 		const message = await collections.chat_messages.create({
 			chatSession: session.id,
 			role: "user",
 			content: input.content,
 			model: input.modelId,
+			runStatus: "pending",
 			metadata: mergeRecords(
 				input.metadata,
 				input.attachments?.length ? { attachments: input.attachments } : null,
 			) as any,
 		});
 
+		// ── Generate stream ID + set active on session ──────────
+		const streamId = `chat-stream:${session.id}:${randomUUID()}`;
 		const projectId = input.projectId ?? relationId(session.project);
 		const taskId = input.taskId ?? relationId(session.task);
-		const runtime = await resolveRuntimeSelection(ctx, {
-			modelId: input.modelId,
-			projectId,
+
+		await collections.chat_sessions.updateById({
+			id: session.id,
+			data: { activeStreamId: streamId },
 		});
-		const cwd = await projectWorkspacePath(collections, projectId);
-		const skillsSystemPrompt = await buildSkillsSystemPrompt(collections, {
-			projectId,
-		});
-		const instructions = await injectMemoriesIntoInstructions(
-			{
-				search: ctx.search,
-				collections,
-				projectId,
-				taskId,
-			},
-			input.content,
-			input.content,
-			ctx.logger,
-		);
-		const run = await createAiRunLink({
-			ctx,
-			runtime,
-			taskId,
-			projectId,
-			initiatedBy: "chat",
-			instructions,
-			systemPrompt: skillsSystemPrompt || undefined,
+
+		// ── Enqueue background producer ─────────────────────────
+		await (queue as any).chatTurnProducer.publish({
 			chatSessionId: session.id,
-			chatMessageId: message.id,
-			runtimeSessionRef: session.runtimeSessionRef,
-			spawnMetadata: {
-				attachments: input.attachments ?? [],
-				...(cwd ? { cwd } : {}),
-			},
-			linkMetadata: { attachments: input.attachments ?? [] },
+			messageId: message.id,
+			streamId,
+			prompt: input.content,
+			projectId: projectId ?? null,
+			taskId: taskId ?? null,
+			modelId: input.modelId ?? null,
+			attachments: input.attachments ?? [],
 		});
-
-		await collections.chat_messages.updateById({
-			id: message.id,
-			data: {
-				run: run.id,
-				runStatus: "pending",
-				model: runtime.modelId ?? undefined,
-				provider: runtime.providerId ?? undefined,
-			},
-		});
-
-		const workflow = await workflowsFromContext(ctx).trigger(
-			"chat-query",
-			{
-				chatSessionId: session.id,
-				messageId: message.id,
-				runId: run.id,
-				prompt: input.content,
-				projectId: projectId ?? null,
-				taskId: input.taskId ?? null,
-				modelId: input.modelId ?? null,
-			},
-			{ idempotencyKey: `chat-query:${message.id}` },
-		);
 
 		return {
 			session,
 			message,
-			run,
-			runId: run.id,
-			workflowInstanceId: workflow.instanceId,
-			existingWorkflow: workflow.existing,
+			streamId,
 		};
 	});

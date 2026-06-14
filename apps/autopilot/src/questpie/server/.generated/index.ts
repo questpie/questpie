@@ -33,6 +33,7 @@ import { taskRelations as _coll_task_relations } from "../collections/task-relat
 import { tasks as _coll_tasks } from "../collections/tasks";
 
 // ── Jobs ───────────────────────────────────────────────────
+import _job_chatTurnProducer from "../jobs/chat-turn-producer";
 import _job_cleanup from "../jobs/cleanup";
 import _job_scheduleTick from "../jobs/schedule-tick";
 import _job_taskEscalation from "../jobs/task-escalation";
@@ -42,6 +43,9 @@ import _route_apps_appId_fn from "../routes/apps/[appId]/[fn]";
 import _route_apps_appId_fs_spread_path from "../routes/apps/[appId]/fs/[...path]";
 import _route_apps_appId_token from "../routes/apps/[appId]/token";
 import _route_chat from "../routes/chat";
+import _route_chat_chatId_approve from "../routes/chat/[chatId]/approve";
+import _route_chat_chatId_cancel from "../routes/chat/[chatId]/cancel";
+import _route_chat_chatId_stream from "../routes/chat/[chatId]/stream";
 import _route_events from "../routes/events";
 import _route_intake from "../routes/intake";
 import _route_runs_runId from "../routes/runs/[runId]";
@@ -91,7 +95,6 @@ import _view_filesView from "../views/files-view";
 import _view_taskDetail from "../views/task-detail";
 
 // ── Workflows ──────────────────────────────────────────────
-import _wf_chatQuery from "../workflows/chat-query";
 import _wf_taskPipeline from "../workflows/task-pipeline";
 
 // ── McpTools ───────────────────────────────────────────────
@@ -209,6 +212,7 @@ export type AppGlobals = _ModuleGlobals;
 
 /** All jobs in the app (modules + user, user overrides) */
 export type AppJobs = _ModuleJobs & {
+	chatTurnProducer: Omit<typeof _job_chatTurnProducer, "handler"> & { handler: (args: unknown) => Promise<unknown> };
 	cleanup: Omit<typeof _job_cleanup, "handler"> & { handler: (args: unknown) => Promise<unknown> };
 	scheduleTick: Omit<typeof _job_scheduleTick, "handler"> & { handler: (args: unknown) => Promise<unknown> };
 	taskEscalation: Omit<typeof _job_taskEscalation, "handler"> & { handler: (args: unknown) => Promise<unknown> };
@@ -220,6 +224,9 @@ export type AppRoutes = _ModuleRoutes & {
 	"apps/[appId]/fs/[...path]": RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_apps_appId_fs_spread_path>, RouteParamsFromKey<"apps/[appId]/fs/[...path]">>;
 	"apps/[appId]/token": RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_apps_appId_token>, RouteParamsFromKey<"apps/[appId]/token">>;
 	chat: RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_chat>, RouteParamsFromKey<"chat">>;
+	"chat/[chatId]/approve": RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_chat_chatId_approve>, RouteParamsFromKey<"chat/[chatId]/approve">>;
+	"chat/[chatId]/cancel": RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_chat_chatId_cancel>, RouteParamsFromKey<"chat/[chatId]/cancel">>;
+	"chat/[chatId]/stream": RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_chat_chatId_stream>, RouteParamsFromKey<"chat/[chatId]/stream">>;
 	events: RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_events>, RouteParamsFromKey<"events">>;
 	intake: RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_intake>, RouteParamsFromKey<"intake">>;
 	"runs/[runId]": RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_runs_runId>, RouteParamsFromKey<"runs/[runId]">>;
@@ -268,7 +275,6 @@ export type AppBlocks = _ModuleBlocks;
 
 /** All workflows in the app (modules + user, user overrides) */
 export type AppWorkflows = _ModuleWorkflows
-	& { [K in typeof _wf_chatQuery.name]: Omit<typeof _wf_chatQuery, "handler" | "onFailure"> & { handler: (args: unknown) => Promise<unknown>; onFailure?: (args: unknown) => Promise<void> } }
 	& { [K in typeof _wf_taskPipeline.name]: Omit<typeof _wf_taskPipeline, "handler" | "onFailure"> & { handler: (args: unknown) => Promise<unknown>; onFailure?: (args: unknown) => Promise<void> } };
 
 /** All mcptools in the app (modules + user, user overrides) */
@@ -344,6 +350,7 @@ type _JobHandlerCollectionsAPI = {
 };
 type _ExecutionContextJob<T> = T extends { name: infer TName extends string; schema: z.ZodSchema<infer TPayload> } ? QueueJobType<TPayload, TName> : never;
 type _ExecutionContextJobs = {
+	chatTurnProducer: _ExecutionContextJob<typeof _job_chatTurnProducer>;
 	cleanup: _ExecutionContextJob<typeof _job_cleanup>;
 	scheduleTick: _ExecutionContextJob<typeof _job_scheduleTick>;
 	taskEscalation: _ExecutionContextJob<typeof _job_taskEscalation>;
@@ -580,6 +587,7 @@ _appPromise = createApp(
 			tasks: _coll_tasks,
 		},
 		jobs: {
+			chatTurnProducer: _job_chatTurnProducer,
 			cleanup: _job_cleanup,
 			scheduleTick: _job_scheduleTick,
 			taskEscalation: _job_taskEscalation,
@@ -589,6 +597,9 @@ _appPromise = createApp(
 			"apps/[appId]/fs/[...path]": _route_apps_appId_fs_spread_path,
 			"apps/[appId]/token": _route_apps_appId_token,
 			chat: _route_chat,
+			"chat/[chatId]/approve": _route_chat_chatId_approve,
+			"chat/[chatId]/cancel": _route_chat_chatId_cancel,
+			"chat/[chatId]/stream": _route_chat_chatId_stream,
 			events: _route_events,
 			intake: _route_intake,
 			"runs/[runId]": _route_runs_runId,
@@ -613,7 +624,6 @@ _appPromise = createApp(
 			taskDetail: _view_taskDetail,
 		},
 		workflows: {
-			[_wf_chatQuery.name]: _wf_chatQuery,
 			[_wf_taskPipeline.name]: _wf_taskPipeline,
 		},
 		mcpTools: {

@@ -36,7 +36,7 @@ const _allFieldDefs = Object.fromEntries(
 declare global {
 	namespace Questpie {
 		interface CollectionKeys { activity: unknown; admin_audit_log: unknown; agent_memory: unknown; assets: unknown; chat_messages: unknown; chat_sessions: unknown; document_store: unknown; environments: unknown; memory_settings: unknown; models: unknown; projects: unknown; providers: unknown; run_links: unknown; schedule_executions: unknown; schedules: unknown; scripts: unknown; secrets: unknown; task_relations: unknown; tasks: unknown }
-		interface JobKeys { cleanup: unknown; scheduleTick: unknown; taskEscalation: unknown }
+		interface JobKeys { chatTurnProducer: unknown; cleanup: unknown; scheduleTick: unknown; taskEscalation: unknown }
 	}
 }
 

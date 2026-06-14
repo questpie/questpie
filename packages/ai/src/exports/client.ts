@@ -1,9 +1,3 @@
-export { useRunStream } from "../client/modules/ai/hooks/use-run-stream.js";
-export type {
-	RunEvent,
-	ToolCallState,
-	UseRunStreamOptions,
-} from "../client/modules/ai/hooks/use-run-stream.js";
-
-export { RunStreamView } from "../client/modules/ai/components/run-stream-view.js";
-export type { RunStreamViewProps } from "../client/modules/ai/components/run-stream-view.js";
+// Client exports — use-run-stream and run-stream-view removed in chat v7 cutover.
+// The old relay-based streaming is replaced by the resumable-sink architecture.
+// See: harness-core.ts exports for the new server-side resumable stream primitives.

@@ -1,5 +1,4 @@
 import { createFetchHandler } from "questpie";
-import { createContextFactory } from "questpie/app";
 import type { RealtimeAdapter, RealtimeChangeEvent } from "questpie/realtime";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
@@ -31,19 +30,7 @@ import runStreamRoute from "../routes/run-stream";
 import runStatusRoute from "../routes/runs/[runId]";
 import runEventsRoute from "../routes/runs/[runId]/events";
 import knowledgeResource from "../services/knowledge-resource";
-import chatQueryWorkflow from "../workflows/chat-query";
-
-type WorkflowEvent = {
-	event: string;
-	data?: unknown;
-	match?: Record<string, unknown>;
-};
-
-type WaitEvent = {
-	name: string;
-	event: string;
-	match?: Record<string, unknown>;
-};
+// chat-query workflow deleted in chat v7 cutover (background producer architecture).
 
 type SSEEvent = {
 	event: string;
@@ -94,17 +81,6 @@ class MockRealtimeAdapter implements RealtimeAdapter {
 			this.subscriberWaiters.add(check);
 		});
 	}
-}
-
-function workerCapabilities() {
-	return [
-		{
-			runtime: "codex",
-			models: ["gpt-5.3-codex"],
-			maxConcurrent: 1,
-			tags: ["mock"],
-		},
-	];
 }
 
 function relationId(value: unknown): string | null {
@@ -200,45 +176,6 @@ function createSSEReader(response: Response) {
 	return { readEvent, readUntil, close };
 }
 
-function fakeStep(
-	events: Record<string, unknown>,
-	options?: { waitEvents?: WaitEvent[] },
-) {
-	return {
-		async run(_name: string, ...args: unknown[]) {
-			const fn = args[args.length - 1];
-			if (typeof fn !== "function") throw new Error("Missing step callback");
-			return fn();
-		},
-		async waitForEvent(
-			name: string,
-			opts: { event: string; match?: Record<string, unknown> },
-		) {
-			options?.waitEvents?.push({
-				name,
-				event: opts.event,
-				match: opts.match,
-			});
-			return events[opts.event] ?? null;
-		},
-		async sleep() {},
-		async sleepUntil() {},
-		async invoke() {
-			throw new Error("Unexpected child workflow invocation");
-		},
-		async sendEvent() {},
-	};
-}
-
-function silentLog() {
-	return {
-		debug() {},
-		info() {},
-		warn() {},
-		error() {},
-	};
-}
-
 describe("chat realtime workflow contract", () => {
 	let setup:
 		| {
@@ -248,23 +185,14 @@ describe("chat realtime workflow contract", () => {
 		| undefined;
 	let handler: ReturnType<typeof createFetchHandler>;
 	let realtimeAdapter: MockRealtimeAdapter;
-	let workflowEvents: WorkflowEvent[];
 
 	beforeEach(async () => {
 		realtimeAdapter = new MockRealtimeAdapter();
-		workflowEvents = [];
 		const workflows = {
-			async trigger(name: string, input: unknown) {
-				workflowEvents.push({ event: `trigger:${name}`, data: input });
-				return { instanceId: `wf-${workflowEvents.length}`, existing: false };
+			async trigger(_name: string, _input: unknown) {
+				return { instanceId: "wf-mock", existing: false };
 			},
-			async sendEvent(
-				event: string,
-				data?: unknown,
-				match?: Record<string, unknown>,
-			) {
-				workflowEvents.push({ event, data, match });
-			},
+			async sendEvent(_event: string, _data?: unknown) {},
 		};
 
 		setup = await buildMockApp(
@@ -313,13 +241,21 @@ describe("chat realtime workflow contract", () => {
 		);
 		await runTestDbMigrations(setup.app);
 
+		const mockQueue = {
+			chatTurnProducer: {
+				async publish() {
+					return "mock-job-id";
+				},
+			},
+		};
+
 		handler = createFetchHandler(setup.app, {
 			basePath: "/api",
 			getSession: async () => ({
 				user: { id: "operator-1" },
 				session: { id: "session-1" },
 			}),
-			extendContext: async () => ({ workflows }),
+			extendContext: async () => ({ workflows, queue: mockQueue }),
 		});
 	});
 
@@ -512,462 +448,34 @@ describe("chat realtime workflow contract", () => {
 		}
 	});
 
-	it("creates chat runs as AI run links and stores the link id on the user message", async () => {
+	it("creates chat sessions and user messages via POST /api/chat", async () => {
 		const app = setup!.app;
-		const provider = await app.collections.providers.create({
-			name: "OpenAI",
-			type: "openai",
-			enabled: true,
-		} as any);
-		const model = await app.collections.models.create({
-			name: "Codex",
-			provider: provider.id,
-			modelId: "gpt-5.3-codex",
-			runtime: "codex",
-			enabled: true,
-		} as any);
-		await app.collections.assets.create({
-			title: "Chat helper skill",
-			path: "company/skills/chat-helper/SKILL.md",
-			kind: "skill",
-			source: "human",
-			contentType: "text/markdown",
-			body: [
-				"---",
-				"name: chat-helper",
-				"description: Use this when answering chat requests.",
-				"status: published",
-				"---",
-				"# Chat helper",
-			].join("\n"),
-		} as any);
-
 		const chat = await callJson("/api/chat", {
 			body: {
-				content: "Create a run link for this chat.",
-				modelId: model.id,
+				content: "Create a chat with the new producer architecture.",
 			},
 		});
+
+		expect(chat.session).toBeTruthy();
+		expect(chat.message).toBeTruthy();
+		expect(chat.streamId).toBeTruthy();
 
 		const message = await app.collections.chat_messages.findOne({
 			where: { id: chat.message.id },
 		});
-		expect(relationId(message?.run)).toBe(chat.runId);
-
-		const runLink = await app.collections.run_links.findOne({
-			where: { id: chat.runId },
-		});
-		expect(runLink).toMatchObject({
-			chatSession: chat.session.id,
-			chatMessage: chat.message.id,
-			status: "pending",
-			runtime: "codex",
-			initiatedBy: "chat",
-			provider: provider.id,
-			model: model.id,
-		});
-
-		const aiRunId = relationId(runLink?.aiRun);
-		expect(aiRunId).toBeTruthy();
-		const aiRun = await app.collections.ai_runs.findOne({
-			where: { id: aiRunId! },
-		});
-		expect(aiRun).toMatchObject({
-			status: "pending",
-			runtime: "codex",
-			prompt: "Create a run link for this chat.",
-		});
-		expect(aiRun?.systemPrompt).toContain(
-			"- chat-helper: Use this when answering chat requests. [read: company/skills/chat-helper/SKILL.md]",
+		expect(message?.role).toBe("user");
+		expect(message?.content).toBe(
+			"Create a chat with the new producer architecture.",
 		);
-		expect(aiRun).not.toHaveProperty("provider");
-		expect(aiRun).not.toHaveProperty("model");
-		expect(
-			(aiRun?.meta as Record<string, unknown> | undefined)?.autopilot,
-		).toBe(undefined);
 
-		const createContext = createContextFactory(app);
-		const ctx = await createContext({ accessMode: "system" });
-		const resources = await ctx.services.knowledgeResource.createRunOutputs({
-			runId: chat.runId,
-			summary: "Knowledge is linked through the product run id.",
-			source: "worker",
+		const session = await app.collections.chat_sessions.findOne({
+			where: { id: chat.session.id },
 		});
-		expect(resources).toHaveLength(1);
-		expect(relationId(resources[0].run)).toBe(chat.runId);
+		expect(session?.activeStreamId).toBe(chat.streamId);
 	});
 
-	it("streams run snapshots and AI run events while chat completion stays workflow-driven", async () => {
-		const app = setup!.app;
-		const worker = await app.collections.ai_workers.create({
-			deviceId: "chat-stream-worker",
-			name: "Chat stream worker",
-			status: "online",
-			capabilities: workerCapabilities(),
-			secretHash: "unused-local-dev",
-		} as any);
-
-		const chat = await callJson("/api/chat", {
-			body: {
-				content: "Summarize the realtime workflow path.",
-				metadata: { source: "test" },
-			},
-		});
-		expect(chat.runId).toBeTruthy();
-		const runLink = await app.collections.run_links.findOne({
-			where: { id: chat.runId },
-		});
-		const aiRunId = relationId(runLink?.aiRun);
-		expect(aiRunId).toBeTruthy();
-		expect(workflowEvents[0]).toMatchObject({
-			event: "trigger:chat-query",
-			data: {
-				chatSessionId: chat.session.id,
-				messageId: chat.message.id,
-				runId: chat.runId,
-			},
-		});
-
-		const abortController = new AbortController();
-		const streamResponse = await call(`/api/run-stream?runId=${chat.runId}`, {
-			method: "GET",
-			signal: abortController.signal,
-		});
-		expect(streamResponse.headers.get("content-type")).toContain(
-			"text/event-stream",
-		);
-		const stream = createSSEReader(streamResponse);
-
-		try {
-			expect(await stream.readEvent()).toMatchObject({
-				event: "heartbeat",
-				data: { type: "heartbeat" },
-			});
-			const initialRun = await stream.readUntil((events) =>
-				events.some((event) => event.event === "run"),
-			);
-			expect(
-				initialRun.find((event) => event.event === "run")?.data.run,
-			).toMatchObject({
-				id: chat.runId,
-				status: "pending",
-			});
-
-			await realtimeAdapter.waitForSubscribers();
-
-			await app.collections.ai_runs.updateById({
-				id: aiRunId!,
-				data: {
-					status: "claimed",
-					worker: worker.id,
-					startedAt: new Date(),
-				},
-			});
-
-			const progressA = await app.collections.ai_run_events.create({
-				run: aiRunId,
-				type: "started",
-				level: "info",
-				summary: "Worker started spawn-agent",
-				sequence: 2,
-				meta: { phase: "start" },
-			} as any);
-			const textDelta = await app.collections.ai_run_events.create({
-				run: aiRunId,
-				type: "text.delta",
-				level: "info",
-				summary: "**Realtime** markdown delta",
-				sequence: 3,
-				meta: {
-					type: "text.delta",
-					text: "**Realtime** workflow path\n\n- streamed as markdown",
-				},
-			} as any);
-			const progressB = await app.collections.ai_run_events.create({
-				run: aiRunId,
-				type: "progress",
-				level: "info",
-				summary: "Streaming progress",
-				sequence: 4,
-				meta: { phase: "progress" },
-			} as any);
-			await app.collections.ai_runs.updateById({
-				id: aiRunId!,
-				data: {
-					status: "completed",
-					summary: "Realtime workflow path completed",
-					runtimeSessionRef: "chat-runtime-session",
-					endedAt: new Date(),
-				},
-			});
-
-			const observed = await stream.readUntil((events) => {
-				const runEvents = events.filter((event) => event.event === "run_event");
-				const runEventTypes = new Set(
-					runEvents.map((event) => event.data.event.type),
-				);
-				const completedRun = events.some(
-					(event) =>
-						event.event === "run" && event.data.run.status === "completed",
-				);
-				return (
-					completedRun &&
-					runEventTypes.has("started") &&
-					runEventTypes.has("text.delta") &&
-					runEventTypes.has("progress")
-				);
-			});
-
-			const streamedRunEvents = observed.filter(
-				(event) => event.event === "run_event",
-			);
-			const streamedIds = streamedRunEvents.map(
-				(event) => event.data.event.id as string,
-			);
-			expect(streamedIds).toContain(progressA.id);
-			expect(streamedIds).toContain(textDelta.id);
-			expect(streamedIds).toContain(progressB.id);
-			expect(new Set(streamedIds).size).toBe(streamedIds.length);
-			expect(
-				streamedRunEvents.find((event) => event.data.event.id === textDelta.id)
-					?.data.event.metadata,
-			).toMatchObject({
-				type: "text.delta",
-				text: "**Realtime** workflow path\n\n- streamed as markdown",
-			});
-			expect(workflowEvents.map((event) => event.event)).toEqual([
-				"trigger:chat-query",
-				"run.claimed",
-				"run.event",
-				"run.event",
-				"run.event",
-				"run.completed",
-			]);
-			expect(workflowEvents.at(-1)).toMatchObject({
-				event: "run.completed",
-				data: {
-					runId: chat.runId,
-					status: "completed",
-					summary: "Realtime workflow path completed",
-				},
-				match: { runId: chat.runId },
-			});
-			const completedMessage = await app.collections.chat_messages.findOne({
-				where: { id: chat.message.id },
-			});
-			expect(completedMessage?.runStatus).toBe("completed");
-			const resources = await app.collections.assets.find({
-				where: { run: chat.runId },
-				limit: 10,
-			});
-			expect(resources.docs[0]).toMatchObject({
-				run: chat.runId,
-				path: `runs/${chat.runId}/summary.md`,
-			});
-		} finally {
-			abortController.abort();
-			await stream.close();
-		}
-	});
-
-	it("creates the assistant response when chat-query receives durable run events", async () => {
-		const app = setup!.app;
-		const createContext = createContextFactory(app);
-		const ctx = await createContext({ accessMode: "system" });
-		const session = await app.collections.chat_sessions.create({
-			title: "Workflow chat",
-			status: "active",
-			scopeType: "company",
-			metadata: { existing: true },
-		} as any);
-		const userMessage = await app.collections.chat_messages.create({
-			chatSession: session.id,
-			role: "user",
-			content: "What happened?",
-		} as any);
-		const run = await app.collections.run_links.create({
-			id: "chat-completed-run",
-			status: "completed",
-			runtime: "codex",
-			initiatedBy: "chat",
-			instructions: userMessage.content,
-			runtimeSessionRef: "workflow-runtime-session",
-			resumable: true,
-			chatSession: session.id,
-			chatMessage: userMessage.id,
-		} as any);
-
-		const result = await chatQueryWorkflow.handler({
-			input: {
-				chatSessionId: session.id,
-				messageId: userMessage.id,
-				runId: run.id,
-				prompt: userMessage.content,
-				projectId: null,
-				taskId: null,
-				modelId: null,
-			},
-			step: fakeStep({
-				"run.claimed": {
-					runId: run.id,
-					workerId: "ai-worker-1",
-					leaseId: "lease-1",
-				},
-				"run.completed": {
-					runId: run.id,
-					status: "completed",
-					summary: "## Result\n\n- The worker finished **cleanly**.",
-					knowledgeResourceIds: ["knowledge-1"],
-				},
-			}) as any,
-			ctx,
-			log: silentLog(),
-		});
-
-		expect(result).toMatchObject({
-			chatSessionId: session.id,
-			runId: run.id,
-			status: "completed",
-		});
-
-		const messages = await app.collections.chat_messages.find({
-			where: { chatSession: session.id },
-			orderBy: { createdAt: "asc" },
-			limit: 10,
-		});
-		const assistantMessage = messages.docs.find(
-			(message: { role?: string }) => message.role === "assistant",
-		);
-		expect(assistantMessage).toMatchObject({
-			content: "## Result\n\n- The worker finished **cleanly**.",
-			run: run.id,
-			runStatus: "completed",
-			metadata: {
-				workflow: "chat-query",
-				knowledgeResourceIds: ["knowledge-1"],
-			},
-		});
-
-		const updatedUserMessage = await app.collections.chat_messages.findOne({
-			where: { id: userMessage.id },
-		});
-		expect(updatedUserMessage).toMatchObject({
-			run: run.id,
-			runStatus: "completed",
-		});
-
-		const updatedSession = await app.collections.chat_sessions.findOne({
-			where: { id: session.id },
-		});
-		expect(updatedSession).toMatchObject({
-			runtimeSessionRef: "workflow-runtime-session",
-			metadata: {
-				existing: true,
-				lastRunId: run.id,
-				lastMessageId: assistantMessage?.id,
-				lastRunStatus: "completed",
-			},
-		});
-
-		const activities = await app.collections.activity.find({
-			where: { run: run.id, type: "chat.response" },
-			limit: 10,
-		});
-		expect(activities.docs).toHaveLength(1);
-		expect(activities.docs[0]).toMatchObject({
-			run: run.id,
-			actor: "workflow:chat-query",
-			summary: `Chat response created for session ${session.id}`,
-			details: {
-				chatSessionId: session.id,
-				messageId: assistantMessage?.id,
-				status: "completed",
-				knowledgeResourceIds: ["knowledge-1"],
-			},
-		});
-	});
-
-	it("creates scheduled chat run links and waits on product run ids", async () => {
-		const app = setup!.app;
-		const createContext = createContextFactory(app);
-		const ctx = await createContext({ accessMode: "system" });
-		const schedule = await app.collections.schedules.create({
-			name: "Scheduled chat query",
-			cron: "0 9 * * *",
-			timezone: "UTC",
-			mode: "chat",
-			enabled: true,
-			chatPrompt: "Summarize the project.",
-			taskTemplate: {},
-		} as any);
-		const session = await app.collections.chat_sessions.create({
-			title: "Scheduled chat",
-			status: "active",
-			scopeType: "company",
-		} as any);
-		const message = await app.collections.chat_messages.create({
-			chatSession: session.id,
-			role: "user",
-			content: "Summarize the project.",
-		} as any);
-		const execution = await app.collections.schedule_executions.create({
-			schedule: schedule.id,
-			chatSession: session.id,
-			status: "triggered",
-			triggeredAt: new Date(),
-			metadata: { mode: "chat", messageId: message.id },
-		} as any);
-		const waitEvents: WaitEvent[] = [];
-
-		const result = await chatQueryWorkflow.handler({
-			input: {
-				chatSessionId: session.id,
-				messageId: message.id,
-				prompt: message.content,
-				scheduleExecutionId: execution.id,
-			},
-			step: fakeStep(
-				{
-					"run.claimed": { runId: "ignored", workerId: "w1" },
-					"run.completed": {
-						status: "completed",
-						summary: "Scheduled chat completed.",
-					},
-				},
-				{ waitEvents },
-			) as any,
-			ctx,
-			log: silentLog(),
-		});
-
-		const runLink = await app.collections.run_links.findOne({
-			where: { id: result.runId },
-		});
-		expect(runLink).toMatchObject({
-			chatSession: session.id,
-			chatMessage: message.id,
-			schedule: schedule.id,
-			scheduleExecution: execution.id,
-			initiatedBy: "chat",
-			status: "pending",
-		});
-		expect(relationId(runLink?.aiRun)).toBeTruthy();
-
-		const linkedExecution = await app.collections.schedule_executions.findOne({
-			where: { id: execution.id },
-		});
-		expect(relationId(linkedExecution?.run)).toBe(result.runId);
-		expect(waitEvents).toEqual([
-			{
-				name: "wait-run-claimed",
-				event: "run.claimed",
-				match: { runId: result.runId },
-			},
-			{
-				name: "wait-run-completed",
-				event: "run.completed",
-				match: { runId: result.runId },
-			},
-		]);
-	});
+	// The following tests verified the old chat-query workflow which has been
+	// replaced by the background chat-turn-producer job in the chat v7 cutover.
+	// The run-stream and ai-run-mirror paths remain untouched and are still
+	// covered by the SSE-ordering and run-auth tests above.
 });
