@@ -12,6 +12,12 @@ const KNOWN = new Map<string, string>([
 	// h3-v2@2.0.0-beta.4 (aliased import). Clears when react-start is bumped
 	// from 1.136.x to 1.167.42+ across the monorepo (planned follow-up PR).
 	["GHSA-3vj8-jmxq-cgj5", "TODO: @tanstack/react-start bump PR"],
+	// esbuild RCE via missing binary integrity check on the *Deno* module's
+	// NPM_CONFIG_REGISTRY download path — unused here (Bun/Node monorepo, no Deno
+	// install). Fixed in esbuild 0.28.1, but a global override is blocked by
+	// upstream ranges: drizzle-kit ^0.25.10, tsx ~0.27.0, fumadocs-mdx ^0.27.2,
+	// vite@7 ^0.27.0. Clears once those widen to esbuild 0.28.
+	["GHSA-gv7w-rqvm-qjhr", "TODO: override esbuild>=0.28.1 once drizzle-kit/tsx/fumadocs/vite7 widen ranges"],
 ]);
 
 type Advisory = {
