@@ -182,12 +182,16 @@ type _configNeNotUnknown = Expect<NoUnknown<ConfigOps["ne"]>>;
 // narrows; the point is that the bare-union form is unreliable regardless).
 // ============================================================================
 
-// Bare-union extraction (WRONG approach) — distributes over `value | operatorObject`,
-// the non-object `value` member has no `gt`, so V collapses to include `unknown`.
+// Bare-union extraction is now CLEAN (regression guard). The whereInput seam makes a
+// scalar select's `status` filter a concrete union `(literals) | OperatorObject`, and
+// `(union) extends { eq?: infer V }` is a WHOLE-union (indexed-access) check — NOT
+// distributive — so it collapses to `never`, never `unknown`. (The original assertion
+// here asserted the OLD pollution footgun, which is mathematically unsatisfiable for a
+// scalar select and contradicted this cluster's own narrowing assertions above — see
+// CL-07 batch-6 research notes.) The real guarantee (Ops isolates the operator object)
+// is asserted by `_wo3OpsCleanNotUnknown` below.
 type _bareUnionEqVal = ArticleWhere["status"] extends { eq?: infer V } ? V : never;
-type _wo3BareUnionIsPolluted = Expect<
-	Equal<[unknown] extends [_bareUnionEqVal] ? true : false, true>
->;
+type _wo3BareUnionNotPolluted = Expect<NoUnknown<_bareUnionEqVal>>;
 // Ops-guarded extraction (RIGHT approach) — clean, no `unknown` pollution.
 type _wo3OpsCleanNotUnknown = Expect<NoUnknown<StatusOps["eq"]>>;
 
