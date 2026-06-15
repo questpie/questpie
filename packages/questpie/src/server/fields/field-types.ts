@@ -20,6 +20,10 @@ import type {
 import type { FieldState } from "#questpie/server/fields/field-class-types.js";
 import type { Field } from "#questpie/server/fields/field-class.js";
 import type {
+	ArrayWhereInput,
+	ElementWhereValueOf,
+} from "#questpie/server/fields/operators/builtin.js";
+import type {
 	OperatorMap,
 	OperatorsToWhereInput,
 } from "#questpie/server/fields/types.js";
@@ -61,18 +65,37 @@ type V2FieldSelect<TState extends FieldState> = _IsAny<TState> extends true
 
 /**
  * Extract where clause type from Field<TState>.
- * Reads operators from the OperatorSetDefinition on TState.
  *
- * Delegates the mapped expansion to OperatorsToWhereInput so the (exact-key)
- * operator→input map is instantiated once per distinct operator SET (~10 exist)
- * instead of once per field state — sealed operator maps would otherwise
- * re-expand the full property list for every field × chain variant × depth.
+ * A field's where-input value is DECOUPLED from its stored `data` (CL-07):
+ *
+ *  1. When the field declares a `whereInput` map (op-name → filter value) it is
+ *     the source of truth (a select → its literal union, a typed json → its
+ *     shape), keyed straight through as `{ [K]?: whereInput[K] }`.
+ *  2. An `.array()` field derives its where-input LAZILY from its `innerState` —
+ *     `ArrayWhereInput` keyed off the inner element's scalar filter value, so a
+ *     `number[]` filters on `number` and a `datetime().array()` on `DateInput`
+ *     (NOT the stored `Date[]`). Deriving here, only on the where path, keeps the
+ *     element-value dig OUT of every array field's eager state intersection.
+ *  3. Otherwise we derive values from the OperatorSetDefinition on `operators`
+ *     (text/number/date/boolean/relation — dates stay `DateInput`). Delegating
+ *     that arm to OperatorsToWhereInput keeps the (exact-key) operator→input map
+ *     instantiated once per distinct operator SET (~10 exist), not per field.
  */
 type V2FieldWhere<TState extends FieldState> = TState extends {
-	operators: { column: infer TColumnOps extends OperatorMap };
+	whereInput: infer TWhere extends Record<string, unknown>;
 }
-	? OperatorsToWhereInput<TColumnOps>
-	: never;
+	? { [K in keyof TWhere]?: TWhere[K] }
+	: TState extends { isArray: true; innerState: infer TInner }
+		? {
+				[K in keyof ArrayWhereInput<ElementWhereValueOf<TInner>>]?: ArrayWhereInput<
+					ElementWhereValueOf<TInner>
+				>[K];
+			}
+		: TState extends {
+					operators: { column: infer TColumnOps extends OperatorMap };
+				}
+			? OperatorsToWhereInput<TColumnOps>
+			: never;
 
 // ============================================================================
 // FieldSelect — "what value does this field contribute to a row?"

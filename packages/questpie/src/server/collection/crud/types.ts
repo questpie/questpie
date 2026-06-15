@@ -582,7 +582,14 @@ type FieldWhereInputFromDefinition<
 > = TFieldDef extends { readonly _: infer TState extends { type: string } } // V2: Field<TState> dispatch via phantom _
 	? TState extends { type: "relation" | "upload" }
 		? V2RelationWhereResolved<TFieldDef, TState, TApp, Depth>
-		: FieldSelect<TFieldDef, TApp> | FieldWhere<TFieldDef, TApp>
+		: // The bare-value shorthand (`{ status: "x" }`) keeps only the NON-object
+			// members of the select type, so the operator object (FieldWhere) is the
+			// SOLE `object` member of this union. An object-typed direct value
+			// (`number[]`/`Date`/typed-json) would otherwise be indistinguishable from
+			// the operator object under `Extract<…, object>`, polluting operator key
+			// probes (WO-3). The operator object always carries `eq`, so dropping the
+			// object shorthand loses no real filtering capability.
+			Exclude<FieldSelect<TFieldDef, TApp>, object> | FieldWhere<TFieldDef, TApp>
 	: never;
 
 type WhereFieldsFromDefinitions<

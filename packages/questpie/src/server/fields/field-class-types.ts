@@ -64,6 +64,16 @@ export interface FieldState {
 	 * resolution need not declare an operator set to be a valid field state.
 	 */
 	operators?: OperatorSetDefinition;
+	/**
+	 * WHERE-input value map (operator name → filter value type), decoupled from
+	 * the stored `data` AND the runtime `operators` singleton. When present,
+	 * `V2FieldWhere` derives the field's where shape from this instead of the
+	 * operator-function param types — letting a `select` filter on its literal
+	 * union, a `number[]` on `number`, a typed json on its shape (CL-07).
+	 * Optional: fields whose singleton operators already carry the right value
+	 * (text/number/date/boolean/relation) omit it and keep the operator path.
+	 */
+	whereInput?: Record<string, unknown>;
 	/** Relation/upload target collection name (for type-level dispatch) */
 	relationTo?: string | Record<string, string>;
 	/** Relation kind: "one" (belongsTo/upload), "many" (hasMany/manyToMany) */

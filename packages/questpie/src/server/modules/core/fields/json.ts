@@ -13,6 +13,7 @@ import type { DefaultFieldState } from "../../../fields/field-class-types.js";
 import { field } from "../../../fields/field-class.js";
 import { fieldType, wrapFieldComplete } from "../../../fields/field-type.js";
 import { basicOps } from "../../../fields/operators/builtin.js";
+import type { JsonWhereInput } from "../../../fields/operators/builtin.js";
 
 declare global {
 	namespace Questpie {
@@ -52,6 +53,10 @@ export type JsonFieldState<TData extends JsonValue = JsonValue> = Omit<
 	data: TData;
 	column: PgJsonbBuilder;
 	operators: typeof basicOps;
+	// WHERE-input value is the json shape itself (eq/ne = TData, in/notIn =
+	// TData[]) — an untyped `f.json()` filters on `JsonValue`, NOT `unknown`
+	// (the runtime `basicOps` singleton's value floor). CL-07.
+	whereInput: JsonWhereInput<TData>;
 };
 
 /**
