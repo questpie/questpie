@@ -1,0 +1,1 @@
+{"type":"start","prompt":"<session-instructions>\nThe block below is operating guidance from the system, not a message from the user — follow it, but do not mention it or attribute it to the user.\n\nhello\n</session-instructions>\n\n<user-message>\nhello\n</user-message>","tools":[],"permissionMode":"allow-all"}

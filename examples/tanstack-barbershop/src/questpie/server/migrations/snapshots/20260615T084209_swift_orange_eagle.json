@@ -1,0 +1,1083 @@
+{
+  "operations": [
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__account__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "account"
+      },
+      "timestamp": "2026-06-15T08:42:09.922Z",
+      "migrationId": "swiftOrangeEagle20260615T084209"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__account__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "account"
+      },
+      "timestamp": "2026-06-15T08:42:09.922Z",
+      "migrationId": "swiftOrangeEagle20260615T084209"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__apikey__DOT__configId",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "'default'",
+        "generated": null,
+        "identity": null,
+        "name": "configId",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "apikey"
+      },
+      "timestamp": "2026-06-15T08:42:09.922Z",
+      "migrationId": "swiftOrangeEagle20260615T084209"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__apikey__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "apikey"
+      },
+      "timestamp": "2026-06-15T08:42:09.922Z",
+      "migrationId": "swiftOrangeEagle20260615T084209"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__apikey__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "apikey"
+      },
+      "timestamp": "2026-06-15T08:42:09.922Z",
+      "migrationId": "swiftOrangeEagle20260615T084209"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__assets__DOT__key",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "key",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "assets"
+      },
+      "timestamp": "2026-06-15T08:42:09.922Z",
+      "migrationId": "swiftOrangeEagle20260615T084209"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__assets__DOT__filename",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "filename",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "assets"
+      },
+      "timestamp": "2026-06-15T08:42:09.922Z",
+      "migrationId": "swiftOrangeEagle20260615T084209"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__assets__DOT__mime_type",
+      "value": {
+        "type": "varchar(100)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "mime_type",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "assets"
+      },
+      "timestamp": "2026-06-15T08:42:09.922Z",
+      "migrationId": "swiftOrangeEagle20260615T084209"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__assets__DOT__size",
+      "value": {
+        "type": "integer",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "size",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "assets"
+      },
+      "timestamp": "2026-06-15T08:42:09.922Z",
+      "migrationId": "swiftOrangeEagle20260615T084209"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__assets__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "assets"
+      },
+      "timestamp": "2026-06-15T08:42:09.922Z",
+      "migrationId": "swiftOrangeEagle20260615T084209"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__assets__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "assets"
+      },
+      "timestamp": "2026-06-15T08:42:09.922Z",
+      "migrationId": "swiftOrangeEagle20260615T084209"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__session__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "session"
+      },
+      "timestamp": "2026-06-15T08:42:09.922Z",
+      "migrationId": "swiftOrangeEagle20260615T084209"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__session__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "session"
+      },
+      "timestamp": "2026-06-15T08:42:09.922Z",
+      "migrationId": "swiftOrangeEagle20260615T084209"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__user__DOT__image",
+      "value": {
+        "type": "varchar(500)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "image",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "user"
+      },
+      "timestamp": "2026-06-15T08:42:09.922Z",
+      "migrationId": "swiftOrangeEagle20260615T084209"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__user__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "user"
+      },
+      "timestamp": "2026-06-15T08:42:09.922Z",
+      "migrationId": "swiftOrangeEagle20260615T084209"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__user__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "user"
+      },
+      "timestamp": "2026-06-15T08:42:09.922Z",
+      "migrationId": "swiftOrangeEagle20260615T084209"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__verification__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "verification"
+      },
+      "timestamp": "2026-06-15T08:42:09.922Z",
+      "migrationId": "swiftOrangeEagle20260615T084209"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__verification__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "verification"
+      },
+      "timestamp": "2026-06-15T08:42:09.922Z",
+      "migrationId": "swiftOrangeEagle20260615T084209"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_locks__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_locks"
+      },
+      "timestamp": "2026-06-15T08:42:09.922Z",
+      "migrationId": "swiftOrangeEagle20260615T084209"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_locks__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_locks"
+      },
+      "timestamp": "2026-06-15T08:42:09.922Z",
+      "migrationId": "swiftOrangeEagle20260615T084209"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_preferences__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_preferences"
+      },
+      "timestamp": "2026-06-15T08:42:09.922Z",
+      "migrationId": "swiftOrangeEagle20260615T084209"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_preferences__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_preferences"
+      },
+      "timestamp": "2026-06-15T08:42:09.922Z",
+      "migrationId": "swiftOrangeEagle20260615T084209"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_saved_views__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_saved_views"
+      },
+      "timestamp": "2026-06-15T08:42:09.922Z",
+      "migrationId": "swiftOrangeEagle20260615T084209"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_saved_views__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_saved_views"
+      },
+      "timestamp": "2026-06-15T08:42:09.922Z",
+      "migrationId": "swiftOrangeEagle20260615T084209"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_audit_log__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_audit_log"
+      },
+      "timestamp": "2026-06-15T08:42:09.922Z",
+      "migrationId": "swiftOrangeEagle20260615T084209"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_audit_log__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_audit_log"
+      },
+      "timestamp": "2026-06-15T08:42:09.922Z",
+      "migrationId": "swiftOrangeEagle20260615T084209"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__appointments__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "appointments"
+      },
+      "timestamp": "2026-06-15T08:42:09.922Z",
+      "migrationId": "swiftOrangeEagle20260615T084209"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__appointments__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "appointments"
+      },
+      "timestamp": "2026-06-15T08:42:09.922Z",
+      "migrationId": "swiftOrangeEagle20260615T084209"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__barber_services__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "barber_services"
+      },
+      "timestamp": "2026-06-15T08:42:09.922Z",
+      "migrationId": "swiftOrangeEagle20260615T084209"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__barber_services__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "barber_services"
+      },
+      "timestamp": "2026-06-15T08:42:09.922Z",
+      "migrationId": "swiftOrangeEagle20260615T084209"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__barbers__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "barbers"
+      },
+      "timestamp": "2026-06-15T08:42:09.922Z",
+      "migrationId": "swiftOrangeEagle20260615T084209"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__barbers__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "barbers"
+      },
+      "timestamp": "2026-06-15T08:42:09.922Z",
+      "migrationId": "swiftOrangeEagle20260615T084209"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__blog_posts__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "blog_posts"
+      },
+      "timestamp": "2026-06-15T08:42:09.922Z",
+      "migrationId": "swiftOrangeEagle20260615T084209"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__blog_posts__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "blog_posts"
+      },
+      "timestamp": "2026-06-15T08:42:09.922Z",
+      "migrationId": "swiftOrangeEagle20260615T084209"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__pages__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "pages"
+      },
+      "timestamp": "2026-06-15T08:42:09.922Z",
+      "migrationId": "swiftOrangeEagle20260615T084209"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__pages__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "pages"
+      },
+      "timestamp": "2026-06-15T08:42:09.922Z",
+      "migrationId": "swiftOrangeEagle20260615T084209"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__pages_versions__DOT__version_created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "version_created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "pages_versions"
+      },
+      "timestamp": "2026-06-15T08:42:09.922Z",
+      "migrationId": "swiftOrangeEagle20260615T084209"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__pages_versions__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "pages_versions"
+      },
+      "timestamp": "2026-06-15T08:42:09.922Z",
+      "migrationId": "swiftOrangeEagle20260615T084209"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__pages_versions__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "pages_versions"
+      },
+      "timestamp": "2026-06-15T08:42:09.922Z",
+      "migrationId": "swiftOrangeEagle20260615T084209"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__reviews__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "reviews"
+      },
+      "timestamp": "2026-06-15T08:42:09.922Z",
+      "migrationId": "swiftOrangeEagle20260615T084209"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__reviews__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "reviews"
+      },
+      "timestamp": "2026-06-15T08:42:09.922Z",
+      "migrationId": "swiftOrangeEagle20260615T084209"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__services__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "services"
+      },
+      "timestamp": "2026-06-15T08:42:09.922Z",
+      "migrationId": "swiftOrangeEagle20260615T084209"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__services__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "services"
+      },
+      "timestamp": "2026-06-15T08:42:09.922Z",
+      "migrationId": "swiftOrangeEagle20260615T084209"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings"
+      },
+      "timestamp": "2026-06-15T08:42:09.922Z",
+      "migrationId": "swiftOrangeEagle20260615T084209"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings"
+      },
+      "timestamp": "2026-06-15T08:42:09.922Z",
+      "migrationId": "swiftOrangeEagle20260615T084209"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_i18n__DOT__navigation",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'[{\"label\":\"Home\",\"href\":\"/\",\"isExternal\":false},{\"label\":\"Services\",\"href\":\"/services\",\"isExternal\":false},{\"label\":\"Our Team\",\"href\":\"/barbers\",\"isExternal\":false},{\"label\":\"Contact\",\"href\":\"/contact\",\"isExternal\":false}]'",
+        "generated": null,
+        "identity": null,
+        "name": "navigation",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_i18n"
+      },
+      "timestamp": "2026-06-15T08:42:09.922Z",
+      "migrationId": "swiftOrangeEagle20260615T084209"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_i18n__DOT__footerLinks",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'[{\"label\":\"Services\",\"href\":\"/services\",\"isExternal\":false},{\"label\":\"Our Team\",\"href\":\"/barbers\",\"isExternal\":false},{\"label\":\"Contact\",\"href\":\"/contact\",\"isExternal\":false},{\"label\":\"Privacy Policy\",\"href\":\"/privacy\",\"isExternal\":false}]'",
+        "generated": null,
+        "identity": null,
+        "name": "footerLinks",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_i18n"
+      },
+      "timestamp": "2026-06-15T08:42:09.922Z",
+      "migrationId": "swiftOrangeEagle20260615T084209"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__version_created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "version_created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-06-15T08:42:09.922Z",
+      "migrationId": "swiftOrangeEagle20260615T084209"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-06-15T08:42:09.922Z",
+      "migrationId": "swiftOrangeEagle20260615T084209"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-06-15T08:42:09.922Z",
+      "migrationId": "swiftOrangeEagle20260615T084209"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_i18n_versions__DOT__navigation",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'[{\"label\":\"Home\",\"href\":\"/\",\"isExternal\":false},{\"label\":\"Services\",\"href\":\"/services\",\"isExternal\":false},{\"label\":\"Our Team\",\"href\":\"/barbers\",\"isExternal\":false},{\"label\":\"Contact\",\"href\":\"/contact\",\"isExternal\":false}]'",
+        "generated": null,
+        "identity": null,
+        "name": "navigation",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_i18n_versions"
+      },
+      "timestamp": "2026-06-15T08:42:09.922Z",
+      "migrationId": "swiftOrangeEagle20260615T084209"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_i18n_versions__DOT__footerLinks",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'[{\"label\":\"Services\",\"href\":\"/services\",\"isExternal\":false},{\"label\":\"Our Team\",\"href\":\"/barbers\",\"isExternal\":false},{\"label\":\"Contact\",\"href\":\"/contact\",\"isExternal\":false},{\"label\":\"Privacy Policy\",\"href\":\"/privacy\",\"isExternal\":false}]'",
+        "generated": null,
+        "identity": null,
+        "name": "footerLinks",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_i18n_versions"
+      },
+      "timestamp": "2026-06-15T08:42:09.922Z",
+      "migrationId": "swiftOrangeEagle20260615T084209"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_realtime_log__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_realtime_log"
+      },
+      "timestamp": "2026-06-15T08:42:09.922Z",
+      "migrationId": "swiftOrangeEagle20260615T084209"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_search__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_search"
+      },
+      "timestamp": "2026-06-15T08:42:09.922Z",
+      "migrationId": "swiftOrangeEagle20260615T084209"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_search__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_search"
+      },
+      "timestamp": "2026-06-15T08:42:09.922Z",
+      "migrationId": "swiftOrangeEagle20260615T084209"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_search_facets__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_search_facets"
+      },
+      "timestamp": "2026-06-15T08:42:09.922Z",
+      "migrationId": "swiftOrangeEagle20260615T084209"
+    },
+    {
+      "type": "set",
+      "path": "extensions.pg_trgm",
+      "value": {
+        "name": "pg_trgm",
+        "statement": "CREATE EXTENSION IF NOT EXISTS \"pg_trgm\";"
+      },
+      "timestamp": "2026-06-15T08:42:09.925Z",
+      "migrationId": "swiftOrangeEagle20260615T084209"
+    }
+  ],
+  "metadata": {
+    "migrationId": "swiftOrangeEagle20260615T084209",
+    "timestamp": "2026-06-15T08:42:10.016Z",
+    "prevId": "00000000-0000-0000-0000-000000000000"
+  }
+}

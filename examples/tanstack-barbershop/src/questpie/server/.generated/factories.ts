@@ -3,7 +3,7 @@
 // Typed factory functions with plugin extensions. Regenerate with: questpie generate
 
 // ── Core Imports ───────────────────────────────────────────
-import { CollectionBuilder, GlobalBuilder, wrapBuilderWithExtensions, builtinFields, type EmptyCollectionState, type EmptyGlobalState, type BuiltinFields, type CollectionBuilderState, type GlobalBuilderState, type FieldState, Field } from "questpie/builders";
+import { CollectionBuilder, GlobalBuilder, wrapBuilderWithExtensions, builtinFields, type EmptyCollectionState, type EmptyGlobalState, type BuiltinFields, Field } from "questpie/builders";
 
 // ── Runtime Field Imports ──────────────────────────────────
 import { adminFields } from "@questpie/admin/fields";
@@ -32,15 +32,6 @@ const _allFieldDefs = Object.fromEntries(
 	Object.entries(_rawFieldDefs).map(([k, v]) => [k, _wrapFieldFactory(v)])
 ) as unknown as typeof _rawFieldDefs;
 
-// ── Entity key registry (names only — acyclic by construction) ─────
-declare global {
-	namespace Questpie {
-		interface CollectionKeys { appointments: unknown; barber_services: unknown; barbers: unknown; blog_posts: unknown; pages: unknown; reviews: unknown; services: unknown }
-		interface GlobalKeys { site_settings: unknown }
-		interface JobKeys { notifyBlogSubscribers: unknown; sendAppointmentCancellation: unknown; sendAppointmentConfirmation: unknown; sendAppointmentReminder: unknown }
-	}
-}
-
 // ── Plugin Imports ─────────────────────────────────────────
 import { type AdminCollectionConfig, type AdminConfigContext, type ListViewConfig, type ListViewConfigContext, type FilterViewsByKind, type FormViewConfig, type FormViewConfigContext, type PreviewConfig, type ServerActionsConfig, type ActionsConfigContext, type AdminGlobalConfig, type AdminConfigInput, createViewCallbackProxy, createComponentCallbackProxy, createActionCallbackProxy, createActionFieldBuilderProxy } from "@questpie/admin/factories";
 import { type AppConfigInput, type AuthConfig } from "questpie/types";
@@ -65,19 +56,19 @@ type _AllFieldTypes = Questpie.FieldTypesMap;
 // Type augmentations — generated from plugin registries
 // ════════════════════════════════════════════════════════════
 
-declare module "questpie/builders" {
-	interface CollectionBuilder<TState extends CollectionBuilderState> {
+declare module "questpie" {
+	interface CollectionBuilder<TState> {
 		admin(configFn: AdminCollectionConfig | ((ctx: AdminConfigContext<_ComponentsRecord>) => AdminCollectionConfig)): CollectionBuilder<TState>;
 		list(configFn: (ctx: ListViewConfigContext<TState extends { fieldDefinitions: infer F extends Record<string, unknown> } ? F : Record<string, unknown>, FilterViewsByKind<_ViewsRecord, "list">, _ComponentsRecord>) => ListViewConfig): CollectionBuilder<TState>;
 		form(configFn: (ctx: FormViewConfigContext<TState extends { fieldDefinitions: infer F extends Record<string, unknown> } ? F : Record<string, unknown>, FilterViewsByKind<_ViewsRecord, "form">>) => FormViewConfig): CollectionBuilder<TState>;
 		preview(config: PreviewConfig): CollectionBuilder<TState>;
 		actions(configFn: (ctx: ActionsConfigContext<Record<string, unknown>, _ComponentsRecord>) => ServerActionsConfig): CollectionBuilder<TState>;
 	}
-	interface GlobalBuilder<TState extends GlobalBuilderState> {
+	interface GlobalBuilder<TState> {
 		admin(configFn: AdminGlobalConfig | ((ctx: AdminConfigContext<_ComponentsRecord>) => AdminGlobalConfig)): GlobalBuilder<TState>;
 		form(configFn: (ctx: FormViewConfigContext<TState extends { fieldDefinitions: infer F extends Record<string, unknown> } ? F : Record<string, unknown>, FilterViewsByKind<_ViewsRecord, "form">>) => FormViewConfig): GlobalBuilder<TState>;
 	}
-	interface Field<TState extends FieldState = FieldState> {
+	interface Field<TState> {
 		admin(config: unknown): Field<TState>;
 		form(configFn: (ctx: { f: Record<string, string> }) => { fields: import('@questpie/admin/factories').FieldLayoutItem[] }): Field<TState>;
 	}
