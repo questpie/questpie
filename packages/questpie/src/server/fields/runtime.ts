@@ -1,4 +1,4 @@
-import type { RequestContext } from "#questpie/server/config/context.js";
+import type { BaseRequestContext } from "#questpie/server/config/context.js";
 import type { FieldState } from "#questpie/server/fields/field-class-types.js";
 import type { Field } from "#questpie/server/fields/field-class.js";
 import type {
@@ -10,7 +10,7 @@ type RuntimeOperation = "create" | "read" | "update";
 
 type FieldDefinitionsMap = Record<string, Field<FieldState>>;
 
-function getRequest(context: RequestContext): Request | undefined {
+function getRequest(context: BaseRequestContext): Request | undefined {
 	const maybeReq = (context as any).req ?? (context as any).request;
 	if (maybeReq instanceof Request) {
 		return maybeReq;
@@ -23,7 +23,7 @@ function createFieldHookContext(params: {
 	fieldName: string;
 	collectionName: string;
 	operation: RuntimeOperation;
-	context: RequestContext;
+	context: BaseRequestContext;
 	db: any;
 	config: Record<string, unknown>;
 	document: Record<string, unknown>;
@@ -49,7 +49,7 @@ export async function applyFieldInputHooks(params: {
 	fieldDefinitions: FieldDefinitionsMap | undefined;
 	collectionName: string;
 	operation: "create" | "update";
-	context: RequestContext;
+	context: BaseRequestContext;
 	db: any;
 	originalDocument?: Record<string, unknown>;
 }): Promise<Record<string, unknown>> {
@@ -108,7 +108,7 @@ export async function applyFieldOutputHooks(params: {
 	fieldDefinitions: FieldDefinitionsMap | undefined;
 	collectionName: string;
 	operation: RuntimeOperation;
-	context: RequestContext;
+	context: BaseRequestContext;
 	db: any;
 	originalDocument?: Record<string, unknown>;
 }): Promise<void> {

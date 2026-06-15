@@ -152,6 +152,38 @@ export const dateOps = operatorSet({
 	},
 });
 
+/**
+ * Operators for `date` fields (ISO date STRINGS, column mode "string").
+ *
+ * Unlike `dateOps` (operand `DateInput = Date | string`, used by datetime/time
+ * whose `data` is `Date`), a `date` field's `data` is `string` and its zod
+ * schema (`z.string().date()`) rejects both `Date` objects and full-ISO strings.
+ * So its WHERE operand is narrowed to `string` — establishing create === where
+ * symmetry on `string` (CL-11 sub-fix B). Runtime comparisons are identical to
+ * `dateOps`; only the type-level operand differs.
+ */
+export const dateStringOps = operatorSet({
+	jsonbCast: "timestamp",
+	column: {
+		eq: operator<string, unknown>((col, value) => eq(col, value)),
+		ne: operator<string, unknown>((col, value) => ne(col, value)),
+		gt: operator<string, unknown>((col, value) => gt(col, value)),
+		gte: operator<string, unknown>((col, value) => gte(col, value)),
+		lt: operator<string, unknown>((col, value) => lt(col, value)),
+		lte: operator<string, unknown>((col, value) => lte(col, value)),
+		in: operator<string[], unknown>((col, values) => inArray(col, values)),
+		notIn: operator<string[], unknown>((col, values) =>
+			notInArray(col, values),
+		),
+		isNull: operator<boolean, unknown>((col, value) =>
+			value ? isNull(col) : isNotNull(col),
+		),
+		isNotNull: operator<boolean, unknown>((col, value) =>
+			value ? isNotNull(col) : isNull(col),
+		),
+	},
+});
+
 // ============================================================================
 // Email Operators
 // ============================================================================

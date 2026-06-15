@@ -1,4 +1,4 @@
-import type { AppContextBase } from "#questpie/server/config/app-context-base.js";
+import type { ResolvedAppHookContext } from "#questpie/server/config/app-context.js";
 import type { AccessMode } from "#questpie/server/config/types.js";
 
 // ============================================================================
@@ -37,10 +37,10 @@ export type GlobalCollectionHookContextFields<
 
 /**
  * Context passed to global collection hooks.
- * Extends {@link AppContextBase}; generated apps augment full {@link AppContext} separately.
+ * Extends the lazy {@link ResolvedAppHookContext} infra seam; generated apps fill it (and augment full {@link AppContext}) separately.
  */
 export type GlobalCollectionHookContext<TData = any, TOriginal = any> =
-	GlobalCollectionHookContextFields<TData, TOriginal> & AppContextBase;
+	GlobalCollectionHookContextFields<TData, TOriginal> & ResolvedAppHookContext;
 
 /**
  * Context passed to global collection hooks before the collection name is injected.
@@ -49,7 +49,7 @@ export type GlobalCollectionHookContextInput<
 	TData = any,
 	TOriginal = any,
 > = Omit<GlobalCollectionHookContextFields<TData, TOriginal>, "collection"> &
-	AppContextBase;
+	ResolvedAppHookContext;
 
 /** Hook-specific fields for global collection transition hooks. */
 export type GlobalCollectionTransitionHookContextFields<TData = any> = {
@@ -71,7 +71,7 @@ export type GlobalCollectionTransitionHookContextFields<TData = any> = {
  * Context passed to global collection transition hooks.
  */
 export type GlobalCollectionTransitionHookContext<TData = any> =
-	GlobalCollectionTransitionHookContextFields<TData> & AppContextBase;
+	GlobalCollectionTransitionHookContextFields<TData> & ResolvedAppHookContext;
 
 /**
  * Context passed to global collection transition hooks before the collection name is injected.
@@ -80,7 +80,7 @@ export type GlobalCollectionTransitionHookContextInput<TData = any> = Omit<
 	GlobalCollectionTransitionHookContextFields<TData>,
 	"collection"
 > &
-	AppContextBase;
+	ResolvedAppHookContext;
 
 /**
  * A single global collection hook entry with optional include/exclude filters.
@@ -126,7 +126,7 @@ export type GlobalGlobalHookContextFields<TData = any> = {
  * Context passed to global global hooks.
  */
 export type GlobalGlobalHookContext<TData = any> =
-	GlobalGlobalHookContextFields<TData> & AppContextBase;
+	GlobalGlobalHookContextFields<TData> & ResolvedAppHookContext;
 
 /**
  * Context passed to global global hooks before the global name is injected.
@@ -135,7 +135,7 @@ export type GlobalGlobalHookContextInput<TData = any> = Omit<
 	GlobalGlobalHookContextFields<TData>,
 	"global"
 > &
-	AppContextBase;
+	ResolvedAppHookContext;
 
 /** Hook-specific fields for global global transition hooks. */
 export type GlobalGlobalTransitionHookContextFields<TData = any> = {
@@ -155,7 +155,7 @@ export type GlobalGlobalTransitionHookContextFields<TData = any> = {
  * Context passed to global global transition hooks.
  */
 export type GlobalGlobalTransitionHookContext<TData = any> =
-	GlobalGlobalTransitionHookContextFields<TData> & AppContextBase;
+	GlobalGlobalTransitionHookContextFields<TData> & ResolvedAppHookContext;
 
 /**
  * Context passed to global global transition hooks before the global name is injected.
@@ -164,7 +164,7 @@ export type GlobalGlobalTransitionHookContextInput<TData = any> = Omit<
 	GlobalGlobalTransitionHookContextFields<TData>,
 	"global"
 > &
-	AppContextBase;
+	ResolvedAppHookContext;
 
 /**
  * A single global global hook entry with optional include/exclude filters.

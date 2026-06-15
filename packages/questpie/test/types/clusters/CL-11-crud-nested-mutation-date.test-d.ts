@@ -134,16 +134,20 @@ declare const app: QuestpieApp;
 void app.collections.articles.create({
 	title: "Hello",
 	slug: "hello",
+	tagList: ["a"],
 	author: { connect: { id: "author-1" } },
 });
 
-// --- A.1  TOP-LEVEL excess key is rejected TODAY (positive control, green). ---
-// Documents the asymmetry the cluster fixes: top-level freshness already works
-// (single object type), so this directive is USED today and must stay green.
+// --- A.1  TOP-LEVEL excess key is rejected (positive control). ---
+// Restored by the `ForbidExcessKeys` (`Exact`) guard on the create parameter —
+// generic capture (`create<TInput …>`) had defeated plain excess checks at the
+// top level too; this directive is USED once the guard lands and must stay green.
 void app.collections.articles.create({
 	title: "Hello",
 	slug: "hello",
-	// @ts-expect-error — excess key rejected at top level (single object type).
+	tagList: ["a"],
+	author: "author-1",
+	// @ts-expect-error — excess key rejected at top level (Exact guard).
 	phantomTop: 1,
 });
 
@@ -155,6 +159,8 @@ void app.collections.articles.create({
 void app.collections.articles.create({
 	title: "Hello",
 	slug: "hello",
+	tagList: ["a"],
+	author: "author-1",
 	comments: {
 		create: { content: "hi", article: "a-1", author: "author-1" },
 	},
@@ -170,6 +176,8 @@ void app.collections.articles.create({
 void app.collections.articles.create({
 	title: "Hello",
 	slug: "hello",
+	tagList: ["a"],
+	author: "author-1",
 	comments: {
 		create: {
 			content: "hi",
@@ -185,6 +193,8 @@ void app.collections.articles.create({
 void app.collections.articles.create({
 	title: "Hello",
 	slug: "hello",
+	tagList: ["a"],
+	author: "author-1",
 	comments: {
 		connectOrCreate: {
 			where: { id: "c-1" },
@@ -204,6 +214,8 @@ void app.collections.articles.create({
 void app.collections.articles.create({
 	title: "Hello",
 	slug: "hello",
+	tagList: ["a"],
+	author: "author-1",
 	comments: {
 		create: {
 			content: "hi",
@@ -232,8 +244,11 @@ type _commentsMemberNotNever = Expect<NoNever<CommentsCreateMember>>;
 void app.collections.articles.create({
 	title: "Hello",
 	slug: "hello",
+	tagList: ["a"],
+	author: "author-1",
 	meta: {
 		seoTitle: "t",
+		seoDescription: "d",
 		featured: true,
 		keywords: ["a", "b"],
 	},
@@ -355,12 +370,15 @@ type PublishedAtCreate = ArticleCreate extends { publishedAt?: infer D }
 	: never; // f.datetime()  → Date
 
 // --- Date / datetime WHERE operator-operand types (off the real where surface). ---
+// A scalar field's collection-level where value is `FieldSelect | FieldWhere`
+// (the operator OBJECT unioned with the bare-value shorthand: `where:{ d:"…" }`).
+// Isolate the operator-object arm (the one carrying `gte`) before reading operands.
 type ArticleWhere = WhereType<App["collections"]["articles"], App>;
 type PublishedOnWhereOps = ArticleWhere extends { publishedOn?: infer O }
-	? NonNullable<O>
+	? Extract<NonNullable<O>, { gte?: unknown }>
 	: never;
 type PublishedAtWhereOps = ArticleWhere extends { publishedAt?: infer O }
-	? NonNullable<O>
+	? Extract<NonNullable<O>, { gte?: unknown }>
 	: never;
 type PublishedOnWhereVal = PublishedOnWhereOps extends { gte?: infer V }
 	? V

@@ -129,9 +129,15 @@ type _paramsRoundTrip = Expect<Equal<KeyedParams["postId"], string>>;
 // ContextResolverParams — lazy off AppContext, loose fallback pre-codegen
 // ============================================================================
 
-// Pre-codegen (AppContext not augmented in this package) the fallbacks apply:
+// Pre-codegen (the `Questpie.ContextResolverBase` seam not yet filled) the
+// loose-but-NOT-`any` fallback applies (CL-05 cyc-4): `session`/`db` route
+// through the dedicated `ResolvedContextResolverBase` seam — no longer the full
+// augmented `AppContext` (which held a live re-cycle) and no longer the old
+// blanket `any`. Pre-codegen they degrade to `unknown`, never `any`.
 type ResolverSession = ContextResolverParams["session"];
 type _sessionFallback = Expect<
 	Extends<{ user: { id: string }; session: {} } | null, ResolverSession>
 >;
-type _dbFallbackIsAny = Expect<Equal<ContextResolverParams["db"], any>>;
+type _dbFallbackIsUnknownNotAny = Expect<
+	Equal<ContextResolverParams["db"], unknown>
+>;

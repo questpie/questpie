@@ -1,6 +1,6 @@
 import type { CollectionBuilder } from "#questpie/server/collection/builder/collection-builder.js";
 import type { Collection } from "#questpie/server/collection/builder/collection.js";
-import type { AppContext } from "#questpie/server/config/app-context.js";
+import type { ResolvedContextResolverBase } from "#questpie/server/config/app-context.js";
 import type {
 	CollectionAccess,
 	ExtractFieldsByLocation,
@@ -710,11 +710,11 @@ export interface ContextResolverParams {
 	/** The incoming HTTP request */
 	request: Request;
 	/** The resolved session (may be null if unauthenticated) */
-	session: AppContext extends { session: infer S }
+	session: ResolvedContextResolverBase extends { session: infer S }
 		? S
 		: { user: any; session: any } | null | undefined;
 	/** Database client for queries */
-	db: AppContext extends { db: infer D } ? D : any;
+	db: ResolvedContextResolverBase extends { db: infer D } ? D : any;
 }
 
 /**
@@ -751,3 +751,23 @@ export type ContextResolver<
 > = (
 	params: ContextResolverParams & Questpie.ContextResolverContext,
 ) => Promise<T> | T;
+
+/**
+ * Validate a `appConfig({ context })` resolver: its return, once awaited and
+ * stripped of `null`/`undefined`, must be a non-empty object. A resolver that
+ * resolves to ONLY a primitive (`async () => "x"`) or ONLY `null`
+ * (`async () => null`) is rejected — extensions can only be an object bundle.
+ * The common `session ? { role } : null` shape passes (it has an object arm).
+ *
+ * Resolves to the original resolver type on success, or a branded
+ * non-callable on failure so the `context` member stops type-checking.
+ */
+export type ValidateContextResolver<TResolver> = TResolver extends (
+	...args: any[]
+) => infer TResult
+	? [NonNullable<Awaited<TResult>>] extends [never]
+		? { "~invalidContextResolver": "resolver must return an object" }
+		: NonNullable<Awaited<TResult>> extends Record<string, any>
+			? TResolver
+			: { "~invalidContextResolver": "resolver must return an object" }
+	: TResolver;

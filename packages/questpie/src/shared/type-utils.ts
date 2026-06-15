@@ -496,10 +496,22 @@ export type ResolveRelations<
 			: never;
 };
 
+/**
+ * Single relation-recursion depth policy (CL-14, STEP B).
+ *
+ * Both relation cycle-breakers — the legacy `ResolveRelationsDeep` (globals +
+ * client) and the app-aware `ResolveRelationsDeepFromApp` (server collections,
+ * crud/types.ts) — share THIS one constant so their exhaustion caps cannot
+ * drift again. Previously the legacy resolver capped at `[1,1,1,1,1]` (5) while
+ * the app-aware one capped at `[1,1,1]` (3); that silent split is the cyc-7
+ * finding. The unified cap is the (lower) server value `[1,1,1]`.
+ */
+export type RelationDepth = [1, 1, 1];
+
 export type ResolveRelationsDeep<
 	TRelations extends Record<string, RelationConfig>,
 	TCollections extends Record<string, AnyCollectionOrBuilder>,
-	Depth extends unknown[] = [1, 1, 1, 1, 1],
+	Depth extends unknown[] = RelationDepth,
 > = {
 	[K in keyof TRelations]: TRelations[K] extends {
 		type: "many" | "manyToMany";

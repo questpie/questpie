@@ -638,7 +638,12 @@ export function generateTemplate(options: TemplateOptions): string {
 		lines.push(
 			"// ── AppContext augmentation — auto-types ALL handlers ──────",
 		);
-		lines.push("type _AppCoreContext = _AppContextExtensions & {");
+		// _AppInfraContext = the full infra surface WITHOUT _AppContextExtensions.
+		// Shared by AppContext (via _AppCoreContext) AND the app-level hook/access
+		// ctx seams (AppHookContext/AppDefaultAccessContext). Excluding the
+		// extensions keeps those seams OFF the cyclic edge
+		// (AppContext → extensions → typeof appConfig → AppHookContext → ...).
+		lines.push("type _AppInfraContext = {");
 		lines.push("\t// Infrastructure");
 		lines.push("\tapp: _AppQuestpie;");
 		lines.push("\tdb: _AppDb;");
@@ -676,6 +681,7 @@ export function generateTemplate(options: TemplateOptions): string {
 			lines.push("\tservices: _AppDefaultServices;");
 		}
 		lines.push("} & _AppCustomServiceNamespaces;");
+		lines.push("type _AppCoreContext = _AppContextExtensions & _AppInfraContext;");
 		lines.push("");
 		lines.push("declare global {");
 		lines.push("\tnamespace Questpie {");
@@ -798,6 +804,31 @@ export function generateTemplate(options: TemplateOptions): string {
 		if (hasServices) {
 			lines.push("\t\t\tservices: _AppDefaultServices;");
 		}
+		lines.push("\t\t}");
+		lines.push("");
+		lines.push(
+			"\t\t// App-level hook / default-access ctx infra seams (CL-05).",
+		);
+		lines.push(
+			"\t\t// Filled with the real infra MINUS _AppContextExtensions, so the",
+		);
+		lines.push(
+			"\t\t// app-level hooks/access predicates get precise db/session/",
+		);
+		lines.push(
+			"\t\t// collections/globals/queue WITHOUT re-entering the extensions cycle.",
+		);
+		lines.push("\t\tinterface AppHookContext extends _AppInfraContext {}");
+		lines.push(
+			"\t\tinterface AppDefaultAccessContext extends _AppInfraContext {}",
+		);
+		lines.push("");
+		lines.push(
+			"\t\t// appConfig({ context }) resolver session/db — off the cyclic edge.",
+		);
+		lines.push("\t\tinterface ContextResolverBase {");
+		lines.push("\t\t\tsession: _AppSession;");
+		lines.push("\t\t\tdb: _AppDb;");
 		lines.push("\t\t}");
 
 		// Registry — ALL registryKey categories + ~-prefixed singles augmented centrally.

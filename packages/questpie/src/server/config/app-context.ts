@@ -64,6 +64,33 @@ declare global {
 		interface ContextResolverContext {}
 
 		/**
+		 * Lazy infra seam for app-level lifecycle-hook ctx (`appConfig({ hooks })`).
+		 * Empty by default — the root codegen template fills it with the real
+		 * infra surface (db/session/collections/globals/queue/...), DELIBERATELY
+		 * excluding `_AppContextExtensions` so the seam stays off the cyclic edge
+		 * (`AppContext → extensions → typeof appConfig → ...`). Pre-codegen it is
+		 * empty and consumers fall back to {@link ResolvedAppHookContext}'s loose
+		 * (non-`any`) default — strictly better than the old all-`any`
+		 * `AppContextBase`.
+		 */
+		interface AppHookContext {}
+
+		/**
+		 * Lazy infra seam for app-level default-access-rule ctx
+		 * (`appConfig({ access })`). Filled by codegen with the real infra
+		 * surface. @see AppHookContext
+		 */
+		interface AppDefaultAccessContext {}
+
+		/**
+		 * Lazy seam for the `appConfig({ context })` resolver's own
+		 * `session`/`db` params. Filled by codegen with the real session/db so
+		 * `ContextResolverParams` no longer threads the full augmented
+		 * `AppContext` (which re-enters the augmentation cycle). @see AppHookContext
+		 */
+		interface ContextResolverBase {}
+
+		/**
 		 * Names-only collection key registry — acyclic by construction.
 		 *
 		 * Codegen emits `interface CollectionKeys { posts: unknown; ... }` from
@@ -80,6 +107,68 @@ declare global {
 		interface JobKeys {}
 	}
 }
+
+/**
+ * Loose-but-not-`any` infra default for the app-level ctx seams. Used by the
+ * `Resolved*` helpers below ONLY pre-codegen (when the lazy seam is still
+ * empty). Entity/request members are `unknown` (never `any`) so the degraded
+ * shape stays type-safe (a typo'd `session.user.rOle` is `unknown`, not
+ * silently allowed). The always-initialized core services
+ * (`logger`/`search`/`realtime`) carry their concrete base types so first-party
+ * module hooks (`modules/core/config/app.ts`) keep type-checking pre-codegen.
+ * Once codegen fills the seam, the precise members replace ALL of these.
+ */
+export interface AppCtxInfraDefault {
+	app?: unknown;
+	db?: unknown;
+	session?: unknown;
+	queue?: unknown;
+	email?: unknown;
+	storage?: unknown;
+	kv?: unknown;
+	executor?: unknown;
+	logger?: import("#questpie/server/modules/core/integrated/logger/service.js").LoggerService;
+	search?: import("#questpie/server/modules/core/integrated/search/types.js").SearchService;
+	realtime?: import("#questpie/server/modules/core/integrated/realtime/service.js").RealtimeService;
+	collections?: unknown;
+	globals?: unknown;
+	tables?: unknown;
+	t?: unknown;
+	services?: Record<string, unknown>;
+	workflows?: unknown;
+}
+
+/**
+ * Resolve the app-level hook ctx infra: the codegen-filled
+ * {@link Questpie.AppHookContext} seam when present, else the loose
+ * (non-`any`) {@link AppCtxInfraDefault}. This is the precise replacement for
+ * the all-`any` `AppContextBase` the hook/access surfaces used as a cycle-break.
+ */
+export type ResolvedAppHookContext = [
+	keyof Questpie.AppHookContext,
+] extends [never]
+	? AppCtxInfraDefault
+	: Questpie.AppHookContext;
+
+/** Resolve the app-level default-access ctx infra. @see ResolvedAppHookContext */
+export type ResolvedAppDefaultAccessContext = [
+	keyof Questpie.AppDefaultAccessContext,
+] extends [never]
+	? AppCtxInfraDefault
+	: Questpie.AppDefaultAccessContext;
+
+/**
+ * Resolve the context-resolver's own `session`/`db` params: the codegen-filled
+ * {@link Questpie.ContextResolverBase} seam when present, else the loose
+ * (non-`any`) default. Replaces routing through the full augmented `AppContext`,
+ * which held a live `AppContext → extensions → typeof appConfig →
+ * ContextResolverParams → AppContext` loop.
+ */
+export type ResolvedContextResolverBase = [
+	keyof Questpie.ContextResolverBase,
+] extends [never]
+	? { session: unknown; db: unknown }
+	: Questpie.ContextResolverBase;
 
 /**
  * Base handler context — shared by global hooks and other pre-codegen handlers.
@@ -208,7 +297,7 @@ export function extractAppServices(
 		scope?: import("#questpie/server/config/request-scope.js").RequestScope;
 	},
 ): AppContext {
-	if (!app) return { db: overrides?.db } as AppContext;
+	if (!app) return { db: overrides?.db } as unknown as AppContext;
 	const result: ExtractAppServicesBase & Record<string, unknown> = {
 		app,
 		db: overrides?.db ?? app.db,

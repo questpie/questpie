@@ -9,7 +9,7 @@ import type { DefaultFieldState } from "../../../fields/field-class-types.js";
 import { field, Field } from "../../../fields/field-class.js";
 import { fieldType, wrapFieldComplete } from "../../../fields/field-type.js";
 import type { FieldWithMethods } from "../../../fields/field-with-methods.js";
-import { dateOps } from "../../../fields/operators/builtin.js";
+import { dateStringOps } from "../../../fields/operators/builtin.js";
 
 declare global {
 	namespace Questpie {
@@ -25,7 +25,7 @@ export type DateFieldState = Omit<DefaultFieldState, "operators"> & {
 	type: "date";
 	data: string;
 	column: PgDateStringBuilder;
-	operators: typeof dateOps;
+	operators: typeof dateStringOps;
 };
 
 export interface DateFieldMethods {
@@ -47,7 +47,7 @@ export function date(): FieldWithMethods<DateFieldState, DateFieldMethods> {
 		type: "date",
 		columnFactory: (name) => pgDate(name, { mode: "string" }),
 		schemaFactory: () => z.string().date(),
-		operatorSet: dateOps,
+		operatorSet: dateStringOps,
 		notNull: false,
 		hasDefault: false,
 		localized: false,
@@ -65,7 +65,7 @@ export const dateFieldType = fieldType("date", {
 		type: "date",
 		columnFactory: (name: string) => pgDate(name, { mode: "string" }),
 		schemaFactory: () => z.string().date(),
-		operatorSet: dateOps,
+		operatorSet: dateStringOps,
 		notNull: false,
 		hasDefault: false,
 		localized: false,

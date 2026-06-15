@@ -347,13 +347,21 @@ type _globSentinelIsNever = Expect<IsNever<GlobSentinel>>;
 type _sentinelsEqual = Expect<Equal<ColSentinel, GlobSentinel>>;
 
 // Neither sentinel is a branded object — a `{ __depthExhausted: … }` brand
-// would give it a key and FAIL these. Encodes "STEP C stays DROPPED".
-type _colSentinelNotBranded = Expect<
-	Equal<HasKey<ColSentinel, "__depthExhausted">, false>
->;
-type _globSentinelNotBranded = Expect<
-	Equal<HasKey<GlobSentinel, "__depthExhausted">, false>
->;
+// (STEP C) would carry that key and FAIL these. Encodes "STEP C stays DROPPED".
+//
+// `HasKey` is NOT `never`-safe on the negative side: `keyof never` is the
+// universal key set, so `HasKey<never, K>` is `true` for ANY `K`. The bare
+// `never` sentinel (which §4 above pins via `IsNever`) must therefore be
+// short-circuited BEFORE the key probe — otherwise this assertion is
+// unsatisfiable for the very `never` sentinel the design mandates. The probe
+// still bites if STEP C is re-introduced: a real `{ __depthExhausted: … }`
+// object is not `never`, so it falls through to the `HasKey === false` check
+// and fails loudly.
+type NotDepthBranded<T> = IsNever<T> extends true
+	? true
+	: Equal<HasKey<T, "__depthExhausted">, false>;
+type _colSentinelNotBranded = Expect<NotDepthBranded<ColSentinel>>;
+type _globSentinelNotBranded = Expect<NotDepthBranded<GlobSentinel>>;
 
 // ============================================================================
 // §5 — GetCollection / DIST-003 (proposal regression test #5; STEP D).

@@ -42,8 +42,8 @@ export type InferContextExtensionsFromAppConfig<TAppConfig> =
 		context?: infer TContext;
 	}
 		? TContext extends (...args: any[]) => infer TResult
-			? Awaited<TResult> extends Record<string, any>
-				? Awaited<TResult>
+			? NonNullable<Awaited<TResult>> extends Record<string, any>
+				? NonNullable<Awaited<TResult>>
 				: {}
 			: {}
 		: {};

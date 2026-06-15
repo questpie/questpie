@@ -54,7 +54,8 @@ function resolveRealtimePayload(
  */
 const realtimeHook = {
 	afterChange: async (ctx: GlobalCollectionHookContext) => {
-		if (!ctx.realtime) return;
+		const realtime = ctx.realtime;
+		if (!realtime) return;
 
 		const operation = resolveRealtimeOperation(ctx, "change");
 		const payload = resolveRealtimePayload(ctx, "change");
@@ -65,7 +66,7 @@ const realtimeHook = {
 		// waits for the outer transaction to release its lock.
 		ctx.onAfterCommit(async () => {
 			try {
-				const change = await ctx.realtime.appendChange({
+				const change = await realtime.appendChange({
 					resourceType: "collection",
 					resource: ctx.collection,
 					operation,
@@ -74,7 +75,7 @@ const realtimeHook = {
 					payload,
 				});
 				if (change) {
-					await ctx.realtime.notify(change);
+					await realtime.notify(change);
 				}
 			} catch {
 				// Realtime log table may not exist yet
@@ -82,14 +83,15 @@ const realtimeHook = {
 		});
 	},
 	afterDelete: async (ctx: GlobalCollectionHookContext) => {
-		if (!ctx.realtime) return;
+		const realtime = ctx.realtime;
+		if (!realtime) return;
 
 		const operation = resolveRealtimeOperation(ctx, "delete");
 		const payload = resolveRealtimePayload(ctx, "delete");
 
 		ctx.onAfterCommit(async () => {
 			try {
-				const change = await ctx.realtime.appendChange({
+				const change = await realtime.appendChange({
 					resourceType: "collection",
 					resource: ctx.collection,
 					operation,
@@ -98,7 +100,7 @@ const realtimeHook = {
 					payload,
 				});
 				if (change) {
-					await ctx.realtime.notify(change);
+					await realtime.notify(change);
 				}
 			} catch {
 				// Realtime log table may not exist yet
@@ -114,7 +116,9 @@ const realtimeHook = {
  */
 const searchHook = {
 	afterChange: async (ctx: GlobalCollectionHookContext) => {
-		if (!ctx.search) return;
+		const search = ctx.search;
+		const logger = ctx.logger;
+		if (!search) return;
 		const recordId = ctx.data?.id;
 		if (!recordId) return;
 
@@ -122,14 +126,11 @@ const searchHook = {
 		ctx.onAfterCommit(async () => {
 			try {
 				// Try per-instance debounced scheduling first
-				const scheduled = ctx.search.scheduleIndex(
-					ctx.collection,
-					String(recordId),
-				);
+				const scheduled = search.scheduleIndex(ctx.collection, String(recordId));
 				if (!scheduled) {
 					// No queue — index synchronously for current locale
 					const title = ctx.data?._title || ctx.data?.id;
-					await ctx.search.index({
+					await search.index({
 						collection: ctx.collection,
 						recordId: String(recordId),
 						locale: ctx.locale ?? "en",
@@ -137,7 +138,7 @@ const searchHook = {
 					});
 				}
 			} catch (err) {
-				ctx.logger.error(
+				logger?.error(
 					`[Core] Search index failed for ${ctx.collection}:${recordId}:`,
 					err,
 				);
@@ -145,18 +146,20 @@ const searchHook = {
 		});
 	},
 	afterDelete: async (ctx: GlobalCollectionHookContext) => {
-		if (!ctx.search) return;
+		const search = ctx.search;
+		const logger = ctx.logger;
+		if (!search) return;
 		const recordId = ctx.data?.id;
 		if (!recordId) return;
 
 		ctx.onAfterCommit(async () => {
 			try {
-				await ctx.search.remove({
+				await search.remove({
 					collection: ctx.collection,
 					recordId: String(recordId),
 				});
 			} catch (err) {
-				ctx.logger.error(
+				logger?.error(
 					`[Core] Search remove failed for ${ctx.collection}:${recordId}:`,
 					err,
 				);
@@ -203,11 +206,12 @@ const scheduledTransitionHook = {
  */
 const globalRealtimeHook = {
 	afterChange: async (ctx: GlobalGlobalHookContext) => {
-		if (!ctx.realtime) return;
+		const realtime = ctx.realtime;
+		if (!realtime) return;
 
 		ctx.onAfterCommit(async () => {
 			try {
-				const change = await ctx.realtime.appendChange({
+				const change = await realtime.appendChange({
 					resourceType: "global",
 					resource: ctx.global,
 					operation: "update",
@@ -216,7 +220,7 @@ const globalRealtimeHook = {
 					payload: ctx.data as Record<string, unknown>,
 				});
 				if (change) {
-					await ctx.realtime.notify(change);
+					await realtime.notify(change);
 				}
 			} catch {
 				// Realtime log table may not exist yet
@@ -230,19 +234,18 @@ const globalRealtimeHook = {
  */
 const globalSearchHook = {
 	afterChange: async (ctx: GlobalGlobalHookContext) => {
-		if (!ctx.search) return;
+		const search = ctx.search;
+		const logger = ctx.logger;
+		if (!search) return;
 		const recordId = ctx.data?.id;
 		if (!recordId) return;
 
 		ctx.onAfterCommit(async () => {
 			try {
-				const scheduled = ctx.search.scheduleIndex(
-					ctx.global,
-					String(recordId),
-				);
+				const scheduled = search.scheduleIndex(ctx.global, String(recordId));
 				if (!scheduled) {
 					const title = ctx.data?._title || ctx.data?.id;
-					await ctx.search.index({
+					await search.index({
 						collection: ctx.global,
 						recordId: String(recordId),
 						locale: ctx.locale ?? "en",
@@ -250,7 +253,7 @@ const globalSearchHook = {
 					});
 				}
 			} catch (err) {
-				ctx.logger.error(
+				logger?.error(
 					`[Core] Search index failed for global ${ctx.global}:${recordId}:`,
 					err,
 				);

@@ -200,19 +200,21 @@ export interface AppModuleInput {
  * ```
  */
 /**
- * App-level default access rule — ctx is the PRE-CODEGEN base context
- * (`AppContextBase`), NOT the augmented `AccessContext`. Contextual typing
- * of a function here must not route through the merged AppContext: the
- * augmentation lives in the generated index, which consumes
+ * App-level default access rule — ctx is the lazy infra seam
+ * `ResolvedAppDefaultAccessContext`, NOT the augmented `AccessContext`.
+ * Contextual typing of a function here must not route through the merged
+ * AppContext: the augmentation lives in the generated index, which consumes
  * `typeof config/app.ts` — any function whose params resolve through the
- * augmentation collapses the whole chain (TS2456). Collection-level
- * `.access()` rules keep the fully augmented ctx; app-level defaults trade
- * extension visibility for being cycle-free by construction.
+ * augmentation collapses the whole chain (TS2456). The seam is filled by
+ * codegen with the real infra (db/session/collections/...) WITHOUT the
+ * extension edge, so it stays cycle-free yet precise (pre-codegen it degrades
+ * to a loose non-`any` default, not the old all-`any` base). Collection-level
+ * `.access()` rules keep the fully augmented ctx.
  */
 export type AppDefaultAccessRule =
 	| boolean
 	| ((
-			ctx: import("#questpie/server/config/app-context-base.js").AppContextBase & {
+			ctx: import("#questpie/server/config/app-context.js").ResolvedAppDefaultAccessContext & {
 				data?: unknown;
 				input?: unknown;
 				locale?: string;
