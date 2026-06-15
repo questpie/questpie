@@ -31,18 +31,27 @@ import { text } from "#questpie/server/modules/core/fields/text.js";
 // Field Select — dispatch via accumulated state properties
 // ============================================================================
 
+/** Local `any` guard — keeps the selector self-contained (no test-util dep). */
+type _IsAny<T> = 0 extends 1 & T ? true : false;
+
 /**
  * Extract select type from Field<TState>.
  *
  * State encodes everything directly:
+ * - state itself is `any` (a `Field<any>` def) → never (no information-free `any` leak)
  * - virtual relations/uploads → never (no FK column)
  * - output: false → never
  * - notNull: true → data type
  * - else → data | null
+ *
+ * NOTE: a bare `FieldState` (concrete state, `data: unknown`) is left to resolve
+ * to `unknown | null` — internal CRUD operates on erased `Field<FieldState>`
+ * definitions and relies on that shape; only the `any`-state leak is sealed.
  */
-type V2FieldSelect<TState extends FieldState> =
-	// Virtual relation/upload fields have no FK column
-	TState extends { virtual: true; type: "relation" | "upload" }
+type V2FieldSelect<TState extends FieldState> = _IsAny<TState> extends true
+	? never
+	: // Virtual relation/upload fields have no FK column
+		TState extends { virtual: true; type: "relation" | "upload" }
 		? never
 		: TState extends { output: false }
 			? never

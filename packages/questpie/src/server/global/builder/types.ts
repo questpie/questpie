@@ -293,8 +293,12 @@ export interface GlobalBuilderState {
 	/**
 	 * Phantom type for field types available in .fields(({ f }) => ...).
 	 * Set directly via EmptyGlobalState generic parameter.
+	 *
+	 * `unknown` (not `Record<string, any>`) so the phantom map carries NO string
+	 * index: `unknown & TFieldTypes` collapses to `TFieldTypes`, making a missing/
+	 * typo'd field key on the `.fields()` callback a hard error instead of `any`.
 	 */
-	"~fieldTypes"?: Record<string, any>;
+	"~fieldTypes"?: unknown;
 }
 
 /**

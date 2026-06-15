@@ -63,7 +63,7 @@ type ExtractFieldTypes<TState extends GlobalBuilderState> =
  */
 // oxlint-disable-next-line no-unsafe-declaration-merging -- Declaration merging is intentional for extension pattern
 export class GlobalBuilder<TState extends GlobalBuilderState> {
-	private state: TState;
+	readonly state: TState;
 	private _builtGlobal?: Global<TState>;
 
 	/**

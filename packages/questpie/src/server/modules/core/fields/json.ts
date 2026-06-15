@@ -30,8 +30,7 @@ export type JsonValue =
 	| boolean
 	| null
 	| JsonValue[]
-	| { [key: string]: JsonValue }
-	| Record<string, unknown>;
+	| { [key: string]: JsonValue };
 
 /** Recursive Zod schema for schema-less JSON fields (replaces `z.any()`). */
 export const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
@@ -45,9 +44,12 @@ export const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
 	]),
 );
 
-export type JsonFieldState = Omit<DefaultFieldState, "operators"> & {
+export type JsonFieldState<TData extends JsonValue = JsonValue> = Omit<
+	DefaultFieldState,
+	"operators"
+> & {
 	type: "json";
-	data: JsonValue;
+	data: TData;
 	column: PgJsonbBuilder;
 	operators: typeof basicOps;
 };
@@ -55,7 +57,9 @@ export type JsonFieldState = Omit<DefaultFieldState, "operators"> & {
 /**
  * Create a schema-less JSON field (stored as JSONB by default).
  *
- * For typed objects, prefer `f.object()`.
+ * For typed objects, prefer `f.object()`. Pass a type argument to narrow the
+ * stored value to a specific JSON shape (unions, `Record<string, T>`, etc.):
+ * `f.json<{ k: number }>()`.
  *
  * @param config - Optional configuration
  *
@@ -63,14 +67,15 @@ export type JsonFieldState = Omit<DefaultFieldState, "operators"> & {
  * ```ts
  * metadata: f.json()
  * rawData: f.json({ mode: "json" })
+ * settings: f.json<{ theme: "light" | "dark" }>()
  * ```
  */
-export function json(config?: {
+export function json<TData extends JsonValue = JsonValue>(config?: {
 	mode?: "jsonb" | "json";
-}): Field<JsonFieldState> {
+}): Field<JsonFieldState<TData>> {
 	const mode = config?.mode ?? "jsonb";
 
-	return wrapFieldComplete(field<JsonFieldState>({
+	return wrapFieldComplete(field<JsonFieldState<TData>>({
 		type: "json",
 		columnFactory: (name) => (mode === "json" ? pgJson(name) : jsonb(name)),
 		schemaFactory: () => jsonValueSchema,

@@ -531,16 +531,21 @@ export function generateTemplate(options: TemplateOptions): string {
 		lines.push(
 			"type _CollectionsAPI = { [K in keyof AppCollections]: CollectionAPI<AppCollections[K], AppCollections> };",
 		);
-		// Job handler collections must be EXPLICIT literal maps of the local
-		// collection imports. Routing through AppCollections (typeof _modules)
-		// creates a type cycle when a job file is part of the module graph:
-		// JobHandlerContext -> AppCollections -> modules.ts -> the job file
-		// being checked — tsc silently collapses the mapped type (TS2339).
+		// Job handler collections mirror AppCollections (= _ModuleCollections &
+		// local literal map), so module collections are reachable inside a job/
+		// workflow handler (cga-1/cga-2/CL-04). The LOCAL half must stay an EXPLICIT
+		// literal of the local collection imports — routing the local keys through
+		// AppCollections creates a type cycle when a job file is part of the module
+		// graph: JobHandlerContext -> AppCollections -> modules.ts -> the job file
+		// being checked (tsc silently collapses the mapped type, TS2339). But
+		// _ModuleCollections is `typeof _modules` (external packages), NOT on the
+		// user job-file path, so intersecting it restores module collections without
+		// re-introducing that cycle.
 		const localCollections = sortedValues(
 			discovered.categories.get("collections") ?? new Map(),
 		).filter((file) => !file.isBundle);
 		if (localCollections.length > 0) {
-			lines.push("type _JobHandlerCollections = {");
+			lines.push("type _JobHandlerCollections = _ModuleCollections & {");
 			for (const file of localCollections) {
 				lines.push(`\t${safeKey(file.key)}: typeof ${file.varName};`);
 			}

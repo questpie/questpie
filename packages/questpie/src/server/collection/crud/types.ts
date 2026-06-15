@@ -415,7 +415,11 @@ type ResolveCollectionRelationFromApp<
 			GetCollection<TCollections, C>,
 			TApp
 		>
-	: RelationShape<any, never, any, unknown, unknown>;
+	: // Not-found arm is LOUD `never` (CL-04): this is the resolver the live CRUD
+		// `with` uses, so an omitted target (e.g. a module collection missing from a
+		// job/workflow ctx map) makes the populated relation `never` and surfaces,
+		// rather than degrading to a silent `any`.
+		RelationShape<never, never, never, unknown, unknown>;
 
 type ResolveRelationsDeepFromApp<
 	TRelations extends Record<string, RelationConfig>,
@@ -487,14 +491,12 @@ type RelationWhereFromTarget<
 		>;
 
 /**
- * To-many quantifiers (some/none/every/count) for relation fields.
+ * To-many quantifiers (some/none/every) for relation fields.
  *
- * Runtime supports these on hasMany/manyToMany relations (toManyOps), but
- * `.hasMany()`/`.manyToMany()` cannot transition the field's type state yet
- * (type-specific methods are state-preserving — audit F4), so the field state
- * always carries belongsTo operators. Offered at the where-composition layer
- * for every relation field until state transitions land; values are fully
- * typed against the target collection's where.
+ * Added ONLY for to-many relations (relationKind:"many"), gated in
+ * V2RelationWhereResolved. Values are fully typed against the target
+ * collection's where. `count` is intentionally absent — no `COUNT(*)` clause
+ * exists yet, so it was a runtime no-op (removed from toManyOps too).
  */
 type RelationQuantifierWhere<
 	TTo extends string,
@@ -504,7 +506,6 @@ type RelationQuantifierWhere<
 	some?: RelationWhereFromTarget<TTo, TApp, Depth>;
 	none?: RelationWhereFromTarget<TTo, TApp, Depth>;
 	every?: RelationWhereFromTarget<TTo, TApp, Depth>;
-	count?: number;
 };
 
 /**
@@ -526,16 +527,27 @@ type V2RelationWhereResolved<
 > = TState extends {
 	relationTo: infer TTo extends string;
 }
-	?
-			| FieldSelect<TFieldDef, TApp>
+	? TState extends { relationKind: "many" }
+		? // to-many: ONLY quantifiers (some/none/every). No bare FK value and no
+			// bare target-where shorthand — those are single-row concepts. Both
+			// the resolved FieldWhere (toManyOps) and the typed quantifier arm
+			// expose the same quantifier keys, so the where is cardinality-uniform.
 			| ResolveWherePlaceholdersV2<
-					FieldWhere<TFieldDef, TApp>,
-					TTo,
-					TApp,
-					Depth
-			  >
-			| RelationWhereFromTarget<TTo, TApp, Depth>
-			| RelationQuantifierWhere<TTo, TApp, Depth>
+						FieldWhere<TFieldDef, TApp>,
+						TTo,
+						TApp,
+						Depth
+				  >
+				| RelationQuantifierWhere<TTo, TApp, Depth>
+		: // to-one: `is`/`isNot` (belongsToOps) + FK value + target-where shorthand.
+			| FieldSelect<TFieldDef, TApp>
+				| ResolveWherePlaceholdersV2<
+						FieldWhere<TFieldDef, TApp>,
+						TTo,
+						TApp,
+						Depth
+				  >
+				| RelationWhereFromTarget<TTo, TApp, Depth>
 	: FieldSelect<TFieldDef, TApp> | FieldWhere<TFieldDef, TApp>;
 
 type ResolveWherePlaceholdersV2<
@@ -832,35 +844,43 @@ export type With<in out TRelations = any> = {
  * Uses the __collection from RelationShape to dispatch through
  * the collection-aware Where/Columns path when available.
  */
-type WithRelationOptions<TRelation> =
+// `where` value: collection-aware when the relation carries a __collection,
+// else field-based. Shared by both cardinalities.
+type RelationWithWhere<TRelation> =
 	IsCollectionLike<RelationCollection<TRelation>> extends true
-		? {
-				columns?: Columns<RelationSelect<TRelation>>;
-				where?: WhereFromCollection<
-					RelationCollection<TRelation>,
-					RelationApp<TRelation>,
-					[1]
-				>;
-				orderBy?: OrderBy<RelationSelect<TRelation>>;
-				limit?: number;
-				offset?: number;
-				with?: With<RelationRelations<TRelation>>;
-				_aggregate?: RelationAggregation<RelationSelect<TRelation>>;
-				_count?: boolean;
-			}
-		: {
-				columns?: Columns<RelationSelect<TRelation>>;
-				where?: WhereFromFields<
-					RelationSelect<TRelation>,
-					RelationRelations<TRelation>
-				>;
-				orderBy?: OrderBy<RelationSelect<TRelation>>;
-				limit?: number;
-				offset?: number;
-				with?: With<RelationRelations<TRelation>>;
-				_aggregate?: RelationAggregation<RelationSelect<TRelation>>;
-				_count?: boolean;
-			};
+		? WhereFromCollection<
+				RelationCollection<TRelation>,
+				RelationApp<TRelation>,
+				[1]
+			>
+		: WhereFromFields<RelationSelect<TRelation>, RelationRelations<TRelation>>;
+
+type WithRelationOptionsToMany<TRelation> = {
+	columns?: Columns<RelationSelect<TRelation>>;
+	where?: RelationWithWhere<TRelation>;
+	orderBy?: OrderBy<RelationSelect<TRelation>>;
+	limit?: number;
+	offset?: number;
+	with?: With<RelationRelations<TRelation>>;
+	_aggregate?: RelationAggregation<RelationSelect<TRelation>>;
+	_count?: boolean;
+};
+
+type WithRelationOptions<TRelation> =
+	// `any` (the generic `With` default used by runtime generators) must NOT
+	// distribute to the restricted to-one shape — it would drop `_count`/
+	// `_aggregate` from every relation. Keep the full option set for `any`.
+	IsAny<TRelation> extends true
+		? WithRelationOptionsToMany<TRelation>
+		: TRelation extends readonly any[]
+			? // to-many: list options (limit/offset/orderBy/aggregate/count) are valid.
+				WithRelationOptionsToMany<TRelation>
+			: // to-one: a single row — list/aggregate options are meaningless (WR-3).
+				{
+					columns?: Columns<RelationSelect<TRelation>>;
+					where?: RelationWithWhere<TRelation>;
+					with?: With<RelationRelations<TRelation>>;
+				};
 
 /**
  * Options for findMany query (Drizzle RQB v2-like)
@@ -1372,10 +1392,10 @@ export type AggregationResult<TAgg extends RelationAggregation> =
 			? { _avg: { [K in keyof TAgg["_avg"]]: number } }
 			: {}) &
 		(TAgg["_min"] extends object
-			? { _min: { [K in keyof TAgg["_min"]]: any } }
+			? { _min: { [K in keyof TAgg["_min"]]: number } }
 			: {}) &
 		(TAgg["_max"] extends object
-			? { _max: { [K in keyof TAgg["_max"]]: any } }
+			? { _max: { [K in keyof TAgg["_max"]]: number } }
 			: {});
 
 /**
