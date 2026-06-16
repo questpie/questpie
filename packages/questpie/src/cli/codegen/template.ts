@@ -334,7 +334,7 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 
 	// L1 type-utils — feed `_Module*` / `_Registry_*` / `_AllModule*` / AppServices.
 	lines.push(
-		'import type { ExtractModulePropArr, ServiceCustomNamespaceInstances, ServiceInstanceOf, ServiceInstancesInNamespace, ServiceTopLevelInstances } from "questpie/types";',
+		'import type { ExtractModulePropArr, ExtractModulePropArrOverride, ServiceCustomNamespaceInstances, ServiceInstanceOf, ServiceInstancesInNamespace, ServiceTopLevelInstances } from "questpie/types";',
 	);
 	// The WorkflowClient<…> wrapper is consumed only by the L2 AppContext/
 	// JobHandler/Workflow contexts (`hasWorkflows` declared up-front above).
@@ -429,10 +429,21 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 	// all current modules: admin/audit/starter emit `Record<never,never>`; core's
 	// CoreServices are framework infrastructure surfaced via _AppInfraContext, not
 	// the user module array). `moduleCategoryType()` centralises this rule.
+	//
+	// The `collections` category uses the OVERRIDE fold instead of the additive `&`
+	// one: a module may both NEST a sub-module shipping `collections.user` AND
+	// re-declare `collections.user` via `collection("user").merge(sub.collections.user)`
+	// (the admin module re-declaring starter's user). Intersecting the two full
+	// `Collection<A> & Collection<B>` instantiations collapses the value to `never`
+	// (nullable-table member drift detonates the object), poisoning
+	// `CollectionInsert`/`CollectionSelect` → `never`/`{}`. `ExtractModulePropArrOverride`
+	// makes the most-derived (outer) re-declaration shadow the nested base instead.
 	const moduleCategoryType = (catName: string): string =>
 		catName === "services"
 			? "{}"
-			: `ExtractModulePropArr<typeof ${modulesFile.varName}, "${catName}">`;
+			: catName === "collections"
+				? `ExtractModulePropArrOverride<typeof ${modulesFile.varName}, "${catName}">`
+				: `ExtractModulePropArr<typeof ${modulesFile.varName}, "${catName}">`;
 	// Exported — `_ModuleCollections` feeds the L2 `_JobHandlerCollections`
 	// literal (imported DOWN from entities.gen.ts). The rest are exported
 	// uniformly (harmless) so any future L2 reference resolves.

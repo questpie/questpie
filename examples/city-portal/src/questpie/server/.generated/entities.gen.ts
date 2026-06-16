@@ -54,9 +54,9 @@ import type { RouteParamsFromKey, RouteWithParams } from "questpie/types";
 // TYPES — composed from typeof references (zero inference cost)
 // ════════════════════════════════════════════════════════════
 
-import type { ExtractModulePropArr, ServiceCustomNamespaceInstances, ServiceInstanceOf, ServiceInstancesInNamespace, ServiceTopLevelInstances } from "questpie/types";
+import type { ExtractModulePropArr, ExtractModulePropArrOverride, ServiceCustomNamespaceInstances, ServiceInstanceOf, ServiceInstancesInNamespace, ServiceTopLevelInstances } from "questpie/types";
 type _RouteDefinitionWithoutHandler<T> = T extends { mode: "raw" } ? Omit<T, "handler"> & { handler: (args: unknown) => Response | Promise<Response> } : Omit<T, "handler"> & { handler: (args: unknown) => unknown | Promise<unknown> };
-export type _ModuleCollections = ExtractModulePropArr<typeof _modules, "collections">;
+export type _ModuleCollections = ExtractModulePropArrOverride<typeof _modules, "collections">;
 export type _ModuleGlobals = ExtractModulePropArr<typeof _modules, "globals">;
 export type _ModuleJobs = ExtractModulePropArr<typeof _modules, "jobs">;
 export type _ModuleRoutes = ExtractModulePropArr<typeof _modules, "routes">;
@@ -66,7 +66,7 @@ export type _ModuleViews = ExtractModulePropArr<typeof _modules, "views">;
 export type _ModuleComponents = ExtractModulePropArr<typeof _modules, "components">;
 export type _ModuleBlocks = ExtractModulePropArr<typeof _modules, "blocks">;
 // Registry category extraction from modules
-export type _Registry_Collections = ExtractModulePropArr<typeof _modules, "collections">;
+export type _Registry_Collections = ExtractModulePropArrOverride<typeof _modules, "collections">;
 export type _Registry_Globals = ExtractModulePropArr<typeof _modules, "globals">;
 export type _Registry_Jobs = ExtractModulePropArr<typeof _modules, "jobs">;
 export type _Registry_Routes = ExtractModulePropArr<typeof _modules, "routes">;

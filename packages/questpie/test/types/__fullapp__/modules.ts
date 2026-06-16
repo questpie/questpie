@@ -7,6 +7,19 @@
  * graph is what makes `ExtractModulePropArr` / `_MPConfigSub` exercise the
  * acyclic folds against actual module category members.
  *
+ * The top-level `adminModule` mirrors the REAL admin module's shape — it BOTH
+ * nests `starterModule` (`modules: [starterModule]`) AND re-declares the `user`
+ * collection via `collection("user").merge(starterModule.collections.user)`. That
+ * same-key, cross-module-nesting re-declaration is the EXACT shape that detonated
+ * the additive `ExtractModulePropArr` collections fold into `never` (the create()
+ * never/{} bug): `_ModuleCollections["user"] = Collection<Starter> & Collection<Admin>`
+ * ⇒ `never` ⇒ `CollectionInsert` `never` / CRUD select `{}`. The fold now uses
+ * `ExtractModulePropArrOverride` (override, not intersect) so the most-derived
+ * admin re-declaration shadows the nested starter one. The remaining starter
+ * collections are passed through by reference (mirrors admin re-declaring the full
+ * starter set directly) so the names-only `Questpie.CollectionKeys` registry — which
+ * reads top-level `keyof module.collections` — keeps every module collection name.
+ *
  * Also pulls a small fixture-local `reportingModule` that ships a `services`
  * member whose VALUE references the app `ctx` (§2.2 asymmetry). It is declared as
  * a plain typed object (the shape codegen actually emits — `services:
@@ -19,6 +32,7 @@
 import type { ServiceBuilder } from "#questpie/server/services/define-service.js";
 import starterModule from "#questpie/server/modules/starter/.generated/module.js";
 
+import { adminUser } from "./collections/admin-user.js";
 import { reportingCarrier } from "./config/reporting-carrier.js";
 import { reportingService } from "./services/reporting.js";
 
@@ -48,4 +62,39 @@ export const reportingModule: ReportingModule = {
 	config: { reporting: reportingCarrier },
 };
 
-export default [starterModule, reportingModule] as const;
+/**
+ * Admin-style module: nests starter AND re-declares `user` (merge), passing the
+ * remaining starter collections through by reference. Mirrors the real admin
+ * module that triggered the create() never/{} bug.
+ */
+type AdminCollections = {
+	user: typeof adminUser;
+	account: typeof starterModule.collections.account;
+	apikey: typeof starterModule.collections.apikey;
+	assets: typeof starterModule.collections.assets;
+	session: typeof starterModule.collections.session;
+	verification: typeof starterModule.collections.verification;
+};
+
+type AdminModule = {
+	name: "fixture-admin";
+	modules: readonly [typeof starterModule];
+	collections: AdminCollections;
+	config: { auth: typeof starterModule.config.auth };
+};
+
+export const adminModule: AdminModule = {
+	name: "fixture-admin",
+	modules: [starterModule] as const,
+	collections: {
+		user: adminUser,
+		account: starterModule.collections.account,
+		apikey: starterModule.collections.apikey,
+		assets: starterModule.collections.assets,
+		session: starterModule.collections.session,
+		verification: starterModule.collections.verification,
+	},
+	config: { auth: starterModule.config.auth },
+};
+
+export default [adminModule, reportingModule] as const;

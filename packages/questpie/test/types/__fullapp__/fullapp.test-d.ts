@@ -16,11 +16,13 @@ import type {
 	AppSession,
 	AppSessionUser,
 } from "./.generated/index.js";
+import type { AppCollections } from "./.generated/entities.gen.js";
 
 import type { InferContextExtensionsFromApp } from "#questpie/server/config/context.js";
+import type { CollectionInsert } from "#questpie/shared/type-utils.js";
 
 import type { Equal, Expect, HasKey, IsAny } from "../type-test-utils.js";
-import type { NoAny } from "../_assert.js";
+import type { NoAny, NoNever, NotEmptyObject } from "../_assert.js";
 
 // ============================================================================
 // Invariant 1 — city-portal-style context-resolver precision (cityId)
@@ -102,6 +104,58 @@ type _isAnyGuard = Expect<Equal<IsAny<AppSessionUser>, false>>;
 
 type _servicesHasReporting = Expect<HasKey<AppServices, "reporting">>;
 type _reportingNotAny = Expect<NoAny<AppServices["reporting"]>>;
+
+// ============================================================================
+// Invariant 8 — collections.X.create() never/{} bug (module-merge collapse)
+// The fixture's top-level adminModule BOTH nests starterModule AND re-declares
+// `user` via collection("user").merge(starterModule.collections.user). Under the
+// additive `&` collections fold, `AppCollections["user"]` collapsed to `never`,
+// poisoning create() input → `never` (TS2322 at every field) and the create()
+// return → `{}` (TS2339 on `.id`). The override fold keeps it a real Collection.
+//
+// These assert IDENTITY against the REAL composed `App["collections"]` CRUD
+// surface — the create() input must accept the real insert (`email: string`, not
+// `never`) and the create() return must be the real row (has `id`, not `{}`).
+// ============================================================================
+
+// The merged module collection value did not collapse to `never`.
+type _userCollNotNever = Expect<NoNever<AppCollections["user"]>>;
+
+// Raw insert model is the real shape (not `never`, carries the user fields).
+type _UserInsert = CollectionInsert<AppCollections["user"]>;
+type _userInsertNotNever = Expect<NoNever<_UserInsert>>;
+type _userInsertNotEmpty = Expect<NotEmptyObject<_UserInsert>>;
+type _userInsertHasEmail = Expect<HasKey<_UserInsert, "email">>;
+type _userInsertHasName = Expect<HasKey<_UserInsert, "name">>;
+
+// create() INPUT param — accepts the real insert; `email`/`name` typed `string`,
+// NOT `never` (the TS2322 booking-call site).
+type _UserCreateInput = Parameters<App["collections"]["user"]["create"]>[0];
+type _userCreateInputNotNever = Expect<NoNever<_UserCreateInput>>;
+type _userCreateInputEmailString = Expect<
+	Equal<NonNullable<_UserCreateInput>["email"], string>
+>;
+type _userCreateInputNameString = Expect<
+	Equal<NonNullable<_UserCreateInput>["name"], string>
+>;
+
+// create() RETURN — the real row (has `id`/`email`, not `{}`/TS2339 on `.id`).
+type _UserCreateReturn = Awaited<
+	ReturnType<App["collections"]["user"]["create"]>
+>;
+type _userCreateReturnNotEmpty = Expect<NotEmptyObject<_UserCreateReturn>>;
+type _userCreateReturnHasId = Expect<HasKey<_UserCreateReturn, "id">>;
+type _userCreateReturnHasEmail = Expect<HasKey<_UserCreateReturn, "email">>;
+
+// Control — a USER collection declared once (articles) stays healthy, proving the
+// override fold does not regress single-declared collections.
+type _ArticlesInsert = CollectionInsert<AppCollections["articles"]>;
+type _articlesInsertNotNever = Expect<NoNever<_ArticlesInsert>>;
+type _articlesInsertHasTitle = Expect<HasKey<_ArticlesInsert, "title">>;
+type _ArticlesCreateReturn = Awaited<
+	ReturnType<App["collections"]["articles"]["create"]>
+>;
+type _articlesCreateReturnHasId = Expect<HasKey<_ArticlesCreateReturn, "id">>;
 
 export type {
 	Ext,

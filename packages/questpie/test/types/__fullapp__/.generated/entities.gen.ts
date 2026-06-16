@@ -26,6 +26,7 @@ import { reportingService as _svc_reporting } from "../services/reporting.js";
 import type {
 	ExtractModuleProp,
 	ExtractModulePropArr,
+	ExtractModulePropArrOverride,
 	ServiceCustomNamespaceInstances,
 	ServiceInstancesInNamespace,
 	ServiceTopLevelInstances,
@@ -36,12 +37,12 @@ import type { ServiceInstanceOf } from "#questpie/server/services/define-service
 // TYPES — composed from typeof references (zero inference cost)
 // ════════════════════════════════════════════════════════════
 
-export type _ModuleCollections = ExtractModulePropArr<typeof _modules, "collections">;
+export type _ModuleCollections = ExtractModulePropArrOverride<typeof _modules, "collections">;
 export type _ModuleGlobals = ExtractModulePropArr<typeof _modules, "globals">;
 export type _ModuleJobs = ExtractModulePropArr<typeof _modules, "jobs">;
 export type _ModuleServices = {};
 // Registry category extraction from modules
-export type _Registry_Collections = ExtractModulePropArr<typeof _modules, "collections">;
+export type _Registry_Collections = ExtractModulePropArrOverride<typeof _modules, "collections">;
 export type _Registry_Globals = ExtractModulePropArr<typeof _modules, "globals">;
 export type _Registry_Jobs = ExtractModulePropArr<typeof _modules, "jobs">;
 export type _Registry_Services = {};
