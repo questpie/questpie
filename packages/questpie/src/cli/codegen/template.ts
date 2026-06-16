@@ -266,8 +266,42 @@ export function generateTemplate(options: TemplateOptions): string {
 			"type _AppAuthConfig = _ModuleConfig extends { auth: infer TAuth } ? TAuth : {};",
 		);
 	}
+	// ── Session-dedicated auth config — OFF the AppContext cycle ──────────
+	// `_AppAuthConfig` (above) is part of the AppContext augmentation cycle: it
+	// feeds `_AppQuestpieConfig.auth`, and its `_ModuleConfig` arm routes through
+	// `_MP<"config"> → _MPRaw`, which `UnionToIntersection`-instantiates the admin
+	// module's cyclic `config.admin` (`appConfig` with AppContext-typed
+	// resolvers). TS aborts that alias (TS2456) and collapses `_AppAuthConfig` to
+	// `any`, so any session derived from it is `any` in real generated apps.
+	//
+	// We deliberately do NOT rewrite that whole-config merge: the early
+	// `_MPRaw → any` collapse is load-bearing — it's the single point where the
+	// (genuine, architectural) AppContext↔config cycle is absorbed; replacing it
+	// makes TS re-discover the cycle at many downstream aliases (services, infra
+	// context) and report MORE TS2456, not fewer.
+	//
+	// Instead we give SESSION its own auth-config alias that (a) is consumed ONLY
+	// by `_AppSession` — never by `_AppQuestpieConfig` — so it stays off the
+	// cyclic edge, and (b) extracts module `config.auth` SHALLOWLY per-declaration
+	// (a positional fold doing a STRUCTURAL key check, never instantiating sibling
+	// `config.admin`). Session inference only needs the `__questpieSessionType__`
+	// phantom on the user's `authConfig()` plus any module-contributed auth, so
+	// this clean alias resolves `_AppSession`/`AppSession`/`AppSessionUser` to the
+	// CONCRETE plugin-aware shape (not `any`) while leaving the cycle untouched.
 	lines.push(
-		"type _AppSession = NonNullable<InferSessionFromAuthConfig<_AppAuthConfig>> | null;",
+		"type _MPConfigSub<A extends readonly any[], K extends string> = A extends readonly [infer H, ...infer T extends readonly any[]] ? (H extends { config: infer C } ? (C extends Record<K, infer V> ? V : {}) : {}) & _MPConfigSub<T, K> : {};",
+	);
+	if (authFile) {
+		lines.push(
+			`type _AppSessionAuthConfig = _MPConfigSub<typeof ${modulesFile.varName}, "auth"> & typeof ${authFile.varName};`,
+		);
+	} else {
+		lines.push(
+			`type _AppSessionAuthConfig = _MPConfigSub<typeof ${modulesFile.varName}, "auth">;`,
+		);
+	}
+	lines.push(
+		"type _AppSession = NonNullable<InferSessionFromAuthConfig<_AppSessionAuthConfig>> | null;",
 	);
 	lines.push("");
 

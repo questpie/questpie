@@ -106,7 +106,9 @@ type _ModuleConfig = _MP<"config">;
 type _AppAppConfig = (_ModuleConfig extends { app: infer TApp } ? TApp : {}) & typeof _appConfig;
 type _AppContextExtensions = Partial<InferContextExtensionsFromAppConfig<_AppAppConfig>>;
 type _AppAuthConfig = (_ModuleConfig extends { auth: infer TAuth } ? TAuth : {}) & typeof _authConfig;
-type _AppSession = NonNullable<InferSessionFromAuthConfig<_AppAuthConfig>> | null;
+type _MPConfigSub<A extends readonly any[], K extends string> = A extends readonly [infer H, ...infer T extends readonly any[]] ? (H extends { config: infer C } ? (C extends Record<K, infer V> ? V : {}) : {}) & _MPConfigSub<T, K> : {};
+type _AppSessionAuthConfig = _MPConfigSub<typeof _modules, "auth"> & typeof _authConfig;
+type _AppSession = NonNullable<InferSessionFromAuthConfig<_AppSessionAuthConfig>> | null;
 
 type _ModuleCollections = _MP<"collections">;
 type _ModuleGlobals = _MP<"globals">;
