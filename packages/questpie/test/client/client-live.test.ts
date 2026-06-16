@@ -216,4 +216,93 @@ describe("client live queries", () => {
 
 		stop();
 	});
+
+	// Regression: concurrent live()/realtime queries must each get a distinct
+	// topic id. A truncated topic hash (slice(0,24)) keyed only the first ~5
+	// chars of the resource name, so `events` and `event_members` (and any two
+	// queries past the truncation window) collapsed to one id — first-writer-wins
+	// dropped the loser's topic from the POST payload and cross-wired its
+	// snapshots. Found dogfooding the Jubli guest feed.
+	it("concurrent live() on prefix-colliding collections keep separate topics (no cross-wire)", async () => {
+		const events: any[] = [];
+		const members: any[] = [];
+
+		const stopEvents = client.collections.events.live(
+			{ where: { id: "evt_1" } },
+			(s) => events.push(s),
+		);
+		const stopMembers = client.collections.event_members.live(
+			{ where: { event: "evt_1" } },
+			(s) => members.push(s),
+		);
+
+		await waitFor(() => connections.length >= 1);
+		// Settle the debounce window so both topics are on one connection.
+		await new Promise((resolve) => setTimeout(resolve, 100));
+
+		const connection = connections[connections.length - 1];
+
+		// Both queries must reach the server as DISTINCT topics, not collapsed.
+		expect(connection.topics).toHaveLength(2);
+		const eventsTopic = connection.topics.find((t) => t.resource === "events");
+		const membersTopic = connection.topics.find(
+			(t) => t.resource === "event_members",
+		);
+		expect(eventsTopic).toBeDefined();
+		expect(membersTopic).toBeDefined();
+		expect(eventsTopic!.id).not.toBe(membersTopic!.id);
+
+		// A snapshot for event_members must reach ONLY the members callback.
+		const memberRows = {
+			docs: [{ id: "m1", displayName: "Ada" }],
+			totalDocs: 1,
+		};
+		connection.sendSnapshot(membersTopic!.id, 1, memberRows);
+		await waitFor(() => members.length === 1);
+		expect(members[0]).toEqual(memberRows);
+		expect(events).toHaveLength(0);
+
+		stopEvents();
+		stopMembers();
+	});
+
+	it("concurrent live() on the same collection with different where keep separate topics", async () => {
+		const a: any[] = [];
+		const b: any[] = [];
+
+		const stopA = client.collections.posts.live(
+			{ where: { event: "A" } },
+			(s) => a.push(s),
+		);
+		const stopB = client.collections.posts.live(
+			{ where: { event: "B" } },
+			(s) => b.push(s),
+		);
+
+		await waitFor(() => connections.length >= 1);
+		await new Promise((resolve) => setTimeout(resolve, 100));
+
+		const connection = connections[connections.length - 1];
+		expect(connection.topics).toHaveLength(2);
+
+		const topicA = connection.topics.find(
+			(t) => (t.where as any)?.event === "A",
+		);
+		const topicB = connection.topics.find(
+			(t) => (t.where as any)?.event === "B",
+		);
+		expect(topicA).toBeDefined();
+		expect(topicB).toBeDefined();
+		expect(topicA!.id).not.toBe(topicB!.id);
+
+		connection.sendSnapshot(topicA!.id, 1, {
+			docs: [{ id: "a1" }],
+			totalDocs: 1,
+		});
+		await waitFor(() => a.length === 1);
+		expect(b).toHaveLength(0);
+
+		stopA();
+		stopB();
+	});
 });
