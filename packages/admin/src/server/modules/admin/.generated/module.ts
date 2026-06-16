@@ -42,6 +42,7 @@ import _comp_icon from "../components/icon";
 
 // ── Singles ────────────────────────────────────────────────
 import _adminConfig from "../config/admin";
+import _fields from "../fields";
 import _plugin from "../plugin";
 
 // ════════════════════════════════════════════════════════════
@@ -99,6 +100,7 @@ export type AdminModule = {
 	config: {
 		admin: typeof _adminConfig;
 	};
+	fields: typeof _fields;
 	plugin: typeof _plugin;
 };
 
@@ -150,6 +152,7 @@ const _module: AdminModule = {
 	config: {
 		admin: _adminConfig,
 	},
+	fields: _fields,
 	plugin: _plugin,
 };
 
