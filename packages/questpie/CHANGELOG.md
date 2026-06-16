@@ -1,5 +1,36 @@
 # questpie
 
+## 3.8.0
+
+### Minor Changes
+
+- [#108](https://github.com/questpie/questpie/pull/108) [`b15ce41`](https://github.com/questpie/questpie/commit/b15ce41ce2ed8378abd0ea3e42c8f577abe9ad6b) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Deep type-safety campaign — break the codegen type cycles and make acyclicity structural.
+
+  The generated `.generated/` output is now a strict one-way layered DAG (`names.gen.ts` → `entities.gen.ts` → `context.gen.ts` → `index.ts`), which makes the `AppContext⇄config` and `ctx → user-code` cycles impossible by construction. A new CI check (`check:codegen-layers`) enforces no-upward-import / no-cycle on the generated layers.
+
+  Fixes:
+
+  - Module-contributed collections that were re-declared across a module-nesting boundary (e.g. the admin module re-declaring starter's `user`) collapsed to `never` — so `collections.user.create()` had `never` inputs and a `{}` return. The module fold now OVERRIDE-merges same-key collection contributions instead of intersecting them.
+  - `ctx.services.<other>` inside a service's `create()` no longer triggers a self-referential type cycle (routed through an ambient `Questpie.Services` registry + a flat per-key seam).
+  - Per-category name registries (`Questpie.<Cat>Keys`) are now emitted for ALL discovered categories (routes/services/blocks/emails/views/components/field-types + collections/globals/jobs) via generic discovery, instead of a hardcoded collections/globals/jobs subset.
+
+  Notes:
+
+  - Types are tightened. After regenerating (`questpie generate`), you may see new type errors that surface previously-hidden bugs — this is intended.
+  - The public `#questpie` import surface and the runtime API are unchanged; the layered split is internal to the generated output.
+
+### Patch Changes
+
+- [#106](https://github.com/questpie/questpie/pull/106) [`590e6c4`](https://github.com/questpie/questpie/commit/590e6c433a73a44316e89d00eeeaa21b0d584e3b) Thanks [@drepkovsky](https://github.com/drepkovsky)! - fix(cli): importing `questpie/cli` no longer executes the CLI. `program.parse()` is now guarded by `import.meta.main`, so it only runs when the CLI file is the process entry (the `questpie` bin or a direct `bun run .../exports/cli.ts`). Previously, a `questpie.config.ts` importing `packageConfig` from `"questpie/cli"` during `bun x questpie generate` loaded a second module instance (src vs dist) whose top-level parse started the same generate again concurrently, corrupting `.generated/module.ts` files (truncated output with NUL bytes). Codegen also writes generated files atomically now (temp file + rename), so concurrent or killed runs can never leave truncated output behind.
+
+- [#103](https://github.com/questpie/questpie/pull/103) [`a56e017`](https://github.com/questpie/questpie/commit/a56e0179f6016915996e9bd9a58c7279d070692a) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Two fixes from jubli's 3.6.1 dogfooding:
+
+  **`questpie push` no longer touches framework or foreign database state.** The diff scope is restricted to the app's own schemas and excludes the migration ledger (`questpie_migrations`); adapter-owned schemas (pg-boss) never enter the diff. A belt-and-suspenders guard additionally scans every PLANNED statement before `apply()` and aborts loudly if anything still targets framework/foreign objects — the previous behavior planned and executed `DROP TABLE questpie_migrations` and pg-boss drops when those objects entered the diff as "extras".
+
+  **Function-valued rules in `appConfig({ access })` no longer collapse the AppContext augmentation.** Contextually-typed rule functions embedded the merged `AppContext` in `typeof config/app.ts`, which the generated index consumes — TS2456 across the whole app. App-level default access rules are now typed over the pre-codegen base context (`AppDefaultAccess` — `session`/`db` available, generated extensions deliberately not), and `appConfig()`'s return type erases `access`/`hooks` to opaque storage (the `CollectionAccessStorage` precedent) while preserving `locale` and the `context` resolver, whose annotated return keeps driving extension inference. Regression fixture: a function-valued default rule + global hook in toy-factory's app config now typechecks.
+
+- [#107](https://github.com/questpie/questpie/pull/107) [`81e4922`](https://github.com/questpie/questpie/commit/81e4922e7ed54a2ff2171e86a9ce45a07b7c433b) Thanks [@drepkovsky](https://github.com/drepkovsky)! - **Realtime: concurrent `{ realtime: true }` / `live()` queries no longer cross-wire.** The client multiplexer derived each subscription's topic id from a hash truncated to 24 base64 characters. Because the normalized topic is key-sorted, that window only captured `{"resource":"` plus the first ~5 characters of the resource name — `where`/`with`/`limit`/`offset`/`orderBy`/`locale` never affected the id. Two live queries whose resource names shared a 5-character prefix (e.g. `events` and `event_members`), or that differed only in `where`, collapsed onto one id: the second topic was dropped from the subscription request, and the server's snapshot for the surviving topic was delivered to both queries — silently overwriting one query's data with the other's. Topic ids now encode the full normalized topic, so every distinct query gets a distinct id. This also fixes a latent crash on non-Latin1 `where` values (the browser path used `btoa()`, which is Latin1-only). Found dogfooding the Jubli guest feed.
+
 ## 3.7.0
 
 ### Minor Changes
