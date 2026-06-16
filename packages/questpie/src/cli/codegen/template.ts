@@ -300,7 +300,7 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 	// `relation("user")` strict keys regress. A side-effect import is never elided.
 	l3.push(`import "${jsImport(L0_FILE)}";`);
 	l3.push(
-		'import type { AccessContext, AppDefinition, CollectionSelect, GlobalSelect, HookContext } from "questpie/types";',
+		'import type { AccessContext, AppDefinition, CollectionSelect, GlobalSelect, HookContext, Where } from "questpie/types";',
 	);
 	// CollectionDoc/GlobalDoc/AppConfig/createContext read these from L1; the
 	// runtime `as _AppQuestpie` cast + AppSession re-exports read from L2.
@@ -1238,6 +1238,18 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 	lines.push(" */");
 	lines.push(
 		"export type GlobalDoc<K extends keyof AppGlobals> = GlobalSelect<AppGlobals[K]>;",
+	);
+	lines.push("");
+	lines.push("/**");
+	lines.push(
+		" * Typed `where` filter for a collection key — prefer over `Record<string, unknown>`",
+	);
+	lines.push(
+		" * when building a `where` clause dynamically before a `find`/`findOne` call.",
+	);
+	lines.push(" */");
+	lines.push(
+		"export type CollectionWhere<K extends keyof AppCollections> = Where<AppCollections[K], AppConfig>;",
 	);
 	lines.push("");
 	lines.push("/**");

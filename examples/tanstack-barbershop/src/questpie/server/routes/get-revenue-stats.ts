@@ -1,6 +1,8 @@
 import { route } from "questpie/services";
 import z from "zod";
 
+import { CollectionWhere } from "#questpie";
+
 export default route()
 	.post()
 	.schema(
@@ -23,9 +25,10 @@ export default route()
 	.handler(async ({ input, collections }) => {
 		const { startDate, endDate, completedOnly } = input;
 
-		const where: Record<string, unknown> = {
+		const where: CollectionWhere<"appointments"> = {
 			scheduledAt: { gte: new Date(startDate), lte: new Date(endDate) },
 		};
+
 		if (completedOnly) {
 			where.status = "completed";
 		}

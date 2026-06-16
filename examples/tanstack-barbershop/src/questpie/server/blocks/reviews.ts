@@ -1,3 +1,4 @@
+import type { CollectionWhere } from "#questpie";
 import { block } from "#questpie/factories";
 
 import { sections } from "./_categories";
@@ -37,7 +38,7 @@ export const reviewsBlock = block("reviews")
 			.default("3"),
 	}))
 	.prefetch(async ({ values, ctx }) => {
-		const where: Record<string, unknown> = {};
+		const where: CollectionWhere<"reviews"> = {};
 		if (values.filter === "featured") {
 			where.rating = { in: ["4", "5"] };
 		}

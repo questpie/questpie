@@ -4,7 +4,7 @@
 
 import { createApp, createContextFactory } from "questpie/app";
 import "./names.gen.js";
-import type { AccessContext, AppDefinition, CollectionSelect, GlobalSelect, HookContext } from "questpie/types";
+import type { AccessContext, AppDefinition, CollectionSelect, GlobalSelect, HookContext, Where } from "questpie/types";
 import type { AppCollections, AppGlobals, AppRoutes } from "./entities.gen.js";
 import type { _AppQuestpie, AppSession, AppSessionUser } from "./context.gen.js";
 
@@ -108,6 +108,12 @@ export type CollectionDoc<K extends keyof AppCollections> = CollectionSelect<App
  * Select/document type for a global key.
  */
 export type GlobalDoc<K extends keyof AppGlobals> = GlobalSelect<AppGlobals[K]>;
+
+/**
+ * Typed `where` filter for a collection key — prefer over `Record<string, unknown>`
+ * when building a `where` clause dynamically before a `find`/`findOne` call.
+ */
+export type CollectionWhere<K extends keyof AppCollections> = Where<AppCollections[K], AppConfig>;
 
 /**
  * Access-rule ctx for shared helpers. `K` narrows `data` to that collection's row.

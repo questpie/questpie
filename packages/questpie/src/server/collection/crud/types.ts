@@ -597,7 +597,10 @@ type WhereFieldsFromDefinitions<
 	TApp,
 	Depth extends unknown[],
 > = {
-	[K in keyof TFieldDefs]?: FieldWhereInputFromDefinition<
+	// `-readonly`: field defs are frozen (readonly keys); a homomorphic map would
+	// propagate that, making the WHERE *input* readonly and breaking the
+	// `const where = {…}; where.field = …` dynamic-build pattern. Strip it.
+	-readonly [K in keyof TFieldDefs]?: FieldWhereInputFromDefinition<
 		TFieldDefs[K],
 		TApp,
 		Depth
@@ -703,7 +706,8 @@ export type RawWhereOperator = (args: RawWhereArgs) => SQL;
  * Supports field conditions, logical operators, and relations
  */
 type WhereFields<in out TFields, in out TRelations> = {
-	[K in keyof TFields]?: K extends RelationKeys<TRelations>
+	// `-readonly`: see WhereFieldsFromDefinitions — keep the WHERE input mutable.
+	-readonly [K in keyof TFields]?: K extends RelationKeys<TRelations>
 		?
 				| RelationFilter<
 						ExtractRelationSelect<RelationValue<TRelations[K]>>,

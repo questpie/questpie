@@ -216,6 +216,12 @@ describe("generateTemplate — minimal (modules.ts only)", () => {
 		);
 	});
 
+	it("emits CollectionWhere helper from AppCollections", () => {
+		expect(code).toContain(
+			"export type CollectionWhere<K extends keyof AppCollections> = Where<AppCollections[K], AppConfig>;",
+		);
+	});
+
 	it("emits AppGlobals type alias (no user globals)", () => {
 		expect(code).toContain("export type AppGlobals = _ModuleGlobals;");
 	});

@@ -15,6 +15,7 @@ import type {
 	AppServices,
 	AppSession,
 	AppSessionUser,
+	CollectionWhere,
 } from "./.generated/index.js";
 import type { AppCollections } from "./.generated/entities.gen.js";
 
@@ -156,6 +157,36 @@ type _ArticlesCreateReturn = Awaited<
 	ReturnType<App["collections"]["articles"]["create"]>
 >;
 type _articlesCreateReturnHasId = Expect<HasKey<_ArticlesCreateReturn, "id">>;
+
+// ============================================================================
+// Invariant — CollectionWhere<K> helper resolves to the real find() where type.
+// The generated `CollectionWhere<"articles">` must (a) stay concrete (not any),
+// (b) carry the collection's field keys, and (c) be assignable to the `where`
+// param of `collections.articles.find` — proving the `AppConfig` app-param choice
+// matches what the CRUD surface expects.
+// ============================================================================
+
+type _ArticlesWhereParam = NonNullable<
+	NonNullable<Parameters<App["collections"]["articles"]["find"]>[0]>["where"]
+>;
+
+type _collectionWhereNotAny = Expect<NoAny<CollectionWhere<"articles">>>;
+type _collectionWhereHasField = Expect<
+	HasKey<CollectionWhere<"articles">, "title">
+>;
+type _collectionWhereAssignable = Expect<
+	Equal<CollectionWhere<"articles"> extends _ArticlesWhereParam ? true : false, true>
+>;
+
+// Mutability guard — `Where` field keys must NOT be readonly, or the
+// `const where = {…}; where.field = …` dynamic-build pattern won't compile.
+// (Homomorphic `readonly` leaked from the frozen field defs once; `-readonly`
+// on the WHERE mapped types strips it.) A direct assignment is the real probe —
+// `Equal<…, Mutable<…>>` would false-negative on CollectionWhere's intersection.
+function _collectionWhereMutationCompiles(): void {
+	const w: CollectionWhere<"articles"> = {};
+	w.title = "Hello"; // readonly key → TS2540 here
+}
 
 export type {
 	Ext,
