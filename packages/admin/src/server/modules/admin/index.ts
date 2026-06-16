@@ -17,7 +17,19 @@
  */
 
 // ── Generated module ──────────────────────────────────────────────────────────
-export type { AdminCollections } from "./.generated/module.js";
+// Named category types — re-exported so the app index can enumerate this
+// module's contributors via `interface AppX extends AdminX …` (pure static
+// register, never a fold). Empty categories are `Record<never, never>`.
+export type {
+	AdminBlocks,
+	AdminCollections,
+	AdminComponents,
+	AdminFieldTypes,
+	AdminGlobals,
+	AdminJobs,
+	AdminRoutes,
+	AdminViews,
+} from "./.generated/module.js";
 import _generatedModule from "./.generated/module.js";
 import { adminPlugin } from "../../plugin.js";
 

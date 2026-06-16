@@ -41,6 +41,8 @@ export type AiCollections = {
 	ai_workers: typeof _coll_ai_workers;
 };
 
+export type AiGlobals = Record<never, never>;
+
 export type AiJobs = {
 	workerTimeout: Omit<typeof _job_workerTimeout, "handler"> & { handler: (args: unknown) => Promise<unknown> };
 };
@@ -57,6 +59,14 @@ export type AiRoutes = {
 	workerRegister: typeof _route_workerRegister extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"workerRegister">> : typeof _route_workerRegister;
 };
 
+export type AiFieldTypes = Record<never, never>;
+
+export type AiViews = Record<never, never>;
+
+export type AiComponents = Record<never, never>;
+
+export type AiBlocks = Record<never, never>;
+
 export type AiServices = {
 	workerManager: typeof _svc_workerManager;
 };
@@ -71,15 +81,15 @@ export type AiModule = {
 	jobs: AiJobs;
 	routes: AiRoutes;
 	services: AiServices;
-	globals: Record<never, never>;
+	globals: AiGlobals;
+	fieldTypes: AiFieldTypes;
+	views: AiViews;
+	components: AiComponents;
+	blocks: AiBlocks;
 	messages: Record<never, never>;
 	emails: Record<never, never>;
 	migrations: readonly unknown[];
 	seeds: readonly unknown[];
-	fieldTypes: Record<never, never>;
-	views: Record<never, never>;
-	components: Record<never, never>;
-	blocks: Record<never, never>;
 	config: {
 		admin: typeof _adminConfig;
 	};

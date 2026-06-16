@@ -1,6 +1,13 @@
 export {
 	type AdminModule,
+	type AdminBlocks,
 	type AdminCollections,
+	type AdminComponents,
+	type AdminFieldTypes,
+	type AdminGlobals,
+	type AdminJobs,
+	type AdminRoutes,
+	type AdminViews,
 	actionFunctions,
 	adminModule,
 	adminRoutes,

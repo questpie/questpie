@@ -19,7 +19,19 @@ import {
 	resolveTargetGraph,
 	runAllTargets,
 } from "../../src/cli/codegen/index.js";
-import { generateTemplate } from "../../src/cli/codegen/template.js";
+import { generateTemplate as _generateTemplate } from "../../src/cli/codegen/template.js";
+
+// Step-6 multi-file split: generateTemplate now returns
+// `{ code, extraFiles }` (index.ts + names.gen.ts/entities.gen.ts/
+// context.gen.ts). These tests assert on the FULL emitted type surface, so the
+// shim concatenates index.ts + every layer file back into one string — the same
+// content the pre-split single index.ts contained.
+function generateTemplate(
+	opts: Parameters<typeof _generateTemplate>[0],
+): string {
+	const { code, extraFiles } = _generateTemplate(opts);
+	return [code, ...extraFiles.map((f) => f.code)].join("\n");
+}
 import type {
 	CategoryDeclaration,
 	CodegenPlugin,
@@ -177,10 +189,21 @@ describe("generateTemplate — minimal (modules.ts only)", () => {
 		expect(code).not.toContain('from "zod"');
 	});
 
-	it("collapses empty module prop intersections to empty objects", () => {
+	it("collapses empty module prop categories to empty objects", () => {
+		// _MP<K>/_MPRaw<K> were replaced by the recursive member-only folds
+		// ExtractModulePropArr / ExtractModulePropArrOverride. For a minimal app
+		// with NO module contributions these resolve to {} per category. The
+		// `services` carrier is emitted as a literal {} (it cannot be folded —
+		// its member values reach AppContext and re-introduce the cycle).
+		expect(code).not.toContain("type _MP<");
+		expect(code).not.toContain("_MPRaw<");
 		expect(code).toContain(
-			"type _MP<K extends string> = [_MPRaw<K>] extends [never] ? {} : unknown extends _MPRaw<K> ? {} : _MPRaw<K>;",
+			'export type _ModuleCollections = ExtractModulePropArrOverride<typeof _modules, "collections">;',
 		);
+		expect(code).toContain(
+			'export type _ModuleGlobals = ExtractModulePropArr<typeof _modules, "globals">;',
+		);
+		expect(code).toContain("export type _ModuleServices = {};");
 	});
 
 	it("emits AppCollections type alias (no user collections)", () => {
@@ -235,15 +258,18 @@ describe("generateTemplate — minimal (modules.ts only)", () => {
 
 	it("derives session from auth config instead of typeof app", () => {
 		expect(code).toContain("type _AppSession =");
-		expect(code).toContain("InferSessionFromAuthConfig<_AppAuthConfig>");
+		expect(code).toContain(
+			"InferSessionFromAuthConfig<_AppSessionAuthConfig>",
+		);
 		expect(code).toContain("session: _AppSession;");
 		expect(code).not.toContain("(typeof app)['auth']");
 	});
 
 	it("derives AppContext infrastructure and globals outside typeof app", () => {
-		expect(code).toContain(
-			"type _AppAppConfig = _ModuleConfig extends { app: infer TApp } ? TApp : {};",
-		);
+		// _ModuleConfig was removed: with no appConfig single the app-config base
+		// collapses to a literal {} (module-level app config now flows through the
+		// flat _MPConfigSub fold, not a _ModuleConfig extends-arm).
+		expect(code).toContain("type _AppAppConfig = {};");
 		expect(code).toContain(
 			"type _AppContextExtensions = Partial<InferContextExtensionsFromAppConfig<_AppAppConfig>>;",
 		);
@@ -783,8 +809,31 @@ describe("generateTemplate — services", () => {
 		expect(code).toContain(
 			"interface AppContext extends _AppCoreContext, _AppTopLevelServices {",
 		);
+		// OUTER AppContext keeps the namespace-filtered whole-fold (unchanged).
 		expect(code).toContain("services: _AppDefaultServices;");
+
+		// §2.2 cycle break — ServiceCreateContext is DECOUPLED from the inline
+		// service folds. It reads `services` from the by-name `Questpie.Services`
+		// interface (extends the FLAT, definition-keyed `_AppServicesSeam`) via
+		// `_ServiceCreateInfra`, rebuilt off the fold-free `_AppInfraRecord`. A
+		// service whose inferred instance eager-reads `ctx.services` no longer
+		// forces the whole fold while the fold is being computed (TS2456).
 		expect(code).toContain(
+			"export type _AppServicesSeam = { [K in keyof _AppServiceDefinitions]: ServiceInstanceOf<_AppServiceDefinitions[K]> };",
+		);
+		expect(code).toContain("type _AppInfraRecord = {");
+		expect(code).toContain(
+			"type _AppInfraContext = _AppInfraRecord & _AppCustomServiceNamespaces;",
+		);
+		expect(code).toContain(
+			'type _ServiceCreateInfra = Omit<_AppInfraRecord, "services"> & { services: Questpie.Services };',
+		);
+		expect(code).toContain("interface Services extends _AppServicesSeam {}");
+		expect(code).toContain(
+			"interface ServiceCreateContext extends _AppContextExtensions, _ServiceCreateInfra {}",
+		);
+		// The OLD inline-fold base must be GONE (the cyclic edge).
+		expect(code).not.toContain(
 			"interface ServiceCreateContext extends _AppCoreContext {}",
 		);
 	});
@@ -990,9 +1039,7 @@ describe("generateTemplate — app config context", () => {
 			singletonFactories: coreSingletonFactories(),
 		});
 
-		expect(code).toContain(
-			"type _AppAppConfig = (_ModuleConfig extends { app: infer TApp } ? TApp : {}) & typeof _appConfig;",
-		);
+		expect(code).toContain("type _AppAppConfig = typeof _appConfig;");
 		expect(code).toContain(
 			"type _AppContextExtensions = Partial<InferContextExtensionsFromAppConfig<_AppAppConfig>>;",
 		);
@@ -1175,7 +1222,13 @@ describe("generateTemplate — spreads", () => {
 			singletonFactories: coreSingletonFactories(),
 		});
 
-		expect(code).toContain('type _ModuleSidebar = _MP<"sidebar">');
+		// _MP<Key> was replaced by the recursive member-only ExtractModulePropArr
+		// fold — spread categories (sidebar/dashboard/...) are extracted from the
+		// module array the same way safe (non-services) categories are.
+		expect(code).toContain(
+			'export type _ModuleSidebar = ExtractModulePropArr<typeof _modules, "sidebar">;',
+		);
+		expect(code).not.toContain('_MP<"sidebar">');
 	});
 
 	it("does not put spread keys into singles or plugin singles section", () => {

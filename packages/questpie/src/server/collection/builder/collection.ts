@@ -150,10 +150,18 @@ type ExtractInputObject<TFieldDefs extends Record<string, any>> = Prettify<
  * For object/array/upload/relation fields, dispatches through FieldSelect to resolve nested/narrowed types.
  * Relation fields especially need FieldSelect because their TValue is a broad union (string | string[] | { type, id } | null)
  * but FieldSelect narrows based on actual config (belongsTo -> string, multiple -> string[], etc.)
+ *
+ * `FieldSelect` resolves an `output:false` (or virtual-relation) field to `never`;
+ * those keys are filtered out so a write-only/server-only field never lingers as a
+ * `never`-typed key on the public select — the same never-filter the nested
+ * `InferObjectData` applies, kept in single-evaluation form (each field's select
+ * type is computed once into `M`, then `never` keys are dropped).
  */
 type ExtractOutputTypes<TFieldDefs extends Record<string, any>> = {
 	[K in keyof TFieldDefs]: FieldSelect<TFieldDefs[K]>;
-};
+} extends infer M
+	? { [K in keyof M as M[K] extends never ? never : K]: M[K] }
+	: never;
 
 /**
  * Infer select type from Collection using TState-based fieldDefinitions.

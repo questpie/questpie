@@ -13,7 +13,7 @@
 import { jsonb, type PgVarcharBuilder, varchar } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
-import type { KnownCollectionKey } from "../../../config/app-context.js";
+import type { StrictCollectionKey } from "../../../config/app-context.js";
 import type { DefaultFieldState } from "../../../fields/field-class-types.js";
 import { Field, field } from "../../../fields/field-class.js";
 import { fieldType, wrapFieldComplete } from "../../../fields/field-type.js";
@@ -53,26 +53,37 @@ export type RelationFieldState<TTo extends string = string> =
 		relationKind: "one";
 	};
 
-export interface RelationFieldMethods {
+export interface RelationFieldMethods<TTo extends string = string> {
+	// Transitioning modifiers — flip the field type-state to a to-many shape.
+	// `.hasMany()`/`.manyToMany()` make the relation virtual (FK on the target /
+	// junction table) → ToManyRelationFieldState. `.multiple()` owns a jsonb
+	// array column → MultipleRelationFieldState (data: string[], not virtual).
 	hasMany(config: {
 		foreignKey: string;
 		onDelete?: ReferentialAction;
 		relationName?: string;
-	}): any;
+	}): Field<ToManyRelationFieldState<TTo>>;
 	manyToMany(config: {
-		through: KnownCollectionKey;
+		through: StrictCollectionKey;
 		sourceField?: string;
 		targetField?: string;
 		relationName?: string;
-	}): any;
-	multiple(): any;
+	}): Field<ToManyRelationFieldState<TTo>>;
+	multiple(): Field<MultipleRelationFieldState<TTo>>;
+	// State-preserving modifiers — `: any` routes through FieldTypeMethodsWrapped's
+	// IsAny short-circuit, which re-attaches the CURRENT accumulated TState. This
+	// keeps a to-many transition intact (e.g. `.hasMany(...).relationName('x')`
+	// stays "many") and preserves `.required()` etc. on a belongsTo chain.
 	onDelete(action: ReferentialAction): any;
 	onUpdate(action: ReferentialAction): any;
 	relationName(name: string): any;
 }
 
 export type ToManyRelationFieldState<TTo extends string = string> =
-	Omit<DefaultFieldState, "operators"> & {
+	// `virtual` MUST be in the Omit list: DefaultFieldState pins `virtual: false`,
+	// so a bare `& { virtual: true }` intersects to `false & true = never` and
+	// collapses the entire state. Same reasoning for the overridden members.
+	Omit<DefaultFieldState, "operators" | "virtual"> & {
 		type: "relation";
 		data: string[];
 		virtual: true;
@@ -99,23 +110,31 @@ export type MultipleRelationFieldState<TTo extends string = string> =
 /**
  * Relation target — accepts collection name, factory function, or polymorphic map.
  *
- * Collection names come from `KnownCollectionKey` — the names-only key
- * registry (`Questpie.CollectionKeys`) emitted by codegen from file discovery
- * alone. It is acyclic by construction (the interface references nothing) and
- * keeps a `(string & {})` fallback so plain strings still compile.
+ * Collection names come from `StrictCollectionKey` — the FINITE key union read
+ * off the names-only registry (`Questpie.CollectionKeys`) emitted by codegen
+ * from file discovery alone. It is acyclic by construction (the interface
+ * references nothing) and falls back to plain `string` when the registry is
+ * empty (pre-codegen / framework build), so source still compiles; once codegen
+ * populates the registry per app, a typo'd target is REJECTED.
  *
  * Do NOT switch to `KnownCollectionNames` (builder-typed Registry) — that
  * recreates the documented cycle:
  *   relation() → KnownCollectionNames → RegistryNames → Registry
  *   → _Registry_Collections → _MP<"collections"> → _Module → typeof _modules
  *   → adminModule → collections → CollectionBuilder (uses relation()) → CYCLE
+ * `StrictCollectionKey` reads the SAME acyclic `Questpie.CollectionKeys` seam
+ * as the loose `KnownCollectionKey`, so it is cycle-safe by the same argument.
  */
 type RelationTarget =
-	| KnownCollectionKey
+	| StrictCollectionKey
 	| (() => { name: string; table?: { id: unknown } })
-	| { [K in KnownCollectionKey]?: KnownCollectionKey | (() => { name: string }) };
+	| {
+			[K in StrictCollectionKey]?:
+				| StrictCollectionKey
+				| (() => { name: string });
+	  };
 
-type JunctionTarget = KnownCollectionKey | (() => { name: string });
+type JunctionTarget = StrictCollectionKey | (() => { name: string });
 
 // ============================================================================
 // Helper Functions
@@ -232,9 +251,9 @@ function buildRelationMetadata(
  * subject: f.relation({ users: "users", posts: "posts" }).required()
  * ```
  */
-export function relation<TTo extends KnownCollectionKey & string>(
+export function relation<TTo extends StrictCollectionKey>(
 	target: TTo | Exclude<RelationTarget, string>,
-): FieldWithMethods<RelationFieldState<TTo>, RelationFieldMethods> {
+): FieldWithMethods<RelationFieldState<TTo>, RelationFieldMethods<TTo>> {
 	const isPoly = isPolymorphicTarget(target);
 
 	if (isPoly) {

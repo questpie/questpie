@@ -38,8 +38,12 @@ export interface FieldState {
 	type: string;
 	/** Runtime data type (string, number, boolean, etc.) */
 	data: unknown;
-	/** Drizzle column builder type (null for virtual/relation fields) */
-	column: unknown;
+	/**
+	 * Drizzle column builder type (null for virtual/relation fields).
+	 * Optional: module-contributed field states that only drive select/input
+	 * resolution need not declare a Drizzle column to be a valid field state.
+	 */
+	column?: unknown;
 	/** NOT NULL constraint applied */
 	notNull: boolean;
 	/** Has a default value */
@@ -54,8 +58,22 @@ export interface FieldState {
 	output: boolean;
 	/** Wrapped in array via .array() */
 	isArray: boolean;
-	/** Operator set for WHERE clause generation */
-	operators: OperatorSetDefinition;
+	/**
+	 * Operator set for WHERE clause generation.
+	 * Optional: module-contributed field states that only drive select/input
+	 * resolution need not declare an operator set to be a valid field state.
+	 */
+	operators?: OperatorSetDefinition;
+	/**
+	 * WHERE-input value map (operator name → filter value type), decoupled from
+	 * the stored `data` AND the runtime `operators` singleton. When present,
+	 * `V2FieldWhere` derives the field's where shape from this instead of the
+	 * operator-function param types — letting a `select` filter on its literal
+	 * union, a `number[]` on `number`, a typed json on its shape (CL-07).
+	 * Optional: fields whose singleton operators already carry the right value
+	 * (text/number/date/boolean/relation) omit it and keep the operator path.
+	 */
+	whereInput?: Record<string, unknown>;
 	/** Relation/upload target collection name (for type-level dispatch) */
 	relationTo?: string | Record<string, string>;
 	/** Relation kind: "one" (belongsTo/upload), "many" (hasMany/manyToMany) */
@@ -99,13 +117,11 @@ export interface ArrayFieldMeta extends Questpie.ArrayFieldMeta {
  */
 export type ArrayFieldState<TInner extends FieldState> = Omit<
 	TInner,
-	"data" | "column" | "isArray" | "operators" | "notNull" | "hasDefault"
+	"data" | "column" | "isArray" | "operators"
 > & {
 	data: TInner["data"][];
 	column: PgJsonbBuilder;
 	isArray: true;
-	notNull: false;
-	hasDefault: false;
 	// Runtime array() switches the operator set to selectMultiOps — mirror it
 	// here so where-maps get exact operator keys (no broad index signature).
 	operators: typeof selectMultiOps;
@@ -250,6 +266,18 @@ export interface FieldRuntimeState {
 // Type Extraction Utilities
 // ============================================================================
 
+/** Local `any` guard — keeps the extractors self-contained (no test-util dep). */
+type _IsAny<T> = 0 extends 1 & T ? true : false;
+/**
+ * "Safe" data read: a degraded `data: unknown`/`data: any` resolves to the wide
+ * object floor `{}` instead of leaking `unknown`/`any` into an input/row shape.
+ * Concrete data passes through unchanged. (`any` is caught here too — `unknown
+ * extends any` is `true`.) Optionality/nullability branching is untouched, so
+ * the erased `Field<FieldState>` CRUD path keeps its optional-key shape; only the
+ * value floor tightens from `unknown` to `{}`.
+ */
+type _SafeData<TData> = unknown extends TData ? {} : TData;
+
 /**
  * Extract the select type from a field's TState.
  * Handles notNull, hasDefault, output, isArray, virtual.
@@ -274,21 +302,23 @@ export type ExtractSelectType<TState extends FieldState> = TState extends {
  * Extract the input type from a field's TState.
  * Handles notNull, hasDefault, input, virtual.
  */
-export type ExtractInputType<TState extends FieldState> = TState extends {
-	input: false;
-}
-	? never
-	: TState extends { virtual: true }
-		? TState extends { input: true }
-			? TState["data"] | undefined
-			: never
-		: TState extends { input: "optional" }
-			? TState["data"] | undefined
-			: TState extends { notNull: true }
-				? TState extends { hasDefault: true }
-					? TState["data"] | undefined
-					: TState["data"]
-				: TState["data"] | null | undefined;
+export type ExtractInputType<TState extends FieldState> =
+	// A `Field<any>` def must not leak `any` into the input shape.
+	_IsAny<TState> extends true
+		? unknown
+		: TState extends { input: false }
+			? never
+			: TState extends { virtual: true }
+				? TState extends { input: true }
+					? _SafeData<TState["data"]> | undefined
+					: never
+				: TState extends { input: "optional" }
+					? _SafeData<TState["data"]> | undefined
+					: TState extends { notNull: true }
+						? TState extends { hasDefault: true }
+							? _SafeData<TState["data"]> | undefined
+							: _SafeData<TState["data"]>
+						: _SafeData<TState["data"]> | null | undefined;
 
 /**
  * Extract the where type from a field's TState operators.

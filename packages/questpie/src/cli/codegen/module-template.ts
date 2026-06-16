@@ -159,8 +159,10 @@ export function generateModuleTemplate(
 	// TYPES — module type extraction
 	// ════════════════════════════════════════════════════════════
 
-	// Determine which categories need named type interfaces.
-	// Use typeEmit from CategoryDeclaration — skip "none" and "messages".
+	// Determine which categories carry FILES needing a non-trivial named type
+	// (collection/global/job/route/view/component/block records built from
+	// `typeof` references). Use typeEmit from CategoryDeclaration — skip "none"
+	// and "messages".
 	const categoriesNeedingTypes = new Set<string>();
 	for (const [catName, fileMap] of discovered.categories) {
 		if (fileMap.size === 0) continue;
@@ -171,7 +173,21 @@ export function generateModuleTemplate(
 		categoriesNeedingTypes.add(catName);
 	}
 
-	if (categoriesNeedingTypes.size > 0) {
+	// The "safe" categories — those that get a PURE STATIC named type on every
+	// module (collections/globals/jobs/routes/views/components/blocks/fieldTypes),
+	// emitting `Record<never, never>` when the module ships none. This lets the
+	// app index enumerate contributors via `interface AppX extends ${Prefix}X …`
+	// (a static register, never a fold). The set is data-driven: a category is
+	// "safe" when its `typeEmit` is the default "standard" AND it is not an array
+	// category (migrations/seeds). This deliberately excludes the carrier
+	// `services` (typeEmit "services" — reaches AppContext, §2.2), `emails`
+	// (typeEmit "emails", standalone), and `messages` (typeEmit "messages").
+	const safeNamedCategories: string[] = [];
+	for (const [catName, decl] of categoryMeta) {
+		if (isSafeNamedCategory(decl)) safeNamedCategories.push(catName);
+	}
+
+	if (categoriesNeedingTypes.size > 0 || safeNamedCategories.length > 0) {
 		lines.push(
 			"// ════════════════════════════════════════════════════════════",
 		);
@@ -205,17 +221,37 @@ export function generateModuleTemplate(
 		// Why emit at all (not just infer from `_module`):
 		//   Deep .merge().set() builder chains cause TS7056 ("inferred type exceeds
 		//   maximum length"). Named interfaces give TypeScript a stable anchor.
-		for (const catName of categoriesNeedingTypes) {
-			const fileMap = discovered.categories.get(catName)!;
+		// Emit a named type for every SAFE category (pure static enumeration target),
+		// plus any file-bearing category that is not itself safe but still needs a
+		// named anchor. Empty safe categories collapse to `Record<never, never>` so
+		// the app index can `extends ${Prefix}X` uniformly without a fold.
+		const emittedTypeCats = new Set<string>();
+		const emitNamedTypeFor = (catName: string): void => {
+			if (emittedTypeCats.has(catName)) return;
+			emittedTypeCats.add(catName);
+			const fileMap = discovered.categories.get(catName);
 			const decl = categoryMeta.get(catName);
 			const typeName = `${typePrefix}${catName.charAt(0).toUpperCase() + catName.slice(1)}`;
+
+			// No files → static empty register (`Record<never, never>`).
+			if (!fileMap || fileMap.size === 0) {
+				lines.push(`export type ${typeName} = Record<never, never>;`);
+				lines.push("");
+				return;
+			}
 
 			if (catName === "routes") {
 				emitSimpleRouteTypeInterface(lines, typeName, fileMap);
 			} else {
 				emitSimpleTypeInterface(lines, typeName, fileMap, decl, catName);
 			}
-		}
+		};
+
+		for (const catName of safeNamedCategories) emitNamedTypeFor(catName);
+		// File-bearing categories that are NOT in the safe set (none today, but
+		// keeps the emission complete if a plugin marks a file-bearing category
+		// non-standard) still get their named anchor.
+		for (const catName of categoriesNeedingTypes) emitNamedTypeFor(catName);
 	}
 
 	// Extra type declarations from plugins
@@ -281,13 +317,21 @@ export function generateModuleTemplate(
 	if (modulesFile) {
 		lines.push(`\tmodules: typeof ${modulesFile.varName};`);
 	}
-	for (const catName of categoriesNeedingTypes) {
+	// Categories with a named type — both file-bearing (categoriesNeedingTypes)
+	// and every safe category (which always has a named type now, `Record<never,
+	// never>` when empty). Reference the named type so the module declaration and
+	// the app index's `extends ${Prefix}X` read the SAME static type.
+	const namedTypeCats = new Set<string>([
+		...categoriesNeedingTypes,
+		...safeNamedCategories,
+	]);
+	for (const catName of namedTypeCats) {
 		if (catName === "messages") continue;
 		const typeName = `${typePrefix}${catName.charAt(0).toUpperCase() + catName.slice(1)}`;
 		lines.push(`\t${safeKey(catName)}: ${typeName};`);
 	}
 	for (const [catName, decl] of categoryMeta) {
-		if (categoriesNeedingTypes.has(catName)) continue;
+		if (namedTypeCats.has(catName)) continue;
 		if (extraPropNames.has(catName)) continue;
 		const emitStrategy = decl.emit ?? "record";
 		if (emitStrategy === "array") {
@@ -562,6 +606,29 @@ function deriveTypePrefix(moduleName: string): string {
 		.split("-")
 		.map((s) => s.charAt(0).toUpperCase() + s.slice(1))
 		.join("");
+}
+
+/**
+ * Whether a category gets a PURE STATIC named type (`${Prefix}<Cat>`) on every
+ * module — emitted even when the module ships none (collapsing to `Record<never,
+ * never>`). These are the categories the app index enumerates via
+ * `interface AppX extends ${Prefix}X … { <user literals> }` (a static register,
+ * never a fold over `typeof _modules`).
+ *
+ * Data-driven (no hardcoded category names): a category is "safe" when its
+ * `typeEmit` is the default "standard" (or unset) AND it is a record category
+ * (not `emit: "array"`). This yields exactly collections / globals / jobs /
+ * routes / views / components / blocks / fieldTypes, and excludes:
+ *   - `services` (typeEmit "services" — its VALUES reach AppContext, §2.2; a
+ *      named type over them would re-introduce the cycle on `extends`)
+ *   - `emails` (typeEmit "emails" — standalone record, app-keyed separately)
+ *   - `messages` (typeEmit "messages" — a key-union, not a record)
+ *   - `migrations`/`seeds` (emit: "array")
+ */
+function isSafeNamedCategory(decl: CategoryDeclaration): boolean {
+	const typeEmit = decl.typeEmit ?? "standard";
+	const emit = decl.emit ?? "record";
+	return typeEmit === "standard" && emit === "record";
 }
 
 /**

@@ -38,6 +38,10 @@ declare global {
 		interface CollectionKeys { inventoryMovements: unknown; machines: unknown; materials: unknown; operations: unknown; productionOrders: unknown; toyMaterials: unknown; toys: unknown }
 		interface GlobalKeys { siteSettings: unknown }
 		interface JobKeys { recalculateMaterialPlan: unknown }
+		interface RouteKeys { "rpc/planning/capacitySummary": unknown; "rpc/planning/receiveMaterials": unknown; "rpc/planning/startProduction": unknown }
+		interface ServiceKeys { capacityPlanner: unknown }
+		interface EmailKeys { productionScheduled: unknown }
+		interface WorkflowKeys { nightlyCapacityReview: unknown; productionOrderPlan: unknown }
 	}
 }
 

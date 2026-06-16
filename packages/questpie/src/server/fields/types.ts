@@ -562,3 +562,64 @@ export type ExtractVirtualFields<TFields extends Record<string, any>> =
  */
 export type ExtractRelationFields<TFields extends Record<string, any>> =
 	ExtractFieldsByLocation<TFields, "relation">;
+
+// ============================================================================
+// Shared Input/Output Shaping (single source of truth for collections + globals)
+// ============================================================================
+
+/**
+ * Extract the input type of a single field definition from its accumulated
+ * state. `Field<TState>` → `ExtractInputType<TState>`.
+ */
+export type FieldInput<T> = T extends {
+	readonly _: infer TState extends
+		import("./field-class-types.js").FieldState;
+}
+	? import("./field-class-types.js").ExtractInputType<TState>
+	: never;
+
+type RequiredInputKeys<TFieldDefs extends Record<string, any>> = {
+	[K in keyof TFieldDefs]: FieldInput<TFieldDefs[K]> extends never
+		? never
+		: undefined extends FieldInput<TFieldDefs[K]>
+			? never
+			: K;
+}[keyof TFieldDefs];
+
+type OptionalInputKeys<TFieldDefs extends Record<string, any>> = {
+	[K in keyof TFieldDefs]: FieldInput<TFieldDefs[K]> extends never
+		? never
+		: undefined extends FieldInput<TFieldDefs[K]>
+			? K
+			: never;
+}[keyof TFieldDefs];
+
+/**
+ * Extract input object type from field definitions, using optional properties
+ * when the field input type includes `undefined`. Shared by collection insert
+ * and global insert/update so both write surfaces derive from field definitions.
+ */
+export type ExtractInputObject<TFieldDefs extends Record<string, any>> =
+	import("#questpie/shared/type-utils.js").Prettify<
+		{
+			[K in RequiredInputKeys<TFieldDefs>]: FieldInput<TFieldDefs[K]>;
+		} & {
+			[K in OptionalInputKeys<TFieldDefs>]?: Exclude<
+				FieldInput<TFieldDefs[K]>,
+				undefined
+			>;
+		}
+	>;
+
+/**
+ * Extract output object type from field definitions. Maps each field through
+ * `FieldSelect` and drops `never` keys (write-only / server-only fields).
+ * Shared by collection select and global select.
+ */
+export type ExtractOutputObject<TFieldDefs extends Record<string, any>> = {
+	[K in keyof TFieldDefs]: import("./field-types.js").FieldSelect<
+		TFieldDefs[K]
+	>;
+} extends infer M
+	? { [K in keyof M as M[K] extends never ? never : K]: M[K] }
+	: never;

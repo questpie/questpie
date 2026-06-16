@@ -14,6 +14,8 @@ import type {
 	ServiceNamespaceOf,
 } from "#questpie/server/services/define-service.js";
 
+import type { Override } from "#questpie/shared/type-utils.js";
+
 import type { Registry } from "./app-context.js";
 
 /**
@@ -78,6 +80,48 @@ export type MergeModuleProp<
 	TModules extends readonly any[],
 	K extends string,
 > = ExtractModulePropArr<TModules, K>;
+
+/**
+ * Override-merging companion of {@link ExtractModuleProp} for whole-definition
+ * categories (collections/globals) where a same-key contribution must REPLACE,
+ * not intersect.
+ *
+ * The additive fold above intersects every contribution with `&`. That is correct
+ * for additive registry categories (fieldTypes/views/components) whose members are
+ * distinct-keyed records. It is WRONG for collections: a module may both NEST a
+ * sub-module that ships `collections.user` AND re-declare `collections.user` via
+ * `collection("user").merge(sub.collections.user)`. Intersecting the two full
+ * `Collection<A> & Collection<B>` instantiations collapses the value to `never`
+ * (a shared member like `i18nTable`/`versionsTable` is `null` on one side and a
+ * typed table on the other, and `null & {…}` reduces the whole object to `never`),
+ * which then poisons `CollectionInsert`/`CollectionSelect` into `never`/`{}`.
+ *
+ * This variant uses `Override<nested, direct>` so the OUTER (most-derived) module's
+ * direct `M[K]` shadows the nested sub-modules' contribution for the same key,
+ * while distinct keys from both sides survive — i.e. a re-declared collection
+ * replaces its base instead of detonating into `never`.
+ */
+export type ExtractModulePropOverride<M, K extends string> = Override<
+	M extends { modules: infer Sub extends readonly any[] }
+		? ExtractModulePropArrOverride<Sub, K>
+		: {},
+	K extends keyof M ? (M[K] extends Record<string, any> ? M[K] : {}) : {}
+>;
+
+/**
+ * Array companion for {@link ExtractModulePropOverride} — folds a readonly tuple
+ * of modules with last-wins override semantics (a later sibling re-declaring a
+ * key shadows an earlier one), mirroring the runtime spread-merge order.
+ */
+export type ExtractModulePropArrOverride<
+	A extends readonly any[],
+	K extends string,
+> = A extends readonly [infer H, ...infer T extends readonly any[]]
+	? Override<
+			ExtractModulePropOverride<H, K>,
+			ExtractModulePropArrOverride<T, K>
+		>
+	: {};
 
 /**
  * Normalize a service namespace to its runtime placement namespace.

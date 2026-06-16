@@ -54,6 +54,8 @@ import _wgt_value from "../widgets/value";
 // TYPES — composed from typeof references (zero inference cost)
 // ════════════════════════════════════════════════════════════
 
+export type AdminBlocks = Record<never, never>;
+
 export type AdminViews =
 	{ [K in typeof _view_collectionDocument.name]: typeof _view_collectionDocument } &
 	{ [K in typeof _view_collectionForm.name]: typeof _view_collectionForm } &
@@ -117,7 +119,7 @@ export type AdminModule = {
 	fields: AdminFields;
 	pages: AdminPages;
 	widgets: AdminWidgets;
-	blocks: Record<never, never>;
+	blocks: AdminBlocks;
 };
 
 const _module: AdminModule = {

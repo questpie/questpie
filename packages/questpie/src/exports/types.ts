@@ -52,6 +52,8 @@ export {
 export type {
 	ExtractModuleProp,
 	ExtractModulePropArr,
+	ExtractModulePropArrOverride,
+	ExtractModulePropOverride,
 	MergeModuleProp,
 	RegistryProp,
 	ServiceCustomNamespaceInstances,
@@ -141,7 +143,9 @@ export type {
 	InferRouteInput,
 	InferRouteOutput,
 	InferRouteParams,
+	JsonRouteDefinition,
 	JsonRouteHandlerArgs,
+	RawRouteDefinition,
 	RawRouteHandlerArgs,
 	RouteDefinition,
 	RouteParamsFromKey,

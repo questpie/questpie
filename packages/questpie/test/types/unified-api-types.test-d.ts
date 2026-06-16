@@ -598,12 +598,12 @@ const _whereCommentsAuthorOps: PostsWhereType = {
 
 type PostsRelations = CollectionRelationsFromApp<typeof posts, TApp>;
 
-// NOTE: Due to FieldWithMethods not updating TState for type-specific methods (hasMany/manyToMany),
-// comments currently resolves as a single RelationShape (type:"one") not an array.
-// This is a known type-system limitation where .hasMany() preserves the base belongsTo TState.
+// comments is a hasMany relation → resolves as an ARRAY of RelationShape now
+// that `.hasMany()` transitions the field type-state to relationKind:"many"
+// (CL-02). InferRelationConfigsFromFields reads relationKind → type:"many".
 type PostsCommentsRel = PostsRelations["comments"];
 type _commentsIsArray = Expect<
-	Equal<PostsCommentsRel extends any[] ? true : false, false>
+	Equal<PostsCommentsRel extends any[] ? true : false, true>
 >;
 
 // Extract element — since it's currently a single RelationShape (not array), extract directly
@@ -788,11 +788,11 @@ type _postsCSTitleNotUnknown = Expect<
 type PostsAuthorField = PostsCSelect["author"];
 type _authorFieldIsString = Expect<Equal<PostsAuthorField, string>>;
 
-// NOTE: hasMany fields currently appear in CollectionSelect as FK string values due to
-// FieldWithMethods preserving the base belongsTo TState (virtual: false) for type-specific methods.
-// The runtime correctly excludes them, but the type system shows them as string | null.
+// hasMany fields are virtual (no FK column on this table) → ABSENT from the base
+// select. `.hasMany()` transitions the field type-state to virtual:true (CL-02),
+// so V2FieldSelect drops them to `never`.
 type _commentsNotInSelect = Expect<
-	Equal<HasKey<PostsCSelect, "comments">, true>
+	Equal<HasKey<PostsCSelect, "comments">, false>
 >;
 
 // ============================================================================
@@ -852,10 +852,10 @@ type _exactDeletedAt = Expect<Equal<PostsCSelect["deletedAt"], Date | null>>;
 type _exactAuthorFK = Expect<Equal<PostsCSelect["author"], string>>;
 type _exactTitle2 = Expect<Equal<PostsCSelect["_title"], string>>;
 
-// NOTE: comments appears in PostsCSelect as a string | null FK value due to the FieldWithMethods
-// type limitation (hasMany doesn't update TState.virtual to true at the type level).
+// comments is virtual (hasMany) → ABSENT from PostsCSelect now that
+// `.hasMany()` flips TState.virtual to true at the type level (CL-02).
 type _commentsAbsent = Expect<
-	Equal<"comments" extends keyof PostsCSelect ? true : false, true>
+	Equal<"comments" extends keyof PostsCSelect ? true : false, false>
 >;
 
 // --- UsersSelect exact types ---

@@ -36,9 +36,15 @@ export type StarterCollections = {
 	verification: typeof _coll_verification;
 };
 
+export type StarterGlobals = Record<never, never>;
+
 export type StarterJobs = {
 	realtimeCleanup: Omit<typeof _job_realtimeCleanup, "handler"> & { handler: (args: unknown) => Promise<unknown> };
 };
+
+export type StarterRoutes = Record<never, never>;
+
+export type StarterFieldTypes = Record<never, never>;
 
 // ════════════════════════════════════════════════════════════
 // MODULE DEFINITION — static plain object
@@ -48,14 +54,14 @@ export type StarterModule = {
 	name: "questpie-starter";
 	collections: StarterCollections;
 	jobs: StarterJobs;
-	globals: Record<never, never>;
-	routes: Record<never, never>;
+	globals: StarterGlobals;
+	routes: StarterRoutes;
+	fieldTypes: StarterFieldTypes;
 	messages: Record<never, never>;
 	services: Record<never, never>;
 	emails: Record<never, never>;
 	migrations: readonly unknown[];
 	seeds: readonly unknown[];
-	fieldTypes: Record<never, never>;
 	config: {
 		app: typeof _appConfig;
 		auth: typeof _authConfig;

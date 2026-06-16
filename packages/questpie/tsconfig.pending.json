@@ -1,0 +1,15 @@
+{
+	"$schema": "https://json.schemastore.org/tsconfig",
+	"extends": "./tsconfig.json",
+	"compilerOptions": {
+		"incremental": false
+	},
+	"include": [
+		"src",
+		"src/server/modules/starter/.generated/*.ts",
+		"test/types/_assert.ts",
+		"test/types/_fixtures.ts",
+		"test/types/clusters"
+	],
+	"exclude": ["node_modules", "dist"]
+}

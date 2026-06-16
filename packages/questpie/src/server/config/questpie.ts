@@ -967,7 +967,12 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 			db?: any;
 			/** Incoming request (if in HTTP scope) */
 			request?: Request;
-			[key: string]: any;
+			/**
+			 * Pre-resolved request-context extensions bundle. Present when
+			 * re-entering an already-resolved context (idempotence by presence).
+			 * @internal
+			 */
+			"~contextExtensions"?: Record<string, unknown>;
 		} = {},
 	): Promise<RequestContext> {
 		const defaultLocale = this.config.locale?.defaultLocale || DEFAULT_LOCALE;

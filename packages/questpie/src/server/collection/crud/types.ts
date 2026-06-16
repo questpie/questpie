@@ -8,7 +8,10 @@ import type {
 	RelationConfig,
 	UploadOptions,
 } from "#questpie/server/collection/builder/types.js";
-import type { RequestContext } from "#questpie/server/config/context.js";
+import type {
+	BaseRequestContext,
+	RequestContext,
+} from "#questpie/server/config/context.js";
 import type { FieldState } from "#questpie/server/fields/field-class-types.js";
 import type {
 	FieldDefinitionsWithSystem,
@@ -30,6 +33,7 @@ import type {
 	ExtractRelationSelect,
 	GetCollection,
 	Prettify,
+	RelationDepth,
 	RelationShape,
 } from "#questpie/shared/type-utils.js";
 
@@ -55,11 +59,17 @@ export interface UploadFile {
 }
 
 /**
- * Context passed to CRUD operations
- * Extends RequestContext with CRUD-specific options
+ * Context passed to CRUD operations.
+ *
+ * Caller-facing alias targeting the strict, index-signature-FREE
+ * {@link BaseRequestContext} (NOT the loose ALS/wire {@link RequestContext}),
+ * so excess-property checking is back on at every CRUD call site: a typo'd
+ * `accessMode`/`stage`/`locale` is a compile error instead of silently
+ * no-op'ing (which falls back to `accessMode: 'system'` — fail-open).
+ *
  * @default accessMode: 'system' - API is backend-only by default
  */
-export type CRUDContext = RequestContext;
+export type CRUDContext = BaseRequestContext;
 
 /**
  * WHERE clause operators for type-safe filtering
@@ -415,12 +425,18 @@ type ResolveCollectionRelationFromApp<
 			GetCollection<TCollections, C>,
 			TApp
 		>
-	: RelationShape<any, never, any, unknown, unknown>;
+	: // Not-found arm is LOUD `never` (CL-04): this is the resolver the live CRUD
+		// `with` uses, so an omitted target (e.g. a module collection missing from a
+		// job/workflow ctx map) makes the populated relation `never` and surfaces,
+		// rather than degrading to a silent `any`.
+		RelationShape<never, never, never, unknown, unknown>;
 
 type ResolveRelationsDeepFromApp<
 	TRelations extends Record<string, RelationConfig>,
 	TApp,
-	Depth extends unknown[] = [1, 1, 1],
+	// Shared relation-recursion cap (CL-14, STEP B) — same constant the legacy
+	// `ResolveRelationsDeep` uses, so the two cycle-breakers can't drift again.
+	Depth extends unknown[] = RelationDepth,
 > = {
 	[K in keyof TRelations]: TRelations[K] extends {
 		type: "many" | "manyToMany";
@@ -487,14 +503,12 @@ type RelationWhereFromTarget<
 		>;
 
 /**
- * To-many quantifiers (some/none/every/count) for relation fields.
+ * To-many quantifiers (some/none/every) for relation fields.
  *
- * Runtime supports these on hasMany/manyToMany relations (toManyOps), but
- * `.hasMany()`/`.manyToMany()` cannot transition the field's type state yet
- * (type-specific methods are state-preserving — audit F4), so the field state
- * always carries belongsTo operators. Offered at the where-composition layer
- * for every relation field until state transitions land; values are fully
- * typed against the target collection's where.
+ * Added ONLY for to-many relations (relationKind:"many"), gated in
+ * V2RelationWhereResolved. Values are fully typed against the target
+ * collection's where. `count` is intentionally absent — no `COUNT(*)` clause
+ * exists yet, so it was a runtime no-op (removed from toManyOps too).
  */
 type RelationQuantifierWhere<
 	TTo extends string,
@@ -504,7 +518,6 @@ type RelationQuantifierWhere<
 	some?: RelationWhereFromTarget<TTo, TApp, Depth>;
 	none?: RelationWhereFromTarget<TTo, TApp, Depth>;
 	every?: RelationWhereFromTarget<TTo, TApp, Depth>;
-	count?: number;
 };
 
 /**
@@ -526,16 +539,27 @@ type V2RelationWhereResolved<
 > = TState extends {
 	relationTo: infer TTo extends string;
 }
-	?
-			| FieldSelect<TFieldDef, TApp>
+	? TState extends { relationKind: "many" }
+		? // to-many: ONLY quantifiers (some/none/every). No bare FK value and no
+			// bare target-where shorthand — those are single-row concepts. Both
+			// the resolved FieldWhere (toManyOps) and the typed quantifier arm
+			// expose the same quantifier keys, so the where is cardinality-uniform.
 			| ResolveWherePlaceholdersV2<
-					FieldWhere<TFieldDef, TApp>,
-					TTo,
-					TApp,
-					Depth
-			  >
-			| RelationWhereFromTarget<TTo, TApp, Depth>
-			| RelationQuantifierWhere<TTo, TApp, Depth>
+						FieldWhere<TFieldDef, TApp>,
+						TTo,
+						TApp,
+						Depth
+				  >
+				| RelationQuantifierWhere<TTo, TApp, Depth>
+		: // to-one: `is`/`isNot` (belongsToOps) + FK value + target-where shorthand.
+			| FieldSelect<TFieldDef, TApp>
+				| ResolveWherePlaceholdersV2<
+						FieldWhere<TFieldDef, TApp>,
+						TTo,
+						TApp,
+						Depth
+				  >
+				| RelationWhereFromTarget<TTo, TApp, Depth>
 	: FieldSelect<TFieldDef, TApp> | FieldWhere<TFieldDef, TApp>;
 
 type ResolveWherePlaceholdersV2<
@@ -558,7 +582,14 @@ type FieldWhereInputFromDefinition<
 > = TFieldDef extends { readonly _: infer TState extends { type: string } } // V2: Field<TState> dispatch via phantom _
 	? TState extends { type: "relation" | "upload" }
 		? V2RelationWhereResolved<TFieldDef, TState, TApp, Depth>
-		: FieldSelect<TFieldDef, TApp> | FieldWhere<TFieldDef, TApp>
+		: // The bare-value shorthand (`{ status: "x" }`) keeps only the NON-object
+			// members of the select type, so the operator object (FieldWhere) is the
+			// SOLE `object` member of this union. An object-typed direct value
+			// (`number[]`/`Date`/typed-json) would otherwise be indistinguishable from
+			// the operator object under `Extract<…, object>`, polluting operator key
+			// probes (WO-3). The operator object always carries `eq`, so dropping the
+			// object shorthand loses no real filtering capability.
+			Exclude<FieldSelect<TFieldDef, TApp>, object> | FieldWhere<TFieldDef, TApp>
 	: never;
 
 type WhereFieldsFromDefinitions<
@@ -832,35 +863,43 @@ export type With<in out TRelations = any> = {
  * Uses the __collection from RelationShape to dispatch through
  * the collection-aware Where/Columns path when available.
  */
-type WithRelationOptions<TRelation> =
+// `where` value: collection-aware when the relation carries a __collection,
+// else field-based. Shared by both cardinalities.
+type RelationWithWhere<TRelation> =
 	IsCollectionLike<RelationCollection<TRelation>> extends true
-		? {
-				columns?: Columns<RelationSelect<TRelation>>;
-				where?: WhereFromCollection<
-					RelationCollection<TRelation>,
-					RelationApp<TRelation>,
-					[1]
-				>;
-				orderBy?: OrderBy<RelationSelect<TRelation>>;
-				limit?: number;
-				offset?: number;
-				with?: With<RelationRelations<TRelation>>;
-				_aggregate?: RelationAggregation<RelationSelect<TRelation>>;
-				_count?: boolean;
-			}
-		: {
-				columns?: Columns<RelationSelect<TRelation>>;
-				where?: WhereFromFields<
-					RelationSelect<TRelation>,
-					RelationRelations<TRelation>
-				>;
-				orderBy?: OrderBy<RelationSelect<TRelation>>;
-				limit?: number;
-				offset?: number;
-				with?: With<RelationRelations<TRelation>>;
-				_aggregate?: RelationAggregation<RelationSelect<TRelation>>;
-				_count?: boolean;
-			};
+		? WhereFromCollection<
+				RelationCollection<TRelation>,
+				RelationApp<TRelation>,
+				[1]
+			>
+		: WhereFromFields<RelationSelect<TRelation>, RelationRelations<TRelation>>;
+
+type WithRelationOptionsToMany<TRelation> = {
+	columns?: Columns<RelationSelect<TRelation>>;
+	where?: RelationWithWhere<TRelation>;
+	orderBy?: OrderBy<RelationSelect<TRelation>>;
+	limit?: number;
+	offset?: number;
+	with?: With<RelationRelations<TRelation>>;
+	_aggregate?: RelationAggregation<RelationSelect<TRelation>>;
+	_count?: boolean;
+};
+
+type WithRelationOptions<TRelation> =
+	// `any` (the generic `With` default used by runtime generators) must NOT
+	// distribute to the restricted to-one shape — it would drop `_count`/
+	// `_aggregate` from every relation. Keep the full option set for `any`.
+	IsAny<TRelation> extends true
+		? WithRelationOptionsToMany<TRelation>
+		: TRelation extends readonly any[]
+			? // to-many: list options (limit/offset/orderBy/aggregate/count) are valid.
+				WithRelationOptionsToMany<TRelation>
+			: // to-one: a single row — list/aggregate options are meaningless (WR-3).
+				{
+					columns?: Columns<RelationSelect<TRelation>>;
+					where?: RelationWithWhere<TRelation>;
+					with?: With<RelationRelations<TRelation>>;
+				};
 
 /**
  * Options for findMany query (Drizzle RQB v2-like)
@@ -984,29 +1023,34 @@ export type FindOneOptions<TCollection, TApp> = Omit<
 /**
  * Nested relation operations for create/update
  */
-export interface NestedRelationConnect {
-	id: string; // Connect to existing record by ID
+export interface NestedRelationConnect<TId = string> {
+	id: TId; // Connect to existing record by ID
 }
 
 export interface NestedRelationCreate<TInsert = any> {
 	data: TInsert; // Create new record
 }
 
-export interface NestedRelationConnectOrCreate<TInsert = any> {
-	where: { id: string } | Partial<TInsert>; // Check if exists by ID or any unique field(s)
+export interface NestedRelationConnectOrCreate<TInsert = any, TId = string> {
+	where: { id: TId } | Partial<TInsert>; // Check if exists by ID or any unique field(s)
 	create: TInsert; // Create if doesn't exist
 }
 
 /**
  * Nested relation mutation options
+ *
+ * `TId` threads the TARGET collection's real primary-key type (via
+ * `ExtractIdType<ExtractRelationSelect<…>>`) so a numeric-PK target's nested
+ * `connect.id` / `connectOrCreate.where.id` / `set` element is `number`, not a
+ * hardcoded `string` (CL-11 sub-fix crudin-3).
  */
-export type NestedRelationMutation<TInsert = any> = {
-	connect?: NestedRelationConnect | NestedRelationConnect[]; // Link existing record(s)
+export type NestedRelationMutation<TInsert = any, TId = string> = {
+	connect?: NestedRelationConnect<TId> | NestedRelationConnect<TId>[]; // Link existing record(s)
 	create?: TInsert | TInsert[]; // Create new record(s)
 	connectOrCreate?:
-		| NestedRelationConnectOrCreate<TInsert>
-		| NestedRelationConnectOrCreate<TInsert>[]; // Create if doesn't exist
-	set?: string[] | { id: string }[]; // Replace all related records (M:N set operation)
+		| NestedRelationConnectOrCreate<TInsert, TId>
+		| NestedRelationConnectOrCreate<TInsert, TId>[]; // Create if doesn't exist
+	set?: TId[] | { id: TId }[]; // Replace all related records (M:N set operation)
 };
 
 type RelationKeys<TRelations> = [TRelations] extends [never]
@@ -1031,7 +1075,10 @@ type RelationMutations<TRelations> = [TRelations] extends [never]
 					? {} // No relations, return empty object
 					: {
 							[K in keyof TRelations]?: NestedRelationMutation<
-								ExtractRelationInsert<RelationValue<TRelations[K]>>
+								ExtractRelationInsert<RelationValue<TRelations[K]>>,
+								ExtractIdType<
+									ExtractRelationSelect<RelationValue<TRelations[K]>>
+								>
 							>;
 						}
 				: {}; // Not a record type or unknown, return empty object instead of permissive Record
@@ -1152,6 +1199,80 @@ export type CreateInputBase<TInsert = any, TRelations = any> = Omit<
 	WidenFkFieldsForMutations<TInsert, TRelations> &
 	Omit<RelationMutations<TRelations>, keyof TInsert>;
 
+/**
+ * Freshness guard (`Exact`): forbid any key present on the captured input
+ * `TInput` that is NOT part of the legal shape `TShape`, by intersecting a
+ * `Record<excessKeys, never>`. Because `create`/`update` capture the literal as
+ * a generic `TInput extends …Base`, plain excess-property checks are bypassed —
+ * this restores them at the CALL site (CL-11 sub-fix A).
+ *
+ * The `Record<Exclude<…>, never>` form (required `never` props on the excess
+ * keys only) is load-bearing: the `{ [K in Exclude<…>]?: never }` mapped form
+ * collapses the VALID keys to `never` under generic inference. Top-level only —
+ * nested relation-mutation create payloads remain a known gap (the
+ * `TInsert | TInsert[]` union disables freshness one level down).
+ */
+type ForbidExcessKeys<TInput, TShape> = Record<
+	Exclude<keyof TInput, keyof TShape>,
+	never
+>;
+
+/**
+ * Freshness for the NESTED relation-mutation `create` / `connectOrCreate.create`
+ * payloads. Recurses one level — for each relation key `K` whose captured value
+ * carries a single-object `create`, forbid keys not on the target's raw insert
+ * model (`ExtractRelationInsert<…>`). Only the single-object arm is guarded; the
+ * `TInsert[]` array arm is a known gap (excess checks are disabled inside a union
+ * the same way they are at the top level for `TInsert | TInsert[]`). Object/json
+ * FIELD values are NOT relation keys, so they are never recursed into.
+ */
+type ForbidExcessNestedCreate<TInput, TRelations> = [TRelations] extends [never]
+	? {}
+	: IsAny<TRelations> extends true
+		? {}
+		: string extends keyof TRelations
+			? {}
+			: {
+					[K in Extract<
+						keyof TInput,
+						keyof TRelations
+					>]?: TInput[K] extends { create: infer C }
+						? C extends readonly any[]
+							? TInput[K] // array arm — known gap, pass through
+							: {
+									create: C &
+										Record<
+											Exclude<
+												keyof C,
+												keyof ExtractRelationInsert<
+													RelationValue<TRelations[K]>
+												>
+											>,
+											never
+										>;
+								}
+						: TInput[K] extends {
+									connectOrCreate: { create: infer CC };
+								}
+							? CC extends readonly any[]
+								? TInput[K]
+								: {
+										connectOrCreate: {
+											create: CC &
+												Record<
+													Exclude<
+														keyof CC,
+														keyof ExtractRelationInsert<
+															RelationValue<TRelations[K]>
+														>
+													>,
+													never
+												>;
+										};
+									}
+							: TInput[K];
+				};
+
 export type CreateInputWithRelations<
 	TInsert = any,
 	TRelations = any,
@@ -1159,7 +1280,10 @@ export type CreateInputWithRelations<
 		TInsert,
 		TRelations
 	>,
-> = TInput & EnforceRelationForMissingFk<TInsert, TRelations, TInput>;
+> = TInput &
+	EnforceRelationForMissingFk<TInsert, TRelations, TInput> &
+	ForbidExcessKeys<TInput, CreateInputBase<TInsert, TRelations>> &
+	ForbidExcessNestedCreate<TInput, TRelations>;
 
 export type CreateInput<TInsert = any, TRelations = any> = CreateInputBase<
 	TInsert,
@@ -1372,10 +1496,10 @@ export type AggregationResult<TAgg extends RelationAggregation> =
 			? { _avg: { [K in keyof TAgg["_avg"]]: number } }
 			: {}) &
 		(TAgg["_min"] extends object
-			? { _min: { [K in keyof TAgg["_min"]]: any } }
+			? { _min: { [K in keyof TAgg["_min"]]: number } }
 			: {}) &
 		(TAgg["_max"] extends object
-			? { _max: { [K in keyof TAgg["_max"]]: any } }
+			? { _max: { [K in keyof TAgg["_max"]]: number } }
 			: {});
 
 /**
