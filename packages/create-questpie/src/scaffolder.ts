@@ -1,14 +1,8 @@
 import { existsSync } from "node:fs";
-import {
-	cp,
-	mkdir,
-	readdir,
-	readFile,
-	rename,
-	rm,
-	writeFile,
-} from "node:fs/promises";
+import { cp, readdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
+
+import { spawn } from "node:child_process";
 
 import * as p from "@clack/prompts";
 
@@ -171,21 +165,15 @@ function selectedFeatures(options: ProjectOptions): FeatureDescriptor[] {
 		.filter((f): f is FeatureDescriptor => Boolean(f));
 }
 
-/** The modules selected for this project (defaults to the v1 always-on set). */
-function selectedModules(options: ProjectOptions): ModuleDefinition[] {
-	const ids = new Set(resolveSelectedModuleIds(options));
-	return modules.filter((m) => ids.has(m.id));
-}
-
 /**
- * Resolve module ids for the current options. Until the multiselect lands
- * (Phase 5) this mirrors the previous hardcoded behavior: admin + openapi are
- * always on, workflows follows its flag.
+ * The modules selected for this project. The selection is resolved upstream
+ * (prompts / flags, validated through the `isModuleAllowed` oracle) and threaded
+ * through `options.modules`; here we just project it onto registry entries,
+ * preserving registry order.
  */
-function resolveSelectedModuleIds(options: ProjectOptions): string[] {
-	const ids = ["admin", "openapi"];
-	if (options.includeWorkflows) ids.push("workflows");
-	return ids;
+function selectedModules(options: ProjectOptions): ModuleDefinition[] {
+	const ids = new Set(options.modules);
+	return modules.filter((m) => ids.has(m.id));
 }
 
 /**
@@ -286,80 +274,6 @@ async function createLocalEnv(targetDir: string): Promise<void> {
 	}
 }
 
-type SkillSource = {
-	name: string;
-	candidates: string[];
-};
-
-function getSkillSources(targetDir: string): SkillSource[] {
-	return [
-		{
-			name: "questpie",
-			candidates: [
-				resolve(import.meta.dirname, "..", "skills", "questpie"),
-				join(targetDir, "node_modules", "questpie", "skills", "questpie"),
-				resolve(
-					import.meta.dirname,
-					"..",
-					"..",
-					"questpie",
-					"skills",
-					"questpie",
-				),
-				resolve(import.meta.dirname, "..", "..", "..", "skills", "questpie"),
-			],
-		},
-		{
-			name: "questpie-admin",
-			candidates: [
-				resolve(import.meta.dirname, "..", "skills", "questpie-admin"),
-				join(
-					targetDir,
-					"node_modules",
-					"@questpie",
-					"admin",
-					"skills",
-					"questpie-admin",
-				),
-				resolve(
-					import.meta.dirname,
-					"..",
-					"..",
-					"admin",
-					"skills",
-					"questpie-admin",
-				),
-				resolve(
-					import.meta.dirname,
-					"..",
-					"..",
-					"..",
-					"skills",
-					"questpie-admin",
-				),
-			],
-		},
-	];
-}
-
-async function installProjectSkills(targetDir: string): Promise<string[]> {
-	const installed: string[] = [];
-	const skillsDir = join(targetDir, ".agents", "skills");
-
-	for (const skill of getSkillSources(targetDir)) {
-		const source = skill.candidates.find((candidate) => existsSync(candidate));
-		if (!source) continue;
-
-		const destination = join(skillsDir, skill.name);
-		await mkdir(skillsDir, { recursive: true });
-		await rm(destination, { recursive: true, force: true });
-		await cp(source, destination, { recursive: true, dereference: true });
-		installed.push(skill.name);
-	}
-
-	return installed;
-}
-
 function handleFatalStepFailure(
 	message: string,
 	error: unknown,
@@ -401,7 +315,7 @@ async function applyProjectOptions(
 	// Gate the write on admin being selected AND the admin dir being present —
 	// headless runtimes ship no admin/ directory.
 	const adminDir = join(targetDir, "src", "questpie", "admin");
-	const adminSelected = resolveSelectedModuleIds(options).includes("admin");
+	const adminSelected = options.modules.includes("admin");
 	if (adminSelected && existsSync(adminDir)) {
 		await writeFile(
 			join(adminDir, "modules.ts"),
@@ -640,6 +554,29 @@ function buildAdminModules(options: ProjectOptions): string {
 	].join("\n");
 }
 
+/**
+ * Spawn `bunx skills add questpie/questpie` detached in the target project so
+ * the scaffold can complete without blocking on the (network-bound) install.
+ * Returns false when the process can't even be spawned (no `bunx` on PATH etc.)
+ * so the caller can fall back to printing the manual command.
+ */
+function startSkillsInstall(targetDir: string): boolean {
+	try {
+		const child = spawn("bunx", ["skills", "add", "questpie/questpie"], {
+			cwd: targetDir,
+			detached: true,
+			stdio: "ignore",
+		});
+		child.on("error", () => {
+			// Swallow async spawn failures (e.g. bunx missing) — best-effort only.
+		});
+		child.unref();
+		return true;
+	} catch {
+		return false;
+	}
+}
+
 export async function scaffold(options: ProjectOptions): Promise<void> {
 	const resolvedOptions: ProjectOptions = {
 		...options,
@@ -647,7 +584,6 @@ export async function scaffold(options: ProjectOptions): Promise<void> {
 		emailAdapter: options.emailAdapter ?? "console",
 		realtimeAdapter: options.realtimeAdapter ?? "none",
 		kvAdapter: options.kvAdapter ?? "memory",
-		includeWorkflows: options.includeWorkflows ?? false,
 	};
 	const spinner = p.spinner();
 	const targetDir = resolve(process.cwd(), resolvedOptions.projectName);
@@ -708,24 +644,25 @@ export async function scaffold(options: ProjectOptions): Promise<void> {
 		}
 	}
 
-	// 5. Install project-local agent skills
+	// 5. Install QUESTPIE agent skills (background, non-blocking).
+	// Reuses the canonical `bunx skills add questpie/questpie` (skills live at the
+	// repo-root `skills/`, maintained separately) — the scaffolder never vendors a
+	// copy. Detached + unref'd so the scaffold finishes immediately while the
+	// install continues; on spawn failure we just print the manual command.
 	if (resolvedOptions.installSkills) {
-		spinner.start("Installing QUESTPIE agent skills");
-		try {
-			const installedSkills = await installProjectSkills(targetDir);
-			if (installedSkills.length > 0) {
-				spinner.stop(
-					label.success(`Installed skills: ${installedSkills.join(", ")}`),
-				);
-			} else {
-				spinner.stop(
-					label.warn(
-						"Could not find packaged skills — run `bunx skill add questpie/questpie` manually if available",
-					),
-				);
-			}
-		} catch {
-			spinner.stop(label.warn("Failed to install skills — continuing"));
+		const started = startSkillsInstall(targetDir);
+		if (started) {
+			p.log.info(
+				label.info(
+					"Installing QUESTPIE agent skills in the background (`bunx skills add questpie/questpie`)",
+				),
+			);
+		} else {
+			p.log.warn(
+				label.warn(
+					"Could not start skills install — run `bunx skills add questpie/questpie` in the project",
+				),
+			);
 		}
 	}
 

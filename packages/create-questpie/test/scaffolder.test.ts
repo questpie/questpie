@@ -23,7 +23,7 @@ afterEach(async () => {
 });
 
 describe("scaffold", () => {
-	test("creates a runnable project shell with env, scripts, and agent skills", async () => {
+	test("creates a runnable project shell with env and scripts (skills not vendored)", async () => {
 		tempDir = await mkdtemp(join(tmpdir(), "create-questpie-"));
 		process.chdir(tempDir);
 
@@ -31,9 +31,12 @@ describe("scaffold", () => {
 			projectName: "smoke-app",
 			templateId: "tanstack-start",
 			databaseName: "smoke_app",
+			modules: defaultModuleIds("tanstack-start"),
 			installDeps: false,
 			initGit: false,
-			installSkills: true,
+			// Skills install is a backgrounded `bunx skills add` (network) — keep
+			// it off in unit tests; we only assert it leaves no vendored copy.
+			installSkills: false,
 			runCodegen: false,
 		});
 
@@ -83,14 +86,10 @@ describe("scaffold", () => {
 			true,
 		);
 
-		expect(
-			existsSync(join(projectDir, ".agents", "skills", "questpie", "SKILL.md")),
-		).toBe(true);
-		expect(
-			existsSync(
-				join(projectDir, ".agents", "skills", "questpie-admin", "SKILL.md"),
-			),
-		).toBe(true);
+		// Skills are no longer vendored — they install via a backgrounded
+		// `bunx skills add questpie/questpie`, so the scaffolder writes no
+		// `.agents/skills/` copy.
+		expect(existsSync(join(projectDir, ".agents", "skills"))).toBe(false);
 	});
 
 	test("applies adapter and workflow options to generated project files", async () => {
@@ -101,6 +100,7 @@ describe("scaffold", () => {
 			projectName: "adapter-app",
 			templateId: "tanstack-start",
 			databaseName: "adapter_app",
+			modules: [...defaultModuleIds("tanstack-start"), "workflows"],
 			installDeps: false,
 			initGit: false,
 			installSkills: false,
@@ -109,7 +109,6 @@ describe("scaffold", () => {
 			emailAdapter: "resend",
 			realtimeAdapter: "redis-streams",
 			kvAdapter: "redis",
-			includeWorkflows: true,
 		});
 
 		const projectDir = join(tempDir, "adapter-app");
@@ -155,6 +154,7 @@ describe("scaffold", () => {
 			projectName: "default-app",
 			templateId: "tanstack-start",
 			databaseName: "default_app",
+			modules: defaultModuleIds("tanstack-start"),
 			installDeps: false,
 			initGit: false,
 			installSkills: false,
@@ -244,6 +244,41 @@ describe("scaffold", () => {
 				``,
 			].join("\n"),
 		);
+	});
+
+	test("server modules.ts reflects the selected module set, not a hardcoded list", async () => {
+		tempDir = await mkdtemp(join(tmpdir(), "create-questpie-"));
+		process.chdir(tempDir);
+
+		// A non-default selection: admin + openapi + workflows.
+		await scaffold({
+			projectName: "selected-app",
+			templateId: "tanstack-start",
+			databaseName: "selected_app",
+			modules: ["admin", "openapi", "workflows"],
+			installDeps: false,
+			initGit: false,
+			installSkills: false,
+			runCodegen: false,
+		});
+
+		const projectDir = join(tempDir, "selected-app");
+		const serverModules = await readFile(
+			join(projectDir, "src", "questpie", "server", "modules.ts"),
+			"utf-8",
+		);
+		const adminModules = await readFile(
+			join(projectDir, "src", "questpie", "admin", "modules.ts"),
+			"utf-8",
+		);
+
+		// Server emits exactly the selected three, in registry order.
+		expect(serverModules).toContain("adminModule");
+		expect(serverModules).toContain("openApiModule");
+		expect(serverModules).toContain("workflowsModule");
+		// admin selected -> admin/modules.ts is (re)written with both client halves.
+		expect(adminModules).toContain("adminClientModule");
+		expect(adminModules).toContain("workflowsClientModule");
 	});
 });
 
