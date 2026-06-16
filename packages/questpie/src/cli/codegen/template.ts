@@ -19,6 +19,8 @@ import {
 	categoryRecordEntry,
 	categoryTypeEntry,
 	importStatement,
+	isKeyedEntityCat,
+	keyRegistryInterfaceName,
 	safeKey,
 	sortedValues,
 } from "./category-emit.js";
@@ -887,19 +889,19 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 			keysTypeName: string;
 		}> = [];
 		{
-			const keyRegistryCats: Array<{ interfaceName: string; catName: string }> = [
-				{ interfaceName: "CollectionKeys", catName: "collections" },
-				{ interfaceName: "GlobalKeys", catName: "globals" },
-				{ interfaceName: "JobKeys", catName: "jobs" },
-			];
 			l0.push(
 				"// ── Module entity-name key sets (distributive `keyof`) ─────",
 			);
-			for (const { interfaceName, catName } of keyRegistryCats) {
+			// Generic over every keyed-entity category (see isKeyedEntityCat) —
+			// no hardcoded category-name list. One alias + one interface per
+			// category the app discovered. extractFromModules:false categories
+			// (emails) contribute NO module names here (only the user-literal
+			// half in factories.ts), preserving their existing semantics.
+			for (const [catName, decl] of allDecls) {
+				if (!isKeyedEntityCat(decl)) continue;
 				if (!discovered.categories.has(catName)) continue;
-				const decl = allDecls.get(catName);
-				const shouldExtract = decl ? decl.extractFromModules !== false : true;
-				if (!shouldExtract) continue;
+				if (decl.extractFromModules === false) continue;
+				const interfaceName = keyRegistryInterfaceName(catName);
 				const keysTypeName = `_Module${capitalize(catName)}KeyNames`;
 				l0.push(
 					`type ${keysTypeName} = (typeof ${modulesFile.varName})[number] extends infer M ? M extends { ${catName}: infer C } ? keyof C & string : never : never;`,

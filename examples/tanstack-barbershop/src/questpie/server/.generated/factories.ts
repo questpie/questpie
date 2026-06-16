@@ -38,6 +38,11 @@ declare global {
 		interface CollectionKeys { appointments: unknown; barber_services: unknown; barbers: unknown; blog_posts: unknown; pages: unknown; reviews: unknown; services: unknown }
 		interface GlobalKeys { site_settings: unknown }
 		interface JobKeys { notifyBlogSubscribers: unknown; sendAppointmentCancellation: unknown; sendAppointmentConfirmation: unknown; sendAppointmentReminder: unknown }
+		interface RouteKeys { createBooking: unknown; getActiveBarbers: unknown; getAvailableTimeSlots: unknown; getRevenueStats: unknown }
+		interface ServiceKeys { blog: unknown }
+		interface EmailKeys { appointmentConfirmation: unknown; newBlogPost: unknown }
+		interface BlockKeys { bookingCta: unknown; columns: unknown; contactInfo: unknown; cta: unknown; divider: unknown; gallery: unknown; heading: unknown; hero: unknown; hours: unknown; imageText: unknown; reviews: unknown; services: unknown; spacer: unknown; stats: unknown; team: unknown; text: unknown }
+		interface McpToolKeys { "barbershop.checkAvailability": unknown }
 	}
 }
 

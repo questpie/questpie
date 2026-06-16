@@ -10,6 +10,10 @@
 import type { BuiltinFields } from "#questpie/server/fields/builder.js";
 
 // ── Entity key registry (names only — acyclic by construction) ─────
+// USER-literal half — one interface per keyed-entity category the app
+// discovered on disk (collections/globals/services here). FILE-derived keys
+// (static strings, no import) keep this leaf acyclic. MODULE entity names are
+// contributed separately by names.gen.ts's distributive-keyof.
 declare global {
 	namespace Questpie {
 		interface CollectionKeys {
@@ -18,6 +22,9 @@ declare global {
 		}
 		interface GlobalKeys {
 			siteSettings: unknown;
+		}
+		interface ServiceKeys {
+			reporting: unknown;
 		}
 	}
 }

@@ -105,6 +105,31 @@ declare global {
 
 		/** Names-only job key registry. @see CollectionKeys */
 		interface JobKeys {}
+
+		/**
+		 * Names-only key registries for the remaining keyed-entity categories.
+		 * Codegen re-augments these generically (one per discovered keyed
+		 * category — see `keyRegistryInterfaceName`). The empty bases here let
+		 * pre-codegen `keyof Questpie.RouteKeys` etc. resolve to `never` (the
+		 * `[keyof ...] extends [never]` fallback). Currently write-only — no
+		 * `Known*Key`/`Strict*Key` consumer is wired yet (turbo-consistency).
+		 * @see CollectionKeys
+		 */
+		interface RouteKeys {}
+		/** @see RouteKeys */
+		interface ServiceKeys {}
+		/** @see RouteKeys */
+		interface EmailKeys {}
+		/** @see RouteKeys */
+		interface ViewKeys {}
+		/** @see RouteKeys */
+		interface ComponentKeys {}
+		/** @see RouteKeys */
+		interface BlockKeys {}
+		/** @see RouteKeys */
+		interface WorkflowKeys {}
+		/** @see RouteKeys */
+		interface FieldTypeKeys {}
 	}
 }
 

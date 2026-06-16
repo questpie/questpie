@@ -37,6 +37,7 @@ declare global {
 	namespace Questpie {
 		interface CollectionKeys { announcements: unknown; cities: unknown; cityMembers: unknown; contacts: unknown; documents: unknown; news: unknown; pages: unknown; submissions: unknown }
 		interface GlobalKeys { site_settings: unknown }
+		interface BlockKeys { accordion: unknown; announcementBanner: unknown; columns: unknown; contactsList: unknown; cta: unknown; divider: unknown; documentsList: unknown; gallery: unknown; heading: unknown; hero: unknown; image: unknown; imageText: unknown; latestNews: unknown; spacer: unknown; text: unknown; video: unknown }
 	}
 }
 

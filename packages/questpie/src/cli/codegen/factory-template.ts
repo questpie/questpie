@@ -234,7 +234,7 @@ export function generateFactoryTemplate(
 
 	// ── Entity key registry — names only, zero imports ─────────
 	if (discoveredCategories) {
-		emitKeyRegistryAugmentation(lines, discoveredCategories);
+		emitKeyRegistryAugmentation(lines, discoveredCategories, target.categories);
 	}
 
 	// Plugin imports (only types needed for signatures)

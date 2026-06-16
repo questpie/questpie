@@ -37,28 +37,75 @@ export function categoryRecordEntry(
 }
 
 /**
+ * Whether a category contributes a names-only `*Keys` registry.
+ *
+ * A keyed-entity category is one that (a) participates in the value-typed
+ * `Registry` (`registryKey` truthy or a string) AND (b) emits a name-keyed
+ * `App*` type (`typeEmit` is the default/`standard`/`services`/`emails` form,
+ * i.e. NOT the `messages`/`none` non-entity forms) AND (c) is not an `array`
+ * emission (migrations/seeds). This naturally selects
+ * {collections, globals, jobs, routes, services, emails, views, components,
+ * blocks, fieldTypes, workflows} and excludes messages/migrations/seeds —
+ * with no hardcoded category-name list. Single source of truth shared by BOTH
+ * halves of the key registry (the module-name half in template.ts and the
+ * user-literal half below).
+ */
+export function isKeyedEntityCat(decl: CategoryDeclaration): boolean {
+	if (decl.registryKey === false || decl.registryKey === undefined)
+		return false;
+	if (decl.emit === "array") return false;
+	if (decl.typeEmit === "messages" || decl.typeEmit === "none") return false;
+	return true;
+}
+
+/**
+ * Derive the names-only `*Keys` interface name for a category — the single
+ * source of truth shared by both halves of the key registry.
+ *
+ * The existing 3 names are SINGULAR-stem (`CollectionKeys`, not
+ * `CollectionsKeys`), so the rule strips a trailing `s` then capitalizes:
+ * collections→CollectionKeys, globals→GlobalKeys, jobs→JobKeys,
+ * routes→RouteKeys, services→ServiceKeys, emails→EmailKeys, views→ViewKeys,
+ * components→ComponentKeys, blocks→BlockKeys, workflows→WorkflowKeys,
+ * fieldTypes→FieldTypeKeys. The `Keys` suffix keeps these collision-free with
+ * the value-typed `ViewsRegistry`/`ComponentsRegistry`/`FieldTypesMap`
+ * registries (different suffix).
+ */
+export function keyRegistryInterfaceName(catName: string): string {
+	const stem = catName.replace(/s$/, "");
+	return `${stem.charAt(0).toUpperCase()}${stem.slice(1)}Keys`;
+}
+
+/**
  * Emit the names-only entity key registry augmentation
- * (`Questpie.CollectionKeys` / `GlobalKeys` / `JobKeys`).
+ * (`Questpie.CollectionKeys` / `GlobalKeys` / `JobKeys` / … one interface per
+ * keyed-entity category).
  *
  * Keys come from file discovery alone and the emitted interfaces reference
  * nothing, so the augmentation is acyclic by construction. Interface merging
  * across generated files (root app + each module) tolerates duplicate keys.
  *
- * Consumed by `KnownCollectionKey` & friends (e.g. `relation()` target
- * autocomplete) with a `(string & {})` fallback — names only, never strict.
+ * Consumed by `KnownCollectionKey` / `StrictCollectionKey` & friends (e.g.
+ * `relation()` target autocomplete/validation) with a `(string & {})` fallback
+ * — names only, never strict.
+ *
+ * Generic over every keyed category (see {@link isKeyedEntityCat}). Keys are
+ * the FILE-derived keys (`safeKey(file.key)`) for EVERY category — a static
+ * string that needs no import, so this file stays acyclic (it must NOT
+ * reference `typeof _modules` or entity instances). For `keyFromProperty`
+ * categories (views/blocks/workflows) the file key can diverge from the
+ * runtime `.name`; that divergence is autocomplete-only (the `*Keys` interfaces
+ * are name SETS with no value semantics) and the runtime-property names are
+ * additionally contributed by the module half over module entities.
  */
 export function emitKeyRegistryAugmentation(
 	lines: string[],
 	discoveredCategories: Map<string, Map<string, DiscoveredFile>>,
+	categoryDecls: Record<string, CategoryDeclaration>,
 ): void {
-	const registries: Array<{ interfaceName: string; catName: string }> = [
-		{ interfaceName: "CollectionKeys", catName: "collections" },
-		{ interfaceName: "GlobalKeys", catName: "globals" },
-		{ interfaceName: "JobKeys", catName: "jobs" },
-	];
-
 	const entries: string[] = [];
-	for (const { interfaceName, catName } of registries) {
+	for (const [catName, decl] of Object.entries(categoryDecls)) {
+		if (!isKeyedEntityCat(decl)) continue;
 		const fileMap = discoveredCategories.get(catName);
 		if (!fileMap || fileMap.size === 0) continue;
 		// Bundles re-export another module's entities — that module's own
@@ -67,6 +114,7 @@ export function emitKeyRegistryAugmentation(
 			.filter((file) => !file.isBundle)
 			.map((file) => `${safeKey(file.key)}: unknown`);
 		if (keys.length === 0) continue;
+		const interfaceName = keyRegistryInterfaceName(catName);
 		entries.push(`\t\tinterface ${interfaceName} { ${keys.join("; ")} }`);
 	}
 
