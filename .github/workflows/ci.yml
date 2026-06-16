@@ -137,6 +137,14 @@ jobs:
       - name: example-errors ratchet
         run: bun run scripts/example-errors.ts
 
+      # ENFORCE the one-way codegen layer DAG (index → context.gen →
+      # entities.gen → names.gen): every generated `.generated/` must import
+      # DOWNWARD only, with no cycle. This locks in (BY CONSTRUCTION) the
+      # impossibility of the AppContext⇄config / ctx→user-code cycles — a
+      # regression in the codegen's emitted import directions fails here.
+      - name: codegen layer DAG (no upward import / no cycle)
+        run: bun run scripts/check-codegen-layers.ts
+
   docs:
     name: Docs
     runs-on: ubuntu-latest
