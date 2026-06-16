@@ -113,6 +113,7 @@ export type AppServices = {
 	[K in keyof _AppServiceDefinitions]: ServiceInstanceOf<_AppServiceDefinitions[K]>;
 };
 export type _AppDefaultServices = ServiceInstancesInNamespace<_AppServiceDefinitions, "services">;
+export type _AppServicesSeam = { [K in keyof _AppServiceDefinitions]: ServiceInstanceOf<_AppServiceDefinitions[K]> };
 export type _AppTopLevelServices = ServiceTopLevelInstances<_AppServiceDefinitions>;
 export type _AppCustomServiceNamespaces = ServiceCustomNamespaceInstances<_AppServiceDefinitions>;
 

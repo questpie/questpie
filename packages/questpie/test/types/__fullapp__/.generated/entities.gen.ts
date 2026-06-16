@@ -22,6 +22,7 @@ import { siteSettings as _glob_siteSettings } from "../globals/site-settings.js"
 
 // ── Services (gen-time-resolved FLAT — never a fold over typeof _modules) ──
 import { reportingService as _svc_reporting } from "../services/reporting.js";
+import { analyticsService as _svc_analytics } from "../services/analytics.js";
 
 import type {
 	ExtractModuleProp,
@@ -77,6 +78,7 @@ export type AppJobs = _ModuleJobs;
  */
 type _AppServiceDefinitions = _ModuleServices & {
 	reporting: typeof _svc_reporting;
+	analytics: typeof _svc_analytics;
 };
 
 /** All services in the app as resolved service instances. */
@@ -84,6 +86,7 @@ export type AppServices = {
 	[K in keyof _AppServiceDefinitions]: ServiceInstanceOf<_AppServiceDefinitions[K]>;
 };
 export type _AppDefaultServices = ServiceInstancesInNamespace<_AppServiceDefinitions, "services">;
+export type _AppServicesSeam = { [K in keyof _AppServiceDefinitions]: ServiceInstanceOf<_AppServiceDefinitions[K]> };
 export type _AppTopLevelServices = ServiceTopLevelInstances<_AppServiceDefinitions>;
 export type _AppCustomServiceNamespaces = ServiceCustomNamespaceInstances<_AppServiceDefinitions>;
 

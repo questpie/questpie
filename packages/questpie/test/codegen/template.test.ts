@@ -795,8 +795,31 @@ describe("generateTemplate — services", () => {
 		expect(code).toContain(
 			"interface AppContext extends _AppCoreContext, _AppTopLevelServices {",
 		);
+		// OUTER AppContext keeps the namespace-filtered whole-fold (unchanged).
 		expect(code).toContain("services: _AppDefaultServices;");
+
+		// §2.2 cycle break — ServiceCreateContext is DECOUPLED from the inline
+		// service folds. It reads `services` from the by-name `Questpie.Services`
+		// interface (extends the FLAT, definition-keyed `_AppServicesSeam`) via
+		// `_ServiceCreateInfra`, rebuilt off the fold-free `_AppInfraRecord`. A
+		// service whose inferred instance eager-reads `ctx.services` no longer
+		// forces the whole fold while the fold is being computed (TS2456).
 		expect(code).toContain(
+			"export type _AppServicesSeam = { [K in keyof _AppServiceDefinitions]: ServiceInstanceOf<_AppServiceDefinitions[K]> };",
+		);
+		expect(code).toContain("type _AppInfraRecord = {");
+		expect(code).toContain(
+			"type _AppInfraContext = _AppInfraRecord & _AppCustomServiceNamespaces;",
+		);
+		expect(code).toContain(
+			'type _ServiceCreateInfra = Omit<_AppInfraRecord, "services"> & { services: Questpie.Services };',
+		);
+		expect(code).toContain("interface Services extends _AppServicesSeam {}");
+		expect(code).toContain(
+			"interface ServiceCreateContext extends _AppContextExtensions, _ServiceCreateInfra {}",
+		);
+		// The OLD inline-fold base must be GONE (the cyclic edge).
+		expect(code).not.toContain(
 			"interface ServiceCreateContext extends _AppCoreContext {}",
 		);
 	});

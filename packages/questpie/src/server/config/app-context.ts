@@ -56,6 +56,27 @@ declare global {
 		interface FieldTypesMap {}
 
 		/**
+		 * Lazy by-name seam for the resolved DEFAULT-namespace service instances
+		 * (`ctx.services` inside a `service().create(ctx)` factory). Empty by
+		 * default — NO index signature, so an unknown service key is a compile
+		 * error, not a silent `any` (mirrors {@link FieldTypesMap}).
+		 *
+		 * The root codegen template re-augments it with `interface Services
+		 * extends _AppDefaultServices {}` — an INTERFACE that extends the resolved
+		 * services fold. `ServiceCreateContext.services` reads THIS interface
+		 * (by-name / lazily) instead of inlining `_AppDefaultServices` into the
+		 * `ServiceCreateContext` base, which detonated the §2.2 fixpoint: a
+		 * service whose INFERRED instance reads `ctx.services` at create-time made
+		 * `ServiceInstanceOf<self>` require `_AppDefaultServices` require
+		 * `ServiceInstanceOf<self>` — a true self-reference that degraded the
+		 * WHOLE `ctx.services` (TS2456 alias-circularity). Routing through this
+		 * empty-base interface defers the fold to member-access time (the same
+		 * pattern that broke the `create()`/collections/session ctx→user
+		 * back-edges via FieldTypesMap/AppHookContext/CollectionKeys).
+		 */
+		interface Services {}
+
+		/**
 		 * Extra parameters available to `appConfig({ context })` resolvers.
 		 * Empty by default — the root codegen template augments it with the
 		 * typed service surface (collections, globals, logger, kv, queue, t,

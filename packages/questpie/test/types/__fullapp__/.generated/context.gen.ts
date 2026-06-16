@@ -53,6 +53,7 @@ import type {
 	AppJobs,
 	AppEmailTemplates,
 	_AppDefaultServices,
+	_AppServicesSeam,
 	_AppTopLevelServices,
 	_AppCustomServiceNamespaces,
 	_Registry_Collections,
@@ -97,7 +98,7 @@ export type _AppQuestpie = Omit<_AppQuestpieBase, "collections" | "globals"> & {
 };
 
 // ── AppContext augmentation — auto-types ALL handlers ──────
-type _AppInfraContext = {
+type _AppInfraRecord = {
 	// Infrastructure
 	app: _AppQuestpie;
 	db: _AppDb;
@@ -120,14 +121,17 @@ type _AppInfraContext = {
 
 	// User services
 	services: _AppDefaultServices;
-} & _AppCustomServiceNamespaces;
+};
+type _AppInfraContext = _AppInfraRecord & _AppCustomServiceNamespaces;
 type _AppCoreContext = _AppContextExtensions & _AppInfraContext;
+type _ServiceCreateInfra = Omit<_AppInfraRecord, "services"> & { services: Questpie.Services };
 
 declare global {
 	namespace Questpie {
 		interface AppContext extends _AppCoreContext, _AppTopLevelServices {}
 
-		interface ServiceCreateContext extends _AppCoreContext {}
+		interface Services extends _AppServicesSeam {}
+		interface ServiceCreateContext extends _AppContextExtensions, _ServiceCreateInfra {}
 		// Names-only marker — the `ServiceCreateContext` fallback conditional
 		// probes THIS interface's keys instead of the real one (whose base
 		// resolves through module service definitions and would cycle).

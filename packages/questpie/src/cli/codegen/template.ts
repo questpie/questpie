@@ -228,6 +228,7 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 	if (hasServicesCat) {
 		l1ToL2.push(
 			"_AppDefaultServices",
+			"_AppServicesSeam",
 			"_AppTopLevelServices",
 			"_AppCustomServiceNamespaces",
 		);
@@ -644,6 +645,36 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 				lines.push(
 					'export type _AppDefaultServices = ServiceInstancesInNamespace<_AppServiceDefinitions, "services">;',
 				);
+				// FLAT seam for `Questpie.Services` (the `ServiceCreateContext.services`
+				// surface). Keyed over `keyof _AppServiceDefinitions` — the LITERAL key
+				// set of the definitions object, which TS reads from the object-type
+				// STRUCTURE alone (no member-type resolution) and so stays acyclic even
+				// while a service's instance is still being inferred. Each value is
+				// `ServiceInstanceOf<_AppServiceDefinitions[K]>` indexed PER-KEY.
+				//
+				// This is the cycle break. The original `ServiceCreateContext.services =
+				// _AppDefaultServices` re-ran the namespace-filtered fold
+				// (`ServiceInstancesInNamespace`, whose `as`-clause reads each def's
+				// namespace) as ONE atomic computation. A service whose INFERRED instance
+				// reads `ctx.services` at create-time made that fold depend on the very
+				// service being captured (its `typeof` is in-flight), so resolving the
+				// namespace filter re-entered → TS2456 alias-circularity that degraded the
+				// WHOLE `ctx.services`. Keying off the acyclic `keyof
+				// _AppServiceDefinitions` and indexing per-key lets cross/self reads
+				// resolve independently. Same flat-explicit principle that broke the
+				// AppContext⇄config cycle.
+				//
+				// NOTE: this seam is intentionally NOT namespace-filtered — filtering
+				// re-reads the in-flight builder namespaces and reintroduces the cycle.
+				// It therefore carries ALL service instances (every namespace), so a
+				// create-ctx `ctx.services.<x>` resolves any service. The OUTER
+				// `AppContext.services` keeps the namespace-filtered `_AppDefaultServices`
+				// (correct default-namespace surface); custom-namespace services are an
+				// uncommon feature and the only consequence here is that a create-ctx may
+				// also see them under `ctx.services` (a widening, never `any`).
+				lines.push(
+					"export type _AppServicesSeam = { [K in keyof _AppServiceDefinitions]: ServiceInstanceOf<_AppServiceDefinitions[K]> };",
+				);
 				lines.push(
 					"export type _AppTopLevelServices = ServiceTopLevelInstances<_AppServiceDefinitions>;",
 				);
@@ -828,12 +859,20 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 		lines.push(
 			"// ── AppContext augmentation — auto-types ALL handlers ──────",
 		);
+		// _AppInfraRecord = the flat infra RECORD (no custom-ns fold). Split out
+		// from `_AppInfraContext` so `_ServiceCreateInfra` (below) can rebuild the
+		// service-create infra WITHOUT the `& _AppCustomServiceNamespaces` fold —
+		// that fold (`ServiceCustomNamespaceInstances`) reads each service def's
+		// namespace and so re-enters the §2.2 cycle when a service's instance is
+		// in-flight. `_AppInfraContext` re-adds the fold below (unchanged surface
+		// for AppContext / hook / access seams).
+		//
 		// _AppInfraContext = the full infra surface WITHOUT _AppContextExtensions.
 		// Shared by AppContext (via _AppCoreContext) AND the app-level hook/access
 		// ctx seams (AppHookContext/AppDefaultAccessContext). Excluding the
 		// extensions keeps those seams OFF the cyclic edge
 		// (AppContext → extensions → typeof appConfig → AppHookContext → ...).
-		lines.push("type _AppInfraContext = {");
+		lines.push("type _AppInfraRecord = {");
 		lines.push("\t// Infrastructure");
 		lines.push("\tapp: _AppQuestpie;");
 		lines.push("\tdb: _AppDb;");
@@ -870,8 +909,29 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 			lines.push("\t// User services");
 			lines.push("\tservices: _AppDefaultServices;");
 		}
-		lines.push("} & _AppCustomServiceNamespaces;");
+		lines.push("};");
+		lines.push("type _AppInfraContext = _AppInfraRecord & _AppCustomServiceNamespaces;");
 		lines.push("type _AppCoreContext = _AppContextExtensions & _AppInfraContext;");
+		if (hasServices) {
+			// ServiceCreateContext base — DECOUPLED from the service folds. The OUTER
+			// AppContext keeps `services: _AppDefaultServices` + `&
+			// _AppCustomServiceNamespaces` (it is NOT a service-create position —
+			// hooks/jobs/routes read them lazily, off the cyclic edge). But
+			// ServiceCreateContext IS a service-create position: a service whose
+			// INFERRED instance reads `ctx.services` at create-time makes the service
+			// folds depend on the very service being captured → a self-reference that
+			// degrades the WHOLE ctx.services (TS2456 alias-circularity).
+			//
+			// So rebuild it from the flat `_AppInfraRecord` (NOT `_AppInfraContext` —
+			// that re-adds the `& _AppCustomServiceNamespaces` fold), Omit `services`,
+			// and re-add it from the by-name `Questpie.Services` interface (which
+			// extends the FLAT, definition-keyed `_AppServicesSeam`, resolved per-key
+			// off the acyclic `keyof _AppServiceDefinitions`). Both edges that re-read
+			// in-flight service types are cut.
+			lines.push(
+				'type _ServiceCreateInfra = Omit<_AppInfraRecord, "services"> & { services: Questpie.Services };',
+			);
+		}
 		lines.push("");
 
 		// ── Module entity-name key sets (distributive `keyof`, UnionToIntersection-free) ──
@@ -1007,7 +1067,26 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 		lines.push("");
 		emitNonRecursiveContext("WorkflowContext");
 		lines.push("");
-		lines.push("\t\tinterface ServiceCreateContext extends _AppCoreContext {}");
+		if (hasServices) {
+			// By-name seam for the create-ctx service instances. Extends the FLAT
+			// per-key `_AppServicesSeam` (NOT the atomic namespace-filtered fold
+			// `_AppDefaultServices`) — so reading `ctx.services.<X>` resolves a single
+			// instance off the acyclic `keyof _AppServiceDefinitions` key set, NOT the
+			// whole fold. That per-key resolution is what breaks the §2.2
+			// self-reference (a service whose INFERRED instance reads `ctx.services` no
+			// longer forces the WHOLE fold while the fold is still being computed). NO
+			// index signature is added (unknown service keys stay compile errors).
+			lines.push("\t\tinterface Services extends _AppServicesSeam {}");
+			// ServiceCreateContext reads `services` from `Questpie.Services` (via
+			// `_ServiceCreateInfra`), NOT the inline `_AppDefaultServices` in
+			// `_AppCoreContext`. The OUTER AppContext is UNCHANGED (still
+			// `_AppCoreContext` + `_AppDefaultServices`) — it is off the cyclic edge.
+			lines.push(
+				"\t\tinterface ServiceCreateContext extends _AppContextExtensions, _ServiceCreateInfra {}",
+			);
+		} else {
+			lines.push("\t\tinterface ServiceCreateContext extends _AppCoreContext {}");
+		}
 		lines.push(
 			"\t\t// Names-only marker — the `ServiceCreateContext` fallback conditional",
 		);
