@@ -12,7 +12,7 @@ A [QUESTPIE](https://questpie.com) app built with TanStack Start.
 ### Setup
 
 ```bash
-# 1) Start PostgreSQL
+# 1) Start PostgreSQL (also provisions required extensions for local dev)
 docker compose up -d
 
 # 2) Regenerate codegen and type-check
@@ -27,6 +27,18 @@ bun run dev
 
 - Admin panel: `http://localhost:3000/admin`
 - API docs (Scalar): `http://localhost:3000/api/docs`
+
+### Database extensions
+
+QUESTPIE is drizzle-native and does **not** auto-create Postgres extensions. The
+starter's full-text search relies on `pg_trgm` (trigram matching).
+
+- **Local dev:** `docker compose up` provisions `pg_trgm` via
+  `docker/init-extensions.sql`, mounted into the postgres container's
+  `/docker-entrypoint-initdb.d/` and run once on first cluster init — so
+  `db:push` works out of the box.
+- **Managed Postgres:** enable required extensions through your provider before
+  deploying. See [the QUESTPIE docs](https://questpie.com/docs) for details.
 
 ## Project Structure
 
