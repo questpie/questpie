@@ -221,7 +221,7 @@ export function generateTemplate(options: TemplateOptions): string {
 	lines.push("");
 
 	lines.push(
-		'import type { ServiceCustomNamespaceInstances, ServiceInstanceOf, ServiceInstancesInNamespace, ServiceTopLevelInstances, UnionToIntersection } from "questpie/types";',
+		'import type { ExtractModulePropArr, ServiceCustomNamespaceInstances, ServiceInstanceOf, ServiceInstancesInNamespace, ServiceTopLevelInstances } from "questpie/types";',
 	);
 	// Workflows plugin present → the generated contexts expose a typed
 	// `workflows` client keyed by AppWorkflows (name + schema preserved).
@@ -234,96 +234,105 @@ export function generateTemplate(options: TemplateOptions): string {
 	lines.push(
 		'type _RouteDefinitionWithoutHandler<T> = T extends { mode: "raw" } ? Omit<T, "handler"> & { handler: (args: unknown) => Response | Promise<Response> } : Omit<T, "handler"> & { handler: (args: unknown) => unknown | Promise<unknown> };',
 	);
-	lines.push(`type _Module = (typeof ${modulesFile.varName})[number];`);
-	lines.push(
-		"type _MPRaw<K extends string> = UnionToIntersection<_Module extends infer M ? M extends Record<K, infer V> ? V : never : never>;",
-	);
-	lines.push(
-		"type _MP<K extends string> = [_MPRaw<K>] extends [never] ? {} : unknown extends _MPRaw<K> ? {} : _MPRaw<K>;",
-	);
-	lines.push('type _ModuleConfig = _MP<"config">;');
+	// Module category extraction is done via `ExtractModulePropArr` — a recursive,
+	// member-only fold over the module tuple (recurses sub-modules, projects only
+	// the requested member). It replaces the old `_MP`/`UnionToIntersection` fuse:
+	// `UnionToIntersection` forced eager whole-union materialization, which dragged
+	// the cyclic config/services carrier members through AppContext (TS2456). The
+	// recursive fold walks modules one at a time and never materializes a sibling
+	// carrier member, so the SAFE categories (collections/globals/jobs/routes/
+	// views/components/blocks) stay acyclic. The CARRIERS (config-extensions, auth,
+	// services) are derived separately below — never via this fold.
 	const appConfigFile = discovered.singles.get("appConfig");
 	const authConfigFile = discovered.singles.get("authConfig");
 	const authFile = authConfigFile ?? discovered.singles.get("auth");
+
+	// `_MPConfigSub` — a POSITIONAL fold over the module tuple that extracts a
+	// SINGLE `config[K]` member per declaration via a structural key check. It
+	// never instantiates a sibling config member (e.g. `config.admin`), so it is
+	// acyclic for `K = "auth"` (BetterAuth options never reach AppContext). It is
+	// the single mechanism used for the `config.auth` carrier below AND for the
+	// session-dedicated auth config.
+	lines.push(
+		"type _MPConfigSub<A extends readonly any[], K extends string> = A extends readonly [infer H, ...infer T extends readonly any[]] ? (H extends { config: infer C } ? (C extends Record<K, infer V> ? V : {}) : {}) & _MPConfigSub<T, K> : {};",
+	);
+
+	// ── config.app extensions — USER-DERIVED, acyclic ────────────────────
+	// `_AppContextExtensions` is the FORMER head of the AppContext⇄config cycle:
+	// it fed `_AppQuestpieConfig["~contextExtensions"]` and, via the old
+	// `_ModuleConfig extends { app }` arm, routed through `_MP<"config"> →
+	// UnionToIntersection`, which materialised the admin module's cyclic
+	// `config.admin` (`appConfig` with AppContext-typed resolvers → TS2456). We
+	// derive the extensions from `typeof <appConfig>` ALONE (a user file):
+	// `InferContextExtensionsFromAppConfig` reads the resolver RETURN shape, never
+	// `typeof app`, so the cyclic config carrier is never instantiated. The
+	// `~contextExtensions` config edge is KEPT (precise — Invariant 1), its SOURCE
+	// is now acyclic.
 	if (appConfigFile) {
-		lines.push(
-			`type _AppAppConfig = (_ModuleConfig extends { app: infer TApp } ? TApp : {}) & typeof ${appConfigFile.varName};`,
-		);
+		lines.push(`type _AppAppConfig = typeof ${appConfigFile.varName};`);
 	} else {
-		lines.push(
-			"type _AppAppConfig = _ModuleConfig extends { app: infer TApp } ? TApp : {};",
-		);
+		lines.push("type _AppAppConfig = {};");
 	}
 	lines.push(
 		"type _AppContextExtensions = Partial<InferContextExtensionsFromAppConfig<_AppAppConfig>>;",
 	);
+
+	// ── config.auth — POSITIONAL fold, acyclic ───────────────────────────
+	// `_AppAuthConfig` feeds `_AppQuestpieConfig.auth`. Extracting `config.auth`
+	// via `_MPConfigSub` (above) materialises ONLY `config["auth"]` (BetterAuth
+	// opts, no AppContext) — never the sibling `config.admin`. The old whole-
+	// config `_ModuleConfig extends { auth }` arm cycled through `_MP<"config">`;
+	// the positional fold does not.
 	if (authFile) {
 		lines.push(
-			`type _AppAuthConfig = (_ModuleConfig extends { auth: infer TAuth } ? TAuth : {}) & typeof ${authFile.varName};`,
+			`type _AppAuthConfig = _MPConfigSub<typeof ${modulesFile.varName}, "auth"> & typeof ${authFile.varName};`,
 		);
 	} else {
 		lines.push(
-			"type _AppAuthConfig = _ModuleConfig extends { auth: infer TAuth } ? TAuth : {};",
+			`type _AppAuthConfig = _MPConfigSub<typeof ${modulesFile.varName}, "auth">;`,
 		);
 	}
-	// ── Session-dedicated auth config — OFF the AppContext cycle ──────────
-	// `_AppAuthConfig` (above) is part of the AppContext augmentation cycle: it
-	// feeds `_AppQuestpieConfig.auth`, and its `_ModuleConfig` arm routes through
-	// `_MP<"config"> → _MPRaw`, which `UnionToIntersection`-instantiates the admin
-	// module's cyclic `config.admin` (`appConfig` with AppContext-typed
-	// resolvers). TS aborts that alias (TS2456) and collapses `_AppAuthConfig` to
-	// `any`, so any session derived from it is `any` in real generated apps.
-	//
-	// We deliberately do NOT rewrite that whole-config merge: the early
-	// `_MPRaw → any` collapse is load-bearing — it's the single point where the
-	// (genuine, architectural) AppContext↔config cycle is absorbed; replacing it
-	// makes TS re-discover the cycle at many downstream aliases (services, infra
-	// context) and report MORE TS2456, not fewer.
-	//
-	// Instead we give SESSION its own auth-config alias that (a) is consumed ONLY
-	// by `_AppSession` — never by `_AppQuestpieConfig` — so it stays off the
-	// cyclic edge, and (b) extracts module `config.auth` SHALLOWLY per-declaration
-	// (a positional fold doing a STRUCTURAL key check, never instantiating sibling
-	// `config.admin`). Session inference only needs the `__questpieSessionType__`
-	// phantom on the user's `authConfig()` plus any module-contributed auth, so
-	// this clean alias resolves `_AppSession`/`AppSession`/`AppSessionUser` to the
-	// CONCRETE plugin-aware shape (not `any`) while leaving the cycle untouched.
-	lines.push(
-		"type _MPConfigSub<A extends readonly any[], K extends string> = A extends readonly [infer H, ...infer T extends readonly any[]] ? (H extends { config: infer C } ? (C extends Record<K, infer V> ? V : {}) : {}) & _MPConfigSub<T, K> : {};",
-	);
-	if (authFile) {
-		lines.push(
-			`type _AppSessionAuthConfig = _MPConfigSub<typeof ${modulesFile.varName}, "auth"> & typeof ${authFile.varName};`,
-		);
-	} else {
-		lines.push(
-			`type _AppSessionAuthConfig = _MPConfigSub<typeof ${modulesFile.varName}, "auth">;`,
-		);
-	}
+	// Session is derived from the SAME acyclic auth config. additionalFields +
+	// plugin user/session fields survive the `&` intersection (Invariant 2).
+	lines.push("type _AppSessionAuthConfig = _AppAuthConfig;");
 	lines.push(
 		"type _AppSession = NonNullable<InferSessionFromAuthConfig<_AppSessionAuthConfig>> | null;",
 	);
 	lines.push("");
 
 	// ── _Module* type extraction for categories ──────────────────
+	// SAFE categories use the recursive member-only `ExtractModulePropArr` fold
+	// (acyclic — the members carry no AppContext back-reference). The `services`
+	// category is the ONE carrier whose member VALUES reach AppContext (a service's
+	// `create(ctx: ServiceCreateContext)` → AppContext); ANY fold over the module
+	// `services` member re-introduces the cycle (verified). It is emitted FLAT from
+	// gen-time knowledge instead — `{}` when no module ships services (the case for
+	// all current modules: admin/audit/starter emit `Record<never,never>`; core's
+	// CoreServices are framework infrastructure surfaced via _AppInfraContext, not
+	// the user module array). `moduleCategoryType()` centralises this rule.
+	const moduleCategoryType = (catName: string): string =>
+		catName === "services"
+			? "{}"
+			: `ExtractModulePropArr<typeof ${modulesFile.varName}, "${catName}">`;
 	for (const [catName, fileMap] of discovered.categories) {
 		const decl = allDecls.get(catName);
 		const shouldExtract = decl ? decl.extractFromModules !== false : true;
 		if (!shouldExtract) continue;
 
 		const moduleTypeName = deriveModuleTypeName(catName);
-		lines.push(`type ${moduleTypeName} = _MP<"${catName}">;`);
+		lines.push(`type ${moduleTypeName} = ${moduleCategoryType(catName)};`);
 	}
 	// Also extract spread keys (sidebar, dashboard, etc.) from modules
 	for (const [stateKey] of discovered.spreads) {
 		const moduleTypeName = deriveModuleTypeName(stateKey);
-		lines.push(`type ${moduleTypeName} = _MP<"${stateKey}">;`);
+		lines.push(`type ${moduleTypeName} = ${moduleCategoryType(stateKey)};`);
 	}
 
-	// ── Registry categories — extracted from modules via _MP<> ──────────
+	// ── Registry categories — extracted from modules (recursive fold) ──────────
 	// ALL categories with registryKey are extracted and merged here centrally.
 	// Modules MUST NOT augment Registry — multiple modules declaring the same
-	// key causes TS2717. The root template is the single source of truth.
+	// key causes TS2717. The root template is the single source of truth. Uses the
+	// same `moduleCategoryType()` rule (flat `{}` for the services carrier).
 	{
 		const registryCatNames: Array<{ catName: string; regKey: string }> = [];
 		for (const [catName, decl] of allDecls) {
@@ -337,7 +346,7 @@ export function generateTemplate(options: TemplateOptions): string {
 			lines.push("// Registry category extraction from modules");
 			for (const { catName } of registryCatNames) {
 				const typeName = `_Registry_${capitalize(catName)}`;
-				lines.push(`type ${typeName} = _MP<"${catName}">;`);
+				lines.push(`type ${typeName} = ${moduleCategoryType(catName)};`);
 			}
 			lines.push("");
 		}

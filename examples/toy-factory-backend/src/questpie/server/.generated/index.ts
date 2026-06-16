@@ -56,42 +56,38 @@ import _openapi from "../config/openapi";
 // TYPES — composed from typeof references (zero inference cost)
 // ════════════════════════════════════════════════════════════
 
-import type { ServiceCustomNamespaceInstances, ServiceInstanceOf, ServiceInstancesInNamespace, ServiceTopLevelInstances, UnionToIntersection } from "questpie/types";
+import type { ExtractModulePropArr, ServiceCustomNamespaceInstances, ServiceInstanceOf, ServiceInstancesInNamespace, ServiceTopLevelInstances } from "questpie/types";
 import type { WorkflowClient } from "@questpie/workflows/server";
 type _RouteDefinitionWithoutHandler<T> = T extends { mode: "raw" } ? Omit<T, "handler"> & { handler: (args: unknown) => Response | Promise<Response> } : Omit<T, "handler"> & { handler: (args: unknown) => unknown | Promise<unknown> };
-type _Module = (typeof _modules)[number];
-type _MPRaw<K extends string> = UnionToIntersection<_Module extends infer M ? M extends Record<K, infer V> ? V : never : never>;
-type _MP<K extends string> = [_MPRaw<K>] extends [never] ? {} : unknown extends _MPRaw<K> ? {} : _MPRaw<K>;
-type _ModuleConfig = _MP<"config">;
-type _AppAppConfig = (_ModuleConfig extends { app: infer TApp } ? TApp : {}) & typeof _appConfig;
-type _AppContextExtensions = Partial<InferContextExtensionsFromAppConfig<_AppAppConfig>>;
-type _AppAuthConfig = (_ModuleConfig extends { auth: infer TAuth } ? TAuth : {}) & typeof _authConfig;
 type _MPConfigSub<A extends readonly any[], K extends string> = A extends readonly [infer H, ...infer T extends readonly any[]] ? (H extends { config: infer C } ? (C extends Record<K, infer V> ? V : {}) : {}) & _MPConfigSub<T, K> : {};
-type _AppSessionAuthConfig = _MPConfigSub<typeof _modules, "auth"> & typeof _authConfig;
+type _AppAppConfig = typeof _appConfig;
+type _AppContextExtensions = Partial<InferContextExtensionsFromAppConfig<_AppAppConfig>>;
+type _AppAuthConfig = _MPConfigSub<typeof _modules, "auth"> & typeof _authConfig;
+type _AppSessionAuthConfig = _AppAuthConfig;
 type _AppSession = NonNullable<InferSessionFromAuthConfig<_AppSessionAuthConfig>> | null;
 
-type _ModuleCollections = _MP<"collections">;
-type _ModuleGlobals = _MP<"globals">;
-type _ModuleJobs = _MP<"jobs">;
-type _ModuleRoutes = _MP<"routes">;
-type _ModuleServices = _MP<"services">;
-type _ModuleFieldTypes = _MP<"fieldTypes">;
-type _ModuleViews = _MP<"views">;
-type _ModuleComponents = _MP<"components">;
-type _ModuleBlocks = _MP<"blocks">;
-type _ModuleWorkflows = _MP<"workflows">;
+type _ModuleCollections = ExtractModulePropArr<typeof _modules, "collections">;
+type _ModuleGlobals = ExtractModulePropArr<typeof _modules, "globals">;
+type _ModuleJobs = ExtractModulePropArr<typeof _modules, "jobs">;
+type _ModuleRoutes = ExtractModulePropArr<typeof _modules, "routes">;
+type _ModuleServices = {};
+type _ModuleFieldTypes = ExtractModulePropArr<typeof _modules, "fieldTypes">;
+type _ModuleViews = ExtractModulePropArr<typeof _modules, "views">;
+type _ModuleComponents = ExtractModulePropArr<typeof _modules, "components">;
+type _ModuleBlocks = ExtractModulePropArr<typeof _modules, "blocks">;
+type _ModuleWorkflows = ExtractModulePropArr<typeof _modules, "workflows">;
 // Registry category extraction from modules
-type _Registry_Collections = _MP<"collections">;
-type _Registry_Globals = _MP<"globals">;
-type _Registry_Jobs = _MP<"jobs">;
-type _Registry_Routes = _MP<"routes">;
-type _Registry_Services = _MP<"services">;
-type _Registry_Emails = _MP<"emails">;
-type _Registry_FieldTypes = _MP<"fieldTypes">;
-type _Registry_Views = _MP<"views">;
-type _Registry_Components = _MP<"components">;
-type _Registry_Blocks = _MP<"blocks">;
-type _Registry_Workflows = _MP<"workflows">;
+type _Registry_Collections = ExtractModulePropArr<typeof _modules, "collections">;
+type _Registry_Globals = ExtractModulePropArr<typeof _modules, "globals">;
+type _Registry_Jobs = ExtractModulePropArr<typeof _modules, "jobs">;
+type _Registry_Routes = ExtractModulePropArr<typeof _modules, "routes">;
+type _Registry_Services = {};
+type _Registry_Emails = ExtractModulePropArr<typeof _modules, "emails">;
+type _Registry_FieldTypes = ExtractModulePropArr<typeof _modules, "fieldTypes">;
+type _Registry_Views = ExtractModulePropArr<typeof _modules, "views">;
+type _Registry_Components = ExtractModulePropArr<typeof _modules, "components">;
+type _Registry_Blocks = ExtractModulePropArr<typeof _modules, "blocks">;
+type _Registry_Workflows = ExtractModulePropArr<typeof _modules, "workflows">;
 
 // Recursive module property extraction (for fields contributed at each level)
 import type { ExtractModuleProp } from "questpie/types";
