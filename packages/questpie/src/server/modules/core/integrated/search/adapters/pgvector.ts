@@ -391,17 +391,6 @@ export class PgVectorSearchAdapter implements SearchAdapter {
 	getTableSchemas(): Record<string, any> {
 		return this.postgresAdapter.getTableSchemas();
 	}
-
-	/**
-	 * Get required PostgreSQL extensions.
-	 * Returns pg_trgm (from base) plus vector extension for embeddings.
-	 */
-	getExtensions(): string[] {
-		return [
-			'CREATE EXTENSION IF NOT EXISTS "pg_trgm";',
-			'CREATE EXTENSION IF NOT EXISTS "vector";',
-		];
-	}
 }
 
 // ============================================================================

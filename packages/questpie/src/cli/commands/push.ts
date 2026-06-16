@@ -44,22 +44,6 @@ export async function pushCommand(options: PushOptions): Promise<void> {
 	const cmsConfig = await loadQuestpieConfig(resolvedConfigPath);
 	const app = cmsConfig.app;
 
-	// Ensure required PostgreSQL extensions exist before diffing the schema.
-	// Adapter-declared extensions (e.g. pg_trgm for trigram GIN indexes) must be
-	// present so drizzle-kit can plan operator-class index statements without
-	// erroring. Reuses the same idempotent seam `questpie migrate` uses — reads
-	// adapter extensions generically, nothing hardcoded.
-	const extResult = await app.migrations.ensureExtensions();
-	if (extResult.applied.length > 0) {
-		console.log(`🔌 Created extensions: ${extResult.applied.length}`);
-		for (const ext of extResult.applied) {
-			console.log(`   ✅ ${ext}`);
-		}
-	}
-	if (extResult.skipped.length > 0) {
-		console.log(`⏭️  Extensions already exist: ${extResult.skipped.length}`);
-	}
-
 	// Get schema from app
 	const schema = app.getSchema();
 	console.log(
@@ -92,7 +76,11 @@ export async function pushCommand(options: PushOptions): Promise<void> {
 		schemas: entities.schemas,
 		tables: entities.tables,
 		entities: undefined,
-		extensions: undefined,
+		// drizzle-kit's only supported extensionsFilters value is "postgis" —
+		// it teaches push to ignore PostGIS-owned tables (spatial_ref_sys etc.)
+		// during the diff. Harmless no-op when PostGIS is unused (no such tables
+		// → nothing filtered). https://orm.drizzle.team/docs/extensions/pg
+		extensions: ["postgis"],
 	};
 	const result = await pushSchema(
 		schema,

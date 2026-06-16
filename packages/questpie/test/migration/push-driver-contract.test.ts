@@ -36,8 +36,10 @@ describe("pushSchema through toKitDb", () => {
 
 	beforeEach(async () => {
 		setup = await buildMockApp({ collections: { articles } });
-		// The schema includes the search table's trigram index; in the real
-		// flow the search adapter creates the extension at app init.
+		// The schema includes the search table's trigram index, whose
+		// operator-class diff requires pg_trgm to exist before push plans it.
+		// The framework does NOT create extensions — they are provided
+		// out-of-band (docker-init / managed DB); this stands in for that.
 		await setup.app.db.execute(
 			sql.raw("CREATE EXTENSION IF NOT EXISTS pg_trgm"),
 		);

@@ -3,9 +3,7 @@ import type { generateDrizzleJson } from "drizzle-kit/api-postgres";
 import { OperationSnapshotManager } from "./operation-snapshot.js";
 import type {
 	GenerateMigrationResult,
-	MigrationExtensionDependency,
 	OperationSnapshot,
-	SnapshotOperation,
 } from "./types.js";
 
 // Infer snapshot type from drizzle-kit API
@@ -40,15 +38,6 @@ export type DrizzleMigrationGeneratorOptions = {
 
 	/** Cumulative snapshot from previous migrations */
 	cumulativeSnapshot?: DrizzleSnapshotJSON;
-
-	/** PostgreSQL extensions required by generated DDL */
-	extensions?: MigrationExtensionDependency[];
-};
-
-type NormalizedExtensionDependency = {
-	name: string;
-	schema?: string;
-	statement: string;
 };
 
 /**
@@ -102,23 +91,12 @@ export class DrizzleMigrationGenerator {
 		);
 
 		// Generate operations by comparing snapshots
-		const ddlOperations = this.operationManager.generateOperations(
+		const operations = this.operationManager.generateOperations(
 			previousSnapshot,
 			newSnapshot,
 			options.migrationName,
 		);
-		const extensions = this.normalizeExtensionDependencies(options.extensions);
-		const extensionOperations = this.generateExtensionOperations(
-			previousSnapshot,
-			extensions,
-			options.migrationName,
-		);
-		const operations = [...ddlOperations, ...extensionOperations];
-		const finalSnapshot = this.withExtensionSnapshot(
-			newSnapshot,
-			previousSnapshot,
-			extensions,
-		);
+		const finalSnapshot = newSnapshot;
 
 		console.log(`Found ${operations.length} operations`);
 
@@ -161,11 +139,6 @@ export class DrizzleMigrationGenerator {
 			processedSqlDown,
 			newSnapshot,
 			previousSnapshot,
-		);
-		processedSqlUp = this.prependCreateExtensionStatements(
-			processedSqlUp,
-			previousSnapshot,
-			extensions,
 		);
 
 		// Skip if no SQL changes (even if there are operations)
@@ -385,149 +358,12 @@ export default migration({
 		return "00000000T000000";
 	}
 
-	private normalizeExtensionDependencies(
-		extensions: MigrationExtensionDependency[] | undefined,
-	): NormalizedExtensionDependency[] {
-		const normalized = new Map<string, NormalizedExtensionDependency>();
-
-		for (const extension of extensions ?? []) {
-			const next = this.normalizeExtensionDependency(extension);
-			if (!next) continue;
-			normalized.set(next.name, next);
-		}
-
-		return Array.from(normalized.values()).sort((a, b) =>
-			a.name.localeCompare(b.name),
-		);
-	}
-
-	private normalizeExtensionDependency(
-		extension: MigrationExtensionDependency,
-	): NormalizedExtensionDependency | null {
-		if (typeof extension === "string") {
-			const name = this.extractExtensionName(extension);
-			if (!name) return null;
-			const statement = this.isCreateExtensionStatement(extension)
-				? this.normalizeExtensionStatement(extension)
-				: this.createExtensionStatement(name);
-			return {
-				name,
-				statement,
-			};
-		}
-
-		const name = extension.name.trim();
-		if (!name) return null;
-		return {
-			name,
-			schema: extension.schema,
-			statement:
-				(extension.statement
-					? this.normalizeExtensionStatement(extension.statement)
-					: undefined) ?? this.createExtensionStatement(name, extension.schema),
-		};
-	}
-
-	private isCreateExtensionStatement(value: string): boolean {
-		return /^CREATE\s+EXTENSION\b/i.test(value.trim());
-	}
-
-	private normalizeExtensionStatement(value: string): string {
-		const trimmed = value.trim();
-		return trimmed.endsWith(";") ? trimmed : `${trimmed};`;
-	}
-
-	private extractExtensionName(value: string): string | null {
-		const trimmed = value.trim().replace(/;$/, "");
-		const createMatch = trimmed.match(
-			/^CREATE\s+EXTENSION\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:"([^"]+)"|([a-zA-Z0-9_-]+))/i,
-		);
-		if (createMatch) {
-			return (createMatch[1] ?? createMatch[2] ?? "").trim() || null;
-		}
-
-		const bareName = trimmed.replace(/^"|"$/g, "");
-		return bareName || null;
-	}
-
-	private createExtensionStatement(name: string, schema?: string): string {
-		const schemaClause = schema
-			? ` WITH SCHEMA ${this.quoteIdentifier(schema)}`
-			: "";
-		return `CREATE EXTENSION IF NOT EXISTS ${this.quoteIdentifier(name)}${schemaClause};`;
-	}
-
-	private quoteIdentifier(value: string): string {
-		return `"${value.replace(/"/g, '""')}"`;
-	}
-
-	private generateExtensionOperations(
-		previousSnapshot: DrizzleSnapshotJSON,
-		extensions: NormalizedExtensionDependency[],
-		migrationId: string,
-	): SnapshotOperation[] {
-		const previousExtensions = this.collectExtensionNames(previousSnapshot);
-		const timestamp = new Date().toISOString();
-
-		return extensions
-			.filter((extension) => !previousExtensions.has(extension.name))
-			.map((extension) => ({
-				type: "set" as const,
-				path: `extensions.${this.encodeSnapshotKey(extension.name)}`,
-				value: {
-					name: extension.name,
-					...(extension.schema ? { schema: extension.schema } : {}),
-					statement: extension.statement,
-				},
-				timestamp,
-				migrationId,
-			}));
-	}
-
-	private withExtensionSnapshot(
-		newSnapshot: DrizzleSnapshotJSON,
-		previousSnapshot: DrizzleSnapshotJSON,
-		extensions: NormalizedExtensionDependency[],
-	): DrizzleSnapshotJSON {
-		const extensionMap = new Map<string, any>();
-		for (const extension of (previousSnapshot as any).extensions ?? []) {
-			if (!extension?.name) continue;
-			extensionMap.set(String(extension.name), extension);
-		}
-		for (const extension of extensions) {
-			extensionMap.set(extension.name, {
-				name: extension.name,
-				...(extension.schema ? { schema: extension.schema } : {}),
-				statement: extension.statement,
-			});
-		}
-		return {
-			...newSnapshot,
-			extensions: Array.from(extensionMap.values()).sort((a, b) =>
-				String(a.name).localeCompare(String(b.name)),
-			),
-		} as DrizzleSnapshotJSON;
-	}
-
-	private collectExtensionNames(snapshot: DrizzleSnapshotJSON): Set<string> {
-		const extensions = new Set<string>();
-		for (const extension of (snapshot as any).extensions ?? []) {
-			if (!extension?.name) continue;
-			extensions.add(String(extension.name));
-		}
-		return extensions;
-	}
-
 	private toDrizzleSnapshot(
 		snapshot: DrizzleSnapshotJSON,
 	): DrizzleSnapshotJSON {
 		const drizzleSnapshot = { ...(snapshot as any) };
 		delete drizzleSnapshot.extensions;
 		return drizzleSnapshot as DrizzleSnapshotJSON;
-	}
-
-	private encodeSnapshotKey(key: string): string {
-		return key.replace(/\./g, "__DOT__").replace(/:/g, "__COLON__");
 	}
 
 	private addIfExistsToConstraintDrops(sqlStatements: string[]): string[] {
@@ -544,19 +380,6 @@ export default migration({
 			}
 			return statement;
 		});
-	}
-
-	private prependCreateExtensionStatements(
-		statements: string[],
-		previousSnapshot: DrizzleSnapshotJSON,
-		extensions: NormalizedExtensionDependency[],
-	): string[] {
-		const previousExtensions = this.collectExtensionNames(previousSnapshot);
-		const toCreate = extensions.filter(
-			(extension) => !previousExtensions.has(extension.name),
-		);
-		if (toCreate.length === 0) return statements;
-		return [...toCreate.map((extension) => extension.statement), ...statements];
 	}
 
 	/**

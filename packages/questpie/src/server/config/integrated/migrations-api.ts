@@ -71,7 +71,6 @@ export class QuestpieMigrationsAPI<
 			fileBaseName,
 			schema: this.app.getSchema(),
 			migrationDir,
-			extensions: this.getRequiredExtensions(),
 		});
 	}
 
@@ -79,73 +78,22 @@ export class QuestpieMigrationsAPI<
 	 * Run pending migrations
 	 *
 	 * Automatically:
-	 * 1. Runs search adapter extensions first (pg_trgm, vector, etc.)
-	 * 2. Runs Drizzle migrations (tables, basic indexes)
-	 * 3. Runs search adapter migrations (FTS indexes, trigram indexes)
+	 * 1. Runs Drizzle migrations (tables, basic indexes)
+	 * 2. Runs search adapter migrations (FTS indexes, trigram indexes)
+	 *
+	 * Required PostgreSQL extensions (pg_trgm, etc.) are expected to already
+	 * exist on the database, provided out-of-band (docker-init / managed DB /
+	 * a hand-authored migration) — drizzle-native: the framework does not
+	 * CREATE EXTENSION on your behalf.
 	 */
 	async up(options: RunMigrationsOptions = {}): Promise<void> {
-		// 1. Ensure search extensions are created first (idempotent)
-		const extResult = await this.ensureExtensions();
-		if (extResult.applied.length > 0 && !this.runner.silent) {
-			console.log(`🔌 Created extensions: ${extResult.applied.length}`);
-			for (const ext of extResult.applied) {
-				console.log(`   ✅ ${ext}`);
-			}
-		}
-		if (extResult.skipped.length > 0 && !this.runner.silent) {
-			console.log(`⏭️  Extensions already exist: ${extResult.skipped.length}`);
-		}
-
-		// 2. Run Drizzle migrations (creates tables)
+		// 1. Run Drizzle migrations (creates tables)
 		const migrations = this.getMigrations();
 		await this.runner.runMigrationsUp(migrations, options);
 
-		// 3. Run search adapter migrations (creates FTS/trigram indexes)
+		// 2. Run search adapter migrations (creates FTS/trigram indexes)
 		// These use IF NOT EXISTS so safe to run multiple times
 		await this.search();
-	}
-
-	/**
-	 * Ensure required PostgreSQL extensions are created.
-	 *
-	 * Runs CREATE EXTENSION statements from the search adapter before migrations.
-	 * These statements are idempotent (IF NOT EXISTS) so safe to run multiple times.
-	 *
-	 * @example
-	 * ```ts
-	 * // Run extensions only (useful for CI/CD)
-	 * await app.migrations.ensureExtensions();
-	 * ```
-	 */
-	async ensureExtensions(): Promise<{ applied: string[]; skipped: string[] }> {
-		const applied: string[] = [];
-		const skipped: string[] = [];
-
-		const adapter = this.app.search?.getAdapter();
-		if (!adapter?.getExtensions) {
-			return { applied, skipped };
-		}
-
-		const extensions = adapter.getExtensions();
-		for (const ext of extensions) {
-			try {
-				await this.app.db.execute(sql.raw(ext));
-				applied.push(ext);
-			} catch (error: any) {
-				const msg = error?.message?.toLowerCase() || "";
-				if (
-					msg.includes("already exists") ||
-					msg.includes("duplicate object") ||
-					msg.includes("duplicate key")
-				) {
-					skipped.push(ext);
-				} else {
-					throw this.createExtensionError(ext, error);
-				}
-			}
-		}
-
-		return { applied, skipped };
 	}
 
 	/**
@@ -289,11 +237,6 @@ export class QuestpieMigrationsAPI<
 		return Array.isArray(migrations)
 			? migrations
 			: (migrations?.migrations ?? []);
-	}
-
-	private getRequiredExtensions(): string[] {
-		const adapter = this.app.search?.getAdapter();
-		return adapter?.getExtensions?.() ?? [];
 	}
 
 	private createExtensionError(statement: string, error: any): Error {
