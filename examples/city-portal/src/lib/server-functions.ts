@@ -295,7 +295,7 @@ export const getAnnouncementsList = createServerFn({ method: "GET" })
 			{
 				where: {
 					city: city.id,
-					...(data.showExpired ? {} : { validTo: { gte: new Date() } }),
+					...(data.showExpired ? {} : { validTo: { gte: new Date().toISOString() } }),
 				},
 				orderBy: { isPinned: "desc", validFrom: "desc" },
 				limit: 50,

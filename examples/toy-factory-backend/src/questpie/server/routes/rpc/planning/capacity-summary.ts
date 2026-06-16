@@ -15,7 +15,7 @@ export default route()
 		const orders = await collections.productionOrders.find(
 			{
 				where: {
-					dueDate: { lte: until },
+					dueDate: { lte: until.toISOString() },
 					status: { in: ["planning", "waiting-materials", "scheduled"] },
 				},
 				limit: 500,
