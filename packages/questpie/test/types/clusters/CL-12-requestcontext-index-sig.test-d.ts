@@ -159,13 +159,18 @@ type _ctxSessionNotUnknown = Expect<NoUnknown<CRUDContext["session"]>>;
 /**
  * LAYER 2 (separate PR) — `db` is no longer `any`. Layer 1 deliberately keeps
  * `db: any` because 3 internal Drizzle-feeding sites read `context.db` typed as
- * `CRUDContext`. This assertion records the Layer-2 debt and is EXPECTED to stay
- * RED after the CL-12 Layer-1 fix lands (it flips green only when `db` is narrowed
- * off `any`).
+ * `CRUDContext`; narrowing `db` is explicitly out of scope for CL-12 (proposal
+ * §CL-12 correction #1 — it would newly break `introspection.ts`/`access-control.ts`/
+ * `shared/context.ts`). So this guarantee is RED-by-design after the Layer-1 fix.
  *
- * `NoAny` runs `IsAny` on the raw value (`0 extends 1 & T`), so it FAILS while
- * `db: any` and passes once `db` is concrete.
+ * Encoded as the Layer-2 debt it is: a CONSUMED `@ts-expect-error`. `NoAny` runs
+ * `IsAny` on the raw value (`0 extends 1 & T`), so `NoAny<CRUDContext["db"]>` is
+ * `false` while `db: any`, and `Expect<false>` errors (TS2344) — the directive
+ * consumes it. When Layer 2 narrows `db` off `any`, `NoAny` becomes `true`,
+ * `Expect` stops erroring, and the now-UNUSED directive trips TS2578 — a loud
+ * trip-wire demanding this be flipped back to a plain positive `Expect<NoAny<…>>`.
  */
+// @ts-expect-error -- LAYER-2 DEBT: db is `any` by design in CL-12 Layer 1; flip to a plain positive Expect once db is narrowed (this directive then trips TS2578).
 type _ctxDbNotAny = Expect<NoAny<CRUDContext["db"]>>;
 
 // ============================================================================

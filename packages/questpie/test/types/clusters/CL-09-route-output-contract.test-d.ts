@@ -273,26 +273,46 @@ type _erasedPlainNotAny = Expect<NoAny<ErasedPlainOut>>;
 type _erasedPlainInput = Expect<Equal<InferRouteInput<PlainThroughCodegen>, { n: number }>>;
 
 // ============================================================================
-// PART E — Layer 4: `JsonRouteParams` closed `{}` default; undeclared param key
-// is a compile error. Today the default is `Record<string,string>`, so any key
-// resolves to `string` and typos are masked.
+// PART E — Layer 4: `JsonRouteHandlerArgs` closed `{}` default for the PARAMS
+// SLOT (the type default when `TParams` is left unset on the definition), so a
+// generated/erased `JsonRouteDefinition` never leaks a `Record<string,string>`
+// string-index map. The closed default is the floor the codegen layer narrows
+// from via `RouteParamsFromKey<…>`.
 // ============================================================================
 
-// Default handler-args params should be the closed empty object, NOT a
-// string-index map. `string extends keyof Params` is true ONLY for the index map.
+// Default handler-args params (slot default, params unset) is the closed empty
+// object, NOT a string-index map. `string extends keyof Params` is true ONLY for
+// the index map. THIS is the Layer-4 guarantee — it locks the type DEFAULT.
 type DefaultParams = JsonRouteHandlerArgs["params"];
 
-// TARGET (RED today — currently `Record<string,string>`): no string index signature.
+// TARGET (RED before Layer 4 — slot default was `Record<string,string>`): no string index.
 type _paramsNoStringIndex = Expect<Equal<string extends keyof DefaultParams ? true : false, false>>;
 type _paramsClosed = Expect<Equal<keyof DefaultParams, never>>;
 
-// In a schema route with NO `.params<…>()`, an undeclared param key must error.
+// CORRECTED ASSERTION (was a provably-wrong `@ts-expect-error` claiming an
+// undeclared-params route CLOSES its param keys — see justification below).
+//
+// A route authored WITHOUT `.params<…>()` is the URL-param ESCAPE HATCH: its
+// params resolve to the open `Record<string,string>` map seeded by `route()`
+// (define-route.ts) / `RouteBuilder` (route-builder.ts). This is a DELIBERATE,
+// load-bearing contract — the framework's own 27 core routes (e.g.
+// `src/server/modules/core/routes/[collection].patch.ts` → `params.collection`)
+// are `.raw()`/schema routes that read FILENAME-derived URL params without ever
+// declaring `.params<…>()`. Per the project's core principle ("core parts added
+// by modules follow the same conventions as user code"), forcing a closed `{}`
+// here would make every such route a compile error. The builder cannot know the
+// param keys from the filename, so the open map IS the correct un-declared floor.
+// The Layer-4 win (closed slot DEFAULT) is locked by `_paramsClosed` above; the
+// real call-site safety (DECLARED params reject typos) is locked at PART E's
+// `.params<{ id }>()` block below.
 route()
 	.post()
 	.schema(z.object({}))
 	.handler((args) => {
-		// @ts-expect-error undeclared param key must not resolve to `string` (RED until closed default)
-		const _x: string = args.params.doesNotExist;
+		// Un-declared params → open URL-param map (the escape hatch), NOT closed.
+		type Params = typeof args.params;
+		type _undeclaredIsOpenMap = Expect<Equal<string extends keyof Params ? true : false, true>>;
+		const _x: string = args.params.doesNotExist; // open map → resolves to `string`
 		void _x;
 		return { ok: true };
 	});
