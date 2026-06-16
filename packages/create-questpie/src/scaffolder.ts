@@ -12,6 +12,7 @@ import { join, resolve } from "node:path";
 
 import * as p from "@clack/prompts";
 
+import { type ModuleDefinition, modules } from "./modules.js";
 import type { ProjectOptions } from "./prompts.js";
 import {
 	detectPackageManager,
@@ -24,6 +25,168 @@ import {
 } from "./utils.js";
 
 const TEMPLATE_VAR_REGEX = /\{\{(\w+)\}\}/g;
+
+/**
+ * Central pinned dependency versions. One place to bump every package the
+ * scaffolder can add. Module deps reference these keys too — `depVersion`
+ * resolves a package name to its pinned version (falling back to the version
+ * declared on the module entry, then "latest").
+ */
+const dependencyVersionMap: Record<string, string> = {
+	"@questpie/admin": "latest",
+	"@questpie/openapi": "latest",
+	"@questpie/workflows": "latest",
+	bullmq: "^5.0.0",
+	redis: "^5.0.0",
+};
+
+function depVersion(name: string, fallback = "latest"): string {
+	return dependencyVersionMap[name] ?? fallback;
+}
+
+/** Stable de-duplication preserving first-seen order. */
+function dedupe(lines: string[]): string[] {
+	return Array.from(new Set(lines));
+}
+
+/**
+ * Adapter feature registry — declarative description of every adapter toggle
+ * (queue / email / realtime / kv). Each selectable option captures the data
+ * the generators need: extra deps, env vars, the runtime-config import line,
+ * and the runtime-config entry block. The generators iterate the SELECTED
+ * options instead of branching on adapter ids.
+ *
+ * `email` is intentionally NOT modelled here: its config entry is a ternary
+ * expression keyed off `MAIL_ADAPTER` and its env enum is derived from the
+ * selection, so it keeps its dedicated builders (`buildEnvFile` /
+ * `buildEmailAdapterExpression`).
+ */
+type FeatureDescriptor = {
+	/** Extra dependencies (name -> version). Deduped across options. */
+	deps?: Record<string, string>;
+	/** Extra env-var schema lines for `src/lib/env.ts`. Deduped across options. */
+	envVars?: string[];
+	/** Import lines for `questpie.config.ts`. Deduped across options. */
+	configImports?: string[];
+	/** Helper function block emitted above the config (already includes trailing blank line). */
+	configHelper?: string[];
+	/** Config entry block (lines) appended into `runtimeConfig({...})`. */
+	configEntry?: (options: ProjectOptions) => string[];
+};
+
+const REDIS_URL_ENV = `\t\tREDIS_URL: z.string().url().default("redis://localhost:6379"),`;
+
+const features: Record<string, Record<string, FeatureDescriptor>> = {
+	queue: {
+		"pg-boss": {
+			configImports: [
+				`import { pgBossAdapter } from "questpie/adapters/pg-boss";`,
+			],
+			configEntry: () => [
+				`\tqueue: {`,
+				`\t\tadapter: pgBossAdapter({ connectionString: env.DATABASE_URL }),`,
+				`\t},`,
+			],
+		},
+		bullmq: {
+			deps: { bullmq: depVersion("bullmq"), redis: depVersion("redis") },
+			envVars: [REDIS_URL_ENV],
+			configImports: [
+				`import { bullMQAdapter } from "questpie/adapters/bullmq";`,
+			],
+			configEntry: () => [
+				`\tqueue: {`,
+				`\t\tadapter: bullMQAdapter({ connection: { url: env.REDIS_URL } }),`,
+				`\t},`,
+			],
+		},
+		none: {},
+	},
+	realtime: {
+		none: {},
+		"pg-notify": {
+			configImports: [
+				`import { pgNotifyAdapter } from "questpie/adapters/pg-notify";`,
+			],
+			configEntry: () => [
+				`\trealtime: {`,
+				`\t\tadapter: pgNotifyAdapter({ connectionString: env.DATABASE_URL }),`,
+				`\t},`,
+			],
+		},
+		"redis-streams": {
+			deps: { redis: depVersion("redis") },
+			envVars: [REDIS_URL_ENV],
+			configImports: [
+				`import { redisStreamsAdapter } from "questpie/adapters/redis-streams";`,
+			],
+			configEntry: () => [
+				`\trealtime: {`,
+				`\t\tadapter: redisStreamsAdapter({ url: env.REDIS_URL }),`,
+				`\t},`,
+			],
+		},
+	},
+	kv: {
+		memory: {},
+		redis: {
+			deps: { redis: depVersion("redis") },
+			envVars: [REDIS_URL_ENV],
+			configImports: [
+				`import { redisKVAdapter } from "questpie/adapters/redis-kv";`,
+				`import { createClient } from "redis";`,
+			],
+			configHelper: [
+				`async function getRedis() {`,
+				`\tconst redis = createClient({ url: env.REDIS_URL });`,
+				`\tawait redis.connect();`,
+				`\treturn redis;`,
+				`}`,
+				``,
+			],
+			configEntry: (options) => [
+				`\tkv: {`,
+				`\t\tadapter: redisKVAdapter({ client: getRedis, keyPrefix: "${options.projectName}:" }),`,
+				`\t},`,
+			],
+		},
+	},
+};
+
+/** The adapter selection for each feature axis, with the same defaults the generators assume. */
+function selectedFeatureOptions(
+	options: ProjectOptions,
+): { axis: string; option: string }[] {
+	return [
+		{ axis: "queue", option: options.queueAdapter ?? "pg-boss" },
+		{ axis: "realtime", option: options.realtimeAdapter ?? "none" },
+		{ axis: "kv", option: options.kvAdapter ?? "memory" },
+	];
+}
+
+/** Resolve the selected feature descriptors (skips unknown/missing entries). */
+function selectedFeatures(options: ProjectOptions): FeatureDescriptor[] {
+	return selectedFeatureOptions(options)
+		.map(({ axis, option }) => features[axis]?.[option])
+		.filter((f): f is FeatureDescriptor => Boolean(f));
+}
+
+/** The modules selected for this project (defaults to the v1 always-on set). */
+function selectedModules(options: ProjectOptions): ModuleDefinition[] {
+	const ids = new Set(resolveSelectedModuleIds(options));
+	return modules.filter((m) => ids.has(m.id));
+}
+
+/**
+ * Resolve module ids for the current options. Until the multiselect lands
+ * (Phase 5) this mirrors the previous hardcoded behavior: admin + openapi are
+ * always on, workflows follows its flag.
+ */
+function resolveSelectedModuleIds(options: ProjectOptions): string[] {
+	const ids = ["admin", "openapi"];
+	if (options.includeWorkflows) ids.push("workflows");
+	return ids;
+}
 
 /**
  * Resolves the path to the templates directory.
@@ -234,11 +397,18 @@ async function applyProjectOptions(
 		buildServerModules(options),
 		"utf-8",
 	);
-	await writeFile(
-		join(targetDir, "src", "questpie", "admin", "modules.ts"),
-		buildAdminModules(options),
-		"utf-8",
-	);
+	// Client modules (admin/modules.ts) only exist on render-layer runtimes.
+	// Gate the write on admin being selected AND the admin dir being present —
+	// headless runtimes ship no admin/ directory.
+	const adminDir = join(targetDir, "src", "questpie", "admin");
+	const adminSelected = resolveSelectedModuleIds(options).includes("admin");
+	if (adminSelected && existsSync(adminDir)) {
+		await writeFile(
+			join(adminDir, "modules.ts"),
+			buildAdminModules(options),
+			"utf-8",
+		);
+	}
 }
 
 async function updatePackageJson(
@@ -251,18 +421,19 @@ async function updatePackageJson(
 		devDependencies: Record<string, string>;
 	};
 
-	if (options.queueAdapter === "bullmq") {
-		packageJson.dependencies.bullmq = "^5.0.0";
+	// Module deps (admin/openapi are already pinned in the template; assigning
+	// the same version is a no-op — workflows is the net-new entry).
+	for (const mod of selectedModules(options)) {
+		for (const [name, version] of Object.entries(mod.deps)) {
+			packageJson.dependencies[name] = depVersion(name, version);
+		}
 	}
-	if (
-		options.queueAdapter === "bullmq" ||
-		options.realtimeAdapter === "redis-streams" ||
-		options.kvAdapter === "redis"
-	) {
-		packageJson.dependencies.redis = "^5.0.0";
-	}
-	if (options.includeWorkflows) {
-		packageJson.dependencies["@questpie/workflows"] = "latest";
+
+	// Adapter feature deps.
+	for (const feature of selectedFeatures(options)) {
+		for (const [name, version] of Object.entries(feature.deps ?? {})) {
+			packageJson.dependencies[name] = version;
+		}
 	}
 
 	await writeFile(
@@ -308,14 +479,11 @@ function buildEnvFile(options: ProjectOptions): string {
 	if (options.emailAdapter === "plunk") {
 		lines.push(`\t\tPLUNK_SECRET_KEY: z.string().optional(),`);
 	}
-	if (
-		options.queueAdapter === "bullmq" ||
-		options.realtimeAdapter === "redis-streams" ||
-		options.kvAdapter === "redis"
-	) {
-		lines.push(
-			`\t\tREDIS_URL: z.string().url().default("redis://localhost:6379"),`,
-		);
+	// Adapter feature env vars (REDIS_URL etc.), deduped across selected axes.
+	for (const line of dedupe(
+		selectedFeatures(options).flatMap((f) => f.envVars ?? []),
+	)) {
+		lines.push(line);
 	}
 
 	lines.push(
@@ -330,63 +498,35 @@ function buildEnvFile(options: ProjectOptions): string {
 }
 
 function buildRuntimeConfig(options: ProjectOptions): string {
+	// Adapter imports follow the axis display order (queue, email, realtime, kv).
+	// `email` keeps its bespoke import builder; the other axes pull from the
+	// feature registry. Imports are deduped (shared redis lines collapse).
+	const queueImports = features.queue?.[options.queueAdapter ?? "pg-boss"]
+		?.configImports ?? [];
+	const realtimeImports = features.realtime?.[
+		options.realtimeAdapter ?? "none"
+	]?.configImports ?? [];
+	const kvImports = features.kv?.[options.kvAdapter ?? "memory"]
+		?.configImports ?? [];
+
 	const imports = [
 		`import { runtimeConfig } from "questpie/app";`,
 		`import { ConsoleAdapter } from "questpie/adapters/console";`,
+		...dedupe([
+			...queueImports,
+			...buildEmailConfigImports(options),
+			...realtimeImports,
+			...kvImports,
+		]),
 	];
-	if (options.queueAdapter === "pg-boss") {
-		imports.push(`import { pgBossAdapter } from "questpie/adapters/pg-boss";`);
-	}
-	if (options.queueAdapter === "bullmq") {
-		imports.push(`import { bullMQAdapter } from "questpie/adapters/bullmq";`);
-	}
-	if (options.emailAdapter === "smtp") {
-		imports.push(`import { SmtpAdapter } from "questpie/adapters/smtp";`);
-	}
-	if (options.emailAdapter === "resend") {
-		imports.push(`import { ResendAdapter } from "questpie/adapters/resend";`);
-	}
-	if (options.emailAdapter === "plunk") {
-		imports.push(`import { PlunkAdapter } from "questpie/adapters/plunk";`);
-	}
-	if (options.realtimeAdapter === "pg-notify") {
-		imports.push(
-			`import { pgNotifyAdapter } from "questpie/adapters/pg-notify";`,
-		);
-	}
-	if (options.realtimeAdapter === "redis-streams") {
-		imports.push(
-			`import { redisStreamsAdapter } from "questpie/adapters/redis-streams";`,
-		);
-	}
-	if (options.kvAdapter === "redis") {
-		imports.push(
-			`import { redisKVAdapter } from "questpie/adapters/redis-kv";`,
-		);
-		imports.push(`import { createClient } from "redis";`);
-	}
 	imports.push(``, `import { env } from "@/lib/env.js";`, ``);
 
-	const helpers: string[] = [];
-	if (options.emailAdapter === "resend" || options.emailAdapter === "plunk") {
-		helpers.push(
-			`function requiredEnv(value: string | undefined, name: string): string {`,
-			`\tif (!value) throw new Error(\`Missing required environment variable: \${name}\`);`,
-			`\treturn value;`,
-			`}`,
-			``,
-		);
-	}
-	if (options.kvAdapter === "redis") {
-		helpers.push(
-			`async function getRedis() {`,
-			`\tconst redis = createClient({ url: env.REDIS_URL });`,
-			`\tawait redis.connect();`,
-			`\treturn redis;`,
-			`}`,
-			``,
-		);
-	}
+	// Helper order: email (requiredEnv) then kv (getRedis).
+	const kvHelper = features.kv?.[options.kvAdapter ?? "memory"]?.configHelper;
+	const helpers: string[] = [
+		...buildEmailConfigHelper(options),
+		...(kvHelper ?? []),
+	];
 
 	const configEntries = [
 		`\tapp: { url: env.APP_URL },`,
@@ -396,40 +536,10 @@ function buildRuntimeConfig(options: ProjectOptions): string {
 		`\t\tadapter: ${buildEmailAdapterExpression(options)},`,
 		`\t},`,
 	];
-	if (options.queueAdapter === "pg-boss") {
-		configEntries.push(
-			`\tqueue: {`,
-			`\t\tadapter: pgBossAdapter({ connectionString: env.DATABASE_URL }),`,
-			`\t},`,
-		);
-	}
-	if (options.queueAdapter === "bullmq") {
-		configEntries.push(
-			`\tqueue: {`,
-			`\t\tadapter: bullMQAdapter({ connection: { url: env.REDIS_URL } }),`,
-			`\t},`,
-		);
-	}
-	if (options.realtimeAdapter === "pg-notify") {
-		configEntries.push(
-			`\trealtime: {`,
-			`\t\tadapter: pgNotifyAdapter({ connectionString: env.DATABASE_URL }),`,
-			`\t},`,
-		);
-	}
-	if (options.realtimeAdapter === "redis-streams") {
-		configEntries.push(
-			`\trealtime: {`,
-			`\t\tadapter: redisStreamsAdapter({ url: env.REDIS_URL }),`,
-			`\t},`,
-		);
-	}
-	if (options.kvAdapter === "redis") {
-		configEntries.push(
-			`\tkv: {`,
-			`\t\tadapter: redisKVAdapter({ client: getRedis, keyPrefix: "${options.projectName}:" }),`,
-			`\t},`,
-		);
+	// Adapter config entries follow the axis order queue, realtime, kv.
+	for (const { axis, option } of selectedFeatureOptions(options)) {
+		const entry = features[axis]?.[option]?.configEntry;
+		if (entry) configEntries.push(...entry(options));
 	}
 
 	return [
@@ -462,27 +572,50 @@ function buildEmailAdapterExpression(options: ProjectOptions): string {
 	return `new ConsoleAdapter({ logHtml: false })`;
 }
 
+/** Email adapter import lines for `questpie.config.ts` (ConsoleAdapter is always imported separately). */
+function buildEmailConfigImports(options: ProjectOptions): string[] {
+	if (options.emailAdapter === "smtp") {
+		return [`import { SmtpAdapter } from "questpie/adapters/smtp";`];
+	}
+	if (options.emailAdapter === "resend") {
+		return [`import { ResendAdapter } from "questpie/adapters/resend";`];
+	}
+	if (options.emailAdapter === "plunk") {
+		return [`import { PlunkAdapter } from "questpie/adapters/plunk";`];
+	}
+	return [];
+}
+
+/** Email helper block (`requiredEnv`) for adapters that read required secrets. */
+function buildEmailConfigHelper(options: ProjectOptions): string[] {
+	if (options.emailAdapter === "resend" || options.emailAdapter === "plunk") {
+		return [
+			`function requiredEnv(value: string | undefined, name: string): string {`,
+			`\tif (!value) throw new Error(\`Missing required environment variable: \${name}\`);`,
+			`\treturn value;`,
+			`}`,
+			``,
+		];
+	}
+	return [];
+}
+
 function buildServerModules(options: ProjectOptions): string {
+	const selected = selectedModules(options);
 	const imports = [
 		`/**`,
 		` * Modules — static module dependencies for this project.`,
 		` */`,
-		`import { adminModule } from "@questpie/admin/modules/admin";`,
-		`import { openApiModule } from "@questpie/openapi";`,
+		...selected.map(
+			(mod) => `import { ${mod.serverSymbol} } from "${mod.serverImport}";`,
+		),
 	];
-	const modules = ["adminModule", "openApiModule"];
-	if (options.includeWorkflows) {
-		imports.push(
-			`import { workflowsModule } from "@questpie/workflows/modules/workflows";`,
-		);
-		modules.push("workflowsModule");
-	}
 
 	return [
 		...imports,
 		``,
 		`const modules = [`,
-		...modules.map((mod) => `\t${mod},`),
+		...selected.map((mod) => `\t${mod.serverSymbol},`),
 		`] as const;`,
 		``,
 		`export default modules;`,
@@ -491,22 +624,18 @@ function buildServerModules(options: ProjectOptions): string {
 }
 
 function buildAdminModules(options: ProjectOptions): string {
-	const imports = [
-		`import { adminClientModule } from "@questpie/admin/client/modules/admin";`,
-	];
-	const modules = ["adminClientModule"];
-
-	if (options.includeWorkflows) {
-		imports.push(
-			`import { workflowsClientModule } from "@questpie/workflows/client/modules/workflows";`,
-		);
-		modules.push("workflowsClientModule");
-	}
+	const clientModules = selectedModules(options).filter(
+		(mod) => mod.clientImport && mod.clientSymbol,
+	);
+	const imports = clientModules.map(
+		(mod) => `import { ${mod.clientSymbol} } from "${mod.clientImport}";`,
+	);
+	const symbols = clientModules.map((mod) => mod.clientSymbol as string);
 
 	return [
 		...imports,
 		``,
-		`export default [${modules.join(", ")}] as const;`,
+		`export default [${symbols.join(", ")}] as const;`,
 		``,
 	].join("\n");
 }
