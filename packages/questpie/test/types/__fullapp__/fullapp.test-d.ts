@@ -12,6 +12,7 @@
 import "./.generated/factories.js";
 import type {
 	App,
+	AppServices,
 	AppSession,
 	AppSessionUser,
 } from "./.generated/index.js";
@@ -92,9 +93,20 @@ type _resolverBaseDb = Expect<NoAny<Questpie.ContextResolverBase["db"]>>;
 // Force IsAny import usage (kept for symmetry with the assert kit conventions).
 type _isAnyGuard = Expect<Equal<IsAny<AppSessionUser>, false>>;
 
+// ============================================================================
+// Services carrier — the FLAT-emitted (gen-time-enumerated, never folded)
+// `reporting` service from the pulled fixture module composes into AppServices.
+// (Its `create((ctx) => …)` references AppContext — the §2.2 asymmetry — yet the
+// flat emission keeps the gate acyclic. The acceptance probe folds it → RED.)
+// ============================================================================
+
+type _servicesHasReporting = Expect<HasKey<AppServices, "reporting">>;
+type _reportingNotAny = Expect<NoAny<AppServices["reporting"]>>;
+
 export type {
 	Ext,
 	App,
+	AppServices,
 	AppSession,
 	AppSessionUser,
 };

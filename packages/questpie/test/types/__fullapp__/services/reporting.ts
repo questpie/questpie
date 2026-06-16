@@ -9,7 +9,6 @@
 import { service } from "#questpie/server/services/define-service.js";
 
 export const reportingService = service({
-	lifecycle: "singleton",
 	create: (ctx) => ({
 		async countArticles() {
 			// Touch the app context surface so this service VALUE carries the

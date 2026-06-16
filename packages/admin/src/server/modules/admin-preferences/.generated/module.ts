@@ -17,6 +17,20 @@ export type AdminPreferencesCollections = {
 	admin_saved_views: typeof _coll_admin_saved_views;
 };
 
+export type AdminPreferencesGlobals = Record<never, never>;
+
+export type AdminPreferencesJobs = Record<never, never>;
+
+export type AdminPreferencesRoutes = Record<never, never>;
+
+export type AdminPreferencesFieldTypes = Record<never, never>;
+
+export type AdminPreferencesViews = Record<never, never>;
+
+export type AdminPreferencesComponents = Record<never, never>;
+
+export type AdminPreferencesBlocks = Record<never, never>;
+
 // ════════════════════════════════════════════════════════════
 // MODULE DEFINITION — static plain object
 // ════════════════════════════════════════════════════════════
@@ -24,18 +38,18 @@ export type AdminPreferencesCollections = {
 export type AdminPreferencesModule = {
 	name: "questpie-admin-preferences";
 	collections: AdminPreferencesCollections;
-	globals: Record<never, never>;
-	jobs: Record<never, never>;
-	routes: Record<never, never>;
+	globals: AdminPreferencesGlobals;
+	jobs: AdminPreferencesJobs;
+	routes: AdminPreferencesRoutes;
+	fieldTypes: AdminPreferencesFieldTypes;
+	views: AdminPreferencesViews;
+	components: AdminPreferencesComponents;
+	blocks: AdminPreferencesBlocks;
 	messages: Record<never, never>;
 	services: Record<never, never>;
 	emails: Record<never, never>;
 	migrations: readonly unknown[];
 	seeds: readonly unknown[];
-	fieldTypes: Record<never, never>;
-	views: Record<never, never>;
-	components: Record<never, never>;
-	blocks: Record<never, never>;
 };
 
 const _module: AdminPreferencesModule = {

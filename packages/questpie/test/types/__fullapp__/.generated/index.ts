@@ -292,6 +292,9 @@ _appPromise = createApp(
 		globals: {
 			siteSettings: _glob_siteSettings,
 		},
+		services: {
+			reporting: _svc_reporting,
+		},
 		config: {
 			app: _appConfig,
 			auth: _authConfig,

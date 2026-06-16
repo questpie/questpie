@@ -22,6 +22,7 @@
 		"mcp:stdio": "bun --bun run ./src/mcp-stdio.ts",
 		"build": "vite build",
 		"preview": "vite preview",
+		"check-types": "tsc --noEmit",
 		"test": "vitest run",
 		"e2e": "playwright test",
 		"e2e:ui": "playwright test --ui",

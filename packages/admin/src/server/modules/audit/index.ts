@@ -12,6 +12,19 @@
 
 // Static module + type
 export type { AuditModule } from "./.generated/module.js";
+// Named category types — re-exported so the app index can enumerate this
+// module's contributors via `interface AppX extends AuditX …` (pure static
+// register, never a fold). Empty categories are `Record<never, never>`.
+export type {
+	AuditBlocks,
+	AuditCollections,
+	AuditComponents,
+	AuditFieldTypes,
+	AuditGlobals,
+	AuditJobs,
+	AuditRoutes,
+	AuditViews,
+} from "./.generated/module.js";
 export { default as auditModule } from "./.generated/module.js";
 
 // Re-export collection and its name constant for direct access

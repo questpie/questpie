@@ -30,24 +30,31 @@ jobs:
   #     - name: Run Oxlint
   #       run: bun run lint
 
-  # TODO: Enable when type errors are fixed
-  # typecheck:
-  #   name: Type Check
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - name: Checkout
-  #       uses: actions/checkout@v4
+  typecheck:
+    name: Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
 
-  #     - name: Setup Bun
-  #       uses: oven-sh/setup-bun@v2
-  #       with:
-  #         bun-version: "1.3.13"
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.13"
 
-  #     - name: Install dependencies
-  #       run: bun install --frozen-lockfile
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
 
-  #     - name: Run type check
-  #       run: bun run check-types
+      # Gates the `questpie` package type surface — INCLUDING the committed
+      # full-app fixture (tsconfig.fullapp.json, wired into the package's
+      # `check-types`). This is the gate that was structurally BLIND to the
+      # AppContext⇄config codegen cycle: it now compiles a real composed
+      # AppContext, so a re-leak of the cycle/`any` fails CI here. The broader
+      # repo-wide `turbo run check-types` stays out until the remaining packages
+      # are clean; the per-example cold-error truth is gated by the
+      # `example-errors ratchet` in the `build` job below.
+      - name: Run type check (questpie package + full-app fixture)
+        run: bunx turbo run check-types --filter=questpie
 
   audit:
     name: Audit

@@ -80,6 +80,10 @@ import _appConfig from "../config/app";
 
 import type { RouteDefinition, RouteParamsFromKey } from "questpie/types";
 
+export type CoreCollections = Record<never, never>;
+
+export type CoreGlobals = Record<never, never>;
+
 export type CoreJobs = {
 	indexRecords: Omit<typeof _job_indexRecords, "handler"> & { handler: (args: unknown) => Promise<unknown> };
 	scheduledTransition: Omit<typeof _job_scheduledTransition, "handler"> & { handler: (args: unknown) => Promise<unknown> };
@@ -119,22 +123,6 @@ export type CoreRoutes = {
 	"search/reindex/[collection]": typeof _route_search_reindex_collection extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"search/reindex/[collection]">> : typeof _route_search_reindex_collection;
 };
 
-export type CoreServices = {
-	auth: typeof _svc_auth;
-	collectionsApi: typeof _svc_collectionsApi;
-	db: typeof _svc_db;
-	email: typeof _svc_email;
-	executor: typeof _svc_executor;
-	globalsApi: typeof _svc_globalsApi;
-	i18n: typeof _svc_i18n;
-	kv: typeof _svc_kv;
-	logger: typeof _svc_logger;
-	queue: typeof _svc_queue;
-	realtime: typeof _svc_realtime;
-	search: typeof _svc_search;
-	storage: typeof _svc_storage;
-};
-
 export type CoreFieldTypes = {
 	boolean: typeof _ftype_boolean;
 	custom: typeof _ftype_custom;
@@ -153,6 +141,22 @@ export type CoreFieldTypes = {
 	url: typeof _ftype_url;
 };
 
+export type CoreServices = {
+	auth: typeof _svc_auth;
+	collectionsApi: typeof _svc_collectionsApi;
+	db: typeof _svc_db;
+	email: typeof _svc_email;
+	executor: typeof _svc_executor;
+	globalsApi: typeof _svc_globalsApi;
+	i18n: typeof _svc_i18n;
+	kv: typeof _svc_kv;
+	logger: typeof _svc_logger;
+	queue: typeof _svc_queue;
+	realtime: typeof _svc_realtime;
+	search: typeof _svc_search;
+	storage: typeof _svc_storage;
+};
+
 // ════════════════════════════════════════════════════════════
 // MODULE DEFINITION — static plain object
 // ════════════════════════════════════════════════════════════
@@ -163,8 +167,8 @@ export type CoreModule = {
 	routes: CoreRoutes;
 	services: CoreServices;
 	fieldTypes: CoreFieldTypes;
-	collections: Record<never, never>;
-	globals: Record<never, never>;
+	collections: CoreCollections;
+	globals: CoreGlobals;
 	messages: Record<never, never>;
 	emails: Record<never, never>;
 	migrations: readonly unknown[];

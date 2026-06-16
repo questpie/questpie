@@ -63,7 +63,13 @@ export type AdminCollections = {
 	verification: typeof _coll_verification;
 };
 
+export type AdminGlobals = Record<never, never>;
+
+export type AdminJobs = Record<never, never>;
+
 export type AdminRoutes = { i18nHelpers: typeof _route_i18nHelpers extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"i18nHelpers">> : typeof _route_i18nHelpers; routeHelpers: typeof _route_routeHelpers extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"routeHelpers">> : typeof _route_routeHelpers } & typeof _route_adminConfig & typeof _route_executeAction & typeof _route_locales & typeof _route_preview & typeof _route_reactive & typeof _route_setup & typeof _route_translations & typeof _route_widgetData;
+
+export type AdminFieldTypes = Record<never, never>;
 
 export type AdminViews = {
 	collectionForm: typeof _view_collectionForm;
@@ -77,6 +83,8 @@ export type AdminComponents = {
 	icon: typeof _comp_icon;
 };
 
+export type AdminBlocks = Record<never, never>;
+
 // ════════════════════════════════════════════════════════════
 // MODULE DEFINITION — static plain object
 // ════════════════════════════════════════════════════════════
@@ -88,15 +96,15 @@ export type AdminModule = {
 	routes: AdminRoutes;
 	views: AdminViews;
 	components: AdminComponents;
-	globals: Record<never, never>;
-	jobs: Record<never, never>;
+	globals: AdminGlobals;
+	jobs: AdminJobs;
+	fieldTypes: AdminFieldTypes;
+	blocks: AdminBlocks;
 	messages: Record<never, never>;
 	services: Record<never, never>;
 	emails: Record<never, never>;
 	migrations: readonly unknown[];
 	seeds: readonly unknown[];
-	fieldTypes: Record<never, never>;
-	blocks: Record<never, never>;
 	config: {
 		admin: typeof _adminConfig;
 	};
