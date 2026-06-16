@@ -537,6 +537,10 @@ export async function runCodegen(
 	// Track additional files to write (e.g. registries.ts for module augmentations)
 	let moduleRegistriesCode: string | null = null;
 
+	// Root-app layer files (names.gen.ts/entities.gen.ts/context.gen.ts) emitted
+	// alongside index.ts by the multi-file split. Module mode leaves this empty.
+	let templateExtraFiles: Array<{ name: string; code: string }> = [];
+
 	if (options.module) {
 		// Module mode: generate module.ts (static module definition)
 		outputFile = options.module.outputFile ?? "module.ts";
@@ -564,7 +568,7 @@ export async function runCodegen(
 		// Root app mode: generate index.ts (app with createApp)
 		outputFile = target.outputFile;
 		const configImportPath = computeRelativeImport(outDir, configPath);
-		code = generateTemplate({
+		const tpl = generateTemplate({
 			configImportPath,
 			discovered,
 			categories: target.categories,
@@ -577,6 +581,8 @@ export async function runCodegen(
 				extraRuntimeCode.length > 0 ? extraRuntimeCode : undefined,
 			extraEntities: extraEntities.size > 0 ? extraEntities : undefined,
 		});
+		code = tpl.code;
+		templateExtraFiles = tpl.extraFiles;
 	}
 
 	// 6. Always generate factories.ts for root app mode
@@ -611,6 +617,11 @@ export async function runCodegen(
 			path: join(outDir, "factories.ts"),
 			code: factoriesCode,
 		});
+	}
+	// Root-app layer files (names.gen.ts/entities.gen.ts/context.gen.ts) from the
+	// multi-file split — written next to index.ts. Empty in module mode.
+	for (const f of templateExtraFiles) {
+		filesToWrite.push({ path: join(outDir, f.name), code: f.code });
 	}
 
 	// Client env modules — one per consumer declared in env.client.ts.

@@ -21,12 +21,22 @@ import {
 	coreCodegenPlugin,
 	resolveTargetGraph,
 } from "../../src/cli/codegen/index.js";
-import { generateTemplate } from "../../src/cli/codegen/template.js";
+import { generateTemplate as _generateTemplate } from "../../src/cli/codegen/template.js";
 import type {
 	CodegenPlugin,
 	DiscoveredFile,
 	DiscoveryResult,
 } from "../../src/cli/codegen/types.js";
+
+// Step-6 multi-file split: generateTemplate returns `{ code, extraFiles }`.
+// Concatenate index.ts + layer files so `.includes(...)` assertions see the
+// full emitted surface.
+function generateTemplate(
+	opts: Parameters<typeof _generateTemplate>[0],
+): string {
+	const { code, extraFiles } = _generateTemplate(opts);
+	return [code, ...extraFiles.map((f) => f.code)].join("\n");
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers

@@ -19,7 +19,19 @@ import {
 	resolveTargetGraph,
 	runAllTargets,
 } from "../../src/cli/codegen/index.js";
-import { generateTemplate } from "../../src/cli/codegen/template.js";
+import { generateTemplate as _generateTemplate } from "../../src/cli/codegen/template.js";
+
+// Step-6 multi-file split: generateTemplate now returns
+// `{ code, extraFiles }` (index.ts + names.gen.ts/entities.gen.ts/
+// context.gen.ts). These tests assert on the FULL emitted type surface, so the
+// shim concatenates index.ts + every layer file back into one string — the same
+// content the pre-split single index.ts contained.
+function generateTemplate(
+	opts: Parameters<typeof _generateTemplate>[0],
+): string {
+	const { code, extraFiles } = _generateTemplate(opts);
+	return [code, ...extraFiles.map((f) => f.code)].join("\n");
+}
 import type {
 	CategoryDeclaration,
 	CodegenPlugin,
