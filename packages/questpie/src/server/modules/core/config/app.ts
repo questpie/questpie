@@ -16,10 +16,14 @@ import type {
 	GlobalCollectionTransitionHookContext,
 	GlobalGlobalHookContext,
 } from "#questpie/server/config/global-hooks-types.js";
+import type { Locale } from "#questpie/server/config/types.js";
+import { buildIndexParams } from "#questpie/server/modules/core/integrated/search/index-params.js";
+import type { SearchableConfig } from "#questpie/server/modules/core/integrated/search/types.js";
 import {
 	TransitionScheduledError,
 	scheduleCollectionTransition,
 } from "#questpie/server/modules/core/workflow/schedule-transition.js";
+import { DEFAULT_LOCALE } from "#questpie/shared/constants.js";
 
 // ============================================================================
 // Realtime helpers
@@ -109,6 +113,50 @@ const realtimeHook = {
 	},
 };
 
+// ============================================================================
+// Search helpers
+// ============================================================================
+
+/**
+ * Minimal structural slice of the Questpie app instance the search hooks reach
+ * for ({@link GlobalCollectionHookContext.app} is `unknown` pre-codegen). Lets
+ * us resolve a collection's declarative `searchable` config + the configured
+ * locales without an `as any` cast.
+ */
+interface AppSearchSurface {
+	getCollectionConfig?: (
+		name: string,
+	) => { state?: { searchable?: SearchableConfig | false } } | undefined;
+	getLocales?: () => Promise<Locale[]>;
+	config?: { locale?: { defaultLocale?: string } };
+}
+
+/** Narrow the loosely-typed hook ctx app to the search slice we touch. */
+function asSearchApp(app: unknown): AppSearchSurface {
+	return (app ?? {}) as AppSearchSurface;
+}
+
+/**
+ * Resolve a collection's `.searchable(...)` config from the app instance.
+ * Returns `undefined` when the collection (or accessor) is unavailable, which
+ * {@link buildIndexParams} treats as the default auto-index config.
+ */
+function resolveSearchableConfig(
+	app: AppSearchSurface,
+	collection: string,
+): SearchableConfig | false | undefined {
+	try {
+		return app.getCollectionConfig?.(collection)?.state?.searchable;
+	} catch {
+		return undefined;
+	}
+}
+
+/** Resolve the configured default locale (mirrors Questpie.createRequestContext). */
+function resolveDefaultLocale(app: AppSearchSurface): string {
+	return app.config?.locale?.defaultLocale ?? DEFAULT_LOCALE;
+}
+
 /**
  * Search indexing hook — schedules async index after change,
  * removes from index after delete. Uses per-app debounce
@@ -128,14 +176,23 @@ const searchHook = {
 				// Try per-instance debounced scheduling first
 				const scheduled = search.scheduleIndex(ctx.collection, String(recordId));
 				if (!scheduled) {
-					// No queue — index synchronously for current locale
-					const title = ctx.data?._title || ctx.data?.id;
-					await search.index({
-						collection: ctx.collection,
-						recordId: String(recordId),
-						locale: ctx.locale ?? "en",
-						title: String(title),
-					});
+					// No queue — index synchronously for current locale.
+					// Resolve the collection's declarative `searchable` config so
+					// content/metadata/facets/embedding are populated (not title-only).
+					const app = asSearchApp(ctx.app);
+					const params = await buildIndexParams(
+						ctx.data as Record<string, any>,
+						{
+							collection: ctx.collection,
+							locale: ctx.locale ?? DEFAULT_LOCALE,
+							searchable: resolveSearchableConfig(app, ctx.collection),
+							app: ctx.app,
+							defaultLocale: resolveDefaultLocale(app),
+						},
+					);
+					if (params) {
+						await search.index(params);
+					}
 				}
 			} catch (err) {
 				logger?.error(
