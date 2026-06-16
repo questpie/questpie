@@ -1,0 +1,8 @@
+{
+	"$comment": "example-errors baseline (cold full-app tsc error counts per example). The package gate is blind to the codegen AppContext⇄config cycle — the examples are the truth. Regenerate with `bun run scripts/example-errors.ts --update` — only commit decreases unless an increase was explicitly approved. CI fails on any increase.",
+	"examples": {
+		"examples/toy-factory-backend": 43,
+		"examples/city-portal": 51,
+		"examples/tanstack-barbershop": 53
+	}
+}

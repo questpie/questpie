@@ -124,6 +124,12 @@ jobs:
       - name: any-census ratchet
         run: bun run scripts/any-census.ts
 
+      # Cold full-app tsc error counts per example must never increase. The
+      # package gate is structurally blind to the codegen AppContext⇄config
+      # cycle; the examples are the truth. Re-baseline with --update on a drop.
+      - name: example-errors ratchet
+        run: bun run scripts/example-errors.ts
+
   docs:
     name: Docs
     runs-on: ubuntu-latest

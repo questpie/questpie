@@ -25,7 +25,8 @@
 		"release": "turbo run build --filter='./packages/*' && bun run scripts/publish.ts",
 		"validate": "bun run scripts/validate.ts",
 		"validate:docs": "bun run scripts/validate-docs.ts",
-		"validate:docs:report": "bun run scripts/validate-docs.ts --report"
+		"validate:docs:report": "bun run scripts/validate-docs.ts --report",
+		"example-errors": "bun run scripts/example-errors.ts"
 	},
 	"dependencies": {
 		"@iconify/react": "^6.0.2",
