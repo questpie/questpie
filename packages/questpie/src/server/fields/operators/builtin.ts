@@ -579,6 +579,7 @@ export const toManyOps = operatorSet({
 		some: operator<CollectionWherePlaceholder, unknown>(() => sql`TRUE`),
 		none: operator<CollectionWherePlaceholder, unknown>(() => sql`TRUE`),
 		every: operator<CollectionWherePlaceholder, unknown>(() => sql`TRUE`),
+		count: operator<number, unknown>(() => sql`0`),
 	},
 });
 
