@@ -683,6 +683,39 @@ export function generateTemplate(options: TemplateOptions): string {
 		lines.push("} & _AppCustomServiceNamespaces;");
 		lines.push("type _AppCoreContext = _AppContextExtensions & _AppInfraContext;");
 		lines.push("");
+
+		// ── Module entity-name key sets (distributive `keyof`, UnionToIntersection-free) ──
+		// One alias per names-only registry category. Each is the UNION of every
+		// module's `keyof <category>` — computed by distributing over the module
+		// tuple union and unioning the per-module key sets, so it does NOT route
+		// through `_MP`/`UnionToIntersection` (which collapses to the wide floor
+		// under workspace/dist resolution and would drop the module names). These
+		// feed the CollectionKeys/GlobalKeys/JobKeys augmentation inside the
+		// `declare global` block below. `& string` keeps the key set to string keys.
+		const keyRegistryModuleNames: Array<{
+			interfaceName: string;
+			keysTypeName: string;
+		}> = [];
+		{
+			const keyRegistryCats: Array<{ interfaceName: string; catName: string }> = [
+				{ interfaceName: "CollectionKeys", catName: "collections" },
+				{ interfaceName: "GlobalKeys", catName: "globals" },
+				{ interfaceName: "JobKeys", catName: "jobs" },
+			];
+			for (const { interfaceName, catName } of keyRegistryCats) {
+				if (!discovered.categories.has(catName)) continue;
+				const decl = allDecls.get(catName);
+				const shouldExtract = decl ? decl.extractFromModules !== false : true;
+				if (!shouldExtract) continue;
+				const keysTypeName = `_Module${capitalize(catName)}KeyNames`;
+				lines.push(
+					`type ${keysTypeName} = (typeof ${modulesFile.varName})[number] extends infer M ? M extends { ${catName}: infer C } ? keyof C & string : never : never;`,
+				);
+				keyRegistryModuleNames.push({ interfaceName, keysTypeName });
+			}
+			if (keyRegistryModuleNames.length > 0) lines.push("");
+		}
+
 		lines.push("declare global {");
 		lines.push("\tnamespace Questpie {");
 		if (hasServices && hasWorkflows) {
@@ -830,6 +863,26 @@ export function generateTemplate(options: TemplateOptions): string {
 		lines.push("\t\t\tsession: _AppSession;");
 		lines.push("\t\t\tdb: _AppDb;");
 		lines.push("\t\t}");
+
+		// ── MODULE entity-name contribution into the names-only key registry ──
+		// factories.ts already augments Questpie.CollectionKeys/GlobalKeys/JobKeys
+		// with the USER entity names (gen-time literals). Modules contribute their
+		// OWN discovered names HERE, so StrictCollectionKey (and the relation
+		// surfaces) recognise cross-module targets like relation("user") for an app
+		// that pulls the admin/starter modules, instead of rejecting them as typos.
+		//
+		// The names come from `_Module*KeyNames` (emitted above) — a DISTRIBUTIVE
+		// `keyof` over `(typeof modules)[number]["<category>"]`, deliberately NOT the
+		// `_Module*` = `_MP<>` aggregate: `_MP` is built on `UnionToIntersection`,
+		// which collapses (and can resolve to the wide floor) under workspace/dist
+		// resolution, silently dropping the module names. The distributive form only
+		// needs each module type's KEY SET, so it stays robust AND reads the same
+		// acyclic seam the USER-name augmentation does — no builder-cycle re-entry.
+		for (const { interfaceName, keysTypeName } of keyRegistryModuleNames) {
+			lines.push(
+				`\t\tinterface ${interfaceName} extends Record<${keysTypeName}, unknown> {}`,
+			);
+		}
 
 		// Registry — ALL registryKey categories + ~-prefixed singles augmented centrally.
 		// This is the SINGLE place that augments Registry. Modules never augment it.

@@ -157,7 +157,7 @@ export type AppBlocks = _ModuleBlocks
 	& { [K in typeof _bloc_video.state.name]: typeof _bloc_video };
 
 type _CollectionsAPI = { [K in keyof AppCollections]: CollectionAPI<AppCollections[K], AppCollections> };
-type _JobHandlerCollections = {
+type _JobHandlerCollections = _ModuleCollections & {
 	announcements: typeof _coll_announcements;
 	cities: typeof _coll_cities;
 	cityMembers: typeof _coll_cityMembers;
@@ -203,7 +203,7 @@ type _AppQuestpie = Omit<_AppQuestpieBase, "collections" | "globals"> & {
 };
 
 // ── AppContext augmentation — auto-types ALL handlers ──────
-type _AppCoreContext = _AppContextExtensions & {
+type _AppInfraContext = {
 	// Infrastructure
 	app: _AppQuestpie;
 	db: _AppDb;
@@ -227,6 +227,11 @@ type _AppCoreContext = _AppContextExtensions & {
 	// User services
 	services: _AppDefaultServices;
 } & _AppCustomServiceNamespaces;
+type _AppCoreContext = _AppContextExtensions & _AppInfraContext;
+
+type _ModuleCollectionsKeyNames = (typeof _modules)[number] extends infer M ? M extends { collections: infer C } ? keyof C & string : never : never;
+type _ModuleGlobalsKeyNames = (typeof _modules)[number] extends infer M ? M extends { globals: infer C } ? keyof C & string : never : never;
+type _ModuleJobsKeyNames = (typeof _modules)[number] extends infer M ? M extends { jobs: infer C } ? keyof C & string : never : never;
 
 declare global {
 	namespace Questpie {
@@ -303,6 +308,22 @@ declare global {
 			t: (key: string, params?: Record<string, unknown>, locale?: string) => string;
 			services: _AppDefaultServices;
 		}
+
+		// App-level hook / default-access ctx infra seams (CL-05).
+		// Filled with the real infra MINUS _AppContextExtensions, so the
+		// app-level hooks/access predicates get precise db/session/
+		// collections/globals/queue WITHOUT re-entering the extensions cycle.
+		interface AppHookContext extends _AppInfraContext {}
+		interface AppDefaultAccessContext extends _AppInfraContext {}
+
+		// appConfig({ context }) resolver session/db — off the cyclic edge.
+		interface ContextResolverBase {
+			session: _AppSession;
+			db: _AppDb;
+		}
+		interface CollectionKeys extends Record<_ModuleCollectionsKeyNames, unknown> {}
+		interface GlobalKeys extends Record<_ModuleGlobalsKeyNames, unknown> {}
+		interface JobKeys extends Record<_ModuleJobsKeyNames, unknown> {}
 
 		interface Registry {
 			collections: _Registry_Collections;

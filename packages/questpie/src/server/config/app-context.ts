@@ -245,6 +245,25 @@ export type KnownCollectionKey = [keyof Questpie.CollectionKeys] extends [never]
 	? string & {}
 	: (keyof Questpie.CollectionKeys & string) | (string & {});
 
+/**
+ * STRICT collection key — the FINITE key union with **no `(string & {})` arm**.
+ *
+ * When `Questpie.CollectionKeys` is populated (an app where codegen emitted the
+ * registry), this is exactly the literal union of collection names, so a typo'd
+ * `relation("typo")` is REJECTED at the type level. When the registry is EMPTY
+ * (the framework package's own build, pre-codegen), it falls back to plain
+ * `string` — the escape hatch that keeps source + framework tests compiling
+ * without forcing every relation surface red before codegen runs.
+ *
+ * This reads the SAME acyclic `Questpie.CollectionKeys` seam as
+ * {@link KnownCollectionKey}, so it is cycle-safe by the identical argument (the
+ * interface references nothing — see relation.ts). Use this for relation
+ * VALIDATION surfaces; keep {@link KnownCollectionKey} for cosmetic autocomplete.
+ */
+export type StrictCollectionKey = [keyof Questpie.CollectionKeys] extends [never]
+	? string
+	: keyof Questpie.CollectionKeys & string;
+
 /** Global keys from the names-only key registry. @see KnownCollectionKey */
 export type KnownGlobalKey = [keyof Questpie.GlobalKeys] extends [never]
 	? string & {}
