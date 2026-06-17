@@ -1,7 +1,7 @@
 import type { BetterAuthOptions } from "better-auth";
 import { createAuthClient } from "better-auth/client";
 
-import type { AppConfig } from "@/questpie/server/app.js";
+import type { AppConfig } from "@/questpie/server/app";
 
 /**
  * Type-safe Better Auth client (vanilla, no React).

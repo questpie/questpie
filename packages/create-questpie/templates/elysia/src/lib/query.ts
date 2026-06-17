@@ -1,6 +1,6 @@
 import { createQuestpieQueryOptions } from "@questpie/tanstack-query";
 
-import { client } from "@/lib/client.js";
+import { client } from "@/lib/client";
 
 /**
  * Typed TanStack Query option builders for this project.

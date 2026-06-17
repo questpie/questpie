@@ -1,1 +1,1 @@
-export { posts } from "./posts.collection.js";
+export { posts } from "./posts.collection";

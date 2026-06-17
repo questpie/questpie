@@ -20,7 +20,7 @@ import _authConfig from "../config/auth";
 // ── Plugin Singles ─────────────────────────────────────────
 import _openapi from "../config/openapi";
 
-import type { AppCollections, AppGlobals, AppJobs, _ModuleCollections, _AppDefaultServices, _AppServicesSeam, _AppTopLevelServices, _AppCustomServiceNamespaces, _Registry_Collections, _Registry_Globals, _Registry_Jobs, _Registry_Routes, _Registry_Services, _Registry_Emails, _Registry_FieldTypes, _AllModuleFields } from "./entities.gen.js";
+import type { AppCollections, AppGlobals, AppJobs, _ModuleCollections, _AppDefaultServices, _AppServicesSeam, _AppTopLevelServices, _AppCustomServiceNamespaces, _Registry_Collections, _Registry_Globals, _Registry_Jobs, _Registry_Routes, _Registry_Services, _Registry_Emails, _Registry_FieldTypes, _AllModuleFields } from "./entities.gen";
 import type { AnyCollectionOrBuilder, AnyGlobalOrBuilder, CollectionAPI, DrizzleClientFromQuestpieConfig, InferContextExtensionsFromAppConfig, InferSessionFromAuthConfig, MailerService, Questpie, QuestpieConfig, QueueClient, QueueJobType, ServiceInstancesInNamespace, TablesFromConfig, z } from "questpie/types";
 
 type _MPConfigSub<A extends readonly any[], K extends string> = A extends readonly [infer H, ...infer T extends readonly any[]] ? (H extends { config: infer C } ? (C extends Record<K, infer V> ? V : {}) : {}) & _MPConfigSub<T, K> : {};

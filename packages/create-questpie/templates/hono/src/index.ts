@@ -13,8 +13,8 @@
 import { Hono } from "hono";
 import { createFetchHandler } from "questpie/http";
 
-import { env } from "@/lib/env.js";
-import { app as questpie } from "@/questpie/server/app.js";
+import { env } from "@/lib/env";
+import { app as questpie } from "@/questpie/server/app";
 
 const handler = createFetchHandler(questpie, { basePath: "/api" });
 

@@ -9,7 +9,7 @@
 import { runtimeConfig } from "questpie/app";
 import { ConsoleAdapter } from "questpie/adapters/console";
 
-import { env } from "@/lib/env.js";
+import { env } from "@/lib/env";
 
 export default runtimeConfig({
 	app: { url: env.APP_URL },

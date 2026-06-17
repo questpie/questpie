@@ -1,1 +1,1 @@
-export { siteSettings } from "./site-settings.global.js";
+export { siteSettings } from "./site-settings.global";
