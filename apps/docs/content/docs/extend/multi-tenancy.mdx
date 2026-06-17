@@ -1,19 +1,19 @@
 ---
 title: Multi-tenancy
-description: Serve many tenants — organizations, properties, cities — from one app by deriving the active scope from the request, isolating data with access rules and scoped globals, and letting admins switch tenants from the sidebar.
+description: Serve many tenants, organizations, properties, cities, from one app by deriving the active scope from the request, isolating data with access rules and scoped globals, and letting admins switch tenants from the sidebar.
 ---
 
-**Multi-tenancy** in QUESTPIE is one app serving many isolated tenants — call them organizations, workspaces, properties, or cities. There is no special "tenant mode": you assemble it from primitives you already know. The client sends the active scope as a request header, an `appConfig({ context })` resolver turns that header into a typed value on every request context, and your access rules and scoped globals read that value to isolate data. Pick the tenant from a sidebar dropdown, and every API call carries it.
+**Multi-tenancy** in QUESTPIE is one app serving many isolated tenants, call them organizations, workspaces, properties, or cities. There is no special "tenant mode": you assemble it from primitives you already know. The client sends the active scope as a request header, an `appConfig({ context })` resolver turns that header into a typed value on every request context, and your access rules and scoped globals read that value to isolate data. Pick the tenant from a sidebar dropdown, and every API call carries it.
 
-This page shows the full loop end to end — server resolver, scoped collections, scoped globals, the admin scope picker — and the two isolation footguns that bite hardest: relations that reach across scopes, and the shared user table that is *not* tenant-scoped.
+This page shows the full loop end to end, server resolver, scoped collections, scoped globals, the admin scope picker, and the two isolation footguns that bite hardest: relations that reach across scopes, and the shared user table that is *not* tenant-scoped.
 
 ## What it does
 
 - **Derive scope from the request.** An `appConfig({ context })` resolver reads a header (`x-tenant-id`, `x-selected-property`, …) once per request and returns a typed value (`{ tenantId }`) that travels into every access rule, hook, route handler, and `getContext()`.
-- **Isolate collection data with access rules.** Add a scope-FK field, then a `read`/`update` rule that returns a `where` filter keyed on the resolved scope — rows outside the active tenant simply never appear.
+- **Isolate collection data with access rules.** Add a scope-FK field, then a `read`/`update` rule that returns a `where` filter keyed on the resolved scope, rows outside the active tenant simply never appear.
 - **Per-tenant singletons.** Mark a global `.options({ scoped })` and each tenant gets its own row automatically (`scope_id` column + unique index), with no extra tables.
 - **Switch tenants in the admin.** `ScopeProvider` + `ScopePicker` give admins a sidebar dropdown; `useScopedFetch` injects the chosen scope header into every request from the typed client.
-- **One codebase, every surface.** The same scope flows through CRUD, REST, the typed client, and the admin — you wire it once at the seams, not per query.
+- **One codebase, every surface.** The same scope flows through CRUD, REST, the typed client, and the admin, you wire it once at the seams, not per query.
 
 ## How the pieces fit
 
@@ -30,11 +30,11 @@ This page shows the full loop end to end — server resolver, scoped collections
                                       └────────────────────────────────────┘
 ```
 
-The scope is **request state**, not configuration. Nothing about a collection is "owned" by a tenant in its definition — isolation is the access rule you write, evaluated per request against the resolved scope.
+The scope is **request state**, not configuration. Nothing about a collection is "owned" by a tenant in its definition, isolation is the access rule you write, evaluated per request against the resolved scope.
 
 ## Quick start
 
-A complete two-tenant setup needs three files: the resolver, a scoped collection, and the admin wiring. The runnable [`examples/city-portal`](https://github.com/questpie/questpie/tree/main/examples/city-portal) shows the same backbone — a per-request resolver, a `ScopePicker` in the sidebar, a scoped `siteSettings` global, and a membership collection. The access-rule pattern for collections below is the recommended way to isolate per-tenant rows; the example carries the scope-FK field but leaves the access enforcement to you, so treat the collection snippet as the QUESTPIE pattern rather than a line-for-line copy of the example.
+A complete two-tenant setup needs three files: the resolver, a scoped collection, and the admin wiring. The runnable [`examples/city-portal`](https://github.com/questpie/questpie/tree/main/examples/city-portal) shows the same backbone, a per-request resolver, a `ScopePicker` in the sidebar, a scoped `siteSettings` global, and a membership collection. The access-rule pattern for collections below is the recommended way to isolate per-tenant rows; the example carries the scope-FK field but leaves the access enforcement to you, so treat the collection snippet as the QUESTPIE pattern rather than a line-for-line copy of the example.
 
 **1. Resolve the scope from the request** in `config/app.ts`. The resolver runs once per HTTP request; its return value is merged flat into the request context.
 
@@ -44,7 +44,7 @@ import { appConfig } from "questpie/app";
 export default appConfig({
   locale: { locales: [{ code: "en" }], defaultLocale: "en" },
   // Runs once per request. The returned object travels into every access
-  // rule, hook, route handler, and getContext() — keyed on the header the
+  // rule, hook, route handler, and getContext(), keyed on the header the
   // client sends.
   context: async ({ request }) => {
     const tenantId = request.headers.get("x-tenant-id");
@@ -58,7 +58,7 @@ export default appConfig({
 ```ts title="src/questpie/server/collections/posts.ts"
 import { collection } from "#questpie/factories";
 
-// ctx is the resolved request context — `tenantId` came from the resolver above.
+// ctx is the resolved request context, `tenantId` came from the resolver above.
 type ScopeCtx = { tenantId: string | null };
 
 export const posts = collection("posts")
@@ -107,8 +107,7 @@ function AdminLayout({ children }: { children: React.ReactNode }) {
 
 function ScopedAdmin({ children }: { children: React.ReactNode }) {
   // useScopedFetch reads the active scope from ScopeProvider and sets the
-  // x-tenant-id header on every request. A plain client would NOT send it —
-  // the picker would change scopeId without changing what the API returns.
+  // x-tenant-id header on every request. A plain client would NOT send it, // the picker would change scopeId without changing what the API returns.
   const scopedFetch = useScopedFetch();
   const client = useMemo(
     () => createClient<typeof app>({ baseURL: "/api", fetch: scopedFetch }),
@@ -139,11 +138,11 @@ questpie push       # creates the posts + tenants tables in dev
 
 That is the whole loop. Pick a tenant in the sidebar → the scoped client sends `x-tenant-id` → the resolver returns `{ tenantId }` → the access rule filters `posts` to that tenant. The scoped fetch is the load-bearing seam: skip `useScopedFetch` and the picker still changes `scopeId`, but no header leaves the browser, so the API keeps returning everything.
 
-<Callout type="warn" title="The resolver only *derives* scope — it does not enforce it">
-`appConfig({ context })` returns a value; it does not filter anything by itself. Isolation happens only where you **read** that value — in access rules (collections) or the `scoped` resolver (globals). A collection with no scope rule is fully visible across every tenant. Derive once, enforce per collection.
+<Callout type="warn" title="The resolver only *derives* scope, it does not enforce it">
+`appConfig({ context })` returns a value; it does not filter anything by itself. Isolation happens only where you **read** that value, in access rules (collections) or the `scoped` resolver (globals). A collection with no scope rule is fully visible across every tenant. Derive once, enforce per collection.
 </Callout>
 
-## The scope resolver — `appConfig({ context })`
+## The scope resolver, `appConfig({ context })`
 
 `context` is one key on the `appConfig()` object in `config/app.ts`. It is the single seam for turning request data into per-request state.
 
@@ -161,14 +160,14 @@ interface ContextResolverParams {
 
 
 
-**What you get in the resolver.** Beyond `request`, `session`, and `db`, the framework passes the full **system-mode** service surface — `collections`, `globals`, `kv`, `queue`, `logger`, `t`, and your services — typed via the codegen-emitted `Questpie.ContextResolverContext` augmentation. So you can validate membership or load tenant config from inside the resolver:
+**What you get in the resolver.** Beyond `request`, `session`, and `db`, the framework passes the full **system-mode** service surface, `collections`, `globals`, `kv`, `queue`, `logger`, `t`, and your services, typed via the codegen-emitted `Questpie.ContextResolverContext` augmentation. So you can validate membership or load tenant config from inside the resolver:
 
-```ts title="config/app.ts — validating membership in the resolver"
+```ts title="config/app.ts, validating membership in the resolver"
 export default appConfig({
   context: async ({ request, session, collections }) => {
     const tenantId = request.headers.get("x-tenant-id");
 
-    // Collections called here run in SYSTEM mode — the resolver is trusted
+    // Collections called here run in SYSTEM mode, the resolver is trusted
     // derivation, so it is not itself subject to scope rules (which is what
     // lets it establish the scope in the first place).
     if (tenantId && session?.user) {
@@ -187,20 +186,20 @@ export default appConfig({
 
 **Where the return value lands.** The resolved object is merged **flat** into the request context and also carried as an internal `"~contextExtensions"` bundle, so it reaches:
 
-- **access rules** — `read`/`create`/`update`/`delete`/`transition`/`serve` (collections) and global access rules,
-- **hooks** — every collection/global hook context spreads it,
-- **route handlers** — `ctx.tenantId` in `routes/`,
-- **`getContext()`** — anywhere inside the request scope (`getContext<typeof app>().tenantId`).
+- **access rules**, `read`/`create`/`update`/`delete`/`transition`/`serve` (collections) and global access rules,
+- **hooks**, every collection/global hook context spreads it,
+- **route handlers**, `ctx.tenantId` in `routes/`,
+- **`getContext()`**, anywhere inside the request scope (`getContext<typeof app>().tenantId`).
 
 
 
-<Callout type="warn" title="`accessMode` is `system` off-request — scope is not auto-applied in jobs and scripts">
-The resolver runs **only when there is a `request`**. CRUD calls with no request (jobs, seeds, scripts, the resolver itself) default to `accessMode: "system"`, which bypasses access rules entirely — so your scope `where` never fires there. Inside a job you must pass the tenant explicitly (`find({ where: { tenant: id } })`) or set `{ accessMode: "user", session }` and inject the context yourself. HTTP requests default to `accessMode: "user"`, where the rules apply.
+<Callout type="warn" title="`accessMode` is `system` off-request, scope is not auto-applied in jobs and scripts">
+The resolver runs **only when there is a `request`**. CRUD calls with no request (jobs, seeds, scripts, the resolver itself) default to `accessMode: "system"`, which bypasses access rules entirely, so your scope `where` never fires there. Inside a job you must pass the tenant explicitly (`find({ where: { tenant: id } })`) or set `{ accessMode: "user", session }` and inject the context yourself. HTTP requests default to `accessMode: "user"`, where the rules apply.
 </Callout>
 
 ### Reserved keys
 
-The framework tracks a set of reserved context keys — the ones it sets itself:
+The framework tracks a set of reserved context keys, the ones it sets itself:
 
 ```text
 session, db, locale, defaultLocale, localeFallback, accessMode, stage,
@@ -208,21 +207,21 @@ request, requestId, traceId, data, input, original, operation, params,
 app, collections, globals, "~contextExtensions"
 ```
 
-Returning one of these from your resolver does **not** throw — in development it logs a one-time warning, and in production it is silent. So watch your console: name your scope key something domain-specific (`tenantId`, `organizationId`, `propertyId`, `cityId`) and you'll never hit it.
+Returning one of these from your resolver does **not** throw, in development it logs a one-time warning, and in production it is silent. So watch your console: name your scope key something domain-specific (`tenantId`, `organizationId`, `propertyId`, `cityId`) and you'll never hit it.
 
-The protection itself is partial. Your resolver's result is merged **flat** into the context, then five base keys — `session`, `locale`, `defaultLocale`, `accessMode`, `db` — are re-set on top, so those genuinely can't be shadowed. The other reserved keys (`request`, `requestId`, `data`, `operation`, `collections`, `globals`, …) are **not** re-set, so a resolver that returns one of those names *would* overwrite it in the flat context. Treat the warning as a real signal, not a guardrail.
+The protection itself is partial. Your resolver's result is merged **flat** into the context, then five base keys, `session`, `locale`, `defaultLocale`, `accessMode`, `db`, are re-set on top, so those genuinely can't be shadowed. The other reserved keys (`request`, `requestId`, `data`, `operation`, `collections`, `globals`, …) are **not** re-set, so a resolver that returns one of those names *would* overwrite it in the flat context. Treat the warning as a real signal, not a guardrail.
 
 <Callout type="info" title="The resolver must return an object">
-`ValidateContextResolver` rejects a resolver that resolves to only a primitive (`async () => "x"`) or only `null` — extensions are an object bundle. The common `session ? { tenantId } : null` shape passes because it has an object arm; returning `{ tenantId: id || null }` is the clean form.
+`ValidateContextResolver` rejects a resolver that resolves to only a primitive (`async () => "x"`) or only `null`, extensions are an object bundle. The common `session ? { tenantId } : null` shape passes because it has an object arm; returning `{ tenantId: id || null }` is the clean form.
 </Callout>
 
 ## Scoping collections
 
-Collections have **no `scoped` option** — collection isolation is access rules, and that is deliberate: it composes with everything else access already does (row filtering, field rules, `serve`). The pattern is three parts:
+Collections have **no `scoped` option**, collection isolation is access rules, and that is deliberate: it composes with everything else access already does (row filtering, field rules, `serve`). The pattern is three parts:
 
-1. **A scope-FK field** — `f.relation("tenants")` (or a plain `f.text()` if the tenant id is external). This is the column the filter keys on.
-2. **An access `where` filter** — `read`/`update`/`delete` rules that return `{ tenant: tenantId }`. A rule that returns a `where` object grants *filtered* access: rows are narrowed, not denied. (See [Access control](/docs/concepts/access-control) for the full `where`-returning model.)
-3. **A `beforeChange` stamp** — set the FK from the resolved scope on `create` so a row cannot be written into the wrong tenant.
+1. **A scope-FK field**, `f.relation("tenants")` (or a plain `f.text()` if the tenant id is external). This is the column the filter keys on.
+2. **An access `where` filter**, `read`/`update`/`delete` rules that return `{ tenant: tenantId }`. A rule that returns a `where` object grants *filtered* access: rows are narrowed, not denied. (See [Access control](/docs/concepts/access-control) for the full `where`-returning model.)
+3. **A `beforeChange` stamp**, set the FK from the resolved scope on `create` so a row cannot be written into the wrong tenant.
 
 ```ts
 collection("invoices")
@@ -243,11 +242,11 @@ collection("invoices")
   });
 ```
 
-<Callout type="warn" title="Rules apply only in user mode — and `null` scope means `tenant IS NULL`">
-Two things to internalize. First, the filter runs only when access is enforced (`accessMode: "user"`, the HTTP default; or explicitly passed). A backend `find()` with the default `system` mode sees **all** tenants — correct for trusted code, dangerous if you forget which mode you're in. Second, `{ tenant: null }` filters to rows whose FK *is null* (unassigned rows), which is rarely what you want — guard for a missing scope (reject, or scope to nothing) rather than letting `null` leak global rows.
+<Callout type="warn" title="Rules apply only in user mode, and `null` scope means `tenant IS NULL`">
+Two things to internalize. First, the filter runs only when access is enforced (`accessMode: "user"`, the HTTP default; or explicitly passed). A backend `find()` with the default `system` mode sees **all** tenants, correct for trusted code, dangerous if you forget which mode you're in. Second, `{ tenant: null }` filters to rows whose FK *is null* (unassigned rows), which is rarely what you want, guard for a missing scope (reject, or scope to nothing) rather than letting `null` leak global rows.
 </Callout>
 
-## Scoping globals — `.options({ scoped })`
+## Scoping globals, `.options({ scoped })`
 
 Globals are the one place scope is a **first-class option**, because a singleton-per-tenant needs storage support: a `scope_id` column and a per-scope unique index. Set `scoped` to a resolver that returns the scope id from context, and QUESTPIE gives each scope its own row automatically.
 
@@ -272,12 +271,12 @@ export default global("siteSettings")
 
 - adds a `scope_id` text column to the global's main table,
 - adds a unique index `<name>_scope_idx` on `scope_id`,
-- makes `get()` / `update()` filter and upsert by the resolved scope id — `get()` returns *this tenant's* row (auto-created on first **access**, read or write, with its `scope_id`), and a `null` scope resolves the one row where `scope_id IS NULL` (the unscoped/global instance).
+- makes `get()` / `update()` filter and upsert by the resolved scope id, `get()` returns *this tenant's* row (auto-created on first **access**, read or write, with its `scope_id`), and a `null` scope resolves the one row where `scope_id IS NULL` (the unscoped/global instance).
 
 
 
 <Callout type="info" title="Scoped globals self-provision per tenant">
-You never create the per-tenant row manually. The first time you **touch** `siteSettings` while `tenantId` resolves to `"t_42"` — a `get()` is enough, you don't have to `update()` first — the read path inserts a row with `scope_id = "t_42"` inside a locked transaction and returns it. Switching scope switches which row you read and write — same global name, isolated rows.
+You never create the per-tenant row manually. The first time you **touch** `siteSettings` while `tenantId` resolves to `"t_42"`, a `get()` is enough, you don't have to `update()` first, the read path inserts a row with `scope_id = "t_42"` inside a locked transaction and returns it. Switching scope switches which row you read and write, same global name, isolated rows.
 </Callout>
 
 ## The admin scope picker
@@ -298,8 +297,8 @@ Holds the selected scope and persists it. Wrap it **above** `AdminProvider` / `A
 
 | Prop | Type | Default | Purpose |
 |---|---|---|---|
-| `headerName` | `string` | — *(required)* | HTTP header carrying the scope id (must match what the resolver reads). |
-| `storageKey` | `string` | — | `localStorage` key to persist the selection across reloads. Omit to not persist. |
+| `headerName` | `string` | none *(required)* | HTTP header carrying the scope id (must match what the resolver reads). |
+| `storageKey` | `string` | none | `localStorage` key to persist the selection across reloads. Omit to not persist. |
 | `defaultScope` | `string \| null` | `null` | Scope id used when nothing is stored. |
 
 
@@ -319,7 +318,7 @@ function TenantBadge() {
 
 ### `useScopedFetch` / `createScopedFetch`
 
-The provider only holds the value — you must give the typed client a fetch that *sends* it. `useScopedFetch()` returns a `fetch` wrapper that sets `headerName: scopeId` on every request (only when `scopeId` is truthy). Build the client with it:
+The provider only holds the value, you must give the typed client a fetch that *sends* it. `useScopedFetch()` returns a `fetch` wrapper that sets `headerName: scopeId` on every request (only when `scopeId` is truthy). Build the client with it:
 
 ```tsx
 import { createClient } from "questpie/client";
@@ -336,10 +335,10 @@ function AdminWithScopedClient() {
 }
 ```
 
-For client construction **outside** React, use `createScopedFetch(headerName, () => currentScopeId)` — same behavior, no hook.
+For client construction **outside** React, use `createScopedFetch(headerName, () => currentScopeId)`, same behavior, no hook.
 
 <Callout type="warn" title="`AdminLayoutProvider` does *not* auto-scope your client">
-`AdminLayoutProvider` forwards the `client` you pass straight through to `AdminProvider` — it does **not** wrap it with a scope-aware fetch. So when the active scope changes, the admin only re-issues queries with the new header if the client *you handed it* already uses a scoped fetch. Build that client with `useScopedFetch` (as above), or the dropdown will change `scopeId` without changing what the API returns.
+`AdminLayoutProvider` forwards the `client` you pass straight through to `AdminProvider`, it does **not** wrap it with a scope-aware fetch. So when the active scope changes, the admin only re-issues queries with the new header if the client *you handed it* already uses a scoped fetch. Build that client with `useScopedFetch` (as above), or the dropdown will change `scopeId` without changing what the API returns.
 </Callout>
 
 ### `ScopePicker`
@@ -354,7 +353,7 @@ The dropdown. It sources options three ways, in priority order: static `options`
   placeholder="Select tenant..."
   allowClear               // adds an "All" option that calls setScope(null)
   clearText="All tenants"  // default "All"
-  compact                  // smaller, no label — fits a sidebar slot
+  compact                  // smaller, no label, fits a sidebar slot
 />
 ```
 
@@ -362,13 +361,13 @@ The dropdown. It sources options three ways, in priority order: static `options`
 
 | Prop | Type | Default | Purpose |
 |---|---|---|---|
-| `collection` | `string` | — | Collection to fetch options from (`find` limit 100). |
+| `collection` | `string` | none | Collection to fetch options from (`find` limit 100). |
 | `labelField` | `string` | `"name"` | Field used as each option's label. |
 | `valueField` | `string` | `"id"` | Field used as each option's value (the scope id). |
-| `options` | `ScopeOption[]` | — | Static options; wins over `collection`/`loadOptions`. |
-| `loadOptions` | `() => Promise<ScopeOption[]>` | — | Async options loader. |
+| `options` | `ScopeOption[]` | none | Static options; wins over `collection`/`loadOptions`. |
+| `loadOptions` | `() => Promise<ScopeOption[]>` | none | Async options loader. |
 | `placeholder` | `string` | `"Select..."` | Shown when nothing is selected. |
-| `label` | `string` | — | Label above the picker (hidden in `compact`). |
+| `label` | `string` | none | Label above the picker (hidden in `compact`). |
 | `allowClear` | `boolean` | `false` | Adds an "All" option mapping to `setScope(null)`. |
 | `clearText` | `string` | `"All"` | Text for the clear/all option. |
 | `compact` | `boolean` | `false` | Compact rendering for a sidebar slot. |
@@ -376,14 +375,14 @@ The dropdown. It sources options three ways, in priority order: static `options`
 `ScopeOption` is `{ value, label, description?, icon? }`.
 
 <Callout type="warn" title="The options collection must be visible at the current scope">
-`ScopePicker collection="tenants"` reads the `tenants` collection through the **same scoped client** — so the tenant *list itself* must not be scoped away to nothing, or the picker comes up empty. Keep the directory collection (`tenants`/`organizations`) readable across scopes, and isolate the *content* collections that hang off it.
+`ScopePicker collection="tenants"` reads the `tenants` collection through the **same scoped client**, so the tenant *list itself* must not be scoped away to nothing, or the picker comes up empty. Keep the directory collection (`tenants`/`organizations`) readable across scopes, and isolate the *content* collections that hang off it.
 </Callout>
 
 ## Gotcha: relations reach across scopes
 
-This is the isolation footgun that bites hardest. Scope lives in each collection's **own** access rules. When you hydrate a relation with `with:`, QUESTPIE runs the **related collection's own CRUD read** — propagating the parent's `accessMode` and `session` — so the related collection's access rules (including its scope filter) **do** apply in user mode. The consequence:
+This is the isolation footgun that bites hardest. Scope lives in each collection's **own** access rules. When you hydrate a relation with `with:`, QUESTPIE runs the **related collection's own CRUD read**, propagating the parent's `accessMode` and `session`, so the related collection's access rules (including its scope filter) **do** apply in user mode. The consequence:
 
-- A relation to a **scoped** collection is safe — its own `read` rule narrows the hydrated rows to the active tenant.
+- A relation to a **scoped** collection is safe, its own `read` rule narrows the hydrated rows to the active tenant.
 - A relation to an **unscoped** collection leaks **every** tenant's rows into the hydrated result, because that collection has no filter to apply.
 
 ```ts
@@ -395,17 +394,17 @@ await app.collections.posts.find(
 );
 ```
 
-The fix is uniform: **scope every collection that holds tenant data**, including the ones you only ever reach through a relation. There is no "scope a relation" shortcut — isolation is per-collection by design.
+The fix is uniform: **scope every collection that holds tenant data**, including the ones you only ever reach through a relation. There is no "scope a relation" shortcut, isolation is per-collection by design.
 
 <Callout type="warn" title="Only upload relations inherit the parent's read decision">
-The one exception is `f.upload()` relations: they carry an internal `inheritAccess` flag (defaulting to `true` *only* for uploads), so the file relation populates from the parent row's read decision instead of re-running collection-level access — field-level read rules still apply. Every **non-upload** relation defaults to `inheritAccess: undefined` and re-runs the target's own access. That symbol is framework-internal and cannot be injected over HTTP (JSON can't carry symbols), so a request can never opt a relation out of its scope rule.
+The one exception is `f.upload()` relations: they carry an internal `inheritAccess` flag (defaulting to `true` *only* for uploads), so the file relation populates from the parent row's read decision instead of re-running collection-level access, field-level read rules still apply. Every **non-upload** relation defaults to `inheritAccess: undefined` and re-runs the target's own access. That symbol is framework-internal and cannot be injected over HTTP (JSON can't carry symbols), so a request can never opt a relation out of its scope rule.
 </Callout>
 
 ## Gotcha: the user / auth collection is not tenant-scoped
 
-The `user` collection ships from the starter module (the admin module `.merge()`s it to add the admin UI), and it has **no `scoped` option** — it is a single shared identity store across every tenant, by design. A user is one account that may belong to many tenants; you don't fork the user row per tenant.
+The `user` collection ships from the starter module (the admin module `.merge()`s it to add the admin UI), and it has **no `scoped` option**, it is a single shared identity store across every tenant, by design. A user is one account that may belong to many tenants; you don't fork the user row per tenant.
 
-Model the *relationship* between users and tenants as its own collection — a membership/join collection — and scope **that**:
+Model the *relationship* between users and tenants as its own collection, a membership/join collection, and scope **that**:
 
 ```ts title="collections/tenant-members.ts"
 collection("tenantMembers")
@@ -425,11 +424,11 @@ collection("tenantMembers")
 
 This is exactly what `examples/city-portal` does with its `cityMembers` collection (user ↔ city + role, with a unique index on the pair). From there, the [membership-validating resolver](#the-scope-resolver--appconfig-context-) above is the recommended next step: check that the session user actually belongs to the requested tenant before trusting the header. (The example derives `cityId` from the header but leaves that membership check to you.)
 
-<Callout type="warn" title="Don't try to scope `user` — scope membership instead">
+<Callout type="warn" title="Don't try to scope `user`, scope membership instead">
 Adding a scope rule to `user` breaks login, the admin people-list, and every `f.relation("user")` picker, because authentication needs the global user lookup. Keep `user` shared; put the per-tenant boundary on a membership collection and enforce it in the resolver and in each content collection's access rules.
 </Callout>
 
-## Common shape — picking a scope strategy
+## Common shape, picking a scope strategy
 
 | You want | Use | Storage |
 |---|---|---|
@@ -439,7 +438,7 @@ Adding a scope rule to `user` breaks login, the admin people-list, and every `f.
 | **Shared** identity across tenants | the built-in `user` collection (leave unscoped) | one table, global |
 | **Hard** isolation (separate Postgres schema) | `.options({ schema: "tenant_x" })` per tenant set | distinct schemas (static tenant set only) |
 
-The first two cover almost every app. Reach for `schema` only when you need physical separation and your tenant set is known at build time — it is not a per-request switch.
+The first two cover almost every app. Reach for `schema` only when you need physical separation and your tenant set is known at build time, it is not a per-request switch.
 
 ## TypeScript
 
@@ -455,14 +454,14 @@ function currentTenant() {
 }
 ```
 
-`getContext()` **throws** if called outside a request scope (use `tryGetContext()` for a safe probe). The scope value is also present directly on every access-rule and hook context (`({ tenantId }) => …`). The scope client/types — `ScopeContextValue`, `ScopeOption`, `ScopeProviderProps`, `ScopePickerProps` — are exported from `@questpie/admin/client`.
+`getContext()` **throws** if called outside a request scope (use `tryGetContext()` for a safe probe). The scope value is also present directly on every access-rule and hook context (`({ tenantId }) => …`). The scope client/types, `ScopeContextValue`, `ScopeOption`, `ScopeProviderProps`, `ScopePickerProps`, are exported from `@questpie/admin/client`.
 
 ## Related
 
-- [Access control](/docs/concepts/access-control) — the `where`-returning rule model that does collection-level scoping, plus field-level rules and the `serve`/`introspect` chains.
-- [Configuration](/docs/concepts/configuration) — `appConfig()` in full (`locale`, `access`, `hooks`, `context`) and the `config/*.ts` convention.
-- [Globals](/docs/concepts/globals) — the singleton model that `.options({ scoped })` extends.
-- [Collections](/docs/concepts/collections) — fields, access, hooks, and the `schema` option used for hard isolation.
-- [Hooks](/docs/concepts/hooks) — where `beforeChange` stamps the scope FK, and the transaction lifecycle.
-- [Relations](/docs/concepts/relations) — `with:` hydration, whose access behavior drives the cross-scope leakage gotcha above.
-- Runnable example: [`examples/city-portal`](https://github.com/questpie/questpie/tree/main/examples/city-portal) — multi-city portal with a `x-selected-city` resolver, a `ScopePicker` in the sidebar, a scoped `siteSettings` global, and a `cityMembers` join collection. Its content collections carry a `city` relation FK; the public site isolates by the `$citySlug` route param rather than access rules, so the access-rule pattern on this page is the recommended extension of it.
+- [Access control](/docs/concepts/access-control), the `where`-returning rule model that does collection-level scoping, plus field-level rules and the `serve`/`introspect` chains.
+- [Configuration](/docs/concepts/configuration), `appConfig()` in full (`locale`, `access`, `hooks`, `context`) and the `config/*.ts` convention.
+- [Globals](/docs/concepts/globals), the singleton model that `.options({ scoped })` extends.
+- [Collections](/docs/concepts/collections), fields, access, hooks, and the `schema` option used for hard isolation.
+- [Hooks](/docs/concepts/hooks), where `beforeChange` stamps the scope FK, and the transaction lifecycle.
+- [Relations](/docs/concepts/relations), `with:` hydration, whose access behavior drives the cross-scope leakage gotcha above.
+- Runnable example: [`examples/city-portal`](https://github.com/questpie/questpie/tree/main/examples/city-portal), multi-city portal with a `x-selected-city` resolver, a `ScopePicker` in the sidebar, a scoped `siteSettings` global, and a `cityMembers` join collection. Its content collections carry a `city` relation FK; the public site isolates by the `$citySlug` route param rather than access rules, so the access-rule pattern on this page is the recommended extension of it.

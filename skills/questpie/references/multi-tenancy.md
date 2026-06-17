@@ -8,7 +8,7 @@ description: QUESTPIE multi-tenant scope context resolver header-based tenant is
 
 # QUESTPIE Multi-Tenancy
 
-QUESTPIE supports multi-tenant applications through a **scope-based** architecture. A "scope" can represent anything: organizations, workspaces, properties, cities, brands — any entity that partitions data.
+QUESTPIE supports multi-tenant applications through a **scope-based** architecture. A "scope" can represent anything: organizations, workspaces, properties, cities, brands, any entity that partitions data.
 
 The whole pattern is one pipeline: **the client injects an HTTP header carrying a scope ID, the `appConfig({ context })` resolver reads it and derives typed context once per request, and access rules filter data with it.**
 
@@ -60,7 +60,7 @@ export default collection("projects").fields(({ f }) => ({
 
 ## Step 2: Derive Context in `appConfig({ context })`
 
-The context resolver lives in `config/app.ts`. It runs **once per HTTP request** at the single derivation point (`app.createContext()`), and the returned object travels with the request — flat-merged into every access rule ctx, hook ctx, route handler args, field access ctx, and `getContext()`.
+The context resolver lives in `config/app.ts`. It runs **once per HTTP request** at the single derivation point (`app.createContext()`), and the returned object travels with the request, flat-merged into every access rule ctx, hook ctx, route handler args, field access ctx, and `getContext()`.
 
 ```ts
 // config/app.ts
@@ -85,7 +85,7 @@ export default appConfig({
 
 ### Context Resolver Parameters
 
-The resolver receives the base request params plus the full system-mode service surface (typed via codegen — `Questpie.ContextResolverContext`):
+The resolver receives the base request params plus the full system-mode service surface (typed via codegen, `Questpie.ContextResolverContext`):
 
 | Parameter     | Type                        | Description                                      |
 | ------------- | --------------------------- | ------------------------------------------------ |
@@ -102,15 +102,15 @@ The resolver receives the base request params plus the full system-mode service 
 
 ### Lifecycle Rules
 
-- **Once per HTTP request.** Admin and REST calls alike. Nested CRUD, relation hydration, and hooks within the same request reuse the same result — never re-run the resolver.
+- **Once per HTTP request.** Admin and REST calls alike. Nested CRUD, relation hydration, and hooks within the same request reuse the same result, never re-run the resolver.
 - **No request → no resolver.** Jobs, workflows, seeds, and `createContext()` without a `request` skip it, so extension types are `Partial<…>` (see [narrowing](#high-not-narrowing-optional-extensions)).
-- **Collections inside the resolver run system mode** — the resolver IS trusted derivation. If you explicitly pass `accessMode: "user"` to a CRUD call inside the resolver, rules evaluated from there see no extensions (they don't exist yet) — rules must already tolerate absence.
+- **Collections inside the resolver run system mode**, the resolver IS trusted derivation. If you explicitly pass `accessMode: "user"` to a CRUD call inside the resolver, rules evaluated from there see no extensions (they don't exist yet), rules must already tolerate absence.
 - **Throwing fails the request** before any rule or handler runs. Throw `ApiError.*` for structured error responses (the tenant-validation case).
-- **Reserved keys warn in dev.** Returning `session`, `db`, `locale`, `accessMode`, `collections`, … from the resolver logs a warning — framework keys cannot be shadowed.
+- **Reserved keys warn in dev.** Returning `session`, `db`, `locale`, `accessMode`, `collections`, … from the resolver logs a warning, framework keys cannot be shadowed.
 
 ## Step 3: Filter Data with Access Rules
 
-The resolved context arrives **flat** on the rule ctx — destructure it directly (no `ctx` wrapper). Extensions are optional types: narrow before use.
+The resolved context arrives **flat** on the rule ctx, destructure it directly (no `ctx` wrapper). Extensions are optional types: narrow before use.
 
 ```ts
 // collections/projects.ts
@@ -138,7 +138,7 @@ export default collection("projects")
 		},
 	})
 	.hooks({
-		// Auto-assign workspace on create — extensions are flat on hook ctx too
+		// Auto-assign workspace on create, extensions are flat on hook ctx too
 		beforeChange: async ({ data, operation, workspaceId }) => {
 			if (operation === "create" && workspaceId) {
 				data.workspace = workspaceId;
@@ -214,7 +214,7 @@ function AdminLayout() {
 
 ### ScopePicker
 
-A dropdown for selecting the current scope. Render it into the sidebar through the `afterBrand` slot — passed via `sidebarProps` (a `Partial<AdminSidebarProps>`):
+A dropdown for selecting the current scope. Render it into the sidebar through the `afterBrand` slot, passed via `sidebarProps` (a `Partial<AdminSidebarProps>`):
 
 ```tsx
 <AdminLayoutProvider
@@ -245,11 +245,11 @@ A dropdown for selecting the current scope. Render it into the sidebar through t
 
 | Prop          | Type                           | Default       | Description                                |
 | ------------- | ------------------------------ | ------------- | ------------------------------------------ |
-| `collection`  | `string`                       | —             | Collection to fetch options from           |
+| `collection`  | `string`                       | none | Collection to fetch options from           |
 | `labelField`  | `string`                       | `"name"`      | Field to display as label                  |
 | `valueField`  | `string`                       | `"id"`        | Field to use as value                      |
-| `options`     | `ScopeOption[]`                | —             | Static options (alternative to collection) |
-| `loadOptions` | `() => Promise<ScopeOption[]>` | —             | Async options loader                       |
+| `options`     | `ScopeOption[]`                | none | Static options (alternative to collection) |
+| `loadOptions` | `() => Promise<ScopeOption[]>` | none | Async options loader                       |
 | `placeholder` | `string`                       | `"Select..."` | Placeholder text                           |
 | `allowClear`  | `boolean`                      | `false`       | Show "All" option to clear scope           |
 | `clearText`   | `string`                       | `"All"`       | Label for the clear option                 |
@@ -315,10 +315,10 @@ const scopedFetch = createScopedFetch(
 Extensions arrive **flat** on rule and hook contexts. There is no `ctx` sub-object:
 
 ```ts
-// WRONG — there is no ctx wrapper
+// WRONG, there is no ctx wrapper
 read: ({ ctx }) => ({ workspace: ctx.workspaceId })
 
-// RIGHT — destructure flat
+// RIGHT, destructure flat
 read: ({ workspaceId }) => (workspaceId ? { workspace: workspaceId } : false)
 ```
 
@@ -339,7 +339,7 @@ read: ({ workspaceId }) => {
 
 ### HIGH: Forgetting cross-scope relation leakage
 
-Filtering the scoped collection is **not enough**. A `find` that hydrates relations (`with: { ... }`) re-reads each related collection — and that nested read only applies the **target** collection's own `.access().read` rule. If the relation target has no scoping rule, hydrating it surfaces other tenants' rows even though the parent query was scoped:
+Filtering the scoped collection is **not enough**. A `find` that hydrates relations (`with: { ... }`) re-reads each related collection, and that nested read only applies the **target** collection's own `.access().read` rule. If the relation target has no scoping rule, hydrating it surfaces other tenants' rows even though the parent query was scoped:
 
 ```ts
 // projects is scoped, but a project's `customer` relation is NOT
@@ -348,7 +348,7 @@ await app.collections.projects.find({
 });
 ```
 
-Every collection reachable as a relation target needs its own scoped `.access()` — scope the relation collections, not just the entry collection:
+Every collection reachable as a relation target needs its own scoped `.access()`, scope the relation collections, not just the entry collection:
 
 ```ts
 // collections/customers.ts
@@ -365,7 +365,7 @@ export default collection("customers")
 
 ### HIGH: Assuming the user/auth collection is scoped
 
-The scope resolver and access rules only scope what **you** scope. The built-in `user` collection (and the `account` / `session` / `apikey` auth tables) ships with no scope field and no tenant `.access()` rule — it is shared globally across every tenant. A `find` on `user`, or a relation pointing at `user`, returns the whole user table regardless of the selected scope. If users belong to tenants, model that membership explicitly (e.g. a `workspace_members` join collection) and scope it yourself; do not rely on `user` being partitioned.
+The scope resolver and access rules only scope what **you** scope. The built-in `user` collection (and the `account` / `session` / `apikey` auth tables) ships with no scope field and no tenant `.access()` rule, it is shared globally across every tenant. A `find` on `user`, or a relation pointing at `user`, returns the whole user table regardless of the selected scope. If users belong to tenants, model that membership explicitly (e.g. a `workspace_members` join collection) and scope it yourself; do not rely on `user` being partitioned.
 
 ### MEDIUM: Hardcoding header names
 
@@ -382,11 +382,11 @@ request.headers.get("x-selected-workspace")
 
 ### MEDIUM: Not validating scope access
 
-In production, validate that the authenticated user actually belongs to the selected scope — otherwise any user can access any scope by sending the header manually. Throw from the resolver to fail the request before any handler runs (see Step 2).
+In production, validate that the authenticated user actually belongs to the selected scope, otherwise any user can access any scope by sending the header manually. Throw from the resolver to fail the request before any handler runs (see Step 2).
 
 ### MEDIUM: Using `extendContext` for tenant scope
 
-`AdapterConfig.extendContext` is a transport-level hook: its result is flat-merged for route handlers and the CRUD context param only — it does NOT reach access rules or hooks. Derived context that rules must see belongs in `appConfig({ context })`.
+`AdapterConfig.extendContext` is a transport-level hook: its result is flat-merged for route handlers and the CRUD context param only, it does NOT reach access rules or hooks. Derived context that rules must see belongs in `appConfig({ context })`.
 
 ## Reference Example
 
@@ -394,7 +394,7 @@ See the **city-portal** example for a complete working implementation:
 
 ```text
 examples/city-portal/
-  src/questpie/server/config/app.ts    # appConfig({ context }) — x-selected-city header
+  src/questpie/server/config/app.ts    # appConfig({ context }), x-selected-city header
   src/routes/admin.tsx                 # ScopeProvider + AdminLayoutProvider w/ sidebarProps.afterBrand ScopePicker
   src/routes/admin/$.tsx               # AdminRouter catch-all (renders the resolved view)
 ```

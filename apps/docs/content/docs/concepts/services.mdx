@@ -1,20 +1,20 @@
 ---
 title: Services
-description: A service is any shared object — an SDK client, a cache, a piece of domain logic — that you declare once in a file and resolve, fully typed, from every route, hook, job, and email handler.
+description: A service is any shared object, an SDK client, a cache, a piece of domain logic, that you declare once in a file and resolve, fully typed, from every route, hook, job, and email handler.
 ---
 
-A **service** is any object your app shares: a Stripe client, an in-memory cache, a wrapper around a third-party SDK, a bag of domain logic. You declare it once as a file in `services/`, and QUESTPIE constructs it, decides whether it lives for the whole process or just one request, and hands it back to you — fully typed — inside every handler. No manual `new`, no module-level singletons you import everywhere, no threading instances down through arguments.
+A **service** is any object your app shares: a Stripe client, an in-memory cache, a wrapper around a third-party SDK, a bag of domain logic. You declare it once as a file in `services/`, and QUESTPIE constructs it, decides whether it lives for the whole process or just one request, and hands it back to you, fully typed, inside every handler. No manual `new`, no module-level singletons you import everywhere, no threading instances down through arguments.
 
-You write a `create(ctx)` factory. `ctx` is the resolved app surface (`db`, `collections`, `email`, other services, …), so a service's dependencies are simply whatever you read off `ctx` — there is **no** separate `deps` array to keep in sync.
+You write a `create(ctx)` factory. `ctx` is the resolved app surface (`db`, `collections`, `email`, other services, …), so a service's dependencies are simply whatever you read off `ctx`, there is **no** separate `deps` array to keep in sync.
 
 ## What it does
 
-- **Register a shared object once** — drop a file in `services/`, default-export `service({ create })`, run codegen, and it's available on every handler context.
-- **Resolve dependencies from `ctx`** — read `db`, `collections`, `email`, or any other service straight off the `create(ctx)` argument; the container resolves them before it builds yours.
-- **Pick a lifecycle** — `"singleton"` (built once, reused for the process) or `"request"` (a fresh instance per request scope).
-- **Get full types in handlers** — codegen types `ctx.services.<name>` (or a top-level / namespaced slot) to whatever your factory returns. A typo'd service name is a compile error, not `any`.
-- **Clean up on teardown** — provide `dispose(instance)` to close connections or flush buffers.
-- **Group related services** — give a service a `namespace` to land it in its own bucket on `ctx`.
+- **Register a shared object once**, drop a file in `services/`, default-export `service({ create })`, run codegen, and it's available on every handler context.
+- **Resolve dependencies from `ctx`**, read `db`, `collections`, `email`, or any other service straight off the `create(ctx)` argument; the container resolves them before it builds yours.
+- **Pick a lifecycle**, `"singleton"` (built once, reused for the process) or `"request"` (a fresh instance per request scope).
+- **Get full types in handlers**, codegen types `ctx.services.<name>` (or a top-level / namespaced slot) to whatever your factory returns. A typo'd service name is a compile error, not `any`.
+- **Clean up on teardown**, provide `dispose(instance)` to close connections or flush buffers.
+- **Group related services**, give a service a `namespace` to land it in its own bucket on `ctx`.
 
 ## Quick start
 
@@ -42,7 +42,7 @@ Run codegen, and the service is typed onto `ctx.services.blog` everywhere:
 questpie generate   # registers the service, types it onto ctx.services.blog
 ```
 
-Consume it by destructuring it off any handler context — here in a collection hook:
+Consume it by destructuring it off any handler context, here in a collection hook:
 
 ```ts title="src/questpie/server/collections/posts.ts"
 import { collection } from "#questpie/factories";
@@ -55,21 +55,21 @@ export const posts = collection("posts")
   }))
   .hooks({
     beforeChange: ({ data, services }) => {
-      // `services.blog` is fully typed — computeReadingTime returns number.
+      // `services.blog` is fully typed, computeReadingTime returns number.
       if (data.content) data.readingTime = services.blog.computeReadingTime(data.content);
     },
   });
 ```
 
-That's the whole loop: one file to register, `ctx.services.blog` to consume — in any hook, route, job, or email handler. The [Full API](#full-api) covers `dispose`, the `request` lifecycle, and namespaces below.
+That's the whole loop: one file to register, `ctx.services.blog` to consume, in any hook, route, job, or email handler. The [Full API](#full-api) covers `dispose`, the `request` lifecycle, and namespaces below.
 
 <Callout type="info" title="The filename is the key">
-A file at `services/blog.ts` registers under the key `blog`; `services/capacity-planner.ts` registers under `capacityPlanner` (the filename is kebab → camelCased). Rename the file and you rename the service. The `service("…")` factory takes **no name argument** — the key comes purely from the file. Codegen maps each `services/<file>.ts` to its camelCased key in the generated module registry (e.g. the core module's `services/collections-api.ts` → `collectionsApi`).
+A file at `services/blog.ts` registers under the key `blog`; `services/capacity-planner.ts` registers under `capacityPlanner` (the filename is kebab → camelCased). Rename the file and you rename the service. The `service("…")` factory takes **no name argument**, the key comes purely from the file. Codegen maps each `services/<file>.ts` to its camelCased key in the generated module registry (e.g. the core module's `services/collections-api.ts` → `collectionsApi`).
 </Callout>
 
 ## Dependencies come from `ctx`, not a `deps` array
 
-There is **no** `deps` option. A service reaches everything it needs through the `create(ctx)` argument — `ctx` is the same typed app surface your route and hook handlers receive. Read what you need off it:
+There is **no** `deps` option. A service reaches everything it needs through the `create(ctx)` argument, `ctx` is the same typed app surface your route and hook handlers receive. Read what you need off it:
 
 ```ts title="src/questpie/server/services/digest.ts"
 import { service } from "questpie/services";
@@ -93,15 +93,15 @@ export default service({
 });
 ```
 
-`ctx` is typed as `ServiceCreateContext`. Before codegen it falls back to the base app context plus `{ app }`; after `questpie generate` it resolves to the full typed surface — `db`, `session`, `collections`, `globals`, `queue`, `email`, `storage`, `kv`, `logger`, `search`, `realtime`, `t`, `services`, plus any namespaced service buckets.
+`ctx` is typed as `ServiceCreateContext`. Before codegen it falls back to the base app context plus `{ app }`; after `questpie generate` it resolves to the full typed surface, `db`, `session`, `collections`, `globals`, `queue`, `email`, `storage`, `kv`, `logger`, `search`, `realtime`, `t`, `services`, plus any namespaced service buckets.
 
 <Callout type="info" title="Services can depend on services">
-Read another service off `ctx.services` inside your factory — `create: (ctx) => ({ … ctx.services.billing … })`. The container resolves the dependency before it constructs yours. The factory may be `async`, so awaiting setup (open a connection, fetch a token) is fine — `create` returns `TInstance | Promise<TInstance>`.
+Read another service off `ctx.services` inside your factory, `create: (ctx) => ({ … ctx.services.billing … })`. The container resolves the dependency before it constructs yours. The factory may be `async`, so awaiting setup (open a connection, fetch a token) is fine, `create` returns `TInstance | Promise<TInstance>`.
 </Callout>
 
 ## Two ways to write it
 
-The object form and the chained form are **equivalent** — the chained methods just build the same state object that the object form passes directly. Use whichever reads better. Both are accepted by the `service()` factory's overloads.
+The object form and the chained form are **equivalent**, the chained methods just build the same state object that the object form passes directly. Use whichever reads better. Both are accepted by the `service()` factory's overloads.
 
 ```ts title="Object form (recommended)"
 import { service } from "questpie/services";
@@ -122,10 +122,10 @@ export default service()
   .dispose((cache) => cache.disconnect());
 ```
 
-Each chained method (`create`, `lifecycle`, `namespace`, `dispose`) spreads `this.state` into a **brand-new** `ServiceBuilder` and never mutates in place — the builder is immutable. The builder itself resolves nothing; the app's service container interprets the resulting `state` at registration time.
+Each chained method (`create`, `lifecycle`, `namespace`, `dispose`) spreads `this.state` into a **brand-new** `ServiceBuilder` and never mutates in place, the builder is immutable. The builder itself resolves nothing; the app's service container interprets the resulting `state` at registration time.
 
 <Callout type="warn" title="`namespace()` takes `string | null`, not `undefined`">
-The chained `.namespace()` method only accepts `string | null`. To put a service in the default `ctx.services` bucket, **omit** `namespace` entirely — don't pass `undefined`. (The object form's type allows `undefined`, but omitting is the idiom.)
+The chained `.namespace()` method only accepts `string | null`. To put a service in the default `ctx.services` bucket, **omit** `namespace` entirely, don't pass `undefined`. (The object form's type allows `undefined`, but omitting is the idiom.)
 </Callout>
 
 ## Lifecycle: singleton vs request
@@ -135,31 +135,31 @@ The chained `.namespace()` method only accepts `string | null`. To put a service
 | Lifecycle | When `create` runs | Use it for |
 |---|---|---|
 | `"singleton"` | Once, the first time it's resolved; the same instance is reused for the app's lifetime. | API clients, connection pools, caches, stateless domain logic. |
-| `"request"` | Per request scope — a fresh instance each time a new handler context is created. | Anything that holds per-request state (a request-scoped buffer, a memo cache scoped to one operation). |
+| `"request"` | Per request scope, a fresh instance each time a new handler context is created. | Anything that holds per-request state (a request-scoped buffer, a memo cache scoped to one operation). |
 
 ```ts title="src/questpie/server/services/request-cache.ts"
 import { service } from "questpie/services";
 
-// A throwaway cache scoped to one request — never shared across requests.
+// A throwaway cache scoped to one request, never shared across requests.
 export default service({
   lifecycle: "request",
   create: () => new Map<string, unknown>(),
 });
 ```
 
-When `lifecycle` is omitted, the container decides; the framework's built-in core services set `"singleton"` explicitly — for example the email service at `packages/questpie/src/server/modules/core/services/email.ts:9`.
+When `lifecycle` is omitted, the container decides; the framework's built-in core services set `"singleton"` explicitly, for example the email service at `packages/questpie/src/server/modules/core/services/email.ts:9`.
 
-<Callout type="warn" title="Singletons outlive every request — don't store request state on them">
-A `"singleton"` is shared across all requests for the life of the process. Never cache the current user, a request's locale, or a per-request transaction on a singleton — it leaks across requests and corrupts data. Put per-request state on a `"request"` service, or read `ctx.session` / `ctx.locale` fresh inside the method that needs it.
+<Callout type="warn" title="Singletons outlive every request, don't store request state on them">
+A `"singleton"` is shared across all requests for the life of the process. Never cache the current user, a request's locale, or a per-request transaction on a singleton, it leaks across requests and corrupts data. Put per-request state on a `"request"` service, or read `ctx.session` / `ctx.locale` fresh inside the method that needs it.
 </Callout>
 
 <Callout type="info" title="`ServiceLifecycle` is not the internal `Lifecycle`">
-The **public** enum is `"singleton" | "request"`. There is a separate, **non-exported** internal proof-of-concept (`ScopedContainer`) whose `Lifecycle` is `"singleton" | "scoped"` — different values, different type, and not part of the public API. Build your services against `"singleton" | "request"` only.
+The **public** enum is `"singleton" | "request"`. There is a separate, **non-exported** internal proof-of-concept (`ScopedContainer`) whose `Lifecycle` is `"singleton" | "scoped"`, different values, different type, and not part of the public API. Build your services against `"singleton" | "request"` only.
 </Callout>
 
 ## Consuming a service
 
-Wherever you get a handler `ctx`, you get your services on it — routes, hooks, jobs, email handlers, and seeds all share the same context builder (`extractAppServices`, `packages/questpie/src/server/config/app-context.ts:356`). Default-namespace services live under `ctx.services`:
+Wherever you get a handler `ctx`, you get your services on it, routes, hooks, jobs, email handlers, and seeds all share the same context builder (`extractAppServices`, `packages/questpie/src/server/config/app-context.ts:356`). Default-namespace services live under `ctx.services`:
 
 ```ts title="In a route"
 import { route } from "questpie/services";
@@ -187,7 +187,7 @@ export default job({
 });
 ```
 
-```ts title="In a hook — defer side effects to commit"
+```ts title="In a hook, defer side effects to commit"
 collection("posts").hooks({
   afterChange: ({ data, operation, services, onAfterCommit }) => {
     if (operation !== "create") return;
@@ -198,16 +198,16 @@ collection("posts").hooks({
 ```
 
 <Callout type="info" title="Read `ctx` inside the method, not just at construction">
-A singleton's `create(ctx)` runs once, so the `ctx` it captures is **not** request-specific — `ctx.session` / `ctx.locale` captured there reflect the resolution moment, not the current caller. If a singleton method needs the current request's session or locale, accept it as an argument from the caller (which has the live request `ctx`) rather than closing over the construction-time `ctx`.
+A singleton's `create(ctx)` runs once, so the `ctx` it captures is **not** request-specific, `ctx.session` / `ctx.locale` captured there reflect the resolution moment, not the current caller. If a singleton method needs the current request's session or locale, accept it as an argument from the caller (which has the live request `ctx`) rather than closing over the construction-time `ctx`.
 </Callout>
 
 ## Full API
 
-`service(state?)` returns a `ServiceBuilder`. All four fields are optional on the type, but a usable service must supply `create`. The factory has three overloads (no-arg, full-state, and partial-state) — they all funnel into `new ServiceBuilder(state ?? {})`.
+`service(state?)` returns a `ServiceBuilder`. All four fields are optional on the type, but a usable service must supply `create`. The factory has three overloads (no-arg, full-state, and partial-state), they all funnel into `new ServiceBuilder(state ?? {})`.
 
 ```ts
 service<TInstance, TNamespace, TLifecycle>({
-  // The factory — receives the resolved app context, returns the instance.
+  // The factory, receives the resolved app context, returns the instance.
   // May be sync or async. This is where dependencies come from. (required)
   create: (ctx: ServiceCreateContext) => TInstance | Promise<TInstance>;
 
@@ -218,14 +218,14 @@ service<TInstance, TNamespace, TLifecycle>({
   // Omit, or "services" → ctx.services[name]. null → ctx[name]. "x" → ctx.x[name].
   namespace?: string | null;
 
-  // Called on teardown with the constructed instance — close connections, flush.
+  // Called on teardown with the constructed instance, close connections, flush.
   dispose?: (instance: TInstance) => void | Promise<void>;
 })
 ```
 
 ### `create(ctx)`
 
-The only field a usable service needs. `ctx` is the resolved app surface; whatever you return becomes the service instance and its inferred type flows to every consumer. Return a class instance, a plain object of methods, or a function — anything. It may be sync or async; an `async create` lets you await setup (connect, authenticate) before the instance is handed out.
+The only field a usable service needs. `ctx` is the resolved app surface; whatever you return becomes the service instance and its inferred type flows to every consumer. Return a class instance, a plain object of methods, or a function, anything. It may be sync or async; an `async create` lets you await setup (connect, authenticate) before the instance is handed out.
 
 ### `lifecycle`
 
@@ -252,7 +252,7 @@ export default service({
 
 ### `namespace`
 
-Controls **where** the resolved instance lands on `ctx`. It accepts `string | null` only (not `undefined` — to use the default bucket, just omit the field). The placement rules live in `extractAppServices` (`packages/questpie/src/server/config/app-context.ts:407`):
+Controls **where** the resolved instance lands on `ctx`. It accepts `string | null` only (not `undefined`, to use the default bucket, just omit the field). The placement rules live in `extractAppServices` (`packages/questpie/src/server/config/app-context.ts:407`):
 
 | `namespace` value | Lands at | Example |
 |---|---|---|
@@ -260,7 +260,7 @@ Controls **where** the resolved instance lands on `ctx`. It accepts `string | nu
 | `null` | top-level `ctx[name]` | `ctx.billing` |
 | any other string `"x"` | `ctx.x[name]` (grouped bucket) | `ctx.integrations.billing` |
 
-```ts title="src/questpie/server/services/billing.ts — grouped under ctx.integrations"
+```ts title="src/questpie/server/services/billing.ts, grouped under ctx.integrations"
 import { service } from "questpie/services";
 
 export default service({
@@ -272,12 +272,12 @@ export default service({
 ```
 
 <Callout type="warn" title="A `null`-namespace service won't override a built-in `ctx` key">
-Top-level keys like `db`, `session`, `email`, `collections`, `globals`, `queue`, `storage`, `kv`, `logger` are populated directly by the context builder. A `namespace: null` service whose key collides with one of these is **silently skipped** — the existing built-in wins (`if (!(name in result))`, `packages/questpie/src/server/config/app-context.ts:415`). Pick a unique key, or leave it in the default `ctx.services` bucket where collisions can't happen.
+Top-level keys like `db`, `session`, `email`, `collections`, `globals`, `queue`, `storage`, `kv`, `logger` are populated directly by the context builder. A `namespace: null` service whose key collides with one of these is **silently skipped**, the existing built-in wins (`if (!(name in result))`, `packages/questpie/src/server/config/app-context.ts:415`). Pick a unique key, or leave it in the default `ctx.services` bucket where collisions can't happen.
 </Callout>
 
 ## Built-in services
 
-The framework's own core capabilities are services too — they follow the *exact same* `service()` convention as your code, with no privileged internal API. That's why `ctx.email`, `ctx.db`, `ctx.queue`, `ctx.storage`, `ctx.kv`, `ctx.search`, and `ctx.realtime` appear on the same context your services land on: each is a core service definition the `core` module ships.
+The framework's own core capabilities are services too, they follow the *exact same* `service()` convention as your code, with no privileged internal API. That's why `ctx.email`, `ctx.db`, `ctx.queue`, `ctx.storage`, `ctx.kv`, `ctx.search`, and `ctx.realtime` appear on the same context your services land on: each is a core service definition the `core` module ships.
 
 The clearest example is the **email** (mailer) service. It is a plain `service({ namespace: null, lifecycle: "singleton", create })` that constructs the `MailerService` from your config and lands top-level as `ctx.email`:
 
@@ -292,15 +292,15 @@ export default service({
 });
 ```
 
-Because the context builder pre-populates `ctx.email` directly, this `namespace: null` registration does **not** overwrite it — the same `if (!(name in result))` guard above applies. You consume it as `ctx.email` (it is **not** `ctx.mailer`). Its full surface — `send`, `sendTemplate`, `renderTemplate`, the `email()` template factory, and the SMTP / Resend / Plunk / Console adapters — lives on the [Emails](/docs/concepts/emails) page.
+Because the context builder pre-populates `ctx.email` directly, this `namespace: null` registration does **not** overwrite it, the same `if (!(name in result))` guard above applies. You consume it as `ctx.email` (it is **not** `ctx.mailer`). Its full surface, `send`, `sendTemplate`, `renderTemplate`, the `email()` template factory, and the SMTP / Resend / Plunk / Console adapters, lives on the [Emails](/docs/concepts/emails) page.
 
 <Callout type="info" title="Two unrelated `email` symbols">
-`questpie/services` exports an `email` that is the **email-template factory** (`email({ name, schema, handler })`), documented under [Emails](/docs/concepts/emails). There is also a separate `f.email()` **field** factory used inside `.fields()`. They share a name but are unrelated — don't conflate them.
+`questpie/services` exports an `email` that is the **email-template factory** (`email({ name, schema, handler })`), documented under [Emails](/docs/concepts/emails). There is also a separate `f.email()` **field** factory used inside `.fields()`. They share a name but are unrelated, don't conflate them.
 </Callout>
 
 ## TypeScript
 
-After `questpie generate`, your services are typed onto the context automatically — destructuring `services.blog` in any handler gives you the full instance type with no annotation. The generated `Questpie.Services` interface extends `_AppServicesSeam` — the resolved fold of **every** registered service, across all namespaces — and **has no index signature**: referencing a service that doesn't exist is a compile error, not a silent `any`. (It's routed through an empty-base interface to defer the type fold, which avoids a TS2456 self-reference when a service's inferred instance reads `ctx.services` at create-time. The seam is intentionally *not* namespace-filtered, since re-reading each in-flight builder's namespace would reintroduce that cycle — so a create-ctx `ctx.services.<x>` can reach any namespace, a widening, never an `any`.) The namespace-filtered default-namespace fold is a different type, `_AppDefaultServices`, which backs the *outer* runtime `ctx.services` surface (`AppContext.services`).
+After `questpie generate`, your services are typed onto the context automatically, destructuring `services.blog` in any handler gives you the full instance type with no annotation. The generated `Questpie.Services` interface extends `_AppServicesSeam`, the resolved fold of **every** registered service, across all namespaces, and **has no index signature**: referencing a service that doesn't exist is a compile error, not a silent `any`. (It's routed through an empty-base interface to defer the type fold, which avoids a TS2456 self-reference when a service's inferred instance reads `ctx.services` at create-time. The seam is intentionally *not* namespace-filtered, since re-reading each in-flight builder's namespace would reintroduce that cycle, so a create-ctx `ctx.services.<x>` can reach any namespace, a widening, never an `any`.) The namespace-filtered default-namespace fold is a different type, `_AppDefaultServices`, which backs the *outer* runtime `ctx.services` surface (`AppContext.services`).
 
 To get the union of registered service names, or to extract a single service's instance / namespace type:
 
@@ -309,7 +309,7 @@ import type { KnownServiceNames } from "questpie";
 import type { ServiceInstanceOf, ServiceNamespaceOf } from "questpie/services";
 import type blog from "./services/blog.js";
 
-// Every registered service name (any namespace) — includes the
+// Every registered service name (any namespace), includes the
 // core module's null-namespace services like "email", "auth", "db"
 type ServiceName = KnownServiceNames; // "blog" | "digest" | "email" | ...
 
@@ -320,20 +320,20 @@ type Blog = ServiceInstanceOf<typeof blog>; // { computeReadingTime(content: str
 type BlogNs = ServiceNamespaceOf<typeof blog>; // undefined
 ```
 
-`KnownServiceNames` comes from `questpie`. The builder/type helpers — `ServiceBuilder`, `ServiceBuilderState`, `ServiceCreateContext`, `ServiceLifecycle`, `ServiceNamespace`, `ServiceInstanceOf`, `ServiceNamespaceOf` — come from `questpie/services` (re-exported from the root `questpie` barrel as well). You rarely import these by hand: the generated context types are usually all you need.
+`KnownServiceNames` comes from `questpie`. The builder/type helpers, `ServiceBuilder`, `ServiceBuilderState`, `ServiceCreateContext`, `ServiceLifecycle`, `ServiceNamespace`, `ServiceInstanceOf`, `ServiceNamespaceOf`, come from `questpie/services` (re-exported from the root `questpie` barrel as well). You rarely import these by hand: the generated context types are usually all you need.
 
 - **`ServiceInstanceOf<T>`** unwraps the instance type from either a `ServiceBuilder` or a raw `{ create }` object.
 - **`ServiceNamespaceOf<T>`** computes the namespace placement (falls back through the builder generic → `state.namespace` → `namespace` → `undefined`).
 
 <Callout type="info" title="`ctx` types only fill in after codegen">
-Before you run `questpie generate`, `ServiceCreateContext` falls back to the base app context plus `{ app }`, so a brand-new service file may show a thinner `ctx`. This fallback is deliberate: two augmentable markers back it — `Questpie.ServiceCreateContext` (the real interface codegen fills with the typed app surface) and `Questpie.ServiceCreateContextGenerated` (a names-only marker the conditional probes to avoid a self-reference cycle). Run `questpie generate` after adding a service to pick up the full typed surface and have it appear on `ctx.services`.
+Before you run `questpie generate`, `ServiceCreateContext` falls back to the base app context plus `{ app }`, so a brand-new service file may show a thinner `ctx`. This fallback is deliberate: two augmentable markers back it, `Questpie.ServiceCreateContext` (the real interface codegen fills with the typed app surface) and `Questpie.ServiceCreateContextGenerated` (a names-only marker the conditional probes to avoid a self-reference cycle). Run `questpie generate` after adding a service to pick up the full typed surface and have it appear on `ctx.services`.
 </Callout>
 
 ## Related
 
-- [Routes](/docs/concepts/routes) — custom endpoints whose `handler({ services })` consume your services.
-- [Hooks](/docs/concepts/hooks) — lifecycle callbacks that reach services the same way (`ctx.services`), and the `onAfterCommit` deferral.
-- [Jobs](/docs/concepts/jobs) — background work that resolves services in its handler.
-- [Emails](/docs/concepts/emails) — the built-in `email` (mailer) service (`ctx.email`), the `email()` template factory, and the mail adapters — the canonical built-in service, documented in full.
-- [Collections](/docs/concepts/collections) — the typed `ctx.collections` API your services read and write through.
-- Runnable example: [`examples/tanstack-barbershop`](https://github.com/questpie/questpie/tree/main/examples/tanstack-barbershop) — see `src/questpie/server/services/blog.ts` consumed from a collection hook.
+- [Routes](/docs/concepts/routes), custom endpoints whose `handler({ services })` consume your services.
+- [Hooks](/docs/concepts/hooks), lifecycle callbacks that reach services the same way (`ctx.services`), and the `onAfterCommit` deferral.
+- [Jobs](/docs/concepts/jobs), background work that resolves services in its handler.
+- [Emails](/docs/concepts/emails), the built-in `email` (mailer) service (`ctx.email`), the `email()` template factory, and the mail adapters, the canonical built-in service, documented in full.
+- [Collections](/docs/concepts/collections), the typed `ctx.collections` API your services read and write through.
+- Runnable example: [`examples/tanstack-barbershop`](https://github.com/questpie/questpie/tree/main/examples/tanstack-barbershop), see `src/questpie/server/services/blog.ts` consumed from a collection hook.

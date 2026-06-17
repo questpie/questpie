@@ -1,6 +1,6 @@
 ---
 name: questpie-admin
-description: QUESTPIE admin panel — setup, branding, theming, sidebar, dashboard, views, blocks, custom fields, media, localization, live preview, auth, dark mode, CSS variables. Use when building or customizing the QUESTPIE admin UI.
+description: QUESTPIE admin panel, setup, branding, theming, sidebar, dashboard, views, blocks, custom fields, media, localization, live preview, auth, dark mode, CSS variables. Use when building or customizing the QUESTPIE admin UI.
 license: MIT
 metadata:
   author: questpie
@@ -9,7 +9,7 @@ metadata:
 
 # QUESTPIE Admin Panel
 
-The QUESTPIE admin panel is a **projection of your server schema** — not the framework itself. It reads collections, globals, and config via introspection and generates a full admin interface. Your backend works without it.
+The QUESTPIE admin panel is a **projection of your server schema**, not the framework itself. It reads collections, globals, and config via introspection and generates a full admin interface. Your backend works without it.
 
 ## Reference Topics
 
@@ -28,7 +28,7 @@ For the complete admin reference with all topics expanded: `AGENTS.md`
 - **React** + **Tailwind CSS v4** + **shadcn** components
 - **@base-ui/react** primitives (NOT @radix-ui)
 - **@iconify/react** with Phosphor icon set (`ph:icon-name`)
-- **sonner** for toasts — `toast.error()`, `toast.success()`
+- **sonner** for toasts, `toast.error()`, `toast.success()`
 - QUESTPIE Neutral Design: flat surfaces, soft neutral geometry,
   tokenized radius, and restrained floating shadows
 
@@ -182,8 +182,8 @@ The full source of truth is `packages/admin/DESIGN.md`. Key defaults:
 
 | Variable      | Value                                                               |
 | ------------- | ------------------------------------------------------------------- |
-| `--font-sans` | `"Geist Variable"` — UI, prose, headings, labels, navigation        |
-| `--font-mono` | `"JetBrains Mono Variable"` — code, file paths, commands, IDs       |
+| `--font-sans` | `"Geist Variable"`, UI, prose, headings, labels, navigation        |
+| `--font-mono` | `"JetBrains Mono Variable"`, code, file paths, commands, IDs       |
 
 ### Sidebar Variables
 
@@ -415,7 +415,7 @@ For the full server-side setup (context resolver, type augmentation, access rule
 
 ## Common Mistakes
 
-1. **CRITICAL: Using `asChild` prop** — QUESTPIE admin uses `@base-ui/react`, which uses the `render` prop. `asChild` is a Radix pattern and does NOT work here.
+1. **CRITICAL: Using `asChild` prop**, QUESTPIE admin uses `@base-ui/react`, which uses the `render` prop. `asChild` is a Radix pattern and does NOT work here.
 
    ```tsx
    // WRONG
@@ -424,9 +424,9 @@ For the full server-side setup (context resolver, type augmentation, access rule
    <DialogTrigger render={<Button>Open</Button>} />
    ```
 
-2. **CRITICAL: Importing from `@radix-ui/*`** — use `@base-ui/react` instead.
+2. **CRITICAL: Importing from `@radix-ui/*`**, use `@base-ui/react` instead.
 
-3. **HIGH: Using `@phosphor-icons/react`** — use `@iconify/react` with `ph:` prefix.
+3. **HIGH: Using `@phosphor-icons/react`**, use `@iconify/react` with `ph:` prefix.
 
    ```tsx
    // WRONG
@@ -436,8 +436,8 @@ For the full server-side setup (context resolver, type augmentation, access rule
    <Icon icon="ph:caret-down" width={16} height={16} />;
    ```
 
-4. **HIGH: Using lucide-react icons** — use `@iconify/react` with Phosphor icon set.
+4. **HIGH: Using lucide-react icons**, use `@iconify/react` with Phosphor icon set.
 
-5. **MEDIUM: Custom `<button>` or `<div>` instead of shadcn components** — use `<Button>`, `<Card>`, etc.
+5. **MEDIUM: Custom `<button>` or `<div>` instead of shadcn components**, use `<Button>`, `<Card>`, etc.
 
-6. **MEDIUM: `console.error` for user errors** — use `toast.error()` from `sonner`.
+6. **MEDIUM: `console.error` for user errors**, use `toast.error()` from `sonner`.

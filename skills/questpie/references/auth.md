@@ -10,13 +10,13 @@ Detailed authentication configuration for QUESTPIE using Better Auth.
 
 ## Contents
 
-- [File Convention](#file-convention) — `config/auth.ts`, `authConfig()` factory
-- [Configuration Options](#configuration-options) — options table + effective defaults
-- [Social Providers (OAuth)](#social-providers-oauth) — `socialProviders`, client `signIn.social`
-- [Session Access](#session-access) — routes, hooks, access rules
-- [User Collection](#user-collection) — starter user model, merge + extend recipe
-- [Reaching the App from Better Auth Callbacks](#reaching-the-app-from-better-auth-callbacks) — `getContext<App>()`, partial overrides
-- [Client-Side Auth (authClient)](#client-side-auth-authclient) — sign-in/up/out, `useSession`
+- [File Convention](#file-convention), `config/auth.ts`, `authConfig()` factory
+- [Configuration Options](#configuration-options), options table + effective defaults
+- [Social Providers (OAuth)](#social-providers-oauth), `socialProviders`, client `signIn.social`
+- [Session Access](#session-access), routes, hooks, access rules
+- [User Collection](#user-collection), starter user model, merge + extend recipe
+- [Reaching the App from Better Auth Callbacks](#reaching-the-app-from-better-auth-callbacks), `getContext<App>()`, partial overrides
+- [Client-Side Auth (authClient)](#client-side-auth-authclient), sign-in/up/out, `useSession`
 - [Environment Variables](#environment-variables)
 - [Production Security Checklist](#production-security-checklist)
 
@@ -48,9 +48,9 @@ Effective defaults below are what the `starterModule` ships (your config merges 
 | ------------------------------------------- | --------- | ------------- | ----------------------------------------------------------- |
 | `emailAndPassword.enabled`                  | `boolean` | `true`        | Enable email/password authentication                        |
 | `emailAndPassword.requireEmailVerification` | `boolean` | `true`        | Require email verification before login                     |
-| `baseURL`                                   | `string`  | —             | Application public URL (used for OAuth callbacks)           |
+| `baseURL`                                   | `string`  | none | Application public URL (used for OAuth callbacks)           |
 | `basePath`                                  | `string`  | `"/api/auth"` | Auth API route prefix                                       |
-| `secret`                                    | `string`  | —             | Session signing secret. **Must be 32+ chars in production** |
+| `secret`                                    | `string`  | none | Session signing secret. **Must be 32+ chars in production** |
 
 ## Social Providers (OAuth)
 
@@ -148,7 +148,7 @@ The `starterModule` defines the canonical Better Auth `user` collection, includi
 - `role` -- admin access role (`admin` or `user`)
 - `avatar`, `banned`, `banReason`, `banExpires` -- profile and ban/access fields
 
-The `adminModule` does not define these fields — it only `.merge()`s `starterModule.collections.user` and layers on the admin UI (label, list/form views, custom actions). Add either module to your config and the collection is created automatically.
+The `adminModule` does not define these fields, it only `.merge()`s `starterModule.collections.user` and layers on the admin UI (label, list/form views, custom actions). Add either module to your config and the collection is created automatically.
 
 Critical: the built-in admin setup route and admin `AuthGuard` depend on `user.role`. Setup checks whether any user has `role = "admin"`, and the admin UI expects `session.user.role === "admin"`. Do not replace `collection("user")` from scratch in an app that uses these modules; merge `starterModule.collections.user` and extend it if custom user fields or admin layout are needed.
 
@@ -197,7 +197,7 @@ Run `questpie generate` and apply migrations to add the column. Anonymous sign-i
 
 ## Reaching the App from Better Auth Callbacks
 
-The `/auth/*` catch-all is a plain **raw route**, and raw routes execute their handler inside `runWithContext()` (the request's AsyncLocalStorage scope). That means every Better Auth callback — `onLinkAccount`, `databaseHooks`, `sendMagicLink`, plugin hooks — already runs inside the request scope, and `getContext<App>()` returns the live app, session, db, and locale.
+The `/auth/*` catch-all is a plain **raw route**, and raw routes execute their handler inside `runWithContext()` (the request's AsyncLocalStorage scope). That means every Better Auth callback, `onLinkAccount`, `databaseHooks`, `sendMagicLink`, plugin hooks, already runs inside the request scope, and `getContext<App>()` returns the live app, session, db, and locale.
 
 **Never build a module-level app singleton or a hand-rolled context bridge for auth callbacks.** The `App` import stays type-only, so there is no circular import:
 
@@ -206,18 +206,16 @@ The `/auth/*` catch-all is a plain **raw route**, and raw routes execute their h
 import { anonymous } from "better-auth/plugins";
 import { getContext } from "questpie";
 import { authConfig } from "questpie/app";
-import type { App } from "#questpie"; // type-only — no runtime cycle
+import type { App } from "#questpie"; // type-only, no runtime cycle
 
 export default authConfig({
 	plugins: [
 		anonymous({
-			// Fires when an anonymous user signs in with a real account —
-			// re-point the guest's rows onto the new user before the plugin
+			// Fires when an anonymous user signs in with a real account, // re-point the guest's rows onto the new user before the plugin
 			// deletes the anonymous user.
 			onLinkAccount: async ({ anonymousUser, newUser }) => {
 				const { app } = getContext<App>();
-				// Bare { accessMode: "system" } elevates ONLY the mode —
-				// session, db, and locale inherit from the request scope (ALS).
+				// Bare { accessMode: "system" } elevates ONLY the mode, // session, db, and locale inherit from the request scope (ALS).
 				await app.collections.memberships.updateMany(
 					{
 						where: { user: anonymousUser.user.id },
@@ -233,10 +231,10 @@ export default authConfig({
 
 ### Partial Context Overrides
 
-CRUD context normalization merges what you pass with the ambient request scope — priority: explicit param → ALS scope → defaults (`accessMode: "system"`, `locale: "en"`). Passing only `{ accessMode: "system" }` elevates the mode while the request's session/db/locale ride along. The inverse also holds: `{ accessMode: "user" }` inside system-scoped code re-enables access rules against the inherited session without re-threading it:
+CRUD context normalization merges what you pass with the ambient request scope, priority: explicit param → ALS scope → defaults (`accessMode: "system"`, `locale: "en"`). Passing only `{ accessMode: "system" }` elevates the mode while the request's session/db/locale ride along. The inverse also holds: `{ accessMode: "user" }` inside system-scoped code re-enables access rules against the inherited session without re-threading it:
 
 ```ts
-// Inside any handler — session comes from the request ALS scope
+// Inside any handler, session comes from the request ALS scope
 await app.collections.posts.find({}, { accessMode: "user" }); // rules enforced for the current user
 await app.collections.posts.find({}, { accessMode: "system" }); // rules bypassed, same session/locale
 ```
@@ -266,7 +264,7 @@ await authClient.signIn.anonymous(); // with the anonymous plugin
 await authClient.signOut();
 ```
 
-Apps without `@questpie/admin` use Better Auth's own `createAuthClient` from `better-auth/react` pointed at `${APP_URL}/api/auth` — same call surface, without the app-inferred session typing.
+Apps without `@questpie/admin` use Better Auth's own `createAuthClient` from `better-auth/react` pointed at `${APP_URL}/api/auth`, same call surface, without the app-inferred session typing.
 
 ## Environment Variables
 

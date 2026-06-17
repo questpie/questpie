@@ -30,7 +30,7 @@ export default [workflowsModule] as const;
 
 `workflowsModule` carries its codegen plugin. Do not also add `workflowsPlugin()` to `questpie.config.ts` unless you are doing a custom module setup that deliberately omits `workflowsModule`.
 
-Runtime options (route access rule — default admin-only — and execution-lease settings) go in plugin-discovered `config/workflows.ts` using the `workflowsConfig()` factory from `@questpie/workflows/server`.
+Runtime options (route access rule, default admin-only, and execution-lease settings) go in plugin-discovered `config/workflows.ts` using the `workflowsConfig()` factory from `@questpie/workflows/server`.
 
 For admin UI pages/widgets, register the client module:
 
@@ -70,7 +70,7 @@ export default workflowsConfig({
 });
 ```
 
-`access` also accepts a single rule applied to every route. Do not pass options to `workflowsModule(...)` — runtime options belong in this config file.
+`access` also accepts a single rule applied to every route. Do not pass options to `workflowsModule(...)`, runtime options belong in this config file.
 
 ## Define A Workflow
 
@@ -131,12 +131,12 @@ bunx questpie generate
 
 `step` exposes durable primitives. Each takes a stable `name` as its first argument; on replay, completed steps return cached results instead of re-executing.
 
-- `step.run(name, fn)` — run a side effect, cache the result.
-- `step.run(name, opts, fn)` — same, with `{ retry, timeout, compensate }` options.
-- `step.sleep(name, duration)` / `step.sleepUntil(name, date)` — durable waits.
-- `step.waitForEvent(name, { event, match?, timeout? })` — suspend until a matching event arrives (returns `null` on timeout).
-- `step.invoke(name, { workflow, input, timeout? })` — start a child workflow and wait for its result.
-- `step.sendEvent(name, { event, data?, match? })` — emit an event that resumes matching waiters.
+- `step.run(name, fn)`, run a side effect, cache the result.
+- `step.run(name, opts, fn)`, same, with `{ retry, timeout, compensate }` options.
+- `step.sleep(name, duration)` / `step.sleepUntil(name, date)`, durable waits.
+- `step.waitForEvent(name, { event, match?, timeout? })`, suspend until a matching event arrives (returns `null` on timeout).
+- `step.invoke(name, { workflow, input, timeout? })`, start a child workflow and wait for its result.
+- `step.sendEvent(name, { event, data?, match? })`, emit an event that resumes matching waiters.
 
 `compensate` is an inline option on `step.run` (not a separate step type). Registered compensations run in reverse order if the workflow later fails:
 

@@ -1,6 +1,6 @@
 # Field Types Reference
 
-Complete configuration patterns for built-in QUESTPIE field types. Fields use a positional constructor argument followed by a fluent chain: `f.text(255).required().default("x")` — there is NO constructor-options object like `f.text({ required: true })`. Per-field sections below list only the **constructor argument(s)**; everything else (`.required()`, `.default()`, `.label()`, etc.) comes from the shared fluent methods.
+Complete configuration patterns for built-in QUESTPIE field types. Fields use a positional constructor argument followed by a fluent chain: `f.text(255).required().default("x")`, there is NO constructor-options object like `f.text({ required: true })`. Per-field sections below list only the **constructor argument(s)**; everything else (`.required()`, `.default()`, `.label()`, etc.) comes from the shared fluent methods.
 
 ## Contents
 
@@ -37,7 +37,7 @@ Every field factory returns a chainable field. These methods are shared by all f
 | `.localized()`       | Per-locale values                                      |
 | `.inputOptional()`   | Optional in API input but required in DB               |
 | `.inputFalse()`      | Exclude from API input                                 |
-| `.outputFalse()`     | Exclude from output — write-only field                 |
+| `.outputFalse()`     | Exclude from output, write-only field                 |
 | `.array()`           | Wrap as a repeatable array (see [`.array()`](#array))  |
 | `.minItems(n)` / `.maxItems(n)` | Array item bounds                           |
 | `.admin(config)`     | Admin UI rendering hints (see [Reactive Admin Behaviors](#reactive-admin-behaviors)) |
@@ -45,7 +45,7 @@ Every field factory returns a chainable field. These methods are shared by all f
 | `.hooks(handlers)`   | Per-field lifecycle hooks                              |
 | `.virtual(sql?)`     | SQL expression for computed read-only field            |
 | `.zod(fn)`           | Extend/replace Zod schema (output narrows value type)  |
-| `.drizzle(fn)`       | Raw Drizzle column builder — constraints/SQL defaults land in DDL; `$type` narrows value type |
+| `.drizzle(fn)`       | Raw Drizzle column builder, constraints/SQL defaults land in DDL; `$type` narrows value type |
 | `.$type<T>()`        | Explicitly set TS value type (type-level; mainly json) |
 
 > `.admin()` is contributed by the admin module. Type-specific helpers also exist (e.g. text `.pattern()`/`.trim()`, number `.min()`/`.max()`/`.positive()`/`.int()`/`.step()`, date `.autoNow()`); they are documented under each field below.
@@ -178,7 +178,7 @@ updatedAt: f.datetime().autoNowUpdate().inputFalse(),
 
 Single value from a predefined list. DB type: `varchar`.
 
-Constructor arg: `options: SelectOption[]` — an array of objects (there is no bare `string[]` overload). Each option:
+Constructor arg: `options: SelectOption[]`, an array of objects (there is no bare `string[]` overload). Each option:
 
 | Key           | Type                | Description                              |
 | ------------- | ------------------- | ---------------------------------------- |
@@ -214,13 +214,13 @@ Reference to another collection. The target is positional.
 
 Constructor arg: `target` is one of:
 
-- a collection-name string — `f.relation("user")`
-- a lazy ref `() => collection` — `f.relation(() => users)` (avoids import cycles)
-- a polymorphic map — `f.relation({ users: "users", posts: "posts" })`
+- a collection-name string, `f.relation("user")`
+- a lazy ref `() => collection`, `f.relation(() => users)` (avoids import cycles)
+- a polymorphic map, `f.relation({ users: "users", posts: "posts" })`
 
 By default this is a belongs-to (single FK column). Chain methods configure it:
 
-- **Chained modifiers**: `.required()`, `.label()`, `.onDelete(action)`, `.onUpdate(action)`, `.relationName(name)` — `action` is `"cascade" | "set null" | "restrict"` (etc.).
+- **Chained modifiers**: `.required()`, `.label()`, `.onDelete(action)`, `.onUpdate(action)`, `.relationName(name)`, `action` is `"cascade" | "set null" | "restrict"` (etc.).
 - **Transition methods** (change the relation shape): `.hasMany({ foreignKey })`, `.manyToMany({ through, sourceField?, targetField? })`, `.multiple()` (inline `jsonb` array of FKs).
 
 Belongs-to (single):
@@ -280,7 +280,7 @@ gallery: f.upload({ mimeTypes: ["image/*"] }).multiple(),
 
 Nested structured data stored as JSONB.
 
-Constructor arg: `fields` — a plain record of nested fields, passed **directly** (not wrapped in `{ fields }`).
+Constructor arg: `fields`, a plain record of nested fields, passed **directly** (not wrapped in `{ fields }`).
 
 ```ts
 address: f.object({
@@ -311,7 +311,7 @@ Reuse nested shapes with a helper that returns a field record:
 
 ## `.array()`
 
-Repeatable items stored as JSONB. `.array()` is a **zero-argument** chain method on any field — the item type IS the field you call it on. Bounds and labels are chained.
+Repeatable items stored as JSONB. `.array()` is a **zero-argument** chain method on any field, the item type IS the field you call it on. Bounds and labels are chained.
 
 Chain after `.array()`: `.minItems(n)`, `.maxItems(n)`, `.localized()`, `.label()`, `.admin({ orderable, mode, ... })`.
 
@@ -372,7 +372,7 @@ metadata: f.json(),
 rawConfig: f.json({ mode: "json" }).label("Configuration"),
 ```
 
-Type it explicitly with `.$type<T>()` (type only) or `.zod()` (type + runtime validation) — the type flows into CRUD select/insert types:
+Type it explicitly with `.$type<T>()` (type only) or `.zod()` (type + runtime validation), the type flows into CRUD select/insert types:
 
 ```ts
 type Layout = { rows: { id: string; span: number }[] };

@@ -4,15 +4,15 @@ Full reference for all `where` clause operators in QUESTPIE CRUD queries.
 
 ## Contents
 
-- [Text Fields](#text-fields) — `text`/`textarea`/`email`/`url`, plus email domain and url host/protocol matchers
-- [Number Fields](#number-fields) — comparison + membership + null checks
-- [Boolean Fields](#boolean-fields) — equality + null checks
-- [Date / DateTime / Time Fields](#date--datetime--time-fields) — comparison + membership, `Date` value caveat
-- [Select Fields (single)](#select-fields-single) — equality + membership + null checks
-- [Multi-Select Fields](#multi-select-fields) — `select().array()` array matchers (`containsAll`/`containsAny`/…)
-- [Relation Fields](#relation-fields) — `belongsTo` (`is`/`isNot`) vs to-many (`some`/`none`/`every`)
-- [JSON / Object Fields](#json--object-fields) — JSONB containment, key, and path operators
-- [Combining Operators](#combining-operators) — AND across fields/operators, `AND`/`OR`/`NOT`
+- [Text Fields](#text-fields), `text`/`textarea`/`email`/`url`, plus email domain and url host/protocol matchers
+- [Number Fields](#number-fields), comparison + membership + null checks
+- [Boolean Fields](#boolean-fields), equality + null checks
+- [Date / DateTime / Time Fields](#date--datetime--time-fields), comparison + membership, `Date` value caveat
+- [Select Fields (single)](#select-fields-single), equality + membership + null checks
+- [Multi-Select Fields](#multi-select-fields), `select().array()` array matchers (`containsAll`/`containsAny`/…)
+- [Relation Fields](#relation-fields), `belongsTo` (`is`/`isNot`) vs to-many (`some`/`none`/`every`)
+- [JSON / Object Fields](#json--object-fields), JSONB containment, key, and path operators
+- [Combining Operators](#combining-operators), AND across fields/operators, `AND`/`OR`/`NOT`
 - [Complete Example](#complete-example)
 
 ## Text Fields
@@ -100,12 +100,12 @@ Applies to: `date`, `datetime`, `time` (all three share the same operators).
 | `isNotNull` | `{ date: { isNotNull: true } }`                          | Is NOT NULL    |
 
 For `Date` instance values, always use the explicit `{ eq: someDate }`
-operator — the bare equality shorthand only works for string/primitive
+operator, the bare equality shorthand only works for string/primitive
 values.
 
 System timestamps (`createdAt`, `updatedAt`, `deletedAt`) are stored as
 `timestamp(3)` (millisecond precision), so a `Date` returned by a query
-compares exactly against the stored value — safe for keyset cursors
+compares exactly against the stored value, safe for keyset cursors
 (`lt`/`gt`/`eq` with a previously returned timestamp).
 
 ## Select Fields (single)
@@ -124,7 +124,7 @@ Applies to: `select` (single value).
 
 ## Multi-Select Fields
 
-Applies to a multi-value select — `f.select([...]).array()` (an array of values, stored as JSONB). There is no separate `multiSelect` field type; `.array()` switches the field to this operator set. It is **distinct** from the single-select set above (`in`/`notIn` do not apply here):
+Applies to a multi-value select, `f.select([...]).array()` (an array of values, stored as JSONB). There is no separate `multiSelect` field type; `.array()` switches the field to this operator set. It is **distinct** from the single-select set above (`in`/`notIn` do not apply here):
 
 | Operator      | Example                                          | Description                  |
 | ------------- | ------------------------------------------------ | ---------------------------- |

@@ -1,22 +1,22 @@
 ---
 title: Fields
-description: Fields are the typed building blocks of a collection — each one declares a column, a Zod schema, an operator set, and an admin component, all from a single chained factory.
+description: Fields are the typed building blocks of a collection, each one declares a column, a Zod schema, an operator set, and an admin component, all from a single chained factory.
 ---
 
-Fields define the shape of your data. Inside a collection, global, or block you call `.fields(({ f }) => ({ ... }))` and assign each key a field built from the `f` proxy: `f.text(255)`, `f.relation("author")`, `f.datetime().autoNow()`. From that one declaration QUESTPIE derives the Postgres column, a runtime Zod validation schema, the WHERE-clause operators for filtering, the insert/select/where TypeScript types, and the admin UI input — so you describe a field once and get the whole stack typed end to end.
+Fields define the shape of your data. Inside a collection, global, or block you call `.fields(({ f }) => ({ ... }))` and assign each key a field built from the `f` proxy: `f.text(255)`, `f.relation("author")`, `f.datetime().autoNow()`. From that one declaration QUESTPIE derives the Postgres column, a runtime Zod validation schema, the WHERE-clause operators for filtering, the insert/select/where TypeScript types, and the admin UI input, so you describe a field once and get the whole stack typed end to end.
 
 ## What it does
 
-- **Generates a typed column** — each field produces a Drizzle/Postgres column with the right type, nullability, and default.
-- **Validates input** — every field derives a Zod schema (length, range, pattern, format) applied on create and update.
-- **Drives type-safe filters** — each field ships an operator set (`eq`, `gt`, `contains`, …) that types the `where` clause for that field.
-- **Renders an admin input** — the field's type picks the editor (text box, date picker, relation selector, rich-text editor) and `.admin()` tunes it.
-- **Infers insert/select types** — `.required()`, `.default()`, `.outputFalse()`, `.virtual()` flow into the generated `CollectionDoc` / insert types with no extra annotation.
-- **Composes by chaining** — every modifier returns a new immutable field, so `f.text(255).required().localized().admin({ ... })` reads top to bottom and stays type-safe at each step.
+- **Generates a typed column**, each field produces a Drizzle/Postgres column with the right type, nullability, and default.
+- **Validates input**, every field derives a Zod schema (length, range, pattern, format) applied on create and update.
+- **Drives type-safe filters**, each field ships an operator set (`eq`, `gt`, `contains`, …) that types the `where` clause for that field.
+- **Renders an admin input**, the field's type picks the editor (text box, date picker, relation selector, rich-text editor) and `.admin()` tunes it.
+- **Infers insert/select types**, `.required()`, `.default()`, `.outputFalse()`, `.virtual()` flow into the generated `CollectionDoc` / insert types with no extra annotation.
+- **Composes by chaining**, every modifier returns a new immutable field, so `f.text(255).required().localized().admin({ ... })` reads top to bottom and stays type-safe at each step.
 
 ## Quick start
 
-`f` is the field builder. You never import it — it is the first argument of the `.fields()` callback. Each property on `f` is a factory; the positional argument configures the column, and you chain modifiers to refine it.
+`f` is the field builder. You never import it, it is the first argument of the `.fields()` callback. Each property on `f` is a factory; the positional argument configures the column, and you chain modifiers to refine it.
 
 ```ts title="src/questpie/server/collections/posts.ts"
 import { collection } from "#questpie/factories";
@@ -33,10 +33,10 @@ export const posts = collection("posts").fields(({ f }) => ({
 }));
 ```
 
-That gives you a `posts` table with the right columns, a validation schema, typed filters, and an admin form — no migrations to hand-write, no types to declare.
+That gives you a `posts` table with the right columns, a validation schema, typed filters, and an admin form, no migrations to hand-write, no types to declare.
 
 <Callout type="info">
-  `f` is a proxy over the registered field types. Accessing an unknown type throws at build time — `Unknown field type: "x". Available types: …` — so typos surface immediately.
+  `f` is a proxy over the registered field types. Accessing an unknown type throws at build time, `Unknown field type: "x". Available types: …`, so typos surface immediately.
 </Callout>
 
 ## Example → inferred types
@@ -66,23 +66,23 @@ How the type maps are derived (read-only reference): `ExtractInputType` / `Extra
 
 ## Field types
 
-Every type below is reached as `f.<type>(…)`. The **constructor arg** is positional — there is no options-object constructor. Refine each field with the [shared methods](#shared-methods) plus the type-specific methods listed here.
+Every type below is reached as `f.<type>(…)`. The **constructor arg** is positional, there is no options-object constructor. Refine each field with the [shared methods](#shared-methods) plus the type-specific methods listed here.
 
 Each type has its own page with the full constructor, type-specific methods, operator set, and gotchas. This hub is the overview; follow a link for the detail.
 
 | Field | What it stores |
 |---|---|
-| [`f.text()`](/docs/concepts/fields/text) | Single-line string — a `varchar` (or unbounded `text`) with length, pattern, and string filtering. |
-| [`f.textarea()`](/docs/concepts/fields/textarea) | Unbounded multi-line string — a `text` column rendered as a multiline editor. |
+| [`f.text()`](/docs/concepts/fields/text) | Single-line string, a `varchar` (or unbounded `text`) with length, pattern, and string filtering. |
+| [`f.textarea()`](/docs/concepts/fields/textarea) | Unbounded multi-line string, a `text` column rendered as a multiline editor. |
 | [`f.email()`](/docs/concepts/fields/email) | String validated as an email address, with domain-aware filters. |
-| [`f.url()`](/docs/concepts/fields/url) | Web address — a `varchar(2048)` with URL-format validation and host/protocol filters. |
-| [`f.number()`](/docs/concepts/fields/number) | Numeric — integer, smallint, bigint, real, double, or fixed-precision decimal, with value bounds. |
-| [`f.boolean()`](/docs/concepts/fields/boolean) | True/false — a `boolean` column with equality / null filtering. |
+| [`f.url()`](/docs/concepts/fields/url) | Web address, a `varchar(2048)` with URL-format validation and host/protocol filters. |
+| [`f.number()`](/docs/concepts/fields/number) | Numeric, integer, smallint, bigint, real, double, or fixed-precision decimal, with value bounds. |
+| [`f.boolean()`](/docs/concepts/fields/boolean) | True/false, a `boolean` column with equality / null filtering. |
 | [`f.date()`](/docs/concepts/fields/date) | Calendar date (no time) as an ISO date string, with auto-now stamping. |
-| [`f.datetime()`](/docs/concepts/fields/datetime) | Instant in time — a `timestamp` reading back as a JS `Date`, with precision and timezone. |
+| [`f.datetime()`](/docs/concepts/fields/datetime) | Instant in time, a `timestamp` reading back as a JS `Date`, with precision and timezone. |
 | [`f.time()`](/docs/concepts/fields/time) | Time of day (`HH:MM:SS`) in a `time` column. |
-| [`f.select()`](/docs/concepts/fields/select) | Enumerated string — read type narrows to the literal union of the option values. |
-| [`f.upload()`](/docs/concepts/fields/upload) | Typed relation to an upload collection — single file, gallery, or inline asset IDs. |
+| [`f.select()`](/docs/concepts/fields/select) | Enumerated string, read type narrows to the literal union of the option values. |
+| [`f.upload()`](/docs/concepts/fields/upload) | Typed relation to an upload collection, single file, gallery, or inline asset IDs. |
 | [`f.object()`](/docs/concepts/fields/object) | Fixed, typed nested shape in one `jsonb` column. |
 | [`.array()`](/docs/concepts/fields/array) | Wraps any field into a list stored as `jsonb`, with length bounds. |
 | [`f.json()`](/docs/concepts/fields/json) | Schema-less `jsonb` (or `json`) for free-form data you narrow and validate yourself. |
@@ -108,7 +108,7 @@ website: f.url(),                          // validated z.string().url(), len 20
 For `text`/`textarea`/`email`/`url`, `.min(n)` / `.max(n)` constrain **string length** (they map to `minLength` / `maxLength`). `email` and `url` add `.email()` / `.url()` format validation automatically. Sources: `packages/questpie/src/server/modules/core/fields/{text,textarea,email,url}.ts`.
 
 <Callout type="warn">
-  `.trim()`, `.lowercase()`, and `.uppercase()` set runtime state but are **not currently applied to the Zod schema** — `derive-schema.ts` only emits `maxLength` / `minLength` / `pattern` for strings, so these three do not transform or validate the value yet. To normalize input, use a `.zod()` refinement or a field hook instead.
+  `.trim()`, `.lowercase()`, and `.uppercase()` set runtime state but are **not currently applied to the Zod schema**, `derive-schema.ts` only emits `maxLength` / `minLength` / `pattern` for strings, so these three do not transform or validate the value yet. To normalize input, use a `.zod()` refinement or a field hook instead.
 </Callout>
 
 ### Number
@@ -130,21 +130,21 @@ Default mode is `"integer"`. `bigint` and `decimal` use Drizzle's `mode: "number
 
 | Field | Constructor | Column | Read type | Type-specific methods |
 |---|---|---|---|---|
-| `f.boolean()` | none | `boolean` | `boolean` | — |
+| `f.boolean()` | none | `boolean` | `boolean` | none |
 
 ```ts
 isActive: f.boolean().default(true).required(),
 ```
 
-No type-specific methods — refine with the shared methods only.
+No type-specific methods, refine with the shared methods only.
 
 ### Date & time
 
 | Field | Constructor | Column | Read type | Type-specific methods |
 |---|---|---|---|---|
 | `f.date()` | none | `date` (`mode: "string"`) | `string` (ISO date) | `.autoNow()` `.autoNowUpdate()` |
-| `f.datetime(config?)` | `{ precision?: 0–6; withTimezone?: boolean }` | `timestamp` (precision `3`, `withTimezone: true`) | `Date` | `.autoNow()` `.autoNowUpdate()` |
-| `f.time(config?)` | `{ precision?: 0–6; withSeconds?: boolean }` | `time` (precision `0`) | `string` (`HH:MM:SS`) | — |
+| `f.datetime(config?)` | `{ precision?: 0-6; withTimezone?: boolean }` | `timestamp` (precision `3`, `withTimezone: true`) | `Date` | `.autoNow()` `.autoNowUpdate()` |
+| `f.time(config?)` | `{ precision?: 0-6; withSeconds?: boolean }` | `time` (precision `0`) | `string` (`HH:MM:SS`) | none |
 
 ```ts
 createdAt: f.datetime().autoNow().inputFalse(),       // set once on create
@@ -178,7 +178,7 @@ tags: f.select([
 ]).array(),
 ```
 
-Passing static options narrows the field's read type to the **literal union** of those values. Multi-select is `.array()` — there is no separate multi factory. Dynamic, server-driven options (search + pagination) use an `OptionsConfig` `{ handler, deps? }`; the read type then widens to `string`. `.enum(name)` creates a fresh `pgEnum` from the option values. Sources: `packages/questpie/src/server/modules/core/fields/select.ts`, `packages/questpie/src/server/fields/reactive-types.ts`.
+Passing static options narrows the field's read type to the **literal union** of those values. Multi-select is `.array()`, there is no separate multi factory. Dynamic, server-driven options (search + pagination) use an `OptionsConfig` `{ handler, deps? }`; the read type then widens to `string`. `.enum(name)` creates a fresh `pgEnum` from the option values. Sources: `packages/questpie/src/server/modules/core/fields/select.ts`, `packages/questpie/src/server/fields/reactive-types.ts`.
 
 ### Relation
 
@@ -187,13 +187,13 @@ Passing static options narrows the field's read type to the **literal union** of
 | `f.relation(target)` | collection name `"user"`, lazy `() => ({ name })`, or polymorphic map `{ users: "users", posts: "posts" }` | `varchar(36)` FK (belongsTo) | `string` (the related id) | `.hasMany()` `.manyToMany()` `.multiple()` `.onDelete()` `.onUpdate()` `.relationName()` |
 
 ```ts
-// belongsTo — owns a FK column, reads back as the related id:
+// belongsTo, owns a FK column, reads back as the related id:
 author: f.relation("user").required().onDelete("cascade"),
 
-// hasMany — no own column; the FK lives on the target table:
+// hasMany, no own column; the FK lives on the target table:
 posts: f.relation("post").hasMany({ foreignKey: "author" }),
 
-// manyToMany — through a junction collection:
+// manyToMany, through a junction collection:
 services: f.relation("service").manyToMany({
   through: "barber_services",
   sourceField: "barber",
@@ -203,16 +203,16 @@ services: f.relation("service").manyToMany({
 
 The default form is **belongsTo**: it owns a `varchar(36)` foreign-key column and reads back as a single id string. The transition methods change the relation kind:
 
-- **`.hasMany({ foreignKey, onDelete?, relationName? })`** — virtual, no own column; the FK lives on the target table. Reads back as `string[]`.
-- **`.manyToMany({ through, sourceField?, targetField?, relationName? })`** — virtual, joined through a junction collection. Reads back as `string[]`.
-- **`.multiple()`** — owns a `jsonb` array of FK ids on this table (not virtual). Reads back as `string[]`.
-- **`.onDelete(action)` / `.onUpdate(action)`** — referential action: `"cascade" \| "set null" \| "restrict" \| "no action"`.
-- **`.relationName(name)`** — disambiguates multiple relations between the same two collections.
+- **`.hasMany({ foreignKey, onDelete?, relationName? })`**, virtual, no own column; the FK lives on the target table. Reads back as `string[]`.
+- **`.manyToMany({ through, sourceField?, targetField?, relationName? })`**, virtual, joined through a junction collection. Reads back as `string[]`.
+- **`.multiple()`**, owns a `jsonb` array of FK ids on this table (not virtual). Reads back as `string[]`.
+- **`.onDelete(action)` / `.onUpdate(action)`**, referential action: `"cascade" \| "set null" \| "restrict" \| "no action"`.
+- **`.relationName(name)`**, disambiguates multiple relations between the same two collections.
 
 The `target` collection name is checked against your registry once codegen runs, so a typo'd target fails to type-check.
 
 <Callout type="info">
-  `.hasMany()`, `.manyToMany()`, `.multiple()` are **transition** methods — they re-shape the field's type state. Chain them early; the order-preserving `.onDelete()` / `.onUpdate()` / `.relationName()` keep whatever state you have accumulated.
+  `.hasMany()`, `.manyToMany()`, `.multiple()` are **transition** methods, they re-shape the field's type state. Chain them early; the order-preserving `.onDelete()` / `.onUpdate()` / `.relationName()` keep whatever state you have accumulated.
 </Callout>
 
 ### Upload
@@ -227,7 +227,7 @@ avatar: f.upload({ to: "assets", mimeTypes: ["image/*"], maxSize: 5_000_000 }),
 gallery: f.upload({ to: "assets" }).multiple(),  // inline jsonb array of asset ids
 ```
 
-`upload` is a relation specialised for files — by default it owns a `varchar(36)` FK to the `assets` collection and the admin renders an upload widget (not a relation picker). Setting `through` makes it many-to-many (virtual); `.multiple()` stores an inline `jsonb` array of asset ids.
+`upload` is a relation specialised for files, by default it owns a `varchar(36)` FK to the `assets` collection and the admin renders an upload widget (not a relation picker). Setting `through` makes it many-to-many (virtual); `.multiple()` stores an inline `jsonb` array of asset ids.
 
 <Callout type="warn">
   `mimeTypes` and `maxSize` are captured as admin metadata, **not** enforced as column constraints. They guide the upload UI; enforce hard limits in your storage adapter or a field hook.
@@ -239,17 +239,17 @@ gallery: f.upload({ to: "assets" }).multiple(),  // inline jsonb array of asset 
 |---|---|---|---|---|
 | `f.object(fields)` | `Record<string, Field>` of nested fields | `jsonb` | inferred object from the nested fields | nested `outputFalse()`/virtual fields drop out of the shape |
 | `f.json(config?)` | `{ mode?: "jsonb" \| "json" }` | `jsonb` (default) or `json` | `JsonValue` (narrow with `.$type<T>()`) | schema-less |
-| `<field>.array()` | — (chain method) | `jsonb` | `T[]` of the inner read type | combine with `.minItems()` / `.maxItems()` |
+| `<field>.array()` | none (chain method) | `jsonb` | `T[]` of the inner read type | combine with `.minItems()` / `.maxItems()` |
 
 ```ts
-// object — typed nested shape stored as one jsonb column:
+// object, typed nested shape stored as one jsonb column:
 address: f.object({
   street: f.text(255),
   city: f.text(120),
   zip: f.text(10),
 }),
 
-// json — schema-less; narrow the type, validate with .zod():
+// json, schema-less; narrow the type, validate with .zod():
 settings: f.json<{ theme: "light" | "dark" }>(),
 
 // array of scalars (or any field):
@@ -292,7 +292,7 @@ body: f.blocks(),                          // block-based page builder
 These two are contributed by `@questpie/admin` and are only on `f` when the admin module is active. `richText` defaults to a TipTap JSON document (`mode: "markdown"` stores a markdown string instead). `blocks` stores a block tree built from your `block(name)` declarations. Sources: `packages/admin/src/server/fields/{rich-text,blocks}.ts`.
 
 <Callout type="info">
-  `f.richText()` and `f.blocks()` exist only when the admin module is registered — they ride in on the generated `f` alongside the 15 core types. Without the admin module, accessing them throws the "Unknown field type" error.
+  `f.richText()` and `f.blocks()` exist only when the admin module is registered, they ride in on the generated `f` alongside the 15 core types. Without the admin module, accessing them throws the "Unknown field type" error.
 </Callout>
 
 ## Shared methods
@@ -304,9 +304,9 @@ These chain methods are available on **every** field type. Each returns a new im
 | Method | Effect |
 |---|---|
 | `.required()` | `NOT NULL` column + required on input (unless it has a default or is `inputOptional`). |
-| `.default(value)` | Column default — literal, a `() => value` factory, or raw `SQL`. Makes input optional. Type-checked against the field's data type. |
+| `.default(value)` | Column default, literal, a `() => value` factory, or raw `SQL`. Makes input optional. Type-checked against the field's data type. |
 | `.zod(fn)` | Transform the auto-derived Zod schema (`.refine()`, or replace it). Returning a concrete output narrows the field's value type. |
-| `.$type<T>()` | Type-level only (no runtime effect) — pin the value type, mainly for `f.json()`. Pair with `.zod()` for runtime validation. |
+| `.$type<T>()` | Type-level only (no runtime effect), pin the value type, mainly for `f.json()`. Pair with `.zod()` for runtime validation. |
 
 ```ts
 email: f.email().required(),
@@ -316,21 +316,21 @@ metadata: f.json<{ flags: string[] }>(),
 ```
 
 <Callout type="info">
-  `.default(value)` is type-constrained to the field's data type, exactly like Drizzle — `f.boolean().default("yes")` won't compile. For column-level SQL defaults, prefer ``.drizzle((c) => c.default(sql`now()`))``.
+  `.default(value)` is type-constrained to the field's data type, exactly like Drizzle, `f.boolean().default("yes")` won't compile. For column-level SQL defaults, prefer ``.drizzle((c) => c.default(sql`now()`))``.
 </Callout>
 
 ### Input/output shaping
 
 | Method | Effect |
 |---|---|
-| `.inputFalse()` | Read-only — excluded from the insert/update input type. |
+| `.inputFalse()` | Read-only, excluded from the insert/update input type. |
 | `.inputOptional()` | Always optional on input, even if the column is `NOT NULL`. |
 | `.inputTrue()` | Force into the input type even if the field is virtual. |
-| `.outputFalse()` | Write-only — dropped from the select/output type (e.g. a password). |
+| `.outputFalse()` | Write-only, dropped from the select/output type (e.g. a password). |
 | `.virtual(expr?)` | No DB column; optional `SQL` expression for a computed value. |
 | `.localized()` | Store per-locale values in the i18n side-table. |
 | `.array()` | Wrap the value as an array (stored as `jsonb`). For `select`, this is multi-select. |
-| `.minItems(n)` / `.maxItems(n)` | Array length bounds — only meaningful after `.array()`. |
+| `.minItems(n)` / `.maxItems(n)` | Array length bounds, only meaningful after `.array()`. |
 
 ```ts
 createdAt: f.datetime().autoNow().inputFalse(),
@@ -347,7 +347,7 @@ tags: f.text().array().maxItems(10),
 |---|---|
 | `.label(text)` / `.description(text)` | Admin label/help text. `I18nText` = `string \| Record<locale, string>`. |
 | `.hooks(hooks)` | Per-field `beforeChange` / `afterRead` / `validate` / `beforeCreate` / `beforeUpdate`. Each transforms the value (same type in, same type out). |
-| `.access(rules)` | Per-field `read` / `create` / `update` access — `boolean` or `(ctx) => boolean \| Promise<boolean>`. |
+| `.access(rules)` | Per-field `read` / `create` / `update` access, `boolean` or `(ctx) => boolean \| Promise<boolean>`. |
 | `.operators(ops)` | Override the WHERE operator set for this field. |
 | `.admin(config)` | Per-field admin UI config (component, placeholder, layout, …). Admin module only. |
 
@@ -359,7 +359,7 @@ phone: f.text(50).admin({ placeholder: "+1 (555) 000-0000" }),
 ```
 
 <Callout type="warn">
-  Field `afterRead` hooks (and `f.blocks()`'s built-in afterRead) run output processing that can deadlock Bun SQL if executed inside an already-open transaction — the context-inherited tx connection blocks. Keep heavy afterRead/block hydration outside an open `tx`. See the framework invariant in `CLAUDE.md` (`feedback_save_inside_tx`).
+  Field `afterRead` hooks (and `f.blocks()`'s built-in afterRead) run output processing that can deadlock Bun SQL if executed inside an already-open transaction, the context-inherited tx connection blocks. Keep heavy afterRead/block hydration outside an open `tx`. See the framework invariant in `CLAUDE.md` (`feedback_save_inside_tx`).
 </Callout>
 
 ### Low-level escape hatches
@@ -384,15 +384,15 @@ Full method source: `packages/questpie/src/server/fields/field-class.ts`.
 
 ### Custom field types
 
-A new field type is declared with `fieldType(name, { create, methods })` — the declarative way to add a type with its own chain methods. Every built-in exports a matching `<name>FieldType` (`textFieldType`, `numberFieldType`, `relationFieldType`, …) that codegen discovers from your `fields/` directories.
+A new field type is declared with `fieldType(name, { create, methods })`, the declarative way to add a type with its own chain methods. Every built-in exports a matching `<name>FieldType` (`textFieldType`, `numberFieldType`, `relationFieldType`, …) that codegen discovers from your `fields/` directories.
 
 ### Custom operator sets
 
-`.operators(ops)` overrides the WHERE operators for a field. Build a set with `operator<TValue>((col, value, ctx) => SQL)` / `operatorSet(...)`. The built-in sets — `stringOps`, `numberOps`, `booleanOps`, `dateOps`, `selectSingleOps`, `belongsToOps`, … — live in `packages/questpie/src/server/operators/builtin.ts`.
+`.operators(ops)` overrides the WHERE operators for a field. Build a set with `operator<TValue>((col, value, ctx) => SQL)` / `operatorSet(...)`. The built-in sets, `stringOps`, `numberOps`, `booleanOps`, `dateOps`, `selectSingleOps`, `belongsToOps`, …, live in `packages/questpie/src/server/operators/builtin.ts`.
 
 ## TypeScript
 
-Fields are the single origin of your collection's read/insert/where types — you rarely touch field types directly. After `questpie generate`, import the projected collection types:
+Fields are the single origin of your collection's read/insert/where types, you rarely touch field types directly. After `questpie generate`, import the projected collection types:
 
 ```ts
 import type { CollectionDoc, CollectionWhere } from "#questpie/types";
@@ -404,13 +404,13 @@ type PostFilter = CollectionWhere<"posts">;  // the typed where clause
 If you need the field primitives themselves (building a plugin or a custom field type), they are exported from `questpie` and `questpie/builders`: `Field`, `field`, `fieldType`, `FieldState`, `FieldWithMethods`, the `Extract*Type` helpers, and the reactive types. Admin's `richText` / `blocks` and their state/document types come from `@questpie/admin/fields`. Sources: `packages/questpie/src/exports/index.ts`, `packages/admin/src/exports/fields.ts`.
 
 <Callout type="info">
-  You don't import the field factories (`text`, `relation`, …) directly in app code — they ride in on the destructured `f` inside `.fields()`. Direct factory imports are for library/plugin authors building custom `f` proxies via `createFieldBuilder`.
+  You don't import the field factories (`text`, `relation`, …) directly in app code, they ride in on the destructured `f` inside `.fields()`. Direct factory imports are for library/plugin authors building custom `f` proxies via `createFieldBuilder`.
 </Callout>
 
 ## Related
 
-- [Collections](/docs/concepts/collections) — where fields are declared and how they project to tables and the admin.
-- [Relations](/docs/concepts/relations) — belongsTo / hasMany / manyToMany / polymorphic in depth.
-- [Validation](/docs/concepts/validation) — how the derived Zod schemas run on create and update.
-- [Hooks](/docs/concepts/hooks) — collection- and field-level lifecycle hooks.
-- Example: `examples/tanstack-barbershop/src/questpie/server/collections/` — real collections using every field type above.
+- [Collections](/docs/concepts/collections), where fields are declared and how they project to tables and the admin.
+- [Relations](/docs/concepts/relations), belongsTo / hasMany / manyToMany / polymorphic in depth.
+- [Validation](/docs/concepts/validation), how the derived Zod schemas run on create and update.
+- [Hooks](/docs/concepts/hooks), collection- and field-level lifecycle hooks.
+- Example: `examples/tanstack-barbershop/src/questpie/server/collections/`, real collections using every field type above.

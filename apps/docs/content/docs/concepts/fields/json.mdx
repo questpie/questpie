@@ -1,18 +1,18 @@
 ---
 title: JSON field
-description: f.json() is a schema-less field backed by a Postgres jsonb (or json) column — for free-form data you can narrow with a type argument and validate with .zod().
+description: f.json() is a schema-less field backed by a Postgres jsonb (or json) column, for free-form data you can narrow with a type argument and validate with .zod().
 ---
 
-`f.json()` stores arbitrary JSON. By default it produces a Postgres `jsonb` column and derives a recursive JSON schema (`jsonValueSchema`), so any valid JSON value round-trips. It is the escape hatch for free-form data — settings blobs, third-party payloads, metadata — where the shape isn't fixed enough for [`f.object()`](/docs/concepts/fields#structured). Pass a type argument to narrow the stored value, and `.zod()` to validate it at runtime.
+`f.json()` stores arbitrary JSON. By default it produces a Postgres `jsonb` column and derives a recursive JSON schema (`jsonValueSchema`), so any valid JSON value round-trips. It is the escape hatch for free-form data, settings blobs, third-party payloads, metadata, where the shape isn't fixed enough for [`f.object()`](/docs/concepts/fields#structured). Pass a type argument to narrow the stored value, and `.zod()` to validate it at runtime.
 
-> **Prerequisites:** read [Fields](/docs/concepts/fields) first — this page covers only the `json` type. The `f` proxy, the chain-modifier model, and shared modifiers like `.required()` / `.default()` / `.localized()` are taught there.
+> **Prerequisites:** read [Fields](/docs/concepts/fields) first, this page covers only the `json` type. The `f` proxy, the chain-modifier model, and shared modifiers like `.required()` / `.default()` / `.localized()` are taught there.
 
 ## What it does
 
-- **Stores arbitrary JSON** — a Postgres `jsonb` column by default, or a `json` column when you pass `{ mode: "json" }`.
-- **Validates as JSON** — the derived schema is a recursive `JsonValue` union (string / number / boolean / null / array / object), not `z.any()` — so a non-JSON value (a `Date`, a function) is a validation error.
-- **Narrows to your shape** — pass a type argument (`f.json<{ theme: "light" | "dark" }>()`) to type the value, and `.zod()` to enforce it at runtime.
-- **Filters with equality operators** — `eq`, `ne`, `in`, `notIn`, `isNull`, `isNotNull`, typed against the JSON value (or your narrowed shape).
+- **Stores arbitrary JSON**, a Postgres `jsonb` column by default, or a `json` column when you pass `{ mode: "json" }`.
+- **Validates as JSON**, the derived schema is a recursive `JsonValue` union (string / number / boolean / null / array / object), not `z.any()`, so a non-JSON value (a `Date`, a function) is a validation error.
+- **Narrows to your shape**, pass a type argument (`f.json<{ theme: "light" | "dark" }>()`) to type the value, and `.zod()` to enforce it at runtime.
+- **Filters with equality operators**, `eq`, `ne`, `in`, `notIn`, `isNull`, `isNotNull`, typed against the JSON value (or your narrowed shape).
 
 ## Quick start
 
@@ -27,7 +27,7 @@ export const posts = collection("posts").fields(({ f }) => ({
 }));
 ```
 
-That gives `posts` a `metadata` column that accepts any JSON value, and a `settings` column whose value reads back as `{ theme: "light" | "dark" } | null` in TypeScript — both stored as `jsonb`, with no schema or migration written by hand.
+That gives `posts` a `metadata` column that accepts any JSON value, and a `settings` column whose value reads back as `{ theme: "light" | "dark" } | null` in TypeScript, both stored as `jsonb`, with no schema or migration written by hand.
 
 ## Constructor argument
 
@@ -39,22 +39,22 @@ That gives `posts` a `metadata` column that accepts any JSON value, and a `setti
 | `f.json({ mode: "jsonb" })` | `jsonb` | recursive `jsonValueSchema` |
 | `f.json({ mode: "json" })` | `json` | recursive `jsonValueSchema` |
 
-The `mode` selects the underlying Postgres column type. **`jsonb` (the default) is what you want** — it is stored in a decomposed binary format, supports indexing, and is faster to query; the `json` mode stores the exact input text (preserving key order and whitespace) and is rarely needed. The derived schema is the same in both modes.
+The `mode` selects the underlying Postgres column type. **`jsonb` (the default) is what you want**, it is stored in a decomposed binary format, supports indexing, and is faster to query; the `json` mode stores the exact input text (preserving key order and whitespace) and is rarely needed. The derived schema is the same in both modes.
 
 <Callout type="info" title="The schema is `JsonValue`, not `z.any()`">
-`f.json()` derives a recursive `jsonValueSchema` — a union of `string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue }`. This deliberately replaces `z.any()`, so a value that isn't valid JSON (a `Date`, a `Map`, a function, `undefined`) fails validation rather than silently passing through.
+`f.json()` derives a recursive `jsonValueSchema`, a union of `string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue }`. This deliberately replaces `z.any()`, so a value that isn't valid JSON (a `Date`, a `Map`, a function, `undefined`) fails validation rather than silently passing through.
 </Callout>
 
 ## Chained methods
 
-`f.json()` has **no type-specific methods** — it returns a plain `Field` (no `FieldWithMethods` wrapper), because there is nothing json-specific to refine. You shape it entirely with the [shared modifiers](/docs/concepts/fields#shared-methods) every field carries. Two of them are central to working with JSON.
+`f.json()` has **no type-specific methods**, it returns a plain `Field` (no `FieldWithMethods` wrapper), because there is nothing json-specific to refine. You shape it entirely with the [shared modifiers](/docs/concepts/fields#shared-methods) every field carries. Two of them are central to working with JSON.
 
 | Modifier | Effect on a JSON field |
 |---|---|
-| `.$type<T>()` | **Type-level only**, no runtime effect — pin the read/write value type to `T`. The primary way to type a JSON field.
+| `.$type<T>()` | **Type-level only**, no runtime effect, pin the read/write value type to `T`. The primary way to type a JSON field.
 | `.zod(fn)` | Replace or refine the auto-derived schema to **actually validate** that shape at runtime.
 
-The type argument on `f.json<T>()` is shorthand for `.$type<T>()` — both are type-only. For runtime safety, pair the type with `.zod()`:
+The type argument on `f.json<T>()` is shorthand for `.$type<T>()`, both are type-only. For runtime safety, pair the type with `.zod()`:
 
 ```ts
 import { z } from "zod";
@@ -74,12 +74,12 @@ collection("users").fields(({ f }) => ({
 ```
 
 <Callout type="warn" title="A type argument alone does NOT validate at runtime">
-`f.json<{ theme: "light" | "dark" }>()` narrows the *TypeScript* type but does **not** validate — the runtime schema stays the loose `jsonValueSchema`, so a write of `{ theme: "blue" }` (or any other JSON) is accepted by the database. To enforce the shape on write, add `.zod()` as shown above.
+`f.json<{ theme: "light" | "dark" }>()` narrows the *TypeScript* type but does **not** validate, the runtime schema stays the loose `jsonValueSchema`, so a write of `{ theme: "blue" }` (or any other JSON) is accepted by the database. To enforce the shape on write, add `.zod()` as shown above.
 </Callout>
 
-## Filtering — operators
+## Filtering, operators
 
-`json` uses the **basic operator set** (`basicOps`) — equality, membership, and null checks. There are no `gt` / `lt` / `contains` / path operators; a JSON field is filtered as a whole value. The operand is typed against the JSON value (or your narrowed shape via `JsonWhereInput<T>`), not `unknown`.
+`json` uses the **basic operator set** (`basicOps`), equality, membership, and null checks. There are no `gt` / `lt` / `contains` / path operators; a JSON field is filtered as a whole value. The operand is typed against the JSON value (or your narrowed shape via `JsonWhereInput<T>`), not `unknown`.
 
 | Operator | Operand | Matches |
 |---|---|---|
@@ -99,27 +99,27 @@ const { docs: unset } = await app.collections.posts.find({
 });
 ```
 
-The operators compare the value as a whole — there is no built-in filtering *inside* the JSON (by a nested key). When you need to query individual keys, model them as real fields (`f.object()` or top-level columns) instead, or add a custom operator set with `.operators()` (see [Fields → custom operator sets](/docs/concepts/fields#custom-operator-sets)).
+The operators compare the value as a whole, there is no built-in filtering *inside* the JSON (by a nested key). When you need to query individual keys, model them as real fields (`f.object()` or top-level columns) instead, or add a custom operator set with `.operators()` (see [Fields → custom operator sets](/docs/concepts/fields#custom-operator-sets)).
 
-For the full query language — combining field filters with `AND` / `OR` / `NOT`, pagination, and `orderBy` — see [Fields → filtering](/docs/concepts/fields). Relation filters and hydration are covered in [Relations](/docs/concepts/relations).
+For the full query language, combining field filters with `AND` / `OR` / `NOT`, pagination, and `orderBy`, see [Fields → filtering](/docs/concepts/fields). Relation filters and hydration are covered in [Relations](/docs/concepts/relations).
 
 ## When to use it
 
-- **`f.json()`** — free-form or open-ended data with no fixed shape: a settings/preferences blob, a captured third-party webhook payload, feature-flag bags, denormalized snapshots.
-- **`f.json<T>()` + `.zod()`** — data that *does* have a shape but is more naturally one value than separate columns (and you still want type safety + validation).
-- **Reach for [`f.object()`](/docs/concepts/fields#structured) instead** when the nested shape is fixed and you want per-key validation and admin form fields generated automatically — `f.object()` also stores `jsonb`, but each key is its own typed, validated field. Use `f.json()` only when the data is genuinely schema-less.
+- **`f.json()`**, free-form or open-ended data with no fixed shape: a settings/preferences blob, a captured third-party webhook payload, feature-flag bags, denormalized snapshots.
+- **`f.json<T>()` + `.zod()`**, data that *does* have a shape but is more naturally one value than separate columns (and you still want type safety + validation).
+- **Reach for [`f.object()`](/docs/concepts/fields#structured) instead** when the nested shape is fixed and you want per-key validation and admin form fields generated automatically, `f.object()` also stores `jsonb`, but each key is its own typed, validated field. Use `f.json()` only when the data is genuinely schema-less.
 - **Need to filter by a nested key?** That's a sign the data should be structured (`f.object()` or separate fields), since the JSON operators match the value as a whole.
 
 ## Multiple values
 
-You don't need `.array()` to store a JSON array — a single `f.json()` already accepts arrays (and any nested structure). Use the type argument to express it:
+You don't need `.array()` to store a JSON array, a single `f.json()` already accepts arrays (and any nested structure). Use the type argument to express it:
 
 ```ts
 tags: f.json<string[]>(),                  // a JSON array, one jsonb column
 events: f.json<Array<{ at: string; type: string }>>(),
 ```
 
-`.array()` is a [shared modifier](/docs/concepts/fields#shared-methods) for making *any field type* repeat — it isn't needed here, since the JSON value can already be an array.
+`.array()` is a [shared modifier](/docs/concepts/fields#shared-methods) for making *any field type* repeat, it isn't needed here, since the JSON value can already be an array.
 
 ## TypeScript
 
@@ -146,7 +146,7 @@ type PostFilter = CollectionWhere<"posts">;  // { settings?: { eq?: { theme: "li
 
 ## Related
 
-- [Fields](/docs/concepts/fields) — the `f` proxy, the chain-modifier model, and the shared modifiers (`.$type()`, `.zod()`, `.required()`, `.localized()`, …).
-- [`f.object()`](/docs/concepts/fields#structured) — the typed, per-key sibling for fixed nested shapes.
-- [Validation](/docs/concepts/validation) — the auto-derived Zod schema and the `.zod()` escape hatch (the way to actually validate a JSON shape).
-- [Relations](/docs/concepts/relations) — filtering by a relation and hydrating related rows with `with`.
+- [Fields](/docs/concepts/fields), the `f` proxy, the chain-modifier model, and the shared modifiers (`.$type()`, `.zod()`, `.required()`, `.localized()`, …).
+- [`f.object()`](/docs/concepts/fields#structured), the typed, per-key sibling for fixed nested shapes.
+- [Validation](/docs/concepts/validation), the auto-derived Zod schema and the `.zod()` escape hatch (the way to actually validate a JSON shape).
+- [Relations](/docs/concepts/relations), filtering by a relation and hydrating related rows with `with`.

@@ -1,17 +1,17 @@
 ---
 title: Text field
-description: f.text() is a single-line string field backed by a Postgres varchar (or unbounded text) — with length, pattern, and string-operator filtering built in.
+description: f.text() is a single-line string field backed by a Postgres varchar (or unbounded text), with length, pattern, and string-operator filtering built in.
 ---
 
 `f.text()` stores a single-line string. By default it produces a `varchar(255)` column, derives a Zod schema that enforces the length, and exposes the full set of string filter operators (`eq`, `contains`, `ilike`, …) on the typed `where` clause. Pass a length to size the column, or switch to an unbounded `text` column when you need it.
 
-> **Prerequisites:** read [Fields](/docs/concepts/fields) first — this page covers only the `text` type. The `f` proxy, the chain-modifier model, and shared modifiers like `.required()` / `.localized()` / `.default()` are taught there.
+> **Prerequisites:** read [Fields](/docs/concepts/fields) first, this page covers only the `text` type. The `f` proxy, the chain-modifier model, and shared modifiers like `.required()` / `.localized()` / `.default()` are taught there.
 
 ## What it does
 
-- **Stores a single-line string** — default `varchar(255)`; pass a number to resize, or `{ mode: "text" }` for an unbounded Postgres `text` column.
-- **Validates length** — the column length becomes a Zod `.max()` automatically; add `.min(n)` / `.max(n)` for explicit bounds and `.pattern(re)` for a format check.
-- **Filters with string operators** — `eq`, `ne`, `in`, `like`, `ilike`, `contains`, `startsWith`, `endsWith`, `isNull`, and more, all typed against `string`.
+- **Stores a single-line string**, default `varchar(255)`; pass a number to resize, or `{ mode: "text" }` for an unbounded Postgres `text` column.
+- **Validates length**, the column length becomes a Zod `.max()` automatically; add `.min(n)` / `.max(n)` for explicit bounds and `.pattern(re)` for a format check.
+- **Filters with string operators**, `eq`, `ne`, `in`, `like`, `ilike`, `contains`, `startsWith`, `endsWith`, `isNull`, and more, all typed against `string`.
 - **Renders a text input** in the admin form (a multiline editor is what [`f.textarea()`](/docs/concepts/fields/textarea) gives you instead).
 
 ## Quick start
@@ -28,7 +28,7 @@ export const posts = collection("posts").fields(({ f }) => ({
 }));
 ```
 
-That gives `posts` a `title` column typed `string` on read, required on insert, validated at `≤ 255` chars, and filterable with the string operators below — no schema or migration written by hand.
+That gives `posts` a `title` column typed `string` on read, required on insert, validated at `≤ 255` chars, and filterable with the string operators below, no schema or migration written by hand.
 
 ## Constructor argument
 
@@ -51,9 +51,9 @@ These methods are specific to `text` (on top of the [shared modifiers](/docs/con
 | `.min(n)` | Minimum **string length** (Zod `.min(n)`). |
 | `.max(n)` | Maximum **string length** (Zod `.max(n)`). |
 | `.pattern(re)` | Validate against a `RegExp` (Zod `.regex(re)`). |
-| `.trim()` | Marks the field as trimmed — **see the gotcha below**. |
-| `.lowercase()` | Marks the field as lowercased — **see the gotcha below**. |
-| `.uppercase()` | Marks the field as uppercased — **see the gotcha below**. |
+| `.trim()` | Marks the field as trimmed, **see the gotcha below**. |
+| `.lowercase()` | Marks the field as lowercased, **see the gotcha below**. |
+| `.uppercase()` | Marks the field as uppercased, **see the gotcha below**. |
 
 ```ts
 collection("users").fields(({ f }) => ({
@@ -66,14 +66,14 @@ collection("users").fields(({ f }) => ({
 ```
 
 <Callout type="warn" title="`.min()` / `.max()` here are STRING LENGTH, not value bounds">
-On a text field, `.min(n)` / `.max(n)` constrain the **number of characters** (they map to `minLength` / `maxLength`). On [`f.number()`](/docs/concepts/fields/number) the same method names constrain the numeric **value**. Same names, different meaning — sized by the field's type.
+On a text field, `.min(n)` / `.max(n)` constrain the **number of characters** (they map to `minLength` / `maxLength`). On [`f.number()`](/docs/concepts/fields/number) the same method names constrain the numeric **value**. Same names, different meaning, sized by the field's type.
 </Callout>
 
 <Callout type="warn" title="`.trim()` / `.lowercase()` / `.uppercase()` are no-ops today">
-These three methods set runtime state but are **not** wired into the Zod schema. `applyRefinements` only applies `maxLength`, `minLength`, and `pattern` for string types — so `.trim()` / `.lowercase()` / `.uppercase()` neither transform nor validate the stored value. If you need the value normalized, do it explicitly with `.zod()` (e.g. `f.text().zod((s) => s.trim().toLowerCase())`) or a `beforeChange` hook.
+These three methods set runtime state but are **not** wired into the Zod schema. `applyRefinements` only applies `maxLength`, `minLength`, and `pattern` for string types, so `.trim()` / `.lowercase()` / `.uppercase()` neither transform nor validate the stored value. If you need the value normalized, do it explicitly with `.zod()` (e.g. `f.text().zod((s) => s.trim().toLowerCase())`) or a `beforeChange` hook.
 </Callout>
 
-## Filtering — operators
+## Filtering, operators
 
 `text` uses the **string operator set** (`stringOps`), so every text field is filterable with these in a `where` clause. The operand is typed `string` (or `string[]` for `in` / `notIn`).
 
@@ -95,12 +95,12 @@ const { docs } = await app.collections.posts.find({
 });
 ```
 
-These operators are field-level filters; the full query language — combining them with `AND` / `OR` / `NOT`, pagination, and `orderBy` — is covered in the querying reference (page forthcoming).
+These operators are field-level filters; the full query language, combining them with `AND` / `OR` / `NOT`, pagination, and `orderBy`, is covered in the querying reference (page forthcoming).
 
 ## When to use it
 
-- **`f.text()`** — short, single-line strings: titles, slugs, names, SKUs, labels. Default `varchar(255)` is the right size for most of these.
-- **`f.text({ mode: "text" })`** — long single-value strings with no natural length cap (a raw description, a serialized token) that still render as a plain input.
+- **`f.text()`**, short, single-line strings: titles, slugs, names, SKUs, labels. Default `varchar(255)` is the right size for most of these.
+- **`f.text({ mode: "text" })`**, long single-value strings with no natural length cap (a raw description, a serialized token) that still render as a plain input.
 - For **multi-line** content with a textarea editor in the admin, reach for [`f.textarea()`](/docs/concepts/fields/textarea). For **formatted** content, use [`f.richText()`](/docs/concepts/fields/rich-text).
 
 ## Multiple values
@@ -113,7 +113,7 @@ tags: f.text(40).array().maxItems(10), // string[] stored as jsonb
 
 ## TypeScript
 
-A text field contributes a `string` to the generated row, insert, and `where` types — no annotation needed. After `questpie generate`, pull the shapes off the collection or the app types:
+A text field contributes a `string` to the generated row, insert, and `where` types, no annotation needed. After `questpie generate`, pull the shapes off the collection or the app types:
 
 ```ts
 type Post = typeof posts.$infer.select;
@@ -124,6 +124,6 @@ type Post = typeof posts.$infer.select;
 
 ## Related
 
-- [Fields](/docs/concepts/fields) — the `f` proxy, the chain-modifier model, and the shared modifiers (`.required()`, `.localized()`, `.default()`, `.array()`, …).
-- [Textarea field](/docs/concepts/fields/textarea) — the multi-line sibling.
-- [Validation](/docs/concepts/validation) — the auto-derived Zod schema and the `.zod()` escape hatch (the way to actually normalize a value).
+- [Fields](/docs/concepts/fields), the `f` proxy, the chain-modifier model, and the shared modifiers (`.required()`, `.localized()`, `.default()`, `.array()`, …).
+- [Textarea field](/docs/concepts/fields/textarea), the multi-line sibling.
+- [Validation](/docs/concepts/validation), the auto-derived Zod schema and the `.zod()` escape hatch (the way to actually normalize a value).

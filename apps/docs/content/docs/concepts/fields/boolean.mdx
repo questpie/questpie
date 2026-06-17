@@ -1,17 +1,17 @@
 ---
 title: Boolean field
-description: f.boolean() is a true/false field backed by a Postgres boolean column — with a z.boolean() schema and equality / null filtering built in.
+description: f.boolean() is a true/false field backed by a Postgres boolean column, with a z.boolean() schema and equality / null filtering built in.
 ---
 
-`f.boolean()` stores a `true` / `false` value. It produces a Postgres `boolean` column, derives a `z.boolean()` schema, and exposes equality and null filter operators on the typed `where` clause. It takes no arguments and has no type-specific methods — you shape it entirely with the [shared modifiers](/docs/concepts/fields#shared-methods) every field has.
+`f.boolean()` stores a `true` / `false` value. It produces a Postgres `boolean` column, derives a `z.boolean()` schema, and exposes equality and null filter operators on the typed `where` clause. It takes no arguments and has no type-specific methods, you shape it entirely with the [shared modifiers](/docs/concepts/fields#shared-methods) every field has.
 
-> **Prerequisites:** read [Fields](/docs/concepts/fields) first — this page covers only the `boolean` type. The `f` proxy, the chain-modifier model, and shared modifiers like `.required()` / `.default()` / `.localized()` are taught there.
+> **Prerequisites:** read [Fields](/docs/concepts/fields) first, this page covers only the `boolean` type. The `f` proxy, the chain-modifier model, and shared modifiers like `.required()` / `.default()` / `.localized()` are taught there.
 
 ## What it does
 
-- **Stores a true/false value** — a Postgres `boolean` column, no precision or length to configure.
-- **Validates as a boolean** — the derived schema is `z.boolean()`, so a non-boolean insert is a validation error.
-- **Filters with boolean operators** — `eq`, `ne`, `isNull`, `isNotNull`, all typed against `boolean`.
+- **Stores a true/false value**, a Postgres `boolean` column, no precision or length to configure.
+- **Validates as a boolean**, the derived schema is `z.boolean()`, so a non-boolean insert is a validation error.
+- **Filters with boolean operators**, `eq`, `ne`, `isNull`, `isNotNull`, all typed against `boolean`.
 - **Renders a toggle / checkbox** in the admin form.
 
 ## Quick start
@@ -27,7 +27,7 @@ export const posts = collection("posts").fields(({ f }) => ({
 }));
 ```
 
-That gives `posts` a `published` column typed `boolean` on read, required on insert with a `false` default, and a nullable `featured` column — filterable with the operators below, with no schema or migration written by hand.
+That gives `posts` a `published` column typed `boolean` on read, required on insert with a `false` default, and a nullable `featured` column, filterable with the operators below, with no schema or migration written by hand.
 
 ## Constructor argument
 
@@ -39,7 +39,7 @@ That gives `posts` a `published` column typed `boolean` on read, required on ins
 
 ## Chained methods
 
-`f.boolean()` has **no type-specific methods** — it returns a plain `Field`, not a `FieldWithMethods` wrapper, because there is nothing boolean-specific to refine. Shape it with the [shared modifiers](/docs/concepts/fields#shared-methods) every field carries (`.required()`, `.default()`, `.label()`, `.description()`, `.localized()`, `.array()`, `.access()`, `.hooks()`, …).
+`f.boolean()` has **no type-specific methods**, it returns a plain `Field`, not a `FieldWithMethods` wrapper, because there is nothing boolean-specific to refine. Shape it with the [shared modifiers](/docs/concepts/fields#shared-methods) every field carries (`.required()`, `.default()`, `.label()`, `.description()`, `.localized()`, `.array()`, `.access()`, `.hooks()`, …).
 
 ```ts
 collection("settings").fields(({ f }) => ({
@@ -53,10 +53,10 @@ collection("settings").fields(({ f }) => ({
 ```
 
 <Callout type="info" title="`.default(value)` is type-checked against `boolean`">
-`.default()` is type-constrained to the field's data type, exactly like Drizzle — `f.boolean().default("yes")` won't compile. Passing a `.default(...)` also makes the field optional on insert. For a column-level SQL default instead of a JS value, use ``.drizzle((c) => c.default(sql`true`))``.
+`.default()` is type-constrained to the field's data type, exactly like Drizzle, `f.boolean().default("yes")` won't compile. Passing a `.default(...)` also makes the field optional on insert. For a column-level SQL default instead of a JS value, use ``.drizzle((c) => c.default(sql`true`))``.
 </Callout>
 
-## Filtering — operators
+## Filtering, operators
 
 `boolean` uses the **boolean operator set** (`booleanOps`), so every boolean field is filterable with these in a `where` clause. The operand is typed `boolean`.
 
@@ -77,14 +77,14 @@ const { docs: unset } = await app.collections.posts.find({
 });
 ```
 
-There are no `gt` / `lt` / `in` style operators — for a tri-state value (true / false / unknown), keep the column nullable and filter `isNull` / `isNotNull` alongside `eq`.
+There are no `gt` / `lt` / `in` style operators, for a tri-state value (true / false / unknown), keep the column nullable and filter `isNull` / `isNotNull` alongside `eq`.
 
-For the full query language — combining field filters with `AND` / `OR` / `NOT`, pagination, and `orderBy` — see the [query reference](/docs/concepts/relations).
+For the full query language, combining field filters with `AND` / `OR` / `NOT`, pagination, and `orderBy`, see the [query reference](/docs/concepts/relations).
 
 ## When to use it
 
-- **`f.boolean()`** — any two-state flag: `published`, `featured`, `isActive`, `acceptedTerms`, feature toggles, opt-ins.
-- Pair it with **`.default(false)` / `.default(true)` + `.required()`** for a non-null flag that never reads back as `null` — usually what you want for a toggle.
+- **`f.boolean()`**, any two-state flag: `published`, `featured`, `isActive`, `acceptedTerms`, feature toggles, opt-ins.
+- Pair it with **`.default(false)` / `.default(true)` + `.required()`** for a non-null flag that never reads back as `null`, usually what you want for a toggle.
 - Leave it **nullable** (no `.required()`) when "not yet decided" is a meaningful third state, then filter with `isNull` / `isNotNull`.
 - For a fixed set of more than two states (e.g. `draft` / `review` / `live`), reach for [`f.select()`](/docs/concepts/fields/select) instead of stacking booleans.
 
@@ -98,7 +98,7 @@ answers: f.boolean().array().maxItems(20), // boolean[] stored as jsonb
 
 ## TypeScript
 
-A boolean field contributes a `boolean` to the generated row, insert, and `where` types — no annotation needed. After `questpie generate`, pull the shapes off the collection or the app types:
+A boolean field contributes a `boolean` to the generated row, insert, and `where` types, no annotation needed. After `questpie generate`, pull the shapes off the collection or the app types:
 
 ```ts
 type Post = typeof posts.$infer.select;
@@ -116,7 +116,7 @@ type PostFilter = CollectionWhere<"posts">; // { published?: { eq?: boolean; ...
 
 ## Related
 
-- [Fields](/docs/concepts/fields) — the `f` proxy, the chain-modifier model, and the shared modifiers (`.required()`, `.default()`, `.array()`, `.localized()`, …).
-- [`f.select()`](/docs/concepts/fields/select) — when a flag grows into a fixed set of more than two states.
-- [Validation](/docs/concepts/validation) — the auto-derived Zod schema and the `.zod()` escape hatch.
-- [Relations](/docs/concepts/relations) — the full query language for combining the operators above.
+- [Fields](/docs/concepts/fields), the `f` proxy, the chain-modifier model, and the shared modifiers (`.required()`, `.default()`, `.array()`, `.localized()`, …).
+- [`f.select()`](/docs/concepts/fields/select), when a flag grows into a fixed set of more than two states.
+- [Validation](/docs/concepts/validation), the auto-derived Zod schema and the `.zod()` escape hatch.
+- [Relations](/docs/concepts/relations), the full query language for combining the operators above.

@@ -4,15 +4,15 @@ description: QUESTPIE access control hooks validation lifecycle beforeValidate b
   - questpie-core
 ---
 
-# QUESTPIE Rules — Access Control, Hooks, Validation
+# QUESTPIE Rules, Access Control, Hooks, Validation
 
-This skill builds on questpie-core. It covers collection/global access control, lifecycle hooks, and validation — the three rule layers that govern data flow.
+This skill builds on questpie-core. It covers collection/global access control, lifecycle hooks, and validation, the three rule layers that govern data flow.
 
 ## Contents
 
-- [Access Control](#access-control) — defaults, collection/global access, row-level, context, system mode
-- [Hooks](#hooks) — lifecycle order, defining hooks, hook context, context-first pattern
-- [Validation](#validation) — field constraints, input modifier, custom validation via hooks
+- [Access Control](#access-control), defaults, collection/global access, row-level, context, system mode
+- [Hooks](#hooks), lifecycle order, defining hooks, hook context, context-first pattern
+- [Validation](#validation), field constraints, input modifier, custom validation via hooks
 - [Common Mistakes](#common-mistakes)
 - [Access Control for Preview Sessions](#access-control-for-preview-sessions)
 
@@ -22,7 +22,7 @@ Access rules are defined per-collection via `.access()`. Each operation accepts 
 
 ### Default Behavior
 
-When no `.access()` is defined, all operations default to `({ session }) => !!session` — **authenticated users only**. You must explicitly set `read: true` for public collections.
+When no `.access()` is defined, all operations default to `({ session }) => !!session`, **authenticated users only**. You must explicitly set `read: true` for public collections.
 
 Every operation resolves through the same chain, with no hidden framework grants above your config:
 
@@ -30,7 +30,7 @@ Every operation resolves through the same chain, with no hidden framework grants
 2. App-level `defaultAccess` (`appConfig({ access })` in `config/app.ts`)
 3. Framework fallback: require session
 
-A deny-all `defaultAccess` (`{ read: false, create: false, update: false, delete: false }`) closes the entire REST surface — including upload-row listing and schema/meta introspection — until collections opt in.
+A deny-all `defaultAccess` (`{ read: false, create: false, update: false, delete: false }`) closes the entire REST surface, including upload-row listing and schema/meta introspection, until collections opt in.
 
 ### Collection Access
 
@@ -110,11 +110,11 @@ Access functions receive `AppContext` with these properties:
 | `db`          | Database instance                                            |
 | `collections` | Typed collection API                                         |
 | `request`     | Current HTTP `Request` (headers, URL)                        |
-| `data`        | The existing row — typed, non-optional in `update`/`delete` rules |
+| `data`        | The existing row, typed, non-optional in `update`/`delete` rules |
 | `input`       | Typed insert shape in `create` rules; typed patch in `update` rules |
 | _extensions_  | Keys returned by `appConfig({ context })`, flat (see below)  |
 
-`data`/`input` are typed **per operation** by the builder — no casts, no annotations inside the defining collection. For shared rule helpers and every other "I need type X" case, see `references/type-inference.md`.
+`data`/`input` are typed **per operation** by the builder, no casts, no annotations inside the defining collection. For shared rule helpers and every other "I need type X" case, see `references/type-inference.md`.
 
 ### Derived Request Context in Rules
 
@@ -128,14 +128,14 @@ export default appConfig({
 	}),
 });
 
-// collections/projects.ts — destructure flat, narrow before use
+// collections/projects.ts, destructure flat, narrow before use
 .access({
 	read: ({ workspaceId }) =>
 		workspaceId ? { workspace: workspaceId } : false,
 })
 ```
 
-Extensions are typed `Partial<…>` — absent for non-HTTP contexts (jobs, seeds, system scripts), so rules must handle `undefined`. See `references/multi-tenancy.md` for the full pattern (membership validation, closure memoization, scope UI).
+Extensions are typed `Partial<…>`, absent for non-HTTP contexts (jobs, seeds, system scripts), so rules must handle `undefined`. See `references/multi-tenancy.md` for the full pattern (membership validation, closure memoization, scope UI).
 
 Access functions may be async. Use `request` for request-scoped checks such as headers, tenant scope, CAPTCHA tokens, or signed public form tokens:
 
@@ -144,7 +144,7 @@ import type { AccessContext } from "questpie";
 import { ApiError } from "questpie/errors";
 import { isAdminRequest } from "@questpie/admin/shared";
 
-// AccessContext is the sanctioned shared-helper param — never hand-roll a
+// AccessContext is the sanctioned shared-helper param, never hand-roll a
 // structural ctx type (see references/type-inference.md)
 async function canCreatePublicSubmission({ request, session }: AccessContext) {
 	if (session?.user) return true;
@@ -249,12 +249,12 @@ export default collection("appointments")
 			}
 			if (operation === "update") {
 				// Derive fields from the incoming patch (`original` is NOT
-				// available here — use afterChange to compare against it)
+				// available here, use afterChange to compare against it)
 			}
 		},
 
 		afterChange: async ({ data, operation, original, queue, onAfterCommit }) => {
-			// Side effects run AFTER the tx commits — never publish/email directly
+			// Side effects run AFTER the tx commits, never publish/email directly
 			// inside afterChange (the write may still roll back).
 			if (operation === "create") {
 				onAfterCommit(() =>
@@ -275,7 +275,7 @@ export default collection("appointments")
 		},
 
 		beforeDelete: async ({ data }) => {
-			// `data` is the record being deleted — use data.id to clean up
+			// `data` is the record being deleted, use data.id to clean up
 		},
 
 		afterDelete: async ({ data }) => {
@@ -296,7 +296,7 @@ Each hook accepts a single function **or an array of functions** (executed in or
 
 | Property        | Available in                                                  | Description                                                 |
 | --------------- | ------------------------------------------------------------- | ----------------------------------------------------------- |
-| `data`          | beforeValidate, beforeChange, afterChange, beforeDelete, afterDelete | Record being written (delete hooks: the record being deleted — use `data.id`) |
+| `data`          | beforeValidate, beforeChange, afterChange, beforeDelete, afterDelete | Record being written (delete hooks: the record being deleted, use `data.id`) |
 | `operation`     | beforeChange, afterChange                                     | `"create"` or `"update"`                                    |
 | `original`      | afterChange (update only)                                     | Previous record state                                       |
 | `onAfterCommit` | All hooks                                                     | Queue a side effect (`(cb) => void`) to run after the tx commits |
@@ -309,7 +309,7 @@ Each hook accepts a single function **or an array of functions** (executed in or
 | `services`      | All hooks                                                     | Custom services from `services/`                            |
 | _extensions_    | All hooks                                                     | `appConfig({ context })` result, flat (HTTP requests only)  |
 
-Derived request context also reaches hooks and any nested code via `getContext<App>()` — including CRUD calls a hook triggers (AsyncLocalStorage carries it):
+Derived request context also reaches hooks and any nested code via `getContext<App>()`, including CRUD calls a hook triggers (AsyncLocalStorage carries it):
 
 ```ts
 .hooks({
@@ -416,7 +416,7 @@ To reject an operation, throw an error:
    Collections without `.access()` require authentication for all operations. For public read access, explicitly set `read: true`.
 
 2. **HIGH: Using `accessMode: "system"` in HTTP handlers.**
-   System mode bypasses all access checks. Only use it for background jobs, seeds, and internal server scripts — never in request handlers.
+   System mode bypasses all access checks. Only use it for background jobs, seeds, and internal server scripts, never in request handlers.
 
 3. **MEDIUM: Mutating `data` in `afterChange` hooks.**
    Changes to `data` in `afterChange` are NOT persisted to the database. Only mutations in `beforeValidate` and `beforeChange` are saved.
@@ -433,10 +433,10 @@ Live preview sessions use token-based authentication. When a preview iframe load
 
 ### Key Points
 
-- Preview tokens are scoped to a specific collection and record — they do not grant broad access.
+- Preview tokens are scoped to a specific collection and record, they do not grant broad access.
 - Preview does **not** bypass access rules. The token resolves to a session with the same permissions as the user who initiated the preview.
 - Access rules (`.access()`) still apply to all data fetched during preview, including prefetched relations and block data.
-- Row-level access (AccessWhere) filters are enforced even in preview context — a user cannot preview records they cannot read.
+- Row-level access (AccessWhere) filters are enforced even in preview context, a user cannot preview records they cannot read.
 
 ### Workflow Published Reads
 

@@ -1,7 +1,7 @@
 ---
 name: questpie-quickstart
 description: >
-  End-to-end getting started with QUESTPIE — from scaffolding to production.
+  End-to-end getting started with QUESTPIE, from scaffolding to production.
   Load when starting a new project, onboarding, or following the happy path
   from zero to a running app with collections, admin panel, and migrations.
 ---
@@ -38,19 +38,19 @@ cd my-app
 
 Options:
 
-- `-t, --template <name>` / `--runtime <id>` — runtime template: `tanstack-start` (default), `next`, `hono`, or `elysia`
-- `--module <name>` / `--modules <a,b>` — enable modules; current ids are `admin`, `openapi`, `workflows`
-- `-y, --yes` — non-interactive mode with defaults
-- `--database <name>` — database name (default derives from the project name)
-- `--queue <adapter>` — `pg-boss` (default), `bullmq`, or `none`
-- `--email <adapter>` — `console` (default), `smtp`, `resend`, or `plunk`
-- `--realtime <adapter>` — `none` (default), `pg-notify`, or `redis-streams`
-- `--kv <adapter>` — `memory` (default) or `redis`
-- `--no-install` — skip `bun install`
-- `--no-git` — skip git init
-- `--no-skills` — skip the background `bunx skills add questpie/questpie`
-- `--no-generate` — skip the post-install codegen run
-- `--continue-on-error` — keep scaffold files when install or codegen fails
+- `-t, --template <name>` / `--runtime <id>`, runtime template: `tanstack-start` (default), `next`, `hono`, or `elysia`
+- `--module <name>` / `--modules <a,b>`, enable modules; current ids are `admin`, `openapi`, `workflows`
+- `-y, --yes`, non-interactive mode with defaults
+- `--database <name>`, database name (default derives from the project name)
+- `--queue <adapter>`, `pg-boss` (default), `bullmq`, or `none`
+- `--email <adapter>`, `console` (default), `smtp`, `resend`, or `plunk`
+- `--realtime <adapter>`, `none` (default), `pg-notify`, or `redis-streams`
+- `--kv <adapter>`, `memory` (default) or `redis`
+- `--no-install`, skip `bun install`
+- `--no-git`, skip git init
+- `--no-skills`, skip the background `bunx skills add questpie/questpie`
+- `--no-generate`, skip the post-install codegen run
+- `--continue-on-error`, keep scaffold files when install or codegen fails
 
 After scaffolding, `.env` already exists; the scaffolder renames `env.example` to `.env.example` and copies it to `.env`.
 
@@ -95,7 +95,7 @@ my-app/
 │   │   │   ├── modules.ts                # Module dependencies (adminModule, openApiModule, ...)
 │   │   │   ├── app.ts                    # Hand-written re-export of .generated/index
 │   │   │   ├── config/                   # Typed configuration files
-│   │   │   │   ├── auth.ts              # authConfig({...}) — Better Auth options
+│   │   │   │   ├── auth.ts              # authConfig({...}), Better Auth options
 │   │   │   │   ├── admin.ts             # adminConfig({ sidebar, dashboard, branding, locale })
 │   │   │   │   └── openapi.ts           # openApiConfig({ info, scalar })
 │   │   │   ├── collections/              # Starter posts collection + your collections
@@ -116,7 +116,7 @@ my-app/
 │       └── admin/                       # Admin routes on render-layer runtimes
 ```
 
-`config/app.ts` (`appConfig({ locale, access, hooks, context })`) is optional and not scaffolded — add it when needed. `routes/`, `jobs/`, `services/`, `blocks/`, `emails/`, `seeds/`, and `migrations/` are auto-discovered the moment you create them under `src/questpie/server/`.
+`config/app.ts` (`appConfig({ locale, access, hooks, context })`) is optional and not scaffolded, add it when needed. `routes/`, `jobs/`, `services/`, `blocks/`, `emails/`, `seeds/`, and `migrations/` are auto-discovered the moment you create them under `src/questpie/server/`.
 
 Default modules are runtime-aware: `tanstack-start` and `next` select `admin` + `openapi`; `hono` and `elysia` select `openapi`. `workflows` is optional. `admin` requires a render-layer runtime, so the scaffolder rejects `--module admin` on `hono` and `elysia`.
 
@@ -243,8 +243,8 @@ bun run scaffold:generate
 
 This scans your file convention directories and generates:
 
-- `src/questpie/server/.generated/index.ts` — `app` instance, `AppConfig` type
-- `src/questpie/server/.generated/factories.ts` — generated factories with module-contributed field types
+- `src/questpie/server/.generated/index.ts`, `app` instance, `AppConfig` type
+- `src/questpie/server/.generated/factories.ts`, generated factories with module-contributed field types
 - Module augmentation for `AppContext` (typed `collections`, `queue`, `email` in every handler)
 
 Use `#questpie/factories` in collection, global, and block files (they need codegen-generated types). Routes, jobs, services, emails use `"questpie"` directly. Use `#questpie` for the generated app/runtime exports.
@@ -299,7 +299,7 @@ import { app } from "@/questpie/server/app";
 
 const handler = createFetchHandler(app, { basePath: "/api" });
 
-// createFetchHandler returns Response | null — fall back to 404 when no route matches.
+// createFetchHandler returns Response | null, fall back to 404 when no route matches.
 const handleCmsRequest = async (request: Request) => {
 	const response = await handler(request);
 	return (
@@ -377,7 +377,7 @@ export const client = createClient<AppConfig>({
 Usage with full type inference:
 
 ```ts
-// Typed collection queries — autocomplete on field names and operators
+// Typed collection queries, autocomplete on field names and operators
 const tasks = await client.collections.tasks.find({
 	where: { completed: false },
 	orderBy: { priority: "desc" },
@@ -437,16 +437,16 @@ DATABASE_URL=postgres://user:pass@localhost:5432/myapp
 
 ### MEDIUM: Convention file with no export
 
-Codegen discovers a file by its export — either `export default` or a named `export const`/`function` works. A file with no export at all is skipped. Collection/global keys derive from the **filename** (kebab → camelCase), not the export name:
+Codegen discovers a file by its export, either `export default` or a named `export const`/`function` works. A file with no export at all is skipped. Collection/global keys derive from the **filename** (kebab → camelCase), not the export name:
 
 ```ts
-// WRONG — defined but never exported, so codegen skips it
+// WRONG, defined but never exported, so codegen skips it
 const tasks = collection("tasks").fields(/* ... */);
 
-// CORRECT — default export (filename tasks.ts → key "tasks")
+// CORRECT, default export (filename tasks.ts → key "tasks")
 export default collection("tasks").fields(/* ... */);
 
-// ALSO CORRECT — named export is discovered too
+// ALSO CORRECT, named export is discovered too
 export const tasks = collection("tasks").fields(/* ... */);
 ```
 
@@ -455,7 +455,7 @@ export const tasks = collection("tasks").fields(/* ... */);
 Framework route handlers should only mount the QUESTPIE fetch handler. Business logic belongs in `routes/`, `jobs/`, or collection hooks:
 
 ```ts
-// WRONG — business logic in route file
+// WRONG, business logic in route file
 export const Route = createFileRoute("/api/custom")({
 	server: {
 		handlers: {
@@ -467,7 +467,7 @@ export const Route = createFileRoute("/api/custom")({
 	},
 });
 
-// CORRECT — use a typed route
+// CORRECT, use a typed route
 // src/questpie/server/routes/my-logic.ts
 export default route()
 	.post()
@@ -506,7 +506,7 @@ export default route()
 
 ## Minimal Complete Example
 
-Starting from zero — every file needed for a working app:
+Starting from zero, every file needed for a working app:
 
 ```ts
 // questpie.config.ts (project root)

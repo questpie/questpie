@@ -1,6 +1,6 @@
 # Codegen Plugin API Reference
 
-A faithful mirror of the source types. **Which do you actually need?** Most plugins only use `categories` (directory-pattern discovery), `discover` (single-file or glob patterns), and `registries` (typed factory extensions). `transform` and `generate` are escape hatches for the rare case where declarative discovery is not enough — reach for them last.
+A faithful mirror of the source types. **Which do you actually need?** Most plugins only use `categories` (directory-pattern discovery), `discover` (single-file or glob patterns), and `registries` (typed factory extensions). `transform` and `generate` are escape hatches for the rare case where declarative discovery is not enough, reach for them last.
 
 - [CodegenPlugin](#codegenplugin)
 - [CodegenTargetContribution](#codegentargetcontribution)
@@ -62,7 +62,7 @@ interface CodegenTargetContribution {
 	/** File patterns to discover (string shorthand or full DiscoverPattern). */
 	discover?: Record<string, DiscoverPattern>;
 
-	/** Post-discovery transform — modify context before code generation. */
+	/** Post-discovery transform, modify context before code generation. */
 	transform?: (ctx: CodegenContext) => void;
 
 	/** Registry declarations for generated typed factories. */

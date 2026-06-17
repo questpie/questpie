@@ -3,19 +3,19 @@
 The exhaustive catalog of adapter config shapes for QUESTPIE infrastructure. For deployment ops (auth, access control, PgBouncer, SSE keepalive, Docker, checklist), see `references/production.md`.
 
 - [Database](#database)
-- [Storage](#storage) — local, S3, R2, signed URLs
-- [Queue](#queue) — pg-boss, BullMQ
-- [Realtime](#realtime) — pgNotify, Redis Streams
-- [Search](#search) — Postgres FTS, pgvector semantic
-- [Email](#email) — SMTP, Console, Resend, Plunk, custom
-- [KV Store](#kv-store) — Redis, custom, in-memory
+- [Storage](#storage), local, S3, R2, signed URLs
+- [Queue](#queue), pg-boss, BullMQ
+- [Realtime](#realtime), pgNotify, Redis Streams
+- [Search](#search), Postgres FTS, pgvector semantic
+- [Email](#email), SMTP, Console, Resend, Plunk, custom
+- [KV Store](#kv-store), Redis, custom, in-memory
 - [Logger](#logger)
 - [OpenAPI](#openapi)
 - [Migrations CLI](#migrations-cli)
 - [Complete Production Config Example](#complete-production-config-example)
 - [Environment Variables Summary](#environment-variables-summary)
 
-Every env var is declared once in `env.ts` (beside `questpie.config.ts`) and consumed via `import env from "./env"` — never raw `process.env.X` / `process.env.X!`. See `references/env.md`.
+Every env var is declared once in `env.ts` (beside `questpie.config.ts`) and consumed via `import env from "./env"`, never raw `process.env.X` / `process.env.X!`. See `references/env.md`.
 
 ## Database
 
@@ -173,7 +173,7 @@ export default runtimeConfig({
 });
 ```
 
-Serving stays collection-scoped — the file route verifies the token **and** the collection's `serve` access rule. To mint URLs manually (custom emails, server-rendered pages):
+Serving stays collection-scoped, the file route verifies the token **and** the collection's `serve` access rule. To mint URLs manually (custom emails, server-rendered pages):
 
 ```ts
 import { buildStorageFileUrl, generateSignedUrlToken } from "questpie/storage";
@@ -182,7 +182,7 @@ const token = await generateSignedUrlToken(asset.key, app.config.secret!, 900, "
 const url = buildStorageFileUrl(app.config.app.url, "/api", "assets", asset.key, token);
 ```
 
-(`verifySignedUrlToken` is the verification half the serve route runs — you rarely call it yourself.)
+(`verifySignedUrlToken` is the verification half the serve route runs, you rarely call it yourself.)
 
 ## Queue
 
@@ -207,7 +207,7 @@ export default runtimeConfig({
 
 ### BullMQ
 
-`connection` is BullMQ's `ConnectionOptions` — pass a `url`, the discrete `{ host, port, password }` ioredis fields, or an existing ioredis instance:
+`connection` is BullMQ's `ConnectionOptions`, pass a `url`, the discrete `{ host, port, password }` ioredis fields, or an existing ioredis instance:
 
 ```ts
 import { runtimeConfig } from "questpie/app";
@@ -265,7 +265,7 @@ export default runtimeConfig({
 
 ### Redis Streams (Multi-Instance)
 
-Required for horizontal scaling across multiple server instances. Takes a connected, redis-shaped `client` (the node-redis command surface: `xAdd`, `xReadGroup`, `xGroupCreate`, `xAck`) — not a URL:
+Required for horizontal scaling across multiple server instances. Takes a connected, redis-shaped `client` (the node-redis command surface: `xAdd`, `xReadGroup`, `xGroupCreate`, `xAck`), not a URL:
 
 ```ts
 import { createClient } from "redis";
@@ -306,7 +306,7 @@ export default runtimeConfig({
 
 ### Semantic Search (pgvector + Embeddings)
 
-`createPgVectorSearchAdapter` wraps the Postgres adapter and adds an `embedding` vector column + cosine-distance search. It needs the `pgvector` extension (`CREATE EXTENSION "vector";` — the adapter ships its own migrations) and an embedding provider:
+`createPgVectorSearchAdapter` wraps the Postgres adapter and adds an `embedding` vector column + cosine-distance search. It needs the `pgvector` extension (`CREATE EXTENSION "vector";`, the adapter ships its own migrations) and an embedding provider:
 
 ```ts
 import { runtimeConfig } from "questpie/app";
@@ -377,7 +377,7 @@ export default runtimeConfig({
 
 ### Resend (HTTP API)
 
-For [Resend](https://resend.com) and Resend-compatible providers — no SMTP credentials needed:
+For [Resend](https://resend.com) and Resend-compatible providers, no SMTP credentials needed:
 
 ```ts
 import { runtimeConfig } from "questpie/app";
@@ -408,7 +408,7 @@ import env from "./env";
 export default runtimeConfig({
 	email: {
 		adapter: plunkAdapter({
-			apiKey: env.PLUNK_API_KEY, // secret key — public keys only track events
+			apiKey: env.PLUNK_API_KEY, // secret key, public keys only track events
 			// baseUrl: "https://next-api.useplunk.com",  // override for self-hosted
 		}),
 	},
@@ -613,7 +613,7 @@ import { openApiModule } from "@questpie/openapi/modules/openapi";
 export default [adminModule, openApiModule] as const;
 ```
 
-`openApiModule` carries its codegen plugin — do not also add `openApiPlugin()` to `questpie.config.ts` unless you deliberately omit the module.
+`openApiModule` carries its codegen plugin, do not also add `openApiPlugin()` to `questpie.config.ts` unless you deliberately omit the module.
 
 Configure it in `config/openapi.ts`:
 

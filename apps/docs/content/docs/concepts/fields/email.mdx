@@ -3,16 +3,16 @@ title: Email field
 description: f.email() is a string field backed by a Postgres varchar that validates the value as an email address and adds domain-aware filter operators on top of the string set.
 ---
 
-`f.email()` stores an email address. It produces a `varchar(255)` column, derives a Zod schema that enforces a valid email format and the column length, and exposes the full string operator set **plus** email-specific `domain` / `domainIn` filters on the typed `where` clause. Reach for it instead of `f.text()` whenever a field must hold a valid email — you get the format check and the domain filters for free.
+`f.email()` stores an email address. It produces a `varchar(255)` column, derives a Zod schema that enforces a valid email format and the column length, and exposes the full string operator set **plus** email-specific `domain` / `domainIn` filters on the typed `where` clause. Reach for it instead of `f.text()` whenever a field must hold a valid email, you get the format check and the domain filters for free.
 
-> **Prerequisites:** read [Fields](/docs/concepts/fields) first — this page covers only the `email` type. The `f` proxy, the chain-modifier model, and shared modifiers like `.required()` / `.localized()` / `.default()` are taught there.
+> **Prerequisites:** read [Fields](/docs/concepts/fields) first, this page covers only the `email` type. The `f` proxy, the chain-modifier model, and shared modifiers like `.required()` / `.localized()` / `.default()` are taught there.
 
 ## What it does
 
-- **Stores an email string** — a `varchar(255)` column by default; pass a number to resize the column.
-- **Validates the format** — the derived Zod schema is `z.string().email().max(maxLength)`, so invalid addresses are rejected on create and update without writing a validator.
-- **Filters by domain** — on top of the string operators, `email` adds `domain` and `domainIn` to match the part after `@` (case-insensitive).
-- **Filters with string operators** — `eq`, `ne`, `in`, `contains`, `ilike`, `startsWith`, `isNull`, and the rest, all typed against `string`.
+- **Stores an email string**, a `varchar(255)` column by default; pass a number to resize the column.
+- **Validates the format**, the derived Zod schema is `z.string().email().max(maxLength)`, so invalid addresses are rejected on create and update without writing a validator.
+- **Filters by domain**, on top of the string operators, `email` adds `domain` and `domainIn` to match the part after `@` (case-insensitive).
+- **Filters with string operators**, `eq`, `ne`, `in`, `contains`, `ilike`, `startsWith`, `isNull`, and the rest, all typed against `string`.
 - **Renders a text input** in the admin form, typed as an email field.
 
 ## Quick start
@@ -28,7 +28,7 @@ export const users = collection("users").fields(({ f }) => ({
 }));
 ```
 
-That gives `users` an `email` column typed `string` on read, required on insert, validated as a well-formed address at `≤ 255` chars, and filterable by domain — no schema or migration written by hand.
+That gives `users` an `email` column typed `string` on read, required on insert, validated as a well-formed address at `≤ 255` chars, and filterable by domain, no schema or migration written by hand.
 
 ## Constructor argument
 
@@ -39,7 +39,7 @@ That gives `users` an `email` column typed `string` on read, required on insert,
 | `f.email()` | `varchar(255)` | Default. `maxLength` defaults to **255**. |
 | `f.email(n)` | `varchar(n)` | Sized varchar; `n` is also applied as a Zod `.max(n)`. |
 
-The field data is always `string`. The derived Zod schema is `z.string().email().max(maxLength)` — the `.email()` refinement is always present, and the `.max()` uses the `255` default or your `n`.
+The field data is always `string`. The derived Zod schema is `z.string().email().max(maxLength)`, the `.email()` refinement is always present, and the `.max()` uses the `255` default or your `n`.
 
 <Callout type="info" title="Need a longer column? 320 is the practical email max">
 The default `varchar(255)` holds nearly every real address, but the RFC upper bound is 320 characters. If you must accept the longest legal addresses, pass `f.email(320)`.
@@ -61,10 +61,10 @@ collection("contacts").fields(({ f }) => ({
 ```
 
 <Callout type="warn" title="`.min()` / `.max()` here are STRING LENGTH, not value bounds">
-On an email field, `.min(n)` / `.max(n)` constrain the **number of characters** (they map to `minLength` / `maxLength`, the same as [`f.text()`](/docs/concepts/fields/text)). On `f.number()` the same method names constrain the numeric **value**. Same names, different meaning — sized by the field's type.
+On an email field, `.min(n)` / `.max(n)` constrain the **number of characters** (they map to `minLength` / `maxLength`, the same as [`f.text()`](/docs/concepts/fields/text)). On `f.number()` the same method names constrain the numeric **value**. Same names, different meaning, sized by the field's type.
 </Callout>
 
-## Filtering — operators
+## Filtering, operators
 
 `email` uses the **email operator set** (`emailOps`), which extends the string set with two domain matchers. So every email field is filterable with all the string operators *and* `domain` / `domainIn`. The operand is typed `string` (or `string[]` for the list operators).
 
@@ -97,13 +97,13 @@ const staff = await app.collections.users.find({
 `domain` compiles to `ILIKE '%@value'`, so `{ domain: "acme.com" }` matches `a@acme.com` but **not** `a@mail.acme.com` (the stored domain is `mail.acme.com`, not `acme.com`). For broader matching use a string operator, e.g. `{ ilike: "%@%acme.com" }`.
 </Callout>
 
-For the full query language — combining field filters with `AND` / `OR` / `NOT`, pagination, and `orderBy` — see [Fields → filtering](/docs/concepts/fields). Relation filters and hydration are covered in [Relations](/docs/concepts/relations).
+For the full query language, combining field filters with `AND` / `OR` / `NOT`, pagination, and `orderBy`, see [Fields → filtering](/docs/concepts/fields). Relation filters and hydration are covered in [Relations](/docs/concepts/relations).
 
 ## When to use it
 
-- **`f.email()`** — any field that must hold a valid email address: a user's login email, a contact address, a notification recipient. You get format validation and domain filters that a plain string field lacks.
+- **`f.email()`**, any field that must hold a valid email address: a user's login email, a contact address, a notification recipient. You get format validation and domain filters that a plain string field lacks.
 - For a free-form short string with no format constraint, use [`f.text()`](/docs/concepts/fields/text) instead.
-- For a website or link, use [`f.url()`](/docs/concepts/fields/url) — the same idea (a validated string), but with `z.string().url()` and host/protocol filter operators.
+- For a website or link, use [`f.url()`](/docs/concepts/fields/url), the same idea (a validated string), but with `z.string().url()` and host/protocol filter operators.
 
 <Callout type="warn" title="Format-valid is not the same as deliverable">
 `z.string().email()` checks syntax only. It does not verify the mailbox exists or the domain accepts mail. Treat a passing value as well-formed, not reachable.
@@ -119,7 +119,7 @@ ccList: f.email().array().maxItems(20), // string[] of validated emails, stored 
 
 ## TypeScript
 
-An email field contributes a `string` to the generated row, insert, and `where` types — no annotation needed. After `questpie generate`, pull the shapes off the collection or the app types:
+An email field contributes a `string` to the generated row, insert, and `where` types, no annotation needed. After `questpie generate`, pull the shapes off the collection or the app types:
 
 ```ts
 type User = typeof users.$infer.select;
@@ -130,6 +130,6 @@ type User = typeof users.$infer.select;
 
 ## Related
 
-- [Fields](/docs/concepts/fields) — the `f` proxy, the chain-modifier model, and the shared modifiers (`.required()`, `.localized()`, `.default()`, `.array()`, …).
-- [Text field](/docs/concepts/fields/text) — the unvalidated single-line string sibling.
-- [Validation](/docs/concepts/validation) — the auto-derived Zod schema and the `.zod()` escape hatch for custom rules.
+- [Fields](/docs/concepts/fields), the `f` proxy, the chain-modifier model, and the shared modifiers (`.required()`, `.localized()`, `.default()`, `.array()`, …).
+- [Text field](/docs/concepts/fields/text), the unvalidated single-line string sibling.
+- [Validation](/docs/concepts/validation), the auto-derived Zod schema and the `.zod()` escape hatch for custom rules.

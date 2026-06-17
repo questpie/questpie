@@ -11,11 +11,11 @@ This skill builds on questpie-core. It covers four business-logic primitives: ro
 
 ## Contents
 
-- [Routes (JSON)](#routes-json) — typed endpoints, input validation, handler context, calling from the client
-- [Jobs](#jobs) — background tasks, publishing, recurring cron, queue adapter config
-- [Raw Routes](#raw-routes) — raw HTTP for webhooks, streams, file downloads
-- [Services](#services) — reusable logic injected into `AppContext`
-- [Emails](#emails) — templates with Zod input and HTML output
+- [Routes (JSON)](#routes-json), typed endpoints, input validation, handler context, calling from the client
+- [Jobs](#jobs), background tasks, publishing, recurring cron, queue adapter config
+- [Raw Routes](#raw-routes), raw HTTP for webhooks, streams, file downloads
+- [Services](#services), reusable logic injected into `AppContext`
+- [Emails](#emails), templates with Zod input and HTML output
 - [Common Mistakes](#common-mistakes)
 
 ## Routes (JSON)
@@ -41,7 +41,7 @@ export default route()
 
 Place files in `routes/`. The filename becomes the route key: `get-active-barbers.ts` maps to `getActiveBarbers`. Files **must** use `export default`.
 
-> **SECURITY — routes are PUBLIC by default.** A route with no `.access()` rule is open to anyone (`evaluateRouteAccess` returns `true` when no rule is set). This is the **opposite** of collections/globals, which default to require-session. Any route that reads private data or performs writes **must** declare `.access()` — e.g. `.access(({ session }) => !!session)`, or `.access(true)` to explicitly mark it public (webhooks verify the signature themselves). The same applies to raw routes.
+> **SECURITY, routes are PUBLIC by default.** A route with no `.access()` rule is open to anyone (`evaluateRouteAccess` returns `true` when no rule is set). This is the **opposite** of collections/globals, which default to require-session. Any route that reads private data or performs writes **must** declare `.access()`, e.g. `.access(({ session }) => !!session)`, or `.access(true)` to explicitly mark it public (webhooks verify the signature themselves). The same applies to raw routes.
 
 ### Input Validation
 
@@ -54,7 +54,7 @@ import z from "zod";
 
 export default route()
 	.post()
-	.access(({ session }) => !!session) // writes need auth — routes are public by default
+	.access(({ session }) => !!session) // writes need auth, routes are public by default
 	.schema(
 		z.object({
 			barberId: z.string(),
@@ -100,7 +100,7 @@ Every handler (route, raw route, job, service, email) receives the same base `Ap
 | `services`    | Custom services from `services/`                           |
 | _extensions_  | `appConfig({ context })` result, flat (e.g. `workspaceId`) |
 
-Each primitive then adds its own keys to this base — see the delta tables below. JSON route handlers add:
+Each primitive then adds its own keys to this base, see the delta tables below. JSON route handlers add:
 
 | Property  | Description                                       |
 | --------- | ------------------------------------------------- |
@@ -109,7 +109,7 @@ Each primitive then adds its own keys to this base — see the delta tables belo
 | `locale`  | Current locale                                    |
 | `request` | The raw `Request`, when executed over HTTP        |
 
-Derived request context (from `appConfig({ context })`) reaches route access rules and handlers alike — destructure the keys directly. Inside any nested code, `getContext<App>()` exposes the same keys (see `references/multi-tenancy.md`).
+Derived request context (from `appConfig({ context })`) reaches route access rules and handlers alike, destructure the keys directly. Inside any nested code, `getContext<App>()` exposes the same keys (see `references/multi-tenancy.md`).
 
 ### Calling Routes
 
@@ -229,7 +229,7 @@ export default job({
 
 Programmatic scheduling from any handler: `queue.cleanupExpired.schedule({}, "0 3 * * *")` and `queue.cleanupExpired.unschedule()`.
 
-Use job-level cron for simple recurring tasks (cleanup, digests, syncs). Reach for **workflow-level cron** (`references/workflows.md`) only when the recurring process needs steps, durable waits, or replay — a workflow is the heavier primitive.
+Use job-level cron for simple recurring tasks (cleanup, digests, syncs). Reach for **workflow-level cron** (`references/workflows.md`) only when the recurring process needs steps, durable waits, or replay, a workflow is the heavier primitive.
 
 ### Job Handler Context
 
@@ -301,7 +301,7 @@ route().post().raw().handler(...)          // POST only
 route().get().post().raw().handler(...)    // GET + POST
 ```
 
-Supported: `.get()`, `.post()`, `.put()`, `.delete()`, `.patch()`. The built-in `/auth/*` catch-all is itself a raw route (`route().get().post().raw()` delegating to Better Auth) — raw handlers run inside `runWithContext`, so the full request context is live in any code they call.
+Supported: `.get()`, `.post()`, `.put()`, `.delete()`, `.patch()`. The built-in `/auth/*` catch-all is itself a raw route (`route().get().post().raw()` delegating to Better Auth), raw handlers run inside `runWithContext`, so the full request context is live in any code they call.
 
 ### Raw Route Handler Context
 
@@ -329,7 +329,7 @@ Raw route handlers must return a `Response` object.
 
 ### Webhook Example (Signature Verification)
 
-Webhooks need the raw body for signature verification — exactly what `.raw()` is for:
+Webhooks need the raw body for signature verification, exactly what `.raw()` is for:
 
 ```ts
 // routes/webhooks/stripe.ts
@@ -338,7 +338,7 @@ import { route } from "questpie/services";
 export default route()
 	.post()
 	.raw()
-	.access(true) // signature IS the auth — verify it yourself below
+	.access(true) // signature IS the auth, verify it yourself below
 	.handler(async ({ request, collections, queue }) => {
 		const body = await request.text();
 		const signature = request.headers.get("stripe-signature");
@@ -357,7 +357,7 @@ export default route()
 
 ### Streamed Response Example
 
-Raw routes can return any `Response`, including streams — CSV exports, server-sent progress, large file proxies:
+Raw routes can return any `Response`, including streams, CSV exports, server-sent progress, large file proxies:
 
 ```ts
 // routes/export.ts
@@ -483,7 +483,7 @@ export default service({
 
 ### Dependencies
 
-There is no `deps` option. `create(ctx)` receives the full `AppContext` — destructure whatever the service needs:
+There is no `deps` option. `create(ctx)` receives the full `AppContext`, destructure whatever the service needs:
 
 ```ts
 // services/analytics.ts
@@ -616,7 +616,7 @@ export default email({
 ## Common Mistakes
 
 1. **HIGH: Forgetting `.access()` on a route.**
-   Routes are PUBLIC by default — a route with no `.access()` rule serves anyone. This is the opposite of collections/globals (require-session by default). Every route that reads private data or performs writes must declare `.access()`. Use `.access(true)` only when the route is intentionally public.
+   Routes are PUBLIC by default, a route with no `.access()` rule serves anyone. This is the opposite of collections/globals (require-session by default). Every route that reads private data or performs writes must declare `.access()`. Use `.access(true)` only when the route is intentionally public.
 
 2. **HIGH: Not using `export default` on route/job/service/email files.**
    Codegen discovery requires `export default`. Named exports are not discovered.

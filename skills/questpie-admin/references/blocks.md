@@ -140,7 +140,7 @@ Blocks often reference related data (images, linked records). Use `.prefetch()` 
 
 ### Functional Prefetch
 
-For complex queries, use a function. The `ctx` parameter provides fully typed `collections` and `globals` via `AppContext` augmentation — no imports needed:
+For complex queries, use a function. The `ctx` parameter provides fully typed `collections` and `globals` via `AppContext` augmentation, no imports needed:
 
 ```ts title="blocks/featured.ts"
 import { block } from "#questpie/factories";
@@ -254,30 +254,30 @@ function PageRenderer({ page }) {
 
 ## Common Mistakes
 
-1. **HIGH: Not using `ctx.collections.*` in functional prefetch** — use the context-injected collections directly. Do NOT import `app` from `#questpie` inside block files (causes circular dependencies).
+1. **HIGH: Not using `ctx.collections.*` in functional prefetch**, use the context-injected collections directly. Do NOT import `app` from `#questpie` inside block files (causes circular dependencies).
 
    ```ts
-   // WRONG — importing app creates circular dependency
+   // WRONG, importing app creates circular dependency
    import { app } from "#questpie";
    .prefetch(async ({ values, ctx }) => {
      const posts = await app.collections.posts.find({});
    })
 
-   // CORRECT — use ctx.collections directly
+   // CORRECT, use ctx.collections directly
    .prefetch(async ({ values, ctx }) => {
      const posts = await ctx.collections.posts.find({});
    })
    ```
 
-2. **HIGH: Importing from `.generated/` inside block files** — block files are imported BY `.generated/index.ts`, so importing from it back creates circular dependencies. Use the `ctx` parameter instead.
+2. **HIGH: Importing from `.generated/` inside block files**, block files are imported BY `.generated/index.ts`, so importing from it back creates circular dependencies. Use the `ctx` parameter instead.
 
-3. **MEDIUM: Block renderer not exported as default or named export** — codegen discovers named exports from block renderer files. Ensure the component is exported.
+3. **MEDIUM: Block renderer not exported as default or named export**, codegen discovers named exports from block renderer files. Ensure the component is exported.
 
-4. **MEDIUM: Using `{ with: { field: true } }` prefetch for complex queries** — declarative prefetch only loads related records by ID. For filtered/sorted/limited queries, use functional prefetch instead.
+4. **MEDIUM: Using `{ with: { field: true } }` prefetch for complex queries**, declarative prefetch only loads related records by ID. For filtered/sorted/limited queries, use functional prefetch instead.
 
-5. **MEDIUM: Forgetting `.prefetch()` for upload fields** — without prefetch, `values.backgroundImage` is just an ID string. Add `{ with: { backgroundImage: true } }` to get the full asset record with `url`.
+5. **MEDIUM: Forgetting `.prefetch()` for upload fields**, without prefetch, `values.backgroundImage` is just an ID string. Add `{ with: { backgroundImage: true } }` to get the full asset record with `url`.
 
-6. **LOW: Missing `category` in `.admin()`** — blocks without a category won't be grouped in the block picker, making it harder to find them.
+6. **LOW: Missing `category` in `.admin()`**, blocks without a category won't be grouped in the block picker, making it harder to find them.
 
 ## Blocks in Live Preview
 

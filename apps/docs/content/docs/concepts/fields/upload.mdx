@@ -1,19 +1,19 @@
 ---
 title: Upload field
-description: f.upload() is a typed relation from a row to a separate upload collection (default "assets") — store a single file reference, a many-to-many gallery, or an inline list of asset IDs, and the admin renders a file picker instead of a relation dropdown.
+description: f.upload() is a typed relation from a row to a separate upload collection (default "assets"), store a single file reference, a many-to-many gallery, or an inline list of asset IDs, and the admin renders a file picker instead of a relation dropdown.
 ---
 
-`f.upload()` links a row to a file stored in a *separate* upload collection — by default the built-in `"assets"` collection. In its single form it's a typed `varchar(36)` foreign key holding one asset ID; the admin renders it as a file picker (upload + browse the media library), not a relation dropdown. Switch it to many-to-many or an inline array when a row needs several files. Reach for it whenever a row references uploaded bytes — a cover image, an attachment, a gallery.
+`f.upload()` links a row to a file stored in a *separate* upload collection, by default the built-in `"assets"` collection. In its single form it's a typed `varchar(36)` foreign key holding one asset ID; the admin renders it as a file picker (upload + browse the media library), not a relation dropdown. Switch it to many-to-many or an inline array when a row needs several files. Reach for it whenever a row references uploaded bytes, a cover image, an attachment, a gallery.
 
-> **Prerequisites:** read [Fields](/docs/concepts/fields) first — this page covers only the `upload` type. The `f` proxy, the chain-modifier model, and shared modifiers like `.required()` / `.localized()` / `.label()` are taught there.
+> **Prerequisites:** read [Fields](/docs/concepts/fields) first, this page covers only the `upload` type. The `f` proxy, the chain-modifier model, and shared modifiers like `.required()` / `.localized()` / `.label()` are taught there.
 
 ## What it does
 
-- **References an asset** — stores a single asset ID as a `varchar(36)` FK to the target upload collection (default `"assets"`); the field data is a `string`.
-- **Targets any upload collection** — `to` points at the collection that holds the bytes; defaults to the framework's `"assets"` collection.
-- **Renders a file picker** — the field's metadata is flagged `isUpload`, so the admin shows an upload/browse-library control instead of a generic relation picker.
-- **Scales to many files** — set `through` for a many-to-many gallery (via a junction collection), or chain `.multiple()` to store an inline array of asset IDs.
-- **Filters like a relation** — a single upload uses the belongsTo operator set (`eq`, `in`, `is`, …); the many forms use quantifier / array operators.
+- **References an asset**, stores a single asset ID as a `varchar(36)` FK to the target upload collection (default `"assets"`); the field data is a `string`.
+- **Targets any upload collection**, `to` points at the collection that holds the bytes; defaults to the framework's `"assets"` collection.
+- **Renders a file picker**, the field's metadata is flagged `isUpload`, so the admin shows an upload/browse-library control instead of a generic relation picker.
+- **Scales to many files**, set `through` for a many-to-many gallery (via a junction collection), or chain `.multiple()` to store an inline array of asset IDs.
+- **Filters like a relation**, a single upload uses the belongsTo operator set (`eq`, `in`, `is`, …); the many forms use quantifier / array operators.
 
 ## Quick start
 
@@ -29,9 +29,9 @@ export const posts = collection("posts").fields(({ f }) => ({
 }));
 ```
 
-That gives `posts` a `coverImage` column typed `string` on read (the asset ID), nullable until you add `.required()`, rendered as a file picker in the admin form, and filterable with the belongsTo operators — no junction table or relation wiring written by hand.
+That gives `posts` a `coverImage` column typed `string` on read (the asset ID), nullable until you add `.required()`, rendered as a file picker in the admin form, and filterable with the belongsTo operators, no junction table or relation wiring written by hand.
 
-<Callout type="info" title="`f.upload()` references a collection — it isn't the byte store">
+<Callout type="info" title="`f.upload()` references a collection, it isn't the byte store">
 The `f.upload()` *field* is a relation **to** an upload collection; the bytes live in that target collection (default `"assets"`). Turning a collection *itself* into the byte store (storage adapter, URL generation, signed URLs, direct-to-storage uploads) is a different concern with the same name. See [Storage adapters](/docs/adapters/storage) for where bytes are persisted and served.
 </Callout>
 
@@ -42,19 +42,19 @@ The `f.upload()` *field* is a relation **to** an upload collection; the bytes li
 | Option | Type | Default | Effect |
 |---|---|---|---|
 | `to` | `string` | `"assets"` | Target upload collection the FK points at. Narrows the field's typed target. |
-| `mimeTypes` | `string[]` | — | Accepted by the config but **currently ignored** — no effect anywhere (see gotcha). Use `.admin({ accept })` to constrain the picker. |
-| `maxSize` | `number` | — | Accepted by the config but **currently ignored** — no effect anywhere (see gotcha). Use `.admin({ maxSize })` to constrain the picker. |
-| `through` | `string` | — | Junction collection name. Setting it makes the field **many-to-many** (see below). |
-| `sourceField` | `string` | — | Name of the source FK column on the junction (M2M only). |
-| `targetField` | `string` | — | Name of the target FK column on the junction (M2M only). |
+| `mimeTypes` | `string[]` | none | Accepted by the config but **currently ignored**, no effect anywhere (see gotcha). Use `.admin({ accept })` to constrain the picker. |
+| `maxSize` | `number` | none | Accepted by the config but **currently ignored**, no effect anywhere (see gotcha). Use `.admin({ maxSize })` to constrain the picker. |
+| `through` | `string` | none | Junction collection name. Setting it makes the field **many-to-many** (see below). |
+| `sourceField` | `string` | none | Name of the source FK column on the junction (M2M only). |
+| `targetField` | `string` | none | Name of the target FK column on the junction (M2M only). |
 
 The single-upload field is always `varchar(36)`, data `string`, schema `z.string().uuid()`.
 
 <Callout type="warn" title="`mimeTypes` / `maxSize` are accepted but currently ignored">
-`mimeTypes` and `maxSize` are destructured from the config and then never used — they reach **no** part of the field. They are not applied to the column, not to the derived Zod schema, and not to the field's metadata (the `metadataFactory` emits no `mimeTypes`/`maxSize`, and `RelationFieldMetadata` has no such keys), so they have no admin-picker effect either. Today they are dead config. To actually constrain the admin file picker, set them on the **field's admin config** instead — `f.upload().admin({ accept: "image/*", maxSize: 5_000_000 })` — which flows to the picker's `accept` / `maxSize` props. Enforce real upload limits on the target upload collection / storage adapter.
+`mimeTypes` and `maxSize` are destructured from the config and then never used, they reach **no** part of the field. They are not applied to the column, not to the derived Zod schema, and not to the field's metadata (the `metadataFactory` emits no `mimeTypes`/`maxSize`, and `RelationFieldMetadata` has no such keys), so they have no admin-picker effect either. Today they are dead config. To actually constrain the admin file picker, set them on the **field's admin config** instead, `f.upload().admin({ accept: "image/*", maxSize: 5_000_000 })`, which flows to the picker's `accept` / `maxSize` props. Enforce real upload limits on the target upload collection / storage adapter.
 </Callout>
 
-## Variants — single, many-to-many, inline array
+## Variants, single, many-to-many, inline array
 
 `f.upload()` has three storage shapes. Pick by how many files the row holds and how you want them stored.
 
@@ -66,23 +66,23 @@ One asset. Owns a `varchar(36)` FK column on this table; data is one asset ID `s
 coverImage: f.upload().required(),   // exactly one asset, NOT NULL
 ```
 
-### Many-to-many — `through`
+### Many-to-many, `through`
 
-Several assets, joined through a junction collection. Setting `through` makes the field **virtual** (no column on this table; the links live in the junction), with a runtime schema of `z.array(z.string().uuid())` — so the value you write/read back is `string[]`. Uses the **toMany** operator set.
+Several assets, joined through a junction collection. Setting `through` makes the field **virtual** (no column on this table; the links live in the junction), with a runtime schema of `z.array(z.string().uuid())`, so the value you write/read back is `string[]`. Uses the **toMany** operator set.
 
 ```ts
 gallery: f.upload({ through: "post_assets" }), // M2M gallery via a junction collection
 ```
 
-### Inline array — `.multiple()`
+### Inline array, `.multiple()`
 
-Several assets stored *inline* as a JSONB array of IDs on this row (no junction). `.multiple()` switches the field to a virtual JSONB column with a runtime schema of `z.array(z.string().uuid())` — the value you write/read back is `string[]`. Uses the **multiple** operator set.
+Several assets stored *inline* as a JSONB array of IDs on this row (no junction). `.multiple()` switches the field to a virtual JSONB column with a runtime schema of `z.array(z.string().uuid())`, the value you write/read back is `string[]`. Uses the **multiple** operator set.
 
 ```ts
 images: f.upload().multiple(),   // string[] of asset IDs, stored inline as jsonb
 ```
 
-<Callout type="info" title="M2M vs `.multiple()` — junction table or inline array">
+<Callout type="info" title="M2M vs `.multiple()`, junction table or inline array">
 Both hold many assets. **`through`** stores the links in a separate junction collection (queryable, supports the `some` / `none` / `every` quantifiers). **`.multiple()`** stores the IDs inline as a JSONB array on the row (no extra table, queried with array operators like `contains`). Use `through` when the relationship itself needs rows (ordering, pivot data); use `.multiple()` for a simple ordered list of files.
 </Callout>
 
@@ -98,11 +98,11 @@ This method is specific to `upload` (on top of the [shared modifiers](/docs/conc
 attachments: f.upload({ to: "documents" }).multiple(), // inline list of document IDs
 ```
 
-## Filtering — operators
+## Filtering, operators
 
 Which operators a `where: { <field>: { … } }` accepts depends on the variant. The operand is an asset ID `string` (or `string[]` / a related `where` for the many forms).
 
-**Single upload** — the **belongsTo** operator set (`belongsToOps`).
+**Single upload**, the **belongsTo** operator set (`belongsToOps`).
 
 | Operator | Operand | Matches |
 |---|---|---|
@@ -123,7 +123,7 @@ const missing = await app.collections.posts.find({
 });
 ```
 
-**Many-to-many (`through`)** — the **toMany** operator set (`toManyOps`): the relation quantifiers.
+**Many-to-many (`through`)**, the **toMany** operator set (`toManyOps`): the relation quantifiers.
 
 | Operator | Operand | Matches |
 |---|---|---|
@@ -132,7 +132,7 @@ const missing = await app.collections.posts.find({
 | `every` | related `where` | Every linked asset matches. |
 | `count` | `number` | Number of linked assets equals the value. |
 
-**Inline array (`.multiple()`)** — the **multiple** operator set (`multipleOps`), querying the JSONB array.
+**Inline array (`.multiple()`)**, the **multiple** operator set (`multipleOps`), querying the JSONB array.
 
 | Operator | Operand | Matches |
 |---|---|---|
@@ -150,21 +150,21 @@ const { docs } = await app.collections.posts.find({
 });
 ```
 
-For the full query language — combining field filters with `AND` / `OR` / `NOT`, pagination, and `orderBy` — see [Fields → filtering](/docs/concepts/fields). Relation filters (`some` / `none` / `every`, `is` / `isNot`) and hydrating the linked asset with `with:` are covered in [Relations](/docs/concepts/relations).
+For the full query language, combining field filters with `AND` / `OR` / `NOT`, pagination, and `orderBy`, see [Fields → filtering](/docs/concepts/fields). Relation filters (`some` / `none` / `every`, `is` / `isNot`) and hydrating the linked asset with `with:` are covered in [Relations](/docs/concepts/relations).
 
 ## When to use it
 
-- **`f.upload()`** — any field that references an uploaded file: a cover image, an avatar, a downloadable attachment. You get a typed asset-ID FK and a file picker in the admin, instead of a free-form string.
-- **`f.upload({ through })` / `f.upload().multiple()`** — when a row holds *several* files: a gallery, a set of attachments. Choose `through` for a junction-backed relation, `.multiple()` for a simple inline list.
-- For a relation to a *non-upload* collection (an author, a category), use [`f.relation()`](/docs/concepts/relations) instead — same FK mechanics, but the admin renders a record picker, not an upload control.
+- **`f.upload()`**, any field that references an uploaded file: a cover image, an avatar, a downloadable attachment. You get a typed asset-ID FK and a file picker in the admin, instead of a free-form string.
+- **`f.upload({ through })` / `f.upload().multiple()`**, when a row holds *several* files: a gallery, a set of attachments. Choose `through` for a junction-backed relation, `.multiple()` for a simple inline list.
+- For a relation to a *non-upload* collection (an author, a category), use [`f.relation()`](/docs/concepts/relations) instead, same FK mechanics, but the admin renders a record picker, not an upload control.
 
 <Callout type="info" title="Hydrate the asset with `with:`">
-A single upload stores only the asset **ID**. To read the asset record itself (its `url`, filename, metadata) alongside the row, hydrate the relation with `with: { coverImage: true }` — exactly like any belongsTo relation (see [Relations → hydration with `with`](/docs/concepts/relations)). The resolved `url` and serving the bytes are covered in [Storage adapters](/docs/adapters/storage).
+A single upload stores only the asset **ID**. To read the asset record itself (its `url`, filename, metadata) alongside the row, hydrate the relation with `with: { coverImage: true }`, exactly like any belongsTo relation (see [Relations → hydration with `with`](/docs/concepts/relations)). The resolved `url` and serving the bytes are covered in [Storage adapters](/docs/adapters/storage).
 </Callout>
 
 ## TypeScript
 
-An upload field contributes a `string` (the asset ID) to the generated row, insert, and `where` types. No annotation needed — after `questpie generate`, pull the shapes off the collection or the app types:
+An upload field contributes a `string` (the asset ID) to the generated row, insert, and `where` types. No annotation needed, after `questpie generate`, pull the shapes off the collection or the app types:
 
 ```ts
 type Post = typeof posts.$infer.select;
@@ -173,12 +173,12 @@ type Post = typeof posts.$infer.select;
 
 `.required()` makes the FK non-null and required on insert; without it the column is nullable and the insert field optional. See [Fields → inferred types](/docs/concepts/fields) for how modifiers flow into the generated types.
 
-<Callout type="warn" title="The many forms keep `string` at the type level — only the runtime value is `string[]`">
-`through` and `.multiple()` change the **runtime** schema to `z.array(z.string().uuid())`, but they do **not** transition the field's static type-state: `UploadFieldState` always pins `data: string`, the M2M branch still returns `FieldWithMethods<UploadFieldState<TTo>, …>`, and `.multiple()` is typed `(): any`. So a many-upload field's generated row/insert/`where` types stay `string`, not `string[]` — unlike [`f.relation().manyToMany()` / `.multiple()`](/docs/concepts/relations), which *do* transition the type-state to a to-many shape with `data: string[]`.
+<Callout type="warn" title="The many forms keep `string` at the type level, only the runtime value is `string[]`">
+`through` and `.multiple()` change the **runtime** schema to `z.array(z.string().uuid())`, but they do **not** transition the field's static type-state: `UploadFieldState` always pins `data: string`, the M2M branch still returns `FieldWithMethods<UploadFieldState<TTo>, …>`, and `.multiple()` is typed `(): any`. So a many-upload field's generated row/insert/`where` types stay `string`, not `string[]`, unlike [`f.relation().manyToMany()` / `.multiple()`](/docs/concepts/relations), which *do* transition the type-state to a to-many shape with `data: string[]`.
 </Callout>
 
 ## Related
 
-- [Fields](/docs/concepts/fields) — the `f` proxy, the chain-modifier model, and the shared modifiers (`.required()`, `.localized()`, `.label()`, …).
-- [Storage adapters](/docs/adapters/storage) — where the bytes are persisted (local vs files-sdk), the resolved `url`, signed URLs, and visibility for the target upload collection.
-- [Relations](/docs/concepts/relations) — belongsTo / hasMany / manyToMany hydration and relation filters that the upload variants share.
+- [Fields](/docs/concepts/fields), the `f` proxy, the chain-modifier model, and the shared modifiers (`.required()`, `.localized()`, `.label()`, …).
+- [Storage adapters](/docs/adapters/storage), where the bytes are persisted (local vs files-sdk), the resolved `url`, signed URLs, and visibility for the target upload collection.
+- [Relations](/docs/concepts/relations), belongsTo / hasMany / manyToMany hydration and relation filters that the upload variants share.

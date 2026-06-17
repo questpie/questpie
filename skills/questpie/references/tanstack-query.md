@@ -12,18 +12,18 @@ description:
 ## Contents
 
 - [Installation](#installation)
-- [Setup](#setup) — client, query options proxy, `QueryClientProvider`
-- [Collection Queries](#collection-queries) — find, find one, count, realtime
-- [Collection Mutations](#collection-mutations) — create, update, delete, bulk, versioning
-- [Global Queries](#global-queries) — get + update (note: `update` takes `{ data }`)
-- [Routes](#routes) — nested namespaces, query keys
-- [Custom Queries](#custom-queries) — escape hatch for non-standard calls
-- [Key Builder](#key-builder) — prefixed query keys
-- [Query Operators (Where Clauses)](#query-operators-where-clauses) — operators by field type, orderBy, pagination, select
-- [Type Inference](#type-inference) — `AppConfig` flow
+- [Setup](#setup), client, query options proxy, `QueryClientProvider`
+- [Collection Queries](#collection-queries), find, find one, count, realtime
+- [Collection Mutations](#collection-mutations), create, update, delete, bulk, versioning
+- [Global Queries](#global-queries), get + update (note: `update` takes `{ data }`)
+- [Routes](#routes), nested namespaces, query keys
+- [Custom Queries](#custom-queries), escape hatch for non-standard calls
+- [Key Builder](#key-builder), prefixed query keys
+- [Query Operators (Where Clauses)](#query-operators-where-clauses), operators by field type, orderBy, pagination, select
+- [Type Inference](#type-inference), `AppConfig` flow
 - [Direct Client Usage (without TanStack Query)](#direct-client-usage-without-tanstack-query)
-- [Realtime](#realtime) — `{ realtime: true }`, adapters, topic builders
-- [Framework Adapters](#framework-adapters) — TanStack Start, Next.js, Hono, Elysia
+- [Realtime](#realtime), `{ realtime: true }`, adapters, topic builders
+- [Framework Adapters](#framework-adapters), TanStack Start, Next.js, Hono, Elysia
 - [Common Mistakes](#common-mistakes)
 
 ## Installation
@@ -249,7 +249,7 @@ function SiteSettings() {
 }
 ```
 
-The globals `update` mutation takes `{ data: {...} }` — its `mutationFn` unwraps `variables.data`. This differs from the direct client (`client.globals.siteSettings.update({ shopName: "New Name" })`), which takes the data object directly.
+The globals `update` mutation takes `{ data: {...} }`, its `mutationFn` unwraps `variables.data`. This differs from the direct client (`client.globals.siteSettings.update({ shopName: "New Name" })`), which takes the data object directly.
 
 ### Globals with Realtime
 
@@ -381,7 +381,7 @@ q.collections.posts.find({
 
 Types flow end-to-end: your field definitions are compiled by codegen into the generated `AppConfig` type (collections, globals, and routes, each with `select`/`insert`/`where`/`orderBy` shapes), and `createClient<AppConfig>()` threads them into `q.collections.posts.find()`, the `where` operators, and the returned `data`.
 
-`AppConfig` is generated — import it from `#questpie`, never hand-write it:
+`AppConfig` is generated, import it from `#questpie`, never hand-write it:
 
 ```ts
 import type { AppConfig } from "#questpie";
@@ -417,7 +417,7 @@ client.setLocale("sk"); // Set locale for localized content
 
 ## Realtime
 
-Pass `{ realtime: true }` as the **typed** second argument (`RealtimeQueryConfig`) to `find()`, `count()`, or `get()` — initial data via a normal fetch, then the server pushes full access-controlled snapshots on every matching change. `findOne()` and `findVersions()` have no realtime form (a second argument there is a compile error).
+Pass `{ realtime: true }` as the **typed** second argument (`RealtimeQueryConfig`) to `find()`, `count()`, or `get()`, initial data via a normal fetch, then the server pushes full access-controlled snapshots on every matching change. `findOne()` and `findVersions()` have no realtime form (a second argument there is a compile error).
 
 ```tsx
 const { data } = useQuery(
@@ -441,9 +441,9 @@ export default runtimeConfig({
 });
 ```
 
-Subscriptions are query-shaped topic objects (`{ resourceType, resource, where?, with? }`) — there are no channel strings. Outside React, use the typed live form of the same query: `client.collections.posts.live(options, onSnapshot)` / `liveIter(options)` (see AGENTS.md §19 Realtime).
+Subscriptions are query-shaped topic objects (`{ resourceType, resource, where?, with? }`), there are no channel strings. Outside React, use the typed live form of the same query: `client.collections.posts.live(options, onSnapshot)` / `liveIter(options)` (see AGENTS.md §19 Realtime).
 
-To build those topic objects yourself — e.g. manual cache invalidation or a raw `client.realtime.subscribe` call that must match the topic a query subscribed with — use the exported builders instead of hand-writing the shape:
+To build those topic objects yourself, e.g. manual cache invalidation or a raw `client.realtime.subscribe` call that must match the topic a query subscribed with, use the exported builders instead of hand-writing the shape:
 
 ```ts
 import { buildCollectionTopic, buildGlobalTopic } from "@questpie/tanstack-query"; // re-exported from questpie/client

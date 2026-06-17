@@ -11,12 +11,12 @@ This skill builds on questpie-core. It is the **deployment/ops** doc: auth, acce
 
 - [Overview](#overview)
 - [Environment](#environment)
-- [Authentication](#authentication) — session, access control, locking down REST
+- [Authentication](#authentication), session, access control, locking down REST
 - [Database & Migrations](#database--migrations)
-- [Infrastructure Adapters](#infrastructure-adapters) — delegated to infrastructure-adapters.md
+- [Infrastructure Adapters](#infrastructure-adapters), delegated to infrastructure-adapters.md
 - [PgBouncer Compatibility](#pgbouncer-compatibility)
 - [Realtime & SSE Keepalive](#realtime--sse-keepalive)
-- [Deployment](#deployment) — Docker, env vars, checklist, health check
+- [Deployment](#deployment), Docker, env vars, checklist, health check
 - [Realtime and Live Preview](#realtime-and-live-preview)
 - [Common Mistakes](#common-mistakes)
 
@@ -38,7 +38,7 @@ Every adapter's exact config shape lives in `references/infrastructure-adapters.
 
 ## Environment
 
-Scaffolded apps declare every env var once in `src/lib/env.ts` via `@t3-oss/env-core` — schema-validated at boot, typed everywhere. The framework-level `questpie/env` helper is still available for apps that want generated server/client env modules; full reference: `references/env.md`. Never use raw `process.env.X` / `process.env.X!` in app code.
+Scaffolded apps declare every env var once in `src/lib/env.ts` via `@t3-oss/env-core`, schema-validated at boot, typed everywhere. The framework-level `questpie/env` helper is still available for apps that want generated server/client env modules; full reference: `references/env.md`. Never use raw `process.env.X` / `process.env.X!` in app code.
 
 ```ts
 // src/questpie/server/env.ts (framework env-helper variant)
@@ -119,7 +119,7 @@ The `adminModule` provides the canonical Better Auth `user` collection for stori
 
 ### Locking Down the REST Surface
 
-Deny-all is actually deny-all — there are no implicit framework grants above
+Deny-all is actually deny-all, there are no implicit framework grants above
 `defaultAccess`:
 
 ```ts title="config/app.ts"
@@ -131,10 +131,10 @@ export default appConfig({
 With this config, anonymous and authenticated callers get nothing unless a
 collection opts in via `.access()`: no row listing (including
 public-visibility upload collections like `assets`), and no schema/meta
-introspection (gated by the same access system — visible iff at least one
+introspection (gated by the same access system, visible iff at least one
 operation is allowed, overridable with the `introspect` access kind). Public
 upload files still serve by key (`GET /:collection/files/:key`) because
-`visibility: "public"` declares the BYTES public — override with the `serve`
+`visibility: "public"` declares the BYTES public, override with the `serve`
 access kind. Do not wrap schema/meta routes in custom auth middleware; use
 `introspect` rules instead.
 
@@ -173,10 +173,10 @@ Configure migration and seed directories in `questpie.config.ts` under `cli.migr
 
 ## Infrastructure Adapters
 
-All adapter config shapes — Storage (local, S3, R2), Queue (pg-boss, BullMQ), Realtime (pgNotify, Redis Streams), Email (SMTP, Console, Resend, Plunk), KV (Redis, custom), Logger, Search, and OpenAPI — live in **`references/infrastructure-adapters.md`**. Each is configured under `runtimeConfig({...})` in `questpie.config.ts`. The deployment-relevant constraints follow.
+All adapter config shapes, Storage (local, S3, R2), Queue (pg-boss, BullMQ), Realtime (pgNotify, Redis Streams), Email (SMTP, Console, Resend, Plunk), KV (Redis, custom), Logger, Search, and OpenAPI, live in **`references/infrastructure-adapters.md`**. Each is configured under `runtimeConfig({...})` in `questpie.config.ts`. The deployment-relevant constraints follow.
 
 - **Queue / pg-boss and Realtime / pgNotify** both rely on PostgreSQL `LISTEN/NOTIFY` and silently break behind PgBouncer in transaction pool mode. See [PgBouncer Compatibility](#pgbouncer-compatibility).
-- **Cloudflare Workers** process queues push-based: use `cloudflareQueuesAdapter` from `questpie/adapters/cloudflare` and export the Worker via `createCloudflareWorkerHandlers` — do not run `app.queue.listen()` in a Worker.
+- **Cloudflare Workers** process queues push-based: use `cloudflareQueuesAdapter` from `questpie/adapters/cloudflare` and export the Worker via `createCloudflareWorkerHandlers`, do not run `app.queue.listen()` in a Worker.
 - **Multi-instance realtime** requires `redisStreamsAdapter`; a single instance can use `pgNotifyAdapter`.
 
 ## PgBouncer Compatibility
@@ -189,8 +189,8 @@ Bun SQL (`new SQL({ url })`) already pools connections internally. In single-ins
 
 | Adapter                          | Direct PG | PgBouncer (transaction)           | PgBouncer (session)         |
 | -------------------------------- | --------- | --------------------------------- | --------------------------- |
-| `pgNotifyAdapter` (realtime)     | works     | broken — listens silently dropped | works (pooling neutralized) |
-| `pgBossAdapter` (queue)          | works     | broken — LISTEN/NOTIFY required   | works (pooling neutralized) |
+| `pgNotifyAdapter` (realtime)     | works     | broken, listens silently dropped | works (pooling neutralized) |
+| `pgBossAdapter` (queue)          | works     | broken, LISTEN/NOTIFY required   | works (pooling neutralized) |
 | Drizzle queries via Bun SQL      | works     | works                             | works                       |
 | `redisStreamsAdapter` (realtime) | n/a       | n/a                               | n/a                         |
 
@@ -219,7 +219,7 @@ The `POST /realtime` SSE stream sends a `ping` every **8s** by default (`realtim
 | Serverless platforms       | response buffering / max duration  | SSE needs streaming responses; buffered platforms break realtime entirely |
 
 ```ts
-// Bun server entry — the app owns Bun.serve options, not the framework
+// Bun server entry, the app owns Bun.serve options, not the framework
 export default {
 	port: 3000,
 	idleTimeout: 30, // seconds
@@ -388,7 +388,7 @@ If your infra mandates PgBouncer, use `session` pool mode for processes that run
 
 ## Realtime and Live Preview
 
-The realtime adapter (`pgNotifyAdapter` or `redisStreamsAdapter`) is relevant for **detached or shared preview sessions** — when the preview runs in a separate browser tab, or multiple collaborators view the same preview.
+The realtime adapter (`pgNotifyAdapter` or `redisStreamsAdapter`) is relevant for **detached or shared preview sessions**, when the preview runs in a separate browser tab, or multiple collaborators view the same preview.
 
 For the default **same-tab preview**, realtime is NOT involved. Current same-tab preview uses `postMessage` for refresh/focus messages between the editor and the iframe.
 

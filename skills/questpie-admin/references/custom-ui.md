@@ -128,7 +128,7 @@ export function ColorCell({ value }) {
 
 ## Custom Views
 
-Create view types beyond built-in table and form — kanban boards, calendars, galleries.
+Create view types beyond built-in table and form, kanban boards, calendars, galleries.
 
 ### Server-Side Declaration
 
@@ -266,28 +266,28 @@ toast.error("Failed to save");
 ### Primitives (base-ui)
 
 ```tsx
-// CORRECT — render prop
+// CORRECT, render prop
 <DialogTrigger render={<Button>Open</Button>} />
 
-// WRONG — asChild is Radix, not base-ui
+// WRONG, asChild is Radix, not base-ui
 <DialogTrigger asChild><Button>Open</Button></DialogTrigger>
 ```
 
 ### Responsive Components
 
-- `ResponsivePopover` — Popover on desktop, Drawer on mobile
-- `ResponsiveDialog` — Dialog on desktop, fullscreen Drawer on mobile
+- `ResponsivePopover`, Popover on desktop, Drawer on mobile
+- `ResponsiveDialog`, Dialog on desktop, fullscreen Drawer on mobile
 - Hooks: `useIsMobile()`, `useIsDesktop()`, `useMediaQuery()`
 
 ## Common Mistakes
 
-1. **HIGH: Not registering custom field in the field registry** — if codegen doesn't discover the field renderer file, the admin will render nothing for that field type. Place it in `questpie/admin/fields/<name>.tsx`.
+1. **HIGH: Not registering custom field in the field registry**, if codegen doesn't discover the field renderer file, the admin will render nothing for that field type. Place it in `questpie/admin/fields/<name>.tsx`.
 
-2. **HIGH: Missing `cell` component for custom fields** — without a cell component, the list view table shows raw values for your custom field instead of a formatted display.
+2. **HIGH: Missing `cell` component for custom fields**, without a cell component, the list view table shows raw values for your custom field instead of a formatted display.
 
-3. **MEDIUM: Reactive field handlers running client-side** — `options.handler`, `compute.handler`, and other reactive handlers run **SERVER-SIDE** with access to `ctx.db`, `ctx.user`. Do not import client-side modules or use browser APIs in them.
+3. **MEDIUM: Reactive field handlers running client-side**, `options.handler`, `compute.handler`, and other reactive handlers run **SERVER-SIDE** with access to `ctx.db`, `ctx.user`. Do not import client-side modules or use browser APIs in them.
 
-4. **MEDIUM: Using `onChange` wrong in field components** — the field renderer receives `onChange` that expects the **value directly**, not a DOM event.
+4. **MEDIUM: Using `onChange` wrong in field components**, the field renderer receives `onChange` that expects the **value directly**, not a DOM event.
 
    ```tsx
    // WRONG
@@ -298,8 +298,8 @@ toast.error("Failed to save");
    onChange={newValue}
    ```
 
-5. **MEDIUM: Importing from `@radix-ui/*`** — QUESTPIE admin uses `@base-ui/react`. Never import Radix primitives.
+5. **MEDIUM: Importing from `@radix-ui/*`**, QUESTPIE admin uses `@base-ui/react`. Never import Radix primitives.
 
-6. **MEDIUM: Using `@phosphor-icons/react` or `lucide-react`** — use `@iconify/react` with `ph:` prefix for all icons.
+6. **MEDIUM: Using `@phosphor-icons/react` or `lucide-react`**, use `@iconify/react` with `ph:` prefix for all icons.
 
-7. **LOW: Not using shadcn components** — prefer `<Button>`, `<Card>`, `<Input>` from the shadcn component library instead of raw HTML elements. The admin follows QUESTPIE Neutral Design.
+7. **LOW: Not using shadcn components**, prefer `<Button>`, `<Card>`, `<Input>` from the shadcn component library instead of raw HTML elements. The admin follows QUESTPIE Neutral Design.

@@ -1,6 +1,6 @@
 ---
 name: questpie
-description: QUESTPIE framework — server-first TypeScript CMS. File-convention codegen, collections, globals, routes, jobs, services, emails, blocks, typed client SDK, TanStack Query integration, adapters (queue, search, realtime, storage, email, KV). Use when building, reviewing, or refactoring any QUESTPIE project.
+description: QUESTPIE framework, server-first TypeScript CMS. File-convention codegen, collections, globals, routes, jobs, services, emails, blocks, typed client SDK, TanStack Query integration, adapters (queue, search, realtime, storage, email, KV). Use when building, reviewing, or refactoring any QUESTPIE project.
 license: MIT
 metadata:
   author: questpie
@@ -24,7 +24,7 @@ Reference these guidelines when:
 - Exposing QUESTPIE through MCP tools or resources
 - Scaffolding a new project or onboarding
 
-## Import Paths — Critical
+## Import Paths, Critical
 
 | Factory                        | Import From                  | Needs Codegen? |
 | ------------------------------ | ---------------------------- | -------------- |
@@ -48,7 +48,7 @@ Reference these guidelines when:
 
 ## Module And Plugin Configuration - Critical
 
-Codegen imports `modules.ts` before runtime app creation to extract module-contributed plugins. **Rule:** any module that contributes a `plugin`, discover patterns, generated factories, categories, views, components, fields, or config factories must be a static entry in `modules.ts` — not a factory call, not behind an env/runtime check. Put runtime options in a plugin-discovered `config/*.ts` singleton factory instead.
+Codegen imports `modules.ts` before runtime app creation to extract module-contributed plugins. **Rule:** any module that contributes a `plugin`, discover patterns, generated factories, categories, views, components, fields, or config factories must be a static entry in `modules.ts`, not a factory call, not behind an env/runtime check. Put runtime options in a plugin-discovered `config/*.ts` singleton factory instead.
 
 ```ts title="modules.ts"
 import { observabilityModule } from "@questpie/observability/server";
@@ -77,7 +77,7 @@ The module reads the resolved config at runtime from `app.state.config.observabi
 
 | Topic             | File                            | Covers                                                             |
 | ----------------- | ------------------------------- | ------------------------------------------------------------------ |
-| Quickstart        | `references/quickstart.md`      | Scaffold, configure, codegen, migrate, serve — zero to running app |
+| Quickstart        | `references/quickstart.md`      | Scaffold, configure, codegen, migrate, serve, zero to running app |
 | Data Modeling     | `references/data-modeling.md`   | Collections, globals, fields, relations, options, localization     |
 | Field Types       | `references/field-types.md`     | All built-in field types with options and operators                |
 | Type Inference    | `references/type-inference.md`  | The infer-first map: `CollectionDoc` / `CollectionWhere`, `AccessContext` helpers, per-op rule typing, cycle rules |
@@ -112,7 +112,7 @@ The module reads the resolved config at runtime from `app.state.config.observabi
 | -------------- | ------------------------------ | ---------------------------------------------------------------- |
 | TanStack Query | `references/tanstack-query.md` | `q.collections.*`, `q.globals.*`, `q.routes.*`, realtime queries |
 
-## Key Patterns — Quick Reference
+## Key Patterns, Quick Reference
 
 ### Collection
 
@@ -147,7 +147,7 @@ import { starterModule } from "questpie/app";
 import { collection } from "#questpie/factories";
 
 // Registering the same key from scratch REPLACES the module's collection
-// (drops its fields/hooks/auth wiring). Merge instead — fully typed:
+// (drops its fields/hooks/auth wiring). Merge instead, fully typed:
 export default collection("user")
 	.merge(starterModule.collections.user)
 	.fields(({ f }) => ({
@@ -213,7 +213,7 @@ const { docs } = await client.collections.posts.find({
 });
 ```
 
-> For build-time-inlined, typed client env, declare `env.client.ts` and import the generated module (`#questpie/env.client.vite` for Vite). The default template skips this and reads `process.env.APP_URL` directly — see `references/env.md`.
+> For build-time-inlined, typed client env, declare `env.client.ts` and import the generated module (`#questpie/env.client.vite` for Vite). The default template skips this and reads `process.env.APP_URL` directly, see `references/env.md`.
 
 ### Queue Dispatch
 
@@ -228,15 +228,15 @@ await queue.sendReminder.publish({ userId: "abc" });
 | Severity | Mistake                                                | Fix                                                                                   |
 | -------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------- |
 | CRITICAL | Files in wrong directory                               | Collections in `collections/`, routes in `routes/`, etc.                              |
-| CRITICAL | Convention file has no export                          | Codegen needs one export — `export default` or a named `export const`/`function` both discovered; a file with no export is skipped. Collection/global keys derive from the filename, not the export name |
-| CRITICAL | Importing route/job/service from `#questpie/factories` | Use `"questpie"` — only collection/global/block/adminConfig use `#questpie/factories` |
-| CRITICAL | Redefining a module collection (e.g. starter `user`) from scratch | `.merge(starterModule.collections.user)` then add fields — see Extend pattern        |
+| CRITICAL | Convention file has no export                          | Codegen needs one export, `export default` or a named `export const`/`function` both discovered; a file with no export is skipped. Collection/global keys derive from the filename, not the export name |
+| CRITICAL | Importing route/job/service from `#questpie/factories` | Use `"questpie"`, only collection/global/block/adminConfig use `#questpie/factories` |
+| CRITICAL | Redefining a module collection (e.g. starter `user`) from scratch | `.merge(starterModule.collections.user)` then add fields, see Extend pattern        |
 | HIGH     | Forgetting `questpie generate` after adding files      | Re-run codegen on any file add/remove in convention dirs                              |
 | HIGH     | Job handler uses `input` instead of `payload`          | Jobs destructure `{ payload }`, routes destructure `{ input }`                        |
 | HIGH     | `queue.send("name", data)`                             | Use `queue.jobName.publish(data)`                                                     |
 | HIGH     | `beforeCreate` / `afterCreate` hook names              | Use `beforeChange` / `afterChange` with `operation === "create"` guard                |
 | MEDIUM   | Using npm/yarn instead of Bun                          | QUESTPIE requires Bun as package manager                                              |
-| MEDIUM   | Editing `.generated/` files                            | Never edit — re-run `questpie generate`                                               |
+| MEDIUM   | Editing `.generated/` files                            | Never edit, re-run `questpie generate`                                               |
 
 ## Preview And Workflow Rules
 

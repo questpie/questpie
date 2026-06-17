@@ -193,6 +193,14 @@ const DRIFT_RULES: Array<{
 		scope: "docs-and-skills",
 	},
 	{
+		id: "typographic-dash",
+		severity: "error",
+		pattern: /[—–]/g,
+		message:
+			"Do not use typographic dash characters in Markdown docs or skills. Use punctuation or ASCII hyphens instead.",
+		scope: "docs-and-skills",
+	},
+	{
 		id: "field-from-docs",
 		severity: "error",
 		pattern: /\bf\.from\s*\(/g,

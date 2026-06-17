@@ -1,6 +1,6 @@
 # QUESTPIE Admin Panel
 
-The QUESTPIE admin panel is a **projection of your server schema** — not the framework itself. It reads collections, globals, and config via introspection and generates a full admin interface. Your backend works without it.
+The QUESTPIE admin panel is a **projection of your server schema**, not the framework itself. It reads collections, globals, and config via introspection and generates a full admin interface. Your backend works without it.
 
 ## Reference Topics
 
@@ -19,7 +19,7 @@ For the complete admin reference with all topics expanded: `AGENTS.md`
 - **React** + **Tailwind CSS v4** + **shadcn** components
 - **@base-ui/react** primitives (NOT @radix-ui)
 - **@iconify/react** with Phosphor icon set (`ph:icon-name`)
-- **sonner** for toasts — `toast.error()`, `toast.success()`
+- **sonner** for toasts, `toast.error()`, `toast.success()`
 - QUESTPIE Neutral Design: flat surfaces, soft neutral geometry,
   tokenized radius, and restrained floating shadows
 
@@ -173,8 +173,8 @@ The full source of truth is `packages/admin/DESIGN.md`. Key defaults:
 
 | Variable      | Value                                                               |
 | ------------- | ------------------------------------------------------------------- |
-| `--font-sans` | `"Geist Variable"` — UI, prose, headings, labels, navigation        |
-| `--font-mono` | `"JetBrains Mono Variable"` — code, file paths, commands, IDs       |
+| `--font-sans` | `"Geist Variable"`, UI, prose, headings, labels, navigation        |
+| `--font-mono` | `"JetBrains Mono Variable"`, code, file paths, commands, IDs       |
 
 ### Sidebar Variables
 
@@ -406,7 +406,7 @@ For the full server-side setup (context resolver, type augmentation, access rule
 
 ## Common Mistakes
 
-1. **CRITICAL: Using `asChild` prop** — QUESTPIE admin uses `@base-ui/react`, which uses the `render` prop. `asChild` is a Radix pattern and does NOT work here.
+1. **CRITICAL: Using `asChild` prop**, QUESTPIE admin uses `@base-ui/react`, which uses the `render` prop. `asChild` is a Radix pattern and does NOT work here.
 
    ```tsx
    // WRONG
@@ -415,9 +415,9 @@ For the full server-side setup (context resolver, type augmentation, access rule
    <DialogTrigger render={<Button>Open</Button>} />
    ```
 
-2. **CRITICAL: Importing from `@radix-ui/*`** — use `@base-ui/react` instead.
+2. **CRITICAL: Importing from `@radix-ui/*`**, use `@base-ui/react` instead.
 
-3. **HIGH: Using `@phosphor-icons/react`** — use `@iconify/react` with `ph:` prefix.
+3. **HIGH: Using `@phosphor-icons/react`**, use `@iconify/react` with `ph:` prefix.
 
    ```tsx
    // WRONG
@@ -427,11 +427,11 @@ For the full server-side setup (context resolver, type augmentation, access rule
    <Icon icon="ph:caret-down" width={16} height={16} />;
    ```
 
-4. **HIGH: Using lucide-react icons** — use `@iconify/react` with Phosphor icon set.
+4. **HIGH: Using lucide-react icons**, use `@iconify/react` with Phosphor icon set.
 
-5. **MEDIUM: Custom `<button>` or `<div>` instead of shadcn components** — use `<Button>`, `<Card>`, etc.
+5. **MEDIUM: Custom `<button>` or `<div>` instead of shadcn components**, use `<Button>`, `<Card>`, etc.
 
-6. **MEDIUM: `console.error` for user errors** — use `toast.error()` from `sonner`.
+6. **MEDIUM: `console.error` for user errors**, use `toast.error()` from `sonner`.
 
 ---
 
@@ -624,7 +624,7 @@ export default adminConfig({
 			{ id: "business", label: { en: "Business" }, layout: "grid", columns: 4 },
 		],
 		items: [
-			/* widget items — see widget types below */
+			/* widget items, see widget types below */
 		],
 	},
 });
@@ -632,7 +632,7 @@ export default adminConfig({
 
 ### Widget Types
 
-**Stats** — count records with optional filter:
+**Stats**, count records with optional filter:
 
 ```ts
 {
@@ -646,7 +646,7 @@ export default adminConfig({
 }
 ```
 
-**Value** — custom-loaded value with trend:
+**Value**, custom-loaded value with trend:
 
 ```ts
 {
@@ -664,7 +664,7 @@ export default adminConfig({
 }
 ```
 
-**Progress** — progress bar toward a goal:
+**Progress**, progress bar toward a goal:
 
 ```ts
 {
@@ -678,7 +678,7 @@ export default adminConfig({
 }
 ```
 
-**Chart** — chart from field values:
+**Chart**, chart from field values:
 
 ```ts
 {
@@ -693,7 +693,7 @@ export default adminConfig({
 }
 ```
 
-**Recent Items** — list recent records:
+**Recent Items**, list recent records:
 
 ```ts
 {
@@ -708,7 +708,7 @@ export default adminConfig({
 }
 ```
 
-**Timeline** — activity stream:
+**Timeline**, activity stream:
 
 ```ts
 {
@@ -824,15 +824,15 @@ export const logs = collection("logs")
 
 ## Common Mistakes
 
-1. **HIGH: Defining columns that don't match field names** — `columns: [f.name]` requires a `name` field in the collection's `.fields()`. Mismatches cause empty columns.
+1. **HIGH: Defining columns that don't match field names**, `columns: [f.name]` requires a `name` field in the collection's `.fields()`. Mismatches cause empty columns.
 
-2. **MEDIUM: Not specifying `searchableFields`** — table search bar won't work unless you explicitly list which fields to search.
+2. **MEDIUM: Not specifying `searchableFields`**, table search bar won't work unless you explicitly list which fields to search.
 
-3. **MEDIUM: Forgetting sidebar section ordering** — items appear in definition order. If you want "Dashboard" at the top, define it first in the `items` array.
+3. **MEDIUM: Forgetting sidebar section ordering**, items appear in definition order. If you want "Dashboard" at the top, define it first in the `items` array.
 
-4. **MEDIUM: Missing `sectionId` on sidebar items** — every item must reference an existing section ID.
+4. **MEDIUM: Missing `sectionId` on sidebar items**, every item must reference an existing section ID.
 
-5. **LOW: Not setting `defaultSort`** — records appear in database insertion order which is usually not what users expect.
+5. **LOW: Not setting `defaultSort`**, records appear in database insertion order which is usually not what users expect.
 
 ## Form Views and Live Preview
 
@@ -1019,7 +1019,7 @@ Blocks often reference related data (images, linked records). Use `.prefetch()` 
 
 ### Functional Prefetch
 
-For complex queries, use a function. The `ctx` parameter provides fully typed `collections` and `globals` via `AppContext` augmentation — no imports needed:
+For complex queries, use a function. The `ctx` parameter provides fully typed `collections` and `globals` via `AppContext` augmentation, no imports needed:
 
 ```ts title="blocks/featured.ts"
 import { block } from "#questpie/factories";
@@ -1133,30 +1133,30 @@ function PageRenderer({ page }) {
 
 ## Common Mistakes
 
-1. **HIGH: Not using `ctx.collections.*` in functional prefetch** — use the context-injected collections directly. Do NOT import `app` from `#questpie` inside block files (causes circular dependencies).
+1. **HIGH: Not using `ctx.collections.*` in functional prefetch**, use the context-injected collections directly. Do NOT import `app` from `#questpie` inside block files (causes circular dependencies).
 
    ```ts
-   // WRONG — importing app creates circular dependency
+   // WRONG, importing app creates circular dependency
    import { app } from "#questpie";
    .prefetch(async ({ values, ctx }) => {
      const posts = await app.collections.posts.find({});
    })
 
-   // CORRECT — use ctx.collections directly
+   // CORRECT, use ctx.collections directly
    .prefetch(async ({ values, ctx }) => {
      const posts = await ctx.collections.posts.find({});
    })
    ```
 
-2. **HIGH: Importing from `.generated/` inside block files** — block files are imported BY `.generated/index.ts`, so importing from it back creates circular dependencies. Use the `ctx` parameter instead.
+2. **HIGH: Importing from `.generated/` inside block files**, block files are imported BY `.generated/index.ts`, so importing from it back creates circular dependencies. Use the `ctx` parameter instead.
 
-3. **MEDIUM: Block renderer not exported as default or named export** — codegen discovers named exports from block renderer files. Ensure the component is exported.
+3. **MEDIUM: Block renderer not exported as default or named export**, codegen discovers named exports from block renderer files. Ensure the component is exported.
 
-4. **MEDIUM: Using `{ with: { field: true } }` prefetch for complex queries** — declarative prefetch only loads related records by ID. For filtered/sorted/limited queries, use functional prefetch instead.
+4. **MEDIUM: Using `{ with: { field: true } }` prefetch for complex queries**, declarative prefetch only loads related records by ID. For filtered/sorted/limited queries, use functional prefetch instead.
 
-5. **MEDIUM: Forgetting `.prefetch()` for upload fields** — without prefetch, `values.backgroundImage` is just an ID string. Add `{ with: { backgroundImage: true } }` to get the full asset record with `url`.
+5. **MEDIUM: Forgetting `.prefetch()` for upload fields**, without prefetch, `values.backgroundImage` is just an ID string. Add `{ with: { backgroundImage: true } }` to get the full asset record with `url`.
 
-6. **LOW: Missing `category` in `.admin()`** — blocks without a category won't be grouped in the block picker, making it harder to find them.
+6. **LOW: Missing `category` in `.admin()`**, blocks without a category won't be grouped in the block picker, making it harder to find them.
 
 ## Blocks in Live Preview
 
@@ -1336,7 +1336,7 @@ export function ColorCell({ value }) {
 
 ## Custom Views
 
-Create view types beyond built-in table and form — kanban boards, calendars, galleries.
+Create view types beyond built-in table and form, kanban boards, calendars, galleries.
 
 ### Server-Side Declaration
 
@@ -1474,28 +1474,28 @@ toast.error("Failed to save");
 ### Primitives (base-ui)
 
 ```tsx
-// CORRECT — render prop
+// CORRECT, render prop
 <DialogTrigger render={<Button>Open</Button>} />
 
-// WRONG — asChild is Radix, not base-ui
+// WRONG, asChild is Radix, not base-ui
 <DialogTrigger asChild><Button>Open</Button></DialogTrigger>
 ```
 
 ### Responsive Components
 
-- `ResponsivePopover` — Popover on desktop, Drawer on mobile
-- `ResponsiveDialog` — Dialog on desktop, fullscreen Drawer on mobile
+- `ResponsivePopover`, Popover on desktop, Drawer on mobile
+- `ResponsiveDialog`, Dialog on desktop, fullscreen Drawer on mobile
 - Hooks: `useIsMobile()`, `useIsDesktop()`, `useMediaQuery()`
 
 ## Common Mistakes
 
-1. **HIGH: Not registering custom field in the field registry** — if codegen doesn't discover the field renderer file, the admin will render nothing for that field type. Place it in `questpie/admin/fields/<name>.tsx`.
+1. **HIGH: Not registering custom field in the field registry**, if codegen doesn't discover the field renderer file, the admin will render nothing for that field type. Place it in `questpie/admin/fields/<name>.tsx`.
 
-2. **HIGH: Missing `cell` component for custom fields** — without a cell component, the list view table shows raw values for your custom field instead of a formatted display.
+2. **HIGH: Missing `cell` component for custom fields**, without a cell component, the list view table shows raw values for your custom field instead of a formatted display.
 
-3. **MEDIUM: Reactive field handlers running client-side** — `options.handler`, `compute.handler`, and other reactive handlers run **SERVER-SIDE** with access to `ctx.db`, `ctx.user`. Do not import client-side modules or use browser APIs in them.
+3. **MEDIUM: Reactive field handlers running client-side**, `options.handler`, `compute.handler`, and other reactive handlers run **SERVER-SIDE** with access to `ctx.db`, `ctx.user`. Do not import client-side modules or use browser APIs in them.
 
-4. **MEDIUM: Using `onChange` wrong in field components** — the field renderer receives `onChange` that expects the **value directly**, not a DOM event.
+4. **MEDIUM: Using `onChange` wrong in field components**, the field renderer receives `onChange` that expects the **value directly**, not a DOM event.
 
    ```tsx
    // WRONG
@@ -1506,10 +1506,10 @@ toast.error("Failed to save");
    onChange={newValue}
    ```
 
-5. **MEDIUM: Importing from `@radix-ui/*`** — QUESTPIE admin uses `@base-ui/react`. Never import Radix primitives.
+5. **MEDIUM: Importing from `@radix-ui/*`**, QUESTPIE admin uses `@base-ui/react`. Never import Radix primitives.
 
-6. **MEDIUM: Using `@phosphor-icons/react` or `lucide-react`** — use `@iconify/react` with `ph:` prefix for all icons.
+6. **MEDIUM: Using `@phosphor-icons/react` or `lucide-react`**, use `@iconify/react` with `ph:` prefix for all icons.
 
-7. **LOW: Not using shadcn components** — prefer `<Button>`, `<Card>`, `<Input>` from the shadcn component library instead of raw HTML elements. The admin follows QUESTPIE Neutral Design.
+7. **LOW: Not using shadcn components**, prefer `<Button>`, `<Card>`, `<Input>` from the shadcn component library instead of raw HTML elements. The admin follows QUESTPIE Neutral Design.
 
 ---

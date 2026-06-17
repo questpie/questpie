@@ -75,9 +75,9 @@ export default collection("posts")
 | `.searchable({...})`                            | Search indexing config (see below)      |
 | `.merge(other)`                                 | Extend a same-name builder (see below)  |
 
-### Extending Collections — `.merge()`
+### Extending Collections, `.merge()`
 
-To extend a collection a module already provides, merge its builder — never redefine the collection from scratch (same-key registration replaces the module's collection wholesale):
+To extend a collection a module already provides, merge its builder, never redefine the collection from scratch (same-key registration replaces the module's collection wholesale):
 
 ```ts
 import { starterModule } from "questpie/app";
@@ -90,7 +90,7 @@ export default collection("user")
 	}));
 ```
 
-Fields/options/extension keys combine by key (merged-in side wins), hooks concatenate, and `.fields()` after `.merge()` is cumulative — it never wipes merged fields. The result stays fully typed.
+Fields/options/extension keys combine by key (merged-in side wins), hooks concatenate, and `.fields()` after `.merge()` is cumulative, it never wipes merged fields. The result stays fully typed.
 
 ### Collection Options
 
@@ -112,9 +112,9 @@ import { uniqueIndex } from "questpie/drizzle-pg-core";
 ])
 ```
 
-### Search Indexing — `.searchable()`
+### Search Indexing, `.searchable()`
 
-`.searchable()` takes a config object whose keys map a record to indexable text/metadata/embeddings — NOT a string array. There is no `.search()` method.
+`.searchable()` takes a config object whose keys map a record to indexable text/metadata/embeddings, NOT a string array. There is no `.search()` method.
 
 ```ts
 .searchable({
@@ -163,8 +163,7 @@ All access kinds and when each is checked:
 | `introspect` | Schema/meta routes (`GET /:collection/{schema,meta}`)              |
 
 Resolution chain for every kind: collection `.access()` → app `defaultAccess`
-(from `appConfig({ access })`) → require session. No hidden framework grants —
-deny-all `defaultAccess` really closes the whole REST surface. Two kinds have
+(from `appConfig({ access })`) → require session. No hidden framework grants, deny-all `defaultAccess` really closes the whole REST surface. Two kinds have
 specialized fallbacks:
 
 - `serve`: `serve` → explicit collection `read` (row-aware, `ctx.data` = upload
@@ -176,7 +175,7 @@ specialized fallbacks:
   their validation schema readable; deny-all apps expose no schemas).
 
 Upload population: `f.upload()` fields populate through the PARENT row's read
-decision — a public gallery (`read: true`) shows its assets (with `url`) to
+decision, a public gallery (`read: true`) shows its assets (with `url`) to
 anonymous readers even when the assets collection itself is unlistable.
 Field-level read rules on the upload collection still apply inside population.
 Hand-written `f.relation()` fields keep normal target-collection access.
@@ -211,7 +210,7 @@ await collections.posts.updateById({
 	data: { status: "published" },
 });
 
-// Bulk update by where (returns T[] — the rows actually written)
+// Bulk update by where (returns T[], the rows actually written)
 await collections.posts.updateMany({
 	where: { status: "draft" },
 	data: { status: "archived" },
@@ -317,7 +316,7 @@ Fields take a positional constructor argument (e.g. `f.text(255)`, `f.select([..
 | `.description(text)`| Help text (supports i18n)               |
 | `.localized()`     | Enable per-locale values                 |
 | `.inputOptional()` | Optional in API input but required in DB |
-| `.outputFalse()`   | Exclude from output — write-only field   |
+| `.outputFalse()`   | Exclude from output, write-only field   |
 | `.array()`         | Wrap as a repeatable array               |
 | `.admin(config)`   | Admin UI rendering hints                 |
 | `.virtual(sql)`    | SQL expression for computed fields       |
@@ -367,7 +366,7 @@ Creates a foreign key column pointing to the target collection's `id`.
 
 ### Multiple (Inline Array of FKs)
 
-`.multiple()` stores an array of foreign-key IDs inline as JSONB — no junction table:
+`.multiple()` stores an array of foreign-key IDs inline as JSONB, no junction table:
 
 ```ts
 gallery: f.relation("assets").multiple(),
@@ -375,7 +374,7 @@ gallery: f.relation("assets").multiple(),
 
 ### Has-Many (Reverse)
 
-`.hasMany({ foreignKey })` is a virtual reverse relation — the FK lives on the TARGET collection, nothing is stored on this row:
+`.hasMany({ foreignKey })` is a virtual reverse relation, the FK lives on the TARGET collection, nothing is stored on this row:
 
 ```ts
 posts: f.relation("posts").hasMany({ foreignKey: "authorId" }),
@@ -523,7 +522,7 @@ Use helper functions to avoid repetition in object fields:
 })
 ```
 
-`f.object()` takes the nested field record **directly** — there is no `{ fields }` wrapper and no function form.
+`f.object()` takes the nested field record **directly**, there is no `{ fields }` wrapper and no function form.
 
 ## Form Layout
 

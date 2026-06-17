@@ -1,6 +1,6 @@
 ---
 name: questpie-core/extend
-description: QUESTPIE extensibility — codegen plugins CodegenPlugin CategoryDeclaration CallbackParamDefinition ScaffoldConfig scaffolds, building modules, custom field types field()/fieldType()/from() factory columnFactory schemaFactory operatorSet metadataFactory, custom adapters createFetchHandler Elysia Hono Next.js TanStack Start, type registries FieldTypeRegistry ComponentTypeRegistry ViewKindRegistry declare module augmentation, package distribution tsdown npm publishing changesets
+description: QUESTPIE extensibility, codegen plugins CodegenPlugin CategoryDeclaration CallbackParamDefinition ScaffoldConfig scaffolds, building modules, custom field types field()/fieldType()/from() factory columnFactory schemaFactory operatorSet metadataFactory, custom adapters createFetchHandler Elysia Hono Next.js TanStack Start, type registries FieldTypeRegistry ComponentTypeRegistry ViewKindRegistry declare module augmentation, package distribution tsdown npm publishing changesets
   - questpie-core
 ---
 
@@ -190,7 +190,7 @@ The admin module contributes a codegen plugin to both `"server"` and `"admin-cli
 
 A module is a reusable package that contributes entities to any QUESTPIE project.
 
-A reusable module imports `collection`/`global` from `questpie/builders`, **not** `#questpie/factories`: `#questpie/factories` resolves to the consumer's generated codegen, which does not exist inside your package — `questpie/builders` is the codegen-independent factory that ships with the framework.
+A reusable module imports `collection`/`global` from `questpie/builders`, **not** `#questpie/factories`: `#questpie/factories` resolves to the consumer's generated codegen, which does not exist inside your package, `questpie/builders` is the codegen-independent factory that ships with the framework.
 
 ```ts
 import { module } from "questpie/app";
@@ -265,12 +265,12 @@ export const notificationsModule = module({
 
 ### How Module Contributions Merge
 
-When several modules (and the app) contribute the same key, `createApp()` merges them deterministically — later modules win per entry:
+When several modules (and the app) contribute the same key, `createApp()` merges them deterministically, later modules win per entry:
 
 | Key | Strategy |
 | --- | --- |
-| `collections`, `globals`, `jobs`, `routes`, `fields`, `services` | record spread-merge — same key: later wins |
-| `messages` | deep-merge by locale — same message key: later wins |
+| `collections`, `globals`, `jobs`, `routes`, `fields`, `services` | record spread-merge, same key: later wins |
+| `messages` | deep-merge by locale, same message key: later wins |
 | `migrations`, `seeds` | array concatenation |
 | `config.*` (app, auth, admin, plugin config keys) | per-key strategies; `auth`/`admin` deep-merge; unknown keys: incoming replaces existing |
 | anything else | auto-detect: object+object → spread, array+array → concat, otherwise incoming wins |
@@ -286,7 +286,7 @@ mergeDeepConcat(a, b); // spread objects, concat array-valued props
 lastWins(a, b); // b
 ```
 
-Use them (instead of hand-rolled spreads) when a module exposes its own "combine these contributions" surface — the semantics then match what the framework does for built-in keys.
+Use them (instead of hand-rolled spreads) when a module exposes its own "combine these contributions" surface, the semantics then match what the framework does for built-in keys.
 
 ### Using a Module
 
@@ -306,7 +306,7 @@ Custom fields are registered through modules and become available on the `f` bui
 A custom field type is a **factory function** that returns a `Field`. Each module `fields` entry becomes a method on the `f` builder proxy after codegen. The easiest way to author one is the `from()` escape hatch, which wraps the internal `field()` factory and supplies the column, Zod schema, and default `eq`/`ne` operators:
 
 ```ts
-// color.ts — a custom "color" field stored as a hex string
+// color.ts, a custom "color" field stored as a hex string
 import { from } from "questpie/builders";
 import { varchar } from "questpie/drizzle-pg-core";
 import { z } from "zod";
@@ -318,7 +318,7 @@ export const color = (defaultValue = "#000000") =>
 	).default(defaultValue);
 ```
 
-For full control over storage, validation, operators, and introspection metadata, `field()` accepts a `FieldRuntimeState` directly (`{ type, columnFactory, schemaFactory, operatorSet, metadataFactory, ... }`) and `fieldType(name, { create, methods })` adds type-specific chain methods — this is exactly how the built-in `text`/`select` factories are defined in `questpie`'s own source.
+For full control over storage, validation, operators, and introspection metadata, `field()` accepts a `FieldRuntimeState` directly (`{ type, columnFactory, schemaFactory, operatorSet, metadataFactory, ... }`) and `fieldType(name, { create, methods })` adds type-specific chain methods, this is exactly how the built-in `text`/`select` factories are defined in `questpie`'s own source.
 
 ### Registration
 
@@ -420,7 +420,7 @@ import { app } from "#questpie";
 
 const handler = createFetchHandler(app, { basePath: "/api" });
 
-// createFetchHandler returns Response | null — fall back to 404.
+// createFetchHandler returns Response | null, fall back to 404.
 const handleCmsRequest = async (request: Request) => {
 	const response = await handler(request);
 	return response ?? new Response("Not found", { status: 404 });
