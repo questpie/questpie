@@ -1,4 +1,11 @@
 {
 	"title": "Admin",
-	"pages": ["index"]
+	"pages": [
+		"index",
+		"collections",
+		"configuration",
+		"custom-views",
+		"auth",
+		"audit"
+	]
 }

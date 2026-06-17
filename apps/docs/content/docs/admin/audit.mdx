@@ -1,0 +1,115 @@
+---
+title: Audit
+description: Add durable admin audit logs, inspect the audit collection, and write custom audit events.
+---
+
+`auditModule` records meaningful changes into the `admin_audit_log` collection. It is a normal QUESTPIE module: add it to `modules.ts`, rerun codegen, and the audit collection becomes part of the app state and admin navigation.
+
+## Enable audit
+
+```ts title="src/questpie/server/modules.ts"
+import { adminModule } from "@questpie/admin/modules/admin";
+import { auditModule } from "@questpie/admin/modules/audit";
+
+export default [adminModule, auditModule] as const;
+```
+
+The audit module contributes:
+
+| Export | Purpose |
+|---|---|
+| `auditModule` | Static module definition for app registration. |
+| `auditLogCollection` | The collection builder for the audit log. |
+| `AUDIT_LOG_COLLECTION` | The collection slug, `"admin_audit_log"`. |
+| `logAuditEntry()` | Public helper for custom audit entries. |
+
+## Audit log collection
+
+The module registers `admin_audit_log` with fields for:
+
+| Field | Meaning |
+|---|---|
+| `action` | Operation name such as `create`, `update`, `delete`, or a custom action. |
+| `resourceType` | Resource category, usually `collection`, `global`, `system`, `job`, or `webhook`. |
+| `resource` | Collection slug, global slug, job name, or custom resource key. |
+| `resourceId` | Optional record id. |
+| `resourceLabel` | Human-readable record or resource label. |
+| `userId` and `userName` | Actor metadata resolved from the current session when available. |
+| `locale` | Locale attached to the operation when available. |
+| `changes` | Structured field-level or operation data. |
+| `metadata` | Extra structured context, including actor type and access mode. |
+| `title` | Display title used by admin list views. |
+
+The audit collection is visible in the admin under the administration section. It has read-only admin actions by default and opts out of auditing itself.
+
+## Per-resource setting
+
+Collections and globals can opt out with admin config.
+
+```ts title="src/questpie/server/collections/import-runs.ts"
+import { collection } from "#questpie/factories";
+
+export const importRuns = collection("importRuns")
+	.fields(({ f }) => ({
+		name: f.text(120).label("Name").required(),
+		payload: f.json().label("Payload"),
+	}))
+	.admin({
+		label: "Import runs",
+		audit: false,
+	});
+```
+
+Use this for noisy technical tables, cache-like data, or records where another system already owns the audit trail.
+
+## Custom audit entries
+
+Use `logAuditEntry()` for jobs, webhooks, custom actions, imports, exports, and other operations that do not map cleanly to a normal CRUD mutation.
+
+```ts title="src/questpie/server/jobs/send-newsletter.ts"
+import { logAuditEntry } from "@questpie/admin/server";
+import { job } from "questpie/services";
+import { z } from "zod";
+
+export default job({
+	name: "sendNewsletter",
+	schema: z.object({
+		campaignId: z.string(),
+	}),
+	handler: async (ctx) => {
+		await logAuditEntry(ctx, {
+			action: "send-newsletter",
+			resourceType: "job",
+			resource: "sendNewsletter",
+			resourceId: ctx.payload.campaignId,
+			resourceLabel: "Newsletter campaign",
+			metadata: { campaignId: ctx.payload.campaignId },
+		});
+	},
+});
+```
+
+`logAuditEntry()` resolves the actor from `ctx.session` when available. If the context is running with `accessMode: "system"`, the actor is recorded as system unless you pass `userId`, `userName`, or `actorType`.
+
+## Querying audit logs
+
+Because the audit log is a normal collection, scripts and server code can query it through `ctx.collections.admin_audit_log`.
+
+```ts
+import { createContext } from "#questpie";
+
+const ctx = await createContext();
+const recent = await ctx.collections.admin_audit_log.find({
+	limit: 20,
+	orderBy: { createdAt: "desc" },
+});
+```
+
+Use system context for background reporting jobs that need to read audit logs outside a user request.
+
+## Common mistakes
+
+- Do not store secrets in `changes` or `metadata`. Audit records are durable and visible to admin users.
+- Keep custom action names stable. They become part of the audit vocabulary editors search by.
+- Opt out noisy resources explicitly with `audit: false` instead of hiding the audit collection.
+- Keep admin access rules in place. Audit tells you what happened; it does not replace authorization.

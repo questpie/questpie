@@ -1,0 +1,199 @@
+---
+title: Configuration
+description: Wire the admin module, configure navigation and dashboard, apply branding, and mount the generated admin client.
+---
+
+Admin configuration is split between server codegen and client codegen. The server side registers modules and emits serializable admin schema. The client side registers React renderers and mounts `AdminRouter`.
+
+## Server module
+
+`adminModule` contributes server routes, fields, views, components, setup/auth screens, and the codegen plugin that adds admin builder methods.
+
+```ts title="src/questpie/server/modules.ts"
+import { adminModule } from "@questpie/admin/modules/admin";
+import { openApiModule } from "@questpie/openapi/modules/openapi";
+
+export default [adminModule, openApiModule] as const;
+```
+
+## Client module
+
+The admin client module registers the built-in React views, fields, components, pages, and widgets.
+
+```ts title="src/questpie/admin/modules.ts"
+import { adminClientModule } from "@questpie/admin/client/modules/admin";
+
+export default [adminClientModule] as const;
+```
+
+```ts title="src/questpie/admin/admin.ts"
+export { default as admin } from "./.generated/client";
+```
+
+## App config
+
+`config/admin.ts` is discovered by codegen and added to `config.admin`. Use it for navigation, dashboard layout, brand text, locale, and shell options.
+
+```ts title="src/questpie/server/config/admin.ts"
+import { adminConfig } from "#questpie/factories";
+
+export default adminConfig({
+	branding: {
+		name: "Acme Studio",
+		logo: { src: "/brand/logo-light.svg", srcDark: "/brand/logo-dark.svg" },
+		tagline: "Content operations",
+		favicon: "/favicon.ico",
+	},
+	locale: {
+		locales: ["en", "sk"],
+		defaultLocale: "en",
+	},
+	sidebar: {
+		sections: [
+			{ id: "overview", title: "Overview" },
+			{ id: "content", title: "Content" },
+			{ id: "settings", title: "Settings" },
+		],
+		items: [
+			{
+				sectionId: "overview",
+				type: "link",
+				label: "Dashboard",
+				href: "/admin",
+				icon: { type: "icon", props: { name: "ph:house" } },
+			},
+			{ sectionId: "content", type: "collection", collection: "posts" },
+			{ sectionId: "content", type: "collection", collection: "assets" },
+			{ sectionId: "settings", type: "global", global: "siteSettings" },
+		],
+	},
+	dashboard: {
+		title: "Operations",
+		description: "Content and workflow overview",
+		columns: 4,
+		actions: [
+			{
+				id: "new-post",
+				label: "New post",
+				href: "/admin/collections/posts/create",
+				icon: { type: "icon", props: { name: "ph:plus" } },
+				variant: "primary",
+			},
+		],
+		items: [
+			{
+				id: "published-posts",
+				type: "stats",
+				collection: "posts",
+				label: "Published posts",
+				filter: { status: "published" },
+				span: 1,
+			},
+			{
+				id: "recent-posts",
+				type: "recentItems",
+				collection: "posts",
+				label: "Recent posts",
+				dateField: "updatedAt",
+				limit: 6,
+				span: 2,
+			},
+		],
+	},
+});
+```
+
+## Sidebar model
+
+The sidebar has named sections and typed items. Use `collection` and `global` items for resources that should use generated admin routes. Use `link` for external pages or custom app routes. Use `page` for admin client pages registered under `src/questpie/admin/pages/`.
+
+| Item type | Target |
+|---|---|
+| `collection` | A registered collection slug. |
+| `global` | A registered global slug. |
+| `link` | A URL or app route. |
+| `page` | A client admin page id. |
+| `divider` | A visual divider within a section. |
+
+Module sidebar contributions and app sidebar config merge by section id. Later section metadata can replace the title or icon, while items are appended or prepended with `position`.
+
+## Dashboard model
+
+Dashboard config is server-side. Built-in widget types include `stats`, `chart`, `recentItems`, `quickActions`, `value`, `table`, `timeline`, `progress`, and `custom`.
+
+Widget loaders run on the server and receive the app context, including `collections`, `globals`, and `db`.
+
+```ts title="src/questpie/server/config/admin.ts"
+import { adminConfig } from "#questpie/factories";
+import type { WidgetFetchContext } from "@questpie/admin/factories";
+
+export default adminConfig({
+	dashboard: {
+		items: [
+			{
+				id: "draft-count",
+				type: "value",
+				label: "Draft posts",
+				loader: async ({ collections }: WidgetFetchContext) => {
+					const result = await collections.posts.count({
+						where: { status: "draft" },
+					});
+					return { value: result };
+				},
+			},
+		],
+	},
+});
+```
+
+## Mount the admin
+
+Mount the generated admin client in your app router. The admin client needs the generated admin config, your typed API client, and the shared QueryClient.
+
+```tsx title="src/routes/admin.tsx"
+import { AdminRouter } from "@questpie/admin/client";
+import { admin } from "@/questpie/admin/admin";
+import { appClient } from "@/lib/client";
+import { queryClient } from "@/lib/query-client";
+
+export default function AdminRoute() {
+	return (
+		<AdminRouter
+			admin={admin}
+			client={appClient}
+			queryClient={queryClient}
+			basePath="/admin"
+		/>
+	);
+}
+```
+
+## CSS and branding
+
+Import the admin stylesheet from your admin CSS entry. Put brand overrides after the admin import so your tokens win by source order.
+
+```css title="src/styles/admin.css"
+@import "tailwindcss";
+@import "@questpie/admin/client/styles/base.css";
+
+@source "../node_modules/@questpie/admin/dist";
+
+:root,
+.light {
+	--primary: oklch(0.58 0.18 245);
+	--ring: oklch(0.58 0.18 245);
+	--surface-radius: 0.5rem;
+}
+```
+
+For chrome-level replacement, add client component files under `src/questpie/admin/components/`:
+
+| File | Replaces |
+|---|---|
+| `admin-sidebar-brand.tsx` | Sidebar brand area. |
+| `admin-sidebar-nav-item.tsx` | Sidebar navigation item renderer. |
+| `admin-auth-layout.tsx` | Login, setup, reset password, and invitation shell. |
+
+## Locale
+
+`locale.locales` and `locale.defaultLocale` configure admin UI language choices. Content localization still comes from your field and app locale configuration. Keep the two aligned when editors need to switch both UI text and localized document values.

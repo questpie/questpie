@@ -1,0 +1,169 @@
+---
+title: Collections and Globals
+description: Configure how collections and globals appear in the generated admin panel.
+---
+
+The admin module extends the generated `collection()` and `global()` factories with UI-specific methods. These methods never replace access control or business logic. They describe labels, navigation, views, forms, preview, and actions for the admin surface that sits on top of your server schema.
+
+## Enable the admin methods
+
+Register `adminModule` in the server module list and rerun codegen. Codegen discovers the module's plugin and adds the admin methods to `#questpie/factories`.
+
+```ts title="src/questpie/server/modules.ts"
+import { adminModule } from "@questpie/admin/modules/admin";
+
+export default [adminModule] as const;
+```
+
+```ts title="src/questpie/server/collections/posts.ts"
+import { collection } from "#questpie/factories";
+
+export const posts = collection("posts")
+	.fields(({ f }) => ({
+		title: f.text(255).label("Title").required(),
+		slug: f.text(120).label("Slug").required(),
+		status: f
+			.select([
+				{ value: "draft", label: "Draft" },
+				{ value: "published", label: "Published" },
+			])
+			.label("Status")
+			.default("draft"),
+		excerpt: f.textarea().label("Excerpt"),
+		body: f.richText().label("Body"),
+		cover: f.upload({ to: "assets" }).label("Cover image"),
+	}))
+	.admin(({ c }) => ({
+		label: "Posts",
+		description: "Editorial content",
+		icon: c.icon("ph:article"),
+		group: "content",
+		order: 10,
+	}))
+	.list(({ v, f }) =>
+		v.collectionTable({
+			columns: [f.title, f.status, "updatedAt"],
+			defaultSort: { field: "updatedAt", direction: "desc" },
+			searchable: [f.title],
+			filterable: [f.status],
+			realtime: true,
+		}),
+	)
+	.form(({ v, f }) =>
+		v.collectionForm({
+			sidebar: {
+				position: "right",
+				fields: [f.status, f.slug, f.cover],
+			},
+			fields: [
+				{
+					type: "section",
+					label: "Content",
+					fields: [f.title, f.excerpt, f.body],
+				},
+			],
+		}),
+	)
+	.preview({
+		enabled: true,
+		position: "right",
+		url: ({ record, locale }) =>
+			`/${locale ?? "en"}/blog/${String(record.slug)}`,
+	})
+	.actions(({ a, c }) => ({
+		builtin: [a.create(), a.save(), a.delete(), a.duplicate()],
+		custom: [
+			a.action({
+				id: "open-preview",
+				label: "Open preview",
+				icon: c.icon("ph:arrow-square-out"),
+				handler: ({ itemId }) => ({
+					type: "redirect",
+					url: `/preview/posts/${itemId}`,
+					external: true,
+				}),
+			}),
+		],
+	}));
+```
+
+## Collection methods
+
+| Method | Purpose |
+|---|---|
+| `.admin(config)` | Label, description, icon, sidebar group, sort order, visibility, and audit participation. |
+| `.list(({ v, f, a, c }) => ...)` | List view choice, columns, sorting, filters, search, grouping, realtime, and list-level actions. |
+| `.form(({ v, f }) => ...)` | Create and edit form layout, sections, tabs, sidebar fields, and form view choice. |
+| `.preview(config)` | Live preview URL builder, position, and default panel size. The URL function runs on the server. |
+| `.actions(({ a, c, f }) => ...)` | Built-in actions and custom row, single-record, bulk, or header actions. Handlers run on the server. |
+
+`f` is a field-reference proxy, not a string you hand-write. Use `f.title`, `f.status`, and other registered field keys so codegen can keep the view config aligned with the collection schema.
+
+`v` is the view proxy. Built-ins include `v.collectionTable(...)`, `v.collectionForm(...)`, and `v.globalForm(...)`. Custom views become available on the same proxy after you add server and client view files.
+
+`c` is the component proxy. It emits serializable component references such as `c.icon("ph:article")` or `c.badge({ text: "Live", color: "success" })`. The admin client resolves those references from its component registry.
+
+`a` is the action proxy. It builds action definitions and built-in action names, then the admin runtime executes custom handlers on the server.
+
+## Globals
+
+Globals are singleton documents. They support `.admin()` and `.form()` only. There is no list page, row action, bulk action, or per-record preview for a global.
+
+```ts title="src/questpie/server/globals/site-settings.ts"
+import { global } from "#questpie/factories";
+
+export const siteSettings = global("siteSettings")
+	.fields(({ f }) => ({
+		siteName: f.text(120).label("Site name").required(),
+		homepageTitle: f.text(180).label("Homepage title"),
+		defaultSocialImage: f.upload({ to: "assets" }).label("Default social image"),
+	}))
+	.admin(({ c }) => ({
+		label: "Site settings",
+		icon: c.icon("ph:gear-six"),
+		group: "settings",
+		order: 1,
+	}))
+	.form(({ v, f }) =>
+		v.globalForm({
+			fields: [
+				{
+					type: "section",
+					label: "General",
+					fields: [f.siteName, f.homepageTitle, f.defaultSocialImage],
+				},
+			],
+		}),
+	);
+```
+
+## Access and visibility
+
+Admin config is not security. Use collection or global `.access()` rules for permission decisions. Admin RPC routes, reactive field callbacks, preview URL generation, actions, widgets, and config reads are guarded by the admin auth contract, and the collection/global access rules still decide what data a user can read or mutate.
+
+`hidden: true` removes a resource from navigation, but it does not make the resource private. Use access rules for private data.
+
+## Audit setting
+
+When `auditModule` is installed, collections and globals participate in audit logging unless their admin config opts out.
+
+```ts
+export const imports = collection("imports")
+	.fields(({ f }) => ({
+		name: f.text(120).required(),
+		payload: f.json(),
+	}))
+	.admin({
+		label: "Imports",
+		audit: false,
+	});
+```
+
+Use this for high-volume technical records where recording every mutation would add noise.
+
+## Common mistakes
+
+- Import `collection()` and `global()` from `#questpie/factories` in app files. That generated factory knows which modules added fields and builder methods.
+- Keep admin display config in admin methods. Do not put UI-only fields into the database schema.
+- Keep `.access()` as the source of permission truth. Admin config can hide or arrange UI, but it does not grant access.
+- Rerun codegen after adding admin modules, custom views, custom components, blocks, or generated config files.
