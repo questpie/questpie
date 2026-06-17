@@ -184,6 +184,15 @@ const DRIFT_RULES: Array<{
 		scope: "docs-and-skills",
 	},
 	{
+		id: "roadmap-placeholder-section",
+		severity: "error",
+		pattern:
+			/\b(?:Next pages to add|first [\w -]*docs cut|follow-up pages should cover)\b/gi,
+		message:
+			"Do not publish roadmap/follow-up placeholders in docs. Ship current product guidance only.",
+		scope: "docs-and-skills",
+	},
+	{
 		id: "field-from-docs",
 		severity: "error",
 		pattern: /\bf\.from\s*\(/g,

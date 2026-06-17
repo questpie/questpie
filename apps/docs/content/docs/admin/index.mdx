@@ -1,5 +1,5 @@
 ---
-title: Admin
+title: Overview
 description: Add the generated admin panel, configure its navigation and branding, and extend it with views, components, blocks, actions, auth, and audit trails.
 ---
 
@@ -28,17 +28,22 @@ import { adminClientModule } from "@questpie/admin/client/modules/admin";
 export default [adminClientModule] as const;
 ```
 
-## Next pages to add
+## Configuration entrypoints
 
-This overview is the first admin docs cut. The follow-up pages should cover:
+Admin setup is split across server and client files so codegen can type both sides:
 
-| Page | Scope |
+| File | Purpose |
 |---|---|
-| `admin/collections` | `.admin()`, `.list()`, `.form()`, `.preview()`, `.actions()`, and global forms. |
-| `admin/configuration` | `config/admin.ts`, sidebar, dashboard widgets, branding, locale, and shell options. |
-| `admin/custom-views` | View/component registration, server references, and client renderers. |
-| `admin/auth` | Better Auth integration, setup flow, admin session helpers, and invitations. |
-| `admin/audit` | `auditModule`, audit-log collection, and per-collection audit settings. |
+| `src/questpie/server/modules.ts` | Registers `adminModule`, which contributes server routes, collections, fields, views, components, and codegen extensions. |
+| `src/questpie/admin/modules.ts` | Registers `adminClientModule`, which resolves server-emitted references into React renderers. |
+| `src/questpie/server/config/admin.ts` | Configures sidebar, dashboard, branding, locale, and shell options through `adminConfig()`. |
+| `src/questpie/admin/admin.ts` | Exports the generated admin client config consumed by the app's `/admin` route. |
+
+## Extension surfaces
+
+Collections and globals can opt into admin behavior with generated builder methods such as `.admin()`, `.list()`, `.form()`, `.preview()`, and `.actions()`. Field-level `.admin()` config controls editor behavior, placeholders, layout hints, and component props. Blocks, views, and components are registry-driven conventions contributed by the admin plugin, so adding a file and rerunning codegen is enough to make them available to the admin client.
+
+The admin module also owns the setup/login screens and integrates with Better Auth. Optional modules such as audit can add their own admin collections and UI surfaces through the same module + codegen plugin path.
 
 ## Related
 
