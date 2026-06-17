@@ -3,10 +3,10 @@
 // Regenerate with: questpie generate
 
 import { createApp, createContextFactory } from "questpie/app";
-import "./names.gen.js";
+import "./names.gen";
 import type { AccessContext, AppDefinition, CollectionSelect, GlobalSelect, HookContext, Where } from "questpie/types";
-import type { AppCollections, AppGlobals, AppRoutes } from "./entities.gen.js";
-import type { _AppQuestpie, AppSession, AppSessionUser } from "./context.gen.js";
+import type { AppCollections, AppGlobals, AppRoutes } from "./entities.gen";
+import type { _AppQuestpie, AppSession, AppSessionUser } from "./context.gen";
 
 // ── Runtime ────────────────────────────────────────────────
 import _runtime from "../questpie.config";
@@ -53,8 +53,8 @@ import _authConfig from "../config/auth";
 import _adminConfig from "../config/admin";
 import _openapi from "../config/openapi";
 
-export type * from "./entities.gen.js";
-export type * from "./context.gen.js";
+export type * from "./entities.gen";
+export type * from "./context.gen";
 
 /**
  * Select/document type for a collection key — prefer over `Record<string, any>` for docs.
