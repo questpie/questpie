@@ -10,6 +10,23 @@ description: >
 
 Complete lifecycle guide: scaffold, define data, generate, migrate, serve, deploy.
 
+## Contents
+
+1. [Scaffold a New Project](#1-scaffold-a-new-project)
+2. [Project Structure](#2-project-structure)
+3. [Runtime Config](#3-runtime-config)
+4. [Define a Collection](#4-define-a-collection)
+5. [Add a Route](#5-add-a-route)
+6. [Run Codegen](#6-run-codegen)
+7. [Push Schema / Run Migrations](#7-push-schema--run-migrations)
+8. [Wire Up the HTTP Handler](#8-wire-up-the-http-handler)
+9. [Add the Admin Panel](#9-add-the-admin-panel)
+10. [Typed Client SDK](#10-typed-client-sdk)
+11. [Start Development](#11-start-development)
+12. [Live Preview (Optional)](#12-live-preview-optional)
+
+Also: [Common Mistakes](#common-mistakes) · [CLI Commands](#quick-reference-cli-commands) · [Minimal Complete Example](#minimal-complete-example)
+
 ---
 
 ## 1. Scaffold a New Project
@@ -28,18 +45,22 @@ Options:
 After scaffolding:
 
 ```bash
-cp .env.example .env   # Set DATABASE_URL, APP_URL, APP_SECRET
+cp env.example .env   # Set DATABASE_URL (and APP_URL / BETTER_AUTH_SECRET if not using defaults)
 ```
 
-### Required Environment Variables
+### Environment Variables
 
-| Variable       | Required | Description                  |
-| -------------- | -------- | ---------------------------- |
-| `DATABASE_URL` | Yes      | PostgreSQL connection string |
-| `APP_URL`      | Yes      | Public URL of the app        |
-| `APP_SECRET`   | Yes      | Secret for auth sessions     |
-| `SMTP_HOST`    | No       | Email SMTP host              |
-| `SMTP_PORT`    | No       | Email SMTP port              |
+Env is validated at boot in `src/lib/env.ts` via `@t3-oss/env-core` (Zod schemas). Add new vars there.
+
+| Variable              | Required | Description                                  |
+| --------------------- | -------- | -------------------------------------------- |
+| `DATABASE_URL`        | Yes      | PostgreSQL connection string                 |
+| `APP_URL`             | No       | Public URL (default: `http://localhost:3000`) |
+| `PORT`                | No       | Server port (default: `3000`)                |
+| `BETTER_AUTH_SECRET`  | No       | Better Auth secret (has a dev default)       |
+| `MAIL_ADAPTER`        | No       | `console` or `smtp` (default: `console`)     |
+| `SMTP_HOST`           | No       | SMTP host (when `MAIL_ADAPTER=smtp`)         |
+| `SMTP_PORT`           | No       | SMTP port (when `MAIL_ADAPTER=smtp`)         |
 
 ---
 
@@ -47,34 +68,34 @@ cp .env.example .env   # Set DATABASE_URL, APP_URL, APP_SECRET
 
 ```text
 my-app/
-├── questpie.config.ts                    # CLI config (re-exports server config)
+├── questpie.config.ts                    # CLI config (references app + migrations dir)
+├── env.example                           # Copy to .env
 ├── src/
 │   ├── questpie/
 │   │   ├── server/
-│   │   │   ├── questpie.config.ts        # Runtime config (DB, adapters, secrets)
-│   │   │   ├── modules.ts                # Module dependencies
+│   │   │   ├── questpie.config.ts        # Runtime config: runtimeConfig({ db, app, ... })
+│   │   │   ├── modules.ts                # Module dependencies (adminModule, openApiModule, ...)
+│   │   │   ├── app.ts                    # Hand-written re-export of .generated/index
 │   │   │   ├── config/                   # Typed configuration files
 │   │   │   │   ├── auth.ts              # authConfig({...}) — Better Auth options
-│   │   │   │   ├── app.ts               # appConfig({ locale, access, hooks, context })
 │   │   │   │   ├── admin.ts             # adminConfig({ sidebar, dashboard, branding, locale })
 │   │   │   │   └── openapi.ts           # openApiConfig({ info, scalar })
-│   │   │   ├── collections/              # One file per collection
-│   │   │   ├── globals/                  # One file per global
-│   │   │   ├── routes/                   # App routes (JSON or raw)
-│   │   │   ├── jobs/                     # Background tasks
-│   │   │   ├── services/                 # Singleton services
-│   │   │   ├── blocks/                   # Content blocks (admin plugin)
-│   │   │   ├── emails/                   # Email templates
+│   │   │   ├── collections/              # One file per collection (auto-discovered)
+│   │   │   ├── globals/                  # One file per global (auto-discovered)
 │   │   │   └── .generated/              # Codegen output (NEVER edit)
 │   │   └── admin/                        # Admin client customizations
-│   │       ├── .generated/              # Codegen output (NEVER edit)
-│   │       └── blocks/                  # Block renderers (React)
+│   │       ├── admin.ts                 # Re-exports generated admin client
+│   │       └── .generated/             # Codegen output (NEVER edit)
 │   ├── lib/
-│   │   └── client.ts                    # Typed client SDK
+│   │   ├── env.ts                       # Typed env (@t3-oss/env-core)
+│   │   ├── client.ts                    # Typed client SDK
+│   │   └── query.ts                     # TanStack Query options
 │   └── routes/
 │       └── api/
 │           └── $.ts                     # API catch-all handler
 ```
+
+`config/app.ts` (`appConfig({ locale, access, hooks, context })`) is optional and not scaffolded — add it when needed. `routes/`, `jobs/`, `services/`, `blocks/`, and `emails/` are not scaffolded by default but are auto-discovered the moment you create them under `server/`.
 
 ### Discovery Rules
 
@@ -102,22 +123,27 @@ Only hyphens are camelized in factory args; underscores are preserved (`global("
 ```ts
 // src/questpie/server/questpie.config.ts
 import { runtimeConfig } from "questpie/app";
+import { env } from "@/lib/env.js";
+
 export default runtimeConfig({
-	app: {
-		url: process.env.APP_URL || "http://localhost:3000",
-	},
-	db: {
-		url: process.env.DATABASE_URL || "postgres://localhost/myapp",
-	},
-	secret: process.env.APP_SECRET || "change-me-in-production",
+	app: { url: env.APP_URL },
+	db: { url: env.DATABASE_URL },
+	secret: env.BETTER_AUTH_SECRET,
 });
 ```
 
-The CLI config at the project root re-exports the server config:
+The CLI config at the project root points the CLI at the app and the migrations directory:
 
 ```ts
 // questpie.config.ts (project root)
-export { default } from "./src/questpie/server/questpie.config";
+import { app } from "@/questpie/server/app";
+
+export const config = {
+	app,
+	cli: { migrations: { directory: "./src/migrations" } },
+};
+
+export default config;
 ```
 
 ---
@@ -222,6 +248,9 @@ bunx questpie migrate:up
 # Rollback last migration
 bunx questpie migrate:down
 
+# Show which migrations have run
+bunx questpie migrate:status
+
 # Reset all migrations
 bunx questpie migrate:reset
 
@@ -237,17 +266,34 @@ bunx questpie migrate:fresh
 
 ```ts
 // src/routes/api/$.ts
-import { createAPIFileRoute } from "@tanstack/react-start/api";
+import { createFileRoute } from "@tanstack/react-router";
 import { createFetchHandler } from "questpie/http";
 import { app } from "#questpie";
 
 const handler = createFetchHandler(app, { basePath: "/api" });
 
-export const Route = createAPIFileRoute("/api/$")({
-	GET: ({ request }) => handler(request),
-	POST: ({ request }) => handler(request),
-	PATCH: ({ request }) => handler(request),
-	DELETE: ({ request }) => handler(request),
+// createFetchHandler returns Response | null — fall back to 404 when no route matches.
+const handleCmsRequest = async (request: Request) => {
+	const response = await handler(request);
+	return (
+		response ??
+		new Response(JSON.stringify({ error: "Not found" }), {
+			status: 404,
+			headers: { "Content-Type": "application/json" },
+		})
+	);
+};
+
+export const Route = createFileRoute("/api/$")({
+	server: {
+		handlers: {
+			GET: ({ request }) => handleCmsRequest(request),
+			POST: ({ request }) => handleCmsRequest(request),
+			PUT: ({ request }) => handleCmsRequest(request),
+			DELETE: ({ request }) => handleCmsRequest(request),
+			PATCH: ({ request }) => handleCmsRequest(request),
+		},
+	},
 });
 ```
 
@@ -374,16 +420,19 @@ QUESTPIE requires PostgreSQL. Set `DATABASE_URL` in `.env` before running `push`
 DATABASE_URL=postgres://user:pass@localhost:5432/myapp
 ```
 
-### MEDIUM: Missing `export default` on convention files
+### MEDIUM: Convention file with no export
 
-Codegen discovers files by their **default export**. Files without `export default` are silently ignored:
+Codegen discovers a file by its export — either `export default` or a named `export const`/`function` works. A file with no export at all is skipped. Collection/global keys derive from the **filename** (kebab → camelCase), not the export name:
 
 ```ts
-// WRONG — codegen will not discover this
-export const tasks = collection("tasks").fields(/* ... */);
+// WRONG — defined but never exported, so codegen skips it
+const tasks = collection("tasks").fields(/* ... */);
 
-// CORRECT
+// CORRECT — default export (filename tasks.ts → key "tasks")
 export default collection("tasks").fields(/* ... */);
+
+// ALSO CORRECT — named export is discovered too
+export const tasks = collection("tasks").fields(/* ... */);
 ```
 
 ### MEDIUM: Putting business logic in route handlers
@@ -392,10 +441,14 @@ Framework route handlers should only mount the QUESTPIE fetch handler. Business 
 
 ```ts
 // WRONG — business logic in route file
-export const Route = createAPIFileRoute("/api/custom")({
-	POST: async ({ request }) => {
-		const db = getDB();
-		// ... manual queries
+export const Route = createFileRoute("/api/custom")({
+	server: {
+		handlers: {
+			POST: async ({ request }) => {
+				const db = getDB();
+				// ... manual queries
+			},
+		},
 	},
 });
 
@@ -425,7 +478,12 @@ export default route()
 | `bunx questpie migrate:generate` | Generate migration from schema diff         |
 | `bunx questpie migrate:up`       | Run pending migrations                      |
 | `bunx questpie migrate:down`     | Rollback last migration                     |
+| `bunx questpie migrate:status`   | Show migration status                       |
 | `bunx questpie migrate:fresh`    | Reset + run all migrations                  |
+| `bunx questpie seed`             | Run pending seeds                           |
+| `bunx questpie seed:undo`        | Undo executed seeds                         |
+| `bunx questpie seed:status`      | Show seed status                            |
+| `bunx questpie seed:reset`       | Reset seed tracking (does not undo data)    |
 | `bun dev`                        | Start development server                    |
 
 ---
@@ -436,7 +494,14 @@ Starting from zero — every file needed for a working app:
 
 ```ts
 // questpie.config.ts (project root)
-export { default } from "./src/questpie/server/questpie.config";
+import { app } from "@/questpie/server/app";
+
+export const config = {
+	app,
+	cli: { migrations: { directory: "./src/migrations" } },
+};
+
+export default config;
 ```
 
 ```ts
@@ -445,7 +510,7 @@ import { runtimeConfig } from "questpie/app";
 export default runtimeConfig({
 	app: { url: process.env.APP_URL || "http://localhost:3000" },
 	db: { url: process.env.DATABASE_URL! },
-	secret: process.env.APP_SECRET || "dev-secret",
+	secret: process.env.BETTER_AUTH_SECRET || "dev-secret",
 });
 ```
 
@@ -465,17 +530,33 @@ export default collection("posts").fields(({ f }) => ({
 
 ```ts
 // src/routes/api/$.ts
-import { createAPIFileRoute } from "@tanstack/react-start/api";
+import { createFileRoute } from "@tanstack/react-router";
 import { createFetchHandler } from "questpie/http";
 import { app } from "#questpie";
 
 const handler = createFetchHandler(app, { basePath: "/api" });
 
-export const Route = createAPIFileRoute("/api/$")({
-	GET: ({ request }) => handler(request),
-	POST: ({ request }) => handler(request),
-	PATCH: ({ request }) => handler(request),
-	DELETE: ({ request }) => handler(request),
+const handleCmsRequest = async (request: Request) => {
+	const response = await handler(request);
+	return (
+		response ??
+		new Response(JSON.stringify({ error: "Not found" }), {
+			status: 404,
+			headers: { "Content-Type": "application/json" },
+		})
+	);
+};
+
+export const Route = createFileRoute("/api/$")({
+	server: {
+		handlers: {
+			GET: ({ request }) => handleCmsRequest(request),
+			POST: ({ request }) => handleCmsRequest(request),
+			PUT: ({ request }) => handleCmsRequest(request),
+			DELETE: ({ request }) => handleCmsRequest(request),
+			PATCH: ({ request }) => handleCmsRequest(request),
+		},
+	},
 });
 ```
 

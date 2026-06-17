@@ -1,47 +1,36 @@
 ---
 name: questpie-core/crud-api
-description: QUESTPIE CRUD API find findOne create updateById updateMany updateBatch deleteById deleteMany restoreById count atomic conditional update claim optimistic locking query operators where filter sort orderBy pagination limit offset with select relations depth context accessMode collections globals client server typesafe
+description: QUESTPIE CRUD API find findOne create updateById updateMany updateBatch deleteById deleteMany restoreById count atomic conditional update claim optimistic locking query operators where filter sort orderBy pagination limit offset with columns relations depth context accessMode collections globals client server typesafe
   - questpie-core
 ---
 
 This skill builds on questpie-core.
 
+## Contents
+
+- [Two API Surfaces](#two-api-surfaces) — `collections.*` (handlers) vs `app.collections.*` (scripts)
+- [Collection Operations](#collection-operations) — find, findOne, create, updateById/Many/Batch, deleteById/Many, restoreById, count
+- [Global Operations](#global-operations) — get, update
+- [Query Operators](#query-operators) — `where` shape, equality shorthand
+- [Sorting](#sorting) — `orderBy` syntaxes
+- [Pagination](#pagination) — `limit`/`offset`, keyset cursors
+- [Relations](#relations) — `with` to eager-load, `columns` to project
+- [Context and Access Modes](#context-and-access-modes) — handlers, partial overrides, transactions, scripts
+- [Client API](#client-api) — same vocabulary, plus `live()` and `upload()`
+- [Common Mistakes](#common-mistakes)
+
 ## Two API Surfaces
 
-QUESTPIE exposes CRUD operations in two ways depending on where you call them:
-
-### 1. Handler Context (routes, hooks, jobs)
-
-Inside any handler, `collections` and `globals` are injected via context. The current request context (session, locale, access mode) is implicit:
+The same CRUD vocabulary runs on two surfaces. Inside any handler (routes, hooks, jobs), `collections`/`globals` are injected and the request context (session, locale, access mode) is implicit. Outside handlers (scripts, seeds), use `app.collections.*`/`app.globals.*` and pass an explicit context as the second argument. See [Context and Access Modes](#context-and-access-modes) for the full rules.
 
 ```ts
-// routes/get-published.ts
-import { route } from "questpie/services";
-export default route()
-	.get()
-	.handler(async ({ collections }) => {
-		const result = await collections.posts.find({
-			where: { status: "published" },
-			limit: 10,
-			orderBy: { createdAt: "desc" },
-		});
-		return result.docs;
-	});
-```
+// In a handler — context is implicit
+const { docs } = await collections.posts.find({ where: { status: "published" }, limit: 10 });
 
-### 2. App Instance (scripts, seeds, external)
-
-Outside handlers, use `app.collections.*` and pass an explicit context as the second argument:
-
-```ts
+// In a script — explicit context required
 import { app } from "#questpie";
-
 const ctx = await app.createContext({ accessMode: "system", locale: "en" });
-
-const result = await app.collections.posts.find(
-	{ where: { status: "published" }, limit: 10 },
-	ctx,
-);
+const { docs } = await app.collections.posts.find({ where: { status: "published" } }, ctx);
 ```
 
 ## Collection Operations
@@ -74,12 +63,14 @@ const result = await collections.posts.find({
 	limit: 20,
 	offset: 0,
 	with: { author: true, category: true },
-	select: { title: true, status: true, createdAt: true },
+	columns: { title: true, status: true, createdAt: true },
 });
 // result: { docs: T[], totalDocs: number }
 ```
 
 **Return type:** `{ docs: T[], totalDocs: number }`
+
+`find()` also accepts: `search` (case-insensitive ILIKE against the title expression), `locale` / `localeFallback` (per-request locale override), `includeDeleted` (only with `softDelete`), `stage` (workflow stage to read from), `extras` (custom SQL fields), and `groupBy` (a field name or `{ field, order }`). With `groupBy`, `limit`/`offset` paginate groups and the **return shape changes** to `{ groups: [{ key, value, count, docs }], totalGroups, ... }` instead of `{ docs, totalDocs }`.
 
 ### `findOne(options)`
 
@@ -205,7 +196,7 @@ const restored = await collections.posts.restoreById({ id: "abc-123" });
 
 ### `count(options)`
 
-Count documents matching a filter.
+Count documents matching a filter. `count()` accepts only `{ where, includeDeleted }` — not the full find options (no `with`, `orderBy`, `limit`, `groupBy`, etc.).
 
 ```ts
 const total = await collections.posts.count({
@@ -343,11 +334,11 @@ const post = await collections.posts.findOne({
 // post.author is now the full author object, not just an ID
 ```
 
-Use `select` to pick specific fields:
+Use `columns` to pick specific fields (inclusion mode with `true`, omission mode with `false`; `id` is always included):
 
 ```ts
 const posts = await collections.posts.find({
-	select: { title: true, status: true },
+	columns: { title: true, status: true },
 });
 ```
 
@@ -471,21 +462,6 @@ const assets = await client.collections.assets.uploadMany(files, {
 ```
 
 ## Common Mistakes
-
-### CRITICAL: Missing context in app.collections calls
-
-When using `app.collections.*` outside handlers, you MUST pass a context. Without it, the call has no session, no locale, and no access mode.
-
-```ts
-// WRONG -- no context
-const posts = await app.collections.posts.find({});
-
-// CORRECT -- explicit context
-const ctx = await app.createContext({ accessMode: "system" });
-const posts = await app.collections.posts.find({}, ctx);
-```
-
-Inside handlers (route handlers, hooks, jobs), context is injected automatically -- use `collections.*` directly.
 
 ### HIGH: Expecting find() to return an array
 

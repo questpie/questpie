@@ -26,6 +26,7 @@ The schema is the single source of types. If you are hand-writing a type that re
 | 18 | Field-level rule ctx (`.access({ fields })`) | `doc` is typed as the row, `user` is typed from the generated session — destructure, don't annotate | |
 | 19 | Derived request context (tenant, role) | `appConfig({ context })` result is inferred and arrives flat on rules — **annotate the resolver return with a self-contained DTO** (inferring it from `.find().docs` re-enters the generated index) | App-level `access` rules get the base ctx (`session`/`db`), not extensions — by design, cycle-free |
 | 20 | Select-option unions | `CollectionDoc<"events">["type"]` (server-side) | No client-safe union export yet; clients infer from SDK responses |
+| 21 | `where` filter for a collection (esp. one built up dynamically) | `import type { CollectionWhere } from "#questpie"` → `CollectionWhere<"appointments">` | Field keys are mutable, so `const where: CollectionWhere<"appointments"> = {}; if (x) where.status = "…"` type-checks. Same cycle rules as `CollectionDoc`. Inline `find({ where: { … } })` is already typed — reach for this only for a standalone/dynamic variable |
 
 ## The Two Cycle Rules
 
@@ -165,3 +166,4 @@ For columns whose value type the field cannot infer, stay declarative — see `r
 | Hand-rolled `CollectionsLike` / `AccessRuleCtx` ctx mirrors | Structural matching of CRUD generics → deep error walls, tsc 5.9 crashes | `AccessContext` param (row 3) |
 | Module-level `app` singleton for callbacks | Import cycles; stale instance in tests | `getContext<App>()` (row 5) |
 | Collection-imported helper returning unannotated `ctx.collections` results | TS7022/TS2502 self-reference | Explicit return annotation (Rule 2) |
+| `const where: Record<string, unknown>` built by hand | No field/operator checking; silent drift from the schema | `CollectionWhere<"posts">` (row 21) |

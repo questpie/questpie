@@ -10,20 +10,26 @@ description: QUESTPIE multi-tenant scope context resolver header-based tenant is
 
 QUESTPIE supports multi-tenant applications through a **scope-based** architecture. A "scope" can represent anything: organizations, workspaces, properties, cities, brands — any entity that partitions data.
 
-The pattern is simple: **HTTP header carries a scope ID, the `appConfig({ context })` resolver derives typed context once per request, access rules filter data**.
-
-## Architecture Overview
+The whole pattern is one pipeline: **the client injects an HTTP header carrying a scope ID, the `appConfig({ context })` resolver reads it and derives typed context once per request, and access rules filter data with it.**
 
 ```text
 Client                          Server
 ──────                          ──────
-ScopeProvider                   config/app.ts → appConfig({ context })
-  ↓ stores scopeId                ↓ resolver runs ONCE per HTTP request
-ScopePicker (UI)                  ↓ result travels with the request
-useScopedFetch()                access rules / hooks / routes / getContext()
-  ↓ injects HTTP header           ↓ read it flat: ({ workspaceId }) => ...
-fetch("x-selected-city: id")    AsyncLocalStorage carries it into nested CRUD
+ScopePicker → ScopeProvider     appConfig({ context }) resolver
+  → useScopedFetch                runs ONCE per HTTP request, reads the header,
+  injects header                  result flat-merges into every access rule,
+  x-selected-workspace: ws_123    hook, route handler, and getContext()
 ```
+
+## Contents
+
+- [Step 1: Define the Scope Collection](#step-1-define-the-scope-collection)
+- [Step 2: Derive Context in `appConfig({ context })`](#step-2-derive-context-in-appconfig-context-)
+- [Step 3: Filter Data with Access Rules](#step-3-filter-data-with-access-rules)
+- [Step 4: Read Derived Context Anywhere](#step-4-read-derived-context-anywhere)
+- [Step 5: Set Up the Admin UI](#step-5-set-up-the-admin-ui)
+- [Common Mistakes](#common-mistakes)
+- [Reference Example](#reference-example)
 
 ## Step 1: Define the Scope Collection
 
@@ -96,39 +102,11 @@ The resolver receives the base request params plus the full system-mode service 
 
 ### Lifecycle Rules
 
-- **Once per HTTP request.** Admin and REST calls alike. Nested CRUD, relation hydration, and hooks within the same request never re-run the resolver.
-- **No request → no resolver.** Jobs, workflows, seeds, and `createContext()` without a `request` skip it. Extension types are `Partial<…>` — **always narrow** (`if (!workspaceId) return false`).
+- **Once per HTTP request.** Admin and REST calls alike. Nested CRUD, relation hydration, and hooks within the same request reuse the same result — never re-run the resolver.
+- **No request → no resolver.** Jobs, workflows, seeds, and `createContext()` without a `request` skip it, so extension types are `Partial<…>` (see [narrowing](#high-not-narrowing-optional-extensions)).
 - **Collections inside the resolver run system mode** — the resolver IS trusted derivation. If you explicitly pass `accessMode: "user"` to a CRUD call inside the resolver, rules evaluated from there see no extensions (they don't exist yet) — rules must already tolerate absence.
 - **Throwing fails the request** before any rule or handler runs. Throw `ApiError.*` for structured error responses (the tenant-validation case).
 - **Reserved keys warn in dev.** Returning `session`, `db`, `locale`, `accessMode`, `collections`, … from the resolver logs a warning — framework keys cannot be shadowed.
-
-### Request-Level Memoization = Closures
-
-The resolver's closure scope lives exactly one request — expensive lookups become lazy functions, no `WeakMap`, no cache keys, no framework machinery:
-
-```ts
-// config/app.ts
-export default appConfig({
-	context: async ({ session, collections }) => {
-		const userId = session?.user?.id ?? null;
-
-		// Resolved at most once per request, only when first awaited
-		let memberships: Promise<string[]> | null = null;
-		const loadMemberships = () =>
-			(memberships ??= (async () => {
-				if (!userId) return [];
-				const rows = await collections.workspace_members.find({
-					where: { user: userId },
-				});
-				return rows.docs.map((r) => r.workspace);
-			})());
-
-		return { userId, memberships: loadMemberships };
-	},
-});
-```
-
-Rules then call `await memberships()` — the underlying query runs once per request no matter how many rules, hooks, and relation hydrations evaluate.
 
 ## Step 3: Filter Data with Access Rules
 
@@ -196,24 +174,31 @@ async function currentWorkspaceOrThrow() {
 
 ### ScopeProvider
 
-Wrap your admin with `ScopeProvider` to enable scope selection. It manages the selected scope ID and persists it to localStorage.
+Wrap your admin with `ScopeProvider` to enable scope selection. It manages the selected scope ID and persists it to localStorage. Place it in the admin layout route, around `AdminLayoutProvider`.
 
 ```tsx
-// routes/admin/$.tsx
+// routes/admin.tsx
+import { Outlet } from "@tanstack/react-router";
 import {
-	AdminLayout,
-	AdminRouter,
+	AdminLayoutProvider,
 	ScopePicker,
 	ScopeProvider,
 } from "@questpie/admin/client";
 
-function AdminPage() {
+function AdminLayout() {
 	return (
 		<ScopeProvider
 			headerName="x-selected-workspace"
 			storageKey="admin-selected-workspace"
 		>
-			<AdminContent />
+			<AdminLayoutProvider
+				admin={admin}
+				client={client}
+				LinkComponent={AdminLink}
+				basePath="/admin"
+			>
+				<Outlet />
+			</AdminLayoutProvider>
 		</ScopeProvider>
 	);
 }
@@ -229,33 +214,31 @@ function AdminPage() {
 
 ### ScopePicker
 
-A dropdown for selecting the current scope. Place it in the sidebar:
+A dropdown for selecting the current scope. Render it into the sidebar through the `afterBrand` slot — passed via `sidebarProps` (a `Partial<AdminSidebarProps>`):
 
 ```tsx
-function AdminContent() {
-	return (
-		<AdminLayout
-			admin={admin}
-			basePath="/admin"
-			slots={{
-				afterBrand: (
-					<div className="px-3 py-2 border-b">
-						<ScopePicker
-							collection="workspaces"
-							labelField="name"
-							placeholder="Select workspace..."
-							allowClear
-							clearText="All Workspaces"
-							compact
-						/>
-					</div>
-				),
-			}}
-		>
-			<AdminRouter basePath="/admin" />
-		</AdminLayout>
-	);
-}
+<AdminLayoutProvider
+	admin={admin}
+	client={client}
+	LinkComponent={AdminLink}
+	basePath="/admin"
+	sidebarProps={{
+		afterBrand: (
+			<div className="border-b px-3 py-2">
+				<ScopePicker
+					collection="workspaces"
+					labelField="name"
+					placeholder="Select workspace..."
+					allowClear
+					clearText="All Workspaces"
+					compact
+				/>
+			</div>
+		),
+	}}
+>
+	<Outlet />
+</AdminLayoutProvider>
 ```
 
 #### ScopePicker Props
@@ -325,22 +308,6 @@ const scopedFetch = createScopedFetch(
 );
 ```
 
-## Full Request Flow
-
-```text
-1. User selects "Acme Corp" in ScopePicker
-2. ScopeProvider stores scopeId = "ws_123" in state + localStorage
-3. useScopedFetch() creates fetch that adds header: x-selected-workspace: ws_123
-4. Client makes API call → POST /api/collections/projects/find
-5. Server: app.createContext() runs the appConfig({ context }) resolver ONCE
-6. Server: resolver extracts workspaceId = "ws_123", validates membership
-7. Server: result travels with the request (flat keys + internal bundle)
-8. Server: access rules read ({ workspaceId }) → return { workspace: "ws_123" }
-9. Server: hooks, nested CRUD, getContext() all see the same workspaceId
-10. Server: query filtered to workspace = "ws_123"
-11. Response: Only Acme Corp's projects returned
-```
-
 ## Common Mistakes
 
 ### HIGH: Wrapping context access in `ctx`
@@ -370,6 +337,36 @@ read: ({ workspaceId }) => {
 };
 ```
 
+### HIGH: Forgetting cross-scope relation leakage
+
+Filtering the scoped collection is **not enough**. A `find` that hydrates relations (`with: { ... }`) re-reads each related collection — and that nested read only applies the **target** collection's own `.access().read` rule. If the relation target has no scoping rule, hydrating it surfaces other tenants' rows even though the parent query was scoped:
+
+```ts
+// projects is scoped, but a project's `customer` relation is NOT
+await app.collections.projects.find({
+	with: { customer: true }, // hydrates ANY tenant's customer row
+});
+```
+
+Every collection reachable as a relation target needs its own scoped `.access()` — scope the relation collections, not just the entry collection:
+
+```ts
+// collections/customers.ts
+export default collection("customers")
+	.fields(({ f }) => ({
+		name: f.text().required(),
+		workspace: f.relation("workspaces").required(),
+	}))
+	.access({
+		read: ({ workspaceId }) =>
+			workspaceId ? { workspace: workspaceId } : false,
+	});
+```
+
+### HIGH: Assuming the user/auth collection is scoped
+
+The scope resolver and access rules only scope what **you** scope. The built-in `user` collection (and the `account` / `session` / `apikey` auth tables) ships with no scope field and no tenant `.access()` rule — it is shared globally across every tenant. A `find` on `user`, or a relation pointing at `user`, returns the whole user table regardless of the selected scope. If users belong to tenants, model that membership explicitly (e.g. a `workspace_members` join collection) and scope it yourself; do not rely on `user` being partitioned.
+
 ### MEDIUM: Hardcoding header names
 
 Use the same header name in `ScopeProvider.headerName` and the resolver. A mismatch means the server never sees the scope ID.
@@ -398,5 +395,6 @@ See the **city-portal** example for a complete working implementation:
 ```text
 examples/city-portal/
   src/questpie/server/config/app.ts    # appConfig({ context }) — x-selected-city header
-  src/routes/admin/$.tsx               # Admin with ScopeProvider + ScopePicker
+  src/routes/admin.tsx                 # ScopeProvider + AdminLayoutProvider w/ sidebarProps.afterBrand ScopePicker
+  src/routes/admin/$.tsx               # AdminRouter catch-all (renders the resolved view)
 ```

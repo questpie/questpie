@@ -5,7 +5,20 @@ description:
   - questpie-core
 ---
 
-This skill builds on questpie-core.
+This skill builds on questpie-core. It is the **deployment/ops** doc: auth, access control, locking down the REST surface, PgBouncer, SSE keepalive, Docker, the production checklist, and common mistakes. For the exhaustive **adapter config shapes** (Storage, Queue, Realtime, Email, KV, Logger, Search, OpenAPI) see `references/infrastructure-adapters.md`.
+
+## Contents
+
+- [Overview](#overview)
+- [Environment](#environment)
+- [Authentication](#authentication) — session, access control, locking down REST
+- [Database & Migrations](#database--migrations)
+- [Infrastructure Adapters](#infrastructure-adapters) — delegated to infrastructure-adapters.md
+- [PgBouncer Compatibility](#pgbouncer-compatibility)
+- [Realtime & SSE Keepalive](#realtime--sse-keepalive)
+- [Deployment](#deployment) — Docker, env vars, checklist, health check
+- [Realtime and Live Preview](#realtime-and-live-preview)
+- [Common Mistakes](#common-mistakes)
 
 ## Overview
 
@@ -20,6 +33,8 @@ QUESTPIE uses an adapter-based architecture for all infrastructure. Development 
 | Email    | Console (logs output) | SMTP (`SmtpAdapter`)                            |
 | KV Store | In-memory             | Redis (`redisKVAdapter`)                        |
 | Logger   | Pino (console)        | Pino (structured JSON)                          |
+
+Every adapter's exact config shape lives in `references/infrastructure-adapters.md`.
 
 ## Environment
 
@@ -44,7 +59,7 @@ export default env({
 });
 ```
 
-All snippets below assume `import env from "./env"` at the top of `questpie.config.ts`.
+Snippets that read config values assume `import env from "./env"` at the top of `questpie.config.ts` (or `../env` from `config/`).
 
 ## Authentication
 
@@ -123,21 +138,9 @@ upload files still serve by key (`GET /:collection/files/:key`) because
 access kind. Do not wrap schema/meta routes in custom auth middleware; use
 `introspect` rules instead.
 
-## Database
+## Database & Migrations
 
-PostgreSQL with Drizzle ORM. Schema is generated from your collection and global definitions.
-
-```ts
-export default runtimeConfig({
-	db: {
-		url: env.DATABASE_URL,
-	},
-});
-```
-
-Raw access via `db` context, indexes via `.indexes()`. See `references/infrastructure-adapters.md` for field-to-column mapping and full details.
-
-## Migrations
+PostgreSQL with Drizzle ORM; schema is generated from your collection and global definitions. In production point `db.url` at a remote PG with SSL. Config shape, field-to-column mapping, raw access, and indexes are in `references/infrastructure-adapters.md`.
 
 ### Development: Push
 
@@ -168,163 +171,13 @@ bunx questpie migrate:reset
 
 Configure migration and seed directories in `questpie.config.ts` under `cli.migrations.directory` and `cli.seeds.directory`. Run seeds with `bunx questpie seed`.
 
-## Storage
+## Infrastructure Adapters
 
-QUESTPIE uses [Files SDK](https://files-sdk.dev/) for file storage.
+All adapter config shapes — Storage (local, S3, R2), Queue (pg-boss, BullMQ), Realtime (pgNotify, Redis Streams), Email (SMTP, Console, Resend, Plunk), KV (Redis, custom), Logger, Search, and OpenAPI — live in **`references/infrastructure-adapters.md`**. Each is configured under `runtimeConfig({...})` in `questpie.config.ts`. The deployment-relevant constraints follow.
 
-### Local (Development Default)
-
-```ts
-export default runtimeConfig({
-	storage: {
-		basePath: "/api",
-	},
-});
-```
-
-### S3 (Production)
-
-```ts
-import { s3 } from "files-sdk/s3";
-
-export default runtimeConfig({
-	storage: {
-		basePath: "/api",
-		adapter: s3({
-			bucket: env.S3_BUCKET,
-			region: env.S3_REGION,
-			credentials: {
-				accessKeyId: env.S3_ACCESS_KEY,
-				secretAccessKey: env.S3_SECRET_KEY,
-			},
-		}),
-	},
-});
-```
-
-### Cloudflare R2 (Production)
-
-```ts
-import { r2 } from "files-sdk/r2";
-
-export default runtimeConfig({
-	storage: {
-		basePath: "/api",
-		adapter: r2({
-			bucket: env.R2_BUCKET,
-			accountId: env.R2_ACCOUNT_ID,
-			accessKeyId: env.R2_ACCESS_KEY_ID,
-			secretAccessKey: env.R2_SECRET_ACCESS_KEY,
-		}),
-	},
-});
-```
-
-### Upload Fields
-
-```ts
-avatar: f.upload({
-  to: "assets",
-  mimeTypes: ["image/*"],
-  maxSize: 5_000_000,
-}),
-```
-
-## Queue
-
-Background job processing with [pg-boss](https://github.com/timgit/pg-boss). Jobs stored in PostgreSQL.
-
-```ts
-import { runtimeConfig } from "questpie/app";
-import { pgBossAdapter } from "questpie/adapters/pg-boss";
-
-export default runtimeConfig({
-	queue: {
-		adapter: pgBossAdapter({
-			connectionString: env.DATABASE_URL,
-		}),
-	},
-});
-```
-
-> **Warning:** pg-boss uses `LISTEN/NOTIFY` internally. Do not point `connectionString` at a PgBouncer in transaction pool mode — jobs will queue but never wake the worker, so they fire only on the polling fallback (slow, sometimes never). See "PgBouncer Compatibility" for the full adapter matrix and routing options. Use a direct PG connection or `cloudflareQueuesAdapter`.
-
-On Cloudflare Workers, queue processing is push-based. Configure `cloudflareQueuesAdapter` from `questpie/adapters/cloudflare` and export the Worker through `createCloudflareWorkerHandlers`; do not run `app.queue.listen()` in a Worker.
-
-### Publishing Jobs
-
-From hooks, functions, or other jobs:
-
-```ts
-handler: async ({ queue }) => {
-	await queue.sendAppointmentConfirmation.publish({
-		appointmentId: "abc",
-		customerId: "def",
-	});
-};
-```
-
-The `queue` object is fully typed -- autocompletion shows all registered jobs and their payload schemas.
-
-## Realtime
-
-SSE-based live updates via `POST /realtime` multiplexed endpoint.
-
-> **Warning:** `pgNotifyAdapter` requires a direct PG connection (or PgBouncer in `session` mode). Behind PgBouncer transaction pooling, `LISTEN` is silently dropped and clients fall back to polling — events never fan out. See "PgBouncer Compatibility" below.
-
-### pgNotify (Single Instance)
-
-```ts
-import { runtimeConfig } from "questpie/app";
-import { pgNotifyAdapter } from "questpie/adapters/pg-notify";
-
-export default runtimeConfig({
-	realtime: {
-		adapter: pgNotifyAdapter({
-			connectionString: env.DATABASE_URL,
-		}),
-	},
-});
-```
-
-### Redis Streams (Multi-Instance)
-
-Required for horizontal scaling:
-
-```ts
-import { runtimeConfig } from "questpie/app";
-import { redisStreamsAdapter } from "questpie/adapters/redis-streams";
-
-export default runtimeConfig({
-	realtime: {
-		adapter: redisStreamsAdapter({
-			url: env.REDIS_URL,
-		}),
-	},
-});
-```
-
-> **Warning:** `pgNotifyAdapter` and `pgBossAdapter` both rely on PostgreSQL `LISTEN/NOTIFY`. They will silently fail behind PgBouncer in transaction pool mode. See "PgBouncer Compatibility" below.
-
-### SSE Keepalive & Timeouts
-
-The `POST /realtime` SSE stream sends a `ping` every **8s** by default (`realtime.keepAliveIntervalMs`). Every layer between browser and server must tolerate at least that idle window, or subscriptions die and reconnect in a loop:
-
-| Layer                      | Setting                            | Recommendation                                                            |
-| -------------------------- | ---------------------------------- | ------------------------------------------------------------------------- |
-| Bun (`Bun.serve`)          | `idleTimeout` (default 10s)        | Default ping survives it; set `idleTimeout: 30` for headroom              |
-| nginx                      | `proxy_read_timeout` (default 60s) | Keep >= 60s; disable SSE response buffering (`proxy_buffering off`)       |
-| Load balancers (ALB, etc.) | idle timeout (often 60s)           | Keep above `keepAliveIntervalMs`                                          |
-| Serverless platforms       | response buffering / max duration  | SSE needs streaming responses; buffered platforms break realtime entirely |
-
-```ts
-// Bun server entry — the app owns Bun.serve options, not the framework
-export default {
-	port: 3000,
-	idleTimeout: 30, // seconds
-	fetch: server.fetch,
-};
-```
+- **Queue / pg-boss and Realtime / pgNotify** both rely on PostgreSQL `LISTEN/NOTIFY` and silently break behind PgBouncer in transaction pool mode. See [PgBouncer Compatibility](#pgbouncer-compatibility).
+- **Cloudflare Workers** process queues push-based: use `cloudflareQueuesAdapter` from `questpie/adapters/cloudflare` and export the Worker via `createCloudflareWorkerHandlers` — do not run `app.queue.listen()` in a Worker.
+- **Multi-instance realtime** requires `redisStreamsAdapter`; a single instance can use `pgNotifyAdapter`.
 
 ## PgBouncer Compatibility
 
@@ -350,110 +203,29 @@ Prepared statements also break under transaction pooling. If you must use it, en
 - **Split topology:** route web traffic through PgBouncer (transaction mode) and run workers (pgBoss, pgNotify) on a direct connection. This works, but realtime fired from web handlers still routes through the same `QUESTPIE_DB`, so realtime in web fails. In practice, going direct everywhere is simpler.
 - **TODO / current limitation:** the framework reads a single `QUESTPIE_DB` env var. There is no built-in split between a pooled URL and a direct URL for LISTEN consumers. Track this if you need a mixed topology.
 
-## Email
+## Realtime & SSE Keepalive
 
-Transactional email with typed templates. Two adapters: `SmtpAdapter` (production) and `ConsoleAdapter` (development).
+SSE-based live updates fan out via the `POST /realtime` multiplexed endpoint. Adapter config (`pgNotifyAdapter`, `redisStreamsAdapter`) is in `references/infrastructure-adapters.md`.
 
-```ts
-import { runtimeConfig } from "questpie/app";
-import { ConsoleAdapter } from "questpie/adapters/console";
-import { SmtpAdapter } from "questpie/adapters/smtp";
+### SSE Keepalive & Timeouts
 
-export default runtimeConfig({
-	email: {
-		adapter:
-			env.NODE_ENV === "development"
-				? new ConsoleAdapter({ logHtml: false })
-				: new SmtpAdapter({
-						transport: { host: env.SMTP_HOST, port: 587, secure: true },
-					}),
-	},
-});
-```
+The `POST /realtime` SSE stream sends a `ping` every **8s** by default (`realtime.keepAliveIntervalMs`). Every layer between browser and server must tolerate at least that idle window, or subscriptions die and reconnect in a loop:
 
-Templates go in `emails/` directory using the `email()` factory. Send via `email.sendTemplate()` in handlers. See `references/infrastructure-adapters.md` for template examples.
-
-## Search
-
-PostgreSQL full-text search. Mark collections as searchable:
+| Layer                      | Setting                            | Recommendation                                                            |
+| -------------------------- | ---------------------------------- | ------------------------------------------------------------------------- |
+| Bun (`Bun.serve`)          | `idleTimeout` (default 10s)        | Default ping survives it; set `idleTimeout: 30` for headroom              |
+| nginx                      | `proxy_read_timeout` (default 60s) | Keep >= 60s; disable SSE response buffering (`proxy_buffering off`)       |
+| Load balancers (ALB, etc.) | idle timeout (often 60s)           | Keep above `keepAliveIntervalMs`                                          |
+| Serverless platforms       | response buffering / max duration  | SSE needs streaming responses; buffered platforms break realtime entirely |
 
 ```ts
-.searchable(["title", "body", "tags"])
-```
-
-Client usage:
-
-```ts
-const results = await client.search.search({
-	query: "haircut styles",
-	collections: ["posts", "services"],
-	limit: 20,
-});
-```
-
-## KV Store
-
-### Redis
-
-```ts
-import { createClient } from "redis";
-import { redisKVAdapter } from "questpie/adapters/redis-kv";
-
-async function getRedis() {
-	const redis = createClient({ url: env.REDIS_URL });
-	await redis.connect();
-	return redis;
-}
-
-export default runtimeConfig({
-	kv: {
-		adapter: redisKVAdapter({ client: getRedis, keyPrefix: "my-app:" }),
-		defaultTtl: 3600,
-	},
-});
-```
-
-### In-Memory Default
-
-```ts
-kv: {
-  defaultTtl: 3600,
-}
-```
-
-### Usage
-
-```ts
-handler: async ({ kv }) => {
-	await kv.set("key", "value", 3600);
-	const value = await kv.get("key");
-	await kv.delete("key");
+// Bun server entry — the app owns Bun.serve options, not the framework
+export default {
+	port: 3000,
+	idleTimeout: 30, // seconds
+	fetch: server.fetch,
 };
 ```
-
-## Logger
-
-Structured logging with [Pino](https://getpino.io):
-
-```ts
-handler: async ({ logger }) => {
-	logger.info("Processing booking");
-	logger.error({ err: error }, "Booking failed");
-	logger.debug({ barberId, serviceId }, "Checking availability");
-};
-```
-
-Log levels: `trace`, `debug`, `info`, `warn`, `error`, `fatal`.
-
-Structured data goes as the first argument:
-
-```ts
-logger.info({ appointmentId: "abc", action: "created" }, "Appointment created");
-```
-
-## OpenAPI
-
-Auto-generate OpenAPI 3.1 spec with `@questpie/openapi`. Install with `bun add @questpie/openapi`, add `openApiModule` to `modules.ts`, configure it in `config/openapi.ts` with `openApiConfig({ info: { title: "My API", version: "1.0.0" } })`, then run `bunx questpie generate`. Serves spec at `/api/openapi.json` and Scalar docs at `/api/docs`. See `references/infrastructure-adapters.md` for full options.
 
 ## Deployment
 
@@ -604,10 +376,11 @@ queue: {
 	adapter: pgBossAdapter({ connectionString: env.QUESTPIE_DB });
 }
 
-// CORRECT -- direct PG connection (Bun SQL pools internally)
-// Or switch to redisStreamsAdapter for realtime in multi-instance deployments
+// CORRECT -- direct PG connection (Bun SQL pools internally), or switch
+// realtime to redisStreamsAdapter, which takes a connected redis client
+// (not a URL) for multi-instance deployments:
 realtime: {
-	adapter: redisStreamsAdapter({ url: env.REDIS_URL });
+	adapter: redisStreamsAdapter({ client: redis }); // see infrastructure-adapters.md
 }
 ```
 

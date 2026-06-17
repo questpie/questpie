@@ -1,6 +1,21 @@
 # Infrastructure Adapters Reference
 
-All adapter configurations for QUESTPIE production infrastructure.
+The exhaustive catalog of adapter config shapes for QUESTPIE infrastructure. For deployment ops (auth, access control, PgBouncer, SSE keepalive, Docker, checklist), see `references/production.md`.
+
+- [Database](#database)
+- [Storage](#storage) — local, S3, R2, signed URLs
+- [Queue](#queue) — pg-boss, BullMQ
+- [Realtime](#realtime) — pgNotify, Redis Streams
+- [Search](#search) — Postgres FTS, pgvector semantic
+- [Email](#email) — SMTP, Console, Resend, Plunk, custom
+- [KV Store](#kv-store) — Redis, custom, in-memory
+- [Logger](#logger)
+- [OpenAPI](#openapi)
+- [Migrations CLI](#migrations-cli)
+- [Complete Production Config Example](#complete-production-config-example)
+- [Environment Variables Summary](#environment-variables-summary)
+
+Every env var is declared once in `env.ts` (beside `questpie.config.ts`) and consumed via `import env from "./env"` — never raw `process.env.X` / `process.env.X!`. See `references/env.md`.
 
 ## Database
 
@@ -8,9 +23,12 @@ PostgreSQL with Drizzle ORM. Configured in `questpie.config.ts`:
 
 ```ts
 import { runtimeConfig } from "questpie/app";
+
+import env from "./env";
+
 export default runtimeConfig({
 	db: {
-		url: process.env.DATABASE_URL || "postgres://localhost/myapp",
+		url: env.DATABASE_URL,
 	},
 });
 ```
@@ -79,15 +97,17 @@ providers that do not have a dedicated Files SDK adapter:
 ```ts
 import { s3 } from "files-sdk/s3";
 
+import env from "./env";
+
 export default runtimeConfig({
 	storage: {
 		basePath: "/api",
 		adapter: s3({
-			bucket: process.env.S3_BUCKET,
-			region: process.env.S3_REGION,
+			bucket: env.S3_BUCKET,
+			region: env.S3_REGION,
 			credentials: {
-				accessKeyId: process.env.S3_ACCESS_KEY!,
-				secretAccessKey: process.env.S3_SECRET_KEY!,
+				accessKeyId: env.S3_ACCESS_KEY,
+				secretAccessKey: env.S3_SECRET_KEY,
 			},
 		}),
 	},
@@ -101,14 +121,16 @@ Use Files SDK's dedicated R2 adapter:
 ```ts
 import { r2 } from "files-sdk/r2";
 
+import env from "./env";
+
 export default runtimeConfig({
 	storage: {
 		basePath: "/api",
 		adapter: r2({
-			bucket: process.env.R2_BUCKET!,
-			accountId: process.env.R2_ACCOUNT_ID!,
-			accessKeyId: process.env.R2_ACCESS_KEY_ID!,
-			secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
+			bucket: env.R2_BUCKET,
+			accountId: env.R2_ACCOUNT_ID,
+			accessKeyId: env.R2_ACCESS_KEY_ID,
+			secretAccessKey: env.R2_SECRET_ACCESS_KEY,
 		}),
 	},
 });
@@ -172,10 +194,12 @@ Background jobs via [pg-boss](https://github.com/timgit/pg-boss), BullMQ, or a c
 import { runtimeConfig } from "questpie/app";
 import { pgBossAdapter } from "questpie/adapters/pg-boss";
 
+import env from "./env";
+
 export default runtimeConfig({
 	queue: {
 		adapter: pgBossAdapter({
-			connectionString: process.env.DATABASE_URL,
+			connectionString: env.DATABASE_URL,
 		}),
 	},
 });
@@ -183,14 +207,18 @@ export default runtimeConfig({
 
 ### BullMQ
 
+`connection` is BullMQ's `ConnectionOptions` — pass a `url`, the discrete `{ host, port, password }` ioredis fields, or an existing ioredis instance:
+
 ```ts
 import { runtimeConfig } from "questpie/app";
 import { bullMQAdapter } from "questpie/adapters/bullmq";
 
+import env from "./env";
+
 export default runtimeConfig({
 	queue: {
 		adapter: bullMQAdapter({
-			connection: { url: process.env.REDIS_URL! },
+			connection: { url: env.REDIS_URL },
 			queuePrefix: "my-app",
 		}),
 	},
@@ -224,10 +252,12 @@ Uses PostgreSQL `LISTEN/NOTIFY`. Best for single-server deployments:
 import { runtimeConfig } from "questpie/app";
 import { pgNotifyAdapter } from "questpie/adapters/pg-notify";
 
+import env from "./env";
+
 export default runtimeConfig({
 	realtime: {
 		adapter: pgNotifyAdapter({
-			connectionString: process.env.DATABASE_URL,
+			connectionString: env.DATABASE_URL,
 		}),
 	},
 });
@@ -235,17 +265,21 @@ export default runtimeConfig({
 
 ### Redis Streams (Multi-Instance)
 
-Required for horizontal scaling across multiple server instances:
+Required for horizontal scaling across multiple server instances. Takes a connected, redis-shaped `client` (the node-redis command surface: `xAdd`, `xReadGroup`, `xGroupCreate`, `xAck`) — not a URL:
 
 ```ts
+import { createClient } from "redis";
 import { runtimeConfig } from "questpie/app";
 import { redisStreamsAdapter } from "questpie/adapters/redis-streams";
 
+import env from "./env";
+
+const redis = createClient({ url: env.REDIS_URL });
+await redis.connect();
+
 export default runtimeConfig({
 	realtime: {
-		adapter: redisStreamsAdapter({
-			url: process.env.REDIS_URL,
-		}),
+		adapter: redisStreamsAdapter({ client: redis }),
 	},
 });
 ```
@@ -276,15 +310,15 @@ export default runtimeConfig({
 
 ```ts
 import { runtimeConfig } from "questpie/app";
-import {
-	createOpenAIEmbeddingProvider,
-	createPgVectorSearchAdapter,
-} from "questpie/adapters/pgvector-search";
+import { createPgVectorSearchAdapter } from "questpie/adapters/pgvector-search";
+import { createOpenAIEmbeddingProvider } from "questpie/search";
+
+import env from "./env";
 
 export default runtimeConfig({
 	search: createPgVectorSearchAdapter({
 		embeddingProvider: createOpenAIEmbeddingProvider({
-			apiKey: process.env.OPENAI_API_KEY!,
+			apiKey: env.OPENAI_API_KEY,
 			model: "text-embedding-3-small",
 		}),
 		// Hybrid scoring weights (defaults shown)
@@ -305,17 +339,21 @@ Transactional email with typed templates.
 
 ### SMTP (Production)
 
+`secure` follows the SMTP convention: `false` for STARTTLS on port 587 (most providers), `true` for implicit TLS on port 465.
+
 ```ts
 import { runtimeConfig } from "questpie/app";
 import { SmtpAdapter } from "questpie/adapters/smtp";
+
+import env from "./env";
 
 export default runtimeConfig({
 	email: {
 		adapter: new SmtpAdapter({
 			transport: {
-				host: process.env.SMTP_HOST,
-				port: parseInt(process.env.SMTP_PORT || "587"),
-				secure: true,
+				host: env.SMTP_HOST,
+				port: 587,
+				secure: false, // STARTTLS; use secure: true with port 465
 			},
 		}),
 	},
@@ -345,10 +383,12 @@ For [Resend](https://resend.com) and Resend-compatible providers — no SMTP cre
 import { runtimeConfig } from "questpie/app";
 import { resendAdapter } from "questpie/adapters/resend";
 
+import env from "./env";
+
 export default runtimeConfig({
 	email: {
 		adapter: resendAdapter({
-			apiKey: process.env.RESEND_API_KEY!,
+			apiKey: env.RESEND_API_KEY,
 			// baseUrl: "https://api.resend.com",  // override for compatible providers
 		}),
 	},
@@ -363,10 +403,12 @@ For [Plunk](https://www.useplunk.com) transactional email (also self-hosted):
 import { runtimeConfig } from "questpie/app";
 import { plunkAdapter } from "questpie/adapters/plunk";
 
+import env from "./env";
+
 export default runtimeConfig({
 	email: {
 		adapter: plunkAdapter({
-			apiKey: process.env.PLUNK_API_KEY!, // secret key — public keys only track events
+			apiKey: env.PLUNK_API_KEY, // secret key — public keys only track events
 			// baseUrl: "https://next-api.useplunk.com",  // override for self-hosted
 		}),
 	},
@@ -382,13 +424,13 @@ For any other provider, extend the `MailAdapter` base class from `questpie/maile
 ```ts
 email: {
   adapter:
-    process.env.NODE_ENV === "development"
+    env.NODE_ENV === "development"
       ? new ConsoleAdapter({ logHtml: false })
       : new SmtpAdapter({
           transport: {
-            host: process.env.SMTP_HOST,
-            port: parseInt(process.env.SMTP_PORT || "587"),
-            secure: true,
+            host: env.SMTP_HOST,
+            port: 587,
+            secure: false, // STARTTLS; use secure: true with port 465
           },
         }),
 }
@@ -434,12 +476,17 @@ Key-value storage for caching, rate limiting, ephemeral data.
 
 ### Redis
 
+`client` accepts a node-redis client or a `() => client` provider (resolved + cached on first use):
+
 ```ts
 import { createClient } from "redis";
+import { runtimeConfig } from "questpie/app";
 import { redisKVAdapter } from "questpie/adapters/redis-kv";
 
+import env from "./env";
+
 async function getRedis() {
-	const redis = createClient({ url: process.env.REDIS_URL! });
+	const redis = createClient({ url: env.REDIS_URL });
 	await redis.connect();
 	return redis;
 }
@@ -454,7 +501,30 @@ export default runtimeConfig({
 
 ### Custom Adapter
 
+Implement the `KVAdapter` interface from `questpie/kv` and pass an instance:
+
 ```ts
+import { runtimeConfig } from "questpie/app";
+import type { KVAdapter } from "questpie/kv";
+
+const myKvAdapter: KVAdapter = {
+	async get(key) {
+		/* ... */ return null;
+	},
+	async set(key, value, ttl) {
+		/* ... */
+	},
+	async delete(key) {
+		/* ... */
+	},
+	async has(key) {
+		/* ... */ return false;
+	},
+	async clear() {
+		/* ... */
+	},
+};
+
 export default runtimeConfig({
 	kv: {
 		adapter: myKvAdapter,
@@ -497,8 +567,8 @@ Structured logging via [Pino](https://getpino.io).
 ```ts
 handler: async ({ logger }) => {
 	logger.info("Processing request");
-	logger.error({ err: error }, "Request failed");
-	logger.debug({ userId, action }, "User action");
+	logger.error("Request failed", { err: error });
+	logger.debug("User action", { userId, action });
 };
 ```
 
@@ -515,17 +585,14 @@ handler: async ({ logger }) => {
 
 ### Structured Data
 
-Pass objects as the first argument:
+Pass the message first, then structured data as additional arguments:
 
 ```ts
-logger.info(
-	{
-		appointmentId: "abc",
-		action: "created",
-		barberId: "def",
-	},
-	"Appointment created",
-);
+logger.info("Appointment created", {
+	appointmentId: "abc",
+	action: "created",
+	barberId: "def",
+});
 ```
 
 ## OpenAPI
@@ -653,48 +720,58 @@ const spec = generateOpenApiSpec(app, {
 ## Complete Production Config Example
 
 ```ts
+import { createClient } from "redis";
 import { runtimeConfig } from "questpie/app";
 import { pgBossAdapter } from "questpie/adapters/pg-boss";
 import { pgNotifyAdapter } from "questpie/adapters/pg-notify";
+import { redisKVAdapter } from "questpie/adapters/redis-kv";
 import { SmtpAdapter } from "questpie/adapters/smtp";
 import { s3 } from "files-sdk/s3";
 
+import env from "./env";
+
+async function getRedis() {
+	const redis = createClient({ url: env.REDIS_URL });
+	await redis.connect();
+	return redis;
+}
+
 export default runtimeConfig({
 	db: {
-		url: process.env.DATABASE_URL!,
+		url: env.DATABASE_URL,
 	},
 	storage: {
 		basePath: "/api",
 		adapter: s3({
-			bucket: process.env.S3_BUCKET!,
-			region: process.env.S3_REGION!,
+			bucket: env.S3_BUCKET,
+			region: env.S3_REGION,
 			credentials: {
-				accessKeyId: process.env.S3_ACCESS_KEY!,
-				secretAccessKey: process.env.S3_SECRET_KEY!,
+				accessKeyId: env.S3_ACCESS_KEY,
+				secretAccessKey: env.S3_SECRET_KEY,
 			},
 		}),
 	},
 	queue: {
 		adapter: pgBossAdapter({
-			connectionString: process.env.DATABASE_URL!,
+			connectionString: env.DATABASE_URL,
 		}),
 	},
 	realtime: {
 		adapter: pgNotifyAdapter({
-			connectionString: process.env.DATABASE_URL!,
+			connectionString: env.DATABASE_URL,
 		}),
 	},
 	email: {
 		adapter: new SmtpAdapter({
 			transport: {
-				host: process.env.SMTP_HOST!,
-				port: parseInt(process.env.SMTP_PORT || "587"),
-				secure: true,
+				host: env.SMTP_HOST,
+				port: 587,
+				secure: false, // STARTTLS; use secure: true with port 465
 			},
 		}),
 	},
 	kv: {
-		adapter: myKvAdapter,
+		adapter: redisKVAdapter({ client: getRedis }),
 		defaultTtl: 3600,
 	},
 	cli: {

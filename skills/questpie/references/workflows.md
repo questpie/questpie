@@ -9,6 +9,14 @@ description:
 
 Use `@questpie/workflows` when business logic spans multiple steps, waits on time or external events, needs retry-safe side effects, or should survive process restarts.
 
+- [Install And Register](#install-and-register)
+- [Configure Runtime Options](#configure-runtime-options)
+- [Define A Workflow](#define-a-workflow)
+- [Step Primitives](#step-primitives)
+- [Trigger And Signal](#trigger-and-signal)
+- [Cron Workflows](#cron-workflows)
+- [Rules](#rules)
+
 ## Install And Register
 
 ```bash
@@ -42,6 +50,27 @@ export default {
 	blocks: { ...adminClientModule.blocks, ...workflowsClientModule.blocks },
 };
 ```
+
+## Configure Runtime Options
+
+Runtime options live in the plugin-discovered `config/workflows.ts`, using the `workflowsConfig()` factory. `access` controls the workflow routes (default: admin-only); `executionLock` tunes the per-instance lease that makes duplicate queue deliveries idempotent.
+
+```ts title="config/workflows.ts"
+import { workflowsConfig } from "@questpie/workflows/server";
+
+export default workflowsConfig({
+	access: {
+		read: ({ session }) => session?.user?.role === "admin",
+		trigger: ({ session }) => !!session?.user,
+	},
+	executionLock: {
+		leaseSeconds: 300,
+		heartbeatSeconds: 60,
+	},
+});
+```
+
+`access` also accepts a single rule applied to every route. Do not pass options to `workflowsModule(...)` — runtime options belong in this config file.
 
 ## Define A Workflow
 
@@ -95,7 +124,44 @@ export default workflow({
 Run codegen after adding workflow files:
 
 ```bash
-bun questpie generate
+bunx questpie generate
+```
+
+## Step Primitives
+
+`step` exposes durable primitives. Each takes a stable `name` as its first argument; on replay, completed steps return cached results instead of re-executing.
+
+- `step.run(name, fn)` — run a side effect, cache the result.
+- `step.run(name, opts, fn)` — same, with `{ retry, timeout, compensate }` options.
+- `step.sleep(name, duration)` / `step.sleepUntil(name, date)` — durable waits.
+- `step.waitForEvent(name, { event, match?, timeout? })` — suspend until a matching event arrives (returns `null` on timeout).
+- `step.invoke(name, { workflow, input, timeout? })` — start a child workflow and wait for its result.
+- `step.sendEvent(name, { event, data?, match? })` — emit an event that resumes matching waiters.
+
+`compensate` is an inline option on `step.run` (not a separate step type). Registered compensations run in reverse order if the workflow later fails:
+
+```ts
+await step.run(
+	"charge-card",
+	{
+		compensate: async (charge) => {
+			await ctx.payments.refund((charge as { chargeId: string }).chargeId);
+		},
+	},
+	async () => {
+		return ctx.payments.charge({ orderId: input.orderId });
+	},
+);
+```
+
+Invoke a child workflow and await its output:
+
+```ts
+const result = await step.invoke<{ shipmentId: string }>("ship", {
+	workflow: "create-shipment",
+	input: { orderId: input.orderId },
+	timeout: "1d",
+});
 ```
 
 ## Trigger And Signal
@@ -127,6 +193,8 @@ await workflows.sendEvent(
 );
 ```
 
+Note the two `sendEvent` signatures differ: the injected `workflows.sendEvent(event, data?, match?)` is **positional**, while inside a handler `step.sendEvent(name, { event, data?, match? })` takes an **options object** (its first argument is the durable step name).
+
 ## Cron Workflows
 
 Use workflow-level `cron` for recurring long-running processes:
@@ -135,7 +203,8 @@ Use workflow-level `cron` for recurring long-running processes:
 export default workflow({
 	name: "nightly-material-plan",
 	schema: z.object({}),
-	cron: { schedule: "0 2 * * *", overlap: "skip" },
+	cron: "0 2 * * *",
+	cronOverlap: "skip",
 	handler: async ({ step, ctx }) => {
 		await step.run("recalculate", async () => {
 			await ctx.queue.recalculateMaterialPlan.publish({});

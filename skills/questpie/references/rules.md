@@ -8,6 +8,14 @@ description: QUESTPIE access control hooks validation lifecycle beforeValidate b
 
 This skill builds on questpie-core. It covers collection/global access control, lifecycle hooks, and validation — the three rule layers that govern data flow.
 
+## Contents
+
+- [Access Control](#access-control) — defaults, collection/global access, row-level, context, system mode
+- [Hooks](#hooks) — lifecycle order, defining hooks, hook context, context-first pattern
+- [Validation](#validation) — field constraints, input modifier, custom validation via hooks
+- [Common Mistakes](#common-mistakes)
+- [Access Control for Preview Sessions](#access-control-for-preview-sessions)
+
 ## Access Control
 
 Access rules are defined per-collection via `.access()`. Each operation accepts a static `boolean` or a function receiving `AppContext` that returns `boolean` or a where clause (row-level filtering).
@@ -56,24 +64,7 @@ export default collection("posts")
 | `serve`      | Upload file bytes by key (`GET /:collection/files/:key`)          |
 | `introspect` | Schema/meta routes (`GET /:collection/{schema,meta}`)             |
 
-Two operations have specialized chains:
-
-- **`serve`** (upload collections): `serve` → explicit collection `read`
-  (row-aware, `ctx.data` is the upload row) → `defaultAccess.serve` → allow.
-  `defaultAccess.read` is deliberately NOT consulted — listing rows and
-  fetching bytes by key are distinct permissions. `visibility: "public"`
-  means bytes are servable by key; `"private"` files always require the
-  signed token in addition to any serve rule.
-- **`introspect`**: `introspect` → `defaultAccess.introspect` → visible iff
-  at least one CRUD operation is allowed for the current user. Create-only
-  public collections keep their validation schema readable; deny-all apps
-  expose no schemas. Denied requests get 401 (anonymous) or 403
-  (authenticated).
-
-`f.upload()` fields populate through the PARENT row's read decision — a
-publicly readable gallery shows its assets (with `url`) to anonymous readers
-even when the assets collection itself is unlistable. Field-level read rules
-on the upload collection still apply inside population.
+`serve` and `introspect` resolve through their own rule (not `read`): `serve` falls back to explicit collection `read` then `defaultAccess.serve`; `introspect` is visible iff at least one CRUD operation is allowed for the current user. `f.upload()` fields populate through the PARENT row's read decision, so a publicly readable gallery shows its assets (with `url`) even when the assets collection itself is unlistable.
 
 ### Global Access
 
@@ -252,56 +243,71 @@ export default collection("appointments")
 			}
 		},
 
-		beforeChange: async ({ data, operation, original }) => {
+		beforeChange: async ({ data, operation }) => {
 			if (operation === "create") {
 				// Set defaults on create
 			}
-			if (operation === "update" && original) {
-				// Compare with original data
+			if (operation === "update") {
+				// Derive fields from the incoming patch (`original` is NOT
+				// available here — use afterChange to compare against it)
 			}
 		},
 
-		afterChange: async ({ data, operation, original, queue }) => {
+		afterChange: async ({ data, operation, original, queue, onAfterCommit }) => {
+			// Side effects run AFTER the tx commits — never publish/email directly
+			// inside afterChange (the write may still roll back).
 			if (operation === "create") {
-				await queue.sendAppointmentConfirmation.publish({
-					appointmentId: data.id,
-					customerId: data.customer,
-				});
+				onAfterCommit(() =>
+					queue.sendAppointmentConfirmation.publish({
+						appointmentId: data.id,
+						customerId: data.customer,
+					}),
+				);
 			}
 			if (operation === "update" && data.status === "cancelled") {
-				await queue.sendAppointmentCancellation.publish({
-					appointmentId: data.id,
-					customerId: data.customer,
-				});
+				onAfterCommit(() =>
+					queue.sendAppointmentCancellation.publish({
+						appointmentId: data.id,
+						customerId: data.customer,
+					}),
+				);
 			}
 		},
 
-		beforeDelete: async ({ id }) => {
-			// Prevent deletion or clean up
+		beforeDelete: async ({ data }) => {
+			// `data` is the record being deleted — use data.id to clean up
 		},
 
-		afterDelete: async ({ id }) => {
-			// Clean up related data
+		afterDelete: async ({ data }) => {
+			// Clean up related data keyed by data.id
 		},
 	});
 ```
 
+Each hook accepts a single function **or an array of functions** (executed in order):
+
+```ts
+.hooks({
+	beforeChange: [normalizeSlug, stampAuthor],
+})
+```
+
 ### Hook Context Properties
 
-| Property      | Available in                              | Description                      |
-| ------------- | ----------------------------------------- | -------------------------------- |
-| `data`        | beforeValidate, beforeChange, afterChange | The record data being written    |
-| `operation`   | beforeChange, afterChange                 | `"create"` or `"update"`         |
-| `original`    | beforeChange, afterChange (update)        | Previous record state            |
-| `id`          | beforeDelete, afterDelete                 | ID of record being deleted       |
-| `collections` | All hooks                                 | Typed collection API             |
-| `globals`     | All hooks                                 | Typed globals API                |
-| `queue`       | All hooks                                 | Queue client for publishing jobs |
-| `email`       | All hooks                                 | Email service                    |
-| `db`          | All hooks                                 | Database instance                |
-| `session`     | All hooks                                 | Current auth session             |
-| `services`    | All hooks                                 | Custom services from `services/` |
-| _extensions_  | All hooks                                 | `appConfig({ context })` result, flat (HTTP requests only) |
+| Property        | Available in                                                  | Description                                                 |
+| --------------- | ------------------------------------------------------------- | ----------------------------------------------------------- |
+| `data`          | beforeValidate, beforeChange, afterChange, beforeDelete, afterDelete | Record being written (delete hooks: the record being deleted — use `data.id`) |
+| `operation`     | beforeChange, afterChange                                     | `"create"` or `"update"`                                    |
+| `original`      | afterChange (update only)                                     | Previous record state                                       |
+| `onAfterCommit` | All hooks                                                     | Queue a side effect (`(cb) => void`) to run after the tx commits |
+| `collections`   | All hooks                                                     | Typed collection API                                        |
+| `globals`       | All hooks                                                     | Typed globals API                                           |
+| `queue`         | All hooks                                                     | Queue client for publishing jobs                            |
+| `email`         | All hooks                                                     | Email service                                               |
+| `db`            | All hooks                                                     | Database instance                                           |
+| `session`       | All hooks                                                     | Current auth session                                        |
+| `services`      | All hooks                                                     | Custom services from `services/`                            |
+| _extensions_    | All hooks                                                     | `appConfig({ context })` result, flat (HTTP requests only)  |
 
 Derived request context also reaches hooks and any nested code via `getContext<App>()` — including CRUD calls a hook triggers (AsyncLocalStorage carries it):
 
@@ -325,16 +331,18 @@ All dependencies come through destructuring. No need to import the app instance:
     data.readingTime = blog.computeReadingTime(data.content);
   },
 
-  afterChange: async ({ data, operation, original, queue }) => {
+  afterChange: async ({ data, operation, original, queue, onAfterCommit }) => {
     if (
       operation === "update" &&
       original?.status !== "published" &&
       data.status === "published"
     ) {
-      await queue.notifyBlogSubscribers.publish({
-        postId: data.id,
-        title: data.title,
-      });
+      onAfterCommit(() =>
+        queue.notifyBlogSubscribers.publish({
+          postId: data.id,
+          title: data.title,
+        }),
+      );
     }
   },
 })

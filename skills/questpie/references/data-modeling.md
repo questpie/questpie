@@ -4,6 +4,18 @@ name: questpie-core/data-modeling
 
 This skill builds on questpie-core. It covers collections, globals, fields, relations, and localization -- the data modeling layer of QUESTPIE.
 
+## Contents
+
+- [Imports](#imports)
+- [Collections](#collections)
+- [Globals](#globals)
+- [Fields](#fields)
+- [Relations](#relations)
+- [Localization](#localization)
+- [Nested Objects and Reusable Patterns](#nested-objects-and-reusable-patterns)
+- [Form Layout](#form-layout)
+- [Common Mistakes](#common-mistakes)
+
 ## Imports
 
 Data model files import generated factories from the `#questpie/factories` alias:
@@ -12,10 +24,10 @@ Data model files import generated factories from the `#questpie/factories` alias
 import { collection, global } from "#questpie/factories";
 ```
 
-Drizzle index helpers come from `drizzle-orm/pg-core`:
+Drizzle index helpers come from `questpie/drizzle-pg-core`:
 
 ```ts
-import { uniqueIndex, index } from "drizzle-orm/pg-core";
+import { uniqueIndex, index } from "questpie/drizzle-pg-core";
 ```
 
 ## Collections
@@ -60,8 +72,7 @@ export default collection("posts")
 | `.access({...})`                                | Access control rules                    |
 | `.preview({...})`                               | Live preview config                     |
 | `.options({...})`                               | Timestamps, versioning, soft delete     |
-| `.search({...})`                                | Search indexing                         |
-| `.searchable(string[])`                         | Searchable fields                       |
+| `.searchable({...})`                            | Search indexing config (see below)      |
 | `.merge(other)`                                 | Extend a same-name builder (see below)  |
 
 ### Extending Collections — `.merge()`
@@ -94,11 +105,23 @@ Fields/options/extension keys combine by key (merged-in side wins), hooks concat
 ### Indexes
 
 ```ts
-import { uniqueIndex } from "drizzle-orm/pg-core";
+import { uniqueIndex } from "questpie/drizzle-pg-core";
 
 .indexes(({ table }) => [
   uniqueIndex("posts_slug_unique").on(table.slug),
 ])
+```
+
+### Search Indexing — `.searchable()`
+
+`.searchable()` takes a config object whose keys map a record to indexable text/metadata/embeddings — NOT a string array. There is no `.search()` method.
+
+```ts
+.searchable({
+  content: (record) => extractTextFromJson(record.body),
+  metadata: (record) => ({ status: record.status }),
+  embeddings: async (record, ctx) => ctx.app.embeddings.generate(record.title),
+})
 ```
 
 ### Live Preview
@@ -264,7 +287,7 @@ Fields are defined inside `.fields()` using the `f` builder. Each field drives t
 | -------------- | --------------------- | ------------------------------- |
 | `f.text()`     | `varchar` / `text`    | Short strings, titles, slugs    |
 | `f.textarea()` | `text`                | Long text, descriptions         |
-| `f.richText()` | `text` (HTML)         | Rich formatted content          |
+| `f.richText()` | `jsonb` (TipTap)      | Rich formatted content          |
 | `f.email()`    | `varchar`             | Email addresses (validated)     |
 | `f.url()`      | `varchar`             | URLs (validated)                |
 | `f.number()`   | `integer` / `numeric` | Counts, prices, quantities      |
@@ -282,20 +305,30 @@ Fields are defined inside `.fields()` using the `f` builder. Each field drives t
 
 See `references/field-types.md` for complete config options per field type.
 
-### Common Field Options
+### Common Field Methods
 
-Every field accepts:
+Fields take a positional constructor argument (e.g. `f.text(255)`, `f.select([...])`), then a fluent chain. There is NO constructor-options object. Common chain methods on every field:
 
-| Option        | Type                               | Description                              |
-| ------------- | ---------------------------------- | ---------------------------------------- |
-| `required`    | `boolean`                          | Field must have a value                  |
-| `default`     | `T`                                | Default value                            |
-| `label`       | `string \| Record<string, string>` | Display label (supports i18n)            |
-| `description` | `string \| Record<string, string>` | Help text                                |
-| `localized`   | `boolean`                          | Enable per-locale values                 |
-| `input`       | `"optional"`                       | Optional in API input but required in DB |
-| `meta`        | `object`                           | Admin UI rendering hints                 |
-| `virtual`     | `SQL`                              | SQL expression for computed fields       |
+| Method             | Description                              |
+| ------------------ | ---------------------------------------- |
+| `.required()`      | Field must have a value                  |
+| `.default(value)`  | Default value                            |
+| `.label(text)`     | Display label (supports i18n)            |
+| `.description(text)`| Help text (supports i18n)               |
+| `.localized()`     | Enable per-locale values                 |
+| `.inputOptional()` | Optional in API input but required in DB |
+| `.outputFalse()`   | Exclude from output — write-only field   |
+| `.array()`         | Wrap as a repeatable array               |
+| `.admin(config)`   | Admin UI rendering hints                 |
+| `.virtual(sql)`    | SQL expression for computed fields       |
+
+```ts
+title: f.text(255).required(),
+slug: f.text(255).required().inputOptional(),
+passwordHash: f.text().outputFalse(),  // accepted on input, never returned
+```
+
+See `references/field-types.md` for the full per-field constructor args and type-specific methods.
 
 ### Virtual (Computed) Fields
 
@@ -316,12 +349,37 @@ All relations are defined via `f.relation()` inside `.fields()`.
 
 ### Belongs-To (Single)
 
+The target is positional: a collection-name string, or a lazy `() => collection` ref (use the ref to avoid import cycles between mutually-referencing collections).
+
 ```ts
 author: f.relation("user").required(),
 barber: f.relation("barbers").required().onDelete("cascade"),
 ```
 
+Lazy ref (import-cycle-safe):
+
+```ts
+import { barbers } from "@/questpie/server/collections/barbers";
+barber: f.relation(() => barbers).required().onDelete("cascade"),
+```
+
 Creates a foreign key column pointing to the target collection's `id`.
+
+### Multiple (Inline Array of FKs)
+
+`.multiple()` stores an array of foreign-key IDs inline as JSONB — no junction table:
+
+```ts
+gallery: f.relation("assets").multiple(),
+```
+
+### Has-Many (Reverse)
+
+`.hasMany({ foreignKey })` is a virtual reverse relation — the FK lives on the TARGET collection, nothing is stored on this row:
+
+```ts
+posts: f.relation("posts").hasMany({ foreignKey: "authorId" }),
+```
 
 ### Many-to-Many (Through Junction)
 
@@ -457,15 +515,15 @@ Use helper functions to avoid repetition in object fields:
 
   return {
     workingHours: f.object({
-      fields: () => ({
-        monday: f.object({ fields: daySchedule }),
-        tuesday: f.object({ fields: daySchedule }),
-        wednesday: f.object({ fields: daySchedule }),
-      }),
+      monday: f.object(daySchedule()),
+      tuesday: f.object(daySchedule()),
+      wednesday: f.object(daySchedule()),
     }),
   };
 })
 ```
+
+`f.object()` takes the nested field record **directly** — there is no `{ fields }` wrapper and no function form.
 
 ## Form Layout
 
@@ -544,6 +602,16 @@ services: f.relation("services").manyToMany({
 
 If content should vary by locale but the field does not chain `.localized()`, queries with different locales will return the same value.
 
-### MEDIUM: Object fields -- function vs plain object
+### MEDIUM: Wrapping object fields in `{ fields }`
 
-Both `f.object({ fields: {...} })` and `f.object({ fields: () => ({...}) })` are valid. Use the function form when reusing helpers or referencing `f`.
+`f.object()` takes the nested field record directly. There is no `{ fields }` wrapper.
+
+```ts
+// WRONG -- no { fields } wrapper exists
+address: f.object({ fields: { street: f.text() } });
+
+// CORRECT
+address: f.object({ street: f.text() });
+```
+
+Reuse shapes with a plain helper that returns a field record, then spread or pass it: `f.object(daySchedule())`.
