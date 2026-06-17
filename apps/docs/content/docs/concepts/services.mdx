@@ -64,7 +64,7 @@ export const posts = collection("posts")
 That's the whole loop: one file to register, `ctx.services.blog` to consume — in any hook, route, job, or email handler. The [Full API](#full-api) covers `dispose`, the `request` lifecycle, and namespaces below.
 
 <Callout type="info" title="The filename is the key">
-A file at `services/blog.ts` registers under the key `blog`; `services/capacity-planner.ts` registers under `capacityPlanner` (the filename is kebab → camelCased). Rename the file and you rename the service. The `service("…")` factory takes **no name argument** — the key comes purely from the file. Codegen maps each `services/<file>.ts` to its camelCased key in the generated module registry (e.g. the core module's `services/collections-api.ts` → `collectionsApi`). Source: `packages/questpie/src/server/modules/core/.generated/module.ts:220`.
+A file at `services/blog.ts` registers under the key `blog`; `services/capacity-planner.ts` registers under `capacityPlanner` (the filename is kebab → camelCased). Rename the file and you rename the service. The `service("…")` factory takes **no name argument** — the key comes purely from the file. Codegen maps each `services/<file>.ts` to its camelCased key in the generated module registry (e.g. the core module's `services/collections-api.ts` → `collectionsApi`).
 </Callout>
 
 ## Dependencies come from `ctx`, not a `deps` array
@@ -93,15 +93,15 @@ export default service({
 });
 ```
 
-`ctx` is typed as `ServiceCreateContext`. Before codegen it falls back to the base app context plus `{ app }`; after `questpie generate` it resolves to the full typed surface — `db`, `session`, `collections`, `globals`, `queue`, `email`, `storage`, `kv`, `logger`, `search`, `realtime`, `t`, `services`, plus any namespaced service buckets. Source: `packages/questpie/src/server/services/define-service.ts:40`.
+`ctx` is typed as `ServiceCreateContext`. Before codegen it falls back to the base app context plus `{ app }`; after `questpie generate` it resolves to the full typed surface — `db`, `session`, `collections`, `globals`, `queue`, `email`, `storage`, `kv`, `logger`, `search`, `realtime`, `t`, `services`, plus any namespaced service buckets.
 
 <Callout type="info" title="Services can depend on services">
-Read another service off `ctx.services` inside your factory — `create: (ctx) => ({ … ctx.services.billing … })`. The container resolves the dependency before it constructs yours. The factory may be `async`, so awaiting setup (open a connection, fetch a token) is fine — `create` returns `TInstance | Promise<TInstance>`. Source: `define-service.ts:52`.
+Read another service off `ctx.services` inside your factory — `create: (ctx) => ({ … ctx.services.billing … })`. The container resolves the dependency before it constructs yours. The factory may be `async`, so awaiting setup (open a connection, fetch a token) is fine — `create` returns `TInstance | Promise<TInstance>`.
 </Callout>
 
 ## Two ways to write it
 
-The object form and the chained form are **equivalent** — the chained methods just build the same state object that the object form passes directly. Use whichever reads better. Both are accepted by the `service()` factory's overloads. Source: `packages/questpie/src/server/services/define-service.ts:113`.
+The object form and the chained form are **equivalent** — the chained methods just build the same state object that the object form passes directly. Use whichever reads better. Both are accepted by the `service()` factory's overloads.
 
 ```ts title="Object form (recommended)"
 import { service } from "questpie/services";
@@ -122,15 +122,15 @@ export default service()
   .dispose((cache) => cache.disconnect());
 ```
 
-Each chained method (`create`, `lifecycle`, `namespace`, `dispose`) spreads `this.state` into a **brand-new** `ServiceBuilder` and never mutates in place — the builder is immutable. The builder itself resolves nothing; the app's service container interprets the resulting `state` at registration time. Source: `define-service.ts:59`.
+Each chained method (`create`, `lifecycle`, `namespace`, `dispose`) spreads `this.state` into a **brand-new** `ServiceBuilder` and never mutates in place — the builder is immutable. The builder itself resolves nothing; the app's service container interprets the resulting `state` at registration time.
 
 <Callout type="warn" title="`namespace()` takes `string | null`, not `undefined`">
-The chained `.namespace()` method only accepts `string | null`. To put a service in the default `ctx.services` bucket, **omit** `namespace` entirely — don't pass `undefined`. (The object form's type allows `undefined`, but omitting is the idiom.) Source: `define-service.ts:103`.
+The chained `.namespace()` method only accepts `string | null`. To put a service in the default `ctx.services` bucket, **omit** `namespace` entirely — don't pass `undefined`. (The object form's type allows `undefined`, but omitting is the idiom.)
 </Callout>
 
 ## Lifecycle: singleton vs request
 
-`lifecycle` decides how often `create` runs. The public type is `ServiceLifecycle = "singleton" | "request"`. Source: `packages/questpie/src/server/services/define-service.ts:8`.
+`lifecycle` decides how often `create` runs. The public type is `ServiceLifecycle = "singleton" | "request"`.
 
 | Lifecycle | When `create` runs | Use it for |
 |---|---|---|
@@ -154,7 +154,7 @@ A `"singleton"` is shared across all requests for the life of the process. Never
 </Callout>
 
 <Callout type="info" title="`ServiceLifecycle` is not the internal `Lifecycle`">
-The **public** enum is `"singleton" | "request"`. There is a separate, **non-exported** internal proof-of-concept (`ScopedContainer`) whose `Lifecycle` is `"singleton" | "scoped"` — different values, different type, and not part of the public API. Build your services against `"singleton" | "request"` only. Source: `define-service.ts:8`.
+The **public** enum is `"singleton" | "request"`. There is a separate, **non-exported** internal proof-of-concept (`ScopedContainer`) whose `Lifecycle` is `"singleton" | "scoped"` — different values, different type, and not part of the public API. Build your services against `"singleton" | "request"` only.
 </Callout>
 
 ## Consuming a service
@@ -203,7 +203,7 @@ A singleton's `create(ctx)` runs once, so the `ctx` it captures is **not** reque
 
 ## Full API
 
-`service(state?)` returns a `ServiceBuilder`. All four fields are optional on the type, but a usable service must supply `create`. The factory has three overloads (no-arg, full-state, and partial-state) — they all funnel into `new ServiceBuilder(state ?? {})`. Source: `packages/questpie/src/server/services/define-service.ts:113`.
+`service(state?)` returns a `ServiceBuilder`. All four fields are optional on the type, but a usable service must supply `create`. The factory has three overloads (no-arg, full-state, and partial-state) — they all funnel into `new ServiceBuilder(state ?? {})`.
 
 ```ts
 service<TInstance, TNamespace, TLifecycle>({
@@ -225,7 +225,7 @@ service<TInstance, TNamespace, TLifecycle>({
 
 ### `create(ctx)`
 
-The only field a usable service needs. `ctx` is the resolved app surface; whatever you return becomes the service instance and its inferred type flows to every consumer. Return a class instance, a plain object of methods, or a function — anything. It may be sync or async; an `async create` lets you await setup (connect, authenticate) before the instance is handed out. Source: `define-service.ts:52`.
+The only field a usable service needs. `ctx` is the resolved app surface; whatever you return becomes the service instance and its inferred type flows to every consumer. Return a class instance, a plain object of methods, or a function — anything. It may be sync or async; an `async create` lets you await setup (connect, authenticate) before the instance is handed out.
 
 ### `lifecycle`
 
@@ -292,7 +292,7 @@ export default service({
 });
 ```
 
-Because the context builder pre-populates `ctx.email` directly, this `namespace: null` registration does **not** overwrite it — the same `if (!(name in result))` guard above applies. You consume it as `ctx.email` (it is **not** `ctx.mailer`). Its full surface — `send`, `sendTemplate`, `renderTemplate`, the `email()` template factory, and the SMTP / Resend / Plunk / Console adapters — lives on the [Emails](/docs/concepts/emails) page. Source: `packages/questpie/src/server/modules/core/services/email.ts:9`.
+Because the context builder pre-populates `ctx.email` directly, this `namespace: null` registration does **not** overwrite it — the same `if (!(name in result))` guard above applies. You consume it as `ctx.email` (it is **not** `ctx.mailer`). Its full surface — `send`, `sendTemplate`, `renderTemplate`, the `email()` template factory, and the SMTP / Resend / Plunk / Console adapters — lives on the [Emails](/docs/concepts/emails) page.
 
 <Callout type="info" title="Two unrelated `email` symbols">
 `questpie/services` exports an `email` that is the **email-template factory** (`email({ name, schema, handler })`), documented under [Emails](/docs/concepts/emails). There is also a separate `f.email()` **field** factory used inside `.fields()`. They share a name but are unrelated — don't conflate them.
@@ -300,7 +300,7 @@ Because the context builder pre-populates `ctx.email` directly, this `namespace:
 
 ## TypeScript
 
-After `questpie generate`, your services are typed onto the context automatically — destructuring `services.blog` in any handler gives you the full instance type with no annotation. The generated `Questpie.Services` interface extends `_AppServicesSeam` — the resolved fold of **every** registered service, across all namespaces — and **has no index signature**: referencing a service that doesn't exist is a compile error, not a silent `any`. (It's routed through an empty-base interface to defer the type fold, which avoids a TS2456 self-reference when a service's inferred instance reads `ctx.services` at create-time. The seam is intentionally *not* namespace-filtered, since re-reading each in-flight builder's namespace would reintroduce that cycle — so a create-ctx `ctx.services.<x>` can reach any namespace, a widening, never an `any`.) The namespace-filtered default-namespace fold is a different type, `_AppDefaultServices`, which backs the *outer* runtime `ctx.services` surface (`AppContext.services`). Source: `packages/questpie/src/cli/codegen/template.ts:646,676,1079`; `packages/questpie/src/server/config/app-context.ts:64-77`.
+After `questpie generate`, your services are typed onto the context automatically — destructuring `services.blog` in any handler gives you the full instance type with no annotation. The generated `Questpie.Services` interface extends `_AppServicesSeam` — the resolved fold of **every** registered service, across all namespaces — and **has no index signature**: referencing a service that doesn't exist is a compile error, not a silent `any`. (It's routed through an empty-base interface to defer the type fold, which avoids a TS2456 self-reference when a service's inferred instance reads `ctx.services` at create-time. The seam is intentionally *not* namespace-filtered, since re-reading each in-flight builder's namespace would reintroduce that cycle — so a create-ctx `ctx.services.<x>` can reach any namespace, a widening, never an `any`.) The namespace-filtered default-namespace fold is a different type, `_AppDefaultServices`, which backs the *outer* runtime `ctx.services` surface (`AppContext.services`).
 
 To get the union of registered service names, or to extract a single service's instance / namespace type:
 
@@ -322,11 +322,11 @@ type BlogNs = ServiceNamespaceOf<typeof blog>; // undefined
 
 `KnownServiceNames` comes from `questpie`. The builder/type helpers — `ServiceBuilder`, `ServiceBuilderState`, `ServiceCreateContext`, `ServiceLifecycle`, `ServiceNamespace`, `ServiceInstanceOf`, `ServiceNamespaceOf` — come from `questpie/services` (re-exported from the root `questpie` barrel as well). You rarely import these by hand: the generated context types are usually all you need.
 
-- **`ServiceInstanceOf<T>`** unwraps the instance type from either a `ServiceBuilder` or a raw `{ create }` object. Source: `define-service.ts:139`.
-- **`ServiceNamespaceOf<T>`** computes the namespace placement (falls back through the builder generic → `state.namespace` → `namespace` → `undefined`). Source: `define-service.ts:146`.
+- **`ServiceInstanceOf<T>`** unwraps the instance type from either a `ServiceBuilder` or a raw `{ create }` object.
+- **`ServiceNamespaceOf<T>`** computes the namespace placement (falls back through the builder generic → `state.namespace` → `namespace` → `undefined`).
 
 <Callout type="info" title="`ctx` types only fill in after codegen">
-Before you run `questpie generate`, `ServiceCreateContext` falls back to the base app context plus `{ app }`, so a brand-new service file may show a thinner `ctx`. This fallback is deliberate: two augmentable markers back it — `Questpie.ServiceCreateContext` (the real interface codegen fills with the typed app surface) and `Questpie.ServiceCreateContextGenerated` (a names-only marker the conditional probes to avoid a self-reference cycle). Run `questpie generate` after adding a service to pick up the full typed surface and have it appear on `ctx.services`. Source: `packages/questpie/src/server/services/define-service.ts:40`.
+Before you run `questpie generate`, `ServiceCreateContext` falls back to the base app context plus `{ app }`, so a brand-new service file may show a thinner `ctx`. This fallback is deliberate: two augmentable markers back it — `Questpie.ServiceCreateContext` (the real interface codegen fills with the typed app surface) and `Questpie.ServiceCreateContextGenerated` (a names-only marker the conditional probes to avoid a self-reference cycle). Run `questpie generate` after adding a service to pick up the full typed surface and have it appear on `ctx.services`.
 </Callout>
 
 ## Related

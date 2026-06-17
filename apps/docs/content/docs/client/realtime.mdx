@@ -25,9 +25,7 @@ import env from "./env"; // declared + validated in env.ts — see Environment
 
 export default runtimeConfig({
   db: { url: env.DATABASE_URL },
-  // Realtime on. With no adapter it polls the change outbox every 2s —
-  // fine for a single instance and local dev.
-  realtime: {},
+  realtime: true,
 });
 ```
 
@@ -49,10 +47,10 @@ const unsubscribe = client.collections.posts.live(
 unsubscribe();
 ```
 
-That callback now re-fires with a fresh, access-filtered top-10 every time a published post changes. Source: `packages/questpie/src/client/index.ts:401`, `packages/questpie/src/server/modules/core/integrated/realtime/types.ts:66`.
+That callback now re-fires with a fresh, access-filtered top-10 every time a published post changes.
 
 <Callout type="info" title="The first snapshot is your initial data">
-You do **not** need a separate `find()` before subscribing. `live()` delivers a full snapshot the moment the connection opens, then keeps it fresh. Treat the first callback invocation as "data loaded". Source: `packages/questpie/src/client/index.ts:396` (doc comment).
+You do **not** need a separate `find()` before subscribing. `live()` delivers a full snapshot the moment the connection opens, then keeps it fresh. Treat the first callback invocation as "data loaded".
 </Callout>
 
 ## Example → inferred snapshot
@@ -71,7 +69,7 @@ client.collections.posts.live(
 );
 ```
 
-A snapshot is a `PaginatedResult<T>` (`{ docs, totalDocs, totalPages, page, hasPrevPage, hasNextPage, prevPage, nextPage, ... }`) — or, if your query uses `groupBy`… it can't, because `groupBy` isn't a live option (see below). Source: `packages/questpie/src/server/collection/crud/types.ts:1590` (`FindResult`), `:1415` (`PaginatedResult`).
+A snapshot is a `PaginatedResult<T>` (`{ docs, totalDocs, totalPages, page, hasPrevPage, hasNextPage, prevPage, nextPage, ... }`) — or, if your query uses `groupBy`… it can't, because `groupBy` isn't a live option (see below).
 
 ## Live query options
 
@@ -88,10 +86,10 @@ type LiveQueryOptions<TSelect, TRelations> = {
 };
 ```
 
-Source: `packages/questpie/src/client/index.ts:325`.
+
 
 <Callout type="warn" title="`columns`, `groupBy`, `search`, `includeDeleted`, `stage` are not live options">
-`LiveQueryOptions` intentionally **excludes** `columns`, `groupBy`, `search`, `includeDeleted`, and `stage`. Realtime snapshots are the full query re-run server-side from the topic fields, so column projection / grouping / soft-delete-included / stage-pinned reads aren't expressed over the wire. If you pass them they're simply not part of the subscription. For those, use a one-shot `find()`. Source: `packages/questpie/src/client/index.ts:325` and `packages/questpie/src/client/realtime/stream.ts:135` (`buildCollectionTopic` only spreads `where`/`with`/`limit`/`offset`/`orderBy`/`locale`).
+`LiveQueryOptions` intentionally **excludes** `columns`, `groupBy`, `search`, `includeDeleted`, and `stage`. Realtime snapshots are the full query re-run server-side from the topic fields, so column projection / grouping / soft-delete-included / stage-pinned reads aren't expressed over the wire. If you pass them they're simply not part of the subscription. For those, use a one-shot `find()`.
 </Callout>
 
 ### `LiveSubscribeOptions` — the third argument
@@ -118,7 +116,7 @@ client.collections.posts.live(
 // ac.abort() unsubscribes — equivalent to calling the returned function.
 ```
 
-`signal` unsubscribes on abort (so you can wire it to a component's lifetime). `onError` fires when the underlying SSE connection fails — wire it so a dropped connection surfaces instead of leaving your UI stuck on stale data. Source: `packages/questpie/src/client/index.ts:346`, `:1111`.
+`signal` unsubscribes on abort (so you can wire it to a component's lifetime). `onError` fires when the underlying SSE connection fails — wire it so a dropped connection surfaces instead of leaving your UI stuck on stale data.
 
 ## `liveIter()` — the async-iterable form
 
@@ -136,7 +134,7 @@ for await (const snapshot of client.collections.posts.liveIter(
 }
 ```
 
-It takes only `{ signal? }` — **no `onError`** (unlike `live()`). A connection failure makes the generator **throw**, so wrap the loop in `try/catch` if you need to handle drops. Terminate by aborting the signal. Source: `packages/questpie/src/client/index.ts:424`, `:1125`; `packages/questpie/src/client/realtime/stream.ts:66` (`sseSnapshotStream`).
+It takes only `{ signal? }` — **no `onError`** (unlike `live()`). A connection failure makes the generator **throw**, so wrap the loop in `try/catch` if you need to handle drops. Terminate by aborting the signal.
 
 ## Globals
 
@@ -152,7 +150,7 @@ const stop = client.globals.siteSettings.live(
 );
 ```
 
-`live()` and `liveIter()` carry the same `LiveSubscribeOptions` / `{ signal? }` semantics as collections. Source: `packages/questpie/src/client/index.ts:703` (`live`), `:725` (`liveIter`), `:338` (`GlobalLiveQueryOptions`).
+`live()` and `liveIter()` carry the same `LiveSubscribeOptions` / `{ signal? }` semantics as collections.
 
 ## Realtime with TanStack Query
 
@@ -173,21 +171,21 @@ function LivePosts() {
 }
 ```
 
-Under the hood the hook uses TanStack's `experimental_streamedQuery` with `refetchMode: "append"`, seeding from `find()` and then replacing the result with each pushed snapshot. The query **key is identical** to the non-realtime version, so the same cache entry is reused. Source: `packages/tanstack-query/src/index.ts:568` (`find`), `:602` (`count`), `:870` (`get`), `:466` (`streamRealtimeQuery`).
+Under the hood the hook uses TanStack's `experimental_streamedQuery` with `refetchMode: "append"`, seeding from `find()` and then replacing the result with each pushed snapshot. The query **key is identical** to the non-realtime version, so the same cache entry is reused.
 
 <Callout type="info" title="A live count reads `totalDocs` off the snapshot">
-`q.collections.posts.count(opts, { realtime: true })` streams the full collection snapshot and extracts `totalDocs` — so your count stays live without a dedicated count subscription. Source: `packages/tanstack-query/src/index.ts:611` (reducer extracts `chunk.totalDocs`).
+`q.collections.posts.count(opts, { realtime: true })` streams the full collection snapshot and extracts `totalDocs` — so your count stays live without a dedicated count subscription.
 </Callout>
 
 <Callout type="warn" title="`{ realtime: true }` only exists on find / count / get">
-`findOne` and every mutation **reject** a `{ realtime: true }` argument at the type level — passing it is a compile error (the tests assert `@ts-expect-error`). There's no live `findOne`; subscribe with `find({ where: { id } })` (or `live()`) and read `docs[0]`. Source: `packages/tanstack-query/src/index.ts:640` (`findOne`, no 2nd arg); `realtime-query-options.test.ts:90`.
+`findOne` and every mutation **reject** a `{ realtime: true }` argument at the type level — passing it is a compile error (the tests assert `@ts-expect-error`). There's no live `findOne`; subscribe with `find({ where: { id } })` (or `live()`) and read `docs[0]`.
 </Callout>
 
 <Callout type="warn" title="If the server has no realtime, `{ realtime: true }` falls back to a stuck stream">
-The client always wires `client.realtime`, so the TanStack flag is honored client-side regardless. The real prerequisite is **server-side realtime**: set `realtime` in your config so `POST /realtime` exists. Without it the SSE connect fails — the stream errors out (and `find()`/`get()`/`live()`'s `onError` fires) rather than silently degrading to a poll. Turn `realtime` on in the server config before relying on live queries. Source: `packages/tanstack-query/src/index.ts:577` (`queryConfig?.realtime && client.realtime`); `packages/questpie/src/client/realtime/stream.ts:84` (error rejects the stream).
+The client always wires `client.realtime`, so the TanStack flag is honored client-side regardless. The real prerequisite is **server-side realtime**: set `realtime` in your config so `POST /realtime` exists. Without it the SSE connect fails — the stream errors out (and `find()`/`get()`/`live()`'s `onError` fires) rather than silently degrading to a poll. Turn `realtime` on in the server config before relying on live queries.
 </Callout>
 
-The TanStack realtime topic is derived purely from your read `options` via `buildCollectionTopic` / `buildGlobalTopic` — config-level `locale`/`stage` are **not** added to the topic, only `options.locale` is. Two subscriptions that differ only by `where` get distinct live streams. Source: `packages/tanstack-query/src/index.ts:578`; `packages/questpie/src/client/realtime/stream.ts:135`.
+The TanStack realtime topic is derived purely from your read `options` via `buildCollectionTopic` / `buildGlobalTopic` — config-level `locale`/`stage` are **not** added to the topic, only `options.locale` is. Two subscriptions that differ only by `where` get distinct live streams.
 
 ## Server-side: turning realtime on
 
@@ -196,7 +194,7 @@ Everything above is the **client** API. None of it works until you turn realtime
 The full server surface — `RealtimeConfig` options, the outbox/poll model, every transport adapter (`pgNotifyAdapter`, `redisStreamsAdapter`, `cloudflareRealtimeAdapter`), and building your own — lives on one page: see [Realtime adapter](/docs/adapters/realtime).
 
 <Callout type="info" title="One connection, by design — don't open your own SSE per query">
-On the client side, every `live()` / `liveIter()` call (and the TanStack flag) shares **one** multiplexed `POST /realtime` SSE connection — 50 subscriptions cost one HTTP connection, sidestepping the browser's ~6-per-domain cap over HTTP/1.1. Always subscribe through the typed wrappers (or `client.realtime`) so they share that connection rather than opening your own stream. Source: `packages/questpie/src/client/realtime/multiplexer.ts:63`.
+On the client side, every `live()` / `liveIter()` call (and the TanStack flag) shares **one** multiplexed `POST /realtime` SSE connection — 50 subscriptions cost one HTTP connection, sidestepping the browser's ~6-per-domain cap over HTTP/1.1. Always subscribe through the typed wrappers (or `client.realtime`) so they share that connection rather than opening your own stream.
 </Callout>
 
 ## Raw realtime — `client.realtime`
@@ -219,9 +217,9 @@ const stopRaw = client.realtime.subscribe<MySnapshot>(
 );
 ```
 
-`RealtimeAPI` is `{ subscribe<TData>(topic, callback, signal?, customId?, onError?) => unsubscribe; stream<TData>(topic, signal?, customId?) => AsyncGenerator; destroy(); topicCount; subscriberCount }`. `subscribe` is the callback form, `stream` the async-iterable form. `destroy()` tears the multiplexer down entirely (it re-creates on the next subscribe). Prefer the typed wrappers — they infer `TData` from the query and can't drift from the topic shape. Source: `packages/questpie/src/client/realtime/stream.ts:14`.
+`RealtimeAPI` is `{ subscribe<TData>(topic, callback, signal?, customId?, onError?) => unsubscribe; stream<TData>(topic, signal?, customId?) => AsyncGenerator; destroy(); topicCount; subscriberCount }`. `subscribe` is the callback form, `stream` the async-iterable form. `destroy()` tears the multiplexer down entirely (it re-creates on the next subscribe). Prefer the typed wrappers — they infer `TData` from the query and can't drift from the topic shape.
 
-`buildCollectionTopic`, `buildGlobalTopic`, and the `RealtimeAPI` / `TopicConfig` / `TopicInput` **types** are re-exported from `questpie/client`. The multiplexer, `createRealtimeAPI`, and `sseSnapshotStream` are internal (not part of the public `questpie/client` surface) — you reach them only through `client.realtime`. Source: `packages/questpie/src/client/realtime/stream.ts:135`, `:185`.
+`buildCollectionTopic`, `buildGlobalTopic`, and the `RealtimeAPI` / `TopicConfig` / `TopicInput` **types** are re-exported from `questpie/client`. The multiplexer, `createRealtimeAPI`, and `sseSnapshotStream` are internal (not part of the public `questpie/client` surface) — you reach them only through `client.realtime`.
 
 ## Localization
 
@@ -231,14 +229,14 @@ Pass `locale` in the live options to subscribe to a specific localized variant �
 client.collections.posts.live({ where: { published: true }, locale: "de" }, onSnap);
 ```
 
-`setLocale()` on the client mutates request headers for `find`/`create`/etc., but does **not** retarget already-open realtime subscriptions — realtime carries `locale` per topic. To switch a subscription's locale, unsubscribe and re-subscribe with the new `locale`. Source: `packages/questpie/src/client/index.ts:1784` (`setLocale` doc), `:325` (`LiveQueryOptions.locale`).
+`setLocale()` on the client mutates request headers for `find`/`create`/etc., but does **not** retarget already-open realtime subscriptions — realtime carries `locale` per topic. To switch a subscription's locale, unsubscribe and re-subscribe with the new `locale`.
 
 ## Pitfalls
 
-- **Always unsubscribe.** `live()` returns an unsubscribe function and accepts a `signal`; `liveIter()` ends on `signal` abort. Leaking subscriptions keeps the multiplexer's SSE connection alive and the server pushing snapshots. In React, call the returned function in your effect cleanup (or pass an `AbortController` signal). Source: `client/index.ts:401`.
-- **No realtime config = no live mode.** `live()`/`liveIter()`/`{ realtime: true }` need `realtime` set in the **server** config. Without it the SSE endpoint isn't served and subscriptions error (via `onError` / a thrown generator). Source: `client/realtime/stream.ts:84`; `types.ts:66`.
-- **Snapshots are full re-runs, not deltas.** Every push is the complete `find()` result for your query (re-evaluated under access rules), not a patch. For very large result sets, narrow with `where`/`limit` rather than streaming thousands of rows on every change. Source: `client/index.ts:396`.
-- **`liveIter()` throws on disconnect; `live()` calls `onError`.** Pick the form that matches your error handling — wrap `for await` in `try/catch`, or pass `onError` to `live()`. Source: `client/index.ts:346`, `client/realtime/stream.ts:84`.
+- **Always unsubscribe.** `live()` returns an unsubscribe function and accepts a `signal`; `liveIter()` ends on `signal` abort. Leaking subscriptions keeps the multiplexer's SSE connection alive and the server pushing snapshots. In React, call the returned function in your effect cleanup (or pass an `AbortController` signal).
+- **No realtime config = no live mode.** `live()`/`liveIter()`/`{ realtime: true }` need `realtime` set in the **server** config. Without it the SSE endpoint isn't served and subscriptions error (via `onError` / a thrown generator).
+- **Snapshots are full re-runs, not deltas.** Every push is the complete `find()` result for your query (re-evaluated under access rules), not a patch. For very large result sets, narrow with `where`/`limit` rather than streaming thousands of rows on every change.
+- **`liveIter()` throws on disconnect; `live()` calls `onError`.** Pick the form that matches your error handling — wrap `for await` in `try/catch`, or pass `onError` to `live()`.
 
 ## TypeScript
 
@@ -254,7 +252,7 @@ import type {
 } from "questpie/client";
 ```
 
-`LiveQueryOptions`, `GlobalLiveQueryOptions`, and `LiveSubscribeOptions` are structural option types on the client method signatures (inferred at the call site — you rarely import them by name). The snapshot type is `FindResult<Row, Relations, TQuery>` for collections and `ApplyQuery<GlobalSelect, Relations, TQuery>` for globals — identical to `find()` / `get()`. Source: `packages/questpie/src/client/index.ts:325`, `:346`; `packages/questpie/src/server/collection/crud/types.ts:1590`.
+`LiveQueryOptions`, `GlobalLiveQueryOptions`, and `LiveSubscribeOptions` are structural option types on the client method signatures (inferred at the call site — you rarely import them by name). The snapshot type is `FindResult<Row, Relations, TQuery>` for collections and `ApplyQuery<GlobalSelect, Relations, TQuery>` for globals — identical to `find()` / `get()`.
 
 ## Related
 
@@ -265,5 +263,3 @@ import type {
 - [Configuration](/docs/concepts/configuration) — where `realtime` lives in `QuestpieConfig`, alongside the other adapters.
 - [Getting started](/docs/getting-started) — sets up `client` and the `q` query-options proxy used in the examples above.
 - Runnable example: [`examples/tanstack-barbershop`](https://github.com/questpie/questpie/tree/main/examples/tanstack-barbershop) — a TanStack Start app using the typed client and TanStack Query bindings.
-
-{/* TODO @user: add a short screen recording / GIF of a live list updating across two browser tabs once a dev server is running (preview tools or manual capture). */}

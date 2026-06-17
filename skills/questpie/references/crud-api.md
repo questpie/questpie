@@ -50,7 +50,7 @@ One vocabulary on both surfaces (server CRUD and client SDK):
 | bulk delete by where | `deleteMany({ where })` | `{ success, count }` |
 | restore by id | `restoreById({ id })` | `T` (softDelete only) |
 
-Deprecated aliases (removed in v4): server `update`/`delete` = bulk (`updateMany`/`deleteMany`); client `update`/`delete`/`restore` = by-id (`updateById`/`deleteById`/`restoreById`). Avoid them — the same names mean different things on each surface. Accessing a method that does not exist on server CRUD throws a `TypeError` listing valid methods (it does NOT return `undefined`).
+Use the explicit method names: `updateById` / `deleteById` / `restoreById` for single records, `updateMany` / `deleteMany` for bulk operations, and `updateBatch` for per-record batches.
 
 ### `find(options)`
 
@@ -537,9 +537,9 @@ const updated2 = await collections.posts.updateById({
 });
 ```
 
-### HIGH: `update`/`delete` mean different things on server vs client
+### HIGH: Use explicit write method names
 
-On server CRUD, `update`/`delete` are deprecated aliases of the BULK operations (`{ where, data }` → `T[]`). On the client SDK they are by-id operations (`{ id, data }` → `T`). Always use the unambiguous names: `updateById`/`deleteById`/`restoreById` for single records, `updateMany`/`deleteMany` for bulk. Calling a method that does not exist (e.g. a typo) on server CRUD throws a `TypeError` listing the valid methods.
+Use `updateById` / `deleteById` / `restoreById` for single-record writes, `updateMany` / `deleteMany` for bulk filters, and `updateBatch` for per-record batches. Calling a method that does not exist (e.g. a typo) on server CRUD throws a `TypeError` listing the valid methods.
 
 ### MEDIUM: Wrong create() signature
 

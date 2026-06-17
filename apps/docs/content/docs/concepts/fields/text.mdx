@@ -32,7 +32,7 @@ That gives `posts` a `title` column typed `string` on read, required on insert, 
 
 ## Constructor argument
 
-`f.text()` has two call signatures. Source: `packages/questpie/src/server/modules/core/fields/text.ts:55`.
+`f.text()` has two call signatures.
 
 | Call | Column | Notes |
 |---|---|---|
@@ -40,11 +40,11 @@ That gives `posts` a `title` column typed `string` on read, required on insert, 
 | `f.text(n)` | `varchar(n)` | Sized varchar; `n` is also applied as a Zod `.max(n)`. |
 | `f.text({ mode: "text" })` | `text` | Unbounded Postgres `text`. No length cap on the schema. |
 
-The resulting field data is always `string`. The derived Zod schema is `z.string()`, with a `.max()` added whenever a length is known (the `255` default or your `n`); `{ mode: "text" }` drops the cap. Source: `text.ts:65`.
+The resulting field data is always `string`. The derived Zod schema is `z.string()`, with a `.max()` added whenever a length is known (the `255` default or your `n`); `{ mode: "text" }` drops the cap.
 
 ## Chained methods
 
-These methods are specific to `text` (on top of the [shared modifiers](/docs/concepts/fields) every field has). Each returns a new immutable field, so they chain in any order. Source: `text.ts:35`, `text.ts:103`.
+These methods are specific to `text` (on top of the [shared modifiers](/docs/concepts/fields) every field has). Each returns a new immutable field, so they chain in any order.
 
 | Method | Effect |
 |---|---|
@@ -66,16 +66,16 @@ collection("users").fields(({ f }) => ({
 ```
 
 <Callout type="warn" title="`.min()` / `.max()` here are STRING LENGTH, not value bounds">
-On a text field, `.min(n)` / `.max(n)` constrain the **number of characters** (they map to `minLength` / `maxLength`). On [`f.number()`](/docs/concepts/fields/number) the same method names constrain the numeric **value**. Same names, different meaning — sized by the field's type. Source: `text.ts:108`; refinements applied in `packages/questpie/src/server/fields/derive-schema.ts:127`.
+On a text field, `.min(n)` / `.max(n)` constrain the **number of characters** (they map to `minLength` / `maxLength`). On [`f.number()`](/docs/concepts/fields/number) the same method names constrain the numeric **value**. Same names, different meaning — sized by the field's type.
 </Callout>
 
 <Callout type="warn" title="`.trim()` / `.lowercase()` / `.uppercase()` are no-ops today">
-These three methods set runtime state but are **not** wired into the Zod schema. `applyRefinements` only applies `maxLength`, `minLength`, and `pattern` for string types — so `.trim()` / `.lowercase()` / `.uppercase()` neither transform nor validate the stored value. If you need the value normalized, do it explicitly with `.zod()` (e.g. `f.text().zod((s) => s.trim().toLowerCase())`) or a `beforeChange` hook. Source: `packages/questpie/src/server/fields/derive-schema.ts:118` (only maxLength/minLength/pattern handled); state set at `text.ts:106`.
+These three methods set runtime state but are **not** wired into the Zod schema. `applyRefinements` only applies `maxLength`, `minLength`, and `pattern` for string types — so `.trim()` / `.lowercase()` / `.uppercase()` neither transform nor validate the stored value. If you need the value normalized, do it explicitly with `.zod()` (e.g. `f.text().zod((s) => s.trim().toLowerCase())`) or a `beforeChange` hook.
 </Callout>
 
 ## Filtering — operators
 
-`text` uses the **string operator set** (`stringOps`), so every text field is filterable with these in a `where` clause. The operand is typed `string` (or `string[]` for `in` / `notIn`). Source: `packages/questpie/src/server/fields/operators/builtin.ts:129`.
+`text` uses the **string operator set** (`stringOps`), so every text field is filterable with these in a `where` clause. The operand is typed `string` (or `string[]` for `in` / `notIn`).
 
 | Operator | Operand | Matches |
 |---|---|---|
@@ -127,5 +127,3 @@ type Post = typeof posts.$infer.select;
 - [Fields](/docs/concepts/fields) — the `f` proxy, the chain-modifier model, and the shared modifiers (`.required()`, `.localized()`, `.default()`, `.array()`, …).
 - [Textarea field](/docs/concepts/fields/textarea) — the multi-line sibling.
 - [Validation](/docs/concepts/validation) — the auto-derived Zod schema and the `.zod()` escape hatch (the way to actually normalize a value).
-
-{/* TODO @user: screenshot of a text field rendered in the admin form (single-line input). */}

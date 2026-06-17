@@ -70,7 +70,7 @@ export default openApiConfig({
 });
 ```
 
-`openApiConfig()` is an identity factory — it returns its argument unchanged and exists purely for type inference. Source: `packages/openapi/src/server.ts:65`.
+`openApiConfig()` is an identity factory — it returns its argument unchanged and exists purely for type inference.
 
 ### `OpenApiModuleConfig`
 
@@ -89,10 +89,10 @@ The config object accepts every field below. All are optional; the defaults prod
 | `search` | `boolean` | `true` (included) | Set `false` to omit the search endpoints. |
 | `scalar` | `ScalarConfig` | — | Scalar UI options (see below). |
 
-Source: `packages/openapi/src/types.ts:4` (`OpenApiConfig`), `:49` (`OpenApiModuleConfig`).
+
 
 <Callout type="warn" title="`specPath` / `docsPath` are not yet honored">
-`OpenApiModuleConfig` declares `specPath` and `docsPath` fields, but the `openApiModule` mounts its routes under the **fixed** keys `openapi.json` and `docs` — these two options have no effect today. To serve the docs at a different path, mount the route factories yourself (see [Custom mounting](#custom-mounting-and-standalone-generation)). Source: `packages/openapi/src/types.ts:52`; `packages/openapi/src/server.ts:231`.
+`OpenApiModuleConfig` declares `specPath` and `docsPath` fields, but the `openApiModule` mounts its routes under the **fixed** keys `openapi.json` and `docs` — these two options have no effect today. To serve the docs at a different path, mount the route factories yourself (see [Custom mounting](#custom-mounting-and-standalone-generation)).
 </Callout>
 
 ### `ScalarConfig`
@@ -107,11 +107,11 @@ Options passed straight through to the Scalar API reference.
 | `hideDownloadButton` | `boolean` | `false` | Hide Scalar's "Download OpenAPI Spec" button. |
 | `defaultHttpClient` | `{ targetKey; clientKey }` | — | The HTTP client preselected for code samples (e.g. `{ targetKey: "shell", clientKey: "curl" }`). |
 
-The Scalar UI is a tiny HTML page that inlines the generated spec as JSON and loads `@scalar/api-reference` from a CDN. Source: `packages/openapi/src/scalar.ts:11`; `packages/openapi/src/types.ts:29` (`ScalarConfig`).
+The Scalar UI is a tiny HTML page that inlines the generated spec as JSON and loads `@scalar/api-reference` from a CDN.
 
 ## What gets documented
 
-Internally, `generateOpenApiSpec(app, routes, config)` walks the app's runtime metadata and merges five sources into one spec. Source: `packages/openapi/src/generator/index.ts:18`. (The exported wrapper you import is the 2-arg `generateOpenApiSpec(app, config?)`, which derives `routes` from `app.config.routes` for you — see [Standalone generation](#custom-mounting-and-standalone-generation).)
+Internally, `generateOpenApiSpec(app, routes, config)` walks the app's runtime metadata and merges five sources into one spec.
 
 | Source | OpenAPI output |
 |---|---|
@@ -121,7 +121,7 @@ Internally, `generateOpenApiSpec(app, routes, config)` walks the app's runtime m
 | **Auth** | Common Better Auth endpoints (sign-in, sign-up, session, sign-out). Omit via `auth: false`. |
 | **Search** | `POST /search` and `POST /search/reindex/{collection}`. Omit via `search: false`. |
 
-Every spec also includes shared component schemas (`ErrorResponse`, `SuccessResponse`, `CountResponse`, `DeleteManyResponse`) and two security schemes — `bearerAuth` (HTTP bearer) and `cookieAuth` (the `better-auth.session_token` cookie). Source: `packages/openapi/src/generator/index.ts:24` (base schemas), `:66` (security schemes).
+Every spec also includes shared component schemas (`ErrorResponse`, `SuccessResponse`, `CountResponse`, `DeleteManyResponse`) and two security schemes — `bearerAuth` (HTTP bearer) and `cookieAuth` (the `better-auth.session_token` cookie).
 
 ### How a route projects into the spec
 
@@ -165,19 +165,19 @@ projects to roughly:
 }
 ```
 
-A route that serves multiple methods (`.get().post()`) emits one operation per method on the same path, each with a method-suffixed `operationId`. **Raw routes** (no input schema) document a permissive request body (`application/json` or `application/octet-stream`) and a generic `200` response. Source: `packages/openapi/src/generator/routes.ts:113`.
+A route that serves multiple methods (`.get().post()`) emits one operation per method on the same path, each with a method-suffixed `operationId`. **Raw routes** (no input schema) document a permissive request body (`application/json` or `application/octet-stream`) and a generic `200` response.
 
 <Callout type="warn" title="Routes without an `outputSchema` document an untyped response">
-A JSON route with `.schema()` but no `.outputSchema()` gets its request body documented but falls back to `{ "type": "object" }` for the response. To get a fully typed response in the spec, add `.outputSchema(...)`. See [Routes → Validation and output](/docs/concepts/routes#validation-and-output). Source: `packages/openapi/src/generator/routes.ts:206`.
+A JSON route with `.schema()` but no `.outputSchema()` gets its request body documented but falls back to `{ "type": "object" }` for the response. To get a fully typed response in the spec, add `.outputSchema(...)`. See [Routes → Validation and output](/docs/concepts/routes#validation-and-output).
 </Callout>
 
 <Callout type="warn" title="Route `.meta()` is not yet read by the route generator">
-The [`RouteMeta`](/docs/concepts/routes#metadata-openapi-and-mcp) shape (`title`, `description`, `tags`) is designed to feed OpenAPI, but the **current** route generator does not consume it — operation `summary` is the route path and `tags` are derived from the top-level path segment (`Routes: <segment>`). Wiring `.meta()` into route operations is part of the `openapi-quality-v1` rework; until it lands, set route descriptions in your own post-processing if you need them. Source: `packages/openapi/src/generator/routes.ts:160` (operationId/summary/tags built without `meta`).
+The [`RouteMeta`](/docs/concepts/routes#metadata-openapi-and-mcp) shape (`title`, `description`, `tags`) is designed to feed OpenAPI, but the **current** route generator does not consume it — operation `summary` is the route path and `tags` are derived from the top-level path segment (`Routes: <segment>`). Wiring `.meta()` into route operations is part of the `openapi-quality-v1` rework; until it lands, set route descriptions in your own post-processing if you need them.
 </Callout>
 
 ### Schema conversion caveat
 
-Route input/output schemas are converted with Zod's `z.toJSONSchema`. When a schema can't be converted — most commonly because it contains a **transform** or **refinement** — the generator catches the error and falls back to a permissive `{ "type": "object", "description": "Schema could not be generated" }`. Plain object/primitive schemas convert faithfully. Improving this fidelity is part of the hardening effort. Source: `packages/openapi/src/generator/schemas.ts:171`.
+Route input/output schemas are converted with Zod's `z.toJSONSchema`. When a schema can't be converted — most commonly because it contains a **transform** or **refinement** — the generator catches the error and falls back to a permissive `{ "type": "object", "description": "Schema could not be generated" }`. Plain object/primitive schemas convert faithfully. Improving this fidelity is part of the hardening effort.
 
 ## Custom mounting and standalone generation
 
@@ -197,7 +197,7 @@ import { docsRoute } from "@questpie/openapi/server";
 export default docsRoute();
 ```
 
-Both factories read config from `config/openapi.ts` at request time, or take an explicit config argument that overrides it. Source: `packages/openapi/src/server.ts:153` (`openApiRoute`), `:191` (`docsRoute`).
+Both factories read config from `config/openapi.ts` at request time, or take an explicit config argument that overrides it.
 
 To generate the spec **without** mounting any route — for a build step, a snapshot test, or a client generator — call `generateOpenApiSpec` directly:
 
@@ -212,7 +212,7 @@ const spec = generateOpenApiSpec(app, {
 // spec.openapi === "3.1.0"; routes are read from app.config.routes automatically.
 ```
 
-Source: `packages/openapi/src/server.ts:88`.
+
 
 ## Access control
 
@@ -253,7 +253,7 @@ import type {
 } from "@questpie/openapi/server";
 ```
 
-The codegen plugin (which discovers `config/openapi.ts` and emits an `AppRouteKeys` type) is exported separately as `openApiPlugin` from `@questpie/openapi/plugin`; you only need it if you wire the plugin manually instead of using `openApiModule` (the module bundles it). Source: `packages/openapi/src/server.ts` (exports), `packages/openapi/src/plugin.ts:21`.
+The codegen plugin (which discovers `config/openapi.ts` and emits an `AppRouteKeys` type) is exported separately as `openApiPlugin` from `@questpie/openapi/plugin`; you only need it if you wire the plugin manually instead of using `openApiModule` (the module bundles it).
 
 ## Related
 
@@ -262,5 +262,3 @@ The codegen plugin (which discovers `config/openapi.ts` and emits an `AppRouteKe
 - [Configuration](/docs/concepts/configuration) — registering `openApiModule` in `modules.ts` and how the fetch handler's `basePath` is wired.
 - [Access control](/docs/concepts/access-control) — gating the endpoints the spec describes.
 - [Getting started](/docs/getting-started) — scaffold an app, then open `/api/docs`.
-
-{/* TODO @user: add a screenshot of the Scalar API reference at /api/docs (with collections + a custom route expanded) once a dev server with @questpie/openapi registered is running — capture via preview tools or manual screenshot. */}

@@ -31,7 +31,7 @@ That gives `posts` a `published` column typed `boolean` on read, required on ins
 
 ## Constructor argument
 
-`f.boolean()` takes **no arguments**. It always produces a `boolean` column with a `z.boolean()` schema. Source: `packages/questpie/src/server/modules/core/fields/boolean.ts:42`.
+`f.boolean()` takes **no arguments**. It always produces a `boolean` column with a `z.boolean()` schema.
 
 | Call | Column | Schema |
 |---|---|---|
@@ -39,7 +39,7 @@ That gives `posts` a `published` column typed `boolean` on read, required on ins
 
 ## Chained methods
 
-`f.boolean()` has **no type-specific methods** — it returns a plain `Field`, not a `FieldWithMethods` wrapper, because there is nothing boolean-specific to refine. Shape it with the [shared modifiers](/docs/concepts/fields#shared-methods) every field carries (`.required()`, `.default()`, `.label()`, `.description()`, `.localized()`, `.array()`, `.access()`, `.hooks()`, …). Source: `boolean.ts:42`.
+`f.boolean()` has **no type-specific methods** — it returns a plain `Field`, not a `FieldWithMethods` wrapper, because there is nothing boolean-specific to refine. Shape it with the [shared modifiers](/docs/concepts/fields#shared-methods) every field carries (`.required()`, `.default()`, `.label()`, `.description()`, `.localized()`, `.array()`, `.access()`, `.hooks()`, …).
 
 ```ts
 collection("settings").fields(({ f }) => ({
@@ -53,12 +53,12 @@ collection("settings").fields(({ f }) => ({
 ```
 
 <Callout type="info" title="`.default(value)` is type-checked against `boolean`">
-`.default()` is type-constrained to the field's data type, exactly like Drizzle — `f.boolean().default("yes")` won't compile. Passing a `.default(...)` also makes the field optional on insert. For a column-level SQL default instead of a JS value, use ``.drizzle((c) => c.default(sql`true`))``. Source: `packages/questpie/src/server/fields/field-class.ts:111`.
+`.default()` is type-constrained to the field's data type, exactly like Drizzle — `f.boolean().default("yes")` won't compile. Passing a `.default(...)` also makes the field optional on insert. For a column-level SQL default instead of a JS value, use ``.drizzle((c) => c.default(sql`true`))``.
 </Callout>
 
 ## Filtering — operators
 
-`boolean` uses the **boolean operator set** (`booleanOps`), so every boolean field is filterable with these in a `where` clause. The operand is typed `boolean`. Source: `packages/questpie/src/server/fields/operators/builtin.ts:196`.
+`boolean` uses the **boolean operator set** (`booleanOps`), so every boolean field is filterable with these in a `where` clause. The operand is typed `boolean`.
 
 | Operator | Operand | Matches |
 |---|---|---|
@@ -120,5 +120,3 @@ type PostFilter = CollectionWhere<"posts">; // { published?: { eq?: boolean; ...
 - [`f.select()`](/docs/concepts/fields/select) — when a flag grows into a fixed set of more than two states.
 - [Validation](/docs/concepts/validation) — the auto-derived Zod schema and the `.zod()` escape hatch.
 - [Relations](/docs/concepts/relations) — the full query language for combining the operators above.
-
-{/* TODO @user: screenshot of a boolean field rendered in the admin form (toggle / checkbox). */}

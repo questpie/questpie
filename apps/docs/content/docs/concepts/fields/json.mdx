@@ -31,7 +31,7 @@ That gives `posts` a `metadata` column that accepts any JSON value, and a `setti
 
 ## Constructor argument
 
-`f.json()` takes a single optional config object. Source: `packages/questpie/src/server/modules/core/fields/json.ts:78`.
+`f.json()` takes a single optional config object.
 
 | Call | Column | Schema |
 |---|---|---|
@@ -39,20 +39,20 @@ That gives `posts` a `metadata` column that accepts any JSON value, and a `setti
 | `f.json({ mode: "jsonb" })` | `jsonb` | recursive `jsonValueSchema` |
 | `f.json({ mode: "json" })` | `json` | recursive `jsonValueSchema` |
 
-The `mode` selects the underlying Postgres column type. **`jsonb` (the default) is what you want** — it is stored in a decomposed binary format, supports indexing, and is faster to query; the `json` mode stores the exact input text (preserving key order and whitespace) and is rarely needed. The derived schema is the same in both modes. Source: `json.ts:81`, `json.ts:85`.
+The `mode` selects the underlying Postgres column type. **`jsonb` (the default) is what you want** — it is stored in a decomposed binary format, supports indexing, and is faster to query; the `json` mode stores the exact input text (preserving key order and whitespace) and is rarely needed. The derived schema is the same in both modes.
 
 <Callout type="info" title="The schema is `JsonValue`, not `z.any()`">
-`f.json()` derives a recursive `jsonValueSchema` — a union of `string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue }`. This deliberately replaces `z.any()`, so a value that isn't valid JSON (a `Date`, a `Map`, a function, `undefined`) fails validation rather than silently passing through. Source: `json.ts:37`.
+`f.json()` derives a recursive `jsonValueSchema` — a union of `string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue }`. This deliberately replaces `z.any()`, so a value that isn't valid JSON (a `Date`, a `Map`, a function, `undefined`) fails validation rather than silently passing through.
 </Callout>
 
 ## Chained methods
 
-`f.json()` has **no type-specific methods** — it returns a plain `Field` (no `FieldWithMethods` wrapper), because there is nothing json-specific to refine. You shape it entirely with the [shared modifiers](/docs/concepts/fields#shared-methods) every field carries. Two of them are central to working with JSON. Source: `json.ts:83` (built with an empty extension map and no `fieldType` methods).
+`f.json()` has **no type-specific methods** — it returns a plain `Field` (no `FieldWithMethods` wrapper), because there is nothing json-specific to refine. You shape it entirely with the [shared modifiers](/docs/concepts/fields#shared-methods) every field carries. Two of them are central to working with JSON.
 
 | Modifier | Effect on a JSON field |
 |---|---|
-| `.$type<T>()` | **Type-level only**, no runtime effect — pin the read/write value type to `T`. The primary way to type a JSON field. Source: `packages/questpie/src/server/fields/field-class.ts:273`. |
-| `.zod(fn)` | Replace or refine the auto-derived schema to **actually validate** that shape at runtime. Source: `field-class.ts:246`. |
+| `.$type<T>()` | **Type-level only**, no runtime effect — pin the read/write value type to `T`. The primary way to type a JSON field.
+| `.zod(fn)` | Replace or refine the auto-derived schema to **actually validate** that shape at runtime.
 
 The type argument on `f.json<T>()` is shorthand for `.$type<T>()` — both are type-only. For runtime safety, pair the type with `.zod()`:
 
@@ -74,12 +74,12 @@ collection("users").fields(({ f }) => ({
 ```
 
 <Callout type="warn" title="A type argument alone does NOT validate at runtime">
-`f.json<{ theme: "light" | "dark" }>()` narrows the *TypeScript* type but does **not** validate — the runtime schema stays the loose `jsonValueSchema`, so a write of `{ theme: "blue" }` (or any other JSON) is accepted by the database. To enforce the shape on write, add `.zod()` as shown above. Source: `.$type()` is type-only (`field-class.ts:273`); the schema is set by `schemaFactory` (`json.ts:86`).
+`f.json<{ theme: "light" | "dark" }>()` narrows the *TypeScript* type but does **not** validate — the runtime schema stays the loose `jsonValueSchema`, so a write of `{ theme: "blue" }` (or any other JSON) is accepted by the database. To enforce the shape on write, add `.zod()` as shown above.
 </Callout>
 
 ## Filtering — operators
 
-`json` uses the **basic operator set** (`basicOps`) — equality, membership, and null checks. There are no `gt` / `lt` / `contains` / path operators; a JSON field is filtered as a whole value. The operand is typed against the JSON value (or your narrowed shape via `JsonWhereInput<T>`), not `unknown`. Source: `packages/questpie/src/server/fields/operators/builtin.ts:662`; where shape `JsonWhereInput<T>` at `builtin.ts:98`.
+`json` uses the **basic operator set** (`basicOps`) — equality, membership, and null checks. There are no `gt` / `lt` / `contains` / path operators; a JSON field is filtered as a whole value. The operand is typed against the JSON value (or your narrowed shape via `JsonWhereInput<T>`), not `unknown`.
 
 | Operator | Operand | Matches |
 |---|---|---|
@@ -150,5 +150,3 @@ type PostFilter = CollectionWhere<"posts">;  // { settings?: { eq?: { theme: "li
 - [`f.object()`](/docs/concepts/fields#structured) — the typed, per-key sibling for fixed nested shapes.
 - [Validation](/docs/concepts/validation) — the auto-derived Zod schema and the `.zod()` escape hatch (the way to actually validate a JSON shape).
 - [Relations](/docs/concepts/relations) — filtering by a relation and hydrating related rows with `with`.
-
-{/* TODO @user: screenshot of a JSON field rendered in the admin form. */}

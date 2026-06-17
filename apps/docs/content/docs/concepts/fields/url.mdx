@@ -31,18 +31,18 @@ That gives `links` a `website` column typed `string` on read, required on insert
 
 ## Constructor argument
 
-`f.url()` takes one optional argument: the column's max character length. Source: `packages/questpie/src/server/modules/core/fields/url.ts:47`.
+`f.url()` takes one optional argument: the column's max character length.
 
 | Call | Column | Notes |
 |---|---|---|
 | `f.url()` | `varchar(2048)` | Default. `maxLength` defaults to **2048** — wider than `f.text()`'s 255, since URLs run long. |
 | `f.url(n)` | `varchar(n)` | Sized varchar; `n` is also applied as a Zod `.max(n)`. |
 
-The resulting field data is always `string`. The derived Zod schema is `z.string().url().max(maxLength)` — the `.url()` refinement is added unconditionally, so every value is validated as a URL regardless of the length you pass. Source: `url.ts:48`, `packages/questpie/src/server/fields/derive-schema.ts:131`.
+The resulting field data is always `string`. The derived Zod schema is `z.string().url().max(maxLength)` — the `.url()` refinement is added unconditionally, so every value is validated as a URL regardless of the length you pass.
 
 ## Chained methods
 
-These methods are specific to `url` (on top of the [shared modifiers](/docs/concepts/fields) every field has). Each returns a new immutable field, so they chain in any order. Source: `url.ts:31`, `url.ts:83`.
+These methods are specific to `url` (on top of the [shared modifiers](/docs/concepts/fields) every field has). Each returns a new immutable field, so they chain in any order.
 
 | Method | Effect |
 |---|---|
@@ -59,16 +59,16 @@ collection("integrations").fields(({ f }) => ({
 ```
 
 <Callout type="warn" title="`.min()` / `.max()` here are STRING LENGTH, not value bounds">
-On a `url` field, `.min(n)` / `.max(n)` constrain the **number of characters** (they map to `minLength` / `maxLength`), exactly as on [`f.text()`](/docs/concepts/fields/text). On `f.number()` the same method names constrain the numeric **value**. Same names, different meaning — sized by the field's type. Source: `url.ts:83`; refinements applied in `packages/questpie/src/server/fields/derive-schema.ts:127`.
+On a `url` field, `.min(n)` / `.max(n)` constrain the **number of characters** (they map to `minLength` / `maxLength`), exactly as on [`f.text()`](/docs/concepts/fields/text). On `f.number()` the same method names constrain the numeric **value**. Same names, different meaning — sized by the field's type.
 </Callout>
 
 <Callout type="info" title="URL validation is always on; tighten it with `.zod()`">
-The `.url()` refinement is appended automatically (`derive-schema.ts:131`) — you don't add it and you can't turn it off through a field method. To go further (e.g. allow only `https`, or restrict hosts), use the `.zod()` escape hatch: `f.url().zod((s) => s.refine((v) => v.startsWith("https://")))`. Source: `derive-schema.ts:124-132`.
+The `.url()` refinement is appended automatically (`derive-schema.ts:131`) — you don't add it and you can't turn it off through a field method. To go further (e.g. allow only `https`, or restrict hosts), use the `.zod()` escape hatch: `f.url().zod((s) => s.refine((v) => v.startsWith("https://")))`.
 </Callout>
 
 ## Filtering — operators
 
-`url` uses the **URL operator set** (`urlOps`), which is the [string operator set](/docs/concepts/fields/text) extended with three URL-specific operators. Every `url` field is filterable with these in a `where` clause. Source: `packages/questpie/src/server/fields/operators/builtin.ts:319`.
+`url` uses the **URL operator set** (`urlOps`), which is the [string operator set](/docs/concepts/fields/text) extended with three URL-specific operators. Every `url` field is filterable with these in a `where` clause.
 
 The inherited string operators (operand `string`, or `string[]` for `in` / `notIn`):
 
@@ -103,7 +103,7 @@ const secure = await app.collections.links.find({
 ```
 
 <Callout type="info" title="`host`/`protocol` are pattern matches, not a parsed URL">
-These operators match against the raw stored string with `LIKE`/`ILIKE` — they don't parse the URL. `host` looks for `://value` anywhere in the string (so it also matches a host that appears inside a path), and `protocol` is a case-sensitive prefix match on `value://`. They're convenient filters, not a strict URL parser. Source: `packages/questpie/src/server/fields/operators/builtin.ts:319-356`.
+These operators match against the raw stored string with `LIKE`/`ILIKE` — they don't parse the URL. `host` looks for `://value` anywhere in the string (so it also matches a host that appears inside a path), and `protocol` is a case-sensitive prefix match on `value://`. They're convenient filters, not a strict URL parser.
 </Callout>
 
 For the full query language — combining field filters with `AND` / `OR` / `NOT`, pagination, and `orderBy` — see [Fields → filtering](/docs/concepts/fields). Relation filters and hydration are covered in [Relations](/docs/concepts/relations).
@@ -141,5 +141,3 @@ type Link = typeof links.$infer.select;
 - [Fields](/docs/concepts/fields) — the `f` proxy, the chain-modifier model, and the shared modifiers (`.required()`, `.localized()`, `.default()`, `.array()`, …).
 - [Text field](/docs/concepts/fields/text) — the plain-string sibling and the `stringOps` operator set `url` extends.
 - [Validation](/docs/concepts/validation) — the auto-derived Zod schema and the `.zod()` escape hatch for stricter URL rules.
-
-{/* TODO @user: screenshot of a url field rendered in the admin form (URL input). */}

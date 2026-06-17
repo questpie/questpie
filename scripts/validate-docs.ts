@@ -50,6 +50,7 @@ interface CodeBlock {
 
 const ROOT_DIR = resolve(import.meta.dir, "..");
 const DOCS_ROOT = join(ROOT_DIR, "apps/docs/content/docs");
+const SKILL_DOCS_ROOT = join(ROOT_DIR, "skills/questpie");
 
 const DOC_EXTENSIONS = new Set([".md", ".mdx"]);
 const CODE_LANGUAGES = new Set([
@@ -112,6 +113,7 @@ const DRIFT_RULES: Array<{
 	severity: Severity;
 	pattern: RegExp;
 	message: string;
+	scope?: "docs-and-skills";
 }> = [
 	{
 		id: "questpie-server-import",
@@ -156,6 +158,53 @@ const DRIFT_RULES: Array<{
 			/\bimport\s+\{[^}]*\bcollection\b[^}]*\}\s+from\s+["']questpie["']/g,
 		message:
 			"Convention files should import `collection` from `#questpie/factories`. Keep `questpie` imports only for package/module code.",
+	},
+	{
+		id: "user-facing-source-marker",
+		severity: "error",
+		pattern: /^\s*Source:\s+/gm,
+		message:
+			"Do not expose source-file provenance in Markdown docs or skills. Keep implementation references out of user-facing guidance.",
+		scope: "docs-and-skills",
+	},
+	{
+		id: "user-facing-verification-marker",
+		severity: "error",
+		pattern: /\b(?:claim-verified|verified:)\b/gi,
+		message:
+			"Do not expose internal verification markers in Markdown docs or skills.",
+		scope: "docs-and-skills",
+	},
+	{
+		id: "user-facing-todo-marker",
+		severity: "error",
+		pattern: /\bTODO\s+@/g,
+		message:
+			"Do not leave owner-addressed TODO markers in Markdown docs or skills.",
+		scope: "docs-and-skills",
+	},
+	{
+		id: "field-from-docs",
+		severity: "error",
+		pattern: /\bf\.from\s*\(/g,
+		message:
+			"Do not document `f.from()` as the field escape hatch. Use `.drizzle()` for Drizzle column tweaks, or `field()` / `fieldType()` for new field types.",
+		scope: "docs-and-skills",
+	},
+	{
+		id: "empty-realtime-config",
+		severity: "error",
+		pattern: /\brealtime:\s*\{\s*\}/g,
+		message: "Use `realtime: true` to enable realtime in docs examples.",
+		scope: "docs-and-skills",
+	},
+	{
+		id: "legacy-api-language",
+		severity: "error",
+		pattern: /\b(?:legacy|deprecated)\b/gi,
+		message:
+			"Do not document old API names or compatibility paths. Show the current API only.",
+		scope: "docs-and-skills",
 	},
 ];
 
@@ -472,8 +521,16 @@ function isFuturePreviewDesignNote(content: string): boolean {
 	);
 }
 
+function isDocsOrSkillFile(file: string): boolean {
+	return file.startsWith(DOCS_ROOT) || file.startsWith(SKILL_DOCS_ROOT);
+}
+
 function validateDriftRules(file: string, content: string, issues: Issue[]) {
 	for (const rule of DRIFT_RULES) {
+		if (rule.scope === "docs-and-skills" && !isDocsOrSkillFile(file)) {
+			continue;
+		}
+
 		let match: RegExpExecArray | null;
 		rule.pattern.lastIndex = 0;
 

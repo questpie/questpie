@@ -39,7 +39,7 @@ Scaffold a new app with `bunx create-questpie my-app` and you ship from a real s
 - **A branded landing page** — at `/`, surfacing your entry points (admin, API docs).
 - **Committed codegen output**, a `docker-compose` (Postgres + extensions), `.env`, and the full script set (`dev`, `db:push`, `migrate*`).
 
-Pick a runtime and follow its [getting-started guide](/docs/getting-started/tanstack-start) to a booting app. {/* TODO @user: link the create-questpie reference here once /docs/getting-started/create-questpie exists (scaffolder flow, flags, runtime×module matrix). */}
+Pick a runtime and follow its [getting-started guide](/docs/getting-started/tanstack-start) to a booting app.
 
 <Callout type="info" title="Four runtimes, one core">
 	TanStack Start and Next.js are fullstack (admin UI included); Hono and Elysia are headless API + typed-client. The `src/questpie/**` core is identical across all four — only a thin runtime adapter (how the handler is mounted) differs.
@@ -69,7 +69,7 @@ export const posts = collection("posts")
 ```
 
 <Callout type="info" title="Import from `#questpie/factories`, not `questpie`">
-	Codegen generates the `collection()` factory so that module-contributed field types (`f.richText()`, `f.blocks()` from the admin module) appear on `f`. A bare `import { collection } from "questpie"` only sees the 15 built-in field types. Always import from `#questpie/factories`. See [Codegen](/docs/concepts/codegen) for how the generated factory is wired.
+	Codegen generates the `collection()` factory so that module-contributed field types (`f.richText()`, `f.blocks()` from the admin module) appear on `f`. A bare `import { collection } from "questpie"` only sees the 15 built-in field types. Always import from `#questpie/factories`. See [Codegen](/docs/extend/codegen) for how the generated factory is wired.
 </Callout>
 
 **2. Run codegen.** This discovers your files and writes the typed runtime to `src/questpie/server/.generated/`.
@@ -235,7 +235,7 @@ export default email({
 
 ### The client
 
-**[Typed client SDK](/docs/concepts/client-sdk)** — `createClient<AppConfig>(...)` from `questpie/client`. Gives you `client.collections.*`, `client.globals.*`, `client.routes.*`, `client.search`, and `client.realtime` — every method typed from your schema. `AppConfig` is the generated type of your app.
+**[Typed client SDK](/docs/client/sdk)** — `createClient<AppConfig>(...)` from `questpie/client`. Gives you `client.collections.*`, `client.globals.*`, `client.routes.*`, `client.search`, and `client.realtime` — every method typed from your schema. `AppConfig` is the generated type of your app.
 
 ```ts
 import { createClient } from "questpie/client";
@@ -244,14 +244,14 @@ import type { AppConfig } from "@/questpie/server/app";
 export const client = createClient<AppConfig>({ baseURL, basePath: "/api" });
 ```
 
-**[TanStack Query](/docs/concepts/tanstack-query)** — `createQuestpieQueryOptions(client)` from `@questpie/tanstack-query` builds `queryOptions`/`mutationOptions` you pass straight into `useQuery`/`useMutation`. Query keys, locale, and stage are handled for you. Pass `{ realtime: true }` to `find`/`count`/`get` for live updates.
+**[TanStack Query](/docs/client/tanstack-query)** — `createQuestpieQueryOptions(client)` from `@questpie/tanstack-query` builds `queryOptions`/`mutationOptions` you pass straight into `useQuery`/`useMutation`. Query keys, locale, and stage are handled for you. Pass `{ realtime: true }` to `find`/`count`/`get` for live updates.
 
 ```ts
 const { data } = useQuery(q.collections.posts.find({ limit: 10 }));
 const create = useMutation(q.collections.posts.create());
 ```
 
-**[Realtime](/docs/concepts/realtime)** — `client.collections.posts.live(query, onSnapshot)` opens a live subscription; the first snapshot arrives immediately, then updates stream over a single multiplexed SSE connection.
+**[Realtime](/docs/client/realtime)** — `client.collections.posts.live(query, onSnapshot)` opens a live subscription; the first snapshot arrives immediately, then updates stream over a single multiplexed SSE connection.
 
 ### Infrastructure (adapters)
 
@@ -277,15 +277,13 @@ export default runtimeConfig({
 
 ### The admin panel
 
-**Admin UI** — add the `@questpie/admin` module and your collections get a full panel: list views, forms, filters, and media — all generated from the same schema via introspection. Customize per collection with `.admin()`, `.list()`, `.form()`, and `.actions()`; the admin's own collections (like `user`) follow the exact same file conventions as yours. {/* TODO @user: link the Admin overview here once /docs/admin exists. */}
-
-{/* SCREENSHOT: admin collection list view for `posts` — TODO @user */}
+**[Admin UI](/docs/admin)** — add the `@questpie/admin` module and your collections get a full panel: list views, forms, filters, and media — all generated from the same schema via introspection. Customize per collection with `.admin()`, `.list()`, `.form()`, and `.actions()`; the admin's own collections follow the exact same file conventions as yours.
 
 ### Extending the framework
 
-**[Modules and plugins](/docs/concepts/modules)** — a module is plain data (`collections`, `routes`, `jobs`, `services`, a codegen `plugin`) you add to `src/questpie/server/modules.ts`. The admin and OpenAPI features ship as modules. [Build your own](/docs/concepts/build-a-plugin) to package reusable schema + behavior.
+**[Modules and plugins](/docs/extend/modules)** — a module is plain data (`collections`, `routes`, `jobs`, `services`, a codegen `plugin`) you add to `src/questpie/server/modules.ts`. Admin, OpenAPI, MCP, and workflows all use this path. [Build your own](/docs/extend/build-a-plugin) to package reusable schema + behavior.
 
-**[Codegen](/docs/concepts/codegen)** — the engine that turns your files into the typed runtime. `questpie generate` runs it once; `questpie dev` watches and regenerates on file add/remove. Codegen output is committed to git. A module's codegen `plugin` lets a package contribute its own file conventions without you editing config.
+**[Codegen](/docs/extend/codegen)** — the engine that turns your files into the typed runtime. `questpie generate` runs it once; `questpie dev` watches and regenerates on file add/remove. Codegen output is committed to git. A module's codegen `plugin` lets a package contribute its own file conventions without you editing config.
 
 <Callout type="warn" title="Re-run codegen after adding or removing files">
 	New collections, routes, and jobs only enter the typed runtime once `questpie generate` (or `questpie dev`) regenerates `.generated/`. Editing the *body* of an existing file does not require a regen — only adding/removing files does.
@@ -296,17 +294,15 @@ export default runtimeConfig({
 - **[Getting started: TanStack Start](/docs/getting-started/tanstack-start)** — scaffold → `docker compose up` → `db:push` → a booting app.
 - **[Collections](/docs/concepts/collections)** — the deep dive on the unit you'll use most.
 - **[Fields](/docs/concepts/fields)** — every built-in field type and the chain-modifier model.
-- **[Client SDK](/docs/concepts/client-sdk)** — the typed client and how every call is inferred from your schema.
-- **[Codegen](/docs/concepts/codegen)** — the engine that turns your files into the typed runtime.
+- **[Client SDK](/docs/client/sdk)** — the typed client and how every call is inferred from your schema.
+- **[Codegen](/docs/extend/codegen)** — the engine that turns your files into the typed runtime.
 
 ### Suggested learning paths
 
 Pick the on-ramp that matches what you're here to do. Each is an ordered path through the canonical pages — read them in sequence and every step builds on the last.
 
-- **New dev (build something)** — [TanStack Start](/docs/getting-started/tanstack-start) → [Collections](/docs/concepts/collections) → [Fields](/docs/concepts/fields) → [Relations](/docs/concepts/relations) → [Access control](/docs/concepts/access-control) → [Client SDK](/docs/concepts/client-sdk) → [TanStack Query](/docs/concepts/tanstack-query). Add [Hooks](/docs/concepts/hooks), [Jobs](/docs/concepts/jobs), and [Routes](/docs/concepts/routes) when you need behavior.
+- **New dev (build something)** — [TanStack Start](/docs/getting-started/tanstack-start) → [Collections](/docs/concepts/collections) → [Fields](/docs/concepts/fields) → [Relations](/docs/concepts/relations) → [Access control](/docs/concepts/access-control) → [Client SDK](/docs/client/sdk) → [TanStack Query](/docs/client/tanstack-query). Add [Hooks](/docs/concepts/hooks), [Jobs](/docs/concepts/jobs), and [Routes](/docs/concepts/routes) when you need behavior.
 - **Backend / data modeler** — [Collections](/docs/concepts/collections) → [Fields](/docs/concepts/fields) → [Relations](/docs/concepts/relations) → [Validation](/docs/concepts/validation) → [Access control](/docs/concepts/access-control) → [Hooks](/docs/concepts/hooks).
-- **Frontend integrator** — [Client SDK](/docs/concepts/client-sdk) → [TanStack Query](/docs/concepts/tanstack-query) → [Realtime](/docs/concepts/realtime).
-- **Extender / plugin author** — [Codegen](/docs/concepts/codegen) → [Modules](/docs/concepts/modules) → [Build a plugin](/docs/concepts/build-a-plugin).
-- **AI agent** — the QUESTPIE skills (by name) plus `llms.txt`/`llms-full.txt` are the agent on-ramp. {/* TODO @user: link /docs/ai (the AI-agent hub: questpie/questpie-admin skills by name + llms.txt) once it exists — see line 302. */}
-
-{/* TODO @user: add "create-questpie" (/docs/getting-started/create-questpie), "Database & extensions" (/docs/database — Drizzle-native push/migrate, no auto-created PG extensions), and "AI & agents" (/docs/ai — questpie/questpie-admin skills + llms.txt) once those pages exist. */}
+- **Frontend integrator** — [Client SDK](/docs/client/sdk) → [TanStack Query](/docs/client/tanstack-query) → [Realtime](/docs/client/realtime).
+- **Extender / plugin author** — [Codegen](/docs/extend/codegen) → [Modules](/docs/extend/modules) → [Build a plugin](/docs/extend/build-a-plugin).
+- **AI agent** — the QUESTPIE skills (by name) plus `llms.txt`/`llms-full.txt` are the agent on-ramp.

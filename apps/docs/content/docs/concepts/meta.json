@@ -14,15 +14,6 @@
 		"services",
 		"emails",
 		"configuration",
-		"environment",
-		"---Client---",
-		"client-sdk",
-		"tanstack-query",
-		"realtime",
-		"---Extend---",
-		"codegen",
-		"modules",
-		"build-a-plugin",
-		"multi-tenancy"
+		"environment"
 	]
 }

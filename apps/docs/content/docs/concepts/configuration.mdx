@@ -73,7 +73,7 @@ questpie generate   # discovers every config file, merges modules, emits .genera
 ```
 
 <Callout type="info" title="Import the factories from `questpie/app` (or `questpie`)">
-`runtimeConfig`, `module`, `appConfig`, and `authConfig` are all exported from both `questpie` and the lighter `questpie/app` barrel. The starter templates and examples use `questpie/app`. The CLI factories — `config()` and `packageConfig()` — live in `questpie/cli` instead. Source: `packages/questpie/src/exports/app.ts:1`, `packages/questpie/src/exports/cli.ts:14`.
+`runtimeConfig`, `module`, `appConfig`, and `authConfig` are all exported from both `questpie` and the lighter `questpie/app` barrel. The starter templates and examples use `questpie/app`. The CLI factories — `config()` and `packageConfig()` — live in `questpie/cli` instead.
 </Callout>
 
 ## How the files connect
@@ -97,7 +97,7 @@ questpie dev        # the same, in watch mode — regenerates on file add/remove
 ```
 
 <Callout type="warn" title="`questpie.config.ts` needs `.generated/index.ts` to exist">
-The CLI's `questpie.config.ts` is in the "new format" — it carries `app.url` but is **not** itself a built app. On a CLI command it auto-resolves `.generated/index.ts` for the real app instance, and errors with *"Run `questpie generate` first"* if that file is missing. Generate before you migrate, seed, or push. Source: `packages/questpie/src/cli/config.ts:191`.
+The CLI's `questpie.config.ts` is in the "new format" — it carries `app.url` but is **not** itself a built app. On a CLI command it auto-resolves `.generated/index.ts` for the real app instance, and errors with *"Run `questpie generate` first"* if that file is missing. Generate before you migrate, seed, or push.
 </Callout>
 
 ## `runtimeConfig` — runtime infrastructure
@@ -142,10 +142,10 @@ export default runtimeConfig({
 });
 ```
 
-When `QUESTPIE_STORAGE_ENDPOINT`, `QUESTPIE_STORAGE_BUCKET`, `QUESTPIE_STORAGE_ACCESS_KEY`, and `QUESTPIE_STORAGE_SECRET_KEY` are all set, an S3-compatible Files SDK adapter is auto-configured. The adapter is lazy — the AWS SDK import is deferred to the first storage operation, so you must install all four peer deps: `@aws-sdk/client-s3`, `@aws-sdk/lib-storage`, `@aws-sdk/s3-presigned-post`, and `@aws-sdk/s3-request-presigner`. Source: `packages/questpie/src/server/config/cloud-env.ts:174` (`resolveStorageConfig`) and `:247` (`createLazyS3StorageAdapter`).
+When `QUESTPIE_STORAGE_ENDPOINT`, `QUESTPIE_STORAGE_BUCKET`, `QUESTPIE_STORAGE_ACCESS_KEY`, and `QUESTPIE_STORAGE_SECRET_KEY` are all set, an S3-compatible Files SDK adapter is auto-configured. The adapter is lazy — the AWS SDK import is deferred to the first storage operation, so you must install all four peer deps: `@aws-sdk/client-s3`, `@aws-sdk/lib-storage`, `@aws-sdk/s3-presigned-post`, and `@aws-sdk/s3-request-presigner`.
 
 <Callout type="warn" title="`db` must resolve from somewhere">
-`app.url` falls back to `http://localhost:3000`, but `db.url` has no default — if it can't be resolved from your value, `QUESTPIE_DB`, or `DATABASE_URL`, `runtimeConfig()` throws at construction. Always provide a database. Source: `packages/questpie/src/server/config/cloud-env.ts:141-146` (`resolveDbConfig`).
+`app.url` falls back to `http://localhost:3000`, but `db.url` has no default — if it can't be resolved from your value, `QUESTPIE_DB`, or `DATABASE_URL`, `runtimeConfig()` throws at construction. Always provide a database.
 </Callout>
 
 ### Options reference
@@ -162,7 +162,7 @@ Everything below `app`/`db` is optional. The full `RuntimeConfigInput` shape:
 | `email` | `MailerConfig` | `{ adapter }` — e.g. `ConsoleAdapter`, `SmtpAdapter`. |
 | `queue` | `{ adapter: QueueAdapter }` | Background job queue (e.g. `pgBossAdapter`). |
 | `search` | `SearchAdapter` | Full-text / vector search (defaults to Postgres search). |
-| `realtime` | `RealtimeConfig` | Realtime transport (poll-based without an adapter). |
+| `realtime` | `true \| RealtimeConfig` | Realtime transport. Use `true` for defaults, or an object for adapter/options. |
 | `kv` | `KVConfig` | Key-value store (defaults to in-memory). |
 | `executor` | `ExecutorConfig` | Sandboxed / trusted code execution (opt-in; disabled by default). |
 | `logger` | `LoggerConfig` | Logger configuration. |
@@ -171,10 +171,10 @@ Everything below `app`/`db` is optional. The full `RuntimeConfigInput` shape:
 | `autoSeed` | `boolean \| SeedCategory \| SeedCategory[]` | Run seeds on startup. |
 | `cli` | `{ migrations?, seeds? }` | Override generated-migration / seed directories. |
 
-The input type is `RuntimeConfigInput` at `packages/questpie/src/server/config/module-types.ts:407` — defined as `Partial<Pick<RuntimeConfig, "app" | "db">> & Omit<RuntimeConfig, "app" | "db">`, i.e. the resolved `RuntimeConfig` interface (`:308`, where every adapter type lives) with `app` and `db` made optional. `DbConfig` itself is a union — `{ url }`, `{ pglite }`, `{ drizzle }` (a pre-built client, for Neon / Vercel Postgres / Hyperdrive), or `{ create }` (a lazy factory, preferred for Cloudflare Workers). Source: `packages/questpie/src/server/config/types.ts:410`.
+The input type is `RuntimeConfigInput` at `packages/questpie/src/server/config/module-types.ts:407` — defined as `Partial<Pick<RuntimeConfig, "app" | "db">> & Omit<RuntimeConfig, "app" | "db">`, i.e. the resolved `RuntimeConfig` interface (`:308`, where every adapter type lives) with `app` and `db` made optional. `DbConfig` itself is a union — `{ url }`, `{ pglite }`, `{ drizzle }` (a pre-built client, for Neon / Vercel Postgres / Hyperdrive), or `{ create }` (a lazy factory, preferred for Cloudflare Workers).
 
 <Callout type="info" title="`plugins` is for codegen plugins, not modules">
-`runtimeConfig({ plugins })` registers **codegen plugins** (the thing that adds file-convention discovery and generated output). Module *dependencies* go in `modules.ts` instead — and a module can carry its own codegen plugin, so most apps never touch `plugins` directly. The adapters (queue, search, KV, …) each have their own page under Infrastructure. Source: `packages/questpie/src/server/config/module-types.ts:313`.
+`runtimeConfig({ plugins })` registers **codegen plugins** (the thing that adds file-convention discovery and generated output). Module *dependencies* go in `modules.ts` instead — and a module can carry its own codegen plugin, so most apps never touch `plugins` directly. The adapters (queue, search, KV, …) each have their own page under Infrastructure.
 </Callout>
 
 The adapter and storage wiring (`StorageConfig`, the queue/search/realtime/kv/executor adapters) each have a dedicated page; this page covers the config *file*, not every adapter.
@@ -201,7 +201,7 @@ export default appConfig({
 });
 ```
 
-`AppConfigInput` is `{ locale?, access?, hooks?, context? }`. Every key is optional. Source: `packages/questpie/src/server/config/module-types.ts:239`.
+`AppConfigInput` is `{ locale?, access?, hooks?, context? }`. Every key is optional.
 
 ### `locale`
 
@@ -218,7 +218,7 @@ locale: {
 }
 ```
 
-`locales` is a static array (or an async function returning one); `defaultLocale` is the code used when a request specifies none; `fallbacks` maps a locale to the code to fall back to. Source: `packages/questpie/src/server/config/types.ts:225`.
+`locales` is a static array (or an async function returning one); `defaultLocale` is the code used when a request specifies none; `fallbacks` maps a locale to the code to fall back to.
 
 ### `access` — app-wide default rules
 
@@ -232,7 +232,7 @@ access: {
 ```
 
 <Callout type="warn" title="The app-level access context is a leaner seam">
-The function context here is `ResolvedAppDefaultAccessContext` (db, session, collections, …), **not** the fully augmented `AccessContext` that per-collection `.access()` rules get. This is deliberate: routing app-level rules through the full augmented context would create a type cycle in the generated app. Use collection-level `.access()` when you need the richest typed context. Source: `packages/questpie/src/server/config/module-types.ts:214`.
+The function context here is `ResolvedAppDefaultAccessContext` (db, session, collections, …), **not** the fully augmented `AccessContext` that per-collection `.access()` rules get. This is deliberate: routing app-level rules through the full augmented context would create a type cycle in the generated app. Use collection-level `.access()` when you need the richest typed context.
 </Callout>
 
 ### `hooks` — global hooks
@@ -251,10 +251,10 @@ hooks: {
 }
 ```
 
-The shape is `GlobalHooksInput` — `{ collections?: GlobalCollectionHookEntry; globals?: GlobalGlobalHookEntry }`. Each value is a **single** hook-entry object (not an array): `GlobalCollectionHookEntry` is `{ include?, exclude?, beforeChange?, afterChange?, beforeDelete?, afterDelete?, beforeTransition?, afterTransition? }`, and `include`/`exclude` scope it to specific slugs. The framework concatenates these entries across modules internally. Per-entity hooks still live on the collection/global builder — see [Hooks](/docs/concepts/hooks). Source: `packages/questpie/src/server/config/global-hooks-types.ts:203` (`GlobalHooksInput`) and `:88` (`GlobalCollectionHookEntry`).
+The shape is `GlobalHooksInput` — `{ collections?: GlobalCollectionHookEntry; globals?: GlobalGlobalHookEntry }`. Each value is a **single** hook-entry object (not an array): `GlobalCollectionHookEntry` is `{ include?, exclude?, beforeChange?, afterChange?, beforeDelete?, afterDelete?, beforeTransition?, afterTransition? }`, and `include`/`exclude` scope it to specific slugs. The framework concatenates these entries across modules internally. Per-entity hooks still live on the collection/global builder — see [Hooks](/docs/concepts/hooks).
 
 <Callout type="warn" title="`collections` / `globals` each take one entry object, not an array">
-A natural mistake is `collections: [{ afterChange }]` — but the public `GlobalHooksInput` type rejects an array; `collections` is a single `GlobalCollectionHookEntry`. The array form (`{ collections: GlobalCollectionHookEntry[] }`) is the framework's internal accumulator (`GlobalHooksState`), never the input. To register several hooks, put multiple lifecycle keys on the one object (`{ beforeChange, afterChange, afterDelete }`). Source: `packages/questpie/src/server/config/global-hooks-types.ts:195` (`GlobalHooksState`) vs `:203` (`GlobalHooksInput`).
+A natural mistake is `collections: [{ afterChange }]` — but the public `GlobalHooksInput` type rejects an array; `collections` is a single `GlobalCollectionHookEntry`. The array form (`{ collections: GlobalCollectionHookEntry[] }`) is the framework's internal accumulator (`GlobalHooksState`), never the input. To register several hooks, put multiple lifecycle keys on the one object (`{ beforeChange, afterChange, afterDelete }`).
 </Callout>
 
 ### `context` — the per-request context resolver
@@ -276,14 +276,14 @@ context: async ({ request, session, collections }) => {
 },
 ```
 
-The resolver receives `{ request, session, db }` plus the full system-mode service surface (`collections`, `globals`, `kv`, `queue`, `logger`, `t`, your services) — typed via the codegen-emitted `Questpie.ContextResolverContext`. Calls inside the resolver run in **system mode** (access rules bypassed): the resolver *is* the trusted derivation step. Source: `packages/questpie/src/server/config/types.ts:749`.
+The resolver receives `{ request, session, db }` plus the full system-mode service surface (`collections`, `globals`, `kv`, `queue`, `logger`, `t`, your services) — typed via the codegen-emitted `Questpie.ContextResolverContext`. Calls inside the resolver run in **system mode** (access rules bypassed): the resolver *is* the trusted derivation step.
 
 <Callout type="warn" title="Annotate (or directly return) the resolver's object — don't return a bare primitive or only null">
-The resolver's **return type** is what drives the typed context extension downstream, so it must resolve to an object. `appConfig()` rejects a resolver that returns *only* a primitive (`async () => "x"`) or *only* `null` (`async () => null`) at the call site. The common `session ? { role } : null` shape passes because it has an object arm. Because the return type is load-bearing, prefer returning an explicit object literal over an inferred-then-narrowed value. Source: `packages/questpie/src/server/config/types.ts:765` (`ValidateContextResolver`).
+The resolver's **return type** is what drives the typed context extension downstream, so it must resolve to an object. `appConfig()` rejects a resolver that returns *only* a primitive (`async () => "x"`) or *only* `null` (`async () => null`) at the call site. The common `session ? { role } : null` shape passes because it has an object arm. Because the return type is load-bearing, prefer returning an explicit object literal over an inferred-then-narrowed value.
 </Callout>
 
 <Callout type="info" title="Why `access` and `hooks` vanish from `appConfig()`'s return type">
-`appConfig()` is identity at runtime, but its **return type** erases `access` and `hooks` to opaque storage and keeps only `locale` and `context`. That's intentional: their function parameter types embed the merged `AppContext`, and riding them back into the generated index would collapse the whole augmentation (TS2456). Both are still fully typed *at the call site* — you just can't read them back off `typeof appConfigFile`. Source: `packages/questpie/src/server/config/factories.ts:36`.
+`appConfig()` is identity at runtime, but its **return type** erases `access` and `hooks` to opaque storage and keeps only `locale` and `context`. That's intentional: their function parameter types embed the merged `AppContext`, and riding them back into the generated index would collapse the whole augmentation (TS2456). Both are still fully typed *at the call site* — you just can't read them back off `typeof appConfigFile`.
 </Callout>
 
 ## `config/auth.ts` — authentication
@@ -304,7 +304,7 @@ export default authConfig({
 });
 ```
 
-`authConfig()` does one extra thing beyond identity: it recovers the **inferred session shape** from your options and threads it through a type-only channel, so your session type flows into the rest of the app without you exporting an unnameable plugin-instantiated type. Runtime values like `secret` and `baseURL` come from `runtimeConfig()` / env — don't duplicate them here. Source: `packages/questpie/src/server/config/factories.ts:71`.
+`authConfig()` does one extra thing beyond identity: it recovers the **inferred session shape** from your options and threads it through a type-only channel, so your session type flows into the rest of the app without you exporting an unnameable plugin-instantiated type. Runtime values like `secret` and `baseURL` come from `runtimeConfig()` / env — don't duplicate them here.
 
 ## The `config/*.ts` convention (extensibility)
 
@@ -331,10 +331,10 @@ declare module "questpie" {
 }
 ```
 
-Now users add `config/my-plugin.ts` (default-exporting your config), codegen folds it into `config.myPlugin`, and modules contributing the same key are merged per sub-key. `AppStateConfig` is `{ app?, auth? }` at the core; everything else is augmentation. Source: `packages/questpie/src/server/config/app-state-config.ts:19`; the convention is documented at `packages/questpie/src/cli/codegen/index.ts:146` (core) and `packages/admin/src/server/plugin.ts:101` (admin).
+Now users add `config/my-plugin.ts` (default-exporting your config), codegen folds it into `config.myPlugin`, and modules contributing the same key are merged per sub-key. `AppStateConfig` is `{ app?, auth? }` at the core; everything else is augmentation.
 
-<Callout type="info" title="`configKey` is the modern mapping; `destructure` is deprecated">
-A discover pattern's `configKey` emits the **whole file** as one entry under the config bucket. The older `destructure` option (which spread an exported object's props into separate `createApp` args) is deprecated — prefer one file → one config key. Source: `packages/questpie/src/cli/codegen/types.ts:166`.
+<Callout type="info" title="Use `configKey` for config files">
+A discover pattern's `configKey` emits the **whole file** as one entry under the config bucket: one file maps to one config key.
 </Callout>
 
 ## `modules.ts` — module dependencies
@@ -365,43 +365,24 @@ export const blogModule = module({
 ```
 
 <Callout type="info" title="A module's `plugin` is codegen-only — never merged at runtime">
-The `plugin` key on a module is extracted by codegen and **excluded** from the runtime module merge. That's how a module package (`@questpie/admin`, `@questpie/openapi`) ships its file conventions without you registering anything in `questpie.config.ts` — adding the module to `modules.ts` is enough. Source: `packages/questpie/src/server/config/module-types.ts:146`; extraction at `packages/questpie/src/cli/codegen/extract-plugins.ts:31`.
+The `plugin` key on a module is extracted by codegen and **excluded** from the runtime module merge. That's how a module package (`@questpie/admin`, `@questpie/openapi`) ships its file conventions without you registering anything in `questpie.config.ts` — adding the module to `modules.ts` is enough.
 </Callout>
 
 The full module surface (`ModuleDefinition`), how modules contribute each category, and the depth-first merge are covered in the Extend → Modules section. The full `module()` and `ModuleDefinition` reference lives at `packages/questpie/src/server/config/create-app.ts:58` and `module-types.ts:94`.
 
-## CLI config formats
+## CLI config
 
-The root `questpie.config.ts` the CLI loads can take a few shapes. The modern one is just a re-export of your server config, which is in the **"new format"** — codegen auto-resolves the built app from `.generated/index.ts`:
+The root `questpie.config.ts` the CLI loads is normally just a re-export of your server config. Codegen resolves the built app from `.generated/index.ts`:
 
 ```ts title="questpie.config.ts (project root)"
 // Re-export the server config; the CLI resolves .generated/index.ts for the app.
 export { default } from "./src/questpie/server/questpie.config";
 ```
 
-`loadQuestpieConfig` accepts four shapes for backward compatibility: the **new format** (`{ app: { url }, … }` → auto-loads `.generated/index.ts`), the **CLI format** (`{ app: questpieInstance, cli }`), a deprecated `{ qcms }` shape, and a direct instance. The new format is what `create-questpie` scaffolds. Source: `packages/questpie/src/cli/config.ts:175`.
-
-### `config()` — wrapping a built instance
-
-For the CLI/legacy format that wraps an already-built `Questpie` instance, use the `config()` identity factory from `questpie/cli`. It carries optional CLI settings (migration / seed directories):
-
-```ts
-import { config } from "questpie/cli";
-import { app } from "./.generated";
-
-export default config({
-  app,
-  cli: {
-    migrations: { directory: "./src/migrations" },
-    seeds: { directory: "./src/seeds" },
-  },
-});
-```
-
-`QuestpieConfigFile` is `{ app, cli? }`; `cli` defaults the directories to `./src/migrations` and `./src/seeds`. Source: `packages/questpie/src/cli/config.ts:122`.
+`create-questpie` scaffolds this shape. CLI settings such as migration and seed directories live in the server config when you need to override the defaults.
 
 <Callout type="warn" title="Importing `questpie/cli` must not run a command">
-The CLI program is side-effect-free on import — command parsing is guarded by `import.meta.main`. This matters because config files import `questpie/cli` for `packageConfig` / `config`, and a stray src-vs-dist double instance running a command could corrupt `.generated/`. Source: `packages/questpie/src/exports/cli.ts:19`.
+The CLI program is side-effect-free on import — command parsing is guarded by `import.meta.main`. This matters because package config files import `questpie/cli` for `packageConfig`, and a stray src-vs-dist double instance running a command could corrupt `.generated/`.
 </Callout>
 
 ## The static-module pattern (`packageConfig`)
@@ -419,7 +400,7 @@ export default packageConfig({
 });
 ```
 
-In package mode, `questpie generate` scans `modulesDir/*`, derives each module's name as `${modulePrefix}-${dirName}`, and runs codegen in **module mode** per subdirectory (emitting `.generated/module.ts`, plus `registries.ts` when there are type augmentations). `PackageConfig` is `{ modulesDir, modulePrefix?, plugins? }` (`modulePrefix` defaults from `package.json` name). Source: `packages/questpie/src/cli/config.ts:316`.
+In package mode, `questpie generate` scans `modulesDir/*`, derives each module's name as `${modulePrefix}-${dirName}`, and runs codegen in **module mode** per subdirectory (emitting `.generated/module.ts`, plus `registries.ts` when there are type augmentations). `PackageConfig` is `{ modulesDir, modulePrefix?, plugins? }` (`modulePrefix` defaults from `package.json` name).
 
 This is the foundation of the QUESTPIE extensibility principle: **the framework's own built-in modules use the exact same `packageConfig` + `config/*.ts` conventions a userland module would** — there are no privileged internal APIs. The core itself is configured with `packageConfig({ modulesDir: "src/server/modules", modulePrefix: "questpie" })`. Building a publishable module + plugin is covered in the Extend → Build a plugin section.
 
@@ -432,12 +413,12 @@ The configuration files only do something once codegen reads them. The relevant 
 | `questpie generate` | Discover all config files, run the `modules.ts` pre-pass, emit `.generated/`. Run after any config change. |
 | `questpie dev` | The same in watch mode — regenerates on file **add/remove** (content edits are skipped; `typeof import` is stable). |
 | `questpie push` | Push the current schema to the dev database (no migration). |
-| `questpie migrate:generate` | Generate a migration from the current schema (production path). |
+| `questpie migrate:create` | Generate a migration from the current schema (production path). |
 
-`questpie generate` auto-detects the config mode from the file shape (root-app vs module vs `packageConfig`) and sets `QUESTPIE_SKIP_ENV_VALIDATION=1` while it imports your code (codegen must run without a populated env). Source: `packages/questpie/src/cli/commands/codegen.ts:133`.
+`questpie generate` auto-detects the config mode from the file shape (root-app vs module vs `packageConfig`) and sets `QUESTPIE_SKIP_ENV_VALIDATION=1` while it imports your code (codegen must run without a populated env).
 
 <Callout type="idea" title="Watch mode regenerates on structural change only">
-`questpie dev` only re-runs codegen when a file is **added or removed** (or a config file changes) — editing the *contents* of an existing collection/config file is skipped, because the generated app references it by `typeof import(...)`, which is stable. If a change isn't picked up, it's structural: add/rename/delete is what triggers a regen. Source: `packages/questpie/src/cli/commands/codegen.ts:492`.
+`questpie dev` only re-runs codegen when a file is **added or removed** (or a config file changes) — editing the *contents* of an existing collection/config file is skipped, because the generated app references it by `typeof import(...)`, which is stable. If a change isn't picked up, it's structural: add/rename/delete is what triggers a regen.
 </Callout>
 
 ## TypeScript
@@ -458,7 +439,7 @@ import type {
 import type { TypedAuthConfig } from "questpie/app"; // authConfig() return
 ```
 
-`AppStateConfig` is the interface plugins augment to add their own `config/<name>.ts` keys; `ContextResolver<T>` is generic over the object your resolver returns. The CLI types (`QuestpieConfigFile`, `QuestpieCliConfig`, `PackageConfig`) come from `questpie/cli`. Codegen plugin types (`CodegenPlugin`, `CategoryDeclaration`, `DiscoverPattern`, …) come from `questpie/codegen`. Source: `packages/questpie/src/exports/index.ts:95`, `packages/questpie/src/exports/codegen.ts:1`.
+`AppStateConfig` is the interface plugins augment to add their own `config/<name>.ts` keys; `ContextResolver<T>` is generic over the object your resolver returns. The CLI types (`QuestpieConfigFile`, `QuestpieCliConfig`, `PackageConfig`) come from `questpie/cli`. Codegen plugin types (`CodegenPlugin`, `CategoryDeclaration`, `DiscoverPattern`, …) come from `questpie/codegen`.
 
 ## Related
 
@@ -468,5 +449,3 @@ import type { TypedAuthConfig } from "questpie/app"; // authConfig() return
 - [Hooks](/docs/concepts/hooks) — per-entity hooks; `config/app.ts`'s `hooks` are the global counterpart.
 - [Environment](/docs/concepts/environment) — `env.ts` / `env()`, boot validation, and server-vs-client vars that feed `runtimeConfig`.
 - Runnable example: [`examples/toy-factory-backend`](https://github.com/questpie/questpie/tree/main/examples/toy-factory-backend) — a complete `questpie.config.ts` + `config/app.ts` + `config/auth.ts` + `modules.ts` set.
-
-{/* TODO @user: this concept has no admin UI surface, so no screenshot is needed. If a "what codegen emits" diagram is wanted, capture it once a dev server is running. */}

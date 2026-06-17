@@ -42,18 +42,18 @@ questpie dev        # same pipeline, in watch mode (100ms debounce)
 ```
 
 <Callout type="info" title="Codegen is what wires the `#questpie/*` imports">
-The `#questpie/factories` and `#questpie` imports your app code uses resolve to codegen's output. Until you run `questpie generate` they don't exist — which is why a fresh checkout or a CI build starts with `questpie generate`. Mode is auto-detected from the config file shape (root app vs. module vs. package). Source: `packages/questpie/src/cli/commands/codegen.ts:133`.
+The `#questpie/factories` and `#questpie` imports your app code uses resolve to codegen's output. Until you run `questpie generate` they don't exist — which is why a fresh checkout or a CI build starts with `questpie generate`. Mode is auto-detected from the config file shape (root app vs. module vs. package).
 </Callout>
 
 ## The pipeline
 
 Codegen runs the same ordered pipeline every time, whatever the mode:
 
-1. **Resolve the target graph.** The built-in `coreCodegenPlugin()` is *always* prepended, then your config plugins, then module-extracted plugins. All contributions to a given target (e.g. `"server"`) merge into one `ResolvedTarget`. Source: `packages/questpie/src/cli/codegen/index.ts:245`.
-2. **Discover files.** Scan each category's `dirs` (both `dir/` and `features/{name}/dir/`) plus the single-file `discover` patterns. Each match becomes a `DiscoveredFile` with a derived `key`, `varName`, `importPath`, and detected `exportType`. Source: `packages/questpie/src/cli/codegen/discover.ts:240`.
+1. **Resolve the target graph.** The built-in `coreCodegenPlugin()` is *always* prepended, then your config plugins, then module-extracted plugins. All contributions to a given target (e.g. `"server"`) merge into one `ResolvedTarget`.
+2. **Discover files.** Scan each category's `dirs` (both `dir/` and `features/{name}/dir/`) plus the single-file `discover` patterns. Each match becomes a `DiscoveredFile` with a derived `key`, `varName`, `importPath`, and detected `exportType`.
 3. **Run transforms.** Each plugin's `transform(ctx)` runs in order, accumulating extra imports / type declarations / runtime code into the context.
 4. **Generate.** Emit `index.ts` (root-app `createApp()`) or `module.ts` (static module def), plus `factories.ts`, validating the output with Bun's transpiler.
-5. **Write atomically.** Files are written to a temp path and renamed — a crashed run never leaves a half-written `.generated/`. Source: `packages/questpie/src/cli/codegen/index.ts:423`.
+5. **Write atomically.** Files are written to a temp path and renamed — a crashed run never leaves a half-written `.generated/`.
 
 ```mermaid
 flowchart TD
@@ -69,7 +69,7 @@ flowchart TD
 ```
 
 <Callout type="info" title="`coreCodegenPlugin()` is the canonical category map">
-Every built-in category and scaffold lives in one place: `coreCodegenPlugin()`. It declares `collections` (factory `collection`), `globals` (factory `global`), `jobs`, `routes` (dirs `routes` + `functions`, recursive, `/`-separated keys), `messages`, `services`, `emails` (emitted as `emailTemplates`), `migrations` + `seeds` (array emit), and `fieldTypes` (factory `fieldType`). It is prepended automatically — you never register it. Reading it is the fastest way to see exactly which dirs are scanned. Source: `packages/questpie/src/cli/codegen/index.ts:47`.
+Every built-in category and scaffold lives in one place: `coreCodegenPlugin()`. It declares `collections` (factory `collection`), `globals` (factory `global`), `jobs`, `routes` (dirs `routes` + `functions`, recursive, `/`-separated keys), `messages`, `services`, `emails` (emitted as `emailTemplates`), `migrations` + `seeds` (array emit), and `fieldTypes` (factory `fieldType`). It is prepended automatically — you never register it. Reading it is the fastest way to see exactly which dirs are scanned.
 </Callout>
 
 ## Export & discovery rules
@@ -87,16 +87,16 @@ import { collection } from "#questpie/factories";
 export const blogPosts = collection("blog-posts").fields(/* … */);
 ```
 
-`collection("blog-posts")` registers as `blogPosts` regardless of the file name. Keep the file name matching the argument by convention (`collections/blog-posts.ts`) so the two never drift, and keep one entity per file. Hyphens convert to camelCase; **underscores pass through unchanged** — collection and global names use the snake_case PostgreSQL convention, and that name *is* the canonical runtime identifier (e.g. for relation targets). Source: `packages/questpie/src/cli/codegen/discover.ts:37` (`kebabToCamelCase`).
+`collection("blog-posts")` registers as `blogPosts` regardless of the file name. Keep the file name matching the argument by convention (`collections/blog-posts.ts`) so the two never drift, and keep one entity per file. Hyphens convert to camelCase; **underscores pass through unchanged** — collection and global names use the snake_case PostgreSQL convention, and that name *is* the canonical runtime identifier (e.g. for relation targets).
 
 For files **without** a factory string argument, the fallback depends on the category:
 
-- **Non-factory categories** (jobs, services, emails, …) always key off the **file name** — never the export name. A single-entity file resolves its key as `kebabToCamelCase(basename(path))` unconditionally, so `jobs/send-newsletter.ts` is `sendNewsletter` whether you `export default` or `export const sendNewsletter`. The export name is used only as the *import binding* (`import { sendNewsletter as _job_sendNewsletter }`), not as the entity key. Source: `packages/questpie/src/cli/codegen/discover.ts:744` (`deriveFileKey`), `category-emit.ts:14` (`importStatement`).
-- **Factory categories** (collections, globals, …) fall back to the **export name** for a named factory export with no string argument, and to the **file name** for a default factory export. Source: `packages/questpie/src/cli/codegen/discover.ts:714`.
+- **Non-factory categories** (jobs, services, emails, …) always key off the **file name** — never the export name. A single-entity file resolves its key as `kebabToCamelCase(basename(path))` unconditionally, so `jobs/send-newsletter.ts` is `sendNewsletter` whether you `export default` or `export const sendNewsletter`. The export name is used only as the *import binding* (`import { sendNewsletter as _job_sendNewsletter }`), not as the entity key.
+- **Factory categories** (collections, globals, …) fall back to the **export name** for a named factory export with no string argument, and to the **file name** for a default factory export.
 
 ### Default OR named export — both are discovered
 
-Codegen detects the export style from the file content (no AST — a fast content scan), in priority order: `export default` → default; `export const X = { … }` (an object **literal**, not a factory call) → a named *bundle* (spread into the parent); `export const/function/class X` → a single named export; `export { X }` → named. Source: `packages/questpie/src/cli/codegen/discover.ts:806` (`detectExportTypeFromContent`).
+Codegen detects the export style from the file content (no AST — a fast content scan), in priority order: `export default` → default; `export const X = { … }` (an object **literal**, not a factory call) → a named *bundle* (spread into the parent); `export const/function/class X` → a single named export; `export { X }` → named.
 
 ```ts
 // Both of these are picked up identically:
@@ -105,12 +105,12 @@ export default collection("posts");        // default
 ```
 
 <Callout type="info" title="Multi-export files are allowed for factory categories">
-Categories with `factoryFunctions` use a two-pass scan that finds *every* matching factory call in a file, so one route file can hold several `route()` definitions. Files with **zero** matching factory calls are skipped entirely — that's how utility and type-only files in a scanned dir are ignored. Entity key still comes from the factory's first string argument when present, else the export name. Source: `packages/questpie/src/cli/codegen/discover.ts:903` (`detectFactoryExports`).
+Categories with `factoryFunctions` use a two-pass scan that finds *every* matching factory call in a file, so one route file can hold several `route()` definitions. Files with **zero** matching factory calls are skipped entirely — that's how utility and type-only files in a scanned dir are ignored. Entity key still comes from the factory's first string argument when present, else the export name.
 </Callout>
 
 ### What codegen skips
 
-Discovery only considers `.ts` / `.tsx` / `.mts` files and skips: `index.ts` / `.mts` / `.tsx`, `*.d.ts` / `*.d.mts`, anything starting with `_`, `__tests__/`, and `*.test.*` / `*.spec.*`. So a `_helpers.ts` next to your collections is invisible to codegen. Source: `packages/questpie/src/cli/codegen/discover.ts:240`.
+Discovery only considers `.ts` / `.tsx` / `.mts` files and skips: `index.ts` / `.mts` / `.tsx`, `*.d.ts` / `*.d.mts`, anything starting with `_`, `__tests__/`, and `*.test.*` / `*.spec.*`. So a `_helpers.ts` next to your collections is invisible to codegen.
 
 ## Committed outputs
 
@@ -127,7 +127,7 @@ Discovery only considers `.ts` / `.tsx` / `.mts` files and skips: `index.ts` / `
 The rule of thumb: **import `collection` / `global` from `#questpie/factories`** (they know your enabled modules, so `f.richText()` and friends appear on `f`), and **import types from `#questpie`**. Run `questpie generate` after any schema change and commit the result alongside your source.
 
 <Callout type="warn" title="Regenerate before you migrate, seed, or push">
-`questpie.config.ts` carries `app.url` but is not itself the built app — on a CLI command it auto-resolves `.generated/index.ts` for the real instance and errors with *"Run `questpie generate` first"* if that file is missing. A stale or absent `.generated/` is the most common cause of "my new collection isn't on `app.collections`". Generate first. Source: `packages/questpie/src/cli/config.ts:191`.
+`questpie.config.ts` carries `app.url` but is not itself the built app — on a CLI command it auto-resolves `.generated/index.ts` for the real instance and errors with *"Run `questpie generate` first"* if that file is missing. A stale or absent `.generated/` is the most common cause of "my new collection isn't on `app.collections`". Generate first.
 </Callout>
 
 ## The `#questpie` type barrel
@@ -156,7 +156,7 @@ type Settings = GlobalDoc<"siteSettings">;   // selected row for a global
 | `AppConfig` | `{ collections, globals, routes, storage, auth }` | The **client** APIs: `createClient<AppConfig>()`, `createAdminAuthClient<AppConfig>()`. |
 | `App` | `typeof app` | The fully typed app instance. |
 
-Two more — `AccessRuleContext<K>` and `HookRuleContext<K>` — narrow `ctx.data` to a collection's row inside shared access/hook helpers. They carry a **cycle rule**: import them only from files *not* imported by a collection (routes, services, jobs, scripts); helpers a collection imports take the package-level `AccessContext` / `HookContext` from `questpie` instead. Source: `packages/questpie/src/cli/codegen/template.ts:1233` (`CollectionDoc`), `:1252` (`CollectionWhere`), `:1276` (`AccessRuleContext`), `:1312` (`AppConfig`), `:1335` (`App`).
+Two more — `AccessRuleContext<K>` and `HookRuleContext<K>` — narrow `ctx.data` to a collection's row inside shared access/hook helpers. They carry a **cycle rule**: import them only from files *not* imported by a collection (routes, services, jobs, scripts); helpers a collection imports take the package-level `AccessContext` / `HookContext` from `questpie` instead.
 
 The barrel also emits `createContext()` — a typed `AppContext` factory for scripts, tests, and standalone code that resolves all services and gives flat access to infrastructure.
 
@@ -170,7 +170,7 @@ Codegen is driven by three commands (the broader migrate / seed / push surface i
 questpie generate [-c, --config <path>] [--dry-run] [--verbose]
 ```
 
-Runs codegen **once**. The mode is auto-detected from the config file: a root-app `runtimeConfig()` runs **all** targets (`index.ts` + `factories.ts`, plus `../admin` if the admin module is present); a `{ module: { name } }` config runs module mode; a `packageConfig()` iterates `modulesDir` subdirectories. The root-app path runs the `modules.ts` plugin pre-pass first. Codegen sets `QUESTPIE_SKIP_ENV_VALIDATION=1` for the run — it imports your user code (config, env, modules) and must not require a populated environment — and exits `1` on target or cross-target projection errors. Source: `packages/questpie/src/cli/index.ts:50`, `packages/questpie/src/cli/commands/codegen.ts:133`.
+Runs codegen **once**. The mode is auto-detected from the config file: a root-app `runtimeConfig()` runs **all** targets (`index.ts` + `factories.ts`, plus `../admin` if the admin module is present); a `{ module: { name } }` config runs module mode; a `packageConfig()` iterates `modulesDir` subdirectories. The root-app path runs the `modules.ts` plugin pre-pass first. Codegen sets `QUESTPIE_SKIP_ENV_VALIDATION=1` for the run — it imports your user code (config, env, modules) and must not require a populated environment — and exits `1` on target or cross-target projection errors.
 
 ### `questpie dev`
 
@@ -178,7 +178,7 @@ Runs codegen **once**. The mode is auto-detected from the config file: a root-ap
 questpie dev [-c, --config <path>] [--verbose]
 ```
 
-Watch mode. Regenerates all targets on file **add / remove** — content-only edits are skipped because `typeof import("…")` is stable, so editing a collection's fields doesn't churn `.generated/`. A change to a config file triggers a full regen. It watches every target root (including `../admin`) and ignores `.generated/` and non-`.ts`/`.tsx`/`.mts` files, with a 100ms debounce. Source: `packages/questpie/src/cli/index.ts:74`, `packages/questpie/src/cli/commands/codegen.ts:492`.
+Watch mode. Regenerates all targets on file **add / remove** — content-only edits are skipped because `typeof import("…")` is stable, so editing a collection's fields doesn't churn `.generated/`. A change to a config file triggers a full regen. It watches every target root (including `../admin`) and ignores `.generated/` and non-`.ts`/`.tsx`/`.mts` files, with a 100ms debounce.
 
 ### `questpie add`
 
@@ -186,7 +186,7 @@ Watch mode. Regenerates all targets on file **add / remove** — content-only ed
 questpie add [type] [name] [-c, --config <path>] [--dry-run] [--list] [--target <target>]
 ```
 
-Plugin-driven scaffolding from each target's `scaffolds`. Built-in types (from `coreCodegenPlugin()`): `collection`, `global`, `job`, `service`, `email` (`.tsx`), `route`, `seed`, `migration`. Modules add more (the admin module contributes `block`). `--list` prints every scaffold type with its description and the targets that declare it. When a scaffold type is declared by multiple targets, `questpie add` writes a file in **all** of them (e.g. a server block definition *and* its admin-client renderer) — pass `--target` to scope to one. Existing files are skipped with a warning, and codegen re-runs afterward. The name is expanded to kebab / camel / pascal / title casings and passed to each template. Source: `packages/questpie/src/cli/index.ts:375`, `packages/questpie/src/cli/commands/add.ts:48`.
+Plugin-driven scaffolding from each target's `scaffolds`. Built-in types (from `coreCodegenPlugin()`): `collection`, `global`, `job`, `service`, `email` (`.tsx`), `route`, `seed`, `migration`. Modules add more (the admin module contributes `block`). `--list` prints every scaffold type with its description and the targets that declare it. When a scaffold type is declared by multiple targets, `questpie add` writes a file in **all** of them (e.g. a server block definition *and* its admin-client renderer) — pass `--target` to scope to one. Existing files are skipped with a warning, and codegen re-runs afterward. The name is expanded to kebab / camel / pascal / title casings and passed to each template.
 
 ```bash
 questpie add collection invoice   # → collections/invoice.ts, then re-runs codegen
@@ -217,10 +217,10 @@ export const myModule = module({
 });
 ```
 
-The `plugin` key is **auto-extracted at codegen time and excluded from the runtime module merge** — it exists purely so a package ships its file conventions without you editing `questpie.config.ts`. Extraction is a depth-first walk (sub-modules before self), deduped by plugin `name` (first occurrence wins); config-registered plugins win over module-extracted ones on a name collision. Source: `packages/questpie/src/cli/codegen/extract-plugins.ts:31`, `packages/questpie/src/server/config/module-types.ts:146`.
+The `plugin` key is **auto-extracted at codegen time and excluded from the runtime module merge** — it exists purely so a package ships its file conventions without you editing `questpie.config.ts`. Extraction is a depth-first walk (sub-modules before self), deduped by plugin `name` (first occurrence wins); config-registered plugins win over module-extracted ones on a name collision.
 
 <Callout type="info" title="`module()` is type-only">
-`module(def)` is an identity function — it returns the definition unchanged and has no runtime behavior. It exists so TypeScript captures the literal module shape. Modules are *static plain data*; there are no factory functions inside a module definition. Source: `packages/questpie/src/server/config/create-app.ts:58`.
+`module(def)` is an identity function — it returns the definition unchanged and has no runtime behavior. It exists so TypeScript captures the literal module shape. Modules are *static plain data*; there are no factory functions inside a module definition.
 </Callout>
 
 ## Extending codegen: the `CodegenPlugin` API
@@ -251,10 +251,10 @@ export function billingPlugin(): CodegenPlugin {
 }
 ```
 
-Register it on `runtimeConfig({ plugins: [...] })` **or** ship it from a module's `plugin` key — both reach the same merge. Source: `packages/questpie/src/cli/codegen/types.ts:695` (`CodegenPlugin`); `questpie/codegen` is the real public export (`packages/questpie/package.json:47`).
+Register it on `runtimeConfig({ plugins: [...] })` **or** ship it from a module's `plugin` key — both reach the same merge.
 
 <Callout type="info" title="`questpie/codegen` is the plugin-author entry point">
-`questpie/codegen` re-exports the full surface: every codegen type (`CodegenPlugin`, `CodegenTargetContribution`, `CategoryDeclaration`, `DiscoverPattern`, `RegistryExtension`, `SingletonFactory`, `BuilderFactory`, `ScaffoldConfig`, …) plus the emit helpers (`categoryRecordEntry`, `categoryTypeEntry`, `importStatement`, `safeKey`, `sortedValues`, `sourceBasename`). This is the only entry point that exposes the codegen types — `questpie/types` does **not** re-export any of them. Source: `packages/questpie/src/exports/codegen.ts:1`.
+`questpie/codegen` re-exports the full surface: every codegen type (`CodegenPlugin`, `CodegenTargetContribution`, `CategoryDeclaration`, `DiscoverPattern`, `RegistryExtension`, `SingletonFactory`, `BuilderFactory`, `ScaffoldConfig`, …) plus the emit helpers (`categoryRecordEntry`, `categoryTypeEntry`, `importStatement`, `safeKey`, `sortedValues`, `sourceBasename`). This is the only entry point that exposes the codegen types — `questpie/types` does **not** re-export any of them.
 </Callout>
 
 ### `CodegenPlugin` shape
@@ -267,7 +267,7 @@ interface CodegenPlugin {
 }
 ```
 
-Well-known target IDs are `"server"` (emits `index.ts` + `factories.ts`) and `"admin-client"` (emits `client.ts`); plugins may add custom IDs. Source: `packages/questpie/src/cli/codegen/types.ts:695`.
+Well-known target IDs are `"server"` (emits `index.ts` + `factories.ts`) and `"admin-client"` (emits `client.ts`); plugins may add custom IDs.
 
 ### `CodegenTargetContribution`
 
@@ -288,7 +288,7 @@ One plugin's contribution to one target. Multiple plugins' contributions to the 
 | `scaffolds` | `Record<string, ScaffoldConfig>` | `questpie add` templates this target provides. |
 
 <Callout type="warn" title="`root` / `outDir` / `outputFile` / `moduleRoot` must agree across contributors">
-When several plugins contribute to the same target ID, `resolveTargetGraph()` merges them — but a conflict in `root`, `outDir`, `outputFile`, or `moduleRoot` **throws**, and a second `generate` per target **throws**. Categories are shallow-merged per key (with one exception: `factoryImports` arrays are *concatenated*), and `transforms` run in plugin order. Source: `packages/questpie/src/cli/codegen/types.ts:463`; `packages/questpie/src/cli/codegen/index.ts:245`.
+When several plugins contribute to the same target ID, `resolveTargetGraph()` merges them — but a conflict in `root`, `outDir`, `outputFile`, or `moduleRoot` **throws**, and a second `generate` per target **throws**. Categories are shallow-merged per key (with one exception: `factoryImports` arrays are *concatenated*), and `transforms` run in plugin order.
 </Callout>
 
 ### `CategoryDeclaration`
@@ -322,7 +322,7 @@ Key behaviors:
 - **`registryKey`** controls the value-typed `Registry`: `true` uses the category name; a string overrides it (e.g. `fieldTypes` → `"~fieldTypes"`; tilde-prefixed keys are intentional internal registry keys); `false`/omitted excludes it.
 - **`factoryImports`** injects spread-merged runtime imports into `factories.ts` (the admin module adds `adminFields` to the field defs this way). When two plugins target the same category, these arrays are concatenated.
 
-Source: `packages/questpie/src/cli/codegen/types.ts:201`.
+
 
 ### `DiscoverPattern`
 
@@ -342,21 +342,21 @@ type DiscoverPattern =
     };
 ```
 
-The string shorthand: a pattern containing `*` (or with no file extension) is a **map / directory** pattern; a single file with an extension (`"config/auth.ts"`, `"sidebar.ts"`) is a **single**. `mergeStrategy: "spread"` collects the root file plus every `features/*/pattern` into an ordered array — that's how sidebar entries and dashboard widgets accumulate from many feature modules. `configKey` emits the whole file as one entry in the config bucket — the modern way to add a composite `config/<name>.ts` file. Source: `packages/questpie/src/cli/codegen/types.ts:83`.
+The string shorthand: a pattern containing `*` (or with no file extension) is a **map / directory** pattern; a single file with an extension (`"config/auth.ts"`, `"sidebar.ts"`) is a **single**. `mergeStrategy: "spread"` collects the root file plus every `features/*/pattern` into an ordered array — that's how sidebar entries and dashboard widgets accumulate from many feature modules. `configKey` emits the whole file as one entry in the config bucket — the modern way to add a composite `config/<name>.ts` file.
 
-<Callout type="warn" title="Use `configKey`, not the deprecated `destructure`">
-`DiscoverPattern.destructure` (flat-mapping an object's props onto separate `createApp` keys) is **deprecated** — use `configKey`, which maps the whole file to one key under the `config` bucket (`AppStateConfig`). The canonical recipe for a plugin's config file is `discover: { xConfig: { pattern: "config/x.ts", configKey: "x" } }` paired with `declare module "questpie" { interface AppStateConfig { x?: XConfig } }`. Modules contributing the same key are merged per sub-key. Source: `packages/questpie/src/cli/codegen/types.ts:166`; `packages/questpie/src/server/config/app-state-config.ts:19`.
+<Callout type="warn" title="Use `configKey` for config files">
+Use `configKey`, which maps the whole file to one key under the `config` bucket (`AppStateConfig`). The canonical recipe for a plugin's config file is `discover: { xConfig: { pattern: "config/x.ts", configKey: "x" } }` paired with `declare module "questpie" { interface AppStateConfig { x?: XConfig } }`. Modules contributing the same key are merged per sub-key.
 </Callout>
 
 ### Generating typed factory methods
 
 Three registry declarations let a plugin generate typed wrappers into `factories.ts`:
 
-- **`RegistryExtension`** — a typed method on `collection()` / `global()` / a field instance. `stateKey` is the builder `.set()` key (the admin module adds `admin`, `adminList`, `adminForm`, …). `isCallback` + `callbackContextParams` make codegen emit runtime proxy helpers; `configTypePlaceholders` swaps tokens (`$COMPONENT_NAMES`) for module-extracted type aliases; `defaults` wraps user config as `{ ...defaults, ...userConfig }`. Source: `packages/questpie/src/cli/codegen/types.ts:752`.
-- **`SingletonFactory`** — a typed identity wrapper for a config file: `export function branding<T extends ServerBrandingConfig>(config: T): T { return config }`. Core declares `appConfig` and `authConfig` here. Source: `packages/questpie/src/cli/codegen/types.ts:831`.
-- **`BuilderFactory`** — a builder factory that needs the wrapped field defs at construction (the admin module's `block()`): codegen emits `export function block<TName extends string>(name) { return BlockBuilder.create(name, _allFieldDefs) }`. Unlike `collection()` / `global()` (always generated), builder factories are plugin-contributed. Source: `packages/questpie/src/cli/codegen/types.ts:873`.
+- **`RegistryExtension`** — a typed method on `collection()` / `global()` / a field instance. `stateKey` is the builder `.set()` key (the admin module adds `admin`, `adminList`, `adminForm`, …). `isCallback` + `callbackContextParams` make codegen emit runtime proxy helpers; `configTypePlaceholders` swaps tokens (`$COMPONENT_NAMES`) for module-extracted type aliases; `defaults` wraps user config as `{ ...defaults, ...userConfig }`.
+- **`SingletonFactory`** — a typed identity wrapper for a config file: `export function branding<T extends ServerBrandingConfig>(config: T): T { return config }`. Core declares `appConfig` and `authConfig` here.
+- **`BuilderFactory`** — a builder factory that needs the wrapped field defs at construction (the admin module's `block()`): codegen emits `export function block<TName extends string>(name) { return BlockBuilder.create(name, _allFieldDefs) }`. Unlike `collection()` / `global()` (always generated), builder factories are plugin-contributed.
 
-`CallbackParamDefinition` ties callback contexts to a **real exported factory** — never an inline JS string. Core declares `f: { factory: "createFieldNameProxy", from: "questpie/builders" }`, which makes `f.title` resolve to the string `"title"` inside a `.fields()` callback. When an extension lists `callbackContextParams: ["f"]`, codegen looks `f` up in the merged params and emits that proxy. Source: `packages/questpie/src/cli/codegen/types.ts:730`.
+`CallbackParamDefinition` ties callback contexts to a **real exported factory** — never an inline JS string. Core declares `f: { factory: "createFieldNameProxy", from: "questpie/builders" }`, which makes `f.title` resolve to the string `"title"` inside a `.fields()` callback. When an extension lists `callbackContextParams: ["f"]`, codegen looks `f` up in the merged params and emits that proxy.
 
 ### Scaffolds
 
@@ -372,23 +372,23 @@ interface ScaffoldConfig {
 // ScaffoldContext = { kebab, camel, pascal, title, targetId }
 ```
 
-Declaring the **same** scaffold name on two targets is the point: `questpie add block hero` then writes a server block definition *and* an admin-client renderer in one command. Source: `packages/questpie/src/cli/codegen/types.ts:1083`.
+Declaring the **same** scaffold name on two targets is the point: `questpie add block hero` then writes a server block definition *and* an admin-client renderer in one command.
 
 ### Custom generators
 
-When a target needs more than the default templates, give it a `generate(ctx)` returning `{ code, additionalFiles? }`. Transforms run **before** `generate`, so `ctx.extraImports` / `extraTypeDeclarations` / `extraRuntimeCode` / `extraEntities` are already populated; `additionalFiles` are written relative to the target `outDir` and each is syntax-validated. The admin module uses this for its `admin-client` target. Only one `generate` per target is allowed. Source: `packages/questpie/src/cli/codegen/types.ts:576`.
+When a target needs more than the default templates, give it a `generate(ctx)` returning `{ code, additionalFiles? }`. Transforms run **before** `generate`, so `ctx.extraImports` / `extraTypeDeclarations` / `extraRuntimeCode` / `extraEntities` are already populated; `additionalFiles` are written relative to the target `outDir` and each is syntax-validated. The admin module uses this for its `admin-client` target. Only one `generate` per target is allowed.
 
 ### Cross-target validation
 
-Register `validators` on the plugin (not on a target) to enforce consistency between targets after **all** have generated. A `CrossTargetValidator` receives the full result map and returns `ProjectionError[]`; a `ProjectionError` with `severity: "error"` fails codegen (exit `1`). This is how the admin module catches a server file referencing a block / view / component the admin-client target never registered. Source: `packages/questpie/src/cli/codegen/types.ts:1012`, `:1038`.
+Register `validators` on the plugin (not on a target) to enforce consistency between targets after **all** have generated. A `CrossTargetValidator` receives the full result map and returns `ProjectionError[]`; a `ProjectionError` with `severity: "error"` fails codegen (exit `1`). This is how the admin module catches a server file referencing a block / view / component the admin-client target never registered.
 
 ## Programmatic API
 
 You almost never need these — the CLI is the interface — but they're public for tooling:
 
-- **`runCodegen(options: CodegenOptions): Promise<CodegenResult>`** — single target. Resolves the graph (core plugin prepended), discovers, transforms, generates `index.ts` (root-app) or `module.ts` (module mode) + `factories.ts`, validates syntax, atomic-writes. Setting `options.module` switches to module mode. Source: `packages/questpie/src/cli/codegen/index.ts:423`.
-- **`runAllTargets(options): Promise<MultiTargetCodegenResult>`** — every resolved target, then all plugin validators. Per-target errors are collected (non-fatal); `validationErrors` with `severity: "error"` fail the CLI. Module mode is **not** supported here — use `runCodegen` directly. Source: `packages/questpie/src/cli/codegen/index.ts:736`.
-- **`generateModule(options: GenerateModuleOptions): Promise<CodegenResult>`** — convenience wrapper for npm packages that emit `.generated/module.ts` at build time. Source: `packages/questpie/src/cli/codegen/generate-module.ts:53`.
+- **`runCodegen(options: CodegenOptions): Promise<CodegenResult>`** — single target. Resolves the graph (core plugin prepended), discovers, transforms, generates `index.ts` (root-app) or `module.ts` (module mode) + `factories.ts`, validates syntax, atomic-writes. Setting `options.module` switches to module mode.
+- **`runAllTargets(options): Promise<MultiTargetCodegenResult>`** — every resolved target, then all plugin validators. Per-target errors are collected (non-fatal); `validationErrors` with `severity: "error"` fail the CLI. Module mode is **not** supported here — use `runCodegen` directly.
+- **`generateModule(options: GenerateModuleOptions): Promise<CodegenResult>`** — convenience wrapper for npm packages that emit `.generated/module.ts` at build time.
 
 ## Packages: the static-module pattern
 
@@ -403,10 +403,10 @@ export default packageConfig({
 });
 ```
 
-QUESTPIE's own core uses exactly this (`modulesDir: "src/server/modules"`, `modulePrefix: "questpie"`). `importRewriteMap` (on the module options) rewrites self-package specifiers so generated imports resolve to source rather than stale `dist/` types. `packageConfig` and `config` are exported from `questpie/cli`. Source: `packages/questpie/src/cli/config.ts:316`; core config at `packages/questpie/questpie.config.ts:12`.
+QUESTPIE's own core uses exactly this (`modulesDir: "src/server/modules"`, `modulePrefix: "questpie"`). `importRewriteMap` (on the module options) rewrites self-package specifiers so generated imports resolve to source rather than stale `dist/` types. `packageConfig` and `config` are exported from `questpie/cli`.
 
 <Callout type="warn" title="Importing `questpie/cli` must not start a command">
-The CLI is side-effect-free on import — command parsing is guarded by `import.meta.main`. Importing `questpie/cli` just to grab `packageConfig` will **not** kick off a command run, which matters in a workspace where a src-vs-dist double-instance could otherwise corrupt `.generated/`. Source: `packages/questpie/src/exports/cli.ts:23`.
+The CLI is side-effect-free on import — command parsing is guarded by `import.meta.main`. Importing `questpie/cli` just to grab `packageConfig` will **not** kick off a command run, which matters in a workspace where a src-vs-dist double-instance could otherwise corrupt `.generated/`.
 </Callout>
 
 ## TypeScript
@@ -432,7 +432,7 @@ import type {
 import { categoryRecordEntry, importStatement, safeKey } from "questpie/codegen";
 ```
 
-App-level generated types — `CollectionDoc<K>`, `CollectionWhere<K>`, `GlobalDoc<K>`, `App`, `AppConfig` — come from `#questpie` (above). The codegen types are exposed **only** via `questpie/codegen`; `questpie/types` does not re-export them. Source: `packages/questpie/src/exports/codegen.ts:1`.
+App-level generated types — `CollectionDoc<K>`, `CollectionWhere<K>`, `GlobalDoc<K>`, `App`, `AppConfig` — come from `#questpie` (above). The codegen types are exposed **only** via `questpie/codegen`; `questpie/types` does not re-export them.
 
 ## Related
 
@@ -441,5 +441,3 @@ App-level generated types — `CollectionDoc<K>`, `CollectionWhere<K>`, `GlobalD
 - [Collections](/docs/concepts/collections) — the export/discovery rules in practice and the `#questpie/factories` builder.
 - [Blocks](/docs/concepts/blocks) — a category contributed by the admin module's codegen plugin (the `block()` builder factory).
 - [Get started](/docs/getting-started) — where `questpie generate` first appears in the workflow.
-
-{/* TODO @user: add a screenshot of a `questpie generate` run (terminal output) + the resulting `.generated/` tree once a dev server is running (preview tools or manual capture). */}

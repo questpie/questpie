@@ -36,7 +36,7 @@ export default questpie(/* modules */).build({
 That single line wires `app.queue` to Postgres. Define a job, run `questpie generate`, and dispatch it as shown in [Jobs](/docs/concepts/jobs) — the adapter does the rest.
 
 <Callout type="info" title="The adapter is required once any job exists">
-If your app has at least one job but no `queue: { adapter }`, the queue service throws: *"Queue adapter is required when jobs are defined. Provide adapter in `.build({ queue: { adapter: ... } })`."* With no jobs at all, `app.queue` is an empty `{}` and no adapter is needed. Source: `packages/questpie/src/server/modules/core/services/queue.ts:16-24`.
+If your app has at least one job but no `queue: { adapter }`, the queue service throws: *"Queue adapter is required when jobs are defined. Provide adapter in `.build({ queue: { adapter: ... } })`."* With no jobs at all, `app.queue` is an empty `{}` and no adapter is needed.
 </Callout>
 
 ## Choosing an adapter
@@ -57,10 +57,10 @@ Each adapter advertises what it can do through capability flags. These gate whic
 | `scheduling` (`options.cron`, `queue.<n>.schedule()`) | yes | yes | no |
 | `singleton` (`singletonKey` dedup) | yes | yes | no |
 
-Source: capability flags at `packages/questpie/src/server/modules/core/integrated/queue/adapters/{pg-boss,bullmq,cloudflare-queues}.ts:14-31` (pg-boss/bullmq) and `:120-128` (cloudflare-queues).
+
 
 <Callout type="info" title="Detect capabilities at runtime with `app.queue.capabilities`">
-The resolved flags are exposed on `app.queue.capabilities` — `longRunningConsumer`, `runOnceConsumer`, `pushConsumer`, `scheduling`, `singleton`. If one codebase targets multiple runtimes, check the relevant flag before calling `listen` / `runOnce` / `schedule` rather than catching the throw. When an adapter omits `capabilities`, the runtime infers them: `longRunningConsumer`/`runOnceConsumer`/`pushConsumer` default to *"is the matching method implemented?"*, `scheduling` to *"are both `schedule` and `unschedule` functions?"*, and `singleton` to `false`. Source: `resolveCapabilities` at `packages/questpie/src/server/modules/core/integrated/queue/service.ts:41`.
+The resolved flags are exposed on `app.queue.capabilities` — `longRunningConsumer`, `runOnceConsumer`, `pushConsumer`, `scheduling`, `singleton`. If one codebase targets multiple runtimes, check the relevant flag before calling `listen` / `runOnce` / `schedule` rather than catching the throw. When an adapter omits `capabilities`, the runtime infers them: `longRunningConsumer`/`runOnceConsumer`/`pushConsumer` default to *"is the matching method implemented?"*, `scheduling` to *"are both `schedule` and `unschedule` functions?"*, and `singleton` to `false`.
 </Callout>
 
 ## The consumer models
@@ -72,7 +72,7 @@ The adapter's capabilities decide *how* a worker drains the queue. The mechanics
 - **Push** (`queue.createPushConsumer()`) — the platform delivers batches to your worker; you don't poll. Cloudflare Queues only.
 
 <Callout type="warn" title="There is no `questpie worker` CLI command">
-Workers start **programmatically** — you import your built app and call `app.queue.listen()` (long-running) or `app.queue.runOnce()` (serverless tick), or wire `app.queue.createPushConsumer()` to the platform's queue entrypoint. The `questpie` CLI has no queue command. The full entrypoint recipes are in [Jobs → Running a worker](/docs/concepts/jobs#running-a-worker). Source: CLI command list at `packages/questpie/src/cli/index.ts`.
+Workers start **programmatically** — you import your built app and call `app.queue.listen()` (long-running) or `app.queue.runOnce()` (serverless tick), or wire `app.queue.createPushConsumer()` to the platform's queue entrypoint. The `questpie` CLI has no queue command. The full entrypoint recipes are in [Jobs → Running a worker](/docs/concepts/jobs#running-a-worker).
 </Callout>
 
 ## pg-boss (Postgres)
@@ -106,7 +106,7 @@ Behavior worth knowing:
 - **Batches are processed serially.** pg-boss always hands an array to its `work()` callback; the adapter iterates items one at a time and reports per-item failures via `boss.fail(...)` so a sibling failure doesn't sink the rest of the batch.
 - **`runOnce` needs pg-boss `fetch()` support** — it throws *"PgBossAdapter.runOnce requires pg-boss fetch() support."* if the installed pg-boss version doesn't expose it.
 
-Supports long-running workers, `runOnce`, cron scheduling, and native `singletonKey`. Source: `packages/questpie/src/server/modules/core/integrated/queue/adapters/pg-boss.ts:12,14-31,45-50,128-160,187`.
+Supports long-running workers, `runOnce`, cron scheduling, and native `singletonKey`.
 
 ## BullMQ (Redis)
 
@@ -142,10 +142,10 @@ Behavior worth knowing:
 - **Scheduling** uses BullMQ's repeatable jobs (`repeat: { pattern: cron, key: "questpie:<jobName>" }`); `unschedule()` removes every repeatable tied to that name.
 
 <Callout type="warn" title="`retryDelay` is still in seconds — even on BullMQ">
-You always pass `retryDelay` in **seconds**, matching every other adapter. The BullMQ adapter multiplies it by 1000 internally to get BullMQ's millisecond `backoff.delay`. Don't pre-multiply. Source: `mapPublishOptions` at `packages/questpie/src/server/modules/core/integrated/queue/adapters/bullmq.ts:119-123`.
+You always pass `retryDelay` in **seconds**, matching every other adapter. The BullMQ adapter multiplies it by 1000 internally to get BullMQ's millisecond `backoff.delay`. Don't pre-multiply.
 </Callout>
 
-Supports long-running workers, `runOnce`, cron scheduling, and `singletonKey` (id-dedup). Source: `packages/questpie/src/server/modules/core/integrated/queue/adapters/bullmq.ts:18-22,24-31,46-48,98-133,176-202`.
+Supports long-running workers, `runOnce`, cron scheduling, and `singletonKey` (id-dedup).
 
 ## Cloudflare Queues (push)
 
@@ -197,7 +197,7 @@ Behavior worth knowing:
 - **Retry handling.** On a handler error the consumer calls `message.retry(...)`. The message is only acked (dropped) when a `retryLimit` was published *and* `attempts >= retryLimit + 1`; with no `retryLimit` set, a failing message always retries. Undecodable messages and messages with no matching handler are acked and skipped.
 - **`runtime: "cloudflare"` marker.** The adapter carries this so QUESTPIE's [runtime-compatibility check](/docs/concepts/configuration) can verify a Cloudflare Workers deploy uses a push-based queue. A custom adapter targeting Workers must set `runtime: "cloudflare"` and implement `createPushConsumer()`.
 
-Source: `packages/questpie/src/server/modules/core/integrated/queue/adapters/cloudflare-queues.ts:10-52,120-128,159-238,254`; runtime check at `packages/questpie/src/server/config/runtime-compatibility.ts:47,82-91`.
+
 
 ## The `QueueAdapter` contract
 
@@ -223,11 +223,11 @@ interface QueueAdapter {
 }
 ```
 
-`start` / `stop` / `publish` / `schedule` / `unschedule` / `on` are **required**; `listen` / `runOnce` / `createPushConsumer` are **optional** — whether you implement each one determines the matching capability flag when `capabilities` leaves it unset (see the capability callout above). Source: `QueueAdapter` at `packages/questpie/src/server/modules/core/integrated/queue/adapter.ts:62-129`.
+`start` / `stop` / `publish` / `schedule` / `unschedule` / `on` are **required**; `listen` / `runOnce` / `createPushConsumer` are **optional** — whether you implement each one determines the matching capability flag when `capabilities` leaves it unset (see the capability callout above).
 
 Two contract details adapter authors rely on:
 
-- **Handlers are keyed by the durable job name.** The framework builds a `QueueHandlerMap` (`Record<jobName, handler>`) and passes it to `listen` / `runOnce` / `createPushConsumer`. Each handler receives a `QueueJobRecord` — `{ id: string; data: unknown }`. Source: `packages/questpie/src/server/modules/core/integrated/queue/adapter.ts:11-32`.
+- **Handlers are keyed by the durable job name.** The framework builds a `QueueHandlerMap` (`Record<jobName, handler>`) and passes it to `listen` / `runOnce` / `createPushConsumer`. Each handler receives a `QueueJobRecord` — `{ id: string; data: unknown }`.
 - **`data` is raw — the framework re-validates it.** Adapters store and replay the raw payload; QUESTPIE re-parses `data` against the job's Zod schema before invoking the user handler. Your adapter never needs to validate. (See [Jobs](/docs/concepts/jobs#the-handler) for the dispatch- and handler-time validation passes.)
 
 ## Extending: a custom adapter
@@ -262,7 +262,7 @@ class MyAdapter implements QueueAdapter {
 // .build({ queue: { adapter: new MyAdapter() } })
 ```
 
-This is the QUESTPIE principle in action: **core, modules, and your own code reach the queue through one contract**. The full "build your own adapter" loop — across every adapter kind — lives in [Building a plugin](/docs/concepts/build-a-plugin). Source: `QueueAdapter` at `packages/questpie/src/server/modules/core/integrated/queue/adapter.ts:62`; capability resolution at `packages/questpie/src/server/modules/core/integrated/queue/service.ts:41`.
+This is the QUESTPIE principle in action: **core, modules, and your own code reach the queue through one contract**. The full "build your own adapter" loop — across every adapter kind — lives in [Building a plugin](/docs/extend/build-a-plugin).
 
 ## TypeScript
 
@@ -285,11 +285,11 @@ import type {
 } from "questpie/adapters/cloudflare-queues";
 ```
 
-`questpie/queue` re-exports the whole contract surface (`QueueAdapter`, the `Queue*` types, capabilities). The concrete adapters are deliberately **not** re-exported from `questpie/queue` — importing them from `questpie/adapters/*` keeps `pg-boss` / `bullmq` / Cloudflare bindings out of your bundle unless you use them. The job-facing types (`JobDefinition`, `PublishOptions`, `QueueClient`, `InferJobPayload`, …) are documented in [Jobs → TypeScript](/docs/concepts/jobs#typescript). Source: `packages/questpie/src/exports/queue.ts`; adapter barrels at `packages/questpie/src/exports/adapters/{pg-boss,bullmq,cloudflare-queues}.ts`.
+`questpie/queue` re-exports the whole contract surface (`QueueAdapter`, the `Queue*` types, capabilities). The concrete adapters are deliberately **not** re-exported from `questpie/queue` — importing them from `questpie/adapters/*` keeps `pg-boss` / `bullmq` / Cloudflare bindings out of your bundle unless you use them. The job-facing types (`JobDefinition`, `PublishOptions`, `QueueClient`, `InferJobPayload`, …) are documented in [Jobs → TypeScript](/docs/concepts/jobs#typescript).
 
 ## Related
 
 - [Jobs](/docs/concepts/jobs) — the feature this adapter serves: `job()`, dispatch, the handler context, and the worker entrypoints. Start here.
 - [Configuration](/docs/concepts/configuration) — the `.build({ ... })` model and runtime-compatibility checks that read the adapter.
-- [Building a plugin](/docs/concepts/build-a-plugin) — implement `QueueAdapter` (and the other adapter contracts) for any backend.
+- [Building a plugin](/docs/extend/build-a-plugin) — implement `QueueAdapter` (and the other adapter contracts) for any backend.
 - [Adapters](/docs/adapters) — the full list of swappable backends (queue, search, realtime, storage, email, KV).

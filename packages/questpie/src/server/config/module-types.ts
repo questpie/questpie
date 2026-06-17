@@ -372,6 +372,8 @@ export interface RuntimeConfig<
 // RuntimeConfigInput — input type for runtimeConfig() with cloud defaults
 // ============================================================================
 
+export type RealtimeConfigInput = true | RealtimeConfig;
+
 /**
  * Input type for {@link runtimeConfig} — accepts the same shape as
  * {@link RuntimeConfig} but `app` and `db` are **optional** because they can
@@ -410,7 +412,10 @@ export type RuntimeConfigInput<
 > = Partial<
 	Pick<RuntimeConfig<TDb, TStorage>, "app" | "db">
 > &
-	Omit<RuntimeConfig<TDb, TStorage>, "app" | "db">;
+	Omit<RuntimeConfig<TDb, TStorage>, "app" | "db" | "realtime"> & {
+		/** Realtime configuration. Use `true` to enable defaults. */
+		realtime?: RealtimeConfigInput;
+	};
 
 type DbFromRuntimeConfigInput<TInput> = TInput extends { db: infer TDb }
 	? TDb extends DbConfig
@@ -433,13 +438,20 @@ export type ResolvedRuntimeConfig<
 		DbFromRuntimeConfigInput<TInput>,
 		StorageFromRuntimeConfigInput<TInput>
 	>,
-	"app" | "db" | "secret" | "storage"
+	"app" | "db" | "secret" | "storage" | "realtime"
 > &
-	Omit<TInput, "app" | "db" | "secret" | "storage"> & {
+	Omit<TInput, "app" | "db" | "secret" | "storage" | "realtime"> & {
 		app: { url: string };
 		db: DbFromRuntimeConfigInput<TInput>;
 		secret: string | undefined;
 		storage: StorageFromRuntimeConfigInput<TInput>;
+		realtime: TInput extends { realtime: infer TRealtime }
+			? TRealtime extends true
+				? RealtimeConfig
+				: TRealtime extends RealtimeConfig
+					? TRealtime
+					: RealtimeConfig | undefined
+			: RealtimeConfig | undefined;
 	};
 
 // ============================================================================

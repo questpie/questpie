@@ -50,7 +50,7 @@ export default runtimeConfig({
 ```
 
 <Callout type="info" title="Drivers come from `files-sdk`, not QUESTPIE">
-QUESTPIE re-exports the `Files` class + types from [`files-sdk`](https://www.npmjs.com/package/files-sdk) (so every package shares one instance), but the actual **drivers** — `s3`, `r2`, `fs`, and ~40 others — are imported from `files-sdk` subpaths: `import { s3 } from "files-sdk/s3"`, `import { r2 } from "files-sdk/r2"`. Install `files-sdk` (it's a QUESTPIE dependency) and the provider's peer SDK (e.g. `@aws-sdk/client-s3` for `s3()`). Source: `packages/questpie/src/exports/storage.ts:1`.
+QUESTPIE re-exports the `Files` class + types from [`files-sdk`](https://www.npmjs.com/package/files-sdk) (so every package shares one instance), but the actual **drivers** — `s3`, `r2`, `fs`, and ~40 others — are imported from `files-sdk` subpaths: `import { s3 } from "files-sdk/s3"`, `import { r2 } from "files-sdk/r2"`. Install `files-sdk` (it's a QUESTPIE dependency) and the provider's peer SDK (e.g. `@aws-sdk/client-s3` for `s3()`).
 </Callout>
 
 ## The two shapes: local vs adapter
@@ -69,7 +69,7 @@ storage: {
 }
 ```
 
-Both shapes also accept the shared base options below. Source: `packages/questpie/src/server/config/types.ts:357` (`StorageConfig`), `:289` (`StorageBaseConfig`).
+Both shapes also accept the shared base options below.
 
 ### Shared options (both shapes)
 
@@ -80,10 +80,10 @@ Both shapes also accept the shared base options below. Source: `packages/questpi
 | `signedUrlExpiration` | `number` (seconds) | `3600` | TTL for the signed URLs QUESTPIE generates for **private** upload-collection files. |
 | `basePath` | `string` | `"/"` | Prefix for the file-serving routes (`{basePath}/:collection/files/:key`). |
 
-Source: `packages/questpie/src/server/config/types.ts:289`.
+
 </Callout>
 
-The removed legacy `driver` / `files` keys are typed as `never` — using them is a compile error. The boot-time validator (`assertValidStorageConfig`) also rejects them, rejects unknown keys, and rejects `adapter` + `location` together. Source: `packages/questpie/src/server/config/cloud-env.ts:55`.
+The boot-time validator (`assertValidStorageConfig`) rejects unknown keys and rejects `adapter` + `location` together.
 
 ### Local filesystem (`location`)
 
@@ -94,7 +94,7 @@ storage: { location: "/var/data/app-uploads" } // absolute
 storage: { location: "./uploads" }             // relative to cwd (the default)
 ```
 
-Internally this becomes `fs({ root: <resolved>, urlBaseUrl: <app.url><basePath>/files, defaultUrlExpiresIn: signedUrlExpiration })` — so a stored file's `url` is served by QUESTPIE at `{app.url}{basePath}/files/...`. The default `basePath` of `/` collapses to an empty string, so with no `basePath` set the prefix is `<app.url>/files` (not `<app.url>//files`). Source: `packages/questpie/src/server/modules/core/integrated/storage/create-driver.ts:50`.
+Internally this becomes `fs({ root: <resolved>, urlBaseUrl: <app.url><basePath>/files, defaultUrlExpiresIn: signedUrlExpiration })` — so a stored file's `url` is served by QUESTPIE at `{app.url}{basePath}/files/...`. The default `basePath` of `/` collapses to an empty string, so with no `basePath` set the prefix is `<app.url>/files` (not `<app.url>//files`).
 
 <Callout type="warn" title="Local disk doesn't survive a redeploy or scale-out">
 The `fs` driver writes to the machine's disk. On ephemeral/containerized hosts (most PaaS, serverless, Cloudflare) that disk is wiped on redeploy and not shared between instances, so uploads vanish or go missing across replicas. Local storage is for **development**; use an object-storage adapter (S3/R2) in production.
@@ -102,7 +102,7 @@ The `fs` driver writes to the machine's disk. On ephemeral/containerized hosts (
 
 ### Object storage (`adapter`)
 
-With `adapter`, QUESTPIE constructs `new Files({ adapter })` directly — it does **not** serve the bytes; the provider (or its CDN) does, and `app.storage.url(key)` returns a provider URL (presigned, or your `publicBaseUrl`). Source: `packages/questpie/src/server/modules/core/integrated/storage/create-driver.ts:41`.
+With `adapter`, QUESTPIE constructs `new Files({ adapter })` directly — it does **not** serve the bytes; the provider (or its CDN) does, and `app.storage.url(key)` returns a provider URL (presigned, or your `publicBaseUrl`).
 
 **S3 (and S3-compatible: MinIO, DigitalOcean Spaces, Wasabi, Backblaze B2, …)** — `import { s3 } from "files-sdk/s3"`:
 
@@ -139,7 +139,7 @@ storage: {
 ```
 
 <Callout type="warn" title="Without `publicBaseUrl`, `url()` returns a presigned (expiring) URL">
-For both `s3()` and `r2()`, when you don't set `publicBaseUrl`, `app.storage.url(key)` returns a **presigned GetObject URL** that expires (default 1 hour, tune with `defaultUrlExpiresIn` or per-call `url(key, { expiresIn })`). Set `publicBaseUrl` (a CDN origin, public-read bucket, or custom domain) for permanent, signature-free URLs. The R2 **binding** variant (`r2({ binding })`, for Workers) has no signing primitive — `url()` throws unless `publicBaseUrl` or hybrid HTTP credentials are configured. Source: files-sdk `s3`/`r2` adapter options.
+For both `s3()` and `r2()`, when you don't set `publicBaseUrl`, `app.storage.url(key)` returns a **presigned GetObject URL** that expires (default 1 hour, tune with `defaultUrlExpiresIn` or per-call `url(key, { expiresIn })`). Set `publicBaseUrl` (a CDN origin, public-read bucket, or custom domain) for permanent, signature-free URLs. The R2 **binding** variant (`r2({ binding })`, for Workers) has no signing primitive — `url()` throws unless `publicBaseUrl` or hybrid HTTP credentials are configured.
 </Callout>
 
 Any of the ~40 Files SDK providers works the same way — GCS (`files-sdk/gcs`), Azure (`files-sdk/azure`), Supabase (`files-sdk/supabase`), and more. Pick the subpath, pass its options, hand the result to `adapter`.
@@ -167,10 +167,10 @@ await app.storage.delete("avatars/u_42.png");
 const { items } = await app.storage.list({ prefix: "avatars/" });
 ```
 
-Source: `app.storage` typed at `packages/questpie/src/server/config/questpie.ts:164`; method surface from `files-sdk`.
+
 
 <Callout type="info" title="Upload collections call `app.storage` for you">
-You rarely touch `app.storage` directly for normal uploads. When you build an [upload collection](/docs/concepts/collections#uploads) with `.upload()`, its `upload()` / `uploadMany()` CRUD methods write through `app.storage`, generate the `key`, and clean up bytes on replace/delete. Reach for `app.storage` directly only for storage operations *outside* a collection (e.g. exporting a generated report). The client-side `client.collections.media.upload(file, { onProgress })` is documented in [the client SDK](/docs/concepts/client-sdk#uploads).
+You rarely touch `app.storage` directly for normal uploads. When you build an [upload collection](/docs/concepts/collections#uploads) with `.upload()`, its `upload()` / `uploadMany()` CRUD methods write through `app.storage`, generate the `key`, and clean up bytes on replace/delete. Reach for `app.storage` directly only for storage operations *outside* a collection (e.g. exporting a generated report). The client-side `client.collections.media.upload(file, { onProgress })` is documented in [the client SDK](/docs/client/sdk#uploads).
 </Callout>
 
 ## Visibility and signed URLs
@@ -186,10 +186,10 @@ const asset = await app.collections.media.findOne({ where: { id } });
 asset.url; // → https://app.example.com/media/files/<key>?token=<hmac-signed>
 ```
 
-The signing/verification helpers are exported from `questpie/storage` if you need them directly: `generateSignedUrlToken(key, secret, expirationSeconds, collection?)`, `verifySignedUrlToken(token, secret, expectedCollection?)`, and `buildStorageFileUrl(baseUrl, basePath, collection, key, token?)`. Source: `packages/questpie/src/server/modules/core/integrated/storage/signed-url.ts`.
+The signing/verification helpers are exported from `questpie/storage` if you need them directly: `generateSignedUrlToken(key, secret, expirationSeconds, collection?)`, `verifySignedUrlToken(token, secret, expectedCollection?)`, and `buildStorageFileUrl(baseUrl, basePath, collection, key, token?)`.
 
 <Callout type="warn" title="Private files need a `secret` — without it, `url` is `undefined`">
-Signing requires `app.config.secret` (resolved from `QUESTPIE_SECRET` / `BETTER_AUTH_SECRET`, or `runtimeConfig({ secret })`). If a collection is `private` and **no secret is set**, the `afterRead` hook leaves `url` as `undefined` rather than emitting an unsigned URL — failing closed instead of leaking the bytes. Always set a secret in any environment that serves private files. Source: `packages/questpie/src/server/collection/builder/collection-builder.ts:862`.
+Signing requires `app.config.secret` (resolved from `QUESTPIE_SECRET` / `BETTER_AUTH_SECRET`, or `runtimeConfig({ secret })`). If a collection is `private` and **no secret is set**, the `afterRead` hook leaves `url` as `undefined` rather than emitting an unsigned URL — failing closed instead of leaking the bytes. Always set a secret in any environment that serves private files.
 </Callout>
 
 <Callout type="info" title="To change *who* may fetch private bytes, use `access.serve`">
@@ -217,14 +217,14 @@ export default route()
   });
 ```
 
-`SignUploadOptions`: `expiresIn` (required, seconds), `contentType?`, `maxSize?`, `minSize?` (default `1`). The result is a `SignedUpload`: either `{ method: "PUT", url, headers? }` or `{ method: "POST", url, fields }` (S3/R2 use the POST form when `maxSize` is set, which enforces the cap via a `content-length-range` policy). Source: files-sdk `SignUploadOptions` / `SignedUpload`.
+`SignUploadOptions`: `expiresIn` (required, seconds), `contentType?`, `maxSize?`, `minSize?` (default `1`). The result is a `SignedUpload`: either `{ method: "PUT", url, headers? }` or `{ method: "POST", url, fields }` (S3/R2 use the POST form when `maxSize` is set, which enforces the cap via a `content-length-range` policy).
 
 <Callout type="warn" title="Always pass `maxSize` to a presigned upload">
 Without `maxSize`, supporting adapters fall back to a presigned **PUT** with **no server-side size limit** — anyone with the URL can upload an arbitrarily large object until `expiresIn` elapses. Set `maxSize` so the adapter uses a size-enforced presigned POST. (Direct-to-storage uploads also bypass your collection's `allowedTypes`/`maxSize`, which are admin-UI hints, not server constraints — so the presigned policy is your enforcement point.)
 </Callout>
 
 <Callout type="info" title="Set `Content-Disposition` for user-uploaded content">
-A user-uploaded `.html` or SVG served inline executes in your domain's origin — stored XSS. When generating a download URL for untrusted content, pass `responseContentDisposition: "attachment"` to `app.storage.url(key, { … })` to force a download instead of inline rendering. Source: files-sdk `UrlOptions`.
+A user-uploaded `.html` or SVG served inline executes in your domain's origin — stored XSS. When generating a download URL for untrusted content, pass `responseContentDisposition: "attachment"` to `app.storage.url(key, { … })` to force a download instead of inline rendering.
 </Callout>
 
 ## Zero-config from environment (`QUESTPIE_STORAGE_*`)
@@ -239,10 +239,10 @@ If you set `QUESTPIE_STORAGE_ENDPOINT` and don't pass an explicit `storage` bloc
 | `QUESTPIE_STORAGE_ACCESS_KEY` | Access key ID |
 | `QUESTPIE_STORAGE_SECRET_KEY` | Secret access key |
 
-The adapter is created with `forcePathStyle: true` and is **lazy** — the `files-sdk/s3` import (and its AWS SDK peers) loads on the first storage operation, not at boot. If the endpoint is set but bucket/keys are missing, QUESTPIE warns and falls back to local storage. An explicit `storage` block in your config always wins over the env vars. Source: `packages/questpie/src/server/config/cloud-env.ts:174`.
+The adapter is created with `forcePathStyle: true` and is **lazy** — the `files-sdk/s3` import (and its AWS SDK peers) loads on the first storage operation, not at boot. If the endpoint is set but bucket/keys are missing, QUESTPIE warns and falls back to local storage. An explicit `storage` block in your config always wins over the env vars.
 
 <Callout type="warn" title="The env-driven S3 path needs the AWS SDK installed">
-The lazy adapter requires `@aws-sdk/client-s3`, `@aws-sdk/lib-storage`, `@aws-sdk/s3-presigned-post`, and `@aws-sdk/s3-request-presigner` as dependencies. If they're missing, the first storage operation throws a clear install message. Source: `packages/questpie/src/server/config/cloud-env.ts:268`.
+The lazy adapter requires `@aws-sdk/client-s3`, `@aws-sdk/lib-storage`, `@aws-sdk/s3-presigned-post`, and `@aws-sdk/s3-request-presigner` as dependencies. If they're missing, the first storage operation throws a clear install message.
 </Callout>
 
 ## TypeScript
@@ -262,7 +262,7 @@ import type { Adapter, UploadResult, SignedUpload, SignUploadOptions } from "que
 import { Files } from "questpie/storage";
 ```
 
-`app.storage` is typed as `StorageFromQuestpieConfig<YourConfig>` — a `Files<>` instance specialized to your configured adapter. Source: `packages/questpie/src/exports/storage.ts:1`, `packages/questpie/src/server/config/types.ts:366`.
+`app.storage` is typed as `StorageFromQuestpieConfig<YourConfig>` — a `Files<>` instance specialized to your configured adapter.
 
 ## Custom adapter
 
@@ -287,14 +287,13 @@ export default runtimeConfig({
 The `Adapter` type is re-exported from `questpie/storage` so you can type your implementation without a direct `files-sdk` import. Everything downstream — upload collections, `app.storage`, signed URLs for QUESTPIE-served files — works unchanged. For the full `Adapter` contract, see the [Files SDK](https://www.npmjs.com/package/files-sdk) docs.
 
 <Callout type="idea" title="Screenshot — admin media library">
-TODO @user: add a screenshot of an upload collection's admin media grid (e.g. `/admin/collections/media`) showing thumbnails served via the configured storage adapter.
 </Callout>
 
 ## Related
 
 - [Upload collections](/docs/concepts/collections#uploads) — `.upload()` makes a collection a byte store; the storage adapter is *where* those bytes go.
 - [`f.upload()` field](/docs/concepts/fields#upload) — a typed relation from a row to an upload collection.
-- [Client SDK — uploads](/docs/concepts/client-sdk#uploads) — `client.collections.media.upload(file, { onProgress })` with XHR progress.
+- [Client SDK — uploads](/docs/client/sdk#uploads) — `client.collections.media.upload(file, { onProgress })` with XHR progress.
 - [Access control](/docs/concepts/access-control) — the `serve` rule that gates who may fetch file bytes.
 - [Configuration](/docs/concepts/configuration) — where the `storage` block lives in `runtimeConfig()`.
 - [Environment](/docs/concepts/environment) — typed `env()` for bucket names, endpoints, and credentials.

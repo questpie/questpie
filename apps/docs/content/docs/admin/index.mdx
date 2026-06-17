@@ -1,0 +1,47 @@
+---
+title: Admin
+description: Add the generated admin panel, configure its navigation and branding, and extend it with views, components, blocks, actions, auth, and audit trails.
+---
+
+The admin panel is a first-class QUESTPIE module. On the server, `adminModule` contributes collections, fields, views, components, routes, and a codegen plugin. On the client, the generated admin builder resolves those server-emitted references into React screens.
+
+## What the admin module gives you
+
+- Collection and global forms generated from your schema.
+- Rich text, blocks, uploads, actions, saved views, locks, setup, and auth screens.
+- `config/admin.ts` for sidebar, dashboard, branding, locale, and shell configuration.
+- Server/client registries for custom views and components.
+- An optional audit module for durable change history.
+
+## Basic wiring
+
+```ts title="src/questpie/server/modules.ts"
+import { adminModule } from "@questpie/admin/modules/admin";
+import { openApiModule } from "@questpie/openapi/modules/openapi";
+
+export default [adminModule, openApiModule] as const;
+```
+
+```ts title="src/questpie/admin/modules.ts"
+import { adminClientModule } from "@questpie/admin/client/modules/admin";
+
+export default [adminClientModule] as const;
+```
+
+## Next pages to add
+
+This overview is the first admin docs cut. The follow-up pages should cover:
+
+| Page | Scope |
+|---|---|
+| `admin/collections` | `.admin()`, `.list()`, `.form()`, `.preview()`, `.actions()`, and global forms. |
+| `admin/configuration` | `config/admin.ts`, sidebar, dashboard widgets, branding, locale, and shell options. |
+| `admin/custom-views` | View/component registration, server references, and client renderers. |
+| `admin/auth` | Better Auth integration, setup flow, admin session helpers, and invitations. |
+| `admin/audit` | `auditModule`, audit-log collection, and per-collection audit settings. |
+
+## Related
+
+- [Modules](/docs/extend/modules) - how `adminModule` contributes runtime and codegen features.
+- [Blocks](/docs/concepts/blocks) - reusable content blocks that render in the admin.
+- [Configuration](/docs/concepts/configuration) - app config and module-discovered config files.

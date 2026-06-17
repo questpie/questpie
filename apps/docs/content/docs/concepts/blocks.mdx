@@ -62,7 +62,7 @@ questpie push       # adds the jsonb content column to the pages table
 That gives you a `pages.content` field that renders the block editor in the admin, validates each block against its declared fields, and returns a `BlocksDocument` your frontend can render.
 
 <Callout type="warn" title="Blocks require the admin module">
-`f.blocks()` and the `block()` factory only exist when `adminModule` is registered in `src/questpie/server/modules.ts`. The admin module registers the `blocks` (and `richText`) field types, and codegen discovers your `blocks/` files and wires `f.blocks()` onto the generated `f`. Without it, `f.blocks()` is not on the field proxy. Source: `packages/admin/src/server/fields/blocks.ts`, `packages/admin/src/server/modules/admin/block/block-builder.ts`.
+`f.blocks()` and the `block()` factory only exist when `adminModule` is registered in `src/questpie/server/modules.ts`. The admin module registers the `blocks` (and `richText`) field types, and codegen discovers your `blocks/` files and wires `f.blocks()` onto the generated `f`. Without it, `f.blocks()` is not on the field proxy.
 </Callout>
 
 ## Example → stored shape
@@ -101,7 +101,7 @@ interface BlockNode {
 }
 ```
 
-Source: `packages/admin/src/server/fields/blocks.ts`.
+
 
 <Callout type="info" title="Structure and content are split on purpose">
 `_tree` holds **structure**, `_values` holds **content**, both keyed by `BlockNode.id`. They are separated so reordering or nesting a block never rewrites its values, and child blocks live in `BlockNode.children`, not inside `_values`. The persisted Zod schema validates `{ _tree, _values }`; `_data` is added by the read hook, not stored.
@@ -119,7 +119,7 @@ Source: `packages/admin/src/server/fields/blocks.ts`.
 | `.allowChildren(max?)` | Make this a layout block that can contain other blocks (optionally capped). |
 | `.prefetch(fn \| { with, loader? })` | Fetch related data on read; the result is attached to `_data[blockId]`. |
 
-Source: `packages/admin/src/server/modules/admin/block/block-builder.ts`.
+
 
 ### `.admin()` — picker metadata
 
@@ -132,7 +132,7 @@ Source: `packages/admin/src/server/modules/admin/block/block-builder.ts`.
 | `icon` | `ComponentReference` | Icon, e.g. `c.icon("ph:image")`. |
 | `category` | `BlockCategoryConfig` | Groups the block: `{ label: I18nText; icon?; order? }`. |
 | `order` | `number` | Order within its category (lower = first). |
-| `hidden` | `boolean` | Hide from the picker (e.g. deprecated blocks). |
+| `hidden` | `boolean` | Hide from the picker. |
 
 ```ts
 .admin(({ c }) => ({
@@ -143,7 +143,7 @@ Source: `packages/admin/src/server/modules/admin/block/block-builder.ts`.
 }))
 ```
 
-Source: `packages/admin/src/server/augmentation/form-layout.ts` (`AdminBlockConfig`, `BlockCategoryConfig`).
+
 
 <Callout type="info" title="Reuse one category across blocks">
 Export a helper that returns a `BlockCategoryConfig` so every block in a group shares one label/icon/order. Type it with `AdminConfigContext` and `BlockCategoryConfig` from `@questpie/admin/factories`:
@@ -158,7 +158,7 @@ export const sections = (c: AdminConfigContext["c"]): BlockCategoryConfig => ({
 });
 ```
 
-Then `category: sections(c)` in each block's `.admin()`. Source: `examples/tanstack-barbershop/src/questpie/server/blocks/_categories.ts`.
+Then `category: sections(c)` in each block's `.admin()`.
 </Callout>
 
 ### `.fields()` — the block's data
@@ -192,7 +192,7 @@ Field values are validated against the block's generated Zod schema and stored u
 }))
 ```
 
-Source: `packages/admin/src/server/modules/admin/block/block-builder.ts` (`form`), `packages/admin/src/server/augmentation/form-layout.ts` (`FieldLayoutItem`).
+
 
 ### `.allowChildren()` — layout blocks
 
@@ -212,7 +212,7 @@ export const columnsBlock = block("columns")
   }));
 ```
 
-Children render via the `children` prop your renderer receives (see [Rendering](#rendering-on-the-frontend)). Source: `examples/city-portal/src/questpie/server/blocks/columns.ts`.
+Children render via the `children` prop your renderer receives (see [Rendering](#rendering-on-the-frontend)).
 
 ## Prefetching block data
 
@@ -229,7 +229,7 @@ Declare which **relation or upload** fields to expand. They are batch-fetched ac
 .prefetch({ with: { author: { with: { avatar: true } } } })
 ```
 
-Each expanded field becomes `ExpandedRecord | null` under `_data[blockId][field]` (an array of records for `.multiple()` relations). Only fields whose metadata is a relation are expanded — a non-relation field name in `with` is silently ignored, never partially resolved. Source: `packages/admin/src/server/modules/admin/block/block-builder.ts` (prefetch overload 2), `prefetch.ts` (`expandDeclaredFields`).
+Each expanded field becomes `ExpandedRecord | null` under `_data[blockId][field]` (an array of records for `.multiple()` relations). Only fields whose metadata is a relation are expanded — a non-relation field name in `with` is silently ignored, never partially resolved.
 
 ### Shape 2 — a custom loader function
 
@@ -245,7 +245,7 @@ For computed data, pass a function. It receives the block's typed `values` and a
 })
 ```
 
-`ctx` is an `AppContext` plus `{ blockId, blockType, locale? }`, so `ctx.collections.<name>.find(...)`, `ctx.db`, and `ctx.session` are available. Source: `packages/admin/src/server/modules/admin/block/block-builder.ts` (`BlockPrefetchContext`, prefetch overload 1), `examples/city-portal/src/questpie/server/blocks/latest-news.ts`.
+`ctx` is an `AppContext` plus `{ blockId, blockType, locale? }`, so `ctx.collections.<name>.find(...)`, `ctx.db`, and `ctx.session` are available.
 
 ### Shape 3 — expand, then run a loader
 
@@ -260,14 +260,14 @@ Combine the two: expand fields with `with`, then run a `loader` that receives th
 })
 ```
 
-On key conflicts, loader/function data wins over expanded data (it is merged on top). Source: `packages/admin/src/server/modules/admin/block/prefetch.ts` (`processBlocksDocument`).
+On key conflicts, loader/function data wins over expanded data (it is merged on top).
 
 <Callout type="warn" title="Prefetch runs in afterRead — keep it outside an open transaction">
 Prefetch runs in the blocks field's `afterRead` hook. Heavy reads inside an **already-open transaction** can deadlock Bun SQL, because the context-inherited tx connection blocks while you query. Keep block hydration (and any field `afterRead`) outside an open `tx`. See the framework invariant in `CLAUDE.md` (`feedback_save_inside_tx`).
 </Callout>
 
 <Callout type="info" title="Prefetch is best-effort and access-aware">
-A failing loader never throws into your read: that block's `_data` is set to `{ _error: "Prefetch failed" }` and the rest of the page still renders. The blocks field's `afterRead` also returns the raw value untouched when called **outside request scope** (e.g. a direct DB read with no context). For `with` expansion, **upload** fields inherit the parent row's read decision (the asset ids are editor-curated content on a row the caller could already read), while plain relations keep their target collection's normal read access. Source: `packages/admin/src/server/modules/admin/block/prefetch.ts`, `fields/blocks.ts`.
+A failing loader never throws into your read: that block's `_data` is set to `{ _error: "Prefetch failed" }` and the rest of the page still renders. The blocks field's `afterRead` also returns the raw value untouched when called **outside request scope** (e.g. a direct DB read with no context). For `with` expansion, **upload** fields inherit the parent row's read decision (the asset ids are editor-curated content on a row the caller could already read), while plain relations keep their target collection's normal read access.
 </Callout>
 
 ## Rendering on the frontend
@@ -319,14 +319,12 @@ export function HeroRenderer({ values, data, children }: BlockProps<"hero">) {
 `values` is typed from the block's `.fields()`; `data` is typed from its `.prefetch()`. Layout blocks (`.allowChildren()`) render their nested blocks through `children`. Sources: `packages/admin/src/client/blocks/block-renderer.tsx`, `examples/tanstack-barbershop/src/components/pages/PageRenderer.tsx`, `examples/tanstack-barbershop/src/questpie/admin/blocks/hero.tsx`.
 
 <Callout type="info" title="What `BlockRenderer` actually passes each renderer">
-At runtime, `BlockRenderer` passes each renderer component `id`, `type` (the block type name, an extra prop the typed shape below omits), `values`, `data`, and the rendered `children` — and nothing else. The `isSelected` / `isPreview` fields in the renderer-props type are **reserved and not wired by `BlockRenderer`**: they are always `undefined` here, so don't build rendering logic on them (selection state lives on the editor wrapper, not the renderer). Stick to `values`, `data`, and `children`. Source: `packages/admin/src/client/blocks/block-renderer.tsx` (lines 118-126).
+At runtime, `BlockRenderer` passes each renderer component `id`, `type` (the block type name, an extra prop the typed shape below omits), `values`, `data`, and the rendered `children` — and nothing else. The `isSelected` / `isPreview` fields in the renderer-props type are **reserved and not wired by `BlockRenderer`**: they are always `undefined` here, so don't build rendering logic on them (selection state lives on the editor wrapper, not the renderer). Stick to `values`, `data`, and `children`.
 </Callout>
 
 <Callout type="info" title="Same renderers power live preview">
-Wrap fields in `PreviewField` to make them inline-editable in live preview, and forward `selectedBlockId` / `onBlockClick` / `onBlockInsert` from `useCollectionPreview()` — `BlockRenderer` then adds click-to-select and insert affordances in preview mode while rendering the exact same components in production. Source: `packages/admin/src/client/blocks/block-renderer.tsx`, `examples/tanstack-barbershop/src/components/pages/PageRenderer.tsx`.
+Wrap fields in `PreviewField` to make them inline-editable in live preview, and forward `selectedBlockId` / `onBlockClick` / `onBlockInsert` from `useCollectionPreview()` — `BlockRenderer` then adds click-to-select and insert affordances in preview mode while rendering the exact same components in production.
 </Callout>
-
-{/* TODO @user: add a screenshot of the admin block editor — picker open with categorized blocks on the left, the block tree with a selected block, and its fields in the inspector. */}
 
 ## Querying blocks fields
 
@@ -351,7 +349,7 @@ await app.collections.pages.find({
 });
 ```
 
-`hasBlockType` and `blockCount` inspect `_tree` only (root level for the count), via Postgres JSONB functions (`jsonb_array_elements`, `jsonb_array_length`). Source: `packages/admin/src/server/fields/blocks.ts` (`getBlocksOperators`).
+`hasBlockType` and `blockCount` inspect `_tree` only (root level for the count), via Postgres JSONB functions (`jsonb_array_elements`, `jsonb_array_length`).
 
 ## TypeScript
 
@@ -374,7 +372,7 @@ import type { BlocksDocument, BlockNode } from "@questpie/admin/fields";
 If you build blocks programmatically (a plugin), `block`, `BlockBuilder`, `AdminBlockConfig`, `BlockCategoryConfig`, `AdminConfigContext`, `BlockPrefetchContext`, and the inference helpers `InferBlockValues` / `InferBlockData` are exported from `@questpie/admin/factories` (and `@questpie/admin/server`); `BlockRenderer`, `BlockRendererProps`, `BlockContent`, `BlockNode`, and `isBlockContent` from `@questpie/admin/client`. Sources: `packages/admin/src/exports/{server,factories,fields,client}.ts`.
 
 <Callout type="info" title="Import `block` from `#questpie/factories`, not `@questpie/admin/server`">
-In app code, always import `block` from `#questpie/factories`. The generated factory wraps the field proxy with your enabled modules so `f.richText()` / `f.blocks()` are available inside a block's `.fields()`; the bare `block()` from `@questpie/admin/server` only sees builtin fields. Source: `examples/tanstack-barbershop/src/questpie/server/.generated/factories.ts`.
+In app code, always import `block` from `#questpie/factories`. The generated factory wraps the field proxy with your enabled modules so `f.richText()` / `f.blocks()` are available inside a block's `.fields()`; the bare `block()` from `@questpie/admin/server` only sees builtin fields.
 </Callout>
 
 ## Related

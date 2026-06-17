@@ -1,4 +1,13 @@
 {
 	"title": "Documentation",
-	"pages": ["index", "getting-started", "concepts", "adapters", "integrations"]
+	"pages": [
+		"index",
+		"getting-started",
+		"concepts",
+		"client",
+		"adapters",
+		"admin",
+		"extend",
+		"integrations"
+	]
 }

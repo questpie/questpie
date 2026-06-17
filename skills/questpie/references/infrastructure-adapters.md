@@ -710,8 +710,8 @@ const spec = generateOpenApiSpec(app, {
 | Command                          | Description                                      |
 | -------------------------------- | ------------------------------------------------ |
 | `bunx questpie push`             | Direct schema sync (dev only, no migration file) |
-| `bunx questpie migrate:generate` | Generate migration from schema diff              |
-| `bunx questpie migrate:up`       | Run pending migrations                           |
+| `bunx questpie migrate:create`   | Generate migration from schema diff              |
+| `bunx questpie migrate`          | Run pending migrations                           |
 | `bunx questpie migrate:down`     | Rollback last migration                          |
 | `bunx questpie migrate:fresh`    | Drop all and re-run (DESTRUCTIVE)                |
 | `bunx questpie migrate:reset`    | Reset migration tracking                         |

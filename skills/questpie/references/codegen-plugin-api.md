@@ -1,7 +1,5 @@
 # Codegen Plugin API Reference
 
-Source: `packages/questpie/src/cli/codegen/types.ts`
-
 A faithful mirror of the source types. **Which do you actually need?** Most plugins only use `categories` (directory-pattern discovery), `discover` (single-file or glob patterns), and `registries` (typed factory extensions). `transform` and `generate` are escape hatches for the rare case where declarative discovery is not enough — reach for them last.
 
 - [CodegenPlugin](#codegenplugin)
@@ -213,7 +211,6 @@ type DiscoverPattern =
 			 *   pattern: "config/app.ts",
 			 *   destructure: { locale: "locale", access: "defaultAccess" },
 			 * }
-			 * @deprecated Use `configKey` instead.
 			 */
 			destructure?: Record<string, string>;
 

@@ -38,10 +38,10 @@ Every adapter's exact config shape lives in `references/infrastructure-adapters.
 
 ## Environment
 
-Declare every env var once in `env.ts` (beside `questpie.config.ts`) — schema-validated at boot, typed everywhere. Never use raw `process.env.X` / `process.env.X!` in app code. Full reference: `references/env.md`.
+Scaffolded apps declare every env var once in `src/lib/env.ts` via `@t3-oss/env-core` — schema-validated at boot, typed everywhere. The framework-level `questpie/env` helper is still available for apps that want generated server/client env modules; full reference: `references/env.md`. Never use raw `process.env.X` / `process.env.X!` in app code.
 
 ```ts
-// src/questpie/server/env.ts
+// src/questpie/server/env.ts (framework env-helper variant)
 import { env } from "questpie/env";
 import { z } from "zod";
 
@@ -154,10 +154,10 @@ bunx questpie push
 
 ```bash
 # Generate migration from schema diff
-bunx questpie migrate:generate
+bunx questpie migrate:create
 
 # Run pending migrations
-bunx questpie migrate:up
+bunx questpie migrate
 
 # Rollback last migration
 bunx questpie migrate:down
@@ -267,7 +267,7 @@ CMD ["bun", "run", ".output/server/index.mjs"]
 
 - Set strong `APP_SECRET` (min 32 characters)
 - Use production `DATABASE_URL` with SSL
-- Run `bunx questpie migrate:up` before deploying
+- Run `bunx questpie migrate` before deploying
 - Configure SMTP for transactional email
 - Set `APP_URL` to your public domain
 - Enable HTTPS
@@ -312,8 +312,8 @@ When you add, remove, or change collection fields, the database schema must be u
 
 ```bash
 # After changing any collection fields:
-bunx questpie migrate:generate   # create migration file
-bunx questpie migrate:up         # apply to database
+bunx questpie migrate:create     # create migration file
+bunx questpie migrate            # apply to database
 
 # Or in development:
 bunx questpie push               # direct schema sync (no migration file)

@@ -75,11 +75,11 @@ await ctx.email.sendTemplate({
 ```
 
 <Callout type="info" title="The filename is the template key">
-A default-exported `email(...)` in `emails/welcome.ts` is registered under the camelCased filename — here `welcome`. A file named `emails/new-blog-post.ts` becomes the key `newBlogPost`. Codegen collects every `emails/*.ts` into the `templates` registry, keyed by that record key, so `sendTemplate({ template: "welcome" })` autocompletes and type-checks. Source: `mailer/service.ts:36-41` (keys by record key), `mailer/template.ts:105-109`.
+A default-exported `email(...)` in `emails/welcome.ts` is registered under the camelCased filename — here `welcome`. A file named `emails/new-blog-post.ts` becomes the key `newBlogPost`. Codegen collects every `emails/*.ts` into the `templates` registry, keyed by that record key, so `sendTemplate({ template: "welcome" })` autocompletes and type-checks.
 </Callout>
 
 <Callout type="warn" title="You must set an adapter — even in dev">
-The core email service throws at app build if `email.adapter` is missing: `"QUESTPIE: 'email.adapter' is required."`. The mailer does have a `ConsoleAdapter` fallback for when no adapter is configured, but the core service never reaches it — it constructs `MailerService` only after asserting your adapter exists. So always set `adapter`; use `new ConsoleAdapter()` explicitly for local development rather than relying on a fallback. Source: `core/services/email.ts:14-21`, `mailer/service.ts:49-66`.
+The core email service throws at app build if `email.adapter` is missing: `"QUESTPIE: 'email.adapter' is required."`. The mailer does have a `ConsoleAdapter` fallback for when no adapter is configured, but the core service never reaches it — it constructs `MailerService` only after asserting your adapter exists. So always set `adapter`; use `new ConsoleAdapter()` explicitly for local development rather than relying on a fallback.
 </Callout>
 
 ## Example → real output
@@ -107,7 +107,7 @@ Two things happened for free during serialization:
 - **`from` was filled** from `defaults.from` — you didn't pass one in the send call.
 - **`text` was derived** from your `html` via `html-to-text`, because the handler returned only `html`.
 
-Source: `mailer/service.ts:84-101` (serialize), `adapters/console.adapter.ts:33-85` (log format).
+
 
 The `input` argument is inferred straight from the template's Zod schema, so a wrong shape is a compile error before it can ever be a runtime one:
 
@@ -171,10 +171,10 @@ interface EmailResult {
 }
 ```
 
-`renderTemplate` throws `Email handler for "X" must return a subject` / `... must return html` if either is falsy, so you can't accidentally ship a blank email. Source: `mailer/service.ts:142-152`, `mailer/template.ts:8-12`.
+`renderTemplate` throws `Email handler for "X" must return a subject` / `... must return html` if either is falsy, so you can't accidentally ship a blank email.
 
 <Callout type="warn" title="App context is only populated inside a request or job scope">
-The handler's `db`, `collections`, and other services are resolved from the active request/job context (AsyncLocalStorage). When you render or send **inside** a hook, route, job, or service, they're fully populated. If you call `renderTemplate`/`sendTemplate` from a bare script with no surrounding scope, those services resolve to an empty `{}` — only `input` and `locale` are guaranteed. Send from within a handler, or wrap standalone calls in an app context. Source: `mailer/service.ts:72-79` (`resolveHandlerContext` returns `{}` when no stored context).
+The handler's `db`, `collections`, and other services are resolved from the active request/job context (AsyncLocalStorage). When you render or send **inside** a hook, route, job, or service, they're fully populated. If you call `renderTemplate`/`sendTemplate` from a bare script with no surrounding scope, those services resolve to an empty `{}` — only `input` and `locale` are guaranteed. Send from within a handler, or wrap standalone calls in an app context.
 </Callout>
 
 ## Sending: `send` vs `sendTemplate`
@@ -206,7 +206,7 @@ await ctx.email.sendTemplate({
 | `locale` | `string` | Optional. Passed to the handler as `args.locale`. |
 
 <Callout type="info" title="sendTemplate is the narrower surface">
-`sendTemplate` does **not** accept `attachments`, `headers`, or `replyTo` — only `send` does. If you need those alongside a template, call `renderTemplate` to get `{ subject, html, text }`, then pass it to `send` with your extras. Source: `mailer/service.ts:159-184`.
+`sendTemplate` does **not** accept `attachments`, `headers`, or `replyTo` — only `send` does. If you need those alongside a template, call `renderTemplate` to get `{ subject, html, text }`, then pass it to `send` with your extras.
 </Callout>
 
 ### `send(options)` — one-off raw mail
@@ -239,7 +239,7 @@ await ctx.email.send({
 | `headers` | `Record<string, string>` | Optional. |
 
 <Callout type="warn" title="send needs a body and a subject">
-`send` throws `"No text or html provided"` if both `html` and `text` are empty, and `subject` is required on the type. For templates, prefer `sendTemplate` so the rendered subject is your fallback. Source: `mailer/service.ts:84-101`, `mailer/types.ts:4-19`.
+`send` throws `"No text or html provided"` if both `html` and `text` are empty, and `subject` is required on the type. For templates, prefer `sendTemplate` so the rendered subject is your fallback.
 </Callout>
 
 ### `renderTemplate(options)` — render without sending
@@ -254,7 +254,7 @@ const { subject, html, text } = await ctx.email.renderTemplate({
 });
 ```
 
-It validates `input` (throwing `ZodError` on a bad shape), throws `Template "X" not found.` for an unknown key, and throws if the handler returns no `subject` or no `html`. Source: `mailer/service.ts:118-154`.
+It validates `input` (throwing `ZodError` on a bad shape), throws `Template "X" not found.` for an unknown key, and throws if the handler returns no `subject` or no `html`.
 
 ### Sending from inside a hook
 
@@ -294,14 +294,14 @@ interface MailerConfig {
 - **`defaults.from`** — used whenever a `send`/`sendTemplate` call omits `from`. If neither is set, the serializer falls back to `"noreply@example.com"`.
 - **`templates`** — collected automatically from `emails/*.ts` by codegen. You normally never write this by hand.
 
-Source: `mailer/types.ts:33-52`, `config/types.ts:499` (`email?: MailerConfig`).
+
 
 ## Adapters
 
 An adapter is the delivery backend. All four extend `MailAdapter` (one abstract method, `send(options: SerializableMailOptions)`) and each lives on its own import path. Pick one; your templates and send calls don't change.
 
 <Callout type="info" title="Adapters import from their own subpath">
-The concrete adapters are **not** re-exported from the root `questpie` barrel — only the abstract `MailAdapter` base and the mailer types are (via `questpie/mailer`). Import each adapter from its dedicated subpath: `questpie/adapters/console`, `questpie/adapters/smtp`, `questpie/adapters/resend`, `questpie/adapters/plunk`. Source: `package.json` exports `"./adapters/*"`, `src/exports/adapters/*`.
+The concrete adapters are **not** re-exported from the root `questpie` barrel — only the abstract `MailAdapter` base and the mailer types are (via `questpie/mailer`). Import each adapter from its dedicated subpath: `questpie/adapters/console`, `questpie/adapters/smtp`, `questpie/adapters/resend`, `questpie/adapters/plunk`.
 </Callout>
 
 ### Console — `questpie/adapters/console`
@@ -319,7 +319,7 @@ new ConsoleAdapter({ logHtml: false });  // both options optional
 | `logHtml` | `boolean` | `false` | When `false`, the HTML body is suppressed with a hint instead of printed. |
 | `logger` | `(message: string) => void` | `console.log` | Where the formatted email is written. |
 
-Source: `adapters/console.adapter.ts:7-17`.
+
 
 ### SMTP — `questpie/adapters/smtp`
 
@@ -344,10 +344,10 @@ new SmtpAdapter({
 | `transport` | `SMTPTransport \| SMTPTransport.Options \| string` | Passed to `nodemailer.createTransport`. |
 | `afterSendCallback` | `(info) => void \| Promise<void>` | Optional. Runs after each send — handy for logging. |
 
-`SmtpAdapter` also has `verify(): Promise<boolean>` (proxies the nodemailer connection check). Source: `adapters/smtp.adapter.ts:10-54`.
+`SmtpAdapter` also has `verify(): Promise<boolean>` (proxies the nodemailer connection check).
 
 <Callout type="info" title="Ethereal for zero-config dev mail">
-`createEtherealSmtpAdapter()` (from `questpie/adapters/smtp`) creates a throwaway [Ethereal](https://ethereal.email) test account and returns an `SmtpAdapter` pre-wired to log a preview URL after each send — no real inbox needed. It returns a `Promise<SmtpAdapter>`, which `MailerConfig.adapter` accepts directly. Dev/testing only (it makes a network call to create the account). Source: `adapters/smtp.adapter.ts:60-81`.
+`createEtherealSmtpAdapter()` (from `questpie/adapters/smtp`) creates a throwaway [Ethereal](https://ethereal.email) test account and returns an `SmtpAdapter` pre-wired to log a preview URL after each send — no real inbox needed. It returns a `Promise<SmtpAdapter>`, which `MailerConfig.adapter` accepts directly. Dev/testing only (it makes a network call to create the account).
 </Callout>
 
 ### Resend — `questpie/adapters/resend`
@@ -369,7 +369,7 @@ resendAdapter({ apiKey: process.env.RESEND_API_KEY! });
 | `userAgent` | `string` | `"questpie-resend-adapter"` | Resend requires this for direct HTTP calls. |
 | `afterSendCallback` | `(response, options) => void \| Promise<void>` | — | Receives the parsed Resend response (`{ id? }`). |
 
-Throws `Resend API error (status statusText): body` on a non-2xx response. Source: `adapters/resend.adapter.ts:11-108`.
+Throws `Resend API error (status statusText): body` on a non-2xx response.
 
 ### Plunk — `questpie/adapters/plunk`
 
@@ -391,7 +391,7 @@ plunkAdapter({ apiKey: process.env.PLUNK_SECRET_KEY! });
 | `afterSendCallback` | `(response, options) => void \| Promise<void>` | — | Receives the parsed Plunk response. |
 
 <Callout type="warn" title="Plunk rejects cc/bcc">
-The Plunk adapter throws if a message sets `cc` or `bcc` — Plunk's transactional API doesn't document them. It also treats a `success: false` body as an error even on an HTTP 2xx. If you need cc/bcc, use SMTP or Resend. Source: `adapters/plunk.adapter.ts:70-96, 125-135`.
+The Plunk adapter throws if a message sets `cc` or `bcc` — Plunk's transactional API doesn't document them. It also treats a `success: false` body as an error even on an HTTP 2xx. If you need cc/bcc, use SMTP or Resend.
 </Callout>
 
 ### Custom adapter
@@ -413,7 +413,7 @@ export class MyAdapter extends MailAdapter {
 }
 ```
 
-Then set `email.adapter: new MyAdapter()` in config. That's the whole contract. Source: `mailer/adapter.ts:6-8`, `mailer/types.ts:24-28` (`SerializableMailOptions` guarantees `from`/`text`/`html`).
+Then set `email.adapter: new MyAdapter()` in config. That's the whole contract.
 
 ## TypeScript
 
@@ -445,7 +445,7 @@ import type {
 } from "questpie/mailer";
 ```
 
-`InferEmailTemplateContext` is a `@deprecated` alias of `InferEmailTemplateInput` — prefer the latter. The union of all registered template keys is available as `KnownEmailNames` (from `questpie`), which falls back to `string & {}` when no templates are registered. Source: `mailer/template.ts:56-69`, `config/app-context.ts:262`.
+The union of all registered template keys is available as `KnownEmailNames` (from `questpie`), which falls back to `string & {}` when no templates are registered.
 
 ## Related
 
@@ -454,5 +454,3 @@ import type {
 - [Services](/docs/concepts/services) — how `ctx.email` and other context services are resolved, and how to add your own.
 - [Validation](/docs/concepts/validation) — the Zod schema on a template is the same validation primitive used across the framework.
 - A runnable example lives in [`examples/tanstack-barbershop`](https://github.com/questpie/questpie/tree/main/examples/tanstack-barbershop) — see `src/questpie/server/emails/` (`appointment-confirmation.ts`, `new-blog-post.ts`) and the `email` block in `src/questpie/server/questpie.config.ts`.
-
-{/* TODO @user: add a screenshot of the admin email-template preview (renderTemplate output) once the admin preview UI is captured. */}

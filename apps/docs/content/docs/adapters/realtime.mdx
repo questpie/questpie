@@ -5,17 +5,17 @@ description: The server-side transport that powers live queries — turn on real
 
 The **realtime adapter** is the server-side transport behind QUESTPIE's live queries. Set `realtime` in your runtime config and every write is recorded to a change **outbox** table; the adapter then signals each app instance to re-run the affected subscriptions and push fresh snapshots over SSE. With no adapter the service polls that outbox on a timer — fine for a single process. Add `pgNotifyAdapter()` or `redisStreamsAdapter({ client })` and changes propagate the instant they happen, across every horizontally-scaled instance.
 
-This page covers the **server** side: the `realtime` config, the outbox/poll model, and each transport adapter's options. The client API — `live()`, `liveIter()`, and the TanStack Query `{ realtime: true }` flag — is taught on [Realtime](/docs/concepts/realtime).
+This page covers the **server** side: the `realtime` config, the outbox/poll model, and each transport adapter's options. The client API — `live()`, `liveIter()`, and the TanStack Query `{ realtime: true }` flag — is taught on [Realtime](/docs/client/realtime).
 
 <Callout type="info" title="Prerequisites">
-Read [Configuration](/docs/concepts/configuration) (where adapters are wired in `questpie.config.ts`) and [Realtime](/docs/concepts/realtime) (the client `live()` API this transport serves).
+Read [Configuration](/docs/concepts/configuration) (where adapters are wired in `questpie.config.ts`) and [Realtime](/docs/client/realtime) (the client `live()` API this transport serves).
 </Callout>
 
 ## What it does
 
 - **Records every change to an outbox.** Each create/update/delete (and bulk variant) appends a row to the `questpie_realtime_log` table — a durable, ordered change log keyed by an auto-incrementing `seq`.
 - **Fans out across instances.** The adapter broadcasts a tiny *notice* ("seq N on collection posts changed") to every process, which then drains the outbox and pushes snapshots to its own SSE subscribers.
-- **Zero-config default.** Turn `realtime` on with `{}` and you get a working transport — polling on a non-Postgres setup, or an auto-wired `pg_notify` listener when a Postgres connection is available.
+- **Zero-config default.** Turn `realtime` on with `true` and you get a working transport — polling on a non-Postgres setup, or an auto-wired `pg_notify` listener when a Postgres connection is available.
 - **Push transports for scale.** `pgNotifyAdapter` rides the database you already run; `redisStreamsAdapter` uses a Redis consumer group; `cloudflareRealtimeAdapter` is backed by a Durable Object.
 - **Privacy-safe by design.** Only a `RealtimeNotice` crosses the wire — never row data. Each subscriber re-runs its own access-controlled query to build its snapshot, so one user's data can't leak through the transport.
 - **Swap with one config line.** The transport is a single `realtime.adapter` value — no app-code change to move from polling to Redis.
@@ -31,16 +31,14 @@ import env from "./env"; // declared + validated in env.ts — see Environment
 
 export default runtimeConfig({
   db: { url: env.DATABASE_URL },
-  // Realtime on. On a Postgres app with no explicit adapter, the service
-  // auto-wires a pg_notify listener; otherwise it polls the outbox every 2s.
-  realtime: {},
+  realtime: true,
 });
 ```
 
-That's the whole server requirement. Subscribe from the client with `client.collections.posts.live(...)` — see [Realtime](/docs/concepts/realtime) for the client API. Source: `packages/questpie/src/server/modules/core/integrated/realtime/types.ts:66`; `packages/questpie/src/server/config/types.ts:544`.
+That's the whole server requirement. Subscribe from the client with `client.collections.posts.live(...)` — see [Realtime](/docs/client/realtime) for the client API.
 
 <Callout type="warn" title="No `realtime` config = no live mode">
-`live()` / `liveIter()` / `{ realtime: true }` all need `realtime` set in the **server** config. The client always wires `client.realtime`, but without server realtime the `POST /realtime` endpoint isn't served and subscriptions error out (via `onError` / a thrown generator) rather than silently degrading. Turn it on before relying on live queries. Source: `packages/questpie/src/client/realtime/stream.ts:84`.
+`live()` / `liveIter()` / `{ realtime: true }` all need `realtime` set in the **server** config. The client always wires `client.realtime`, but without server realtime the `POST /realtime` endpoint isn't served and subscriptions error out (via `onError` / a thrown generator) rather than silently degrading. Turn it on before relying on live queries.
 </Callout>
 
 ## How the transport works
@@ -57,12 +55,12 @@ The flow, from a write to a pushed snapshot:
 The adapter is only the *signal* layer (steps 2-3). The outbox (step 1) and the access-controlled re-run (step 4) happen regardless of which adapter you pick. This is why the notice carries no payload — the snapshot is always rebuilt server-side per subscriber.
 
 <Callout type="info" title="The notice is a cue, not the data">
-A `RealtimeNotice` is `Pick<RealtimeChangeEvent, "seq" | "resourceType" | "resource" | "operation">` — just enough to say *something matching changed*. The full event (with `payload`) lives in the outbox; subscribers never receive another user's rows over the transport. Source: `packages/questpie/src/server/modules/core/integrated/realtime/types.ts:23`.
+A `RealtimeNotice` is `Pick<RealtimeChangeEvent, "seq" | "resourceType" | "resource" | "operation">` — just enough to say *something matching changed*. The full event (with `payload`) lives in the outbox; subscribers never receive another user's rows over the transport.
 </Callout>
 
 ## `RealtimeConfig` — the options
 
-`RealtimeConfig` is the `realtime` key of `QuestpieConfig`. Every field is optional:
+Use `realtime: true` to turn on the default transport. Use an object when you want to configure the transport or tune the SSE/outbox behavior:
 
 ```ts
 interface RealtimeConfig {
@@ -74,7 +72,7 @@ interface RealtimeConfig {
 }
 ```
 
-Source: `packages/questpie/src/server/modules/core/integrated/realtime/types.ts:66`.
+
 
 | Option | Default | What it controls |
 |---|---|---|
@@ -85,7 +83,7 @@ Source: `packages/questpie/src/server/modules/core/integrated/realtime/types.ts:
 | `keepAliveIntervalMs` | `8000` | Interval between `ping` keep-alive events on each `POST /realtime` SSE stream. |
 
 <Callout type="warn" title="Keep `keepAliveIntervalMs` under your idle timeout">
-The default `8000` ms is deliberately under Bun's default 10s `idleTimeout`, so SSE streams survive on an untuned `Bun.serve`. Behind a proxy with a shorter read timeout (some default to 30-60s, but custom ones can be lower), drop it further so the connection never goes idle long enough to be culled. Source: `packages/questpie/src/server/modules/core/integrated/realtime/types.ts:103`.
+The default `8000` ms is deliberately under Bun's default 10s `idleTimeout`, so SSE streams survive on an untuned `Bun.serve`. Behind a proxy with a shorter read timeout (some default to 30-60s, but custom ones can be lower), drop it further so the connection never goes idle long enough to be culled.
 </Callout>
 
 ## The default: poll vs auto `pg_notify`
@@ -93,10 +91,10 @@ The default `8000` ms is deliberately under Bun's default 10s `idleTimeout`, so 
 Omitting `adapter` does **not** always mean naive polling. The service resolves the transport lazily on the first subscription (in `ensureStarted()`, triggered from `subscribe()` — not at process boot), like this:
 
 1. **Explicit `adapter` set** → use it.
-2. **No adapter, but a Postgres connection string is available** → the service lazily constructs a `pgNotifyAdapter` on the `questpie_realtime` channel for you. Most Postgres apps get push delivery from `realtime: {}` with no extra config.
+2. **No adapter, but a Postgres connection string is available** → the service lazily constructs a `pgNotifyAdapter` on the `questpie_realtime` channel for you. Most Postgres apps get push delivery from `realtime: true` with no extra config.
 3. **No adapter and no Postgres connection** → fall back to polling the outbox every `pollIntervalMs` (default 2s).
 
-Source: `packages/questpie/src/server/modules/core/integrated/realtime/service.ts:410-426`; the connection string is threaded from `app._pgConnectionString` in `packages/questpie/src/server/modules/core/services/realtime.ts:19`.
+
 
 <Callout type="info" title="Polling is real, just laggy">
 The poll path is correct, not a downgrade in behavior — it drains the same outbox and pushes the same access-controlled snapshots, just on a 2s timer instead of on-change. It's a fine default for a single instance and local dev. For multiple processes you want a real adapter (next section) so a write on instance A reaches a subscriber on instance B.
@@ -127,7 +125,7 @@ export default runtimeConfig({
 });
 ```
 
-`PgNotifyAdapterOptions` is `{ channel?, client?, connection?, connectionString? }`. You must supply **one** connection source. Source: `packages/questpie/src/server/modules/core/integrated/realtime/adapters/pg-notify.ts:152` (factory), `:24` (constructor).
+`PgNotifyAdapterOptions` is `{ channel?, client?, connection?, connectionString? }`. You must supply **one** connection source.
 
 | Option | Type | Default | Notes |
 |---|---|---|---|
@@ -144,7 +142,7 @@ Behavior:
 - **Uses `LISTEN`/`UNLISTEN` + `pg_notify($1, $2)`.** The notice JSON (`{ seq, resourceType, resource, operation }`) is the channel payload.
 
 <Callout type="info" title="You usually don't need to write this">
-On a Postgres app, `realtime: {}` already auto-wires `pg_notify` on the default channel (see [the default](#the-default-poll-vs-auto-pg-notify) above). Configure `pgNotifyAdapter` explicitly only when you want a **non-default channel**, want to **reuse an existing `pg` client**, or are pointing realtime at a **different database** than your main `db`. Source: `packages/questpie/src/server/modules/core/integrated/realtime/service.ts:410`.
+On a Postgres app, `realtime: true` already auto-wires `pg_notify` on the default channel (see [the default](#the-default-poll-vs-auto-pg-notify) above). Configure `pgNotifyAdapter` explicitly only when you want a **non-default channel**, want to **reuse an existing `pg` client**, or are pointing realtime at a **different database** than your main `db`.
 </Callout>
 
 ## `redisStreamsAdapter` — Redis Streams
@@ -175,7 +173,7 @@ export default runtimeConfig({
 });
 ```
 
-`RedisStreamsAdapterOptions` is `{ client (required), stream?, group?, consumer?, blockMs?, batchSize? }`. Source: `packages/questpie/src/server/modules/core/integrated/realtime/adapters/redis-streams.ts:206` (factory), `:35` (constructor), `:4` (`RedisStreamsClient`).
+`RedisStreamsAdapterOptions` is `{ client (required), stream?, group?, consumer?, blockMs?, batchSize? }`.
 
 | Option | Type | Default | Notes |
 |---|---|---|---|
@@ -203,7 +201,7 @@ type RedisStreamsClient = {
   disconnect?(): void;
 };
 ```
-Only `xAdd` and `xReadGroup` are mandatory. Source: `packages/questpie/src/server/modules/core/integrated/realtime/adapters/redis-streams.ts:4`.
+Only `xAdd` and `xReadGroup` are mandatory.
 </Callout>
 
 ## `cloudflareRealtimeAdapter` — Durable Objects
@@ -227,7 +225,7 @@ export default runtimeConfig({
 });
 ```
 
-`CloudflareRealtimeAdapterOptions` is `{ namespace (required), objectName?, hubPath? }`. The `namespace` is a Durable Object namespace binding, or a **zero-argument** function that returns one (resolved lazily when the adapter first needs it, so you can defer reading it out of your Worker env). Source: `packages/questpie/src/server/modules/core/integrated/realtime/adapters/cloudflare.ts:128` (factory), `:52` (class).
+`CloudflareRealtimeAdapterOptions` is `{ namespace (required), objectName?, hubPath? }`. The `namespace` is a Durable Object namespace binding, or a **zero-argument** function that returns one (resolved lazily when the adapter first needs it, so you can defer reading it out of your Worker env).
 
 | Option | Type | Default | Notes |
 |---|---|---|---|
@@ -235,7 +233,7 @@ export default runtimeConfig({
 | `objectName` | `string` | `"questpie-realtime"` | Name of the DO instance (`idFromName`) all notices route through. |
 | `hubPath` | `string` | `"/__questpie/realtime"` | Internal hub path; the adapter derives `${hubPath}/subscribe` and `${hubPath}/notify`. |
 
-This adapter carries a `runtime: "cloudflare"` discriminator so the Cloudflare fetch/queue handlers detect it, and it's wired together with the **`createCloudflareRealtimeDurableObjectHandler`** export (from `questpie/adapters/cloudflare`) that implements the DO itself. Source: `packages/questpie/src/server/adapters/cloudflare.ts:192`.
+This adapter carries a `runtime: "cloudflare"` discriminator so the Cloudflare fetch/queue handlers detect it, and it's wired together with the **`createCloudflareRealtimeDurableObjectHandler`** export (from `questpie/adapters/cloudflare`) that implements the DO itself.
 
 <Callout type="info" title="Cloudflare realtime is a deployment-specific setup">
 Unlike `pg_notify` / Redis, this adapter requires a Durable Object class bound in your `wrangler` config plus the DO handler. It's part of the Cloudflare Workers deployment story rather than a drop-in line. The other two adapters need no Workers-specific wiring.
@@ -255,7 +253,7 @@ The change log lives in one Drizzle table, `questpie_realtime_log`, created by c
 | `payload` | `jsonb` (default `{}`) — the change detail, kept server-side (never broadcast). |
 | `created_at` | Insert timestamp; powers `retentionDays` cleanup. |
 
-Source: `packages/questpie/src/server/modules/core/integrated/realtime/collection.ts:9`. Cleanup runs automatically: the service deletes rows below the minimum consumed `seq` across active subscribers, with `retentionDays` as an optional extra window.
+
 
 ## TypeScript
 
@@ -272,7 +270,7 @@ import type {
 } from "questpie/realtime";
 ```
 
-Each adapter's option type ships from its own entry — `PgNotifyAdapterOptions` from `questpie/adapters/pg-notify`, `RedisStreamsAdapterOptions` + `RedisStreamsClient` from `questpie/adapters/redis-streams`, `CloudflareRealtimeAdapterOptions` from `questpie/adapters/cloudflare-realtime`. Source: `packages/questpie/src/exports/realtime.ts`; `packages/questpie/src/exports/adapters/*.ts`.
+Each adapter's option type ships from its own entry — `PgNotifyAdapterOptions` from `questpie/adapters/pg-notify`, `RedisStreamsAdapterOptions` + `RedisStreamsClient` from `questpie/adapters/redis-streams`, `CloudflareRealtimeAdapterOptions` from `questpie/adapters/cloudflare-realtime`.
 
 ## Build your own transport
 
@@ -287,13 +285,13 @@ interface RealtimeAdapter {
 }
 ```
 
-`notify` publishes a change to all instances; `subscribe` registers a handler that fires on every received notice (the service uses it to trigger a `drain()`) and returns an unsubscribe function. You only need to move the four notice fields (`seq`, `resourceType`, `resource`, `operation`) — never the payload. Wire your instance as `realtime.adapter`. Source: `packages/questpie/src/server/modules/core/integrated/realtime/adapter.ts:6`. See [Building a plugin](/docs/concepts/build-a-plugin) for the general pattern across every adapter kind.
+`notify` publishes a change to all instances; `subscribe` registers a handler that fires on every received notice (the service uses it to trigger a `drain()`) and returns an unsubscribe function. You only need to move the four notice fields (`seq`, `resourceType`, `resource`, `operation`) — never the payload. Wire your instance as `realtime.adapter`.
 
 ## Related
 
-- [Realtime](/docs/concepts/realtime) — the client API this transport powers: `live()`, `liveIter()`, and the TanStack Query `{ realtime: true }` flag.
+- [Realtime](/docs/client/realtime) — the client API this transport powers: `live()`, `liveIter()`, and the TanStack Query `{ realtime: true }` flag.
 - [Configuration](/docs/concepts/configuration) — where `realtime` lives in `QuestpieConfig`, alongside the other adapters.
 - [Adapters](/docs/adapters) — the hub listing every adapter kind and the swap-the-backend model.
-- [Building a plugin](/docs/concepts/build-a-plugin) — implement `RealtimeAdapter` (or any adapter contract) yourself.
-- [Multi-tenancy](/docs/concepts/multi-tenancy) — how access rules re-run per subscriber keep tenant data isolated over realtime.
+- [Building a plugin](/docs/extend/build-a-plugin) — implement `RealtimeAdapter` (or any adapter contract) yourself.
+- [Multi-tenancy](/docs/extend/multi-tenancy) — how access rules re-run per subscriber keep tenant data isolated over realtime.
 - Runnable example: [`examples/tanstack-barbershop`](https://github.com/questpie/questpie/tree/main/examples/tanstack-barbershop) — a TanStack Start app using realtime via the typed client and TanStack Query bindings.

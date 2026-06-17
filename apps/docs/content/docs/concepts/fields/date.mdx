@@ -32,17 +32,17 @@ That gives `announcements` two `date` columns typed `string` on read, one requir
 
 ## Constructor argument
 
-`f.date()` takes **no arguments**. There is no precision or timezone knob — a calendar date has neither. It always produces a `date` column in Drizzle's `mode: "string"`, so the field data is `string` and the derived schema is `z.string().date()`. Source: `packages/questpie/src/server/modules/core/fields/date.ts:45`.
+`f.date()` takes **no arguments**. There is no precision or timezone knob — a calendar date has neither. It always produces a `date` column in Drizzle's `mode: "string"`, so the field data is `string` and the derived schema is `z.string().date()`.
 
 If you need a timestamp (a moment in time, with timezone) use [`f.datetime()`](/docs/concepts/fields/datetime); for a time of day with no date use [`f.time()`](/docs/concepts/fields/time).
 
 <Callout type="info" title="The value is a string, not a `Date`">
-A `date` field's data type is `string` — an ISO date like `"2024-01-31"`. Its schema (`z.string().date()`) rejects both `Date` objects and full ISO date-time strings (e.g. `"2024-01-31T00:00:00Z"`). Pass the bare date string when you create or update, and expect a string when you read. This is the deliberate difference from `f.datetime()`, whose data *is* a `Date`. Source: `date.ts:26`, `date.ts:49`.
+A `date` field's data type is `string` — an ISO date like `"2024-01-31"`. Its schema (`z.string().date()`) rejects both `Date` objects and full ISO date-time strings (e.g. `"2024-01-31T00:00:00Z"`). Pass the bare date string when you create or update, and expect a string when you read. This is the deliberate difference from `f.datetime()`, whose data *is* a `Date`.
 </Callout>
 
 ## Chained methods
 
-These two methods are specific to `date` (on top of the [shared modifiers](/docs/concepts/fields#shared-methods) every field has). Each returns a new immutable field, so they chain in any order. Source: `date.ts:31`, `date.ts:77`.
+These two methods are specific to `date` (on top of the [shared modifiers](/docs/concepts/fields#shared-methods) every field has). Each returns a new immutable field, so they chain in any order.
 
 | Method | Effect |
 |---|---|
@@ -59,12 +59,12 @@ collection("posts").fields(({ f }) => ({
 ```
 
 <Callout type="warn" title="`.autoNow()` produces a `Date`, but the column stores a date string">
-Both helpers use `() => new Date()` as the value — a full timestamp — even though the column is a date-only string. Drizzle's date-string column serializes that `Date` with `toISOString()` (a full **UTC** ISO timestamp, e.g. `"2024-01-31T12:34:56.789Z"`), and Postgres truncates it to the calendar date on insert. So the stored value is a correct date — but it reflects the **UTC** day, not the local one: near midnight in a non-UTC timezone, "today" can land on the previous or next calendar day. If you need a specific calendar date (a fixed day, or "today" in a particular timezone), set the value explicitly with `.default("2024-01-01")` or a field hook that returns the exact `YYYY-MM-DD` string instead. For real timestamp columns, prefer [`f.datetime().autoNow()`](/docs/concepts/fields/datetime). Source: `date.ts:79` (`defaultValue: () => new Date()`); Drizzle `PgDateString.mapToDriverValue` returns `value.toISOString()`.
+Both helpers use `() => new Date()` as the value — a full timestamp — even though the column is a date-only string. Drizzle's date-string column serializes that `Date` with `toISOString()` (a full **UTC** ISO timestamp, e.g. `"2024-01-31T12:34:56.789Z"`), and Postgres truncates it to the calendar date on insert. So the stored value is a correct date — but it reflects the **UTC** day, not the local one: near midnight in a non-UTC timezone, "today" can land on the previous or next calendar day. If you need a specific calendar date (a fixed day, or "today" in a particular timezone), set the value explicitly with `.default("2024-01-01")` or a field hook that returns the exact `YYYY-MM-DD` string instead. For real timestamp columns, prefer [`f.datetime().autoNow()`](/docs/concepts/fields/datetime).
 </Callout>
 
 ## Filtering — operators
 
-`date` uses the **date-string operator set** (`dateStringOps`), so every date field is filterable with these in a `where` clause. The operand is typed `string` (or `string[]` for `in` / `notIn`) — pass ISO date strings, not `Date` objects. Source: `packages/questpie/src/server/fields/operators/builtin.ts:250`.
+`date` uses the **date-string operator set** (`dateStringOps`), so every date field is filterable with these in a `where` clause. The operand is typed `string` (or `string[]` for `in` / `notIn`) — pass ISO date strings, not `Date` objects.
 
 | Operator | Operand | Matches |
 |---|---|---|
@@ -86,8 +86,6 @@ const { docs } = await app.collections.announcements.find({
 ```
 
 ISO date strings sort lexicographically the same way they sort chronologically, so range filters (`gte` / `lte`) and `orderBy` behave as you expect. The runtime comparison is identical to [`f.datetime()`](/docs/concepts/fields/datetime)'s; only the operand *type* differs — `date` narrows it to `string`. To combine a date filter with a [relation filter](/docs/concepts/relations) (e.g. only announcements whose `author` is active), nest both in the same `where` clause.
-
-{/* TODO @user: once `concepts/querying` exists, link it here as the canonical home of the full query language — `AND` / `OR` / `NOT`, pagination, `orderBy`, and per-field operators (docs-map §1.5). */}
 
 ## When to use it
 
@@ -128,5 +126,3 @@ type AnnouncementFilter = CollectionWhere<"announcements">;  // { validFrom?: { 
 - [`f.time()`](/docs/concepts/fields/time) — a time of day with no date.
 - [Validation](/docs/concepts/validation) — the auto-derived Zod schema and the `.zod()` escape hatch for custom date rules.
 - [Relations](/docs/concepts/relations) — hydrating related records with `with` and filtering by a relation alongside a date filter.
-
-{/* TODO @user: screenshot of a date field rendered in the admin form (date picker). */}

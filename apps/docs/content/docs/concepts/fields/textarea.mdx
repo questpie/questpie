@@ -74,7 +74,7 @@ bio: f.textarea().min(10).max(2000),   // 10–2000 characters, validated on wri
 Everything else comes from the [shared field modifiers](/docs/concepts/fields#shared-methods) — `.required()`, `.default()`, `.localized()`, `.label()`, `.description()`, `.hooks()`, `.access()`, `.admin()`, `.zod()`, and the rest. They behave identically on `textarea` as on any field.
 
 <Callout type="info" title="textarea vs text">
-`f.textarea()` and `f.text({ mode: "text" })` both produce an unbounded Postgres `text` column with the same `string` type and the same string operators. The **only** difference is the type discriminator: `textarea` reports `type: "textarea"`, which drives the admin to a multiline editor; `text` reports `type: "text"` (a single-line input). Pick `textarea` when you want the multiline UI. Source: `packages/questpie/src/server/modules/core/fields/textarea.ts`.
+`f.textarea()` and `f.text({ mode: "text" })` both produce an unbounded Postgres `text` column with the same `string` type and the same string operators. The **only** difference is the type discriminator: `textarea` reports `type: "textarea"`, which drives the admin to a multiline editor; `text` reports `type: "text"` (a single-line input). Pick `textarea` when you want the multiline UI.
 </Callout>
 
 ## Querying
@@ -130,9 +130,7 @@ type Post = CollectionDoc<"posts">;          // { excerpt: string | null; ... }
 type PostFilter = CollectionWhere<"posts">;  // { excerpt?: { contains?: string; ... } }
 ```
 
-The field primitives (`TextareaFieldState`, `TextareaFieldMethods`) are exported from `questpie` for plugin/library authors; app code reaches the value through the generated collection types above. Source: `packages/questpie/src/server/modules/core/fields/textarea.ts`.
-
-{/* TODO @user: add a screenshot of a textarea field rendered in the admin form (multiline input). */}
+The field primitives (`TextareaFieldState`, `TextareaFieldMethods`) are exported from `questpie` for plugin/library authors; app code reaches the value through the generated collection types above.
 
 ## Related
 

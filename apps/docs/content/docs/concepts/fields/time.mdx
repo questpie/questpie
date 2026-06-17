@@ -33,13 +33,15 @@ That gives `businesses` two `time` columns, required on insert, validated agains
 
 ```ts
 await app.collections.businesses.create({
-  data: { name: "Cafe", opensAt: "08:00:00", closesAt: "17:30:00" },
+	name: "Cafe",
+	opensAt: "08:00:00",
+	closesAt: "17:30:00",
 });
 ```
 
 ## Constructor argument
 
-`f.time(config?)` takes one optional config object. Source: `packages/questpie/src/server/modules/core/fields/time.ts:46`.
+`f.time(config?)` takes one optional config object.
 
 | Option | Type | Default | Effect |
 |---|---|---|---|
@@ -52,19 +54,19 @@ preciseAt: f.time({ precision: 3 }),         // time(3), millisecond precision
 clockIn:   f.time({ withSeconds: false }),   // validates "HH:MM"
 ```
 
-The resulting field data is always a `string`. The derived Zod schema is a `z.string().regex(...)` whose pattern depends on `withSeconds`. Source: `time.ts:49`, `time.ts:56`.
+The resulting field data is always a `string`. The derived Zod schema is a `z.string().regex(...)` whose pattern depends on `withSeconds`.
 
 <Callout type="info" title="`precision` is the column; `withSeconds` is the schema">
-`precision` controls the Postgres column's fractional-second storage. `withSeconds` controls only which **input regex** the value is validated against (`HH:MM:SS` vs `HH:MM`) — it does not change the column. They are independent: `f.time({ precision: 3, withSeconds: true })` stores milliseconds and accepts `"14:00:00.500"`. Source: `time.ts:47-55`.
+`precision` controls the Postgres column's fractional-second storage. `withSeconds` controls only which **input regex** the value is validated against (`HH:MM:SS` vs `HH:MM`) — it does not change the column. They are independent: `f.time({ precision: 3, withSeconds: true })` stores milliseconds and accepts `"14:00:00.500"`.
 </Callout>
 
 <Callout type="warn" title="The value is a STRING, not a Date">
-A time field's data is an `"HH:MM:SS"` **string** — there is no date or timezone attached. Don't pass a `Date`; pass the formatted string (`"09:30:00"`). This differs from [`f.datetime()`](/docs/concepts/fields/datetime), whose value is a real `Date`. Source: `time.ts:24-28`.
+A time field's data is an `"HH:MM:SS"` **string** — there is no date or timezone attached. Don't pass a `Date`; pass the formatted string (`"09:30:00"`). This differs from [`f.datetime()`](/docs/concepts/fields/datetime), whose value is a real `Date`.
 </Callout>
 
 ## Chained methods
 
-`f.time()` has **no type-specific chain methods** — it returns a plain field, so only the [shared modifiers](/docs/concepts/fields#shared-methods) apply (`.required()`, `.default("09:00:00")`, `.label()`, `.localized()`, `.array()`, `.virtual()`, …). Source: `time.ts:46`, `time.ts:77` (the `timeFieldType` declares no `methods`).
+`f.time()` has **no type-specific chain methods** — it returns a plain field, so only the [shared modifiers](/docs/concepts/fields#shared-methods) apply (`.required()`, `.default("09:00:00")`, `.label()`, `.localized()`, `.array()`, `.virtual()`, …).
 
 ```ts
 collection("schedules").fields(({ f }) => ({
@@ -75,12 +77,12 @@ collection("schedules").fields(({ f }) => ({
 ```
 
 <Callout type="info" title="No `autoNow()` on time fields">
-`.autoNow()` and `.autoNowUpdate()` are [`f.datetime()`](/docs/concepts/fields/datetime) methods (they set the column to the current `Date`). They do **not** exist on `f.time()`. For a literal default time use the shared `.default("09:00:00")` modifier. Source: `time.ts` (no `methods`), `datetime.ts:96`.
+`.autoNow()` and `.autoNowUpdate()` are [`f.datetime()`](/docs/concepts/fields/datetime) methods (they set the column to the current `Date`). They do **not** exist on `f.time()`. For a literal default time use the shared `.default("09:00:00")` modifier.
 </Callout>
 
 ## Filtering — operators
 
-`time` uses the **date operator set** (`dateOps`), the same set as [`f.datetime()`](/docs/concepts/fields/datetime). Every time field is filterable with these in a `where` clause. The operand is typed `DateInput` (`Date | string`) — pass the time string, e.g. `"12:00:00"`. Source: `packages/questpie/src/server/fields/operators/builtin.ts:218`.
+`time` uses the **date operator set** (`dateOps`), the same set as [`f.datetime()`](/docs/concepts/fields/datetime). Every time field is filterable with these in a `where` clause. The operand is typed `DateInput` (`Date | string`) — pass the time string, e.g. `"12:00:00"`.
 
 | Operator | Operand | Matches |
 |---|---|---|
@@ -141,5 +143,3 @@ type BusinessFilter = CollectionWhere<"businesses">;  // { opensAt?: { gt?: Date
 - [`f.date()`](/docs/concepts/fields/date) — a calendar date only (ISO date string).
 - [Validation](/docs/concepts/validation) — the auto-derived Zod schema and the `.zod()` escape hatch for custom rules.
 - [Relations](/docs/concepts/relations) — the full query language for combining the operators above.
-
-{/* TODO @user: screenshot of a time field rendered in the admin form (time picker). */}

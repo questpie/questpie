@@ -33,7 +33,7 @@ That gives `products` a `stock` column typed `number` on read, required on inser
 
 ## Constructor argument
 
-`f.number()` has three call signatures. The argument selects the **storage mode** (it is positional — there is no general options object). Source: `packages/questpie/src/server/modules/core/fields/number.ts:73`.
+`f.number()` has three call signatures. The argument selects the **storage mode** (it is positional — there is no general options object).
 
 | Call | Column | Read type | Notes |
 |---|---|---|---|
@@ -44,15 +44,15 @@ That gives `products` a `stock` column typed `number` on read, required on inser
 | `f.number("double")` | `doublePrecision` | `number` | 64-bit float. No `.int()`. |
 | `f.number({ mode: "decimal", precision?, scale? })` | `numeric(precision, scale)` (`mode: "number"`) | `number` | Fixed precision. Defaults: `precision: 10`, `scale: 2`. Reads as JS `number`. |
 
-The resulting field data is always `number`. The derived Zod schema is `z.number()`, with `.int()` added automatically for the **integer** and **smallint** modes (`isInt` flag). The float modes (`real`, `double`) and `decimal` accept fractional values. Source: `number.ts:81`, `number.ts:117`.
+The resulting field data is always `number`. The derived Zod schema is `z.number()`, with `.int()` added automatically for the **integer** and **smallint** modes (`isInt` flag). The float modes (`real`, `double`) and `decimal` accept fractional values.
 
 <Callout type="info" title="`bigint` and `decimal` read back as JS `number`">
-Both use Drizzle's `mode: "number"`, so the value type on read/insert/update is a plain JS `number`. That keeps the API uniform, but a `number` only holds integers exactly up to `Number.MAX_SAFE_INTEGER` (2^53 − 1) and `decimal` arithmetic goes through floating point. For money or IDs beyond that range, store the value as `f.text()` (or drop to a raw `bigint`/`numeric` column with [`f.from()`](/docs/concepts/fields)) and do exact math yourself. Source: `number.ts:99`, `number.ts:105`.
+Both use Drizzle's `mode: "number"`, so the value type on read/insert/update is a plain JS `number`. That keeps the API uniform, but a `number` only holds integers exactly up to `Number.MAX_SAFE_INTEGER` (2^53 − 1) and `decimal` arithmetic goes through floating point. For money or IDs beyond that range, store an exact string value with `f.text()` and validate the format with `.zod()`, or create a dedicated custom field type.
 </Callout>
 
 ## Chained methods
 
-These methods are specific to `number` (on top of the [shared modifiers](/docs/concepts/fields#shared-methods) every field has). Each returns a new immutable field, so they chain in any order. Source: `number.ts:39`, `number.ts:182`.
+These methods are specific to `number` (on top of the [shared modifiers](/docs/concepts/fields#shared-methods) every field has). Each returns a new immutable field, so they chain in any order.
 
 | Method | Effect | Schema |
 |---|---|---|
@@ -72,12 +72,12 @@ collection("orders").fields(({ f }) => ({
 All five refinements are applied to the derived Zod schema in `applyRefinements` (`packages/questpie/src/server/fields/derive-schema.ts:136`). They run on create and update.
 
 <Callout type="info" title="`.min()` / `.max()` here are VALUE bounds, not string length">
-On a number field, `.min(n)` / `.max(n)` constrain the numeric **value**. On [`f.text()`](/docs/concepts/fields/text) the same method names constrain **string length** (they map to `minLength` / `maxLength`). Same names, different meaning — sized by the field's type. Source: `number.ts:183`.
+On a number field, `.min(n)` / `.max(n)` constrain the numeric **value**. On [`f.text()`](/docs/concepts/fields/text) the same method names constrain **string length** (they map to `minLength` / `maxLength`). Same names, different meaning — sized by the field's type.
 </Callout>
 
 ## Filtering — operators
 
-`number` uses the **number operator set** (`numberOps`), so every number field is filterable with these in a `where` clause. The operand is typed `number` (or `number[]` for `in` / `notIn`). Source: `packages/questpie/src/server/fields/operators/builtin.ts:167`.
+`number` uses the **number operator set** (`numberOps`), so every number field is filterable with these in a `where` clause. The operand is typed `number` (or `number[]` for `in` / `notIn`).
 
 | Operator | Operand | Matches |
 |---|---|---|
@@ -139,5 +139,3 @@ type ProductFilter = CollectionWhere<"products">; // { stock?: { gt?: number; ..
 - [`f.text()`](/docs/concepts/fields/text) — strings, where `.min()` / `.max()` mean length instead of value.
 - [Validation](/docs/concepts/validation) — the auto-derived Zod schema and the `.zod()` escape hatch for custom numeric rules.
 - [Relations](/docs/concepts/relations) — the full query language for combining the operators above.
-
-{/* TODO @user: screenshot of a number field rendered in the admin form (number input). */}

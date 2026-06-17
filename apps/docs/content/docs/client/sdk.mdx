@@ -59,7 +59,7 @@ const created = await client.collections.posts.create({
 ```
 
 <Callout type="info" title="`AppConfig` is a type, not a value">
-`createClient<AppConfig>(...)` takes the **generated** `AppConfig` (`typeof app`) as a type parameter — there is no runtime app passed to the client. Run `questpie generate` after changing your schema so `AppConfig` (and therefore every client method) stays in sync. The runtime is a `Proxy`, so any string key returns a callable surface even when the type rejects it — unknown collection/route names are compile-time errors only, not runtime guards. Source: `packages/questpie/src/client/index.ts:979`.
+`createClient<AppConfig>(...)` takes the **generated** `AppConfig` (`typeof app`) as a type parameter — there is no runtime app passed to the client. Run `questpie generate` after changing your schema so `AppConfig` (and therefore every client method) stays in sync. The runtime is a `Proxy`, so any string key returns a callable surface even when the type rejects it — unknown collection/route names are compile-time errors only, not runtime guards.
 </Callout>
 
 ## Configuration
@@ -98,7 +98,7 @@ export type QuestpieClientConfig = {
 ```
 
 <Callout type="warn" title="`basePath` must match the server, and `'/'` reads back as `''`">
-The client's `basePath` and the server handler's `basePath` (`createFetchHandler({ basePath })`, `questpieNext(app, { basePath })`, …) must be identical or requests 404. Use `"/"` for a server-only API, `"/api"` for a fullstack app that also serves a frontend. `getBasePath()` returns the **normalized** path — an empty string `""` when `basePath` is `"/"`, not `"/"`. Source: `packages/questpie/src/client/index.ts:983`.
+The client's `basePath` and the server handler's `basePath` (`createFetchHandler({ basePath })`, `questpieNext(app, { basePath })`, …) must be identical or requests 404. Use `"/"` for a server-only API, `"/api"` for a fullstack app that also serves a frontend. `getBasePath()` returns the **normalized** path — an empty string `""` when `basePath` is `"/"`, not `"/"`.
 </Callout>
 
 ## Collections
@@ -144,7 +144,7 @@ const total = await client.collections.posts.count({ where: { published: true } 
 ```
 
 <Callout type="info" title="`find()` returns an envelope; `groupBy` changes its shape">
-Read your rows off `result.docs`, never `result` itself. Pass `groupBy` and the result becomes a `GroupedPaginatedResult` instead — `{ groups: [{ key, value, count, docs }], totalGroups, ... }`, where `limit`/`offset` paginate the **groups**. Both shapes are inferred from your options. Source: `packages/questpie/src/server/collection/crud/types.ts:1415`, `:1431`.
+Read your rows off `result.docs`, never `result` itself. Pass `groupBy` and the result becomes a `GroupedPaginatedResult` instead — `{ groups: [{ key, value, count, docs }], totalGroups, ... }`, where `limit`/`offset` paginate the **groups**. Both shapes are inferred from your options.
 </Callout>
 
 ### Create, update, delete
@@ -173,7 +173,7 @@ await client.collections.posts.restoreById({ id: created.id });
 ```
 
 <Callout type="info" title="`updateById` / `deleteById` are canonical; `update` / `delete` are aliases">
-On the **client**, `update({ id, data })` and `delete({ id })` operate on a single row by id — they are aliases of `updateById` / `deleteById`, kept so the vocabulary reads the same. This is the opposite of the **server** CRUD, where `update` / `delete` are bulk-by-`where`. Prefer the `…ById` names in app code to avoid confusion. Source: `packages/questpie/src/client/index.ts:1445`, `:1452`.
+On the **client**, `update({ id, data })` and `delete({ id })` operate on a single row by id — they are aliases of `updateById` / `deleteById`, kept so the vocabulary reads the same. This is the opposite of the **server** CRUD, where `update` / `delete` are bulk-by-`where`. Prefer the `…ById` names in app code to avoid confusion.
 </Callout>
 
 ### Bulk writes
@@ -200,7 +200,7 @@ const { count } = await client.collections.posts.deleteMany({
 ```
 
 <Callout type="warn" title="`updateMany` / `deleteMany` are claim-checked">
-Bulk operations lock the matching rows and re-evaluate `where` at write time, returning only the rows that won the race. `updateMany` returns the array of written rows — an **empty array means nothing matched at write time** (e.g. you lost a concurrent claim), not an error. `deleteMany`'s `count` is exactly the rows that still matched at delete time. `deleteMany` uses `POST /:collection/delete-many` (not `DELETE`) because it carries a body. Source: `packages/questpie/src/client/index.ts:1301`, `:1331`.
+Bulk operations lock the matching rows and re-evaluate `where` at write time, returning only the rows that won the race. `updateMany` returns the array of written rows — an **empty array means nothing matched at write time** (e.g. you lost a concurrent claim), not an error. `deleteMany`'s `count` is exactly the rows that still matched at delete time. `deleteMany` uses `POST /:collection/delete-many` (not `DELETE`) because it carries a body.
 </Callout>
 
 ### Versions and workflow
@@ -219,7 +219,7 @@ await client.collections.posts.revertToVersion({ id, version: 3 });
 await client.collections.posts.transitionStage({ id, stage: "published" });
 ```
 
-A `Date` `scheduledAt` is serialized via `.toISOString()`; omit it entirely to transition now. Source: `packages/questpie/src/client/index.ts:1233`, `:1256`, `:1275`.
+A `Date` `scheduledAt` is serialized via `.toISOString()`; omit it entirely to transition now.
 
 ### Uploads
 
@@ -241,7 +241,7 @@ const assets = await client.collections.media.uploadMany(files, {
 ```
 
 <Callout type="warn" title="Upload uses XHR, parses plain JSON, and throws `UploadError`">
-The upload path bypasses the `fetch`/SuperJSON pipeline: it sends `credentials: true` over `XMLHttpRequest`, and parses the response with plain `JSON.parse` (no SuperJSON). On failure it throws **`UploadError`** — *not* `QuestpieClientError`. `UploadError` carries `status` and `response`, with messages like `"Upload failed"`, `"Network error during upload"`, or `"Upload cancelled"`. `uploadMany` aborts between files on `signal` and short-circuits to `[]` for an empty array. Source: `packages/questpie/src/client/index.ts:1354`, `:1466`, `:103`.
+The upload path bypasses the `fetch`/SuperJSON pipeline: it sends `credentials: true` over `XMLHttpRequest`, and parses the response with plain `JSON.parse` (no SuperJSON). On failure it throws **`UploadError`** — *not* `QuestpieClientError`. `UploadError` carries `status` and `response`, with messages like `"Upload failed"`, `"Network error during upload"`, or `"Upload cancelled"`. `uploadMany` aborts between files on `signal` and short-circuits to `[]` for an empty array.
 </Callout>
 
 ### Introspection
@@ -251,7 +251,7 @@ const meta = await client.collections.posts.meta(); // title field, timestamps, 
 const schema = await client.collections.posts.schema(); // fields, relations, access (for current user), validation JSON Schema
 ```
 
-`meta()` returns lightweight schema info for building dynamic UIs; `schema()` returns full introspection (including access **evaluated for the current session**) — this is what the admin panel uses to auto-generate forms and tables. Source: `packages/questpie/src/client/index.ts:1346`, `:1350`.
+`meta()` returns lightweight schema info for building dynamic UIs; `schema()` returns full introspection (including access **evaluated for the current session**) — this is what the admin panel uses to auto-generate forms and tables.
 
 ### Collection method reference
 
@@ -297,11 +297,11 @@ const next = await client.globals.settings.update(
 ```
 
 <Callout type="warn" title="`globals.update` takes the data object directly">
-Because a global is a singleton, `update` takes the **data object as its first argument** — `update(data, options?)` — not the `{ id, data }` shape that collections use. The second argument is the query options (`with` / `locale` / `localeFallback` / `stage`). Mixing them up (`update({ id, data })`) writes a bogus `id` field. Source: `packages/questpie/src/client/index.ts:1561`.
+Because a global is a singleton, `update` takes the **data object as its first argument** — `update(data, options?)` — not the `{ id, data }` shape that collections use. The second argument is the query options (`with` / `locale` / `localeFallback` / `stage`). Mixing them up (`update({ id, data })`) writes a bogus `id` field.
 </Callout>
 
 <Callout type="info" title="`get()` is typed non-null, but a global can be empty">
-The client types `get()` as non-null for ergonomics, while the underlying global CRUD can return `null` before the singleton has ever been written. In practice a global resolves to its default/empty record once initialized; guard for the unwritten case if you read a global before any `update`. Source: `packages/questpie/src/client/index.ts:678`.
+The client types `get()` as non-null for ergonomics, while the underlying global CRUD can return `null` before the singleton has ever been written. In practice a global resolves to its default/empty record once initialized; guard for the unwritten case if you read a global before any `update`.
 </Callout>
 
 The remaining global methods mirror collections, with the singleton shapes:
@@ -341,7 +341,7 @@ const url = client.routes.admin.stats.url; // "http://localhost:3000/api/admin/s
 ```
 
 <Callout type="info" title="The routes proxy is callable at any depth">
-`client.routes` is a `Proxy` — traversing deeper builds the URL path, and **calling** any node sends the request (default `POST`). Segment names are converted camelCase → kebab-case (`adminStats` → `admin-stats`). Method names are matched case-insensitively (`.get`, `.post`, `.put`, `.delete`, `.patch`). Untyped apps degrade to a permissive `Record<string, any>` so a typed client stays assignable to `QuestpieClient<any>`. Source: `packages/questpie/src/client/index.ts:1719`.
+`client.routes` is a `Proxy` — traversing deeper builds the URL path, and **calling** any node sends the request (default `POST`). Segment names are converted camelCase → kebab-case (`adminStats` → `admin-stats`). Method names are matched case-insensitively (`.get`, `.post`, `.put`, `.delete`, `.patch`). Untyped apps degrade to a permissive `Record<string, any>` so a typed client stays assignable to `QuestpieClient<any>`.
 </Callout>
 
 ## Search
@@ -365,7 +365,7 @@ const results = await client.search.search({
 await client.search.reindex("posts");
 ```
 
-`SearchResponse` is `{ docs: PopulatedSearchResult[]; total: number; facets? }`, where each doc is `T & { _collection, _search }`. `reindex` returns `{ success, collection }`; its server-side access defaults to the target collection's `update` rule. Source: `packages/questpie/src/client/index.ts:924`, `:933`, `:849`.
+`SearchResponse` is `{ docs: PopulatedSearchResult[]; total: number; facets? }`, where each doc is `T & { _collection, _search }`. `reindex` returns `{ success, collection }`; its server-side access defaults to the target collection's `update` rule.
 
 ## Realtime — live queries
 
@@ -408,11 +408,11 @@ const unsubscribe = client.globals.settings.live({}, (snapshot) => {
 ```
 
 <Callout type="warn" title="`live()` carries a SUBSET of query options">
-Live queries only carry `where`, `with`, `limit`, `offset`, `orderBy`, and `locale` on the wire (`LiveQueryOptions`) — they deliberately **exclude** `columns`, `groupBy`, `search`, `includeDeleted`, and `stage`, because each snapshot is a full query result re-run server-side from those fields. Globals carry `with` + `locale` only. Pass an unsupported option and it is dropped, not applied. Source: `packages/questpie/src/client/index.ts:325`, `:338`.
+Live queries only carry `where`, `with`, `limit`, `offset`, `orderBy`, and `locale` on the wire (`LiveQueryOptions`) — they deliberately **exclude** `columns`, `groupBy`, `search`, `includeDeleted`, and `stage`, because each snapshot is a full query result re-run server-side from those fields. Globals carry `with` + `locale` only. Pass an unsupported option and it is dropped, not applied.
 </Callout>
 
 <Callout type="info" title="Always provide an unsubscribe path — and handle `onError`">
-The callback form returns an unsubscribe function; call it (or pass `opts.signal` and abort) when the component unmounts, or the SSE subscription leaks. The `onError` callback fires when the connection fails — wire it so a dropped stream surfaces instead of an infinite loading state. `liveIter()` only accepts `signal` (terminate by aborting it); it has no `onError`. Changing `setLocale()` does **not** re-key already-open subscriptions — locale is carried per-topic at subscribe time. Source: `packages/questpie/src/client/index.ts:401`, `:1784`.
+The callback form returns an unsubscribe function; call it (or pass `opts.signal` and abort) when the component unmounts, or the SSE subscription leaks. The `onError` callback fires when the connection fails — wire it so a dropped stream surfaces instead of an infinite loading state. `liveIter()` only accepts `signal` (terminate by aborting it); it has no `onError`. Changing `setLocale()` does **not** re-key already-open subscriptions — locale is carried per-topic at subscribe time.
 </Callout>
 
 ### Low-level realtime API
@@ -435,10 +435,10 @@ for await (const snap of client.realtime.stream(topic)) { /* ... */ }
 client.realtime.destroy(); // tear down the multiplexer (re-creates lazily on next use)
 ```
 
-`buildCollectionTopic(name, options?)` and `buildGlobalTopic(name, options?)` return a `TopicConfig` (`{ resourceType, resource, ...defined options }`) — undefined option keys are omitted so the topic hash is stable. Both are value exports from `questpie/client`. `client.realtime` exposes `subscribe`, `stream`, `destroy`, and the `topicCount` / `subscriberCount` getters (which read `0` before the multiplexer is created). Source: `packages/questpie/src/client/realtime/stream.ts:135`, `:185`.
+`buildCollectionTopic(name, options?)` and `buildGlobalTopic(name, options?)` return a `TopicConfig` (`{ resourceType, resource, ...defined options }`) — undefined option keys are omitted so the topic hash is stable. Both are value exports from `questpie/client`. `client.realtime` exposes `subscribe`, `stream`, `destroy`, and the `topicCount` / `subscriberCount` getters (which read `0` before the multiplexer is created).
 
 <Callout type="info" title="One SSE connection for every topic">
-The realtime API lazily creates a single `RealtimeMultiplexer` on the first `subscribe`/`stream`, and runs **all** topics over one `POST /realtime` connection — this sidesteps the browser's HTTP/1.1 six-connections-per-domain limit. The connect body is plain JSON (not SuperJSON); reconnects are debounced with exponential backoff. Source: `packages/questpie/src/client/realtime/multiplexer.ts:63`.
+The realtime API lazily creates a single `RealtimeMultiplexer` on the first `subscribe`/`stream`, and runs **all** topics over one `POST /realtime` connection — this sidesteps the browser's HTTP/1.1 six-connections-per-domain limit. The connect body is plain JSON (not SuperJSON); reconnects are debounced with exponential backoff.
 </Callout>
 
 ## Localization
@@ -456,7 +456,7 @@ client.setLocale(); // pass nothing to clear the locale header
 Per-call locale overrides go through the method `options` instead — e.g. `find({ where, locale: "de" })` or `create(data, { locale: "de" })` — which serialize into the query string and take precedence over the header for that one call.
 
 <Callout type="warn" title="`setLocale` mutates shared headers; it does not touch open SSE streams">
-`setLocale(locale)` rewrites the client's shared default headers in place, so it affects **every** subsequent collection / global / route / search request. It does **not** re-key already-open realtime subscriptions — those carry their locale per-topic from when they were opened. Re-subscribe (or pass `locale` in the live options) to change a live query's locale. Source: `packages/questpie/src/client/index.ts:1784`.
+`setLocale(locale)` rewrites the client's shared default headers in place, so it affects **every** subsequent collection / global / route / search request. It does **not** re-key already-open realtime subscriptions — those carry their locale per-topic from when they were opened. Re-subscribe (or pass `locale` in the live options) to change a live query's locale.
 </Callout>
 
 ## Error handling
@@ -479,7 +479,7 @@ try {
 }
 ```
 
-`QuestpieClientError` carries `status`, `statusText`, `url`, and — when the body is an `ApiErrorShape` — `code`, `fieldErrors`, and `context`. Uploads are the exception: they throw `UploadError` (see [Uploads](#uploads)). Source: `packages/questpie/src/client/index.ts:134`, `:1035`.
+`QuestpieClientError` carries `status`, `statusText`, `url`, and — when the body is an `ApiErrorShape` — `code`, `fieldErrors`, and `context`. Uploads are the exception: they throw `UploadError` (see [Uploads](#uploads)).
 
 ## Framework adapters
 
@@ -496,7 +496,7 @@ export const { GET, POST, PATCH, DELETE, PUT, OPTIONS, HEAD } =
   questpieNextRouteHandlers(app, { basePath: "/api" });
 ```
 
-`questpieNextRouteHandlers(app, config?)` returns `{ GET, POST, PATCH, DELETE, PUT, OPTIONS, HEAD }` all bound to the same handler — the idiomatic App Router catch-all. `questpieNext(app, config?)` is the single-handler form (returns a `(request) => Promise<Response>`), converting an out-of-base request into a `404` JSON. `@questpie/next` has a single `.` export (no `/server` subpath). Source: `packages/next/src/server.ts:22`, `:37`.
+`questpieNextRouteHandlers(app, config?)` returns `{ GET, POST, PATCH, DELETE, PUT, OPTIONS, HEAD }` all bound to the same handler — the idiomatic App Router catch-all. `questpieNext(app, config?)` is the single-handler form (returns a `(request) => Promise<Response>`), converting an out-of-base request into a `404` JSON. `@questpie/next` has a single `.` export (no `/server` subpath).
 
 ### Hono — `@questpie/hono/server`
 
@@ -511,7 +511,7 @@ server.route("/", questpieHono(app, { basePath: "/api" }));
 export default server;
 ```
 
-`questpieHono(app, config?)` returns a Hono app mounting a catch-all `${basePath}/*`; mount it with `server.route("/", …)`. It forces `accessMode: "user"` and reads context from `c.get("appContext")` / `c.get("user")` when present. Add `questpieMiddleware(app)` if you want QUESTPIE's context vars (`app`, `appContext`, `user`) on your own Hono routes. For custom routes fully typed via Hono RPC, `createClientFromHono` merges a QUESTPIE client with an `hc` client. Source: `packages/hono/src/server.ts:74`, `:33`.
+`questpieHono(app, config?)` returns a Hono app mounting a catch-all `${basePath}/*`; mount it with `server.route("/", …)`. It forces `accessMode: "user"` and reads context from `c.get("appContext")` / `c.get("user")` when present. Add `questpieMiddleware(app)` if you want QUESTPIE's context vars (`app`, `appContext`, `user`) on your own Hono routes. For custom routes fully typed via Hono RPC, `createClientFromHono` merges a QUESTPIE client with an `hc` client.
 
 ### Elysia — `@questpie/elysia/server`
 
@@ -526,10 +526,10 @@ const server = new Elysia()
 export default server;
 ```
 
-`questpieElysia(app, config?)` returns an Elysia plugin (`.use(...)`) with a catch-all `/*` under `prefix=basePath`, forcing `accessMode: "user"` and returning `404` JSON when out of base. For custom routes fully typed via Eden Treaty, `createClientFromEden` merges a QUESTPIE client with an Eden client. Source: `packages/elysia/src/server.ts:72`.
+`questpieElysia(app, config?)` returns an Elysia plugin (`.use(...)`) with a catch-all `/*` under `prefix=basePath`, forcing `accessMode: "user"` and returning `404` JSON when out of base. For custom routes fully typed via Eden Treaty, `createClientFromEden` merges a QUESTPIE client with an Eden client.
 
 <Callout type="info" title="One client, swappable backend">
-`createClient<AppConfig>` is the same regardless of which adapter serves the API — only the server mount changes. Keep `baseURL` + `basePath` aligned with the adapter and every collection/global/route call works unchanged across Next, Hono, and Elysia. The Hono and Elysia packages also ship framework-native client helpers (`createClientFromHono`, `createClientFromEden`) for typing *custom* routes through Hono RPC / Eden Treaty while keeping QUESTPIE's CRUD surface. Source: `packages/hono/src/client.ts:60`, `packages/elysia/src/client.ts:59`.
+`createClient<AppConfig>` is the same regardless of which adapter serves the API — only the server mount changes. Keep `baseURL` + `basePath` aligned with the adapter and every collection/global/route call works unchanged across Next, Hono, and Elysia. The Hono and Elysia packages also ship framework-native client helpers (`createClientFromHono`, `createClientFromEden`) for typing *custom* routes through Hono RPC / Eden Treaty while keeping QUESTPIE's CRUD surface.
 </Callout>
 
 ## TypeScript
@@ -573,15 +573,13 @@ type Post = PostsFindResult["docs"][number];
 type AppClient = typeof client; // hand the whole client to helpers
 ```
 
-`QuestpieClientConfig`, `QuestpieClient`, `QuestpieClientError`, `UploadError`, `UploadOptions`, the search types, the live/topic types, and the shared query types (`Where`, `With`, `FindManyOptions`, `ApplyQuery`, `FindResult`, …) are all exported from `questpie/client`. The `createClient`/`Where`/`With`/`FindResult` re-exports are exactly what `@questpie/tanstack-query` builds its hooks on. Source: `packages/questpie/src/client/index.ts:215`, `packages/questpie/src/exports/client.ts`.
+`QuestpieClientConfig`, `QuestpieClient`, `QuestpieClientError`, `UploadError`, `UploadOptions`, the search types, the live/topic types, and the shared query types (`Where`, `With`, `FindManyOptions`, `ApplyQuery`, `FindResult`, …) are all exported from `questpie/client`. The `createClient`/`Where`/`With`/`FindResult` re-exports are exactly what `@questpie/tanstack-query` builds its hooks on.
 
 ## Related
 
 - [Getting started](/docs/getting-started) — scaffolds `src/lib/client.ts` and wires the adapter for you.
-- [TanStack Query](/docs/concepts/tanstack-query) — `queryOptions` / `mutationOptions` builders over this client, with realtime-backed live queries.
+- [TanStack Query](/docs/client/tanstack-query) — `queryOptions` / `mutationOptions` builders over this client, with realtime-backed live queries.
 - [Collections](/docs/concepts/collections) — the server definition behind `client.collections.*` (CRUD, query language, uploads).
 - [Globals](/docs/concepts/globals) — the singleton counterpart behind `client.globals.*`.
 - [Routes](/docs/concepts/routes) — defining the custom endpoints `client.routes.*` calls.
 - Runnable example: [`examples/tanstack-barbershop`](https://github.com/questpie/questpie/tree/main/examples/tanstack-barbershop) — a fullstack app using the typed client end to end.
-
-{/* TODO @user: optional — add a screenshot of the network tab / a live query updating in the browser once a dev server is running (preview tools or manual capture). */}

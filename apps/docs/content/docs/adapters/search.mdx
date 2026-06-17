@@ -11,7 +11,7 @@ Read [Collections](/docs/concepts/collections) first — search indexes collecti
 
 ## What it does
 
-- **One config line, search everywhere.** Set `search` in `questpie.config.ts` (or omit it for the default) and you get `app.search.search(...)` on the server, a `search` method on the [typed client](/docs/concepts/client-sdk), and per-collection indexing — no extra wiring.
+- **One config line, search everywhere.** Set `search` in `questpie.config.ts` (or omit it for the default) and you get `app.search.search(...)` on the server, a `search` method on the [typed client](/docs/client/sdk), and per-collection indexing — no extra wiring.
 - **Lexical by default.** The default Postgres adapter does Postgres full-text search (FTS) plus trigram fuzzy matching, with no extra services — just one extension.
 - **Semantic when you need it.** Swap in the pgvector adapter with an embedding provider (OpenAI or your own) to rank by meaning, not just keyword overlap.
 - **Faceted + filtered.** Return facet aggregations (counts, ranges, hierarchies) and filter by collection, locale, or indexed metadata.
@@ -71,7 +71,7 @@ const { docs, total } = await client.search.search({ query: "release notes" });
 ```
 
 <Callout type="warn" title="The default adapter needs the `pg_trgm` extension">
-Trigram fuzzy matching requires Postgres' `pg_trgm` extension, and **QUESTPIE does not auto-create extensions** (it is drizzle-native). On local dev, the `create-questpie` starters provision it for you (the `docker compose up` Postgres container runs `CREATE EXTENSION IF NOT EXISTS "pg_trgm";` on first init). Without the extension, `db:push` fails when it tries to build the trigram index. On managed Postgres, enable it through your provider. See [Required Postgres extensions](#required-postgres-extensions) below. Source: `packages/create-questpie/templates/tanstack-start/docker/init-extensions.sql:11`.
+Trigram fuzzy matching requires Postgres' `pg_trgm` extension, and **QUESTPIE does not auto-create extensions** (it is drizzle-native). On local dev, the `create-questpie` starters provision it for you (the `docker compose up` Postgres container runs `CREATE EXTENSION IF NOT EXISTS "pg_trgm";` on first init). Without the extension, `db:push` fails when it tries to build the trigram index. On managed Postgres, enable it through your provider. See [Required Postgres extensions](#required-postgres-extensions) below.
 </Callout>
 
 ## Example → real output
@@ -105,10 +105,10 @@ const res = await app.search.search({
 // }
 ```
 
-The **client** `search` returns the same data hydrated into full records (so you get the live row, not just the index snapshot): `{ docs, total, facets? }`, where each `doc` is your collection row plus a `_collection` name and a `_search` block (`score`, `highlights`, `indexedTitle`, `indexedContent`). Source: `packages/questpie/src/client/index.ts:881` (`PopulatedSearchResult`), `:912` (client `SearchResponse`).
+The **client** `search` returns the same data hydrated into full records (so you get the live row, not just the index snapshot): `{ docs, total, facets? }`, where each `doc` is your collection row plus a `_collection` name and a `_search` block (`score`, `highlights`, `indexedTitle`, `indexedContent`).
 
 <Callout type="info" title="Empty query = browse mode">
-Call `search` with `query: ""` and the adapter skips ranking and returns rows ordered by `updatedAt DESC` (still scoped by `collections`, `locale`, and `filters`). Useful for "latest in this collection" listings. Source: `packages/questpie/src/server/modules/core/integrated/search/adapters/postgres.ts:257`.
+Call `search` with `query: ""` and the adapter skips ranking and returns rows ordered by `updatedAt DESC` (still scoped by `collections`, `locale`, and `filters`). Useful for "latest in this collection" listings.
 </Callout>
 
 ## Search options
@@ -127,7 +127,7 @@ Both `app.search.search(...)` and `client.search.search(...)` take the same `Sea
 | `highlights` | `boolean` | `true` | Wrap matches in `<mark>` in the returned snippets. |
 | `facets` | `FacetDefinition[]` | — | Request facet aggregations (see [Facets](#facets)). |
 
-Source: `packages/questpie/src/server/modules/core/integrated/search/types.ts:287`.
+
 
 `filters` matches the `metadata` you index per collection. For example, with `.searchable({ metadata: (r) => ({ status: r.status }) })`:
 
@@ -139,14 +139,14 @@ await app.search.search({
 ```
 
 <Callout type="info" title="Access filtering is internal">
-`SearchOptions` also carries `accessFilters` server-side, which the core search route fills in from each collection's [access rules](/docs/concepts/access-control) so results respect row-level access. You don't pass it by hand — the HTTP `search` endpoint derives it. Reindexing is gated the same way: `POST /api/search/reindex/:collection` checks the adapter's `reindexAccess` config, which **defaults to the target collection's `update` access rule**. Source: `types.ts:354` (`accessFilters`), `:259` (`CollectionAccessFilter`), adapter `buildAccessCondition` at `postgres.ts:324`; `reindexAccess` at `packages/questpie/src/server/adapters/types.ts:47` (default policy in `routes/search.ts:64`).
+`SearchOptions` also carries `accessFilters` server-side, which the core search route fills in from each collection's [access rules](/docs/concepts/access-control) so results respect row-level access. You don't pass it by hand — the HTTP `search` endpoint derives it. Reindexing is gated the same way: `POST /api/search/reindex/:collection` checks the adapter's `reindexAccess` config, which **defaults to the target collection's `update` access rule**.
 </Callout>
 
 ## Configuring the index: `.searchable()`
 
 `.searchable()` on a collection is the single source of truth for **what** gets indexed — the `title`, `content`, `metadata`, and `facets` you pass are taught in full on [Collections → Searchable](/docs/concepts/collections#searchable). This page only covers the two keys that are search-adapter-specific: `embeddings` (override the vector the [pgvector adapter](#the-pgvector-adapter-semantic-search) generates) and `manual`.
 
-`SearchableConfig` is `{ disabled?, title?, content?, embeddings?, metadata?, facets?, manual? }`. `manual: true` means the collection is searchable but you index it yourself — no automatic re-index on write (see [Indexing](#indexing)). Source: `packages/questpie/src/server/modules/core/integrated/search/types.ts:94`.
+`SearchableConfig` is `{ disabled?, title?, content?, embeddings?, metadata?, facets?, manual? }`. `manual: true` means the collection is searchable but you index it yourself — no automatic re-index on write (see [Indexing](#indexing)).
 
 ### Facets
 
@@ -175,7 +175,7 @@ const { facets } = await app.search.search({
 // facets: [{ field: "category", values: [{ value: "sneakers", count: 12 }, …] }]
 ```
 
-A `FacetFieldConfig` is `true | { type: "array" } | { type: "range"; buckets } | { type: "hierarchy"; separator? }`. A per-query `FacetDefinition` is `{ field, limit? (10), sortBy? ("count" | "alpha") }`. Facet keys should match your `metadata` field names. Source: `types.ts:34` (field config), `types.ts:181` (query definition).
+A `FacetFieldConfig` is `true | { type: "array" } | { type: "range"; buckets } | { type: "hierarchy"; separator? }`. A per-query `FacetDefinition` is `{ field, limit? (10), sortBy? ("count" | "alpha") }`. Facet keys should match your `metadata` field names.
 
 ## Search modes
 
@@ -187,10 +187,10 @@ A `FacetFieldConfig` is `true | { type: "array" } | { type: "range"; buckets } |
 | `hybrid` *(default)* | FTS + trigram fused (`ts_rank_cd×ftsWeight + similarity×(1−ftsWeight)`) | FTS + trigram fused — forwards `hybrid` to the base adapter (no semantic yet) |
 | `semantic` | not supported | embeds the query, ranks by cosine distance over the `embedding` column |
 
-The Postgres adapter's hybrid score combines the FTS rank (`ts_rank_cd`) with a trigram `similarity(title, query)` so typos and partial words still match; the trigram term lives in `hybrid`, not `lexical`. The pgvector adapter forwards every non-semantic mode to the base adapter unchanged — so its `lexical` and `hybrid` behave exactly like the Postgres adapter's. Source: `postgres.ts:266` (mode routing), `pgvector.ts:229` (mode forwarding).
+The Postgres adapter's hybrid score combines the FTS rank (`ts_rank_cd`) with a trigram `similarity(title, query)` so typos and partial words still match; the trigram term lives in `hybrid`, not `lexical`. The pgvector adapter forwards every non-semantic mode to the base adapter unchanged — so its `lexical` and `hybrid` behave exactly like the Postgres adapter's.
 
 <Callout type="warn" title="pgvector `hybrid` doesn't fuse in the vector score yet">
-The pgvector adapter fully implements `semantic` (the vector path). Its `lexical` and `hybrid` modes forward to the base Postgres adapter, so `hybrid` gives you FTS + trigram fused — but **not** the semantic (vector) component. Fusing the embedding score into `hybrid` is a documented follow-up. If you want meaning-based recall today, request `mode: "semantic"` explicitly. Source: `pgvector.ts:229`.
+The pgvector adapter fully implements `semantic` (the vector path). Its `lexical` and `hybrid` modes forward to the base Postgres adapter, so `hybrid` gives you FTS + trigram fused — but **not** the semantic (vector) component. Fusing the embedding score into `hybrid` is a documented follow-up. If you want meaning-based recall today, request `mode: "semantic"` explicitly.
 </Callout>
 
 ## The Postgres adapter (default)
@@ -211,7 +211,7 @@ createPostgresSearchAdapter({
 | `trigramThreshold` | `number` | `0.3` | Minimum trigram similarity (0–1) for a fuzzy match. |
 | `ftsWeight` | `number` | `0.7` | FTS weight in hybrid scoring; trigram weight is `1 − ftsWeight`. |
 
-Its capabilities are `{ lexical: true, trigram: true, semantic: false, hybrid: true, facets: true }`. FTS uses `to_tsvector('simple', …)` — a language-agnostic config with **no stemming** (so "run" won't match "running"; trigram matching softens this for typos and prefixes). The index lives in two tables, `questpie_search` and `questpie_search_facets`, which QUESTPIE creates through Drizzle from the adapter's `getTableSchemas()`. Source: `postgres.ts:1113` (factory), `:83` (capabilities), `:124` (FTS vector).
+Its capabilities are `{ lexical: true, trigram: true, semantic: false, hybrid: true, facets: true }`. FTS uses `to_tsvector('simple', …)` — a language-agnostic config with **no stemming** (so "run" won't match "running"; trigram matching softens this for typos and prefixes). The index lives in two tables, `questpie_search` and `questpie_search_facets`, which QUESTPIE creates through Drizzle from the adapter's `getTableSchemas()`.
 
 ## The pgvector adapter (semantic search)
 
@@ -244,10 +244,10 @@ export default runtimeConfig({
 | `trigramThreshold` | `number` | `0.3` | Inherited — passed to the internal Postgres adapter. |
 | `ftsWeight` | `number` | `0.7` | Inherited — passed to the internal Postgres adapter. |
 
-Its capabilities are `{ lexical: true, trigram, semantic: true, hybrid: true, facets: true }`. On `index()`, it generates an embedding from the title + content (or uses one returned by your `.searchable({ embeddings })` override) and stores it in the `embedding vector(N)` column, where `N` is the provider's dimension count. Semantic search excludes rows whose `embedding` is still `NULL`. Source: `pgvector.ts:416` (factory), `:153` (class), `:255` (`searchSemantic`).
+Its capabilities are `{ lexical: true, trigram, semantic: true, hybrid: true, facets: true }`. On `index()`, it generates an embedding from the title + content (or uses one returned by your `.searchable({ embeddings })` override) and stores it in the `embedding vector(N)` column, where `N` is the provider's dimension count. Semantic search excludes rows whose `embedding` is still `NULL`.
 
 <Callout type="warn" title="pgvector embedding dimensions are fixed at migration time">
-The `embedding vector(N)` column is sized from your embedding provider's `dimensions` when the migration is generated. Changing the provider (or its `dimensions`) later means the column no longer matches — re-generate/alter the column and re-index. The `embedding` column is **pgvector-only**: it is managed by a raw-SQL migration, not the shared Drizzle schema, so the plain Postgres adapter never creates a `vector` column it can't back. Source: `pgvector.ts:213` (column migration), `:282` (raw identifier note).
+The `embedding vector(N)` column is sized from your embedding provider's `dimensions` when the migration is generated. Changing the provider (or its `dimensions`) later means the column no longer matches — re-generate/alter the column and re-index. The `embedding` column is **pgvector-only**: it is managed by a raw-SQL migration, not the shared Drizzle schema, so the plain Postgres adapter never creates a `vector` column it can't back.
 </Callout>
 
 ### Embedding providers
@@ -274,7 +274,7 @@ createOpenAIEmbeddingProvider({
 | `dimensions` | `number` | `1536` | Must match the model: `3-small` → 1536/512, `3-large` → 3072/256/1024, `ada-002` → 1536 fixed. |
 | `baseUrl` | `string` | `"https://api.openai.com/v1"` | Override for OpenAI-compatible APIs/proxies. |
 
-Source: `packages/questpie/src/server/modules/core/integrated/search/providers/embeddings.ts:128`.
+
 
 **Custom / local** — `createCustomEmbeddingProvider(options)` wraps any embedding service (a local model, a different API). Provide `generate`; `generateBatch` is optional and falls back to `Promise.all` of `generate`:
 
@@ -289,7 +289,7 @@ createCustomEmbeddingProvider({
 });
 ```
 
-Source: `embeddings.ts:216`.
+
 
 ## Required Postgres extensions
 
@@ -302,16 +302,16 @@ QUESTPIE is **drizzle-native and does not auto-create Postgres extensions** — 
 
 How to provide them:
 
-- **Local dev (starters):** `create-questpie` projects mount an init script into the Postgres container, so `docker compose up` runs `CREATE EXTENSION IF NOT EXISTS "pg_trgm";` on first cluster init — `db:push` works out of the box. For pgvector, add `CREATE EXTENSION IF NOT EXISTS "vector";` to that script (`docker/init-extensions.sql`) and use a Postgres image that bundles pgvector. Source: `packages/create-questpie/templates/tanstack-start/docker/init-extensions.sql`.
+- **Local dev (starters):** `create-questpie` projects mount an init script into the Postgres container, so `docker compose up` runs `CREATE EXTENSION IF NOT EXISTS "pg_trgm";` on first cluster init — `db:push` works out of the box. For pgvector, add `CREATE EXTENSION IF NOT EXISTS "vector";` to that script (`docker/init-extensions.sql`) and use a Postgres image that bundles pgvector.
 - **Managed Postgres:** enable the extension through your provider (most expose `pg_trgm` and `pgvector` as one-click or `CREATE EXTENSION` in a console).
 
 <Callout type="info" title="External adapters need no tables or extensions">
-The Postgres and pgvector adapters are *local* — they return their tables from `getTableSchemas()` so QUESTPIE includes them in Drizzle migrations, and they declare extensions. A search adapter that points at an external service (Meilisearch, Elasticsearch) returns no table schemas and needs no Postgres extensions. Source: `types.ts:671` (`SearchAdapter`), `postgres.ts:1086` (`getTableSchemas`).
+The Postgres and pgvector adapters are *local* — they return their tables from `getTableSchemas()` so QUESTPIE includes them in Drizzle migrations, and they declare extensions. A search adapter that points at an external service (Meilisearch, Elasticsearch) returns no table schemas and needs no Postgres extensions.
 </Callout>
 
 ## Indexing
 
-You almost never index by hand. Searchable collections are re-indexed automatically after a write: the search service batches changed records over a 100 ms debounce window and dispatches the core `index-records` [job](/docs/concepts/jobs) (when a [queue adapter](/docs/concepts/configuration) is configured), falling back to synchronous indexing otherwise. Source: `service.ts:157` (`scheduleIndex`).
+You almost never index by hand. Searchable collections are re-indexed automatically after a write: the search service batches changed records over a 100 ms debounce window and dispatches the core `index-records` [job](/docs/concepts/jobs) (when a [queue adapter](/docs/concepts/configuration) is configured), falling back to synchronous indexing otherwise.
 
 When you do need manual control, `app.search` exposes the service surface:
 
@@ -323,7 +323,7 @@ await app.search.clear();                          // wipe the whole index
 ```
 
 <Callout type="warn" title="`reindex()` on the local adapters is not implemented">
-`app.search.reindex(collection)` (and the client `reindex` / `POST /api/search/reindex/:collection` route) throw `"reindex() not yet implemented - requires app context"` on the Postgres and pgvector adapters. To rebuild the index today, re-save the records (or call `index()` / `indexBatch()` yourself) rather than relying on `reindex()`. The reindex route's [access](/docs/concepts/access-control) is governed by the `reindexAccess` adapter option (default = the collection's `update` rule) — relevant once you wire a custom adapter that implements `reindex()`. Source: `postgres.ts:1060`; `reindexAccess` at `packages/questpie/src/server/adapters/types.ts:47`.
+`app.search.reindex(collection)` (and the client `reindex` / `POST /api/search/reindex/:collection` route) throw `"reindex() not yet implemented - requires app context"` on the Postgres and pgvector adapters. To rebuild the index today, re-save the records (or call `index()` / `indexBatch()` yourself) rather than relying on `reindex()`. The reindex route's [access](/docs/concepts/access-control) is governed by the `reindexAccess` adapter option (default = the collection's `update` rule) — relevant once you wire a custom adapter that implements `reindex()`.
 </Callout>
 
 ## Extending: custom search adapters
@@ -346,7 +346,7 @@ interface SearchAdapter {
 }
 ```
 
-`initialize()` must **not** create tables — return Drizzle table objects from `getTableSchemas()` (local backends) so migrations own the DDL, or return `undefined` (external backends). `app.search.search(...)` and `.searchable()` work unchanged regardless of which adapter is wired. This is the QUESTPIE principle: the framework, modules, and your own code all reach the same `search` slot through one contract — there is no privileged internal search API. Source: `types.ts:671` (`SearchAdapter`).
+`initialize()` must **not** create tables — return Drizzle table objects from `getTableSchemas()` (local backends) so migrations own the DDL, or return `undefined` (external backends). `app.search.search(...)` and `.searchable()` work unchanged regardless of which adapter is wired. This is the QUESTPIE principle: the framework, modules, and your own code all reach the same `search` slot through one contract — there is no privileged internal search API.
 
 ## TypeScript
 
@@ -364,7 +364,7 @@ import type {
 } from "questpie/search";
 ```
 
-Adapter and provider factories and their option types come from their own entry points: `createPostgresSearchAdapter` / `PostgresSearchAdapterOptions` from `questpie/adapters/postgres-search`, `createPgVectorSearchAdapter` / `PgVectorSearchAdapterOptions` from `questpie/adapters/pgvector-search`, and the embedding providers from `questpie/search`. Source: `packages/questpie/src/exports/search.ts`, `packages/questpie/src/exports/adapters/postgres-search.ts`, `.../pgvector-search.ts`.
+Adapter and provider factories and their option types come from their own entry points: `createPostgresSearchAdapter` / `PostgresSearchAdapterOptions` from `questpie/adapters/postgres-search`, `createPgVectorSearchAdapter` / `PgVectorSearchAdapterOptions` from `questpie/adapters/pgvector-search`, and the embedding providers from `questpie/search`.
 
 ## Related
 
@@ -372,6 +372,4 @@ Adapter and provider factories and their option types come from their own entry 
 - [Configuration](/docs/concepts/configuration) — the `runtimeConfig` / `questpie.config.ts` pattern that wires the `search` adapter.
 - [Access control](/docs/concepts/access-control) — how search results respect row-level access rules, and how `reindexAccess` gates the reindex route.
 - [Jobs](/docs/concepts/jobs) — the `index-records` job behind automatic re-indexing.
-- [Typed client SDK](/docs/concepts/client-sdk) — calling `client.search.search(...)` from the frontend.
-
-{/* TODO @user: add a screenshot of search results (admin or a demo UI) once a dev server with a search adapter + indexed data is running. */}
+- [Typed client SDK](/docs/client/sdk) — calling `client.search.search(...)` from the frontend.

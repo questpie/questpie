@@ -8,7 +8,7 @@ description: .array() wraps any field type into a list stored as a single jsonb 
 > **Prerequisites:** read [Fields](/docs/concepts/fields) first — this page covers only the `.array()` modifier. The `f` proxy, the chain-modifier model, and the other shared modifiers (`.required()` / `.default()` / `.localized()`) are taught there.
 
 <Callout type="info" title="There is no `f.array()` factory">
-`.array()` is a **chain modifier**, not a field type — you never call `f.array()`. You build the element field first, then wrap it: `f.text(40).array()`. It is one of the [shared modifiers](/docs/concepts/fields#shared-methods) every field carries. Source: `packages/questpie/src/server/fields/field-class.ts:187`.
+`.array()` is a **chain modifier**, not a field type — you never call `f.array()`. You build the element field first, then wrap it: `f.text(40).array()`. It is one of the [shared modifiers](/docs/concepts/fields#shared-methods) every field carries.
 </Callout>
 
 ## What it does
@@ -40,7 +40,7 @@ That gives `posts` a `tags` column typed `string[] | null` on read and a non-nul
 
 ## How `.array()` transforms the field
 
-`.array()` rewrites four things on the field state. Source: `packages/questpie/src/server/fields/field-class.ts:187`, `field-class-types.ts:118`.
+`.array()` rewrites four things on the field state.
 
 | Aspect | Before `.array()` | After `.array()` |
 |---|---|---|
@@ -53,7 +53,7 @@ That gives `posts` a `tags` column typed `string[] | null` on read and a non-nul
 The inner field is preserved on the state (`innerField` / `innerState`), so per-element validation still runs — `f.text(40).array()` rejects an element longer than 40 characters, and `f.email().array()` rejects a non-email element. The array itself is stored verbatim as a single JSONB value; there is no separate table or row-per-item.
 
 <Callout type="info" title="Order doesn't matter for length, but `.minItems()` / `.maxItems()` only apply after `.array()`">
-`.minItems(n)` and `.maxItems(n)` are no-ops unless the field is an array — they refine the `z.array(...)` schema (`arraySchema.min(n)` / `.max(n)`). On a non-array field they set state that nothing reads. Source: `packages/questpie/src/server/fields/derive-schema.ts:80`, `field-class.ts:336`.
+`.minItems(n)` and `.maxItems(n)` are no-ops unless the field is an array — they refine the `z.array(...)` schema (`arraySchema.min(n)` / `.max(n)`). On a non-array field they set state that nothing reads.
 </Callout>
 
 ## Chained methods
@@ -81,7 +81,7 @@ collection("recipes").fields(({ f }) => ({
 
 ## Filtering — operators
 
-An array field uses the **multi-value operator set** (`selectMultiOps`). Every operand element is typed to the inner field's filter value — a `number[]` filters on `number`, a `f.select([...]).array()` filters on its literal union. Source: `packages/questpie/src/server/fields/operators/builtin.ts:387`.
+An array field uses the **multi-value operator set** (`selectMultiOps`). Every operand element is typed to the inner field's filter value — a `number[]` filters on `number`, a `f.select([...]).array()` filters on its literal union.
 
 | Operator | Operand | Matches |
 |---|---|---|
@@ -111,7 +111,7 @@ const { docs: untagged } = await app.collections.posts.find({
 ```
 
 <Callout type="warn" title="`contains` (single item) is typed but not implemented">
-The generated `where` type lists a single-item `contains: Item` operator, but the runtime `selectMultiOps` set has **no** `contains` — only `containsAll` and `containsAny`. Using `{ tags: { contains: "ts" } }` type-checks but is silently ignored at query time. Use `containsAny: ["ts"]` to match a single element. Source: type at `packages/questpie/src/server/fields/operators/builtin.ts` (`ArrayWhereInput`); runtime set at `builtin.ts:387` (no `contains` key).
+The generated `where` type lists a single-item `contains: Item` operator, but the runtime `selectMultiOps` set has **no** `contains` — only `containsAll` and `containsAny`. Using `{ tags: { contains: "ts" } }` type-checks but is silently ignored at query time. Use `containsAny: ["ts"]` to match a single element.
 </Callout>
 
 For the full query language — combining field filters with `AND` / `OR` / `NOT`, pagination, and `orderBy` — see the [query reference](/docs/concepts/relations).
@@ -126,7 +126,7 @@ For the full query language — combining field filters with `AND` / `OR` / `NOT
 
 ## TypeScript
 
-An array field contributes `Item[]` to the generated row and insert types, and an [`ArrayWhereInput`](/docs/concepts/relations) shape to the `where` type. The element filter value is derived from the inner field, not the stored data — a `f.datetime().array()` filters on the inner field's date input, not `Date[]`. Source: `packages/questpie/src/server/fields/field-types.ts:84`.
+An array field contributes `Item[]` to the generated row and insert types, and an [`ArrayWhereInput`](/docs/concepts/relations) shape to the `where` type. The element filter value is derived from the inner field, not the stored data — a `f.datetime().array()` filters on the inner field's date input, not `Date[]`.
 
 ```ts
 type Post = typeof posts.$infer.select;
@@ -149,5 +149,3 @@ type PostFilter = CollectionWhere<"posts">;  // { tags?: { containsAll?: string[
 - [`f.object()`](/docs/concepts/fields#field-types) — for a list of structured items, wrap an object: `f.object({ ... }).array()`.
 - [Relations](/docs/concepts/relations) — when the list elements are rows in another collection (and the full query language for the operators above).
 - [Validation](/docs/concepts/validation) — the auto-derived `z.array(...)` schema and the `.zod()` escape hatch.
-
-{/* TODO @user: screenshot of an array field rendered in the admin form (a repeatable list of the inner field's input). */}

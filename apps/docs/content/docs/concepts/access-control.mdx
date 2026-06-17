@@ -238,8 +238,8 @@ On a write, only fields actually present in the input are checked, and on update
 	**`access.fields` is the source of truth — and field flags fold into it.**
 	`f.text().input(false)` contributes `{ create: false, update: false }` and
 	`.output(false)` contributes `{ read: false }`, merged into the same
-	field-access map. The deprecated `.access()` on a field definition is still
-	honored but `access.fields` is the documented place to put per-field rules.
+	field-access map. Put per-field rules in `access.fields` so collection-level
+	access remains the single read/write policy surface.
 	Meta fields (`id`, `_title`, `createdAt`, `updatedAt`, `deletedAt`) are never
 	read-filtered.
 </Callout>
@@ -320,7 +320,7 @@ export default seed({
 		// Pass ctx as the second argument to any operation.
 		const existing = await collections.posts.find({ where: { status: "draft" } }, ctx);
 		if (existing.length === 0) {
-			await collections.posts.create({ data: { title: "Seeded post" } }, ctx);
+			await collections.posts.create({ title: "Seeded post" }, ctx);
 			log("Seeded demo post");
 		}
 	},

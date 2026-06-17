@@ -36,7 +36,7 @@ export const appointments = collection("appointments").fields(({ f }) => ({
 That gives the `appointments` table a `customer`, `barber`, and `service` foreign-key column, a typed id on every read, and a relation picker in the admin form — no junction table to wire, no relation graph to declare.
 
 <Callout type="info">
-  The `target` name is checked against your collection registry **once codegen runs**, so a typo'd target fails to type-check. Before the first `questpie generate` it falls back to plain `string` so source still compiles. The check reads `StrictCollectionKey` — a names-only, acyclic registry seam. Source: `packages/questpie/src/server/modules/core/fields/relation.ts` (the `RelationTarget` type and the `StrictCollectionKey` note above it).
+  The `target` name is checked against your collection registry **once codegen runs**, so a typo'd target fails to type-check. Before the first `questpie generate` it falls back to plain `string` so source still compiles. The check reads `StrictCollectionKey` — a names-only, acyclic registry seam.
 </Callout>
 
 ## Example → real output
@@ -70,11 +70,11 @@ const hydrated = await client.collections.appointments.findOne({
 // }
 ```
 
-A belongsTo FK is a single `string` in the read shape; under `with` the FK key is **replaced** by the target document (not merged alongside it). `hasMany` / `manyToMany` fields have **no column on this table**, so they are absent from the base read shape entirely and only appear when you populate them through `with` (as an array). Source: `packages/questpie/src/server/collection/crud/types.ts` (`FieldSelect`: belongsTo → `string`, hasMany/m2m → dropped; `ApplyQuery` omits a `with`-loaded key from the base select so the relation cleanly replaces it).
+A belongsTo FK is a single `string` in the read shape; under `with` the FK key is **replaced** by the target document (not merged alongside it). `hasMany` / `manyToMany` fields have **no column on this table**, so they are absent from the base read shape entirely and only appear when you populate them through `with` (as an array).
 
 ## Target forms
 
-The positional argument to `f.relation(...)` takes three shapes. Source: `packages/questpie/src/server/modules/core/fields/relation.ts` (`RelationTarget`, `resolveTargetName`).
+The positional argument to `f.relation(...)` takes three shapes.
 
 | Form | Example | Result |
 |---|---|---|
@@ -95,7 +95,7 @@ subject: f.relation({ users: "users", posts: "posts" }).required(),
 ```
 
 <Callout type="info">
-  The polymorphic (morphTo) form creates **two columns** — `${name}Type` and `${name}Id` (a `varchar(36)` uuid) — and its read shape is `{ type: string; id: string }`, not a single id. The `${name}Type` column is a **`varchar`** sized to the longest key (min 50 chars), **not** a Postgres enum — only the runtime Zod schema constrains it to the listed keys via `z.enum`. Use morphTo when one field genuinely points at multiple collection types; for a fixed single target prefer the plain name. Source: `relation.ts` (morphTo branch — `columnFactory` returns two `varchar` builders; `schemaFactory` returns `z.object({ type: z.enum(...), id: z.string().uuid() })`).
+  The polymorphic (morphTo) form creates **two columns** — `${name}Type` and `${name}Id` (a `varchar(36)` uuid) — and its read shape is `{ type: string; id: string }`, not a single id. The `${name}Type` column is a **`varchar`** sized to the longest key (min 50 chars), **not** a Postgres enum — only the runtime Zod schema constrains it to the listed keys via `z.enum`. Use morphTo when one field genuinely points at multiple collection types; for a fixed single target prefer the plain name.
 </Callout>
 
 ## Relation kinds
@@ -148,12 +148,12 @@ featuredServices: f.relation("services").multiple(),
 ```
 
 <Callout type="warning">
-  `.hasMany()`, `.manyToMany()`, and `.multiple()` are **transition** methods — they re-shape the field's type-state from belongsTo to a to-many shape. Apply the transition **first**, then refine. The state-preserving modifiers (`.required()`, `.onDelete()`, `.onUpdate()`, `.relationName()`) carry forward whatever state you have already accumulated, so the order is: `f.relation("appointments").hasMany({ foreignKey: "barber" }).relationName("barberAppointments")`. A transition applied *after* a modifier is the one that defines the final kind. Source: `relation.ts` (`RelationFieldMethods` — transitions return `Field<ToManyRelationFieldState>`; modifiers are `: any` and route through the IsAny short-circuit to preserve `TState`).
+  `.hasMany()`, `.manyToMany()`, and `.multiple()` are **transition** methods — they re-shape the field's type-state from belongsTo to a to-many shape. Apply the transition **first**, then refine. The state-preserving modifiers (`.required()`, `.onDelete()`, `.onUpdate()`, `.relationName()`) carry forward whatever state you have already accumulated, so the order is: `f.relation("appointments").hasMany({ foreignKey: "barber" }).relationName("barberAppointments")`. A transition applied *after* a modifier is the one that defines the final kind.
 </Callout>
 
 ## Referential actions & naming
 
-These modifiers preserve the field's accumulated state, so they compose in any order after a transition. Source: `packages/questpie/src/server/modules/core/fields/relation.ts`; `packages/questpie/src/server/fields/types.ts` (`ReferentialAction`).
+These modifiers preserve the field's accumulated state, so they compose in any order after a transition.
 
 ### `.onDelete(action)` / `.onUpdate(action)`
 
@@ -172,7 +172,7 @@ barber: f.relation(() => barbers).required().onDelete("cascade"),
 ```
 
 <Callout type="info">
-  The action flows into the relation graph and is **enforced on the QUESTPIE CRUD path**: `cascade` / `hasMany` cascade-deletes run through `deleteById`, and `restrict` throws a `409 Conflict` ("Cannot delete: related records exist…") when dependents remain. It needs a `relationName` (or an inferred reverse relation) to find the dependents. Source: `packages/questpie/src/server/collection/crud/relation-mutations/cascade-delete.ts`.
+  The action flows into the relation graph and is **enforced on the QUESTPIE CRUD path**: `cascade` / `hasMany` cascade-deletes run through `deleteById`, and `restrict` throws a `409 Conflict` ("Cannot delete: related records exist…") when dependents remain. It needs a `relationName` (or an inferred reverse relation) to find the dependents.
 </Callout>
 
 ### `.relationName(name)`
@@ -186,7 +186,7 @@ recipient: f.relation("user").required().relationName("receivedMessages"),
 
 ## Hydration with `with`
 
-`with` populates relations on a query. Each relation key takes `true` (populate with defaults) or an options object to scope the populated rows. Source: `packages/questpie/src/server/collection/crud/types.ts` (`With`, `WithRelationOptions`).
+`with` populates relations on a query. Each relation key takes `true` (populate with defaults) or an options object to scope the populated rows.
 
 ```ts
 // to-one (belongsTo) — populate, optionally with a partial select:
@@ -226,12 +226,12 @@ const barber = await client.collections.barbers.findOne({
 ```
 
 <Callout type="info">
-  Relations are **not** hydrated unless you ask. A field you didn't list in `with` comes back as its id (belongsTo → a single `string`; `multiple` → the raw `string[]` array stored in its column) or is absent entirely (hasMany / manyToMany have no column here). This keeps the default read one query and one row — opt into joins only where you need them. Hydration depth is capped by the type system to keep inference finite, so very deep nested `with` chains stop resolving past the cap. Source: the `RelationDepth` recursion cap (defined in `packages/questpie/src/shared/type-utils.ts`, applied as the default depth in `crud/types.ts`).
+  Relations are **not** hydrated unless you ask. A field you didn't list in `with` comes back as its id (belongsTo → a single `string`; `multiple` → the raw `string[]` array stored in its column) or is absent entirely (hasMany / manyToMany have no column here). This keeps the default read one query and one row — opt into joins only where you need them. Hydration depth is capped by the type system to keep inference finite, so very deep nested `with` chains stop resolving past the cap.
 </Callout>
 
 ## Filtering by relation
 
-Relations are filterable in `where`, typed against the **target** collection. The available operators depend on cardinality. Source: `packages/questpie/src/server/collection/crud/types.ts` (`V2RelationWhereResolved`); operator sets in `packages/questpie/src/server/fields/operators/builtin.ts` (`belongsToOps`, `toManyOps`, `multipleOps`).
+Relations are filterable in `where`, typed against the **target** collection. The available operators depend on cardinality.
 
 ### to-one (belongsTo)
 
@@ -283,12 +283,12 @@ await client.collections.barbers.find({
 ```
 
 <Callout type="warning">
-  The to-many quantifiers are `some` / `none` / `every` — there is no `count` operator you can put in a relation `where`. To count related rows, use `with: { rel: { _count: true } }` on the query instead. Source: the typed where surface only ever exposes the three quantifiers for a to-many relation — `crud/types.ts` (`V2RelationWhereResolved`'s `relationKind: "many"` arm and `RelationQuantifierWhere`).
+  The to-many quantifiers are `some` / `none` / `every` — there is no `count` operator you can put in a relation `where`. To count related rows, use `with: { rel: { _count: true } }` on the query instead.
 </Callout>
 
 ## Writing relations (nested create / update)
 
-`create` and `update` accept relation writes inline, so you can link or create related rows in the same call. Source: `packages/questpie/src/server/collection/crud/types.ts` (`NestedRelationMutation`, `CreateInputBase`, `UpdateInput`).
+`create` and `update` accept relation writes inline, so you can link or create related rows in the same call.
 
 For a **belongsTo** field, pass either the raw FK string or a nested mutation:
 
@@ -333,7 +333,7 @@ await client.collections.barbers.updateById({
 The nested mutation supports `connect` (link existing), `create` (insert new), `connectOrCreate` (link if a match exists, else create), and `set` (replace the whole to-many set). Each accepts a single value or an array; `connect.id` and `set` are typed to the **target's** primary-key type.
 
 <Callout type="info">
-  A belongsTo field key overlaps with its FK column name, so the write type accepts **either** the raw id **or** the nested mutation under the same key (`barber: barberId` or `barber: { connect: { id } }`). On `create`, when a belongsTo FK is `notNull` (`.required()`) you must satisfy it with one of the two — a raw id or a `connect` — or the call won't type-check. Source: `crud/types.ts` (`WidenFkFieldsForMutations`, `EnforceRelationForMissingFk`).
+  A belongsTo field key overlaps with its FK column name, so the write type accepts **either** the raw id **or** the nested mutation under the same key (`barber: barberId` or `barber: { connect: { id } }`). On `create`, when a belongsTo FK is `notNull` (`.required()`) you must satisfy it with one of the two — a raw id or a `connect` — or the call won't type-check.
 </Callout>
 
 ## Gotchas
@@ -347,11 +347,11 @@ The nested mutation supports `connect` (link existing), `create` (insert new), `
 </Callout>
 
 <Callout type="warning">
-  **`upload` is the file relation — use it for assets.** `f.upload(...)` is a relation specialised for files: it owns a `varchar(36)` FK to the `assets` collection and the admin renders an upload widget instead of a relation picker. Don't model file links with a raw `f.relation("assets")` — reach for `f.upload()`. See [Fields](/docs/concepts/fields). Source: `packages/questpie/src/server/modules/core/fields/upload.ts`.
+  **`upload` is the file relation — use it for assets.** `f.upload(...)` is a relation specialised for files: it owns a `varchar(36)` FK to the `assets` collection and the admin renders an upload widget instead of a relation picker. Don't model file links with a raw `f.relation("assets")` — reach for `f.upload()`. See [Fields](/docs/concepts/fields).
 </Callout>
 
 <Callout type="info">
-  **`onDelete` / `restrict` enforcement needs a resolvable reverse relation.** Cascade and restrict run on the QUESTPIE CRUD path and walk the relation graph to find dependents; when two relations target the same collection, set `.relationName(...)` so the reverse relation resolves. Source: `crud/relation-mutations/cascade-delete.ts`.
+  **`onDelete` / `restrict` enforcement needs a resolvable reverse relation.** Cascade and restrict run on the QUESTPIE CRUD path and walk the relation graph to find dependents; when two relations target the same collection, set `.relationName(...)` so the reverse relation resolves.
 </Callout>
 
 ## TypeScript
@@ -365,15 +365,13 @@ type Appointment = CollectionDoc<"appointments">;   // `barber`/`customer` are `
 type ApptFilter = CollectionWhere<"appointments">;  // typed where, incl. relation filters
 ```
 
-`CollectionDoc<"appointments">` resolves the belongsTo fields to ids; passing `with` to a query widens the result to include the populated rows (this happens at the call site — you don't annotate it). `CollectionWhere<"appointments">` types the relation filters above (`is`/`isNot`, `some`/`none`/`every`). Source: the app-bound `CollectionDoc` / `CollectionWhere` helpers in your generated `src/questpie/server/.generated/index.ts` (`#questpie`), built on `CollectionSelect` / `Where` from `questpie/types`.
+`CollectionDoc<"appointments">` resolves the belongsTo fields to ids; passing `with` to a query widens the result to include the populated rows (this happens at the call site — you don't annotate it). `CollectionWhere<"appointments">` types the relation filters above (`is`/`isNot`, `some`/`none`/`every`).
 
-If you are building a plugin or a custom field type and need the relation primitives themselves, four are exported from `questpie`: the `relation` factory, its `RelationFieldState` / `RelationFieldMethods` type-state, and the `RelationFieldMetadata` introspection shape. The other internal symbols (`ToManyRelationFieldState`, `MultipleRelationFieldState`, `MorphToFieldState`, `relationFieldType`, `ReferentialAction`, `InferredRelationType`) are not re-exported from the package entry — reach for them via the `fieldType()` recipe below rather than importing them directly. Source: `packages/questpie/src/exports/index.ts` (`export *` from `core/fields/index.ts` surfaces `relation` / `RelationFieldState` / `RelationFieldMethods`; `RelationFieldMetadata` is named from `fields/types.ts`).
+If you are building a plugin or a custom field type and need the relation primitives themselves, four are exported from `questpie`: the `relation` factory, its `RelationFieldState` / `RelationFieldMethods` type-state, and the `RelationFieldMetadata` introspection shape. The other internal symbols (`ToManyRelationFieldState`, `MultipleRelationFieldState`, `MorphToFieldState`, `relationFieldType`, `ReferentialAction`, `InferredRelationType`) are not re-exported from the package entry — reach for them via the `fieldType()` recipe below rather than importing them directly.
 
 ## Extending
 
-`relation` is itself built on the public `fieldType()` declaration API — its transition methods (`.hasMany()`, `.multiple()`, …) are defined in `relationFieldType.methods`, the same mechanism you use to add your own field type with chain methods. If you need a relation variant the builtins don't cover (a custom referential strategy, a different column layout), you build a new field type the same way the framework builds this one — no internal hooks. See [Fields → custom field types](/docs/concepts/fields) for the `fieldType()` recipe (`create`, `methods`, `toColumn` / `toZodSchema` / `getOperators` / `getMetadata`). Source: `packages/questpie/src/server/modules/core/fields/relation.ts` (`relationFieldType`); `packages/questpie/src/server/fields/field-type.ts`.
-
-{/* TODO @user: add a screenshot of an admin relation picker (the searchable selector wired to a target collection) and a many-to-many table widget (e.g. barbers → services). */}
+`relation` is itself built on the public `fieldType()` declaration API — its transition methods (`.hasMany()`, `.multiple()`, …) are defined in `relationFieldType.methods`, the same mechanism you use to add your own field type with chain methods. If you need a relation variant the builtins don't cover (a custom referential strategy, a different column layout), you build a new field type the same way the framework builds this one — no internal hooks. See [Fields → custom field types](/docs/concepts/fields) for the `fieldType()` recipe (`create`, `methods`, `toColumn` / `toZodSchema` / `getOperators` / `getMetadata`).
 
 ## Related
 

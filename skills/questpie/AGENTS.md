@@ -86,12 +86,15 @@ A QuestPie project follows a **convention-over-configuration** file layout. The 
 ```
 <project>/
   questpie.config.ts                ← CLI entry (wraps app + cli config)
+  .env                              ← created from .env.example by create-questpie
   src/
+    lib/
+      env.ts                        ← @t3-oss/env-core boot validation
+      client.ts                     ← typed QUESTPIE client SDK
+      query.ts                      ← TanStack Query option builders
     questpie/
       server/                       ← Server root (all data + behavior)
         questpie.config.ts          ← runtimeConfig({ db, app, storage, ... })
-        env.ts                      ← env({ server, client?, refine? }) — boot-validated
-        env.client.ts               ← clientEnv({ consumers, vars }) — client-safe vars
         modules.ts                  ← export default [adminModule, ...] as const
         app.ts                      ← re-export of .generated/index (stable import)
         config/
@@ -126,8 +129,16 @@ A QuestPie project follows a **convention-over-configuration** file layout. The 
         .generated/
           client.ts
     routes/
-      api/$.ts                      ← HTTP catch-all → createFetchHandler(app)
+      api/$.ts                      ← TanStack Start HTTP catch-all → createFetchHandler(app)
 ```
+
+`create-questpie` currently ships four runtime templates: `tanstack-start`
+(default), `next`, `hono`, and `elysia`. `tanstack-start` and `next` default to
+`admin` + `openapi`; `hono` and `elysia` default to `openapi` only. Optional
+module id `workflows` is supported. The scaffolder also wires adapter choices:
+queue `pg-boss` / `bullmq` / `none`, email `console` / `smtp` / `resend` /
+`plunk`, realtime `none` / `pg-notify` / `redis-streams`, and KV `memory` /
+`redis`.
 
 ### Key Rules
 
@@ -522,7 +533,6 @@ All accessed via `f` in the `.fields()` callback:
 | `f.json(config?)`      | `jsonb` / `json`                     | `JsonValue`    | `{ mode: "jsonb" \| "json" }`                                                    |
 | `f.richText()`         | `jsonb`                              | TipTap doc     | _Admin plugin only_                                                              |
 | `f.blocks()`           | `jsonb`                              | Block tree     | _Admin plugin only_                                                              |
-| `f.from(column, zod?)` | custom                               | `unknown`      | `.type(name)` — escape hatch (PostGIS, etc.). Internal type string is `"custom"` |
 
 ### Common Field Methods (Available on All Types)
 
@@ -533,6 +543,7 @@ f.text(255)
 	.label("Post Title") // display label (I18nText)
 	.description("The main title") // help text
 	.localized() // stored in i18n table, per-locale
+	.drizzle((column) => column.default(sql`now()`)) // column-level Drizzle behavior
 	.virtual(sql`...`) // computed column, no DB storage
 	.array() // wrap as JSONB array
 	.minItems(1)
@@ -1210,7 +1221,7 @@ export default seed({
 
 ```bash
 bun questpie migrate              # Run pending migrations
-bun questpie migrate:generate     # Generate migration from schema diff
+bun questpie migrate:create       # Generate migration from schema diff
 bun questpie migrate:status       # Show status
 bun questpie migrate:down         # Rollback
 bun questpie migrate:reset        # Rollback all
@@ -1687,10 +1698,10 @@ const post = await app.collections.posts.findOne({
 // WRITE
 .create(data)                      → T
 .updateById({ id, data })          → T
-.updateMany({ where, data })       → T[]       (batch; deprecated alias: update)
+.updateMany({ where, data })       → T[]       (bulk by filter)
 .updateBatch({ updates })          → T[]       (per-record batch)
 .deleteById({ id })                → { success }
-.deleteMany({ where })             → { success, count }  (batch; deprecated alias: delete)
+.deleteMany({ where })             → { success, count }  (bulk by filter)
 .restoreById({ id })               → T          (soft-delete)
 
 // VERSIONING
@@ -2654,8 +2665,8 @@ bun questpie <command> [options]
 | `generate`               | Run codegen (one-shot)                              |
 | `dev`                    | Watch mode codegen (re-runs on file add/remove)     |
 | `push`                   | Push schema to DB (dev only, like drizzle-kit push) |
-| `migrate` / `migrate:up` | Run pending migrations                              |
-| `migrate:generate`       | Generate migration from schema diff                 |
+| `migrate`                 | Run pending migrations                              |
+| `migrate:create`          | Generate migration from schema diff                 |
 | `migrate:down`           | Rollback migrations                                 |
 | `migrate:status`         | Show migration status                               |
 | `migrate:reset`          | Rollback all                                        |
@@ -2670,6 +2681,35 @@ bun questpie <command> [options]
 Global options: `-c, --config <path>` (default: `questpie.config.ts`)
 
 ### Scaffolding
+
+Create a new project:
+
+```bash
+bun create questpie my-app
+bun create questpie my-app --runtime tanstack-start --module admin --module openapi
+bun create questpie api --runtime hono --queue pg-boss --email console --realtime none --kv memory
+```
+
+Current runtime templates: `tanstack-start` (default), `next`, `hono`, `elysia`.
+Current module ids: `admin`, `openapi`, `workflows`; `admin` is only valid on
+render-layer runtimes (`tanstack-start`, `next`). Current adapter flags:
+`--queue pg-boss|bullmq|none`, `--email console|smtp|resend|plunk`,
+`--realtime none|pg-notify|redis-streams`, and `--kv memory|redis`. The
+scaffolder creates `.env` from `.env.example`, installs `questpie/questpie`
+skills in the background unless `--no-skills` is set, and runs codegen unless
+`--no-generate` is set.
+
+In generated apps, prefer the scaffolded scripts:
+
+```bash
+bun run scaffold:verify
+bun run db:push
+bun run migrate:create
+bun run migrate
+bun run dev
+```
+
+Add entities to an existing app:
 
 ```bash
 bun questpie add collection blog-posts

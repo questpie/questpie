@@ -35,13 +35,13 @@ That gives `users` an `address` column typed `{ street: string; city: string; zi
 
 ## Constructor argument
 
-`f.object(fields)` takes one positional argument: a `Record<string, Field>` of nested field definitions. Source: `packages/questpie/src/server/modules/core/fields/object.ts:69`.
+`f.object(fields)` takes one positional argument: a `Record<string, Field>` of nested field definitions.
 
 | Argument | Type | Notes |
 |---|---|---|
 | `fields` | `Record<string, Field>` | The nested shape. Each value is a field built from `f` (and chained like any other). |
 
-The column is always `jsonb`. The schema is built by calling `.toZodSchema()` on each nested field and wrapping the result in `z.object({...})`, so each key validates with its own field's rules. The object's read type is **inferred** from the nested fields' select types — declare `f.text().required()` and that key is `string`; leave it optional and it is `string | null`. Source: `object.ts:75` (schema), `object.ts:37` (`InferObjectData`).
+The column is always `jsonb`. The schema is built by calling `.toZodSchema()` on each nested field and wrapping the result in `z.object({...})`, so each key validates with its own field's rules. The object's read type is **inferred** from the nested fields' select types — declare `f.text().required()` and that key is `string`; leave it optional and it is `string | null`.
 
 <Callout type="info" title="Nested fields are real fields">
 Each value in the record is a full field — chain `.required()`, `.default()`, `.label()`, even nest another `f.object({...})`. The nested field's Zod schema and its nullability both flow into the parent object's schema and inferred type. There is no separate "object sub-field" type; you compose the same `f.*` factories.
@@ -49,7 +49,7 @@ Each value in the record is a full field — chain `.required()`, `.default()`, 
 
 ## Chained methods
 
-`f.object()` has **no type-specific chain methods** — it is refined entirely with the [shared modifiers](/docs/concepts/fields) every field has (`.required()`, `.default()`, `.label()`, `.localized()`, `.array()`, `.access()`, …). Source: `object.ts:124` (the `fieldType` registers no `methods`).
+`f.object()` has **no type-specific chain methods** — it is refined entirely with the [shared modifiers](/docs/concepts/fields) every field has (`.required()`, `.default()`, `.label()`, `.localized()`, `.array()`, `.access()`, …).
 
 ```ts
 // A required object with a default and a label:
@@ -69,7 +69,7 @@ The two shared modifiers worth calling out for objects:
 
 ## Filtering — operators
 
-`object` uses the **object operator set** (`objectOps`), built on structural JSONB operations. The whole set is JSONB-path aware: the same operators work on a top-level object field and on a key *inside* a nested object. Source: `packages/questpie/src/server/fields/operators/builtin.ts:459`.
+`object` uses the **object operator set** (`objectOps`), built on structural JSONB operations. The whole set is JSONB-path aware: the same operators work on a top-level object field and on a key *inside* a nested object.
 
 | Operator | Operand | Matches (Postgres) |
 |---|---|---|
@@ -132,11 +132,11 @@ links: f
 ## Gotchas
 
 <Callout type="warn" title="Nested write-only fields drop out of the object shape">
-A nested field marked `.outputFalse()` (write-only) resolves to `never` and is **dropped from the inferred object data type** — mirroring how the same field is dropped from a top-level row. The key still validates on input (its Zod schema is in the composed `z.object`), but it won't appear in the read shape. A *virtual* nested field is different: it keeps its data type in the read shape (a nested to-many `f.relation()`, for instance, infers as `string[] | null`). Source: `object.ts:37` (`InferObjectData` delegates to `ExtractSelectType`), which returns `never` only for `output: false`.
+A nested field marked `.outputFalse()` (write-only) resolves to `never` and is **dropped from the inferred object data type** — mirroring how the same field is dropped from a top-level row. The key still validates on input (its Zod schema is in the composed `z.object`), but it won't appear in the read shape. A *virtual* nested field is different: it keeps its data type in the read shape (a nested to-many `f.relation()`, for instance, infers as `string[] | null`).
 </Callout>
 
 <Callout type="warn" title="The object is stored as one JSONB value">
-The whole object is a single `jsonb` column — there are no per-key columns, indexes, or foreign keys inside it. Nested `f.relation()` fields don't create real FKs, and you can't `orderBy` a nested key or hydrate it with `with:`. If a nested value needs to be a real, query-first relationship, model it as its own collection. Source: `object.ts:74` (`columnFactory: jsonb`).
+The whole object is a single `jsonb` column — there are no per-key columns, indexes, or foreign keys inside it. Nested `f.relation()` fields don't create real FKs, and you can't `orderBy` a nested key or hydrate it with `with:`. If a nested value needs to be a real, query-first relationship, model it as its own collection.
 </Callout>
 
 ## TypeScript
@@ -158,5 +158,3 @@ type User = typeof users.$infer.select;
 - [Blocks](/docs/concepts/blocks) — for *heterogeneous* repeatable content (a page builder) rather than a homogeneous object array.
 - [Collections](/docs/concepts/collections) / [Relations](/docs/concepts/relations) — when nested data should be its own rows with real queries and relationships.
 - [Validation](/docs/concepts/validation) — the auto-derived Zod schema and the `.zod()` escape hatch.
-
-{/* TODO @user: screenshot of an object field rendered in the admin form (grouped nested inputs). */}

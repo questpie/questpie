@@ -39,22 +39,22 @@ That gives `posts` a `status` column whose read type is `"draft" | "published" |
 
 ## Constructor argument
 
-`f.select()` takes one argument — either a **static options array** or a dynamic **`OptionsConfig`**. There is no options-object constructor. Source: `packages/questpie/src/server/modules/core/fields/select.ts:137`.
+`f.select()` takes one argument — either a **static options array** or a dynamic **`OptionsConfig`**. There is no options-object constructor.
 
 | Call | Stored value | Read type | Column |
 |---|---|---|---|
 | `f.select([...options])` | one option `value` (as string) | **literal union** of the values | `varchar(n)`, where `n` = the longest value's length, minimum `50` |
 | `f.select(optionsConfig)` | any string the handler returns | `string` | `varchar(255)` |
 
-For static options, the field data is the **literal union** of the option values — the read/insert/update/`where` types all narrow to `"draft" | "published" | …`. The derived schema is `z.enum(values)`. For a dynamic `OptionsConfig`, the data widens to `string`, the schema is `z.string()`, and the introspection metadata ships an empty options array (the admin fetches them at runtime). Source: `select.ts:152`, `select.ts:161`.
+For static options, the field data is the **literal union** of the option values — the read/insert/update/`where` types all narrow to `"draft" | "published" | …`. The derived schema is `z.enum(values)`. For a dynamic `OptionsConfig`, the data widens to `string`, the schema is `z.string()`, and the introspection metadata ships an empty options array (the admin fetches them at runtime).
 
 <Callout type="info" title="The literal union needs the options inline (or `as const`)">
-The narrowing comes from the `<const T extends readonly SelectOption[]>` overload, so the value literals must be statically visible at the call site. `f.select([{ value: "draft", label: "Draft" }, …])` inlined in `.fields()` narrows fine. If you hoist the array to a `const` variable, declare it `as const` (`const STATUSES = [...] as const`) or the read type falls back to `string`. Source: `select.ts:137`.
+The narrowing comes from the `<const T extends readonly SelectOption[]>` overload, so the value literals must be statically visible at the call site. `f.select([{ value: "draft", label: "Draft" }, …])` inlined in `.fields()` narrows fine. If you hoist the array to a `const` variable, declare it `as const` (`const STATUSES = [...] as const`) or the read type falls back to `string`.
 </Callout>
 
 ### The option shape
 
-Each option is a `SelectOption`. Only `value` and `label` are required; the rest drive the admin UI. Source: `select.ts:79`.
+Each option is a `SelectOption`. Only `value` and `label` are required; the rest drive the admin UI.
 
 | Key | Type | Purpose |
 |---|---|---|
@@ -65,7 +65,7 @@ Each option is a `SelectOption`. Only `value` and `label` are required; the rest
 | `icon?` | `ComponentReference` | An icon next to the option — built with the `c` proxy, e.g. `c.icon("ph:check-circle")`. |
 | `className?` | `string` | Tailwind/utility classes for the option's badge/row (tonal styling). |
 
-`value`, `label`, `description`, `disabled`, `icon`, and `className` are all serialized into the admin introspection metadata, so the dropdown and table cells render consistently without any per-project component override. Source: `select.ts:109`, `select.ts:180`.
+`value`, `label`, `description`, `disabled`, `icon`, and `className` are all serialized into the admin introspection metadata, so the dropdown and table cells render consistently without any per-project component override.
 
 ```ts
 import { collection } from "#questpie/factories";
@@ -89,7 +89,7 @@ export const deployments = collection("deployments").fields(({ f, c }) => ({
 
 ## Chained methods
 
-`.enum(name)` is the only method specific to `select`, on top of the [shared modifiers](/docs/concepts/fields#shared-methods) every field has and `.array()` for multi-select (below). Source: `select.ts:55`, `select.ts:257`.
+`.enum(name)` is the only method specific to `select`, on top of the [shared modifiers](/docs/concepts/fields#shared-methods) every field has and `.array()` for multi-select (below).
 
 | Method | Effect |
 |---|---|
@@ -108,7 +108,7 @@ status: f
 ```
 
 <Callout type="warn" title="`.enum()` builds a fresh `pgEnum` from the *static* values">
-`.enum(name)` reads the option values it has at call time and creates a brand-new `pgEnum(name, values)` each call — there is no shared cache, so the same `name` used twice creates two distinct definitions. Call it **after** your options are set. On a select with **no** static options (a dynamic `OptionsConfig`) it only flags `enumType`/`enumName` and leaves the column a `varchar`, since there are no values to build the enum from. Changing the option set later is a Postgres enum migration (add/rename a value), not a free edit. Source: `select.ts:258`.
+`.enum(name)` reads the option values it has at call time and creates a brand-new `pgEnum(name, values)` each call — there is no shared cache, so the same `name` used twice creates two distinct definitions. Call it **after** your options are set. On a select with **no** static options (a dynamic `OptionsConfig`) it only flags `enumType`/`enumName` and leaves the column a `varchar`, since there are no values to build the enum from. Changing the option set later is a Postgres enum migration (add/rename a value), not a free edit.
 </Callout>
 
 ## Multi-select
@@ -129,7 +129,7 @@ tags: f
 
 ## Filtering — operators
 
-A single (non-array) select uses the **single-select operator set** (`selectSingleOps`) — equality and membership against the value union. Source: `packages/questpie/src/server/fields/operators/builtin.ts:365`.
+A single (non-array) select uses the **single-select operator set** (`selectSingleOps`) — equality and membership against the value union.
 
 | Operator | Operand | Matches |
 |---|---|---|
@@ -144,7 +144,7 @@ const { docs } = await app.collections.posts.find({
 });
 ```
 
-A **multi-select** (`.array()`) uses `selectMultiOps` instead — the value is a `jsonb` array, so the operators are structural. Source: `builtin.ts:387`.
+A **multi-select** (`.array()`) uses `selectMultiOps` instead — the value is a `jsonb` array, so the operators are structural.
 
 | Operator | Operand | Matches |
 |---|---|---|
@@ -166,7 +166,7 @@ For the full query language — combining field filters with `AND` / `OR` / `NOT
 
 ## Dynamic options
 
-When the choices depend on other field values or come from a runtime source rather than a fixed list, pass an `OptionsConfig` instead of an array. The handler returns the options on demand and receives the current form data, search term, and pagination, so the admin dropdown can react to siblings, search, and lazy-load. Source: `packages/questpie/src/server/fields/reactive-types.ts:73`.
+When the choices depend on other field values or come from a runtime source rather than a fixed list, pass an `OptionsConfig` instead of an array. The handler returns the options on demand and receives the current form data, search term, and pagination, so the admin dropdown can react to siblings, search, and lazy-load.
 
 ```ts title="src/questpie/server/collections/addresses.ts"
 import { collection } from "#questpie/factories";
@@ -205,14 +205,14 @@ export const addresses = collection("addresses").fields(({ f }) => ({
 | `handler` | `(ctx: OptionsContext) => OptionsResult \| Promise<OptionsResult>` | Returns the options for the current form `data` / `search` / `page`. |
 | `deps?` | `string[] \| ((ctx) => any[])` | Sibling field values whose changes refetch the options. Auto-tracked from the handler if omitted. |
 
-The handler's `ctx` (`OptionsContext`) carries `{ data, sibling, search, page, limit, ctx }` — the current form `data`, the `sibling` field values, the `search` string the user typed, the `page`/`limit` for pagination, and the server `ctx` (`{ db, user, req, locale }`). It returns an `OptionsResult`: `{ options: { value, label }[]; hasMore?; total? }`. Source: `reactive-types.ts:54`.
+The handler's `ctx` (`OptionsContext`) carries `{ data, sibling, search, page, limit, ctx }` — the current form `data`, the `sibling` field values, the `search` string the user typed, the `page`/`limit` for pagination, and the server `ctx` (`{ db, user, req, locale }`). It returns an `OptionsResult`: `{ options: { value, label }[]; hasMore?; total? }`.
 
 <Callout type="info" title="The server `ctx.db` is untyped here">
-Inside an options handler the server context `ctx.ctx.db` is typed `unknown` (`ReactiveServerContext`), so it carries no per-collection autocomplete. To load options from your own tables, query through a typed handle you bring into scope (e.g. an imported `app`), not `ctx.ctx.db.collections.*`. If what you want is a typed reference to another collection's rows, use [`f.relation()`](/docs/concepts/relations) instead. Source: `reactive-types.ts:17`.
+Inside an options handler the server context `ctx.ctx.db` is typed `unknown` (`ReactiveServerContext`), so it carries no per-collection autocomplete. To load options from your own tables, query through a typed handle you bring into scope (e.g. an imported `app`), not `ctx.ctx.db.collections.*`. If what you want is a typed reference to another collection's rows, use [`f.relation()`](/docs/concepts/relations) instead.
 </Callout>
 
 <Callout type="info" title="Dynamic select stores a plain `string`">
-With an `OptionsConfig`, the value isn't known at compile time, so the field's read type is `string` (not a literal union) and the schema is `z.string()`. Use a static options array whenever the set is fixed and known — you get the narrowed type and `z.enum` validation for free. For a typed reference to another collection's rows, reach for [`f.relation()`](/docs/concepts/relations) instead, which gives a real FK and `with:` hydration. Source: `select.ts:162`.
+With an `OptionsConfig`, the value isn't known at compile time, so the field's read type is `string` (not a literal union) and the schema is `z.string()`. Use a static options array whenever the set is fixed and known — you get the narrowed type and `z.enum` validation for free. For a typed reference to another collection's rows, reach for [`f.relation()`](/docs/concepts/relations) instead, which gives a real FK and `with:` hydration.
 </Callout>
 
 ## When to use it
@@ -247,5 +247,3 @@ type PostFilter = CollectionWhere<"posts">;  // { status?: { eq?: "draft" | "pub
 - [`f.relation()`](/docs/concepts/relations) — when the choices are rows in another collection and you want a typed FK + hydration instead of a stored string.
 - [Validation](/docs/concepts/validation) — the auto-derived `z.enum` schema and the `.zod()` escape hatch for custom rules.
 - [Relations](/docs/concepts/relations) — the full query language for combining the operators above.
-
-{/* TODO @user: screenshot of a select field rendered in the admin form (dropdown with option icons/badges). */}

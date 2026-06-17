@@ -36,7 +36,7 @@ export const posts = collection("posts").fields(({ f }) => ({
 That gives you a `posts` table with the right columns, a validation schema, typed filters, and an admin form — no migrations to hand-write, no types to declare.
 
 <Callout type="info">
-  `f` is a proxy over the registered field types. Accessing an unknown type throws at build time — `Unknown field type: "x". Available types: …` — so typos surface immediately. Source: `packages/questpie/src/server/fields/builder.ts`.
+  `f` is a proxy over the registered field types. Accessing an unknown type throws at build time — `Unknown field type: "x". Available types: …` — so typos surface immediately.
 </Callout>
 
 ## Example → inferred types
@@ -108,7 +108,7 @@ website: f.url(),                          // validated z.string().url(), len 20
 For `text`/`textarea`/`email`/`url`, `.min(n)` / `.max(n)` constrain **string length** (they map to `minLength` / `maxLength`). `email` and `url` add `.email()` / `.url()` format validation automatically. Sources: `packages/questpie/src/server/modules/core/fields/{text,textarea,email,url}.ts`.
 
 <Callout type="warn">
-  `.trim()`, `.lowercase()`, and `.uppercase()` set runtime state but are **not currently applied to the Zod schema** — `derive-schema.ts` only emits `maxLength` / `minLength` / `pattern` for strings, so these three do not transform or validate the value yet. To normalize input, use a `.zod()` refinement or a field hook instead. Source: `packages/questpie/src/server/fields/derive-schema.ts`.
+  `.trim()`, `.lowercase()`, and `.uppercase()` set runtime state but are **not currently applied to the Zod schema** — `derive-schema.ts` only emits `maxLength` / `minLength` / `pattern` for strings, so these three do not transform or validate the value yet. To normalize input, use a `.zod()` refinement or a field hook instead.
 </Callout>
 
 ### Number
@@ -124,7 +124,7 @@ price: f.number({ mode: "decimal", precision: 10, scale: 2 }),
 weight: f.number("double").positive(),
 ```
 
-Default mode is `"integer"`. `bigint` and `decimal` use Drizzle's `mode: "number"`, so they read back as JS `number` (not `bigint`/`string`). `.step(n)` adds a `value % n === 0` refinement. For numbers, `.min()` / `.max()` set **value bounds** (distinct from the string-length `.min()` / `.max()` on `text`). Source: `packages/questpie/src/server/modules/core/fields/number.ts`.
+Default mode is `"integer"`. `bigint` and `decimal` use Drizzle's `mode: "number"`, so they read back as JS `number` (not `bigint`/`string`). `.step(n)` adds a `value % n === 0` refinement. For numbers, `.min()` / `.max()` set **value bounds** (distinct from the string-length `.min()` / `.max()` on `text`).
 
 ### Boolean
 
@@ -136,7 +136,7 @@ Default mode is `"integer"`. `bigint` and `decimal` use Drizzle's `mode: "number
 isActive: f.boolean().default(true).required(),
 ```
 
-No type-specific methods — refine with the shared methods only. Source: `packages/questpie/src/server/modules/core/fields/boolean.ts`.
+No type-specific methods — refine with the shared methods only.
 
 ### Date & time
 
@@ -209,7 +209,7 @@ The default form is **belongsTo**: it owns a `varchar(36)` foreign-key column an
 - **`.onDelete(action)` / `.onUpdate(action)`** — referential action: `"cascade" \| "set null" \| "restrict" \| "no action"`.
 - **`.relationName(name)`** — disambiguates multiple relations between the same two collections.
 
-The `target` collection name is checked against your registry once codegen runs, so a typo'd target fails to type-check. Source: `packages/questpie/src/server/modules/core/fields/relation.ts`.
+The `target` collection name is checked against your registry once codegen runs, so a typo'd target fails to type-check.
 
 <Callout type="info">
   `.hasMany()`, `.manyToMany()`, `.multiple()` are **transition** methods — they re-shape the field's type state. Chain them early; the order-preserving `.onDelete()` / `.onUpdate()` / `.relationName()` keep whatever state you have accumulated.
@@ -227,7 +227,7 @@ avatar: f.upload({ to: "assets", mimeTypes: ["image/*"], maxSize: 5_000_000 }),
 gallery: f.upload({ to: "assets" }).multiple(),  // inline jsonb array of asset ids
 ```
 
-`upload` is a relation specialised for files — by default it owns a `varchar(36)` FK to the `assets` collection and the admin renders an upload widget (not a relation picker). Setting `through` makes it many-to-many (virtual); `.multiple()` stores an inline `jsonb` array of asset ids. Source: `packages/questpie/src/server/modules/core/fields/upload.ts`.
+`upload` is a relation specialised for files — by default it owns a `varchar(36)` FK to the `assets` collection and the admin renders an upload widget (not a relation picker). Setting `through` makes it many-to-many (virtual); `.multiple()` stores an inline `jsonb` array of asset ids.
 
 <Callout type="warn">
   `mimeTypes` and `maxSize` are captured as admin metadata, **not** enforced as column constraints. They guide the upload UI; enforce hard limits in your storage adapter or a field hook.
@@ -240,7 +240,6 @@ gallery: f.upload({ to: "assets" }).multiple(),  // inline jsonb array of asset 
 | `f.object(fields)` | `Record<string, Field>` of nested fields | `jsonb` | inferred object from the nested fields | nested `outputFalse()`/virtual fields drop out of the shape |
 | `f.json(config?)` | `{ mode?: "jsonb" \| "json" }` | `jsonb` (default) or `json` | `JsonValue` (narrow with `.$type<T>()`) | schema-less |
 | `<field>.array()` | — (chain method) | `jsonb` | `T[]` of the inner read type | combine with `.minItems()` / `.maxItems()` |
-| `f.from(column, zodSchema?)` | a Drizzle column builder (or `(name) => builder`) + optional Zod schema | whatever the column produces | from the Zod schema, or `unknown` | escape hatch for custom PG types |
 
 ```ts
 // object — typed nested shape stored as one jsonb column:
@@ -255,12 +254,27 @@ settings: f.json<{ theme: "light" | "dark" }>(),
 
 // array of scalars (or any field):
 tags: f.text().array().maxItems(10),
-
-// from — bring an arbitrary Drizzle column (e.g. PostGIS):
-location: f.from(customGeometryColumn, z.object({ lat: z.number(), lng: z.number() })),
 ```
 
-Use `f.object()` when the nested shape is fixed and you want per-key validation; use `f.json()` when the data is free-form (narrow the type with `.$type<T>()` and add runtime validation with `.zod()`). `f.from()` is the escape hatch for any Drizzle column the built-ins don't cover. Sources: `packages/questpie/src/server/modules/core/fields/{object,json,from}.ts`.
+Use `f.object()` when the nested shape is fixed and you want per-key validation; use `f.json()` when the data is free-form (narrow the type with `.$type<T>()` and add runtime validation with `.zod()`).
+
+### Custom Drizzle column behavior
+
+Keep the QUESTPIE field type and use `.drizzle()` when the field needs column-level Drizzle behavior that the fluent QUESTPIE method surface does not expose. The callback receives the underlying Drizzle column builder and must return the column builder to use.
+
+```ts
+import { sql } from "drizzle-orm";
+
+const externalId = f
+  .text(255)
+  .drizzle((column) => column.$type<`ext_${string}`>());
+
+const createdAt = f
+  .datetime()
+  .drizzle((column) => column.default(sql`now()`));
+```
+
+Use `.drizzle()` for column builder details such as SQL defaults, Drizzle `$type<T>()`, or a Drizzle option that belongs to the generated column. If the field needs a new storage model, metadata shape, or operator set, create a custom field type with `field()` / `fieldType()` instead.
 
 ### Rich text & blocks (admin module)
 
@@ -352,7 +366,7 @@ phone: f.text(50).admin({ placeholder: "+1 (555) 000-0000" }),
 
 | Method | Effect |
 |---|---|
-| `.drizzle(fn)` | Mutate the underlying Drizzle column builder (``.default(sql`...`)``, `.$type<T>()`). Applied last when building the column. |
+| `.drizzle(fn)` | Customize the underlying Drizzle column builder (``.default(sql`...`)``, `.$type<T>()`). Applied last when building the column. |
 | `.fromDb(fn)` / `.toDb(fn)` | Pure value mappers at the DB boundary (no type change). |
 | `.set(key, value)` | Generic plugin-extension setter (what `.admin()` / `.form()` use under the hood). |
 
@@ -366,11 +380,11 @@ Full method source: `packages/questpie/src/server/fields/field-class.ts`.
 
 ### Field hook lifecycle
 
-`.hooks()` runs per field. Hook values are typed to the field's data type and must return the same type (transform, not reshape). On write the order is `validate → beforeCreate`/`beforeUpdate` → `beforeChange`; on read, `afterRead`. The hook context gives you `{ field, collection, operation, req?, user?, doc, originalValue?, db, config }`. Source: `packages/questpie/src/server/fields/field-class.ts` + `types.ts`.
+`.hooks()` runs per field. Hook values are typed to the field's data type and must return the same type (transform, not reshape). On write the order is `validate → beforeCreate`/`beforeUpdate` → `beforeChange`; on read, `afterRead`. The hook context gives you `{ field, collection, operation, req?, user?, doc, originalValue?, db, config }`.
 
 ### Custom field types
 
-A new field type is declared with `fieldType(name, { create, methods })` — the declarative way to add a type with its own chain methods. Every built-in exports a matching `<name>FieldType` (`textFieldType`, `numberFieldType`, `relationFieldType`, …) that codegen discovers from your `fields/` directories. Source: `packages/questpie/src/server/fields/field-type.ts`.
+A new field type is declared with `fieldType(name, { create, methods })` — the declarative way to add a type with its own chain methods. Every built-in exports a matching `<name>FieldType` (`textFieldType`, `numberFieldType`, `relationFieldType`, …) that codegen discovers from your `fields/` directories.
 
 ### Custom operator sets
 
@@ -392,8 +406,6 @@ If you need the field primitives themselves (building a plugin or a custom field
 <Callout type="info">
   You don't import the field factories (`text`, `relation`, …) directly in app code — they ride in on the destructured `f` inside `.fields()`. Direct factory imports are for library/plugin authors building custom `f` proxies via `createFieldBuilder`.
 </Callout>
-
-{/* TODO @user: add a screenshot of an admin form rendered from these fields (text input, relation picker, rich-text editor). */}
 
 ## Related
 

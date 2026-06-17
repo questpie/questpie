@@ -30,10 +30,10 @@ Each adapter declares its own capabilities, so the runtime can fail fast or bran
 
 ## Custom adapters
 
-Every adapter is defined by a public contract — `QueueAdapter`, `SearchAdapter`, `RealtimeAdapter`, `StorageConfig`, `MailAdapter`, `KVAdapter` — and the built-ins are just implementations of it. To back a concern with a broker the built-ins don't cover, implement the contract and wire your instance into the same config slot. The full build-your-own loop, which applies to every adapter kind, lives in [Building a plugin](/docs/concepts/build-a-plugin).
+Every adapter is defined by a public contract — `QueueAdapter`, `SearchAdapter`, `RealtimeAdapter`, `StorageConfig`, `MailAdapter`, `KVAdapter` — and the built-ins are just implementations of it. To back a concern with a broker the built-ins don't cover, implement the contract and wire your instance into the same config slot. The full build-your-own loop, which applies to every adapter kind, lives in [Building a plugin](/docs/extend/build-a-plugin).
 
 ## Related
 
 - [Configuration](/docs/concepts/configuration) — where every adapter slot lives and how it's wired.
-- [Building a plugin](/docs/concepts/build-a-plugin) — implement any adapter contract for a custom backend.
+- [Building a plugin](/docs/extend/build-a-plugin) — implement any adapter contract for a custom backend.
 - [Jobs](/docs/concepts/jobs) · [Search](/docs/adapters/search) · [Emails](/docs/concepts/emails) — the features each adapter powers.

@@ -32,12 +32,12 @@ export const posts = collection("posts").fields(({ f }) => ({
 That gives `posts` a `coverImage` column typed `string` on read (the asset ID), nullable until you add `.required()`, rendered as a file picker in the admin form, and filterable with the belongsTo operators — no junction table or relation wiring written by hand.
 
 <Callout type="info" title="`f.upload()` references a collection — it isn't the byte store">
-The `f.upload()` *field* is a relation **to** an upload collection; the bytes live in that target collection (default `"assets"`). Turning a collection *itself* into the byte store (storage adapter, URL generation, signed URLs, direct-to-storage uploads) is a different concern with the same name. See [Storage adapters](/docs/adapters/storage) for where bytes are persisted and served. Source: `packages/questpie/src/server/modules/core/fields/upload.ts` (the `upload` factory).
+The `f.upload()` *field* is a relation **to** an upload collection; the bytes live in that target collection (default `"assets"`). Turning a collection *itself* into the byte store (storage adapter, URL generation, signed URLs, direct-to-storage uploads) is a different concern with the same name. See [Storage adapters](/docs/adapters/storage) for where bytes are persisted and served.
 </Callout>
 
 ## Constructor argument
 
-`f.upload()` takes a single optional config object. Every key is optional. Source: `packages/questpie/src/server/modules/core/fields/upload.ts:53` (`UploadConfig`), `upload.ts:89` (factory).
+`f.upload()` takes a single optional config object. Every key is optional.
 
 | Option | Type | Default | Effect |
 |---|---|---|---|
@@ -48,10 +48,10 @@ The `f.upload()` *field* is a relation **to** an upload collection; the bytes li
 | `sourceField` | `string` | — | Name of the source FK column on the junction (M2M only). |
 | `targetField` | `string` | — | Name of the target FK column on the junction (M2M only). |
 
-The single-upload field is always `varchar(36)`, data `string`, schema `z.string().uuid()`. Source: `packages/questpie/src/server/modules/core/fields/upload.ts` (factory `columnFactory` / `schemaFactory`).
+The single-upload field is always `varchar(36)`, data `string`, schema `z.string().uuid()`.
 
 <Callout type="warn" title="`mimeTypes` / `maxSize` are accepted but currently ignored">
-`mimeTypes` and `maxSize` are destructured from the config and then never used — they reach **no** part of the field. They are not applied to the column, not to the derived Zod schema, and not to the field's metadata (the `metadataFactory` emits no `mimeTypes`/`maxSize`, and `RelationFieldMetadata` has no such keys), so they have no admin-picker effect either. Today they are dead config. To actually constrain the admin file picker, set them on the **field's admin config** instead — `f.upload().admin({ accept: "image/*", maxSize: 5_000_000 })` — which flows to the picker's `accept` / `maxSize` props. Enforce real upload limits on the target upload collection / storage adapter. Source: `packages/questpie/src/server/modules/core/fields/upload.ts` (`mimeTypes`/`maxSize` destructured at the factory + `create` but never referenced; `metadataFactory` does not read them), `packages/questpie/src/server/fields/types.ts` (`RelationFieldMetadata`), `packages/admin/src/client/components/fields/upload-field.tsx` (picker `accept` / `maxSize` come from the field's admin config).
+`mimeTypes` and `maxSize` are destructured from the config and then never used — they reach **no** part of the field. They are not applied to the column, not to the derived Zod schema, and not to the field's metadata (the `metadataFactory` emits no `mimeTypes`/`maxSize`, and `RelationFieldMetadata` has no such keys), so they have no admin-picker effect either. Today they are dead config. To actually constrain the admin file picker, set them on the **field's admin config** instead — `f.upload().admin({ accept: "image/*", maxSize: 5_000_000 })` — which flows to the picker's `accept` / `maxSize` props. Enforce real upload limits on the target upload collection / storage adapter.
 </Callout>
 
 ## Variants — single, many-to-many, inline array
@@ -68,7 +68,7 @@ coverImage: f.upload().required(),   // exactly one asset, NOT NULL
 
 ### Many-to-many — `through`
 
-Several assets, joined through a junction collection. Setting `through` makes the field **virtual** (no column on this table; the links live in the junction), with a runtime schema of `z.array(z.string().uuid())` — so the value you write/read back is `string[]`. Uses the **toMany** operator set. Source: `packages/questpie/src/server/modules/core/fields/upload.ts` (factory: `virtual: isM2M`, `schemaFactory` → array of uuid, `operatorSet: toManyOps`).
+Several assets, joined through a junction collection. Setting `through` makes the field **virtual** (no column on this table; the links live in the junction), with a runtime schema of `z.array(z.string().uuid())` — so the value you write/read back is `string[]`. Uses the **toMany** operator set.
 
 ```ts
 gallery: f.upload({ through: "post_assets" }), // M2M gallery via a junction collection
@@ -76,19 +76,19 @@ gallery: f.upload({ through: "post_assets" }), // M2M gallery via a junction col
 
 ### Inline array — `.multiple()`
 
-Several assets stored *inline* as a JSONB array of IDs on this row (no junction). `.multiple()` switches the field to a virtual JSONB column with a runtime schema of `z.array(z.string().uuid())` — the value you write/read back is `string[]`. Uses the **multiple** operator set. Source: `packages/questpie/src/server/modules/core/fields/upload.ts` (`uploadFieldType.methods.multiple` → `virtual: true`, `columnFactory: null`, `schemaFactory` → array of uuid, `operatorSet: multipleOps`).
+Several assets stored *inline* as a JSONB array of IDs on this row (no junction). `.multiple()` switches the field to a virtual JSONB column with a runtime schema of `z.array(z.string().uuid())` — the value you write/read back is `string[]`. Uses the **multiple** operator set.
 
 ```ts
 images: f.upload().multiple(),   // string[] of asset IDs, stored inline as jsonb
 ```
 
 <Callout type="info" title="M2M vs `.multiple()` — junction table or inline array">
-Both hold many assets. **`through`** stores the links in a separate junction collection (queryable, supports the `some` / `none` / `every` quantifiers). **`.multiple()`** stores the IDs inline as a JSONB array on the row (no extra table, queried with array operators like `contains`). Use `through` when the relationship itself needs rows (ordering, pivot data); use `.multiple()` for a simple ordered list of files. Source: `packages/questpie/src/server/modules/core/fields/upload.ts` (`through` → `virtual: isM2M` vs `multiple` → inline jsonb).
+Both hold many assets. **`through`** stores the links in a separate junction collection (queryable, supports the `some` / `none` / `every` quantifiers). **`.multiple()`** stores the IDs inline as a JSONB array on the row (no extra table, queried with array operators like `contains`). Use `through` when the relationship itself needs rows (ordering, pivot data); use `.multiple()` for a simple ordered list of files.
 </Callout>
 
 ## Chained methods
 
-This method is specific to `upload` (on top of the [shared modifiers](/docs/concepts/fields) every field has). It returns a new immutable field. Source: `packages/questpie/src/server/modules/core/fields/upload.ts` (`UploadFieldMethods`, `uploadFieldType.methods.multiple`).
+This method is specific to `upload` (on top of the [shared modifiers](/docs/concepts/fields) every field has). It returns a new immutable field.
 
 | Method | Effect |
 |---|---|
@@ -102,7 +102,7 @@ attachments: f.upload({ to: "documents" }).multiple(), // inline list of documen
 
 Which operators a `where: { <field>: { … } }` accepts depends on the variant. The operand is an asset ID `string` (or `string[]` / a related `where` for the many forms).
 
-**Single upload** — the **belongsTo** operator set (`belongsToOps`). Source: `packages/questpie/src/server/fields/operators/builtin.ts:551`.
+**Single upload** — the **belongsTo** operator set (`belongsToOps`).
 
 | Operator | Operand | Matches |
 |---|---|---|
@@ -123,7 +123,7 @@ const missing = await app.collections.posts.find({
 });
 ```
 
-**Many-to-many (`through`)** — the **toMany** operator set (`toManyOps`): the relation quantifiers. Source: `builtin.ts:576`.
+**Many-to-many (`through`)** — the **toMany** operator set (`toManyOps`): the relation quantifiers.
 
 | Operator | Operand | Matches |
 |---|---|---|
@@ -132,7 +132,7 @@ const missing = await app.collections.posts.find({
 | `every` | related `where` | Every linked asset matches. |
 | `count` | `number` | Number of linked assets equals the value. |
 
-**Inline array (`.multiple()`)** — the **multiple** operator set (`multipleOps`), querying the JSONB array. Source: `builtin.ts:590`.
+**Inline array (`.multiple()`)** — the **multiple** operator set (`multipleOps`), querying the JSONB array.
 
 | Operator | Operand | Matches |
 |---|---|---|
@@ -159,7 +159,7 @@ For the full query language — combining field filters with `AND` / `OR` / `NOT
 - For a relation to a *non-upload* collection (an author, a category), use [`f.relation()`](/docs/concepts/relations) instead — same FK mechanics, but the admin renders a record picker, not an upload control.
 
 <Callout type="info" title="Hydrate the asset with `with:`">
-A single upload stores only the asset **ID**. To read the asset record itself (its `url`, filename, metadata) alongside the row, hydrate the relation with `with: { coverImage: true }` — exactly like any belongsTo relation (see [Relations → hydration with `with`](/docs/concepts/relations)). The resolved `url` and serving the bytes are covered in [Storage adapters](/docs/adapters/storage). Source: `packages/questpie/src/server/modules/core/fields/upload.ts` (`metadataFactory`: `relationType: "belongsTo"`, `targetCollection`).
+A single upload stores only the asset **ID**. To read the asset record itself (its `url`, filename, metadata) alongside the row, hydrate the relation with `with: { coverImage: true }` — exactly like any belongsTo relation (see [Relations → hydration with `with`](/docs/concepts/relations)). The resolved `url` and serving the bytes are covered in [Storage adapters](/docs/adapters/storage).
 </Callout>
 
 ## TypeScript
@@ -174,7 +174,7 @@ type Post = typeof posts.$infer.select;
 `.required()` makes the FK non-null and required on insert; without it the column is nullable and the insert field optional. See [Fields → inferred types](/docs/concepts/fields) for how modifiers flow into the generated types.
 
 <Callout type="warn" title="The many forms keep `string` at the type level — only the runtime value is `string[]`">
-`through` and `.multiple()` change the **runtime** schema to `z.array(z.string().uuid())`, but they do **not** transition the field's static type-state: `UploadFieldState` always pins `data: string`, the M2M branch still returns `FieldWithMethods<UploadFieldState<TTo>, …>`, and `.multiple()` is typed `(): any`. So a many-upload field's generated row/insert/`where` types stay `string`, not `string[]` — unlike [`f.relation().manyToMany()` / `.multiple()`](/docs/concepts/relations), which *do* transition the type-state to a to-many shape with `data: string[]`. Source: `packages/questpie/src/server/modules/core/fields/upload.ts` (`UploadFieldState` → `data: string`; factory return type; `UploadFieldMethods.multiple(): any`) vs `packages/questpie/src/server/modules/core/fields/relation.ts` (`manyToMany` / `multiple` return `Field<ToManyRelationFieldState>` / `MultipleRelationFieldState`).
+`through` and `.multiple()` change the **runtime** schema to `z.array(z.string().uuid())`, but they do **not** transition the field's static type-state: `UploadFieldState` always pins `data: string`, the M2M branch still returns `FieldWithMethods<UploadFieldState<TTo>, …>`, and `.multiple()` is typed `(): any`. So a many-upload field's generated row/insert/`where` types stay `string`, not `string[]` — unlike [`f.relation().manyToMany()` / `.multiple()`](/docs/concepts/relations), which *do* transition the type-state to a to-many shape with `data: string[]`.
 </Callout>
 
 ## Related
@@ -182,5 +182,3 @@ type Post = typeof posts.$infer.select;
 - [Fields](/docs/concepts/fields) — the `f` proxy, the chain-modifier model, and the shared modifiers (`.required()`, `.localized()`, `.label()`, …).
 - [Storage adapters](/docs/adapters/storage) — where the bytes are persisted (local vs files-sdk), the resolved `url`, signed URLs, and visibility for the target upload collection.
 - [Relations](/docs/concepts/relations) — belongsTo / hasMany / manyToMany hydration and relation filters that the upload variants share.
-
-{/* TODO @user: screenshot of an upload field rendered in the admin form (file picker with upload + "Browse Library"). */}

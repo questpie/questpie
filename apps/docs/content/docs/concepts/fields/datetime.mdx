@@ -34,12 +34,12 @@ export const events = collection("events").fields(({ f }) => ({
 That gives `events` a `startsAt` column typed `Date` on read, required on insert, validated by `z.coerce.date()`, and filterable with the operators below — plus self-managing `createdAt` / `updatedAt` columns you never set by hand.
 
 <Callout type="info" title="`timestamps: true` already gives you createdAt / updatedAt">
-You rarely hand-write `createdAt` / `updatedAt`. A collection's [`timestamps` option](/docs/concepts/collections#timestamps) (on by default) adds both for you. Declare your own `f.datetime().autoNow()` columns only when you want extra managed timestamps (e.g. `publishedAt`, `archivedAt`) or different names. Source: `packages/questpie/src/server/collection/builder/types.ts:131`.
+You rarely hand-write `createdAt` / `updatedAt`. A collection's [`timestamps` option](/docs/concepts/collections#timestamps) (on by default) adds both for you. Declare your own `f.datetime().autoNow()` columns only when you want extra managed timestamps (e.g. `publishedAt`, `archivedAt`) or different names.
 </Callout>
 
 ## Constructor argument
 
-`f.datetime()` takes one optional config object. Both keys are optional and have defaults. Source: `packages/questpie/src/server/modules/core/fields/datetime.ts:54`.
+`f.datetime()` takes one optional config object. Both keys are optional and have defaults.
 
 | Option | Type | Default | Effect |
 |---|---|---|---|
@@ -54,15 +54,15 @@ collection("logs").fields(({ f }) => ({
 }));
 ```
 
-The field data type is always `Date`, and the column is built with Drizzle's `mode: "date"`. The derived Zod schema is `z.coerce.date()` regardless of config. Source: `datetime.ts:55`, `datetime.ts:61`.
+The field data type is always `Date`, and the column is built with Drizzle's `mode: "date"`. The derived Zod schema is `z.coerce.date()` regardless of config.
 
 <Callout type="info" title="Keep `withTimezone: true` unless you have a reason not to">
-The default `timestamptz` stores an unambiguous instant (Postgres normalizes to UTC on write and converts on read), which is what you want for events, audit trails, and anything compared across timezones. Set `withTimezone: false` only for wall-clock values that are intentionally timezone-naive. Source: `datetime.ts:55`.
+The default `timestamptz` stores an unambiguous instant (Postgres normalizes to UTC on write and converts on read), which is what you want for events, audit trails, and anything compared across timezones. Set `withTimezone: false` only for wall-clock values that are intentionally timezone-naive.
 </Callout>
 
 ## Chained methods
 
-These two methods are specific to `datetime` (on top of the [shared modifiers](/docs/concepts/fields#shared-methods) every field has). Each returns a new immutable field, so they chain in any order. Source: `datetime.ts:96`.
+These two methods are specific to `datetime` (on top of the [shared modifiers](/docs/concepts/fields#shared-methods) every field has). Each returns a new immutable field, so they chain in any order.
 
 | Method | Effect |
 |---|---|
@@ -79,12 +79,12 @@ collection("articles").fields(({ f }) => ({
 ```
 
 <Callout type="info" title="`.autoNow()` is a default; `.autoNowUpdate()` is a hook">
-`.autoNow()` only fills the value when none is given (a column default), so a caller-supplied value wins on insert. `.autoNowUpdate()` overrides on every write via a `beforeChange` hook — a caller-supplied value is discarded. Pair `.autoNowUpdate()` with `.inputFalse()` so the field is read-only and the intent is clear. Source: `datetime.ts:97` (`autoNow`), `datetime.ts:99` (`autoNowUpdate`).
+`.autoNow()` only fills the value when none is given (a column default), so a caller-supplied value wins on insert. `.autoNowUpdate()` overrides on every write via a `beforeChange` hook — a caller-supplied value is discarded. Pair `.autoNowUpdate()` with `.inputFalse()` so the field is read-only and the intent is clear.
 </Callout>
 
 ## Filtering — operators
 
-`datetime` uses the **date operator set** (`dateOps`), so every datetime field is filterable with these in a `where` clause. The operand type is `DateInput` — `Date | string` — so you can compare against a `Date` or an ISO string. Source: `packages/questpie/src/server/fields/operators/builtin.ts:218`.
+`datetime` uses the **date operator set** (`dateOps`), so every datetime field is filterable with these in a `where` clause. The operand type is `DateInput` — `Date | string` — so you can compare against a `Date` or an ISO string.
 
 | Operator | Operand | Matches |
 |---|---|---|
@@ -142,5 +142,3 @@ The insert type is `Date` (the value you pass is type-checked as a `Date`) — n
 - [Collections → `timestamps`](/docs/concepts/collections#timestamps) — the built-in `createdAt` / `updatedAt` you usually rely on instead of hand-rolling these.
 - [Validation](/docs/concepts/validation) — the auto-derived Zod schema and the `.zod()` escape hatch for custom date rules.
 - [Relations](/docs/concepts/relations) — the full query language for combining the operators above.
-
-{/* TODO @user: screenshot of a datetime field rendered in the admin form (date-time picker). */}

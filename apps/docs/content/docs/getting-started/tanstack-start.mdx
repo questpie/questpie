@@ -190,7 +190,7 @@ bun run db:push
 Under the hood this runs `questpie push` — drizzle-native schema push, for **development only**. It reads your generated schema and applies it straight to the database. For production you generate and run migrations instead (`bun run migrate:create` → `bun run migrate`).
 
 <Callout type="info" title="Re-run codegen after adding or removing files">
-	If you add or remove a collection or global later, regenerate first (`bun run questpie:generate`, or `bun run scaffold:verify` to also type-check), then `bun run db:push` again. Editing a definition's body doesn't need a regen. The `questpie add` CLI runs codegen for you automatically — see [Codegen](/docs/concepts/codegen).
+	If you add or remove a collection or global later, regenerate first (`bun run questpie:generate`, or `bun run scaffold:verify` to also type-check), then `bun run db:push` again. Editing a definition's body doesn't need a regen. The `questpie add` CLI runs codegen for you automatically — see [Codegen](/docs/extend/codegen).
 </Callout>
 
 ## 5. Run the dev server
@@ -207,17 +207,11 @@ Vite + Nitro start on **http://localhost:3000**. Three URLs now serve:
 | `http://localhost:3000/api/docs` | OpenAPI reference rendered with Scalar. |
 | `http://localhost:3000/admin` | Admin panel. |
 
-{/* TODO @user: screenshot the landing page at localhost:3000 with the three entry-point cards (preview tools or manual capture). */}
-
 ### Create your first admin
 
 Open **http://localhost:3000/admin**. Because no admin user exists yet, the panel shows a **setup screen** to create the first one. Fill in a name, email, and password (minimum 8 characters), then sign in with those credentials.
 
-{/* TODO @user: screenshot the admin setup screen (create first admin). */}
-
 This is a one-time bootstrap: once an admin exists, the setup endpoint refuses to create more users, and `/admin` goes straight to the login screen. From there you can open **Posts** and create a row — you'll use it in the next step.
-
-{/* TODO @user: screenshot the admin Posts list view after creating a post. */}
 
 ## 6. Query from the typed client
 
@@ -316,8 +310,8 @@ The starter ships `CLAUDE.md` / `AGENTS.md` that point AI assistants at the QUES
 ## Related
 
 - [Collections](/docs/concepts/collections) — fields, relations, hooks, access, and the admin views they generate.
-- [Client SDK](/docs/concepts/client-sdk) — the typed client in depth: `createClient<AppConfig>()`, every CRUD method, and the query options.
-- [TanStack Query](/docs/concepts/tanstack-query) — the React hooks layer: `q.collections.*` / `q.globals.*` / `q.routes.*`.
-- [Codegen](/docs/concepts/codegen) — what `questpie generate` / `questpie add` do and when to re-run them.
+- [Client SDK](/docs/client/sdk) — the typed client in depth: `createClient<AppConfig>()`, every CRUD method, and the query options.
+- [TanStack Query](/docs/client/tanstack-query) — the React hooks layer: `q.collections.*` / `q.globals.*` / `q.routes.*`.
+- [Codegen](/docs/extend/codegen) — what `questpie generate` / `questpie add` do and when to re-run them.
 - [Configuration](/docs/concepts/configuration) — `runtimeConfig()`, modules, and adapter wiring in `questpie.config.ts`.
 - [Environment](/docs/concepts/environment) — the typed `env` module and boot-time validation.

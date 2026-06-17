@@ -32,14 +32,14 @@ That gives `users` an `email` column typed `string` on read, required on insert,
 
 ## Constructor argument
 
-`f.email()` takes a single optional `maxLength`. Source: `packages/questpie/src/server/modules/core/fields/email.ts:46`.
+`f.email()` takes a single optional `maxLength`.
 
 | Call | Column | Notes |
 |---|---|---|
 | `f.email()` | `varchar(255)` | Default. `maxLength` defaults to **255**. |
 | `f.email(n)` | `varchar(n)` | Sized varchar; `n` is also applied as a Zod `.max(n)`. |
 
-The field data is always `string`. The derived Zod schema is `z.string().email().max(maxLength)` — the `.email()` refinement is always present, and the `.max()` uses the `255` default or your `n`. Source: `email.ts:50`.
+The field data is always `string`. The derived Zod schema is `z.string().email().max(maxLength)` — the `.email()` refinement is always present, and the `.max()` uses the `255` default or your `n`.
 
 <Callout type="info" title="Need a longer column? 320 is the practical email max">
 The default `varchar(255)` holds nearly every real address, but the RFC upper bound is 320 characters. If you must accept the longest legal addresses, pass `f.email(320)`.
@@ -47,7 +47,7 @@ The default `varchar(255)` holds nearly every real address, but the RFC upper bo
 
 ## Chained methods
 
-These methods are specific to `email` (on top of the [shared modifiers](/docs/concepts/fields) every field has). Each returns a new immutable field, so they chain in any order. Source: `email.ts:31`, `email.ts:82`.
+These methods are specific to `email` (on top of the [shared modifiers](/docs/concepts/fields) every field has). Each returns a new immutable field, so they chain in any order.
 
 | Method | Effect |
 |---|---|
@@ -61,12 +61,12 @@ collection("contacts").fields(({ f }) => ({
 ```
 
 <Callout type="warn" title="`.min()` / `.max()` here are STRING LENGTH, not value bounds">
-On an email field, `.min(n)` / `.max(n)` constrain the **number of characters** (they map to `minLength` / `maxLength`, the same as [`f.text()`](/docs/concepts/fields/text)). On `f.number()` the same method names constrain the numeric **value**. Same names, different meaning — sized by the field's type. Source: `email.ts:83`; refinements applied in `packages/questpie/src/server/fields/derive-schema.ts:127`.
+On an email field, `.min(n)` / `.max(n)` constrain the **number of characters** (they map to `minLength` / `maxLength`, the same as [`f.text()`](/docs/concepts/fields/text)). On `f.number()` the same method names constrain the numeric **value**. Same names, different meaning — sized by the field's type.
 </Callout>
 
 ## Filtering — operators
 
-`email` uses the **email operator set** (`emailOps`), which extends the string set with two domain matchers. So every email field is filterable with all the string operators *and* `domain` / `domainIn`. The operand is typed `string` (or `string[]` for the list operators). Source: `packages/questpie/src/server/fields/operators/builtin.ts:280`.
+`email` uses the **email operator set** (`emailOps`), which extends the string set with two domain matchers. So every email field is filterable with all the string operators *and* `domain` / `domainIn`. The operand is typed `string` (or `string[]` for the list operators).
 
 | Operator | Operand | Matches |
 |---|---|---|
@@ -94,7 +94,7 @@ const staff = await app.collections.users.find({
 ```
 
 <Callout type="info" title="`domain` matches the suffix after `@`, not a substring">
-`domain` compiles to `ILIKE '%@value'`, so `{ domain: "acme.com" }` matches `a@acme.com` but **not** `a@mail.acme.com` (the stored domain is `mail.acme.com`, not `acme.com`). For broader matching use a string operator, e.g. `{ ilike: "%@%acme.com" }`. Source: `builtin.ts:282`.
+`domain` compiles to `ILIKE '%@value'`, so `{ domain: "acme.com" }` matches `a@acme.com` but **not** `a@mail.acme.com` (the stored domain is `mail.acme.com`, not `acme.com`). For broader matching use a string operator, e.g. `{ ilike: "%@%acme.com" }`.
 </Callout>
 
 For the full query language — combining field filters with `AND` / `OR` / `NOT`, pagination, and `orderBy` — see [Fields → filtering](/docs/concepts/fields). Relation filters and hydration are covered in [Relations](/docs/concepts/relations).
@@ -133,5 +133,3 @@ type User = typeof users.$infer.select;
 - [Fields](/docs/concepts/fields) — the `f` proxy, the chain-modifier model, and the shared modifiers (`.required()`, `.localized()`, `.default()`, `.array()`, …).
 - [Text field](/docs/concepts/fields/text) — the unvalidated single-line string sibling.
 - [Validation](/docs/concepts/validation) — the auto-derived Zod schema and the `.zod()` escape hatch for custom rules.
-
-{/* TODO @user: screenshot of an email field rendered in the admin form (single-line input). */}

@@ -43,7 +43,7 @@ export default runtimeConfig({
 That `email` block is a `MailerConfig`. `adapter` is the only field you must set; `defaults.from` fills in the `From` address when a send call omits one. (Templates are populated by codegen from `emails/*.ts` — see [Emails](/docs/concepts/emails); you don't list them here.)
 
 <Callout type="warn" title="You must set an adapter — even in dev">
-The core email service throws at app build if `email.adapter` is missing: `"QUESTPIE: 'email.adapter' is required. Provide adapter in .build({ email: { adapter: ... } })"`. The mailer *does* have a `ConsoleAdapter` fallback for the no-adapter case, but the core service never reaches it — it constructs `MailerService` only after asserting your adapter exists. So always set `adapter`; use `new ConsoleAdapter()` explicitly for local development rather than relying on a fallback. Source: `core/services/email.ts:15-19`, `mailer/service.ts:49-66`.
+The core email service throws at app build if `email.adapter` is missing: `"QUESTPIE: 'email.adapter' is required. Provide adapter in .build({ email: { adapter: ... } })"`. The mailer *does* have a `ConsoleAdapter` fallback for the no-adapter case, but the core service never reaches it — it constructs `MailerService` only after asserting your adapter exists. So always set `adapter`; use `new ConsoleAdapter()` explicitly for local development rather than relying on a fallback.
 </Callout>
 
 ## The adapter contract
@@ -73,9 +73,9 @@ type SerializableMailOptions = {
 };
 ```
 
-Source: `mailer/adapter.ts:6-8`, `mailer/types.ts:24-28`, `mailer/service.ts:84-101` (serialize).
 
-The concrete adapters are **not** re-exported from the root `questpie` barrel — only the abstract `MailAdapter` base and the mailer types are (via `questpie/mailer`). Import each adapter from its own subpath: `questpie/adapters/console`, `questpie/adapters/smtp`, `questpie/adapters/resend`, `questpie/adapters/plunk`. Source: `package.json` exports — one key per adapter (`./adapters/console`, `./adapters/smtp`, `./adapters/resend`, `./adapters/plunk`, …), each mapping to `src/exports/adapters/<name>.ts`.
+
+The concrete adapters are **not** re-exported from the root `questpie` barrel — only the abstract `MailAdapter` base and the mailer types are (via `questpie/mailer`). Import each adapter from its own subpath: `questpie/adapters/console`, `questpie/adapters/smtp`, `questpie/adapters/resend`, `questpie/adapters/plunk`.
 
 ## Console — `questpie/adapters/console`
 
@@ -93,7 +93,7 @@ new ConsoleAdapter({ logHtml: true }); // also print the HTML body
 | `logHtml` | `boolean` | `false` | When `false`, the HTML body is replaced with a one-line hint instead of printed (HTML is verbose). |
 | `logger` | `(message: string) => void` | `console.log` | Where each line goes. |
 
-It logs `From / To / CC / BCC / Reply-To / Subject`, the plain-text body, attachment filenames, and (only when `logHtml: true`) the HTML. It never sends. Source: `adapters/console.adapter.ts:7-86`.
+It logs `From / To / CC / BCC / Reply-To / Subject`, the plain-text body, attachment filenames, and (only when `logHtml: true`) the HTML. It never sends.
 
 ## SMTP — `questpie/adapters/smtp`
 
@@ -120,7 +120,7 @@ new SmtpAdapter({ transport: "smtp://user:pass@smtp.example.com:587" });
 | `transport` | `SMTPTransport \| SMTPTransport.Options \| string` | Passed straight to `nodemailer.createTransport` — an options object, an `SMTPTransport` instance, or a connection-string URL. |
 | `afterSendCallback` | `(info: SentMessageInfo) => void \| Promise<void>` | Runs after each send. Handy for logging provider message IDs or preview URLs. |
 
-`SmtpAdapter` also exposes `verify(): Promise<boolean>`, which proxies nodemailer's SMTP connection check. Source: `adapters/smtp.adapter.ts:10-54`.
+`SmtpAdapter` also exposes `verify(): Promise<boolean>`, which proxies nodemailer's SMTP connection check.
 
 ### Ethereal test inbox
 
@@ -135,7 +135,7 @@ export default runtimeConfig({
 });
 ```
 
-It returns a `Promise<SmtpAdapter>`, which `MailerConfig.adapter` accepts directly (the mailer awaits the promise lazily on first send). Dev/testing only — it makes a network call to create the account. Source: `adapters/smtp.adapter.ts:60-81`.
+It returns a `Promise<SmtpAdapter>`, which `MailerConfig.adapter` accepts directly (the mailer awaits the promise lazily on first send). Dev/testing only — it makes a network call to create the account.
 
 ## Resend — `questpie/adapters/resend`
 
@@ -156,7 +156,7 @@ resendAdapter({ apiKey: env.RESEND_API_KEY });
 | `fetch` | `typeof fetch` | global `fetch` | Override for tests or non-standard runtimes. |
 | `afterSendCallback` | `(response: ResendSendResponse, options) => void \| Promise<void>` | — | Runs with the parsed JSON body (e.g. the message `id`) after Resend accepts the email. |
 
-Buffer attachments are base64-encoded automatically. On a non-2xx response it throws `Resend API error (<status> <statusText>): <body>`. Source: `adapters/resend.adapter.ts:11-108`.
+Buffer attachments are base64-encoded automatically. On a non-2xx response it throws `Resend API error (<status> <statusText>): <body>`.
 
 ## Plunk — `questpie/adapters/plunk`
 
@@ -178,7 +178,7 @@ plunkAdapter({ apiKey: env.PLUNK_SECRET_KEY });
 | `afterSendCallback` | `(response: PlunkSendResponse, options) => void \| Promise<void>` | — | Runs with the parsed body after Plunk accepts the email. |
 
 <Callout type="warn" title="Plunk rejects CC and BCC">
-`PlunkAdapter` throws if a message sets `cc` or `bcc` — Plunk's transactional API doesn't document those fields. It also treats a `success: false` body as an error even on an HTTP 2xx response. If you need CC/BCC, use SMTP or Resend. Source: `adapters/plunk.adapter.ts:70-96, 125-135`.
+`PlunkAdapter` throws if a message sets `cc` or `bcc` — Plunk's transactional API doesn't document those fields. It also treats a `success: false` body as an error even on an HTTP 2xx response. If you need CC/BCC, use SMTP or Resend.
 </Callout>
 
 ## Choosing an adapter
@@ -198,8 +198,8 @@ A common setup branches on `NODE_ENV` (see the Quick start) so dev logs to the c
 ## Gotchas
 
 - **The adapter is required even in dev** — the core email service asserts it at app build. See the Quick-start callout.
-- **`defaults.from` is the only fallback sender.** If a send call omits `from` and you set no `defaults.from`, mail goes out as `noreply@example.com`. Set `defaults.from` in config. Source: `mailer/service.ts:97`.
-- **`adapter` may be a `Promise`.** `MailerConfig.adapter` accepts `MailAdapter | Promise<MailAdapter>`; the promise is awaited lazily on the first send (how `createEtherealSmtpAdapter()` plugs in). Source: `mailer/service.ts:49-51`.
+- **`defaults.from` is the only fallback sender.** If a send call omits `from` and you set no `defaults.from`, mail goes out as `noreply@example.com`. Set `defaults.from` in config.
+- **`adapter` may be a `Promise`.** `MailerConfig.adapter` accepts `MailAdapter | Promise<MailAdapter>`; the promise is awaited lazily on the first send (how `createEtherealSmtpAdapter()` plugs in).
 - **HTTP adapters surface provider errors as thrown `Error`s** — wrap sends you can't afford to lose, or dispatch them from a [job](/docs/concepts/jobs) so failures retry. Resend throws on non-2xx; Plunk throws on non-2xx *or* `success: false`.
 - **Plunk drops CC/BCC** — it throws rather than silently dropping them. See the Plunk callout.
 
@@ -250,7 +250,7 @@ export default runtimeConfig({
 });
 ```
 
-That's the whole contract. Source: `mailer/adapter.ts:6-8`, `mailer/types.ts:24-28` (`SerializableMailOptions` types `from`/`text`/`html` as present `string`s), `mailer/service.ts:91-100` (serialize: `from` defaulted, at least one of `text`/`html` non-empty).
+That's the whole contract.
 
 ## TypeScript
 
