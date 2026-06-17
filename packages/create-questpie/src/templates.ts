@@ -20,8 +20,14 @@ export const templates: Template[] = [
 		description:
 			"Headless REST API with Hono on Bun, OpenAPI/Scalar docs, and a typed client (no admin UI)",
 	},
+	{
+		id: "elysia",
+		label: "Elysia",
+		hint: "headless api",
+		description:
+			"Headless REST API with Elysia on Bun, OpenAPI/Scalar docs, and a typed client (no admin UI)",
+	},
 	// Future templates:
-	// { id: "elysia", label: "Elysia", hint: "bun-native", description: "Bun-native API server with Elysia" },
 	// { id: "next", label: "Next.js", hint: "react", description: "React with Next.js App Router" },
 ];
 
