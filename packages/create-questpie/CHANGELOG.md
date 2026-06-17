@@ -1,5 +1,20 @@
 # create-questpie
 
+## 2.1.0
+
+### Minor Changes
+
+- [#109](https://github.com/questpie/questpie/pull/109) [`835f985`](https://github.com/questpie/questpie/commit/835f98502bd98a2c2b3f34201ac6370f03105c93) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Multi-runtime scaffolding: choose **TanStack Start, Next.js, Hono, or Elysia**.
+
+  - **Next.js** (App Router, Turbopack) and **TanStack Start** are full-stack —
+    admin UI, OpenAPI/Scalar docs, typed client + TanStack Query.
+  - **Hono** and **Elysia** are headless API servers on Bun (no admin UI).
+  - Interactive runtime + module selection; agent skills installed via
+    `bunx skills add questpie/questpie`.
+  - Every template ships an extensionless-import shared core that is
+    byte-identical across runtimes; each was boot-verified to start with zero
+    errors.
+
 ## 2.0.4
 
 ### Patch Changes
