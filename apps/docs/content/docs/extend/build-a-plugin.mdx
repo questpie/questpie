@@ -1,0 +1,588 @@
+---
+title: Building a plugin
+description: A plugin is the unit of extension in QUESTPIE, it teaches codegen new file conventions, wraps the collection/global/field builders with typed methods, and ships everything as one npm package. The framework's own admin is just a plugin, and yours reaches the exact same seams.
+---
+
+QUESTPIE has one extension principle: **core, modules, and your own code reach the framework through the same seams.** There are no privileged internal APIs. The admin panel, the audit log, OpenAPI, each is a plugin that declares file conventions, extends the builders, and contributes generated output through the public `CodegenPlugin` contract. When you build a plugin, you reach for the same primitives. Add a custom field type and it appears on `f` next to `f.text()`; add a `config/<name>.ts` convention and it merges into every app that installs you; ship a scaffold and `questpie add` learns a new type.
+
+This page is the build-your-own loop end to end: the **contract** (`CodegenPlugin`), the **seams** it can extend (categories, discover patterns, builder extensions, scaffolds, custom generators), the smaller per-feature extensions you'll reach for far more often (a **custom field type**, a **custom query operator**, a **custom adapter**, a **custom block/component**), how a plugin **extends config non-destructively**, and how to **publish** it as a module package.
+
+## What it does
+
+- **Teach codegen new file conventions.** Declare a category (`views/`, `blocks/`, your own `widgets/`) or a single-file discover pattern (`config/my-plugin.ts`) and codegen scans, imports, types, and wires those files into every app that installs your plugin, no central registry to edit.
+- **Wrap the builders with typed methods.** Add `.admin()`, `.list()`, or your own method to `collection()` / `global()` / field instances; codegen generates the typed wrapper into `factories.ts` so app code gets autocomplete and the value lands under a known state key.
+- **Add primitives that look builtin.** A custom field type from `field()` / `fieldType()` shows up on `f`; a custom adapter (queue, search, storage, KV, realtime, executor) wires into `runtimeConfig()` like the built-in ones; a custom operator extends a field's `where`.
+- **Extend config without forking.** Claim a `config/<name>.ts` file and augment `AppStateConfig`, your config bucket merges per-key across modules. No framework code changes.
+- **Ship scaffolds + a custom generator.** Contribute `questpie add <type>` templates and, when one output file isn't enough, take over generation for a whole target.
+- **Distribute as one package.** A module attaches its `plugin` and auto-registers on install, users add it to `modules.ts` and touch nothing else.
+
+<Callout type="info" title="Pick the smallest seam that fits">
+Most extension is *not* a full plugin. A custom field type, a custom operator, or a custom adapter is a single factory call you register where the built-in ones go. Reach for a `CodegenPlugin` only when you need codegen to discover *new file conventions* or wrap the *builders*. The [per-feature recipes](#custom-field-types) below come first for that reason; the [full plugin contract](#the-codegen-plugin-contract) is the deep end.
+</Callout>
+
+## The two layers of extension
+
+QUESTPIE extension splits cleanly in two, and most of what you build lives in the first:
+
+| Layer | What it is | How you register it | Touches codegen? |
+|---|---|---|---|
+| **Runtime primitives** | Custom field types, operators, adapters, blocks, components | A factory call registered where the built-ins live (a module's `fields` record or a `fields.ts` bundle, a `runtimeConfig()` adapter slot, a `blocks/`/`components/` file) | no |
+| **Codegen plugin** | New file conventions + builder-method extensions | `CodegenPlugin` in `runtimeConfig({ plugins })` or attached to a module's `plugin` | yes |
+
+A field type appears on `f` because the **core codegen plugin** already extracts field factories from a module's `fields` record (and from a root app's `fields.ts` bundle) and merges them into the `f` proxy, you register a factory, not write a plugin. A `CodegenPlugin` is only needed when you want to invent a *new* convention (your own `widgets/` directory) or add a *new builder method* (`collection().myThing()`). Start with the recipe, escalate to the contract.
+
+## Custom field types
+
+`f.*` is open. A custom field type is a factory function that returns a `Field`, it declares how the value maps to a Postgres column, how it validates, and what `where` operators it exposes. Register the factory on a module's `fields` record, run codegen, and it appears on `f` in every `.fields(({ f }) => …)` callback, exactly like a builtin. This is the QUESTPIE principle at its most concrete: **there is no privileged field API; builtins are authored the same way you author yours.**
+
+The contract is the four runtime accessors every `Field` implements, codegen and the CRUD layer call them, you supply them through the field's runtime state:
+
+| Accessor | What it answers | Where it comes from |
+|---|---|---|
+| `toColumn(name)` | the Drizzle column to create | `columnFactory` in the field state |
+| `toZodSchema()` | how to validate the value | `schemaFactory` in the field state |
+| `getOperators()` | the `where` operator set | `operatorSet` in the field state |
+| `getMetadata()` | what the admin introspects (label, type, validation) | derived from state |
+
+### Start with `.drizzle()` for column tweaks
+
+If all you need is custom Drizzle column behavior, keep the closest QUESTPIE field type and add `.drizzle()`. That keeps the admin metadata, validation defaults, localization rules, access flags, and typed client projections attached to the field.
+
+```ts title="src/questpie/server/collections/products.ts"
+import { sql } from "drizzle-orm";
+import { collection } from "#questpie/factories";
+
+export default collection("products").fields(({ f }) => ({
+  sku: f
+    .text(64)
+    .required()
+    .drizzle((column) => column.$type<`sku_${string}`>()),
+  createdAt: f
+    .datetime()
+    .inputFalse()
+    .drizzle((column) => column.default(sql`now()`)),
+}));
+```
+
+Reach for a custom field type only when you need a new storage model, metadata shape, or operator set.
+
+### The smallest custom field, `field(state)`
+
+When you need to control the operator set, metadata, or column factory directly, drop to `field(state)`, the lower-level factory that wraps a `FieldRuntimeState` into an immutable `Field`. This is exactly how every builtin (`text`, `number`, `relation`, …) is authored in QUESTPIE's own source:
+
+```ts title="src/questpie/server/fields/color.ts (full control)"
+import { varchar } from "questpie/drizzle-pg-core";
+import { z } from "zod";
+import { field } from "questpie/builders";
+// operator sets live at the internal operators barrel, see the callout below.
+import { stringOps } from "#questpie/server/fields/operators/index.js";
+
+export function color() {
+  return field({
+    type: "color",
+    columnFactory: (name: string) => varchar(name, { length: 7 }),
+    schemaFactory: () => z.string().regex(/^#[0-9a-fA-F]{6}$/),
+    operatorSet: stringOps, // reuse the builtin string operator set
+    notNull: false,
+    hasDefault: false,
+    localized: false,
+    virtual: false,
+    input: true,
+    output: true,
+    isArray: false,
+  });
+}
+```
+
+`field` comes from `questpie/builders`; `FieldRuntimeState` requires an `operatorSet`, so reusing `stringOps` gives a `color` field `eq` / `in` / `ilike` / `isNull` and friends for free.
+
+<Callout type="warn" title="`operator` / `operatorSet` / `stringOps` are not public exports">
+The operator-authoring primitives, `operator()`, `operatorSet()`, `extendOperatorSet()`, and the builtin sets (`stringOps`, `numberOps`, …), live at the internal path `#questpie/server/fields/operators/index.js` and are **not** re-exported from `questpie` or `questpie/builders`. Only their *types* (`OperatorFn`, `OperatorMap`, `ContextualOperators`) are public. The public-export surface is verified in `packages/questpie/src/exports/builders.ts`.
+</Callout>
+
+### Adding chain methods with `fieldType()`
+
+A bare `field()` factory has the common methods (`.required()`, `.default()`, `.label()`, `.localized()`, …) but no *type-specific* ones. To add chainable methods like `.pattern()` or `.uppercase()`, use `fieldType()`, the declarative way to define a field type with methods, which is exactly how every builtin (`text`, `number`, `relation`, …) is built:
+
+```ts title="src/questpie/server/fields/slug.ts"
+import { varchar } from "questpie/drizzle-pg-core";
+import { z } from "zod";
+import { fieldType } from "questpie/builders";
+import type { Field } from "questpie/builders";
+// stringOps is internal, see the operators callout above.
+import { stringOps } from "#questpie/server/fields/operators/index.js";
+
+export const slugFieldType = fieldType("slug", {
+  // create(...args) → the FieldRuntimeState (same shape field() takes)
+  create: (maxLength: number = 255) => ({
+    type: "slug",
+    columnFactory: (name: string) => varchar(name, { length: maxLength }),
+    schemaFactory: () => z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).max(maxLength),
+    operatorSet: stringOps,
+    notNull: false,
+    hasDefault: false,
+    localized: false,
+    virtual: false,
+    input: true,
+    output: true,
+    isArray: false,
+    maxLength,
+  }),
+  // type-specific chain methods: (field, ...args) => field
+  methods: {
+    maxLen: (f: Field<any>, n: number) => f.derive({ maxLength: n }),
+  },
+});
+
+// The callable factory the `f` proxy uses:
+export const slug = slugFieldType.factory;
+```
+
+`fieldType(name, { create, methods })` returns a frozen `{ name, factory, methods }`. The `factory` auto-wraps the field in a Proxy (via `wrapFieldComplete`) so methods are never lost across a chain, `f.slug().maxLen(80).required()` keeps `.maxLen()` available at every step. Each method receives the field plus its args and returns a field, mutating state through `.derive()` (which forbids touching identity props like `type`/`columnFactory`).
+
+### Registering it so `f.color()` appears
+
+A field factory only reaches the `f` proxy once codegen knows about it. There are two ways, and in a package you'll use the first:
+
+```ts title="src/module.ts, register on a module's fields record (preferred)"
+import { module } from "questpie/app";
+import { color } from "./fields/color";
+import { slug } from "./fields/slug";
+
+export const myModule = module({
+  name: "acme-fields",
+  fields: { color, slug }, // each entry becomes a method on f
+});
+```
+
+When a module declares a `fields` record, codegen extracts those factories (the core plugin's `fieldTypes` category sets `extractFromModules: true`) and merges them into the generated `f` proxy, so any app that installs your module gets `f.color()` and `f.slug()`. This is how `@questpie/admin` ships `richText` and `blocks`: it contributes them via `factoryImports` on the same `fieldTypes` category.
+
+In a **root app** (not a package), the same effect comes from a single `src/questpie/server/fields.ts` *bundle* file that exports your factories, codegen discovers it via the `fields` discover pattern, spreads its default export into the runtime field map, and augments the type-level `FieldTypesMap`.
+
+<Callout type="info" title="Two `fields` mechanisms, don't confuse them">
+The core plugin has *both* a `fields.ts` single-file discover pattern (the root-app bundle, index.ts:145) and a `fieldTypes` *category* that scans the `fields/` directory for `fieldType()` calls (index.ts:131, `dirs: ["fields"]`). The category feeds the `~fieldTypes` Registry and module extraction; it does **not** auto-inject loose `fields/`-directory files into a root app's `f` proxy. Register via a module's `fields` record (packages) or the `fields.ts` bundle (root apps).
+</Callout>
+
+The full field surface, every common method (`.zod()`, `.drizzle()`, `.array()`, `.access()`, `.hooks()`, …), the `FieldRuntimeState` shape, and the per-type metadata, is in [Fields](/docs/concepts/fields). What's above is the minimum to add your own.
+
+## Custom query operators
+
+A field's `where` keys come from its **operator set**. When no builtin set fits (you need `domain`, `withinRadius`, a JSONB-path match), author one with `operatorSet()` / `extendOperatorSet()` and pass it as the field's `operatorSet`. The keys you declare become the typed `where` operators on every collection that uses the field.
+
+An operator is a function `(column, value, ctx) => SQL` wrapped by `operator()`. The `value` type you give it becomes the operand type in `where`:
+
+```ts title="src/questpie/server/fields/email-domain.ts (operators)"
+import { sql } from "questpie/drizzle";
+// operator / operatorSet / extendOperatorSet / stringOps are internal, they are
+// NOT exported from questpie/builders. Import them from the operators barrel.
+import {
+  operator,
+  extendOperatorSet,
+  stringOps,
+} from "#questpie/server/fields/operators/index.js";
+
+// Extend the builtin string operators with a `domain` filter.
+export const domainOps = extendOperatorSet(stringOps, {
+  column: {
+    // `value: string` → `where: { contact: { domain: "questpie.com" } }`
+    domain: operator<string>((col, value) => sql`${col} ILIKE ${"%@" + value}`),
+  },
+});
+```
+
+`operatorSet({ jsonbCast, column, jsonbOverrides? })` builds a set from scratch; `extendOperatorSet(base, { jsonbCast?, column?, jsonbOverrides? })` inherits every key of `base` and adds yours, all three extension fields are optional, and a missing `jsonbCast` falls back to the base's (this is exactly how `emailOps` and `urlOps` extend `stringOps`). `jsonbCast` (`"text" | "numeric" | "boolean" | "timestamp" | "jsonb" | null`) tells the engine how to compare the field when it's nested inside an `f.object()`, set it to match your column's storage. Wire the set onto a field via its `operatorSet` state (or `.operators(domainOps)` on an existing field).
+
+<Callout type="warn" title="`operator` / `operatorSet` are internal, not public exports">
+`operator()`, `operatorSet()`, and `extendOperatorSet()` are **not** re-exported from `questpie` or `questpie/builders`, import them from `#questpie/server/fields/operators/index.js`. Only the `OperatorFn` / `OperatorMap` / `ContextualOperators` **types** are public. Always type your operand precisely, `operator<string>(…)` makes the `where` operand `string`, which is what flows into the field's filter shape.
+</Callout>
+
+The complete operator catalog (what each builtin field exposes, the JSONB-path overrides, relation quantifiers) is in the [query reference under Relations](/docs/concepts/relations) and [Fields](/docs/concepts/fields).
+
+## Custom adapters
+
+Infrastructure in QUESTPIE is adapter-shaped. Every subsystem, queue, search, realtime, storage, KV, executor, is an interface you wire into `runtimeConfig()`. The built-in adapters (Postgres search, `pg_notify` realtime, memory KV) are just implementations of those interfaces, and a custom adapter is any object that satisfies the contract. You don't register adapters with codegen; you pass them to `runtimeConfig()` like the built-in ones.
+
+Each subsystem has one interface. A few of them:
+
+| Subsystem | Interface | Wire it as | Source |
+|---|---|---|---|
+| Search | `SearchAdapter` | `runtimeConfig({ search })` | `…/integrated/search/types.ts:671` |
+| Realtime | `RealtimeAdapter` | `runtimeConfig({ realtime: { adapter } })` | `…/integrated/realtime/adapter.ts:6` |
+| KV | `KVAdapter` | `runtimeConfig({ kv: { adapter } })` | `…/integrated/kv/adapter.ts:4` |
+| Executor | `ExecutorAdapter` | `runtimeConfig({ executor: { sandboxed } })` | `…/integrated/executor/adapter.ts:146` |
+| Storage | `files-sdk` `Adapter` | `runtimeConfig({ storage: { adapter } })` | `packages/questpie/src/exports/storage.ts:1` |
+
+A `RealtimeAdapter` is the smallest contract, four methods. Here is the shape of a custom transport adapter:
+
+```ts title="src/questpie/server/adapters/my-realtime.ts"
+import type {
+  RealtimeAdapter,
+  RealtimeChangeEvent,
+  RealtimeNotice,
+} from "questpie/realtime";
+
+export function myRealtimeAdapter(): RealtimeAdapter {
+  return {
+    async start() {/* open the connection */},
+    async stop() {/* close it */},
+    async notify(event: RealtimeChangeEvent) {/* broadcast to other instances */},
+    subscribe(handler: (notice: RealtimeNotice) => void) {
+      // call handler(notice) on each incoming change; return an unsubscribe fn
+      return () => {/* unsubscribe */};
+    },
+  };
+}
+```
+
+```ts title="src/questpie/server/questpie.config.ts"
+import { runtimeConfig } from "questpie/app";
+import { myRealtimeAdapter } from "./adapters/my-realtime";
+
+export default runtimeConfig({
+  db: { url: process.env.DATABASE_URL! },
+  realtime: { adapter: myRealtimeAdapter() },
+});
+```
+
+The adapter interfaces and their config types (`RealtimeAdapter` / `RealtimeConfig`, `SearchAdapter` / `SearchOptions` / `SearchResponse`, `KVAdapter` / `KVConfig`, `ExecutorAdapter` / `ExecutorConfig`) are all exported from the matching subpath, `questpie/realtime`, `questpie/search`, `questpie/kv`, `questpie/executor`. Build against the interface and the framework treats yours identically to a builtin. Each subsystem's contract and the built-in adapters are documented under Infrastructure.
+
+<Callout type="info" title="Adapters that need a runtime discriminator">
+A few adapters carry a `readonly runtime` field (e.g. the Cloudflare adapters set `runtime: "cloudflare"`) so the Cloudflare fetch/queue handlers can detect them. That's a built-in detail of those specific adapters, not a requirement of the interface, a plain transport adapter like the one above needs no discriminator.
+</Callout>
+
+## Custom blocks & components
+
+Blocks and components are admin extension points contributed by the `@questpie/admin` plugin. Once admin is installed, codegen discovers `blocks/*.ts` and `components/*.ts` server-side conventions and wires them in, so adding your own is, again, dropping a file, not writing a plugin.
+
+A **block** is a reusable content unit for the visual block editor (`f.blocks()`). Declare it with `block(name)`, a builder that takes the same `.fields(({ f }) => …)` callback as a collection, plus admin presentation and a `.form()` layout:
+
+```ts title="src/questpie/server/blocks/hero.ts"
+import { block } from "#questpie/factories";
+
+export const heroBlock = block("hero")
+  .admin(({ c }) => ({
+    label: "Hero",
+    icon: c.icon("ph:image"),
+    category: { label: "Layout" },
+  }))
+  .fields(({ f }) => ({
+    heading: f.text(120).label("Heading").required(),
+    subheading: f.textarea().label("Subheading"),
+  }));
+```
+
+`block` comes from `#questpie/factories` (the generated factory, like `collection`) because the block builder needs your merged field defs at construction. Codegen keys blocks off the name you pass (`block("hero")`).
+
+A **component** registers a named React-component reference you can hand to admin config (icons, custom cells, dashboard widgets) with typed props. Declare it server-side with `component(name, config)`; the `c` proxy in `.admin()` / `.actions()` / dashboard callbacks then offers `c.myComponent(props)` with autocomplete.
+
+<Callout type="info" title="Blocks and components are two-sided">
+A block or component has a **server definition** (`blocks/`, `components/`, schema + props) and a matching **client renderer** (`client/blocks/`, `client/components/`, the React component). `questpie add block hero` scaffolds both sides for you because the admin plugin declares the `block` scaffold on *both* its `server` and `admin-client` targets. The admin docs cover the client side; this page covers how the extension points exist.
+</Callout>
+
+The full block/component authoring surface, field layouts, prefetch, the client renderer contract, custom views/widgets, is in the admin documentation. What matters here: they're standard file conventions, reachable by any app the moment admin is installed.
+
+## The codegen plugin contract
+
+Everything above adds a *value* where the framework already looks. A `CodegenPlugin` adds a *new place to look*: a new file convention, a new builder method, a new generated file. This is the deep seam, and the canonical example is `adminPlugin()` itself.
+
+A plugin is one object: a `name`, a map of **target contributions**, and optional cross-target **validators**.
+
+```ts
+import type { CodegenPlugin } from "questpie/codegen";
+
+export function myPlugin(): CodegenPlugin {
+  return {
+    name: "my-plugin", // unique; dedup is by name (first wins on collision)
+    targets: {
+      server: {
+        root: ".",
+        outputFile: "index.ts",
+        // categories, discover, registries, transform, scaffolds, generate…
+      },
+    },
+    validators: [], // cross-target checks, run after all targets generate
+  };
+}
+```
+
+`CodegenPlugin` is `{ name; targets: Record<string, CodegenTargetContribution>; validators?: CrossTargetValidator[] }`. The well-known target IDs are `"server"` (emits `index.ts` + `factories.ts`) and `"admin-client"` (emits `client.ts`); plugins may add custom IDs. When multiple plugins contribute to the same target, codegen **merges** their contributions into one resolved target, so admin, OpenAPI, and yours coexist. Import the type from `questpie/codegen`, the public entry for plugin authors.
+
+### Registering a plugin
+
+Two ways, and you'll almost always use the second:
+
+```ts title="Direct, in questpie.config.ts"
+import { runtimeConfig } from "questpie/app";
+import { myPlugin } from "@acme/questpie-thing/plugin";
+
+export default runtimeConfig({
+  db: { url: process.env.DATABASE_URL! },
+  plugins: [myPlugin()], // codegen plugins, NOT module dependencies
+});
+```
+
+```ts title="Via a module, attach .plugin, ship in modules.ts (preferred)"
+import { module } from "questpie/app";
+import { myPlugin } from "./plugin";
+
+export const myModule = module({
+  name: "acme-thing",
+  plugin: myPlugin(), // auto-extracted at codegen time
+  // collections, jobs, messages… all merged at runtime
+});
+```
+
+When a plugin rides on a module's `plugin` field, codegen's pre-pass (`extractPluginsFromModules`) auto-registers it the moment the module appears in `modules.ts`, the user adds nothing to `questpie.config.ts`. This is how `adminModule` works: `Object.assign(generatedModule, { plugin: adminPlugin() })`, and installing the module *is* installing the plugin. The `plugin` key is codegen-only, it's stripped from the runtime module merge.
+
+<Callout type="warn" title="`plugins` is for codegen plugins; `modules.ts` is for dependencies">
+`runtimeConfig({ plugins })` registers **codegen plugins** (file discovery + generated output). Module *dependencies* go in `modules.ts`. Because a module can carry its own codegen plugin, most apps never touch `plugins` directly, they just install your module. The core codegen plugin is *always* prepended automatically; never register it.
+</Callout>
+
+### Target contribution, the surface
+
+A `CodegenTargetContribution` is what a plugin adds to one target. Every field is optional except `root` + `outputFile`:
+
+| Field | Type | What it adds |
+|---|---|---|
+| `root` | `string` | discovery root, relative to the server root (`"."` server, `"../admin"` client) |
+| `outDir` | `string` | output dir within root (default `.generated`) |
+| `outputFile` | `string` | the primary generated file (`index.ts`, `client.ts`) |
+| `moduleRoot` | `string` | subdir within each module dir this target discovers from (admin uses `"client"`) |
+| `categories` | `Record<string, CategoryDeclaration>` | directory conventions to scan (`views/`, `blocks/`) |
+| `discover` | `Record<string, DiscoverPattern>` | single-file / glob patterns (`config/x.ts`, `sidebar.ts`) |
+| `registries` | object | typed builder-method extensions (collection/global/field) + singleton/builder factories |
+| `callbackParams` | `Record<string, CallbackParamDefinition>` | runtime proxies for callback-style extension methods |
+| `transform` | `(ctx) => void` | mutate the codegen context before generation (add imports, type decls) |
+| `generate` | `(ctx) => CodegenTargetOutput` | take over generation of the whole file (one per target) |
+| `scaffolds` | `Record<string, ScaffoldConfig>` | `questpie add <type>` templates |
+
+`root` / `outDir` / `outputFile` / `moduleRoot` **must be consistent** across every plugin contributing to a target, codegen throws if two plugins disagree. Only **one** `generate` is allowed per target.
+
+### Categories, discover a directory convention
+
+A `CategoryDeclaration` is the primary unit of the plugin system: it tells codegen "scan these directories, treat each file as an entity, import and type it this way." The admin plugin's `views` category is a complete example:
+
+```ts
+categories: {
+  views: {
+    dirs: ["views"],          // scan views/ (and features/*/views/)
+    prefix: "view",           // var-name prefix in generated code
+    factoryFunctions: ["view"], // each `view(...)` call → one entity
+    registryKey: true,        // add to the typed names registry (ViewKeys)
+    placeholder: "$VIEW_NAMES",    // token resolved to the names union
+    recordPlaceholder: "$VIEWS_RECORD",
+    typeEmit: "standard",     // AppViews = _ModuleViews & { [name]: typeof var }
+    includeInAppState: true,
+    extractFromModules: true,
+  },
+},
+```
+
+The knobs you'll actually reach for:
+
+| Option | Type / default | Effect |
+|---|---|---|
+| `dirs` | `string[]` (required) | directories to scan; also scans `features/{name}/{dir}/` |
+| `prefix` | `string` (required) | generated variable-name prefix (`_view_…`) |
+| `recursive` | `boolean` | recurse into subdirectories |
+| `emit` | `"record"` \| `"array"` (default `"record"`) | `{ key: var }` vs flat `[var1, var2]` (migrations/seeds use `array`) |
+| `typeEmit` | `"standard"` \| `"services"` \| `"emails"` \| `"messages"` \| `"none"` | how the value type is emitted |
+| `registryKey` | `string` \| `boolean` (default `true` for standard) | key in the typed `Registry`; tilde keys like `~fieldTypes` are internal |
+| `factoryFunctions` | `string[]` | enables multi-export discovery, each matching factory call becomes a separate entity; files with none are skipped |
+| `keyFromProperty` | `string` | use a runtime prop as the key (views → `"name"`, blocks → `"state.name"`) |
+| `keyFromSource` | `"basename"` | use the source filename as the key (client convention files) |
+| `factoryImports` | `Array<{ name; from }>` | named exports spread-merged into `factories.ts` (admin merges `adminFields`) |
+
+
+
+<Callout type="info" title="`factoryFunctions` is how one file yields many entities">
+Without `factoryFunctions`, a file is one entity keyed off its default/named export. With it, codegen scans for every call to a named factory (`view(…)`, `block(…)`) and emits one entity per call, keyed off the factory's first string argument, and silently skips files that contain no such call (so utility/type files in the same directory don't pollute the registry).
+</Callout>
+
+### Discover patterns, single files & spreads
+
+Where a category scans a *directory*, a `DiscoverPattern` matches a *single file* or a *spread* of files. This is how a plugin claims `config/my-plugin.ts`, `sidebar.ts`, or `fields.ts`:
+
+```ts
+discover: {
+  // single file → emitted as config.myPlugin (the modern config-bucket path)
+  myPluginConfig: { pattern: "config/my-plugin.ts", configKey: "myPlugin" },
+  // single file whose `typeof` augments the Registry
+  fields: { pattern: "fields.ts", registryKey: "~fieldTypes" },
+},
+```
+
+A bare string is shorthand: contains `*` or has no extension → directory/map pattern; a single file with an extension → single. The full object form adds `resolve` (`"default"` / `"named"` / `"all"` / `"auto"`), `keyFrom`, `cardinality`, `mergeStrategy: "spread"` (collects the root file plus every `features/*/pattern` into an ordered array, how `sidebar`/`dashboard` work), `configKey` (emit the whole file under `config.<key>`), and `registryKey`.
+
+### Builder extensions, add a typed method
+
+The most powerful seam: add a method to `collection()`, `global()`, or a field instance that codegen generates into `factories.ts` as a typed wrapper. A `RegistryExtension` declares the method's state key, its config type, its imports, and (for callbacks) the proxy params. The admin plugin's `.preview()` is the simplest:
+
+```ts
+registries: {
+  collectionExtensions: {
+    preview: {
+      stateKey: "adminPreview", // collection.set("adminPreview", config)
+      imports: [{ name: "PreviewConfig", from: "@questpie/admin/factories" }],
+      configType: "PreviewConfig", // the generated method's parameter type
+    },
+  },
+},
+```
+
+Codegen turns that into a typed `.preview(config: PreviewConfig)` method on the generated `collection()` that stores the value under `adminPreview`. `RegistryExtension` fields:
+
+| Field | Purpose |
+|---|---|
+| `stateKey` | the builder `.set()` key the value lands under |
+| `configType` | TS type of the method's argument (defaults to `any`) |
+| `imports` | imports the `configType` needs, added to `factories.ts` |
+| `isCallback` + `callbackContextParams` | mark a callback method (e.g. `["v","f","a","c"]`) and which proxies it receives |
+| `callbackParams` | per-extension proxy overrides (precedence over the plugin-level map) |
+| `configTypePlaceholders` | replace tokens (`$COMPONENTS`) with module-extracted type aliases |
+| `defaults` | wrap user config as `{ ...defaults, ...userConfig }` |
+
+Field-level extensions (`fieldExtensions`) work the same way and produce `.admin()` / `.form()` on every `f.*()`. Alongside them, `singletonFactories` generate typed identity wrappers for convention files (`branding<T>(config: T): T`), and `builderFactories` generate factory functions that need your merged field defs at construction (admin contributes `block`).
+
+<Callout type="warn" title="Callback extensions reference a real factory, never an inline string">
+When an extension is `isCallback` and lists `callbackContextParams: ["f"]`, codegen looks up `f` in the merged `callbackParams` and emits the proxy by calling the **named factory** it points at (`{ factory: "createFieldNameProxy", from: "questpie/builders" }`). The factory must be a real exported function. There are no inline JS strings in generated code, every proxy is a real import.
+</Callout>
+
+### Transforms & custom generators
+
+For output that a category can't express, two escape hatches. A `transform(ctx)` runs after discovery and before generation, it can `ctx.addImport()`, `ctx.addTypeDeclaration()`, `ctx.addRuntimeCode()`, and `ctx.set()` to inject extra pieces into the template. The admin plugin's `admin-client` transform reads discovered blocks and emits a `BlockProps<T>` helper type.
+
+When one output file isn't enough, you need to generate a whole bespoke file, supply `generate(ctx)`. It receives the resolved target, the discovery result, and the accumulated extras, and returns `{ code; additionalFiles? }`. Only one plugin may own `generate` per target. The admin `admin-client` target uses it to render the pre-built client config.
+
+### Scaffolds, teach `questpie add`
+
+A `ScaffoldConfig` adds a `questpie add <type> <name>` template. `dir` is relative to the target root, `template(ctx)` returns the file contents, and `ctx` carries every casing of the name plus the target id:
+
+```ts
+scaffolds: {
+  widget: {
+    dir: "widgets",
+    description: "A dashboard widget",
+    template: ({ kebab, camel, pascal }) =>
+      `import { widget } from "@acme/questpie-thing";\n\n` +
+      `export const ${camel}Widget = widget("${kebab}");\n`,
+  },
+},
+```
+
+`ScaffoldContext` is `{ kebab; camel; pascal; title; targetId }`. If multiple targets declare the **same** scaffold name, `questpie add` writes a file in **each**, this is how `questpie add block` creates both the server definition and the client renderer in one command. Existing files are skipped with a warning.
+
+### Cross-target validators
+
+A plugin that spans targets can enforce consistency between them with a `CrossTargetValidator`, `(targets: Map<string, CodegenResult>) => ProjectionError[]`, registered on `CodegenPlugin.validators` and run after all targets generate. Admin uses one to catch a server-side view/block/component the admin-client target never registered; a `ProjectionError` with `severity: "error"` fails codegen (exit 1).
+
+## Extending config non-destructively
+
+Plugins extend an app **additively**, they never overwrite. Two mechanisms guarantee it:
+
+**Merge, don't replace.** When multiple plugins contribute to the same target, codegen *merges* their categories, discover patterns, registries, and scaffolds; transforms run in plugin order. The one rule that can fail is structural: `root` / `outputFile` / a second `generate` must not conflict. Module-contributed collections/globals are merged by key (later modules override), and a user can extend a module's collection with `collection("user").merge(starter.collections.user).fields(...)`, the merge preserves admin config keys and prior fields.
+
+**Claim your own config file.** The cleanest way to ship configurable behavior is a `config/<name>.ts` convention that maps to one key in `AppStateConfig` (the config bucket). Declare a discover pattern and augment the interface, your config merges per-key across every module, and no framework code changes:
+
+```ts
+// 1. in your plugin's target contribution:
+discover: {
+  myPluginConfig: { pattern: "config/my-plugin.ts", configKey: "myPlugin" },
+},
+
+// 2. augment the bucket so the key is typed:
+declare module "questpie" {
+  interface AppStateConfig {
+    myPlugin?: { theme?: "light" | "dark" };
+  }
+}
+```
+
+A user then drops `config/my-plugin.ts` exporting your config, and it lands at `app.config.myPlugin`. This is exactly how `config/admin.ts` and `config/openapi.ts` work, they're not special-cased, just instances of this pattern. The [Configuration](/docs/concepts/configuration) page covers the config bucket from the app author's side.
+
+<Callout type="info" title="Why non-destructive matters">
+A QUESTPIE app composes N plugins (admin, audit, OpenAPI, yours) and its own files. If any plugin could overwrite another's output, ordering would become load-bearing and installs would be fragile. Merge-not-replace + per-key config buckets mean plugins are *commutative* in the common case, you install them in any order and they coexist. The only hard conflicts (same `outputFile`, two `generate`s) fail loudly at codegen time, not silently at runtime.
+</Callout>
+
+## Packaging & publishing
+
+A plugin ships as a **module package**. The shape that makes `questpie generate` discover your conventions both *inside your package* (so you commit a generated `.generated/module.ts`) and *in the consuming app* (so your plugin runs there too):
+
+1. **Author your conventions**, your collections, blocks, custom fields, and the `CodegenPlugin` itself, in your package's source.
+2. **Attach the plugin to a module** and export it:
+   ```ts title="src/module.ts"
+   import { module } from "questpie/app";
+   import { myPlugin } from "./plugin";
+   export const myModule = module({ name: "acme-thing", plugin: myPlugin() });
+   ```
+3. **Generate `.generated/module.ts` at build time** with a `packageConfig`, the dev-only entry for the static-module pattern. It scans `modulesDir/*`, derives each module's name, and emits a static module definition per subdir:
+   ```ts title="questpie.config.ts (in your package)"
+   import { packageConfig } from "questpie/cli";
+   import { myPlugin } from "./src/plugin";
+
+   export default packageConfig({
+     modulesDir: "src/modules",
+     modulePrefix: "acme",
+     plugins: [myPlugin()],
+   });
+   ```
+4. **Ship only the generated `module.ts`**, `packageConfig` itself is dev-only and not distributed. Consumers add your module to `modules.ts`; because it carries `.plugin`, your codegen plugin auto-registers in *their* app with no extra config.
+
+`packageConfig` is `{ modulesDir; modulePrefix?; plugins? }`, exported from `questpie/cli` (which is side-effect-free on import, importing it must never start a CLI command). The core framework itself uses this exact pattern: `packageConfig({ modulesDir: "src/server/modules", modulePrefix: "questpie" })`.
+
+<Callout type="warn" title="Import the type from `questpie/codegen`, the lightweight `plugin` entry">
+Author your `CodegenPlugin` against `questpie/codegen` (types) and keep the plugin factory in a *standalone* entry like `@acme/thing/plugin` that does **not** pull in `drizzle-orm` or runtime code, so a user importing your plugin into `questpie.config.ts` stays lightweight. This is why `@questpie/admin` exposes `adminPlugin()` from `@questpie/admin/plugin` separately from the heavy server entry.
+</Callout>
+
+## The whole loop
+
+Putting the build-your-own loop together, the four moves, smallest seam first:
+
+1. **Contract.** Decide the seam. A new *value* where the framework already looks (field type, operator, adapter, block) → a single factory call, no plugin. A new *file convention* or *builder method* → a `CodegenPlugin`.
+2. **Scaffold / template.** For a plugin, declare categories + discover patterns + registries on a target; add `scaffolds` so users get `questpie add <type>`.
+3. **Non-destructive config.** Claim a `config/<name>.ts` and augment `AppStateConfig` rather than overwriting anything; rely on codegen's merge-not-replace.
+4. **Publish.** Attach the plugin to a `module()`, generate `.generated/module.ts` with `packageConfig`, ship it. Users add one line to `modules.ts`.
+
+Every step rides the same primitives the framework's own admin uses, that's the invariant. If you can point to where a builtin does it, you can do it too.
+
+## TypeScript
+
+Plugin authors import codegen types from `questpie/codegen`, field factories from `questpie/builders`, and `module` / `packageConfig` from `questpie/app` and `questpie/cli`:
+
+```ts
+import type {
+  CodegenPlugin,
+  CodegenTargetContribution,
+  CategoryDeclaration,
+  DiscoverPattern,
+  RegistryExtension,
+  SingletonFactory,
+  BuilderFactory,
+  ScaffoldConfig,
+  CrossTargetValidator,
+  CodegenContext,
+  CodegenTargetGenerateContext,
+} from "questpie/codegen";
+
+// Public field factories + operator/field types.
+import { field, fieldType, from } from "questpie/builders";
+import type { OperatorFn, OperatorMap, ContextualOperators } from "questpie/builders";
+
+// Operator-authoring functions are internal (not on questpie/builders).
+import { operator, operatorSet, extendOperatorSet } from "#questpie/server/fields/operators/index.js";
+
+import { module } from "questpie/app";          // module(), NOT on questpie/cli
+import { packageConfig } from "questpie/cli";    // packageConfig (dev-only)
+import type { ModuleDefinition } from "questpie/types";
+```
+
+`questpie/codegen` is the public entry for plugin authoring, it re-exports every codegen type plus the emit helpers (`categoryRecordEntry`, `categoryTypeEntry`, `importStatement`, `safeKey`, …). The same types are also on `questpie/types` (minus a few authoring-only ones). The public field primitives, `field`, `fieldType`, `from`, `wrapFieldComplete`, `FieldTypeDefinition`, and the *types* `OperatorFn` / `OperatorMap` / `ContextualOperators`, live on `questpie` / `questpie/builders`; the operator-authoring *functions* (`operator`, `operatorSet`, `extendOperatorSet`, the builtin sets) are internal at `#questpie/server/fields/operators/index.js`.
+
+## Related
+
+- [Configuration](/docs/concepts/configuration), `runtimeConfig({ plugins })`, `modules.ts`, the `config/<name>.ts` pattern, and the config bucket from the app author's side.
+- [Fields](/docs/concepts/fields), every `f.*` type, the full field-builder surface, and the field-definition contract your custom type implements.
+- [Collections](/docs/concepts/collections), `.merge()` and how a module-provided collection is extended non-destructively.
+- [Relations](/docs/concepts/relations), the query/operator surface your custom operators extend.
+- [Blocks](/docs/concepts/blocks), the block content model your custom blocks plug into.
+- Runnable example: [`examples/toy-factory-backend`](https://github.com/questpie/questpie/tree/main/examples/toy-factory-backend), a multi-module app you can read for the module + convention layout.

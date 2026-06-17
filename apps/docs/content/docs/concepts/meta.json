@@ -1,0 +1,19 @@
+{
+	"title": "Concepts",
+	"pages": [
+		"collections",
+		"globals",
+		"fields",
+		"relations",
+		"blocks",
+		"access-control",
+		"hooks",
+		"validation",
+		"routes",
+		"jobs",
+		"services",
+		"emails",
+		"configuration",
+		"environment"
+	]
+}

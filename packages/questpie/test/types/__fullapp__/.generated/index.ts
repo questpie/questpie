@@ -19,6 +19,7 @@ import { createContextFactory } from "#questpie/server/config/create-context-fac
 import type { AppDefinition } from "#questpie/server/config/module-types.js";
 import type { CollectionSelect, GlobalSelect } from "#questpie/shared/type-utils.js";
 import type { AccessContext, HookContext } from "#questpie/server/collection/builder/types.js";
+import type { Where } from "#questpie/server/collection/crud/index.js";
 
 // Side-effect import of names.gen.ts (L0) — it lives in the `.generated`
 // dot-folder and is imported by nothing else, so without this its ambient
@@ -58,6 +59,12 @@ export type * from "./context.gen.js";
  * Select/document type for a collection key — prefer over `Record<string, any>` for docs.
  */
 export type CollectionDoc<K extends keyof AppCollections> = CollectionSelect<AppCollections[K]>;
+
+/**
+ * Typed `where` filter for a collection key — prefer over `Record<string, unknown>`
+ * when building a `where` clause dynamically before a `find`/`findOne` call.
+ */
+export type CollectionWhere<K extends keyof AppCollections> = Where<AppCollections[K], AppConfig>;
 
 /**
  * Select/document type for a global key.

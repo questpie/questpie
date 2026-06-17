@@ -65,14 +65,6 @@ const RANK: Record<LayerFile, number> = {
 	"index.ts": 3,
 };
 
-/** Map a layer file to the module basename it is imported as (the `.js` form). */
-const SPECIFIER_BY_LAYER: Record<LayerFile, string> = {
-	"names.gen.ts": "names.gen.js",
-	"entities.gen.ts": "entities.gen.js",
-	"context.gen.ts": "context.gen.js",
-	"index.ts": "index.js",
-};
-
 /**
  * Extract every module specifier from `import`/`export … from`/bare-`import`/
  * dynamic-`import()` statements in a TS source. Deterministic regex over the
@@ -98,21 +90,22 @@ function extractSpecifiers(source: string): string[] {
 /**
  * If a specifier resolves to one of the four layer files in the SAME generated
  * dir, return that layer file; otherwise null (cross-package / `../` / `#alias`
- * imports are outside the intra-layer graph and ignored). Matches `./X.js`,
- * `X.js`, and (defensively) extensionless `./index` forms.
+ * imports are outside the intra-layer graph and ignored). Extension-AGNOSTIC:
+ * matches `./entities.gen.js`, `./entities.gen.ts`, and the extensionless
+ * `./entities.gen` (bundler) form alike — so the check stays meaningful
+ * regardless of which import-extension convention the codegen emits.
  */
 function resolveLayer(specifier: string): LayerFile | null {
-	// Only same-dir relative specifiers can hit a sibling layer file.
-	if (specifier.startsWith("../") || specifier.startsWith("#") || !specifier.includes(".")) {
-		// `!includes(".")` also rejects bare-package specifiers; extensionless
-		// `./index` is handled below before this returns.
-	}
-	const normalized = specifier.replace(/^\.\//, "");
+	// Only same-dir relative specifiers can hit a sibling layer file; `../`,
+	// `#alias`, and bare-package specifiers are outside the intra-layer graph.
+	if (specifier.startsWith("../") || specifier.startsWith("#")) return null;
+	// Strip a leading `./` and any module extension → the bare layer stem.
+	const stem = specifier.replace(/^\.\//, "").replace(/\.(js|ts|mjs|mts)$/, "");
 	for (const layer of LAYERS) {
-		if (normalized === SPECIFIER_BY_LAYER[layer]) return layer;
-		// Defensive: extensionless `./index` (no `.js`) — would still be an edge.
-		if (layer === "index.ts" && (normalized === "index" || normalized === "")) return layer;
+		if (stem === layer.replace(/\.ts$/, "")) return layer;
 	}
+	// Bare `./` (directory import) resolves to the dir's index.
+	if (stem === "") return "index.ts";
 	return null;
 }
 

@@ -1,0 +1,37 @@
+{
+	"include": [
+		"next-env.d.ts",
+		"src/**/*.ts",
+		"src/**/*.tsx",
+		"*.config.ts",
+		".next/types/**/*.ts"
+	],
+	"exclude": ["node_modules", "dist", "**/*.test.ts"],
+	"compilerOptions": {
+		"target": "ES2022",
+		"jsx": "preserve",
+		"module": "ESNext",
+		"lib": ["ES2022", "DOM", "DOM.Iterable"],
+		"moduleResolution": "bundler",
+		"resolveJsonModule": true,
+		"verbatimModuleSyntax": false,
+		"isolatedModules": true,
+		"incremental": true,
+		"noEmit": true,
+		"allowJs": true,
+		"esModuleInterop": true,
+		"skipLibCheck": true,
+		"strict": true,
+		"noUnusedLocals": false,
+		"noUnusedParameters": false,
+		"noFallthroughCasesInSwitch": true,
+		"plugins": [{ "name": "next" }],
+		"baseUrl": ".",
+		"paths": {
+			"@/*": ["./src/*"],
+			"~/*": ["./src/*"],
+			"#questpie": ["./src/questpie/server/.generated/index.ts"],
+			"#questpie/*": ["./src/questpie/server/.generated/*"]
+		}
+	}
+}

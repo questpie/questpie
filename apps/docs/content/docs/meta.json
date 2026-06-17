@@ -2,13 +2,12 @@
 	"title": "Documentation",
 	"pages": [
 		"index",
-		"start-here",
-		"backend",
-		"workspace",
-		"frontend",
-		"production",
+		"getting-started",
+		"concepts",
+		"client",
+		"adapters",
+		"admin",
 		"extend",
-		"examples",
-		"reference"
+		"integrations"
 	]
 }

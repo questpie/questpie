@@ -1,0 +1,128 @@
+---
+title: Date field
+description: f.date() stores a calendar date (no time) as an ISO date string, backed by a Postgres `date` column, with `.autoNow()` / `.autoNowUpdate()` stamping and comparison operators on the typed `where` clause.
+---
+
+`f.date()` stores a **calendar date**, year-month-day, no time of day. It maps to a Postgres `date` column in string mode, so the value you read, write, and filter on is an ISO date `string` like `"2024-01-31"` (never a JS `Date`). The derived schema is `z.string().date()`, and the field exposes comparison operators (`eq`, `gt`, `lte`, `in`, …) on the typed `where` clause. Reach for it when you care about the day but not the clock, a publish date, a due date, a birthday.
+
+> **Prerequisites:** read [Fields](/docs/concepts/fields) first, this page covers only the `date` type. The `f` proxy, the chain-modifier model, and shared modifiers like `.required()` / `.default()` / `.localized()` are taught there.
+
+## What it does
+
+- **Stores a date-only value**, a Postgres `date` column (`mode: "string"`), so there is no time-of-day or timezone component to reason about.
+- **Reads and writes as an ISO date string**, the value type is `string` (`"YYYY-MM-DD"`), not a `Date`. Validated by `z.string().date()`, which rejects `Date` objects and full date-time strings.
+- **Auto-stamps on write**, `.autoNow()` defaults the field on create; `.autoNowUpdate()` refreshes it on every write.
+- **Filters with comparison operators**, `eq`, `ne`, `gt`, `gte`, `lt`, `lte`, `in`, `notIn`, `isNull`, `isNotNull`, all typed against `string`.
+- **Renders a date picker** in the admin form.
+
+## Quick start
+
+Use `f.date()` inside a `.fields()` callback. It takes no constructor argument; chain modifiers to make it required, give it a default, or label it.
+
+```ts title="src/questpie/server/collections/announcements.ts"
+import { collection } from "#questpie/factories";
+
+export const announcements = collection("announcements").fields(({ f }) => ({
+  validFrom: f.date().label("Valid From").required(), // ISO date, NOT NULL
+  validTo: f.date().label("Valid Until"),             // nullable
+}));
+```
+
+That gives `announcements` two `date` columns typed `string` on read, one required on insert, both validated as ISO dates and filterable with the comparison operators below, no schema or migration written by hand.
+
+## Constructor argument
+
+`f.date()` takes **no arguments**. There is no precision or timezone knob, a calendar date has neither. It always produces a `date` column in Drizzle's `mode: "string"`, so the field data is `string` and the derived schema is `z.string().date()`.
+
+If you need a timestamp (a moment in time, with timezone) use [`f.datetime()`](/docs/concepts/fields/datetime); for a time of day with no date use [`f.time()`](/docs/concepts/fields/time).
+
+<Callout type="info" title="The value is a string, not a `Date`">
+A `date` field's data type is `string`, an ISO date like `"2024-01-31"`. Its schema (`z.string().date()`) rejects both `Date` objects and full ISO date-time strings (e.g. `"2024-01-31T00:00:00Z"`). Pass the bare date string when you create or update, and expect a string when you read. This is the deliberate difference from `f.datetime()`, whose data *is* a `Date`.
+</Callout>
+
+## Chained methods
+
+These two methods are specific to `date` (on top of the [shared modifiers](/docs/concepts/fields#shared-methods) every field has). Each returns a new immutable field, so they chain in any order.
+
+| Method | Effect |
+|---|---|
+| `.autoNow()` | Sets a default of the current time on **create**, `hasDefault: true`, `defaultValue: () => new Date()`. Makes the input optional. |
+| `.autoNowUpdate()` | Adds a `beforeChange` hook that returns the current time on **every write** (create and update), merged with any existing hooks. |
+
+The common pattern is to pair either method with [`.inputFalse()`](/docs/concepts/fields#input-output-shaping) so the field is system-managed and never accepted from the client:
+
+```ts
+collection("posts").fields(({ f }) => ({
+  publishedOn: f.date().autoNow().inputFalse(),     // stamped once, on create
+  reviewedOn:  f.date().autoNowUpdate().inputFalse(), // re-stamped on every write
+}));
+```
+
+<Callout type="warn" title="`.autoNow()` produces a `Date`, but the column stores a date string">
+Both helpers use `() => new Date()` as the value, a full timestamp, even though the column is a date-only string. Drizzle's date-string column serializes that `Date` with `toISOString()` (a full **UTC** ISO timestamp, e.g. `"2024-01-31T12:34:56.789Z"`), and Postgres truncates it to the calendar date on insert. So the stored value is a correct date, but it reflects the **UTC** day, not the local one: near midnight in a non-UTC timezone, "today" can land on the previous or next calendar day. If you need a specific calendar date (a fixed day, or "today" in a particular timezone), set the value explicitly with `.default("2024-01-01")` or a field hook that returns the exact `YYYY-MM-DD` string instead. For real timestamp columns, prefer [`f.datetime().autoNow()`](/docs/concepts/fields/datetime).
+</Callout>
+
+## Filtering, operators
+
+`date` uses the **date-string operator set** (`dateStringOps`), so every date field is filterable with these in a `where` clause. The operand is typed `string` (or `string[]` for `in` / `notIn`), pass ISO date strings, not `Date` objects.
+
+| Operator | Operand | Matches |
+|---|---|---|
+| `eq` / `ne` | `string` | Exact equal / not equal. |
+| `gt` / `gte` | `string` | After / on-or-after the given date. |
+| `lt` / `lte` | `string` | Before / on-or-before the given date. |
+| `in` / `notIn` | `string[]` | Date is (not) in the list. |
+| `isNull` / `isNotNull` | `boolean` | Column is (not) null. |
+
+```ts
+// Announcements valid as of today:
+const today = new Date().toISOString().slice(0, 10); // "YYYY-MM-DD"
+const { docs } = await app.collections.announcements.find({
+  where: {
+    validFrom: { lte: today },
+    validTo: { gte: today },
+  },
+});
+```
+
+ISO date strings sort lexicographically the same way they sort chronologically, so range filters (`gte` / `lte`) and `orderBy` behave as you expect. The runtime comparison is identical to [`f.datetime()`](/docs/concepts/fields/datetime)'s; only the operand *type* differs, `date` narrows it to `string`. To combine a date filter with a [relation filter](/docs/concepts/relations) (e.g. only announcements whose `author` is active), nest both in the same `where` clause.
+
+## When to use it
+
+- **`f.date()`**, a calendar day with no time-of-day or timezone: publish dates, due dates, valid-from / valid-to ranges, birthdays, deadlines.
+- **[`f.datetime()`](/docs/concepts/fields/datetime)**, a precise moment in time (with timezone), read back as a JS `Date`: `createdAt`, event start times, anything where the clock matters.
+- **[`f.time()`](/docs/concepts/fields/time)**, a time of day with no date: opening hours, a daily reminder time.
+
+## Multiple values
+
+Chain `.array()` to store a list of dates in a single `jsonb` column, and bound the list length with `.minItems(n)` / `.maxItems(n)`. This is a [shared modifier](/docs/concepts/fields#shared-methods), not date-specific:
+
+```ts
+blackoutDates: f.date().array().maxItems(20), // string[] stored as jsonb
+```
+
+## TypeScript
+
+A date field contributes a `string` to the generated row, insert, and `where` types, no annotation needed. After `questpie generate`, pull the shapes off the collection or the app types:
+
+```ts
+type Announcement = typeof announcements.$infer.select;
+//   ^? { id: string; validFrom: string; validTo: string | null; ... }
+```
+
+```ts
+import type { CollectionDoc, CollectionWhere } from "#questpie/types";
+
+type Announcement = CollectionDoc<"announcements">;          // { validFrom: string; ... }
+type AnnouncementFilter = CollectionWhere<"announcements">;  // { validFrom?: { gte?: string; ... } }
+```
+
+`.required()` makes the field non-null and required on insert; without it the column is nullable and the insert field optional. `.default("2024-01-01")` (or `.autoNow()`) makes the input optional and is type-checked against `string`. See [Fields → inferred types](/docs/concepts/fields#example--inferred-types) for how modifiers flow into the generated types.
+
+## Related
+
+- [Fields](/docs/concepts/fields), the `f` proxy, the chain-modifier model, and the shared modifiers (`.required()`, `.default()`, `.array()`, `.localized()`, …).
+- [`f.datetime()`](/docs/concepts/fields/datetime), a timestamp (moment in time, with timezone) read back as a `Date`.
+- [`f.time()`](/docs/concepts/fields/time), a time of day with no date.
+- [Validation](/docs/concepts/validation), the auto-derived Zod schema and the `.zod()` escape hatch for custom date rules.
+- [Relations](/docs/concepts/relations), hydrating related records with `with` and filtering by a relation alongside a date filter.

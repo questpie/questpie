@@ -1,0 +1,19 @@
+---
+title: Overview
+description: External-facing modules that expose your QUESTPIE app to tools and API consumers through MCP and OpenAPI.
+---
+
+Integrations are modules you add to surface what your app already knows to external consumers. Register one, run codegen, and the integration introspects your existing collections, globals, and routes, no decorators, no hand-written spec, no separate build step. These pages cover external protocols and API documentation surfaces. For framework modules such as admin and workflows, use [Admin](/docs/admin) and [Extend](/docs/extend/modules).
+
+## Available integrations
+
+| Integration | What it does |
+|---|---|
+| **[MCP](/docs/integrations/mcp)** | Add `mcpModule` and your app becomes a Model Context Protocol server, collections, globals, and opted-in routes become tools an AI client can call, gated by your access rules. |
+| **[OpenAPI and Scalar](/docs/integrations/openapi)** | Add `@questpie/openapi` and your whole API documents itself, an OpenAPI 3.1 spec at `/api/openapi.json` plus interactive [Scalar](https://scalar.com) docs at `/api/docs`. |
+
+## Related
+
+- [Routes](/docs/concepts/routes), how routes opt into MCP tool exposure and shape their OpenAPI metadata.
+- [Collections](/docs/concepts/collections) · [Globals](/docs/concepts/globals), the surfaces both integrations introspect.
+- [Access control](/docs/concepts/access-control), the rules that gate every exposed operation.

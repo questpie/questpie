@@ -1,0 +1,20 @@
+{
+	"title": "Fields",
+	"pages": [
+		"text",
+		"textarea",
+		"email",
+		"url",
+		"number",
+		"boolean",
+		"date",
+		"datetime",
+		"time",
+		"select",
+		"object",
+		"array",
+		"json",
+		"rich-text",
+		"upload"
+	]
+}

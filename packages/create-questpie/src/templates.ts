@@ -13,10 +13,27 @@ export const templates: Template[] = [
 		description:
 			"Full-stack React with TanStack Start, Vite, Tailwind CSS, and Nitro server",
 	},
-	// Future templates:
-	// { id: "hono", label: "Hono", hint: "api-only", description: "Lightweight API server with Hono" },
-	// { id: "elysia", label: "Elysia", hint: "bun-native", description: "Bun-native API server with Elysia" },
-	// { id: "next", label: "Next.js", hint: "react", description: "React with Next.js App Router" },
+	{
+		id: "hono",
+		label: "Hono",
+		hint: "headless api",
+		description:
+			"Headless REST API with Hono on Bun, OpenAPI/Scalar docs, and a typed client (no admin UI)",
+	},
+	{
+		id: "elysia",
+		label: "Elysia",
+		hint: "headless api",
+		description:
+			"Headless REST API with Elysia on Bun, OpenAPI/Scalar docs, and a typed client (no admin UI)",
+	},
+	{
+		id: "next",
+		label: "Next.js",
+		hint: "fullstack",
+		description:
+			"Full-stack React with Next.js App Router (Turbopack), admin UI, OpenAPI/Scalar docs, and a typed client",
+	},
 ];
 
 export function getTemplate(id: string): Template | undefined {

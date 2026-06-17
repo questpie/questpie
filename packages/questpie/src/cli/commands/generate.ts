@@ -178,7 +178,6 @@ async function generateMigrationInternal(
 		schema,
 		migrationDir,
 		cumulativeSnapshot,
-		extensions: app.search?.getAdapter?.()?.getExtensions?.() ?? [],
 	});
 
 	if (result.skipped) {

@@ -192,7 +192,7 @@ export default adminConfig({
 			{ id: "business", label: { en: "Business" }, layout: "grid", columns: 4 },
 		],
 		items: [
-			/* widget items — see widget types below */
+			/* widget items, see widget types below */
 		],
 	},
 });
@@ -200,7 +200,7 @@ export default adminConfig({
 
 ### Widget Types
 
-**Stats** — count records with optional filter:
+**Stats**, count records with optional filter:
 
 ```ts
 {
@@ -214,7 +214,7 @@ export default adminConfig({
 }
 ```
 
-**Value** — custom-loaded value with trend:
+**Value**, custom-loaded value with trend:
 
 ```ts
 {
@@ -232,7 +232,7 @@ export default adminConfig({
 }
 ```
 
-**Progress** — progress bar toward a goal:
+**Progress**, progress bar toward a goal:
 
 ```ts
 {
@@ -246,7 +246,7 @@ export default adminConfig({
 }
 ```
 
-**Chart** — chart from field values:
+**Chart**, chart from field values:
 
 ```ts
 {
@@ -261,7 +261,7 @@ export default adminConfig({
 }
 ```
 
-**Recent Items** — list recent records:
+**Recent Items**, list recent records:
 
 ```ts
 {
@@ -276,7 +276,7 @@ export default adminConfig({
 }
 ```
 
-**Timeline** — activity stream:
+**Timeline**, activity stream:
 
 ```ts
 {
@@ -392,15 +392,15 @@ export const logs = collection("logs")
 
 ## Common Mistakes
 
-1. **HIGH: Defining columns that don't match field names** — `columns: [f.name]` requires a `name` field in the collection's `.fields()`. Mismatches cause empty columns.
+1. **HIGH: Defining columns that don't match field names**, `columns: [f.name]` requires a `name` field in the collection's `.fields()`. Mismatches cause empty columns.
 
-2. **MEDIUM: Not specifying `searchableFields`** — table search bar won't work unless you explicitly list which fields to search.
+2. **MEDIUM: Not specifying `searchableFields`**, table search bar won't work unless you explicitly list which fields to search.
 
-3. **MEDIUM: Forgetting sidebar section ordering** — items appear in definition order. If you want "Dashboard" at the top, define it first in the `items` array.
+3. **MEDIUM: Forgetting sidebar section ordering**, items appear in definition order. If you want "Dashboard" at the top, define it first in the `items` array.
 
-4. **MEDIUM: Missing `sectionId` on sidebar items** — every item must reference an existing section ID.
+4. **MEDIUM: Missing `sectionId` on sidebar items**, every item must reference an existing section ID.
 
-5. **LOW: Not setting `defaultSort`** — records appear in database insertion order which is usually not what users expect.
+5. **LOW: Not setting `defaultSort`**, records appear in database insertion order which is usually not what users expect.
 
 ## Form Views and Live Preview
 

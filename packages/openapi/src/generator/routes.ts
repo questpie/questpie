@@ -15,14 +15,54 @@ function camelToKebab(str: string): string {
 	return str.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`);
 }
 
+/**
+ * Convert a route key segment to its URL pattern segment, matching the HTTP
+ * adapter (adapters/http.ts:56-64): `[param]` / `[...slug]` pass through
+ * untouched, literal segments are kebab-cased.
+ */
+function routeKeySegmentToPatternSegment(segment: string): string {
+	if (segment.startsWith("[") && segment.endsWith("]")) {
+		return segment;
+	}
+	return camelToKebab(segment);
+}
+
+/**
+ * Convert a file-convention pattern segment to an OpenAPI path-template
+ * segment: `[...slug]` → `{slug}`, `[param]` → `{param}`, literal → as-is.
+ */
+function patternSegmentToOpenApi(segment: string): {
+	out: string;
+	param?: string;
+} {
+	if (segment.startsWith("[...") && segment.endsWith("]")) {
+		const name = segment.slice(4, -1);
+		return { out: `{${name}}`, param: name };
+	}
+	if (segment.startsWith("[") && segment.endsWith("]")) {
+		const name = segment.slice(1, -1);
+		return { out: `{${name}}`, param: name };
+	}
+	return { out: segment };
+}
+
 interface FlatRouteEntry {
+	/** URL path pattern with file-convention brackets (e.g. "user/[id]"). */
 	path: string;
 	segments: string[];
+	/** HTTP methods this route serves (lower-cased downstream). */
+	methods: string[];
 	definition: any;
 }
 
 /**
- * Flatten a routes tree into a list of { path, definition }.
+ * Flatten a routes tree into a list of route entries.
+ *
+ * Mirrors the HTTP adapter's key parsing (adapters/http.ts:82-89) and the
+ * route introspection (routes/introspection.ts:52-72) — the single source of
+ * truth for how a route key maps to a path + HTTP methods:
+ *   1. a trailing `:METHOD` suffix on the key sets the method, path is the prefix;
+ *   2. otherwise `method` may be a string OR an array (`.get().post()`).
  */
 function flattenRoutesTree(
 	tree: RoutesTree,
@@ -31,20 +71,36 @@ function flattenRoutesTree(
 	const entries: FlatRouteEntry[] = [];
 
 	for (const [key, value] of Object.entries(tree)) {
-		const segments = [...prefix, key];
 		if (
 			value &&
 			typeof value === "object" &&
 			"handler" in value &&
 			typeof (value as any).handler === "function"
 		) {
+			const def = value as any;
+
+			// Split a trailing `:METHOD` key suffix from the path (mirrors http.ts).
+			let keyPath = key;
+			let methods: string[];
+			const colonIdx = key.lastIndexOf(":");
+			if (colonIdx > 0) {
+				keyPath = key.slice(0, colonIdx);
+				methods = [key.slice(colonIdx + 1).toUpperCase()];
+			} else {
+				methods = Array.isArray(def.method)
+					? def.method
+					: [def.method ?? "post"];
+			}
+
+			const segments = [...prefix, ...keyPath.split("/")];
 			entries.push({
 				path: segments.join("/"),
 				segments,
-				definition: value,
+				methods,
+				definition: def,
 			});
 		} else if (value && typeof value === "object") {
-			entries.push(...flattenRoutesTree(value as RoutesTree, segments));
+			entries.push(...flattenRoutesTree(value as RoutesTree, [...prefix, key]));
 		}
 	}
 
@@ -77,8 +133,21 @@ export function generateRoutePaths(
 	for (const entry of entries) {
 		const def = entry.definition;
 		const isRaw = def.mode === "raw";
-		const method: string = (def.method ?? "post").toLowerCase();
-		const topLevel = entry.segments[0] ?? "routes";
+
+		// Build the OpenAPI path template + path params from the pattern segments.
+		// Literal segments are kebab-cased to match the served URLs (http.ts),
+		// `[param]` / `[...slug]` become `{param}` / `{slug}` templates.
+		const pathParams: string[] = [];
+		const patternSegments = entry.segments.map((segment) => {
+			const { out, param } = patternSegmentToOpenApi(
+				routeKeySegmentToPatternSegment(segment),
+			);
+			if (param) pathParams.push(param);
+			return out;
+		});
+		const routePath = `${basePath}/${patternSegments.join("/")}`;
+
+		const topLevel = patternSegments[0] ?? "routes";
 
 		if (!tagSet.has(topLevel)) {
 			tagSet.add(topLevel);
@@ -88,13 +157,23 @@ export function generateRoutePaths(
 			});
 		}
 
-		const operationId = `route_${entry.segments.join("_")}`;
-		const routePath = `${basePath}/${entry.segments.map(camelToKebab).join("/")}`;
+		const baseOperationId = `route_${entry.segments.join("_")}`;
+		// A route can serve multiple methods (`.get().post()`); suffix the
+		// operationId with the method so each operation stays unique.
+		const multiMethod = entry.methods.length > 1;
+
+		const parameters = pathParams.map((name) => ({
+			name,
+			in: "path",
+			required: true,
+			schema: { type: "string" },
+		}));
 
 		const operation: PathOperation = {
-			operationId,
+			operationId: baseOperationId,
 			summary: entry.path,
 			tags: [`Routes: ${topLevel}`],
+			...(parameters.length > 0 ? { parameters } : {}),
 			responses: {},
 		};
 
@@ -127,14 +206,14 @@ export function generateRoutePaths(
 			let outputSchema: unknown = { type: "object" };
 
 			if (def.schema) {
-				const schemaName = `${operationId}_Input`;
+				const schemaName = `${baseOperationId}_Input`;
 				const converted = zodToJsonSchema(def.schema);
 				schemas[schemaName] = converted;
 				inputSchema = { $ref: `#/components/schemas/${schemaName}` };
 			}
 
 			if (def.outputSchema) {
-				const schemaName = `${operationId}_Output`;
+				const schemaName = `${baseOperationId}_Output`;
 				const converted = zodToJsonSchema(def.outputSchema);
 				schemas[schemaName] = converted;
 				outputSchema = { $ref: `#/components/schemas/${schemaName}` };
@@ -144,7 +223,14 @@ export function generateRoutePaths(
 			operation.responses = jsonResponse(outputSchema, "Route output");
 		}
 
-		paths[routePath] = { [method]: operation };
+		// Emit one operation per method onto the SAME path object so sibling
+		// methods (e.g. a `.get().post()` route) are not clobbered.
+		const pathItem = (paths[routePath] ??= {});
+		for (const method of entry.methods) {
+			pathItem[method.toLowerCase()] = multiMethod
+				? { ...operation, operationId: `${baseOperationId}_${method.toLowerCase()}` }
+				: operation;
+		}
 	}
 
 	return { paths, schemas, tags };

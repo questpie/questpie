@@ -248,14 +248,20 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 	)) {
 		l1ToL2.push(`_AllModule${capitalize(singleName)}`);
 	}
-	const jsImport = (file: string) => `./${file.replace(/\.ts$/, ".js")}`;
+	// Sibling-layer import specifier — EXTENSIONLESS (not `.js`). Every QUESTPIE
+	// consumer compiles with `moduleResolution: "bundler"`, which resolves `./x`
+	// → `./x.ts`; extensionless also resolves under Vite, Bun, AND Turbopack
+	// (Next), the last of which — unlike webpack/vite — has NO `.js`→`.ts`
+	// extension alias and so cannot consume a `.js` specifier pointing at a
+	// `.ts` source. tsdown still builds the package itself with real extensions.
+	const layerImport = (file: string) => `./${file.replace(/\.ts$/, "")}`;
 
 	// ── L1 entities.gen.ts — value preamble + category extra type imports ──
 	genHeader(l1);
 	// Side-effect import of names.gen.ts (L0) — loads the ambient module-name key
 	// registry alongside the type layer. Downward edge L1→L0 (allowed); names.gen
 	// is dot-folder-globbed-out so it only joins the program via this import.
-	l1.push(`import "${jsImport(L0_FILE)}";`);
+	l1.push(`import "${layerImport(L0_FILE)}";`);
 	pushValueImports(l1);
 	l1.push(
 		'import type { RouteParamsFromKey, RouteWithParams } from "questpie/types";',
@@ -277,7 +283,7 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 	genHeader(l2);
 	pushValueImports(l2);
 	l2.push(
-		`import type { ${l1ToL2.join(", ")} } from "${jsImport(L1_FILE)}";`,
+		`import type { ${l1ToL2.join(", ")} } from "${layerImport(L1_FILE)}";`,
 	);
 	l2.push(
 		'import type { AnyCollectionOrBuilder, AnyGlobalOrBuilder, CollectionAPI, DrizzleClientFromQuestpieConfig, InferContextExtensionsFromAppConfig, InferSessionFromAuthConfig, MailerService, Questpie, QuestpieConfig, QueueClient, QueueJobType, ServiceInstancesInNamespace, TablesFromConfig, z } from "questpie/types";',
@@ -298,16 +304,16 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 	// without this its ambient `declare global` (the MODULE entity-name half of
 	// CollectionKeys/GlobalKeys/JobKeys) never joins the program and cross-module
 	// `relation("user")` strict keys regress. A side-effect import is never elided.
-	l3.push(`import "${jsImport(L0_FILE)}";`);
+	l3.push(`import "${layerImport(L0_FILE)}";`);
 	l3.push(
-		'import type { AccessContext, AppDefinition, CollectionSelect, GlobalSelect, HookContext } from "questpie/types";',
+		'import type { AccessContext, AppDefinition, CollectionSelect, GlobalSelect, HookContext, Where } from "questpie/types";',
 	);
 	// CollectionDoc/GlobalDoc/AppConfig/createContext read these from L1; the
 	// runtime `as _AppQuestpie` cast + AppSession re-exports read from L2.
 	const l3FromL1 = ["AppCollections", "AppGlobals", "AppRoutes"];
-	l3.push(`import type { ${l3FromL1.join(", ")} } from "${jsImport(L1_FILE)}";`);
+	l3.push(`import type { ${l3FromL1.join(", ")} } from "${layerImport(L1_FILE)}";`);
 	l3.push(
-		`import type { _AppQuestpie, AppSession, AppSessionUser } from "${jsImport(L2_FILE)}";`,
+		`import type { _AppQuestpie, AppSession, AppSessionUser } from "${layerImport(L2_FILE)}";`,
 	);
 	l3.push("");
 	pushValueImports(l3);
@@ -1221,8 +1227,8 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 	// keeps resolving the App* category types (entities.gen) + session/route/
 	// block types (context.gen) off the package root (index.ts). Type-only star
 	// re-exports — no runtime require is emitted between the .gen.ts files.
-	lines.push(`export type * from "${jsImport(L1_FILE)}";`);
-	lines.push(`export type * from "${jsImport(L2_FILE)}";`);
+	lines.push(`export type * from "${layerImport(L1_FILE)}";`);
+	lines.push(`export type * from "${layerImport(L2_FILE)}";`);
 	lines.push("");
 	lines.push("/**");
 	lines.push(
@@ -1238,6 +1244,18 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 	lines.push(" */");
 	lines.push(
 		"export type GlobalDoc<K extends keyof AppGlobals> = GlobalSelect<AppGlobals[K]>;",
+	);
+	lines.push("");
+	lines.push("/**");
+	lines.push(
+		" * Typed `where` filter for a collection key — prefer over `Record<string, unknown>`",
+	);
+	lines.push(
+		" * when building a `where` clause dynamically before a `find`/`findOne` call.",
+	);
+	lines.push(" */");
+	lines.push(
+		"export type CollectionWhere<K extends keyof AppCollections> = Where<AppCollections[K], AppConfig>;",
 	);
 	lines.push("");
 	lines.push("/**");

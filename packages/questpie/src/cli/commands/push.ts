@@ -76,7 +76,11 @@ export async function pushCommand(options: PushOptions): Promise<void> {
 		schemas: entities.schemas,
 		tables: entities.tables,
 		entities: undefined,
-		extensions: undefined,
+		// drizzle-kit's only supported extensionsFilters value is "postgis" —
+		// it teaches push to ignore PostGIS-owned tables (spatial_ref_sys etc.)
+		// during the diff. Harmless no-op when PostGIS is unused (no such tables
+		// → nothing filtered). https://orm.drizzle.team/docs/extensions/pg
+		extensions: ["postgis"],
 	};
 	const result = await pushSchema(
 		schema,

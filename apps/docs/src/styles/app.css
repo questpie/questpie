@@ -1188,40 +1188,86 @@ pre button[aria-label*="copy" i]:hover,
 	filter: none !important;
 }
 
-[data-callout],
-.fd-callout {
-	border: 1px solid var(--border-subtle) !important;
-	border-inline-start-width: 3px !important;
-	border-radius: var(--surface-radius) !important;
-	background: var(--card) !important;
-	color: var(--card-foreground) !important;
-	box-shadow: var(--surface-shadow) !important;
+.docs-callout {
+	--docs-callout-accent: var(--foreground-muted);
+	display: grid;
+	grid-template-columns: 1.25rem minmax(0, 1fr);
+	align-items: start;
+	column-gap: 0.75rem;
+	margin: 1rem 0;
+	padding: 0.875rem 1rem;
+	border: 0 !important;
+	border-radius: 0.5rem !important;
+	background: color-mix(
+		in srgb,
+		var(--surface-low) 84%,
+		var(--background)
+	) !important;
+	color: var(--foreground) !important;
+	box-shadow: 0 0 0 1px color-mix(in srgb, var(--foreground) 9%, transparent) !important;
 }
 
-[data-callout="info"],
-.fd-callout[data-type="info"] {
-	border-inline-start-color: var(--color-fd-info) !important;
+.docs-callout[data-callout="warn"] {
+	--docs-callout-accent: var(--syntax-number);
 }
 
-[data-callout="warn"],
-[data-callout="warning"],
-.fd-callout[data-type="warn"],
-.fd-callout[data-type="warning"] {
-	border-inline-start-color: var(--color-fd-warning) !important;
+.docs-callout[data-callout="error"] {
+	--docs-callout-accent: var(--destructive);
 }
 
-[data-callout="error"],
-[data-callout="danger"],
-.fd-callout[data-type="error"],
-.fd-callout[data-type="danger"] {
-	border-inline-start-color: var(--color-fd-error) !important;
+.docs-callout[data-callout="success"] {
+	--docs-callout-accent: var(--success);
 }
 
-[data-callout="tip"],
-[data-callout="success"],
-.fd-callout[data-type="tip"],
-.fd-callout[data-type="success"] {
-	border-inline-start-color: var(--color-fd-success) !important;
+.docs-callout[data-callout="idea"] {
+	--docs-callout-accent: var(--primary);
+}
+
+.docs-callout__icon {
+	display: inline-flex;
+	width: 1.25rem;
+	height: 1.25rem;
+	margin-top: 0.09375rem;
+	align-items: center;
+	justify-content: center;
+	color: var(--docs-callout-accent);
+}
+
+.docs-callout__icon svg {
+	width: 1rem;
+	height: 1rem;
+	flex-shrink: 0;
+}
+
+.docs-callout__body {
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 0.375rem;
+}
+
+.docs-callout__title {
+	margin: 0 !important;
+	color: var(--foreground) !important;
+	font-size: 0.9375rem !important;
+	font-weight: 650;
+	line-height: 1.35;
+	text-wrap: balance;
+}
+
+.docs-callout__description {
+	margin: 0 !important;
+	color: var(--foreground-muted);
+	font-size: 0.9375rem;
+	line-height: 1.65;
+}
+
+.docs-callout__description > :first-child {
+	margin-top: 0 !important;
+}
+
+.docs-callout__description > :last-child {
+	margin-bottom: 0 !important;
 }
 
 .prose table,

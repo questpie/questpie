@@ -5,9 +5,15 @@ import { resolve } from "node:path";
 
 import { Command } from "commander";
 
+import { isModuleAllowed, modules as moduleRegistry } from "./modules.js";
 import { runPrompts } from "./prompts.js";
 import { scaffold } from "./scaffolder.js";
 import { getTemplate } from "./templates.js";
+
+/** Collect a repeatable `--module <name>` flag into an array. */
+function collectModule(value: string, previous: string[]): string[] {
+	return [...previous, value];
+}
 
 function readPackageVersion(): string {
 	for (const candidate of [
@@ -29,6 +35,18 @@ const program = new Command()
 	.version(readPackageVersion())
 	.argument("[project-name]", "Name of the project")
 	.option("-t, --template <name>", "Template to use (default: tanstack-start)")
+	.option("--runtime <id>", "Runtime to use (alias of --template)")
+	.option(
+		"--module <name>",
+		"Module to enable (repeatable, e.g. --module admin --module openapi)",
+		collectModule,
+		[] as string[],
+	)
+	.option(
+		"--modules <a,b,c>",
+		"Comma-separated modules to enable (e.g. --modules admin,openapi)",
+	)
+	.option("-y, --yes", "Skip prompts and accept all defaults")
 	.option(
 		"--database <name>",
 		"Database name (default: derived from project name)",
@@ -50,22 +68,54 @@ const program = new Command()
 		"Realtime adapter: none, pg-notify, redis-streams (default: none)",
 	)
 	.option("--kv <adapter>", "KV adapter: memory, redis (default: memory)")
-	.option("--workflows", "Install and register @questpie/workflows")
 	.option(
 		"--continue-on-error",
 		"Keep scaffold files when dependency install or codegen fails",
 	)
 	.action(async (projectName: string | undefined, opts) => {
 		try {
-			// Validate template if provided
-			if (opts.template && !getTemplate(opts.template)) {
-				throw new Error(`Unknown template: ${opts.template}`);
+			// --runtime is an alias of --template (id === template dir name).
+			const templateId: string | undefined = opts.template ?? opts.runtime;
+
+			// Validate template/runtime if provided.
+			if (templateId && !getTemplate(templateId)) {
+				throw new Error(`Unknown ${opts.runtime ? "runtime" : "template"}: ${templateId}`);
+			}
+
+			// Merge `--module` (repeatable) + `--modules <a,b,c>` into one list.
+			const requestedModules = [
+				...((opts.module as string[]) ?? []),
+				...(typeof opts.modules === "string"
+					? opts.modules.split(",").map((m: string) => m.trim()).filter(Boolean)
+					: []),
+			];
+
+			// Front-loaded oracle validation: reject invalid module/runtime combos
+			// with a single graceful line, BEFORE any prompt or file write. Reuses
+			// the exact `isModuleAllowed` predicate the prompt filter uses.
+			if (requestedModules.length > 0 && templateId) {
+				for (const id of requestedModules) {
+					const known = moduleRegistry.some((m) => m.id === id);
+					if (!known) {
+						throw new Error(
+							`Unknown module: ${id}. Available: ${moduleRegistry.map((m) => m.id).join(", ")}.`,
+						);
+					}
+					if (!isModuleAllowed(id, templateId)) {
+						throw new Error(
+							`Module "${id}" is not available for runtime "${templateId}".`,
+						);
+					}
+				}
 			}
 
 			const options = await runPrompts({
 				projectName,
-				templateId: opts.template,
+				templateId,
 				databaseName: opts.database,
+				requestedModules:
+					requestedModules.length > 0 ? requestedModules : undefined,
+				fillDefaults: opts.yes === true,
 				installDeps: opts.install === false ? false : undefined,
 				initGit: opts.git === false ? false : undefined,
 				installSkills: opts.skills === false ? false : undefined,
@@ -75,7 +125,6 @@ const program = new Command()
 				emailAdapter: opts.email,
 				realtimeAdapter: opts.realtime,
 				kvAdapter: opts.kv,
-				includeWorkflows: opts.workflows === true,
 			});
 
 			await scaffold(options);

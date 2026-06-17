@@ -736,19 +736,6 @@ export interface SearchAdapter {
 	 * External adapters (Meilisearch, Elasticsearch) return undefined.
 	 */
 	getTableSchemas?(): Record<string, any>;
-
-	/**
-	 * Get required PostgreSQL extensions.
-	 * Returns CREATE EXTENSION statements that will be run before migrations.
-	 *
-	 * @example
-	 * ```ts
-	 * getExtensions() {
-	 *   return ['CREATE EXTENSION IF NOT EXISTS "pg_trgm";'];
-	 * }
-	 * ```
-	 */
-	getExtensions?(): string[];
 }
 
 // ============================================================================

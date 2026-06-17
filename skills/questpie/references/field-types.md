@@ -1,46 +1,74 @@
 # Field Types Reference
 
-Complete configuration patterns for built-in QUESTPIE field types. Fields use fluent builders: pass only constructor arguments to the field factory, then chain `.required()`, `.default()`, `.label()`, `.localized()`, `.inputOptional()`, `.admin()`, and related methods.
+Complete configuration patterns for built-in QUESTPIE field types. Fields use a positional constructor argument followed by a fluent chain: `f.text(255).required().default("x")`, there is NO constructor-options object like `f.text({ required: true })`. Per-field sections below list only the **constructor argument(s)**; everything else (`.required()`, `.default()`, `.label()`, etc.) comes from the shared fluent methods.
+
+## Contents
+
+- [Common Fluent Methods (All Fields)](#common-fluent-methods-all-fields)
+- [`f.text(maxLength?)`](#ftextmaxlength)
+- [`f.textarea()`](#ftextarea)
+- [`f.richText(options?)`](#frichtextoptions)
+- [`f.email(maxLength?)`](#femailmaxlength)
+- [`f.url(maxLength?)`](#furlmaxlength)
+- [`f.number(mode?)`](#fnumbermode)
+- [`f.boolean()`](#fboolean)
+- [`f.date()`](#fdate)
+- [`f.time(config?)`](#ftimeconfig)
+- [`f.datetime(config?)`](#fdatetimeconfig)
+- [`f.select(options)`](#fselectoptions)
+- [`f.relation(target)`](#frelationtarget)
+- [`f.upload(config?)`](#fuploadconfig)
+- [`f.object(fields)`](#fobjectfields)
+- [`.array()`](#array)
+- [`f.blocks()`](#fblocks)
+- [`f.json(config?)`](#fjsonconfig)
+- [Reactive Admin Behaviors](#reactive-admin-behaviors)
 
 ## Common Fluent Methods (All Fields)
 
-| Method               | Description                                 |
-| -------------------- | ------------------------------------------- |
-| `.required()`        | Field must have a value                     |
-| `.default(value)`    | Default value                               |
-| `.label(text)`       | Display label (supports i18n)               |
-| `.description(text)` | Help text                                   |
-| `.localized()`       | Per-locale values                           |
-| `.inputOptional()`   | Optional in API input but required in DB    |
-| `.admin(config)`     | Admin UI rendering hints                    |
-| `.virtual(sql)`      | SQL expression for computed read-only field |
-| `.zod(fn)`           | Extend/replace Zod schema (output narrows value type) |
-| `.drizzle(fn)`       | Raw Drizzle column builder — constraints/SQL defaults land in DDL; `$type` narrows value type |
+Every field factory returns a chainable field. These methods are shared by all field types:
+
+| Method               | Description                                            |
+| -------------------- | ------------------------------------------------------ |
+| `.required()`        | Field must have a value (NOT NULL)                     |
+| `.default(value)`    | Default value (value, `() => value`, or SQL)           |
+| `.label(text)`       | Display label (supports i18n)                          |
+| `.description(text)` | Help text (supports i18n)                              |
+| `.localized()`       | Per-locale values                                      |
+| `.inputOptional()`   | Optional in API input but required in DB               |
+| `.inputFalse()`      | Exclude from API input                                 |
+| `.outputFalse()`     | Exclude from output, write-only field                 |
+| `.array()`           | Wrap as a repeatable array (see [`.array()`](#array))  |
+| `.minItems(n)` / `.maxItems(n)` | Array item bounds                           |
+| `.admin(config)`     | Admin UI rendering hints (see [Reactive Admin Behaviors](#reactive-admin-behaviors)) |
+| `.access(rules)`     | Per-field access control                               |
+| `.hooks(handlers)`   | Per-field lifecycle hooks                              |
+| `.virtual(sql?)`     | SQL expression for computed read-only field            |
+| `.zod(fn)`           | Extend/replace Zod schema (output narrows value type)  |
+| `.drizzle(fn)`       | Raw Drizzle column builder, constraints/SQL defaults land in DDL; `$type` narrows value type |
 | `.$type<T>()`        | Explicitly set TS value type (type-level; mainly json) |
 
-## `f.text(options?)`
+> `.admin()` is contributed by the admin module. Type-specific helpers also exist (e.g. text `.pattern()`/`.trim()`, number `.min()`/`.max()`/`.positive()`/`.int()`/`.step()`, date `.autoNow()`); they are documented under each field below.
 
-Short strings, titles, slugs. DB type: `varchar` or `text`.
+## `f.text(maxLength?)`
 
-| Option        | Type             | Default | Description                               |
-| ------------- | ---------------- | ------- | ----------------------------------------- |
-| `maxLength`   | `number`         | --      | Max string length (uses varchar when set) |
-| `required`    | `boolean`        | `false` | Required field                            |
-| `default`     | `string`         | --      | Default value                             |
-| `localized`   | `boolean`        | `false` | Per-locale values                         |
-| `input`       | `"optional"`     | --      | Optional in API input                     |
-| `label`       | `string \| i18n` | --      | Display label                             |
-| `description` | `string \| i18n` | --      | Help text                                 |
-| `virtual`     | `SQL`            | --      | SQL computed value                        |
+Short strings, titles, slugs. DB type: `varchar(maxLength)` (default `255`). Pass `{ mode: "text" }` for unlimited `text`.
+
+Constructor arg: `maxLength?: number` (default `255`), or `{ mode: "text" }`.
+
+Type-specific chain methods: `.pattern(re)`, `.trim()`, `.lowercase()`, `.uppercase()`, `.min(n)`, `.max(n)`.
 
 ```ts
 name: f.text(255).required(),
 slug: f.text(255).required().inputOptional(),
+body: f.text({ mode: "text" }),
 ```
 
-## `f.textarea(options?)`
+## `f.textarea()`
 
-Long text, descriptions. DB type: `text`. Same options as `f.text()`. Renders as textarea in admin.
+Long text, descriptions. DB type: `text`. Renders as a textarea in admin.
+
+Constructor arg: none. Chain `.min(n)` / `.max(n)` for length bounds.
 
 ```ts
 bio: f.textarea().localized(),
@@ -49,129 +77,118 @@ description: f.textarea().label({ en: "Description", sk: "Popis" }),
 
 ## `f.richText(options?)`
 
-Rich formatted content stored as HTML. DB type: `text`. Same options as `f.text()`. Renders as rich text editor in admin.
+Rich formatted content. DB type: `jsonb` (TipTap document) by default, or `text` with `{ mode: "markdown" }`. Renders as a rich text editor in admin. Imported from the admin module's field set (available as `f.richText` in collection `.fields()`).
+
+Constructor arg: `options?: { mode?: "json" | "markdown" }` (default `"json"`).
 
 ```ts
 content: f.richText().localized(),
-body: f.richText().required(),
+notes: f.richText({ mode: "markdown" }),
 ```
 
-## `f.email(options?)`
+## `f.email(maxLength?)`
 
-Email addresses with format validation. Same options as `f.text()`.
+Email addresses with format validation. DB type: `varchar(maxLength)` (default `255`).
+
+Constructor arg: `maxLength?: number` (default `255`). Chain `.min(n)` / `.max(n)` for length bounds.
 
 ```ts
 email: f.email().required(),
 contactEmail: f.email().label("Contact Email"),
 ```
 
-## `f.url(options?)`
+## `f.url(maxLength?)`
 
-URLs with format validation. Same options as `f.text()`.
+URLs with format validation. DB type: `varchar(maxLength)` (default `2048`).
+
+Constructor arg: `maxLength?: number` (default `2048`). Chain `.min(n)` / `.max(n)` for length bounds.
 
 ```ts
 website: f.url(),
-profileUrl: f.url().label("Profile URL"),
+link: f.url(500).label("Profile URL"),
 ```
 
-## `f.number(options?)`
+## `f.number(mode?)`
 
-Numeric values. DB type: `integer` or `numeric`.
+Numeric values. DB type depends on mode: `integer` (default), `smallint`, `bigint`, `real`, `double`, or `numeric` (decimal).
 
-| Option        | Type             | Default | Description   |
-| ------------- | ---------------- | ------- | ------------- |
-| `required`    | `boolean`        | `false` | Required      |
-| `default`     | `number`         | --      | Default value |
-| `min`         | `number`         | --      | Minimum value |
-| `max`         | `number`         | --      | Maximum value |
-| `label`       | `string \| i18n` | --      | Display label |
-| `description` | `string \| i18n` | --      | Help text     |
+Constructor arg: a mode string (`"integer" | "smallint" | "bigint" | "real" | "double"`) OR a decimal config `{ mode: "decimal"; precision?: number; scale?: number }`.
+
+Type-specific chain methods: `.min(n)`, `.max(n)`, `.positive()`, `.int()`, `.step(n)`.
 
 ```ts
-price: f.number().required().min(0),
-duration: f.number().required().label("Duration (minutes)"),
 sortOrder: f.number().default(0),
+price: f.number({ mode: "decimal", precision: 10, scale: 2 }).required().min(0),
+rating: f.number("real").min(0).max(5),
 ```
 
-## `f.boolean(options?)`
+## `f.boolean()`
 
 Boolean flags. DB type: `boolean`.
 
-| Option        | Type             | Default | Description   |
-| ------------- | ---------------- | ------- | ------------- |
-| `required`    | `boolean`        | `false` | Required      |
-| `default`     | `boolean`        | --      | Default value |
-| `label`       | `string \| i18n` | --      | Display label |
-| `description` | `string \| i18n` | --      | Help text     |
+Constructor arg: none.
 
 ```ts
 isActive: f.boolean().default(true).required(),
 isFeatured: f.boolean().default(false),
 ```
 
-Admin meta hint to render as switch:
+Render as a switch via `.admin()`:
 
 ```ts
 isActive: f.boolean().default(true).admin({ displayAs: "switch" }),
 ```
 
-## `f.date(options?)`
+## `f.date()`
 
-Calendar dates. DB type: `date`.
+Calendar dates (ISO date string). DB type: `date`.
 
-| Option     | Type             | Default | Description   |
-| ---------- | ---------------- | ------- | ------------- |
-| `required` | `boolean`        | `false` | Required      |
-| `default`  | `Date \| string` | --      | Default value |
-| `label`    | `string \| i18n` | --      | Display label |
+Constructor arg: none. Type-specific chain methods: `.autoNow()` (default to now on create), `.autoNowUpdate()` (set to now on every write).
 
 ```ts
 publishedAt: f.date(),
 birthDate: f.date().required(),
+startDate: f.date().default("2024-01-01"),
 ```
 
-## `f.time(options?)`
+## `f.time(config?)`
 
-Time of day. DB type: `time`.
+Time of day (`HH:MM:SS`). DB type: `time`.
 
-| Option     | Type             | Default | Description   |
-| ---------- | ---------------- | ------- | ------------- |
-| `required` | `boolean`        | `false` | Required      |
-| `default`  | `string`         | --      | Default value |
-| `label`    | `string \| i18n` | --      | Display label |
+Constructor arg: `config?: { precision?: 0-6; withSeconds?: boolean }`.
 
 ```ts
 startTime: f.time().label("Start"),
-endTime: f.time().label("End"),
+eventTime: f.time({ precision: 3 }),
 ```
 
-## `f.datetime(options?)`
+## `f.datetime(config?)`
 
-Date + time. DB type: `timestamp`.
+Date + time. DB type: `timestamp`. Value is a `Date`.
 
-| Option     | Type             | Default | Description   |
-| ---------- | ---------------- | ------- | ------------- |
-| `required` | `boolean`        | `false` | Required      |
-| `default`  | `Date \| string` | --      | Default value |
-| `label`    | `string \| i18n` | --      | Display label |
+Constructor arg: `config?: { precision?: 0-6; withTimezone?: boolean }`. Type-specific chain methods: `.autoNow()`, `.autoNowUpdate()`.
 
 ```ts
 scheduledAt: f.datetime().required(),
-expiresAt: f.datetime(),
+createdAt: f.datetime().autoNow().inputFalse(),
+updatedAt: f.datetime().autoNowUpdate().inputFalse(),
 ```
 
 ## `f.select(options)`
 
 Single value from a predefined list. DB type: `varchar`.
 
-| Option     | Type                             | Default | Description                  |
-| ---------- | -------------------------------- | ------- | ---------------------------- |
-| `options`  | `string[] \| { value, label }[]` | --      | Available choices (REQUIRED) |
-| `required` | `boolean`                        | `false` | Required                     |
-| `default`  | `string`                         | --      | Default value                |
-| `label`    | `string \| i18n`                 | --      | Display label                |
+Constructor arg: `options: SelectOption[]`, an array of objects (there is no bare `string[]` overload). Each option:
 
-Simple string options:
+| Key           | Type                | Description                              |
+| ------------- | ------------------- | ---------------------------------------- |
+| `value`       | `string \| number`  | Stored value (REQUIRED)                  |
+| `label`       | `string \| i18n`    | Display label (REQUIRED)                 |
+| `description` | `string \| i18n`    | Optional helper text                     |
+| `icon`        | `ComponentReference`| Optional icon (e.g. `c.icon("ph:check")`)|
+| `disabled`    | `boolean`           | Disable this option                      |
+
+Multi-select is `.array()`; the type-specific `.enum(name)` switches storage to a Postgres enum.
 
 ```ts
 status: f.select([
@@ -185,32 +202,39 @@ Options with i18n labels:
 
 ```ts
 status: f.select([
-    { value: "pending", label: { en: "Pending", sk: "Cakajuce" } },
-    { value: "confirmed", label: { en: "Confirmed", sk: "Potvrdene" } },
-    { value: "completed", label: { en: "Completed", sk: "Dokoncene" } },
+  { value: "pending", label: { en: "Pending", sk: "Cakajuce" } },
+  { value: "confirmed", label: { en: "Confirmed", sk: "Potvrdene" } },
+  { value: "completed", label: { en: "Completed", sk: "Dokoncene" } },
 ]).required().default("pending"),
 ```
 
-## `f.relation(options)`
+## `f.relation(target)`
 
-Reference to another collection.
+Reference to another collection. The target is positional.
 
-| Option        | Type                                    | Default | Description                                                 |
-| ------------- | --------------------------------------- | ------- | ----------------------------------------------------------- |
-| `to`          | `string`                                | --      | Target collection name (REQUIRED)                           |
-| `required`    | `boolean`                               | `false` | Required                                                    |
-| `hasMany`     | `boolean`                               | `false` | Has-many relation                                           |
-| `through`     | `string`                                | --      | Junction collection (required with hasMany)                 |
-| `sourceField` | `string`                                | --      | FK in junction -> this collection (required with through)   |
-| `targetField` | `string`                                | --      | FK in junction -> target collection (required with through) |
-| `onDelete`    | `"cascade" \| "set null" \| "restrict"` | --      | Foreign key behavior                                        |
-| `label`       | `string \| i18n`                        | --      | Display label                                               |
+Constructor arg: `target` is one of:
+
+- a collection-name string, `f.relation("user")`
+- a lazy ref `() => collection`, `f.relation(() => users)` (avoids import cycles)
+- a polymorphic map, `f.relation({ users: "users", posts: "posts" })`
+
+By default this is a belongs-to (single FK column). Chain methods configure it:
+
+- **Chained modifiers**: `.required()`, `.label()`, `.onDelete(action)`, `.onUpdate(action)`, `.relationName(name)`, `action` is `"cascade" | "set null" | "restrict"` (etc.).
+- **Transition methods** (change the relation shape): `.hasMany({ foreignKey })`, `.manyToMany({ through, sourceField?, targetField? })`, `.multiple()` (inline `jsonb` array of FKs).
 
 Belongs-to (single):
 
 ```ts
 author: f.relation("user").required(),
 category: f.relation("categories").onDelete("set null"),
+```
+
+Lazy ref (import-cycle-safe):
+
+```ts
+import { barbers } from "@/questpie/server/collections/barbers";
+barber: f.relation(() => barbers).required().onDelete("cascade"),
 ```
 
 Many-to-many (through junction):
@@ -223,60 +247,50 @@ tags: f.relation("tags").manyToMany({
 }),
 ```
 
+Multiple (inline array of FKs, no junction):
+
+```ts
+images: f.relation("assets").multiple(),
+```
+
 Dynamic options (admin):
 
 ```ts
 city: f.relation("cities").admin({
-  options: {
-    handler: async ({ data, search, ctx }) => {
-      const cities = await ctx.db.query.cities.findMany({
-        where: { countryId: data.country },
-      });
-      return { options: cities.map((c) => ({ value: c.id, label: c.name })) };
-    },
-    deps: ({ data }) => [data.country],
-  },
+  filter: ({ data }) => ({ countryId: data.country }),
 }),
 ```
 
-## `f.upload(options)`
+## `f.upload(config?)`
 
 File upload linked to a storage collection.
 
-| Option      | Type             | Default | Description                               |
-| ----------- | ---------------- | ------- | ----------------------------------------- |
-| `to`        | `string`         | --      | Upload/storage collection name (REQUIRED) |
-| `mimeTypes` | `string[]`       | --      | Allowed MIME types (e.g., `["image/*"]`)  |
-| `maxSize`   | `number`         | --      | Max file size in bytes                    |
-| `label`     | `string \| i18n` | --      | Display label                             |
+Constructor arg: `config?` with `to?: string` (target upload collection, defaults `"assets"`), `mimeTypes?: string[]`, `maxSize?: number` (bytes), and M2M keys `through?`/`sourceField?`/`targetField?`. Label is chained, not a config key.
+
+Type-specific chain method: `.multiple()` (inline array of asset IDs).
 
 ```ts
-avatar: f.upload({ to: "assets", mimeTypes: ["image/*"], maxSize: 5_000_000 }),
-document: f.upload({ to: "assets", mimeTypes: ["application/pdf"] }),
-cover: f.upload({ to: "assets" }),
+avatar: f.upload({ mimeTypes: ["image/*"], maxSize: 5_000_000 }).label("Avatar"),
+document: f.upload({ to: "media", mimeTypes: ["application/pdf"] }),
+cover: f.upload(),
+gallery: f.upload({ mimeTypes: ["image/*"] }).multiple(),
 ```
 
-## `f.object(options)`
+## `f.object(fields)`
 
 Nested structured data stored as JSONB.
 
-| Option    | Type                     | Default | Description                         |
-| --------- | ------------------------ | ------- | ----------------------------------- |
-| `fields`  | `Record \| () => Record` | --      | Nested field definitions (REQUIRED) |
-| `default` | `object`                 | --      | Default value                       |
-| `label`   | `string \| i18n`         | --      | Display label                       |
-
-Plain object form:
+Constructor arg: `fields`, a plain record of nested fields, passed **directly** (not wrapped in `{ fields }`).
 
 ```ts
 address: f.object({
   street: f.text().required(),
   city: f.text().required(),
-  zip: f.text(),
+  zip: f.text(10),
 }),
 ```
 
-Function form (for helpers/reuse):
+Reuse nested shapes with a helper that returns a field record:
 
 ```ts
 .fields(({ f }) => {
@@ -297,15 +311,9 @@ Function form (for helpers/reuse):
 
 ## `.array()`
 
-Repeatable items stored as JSONB.
+Repeatable items stored as JSONB. `.array()` is a **zero-argument** chain method on any field, the item type IS the field you call it on. Bounds and labels are chained.
 
-| Option      | Type             | Default | Description                |
-| ----------- | ---------------- | ------- | -------------------------- |
-| `of`        | `Field`          | --      | Item field type (REQUIRED) |
-| `maxItems`  | `number`         | --      | Maximum number of items    |
-| `default`   | `any[]`          | --      | Default value              |
-| `localized` | `boolean`        | `false` | Per-locale array           |
-| `label`     | `string \| i18n` | --      | Display label              |
+Chain after `.array()`: `.minItems(n)`, `.maxItems(n)`, `.localized()`, `.label()`, `.admin({ orderable, mode, ... })`.
 
 Array of primitives:
 
@@ -336,36 +344,35 @@ navigation: f.object({
 }).array().localized(),
 ```
 
-Admin meta for ordering:
+Orderable inline array in admin:
 
 ```ts
 items: f.object({ name: f.text() }).array().admin({ orderable: true, mode: "inline" }),
 ```
 
-## `f.blocks(options?)`
+## `f.blocks()`
 
-Content blocks for page builders. Stored as JSONB.
+Content blocks for page builders. Stored as JSONB. Imported from the admin module's field set (available as `f.blocks` in collection `.fields()`).
 
-| Option      | Type             | Default | Description       |
-| ----------- | ---------------- | ------- | ----------------- |
-| `localized` | `boolean`        | `false` | Per-locale blocks |
-| `label`     | `string \| i18n` | --      | Display label     |
+Constructor arg: none. Chain `.localized()`, `.label()`, `.admin()`.
 
 ```ts
 content: f.blocks().localized(),
 pageContent: f.blocks(),
 ```
 
-## `f.json(options?)`
+## `f.json(config?)`
 
-Raw JSON data. No schema validation by default; value types as loose `JsonValue`.
+Raw JSON data. No schema validation by default; value types as loose `JsonValue`. DB type: `jsonb` (or `json` with `{ mode: "json" }`).
+
+Constructor arg: `config?: { mode?: "jsonb" | "json" }`.
 
 ```ts
 metadata: f.json(),
-rawConfig: f.json().label("Configuration"),
+rawConfig: f.json({ mode: "json" }).label("Configuration"),
 ```
 
-Type it explicitly with `.$type<T>()` (type only) or `.zod()` (type + runtime validation) — the type flows into CRUD select/insert types:
+Type it explicitly with `.$type<T>()` (type only) or `.zod()` (type + runtime validation), the type flows into CRUD select/insert types:
 
 ```ts
 type Layout = { rows: { id: string; span: number }[] };
@@ -374,25 +381,32 @@ layout: f.json().$type<Layout>(),
 settings: f.json().zod(() => z.object({ theme: z.enum(["light", "dark"]) })),
 ```
 
-## Admin Meta Options
+## Reactive Admin Behaviors
 
-The `meta.admin` object controls field rendering in the admin panel:
+Admin rendering hints and reactive behaviors are authored with the chained `.admin({...})` call. Beyond per-field display options (`placeholder`, `displayAs`, `orderable`, `mode`, ...), every field's `.admin()` accepts reactive behaviors:
+
+| Behavior   | Type                                  | Description                          |
+| ---------- | ------------------------------------- | ------------------------------------ |
+| `hidden`   | `boolean \| ({ data }) => boolean`    | Conditionally hide the field         |
+| `readOnly` | `boolean \| ({ data }) => boolean`    | Conditionally make read-only         |
+| `disabled` | `boolean \| ({ data }) => boolean`    | Conditionally disable                |
+| `compute`  | `({ data }) => value` or `{ handler, deps, debounce }` | Auto-compute the value |
 
 ```ts
-isActive: f.boolean().default(true).admin({ displayAs: "switch" }),
 slug: f.text().admin({ placeholder: "auto-generated" }),
-socialLinks: f.object({ url: f.url() }).array().admin({ orderable: true, mode: "inline" }),
+isActive: f.boolean().default(true).admin({ displayAs: "switch" }),
+
+// Reactive: hide until advanced mode is on
+seoTitle: f.text().admin({ hidden: ({ data }) => !data.showAdvanced }),
+
+// Reactive: auto-generate slug from title
+slug: f.text().admin({
+  compute: {
+    handler: ({ data }) => slugify(data.title),
+    deps: ["title"],
+    debounce: 300,
+  },
+}),
 ```
-
-## Reactive Field Behaviors
-
-Fields support reactive behaviors in `meta.admin`:
-
-| Behavior   | Description                                          |
-| ---------- | ---------------------------------------------------- |
-| `hidden`   | `({ data }) => boolean` -- conditionally hide        |
-| `readOnly` | `({ data }) => boolean` -- conditionally read-only   |
-| `disabled` | `({ data }) => boolean` -- conditionally disable     |
-| `compute`  | `{ handler, deps, debounce }` -- auto-compute values |
 
 All reactive handlers run server-side with access to `ctx.db`, `ctx.user`, `ctx.req`.

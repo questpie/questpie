@@ -9,6 +9,7 @@ import type {
 	AppModuleInput,
 	AppDefinition,
 	ModuleDefinition,
+	RealtimeConfigInput,
 	ResolvedRuntimeConfig,
 	RuntimeConfig,
 	RuntimeConfigInput,
@@ -33,6 +34,13 @@ type RuntimeConfigStorageInputGuard<TInput> = TInput extends {
 		? unknown
 		: { storage?: never }
 	: unknown;
+
+function resolveRealtimeConfig(
+	realtime: RealtimeConfigInput | undefined,
+): RuntimeConfig["realtime"] {
+	if (realtime === true) return {};
+	return realtime;
+}
 
 // ============================================================================
 // module() — identity function for type inference
@@ -115,6 +123,7 @@ export function runtimeConfig<const TInput extends RuntimeConfigInput>(
 		db: resolveDbConfig(input.db),
 		secret: resolveSecret(input.secret as string | undefined),
 		storage: resolveStorageConfig(input.storage),
+		realtime: resolveRealtimeConfig(input.realtime),
 	} as unknown as ResolvedRuntimeConfig<TInput>;
 
 	return resolved;

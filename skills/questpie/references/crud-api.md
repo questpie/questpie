@@ -1,47 +1,36 @@
 ---
 name: questpie-core/crud-api
-description: QUESTPIE CRUD API find findOne create updateById updateMany updateBatch deleteById deleteMany restoreById count atomic conditional update claim optimistic locking query operators where filter sort orderBy pagination limit offset with select relations depth context accessMode collections globals client server typesafe
+description: QUESTPIE CRUD API find findOne create updateById updateMany updateBatch deleteById deleteMany restoreById count atomic conditional update claim optimistic locking query operators where filter sort orderBy pagination limit offset with columns relations depth context accessMode collections globals client server typesafe
   - questpie-core
 ---
 
 This skill builds on questpie-core.
 
+## Contents
+
+- [Two API Surfaces](#two-api-surfaces), `collections.*` (handlers) vs `app.collections.*` (scripts)
+- [Collection Operations](#collection-operations), find, findOne, create, updateById/Many/Batch, deleteById/Many, restoreById, count
+- [Global Operations](#global-operations), get, update
+- [Query Operators](#query-operators), `where` shape, equality shorthand
+- [Sorting](#sorting), `orderBy` syntaxes
+- [Pagination](#pagination), `limit`/`offset`, keyset cursors
+- [Relations](#relations), `with` to eager-load, `columns` to project
+- [Context and Access Modes](#context-and-access-modes), handlers, partial overrides, transactions, scripts
+- [Client API](#client-api), same vocabulary, plus `live()` and `upload()`
+- [Common Mistakes](#common-mistakes)
+
 ## Two API Surfaces
 
-QUESTPIE exposes CRUD operations in two ways depending on where you call them:
-
-### 1. Handler Context (routes, hooks, jobs)
-
-Inside any handler, `collections` and `globals` are injected via context. The current request context (session, locale, access mode) is implicit:
+The same CRUD vocabulary runs on two surfaces. Inside any handler (routes, hooks, jobs), `collections`/`globals` are injected and the request context (session, locale, access mode) is implicit. Outside handlers (scripts, seeds), use `app.collections.*`/`app.globals.*` and pass an explicit context as the second argument. See [Context and Access Modes](#context-and-access-modes) for the full rules.
 
 ```ts
-// routes/get-published.ts
-import { route } from "questpie/services";
-export default route()
-	.get()
-	.handler(async ({ collections }) => {
-		const result = await collections.posts.find({
-			where: { status: "published" },
-			limit: 10,
-			orderBy: { createdAt: "desc" },
-		});
-		return result.docs;
-	});
-```
+// In a handler, context is implicit
+const { docs } = await collections.posts.find({ where: { status: "published" }, limit: 10 });
 
-### 2. App Instance (scripts, seeds, external)
-
-Outside handlers, use `app.collections.*` and pass an explicit context as the second argument:
-
-```ts
+// In a script, explicit context required
 import { app } from "#questpie";
-
 const ctx = await app.createContext({ accessMode: "system", locale: "en" });
-
-const result = await app.collections.posts.find(
-	{ where: { status: "published" }, limit: 10 },
-	ctx,
-);
+const { docs } = await app.collections.posts.find({ where: { status: "published" } }, ctx);
 ```
 
 ## Collection Operations
@@ -61,7 +50,7 @@ One vocabulary on both surfaces (server CRUD and client SDK):
 | bulk delete by where | `deleteMany({ where })` | `{ success, count }` |
 | restore by id | `restoreById({ id })` | `T` (softDelete only) |
 
-Deprecated aliases (removed in v4): server `update`/`delete` = bulk (`updateMany`/`deleteMany`); client `update`/`delete`/`restore` = by-id (`updateById`/`deleteById`/`restoreById`). Avoid them — the same names mean different things on each surface. Accessing a method that does not exist on server CRUD throws a `TypeError` listing valid methods (it does NOT return `undefined`).
+Use the explicit method names: `updateById` / `deleteById` / `restoreById` for single records, `updateMany` / `deleteMany` for bulk operations, and `updateBatch` for per-record batches.
 
 ### `find(options)`
 
@@ -74,12 +63,14 @@ const result = await collections.posts.find({
 	limit: 20,
 	offset: 0,
 	with: { author: true, category: true },
-	select: { title: true, status: true, createdAt: true },
+	columns: { title: true, status: true, createdAt: true },
 });
 // result: { docs: T[], totalDocs: number }
 ```
 
 **Return type:** `{ docs: T[], totalDocs: number }`
+
+`find()` also accepts: `search` (case-insensitive ILIKE against the title expression), `locale` / `localeFallback` (per-request locale override), `includeDeleted` (only with `softDelete`), `stage` (workflow stage to read from), `extras` (custom SQL fields), and `groupBy` (a field name or `{ field, order }`). With `groupBy`, `limit`/`offset` paginate groups and the **return shape changes** to `{ groups: [{ key, value, count, docs }], totalGroups, ... }` instead of `{ docs, totalDocs }`.
 
 ### `findOne(options)`
 
@@ -121,14 +112,14 @@ const updated = await collections.posts.updateById({
 
 ### `updateMany(options)`
 
-Bulk update all documents matching `where`. Returns an **array** of the updated records — never a single object.
+Bulk update all documents matching `where`. Returns an **array** of the updated records, never a single object.
 
 ```ts
 const updated = await collections.posts.updateMany({
 	where: { status: "draft" },
 	data: { status: "archived" },
 });
-// updated: T[] — exactly the rows that were written
+// updated: T[], exactly the rows that were written
 ```
 
 `updateMany` is claim-checked: inside the write transaction the matched rows are locked and `where` is re-evaluated, so rows changed by a concurrent writer are skipped instead of silently overwritten. The returned array reports exactly the winners.
@@ -147,7 +138,7 @@ const claimed = await collections.event_members.updateMany(
 	{ accessMode: "system" },
 );
 if (claimed.length === 0) {
-	// Lost the race (or row vanished) — handle explicitly
+	// Lost the race (or row vanished), handle explicitly
 }
 
 // Optimistic concurrency: write only if the revision is unchanged
@@ -155,10 +146,10 @@ const bumped = await collections.documents.updateMany(
 	{ where: { id, revision: doc.revision }, data: { body, revision: doc.revision + 1 } },
 	ctx,
 );
-if (bumped.length === 0) throw new Error("Conflict — reload and retry");
+if (bumped.length === 0) throw new Error("Conflict, reload and retry");
 ```
 
-Hook timing: `beforeValidate`/`beforeChange` run before the transaction on candidates (intent — may fire for losers); `afterChange`, versioning, and the return value are winners-only (fact).
+Hook timing: `beforeValidate`/`beforeChange` run before the transaction on candidates (intent, may fire for losers); `afterChange`, versioning, and the return value are winners-only (fact).
 
 ### `updateBatch(options)`
 
@@ -185,7 +176,7 @@ await collections.posts.deleteById({ id: "abc-123" });
 
 ### `deleteMany(options)`
 
-Bulk delete all documents matching `where`. Claim-checked like `updateMany` — `count` is the number of rows that still matched at delete time.
+Bulk delete all documents matching `where`. Claim-checked like `updateMany`, `count` is the number of rows that still matched at delete time.
 
 ```ts
 const result = await collections.posts.deleteMany({
@@ -205,7 +196,7 @@ const restored = await collections.posts.restoreById({ id: "abc-123" });
 
 ### `count(options)`
 
-Count documents matching a filter.
+Count documents matching a filter. `count()` accepts only `{ where, includeDeleted }`, not the full find options (no `with`, `orderBy`, `limit`, `groupBy`, etc.).
 
 ```ts
 const total = await collections.posts.count({
@@ -304,7 +295,7 @@ const page2 = await collections.posts.find({
 For stable pagination over changing data, use a tuple cursor of
 `(createdAt, id)` with a matching multi-field `orderBy`. System timestamps
 are stored with millisecond precision (`timestamp(3)`), so a `Date` you read
-back equals the stored value exactly — cursor comparisons are exact:
+back equals the stored value exactly, cursor comparisons are exact:
 
 ```ts
 const page = await collections.posts.find({
@@ -328,8 +319,7 @@ const last = page.docs.at(-1);
 const nextCursor = last ? { createdAt: last.createdAt, id: last.id } : null;
 ```
 
-Always use the explicit `{ eq: ... }` operator for `Date` cursor values —
-do not pass a bare `Date` as an equality shorthand.
+Always use the explicit `{ eq: ... }` operator for `Date` cursor values, do not pass a bare `Date` as an equality shorthand.
 
 ## Relations
 
@@ -343,11 +333,11 @@ const post = await collections.posts.findOne({
 // post.author is now the full author object, not just an ID
 ```
 
-Use `select` to pick specific fields:
+Use `columns` to pick specific fields (inclusion mode with `true`, omission mode with `false`; `id` is always included):
 
 ```ts
 const posts = await collections.posts.find({
-	select: { title: true, status: true },
+	columns: { title: true, status: true },
 });
 ```
 
@@ -369,7 +359,7 @@ export default route()
 
 ### Partial Overrides (Inside Request Scope)
 
-The optional second argument of every CRUD call merges with the ambient request scope. Priority: **explicit param → ALS scope (`runWithContext`) → defaults** (`accessMode: "system"`, `locale: "en"`). A bare `{ accessMode: "system" }` elevates only the mode — the request's `session`, `db`, and `locale` ride along automatically. The inverse holds too:
+The optional second argument of every CRUD call merges with the ambient request scope. Priority: **explicit param → ALS scope (`runWithContext`) → defaults** (`accessMode: "system"`, `locale: "en"`). A bare `{ accessMode: "system" }` elevates only the mode, the request's `session`, `db`, and `locale` ride along automatically. The inverse holds too:
 
 ```ts
 // Inside any handler / hook / Better Auth callback:
@@ -385,7 +375,7 @@ Never re-thread `session`/`locale` by hand when you only want a different access
 
 ### Transactions
 
-`withTransaction(db, fn)` (from `questpie`) runs multiple CRUD calls atomically — calls inside the callback inherit the transaction connection through the ALS scope, and nested `withTransaction` calls reuse the open transaction. Queue side effects for after COMMIT with `onAfterCommit`:
+`withTransaction(db, fn)` (from `questpie`) runs multiple CRUD calls atomically, calls inside the callback inherit the transaction connection through the ALS scope, and nested `withTransaction` calls reuse the open transaction. Queue side effects for after COMMIT with `onAfterCommit`:
 
 ```ts
 import { onAfterCommit, withTransaction } from "questpie";
@@ -402,7 +392,7 @@ await withTransaction(db, async () => {
 });
 ```
 
-Do not run output-hook-heavy reads (blocks/upload `afterRead`) inside an open transaction unless necessary — they inherit the tx connection too.
+Do not run output-hook-heavy reads (blocks/upload `afterRead`) inside an open transaction unless necessary, they inherit the tx connection too.
 
 ### In Scripts / Seeds
 
@@ -441,7 +431,7 @@ const count = await client.collections.posts.count({
 
 ### Live Queries (Client Only)
 
-Every read has a live form — `live()` mirrors `find()` (same options, same snapshot type) and pushes access-controlled snapshots over SSE. Globals mirror `get()`: `client.globals.<name>.live(...)`. See AGENTS.md §19 Realtime:
+Every read has a live form, `live()` mirrors `find()` (same options, same snapshot type) and pushes access-controlled snapshots over SSE. Globals mirror `get()`: `client.globals.<name>.live(...)`. See AGENTS.md §19 Realtime:
 
 ```ts
 const stop = client.collections.posts.live(
@@ -471,21 +461,6 @@ const assets = await client.collections.assets.uploadMany(files, {
 ```
 
 ## Common Mistakes
-
-### CRITICAL: Missing context in app.collections calls
-
-When using `app.collections.*` outside handlers, you MUST pass a context. Without it, the call has no session, no locale, and no access mode.
-
-```ts
-// WRONG -- no context
-const posts = await app.collections.posts.find({});
-
-// CORRECT -- explicit context
-const ctx = await app.createContext({ accessMode: "system" });
-const posts = await app.collections.posts.find({}, ctx);
-```
-
-Inside handlers (route handlers, hooks, jobs), context is injected automatically -- use `collections.*` directly.
 
 ### HIGH: Expecting find() to return an array
 
@@ -561,9 +536,9 @@ const updated2 = await collections.posts.updateById({
 });
 ```
 
-### HIGH: `update`/`delete` mean different things on server vs client
+### HIGH: Use explicit write method names
 
-On server CRUD, `update`/`delete` are deprecated aliases of the BULK operations (`{ where, data }` → `T[]`). On the client SDK they are by-id operations (`{ id, data }` → `T`). Always use the unambiguous names: `updateById`/`deleteById`/`restoreById` for single records, `updateMany`/`deleteMany` for bulk. Calling a method that does not exist (e.g. a typo) on server CRUD throws a `TypeError` listing the valid methods.
+Use `updateById` / `deleteById` / `restoreById` for single-record writes, `updateMany` / `deleteMany` for bulk filters, and `updateBatch` for per-record batches. Calling a method that does not exist (e.g. a typo) on server CRUD throws a `TypeError` listing the valid methods.
 
 ### MEDIUM: Wrong create() signature
 

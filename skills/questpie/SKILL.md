@@ -1,6 +1,6 @@
 ---
 name: questpie
-description: QUESTPIE framework — server-first TypeScript CMS. File-convention codegen, collections, globals, routes, jobs, services, emails, blocks, typed client SDK, TanStack Query integration, adapters (queue, search, realtime, storage, email, KV). Use when building, reviewing, or refactoring any QUESTPIE project.
+description: QUESTPIE framework, server-first TypeScript CMS. File-convention codegen, collections, globals, routes, jobs, services, emails, blocks, typed client SDK, TanStack Query integration, adapters (queue, search, realtime, storage, email, KV). Use when building, reviewing, or refactoring any QUESTPIE project.
 license: MIT
 metadata:
   author: questpie
@@ -24,7 +24,7 @@ Reference these guidelines when:
 - Exposing QUESTPIE through MCP tools or resources
 - Scaffolding a new project or onboarding
 
-## Import Paths — Critical
+## Import Paths, Critical
 
 | Factory                        | Import From                  | Needs Codegen? |
 | ------------------------------ | ---------------------------- | -------------- |
@@ -48,11 +48,7 @@ Reference these guidelines when:
 
 ## Module And Plugin Configuration - Critical
 
-Codegen imports `modules.ts` before runtime app creation to extract module-contributed plugins. Any module that contributes a `plugin`, discover patterns, generated factories, categories, views, components, fields, or config factories must be statically discoverable from `modules.ts`.
-
-### DO THIS
-
-Use a static module and a plugin-discovered config file for runtime options:
+Codegen imports `modules.ts` before runtime app creation to extract module-contributed plugins. **Rule:** any module that contributes a `plugin`, discover patterns, generated factories, categories, views, components, fields, or config factories must be a static entry in `modules.ts`, not a factory call, not behind an env/runtime check. Put runtime options in a plugin-discovered `config/*.ts` singleton factory instead.
 
 ```ts title="modules.ts"
 import { observabilityModule } from "@questpie/observability/server";
@@ -69,44 +65,7 @@ export default observabilityConfig({
 });
 ```
 
-The module reads config at runtime from `app.state.config.observability`:
-
-```ts
-export const observabilityModule = module({
-	name: "questpie-observability",
-	plugin: observabilityPlugin(),
-	services: {
-		observability: service({
-			namespace: null,
-			lifecycle: "singleton",
-			create: ({ app, logger }) =>
-				createObservabilityService(app.state.config?.observability, logger),
-		}),
-	},
-});
-```
-
-### DON'T DO THIS
-
-Do not make runtime options the primary API for codegen-aware modules:
-
-```ts title="modules.ts"
-export default [
-	observabilityModule({
-		serviceName: "barbershop",
-	}),
-] as const;
-```
-
-Do not conditionally hide codegen-aware modules or plugins behind env/runtime checks:
-
-```ts title="modules.ts"
-export default [
-	process.env.OTEL_ENABLED ? observabilityModule : undefined,
-].filter(Boolean);
-```
-
-Factory modules are acceptable only for simple runtime-only modules whose plugin identity and codegen contributions do not change. For reusable packages that ship a `CodegenPlugin`, prefer **static module + `config/*.ts` singleton factory**.
+The module reads the resolved config at runtime from `app.state.config.observability`. Factory modules (`someModule({...})` in `modules.ts`) are acceptable only for simple runtime-only modules whose plugin identity and codegen contributions never change. Full DO/DON'T treatment: `references/extend.md`.
 
 ## Admin Auth Contract - Critical
 
@@ -118,10 +77,10 @@ Factory modules are acceptable only for simple runtime-only modules whose plugin
 
 | Topic             | File                            | Covers                                                             |
 | ----------------- | ------------------------------- | ------------------------------------------------------------------ |
-| Quickstart        | `references/quickstart.md`      | Scaffold, configure, codegen, migrate, serve — zero to running app |
+| Quickstart        | `references/quickstart.md`      | Scaffold, configure, codegen, migrate, serve, zero to running app |
 | Data Modeling     | `references/data-modeling.md`   | Collections, globals, fields, relations, options, localization     |
 | Field Types       | `references/field-types.md`     | All built-in field types with options and operators                |
-| Type Inference    | `references/type-inference.md`  | The infer-first map: `CollectionDoc`, `AccessContext` helpers, per-op rule typing, cycle rules |
+| Type Inference    | `references/type-inference.md`  | The infer-first map: `CollectionDoc` / `CollectionWhere`, `AccessContext` helpers, per-op rule typing, cycle rules |
 | Rules             | `references/rules.md`           | Access control (row/field level), hooks lifecycle, validation, derived request context |
 | Business Logic    | `references/business-logic.md`  | Routes, jobs, services, email templates, context injection         |
 | Durable Workflows | `references/workflows.md`       | Long-running workflows, steps, events, cron, admin UI              |
@@ -153,7 +112,7 @@ Factory modules are acceptable only for simple runtime-only modules whose plugin
 | -------------- | ------------------------------ | ---------------------------------------------------------------- |
 | TanStack Query | `references/tanstack-query.md` | `q.collections.*`, `q.globals.*`, `q.routes.*`, realtime queries |
 
-## Key Patterns — Quick Reference
+## Key Patterns, Quick Reference
 
 ### Collection
 
@@ -188,7 +147,7 @@ import { starterModule } from "questpie/app";
 import { collection } from "#questpie/factories";
 
 // Registering the same key from scratch REPLACES the module's collection
-// (drops its fields/hooks/auth wiring). Merge instead — fully typed:
+// (drops its fields/hooks/auth wiring). Merge instead, fully typed:
 export default collection("user")
 	.merge(starterModule.collections.user)
 	.fields(({ f }) => ({
@@ -224,7 +183,11 @@ export default job({
 		const user = await collections.users.findOne({
 			where: { id: payload.userId },
 		});
-		await email.send("reminder", { to: user.email, data: { name: user.name } });
+		await email.sendTemplate({
+			template: "reminder",
+			to: user.email,
+			input: { name: user.name },
+		});
 	},
 });
 ```
@@ -234,11 +197,12 @@ export default job({
 ```ts
 import { createClient } from "questpie/client";
 import type { AppConfig } from "#questpie";
-import { env } from "#questpie/env.client.vite"; // generated from env.client.ts
 
 const client = createClient<AppConfig>({
 	baseURL:
-		typeof window !== "undefined" ? window.location.origin : env.APP_URL,
+		typeof window !== "undefined"
+			? window.location.origin
+			: process.env.APP_URL || "http://localhost:3000",
 	basePath: "/api",
 });
 
@@ -248,6 +212,8 @@ const { docs } = await client.collections.posts.find({
 	with: { author: true },
 });
 ```
+
+> For build-time-inlined, typed client env, declare `env.client.ts` and import the generated module (`#questpie/env.client.vite` for Vite). The default template skips this and reads `process.env.APP_URL` directly, see `references/env.md`.
 
 ### Queue Dispatch
 
@@ -262,21 +228,15 @@ await queue.sendReminder.publish({ userId: "abc" });
 | Severity | Mistake                                                | Fix                                                                                   |
 | -------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------- |
 | CRITICAL | Files in wrong directory                               | Collections in `collections/`, routes in `routes/`, etc.                              |
-| CRITICAL | Missing `export default` on convention files           | Codegen silently ignores files without default export                                 |
-| CRITICAL | Importing route/job/service from `#questpie/factories` | Use `"questpie"` — only collection/global/block/adminConfig use `#questpie/factories` |
-| CRITICAL | Redefining a module collection (e.g. starter `user`) from scratch | `.merge(starterModule.collections.user)` then add fields — see Extend pattern        |
+| CRITICAL | Convention file has no export                          | Codegen needs one export, `export default` or a named `export const`/`function` both discovered; a file with no export is skipped. Collection/global keys derive from the filename, not the export name |
+| CRITICAL | Importing route/job/service from `#questpie/factories` | Use `"questpie"`, only collection/global/block/adminConfig use `#questpie/factories` |
+| CRITICAL | Redefining a module collection (e.g. starter `user`) from scratch | `.merge(starterModule.collections.user)` then add fields, see Extend pattern        |
 | HIGH     | Forgetting `questpie generate` after adding files      | Re-run codegen on any file add/remove in convention dirs                              |
 | HIGH     | Job handler uses `input` instead of `payload`          | Jobs destructure `{ payload }`, routes destructure `{ input }`                        |
 | HIGH     | `queue.send("name", data)`                             | Use `queue.jobName.publish(data)`                                                     |
-| HIGH     | Raw `process.env.X` / `process.env.X!` in app code     | Declare in `env.ts` with `env()` — typed, boot-validated (see `references/env.md`)    |
 | HIGH     | `beforeCreate` / `afterCreate` hook names              | Use `beforeChange` / `afterChange` with `operation === "create"` guard                |
-| HIGH     | Module-level app singleton for Better Auth callbacks   | `getContext<App>()` works inside `onLinkAccount`/`databaseHooks`/plugin hooks — see `references/auth.md` |
-| HIGH     | Hand-writing a type the schema already knows           | Use the inference one-liner (`CollectionDoc`, `AccessContext`, `ctx.data`, …) — see `references/type-inference.md` |
-| HIGH     | Runtime options in codegen-aware modules               | Use static `module({...})` + plugin-discovered `config/*.ts` factory                  |
-| HIGH     | Exposing MCP HTTP as trusted system access             | HTTP MCP is user mode only; use stdio only in trusted local/system contexts           |
-| HIGH     | Bare `Date` as where-equality (`{ createdAt: someDate }`) | Use the explicit operator: `{ createdAt: { eq: someDate } }` — see `references/crud-api.md` keyset recipe |
 | MEDIUM   | Using npm/yarn instead of Bun                          | QUESTPIE requires Bun as package manager                                              |
-| MEDIUM   | Editing `.generated/` files                            | Never edit — re-run `questpie generate`                                               |
+| MEDIUM   | Editing `.generated/` files                            | Never edit, re-run `questpie generate`                                               |
 
 ## Preview And Workflow Rules
 

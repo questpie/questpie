@@ -1,32 +1,21 @@
 ---
-title: Extend
-description: Create custom fields, views, adapters, plugins, and modules.
+title: Overview
+description: Add your own modules, plugins, generated file conventions, and scope-aware behavior on top of the same extension points QUESTPIE uses internally.
 ---
 
-QUESTPIE is designed to be extensible. The core framework provides primitives — everything else comes from plugins and modules.
+QUESTPIE treats framework features and userland features the same way: a module contributes runtime state, and a plugin teaches codegen how to discover and type new files. Use this section when you are packaging reusable behavior, adding custom conventions, or shaping an app around scopes and tenants.
 
-## Extension Points
+## Pages
 
-| Extension                                           | What it does                                                 |
-| --------------------------------------------------- | ------------------------------------------------------------ |
-| [Custom Fields](/docs/extend/custom-fields)         | New field types with custom storage and rendering            |
-| [Custom Views](/docs/extend/custom-views)           | New list/form view types                                     |
-| [Custom Adapters](/docs/extend/custom-adapters)     | New KV, queue, search, realtime, storage, and email adapters |
-| [Registries](/docs/extend/registries)               | Field, view, and component registry deep dive                |
-| [Building a Plugin](/docs/extend/building-a-plugin) | Create a codegen plugin package                              |
-| [Building a Module](/docs/extend/building-a-module) | Create a reusable module                                     |
+| Page | What it covers |
+|---|---|
+| **[Modules](/docs/extend/modules)** | Static module objects, module merging, bundled plugins, and how packages contribute runtime features. |
+| **[Building a plugin](/docs/extend/build-a-plugin)** | The authoring loop for reusable codegen-aware packages. |
+| **[Codegen](/docs/extend/codegen)** | File discovery, generated factories, registries, and the `CodegenPlugin` API. |
+| **[Multi-tenancy](/docs/extend/multi-tenancy)** | Scope derivation, access-rule enforcement, scoped globals, and the admin scope picker. |
 
-## Architecture
+## Related
 
-The extension system follows three levels:
-
-```mermaid
-flowchart LR
-  Plugin["Plugin<br/>declares what can exist"]
-  Module["Module<br/>contributes what does exist"]
-  Config["Config<br/>runs the runtime"]
-
-  Plugin --> Module --> Config
-```
-
-Plugins tell codegen what to discover. Modules provide the actual implementations. Config wires infrastructure.
+- [Configuration](/docs/concepts/configuration) - where modules and config files are wired.
+- [Adapters](/docs/adapters) - the infrastructure contracts your modules can use or replace.
+- [Admin](/docs/admin) - the largest built-in example of a module plus codegen plugin.

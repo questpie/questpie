@@ -4,6 +4,11 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import {
+	defaultModuleIds,
+	isModuleAllowed,
+	type RuntimeId,
+} from "../src/modules";
 import { scaffold } from "../src/scaffolder";
 
 let tempDir: string | undefined;
@@ -18,7 +23,7 @@ afterEach(async () => {
 });
 
 describe("scaffold", () => {
-	test("creates a runnable project shell with env, scripts, and agent skills", async () => {
+	test("creates a runnable project shell with env and scripts (skills not vendored)", async () => {
 		tempDir = await mkdtemp(join(tmpdir(), "create-questpie-"));
 		process.chdir(tempDir);
 
@@ -26,9 +31,12 @@ describe("scaffold", () => {
 			projectName: "smoke-app",
 			templateId: "tanstack-start",
 			databaseName: "smoke_app",
+			modules: defaultModuleIds("tanstack-start"),
 			installDeps: false,
 			initGit: false,
-			installSkills: true,
+			// Skills install is a backgrounded `bunx skills add` (network) — keep
+			// it off in unit tests; we only assert it leaves no vendored copy.
+			installSkills: false,
 			runCodegen: false,
 		});
 
@@ -78,14 +86,10 @@ describe("scaffold", () => {
 			true,
 		);
 
-		expect(
-			existsSync(join(projectDir, ".agents", "skills", "questpie", "SKILL.md")),
-		).toBe(true);
-		expect(
-			existsSync(
-				join(projectDir, ".agents", "skills", "questpie-admin", "SKILL.md"),
-			),
-		).toBe(true);
+		// Skills are no longer vendored — they install via a backgrounded
+		// `bunx skills add questpie/questpie`, so the scaffolder writes no
+		// `.agents/skills/` copy.
+		expect(existsSync(join(projectDir, ".agents", "skills"))).toBe(false);
 	});
 
 	test("applies adapter and workflow options to generated project files", async () => {
@@ -96,6 +100,7 @@ describe("scaffold", () => {
 			projectName: "adapter-app",
 			templateId: "tanstack-start",
 			databaseName: "adapter_app",
+			modules: [...defaultModuleIds("tanstack-start"), "workflows"],
 			installDeps: false,
 			initGit: false,
 			installSkills: false,
@@ -104,7 +109,6 @@ describe("scaffold", () => {
 			emailAdapter: "resend",
 			realtimeAdapter: "redis-streams",
 			kvAdapter: "redis",
-			includeWorkflows: true,
 		});
 
 		const projectDir = join(tempDir, "adapter-app");
@@ -140,5 +144,175 @@ describe("scaffold", () => {
 		expect(runtimeConfig).toContain("redisKVAdapter");
 		expect(serverModules).toContain("workflowsModule");
 		expect(adminModules).toContain("workflowsClientModule");
+	});
+
+	test("emits exact default modules/config/env (locks registry behavior)", async () => {
+		tempDir = await mkdtemp(join(tmpdir(), "create-questpie-"));
+		process.chdir(tempDir);
+
+		await scaffold({
+			projectName: "default-app",
+			templateId: "tanstack-start",
+			databaseName: "default_app",
+			modules: defaultModuleIds("tanstack-start"),
+			installDeps: false,
+			initGit: false,
+			installSkills: false,
+			runCodegen: false,
+		});
+
+		const projectDir = join(tempDir, "default-app");
+		const read = (rel: string) => readFile(join(projectDir, rel), "utf-8");
+
+		expect(await read("src/questpie/server/modules.ts")).toBe(
+			[
+				`/**`,
+				` * Modules — static module dependencies for this project.`,
+				` */`,
+				`import { adminModule } from "@questpie/admin/modules/admin";`,
+				`import { openApiModule } from "@questpie/openapi";`,
+				``,
+				`const modules = [`,
+				`\tadminModule,`,
+				`\topenApiModule,`,
+				`] as const;`,
+				``,
+				`export default modules;`,
+				``,
+			].join("\n"),
+		);
+
+		expect(await read("src/questpie/admin/modules.ts")).toBe(
+			[
+				`import { adminClientModule } from "@questpie/admin/client/modules/admin";`,
+				``,
+				`export default [adminClientModule] as const;`,
+				``,
+			].join("\n"),
+		);
+
+		expect(await read("src/questpie/server/questpie.config.ts")).toBe(
+			[
+				`/**`,
+				` * QUESTPIE Runtime Configuration`,
+				` *`,
+				` * Runtime-only configuration: database, adapters, secrets.`,
+				` * Entity definitions are codegen-generated.`,
+				` */`,
+				``,
+				`import { runtimeConfig } from "questpie/app";`,
+				`import { ConsoleAdapter } from "questpie/adapters/console";`,
+				`import { pgBossAdapter } from "questpie/adapters/pg-boss";`,
+				``,
+				`import { env } from "@/lib/env.js";`,
+				``,
+				`export default runtimeConfig({`,
+				`\tapp: { url: env.APP_URL },`,
+				`\tdb: { url: env.DATABASE_URL },`,
+				`\tstorage: { basePath: "/api" },`,
+				`\temail: {`,
+				`\t\tadapter: new ConsoleAdapter({ logHtml: false }),`,
+				`\t},`,
+				`\tqueue: {`,
+				`\t\tadapter: pgBossAdapter({ connectionString: env.DATABASE_URL }),`,
+				`\t},`,
+				`});`,
+				``,
+			].join("\n"),
+		);
+
+		expect(await read("src/lib/env.ts")).toBe(
+			[
+				`import { createEnv } from "@t3-oss/env-core";`,
+				`import { z } from "zod";`,
+				``,
+				`export const env = createEnv({`,
+				`\tserver: {`,
+				`\t\tDATABASE_URL: z.string().url(),`,
+				`\t\tAPP_URL: z.string().url().default("http://localhost:3000"),`,
+				`\t\tPORT: z`,
+				`\t\t\t.string()`,
+				`\t\t\t.transform(Number)`,
+				`\t\t\t.pipe(z.number().int().positive())`,
+				`\t\t\t.default(3000),`,
+				`\t\tBETTER_AUTH_SECRET: z.string().min(1).default("change-me-in-production"),`,
+				`\t\tMAIL_ADAPTER: z.enum(["console"]).default("console"),`,
+				`\t},`,
+				`\truntimeEnv: process.env,`,
+				`\temptyStringAsUndefined: true,`,
+				`});`,
+				``,
+			].join("\n"),
+		);
+	});
+
+	test("server modules.ts reflects the selected module set, not a hardcoded list", async () => {
+		tempDir = await mkdtemp(join(tmpdir(), "create-questpie-"));
+		process.chdir(tempDir);
+
+		// A non-default selection: admin + openapi + workflows.
+		await scaffold({
+			projectName: "selected-app",
+			templateId: "tanstack-start",
+			databaseName: "selected_app",
+			modules: ["admin", "openapi", "workflows"],
+			installDeps: false,
+			initGit: false,
+			installSkills: false,
+			runCodegen: false,
+		});
+
+		const projectDir = join(tempDir, "selected-app");
+		const serverModules = await readFile(
+			join(projectDir, "src", "questpie", "server", "modules.ts"),
+			"utf-8",
+		);
+		const adminModules = await readFile(
+			join(projectDir, "src", "questpie", "admin", "modules.ts"),
+			"utf-8",
+		);
+
+		// Server emits exactly the selected three, in registry order.
+		expect(serverModules).toContain("adminModule");
+		expect(serverModules).toContain("openApiModule");
+		expect(serverModules).toContain("workflowsModule");
+		// admin selected -> admin/modules.ts is (re)written with both client halves.
+		expect(adminModules).toContain("adminClientModule");
+		expect(adminModules).toContain("workflowsClientModule");
+	});
+});
+
+describe("module oracle", () => {
+	const renderRuntimes: RuntimeId[] = ["tanstack-start", "next"];
+	const headlessRuntimes: RuntimeId[] = ["hono", "elysia"];
+
+	test("admin is allowed on render-layer runtimes", () => {
+		for (const runtime of renderRuntimes) {
+			expect(isModuleAllowed("admin", runtime)).toBe(true);
+		}
+	});
+
+	test("admin is rejected on headless runtimes", () => {
+		for (const runtime of headlessRuntimes) {
+			expect(isModuleAllowed("admin", runtime)).toBe(false);
+		}
+	});
+
+	test("server-only modules are allowed on every runtime", () => {
+		for (const runtime of [...renderRuntimes, ...headlessRuntimes]) {
+			expect(isModuleAllowed("openapi", runtime)).toBe(true);
+			expect(isModuleAllowed("workflows", runtime)).toBe(true);
+		}
+	});
+
+	test("unknown module ids are rejected", () => {
+		expect(isModuleAllowed("does-not-exist", "tanstack-start")).toBe(false);
+	});
+
+	test("default module ids include admin only for render runtimes", () => {
+		expect(defaultModuleIds("tanstack-start")).toEqual(["admin", "openapi"]);
+		expect(defaultModuleIds("next")).toEqual(["admin", "openapi"]);
+		expect(defaultModuleIds("hono")).toEqual(["openapi"]);
+		expect(defaultModuleIds("elysia")).toEqual(["openapi"]);
 	});
 });
