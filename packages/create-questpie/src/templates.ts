@@ -27,8 +27,13 @@ export const templates: Template[] = [
 		description:
 			"Headless REST API with Elysia on Bun, OpenAPI/Scalar docs, and a typed client (no admin UI)",
 	},
-	// Future templates:
-	// { id: "next", label: "Next.js", hint: "react", description: "React with Next.js App Router" },
+	{
+		id: "next",
+		label: "Next.js",
+		hint: "fullstack",
+		description:
+			"Full-stack React with Next.js App Router (Turbopack), admin UI, OpenAPI/Scalar docs, and a typed client",
+	},
 ];
 
 export function getTemplate(id: string): Template | undefined {

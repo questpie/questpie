@@ -1,0 +1,11 @@
+-- Postgres extensions provisioned for local development.
+-- Mounted into the postgres container at /docker-entrypoint-initdb.d/ and run
+-- once, on first cluster init, before the app connects.
+--
+-- QUESTPIE is drizzle-native: the app does NOT auto-create extensions. The
+-- starter's full-text search uses pg_trgm (trigram matching), so we provision
+-- it here to keep `db:push` working out-of-the-box while you prototype.
+--
+-- On managed Postgres, enable required extensions via your provider instead.
+-- See https://questpie.com/docs for details.
+CREATE EXTENSION IF NOT EXISTS "pg_trgm";
