@@ -22,23 +22,13 @@ function generateLLMSTxt(baseUrl: string, pages: LLMSPage[]) {
 	// Generate structured links
 	const sections: string[] = [];
 
+	// Mirrors the top-level sections in content/docs/meta.json (root `index`
+	// page lands in the "root" bucket and is intentionally omitted here).
 	const sectionOrder: Array<{ key: string; title: string }> = [
-		{ key: "start-here", title: "Start Here" },
-		{ key: "backend", title: "Build Your Backend" },
-		{ key: "workspace", title: "Admin Workspace" },
-		{ key: "frontend", title: "Client Integration" },
-		{ key: "production", title: "Production" },
-		{ key: "extend", title: "Extend" },
-		{ key: "examples", title: "Examples" },
-		{ key: "reference", title: "API Reference" },
-		{ key: "getting-started", title: "Platform Quickstart" },
-		{ key: "mentality", title: "Architecture Principles" },
-		{ key: "server", title: "Server Model" },
-		{ key: "infrastructure", title: "Infrastructure Modules" },
-		{ key: "client", title: "Client Projections" },
-		{ key: "admin", title: "Admin Interface" },
-		{ key: "guides", title: "Guides" },
-		{ key: "migration", title: "Migration" },
+		{ key: "getting-started", title: "Getting Started" },
+		{ key: "concepts", title: "Concepts" },
+		{ key: "adapters", title: "Adapters" },
+		{ key: "integrations", title: "Integrations" },
 	];
 
 	for (const section of sectionOrder) {

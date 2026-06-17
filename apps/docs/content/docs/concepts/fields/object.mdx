@@ -1,0 +1,162 @@
+---
+title: Object field
+description: f.object() stores a fixed, typed nested shape in a single Postgres jsonb column — each nested key is itself a field with its own validation, and the whole object is filterable with JSONB operators.
+---
+
+`f.object()` groups a fixed set of nested fields into one structured value stored as a single `jsonb` column. You pass it a record of nested field definitions; QUESTPIE derives a `z.object({...})` schema from them, infers the object's read type from the nested fields, and exposes JSONB filter operators (`contains`, `hasKey`, `pathEquals`, …) on the typed `where` clause. Reach for it when the shape is known and you want per-key validation — for free-form data use [`f.json()`](/docs/concepts/fields/json) instead.
+
+> **Prerequisites:** read [Fields](/docs/concepts/fields) first — this page covers only the `object` type. The `f` proxy, the chain-modifier model, and shared modifiers like `.required()` / `.localized()` / `.array()` are taught there.
+
+## What it does
+
+- **Stores a typed nested shape** in one `jsonb` column — no extra table, no join.
+- **Validates each key** — every nested field contributes its own Zod schema, composed into a `z.object({...})` for the whole value.
+- **Infers the object type** from the nested fields, so the read shape stays in sync with the keys you declare.
+- **Filters with JSONB operators** — `contains`, `containedBy`, `hasKey`, `pathEquals`, and more, evaluated against the stored JSON.
+
+## Quick start
+
+Use `f.object()` inside a `.fields()` callback. The single argument is a record of nested fields, each built from the same `f` proxy and refinable with the same chain methods.
+
+```ts title="src/questpie/server/collections/users.ts"
+import { collection } from "#questpie/factories";
+
+export const users = collection("users").fields(({ f }) => ({
+  email: f.email().required(),
+  address: f.object({
+    street: f.text().required(),
+    city: f.text().required(),
+    zip: f.text(10),
+  }),
+}));
+```
+
+That gives `users` an `address` column typed `{ street: string; city: string; zip: string | null }` on read, stored as one `jsonb` value, validated by a composed `z.object({...})` on create and update — no separate table, no schema written by hand.
+
+## Constructor argument
+
+`f.object(fields)` takes one positional argument: a `Record<string, Field>` of nested field definitions. Source: `packages/questpie/src/server/modules/core/fields/object.ts:69`.
+
+| Argument | Type | Notes |
+|---|---|---|
+| `fields` | `Record<string, Field>` | The nested shape. Each value is a field built from `f` (and chained like any other). |
+
+The column is always `jsonb`. The schema is built by calling `.toZodSchema()` on each nested field and wrapping the result in `z.object({...})`, so each key validates with its own field's rules. The object's read type is **inferred** from the nested fields' select types — declare `f.text().required()` and that key is `string`; leave it optional and it is `string | null`. Source: `object.ts:75` (schema), `object.ts:37` (`InferObjectData`).
+
+<Callout type="info" title="Nested fields are real fields">
+Each value in the record is a full field — chain `.required()`, `.default()`, `.label()`, even nest another `f.object({...})`. The nested field's Zod schema and its nullability both flow into the parent object's schema and inferred type. There is no separate "object sub-field" type; you compose the same `f.*` factories.
+</Callout>
+
+## Chained methods
+
+`f.object()` has **no type-specific chain methods** — it is refined entirely with the [shared modifiers](/docs/concepts/fields) every field has (`.required()`, `.default()`, `.label()`, `.localized()`, `.array()`, `.access()`, …). Source: `object.ts:124` (the `fieldType` registers no `methods`).
+
+```ts
+// A required object with a default and a label:
+seo: f
+  .object({
+    title: f.text(60),
+    description: f.text(160),
+  })
+  .label("SEO")
+  .default({ title: "", description: "" }),
+```
+
+The two shared modifiers worth calling out for objects:
+
+- **`.array()`** — turns the field into a *list of objects* (`T[]`), still stored as one `jsonb` column. Bound the length with `.minItems(n)` / `.maxItems(n)`. See [Repeated objects](#repeated-objects) below.
+- **`.required()`** — makes the column `NOT NULL` and the whole object required on insert. Without it the object is nullable (`T | null`) and optional on input.
+
+## Filtering — operators
+
+`object` uses the **object operator set** (`objectOps`), built on structural JSONB operations. The whole set is JSONB-path aware: the same operators work on a top-level object field and on a key *inside* a nested object. Source: `packages/questpie/src/server/fields/operators/builtin.ts:459`.
+
+| Operator | Operand | Matches (Postgres) |
+|---|---|---|
+| `contains` | a partial object | JSON contains (`@>`) — the stored value contains this subtree. |
+| `containedBy` | an object | JSON contained by (`<@`) — the stored value is a subtree of this. |
+| `hasKey` | `string` | The object has this top-level key (`?`). |
+| `hasKeys` | `string[]` | The object has **all** of these keys (`?&`). |
+| `hasAnyKeys` | `string[]` | The object has **any** of these keys (`?\|`). |
+| `pathEquals` | `{ path: string[]; val }` | The value at `path` equals `val` (JSONB path navigation). |
+| `jsonPath` | `string` | Matches a Postgres `jsonpath` expression (`@@`). |
+| `isEmpty` / `isNotEmpty` | `boolean` | The object is (not) `{}` / null. |
+| `isNull` / `isNotNull` | `boolean` | The column is (not) `null`. |
+
+```ts
+// Find users in a given city using a nested-path match:
+const { docs } = await app.collections.users.find({
+  where: {
+    address: { pathEquals: { path: ["city"], val: "Berlin" } },
+  },
+});
+
+// Or: the address object must contain this subtree (city + zip):
+await app.collections.users.find({
+  where: { address: { contains: { city: "Berlin", zip: "10115" } } },
+});
+```
+
+<Callout type="info" title="`pathEquals` / `contains` over per-field columns">
+There is no relational filter on a sub-key (an object is one `jsonb` value, not joined rows). To filter by a nested value, use `pathEquals` (exact value at a path) or `contains` (a subtree must be present). If you find yourself querying deep object paths constantly, that data may belong in its own [collection](/docs/concepts/collections) with a [relation](/docs/concepts/relations).
+</Callout>
+
+For the full query language — combining filters with `AND` / `OR` / `NOT`, pagination, and `orderBy` — see the [query reference](/docs/concepts/relations).
+
+## When to use it
+
+- **`f.object()`** — a **fixed, known** nested shape you want validated key by key: an address, an SEO block, a coordinate pair, a settings group. The keys and their types are part of your schema.
+- **[`f.json()`](/docs/concepts/fields/json)** — **free-form** or externally-shaped data with no fixed keys (a raw webhook payload, arbitrary metadata). It is schema-less; narrow the type with `.$type<T>()` and add runtime validation with `.zod()` only if you want it.
+- **A separate [collection](/docs/concepts/collections) + [relation](/docs/concepts/relations)** — when the nested data needs its own rows, its own queries, or its own access rules. An object is the right call only while the data is genuinely *owned by and embedded in* the parent row.
+
+## Repeated objects
+
+Chain `.array()` to store a **list** of objects in the single `jsonb` column, and bound it with `.minItems(n)` / `.maxItems(n)`. The inner object shape is validated per item. `.array()` is a [shared modifier](/docs/concepts/fields), not object-specific:
+
+```ts
+// A list of typed link objects:
+links: f
+  .object({
+    label: f.text().required(),
+    url: f.url().required(),
+  })
+  .array()
+  .maxItems(5),
+//  ^ read type: { label: string; url: string }[]
+```
+
+<Callout type="info" title="Object array vs blocks">
+`f.object().array()` is for a **homogeneous** list — every item has the same shape. When items can be *different* types chosen from a palette (a page builder), use [`f.blocks()`](/docs/concepts/blocks) instead. (For arranging an object's keys into sections/tabs in the admin form, an object field also accepts a field-level `.form()` layout config, contributed by the admin module.)
+</Callout>
+
+## Gotchas
+
+<Callout type="warn" title="Nested write-only fields drop out of the object shape">
+A nested field marked `.outputFalse()` (write-only) resolves to `never` and is **dropped from the inferred object data type** — mirroring how the same field is dropped from a top-level row. The key still validates on input (its Zod schema is in the composed `z.object`), but it won't appear in the read shape. A *virtual* nested field is different: it keeps its data type in the read shape (a nested to-many `f.relation()`, for instance, infers as `string[] | null`). Source: `object.ts:37` (`InferObjectData` delegates to `ExtractSelectType`), which returns `never` only for `output: false`.
+</Callout>
+
+<Callout type="warn" title="The object is stored as one JSONB value">
+The whole object is a single `jsonb` column — there are no per-key columns, indexes, or foreign keys inside it. Nested `f.relation()` fields don't create real FKs, and you can't `orderBy` a nested key or hydrate it with `with:`. If a nested value needs to be a real, query-first relationship, model it as its own collection. Source: `object.ts:74` (`columnFactory: jsonb`).
+</Callout>
+
+## TypeScript
+
+An object field contributes its inferred shape to the generated row, insert, and `where` types — no annotation needed. After `questpie generate`, pull the shapes off the collection or the app types:
+
+```ts
+type User = typeof users.$infer.select;
+//   ^? { id: string; email: string;
+//        address: { street: string; city: string; zip: string | null } | null; ... }
+```
+
+`.required()` makes the whole object non-null and required on insert; nested `.required()` does the same per key inside the object. See [Fields → inferred types](/docs/concepts/fields) for how modifiers flow into the generated types.
+
+## Related
+
+- [Fields](/docs/concepts/fields) — the `f` proxy, the chain-modifier model, and the shared modifiers (`.required()`, `.array()`, `.localized()`, `.default()`, …).
+- [`f.json()`](/docs/concepts/fields/json) — the schema-less sibling for free-form data with no fixed keys.
+- [Blocks](/docs/concepts/blocks) — for *heterogeneous* repeatable content (a page builder) rather than a homogeneous object array.
+- [Collections](/docs/concepts/collections) / [Relations](/docs/concepts/relations) — when nested data should be its own rows with real queries and relationships.
+- [Validation](/docs/concepts/validation) — the auto-derived Zod schema and the `.zod()` escape hatch.
+
+{/* TODO @user: screenshot of an object field rendered in the admin form (grouped nested inputs). */}

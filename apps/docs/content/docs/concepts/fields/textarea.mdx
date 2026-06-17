@@ -1,0 +1,142 @@
+---
+title: Textarea field
+description: f.textarea() is an unbounded multi-line string field — a Postgres text column that renders as a multiline editor in the admin, with the same string filters as text.
+---
+
+`f.textarea()` declares a multi-line string. It stores an unbounded Postgres `text` column, reads back as a `string`, validates as a string (no length cap by default), and filters with the standard string operators — the same surface as [`f.text()`](/docs/concepts/fields/text), but it renders as a multiline textarea in the admin instead of a single-line input.
+
+Reach for it when you have free-form prose that has no real length limit: a bio, an excerpt, an internal note, a description. For short, capped strings use `f.text(maxLength)`; for formatted/structured content use [`f.richText()`](/docs/concepts/fields/rich-text).
+
+> **Prerequisites:** [Fields](/docs/concepts/fields) — the `f` proxy, how a field becomes a column + schema + filters + admin input, and the chain modifiers shared by every field type.
+
+## What it does
+
+- **Stores unbounded text** — produces a Postgres `text` column (no `varchar(n)` length cap), so long content is never truncated.
+- **Reads back as a string** — the value type on read, insert, and update is `string`.
+- **Renders a multiline editor** — the `textarea` type tells the admin to use a multi-row text area, not a one-line input.
+- **Validates as a string** — derives `z.string()` (plus optional length bounds you add with `.min()` / `.max()`).
+- **Filters with string operators** — ships the `stringOps` set (`eq`, `contains`, `ilike`, `startsWith`, …) so `where` is typed for this field.
+
+## Quick start
+
+`f` is the field builder destructured from the `.fields()` callback — you never import it. `textarea` takes **no constructor argument**; chain the shared modifiers to refine it.
+
+```ts title="src/questpie/server/collections/posts.ts"
+import { collection } from "#questpie/factories";
+
+export const posts = collection("posts").fields(({ f }) => ({
+  title: f.text(255).required(),
+  excerpt: f.textarea(),                       // unbounded text, multiline editor
+  notes: f.textarea().label({ en: "Internal notes" }),
+  // Shared modifiers (.required, .default, .localized, .admin, …) are documented
+  // on the Fields page; the textarea-specific methods are below.
+}));
+```
+
+After `questpie generate`, `excerpt` and `notes` are `string` on the row type, accept any-length text on write, and expose string filters on `where`. No migration to hand-write.
+
+## Example → inferred type
+
+```ts
+const posts = collection("posts").fields(({ f }) => ({
+  title: f.text(255).required(),
+  excerpt: f.textarea(),               // optional string column
+  summary: f.textarea().required(),    // NOT NULL — required on insert
+}));
+
+// After `questpie generate`, rows read back as:
+// {
+//   id: string;
+//   title: string;
+//   excerpt: string | null;   // nullable until you .required() it
+//   summary: string;
+//   createdAt: Date; updatedAt: Date;  // from the base collection
+// }
+```
+
+Like every field, `textarea` is optional and nullable by default; `.required()` makes the column `NOT NULL` and the value required on insert. The read/insert/where shapes are derived by `ExtractSelectType` / `ExtractInputType` / `ExtractWhereType` in `packages/questpie/src/server/fields/field-class-types.ts`.
+
+## Constructor & methods
+
+`f.textarea()` takes no arguments. It has two type-specific chain methods, both of which constrain **string length**:
+
+| Method | Effect | Maps to |
+|---|---|---|
+| `.min(n)` | Minimum character length — adds `z.string().min(n)` to the validation schema. | `minLength` |
+| `.max(n)` | Maximum character length — adds `z.string().max(n)` to the validation schema. | `maxLength` |
+
+```ts
+bio: f.textarea().min(10).max(2000),   // 10–2000 characters, validated on write
+```
+
+`.min(n)` / `.max(n)` set length bounds only — they do **not** change the column type, which stays unbounded Postgres `text` regardless. The bounds are applied to the derived Zod schema in `packages/questpie/src/server/fields/derive-schema.ts` (string refinements: `maxLength` / `minLength` / `pattern`).
+
+Everything else comes from the [shared field modifiers](/docs/concepts/fields#shared-methods) — `.required()`, `.default()`, `.localized()`, `.label()`, `.description()`, `.hooks()`, `.access()`, `.admin()`, `.zod()`, and the rest. They behave identically on `textarea` as on any field.
+
+<Callout type="info" title="textarea vs text">
+`f.textarea()` and `f.text({ mode: "text" })` both produce an unbounded Postgres `text` column with the same `string` type and the same string operators. The **only** difference is the type discriminator: `textarea` reports `type: "textarea"`, which drives the admin to a multiline editor; `text` reports `type: "text"` (a single-line input). Pick `textarea` when you want the multiline UI. Source: `packages/questpie/src/server/modules/core/fields/textarea.ts`.
+</Callout>
+
+## Querying
+
+`textarea` ships the `stringOps` operator set — identical to `f.text()` — so its `where` clause supports:
+
+| Operator | Meaning |
+|---|---|
+| `eq` / `ne` | Exact equality / inequality. |
+| `in` / `notIn` | Membership in a list of strings. |
+| `like` / `notLike` | Case-**sensitive** SQL `LIKE` (you supply `%` wildcards). |
+| `ilike` / `notIlike` | Case-**insensitive** `LIKE`. |
+| `contains` | Substring match (`LIKE '%value%'`). |
+| `startsWith` / `endsWith` | Prefix / suffix match. |
+| `isNull` / `isNotNull` | Boolean null checks. |
+
+```ts
+// Posts whose excerpt mentions "release" (case-insensitive substring):
+await app.collections.posts.find({
+  where: { excerpt: { contains: "release" } },
+});
+
+// Posts with a non-empty internal note:
+await app.collections.posts.find({
+  where: { notes: { isNotNull: true } },
+});
+```
+
+The set is defined as `stringOps` in `packages/questpie/src/server/fields/operators/builtin.ts`. These same operators type the `where` clause on the server (`app.collections.*`) and on the typed client.
+
+<Callout type="warn" title="No full-text search">
+`contains` / `ilike` are SQL `LIKE` scans, not full-text search — fine for filtering, but not built for ranked search over large prose. For relevance-ranked search across long text, mark the collection `.searchable()` and use the search adapter (pg_trgm / pgvector) rather than a `contains` filter.
+</Callout>
+
+## Localization
+
+To store a per-locale value (one row of text per locale, in the i18n side-table), add `.localized()`:
+
+```ts
+description: f.textarea().localized(),   // per-locale prose
+```
+
+`.localized()` is a shared modifier with one home — see [Fields → shared methods](/docs/concepts/fields#shared-methods) for how localized fields move to the i18n table and how labels accept `I18nText`.
+
+## TypeScript
+
+You rarely touch the field type directly — `textarea` flows into the generated collection types. After `questpie generate`:
+
+```ts
+import type { CollectionDoc, CollectionWhere } from "#questpie/types";
+
+type Post = CollectionDoc<"posts">;          // { excerpt: string | null; ... }
+type PostFilter = CollectionWhere<"posts">;  // { excerpt?: { contains?: string; ... } }
+```
+
+The field primitives (`TextareaFieldState`, `TextareaFieldMethods`) are exported from `questpie` for plugin/library authors; app code reaches the value through the generated collection types above. Source: `packages/questpie/src/server/modules/core/fields/textarea.ts`.
+
+{/* TODO @user: add a screenshot of a textarea field rendered in the admin form (multiline input). */}
+
+## Related
+
+- [Fields](/docs/concepts/fields) — the field model, the `f` proxy, and the chain modifiers shared by every type.
+- [`f.text()`](/docs/concepts/fields/text) — single-line / length-capped strings; same operators, different admin UI.
+- [`f.richText()`](/docs/concepts/fields/rich-text) — formatted content (TipTap JSON or markdown) when prose needs structure.
+- [`f.email()`](/docs/concepts/fields/email) / [`f.url()`](/docs/concepts/fields/url) — string fields with built-in format validation.

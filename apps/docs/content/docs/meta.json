@@ -1,14 +1,4 @@
 {
 	"title": "Documentation",
-	"pages": [
-		"index",
-		"start-here",
-		"backend",
-		"workspace",
-		"frontend",
-		"production",
-		"extend",
-		"examples",
-		"reference"
-	]
+	"pages": ["index", "getting-started", "concepts", "adapters", "integrations"]
 }

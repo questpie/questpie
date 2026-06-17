@@ -1,0 +1,455 @@
+---
+title: Collections
+description: A collection is one typed, versioned database table defined in code — and from that single definition you get CRUD, an admin UI, REST routes, OpenAPI, and a typed client, all in sync.
+---
+
+A **collection** is one database table you define in code. You declare its fields, who can touch each operation, and what happens around every write — and QUESTPIE projects that single definition into a typed CRUD object, an admin list + form, REST endpoints, OpenAPI docs, and a typed client. Change the definition, run codegen, and every layer moves together. Nothing is defined twice.
+
+## What it does
+
+- **One definition, every surface.** From `collection("posts").fields(...)` you get `app.collections.posts` (typed CRUD), an admin list + form, REST routes under `/api/posts`, OpenAPI entries, and a typed client — with no extra wiring.
+- **Typed end to end.** Field declarations drive the row type, the insert/update inputs, the `where` filters, relation hydration, and the client SDK. A typo in a field name is a compile error, not a runtime surprise.
+- **Lifecycle built in.** Opt into `timestamps`, `softDelete`, and `versioning` (with an optional draft → published `workflow`) per collection through one `.options()` call.
+- **Rules co-located.** Attach `.access()` (row-level rules that can return a `where` to filter) and `.hooks()` (functions around each operation) right on the definition.
+- **Relations and uploads as fields.** `f.relation("author")` adds a typed FK, admin picker, and `with: { author: true }` hydration; `.upload()` turns the collection into a media store. Covered in [Relations](/docs/concepts/relations) and below.
+- **Auto-discovered.** Drop a file in `collections/`, run codegen, and it's registered. There is no central registry to edit.
+
+## Quick start
+
+Create one file per collection under your `collections/` directory. Import `collection` from `#questpie/factories` — the codegen-generated factory that knows your enabled modules (so `f.richText()`, `f.blocks()`, and friends appear on `f`) — then declare fields.
+
+```ts title="src/questpie/server/collections/posts.ts"
+import { collection } from "#questpie/factories";
+
+// The string you pass to collection("posts") is the key on app.collections —
+// keep the file name matching it by convention.
+export const posts = collection("posts")
+  .fields(({ f }) => ({
+    title: f.text().label("Title").required(),
+    slug: f.text().label("Slug").required(),
+    content: f.richText().label("Content"),
+    published: f.boolean().label("Published").default(false).required(),
+  }))
+  .title(({ f }) => f.title) // which field labels a row in the admin
+  .options({ timestamps: true }); // createdAt + updatedAt (on by default)
+```
+
+Then regenerate the typed surface and create the table:
+
+```bash
+questpie generate   # registers the collection, updates app.collections.posts + client
+questpie push       # creates the table in your dev database
+```
+
+<Callout type="info" title="Import from `#questpie/factories`, not `questpie`">
+The bare `collection()` exported from `questpie` only sees **builtin** field types. The generated `#questpie/factories` factory calls `CollectionBuilder.create(name, fieldDefs)` under the hood with your merged builtins + module fields, so module types (`richText`, `blocks`, …) show up on `f`. Always import `collection` from `#questpie/factories` in app code. Source: `packages/questpie/src/server/collection/builder/collection-builder.ts:135`; generated factory at `.generated/factories.ts`.
+</Callout>
+
+That one file now gives you:
+
+```ts
+// Typed CRUD, server-side:
+const { docs } = await app.collections.posts.find({ where: { published: true } });
+const post = await app.collections.posts.create({
+  data: { title: "Hello", slug: "hello", published: true },
+});
+
+// REST, out of the box (mounted under /api):
+//   GET    /api/posts          POST   /api/posts
+//   GET    /api/posts/:id      PATCH  /api/posts/:id      DELETE /api/posts/:id
+
+// Admin UI at /admin/collections/posts — list view + edit form.
+// OpenAPI/Scalar entry at /api/docs.
+```
+
+## Example → inferred types
+
+Field declarations are the single source of truth for every type. Pull the row, insert, and update shapes off the builder with `$infer` — never hand-write a row interface that can drift:
+
+```ts
+type Post = typeof posts.$infer.select;
+//   ^? { id: string; title: string; slug: string; content: …; published: boolean;
+//        createdAt: Date; updatedAt: Date; _title: string }
+
+type NewPost = typeof posts.$infer.insert;
+//   ^? { title: string; slug: string; content?: …; published?: boolean }
+
+type PostPatch = typeof posts.$infer.update; // Partial<NewPost>
+```
+
+Every selected row carries a computed **`_title: string`** — the value of the field you named in `.title()`, resolved through localization (i18n `COALESCE`) and virtuals. It's the row label in the admin and what `search` matches against. `$infer` is a type-only helper (its runtime value is an empty object); the select type also includes virtual outputs, localized field outputs, and — for [upload collections](#uploads) — the resolved `url`. Source: `collection-builder.ts:1075`.
+
+<Callout type="info" title="`find()` returns a paginated envelope, not an array">
+`find()` always resolves to `{ docs, totalDocs, totalPages, page, hasPrevPage, hasNextPage, prevPage, nextPage, ... }`. Read your rows off `result.docs`. Source: `packages/questpie/src/server/collection/crud/types.ts:1415`. Pass `groupBy` and you get a *grouped* envelope instead (`groups`, `totalGroups`), where `limit`/`offset` paginate the groups.
+</Callout>
+
+## Defining fields
+
+`.fields(({ f }) => ({ … }))` is where the table takes shape. `f` is a proxy over every field factory available to your app — builtins plus any module-contributed types. The callback context also carries `c`, the component-reference proxy (e.g. `c.icon("ph:article")`), used by admin config.
+
+```ts
+collection("articles").fields(({ f }) => ({
+  title: f.text().required(),
+  views: f.number().default(0),
+  publishedAt: f.datetime(),
+  status: f.select([
+    { value: "draft", label: "Draft" },
+    { value: "live", label: "Live" },
+  ]),
+  author: f.relation("users"),   // typed FK + admin picker + with: { author: true }
+  coverImage: f.upload({ to: "assets" }), // a RELATION to the "assets" upload collection
+}));
+```
+
+The full field catalog — every `f.*` type, its options, validation, and localization — lives in [Fields](/docs/concepts/fields). Two collection-level rules worth knowing now:
+
+- **`.fields()` is cumulative.** Calling it again (or `.merge()` then `.fields()`) keeps prior fields and overrides by key. Re-declaring a key replaces that field cleanly (dropping its stale localized/relation state). This is what makes the module-extension recipe safe: `collection("user").merge(starter.collections.user).fields(...)` keeps the starter's fields and adds yours. Source: `collection-builder.ts:188`.
+- **`.title(({ f }) => f.title)`** takes a field **name**, not an expression — `f` is a proxy that returns the accessed key as a string. It sets the source for the computed `_title` column. Source: `collection-builder.ts:534`.
+
+<Callout type="warn" title="`f.upload()` (field) vs `.upload()` (builder method) are different things">
+`f.upload({ to: "assets" })` is a **field** — a typed relation from this row to a *separate* upload collection (default target `"assets"`). The collection-level **`.upload()`** method (below) turns *this* collection itself into the byte store. Use the field when you want "this post has a cover image stored in my media collection"; use the method when you're building the media collection. Source: `packages/questpie/src/server/modules/core/fields/upload.ts:89` (field) vs `collection-builder.ts:799` (method).
+</Callout>
+
+<Callout type="warn" title="Use the field builder, not raw Drizzle columns">
+`.fields()` has a deprecated raw-column overload (`{ col: pgColumn() }`) kept only for tests that need raw `.references()` FKs. Raw columns are never localized and carry no field definition, so they're invisible to the admin, validation, and the typed client. Always use the `({ f }) => …` form. Source: `collection-builder.ts:215`.
+</Callout>
+
+## Options — lifecycle behavior
+
+`.options()` turns on table-level lifecycle features. On a single builder it **replaces** the options object wholesale, so pass everything in one call:
+
+```ts
+collection("posts").options({
+  timestamps: true, // createdAt + updatedAt — default ON
+  softDelete: true, // deletedAt column; deletes become soft
+  versioning: true, // <name>_versions table, keep history
+  schema: "content", // Postgres schema (default: public)
+});
+```
+
+`CollectionOptions` is `{ schema?, timestamps?, softDelete?, versioning? }`. There is no `singleton` option — singletons are [Globals](/docs/concepts/globals). Source: `packages/questpie/src/server/collection/builder/types.ts:108`.
+
+### `timestamps`
+
+`boolean`, **default `true`**. Adds `createdAt` and `updatedAt` (`notNull`, `defaultNow`) to the main table. To drop them you must set `timestamps: false` explicitly. Source: `types.ts:131`.
+
+### `softDelete`
+
+`boolean`, **default `false`**. Adds a nullable `deletedAt` column plus an auto-index `<name>_deleted_at_idx`. With it on:
+
+- `deleteById` / `deleteMany` set `deletedAt` instead of removing the row.
+- `restoreById` becomes available to bring a soft-deleted row back.
+- Queries hide deleted rows by default; pass `includeDeleted: true` to see them.
+
+For uniqueness that should free up again after a soft-delete (e.g. a unique email that another row may reclaim), use `softDeleteUniqueIndex()` inside `.indexes()` — it scopes the constraint to `WHERE deleted_at IS NULL`. Source: `types.ts:136`, `index-helpers.ts:20`.
+
+### `versioning`
+
+`boolean | CollectionVersioningOptions`, **default `false`**. `true` uses defaults; the object form is `{ enabled?, maxVersions?, workflow? }` (`maxVersions` defaults to **50**). Enabling it creates a `<name>_versions` table (and `<name>_i18n_versions` if the collection has localized fields) and unlocks `findVersions` / `revertToVersion` on the CRUD object. Source: `types.ts:166`, `types.ts:30`.
+
+```ts
+collection("pages").options({
+  versioning: { maxVersions: 100 },
+});
+```
+
+#### Draft / publish workflow
+
+Nest a `workflow` under `versioning` to add staged content. `workflow: true` gives the stages `["draft", "published"]`; the object form lets you name stages and constrain transitions:
+
+```ts
+collection("pages").options({
+  versioning: {
+    workflow: {
+      stages: {
+        draft: { transitions: ["review"] },
+        review: { transitions: ["published", "draft"] },
+        published: {},
+      },
+      initialStage: "draft",
+    },
+  },
+});
+```
+
+`WorkflowOptions` is `{ stages?, initialStage? }` and each `WorkflowStageOptions` is `{ label?, description?, transitions? }` (omit `transitions` for unrestricted moves; `initialStage` defaults to the first stage). Enabling workflow adds `versionStage` / `versionFromStage` columns, a `transitionStage()` CRUD method, `beforeTransition` / `afterTransition` hooks, and an `access.transition` rule. Source: `types.ts:63`, `types.ts:50`.
+
+<Callout type="warn" title="Workflow requires versioning">
+Workflow stages create version snapshots, so workflow lives **under** `versioning`. Setting `workflow` auto-enables versioning. Setting `versioning: { enabled: false }` together with a `workflow` **throws at construction** — the two are contradictory. Source: `packages/questpie/src/server/collection/builder/collection.ts:636` (constructor).
+</Callout>
+
+### `schema`
+
+`string`. The Postgres schema all four tables (main, i18n, versions, i18n_versions) are created under; generated migrations emit `CREATE SCHEMA IF NOT EXISTS`. Defaults to `public`. Cross-schema relations render fully-qualified (`REFERENCES "other_schema"."table"("id")`). Source: `types.ts:126`.
+
+## Access control
+
+`.access()` declares who may read, create, update, delete (and, with workflow, transition) rows. Each rule is `boolean` or a function of the request context; for `read`, `update`, `delete`, and `transition` a function may return a **`where` object** to *filter* rows rather than allow-or-deny.
+
+```ts
+collection("posts").access({
+  read: true, // public read
+  create: ({ session }) => Boolean(session), // any signed-in user
+  // Row-level: authors only see and edit their own rows.
+  update: ({ session }) => ({ authorId: session?.user.id }),
+  delete: ({ session }) => session?.user.role === "admin",
+});
+```
+
+The rule context spreads the full `AppContext` (`db`, `session`, `kv`, `queue`, `collections`, `app`, …) plus `{ data?, input?, locale?, request? }`. Its shape differs by operation:
+
+| Rule | `data` (existing row) | `input` (incoming) | May return a `where` filter? |
+|---|---|---|---|
+| `read` | — | — | yes (narrows results) |
+| `create` | — | the insert payload | no |
+| `update` | the existing row | the patch | yes |
+| `delete` / `transition` | the existing row | — | yes |
+
+A rule that returns an `AccessWhere` object grants *filtered* access — rows are narrowed by that condition. A rule function that **throws** denies with a reason. Beyond CRUD, two extra rules exist: `serve` (upload-byte access — resolves `serve` → `read` → `defaultAccess.serve` → allow) and `introspect` (admin schema visibility — visible iff any CRUD op is allowed). Field-level rules go under `access.fields` and can only allow/deny (no filtering); their context is slim (`{ req?, user?, doc?, operation }`), not the full `AppContext`. Source: `types.ts:905`, `types.ts:835`, `types.ts:864`.
+
+<Callout type="warn" title="Secure by default">
+An **undefined** access rule is not "open" — it requires a session. Leave `read` unset and anonymous reads are rejected. Set `read: true` to make a collection public on purpose. The enforcement is one line — `if (rule === undefined) return !!context.session;` — in `packages/questpie/src/server/collection/crud/shared/access-control.ts:85` (doc-commented "secure by default" at `:54-65`).
+</Callout>
+
+<Callout type="info" title="`.access()` replaces; `.merge()` shallow-merges">
+On a single builder, each `.access()` call **replaces** the previous one (last call wins) — unlike `.hooks()`, which merges. When you `.merge()` two builders, access objects are shallow-merged with the *other* builder winning per key. Source: `collection-builder.ts:656`, `collection-builder.ts:1084`.
+</Callout>
+
+Access is enforced only when you ask for it. CRUD calls default to `accessMode: "system"` (backend; rules bypassed). Pass `{ accessMode: "user", session }` as the **second argument** to run the rules. The full model — `AccessWhere` shape, the `serve`/`introspect` chains, field-level rules — is in [Access control](/docs/concepts/access-control).
+
+## Hooks
+
+`.hooks()` attaches functions that run around each operation. Hooks **merge** across calls (each stage collects into an array), so you can add them incrementally or compose them from modules.
+
+```ts
+collection("posts").hooks({
+  beforeChange: ({ data, operation }) => {
+    if (operation === "create" && data.title && !data.slug) {
+      data.slug = slugify(data.title); // mutate the incoming payload in place
+    }
+  },
+  afterChange: ({ data, onAfterCommit, queue }) => {
+    // Defer side effects until the transaction commits.
+    onAfterCommit(async () => {
+      await queue.notify.publish({ postId: data.id });
+    });
+  },
+});
+```
+
+The fire order per operation:
+
+- **create / update:** `beforeOperation` → `beforeValidate` → `beforeChange` → *[DB write]* → `afterChange` → `afterRead`
+- **delete:** `beforeOperation` → `beforeDelete` → *[DB write]* → `afterDelete` → `afterRead`
+- **read:** `beforeOperation` → `beforeRead` → *[DB read]* → `afterRead`
+
+`beforeValidate` / `beforeChange` receive the mutable input (`TInsert` on create, `TUpdate` on update); `afterChange` / `afterRead` receive the full selected row plus `original` (only on update). Workflow adds `beforeTransition` / `afterTransition`, which use a `TransitionHookContext` (`{ data, recordId, fromStage, toStage, scheduledAt? }`) — throw in `beforeTransition` to abort. Every hook context spreads the full `AppContext`. Source: `types.ts:640`, `types.ts:370`, `types.ts:601`.
+
+<Callout type="warn" title="Fire jobs and emails from `onAfterCommit`, never inline">
+If a hook runs inside an open transaction, doing extra reads (blocks, upload `afterRead`) or queuing work from the hook body can deadlock or fire on data that later rolls back. Use `onAfterCommit(cb)` — it runs after the tx commits (or immediately if there is no tx), so jobs/emails/search only fire on durable data. Source: `types.ts:370`; framework invariant.
+</Callout>
+
+Hooks **merge** (collections accumulate; globals replace — a deliberate asymmetry). See [Hooks](/docs/concepts/hooks) for each stage's exact signature and the transaction lifecycle.
+
+## Uploads
+
+Call `.upload()` to make a collection store file bytes. It adds the storage columns (`key`, `filename`, `mimeType`, `size`, `visibility`), extends the row with a resolved `url: string`, registers the storage lifecycle hooks (URL generation on read, cleanup on change/delete), and enables `upload()` / `uploadMany()` CRUD methods plus the file routes:
+
+```ts title="src/questpie/server/collections/media.ts"
+import { collection } from "#questpie/factories";
+
+export const media = collection("media")
+  .fields(({ f }) => ({
+    alt: f.text().label("Alt text"),
+  }))
+  .upload({
+    visibility: "private", // default "public"
+    maxSize: 10 * 1024 * 1024, // 10 MB
+    allowedTypes: ["image/*", "application/pdf"],
+  });
+
+// New routes:
+//   POST /api/media/upload
+//   GET  /api/media/files/:key
+```
+
+`UploadOptions`:
+
+- **`visibility`** — `"public" | "private"`, default `"public"`. Governs **file serving** only. For private files, the `afterRead` hook builds a signed URL from `app.config.app.url` + a token (needs `app.config.secret`; without it `url` is `undefined`).
+- **`maxSize`** — max bytes.
+- **`allowedTypes`** — MIME patterns; wildcards like `"image/*"` allowed.
+
+The `key`/`filename`/`mimeType`/`size` columns are nullable (a row can exist before its blob); `visibility` is `notNull` default `"public"`. Source: `collection-builder.ts:799`, `types.ts:81`.
+
+<Callout type="info" title="`visibility` gates bytes, not rows">
+`visibility` only controls who can fetch the **file bytes**. Reading and listing the upload **rows** still goes through the normal `.access()` chain. To override just the byte-serving rule, set `access.serve`. Source: `types.ts:81`.
+</Callout>
+
+Store files at runtime with the CRUD methods (only present on `.upload()` collections):
+
+```ts
+const asset = await app.collections.media.upload(file, ctx); // file: UploadFile
+console.log(asset.url);
+```
+
+`UploadFile` is `{ name, type, size, arrayBuffer?, stream? }` — `stream` is preferred over `arrayBuffer` for large files. Source: `crud/types.ts:45`.
+
+## Searchable
+
+`.searchable()` controls how a collection is indexed by a configured search adapter. The default (the field left unset) auto-indexes the title plus auto-derived content; pass an object to customize, or `false` to opt out entirely:
+
+```ts
+collection("posts").searchable({
+  content: (record) => `${record.title}\n${record.excerpt}`,
+  metadata: (record) => ({ author: record.authorId, tags: record.tags }),
+  facets: {
+    tags: { type: "array" },
+    price: { type: "range", buckets: [{ label: "Cheap", max: 10 }] },
+  },
+});
+
+collection("logs").searchable(false); // never indexed
+```
+
+A `FacetFieldConfig` is `true | { type: "array" } | { type: "range"; buckets } | { type: "hierarchy"; separator? }`. Indexing only happens if a search adapter is configured, and facet keys should match your `metadata` field names. Source: `collection-builder.ts:693`, `packages/questpie/src/server/modules/core/integrated/search/types.ts:34`.
+
+## The full builder API
+
+`collection(name)` returns a `CollectionBuilder` whose methods chain and return the builder. Codegen calls `.build()` for you. The common methods:
+
+| Method | Purpose | Merge behavior |
+|---|---|---|
+| `.fields(({ f }) => …)` | Declare columns (the source of truth for all types). | cumulative, override by key |
+| `.title(({ f }) => f.x)` | Field name that labels a row (`_title`). | replaces |
+| `.options(opts)` | Lifecycle: `timestamps`, `softDelete`, `versioning`, `schema`. | replaces |
+| `.access(rules)` | Read/create/update/delete/transition/serve/introspect rules. | replaces |
+| `.hooks(hooks)` | Functions around each operation. | merges into arrays |
+| `.searchable(config)` | Search indexing (or `false` to disable). | replaces |
+| `.indexes(({ table }) => […])` | Drizzle indexes / unique constraints. | replaces (lazy callback) |
+| `.validation(opts)` | Tune the generated Zod schemas (`exclude` / `refine`). | replaces |
+| `.upload(opts)` | Make it a media collection. | — |
+| `.set(key, value)` | Attach arbitrary state (extension seam). | — |
+| `.merge(other)` | Combine with another builder of the same name. | see below |
+| `.build()` | Resolve relations and materialize the `Collection`. | — |
+
+The **admin** methods — `.admin()`, `.list()`, `.form()`, `.actions()`, `.preview()` — are contributed by the `@questpie/admin` module via codegen (they appear on the builder once admin is enabled, attached through `.set()`). They configure the panel UI and are documented in the admin docs. Source: `packages/admin/src/server/augmentation/index.ts:111`.
+
+### Indexes
+
+`.indexes()` receives the built columns and returns Drizzle index values. It's stored as a lazy callback evaluated at build time (not in `state.indexes`, which stays `{}`):
+
+```ts
+import { uniqueIndex } from "questpie/drizzle-pg-core";
+
+collection("posts").indexes(({ table }) => [
+  uniqueIndex("posts_slug_idx").on(table.slug),
+]);
+```
+
+Source: `collection-builder.ts:507`.
+
+### Merging builders
+
+`.merge(other)` combines two builders of the **same name** — fields, virtuals, relations, indexes, hooks, access, options, and output. The other builder's `title` / `searchable` / `upload` / `validation` win; hooks combine into arrays; access is shallow-merged (other wins). This is the mechanism behind extending a module-provided collection.
+
+<Callout type="info" title="`.merge()` preserves admin config">
+`.merge()` spreads the full state first so the admin extension keys (`admin`, `adminList`, `adminForm`, `adminActions`, `adminPreview`) survive before explicit keys are overridden — this is a framework invariant. Pending (unresolved) relations are merged by field name; a field the other side redefines drops this side's pending entry. Source: `collection-builder.ts:1084`; framework invariant.
+</Callout>
+
+{/* TODO @ia: single-source — this page is currently the de-facto home for CRUD methods + the query language, and also re-teaches the per-operation access table, the secure-by-default callout, the hook fire-order, and the claim-checked-bulk callout (canonically owned by /docs/concepts/access-control and /docs/concepts/hooks). Consistent today. When concepts/crud + concepts/querying are authored (docs-playbook §5 / docs-map §1.5), shrink this "CRUD reference" section and the access/hooks re-explanations above to framing + see-links, and add inline see [CRUD](/docs/concepts/crud) / see [Querying](/docs/concepts/querying) at the points of contact (CRUD method table, find() options paragraph). Do NOT add those links until the pages exist. */}
+
+## CRUD reference
+
+The built collection produces `app.collections.<name>` (and `ctx.collections.<name>` inside hooks, routes, jobs, and seeds) — a typed CRUD object. One vocabulary across all collections:
+
+| Method | Use |
+|---|---|
+| `find(opts)` | List rows. Returns a paginated envelope (`{ docs, totalDocs, … }`). |
+| `findOne(opts)` | First match or `null`. |
+| `count(opts)` | Count matching rows (`where`, `includeDeleted`). |
+| `create({ data })` | Insert one row (supports nested relation mutations). |
+| `updateById({ id, data })` | Update one row by id. |
+| `updateMany({ where, data })` | Bulk update by filter (claim-checked). |
+| `updateBatch({ updates })` | Per-record updates (`[{ id, data }]`) in one transaction. |
+| `deleteById({ id })` | Delete (soft if enabled) by id. |
+| `restoreById({ id })` | Restore a soft-deleted row (soft-delete collections only). |
+| `deleteMany({ where })` | Bulk delete by filter (claim-checked). |
+| `findVersions(opts)` / `revertToVersion(opts)` | History (versioning on). |
+| `transitionStage({ id, stage })` | Move a row's workflow stage (workflow on). |
+| `upload(file)` / `uploadMany(files)` | Store files (`.upload()` collections only). |
+
+Every method takes a `CRUDContext` as its **second** argument — pass `{ accessMode: "user", session }` to enforce access, `{ locale }` to read/write a localized variant, `{ stage }` to target a workflow stage. The context type is index-signature-free on purpose: a typo'd key is a compile error, not a silent fallback to `accessMode: "system"`. Source: `crud/types.ts:1612`, `crud/types.ts:72`.
+
+<Callout type="warn" title="`updateMany` / `deleteMany` are claim-checked">
+Bulk operations lock the matching rows and re-evaluate the `where` inside the transaction, returning only the rows that won the race. `updateMany` returns the written rows (an empty array means you lost a concurrent claim); `deleteMany` returns `{ success, count }`. The legacy `update` / `delete` bulk aliases are deprecated and removed in v4 — use `updateMany` / `deleteMany`. Source: `crud/types.ts:1612`.
+</Callout>
+
+`find()` options include `where`, `with` (relation hydration), `columns`, `orderBy`, `limit`, `offset`, `extras`, `search` (case-insensitive ILIKE against `_title`), `locale`, `localeFallback`, `includeDeleted` (soft-delete only), `stage`, and `groupBy`. The full query language — `where` operators, relation filters (`some`/`none`/`every`, `is`/`isNot`), `with` aggregations — is covered under [Relations](/docs/concepts/relations) and the query reference. Source: `crud/types.ts:911`.
+
+## REST API
+
+Every collection is also served over HTTP, mounted under your handler's `basePath` (default `/api`). The routes are real file-convention routes the core module ships:
+
+| Method | Path | Maps to |
+|---|---|---|
+| `GET` | `/api/:collection` | `find` (paginated) |
+| `POST` | `/api/:collection` | `create` |
+| `PATCH` | `/api/:collection` | `updateMany` |
+| `GET` | `/api/:collection/:id` | `findOne` |
+| `PATCH` | `/api/:collection/:id` | `updateById` |
+| `DELETE` | `/api/:collection/:id` | `deleteById` |
+| `GET` | `/api/:collection/count` | `count` |
+| `POST` | `/api/:collection/delete-many` | `deleteMany` |
+| `POST` | `/api/:collection/update-batch` | `updateBatch` |
+| `POST` | `/api/:collection/:id/restore` | `restoreById` (soft-delete) |
+| `GET` | `/api/:collection/:id/versions` | `findVersions` (versioning) |
+| `POST` | `/api/:collection/:id/revert` | `revertToVersion` (versioning) |
+| `POST` | `/api/:collection/:id/transition` | `transitionStage` (workflow) |
+| `POST` | `/api/:collection/upload` | `upload` (`.upload()` collections) |
+| `GET` | `/api/:collection/files/*key` | serve file bytes |
+| `GET` | `/api/:collection/schema` · `/meta` | introspection (admin) |
+
+The same operations are reachable through the [typed client](/docs/concepts/client-sdk) and appear in the OpenAPI/Scalar reference at `/api/docs`. Source: `packages/questpie/src/server/modules/core/routes/[collection]*`.
+
+## Export & discovery convention
+
+Codegen discovers collections by scanning the `collections/` directory. Two rules:
+
+- **The `collection("…")` argument is the key.** The string you pass to `collection()` (kebab → camelCased) is what registers on `app.collections` — `collection("blog-posts")` keys as `blogPosts`, regardless of the file name. Keep the file name matching the argument (`collections/blog-posts.ts`) so the two never drift, and keep one collection per file. The file name is only a **fallback**: a *default* export with no string argument keys off the file name; a *named* export with no argument keys off the export name. So `export const foo = collection("articles")` in `posts.ts` registers as `articles`, not `posts`. Source: `packages/questpie/src/cli/codegen/discover.ts:707` (named) and `:725` (default); decision table in `packages/questpie/AGENTS.md:294` ("Codegen Key Derivation").
+- **Default or named export both work.** `export const posts = collection("posts")…` and `export default collection("posts")…` are both picked up.
+
+After adding or renaming a file, run `questpie generate` (or `questpie dev`, which watches) to regenerate `.generated/` — that's what wires the new collection into `app.collections.*`, the admin, REST, OpenAPI, and the client. Then `questpie push` (dev) or `questpie migrate:generate` (production) to materialize the table. Source: `packages/questpie/src/cli/index.ts:50`.
+
+<Callout type="idea" title="Scaffold it">
+`questpie add collection my-thing` creates the file with the right boilerplate and runs codegen for you. Run `questpie add --list` to see every scaffold type. Source: `packages/questpie/src/cli/index.ts:375`.
+</Callout>
+
+## Extending: custom field types
+
+`f.*` is open. A collection can use any field a module registers — including your own. A custom field is a `field()` definition that declares how it maps to a column, validates, and exposes query operators; once a module contributes it, it appears on `f` in `.fields(({ f }) => …)` exactly like a builtin. The contract (`toColumn` / `toZodSchema` / `getOperators` / `getMetadata`) and the publishing loop are covered in [Fields → custom field types](/docs/concepts/fields) and the Extend section. This is the QUESTPIE principle in action: **core, modules, and your own code reach the same builder through one seam** — there are no privileged internal field APIs.
+
+## TypeScript
+
+Derive every shape from the collection definition:
+
+```ts
+import { posts } from "#questpie/server/collections/posts";
+
+type Post = typeof posts.$infer.select; // full row, incl. _title
+type NewPost = typeof posts.$infer.insert; // create payload
+type PostPatch = typeof posts.$infer.update; // Partial<NewPost>
+```
+
+The collection-builder types — `CollectionBuilder`, `CollectionBuilderState`, `CollectionSelect` / `CollectionInsert` / `CollectionUpdate`, `CollectionOptions`, `CollectionAccess`, `CollectionHooks`, `RelationConfig`, and the CRUD/query types (`CRUD`, `FindManyOptions`, `Where`, `With`, …) — are all exported publicly from `questpie/builders` if you need to reference them directly in shared helpers. For app-aware aliases that resolve relations through your generated `AppContext`, prefer the generated types from `#questpie`. Source: `collection-builder.ts:1075`, `builder/index.js`.
+
+## Related
+
+- [Globals](/docs/concepts/globals) — the singleton counterpart: one row, `get` / `update` only.
+- [Fields](/docs/concepts/fields) — every `f.*` type, its options, validation, localization, and how to add your own.
+- [Relations](/docs/concepts/relations) — `f.relation()`, `with` hydration, the query language, and nested mutations.
+- [Access control](/docs/concepts/access-control) — the full rule model and `where`-returning rules.
+- [Hooks](/docs/concepts/hooks) — each hook's signature and the transaction lifecycle.
+- [Validation](/docs/concepts/validation) — the generated Zod schemas and how to tune them.
+- Runnable example: [`examples/toy-factory-backend`](https://github.com/questpie/questpie/tree/main/examples/toy-factory-backend) — a multi-collection app with relations, versioning, and jobs.
+
+{/* TODO @user: add an admin screenshot of the posts list + edit form once a dev server is running (preview tools or manual capture). */}

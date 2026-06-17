@@ -1,4 +1,0 @@
-{
-	"title": "Business Logic",
-	"pages": ["routes", "raw-routes", "jobs", "workflows", "code-execution", "seeds", "services", "emails"]
-}

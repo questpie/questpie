@@ -1,0 +1,39 @@
+---
+title: Adapters
+description: Adapters are the swappable backends behind QUESTPIE's infrastructure — queue, search, realtime, storage, email, and KV. Pick one per concern in your config and the same app code runs on any of them.
+---
+
+An **adapter** is the plug-in backend for one piece of infrastructure. Your application code talks to a stable service — `app.queue`, `app.search`, `ctx.kv`, `ctx.email`, `app.storage` — and the adapter decides where that work actually runs. Wire one adapter per concern in your config and you can move from Postgres to Redis, local disk to S3, or a dev console to Resend by editing a single block. No handler changes, no dispatch changes, no app-code changes.
+
+This is the QUESTPIE principle in action: **core, modules, and your own code reach each backend through the same contract.** The built-in adapters implement the exact same seam your own adapter would.
+
+## Adapter kinds
+
+QUESTPIE ships six adapter slots. Each page below covers the whole vertical: which backend to choose, how to configure it, and the contract to implement your own.
+
+| Adapter | What it does | Default |
+|---|---|---|
+| **[Queue](/docs/adapters/queue)** | Where background [jobs](/docs/concepts/jobs) run — store, schedule, and hand work to a worker. | pg-boss (Postgres) |
+| **[Search](/docs/adapters/search)** | Full-text and semantic search behind [`.searchable()`](/docs/concepts/collections#searchable) and `app.search`. | Postgres (FTS + trigram) |
+| **[Realtime](/docs/adapters/realtime)** | The server-side transport that fans out live-query changes across every app instance. | poll-based |
+| **[Storage](/docs/adapters/storage)** | Where uploaded file bytes physically live, plus signed URLs and visibility. | local filesystem |
+| **[Email](/docs/adapters/email)** | The delivery backend for every outgoing [email](/docs/concepts/emails) template and one-off message. | console (dev) |
+| **[KV](/docs/adapters/kv)** | A typed key-value store on `ctx.kv` with TTL and tag-based invalidation. | in-memory |
+
+## How they wire in
+
+You select an adapter once, in `questpie.config.ts` (or the `.build({ ... })` call), and the rest of your code is untouched. See [Configuration](/docs/concepts/configuration) for where each slot lives and how the runtime resolves it.
+
+<Callout type="info">
+Each adapter declares its own capabilities, so the runtime can fail fast or branch — for example, a queue adapter advertises whether it supports long-running workers or push delivery. The per-adapter pages document the relevant flags.
+</Callout>
+
+## Custom adapters
+
+Every adapter is defined by a public contract — `QueueAdapter`, `SearchAdapter`, `RealtimeAdapter`, `StorageConfig`, `MailAdapter`, `KVAdapter` — and the built-ins are just implementations of it. To back a concern with a broker the built-ins don't cover, implement the contract and wire your instance into the same config slot. The full build-your-own loop, which applies to every adapter kind, lives in [Building a plugin](/docs/concepts/build-a-plugin).
+
+## Related
+
+- [Configuration](/docs/concepts/configuration) — where every adapter slot lives and how it's wired.
+- [Building a plugin](/docs/concepts/build-a-plugin) — implement any adapter contract for a custom backend.
+- [Jobs](/docs/concepts/jobs) · [Search](/docs/adapters/search) · [Emails](/docs/concepts/emails) — the features each adapter powers.

@@ -1,0 +1,372 @@
+---
+title: Globals
+description: Globals are single-row data models — site settings, a homepage, a footer — built with the same fields, hooks, and access rules as collections, but with get/update instead of full CRUD.
+---
+
+A global is a **singleton**: one record, not a table of many. Use it for the thing your app has exactly one of — site settings, SEO defaults, a homepage layout, a footer. You declare it in a file with the same field, hook, and access builders you use for a [collection](/docs/concepts/collections), run codegen, and get a typed `app.globals.<name>` surface with `get()` and `update()` — no `create`, no `find`, no `delete`, and a single edit screen in the admin instead of a list.
+
+## What it does
+
+- **Gives you one always-addressable record.** No ids to track, no "create first" — you `get()` it and `update()` it.
+- **Reuses the entire field builder.** `f.text()`, `f.object().array()`, `f.upload()`, `f.select()`, relations, and `.localized()` all work exactly as in collections.
+- **Generates a typed `get()`/`update()` API** on `app.globals.<name>` (server) and on the typed client (over HTTP), with the row type inferred from your fields.
+- **Renders a single admin form** via `.admin()` + `.form()` — no list view, because there is nothing to list.
+- **Snapshots history with `versioning`**, and adds draft → published stages with a nested `workflow`.
+- **Scopes per tenant with `scoped`** — one row per city, property, or tenant from the same definition.
+
+<Callout type="info" title="Global or collection — the one-line rule">
+If you could ever have *two* of them, it's a [collection](/docs/concepts/collections). If there's exactly one — settings, homepage, footer — it's a global. Globals have no `find`, `create`, `delete`, or list view.
+</Callout>
+
+## Quick start
+
+Create a file under your `globals/` directory. This is the smallest complete global — two fields and an admin form:
+
+```ts title="src/questpie/server/globals/site-settings.ts"
+import { global } from "#questpie/factories";
+
+export const siteSettings = global("site_settings")
+  .fields(({ f }) => ({
+    siteName: f.text().label("Site Name").required().default("My Site"),
+    description: f.textarea().label("Site Description"),
+  }))
+  .access({
+    read: true, // expose to anonymous frontend requests
+  })
+  .admin(({ c }) => ({
+    label: "Site Settings",
+    icon: c.icon("ph:gear"),
+  }))
+  .form(({ v, f }) =>
+    v.globalForm({
+      fields: [f.siteName, f.description],
+    }),
+  );
+
+// Full options — timestamps, versioning, scoped — under "Builder API" below.
+```
+
+Then run codegen so `app.globals.siteSettings` becomes typed, and create the table:
+
+```bash
+questpie generate   # regenerate the typed app surface
+questpie push       # create the table (dev) — or migrate:generate for prod
+```
+
+<Callout type="info" title="Import from `#questpie/factories`, not `questpie`">
+Import `global` from **`#questpie/factories`**, not from `questpie` directly. The generated factory injects your module field types (`richText`, `blocks`, …) into `f`. A plain `global()` from the package only sees builtin field types. Source: `global-builder.ts:517` (`global()`); the generated factory wraps `GlobalBuilder.create(name, fieldDefs)` at `global-builder.ts:88`.
+</Callout>
+
+## Reading and writing
+
+At runtime a global lives on `app.globals.<name>` — and on `ctx.globals.<name>` inside hooks, routes, jobs, blocks, and seeds, since the context spreads the full app. The CRUD surface is `get()` and `update()` (plus version/workflow methods when enabled). This is the `GlobalCRUD` interface in `global/crud/types.ts:210`.
+
+### get(options?, context?)
+
+```ts
+import { app } from "#questpie";
+
+const settings = await app.globals.siteSettings.get();
+//    ^? { id: string; siteName: string; description: string | null;
+//         createdAt: Date; updatedAt: Date } | null
+
+if (!settings) throw new Error("site_settings has not been initialized");
+console.log(settings.siteName);
+```
+
+`get()` returns the record, or `null` if the row has never been written. Pass options to hydrate relations, pick columns, or override the locale; pass a `context` as the second argument to enforce access rules:
+
+```ts
+const settings = await app.globals.siteSettings.get(
+  { with: { logo: true }, locale: "sk" },
+  { accessMode: "user", session }, // CRUDContext — enforces .access() rules
+);
+```
+
+`GlobalGetOptions` (`global/crud/types.ts:64`) accepts exactly: `with` (relations), `columns` (partial selection), `locale`, `localeFallback`, and `stage` (workflow). There is no `where`, `limit`, `offset`, or `orderBy` — a singleton has nothing to filter or paginate.
+
+<Callout type="warn" title="`get()` returns `null` until the row exists — and `.default()` does not change that">
+A global has no row until something writes it: a seed, an admin save, or an `update()`. Field `.default(...)` values describe the **admin form's initial state**, not a database default — they are *not* auto-inserted on first read. Always handle `null` on the first read (or seed the global at boot). Source: `get()` returns `Promise<… | null>` at `global/crud/types.ts:223`.
+</Callout>
+
+### update(data, context?, options?)
+
+```ts
+import { app } from "#questpie";
+
+const updated = await app.globals.siteSettings.update({
+  siteName: "QUESTPIE",
+  description: "Server-first TypeScript CMS",
+});
+//    ^? { id: string; siteName: string; description: string | null;
+//         createdAt: Date; updatedAt: Date }
+```
+
+`update()` is an **upsert** of the single row: it creates the row on the first call and patches it thereafter. It returns the updated record (never `null`). The patch is validated against the field schema before the write, and `beforeChange`/`afterChange` (and `beforeUpdate`/`afterUpdate`) hooks run around it.
+
+<Callout type="warn" title="Argument order differs from collections">
+On the server, `update(data, context, options)` takes the patch **first**, then the `CRUDContext`, then options — there is no id to address, so the context is the *second* argument. Collections use `updateById({ id, data }, context)`. Source: `global/crud/types.ts:229`.
+</Callout>
+
+To write per-locale content, pass a locale-bound context (or the `locale` option) and call `update()` once per locale:
+
+```ts
+await app.globals.siteSettings.update(
+  { tagline: "Sharp cuts, every time" },
+  { accessMode: "system", locale: "en" },
+);
+await app.globals.siteSettings.update(
+  { tagline: "Ostré strihy, vždy" },
+  { accessMode: "system", locale: "sk" },
+);
+```
+
+### Versions and workflow
+
+When you enable `versioning` (see [Builder API → .options()](#options)), three more methods appear on the same object:
+
+```ts
+const versions = await app.globals.siteSettings.findVersions({ limit: 10 });
+//    ^? GlobalVersionRecord[]  ({ id, versionId, versionNumber,
+//                                 versionOperation, versionUserId, versionCreatedAt })
+
+await app.globals.siteSettings.revertToVersion({ version: 3 });
+
+// Only when workflow is enabled:
+await app.globals.siteSettings.transitionStage({ stage: "published" });
+```
+
+`transitionStage()` exists only on workflow-enabled globals; its `scheduledAt` param schedules the transition for a future date instead of running it now (`GlobalTransitionStageParams`, `global/crud/types.ts:121`). `revertToVersion()` accepts `{ version }`, `{ versionId }`, or `{ id }` (`GlobalRevertVersionOptions`, `global/crud/types.ts:134`). Source: `global/crud/types.ts:240` (`revertToVersion`), `:250` (`transitionStage`).
+
+<Callout type="info" title="`GlobalVersionRecord` has no `versionStage`">
+A collection's version record carries the workflow stage; a global's does not — read the current stage via the `stage` option on `get()` instead. Source: `global/crud/types.ts:140`.
+</Callout>
+
+### From the typed client
+
+The typed client exposes the same global over HTTP at `client.globals.<name>`, with one signature difference: there is no `context` argument — the request carries the session via cookies, so access runs in `user` mode automatically.
+
+```ts
+// update(data, options?) — NO context arg on the client
+const settings = await client.globals.siteSettings.update(
+  { siteName: "QUESTPIE" },
+  { with: { logo: true } },
+);
+
+const schema = await client.globals.siteSettings.schema(); // full introspection
+const meta = await client.globals.siteSettings.meta();     // timestamps/versioning/localized
+```
+
+The client surface is `get`, `update`, `schema`, `meta`, `findVersions`, `revertToVersion`, and `transitionStage` (`GlobalAPI` in `client/index.ts:670`). Live subscriptions (`live()`) are available when the realtime adapter is configured.
+
+## Builder API
+
+`global(name)` returns a `GlobalBuilder`. Every method returns the builder, so you chain them and export the result — **codegen calls `.build()` for you**; you never call it yourself in app code. Each method below is grounded in `packages/questpie/src/server/global/builder/`.
+
+<Callout type="info" title="Method order does not matter">
+`.fields()`, `.options()`, `.access()`, `.hooks()`, `.admin()`, and `.form()` can appear in any order. The barbershop example places `.options()` and `.access()` last; the quick start places them first. Both are valid.
+</Callout>
+
+### `.fields(({ f }) => ({ ... }))`
+
+Define the global's fields with the field builder. **Cumulative + override-by-key**: calling `.fields()` again adds to and overrides earlier fields by key, never wiping them. `f` carries every builtin field type plus any module fields codegen injected (`richText`, `blocks`, …).
+
+```ts
+global("site_settings").fields(({ f }) => ({
+  siteName: f.text().required(),
+  contactEmail: f.email(),
+  tagline: f.text().localized(),                 // per-locale value
+  logo: f.upload({ to: "assets" }),              // relation to an upload collection
+  navigation: f
+    .object({
+      label: f.text().required(),
+      href: f.text().required(),
+    })
+    .array(),                                    // repeatable nested objects
+}));
+```
+
+See [Fields](/docs/concepts/fields) for the full field catalog and [Relations](/docs/concepts/relations) for `f.upload()` / `f.relation()`. Source: `global-builder.ts:130`.
+
+<Callout type="info" title="Localized fields work on globals">
+Mark a field `.localized()` and QUESTPIE generates a `<name>_i18n` table behind the global. At the type level `localized` stays `[]` (a known limitation of the field-builder overload), but the runtime fully supports it — read and write per locale via the `locale` option shown above. Source: `global-builder.ts:130` (cumulative-merge logic), i18n table generated at `global.ts:449`.
+</Callout>
+
+### `.options({ ... })`
+
+```ts
+.options({
+  timestamps: true,        // createdAt + updatedAt (default: true)
+  versioning: true,        // snapshot every change into <name>_versions
+})
+```
+
+`GlobalOptions` (`global/builder/types.ts:31`) is a strict, four-key shape:
+
+| Option | Type | Default | Effect |
+|---|---|---|---|
+| `timestamps` | `boolean` | `true` | Adds `createdAt` + `updatedAt`. Set `false` to drop them. |
+| `schema` | `string` | `public` | Places all tables in a Postgres schema; migrations emit `CREATE SCHEMA IF NOT EXISTS`. |
+| `versioning` | `boolean \| { enabled?, maxVersions?, workflow? }` | `false` | Snapshots into `<name>_versions`; enables `findVersions` / `revertToVersion`. |
+| `scoped` | `(ctx) => string \| null \| undefined` | — | Multi-tenant: each scope gets its own row (see [below](#multi-tenant-globals-with-scoped)). |
+
+There is **no `softDelete`** option — a singleton is never deleted. (Note: `.options()` replaces the whole options object on the builder; it does not deep-merge across multiple `.options()` calls.)
+
+### `.access({ read, update, transition, introspect, fields })`
+
+Control who can read and write the global. A rule is a `boolean` or a function returning `boolean` (or a promise of one). Because a global is a single row, rules **cannot return a where-filter** the way [collection access rules](/docs/concepts/access-control) can — there is nothing to filter.
+
+```ts
+.access({
+  read: true,                                    // anyone can read
+  update: ({ session }) =>
+    (session?.user as { role?: string } | undefined)?.role === "admin",
+})
+```
+
+`GlobalAccess` (`global/builder/types.ts:211`):
+
+| Rule | When it runs | `ctx.data` |
+|---|---|---|
+| `read` | before reading | not loaded |
+| `update` | before writing | the existing record (`undefined` on first write); `ctx.input` is the patch |
+| `transition` | before a stage change | the existing record — falls back to `update` if omitted |
+| `introspect` | admin schema visibility | — visible if `read` **or** `update` is allowed |
+| `fields` | per-field allow/deny | `{ read?, update? }` per field name (no filtering, only allow/deny) |
+
+The rule context (`GlobalAccessContext`) spreads the full `AppContext` (`db`, `session`, `kv`, `queue`, `globals`, …) plus `{ data?, input?, locale? }`.
+
+<Callout type="warn" title="Secure by default — an omitted rule requires a session">
+A missing access rule does **not** mean "public"; it requires an authenticated session. Set `read: true` explicitly to expose a global to anonymous frontend requests (as `site_settings` typically needs). Backend calls run with the default `accessMode: 'system'`, which bypasses these rules entirely — pass `{ accessMode: 'user', session }` in the `CRUDContext` to enforce them.
+</Callout>
+
+### `.hooks({ ... })`
+
+Run logic around reads and writes. Each hook is a function (or array of functions) receiving `AppContext & { data, input?, locale?, accessMode? }`.
+
+```ts
+.hooks({
+  afterChange: async ({ data, kv }) => {
+    await kv.set("site-settings-cache", data); // invalidate a cache, warm a CDN, …
+  },
+})
+```
+
+`GlobalHooks` (`global/builder/types.ts:153`) are: `beforeUpdate`, `afterUpdate`, `beforeRead`, `afterRead`, `beforeChange`, `afterChange` (the last two are shorthands that run on update), `beforeTransition`, and `afterTransition`. There are **no `create` or `delete` hooks** — a global is never created or deleted, only updated.
+
+<Callout type="warn" title="Global hooks replace; collection hooks merge">
+Calling `.hooks()` twice on a global keeps only the **last** call's hooks (the builder overwrites `state.hooks`). Collections instead merge successive `.hooks()` into arrays. Put all of a global's hooks in one `.hooks({ … })` call. The same replace-not-merge behavior applies to `.access()`. Source: `global-builder.ts:307` (hooks), `global-builder.ts:322` (access).
+</Callout>
+
+### .admin() and .form()
+
+Globals support exactly **two** admin methods — `.admin()` (label, description, icon, group, ordering) and `.form()` (the edit-form layout). They have **no** `.list()`, `.preview()`, or `.actions()`, because there is no list of records. These methods are declaration-merged onto the builder by `@questpie/admin`; install it to make them available. Source: `packages/admin/src/server/augmentation/index.ts:179`.
+
+```ts
+.admin(({ c }) => ({
+  label: "Site Settings",
+  icon: c.icon("ph:gear"),
+  group: "Configuration",
+}))
+.form(({ v, f }) =>
+  v.globalForm({
+    fields: [
+      { type: "section", label: "Branding", layout: "grid", columns: 2,
+        fields: [f.siteName, f.logo] },
+      { type: "section", label: "Contact", fields: [f.contactEmail] },
+    ],
+  }),
+)
+```
+
+`.form()` accepts plain field names (`f.siteName`), `{ type: "section", … }` groups (with `layout: "stack" | "inline" | "grid"` and `columns`), and `{ type: "tabs", … }`. Labels accept a plain string or a `{ en, sk, … }` locale map. The full layout API is documented with the admin form views.
+
+{/* TODO @user: screenshot of a global's admin settings screen — single edit form, no list view. */}
+
+## Advanced
+
+### Versioning and the publishing workflow
+
+Set `versioning: true` to snapshot every update into a `<name>_versions` table — then `findVersions()` and `revertToVersion()` light up. Nest a `workflow` under it for draft → published stages:
+
+```ts
+const siteSettings = global("site_settings")
+  .fields(({ f }) => ({ siteName: f.text().required() }))
+  .options({
+    versioning: { workflow: true }, // stages: ['draft', 'published']
+  });
+```
+
+Enabling `workflow` adds `transitionStage()`, `beforeTransition`/`afterTransition` hooks, and an `access.transition` rule, and writes a version snapshot at each stage change. Read a specific stage with the `stage` option on `get()`. The publishing model is shared with collections.
+
+<Callout type="warn" title="`workflow` requires versioning">
+Setting `workflow` auto-enables versioning. Explicitly combining `versioning: { enabled: false }` with a workflow **throws at construction** — stages are stored as version snapshots, so they cannot exist without versioning. Source: the `Global` constructor throws when `versioning.enabled === false` and a workflow is set, `global.ts:298`.
+</Callout>
+
+### Multi-tenant globals with `scoped`
+
+A plain global is one row for the whole app. `scoped` makes it one row **per scope** — per tenant, per city, per property. The resolver receives the request context (including custom `.context()` extensions) and returns the scope id:
+
+```ts
+const propertySettings = global("property_settings")
+  .options({
+    scoped: (ctx) => ctx.propertyId, // from a context extension
+  })
+  .fields(({ f }) => ({
+    welcomeMessage: f.text(),
+    theme: f.select([
+      { value: "light", label: "Light" },
+      { value: "dark", label: "Dark" },
+    ]),
+  }));
+```
+
+Behind the scenes a nullable `scope_id` column and a unique `<name>_scope_idx` index are added (and `scope_id` is carried into the versions table too). `get()` and `update()` then read and write the row for whatever scope the context resolves to — you call them exactly as before; **the scope is selected from context, not passed as an argument**. Wiring `ctx.propertyId` is covered under multi-tenancy. Source: `GlobalScopeResolver` type at `global/builder/types.ts:24` (the `scoped` option that takes it is `:98`), scope column + index at `global.ts:413`.
+
+<Callout type="info" title="The resolver may return `null`/`undefined`">
+When it does, the global resolves the unscoped (null-scope) row — useful for a shared default across tenants. The resolver runs per request, so it sees the same context your hooks and access rules see.
+</Callout>
+
+### What gets generated
+
+A built global produces up to four Drizzle tables, mirroring collections (minus the title column):
+
+| Table | When | Notes |
+|---|---|---|
+| `<name>` | always | main row: `id` + your main fields (+ `scope_id` if scoped, + timestamps unless disabled) |
+| `<name>_i18n` | any `.localized()` field | per-locale values, unique on `(parent_id, locale)` |
+| `<name>_versions` | `versioning` enabled | snapshots; indexed on `(id, version_number)` and `(id, version_stage, version_number)` |
+| `<name>_i18n_versions` | versioning **and** localized | per-locale snapshot values |
+
+Source: table generation in `global.ts:410` onward. The set is identical to a collection's, except a global never gets a soft-delete column and never computes a `_title`.
+
+## TypeScript
+
+Infer a global's row type from the builder export — useful for typing function returns and component props:
+
+```ts
+import type { siteSettings } from "@/questpie/server/globals/site-settings";
+
+type SiteSettings = typeof siteSettings.$infer.select;
+//   { id: string; siteName: string; description: string | null;
+//     createdAt: Date; updatedAt: Date }
+
+type SiteSettingsUpdate = typeof siteSettings.$infer.update; // Partial of the inputs
+```
+
+Unlike a collection's `$infer.select`, a global's has **no `_title`** field — globals don't compute a title column. Source: `$infer` on the built `Global` class, `global.ts:247`.
+
+When you read through a server function that hydrates relations (`with`), infer from the call instead so the loaded relations are reflected in the type:
+
+```ts
+export type SiteSettingsData = Awaited<ReturnType<typeof getSiteSettings>>;
+```
+
+## Related
+
+- [Collections](/docs/concepts/collections) — multi-row tables with full CRUD and list views.
+- [Fields](/docs/concepts/fields) — the field catalog used by `.fields()`.
+- [Relations](/docs/concepts/relations) — `f.relation()` / `f.upload()` and relation hydration with `with`.
+- [Access control](/docs/concepts/access-control) — the access-rule model shared with collections.
+- [Hooks](/docs/concepts/hooks) — the lifecycle-hook model.
+- Runnable examples: `examples/tanstack-barbershop/src/questpie/server/globals/site-settings.ts` (versioned, localized) and `examples/city-portal/src/questpie/server/globals/site-settings.ts` (`scoped` per city).

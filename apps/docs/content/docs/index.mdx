@@ -1,84 +1,21 @@
 ---
-title: Overview
-description: One schema. Every output. Backend-first TypeScript framework with schema-driven codegen.
+title: Documentation
+description: Server-first TypeScript framework with schema-driven codegen. Start with Getting Started, then dig into the Concepts.
 ---
 
-## One Schema. Every Output.
+QUESTPIE is a **server-first TypeScript framework**. You define your schema once with file-convention factories, run codegen, and get a typed runtime, an admin UI, a REST API, OpenAPI docs, a typed client, and TanStack Query — all projected from that one schema.
 
-QUESTPIE is a **backend-first TypeScript framework** where you define your data schema once, and codegen + introspection project it into typed runtimes, APIs, and frontends.
+New here? Start with **[Getting Started](/docs/getting-started)** for the mental model and your first app, then explore the **[Concepts](/docs/concepts/collections)** for a deep dive on each building block.
 
-```mermaid
-flowchart LR
-  Schema["Schema"]
-  Codegen["Codegen"]
-  Runtime["Typed Runtime"]
-  Projection["Projection"]
-  Frontend["Any Frontend"]
-
-  Schema --> Codegen --> Runtime --> Projection --> Frontend
-```
-
-Define collections, routes, jobs, and hooks as plain files. Codegen wires them into a type-safe runtime. The admin panel, client SDK, and OpenAPI spec are all **projections** of the same schema — not separate definitions.
-
-<Callout type="warn">
-	**Active Development** — QUESTPIE follows semantic versioning. The API may
-	change between releases. Full stability is targeted for **v3**.
-</Callout>
-
-## How It Works
-
-```ts title="collections/posts.ts"
-import { collection } from "#questpie/factories";
-
-export default collection("posts").fields(({ f }) => ({
-	title: f.text(255).required(),
-	body: f.textarea().localized(),
-	cover: f.upload({ to: "assets", mimeTypes: ["image/*"] }),
-	author: f.relation("user"),
-	status: f.select([
-		{ value: "draft", label: "Draft" },
-		{ value: "published", label: "Published" },
-	]),
-	publishedAt: f.date(),
-}));
-```
-
-This single file defines:
-
-- **Database schema** — Drizzle table with correct column types
-- **API validation** — Zod schemas for create/update
-- **Query operators** — Type-safe `where`, `orderBy`, `with`
-- **Client types** — End-to-end TypeScript from server to frontend
-- **Admin UI** — Form fields, list columns, filters (when `@questpie/admin` is installed)
-
-## Package Architecture
-
-```mermaid
-flowchart TD
-  Required["Required packages"]
-  Core["questpie<br/>core runtime, fields, hooks, routes, codegen"]
-  Adapter["@questpie/&lt;adapter&gt;<br/>hono, elysia, or nextjs"]
-  Optional["Optional packages"]
-  Admin["@questpie/admin<br/>admin interface via schema introspection"]
-  Query["@questpie/tanstack-query<br/>TanStack Query hooks"]
-
-  Required --> Core
-  Required --> Adapter
-  Optional --> Admin
-  Optional --> Query
-```
-
-## Documentation Sections
-
-- **[Start Here](/docs/start-here)** — What is QUESTPIE, installation, first app, project structure
-- **[Build Your Backend](/docs/backend)** — Data modeling, rules, business logic, architecture
-- **[Admin Workspace](/docs/workspace)** — Admin panel setup, views, blocks, actions
-- **[Client Integration](/docs/frontend)** — Client SDK, TanStack Query, realtime, HTTP adapters
-- **[Production](/docs/production)** — Database, auth, storage, email, queue, deployment
-- **[Extend](/docs/extend)** — Custom fields, views, plugins, modules
-- **[Examples](/docs/examples)** — TanStack Barbershop end-to-end walkthrough
-- **[API Reference](/docs/reference)** — Complete API reference
-
-## Canonical Example
-
-All code examples in these docs come from the [TanStack Barbershop](/docs/examples/barbershop) — a real booking app with 7 collections, server routes, background jobs, email templates, and a full admin dashboard.
+<Cards>
+	<Card
+		title="Getting Started"
+		href="/docs/getting-started"
+		description="What QUESTPIE is, the one-schema model, and a full first-app walkthrough."
+	/>
+	<Card
+		title="Concepts"
+		href="/docs/concepts/collections"
+		description="Collections, fields, relations, hooks, validation, routes, jobs, services, and more — in depth."
+	/>
+</Cards>
