@@ -37,7 +37,6 @@ import type {
 	InferRouteInput,
 	InferRouteOutput,
 	InferRouteParams,
-	JsonRouteDefinition,
 	JsonRouteHandlerArgs,
 	RawRouteDefinition,
 	RouteParamsFromKey,
@@ -77,7 +76,9 @@ const echoRoute = route()
 	}));
 
 type EchoOutput = InferRouteOutput<typeof echoRoute>;
-type _echoOutput = Expect<Equal<EchoOutput, { echoed: string; length: number }>>;
+type _echoOutput = Expect<
+	Equal<EchoOutput, { echoed: string; length: number }>
+>;
 type _echoOutputNotAny = Expect<Not<IsAny<EchoOutput>>>;
 type _echoInput = Expect<
 	Equal<InferRouteInput<typeof echoRoute>, { message: string }>
@@ -92,7 +93,9 @@ const plainRoute = route()
 type _plainOutput = Expect<
 	Equal<InferRouteOutput<typeof plainRoute>, { doubled: number }>
 >;
-type _plainOutputNotAny = Expect<Not<IsAny<InferRouteOutput<typeof plainRoute>>>>;
+type _plainOutputNotAny = Expect<
+	Not<IsAny<InferRouteOutput<typeof plainRoute>>>
+>;
 
 // Raw routes still infer `Response`
 const rawRoute = route()
@@ -122,7 +125,10 @@ const validatedRoute = route()
 	.handler(() => ({ ok: true, hits: ["a"] }));
 
 type _outputSchemaWins = Expect<
-	Equal<InferRouteOutput<typeof validatedRoute>, { ok: boolean; hits: string[] }>
+	Equal<
+		InferRouteOutput<typeof validatedRoute>,
+		{ ok: boolean; hits: string[] }
+	>
 >;
 
 // ============================================================================
@@ -145,7 +151,10 @@ type EchoThroughCodegen = RouteWithParams<
 >;
 
 type _erasedOutputSurvives = Expect<
-	Equal<InferRouteOutput<EchoThroughCodegen>, { echoed: string; length: number }>
+	Equal<
+		InferRouteOutput<EchoThroughCodegen>,
+		{ echoed: string; length: number }
+	>
 >;
 type _erasedInputSurvives = Expect<
 	Equal<InferRouteInput<EchoThroughCodegen>, { message: string }>
@@ -159,6 +168,19 @@ type ScheduleThroughCodegen = RouteWithParams<
 type ScheduleParams = InferRouteParams<ScheduleThroughCodegen>;
 type _paramKey = Expect<Equal<keyof ScheduleParams, "barberId">>;
 type _paramValue = Expect<Equal<ScheduleParams["barberId"], string>>;
+
+type MethodSuffixParams = RouteParamsFromKey<"barbers/[barberId]:GET">;
+type _methodSuffixParamKey = Expect<
+	Equal<keyof MethodSuffixParams, "barberId">
+>;
+type _methodSuffixParamValue = Expect<
+	Equal<MethodSuffixParams["barberId"], string>
+>;
+
+type MethodSuffixCatchAllParams = RouteParamsFromKey<"auth/[...path]:POST">;
+type _methodSuffixCatchAllParam = Expect<
+	Equal<MethodSuffixCatchAllParams["path"], string>
+>;
 
 // Raw routes survive erasure as raw definitions
 type RawThroughCodegen = RouteWithParams<
@@ -177,14 +199,20 @@ const users = collection("users").fields(({ f }) => ({
 	name: f.text(255).required(),
 }));
 
+const statsRoute = route()
+	.post()
+	.schema(z.object({ period: z.enum(["week", "month"]) }))
+	.handler(() => ({ total: 1 }));
+
+const adminUsersGetRoute = route()
+	.get()
+	.schema(z.object({ q: z.string().optional() }))
+	.handler(() => ({ users: ["a"] }));
+
 type MockRoutes = {
 	getSlots: typeof echoRoute;
-	"admin/stats": JsonRouteDefinition<
-		{ period: "week" | "month" },
-		{ total: number },
-		{}
-	>;
-	"admin/users:GET": JsonRouteDefinition<{ q?: string }, { users: string[] }, {}>;
+	"admin/stats": typeof statsRoute;
+	"admin/users:GET": typeof adminUsersGetRoute;
 	download: RawRouteDefinition;
 };
 
@@ -195,15 +223,19 @@ type ClientApp = {
 
 declare const client: QuestpieClient<ClientApp>;
 
-// Flat camelCase keys are direct callers with typed input AND output
-type GetSlots = typeof client.routes.getSlots;
+// Flat camelCase keys expose explicit method leaves with typed input AND output
+type GetSlots = typeof client.routes.getSlots.post;
 type _slotsInput = Expect<Equal<Parameters<GetSlots>[0], { message: string }>>;
 type _slotsOutput = Expect<
 	Equal<Awaited<ReturnType<GetSlots>>, { echoed: string; length: number }>
 >;
 
-// Slash keys expand into nested namespaces — the documented call style
-type AdminStats = typeof client.routes.admin.stats;
+// Direct route calls are not part of the typed client surface
+// @ts-expect-error call the explicit HTTP method leaf instead
+void client.routes.getSlots({ message: "x" });
+
+// Slash keys expand into nested namespaces with method leaves
+type AdminStats = typeof client.routes.admin.stats.post;
 type _statsInput = Expect<
 	Equal<Parameters<AdminStats>[0], { period: "week" | "month" }>
 >;
@@ -219,7 +251,7 @@ type _usersGetOutput = Expect<
 
 // Raw routes return the raw Response
 type _downloadOutput = Expect<
-	Equal<Awaited<ReturnType<typeof client.routes.download>>, Response>
+	Equal<Awaited<ReturnType<typeof client.routes.download.get>>, Response>
 >;
 
 // Phantom route names are compile errors (no index-signature poisoning)
@@ -280,4 +312,6 @@ service({
 });
 
 // The resolved context always carries the app instance pre-codegen
-type _serviceCtxHasApp = Expect<Extends<ServiceCreateContext, { app: unknown }>>;
+type _serviceCtxHasApp = Expect<
+	Extends<ServiceCreateContext, { app: unknown }>
+>;

@@ -200,7 +200,7 @@ Signed URLs answer *how* bytes are served; the `serve` access rule answers *who*
 
 For large files, route the **bytes** straight from the browser to S3/R2 instead of through your server. Mint a presigned upload from a [route](/docs/concepts/routes), hand it to the client, and have the client PUT/POST the file to the provider directly:
 
-```ts title="src/questpie/server/routes/sign-upload.ts"
+```ts title="src/questpie/server/routes/sign-upload.post.ts"
 import { route } from "questpie/services";
 import { z } from "zod";
 

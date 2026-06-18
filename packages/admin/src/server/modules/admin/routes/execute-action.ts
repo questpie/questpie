@@ -771,7 +771,7 @@ const getActionsConfigResponseSchema = z
  * @example
  * ```ts
  * // From client
- * const result = await client.routes.executeAction({
+ * const result = await client.routes.executeAction.post({
  *   collection: "posts",
  *   actionId: "publish",
  *   itemId: "123",

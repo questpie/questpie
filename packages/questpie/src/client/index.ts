@@ -3,6 +3,7 @@ import superjson from "superjson";
 
 import type { GlobalSchema } from "#questpie/server/global/introspection.js";
 import type {
+	HttpMethod,
 	InferRouteInput,
 	InferRouteOutput,
 	JsonRouteDefinition,
@@ -261,8 +262,9 @@ type RawRouteCaller = (options?: RouteCallOptions) => Promise<Response>;
  * Type-safe routes client API.
  *
  * Flat route keys like `"admin/stats"` are expanded into nested dot notation
- * (`client.routes.admin.stats({ period: "week" })`) with literal keys only —
- * unknown route names are compile errors.
+ * with explicit HTTP method leaves
+ * (`client.routes.admin.stats.post({ period: "week" })`) and literal keys only.
+ * Unknown route names are compile errors.
  *
  * Untyped apps (`routes: Record<string, any>`) degrade to a permissive index
  * signature; apps without routes get `{}`.
@@ -283,7 +285,7 @@ type RoutesClient<TRoutes> = [NonNullable<TRoutes>] extends [never]
 
 /**
  * Expand flat route keys into nested structure.
- * `"admin/stats"` → `{ admin: { stats: RouteLeaf } }`
+ * `"admin/stats"` → `{ admin: { stats: { post: RouteLeaf } } }`
  * `"admin/stats:GET"` → `{ admin: { stats: { get: ... } } }`
  */
 type ExpandRoutes<TRoutes extends Record<string, any>> = UnionToIntersection<
@@ -305,7 +307,15 @@ type ExpandKey<K extends string, TDef> = K extends `${infer Head}/${infer Rest}`
 	? { [P in Head]: ExpandKey<Rest, TDef> }
 	: K extends `${infer Path}:${infer Method}`
 		? { [P in Path]: { [M in Lowercase<Method>]: RouteCallerFromDef<TDef> } }
-		: { [P in K]: RouteCallerFromDef<TDef> };
+		: { [P in K]: RouteMethodCallers<TDef> };
+
+type RouteMethodNames<TMethod> = TMethod extends readonly (infer M)[]
+	? Lowercase<Extract<M, HttpMethod>>
+	: Lowercase<Extract<TMethod, HttpMethod>>;
+
+type RouteMethodCallers<TDef> = TDef extends { method: infer TMethod }
+	? { [M in RouteMethodNames<TMethod>]: RouteCallerFromDef<TDef> }
+	: { post: RouteCallerFromDef<TDef> };
 
 type RouteCallerFromDef<TDef> =
 	TDef extends JsonRouteDefinition<any, any>
@@ -972,8 +982,8 @@ export type QuestpieClient<TApp extends QuestpieApp> = {
  * // Type-safe collections
  * const posts = await client.collections.posts.find({ limit: 10 })
  *
- * // Type-safe routes — nested keys from flat route files
- * const result = await client.routes.admin.stats({ period: "week" })
+ * // Type-safe routes — nested keys from flat route files, explicit method leaf
+ * const result = await client.routes.admin.stats.post({ period: "week" })
  * ```
  */
 export function createClient<TApp extends QuestpieApp>(
@@ -1707,12 +1717,10 @@ export function createClient<TApp extends QuestpieApp>(
 	 * Routes API — nested proxy that maps route keys to callable endpoints.
 	 *
 	 * Route paths use slash-separated segments accessed via dot notation:
-	 *   `routes/admin/stats.ts` → `client.routes.admin.stats(input)`
+	 *   `routes/admin/stats.post.ts` → `client.routes.admin.stats.post(input)`
 	 *
-	 * For multi-export routes with method suffix:
+	 * For routes with method suffix:
 	 *   `admin/stats:GET` → `client.routes.admin.stats.get(input)`
-	 *
-	 * The proxy is callable at any depth — calling it sends a POST request.
 	 * Traversing deeper builds the URL path.
 	 * Segment names are converted from camelCase to kebab-case for URLs.
 	 */

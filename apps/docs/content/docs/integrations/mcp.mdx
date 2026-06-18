@@ -90,7 +90,7 @@ Tools carry MCP annotations automatically: read operations get `readOnlyHint: tr
 
 A route is exposed as a tool only when its metadata opts in. Set `meta.mcp.expose = true` on a JSON route (see [Routes → Metadata: OpenAPI and MCP](/docs/concepts/routes)):
 
-```ts title="src/questpie/server/routes/get-revenue-stats.ts"
+```ts title="src/questpie/server/routes/get-revenue-stats.post.ts"
 import { route } from "questpie";
 import { z } from "zod";
 

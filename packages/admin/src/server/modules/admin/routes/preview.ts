@@ -219,7 +219,7 @@ export function createPreviewFunctions(
 	 *
 	 * @example
 	 * ```ts
-	 * const { token } = await client.routes.mintPreviewToken({
+	 * const { token } = await client.routes.mintPreviewToken.post({
 	 *   path: "/pages/about",
 	 *   ttlMs: 30 * 60 * 1000, // 30 minutes
 	 * });
@@ -270,7 +270,7 @@ export function createPreviewFunctions(
 	 *
 	 * @example
 	 * ```ts
-	 * const result = await client.routes.verifyPreviewToken({ token });
+	 * const result = await client.routes.verifyPreviewToken.post({ token });
 	 * if (result.valid) {
 	 *   // Redirect to result.path with draft mode cookie
 	 * }
@@ -399,7 +399,7 @@ const getPreviewUrlOutputSchema = z.object({
  *
  * @example
  * ```ts
- * const { url } = await client.routes.getPreviewUrl({
+ * const { url } = await client.routes.getPreviewUrl.post({
  *   collection: "pages",
  *   record: { slug: "about", title: "About Us" },
  *   locale: "en",

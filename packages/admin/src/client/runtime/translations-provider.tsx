@@ -93,7 +93,9 @@ export function getAdminTranslationsQueryOptions(client: any, locale: string) {
 		queryKey: ["questpie", "adminTranslations", locale] as const,
 		queryFn: async () => {
 			try {
-				const result = await client.routes.getAdminTranslations({ locale });
+				const result = await client.routes.getAdminTranslations.post({
+					locale,
+				});
 				return result as {
 					locale: string;
 					messages: SimpleMessages;
@@ -133,7 +135,7 @@ export function getAdminLocalesQueryOptions(client: any) {
 		queryKey: ["questpie", "adminLocales"] as const,
 		queryFn: async () => {
 			try {
-				const result = await client.routes.getAdminLocales({});
+				const result = await client.routes.getAdminLocales.post({});
 				return result as {
 					locales: string[];
 					defaultLocale: string;

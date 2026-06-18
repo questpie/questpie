@@ -127,7 +127,7 @@ Every spec also includes shared component schemas (`ErrorResponse`, `SuccessResp
 
 For each route in the tree, the generator builds the OpenAPI path from the file-convention key, literal segments are kebab-cased and `[param]` / `[...slug]` become `{param}` / `{slug}` templates, matching the URLs the HTTP adapter actually serves:
 
-```ts title="routes/reports/[year].ts"
+```ts title="routes/reports/[year].get.ts"
 import { route } from "questpie";
 import { z } from "zod";
 
@@ -165,7 +165,7 @@ projects to roughly:
 }
 ```
 
-A route that serves multiple methods (`.get().post()`) emits one operation per method on the same path, each with a method-suffixed `operationId`. **Raw routes** (no input schema) document a permissive request body (`application/json` or `application/octet-stream`) and a generic `200` response.
+Method-suffixed sibling routes on the same path emit one operation per method, each with a method-suffixed `operationId`. **Raw routes** (no input schema) document a permissive request body (`application/json` or `application/octet-stream`) and a generic `200` response.
 
 <Callout type="warn" title="Routes without an `outputSchema` document an untyped response">
 A JSON route with `.schema()` but no `.outputSchema()` gets its request body documented but falls back to `{ "type": "object" }` for the response. To get a fully typed response in the spec, add `.outputSchema(...)`. See [Routes → Validation and output](/docs/concepts/routes#validation-and-output).
@@ -183,14 +183,14 @@ Route input/output schemas are converted with Zod's `z.toJSONSchema`. When a sch
 
 The module is a thin wrapper over two exported [route](/docs/concepts/routes) factories. Drop either into your own `routes/` directory if you want a different path or want to apply your own [access](/docs/concepts/access-control) rule:
 
-```ts title="src/questpie/server/routes/openapi-spec.ts"
+```ts title="src/questpie/server/routes/openapi-spec.get.ts"
 import { openApiRoute } from "@questpie/openapi/server";
 
 // Serves the OpenAPI 3.1 JSON (cached with ETag).
 export default openApiRoute();
 ```
 
-```ts title="src/questpie/server/routes/api-docs.ts"
+```ts title="src/questpie/server/routes/api-docs.get.ts"
 import { docsRoute } from "@questpie/openapi/server";
 
 // Serves the Scalar UI.

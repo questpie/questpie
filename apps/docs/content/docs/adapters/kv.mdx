@@ -21,7 +21,7 @@ Read [Adapters](/docs/adapters) (what an adapter is and the full list of swappab
 
 The KV store works out of the box with **zero config**, `ctx.kv` is always present, backed by the in-memory adapter. The app context is spread into every route handler, so you destructure `kv` directly:
 
-```ts title="src/questpie/server/routes/cached-stats.ts"
+```ts title="src/questpie/server/routes/cached-stats.get.ts"
 import { route } from "questpie/services";
 
 export default route()

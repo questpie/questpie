@@ -110,7 +110,9 @@ type _plainOutputExact = Expect<Equal<PlainOutput, { doubled: number }>>;
 type _plainOutputNotAny = Expect<NoAny<PlainOutput>>;
 type _plainOutputNotNever = Expect<NoNever<PlainOutput>>;
 // Input is already preserved today — positive companion so a regression here is loud too.
-type _plainInputExact = Expect<Equal<InferRouteInput<typeof plainRoute>, { n: number }>>;
+type _plainInputExact = Expect<
+	Equal<InferRouteInput<typeof plainRoute>, { n: number }>
+>;
 
 // A second handler-return shape (object with mixed members) — covers the CLASS,
 // not just the one-key example.
@@ -158,9 +160,14 @@ const validatedRoute = route()
 	.handler(() => ({ ok: true, hits: ["a"] }));
 
 type _outputSchemaWins = Expect<
-	Equal<InferRouteOutput<typeof validatedRoute>, { ok: boolean; hits: string[] }>
+	Equal<
+		InferRouteOutput<typeof validatedRoute>,
+		{ ok: boolean; hits: string[] }
+	>
 >;
-type _outputSchemaNotAny = Expect<NoAny<InferRouteOutput<typeof validatedRoute>>>;
+type _outputSchemaNotAny = Expect<
+	NoAny<InferRouteOutput<typeof validatedRoute>>
+>;
 
 // ============================================================================
 // PART B — Layer 1: NoSchema/HasSchema discriminant collapse.
@@ -179,13 +186,19 @@ const bareRoute = route()
 // TARGET (RED today — currently `"json"`): a schemaless chain is a RAW route.
 type _bareModeRaw = Expect<Equal<(typeof bareRoute)["mode"], "raw">>;
 // TARGET (RED today — currently has a `schema` member): no `schema` key on a raw def.
-type _bareNoSchemaMember = Expect<Equal<HasKey<typeof bareRoute, "schema">, false>>;
+type _bareNoSchemaMember = Expect<
+	Equal<HasKey<typeof bareRoute, "schema">, false>
+>;
 // TARGET: a bare chain produces a `RawRouteDefinition` exactly (output is `Response`).
-type _bareIsRawDef = Expect<Equal<InferRouteOutput<typeof bareRoute>, Response>>;
+type _bareIsRawDef = Expect<
+	Equal<InferRouteOutput<typeof bareRoute>, Response>
+>;
 type _bareOutputNotAny = Expect<NoAny<InferRouteOutput<typeof bareRoute>>>;
 // TARGET: a raw route has NO input — `InferRouteInput` is `never`, NOT `false`.
 type _bareInputNever = Expect<IsNever<InferRouteInput<typeof bareRoute>>>;
-type _bareInputNotFalse = Expect<Not<Equal<InferRouteInput<typeof bareRoute>, false>>>;
+type _bareInputNotFalse = Expect<
+	Not<Equal<InferRouteInput<typeof bareRoute>, false>>
+>;
 
 // Bare-route handler args carry NO `input` member (it is a raw handler). The
 // `@ts-expect-error` fires only once the chain is correctly the raw arm; the
@@ -207,7 +220,9 @@ const rawRoute = route()
 	.handler(async () => new Response("ok"));
 
 type _rawModeRaw = Expect<Equal<(typeof rawRoute)["mode"], "raw">>;
-type _rawNoSchemaMember = Expect<Equal<HasKey<typeof rawRoute, "schema">, false>>;
+type _rawNoSchemaMember = Expect<
+	Equal<HasKey<typeof rawRoute, "schema">, false>
+>;
 type _rawOutput = Expect<Equal<InferRouteOutput<typeof rawRoute>, Response>>;
 
 // ============================================================================
@@ -236,6 +251,11 @@ type OutputOnlyIn = InferRouteInput<typeof outputOnlyRoute>;
 type _outputOnlyInputNotFalse = Expect<Not<Equal<OutputOnlyIn, false>>>;
 // And it must not silently be `any` either (a sensible caller input or `never`).
 type _outputOnlyInputNotAny = Expect<NoAny<OutputOnlyIn>>;
+
+const adminStatsRoute = route()
+	.post()
+	.schema(z.object({ period: z.enum(["week", "month"]) }))
+	.handler(() => ({ total: 1 }));
 
 // ============================================================================
 // PART D — Layer 2c: `InferRouteOutput` terminal fallthrough → `unknown`, not
@@ -270,7 +290,9 @@ type PlainThroughCodegen = RouteWithParams<
 type ErasedPlainOut = InferRouteOutput<PlainThroughCodegen>;
 type _erasedPlainExact = Expect<Equal<ErasedPlainOut, { doubled: number }>>;
 type _erasedPlainNotAny = Expect<NoAny<ErasedPlainOut>>;
-type _erasedPlainInput = Expect<Equal<InferRouteInput<PlainThroughCodegen>, { n: number }>>;
+type _erasedPlainInput = Expect<
+	Equal<InferRouteInput<PlainThroughCodegen>, { n: number }>
+>;
 
 // ============================================================================
 // PART E — Layer 4: `JsonRouteHandlerArgs` closed `{}` default for the PARAMS
@@ -286,7 +308,9 @@ type _erasedPlainInput = Expect<Equal<InferRouteInput<PlainThroughCodegen>, { n:
 type DefaultParams = JsonRouteHandlerArgs["params"];
 
 // TARGET (RED before Layer 4 — slot default was `Record<string,string>`): no string index.
-type _paramsNoStringIndex = Expect<Equal<string extends keyof DefaultParams ? true : false, false>>;
+type _paramsNoStringIndex = Expect<
+	Equal<string extends keyof DefaultParams ? true : false, false>
+>;
 type _paramsClosed = Expect<Equal<keyof DefaultParams, never>>;
 
 // CORRECTED ASSERTION (was a provably-wrong `@ts-expect-error` claiming an
@@ -311,7 +335,9 @@ route()
 	.handler((args) => {
 		// Un-declared params → open URL-param map (the escape hatch), NOT closed.
 		type Params = typeof args.params;
-		type _undeclaredIsOpenMap = Expect<Equal<string extends keyof Params ? true : false, true>>;
+		type _undeclaredIsOpenMap = Expect<
+			Equal<string extends keyof Params ? true : false, true>
+		>;
 		const _x: string = args.params.doesNotExist; // open map → resolves to `string`
 		void _x;
 		return { ok: true };
@@ -358,11 +384,16 @@ type PublicJsonRouteDefinition = import("questpie/types").JsonRouteDefinition<
 	{ b: number }
 >;
 type _jsonDefNameable = Expect<
-	Equal<PublicJsonRouteDefinition, JsonRouteDefinition<{ a: string }, { b: number }>>
+	Equal<
+		PublicJsonRouteDefinition,
+		JsonRouteDefinition<{ a: string }, { b: number }>
+	>
 >;
 
 type PublicRawRouteDefinition = import("questpie/types").RawRouteDefinition;
-type _rawDefNameable = Expect<Equal<PublicRawRouteDefinition, RawRouteDefinition>>;
+type _rawDefNameable = Expect<
+	Equal<PublicRawRouteDefinition, RawRouteDefinition>
+>;
 
 // The internally-imported definitions parameterize correctly (positive baseline —
 // green today AND after; guards a regression in the concrete def shapes).
@@ -372,7 +403,9 @@ type _jsonDefUsable = Expect<
 		{ b: number }
 	>
 >;
-type _rawDefUsable = Expect<Equal<InferRouteOutput<RawRouteDefinition>, Response>>;
+type _rawDefUsable = Expect<
+	Equal<InferRouteOutput<RawRouteDefinition>, Response>
+>;
 
 // ============================================================================
 // PART G — end-to-end client output: `client.routes.*` returns the REAL output,
@@ -388,9 +421,9 @@ type AppRoutesShape = {
 	// Output-only chain — input must not poison the caller as `false`.
 	outputOnly: typeof outputOnlyRoute;
 	// Raw route — returns Response.
-	download: RawRouteDefinition;
-	// Nested + method-suffixed keys (registry probes).
-	"admin/stats": JsonRouteDefinition<{ period: "week" | "month" }, { total: number }, {}>;
+	download: typeof rawRoute;
+	// Nested route keys expose explicit method leaves.
+	"admin/stats": typeof adminStatsRoute;
 };
 
 type ClientAppShape = {
@@ -402,7 +435,7 @@ declare const client: QuestpieClient<ClientAppShape>;
 
 // TARGET (RED today — currently `any`): the no-outputSchema route returns its
 // recovered handler shape end-to-end through the client caller.
-type CapOut = Awaited<ReturnType<typeof client.routes.capacitySummary>>;
+type CapOut = Awaited<ReturnType<typeof client.routes.capacitySummary.get>>;
 type _capExact = Expect<
 	Equal<
 		CapOut,
@@ -418,21 +451,23 @@ type _capNotAny = Expect<NoAny<CapOut>>;
 type _capHasKey = Expect<HasKey<CapOut, "availableMachines">>;
 
 // Control — the validated route's client output is concrete (green today + after).
-type ValidatedOut = Awaited<ReturnType<typeof client.routes.validated>>;
-type _validatedExact = Expect<Equal<ValidatedOut, { ok: boolean; hits: string[] }>>;
+type ValidatedOut = Awaited<ReturnType<typeof client.routes.validated.post>>;
+type _validatedExact = Expect<
+	Equal<ValidatedOut, { ok: boolean; hits: string[] }>
+>;
 type _validatedNotAny = Expect<NoAny<ValidatedOut>>;
 
 // Output-only route: the client caller input must NOT be the literal `false`.
-type OutputOnlyClientIn = Parameters<typeof client.routes.outputOnly>[0];
+type OutputOnlyClientIn = Parameters<typeof client.routes.outputOnly.post>[0];
 type _clientInputNotFalse = Expect<Not<Equal<OutputOnlyClientIn, false>>>;
 
 // Raw route returns Response (control).
 type _downloadOut = Expect<
-	Equal<Awaited<ReturnType<typeof client.routes.download>>, Response>
+	Equal<Awaited<ReturnType<typeof client.routes.download.get>>, Response>
 >;
 
 // Nested slash key expands and stays concrete (control).
-type AdminStatsOut = Awaited<ReturnType<typeof client.routes.admin.stats>>;
+type AdminStatsOut = Awaited<ReturnType<typeof client.routes.admin.stats.post>>;
 type _adminStatsExact = Expect<Equal<AdminStatsOut, { total: number }>>;
 type _adminStatsNotAny = Expect<NoAny<AdminStatsOut>>;
 
@@ -446,7 +481,7 @@ type _adminStatsNotAny = Expect<NoAny<AdminStatsOut>>;
 // SAME client route caller as Part G, so this asserts the propagated identity.
 // ============================================================================
 
-type RouteData = Awaited<ReturnType<typeof client.routes.capacitySummary>>;
+type RouteData = Awaited<ReturnType<typeof client.routes.capacitySummary.get>>;
 
 // TARGET (RED today — currently `any`): tanstack route data is the concrete shape.
 type _tsqRouteDataNotAny = Expect<NoAny<RouteData>>;
@@ -463,7 +498,7 @@ type _tsqRouteDataExact = Expect<
 >;
 
 // Mutation-style route variables stay precise (control — already typed today).
-type StatsVars = Parameters<typeof client.routes.admin.stats>[0];
+type StatsVars = Parameters<typeof client.routes.admin.stats.post>[0];
 type _statsVarsExact = Expect<Equal<StatsVars, { period: "week" | "month" }>>;
 type _statsVarsNotAny = Expect<NoAny<StatsVars>>;
 
@@ -489,4 +524,6 @@ route()
 // Default handler-args input is `unknown`, never `any` (positive baseline — the
 // JSON-args default; controls Layer 2c's "never silent any on the input side").
 type _defaultInputUnknown = Expect<IsUnknown<JsonRouteHandlerArgs["input"]>>;
-type _defaultInputNotAny = Expect<Equal<IsAny<JsonRouteHandlerArgs["input"]>, false>>;
+type _defaultInputNotAny = Expect<
+	Equal<IsAny<JsonRouteHandlerArgs["input"]>, false>
+>;

@@ -118,7 +118,7 @@
   - **Module system** — core infrastructure (search, realtime, auth, queue) wired as formal service definitions
   - **`fieldType()` + `FieldWithMethods`** — type-safe field chain methods (`.manyToMany()`, `.trim()`, `.autoNow()`, etc.)
   - **Hook type safety** — fully typed `ctx.data` in collection hooks, no more `{ [x: string]: any }` fallback
-  - **Route system** — file-path conventions, method chaining (`.get().post()`), priority matcher
+  - **Route system** — file-path conventions, method-specific route definitions, priority matcher
   - **Workflow transitions** — `transitionStage()` with scheduled transitions, audit logging, admin UI
   - **Version history** — full versions/revert parity across stack with admin UI
   - **Server actions** — real form field mapping, RPC execution, effects handling

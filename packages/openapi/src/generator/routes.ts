@@ -62,7 +62,7 @@ interface FlatRouteEntry {
  * route introspection (routes/introspection.ts:52-72) — the single source of
  * truth for how a route key maps to a path + HTTP methods:
  *   1. a trailing `:METHOD` suffix on the key sets the method, path is the prefix;
- *   2. otherwise `method` may be a string OR an array (`.get().post()`).
+ *   2. otherwise the route definition's method is used.
  */
 function flattenRoutesTree(
 	tree: RoutesTree,
@@ -126,6 +126,20 @@ export function generateRoutePaths(
 
 	const basePath = config.basePath ?? "/";
 	const entries = flattenRoutesTree(routes);
+	const pathMethodCounts = new Map<string, number>();
+	for (const entry of entries) {
+		const patternSegments = entry.segments.map((segment) => {
+			const { out } = patternSegmentToOpenApi(
+				routeKeySegmentToPatternSegment(segment),
+			);
+			return out;
+		});
+		const routePath = `${basePath}/${patternSegments.join("/")}`;
+		pathMethodCounts.set(
+			routePath,
+			(pathMethodCounts.get(routePath) ?? 0) + entry.methods.length,
+		);
+	}
 
 	// Group by top-level key for tags
 	const tagSet = new Set<string>();
@@ -158,9 +172,13 @@ export function generateRoutePaths(
 		}
 
 		const baseOperationId = `route_${entry.segments.join("_")}`;
-		// A route can serve multiple methods (`.get().post()`); suffix the
+		// Method-suffixed sibling routes can share one path; suffix the
 		// operationId with the method so each operation stays unique.
-		const multiMethod = entry.methods.length > 1;
+		const multiMethod = (pathMethodCounts.get(routePath) ?? 0) > 1;
+		const schemaOperationId =
+			multiMethod && entry.methods.length === 1
+				? `${baseOperationId}_${entry.methods[0].toLowerCase()}`
+				: baseOperationId;
 
 		const parameters = pathParams.map((name) => ({
 			name,
@@ -206,14 +224,14 @@ export function generateRoutePaths(
 			let outputSchema: unknown = { type: "object" };
 
 			if (def.schema) {
-				const schemaName = `${baseOperationId}_Input`;
+				const schemaName = `${schemaOperationId}_Input`;
 				const converted = zodToJsonSchema(def.schema);
 				schemas[schemaName] = converted;
 				inputSchema = { $ref: `#/components/schemas/${schemaName}` };
 			}
 
 			if (def.outputSchema) {
-				const schemaName = `${baseOperationId}_Output`;
+				const schemaName = `${schemaOperationId}_Output`;
 				const converted = zodToJsonSchema(def.outputSchema);
 				schemas[schemaName] = converted;
 				outputSchema = { $ref: `#/components/schemas/${schemaName}` };
@@ -223,12 +241,15 @@ export function generateRoutePaths(
 			operation.responses = jsonResponse(outputSchema, "Route output");
 		}
 
-		// Emit one operation per method onto the SAME path object so sibling
-		// methods (e.g. a `.get().post()` route) are not clobbered.
+		// Emit one operation per method onto the SAME path object so method
+		// siblings are not clobbered.
 		const pathItem = (paths[routePath] ??= {});
 		for (const method of entry.methods) {
 			pathItem[method.toLowerCase()] = multiMethod
-				? { ...operation, operationId: `${baseOperationId}_${method.toLowerCase()}` }
+				? {
+						...operation,
+						operationId: `${baseOperationId}_${method.toLowerCase()}`,
+					}
 				: operation;
 		}
 	}

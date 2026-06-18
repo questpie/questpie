@@ -95,7 +95,7 @@ const getAdminLocalesOutputSchema = z.object({
  * @example
  * ```ts
  * // Client fetches translations
- * const { messages, locale, fallbackLocale } = await client.routes.getAdminTranslations({
+ * const { messages, locale, fallbackLocale } = await client.routes.getAdminTranslations.post({
  *   locale: "sk",
  * });
  *
@@ -159,7 +159,7 @@ const getAdminTranslations = route()
  *
  * @example
  * ```ts
- * const { locales, defaultLocale } = await client.routes.getAdminLocales({});
+ * const { locales, defaultLocale } = await client.routes.getAdminLocales.post({});
  * // locales: ["en", "sk"]
  * // defaultLocale: "en"
  * ```

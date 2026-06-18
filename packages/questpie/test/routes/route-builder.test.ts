@@ -14,28 +14,10 @@ describe("route builder", () => {
 		expect(Object.isFrozen(def)).toBe(true);
 	});
 
-	it("adds every supported method helper once when chained", () => {
-		const def = route()
-			.get()
-			.post()
-			.put()
-			.delete()
-			.patch()
-			.head()
-			.options()
-			.get()
-			.raw()
-			.handler(async () => new Response("ok"));
-
-		expect(def.method).toEqual([
-			"GET",
-			"POST",
-			"PUT",
-			"DELETE",
-			"PATCH",
-			"HEAD",
-			"OPTIONS",
-		]);
+	it("rejects multiple HTTP methods on one route definition", () => {
+		expect(() => route().get().post()).toThrow(
+			"route() accepts one HTTP method",
+		);
 	});
 
 	it("preserves JSON route schema, output schema, access, metadata, and params config", () => {

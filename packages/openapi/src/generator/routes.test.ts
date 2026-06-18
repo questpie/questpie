@@ -1,22 +1,24 @@
 import { describe, expect, it } from "bun:test";
+
 import { route } from "questpie";
 import { z } from "zod";
 
 import { generateRoutePaths } from "./routes.js";
 
-describe("generateRoutePaths — method as array or :METHOD suffix", () => {
-	it("emits one operation per method for an array-method route without throwing", () => {
-		// The core auth catch-all is `.get().post().raw()` → method = ["GET","POST"].
-		const authCatchAll = route()
+describe("generateRoutePaths — method suffix routes", () => {
+	it("emits one operation per method for method-suffixed routes on the same path", () => {
+		const authGet = route()
 			.get()
+			.raw()
+			.handler(() => new Response("ok"));
+		const authPost = route()
 			.post()
 			.raw()
 			.handler(() => new Response("ok"));
 
 		const routes = {
-			auth: {
-				"[...path]": authCatchAll,
-			},
+			"auth/[...path]:GET": authGet,
+			"auth/[...path]:POST": authPost,
 		} as any;
 
 		let result: ReturnType<typeof generateRoutePaths> | undefined;
@@ -54,9 +56,9 @@ describe("generateRoutePaths — method as array or :METHOD suffix", () => {
 		expect(result.paths["/api/items"]).toBeDefined();
 		expect(result.paths["/api/items"].post).toBeDefined();
 		expect(Object.keys(result.paths)).toEqual(["/api/items"]);
-		expect(
-			Object.keys(result.paths).some((p) => p.includes(":POST")),
-		).toBe(false);
+		expect(Object.keys(result.paths).some((p) => p.includes(":POST"))).toBe(
+			false,
+		);
 	});
 
 	it("converts [param] and [...slug] segments to {param} templates with path parameters", () => {

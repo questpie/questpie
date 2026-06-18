@@ -39,7 +39,7 @@ const client = createClientFromEden<App, AppConfig>({
 const { docs } = await client.collections.posts.find({ limit: 10 });
 
 // App routes — fully typed
-const stats = await client.routes.getStats({ period: "week" });
+const stats = await client.routes.getStats.post({ period: "week" });
 
 // Custom Elysia routes — fully typed via Eden Treaty
 const result = await client.api.custom.route.get();

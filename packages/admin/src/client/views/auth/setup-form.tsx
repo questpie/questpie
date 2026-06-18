@@ -48,7 +48,7 @@ type SetupFormProps = {
  *   const [error, setError] = useState<string | null>(null)
  *
  *   const handleSetup = async (values: SetupFormValues) => {
- *     const result = await client.routes.createFirstAdmin({
+ *     const result = await client.routes.createFirstAdmin.post({
  *       email: values.email,
  *       password: values.password,
  *       name: values.name,
