@@ -1235,6 +1235,34 @@ export default seed({
 });
 ```
 
+Normal `seed({...})` handlers run inside one transaction; failed database writes
+and the seed tracking row roll back together. For resumable work, use
+`seed.steps({...})` and put mutating work inside `step(name, fn)`. The callback
+receives a transaction-bound seed context. Completed steps are cached in
+`questpie_seed_steps`, skipped on re-run, and cleared by `questpie seed --force`
+/ `questpie seed:reset`. Step seeds do not have one seed-wide rollback boundary;
+writes outside `step(...)` are not checkpointed and are not rolled back if later
+work fails.
+
+```ts
+import { seed } from "questpie/services";
+export default seed.steps({
+	id: "seed-demo-categories",
+	category: "dev",
+	run: async ({ step }) => {
+		const category = await step("prepare-category", async () => ({
+			name: "Demo",
+		}));
+
+		await step("create-demo-category", async ({ collections }) => {
+			await collections.categories.create({
+				name: category.name,
+			});
+		});
+	},
+});
+```
+
 ### CLI Commands
 
 ```bash

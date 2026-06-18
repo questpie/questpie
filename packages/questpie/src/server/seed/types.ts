@@ -9,6 +9,14 @@ import type { RequestContext } from "#questpie/server/config/context.js";
  */
 export type SeedCategory = "required" | "dev" | "test";
 
+export type SeedJsonValue =
+	| null
+	| boolean
+	| number
+	| string
+	| SeedJsonValue[]
+	| { [key: string]: SeedJsonValue };
+
 /**
  * Context passed to seed run/undo functions.
  *
@@ -55,16 +63,23 @@ export type SeedContext = AppContext & {
 	}): Promise<RequestContext>;
 };
 
-/**
- * Seed definition — a unit of seed data.
- *
- * Seeds are different from migrations:
- * - They get full app context (not just raw DB)
- * - They have categories for selective execution
- * - They can optionally have an undo function
- * - They should be idempotent by default
- */
-export type Seed = {
+export type SeedStepContext = SeedContext & {
+	/**
+	 * Run one checkpointed seed step.
+	 *
+	 * Completed steps are skipped on re-run and return their cached JSON result.
+	 * Use `seed.steps()` when a seed needs this helper; normal `seed()` runs stay
+	 * transactional and do not expose `step()`. The callback receives a context
+	 * bound to the step transaction; callbacks that do not need it can omit the
+	 * parameter.
+	 */
+	step<T extends SeedJsonValue | void>(
+		name: string,
+		fn: (ctx: SeedContext) => T | Promise<T>,
+	): Promise<T>;
+};
+
+export type BaseSeed = {
 	/** Unique seed ID (e.g., "adminUser", "demoData") */
 	id: string;
 
@@ -73,13 +88,6 @@ export type Seed = {
 
 	/** Seed category — determines when this seed should run */
 	category: SeedCategory;
-
-	/**
-	 * Run the seed — populate data.
-	 * Should be idempotent (safe to re-run).
-	 * For "required" seeds, check if data exists before creating.
-	 */
-	run: (ctx: SeedContext) => Promise<void>;
 
 	/**
 	 * Optional: Undo the seed — remove seeded data.
@@ -93,6 +101,46 @@ export type Seed = {
 	 */
 	dependsOn?: string[];
 };
+
+/**
+ * Seed definition — a unit of seed data.
+ *
+ * Seeds are different from migrations:
+ * - They get full app context (not just raw DB)
+ * - They have categories for selective execution
+ * - They can optionally have an undo function
+ * - They should be idempotent by default
+ */
+export type SimpleSeed = BaseSeed & {
+	"~kind"?: "simple";
+	/**
+	 * Run the seed — populate data.
+	 * Normal seeds run inside one transaction and roll back fully on failure.
+	 */
+	run: (ctx: SeedContext) => Promise<void>;
+};
+
+export type StepSeed = BaseSeed & {
+	"~kind": "steps";
+	/**
+	 * Run a checkpointed seed. Use `ctx.step(name, fn)` for mutating work that
+	 * should be skipped on re-run after a partial failure.
+	 */
+	run: (ctx: SeedStepContext) => Promise<void>;
+};
+
+export type Seed = SimpleSeed | StepSeed;
+
+export type StepSeedInput = Omit<StepSeed, "~kind">;
+
+export type SeedFactory = {
+	(def: SimpleSeed): SimpleSeed;
+	steps(def: StepSeedInput): StepSeed;
+};
+
+export function isStepSeed(seed: Seed): seed is StepSeed {
+	return seed["~kind"] === "steps";
+}
 
 /**
  * Seed record tracked in the database

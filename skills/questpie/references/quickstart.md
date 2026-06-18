@@ -496,7 +496,7 @@ export default route()
 | `bunx questpie seed`             | Run pending seeds                           |
 | `bunx questpie seed:undo`        | Undo executed seeds                         |
 | `bunx questpie seed:status`      | Show seed status                            |
-| `bunx questpie seed:reset`       | Reset seed tracking (does not undo data)    |
+| `bunx questpie seed:reset`       | Reset seed tracking/checkpoints (does not undo data) |
 | `bun run dev`                    | Start development server                    |
 
 ---

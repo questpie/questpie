@@ -1,4 +1,9 @@
-import type { Seed } from "./types.js";
+import type {
+	SeedFactory,
+	SimpleSeed,
+	StepSeed,
+	StepSeedInput,
+} from "./types.js";
 
 /**
  * Define a seed using the file-convention format.
@@ -30,6 +35,15 @@ import type { Seed } from "./types.js";
  * });
  * ```
  */
-export function seed(def: Seed): Seed {
+function defineSeed(def: SimpleSeed): SimpleSeed {
 	return def;
 }
+
+defineSeed.steps = function steps(def: StepSeedInput): StepSeed {
+	return {
+		...def,
+		"~kind": "steps",
+	};
+};
+
+export const seed = defineSeed as SeedFactory;

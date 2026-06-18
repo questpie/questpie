@@ -37,7 +37,7 @@ Reference these guidelines when:
 | `service()`                    | `"questpie"`                 | No             |
 | `email({...})`                 | `"questpie"`                 | No             |
 | `migration({...})`             | `"questpie"`                 | No             |
-| `seed({...})`                  | `"questpie"`                 | No             |
+| `seed({...})` / `seed.steps({...})` | `"questpie"`            | No             |
 | `runtimeConfig({...})`         | `"questpie/app"`             | No             |
 | `appConfig({...})`             | `"questpie/app"`             | No             |
 | `authConfig({...})`            | `"questpie/app"`             | No             |
