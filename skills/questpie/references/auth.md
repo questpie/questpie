@@ -38,7 +38,7 @@ export default authConfig({
 });
 ```
 
-Codegen discovers this file automatically. No manual registration needed. Your config is merged over the `starterModule` auth config (plugins are deduped by ID), so you only need to declare the keys you want to change.
+Codegen discovers this file automatically. No manual registration needed. Your config is merged over every module's `config.auth`, including nested modules. The starter module contributes the default `admin()` and `bearer()` Better Auth plugins (plugins are deduped by ID), so you only need to declare the keys you want to change. In admin-enabled apps, keep `admin()` and `bearer()` explicit in app config as well so the auth contract is visible in the project.
 
 ## Configuration Options
 
@@ -77,6 +77,14 @@ await authClient.signIn.social({ provider: "google", callbackURL: "/" });
 ```
 
 ## Session Access
+
+### Generated Session Contract
+
+`session.user.role` must be typed by the generated app. The role comes from Better Auth's `admin()` plugin, which is contributed by the starter module and folded through nested modules such as `adminModule -> starterModule`. App-local `config/auth.ts` is merged on top and can add more plugin or `additionalFields` session shape.
+
+After changing `modules.ts` or `config/auth.ts`, run `questpie generate`. Then route handlers, hooks, services, access rules, `AppSession`, `AppSessionUser`, and `createAdminAuthClient<AppConfig>()` all see the same merged auth graph.
+
+Never write `(session?.user as any)?.role`. If role is missing from the type, fix the module/auth/codegen chain.
 
 ### In Routes
 
@@ -131,8 +139,8 @@ export default route()
   create: ({ session }) => !!session,
 
   // Only admins can update/delete
-  update: ({ session }) => (session?.user as any)?.role === "admin",
-  delete: ({ session }) => (session?.user as any)?.role === "admin",
+  update: ({ session }) => session?.user.role === "admin",
+  delete: ({ session }) => session?.user.role === "admin",
 })
 ```
 

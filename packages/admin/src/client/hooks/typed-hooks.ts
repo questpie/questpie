@@ -7,7 +7,7 @@
  * @example
  * ```ts
  * // In your admin setup file:
- * import type { App } from "./server/app";
+ * import type { App } from "#questpie";
  * import { createTypedHooks } from '@questpie/admin/client';
  *
  * export const {
@@ -31,11 +31,15 @@ import {
 	useQueryClient,
 } from "@tanstack/react-query";
 import type { QuestpieApp } from "questpie/client";
-import type { QuestpieQueryOptionsProxy } from "@questpie/tanstack-query";
 
+import type { QuestpieQueryOptionsProxy } from "@questpie/tanstack-query";
 import { createQuestpieQueryOptions } from "@questpie/tanstack-query";
 
-import { selectContentLocale, useAdminStore, useScopedLocale } from "../runtime";
+import {
+	selectContentLocale,
+	useAdminStore,
+	useScopedLocale,
+} from "../runtime";
 import {
 	type CollectionQueryKey,
 	getCollectionQueryApi,
@@ -55,8 +59,8 @@ type CollectionNames<TApp extends QuestpieApp> = CollectionQueryKey<TApp>;
 /**
  * Extract global names from a QuestpieApp config
  */
-type GlobalNames<TApp extends QuestpieApp> = keyof QuestpieQueryOptionsProxy<TApp>["globals"] &
-	string;
+type GlobalNames<TApp extends QuestpieApp> =
+	keyof QuestpieQueryOptionsProxy<TApp>["globals"] & string;
 
 // ============================================================================
 // Typed Hooks Interface
@@ -191,7 +195,7 @@ export interface TypedHooks<TApp extends QuestpieApp> {
  *
  * @example
  * ```ts
- * import type { App } from "./server/app";
+ * import type { App } from "#questpie";
  * import { createTypedHooks } from '@questpie/admin/client';
  *
  * // Create typed hooks
@@ -332,7 +336,10 @@ export function createTypedHooks<TApp extends QuestpieApp>(): TypedHooks<TApp> {
 			locale: contentLocale,
 		});
 
-		const baseOptions = getCollectionQueryApi(queryOpts, collection as CollectionQueryKey<TApp>).create();
+		const baseOptions = getCollectionQueryApi(
+			queryOpts,
+			collection as CollectionQueryKey<TApp>,
+		).create();
 		const listQueryKey = queryOpts.key([
 			"collections",
 			collection as string,
@@ -374,7 +381,10 @@ export function createTypedHooks<TApp extends QuestpieApp>(): TypedHooks<TApp> {
 			locale: contentLocale,
 		});
 
-		const baseOptions = getCollectionQueryApi(queryOpts, collection as CollectionQueryKey<TApp>).update();
+		const baseOptions = getCollectionQueryApi(
+			queryOpts,
+			collection as CollectionQueryKey<TApp>,
+		).update();
 		const listQueryKey = queryOpts.key([
 			"collections",
 			collection as string,
@@ -423,7 +433,10 @@ export function createTypedHooks<TApp extends QuestpieApp>(): TypedHooks<TApp> {
 			locale: contentLocale,
 		});
 
-		const baseOptions = getCollectionQueryApi(queryOpts, collection as CollectionQueryKey<TApp>).delete();
+		const baseOptions = getCollectionQueryApi(
+			queryOpts,
+			collection as CollectionQueryKey<TApp>,
+		).delete();
 		const listQueryKey = queryOpts.key([
 			"collections",
 			collection as string,
@@ -472,7 +485,10 @@ export function createTypedHooks<TApp extends QuestpieApp>(): TypedHooks<TApp> {
 			locale: contentLocale,
 		});
 
-		const baseOptions = getCollectionQueryApi(queryOpts, collection as CollectionQueryKey<TApp>).restore();
+		const baseOptions = getCollectionQueryApi(
+			queryOpts,
+			collection as CollectionQueryKey<TApp>,
+		).restore();
 		const listQueryKey = queryOpts.key([
 			"collections",
 			collection as string,
@@ -523,7 +539,10 @@ export function createTypedHooks<TApp extends QuestpieApp>(): TypedHooks<TApp> {
 		});
 
 		const baseQuery = collection
-			? getCollectionQueryApi(queryOpts, collection as CollectionQueryKey<TApp>).findVersions({
+			? getCollectionQueryApi(
+					queryOpts,
+					collection as CollectionQueryKey<TApp>,
+				).findVersions({
 					id,
 					...(options?.limit !== undefined ? { limit: options.limit } : {}),
 					...(options?.offset !== undefined ? { offset: options.offset } : {}),
@@ -554,8 +573,10 @@ export function createTypedHooks<TApp extends QuestpieApp>(): TypedHooks<TApp> {
 			locale: contentLocale,
 		});
 
-		const baseOptions =
-			getCollectionQueryApi(queryOpts, collection as CollectionQueryKey<TApp>).revertToVersion();
+		const baseOptions = getCollectionQueryApi(
+			queryOpts,
+			collection as CollectionQueryKey<TApp>,
+		).revertToVersion();
 		const listQueryKey = queryOpts.key([
 			"collections",
 			collection as string,

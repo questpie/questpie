@@ -139,7 +139,9 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 		// it before the runtime config guarantees env validation fails boot before
 		// runtimeConfig() resolution, adapters, auth, and db init.
 		if (envFile) {
-			buf.push("// ── Env (validated before everything else) ─────────────────");
+			buf.push(
+				"// ── Env (validated before everything else) ─────────────────",
+			);
 			buf.push(importStatement(envFile));
 			buf.push("");
 		}
@@ -164,7 +166,9 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 		}
 
 		if (coreSingles.core.length > 0) {
-			buf.push("// ── Core Singles ───────────────────────────────────────────");
+			buf.push(
+				"// ── Core Singles ───────────────────────────────────────────",
+			);
 			for (const file of coreSingles.core) {
 				buf.push(importStatement(file));
 			}
@@ -172,7 +176,9 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 		}
 
 		if (coreSingles.plugin.length > 0) {
-			buf.push("// ── Plugin Singles ─────────────────────────────────────────");
+			buf.push(
+				"// ── Plugin Singles ─────────────────────────────────────────",
+			);
 			for (const file of coreSingles.plugin) {
 				buf.push(importStatement(file));
 			}
@@ -218,13 +224,17 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 
 	// Flags that gate which cross-layer named types L1 actually emits → so L2/L3
 	// import EXACTLY what exists (a stale name = TS2305 under bundler resolution).
-	const hasMessagesCat =
-		(discovered.categories.get("messages")?.size ?? 0) > 0;
+	const hasMessagesCat = (discovered.categories.get("messages")?.size ?? 0) > 0;
 	const hasEmailsCat = (discovered.categories.get("emails")?.size ?? 0) > 0;
 	const hasServicesCat = discovered.categories.has("services");
 	// `_ModuleCollections` feeds L2's `_JobHandlerCollections` literal (the module
 	// half of the job-handler collections map).
-	const l1ToL2 = ["AppCollections", "AppGlobals", "AppJobs", "_ModuleCollections"];
+	const l1ToL2 = [
+		"AppCollections",
+		"AppGlobals",
+		"AppJobs",
+		"_ModuleCollections",
+	];
 	if (hasServicesCat) {
 		l1ToL2.push(
 			"_AppDefaultServices",
@@ -311,9 +321,11 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 	// CollectionDoc/GlobalDoc/AppConfig/createContext read these from L1; the
 	// runtime `as _AppQuestpie` cast + AppSession re-exports read from L2.
 	const l3FromL1 = ["AppCollections", "AppGlobals", "AppRoutes"];
-	l3.push(`import type { ${l3FromL1.join(", ")} } from "${layerImport(L1_FILE)}";`);
 	l3.push(
-		`import type { _AppQuestpie, AppSession, AppSessionUser } from "${layerImport(L2_FILE)}";`,
+		`import type { ${l3FromL1.join(", ")} } from "${layerImport(L1_FILE)}";`,
+	);
+	l3.push(
+		`import type { _AppQuestpie, AppAuthConfig, AppSession, AppSessionUser } from "${layerImport(L2_FILE)}";`,
 	);
 	l3.push("");
 	pushValueImports(l3);
@@ -380,7 +392,13 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 	// the single mechanism used for the `config.auth` carrier below AND for the
 	// session-dedicated auth config.
 	lines.push(
-		"type _MPConfigSub<A extends readonly any[], K extends string> = A extends readonly [infer H, ...infer T extends readonly any[]] ? (H extends { config: infer C } ? (C extends Record<K, infer V> ? V : {}) : {}) & _MPConfigSub<T, K> : {};",
+		"type _MPSubModules<M> = M extends { modules: infer S extends readonly any[] } ? S : readonly [];",
+	);
+	lines.push(
+		"type _MPConfigValue<M, K extends string> = M extends { config: infer C } ? (C extends Record<K, infer V> ? V : {}) : {};",
+	);
+	lines.push(
+		"type _MPConfigSub<A extends readonly any[], K extends string> = A extends readonly [infer H, ...infer T extends readonly any[]] ? _MPConfigSub<_MPSubModules<H>, K> & _MPConfigValue<H, K> & _MPConfigSub<T, K> : {};",
 	);
 
 	// ── config.app extensions — USER-DERIVED, acyclic ────────────────────
@@ -462,12 +480,16 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 		if (!shouldExtract) continue;
 
 		const moduleTypeName = deriveModuleTypeName(catName);
-		lines.push(`export type ${moduleTypeName} = ${moduleCategoryType(catName)};`);
+		lines.push(
+			`export type ${moduleTypeName} = ${moduleCategoryType(catName)};`,
+		);
 	}
 	// Also extract spread keys (sidebar, dashboard, etc.) from modules
 	for (const [stateKey] of discovered.spreads) {
 		const moduleTypeName = deriveModuleTypeName(stateKey);
-		lines.push(`export type ${moduleTypeName} = ${moduleCategoryType(stateKey)};`);
+		lines.push(
+			`export type ${moduleTypeName} = ${moduleCategoryType(stateKey)};`,
+		);
 	}
 
 	// ── Registry categories — extracted from modules (recursive fold) ──────────
@@ -916,8 +938,12 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 			lines.push("\tservices: _AppDefaultServices;");
 		}
 		lines.push("};");
-		lines.push("type _AppInfraContext = _AppInfraRecord & _AppCustomServiceNamespaces;");
-		lines.push("type _AppCoreContext = _AppContextExtensions & _AppInfraContext;");
+		lines.push(
+			"type _AppInfraContext = _AppInfraRecord & _AppCustomServiceNamespaces;",
+		);
+		lines.push(
+			"type _AppCoreContext = _AppContextExtensions & _AppInfraContext;",
+		);
 		if (hasServices) {
 			// ServiceCreateContext base — DECOUPLED from the service folds. The OUTER
 			// AppContext keeps `services: _AppDefaultServices` + `&
@@ -955,9 +981,7 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 			keysTypeName: string;
 		}> = [];
 		{
-			l0.push(
-				"// ── Module entity-name key sets (distributive `keyof`) ─────",
-			);
+			l0.push("// ── Module entity-name key sets (distributive `keyof`) ─────");
 			// Generic over every keyed-entity category (see isKeyedEntityCat) —
 			// no hardcoded category-name list. One alias + one interface per
 			// category the app discovered. extractFromModules:false categories
@@ -1091,7 +1115,9 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 				"\t\tinterface ServiceCreateContext extends _AppContextExtensions, _ServiceCreateInfra {}",
 			);
 		} else {
-			lines.push("\t\tinterface ServiceCreateContext extends _AppCoreContext {}");
+			lines.push(
+				"\t\tinterface ServiceCreateContext extends _AppCoreContext {}",
+			);
 		}
 		lines.push(
 			"\t\t// Names-only marker — the `ServiceCreateContext` fallback conditional",
@@ -1213,6 +1239,8 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 	l2.push(
 		"/** Resolved auth session for this app (`{ user, session } | null`). */",
 	);
+	l2.push("export type AppAuthConfig = _AppAuthConfig;");
+	l2.push("");
 	l2.push("export type AppSession = _AppSession;");
 	l2.push("");
 	l2.push("/** Authenticated user shape from the app session. */");
@@ -1263,9 +1291,15 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 		" * Access-rule ctx for shared helpers. `K` narrows `data` to that collection's row.",
 	);
 	lines.push(" *");
-	lines.push(" * CYCLE RULE: import these only from files NOT imported by a collection");
-	lines.push(" * (routes, services, jobs, scripts). Helpers imported by collections take");
-	lines.push(' * the package-level `AccessContext` from "questpie" instead — see the');
+	lines.push(
+		" * CYCLE RULE: import these only from files NOT imported by a collection",
+	);
+	lines.push(
+		" * (routes, services, jobs, scripts). Helpers imported by collections take",
+	);
+	lines.push(
+		' * the package-level `AccessContext` from "questpie" instead — see the',
+	);
 	lines.push(" * type-inference reference.");
 	lines.push(" *");
 	lines.push(" * @example");
@@ -1320,9 +1354,7 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 	lines.push("\tglobals: AppGlobals;");
 	lines.push("\troutes: AppRoutes;");
 	lines.push('\tstorage: (typeof _runtime)["storage"];');
-	if (authFile) {
-		lines.push(`\tauth: typeof ${authFile.varName};`);
-	}
+	lines.push("\tauth: AppAuthConfig;");
 	lines.push("};");
 	lines.push("");
 

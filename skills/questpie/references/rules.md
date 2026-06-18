@@ -1,6 +1,7 @@
 ---
 name: questpie-core-rules
-description: QUESTPIE access control hooks validation lifecycle beforeValidate beforeChange afterChange beforeDelete afterDelete access rules field-level row-level secure-by-default Zod schema refinements collection global
+description:
+  QUESTPIE access control hooks validation lifecycle beforeValidate beforeChange afterChange beforeDelete afterDelete access rules field-level row-level secure-by-default Zod schema refinements collection global
   - questpie-core
 ---
 
@@ -35,7 +36,7 @@ A deny-all `defaultAccess` (`{ read: false, create: false, update: false, delete
 ### Collection Access
 
 ```ts
-// collections/posts.collection.ts
+// collections/posts.ts
 import { collection } from "#questpie/factories";
 
 export default collection("posts")
@@ -54,15 +55,15 @@ export default collection("posts")
 
 ### Operations
 
-| Operation    | When checked                                                     |
-| ------------ | ---------------------------------------------------------------- |
-| `read`       | Listing and fetching records                                      |
-| `create`     | Creating new records                                              |
-| `update`     | Updating existing records                                         |
-| `delete`     | Deleting records                                                  |
-| `transition` | Workflow stage transitions (falls back to `update`)               |
-| `serve`      | Upload file bytes by key (`GET /:collection/files/:key`)          |
-| `introspect` | Schema/meta routes (`GET /:collection/{schema,meta}`)             |
+| Operation    | When checked                                             |
+| ------------ | -------------------------------------------------------- |
+| `read`       | Listing and fetching records                             |
+| `create`     | Creating new records                                     |
+| `update`     | Updating existing records                                |
+| `delete`     | Deleting records                                         |
+| `transition` | Workflow stage transitions (falls back to `update`)      |
+| `serve`      | Upload file bytes by key (`GET /:collection/files/:key`) |
+| `introspect` | Schema/meta routes (`GET /:collection/{schema,meta}`)    |
 
 `serve` and `introspect` resolve through their own rule (not `read`): `serve` falls back to explicit collection `read` then `defaultAccess.serve`; `introspect` is visible iff at least one CRUD operation is allowed for the current user. `f.upload()` fields populate through the PARENT row's read decision, so a publicly readable gallery shows its assets (with `url`) even when the assets collection itself is unlistable.
 
@@ -71,7 +72,7 @@ export default collection("posts")
 Globals support `read` and `update` only (singletons have no create/delete):
 
 ```ts
-// globals/site-settings.global.ts
+// globals/site-settings.ts
 import { global } from "#questpie/factories";
 
 export default global("siteSettings")
@@ -104,15 +105,15 @@ Return a where clause object instead of a boolean to restrict operations to matc
 
 Access functions receive `AppContext` with these properties:
 
-| Property      | Description                                                  |
-| ------------- | ------------------------------------------------------------ |
-| `session`     | Current auth session (null if unauthed)                      |
-| `db`          | Database instance                                            |
-| `collections` | Typed collection API                                         |
-| `request`     | Current HTTP `Request` (headers, URL)                        |
-| `data`        | The existing row, typed, non-optional in `update`/`delete` rules |
+| Property      | Description                                                         |
+| ------------- | ------------------------------------------------------------------- |
+| `session`     | Current auth session (null if unauthed)                             |
+| `db`          | Database instance                                                   |
+| `collections` | Typed collection API                                                |
+| `request`     | Current HTTP `Request` (headers, URL)                               |
+| `data`        | The existing row, typed, non-optional in `update`/`delete` rules    |
 | `input`       | Typed insert shape in `create` rules; typed patch in `update` rules |
-| _extensions_  | Keys returned by `appConfig({ context })`, flat (see below)  |
+| _extensions_  | Keys returned by `appConfig({ context })`, flat (see below)         |
 
 `data`/`input` are typed **per operation** by the builder, no casts, no annotations inside the defining collection. For shared rule helpers and every other "I need type X" case, see `references/type-inference.md`.
 
@@ -219,7 +220,7 @@ beforeDelete --> Database Delete --> afterDelete
 ### Defining Hooks
 
 ```ts
-// collections/appointments.collection.ts
+// collections/appointments.ts
 import { collection } from "#questpie/factories";
 
 export default collection("appointments")
@@ -253,7 +254,13 @@ export default collection("appointments")
 			}
 		},
 
-		afterChange: async ({ data, operation, original, queue, onAfterCommit }) => {
+		afterChange: async ({
+			data,
+			operation,
+			original,
+			queue,
+			onAfterCommit,
+		}) => {
 			// Side effects run AFTER the tx commits, never publish/email directly
 			// inside afterChange (the write may still roll back).
 			if (operation === "create") {
@@ -294,20 +301,20 @@ Each hook accepts a single function **or an array of functions** (executed in or
 
 ### Hook Context Properties
 
-| Property        | Available in                                                  | Description                                                 |
-| --------------- | ------------------------------------------------------------- | ----------------------------------------------------------- |
+| Property        | Available in                                                         | Description                                                                  |
+| --------------- | -------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
 | `data`          | beforeValidate, beforeChange, afterChange, beforeDelete, afterDelete | Record being written (delete hooks: the record being deleted, use `data.id`) |
-| `operation`     | beforeChange, afterChange                                     | `"create"` or `"update"`                                    |
-| `original`      | afterChange (update only)                                     | Previous record state                                       |
-| `onAfterCommit` | All hooks                                                     | Queue a side effect (`(cb) => void`) to run after the tx commits |
-| `collections`   | All hooks                                                     | Typed collection API                                        |
-| `globals`       | All hooks                                                     | Typed globals API                                           |
-| `queue`         | All hooks                                                     | Queue client for publishing jobs                            |
-| `email`         | All hooks                                                     | Email service                                               |
-| `db`            | All hooks                                                     | Database instance                                           |
-| `session`       | All hooks                                                     | Current auth session                                        |
-| `services`      | All hooks                                                     | Custom services from `services/`                            |
-| _extensions_    | All hooks                                                     | `appConfig({ context })` result, flat (HTTP requests only)  |
+| `operation`     | beforeChange, afterChange                                            | `"create"` or `"update"`                                                     |
+| `original`      | afterChange (update only)                                            | Previous record state                                                        |
+| `onAfterCommit` | All hooks                                                            | Queue a side effect (`(cb) => void`) to run after the tx commits             |
+| `collections`   | All hooks                                                            | Typed collection API                                                         |
+| `globals`       | All hooks                                                            | Typed globals API                                                            |
+| `queue`         | All hooks                                                            | Queue client for publishing jobs                                             |
+| `email`         | All hooks                                                            | Email service                                                                |
+| `db`            | All hooks                                                            | Database instance                                                            |
+| `session`       | All hooks                                                            | Current auth session                                                         |
+| `services`      | All hooks                                                            | Custom services from `services/`                                             |
+| _extensions_    | All hooks                                                            | `appConfig({ context })` result, flat (HTTP requests only)                   |
 
 Derived request context also reaches hooks and any nested code via `getContext<App>()`, including CRUD calls a hook triggers (AsyncLocalStorage carries it):
 

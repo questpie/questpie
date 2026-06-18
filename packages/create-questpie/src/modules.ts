@@ -55,7 +55,7 @@ export const modules: ModuleDefinition[] = [
 		group: "Core",
 		defaultFor: ["tanstack-start", "next"],
 		requiresRender: true,
-		deps: { "@questpie/admin": "latest" },
+		deps: { "@questpie/admin": "latest", "better-auth": "^1.6.11" },
 		serverImport: "@questpie/admin/modules/admin",
 		serverSymbol: "adminModule",
 		clientImport: "@questpie/admin/client/modules/admin",

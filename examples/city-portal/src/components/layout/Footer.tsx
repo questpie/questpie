@@ -6,7 +6,10 @@
 
 import { Link } from "@tanstack/react-router";
 
-import type { FooterLink, SocialLink } from "@/questpie/server/globals";
+import type {
+	FooterLink,
+	SocialLink,
+} from "@/questpie/server/globals/site-settings";
 
 interface FooterProps {
 	cityName: string;

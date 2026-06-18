@@ -38,9 +38,9 @@ Reference these guidelines when:
 | `email({...})`                 | `"questpie"`                 | No             |
 | `migration({...})`             | `"questpie"`                 | No             |
 | `seed({...})`                  | `"questpie"`                 | No             |
-| `runtimeConfig({...})`         | `"questpie"`                 | No             |
-| `appConfig({...})`             | `"questpie"`                 | No             |
-| `authConfig({...})`            | `"questpie"`                 | No             |
+| `runtimeConfig({...})`         | `"questpie/app"`             | No             |
+| `appConfig({...})`             | `"questpie/app"`             | No             |
+| `authConfig({...})`            | `"questpie/app"`             | No             |
 | `env({...})`                   | `"questpie/env"`             | No             |
 | `clientEnv({...})`             | `"questpie/env"`             | No             |
 | `createClient<AppConfig>()`    | `"questpie/client"`          | No             |
@@ -70,6 +70,34 @@ The module reads the resolved config at runtime from `app.state.config.observabi
 ## Admin Auth Contract - Critical
 
 `adminModule` includes the starter auth model and owns the canonical Better Auth `user` collection shape used by admin setup and login guards. That contract includes `user.role` with at least `admin` and `user` values. Do not replace `collection("user")` from scratch in apps that use `adminModule`; merge `starterModule.collections.user` and extend it when custom user fields or layout are needed.
+
+Auth config is merged through the entire module tree, including nested modules. `adminModule` depends on `starterModule`, and starter contributes Better Auth `admin()` / `bearer()` plugins through `config.auth`; app `config/auth.ts` is merged on top. After changing `modules.ts` or `config/auth.ts`, run `questpie generate`. `session.user.role` must be typed in routes, hooks, services, and access rules. Never fix a missing role with `(session.user as any)`, fix modules/auth/codegen.
+
+For admin-enabled apps, keep the auth plugins explicit in app config too:
+
+```ts title="config/auth.ts"
+import { admin, bearer } from "better-auth/plugins";
+import { authConfig } from "questpie/app";
+
+export default authConfig({
+	plugins: [admin(), bearer()],
+	emailAndPassword: { enabled: true, requireEmailVerification: false },
+});
+```
+
+## Generated App Surface - Critical
+
+After `questpie generate`, the generated server files are the source of truth for what exists in the app. Inspect them before inventing imports, names, fields, or casts:
+
+| Need to know                         | Ground truth                                                                 |
+| ------------------------------------ | ---------------------------------------------------------------------------- |
+| Collections, globals, routes, services | `src/questpie/server/.generated/entities.gen.ts` and `AppCollections`, `AppGlobals`, `AppRoutes`, `AppServices` from `#questpie` |
+| Relation target keys                 | `src/questpie/server/.generated/names.gen.ts`                                |
+| Handler, hook, route, block context  | `src/questpie/server/.generated/context.gen.ts` and `Questpie.AppContext`    |
+| Session and auth user shape          | `AppSession`, `AppSessionUser`, and `AppConfig.auth` from `#questpie`        |
+| Enabled field and builder methods    | `src/questpie/server/.generated/factories.ts`                                |
+
+Files starting with `_`, `index.ts`, declaration files, tests, and specs are intentionally invisible to codegen. If something is missing from the generated surface, fix discovery, modules, or config and rerun `questpie generate`; do not add `any`, re-export barrels, or duplicate registries at the call site.
 
 ## Reference Topics
 
@@ -228,9 +256,10 @@ await queue.sendReminder.publish({ userId: "abc" });
 | Severity | Mistake                                                | Fix                                                                                   |
 | -------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------- |
 | CRITICAL | Files in wrong directory                               | Collections in `collections/`, routes in `routes/`, etc.                              |
-| CRITICAL | Convention file has no export                          | Codegen needs one export, `export default` or a named `export const`/`function` both discovered; a file with no export is skipped. Collection/global keys derive from the filename, not the export name |
+| CRITICAL | Convention file has no export                          | Codegen needs one export, `export default` or a named `export const`/`function` both discovered; a file with no export is skipped. Factory categories key from the factory string (`collection("blog-posts")` -> `blogPosts`); non-factory categories key from the filename |
 | CRITICAL | Importing route/job/service from `#questpie/factories` | Use `"questpie"`, only collection/global/block/adminConfig use `#questpie/factories` |
 | CRITICAL | Redefining a module collection (e.g. starter `user`) from scratch | `.merge(starterModule.collections.user)` then add fields, see Extend pattern        |
+| CRITICAL | Casting `session.user` to `any` for admin role checks | Use `session?.user.role`; if it is not typed, fix `modules.ts`, `config/auth.ts`, and regenerated output |
 | HIGH     | Forgetting `questpie generate` after adding files      | Re-run codegen on any file add/remove in convention dirs                              |
 | HIGH     | Job handler uses `input` instead of `payload`          | Jobs destructure `{ payload }`, routes destructure `{ input }`                        |
 | HIGH     | `queue.send("name", data)`                             | Use `queue.jobName.publish(data)`                                                     |

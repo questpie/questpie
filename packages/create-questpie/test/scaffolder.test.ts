@@ -77,6 +77,7 @@ describe("scaffold", () => {
 			"questpie migrate -c questpie.config.ts",
 		);
 		expect(packageJson.dependencies["@electric-sql/pglite"]).toBeDefined();
+		expect(packageJson.dependencies["better-auth"]).toBe("^1.6.11");
 		expect(packageJson.dependencies["pg-boss"]).toBeDefined();
 		expect(packageJson.dependencies.nodemailer).toBeDefined();
 		expect(packageJson.devDependencies["@tanstack/router-cli"]).toBeDefined();
@@ -191,6 +192,19 @@ describe("scaffold", () => {
 			].join("\n"),
 		);
 
+		expect(await read("questpie.config.ts")).toBe(
+			[
+				`/**`,
+				` * Questpie CLI Configuration`,
+				` *`,
+				` * Re-exports the server config for CLI commands (migrate, generate, seed).`,
+				` * The CLI auto-resolves .generated/index.ts for the app instance.`,
+				` */`,
+				`export { default } from "./src/questpie/server/questpie.config";`,
+				``,
+			].join("\n"),
+		);
+
 		expect(await read("src/questpie/server/questpie.config.ts")).toBe(
 			[
 				`/**`,
@@ -215,6 +229,25 @@ describe("scaffold", () => {
 				`\t},`,
 				`\tqueue: {`,
 				`\t\tadapter: pgBossAdapter({ connectionString: env.DATABASE_URL }),`,
+				`\t},`,
+				`\tcli: {`,
+				`\t\tmigrations: { directory: "./src/migrations" },`,
+				`\t},`,
+				`});`,
+				``,
+			].join("\n"),
+		);
+
+		expect(await read("src/questpie/server/config/auth.ts")).toBe(
+			[
+				`import { admin, bearer } from "better-auth/plugins";`,
+				`import { authConfig } from "questpie/app";`,
+				``,
+				`export default authConfig({`,
+				`\tplugins: [admin(), bearer()],`,
+				`\temailAndPassword: {`,
+				`\t\tenabled: true,`,
+				`\t\trequireEmailVerification: false,`,
 				`\t},`,
 				`});`,
 				``,

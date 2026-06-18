@@ -85,7 +85,7 @@ A QuestPie project follows a **convention-over-configuration** file layout. The 
 
 ```
 <project>/
-  questpie.config.ts                ← CLI entry (wraps app + cli config)
+  questpie.config.ts                ← CLI entry (re-exports server runtime config)
   .env                              ← created from .env.example by create-questpie
   src/
     lib/
@@ -96,7 +96,6 @@ A QuestPie project follows a **convention-over-configuration** file layout. The 
       server/                       ← Server root (all data + behavior)
         questpie.config.ts          ← runtimeConfig({ db, app, storage, ... })
         modules.ts                  ← export default [adminModule, ...] as const
-        app.ts                      ← re-export of .generated/index (stable import)
         config/
           auth.ts                   ← authConfig({...})       (from "questpie/app")
           app.ts                    ← appConfig({...})        (from "questpie/app", optional)
@@ -143,25 +142,45 @@ queue `pg-boss` / `bullmq` / `none`, email `console` / `smtp` / `resend` /
 ### Key Rules
 
 - **Files starting with `_`** are private/utility, skipped by discovery.
-- **`index.ts`** files are always ignored by the scanner (use them as barrel re-exports if needed).
+- **`index.ts`** files are always ignored by the scanner for compatibility. Do not add barrel re-exports in convention directories; define entities directly in named files such as `posts.ts` or `site-settings.ts`.
 - **File names become keys**: `site-settings.ts` → `siteSettings` (kebab → camelCase). Underscores are preserved (`my_table.ts` → `my_table`) for PostgreSQL naming.
 - **`features/`** mirrors the same directory structure, entities from both flat and feature layouts are merged.
 
+### Feature-First Layout
+
+`features/<feature>/<category>/...` is an organizational layout, not a namespace.
+Codegen scans both `collections/posts.ts` and
+`features/blog/collections/articles.ts` into the same `collections` map.
+
+Version guard: this is a `questpie@3.0.2+` file-convention codegen feature. Do
+not claim it works for 1.x / 2.x projects unless they have been migrated to the
+v3 codegen line.
+
+Rules:
+
+- Feature names do not prefix keys: `features/blog/collections/articles.ts` becomes `app.collections.articles`.
+- Keys must be unique per category across flat and feature layouts. Duplicates are codegen errors.
+- Recursive route keys ignore the feature prefix: `features/blog/routes/webhooks/stripe.post.ts` becomes `webhooks/stripe:POST`.
+- Core supported category dirs: `collections`, `globals`, `jobs`, `routes`, `functions`, `messages`, `services`, `emails`, `migrations`, `seeds`, `fields`.
+- Plugin category dirs and directory patterns use the same rule, for example `features/admin/blocks/hero.ts` when the admin plugin is enabled.
+- Single-file config patterns stay root-level unless a plugin explicitly uses `mergeStrategy: "spread"`. Do not put `config/app.ts`, `config/auth.ts`, `config/admin.ts`, `modules.ts`, `env.ts`, or `fields.ts` under `features/`.
+- `features/_internal`, `_helpers.ts`, `index.ts`, tests, and declaration files are skipped.
+
 ### Export Conventions Per Directory
 
-| Directory      | Export Style              | Factory              |
-| -------------- | ------------------------- | -------------------- |
-| `collections/` | **named** export          | `collection("name")` |
-| `globals/`     | **named** export          | `global("name")`     |
-| `routes/`      | **default** export        | `route()`            |
-| `jobs/`        | **default** export        | `job({...})`         |
-| `services/`    | **named** export          | `service()`          |
-| `emails/`      | **default** export (.tsx) | `email({...})`       |
-| `blocks/`      | **named** export          | `block("name")`      |
-| `migrations/`  | **default** export        | `migration({...})`   |
-| `seeds/`       | **default** export        | `seed({...})`        |
-| `env.ts`       | **default** export        | `env({...})`         |
-| `env.client.ts`| **default** export        | `clientEnv({...})`   |
+| Directory       | Export Style              | Factory              |
+| --------------- | ------------------------- | -------------------- |
+| `collections/`  | **named** export          | `collection("name")` |
+| `globals/`      | **named** export          | `global("name")`     |
+| `routes/`       | **default** export        | `route()`            |
+| `jobs/`         | **default** export        | `job({...})`         |
+| `services/`     | **named** export          | `service()`          |
+| `emails/`       | **default** export (.tsx) | `email({...})`       |
+| `blocks/`       | **named** export          | `block("name")`      |
+| `migrations/`   | **default** export        | `migration({...})`   |
+| `seeds/`        | **default** export        | `seed({...})`        |
+| `env.ts`        | **default** export        | `env({...})`         |
+| `env.client.ts` | **default** export        | `clientEnv({...})`   |
 
 ---
 
@@ -170,7 +189,7 @@ queue `pg-boss` / `bullmq` / `none`, email `console` / `smtp` / `resend` /
 ### How It Starts
 
 ```
-questpie.config.ts  →  modules.ts  →  codegen  →  .generated/index.ts  →  createApp()
+questpie.config.ts  →  src/questpie/server/questpie.config.ts  →  modules.ts  →  codegen  →  .generated/index.ts  →  createApp()
 ```
 
 **Step 1**, `env.ts` declares + validates environment variables (optional but recommended; see `references/env.md`), and `questpie.config.ts` declares infrastructure (DB, storage, email, etc.):
@@ -233,8 +252,8 @@ export const app = await createApp(
 
 ```ts
 // src/routes/api/$.ts (TanStack Start example)
+import { app } from "#questpie";
 import { createFetchHandler } from "questpie/http";
-import { app } from "@/questpie/server/app";
 import { createAPIFileRoute } from "@tanstack/react-start/api";
 
 const handler = createFetchHandler(app, { basePath: "/api" });
@@ -515,24 +534,24 @@ Fields define the shape of your data. Every field starts from a **field type fac
 
 All accessed via `f` in the `.fields()` callback:
 
-| Factory                | DB Column                            | JS Type        | Key Options                                                                      |
-| ---------------------- | ------------------------------------ | -------------- | -------------------------------------------------------------------------------- |
-| `f.text(maxLength?)`   | `varchar(n)` / `text`                | `string`       | `.pattern(re)`, `.trim()`, `.lowercase()`, `.uppercase()`, `.min(n)`, `.max(n)`  |
-| `f.textarea()`         | `text`                               | `string`       | `.min(n)`, `.max(n)`                                                             |
-| `f.email(maxLength?)`  | `varchar(255)`                       | `string`       | `.min(n)`, `.max(n)`                                                             |
-| `f.url(maxLength?)`    | `varchar(2048)`                      | `string`       | `.min(n)`, `.max(n)`                                                             |
-| `f.number(mode?)`      | `integer` / `real` / `numeric` / ... | `number`       | `.min(n)`, `.max(n)`, `.positive()`, `.int()`, `.step(n)`                        |
-| `f.boolean()`          | `boolean`                            | `boolean`      | none |
-| `f.date()`             | `date`                               | `string` (ISO) | `.autoNow()`, `.autoNowUpdate()`                                                 |
-| `f.datetime()`         | `timestamp`                          | `Date`         | `.autoNow()`, `.autoNowUpdate()`                                                 |
-| `f.time()`             | `time`                               | `string`       | none |
-| `f.select(options[])`  | `varchar`                            | `string`       | `.enum(name)`                                                                    |
-| `f.relation(target)`   | `varchar(36)` FK                     | `string`       | See [Relations](#8-relations)                                                    |
-| `f.upload(config?)`    | `varchar(36)` FK                     | `string`       | `.multiple()`                                                                    |
-| `f.object(fields)`     | `jsonb`                              | `{...}`        | Nested field definitions                                                         |
-| `f.json(config?)`      | `jsonb` / `json`                     | `JsonValue`    | `{ mode: "jsonb" \| "json" }`                                                    |
-| `f.richText()`         | `jsonb`                              | TipTap doc     | _Admin plugin only_                                                              |
-| `f.blocks()`           | `jsonb`                              | Block tree     | _Admin plugin only_                                                              |
+| Factory               | DB Column                            | JS Type        | Key Options                                                                     |
+| --------------------- | ------------------------------------ | -------------- | ------------------------------------------------------------------------------- |
+| `f.text(maxLength?)`  | `varchar(n)` / `text`                | `string`       | `.pattern(re)`, `.trim()`, `.lowercase()`, `.uppercase()`, `.min(n)`, `.max(n)` |
+| `f.textarea()`        | `text`                               | `string`       | `.min(n)`, `.max(n)`                                                            |
+| `f.email(maxLength?)` | `varchar(255)`                       | `string`       | `.min(n)`, `.max(n)`                                                            |
+| `f.url(maxLength?)`   | `varchar(2048)`                      | `string`       | `.min(n)`, `.max(n)`                                                            |
+| `f.number(mode?)`     | `integer` / `real` / `numeric` / ... | `number`       | `.min(n)`, `.max(n)`, `.positive()`, `.int()`, `.step(n)`                       |
+| `f.boolean()`         | `boolean`                            | `boolean`      | none                                                                            |
+| `f.date()`            | `date`                               | `string` (ISO) | `.autoNow()`, `.autoNowUpdate()`                                                |
+| `f.datetime()`        | `timestamp`                          | `Date`         | `.autoNow()`, `.autoNowUpdate()`                                                |
+| `f.time()`            | `time`                               | `string`       | none                                                                            |
+| `f.select(options[])` | `varchar`                            | `string`       | `.enum(name)`                                                                   |
+| `f.relation(target)`  | `varchar(36)` FK                     | `string`       | See [Relations](#8-relations)                                                   |
+| `f.upload(config?)`   | `varchar(36)` FK                     | `string`       | `.multiple()`                                                                   |
+| `f.object(fields)`    | `jsonb`                              | `{...}`        | Nested field definitions                                                        |
+| `f.json(config?)`     | `jsonb` / `json`                     | `JsonValue`    | `{ mode: "jsonb" \| "json" }`                                                   |
+| `f.richText()`        | `jsonb`                              | TipTap doc     | _Admin plugin only_                                                             |
+| `f.blocks()`          | `jsonb`                              | Block tree     | _Admin plugin only_                                                             |
 
 ### Common Field Methods (Available on All Types)
 
@@ -597,7 +616,6 @@ layout: f.json().$type<{ rows: { id: string; span: number }[] }>(),
 ```
 
 Field schemas are enforced server-side: create/update validates each input key against its field's schema (incl. `.zod()` transforms, email format, select enums). System fields and relation/upload FKs validate against their column shape.
-
 
 ### Custom Field Types
 
@@ -1165,13 +1183,13 @@ await ctx.email.send("welcome", {
 
 ### Email Adapters
 
-| Adapter                       | Import                       | Description                      |
-| ----------------------------- | ---------------------------- | -------------------------------- |
-| `ConsoleAdapter`              | `questpie/adapters/console`  | Logs to console (dev)            |
-| `SmtpAdapter`                 | `questpie/adapters/smtp`     | SMTP via Nodemailer              |
-| `resendAdapter()`             | `questpie/adapters/resend`   | Resend HTTP API (and compatible) |
-| `plunkAdapter()`              | `questpie/adapters/plunk`    | Plunk transactional HTTP API     |
-| `createEtherealSmtpAdapter()` | `questpie/adapters/smtp`     | Auto-generated test SMTP account |
+| Adapter                       | Import                      | Description                      |
+| ----------------------------- | --------------------------- | -------------------------------- |
+| `ConsoleAdapter`              | `questpie/adapters/console` | Logs to console (dev)            |
+| `SmtpAdapter`                 | `questpie/adapters/smtp`    | SMTP via Nodemailer              |
+| `resendAdapter()`             | `questpie/adapters/resend`  | Resend HTTP API (and compatible) |
+| `plunkAdapter()`              | `questpie/adapters/plunk`   | Plunk transactional HTTP API     |
+| `createEtherealSmtpAdapter()` | `questpie/adapters/smtp`    | Auto-generated test SMTP account |
 
 ---
 
@@ -1464,12 +1482,19 @@ Snapshots are idempotent state, not diffs, filtered subscriptions may receive un
 ```ts
 // React + TanStack Query, typed second arg, no casts needed
 const { data } = useQuery(
-	qp.collections.posts.find({ where: { event: eventId }, limit: 50 }, { realtime: true }),
+	qp.collections.posts.find(
+		{ where: { event: eventId }, limit: 50 },
+		{ realtime: true },
+	),
 );
 
 // Vanilla TS, live() is the live form of find(): same options in, same result type out
 const stop = client.collections.posts.live(
-	{ where: { event: eventId }, with: { author: true }, orderBy: { createdAt: "desc" } },
+	{
+		where: { event: eventId },
+		with: { author: true },
+		orderBy: { createdAt: "desc" },
+	},
 	(snap) => render(snap.docs), // snap.docs[i].author is typed
 	{ onError: (e) => console.error(e) },
 );
@@ -1499,11 +1524,11 @@ Live options carry exactly what the wire protocol supports: `where`, `with`, `li
 
 `POST <basePath>/realtime` body `{ topics: [{ id, resourceType: "collection" | "global", resource, where?, with?, limit?, offset?, orderBy?, locale? }] }` → SSE events:
 
-| Event      | Payload                  | Meaning                                                |
-| ---------- | ------------------------ | ------------------------------------------------------ |
-| `snapshot` | `{ topicId, seq, data }` | Full `find()`/`get()` result under subscriber's auth   |
-| `error`    | `{ topicId, message }`   | Topic-level failure (unknown resource, access denied)  |
-| `ping`     | `{ ts }`                 | Keep-alive (default every 8s)                          |
+| Event      | Payload                  | Meaning                                               |
+| ---------- | ------------------------ | ----------------------------------------------------- |
+| `snapshot` | `{ topicId, seq, data }` | Full `find()`/`get()` result under subscriber's auth  |
+| `error`    | `{ topicId, message }`   | Topic-level failure (unknown resource, access denied) |
+| `ping`     | `{ ts }`                 | Keep-alive (default every 8s)                         |
 
 Ignore unknown SSE event types (forward compat).
 
@@ -1628,15 +1653,15 @@ interface AppContext {
 
 ### Where AppContext Is Available
 
-| Context          | How to Access                                                    |
-| ---------------- | ---------------------------------------------------------------- |
-| Collection hooks | First argument: `async (ctx) => { ... }`                         |
-| Route handlers   | Destructure: `async ({ db, session, collections }) => { ... }`   |
-| Job handlers     | Destructure: `async ({ payload, queue, email }) => { ... }`      |
-| Email templates  | Destructure: `async ({ input, collections }) => { ... }`         |
-| Access rules     | Destructure: `({ session, data }) => boolean`                    |
-| Seeds            | `async ({ collections, log }) => { ... }`                        |
-| Services         | `create: ({ app }) => ...` (app instance only, not full context) |
+| Context                                                                                 | How to Access                                                                                                                                 |
+| --------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Collection hooks                                                                        | First argument: `async (ctx) => { ... }`                                                                                                      |
+| Route handlers                                                                          | Destructure: `async ({ db, session, collections }) => { ... }`                                                                                |
+| Job handlers                                                                            | Destructure: `async ({ payload, queue, email }) => { ... }`                                                                                   |
+| Email templates                                                                         | Destructure: `async ({ input, collections }) => { ... }`                                                                                      |
+| Access rules                                                                            | Destructure: `({ session, data }) => boolean`                                                                                                 |
+| Seeds                                                                                   | `async ({ collections, log }) => { ... }`                                                                                                     |
+| Services                                                                                | `create: ({ app }) => ...` (app instance only, not full context)                                                                              |
 | Better Auth callbacks (`onLinkAccount`, `databaseHooks`, `sendMagicLink`, plugin hooks) | `getContext<App>()`, `/auth/*` is a raw route executed inside `runWithContext`, so the request scope is live there (see `references/auth.md`) |
 
 ### Getting Context Programmatically
@@ -1811,9 +1836,9 @@ The typed client for calling the QuestPie API from frontend or external code.
 
 ```ts
 import { createClient } from "questpie/client";
-import type { App } from "@/questpie/server/app";
+import type { AppConfig } from "#questpie";
 
-export const client = createClient<App>({
+export const client = createClient<AppConfig>({
 	baseURL: "http://localhost:3000",
 	basePath: "/api", // matches your catch-all route
 });
@@ -1925,9 +1950,9 @@ Pre-built query/mutation options for `@tanstack/react-query`.
 ```ts
 import { createQuestpieQueryOptions } from "@questpie/tanstack-query";
 import { client } from "@/lib/client";
-import type { App } from "@/questpie/server/app";
+import type { AppConfig } from "#questpie";
 
-export const qp = createQuestpieQueryOptions<App>(client, {
+export const qp = createQuestpieQueryOptions<AppConfig>(client, {
 	keyPrefix: ["questpie"],
 });
 ```
@@ -2171,12 +2196,12 @@ collection("posts").form(({ v, f }) =>
 
 #### Form Layout Primitives
 
-| Type                                                             | Description                              |
-| ---------------------------------------------------------------- | ---------------------------------------- |
+| Type                                                             | Description                             |
+| ---------------------------------------------------------------- | --------------------------------------- |
 | `string` (e.g. `f.title`)                                        | Bare field, renders with default config |
-| `{ field, hidden?, readOnly?, disabled?, compute?, className? }` | Field with overrides                     |
-| `{ type: "section", label?, layout?, columns?, fields: [...] }`  | Visual grouping                          |
-| `{ type: "tabs", tabs: [{ id, label, icon?, fields }] }`         | Tabbed layout                            |
+| `{ field, hidden?, readOnly?, disabled?, compute?, className? }` | Field with overrides                    |
+| `{ type: "section", label?, layout?, columns?, fields: [...] }`  | Visual grouping                         |
+| `{ type: "tabs", tabs: [{ id, label, icon?, fields }] }`         | Tabbed layout                           |
 
 #### Reactive Field Config
 
@@ -2307,12 +2332,12 @@ Each server field type maps to a React component in the admin:
 | `select`       | `SelectField`       | primitive        |
 | `relation`     | `RelationField`     | `RelationCell`   |
 | `upload`       | `UploadField`       | `UploadCell`     |
-| `richText`     | `RichTextField`     | none |
-| `json`         | `JsonField`         | none |
+| `richText`     | `RichTextField`     | none             |
+| `json`         | `JsonField`         | none             |
 | `object`       | `ObjectField`       | `ObjectCell`     |
 | `array`        | `ArrayField`        | `ArrayCell`      |
 | `blocks`       | `BlocksField`       | `BlocksCell`     |
-| `assetPreview` | `AssetPreviewField` | none |
+| `assetPreview` | `AssetPreviewField` | none             |
 
 Register custom field types:
 
@@ -2554,11 +2579,11 @@ Configure it through plugin-discovered `config/mcp.ts`, not `mcpModule(options)`
 
 ### Storage Adapters
 
-| Config                              | Storage backend                  |
-| ----------------------------------- | -------------------------------- |
-| Default                             | Filesystem adapter (`./uploads`) |
-| `QUESTPIE_STORAGE_*` env vars       | S3-compatible (auto-detected)    |
-| `{ adapter: customAdapter }`        | Files SDK adapter instance       |
+| Config                        | Storage backend                  |
+| ----------------------------- | -------------------------------- |
+| Default                       | Filesystem adapter (`./uploads`) |
+| `QUESTPIE_STORAGE_*` env vars | S3-compatible (auto-detected)    |
+| `{ adapter: customAdapter }`  | Files SDK adapter instance       |
 
 ### Queue Adapters
 
@@ -2570,10 +2595,10 @@ Configure it through plugin-discovered `config/mcp.ts`, not `mcpModule(options)`
 
 ### Search Adapters
 
-| Adapter                          | Description                       |
-| -------------------------------- | --------------------------------- |
-| `createPostgresSearchAdapter()`  | pg_trgm + full-text search        |
-| `createPgVectorSearchAdapter()`  | Hybrid semantic search (pgvector + embedding provider, see `references/infrastructure-adapters.md`) |
+| Adapter                         | Description                                                                                         |
+| ------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `createPostgresSearchAdapter()` | pg_trgm + full-text search                                                                          |
+| `createPgVectorSearchAdapter()` | Hybrid semantic search (pgvector + embedding provider, see `references/infrastructure-adapters.md`) |
 
 ### Realtime Adapters
 
@@ -2660,23 +2685,23 @@ declare module "questpie" {
 bun questpie <command> [options]
 ```
 
-| Command                  | Description                                         |
-| ------------------------ | --------------------------------------------------- |
-| `generate`               | Run codegen (one-shot)                              |
-| `dev`                    | Watch mode codegen (re-runs on file add/remove)     |
-| `push`                   | Push schema to DB (dev only, like drizzle-kit push) |
-| `migrate`                 | Run pending migrations                              |
-| `migrate:create`          | Generate migration from schema diff                 |
-| `migrate:down`           | Rollback migrations                                 |
-| `migrate:status`         | Show migration status                               |
-| `migrate:reset`          | Rollback all                                        |
-| `migrate:fresh`          | Reset + re-run all migrations                       |
-| `seed`                   | Run pending seeds                                   |
-| `seed:undo`              | Undo executed seeds                                 |
-| `seed:status`            | Show seed status                                    |
-| `seed:reset`             | Reset seed tracking                                 |
-| `add <type> <name>`      | Scaffold new entity file                            |
-| `add --list`             | Show available entity types                         |
+| Command             | Description                                         |
+| ------------------- | --------------------------------------------------- |
+| `generate`          | Run codegen (one-shot)                              |
+| `dev`               | Watch mode codegen (re-runs on file add/remove)     |
+| `push`              | Push schema to DB (dev only, like drizzle-kit push) |
+| `migrate`           | Run pending migrations                              |
+| `migrate:create`    | Generate migration from schema diff                 |
+| `migrate:down`      | Rollback migrations                                 |
+| `migrate:status`    | Show migration status                               |
+| `migrate:reset`     | Rollback all                                        |
+| `migrate:fresh`     | Reset + re-run all migrations                       |
+| `seed`              | Run pending seeds                                   |
+| `seed:undo`         | Undo executed seeds                                 |
+| `seed:status`       | Show seed status                                    |
+| `seed:reset`        | Reset seed tracking                                 |
+| `add <type> <name>` | Scaffold new entity file                            |
+| `add --list`        | Show available entity types                         |
 
 Global options: `-c, --config <path>` (default: `questpie.config.ts`)
 
@@ -2868,44 +2893,44 @@ module()                 Packaging unit (groups related entities)
 | ----------------------------- | --------------------- | ----------------------- |
 | `DATABASE_URL`                | PostgreSQL connection | (required)              |
 | `APP_URL`                     | Application URL       | `http://localhost:3000` |
-| `BETTER_AUTH_SECRET`          | Auth signing secret   | none |
-| `QUESTPIE_DB`                 | Cloud DB override     | none |
-| `QUESTPIE_APP_URL`            | Cloud URL override    | none |
-| `QUESTPIE_SECRET`             | Cloud secret override | none |
-| `QUESTPIE_STORAGE_ENDPOINT`   | S3 endpoint           | none |
-| `QUESTPIE_STORAGE_BUCKET`     | S3 bucket             | none |
-| `QUESTPIE_STORAGE_REGION`     | S3 region             | none |
-| `QUESTPIE_STORAGE_ACCESS_KEY` | S3 access key         | none |
-| `QUESTPIE_STORAGE_SECRET_KEY` | S3 secret key         | none |
+| `BETTER_AUTH_SECRET`          | Auth signing secret   | none                    |
+| `QUESTPIE_DB`                 | Cloud DB override     | none                    |
+| `QUESTPIE_APP_URL`            | Cloud URL override    | none                    |
+| `QUESTPIE_SECRET`             | Cloud secret override | none                    |
+| `QUESTPIE_STORAGE_ENDPOINT`   | S3 endpoint           | none                    |
+| `QUESTPIE_STORAGE_BUCKET`     | S3 bucket             | none                    |
+| `QUESTPIE_STORAGE_REGION`     | S3 region             | none                    |
+| `QUESTPIE_STORAGE_ACCESS_KEY` | S3 access key         | none                    |
+| `QUESTPIE_STORAGE_SECRET_KEY` | S3 secret key         | none                    |
 
 ---
 
 ## Quick Reference: All Primitives
 
-| Primitive      | Factory                              | Import From                | Purpose                      |
-| -------------- | ------------------------------------ | -------------------------- | ---------------------------- |
-| Collection     | `collection(name)`                   | `#questpie/factories`      | Data table + CRUD            |
-| Global         | `global(name)`                       | `#questpie/factories`      | Singleton document           |
-| Field          | `f.text()`, `f.number()`, ...        | `.fields()` callback       | Column definition            |
-| Field Type     | `fieldType(name, config)`            | `questpie`                 | Custom field type            |
-| Route          | `route()`                            | `questpie`                 | HTTP endpoint                |
-| Service        | `service()`                          | `questpie`                 | Injectable dependency        |
-| Job            | `job({...})`                         | `questpie`                 | Background task              |
-| Email          | `email({...})`                       | `questpie`                 | Email template               |
-| Block          | `block(name)`                        | `#questpie/factories`      | Content builder block        |
-| Migration      | `migration({...})`                   | `questpie`                 | DB schema change             |
-| Seed           | `seed({...})`                        | `questpie`                 | DB seed data                 |
-| Module         | `module({...})`                      | `questpie`                 | Packaging unit               |
-| Runtime Config | `runtimeConfig({...})`               | `questpie`                 | Infrastructure config        |
+| Primitive      | Factory                              | Import From                | Purpose                        |
+| -------------- | ------------------------------------ | -------------------------- | ------------------------------ |
+| Collection     | `collection(name)`                   | `#questpie/factories`      | Data table + CRUD              |
+| Global         | `global(name)`                       | `#questpie/factories`      | Singleton document             |
+| Field          | `f.text()`, `f.number()`, ...        | `.fields()` callback       | Column definition              |
+| Field Type     | `fieldType(name, config)`            | `questpie`                 | Custom field type              |
+| Route          | `route()`                            | `questpie`                 | HTTP endpoint                  |
+| Service        | `service()`                          | `questpie`                 | Injectable dependency          |
+| Job            | `job({...})`                         | `questpie`                 | Background task                |
+| Email          | `email({...})`                       | `questpie`                 | Email template                 |
+| Block          | `block(name)`                        | `#questpie/factories`      | Content builder block          |
+| Migration      | `migration({...})`                   | `questpie`                 | DB schema change               |
+| Seed           | `seed({...})`                        | `questpie`                 | DB seed data                   |
+| Module         | `module({...})`                      | `questpie`                 | Packaging unit                 |
+| Runtime Config | `runtimeConfig({...})`               | `questpie`                 | Infrastructure config          |
 | App Config     | `appConfig({...})`                   | `questpie`                 | Locale, access, hooks, context |
-| Auth Config    | `authConfig({...})`                  | `questpie`                 | Better Auth options          |
-| Env            | `env({...})`                         | `questpie/env`             | Boot-validated typed env     |
-| Client Env     | `clientEnv({...})`                   | `questpie/env`             | Client-safe env definition   |
-| Admin Config   | `adminConfig({...})`                 | `#questpie/factories`      | Sidebar, dashboard, branding |
-| View           | `view(name, {kind, component})`      | `@questpie/admin/client`   | Admin view component         |
-| Widget         | `widget(name, {component})`          | `@questpie/admin/client`   | Dashboard widget             |
-| Component      | `component(name, {component})`       | `@questpie/admin/client`   | Server-driven component      |
-| Client         | `createClient<App>(config)`          | `questpie/client`          | Frontend API client          |
-| Query Options  | `createQuestpieQueryOptions(client)` | `@questpie/tanstack-query` | TanStack Query integration   |
+| Auth Config    | `authConfig({...})`                  | `questpie`                 | Better Auth options            |
+| Env            | `env({...})`                         | `questpie/env`             | Boot-validated typed env       |
+| Client Env     | `clientEnv({...})`                   | `questpie/env`             | Client-safe env definition     |
+| Admin Config   | `adminConfig({...})`                 | `#questpie/factories`      | Sidebar, dashboard, branding   |
+| View           | `view(name, {kind, component})`      | `@questpie/admin/client`   | Admin view component           |
+| Widget         | `widget(name, {component})`          | `@questpie/admin/client`   | Dashboard widget               |
+| Component      | `component(name, {component})`       | `@questpie/admin/client`   | Server-driven component        |
+| Client         | `createClient<App>(config)`          | `questpie/client`          | Frontend API client            |
+| Query Options  | `createQuestpieQueryOptions(client)` | `@questpie/tanstack-query` | TanStack Query integration     |
 
 > **Import rule of thumb:** Only `collection()`, `global()`, `block()`, and `adminConfig()` come from `#questpie/factories` (they need codegen-generated types). Everything else comes from `"questpie"` directly.

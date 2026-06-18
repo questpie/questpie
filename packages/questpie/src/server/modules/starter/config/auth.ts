@@ -7,10 +7,12 @@
  */
 import { admin, bearer } from "better-auth/plugins";
 
-export default {
+import { authConfig } from "#questpie/server/config/factories.js";
+
+export default authConfig({
 	plugins: [admin(), bearer()],
 	emailAndPassword: {
 		enabled: true,
 		requireEmailVerification: true,
 	},
-};
+});

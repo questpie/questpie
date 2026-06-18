@@ -62,9 +62,9 @@ import _mig_20260427T093217_eager_blue_phoenix from "../migrations/20260427T0932
 import _mig_20260429T170546_kind_yellow_eagle from "../migrations/20260429T170546_kind_yellow_eagle";
 
 // ── Seeds ──────────────────────────────────────────────────
-import _seed_blogPosts_seed from "../seeds/blog-posts.seed";
-import _seed_demoData_seed from "../seeds/demo-data.seed";
-import _seed_siteSettings_seed from "../seeds/site-settings.seed";
+import _seed_blogPosts from "../seeds/blog-posts";
+import _seed_demoData from "../seeds/demo-data";
+import _seed_siteSettings from "../seeds/site-settings";
 
 // ── Blocks ─────────────────────────────────────────────────
 import { bookingCtaBlock as _bloc_bookingCta } from "../blocks/booking-cta";
@@ -195,7 +195,7 @@ _appPromise = createApp(
 			newBlogPost: _email_newBlogPost,
 		},
 		migrations: [_mig_20260206T174642_gentle_azure_eagle, _mig_20260206T180920_fancy_green_tiger, _mig_20260211T100836_calm_blue_phoenix, _mig_20260218T195452_calm_blue_dragon, _mig_20260218T223923_fancy_blue_panda, _mig_20260218T235924_kind_crimson_falcon, _mig_20260307T122102_eager_red_eagle, _mig_20260307T135142_fancy_orange_tiger, _mig_20260424T221327_bold_yellow_phoenix, _mig_20260427T093217_eager_blue_phoenix, _mig_20260429T170546_kind_yellow_eagle],
-		seeds: [_seed_blogPosts_seed, _seed_demoData_seed, _seed_siteSettings_seed],
+		seeds: [_seed_blogPosts, _seed_demoData, _seed_siteSettings],
 		blocks: {
 			[_bloc_bookingCta.state.name]: _bloc_bookingCta,
 			[_bloc_columns.state.name]: _bloc_columns,

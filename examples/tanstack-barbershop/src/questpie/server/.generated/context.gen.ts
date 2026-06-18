@@ -56,9 +56,9 @@ import _mig_20260427T093217_eager_blue_phoenix from "../migrations/20260427T0932
 import _mig_20260429T170546_kind_yellow_eagle from "../migrations/20260429T170546_kind_yellow_eagle";
 
 // ── Seeds ──────────────────────────────────────────────────
-import _seed_blogPosts_seed from "../seeds/blog-posts.seed";
-import _seed_demoData_seed from "../seeds/demo-data.seed";
-import _seed_siteSettings_seed from "../seeds/site-settings.seed";
+import _seed_blogPosts from "../seeds/blog-posts";
+import _seed_demoData from "../seeds/demo-data";
+import _seed_siteSettings from "../seeds/site-settings";
 
 // ── Blocks ─────────────────────────────────────────────────
 import { bookingCtaBlock as _bloc_bookingCta } from "../blocks/booking-cta";

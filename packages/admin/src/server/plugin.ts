@@ -5,7 +5,7 @@
  * Register in questpie.config.ts:
  *
  * ```ts
- * import { runtimeConfig } from "questpie";
+ * import { runtimeConfig } from "questpie/app";
  * import { adminPlugin } from "@questpie/admin/plugin";
  *
  * export default runtimeConfig({

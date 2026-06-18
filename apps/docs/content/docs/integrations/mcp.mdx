@@ -313,7 +313,7 @@ For trusted local clients (a CLI, a desktop agent on the same machine), run an M
 
 ```ts
 import { startStdioServer } from "@questpie/mcp/stdio";
-import { app } from "./questpie/server/app.js";
+import { app } from "#questpie";
 
 await startStdioServer(app);
 ```

@@ -11,6 +11,7 @@
 		"validation",
 		"routes",
 		"jobs",
+		"seeds",
 		"services",
 		"emails",
 		"configuration",

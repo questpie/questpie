@@ -23,7 +23,7 @@ export type TypedAuthConfig<TSession = unknown> = AuthConfig & {
  * @example
  * ```ts
  * // config/app.ts
- * import { appConfig } from "questpie";
+ * import { appConfig } from "questpie/app";
  *
  * export default appConfig({
  *   locale: { locales: [{ code: "en" }], defaultLocale: "en" },
@@ -60,7 +60,7 @@ export function appConfig<T extends AppConfigInput>(
  * @example
  * ```ts
  * // config/auth.ts
- * import { authConfig } from "questpie";
+ * import { authConfig } from "questpie/app";
  *
  * export default authConfig({
  *   emailAndPassword: { enabled: true },

@@ -6,8 +6,8 @@
  * Admin sidebar, dashboard, and branding live in config/admin.ts.
  */
 
-import { runtimeConfig } from "questpie/app";
 import { ConsoleAdapter } from "questpie/adapters/console";
+import { runtimeConfig } from "questpie/app";
 
 import { env } from "@/lib/env";
 
@@ -17,5 +17,8 @@ export default runtimeConfig({
 	storage: { basePath: "/api" },
 	email: {
 		adapter: new ConsoleAdapter({ logHtml: false }),
+	},
+	cli: {
+		migrations: { directory: "./src/migrations" },
 	},
 });

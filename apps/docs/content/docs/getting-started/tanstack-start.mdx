@@ -15,7 +15,9 @@ By the end you have a single-package full-stack app with:
 - **An admin panel** at `/admin`, **OpenAPI + Scalar docs** at `/api/docs`, and a landing page at `/`.
 
 <Callout type="info" title="TanStack Start is the recommended runtime today">
-	It's the only runtime with a published template. Next.js, Hono, and Elysia are on the way, the QUESTPIE core (`src/questpie/**`, `src/lib/**`) is identical across runtimes; only the thin mount layer differs.
+	It's the only runtime with a published template. Next.js, Hono, and Elysia are
+	on the way, the QUESTPIE core (`src/questpie/**`, `src/lib/**`) is identical
+	across runtimes; only the thin mount layer differs.
 </Callout>
 
 ## Prerequisites
@@ -46,7 +48,9 @@ bunx create-questpie my-app --runtime tanstack-start --modules admin,openapi -y
 ```
 
 <Callout type="info" title="Module/runtime combos are validated up front">
-	`admin` needs a render-layer runtime, asking for `--modules admin` on a headless runtime (Hono, Elysia) is rejected with a clear message before anything is written.
+	`admin` needs a render-layer runtime, asking for `--modules admin` on a
+	headless runtime (Hono, Elysia) is rejected with a clear message before
+	anything is written.
 </Callout>
 
 When the command finishes, the scaffolder has already:
@@ -66,17 +70,16 @@ my-app/
   docker-compose.yml                 # Postgres + extension provisioning
   docker/init-extensions.sql         # CREATE EXTENSION pg_trgm
   .env                               # generated from .env.example
-  questpie.config.ts                 # CLI config (points at the app)
+  questpie.config.ts                 # CLI entry, re-exports server runtime config
   src/
     questpie/
       server/
         questpie.config.ts           # runtime config, db, adapters, secrets
-        app.ts                       # re-exports the generated app + AppConfig
         modules.ts                   # enabled modules (admin, openapi, …)
         collections/
-          posts.collection.ts        # starter collection
+          posts.ts        # starter collection
         globals/
-          site-settings.global.ts    # starter global
+          site-settings.ts    # starter global
         config/                      # admin / auth / openapi config
         .generated/                  # codegen output (committed, do not edit)
       admin/
@@ -98,9 +101,8 @@ The QUESTPIE handler is mounted by `createFetchHandler`, which serves every CRUD
 
 ```ts title="src/routes/api/$.ts"
 import { createFileRoute } from "@tanstack/react-router";
+import { app } from "#questpie";
 import { createFetchHandler } from "questpie/http";
-
-import { app } from "@/questpie/server/app";
 
 const handler = createFetchHandler(app, { basePath: "/api" });
 
@@ -115,12 +117,14 @@ const handleCmsRequest = async (request: Request) =>
 ```
 
 <Callout type="info" title="Keep the two `basePath` values in sync">
-	`basePath: "/api"` here **must** match the client's `basePath` in `src/lib/client.ts`. The scaffold ships them aligned; keep them in sync if you change either.
+	`basePath: "/api"` here **must** match the client's `basePath` in
+	`src/lib/client.ts`. The scaffold ships them aligned; keep them in sync if you
+	change either.
 </Callout>
 
 The starter `posts` collection is a real schema, not an empty placeholder. The slug auto-fills from the title via an admin `compute` (trimmed below, see the file):
 
-```ts title="src/questpie/server/collections/posts.collection.ts"
+```ts title="src/questpie/server/collections/posts.ts"
 import { collection } from "#questpie/factories";
 
 export const posts = collection("posts")
@@ -142,7 +146,10 @@ export const posts = collection("posts")
 ```
 
 <Callout type="info" title="`#questpie/factories`, not `questpie`">
-	Definition files import the builders (`collection`, `global`) from `#questpie/factories`, the generated, app-typed factory module. `f` isn't imported; it arrives as the `.fields()` callback argument. See [Collections](/docs/concepts/collections) for the full builder.
+	Definition files import the builders (`collection`, `global`) from
+	`#questpie/factories`, the generated, app-typed factory module. `f` isn't
+	imported; it arrives as the `.fields()` callback argument. See
+	[Collections](/docs/concepts/collections) for the full builder.
 </Callout>
 
 ## 2. Move into the project
@@ -162,7 +169,8 @@ MAIL_ADAPTER=console
 ```
 
 <Callout type="warn" title="Replace the auth secret before deploying">
-	The generated `BETTER_AUTH_SECRET` is fine for local development. Set a fresh, secret value before you deploy, never ship the scaffolded one.
+	The generated `BETTER_AUTH_SECRET` is fine for local development. Set a fresh,
+	secret value before you deploy, never ship the scaffolded one.
 </Callout>
 
 ## 3. Start Postgres
@@ -176,7 +184,12 @@ docker compose up -d
 This brings up Postgres 17 on port `5432` and, on first cluster init, runs `docker/init-extensions.sql`, which does `CREATE EXTENSION IF NOT EXISTS "pg_trgm"`. The starter's full-text search relies on `pg_trgm` (trigram matching), so provisioning it here keeps `db:push` working out of the box.
 
 <Callout type="warn" title="QUESTPIE does not auto-create Postgres extensions">
-	This is deliberate and drizzle-native: extensions can't be reliably created by the app at runtime, so QUESTPIE never silently tries. Locally, `docker compose up` provisions them for you. On **managed Postgres**, enable the extensions you need (e.g. `pg_trgm`) through your provider before deploying. The [Search adapter](/docs/adapters/search) covers which extensions each search backend requires.
+	This is deliberate and drizzle-native: extensions can't be reliably created by
+	the app at runtime, so QUESTPIE never silently tries. Locally, `docker compose
+	up` provisions them for you. On **managed Postgres**, enable the extensions
+	you need (e.g. `pg_trgm`) through your provider before deploying. The [Search
+	adapter](/docs/adapters/search) covers which extensions each search backend
+	requires.
 </Callout>
 
 ## 4. Push your schema
@@ -190,7 +203,11 @@ bun run db:push
 Under the hood this runs `questpie push`, drizzle-native schema push, for **development only**. It reads your generated schema and applies it straight to the database. For production you generate and run migrations instead (`bun run migrate:create` → `bun run migrate`).
 
 <Callout type="info" title="Re-run codegen after adding or removing files">
-	If you add or remove a collection or global later, regenerate first (`bun run questpie:generate`, or `bun run scaffold:verify` to also type-check), then `bun run db:push` again. Editing a definition's body doesn't need a regen. The `questpie add` CLI runs codegen for you automatically, see [Codegen](/docs/extend/codegen).
+	If you add or remove a collection or global later, regenerate first (`bun run
+	questpie:generate`, or `bun run scaffold:verify` to also type-check), then
+	`bun run db:push` again. Editing a definition's body doesn't need a regen. The
+	`questpie add` CLI runs codegen for you automatically, see
+	[Codegen](/docs/extend/codegen).
 </Callout>
 
 ## 5. Run the dev server
@@ -201,11 +218,11 @@ bun run dev
 
 Vite + Nitro start on **http://localhost:3000**. Three URLs now serve:
 
-| URL | What it is |
-| --- | --- |
-| `http://localhost:3000/` | Landing page, links to the admin, API docs, and these docs. |
-| `http://localhost:3000/api/docs` | OpenAPI reference rendered with Scalar. |
-| `http://localhost:3000/admin` | Admin panel. |
+| URL                              | What it is                                                  |
+| -------------------------------- | ----------------------------------------------------------- |
+| `http://localhost:3000/`         | Landing page, links to the admin, API docs, and these docs. |
+| `http://localhost:3000/api/docs` | OpenAPI reference rendered with Scalar.                     |
+| `http://localhost:3000/admin`    | Admin panel.                                                |
 
 ### Create your first admin
 
@@ -220,7 +237,7 @@ The scaffold already created a fully typed client in `src/lib/client.ts`. It's t
 ```ts title="src/lib/client.ts"
 import { createClient } from "questpie/client";
 
-import type { AppConfig } from "@/questpie/server/app";
+import type { AppConfig } from "#questpie";
 
 export const client = createClient<AppConfig>({
 	baseURL:
@@ -255,11 +272,13 @@ The result is the real record shape, inferred from the collection, no manual typ
 			"id": "01J…",
 			"title": "Hello QUESTPIE",
 			"slug": "hello-questpie",
-			"content": { /* rich text */ },
+			"content": {
+				/* rich text */
+			},
 			"published": true,
 			"createdAt": "2026-06-17T10:00:00.000Z",
-			"updatedAt": "2026-06-17T10:00:00.000Z"
-		}
+			"updatedAt": "2026-06-17T10:00:00.000Z",
+		},
 	],
 	"totalDocs": 1,
 	"limit": 10,
@@ -269,7 +288,7 @@ The result is the real record shape, inferred from the collection, no manual typ
 	"hasPrevPage": false,
 	"hasNextPage": false,
 	"prevPage": null,
-	"nextPage": null
+	"nextPage": null,
 }
 ```
 

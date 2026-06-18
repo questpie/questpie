@@ -97,7 +97,8 @@ export async function addCommand(options: AddOptions): Promise<void> {
 	}
 
 	// 6. Compute names
-	const kebab = toKebabCase(options.name);
+	const normalizedName = stripScaffoldTypeSuffix(options.name, options.type);
+	const kebab = toKebabCase(normalizedName);
 	const camel = toCamelCase(kebab);
 	const pascal = toPascalCase(kebab);
 	const title = toTitleCase(kebab);
@@ -222,9 +223,26 @@ function printScaffoldList(registry: Map<string, ScaffoldEntry[]>): void {
 export function toKebabCase(str: string): string {
 	return str
 		.replace(/([a-z])([A-Z])/g, "$1-$2")
-		.replace(/[\s_]+/g, "-")
+		.replace(/[\s_.]+/g, "-")
 		.toLowerCase()
 		.replace(/[^a-z0-9-]/g, "");
+}
+
+export function stripScaffoldTypeSuffix(name: string, type: string): string {
+	const scaffoldType = toKebabCase(type);
+	if (!scaffoldType) return name;
+
+	const normalized = name.trim();
+	const suffix = new RegExp(`^(.+)[._-]${escapeRegExp(scaffoldType)}$`, "i");
+	const match = normalized.match(suffix);
+	if (!match) return name;
+
+	const stripped = match[1].trim();
+	return toKebabCase(stripped) ? stripped : name;
+}
+
+function escapeRegExp(value: string): string {
+	return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 export function toCamelCase(kebab: string): string {
