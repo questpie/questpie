@@ -77,9 +77,9 @@ src/
       app.ts                         # Re-export of generated app
       .generated/                    # Codegen output (do not edit manually)
       collections/
-        posts.collection.ts
+        posts.ts
       globals/
-        site-settings.global.ts
+        site-settings.ts
   lib/
     env.ts
     client.ts                        # Typed REST client (createClient<AppConfig>)

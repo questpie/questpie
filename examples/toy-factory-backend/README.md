@@ -82,9 +82,9 @@ src/
       services/
         capacity-planner.ts
       seeds/
-        demo.seed.ts
+        demo.ts
       globals/
-        site-settings.global.ts
+        site-settings.ts
     admin/
       admin.ts                       # Re-export of generated admin config
       modules.ts                     # Admin client module defaults

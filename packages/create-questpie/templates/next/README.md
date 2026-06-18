@@ -81,9 +81,9 @@ src/
       app.ts                         # Re-export of generated app
       .generated/                    # Codegen output (do not edit manually)
       collections/
-        posts.collection.ts
+        posts.ts
       globals/
-        site-settings.global.ts
+        site-settings.ts
     admin/
       admin.ts                       # Re-export of generated admin config
       modules.ts                     # Admin client module defaults

@@ -1,8 +1,7 @@
+import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { cp, readdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
-
-import { spawn } from "node:child_process";
 
 import * as p from "@clack/prompts";
 
@@ -30,6 +29,7 @@ const dependencyVersionMap: Record<string, string> = {
 	"@questpie/admin": "latest",
 	"@questpie/openapi": "latest",
 	"@questpie/workflows": "latest",
+	"better-auth": "^1.6.11",
 	bullmq: "^5.0.0",
 	redis: "^5.0.0",
 };
@@ -307,6 +307,11 @@ async function applyProjectOptions(
 		"utf-8",
 	);
 	await writeFile(
+		join(targetDir, "src", "questpie", "server", "config", "auth.ts"),
+		buildAuthConfig(options),
+		"utf-8",
+	);
+	await writeFile(
 		join(targetDir, "src", "questpie", "server", "modules.ts"),
 		buildServerModules(options),
 		"utf-8",
@@ -415,13 +420,12 @@ function buildRuntimeConfig(options: ProjectOptions): string {
 	// Adapter imports follow the axis display order (queue, email, realtime, kv).
 	// `email` keeps its bespoke import builder; the other axes pull from the
 	// feature registry. Imports are deduped (shared redis lines collapse).
-	const queueImports = features.queue?.[options.queueAdapter ?? "pg-boss"]
-		?.configImports ?? [];
-	const realtimeImports = features.realtime?.[
-		options.realtimeAdapter ?? "none"
-	]?.configImports ?? [];
-	const kvImports = features.kv?.[options.kvAdapter ?? "memory"]
-		?.configImports ?? [];
+	const queueImports =
+		features.queue?.[options.queueAdapter ?? "pg-boss"]?.configImports ?? [];
+	const realtimeImports =
+		features.realtime?.[options.realtimeAdapter ?? "none"]?.configImports ?? [];
+	const kvImports =
+		features.kv?.[options.kvAdapter ?? "memory"]?.configImports ?? [];
 
 	const imports = [
 		`import { runtimeConfig } from "questpie/app";`,
@@ -455,6 +459,11 @@ function buildRuntimeConfig(options: ProjectOptions): string {
 		const entry = features[axis]?.[option]?.configEntry;
 		if (entry) configEntries.push(...entry(options));
 	}
+	configEntries.push(
+		`\tcli: {`,
+		`\t\tmigrations: { directory: "./src/migrations" },`,
+		`\t},`,
+	);
 
 	return [
 		`/**`,
@@ -468,6 +477,39 @@ function buildRuntimeConfig(options: ProjectOptions): string {
 		...helpers,
 		`export default runtimeConfig({`,
 		...configEntries,
+		`});`,
+		``,
+	].join("\n");
+}
+
+function buildAuthConfig(options: ProjectOptions): string {
+	const adminSelected = options.modules.includes("admin");
+	const imports = adminSelected
+		? [
+				`import { admin, bearer } from "better-auth/plugins";`,
+				`import { authConfig } from "questpie/app";`,
+			]
+		: [`import { authConfig } from "questpie/app";`];
+	const entries = adminSelected
+		? [
+				`\tplugins: [admin(), bearer()],`,
+				`\temailAndPassword: {`,
+				`\t\tenabled: true,`,
+				`\t\trequireEmailVerification: false,`,
+				`\t},`,
+			]
+		: [
+				`\temailAndPassword: {`,
+				`\t\tenabled: true,`,
+				`\t\trequireEmailVerification: false,`,
+				`\t},`,
+			];
+
+	return [
+		...imports,
+		``,
+		`export default authConfig({`,
+		...entries,
 		`});`,
 		``,
 	].join("\n");

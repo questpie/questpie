@@ -47,7 +47,8 @@ run on Node, install `@elysiajs/node` and pass its adapter:
 
 ```ts
 import { node } from "@elysiajs/node";
-new Elysia({ adapter: node() }) /* …routes… */ .listen(env.PORT ?? 3000);
+new Elysia({ adapter: node() }) /* …routes… */
+	.listen(env.PORT ?? 3000);
 ```
 
 ## Database extensions
@@ -77,9 +78,9 @@ src/
       app.ts                         # Re-export of generated app
       .generated/                    # Codegen output (do not edit manually)
       collections/
-        posts.collection.ts
+        posts.ts
       globals/
-        site-settings.global.ts
+        site-settings.ts
   lib/
     env.ts
     client.ts                        # Typed REST client (createClient<AppConfig>)

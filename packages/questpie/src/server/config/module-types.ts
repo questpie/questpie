@@ -189,7 +189,7 @@ export interface AppModuleInput {
  * @example
  * ```ts
  * // config/app.ts
- * import { appConfig } from "questpie";
+ * import { appConfig } from "questpie/app";
  *
  * export default appConfig({
  *   locale: { locales: [{ code: "en" }, { code: "sk" }], defaultLocale: "en" },
@@ -291,7 +291,7 @@ export type AppConfigResolved<T extends AppConfigInput> = {
  * @example
  * ```ts
  * // questpie.config.ts
- * import { runtimeConfig } from "questpie";
+ * import { runtimeConfig } from "questpie/app";
  * import { adminPlugin } from "@questpie/admin/plugin";
  *
  * export default runtimeConfig({
@@ -409,9 +409,7 @@ export type RealtimeConfigInput = true | RealtimeConfig;
 export type RuntimeConfigInput<
 	TDb extends DbConfig = DbConfig,
 	TStorage extends StorageConfig | undefined = StorageConfig | undefined,
-> = Partial<
-	Pick<RuntimeConfig<TDb, TStorage>, "app" | "db">
-> &
+> = Partial<Pick<RuntimeConfig<TDb, TStorage>, "app" | "db">> &
 	Omit<RuntimeConfig<TDb, TStorage>, "app" | "db" | "realtime"> & {
 		/** Realtime configuration. Use `true` to enable defaults. */
 		realtime?: RealtimeConfigInput;
@@ -431,28 +429,27 @@ type StorageFromRuntimeConfigInput<TInput> = "storage" extends keyof TInput
 		: StorageConfig<Adapter> | undefined
 	: StorageConfig | undefined;
 
-export type ResolvedRuntimeConfig<
-	TInput extends RuntimeConfigInput<any, any>,
-> = Omit<
-	RuntimeConfig<
-		DbFromRuntimeConfigInput<TInput>,
-		StorageFromRuntimeConfigInput<TInput>
-	>,
-	"app" | "db" | "secret" | "storage" | "realtime"
-> &
-	Omit<TInput, "app" | "db" | "secret" | "storage" | "realtime"> & {
-		app: { url: string };
-		db: DbFromRuntimeConfigInput<TInput>;
-		secret: string | undefined;
-		storage: StorageFromRuntimeConfigInput<TInput>;
-		realtime: TInput extends { realtime: infer TRealtime }
-			? TRealtime extends true
-				? RealtimeConfig
-				: TRealtime extends RealtimeConfig
-					? TRealtime
-					: RealtimeConfig | undefined
-			: RealtimeConfig | undefined;
-	};
+export type ResolvedRuntimeConfig<TInput extends RuntimeConfigInput<any, any>> =
+	Omit<
+		RuntimeConfig<
+			DbFromRuntimeConfigInput<TInput>,
+			StorageFromRuntimeConfigInput<TInput>
+		>,
+		"app" | "db" | "secret" | "storage" | "realtime"
+	> &
+		Omit<TInput, "app" | "db" | "secret" | "storage" | "realtime"> & {
+			app: { url: string };
+			db: DbFromRuntimeConfigInput<TInput>;
+			secret: string | undefined;
+			storage: StorageFromRuntimeConfigInput<TInput>;
+			realtime: TInput extends { realtime: infer TRealtime }
+				? TRealtime extends true
+					? RealtimeConfig
+					: TRealtime extends RealtimeConfig
+						? TRealtime
+						: RealtimeConfig | undefined
+				: RealtimeConfig | undefined;
+		};
 
 // ============================================================================
 // App Definition — what codegen generates (first arg to createApp)

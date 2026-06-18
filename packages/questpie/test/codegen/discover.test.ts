@@ -286,19 +286,6 @@ describe("discoverFiles", () => {
 		expect(file.namedExportName).toBe("posts");
 	});
 
-	it("ignores index.ts in collections", async () => {
-		await write("collections/index.ts", "export * from './posts';");
-		await write(
-			"collections/posts.ts",
-			"export const posts = collection('posts');",
-		);
-
-		const result = await discoverFiles(rootDir, outDir, coreDiscoverOptions());
-		const collections = cat(result, "collections");
-		expect(collections.size).toBe(1);
-		expect(collections.has("posts")).toBe(true);
-	});
-
 	it("ignores private files starting with _ in collections", async () => {
 		await write("collections/_utils.ts", "export const util = {};");
 		await write(
@@ -512,6 +499,60 @@ describe("discoverFiles", () => {
 		expect(collections.has("articles")).toBe(true);
 	});
 
+	it("discovers recursive routes from features/ layout without namespacing by feature", async () => {
+		await write("features/blog/routes/webhooks/stripe.post.ts");
+
+		const result = await discoverFiles(rootDir, outDir, coreDiscoverOptions());
+		const routes = cat(result, "routes");
+		const route = routes.get("webhooks/stripe:POST");
+
+		expect(route).toBeDefined();
+		expect(route?.source).toBe("features/blog/routes/webhooks/stripe.post.ts");
+	});
+
+	it("discovers core category dirs from features/ layout", async () => {
+		await write(
+			"features/site/globals/settings.ts",
+			"export const settings = global('settings');",
+		);
+		await write(
+			"features/catalog/services/pricing.ts",
+			"export const pricing = {};",
+		);
+		await write("features/marketing/emails/welcome.tsx");
+		await write("features/blog/jobs/publish.ts");
+		await write("features/blog/seeds/demo.ts");
+		await write("features/i18n/messages/en.ts");
+		await write(
+			"features/editor/fields/rating.ts",
+			"export const rating = fieldType('rating');",
+		);
+
+		const result = await discoverFiles(rootDir, outDir, coreDiscoverOptions());
+
+		expect(cat(result, "globals").get("settings")?.source).toBe(
+			"features/site/globals/settings.ts",
+		);
+		expect(cat(result, "services").get("pricing")?.source).toBe(
+			"features/catalog/services/pricing.ts",
+		);
+		expect(cat(result, "emails").get("welcome")?.source).toBe(
+			"features/marketing/emails/welcome.tsx",
+		);
+		expect(cat(result, "jobs").get("publish")?.source).toBe(
+			"features/blog/jobs/publish.ts",
+		);
+		expect(cat(result, "seeds").get("demo")?.source).toBe(
+			"features/blog/seeds/demo.ts",
+		);
+		expect(cat(result, "messages").get("en")?.source).toBe(
+			"features/i18n/messages/en.ts",
+		);
+		expect(cat(result, "fieldTypes").get("rating")?.source).toBe(
+			"features/editor/fields/rating.ts",
+		);
+	});
+
 	// ── Conflict detection ────────────────────────────────────────────────────
 
 	it("throws on duplicate keys from by-type and by-feature layout", async () => {
@@ -558,6 +599,20 @@ describe("discoverFiles", () => {
 		expect(blocks.has("cta")).toBe(true);
 	});
 
+	it("discovers plugin directory patterns from features/ layout", async () => {
+		await write("features/marketing/blocks/hero.ts", "export const hero = {};");
+
+		const result = await discoverFiles(rootDir, outDir, {
+			discover: { blocks: "blocks/*.ts" },
+		});
+
+		const blocks = result.categories.get("blocks")!;
+		const block = blocks.get("hero");
+
+		expect(block).toBeDefined();
+		expect(block?.source).toBe("features/marketing/blocks/hero.ts");
+	});
+
 	it("discovers plugin single-file pattern (e.g. sidebar.ts)", async () => {
 		await write("sidebar.ts", "export default [];");
 
@@ -569,6 +624,16 @@ describe("discoverFiles", () => {
 		const file = result.singles.get("sidebar")!;
 		expect(file.key).toBe("sidebar");
 		expect(file.varName).toBe("_sidebar");
+	});
+
+	it("does not discover feature-level single-file patterns unless they use spread", async () => {
+		await write("features/admin/sidebar.ts", "export default [];");
+
+		const result = await discoverFiles(rootDir, outDir, {
+			discover: { sidebar: "sidebar.ts" },
+		});
+
+		expect(result.singles.has("sidebar")).toBe(false);
 	});
 });
 

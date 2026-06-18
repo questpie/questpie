@@ -361,7 +361,7 @@ For full type inference, register your app types:
 
 ```typescript
 // admin.ts
-import type { App } from "./server/app";
+import type { App } from "#questpie";
 
 declare module "@questpie/admin/builder" {
 	interface AdminTypeRegistry {

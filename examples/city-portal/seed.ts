@@ -5,9 +5,8 @@
  * Usage: bun run seed.ts [--force]
  */
 
+import { app } from "#questpie";
 import type { BlocksDocument } from "@questpie/admin/server";
-
-import { app } from "./src/questpie/server/app";
 
 // ============================================================================
 // Helper: TipTap Rich Text

@@ -1,3 +1,4 @@
+import starterModule from "#questpie/server/modules/starter/.generated/module.js";
 /**
  * Full-app gate fixture — pulled modules.
  *
@@ -30,7 +31,6 @@
  * probe (a services-fold) genuinely cyclic, proving the gate catches the cycle.
  */
 import type { ServiceBuilder } from "#questpie/server/services/define-service.js";
-import starterModule from "#questpie/server/modules/starter/.generated/module.js";
 
 import { adminUser } from "./collections/admin-user.js";
 import { reportingCarrier } from "./config/reporting-carrier.js";
@@ -80,7 +80,6 @@ type AdminModule = {
 	name: "fixture-admin";
 	modules: readonly [typeof starterModule];
 	collections: AdminCollections;
-	config: { auth: typeof starterModule.config.auth };
 };
 
 export const adminModule: AdminModule = {
@@ -94,7 +93,6 @@ export const adminModule: AdminModule = {
 		session: starterModule.collections.session,
 		verification: starterModule.collections.verification,
 	},
-	config: { auth: starterModule.config.auth },
 };
 
 export default [adminModule, reportingModule] as const;

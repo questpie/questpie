@@ -1,0 +1,278 @@
+---
+title: Seeds
+description: Seed initial, required, demo, or test data with fully typed app context, category filters, dependency ordering, undo handlers, and CLI tracking.
+---
+
+A **seed** writes app data through the same typed surface your routes, hooks, jobs, and services use. Drop a file in `seeds/`, default-export `seed({...})`, run codegen, and the CLI can run the seed once, skip it after it has been recorded, filter it by category, validate it in a rolled-back transaction, undo it when you provide an `undo` handler, or run it automatically at startup.
+
+Use seeds for data that belongs to the app, not for schema changes. Migrations change tables and columns; seeds create rows such as the first admin user, default roles, baseline site settings, demo posts, or integration test fixtures.
+
+## What it does
+
+- **Uses full app context.** A seed receives `collections`, `globals`, `db`, `services`, `email`, `queue`, `storage`, `kv`, and the rest of your app context.
+- **Runs in system mode by default.** Seed work bypasses collection, global, and field access rules, so bootstrap data can be created before any user exists.
+- **Tracks what ran.** Completed seeds are recorded in the `questpie_seeds` table and skipped on later runs unless you pass `--force`.
+- **Orders dependencies.** `dependsOn` lists seed ids that must run first; the runner topologically sorts them before execution.
+- **Filters by category.** Categories let you separate required bootstrap data, local demo data, and test fixtures.
+- **Supports undo.** `seed:undo` calls each seed's optional `undo` handler and removes its tracking row.
+
+## Quick start
+
+Create a seed file under the server `seeds/` directory:
+
+```ts title="src/questpie/server/seeds/site-settings.ts"
+import { seed } from "questpie";
+
+export default seed({
+  id: "siteSettings",
+  description: "Create default site settings",
+  category: "required",
+  async run({ globals, createContext, log }) {
+    const ctx = await createContext({ accessMode: "system" });
+
+    await globals.siteSettings.update(
+      {
+        siteName: "QUESTPIE",
+        supportEmail: "support@example.com",
+      },
+      ctx,
+    );
+
+    log("Default site settings written");
+  },
+});
+```
+
+Run codegen after adding, renaming, or removing a seed file:
+
+```bash
+questpie generate
+```
+
+Then run pending seeds:
+
+```bash
+questpie seed
+```
+
+You can also scaffold the file:
+
+```bash
+questpie add seed site-settings
+```
+
+## Idempotent data
+
+A seed should be safe to run more than once. The runner skips already-recorded seeds, but `--force`, reset tracking, fresh databases, and local experiments all re-enter the `run` handler. Check for existing data, use stable unique keys, or update/upsert singletons instead of blindly inserting duplicates.
+
+```ts title="src/questpie/server/seeds/demo-posts.ts"
+import { seed } from "questpie";
+
+export default seed({
+  id: "demoPosts",
+  description: "Create demo posts for local development",
+  category: "dev",
+  async run({ collections, createContext, log }) {
+    const ctx = await createContext({ accessMode: "system" });
+
+    const existing = await collections.posts.findOne(
+      { where: { slug: "hello-questpie" } },
+      ctx,
+    );
+
+    if (existing) {
+      log("Demo post already exists");
+      return;
+    }
+
+    await collections.posts.create(
+      {
+        title: "Hello QUESTPIE",
+        slug: "hello-questpie",
+        status: "draft",
+      },
+      ctx,
+    );
+  },
+  async undo({ collections, createContext }) {
+    const ctx = await createContext({ accessMode: "system" });
+
+    await collections.posts.deleteMany(
+      {
+        where: { slug: { eq: "hello-questpie" } },
+      },
+      ctx,
+    );
+  },
+});
+```
+
+## Categories
+
+Every seed has one category:
+
+| Category | Use it for |
+|---|---|
+| `required` | Bootstrap data required in every environment, such as roles, baseline settings, or the first admin invitation. |
+| `dev` | Local and preview data, such as demo posts, fake users, sample products, or screenshots. |
+| `test` | Deterministic fixtures for integration and end-to-end tests. |
+
+Run one or more categories from the CLI:
+
+```bash
+questpie seed --category required
+questpie seed --category required,dev
+```
+
+`--category` is exact. If you ask for `dev`, only `dev` seeds are selected by that CLI filter. The `autoSeed` shorthand has its own convenience behavior, covered below.
+
+## Dependencies
+
+Use `dependsOn` when one seed needs data another seed creates:
+
+```ts title="src/questpie/server/seeds/demo-posts.ts"
+import { seed } from "questpie";
+
+export default seed({
+  id: "demoPosts",
+  category: "dev",
+  dependsOn: ["siteSettings"],
+  async run({ collections }) {
+    await collections.posts.create({
+      title: "Seeded post",
+      status: "draft",
+    });
+  },
+});
+```
+
+Dependencies are seed ids, not filenames. If a dependency is outside the selected category or `--only` list, the runner can still pull it into the ordered execution set because it is required by a selected seed.
+
+## Context and access
+
+Seed handlers receive a `SeedContext`, which is the app context plus:
+
+| Helper | Purpose |
+|---|---|
+| `log(message)` | Writes a seed-scoped log line. |
+| `createContext(options?)` | Builds a request context for CRUD calls that need a locale or explicit access mode. |
+
+The runner creates seed work in system mode. Use `createContext()` when you need to pass a specific request context into CRUD methods, especially for localized globals and collections:
+
+```ts title="src/questpie/server/seeds/localized-settings.ts"
+import { seed } from "questpie";
+
+export default seed({
+  id: "localizedSettings",
+  category: "required",
+  async run({ globals, createContext }) {
+    const en = await createContext({ locale: "en", accessMode: "system" });
+    const sk = await createContext({ locale: "sk", accessMode: "system" });
+
+    await globals.siteSettings.update({ tagline: "Build faster" }, en);
+    await globals.siteSettings.update({ tagline: "Stavaj rychlejsie" }, sk);
+  },
+});
+```
+
+Do not use seeds to model user-facing permissions. Seeds are trusted internal code; regular HTTP requests still run in user mode and go through access rules.
+
+## CLI commands
+
+| Command | What it does |
+|---|---|
+| `questpie seed` | Runs pending seeds. |
+| `questpie seed:status` | Prints pending and executed seeds. |
+| `questpie seed:undo` | Runs `undo` handlers for executed seeds, then removes their tracking rows. |
+| `questpie seed:reset` | Clears tracking rows without changing app data. |
+
+Shared options:
+
+| Option | Commands | Effect |
+|---|---|---|
+| `-c, --config <path>` | all | Use a non-default `questpie.config.ts`. |
+| `--category <categories>` | `seed`, `seed:undo` | Comma-separated category filter: `required`, `dev`, `test`. |
+| `--only <ids>` | `seed`, `seed:undo`, `seed:reset` | Comma-separated seed id filter. |
+| `-f, --force` | `seed` | Re-run selected seeds even when tracking says they already executed. |
+| `--validate` | `seed` | Run selected seeds inside a transaction and roll it back. |
+
+`seed:reset` is not an undo. It only clears tracking, so the next `questpie seed` treats those seeds as pending again.
+
+<Callout type="warn" title="Validate only rolls back database writes">
+`questpie seed --validate` runs seed database work inside a transaction and rolls it back. External side effects still run if your seed sends email, calls an HTTP API, publishes a queue job, writes to object storage, or mutates another system. Keep validation-safe seeds free of external side effects, or guard those calls yourself.
+</Callout>
+
+## Auto-seed
+
+`runtimeConfig({ autoSeed })` runs seeds on application startup:
+
+```ts title="src/questpie/server/questpie.config.ts"
+import { runtimeConfig } from "questpie/app";
+
+export default runtimeConfig({
+  autoSeed: "required",
+});
+```
+
+The shorthand resolves like this:
+
+| Value | Categories |
+|---|---|
+| `true` | all pending seeds |
+| `"required"` | `required` |
+| `"dev"` | `required`, `dev` |
+| `"test"` | `required`, `test` |
+| `["dev"]` | exactly `dev` |
+| `false` or omitted | no automatic seed run |
+
+Use automatic seeds for bootstrap data that must exist before the app serves traffic. Keep demo and test data opt-in unless the environment is explicitly meant for it.
+
+## Modules
+
+Modules can contribute seeds alongside collections, globals, jobs, routes, services, migrations, and messages:
+
+```ts title="src/module.ts"
+import { module } from "questpie/app";
+import { seed } from "questpie";
+
+const requiredSettings = seed({
+  id: "acmeRequiredSettings",
+  category: "required",
+  async run({ globals }) {
+    await globals.siteSettings.update({
+      siteName: "Acme",
+    });
+  },
+});
+
+export const acmeModule = module({
+  name: "acme",
+  seeds: [requiredSettings],
+});
+```
+
+Seed arrays concatenate across modules. They are not keyed object maps, so make each `id` globally unique enough for your app or package.
+
+## Full API
+
+```ts
+type SeedCategory = "required" | "dev" | "test";
+
+type Seed = {
+  id: string;
+  description?: string;
+  category: SeedCategory;
+  run: (ctx: SeedContext) => Promise<void>;
+  undo?: (ctx: SeedContext) => Promise<void>;
+  dependsOn?: string[];
+};
+```
+
+`SeedContext` is the full app context plus `log()` and `createContext()`. The same context shape means seeds can call collections, globals, services, queues, mailers, storage, KV, and raw `db` without importing the generated `app`.
+
+## Related
+
+- [Configuration](/docs/concepts/configuration), `runtimeConfig({ autoSeed })` and CLI directory overrides.
+- [Access control](/docs/concepts/access-control), how system mode bypasses collection and field rules.
+- [Codegen](/docs/extend/codegen), how `seeds/` files are discovered and how `questpie add seed` scaffolds one.
+- [Modules](/docs/extend/modules), how modules contribute seeds and how seed arrays merge.

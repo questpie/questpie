@@ -30,6 +30,24 @@ type SessionMarker<TAuthConfig> = TAuthConfig extends {
 	? NonNullable<TSession>
 	: never;
 
+type BetterAuthSessionFromConfig<TAuthConfig> = Auth<
+	TAuthConfig extends BetterAuthOptions ? TAuthConfig : BetterAuthOptions
+>["$Infer"]["Session"];
+
+type MergeSessionShapes<TBase, TOverride> = [TOverride] extends [never]
+	? TBase
+	: TBase extends { user: infer TBaseUser; session: infer TBaseSession }
+		? TOverride extends {
+				user: infer TOverrideUser;
+				session: infer TOverrideSession;
+			}
+			? {
+					user: TBaseUser & TOverrideUser;
+					session: TBaseSession & TOverrideSession;
+				}
+			: TBase & TOverride
+		: TBase & TOverride;
+
 /**
  * Infer custom request-context extensions from `config/app.ts`.
  *
@@ -70,10 +88,11 @@ export type InferContextExtensionsFromApp<TApp> = TApp extends {
 export type InferSessionFromAuthConfig<TAuthConfig> = [
 	SessionMarker<TAuthConfig>,
 ] extends [never]
-	? Auth<
-			TAuthConfig extends BetterAuthOptions ? TAuthConfig : BetterAuthOptions
-		>["$Infer"]["Session"]
-	: SessionMarker<TAuthConfig>;
+	? BetterAuthSessionFromConfig<TAuthConfig>
+	: MergeSessionShapes<
+			BetterAuthSessionFromConfig<TAuthConfig>,
+			SessionMarker<TAuthConfig>
+		>;
 
 /**
  * Infer the database type from a app instance.

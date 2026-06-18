@@ -8,7 +8,7 @@
 import { Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 
-import type { NavItem } from "@/questpie/server/globals";
+import type { NavItem } from "@/questpie/server/globals/site-settings";
 
 interface HeaderProps {
 	cityName: string;

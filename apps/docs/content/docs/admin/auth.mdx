@@ -16,11 +16,14 @@ export default [adminModule] as const;
 ```
 
 ```ts title="src/questpie/server/config/auth.ts"
-import { authConfig } from "questpie";
+import { admin, bearer } from "better-auth/plugins";
+import { authConfig } from "questpie/app";
 
 export default authConfig({
+	plugins: [admin(), bearer()],
 	emailAndPassword: {
 		enabled: true,
+		requireEmailVerification: false,
 	},
 });
 ```
@@ -39,6 +42,29 @@ The admin guard checks the active session user role.
 | No session | Rejected and redirected to login. |
 
 If you extend the Better Auth `user` collection, keep the admin starter fields and role propagation. The setup route expects the canonical `user` collection to include `id`, `role`, and `emailVerified`.
+
+## Session type contract
+
+`session.user.role` is not a convention to cast around. It is contributed by Better Auth's `admin()` plugin, folded through `authConfig()`, and emitted into generated `AppSessionUser`.
+
+When `adminModule` is installed, it depends on the starter module, and the starter module contributes the default `config.auth` with `admin()` and `bearer()`. Your app's `config/auth.ts` is merged on top. Admin-enabled apps should still keep the plugins explicit in app auth config so the contract is visible in the project and stable across scaffolded changes.
+
+After changing `modules.ts` or `config/auth.ts`, run:
+
+```bash
+questpie generate
+```
+
+Then `AppSession`, `AppSessionUser`, `AppConfig.auth`, route handler `session`, hooks, access rules, and services all see the merged auth graph.
+
+```ts
+.access({
+	update: ({ session }) => session?.user.role === "admin",
+	delete: ({ session }) => session?.user.role === "admin",
+})
+```
+
+Do not write `(session?.user as any)?.role`. If `role` is missing, the auth module/config/codegen chain is wrong and should be fixed at the source.
 
 ## First admin setup
 
@@ -100,6 +126,7 @@ The admin client exports `createAdminAuthClient()` and `useAuthClient()` for scr
 ## Common mistakes
 
 - Do not treat any authenticated user as an admin. Check for `role: "admin"`.
+- Do not cast `session.user` to `any` for role checks. Fix the generated session type instead.
 - Do not replace the starter user collection from scratch. Extend it while preserving the fields and session role used by admin.
 - Do not expose custom admin routes without `requireAdminAuth()` or an equivalent role check.
 - Do not hide admin UI as your only protection. Server helpers and collection/global access rules still need to enforce data access.

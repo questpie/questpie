@@ -7,7 +7,7 @@
  * ```ts
  * // middleware.ts
  * import { createNextAuthMiddleware } from "@questpie/admin/server/adapters/nextjs";
- * import { app } from "./questpie/server/app";
+ * import { app } from "#questpie";
  *
  * export default createNextAuthMiddleware({
  *   app,
@@ -85,7 +85,7 @@ function pathMatches(pathname: string, patterns: string[]): boolean {
  * ```ts
  * // middleware.ts
  * import { createNextAuthMiddleware } from "@questpie/admin/server/adapters/nextjs";
- * import { app } from "./questpie/server/app";
+ * import { app } from "#questpie";
  *
  * export default createNextAuthMiddleware({
  *   app,
@@ -162,7 +162,7 @@ export function createNextAuthMiddleware({
  * // app/admin/layout.tsx
  * import { getNextAdminSession } from "@questpie/admin/server/adapters/nextjs";
  * import { headers } from "next/headers";
- * import { app } from "@/questpie/server/app";
+ * import { app } from "#questpie";
  *
  * export default async function AdminLayout({ children }) {
  *   const headersList = headers();
@@ -183,7 +183,7 @@ export function createNextAuthMiddleware({
  * ```ts
  * // app/api/admin/users/route.ts
  * import { getNextAdminSession } from "@questpie/admin/server/adapters/nextjs";
- * import { app } from "@/questpie/server/app";
+ * import { app } from "#questpie";
  *
  * export async function GET(request: Request) {
  *   const session = await getNextAdminSession({

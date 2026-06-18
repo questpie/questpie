@@ -10,6 +10,12 @@
  * @see ideal-codegen-design §6 (preserved invariants, each with a proving assertion)
  */
 import "./.generated/factories.js";
+import type { InferContextExtensionsFromApp } from "#questpie/server/config/context.js";
+import type { CollectionInsert } from "#questpie/shared/type-utils.js";
+
+import type { NoAny, NoNever, NotEmptyObject } from "../_assert.js";
+import type { Equal, Expect, HasKey, IsAny } from "../type-test-utils.js";
+import type { AppCollections } from "./.generated/entities.gen.js";
 import type {
 	App,
 	AppServices,
@@ -17,13 +23,6 @@ import type {
 	AppSessionUser,
 	CollectionWhere,
 } from "./.generated/index.js";
-import type { AppCollections } from "./.generated/entities.gen.js";
-
-import type { InferContextExtensionsFromApp } from "#questpie/server/config/context.js";
-import type { CollectionInsert } from "#questpie/shared/type-utils.js";
-
-import type { Equal, Expect, HasKey, IsAny } from "../type-test-utils.js";
-import type { NoAny, NoNever, NotEmptyObject } from "../_assert.js";
 
 // ============================================================================
 // Invariant 1 — city-portal-style context-resolver precision (cityId)
@@ -41,13 +40,14 @@ type _extKeysExact = Expect<Equal<keyof Ext, "cityId">>;
 // ============================================================================
 // Invariant 2 — plugin-aware session (P0 keystone)
 // AppSession / AppSessionUser must be concrete (not any). The Better Auth
-// admin() plugin contributes `role`; additionalFields contributes `department`.
-// Both must survive into the inferred user shape.
+// admin() plugin contributes `role` from a nested starter module; app-local
+// additionalFields contributes `department`. Both must survive into the inferred
+// user shape.
 // ============================================================================
 
 type _sessionNotAny = Expect<NoAny<AppSession>>;
 type _sessionUserNotAny = Expect<NoAny<AppSessionUser>>;
-// Plugin-contributed user field present + not-any (the plugin carrier).
+// Nested module plugin-contributed user field present + not-any.
 type _userHasRole = Expect<HasKey<AppSessionUser, "role">>;
 type _userRoleNotAny = Expect<NoAny<AppSessionUser["role"]>>;
 // additionalFields-contributed user field present (the additionalFields carrier).
@@ -87,10 +87,14 @@ type _hookDb = Expect<NoAny<Questpie.AppHookContext["db"]>>;
 type _hookCollections = Expect<NoAny<Questpie.AppHookContext["collections"]>>;
 type _hookQueue = Expect<NoAny<Questpie.AppHookContext["queue"]>>;
 
-type _accessSession = Expect<NoAny<Questpie.AppDefaultAccessContext["session"]>>;
+type _accessSession = Expect<
+	NoAny<Questpie.AppDefaultAccessContext["session"]>
+>;
 type _accessDb = Expect<NoAny<Questpie.AppDefaultAccessContext["db"]>>;
 
-type _resolverBaseSession = Expect<NoAny<Questpie.ContextResolverBase["session"]>>;
+type _resolverBaseSession = Expect<
+	NoAny<Questpie.ContextResolverBase["session"]>
+>;
 type _resolverBaseDb = Expect<NoAny<Questpie.ContextResolverBase["db"]>>;
 
 // Force IsAny import usage (kept for symmetry with the assert kit conventions).
@@ -175,7 +179,10 @@ type _collectionWhereHasField = Expect<
 	HasKey<CollectionWhere<"articles">, "title">
 >;
 type _collectionWhereAssignable = Expect<
-	Equal<CollectionWhere<"articles"> extends _ArticlesWhereParam ? true : false, true>
+	Equal<
+		CollectionWhere<"articles"> extends _ArticlesWhereParam ? true : false,
+		true
+	>
 >;
 
 // Mutability guard — `Where` field keys must NOT be readonly, or the
@@ -188,10 +195,4 @@ function _collectionWhereMutationCompiles(): void {
 	w.title = "Hello"; // readonly key → TS2540 here
 }
 
-export type {
-	Ext,
-	App,
-	AppServices,
-	AppSession,
-	AppSessionUser,
-};
+export type { Ext, App, AppServices, AppSession, AppSessionUser };

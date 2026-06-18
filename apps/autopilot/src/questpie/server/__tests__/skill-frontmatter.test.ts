@@ -14,7 +14,10 @@ import {
 } from "../lib/skill-frontmatter";
 
 /** A minimal valid SKILL.md body for a given frontmatter block. */
-function doc(frontmatter: string, body = "\n# Body\n\nProcedure here.\n"): string {
+function doc(
+	frontmatter: string,
+	body = "\n# Body\n\nProcedure here.\n",
+): string {
 	return `---\n${frontmatter}\n---\n${body}`;
 }
 
@@ -41,14 +44,20 @@ describe("parseSkillFrontmatter — valid documents", () => {
 		expect(fm.description).toContain("Build a mini-app");
 		expect(fm.version).toBe("1.0.0");
 		expect(fm.status).toBe("published");
-		expect(fm.allowed_tools).toEqual(["knowledge_read", "knowledge_write", "run_code"]);
+		expect(fm.allowed_tools).toEqual([
+			"knowledge_read",
+			"knowledge_write",
+			"run_code",
+		]);
 		expect(fm.triggers).toEqual(["create an app", "build a tool"]);
 		expect(fm.references).toEqual(["server.template.ts"]);
 	});
 
 	it("accepts the minimal required fields (name + description + status)", () => {
 		const fm = parseSkillFrontmatter(
-			doc("name: ok-skill\ndescription: Does a thing when asked.\nstatus: draft"),
+			doc(
+				"name: ok-skill\ndescription: Does a thing when asked.\nstatus: draft",
+			),
 		);
 		expect(fm.name).toBe("ok-skill");
 		expect(fm.status).toBe("draft");
@@ -114,9 +123,17 @@ describe("parseSkillFrontmatter — limit enforcement", () => {
 	});
 
 	it("rejects a non-lowercase-hyphen name", () => {
-		for (const bad of ["Make_App", "make app", "MakeApp", "-leading", "trailing-"]) {
+		for (const bad of [
+			"Make_App",
+			"make app",
+			"MakeApp",
+			"-leading",
+			"trailing-",
+		]) {
 			expect(() =>
-				parseSkillFrontmatter(doc(`name: ${bad}\ndescription: ok\nstatus: draft`)),
+				parseSkillFrontmatter(
+					doc(`name: ${bad}\ndescription: ok\nstatus: draft`),
+				),
 			).toThrow(SkillFrontmatterError);
 		}
 	});
@@ -159,14 +176,16 @@ describe("parseSkillFrontmatter — limit enforcement", () => {
 
 describe("parseSkillFrontmatter — malformed input fails closed", () => {
 	it("rejects a body with no frontmatter fence", () => {
-		expect(() => parseSkillFrontmatter("# Just markdown, no frontmatter")).toThrow(
-			/must open with a `---`/,
-		);
+		expect(() =>
+			parseSkillFrontmatter("# Just markdown, no frontmatter"),
+		).toThrow(/must open with a `---`/);
 	});
 
 	it("rejects an unterminated frontmatter block", () => {
 		expect(() =>
-			parseSkillFrontmatter("---\nname: ok\ndescription: ok\nstatus: draft\n# never closes"),
+			parseSkillFrontmatter(
+				"---\nname: ok\ndescription: ok\nstatus: draft\n# never closes",
+			),
 		).toThrow(/unterminated/);
 	});
 
@@ -202,13 +221,17 @@ describe("parseSkillFrontmatter — malformed input fails closed", () => {
 
 	it("rejects tabs in the frontmatter", () => {
 		expect(() =>
-			parseSkillFrontmatter("---\nname: ok\n\tdescription: ok\nstatus: draft\n---\nx"),
+			parseSkillFrontmatter(
+				"---\nname: ok\n\tdescription: ok\nstatus: draft\n---\nx",
+			),
 		).toThrow(/tab/);
 	});
 
 	it("rejects unexpected indentation at the top level", () => {
 		expect(() =>
-			parseSkillFrontmatter("---\nname: ok\n  description: ok\nstatus: draft\n---\nx"),
+			parseSkillFrontmatter(
+				"---\nname: ok\n  description: ok\nstatus: draft\n---\nx",
+			),
 		).toThrow(SkillFrontmatterError);
 	});
 
@@ -229,15 +252,15 @@ describe("parseSkillFrontmatter — malformed input fails closed", () => {
 	});
 
 	it("rejects a non-string body", () => {
-		expect(() =>
-			parseSkillFrontmatter(undefined as unknown as string),
-		).toThrow(SkillFrontmatterError);
+		expect(() => parseSkillFrontmatter(undefined as unknown as string)).toThrow(
+			SkillFrontmatterError,
+		);
 	});
 
 	it("rejects a missing required field (no description)", () => {
-		expect(() =>
-			parseSkillFrontmatter(doc("name: ok\nstatus: draft")),
-		).toThrow(/description/);
+		expect(() => parseSkillFrontmatter(doc("name: ok\nstatus: draft"))).toThrow(
+			/description/,
+		);
 	});
 });
 
@@ -248,7 +271,7 @@ describe("the seeded make-a-miniapp SKILL.md validates", () => {
 		// acceptance criterion "a skill file validates"). The seed escapes backtick
 		// and `${` inside the literal — undo those to recover the stored body.
 		const seedPath = fileURLToPath(
-			new URL("../seeds/make-a-miniapp-skill.seed.ts", import.meta.url),
+			new URL("../seeds/make-a-miniapp-skill.ts", import.meta.url),
 		);
 		const src = readFileSync(seedPath, "utf8");
 		const match = src.match(/const SKILL_BODY = `([\s\S]*?)`;\n/);
@@ -261,7 +284,11 @@ describe("the seeded make-a-miniapp SKILL.md validates", () => {
 		expect(fm.name).toBe("make-a-miniapp");
 		expect(fm.status).toBe("published");
 		expect(fm.version).toBe("1.0.0");
-		expect(fm.allowed_tools).toEqual(["knowledge_read", "knowledge_write", "run_code"]);
+		expect(fm.allowed_tools).toEqual([
+			"knowledge_read",
+			"knowledge_write",
+			"run_code",
+		]);
 		expect(fm.references).toContain("server.template.ts");
 		expect(fm.references).toContain("examples/social-scheduler.md");
 		expect(fm.description.length).toBeLessThanOrEqual(SKILL_DESCRIPTION_MAX);
@@ -276,7 +303,7 @@ describe("the make-a-miniapp skill teaches the REAL .app API", () => {
 	/** Read the seed source once; each test extracts a template/code block. */
 	function seedSource(): string {
 		const seedPath = fileURLToPath(
-			new URL("../seeds/make-a-miniapp-skill.seed.ts", import.meta.url),
+			new URL("../seeds/make-a-miniapp-skill.ts", import.meta.url),
 		);
 		return readFileSync(seedPath, "utf8");
 	}
@@ -285,7 +312,9 @@ describe("the make-a-miniapp skill teaches the REAL .app API", () => {
 	function extractTemplate(src: string, name: string): string {
 		const m = src.match(new RegExp(`const ${name} = \`([\\s\\S]*?)\`;\\n`));
 		expect(m, `template literal ${name} not found`).not.toBeNull();
-		return (m as RegExpMatchArray)[1].replace(/\\`/g, "`").replace(/\\\$/g, "$");
+		return (m as RegExpMatchArray)[1]
+			.replace(/\\`/g, "`")
+			.replace(/\\\$/g, "$");
 	}
 
 	/** Pull the first fenced ```ts … ``` code block out of a markdown string. */
@@ -349,6 +378,8 @@ describe("the make-a-miniapp skill teaches the REAL .app API", () => {
 		const body = extractTemplate(seedSource(), "SKILL_BODY");
 		// The body MAY mention that no such module exists (negative guidance); it must
 		// never present an `import { … } from "questpie/miniapp"` statement.
-		expect(body).not.toMatch(/import\s*\{[^}]*\}\s*from\s*["']questpie\/miniapp["']/);
+		expect(body).not.toMatch(
+			/import\s*\{[^}]*\}\s*from\s*["']questpie\/miniapp["']/,
+		);
 	});
 });

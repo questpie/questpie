@@ -8,14 +8,22 @@
 import { Elysia } from "elysia";
 import { createFetchHandler } from "questpie/http";
 
+import { app as questpie } from "#questpie";
 import { env } from "@/lib/env";
-import { app as questpie } from "@/questpie/server/app";
 
 const handler = createFetchHandler(questpie, { basePath: "/api" });
 
 new Elysia()
-	.all("/api/*", async ({ request }) => (await handler(request)) ?? new Response("Not Found", { status: 404 }))
-	.get("/", () => new Response(null, { status: 302, headers: { Location: "/api/docs" } }))
+	.all(
+		"/api/*",
+		async ({ request }) =>
+			(await handler(request)) ?? new Response("Not Found", { status: 404 }),
+	)
+	.get(
+		"/",
+		() =>
+			new Response(null, { status: 302, headers: { Location: "/api/docs" } }),
+	)
 	.listen(env.PORT ?? 3000);
 
 console.log(`🚀 QUESTPIE headless API on http://localhost:${env.PORT ?? 3000}`);

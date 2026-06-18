@@ -1,6 +1,6 @@
 import { createFetchHandler } from "questpie/http";
 
-import { app } from "@/questpie/server/app";
+import { app } from "#questpie";
 
 const handler = createFetchHandler(app, {
 	basePath: "/api",

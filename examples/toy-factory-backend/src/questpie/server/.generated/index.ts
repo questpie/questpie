@@ -24,7 +24,7 @@ import { toyMaterials as _coll_toyMaterials } from "../collections/toy-materials
 import { toys as _coll_toys } from "../collections/toys";
 
 // ── Globals ────────────────────────────────────────────────
-import { siteSettings as _glob_siteSettings } from "../globals/site-settings.global";
+import { siteSettings as _glob_siteSettings } from "../globals/site-settings";
 
 // ── Jobs ───────────────────────────────────────────────────
 import _job_recalculateMaterialPlan from "../jobs/recalculate-material-plan";
@@ -41,7 +41,7 @@ import _svc_capacityPlanner from "../services/capacity-planner";
 import _email_productionScheduled from "../emails/production-scheduled";
 
 // ── Seeds ──────────────────────────────────────────────────
-import _seed_demo_seed from "../seeds/demo.seed";
+import _seed_demo from "../seeds/demo";
 
 // ── Workflows ──────────────────────────────────────────────
 import _wf_nightlyCapacityReview from "../workflows/nightly-capacity-review";
@@ -147,7 +147,7 @@ _appPromise = createApp(
 		emailTemplates: {
 			productionScheduled: _email_productionScheduled,
 		},
-		seeds: [_seed_demo_seed],
+		seeds: [_seed_demo],
 		workflows: {
 			[_wf_nightlyCapacityReview.name]: _wf_nightlyCapacityReview,
 			[_wf_productionOrderPlan.name]: _wf_productionOrderPlan,

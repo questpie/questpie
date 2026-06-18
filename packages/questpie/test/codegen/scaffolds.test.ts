@@ -24,6 +24,7 @@ import type {
 } from "../../src/cli/codegen/types.js";
 import {
 	addCommand,
+	stripScaffoldTypeSuffix,
 	toCamelCase,
 	toKebabCase,
 	toPascalCase,
@@ -155,8 +156,25 @@ describe("name casing helpers", () => {
 		expect(toKebabCase("MyBlock")).toBe("my-block");
 		expect(toKebabCase("my-block")).toBe("my-block");
 		expect(toKebabCase("my_block")).toBe("my-block");
+		expect(toKebabCase("my.block")).toBe("my-block");
 		expect(toKebabCase("MY BLOCK")).toBe("my-block");
 		expect(toKebabCase("simple")).toBe("simple");
+	});
+
+	it("stripScaffoldTypeSuffix removes old entity filename suffix habits", () => {
+		expect(stripScaffoldTypeSuffix("posts.collection", "collection")).toBe(
+			"posts",
+		);
+		expect(stripScaffoldTypeSuffix("site-settings.global", "global")).toBe(
+			"site-settings",
+		);
+		expect(stripScaffoldTypeSuffix("send-welcome.job", "job")).toBe(
+			"send-welcome",
+		);
+		expect(stripScaffoldTypeSuffix("posts", "collection")).toBe("posts");
+		expect(stripScaffoldTypeSuffix("collection", "collection")).toBe(
+			"collection",
+		);
 	});
 
 	it("toCamelCase", () => {

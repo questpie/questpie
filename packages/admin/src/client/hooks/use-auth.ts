@@ -9,9 +9,9 @@
  * ```tsx
  * // In your app, create the auth client once:
  * import { createAdminAuthClient } from '@questpie/admin/hooks'
- * import type { app } from "./server/app"
+ * import type { AppConfig } from "#questpie"
  *
- * export const authClient = createAdminAuthClient<typeof app>({
+ * export const authClient = createAdminAuthClient<AppConfig>({
  *   baseURL: 'http://localhost:3000'
  * })
  *
@@ -87,10 +87,10 @@ type InternalClientOptions<T extends QuestpieApp> = {
  * @example
  * ```tsx
  * import { createAdminAuthClient } from '@questpie/admin/hooks'
- * import type { app } from "./server/app"
+ * import type { AppConfig } from "#questpie"
  *
  * // Create client with type inference from your app
- * export const authClient = createAdminAuthClient<typeof app>({
+ * export const authClient = createAdminAuthClient<AppConfig>({
  *   baseURL: 'http://localhost:3000'
  * })
  *
@@ -126,9 +126,9 @@ export function createAdminAuthClient<T extends QuestpieApp>(
  * @example
  * ```tsx
  * import type { AdminAuthClient } from '@questpie/admin/hooks'
- * import type { app } from "./server/app"
+ * import type { AppConfig } from "#questpie"
  *
- * type MyAuthClient = AdminAuthClient<typeof app>
+ * type MyAuthClient = AdminAuthClient<AppConfig>
  * ```
  */
 type AdminAuthClient<T extends QuestpieApp> = ReturnType<
@@ -141,9 +141,9 @@ type AdminAuthClient<T extends QuestpieApp> = ReturnType<
  * @example
  * ```tsx
  * import type { AdminSession } from '@questpie/admin/hooks'
- * import type { app } from "./server/app"
+ * import type { AppConfig } from "#questpie"
  *
- * type MySession = AdminSession<typeof app>
+ * type MySession = AdminSession<AppConfig>
  * // Includes: { user: { id, email, name, role, ... }, session: { ... } }
  * ```
  */
@@ -156,9 +156,9 @@ type AdminSession<T extends QuestpieApp> =
  * @example
  * ```tsx
  * import type { AdminUser } from '@questpie/admin/hooks'
- * import type { app } from "./server/app"
+ * import type { AppConfig } from "#questpie"
  *
- * type MyUser = AdminUser<typeof app>
+ * type MyUser = AdminUser<AppConfig>
  * ```
  */
 type AdminUser<T extends QuestpieApp> = AdminSession<T>["user"];

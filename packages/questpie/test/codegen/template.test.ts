@@ -264,9 +264,7 @@ describe("generateTemplate — minimal (modules.ts only)", () => {
 
 	it("derives session from auth config instead of typeof app", () => {
 		expect(code).toContain("type _AppSession =");
-		expect(code).toContain(
-			"InferSessionFromAuthConfig<_AppSessionAuthConfig>",
-		);
+		expect(code).toContain("InferSessionFromAuthConfig<_AppSessionAuthConfig>");
 		expect(code).toContain("session: _AppSession;");
 		expect(code).not.toContain("(typeof app)['auth']");
 	});
@@ -1077,7 +1075,7 @@ describe("generateTemplate — auth", () => {
 
 		expect(code).toContain('import _auth from "../auth"');
 		expect(code).toContain("auth: _auth,");
-		expect(code).toContain("auth: typeof _auth;");
+		expect(code).toContain("auth: AppAuthConfig;");
 	});
 });
 

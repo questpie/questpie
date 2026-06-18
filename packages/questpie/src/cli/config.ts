@@ -57,12 +57,7 @@ export interface QuestpieCliConfig {
  *    - Compares with previous snapshots
  *    - Generates new migration in `cli.migrations.directory`
  *
- * 2. Import migration in your app:
- *    ```ts
- *    import { migrations } from "./src/migrations.js"
- *    // in questpie.config.ts
- *    export default config({ db: { url }, app: { url }, migrations })
- *    ```
+ * 2. Regenerate the app surface: `bun questpie generate`
  *
  * 3. Run migrations: `bun questpie migrate:up`
  *    - CLI reads migrations from `app.config.migrations.migrations`
@@ -71,25 +66,15 @@ export interface QuestpieCliConfig {
  * @example
  * ```ts
  * // questpie.config.ts
- * import { config } from "questpie/cli";
- * import { app } from "./src/server/app.js";
- *
- * export default config({
- *   app: app,
- *   cli: {
- *     migrations: {
- *       directory: "./src/migrations",
- *     },
- *   },
- * });
+ * export { default } from "./src/questpie/server/questpie.config";
  * ```
  */
 export interface QuestpieConfigFile<
 	TApp extends Questpie<any> = Questpie<any>,
 > {
 	/**
-	 * The Questpie instance
-	 * Must have migrations loaded via `.migrations([...])` for migrate:up to work
+	 * The Questpie instance.
+	 * New file-convention apps resolve this from `#questpie` instead of hand-writing it.
 	 */
 	app: TApp;
 
@@ -106,17 +91,7 @@ export interface QuestpieConfigFile<
  * @example
  * ```ts
  * // questpie.config.ts
- * import { config } from "questpie/cli";
- * import { app } from "./src/server/app.js";
- *
- * export default config({
- *   app: app,
- *   cli: {
- *     migrations: {
- *       directory: "./src/migrations",
- *     },
- *   },
- * });
+ * export { default } from "./src/questpie/server/questpie.config";
  * ```
  */
 export function config<TApp extends Questpie<any>>(

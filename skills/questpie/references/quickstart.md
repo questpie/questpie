@@ -85,7 +85,7 @@ Env is validated at boot in `src/lib/env.ts` via `@t3-oss/env-core` (Zod schemas
 
 ```text
 my-app/
-├── questpie.config.ts                    # CLI config (references app + migrations dir)
+├── questpie.config.ts                    # CLI entry (re-exports server runtime config)
 ├── .env                                  # Created from .env.example
 ├── .env.example                          # Checked-in env template
 ├── src/
@@ -93,7 +93,6 @@ my-app/
 │   │   ├── server/
 │   │   │   ├── questpie.config.ts        # Runtime config: runtimeConfig({ db, app, ... })
 │   │   │   ├── modules.ts                # Module dependencies (adminModule, openApiModule, ...)
-│   │   │   ├── app.ts                    # Hand-written re-export of .generated/index
 │   │   │   ├── config/                   # Typed configuration files
 │   │   │   │   ├── auth.ts              # authConfig({...}), Better Auth options
 │   │   │   │   ├── admin.ts             # adminConfig({ sidebar, dashboard, branding, locale })
@@ -159,18 +158,11 @@ export default runtimeConfig({
 });
 ```
 
-The CLI config at the project root points the CLI at the app and the migrations directory:
+The CLI entry at the project root is only a convenience re-export. Runtime and CLI options live in the server config:
 
 ```ts
 // questpie.config.ts (project root)
-import { app } from "@/questpie/server/app";
-
-export const config = {
-	app,
-	cli: { migrations: { directory: "./src/migrations" } },
-};
-
-export default config;
+export { default } from "./src/questpie/server/questpie.config";
 ```
 
 ---
@@ -245,9 +237,14 @@ This scans your file convention directories and generates:
 
 - `src/questpie/server/.generated/index.ts`, `app` instance, `AppConfig` type
 - `src/questpie/server/.generated/factories.ts`, generated factories with module-contributed field types
+- `src/questpie/server/.generated/entities.gen.ts`, flat app maps like `AppCollections`, `AppGlobals`, `AppRoutes`, `AppServices`
+- `src/questpie/server/.generated/context.gen.ts`, typed handler context and auth/session surface
+- `src/questpie/server/.generated/names.gen.ts`, relation target names
 - Module augmentation for `AppContext` (typed `collections`, `queue`, `email` in every handler)
 
 Use `#questpie/factories` in collection, global, and block files (they need codegen-generated types). Routes, jobs, services, emails use `"questpie"` directly. Use `#questpie` for the generated app/runtime exports.
+
+Treat the generated output as the app inventory. If a collection, global, route, service, field builder method, relation target, or `session.user` property is missing there, fix discovery, `modules.ts`, or `config/*.ts` and run codegen again. Do not add `any` casts, re-export `index.ts` barrels, or duplicate registries to hide a missing generated type.
 
 **Run codegen again every time you add, rename, or remove a file in a convention directory.** In scaffolded projects, use `bun run questpie:generate` for just QUESTPIE codegen, `bun run scaffold:generate` for framework pre-generation plus QUESTPIE codegen, and `bun run scaffold:verify` for codegen plus TypeScript.
 
@@ -294,8 +291,8 @@ bun run migrate:fresh
 ```ts
 // src/routes/api/$.ts
 import { createFileRoute } from "@tanstack/react-router";
+import { app } from "#questpie";
 import { createFetchHandler } from "questpie/http";
-import { app } from "@/questpie/server/app";
 
 const handler = createFetchHandler(app, { basePath: "/api" });
 
@@ -437,13 +434,13 @@ DATABASE_URL=postgres://user:pass@localhost:5432/myapp
 
 ### MEDIUM: Convention file with no export
 
-Codegen discovers a file by its export, either `export default` or a named `export const`/`function` works. A file with no export at all is skipped. Collection/global keys derive from the **filename** (kebab → camelCase), not the export name:
+Codegen discovers a file by its export, either `export default` or a named `export const`/`function` works. A file with no export at all is skipped. Factory categories such as collections and globals key from the factory string when present; non-factory categories such as routes, jobs, services, and emails key from the filename:
 
 ```ts
 // WRONG, defined but never exported, so codegen skips it
 const tasks = collection("tasks").fields(/* ... */);
 
-// CORRECT, default export (filename tasks.ts → key "tasks")
+// CORRECT, default export (collection("tasks") -> key "tasks")
 export default collection("tasks").fields(/* ... */);
 
 // ALSO CORRECT, named export is discovered too
@@ -510,14 +507,7 @@ Starting from zero, every file needed for a working app:
 
 ```ts
 // questpie.config.ts (project root)
-import { app } from "@/questpie/server/app";
-
-export const config = {
-	app,
-	cli: { migrations: { directory: "./src/migrations" } },
-};
-
-export default config;
+export { default } from "./src/questpie/server/questpie.config";
 ```
 
 ```ts
@@ -551,8 +541,8 @@ export default collection("posts").fields(({ f }) => ({
 ```ts
 // src/routes/api/$.ts
 import { createFileRoute } from "@tanstack/react-router";
+import { app } from "#questpie";
 import { createFetchHandler } from "questpie/http";
-import { app } from "@/questpie/server/app";
 
 const handler = createFetchHandler(app, { basePath: "/api" });
 

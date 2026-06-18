@@ -59,10 +59,10 @@ That single object now governs `GET/POST/PATCH/DELETE /api/posts`, every `client
 
 A function rule can return three kinds of value, and the framework reacts to each:
 
-| Return value | Effect |
-| --- | --- |
-| `true` | Allow the operation. |
-| `false` | Deny, throws `ApiError.forbidden` (403). |
+| Return value            | Effect                                                                                                                                        |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `true`                  | Allow the operation.                                                                                                                          |
+| `false`                 | Deny, throws `ApiError.forbidden` (403).                                                                                                      |
 | an `AccessWhere` object | Filter: on `read` it is `AND`-merged into the query `WHERE`; on `update`/`delete` the loaded row is tested against it (mismatch → forbidden). |
 
 A bare boolean shorthand, `read: true`, `create: false`, is the same as a function that always returns it.
@@ -140,12 +140,12 @@ export default appConfig({
 
 Every rule function receives an `AccessContext`, the full app context (`db`, `session`, `collections`, `globals`, `queue`, `kv`, `storage`, `search`, `realtime`, `mailer`, `logger`, plus any context extensions you added in `appConfig({ context })`), plus a few operation-specific keys. What's populated depends on the operation:
 
-| Operation | `ctx.data` | `ctx.input` | Can return `AccessWhere`? |
-| --- | --- | --- | --- |
-| `read` | none (no row loaded) | none | yes, merges into the query |
-| `create` | none (no row yet) | the raw input, **pre-validation** | no, there's no row to match |
-| `update` | the **existing** row | the patch | yes, checked against the loaded row |
-| `delete` | the **existing** row | none | yes, checked against the loaded row |
+| Operation | `ctx.data`           | `ctx.input`                       | Can return `AccessWhere`?           |
+| --------- | -------------------- | --------------------------------- | ----------------------------------- |
+| `read`    | none (no row loaded) | none                              | yes, merges into the query          |
+| `create`  | none (no row yet)    | the raw input, **pre-validation** | no, there's no row to match         |
+| `update`  | the **existing** row | the patch                         | yes, checked against the loaded row |
+| `delete`  | the **existing** row | none                              | yes, checked against the loaded row |
 
 ```ts
 .access({
@@ -201,7 +201,7 @@ The same `AccessWhere` shape behaves differently depending on the operation:
 ```ts
 read: ({ session }) => ({
 	OR: [{ authorId: session?.user?.id }, { status: "published" }],
-})
+});
 ```
 
 ## Field-level access
@@ -226,10 +226,10 @@ Use `access.fields` to allow or deny **individual fields** per operation, keyed 
 
 Each flag's effect when it resolves to `false`:
 
-| Flag | When `false` |
-| --- | --- |
-| `read: false` | the field is **omitted** from the response |
-| `create: false` | providing the field on create throws `forbidden` (with the `fieldPath`) |
+| Flag            | When `false`                                                                                                              |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `read: false`   | the field is **omitted** from the response                                                                                |
+| `create: false` | providing the field on create throws `forbidden` (with the `fieldPath`)                                                   |
 | `update: false` | **changing** the field throws `forbidden` (with the `fieldPath`), submitting the unchanged value passes through untouched |
 
 On a write, only fields actually present in the input are checked, and on update a value equal to the existing one is skipped, so resubmitting the whole record without changing a frozen field is fine. Field rules receive a **slim** context, `{ req?, user, doc?, operation }`, not the full app context. `user` is your generated session user; `doc` is the row on read/update/delete (`undefined` on create); `operation` is the current operation. Field rules only allow or deny; they cannot return an `AccessWhere`.
@@ -259,18 +259,20 @@ Knowing the exact sequence helps you reason about which rule fires first and whe
 For an **update** it's the same shape, with `access.update` first (plus the `AccessWhere` row-match), then `beforeValidate`, validation, `access.fields[...].update`, `beforeChange`, **UPDATE**, `afterChange`, the `afterRead` hook, and finally the field read filter. **Reads** run `access.read` (producing the merged `WHERE`), the **SELECT**, then the field read filter and `afterRead`.
 
 <Callout type="info">
-	**The field read filter and `afterRead` run in opposite orders on writes vs reads.** On a
-	**write** (create/update) the `afterRead` hook fires *before* the field read filter strips denied
-	fields, so your hook sees the full row, then the filter runs last on the way out. On a **read**
-	the field read filter runs *before* `afterRead`. If an `afterRead` hook depends on a field that a
-	`read` rule denies, that field is present after a write but already stripped on a plain read.
+	**The field read filter and `afterRead` run in opposite orders on writes vs
+	reads.** On a **write** (create/update) the `afterRead` hook fires *before*
+	the field read filter strips denied fields, so your hook sees the full row,
+	then the filter runs last on the way out. On a **read** the field read filter
+	runs *before* `afterRead`. If an `afterRead` hook depends on a field that a
+	`read` rule denies, that field is present after a write but already stripped
+	on a plain read.
 </Callout>
 
 <Callout type="info">
 	**Access runs before validation; field-write runs before validation too.**
 	Row-level access and field-level *write* access both gate the input **before**
-	the Zod schema sees it, so a denied write never reaches validation. Field-level
-	*read* filtering runs on the way out, after the row is loaded. See
+	the Zod schema sees it, so a denied write never reaches validation.
+	Field-level *read* filtering runs on the way out, after the row is loaded. See
 	[Hooks](/docs/concepts/hooks) for the full lifecycle and
 	[Validation](/docs/concepts/validation) for the schema step.
 </Callout>
@@ -285,14 +287,15 @@ Three more operations have their own rules, each with a deliberate fallback chai
 
 **`serve`**, guards serving an upload's **bytes** by key (`GET /:collection/files/:key`). `ctx.data` is the upload row.
 
-> Resolution: `access.serve` → collection `access.read` → app `defaultAccess.serve` → **allow**. App-level `defaultAccess.read` is deliberately *not* in this chain: listing rows and fetching bytes by key are distinct permissions.
+> Resolution: `access.serve` → collection `access.read` → app `defaultAccess.serve` → **allow**. App-level `defaultAccess.read` is deliberately _not_ in this chain: listing rows and fetching bytes by key are distinct permissions.
 
 <Callout type="warn">
 	**`serve` falls open, and private files always check the token too.** If
 	`serve`, the collection's `read`, and `defaultAccess.serve` are all undefined,
-	byte serving is **allowed**. For `visibility: "private"` uploads a signed-token
-	check always applies **in addition** to this rule, but for `"public"` uploads,
-	set `serve` explicitly if the bytes shouldn't be world-readable.
+	byte serving is **allowed**. For `visibility: "private"` uploads a
+	signed-token check always applies **in addition** to this rule, but for
+	`"public"` uploads, set `serve` explicitly if the bytes shouldn't be
+	world-readable.
 </Callout>
 
 **`introspect`**, guards the schema/meta endpoints (`GET /:collection/{schema,meta}`) that the admin UI and OpenAPI generator read.
@@ -303,10 +306,10 @@ Three more operations have their own rules, each with a deliberate fallback chai
 
 Seed scripts, jobs, and internal server code need to read and write everything without tripping access rules. That's `accessMode: "system"`: it makes the access engine return `true` immediately, skips field read **and** write filtering, and bypasses the `transition` / `serve` checks.
 
-You set it on the **context**, then pass that context to CRUD calls. Inside a seed, `createContext` is handed to you:
+You set it on the **context**, then pass that context to CRUD calls. Inside a seed, `createContext` is handed to you. See [Seeds](/docs/concepts/seeds) for the full seed lifecycle:
 
-```ts title="src/questpie/server/seeds/posts.seed.ts"
-import { seed } from "questpie/services";
+```ts title="src/questpie/server/seeds/posts.ts"
+import { seed } from "questpie";
 
 export default seed({
 	id: "demoPosts",
@@ -318,8 +321,11 @@ export default seed({
 		});
 
 		// Pass ctx as the second argument to any operation.
-		const existing = await collections.posts.find({ where: { status: "draft" } }, ctx);
-		if (existing.length === 0) {
+		const existing = await collections.posts.findOne(
+			{ where: { slug: "seeded-post" } },
+			ctx,
+		);
+		if (!existing) {
 			await collections.posts.create({ title: "Seeded post" }, ctx);
 			log("Seeded demo post");
 		}
@@ -330,7 +336,7 @@ export default seed({
 Outside a seed, build the context from the app instance, handy in server-side data loaders or scripts:
 
 ```ts title="src/lib/server-helpers.ts"
-import { app } from "@/questpie/server/.generated";
+import { app } from "#questpie";
 
 export async function createServerContext() {
 	return app.createContext({ accessMode: "system" });
@@ -357,7 +363,7 @@ export const siteSettings = global("siteSettings")
 		maintenanceMode: f.boolean(),
 	}))
 	.access({
-		read: true,                                       // settings are public
+		read: true, // settings are public
 		update: ({ session }) => session?.user?.role === "admin",
 	});
 ```
@@ -394,16 +400,16 @@ import { ApiError } from "questpie/errors";
 })
 ```
 
-| Factory | Code | HTTP |
-| --- | --- | --- |
-| `ApiError.unauthorized(message?)` | `UNAUTHORIZED` | 401 |
-| `ApiError.forbidden(context)` | `FORBIDDEN` | 403 |
-| `ApiError.notFound(resource, id?)` | `NOT_FOUND` | 404 |
-| `ApiError.badRequest(message?, fieldErrors?)` | `BAD_REQUEST` | 400 |
-| `ApiError.conflict(message)` | `CONFLICT` | 409 |
-| `ApiError.internal(message?, cause?)` | `INTERNAL_SERVER_ERROR` | 500 |
+| Factory                                       | Code                    | HTTP |
+| --------------------------------------------- | ----------------------- | ---- |
+| `ApiError.unauthorized(message?)`             | `UNAUTHORIZED`          | 401  |
+| `ApiError.forbidden(context)`                 | `FORBIDDEN`             | 403  |
+| `ApiError.notFound(resource, id?)`            | `NOT_FOUND`             | 404  |
+| `ApiError.badRequest(message?, fieldErrors?)` | `BAD_REQUEST`           | 400  |
+| `ApiError.conflict(message)`                  | `CONFLICT`              | 409  |
+| `ApiError.internal(message?, cause?)`         | `INTERNAL_SERVER_ERROR` | 500  |
 
-`ApiError.forbidden(context)` takes `{ operation, resource, reason, requiredRole?, userRole?, fieldPath? }`. A `reason` of `"Access denied"` triggers the built-in localized message; any other `reason` is sent to the client verbatim. `401` means *no auth*; `403` means *authenticated but not permitted*, reach for `unauthorized` vs `forbidden` accordingly. Every `ApiError` serializes to a stable JSON shape (`{ code, message, fieldErrors?, context? }`) the typed client surfaces, and the full code set (`BAD_REQUEST`, `UNAUTHORIZED`, `FORBIDDEN`, `NOT_FOUND`, `CONFLICT`, `VALIDATION_ERROR`, `HOOK_ERROR`, …) is exported from `questpie/errors`.
+`ApiError.forbidden(context)` takes `{ operation, resource, reason, requiredRole?, userRole?, fieldPath? }`. A `reason` of `"Access denied"` triggers the built-in localized message; any other `reason` is sent to the client verbatim. `401` means _no auth_; `403` means _authenticated but not permitted_, reach for `unauthorized` vs `forbidden` accordingly. Every `ApiError` serializes to a stable JSON shape (`{ code, message, fieldErrors?, context? }`) the typed client surfaces, and the full code set (`BAD_REQUEST`, `UNAUTHORIZED`, `FORBIDDEN`, `NOT_FOUND`, `CONFLICT`, `VALIDATION_ERROR`, `HOOK_ERROR`, …) is exported from `questpie/errors`.
 
 ## TypeScript
 
