@@ -10,7 +10,7 @@
  * @see RFC-MODULE-ARCHITECTURE §9 (Generated Code)
  */
 
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, rename, writeFile } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
 
 import { discoverFiles } from "./discover.js";
@@ -537,6 +537,10 @@ export async function runCodegen(
 	// Track additional files to write (e.g. registries.ts for module augmentations)
 	let moduleRegistriesCode: string | null = null;
 
+	// Root-app layer files (names.gen.ts/entities.gen.ts/context.gen.ts) emitted
+	// alongside index.ts by the multi-file split. Module mode leaves this empty.
+	let templateExtraFiles: Array<{ name: string; code: string }> = [];
+
 	if (options.module) {
 		// Module mode: generate module.ts (static module definition)
 		outputFile = options.module.outputFile ?? "module.ts";
@@ -564,7 +568,7 @@ export async function runCodegen(
 		// Root app mode: generate index.ts (app with createApp)
 		outputFile = target.outputFile;
 		const configImportPath = computeRelativeImport(outDir, configPath);
-		code = generateTemplate({
+		const tpl = generateTemplate({
 			configImportPath,
 			discovered,
 			categories: target.categories,
@@ -577,6 +581,8 @@ export async function runCodegen(
 				extraRuntimeCode.length > 0 ? extraRuntimeCode : undefined,
 			extraEntities: extraEntities.size > 0 ? extraEntities : undefined,
 		});
+		code = tpl.code;
+		templateExtraFiles = tpl.extraFiles;
 	}
 
 	// 6. Always generate factories.ts for root app mode
@@ -612,6 +618,11 @@ export async function runCodegen(
 			code: factoriesCode,
 		});
 	}
+	// Root-app layer files (names.gen.ts/entities.gen.ts/context.gen.ts) from the
+	// multi-file split — written next to index.ts. Empty in module mode.
+	for (const f of templateExtraFiles) {
+		filesToWrite.push({ path: join(outDir, f.name), code: f.code });
+	}
 
 	// Client env modules — one per consumer declared in env.client.ts.
 	// Root app mode only (module-contributed env is a separate concern).
@@ -636,7 +647,7 @@ export async function runCodegen(
 	if (!dryRun) {
 		await mkdir(outDir, { recursive: true });
 		for (const file of filesToWrite) {
-			await writeFile(file.path, file.code, "utf-8");
+			await atomicWriteFile(file.path, file.code);
 		}
 	}
 
@@ -646,6 +657,17 @@ export async function runCodegen(
 		outputPath,
 		discovered,
 	};
+}
+
+/**
+ * Write via temp file + rename so a concurrent or killed run can never leave
+ * a truncated/interleaved .generated file behind (rename is atomic within
+ * the same directory).
+ */
+async function atomicWriteFile(path: string, code: string): Promise<void> {
+	const tmpPath = `${path}.${process.pid}.tmp`;
+	await writeFile(tmpPath, code, "utf-8");
+	await rename(tmpPath, path);
 }
 
 // ============================================================================
@@ -787,14 +809,14 @@ export async function runAllTargets(
 
 				if (!dryRun) {
 					await mkdir(targetOutDir, { recursive: true });
-					await writeFile(outputPath, output.code, "utf-8");
+					await atomicWriteFile(outputPath, output.code);
 
 					if (output.additionalFiles) {
 						for (const [relPath, content] of Object.entries(
 							output.additionalFiles,
 						)) {
 							const absPath = join(targetOutDir, relPath);
-							await writeFile(absPath, content, "utf-8");
+							await atomicWriteFile(absPath, content);
 						}
 					}
 				}

@@ -1,0 +1,151 @@
+---
+title: Array field
+description: .array() wraps any field type into a list stored as a single jsonb column, with a z.array() schema, length bounds, and membership filtering on the typed where clause.
+---
+
+`.array()` is the shared modifier that turns any field into a **list** of that field's values. Chain it onto `f.text()`, `f.number()`, `f.select(...)`, and most other types: the column becomes a single Postgres `jsonb` array, the derived schema becomes `z.array(inner)`, and the `where` clause swaps to membership operators. The element type is whatever the inner field produced, `f.number().array()` is a `number[]`, `f.text().array()` is a `string[]`.
+
+> **Prerequisites:** read [Fields](/docs/concepts/fields) first, this page covers only the `.array()` modifier. The `f` proxy, the chain-modifier model, and the other shared modifiers (`.required()` / `.default()` / `.localized()`) are taught there.
+
+<Callout type="info" title="There is no `f.array()` factory">
+`.array()` is a **chain modifier**, not a field type, you never call `f.array()`. You build the element field first, then wrap it: `f.text(40).array()`. It is one of the [shared modifiers](/docs/concepts/fields#shared-methods) every field carries.
+</Callout>
+
+## What it does
+
+- **Wraps any inner field into a list**, `f.<type>(...).array()` stores `inner[]`, keeping the inner field's validation per element.
+- **Stores as one `jsonb` column**, the whole array lives in a single column, regardless of the inner type (no junction table, no separate rows).
+- **Bounds the length**, chain `.minItems(n)` / `.maxItems(n)` to constrain how many elements are allowed.
+- **Filters by membership**, the `where` clause exposes `containsAll`, `containsAny`, whole-array `eq`, `length`, and `isEmpty` / `isNotEmpty` instead of the scalar operators.
+- **Powers multi-select**, `f.select([...]).array()` is exactly how you get a multi-value select (see [When to use it](#when-to-use-it)).
+- **Renders a repeatable input** in the admin form, a list of the inner field's component.
+
+## Quick start
+
+Build the element field, then chain `.array()`. Bound the length with `.minItems()` / `.maxItems()` where it matters.
+
+```ts title="src/questpie/server/collections/posts.ts"
+import { collection } from "#questpie/factories";
+
+export const posts = collection("posts").fields(({ f }) => ({
+  // string[], a list of free-text tags, capped at 10
+  tags: f.text(40).array().maxItems(10),
+
+  // number[], required, must contain at least one value
+  ratings: f.number().array().minItems(1).required(),
+}));
+```
+
+That gives `posts` a `tags` column typed `string[] | null` on read and a non-null `ratings` column typed `number[]`, both stored as `jsonb`, both validated element-by-element and bounded by length, with no migration or schema written by hand. Run `questpie generate` then `questpie push` to register the change and create the column.
+
+## How `.array()` transforms the field
+
+`.array()` rewrites four things on the field state.
+
+| Aspect | Before `.array()` | After `.array()` |
+|---|---|---|
+| **Data type** | `T` (the inner field's data) | `T[]` |
+| **Column** | the inner column (e.g. `varchar(40)`) | `jsonb` (always) |
+| **Schema** | the inner Zod schema | `z.array(inner)` |
+| **Operators** | the inner set (e.g. `stringOps`) | `selectMultiOps` (membership) |
+| **`getType()`** | the inner type (`"text"`) | `"array"` |
+
+The inner field is preserved on the state (`innerField` / `innerState`), so per-element validation still runs, `f.text(40).array()` rejects an element longer than 40 characters, and `f.email().array()` rejects a non-email element. The array itself is stored verbatim as a single JSONB value; there is no separate table or row-per-item.
+
+<Callout type="info" title="Order doesn't matter for length, but `.minItems()` / `.maxItems()` only apply after `.array()`">
+`.minItems(n)` and `.maxItems(n)` are no-ops unless the field is an array, they refine the `z.array(...)` schema (`arraySchema.min(n)` / `.max(n)`). On a non-array field they set state that nothing reads.
+</Callout>
+
+## Chained methods
+
+`.array()` itself takes no arguments. The two modifiers that only make sense on an array are:
+
+| Method | Effect | Source |
+|---|---|---|
+| `.minItems(n)` | Array must have **at least** `n` elements (`z.array(...).min(n)`). | `field-class.ts:336` |
+| `.maxItems(n)` | Array may have **at most** `n` elements (`z.array(...).max(n)`). | `field-class.ts:341` |
+
+Everything else is a [shared modifier](/docs/concepts/fields#shared-methods) and applies to the array as a whole:
+
+- `.required()` makes the column `NOT NULL` and the array required on insert (the element count is still governed by `.minItems()`).
+- `.default([...])` seeds an initial array, type-checked against the element type, so `f.number().array().default(["x"])` won't compile.
+- `.label()` / `.description()` set the admin label and helper text.
+- `.localized()` stores a **per-locale array** in the i18n side-table (a [shared modifier](/docs/concepts/fields#shared-methods)).
+
+```ts
+collection("recipes").fields(({ f }) => ({
+  // Up to 12 steps, defaults to an empty list, never null
+  steps: f.text({ mode: "text" }).array().maxItems(12).default([]).required(),
+}));
+```
+
+## Filtering, operators
+
+An array field uses the **multi-value operator set** (`selectMultiOps`). Every operand element is typed to the inner field's filter value, a `number[]` filters on `number`, a `f.select([...]).array()` filters on its literal union.
+
+| Operator | Operand | Matches |
+|---|---|---|
+| `containsAll` | `Item[]` | Array contains **every** listed value (JSONB `@>`). |
+| `containsAny` | `Item[]` | Array contains **at least one** listed value (JSONB `?\|`). |
+| `eq` | `Item[]` | Array equals the given array **exactly** (same elements, same order). |
+| `length` | `number` | Array has exactly this many elements (`jsonb_array_length`). |
+| `isEmpty` | `boolean` | Array is `[]` **or** `null`. |
+| `isNotEmpty` | `boolean` | Array is non-empty and not null. |
+| `isNull` / `isNotNull` | `boolean` | Column is (not) null. Pass `true` to assert, `false` to invert. |
+
+```ts
+// Posts tagged with BOTH "ts" and "cms"
+const { docs } = await app.collections.posts.find({
+  where: { tags: { containsAll: ["ts", "cms"] } },
+});
+
+// Posts tagged with EITHER "ts" or "go"
+const { docs: anyMatch } = await app.collections.posts.find({
+  where: { tags: { containsAny: ["ts", "go"] } },
+});
+
+// Posts with no tags yet
+const { docs: untagged } = await app.collections.posts.find({
+  where: { tags: { isEmpty: true } },
+});
+```
+
+<Callout type="warn" title="`contains` (single item) is typed but not implemented">
+The generated `where` type lists a single-item `contains: Item` operator, but the runtime `selectMultiOps` set has **no** `contains`, only `containsAll` and `containsAny`. Using `{ tags: { contains: "ts" } }` type-checks but is silently ignored at query time. Use `containsAny: ["ts"]` to match a single element.
+</Callout>
+
+For the full query language, combining field filters with `AND` / `OR` / `NOT`, pagination, and `orderBy`, see the [query reference](/docs/concepts/relations).
+
+## When to use it
+
+- **`.array()`**, any homogeneous list of one field type: tags (`f.text().array()`), scores (`f.number().array()`), checked options, a fixed set of attachments-by-id.
+- **Multi-select**, `f.select([...]).array()` is the canonical multi-value select. The inner `select` keeps its literal-union typing and option list; `.array()` makes it multiple. See [`f.select()`](/docs/concepts/fields#field-types).
+- **Bound the size**, pair with `.minItems()` / `.maxItems()` whenever there's a real cap (a top-5 list, "at least one"), so the array is validated at the edge.
+- **Reach for [Relations](/docs/concepts/relations) instead** when the elements are rows in another collection, a list of FKs you want to query, join, and hydrate with `with:`. `.array()` is for inline values, not normalized references.
+- **Reach for [`f.object()`](/docs/concepts/fields#field-types) (then `.array()`)** when each element needs multiple sub-fields, `f.object({ ... }).array()` gives a list of structured items.
+
+## TypeScript
+
+An array field contributes `Item[]` to the generated row and insert types, and an [`ArrayWhereInput`](/docs/concepts/relations) shape to the `where` type. The element filter value is derived from the inner field, not the stored data, a `f.datetime().array()` filters on the inner field's date input, not `Date[]`.
+
+```ts
+type Post = typeof posts.$infer.select;
+//   ^? { id: string; tags: string[] | null; ratings: number[]; ... }
+```
+
+```ts
+import type { CollectionDoc, CollectionWhere } from "#questpie";
+
+type Post = CollectionDoc<"posts">;          // { tags: string[] | null; ratings: number[]; ... }
+type PostFilter = CollectionWhere<"posts">;  // { tags?: { containsAll?: string[]; ... } }
+```
+
+`.required()` makes the array non-null and required on insert; without it the column is nullable (`Item[] | null`) and the insert field optional. `.minItems()` / `.maxItems()` add length validation to the derived `z.array(...)` schema but have no type-level effect. See [Fields → inferred types](/docs/concepts/fields#example--inferred-types) for how modifiers flow into the generated types.
+
+## Related
+
+- [Fields](/docs/concepts/fields), the `f` proxy, the chain-modifier model, and the other shared modifiers (`.required()`, `.default()`, `.localized()`, …).
+- [`f.select()`](/docs/concepts/fields#field-types), multi-select is `f.select([...]).array()`.
+- [`f.object()`](/docs/concepts/fields#field-types), for a list of structured items, wrap an object: `f.object({ ... }).array()`.
+- [Relations](/docs/concepts/relations), when the list elements are rows in another collection (and the full query language for the operators above).
+- [Validation](/docs/concepts/validation), the auto-derived `z.array(...)` schema and the `.zod()` escape hatch.

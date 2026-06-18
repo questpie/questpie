@@ -26,7 +26,7 @@ Everything a developer needs to understand and work with QuestPie CMS.
 18. [Search](#18-search)
 19. [Realtime](#19-realtime)
 20. [i18n / Localization](#20-i18n--localization)
-21. [AppContext — What's Available Everywhere](#21-appcontext--whats-available-everywhere)
+21. [AppContext, What's Available Everywhere](#21-appcontext--whats-available-everywhere)
 22. [Server-Side CRUD API](#22-server-side-crud-api)
 23. [Client SDK](#23-client-sdk)
 24. [TanStack Query Integration](#24-tanstack-query-integration)
@@ -37,7 +37,7 @@ Everything a developer needs to understand and work with QuestPie CMS.
 29. [Adapters & Infrastructure](#29-adapters--infrastructure)
 30. [TypeScript Type Augmentation](#30-typescript-type-augmentation)
 31. [CLI Reference](#31-cli-reference)
-32. [How It All Connects — The Big Picture](#32-how-it-all-connects--the-big-picture)
+32. [How It All Connects, The Big Picture](#32-how-it-all-connects--the-big-picture)
 
 ---
 
@@ -48,7 +48,7 @@ QuestPie is a **headless CMS framework** for TypeScript. You define your content
 - A fully typed **REST API** (auto-generated from your schema)
 - A pluggable **admin panel** (React, server-driven)
 - **Typed client SDK** + TanStack Query hooks
-- Background **jobs**, **email**, **storage**, **search**, **realtime** — all pluggable
+- Background **jobs**, **email**, **storage**, **search**, **realtime**, all pluggable
 
 ### Tech Stack
 
@@ -85,15 +85,17 @@ A QuestPie project follows a **convention-over-configuration** file layout. The 
 
 ```
 <project>/
-  questpie.config.ts                ← CLI entry (wraps app + cli config)
+  questpie.config.ts                ← CLI entry (re-exports server runtime config)
+  .env                              ← created from .env.example by create-questpie
   src/
+    lib/
+      env.ts                        ← @t3-oss/env-core boot validation
+      client.ts                     ← typed QUESTPIE client SDK
+      query.ts                      ← TanStack Query option builders
     questpie/
       server/                       ← Server root (all data + behavior)
         questpie.config.ts          ← runtimeConfig({ db, app, storage, ... })
-        env.ts                      ← env({ server, client?, refine? }) — boot-validated
-        env.client.ts               ← clientEnv({ consumers, vars }) — client-safe vars
         modules.ts                  ← export default [adminModule, ...] as const
-        app.ts                      ← re-export of .generated/index (stable import)
         config/
           auth.ts                   ← authConfig({...})       (from "questpie/app")
           app.ts                    ← appConfig({...})        (from "questpie/app", optional)
@@ -126,31 +128,59 @@ A QuestPie project follows a **convention-over-configuration** file layout. The 
         .generated/
           client.ts
     routes/
-      api/$.ts                      ← HTTP catch-all → createFetchHandler(app)
+      api/$.ts                      ← TanStack Start HTTP catch-all → createFetchHandler(app)
 ```
+
+`create-questpie` currently ships four runtime templates: `tanstack-start`
+(default), `next`, `hono`, and `elysia`. `tanstack-start` and `next` default to
+`admin` + `openapi`; `hono` and `elysia` default to `openapi` only. Optional
+module id `workflows` is supported. The scaffolder also wires adapter choices:
+queue `pg-boss` / `bullmq` / `none`, email `console` / `smtp` / `resend` /
+`plunk`, realtime `none` / `pg-notify` / `redis-streams`, and KV `memory` /
+`redis`.
 
 ### Key Rules
 
-- **Files starting with `_`** are private/utility — skipped by discovery.
-- **`index.ts`** files are always ignored by the scanner (use them as barrel re-exports if needed).
+- **Files starting with `_`** are private/utility, skipped by discovery.
+- **`index.ts`** files are always ignored by the scanner for compatibility. Do not add barrel re-exports in convention directories; define entities directly in named files such as `posts.ts` or `site-settings.ts`.
 - **File names become keys**: `site-settings.ts` → `siteSettings` (kebab → camelCase). Underscores are preserved (`my_table.ts` → `my_table`) for PostgreSQL naming.
-- **`features/`** mirrors the same directory structure — entities from both flat and feature layouts are merged.
+- **`features/`** mirrors the same directory structure, entities from both flat and feature layouts are merged.
+
+### Feature-First Layout
+
+`features/<feature>/<category>/...` is an organizational layout, not a namespace.
+Codegen scans both `collections/posts.ts` and
+`features/blog/collections/articles.ts` into the same `collections` map.
+
+Version guard: this is a `questpie@3.0.2+` file-convention codegen feature. Do
+not claim it works for 1.x / 2.x projects unless they have been migrated to the
+v3 codegen line.
+
+Rules:
+
+- Feature names do not prefix keys: `features/blog/collections/articles.ts` becomes `app.collections.articles`.
+- Keys must be unique per category across flat and feature layouts. Duplicates are codegen errors.
+- Recursive route keys ignore the feature prefix: `features/blog/routes/webhooks/stripe.post.ts` becomes `webhooks/stripe:POST`.
+- Core supported category dirs: `collections`, `globals`, `jobs`, `routes`, `functions`, `messages`, `services`, `emails`, `migrations`, `seeds`, `fields`.
+- Plugin category dirs and directory patterns use the same rule, for example `features/admin/blocks/hero.ts` when the admin plugin is enabled.
+- Single-file config patterns stay root-level unless a plugin explicitly uses `mergeStrategy: "spread"`. Do not put `config/app.ts`, `config/auth.ts`, `config/admin.ts`, `modules.ts`, `env.ts`, or `fields.ts` under `features/`.
+- `features/_internal`, `_helpers.ts`, `index.ts`, tests, and declaration files are skipped.
 
 ### Export Conventions Per Directory
 
-| Directory      | Export Style              | Factory              |
-| -------------- | ------------------------- | -------------------- |
-| `collections/` | **named** export          | `collection("name")` |
-| `globals/`     | **named** export          | `global("name")`     |
-| `routes/`      | **default** export        | `route()`            |
-| `jobs/`        | **default** export        | `job({...})`         |
-| `services/`    | **named** export          | `service()`          |
-| `emails/`      | **default** export (.tsx) | `email({...})`       |
-| `blocks/`      | **named** export          | `block("name")`      |
-| `migrations/`  | **default** export        | `migration({...})`   |
-| `seeds/`       | **default** export        | `seed({...})`        |
-| `env.ts`       | **default** export        | `env({...})`         |
-| `env.client.ts`| **default** export        | `clientEnv({...})`   |
+| Directory       | Export Style              | Factory              |
+| --------------- | ------------------------- | -------------------- |
+| `collections/`  | **named** export          | `collection("name")` |
+| `globals/`      | **named** export          | `global("name")`     |
+| `routes/`       | **default** export        | `route()`            |
+| `jobs/`         | **default** export        | `job({...})`         |
+| `services/`     | **named** export          | `service()`          |
+| `emails/`       | **default** export (.tsx) | `email({...})`       |
+| `blocks/`       | **named** export          | `block("name")`      |
+| `migrations/`   | **default** export        | `migration({...})`   |
+| `seeds/`        | **default** export        | `seed({...})`        |
+| `env.ts`        | **default** export        | `env({...})`         |
+| `env.client.ts` | **default** export        | `clientEnv({...})`   |
 
 ---
 
@@ -159,10 +189,10 @@ A QuestPie project follows a **convention-over-configuration** file layout. The 
 ### How It Starts
 
 ```
-questpie.config.ts  →  modules.ts  →  codegen  →  .generated/index.ts  →  createApp()
+questpie.config.ts  →  src/questpie/server/questpie.config.ts  →  modules.ts  →  codegen  →  .generated/index.ts  →  createApp()
 ```
 
-**Step 1** — `env.ts` declares + validates environment variables (optional but recommended; see `references/env.md`), and `questpie.config.ts` declares infrastructure (DB, storage, email, etc.):
+**Step 1**, `env.ts` declares + validates environment variables (optional but recommended; see `references/env.md`), and `questpie.config.ts` declares infrastructure (DB, storage, email, etc.):
 
 ```ts
 // env.ts
@@ -189,9 +219,9 @@ export default runtimeConfig({
 });
 ```
 
-When `env.ts` exists, the generated app imports it FIRST — a misconfigured environment fails boot before adapters/auth/db init, with every offending var named (values never logged).
+When `env.ts` exists, the generated app imports it FIRST, a misconfigured environment fails boot before adapters/auth/db init, with every offending var named (values never logged).
 
-**Step 2** — `modules.ts` declares which module packages to use:
+**Step 2**, `modules.ts` declares which module packages to use:
 
 ```ts
 import { adminModule } from "@questpie/admin/modules/admin";
@@ -200,7 +230,7 @@ import { openApiModule } from "@questpie/openapi/modules/openapi";
 export default [adminModule, openApiModule] as const;
 ```
 
-**Step 3** — `questpie generate` scans everything and writes `.generated/index.ts` which calls:
+**Step 3**, `questpie generate` scans everything and writes `.generated/index.ts` which calls:
 
 ```ts
 export const app = await createApp(
@@ -209,21 +239,21 @@ export const app = await createApp(
 );
 ```
 
-**Step 4** — Inside `createApp()`:
+**Step 4**, Inside `createApp()`:
 
 1. Auto-prepends `coreModule` (built-in routes, services, field types)
 2. Flattens all modules **depth-first** (sub-modules first, parent last)
-3. **Merges** contributions per key — later modules override earlier ones
+3. **Merges** contributions per key, later modules override earlier ones
 4. Wraps user-level entities as `__user` module (appended **last** = user always wins)
 5. Creates the `Questpie` instance with merged config
 6. Initializes all services (`db`, `auth`, `storage`, `queue`, `email`, `kv`, `logger`, `search`, `realtime`)
 
-**Step 5** — The HTTP handler connects it all:
+**Step 5**, The HTTP handler connects it all:
 
 ```ts
 // src/routes/api/$.ts (TanStack Start example)
+import { app } from "#questpie";
 import { createFetchHandler } from "questpie/http";
-import { app } from "@/questpie/server/app";
 import { createAPIFileRoute } from "@tanstack/react-start/api";
 
 const handler = createFetchHandler(app, { basePath: "/api" });
@@ -240,13 +270,13 @@ export const APIRoute = createAPIFileRoute("/api/$")({
 // Bun.serve({ fetch: createFetchHandler(app) });
 ```
 
-This single handler serves all collection CRUD, auth, search, realtime, storage, and custom routes via a **trie-based dispatcher**. The exact wiring depends on your framework — TanStack Start uses `createAPIFileRoute`, Hono uses middleware, Next.js uses route handlers.
+This single handler serves all collection CRUD, auth, search, realtime, storage, and custom routes via a **trie-based dispatcher**. The exact wiring depends on your framework, TanStack Start uses `createAPIFileRoute`, Hono uses middleware, Next.js uses route handlers.
 
 ---
 
 ## 4. Modules
 
-Modules are the **packaging unit** of the framework. They are plain static objects — no class instances, no runtime instantiation.
+Modules are the **packaging unit** of the framework. They are plain static objects, no class instances, no runtime instantiation.
 
 ```ts
 import { module } from "questpie/app";
@@ -300,7 +330,7 @@ Modules are resolved **depth-first**: sub-modules are processed before their par
 
 ## 5. Collections
 
-Collections are the **primary data primitive** — each one maps to a PostgreSQL table with auto-generated CRUD, hooks, access control, and admin UI.
+Collections are the **primary data primitive**, each one maps to a PostgreSQL table with auto-generated CRUD, hooks, access control, and admin UI.
 
 ```ts
 import { collection } from "#questpie/factories";
@@ -431,14 +461,14 @@ export const posts = collection("posts")
 | `.preview({...})`                | Live preview config                                               |
 | `.actions({...})`                | Custom server actions                                             |
 
-> `.admin()`, `.list()`, `.form()`, `.preview()`, `.actions()` are added by the admin plugin — they're not available without `@questpie/admin`.
+> `.admin()`, `.list()`, `.form()`, `.preview()`, `.actions()` are added by the admin plugin, they're not available without `@questpie/admin`.
 
-### Extending Collections — `.merge()`
+### Extending Collections, `.merge()`
 
-Collections compose. To extend a collection a module already provides (starter `user`, `assets`, ...), **merge the module's builder — never redefine the collection from scratch** (registering the same key replaces the module's collection wholesale, dropping its fields, hooks, and auth wiring):
+Collections compose. To extend a collection a module already provides (starter `user`, `assets`, ...), **merge the module's builder, never redefine the collection from scratch** (registering the same key replaces the module's collection wholesale, dropping its fields, hooks, and auth wiring):
 
 ```ts
-// collections/user.ts — extend the starter user
+// collections/user.ts, extend the starter user
 import { starterModule } from "questpie/app";
 import { collection } from "#questpie/factories";
 
@@ -449,13 +479,13 @@ export default collection("user")
 	}));
 ```
 
-Semantics: fields/virtuals/relations/indexes/options/extension keys combine by key (merged-in builder wins on conflict); hooks concatenate (both run); `title`/`searchable`/`upload` take the merged-in value when set. `.fields()` after `.merge()` is cumulative — adds and overrides by key, never wipes. Everything stays fully typed (`$infer`, CRUD types include both sides).
+Semantics: fields/virtuals/relations/indexes/options/extension keys combine by key (merged-in builder wins on conflict); hooks concatenate (both run); `title`/`searchable`/`upload` take the merged-in value when set. `.fields()` after `.merge()` is cumulative, adds and overrides by key, never wipes. Everything stays fully typed (`$infer`, CRUD types include both sides).
 
 ---
 
 ## 6. Globals
 
-Globals are **singleton documents** — one row per global (or one per tenant if `scoped`). Think "site settings", "homepage config", "footer links".
+Globals are **singleton documents**, one row per global (or one per tenant if `scoped`). Think "site settings", "homepage config", "footer links".
 
 ```ts
 import { global } from "#questpie/factories";
@@ -504,25 +534,24 @@ Fields define the shape of your data. Every field starts from a **field type fac
 
 All accessed via `f` in the `.fields()` callback:
 
-| Factory                | DB Column                            | JS Type        | Key Options                                                                      |
-| ---------------------- | ------------------------------------ | -------------- | -------------------------------------------------------------------------------- |
-| `f.text(maxLength?)`   | `varchar(n)` / `text`                | `string`       | `.pattern(re)`, `.trim()`, `.lowercase()`, `.uppercase()`, `.min(n)`, `.max(n)`  |
-| `f.textarea()`         | `text`                               | `string`       | `.min(n)`, `.max(n)`                                                             |
-| `f.email(maxLength?)`  | `varchar(255)`                       | `string`       | `.min(n)`, `.max(n)`                                                             |
-| `f.url(maxLength?)`    | `varchar(2048)`                      | `string`       | `.min(n)`, `.max(n)`                                                             |
-| `f.number(mode?)`      | `integer` / `real` / `numeric` / ... | `number`       | `.min(n)`, `.max(n)`, `.positive()`, `.int()`, `.step(n)`                        |
-| `f.boolean()`          | `boolean`                            | `boolean`      | —                                                                                |
-| `f.date()`             | `date`                               | `string` (ISO) | `.autoNow()`, `.autoNowUpdate()`                                                 |
-| `f.datetime()`         | `timestamp`                          | `Date`         | `.autoNow()`, `.autoNowUpdate()`                                                 |
-| `f.time()`             | `time`                               | `string`       | —                                                                                |
-| `f.select(options[])`  | `varchar`                            | `string`       | `.enum(name)`                                                                    |
-| `f.relation(target)`   | `varchar(36)` FK                     | `string`       | See [Relations](#8-relations)                                                    |
-| `f.upload(config?)`    | `varchar(36)` FK                     | `string`       | `.multiple()`                                                                    |
-| `f.object(fields)`     | `jsonb`                              | `{...}`        | Nested field definitions                                                         |
-| `f.json(config?)`      | `jsonb` / `json`                     | `JsonValue`    | `{ mode: "jsonb" \| "json" }`                                                    |
-| `f.richText()`         | `jsonb`                              | TipTap doc     | _Admin plugin only_                                                              |
-| `f.blocks()`           | `jsonb`                              | Block tree     | _Admin plugin only_                                                              |
-| `f.from(column, zod?)` | custom                               | `unknown`      | `.type(name)` — escape hatch (PostGIS, etc.). Internal type string is `"custom"` |
+| Factory               | DB Column                            | JS Type        | Key Options                                                                     |
+| --------------------- | ------------------------------------ | -------------- | ------------------------------------------------------------------------------- |
+| `f.text(maxLength?)`  | `varchar(n)` / `text`                | `string`       | `.pattern(re)`, `.trim()`, `.lowercase()`, `.uppercase()`, `.min(n)`, `.max(n)` |
+| `f.textarea()`        | `text`                               | `string`       | `.min(n)`, `.max(n)`                                                            |
+| `f.email(maxLength?)` | `varchar(255)`                       | `string`       | `.min(n)`, `.max(n)`                                                            |
+| `f.url(maxLength?)`   | `varchar(2048)`                      | `string`       | `.min(n)`, `.max(n)`                                                            |
+| `f.number(mode?)`     | `integer` / `real` / `numeric` / ... | `number`       | `.min(n)`, `.max(n)`, `.positive()`, `.int()`, `.step(n)`                       |
+| `f.boolean()`         | `boolean`                            | `boolean`      | none                                                                            |
+| `f.date()`            | `date`                               | `string` (ISO) | `.autoNow()`, `.autoNowUpdate()`                                                |
+| `f.datetime()`        | `timestamp`                          | `Date`         | `.autoNow()`, `.autoNowUpdate()`                                                |
+| `f.time()`            | `time`                               | `string`       | none                                                                            |
+| `f.select(options[])` | `varchar`                            | `string`       | `.enum(name)`                                                                   |
+| `f.relation(target)`  | `varchar(36)` FK                     | `string`       | See [Relations](#8-relations)                                                   |
+| `f.upload(config?)`   | `varchar(36)` FK                     | `string`       | `.multiple()`                                                                   |
+| `f.object(fields)`    | `jsonb`                              | `{...}`        | Nested field definitions                                                        |
+| `f.json(config?)`     | `jsonb` / `json`                     | `JsonValue`    | `{ mode: "jsonb" \| "json" }`                                                   |
+| `f.richText()`        | `jsonb`                              | TipTap doc     | _Admin plugin only_                                                             |
+| `f.blocks()`          | `jsonb`                              | Block tree     | _Admin plugin only_                                                             |
 
 ### Common Field Methods (Available on All Types)
 
@@ -533,6 +562,7 @@ f.text(255)
 	.label("Post Title") // display label (I18nText)
 	.description("The main title") // help text
 	.localized() // stored in i18n table, per-locale
+	.drizzle((column) => column.default(sql`now()`)) // column-level Drizzle behavior
 	.virtual(sql`...`) // computed column, no DB storage
 	.array() // wrap as JSONB array
 	.minItems(1)
@@ -556,7 +586,7 @@ f.text(255)
 		update: ({ session }) => session?.user.role === "admin",
 	})
 	.operators(ops) // override WHERE operator set for queries
-	.drizzle((col) => col.unique()) // raw Drizzle column builder — constraints/defaults land in DDL; $type<T>() narrows value type
+	.drizzle((col) => col.unique()) // raw Drizzle column builder, constraints/defaults land in DDL; $type<T>() narrows value type
 	.zod((schema) => schema.refine(check)) // extend/replace Zod schema (output narrows value type)
 	.$type<Layout>() // explicitly set TS value type (type-level only; mainly for json)
 	.fromDb((value) => value) // transform after reading from DB
@@ -565,7 +595,7 @@ f.text(255)
 	.derive(extra); // derive additional runtime state
 ```
 
-### Extending Fields — typed escape hatches
+### Extending Fields, typed escape hatches
 
 Built-in fields don't box you in. All three hatches propagate types into CRUD select/insert types:
 
@@ -573,10 +603,10 @@ Built-in fields don't box you in. All three hatches propagate types into CRUD se
 // extend Zod validation (type unchanged)
 slug: f.text().zod((s) => s.refine(isKebabCase, "must be kebab-case")),
 
-// replace the Zod schema — value type narrows to the schema output
+// replace the Zod schema, value type narrows to the schema output
 settings: f.json().zod(() => z.object({ theme: z.enum(["light", "dark"]) })),
 
-// extend the underlying Drizzle column — raw builder access, lands in DDL/migrations
+// extend the underlying Drizzle column, raw builder access, lands in DDL/migrations
 slug: f.text(255).drizzle((col) => col.unique()),
 viewCount: f.number().drizzle((col) => col.default(sql`0`)),
 total: f.number().drizzle((col) => col.$type<Cents>()), // narrows value type
@@ -586,7 +616,6 @@ layout: f.json().$type<{ rows: { id: string; span: number }[] }>(),
 ```
 
 Field schemas are enforced server-side: create/update validates each input key against its field's schema (incl. `.zod()` transforms, email format, select enums). System fields and relation/upload FKs validate against their column shape.
-
 
 ### Custom Field Types
 
@@ -617,28 +646,28 @@ All relationships are expressed via `f.relation(target)` with chain methods:
 ### Relationship Types
 
 ```ts
-// belongsTo (default) — FK on this table
+// belongsTo (default), FK on this table
 f.relation("user");
 // Column: authorId varchar(36) → FK to user.id
 
-// hasMany — virtual, FK lives on the target table
+// hasMany, virtual, FK lives on the target table
 f.relation("comments").hasMany({
 	foreignKey: "postId",
 	onDelete: "cascade",
 });
 
-// manyToMany — virtual, uses a junction table
+// manyToMany, virtual, uses a junction table
 f.relation("tags").manyToMany({
 	through: "post_tags",
 	sourceField: "postId", // optional, inferred
 	targetField: "tagId", // optional, inferred
 });
 
-// multiple — stores array of IDs as JSONB
+// multiple, stores array of IDs as JSONB
 f.relation("assets").multiple();
 // Column: imageIds jsonb (["uuid1", "uuid2", ...])
 
-// polymorphic (morphTo) — two columns: type + id
+// polymorphic (morphTo), two columns: type + id
 f.relation({ users: "users", teams: "teams" });
 // Columns: assigneeType varchar, assigneeId varchar
 ```
@@ -679,16 +708,16 @@ READ:    beforeOperation → beforeRead     → [DB SELECT]  → afterRead
 
 ```ts
 collection("posts").hooks({
-  // Runs before ANY operation — logging, rate limiting
+  // Runs before ANY operation, logging, rate limiting
   beforeOperation: async (ctx) => { ... },
 
-  // Runs before validation on create/update — normalize input
+  // Runs before validation on create/update, normalize input
   beforeValidate: async (ctx) => {
     ctx.data.email = ctx.data.email?.toLowerCase();
     return ctx.data;
   },
 
-  // Runs after validation, before DB write — business logic, derived fields
+  // Runs after validation, before DB write, business logic, derived fields
   beforeChange: async (ctx) => {
     if (ctx.operation === "create") {
       ctx.data.slug = slugify(ctx.data.title);
@@ -696,7 +725,7 @@ collection("posts").hooks({
     return ctx.data;
   },
 
-  // Runs after create/update — notifications, webhooks, side effects
+  // Runs after create/update, notifications, webhooks, side effects
   afterChange: async (ctx) => {
     // ctx.original is available on update (the record before changes)
     ctx.onAfterCommit(async () => {
@@ -704,7 +733,7 @@ collection("posts").hooks({
     });
   },
 
-  // Runs before DB SELECT — modify query
+  // Runs before DB SELECT, modify query
   beforeRead: async (ctx) => { ... },
 
   // Runs after any operation that returns data
@@ -748,13 +777,13 @@ Every hook receives `HookContext` which includes:
 
 ### Important Rules
 
-- **`before*` hooks** — errors abort the operation (throw to reject)
-- **`afterDelete`** (single) and **`afterChange`** (batch update) — errors are caught and logged (non-fatal)
-- **`afterRead`** — errors **propagate** (fatal) — keep `afterRead` hooks safe
-- **`afterChange`** (single create/update) — collection-level errors propagate; use `onAfterCommit` for risky side effects
-- **Hooks can be arrays**: `.hooks({ afterChange: [hook1, hook2] })` — executed sequentially
+- **`before*` hooks**, errors abort the operation (throw to reject)
+- **`afterDelete`** (single) and **`afterChange`** (batch update), errors are caught and logged (non-fatal)
+- **`afterRead`**, errors **propagate** (fatal), keep `afterRead` hooks safe
+- **`afterChange`** (single create/update), collection-level errors propagate; use `onAfterCommit` for risky side effects
+- **Hooks can be arrays**: `.hooks({ afterChange: [hook1, hook2] })`, executed sequentially
 - Use **`onAfterCommit`** for side effects (emails, jobs) that should only fire if the DB write succeeds
-- **`deleteMany`** does NOT trigger `afterRead` — it returns `{ success, count }` directly
+- **`deleteMany`** does NOT trigger `afterRead`, it returns `{ success, count }` directly
 
 ### Global Hooks
 
@@ -844,7 +873,7 @@ collection("users").access({
 
 ### Default Behavior
 
-When no access rule is set, the default is **`!!session`** — require an authenticated session. This is secure-by-default.
+When no access rule is set, the default is **`!!session`**, require an authenticated session. This is secure-by-default.
 
 ### System Mode
 
@@ -870,7 +899,7 @@ appConfig({
 	}),
 });
 
-// Any access rule — typed by inference, narrow before use (absent in jobs/seeds)
+// Any access rule, typed by inference, narrow before use (absent in jobs/seeds)
 access: {
 	read: ({ workspaceId }) => (workspaceId ? { workspace: workspaceId } : false),
 }
@@ -921,7 +950,7 @@ route()
 	.schema(zodSchema) // input validation
 	.outputSchema(zodSchema) // response type (for OpenAPI)
 	.access(rule) // access control
-	.handler(fn); // terminal — returns RouteDefinition
+	.handler(fn); // terminal, returns RouteDefinition
 ```
 
 ### File-Path Routing
@@ -1052,7 +1081,7 @@ async ({ db, session, services }) => {
 
 ## 13. Jobs
 
-Background jobs for async processing — retries, scheduling, and queuing.
+Background jobs for async processing, retries, scheduling, and queuing.
 
 ```ts
 import { job } from "questpie/services";
@@ -1154,13 +1183,13 @@ await ctx.email.send("welcome", {
 
 ### Email Adapters
 
-| Adapter                       | Import                       | Description                      |
-| ----------------------------- | ---------------------------- | -------------------------------- |
-| `ConsoleAdapter`              | `questpie/adapters/console`  | Logs to console (dev)            |
-| `SmtpAdapter`                 | `questpie/adapters/smtp`     | SMTP via Nodemailer              |
-| `resendAdapter()`             | `questpie/adapters/resend`   | Resend HTTP API (and compatible) |
-| `plunkAdapter()`              | `questpie/adapters/plunk`    | Plunk transactional HTTP API     |
-| `createEtherealSmtpAdapter()` | `questpie/adapters/smtp`     | Auto-generated test SMTP account |
+| Adapter                       | Import                      | Description                      |
+| ----------------------------- | --------------------------- | -------------------------------- |
+| `ConsoleAdapter`              | `questpie/adapters/console` | Logs to console (dev)            |
+| `SmtpAdapter`                 | `questpie/adapters/smtp`    | SMTP via Nodemailer              |
+| `resendAdapter()`             | `questpie/adapters/resend`  | Resend HTTP API (and compatible) |
+| `plunkAdapter()`              | `questpie/adapters/plunk`   | Plunk transactional HTTP API     |
+| `createEtherealSmtpAdapter()` | `questpie/adapters/smtp`    | Auto-generated test SMTP account |
 
 ---
 
@@ -1210,7 +1239,7 @@ export default seed({
 
 ```bash
 bun questpie migrate              # Run pending migrations
-bun questpie migrate:generate     # Generate migration from schema diff
+bun questpie migrate:create       # Generate migration from schema diff
 bun questpie migrate:status       # Show status
 bun questpie migrate:down         # Rollback
 bun questpie migrate:reset        # Rollback all
@@ -1438,33 +1467,40 @@ await ctx.queue.indexRecords.publish({ collection: "posts" });
 
 ## 19. Realtime
 
-Live queries over SSE. **Broadcasts are automatic** — every collection/global create/update/delete already writes a change event to the `questpie_realtime_log` outbox and notifies subscribers. Do NOT write `afterChange` hooks that "emit" realtime events; a custom emitter double-fires against the built-in broadcast hook.
+Live queries over SSE. **Broadcasts are automatic**, every collection/global create/update/delete already writes a change event to the `questpie_realtime_log` outbox and notifies subscribers. Do NOT write `afterChange` hooks that "emit" realtime events; a custom emitter double-fires against the built-in broadcast hook.
 
 ### How It Works
 
 1. Every CRUD write appends a change event to the outbox; an adapter (pg_notify / Redis Streams) or 2s polling wakes subscribers
-2. The server **re-runs the subscribed query under the subscriber's auth** and pushes the full result as a `snapshot` — clients never receive raw change events (no `operation`/`recordId` on the client; snapshots are access-controlled)
+2. The server **re-runs the subscribed query under the subscriber's auth** and pushes the full result as a `snapshot`, clients never receive raw change events (no `operation`/`recordId` on the client; snapshots are access-controlled)
 3. One SSE connection multiplexes all topics (`POST /realtime`)
 
-Snapshots are idempotent state, not diffs — filtered subscriptions may receive unchanged snapshots on update/delete (over-refresh by design). Always render from the snapshot.
+Snapshots are idempotent state, not diffs, filtered subscriptions may receive unchanged snapshots on update/delete (over-refresh by design). Always render from the snapshot.
 
 ### Client-Side Usage
 
 ```ts
-// React + TanStack Query — typed second arg, no casts needed
+// React + TanStack Query, typed second arg, no casts needed
 const { data } = useQuery(
-	qp.collections.posts.find({ where: { event: eventId }, limit: 50 }, { realtime: true }),
+	qp.collections.posts.find(
+		{ where: { event: eventId }, limit: 50 },
+		{ realtime: true },
+	),
 );
 
-// Vanilla TS — live() is the live form of find(): same options in, same result type out
+// Vanilla TS, live() is the live form of find(): same options in, same result type out
 const stop = client.collections.posts.live(
-	{ where: { event: eventId }, with: { author: true }, orderBy: { createdAt: "desc" } },
+	{
+		where: { event: eventId },
+		with: { author: true },
+		orderBy: { createdAt: "desc" },
+	},
 	(snap) => render(snap.docs), // snap.docs[i].author is typed
 	{ onError: (e) => console.error(e) },
 );
 stop(); // unsubscribe
 
-// Async-iterable form (workers, agents, tests) — terminate via AbortSignal
+// Async-iterable form (workers, agents, tests), terminate via AbortSignal
 for await (const snap of client.collections.posts.liveIter(
 	{ where: { event: eventId } },
 	{ signal: controller.signal },
@@ -1475,30 +1511,30 @@ for await (const snap of client.collections.posts.liveIter(
 // Globals mirror get()
 client.globals.siteSettings.live(undefined, (settings) => applyTheme(settings));
 
-// Low-level escape hatch — topic objects, never channel strings; data is untyped
+// Low-level escape hatch, topic objects, never channel strings; data is untyped
 client.realtime.subscribe(
 	{ resourceType: "collection", resource: "posts", where: { event: eventId } },
-	(data) => {}, // unknown — prefer the typed live() wrappers
+	(data) => {}, // unknown, prefer the typed live() wrappers
 );
 ```
 
-Live options carry exactly what the wire protocol supports: `where`, `with`, `limit`, `offset`, `orderBy`, `locale` (no `columns`/`groupBy`/`search` — compile error).
+Live options carry exactly what the wire protocol supports: `where`, `with`, `limit`, `offset`, `orderBy`, `locale` (no `columns`/`groupBy`/`search`, compile error).
 
 ### Wire Protocol (stable contract)
 
 `POST <basePath>/realtime` body `{ topics: [{ id, resourceType: "collection" | "global", resource, where?, with?, limit?, offset?, orderBy?, locale? }] }` → SSE events:
 
-| Event      | Payload                  | Meaning                                                |
-| ---------- | ------------------------ | ------------------------------------------------------ |
-| `snapshot` | `{ topicId, seq, data }` | Full `find()`/`get()` result under subscriber's auth   |
-| `error`    | `{ topicId, message }`   | Topic-level failure (unknown resource, access denied)  |
-| `ping`     | `{ ts }`                 | Keep-alive (default every 8s)                          |
+| Event      | Payload                  | Meaning                                               |
+| ---------- | ------------------------ | ----------------------------------------------------- |
+| `snapshot` | `{ topicId, seq, data }` | Full `find()`/`get()` result under subscriber's auth  |
+| `error`    | `{ topicId, message }`   | Topic-level failure (unknown resource, access denied) |
+| `ping`     | `{ ts }`                 | Keep-alive (default every 8s)                         |
 
 Ignore unknown SSE event types (forward compat).
 
 ### Keepalive (Bun)
 
-The stream pings every 8s by default (`realtime.keepAliveIntervalMs`). Bun's default `idleTimeout` is 10s — the default ping survives it, but set headroom explicitly in the server entry:
+The stream pings every 8s by default (`realtime.keepAliveIntervalMs`). Bun's default `idleTimeout` is 10s, the default ping survives it, but set headroom explicitly in the server entry:
 
 ```ts
 export default { port: 3000, idleTimeout: 30, fetch: server.fetch };
@@ -1528,7 +1564,7 @@ runtimeConfig({
 
 ### Content Localization
 
-Mark fields as localized — stored per-locale in a separate i18n table:
+Mark fields as localized, stored per-locale in a separate i18n table:
 
 ```ts
 f.text(255).localized(); // stored in {collection}_i18n table
@@ -1575,7 +1611,7 @@ adminConfig({
 	},
 });
 
-// messages/en.ts — admin UI string translations
+// messages/en.ts, admin UI string translations
 export default {
 	"admin.posts.title": "Blog Posts",
 	"admin.posts.description": "Manage blog posts",
@@ -1592,9 +1628,9 @@ const msg = ctx.t("billing.invoice_sent", { amount: 100 }, "en");
 
 ---
 
-## 21. AppContext — What's Available Everywhere
+## 21. AppContext, What's Available Everywhere
 
-Every hook, route handler, job handler, and service receives `AppContext`. This is the **core runtime interface** — learn it once, use it everywhere.
+Every hook, route handler, job handler, and service receives `AppContext`. This is the **core runtime interface**, learn it once, use it everywhere.
 
 ```ts
 interface AppContext {
@@ -1617,22 +1653,22 @@ interface AppContext {
 
 ### Where AppContext Is Available
 
-| Context          | How to Access                                                    |
-| ---------------- | ---------------------------------------------------------------- |
-| Collection hooks | First argument: `async (ctx) => { ... }`                         |
-| Route handlers   | Destructure: `async ({ db, session, collections }) => { ... }`   |
-| Job handlers     | Destructure: `async ({ payload, queue, email }) => { ... }`      |
-| Email templates  | Destructure: `async ({ input, collections }) => { ... }`         |
-| Access rules     | Destructure: `({ session, data }) => boolean`                    |
-| Seeds            | `async ({ collections, log }) => { ... }`                        |
-| Services         | `create: ({ app }) => ...` (app instance only, not full context) |
-| Better Auth callbacks (`onLinkAccount`, `databaseHooks`, `sendMagicLink`, plugin hooks) | `getContext<App>()` — `/auth/*` is a raw route executed inside `runWithContext`, so the request scope is live there (see `references/auth.md`) |
+| Context                                                                                 | How to Access                                                                                                                                 |
+| --------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Collection hooks                                                                        | First argument: `async (ctx) => { ... }`                                                                                                      |
+| Route handlers                                                                          | Destructure: `async ({ db, session, collections }) => { ... }`                                                                                |
+| Job handlers                                                                            | Destructure: `async ({ payload, queue, email }) => { ... }`                                                                                   |
+| Email templates                                                                         | Destructure: `async ({ input, collections }) => { ... }`                                                                                      |
+| Access rules                                                                            | Destructure: `({ session, data }) => boolean`                                                                                                 |
+| Seeds                                                                                   | `async ({ collections, log }) => { ... }`                                                                                                     |
+| Services                                                                                | `create: ({ app }) => ...` (app instance only, not full context)                                                                              |
+| Better Auth callbacks (`onLinkAccount`, `databaseHooks`, `sendMagicLink`, plugin hooks) | `getContext<App>()`, `/auth/*` is a raw route executed inside `runWithContext`, so the request scope is live there (see `references/auth.md`) |
 
 ### Getting Context Programmatically
 
 ```ts
 import { getContext, tryGetContext } from "questpie/types";
-import type { App } from "#questpie"; // type-only — no runtime cycle
+import type { App } from "#questpie"; // type-only, no runtime cycle
 
 const ctx = getContext<App>(); // typed app/session/extensions; throws outside a request scope
 const maybe = tryGetContext(); // returns null if outside scope
@@ -1645,7 +1681,7 @@ const fresh = await app.createContext({
 });
 ```
 
-**Partial context overrides:** the second argument of every CRUD call merges with the ambient request scope (priority: explicit param → ALS scope → defaults). A bare `{ accessMode: "system" }` elevates **only** the mode — `session`, `db`, and `locale` inherit from the request automatically. The inverse works too: `{ accessMode: "user" }` inside system-scoped code re-enables access rules against the inherited session. Never re-thread session/locale by hand:
+**Partial context overrides:** the second argument of every CRUD call merges with the ambient request scope (priority: explicit param → ALS scope → defaults). A bare `{ accessMode: "system" }` elevates **only** the mode, `session`, `db`, and `locale` inherit from the request automatically. The inverse works too: `{ accessMode: "user" }` inside system-scoped code re-enables access rules against the inherited session. Never re-thread session/locale by hand:
 
 ```ts
 await app.collections.posts.find({}, { accessMode: "system" }); // mode elevated, request session/locale ride along
@@ -1687,10 +1723,10 @@ const post = await app.collections.posts.findOne({
 // WRITE
 .create(data)                      → T
 .updateById({ id, data })          → T
-.updateMany({ where, data })       → T[]       (batch; deprecated alias: update)
+.updateMany({ where, data })       → T[]       (bulk by filter)
 .updateBatch({ updates })          → T[]       (per-record batch)
 .deleteById({ id })                → { success }
-.deleteMany({ where })             → { success, count }  (batch; deprecated alias: delete)
+.deleteMany({ where })             → { success, count }  (bulk by filter)
 .restoreById({ id })               → T          (soft-delete)
 
 // VERSIONING
@@ -1800,9 +1836,9 @@ The typed client for calling the QuestPie API from frontend or external code.
 
 ```ts
 import { createClient } from "questpie/client";
-import type { App } from "@/questpie/server/app";
+import type { AppConfig } from "#questpie";
 
-export const client = createClient<App>({
+export const client = createClient<AppConfig>({
 	baseURL: "http://localhost:3000",
 	basePath: "/api", // matches your catch-all route
 });
@@ -1914,9 +1950,9 @@ Pre-built query/mutation options for `@tanstack/react-query`.
 ```ts
 import { createQuestpieQueryOptions } from "@questpie/tanstack-query";
 import { client } from "@/lib/client";
-import type { App } from "@/questpie/server/app";
+import type { AppConfig } from "#questpie";
 
-export const qp = createQuestpieQueryOptions<App>(client, {
+export const qp = createQuestpieQueryOptions<AppConfig>(client, {
 	keyPrefix: ["questpie"],
 });
 ```
@@ -2091,7 +2127,7 @@ The admin client receives a pre-built `AdminState` object containing all registe
 
 These methods are added to `CollectionBuilder`, `GlobalBuilder`, and `Field` by the admin plugin's codegen.
 
-### `.admin()` — Collection/Global Metadata
+### `.admin()`, Collection/Global Metadata
 
 ```ts
 collection("posts").admin(({ c }) => ({
@@ -2105,7 +2141,7 @@ collection("posts").admin(({ c }) => ({
 }));
 ```
 
-### `.list()` — List View Config
+### `.list()`, List View Config
 
 ```ts
 collection("posts").list(({ v, f, a }) =>
@@ -2123,7 +2159,7 @@ collection("posts").list(({ v, f, a }) =>
 );
 ```
 
-### `.form()` — Form View Config
+### `.form()`, Form View Config
 
 ```ts
 collection("posts").form(({ v, f }) =>
@@ -2160,12 +2196,12 @@ collection("posts").form(({ v, f }) =>
 
 #### Form Layout Primitives
 
-| Type                                                             | Description                              |
-| ---------------------------------------------------------------- | ---------------------------------------- |
-| `string` (e.g. `f.title`)                                        | Bare field — renders with default config |
-| `{ field, hidden?, readOnly?, disabled?, compute?, className? }` | Field with overrides                     |
-| `{ type: "section", label?, layout?, columns?, fields: [...] }`  | Visual grouping                          |
-| `{ type: "tabs", tabs: [{ id, label, icon?, fields }] }`         | Tabbed layout                            |
+| Type                                                             | Description                             |
+| ---------------------------------------------------------------- | --------------------------------------- |
+| `string` (e.g. `f.title`)                                        | Bare field, renders with default config |
+| `{ field, hidden?, readOnly?, disabled?, compute?, className? }` | Field with overrides                    |
+| `{ type: "section", label?, layout?, columns?, fields: [...] }`  | Visual grouping                         |
+| `{ type: "tabs", tabs: [{ id, label, icon?, fields }] }`         | Tabbed layout                           |
 
 #### Reactive Field Config
 
@@ -2184,7 +2220,7 @@ Fields can be dynamically hidden, read-only, disabled, or computed based on othe
 }
 ```
 
-### `.preview()` — Live Preview
+### `.preview()`, Live Preview
 
 ```ts
 collection("posts").preview({
@@ -2199,7 +2235,7 @@ Live Preview uses the existing admin `FormView`, Preview button, `LivePreviewMod
 
 Frontend visual editing needs `useCollectionPreview`, `PreviewProvider`, `PreviewField`, and usually `BlockRenderer`; load the `questpie-admin` skill for the full frontend preparation checklist.
 
-### `.actions()` — Server Actions
+### `.actions()`, Server Actions
 
 ```ts
 collection("posts").actions(({ a, c, f }) => ({
@@ -2296,12 +2332,12 @@ Each server field type maps to a React component in the admin:
 | `select`       | `SelectField`       | primitive        |
 | `relation`     | `RelationField`     | `RelationCell`   |
 | `upload`       | `UploadField`       | `UploadCell`     |
-| `richText`     | `RichTextField`     | —                |
-| `json`         | `JsonField`         | —                |
+| `richText`     | `RichTextField`     | none             |
+| `json`         | `JsonField`         | none             |
 | `object`       | `ObjectField`       | `ObjectCell`     |
 | `array`        | `ArrayField`        | `ArrayCell`      |
 | `blocks`       | `BlocksField`       | `BlocksCell`     |
-| `assetPreview` | `AssetPreviewField` | —                |
+| `assetPreview` | `AssetPreviewField` | none             |
 
 Register custom field types:
 
@@ -2488,7 +2524,7 @@ export default packageConfig({
 });
 ```
 
-This generates `.generated/module.ts` for each module subdirectory (no `createApp`, no runtime config — just a typed module object).
+This generates `.generated/module.ts` for each module subdirectory (no `createApp`, no runtime config, just a typed module object).
 
 ---
 
@@ -2500,8 +2536,8 @@ QuestPie uses pluggable adapters for all infrastructure concerns.
 
 Always **PostgreSQL** via **Drizzle ORM**. Two client options:
 
-- `Bun.SQL` (production — native Bun PostgreSQL driver)
-- `PGlite` (testing — in-process SQLite-compatible Postgres)
+- `Bun.SQL` (production, native Bun PostgreSQL driver)
+- `PGlite` (testing, in-process SQLite-compatible Postgres)
 
 ### HTTP Adapters
 
@@ -2543,11 +2579,11 @@ Configure it through plugin-discovered `config/mcp.ts`, not `mcpModule(options)`
 
 ### Storage Adapters
 
-| Config                              | Storage backend                  |
-| ----------------------------------- | -------------------------------- |
-| Default                             | Filesystem adapter (`./uploads`) |
-| `QUESTPIE_STORAGE_*` env vars       | S3-compatible (auto-detected)    |
-| `{ adapter: customAdapter }`        | Files SDK adapter instance       |
+| Config                        | Storage backend                  |
+| ----------------------------- | -------------------------------- |
+| Default                       | Filesystem adapter (`./uploads`) |
+| `QUESTPIE_STORAGE_*` env vars | S3-compatible (auto-detected)    |
+| `{ adapter: customAdapter }`  | Files SDK adapter instance       |
 
 ### Queue Adapters
 
@@ -2559,10 +2595,10 @@ Configure it through plugin-discovered `config/mcp.ts`, not `mcpModule(options)`
 
 ### Search Adapters
 
-| Adapter                          | Description                       |
-| -------------------------------- | --------------------------------- |
-| `createPostgresSearchAdapter()`  | pg_trgm + full-text search        |
-| `createPgVectorSearchAdapter()`  | Hybrid semantic search (pgvector + embedding provider — see `references/infrastructure-adapters.md`) |
+| Adapter                         | Description                                                                                         |
+| ------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `createPostgresSearchAdapter()` | pg_trgm + full-text search                                                                          |
+| `createPgVectorSearchAdapter()` | Hybrid semantic search (pgvector + embedding provider, see `references/infrastructure-adapters.md`) |
 
 ### Realtime Adapters
 
@@ -2649,27 +2685,56 @@ declare module "questpie" {
 bun questpie <command> [options]
 ```
 
-| Command                  | Description                                         |
-| ------------------------ | --------------------------------------------------- |
-| `generate`               | Run codegen (one-shot)                              |
-| `dev`                    | Watch mode codegen (re-runs on file add/remove)     |
-| `push`                   | Push schema to DB (dev only, like drizzle-kit push) |
-| `migrate` / `migrate:up` | Run pending migrations                              |
-| `migrate:generate`       | Generate migration from schema diff                 |
-| `migrate:down`           | Rollback migrations                                 |
-| `migrate:status`         | Show migration status                               |
-| `migrate:reset`          | Rollback all                                        |
-| `migrate:fresh`          | Reset + re-run all migrations                       |
-| `seed`                   | Run pending seeds                                   |
-| `seed:undo`              | Undo executed seeds                                 |
-| `seed:status`            | Show seed status                                    |
-| `seed:reset`             | Reset seed tracking                                 |
-| `add <type> <name>`      | Scaffold new entity file                            |
-| `add --list`             | Show available entity types                         |
+| Command             | Description                                         |
+| ------------------- | --------------------------------------------------- |
+| `generate`          | Run codegen (one-shot)                              |
+| `dev`               | Watch mode codegen (re-runs on file add/remove)     |
+| `push`              | Push schema to DB (dev only, like drizzle-kit push) |
+| `migrate`           | Run pending migrations                              |
+| `migrate:create`    | Generate migration from schema diff                 |
+| `migrate:down`      | Rollback migrations                                 |
+| `migrate:status`    | Show migration status                               |
+| `migrate:reset`     | Rollback all                                        |
+| `migrate:fresh`     | Reset + re-run all migrations                       |
+| `seed`              | Run pending seeds                                   |
+| `seed:undo`         | Undo executed seeds                                 |
+| `seed:status`       | Show seed status                                    |
+| `seed:reset`        | Reset seed tracking                                 |
+| `add <type> <name>` | Scaffold new entity file                            |
+| `add --list`        | Show available entity types                         |
 
 Global options: `-c, --config <path>` (default: `questpie.config.ts`)
 
 ### Scaffolding
+
+Create a new project:
+
+```bash
+bun create questpie my-app
+bun create questpie my-app --runtime tanstack-start --module admin --module openapi
+bun create questpie api --runtime hono --queue pg-boss --email console --realtime none --kv memory
+```
+
+Current runtime templates: `tanstack-start` (default), `next`, `hono`, `elysia`.
+Current module ids: `admin`, `openapi`, `workflows`; `admin` is only valid on
+render-layer runtimes (`tanstack-start`, `next`). Current adapter flags:
+`--queue pg-boss|bullmq|none`, `--email console|smtp|resend|plunk`,
+`--realtime none|pg-notify|redis-streams`, and `--kv memory|redis`. The
+scaffolder creates `.env` from `.env.example`, installs `questpie/questpie`
+skills in the background unless `--no-skills` is set, and runs codegen unless
+`--no-generate` is set.
+
+In generated apps, prefer the scaffolded scripts:
+
+```bash
+bun run scaffold:verify
+bun run db:push
+bun run migrate:create
+bun run migrate
+bun run dev
+```
+
+Add entities to an existing app:
 
 ```bash
 bun questpie add collection blog-posts
@@ -2685,7 +2750,7 @@ bun questpie add block hero            # with admin plugin
 
 ---
 
-## 32. How It All Connects — The Big Picture
+## 32. How It All Connects, The Big Picture
 
 ### Data Flow: Server Startup
 
@@ -2828,44 +2893,44 @@ module()                 Packaging unit (groups related entities)
 | ----------------------------- | --------------------- | ----------------------- |
 | `DATABASE_URL`                | PostgreSQL connection | (required)              |
 | `APP_URL`                     | Application URL       | `http://localhost:3000` |
-| `BETTER_AUTH_SECRET`          | Auth signing secret   | —                       |
-| `QUESTPIE_DB`                 | Cloud DB override     | —                       |
-| `QUESTPIE_APP_URL`            | Cloud URL override    | —                       |
-| `QUESTPIE_SECRET`             | Cloud secret override | —                       |
-| `QUESTPIE_STORAGE_ENDPOINT`   | S3 endpoint           | —                       |
-| `QUESTPIE_STORAGE_BUCKET`     | S3 bucket             | —                       |
-| `QUESTPIE_STORAGE_REGION`     | S3 region             | —                       |
-| `QUESTPIE_STORAGE_ACCESS_KEY` | S3 access key         | —                       |
-| `QUESTPIE_STORAGE_SECRET_KEY` | S3 secret key         | —                       |
+| `BETTER_AUTH_SECRET`          | Auth signing secret   | none                    |
+| `QUESTPIE_DB`                 | Cloud DB override     | none                    |
+| `QUESTPIE_APP_URL`            | Cloud URL override    | none                    |
+| `QUESTPIE_SECRET`             | Cloud secret override | none                    |
+| `QUESTPIE_STORAGE_ENDPOINT`   | S3 endpoint           | none                    |
+| `QUESTPIE_STORAGE_BUCKET`     | S3 bucket             | none                    |
+| `QUESTPIE_STORAGE_REGION`     | S3 region             | none                    |
+| `QUESTPIE_STORAGE_ACCESS_KEY` | S3 access key         | none                    |
+| `QUESTPIE_STORAGE_SECRET_KEY` | S3 secret key         | none                    |
 
 ---
 
 ## Quick Reference: All Primitives
 
-| Primitive      | Factory                              | Import From                | Purpose                      |
-| -------------- | ------------------------------------ | -------------------------- | ---------------------------- |
-| Collection     | `collection(name)`                   | `#questpie/factories`      | Data table + CRUD            |
-| Global         | `global(name)`                       | `#questpie/factories`      | Singleton document           |
-| Field          | `f.text()`, `f.number()`, ...        | `.fields()` callback       | Column definition            |
-| Field Type     | `fieldType(name, config)`            | `questpie`                 | Custom field type            |
-| Route          | `route()`                            | `questpie`                 | HTTP endpoint                |
-| Service        | `service()`                          | `questpie`                 | Injectable dependency        |
-| Job            | `job({...})`                         | `questpie`                 | Background task              |
-| Email          | `email({...})`                       | `questpie`                 | Email template               |
-| Block          | `block(name)`                        | `#questpie/factories`      | Content builder block        |
-| Migration      | `migration({...})`                   | `questpie`                 | DB schema change             |
-| Seed           | `seed({...})`                        | `questpie`                 | DB seed data                 |
-| Module         | `module({...})`                      | `questpie`                 | Packaging unit               |
-| Runtime Config | `runtimeConfig({...})`               | `questpie`                 | Infrastructure config        |
+| Primitive      | Factory                              | Import From                | Purpose                        |
+| -------------- | ------------------------------------ | -------------------------- | ------------------------------ |
+| Collection     | `collection(name)`                   | `#questpie/factories`      | Data table + CRUD              |
+| Global         | `global(name)`                       | `#questpie/factories`      | Singleton document             |
+| Field          | `f.text()`, `f.number()`, ...        | `.fields()` callback       | Column definition              |
+| Field Type     | `fieldType(name, config)`            | `questpie`                 | Custom field type              |
+| Route          | `route()`                            | `questpie`                 | HTTP endpoint                  |
+| Service        | `service()`                          | `questpie`                 | Injectable dependency          |
+| Job            | `job({...})`                         | `questpie`                 | Background task                |
+| Email          | `email({...})`                       | `questpie`                 | Email template                 |
+| Block          | `block(name)`                        | `#questpie/factories`      | Content builder block          |
+| Migration      | `migration({...})`                   | `questpie`                 | DB schema change               |
+| Seed           | `seed({...})`                        | `questpie`                 | DB seed data                   |
+| Module         | `module({...})`                      | `questpie`                 | Packaging unit                 |
+| Runtime Config | `runtimeConfig({...})`               | `questpie`                 | Infrastructure config          |
 | App Config     | `appConfig({...})`                   | `questpie`                 | Locale, access, hooks, context |
-| Auth Config    | `authConfig({...})`                  | `questpie`                 | Better Auth options          |
-| Env            | `env({...})`                         | `questpie/env`             | Boot-validated typed env     |
-| Client Env     | `clientEnv({...})`                   | `questpie/env`             | Client-safe env definition   |
-| Admin Config   | `adminConfig({...})`                 | `#questpie/factories`      | Sidebar, dashboard, branding |
-| View           | `view(name, {kind, component})`      | `@questpie/admin/client`   | Admin view component         |
-| Widget         | `widget(name, {component})`          | `@questpie/admin/client`   | Dashboard widget             |
-| Component      | `component(name, {component})`       | `@questpie/admin/client`   | Server-driven component      |
-| Client         | `createClient<App>(config)`          | `questpie/client`          | Frontend API client          |
-| Query Options  | `createQuestpieQueryOptions(client)` | `@questpie/tanstack-query` | TanStack Query integration   |
+| Auth Config    | `authConfig({...})`                  | `questpie`                 | Better Auth options            |
+| Env            | `env({...})`                         | `questpie/env`             | Boot-validated typed env       |
+| Client Env     | `clientEnv({...})`                   | `questpie/env`             | Client-safe env definition     |
+| Admin Config   | `adminConfig({...})`                 | `#questpie/factories`      | Sidebar, dashboard, branding   |
+| View           | `view(name, {kind, component})`      | `@questpie/admin/client`   | Admin view component           |
+| Widget         | `widget(name, {component})`          | `@questpie/admin/client`   | Dashboard widget               |
+| Component      | `component(name, {component})`       | `@questpie/admin/client`   | Server-driven component        |
+| Client         | `createClient<App>(config)`          | `questpie/client`          | Frontend API client            |
+| Query Options  | `createQuestpieQueryOptions(client)` | `@questpie/tanstack-query` | TanStack Query integration     |
 
 > **Import rule of thumb:** Only `collection()`, `global()`, `block()`, and `adminConfig()` come from `#questpie/factories` (they need codegen-generated types). Everything else comes from `"questpie"` directly.

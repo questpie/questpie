@@ -8,12 +8,12 @@ Conventions and patterns for the QuestPie CMS monorepo. Applies to both human co
 
 ### Principles
 
-1. **Server-first** — Root/default export path = server API. Client code lives under `/client/*`.
-2. **Focused files** — Each export file covers one concern, max ~15 exports. No mega barrels.
-3. **Named exports only** — No default exports from package entry points.
-4. **No `export *`** — Always re-export named symbols explicitly (tree-shaking).
-5. **No wildcards** — Never use `"./*"` in package.json exports. Only explicit paths.
-6. **`sideEffects: false`** — Declared in every package.json (except CSS: `["**/*.css"]`).
+1. **Server-first**, Root/default export path = server API. Client code lives under `/client/*`.
+2. **Focused files**, Each export file covers one concern, max ~15 exports. No mega barrels.
+3. **Named exports only**, No default exports from package entry points.
+4. **No `export *`**, Always re-export named symbols explicitly (tree-shaking).
+5. **No wildcards**, Never use `"./*"` in package.json exports. Only explicit paths.
+6. **`sideEffects: false`**, Declared in every package.json (except CSS: `["**/*.css"]`).
 
 ### Directory Structure
 
@@ -170,7 +170,7 @@ import { workflowsClientModule } from "@questpie/workflows/client/modules/workfl
 export default [adminClientModule, workflowsClientModule] as const;
 ```
 
-Codegen automatically generates the merge logic — no manual spreading.
+Codegen automatically generates the merge logic, no manual spreading.
 
 ---
 
@@ -189,7 +189,7 @@ import { something } from "#questpie/admin/server/some/module.js";
 
 Never import from the package's own public exports:
 ```ts
-// BAD — circular, breaks build
+// BAD, circular, breaks build
 import { collection } from "questpie";  // inside questpie package!
 
 // GOOD
@@ -200,12 +200,12 @@ import { collection } from "#questpie/server/collection/builder/collection-build
 
 Always import from public export paths:
 ```ts
-// GOOD — uses public API
+// GOOD, uses public API
 import { adminModule } from "@questpie/admin/modules/admin";
 import { view, block } from "@questpie/admin/factories";
 import type { AppContext } from "questpie/types";
 
-// BAD — never import from internal src/ paths
+// BAD, never import from internal src/ paths
 // import { something } from "@questpie/pkg/src/internal/deep/path";
 ```
 
@@ -298,9 +298,9 @@ export { default as adminClientModule } from "../server/modules/admin/client/ind
 
 ## General Rules
 
-- **No `export * from` barrels** inside packages — only in `src/exports/` directories for public API
-- **No default exports** from package entry points — always named
+- **No `export * from` barrels** inside packages, only in `src/exports/` directories for public API
+- **No default exports** from package entry points, always named
 - **No co-authored-by** in git commits
-- **Fix everything** found during testing — never dismiss as "pre-existing"
-- **Server-first** — default assumption is server code unless explicitly under `/client`
-- **Declarative over imperative** — configuration as data, not conditional code
+- **Fix everything** found during testing, never dismiss as "pre-existing"
+- **Server-first**, default assumption is server code unless explicitly under `/client`
+- **Declarative over imperative**, configuration as data, not conditional code

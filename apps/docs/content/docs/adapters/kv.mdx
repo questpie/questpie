@@ -1,0 +1,269 @@
+---
+title: KV adapter
+description: A typed key-value store on your app context, ctx.kv.get/set/delete/has/clear with TTL and tag-based invalidation. In-memory by default; swap to Redis or Cloudflare KV with one config line and no app-code change.
+---
+
+QUESTPIE ships a small **key-value store** at `app.kv` (and `ctx.kv` in every handler). You call `get`, `set`, `delete`, `has`, and `clear` against a typed service; the actual storage is a swappable **adapter**. By default it's an in-process `Map`, good enough for dev and single-process deployments. Point one config line at Redis or Cloudflare KV and the same `ctx.kv` calls now hit a shared, persistent store. Your application code never changes.
+
+<Callout type="info" title="Prerequisites">
+Read [Adapters](/docs/adapters) (what an adapter is and the full list of swappable backends) and [Configuration](/docs/concepts/configuration) (where the `kv` slot is wired into `questpie.config.ts` via `runtimeConfig`). KV has no separate feature page, the store *is* the adapter, so this page owns both.
+</Callout>
+
+## What it does
+
+- **One store, on every context.** `ctx.kv` / `app.kv` give you `get` / `set` / `delete` / `has` / `clear` from any route, hook, job, or service, no import, no setup.
+- **TTL built in.** Pass a per-call expiry in seconds, or set a `defaultTtl` once in config so every `set` expires automatically.
+- **Tag-based invalidation.** Adapters can group keys under tags and drop a whole group in one call (`invalidateByTag`), ideal for cache busting (e.g. invalidate every cached page tagged `post:123`).
+- **Swap backends with one line.** In-memory by default; set `kv.adapter` to `redisKVAdapter(...)` or `cloudflareKVAdapter(...)` and nothing else moves.
+- **Bring your own.** The store is just the `KVAdapter` interface, implement it for any backend you like.
+
+## Quick start
+
+The KV store works out of the box with **zero config**, `ctx.kv` is always present, backed by the in-memory adapter. The app context is spread into every route handler, so you destructure `kv` directly:
+
+```ts title="src/questpie/server/routes/cached-stats.ts"
+import { route } from "questpie/services";
+
+export default route()
+  .get()
+  .handler(async ({ kv, collections }) => {
+    // Try the cache first
+    const cached = await kv.get<{ total: number }>("stats:posts");
+    if (cached) return cached;
+
+    // Miss, compute, then cache for 60 seconds
+    const total = await collections.posts.count();
+    const stats = { total };
+    await kv.set("stats:posts", stats, 60); // ttl in SECONDS
+    return stats;
+  });
+```
+
+That's it, no adapter to install for local development. To use a real backend in production, wire one adapter in `questpie.config.ts` (full options [below](#configuration)):
+
+```ts title="src/questpie/server/questpie.config.ts"
+import { runtimeConfig } from "questpie/app";
+import { redisKVAdapter } from "questpie/adapters/redis-kv";
+import { createClient } from "redis";
+
+const redis = createClient({ url: process.env.REDIS_URL });
+await redis.connect();
+
+export default runtimeConfig({
+  kv: {
+    adapter: redisKVAdapter({ client: redis }),
+    defaultTtl: 3600, // optional: seconds, applied when set() omits a ttl
+  },
+});
+```
+
+<Callout type="info" title="The default adapter is in-process and not shared">
+With no `kv.adapter` configured, `KVService` uses [`MemoryKVAdapter`](#in-memory-default), a plain `Map` local to **one** process. It is wiped on restart and **not shared** across server instances or workers. Fine for dev and single-process apps; for anything horizontally scaled, configure Redis or Cloudflare KV so all instances see the same data.
+</Callout>
+
+## Using the store
+
+`ctx.kv` (and `app.kv`) is a `KVService` with exactly five methods. This is the surface every adapter is normalized to:
+
+```ts
+// Read, returns null on miss; pass <T> for a typed value
+const user = await ctx.kv.get<User>("user:42");
+
+// Write, ttl is OPTIONAL and in SECONDS (falls back to config.defaultTtl)
+await ctx.kv.set("user:42", user);        // no expiry
+await ctx.kv.set("otp:42", "839201", 300); // expires in 5 minutes
+
+// Existence check (respects TTL, an expired key reports false)
+if (await ctx.kv.has("otp:42")) { /* ... */ }
+
+// Delete one key
+await ctx.kv.delete("otp:42");
+
+// Drop everything this adapter owns (scoped to keyPrefix where supported)
+await ctx.kv.clear();
+```
+
+<Callout type="info" title="Values must be JSON-serializable on Redis & Cloudflare KV">
+The in-memory adapter stores your value by reference (any JS value works). The Redis and Cloudflare adapters `JSON.stringify` it on write and `JSON.parse` on read, and **throw** a `TypeError` if the value can't be serialized (e.g. a `function`, a `BigInt`, or a circular structure). Read back is best-effort: a stored string that isn't valid JSON is returned as the raw string. Keep KV values to plain data.
+</Callout>
+
+### Tag-based invalidation
+
+`KVService` deliberately exposes only the five core methods, but every built-in adapter also implements **tag invalidation** at the adapter level. Reach it through `app.config.kv?.adapter`, or, more reliably, a reference you keep to the adapter you constructed:
+
+```ts
+const adapter = app.config.kv?.adapter; // KVAdapter | undefined
+
+// Cache a value and tag it
+await adapter?.setWithTags?.("page:/posts/hello", html, ["post:123"], 3600);
+await adapter?.setWithTags?.("og:/posts/hello", ogImage, ["post:123"]);
+
+// Later, invalidate every key tagged post:123 in one call
+await adapter?.invalidateByTag?.("post:123");
+// or several tags at once
+await adapter?.invalidateByTags?.(["post:123", "post:124"]);
+```
+
+<Callout type="warn" title="On the zero-config default, `app.config.kv?.adapter` is `undefined`">
+`app.config` is your *raw* config object. When you omit `kv.adapter`, the default `MemoryKVAdapter` is constructed **inside** `KVService` (`service.ts:11`) and never written back to `app.config`, so on the default setup `app.config.kv?.adapter` is `undefined` and the `?.` calls above **silently do nothing**, even though `MemoryKVAdapter` fully implements `setWithTags` / `invalidateByTag` (`memory.ts:28`). Tag invalidation is only reachable when you construct an adapter explicitly: either set `kv.adapter` in config and read it back via `app.config.kv?.adapter`, or, cleaner, keep your own reference to the adapter you built and call its tag methods directly.
+</Callout>
+
+<Callout type="info" title="Tag methods live on the adapter, not the service">
+`get` / `set` / `delete` / `has` / `clear` are the only methods on `KVService`. `setWithTags`, `invalidateByTag`, and `invalidateByTags` are **optional** members of the `KVAdapter` interface, every built-in adapter implements them, but a custom adapter may not. That's why they're typed as optional (`?.`) when you reach them off the config.
+</Callout>
+
+## Configuration
+
+KV is configured under the `kv` key of your `questpie.config.ts` (`QuestpieConfig.kv`, source: `packages/questpie/src/server/config/types.ts:554`). The shape is `KVConfig`:
+
+```ts
+interface KVConfig {
+  /** Custom adapter instance. Defaults to MemoryKVAdapter. */
+  adapter?: KVAdapter;
+  /** Default TTL in seconds, applied by set() when no per-call ttl is given. */
+  defaultTtl?: number;
+}
+```
+
+| Option | Type | Default | Notes |
+|---|---|---|---|
+| `adapter` | `KVAdapter` | `new MemoryKVAdapter()` | The backend. Omit for in-memory. |
+| `defaultTtl` | `number` | _(none)_ | Seconds. Applied by `KVService.set` only when the call omits its own `ttl`. |
+
+Source for the default + `defaultTtl` fallback: `kv/service.ts:11,19`.
+
+## Adapters
+
+QUESTPIE ships three KV adapters. The interface contract, `KVAdapter`, and the `KVConfig` type are the only things exported from `questpie/kv`; the concrete adapters each live in their own entry so you only pull in the client you actually use.
+
+| Adapter | Import | Backend | Shared / persistent |
+|---|---|---|---|
+| `MemoryKVAdapter` | `questpie/adapters/memory-kv` | in-process `Map` | no |
+| `redisKVAdapter` | `questpie/adapters/redis-kv` | Redis | yes |
+| `cloudflareKVAdapter` | `questpie/adapters/cloudflare-kv` | Cloudflare KV namespace | yes |
+
+### In-memory (default)
+
+The fallback when `kv.adapter` is unset. A plain `Map` with TTL bookkeeping. The constructor takes **no arguments**.
+
+```ts title="src/questpie/server/questpie.config.ts"
+import { runtimeConfig } from "questpie/app";
+import { MemoryKVAdapter } from "questpie/adapters/memory-kv";
+
+export default runtimeConfig({
+  // Equivalent to omitting `kv` entirely, shown only to be explicit
+  kv: { adapter: new MemoryKVAdapter() },
+});
+```
+
+TTL is honored lazily: an expired entry is dropped the next time `get` or `has` touches it. State is per-process and lost on restart.
+
+### Redis
+
+Backed by Redis, using the [node-redis](https://github.com/redis/node-redis) command shape. The `client` option is **required**, you construct and connect the client yourself and pass it in (a connected client, or a `() => client` provider resolved lazily on first use).
+
+```ts title="src/questpie/server/questpie.config.ts"
+import { runtimeConfig } from "questpie/app";
+import { redisKVAdapter } from "questpie/adapters/redis-kv";
+import { createClient } from "redis";
+
+const redis = createClient({ url: process.env.REDIS_URL });
+await redis.connect();
+
+export default runtimeConfig({
+  kv: {
+    adapter: redisKVAdapter({
+      client: redis,
+      keyPrefix: "myapp:", // namespace this app's keys in a shared Redis db
+    }),
+  },
+});
+```
+
+`redisKVAdapter` options (source: `kv/adapters/redis.ts:29`):
+
+| Option | Type | Default | Notes |
+|---|---|---|---|
+| `client` | `RedisKVClient \| () => RedisKVClient` | none _(required)_ | A connected node-redis-shaped client, or a provider returning one (resolved once on first call). |
+| `keyPrefix` | `string` | `""` | Prepended to every key. Use it when one Redis db is shared by multiple logical caches. |
+| `tagIndexPrefix` | `string` | `"__questpie_tag:"` | Prefix for the internal tag-index sets, applied **after** `keyPrefix`. |
+| `scanCount` | `number` | `100` | Keys requested per `SCAN` page during `clear()` / tag cleanup. |
+| `allowFlushDb` | `boolean` | `false` | See the warning below. |
+
+Tags are stored as Redis SETs; TTL maps to the `EX` option on `SET`. `delete()` and `clear()` scan the keyspace (`SCAN`, not `KEYS`) to keep the tag index consistent.
+
+<Callout type="warn" title="`clear()` will not FLUSHDB a shared database by default">
+`ctx.kv.clear()` on Redis deletes only keys matching your `keyPrefix` (via `SCAN` + `DEL`). It calls `FLUSHDB` **only** when you have *no* `keyPrefix` **and** explicitly set `allowFlushDb: true`, a guard so a `clear()` can't wipe a Redis database shared with other apps. If you rely on `clear()` to be cheap and total, give the adapter its own database and opt in with `allowFlushDb: true`.
+</Callout>
+
+The `RedisKVClient` interface (`get` / `set` / `del` / `exists` / `sAdd` / `sMembers` / `sRem` / `scanIterator` / optional `flushDb`) is a structural subset of node-redis, any client matching that shape works.
+
+### Cloudflare KV
+
+Backed by a [Cloudflare KV namespace](https://developers.cloudflare.com/kv/) binding. Pass the binding as `namespace` (or a `() => namespace` provider for runtimes where the binding is resolved per-request). For use when deploying QUESTPIE to Cloudflare Workers.
+
+```ts title="src/questpie/server/questpie.config.ts"
+import { runtimeConfig } from "questpie/app";
+import { cloudflareKVAdapter } from "questpie/adapters/cloudflare-kv";
+
+export default runtimeConfig({
+  kv: {
+    // MY_KV is a KV namespace binding from your wrangler config
+    adapter: cloudflareKVAdapter({ namespace: () => env.MY_KV }),
+  },
+});
+```
+
+`cloudflareKVAdapter` options (source: `kv/adapters/cloudflare-kv.ts:41`):
+
+| Option | Type | Default | Notes |
+|---|---|---|---|
+| `namespace` | `CloudflareKVNamespace \| () => CloudflareKVNamespace` | none _(required)_ | A KV namespace binding, or a provider returning one. |
+| `keyPrefix` | `string` | `""` | Prepended to every key. Use it when one namespace is shared by multiple logical caches. |
+| `tagIndexPrefix` | `string` | `"__questpie_tag:"` | Prefix for the internal tag-index entries, applied after `keyPrefix`. |
+| `listLimit` | `number` | `1000` | Keys requested per `list()` page during `clear()` / tag cleanup. |
+
+TTL maps to Cloudflare's `expirationTtl`. Because Cloudflare KV has no SET type, tags are stored as JSON arrays under tag-index keys, and `clear()` / invalidation paginate with `list()` + `cursor`. The adapter also exposes `runtime = "cloudflare"`, the discriminator the Cloudflare fetch/queue handlers use to detect Cloudflare-backed adapters.
+
+<Callout type="warn" title="Cloudflare KV is eventually consistent">
+Cloudflare KV reads can lag writes by a short window, a value you just `set` may not be visible to the next `get` on a different edge location immediately. This is a property of the platform, not the adapter. Don't use it for read-after-write guarantees (e.g. one-time tokens you verify milliseconds later); use it for caches and config that tolerate brief staleness. See Cloudflare's KV consistency docs.
+</Callout>
+
+The `cloudflareKVAdapter` factory and its `CloudflareKVNamespace` type are also re-exported from `questpie/adapters/cloudflare` alongside the other Cloudflare-runtime adapters, if you prefer a single import.
+
+## Extending: custom adapters
+
+The KV store is just an interface, implement `KVAdapter` to back it with any store (Memcached, DynamoDB, an HTTP cache, a SQLite table). Import the interface from `questpie/kv`:
+
+```ts title="src/questpie/server/lib/my-kv-adapter.ts"
+import type { KVAdapter } from "questpie/kv";
+
+export class MyKVAdapter implements KVAdapter {
+  async get<T>(key: string): Promise<T | null> { /* ... */ }
+  async set(key: string, value: unknown, ttl?: number): Promise<void> { /* ... */ }
+  async delete(key: string): Promise<void> { /* ... */ }
+  async has(key: string): Promise<boolean> { /* ... */ }
+  async clear(): Promise<void> { /* ... */ }
+  // Optional, implement to support tag invalidation:
+  // setWithTags, invalidateByTag, invalidateByTags
+}
+```
+
+Wire it under `kv.adapter` exactly like the built-ins. The five core methods are required; the three tag methods are optional. `ttl` is always in **seconds**. Source for the contract: `packages/questpie/src/server/modules/core/integrated/kv/adapter.ts:4`. For the full pattern that applies to every adapter kind, see [Building a plugin](/docs/extend/build-a-plugin).
+
+## TypeScript
+
+`questpie/kv` exports the two types you need to type a config or a custom adapter:
+
+```ts
+import type { KVAdapter, KVConfig } from "questpie/kv";
+```
+
+`KVConfig` types the `kv` slot in `questpie.config.ts`; `KVAdapter` is the contract a custom backend implements. Per-adapter option and client types (`RedisKVAdapterOptions`, `RedisKVClient`, `CloudflareKVAdapterOptions`, `CloudflareKVNamespace`, …) are exported from each adapter entry (`questpie/adapters/redis-kv`, `questpie/adapters/cloudflare-kv`).
+
+## Related
+
+- [Configuration](/docs/concepts/configuration), where `kv` is wired into `questpie.config.ts` (`runtimeConfig`).
+- [Adapters overview](/docs/adapters), what an adapter is and the full list of swappable backends.
+- [Building a plugin](/docs/extend/build-a-plugin), the general pattern for implementing any adapter contract.
+- [Services](/docs/concepts/services), `ctx.kv` is a core service; how the service context is assembled.

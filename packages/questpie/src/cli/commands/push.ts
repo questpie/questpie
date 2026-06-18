@@ -2,6 +2,10 @@ import { existsSync } from "node:fs";
 
 import { toKitDb } from "../../server/db/driver-result.js";
 import { loadQuestpieConfig } from "../config.js";
+import {
+	assertPushStatementsSafe,
+	computePushEntities,
+} from "./push-scope.js";
 import { resolveCliPath } from "../utils.js";
 
 export type PushOptions = {
@@ -64,7 +68,26 @@ export async function pushCommand(options: PushOptions): Promise<void> {
 	// drizzle-kit assumes node-postgres result shape (`execute().rows`);
 	// toKitDb normalizes driver-native results (bun-sql/postgres-js return
 	// bare arrays) so push works against any configured driver.
-	const result = await pushSchema(schema, toKitDb(app.db) as any);
+	// Diff scope: only the app's schemas, never the migration ledger or
+	// adapter-owned schemas (pg-boss) — see push-scope.ts for the incident
+	// this guards against.
+	const entities = computePushEntities(schema);
+	const entitiesConfig: Parameters<typeof pushSchema>[3] = {
+		schemas: entities.schemas,
+		tables: entities.tables,
+		entities: undefined,
+		// drizzle-kit's only supported extensionsFilters value is "postgis" —
+		// it teaches push to ignore PostGIS-owned tables (spatial_ref_sys etc.)
+		// during the diff. Harmless no-op when PostGIS is unused (no such tables
+		// → nothing filtered). https://orm.drizzle.team/docs/extensions/pg
+		extensions: ["postgis"],
+	};
+	const result = await pushSchema(
+		schema,
+		toKitDb(app.db) as any,
+		undefined,
+		entitiesConfig,
+	);
 
 	if (result.sqlStatements.length === 0) {
 		console.log("✅ Schema is already up to date!");
@@ -91,6 +114,10 @@ export async function pushCommand(options: PushOptions): Promise<void> {
 		}
 		console.log("");
 	}
+
+	// Belt-and-suspenders: refuse to execute anything that targets
+	// framework/foreign state even if the diff filters drifted.
+	assertPushStatementsSafe(result.sqlStatements, entities.schemas);
 
 	// Execute statements
 	console.log("⏳ Applying changes...");

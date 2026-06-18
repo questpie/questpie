@@ -181,11 +181,16 @@ function firstNonEmptyString(...values: unknown[]): string | null {
 	return null;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return !!value && typeof value === "object";
+}
+
 function resolveAuditActor(ctx: {
-	session?: { user?: Record<string, unknown> | null } | null;
+	session?: unknown;
 	accessMode?: string;
 }): AuditActor {
-	const user = ctx.session?.user;
+	const session = isRecord(ctx.session) ? ctx.session : null;
+	const user = isRecord(session?.user) ? session.user : null;
 	const userId = user?.id != null ? String(user.id) : null;
 	const userName = firstNonEmptyString(user?.name, user?.email, userId);
 	if (userName) {
@@ -225,7 +230,8 @@ function logAuditFailure(
 
 async function collectionAfterChange(ctx: GlobalCollectionHookContext) {
 	try {
-		const collections = (ctx as any).collections ?? (ctx as any).app?.collections;
+		const collections =
+			(ctx as any).collections ?? (ctx as any).app?.collections;
 
 		if (isAuditDisabled("collection", ctx.collection)) return;
 
@@ -282,7 +288,8 @@ async function collectionAfterChange(ctx: GlobalCollectionHookContext) {
 
 async function collectionAfterDelete(ctx: GlobalCollectionHookContext) {
 	try {
-		const collections = (ctx as any).collections ?? (ctx as any).app?.collections;
+		const collections =
+			(ctx as any).collections ?? (ctx as any).app?.collections;
 
 		if (isAuditDisabled("collection", ctx.collection)) return;
 
@@ -333,7 +340,8 @@ async function collectionAfterTransition(
 	ctx: GlobalCollectionTransitionHookContext,
 ) {
 	try {
-		const collections = (ctx as any).collections ?? (ctx as any).app?.collections;
+		const collections =
+			(ctx as any).collections ?? (ctx as any).app?.collections;
 
 		if (isAuditDisabled("collection", ctx.collection)) return;
 
@@ -385,7 +393,8 @@ async function collectionAfterTransition(
 
 async function globalAfterChange(ctx: GlobalGlobalHookContext) {
 	try {
-		const collections = (ctx as any).collections ?? (ctx as any).app?.collections;
+		const collections =
+			(ctx as any).collections ?? (ctx as any).app?.collections;
 
 		if (isAuditDisabled("global", ctx.global)) return;
 
@@ -428,11 +437,10 @@ async function globalAfterChange(ctx: GlobalGlobalHookContext) {
 	}
 }
 
-async function globalAfterTransition(
-	ctx: GlobalGlobalTransitionHookContext,
-) {
+async function globalAfterTransition(ctx: GlobalGlobalTransitionHookContext) {
 	try {
-		const collections = (ctx as any).collections ?? (ctx as any).app?.collections;
+		const collections =
+			(ctx as any).collections ?? (ctx as any).app?.collections;
 
 		if (isAuditDisabled("global", ctx.global)) return;
 

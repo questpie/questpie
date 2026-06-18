@@ -61,10 +61,11 @@ import type {
 // Route outputs — `.outputSchema()` drives the route's output type
 // ============================================================================
 
-// NOTE: handler-RETURN inference is deliberately not captured — a generic
-// `.handler<TResult>()` makes `typeof routeConst` depend on the handler arrow,
-// which cycles through the app's module type graph (TS2456). Outputs come
-// from `.outputSchema()` until codegen emits resolved route signatures.
+// NOTE: handler-RETURN inference IS captured. `.handler<TReturn>()` infers the
+// return type and threads it into `JsonRouteDefinition`'s output slot, so a JSON
+// route without `.outputSchema()` recovers its concrete handler shape rather than
+// collapsing to `any`. The handler arg already references `AppContext`, so
+// inferring the *return* adds no new edge to the module type graph (no TS2456).
 
 const echoRoute = route()
 	.post()
@@ -82,13 +83,16 @@ type _echoInput = Expect<
 	Equal<InferRouteInput<typeof echoRoute>, { message: string }>
 >;
 
-// Without an output schema the output stays `any` (status quo — see NOTE)
+// Without an output schema the output is recovered from the handler return.
 const plainRoute = route()
 	.post()
 	.schema(z.object({ n: z.number() }))
 	.handler(({ input }) => ({ doubled: input.n * 2 }));
 
-type _plainOutputIsAny = Expect<IsAny<InferRouteOutput<typeof plainRoute>>>;
+type _plainOutput = Expect<
+	Equal<InferRouteOutput<typeof plainRoute>, { doubled: number }>
+>;
+type _plainOutputNotAny = Expect<Not<IsAny<InferRouteOutput<typeof plainRoute>>>>;
 
 // Raw routes still infer `Response`
 const rawRoute = route()

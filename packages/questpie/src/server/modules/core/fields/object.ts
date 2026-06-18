@@ -5,7 +5,11 @@
 import { jsonb, type PgJsonbBuilder } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
-import type { DefaultFieldState, FieldState } from "../../../fields/field-class-types.js";
+import type {
+	DefaultFieldState,
+	ExtractSelectType,
+	FieldState,
+} from "../../../fields/field-class-types.js";
 import { field } from "../../../fields/field-class.js";
 import { fieldType, wrapFieldComplete } from "../../../fields/field-type.js";
 import { objectOps } from "../../../fields/operators/builtin.js";
@@ -23,17 +27,22 @@ export interface ObjectFieldMeta extends Questpie.ObjectFieldMeta {
 
 /**
  * Infer the data type from nested field definitions.
- * Resolves each field's notNull + data to produce the typed object shape.
+ *
+ * Delegates to the canonical `ExtractSelectType` so nested field-shaping matches
+ * top-level rows: an `outputFalse()` (output:false) or virtual-relation nested
+ * field resolves to `never` and is dropped from the object shape, exactly as it
+ * is dropped at the collection level. Single-evaluation form — each field's
+ * select type is computed once into `M`, then `never` keys are filtered out.
  */
 type InferObjectData<TFields extends Record<string, Field<any>>> = {
 	[K in keyof TFields]: TFields[K] extends {
 		readonly _: infer S extends FieldState;
 	}
-		? S extends { notNull: true }
-			? S["data"]
-			: S["data"] | null
+		? ExtractSelectType<S>
 		: unknown;
-};
+} extends infer M
+	? { [K in keyof M as M[K] extends never ? never : K]: M[K] }
+	: never;
 
 export type ObjectFieldState<TData = Record<string, unknown>> =
 	Omit<DefaultFieldState, "operators"> & {

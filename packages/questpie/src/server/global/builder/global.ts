@@ -26,6 +26,15 @@ import type {
 	I18nFieldAccessor,
 	InferSQLType,
 } from "#questpie/server/collection/builder/types.js";
+import type { FieldState } from "#questpie/server/fields/field-class-types.js";
+import type { GlobalFieldDefinitionsWithSystem } from "#questpie/server/fields/field-types.js";
+import type {
+	ExtractI18nFields,
+	ExtractInputObject,
+	ExtractMainFields,
+	ExtractOutputObject,
+	ExtractVirtualFields,
+} from "#questpie/server/fields/types.js";
 import { systemTimestamp } from "#questpie/server/db/system-columns.js";
 import type {
 	GlobalBuilderState,
@@ -38,6 +47,7 @@ import {
 } from "#questpie/server/modules/core/workflow/config.js";
 import { DEFAULT_LOCALE } from "#questpie/shared/constants.js";
 import type { GlobalMeta } from "#questpie/shared/global-meta.js";
+import type { Prettify } from "#questpie/shared/type-utils.js";
 
 import { GlobalCRUDGenerator } from "../crud/global-crud-generator.js";
 import type { GlobalCRUD } from "../crud/types.js";
@@ -93,9 +103,23 @@ function cloneColumnType(sourceColumn: PgColumn, newName: string) {
 }
 
 /**
- * Infer select type from Global
+ * Detect whether a global carries field definitions (the `.fields()` API) vs.
+ * raw Drizzle columns. Mirrors collection `HasFieldDefinitions`.
  */
-type InferGlobalSelect<
+type HasGlobalFieldDefs<TFieldDefs> = [TFieldDefs] extends [
+	Record<string, never>,
+]
+	? false
+	: TFieldDefs extends Record<string, { readonly _: FieldState }>
+		? keyof TFieldDefs extends never
+			? false
+			: true
+		: false;
+
+/**
+ * Legacy (raw-Drizzle) global select — used when no field definitions exist.
+ */
+type InferLegacyGlobalSelect<
 	TTable extends PgTable,
 	TFields extends Record<string, any>,
 	TLocalized extends ReadonlyArray<keyof TFields>,
@@ -107,9 +131,9 @@ type InferGlobalSelect<
 };
 
 /**
- * Infer insert type from Global
+ * Legacy (raw-Drizzle) global insert — used when no field definitions exist.
  */
-type InferGlobalInsert<
+type InferLegacyGlobalInsert<
 	TTable extends PgTable,
 	TFields extends Record<string, any>,
 	TLocalized extends ReadonlyArray<keyof TFields>,
@@ -118,15 +142,88 @@ type InferGlobalInsert<
 };
 
 /**
- * Infer update type from Global
+ * Legacy (raw-Drizzle) global update — used when no field definitions exist.
  */
-type InferGlobalUpdate<
+type InferLegacyGlobalUpdate<
 	TTable extends PgTable,
 	TFields extends Record<string, any>,
 	TLocalized extends ReadonlyArray<keyof TFields>,
 > = Partial<InferInsertModel<TTable>> & {
 	[K in TLocalized[number]]?: GetColumnData<TFields[K]>;
 };
+
+/**
+ * Infer select type from Global.
+ * When field definitions exist, derive precisely from them (mirroring
+ * `InferCollectionSelect`) so object/array fields stay concrete and select
+ * literal-unions survive. Otherwise fall back to raw-Drizzle inference.
+ */
+type InferGlobalSelect<
+	TTable extends PgTable,
+	TFields extends Record<string, any>,
+	TLocalized extends ReadonlyArray<keyof TFields>,
+	TVirtuals extends Record<string, SQL>,
+	TFieldDefs = undefined,
+	TOptions extends { timestamps?: boolean } = {},
+> =
+	HasGlobalFieldDefs<TFieldDefs> extends true
+		? TFieldDefs extends Record<string, any>
+			? GlobalFieldDefinitionsWithSystem<
+					TFieldDefs,
+					TOptions
+				> extends infer TAllFields extends Record<string, any>
+				? Prettify<
+						ExtractOutputObject<ExtractMainFields<TAllFields>> &
+							ExtractOutputObject<ExtractVirtualFields<TAllFields>> &
+							ExtractOutputObject<ExtractI18nFields<TAllFields>>
+					>
+				: InferLegacyGlobalSelect<TTable, TFields, TLocalized, TVirtuals>
+			: InferLegacyGlobalSelect<TTable, TFields, TLocalized, TVirtuals>
+		: InferLegacyGlobalSelect<TTable, TFields, TLocalized, TVirtuals>;
+
+/**
+ * Infer insert type from Global.
+ * Field-def path mirrors `InferCollectionInsert`: main fields from
+ * `ExtractInputObject`, i18n fields partial. Otherwise raw-Drizzle.
+ */
+type InferGlobalInsert<
+	TTable extends PgTable,
+	TFields extends Record<string, any>,
+	TLocalized extends ReadonlyArray<keyof TFields>,
+	TFieldDefs = undefined,
+	TOptions extends { timestamps?: boolean } = {},
+> =
+	HasGlobalFieldDefs<TFieldDefs> extends true
+		? TFieldDefs extends Record<string, any>
+			? GlobalFieldDefinitionsWithSystem<
+					TFieldDefs,
+					TOptions
+				> extends infer TAllFields extends Record<string, any>
+				? Prettify<
+						ExtractInputObject<ExtractMainFields<TAllFields>> &
+							Partial<ExtractInputObject<ExtractI18nFields<TAllFields>>>
+					>
+				: InferLegacyGlobalInsert<TTable, TFields, TLocalized>
+			: InferLegacyGlobalInsert<TTable, TFields, TLocalized>
+		: InferLegacyGlobalInsert<TTable, TFields, TLocalized>;
+
+/**
+ * Infer update type from Global. Partial of insert (mirrors collections).
+ */
+type InferGlobalUpdate<
+	TTable extends PgTable,
+	TFields extends Record<string, any>,
+	TLocalized extends ReadonlyArray<keyof TFields>,
+	TFieldDefs = undefined,
+	TOptions extends { timestamps?: boolean } = {},
+> =
+	HasGlobalFieldDefs<TFieldDefs> extends true
+		? Prettify<
+				Partial<
+					InferGlobalInsert<TTable, TFields, TLocalized, TFieldDefs, TOptions>
+				>
+			>
+		: InferLegacyGlobalUpdate<TTable, TFields, TLocalized>;
 
 export class Global<TState extends GlobalBuilderState> {
 	public readonly name: TState["name"];
@@ -158,7 +255,9 @@ export class Global<TState extends GlobalBuilderState> {
 			>,
 			TState["fields"],
 			TState["localized"],
-			TState["virtuals"]
+			TState["virtuals"],
+			TState["fieldDefinitions"],
+			TState["options"]
 		>;
 		insert: InferGlobalInsert<
 			InferGlobalTableWithColumns<
@@ -169,7 +268,9 @@ export class Global<TState extends GlobalBuilderState> {
 				TState["options"]
 			>,
 			TState["fields"],
-			TState["localized"]
+			TState["localized"],
+			TState["fieldDefinitions"],
+			TState["options"]
 		>;
 		update: InferGlobalUpdate<
 			InferGlobalTableWithColumns<
@@ -180,7 +281,9 @@ export class Global<TState extends GlobalBuilderState> {
 				TState["options"]
 			>,
 			TState["fields"],
-			TState["localized"]
+			TState["localized"],
+			TState["fieldDefinitions"],
+			TState["options"]
 		>;
 	};
 
@@ -260,10 +363,24 @@ export class Global<TState extends GlobalBuilderState> {
 			any,
 			TState["fields"],
 			TState["localized"],
-			TState["virtuals"]
+			TState["virtuals"],
+			TState["fieldDefinitions"],
+			TState["options"]
 		>,
-		InferGlobalInsert<any, TState["fields"], TState["localized"]>,
-		InferGlobalUpdate<any, TState["fields"], TState["localized"]>,
+		InferGlobalInsert<
+			any,
+			TState["fields"],
+			TState["localized"],
+			TState["fieldDefinitions"],
+			TState["options"]
+		>,
+		InferGlobalUpdate<
+			any,
+			TState["fields"],
+			TState["localized"],
+			TState["fieldDefinitions"],
+			TState["options"]
+		>,
 		TState["relations"]
 	> {
 		const crud = new GlobalCRUDGenerator(

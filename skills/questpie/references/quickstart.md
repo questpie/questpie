@@ -1,7 +1,7 @@
 ---
 name: questpie-quickstart
 description: >
-  End-to-end getting started with QUESTPIE — from scaffolding to production.
+  End-to-end getting started with QUESTPIE, from scaffolding to production.
   Load when starting a new project, onboarding, or following the happy path
   from zero to a running app with collections, admin panel, and migrations.
 ---
@@ -9,6 +9,23 @@ description: >
 # QUESTPIE Quickstart
 
 Complete lifecycle guide: scaffold, define data, generate, migrate, serve, deploy.
+
+## Contents
+
+1. [Scaffold a New Project](#1-scaffold-a-new-project)
+2. [Project Structure](#2-project-structure)
+3. [Runtime Config](#3-runtime-config)
+4. [Define a Collection](#4-define-a-collection)
+5. [Add a Route](#5-add-a-route)
+6. [Run Codegen](#6-run-codegen)
+7. [Push Schema / Run Migrations](#7-push-schema--run-migrations)
+8. [Wire Up the HTTP Handler](#8-wire-up-the-http-handler)
+9. [Add the Admin Panel](#9-add-the-admin-panel)
+10. [Typed Client SDK](#10-typed-client-sdk)
+11. [Start Development](#11-start-development)
+12. [Live Preview (Optional)](#12-live-preview-optional)
+
+Also: [Common Mistakes](#common-mistakes) · [CLI Commands](#quick-reference-cli-commands) · [Minimal Complete Example](#minimal-complete-example)
 
 ---
 
@@ -21,25 +38,46 @@ cd my-app
 
 Options:
 
-- `-t, --template <name>` — template to use (default: `tanstack-start`)
-- `--no-install` — skip `bun install`
-- `--no-git` — skip git init
+- `-t, --template <name>` / `--runtime <id>`, runtime template: `tanstack-start` (default), `next`, `hono`, or `elysia`
+- `--module <name>` / `--modules <a,b>`, enable modules; current ids are `admin`, `openapi`, `workflows`
+- `-y, --yes`, non-interactive mode with defaults
+- `--database <name>`, database name (default derives from the project name)
+- `--queue <adapter>`, `pg-boss` (default), `bullmq`, or `none`
+- `--email <adapter>`, `console` (default), `smtp`, `resend`, or `plunk`
+- `--realtime <adapter>`, `none` (default), `pg-notify`, or `redis-streams`
+- `--kv <adapter>`, `memory` (default) or `redis`
+- `--no-install`, skip `bun install`
+- `--no-git`, skip git init
+- `--no-skills`, skip the background `bunx skills add questpie/questpie`
+- `--no-generate`, skip the post-install codegen run
+- `--continue-on-error`, keep scaffold files when install or codegen fails
 
-After scaffolding:
+After scaffolding, `.env` already exists; the scaffolder renames `env.example` to `.env.example` and copies it to `.env`.
 
 ```bash
-cp .env.example .env   # Set DATABASE_URL, APP_URL, APP_SECRET
+cd my-app
+docker compose up -d
+bun run scaffold:verify
+bun run db:push
+bun run dev
 ```
 
-### Required Environment Variables
+### Environment Variables
 
-| Variable       | Required | Description                  |
-| -------------- | -------- | ---------------------------- |
-| `DATABASE_URL` | Yes      | PostgreSQL connection string |
-| `APP_URL`      | Yes      | Public URL of the app        |
-| `APP_SECRET`   | Yes      | Secret for auth sessions     |
-| `SMTP_HOST`    | No       | Email SMTP host              |
-| `SMTP_PORT`    | No       | Email SMTP port              |
+Env is validated at boot in `src/lib/env.ts` via `@t3-oss/env-core` (Zod schemas). Add new vars there.
+
+| Variable              | Required | Description                                  |
+| --------------------- | -------- | -------------------------------------------- |
+| `DATABASE_URL`        | Yes      | PostgreSQL connection string                 |
+| `APP_URL`             | No       | Public URL (default: `http://localhost:3000`) |
+| `PORT`                | No       | Server port (default: `3000`)                |
+| `BETTER_AUTH_SECRET`  | No       | Better Auth secret (has a dev default)       |
+| `MAIL_ADAPTER`        | No       | `console`, `smtp`, `resend`, or `plunk`      |
+| `SMTP_HOST`           | No       | SMTP host (when `MAIL_ADAPTER=smtp`)         |
+| `SMTP_PORT`           | No       | SMTP port (when `MAIL_ADAPTER=smtp`)         |
+| `RESEND_API_KEY`      | No       | Resend API key (when `MAIL_ADAPTER=resend`)  |
+| `PLUNK_SECRET_KEY`    | No       | Plunk API key (when `MAIL_ADAPTER=plunk`)    |
+| `REDIS_URL`           | No       | Redis URL when BullMQ, Redis realtime, or Redis KV is selected |
 
 ---
 
@@ -47,34 +85,39 @@ cp .env.example .env   # Set DATABASE_URL, APP_URL, APP_SECRET
 
 ```text
 my-app/
-├── questpie.config.ts                    # CLI config (re-exports server config)
+├── questpie.config.ts                    # CLI entry (re-exports server runtime config)
+├── .env                                  # Created from .env.example
+├── .env.example                          # Checked-in env template
 ├── src/
 │   ├── questpie/
 │   │   ├── server/
-│   │   │   ├── questpie.config.ts        # Runtime config (DB, adapters, secrets)
-│   │   │   ├── modules.ts                # Module dependencies
+│   │   │   ├── questpie.config.ts        # Runtime config: runtimeConfig({ db, app, ... })
+│   │   │   ├── modules.ts                # Module dependencies (adminModule, openApiModule, ...)
 │   │   │   ├── config/                   # Typed configuration files
-│   │   │   │   ├── auth.ts              # authConfig({...}) — Better Auth options
-│   │   │   │   ├── app.ts               # appConfig({ locale, access, hooks, context })
+│   │   │   │   ├── auth.ts              # authConfig({...}), Better Auth options
 │   │   │   │   ├── admin.ts             # adminConfig({ sidebar, dashboard, branding, locale })
 │   │   │   │   └── openapi.ts           # openApiConfig({ info, scalar })
-│   │   │   ├── collections/              # One file per collection
-│   │   │   ├── globals/                  # One file per global
-│   │   │   ├── routes/                   # App routes (JSON or raw)
-│   │   │   ├── jobs/                     # Background tasks
-│   │   │   ├── services/                 # Singleton services
-│   │   │   ├── blocks/                   # Content blocks (admin plugin)
-│   │   │   ├── emails/                   # Email templates
+│   │   │   ├── collections/              # Starter posts collection + your collections
+│   │   │   ├── globals/                  # Starter site-settings global + your globals
 │   │   │   └── .generated/              # Codegen output (NEVER edit)
 │   │   └── admin/                        # Admin client customizations
-│   │       ├── .generated/              # Codegen output (NEVER edit)
-│   │       └── blocks/                  # Block renderers (React)
+│   │       ├── admin.ts                 # Re-exports generated admin client
+│   │       ├── modules.ts               # Admin client modules
+│   │       └── .generated/             # Codegen output (NEVER edit)
 │   ├── lib/
-│   │   └── client.ts                    # Typed client SDK
+│   │   ├── env.ts                       # Typed env (@t3-oss/env-core)
+│   │   ├── auth-client.ts               # Admin auth client
+│   │   ├── client.ts                    # Typed client SDK
+│   │   ├── query-client.ts              # TanStack Query client
+│   │   └── query.ts                     # TanStack Query options
 │   └── routes/
-│       └── api/
-│           └── $.ts                     # API catch-all handler
+│       ├── api/$.ts                     # TanStack Start API catch-all
+│       └── admin/                       # Admin routes on render-layer runtimes
 ```
+
+`config/app.ts` (`appConfig({ locale, access, hooks, context })`) is optional and not scaffolded, add it when needed. `routes/`, `jobs/`, `services/`, `blocks/`, `emails/`, `seeds/`, and `migrations/` are auto-discovered the moment you create them under `src/questpie/server/`.
+
+Default modules are runtime-aware: `tanstack-start` and `next` select `admin` + `openapi`; `hono` and `elysia` select `openapi`. `workflows` is optional. `admin` requires a render-layer runtime, so the scaffolder rejects `--module admin` on `hono` and `elysia`.
 
 ### Discovery Rules
 
@@ -102,18 +145,20 @@ Only hyphens are camelized in factory args; underscores are preserved (`global("
 ```ts
 // src/questpie/server/questpie.config.ts
 import { runtimeConfig } from "questpie/app";
+import { ConsoleAdapter } from "questpie/adapters/console";
+import { env } from "@/lib/env.js";
+
 export default runtimeConfig({
-	app: {
-		url: process.env.APP_URL || "http://localhost:3000",
+	app: { url: env.APP_URL },
+	db: { url: env.DATABASE_URL },
+	storage: { basePath: "/api" },
+	email: {
+		adapter: new ConsoleAdapter({ logHtml: false }),
 	},
-	db: {
-		url: process.env.DATABASE_URL || "postgres://localhost/myapp",
-	},
-	secret: process.env.APP_SECRET || "change-me-in-production",
 });
 ```
 
-The CLI config at the project root re-exports the server config:
+The CLI entry at the project root is only a convenience re-export. Runtime and CLI options live in the server config:
 
 ```ts
 // questpie.config.ts (project root)
@@ -185,18 +230,23 @@ Typed JSON routes are exposed as flat endpoints at `/api/<route-path>`.
 ## 6. Run Codegen
 
 ```bash
-bunx questpie generate
+bun run scaffold:generate
 ```
 
 This scans your file convention directories and generates:
 
-- `src/questpie/server/.generated/index.ts` — `app` instance, `AppConfig` type
-- `src/questpie/server/.generated/module.ts` — merged module with all discovered entities
+- `src/questpie/server/.generated/index.ts`, `app` instance, `AppConfig` type
+- `src/questpie/server/.generated/factories.ts`, generated factories with module-contributed field types
+- `src/questpie/server/.generated/entities.gen.ts`, flat app maps like `AppCollections`, `AppGlobals`, `AppRoutes`, `AppServices`
+- `src/questpie/server/.generated/context.gen.ts`, typed handler context and auth/session surface
+- `src/questpie/server/.generated/names.gen.ts`, relation target names
 - Module augmentation for `AppContext` (typed `collections`, `queue`, `email` in every handler)
 
 Use `#questpie/factories` in collection, global, and block files (they need codegen-generated types). Routes, jobs, services, emails use `"questpie"` directly. Use `#questpie` for the generated app/runtime exports.
 
-**Run codegen again every time you add, rename, or remove a file in a convention directory.**
+Treat the generated output as the app inventory. If a collection, global, route, service, field builder method, relation target, or `session.user` property is missing there, fix discovery, `modules.ts`, or `config/*.ts` and run codegen again. Do not add `any` casts, re-export `index.ts` barrels, or duplicate registries to hide a missing generated type.
+
+**Run codegen again every time you add, rename, or remove a file in a convention directory.** In scaffolded projects, use `bun run questpie:generate` for just QUESTPIE codegen, `bun run scaffold:generate` for framework pre-generation plus QUESTPIE codegen, and `bun run scaffold:verify` for codegen plus TypeScript.
 
 ---
 
@@ -205,7 +255,7 @@ Use `#questpie/factories` in collection, global, and block files (they need code
 ### Development (quick iteration)
 
 ```bash
-bunx questpie push
+bun run db:push
 ```
 
 Syncs your Drizzle schema directly to the database. No migration files created. Use this during development only.
@@ -214,19 +264,22 @@ Syncs your Drizzle schema directly to the database. No migration files created. 
 
 ```bash
 # Generate a migration from schema diff
-bunx questpie migrate:generate
+bun run migrate:create
 
 # Run pending migrations
-bunx questpie migrate:up
+bun run migrate
 
 # Rollback last migration
-bunx questpie migrate:down
+bun run migrate:down
+
+# Show which migrations have run
+bun run migrate:status
 
 # Reset all migrations
-bunx questpie migrate:reset
+bun run migrate:reset
 
 # Reset + run all (fresh start)
-bunx questpie migrate:fresh
+bun run migrate:fresh
 ```
 
 ---
@@ -237,50 +290,55 @@ bunx questpie migrate:fresh
 
 ```ts
 // src/routes/api/$.ts
-import { createAPIFileRoute } from "@tanstack/react-start/api";
-import { createFetchHandler } from "questpie/http";
+import { createFileRoute } from "@tanstack/react-router";
 import { app } from "#questpie";
+import { createFetchHandler } from "questpie/http";
 
 const handler = createFetchHandler(app, { basePath: "/api" });
 
-export const Route = createAPIFileRoute("/api/$")({
-	GET: ({ request }) => handler(request),
-	POST: ({ request }) => handler(request),
-	PATCH: ({ request }) => handler(request),
-	DELETE: ({ request }) => handler(request),
+// createFetchHandler returns Response | null, fall back to 404 when no route matches.
+const handleCmsRequest = async (request: Request) => {
+	const response = await handler(request);
+	return (
+		response ??
+		new Response(JSON.stringify({ error: "Not found" }), {
+			status: 404,
+			headers: { "Content-Type": "application/json" },
+		})
+	);
+};
+
+export const Route = createFileRoute("/api/$")({
+	server: {
+		handlers: {
+			GET: ({ request }) => handleCmsRequest(request),
+			POST: ({ request }) => handleCmsRequest(request),
+			PUT: ({ request }) => handleCmsRequest(request),
+			DELETE: ({ request }) => handleCmsRequest(request),
+			PATCH: ({ request }) => handleCmsRequest(request),
+		},
+	},
 });
 ```
 
-### Hono
+### Hono / Elysia
 
-```ts
-import { questpieHono } from "@questpie/hono/server";
-import { Hono } from "hono";
-import { app } from "#questpie";
+The headless templates mount the same `createFetchHandler(app, { basePath: "/api" })` in `src/index.ts` and redirect `/` to `/api/docs`. They do not include the admin UI or `src/routes/admin`.
 
-export default new Hono().route("/api", questpieHono(app));
-```
+### Runtime templates
 
-### Available Adapters
-
-| Adapter        | Package            | Use case              |
-| -------------- | ------------------ | --------------------- |
-| Hono           | `@questpie/hono`   | General purpose, fast |
-| Elysia         | `@questpie/elysia` | Bun-native            |
-| Next.js        | `@questpie/next`   | Next.js API routes    |
-| TanStack Start | (built-in)         | Generic fetch handler |
+| Template | Shape |
+|---|---|
+| `tanstack-start` | Full-stack React with admin routes, Vite, Tailwind, Nitro |
+| `next` | Next.js App Router with admin routes |
+| `hono` | Headless Bun API with Hono and OpenAPI/Scalar |
+| `elysia` | Headless Bun API with Elysia and OpenAPI/Scalar |
 
 ---
 
 ## 9. Add the Admin Panel
 
-### Install
-
-```bash
-bun add @questpie/admin
-```
-
-### Register the admin module
+The `tanstack-start` and `next` templates select the admin module by default. The server module and admin client module are both static:
 
 ```ts
 // src/questpie/server/modules.ts
@@ -288,13 +346,13 @@ import { adminModule } from "@questpie/admin/modules/admin";
 export default [adminModule] as const;
 ```
 
-### Re-run codegen
-
-```bash
-bunx questpie generate
+```ts
+// src/questpie/admin/modules.ts
+import { adminClientModule } from "@questpie/admin/client/modules/admin";
+export default [adminClientModule] as const;
 ```
 
-This picks up admin conventions (`config/admin.ts`, blocks, views, components) and generates `admin/.generated/client.ts`.
+This picks up admin conventions (`config/admin.ts`, blocks, views, components) and generates `src/questpie/admin/.generated/client.ts`.
 
 Navigate to `/admin` to see the admin panel with your collections.
 
@@ -316,7 +374,7 @@ export const client = createClient<AppConfig>({
 Usage with full type inference:
 
 ```ts
-// Typed collection queries — autocomplete on field names and operators
+// Typed collection queries, autocomplete on field names and operators
 const tasks = await client.collections.tasks.find({
 	where: { completed: false },
 	orderBy: { priority: "desc" },
@@ -331,7 +389,7 @@ const overdue = await client.routes.getOverdueTasks({});
 ## 11. Start Development
 
 ```bash
-bun dev
+bun run dev
 ```
 
 Test: `curl http://localhost:3000/api/tasks` for collection CRUD, `curl -X POST http://localhost:3000/api/get-overdue-tasks -H "Content-Type: application/json" -d '{}'` for typed route calls.
@@ -374,16 +432,19 @@ QUESTPIE requires PostgreSQL. Set `DATABASE_URL` in `.env` before running `push`
 DATABASE_URL=postgres://user:pass@localhost:5432/myapp
 ```
 
-### MEDIUM: Missing `export default` on convention files
+### MEDIUM: Convention file with no export
 
-Codegen discovers files by their **default export**. Files without `export default` are silently ignored:
+Codegen discovers a file by its export, either `export default` or a named `export const`/`function` works. A file with no export at all is skipped. Factory categories such as collections and globals key from the factory string when present; non-factory categories such as routes, jobs, services, and emails key from the filename:
 
 ```ts
-// WRONG — codegen will not discover this
-export const tasks = collection("tasks").fields(/* ... */);
+// WRONG, defined but never exported, so codegen skips it
+const tasks = collection("tasks").fields(/* ... */);
 
-// CORRECT
+// CORRECT, default export (collection("tasks") -> key "tasks")
 export default collection("tasks").fields(/* ... */);
+
+// ALSO CORRECT, named export is discovered too
+export const tasks = collection("tasks").fields(/* ... */);
 ```
 
 ### MEDIUM: Putting business logic in route handlers
@@ -391,15 +452,19 @@ export default collection("tasks").fields(/* ... */);
 Framework route handlers should only mount the QUESTPIE fetch handler. Business logic belongs in `routes/`, `jobs/`, or collection hooks:
 
 ```ts
-// WRONG — business logic in route file
-export const Route = createAPIFileRoute("/api/custom")({
-	POST: async ({ request }) => {
-		const db = getDB();
-		// ... manual queries
+// WRONG, business logic in route file
+export const Route = createFileRoute("/api/custom")({
+	server: {
+		handlers: {
+			POST: async ({ request }) => {
+				const db = getDB();
+				// ... manual queries
+			},
+		},
 	},
 });
 
-// CORRECT — use a typed route
+// CORRECT, use a typed route
 // src/questpie/server/routes/my-logic.ts
 export default route()
 	.post()
@@ -420,19 +485,25 @@ export default route()
 | Command                          | Purpose                                     |
 | -------------------------------- | ------------------------------------------- |
 | `bun create questpie my-app`     | Scaffold a new project                      |
-| `bunx questpie generate`         | Scan conventions, generate types and app    |
-| `bunx questpie push`             | Push schema to DB (dev only, no migrations) |
-| `bunx questpie migrate:generate` | Generate migration from schema diff         |
-| `bunx questpie migrate:up`       | Run pending migrations                      |
-| `bunx questpie migrate:down`     | Rollback last migration                     |
-| `bunx questpie migrate:fresh`    | Reset + run all migrations                  |
-| `bun dev`                        | Start development server                    |
+| `bun run scaffold:verify`        | Regenerate and type-check scaffold          |
+| `bun run questpie:generate`      | Scan conventions, generate types and app    |
+| `bun run db:push`                | Push schema to DB (dev only, no migrations) |
+| `bun run migrate:create`         | Generate migration from schema diff         |
+| `bun run migrate`                | Run pending migrations                      |
+| `bun run migrate:down`           | Rollback last migration                     |
+| `bun run migrate:status`         | Show migration status                       |
+| `bun run migrate:fresh`          | Reset + run all migrations                  |
+| `bunx questpie seed`             | Run pending seeds                           |
+| `bunx questpie seed:undo`        | Undo executed seeds                         |
+| `bunx questpie seed:status`      | Show seed status                            |
+| `bunx questpie seed:reset`       | Reset seed tracking (does not undo data)    |
+| `bun run dev`                    | Start development server                    |
 
 ---
 
 ## Minimal Complete Example
 
-Starting from zero — every file needed for a working app:
+Starting from zero, every file needed for a working app:
 
 ```ts
 // questpie.config.ts (project root)
@@ -442,10 +513,14 @@ export { default } from "./src/questpie/server/questpie.config";
 ```ts
 // src/questpie/server/questpie.config.ts
 import { runtimeConfig } from "questpie/app";
+import { ConsoleAdapter } from "questpie/adapters/console";
+import { env } from "@/lib/env";
+
 export default runtimeConfig({
-	app: { url: process.env.APP_URL || "http://localhost:3000" },
-	db: { url: process.env.DATABASE_URL! },
-	secret: process.env.APP_SECRET || "dev-secret",
+	app: { url: env.APP_URL },
+	db: { url: env.DATABASE_URL },
+	storage: { basePath: "/api" },
+	email: { adapter: new ConsoleAdapter({ logHtml: false }) },
 });
 ```
 
@@ -465,26 +540,42 @@ export default collection("posts").fields(({ f }) => ({
 
 ```ts
 // src/routes/api/$.ts
-import { createAPIFileRoute } from "@tanstack/react-start/api";
-import { createFetchHandler } from "questpie/http";
+import { createFileRoute } from "@tanstack/react-router";
 import { app } from "#questpie";
+import { createFetchHandler } from "questpie/http";
 
 const handler = createFetchHandler(app, { basePath: "/api" });
 
-export const Route = createAPIFileRoute("/api/$")({
-	GET: ({ request }) => handler(request),
-	POST: ({ request }) => handler(request),
-	PATCH: ({ request }) => handler(request),
-	DELETE: ({ request }) => handler(request),
+const handleCmsRequest = async (request: Request) => {
+	const response = await handler(request);
+	return (
+		response ??
+		new Response(JSON.stringify({ error: "Not found" }), {
+			status: 404,
+			headers: { "Content-Type": "application/json" },
+		})
+	);
+};
+
+export const Route = createFileRoute("/api/$")({
+	server: {
+		handlers: {
+			GET: ({ request }) => handleCmsRequest(request),
+			POST: ({ request }) => handleCmsRequest(request),
+			PUT: ({ request }) => handleCmsRequest(request),
+			DELETE: ({ request }) => handleCmsRequest(request),
+			PATCH: ({ request }) => handleCmsRequest(request),
+		},
+	},
 });
 ```
 
 Then run:
 
 ```bash
-bunx questpie generate
-bunx questpie push
-bun dev
+bun run scaffold:verify
+bun run db:push
+bun run dev
 ```
 
 ---

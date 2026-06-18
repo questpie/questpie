@@ -25,4 +25,7 @@ export default runtimeConfig({
 	queue: {
 		adapter: pgBossAdapter({ connectionString: env.DATABASE_URL }),
 	},
+	cli: {
+		migrations: { directory: "./src/migrations" },
+	},
 });

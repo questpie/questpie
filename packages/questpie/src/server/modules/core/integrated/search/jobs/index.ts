@@ -8,4 +8,4 @@ export {
 	type IndexRecordsPayload,
 	indexRecordsJob,
 	indexRecordsSchema,
-} from "./index-records.job.js";
+} from "./index-records.js";

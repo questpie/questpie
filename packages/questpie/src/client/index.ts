@@ -14,7 +14,6 @@ import type {
 	AnyCollectionOrBuilder,
 	CollectionInsert,
 	CollectionRelations,
-	CollectionSelect,
 	CollectionUpdate,
 	GetCollection,
 	GlobalRelations,
@@ -25,6 +24,7 @@ import type {
 
 import type {
 	ApplyQuery,
+	CollectionSelect as CollectionSelectFromApp,
 	CreateInputBase,
 	CreateInputWithRelations,
 	FindResult,
@@ -351,6 +351,21 @@ export type LiveSubscribeOptions = {
 };
 
 /**
+ * Client-side output row for a collection.
+ *
+ * Unifies the client SDK row with the SERVER row: both resolve through the
+ * app-aware `CollectionSelectFromApp` (2-arg field-def select) so the same
+ * collection has ONE row type — readonly and module-aware on both surfaces —
+ * instead of the legacy 1-arg Drizzle `$infer.select` rebuild (mutable,
+ * module-blind) that drifted from the server (CL-10). The app shape mirrors the
+ * server's `AppFromCollections<TCollections>` ({ collections: TCollections }).
+ */
+type ClientRow<
+	TCollection,
+	TCollections extends Record<string, AnyCollectionOrBuilder>,
+> = CollectionSelectFromApp<TCollection, { collections: TCollections }>;
+
+/**
  * Type-safe collection API for a single collection
  */
 type CollectionAPI<
@@ -362,14 +377,14 @@ type CollectionAPI<
 	 */
 	find: <
 		TQuery extends FindManyOptions<
-			CollectionSelect<TCollection>,
+			ClientRow<TCollection, TCollections>,
 			ResolveRelationsDeep<CollectionRelations<TCollection>, TCollections>
 		>,
 	>(
 		options?: TQuery,
 	) => Promise<
 		FindResult<
-			CollectionSelect<TCollection>,
+			ClientRow<TCollection, TCollections>,
 			ResolveRelationsDeep<CollectionRelations<TCollection>, TCollections>,
 			TQuery
 		>
@@ -386,7 +401,7 @@ type CollectionAPI<
 	live: <
 		TQuery extends
 			| LiveQueryOptions<
-					CollectionSelect<TCollection>,
+					ClientRow<TCollection, TCollections>,
 					ResolveRelationsDeep<CollectionRelations<TCollection>, TCollections>
 			  >
 			| undefined,
@@ -394,7 +409,7 @@ type CollectionAPI<
 		options: TQuery,
 		onSnapshot: (
 			snapshot: FindResult<
-				CollectionSelect<TCollection>,
+				ClientRow<TCollection, TCollections>,
 				ResolveRelationsDeep<CollectionRelations<TCollection>, TCollections>,
 				TQuery
 			>,
@@ -408,7 +423,7 @@ type CollectionAPI<
 	 */
 	liveIter: <
 		TQuery extends LiveQueryOptions<
-			CollectionSelect<TCollection>,
+			ClientRow<TCollection, TCollections>,
 			ResolveRelationsDeep<CollectionRelations<TCollection>, TCollections>
 		>,
 	>(
@@ -416,7 +431,7 @@ type CollectionAPI<
 		opts?: { signal?: AbortSignal },
 	) => AsyncGenerator<
 		FindResult<
-			CollectionSelect<TCollection>,
+			ClientRow<TCollection, TCollections>,
 			ResolveRelationsDeep<CollectionRelations<TCollection>, TCollections>,
 			TQuery
 		>,
@@ -429,7 +444,7 @@ type CollectionAPI<
 	 */
 	count: (options?: {
 		where?: FindManyOptions<
-			CollectionSelect<TCollection>,
+			ClientRow<TCollection, TCollections>,
 			ResolveRelationsDeep<CollectionRelations<TCollection>, TCollections>
 		>["where"];
 		includeDeleted?: boolean;
@@ -441,13 +456,13 @@ type CollectionAPI<
 	 */
 	findOne: <
 		TQuery extends FindOneOptionsBase<
-			CollectionSelect<TCollection>,
+			ClientRow<TCollection, TCollections>,
 			ResolveRelationsDeep<CollectionRelations<TCollection>, TCollections>
 		>,
 	>(
 		options?: TQuery,
 	) => Promise<ApplyQuery<
-		CollectionSelect<TCollection>,
+		ClientRow<TCollection, TCollections>,
 		ResolveRelationsDeep<CollectionRelations<TCollection>, TCollections>,
 		TQuery
 	> | null>;
@@ -467,7 +482,7 @@ type CollectionAPI<
 			TInput
 		>,
 		options?: LocaleOptions,
-	) => Promise<CollectionSelect<TCollection>>;
+	) => Promise<ClientRow<TCollection, TCollections>>;
 	/**
 	 * Update a single record by ID
 	 * Canonical name — same vocabulary as server CRUD.
@@ -481,7 +496,7 @@ type CollectionAPI<
 			>;
 		},
 		options?: LocaleOptions,
-	) => Promise<CollectionSelect<TCollection>>;
+	) => Promise<ClientRow<TCollection, TCollections>>;
 
 	/**
 	 * Update a single record by ID
@@ -496,7 +511,7 @@ type CollectionAPI<
 			>;
 		},
 		options?: LocaleOptions,
-	) => Promise<CollectionSelect<TCollection>>;
+	) => Promise<ClientRow<TCollection, TCollections>>;
 
 	/**
 	 * Delete a single record by ID
@@ -523,7 +538,7 @@ type CollectionAPI<
 	restoreById: (
 		params: { id: string },
 		options?: LocaleOptions,
-	) => Promise<CollectionSelect<TCollection>>;
+	) => Promise<ClientRow<TCollection, TCollections>>;
 
 	/**
 	 * Restore a soft-deleted record by ID
@@ -532,7 +547,7 @@ type CollectionAPI<
 	restore: (
 		params: { id: string },
 		options?: LocaleOptions,
-	) => Promise<CollectionSelect<TCollection>>;
+	) => Promise<ClientRow<TCollection, TCollections>>;
 
 	/**
 	 * Find version history for a single record
@@ -542,7 +557,7 @@ type CollectionAPI<
 		options?: LocaleOptions,
 	) => Promise<
 		Array<
-			CollectionSelect<TCollection> & {
+			ClientRow<TCollection, TCollections> & {
 				versionId: string;
 				versionNumber: number;
 				versionOperation: string;
@@ -558,7 +573,7 @@ type CollectionAPI<
 	revertToVersion: (
 		params: { id: string; version?: number; versionId?: string },
 		options?: LocaleOptions,
-	) => Promise<CollectionSelect<TCollection>>;
+	) => Promise<ClientRow<TCollection, TCollections>>;
 
 	/**
 	 * Transition a record to a different workflow stage (no data mutation)
@@ -566,7 +581,7 @@ type CollectionAPI<
 	transitionStage: (
 		params: CollectionTransitionStageInput,
 		options?: LocaleOptions,
-	) => Promise<CollectionSelect<TCollection>>;
+	) => Promise<ClientRow<TCollection, TCollections>>;
 
 	/**
 	 * Update multiple records matching a where clause
@@ -574,7 +589,7 @@ type CollectionAPI<
 	updateMany: (
 		params: {
 			where: Where<
-				CollectionSelect<TCollection>,
+				ClientRow<TCollection, TCollections>,
 				ResolveRelationsDeep<CollectionRelations<TCollection>, TCollections>
 			>;
 			data: UpdateInput<
@@ -583,7 +598,7 @@ type CollectionAPI<
 			>;
 		},
 		options?: LocaleOptions,
-	) => Promise<CollectionSelect<TCollection>[]>;
+	) => Promise<ClientRow<TCollection, TCollections>[]>;
 
 	/**
 	 * Update multiple records with distinct data per record
@@ -599,7 +614,7 @@ type CollectionAPI<
 			}>;
 		},
 		options?: LocaleOptions,
-	) => Promise<CollectionSelect<TCollection>[]>;
+	) => Promise<ClientRow<TCollection, TCollections>[]>;
 
 	/**
 	 * Delete multiple records matching a where clause
@@ -607,7 +622,7 @@ type CollectionAPI<
 	deleteMany: (
 		params: {
 			where: Where<
-				CollectionSelect<TCollection>,
+				ClientRow<TCollection, TCollections>,
 				ResolveRelationsDeep<CollectionRelations<TCollection>, TCollections>
 			>;
 		},

@@ -1,12 +1,23 @@
 ---
 name: questpie-core/extend
-description: QUESTPIE extensibility — codegen plugins CodegenPlugin CategoryDeclaration CallbackParamDefinition, building modules, custom field types field() factory toColumn toZodSchema getOperators getMetadata, custom adapters createFetchHandler Elysia Hono Next.js TanStack Start, type registries FieldTypeRegistry ComponentTypeRegistry ViewKindRegistry declare module augmentation, package distribution tsdown npm publishing changesets
+description: QUESTPIE extensibility, codegen plugins CodegenPlugin CategoryDeclaration CallbackParamDefinition ScaffoldConfig scaffolds, building modules, custom field types field()/fieldType()/from() factory columnFactory schemaFactory operatorSet metadataFactory, custom adapters createFetchHandler Elysia Hono Next.js TanStack Start, type registries FieldTypeRegistry ComponentTypeRegistry ViewKindRegistry declare module augmentation, package distribution tsdown npm publishing changesets
   - questpie-core
 ---
 
 ## Overview
 
 This skill covers extending QUESTPIE: building codegen plugins, reusable modules, custom field types, framework adapters, type registries, and package distribution.
+
+## Contents
+
+- [Building a Codegen Plugin](#building-a-codegen-plugin)
+- [Building a Module](#building-a-module)
+- [Custom Field Types](#custom-field-types)
+- [Custom Adapters](#custom-adapters)
+- [Type Registries](#type-registries)
+- [Package Distribution](#package-distribution)
+- [Common Mistakes](#common-mistakes)
+- [References](#references)
 
 ## Building a Codegen Plugin
 
@@ -67,11 +78,24 @@ export function myPlugin(): CodegenPlugin {
 						from: "my-plugin-package",
 					},
 				},
+
+				// Scaffold templates for `questpie add <type> <name>`
+				scaffolds: {
+					widget: {
+						dir: "widgets",
+						extension: ".ts",
+						description: "A dashboard widget",
+						template: ({ kebab, pascal }) =>
+							`import { widget } from "#questpie/factories";\n\nexport default widget("${kebab}"); // ${pascal}\n`,
+					},
+				},
 			},
 		},
 	};
 }
 ```
+
+`scaffolds` is a `Record<string, ScaffoldConfig>` keyed by scaffold-type name. `questpie add widget my-thing` runs the matching `template(ctx)` (ctx: `kebab`/`camel`/`pascal`/`title`/`targetId`) and writes the file under `dir` in every target that declares that scaffold name.
 
 ### Register in Config
 
@@ -166,6 +190,8 @@ The admin module contributes a codegen plugin to both `"server"` and `"admin-cli
 
 A module is a reusable package that contributes entities to any QUESTPIE project.
 
+A reusable module imports `collection`/`global` from `questpie/builders`, **not** `#questpie/factories`: `#questpie/factories` resolves to the consumer's generated codegen, which does not exist inside your package, `questpie/builders` is the codegen-independent factory that ships with the framework.
+
 ```ts
 import { module } from "questpie/app";
 import { collection } from "questpie/builders";
@@ -239,12 +265,12 @@ export const notificationsModule = module({
 
 ### How Module Contributions Merge
 
-When several modules (and the app) contribute the same key, `createApp()` merges them deterministically — later modules win per entry:
+When several modules (and the app) contribute the same key, `createApp()` merges them deterministically, later modules win per entry:
 
 | Key | Strategy |
 | --- | --- |
-| `collections`, `globals`, `jobs`, `routes`, `fields`, `services` | record spread-merge — same key: later wins |
-| `messages` | deep-merge by locale — same message key: later wins |
+| `collections`, `globals`, `jobs`, `routes`, `fields`, `services` | record spread-merge, same key: later wins |
+| `messages` | deep-merge by locale, same message key: later wins |
 | `migrations`, `seeds` | array concatenation |
 | `config.*` (app, auth, admin, plugin config keys) | per-key strategies; `auth`/`admin` deep-merge; unknown keys: incoming replaces existing |
 | anything else | auto-detect: object+object → spread, array+array → concat, otherwise incoming wins |
@@ -260,7 +286,7 @@ mergeDeepConcat(a, b); // spread objects, concat array-valued props
 lastWins(a, b); // b
 ```
 
-Use them (instead of hand-rolled spreads) when a module exposes its own "combine these contributions" surface — the semantics then match what the framework does for built-in keys.
+Use them (instead of hand-rolled spreads) when a module exposes its own "combine these contributions" surface, the semantics then match what the framework does for built-in keys.
 
 ### Using a Module
 
@@ -275,43 +301,45 @@ export default [adminModule, notificationsModule] as const;
 
 Custom fields are registered through modules and become available on the `f` builder after codegen.
 
-### Registration
+### Field Definition
+
+A custom field type is a **factory function** that returns a `Field`. Each module `fields` entry becomes a method on the `f` builder proxy after codegen. The easiest way to author one is the `from()` escape hatch, which wraps the internal `field()` factory and supplies the column, Zod schema, and default `eq`/`ne` operators:
 
 ```ts
+// color.ts, a custom "color" field stored as a hex string
+import { from } from "questpie/builders";
+import { varchar } from "questpie/drizzle-pg-core";
+import { z } from "zod";
+
+export const color = (defaultValue = "#000000") =>
+	from(
+		varchar("", { length: 7 }), // column builder (name is filled in by codegen)
+		z.string().regex(/^#[0-9a-fA-F]{6}$/), // validation schema
+	).default(defaultValue);
+```
+
+For full control over storage, validation, operators, and introspection metadata, `field()` accepts a `FieldRuntimeState` directly (`{ type, columnFactory, schemaFactory, operatorSet, metadataFactory, ... }`) and `fieldType(name, { create, methods })` adds type-specific chain methods, this is exactly how the built-in `text`/`select` factories are defined in `questpie`'s own source.
+
+### Registration
+
+Register the factory on a module under `fields`:
+
+```ts
+import { module } from "questpie/app";
+import { color } from "./color.js";
+
 const myModule = module({
 	name: "custom-fields",
-	fields: {
-		color: colorField,
-		currency: currencyField,
-	},
+	fields: { color },
 });
 ```
 
-Once registered and codegen runs:
+Once registered and codegen runs, the field is available on `f`:
 
 ```ts
 .fields(({ f }) => ({
-  brandColor: f.color().default("#000000"),
-  price: f.currency({ currency: "USD" }),
+  brandColor: f.color().required(),
 }))
-```
-
-### Field Definition
-
-A custom field defines:
-
-- **Storage type** -- how the value is stored in the database (via `toColumn`)
-- **Validation** -- Zod schema for the value (via `toZodSchema`)
-- **Operators** -- query operators (via `getOperators`)
-- **Metadata** -- introspection metadata (via `getMetadata`)
-
-The `Field` class is an immutable builder:
-
-```ts
-import { Field } from "questpie/builders";
-
-// Each method returns a new Field with updated type state
-f.text(255).required().label({ en: "Name" }).admin({ placeholder: "..." });
 ```
 
 ### Admin Renderer
@@ -386,16 +414,28 @@ export const { GET, POST, PATCH, DELETE } = questpieNextRouteHandlers(app, {
 **TanStack Start (no adapter needed):**
 
 ```ts title="src/routes/api/$.ts"
-import { createAPIFileRoute } from "@tanstack/react-start/api";
+import { createFileRoute } from "@tanstack/react-router";
 import { createFetchHandler } from "questpie/http";
 import { app } from "#questpie";
 
 const handler = createFetchHandler(app, { basePath: "/api" });
-export const Route = createAPIFileRoute("/api/$")({
-	GET: ({ request }) => handler(request),
-	POST: ({ request }) => handler(request),
-	PATCH: ({ request }) => handler(request),
-	DELETE: ({ request }) => handler(request),
+
+// createFetchHandler returns Response | null, fall back to 404.
+const handleCmsRequest = async (request: Request) => {
+	const response = await handler(request);
+	return response ?? new Response("Not found", { status: 404 });
+};
+
+export const Route = createFileRoute("/api/$")({
+	server: {
+		handlers: {
+			GET: ({ request }) => handleCmsRequest(request),
+			POST: ({ request }) => handleCmsRequest(request),
+			PUT: ({ request }) => handleCmsRequest(request),
+			DELETE: ({ request }) => handleCmsRequest(request),
+			PATCH: ({ request }) => handleCmsRequest(request),
+		},
+	},
 });
 ```
 
@@ -512,7 +552,7 @@ export default defineConfig({
 	"main": "dist/index.js",
 	"types": "dist/index.d.ts",
 	"peerDependencies": {
-		"questpie": "^2.0.0"
+		"questpie": "^3.0.0"
 	}
 }
 ```

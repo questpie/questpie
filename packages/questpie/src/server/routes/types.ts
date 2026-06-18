@@ -108,7 +108,9 @@ export type RouteParamsFromKey<TKey extends string> =
  */
 export type JsonRouteHandlerArgs<
 	TInput = unknown,
-	TParams extends JsonRouteParams = JsonRouteParams,
+	// Closed `{}` default (NOT `Record<string,string>`): an undeclared param key
+	// is a compile error unless `.params<…>()` opens specific keys.
+	TParams extends JsonRouteParams = {},
 > = AppContext & {
 	/** Validated input data (from body or query string) */
 	input: TInput;
@@ -124,7 +126,7 @@ export type JsonRouteHandlerArgs<
  * Context passed to raw route handlers.
  */
 export type RawRouteHandlerArgs<
-	TParams extends JsonRouteParams = JsonRouteParams,
+	TParams extends JsonRouteParams = {},
 > = AppContext & {
 	/** Raw incoming request */
 	request: Request;
@@ -216,7 +218,10 @@ export type InferRouteOutput<T> = T extends {
 			Output
 		: T extends { handler: (args: any) => infer Result }
 			? Awaited<Result>
-			: never;
+			: // Terminal fallthrough: no output info recoverable. Surface a loud
+				// `unknown` (forces the caller to narrow) rather than a silent `any`
+				// or a `never` that would erase the route from a union.
+				unknown;
 
 export type InferRouteParams<T> =
 	T extends JsonRouteDefinition<any, any, infer TParams>

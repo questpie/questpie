@@ -1,0 +1,57 @@
+---
+title: Overview
+description: Add the generated admin panel, configure its navigation and branding, and extend it with views, components, blocks, actions, auth, and audit trails.
+---
+
+The admin panel is a first-class QUESTPIE module. On the server, `adminModule` contributes collections, fields, views, components, routes, and a codegen plugin. On the client, the generated admin builder resolves those server-emitted references into React screens.
+
+## What the admin module gives you
+
+- Collection and global forms generated from your schema.
+- Rich text, blocks, uploads, actions, saved views, locks, setup, and auth screens.
+- `config/admin.ts` for sidebar, dashboard, branding, locale, and shell configuration.
+- Server/client registries for custom views and components.
+- An optional audit module for durable change history.
+
+## Basic wiring
+
+```ts title="src/questpie/server/modules.ts"
+import { adminModule } from "@questpie/admin/modules/admin";
+import { openApiModule } from "@questpie/openapi/modules/openapi";
+
+export default [adminModule, openApiModule] as const;
+```
+
+```ts title="src/questpie/admin/modules.ts"
+import { adminClientModule } from "@questpie/admin/client/modules/admin";
+
+export default [adminClientModule] as const;
+```
+
+## Configuration entrypoints
+
+Admin setup is split across server and client files so codegen can type both sides:
+
+| File | Purpose |
+|---|---|
+| `src/questpie/server/modules.ts` | Registers `adminModule`, which contributes server routes, collections, fields, views, components, and codegen extensions. |
+| `src/questpie/admin/modules.ts` | Registers `adminClientModule`, which resolves server-emitted references into React renderers. |
+| `src/questpie/server/config/admin.ts` | Configures sidebar, dashboard, branding, locale, and shell options through `adminConfig()`. |
+| `src/questpie/admin/admin.ts` | Exports the generated admin client config consumed by the app's `/admin` route. |
+
+## Extension surfaces
+
+Collections and globals can opt into admin behavior with generated builder methods such as `.admin()`, `.list()`, `.form()`, `.preview()`, and `.actions()`. Field-level `.admin()` config controls editor behavior, placeholders, layout hints, and component props. Blocks, views, and components are registry-driven conventions contributed by the admin plugin, so adding a file and rerunning codegen is enough to make them available to the admin client.
+
+The admin module also owns the setup/login screens and integrates with Better Auth. Optional modules such as audit can add their own admin collections and UI surfaces through the same module + codegen plugin path.
+
+## Related
+
+- [Collections and globals](/docs/admin/collections) - `.admin()`, `.list()`, `.form()`, `.preview()`, `.actions()`, and global forms.
+- [Configuration](/docs/admin/configuration) - `config/admin.ts`, sidebar, dashboard, branding, locale, shell, and client mounting.
+- [Custom views and components](/docs/admin/custom-views) - registry-based view and component extensions on the server and client.
+- [Authentication](/docs/admin/auth) - Better Auth setup, admin sessions, setup flow, and invitations.
+- [Audit](/docs/admin/audit) - `auditModule`, `admin_audit_log`, per-resource audit settings, and custom audit entries.
+- [Modules](/docs/extend/modules) - how `adminModule` contributes runtime and codegen features.
+- [Blocks](/docs/concepts/blocks) - reusable content blocks that render in the admin.
+- [Configuration](/docs/concepts/configuration) - app config and module-discovered config files.

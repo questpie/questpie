@@ -9,6 +9,15 @@ description:
 
 This skill builds on questpie-core. It covers four business-logic primitives: routes (JSON and raw HTTP), jobs (background tasks), services (reusable logic), and emails (templates).
 
+## Contents
+
+- [Routes (JSON)](#routes-json), typed endpoints, input validation, handler context, calling from the client
+- [Jobs](#jobs), background tasks, publishing, recurring cron, queue adapter config
+- [Raw Routes](#raw-routes), raw HTTP for webhooks, streams, file downloads
+- [Services](#services), reusable logic injected into `AppContext`
+- [Emails](#emails), templates with Zod input and HTML output
+- [Common Mistakes](#common-mistakes)
+
 ## Routes (JSON)
 
 JSON routes are typed server-side endpoints. Define an input schema with Zod, write a handler, and call it from the client with full type safety.
@@ -32,6 +41,8 @@ export default route()
 
 Place files in `routes/`. The filename becomes the route key: `get-active-barbers.ts` maps to `getActiveBarbers`. Files **must** use `export default`.
 
+> **SECURITY, routes are PUBLIC by default.** A route with no `.access()` rule is open to anyone (`evaluateRouteAccess` returns `true` when no rule is set). This is the **opposite** of collections/globals, which default to require-session. Any route that reads private data or performs writes **must** declare `.access()`, e.g. `.access(({ session }) => !!session)`, or `.access(true)` to explicitly mark it public (webhooks verify the signature themselves). The same applies to raw routes.
+
 ### Input Validation
 
 JSON routes validate input with Zod automatically:
@@ -43,6 +54,7 @@ import z from "zod";
 
 export default route()
 	.post()
+	.access(({ session }) => !!session) // writes need auth, routes are public by default
 	.schema(
 		z.object({
 			barberId: z.string(),
@@ -76,11 +88,10 @@ export default route()
 
 ### Handler Context
 
-Route handlers receive the full `AppContext`:
+Every handler (route, raw route, job, service, email) receives the same base `AppContext`:
 
 | Property      | Description                                                |
 | ------------- | ---------------------------------------------------------- |
-| `input`       | Validated data matching the Zod schema                     |
 | `collections` | Typed collection API                                       |
 | `queue`       | Publish background jobs                                    |
 | `email`       | Send emails                                                |
@@ -89,7 +100,16 @@ Route handlers receive the full `AppContext`:
 | `services`    | Custom services from `services/`                           |
 | _extensions_  | `appConfig({ context })` result, flat (e.g. `workspaceId`) |
 
-Derived request context (from `appConfig({ context })`) reaches route access rules and handlers alike — destructure the keys directly. Inside any nested code, `getContext<App>()` exposes the same keys (see `references/multi-tenancy.md`).
+Each primitive then adds its own keys to this base, see the delta tables below. JSON route handlers add:
+
+| Property  | Description                                       |
+| --------- | ------------------------------------------------- |
+| `input`   | Validated data matching the Zod schema            |
+| `params`  | URL path parameters (when pattern-matched)        |
+| `locale`  | Current locale                                    |
+| `request` | The raw `Request`, when executed over HTTP        |
+
+Derived request context (from `appConfig({ context })`) reaches route access rules and handlers alike, destructure the keys directly. Inside any nested code, `getContext<App>()` exposes the same keys (see `references/multi-tenancy.md`).
 
 ### Calling Routes
 
@@ -133,7 +153,7 @@ import { job } from "questpie/services";
 import z from "zod";
 
 export default job({
-	name: "sendAppointmentConfirmation",
+	name: "send-appointment-confirmation",
 	schema: z.object({
 		appointmentId: z.string(),
 		customerId: z.string(),
@@ -196,7 +216,7 @@ import { job } from "questpie/services";
 import z from "zod";
 
 export default job({
-	name: "cleanupExpired",
+	name: "cleanup-expired",
 	schema: z.object({}),
 	options: { cron: "0 3 * * *" }, // every day at 03:00
 	handler: async ({ collections }) => {
@@ -209,17 +229,16 @@ export default job({
 
 Programmatic scheduling from any handler: `queue.cleanupExpired.schedule({}, "0 3 * * *")` and `queue.cleanupExpired.unschedule()`.
 
-Use job-level cron for simple recurring tasks (cleanup, digests, syncs). Reach for **workflow-level cron** (`references/workflows.md`) only when the recurring process needs steps, durable waits, or replay — a workflow is the heavier primitive.
+Use job-level cron for simple recurring tasks (cleanup, digests, syncs). Reach for **workflow-level cron** (`references/workflows.md`) only when the recurring process needs steps, durable waits, or replay, a workflow is the heavier primitive.
 
 ### Job Handler Context
 
-| Property      | Description                            |
-| ------------- | -------------------------------------- |
-| `payload`     | Validated data matching the Zod schema |
-| `collections` | Typed collection API                   |
-| `email`       | Email service                          |
-| `queue`       | Publish other jobs                     |
-| `db`          | Database instance                      |
+Job handlers receive the base `AppContext` (see [Handler Context](#handler-context)) plus:
+
+| Property  | Description                            |
+| --------- | -------------------------------------- |
+| `payload` | Validated data matching the Zod schema |
+| `locale`  | Current locale                         |
 
 ### Queue Adapter Configuration
 
@@ -282,24 +301,19 @@ route().post().raw().handler(...)          // POST only
 route().get().post().raw().handler(...)    // GET + POST
 ```
 
-Supported: `.get()`, `.post()`, `.put()`, `.delete()`, `.patch()`. The built-in `/auth/*` catch-all is itself a raw route (`route().get().post().raw()` delegating to Better Auth) — raw handlers run inside `runWithContext`, so the full request context is live in any code they call.
+Supported: `.get()`, `.post()`, `.put()`, `.delete()`, `.patch()`. The built-in `/auth/*` catch-all is itself a raw route (`route().get().post().raw()` delegating to Better Auth), raw handlers run inside `runWithContext`, so the full request context is live in any code they call.
 
-### Route Handler Context
+### Raw Route Handler Context
 
-| Property      | Type                     | Description                                  |
-| ------------- | ------------------------ | -------------------------------------------- |
-| `request`     | `Request`                | Standard Web API Request                     |
-| `params`      | `Record<string, string>` | URL path parameters                          |
-| `locale`      | `string`                 | Current locale                               |
-| `db`          | `Database`               | Database instance                            |
-| `session`     | `Session \| null`        | Current auth session                         |
-| `collections` | `CollectionsAPI`         | Typed collection API                         |
-| `queue`       | `QueueClient`            | Queue client                                 |
-| `email`       | `MailerService`          | Email service                                |
-| `services`    |                          | User-defined services                        |
-| _extensions_  |                          | `appConfig({ context })` result, flat        |
+Raw route handlers receive the base `AppContext` (see [Handler Context](#handler-context)) plus:
 
-Route handlers must return a `Response` object.
+| Property  | Type                     | Description                |
+| --------- | ------------------------ | -------------------------- |
+| `request` | `Request`                | Standard Web API Request   |
+| `params`  | `Record<string, string>` | URL path parameters        |
+| `locale`  | `string`                 | Current locale             |
+
+Raw route handlers must return a `Response` object.
 
 ### JSON Routes vs Raw Routes
 
@@ -315,7 +329,7 @@ Route handlers must return a `Response` object.
 
 ### Webhook Example (Signature Verification)
 
-Webhooks need the raw body for signature verification — exactly what `.raw()` is for:
+Webhooks need the raw body for signature verification, exactly what `.raw()` is for:
 
 ```ts
 // routes/webhooks/stripe.ts
@@ -324,7 +338,7 @@ import { route } from "questpie/services";
 export default route()
 	.post()
 	.raw()
-	.access(true) // signature IS the auth — verify it yourself below
+	.access(true) // signature IS the auth, verify it yourself below
 	.handler(async ({ request, collections, queue }) => {
 		const body = await request.text();
 		const signature = request.headers.get("stripe-signature");
@@ -343,7 +357,7 @@ export default route()
 
 ### Streamed Response Example
 
-Raw routes can return any `Response`, including streams — CSV exports, server-sent progress, large file proxies:
+Raw routes can return any `Response`, including streams, CSV exports, server-sent progress, large file proxies:
 
 ```ts
 // routes/export.ts
@@ -460,7 +474,6 @@ export default service({
 import { service } from "questpie/services";
 export default service({
 	lifecycle: "request",
-	deps: ["db", "session"] as const,
 	create: ({ db, session }) => {
 		return createScopedDb(db, session?.user?.tenantId);
 	},
@@ -470,21 +483,20 @@ export default service({
 
 ### Dependencies
 
-Services can depend on other services and infrastructure via `deps`. Use `as const` for type safety:
+There is no `deps` option. `create(ctx)` receives the full `AppContext`, destructure whatever the service needs:
 
 ```ts
 // services/analytics.ts
 import { service } from "questpie/services";
 export default service({
-	deps: ["db", "logger"] as const,
-	create: ({ db, logger }) => {
-		logger.info("Analytics service initialized");
+	create: (ctx) => {
+		const { db } = ctx;
 		return new AnalyticsService(db);
 	},
 });
 ```
 
-Available dependencies: `db`, `logger`, `kv`, `email`, `queue`, `storage`, `search`, `realtime`, `session`, and any user-defined services.
+Available on the context: `db`, `kv`, `email`, `queue`, `storage`, `search`, `realtime`, `session`, `collections`, other `services`, plus any `appConfig({ context })` extensions.
 
 ### Disposal
 
@@ -504,9 +516,8 @@ export default service({
 
 ```ts
 service({
-  lifecycle?: "singleton" | "request",        // default: "singleton"
-  deps?: readonly string[],                   // dependencies from AppContext
-  create: (deps) => TInstance,                // factory function
+  lifecycle?: "singleton" | "request",          // default: "singleton"
+  create: (ctx) => TInstance,                   // factory; ctx is the full AppContext
   dispose?: (instance) => void | Promise<void>, // cleanup
 })
 ```
@@ -604,8 +615,8 @@ export default email({
 
 ## Common Mistakes
 
-1. **HIGH: Putting business logic in route files.**
-   Framework route files should only mount HTTP handlers. Business logic belongs in routes, hooks, or services. Raw routes are for HTTP control (webhooks, file downloads, streaming).
+1. **HIGH: Forgetting `.access()` on a route.**
+   Routes are PUBLIC by default, a route with no `.access()` rule serves anyone. This is the opposite of collections/globals (require-session by default). Every route that reads private data or performs writes must declare `.access()`. Use `.access(true)` only when the route is intentionally public.
 
 2. **HIGH: Not using `export default` on route/job/service/email files.**
    Codegen discovery requires `export default`. Named exports are not discovered.

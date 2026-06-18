@@ -1,6 +1,12 @@
 import * as p from "@clack/prompts";
 import pc from "picocolors";
 
+import {
+	defaultModuleIds,
+	isModuleAllowed,
+	modules as moduleRegistry,
+	type RuntimeId,
+} from "./modules.js";
 import { templates } from "./templates.js";
 import { isValidPackageName, toDbName } from "./utils.js";
 
@@ -18,6 +24,7 @@ export type ProjectOptions = {
 	projectName: string;
 	templateId: string;
 	databaseName: string;
+	modules: string[];
 	installDeps: boolean;
 	initGit: boolean;
 	installSkills: boolean;
@@ -27,7 +34,6 @@ export type ProjectOptions = {
 	emailAdapter?: EmailAdapterOption;
 	realtimeAdapter?: RealtimeAdapterOption;
 	kvAdapter?: KVAdapterOption;
-	includeWorkflows?: boolean;
 };
 
 function assertChoice<T extends readonly string[]>(
@@ -49,14 +55,56 @@ function withOptionDefaults(options: ProjectOptions): ProjectOptions {
 		emailAdapter: options.emailAdapter ?? "console",
 		realtimeAdapter: options.realtimeAdapter ?? "none",
 		kvAdapter: options.kvAdapter ?? "memory",
-		includeWorkflows: options.includeWorkflows ?? false,
 	};
 }
 
+/**
+ * Resolve the module ids for a non-interactive run (flags / --yes). Explicit
+ * `--module(s)` win; otherwise fall back to the runtime defaults. Every id is
+ * validated through the same `isModuleAllowed` oracle the prompt filter uses,
+ * so a flag combo cannot bypass the compatibility rule.
+ */
+function resolveModuleIds(
+	runtime: string,
+	requested: string[] | undefined,
+): string[] {
+	const allowed = moduleRegistry.filter((m) =>
+		isModuleAllowed(m.id, runtime),
+	);
+	const allowedIds = new Set(allowed.map((m) => m.id));
+	if (requested && requested.length > 0) {
+		for (const id of requested) {
+			if (!allowedIds.has(id)) {
+				const known = moduleRegistry.some((m) => m.id === id);
+				throw new Error(
+					known
+						? `Module "${id}" is not available for runtime "${runtime}".`
+						: `Unknown module: ${id}. Expected one of: ${moduleRegistry
+								.map((m) => m.id)
+								.join(", ")}.`,
+				);
+			}
+		}
+		// Preserve registry order; de-dupe.
+		const wanted = new Set(requested);
+		return allowed.filter((m) => wanted.has(m.id)).map((m) => m.id);
+	}
+	return defaultModuleIds(runtime as RuntimeId).filter((id) =>
+		allowedIds.has(id),
+	);
+}
+
 export async function runPrompts(
-	args: Partial<ProjectOptions> & { projectName?: string },
+	args: Partial<ProjectOptions> & {
+		projectName?: string;
+		/** Raw `--module(s)` selection (validated against the runtime oracle). */
+		requestedModules?: string[];
+		/** `--yes` / `-y`: skip prompts, fill every choice with its default. */
+		fillDefaults?: boolean;
+	},
 ): Promise<ProjectOptions> {
-	const isInteractive = Boolean(process.stdin.isTTY && process.stdout.isTTY);
+	const isInteractive =
+		Boolean(process.stdin.isTTY && process.stdout.isTTY) && !args.fillDefaults;
 	const queueAdapter = assertChoice(
 		"queue adapter",
 		args.queueAdapter,
@@ -84,10 +132,13 @@ export async function runPrompts(
 			);
 		}
 
+		const templateId = args.templateId ?? templates[0].id;
 		return withOptionDefaults({
 			projectName: args.projectName,
-			templateId: args.templateId ?? templates[0].id,
+			templateId,
 			databaseName: args.databaseName ?? toDbName(args.projectName),
+			modules:
+				args.modules ?? resolveModuleIds(templateId, args.requestedModules),
 			installDeps: args.installDeps ?? true,
 			initGit: args.initGit ?? true,
 			installSkills: args.installSkills ?? true,
@@ -97,7 +148,6 @@ export async function runPrompts(
 			emailAdapter,
 			realtimeAdapter,
 			kvAdapter,
-			includeWorkflows: args.includeWorkflows ?? false,
 		});
 	}
 
@@ -128,11 +178,36 @@ export async function runPrompts(
 				if (args.templateId) return Promise.resolve(args.templateId);
 				if (templates.length === 1) return Promise.resolve(templates[0].id);
 				return p.select({
-					message: "Select a template",
+					message: "Runtime",
 					options: templates.map((t) => ({
 						value: t.id,
 						label: t.label,
 						hint: t.hint,
+					})),
+				});
+			},
+			modules: ({ results }) => {
+				const runtime = results.templateId as string;
+				if (args.modules) return Promise.resolve(args.modules);
+				if (args.requestedModules) {
+					return Promise.resolve(
+						resolveModuleIds(runtime, args.requestedModules),
+					);
+				}
+				const available = moduleRegistry.filter((m) =>
+					isModuleAllowed(m.id, runtime),
+				);
+				const defaults = new Set(defaultModuleIds(runtime as RuntimeId));
+				return p.multiselect({
+					message: "Modules",
+					required: false,
+					initialValues: available
+						.filter((m) => defaults.has(m.id))
+						.map((m) => m.id),
+					options: available.map((m) => ({
+						value: m.id,
+						label: m.group ? `${m.group} · ${m.label}` : m.label,
+						hint: m.hint,
 					})),
 				});
 			},
@@ -192,6 +267,7 @@ export async function runPrompts(
 		projectName: questions.projectName as string,
 		templateId: questions.templateId as string,
 		databaseName: questions.databaseName as string,
+		modules: questions.modules as string[],
 		installDeps: questions.installDeps as boolean,
 		initGit: questions.initGit as boolean,
 		installSkills: questions.installSkills as boolean,
@@ -201,6 +277,5 @@ export async function runPrompts(
 		emailAdapter,
 		realtimeAdapter,
 		kvAdapter,
-		includeWorkflows: args.includeWorkflows ?? false,
 	});
 }

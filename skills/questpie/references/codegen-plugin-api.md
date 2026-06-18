@@ -1,6 +1,19 @@
 # Codegen Plugin API Reference
 
-Source: `packages/questpie/src/cli/codegen/types.ts`
+A faithful mirror of the source types. **Which do you actually need?** Most plugins only use `categories` (directory-pattern discovery), `discover` (single-file or glob patterns), and `registries` (typed factory extensions). `transform` and `generate` are escape hatches for the rare case where declarative discovery is not enough, reach for them last.
+
+- [CodegenPlugin](#codegenplugin)
+- [CodegenTargetContribution](#codegentargetcontribution)
+- [CategoryDeclaration](#categorydeclaration)
+- [DiscoverPattern](#discoverpattern)
+- [RegistryExtension](#registryextension)
+- [CallbackParamDefinition](#callbackparamdefinition)
+- [SingletonFactory](#singletonfactory)
+- [CodegenContext](#codegencontext)
+- [DiscoveredFile](#discoveredfile)
+- [ScaffoldConfig](#scaffoldconfig)
+- [CrossTargetValidator](#crosstargetvalidator)
+- [CodegenOptions](#codegenoptions)
 
 ## CodegenPlugin
 
@@ -49,7 +62,7 @@ interface CodegenTargetContribution {
 	/** File patterns to discover (string shorthand or full DiscoverPattern). */
 	discover?: Record<string, DiscoverPattern>;
 
-	/** Post-discovery transform — modify context before code generation. */
+	/** Post-discovery transform, modify context before code generation. */
 	transform?: (ctx: CodegenContext) => void;
 
 	/** Registry declarations for generated typed factories. */
@@ -200,6 +213,16 @@ type DiscoverPattern =
 			 * }
 			 */
 			destructure?: Record<string, string>;
+
+			/**
+			 * Emit the discovered file as `config.<configKey>` in the createApp
+			 * definition. Each config file = one key in the config bucket.
+			 *
+			 * @example
+			 * appConfig: { pattern: "config/app.ts", configKey: "app" }
+			 * // Generated: config: { app: _appConfig }
+			 */
+			configKey?: string;
 	  };
 ```
 
@@ -223,6 +246,9 @@ interface RegistryExtension {
 
 	/** Context parameter names for callback-style extensions. */
 	callbackContextParams?: string[];
+
+	/** Per-extension callback param overrides (take precedence over the plugin-level `callbackParams`). */
+	callbackParams?: Record<string, CallbackParamDefinition>;
 
 	/** Placeholder -> category mapping for type extraction. */
 	configTypePlaceholders?: Record<string, string>;

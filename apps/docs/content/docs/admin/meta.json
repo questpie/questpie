@@ -1,0 +1,11 @@
+{
+	"title": "Admin",
+	"pages": [
+		"index",
+		"collections",
+		"configuration",
+		"custom-views",
+		"auth",
+		"audit"
+	]
+}

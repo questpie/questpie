@@ -144,6 +144,14 @@ bun questpie migrate:generate
 bun questpie migrate
 ```
 
+## Database extensions
+
+QUESTPIE is drizzle-native and does **not** auto-create Postgres extensions. When a feature requires one, provision it yourself — add `CREATE EXTENSION IF NOT EXISTS "<name>";` to a migration, or enable it via your managed-Postgres provider.
+
+- **Required Postgres extension: `pg_trgm`** (trigram search) — needed by the full-text search feature.
+
+The same pattern applies to future capabilities (e.g. geometry/PostGIS → `postgis`).
+
 ## Field Builder
 
 Fields are defined via the `f` proxy inside `.fields()`. Each field produces a Drizzle column, Zod validation, typed query operators, and serializable metadata:

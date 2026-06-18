@@ -9,10 +9,10 @@ questpie/
   questpie.config.ts   # Main config (runtimeConfig + plugins)
   modules.ts           # Module registrations ([adminModule, ...] as const)
   collections/         # Collection definitions (standalone factories)
-    barbers.collection.ts
-    services.collection.ts
-    appointments.collection.ts
-    reviews.collection.ts
+    barbers.ts
+    services.ts
+    appointments.ts
+    reviews.ts
   jobs/                # Background jobs
     index.ts
   routes/              # Standalone routes (auto-discovered)
@@ -42,7 +42,6 @@ Both server and admin are fully code-generated from file conventions. No manual 
 // questpie.config.ts
 import { runtimeConfig } from "questpie/app";
 export default runtimeConfig({
-
 	db: { url: process.env.DATABASE_URL! },
 	app: { url: process.env.APP_URL! },
 });
@@ -55,7 +54,7 @@ export default [adminModule] as const;
 ```
 
 ```typescript
-// Collections are auto-discovered from collections/*.collection.ts
+// Collections are auto-discovered from collections/*.ts
 // The codegen generates .generated/index.ts with the typed app instance:
 //   import { app } from "#questpie";
 //   export type App = typeof app;
@@ -124,7 +123,7 @@ const { client } = useAdminContext();
 ### Server Collection (Backend)
 
 ```typescript
-// collections/barbers.collection.ts
+// collections/barbers.ts
 import { collection } from "questpie/builders";
 export default collection("barbers").fields(({ f }) => ({
 	name: f.text({ label: "Name", required: true }),
@@ -157,7 +156,6 @@ Server configuration uses the top-level `runtimeConfig()` factory. Modules are r
 // questpie.config.ts
 import { runtimeConfig } from "questpie/app";
 export default runtimeConfig({
-
 	db: { url: process.env.DATABASE_URL! },
 	app: { url: process.env.APP_URL! },
 });
@@ -245,7 +243,6 @@ const backendMessages = {
 } as const;
 
 export default runtimeConfig({
-
 	db: { url: process.env.DATABASE_URL! },
 	app: { url: process.env.APP_URL! },
 	// Configure content locales
@@ -273,7 +270,6 @@ Admin UI translations are configured server-side via `.adminLocale()` and fetche
 // questpie.config.ts
 import { runtimeConfig } from "questpie/app";
 export default runtimeConfig({
-
 	db: { url: process.env.DATABASE_URL! },
 	app: { url: process.env.APP_URL! },
 	adminLocale: {

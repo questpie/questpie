@@ -5,7 +5,7 @@
  */
 import { collection } from "questpie";
 
-import { locksCollection } from "../../admin-preferences/collections/locks.collection.js";
+import { locksCollection } from "../../admin-preferences/collections/locks.js";
 
 export default collection("admin_locks")
 	.merge(locksCollection)

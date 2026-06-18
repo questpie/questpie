@@ -1,0 +1,336 @@
+---
+title: Getting started, TanStack Start
+description: Scaffold a QUESTPIE app, boot Postgres, push your schema, and run a first typed-client query, from zero to a running full-stack app.
+---
+
+This is the linear path from nothing to a running QUESTPIE app on **TanStack Start** (React SSR + Vite + Nitro). You scaffold the project, start Postgres, push your schema, run the dev server, and hit a typed client query that returns real data. Every step ends with something that works.
+
+> **Prerequisites:** none beyond the tools below. New to the framework? Read the [overview](/docs) first for the one-schema mental model; it's optional for getting a project booting.
+
+By the end you have a single-package full-stack app with:
+
+- **Starter content**, a `posts` collection and a `siteSettings` global, already typed end to end.
+- **Auth wired**, Better Auth (email/password) on the server, plus the auth client.
+- **A typed client + TanStack Query**, `createClient<AppConfig>()` and `createQuestpieQueryOptions(client)`, ready to query.
+- **An admin panel** at `/admin`, **OpenAPI + Scalar docs** at `/api/docs`, and a landing page at `/`.
+
+<Callout type="info" title="TanStack Start is the recommended runtime today">
+	It's the only runtime with a published template. Next.js, Hono, and Elysia are
+	on the way, the QUESTPIE core (`src/questpie/**`, `src/lib/**`) is identical
+	across runtimes; only the thin mount layer differs.
+</Callout>
+
+## Prerequisites
+
+- **[Bun](https://bun.sh) 1.3+**, the package manager and runtime the template targets.
+- **[Docker](https://www.docker.com/)**, runs local Postgres (and provisions the extensions the starter needs).
+
+## 1. Scaffold the project
+
+Run the create command. With no flags it walks you through an interactive setup; press enter to accept the defaults.
+
+```bash
+bunx create-questpie my-app
+```
+
+You'll be asked for:
+
+- **Project name**, the directory and package name (lowercase, hyphens).
+- **Runtime**, TanStack Start (the default).
+- **Modules**, `admin` and `openapi` are on by default; `workflows` is optional.
+- **Database name**, defaults to a slug of your project name.
+- **Install dependencies / git / agent skills**, all default to yes.
+
+Prefer a non-interactive run? Every prompt has a flag, and `-y` fills the rest with defaults:
+
+```bash
+bunx create-questpie my-app --runtime tanstack-start --modules admin,openapi -y
+```
+
+<Callout type="info" title="Module/runtime combos are validated up front">
+	`admin` needs a render-layer runtime, asking for `--modules admin` on a
+	headless runtime (Hono, Elysia) is rejected with a clear message before
+	anything is written.
+</Callout>
+
+When the command finishes, the scaffolder has already:
+
+- Copied the template and substituted your project/database names.
+- Created `.env` from `.env.example` (with a generated DB password and `BETTER_AUTH_SECRET`).
+- Installed dependencies and run codegen (`scaffold:generate`), so `src/questpie/server/.generated/*` is populated.
+- Initialized a git repo.
+- Kicked off `bunx skills add questpie/questpie` in the background to install the QUESTPIE agent skills.
+
+### What got scaffolded
+
+A single-package app, server and client co-located, so the typed client works with zero workspace plumbing:
+
+```text
+my-app/
+  docker-compose.yml                 # Postgres + extension provisioning
+  docker/init-extensions.sql         # CREATE EXTENSION pg_trgm
+  .env                               # generated from .env.example
+  questpie.config.ts                 # CLI entry, re-exports server runtime config
+  src/
+    questpie/
+      server/
+        questpie.config.ts           # runtime config, db, adapters, secrets
+        modules.ts                   # enabled modules (admin, openapi, …)
+        collections/
+          posts.ts        # starter collection
+        globals/
+          site-settings.ts    # starter global
+        config/                      # admin / auth / openapi config
+        .generated/                  # codegen output (committed, do not edit)
+      admin/
+        admin.ts                     # re-exports the generated admin config
+        modules.ts                   # admin client modules
+        .generated/                  # admin client codegen output
+    lib/
+      env.ts                         # typed env (@t3-oss/env-core + Zod v4)
+      client.ts                      # createClient<AppConfig>()
+      auth-client.ts                 # Better Auth client
+      query.ts                       # createQuestpieQueryOptions(client)
+    routes/
+      index.tsx                      # landing page (/)
+      api/$.ts                       # QUESTPIE fetch handler mount (/api/*)
+      admin/                         # admin routes (/admin/*)
+```
+
+The QUESTPIE handler is mounted by `createFetchHandler`, which serves every CRUD, global, route, search, and realtime endpoint under `/api`. It resolves a `Response` for any matched route and `null` when nothing matches, so the route wraps it with a 404 fallback:
+
+```ts title="src/routes/api/$.ts"
+import { createFileRoute } from "@tanstack/react-router";
+import { app } from "#questpie";
+import { createFetchHandler } from "questpie/http";
+
+const handler = createFetchHandler(app, { basePath: "/api" });
+
+const handleCmsRequest = async (request: Request) =>
+	(await handler(request)) ??
+	new Response(JSON.stringify({ error: "Not found" }), {
+		status: 404,
+		headers: { "Content-Type": "application/json" },
+	});
+
+// Wired to GET/POST/PUT/DELETE/PATCH on "/api/$", see the file for the route.
+```
+
+<Callout type="info" title="Keep the two `basePath` values in sync">
+	`basePath: "/api"` here **must** match the client's `basePath` in
+	`src/lib/client.ts`. The scaffold ships them aligned; keep them in sync if you
+	change either.
+</Callout>
+
+The starter `posts` collection is a real schema, not an empty placeholder. The slug auto-fills from the title via an admin `compute` (trimmed below, see the file):
+
+```ts title="src/questpie/server/collections/posts.ts"
+import { collection } from "#questpie/factories";
+
+export const posts = collection("posts")
+	.fields(({ f }) => ({
+		title: f.text(255).label("Title").required(),
+		slug: f.text(255).label("Slug").required().inputOptional(), // .admin({ compute }) auto-fills from title
+		content: f.richText().label("Content"),
+		published: f.boolean().label("Published").default(false).required(),
+	}))
+	.title(({ f }) => f.title)
+	.admin(({ c }) => ({ label: "Posts", icon: c.icon("ph:article") }))
+	.list(({ v }) => v.collectionTable({}))
+	.form(({ v, f }) =>
+		v.collectionForm({
+			sidebar: { position: "right", fields: [f.slug, f.published] },
+			fields: [f.title, f.content],
+		}),
+	);
+```
+
+<Callout type="info" title="`#questpie/factories`, not `questpie`">
+	Definition files import the builders (`collection`, `global`) from
+	`#questpie/factories`, the generated, app-typed factory module. `f` isn't
+	imported; it arrives as the `.fields()` callback argument. See
+	[Collections](/docs/concepts/collections) for the full builder.
+</Callout>
+
+## 2. Move into the project
+
+```bash
+cd my-app
+```
+
+Your `.env` already exists. Open it to confirm the values look right, the database URL, app URL, and auth secret are pre-filled:
+
+```bash title=".env"
+DATABASE_URL=postgresql://my_app:<generated>@localhost:5432/my_app
+APP_URL=http://localhost:3000
+PORT=3000
+BETTER_AUTH_SECRET=<generated>
+MAIL_ADAPTER=console
+```
+
+<Callout type="warn" title="Replace the auth secret before deploying">
+	The generated `BETTER_AUTH_SECRET` is fine for local development. Set a fresh,
+	secret value before you deploy, never ship the scaffolded one.
+</Callout>
+
+## 3. Start Postgres
+
+The template includes a `docker-compose.yml` that runs Postgres **and** provisions the extensions the starter needs. Start it in the background:
+
+```bash
+docker compose up -d
+```
+
+This brings up Postgres 17 on port `5432` and, on first cluster init, runs `docker/init-extensions.sql`, which does `CREATE EXTENSION IF NOT EXISTS "pg_trgm"`. The starter's full-text search relies on `pg_trgm` (trigram matching), so provisioning it here keeps `db:push` working out of the box.
+
+<Callout type="warn" title="QUESTPIE does not auto-create Postgres extensions">
+	This is deliberate and drizzle-native: extensions can't be reliably created by
+	the app at runtime, so QUESTPIE never silently tries. Locally, `docker compose
+	up` provisions them for you. On **managed Postgres**, enable the extensions
+	you need (e.g. `pg_trgm`) through your provider before deploying. The [Search
+	adapter](/docs/adapters/search) covers which extensions each search backend
+	requires.
+</Callout>
+
+## 4. Push your schema
+
+With Postgres running, create the tables for your collections and globals. For fast local prototyping, push the schema directly:
+
+```bash
+bun run db:push
+```
+
+Under the hood this runs `questpie push`, drizzle-native schema push, for **development only**. It reads your generated schema and applies it straight to the database. For production you generate and run migrations instead (`bun run migrate:create` → `bun run migrate`).
+
+<Callout type="info" title="Re-run codegen after adding or removing files">
+	If you add or remove a collection or global later, regenerate first (`bun run
+	questpie:generate`, or `bun run scaffold:verify` to also type-check), then
+	`bun run db:push` again. Editing a definition's body doesn't need a regen. The
+	`questpie add` CLI runs codegen for you automatically, see
+	[Codegen](/docs/extend/codegen).
+</Callout>
+
+## 5. Run the dev server
+
+```bash
+bun run dev
+```
+
+Vite + Nitro start on **http://localhost:3000**. Three URLs now serve:
+
+| URL                              | What it is                                                  |
+| -------------------------------- | ----------------------------------------------------------- |
+| `http://localhost:3000/`         | Landing page, links to the admin, API docs, and these docs. |
+| `http://localhost:3000/api/docs` | OpenAPI reference rendered with Scalar.                     |
+| `http://localhost:3000/admin`    | Admin panel.                                                |
+
+### Create your first admin
+
+Open **http://localhost:3000/admin**. Because no admin user exists yet, the panel shows a **setup screen** to create the first one. Fill in a name, email, and password (minimum 8 characters), then sign in with those credentials.
+
+This is a one-time bootstrap: once an admin exists, the setup endpoint refuses to create more users, and `/admin` goes straight to the login screen. From there you can open **Posts** and create a row, you'll use it in the next step.
+
+## 6. Query from the typed client
+
+The scaffold already created a fully typed client in `src/lib/client.ts`. It's typed against your schema via `AppConfig`, so collection names, field types, query operators, and return shapes are all inferred:
+
+```ts title="src/lib/client.ts"
+import { createClient } from "questpie/client";
+
+import type { AppConfig } from "#questpie";
+
+export const client = createClient<AppConfig>({
+	baseURL:
+		typeof window !== "undefined"
+			? window.location.origin
+			: process.env.APP_URL || "http://localhost:3000",
+	basePath: "/api",
+});
+```
+
+Query the `posts` you created. `find()` returns a paginated envelope, `docs` is your typed array, alongside `totalDocs`, `page`, `hasNextPage`, and friends:
+
+```ts
+import { client } from "@/lib/client";
+
+const { docs, totalDocs } = await client.collections.posts.find({
+	where: { published: true },
+	orderBy: { createdAt: "desc" },
+	limit: 10,
+});
+
+console.log(totalDocs, docs[0]?.title);
+```
+
+The result is the real record shape, inferred from the collection, no manual types:
+
+```jsonc
+// { docs, totalDocs, limit, totalPages, page, pagingCounter, hasPrevPage, hasNextPage, prevPage, nextPage }
+{
+	"docs": [
+		{
+			"id": "01J…",
+			"title": "Hello QUESTPIE",
+			"slug": "hello-questpie",
+			"content": {
+				/* rich text */
+			},
+			"published": true,
+			"createdAt": "2026-06-17T10:00:00.000Z",
+			"updatedAt": "2026-06-17T10:00:00.000Z",
+		},
+	],
+	"totalDocs": 1,
+	"limit": 10,
+	"totalPages": 1,
+	"page": 1,
+	"pagingCounter": 1,
+	"hasPrevPage": false,
+	"hasNextPage": false,
+	"prevPage": null,
+	"nextPage": null,
+}
+```
+
+In a React component, use the TanStack Query bindings the scaffold wired up in `src/lib/query.ts`, the same query, as a hook:
+
+```tsx title="A component"
+import { useQuery } from "@tanstack/react-query";
+
+import { q } from "@/lib/query";
+
+function Posts() {
+	const { data } = useQuery(
+		q.collections.posts.find({ where: { published: true }, limit: 10 }),
+	);
+
+	return <p>{data?.totalDocs ?? 0} published posts</p>;
+}
+```
+
+`q.collections.*`, `q.globals.*`, and `q.routes.*` return ready-made `queryOptions()` / `mutationOptions()` objects, fully typed from your schema. Pass them straight into `useQuery` / `useMutation`.
+
+That's a clean booting app: Postgres up, schema pushed, dev server serving `/`, `/api/docs`, and `/admin`, and the typed client returning real data.
+
+## Common gotchas
+
+- **`db:push` fails with a missing-extension error.** Postgres isn't up yet, or it was created before the init script ran. Run `docker compose up -d` first. If you started the database before adding the project, recreate the volume so `docker/init-extensions.sql` runs on a fresh cluster (`docker compose down -v` then `docker compose up -d`).
+- **`/admin` returns 404 or the page is blank.** Admin only ships on render-layer runtimes (TanStack Start, Next). On headless runtimes (Hono, Elysia) the project is API + typed-client only. Make sure the `admin` module was selected at scaffold time.
+- **Type errors after editing a collection.** Codegen output is stale. Run `bun run scaffold:verify` (regenerate + type-check), then `bun run db:push`.
+- **Client requests 404.** The client's `basePath` and the server's `createFetchHandler({ basePath })` must match (`"/api"` in this template).
+
+## Next steps
+
+- **Add a collection**, `bunx questpie add collection products` scaffolds the file and runs codegen for you; then `bun run db:push`.
+- **Add a global**, `bunx questpie add global marketing`, then `bun run db:push`.
+
+The starter ships `CLAUDE.md` / `AGENTS.md` that point AI assistants at the QUESTPIE skills. If skills didn't install during scaffolding, run `bunx skills add questpie/questpie` in the project.
+
+## Related
+
+- [Collections](/docs/concepts/collections), fields, relations, hooks, access, and the admin views they generate.
+- [Client SDK](/docs/client/sdk), the typed client in depth: `createClient<AppConfig>()`, every CRUD method, and the query options.
+- [TanStack Query](/docs/client/tanstack-query), the React hooks layer: `q.collections.*` / `q.globals.*` / `q.routes.*`.
+- [Codegen](/docs/extend/codegen), what `questpie generate` / `questpie add` do and when to re-run them.
+- [Configuration](/docs/concepts/configuration), `runtimeConfig()`, modules, and adapter wiring in `questpie.config.ts`.
+- [Environment](/docs/concepts/environment), the typed `env` module and boot-time validation.

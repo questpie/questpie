@@ -43,6 +43,8 @@ export type WorkflowsCollections = {
 	wf_step: typeof _coll_wf_step;
 };
 
+export type WorkflowsGlobals = Record<never, never>;
+
 export type WorkflowsJobs = {
 	wfExecute: Omit<typeof _job_wfExecute, "handler"> & { handler: (args: unknown) => Promise<unknown> };
 	wfMaintenance: Omit<typeof _job_wfMaintenance, "handler"> & { handler: (args: unknown) => Promise<unknown> };
@@ -61,6 +63,14 @@ export type WorkflowsRoutes = {
 	triggerWorkflow: typeof _route_triggerWorkflow extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"triggerWorkflow">> : typeof _route_triggerWorkflow;
 };
 
+export type WorkflowsFieldTypes = Record<never, never>;
+
+export type WorkflowsViews = Record<never, never>;
+
+export type WorkflowsComponents = Record<never, never>;
+
+export type WorkflowsBlocks = Record<never, never>;
+
 export type WorkflowsServices = {
 	workflows: typeof _svc_workflows;
 };
@@ -75,15 +85,15 @@ export type WorkflowsModule = {
 	jobs: WorkflowsJobs;
 	routes: WorkflowsRoutes;
 	services: WorkflowsServices;
-	globals: Record<never, never>;
+	globals: WorkflowsGlobals;
+	fieldTypes: WorkflowsFieldTypes;
+	views: WorkflowsViews;
+	components: WorkflowsComponents;
+	blocks: WorkflowsBlocks;
 	messages: Record<never, never>;
 	emails: Record<never, never>;
 	migrations: readonly unknown[];
 	seeds: readonly unknown[];
-	fieldTypes: Record<never, never>;
-	views: Record<never, never>;
-	components: Record<never, never>;
-	blocks: Record<never, never>;
 	config: {
 		admin: typeof _adminConfig;
 	};

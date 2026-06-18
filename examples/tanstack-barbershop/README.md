@@ -162,7 +162,7 @@ bun questpie push
 1. **Make schema changes** in your collection definitions
 2. **Generate migration**: `bun questpie migrate:generate`
 3. **Review** the generated migration file in `src/migrations/`
-4. **Import** migrations in `src/server/app.ts` via `.migrations(migrations)`
+4. **Regenerate** the app surface: `bun questpie generate`
 5. **Run migration**: `bun questpie migrate:up`
 
 ## 🗄️ Database Schema

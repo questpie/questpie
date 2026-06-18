@@ -1,5 +1,44 @@
 # autopilot
 
+## 0.0.16
+
+### Patch Changes
+
+- Updated dependencies [[`9e14122`](https://github.com/questpie/questpie/commit/9e1412231f18b40db2c87c1ce35dc352842b5cff)]:
+  - questpie@3.9.1
+  - @questpie/admin@3.9.1
+  - @questpie/ai@3.0.0
+  - @questpie/executor@3.0.9
+  - @questpie/mcp@3.2.7
+  - @questpie/sandbox@3.0.9
+  - @questpie/workflows@3.9.1
+
+## 0.0.15
+
+### Patch Changes
+
+- Updated dependencies [[`835f985`](https://github.com/questpie/questpie/commit/835f98502bd98a2c2b3f34201ac6370f03105c93)]:
+  - questpie@3.9.0
+  - @questpie/admin@3.9.0
+  - @questpie/ai@3.0.0
+  - @questpie/executor@3.0.8
+  - @questpie/mcp@3.2.7
+  - @questpie/sandbox@3.0.8
+  - @questpie/workflows@3.9.0
+
+## 0.0.14
+
+### Patch Changes
+
+- Updated dependencies [[`590e6c4`](https://github.com/questpie/questpie/commit/590e6c433a73a44316e89d00eeeaa21b0d584e3b), [`a56e017`](https://github.com/questpie/questpie/commit/a56e0179f6016915996e9bd9a58c7279d070692a), [`81e4922`](https://github.com/questpie/questpie/commit/81e4922e7ed54a2ff2171e86a9ce45a07b7c433b), [`b15ce41`](https://github.com/questpie/questpie/commit/b15ce41ce2ed8378abd0ea3e42c8f577abe9ad6b)]:
+  - questpie@3.8.0
+  - @questpie/admin@3.8.0
+  - @questpie/ai@3.0.0
+  - @questpie/executor@3.0.7
+  - @questpie/mcp@3.2.7
+  - @questpie/sandbox@3.0.7
+  - @questpie/workflows@3.8.0
+
 ## 0.0.13
 
 ### Patch Changes

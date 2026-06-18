@@ -13,9 +13,9 @@ import { fieldType, wrapFieldComplete } from "../../../fields/field-type.js";
 import type { FieldWithMethods } from "../../../fields/field-with-methods.js";
 import { basicOps } from "../../../fields/operators/builtin.js";
 
-export type CustomFieldState = DefaultFieldState & {
+export type CustomFieldState<TData = unknown> = DefaultFieldState & {
 	type: "custom";
-	data: unknown;
+	data: TData;
 };
 
 export interface CustomFieldMethods {
@@ -39,18 +39,22 @@ export interface CustomFieldMethods {
  * // Custom column with auto-derived schema
  * data: f.from(customColumn(""))
  * ```
+ *
+ * Pass a Zod schema (or an explicit type argument) to type the stored value:
+ * `f.from(geometry(""), z.object({ lat: z.number(), lng: z.number() }))` yields
+ * `data: { lat: number; lng: number }`.
  */
-export function from(
+export function from<TData = unknown>(
 	column: unknown,
-	zodSchema?: ZodType,
-): FieldWithMethods<CustomFieldState, CustomFieldMethods> {
+	zodSchema?: ZodType<TData>,
+): FieldWithMethods<CustomFieldState<TData>, CustomFieldMethods> {
 	// If column is a column builder instance, wrap it as a factory
 	const isFactory = typeof column === "function";
 	const columnFactory = isFactory
 		? (column as (name: string) => unknown)
 		: (_name: string) => column;
 
-	return wrapFieldComplete(field<CustomFieldState>({
+	return wrapFieldComplete(field<CustomFieldState<TData>>({
 		type: "custom",
 		columnFactory,
 		schemaFactory: zodSchema ? () => zodSchema : () => z.unknown(),

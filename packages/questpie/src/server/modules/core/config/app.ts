@@ -16,10 +16,14 @@ import type {
 	GlobalCollectionTransitionHookContext,
 	GlobalGlobalHookContext,
 } from "#questpie/server/config/global-hooks-types.js";
+import type { Locale } from "#questpie/server/config/types.js";
+import { buildIndexParams } from "#questpie/server/modules/core/integrated/search/index-params.js";
+import type { SearchableConfig } from "#questpie/server/modules/core/integrated/search/types.js";
 import {
 	TransitionScheduledError,
 	scheduleCollectionTransition,
 } from "#questpie/server/modules/core/workflow/schedule-transition.js";
+import { DEFAULT_LOCALE } from "#questpie/shared/constants.js";
 
 // ============================================================================
 // Realtime helpers
@@ -54,7 +58,8 @@ function resolveRealtimePayload(
  */
 const realtimeHook = {
 	afterChange: async (ctx: GlobalCollectionHookContext) => {
-		if (!ctx.realtime) return;
+		const realtime = ctx.realtime;
+		if (!realtime) return;
 
 		const operation = resolveRealtimeOperation(ctx, "change");
 		const payload = resolveRealtimePayload(ctx, "change");
@@ -65,7 +70,7 @@ const realtimeHook = {
 		// waits for the outer transaction to release its lock.
 		ctx.onAfterCommit(async () => {
 			try {
-				const change = await ctx.realtime.appendChange({
+				const change = await realtime.appendChange({
 					resourceType: "collection",
 					resource: ctx.collection,
 					operation,
@@ -74,7 +79,7 @@ const realtimeHook = {
 					payload,
 				});
 				if (change) {
-					await ctx.realtime.notify(change);
+					await realtime.notify(change);
 				}
 			} catch {
 				// Realtime log table may not exist yet
@@ -82,14 +87,15 @@ const realtimeHook = {
 		});
 	},
 	afterDelete: async (ctx: GlobalCollectionHookContext) => {
-		if (!ctx.realtime) return;
+		const realtime = ctx.realtime;
+		if (!realtime) return;
 
 		const operation = resolveRealtimeOperation(ctx, "delete");
 		const payload = resolveRealtimePayload(ctx, "delete");
 
 		ctx.onAfterCommit(async () => {
 			try {
-				const change = await ctx.realtime.appendChange({
+				const change = await realtime.appendChange({
 					resourceType: "collection",
 					resource: ctx.collection,
 					operation,
@@ -98,7 +104,7 @@ const realtimeHook = {
 					payload,
 				});
 				if (change) {
-					await ctx.realtime.notify(change);
+					await realtime.notify(change);
 				}
 			} catch {
 				// Realtime log table may not exist yet
@@ -107,6 +113,50 @@ const realtimeHook = {
 	},
 };
 
+// ============================================================================
+// Search helpers
+// ============================================================================
+
+/**
+ * Minimal structural slice of the Questpie app instance the search hooks reach
+ * for ({@link GlobalCollectionHookContext.app} is `unknown` pre-codegen). Lets
+ * us resolve a collection's declarative `searchable` config + the configured
+ * locales without an `as any` cast.
+ */
+interface AppSearchSurface {
+	getCollectionConfig?: (
+		name: string,
+	) => { state?: { searchable?: SearchableConfig | false } } | undefined;
+	getLocales?: () => Promise<Locale[]>;
+	config?: { locale?: { defaultLocale?: string } };
+}
+
+/** Narrow the loosely-typed hook ctx app to the search slice we touch. */
+function asSearchApp(app: unknown): AppSearchSurface {
+	return (app ?? {}) as AppSearchSurface;
+}
+
+/**
+ * Resolve a collection's `.searchable(...)` config from the app instance.
+ * Returns `undefined` when the collection (or accessor) is unavailable, which
+ * {@link buildIndexParams} treats as the default auto-index config.
+ */
+function resolveSearchableConfig(
+	app: AppSearchSurface,
+	collection: string,
+): SearchableConfig | false | undefined {
+	try {
+		return app.getCollectionConfig?.(collection)?.state?.searchable;
+	} catch {
+		return undefined;
+	}
+}
+
+/** Resolve the configured default locale (mirrors Questpie.createRequestContext). */
+function resolveDefaultLocale(app: AppSearchSurface): string {
+	return app.config?.locale?.defaultLocale ?? DEFAULT_LOCALE;
+}
+
 /**
  * Search indexing hook — schedules async index after change,
  * removes from index after delete. Uses per-app debounce
@@ -114,7 +164,9 @@ const realtimeHook = {
  */
 const searchHook = {
 	afterChange: async (ctx: GlobalCollectionHookContext) => {
-		if (!ctx.search) return;
+		const search = ctx.search;
+		const logger = ctx.logger;
+		if (!search) return;
 		const recordId = ctx.data?.id;
 		if (!recordId) return;
 
@@ -122,22 +174,28 @@ const searchHook = {
 		ctx.onAfterCommit(async () => {
 			try {
 				// Try per-instance debounced scheduling first
-				const scheduled = ctx.search.scheduleIndex(
-					ctx.collection,
-					String(recordId),
-				);
+				const scheduled = search.scheduleIndex(ctx.collection, String(recordId));
 				if (!scheduled) {
-					// No queue — index synchronously for current locale
-					const title = ctx.data?._title || ctx.data?.id;
-					await ctx.search.index({
-						collection: ctx.collection,
-						recordId: String(recordId),
-						locale: ctx.locale ?? "en",
-						title: String(title),
-					});
+					// No queue — index synchronously for current locale.
+					// Resolve the collection's declarative `searchable` config so
+					// content/metadata/facets/embedding are populated (not title-only).
+					const app = asSearchApp(ctx.app);
+					const params = await buildIndexParams(
+						ctx.data as Record<string, any>,
+						{
+							collection: ctx.collection,
+							locale: ctx.locale ?? DEFAULT_LOCALE,
+							searchable: resolveSearchableConfig(app, ctx.collection),
+							app: ctx.app,
+							defaultLocale: resolveDefaultLocale(app),
+						},
+					);
+					if (params) {
+						await search.index(params);
+					}
 				}
 			} catch (err) {
-				ctx.logger.error(
+				logger?.error(
 					`[Core] Search index failed for ${ctx.collection}:${recordId}:`,
 					err,
 				);
@@ -145,18 +203,20 @@ const searchHook = {
 		});
 	},
 	afterDelete: async (ctx: GlobalCollectionHookContext) => {
-		if (!ctx.search) return;
+		const search = ctx.search;
+		const logger = ctx.logger;
+		if (!search) return;
 		const recordId = ctx.data?.id;
 		if (!recordId) return;
 
 		ctx.onAfterCommit(async () => {
 			try {
-				await ctx.search.remove({
+				await search.remove({
 					collection: ctx.collection,
 					recordId: String(recordId),
 				});
 			} catch (err) {
-				ctx.logger.error(
+				logger?.error(
 					`[Core] Search remove failed for ${ctx.collection}:${recordId}:`,
 					err,
 				);
@@ -203,11 +263,12 @@ const scheduledTransitionHook = {
  */
 const globalRealtimeHook = {
 	afterChange: async (ctx: GlobalGlobalHookContext) => {
-		if (!ctx.realtime) return;
+		const realtime = ctx.realtime;
+		if (!realtime) return;
 
 		ctx.onAfterCommit(async () => {
 			try {
-				const change = await ctx.realtime.appendChange({
+				const change = await realtime.appendChange({
 					resourceType: "global",
 					resource: ctx.global,
 					operation: "update",
@@ -216,7 +277,7 @@ const globalRealtimeHook = {
 					payload: ctx.data as Record<string, unknown>,
 				});
 				if (change) {
-					await ctx.realtime.notify(change);
+					await realtime.notify(change);
 				}
 			} catch {
 				// Realtime log table may not exist yet
@@ -230,19 +291,18 @@ const globalRealtimeHook = {
  */
 const globalSearchHook = {
 	afterChange: async (ctx: GlobalGlobalHookContext) => {
-		if (!ctx.search) return;
+		const search = ctx.search;
+		const logger = ctx.logger;
+		if (!search) return;
 		const recordId = ctx.data?.id;
 		if (!recordId) return;
 
 		ctx.onAfterCommit(async () => {
 			try {
-				const scheduled = ctx.search.scheduleIndex(
-					ctx.global,
-					String(recordId),
-				);
+				const scheduled = search.scheduleIndex(ctx.global, String(recordId));
 				if (!scheduled) {
 					const title = ctx.data?._title || ctx.data?.id;
-					await ctx.search.index({
+					await search.index({
 						collection: ctx.global,
 						recordId: String(recordId),
 						locale: ctx.locale ?? "en",
@@ -250,7 +310,7 @@ const globalSearchHook = {
 					});
 				}
 			} catch (err) {
-				ctx.logger.error(
+				logger?.error(
 					`[Core] Search index failed for global ${ctx.global}:${recordId}:`,
 					err,
 				);

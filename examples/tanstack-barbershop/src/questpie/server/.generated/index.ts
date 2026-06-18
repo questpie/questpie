@@ -3,8 +3,13 @@
 // Regenerate with: questpie generate
 
 import { createApp, createContextFactory } from "questpie/app";
-import type { AnyCollectionOrBuilder, AnyGlobalOrBuilder, AppDefinition, CollectionAPI, CollectionSelect, DrizzleClientFromQuestpieConfig, InferContextExtensionsFromAppConfig, InferSessionFromAuthConfig, MailerService, Questpie, QuestpieConfig, QueueClient, QueueJobType, RouteParamsFromKey, RouteWithParams, TablesFromConfig } from "questpie/types";
-import type { z } from "zod";
+import "./names.gen";
+import type { AccessContext, AppDefinition, CollectionSelect, GlobalSelect, HookContext, Where } from "questpie/types";
+import type { AppCollections, AppGlobals, AppRoutes } from "./entities.gen";
+import type { _AppQuestpie, AppSession, AppSessionUser } from "./context.gen";
+
+// ── Env (validated before everything else) ─────────────────
+import _env from "../env";
 
 // ── Runtime ────────────────────────────────────────────────
 import _runtime from "../questpie.config";
@@ -57,9 +62,9 @@ import _mig_20260427T093217_eager_blue_phoenix from "../migrations/20260427T0932
 import _mig_20260429T170546_kind_yellow_eagle from "../migrations/20260429T170546_kind_yellow_eagle";
 
 // ── Seeds ──────────────────────────────────────────────────
-import _seed_blogPosts_seed from "../seeds/blog-posts.seed";
-import _seed_demoData_seed from "../seeds/demo-data.seed";
-import _seed_siteSettings_seed from "../seeds/site-settings.seed";
+import _seed_blogPosts from "../seeds/blog-posts";
+import _seed_demoData from "../seeds/demo-data";
+import _seed_siteSettings from "../seeds/site-settings";
 
 // ── Blocks ─────────────────────────────────────────────────
 import { bookingCtaBlock as _bloc_bookingCta } from "../blocks/booking-cta";
@@ -91,269 +96,8 @@ import _adminConfig from "../config/admin";
 import _mcpConfig from "../config/mcp";
 import _openapi from "../config/openapi";
 
-// ════════════════════════════════════════════════════════════
-// TYPES — composed from typeof references (zero inference cost)
-// ════════════════════════════════════════════════════════════
-
-import type { ServiceCustomNamespaceInstances, ServiceInstanceOf, ServiceInstancesInNamespace, ServiceTopLevelInstances, UnionToIntersection } from "questpie/types";
-type _RouteDefinitionWithoutHandler<T> = T extends { mode: "raw" } ? Omit<T, "handler"> & { handler: (args: unknown) => Response | Promise<Response> } : Omit<T, "handler"> & { handler: (args: unknown) => unknown | Promise<unknown> };
-type _Module = (typeof _modules)[number];
-type _MPRaw<K extends string> = UnionToIntersection<_Module extends infer M ? M extends Record<K, infer V> ? V : never : never>;
-type _MP<K extends string> = [_MPRaw<K>] extends [never] ? {} : _MPRaw<K>;
-type _ModuleConfig = _MP<"config">;
-type _AppAppConfig = (_ModuleConfig extends { app: infer TApp } ? TApp : {}) & typeof _appConfig;
-type _AppContextExtensions = Partial<InferContextExtensionsFromAppConfig<_AppAppConfig>>;
-type _AppAuthConfig = (_ModuleConfig extends { auth: infer TAuth } ? TAuth : {}) & typeof _authConfig;
-type _AppSession = NonNullable<InferSessionFromAuthConfig<_AppAuthConfig>> | null;
-
-type _ModuleCollections = _MP<"collections">;
-type _ModuleGlobals = _MP<"globals">;
-type _ModuleJobs = _MP<"jobs">;
-type _ModuleRoutes = _MP<"routes">;
-type _ModuleServices = _MP<"services">;
-type _ModuleFieldTypes = _MP<"fieldTypes">;
-type _ModuleViews = _MP<"views">;
-type _ModuleComponents = _MP<"components">;
-type _ModuleBlocks = _MP<"blocks">;
-type _ModuleMcpTools = _MP<"mcpTools">;
-// Registry category extraction from modules
-type _Registry_Collections = _MP<"collections">;
-type _Registry_Globals = _MP<"globals">;
-type _Registry_Jobs = _MP<"jobs">;
-type _Registry_Routes = _MP<"routes">;
-type _Registry_Services = _MP<"services">;
-type _Registry_Emails = _MP<"emails">;
-type _Registry_FieldTypes = _MP<"fieldTypes">;
-type _Registry_Views = _MP<"views">;
-type _Registry_Components = _MP<"components">;
-type _Registry_Blocks = _MP<"blocks">;
-type _Registry_McpTools = _MP<"mcpTools">;
-
-// Recursive module property extraction (for fields contributed at each level)
-import type { ExtractModuleProp } from "questpie/types";
-
-type _AllModuleFields = ExtractModuleProp<{ modules: typeof _modules }, "fields">;
-
-/** All collections in the app (modules + user, user overrides) */
-export type AppCollections = _ModuleCollections & {
-	appointments: typeof _coll_appointments;
-	barber_services: typeof _coll_barber_services;
-	barbers: typeof _coll_barbers;
-	blog_posts: typeof _coll_blog_posts;
-	pages: typeof _coll_pages;
-	reviews: typeof _coll_reviews;
-	services: typeof _coll_services;
-};
-
-/** All globals in the app (modules + user, user overrides) */
-export type AppGlobals = _ModuleGlobals & {
-	site_settings: typeof _glob_site_settings;
-};
-
-/** All jobs in the app (modules + user, user overrides) */
-export type AppJobs = _ModuleJobs & {
-	notifyBlogSubscribers: Omit<typeof _job_notifyBlogSubscribers, "handler"> & { handler: (args: unknown) => Promise<unknown> };
-	sendAppointmentCancellation: Omit<typeof _job_sendAppointmentCancellation, "handler"> & { handler: (args: unknown) => Promise<unknown> };
-	sendAppointmentConfirmation: Omit<typeof _job_sendAppointmentConfirmation, "handler"> & { handler: (args: unknown) => Promise<unknown> };
-	sendAppointmentReminder: Omit<typeof _job_sendAppointmentReminder, "handler"> & { handler: (args: unknown) => Promise<unknown> };
-};
-
-/** All routes in the app (modules + user, user overrides) */
-export type AppRoutes = _ModuleRoutes & {
-	createBooking: RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_createBooking>, RouteParamsFromKey<"createBooking">>;
-	getActiveBarbers: RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_getActiveBarbers>, RouteParamsFromKey<"getActiveBarbers">>;
-	getAvailableTimeSlots: RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_getAvailableTimeSlots>, RouteParamsFromKey<"getAvailableTimeSlots">>;
-	getRevenueStats: RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_getRevenueStats>, RouteParamsFromKey<"getRevenueStats">>;
-};
-
-/** All service definitions in the app (modules + user, user overrides). */
-type _AppServiceDefinitions = _ModuleServices & {
-	blog: typeof _svc_blog;
-};
-
-/** All services in the app as resolved service instances. */
-export type AppServices = {
-	[K in keyof _AppServiceDefinitions]: ServiceInstanceOf<_AppServiceDefinitions[K]>;
-};
-type _AppDefaultServices = ServiceInstancesInNamespace<_AppServiceDefinitions, "services">;
-type _AppTopLevelServices = ServiceTopLevelInstances<_AppServiceDefinitions>;
-type _AppCustomServiceNamespaces = ServiceCustomNamespaceInstances<_AppServiceDefinitions>;
-
-/** All email templates in the app — use with email.sendTemplate() */
-export type AppEmailTemplates = {
-	appointmentConfirmation: typeof _email_appointmentConfirmation;
-	newBlogPost: typeof _email_newBlogPost;
-};
-
-/** All fieldtypes in the app (modules + user, user overrides) */
-export type AppFieldTypes = _ModuleFieldTypes;
-
-/** All views in the app (modules + user, user overrides) */
-export type AppViews = _ModuleViews;
-
-/** All components in the app (modules + user, user overrides) */
-export type AppComponents = _ModuleComponents;
-
-/** All blocks in the app (modules + user, user overrides) */
-export type AppBlocks = _ModuleBlocks
-	& { [K in typeof _bloc_bookingCta.state.name]: typeof _bloc_bookingCta }
-	& { [K in typeof _bloc_columns.state.name]: typeof _bloc_columns }
-	& { [K in typeof _bloc_contactInfo.state.name]: typeof _bloc_contactInfo }
-	& { [K in typeof _bloc_cta.state.name]: typeof _bloc_cta }
-	& { [K in typeof _bloc_divider.state.name]: typeof _bloc_divider }
-	& { [K in typeof _bloc_gallery.state.name]: typeof _bloc_gallery }
-	& { [K in typeof _bloc_heading.state.name]: typeof _bloc_heading }
-	& { [K in typeof _bloc_hero.state.name]: typeof _bloc_hero }
-	& { [K in typeof _bloc_hours.state.name]: typeof _bloc_hours }
-	& { [K in typeof _bloc_imageText.state.name]: typeof _bloc_imageText }
-	& { [K in typeof _bloc_reviews.state.name]: typeof _bloc_reviews }
-	& { [K in typeof _bloc_services.state.name]: typeof _bloc_services }
-	& { [K in typeof _bloc_spacer.state.name]: typeof _bloc_spacer }
-	& { [K in typeof _bloc_stats.state.name]: typeof _bloc_stats }
-	& { [K in typeof _bloc_team.state.name]: typeof _bloc_team }
-	& { [K in typeof _bloc_text.state.name]: typeof _bloc_text };
-
-/** All mcptools in the app (modules + user, user overrides) */
-export type AppMcpTools = _ModuleMcpTools & {
-	"barbershop.checkAvailability": typeof _mcpTool_barbershop_checkAvailability;
-};
-
-export type AppRouteKeys = "getAvailableTimeSlots" | "getRevenueStats" | "getActiveBarbers" | "createBooking";
-
-type _CollectionsAPI = { [K in keyof AppCollections]: CollectionAPI<AppCollections[K], AppCollections> };
-type _JobHandlerCollections = AppCollections;
-type _JobHandlerCollectionsAPI = _CollectionsAPI;
-type _ExecutionContextJob<T> = T extends { name: infer TName extends string; schema: z.ZodSchema<infer TPayload> } ? QueueJobType<TPayload, TName> : never;
-type _ExecutionContextJobs = {
-	notifyBlogSubscribers: _ExecutionContextJob<typeof _job_notifyBlogSubscribers>;
-	sendAppointmentCancellation: _ExecutionContextJob<typeof _job_sendAppointmentCancellation>;
-	sendAppointmentConfirmation: _ExecutionContextJob<typeof _job_sendAppointmentConfirmation>;
-	sendAppointmentReminder: _ExecutionContextJob<typeof _job_sendAppointmentReminder>;
-};
-type _ExecutionContextServiceDefinitions = {
-	blog: typeof _svc_blog;
-};
-type _ExecutionContextDefaultServices = ServiceInstancesInNamespace<_ExecutionContextServiceDefinitions, "services">;
-type _AppCollectionDefinitions = AppCollections & Record<string, AnyCollectionOrBuilder>;
-type _AppGlobalDefinitions = AppGlobals & Record<string, AnyGlobalOrBuilder>;
-type _AppQuestpieConfig = Omit<QuestpieConfig, "app" | "db" | "collections" | "globals" | "auth"> & {
-	app: (typeof _runtime)["app"];
-	db: (typeof _runtime)["db"];
-	collections: _AppCollectionDefinitions;
-	globals: _AppGlobalDefinitions;
-	auth: _AppAuthConfig;
-	storage: (typeof _runtime)["storage"];
-};
-type _AppQuestpieBase = Questpie<_AppQuestpieConfig>;
-type _AppDb = DrizzleClientFromQuestpieConfig<_AppQuestpieConfig>;
-type _AppGlobalsAPI = _AppQuestpieBase["globals"];
-type _AppStorage = _AppQuestpieBase["storage"];
-type _AppTables = TablesFromConfig<_AppQuestpieConfig>;
-type _AppQuestpie = Omit<_AppQuestpieBase, "collections" | "globals"> & {
-	collections: _CollectionsAPI;
-	globals: _AppGlobalsAPI;
-};
-
-// ── AppContext augmentation — auto-types ALL handlers ──────
-type _AppCoreContext = _AppContextExtensions & {
-	// Infrastructure
-	db: _AppDb;
-	email: MailerService<AppEmailTemplates>;
-	queue: QueueClient<AppJobs>;
-	storage: _AppStorage;
-	kv: _AppQuestpie["kv"];
-	logger: _AppQuestpie["logger"];
-	search: _AppQuestpie["search"];
-	realtime: _AppQuestpie["realtime"];
-
-	// Entity APIs
-	collections: _CollectionsAPI;
-	globals: _AppGlobalsAPI;
-	tables: _AppTables;
-
-	// Request-scoped
-	session: _AppSession;
-	t: (key: string, params?: Record<string, unknown>, locale?: string) => string;
-
-	// User services
-	services: _AppDefaultServices;
-} & _AppCustomServiceNamespaces;
-
-declare global {
-	namespace Questpie {
-		interface AppContext extends _AppCoreContext, _AppTopLevelServices {}
-
-		interface JobHandlerContext {
-			// Infrastructure
-			db: unknown;
-			email: MailerService<AppEmailTemplates>;
-			queue: QueueClient<_ExecutionContextJobs>;
-			storage: _AppStorage;
-			kv: unknown;
-			logger: unknown;
-			search: unknown;
-			realtime: unknown;
-
-			// Entity APIs
-			collections: _JobHandlerCollectionsAPI;
-			globals: Record<string, unknown>;
-			tables: Record<string, unknown>;
-
-			// Request-scoped
-			session: unknown;
-			t: (key: string, params?: Record<string, unknown>, locale?: string) => string;
-
-			// Top-level services (namespace: null)
-			workflows?: "workflows" extends keyof _AppTopLevelServices ? _AppTopLevelServices["workflows"] : never;
-
-			// User services
-			services: _ExecutionContextDefaultServices;
-		}
-
-		interface WorkflowContext {
-			// Infrastructure
-			db: unknown;
-			email: MailerService<AppEmailTemplates>;
-			queue: QueueClient<_ExecutionContextJobs>;
-			storage: _AppStorage;
-			kv: unknown;
-			logger: unknown;
-			search: unknown;
-			realtime: unknown;
-
-			// Entity APIs
-			collections: _JobHandlerCollectionsAPI;
-			globals: Record<string, unknown>;
-			tables: Record<string, unknown>;
-
-			// Request-scoped
-			session: unknown;
-			t: (key: string, params?: Record<string, unknown>, locale?: string) => string;
-
-			// Top-level services (namespace: null)
-			workflows?: "workflows" extends keyof _AppTopLevelServices ? _AppTopLevelServices["workflows"] : never;
-
-			// User services
-			services: _ExecutionContextDefaultServices;
-		}
-
-		interface ServiceCreateContext extends _AppCoreContext {}
-
-		interface Registry {
-			collections: _Registry_Collections;
-			globals: _Registry_Globals;
-			jobs: _Registry_Jobs;
-			routes: _Registry_Routes;
-			services: _Registry_Services;
-			emails: _Registry_Emails;
-			"~fieldTypes": _Registry_FieldTypes & _AllModuleFields;
-			views: _Registry_Views;
-			components: _Registry_Components;
-			blocks: _Registry_Blocks;
-			mcpTools: _Registry_McpTools;
-		}
-	}
-}
+export type * from "./entities.gen";
+export type * from "./context.gen";
 
 /**
  * Select/document type for a collection key — prefer over `Record<string, any>` for docs.
@@ -361,13 +105,49 @@ declare global {
 export type CollectionDoc<K extends keyof AppCollections> = CollectionSelect<AppCollections[K]>;
 
 /**
+ * Select/document type for a global key.
+ */
+export type GlobalDoc<K extends keyof AppGlobals> = GlobalSelect<AppGlobals[K]>;
+
+/**
+ * Typed `where` filter for a collection key — prefer over `Record<string, unknown>`
+ * when building a `where` clause dynamically before a `find`/`findOne` call.
+ */
+export type CollectionWhere<K extends keyof AppCollections> = Where<AppCollections[K], AppConfig>;
+
+/**
+ * Access-rule ctx for shared helpers. `K` narrows `data` to that collection's row.
+ *
+ * CYCLE RULE: import these only from files NOT imported by a collection
+ * (routes, services, jobs, scripts). Helpers imported by collections take
+ * the package-level `AccessContext` from "questpie" instead — see the
+ * type-inference reference.
+ *
+ * @example
+ * ```ts
+ * export async function isOwner(ctx: AccessRuleContext<"posts">) {
+ *   return ctx.data?.authorId === ctx.session?.user.id; // ctx.collections typed
+ * }
+ * ```
+ */
+export type AccessRuleContext<K extends keyof AppCollections | unknown = unknown> =
+	AccessContext<K extends keyof AppCollections ? CollectionDoc<K> : unknown>;
+
+/**
+ * Hook ctx for shared helpers. `K` narrows `data` to that collection's row.
+ * Same cycle rule as `AccessRuleContext`.
+ */
+export type HookRuleContext<K extends keyof AppCollections | unknown = unknown> =
+	HookContext<K extends keyof AppCollections ? CollectionDoc<K> : unknown>;
+
+/**
  * Flat config type for client APIs.
  * Use with `createClient<AppConfig>()` and `createAdminAuthClient<AppConfig>()`.
  * For handler context, use `AppContext` (auto-typed via module augmentation).
  */
 export type AppConfig = {
-	collections: AppCollections & Record<string, AnyCollectionOrBuilder>;
-	globals: AppGlobals & Record<string, AnyGlobalOrBuilder>;
+	collections: AppCollections;
+	globals: AppGlobals;
 	routes: AppRoutes;
 	storage: (typeof _runtime)["storage"];
 	auth: typeof _authConfig;
@@ -377,9 +157,12 @@ export type AppConfig = {
 // RUNTIME — create the app instance
 // ════════════════════════════════════════════════════════════
 
-export const app = await createApp(
+var _appPromise: Promise<unknown> | undefined;
+
+_appPromise = createApp(
 	({
 		modules: _modules,
+		env: _env,
 		collections: {
 			appointments: _coll_appointments,
 			barber_services: _coll_barber_services,
@@ -412,7 +195,7 @@ export const app = await createApp(
 			newBlogPost: _email_newBlogPost,
 		},
 		migrations: [_mig_20260206T174642_gentle_azure_eagle, _mig_20260206T180920_fancy_green_tiger, _mig_20260211T100836_calm_blue_phoenix, _mig_20260218T195452_calm_blue_dragon, _mig_20260218T223923_fancy_blue_panda, _mig_20260218T235924_kind_crimson_falcon, _mig_20260307T122102_eager_red_eagle, _mig_20260307T135142_fancy_orange_tiger, _mig_20260424T221327_bold_yellow_phoenix, _mig_20260427T093217_eager_blue_phoenix, _mig_20260429T170546_kind_yellow_eagle],
-		seeds: [_seed_blogPosts_seed, _seed_demoData_seed, _seed_siteSettings_seed],
+		seeds: [_seed_blogPosts, _seed_demoData, _seed_siteSettings],
 		blocks: {
 			[_bloc_bookingCta.state.name]: _bloc_bookingCta,
 			[_bloc_columns.state.name]: _bloc_columns,
@@ -443,7 +226,12 @@ export const app = await createApp(
 		},
 	}) satisfies AppDefinition,
 	_runtime,
-) as unknown as _AppQuestpie;
+);
+
+export const app = (await _appPromise) as unknown as _AppQuestpie;
+
+/** Validated app environment (from env.ts). */
+export const env = _env;
 
 /** Fully typed QUESTPIE app instance. */
 export type App = typeof app;
@@ -461,6 +249,14 @@ export type App = typeof app;
  * const posts = await ctx.collections.posts.find({});
  * ```
  */
-export const createContext = createContextFactory(app);
+export async function createContext(
+	options?: Parameters<ReturnType<typeof createContextFactory>>[0],
+) {
+	while (!_appPromise) {
+		await new Promise((resolve) => setTimeout(resolve, 0));
+	}
+
+	return createContextFactory((await _appPromise) as _AppQuestpie)(options);
+}
 
 // Factories: import { collection, global, ... } from '#questpie/factories';

@@ -83,7 +83,7 @@ export class PostgresSearchAdapter implements SearchAdapter {
 	get capabilities(): AdapterCapabilities {
 		return {
 			lexical: true,
-			trigram: true, // pg_trgm required, created by ensureExtensions()
+			trigram: true, // requires the pg_trgm extension (provided out-of-band)
 			semantic: false,
 			hybrid: true, // FTS + trigram
 			facets: true,
@@ -1088,14 +1088,6 @@ export class PostgresSearchAdapter implements SearchAdapter {
 			questpie_search: questpieSearchTable,
 			questpie_search_facets: questpieSearchFacetsTable,
 		};
-	}
-
-	/**
-	 * Get required PostgreSQL extensions.
-	 * These will be created before migrations are run.
-	 */
-	getExtensions(): string[] {
-		return ['CREATE EXTENSION IF NOT EXISTS "pg_trgm";'];
 	}
 }
 

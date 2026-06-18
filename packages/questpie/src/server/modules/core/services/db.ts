@@ -50,15 +50,31 @@ export default service({
 		}
 
 		if ("url" in config.db) {
-			const [{ SQL }, { drizzle: drizzleBun }] = await Promise.all([
-				import("bun"),
-				import("drizzle-orm/bun-sql"),
+			app._pgConnectionString = config.db.url;
+
+			// Pick the Postgres driver by runtime so a single `db.url` config runs
+			// on BOTH Bun and Node: Bun → the native zero-dep `bun:sql` client;
+			// Node (e.g. Next.js's server runtime) → `node-postgres` via the
+			// optional `pg` peer dependency. Bun servers keep the bun-sql path.
+			if (typeof (globalThis as { Bun?: unknown }).Bun !== "undefined") {
+				const [{ SQL }, { drizzle: drizzleBun }] = await Promise.all([
+					import("bun"),
+					import("drizzle-orm/bun-sql"),
+				]);
+
+				const bunSqlClient = new SQL({ url: config.db.url });
+				app._dbCleanup = () => bunSqlClient.close({ timeout: 5 });
+				return drizzleBun({ client: bunSqlClient, schema });
+			}
+
+			const [{ default: pg }, { drizzle: drizzlePg }] = await Promise.all([
+				import("pg"),
+				import("drizzle-orm/node-postgres"),
 			]);
 
-			const bunSqlClient = new SQL({ url: config.db.url });
-			app._pgConnectionString = config.db.url;
-			app._dbCleanup = () => bunSqlClient.close({ timeout: 5 });
-			return drizzleBun({ client: bunSqlClient, schema });
+			const pgPool = new pg.Pool({ connectionString: config.db.url });
+			app._dbCleanup = () => pgPool.end();
+			return drizzlePg({ client: pgPool, schema });
 		}
 
 		const { drizzle: drizzlePgLite } = await import("drizzle-orm/pglite");

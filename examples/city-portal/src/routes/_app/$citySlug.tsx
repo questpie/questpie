@@ -22,7 +22,7 @@ import type {
 	FooterLink,
 	NavItem,
 	SocialLink,
-} from "@/questpie/server/globals";
+} from "@/questpie/server/globals/site-settings";
 
 import stylesCss from "@/styles.css?url";
 

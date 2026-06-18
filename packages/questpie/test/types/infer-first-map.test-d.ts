@@ -35,34 +35,56 @@ import type {
 import type { Equal, Expect, Extends } from "./type-test-utils.js";
 
 // ============================================================================
-// Names-only key registry — simulates the codegen-emitted augmentation
-// (factories.ts / module.ts emit exactly this shape: zero type references)
+// Names-only key registry — populated-registry semantics via a LOCAL lens.
+//
+// A `declare global { namespace Questpie { interface CollectionKeys {…} } }`
+// here would be WHOLE-PROGRAM: it pollutes every other package test file and
+// makes the strict `StrictCollectionKey` finite across the entire framework
+// build (breaking all relation surfaces that target names outside this set).
+// The registry is populated PER-APP by codegen, never in a shared package
+// fixture — so the populated-key semantics for the LOOSE `Known*Key` types are
+// proven over a local fake-registry mirror (the same isolation strategy CL-06
+// uses for `StrictCollectionKey`), keeping the real registry EMPTY in-package.
 // ============================================================================
 
-declare global {
-	namespace Questpie {
-		interface CollectionKeys {
-			posts: unknown;
-			authors: unknown;
-		}
-		interface GlobalKeys {
-			settings: unknown;
-		}
-		interface JobKeys {
-			sendNewsletter: unknown;
-		}
-	}
+/** The loose `Known*Key` body, parameterized over a fake registry lens. */
+type KnownOver<R> = [keyof R] extends [never]
+	? string & {}
+	: (keyof R & string) | (string & {});
+
+interface FakeCollectionKeys {
+	posts: unknown;
+	authors: unknown;
+}
+interface FakeGlobalKeys {
+	settings: unknown;
+}
+interface FakeJobKeys {
+	sendNewsletter: unknown;
 }
 
-// Known keys are part of the union…
-type _postsKnown = Expect<Extends<"posts", KnownCollectionKey>>;
-type _authorsKnown = Expect<Extends<"authors", KnownCollectionKey>>;
-type _settingsKnown = Expect<Extends<"settings", KnownGlobalKey>>;
-type _jobKnown = Expect<Extends<"sendNewsletter", KnownJobKey>>;
+// The real loose aliases bind to exactly the `KnownOver<registry>` formula.
+type _knownColMatchesFormula = Expect<
+	Equal<KnownCollectionKey, KnownOver<Questpie.CollectionKeys>>
+>;
+type _knownGlobalMatchesFormula = Expect<
+	Equal<KnownGlobalKey, KnownOver<Questpie.GlobalKeys>>
+>;
+type _knownJobMatchesFormula = Expect<
+	Equal<KnownJobKey, KnownOver<Questpie.JobKeys>>
+>;
+
+// Known keys are part of the union (proven over the populated lens)…
+type _postsKnown = Expect<Extends<"posts", KnownOver<FakeCollectionKeys>>>;
+type _authorsKnown = Expect<Extends<"authors", KnownOver<FakeCollectionKeys>>>;
+type _settingsKnown = Expect<Extends<"settings", KnownOver<FakeGlobalKeys>>>;
+type _jobKnown = Expect<Extends<"sendNewsletter", KnownOver<FakeJobKeys>>>;
 
 // …and arbitrary strings still pass (names only — never strict).
-type _anyStringStillWorks = Expect<Extends<"not_generated", KnownCollectionKey>>;
-type _anyGlobalString = Expect<Extends<"whatever", KnownGlobalKey>>;
+type _anyStringStillWorks = Expect<
+	Extends<"not_generated", KnownOver<FakeCollectionKeys>>
+>;
+type _anyGlobalString = Expect<Extends<"whatever", KnownOver<FakeGlobalKeys>>>;
 
 // ============================================================================
 // relation() — known keys autocomplete, plain strings keep compiling
@@ -129,9 +151,15 @@ type _paramsRoundTrip = Expect<Equal<KeyedParams["postId"], string>>;
 // ContextResolverParams — lazy off AppContext, loose fallback pre-codegen
 // ============================================================================
 
-// Pre-codegen (AppContext not augmented in this package) the fallbacks apply:
+// Pre-codegen (the `Questpie.ContextResolverBase` seam not yet filled) the
+// loose-but-NOT-`any` fallback applies (CL-05 cyc-4): `session`/`db` route
+// through the dedicated `ResolvedContextResolverBase` seam — no longer the full
+// augmented `AppContext` (which held a live re-cycle) and no longer the old
+// blanket `any`. Pre-codegen they degrade to `unknown`, never `any`.
 type ResolverSession = ContextResolverParams["session"];
 type _sessionFallback = Expect<
 	Extends<{ user: { id: string }; session: {} } | null, ResolverSession>
 >;
-type _dbFallbackIsAny = Expect<Equal<ContextResolverParams["db"], any>>;
+type _dbFallbackIsUnknownNotAny = Expect<
+	Equal<ContextResolverParams["db"], unknown>
+>;

@@ -52,6 +52,8 @@ export {
 export type {
 	ExtractModuleProp,
 	ExtractModulePropArr,
+	ExtractModulePropArrOverride,
+	ExtractModulePropOverride,
 	MergeModuleProp,
 	RegistryProp,
 	ServiceCustomNamespaceInstances,
@@ -137,11 +139,14 @@ export type {
 	ResolveRelationsDeep,
 } from "#questpie/shared/type-utils.js";
 export type { CollectionAPI } from "#questpie/server/config/integrated/questpie-api.js";
+export type { Where } from "#questpie/server/collection/crud/index.js";
 export type {
 	InferRouteInput,
 	InferRouteOutput,
 	InferRouteParams,
+	JsonRouteDefinition,
 	JsonRouteHandlerArgs,
+	RawRouteDefinition,
 	RawRouteHandlerArgs,
 	RouteDefinition,
 	RouteParamsFromKey,

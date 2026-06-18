@@ -549,27 +549,6 @@ export async function processDocumentBlocksPrefetch<
 	return result as T;
 }
 
-/**
- * Create an afterRead hook for processing blocks prefetch.
- * This hook can be added to collections that have blocks fields.
- *
- * @example
- * ```ts
- * // collections/pages/index.ts
- * import { collection } from "questpie";
- * import { createBlocksPrefetchHook } from "@questpie/admin/server";
- *
- * export default collection("pages", {
- *   fields: ({ f }) => ({
- *     title: f.text({ required: true }),
- *     content: f.blocks({ allowedBlocks: ["hero", "text"] }),
- *   }),
- *   hooks: {
- *     afterRead: createBlocksPrefetchHook(),
- *   },
- * });
- * ```
- */
 export function createBlocksPrefetchHook() {
 	return async (ctx: {
 		data: Record<string, unknown>;

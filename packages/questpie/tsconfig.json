@@ -20,5 +20,5 @@
 		"src/server/modules/starter/.generated/*.ts",
 		"test/types"
 	],
-	"exclude": ["node_modules", "dist"]
+	"exclude": ["node_modules", "dist", "test/types/clusters", "test/types/__fullapp__"]
 }

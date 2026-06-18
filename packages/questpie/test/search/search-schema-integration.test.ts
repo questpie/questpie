@@ -11,7 +11,7 @@ import { buildMockApp } from "../utils/mocks/mock-app-builder";
 /**
  * Tests for Search Adapter Schema Integration
  *
- * These tests verify that adapters correctly implement getTableSchemas() and getExtensions()
+ * These tests verify that adapters correctly implement getTableSchemas()
  * for migration integration.
  */
 
@@ -42,15 +42,6 @@ describe("Search Schema Integration", () => {
 				);
 			});
 		});
-
-		describe("getExtensions()", () => {
-			it("should return pg_trgm extension", () => {
-				const extensions = adapter.getExtensions();
-
-				expect(extensions).toHaveLength(1);
-				expect(extensions[0]).toBe('CREATE EXTENSION IF NOT EXISTS "pg_trgm";');
-			});
-		});
 	});
 
 	describe("PgVectorSearchAdapter", () => {
@@ -76,20 +67,6 @@ describe("Search Schema Integration", () => {
 				expect(schemas.questpie_search_facets).toBeDefined();
 			});
 		});
-
-		describe("getExtensions()", () => {
-			it("should return pg_trgm and vector extensions", () => {
-				const extensions = adapter.getExtensions();
-
-				expect(extensions).toHaveLength(2);
-				expect(extensions).toContain(
-					'CREATE EXTENSION IF NOT EXISTS "pg_trgm";',
-				);
-				expect(extensions).toContain(
-					'CREATE EXTENSION IF NOT EXISTS "vector";',
-				);
-			});
-		});
 	});
 
 	describe("External Adapter Pattern (no local storage)", () => {
@@ -102,12 +79,10 @@ describe("Search Schema Integration", () => {
 			const externalAdapterPattern = {
 				name: "meilisearch",
 				// No getTableSchemas method - external storage
-				// No getExtensions method - no PostgreSQL extensions needed
 			};
 
 			expect(externalAdapterPattern.name).toBe("meilisearch");
 			expect((externalAdapterPattern as any).getTableSchemas).toBeUndefined();
-			expect((externalAdapterPattern as any).getExtensions).toBeUndefined();
 		});
 	});
 });

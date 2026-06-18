@@ -1,0 +1,394 @@
+---
+title: Hooks
+description: Run your code at each stage of a collection's create, update, read, and delete lifecycle, to transform input, derive fields, enforce rules, and fire side effects only after the write commits.
+---
+
+Hooks let you run logic at precise points in a collection's lifecycle: mutate input before it's validated, compute derived fields right before the write, react to a completed change with the full saved record, and fire jobs or emails only after the row is durable. You declare them once with `.hooks({ ... })`, and they run on **every** operation against that collection, REST, the typed client, the admin UI, and internal server code alike. There is no separate "API hook" vs "admin hook"; one declaration governs them all.
+
+## What it does
+
+- **Transform input before validation**, normalize, trim, and default values in `beforeValidate` by mutating `ctx.data` in place.
+- **Derive fields and run business logic** on validated input in `beforeChange`, slugs, computed columns, cross-field checks, the last chance to change what gets written.
+- **React to a completed write** in `afterChange` with the full saved record, plus `ctx.original` on update so you can diff old versus new.
+- **Shape query output** in `afterRead`, add computed fields, format values, redact.
+- **Guard and clean up deletes** with `beforeDelete` (block, cascade, back up) and `afterDelete` (cleanup, notify).
+- **Fire side effects only after the transaction commits** with `ctx.onAfterCommit`, jobs, emails, webhooks, search indexing.
+- **Abort an operation** by throwing in any `before*` hook.
+
+## Quick start
+
+Add a `.hooks({ ... })` block to any collection. This one generates a slug before the write, then dispatches a notification job, but only once the row is committed:
+
+```ts title="src/questpie/server/collections/posts.ts"
+import { collection } from "#questpie/factories";
+
+function slugify(input: string): string {
+	return input
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, "-")
+		.replace(/^-|-$/g, "");
+}
+
+export const posts = collection("posts")
+	.fields(({ f }) => ({
+		title: f.text(255).required(),
+		slug: f.text(255),
+		body: f.richText(),
+	}))
+	.hooks({
+		// Runs after validation, before the INSERT/UPDATE. Mutate `data` in place.
+		beforeChange: ({ data, operation }) => {
+			if (operation === "create" && data.title && !data.slug) {
+				data.slug = slugify(data.title);
+			}
+		},
+
+		// Runs after the write, INSIDE the CRUD transaction.
+		// Defer the side effect so it only fires once the data is durable.
+		afterChange: ({ data, operation, onAfterCommit, queue }) => {
+			if (operation !== "create") return;
+			onAfterCommit(async () => {
+				await queue.notifyPost.publish({ postId: data.id });
+			});
+		},
+	});
+```
+
+That's the whole surface for most collections: one or two `before*` hooks to shape data, one `afterChange` to react. Every stage and every `ctx` property is in [Full API](#full-api) below.
+
+<Callout type="info">
+	**Hooks merge across calls.** Each call to `.hooks()` *appends* to the existing
+	handlers per stage, it never replaces them. Calling `.hooks()` twice, or
+	composing a collection from modules, accumulates handlers for each stage and
+	runs them in registration order. (Contrast with `.access()`, which overwrites
+	the whole access object on each call.)
+</Callout>
+
+## Example: what each hook receives
+
+On an update, `afterChange` receives both the saved record (`ctx.data`) and the pre-update record (`ctx.original`), so you can diff and act only on a real change:
+
+```ts title="src/questpie/server/collections/posts.ts"
+.hooks({
+	afterChange: ({ data, original, operation, onAfterCommit, email }) => {
+		if (operation === "update" && original && data.status !== original.status) {
+			onAfterCommit(async () => {
+				await email.sendTemplate({
+					template: "postStatusChanged",
+					input: { title: data.title, status: data.status },
+					to: data.authorEmail,
+				});
+			});
+		}
+	},
+})
+```
+
+Written **inline** on `.hooks({ ... })`, `data` / `original` / `operation` are already narrowed to the `posts` row with no annotations:
+
+```ts
+// data:      CollectionDoc<"posts">              (the saved record)
+// original:  CollectionDoc<"posts"> | undefined   (set only on update)
+// operation: "create" | "update"
+```
+
+<Callout type="warn">
+	**`ctx.original` holds the previous record only on update.** It is exposed at
+	all only on `afterChange` and `afterRead`, and is populated (non-`undefined`)
+	*only* for the `update` operation. On those two hooks its type is
+	`CollectionDoc<K> | undefined` on **every** branch (including create / delete /
+	read), so it's not `never`-typed there, it's simply `undefined` at runtime on
+	the non-update operations. Always branch on `ctx.operation === "update"` before
+	reading it.
+
+	On every *other* hook (`beforeOperation`, the `before*` write/read/delete
+	hooks, and `afterDelete`) `ctx.original` is `never`-typed, you can't read it
+	without a cast. (At runtime the delete path does pass the deleted row into
+	`ctx.original` for `beforeDelete` / `afterDelete`, but the type contract hides
+	it; read `ctx.data` for the deleted record instead.)
+</Callout>
+
+## Full API
+
+### Lifecycle stages
+
+Declare any subset of these on `.hooks({ ... })`. Each value is a **single function or an array of functions**, see [Arrays and composition](#arrays-and-composition).
+
+| Stage | Fires on | `ctx.data` | `ctx.original` | Throw aborts? |
+|---|---|---|---|---|
+| `beforeOperation` | create, update, read, delete | input (type depends on op) | none | yes |
+| `beforeValidate` | create, update | **mutable** input | none | yes |
+| `beforeChange` | create, update | **validated** input | none | yes |
+| `afterChange` | create, update | the saved record | record (update only) | **on create only**, propagates + rolls back; on update it's caught + logged |
+| `beforeRead` | read | query options | none | yes |
+| `afterRead` | create, update, read, delete | the record | record (update only) | **yes**, propagates to the caller |
+| `beforeDelete` | delete | record to be deleted | none | yes |
+| `afterDelete` | delete | the deleted record | none | no, caught + logged |
+| `beforeTransition` | workflow transition | the record | none | yes |
+| `afterTransition` | workflow transition | the record | none | no, caught + logged |
+
+`beforeTransition` / `afterTransition` fire only on workflow stage transitions and carry a different context, see [Transition hooks](#transition-hooks). The "Throw aborts?" column is subtle for the `after*` hooks, see [Aborting an operation](#aborting-an-operation) for exactly which ones swallow errors and which propagate.
+
+**Execution order**, per operation:
+
+```
+Create  →  beforeOperation → beforeValidate → beforeChange → [INSERT] → afterChange → afterRead
+Update  →  beforeOperation → beforeValidate → beforeChange → [UPDATE] → afterChange → afterRead
+Delete  →  beforeOperation → beforeDelete   → [DELETE] → afterDelete → afterRead
+Read    →  beforeOperation → beforeRead     → [SELECT] → afterRead
+```
+
+`afterRead` is the only output hook that fires after **all four** operations, branch on `ctx.operation` to discriminate inside it. (The upload feature auto-injects an `afterRead` hook to generate file URLs, and an `afterDelete` hook to remove stored bytes, your hooks run alongside these.)
+
+<Callout type="info">
+	**There is no `beforeCreate` / `beforeUpdate`.** Create and update share the
+	same `beforeValidate` / `beforeChange` / `afterChange` stages, branch on
+	`ctx.operation === "create"` to distinguish them. (Globals are different: they
+	use `beforeUpdate` / `afterUpdate`. See [Globals](#related).)
+</Callout>
+
+### What each stage is for
+
+- **`beforeOperation`**, runs first for **every** operation, including read and delete. Use for logging, rate limiting, or early checks. `ctx.data` is the input (type depends on the operation), `ctx.original` is not available.
+- **`beforeValidate`**, transform, normalize, and default the **mutable** input before the Zod schema runs. Mutate `ctx.data` in place. Create and update only.
+- **`beforeChange`**, business logic on **validated** input: slug generation, derived fields, complex cross-field validation. The last point at which you can change what gets written. Create and update only; `ctx.original` is *not* available here, diff in `afterChange` instead.
+- **`afterChange`**, react to a completed write with the full record. Has `ctx.original` on update for diffing. Runs **inside** the transaction, defer durable side effects with [`onAfterCommit`](#side-effects-onaftercommit).
+- **`beforeRead`**, modify query options / add filters. Here `ctx.data` is the query context, not a row.
+- **`afterRead`**, transform output, add computed fields, format values. Fires after create, update, delete, and read.
+- **`beforeDelete`**, block deletion (throw), cascade, or back up. `ctx.data` is the record about to be deleted.
+- **`afterDelete`**, cleanup, logging, notifications. `ctx.data` is the deleted record.
+
+### The hook context (`ctx`)
+
+Every hook receives one argument, the `HookContext`. It is your `AppContext` (all framework services) plus the per-operation lifecycle fields. Destructure what you need:
+
+```ts
+type HookContext = AppContext & {
+	data: TData;              // see the stage table for what this is
+	original: TOriginal;      // CollectionDoc<K> | undefined on afterChange/afterRead (set only on update); never-typed elsewhere
+	operation: "create" | "update" | "delete" | "read";
+	locale?: string;
+	accessMode?: "user" | "system";
+	onAfterCommit: (callback: () => Promise<void>) => void;
+
+	// Bulk metadata, present only inside updateMany / deleteMany:
+	isBatch?: boolean;
+	recordIds?: (string | number)[];
+	records?: TData[];
+	count?: number;
+};
+```
+
+| `ctx` property | What you get |
+|---|---|
+| `data` | The lifecycle payload for this stage (input for `before*`; the record for `afterChange` / `afterRead` / delete hooks). |
+| `original` | The pre-update record. Typed `CollectionDoc<K> \| undefined` on `afterChange` / `afterRead` (populated only on `update`, `undefined` on the other operations); `never`-typed on every other hook. |
+| `operation` | `"create"` \| `"update"` \| `"delete"` \| `"read"`, narrowed per stage. |
+| `locale` | The active locale for this operation, when set. |
+| `accessMode` | `"user"` (normal) or `"system"` (internal/seed/job code, bypasses access control). |
+| `onAfterCommit` | Queue a callback to run after the outermost transaction commits. See [Side effects](#side-effects-onaftercommit). |
+| `db`, `collections`, `globals` | Database handle and typed access to other collections/globals. |
+| `queue`, `email`, `search`, `realtime`, `kv`, `storage` | Adapter services: queue jobs, email, search index, realtime, KV, file storage. |
+| `session`, `services`, `logger` | The current session, your registered services, and the logger. |
+| `isBatch`, `recordIds`, `records`, `count` | Bulk metadata, present only in `updateMany` / `deleteMany`. See [Bulk operations](#bulk-operations). |
+
+`AppContext` is assembled from your registered adapters and services, so `ctx.session` and `ctx.services` are typed by your app's codegen. The same flat service surface is injected into access rules, routes, and jobs, once you know it in a hook, you know it everywhere.
+
+<Callout type="info">
+	**The email service is `ctx.email`, and you send with `sendTemplate`.** Reach
+	for `ctx.email.sendTemplate({ template, input, to })`, `template` is one of
+	your generated email keys and `input` is its typed props. There is no
+	`ctx.mailer`.
+</Callout>
+
+## Advanced
+
+### Side effects (`onAfterCommit`)
+
+`afterChange`, `afterDelete`, and `afterTransition` run **inside** the CRUD transaction. If you dispatch a job, send an email, or index a document directly from one of them and the transaction later rolls back, you've fired a side effect for data that never landed. (`afterRead` runs *after* the transaction closes, but the same rule applies, keep durable side effects out of hook bodies.)
+
+Use `ctx.onAfterCommit(cb)` to defer the side effect until the **outermost** transaction commits:
+
+```ts title="src/questpie/server/collections/posts.ts"
+.hooks({
+	afterChange: ({ data, operation, onAfterCommit, queue, search }) => {
+		onAfterCommit(async () => {
+			await search.scheduleIndex("posts", String(data.id));
+			if (operation === "create") {
+				await queue.welcomePost.publish({ postId: data.id });
+			}
+		});
+	},
+})
+```
+
+- The callback runs **only after** the data is durably committed.
+- If you call `onAfterCommit` **outside** any transaction, the callback runs **immediately** (fire-and-forget).
+- After-commit callbacks are **not awaited** by the operation, and their errors are logged, not propagated. Don't rely on them to fail the request.
+
+This is exactly how the framework's own realtime and search hooks are written, both subscribe to `afterChange` / `afterDelete` and wrap their broadcast/indexing in `ctx.onAfterCommit`, so events fire only on durable data.
+
+<Callout type="warn">
+	**Don't write to the DB or dispatch directly from an `after*` hook.** Inside
+	an `after*` hook you are already in the CRUD transaction. Dispatching a job,
+	calling `realtime.notify`, or running a second write directly can fire on data
+	that rolls back, and on a single-connection database (PGlite in dev) a
+	context-inherited write can **deadlock** against the open outer transaction.
+	Always wrap durable side effects in `onAfterCommit`.
+</Callout>
+
+### Aborting an operation
+
+Throw inside any `before*` hook to abort. `before*` errors **propagate** and roll the operation back:
+
+```ts title="src/questpie/server/collections/posts.ts"
+import { ApiError } from "questpie/errors";
+
+.hooks({
+	beforeDelete: ({ data }) => {
+		if (data.isProtected) {
+			throw ApiError.badRequest("This record cannot be deleted.");
+		}
+	},
+})
+```
+
+`ApiError` gives you a typed, status-mapped failure (`badRequest` → 400, `forbidden` → 403, `notFound` → 404, …) that serializes cleanly to the client. A plain `throw new Error(...)` also aborts, but is reported as a generic internal error (HTTP 500) rather than a typed one, so prefer `ApiError`. See [Validation](#related) for the full `ApiError` surface.
+
+<Callout type="warn">
+	**Not every `after*` hook swallows its errors, know which ones do.** A throw
+	is caught and logged (`[QUESTPIE] … hook error: …`), not propagated, in only
+	three places: **`afterChange` on update** (single and bulk), **`afterDelete`**,
+	and **`afterTransition`**. The operation still succeeds there.
+
+	But two cases **do propagate** a thrown error, and they will surface to the
+	caller:
+
+	- **`afterChange` on *create*** runs inside the create transaction with no
+	  catch, a throw **rolls the insert back** and fails the request.
+	- **`afterRead` on *every* operation** (create, update, delete, read) runs with
+	  no catch, a throw propagates to the caller, even though the write itself
+	  already committed (so you can get a failed response for data that landed).
+
+	If you need a hook that can never affect the response, use one of the three
+	non-fatal `after*` cases, or, better, do the veto-able work in a `before*`
+	stage and defer everything else with [`onAfterCommit`](#side-effects-onaftercommit),
+	whose callbacks are always non-fatal.
+</Callout>
+
+### Bulk operations
+
+`updateMany` and `deleteMany` run hooks **per record** and attach batch metadata to `ctx`, so you can short-circuit expensive per-row work and reason about the whole batch:
+
+```ts title="src/questpie/server/collections/posts.ts"
+.hooks({
+	afterChange: ({ data, isBatch, recordIds, count, onAfterCommit, queue }) => {
+		if (isBatch) {
+			// This callback still fires once per affected record;
+			// recordIds / count describe the whole batch.
+		}
+		onAfterCommit(async () => {
+			await queue.reindexPost.publish({ id: data.id });
+		});
+	},
+})
+```
+
+- `isBatch` is `true` when the hook runs as part of `updateMany` / `deleteMany`.
+- `recordIds` / `records` / `count` describe the whole batch. `records` semantics: **post-image** on update, **pre-image** on delete.
+
+<Callout type="warn">
+	**Bulk `before*` hooks are *intent*, bulk `afterChange` is *fact*.** In a
+	conditional (`where`-based) `updateMany`, `beforeValidate` and `beforeChange`
+	run on the *pre-image* of every candidate row, they may fire for rows that
+	then lose a concurrent write-time claim and are never actually written.
+	`afterChange` (and the returned records) fire for the **winners only**. So put
+	validation/transform that's safe to run speculatively in `before*`, and
+	anything that must reflect a real committed change in `afterChange`.
+</Callout>
+
+### Transition hooks
+
+If a collection has versioning + a workflow enabled, `beforeTransition` and `afterTransition` fire when a record moves between workflow stages (via `transitionStage`). They receive a **different context** from the CRUD hooks, there is no `data` / `original` / `operation` triple; instead you get the stage move:
+
+```ts title="src/questpie/server/collections/posts.ts"
+.hooks({
+	beforeTransition: ({ data, fromStage, toStage, recordId }) => {
+		if (toStage === "published" && !data.publishedAt) {
+			throw new Error("Set publishedAt before publishing.");
+		}
+	},
+	afterTransition: ({ data, fromStage, toStage, onAfterCommit, queue }) => {
+		onAfterCommit(async () => {
+			await queue.announce.publish({ postId: data.id, stage: toStage });
+		});
+	},
+})
+```
+
+The transition context carries `data` (the record), `recordId`, `fromStage`, `toStage`, an optional `scheduledAt` (set when the transition is scheduled for a future date instead of running now), `locale`, and `accessMode`, plus the usual `AppContext` services and `onAfterCommit`. Throw in `beforeTransition` to abort the transition.
+
+### Arrays and composition
+
+Any stage accepts a **single function or an array**, both are valid:
+
+```ts
+.hooks({
+	beforeChange: [normalizeTitle, computeSlug, stampUpdatedBy],
+})
+```
+
+Because `.hooks()` **merges** per stage, you can split hooks across calls or contribute them from modules, and they all run in registration order:
+
+```ts
+collection("posts")
+	.hooks({ beforeChange: normalizeTitle })   // e.g. module A
+	.hooks({ beforeChange: computeSlug });      // e.g. module B
+// → both run on every change, in order
+```
+
+### Field access vs hooks
+
+To strip or hide a single field by permission, prefer **field access rules** (`access.fields`) or `f.text().inputFalse()` (read-only, drop it from input) / `f.text().outputFalse()` (write-only, drop it from output) over writing a hook that deletes keys, they fold into the same authorization layer and run automatically. Use **hooks for logic** (deriving, reacting, side effects); use **access for authorization**. See [Access control](#related).
+
+## TypeScript
+
+Hooks are fully typed from your collection definition, `ctx.data`, `ctx.original`, and `ctx.operation` narrow per stage with **no annotations** when you write the hook **inline** on `.hooks({ ... })`.
+
+For **shared helpers** in separate files, import the generated `HookRuleContext<K>` alias from `#questpie`, which narrows `data` to that collection's row:
+
+```ts title="src/questpie/server/lib/post-hooks.ts"
+import type { HookRuleContext } from "#questpie";
+
+export function stampSlug(ctx: HookRuleContext<"posts">) {
+	if (ctx.operation === "create" && ctx.data.title && !ctx.data.slug) {
+		ctx.data.slug = ctx.data.title.toLowerCase().replace(/\s+/g, "-");
+	}
+}
+```
+
+`HookRuleContext<K>` is generated into `src/questpie/server/.generated/index.ts` and aliases the package-level `HookContext`, resolving `data` to `CollectionDoc<K>` and typing `ctx.session` / `ctx.collections` through your app's `AppContext`.
+
+<Callout type="warn">
+	**Cycle rule for the generated context aliases.** Import `HookRuleContext` /
+	`AccessRuleContext` **only** from files that are *not* imported by a collection
+	(routes, services, jobs, scripts). A helper that a collection imports must take
+	the package-level `HookContext` / `AccessContext` from `questpie` instead, importing the generated `#questpie` barrel from a collection creates a codegen
+	cycle.
+</Callout>
+
+The raw types live in the `questpie` package if you need them directly:
+
+```ts
+import type { HookContext, HookFunction } from "questpie";
+// HookContext<TData, TOriginal, TOperation>
+// HookFunction<TData, TOriginal, TOperation> = (ctx) => Promise<void> | void
+```
+
+## Related
+
+- **[Access control](/docs/concepts/access-control)**, authorize reads/writes and filter rows; field-level access for hiding columns. Use access for *who*, hooks for *what happens*.
+- **[Validation](/docs/concepts/validation)**, the Zod schema that runs between `beforeValidate` and `beforeChange`; `exclude` / `refine` and field-level `.zod()`; the full `ApiError` surface you throw from `before*` hooks.
+- **[Collections](/docs/concepts/collections)**, where `.hooks()` lives, alongside fields, indexes, access, and admin config.
+- **[Globals](/docs/concepts/globals)**, singletons with their own `beforeUpdate` / `afterUpdate` hook stages.
+- **[Jobs](/docs/concepts/jobs)**, what you dispatch from `onAfterCommit`; the typed `queue.*` services available on `ctx`.

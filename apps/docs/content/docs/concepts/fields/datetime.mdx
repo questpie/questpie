@@ -1,0 +1,144 @@
+---
+title: Datetime field
+description: f.datetime() stores an instant in time as a Postgres timestamp and reads back as a JS Date, with configurable precision and timezone, auto-now defaults for created/updated columns, and comparison operators on the typed where clause.
+---
+
+`f.datetime()` stores a point in time. It maps to a Postgres `timestamp` column, reads back as a real JS `Date`, derives a `z.coerce.date()` schema (so ISO strings and `Date` objects both validate), and exposes comparison operators (`eq`, `gt`, `lte`, `in`, …) on the typed `where` clause. Chain `.autoNow()` for a created-at column or `.autoNowUpdate()` for an updated-at column.
+
+> **Prerequisites:** read [Fields](/docs/concepts/fields) first, this page covers only the `datetime` type. The `f` proxy, the chain-modifier model, and shared modifiers like `.required()` / `.default()` / `.localized()` are taught there.
+
+## What it does
+
+- **Stores an instant as a Postgres `timestamp`**, `timestamp` column with `mode: "date"`, configurable `precision` (0-6 fractional-second digits) and `withTimezone`.
+- **Reads back as a JS `Date`**, the field data type is `Date`, not a string. (Contrast [`f.date()`](/docs/concepts/fields/date), which stores a date-only ISO **string**.)
+- **Coerces on validation at runtime**, the derived schema is `z.coerce.date()`, so a `Date` and an ISO-8601 string are both accepted at runtime and coerced to a `Date` (the static insert type is still `Date`, see [TypeScript](#typescript)).
+- **Auto-timestamps with one method**, `.autoNow()` defaults the column to "now" on insert; `.autoNowUpdate()` rewrites it to "now" on every write.
+- **Filters with comparison operators**, `eq`, `ne`, `gt`, `gte`, `lt`, `lte`, `in`, `notIn`, `isNull`, `isNotNull`, typed against `Date | string`.
+- **Renders a date-time picker** in the admin form.
+
+## Quick start
+
+Use `f.datetime()` inside a `.fields()` callback. The optional config tunes precision and timezone; chain `.autoNow()` / `.autoNowUpdate()` for managed timestamp columns.
+
+```ts title="src/questpie/server/collections/events.ts"
+import { collection } from "#questpie/factories";
+
+export const events = collection("events").fields(({ f }) => ({
+  startsAt: f.datetime().required(),                // timestamp, NOT NULL
+  publishedAt: f.datetime(),                         // nullable instant
+  createdAt: f.datetime().autoNow().inputFalse(),    // set once, on insert
+  updatedAt: f.datetime().autoNowUpdate().inputFalse(), // rewritten on every write
+}));
+```
+
+That gives `events` a `startsAt` column typed `Date` on read, required on insert, validated by `z.coerce.date()`, and filterable with the operators below, plus self-managing `createdAt` / `updatedAt` columns you never set by hand.
+
+<Callout type="info" title="`timestamps: true` already gives you createdAt / updatedAt">
+You rarely hand-write `createdAt` / `updatedAt`. A collection's [`timestamps` option](/docs/concepts/collections#timestamps) (on by default) adds both for you. Declare your own `f.datetime().autoNow()` columns only when you want extra managed timestamps (e.g. `publishedAt`, `archivedAt`) or different names.
+</Callout>
+
+## Constructor argument
+
+`f.datetime()` takes one optional config object. Both keys are optional and have defaults.
+
+| Option | Type | Default | Effect |
+|---|---|---|---|
+| `precision` | `0 \| 1 \| 2 \| 3 \| 4 \| 5 \| 6` | `3` | Fractional-second digits stored in the column. `3` = milliseconds, `0` = whole seconds, `6` = microseconds. |
+| `withTimezone` | `boolean` | `true` | When `true`, uses `timestamptz` (`timestamp with time zone`). |
+
+```ts
+collection("logs").fields(({ f }) => ({
+  occurredAt: f.datetime(),                              // timestamptz, ms precision (defaults)
+  tickAt: f.datetime({ precision: 6 }),                  // microsecond precision
+  localStamp: f.datetime({ withTimezone: false }),       // timestamp (no tz)
+}));
+```
+
+The field data type is always `Date`, and the column is built with Drizzle's `mode: "date"`. The derived Zod schema is `z.coerce.date()` regardless of config.
+
+<Callout type="info" title="Keep `withTimezone: true` unless you have a reason not to">
+The default `timestamptz` stores an unambiguous instant (Postgres normalizes to UTC on write and converts on read), which is what you want for events, audit trails, and anything compared across timezones. Set `withTimezone: false` only for wall-clock values that are intentionally timezone-naive.
+</Callout>
+
+## Chained methods
+
+These two methods are specific to `datetime` (on top of the [shared modifiers](/docs/concepts/fields#shared-methods) every field has). Each returns a new immutable field, so they chain in any order.
+
+| Method | Effect |
+|---|---|
+| `.autoNow()` | Sets a column **default** of `() => new Date()`, the value is populated once, on insert, if you don't provide one. Makes the input optional. |
+| `.autoNowUpdate()` | Injects a `beforeChange` hook that returns `new Date()` on **every** create and update, so the column always reflects the last write. Merges with any existing hooks. |
+
+The canonical pairing is one of each, both hidden from input so callers can't set them:
+
+```ts
+collection("articles").fields(({ f }) => ({
+  createdAt: f.datetime().autoNow().inputFalse(),       // written once
+  updatedAt: f.datetime().autoNowUpdate().inputFalse(), // re-written each save
+}));
+```
+
+<Callout type="info" title="`.autoNow()` is a default; `.autoNowUpdate()` is a hook">
+`.autoNow()` only fills the value when none is given (a column default), so a caller-supplied value wins on insert. `.autoNowUpdate()` overrides on every write via a `beforeChange` hook, a caller-supplied value is discarded. Pair `.autoNowUpdate()` with `.inputFalse()` so the field is read-only and the intent is clear.
+</Callout>
+
+## Filtering, operators
+
+`datetime` uses the **date operator set** (`dateOps`), so every datetime field is filterable with these in a `where` clause. The operand type is `DateInput`, `Date | string`, so you can compare against a `Date` or an ISO string.
+
+| Operator | Operand | Matches |
+|---|---|---|
+| `eq` / `ne` | `Date \| string` | Exact equal / not equal. |
+| `gt` / `gte` | `Date \| string` | After / at-or-after the given instant. |
+| `lt` / `lte` | `Date \| string` | Before / at-or-before the given instant. |
+| `in` / `notIn` | `(Date \| string)[]` | Value is (not) in the list. |
+| `isNull` / `isNotNull` | `boolean` | Column is (not) null. |
+
+```ts
+// Events that start in the next 24 hours, not yet archived:
+const now = new Date();
+const { docs } = await app.collections.events.find({
+  where: {
+    startsAt: { gte: now, lte: new Date(now.getTime() + 86_400_000) },
+    archivedAt: { isNull: true },
+  },
+  orderBy: { startsAt: "asc" },
+});
+```
+
+For the full query language, combining field filters with `AND` / `OR` / `NOT`, pagination, and `orderBy`, see the [query reference](/docs/concepts/relations).
+
+## When to use it
+
+- **`f.datetime()`**, any precise instant: when an event happened or will happen, publish times, expiry times, audit timestamps. This is the right choice whenever you need both a date **and** a time, or need to compare moments across timezones.
+- **`f.datetime().autoNow()`**, an extra created-style timestamp beyond the built-in `createdAt` (e.g. `publishedAt`, `confirmedAt`).
+- **`f.datetime().autoNowUpdate()`**, an extra updated-style timestamp that should track the last write.
+- **Reach for a sibling instead when:** you need a **date only** (no time, no timezone) → [`f.date()`](/docs/concepts/fields/date) (stored as an ISO date string); you need a **time of day only** → [`f.time()`](/docs/concepts/fields/time).
+
+## TypeScript
+
+A datetime field contributes a `Date` to the generated row, insert, and `where` types, no annotation needed. After `questpie generate`, pull the shapes off the collection or the app types:
+
+```ts
+type Event = typeof events.$infer.select;
+//   ^? { id: string; startsAt: Date; publishedAt: Date | null;
+//        createdAt: Date; updatedAt: Date; ... }
+```
+
+```ts
+import type { CollectionDoc, CollectionWhere } from "#questpie/types";
+
+type Event = CollectionDoc<"events">;          // { startsAt: Date; ... }
+type EventFilter = CollectionWhere<"events">;  // { startsAt?: { gte?: Date | string; ... } }
+```
+
+The insert type is `Date` (the value you pass is type-checked as a `Date`), not `Date | string`. The derived `z.coerce.date()` schema additionally coerces an ISO string to a `Date` at **runtime**, so raw JSON / HTTP bodies still validate; that coercion is a runtime behavior and is not reflected in the static insert type. The selected value is always a `Date`. `.required()` makes the field non-null and required on insert; `.autoNow()` / `.default(...)` make the insert field optional (`Date | undefined`). `.inputFalse()` drops the field from the insert/update types entirely (read-only). See [Fields → inferred types](/docs/concepts/fields#example--inferred-types) for how modifiers flow into the generated types.
+
+## Related
+
+- [Fields](/docs/concepts/fields), the `f` proxy, the chain-modifier model, and the shared modifiers (`.required()`, `.default()`, `.inputFalse()`, `.localized()`, …).
+- [`f.date()`](/docs/concepts/fields/date), date-only values, stored as an ISO `string` with its own string operand.
+- [`f.time()`](/docs/concepts/fields/time), time-of-day values; shares the same `dateOps` operator set.
+- [Collections → `timestamps`](/docs/concepts/collections#timestamps), the built-in `createdAt` / `updatedAt` you usually rely on instead of hand-rolling these.
+- [Validation](/docs/concepts/validation), the auto-derived Zod schema and the `.zod()` escape hatch for custom date rules.
+- [Relations](/docs/concepts/relations), the full query language for combining the operators above.

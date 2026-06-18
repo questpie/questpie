@@ -427,7 +427,11 @@ describe("Migration System - DrizzleMigrationGenerator", () => {
 		expect(result2.skipped).toBe(true);
 	});
 
-	test("should emit required search extensions before dependent indexes", async () => {
+	test("should NOT auto-create extensions, but still emit dependent indexes", async () => {
+		// Drizzle-native: generated migrations no longer prepend CREATE EXTENSION
+		// (drizzle generate doesn't emit it, so neither do we). The dependent
+		// trigram index is still emitted; the pg_trgm extension is expected to
+		// already exist on the DB, provided out-of-band (docker-init / managed).
 		const { DrizzleMigrationGenerator } =
 			await import("../../src/server/migration/generator.js");
 
@@ -460,7 +464,6 @@ describe("Migration System - DrizzleMigrationGenerator", () => {
 			fileBaseName: "20250108_search_extension",
 			schema: app.getSchema(),
 			migrationDir: testMigrationDir,
-			extensions: adapter.getExtensions(),
 		});
 
 		expect(result.skipped).toBe(false);
@@ -469,14 +472,12 @@ describe("Migration System - DrizzleMigrationGenerator", () => {
 			join(testMigrationDir, "20250108_search_extension.ts"),
 			"utf8",
 		);
-		const extensionIndex = contents.indexOf(
-			'CREATE EXTENSION IF NOT EXISTS "pg_trgm";',
-		);
-		const trigramIndex = contents.indexOf('CREATE INDEX "idx_search_trigram"');
-		expect(extensionIndex).toBeGreaterThanOrEqual(0);
-		expect(trigramIndex).toBeGreaterThanOrEqual(0);
-		expect(extensionIndex).toBeLessThan(trigramIndex);
+		// No CREATE EXTENSION in the generated migration...
+		expect(contents).not.toContain("CREATE EXTENSION");
+		// ...but the dependent trigram index is still emitted.
+		expect(contents).toContain('CREATE INDEX "idx_search_trigram"');
 
+		// No extensions.<name> op recorded in the snapshot.
 		const snapshot = JSON.parse(
 			readFileSync(
 				join(testMigrationDir, "snapshots", "20250108_search_extension.json"),
@@ -484,63 +485,17 @@ describe("Migration System - DrizzleMigrationGenerator", () => {
 			),
 		);
 		expect(
-			snapshot.operations.some(
-				(operation: any) => operation.path === "extensions.pg_trgm",
+			snapshot.operations.some((operation: any) =>
+				String(operation.path).startsWith("extensions."),
 			),
-		).toBe(true);
-	});
-
-	test("should not re-emit search extensions once present in snapshots", async () => {
-		const { DrizzleMigrationGenerator } =
-			await import("../../src/server/migration/generator.js");
-
-		const adapter = createPostgresSearchAdapter();
-		const posts = collection("posts")
-			.fields(({ f }) => ({
-				title: f.text(255).required(),
-				content: f.textarea(),
-			}))
-			.title(({ f }) => f.title)
-			.searchable({ content: (record) => record.content || "" });
-
-		const def = module({
-			name: "search-extension-repeat-test",
-			collections: { posts },
-		});
-		const app = await createApp(def, {
-			app: { url: "http://localhost:3000" },
-			db: { pglite: pgClient },
-			email: { adapter: new MockMailAdapter() },
-			queue: { adapter: new MockQueueAdapter() },
-			kv: { adapter: new MockKVAdapter() },
-			logger: { adapter: new MockLogger() },
-			search: adapter,
-		});
-
-		const generator = new DrizzleMigrationGenerator();
-		const result1 = await generator.generateMigration({
-			migrationName: "searchExtensionV120250108",
-			fileBaseName: "20250108_search_extension_v1",
-			schema: app.getSchema(),
-			migrationDir: testMigrationDir,
-			extensions: adapter.getExtensions(),
-		});
-		expect(result1.skipped).toBe(false);
-
-		const result2 = await generator.generateMigration({
-			migrationName: "searchExtensionV220250108",
-			fileBaseName: "20250108_search_extension_v2",
-			schema: app.getSchema(),
-			migrationDir: testMigrationDir,
-			extensions: adapter.getExtensions(),
-		});
-		expect(result2.skipped).toBe(true);
-		expect(
-			existsSync(join(testMigrationDir, "20250108_search_extension_v2.ts")),
 		).toBe(false);
 	});
 
-	test("generated search migration runs on a clean database without runtime extension setup", async () => {
+	test("generated search migration runs on a clean DB that already has the extension", async () => {
+		// The framework does not CREATE EXTENSION; the trigram index in the
+		// generated migration applies because pg_trgm is provided out-of-band.
+		// createTestDb() loads pg_trgm at the PGlite level — the test analog of
+		// docker-init / a managed DB shipping the contrib extension.
 		const { DrizzleMigrationGenerator } =
 			await import("../../src/server/migration/generator.js");
 
@@ -575,8 +530,11 @@ describe("Migration System - DrizzleMigrationGenerator", () => {
 				fileBaseName: "20250108_search_extension_fresh",
 				schema: app.getSchema(),
 				migrationDir: testMigrationDir,
-				extensions: adapter.getExtensions(),
 			});
+
+			// The generated migration itself must not create the extension.
+			const contents = readFileSync(`${result.filePath}.ts`, "utf8");
+			expect(contents).not.toContain("CREATE EXTENSION");
 
 			const migrationModule = await import(
 				`${pathToFileURL(`${result.filePath}.ts`).href}?t=${Date.now()}`
@@ -584,6 +542,8 @@ describe("Migration System - DrizzleMigrationGenerator", () => {
 			const runner = new MigrationRunner(app.db, { silent: true });
 			await runner.fresh([migrationModule.default]);
 
+			// pg_trgm is present because createTestDb provided it out-of-band
+			// (docker-init analog), not because the migration created it.
 			const extensionResult = await cleanDb.query(
 				"SELECT extname FROM pg_extension WHERE extname = 'pg_trgm'",
 			);

@@ -4,7 +4,7 @@
 		"questpie": {
 			": any": 561,
 			"as any": 478,
-			"as unknown as": 44,
+			"as unknown as": 45,
 			"@ts-expect-error": 0
 		},
 		"admin": {

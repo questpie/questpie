@@ -1,0 +1,205 @@
+---
+title: Custom Views and Components
+description: Register server-side admin references and pair them with client-side React renderers.
+---
+
+Admin extensions are registry-driven. Server files declare serializable references and config types. Client files declare the React renderers that resolve those references. Codegen connects both sides.
+
+## File conventions
+
+| Server file | Client file | Purpose |
+|---|---|---|
+| `src/questpie/server/views/*.ts` | `src/questpie/admin/views/*.tsx` | Collection list, collection form, global form, or document views. |
+| `src/questpie/server/components/*.ts` | `src/questpie/admin/components/*.tsx` | Reusable component references for icons, badges, cells, actions, dashboard config, and custom UI. |
+| `src/questpie/server/blocks/*.ts` | `src/questpie/admin/blocks/*.tsx` | Visual block definitions and block editor renderers. |
+| `src/questpie/admin/widgets/*.tsx` | Same client target | Custom dashboard widget renderers. |
+| `src/questpie/admin/pages/*.tsx` | Same client target | Custom admin pages addressable from sidebar `page` items. |
+
+Use the same stable name on the server and client. For example, a server `view("kanban", ...)` pairs with a client `view("kanban", ...)`.
+
+## Custom list view
+
+Declare the server-side view and its config type:
+
+```ts title="src/questpie/server/views/kanban.ts"
+import { view } from "@questpie/admin/factories";
+
+type KanbanConfig = {
+	groupBy: string;
+	titleField: string;
+	descriptionField?: string;
+};
+
+export default view<KanbanConfig>("kanban", {
+	kind: "list",
+});
+```
+
+Use it from a collection through the generated `v` proxy:
+
+```ts title="src/questpie/server/collections/tasks.ts"
+import { collection } from "#questpie/factories";
+
+export const tasks = collection("tasks")
+	.fields(({ f }) => ({
+		title: f.text(160).label("Title").required(),
+		status: f
+			.select([
+				{ value: "todo", label: "To do" },
+				{ value: "doing", label: "Doing" },
+				{ value: "done", label: "Done" },
+			])
+			.label("Status")
+			.default("todo"),
+		summary: f.textarea().label("Summary"),
+	}))
+	.list(({ v, f }) =>
+		v.kanban({
+			groupBy: f.status,
+			titleField: f.title,
+			descriptionField: f.summary,
+		}),
+	);
+```
+
+Add the client renderer:
+
+```tsx title="src/questpie/admin/views/kanban.tsx"
+import { type CollectionListViewProps, view } from "@questpie/admin/client";
+
+function KanbanView({ collection, config }: CollectionListViewProps) {
+	return (
+		<div className="grid gap-3">
+			<h1 className="text-lg font-semibold">{collection}</h1>
+			<pre className="rounded-md border p-3 text-xs">
+				{JSON.stringify(config, null, 2)}
+			</pre>
+		</div>
+	);
+}
+
+export default view("kanban", {
+	kind: "list",
+	component: KanbanView,
+});
+```
+
+The example renderer is intentionally small. In a real view, use the list props and the same admin client APIs that built-in views use.
+
+## Custom form view
+
+Form views work the same way, but the server view uses `kind: "form"` and collections or globals reference it from `.form()`.
+
+```ts title="src/questpie/server/views/wizard.ts"
+import { view } from "@questpie/admin/factories";
+
+type WizardConfig = {
+	steps: Array<{
+		title: string;
+		fields: string[];
+	}>;
+};
+
+export default view<WizardConfig>("wizard", {
+	kind: "form",
+});
+```
+
+```ts title="src/questpie/server/collections/products.ts"
+import { collection } from "#questpie/factories";
+
+export const products = collection("products")
+	.fields(({ f }) => ({
+		name: f.text(120).label("Name").required(),
+		summary: f.textarea().label("Summary"),
+		price: f.number().label("Price"),
+	}))
+	.form(({ v, f }) =>
+		v.wizard({
+			steps: [
+				{ title: "Basics", fields: [f.name, f.summary] },
+				{ title: "Pricing", fields: [f.price] },
+			],
+		}),
+	);
+```
+
+## Component references
+
+Server component definitions give the `c` proxy typed props. The admin client renders the matching React component by registry key.
+
+```ts title="src/questpie/server/components/statusPill.ts"
+import { component } from "@questpie/admin/factories";
+
+type StatusPillProps = {
+	text: string;
+	tone?: "default" | "success" | "warning";
+};
+
+export default component<StatusPillProps>("statusPill");
+```
+
+```tsx title="src/questpie/admin/components/statusPill.tsx"
+type StatusPillProps = {
+	text: string;
+	tone?: "default" | "success" | "warning";
+};
+
+export default function StatusPill({
+	text,
+	tone = "default",
+}: StatusPillProps) {
+	const className =
+		tone === "success"
+			? "bg-green-50 text-green-700"
+			: tone === "warning"
+				? "bg-amber-50 text-amber-700"
+				: "bg-muted text-muted-foreground";
+
+	return (
+		<span className={`inline-flex rounded px-2 py-1 text-xs ${className}`}>
+			{text}
+		</span>
+	);
+}
+```
+
+Then use the component reference from admin config:
+
+```ts title="src/questpie/server/collections/orders.ts"
+export const orders = collection("orders")
+	.fields(({ f }) => ({
+		number: f.text(80).label("Order number").required(),
+		status: f
+			.select([
+				{ value: "new", label: "New" },
+				{ value: "paid", label: "Paid" },
+				{ value: "shipped", label: "Shipped" },
+			])
+			.label("Status"),
+	}))
+	.admin(({ c }) => ({
+		label: "Orders",
+		icon: c.icon("ph:shopping-cart"),
+	}))
+	.actions(({ a, c }) => ({
+		custom: [
+			a.action({
+				id: "mark-priority",
+				label: "Mark priority",
+				icon: c.statusPill({ text: "Priority", tone: "warning" }),
+				handler: () => ({
+					type: "success",
+					toast: { message: "Priority marker applied" },
+				}),
+			}),
+		],
+	}));
+```
+
+## Registry rules
+
+- Server config must stay serializable. Return component references, view names, fields, strings, numbers, booleans, arrays, objects, or server callbacks where the API explicitly accepts them.
+- Do not return React elements from server files. Put React in `src/questpie/admin/**`.
+- The factory string is the identity. Renaming a file does not rename `view("kanban")` or `component("statusPill")`.
+- Rerun codegen after adding or renaming any server or admin-client registry file.

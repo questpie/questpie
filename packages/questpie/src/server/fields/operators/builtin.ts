@@ -29,9 +29,94 @@ import {
 import type { DateInput } from "#questpie/shared/type-utils.js";
 
 import { operator } from "../types.js";
-import type { CollectionWherePlaceholder } from "../types.js";
+import type {
+	CollectionWherePlaceholder,
+	ExtractOperatorParamType,
+} from "../types.js";
 import { jsonbPathRef, textArray } from "./jsonb-sql.js";
 import { extendOperatorSet, operatorSet } from "./operator-set.js";
+
+// ============================================================================
+// WHERE-input value maps — the filter shape a field exposes, decoupled from
+// both the stored `data` AND the runtime operator-set singleton.
+//
+// The runtime operator-set singletons (`selectSingleOps`, `selectMultiOps`,
+// `basicOps`, …) hardcode their value types (`string`, `string[]`, `unknown`)
+// because at runtime the SQL builder only needs the operator FUNCTIONS, not
+// precise value types. But the WHERE-input TYPE a caller sees must depend on the
+// field's data (a select narrows to its literal union, a `number[]` filters on
+// `number`, a typed json on its shape) WITHOUT touching `data`-derived select.
+//
+// A field declares its where-input once, at its `FieldState.whereInput` seam (a
+// plain op-name → value map). `V2FieldWhere` prefers `whereInput` when present,
+// else falls back to deriving values from `operators.column` (text/number/date/
+// boolean/relation keep their singleton — dates stay `DateInput`, no regression).
+//
+// The map keeps each value in a COVARIANT property position (not a function
+// parameter), so `Field<infer S extends SelectFieldState>` inference — which
+// matches a narrow `whereInput` against the wide `FieldState` constraint — is not
+// rejected by operator-function contravariance.
+// ============================================================================
+
+/**
+ * Scalar where-input value map (eq/ne/in/notIn membership + null checks),
+ * parameterized by the scalar filter value `TValue`. Used by `select` (value =
+ * the literal union).
+ */
+export type ScalarWhereInput<TValue> = {
+	eq: TValue;
+	ne: TValue;
+	in: TValue[];
+	notIn: TValue[];
+	isNull: boolean;
+	isNotNull: boolean;
+};
+
+/**
+ * Array where-input value map, parameterized by the INNER element filter value
+ * `TItem`. Whole-array equality + structural membership (`containsAll`/
+ * `containsAny` take `TItem[]`, the per-element `contains` takes a single
+ * `TItem`), with `length`/`isEmpty` staying scalar. Used by `.array()`.
+ */
+export type ArrayWhereInput<TItem> = {
+	contains: TItem;
+	containsAll: TItem[];
+	containsAny: TItem[];
+	eq: TItem[];
+	isEmpty: boolean;
+	isNotEmpty: boolean;
+	length: number;
+	isNull: boolean;
+	isNotNull: boolean;
+};
+
+/**
+ * Raw-json where-input value map, parameterized by the json filter value `T`
+ * (an untyped `f.json()` → `JsonValue`; a typed `f.json<Shape>()` → `Shape`).
+ * Mirrors `basicOps`' keys but with a precise value instead of `unknown`.
+ */
+export type JsonWhereInput<T> = {
+	eq: T;
+	ne: T;
+	in: T[];
+	notIn: T[];
+	isNull: boolean;
+	isNotNull: boolean;
+};
+
+/**
+ * A field's SCALAR where-value: its `whereInput.eq` when the field declares one
+ * (select → its literal union), else the `eq` operator's param type off its
+ * operator set (number → `number`, text → `string`, datetime → `DateInput`).
+ * Used to derive an array field's element filter value from its inner field.
+ */
+export type ElementWhereValueOf<TInner> = TInner extends {
+	whereInput: { eq: infer V };
+}
+	? V
+	: TInner extends { operators: { column: { eq: infer TFn } } }
+		? ExtractOperatorParamType<TFn>
+		: never;
 
 // ============================================================================
 // String Operators
@@ -141,6 +226,38 @@ export const dateOps = operatorSet({
 		lte: operator<DateInput, unknown>((col, value) => lte(col, value)),
 		in: operator<DateInput[], unknown>((col, values) => inArray(col, values)),
 		notIn: operator<DateInput[], unknown>((col, values) =>
+			notInArray(col, values),
+		),
+		isNull: operator<boolean, unknown>((col, value) =>
+			value ? isNull(col) : isNotNull(col),
+		),
+		isNotNull: operator<boolean, unknown>((col, value) =>
+			value ? isNotNull(col) : isNull(col),
+		),
+	},
+});
+
+/**
+ * Operators for `date` fields (ISO date STRINGS, column mode "string").
+ *
+ * Unlike `dateOps` (operand `DateInput = Date | string`, used by datetime/time
+ * whose `data` is `Date`), a `date` field's `data` is `string` and its zod
+ * schema (`z.string().date()`) rejects both `Date` objects and full-ISO strings.
+ * So its WHERE operand is narrowed to `string` — establishing create === where
+ * symmetry on `string` (CL-11 sub-fix B). Runtime comparisons are identical to
+ * `dateOps`; only the type-level operand differs.
+ */
+export const dateStringOps = operatorSet({
+	jsonbCast: "timestamp",
+	column: {
+		eq: operator<string, unknown>((col, value) => eq(col, value)),
+		ne: operator<string, unknown>((col, value) => ne(col, value)),
+		gt: operator<string, unknown>((col, value) => gt(col, value)),
+		gte: operator<string, unknown>((col, value) => gte(col, value)),
+		lt: operator<string, unknown>((col, value) => lt(col, value)),
+		lte: operator<string, unknown>((col, value) => lte(col, value)),
+		in: operator<string[], unknown>((col, values) => inArray(col, values)),
+		notIn: operator<string[], unknown>((col, values) =>
 			notInArray(col, values),
 		),
 		isNull: operator<boolean, unknown>((col, value) =>

@@ -1,0 +1,332 @@
+---
+title: Modules
+description: A module is a plain, static data object that contributes collections, globals, jobs, routes, services, config, and even codegen plugins to your app, the unit QUESTPIE uses to ship batteries (admin, OpenAPI) and the unit you publish to share your own.
+---
+
+A **module** is a plain data object that bundles up a slice of an app, collections, globals, jobs, routes, services, migrations, seeds, backend messages, and config, so it can be added to a project in one line. You list the modules you depend on in `modules.ts`, run codegen, and every entity they contribute is merged into your typed app: `app.collections.*`, the admin UI, REST, the client. Modules are how QUESTPIE ships its own batteries (`@questpie/admin`, `@questpie/openapi`), and how you publish reusable functionality of your own. Crucially, a module is **static plain data**, no factory functions run inside it, and the framework's own built-in modules use the exact same shape your code would.
+
+## What it does
+
+- **Bundles a feature into one dependency.** A module packs collections, globals, jobs, routes, services, migrations, seeds, messages, and `config` into a single object you add to `modules.ts`, no per-entity wiring.
+- **Auto-wires its file conventions.** A module carries its own codegen `plugin`, so adding it to `modules.ts` registers its discovery rules and generated output, you never touch `questpie.config.ts`.
+- **Merges depth-first into your app.** Dependencies resolve before dependents; later modules override earlier ones by key. The result is one flat, typed app where module entities sit beside yours.
+- **Stays composable, not magic.** Module-contributed types (a collection, an auth `role`) surface in your typed context, modules are visible, not hidden behind imperative registration.
+- **Same shape as userland.** Core, `@questpie/admin`, and a module you publish all use the one `ModuleDefinition` shape and the same `packageConfig` build, there are no privileged internal module APIs.
+- **Authored as static data.** You write a module with the `module()` identity factory (for hand-authored ones) or generate it from file convention with `packageConfig()` (for packages), never with runtime logic inside.
+
+## Quick start
+
+You consume modules far more often than you author them. To depend on a pre-built module, import it and add it to your `modules.ts` array:
+
+```ts title="src/questpie/server/modules.ts"
+import { adminModule } from "@questpie/admin/modules/admin";
+import { openApiModule } from "@questpie/openapi";
+
+// Pre-built modules this project depends on.
+const modules = [adminModule, openApiModule] as const;
+export default modules;
+```
+
+Then regenerate the typed app:
+
+```bash
+questpie generate   # pre-passes modules.ts, merges every module's entities into .generated/
+```
+
+That one array gives you the admin panel (`@questpie/admin` contributes collections, routes, an admin config file, and its codegen plugin) and OpenAPI/Scalar docs at `/api/docs` (`@questpie/openapi`), with nothing added to `questpie.config.ts`.
+
+To author your **own** module, to group a feature, or as the seed of a publishable package, use the `module()` identity factory. It returns the object unchanged; it exists purely so TypeScript captures the literal shape:
+
+```ts title="src/questpie/server/blog-module.ts"
+import { collection } from "#questpie/factories";
+import { module } from "questpie/app";
+
+export const blogModule = module({
+	name: "blog", // unique, modules de-dupe by name
+	collections: {
+		posts: collection("posts").fields(({ f }) => ({
+			title: f.text().required(),
+			body: f.richText(), // richText is a module-contributed field, see callout
+		})),
+	},
+	messages: { en: { "blog.published": "Published" } },
+});
+```
+
+Add `blogModule` to `modules.ts` like any other, run `questpie generate`, and `app.collections.posts` exists.
+
+<Callout
+	type="info"
+	title="`module` from `questpie/app`, `collection` from `#questpie/factories`"
+>
+	`module()` is exported from both `questpie` and the lighter `questpie/app`
+	barrel, the starter templates use `questpie/app`. It is a pure **identity**
+	function: it returns your definition unchanged and runs no code, so it adds
+	nothing at runtime. Its only job is type inference. `collection()`, on the
+	other hand, comes from your generated **`#questpie/factories`** factory, *not*
+	`questpie/app`, which doesn't re-export it, because that's the import that
+	knows your enabled modules, so module-contributed field types like
+	`f.richText()` (added by `@questpie/admin`) and `f.blocks()` appear on `f`.
+	The bare `collection()` from `questpie` only sees builtin fields.
+</Callout>
+
+## What a module contributes
+
+A module is a `ModuleDefinition`, a static plain object. Every key beyond `name` is optional, and each maps to one category of contribution that gets merged into your app:
+
+```ts
+export interface ModuleDefinition {
+	name: string; // unique, required
+	modules?: ModuleDefinition[]; // dependency modules (resolved first)
+	collections?: Record<string, AnyCollectionOrBuilder>;
+	globals?: Record<string, AnyGlobalOrBuilder>;
+	jobs?: Record<string, JobDefinition<any, any>>;
+	routes?: Record<string, RouteDefinition>;
+	fields?: Record<string, any>; // custom field types (extend the `f` proxy)
+	services?: Record<string, ServiceBuilder<any>>;
+	migrations?: Migration[]; // concatenated with others
+	seeds?: Seed[]; // concatenated with others
+	messages?: Record<string, Record<string, string>>; // backend i18n, deep-merged per locale
+	config?: ResolvedAppStateConfig; // the config bucket (config/*.ts files)
+	plugin?: CodegenPlugin | CodegenPlugin[]; // codegen-only, see below
+	[key: string]: unknown; // open: plugins add keys via declaration merging
+}
+```
+
+| Key           | Contributes                                                   | Merge across modules                      |
+| ------------- | ------------------------------------------------------------- | ----------------------------------------- |
+| `name`        | The unique module identifier (required).                      | de-dup key (last wins)                    |
+| `modules`     | Dependency modules, resolved depth-first **before** this one. | flattened into the tree                   |
+| `collections` | Collections, keyed by name.                                   | override by key                           |
+| `globals`     | Globals, keyed by name.                                       | override by key                           |
+| `jobs`        | Job definitions, keyed by name.                               | override by key                           |
+| `routes`      | Route / function definitions, keyed by path.                  | override by key                           |
+| `fields`      | Custom field types that appear on the `f` proxy.              | override by key                           |
+| `services`    | Services, keyed by name.                                      | override by key                           |
+| `migrations`  | Migrations.                                                   | **concatenated**                          |
+| `seeds`       | [Seeds](/docs/concepts/seeds).                                | **concatenated**                          |
+| `messages`    | Backend messages keyed by locale.                             | **deep-merged** per locale                |
+| `config`      | The config bucket, each `config/<name>.ts` file as one key.   | merged per sub-key                        |
+| `plugin`      | Codegen plugin(s) the module ships.                           | **codegen-only**, never merged at runtime |
+
+The trailing `[key: string]: unknown` index signature is what lets module **packages** extend the shape: `@questpie/admin`'s generated module carries `listViews`, `formViews`, `components`, `blocks`, `sidebar`, `dashboard`, `branding`, and `adminLocale` keys, and they merge into your app the same way. These are concrete properties codegen **derives** from the package's file convention (e.g. `listViews` / `formViews` are produced by `filterViewsByKind`, exported as named type aliases like `AdminViews` from the generated `module.ts`); they satisfy `ModuleDefinition` purely through that index signature, there's no `declare module "questpie" { interface ModuleDefinition { … } }` augmenting the interface. You never set these by hand, they come from the package's codegen plugin.
+
+<Callout
+	type="warn"
+	title="A module is static data, no factory functions inside"
+>
+	A `ModuleDefinition` is plain, serializable-shaped data: maps of already-built
+	definitions, arrays, and config objects. It does **not** run logic at load,
+	there is no `setup()`, no constructor, no runtime-options callback. This is
+	deliberate: codegen reads the shape by `typeof import(...)`, which only stays
+	stable if nothing executes. Build your collections/jobs/services with their
+	own factories and put the **results** in the module.
+</Callout>
+
+## How modules merge into your app
+
+You declare the modules you depend on in `modules.ts` (covered in [Configuration → `modules.ts`](/docs/concepts/configuration)). Codegen reads that file in a dedicated **pre-pass** before the rest of discovery, and folds every module's contributions into one flat app.
+
+The traversal is **depth-first, dependencies first**. A module names its own dependencies in its `modules` key, and those are flattened ahead of it:
+
+```ts title="how @questpie/admin declares its dependency (packages/admin/src/server/modules/admin/modules.ts)"
+import { starterModule } from "questpie";
+
+// The admin module depends on the starter module (auth collections + assets).
+export default [starterModule] as const;
+```
+
+So if your `modules.ts` is `[adminModule, openApiModule]`, the effective resolved order is `starterModule` (admin's dependency) → `adminModule` → `openApiModule` → **your own files last**. Two rules govern the merge:
+
+- **Override by key, last wins.** For keyed categories (`collections`, `globals`, `jobs`, `routes`, `services`, `fields`, `config` sub-keys), a later contributor replaces an earlier one under the same key. Your app files come last, so they always win, that's how you extend a module-provided collection (e.g. `collection("user").merge(starter.collections.user)`).
+- **De-dup by `name`, last occurrence wins.** If the same module appears twice in the resolved tree (e.g. two modules both depend on `starterModule`), it's included once.
+
+A few categories don't override, they **accumulate**: `migrations` and [seeds](/docs/concepts/seeds) are concatenated across all modules, and `messages` are deep-merged per locale (a later module overrides individual keys, not the whole locale).
+
+`config` is keyed by config file name and merged per sub-key across the whole resolved module tree. This includes nested modules. For auth, the generated type fold reads every `config.auth` contribution from dependencies first, then the app's `config/auth.ts` on top. In an admin app, `adminModule` depends on `starterModule`, and the starter auth config contributes Better Auth's `admin()` plugin. That plugin is what makes `session.user.role` part of `AppSessionUser`.
+
+```ts title="src/questpie/server/modules.ts"
+import { adminModule } from "@questpie/admin/modules/admin";
+
+export default [adminModule] as const;
+```
+
+```ts
+// After `questpie generate`, this must compile in handlers and access rules.
+({ session }) => session?.user.role === "admin";
+```
+
+If a module contributes auth, fields, services, routes, or config that affects generated types, it must be a static entry in `modules.ts` or nested under another static module. Do not hide it behind runtime conditions or a factory whose returned plugin/config shape changes by environment; codegen needs to know what is in the app before runtime.
+
+<Callout type="info" title="Your app files always win">
+	Because module resolution runs first and your own `collections/`, `globals/`,
+	`routes/` (etc.) are discovered last, anything you define under the same key
+	as a module **overrides** the module's version. This is the mechanism behind
+	extending a module-provided collection: import its builder, `.merge()` it, add
+	your fields, and re-export under the same key. See [Collections → merging
+	builders](/docs/concepts/collections).
+</Callout>
+
+## The `plugin` key, how a module ships its file conventions
+
+The one key that is **not** merged into your runtime app is `plugin`. A module can carry one or more `CodegenPlugin`s, and codegen extracts them in a pre-pass, this is how a module package contributes its **file-convention discovery** (which directories to scan, what to generate) without you registering anything in `questpie.config.ts`.
+
+There are two real patterns, both from the framework's own modules. A hand-authored module sets `plugin` inline:
+
+```ts title="@questpie/openapi (packages/openapi/src/server.ts:231)"
+import { module } from "questpie";
+import { openApiPlugin } from "./plugin.js";
+
+export const openApiModule = module({
+	name: "questpie-openapi",
+	plugin: openApiPlugin(), // codegen-only, extracted, never merged at runtime
+	routes: {
+		"openapi.json": openApiRoute(),
+		docs: docsRoute(),
+	},
+});
+```
+
+A codegen-**generated** module (built from file convention with `packageConfig`, below) attaches its plugin after the fact:
+
+```ts title="@questpie/admin (packages/admin/src/server/modules/admin/index.ts:43)"
+import _generatedModule from "./.generated/module.js";
+import { adminPlugin } from "../../plugin.js";
+
+// The generated module is static data; attach the codegen plugin so
+// extractPluginsFromModules auto-discovers it from modules.ts.
+export const adminModule = Object.assign(_generatedModule, {
+	plugin: adminPlugin(),
+});
+```
+
+At codegen time, `extractPluginsFromModules` walks the module tree **depth-first** (the same order as the runtime merge), collects every `plugin`, and de-dups by plugin `name` (**first occurrence wins**). Those plugins are merged _after_ any plugins you registered directly in `runtimeConfig({ plugins })`, so a config-level plugin wins a name collision.
+
+<Callout type="warn" title="`plugin` is excluded from the runtime merge">
+	The `plugin` key is read **only** at codegen time. It is never folded into
+	`app.state` and never reaches a running request. That separation is what lets
+	`[adminModule, openApiModule]` in `modules.ts` be enough, adding the module
+	registers its conventions *and* its entities in one step, with no parallel
+	`plugins: [...]` list to keep in sync.
+</Callout>
+
+The plugin itself, what categories and discovery it declares, and how you write one, is covered in its own pages: see [Building a plugin](/docs/extend/build-a-plugin) for the authoring loop and [Codegen](/docs/extend/codegen) for the full `CodegenPlugin` API. A short treatment of how a module _ships_ one is [below](#shipping-a-codegen-plugin).
+
+## The static-module pattern (`packageConfig`)
+
+When you publish an npm **package** that ships modules (the way `@questpie/admin` does), you don't hand-write the `module()` object and re-export every entity by hand. Instead you describe the package once with `packageConfig()` and let `questpie generate` build a static `.generated/module.ts` per subdirectory, from the _same file convention_ a normal app uses (`collections/`, `globals/`, `routes/`, `config/*.ts`, …).
+
+```ts title="questpie.config.ts (inside a module package)"
+import { packageConfig } from "questpie/cli";
+import { myPlugin } from "./src/server/plugin.js";
+
+export default packageConfig({
+	modulesDir: "src/server/modules", // each subdir → one module
+	modulePrefix: "questpie", // dir "admin" → module "questpie-admin"
+	plugins: [myPlugin()], // codegen plugins shared across every module
+});
+```
+
+In package mode, `questpie generate` scans `modulesDir/*`, derives each module's `name` as `${modulePrefix}-${dirName}`, and runs codegen in **module mode** for each subdirectory, emitting `.generated/module.ts` (a static `ModuleDefinition`), plus a `registries.ts` when there are type augmentations. Only those generated `module.ts` files ship in the package; `packageConfig` itself is dev-only and never distributed. `PackageConfig` is `{ __type, modulesDir, modulePrefix?, plugins? }` (`modulePrefix` defaults from `package.json` name).
+
+This is the QUESTPIE extensibility principle made concrete: **the framework's own built-in modules are built with the exact same `packageConfig` + file convention a userland package would use.** The core itself is configured with `packageConfig({ modulesDir: "src/server/modules", modulePrefix: "questpie" })`, `core` and `starter` are just modules in that directory. There is no privileged internal module API.
+
+A generated module is the static object you'd otherwise write by hand:
+
+```ts title="a generated .generated/module.ts (abridged, questpie-starter)"
+import _coll_user from "../collections/user";
+import _appConfig from "../config/app";
+import _authConfig from "../config/auth";
+
+const _module = {
+	name: "questpie-starter" as const,
+	collections: { user: _coll_user /* … */ },
+	jobs: {
+		/* … */
+	},
+	config: { app: _appConfig, auth: _authConfig },
+	// …
+};
+export default _module;
+```
+
+<Callout
+	type="info"
+	title="`packageConfig` is for building packages, not consuming them"
+>
+	You only reach for `packageConfig()` when **publishing** a module package.
+	Consuming a module is just importing it into `modules.ts`. The CLI factory
+	lives in `questpie/cli` (alongside `config()`), and importing `questpie/cli`
+	is side-effect-free, command parsing is guarded by `import.meta.main`, so a
+	config file can import `packageConfig` without accidentally running a CLI
+	command.
+</Callout>
+
+## Module visibility & ejecting
+
+QUESTPIE keeps modules **composable** (you install one and get batteries) without making them **magic** (hidden contributions you can't see). The guiding principle is _discoverability over magic_: a module contributing a collection or an auth field is fine, a module doing it _invisibly_ is the thing to avoid.
+
+Two consequences you'll feel:
+
+- **Module-contributed types surface in your context.** When the starter module's `config/auth.ts` adds the Better Auth `admin()` plugin (giving `user.role`), that field shows up in your typed session, module contributions are visible at the type level, not erased.
+- **Ejecting is a rare escape hatch, not the default.** If you ever need to _own_ one definition a module provides (to fork it permanently), the model favors copying that single definition into your app rather than carrying copies of everything. The default stays: keep the module, override the one key you care about via the [merge mechanism](#how-modules-merge-into-your-app).
+
+The reason modules stay first-class (rather than scaffolding every definition into your repo, Payload-style) is **reuse and type performance**: a third-party `@questpie/stripe` you install can contribute collections and config you never copy, and codegen's `typeof`-based emit is what keeps a large typed app fast. The cost, opacity, is paid down by visibility (typed contributions), not by abandoning modules.
+
+<Callout type="warn" title="Don't replace a module's collection, extend it">
+Modules like the admin/starter pair contribute the `user` collection (it carries auth columns + admin config). Redefining `user` from scratch under the same key silently drops everything the module set up. Instead, import the module's builder and extend it: `collection("user").merge(starter.collections.user).fields(({ f }) => ({ … }))`, `.merge()` preserves the module's fields, hooks, and admin config, and your fields layer on top.
+</Callout>
+
+## Shipping a codegen plugin
+
+A module's `plugin` is a `CodegenPlugin`, the object that teaches codegen new **file conventions** (which directories become which categories), wraps the builders with typed methods (`.admin()`, `.list()`), and contributes generated output. Most modules never carry one, they only contribute entities, but it's the seam that powers `@questpie/admin` and `@questpie/openapi`.
+
+Authoring a `CodegenPlugin` is documented in full on its own pages; this page only covers how a module _attaches_ one (the inline-vs-`Object.assign` patterns [above](#the-plugin-key--how-a-module-ships-its-file-conventions)) and how extraction merges them (`extractPluginsFromModules`, first-occurrence-wins). For the contract itself, go to:
+
+- **[Building a plugin](/docs/extend/build-a-plugin#the-codegen-plugin-contract)**, the build-your-own loop: the `CodegenPlugin` contract, targets, categories, discover patterns, builder extensions, scaffolds, and validators, plus the smaller per-feature seams (custom field type, operator, adapter, block) you'll reach for far more often.
+- **[Codegen → the `CodegenPlugin` API](/docs/extend/codegen#extending-codegen-the-codegenplugin-api)**, the reference for every type: `CodegenTargetContribution`, `CategoryDeclaration`, `DiscoverPattern`, and the registry/scaffold surfaces.
+
+All of these types are exported from **`questpie/codegen`**, the public entry for plugin authors.
+
+## Gotchas
+
+The footguns most likely to bite when working with modules:
+
+- **The bare `collection()` from `questpie` only sees builtin fields.** Inside a module, use the same `#questpie/factories` import your app does so module-contributed field types (`richText`, `blocks`) appear on `f`. See [Collections → quick start](/docs/concepts/collections).
+- **`migrations` / `seeds` concatenate; everything keyed overrides.** If two modules both contribute a migration or seed, you get both. Keep seed ids globally unique. If two contribute a `posts` collection, the later one wins outright, there's no automatic merge of keyed entries (that's what `.merge()` on the builder is for).
+- **De-dup is by `name`, not by reference.** Two different module objects with the same `name` collapse to one (last occurrence wins). Give every module a unique, stable `name`.
+- **A module's `plugin` runs at codegen, its entities at runtime.** If a module's entities appear but its file conventions don't (or vice-versa), check that the package both ships the entities _and_ attaches the `plugin`, they travel together but are processed in different phases.
+
+## TypeScript
+
+The module and plugin types are exported for when you author a module or a plugin:
+
+```ts
+import type {
+	ModuleDefinition, // the static module shape
+	AppModuleInput, // the looser shape createApp() accepts
+	AppStateConfig, // the plugin-extensible config bucket
+} from "questpie";
+
+import type {
+	CodegenPlugin, // the plugin object a module's `plugin` key holds
+	CategoryDeclaration, // a file-convention category
+	DiscoverPattern, // single-file / spread discovery
+	RegistryExtension, // a builder method a plugin adds
+	ScaffoldConfig, // a `questpie add` template
+} from "questpie/codegen";
+```
+
+`ModuleDefinition` carries the open index signature plugins augment via declaration merging; `AppModuleInput` is the narrower shape `createApp()` accepts (generated modules satisfy it without the index signature). The codegen plugin types are the superset for plugin authoring, a subset is also re-exported from `questpie/types`.
+
+## Related
+
+- [Configuration](/docs/concepts/configuration), `modules.ts`, the `config/*.ts` convention, `runtimeConfig` / `appConfig` / `authConfig`, and `packageConfig` in context.
+- [Collections](/docs/concepts/collections), what modules most often contribute, and how `.merge()` extends a module-provided collection.
+- [Globals](/docs/concepts/globals), the singleton counterpart, also contributable by modules.
+- [Fields](/docs/concepts/fields), custom field types a module adds to the `f` proxy.
+- [Routes](/docs/concepts/routes) and [Jobs](/docs/concepts/jobs), other categories a module contributes.
+- [Seeds](/docs/concepts/seeds), bootstrap and demo data a module can contribute.
+- [Building a plugin](/docs/extend/build-a-plugin), author the `CodegenPlugin` a module ships, plus the smaller per-feature seams (custom field type, operator, adapter, block).
+- [Codegen](/docs/extend/codegen), the pipeline that reads `modules.ts`, merges modules, and the full `CodegenPlugin` API reference.
+- Runnable example: [`examples/toy-factory-backend`](https://github.com/questpie/questpie/tree/main/examples/toy-factory-backend), a project whose `modules.ts` depends on `adminModule`, `openApiModule`, and `workflowsModule`.

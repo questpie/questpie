@@ -17,10 +17,16 @@ const dirname = path.dirname(filename);
 export const testMigrationDir = join(dirname, "test-migrations-generate");
 
 export const createTestDb = async () => {
-	// Create PGlite with pg_trgm extension for trigram search support
+	// Create PGlite with the pg_trgm contrib module bundled...
 	const client = await PGlite.create({
 		extensions: { pg_trgm },
 	});
+
+	// ...and actually CREATE the extension so its operator classes
+	// (gin_trgm_ops) resolve. The framework no longer creates extensions —
+	// they must be provided out-of-band (docker-init / managed DB). This is
+	// that provisioning step for the test DB.
+	await client.exec("CREATE EXTENSION IF NOT EXISTS pg_trgm");
 
 	return client;
 };

@@ -18,7 +18,13 @@
 
 import { z } from "zod";
 
+import type { Locale } from "#questpie/server/config/types.js";
 import type { Questpie } from "#questpie/server/config/questpie.js";
+import { buildIndexParams } from "../integrated/search/index-params.js";
+import type {
+	IndexParams,
+	SearchableConfig,
+} from "../integrated/search/types.js";
 import { job } from "../integrated/queue/job.js";
 
 /**
@@ -39,32 +45,17 @@ const indexRecordsSchema = z.object({
 type IndexRecordsPayload = z.infer<typeof indexRecordsSchema>;
 
 /**
- * Fields excluded from auto-generated search content
+ * Minimal structural slice of the Questpie app instance this job reaches for
+ * (the job handler ctx exposes `app` via extractAppServices). Lets us resolve
+ * the configured locales + each collection's declarative `searchable` config
+ * without an `as any` cast on the app itself.
  */
-const EXCLUDED_CONTENT_FIELDS = new Set([
-	"id",
-	"_title",
-	"createdAt",
-	"updatedAt",
-	"deletedAt",
-	"_locale",
-	"_parentId",
-]);
-
-/**
- * Auto-generate searchable content from record fields
- */
-function generateAutoContent(record: any): string {
-	const parts: string[] = [];
-
-	for (const [key, value] of Object.entries(record)) {
-		if (EXCLUDED_CONTENT_FIELDS.has(key)) continue;
-		if (value == null) continue;
-		if (typeof value === "object") continue;
-		parts.push(`${key}: ${String(value)}`);
-	}
-
-	return parts.join(", ");
+interface AppIndexSurface {
+	getLocales?: () => Promise<Locale[]>;
+	getCollectionConfig?: (
+		name: string,
+	) => { state?: { searchable?: SearchableConfig | false } } | undefined;
+	config?: { locale?: { defaultLocale?: string } };
 }
 
 /**
@@ -88,26 +79,20 @@ const indexRecordsJob = job({
 		const collections = (ctx as any).collections as
 			| Record<string, any>
 			| undefined;
+		const app = ((ctx as any).app ?? {}) as AppIndexSurface;
 
 		if (!search) {
 			console.warn("[index-records] Search service not configured, skipping");
 			return;
 		}
 
-		// Get configured locales (or default to 'en')
-		const t = (ctx as any).t as ((key: string) => string) | undefined;
-		// Default to 'en' locale when getLocales is not available
-		const localeCodes = ["en"];
+		// Resolve configured locales declaratively (no hardcoded list).
+		const locales = (await app.getLocales?.()) ?? [{ code: "en" }];
+		const localeCodes = locales.map((l) => l.code);
+		const defaultLocale = app.config?.locale?.defaultLocale ?? "en";
 
 		// Batch all index operations
-		const indexOperations: Array<{
-			collection: string;
-			recordId: string;
-			locale: string;
-			title: string;
-			content?: string;
-			metadata?: Record<string, any>;
-		}> = [];
+		const indexOperations: IndexParams[] = [];
 
 		for (const { collection, recordId } of payload.items) {
 			// Get collection CRUD API
@@ -118,6 +103,11 @@ const indexRecordsJob = job({
 				);
 				continue;
 			}
+
+			// Resolve the collection's declarative `searchable` config once
+			// per collection so content/metadata/facets/embedding are populated.
+			const searchable = app.getCollectionConfig?.(collection)?.state
+				?.searchable;
 
 			// Index ALL locales for this record
 			for (const locale of localeCodes) {
@@ -132,19 +122,15 @@ const indexRecordsJob = job({
 
 					if (!record) continue;
 
-					// Extract title
-					const title = record._title || record.id;
-
-					// Extract content (auto-generate from fields)
-					const content = generateAutoContent(record) || undefined;
-
-					indexOperations.push({
+					const params = await buildIndexParams(record, {
 						collection,
-						recordId,
 						locale,
-						title,
-						content,
+						searchable,
+						app,
+						defaultLocale,
 					});
+
+					if (params) indexOperations.push(params);
 				} catch (error) {
 					console.warn(
 						`[index-records] Failed to fetch ${collection}:${recordId} for locale ${locale}:`,

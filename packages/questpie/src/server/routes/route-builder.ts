@@ -41,8 +41,11 @@ type NoMode = { __mode: false };
 type JsonMode = { __mode: "json" };
 type RawMode = { __mode: "raw" };
 
+// Explicit discriminant (`__schema: true/false`) — a structural `{ __schema: T }`
+// would make `NoSchema = { __schema: false }` match `HasSchema<infer T>` as
+// T=false, mis-classifying a schemaless `route().handler()` chain as a JSON route.
 type NoSchema = { __schema: false };
-type HasSchema<T = any> = { __schema: T };
+type HasSchema<T = unknown> = { __schema: true; __schemaType: T };
 
 // Explicit discriminant (`__output: true/false`) — a structural
 // `{ __output: T }` would make NoOutput match `HasOutput<infer O>` as O=false.
@@ -175,16 +178,22 @@ export class RouteBuilder<
 	}
 
 	/**
-	 * Set output validation schema (optional).
+	 * Set output validation schema (optional). Implies JSON mode — an
+	 * `.outputSchema()`-only chain (no `.schema()`) is a JSON route whose input
+	 * defaults to `unknown`, never a raw route.
 	 *
 	 * Besides runtime response validation, the schema becomes the route's
-	 * output type and `.handler()` constrains the handler's return type
-	 * against it — a mismatch is a compile error.
+	 * output type. When `.schema()` was also called, `.handler()` constrains the
+	 * handler's return type against it — a mismatch is a compile error.
 	 */
 	outputSchema<TNextOutput>(
 		schema: z.ZodSchema<TNextOutput>,
-	): RouteBuilder<TParams, _TMethod, TMode, TSchema, HasOutput<TNextOutput>> {
-		return new RouteBuilder({ ...this._config, outputSchema: schema }) as any;
+	): RouteBuilder<TParams, _TMethod, JsonMode, TSchema, HasOutput<TNextOutput>> {
+		return new RouteBuilder({
+			...this._config,
+			mode: "json",
+			outputSchema: schema,
+		}) as any;
 	}
 
 	/**
@@ -236,30 +245,42 @@ export class RouteBuilder<
 	 * output type (`InferRouteOutput<typeof def>`, surviving codegen) and the
 	 * handler's return is checked against it — a mismatch is a compile error.
 	 *
-	 * Deliberately NOT generic over the handler's return type: per-call
-	 * inference here makes `typeof routeConst` depend on the handler arrow,
-	 * which cycles through the app's module type graph (module routes →
-	 * AppContext augmentation → modules → module routes, TS2456). Outputs are
-	 * therefore only captured from `.outputSchema()` until codegen emits
-	 * resolved route signatures.
+	 * For schema routes WITHOUT an `.outputSchema()`, the handler's return type
+	 * is inferred (`TReturn`) and threaded into `JsonRouteDefinition`'s output
+	 * slot, so `InferRouteOutput<typeof def>` recovers the concrete handler shape
+	 * instead of collapsing to `any`. The handler arg type (`JsonRouteHandlerArgs`)
+	 * already references `AppContext`, so inferring the *return* adds no new edge
+	 * to the module type graph.
 	 */
-	handler(
+	handler<TReturn>(
 		handler: TMode extends RawMode
 			? (args: RawRouteHandlerArgs<TParams>) => Response | Promise<Response>
 			: TSchema extends HasSchema<infer TInput>
 				? TOutput extends HasOutput<infer O>
 					? (args: JsonRouteHandlerArgs<TInput, TParams>) => O | Promise<O>
-					: (args: JsonRouteHandlerArgs<TInput, TParams>) => any
-				: (args: RawRouteHandlerArgs<TParams>) => Response | Promise<Response>,
+					: (args: JsonRouteHandlerArgs<TInput, TParams>) => TReturn | Promise<TReturn>
+				: // Output-only chain (`.outputSchema()` with no `.schema()`): JSON
+					// route with `unknown` input. Output comes from the schema, so the
+					// handler return is unconstrained here.
+					TMode extends JsonMode
+					? (args: JsonRouteHandlerArgs<unknown, TParams>) => any
+					: (args: RawRouteHandlerArgs<TParams>) => Response | Promise<Response>,
 	): TMode extends RawMode
 		? RawRouteDefinition<TParams>
 		: TSchema extends HasSchema<infer TInput>
 			? JsonRouteDefinition<
 					TInput,
-					TOutput extends HasOutput<infer O> ? O : any,
+					TOutput extends HasOutput<infer O> ? O : Awaited<TReturn>,
 					TParams
 				>
-			: RawRouteDefinition<TParams> {
+			: // Output-only chain → JSON route, `unknown` input, output from schema.
+				TMode extends JsonMode
+				? JsonRouteDefinition<
+						unknown,
+						TOutput extends HasOutput<infer O> ? O : unknown,
+						TParams
+					>
+				: RawRouteDefinition<TParams> {
 		const method = this._config.method ?? "POST";
 
 		if (this._config.mode === "json" || this._config.schema) {

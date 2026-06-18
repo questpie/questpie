@@ -9,6 +9,23 @@ description:
 
 `@questpie/tanstack-query` provides type-safe TanStack Query option builders for QUESTPIE. It creates `queryOptions()` and `mutationOptions()` objects that you pass directly to `useQuery()` and `useMutation()`. Full type inference flows from your server schema to React components.
 
+## Contents
+
+- [Installation](#installation)
+- [Setup](#setup), client, query options proxy, `QueryClientProvider`
+- [Collection Queries](#collection-queries), find, find one, count, realtime
+- [Collection Mutations](#collection-mutations), create, update, delete, bulk, versioning
+- [Global Queries](#global-queries), get + update (note: `update` takes `{ data }`)
+- [Routes](#routes), nested namespaces, query keys
+- [Custom Queries](#custom-queries), escape hatch for non-standard calls
+- [Key Builder](#key-builder), prefixed query keys
+- [Query Operators (Where Clauses)](#query-operators-where-clauses), operators by field type, orderBy, pagination, select
+- [Type Inference](#type-inference), `AppConfig` flow
+- [Direct Client Usage (without TanStack Query)](#direct-client-usage-without-tanstack-query)
+- [Realtime](#realtime), `{ realtime: true }`, adapters, topic builders
+- [Framework Adapters](#framework-adapters), TanStack Start, Next.js, Hono, Elysia
+- [Common Mistakes](#common-mistakes)
+
 ## Installation
 
 ```bash
@@ -224,13 +241,15 @@ function SiteSettings() {
 	return (
 		<div>
 			<h1>{settings?.shopName}</h1>
-			<button onClick={() => update.mutate({ shopName: "New Name" })}>
+			<button onClick={() => update.mutate({ data: { shopName: "New Name" } })}>
 				Update
 			</button>
 		</div>
 	);
 }
 ```
+
+The globals `update` mutation takes `{ data: {...} }`, its `mutationFn` unwraps `variables.data`. This differs from the direct client (`client.globals.siteSettings.update({ shopName: "New Name" })`), which takes the data object directly.
 
 ### Globals with Realtime
 
@@ -360,31 +379,12 @@ q.collections.posts.find({
 
 ## Type Inference
 
-Types flow end-to-end from schema definition to client SDK:
+Types flow end-to-end: your field definitions are compiled by codegen into the generated `AppConfig` type (collections, globals, and routes, each with `select`/`insert`/`where`/`orderBy` shapes), and `createClient<AppConfig>()` threads them into `q.collections.posts.find()`, the `where` operators, and the returned `data`.
 
-```text
-Field Definition                    Codegen                        Client SDK
-f.text().required()           ->   AppConfig type          ->   q.collections.posts.find()
-f.number()                    ->   with field types        ->   where: { price: { gte: 1000 } }
-f.select([...])               ->   and operators           ->   data.status === "published"
-```
-
-The generated `AppConfig` type includes collections, globals, and routes:
+`AppConfig` is generated, import it from `#questpie`, never hand-write it:
 
 ```ts
-export type AppConfig = {
-	collections: {
-		posts: {
-			select: { id: string; title: string; status: "draft" | "published" };
-			insert: { title: string; status?: "draft" | "published" };
-			where: {
-				title?: string | { contains?: string };
-				status?: "draft" | "published";
-			};
-			orderBy: { title?: "asc" | "desc"; createdAt?: "asc" | "desc" };
-		};
-	};
-};
+import type { AppConfig } from "#questpie";
 ```
 
 ## Direct Client Usage (without TanStack Query)
@@ -417,7 +417,7 @@ client.setLocale("sk"); // Set locale for localized content
 
 ## Realtime
 
-Pass `{ realtime: true }` as the **typed** second argument (`RealtimeQueryConfig`) to `find()`, `count()`, or `get()` — initial data via a normal fetch, then the server pushes full access-controlled snapshots on every matching change. `findOne()` and `findVersions()` have no realtime form (a second argument there is a compile error).
+Pass `{ realtime: true }` as the **typed** second argument (`RealtimeQueryConfig`) to `find()`, `count()`, or `get()`, initial data via a normal fetch, then the server pushes full access-controlled snapshots on every matching change. `findOne()` and `findVersions()` have no realtime form (a second argument there is a compile error).
 
 ```tsx
 const { data } = useQuery(
@@ -441,9 +441,9 @@ export default runtimeConfig({
 });
 ```
 
-Subscriptions are query-shaped topic objects (`{ resourceType, resource, where?, with? }`) — there are no channel strings. Outside React, use the typed live form of the same query: `client.collections.posts.live(options, onSnapshot)` / `liveIter(options)` (see AGENTS.md §19 Realtime).
+Subscriptions are query-shaped topic objects (`{ resourceType, resource, where?, with? }`), there are no channel strings. Outside React, use the typed live form of the same query: `client.collections.posts.live(options, onSnapshot)` / `liveIter(options)` (see AGENTS.md §19 Realtime).
 
-To build those topic objects yourself — e.g. manual cache invalidation or a raw `client.realtime.subscribe` call that must match the topic a query subscribed with — use the exported builders instead of hand-writing the shape:
+To build those topic objects yourself, e.g. manual cache invalidation or a raw `client.realtime.subscribe` call that must match the topic a query subscribed with, use the exported builders instead of hand-writing the shape:
 
 ```ts
 import { buildCollectionTopic, buildGlobalTopic } from "@questpie/tanstack-query"; // re-exported from questpie/client

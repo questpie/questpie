@@ -217,12 +217,18 @@ export type InferRelationConfigsFromFields<
 					relationKind: infer TKind;
 				}
 				? RelationConfig & {
-						type: TKind extends "many" ? "many" : "one";
+						// to-many (hasMany/m2m) OR `multiple()` (data is an array of
+						// FKs, relationKind "one") both populate as an array.
+						type: TKind extends "many"
+							? "many"
+							: TState["data"] extends readonly any[]
+								? "many"
+								: "one";
 						collection: TTo;
 					}
 				: TState extends { relationTo: infer TTo extends string }
 					? RelationConfig & {
-							type: "one";
+							type: TState["data"] extends readonly any[] ? "many" : "one";
 							collection: TTo;
 						}
 					: RelationConfig
@@ -1158,8 +1164,12 @@ export interface CollectionBuilderState {
 	/**
 	 * Phantom type for field types available in .fields(({ f }) => ...).
 	 * Set directly via EmptyCollectionState generic parameter.
+	 *
+	 * `unknown` (not `Record<string, any>`) so the phantom map carries NO string
+	 * index: `unknown & TFieldTypes` collapses to `TFieldTypes`, making a missing/
+	 * typo'd field key on the `.fields()` callback a hard error instead of `any`.
 	 */
-	"~fieldTypes"?: Record<string, any>;
+	"~fieldTypes"?: unknown;
 }
 
 /**
@@ -1194,7 +1204,7 @@ export type ExtractAccess<TState extends CollectionBuilderState> =
 export type EmptyCollectionState<
 	TName extends string,
 	_TDeprecated = undefined,
-	TFieldTypes extends Record<string, any> = Record<string, any>,
+	TFieldTypes = unknown,
 > = CollectionBuilderState & {
 	name: TName;
 	fields: {};

@@ -16,6 +16,7 @@ import {
 	selectMultiOps,
 	selectSingleOps,
 } from "../../../fields/operators/builtin.js";
+import type { ScalarWhereInput } from "../../../fields/operators/builtin.js";
 import type { OptionsConfig } from "../../../fields/reactive.js";
 import type { SelectFieldMetadata } from "../../../fields/types.js";
 
@@ -45,6 +46,10 @@ export type SelectFieldState<TValue extends string = string> =
 		data: TValue;
 		column: PgVarcharBuilder<[string, ...string[]]>;
 		operators: typeof selectSingleOps;
+		// WHERE-input value tracks the literal union (eq/ne = TValue, in/notIn =
+		// TValue[]) — decoupled from the runtime `selectSingleOps` singleton, whose
+		// hardcoded `string` value types only drive SQL (CL-07).
+		whereInput: ScalarWhereInput<TValue>;
 	};
 
 export interface SelectFieldMethods {

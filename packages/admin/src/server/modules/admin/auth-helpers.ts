@@ -100,6 +100,12 @@ export function hasAdminRole(ctx: unknown): boolean {
 	);
 }
 
+function sessionRole(session: { user?: unknown } | null): unknown {
+	const user = session?.user;
+	if (!user || typeof user !== "object" || !("role" in user)) return undefined;
+	return (user as { role?: unknown }).role;
+}
+
 /**
  * Check if user is authenticated with required role on the server.
  * Returns a redirect Response if not authenticated, null if authenticated.
@@ -160,8 +166,7 @@ export async function requireAdminAuth({
 			return Response.redirect(redirectUrl.toString(), 302);
 		}
 
-		// Check role - cast to any because role is added by Better Auth admin plugin
-		const userRole = (session.user as any).role;
+		const userRole = sessionRole(session);
 		if (userRole !== requiredRole) {
 			const currentUrl = new URL(request.url);
 			const redirectUrl = new URL(loginPath, currentUrl.origin);
@@ -237,6 +242,5 @@ export async function isAdminUser({
 	requiredRole = "admin",
 }: GetAdminSessionOptions & { requiredRole?: string }): Promise<boolean> {
 	const session = await getAdminSession({ request, app });
-	// Cast to any to access role - it's added by Better Auth admin plugin
-	return (session?.user as any)?.role === requiredRole;
+	return session?.user.role === requiredRole;
 }

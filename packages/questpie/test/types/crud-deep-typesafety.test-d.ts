@@ -164,21 +164,21 @@ type _manualTitleIsString = Expect<
 	Equal<ArticleSelect_Manual["title"], string>
 >;
 
-// NOTE: hasMany/manyToMany fields currently appear in CollectionSelect as string | null FK values.
-// This is because FieldWithMethods preserves the base RelationFieldState (virtual: false, relationKind: "one")
-// when type-specific methods (.hasMany(), .manyToMany()) are called — the TState does not update.
-// The runtime behavior is correct (they are excluded), but the type system reflects the base state.
+// hasMany/manyToMany fields are virtual (no FK column on this table), so they
+// are ABSENT from the base select. `.hasMany()`/`.manyToMany()` transition the
+// field type-state to ToManyRelationFieldState (virtual:true) → V2FieldSelect
+// drops them to `never` (filtered out). (CL-02.)
 type _inferCategoriesAbsent = Expect<
-	Equal<HasKey<ArticleSelect_Infer, "categories">, true>
+	Equal<HasKey<ArticleSelect_Infer, "categories">, false>
 >;
 type _manualCategoriesAbsent = Expect<
-	Equal<HasKey<ArticleSelect_Manual, "categories">, true>
+	Equal<HasKey<ArticleSelect_Manual, "categories">, false>
 >;
 type _inferCommentsAbsent = Expect<
-	Equal<HasKey<ArticleSelect_Infer, "comments">, true>
+	Equal<HasKey<ArticleSelect_Infer, "comments">, false>
 >;
 type _manualCommentsAbsent = Expect<
-	Equal<HasKey<ArticleSelect_Manual, "comments">, true>
+	Equal<HasKey<ArticleSelect_Manual, "comments">, false>
 >;
 
 // --- Object field should resolve nested shape ---
@@ -552,10 +552,7 @@ type _authorResultNotString = Expect<
 	Not<Equal<WithAuthorResult["author"], string>>
 >;
 
-// --- With comments: true → adds Comment (currently single, not array, due to hasMany type limitation) ---
-// NOTE: hasMany fields resolve as type:"one" in InferRelationConfigsFromFields because
-// FieldWithMethods preserves the base RelationFieldState (relationKind:"one") for .hasMany().
-// Runtime is correct (returns array), but type system sees it as a single relation.
+// --- With comments: true → adds Comment[] (to-many resolves as an array — CL-02). ---
 type WithCommentsResult = ApplyQuery<
 	ASelect,
 	ARelations,
@@ -563,37 +560,35 @@ type WithCommentsResult = ApplyQuery<
 >;
 type CommentsArr = WithCommentsResult["comments"];
 type _commentsIsArray = Expect<
-	Equal<CommentsArr extends any[] ? true : false, false>
+	Equal<CommentsArr extends any[] ? true : false, true>
 >;
-type CommentInResult = CommentsArr;
+type CommentInResult = CommentsArr extends readonly (infer E)[] ? E : never;
 type _commentHasContent = Expect<
 	Equal<HasKey<CommentInResult, "content">, true>
 >;
 
-// --- With categories: true → adds Category (currently single, not array, due to manyToMany type limitation) ---
-// NOTE: manyToMany fields resolve as type:"one" in InferRelationConfigsFromFields because
-// FieldWithMethods preserves the base RelationFieldState (relationKind:"one") for .manyToMany().
+// --- With categories: true → adds Category[] (manyToMany resolves as an array — CL-02). ---
 type WithCatsResult = ApplyQuery<
 	ASelect,
 	ARelations,
 	{ with: { categories: true } }
 >;
 type CatsArr = WithCatsResult["categories"];
-type _catsIsArray = Expect<Equal<CatsArr extends any[] ? true : false, false>>;
-type CatInResult = CatsArr;
+type _catsIsArray = Expect<Equal<CatsArr extends any[] ? true : false, true>>;
+type CatInResult = CatsArr extends readonly (infer E)[] ? E : never;
 type _catHasName = Expect<Equal<HasKey<CatInResult, "name">, true>>;
 type _catNameString = Expect<Equal<CatInResult["name"], string>>;
 
-// --- Nested with: comments → author ---
-// NOTE: comments resolves as single relation (not array) due to hasMany type limitation.
+// --- Nested with: comments → author (comments still an array — CL-02). ---
 type WithNestedResult = ApplyQuery<
 	ASelect,
 	ARelations,
 	{ with: { comments: { with: { author: true } } } }
 >;
 type NestedCommentsArr = WithNestedResult["comments"];
-// Single relation (not array) — use directly
-type NestedComment = NestedCommentsArr;
+type NestedComment = NestedCommentsArr extends readonly (infer E)[]
+	? E
+	: never;
 type _nestedCommentHasContent = Expect<
 	Equal<HasKey<NestedComment, "content">, true>
 >;
@@ -634,19 +629,19 @@ type _colWithAuthorHasName = Expect<
 >;
 
 // --- Aggregation: _count ---
-// NOTE: _count aggregation only fires when the relation is resolved as an array (type:"many").
-// Since comments currently resolves as type:"one" (due to FieldWithMethods type limitation),
-// _count: true is treated as a regular with option and CommentsAgg = CommentSelect (no _count).
+// _count aggregation fires now that comments resolves as a to-many array
+// (type:"many" — CL-02). With `_count: true` the relation collapses to the
+// aggregate shape `{ _count: number }` (no row columns).
 type AggCountResult = ApplyQuery<
 	ASelect,
 	ARelations,
 	{ with: { comments: { _count: true } } }
 >;
 type CommentsAgg = AggCountResult["comments"];
-type _aggCountHasCount = Expect<Equal<HasKey<CommentsAgg, "_count">, false>>;
-// _count is not present — the aggregation didn't fire due to type:"one" resolution
+type _aggCountHasCount = Expect<Equal<HasKey<CommentsAgg, "_count">, true>>;
+// row columns are NOT present — `_count: true` selects only the aggregate
 type _commentsAggHasContent = Expect<
-	Equal<HasKey<CommentsAgg, "content">, true>
+	Equal<HasKey<CommentsAgg, "content">, false>
 >;
 
 // ============================================================================

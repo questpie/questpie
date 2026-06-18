@@ -189,7 +189,7 @@ export interface AppModuleInput {
  * @example
  * ```ts
  * // config/app.ts
- * import { appConfig } from "questpie";
+ * import { appConfig } from "questpie/app";
  *
  * export default appConfig({
  *   locale: { locales: [{ code: "en" }, { code: "sk" }], defaultLocale: "en" },
@@ -199,12 +199,82 @@ export interface AppModuleInput {
  * });
  * ```
  */
+/**
+ * App-level default access rule — ctx is the lazy infra seam
+ * `ResolvedAppDefaultAccessContext`, NOT the augmented `AccessContext`.
+ * Contextual typing of a function here must not route through the merged
+ * AppContext: the augmentation lives in the generated index, which consumes
+ * `typeof config/app.ts` — any function whose params resolve through the
+ * augmentation collapses the whole chain (TS2456). The seam is filled by
+ * codegen with the real infra (db/session/collections/...) WITHOUT the
+ * extension edge, so it stays cycle-free yet precise (pre-codegen it degrades
+ * to a loose non-`any` default, not the old all-`any` base). Collection-level
+ * `.access()` rules keep the fully augmented ctx.
+ */
+export type AppDefaultAccessRule =
+	| boolean
+	| ((
+			ctx: import("#questpie/server/config/app-context.js").ResolvedAppDefaultAccessContext & {
+				data?: unknown;
+				input?: unknown;
+				locale?: string;
+				request?: Request;
+			},
+	  ) =>
+			| boolean
+			| Record<string, unknown>
+			| Promise<boolean | Record<string, unknown>>);
+
+/** App-level default access map — see {@link AppDefaultAccessRule}. */
+export interface AppDefaultAccess {
+	read?: AppDefaultAccessRule;
+	create?: AppDefaultAccessRule;
+	update?: AppDefaultAccessRule;
+	delete?: AppDefaultAccessRule;
+	transition?: AppDefaultAccessRule;
+	serve?: AppDefaultAccessRule;
+	introspect?: AppDefaultAccessRule;
+}
+
 export interface AppConfigInput {
 	locale?: LocaleConfig;
-	access?: CollectionAccess;
+	access?: AppDefaultAccess;
 	hooks?: import("#questpie/server/config/global-hooks-types.js").GlobalHooksInput;
 	context?: ContextResolver;
 }
+
+declare const __appAccessStorageBrand: unique symbol;
+/**
+ * Opaque storage for app-level default access rules on the `appConfig()`
+ * RETURN type. Function-valued rules must not survive into
+ * `typeof appConfig-file` — their parameter types (AccessContext) re-enter
+ * the generated index through the `_ModuleConfig` extraction and collapse
+ * the whole AppContext augmentation (TS2456). Same erasure precedent as
+ * `CollectionAccessStorage` on the collection builder.
+ */
+export type AppAccessStorage = Record<string, unknown> & {
+	readonly [__appAccessStorageBrand]?: never;
+};
+
+declare const __appHooksStorageBrand: unique symbol;
+/** Opaque storage for app-level hooks on the `appConfig()` return type. @see AppAccessStorage */
+export type AppHooksStorage = Record<string, unknown> & {
+	readonly [__appHooksStorageBrand]?: never;
+};
+
+/**
+ * The `appConfig()` RETURN shape: access/hooks erased to opaque storage
+ * (nothing downstream consumes their types), `context` preserved verbatim
+ * (its return type drives the generated context-extension inference — which
+ * is why resolver returns must be explicitly annotated, never inferred from
+ * CRUD results).
+ */
+export type AppConfigResolved<T extends AppConfigInput> = {
+	locale?: T["locale"];
+	context?: T["context"];
+	access?: AppAccessStorage;
+	hooks?: AppHooksStorage;
+};
 
 // ============================================================================
 // Runtime Config — what questpie.config.ts exports (new architecture)
@@ -221,7 +291,7 @@ export interface AppConfigInput {
  * @example
  * ```ts
  * // questpie.config.ts
- * import { runtimeConfig } from "questpie";
+ * import { runtimeConfig } from "questpie/app";
  * import { adminPlugin } from "@questpie/admin/plugin";
  *
  * export default runtimeConfig({
@@ -302,6 +372,8 @@ export interface RuntimeConfig<
 // RuntimeConfigInput — input type for runtimeConfig() with cloud defaults
 // ============================================================================
 
+export type RealtimeConfigInput = true | RealtimeConfig;
+
 /**
  * Input type for {@link runtimeConfig} — accepts the same shape as
  * {@link RuntimeConfig} but `app` and `db` are **optional** because they can
@@ -337,10 +409,11 @@ export interface RuntimeConfig<
 export type RuntimeConfigInput<
 	TDb extends DbConfig = DbConfig,
 	TStorage extends StorageConfig | undefined = StorageConfig | undefined,
-> = Partial<
-	Pick<RuntimeConfig<TDb, TStorage>, "app" | "db">
-> &
-	Omit<RuntimeConfig<TDb, TStorage>, "app" | "db">;
+> = Partial<Pick<RuntimeConfig<TDb, TStorage>, "app" | "db">> &
+	Omit<RuntimeConfig<TDb, TStorage>, "app" | "db" | "realtime"> & {
+		/** Realtime configuration. Use `true` to enable defaults. */
+		realtime?: RealtimeConfigInput;
+	};
 
 type DbFromRuntimeConfigInput<TInput> = TInput extends { db: infer TDb }
 	? TDb extends DbConfig
@@ -356,21 +429,27 @@ type StorageFromRuntimeConfigInput<TInput> = "storage" extends keyof TInput
 		: StorageConfig<Adapter> | undefined
 	: StorageConfig | undefined;
 
-export type ResolvedRuntimeConfig<
-	TInput extends RuntimeConfigInput<any, any>,
-> = Omit<
-	RuntimeConfig<
-		DbFromRuntimeConfigInput<TInput>,
-		StorageFromRuntimeConfigInput<TInput>
-	>,
-	"app" | "db" | "secret" | "storage"
-> &
-	Omit<TInput, "app" | "db" | "secret" | "storage"> & {
-		app: { url: string };
-		db: DbFromRuntimeConfigInput<TInput>;
-		secret: string | undefined;
-		storage: StorageFromRuntimeConfigInput<TInput>;
-	};
+export type ResolvedRuntimeConfig<TInput extends RuntimeConfigInput<any, any>> =
+	Omit<
+		RuntimeConfig<
+			DbFromRuntimeConfigInput<TInput>,
+			StorageFromRuntimeConfigInput<TInput>
+		>,
+		"app" | "db" | "secret" | "storage" | "realtime"
+	> &
+		Omit<TInput, "app" | "db" | "secret" | "storage" | "realtime"> & {
+			app: { url: string };
+			db: DbFromRuntimeConfigInput<TInput>;
+			secret: string | undefined;
+			storage: StorageFromRuntimeConfigInput<TInput>;
+			realtime: TInput extends { realtime: infer TRealtime }
+				? TRealtime extends true
+					? RealtimeConfig
+					: TRealtime extends RealtimeConfig
+						? TRealtime
+						: RealtimeConfig | undefined
+				: RealtimeConfig | undefined;
+		};
 
 // ============================================================================
 // App Definition — what codegen generates (first arg to createApp)

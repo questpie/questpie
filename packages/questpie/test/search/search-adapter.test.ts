@@ -142,16 +142,6 @@ describe("PostgresSearchAdapter", () => {
 		});
 	});
 
-	describe("getExtensions", () => {
-		it("should return pg_trgm extension", () => {
-			const extensions = adapter.getExtensions();
-
-			expect(extensions).toBeDefined();
-			expect(extensions.length).toBeGreaterThan(0);
-			expect(extensions).toContain('CREATE EXTENSION IF NOT EXISTS "pg_trgm";');
-		});
-	});
-
 	describe("app.getSchema() integration", () => {
 		it("should include search tables in app.getSchema()", () => {
 			const schema = setup.app.getSchema();
@@ -177,22 +167,18 @@ describe("PostgresSearchAdapter", () => {
 		});
 	});
 
-	describe("app.migrations.ensureExtensions()", () => {
-		it("should run extensions without error", async () => {
-			// ensureExtensions is idempotent - can be called multiple times
-			const result = await setup.app.migrations.ensureExtensions();
-
-			// Should have either applied or skipped the extension
-			expect(result.applied.length + result.skipped.length).toBeGreaterThan(0);
-		});
-
-		it("should handle already existing extensions gracefully", async () => {
-			// Run twice - second time should skip
-			await setup.app.migrations.ensureExtensions();
-			const result = await setup.app.migrations.ensureExtensions();
-
-			// Should be skipped (already exists) or applied (no error)
-			expect(result.applied.length + result.skipped.length).toBeGreaterThan(0);
+	describe("required extension provided out-of-band", () => {
+		it("has pg_trgm available for trigram search", async () => {
+			// The framework no longer creates extensions — they are provided
+			// out-of-band (docker-init / managed DB). The test DB ships pg_trgm
+			// so the adapter's trigram index/search works against it.
+			const result = await setup.app.db.execute(
+				sql.raw(
+					"SELECT extname FROM pg_extension WHERE extname = 'pg_trgm'",
+				),
+			);
+			const rows = (result as { rows?: unknown[] }).rows ?? result;
+			expect((rows as unknown[]).length).toBe(1);
 		});
 	});
 

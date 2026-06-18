@@ -106,13 +106,33 @@ type FieldCommonMethodsWrapped<
 		: FieldCommonMethods<TState>[K];
 };
 
+/** Local any-detector — keep this file self-contained (no cross-module import). */
+type _IsAny<T> = 0 extends 1 & T ? true : false;
+
 type FieldTypeMethodsWrapped<
 	in out TState extends FieldState,
 	in out TMethods,
 > = {
-	// Re-wrap type-specific methods: return FieldWithMethods<TState, TMethods>
-	[K in keyof TMethods]: TMethods[K] extends (...args: infer A) => any
-		? (...args: A) => FieldWithMethods<TState, TMethods>
+	// Re-wrap type-specific methods, honoring each method's DECLARED return:
+	//   - `Field<R>` / `FieldWithMethods<R, _>` returns transition to R (e.g.
+	//     relation `.hasMany()` → ToManyRelationFieldState);
+	//   - everything else (incl. `(): any` state-preserving methods like
+	//     text().pattern(), relation().relationName()) keeps the current TState.
+	//
+	// CRITICAL: the `IsAny<Ret>` short-circuit MUST come BEFORE the state test.
+	// `any extends { _: infer R } ? A : B` evaluates to the UNION `A | B`, so a
+	// `(): any` method would otherwise poison the field state to `any`.
+	//
+	// The transition is probed via the phantom `_` (Field<R> and FieldWithMethods
+	// <R,_> both expose `readonly _: R`). Probing `_` directly avoids the class-
+	// generic inference fragility of `Field<infer R>` (Field's methods reference
+	// TState contravariantly, which defeats `infer` on the class itself).
+	[K in keyof TMethods]: TMethods[K] extends (...args: infer A) => infer Ret
+		? _IsAny<Ret> extends true
+			? (...args: A) => FieldWithMethods<TState, TMethods>
+			: Ret extends { readonly _: infer R extends FieldState }
+				? (...args: A) => FieldWithMethods<R, TMethods>
+				: (...args: A) => FieldWithMethods<TState, TMethods>
 		: TMethods[K];
 };
 

@@ -1,5 +1,48 @@
 # @questpie/admin
 
+## 3.9.1
+
+### Patch Changes
+
+- [#111](https://github.com/questpie/questpie/pull/111) [`9e14122`](https://github.com/questpie/questpie/commit/9e1412231f18b40db2c87c1ce35dc352842b5cff) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Tighten scaffold conventions, generated app typing, and admin auth session inference.
+
+- Updated dependencies [[`9e14122`](https://github.com/questpie/questpie/commit/9e1412231f18b40db2c87c1ce35dc352842b5cff)]:
+  - questpie@3.9.1
+  - @questpie/tanstack-query@3.9.1
+
+## 3.9.0
+
+### Patch Changes
+
+- Updated dependencies [[`835f985`](https://github.com/questpie/questpie/commit/835f98502bd98a2c2b3f34201ac6370f03105c93)]:
+  - questpie@3.9.0
+  - @questpie/tanstack-query@3.9.0
+
+## 3.8.0
+
+### Minor Changes
+
+- [#108](https://github.com/questpie/questpie/pull/108) [`b15ce41`](https://github.com/questpie/questpie/commit/b15ce41ce2ed8378abd0ea3e42c8f577abe9ad6b) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Deep type-safety campaign — break the codegen type cycles and make acyclicity structural.
+
+  The generated `.generated/` output is now a strict one-way layered DAG (`names.gen.ts` → `entities.gen.ts` → `context.gen.ts` → `index.ts`), which makes the `AppContext⇄config` and `ctx → user-code` cycles impossible by construction. A new CI check (`check:codegen-layers`) enforces no-upward-import / no-cycle on the generated layers.
+
+  Fixes:
+
+  - Module-contributed collections that were re-declared across a module-nesting boundary (e.g. the admin module re-declaring starter's `user`) collapsed to `never` — so `collections.user.create()` had `never` inputs and a `{}` return. The module fold now OVERRIDE-merges same-key collection contributions instead of intersecting them.
+  - `ctx.services.<other>` inside a service's `create()` no longer triggers a self-referential type cycle (routed through an ambient `Questpie.Services` registry + a flat per-key seam).
+  - Per-category name registries (`Questpie.<Cat>Keys`) are now emitted for ALL discovered categories (routes/services/blocks/emails/views/components/field-types + collections/globals/jobs) via generic discovery, instead of a hardcoded collections/globals/jobs subset.
+
+  Notes:
+
+  - Types are tightened. After regenerating (`questpie generate`), you may see new type errors that surface previously-hidden bugs — this is intended.
+  - The public `#questpie` import surface and the runtime API are unchanged; the layered split is internal to the generated output.
+
+### Patch Changes
+
+- Updated dependencies [[`590e6c4`](https://github.com/questpie/questpie/commit/590e6c433a73a44316e89d00eeeaa21b0d584e3b), [`a56e017`](https://github.com/questpie/questpie/commit/a56e0179f6016915996e9bd9a58c7279d070692a), [`81e4922`](https://github.com/questpie/questpie/commit/81e4922e7ed54a2ff2171e86a9ce45a07b7c433b), [`b15ce41`](https://github.com/questpie/questpie/commit/b15ce41ce2ed8378abd0ea3e42c8f577abe9ad6b)]:
+  - questpie@3.8.0
+  - @questpie/tanstack-query@3.8.0
+
 ## 3.7.0
 
 ### Patch Changes

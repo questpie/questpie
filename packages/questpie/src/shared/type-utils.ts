@@ -390,7 +390,10 @@ type ResolveCollectionSelect<
 	C,
 > = C extends keyof TCollections
 	? CollectionSelect<GetCollection<TCollections, C>>
-	: any;
+	: // Not-found arm is LOUD `never`, not silent `any`: a relation whose target
+		// collection is absent from the map (typo, or a module collection omitted
+		// from a job/workflow ctx map) must surface — not degrade to `any` (CL-04).
+		never;
 
 type DecrementDepth<Depth extends unknown[]> = Depth extends [
 	unknown,
@@ -438,7 +441,16 @@ type ResolveCollectionRelation<
 	Depth extends unknown[],
 > = C extends keyof TCollections
 	? RelationShape<
-			CollectionSelect<GetCollection<TCollections, C>>,
+			// App-aware (field-definition) select so populated relation bodies
+			// match the collection CRUD surface (CollectionSelect<T, TApp>) used
+			// by CollectionRelationsFromApp. `FieldSelect`'s TApp is inert, so
+			// `unknown` here is identical to threading the real app — this brings
+			// globals (which resolve through this legacy stack) to collection
+			// parity for the populated relation body (GWR-3).
+			import("#questpie/server/collection/crud/types.js").CollectionSelect<
+				GetCollection<TCollections, C>,
+				unknown
+			>,
 			Depth extends []
 				? never
 				: ResolveRelationsDeep<
@@ -450,7 +462,11 @@ type ResolveCollectionRelation<
 			GetCollection<TCollections, C>,
 			unknown
 		>
-	: RelationShape<any, never, any, unknown, unknown>;
+	: // Not-found arm is LOUD `never` (CL-04): an absent target collection makes
+		// the populated relation body `never`, so `ExtractRelationSelect` of the
+		// fallback is `never` — a missing/typo'd/omitted target surfaces instead
+		// of silently resolving through `any`.
+		RelationShape<never, never, never, unknown, unknown>;
 
 /**
  * Resolve all relations from a RelationConfig to actual types
@@ -480,10 +496,22 @@ export type ResolveRelations<
 			: never;
 };
 
+/**
+ * Single relation-recursion depth policy (CL-14, STEP B).
+ *
+ * Both relation cycle-breakers — the legacy `ResolveRelationsDeep` (globals +
+ * client) and the app-aware `ResolveRelationsDeepFromApp` (server collections,
+ * crud/types.ts) — share THIS one constant so their exhaustion caps cannot
+ * drift again. Previously the legacy resolver capped at `[1,1,1,1,1]` (5) while
+ * the app-aware one capped at `[1,1,1]` (3); that silent split is the cyc-7
+ * finding. The unified cap is the (lower) server value `[1,1,1]`.
+ */
+export type RelationDepth = [1, 1, 1];
+
 export type ResolveRelationsDeep<
 	TRelations extends Record<string, RelationConfig>,
 	TCollections extends Record<string, AnyCollectionOrBuilder>,
-	Depth extends unknown[] = [1, 1, 1, 1, 1],
+	Depth extends unknown[] = RelationDepth,
 > = {
 	[K in keyof TRelations]: TRelations[K] extends {
 		type: "many" | "manyToMany";

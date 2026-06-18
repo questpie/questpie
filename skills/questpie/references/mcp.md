@@ -37,7 +37,7 @@ export default mcpConfig({
 
 Do not use `mcpModule(options)`. Runtime options belong in the plugin-discovered config file.
 
-`mcpModule` carries its codegen plugin. Do not also add `mcpPlugin()` to `questpie.config.ts` unless you are doing a custom setup that deliberately omits `mcpModule` — double registration duplicates the plugin.
+`mcpModule` carries its codegen plugin. Do not also add `mcpPlugin()` to `questpie.config.ts` unless you are doing a custom setup that deliberately omits `mcpModule`, double registration duplicates the plugin.
 
 ## CRUD Policy
 
