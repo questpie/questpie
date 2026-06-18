@@ -1,5 +1,11 @@
 # questpie
 
+## 3.9.1
+
+### Patch Changes
+
+- [#111](https://github.com/questpie/questpie/pull/111) [`9e14122`](https://github.com/questpie/questpie/commit/9e1412231f18b40db2c87c1ce35dc352842b5cff) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Tighten scaffold conventions, generated app typing, and admin auth session inference.
+
 ## 3.9.0
 
 ### Minor Changes

@@ -1,5 +1,18 @@
 # autopilot
 
+## 0.0.16
+
+### Patch Changes
+
+- Updated dependencies [[`9e14122`](https://github.com/questpie/questpie/commit/9e1412231f18b40db2c87c1ce35dc352842b5cff)]:
+  - questpie@3.9.1
+  - @questpie/admin@3.9.1
+  - @questpie/ai@3.0.0
+  - @questpie/executor@3.0.9
+  - @questpie/mcp@3.2.7
+  - @questpie/sandbox@3.0.9
+  - @questpie/workflows@3.9.1
+
 ## 0.0.15
 
 ### Patch Changes
