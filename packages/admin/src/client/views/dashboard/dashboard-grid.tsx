@@ -93,37 +93,48 @@ interface DashboardGridProps {
 /**
  * Grid column classes for different column counts.
  * Uses fixed auto rows so cards align like tile-based mobile widgets.
+ *
+ * Multi-column presets (>= 3) now start at a single column and widen via
+ * container queries (the grid wrapper is the `@container`), instead of the old
+ * hard floor of two columns. The narrowest containers (< 20rem — small phones,
+ * or a grid nested inside a padded card/tab) collapse to one readable column;
+ * `@xs` (20rem) steps to two, then `@sm`/`@md`/`@lg` widen further. The 1- and
+ * 2-column presets keep their fixed intent.
  */
 const gridClasses: Record<number, string> = {
 	1: "grid-cols-1",
 	2: "grid-cols-2",
-	3: "grid-cols-2 @md:grid-cols-3",
-	4: "grid-cols-2 @md:grid-cols-4",
-	5: "grid-cols-2 @sm:grid-cols-3 @md:grid-cols-4 @lg:grid-cols-5",
-	6: "grid-cols-2 @sm:grid-cols-3 @md:grid-cols-4 @lg:grid-cols-6",
-	7: "grid-cols-2 @xs:grid-cols-4 @md:grid-cols-6 @lg:grid-cols-7",
-	8: "grid-cols-2 @xs:grid-cols-4 @md:grid-cols-6 @lg:grid-cols-8",
-	9: "grid-cols-2 @xs:grid-cols-4 @md:grid-cols-6 @lg:grid-cols-9",
-	10: "grid-cols-2 @xs:grid-cols-4 @md:grid-cols-6 @lg:grid-cols-10",
-	11: "grid-cols-2 @xs:grid-cols-4 @md:grid-cols-6 @lg:grid-cols-11",
-	12: "grid-cols-2 @xs:grid-cols-4 @md:grid-cols-6 @lg:grid-cols-12",
+	3: "grid-cols-1 @xs:grid-cols-2 @md:grid-cols-3",
+	4: "grid-cols-1 @xs:grid-cols-2 @md:grid-cols-4",
+	5: "grid-cols-1 @xs:grid-cols-2 @sm:grid-cols-3 @md:grid-cols-4 @lg:grid-cols-5",
+	6: "grid-cols-1 @xs:grid-cols-2 @sm:grid-cols-3 @md:grid-cols-4 @lg:grid-cols-6",
+	7: "grid-cols-1 @xs:grid-cols-2 @sm:grid-cols-4 @md:grid-cols-6 @lg:grid-cols-7",
+	8: "grid-cols-1 @xs:grid-cols-2 @sm:grid-cols-4 @md:grid-cols-6 @lg:grid-cols-8",
+	9: "grid-cols-1 @xs:grid-cols-2 @sm:grid-cols-4 @md:grid-cols-6 @lg:grid-cols-9",
+	10: "grid-cols-1 @xs:grid-cols-2 @sm:grid-cols-4 @md:grid-cols-6 @lg:grid-cols-10",
+	11: "grid-cols-1 @xs:grid-cols-2 @sm:grid-cols-4 @md:grid-cols-6 @lg:grid-cols-11",
+	12: "grid-cols-1 @xs:grid-cols-2 @sm:grid-cols-4 @md:grid-cols-6 @lg:grid-cols-12",
 };
 
 /**
  * Span classes for widget column spanning.
+ *
+ * Mirrors `gridClasses`: at the single-column base every widget spans the full
+ * row, then widens at each container-query step so a span never exceeds the
+ * available column count.
  */
 const spanClasses: Record<number, string> = {
 	1: "col-span-1",
-	2: "col-span-2",
-	3: "col-span-2 @md:col-span-3",
-	4: "col-span-2 @md:col-span-4",
-	5: "col-span-2 @md:col-span-4 @lg:col-span-5",
-	6: "col-span-2 @md:col-span-4 @lg:col-span-6",
-	7: "col-span-2 @xs:col-span-4 @md:col-span-6 @lg:col-span-7",
-	8: "col-span-2 @xs:col-span-4 @md:col-span-6 @lg:col-span-8",
-	9: "col-span-2 @xs:col-span-4 @md:col-span-6 @lg:col-span-9",
-	10: "col-span-2 @xs:col-span-4 @md:col-span-6 @lg:col-span-10",
-	11: "col-span-2 @xs:col-span-4 @md:col-span-6 @lg:col-span-11",
+	2: "col-span-1 @xs:col-span-2",
+	3: "col-span-1 @xs:col-span-2 @md:col-span-3",
+	4: "col-span-1 @xs:col-span-2 @md:col-span-4",
+	5: "col-span-1 @xs:col-span-2 @md:col-span-4 @lg:col-span-5",
+	6: "col-span-1 @xs:col-span-2 @md:col-span-4 @lg:col-span-6",
+	7: "col-span-1 @xs:col-span-2 @sm:col-span-4 @md:col-span-6 @lg:col-span-7",
+	8: "col-span-1 @xs:col-span-2 @sm:col-span-4 @md:col-span-6 @lg:col-span-8",
+	9: "col-span-1 @xs:col-span-2 @sm:col-span-4 @md:col-span-6 @lg:col-span-9",
+	10: "col-span-1 @xs:col-span-2 @sm:col-span-4 @md:col-span-6 @lg:col-span-10",
+	11: "col-span-1 @xs:col-span-2 @sm:col-span-4 @md:col-span-6 @lg:col-span-11",
 	12: "col-span-full",
 };
 

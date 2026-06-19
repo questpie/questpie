@@ -167,7 +167,14 @@ export const BlockItem = React.memo(function BlockItem({
 					<button
 						type="button"
 						data-drag-handle
-						className="hover:bg-muted -ml-1 cursor-grab rounded p-1 active:cursor-grabbing"
+						aria-label={t("field.dragToReorder")}
+						className={cn(
+							"hover:bg-muted -ml-1 flex shrink-0 cursor-grab touch-none items-center justify-center rounded p-1 active:cursor-grabbing",
+							// Full 44px touch target on coarse pointers (this bare button is
+							// not covered by the foundation's [data-slot=button] floor),
+							// back to intrinsic size on desktop.
+							"size-11 md:size-auto",
+						)}
 						{...attributes}
 						{...listeners}
 						onClick={(e) => e.stopPropagation()}
@@ -229,7 +236,7 @@ export const BlockItem = React.memo(function BlockItem({
 							canHaveChildren={canHaveChildren}
 							onDuplicate={handleDuplicate}
 							onRemove={handleRemove}
-							className="size-7 opacity-0 transition-opacity group-hover:opacity-100"
+							className="size-7 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100"
 						/>
 					</div>
 				</CardHeader>
@@ -257,7 +264,8 @@ export const BlockItem = React.memo(function BlockItem({
 				<div className="relative">
 					{/* Rail line */}
 					<div className="bg-border absolute top-0 bottom-0 left-3 w-px" />
-					<div className="space-y-2 pt-2 pl-8">
+					{/* Tighter indent on mobile so deep nesting doesn't run off-screen */}
+					<div className="space-y-2 pt-2 pl-6 md:pl-8">
 						<BlockTree
 							blocks={block.children}
 							level={level + 1}
@@ -269,10 +277,10 @@ export const BlockItem = React.memo(function BlockItem({
 
 			{/* Add child button - only for blocks that can have children */}
 			{canHaveChildren && isExpanded && (
-				<div className="relative mt-2 pl-8">
+				<div className="relative mt-2 pl-6 md:pl-8">
 					<div className="bg-border absolute -top-2 left-3 h-[calc(50%+8px)] w-px" />
 					{/* Horizontal rail connector */}
-					<div className="bg-border absolute top-1/2 left-3 h-px w-5" />
+					<div className="bg-border absolute top-1/2 left-3 h-px w-3 md:w-5" />
 					<BlockInsertButton
 						position={{ parentId: block.id, index: block.children.length }}
 						variant="rail"

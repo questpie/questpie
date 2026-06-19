@@ -11,6 +11,7 @@ import { useFieldArray, useFormContext, useWatch } from "react-hook-form";
 
 import type { FieldInstance } from "../../builder/field/field";
 import { configureField } from "../../builder/field/field";
+import { useIsMobile } from "../../hooks/use-media-query";
 import { useResolveText, useTranslation } from "../../i18n/hooks";
 import { cn } from "../../lib/utils";
 import { selectAdmin, useAdminStore } from "../../runtime";
@@ -356,6 +357,7 @@ export function ObjectArrayField({
 }: ObjectArrayFieldProps): React.ReactElement {
 	const { t } = useTranslation();
 	const resolveText = useResolveText();
+	const isMobile = useIsMobile();
 	const resolvedPlaceholder = placeholder
 		? resolveText(placeholder)
 		: undefined;
@@ -511,6 +513,10 @@ export function ObjectArrayField({
 		);
 
 	const showEditor = mode === "modal" || mode === "drawer";
+	// On mobile, force the drawer/sheet editor even when configured as a centered
+	// "modal" — a full-width bottom/side sheet with a backdrop + scroll-lock is the
+	// usable touch pattern (a cramped centered dialog is not). Desktop keeps modal.
+	const useSheetEditor = mode === "drawer" || (mode === "modal" && isMobile);
 
 	return (
 		<FieldWrapper
@@ -565,7 +571,7 @@ export function ObjectArrayField({
 				</Button>
 			)}
 
-			{showEditor && mode === "modal" && (
+			{showEditor && mode === "modal" && !isMobile && (
 				<Dialog open={isOpen} onOpenChange={handleOpenChange}>
 					<DialogContent className="sm:max-w-2xl">
 						<DialogHeader>
@@ -581,7 +587,7 @@ export function ObjectArrayField({
 				</Dialog>
 			)}
 
-			{showEditor && mode === "drawer" && (
+			{showEditor && useSheetEditor && (
 				<Sheet open={isOpen} onOpenChange={handleOpenChange}>
 					<SheetContent side="right" className="sm:max-w-lg">
 						<SheetHeader>

@@ -64,6 +64,11 @@ export function NumberInput({
 		onChange(clampedValue);
 	};
 
+	// Native numeric keypad on touch: decimal pad when fractional steps are
+	// allowed (so the user can type a "."), plain numeric pad otherwise.
+	const inputMode: "numeric" | "decimal" =
+		step % 1 === 0 ? "numeric" : "decimal";
+
 	const increment = () => {
 		const current = value ?? 0;
 		handleChange(current + step);
@@ -105,6 +110,7 @@ export function NumberInput({
 					min={min}
 					max={max}
 					step={step}
+					inputMode={inputMode}
 					aria-invalid={ariaInvalid}
 					aria-describedby={ariaDescribedBy}
 					className="[appearance:textfield] text-center [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
@@ -142,6 +148,7 @@ export function NumberInput({
 			min={min}
 			max={max}
 			step={step}
+			inputMode={inputMode}
 			aria-invalid={ariaInvalid}
 			aria-describedby={ariaDescribedBy}
 			className={cn("qa-number-input", className)}

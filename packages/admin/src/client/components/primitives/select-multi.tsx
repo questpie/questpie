@@ -285,7 +285,15 @@ export function SelectMulti<TValue extends string = string>({
 							<Badge
 								key={String(val)}
 								variant="secondary"
-								className={cn("min-h-7 gap-1 pr-1", chipOption?.className)}
+								className={cn(
+									// Touch: tall enough to host a 44px remove target and let
+									// the chip-x tap slop spill out (Badge hard-codes
+									// overflow-hidden, which would otherwise clip after:-inset-1).
+									// Mirrors the editable chips-display chip; desktop unchanged.
+									"min-h-11 overflow-visible pr-1 md:min-h-7 md:overflow-hidden",
+									"gap-1",
+									chipOption?.className,
+								)}
 							>
 								{chipOption?.icon}
 								<span className="max-w-24 truncate">{getLabel(val)}</span>
@@ -295,9 +303,16 @@ export function SelectMulti<TValue extends string = string>({
 										title={t("field.removeItem", "Remove option")}
 										onPointerDown={(e) => handleRemove(val, e)}
 										onClick={(e) => handleRemove(val, e)}
-										className="hover:bg-muted-foreground/20 inline-flex size-5 items-center justify-center rounded-full transition-colors"
+										className={cn(
+											"hover:bg-muted-foreground/20 relative inline-flex size-9 items-center justify-center rounded-full transition-colors md:size-5",
+											// Touch: 36px visual + un-clipped -inset-1 slop = a real
+											// 44px hit target (the chip x is a <span>, so the
+											// foundation's button floor doesn't apply). Mirrors the
+											// clear-all control below.
+											"after:absolute after:-inset-1 md:after:hidden",
+										)}
 									>
-										<Icon icon="ph:x" className="size-2.5" />
+										<Icon icon="ph:x" className="size-3.5 md:size-2.5" />
 									</span>
 								)}
 							</Badge>
@@ -317,9 +332,13 @@ export function SelectMulti<TValue extends string = string>({
 						title={t("common.clear", "Clear all")}
 						onPointerDown={handleClearAll}
 						onClick={handleClearAll}
-						className="hover:bg-muted inline-flex size-6 items-center justify-center rounded-md opacity-60 transition-[background-color,opacity] hover:opacity-100"
+						className={cn(
+							"hover:bg-muted relative inline-flex size-9 items-center justify-center rounded-md opacity-60 transition-[background-color,opacity] hover:opacity-100 md:size-6",
+							// Touch: full 44px hit area via slop on top of the 36px target.
+							"after:absolute after:-inset-1 md:after:hidden",
+						)}
 					>
-						<Icon icon="ph:x" className="size-3" />
+						<Icon icon="ph:x" className="size-4 md:size-3" />
 					</span>
 				)}
 				<Icon icon="ph:plus" className="size-3.5 opacity-50" />

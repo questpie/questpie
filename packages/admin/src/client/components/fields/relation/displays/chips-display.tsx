@@ -58,7 +58,9 @@ export function ChipsDisplay({
 					return (
 						<div
 							key={item.id}
-							className="qa-chips-display__chip item-surface border-border bg-secondary text-secondary-foreground inline-flex min-h-8 items-center gap-1 py-0.5 pr-1 pl-2"
+							// On touch the edit/remove buttons are floored to 44px by the
+							// foundation; give the chip room to contain them cleanly.
+							className="qa-chips-display__chip item-surface border-border bg-secondary text-secondary-foreground inline-flex min-h-11 items-center gap-0.5 py-0.5 pr-1 pl-2 md:min-h-8 md:gap-1"
 						>
 							{iconElement}
 							<span className="text-sm">{displayText}</span>

@@ -69,8 +69,10 @@ export function TimeInput({
 						"flex-1 bg-transparent outline-none",
 						"placeholder:text-muted-foreground",
 						"disabled:cursor-not-allowed",
-						// Hide the native clock icon in some browsers
-						"[&::-webkit-calendar-picker-indicator]:hidden",
+						// Hide the native clock icon on fine pointers (mouse) for a
+						// cleaner look, but KEEP it on touch so the OS time wheel stays
+						// reachable.
+						"[@media(pointer:fine)]:[&::-webkit-calendar-picker-indicator]:hidden",
 					)}
 				/>
 				{value && !disabled && (

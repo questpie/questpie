@@ -25,6 +25,17 @@ import { selectClient, useAdminStore } from "../../runtime/provider.js";
 
 const DEV_TELEMETRY = process.env.NODE_ENV === "development";
 
+/**
+ * Cooldown after a `PREVIEW_READY` during which a *resync-driven* full reload is
+ * suppressed. Breaks the reload loop where a preview page requests a resync on
+ * every load: reload -> READY -> RESYNC_REQUEST -> reload -> ... The in-place
+ * `FULL_RESYNC` + snapshot re-push already brings the just-loaded page back in
+ * sync, so a second reload immediately after load is pure churn. User-initiated
+ * refreshes (save / structural changes) land well outside this window and still
+ * reload normally.
+ */
+const RESYNC_RELOAD_COOLDOWN_MS = 1500;
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -77,7 +88,7 @@ type PreviewPaneProps = {
  * Renders an iframe with the preview page and handles
  * bidirectional communication via postMessage.
  */
-export const PreviewPane = React.forwardRef<PreviewPaneRef, PreviewPaneProps>(
+const PreviewPaneImpl = React.forwardRef<PreviewPaneRef, PreviewPaneProps>(
 	(
 		{
 			url,
@@ -102,6 +113,7 @@ export const PreviewPane = React.forwardRef<PreviewPaneRef, PreviewPaneProps>(
 		const [isRefreshing, setIsRefreshing] = React.useState(false);
 		const isRefreshingRef = React.useRef(false);
 		const pendingRefreshRef = React.useRef(false);
+		const lastReadyAtRef = React.useRef(0);
 		const seqRef = React.useRef(0);
 		const pendingMessagesRef = React.useRef<AdminToPreviewMessage[]>([]);
 		const refreshMetricsRef = React.useRef({
@@ -233,6 +245,27 @@ export const PreviewPane = React.forwardRef<PreviewPaneRef, PreviewPaneProps>(
 				return;
 			}
 
+			// Loop breaker: a reload that arrives right after the preview just
+			// (re)loaded is the reload-storm signature (reload -> READY ->
+			// RESYNC_REQUEST -> reload -> ...). The in-place FULL_RESYNC + snapshot
+			// re-push already resynced the fresh page, so the redundant reload is
+			// pure churn. Genuine refreshes (save / workflow / locale / revert) are
+			// user-initiated and land seconds after a load, well outside this window.
+			//
+			// Correctness note: this cooldown suppresses ALL reloads in the window,
+			// not just resync-driven ones. That is safe because the user-initiated
+			// paths already push the new state in place BEFORE calling refresh —
+			// save commits a snapshot (`commitPreviewSnapshot` -> `sendCommit`) and
+			// workflow/locale/revert send a `FULL_RESYNC` — so even if such a reload
+			// is dropped here, the preview already reflects the change. The only
+			// thing skipped is a redundant full reload, never the data itself.
+			if (
+				lastReadyAtRef.current &&
+				performance.now() - lastReadyAtRef.current < RESYNC_RELOAD_COOLDOWN_MS
+			) {
+				return;
+			}
+
 			const metrics = refreshMetricsRef.current;
 			const now = performance.now();
 			if (!metrics.startedAt) {
@@ -323,6 +356,7 @@ export const PreviewPane = React.forwardRef<PreviewPaneRef, PreviewPaneProps>(
 						isReadyRef.current = true;
 						isRefreshingRef.current = false;
 						pendingRefreshRef.current = false;
+						lastReadyAtRef.current = performance.now();
 						refreshMetricsRef.current = {
 							startedAt: 0,
 							requested: 0,
@@ -385,12 +419,21 @@ export const PreviewPane = React.forwardRef<PreviewPaneRef, PreviewPaneProps>(
 						break;
 
 					case "RESYNC_REQUEST":
-						onResyncRequest?.(event.data.reason);
-						sendToPreview(
-							{ type: "FULL_RESYNC", reason: event.data.reason },
-							true,
-						);
-						requestRefresh();
+						if (onResyncRequest) {
+							// The owner (FormView) re-pushes the snapshot and drives its own
+							// FULL_RESYNC + refresh, so defer to it. Doing the same work here
+							// too would double every resync and, with a preview that resyncs
+							// on load, spin a reload loop. `requestRefresh`'s post-ready
+							// cooldown additionally coalesces that loop into a no-op.
+							onResyncRequest(event.data.reason);
+						} else {
+							// Standalone fallback (no owner wired): resync in place and reload.
+							sendToPreview(
+								{ type: "FULL_RESYNC", reason: event.data.reason },
+								true,
+							);
+							requestRefresh();
+						}
 						break;
 
 					case "FIELD_VALUE_EDITED":
@@ -485,4 +528,16 @@ export const PreviewPane = React.forwardRef<PreviewPaneRef, PreviewPaneProps>(
 	},
 );
 
-PreviewPane.displayName = "PreviewPane";
+PreviewPaneImpl.displayName = "PreviewPane";
+
+/**
+ * Memoized so the iframe shell and its postMessage effects do NOT re-render when
+ * `LivePreviewContent` re-renders for form-side reasons. Every prop forwarded by
+ * the live-preview content is stable — `url` is a memoized string, the `on*`
+ * handlers are `useCallback`'d, and `selectedBlockId`/`onPatchApplied` are omitted
+ * — so the shallow compare holds and the preview is insulated from FormView
+ * re-renders WITHOUT needing the form subtree (`children`) memoized upstream.
+ * This is the real fix for audit 8.5(1): the form should re-render freely to
+ * reflect lock/autosave/workflow/locale state; only the iframe must stay put.
+ */
+export const PreviewPane = React.memo(PreviewPaneImpl);

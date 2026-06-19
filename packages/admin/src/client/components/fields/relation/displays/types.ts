@@ -31,6 +31,10 @@ export interface RelationItemActions {
 	onEdit?: (item: any) => void;
 	onRemove?: (item: any) => void;
 	onNavigate?: (item: any) => void;
+	/** Move the item one position earlier in an orderable relation. */
+	onMoveUp?: (item: any) => void;
+	/** Move the item one position later in an orderable relation. */
+	onMoveDown?: (item: any) => void;
 }
 
 /**
@@ -157,7 +161,8 @@ export function formatCellValue(value: unknown): string {
 export function getImageUrl(item: any, imageField?: string): string | null {
 	if (!imageField) return null;
 	const imageValue = item[imageField];
-	if (typeof imageValue === "string") return resolveAssetUrl(imageValue) ?? null;
+	if (typeof imageValue === "string")
+		return resolveAssetUrl(imageValue) ?? null;
 	if (imageValue?.url) return resolveAssetUrl(imageValue.url) ?? null;
 	return null;
 }
