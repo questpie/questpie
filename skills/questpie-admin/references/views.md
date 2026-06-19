@@ -7,7 +7,7 @@ description: QUESTPIE admin views list-view table form-view sections sidebar das
 
 This skill builds on questpie-admin.
 
-Views control how data appears in the QUESTPIE admin panel. They are configured **server-side** on collections and globals, then rendered by the admin client via registries.
+Views control how data appears in the QUESTPIE admin panel. They are configured **server-side** on collections and globals via `.list()` / `.form()`, and the admin client renders them from that introspected config. Custom view *types* (kanban, calendar, …) are declarative `view()` definitions discovered by codegen - see `references/custom-ui.md`.
 
 ```text
 Server Config                     Admin UI
@@ -404,46 +404,4 @@ export const logs = collection("logs")
 
 ## Form Views and Live Preview
 
-Form views connect to the existing Live Preview system when the collection has `.preview()` configured. Keep `v.collectionForm()` as the form surface; do not introduce a separate visual-edit form API, a second default form view, or parallel preview API names. The form editor remains the source of patches, refreshes, commits, and resyncs.
-
-### Enabling Preview on a Collection
-
-Add `.preview()` to the collection definition:
-
-```ts
-export const pages = collection("pages")
-	.fields(({ f }) => ({
-		title: f.text().required().localized(),
-		slug: f.text().required(),
-		content: f.blocks().localized(),
-	}))
-	.preview({
-		enabled: true,
-		position: "right",
-		defaultWidth: 50,
-		url: ({ record }) => `/${record.slug}?preview=true`,
-	});
-```
-
-### How It Works
-
-1. The form view detects `.preview()` config and opens a split-screen layout
-2. The preview iframe mirrors form state with snapshot, patch, refresh, commit, and resync messages
-3. Save/autosave/Cmd+S/history/workflow/locks/actions stay in the form lifecycle
-4. The preview page uses `useCollectionPreview({ initialData, onRefresh })`
-5. `PreviewProvider`, `PreviewField`, and `BlockRenderer` wire field and block annotations
-
-### Frontend Preparation Checklist
-
-Use this checklist before expecting visual editing to work:
-
-1. The collection has `.preview({ url })`.
-2. The page loader returns the complete rendered record shape.
-3. Public workflow reads use `stage: "published"`; if public client/HTTP access is enabled, anonymous read access also requires `input?.stage === "published"`. Preview/draft-mode reads load the working record for authorized editors.
-4. The page renderer calls `useCollectionPreview({ initialData, onRefresh })`.
-5. The rendered page is wrapped in `PreviewProvider preview={preview}`.
-6. UI reads from `preview.data`, not directly from loader data.
-7. Scalar text uses `PreviewField field="..." editable="text" | "textarea"` when inline editing is expected.
-8. Blocks render through `BlockRenderer` with `selectedBlockId` and `onBlockClick`.
-9. `BlockScopeProvider` is only needed for custom/manual block rendering outside `BlockRenderer`.
-10. Add/remove/reorder/nesting block operations stay in the existing block editor.
+When a collection has `.preview()`, the form view becomes the split-screen preview surface - keep `v.collectionForm()` as the form; do not introduce a separate visual-edit form API, a second default form view, or parallel preview API names. The `.preview()` server config, the frontend preparation checklist, and the `useCollectionPreview` / `PreviewProvider` / `PreviewField` / `BlockRenderer` APIs all live in the questpie-admin skill's **Live Preview** section (SKILL.md).

@@ -1,221 +1,177 @@
 ---
 name: questpie-admin/custom-ui
-description: QUESTPIE custom-fields custom-views registries field-registry view-registry component-registry reactive-fields dynamic-options widgets field-renderer cell-renderer
+description: QUESTPIE custom admin UI field() view() widget() definitions discovered by codegen FieldComponentProps BaseFieldProps WidgetComponentProps CollectionListViewProps cell renderer component props never edit .generated declarative reactive fields dynamic options
 ---
 
 # QUESTPIE Custom UI
 
 This skill builds on questpie-admin.
 
-Extend the QUESTPIE admin with custom field types, custom view types, custom components, and reactive field behaviors.
+Custom admin UI - field renderers, custom views, dashboard widgets - is **declarative**, exactly like the rest of QUESTPIE. You write a *definition* with a factory (`field()`, `view()`, `widget()` from `@questpie/admin/client`), default-export it from a convention directory, and `questpie generate` discovers it and wires it into `admin/.generated/client.ts`.
 
-## Registries
+There is **no imperative wiring**: you never call a registry, never register a renderer in `modules.ts`, and **never edit anything under `.generated/`** (it is codegen output). A definition is a plain frozen `name → component` object - and all field *options* (label, required, validation, placeholder, …) come from **server introspection at runtime**, so a component reads them off its props; it does not declare them.
 
-Registries connect server-side schema to client-side rendering. When the admin encounters a field type, it looks up the renderer in the field registry.
+## Where definitions live
 
-```text
-Server: f.text().required()
-  |
-Generated: { type: "text", options: {...} }
-  |
-Admin Client: fieldRegistry.get("text")
-  |
-React: <TextFieldRenderer value={...} onChange={...} />
+Drop a default-exported definition in the admin client root (`src/questpie/admin/`); codegen merges it with the built-ins:
+
+| Directory | Factory | Renders |
+| --- | --- | --- |
+| `fields/` | `field()` | a field type's edit control + table cell |
+| `views/` | `view()` | a custom list/form/… view |
+| `widgets/` | `widget()` | a dashboard widget |
+| `pages/` | `page()` | a full custom admin screen / route |
+| `blocks/` | (block renderer) | a block - see `references/blocks.md` |
+| `components/` | server-driven components | components referenced from server config |
+
+Scaffold one with `questpie add field|view|widget|block <name>` (creates the file in the right directory), then run `questpie generate`.
+
+## Component prop types
+
+When you author a custom component, import its prop type so props are typed. Everything comes from `@questpie/admin/client` **except** `BlockProps`, which is generated per-app:
+
+| Component | Prop type | Import from |
+| --- | --- | --- |
+| field `component` | `FieldComponentProps<TValue>` (extends `BaseFieldProps`) | `@questpie/admin/client` |
+| field `cell` | none - type inline as `{ value }: { value: unknown }` | - |
+| view, `kind: "list"` | `CollectionListViewProps` | `@questpie/admin/client` |
+| view, `kind: "form"` (collection) | `CollectionFormViewProps` | `@questpie/admin/client` |
+| view, `kind: "form"` (global) | `GlobalFormViewProps` | `@questpie/admin/client` |
+| widget `component` | `WidgetComponentProps<TData>` | `@questpie/admin/client` |
+| page `component` | none - a plain route component; fetch via the typed client | - |
+| block renderer | `BlockProps<"name">` (typed per block name) | `../.generated/client` (relative) |
+
+```tsx
+// every admin prop type is a named import from the package:
+import { field, type FieldComponentProps } from "@questpie/admin/client";
+// blocks are the exception - typed per block from YOUR generated client:
+import type { BlockProps } from "../.generated/client";
 ```
 
-### Built-in Field Registry
+## Custom field renderer
 
-```
-text       -> TextInput
-textarea   -> TextareaInput
-richText   -> RichTextEditor (TipTap)
-number     -> NumberInput
-boolean    -> Checkbox / Switch
-date       -> DatePicker
-datetime   -> DateTimePicker
-select     -> SelectDropdown
-relation   -> RelationPicker
-upload     -> FileUpload
-object     -> NestedForm
-array      -> RepeatableItems
-blocks     -> BlockEditor
-json       -> JSONEditor
-```
+A field renderer is `field("typeName", { component, cell? })`. `typeName` matches the server field type; `component` is the edit control, `cell` is the list-table column. Each may be a component or a lazy `() => import(...)`.
 
-### Extending Registries
+```tsx title="src/questpie/admin/fields/color.tsx"
+import { field, type FieldComponentProps } from "@questpie/admin/client";
 
-Place files in the admin directory. Codegen discovers them automatically:
+function ColorField({ value, onChange, onBlur, disabled, error }: FieldComponentProps<string>) {
+	return (
+		<input
+			type="color"
+			value={value ?? "#000000"}
+			disabled={disabled}
+			aria-invalid={!!error}
+			onChange={(e) => onChange?.(e.target.value)}
+			onBlur={onBlur}
+		/>
+	);
+}
 
-```
-questpie/admin/
-  fields/
-    color.tsx        # Custom color field renderer
-    currency.tsx     # Custom currency field renderer
-  views/
-    kanban.tsx       # Custom kanban list view
+function ColorCell({ value }: { value: unknown }) {
+	return <span className="font-mono">{String(value ?? "")}</span>;
+}
+
+export default field("color", { component: ColorField, cell: ColorCell });
 ```
 
-These are merged with built-in defaults during codegen and exported in `.generated/client.ts`.
+That is the whole wiring - no registry call, nothing added to `modules.ts`. (Creating the *server* field type that adds `f.color()` to the builder is separate: see the questpie skill's `references/extend.md` and `references/field-types.md`. The client side only maps a type name to a component.)
 
-## Custom Fields
+### Field component props
 
-### Server-Side Registration
+The `component` receives `FieldComponentProps<TValue>` (the typed superset of `BaseFieldProps`, which is what `questpie add field` scaffolds):
 
-Register custom fields through modules:
+| Prop | Type | Meaning |
+| --- | --- | --- |
+| `value` | `TValue` | current value (typed) |
+| `onChange?` | `(value: TValue) => void` | commit a new value - **pass the value, not a DOM event**; omitted in read-only/preview |
+| `onBlur` | `() => void` | mark touched / trigger validation |
+| `config?` | `FieldUIConfig` | resolved UI config from server introspection |
+| `name` | `string` | field name |
+| `disabled` / `readOnly` | `boolean` | disabled or read-only |
+| `error` | `string` | validation message to display |
+| `label` / `description` / `placeholder` | `string` | already resolved (i18n applied) |
+| `required` | `boolean` | required field |
+| `localized` / `locale` | `boolean` / `string` | localized field + current content locale |
+| `hideLabel` | `boolean` | render the control without its own label (compact rows) |
+| `className` | `string` | class to apply to the control |
 
-```ts
-const myModule = module({
-	name: "custom-fields",
-	fields: {
-		color: colorField,
-		currency: currencyField,
-		phone: phoneField,
-	},
+Read options off these props - don't re-declare them; they flow from the server `f.xxx()` definition via introspection. A `cell` component receives just `{ value }` (the column value).
+
+## Custom view
+
+A view is `view("name", { kind, component })`. `kind` is the view kind it satisfies (`list`, `form`, …); the component receives that kind's context - e.g. a `list` view gets `CollectionListViewProps` (rows, columns, pagination, selection).
+
+```tsx title="src/questpie/admin/views/kanban.tsx"
+import { view, type CollectionListViewProps } from "@questpie/admin/client";
+
+function KanbanView(props: CollectionListViewProps) {
+	// props carries the list context (data, columns, sort, selection, …)
+	return <div className="flex gap-4">{/* render columns from props */}</div>;
+}
+
+export default view("kanban", { kind: "list", component: KanbanView });
+```
+
+Use it declaratively on a collection: `.list(({ v }) => v.kanban({ columns: "status" }))`. The view's config comes from that `.list()` declaration via introspection, not from the client definition.
+
+## Widget
+
+A widget is `widget("name", { component })`; the component receives `WidgetComponentProps<TData>`:
+
+| Prop | Type | Meaning |
+| --- | --- | --- |
+| `config` | `WidgetConfig \| Record<string, any>` | widget config from the dashboard declaration |
+| `data?` | `TData` | data from the widget's data source |
+| `isLoading?` | `boolean` | loading state |
+
+```tsx title="src/questpie/admin/widgets/sales.tsx"
+import { widget, type WidgetComponentProps } from "@questpie/admin/client";
+
+function SalesWidget({ data, isLoading }: WidgetComponentProps<{ total: number }>) {
+	if (isLoading) return null;
+	return <div className="text-2xl font-mono">{data?.total ?? 0}</div>;
+}
+
+export default widget("sales", { component: SalesWidget });
+```
+
+## Custom page
+
+A page is a full custom admin screen: `page("name", { component, path, showInNav?, label?, icon?, group?, order? })` in `pages/`. The component is free-form React mounted at an admin route; `showInNav: true` adds a sidebar entry. Use it for experiences that aren't a collection/global - dashboards, importers, a chat UI. End-to-end example: `references/recipes.md`.
+
+```tsx title="src/questpie/admin/pages/reports.tsx"
+import { page } from "@questpie/admin/client";
+
+function ReportsPage() {
+	return <div>{/* free-form React; call the backend via the typed client */}</div>;
+}
+
+export default page("reports", {
+	component: ReportsPage,
+	path: "/reports",
+	showInNav: true,
+	label: { en: "Reports" },
 });
 ```
 
-Once registered and codegen runs, the field becomes available on the `f` builder:
+## Built-in field renderers
 
-```ts
-.fields(({ f }) => ({
-  brandColor: f.color().default("#000000"),
-  price: f.currency({ currency: "USD" }),
-}))
-```
+For reference, the built-in field types render as:
 
-### Admin Field Renderer
-
-Create a React component for the field's edit form:
-
-```tsx title="admin/fields/color.tsx"
-import { Icon } from "@iconify/react";
-
-function ColorFieldRenderer({ value, onChange }) {
-	return (
-		<div className="flex items-center gap-2">
-			<input
-				type="color"
-				value={value || "#000000"}
-				onChange={(e) => onChange(e.target.value)}
-				className="w-10 h-10 border border-border cursor-pointer"
-			/>
-			<span className="font-mono text-sm text-muted-foreground">
-				{value || "#000000"}
-			</span>
-		</div>
-	);
-}
-```
-
-### Cell Renderer
-
-For custom table column rendering, provide a `cell` component alongside the field renderer:
-
-```tsx title="admin/fields/color.tsx"
-// Cell component for list view table
-export function ColorCell({ value }) {
-	return (
-		<div className="flex items-center gap-2">
-			<div
-				className="w-4 h-4 border border-border"
-				style={{ backgroundColor: value || "transparent" }}
-			/>
-			<span className="text-xs font-mono">{value}</span>
-		</div>
-	);
-}
-```
-
-## Custom Views
-
-Create view types beyond built-in table and form, kanban boards, calendars, galleries.
-
-### Server-Side Declaration
-
-```ts
-const myModule = module({
-	name: "custom-views",
-	views: {
-		kanban: kanbanViewDefinition,
-		calendar: calendarViewDefinition,
-	},
-});
-```
-
-### Usage in Collections
-
-```ts
-.list(({ v }) => v.kanban({
-  columns: "status",
-  cardTitle: "title",
-}))
-```
-
-### Client Rendering
-
-```tsx title="admin/views/kanban.tsx"
-function KanbanView({ data, columns, onDrop }) {
-	return (
-		<div className="flex gap-4">
-			{columns.map((col) => (
-				<div key={col.id} className="flex-1">
-					<h3 className="font-mono text-sm font-semibold mb-2">{col.label}</h3>
-					{data
-						.filter((item) => item.status === col.id)
-						.map((item) => (
-							<div
-								key={item.id}
-								className="border border-border bg-card p-3 mb-2"
-							>
-								{item.title}
-							</div>
-						))}
-				</div>
-			))}
-		</div>
-	);
-}
-```
+| Type | Renderer | Type | Renderer |
+| --- | --- | --- | --- |
+| `text` | text input | `relation` | relation picker |
+| `textarea` | textarea | `upload` | file upload |
+| `richText` | TipTap editor | `object` | nested form |
+| `number` | number input | `array` | repeatable items |
+| `boolean` | checkbox / switch | `blocks` | block editor |
+| `date` / `datetime` | date picker | `json` | JSON editor |
+| `select` | select dropdown | | |
 
 ## Reactive Field System
 
-Fields support reactive behaviors configured in the collection's `.form()` view or on the field definition itself.
-
-### Conditional Visibility
-
-```ts
-{
-  field: f.cancellationReason,
-  hidden: ({ data }) => data.status !== "cancelled",
-}
-```
-
-### Read-Only
-
-```ts
-{
-  field: f.customerName,
-  readOnly: ({ data }) => !!data.customer,
-}
-```
-
-### Computed Values
-
-```ts
-{
-  field: f.slug,
-  compute: {
-    handler: ({ data }) => {
-      if (data.name && !data.slug?.trim()) {
-        return slugify(data.name);
-      }
-      return undefined;
-    },
-    deps: ({ data }) => [data.name, data.slug],
-    debounce: 300,
-  },
-}
-```
+Conditional visibility (`hidden`), read-only (`readOnly`), and computed values (`compute`) are configured the same way on form views - see `references/views.md`. The one reactive behavior unique to custom fields is server-side dynamic options:
 
 ### Dynamic Options (Server-Side)
 
@@ -241,36 +197,13 @@ The `handler` runs **server-side** with full access to `ctx.db`, `ctx.user`, `ct
 
 ## UI Component Reference
 
-When building custom admin UI, use these patterns:
+Icons (`@iconify/react`, `ph:` prefix), toasts (`sonner`), and base-ui `render`-vs-`asChild` usage are covered in the questpie-admin skill's Tech Stack and Common Mistakes (SKILL.md). Two admin-specific specifics:
 
-### Icons
-
-```tsx
-import { Icon } from "@iconify/react";
-
-// Phosphor icon set with ph: prefix
-<Icon icon="ph:house" width={20} height={20} />
-<Icon icon="ph:caret-down-bold" width={16} height={16} />  // bold weight
-<Icon icon="ph:heart-fill" width={16} height={16} />        // fill weight
-```
-
-### Toasts
+### Icon weights
 
 ```tsx
-import { toast } from "sonner";
-
-toast.success("Record saved");
-toast.error("Failed to save");
-```
-
-### Primitives (base-ui)
-
-```tsx
-// CORRECT, render prop
-<DialogTrigger render={<Button>Open</Button>} />
-
-// WRONG, asChild is Radix, not base-ui
-<DialogTrigger asChild><Button>Open</Button></DialogTrigger>
+<Icon icon="ph:caret-down-bold" width={16} height={16} />  // bold
+<Icon icon="ph:heart-fill" width={16} height={16} />        // fill
 ```
 
 ### Responsive Components
@@ -281,13 +214,15 @@ toast.error("Failed to save");
 
 ## Common Mistakes
 
-1. **HIGH: Not registering custom field in the field registry**, if codegen doesn't discover the field renderer file, the admin will render nothing for that field type. Place it in `questpie/admin/fields/<name>.tsx`.
+1. **CRITICAL: Editing `.generated/` or expecting manual registration**, custom UI is wired by codegen from your default-exported `field()`/`view()`/`widget()` definition files. Never edit `admin/.generated/client.ts`. If a renderer doesn't appear, the definition file is missing/misplaced or you forgot `questpie generate`, place it in `src/questpie/admin/{fields,views,widgets}/<name>.tsx`.
 
-2. **HIGH: Missing `cell` component for custom fields**, without a cell component, the list view table shows raw values for your custom field instead of a formatted display.
+2. **HIGH: Re-declaring field options in the client renderer**, label/required/validation/placeholder come from the server `f.xxx()` definition via introspection. Read them off props; do not hardcode them in the component.
 
-3. **MEDIUM: Reactive field handlers running client-side**, `options.handler`, `compute.handler`, and other reactive handlers run **SERVER-SIDE** with access to `ctx.db`, `ctx.user`. Do not import client-side modules or use browser APIs in them.
+3. **HIGH: Missing `cell` component for custom fields**, without a `cell`, the list-view table shows the raw value instead of a formatted display.
 
-4. **MEDIUM: Using `onChange` wrong in field components**, the field renderer receives `onChange` that expects the **value directly**, not a DOM event.
+4. **MEDIUM: Reactive field handlers running client-side**, `options.handler`, `compute.handler`, and other reactive handlers run **SERVER-SIDE** with access to `ctx.db`, `ctx.user`. Do not import client-side modules or use browser APIs in them.
+
+5. **MEDIUM: Using `onChange` wrong in field components**, the renderer's `onChange` expects the **value directly**, not a DOM event.
 
    ```tsx
    // WRONG
@@ -298,8 +233,4 @@ toast.error("Failed to save");
    onChange={newValue}
    ```
 
-5. **MEDIUM: Importing from `@radix-ui/*`**, QUESTPIE admin uses `@base-ui/react`. Never import Radix primitives.
-
-6. **MEDIUM: Using `@phosphor-icons/react` or `lucide-react`**, use `@iconify/react` with `ph:` prefix for all icons.
-
-7. **LOW: Not using shadcn components**, prefer `<Button>`, `<Card>`, `<Input>` from the shadcn component library instead of raw HTML elements. The admin follows QUESTPIE Neutral Design.
+6. **MEDIUM: Radix imports, wrong icons, raw HTML elements**, see the questpie-admin skill's Common Mistakes (SKILL.md): use `@base-ui/react` (not `@radix-ui/*`), `@iconify/react` with `ph:` (not `@phosphor-icons/react`/`lucide-react`), and shadcn components (not raw HTML).
