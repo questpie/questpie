@@ -7,7 +7,7 @@ description: QUESTPIE admin views list-view table form-view sections sidebar das
 
 This skill builds on questpie-admin.
 
-Views control how data appears in the QUESTPIE admin panel. They are configured **server-side** on collections and globals, then rendered by the admin client via registries.
+Views control how data appears in the QUESTPIE admin panel. They are configured **server-side** on collections and globals via `.list()` / `.form()`, and the admin client renders them from that introspected config. Custom view *types* (kanban, calendar, …) are declarative `view()` definitions discovered by codegen — see `references/custom-ui.md`.
 
 ```text
 Server Config                     Admin UI
