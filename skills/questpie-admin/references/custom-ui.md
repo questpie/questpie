@@ -26,6 +26,28 @@ Drop a default-exported definition in the admin client root (`src/questpie/admin
 
 Scaffold one with `questpie add field|view|widget|block <name>` (creates the file in the right directory), then run `questpie generate`.
 
+## Component prop types
+
+When you author a custom component, import its prop type so props are typed. Everything comes from `@questpie/admin/client` **except** `BlockProps`, which is generated per-app:
+
+| Component | Prop type | Import from |
+| --- | --- | --- |
+| field `component` | `FieldComponentProps<TValue>` (extends `BaseFieldProps`) | `@questpie/admin/client` |
+| field `cell` | none — type inline as `{ value }: { value: unknown }` | — |
+| view, `kind: "list"` | `CollectionListViewProps` | `@questpie/admin/client` |
+| view, `kind: "form"` (collection) | `CollectionFormViewProps` | `@questpie/admin/client` |
+| view, `kind: "form"` (global) | `GlobalFormViewProps` | `@questpie/admin/client` |
+| widget `component` | `WidgetComponentProps<TData>` | `@questpie/admin/client` |
+| page `component` | none — a plain route component; fetch via the typed client | — |
+| block renderer | `BlockProps<"name">` (typed per block name) | `../.generated/client` (relative) |
+
+```tsx
+// every admin prop type is a named import from the package:
+import { field, type FieldComponentProps } from "@questpie/admin/client";
+// blocks are the exception — typed per block from YOUR generated client:
+import type { BlockProps } from "../.generated/client";
+```
+
 ## Custom field renderer
 
 A field renderer is `field("typeName", { component, cell? })`. `typeName` matches the server field type; `component` is the edit control, `cell` is the list-table column. Each may be a component or a lazy `() => import(...)`.
