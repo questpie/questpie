@@ -116,6 +116,7 @@ Files starting with `_`, `index.ts`, declaration files, tests, and specs are int
 | Durable Workflows | `references/workflows.md`       | Long-running workflows, steps, events, cron, admin UI              |
 | Sandboxed Code    | `references/sandbox.md`         | `ctx.executor.run()`, isolation modes, capability model, Deno engine deployment |
 | CRUD API          | `references/crud-api.md`        | `find`, `create`, `updateById`/`updateMany`, `deleteById`/`deleteMany`, atomic conditional updates, globals API |
+| Seeds             | `references/seeds.md`           | `seed()` vs `seed.steps()`, idempotency, checkpointed steps, categories, `dependsOn`, `undo`, `autoSeed`, seed CLI |
 | Query Operators   | `references/query-operators.md` | `where` clause operators by field type                             |
 | Realtime          | `references/realtime.md`        | Live queries over SSE, automatic broadcasts, `live()`/`liveIter()`, wire protocol, keepalive |
 
