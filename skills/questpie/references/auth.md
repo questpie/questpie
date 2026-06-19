@@ -284,7 +284,6 @@ Apps without `@questpie/admin` use Better Auth's own `createAuthClient` from `be
 ## Production Security Checklist
 
 1. Set `BETTER_AUTH_SECRET` to a strong random value (32+ chars)
-2. Set `APP_URL` to your production domain (HTTPS)
+2. Serve `APP_URL` and all auth endpoints over HTTPS in production
 3. Enable `requireEmailVerification` if using email/password
-4. Use HTTPS for all auth endpoints
-5. Configure proper CORS if API and frontend are on different domains
+4. Configure proper CORS if API and frontend are on different domains

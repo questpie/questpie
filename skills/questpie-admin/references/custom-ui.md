@@ -179,43 +179,7 @@ function KanbanView({ data, columns, onDrop }) {
 
 ## Reactive Field System
 
-Fields support reactive behaviors configured in the collection's `.form()` view or on the field definition itself.
-
-### Conditional Visibility
-
-```ts
-{
-  field: f.cancellationReason,
-  hidden: ({ data }) => data.status !== "cancelled",
-}
-```
-
-### Read-Only
-
-```ts
-{
-  field: f.customerName,
-  readOnly: ({ data }) => !!data.customer,
-}
-```
-
-### Computed Values
-
-```ts
-{
-  field: f.slug,
-  compute: {
-    handler: ({ data }) => {
-      if (data.name && !data.slug?.trim()) {
-        return slugify(data.name);
-      }
-      return undefined;
-    },
-    deps: ({ data }) => [data.name, data.slug],
-    debounce: 300,
-  },
-}
-```
+Conditional visibility (`hidden`), read-only (`readOnly`), and computed values (`compute`) are configured the same way on form views — see `references/views.md`. The one reactive behavior unique to custom fields is server-side dynamic options:
 
 ### Dynamic Options (Server-Side)
 
@@ -241,36 +205,13 @@ The `handler` runs **server-side** with full access to `ctx.db`, `ctx.user`, `ct
 
 ## UI Component Reference
 
-When building custom admin UI, use these patterns:
+Icons (`@iconify/react`, `ph:` prefix), toasts (`sonner`), and base-ui `render`-vs-`asChild` usage are covered in the questpie-admin skill's Tech Stack and Common Mistakes (SKILL.md). Two admin-specific specifics:
 
-### Icons
-
-```tsx
-import { Icon } from "@iconify/react";
-
-// Phosphor icon set with ph: prefix
-<Icon icon="ph:house" width={20} height={20} />
-<Icon icon="ph:caret-down-bold" width={16} height={16} />  // bold weight
-<Icon icon="ph:heart-fill" width={16} height={16} />        // fill weight
-```
-
-### Toasts
+### Icon weights
 
 ```tsx
-import { toast } from "sonner";
-
-toast.success("Record saved");
-toast.error("Failed to save");
-```
-
-### Primitives (base-ui)
-
-```tsx
-// CORRECT, render prop
-<DialogTrigger render={<Button>Open</Button>} />
-
-// WRONG, asChild is Radix, not base-ui
-<DialogTrigger asChild><Button>Open</Button></DialogTrigger>
+<Icon icon="ph:caret-down-bold" width={16} height={16} />  // bold
+<Icon icon="ph:heart-fill" width={16} height={16} />        // fill
 ```
 
 ### Responsive Components
@@ -298,8 +239,4 @@ toast.error("Failed to save");
    onChange={newValue}
    ```
 
-5. **MEDIUM: Importing from `@radix-ui/*`**, QUESTPIE admin uses `@base-ui/react`. Never import Radix primitives.
-
-6. **MEDIUM: Using `@phosphor-icons/react` or `lucide-react`**, use `@iconify/react` with `ph:` prefix for all icons.
-
-7. **LOW: Not using shadcn components**, prefer `<Button>`, `<Card>`, `<Input>` from the shadcn component library instead of raw HTML elements. The admin follows QUESTPIE Neutral Design.
+5. **MEDIUM: Radix imports, wrong icons, raw HTML elements**, see the questpie-admin skill's Common Mistakes (SKILL.md): use `@base-ui/react` (not `@radix-ui/*`), `@iconify/react` with `ph:` (not `@phosphor-icons/react`/`lucide-react`), and shadcn components (not raw HTML).

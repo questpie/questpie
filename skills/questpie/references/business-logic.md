@@ -187,6 +187,21 @@ export default job({
 
 Place files in `jobs/`. The filename becomes the job key: `send-appointment-confirmation.ts` maps to `sendAppointmentConfirmation`.
 
+Retry behavior is configured via `options` on the job:
+
+```ts
+export default job({
+	name: "send-appointment-confirmation",
+	schema: z.object({ appointmentId: z.string() }),
+	options: {
+		retryLimit: 3,
+		retryDelay: 5, // seconds, NOT ms
+		retryBackoff: true, // exponential
+	},
+	handler: async ({ payload }) => { /* ... */ },
+});
+```
+
 ### Publishing Jobs
 
 Publish from hooks, routes, or other jobs via the typed `queue` context:
@@ -242,21 +257,7 @@ Job handlers receive the base `AppContext` (see [Handler Context](#handler-conte
 
 ### Queue Adapter Configuration
 
-Configure the queue adapter in your runtime config:
-
-```ts
-// questpie.config.ts
-import { runtimeConfig } from "questpie/app";
-import { pgBossAdapter } from "questpie/adapters/pg-boss";
-
-export default runtimeConfig({
-	queue: {
-		adapter: pgBossAdapter({
-			connectionString: process.env.DATABASE_URL,
-		}),
-	},
-});
-```
+Jobs require a queue adapter in `questpie.config.ts` (`runtimeConfig({ queue: { adapter } })`). Adapter shapes (pg-boss, BullMQ, Cloudflare Queues) and connection options: `references/infrastructure-adapters.md`.
 
 ## Raw Routes
 

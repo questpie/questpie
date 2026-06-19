@@ -229,6 +229,8 @@ await app.globals.siteSettings.update(
 );
 ```
 
+When the global has versioning enabled, it also exposes `findVersions(options?) → VersionRecord[]`, `revertToVersion({ version }) → T`, and `transitionStage({ stage }) → T` (the global counterparts of the collection versioning methods).
+
 ## Query Operators
 
 Operators are always nested inside field objects in `where`. See `references/query-operators.md` for the full reference.
@@ -288,6 +290,23 @@ const page2 = await collections.posts.find({
 	offset: 20,
 });
 // page2.totalDocs = total count across all pages
+```
+
+`find()` returns the full `PaginatedResult<T>` (the snippets above destructure the two common fields):
+
+```ts
+{
+	docs: T[],
+	totalDocs: number,
+	limit: number,
+	totalPages: number,
+	page: number,
+	pagingCounter: number,
+	hasPrevPage: boolean,
+	hasNextPage: boolean,
+	prevPage: number | null,
+	nextPage: number | null,
+}
 ```
 
 ### Keyset (cursor) pagination
@@ -429,9 +448,11 @@ const count = await client.collections.posts.count({
 });
 ```
 
+Client calls reject with `QuestpieClientError` (import from `questpie/client`) on a non-2xx response; check `err instanceof QuestpieClientError` to read the server status and message.
+
 ### Live Queries (Client Only)
 
-Every read has a live form, `live()` mirrors `find()` (same options, same snapshot type) and pushes access-controlled snapshots over SSE. Globals mirror `get()`: `client.globals.<name>.live(...)`. See AGENTS.md §19 Realtime:
+Every read has a live form, `live()` mirrors `find()` (same options, same snapshot type) and pushes access-controlled snapshots over SSE. Globals mirror `get()`: `client.globals.<name>.live(...)`. See `references/realtime.md`:
 
 ```ts
 const stop = client.collections.posts.live(

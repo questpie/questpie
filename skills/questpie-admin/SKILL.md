@@ -21,7 +21,7 @@ The QUESTPIE admin panel is a **projection of your server schema**, not the fram
 
 ## Full Compiled Document
 
-For the complete admin reference with all topics expanded: `AGENTS.md`
+`AGENTS.md` expands this file plus every `references/` topic inline, in one document. It is generated (`bun run scripts/build-skill-docs.ts`), so read it when you want everything at once, but edit the sources (this file and `references/`), never `AGENTS.md` directly.
 
 ## Tech Stack
 

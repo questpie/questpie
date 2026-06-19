@@ -347,14 +347,7 @@ where: { author: "user-id-123" }
 
 ### Operators by Field Type
 
-| Field Type          | Operators                                            |
-| ------------------- | ---------------------------------------------------- |
-| `text`              | `equals`, `contains`, `startsWith`, `endsWith`, `in` |
-| `number`            | `equals`, `gt`, `gte`, `lt`, `lte`, `in`             |
-| `boolean`           | `equals`                                             |
-| `date` / `datetime` | `equals`, `gt`, `gte`, `lt`, `lte`                   |
-| `select`            | `equals`, `in`                                       |
-| `relation`          | `equals` (by ID)                                     |
+`where` operators are identical to the server CRUD API and fully type-safe from your field definitions. Full operator reference by field type: `references/query-operators.md`.
 
 ### OrderBy, Pagination, Relations, Select
 

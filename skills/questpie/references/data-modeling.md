@@ -182,49 +182,7 @@ Hand-written `f.relation()` fields keep normal target-collection access.
 
 ### CRUD Operations (Server-Side)
 
-```ts
-const { collections } = context;
-
-// Find many
-const results = await collections.posts.find({
-	where: { status: "published" },
-	orderBy: { publishedAt: "desc" },
-	limit: 10,
-	offset: 0,
-});
-// results.docs: Post[], results.totalDocs: number
-
-// Find one
-const post = await collections.posts.findOne({ where: { id: "abc" } });
-
-// Create
-const newPost = await collections.posts.create({
-	title: "Hello",
-	body: "<p>World</p>",
-	status: "draft",
-});
-
-// Update by id (returns T, throws notFound)
-await collections.posts.updateById({
-	id: "abc",
-	data: { status: "published" },
-});
-
-// Bulk update by where (returns T[], the rows actually written)
-await collections.posts.updateMany({
-	where: { status: "draft" },
-	data: { status: "archived" },
-});
-
-// Delete by id
-await collections.posts.deleteById({ id: "abc" });
-
-// Bulk delete by where (returns { success, count })
-await collections.posts.deleteMany({ where: { status: "archived" } });
-
-// Count
-const count = await collections.posts.count({ where: { status: "published" } });
-```
+Server and client CRUD vocabulary, full options, return shapes, atomic/conditional updates, and transactions: `references/crud-api.md`.
 
 ## Globals
 
@@ -266,15 +224,7 @@ Globals share most methods with collections but do NOT support `.list()`, `.inde
 
 ### Global API
 
-```ts
-// Server-side
-const settings = await globals.siteSettings.get();
-await globals.siteSettings.update({ shopName: "New Name" });
-
-// Client-side
-const settings = await client.globals.siteSettings.get();
-await client.globals.siteSettings.update({ shopName: "New Name" });
-```
+Globals expose `get()` / `update()` (plus versioning methods when enabled), server- and client-side. Full signatures: `references/crud-api.md`.
 
 ## Fields
 

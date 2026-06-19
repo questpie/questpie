@@ -281,31 +281,13 @@ function PageRenderer({ page }) {
 
 ## Blocks in Live Preview
 
-When a collection has `.preview()` configured, blocks participate in the existing Live Preview system through `BlockRenderer` and `PreviewField`. The form remains authoritative; block annotations only mirror values, focus fields, select blocks, or request inline scalar edits.
-
-### Preferred: BlockRenderer
-
-Use `BlockRenderer` for normal frontend page rendering. It preserves `data-block-id`, routes block selection, and scopes nested `PreviewField` paths automatically.
-
-```tsx
-<BlockRenderer
-	content={preview.data.content}
-	data={preview.data.content?._data}
-	renderers={admin.blocks}
-	selectedBlockId={preview.selectedBlockId}
-	onBlockClick={preview.isPreviewMode ? preview.handleBlockClick : undefined}
-/>
-```
-
-Inside custom block renderers, annotate scalar values with `PreviewField`:
+When a collection has `.preview()`, blocks participate in Live Preview through `BlockRenderer` and `PreviewField` — see the questpie-admin skill's **Live Preview** section (SKILL.md) for the `BlockRenderer` setup. The block-specific rule: a `PreviewField` rendered inside `BlockRenderer` resolves to `content._values.{blockId}.<field>`, block scope is applied automatically.
 
 ```tsx
 <PreviewField field="title" editable="text" as="h2">
 	{values.title}
 </PreviewField>
 ```
-
-This resolves to `content._values.{blockId}.title` when rendered inside `BlockRenderer`.
 
 ### Manual BlockScopeProvider Wrapper
 

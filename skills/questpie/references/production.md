@@ -63,59 +63,7 @@ Snippets that read config values assume `import env from "./env"` at the top of 
 
 ## Authentication
 
-QUESTPIE uses [Better Auth](https://www.better-auth.com/). Configure via `config/auth.ts`:
-
-```ts
-// src/questpie/server/config/auth.ts
-import { authConfig } from "questpie/app";
-
-import env from "../env";
-
-export default authConfig({
-	emailAndPassword: {
-		enabled: true,
-		requireEmailVerification: false,
-	},
-	baseURL: env.APP_URL ?? "http://localhost:3000",
-	basePath: "/api/auth",
-	secret: env.BETTER_AUTH_SECRET,
-});
-```
-
-### Auth Options
-
-| Option                                      | Type      | Description                                         |
-| ------------------------------------------- | --------- | --------------------------------------------------- |
-| `emailAndPassword.enabled`                  | `boolean` | Enable email/password login                         |
-| `emailAndPassword.requireEmailVerification` | `boolean` | Require email verification                          |
-| `baseURL`                                   | `string`  | App public URL                                      |
-| `basePath`                                  | `string`  | Auth API path prefix                                |
-| `secret`                                    | `string`  | Session signing secret (min 32 chars in production) |
-
-### Session in Handlers
-
-Access the current session in functions, hooks, and access rules:
-
-```ts
-handler: async ({ session }) => {
-	if (!session) throw new Error("Not authenticated");
-	const user = session.user;
-	// user.id, user.email, user.name
-};
-```
-
-### Access Control with Session
-
-```ts
-.access({
-  read: true,
-  create: ({ session }) => !!session,
-  update: ({ session }) => session?.user.role === "admin",
-  delete: ({ session }) => session?.user.role === "admin",
-})
-```
-
-The `adminModule` provides the canonical Better Auth `user` collection for storing user accounts. That contract includes `user.role` (`admin` or `user`), which built-in admin setup and login guards depend on. Do not replace `collection("user")` from scratch in apps that use `adminModule`; merge `starterModule.collections.user` and extend it instead.
+Full auth setup — `authConfig()` options, session shape, providers, and the `adminModule` user-collection contract (`user.role`, merge `starterModule.collections.user`, never redefine `collection("user")` from scratch) — lives in `references/auth.md`. One deployment-specific concern:
 
 ### Locking Down the REST Surface
 

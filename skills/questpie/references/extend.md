@@ -112,6 +112,8 @@ export default runtimeConfig({
 
 Use direct `runtimeConfig({ plugins })` registration only for standalone codegen plugins or custom setups that do not ship a module. Reusable packages should usually attach the plugin to a static module and let codegen extract it from `modules.ts`.
 
+A published module package that ships its own convention dirs declares package-level config with `packageConfig()` (from `questpie/cli`) instead of `runtimeConfig()`; codegen reads it when scanning the package.
+
 ### Configurable Codegen-Aware Modules
 
 When a package ships a module and a `CodegenPlugin`, keep module identity static and put runtime options in a plugin-discovered config file. Codegen imports `modules.ts` before runtime app creation, so it must be able to see the same module/plugin tree regardless of environment or runtime options.
