@@ -7,7 +7,7 @@ description: QUESTPIE admin views list-view table form-view sections sidebar das
 
 This skill builds on questpie-admin.
 
-Views control how data appears in the QUESTPIE admin panel. They are configured **server-side** on collections and globals via `.list()` / `.form()`, and the admin client renders them from that introspected config. Custom view *types* (kanban, calendar, …) are declarative `view()` definitions discovered by codegen — see `references/custom-ui.md`.
+Views control how data appears in the QUESTPIE admin panel. They are configured **server-side** on collections and globals via `.list()` / `.form()`, and the admin client renders them from that introspected config. Custom view *types* (kanban, calendar, …) are declarative `view()` definitions discovered by codegen - see `references/custom-ui.md`.
 
 ```text
 Server Config                     Admin UI
@@ -404,4 +404,4 @@ export const logs = collection("logs")
 
 ## Form Views and Live Preview
 
-When a collection has `.preview()`, the form view becomes the split-screen preview surface — keep `v.collectionForm()` as the form; do not introduce a separate visual-edit form API, a second default form view, or parallel preview API names. The `.preview()` server config, the frontend preparation checklist, and the `useCollectionPreview` / `PreviewProvider` / `PreviewField` / `BlockRenderer` APIs all live in the questpie-admin skill's **Live Preview** section (SKILL.md).
+When a collection has `.preview()`, the form view becomes the split-screen preview surface - keep `v.collectionForm()` as the form; do not introduce a separate visual-edit form API, a second default form view, or parallel preview API names. The `.preview()` server config, the frontend preparation checklist, and the `useCollectionPreview` / `PreviewProvider` / `PreviewField` / `BlockRenderer` APIs all live in the questpie-admin skill's **Live Preview** section (SKILL.md).

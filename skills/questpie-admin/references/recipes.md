@@ -7,7 +7,7 @@ description: QUESTPIE admin recipes BE field vs FE field server field type from(
 
 This skill builds on questpie-admin.
 
-Task-oriented recipes for extending the admin. Every recipe is **declarative**: add definition files, run `questpie generate`, codegen wires them — you never edit `.generated/`. Primitive reference (factories + component props) is in `references/custom-ui.md`.
+Task-oriented recipes for extending the admin. Every recipe is **declarative**: add definition files, run `questpie generate`, codegen wires them - you never edit `.generated/`. Primitive reference (factories + component props) is in `references/custom-ui.md`.
 
 ## BE field vs FE field
 
@@ -15,19 +15,19 @@ A custom field has **two independent halves** that connect by name:
 
 | | BE field (server) | FE field (admin client) |
 | --- | --- | --- |
-| What | the **field type** — adds `f.color()` to the builder | the **renderer** — how that type looks in the admin |
+| What | the **field type** - adds `f.color()` to the builder | the **renderer** - how that type looks in the admin |
 | Owns | storage column, Zod validation, operators, options/metadata | the edit control + the table cell |
 | Factory | `from()` / `field()` / `fieldType()` (from `questpie/builders`) | `field("color", { component, cell })` (from `@questpie/admin/client`) |
 | Lives in | a module's `fields` (questpie skill `references/extend.md`) | `src/questpie/admin/fields/color.tsx` |
 | Without the other | works headless, no admin needed | a default control is used if you ship none |
 
-They never import each other. The server type emits introspection metadata under its type name; the admin looks up the renderer by the **same name** and feeds it the resolved options as props. So options are declared once (server) and *read* off props (client) — never duplicated.
+They never import each other. The server type emits introspection metadata under its type name; the admin looks up the renderer by the **same name** and feeds it the resolved options as props. So options are declared once (server) and *read* off props (client) - never duplicated.
 
 ## Recipe: a custom field, end to end
 
 A `color` field stored as a hex string, with its own admin control + table cell.
 
-**1. BE — the field type** (server):
+**1. BE - the field type** (server):
 
 ```ts title="src/questpie/server/fields/color.ts"
 import { from } from "questpie/builders";
@@ -51,7 +51,7 @@ export default [module({ name: "app-fields", fields: { color } })] as const;
 .fields(({ f }) => ({ brandColor: f.color().required().label({ en: "Brand color" }) }))
 ```
 
-**2. FE — the renderer** (admin client):
+**2. FE - the renderer** (admin client):
 
 ```tsx title="src/questpie/admin/fields/color.tsx"
 import { field, type FieldComponentProps } from "@questpie/admin/client";
@@ -76,11 +76,11 @@ function ColorCell({ value }: { value: unknown }) {
 export default field("color", { component: ColorField, cell: ColorCell });
 ```
 
-**3.** Run `questpie generate`. The `label` / `required` set on the server arrive as props — the renderer never re-declares them.
+**3.** Run `questpie generate`. The `label` / `required` set on the server arrive as props - the renderer never re-declares them.
 
 ## Recipe: a custom experience in the admin (e.g. a chat page)
 
-For a full custom screen — a chat UI, an analytics board, a bulk importer — use a **page**: `page("name", { component, path, showInNav, label, icon? })` from `@questpie/admin/client`, in `src/questpie/admin/pages/`. The component is free-form React mounted at an admin route; `showInNav: true` adds a sidebar entry automatically.
+For a full custom screen - a chat UI, an analytics board, a bulk importer - use a **page**: `page("name", { component, path, showInNav, label, icon? })` from `@questpie/admin/client`, in `src/questpie/admin/pages/`. The component is free-form React mounted at an admin route; `showInNav: true` adds a sidebar entry automatically.
 
 ```tsx title="src/questpie/admin/pages/chat.tsx"
 import { page } from "@questpie/admin/client";
@@ -112,11 +112,11 @@ export default page("chat", {
 });
 ```
 
-The backend is just normal QUESTPIE — a `route()` (plus `job()` / `service()` / a collection for history) in the server tree (questpie skill `references/business-logic.md`); the page calls it through the typed client and renders the result. Nothing about the page is special-cased — it is a declaration discovered from `admin/pages/`. (To place it under a specific sidebar section instead of auto-nav, omit `showInNav` and add a `type: "page"` item referencing it in `adminConfig.sidebar`.)
+The backend is just normal QUESTPIE - a `route()` (plus `job()` / `service()` / a collection for history) in the server tree (questpie skill `references/business-logic.md`); the page calls it through the typed client and renders the result. Nothing about the page is special-cased - it is a declaration discovered from `admin/pages/`. (To place it under a specific sidebar section instead of auto-nav, omit `showInNav` and add a `type: "page"` item referencing it in `adminConfig.sidebar`.)
 
 ## Recipe: a custom view (display)
 
-To change how a collection's list (or form) renders — kanban, calendar, gallery — ship a `view("name", { kind, component })` in `src/questpie/admin/views/`, then select it declaratively on the collection.
+To change how a collection's list (or form) renders - kanban, calendar, gallery - ship a `view("name", { kind, component })` in `src/questpie/admin/views/`, then select it declaratively on the collection.
 
 ```tsx title="src/questpie/admin/views/kanban.tsx"
 import { view, type CollectionListViewProps } from "@questpie/admin/client";
@@ -133,4 +133,4 @@ export default view("kanban", { kind: "list", component: KanbanView });
 .list(({ v }) => v.kanban({ columns: "status" })) // view config lives here, arrives as props
 ```
 
-For a smaller, cell-level display (a badge, a sparkline in a table column) you usually only need the `cell` of an FE field renderer — see the field recipe — not a whole view.
+For a smaller, cell-level display (a badge, a sparkline in a table column) you usually only need the `cell` of an FE field renderer - see the field recipe - not a whole view.

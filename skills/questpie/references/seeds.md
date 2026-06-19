@@ -39,7 +39,7 @@ export default seed({
 });
 ```
 
-**Seeds must be idempotent.** Tracking skips already-run seeds, but `--force`, fresh DBs, and `seed:reset` re-enter `run`. Check-if-exists, use stable unique keys, or upsert singletons — never blind-insert duplicates.
+**Seeds must be idempotent.** Tracking skips already-run seeds, but `--force`, fresh DBs, and `seed:reset` re-enter `run`. Check-if-exists, use stable unique keys, or upsert singletons - never blind-insert duplicates.
 
 ### Checkpointed steps
 
@@ -58,7 +58,7 @@ export default seed.steps({
 
 - `step(name, fn)` runs `fn` with a **transaction-bound** seed context and stores its return value; on re-run a completed step skips and returns the cached value.
 - Step results must be **JSON-serializable** (a void step returns `undefined` on replay).
-- A step seed has **no seed-wide rollback** — keep all DB mutations inside `step(...)`; work outside a step is neither checkpointed nor rolled back.
+- A step seed has **no seed-wide rollback** - keep all DB mutations inside `step(...)`; work outside a step is neither checkpointed nor rolled back.
 - `questpie seed --force` clears that seed's checkpoints (every step re-runs); `seed:reset` also clears them.
 
 ## Categories
@@ -80,11 +80,11 @@ Every seed has one `category`: `required` (bootstrap data for every env), `dev` 
 | `questpie seed` | Run pending seeds |
 | `questpie seed:status` | List pending + executed seeds |
 | `questpie seed:undo` | Run `undo` handlers for executed seeds, then remove tracking rows |
-| `questpie seed:reset` | Clear tracking rows + step checkpoints (NOT an undo — leaves data, marks seeds pending) |
+| `questpie seed:reset` | Clear tracking rows + step checkpoints (NOT an undo - leaves data, marks seeds pending) |
 
 Options: `--category <required,dev,test>` (`seed`, `seed:undo`), `--only <ids>` (`seed`, `seed:undo`, `seed:reset`), `-f, --force` (re-run despite tracking), `--validate` (run inside a transaction and roll back).
 
-`--validate` rolls back **database** writes only — external side effects (email, HTTP, queue publish, storage) still run. Guard those or keep validation-safe seeds free of them.
+`--validate` rolls back **database** writes only - external side effects (email, HTTP, queue publish, storage) still run. Guard those or keep validation-safe seeds free of them.
 
 ## Modules
 

@@ -7,9 +7,9 @@ description: QUESTPIE custom admin UI field() view() widget() definitions discov
 
 This skill builds on questpie-admin.
 
-Custom admin UI — field renderers, custom views, dashboard widgets — is **declarative**, exactly like the rest of QUESTPIE. You write a *definition* with a factory (`field()`, `view()`, `widget()` from `@questpie/admin/client`), default-export it from a convention directory, and `questpie generate` discovers it and wires it into `admin/.generated/client.ts`.
+Custom admin UI - field renderers, custom views, dashboard widgets - is **declarative**, exactly like the rest of QUESTPIE. You write a *definition* with a factory (`field()`, `view()`, `widget()` from `@questpie/admin/client`), default-export it from a convention directory, and `questpie generate` discovers it and wires it into `admin/.generated/client.ts`.
 
-There is **no imperative wiring**: you never call a registry, never register a renderer in `modules.ts`, and **never edit anything under `.generated/`** (it is codegen output). A definition is a plain frozen `name → component` object — and all field *options* (label, required, validation, placeholder, …) come from **server introspection at runtime**, so a component reads them off its props; it does not declare them.
+There is **no imperative wiring**: you never call a registry, never register a renderer in `modules.ts`, and **never edit anything under `.generated/`** (it is codegen output). A definition is a plain frozen `name → component` object - and all field *options* (label, required, validation, placeholder, …) come from **server introspection at runtime**, so a component reads them off its props; it does not declare them.
 
 ## Where definitions live
 
@@ -21,7 +21,7 @@ Drop a default-exported definition in the admin client root (`src/questpie/admin
 | `views/` | `view()` | a custom list/form/… view |
 | `widgets/` | `widget()` | a dashboard widget |
 | `pages/` | `page()` | a full custom admin screen / route |
-| `blocks/` | (block renderer) | a block — see `references/blocks.md` |
+| `blocks/` | (block renderer) | a block - see `references/blocks.md` |
 | `components/` | server-driven components | components referenced from server config |
 
 Scaffold one with `questpie add field|view|widget|block <name>` (creates the file in the right directory), then run `questpie generate`.
@@ -33,18 +33,18 @@ When you author a custom component, import its prop type so props are typed. Eve
 | Component | Prop type | Import from |
 | --- | --- | --- |
 | field `component` | `FieldComponentProps<TValue>` (extends `BaseFieldProps`) | `@questpie/admin/client` |
-| field `cell` | none — type inline as `{ value }: { value: unknown }` | — |
+| field `cell` | none - type inline as `{ value }: { value: unknown }` | - |
 | view, `kind: "list"` | `CollectionListViewProps` | `@questpie/admin/client` |
 | view, `kind: "form"` (collection) | `CollectionFormViewProps` | `@questpie/admin/client` |
 | view, `kind: "form"` (global) | `GlobalFormViewProps` | `@questpie/admin/client` |
 | widget `component` | `WidgetComponentProps<TData>` | `@questpie/admin/client` |
-| page `component` | none — a plain route component; fetch via the typed client | — |
+| page `component` | none - a plain route component; fetch via the typed client | - |
 | block renderer | `BlockProps<"name">` (typed per block name) | `../.generated/client` (relative) |
 
 ```tsx
 // every admin prop type is a named import from the package:
 import { field, type FieldComponentProps } from "@questpie/admin/client";
-// blocks are the exception — typed per block from YOUR generated client:
+// blocks are the exception - typed per block from YOUR generated client:
 import type { BlockProps } from "../.generated/client";
 ```
 
@@ -75,7 +75,7 @@ function ColorCell({ value }: { value: unknown }) {
 export default field("color", { component: ColorField, cell: ColorCell });
 ```
 
-That is the whole wiring — no registry call, nothing added to `modules.ts`. (Creating the *server* field type that adds `f.color()` to the builder is separate: see the questpie skill's `references/extend.md` and `references/field-types.md`. The client side only maps a type name to a component.)
+That is the whole wiring - no registry call, nothing added to `modules.ts`. (Creating the *server* field type that adds `f.color()` to the builder is separate: see the questpie skill's `references/extend.md` and `references/field-types.md`. The client side only maps a type name to a component.)
 
 ### Field component props
 
@@ -84,7 +84,7 @@ The `component` receives `FieldComponentProps<TValue>` (the typed superset of `B
 | Prop | Type | Meaning |
 | --- | --- | --- |
 | `value` | `TValue` | current value (typed) |
-| `onChange?` | `(value: TValue) => void` | commit a new value — **pass the value, not a DOM event**; omitted in read-only/preview |
+| `onChange?` | `(value: TValue) => void` | commit a new value - **pass the value, not a DOM event**; omitted in read-only/preview |
 | `onBlur` | `() => void` | mark touched / trigger validation |
 | `config?` | `FieldUIConfig` | resolved UI config from server introspection |
 | `name` | `string` | field name |
@@ -96,11 +96,11 @@ The `component` receives `FieldComponentProps<TValue>` (the typed superset of `B
 | `hideLabel` | `boolean` | render the control without its own label (compact rows) |
 | `className` | `string` | class to apply to the control |
 
-Read options off these props — don't re-declare them; they flow from the server `f.xxx()` definition via introspection. A `cell` component receives just `{ value }` (the column value).
+Read options off these props - don't re-declare them; they flow from the server `f.xxx()` definition via introspection. A `cell` component receives just `{ value }` (the column value).
 
 ## Custom view
 
-A view is `view("name", { kind, component })`. `kind` is the view kind it satisfies (`list`, `form`, …); the component receives that kind's context — e.g. a `list` view gets `CollectionListViewProps` (rows, columns, pagination, selection).
+A view is `view("name", { kind, component })`. `kind` is the view kind it satisfies (`list`, `form`, …); the component receives that kind's context - e.g. a `list` view gets `CollectionListViewProps` (rows, columns, pagination, selection).
 
 ```tsx title="src/questpie/admin/views/kanban.tsx"
 import { view, type CollectionListViewProps } from "@questpie/admin/client";
@@ -138,7 +138,7 @@ export default widget("sales", { component: SalesWidget });
 
 ## Custom page
 
-A page is a full custom admin screen: `page("name", { component, path, showInNav?, label?, icon?, group?, order? })` in `pages/`. The component is free-form React mounted at an admin route; `showInNav: true` adds a sidebar entry. Use it for experiences that aren't a collection/global — dashboards, importers, a chat UI. End-to-end example: `references/recipes.md`.
+A page is a full custom admin screen: `page("name", { component, path, showInNav?, label?, icon?, group?, order? })` in `pages/`. The component is free-form React mounted at an admin route; `showInNav: true` adds a sidebar entry. Use it for experiences that aren't a collection/global - dashboards, importers, a chat UI. End-to-end example: `references/recipes.md`.
 
 ```tsx title="src/questpie/admin/pages/reports.tsx"
 import { page } from "@questpie/admin/client";
@@ -171,7 +171,7 @@ For reference, the built-in field types render as:
 
 ## Reactive Field System
 
-Conditional visibility (`hidden`), read-only (`readOnly`), and computed values (`compute`) are configured the same way on form views — see `references/views.md`. The one reactive behavior unique to custom fields is server-side dynamic options:
+Conditional visibility (`hidden`), read-only (`readOnly`), and computed values (`compute`) are configured the same way on form views - see `references/views.md`. The one reactive behavior unique to custom fields is server-side dynamic options:
 
 ### Dynamic Options (Server-Side)
 

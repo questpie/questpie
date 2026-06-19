@@ -63,7 +63,7 @@ Snippets that read config values assume `import env from "./env"` at the top of 
 
 ## Authentication
 
-Full auth setup — `authConfig()` options, session shape, providers, and the `adminModule` user-collection contract (`user.role`, merge `starterModule.collections.user`, never redefine `collection("user")` from scratch) — lives in `references/auth.md`. One deployment-specific concern:
+Full auth setup - `authConfig()` options, session shape, providers, and the `adminModule` user-collection contract (`user.role`, merge `starterModule.collections.user`, never redefine `collection("user")` from scratch) - lives in `references/auth.md`. One deployment-specific concern:
 
 ### Locking Down the REST Surface
 

@@ -281,7 +281,7 @@ function PageRenderer({ page }) {
 
 ## Blocks in Live Preview
 
-When a collection has `.preview()`, blocks participate in Live Preview through `BlockRenderer` and `PreviewField` — see the questpie-admin skill's **Live Preview** section (SKILL.md) for the `BlockRenderer` setup. The block-specific rule: a `PreviewField` rendered inside `BlockRenderer` resolves to `content._values.{blockId}.<field>`, block scope is applied automatically.
+When a collection has `.preview()`, blocks participate in Live Preview through `BlockRenderer` and `PreviewField` - see the questpie-admin skill's **Live Preview** section (SKILL.md) for the `BlockRenderer` setup. The block-specific rule: a `PreviewField` rendered inside `BlockRenderer` resolves to `content._values.{blockId}.<field>`, block scope is applied automatically.
 
 ```tsx
 <PreviewField field="title" editable="text" as="h2">
