@@ -346,21 +346,19 @@ Once registered and codegen runs, the field is available on `f`:
 
 ### Admin Renderer
 
-Register a React component to render the field in the admin panel:
+The admin renderer is a declarative `field()` definition (not a bare component): default-export `field("<typeName>", { component, cell? })` from `src/questpie/admin/fields/<name>.tsx`, where the name matches the server field type. Codegen discovers it; never edit `.generated/`.
 
-```tsx
-function ColorFieldRenderer({ value, onChange }) {
-	return (
-		<input
-			type="color"
-			value={value || "#000000"}
-			onChange={(e) => onChange(e.target.value)}
-		/>
-	);
+```tsx title="src/questpie/admin/fields/color.tsx"
+import { field, type FieldComponentProps } from "@questpie/admin/client";
+
+function ColorField({ value, onChange }: FieldComponentProps<string>) {
+	return <input type="color" value={value ?? "#000000"} onChange={(e) => onChange?.(e.target.value)} />;
 }
+
+export default field("color", { component: ColorField });
 ```
 
-Place it in `questpie/admin/fields/color.tsx` -- codegen discovers it automatically.
+Full prop contract, cells, and custom views/widgets/pages: the `questpie-admin` skill's `references/custom-ui.md` and `references/recipes.md`.
 
 ## Custom Adapters
 

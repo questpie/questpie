@@ -20,6 +20,7 @@ Drop a default-exported definition in the admin client root (`src/questpie/admin
 | `fields/` | `field()` | a field type's edit control + table cell |
 | `views/` | `view()` | a custom list/form/… view |
 | `widgets/` | `widget()` | a dashboard widget |
+| `pages/` | `page()` | a full custom admin screen / route |
 | `blocks/` | (block renderer) | a block — see `references/blocks.md` |
 | `components/` | server-driven components | components referenced from server config |
 
@@ -111,6 +112,25 @@ function SalesWidget({ data, isLoading }: WidgetComponentProps<{ total: number }
 }
 
 export default widget("sales", { component: SalesWidget });
+```
+
+## Custom page
+
+A page is a full custom admin screen: `page("name", { component, path, showInNav?, label?, icon?, group?, order? })` in `pages/`. The component is free-form React mounted at an admin route; `showInNav: true` adds a sidebar entry. Use it for experiences that aren't a collection/global — dashboards, importers, a chat UI. End-to-end example: `references/recipes.md`.
+
+```tsx title="src/questpie/admin/pages/reports.tsx"
+import { page } from "@questpie/admin/client";
+
+function ReportsPage() {
+	return <div>{/* free-form React; call the backend via the typed client */}</div>;
+}
+
+export default page("reports", {
+	component: ReportsPage,
+	path: "/reports",
+	showInNav: true,
+	label: { en: "Reports" },
+});
 ```
 
 ## Built-in field renderers

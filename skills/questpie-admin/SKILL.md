@@ -17,7 +17,8 @@ The QUESTPIE admin panel is a **projection of your server schema**, not the fram
 | --------- | ------------------------- | -------------------------------------------------------------------------------------- |
 | Views     | `references/views.md`     | List views, form views, dashboard, sidebar, filters, bulk actions, visibility, history |
 | Blocks    | `references/blocks.md`    | Block definitions, fields, prefetch, renderers, block picker                           |
-| Custom UI | `references/custom-ui.md` | Custom fields, custom views, registries, reactive fields, widgets                      |
+| Custom UI | `references/custom-ui.md` | Declarative `field()`/`view()`/`widget()`/`page()` definitions, component props, reactive fields |
+| Recipes   | `references/recipes.md`   | BE vs FE field, end-to-end custom field, custom admin page (e.g. chat), custom view     |
 
 ## Full Compiled Document
 
