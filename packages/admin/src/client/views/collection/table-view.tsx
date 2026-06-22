@@ -26,9 +26,12 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { Icon } from "@iconify/react";
 import {
+	type Cell,
+	type Column,
 	type ColumnDef,
 	flexRender,
 	getCoreRowModel,
+	type Row,
 	type RowSelectionState,
 	type SortingState,
 	useReactTable,
@@ -776,15 +779,15 @@ function MobileRecordCard({
 	moveUpLabel,
 	moveDownLabel,
 }: {
-	row: any;
-	titleCell: any;
-	bodyCells: any[];
+	row: Row<any>;
+	titleCell: Cell<any, unknown> | undefined;
+	bodyCells: Cell<any, unknown>[];
 	getFieldLabel: (columnId: string) => string;
 	rowActions: ActionDefinition[];
 	collection: string;
 	actionHelpers: any;
 	onOpenDialog: (action: ActionDefinition, item: any) => void;
-	onOpen: (item: any) => void;
+	onOpen: (item: { id: string }) => void;
 	isExpanded: boolean;
 	onToggleExpand: () => void;
 	isReorderMode: boolean;
@@ -1051,7 +1054,7 @@ function MobileSortSheet({
 }: {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
-	entries: { column: any; label: string }[];
+	entries: { column: Column<any>; label: string }[];
 	title: string;
 	doneLabel: string;
 	ascLabel: string;
@@ -2326,7 +2329,17 @@ function TableViewInner({
 		collectionMeta?.title?.type === "field" && collectionMeta?.title?.fieldName
 			? collectionMeta.title.fieldName
 			: "_title";
-	const groupedRowModel = useMemo(() => {
+	type GroupedRowEntry =
+		| {
+				type: "group";
+				key: string;
+				label: string;
+				icon: React.ReactNode;
+				count: number;
+				collapsed: boolean;
+		  }
+		| { type: "row"; row: Row<any> };
+	const groupedRowModel = useMemo<GroupedRowEntry[]>(() => {
 		const rows = tableRows;
 		const groupBy = viewState.config.groupBy;
 		if (!groupBy) {
@@ -2457,7 +2470,7 @@ function TableViewInner({
 	};
 
 	const handleRowClick = React.useCallback(
-		(item: any) => {
+		(item: { id: string }) => {
 			navigate(`${basePath}/collections/${collection}/${item.id}`);
 		},
 		[navigate, basePath, collection],
@@ -2787,7 +2800,7 @@ function TableViewInner({
 				<div className="qa-table-view__table-wrapper min-w-0">
 					{isMobile ? (
 						<div className="qa-record-cards flex flex-col gap-2">
-							{groupedRowModel.map((entry: any) => {
+							{groupedRowModel.map((entry) => {
 								if (entry.type === "group") {
 									return (
 										<button
@@ -2820,10 +2833,10 @@ function TableViewInner({
 								const row = entry.row;
 								const visibleCells = row.getVisibleCells();
 								const titleCell = visibleCells.find(
-									(cell: any) => cell.column.id === mobileTitleColumnId,
+									(cell) => cell.column.id === mobileTitleColumnId,
 								);
 								const bodyCells = visibleCells.filter(
-									(cell: any) =>
+									(cell) =>
 										cell.column.id !== "_select" &&
 										cell.column.id !== "_actions" &&
 										cell.column.id !== titleCell?.column.id &&
@@ -2993,7 +3006,7 @@ function TableViewInner({
 										strategy={verticalListSortingStrategy}
 									>
 										<TableBody>
-											{groupedRowModel.map((entry: any) => {
+											{groupedRowModel.map((entry) => {
 												if (entry.type === "group") {
 													return (
 														<TableRow
@@ -3072,7 +3085,7 @@ function TableViewInner({
 													>
 														{row
 															.getVisibleCells()
-															.map((cell: any, cellIndex: number) => {
+															.map((cell, cellIndex) => {
 																// Checkbox column gets compact styling
 																const isCheckboxCol = cellIndex === 0;
 																const columnWidth = getColumnSize(
