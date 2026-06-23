@@ -34,6 +34,7 @@ export type {
 	JsonRouteHandlerArgs,
 	RawRouteHandlerArgs,
 } from "#questpie/server/routes/types.js";
+export type { AppContextBase } from "#questpie/server/config/app-context-base.js";
 export {
 	type AppContext,
 	extractAppServices,
