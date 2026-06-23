@@ -66,16 +66,43 @@ export class MailerService<
 	}
 
 	/**
-	 * Resolve the handler context from AsyncLocalStorage.
-	 * Returns AppContext services if running inside a request/job scope.
+	 * Resolve the template-handler services, preferring an explicit context
+	 * (for callers outside a request/job scope) over the ambient AppContext
+	 * (AsyncLocalStorage).
+	 *
+	 * `hasContext` is false only when NEITHER is available. Every user-code
+	 * entry point now establishes ambient context — HTTP, CRUD, jobs (queue
+	 * wrap), admin actions — so a false here is a genuinely contextless call.
 	 */
-	private resolveHandlerContext(): any {
+	private resolveHandlerContext(ctx?: {
+		app?: unknown;
+		db?: unknown;
+		session?: unknown;
+	}): { services: Record<string, unknown>; hasContext: boolean } {
+		if (ctx?.app) {
+			return {
+				services: {
+					...extractAppServices(ctx.app, {
+						db: ctx.db,
+						session: ctx.session,
+					}),
+				},
+				hasContext: true,
+			};
+		}
 		const stored = tryGetContext();
-		if (!stored?.app) return {};
-		return extractAppServices(stored.app, {
-			db: stored.db,
-			session: stored.session,
-		});
+		if (!stored?.app) {
+			return { services: {}, hasContext: false };
+		}
+		return {
+			services: {
+				...extractAppServices(stored.app, {
+					db: stored.db,
+					session: stored.session,
+				}),
+			},
+			hasContext: true,
+		};
 	}
 
 	/**
@@ -119,6 +146,12 @@ export class MailerService<
 		template: K;
 		input: InferEmailTemplateInput<GetEmailTemplate<TTemplates, K>>;
 		locale?: string;
+		/**
+		 * Explicit app context for callers outside a request/job scope. Prefer
+		 * the ambient context (now established everywhere); pass this only as a
+		 * deliberate escape hatch.
+		 */
+		ctx?: { app?: unknown; db?: unknown; session?: unknown };
 	}): Promise<EmailResult> {
 		const templateDef = this.templates.get(options.template as string);
 		if (!templateDef) {
@@ -128,16 +161,35 @@ export class MailerService<
 		// Validate input with Zod schema
 		const validatedInput = templateDef.schema.parse(options.input);
 
-		// Build handler args: AppContext + input + locale
-		const appServices = this.resolveHandlerContext();
+		// Build handler args: AppContext services + input + locale
+		const { services, hasContext } = this.resolveHandlerContext(options.ctx);
 		const handlerArgs = {
-			...appServices,
+			...services,
 			input: validatedInput,
 			locale: options.locale,
 		};
 
+		// Defense in depth: with no ambient/explicit context the app-service
+		// keys (collections, db, queue, …) are absent. Surface a clear,
+		// actionable error the instant a handler reaches for one — instead of
+		// the cryptic downstream "collections is undefined" the prod crash hit.
+		// Handlers that only use `input`/`locale` are unaffected.
+		const guardedArgs = hasContext
+			? handlerArgs
+			: new Proxy(handlerArgs, {
+					get: (target, prop, receiver) => {
+						if (typeof prop === "symbol" || prop in target) {
+							return Reflect.get(target, prop, receiver);
+						}
+						throw new Error(
+							`[QUESTPIE] email template '${String(options.template)}' handler needs app context — ` +
+								"call inside a job/request scope (now wrapped) or pass ctx to sendTemplate().",
+						);
+					},
+				});
+
 		// Call handler (may be async)
-		const result = await templateDef.handler(handlerArgs as any);
+		const result = await templateDef.handler(guardedArgs as any);
 
 		if (!result.subject) {
 			throw new Error(
@@ -164,12 +216,15 @@ export class MailerService<
 		from?: string;
 		cc?: string | string[];
 		bcc?: string | string[];
+		replyTo?: string;
 		locale?: string;
+		ctx?: { app?: unknown; db?: unknown; session?: unknown };
 	}): Promise<void> {
 		const result = await this.renderTemplate({
 			template: options.template,
 			input: options.input,
 			locale: options.locale,
+			ctx: options.ctx,
 		});
 
 		return this.send({
@@ -178,6 +233,7 @@ export class MailerService<
 			from: options.from,
 			cc: options.cc,
 			bcc: options.bcc,
+			replyTo: options.replyTo,
 			html: result.html,
 			text: result.text,
 		});

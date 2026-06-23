@@ -53,6 +53,18 @@ const withTextTemplate = email({
 	}),
 });
 
+// Reaches for an app service (`collections`) — the shape of the prod-crash
+// handler. Outside any request/job scope it must get a clear error, not a
+// downstream "collections is undefined".
+const contextTemplate = email({
+	name: "contextAware",
+	schema: z.object({ id: z.string() }),
+	handler: ({ input, collections }: any) => ({
+		subject: `Order ${input.id}`,
+		html: `<p>${collections.orders ? "ok" : "?"}</p>`,
+	}),
+});
+
 // -- Tests ---------------------------------------------------------------------
 
 describe("MailerService", () => {
@@ -69,6 +81,7 @@ describe("MailerService", () => {
 				asyncData: asyncTemplate,
 				htmlOnly: noTextTemplate,
 				withText: withTextTemplate,
+				contextAware: contextTemplate,
 			},
 		});
 	});
@@ -354,6 +367,38 @@ describe("MailerService", () => {
 
 			const sent = adapter.getSentMails()[0];
 			expect(sent.to).toEqual(["a@example.com", "b@example.com"]);
+		});
+
+		it("forwards replyTo to the underlying send (M2)", async () => {
+			await service.sendTemplate({
+				template: "welcome",
+				to: "user@example.com",
+				replyTo: "support@example.com",
+				input: {
+					userName: "Bob",
+					activationUrl: "https://example.com/activate",
+				},
+			});
+
+			const sent = adapter.getSentMails()[0];
+			expect(sent.replyTo).toBe("support@example.com");
+		});
+
+		it("throws a clear error when a handler needs app context and none is available (M1)", async () => {
+			// No request/job scope and no explicit ctx — the handler reaches for
+			// `collections`, which must surface the actionable message rather than
+			// a cryptic "collections is undefined".
+			await expect(
+				service.sendTemplate({
+					template: "contextAware",
+					to: "user@example.com",
+					input: { id: "1" },
+				}),
+			).rejects.toThrow(
+				/email template 'contextAware' handler needs app context/,
+			);
+
+			expect(adapter.getSentCount()).toBe(0);
 		});
 	});
 
