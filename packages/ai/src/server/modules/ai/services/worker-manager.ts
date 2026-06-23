@@ -261,7 +261,7 @@ export default service()
 					const active = await activeForRuntime(runRuntime);
 					if (active >= maxConcurrent) continue;
 
-					const updated = await collections.ai_runs.update({
+					const updated = await collections.ai_runs.updateMany({
 						where: { id: candidate.id, status: "pending" },
 						data: {
 							status: "claimed",
@@ -397,7 +397,7 @@ export default service()
 						data: { status: "expired" },
 					});
 					if (runId) {
-						await collections.ai_runs.update({
+						await collections.ai_runs.updateMany({
 							where: { id: runId, status: { in: ["claimed", "running"] } },
 							data: { status: "pending", worker: null as any },
 						});

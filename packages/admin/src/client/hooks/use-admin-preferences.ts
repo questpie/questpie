@@ -149,7 +149,7 @@ export function useSetAdminPreference<T = unknown>(key: string) {
 
 			if (existing) {
 				// Update existing
-				return collections.admin_preferences.update({
+				return collections.admin_preferences.updateById({
 					id: existing.id,
 					data: { value },
 				});
@@ -210,7 +210,7 @@ function useDeleteAdminPreference(key: string) {
 			});
 
 			if (existing) {
-				return collections.admin_preferences.delete({ id: existing.id });
+				return collections.admin_preferences.deleteById({ id: existing.id });
 			}
 
 			return null;
