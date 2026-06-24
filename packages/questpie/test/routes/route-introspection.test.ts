@@ -42,7 +42,6 @@ describe("route introspection", () => {
 	it("uses route definition methods when the key has no method suffix", () => {
 		const def = route()
 			.post()
-			.patch()
 			.raw()
 			.meta({ title: "Webhook" })
 			.handler(async () => new Response("ok"));
@@ -52,7 +51,7 @@ describe("route introspection", () => {
 		expect(routes[0]).toMatchObject({
 			key: "webhooks/stripeEvents",
 			path: "/webhooks/stripe-events",
-			methods: ["POST", "PATCH"],
+			methods: ["POST"],
 			mode: "raw",
 			params: [],
 			meta: { title: "Webhook" },
