@@ -5,6 +5,7 @@
  * for the collection action system.
  */
 
+import type { AppContextBase } from "questpie";
 import type { I18nText } from "questpie/shared";
 import type { ZodType } from "zod";
 
@@ -89,9 +90,14 @@ export interface ServerActionEffects {
 }
 
 /**
- * Action handler context
+ * Action handler context.
+ *
+ * Extends {@link AppContextBase} so handlers reach the full app surface —
+ * `queue`, `email`, `storage`, `kv`, `services`, … — directly from `ctx`,
+ * just like a route handler. The action-specific fields below layer on top.
  */
-export interface ServerActionContext<TData = Record<string, unknown>> {
+export interface ServerActionContext<TData = Record<string, unknown>>
+	extends AppContextBase {
 	/** Form data submitted */
 	data: TData;
 	/** Item ID (for single-item actions) */

@@ -328,7 +328,7 @@ export function useLock(options: UseLockOptions): UseLockResult {
 
 			const expiresAt = new Date(Date.now() + LOCK_DURATION_MS);
 
-			await (queryOpts as any).collections.admin_locks.update({
+			await (queryOpts as any).collections.admin_locks.updateById({
 				id: lockIdRef.current,
 				data: { expiresAt },
 			});
@@ -340,7 +340,7 @@ export function useLock(options: UseLockOptions): UseLockResult {
 		mutationFn: async () => {
 			if (!lockIdRef.current) return;
 
-			await (queryOpts as any).collections.admin_locks.delete({
+			await (queryOpts as any).collections.admin_locks.deleteById({
 				id: lockIdRef.current,
 			});
 		},

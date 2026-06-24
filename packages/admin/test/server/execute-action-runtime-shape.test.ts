@@ -216,4 +216,63 @@ describe("admin execute action runtime shape", () => {
 		expect(result.success).toBe(true);
 		expect(received).toEqual([{ title: "", count: 0, enabled: false }]);
 	});
+
+	it("exposes the full app service surface (queue/email) to custom action handlers (B2)", async () => {
+		const sideEffects: string[] = [];
+		const fakeQueue = {
+			publish: async (name: string) => {
+				sideEffects.push(`queue:${name}`);
+			},
+		};
+		const fakeEmail = {
+			sendTemplate: async () => {
+				sideEffects.push("email");
+			},
+		};
+		const capturedCtx: Record<string, unknown>[] = [];
+		const app = {
+			state: {},
+			queue: fakeQueue,
+			email: fakeEmail,
+			collections: {},
+			globals: {},
+			getCollections() {
+				return {
+					orders: {
+						state: {
+							adminActions: {
+								builtin: [],
+								custom: [
+									{
+										id: "fulfill",
+										label: "Fulfill",
+										handler: async (ctx: any) => {
+											capturedCtx.push(ctx);
+											// Side-effects straight from the explicit ctx — `queue`
+											// and `email` were undefined before B2 (the action ctx
+											// omitted them, forcing a stage→afterChange workaround).
+											await ctx.queue.publish("fulfill-order");
+											await ctx.email.sendTemplate({});
+											return { type: "success" };
+										},
+									},
+								],
+							},
+						},
+					},
+				};
+			},
+		};
+
+		const result = await executeAction(app as any, {
+			collection: "orders",
+			actionId: "fulfill",
+			data: {},
+		});
+
+		expect(result.success).toBe(true);
+		expect(capturedCtx[0]?.queue).toBe(fakeQueue);
+		expect(capturedCtx[0]?.email).toBe(fakeEmail);
+		expect(sideEffects).toEqual(["queue:fulfill-order", "email"]);
+	});
 });
