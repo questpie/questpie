@@ -25,14 +25,6 @@ import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import { Checkbox } from "../../components/ui/checkbox";
 import {
-	Dialog,
-	DialogContent,
-	DialogDescription,
-	DialogFooter,
-	DialogHeader,
-	DialogTitle,
-} from "../../components/ui/dialog";
-import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
@@ -40,6 +32,14 @@ import {
 } from "../../components/ui/dropdown-menu";
 import { EmptyState } from "../../components/ui/empty-state";
 import { Label } from "../../components/ui/label";
+import {
+	ResponsiveDialog,
+	ResponsiveDialogContent,
+	ResponsiveDialogDescription,
+	ResponsiveDialogFooter,
+	ResponsiveDialogHeader,
+	ResponsiveDialogTitle,
+} from "../../components/ui/responsive-dialog";
 import { Skeleton } from "../../components/ui/skeleton";
 import {
 	useGlobal,
@@ -849,7 +849,7 @@ export default function GlobalFormView({
 			/>
 
 			{/* Workflow Transition Confirmation Dialog */}
-			<Dialog
+			<ResponsiveDialog
 				open={!!transitionTarget}
 				onOpenChange={(open) => {
 					if (!open) {
@@ -859,21 +859,21 @@ export default function GlobalFormView({
 					}
 				}}
 			>
-				<DialogContent>
-					<DialogHeader>
-						<DialogTitle className="flex items-center gap-2">
+				<ResponsiveDialogContent>
+					<ResponsiveDialogHeader>
+						<ResponsiveDialogTitle className="flex items-center gap-2">
 							<Icon icon="ph:arrows-left-right" className="size-5" />
 							{t("workflow.transitionTo", {
 								stage: transitionTarget?.label ?? transitionTarget?.name ?? "",
 							})}
-						</DialogTitle>
-						<DialogDescription>
+						</ResponsiveDialogTitle>
+						<ResponsiveDialogDescription>
 							{t("workflow.transitionDescription", {
 								from: currentStageLabel,
 								to: transitionTarget?.label ?? transitionTarget?.name ?? "",
 							})}
-						</DialogDescription>
-					</DialogHeader>
+						</ResponsiveDialogDescription>
+					</ResponsiveDialogHeader>
 
 					{/* Optional scheduling */}
 					<div className="space-y-3 py-2">
@@ -911,7 +911,7 @@ export default function GlobalFormView({
 						)}
 					</div>
 
-					<DialogFooter>
+					<ResponsiveDialogFooter>
 						<Button
 							type="button"
 							variant="outline"
@@ -920,6 +920,7 @@ export default function GlobalFormView({
 								setTransitionSchedule(false);
 								setTransitionScheduledAt(null);
 							}}
+							className="w-full md:w-auto"
 						>
 							{t("common.cancel")}
 						</Button>
@@ -930,7 +931,7 @@ export default function GlobalFormView({
 								transitionMutation.isPending ||
 								(transitionSchedule && !transitionScheduledAt)
 							}
-							className="gap-2"
+							className="w-full gap-2 md:w-auto"
 						>
 							{transitionMutation.isPending && (
 								<Icon icon="ph:spinner-gap" className="size-4 animate-spin" />
@@ -939,31 +940,41 @@ export default function GlobalFormView({
 								? t("workflow.scheduleLabel")
 								: t("workflow.transition")}
 						</Button>
-					</DialogFooter>
-				</DialogContent>
-			</Dialog>
+					</ResponsiveDialogFooter>
+				</ResponsiveDialogContent>
+			</ResponsiveDialog>
 			{/* Locale change confirmation dialog */}
-			<Dialog
+			<ResponsiveDialog
 				open={localeChangeDialog.open}
 				onOpenChange={(open) => !open && handleLocaleChangeCancel()}
 			>
-				<DialogContent>
-					<DialogHeader>
-						<DialogTitle>{t("locale.unsavedChanges")}</DialogTitle>
-						<DialogDescription>
+				<ResponsiveDialogContent>
+					<ResponsiveDialogHeader>
+						<ResponsiveDialogTitle>
+							{t("locale.unsavedChanges")}
+						</ResponsiveDialogTitle>
+						<ResponsiveDialogDescription>
 							{t("locale.unsavedChangesDescription")}
-						</DialogDescription>
-					</DialogHeader>
-					<DialogFooter>
-						<Button variant="outline" onClick={handleLocaleChangeCancel}>
+						</ResponsiveDialogDescription>
+					</ResponsiveDialogHeader>
+					<ResponsiveDialogFooter>
+						<Button
+							variant="outline"
+							onClick={handleLocaleChangeCancel}
+							className="w-full md:w-auto"
+						>
 							{t("common.cancel")}
 						</Button>
-						<Button variant="default" onClick={handleLocaleChangeConfirm}>
+						<Button
+							variant="default"
+							onClick={handleLocaleChangeConfirm}
+							className="w-full md:w-auto"
+						>
 							{t("locale.discardChanges")}
 						</Button>
-					</DialogFooter>
-				</DialogContent>
-			</Dialog>
+					</ResponsiveDialogFooter>
+				</ResponsiveDialogContent>
+			</ResponsiveDialog>
 		</FormProvider>
 	);
 }

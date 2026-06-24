@@ -118,6 +118,41 @@ function MenuItems({
 		[blockTree, blockId],
 	);
 
+	// Number of siblings in this block's parent — used to gate Move up/down.
+	const siblingCount = React.useMemo(() => {
+		if (!blockPosition) return 0;
+		if (blockPosition.parentId === null) return blockTree.length;
+		const parent = findBlockById(blockTree, blockPosition.parentId);
+		return parent?.children.length ?? 0;
+	}, [blockTree, blockPosition]);
+
+	const canMoveUp = blockPosition ? blockPosition.index > 0 : false;
+	const canMoveDown = blockPosition
+		? blockPosition.index < siblingCount - 1
+		: false;
+
+	const handleMoveUp = () => {
+		if (!blockPosition || !canMoveUp) return;
+		actions.moveBlock(
+			blockId,
+			blockPosition.parentId,
+			blockPosition.index,
+			blockPosition.index - 1,
+		);
+		onClose?.();
+	};
+
+	const handleMoveDown = () => {
+		if (!blockPosition || !canMoveDown) return;
+		actions.moveBlock(
+			blockId,
+			blockPosition.parentId,
+			blockPosition.index,
+			blockPosition.index + 1,
+		);
+		onClose?.();
+	};
+
 	const handleAddChild = (blockType: string) => {
 		// Find current block to get children count
 		const block = findBlockById(blockTree, blockId);
@@ -211,6 +246,25 @@ function MenuItems({
 								))}
 							</SubMenuContent>
 						</SubMenu>
+					)}
+					<Separator />
+				</>
+			)}
+
+			{/* Reorder (touch-friendly fallback for drag) */}
+			{(canMoveUp || canMoveDown) && (
+				<>
+					{canMoveUp && (
+						<MenuItem onClick={handleMoveUp}>
+							<Icon icon="ph:arrow-up" className="size-4" />
+							{t("field.moveUp")}
+						</MenuItem>
+					)}
+					{canMoveDown && (
+						<MenuItem onClick={handleMoveDown}>
+							<Icon icon="ph:arrow-down" className="size-4" />
+							{t("field.moveDown")}
+						</MenuItem>
 					)}
 					<Separator />
 				</>

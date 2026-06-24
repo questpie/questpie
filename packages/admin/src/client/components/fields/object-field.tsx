@@ -387,8 +387,12 @@ function NestedFieldsLayout({
 	));
 
 	if (layout === "inline") {
+		// Mobile-first: stack full-width so inline controls don't get cramped
+		// under ~360px; restore the side-by-side inline row from md up.
 		return (
-			<div className="flex flex-wrap items-end gap-2">{fieldElements}</div>
+			<div className="flex flex-col gap-2 md:flex-row md:flex-wrap md:items-end">
+				{fieldElements}
+			</div>
 		);
 	}
 
@@ -397,7 +401,9 @@ function NestedFieldsLayout({
 			<div
 				className={cn(
 					"grid gap-4",
-					gridColumnClasses[columns] || "grid-cols-2",
+					// gridColumnClasses entries already collapse to one column on
+					// small screens; the fallback must too.
+					gridColumnClasses[columns] || "grid-cols-1 sm:grid-cols-2",
 				)}
 			>
 				{fieldElements}

@@ -300,9 +300,10 @@ export function AssetPreview({
 					</div>
 				)}
 
-				{/* Action buttons (visible on hover) */}
+				{/* Action buttons: always visible on touch, hover-revealed on desktop.
+					Wrap so 44px-floored touch targets stay reachable on small thumbnails. */}
 				{!loading && !disabled && (onRemove || onEdit || href) && (
-					<div className="absolute inset-0 flex items-center justify-center gap-1 bg-black/50 opacity-0 transition-opacity group-hover:opacity-100">
+					<div className="absolute inset-0 flex flex-wrap items-center justify-center gap-1 bg-black/50 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100">
 						{href && (
 							<Button
 								type="button"
@@ -586,7 +587,7 @@ export function AssetPreview({
 						type="button"
 						variant="secondary"
 						size="icon-xs"
-						className="absolute top-2 right-2 opacity-0 transition-opacity group-hover:opacity-100"
+						className="absolute top-2 right-2 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100"
 						onClick={(e) => {
 							e.stopPropagation();
 							onRemove();

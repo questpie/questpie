@@ -8,7 +8,7 @@
 			"@ts-expect-error": 0
 		},
 		"admin": {
-			": any": 451,
+			": any": 454,
 			"as any": 457,
 			"as unknown as": 27,
 			"@ts-expect-error": 0

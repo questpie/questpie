@@ -18,6 +18,7 @@ import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
+	DropdownMenuLabel,
 	DropdownMenuSeparator,
 	DropdownMenuSub,
 	DropdownMenuSubContent,
@@ -630,6 +631,8 @@ function NavItem({
 			className={cn(
 				"qa-sidebar__nav-link",
 				menuButtonStyles,
+				// Larger touch target + legible label on mobile
+				isMobile && "py-2.5 text-sm",
 				isActive && "qa-sidebar__nav-link--active",
 				isActive && menuButtonActiveStyles,
 			)}
@@ -774,6 +777,7 @@ function NavGroup({
 	toggleSection: (sectionId: string) => void;
 	depth?: number;
 }) {
+	const { isMobile } = useSidebar();
 	const isCollapsed = isSectionCollapsed(group.id, group.collapsible);
 	const resolveText = useResolveText();
 	const groupLabel = resolveText(group.label);
@@ -789,6 +793,8 @@ function NavGroup({
 				<SidebarGroupLabel
 					className={cn(
 						"qa-sidebar__group-label mt-2 gap-2 px-3",
+						// Taller, easier-to-hit collapse header on mobile
+						isMobile && group.collapsible && "h-11",
 						group.collapsible && "hover:text-sidebar-foreground cursor-pointer",
 						depth > 0 && "pl-6",
 					)}
@@ -818,6 +824,8 @@ function NavGroup({
 							icon="ph:caret-down"
 							className={cn(
 								"size-3.5 transition-transform",
+								// Larger caret target on mobile
+								isMobile && "size-4 shrink-0",
 								isCollapsed && "-rotate-90",
 							)}
 							aria-hidden="true"
@@ -1007,6 +1015,80 @@ function UserFooter({
 		[setTheme],
 	);
 
+	// Shared option rows reused by the desktop flyout (DropdownMenuSub) and the
+	// mobile inline sections (DropdownMenuLabel) so a 360px drawer never has to
+	// open a side-flyout that can overflow.
+	const themeItems = React.useMemo(
+		() =>
+			themeOptions.map((option) => (
+				<DropdownMenuItem
+					key={option.value}
+					onClick={() => handleThemeChange(option.value)}
+				>
+					<Icon icon={option.icon} className="size-4" />
+					<span className="flex-1">{option.label}</span>
+					{option.value === theme && (
+						<Icon icon="ph:check" className="text-foreground size-4" />
+					)}
+				</DropdownMenuItem>
+			)),
+		[themeOptions, handleThemeChange, theme],
+	);
+
+	const uiLocaleItems = React.useMemo(
+		() =>
+			uiLocaleOptions.map((locale) => (
+				<DropdownMenuItem
+					key={locale.code}
+					onClick={() => setUiLocale(locale.code)}
+				>
+					<img
+						src={getFlagUrl(locale.code)}
+						alt={locale.code}
+						className="image-outline h-3 w-4 object-cover"
+						onError={(e) => {
+							e.currentTarget.style.display = "none";
+						}}
+					/>
+					<span className="font-chrome chrome-meta w-6 text-xs font-medium">
+						{locale.code}
+					</span>
+					<span className="flex-1">{locale.label}</span>
+					{locale.code === uiLocale && (
+						<Icon icon="ph:check" className="text-foreground size-4" />
+					)}
+				</DropdownMenuItem>
+			)),
+		[uiLocaleOptions, setUiLocale, uiLocale],
+	);
+
+	const contentLocaleItems = React.useMemo(
+		() =>
+			(contentLocales?.locales ?? []).map((locale) => (
+				<DropdownMenuItem
+					key={locale.code}
+					onClick={() => setContentLocale(locale.code)}
+				>
+					<img
+						src={getFlagUrl(locale.flagCountryCode ?? locale.code)}
+						alt={locale.code}
+						className="image-outline h-3 w-4 object-cover"
+						onError={(e) => {
+							e.currentTarget.style.display = "none";
+						}}
+					/>
+					<span className="font-chrome chrome-meta w-6 text-xs font-medium">
+						{locale.code}
+					</span>
+					<span className="flex-1">{locale.label ?? locale.code}</span>
+					{locale.code === contentLocale && (
+						<Icon icon="ph:check" className="text-foreground size-4" />
+					)}
+				</DropdownMenuItem>
+			)),
+		[contentLocales, setContentLocale, contentLocale],
+	);
+
 	// Close sidebar on mobile when navigating
 	const closeSidebarOnMobile = React.useCallback(() => {
 		if (isMobile) {
@@ -1117,108 +1199,69 @@ function UserFooter({
 							{shouldShowThemeToggle && (
 								<>
 									<DropdownMenuSeparator />
-									<DropdownMenuSub>
-										<DropdownMenuSubTrigger>
-											<Icon icon={currentThemeOption.icon} />
-											{t("ui.toggleTheme")}
-										</DropdownMenuSubTrigger>
-										<DropdownMenuSubContent className="min-w-40">
-											{themeOptions.map((option) => (
-												<DropdownMenuItem
-													key={option.value}
-													onClick={() => handleThemeChange(option.value)}
-												>
-													<Icon icon={option.icon} className="size-4" />
-													<span className="flex-1">{option.label}</span>
-													{option.value === theme && (
-														<Icon
-															icon="ph:check"
-															className="text-foreground size-4"
-														/>
-													)}
-												</DropdownMenuItem>
-											))}
-										</DropdownMenuSubContent>
-									</DropdownMenuSub>
+									{isMobile ? (
+										<>
+											<DropdownMenuLabel>
+												{t("ui.toggleTheme")}
+											</DropdownMenuLabel>
+											{themeItems}
+										</>
+									) : (
+										<DropdownMenuSub>
+											<DropdownMenuSubTrigger>
+												<Icon icon={currentThemeOption.icon} />
+												{t("ui.toggleTheme")}
+											</DropdownMenuSubTrigger>
+											<DropdownMenuSubContent className="min-w-40">
+												{themeItems}
+											</DropdownMenuSubContent>
+										</DropdownMenuSub>
+									)}
 								</>
 							)}
 							{/* UI Language Switcher */}
-							{hasMultipleUiLocales && (
-								<DropdownMenuSub>
-									<DropdownMenuSubTrigger>
-										<Icon icon="ph:globe" />
-										{t("locale.uiLanguage")}
-									</DropdownMenuSubTrigger>
+							{hasMultipleUiLocales &&
+								(isMobile ? (
+									<>
+										<DropdownMenuSeparator />
+										<DropdownMenuLabel>
+											{t("locale.uiLanguage")}
+										</DropdownMenuLabel>
+										{uiLocaleItems}
+									</>
+								) : (
+									<DropdownMenuSub>
+										<DropdownMenuSubTrigger>
+											<Icon icon="ph:globe" />
+											{t("locale.uiLanguage")}
+										</DropdownMenuSubTrigger>
 
-									<DropdownMenuSubContent>
-										{uiLocaleOptions.map((locale) => (
-											<DropdownMenuItem
-												key={locale.code}
-												onClick={() => setUiLocale(locale.code)}
-											>
-												<img
-													src={getFlagUrl(locale.code)}
-													alt={locale.code}
-													className="image-outline h-3 w-4 object-cover"
-													onError={(e) => {
-														e.currentTarget.style.display = "none";
-													}}
-												/>
-												<span className="font-chrome chrome-meta w-6 text-xs font-medium">
-													{locale.code}
-												</span>
-												<span className="flex-1">{locale.label}</span>
-												{locale.code === uiLocale && (
-													<Icon
-														icon="ph:check"
-														className="text-foreground size-4"
-													/>
-												)}
-											</DropdownMenuItem>
-										))}
-									</DropdownMenuSubContent>
-								</DropdownMenuSub>
-							)}
+										<DropdownMenuSubContent>
+											{uiLocaleItems}
+										</DropdownMenuSubContent>
+									</DropdownMenuSub>
+								))}
 							{/* Content Language Switcher */}
-							{hasMultipleContentLocales && (
-								<DropdownMenuSub>
-									<DropdownMenuSubTrigger>
-										<Icon icon="ph:translate" />
-										{t("locale.contentLanguage")}
-									</DropdownMenuSubTrigger>
-									<DropdownMenuSubContent>
-										{contentLocales!.locales.map((locale) => (
-											<DropdownMenuItem
-												key={locale.code}
-												onClick={() => setContentLocale(locale.code)}
-											>
-												<img
-													src={getFlagUrl(
-														locale.flagCountryCode ?? locale.code,
-													)}
-													alt={locale.code}
-													className="image-outline h-3 w-4 object-cover"
-													onError={(e) => {
-														e.currentTarget.style.display = "none";
-													}}
-												/>
-												<span className="font-chrome chrome-meta w-6 text-xs font-medium">
-													{locale.code}
-												</span>
-												<span className="flex-1">
-													{locale.label ?? locale.code}
-												</span>
-												{locale.code === contentLocale && (
-													<Icon
-														icon="ph:check"
-														className="text-foreground size-4"
-													/>
-												)}
-											</DropdownMenuItem>
-										))}
-									</DropdownMenuSubContent>
-								</DropdownMenuSub>
-							)}
+							{hasMultipleContentLocales &&
+								(isMobile ? (
+									<>
+										<DropdownMenuSeparator />
+										<DropdownMenuLabel>
+											{t("locale.contentLanguage")}
+										</DropdownMenuLabel>
+										{contentLocaleItems}
+									</>
+								) : (
+									<DropdownMenuSub>
+										<DropdownMenuSubTrigger>
+											<Icon icon="ph:translate" />
+											{t("locale.contentLanguage")}
+										</DropdownMenuSubTrigger>
+										<DropdownMenuSubContent>
+											{contentLocaleItems}
+										</DropdownMenuSubContent>
+									</DropdownMenuSub>
+								))}
 							<DropdownMenuSeparator />
 							<DropdownMenuItem variant="destructive" onClick={handleLogout}>
 								<Icon icon="ph:sign-out" className="size-4" />

@@ -17,6 +17,7 @@
 import { Icon } from "@iconify/react";
 import * as React from "react";
 
+import { useIsMobile } from "../../hooks/use-media-query";
 import { useTranslation } from "../../i18n/hooks";
 import { cn } from "../../lib/utils";
 import { Button } from "../ui/button";
@@ -150,6 +151,24 @@ function matchesAccept(file: File, accept?: string[]): boolean {
 }
 
 /**
+ * Whether every accepted pattern is an image or video type.
+ * Used to offer the device camera on mobile (`capture`) without forcing it for
+ * document/other uploads.
+ */
+function isCameraCapturable(accept?: string[]): boolean {
+	if (!accept || accept.length === 0) return false;
+	return accept.every((pattern) => {
+		const normalized = pattern.toLowerCase();
+		return (
+			normalized.startsWith("image/") ||
+			normalized.startsWith("video/") ||
+			normalized === "image/*" ||
+			normalized === "video/*"
+		);
+	});
+}
+
+/**
  * Format file size for display
  */
 function formatFileSize(bytes: number): string {
@@ -180,9 +199,18 @@ export function Dropzone({
 	onValidationError,
 }: DropzoneProps) {
 	const { t } = useTranslation();
+	const isMobile = useIsMobile();
 	const [isDragging, setIsDragging] = React.useState(false);
 	const inputRef = React.useRef<HTMLInputElement>(null);
 	const dragCounterRef = React.useRef(0);
+
+	// On phones, offer the rear camera directly for single image/video fields.
+	// Skipped for multi-file fields where gallery multi-select is expected
+	// (camera capture is single-shot and would block picking several files).
+	const captureAttr =
+		isMobile && !multiple && isCameraCapturable(accept)
+			? "environment"
+			: undefined;
 
 	/**
 	 * Validate files and return valid ones + errors
@@ -381,6 +409,7 @@ export function Dropzone({
 				ref={inputRef}
 				type="file"
 				accept={acceptString}
+				capture={captureAttr}
 				multiple={multiple}
 				onChange={handleInputChange}
 				className="sr-only"

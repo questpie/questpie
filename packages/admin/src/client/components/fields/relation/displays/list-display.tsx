@@ -90,17 +90,6 @@ export function ListDisplay({
 						key={item.id}
 						className="item-surface border-border bg-card flex items-center gap-2 px-3 py-2.5"
 					>
-						{/* Drag Handle */}
-						{orderable && (
-							<button
-								type="button"
-								className="text-muted-foreground hover:text-foreground flex shrink-0 cursor-grab items-center"
-								aria-label={t("field.dragToReorder")}
-							>
-								<Icon icon="ph:dots-six-vertical" className="size-4" />
-							</button>
-						)}
-
 						{/* Item Display */}
 						<div className="flex min-w-0 flex-1 items-center gap-2">
 							{iconElement}
@@ -112,6 +101,37 @@ export function ListDisplay({
 								</span>
 							)}
 						</div>
+
+						{/* Move Buttons (orderable relations) — reorder delegates
+						    up to RelationPicker, which owns the value array */}
+						{orderable && actions?.onMoveUp && (
+							<Button
+								type="button"
+								variant="ghost"
+								size="icon-xs"
+								className="shrink-0"
+								onClick={() => actions.onMoveUp?.(item)}
+								disabled={index === 0}
+								title={t("field.moveUp")}
+								aria-label={t("field.moveUp")}
+							>
+								<Icon icon="ph:caret-up" className="size-3" />
+							</Button>
+						)}
+						{orderable && actions?.onMoveDown && (
+							<Button
+								type="button"
+								variant="ghost"
+								size="icon-xs"
+								className="shrink-0"
+								onClick={() => actions.onMoveDown?.(item)}
+								disabled={index === items.length - 1}
+								title={t("field.moveDown")}
+								aria-label={t("field.moveDown")}
+							>
+								<Icon icon="ph:caret-down" className="size-3" />
+							</Button>
+						)}
 
 						{/* Edit Button */}
 						{actions?.onEdit && (

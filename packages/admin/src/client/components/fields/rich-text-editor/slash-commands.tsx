@@ -19,6 +19,68 @@ import type {
 } from "./types";
 
 /**
+ * Popper options for the slash-command popup.
+ *
+ * The primary placement stays `bottom-start` (the conventional downward
+ * slash-menu direction, and where there is almost always room on desktop).
+ * `flip` only swaps to `top-start` when `bottom-start` would overflow the
+ * visible viewport — e.g. when the on-screen keyboard occludes the area below
+ * the caret on touch — and `preventOverflow` keeps it pinned inside that
+ * viewport. Both modifiers use the "viewport" boundary (the visual viewport on
+ * touch) so the menu never renders behind the on-screen keyboard.
+ */
+const SLASH_POPPER_OPTIONS = {
+	modifiers: [
+		{
+			name: "flip",
+			options: {
+				boundary: "clippingParents" as const,
+				rootBoundary: "viewport" as const,
+				fallbackPlacements: ["top-start", "bottom-start", "top", "bottom"],
+			},
+		},
+		{
+			name: "preventOverflow",
+			options: {
+				boundary: "clippingParents" as const,
+				rootBoundary: "viewport" as const,
+				padding: 8,
+				altAxis: true,
+			},
+		},
+	],
+};
+
+/**
+ * Resolve the caret rectangle reported by the editor, clamped to the visual
+ * viewport. On touch devices the visual viewport shrinks when the keyboard is
+ * open; clamping the caret's vertical bounds into the visible area makes
+ * popper's flip/overflow math pick a placement that stays on screen.
+ */
+function resolveCaretRect(
+	clientRect: (() => DOMRect | null) | null | undefined,
+): DOMRect {
+	const rect = clientRect?.() ?? null;
+	if (!rect) {
+		return new DOMRect(0, 0, 0, 0);
+	}
+
+	const vv = typeof window !== "undefined" ? window.visualViewport : null;
+	if (!vv) {
+		return rect;
+	}
+
+	const minTop = vv.offsetTop;
+	const maxBottom = vv.offsetTop + vv.height;
+	// Keep the reference within the visible region so the menu doesn't anchor
+	// to a caret that sits underneath the keyboard.
+	const top = Math.min(Math.max(rect.top, minTop), maxBottom);
+	const bottom = Math.min(Math.max(rect.bottom, minTop), maxBottom);
+
+	return new DOMRect(rect.x, top, rect.width, Math.max(0, bottom - top));
+}
+
+/**
  * Slash command list component
  */
 const SlashCommandList = React.forwardRef<
@@ -67,7 +129,10 @@ const SlashCommandList = React.forwardRef<
 	}));
 
 	const grouped = React.useMemo(() => {
-		const groups: { label: string | undefined; items: { item: SlashCommandItem; globalIndex: number }[] }[] = [];
+		const groups: {
+			label: string | undefined;
+			items: { item: SlashCommandItem; globalIndex: number }[];
+		}[] = [];
 		let currentLabel: string | undefined;
 		for (let i = 0; i < items.length; i++) {
 			const item = items[i];
@@ -88,7 +153,10 @@ const SlashCommandList = React.forwardRef<
 			{grouped.map((group) => (
 				<div key={group.label ?? "ungrouped"}>
 					{group.label && (
-						<div className="qp-rich-text-editor__slash-group" aria-hidden="true">
+						<div
+							className="qp-rich-text-editor__slash-group"
+							aria-hidden="true"
+						>
 							{group.label}
 						</div>
 					)}
@@ -190,13 +258,18 @@ export function createSlashCommandExtension(
 								}
 
 								popup = tippy("body", {
-									getReferenceClientRect: props.clientRect,
+									getReferenceClientRect: () =>
+										resolveCaretRect(props.clientRect),
 									appendTo: () => document.body,
 									content: component.element,
 									showOnCreate: true,
 									interactive: true,
 									trigger: "manual",
+									// Open below the caret by default (conventional + room on desktop);
+									// flip/preventOverflow swap to top-start only when the on-screen
+									// keyboard would occlude the menu below on touch.
 									placement: "bottom-start",
+									popperOptions: SLASH_POPPER_OPTIONS,
 									theme: "qp-rich-text-editor",
 								});
 							},
@@ -209,7 +282,8 @@ export function createSlashCommandExtension(
 								}
 
 								popup?.[0].setProps({
-									getReferenceClientRect: props.clientRect,
+									getReferenceClientRect: () =>
+										resolveCaretRect(props.clientRect),
 								});
 							},
 

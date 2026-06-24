@@ -227,8 +227,12 @@ export default function QuickActionsWidget({
 							key={action.id}
 							type="button"
 							onClick={() => handleClick(action)}
+							// min-h-11 (44px): this is a bare <button>, so the coarse-pointer
+							// touch-target floor in base.css (which only matches
+							// [data-slot="button"]/[role="button"]/a[role="menuitem"]) does not
+							// reach it — give it a real 44px hit area directly.
 							className={cn(
-								"group flex min-h-10 w-full items-center gap-3 rounded-md p-2 text-left transition-[background-color,transform] active:scale-[0.96]",
+								"group flex min-h-11 w-full items-center gap-3 rounded-md p-2 text-left transition-[background-color,transform] active:scale-[0.96]",
 								variantStyles[action.variant],
 							)}
 						>
@@ -247,7 +251,7 @@ export default function QuickActionsWidget({
 							</span>
 							<Icon
 								icon="ph:arrow-right"
-								className="text-muted-foreground size-4 opacity-0 transition-opacity group-hover:opacity-100"
+								className="text-muted-foreground size-4 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100"
 							/>
 						</button>
 					);

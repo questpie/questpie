@@ -29,6 +29,7 @@ import {
 	type AdminTheme,
 	useManagedAdminTheme,
 } from "./admin-theme";
+import { AdminTopbar } from "./admin-topbar";
 
 export type { AdminTheme } from "./admin-theme";
 
@@ -236,7 +237,11 @@ const RAIL_COLLAPSED_KEY = "qa-admin-secondary-rail-collapsed";
  * bounds; the user can resize within those bounds and collapse the rail, and the
  * choice survives reloads.
  */
-function useRailState(defaultWidth: number, minWidth: number, maxWidth: number) {
+function useRailState(
+	defaultWidth: number,
+	minWidth: number,
+	maxWidth: number,
+) {
 	const clamp = React.useCallback(
 		(w: number) => Math.min(maxWidth, Math.max(minWidth, Math.round(w))),
 		[minWidth, maxWidth],
@@ -314,7 +319,7 @@ function AdminShellRail({
 	);
 
 	const baseClass = cn(
-		"qa-admin-layout__secondary-rail bg-background h-svh min-h-0 shrink-0 overflow-hidden border-border-subtle",
+		"qa-admin-layout__secondary-rail bg-background border-border-subtle h-svh min-h-0 shrink-0 overflow-hidden",
 		isRight ? "border-l" : "border-r",
 		config.hiddenOnMobile === false ? "flex" : "hidden md:flex",
 	);
@@ -487,7 +492,7 @@ export function AdminLayout({
 		<AdminThemeAppliedContext.Provider value={true}>
 			<div
 				className={cn(
-					"qa-admin-layout bg-sidebar text-foreground min-h-screen",
+					"qa-admin-layout bg-sidebar text-foreground min-h-svh",
 					className,
 				)}
 			>
@@ -530,6 +535,9 @@ export function AdminLayout({
 
 					{/* Content Area */}
 					<SidebarInset className="qa-admin-layout__content bg-background flex h-svh scrollbar-none flex-col overflow-hidden md:rounded-t-2xl">
+						{/* Persistent mobile header — reopens nav + global search (md:hidden) */}
+						<AdminTopbar onSearchOpen={openSearch} />
+
 						{/* Header (optional) */}
 						{shouldShowHeader && header && (
 							<header className="qa-admin-layout__header border-border-subtle border-b">
