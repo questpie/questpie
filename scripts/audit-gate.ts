@@ -29,23 +29,6 @@ const KNOWN = new Map<string, string>([
 	// ws memory-exhaustion DoS from tiny fragments/data chunks — transitive dep.
 	// Clears when ws is bumped >=8.21.0 (dep-hygiene PR).
 	["GHSA-96hv-2xvq-fx4p", "TODO: bump ws>=8.21.0 (dep-hygiene PR; transitive)"],
-	// undici@7.25.0 (transitive: cheerio ^7.19.0 -> @tanstack/start-plugin-core
-	// -> @tanstack/react-start) — three advisories confined to undici's SOCKS5
-	// ProxyAgent and outbound WebSocket-client paths, neither of which the
-	// framework's request handling uses (realtime runs on `ws`, not undici's WS
-	// client). All fixed in undici 7.28.0, already admitted by cheerio's ^7.19.0
-	// range. Same dependency subtree as GHSA-3vj8 above, so they clear with the
-	// planned @tanstack/react-start bump — or sooner via an undici>=7.28.0
-	// override (dep-hygiene follow-up PR).
-	["GHSA-vmh5-mc38-953g", "TODO: undici>=7.28.0 (react-start bump / override; SOCKS5 TLS-bypass path unused)"],
-	["GHSA-vxpw-j846-p89q", "TODO: undici>=7.28.0 (react-start bump / override; outbound WS-client path unused)"],
-	["GHSA-hm92-r4w5-c3mj", "TODO: undici>=7.28.0 (react-start bump / override; SOCKS5 proxy-pool path unused)"],
-	// nodemailer@7.0.13 raw-message option bypasses disableFileAccess/
-	// disableUrlAccess. The framework composes messages programmatically and never
-	// forwards an untrusted per-message `raw` option, so the file-read/SSRF vector
-	// is not reachable through the mail path. Fixed only above 9.0.0 — a major bump
-	// from the current ^7.0.12 that needs mail-path testing (dep-hygiene PR).
-	["GHSA-p6gq-j5cr-w38f", "TODO: bump nodemailer >9.0.0 (major 7->9; dep-hygiene PR, needs mail-path testing)"],
 ]);
 
 type Advisory = {
