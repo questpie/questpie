@@ -131,6 +131,9 @@ export const stringOps = operatorSet({
 	column: {
 		eq: operator<string, unknown>((col, value) => eq(col, value)),
 		ne: operator<string, unknown>((col, value) => ne(col, value)),
+		not: operator<string | null, unknown>((col, value) =>
+			value === null ? isNotNull(col) : ne(col, value),
+		),
 		in: operator<string[], unknown>((col, values) => inArray(col, values)),
 		notIn: operator<string[], unknown>((col, values) =>
 			notInArray(col, values),
@@ -169,6 +172,9 @@ export const numberOps = operatorSet({
 	column: {
 		eq: operator<number, unknown>((col, value) => eq(col, value)),
 		ne: operator<number, unknown>((col, value) => ne(col, value)),
+		not: operator<number | null, unknown>((col, value) =>
+			value === null ? isNotNull(col) : ne(col, value),
+		),
 		gt: operator<number, unknown>((col, value) => gt(col, value)),
 		gte: operator<number, unknown>((col, value) => gte(col, value)),
 		lt: operator<number, unknown>((col, value) => lt(col, value)),
@@ -198,6 +204,9 @@ export const booleanOps = operatorSet({
 	column: {
 		eq: operator<boolean, unknown>((col, value) => eq(col, value)),
 		ne: operator<boolean, unknown>((col, value) => ne(col, value)),
+		not: operator<boolean | null, unknown>((col, value) =>
+			value === null ? isNotNull(col) : ne(col, value),
+		),
 		isNull: operator<boolean, unknown>((col, value) =>
 			value ? isNull(col) : isNotNull(col),
 		),
@@ -220,6 +229,9 @@ export const dateOps = operatorSet({
 	column: {
 		eq: operator<DateInput, unknown>((col, value) => eq(col, value)),
 		ne: operator<DateInput, unknown>((col, value) => ne(col, value)),
+		not: operator<DateInput | null, unknown>((col, value) =>
+			value === null ? isNotNull(col) : ne(col, value),
+		),
 		gt: operator<DateInput, unknown>((col, value) => gt(col, value)),
 		gte: operator<DateInput, unknown>((col, value) => gte(col, value)),
 		lt: operator<DateInput, unknown>((col, value) => lt(col, value)),
@@ -252,6 +264,9 @@ export const dateStringOps = operatorSet({
 	column: {
 		eq: operator<string, unknown>((col, value) => eq(col, value)),
 		ne: operator<string, unknown>((col, value) => ne(col, value)),
+		not: operator<string | null, unknown>((col, value) =>
+			value === null ? isNotNull(col) : ne(col, value),
+		),
 		gt: operator<string, unknown>((col, value) => gt(col, value)),
 		gte: operator<string, unknown>((col, value) => gte(col, value)),
 		lt: operator<string, unknown>((col, value) => lt(col, value)),
@@ -367,6 +382,9 @@ export const selectSingleOps = operatorSet({
 	column: {
 		eq: operator<string, unknown>((col, value) => eq(col, value)),
 		ne: operator<string, unknown>((col, value) => ne(col, value)),
+		not: operator<string | null, unknown>((col, value) =>
+			value === null ? isNotNull(col) : ne(col, value),
+		),
 		in: operator<string[], unknown>((col, values) => inArray(col, values)),
 		notIn: operator<string[], unknown>((col, values) =>
 			notInArray(col, values),
@@ -553,6 +571,9 @@ export const belongsToOps = operatorSet({
 	column: {
 		eq: operator<string, unknown>((col, value) => eq(col, value)),
 		ne: operator<string, unknown>((col, value) => ne(col, value)),
+		not: operator<string | null, unknown>((col, value) =>
+			value === null ? isNotNull(col) : ne(col, value),
+		),
 		in: operator<string[], unknown>((col, values) => inArray(col, values)),
 		notIn: operator<string[], unknown>((col, values) =>
 			notInArray(col, values),
@@ -664,6 +685,9 @@ export const basicOps = operatorSet({
 	column: {
 		eq: operator<unknown, unknown>((col, value) => eq(col, value)),
 		ne: operator<unknown, unknown>((col, value) => ne(col, value)),
+		not: operator<unknown, unknown>((col, value) =>
+			value === null ? isNotNull(col) : ne(col, value),
+		),
 		in: operator<unknown[], unknown>((col, values) => inArray(col, values)),
 		notIn: operator<unknown[], unknown>((col, values) =>
 			notInArray(col, values),
