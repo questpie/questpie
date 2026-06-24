@@ -14,13 +14,13 @@ import type { ConfirmationConfig } from "../../builder/types/action-types";
 import { useResolveText, useTranslation } from "../../i18n/hooks";
 import { Button } from "../ui/button";
 import {
-	Dialog,
-	DialogContent,
-	DialogDescription,
-	DialogFooter,
-	DialogHeader,
-	DialogTitle,
-} from "../ui/dialog";
+	ResponsiveDialog,
+	ResponsiveDialogContent,
+	ResponsiveDialogDescription,
+	ResponsiveDialogFooter,
+	ResponsiveDialogHeader,
+	ResponsiveDialogTitle,
+} from "../ui/responsive-dialog";
 
 interface ConfirmationDialogProps {
 	/** Whether the dialog is open */
@@ -78,30 +78,33 @@ export function ConfirmationDialog({
 	const isLoading = loading || isProcessing;
 
 	return (
-		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="qa-confirmation-dialog sm:max-w-[425px]">
-				<DialogHeader>
+		<ResponsiveDialog open={open} onOpenChange={onOpenChange}>
+			<ResponsiveDialogContent className="qa-confirmation-dialog sm:max-w-[425px]">
+				<ResponsiveDialogHeader>
 					<div className="flex items-start gap-3">
 						{config.destructive && (
 							<div className="border-border-subtle bg-surface-low text-foreground-subtle flex size-10 shrink-0 items-center justify-center rounded-full border">
 								<Icon icon="ph:warning" className="size-5" />
 							</div>
 						)}
-						<div className="space-y-1">
-							<DialogTitle>{resolveText(config.title)}</DialogTitle>
+						<div className="min-w-0 space-y-1">
+							<ResponsiveDialogTitle>
+								{resolveText(config.title)}
+							</ResponsiveDialogTitle>
 							{config.description && (
-								<DialogDescription>
+								<ResponsiveDialogDescription>
 									{resolveText(config.description)}
-								</DialogDescription>
+								</ResponsiveDialogDescription>
 							)}
 						</div>
 					</div>
-				</DialogHeader>
-				<DialogFooter className="mt-4">
+				</ResponsiveDialogHeader>
+				<ResponsiveDialogFooter className="mt-4">
 					<Button
 						variant="outline"
 						onClick={() => onOpenChange(false)}
 						disabled={isLoading}
+						className="w-full md:w-auto"
 					>
 						{resolveText(config.cancelLabel) || t("common.cancel")}
 					</Button>
@@ -109,13 +112,14 @@ export function ConfirmationDialog({
 						variant={config.destructive ? "destructive" : "default"}
 						onClick={handleConfirm}
 						disabled={isLoading}
+						className="w-full md:w-auto"
 					>
 						{isLoading
 							? t("ui.processing")
 							: resolveText(config.confirmLabel) || t("common.confirm")}
 					</Button>
-				</DialogFooter>
-			</DialogContent>
-		</Dialog>
+				</ResponsiveDialogFooter>
+			</ResponsiveDialogContent>
+		</ResponsiveDialog>
 	);
 }

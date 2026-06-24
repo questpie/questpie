@@ -5,6 +5,7 @@ import { format } from "date-fns";
 import { useState } from "react";
 import { DayPicker } from "react-day-picker";
 
+import { useIsMobile } from "../../hooks/use-media-query";
 import { useDateFnsLocale, useResolveText } from "../../i18n/hooks";
 import { cn } from "../../lib/utils";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
@@ -13,6 +14,34 @@ import type {
 	DateRangeInputProps,
 	DateTimeInputProps,
 } from "./types";
+
+// Native <input type="date"/"datetime-local"> serialization (always local time,
+// no timezone) — used on touch so the OS date/time picker is offered instead of
+// the small custom DayPicker.
+const NATIVE_DATE_FORMAT = "yyyy-MM-dd";
+
+function parseNativeDate(value: string): Date | null {
+	if (!value) return null;
+	const [year, month, day] = value.split("-").map(Number);
+	if (!year || !month || !day) return null;
+	return new Date(year, month - 1, day);
+}
+
+function parseNativeDateTime(value: string): Date | null {
+	if (!value) return null;
+	const [datePart, timePart = "00:00"] = value.split("T");
+	const base = parseNativeDate(datePart);
+	if (!base) return null;
+	const [hours, minutes, seconds] = timePart.split(":").map(Number);
+	base.setHours(hours || 0, minutes || 0, seconds || 0, 0);
+	return base;
+}
+
+const nativeDateInputClassName = cn(
+	"control-surface font-chrome flex w-full items-center gap-2 px-3 py-2 text-sm",
+	"focus-within:border-border-strong focus-within:ring-ring/20 focus-within:ring-3 focus-within:outline-none",
+	"disabled:cursor-not-allowed disabled:opacity-50",
+);
 
 const datePickerClassNames = {
 	months: "flex flex-col sm:flex-row gap-2",
@@ -88,6 +117,7 @@ export function DateInput({
 }: DateInputProps) {
 	const resolveText = useResolveText();
 	const dateFnsLocale = useDateFnsLocale();
+	const isMobile = useIsMobile();
 	const [open, setOpen] = useState(false);
 
 	const handleSelect = (date: Date | undefined) => {
@@ -99,6 +129,41 @@ export function DateInput({
 		e.stopPropagation();
 		onChange(null);
 	};
+
+	// Mobile: native OS date picker (correct locale + large touch targets).
+	if (isMobile) {
+		return (
+			<div
+				className={cn(
+					"qa-date-input",
+					nativeDateInputClassName,
+					disabled && "opacity-50",
+					ariaInvalid && "border-border-strong",
+					className,
+				)}
+			>
+				<Icon
+					icon="ph:calendar-blank"
+					className="text-muted-foreground size-4 shrink-0"
+				/>
+				<input
+					type="date"
+					id={id}
+					disabled={disabled}
+					aria-invalid={ariaInvalid}
+					value={value ? format(value, NATIVE_DATE_FORMAT) : ""}
+					min={minDate ? format(minDate, NATIVE_DATE_FORMAT) : undefined}
+					max={maxDate ? format(maxDate, NATIVE_DATE_FORMAT) : undefined}
+					onChange={(e) => onChange(parseNativeDate(e.target.value))}
+					className={cn(
+						"flex-1 bg-transparent outline-none",
+						"disabled:cursor-not-allowed",
+						!value && "text-muted-foreground",
+					)}
+				/>
+			</div>
+		);
+	}
 
 	return (
 		<Popover open={open} onOpenChange={setOpen}>
@@ -174,6 +239,7 @@ export function DateTimeInput({
 }: DateTimeInputProps) {
 	const resolveText = useResolveText();
 	const dateFnsLocale = useDateFnsLocale();
+	const isMobile = useIsMobile();
 	const [open, setOpen] = useState(false);
 	const [timeValue, setTimeValue] = useState(() => {
 		if (!value) return "";
@@ -213,6 +279,56 @@ export function DateTimeInput({
 		onChange(null);
 		setTimeValue("");
 	};
+
+	// Mobile: native OS date+time picker.
+	if (isMobile) {
+		const nativeFormat =
+			precision === "second"
+				? `${NATIVE_DATE_FORMAT}'T'HH:mm:ss`
+				: `${NATIVE_DATE_FORMAT}'T'HH:mm`;
+		return (
+			<div
+				className={cn(
+					"qa-datetime-input",
+					nativeDateInputClassName,
+					disabled && "opacity-50",
+					ariaInvalid && "border-border-strong",
+					className,
+				)}
+			>
+				<Icon
+					icon="ph:calendar-blank"
+					className="text-muted-foreground size-4 shrink-0"
+				/>
+				<input
+					type="datetime-local"
+					id={id}
+					disabled={disabled}
+					aria-invalid={ariaInvalid}
+					step={precision === "second" ? 1 : 60}
+					value={value ? format(value, nativeFormat) : ""}
+					min={minDate ? format(minDate, nativeFormat) : undefined}
+					max={maxDate ? format(maxDate, nativeFormat) : undefined}
+					onChange={(e) => {
+						const next = parseNativeDateTime(e.target.value);
+						onChange(next);
+						setTimeValue(
+							next
+								? precision === "second"
+									? format(next, "HH:mm:ss")
+									: format(next, "HH:mm")
+								: "",
+						);
+					}}
+					className={cn(
+						"flex-1 bg-transparent outline-none",
+						"disabled:cursor-not-allowed",
+						!value && "text-muted-foreground",
+					)}
+				/>
+			</div>
+		);
+	}
 
 	return (
 		<Popover open={open} onOpenChange={setOpen}>
@@ -297,6 +413,7 @@ function DateRangeInput({
 }: DateRangeInputProps) {
 	const resolveText = useResolveText();
 	const dateFnsLocale = useDateFnsLocale();
+	const isMobile = useIsMobile();
 	const [open, setOpen] = useState(false);
 
 	const handleSelect = (range: { from?: Date; to?: Date } | undefined) => {
@@ -344,7 +461,13 @@ function DateRangeInput({
 					/>
 				)}
 			</PopoverTrigger>
-			<PopoverContent className={datePopoverClassName} align="start">
+			<PopoverContent
+				className={cn(
+					datePopoverClassName,
+					"max-w-[calc(100vw-1rem)] overflow-x-auto",
+				)}
+				align="start"
+			>
 				<DayPicker
 					mode="range"
 					selected={
@@ -354,7 +477,7 @@ function DateRangeInput({
 					}
 					onSelect={handleSelect}
 					locale={dateFnsLocale}
-					numberOfMonths={2}
+					numberOfMonths={isMobile ? 1 : 2}
 					disabled={(date) => {
 						if (minDate && date < minDate) return true;
 						if (maxDate && date > maxDate) return true;

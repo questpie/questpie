@@ -8,6 +8,7 @@ import type { Editor } from "@tiptap/core";
 import * as React from "react";
 import { toast } from "sonner";
 
+import { useIsMobile } from "../../../hooks/use-media-query";
 import type { Asset } from "../../../hooks/use-upload";
 import { useTranslation } from "../../../i18n/hooks";
 import { resolveAssetUrl } from "../../../utils/asset-url";
@@ -21,6 +22,12 @@ import {
 	PopoverTitle,
 	PopoverTrigger,
 } from "../../ui/popover";
+import {
+	ResponsiveDialog,
+	ResponsiveDialogContent,
+	ResponsiveDialogHeader,
+	ResponsiveDialogTitle,
+} from "../../ui/responsive-dialog";
 import { useRichTextImageUpload } from "./image-upload";
 
 type ImagePopoverProps = {
@@ -47,6 +54,7 @@ export function ImagePopover({
 }: ImagePopoverProps) {
 	"use no memo";
 	const { t } = useTranslation();
+	const isMobile = useIsMobile();
 	const [imageUrl, setImageUrl] = React.useState("");
 	const [imageAlt, setImageAlt] = React.useState("");
 	const [uploadingImage, setUploadingImage] = React.useState(false);
@@ -136,6 +144,104 @@ export function ImagePopover({
 		setIsPickerOpen(false);
 	};
 
+	const body = (
+		<div className="space-y-3">
+			<div className="space-y-2">
+				<Input
+					aria-label={t("editor.image")}
+					autoComplete="off"
+					inputMode="url"
+					name="rich-text-image-url"
+					type="url"
+					value={imageUrl}
+					placeholder="https://example.com/image.jpg…"
+					onChange={(event) => setImageUrl(event.target.value)}
+					disabled={disabled}
+				/>
+				<Input
+					aria-label={t("editor.altText")}
+					autoComplete="off"
+					name="rich-text-image-alt"
+					value={imageAlt}
+					placeholder={`${t("editor.altText")}…`}
+					onChange={(event) => setImageAlt(event.target.value)}
+					disabled={disabled}
+				/>
+				<div className="flex justify-end gap-2">
+					<Button
+						type="button"
+						size="xs"
+						onClick={handleInsertImageUrl}
+						disabled={disabled || !imageUrl}
+					>
+						{t("editor.insertUrl")}
+					</Button>
+				</div>
+			</div>
+
+			<div className="space-y-2">
+				<div className="text-xs font-medium">{t("editor.uploadFile")}</div>
+				<input
+					ref={fileInputRef}
+					type="file"
+					accept="image/*"
+					onChange={handleImageUpload}
+					className="sr-only"
+					disabled={disabled || uploadingImage}
+				/>
+				<div className="flex items-center gap-2">
+					<Button
+						type="button"
+						size="xs"
+						variant="outline"
+						onClick={() => fileInputRef.current?.click()}
+						disabled={
+							disabled || uploadingImage || (!onImageUpload && !collection)
+						}
+					>
+						{uploadingImage ? t("editor.uploading") : t("editor.chooseFile")}
+					</Button>
+					{showMediaLibrary && (
+						<Button
+							type="button"
+							size="xs"
+							variant="outline"
+							onClick={() => setIsPickerOpen(true)}
+							disabled={disabled || !collection}
+						>
+							{t("editor.browseLibrary")}
+						</Button>
+					)}
+				</div>
+			</div>
+		</div>
+	);
+
+	if (isMobile) {
+		return (
+			<>
+				<ResponsiveDialog open={open} onOpenChange={onOpenChange}>
+					<ResponsiveDialogContent className="p-4">
+						<ResponsiveDialogHeader className="px-0 pt-0">
+							<ResponsiveDialogTitle>{t("editor.image")}</ResponsiveDialogTitle>
+						</ResponsiveDialogHeader>
+						{body}
+					</ResponsiveDialogContent>
+				</ResponsiveDialog>
+				{showMediaLibrary && (
+					<MediaPickerDialog
+						open={isPickerOpen}
+						onOpenChange={setIsPickerOpen}
+						mode="single"
+						accept={["image/*"]}
+						onSelect={handlePickerSelect}
+						collection={collection}
+					/>
+				)}
+			</>
+		);
+	}
+
 	return (
 		<>
 			<Popover open={open} onOpenChange={onOpenChange}>
@@ -143,86 +249,11 @@ export function ImagePopover({
 					nativeButton={false}
 					render={<div className="sr-only" />}
 				/>
-				<PopoverContent className="w-80">
+				<PopoverContent className="w-80 max-w-[calc(100vw-2rem)]">
 					<PopoverHeader>
 						<PopoverTitle>{t("editor.image")}</PopoverTitle>
 					</PopoverHeader>
-					<div className="space-y-3">
-						<div className="space-y-2">
-							<Input
-								aria-label={t("editor.image")}
-								autoComplete="off"
-								inputMode="url"
-								name="rich-text-image-url"
-								type="url"
-								value={imageUrl}
-								placeholder="https://example.com/image.jpg…"
-								onChange={(event) => setImageUrl(event.target.value)}
-								disabled={disabled}
-							/>
-							<Input
-								aria-label={t("editor.altText")}
-								autoComplete="off"
-								name="rich-text-image-alt"
-								value={imageAlt}
-								placeholder={`${t("editor.altText")}…`}
-								onChange={(event) => setImageAlt(event.target.value)}
-								disabled={disabled}
-							/>
-							<div className="flex justify-end gap-2">
-								<Button
-									type="button"
-									size="xs"
-									onClick={handleInsertImageUrl}
-									disabled={disabled || !imageUrl}
-								>
-									{t("editor.insertUrl")}
-								</Button>
-							</div>
-						</div>
-
-						<div className="space-y-2">
-							<div className="text-xs font-medium">
-								{t("editor.uploadFile")}
-							</div>
-							<input
-								ref={fileInputRef}
-								type="file"
-								accept="image/*"
-								onChange={handleImageUpload}
-								className="sr-only"
-								disabled={disabled || uploadingImage}
-							/>
-							<div className="flex items-center gap-2">
-								<Button
-									type="button"
-									size="xs"
-									variant="outline"
-									onClick={() => fileInputRef.current?.click()}
-									disabled={
-										disabled ||
-										uploadingImage ||
-										(!onImageUpload && !collection)
-									}
-								>
-									{uploadingImage
-										? t("editor.uploading")
-										: t("editor.chooseFile")}
-								</Button>
-								{showMediaLibrary && (
-									<Button
-										type="button"
-										size="xs"
-										variant="outline"
-										onClick={() => setIsPickerOpen(true)}
-										disabled={disabled || !collection}
-									>
-										{t("editor.browseLibrary")}
-									</Button>
-								)}
-							</div>
-						</div>
-					</div>
+					{body}
 				</PopoverContent>
 			</Popover>
 			{showMediaLibrary && (

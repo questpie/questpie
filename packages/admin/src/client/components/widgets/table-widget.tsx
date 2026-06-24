@@ -86,13 +86,20 @@ function toListColumnConfig(column: TableWidgetColumn): ColumnConfig<string> {
 	};
 }
 
-function getColumnSizeStyle(column: unknown): React.CSSProperties {
-	const size =
-		typeof (column as any)?.getSize === "function"
-			? (column as any).getSize()
-			: 120;
+function getColumnSize(column: unknown): number {
+	return typeof (column as any)?.getSize === "function"
+		? (column as any).getSize()
+		: 120;
+}
 
-	return { width: size, minWidth: size, maxWidth: size };
+function getColumnSizeStyle(): React.CSSProperties {
+	// Under `table-fixed` the `<colgroup>` percentage widths fully govern column
+	// sizing, so cells must NOT carry a pixel `width` (a definite px width would
+	// be honored by the fixed layout and could push the table past a phone-width
+	// tile, reintroducing horizontal scroll). We only override the shared cell's
+	// baked-in `min-w-[100px]` so a column can collapse below its content width
+	// and truncate with ellipsis instead of expanding the table.
+	return { minWidth: 0 };
 }
 
 function getAlignClass(align: unknown): string | undefined {
@@ -213,6 +220,10 @@ export default function TableWidget({
 		getRowId: (row: any, index) => String(row.id ?? row._id ?? index),
 	});
 	const visibleColumns = table.getVisibleLeafColumns();
+	// Sum of column sizes drives the proportional `<colgroup>` percentage widths
+	// below (guard against 0 so the division can't produce NaN/Infinity).
+	const totalColumnSize =
+		visibleColumns.reduce((sum, column) => sum + getColumnSize(column), 0) || 1;
 	const rows = table.getRowModel().rows;
 	const isSchemaLoading =
 		(fieldsLoading && !fieldsError) || (metaLoading && !metaError);
@@ -250,11 +261,18 @@ export default function TableWidget({
 				<Table
 					aria-label={title ?? `${formatLabel(collection)} table`}
 					className="min-w-full table-fixed"
-					style={{ minWidth: table.getTotalSize() }}
 				>
 					<colgroup>
 						{visibleColumns.map((column) => (
-							<col key={column.id} style={{ width: column.getSize() }} />
+							<col
+								key={column.id}
+								style={{
+									// Proportional weight (% of the summed column sizes) so
+									// `table-fixed` scales every column down to fit a narrow
+									// container and truncates, while keeping relative widths.
+									width: `${(getColumnSize(column) / totalColumnSize) * 100}%`,
+								}}
+							/>
 						))}
 					</colgroup>
 					<TableHeader>
@@ -269,7 +287,7 @@ export default function TableWidget({
 										<TableHead
 											key={header.id}
 											className={getAlignClass(meta?.align)}
-											style={getColumnSizeStyle(header.column)}
+											style={getColumnSizeStyle()}
 										>
 											{header.isPlaceholder
 												? null
@@ -320,7 +338,7 @@ export default function TableWidget({
 													getAlignClass(meta?.align),
 													meta?.className,
 												)}
-												style={getColumnSizeStyle(cell.column)}
+												style={getColumnSizeStyle()}
 											>
 												{flexRender(
 													cell.column.columnDef.cell,

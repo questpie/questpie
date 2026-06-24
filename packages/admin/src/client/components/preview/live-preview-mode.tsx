@@ -61,11 +61,13 @@ interface LivePreviewModeProps {
 // Inner Component (with FocusContext access)
 // ============================================================================
 
-type LivePreviewContentProps = LivePreviewModeProps & {
+// `onClose` is intentionally omitted: the inner content never calls it (exit is
+// handled via `handleExitPreview`), so forwarding it through the `React.memo`
+// boundary would only feed the shallow compare an unstable inline arrow from the
+// parent and defeat memoization for no benefit.
+type LivePreviewContentProps = Omit<LivePreviewModeProps, "onClose"> & {
 	previewRef: React.RefObject<PreviewPaneRef | null>;
 };
-
-const DEV_TELEMETRY = process.env.NODE_ENV === "development";
 
 function getFocusStatePath(state: FocusState): string | null {
 	if (state.type === "field" || state.type === "relation") {
@@ -157,51 +159,7 @@ function useResizablePane(defaultSize = 50, minSize = 30, enabled = true) {
 	return { previewPercent, containerRef, handleMouseDown };
 }
 
-function useLivePreviewRenderTelemetry({
-	open,
-	isMobile,
-	activeTab,
-}: {
-	open: boolean;
-	isMobile: boolean;
-	activeTab: "form" | "preview";
-}) {
-	const renderCountRef = React.useRef(0);
-	const startAtRef = React.useRef(0);
-	const lastLogAtRef = React.useRef(0);
-
-	React.useEffect(() => {
-		if (!DEV_TELEMETRY) return;
-
-		if (!open) {
-			renderCountRef.current = 0;
-			startAtRef.current = 0;
-			lastLogAtRef.current = 0;
-			return;
-		}
-
-		const now = performance.now();
-		if (!startAtRef.current) {
-			startAtRef.current = now;
-		}
-
-		renderCountRef.current += 1;
-		const shouldLogByCount = renderCountRef.current % 25 === 0;
-		const shouldLogByTime = now - lastLogAtRef.current >= 5000;
-		if (!shouldLogByCount && !shouldLogByTime) {
-			return;
-		}
-
-		lastLogAtRef.current = now;
-		const elapsedMs = Math.max(1, now - startAtRef.current);
-		const rendersPerSecond = (renderCountRef.current * 1000) / elapsedMs;
-		console.debug(
-			`[LivePreviewTelemetry] renders=${renderCountRef.current} rps=${rendersPerSecond.toFixed(2)} mobile=${isMobile} tab=${activeTab}`,
-		);
-	});
-}
-
-function LivePreviewContent({
+function LivePreviewContentImpl({
 	open,
 	children,
 	previewUrl,
@@ -215,7 +173,6 @@ function LivePreviewContent({
 	const { t } = useTranslation();
 	const isMobile = useIsMobile();
 	const [activeTab, setActiveTab] = React.useState<"form" | "preview">("form");
-	useLivePreviewRenderTelemetry({ open, isMobile, activeTab });
 	const { previewPercent, containerRef, handleMouseDown } = useResizablePane(
 		defaultSize,
 		minSize,
@@ -492,13 +449,30 @@ function LivePreviewContent({
 	);
 }
 
+/**
+ * Memoized to insulate the (potentially heavy) preview shell from parent
+ * re-renders. The non-`children` props forwarded by `LivePreviewMode` are stable
+ * — `previewRef` is a ref, the `on*` callbacks come from the parent already
+ * wrapped in `useCallback`, the size props are primitives, and `onClose` is no
+ * longer threaded through this boundary at all — so the shallow compare only
+ * trips on `children`.
+ *
+ * Note: `FormView` rebuilds its `formShell` element each render, so this memo is
+ * usually busted by `children` — and that is intentional and fine. The form SHOULD
+ * re-render to reflect lock/autosave/workflow/locale state. The expensive part (the
+ * iframe) is insulated independently by `PreviewPane`'s own `React.memo` (audit
+ * 8.5(1)), so a re-render here only re-runs cheap layout/hooks, never the iframe.
+ */
+const LivePreviewContent = React.memo(LivePreviewContentImpl);
+
 // ============================================================================
 // Main Component
 // ============================================================================
 
 export function LivePreviewMode({
 	open,
-	onClose,
+	// `onClose` stays in the public props (callers pass it) but is not threaded to
+	// the memoized content, which exits via its own `handleExitPreview`.
 	children,
 	previewUrl,
 	previewRef: previewRefProp,
@@ -541,7 +515,6 @@ export function LivePreviewMode({
 		<FocusProvider onFocusChange={handleFocusChange}>
 			<LivePreviewContent
 				open={open}
-				onClose={onClose}
 				previewUrl={previewUrl}
 				previewRef={previewRef}
 				onFieldValueEdited={onFieldValueEdited}

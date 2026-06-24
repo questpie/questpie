@@ -1,12 +1,23 @@
+"use client";
+
 import { Dialog as SheetPrimitive } from "@base-ui/react/dialog";
 import { Icon } from "@iconify/react";
 import type * as React from "react";
 
+import { useIsMobile } from "../../hooks/use-media-query";
 import { cn } from "../../lib/utils";
 import { Button } from "./button";
 
-function Sheet({ ...props }: SheetPrimitive.Root.Props) {
-	return <SheetPrimitive.Root data-slot="sheet" {...props} />;
+function Sheet({ modal, ...props }: SheetPrimitive.Root.Props) {
+	const isMobile = useIsMobile();
+	// On phones a non-modal side panel (modal={false}) leaves the background
+	// scrollable and tappable behind a full-width sheet. Force modal at mobile
+	// widths so the page is scroll-locked and a backdrop tap dismisses; desktop
+	// keeps its opt-out side-panel behaviour untouched.
+	const resolvedModal = isMobile ? true : modal;
+	return (
+		<SheetPrimitive.Root data-slot="sheet" modal={resolvedModal} {...props} />
+	);
 }
 
 function SheetPortal({ ...props }: SheetPrimitive.Portal.Props) {
@@ -40,6 +51,10 @@ function SheetContent({
 	animated?: boolean;
 	showOverlay?: boolean;
 }) {
+	const isMobile = useIsMobile();
+	// Full-width mobile sheets need a visible scrim so the layer reads as modal
+	// and the page behind is dimmed. Desktop honours the caller's `showOverlay`.
+	const overlayVisible = showOverlay || isMobile;
 	const overlayClassName = animated
 		? "qa-sheet__overlay motion-overlay fixed inset-0 z-50 bg-black/80 data-ending-style:opacity-0 data-starting-style:opacity-0"
 		: "qa-sheet__overlay fixed inset-0 z-50 bg-black/80";
@@ -50,7 +65,7 @@ function SheetContent({
 
 	return (
 		<SheetPortal>
-			{showOverlay && <SheetOverlay className={overlayClassName} />}
+			{overlayVisible && <SheetOverlay className={overlayClassName} />}
 			<SheetPrimitive.Popup
 				data-slot="sheet-content"
 				data-side={side}

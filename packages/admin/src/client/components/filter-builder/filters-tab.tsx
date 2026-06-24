@@ -12,13 +12,6 @@ import {
 } from "../primitives/types";
 import { Button } from "../ui/button.js";
 import { Input } from "../ui/input.js";
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from "../ui/select.js";
 import type { AvailableField, FilterOperator, FilterRule } from "./types.js";
 
 interface FiltersTabProps {
@@ -322,24 +315,24 @@ function FilterValueInput({
 	}
 
 	if (field.type === "checkbox" || field.type === "switch") {
-		const booleanValue =
-			typeof filter.value === "boolean" ? String(filter.value) : undefined;
+		const booleanValue: string | null =
+			typeof filter.value === "boolean" ? String(filter.value) : null;
 
 		return (
-			<Select
+			<SelectSingle<string>
 				value={booleanValue}
-				onValueChange={(value) =>
+				onChange={(value) =>
 					updateFilter(filter.id, { value: value === "true" })
 				}
-			>
-				<SelectTrigger className="h-8 text-xs">
-					<SelectValue placeholder={t("viewOptions.valuePlaceholder")} />
-				</SelectTrigger>
-				<SelectContent>
-					<SelectItem value="true">{t("common.yes")}</SelectItem>
-					<SelectItem value="false">{t("common.no")}</SelectItem>
-				</SelectContent>
-			</Select>
+				options={[
+					{ value: "true", label: t("common.yes") },
+					{ value: "false", label: t("common.no") },
+				]}
+				clearable={false}
+				placeholder={t("viewOptions.valuePlaceholder")}
+				drawerTitle={t("viewOptions.valuePlaceholder")}
+				className="h-8 text-xs"
+			/>
 		);
 	}
 
@@ -438,6 +431,17 @@ export function FiltersTab({
 				return true;
 			}),
 		[fields],
+	);
+
+	// Field options for the field SelectSingle. SelectSingle resolves the
+	// I18nText label internally, so pass the raw label through.
+	const filterFieldOptions = React.useMemo(
+		() =>
+			filterableFields.map((f) => ({
+				value: f.name,
+				label: f.label,
+			})),
+		[filterableFields],
 	);
 
 	const addFilter = () => {
@@ -545,10 +549,10 @@ export function FiltersTab({
 								<Icon icon="ph:trash" width={14} height={14} />
 							</Button>
 						</div>
-						<div className="grid grid-cols-2 gap-2">
-							<Select
-								value={filter.field || undefined}
-								onValueChange={(value) => {
+						<div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+							<SelectSingle
+								value={filter.field || null}
+								onChange={(value) => {
 									const selectedField = fields.find((f) => f.name === value);
 									const operators = getOperatorsForField(selectedField);
 									const nextOperator = operators[0] ?? "equals";
@@ -560,29 +564,17 @@ export function FiltersTab({
 											: "",
 									});
 								}}
-							>
-								<SelectTrigger className="h-8 text-xs">
-									<SelectValue>
-										{filter.field
-											? resolveText(
-													fields.find((f) => f.name === filter.field)?.label ??
-														filter.field,
-												)
-											: t("viewOptions.selectField")}
-									</SelectValue>
-								</SelectTrigger>
-								<SelectContent>
-									{filterableFields.map((f) => (
-										<SelectItem key={f.name} value={f.name}>
-											{resolveText(f.label)}
-										</SelectItem>
-									))}
-								</SelectContent>
-							</Select>
-							<Select
-								value={activeOperator || undefined}
-								onValueChange={(value) => {
-									const nextOperator = value as FilterOperator;
+								options={filterFieldOptions}
+								selectedLabel={field ? resolveText(field.label) : undefined}
+								clearable={false}
+								placeholder={t("viewOptions.selectField")}
+								drawerTitle={t("viewOptions.selectField")}
+								className="h-8 text-xs"
+							/>
+							<SelectSingle<FilterOperator>
+								value={activeOperator || null}
+								onChange={(value) => {
+									const nextOperator = value ?? "equals";
 									updateFilter(filter.id, {
 										operator: nextOperator,
 										value: normalizeValueForOperator(
@@ -592,22 +584,15 @@ export function FiltersTab({
 										) as FilterRule["value"],
 									});
 								}}
-							>
-								<SelectTrigger className="h-8 text-xs">
-									<SelectValue>
-										{activeOperator
-											? t(OPERATOR_KEYS[activeOperator] || activeOperator)
-											: t("viewOptions.selectOperator")}
-									</SelectValue>
-								</SelectTrigger>
-								<SelectContent>
-									{availableOperators.map((op) => (
-										<SelectItem key={op} value={op}>
-											{t(OPERATOR_KEYS[op])}
-										</SelectItem>
-									))}
-								</SelectContent>
-							</Select>
+								options={availableOperators.map((op) => ({
+									value: op,
+									label: t(OPERATOR_KEYS[op] ?? op),
+								}))}
+								clearable={false}
+								placeholder={t("viewOptions.selectOperator")}
+								drawerTitle={t("viewOptions.selectOperator")}
+								className="h-8 text-xs"
+							/>
 						</div>
 						<FilterValueInput
 							field={field}
