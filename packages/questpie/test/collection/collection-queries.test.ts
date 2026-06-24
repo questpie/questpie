@@ -192,6 +192,28 @@ describe("collection query operations", () => {
 			expect(result.docs[0].status).toBe("draft");
 		});
 
+		it("filters with the not alias (= ne)", async () => {
+			const ctx = createTestContext();
+
+			const result = await setup.app.collections.posts.find(
+				{ where: { id: { not: testPosts[0].id } } },
+				ctx,
+			);
+			expect(result.docs.length).toBe(5);
+			expect(result.docs.some((p) => p.id === testPosts[0].id)).toBe(false);
+		});
+
+		it("maps `not: null` to SQL IS NOT NULL", async () => {
+			const ctx = createTestContext();
+
+			const result = await setup.app.collections.posts.find(
+				{ where: { publishedAt: { not: null } } },
+				ctx,
+			);
+			expect(result.docs.length).toBe(5);
+			expect(result.docs.every((p) => p.publishedAt !== null)).toBe(true);
+		});
+
 		it("combines multiple filters (AND)", async () => {
 			const ctx = createTestContext();
 

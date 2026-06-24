@@ -78,6 +78,8 @@ export type CRUDContext = BaseRequestContext;
 export interface WhereOperatorsLegacy<T> {
 	eq?: T;
 	ne?: T;
+	/** Alias for `ne`; `not: null` maps to SQL `IS NOT NULL`. */
+	not?: T | null;
 	gt?: T extends Date ? Date | string : T extends number | string ? T : never;
 	gte?: T extends Date ? Date | string : T extends number | string ? T : never;
 	lt?: T extends Date ? Date | string : T extends number | string ? T : never;
