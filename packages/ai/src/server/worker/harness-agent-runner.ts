@@ -61,7 +61,10 @@ async function runViaHarness(args: {
 	const cwd = input.cwd ?? config.workerDir;
 	const abortSignal = AbortSignal.timeout(DEFAULT_RUN_TIMEOUT_MS);
 	const agent = new HarnessAgent({
-		harness: createClaudeCode(),
+		// canary peer dual-instance (see harness-core) — assert the adapter type.
+		harness: createClaudeCode() as unknown as ConstructorParameters<
+			typeof HarnessAgent
+		>[0]["harness"],
 		sandbox: createLocalHostSandbox({ workRoot: cwd }),
 		permissionMode: "allow-all",
 	});

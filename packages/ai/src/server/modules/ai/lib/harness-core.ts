@@ -95,7 +95,13 @@ export function createHarnessAgent<TTools extends ToolSet = {}>(
 
 	return new HarnessAgent({
 		id: options.key,
-		harness: createClaudeCode(options.claudeCode),
+		// @ai-sdk/harness canary resolves harness + harness-claude-code against two
+		// peer copies, so createClaudeCode()'s HarnessV1 is nominally — not
+		// structurally — distinct from the HarnessAgentAdapter HarnessAgent expects.
+		// Assert the adapter type at this single boundary until the peer dedupes.
+		harness: createClaudeCode(
+			options.claudeCode,
+		) as unknown as ConstructorParameters<typeof HarnessAgent>[0]["harness"],
 		sandbox: createLocalHostSandbox({
 			...options.sandbox,
 			workRoot: options.workRoot,
@@ -111,7 +117,10 @@ export function createHarnessAgent<TTools extends ToolSet = {}>(
 						mcpServers: options.mcpServers,
 					})
 			: undefined,
-	} satisfies HarnessAgentSettings<ReturnType<typeof createClaudeCode>, TTools>);
+	} satisfies HarnessAgentSettings<
+		ConstructorParameters<typeof HarnessAgent>[0]["harness"],
+		TTools
+	>);
 }
 
 export function createInMemoryHarnessSessionStore(): HarnessSessionStore {
