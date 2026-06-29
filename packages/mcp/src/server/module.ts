@@ -3,6 +3,18 @@ import { module, route } from "questpie";
 
 import { createMcpServer } from "./create-server.js";
 import { mcpPlugin } from "./plugin.js";
+import type { QuestpieApp } from "./runtime.js";
+
+function appFromRouteContext(ctx: object): QuestpieApp {
+	return (ctx as { app: QuestpieApp }).app;
+}
+
+function executionContextFromRouteContext(ctx: object) {
+	const routeCtx = { ...ctx } as Record<string, unknown>;
+	delete routeCtx.app;
+	delete routeCtx.request;
+	return routeCtx;
+}
 
 function withCors(response: Response, request: Request): Response {
 	const headers = new Headers(response.headers);
@@ -33,7 +45,9 @@ const mcpRoute = route()
 		title: "MCP endpoint",
 		description: "Model Context Protocol endpoint for QUESTPIE.",
 	})
-	.handler(async ({ app, request, ...ctx }) => {
+	.handler(async (ctx) => {
+		const { request } = ctx;
+		const app = appFromRouteContext(ctx);
 		if (request.method === "OPTIONS") {
 			return withCors(new Response(null, { status: 204 }), request);
 		}
@@ -50,7 +64,7 @@ const mcpRoute = route()
 			transport: "http",
 			accessMode: "user",
 			request,
-			ctx: ctx as any,
+			ctx: executionContextFromRouteContext(ctx) as any,
 		});
 		const transport = new WebStandardStreamableHTTPServerTransport({
 			sessionIdGenerator: undefined,

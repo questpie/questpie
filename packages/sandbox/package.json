@@ -1,7 +1,6 @@
 {
 	"name": "@questpie/sandbox",
 	"version": "3.0.9",
-	"private": true,
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/questpie/questpie.git",
@@ -11,7 +10,11 @@
 		"dist",
 		"src/sandbox-server.ts",
 		"src/guest-entry.ts",
-		"src/net-validation.ts"
+		"src/net-validation.ts",
+		"src/server-internals.ts",
+		"src/egress-firewall.ts",
+		"src/types.ts",
+		"src/guest-bindings.ts"
 	],
 	"type": "module",
 	"sideEffects": false,

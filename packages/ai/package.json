@@ -1,7 +1,6 @@
 {
 	"name": "@questpie/ai",
 	"version": "3.0.0",
-	"private": true,
 	"description": "AI module for QuestPie run and worker execution",
 	"repository": {
 		"type": "git",

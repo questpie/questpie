@@ -35,6 +35,10 @@ import { route } from "questpie";
 import type { BrokerRpcResponse, ExecutorService } from "questpie/executor";
 import { BINDINGS_TOKEN_HEADER } from "questpie/executor";
 
+function appFromRouteContext(ctx: object): { executor?: ExecutorService } {
+	return (ctx as { app: { executor?: ExecutorService } }).app;
+}
+
 function json(body: BrokerRpcResponse, status: number): Response {
 	return new Response(JSON.stringify(body), {
 		status,
@@ -45,7 +49,9 @@ function json(body: BrokerRpcResponse, status: number): Response {
 export const sandboxRpcRoute = route()
 	.post()
 	.raw()
-	.handler(async ({ request, app }) => {
+	.handler(async (ctx) => {
+		const { request } = ctx;
+		const app = appFromRouteContext(ctx);
 		const broker = (app.executor as ExecutorService | undefined)?.broker;
 		if (!broker) {
 			return json(
