@@ -136,7 +136,7 @@ import type { RouteParamsFromKey, RouteWithParams } from "questpie/types";
 // TYPES — composed from typeof references (zero inference cost)
 // ════════════════════════════════════════════════════════════
 
-import type { ExtractModulePropArr, ExtractModulePropArrOverride, ServiceCustomNamespaceInstances, ServiceInstanceOf, ServiceInstancesInNamespace, ServiceTopLevelInstances } from "questpie/types";
+import type { ExtractModulePropArr, ExtractModulePropArrOverride, Override, ServiceCustomNamespaceInstances, ServiceInstanceOf, ServiceInstancesInNamespace, ServiceTopLevelInstances } from "questpie/types";
 type _RouteDefinitionWithoutHandler<T> = T extends { mode: "raw" } ? Omit<T, "handler"> & { handler: (args: unknown) => Response | Promise<Response> } : Omit<T, "handler"> & { handler: (args: unknown) => unknown | Promise<unknown> };
 export type _ModuleCollections = ExtractModulePropArrOverride<typeof _modules, "collections">;
 export type _ModuleGlobals = ExtractModulePropArr<typeof _modules, "globals">;
@@ -176,7 +176,7 @@ declare global {
 }
 
 /** All collections in the app (modules + user, user overrides) */
-export type AppCollections = _ModuleCollections & {
+export type AppCollections = Override<_ModuleCollections, {
 	activity: typeof _coll_activity;
 	admin_audit_log: typeof _coll_admin_audit_log;
 	agent_memory: typeof _coll_agent_memory;
@@ -196,7 +196,7 @@ export type AppCollections = _ModuleCollections & {
 	secrets: typeof _coll_secrets;
 	task_relations: typeof _coll_task_relations;
 	tasks: typeof _coll_tasks;
-};
+}>;
 
 /** All globals in the app (modules + user, user overrides) */
 export type AppGlobals = _ModuleGlobals;

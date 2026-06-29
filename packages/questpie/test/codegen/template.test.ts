@@ -565,7 +565,7 @@ describe("generateTemplate — collections", () => {
 		expect(code).toContain("posts: _coll_posts,");
 	});
 
-	it("emits AppCollections type intersection when user collections exist", () => {
+	it("emits AppCollections type override when user collections exist", () => {
 		const result = minimalResult();
 		cat(result, "collections").set(
 			"posts",
@@ -583,8 +583,10 @@ describe("generateTemplate — collections", () => {
 			singletonFactories: coreSingletonFactories(),
 		});
 
+		// `collections` OVERRIDE-folds (not `&`-intersects) so a user app can
+		// re-declare a module-contributed collection without detonating it to `never`.
 		expect(code).toContain(
-			"export type AppCollections = _ModuleCollections & {",
+			"export type AppCollections = Override<_ModuleCollections, {",
 		);
 		expect(code).toContain("posts: typeof _coll_posts;");
 	});
