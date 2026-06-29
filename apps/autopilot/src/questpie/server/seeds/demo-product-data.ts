@@ -1,5 +1,7 @@
 import { seed } from "questpie/services";
 
+import { asRecord } from "../lib/records";
+
 const DEMO_PROJECT_SLUG = "questpie-autopilot-demo";
 
 export default seed({
@@ -198,7 +200,7 @@ export default seed({
 					scopeType: "project",
 					queue: "default",
 					createdBy: "seed:autopilotDemoProductData",
-					context,
+					context: asRecord(context),
 					metadata: {
 						seed: "autopilotDemoProductData",
 					},

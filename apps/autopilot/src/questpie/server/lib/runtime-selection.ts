@@ -1,9 +1,12 @@
 import { ApiError } from "questpie/errors";
 
-import type { AppCollections, WorkflowContextCollections } from "./app-types";
+import type { WorkflowContextCollections } from "./app-types";
 import { asRecord, isRecord, relationId } from "./records";
 
-type Collections = AppCollections;
+// The runtime resolvers only read `models`/`providers`, both of which are in the
+// (narrower) job-handler collections surface — accept that so workflow/job callers
+// pass `ctx.collections` without a widening cast.
+type Collections = WorkflowContextCollections["collections"];
 
 export type RuntimeId = "claude-code" | "codex";
 
