@@ -37,6 +37,11 @@ declare global {
 	namespace Questpie {
 		interface CollectionKeys { activity: unknown; admin_audit_log: unknown; agent_memory: unknown; assets: unknown; chat_messages: unknown; chat_sessions: unknown; document_store: unknown; environments: unknown; memory_settings: unknown; models: unknown; projects: unknown; providers: unknown; run_links: unknown; schedule_executions: unknown; schedules: unknown; scripts: unknown; secrets: unknown; task_relations: unknown; tasks: unknown }
 		interface JobKeys { chatTurnProducer: unknown; cleanup: unknown; scheduleTick: unknown; taskEscalation: unknown; taskTurnProducer: unknown }
+		interface RouteKeys { "apps/[appId]/[fn]": unknown; "apps/[appId]/fs/[...path]": unknown; "apps/[appId]/token": unknown; chat: unknown; "chat/[chatId]/approve": unknown; "chat/[chatId]/cancel": unknown; "chat/[chatId]/stream": unknown; events: unknown; intake: unknown; "runs/[runId]": unknown; "runs/[runId]/artifacts": unknown; "runs/[runId]/artifacts/[artifactId]/content": unknown; "runs/[runId]/events": unknown; runStream: unknown; "workspaceInspection/content": unknown; "workspaceInspection/diff": unknown; "workspaceInspection/list": unknown; "workspaceInspection/read": unknown }
+		interface ServiceKeys { gitProviderAdapters: unknown; knowledgeResource: unknown }
+		interface ViewKeys { fileDetail: unknown; filesView: unknown; taskDetail: unknown }
+		interface WorkflowKeys { taskPipeline: unknown }
+		interface McpToolKeys { artifact_create: unknown; knowledge_delete: unknown; knowledge_list: unknown; knowledge_read: unknown; knowledge_search: unknown; knowledge_write: unknown; run_artifact_content: unknown; run_artifact_create: unknown; run_artifacts: unknown; run_code: unknown; run_events: unknown; run_get: unknown; run_list: unknown; schedule_get: unknown; schedule_list: unknown; schedule_trigger: unknown; task_cancel: unknown; task_create: unknown; task_dependencies: unknown; task_dependents: unknown; task_get: unknown; task_list: unknown; task_retry: unknown; task_update: unknown }
 	}
 }
 
