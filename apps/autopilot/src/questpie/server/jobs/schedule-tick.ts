@@ -18,7 +18,7 @@ import {
 	resolveCollectionRelationFields,
 	resolveCollectionWriteRule,
 } from "../apps/mini-app-runner";
-import { asRecord, relationId } from "../lib/records";
+import { asRecord, relationId, stringFrom } from "../lib/records";
 import {
 	computeNextRunAt,
 	dateOrNull,
@@ -190,11 +190,12 @@ async function triggerTaskSchedule(
 			| "medium"
 			| "high"
 			| "urgent",
-		project: template.projectId ?? template.project_id ?? undefined,
+		project:
+			stringFrom(template.projectId) ?? stringFrom(template.project_id) ?? undefined,
 		scopeType: (template.projectId || template.project_id
 			? "project"
 			: "company") as "project" | "company",
-		model: template.modelId ?? template.model_id ?? undefined,
+		model: stringFrom(template.modelId) ?? stringFrom(template.model_id) ?? undefined,
 		queue: template.queue != null ? String(template.queue) : undefined,
 		scheduledBy: scheduleActor(schedule.id),
 		createdBy: scheduleActor(schedule.id),

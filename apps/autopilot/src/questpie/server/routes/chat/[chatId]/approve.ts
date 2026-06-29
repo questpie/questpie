@@ -9,6 +9,7 @@
 import { route } from "questpie/services";
 import { z } from "zod";
 
+import { mergeRecords } from "../../../lib/records";
 import { sessionOnly } from "../../../lib/route-access";
 
 const approveSchema = z.object({
@@ -52,7 +53,7 @@ export default route()
 		await collections.chat_sessions.updateById({
 			id: chatId,
 			data: {
-				metadata: { ...existingMeta, pendingApprovals: approvals },
+				metadata: mergeRecords(existingMeta, { pendingApprovals: approvals }),
 			},
 		});
 

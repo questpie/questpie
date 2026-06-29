@@ -5,6 +5,7 @@
  */
 
 import { route } from "questpie/services";
+import { z } from "zod";
 
 import { createQuestpieResumableStreamStore } from "@questpie/ai/harness-core";
 
@@ -13,6 +14,12 @@ import { sessionOnly } from "../../../lib/route-access";
 export default route()
 	.post()
 	.access(sessionOnly)
+	.outputSchema(
+		z.union([
+			z.object({ error: z.string() }),
+			z.object({ cancelled: z.boolean(), chatId: z.string() }),
+		]),
+	)
 	.handler(async ({ collections, kv, params }) => {
 		const chatId = (params as any).chatId as string;
 		if (!chatId) {
