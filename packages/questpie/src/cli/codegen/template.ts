@@ -355,7 +355,7 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 
 	// L1 type-utils — feed `_Module*` / `_Registry_*` / `_AllModule*` / AppServices.
 	lines.push(
-		'import type { ExtractModulePropArr, ExtractModulePropArrOverride, ServiceCustomNamespaceInstances, ServiceInstanceOf, ServiceInstancesInNamespace, ServiceTopLevelInstances } from "questpie/types";',
+		'import type { ExtractModulePropArr, ExtractModulePropArrOverride, Override, ServiceCustomNamespaceInstances, ServiceInstanceOf, ServiceInstancesInNamespace, ServiceTopLevelInstances } from "questpie/types";',
 	);
 	// The WorkflowClient<…> wrapper is consumed only by the L2 AppContext/
 	// JobHandler/Workflow contexts (`hasWorkflows` declared up-front above).
@@ -1692,11 +1692,23 @@ function emitTypeInterface(
 				);
 			}
 		} else {
-			lines.push(`export type ${typeName} = ${moduleTypeName} & {`);
+			// `collections` must OVERRIDE (not intersect) on shared keys: a user app may
+			// re-declare a module-contributed collection (e.g. a standalone
+			// `collection("assets")`). Intersecting `_ModuleCollections & { assets }`
+			// detonates the shared collection to `never` (nullable-table member drift),
+			// poisoning CollectionInsert/Select — the same reason the module-level fold
+			// uses `ExtractModulePropArrOverride`. `Override<module, user>` lets the
+			// most-derived user definition shadow the module one; distinct keys survive.
+			const overrideFold = catName === "collections";
+			lines.push(
+				overrideFold
+					? `export type ${typeName} = Override<${moduleTypeName}, {`
+					: `export type ${typeName} = ${moduleTypeName} & {`,
+			);
 			for (const file of sortedValues(fileMap)) {
 				lines.push(`\t${categoryTypeEntry(file, decl, catName)};`);
 			}
-			lines.push("};");
+			lines.push(overrideFold ? "}>;" : "};");
 		}
 	} else {
 		lines.push(`export type ${typeName} = ${moduleTypeName};`);
