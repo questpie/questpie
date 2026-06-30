@@ -32,6 +32,7 @@ import { tasks as _coll_tasks } from "../collections/tasks";
 // ── Jobs ───────────────────────────────────────────────────
 import _job_chatTurnProducer from "../jobs/chat-turn-producer";
 import _job_cleanup from "../jobs/cleanup";
+import _job_runAvailable from "../jobs/run-available";
 import _job_scheduleTick from "../jobs/schedule-tick";
 import _job_taskEscalation from "../jobs/task-escalation";
 import _job_taskTurnProducer from "../jobs/task-turn-producer";
@@ -190,6 +191,7 @@ type _ExecutionContextJob<T> = T extends { name: infer TName extends string; sch
 type _ExecutionContextJobs = {
 	chatTurnProducer: _ExecutionContextJob<typeof _job_chatTurnProducer>;
 	cleanup: _ExecutionContextJob<typeof _job_cleanup>;
+	runAvailable: _ExecutionContextJob<typeof _job_runAvailable>;
 	scheduleTick: _ExecutionContextJob<typeof _job_scheduleTick>;
 	taskEscalation: _ExecutionContextJob<typeof _job_taskEscalation>;
 	taskTurnProducer: _ExecutionContextJob<typeof _job_taskTurnProducer>;

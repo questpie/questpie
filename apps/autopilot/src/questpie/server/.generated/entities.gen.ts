@@ -33,6 +33,7 @@ import { tasks as _coll_tasks } from "../collections/tasks";
 // ── Jobs ───────────────────────────────────────────────────
 import _job_chatTurnProducer from "../jobs/chat-turn-producer";
 import _job_cleanup from "../jobs/cleanup";
+import _job_runAvailable from "../jobs/run-available";
 import _job_scheduleTick from "../jobs/schedule-tick";
 import _job_taskEscalation from "../jobs/task-escalation";
 import _job_taskTurnProducer from "../jobs/task-turn-producer";
@@ -206,6 +207,7 @@ export type AppGlobals = _ModuleGlobals;
 export type AppJobs = _ModuleJobs & {
 	chatTurnProducer: Omit<typeof _job_chatTurnProducer, "handler"> & { handler: (args: unknown) => Promise<unknown> };
 	cleanup: Omit<typeof _job_cleanup, "handler"> & { handler: (args: unknown) => Promise<unknown> };
+	runAvailable: Omit<typeof _job_runAvailable, "handler"> & { handler: (args: unknown) => Promise<unknown> };
 	scheduleTick: Omit<typeof _job_scheduleTick, "handler"> & { handler: (args: unknown) => Promise<unknown> };
 	taskEscalation: Omit<typeof _job_taskEscalation, "handler"> & { handler: (args: unknown) => Promise<unknown> };
 	taskTurnProducer: Omit<typeof _job_taskTurnProducer, "handler"> & { handler: (args: unknown) => Promise<unknown> };

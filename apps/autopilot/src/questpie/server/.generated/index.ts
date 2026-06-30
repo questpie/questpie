@@ -38,6 +38,7 @@ import { tasks as _coll_tasks } from "../collections/tasks";
 // ── Jobs ───────────────────────────────────────────────────
 import _job_chatTurnProducer from "../jobs/chat-turn-producer";
 import _job_cleanup from "../jobs/cleanup";
+import _job_runAvailable from "../jobs/run-available";
 import _job_scheduleTick from "../jobs/schedule-tick";
 import _job_taskEscalation from "../jobs/task-escalation";
 import _job_taskTurnProducer from "../jobs/task-turn-producer";
@@ -226,6 +227,7 @@ _appPromise = createApp(
 		jobs: {
 			chatTurnProducer: _job_chatTurnProducer,
 			cleanup: _job_cleanup,
+			runAvailable: _job_runAvailable,
 			scheduleTick: _job_scheduleTick,
 			taskEscalation: _job_taskEscalation,
 			taskTurnProducer: _job_taskTurnProducer,
