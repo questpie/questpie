@@ -11,6 +11,21 @@ function maxConcurrentRuns() {
 	return Math.floor(parsed);
 }
 
+// Decoupled worker: a separate process cannot share the API's in-process
+// MemoryKVAdapter Map, so the resumable stream sink it writes would be invisible
+// to the HTTP /stream tail. Require a shared KV (Redis). questpie.config.ts wires
+// Redis only when REDIS_URL is set, so REDIS_URL-unset ⟺ MemoryKVAdapter active.
+// The in-process fleet never runs this file, so this cannot false-positive.
+function assertSharedKvForDecoupledWorker(): void {
+	if (!process.env.REDIS_URL) {
+		throw new Error(
+			"AI worker started decoupled but no shared KV is configured — set REDIS_URL (or run the worker in-process). A separate worker process cannot share the API's in-process KV.",
+		);
+	}
+}
+
+assertSharedKvForDecoupledWorker();
+
 // startAIWorker needs resolved services (workerManager), which live on a
 // context, not the bare app instance — so run it within a system context.
 const ctx = await createContext({ accessMode: "system" });
