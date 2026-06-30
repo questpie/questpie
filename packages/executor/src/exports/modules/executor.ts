@@ -1,2 +1,2 @@
-export { executorModule } from "../../server/module.js";
-export { default } from "../../server/module.js";
+export { executorModule } from "../../server/modules/executor/index.js";
+export { default } from "../../server/modules/executor/index.js";

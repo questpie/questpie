@@ -63,7 +63,8 @@
 	},
 	"scripts": {
 		"build": "tsdown",
-		"check-types": "tsc --noEmit"
+		"check-types": "tsc --noEmit",
+		"questpie:generate": "bun questpie generate --verbose"
 	},
 	"dependencies": {
 		"@modelcontextprotocol/sdk": "^1.29.0",

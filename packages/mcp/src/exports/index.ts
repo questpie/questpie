@@ -1,4 +1,4 @@
-export { default, mcpModule } from "../server/module.js";
+export { default, mcpModule } from "../server/modules/mcp/index.js";
 export { createMcpServer } from "../server/create-server.js";
 export { mcpConfig } from "../server/config.js";
 export { mcpTool } from "../server/mcp-tool.js";

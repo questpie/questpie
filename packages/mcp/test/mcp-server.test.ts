@@ -206,10 +206,10 @@ describe("@questpie/mcp server", () => {
 			{ siteName: "Questpie", privateToken: "seed-token" },
 			createTestContext({ accessMode: "system" }),
 		);
-	});
+	}, 30000);
 
 	afterEach(async () => {
-		await setup.cleanup();
+		await setup?.cleanup();
 	});
 
 	it("handles JSON-RPC initialize plus tool and resource discovery", async () => {

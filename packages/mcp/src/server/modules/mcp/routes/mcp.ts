@@ -1,9 +1,8 @@
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
-import { module, route } from "questpie";
+import { route } from "questpie";
 
-import { createMcpServer } from "./create-server.js";
-import { mcpPlugin } from "./plugin.js";
-import type { QuestpieApp } from "./runtime.js";
+import { createMcpServer } from "../../../create-server.js";
+import type { QuestpieApp } from "../../../runtime.js";
 
 function appFromRouteContext(ctx: object): QuestpieApp {
 	return (ctx as { app: QuestpieApp }).app;
@@ -35,7 +34,7 @@ function withCors(response: Response, request: Request): Response {
 	});
 }
 
-const mcpRoute = route()
+export default route()
 	.post()
 	.get()
 	.delete()
@@ -77,13 +76,3 @@ const mcpRoute = route()
 		const response = await transport.handleRequest(request);
 		return withCors(response, request);
 	});
-
-export const mcpModule = module({
-	name: "questpie-mcp",
-	plugin: mcpPlugin(),
-	routes: {
-		mcp: mcpRoute,
-	},
-});
-
-export default mcpModule;

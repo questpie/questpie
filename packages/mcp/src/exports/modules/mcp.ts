@@ -1,1 +1,2 @@
-export { mcpModule } from "../../server/module.js";
+export { mcpModule } from "../../server/modules/mcp/index.js";
+export type { McpModule } from "../../server/modules/mcp/index.js";
