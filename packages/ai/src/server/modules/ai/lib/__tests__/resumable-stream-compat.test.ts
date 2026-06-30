@@ -1,12 +1,14 @@
 /**
  * Compat test for the resumable stream store.
  *
- * Validates that the backing store supports the required semantics:
- * - append to a live stream
- * - read from offset (resume cursor)
- * - finish / isFinished
- * - TTL (via health check)
- * - fail-closed on outage
+ * Validates the T3 contracts:
+ * - append persists / post-finish guard (no write after finish)
+ * - readFrom returns a CONTIGUOUS slice with a typed `{chunks, nextOffset, gap}`
+ *   (advance by true index; gap signals an expired prefix, never a torn slice)
+ * - createSink persists chunk-OBJECTS as JSONL (JSON.stringify per entry) with an
+ *   epoch-guard seam (superseded → zero appends, no seal)
+ * - resumeStream resumes from offset and closes cleanly
+ * - health check / fail-closed
  *
  * Uses an in-memory KV implementation so it can run without infra.
  */
@@ -54,7 +56,7 @@ function createTestKV(): QuestpieKVLike {
 }
 
 describe("QuestpieResumableStreamStore", () => {
-	it("append + readFrom: sequential appends are readable from offset", async () => {
+	it("append + readFrom: contiguous slice advances nextOffset by true index", async () => {
 		const kv = createTestKV();
 		const store = new QuestpieResumableStreamStore({ kv, ttlSeconds: 60 });
 
@@ -63,17 +65,21 @@ describe("QuestpieResumableStreamStore", () => {
 		await store.append(streamId, "chunk-1");
 		await store.append(streamId, "chunk-2");
 
-		// Read all from start
 		const all = await store.readFrom(streamId, 0);
-		expect(all).toEqual(["chunk-0", "chunk-1", "chunk-2"]);
+		expect(all.chunks).toEqual(["chunk-0", "chunk-1", "chunk-2"]);
+		expect(all.nextOffset).toBe(3);
+		expect(all.gap).toBe(false);
 
-		// Read from offset 1
 		const fromOne = await store.readFrom(streamId, 1);
-		expect(fromOne).toEqual(["chunk-1", "chunk-2"]);
+		expect(fromOne.chunks).toEqual(["chunk-1", "chunk-2"]);
+		expect(fromOne.nextOffset).toBe(3);
+		expect(fromOne.gap).toBe(false);
 
-		// Read from offset 3 (past end)
+		// Past end → caught up, NOT a gap.
 		const pastEnd = await store.readFrom(streamId, 3);
-		expect(pastEnd).toEqual([]);
+		expect(pastEnd.chunks).toEqual([]);
+		expect(pastEnd.nextOffset).toBe(3);
+		expect(pastEnd.gap).toBe(false);
 	});
 
 	it("finish / isFinished lifecycle", async () => {
@@ -90,6 +96,45 @@ describe("QuestpieResumableStreamStore", () => {
 		expect(await store.isFinished(streamId)).toBe(true);
 	});
 
+	it("append is a no-op after finish (post-finish guard)", async () => {
+		const kv = createTestKV();
+		const store = new QuestpieResumableStreamStore({ kv, ttlSeconds: 60 });
+
+		const streamId = "test-postfinish";
+		await store.append(streamId, "a");
+		await store.finish(streamId);
+
+		// A zombie/superseded writer's late append must be dropped, not appended
+		// past the seal.
+		const idx = await store.append(streamId, "b");
+		expect(idx).toBe(1); // returns current len, no write
+		expect((await store.readFrom(streamId, 0)).chunks).toEqual(["a"]);
+	});
+
+	it("readFrom reports a typed gap for an expired prefix, not a torn slice", async () => {
+		const kv = createTestKV();
+		const store = new QuestpieResumableStreamStore({ kv, ttlSeconds: 60 });
+
+		const streamId = "test-expired";
+		await store.append(streamId, "chunk-0");
+		await store.append(streamId, "chunk-1");
+		await store.append(streamId, "chunk-2");
+
+		// Simulate TTL expiry of the earliest chunk (KV expires oldest-first).
+		await kv.delete("rs:test-expired:c:0");
+
+		// From the expired floor → gap, NOT a torn ["chunk-1","chunk-2"].
+		const fromZero = await store.readFrom(streamId, 0);
+		expect(fromZero.chunks).toEqual([]);
+		expect(fromZero.gap).toBe(true);
+
+		// From the present floor → contiguous, no gap, true-index nextOffset.
+		const fromOne = await store.readFrom(streamId, 1);
+		expect(fromOne.chunks).toEqual(["chunk-1", "chunk-2"]);
+		expect(fromOne.gap).toBe(false);
+		expect(fromOne.nextOffset).toBe(3);
+	});
+
 	it("cleanup removes all stream keys", async () => {
 		const kv = createTestKV();
 		const store = new QuestpieResumableStreamStore({ kv, ttlSeconds: 60 });
@@ -101,7 +146,7 @@ describe("QuestpieResumableStreamStore", () => {
 
 		await store.cleanup(streamId);
 
-		expect(await store.readFrom(streamId, 0)).toEqual([]);
+		expect((await store.readFrom(streamId, 0)).chunks).toEqual([]);
 		expect(await store.isFinished(streamId)).toBe(false);
 	});
 
@@ -140,7 +185,7 @@ describe("QuestpieResumableStreamStore", () => {
 });
 
 describe("ResumableUIMessageStore", () => {
-	it("createSink persists chunks that can be read back via resumeStream", async () => {
+	it("createSink persists chunk-objects as JSONL readable via resumeStream", async () => {
 		const kv = createTestKV();
 		const backingStore = new QuestpieResumableStreamStore({
 			kv,
@@ -149,42 +194,65 @@ describe("ResumableUIMessageStore", () => {
 		const store = new ResumableUIMessageStore(backingStore);
 
 		const streamId = "test-uimsg-1";
-		const sseChunks = [
-			'data: {"type":"text"}\n\n',
-			'data: {"type":"done"}\n\n',
+		const chunks = [
+			{ type: "start", messageId: "m1" },
+			{ type: "text-delta", id: "0", delta: "hello" },
+			{ type: "finish" },
 		];
 
-		// Create a ReadableStream simulating SSE output
-		const sseStream = new ReadableStream<string>({
+		const objectStream = new ReadableStream<unknown>({
 			start(controller) {
-				for (const chunk of sseChunks) {
-					controller.enqueue(chunk);
-				}
+				for (const chunk of chunks) controller.enqueue(chunk);
 				controller.close();
 			},
 		});
 
-		// Run the sink
-		const sink = store.createSink(streamId);
-		await sink({ stream: sseStream });
+		await store.createSink(streamId)({ stream: objectStream });
 
-		// Verify the stream is finished
 		expect(await backingStore.isFinished(streamId)).toBe(true);
 
-		// Resume from 0 — there is data to read
 		const resumed = await store.resumeStream(streamId, 0);
 		expect(resumed).not.toBeNull();
 
+		const results: string[] = [];
 		if (resumed) {
 			const reader = resumed.getReader();
-			const results: string[] = [];
 			while (true) {
 				const { done, value } = await reader.read();
 				if (done) break;
 				results.push(value);
 			}
-			expect(results).toEqual(sseChunks);
 		}
+		// Each stored entry is JSON.stringify(chunk) and round-trips back.
+		expect(results).toEqual(chunks.map((chunk) => JSON.stringify(chunk)));
+		expect(results.map((result) => JSON.parse(result))).toEqual(chunks);
+	});
+
+	it("createSink aborts with zero appends and no seal when superseded", async () => {
+		const kv = createTestKV();
+		const backingStore = new QuestpieResumableStreamStore({
+			kv,
+			ttlSeconds: 60,
+		});
+		const store = new ResumableUIMessageStore(backingStore);
+
+		const streamId = "test-superseded";
+		const objectStream = new ReadableStream<unknown>({
+			start(controller) {
+				controller.enqueue({ type: "start" });
+				controller.enqueue({ type: "text-delta", id: "0", delta: "x" });
+				controller.close();
+			},
+		});
+
+		// onBeforeFirstAppend → false: the worker was superseded by a re-claim.
+		await store.createSink(streamId, {
+			onBeforeFirstAppend: async () => false,
+		})({ stream: objectStream });
+
+		// Zero appends AND not sealed (the re-claimer's sink owns + seals it).
+		expect((await backingStore.readFrom(streamId, 0)).chunks).toEqual([]);
+		expect(await backingStore.isFinished(streamId)).toBe(false);
 	});
 
 	it("resumeStream from offset skips already-consumed chunks", async () => {

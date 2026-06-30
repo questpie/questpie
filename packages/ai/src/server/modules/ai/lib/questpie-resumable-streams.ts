@@ -78,6 +78,12 @@ export class QuestpieResumableStreamStore implements ResumableStreamStore {
 
 	async append(streamId: string, chunk: string): Promise<number> {
 		const len = (await this.kv.get<number>(this.lenKey(streamId))) ?? 0;
+		// Post-finish guard: a superseded/zombie writer cannot write past a seal.
+		// (Combined with the sink's epoch lease-touch, a superseded worker neither
+		// corrupts the stream nor finalizes the row.)
+		if (await this.isFinished(streamId)) {
+			return len;
+		}
 		const index = len;
 		// Write chunk first, then update length — readers see length only after data is present.
 		await this.kv.set(this.chunkKey(streamId, index), chunk, this.ttl);
@@ -85,21 +91,31 @@ export class QuestpieResumableStreamStore implements ResumableStreamStore {
 		return index;
 	}
 
-	async readFrom(streamId: string, fromOffset: number): Promise<string[]> {
+	async readFrom(
+		streamId: string,
+		fromOffset: number,
+	): Promise<{ chunks: string[]; nextOffset: number; gap: boolean }> {
 		const len = (await this.kv.get<number>(this.lenKey(streamId))) ?? 0;
-		if (fromOffset >= len) return [];
-
-		const chunks: string[] = [];
-		for (let i = fromOffset; i < len; i++) {
-			const chunk = await this.kv.get<string>(this.chunkKey(streamId, i));
-			if (chunk !== null) {
-				chunks.push(chunk);
-			}
-			// If a chunk is missing (expired), skip — the client will see a gap.
-			// This is acceptable: TTL expiration means the stream is old enough
-			// that a full re-fetch is appropriate.
+		if (fromOffset >= len) {
+			// Caught up — not a gap, just nothing new yet.
+			return { chunks: [], nextOffset: fromOffset, gap: false };
 		}
-		return chunks;
+
+		// Contiguous slice from fromOffset: stop at the first missing index rather
+		// than skipping it (skipping desyncs the reader cursor — the verified bug).
+		const chunks: string[] = [];
+		let i = fromOffset;
+		for (; i < len; i++) {
+			const chunk = await this.kv.get<string>(this.chunkKey(streamId, i));
+			if (chunk === null) break;
+			chunks.push(chunk);
+		}
+
+		// gap = the requested offset itself is below the present floor (its chunk
+		// TTL-expired). KV expires oldest-first, so expired indices are a prefix
+		// [0, base) and a missing chunk[fromOffset] ⟺ fromOffset < base.
+		const gap = chunks.length === 0 && fromOffset < len;
+		return { chunks, nextOffset: fromOffset + chunks.length, gap };
 	}
 
 	async finish(streamId: string): Promise<void> {

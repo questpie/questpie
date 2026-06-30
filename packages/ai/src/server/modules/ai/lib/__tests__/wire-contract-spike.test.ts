@@ -96,7 +96,7 @@ function frameRunStreamSSE(
 	const encoder = new TextEncoder();
 	return new ReadableStream<Uint8Array>({
 		async start(controller) {
-			const raw = await store.readFrom(streamId, fromOffset);
+			const { chunks: raw } = await store.readFrom(streamId, fromOffset);
 			raw.forEach((json, k) => {
 				// `json` is ALREADY a JSON string — frame once, never re-stringify.
 				controller.enqueue(
@@ -141,7 +141,7 @@ function makeTransport(
 			const url = new URL(String(input), "http://spike.local");
 			const fromOffset =
 				Number.parseInt(url.searchParams.get("offset") ?? "0", 10) || 0;
-			const raw = await store.readFrom(streamId, fromOffset);
+			const { chunks: raw } = await store.readFrom(streamId, fromOffset);
 			const finished = await store.isFinished(streamId);
 			// Drained + finished → 204 (reconnectToStream resolves null).
 			if (raw.length === 0 && finished) {
@@ -177,7 +177,7 @@ describe("T0b wire-contract spike", () => {
 
 		// E5: JSONL invariant — every stored value is a STRING that JSON-parses
 		// back to the source object (guards the `[object Object]` sink bug).
-		const stored = await store.readFrom(streamId, 0);
+		const { chunks: stored } = await store.readFrom(streamId, 0);
 		expect(stored.length).toBe(producedChunks.length);
 		stored.forEach((s, i) => {
 			expect(typeof s).toBe("string");

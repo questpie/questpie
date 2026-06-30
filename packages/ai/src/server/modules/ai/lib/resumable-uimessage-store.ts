@@ -16,8 +16,17 @@ export interface ResumableStreamStore {
 	/** Append a chunk to the stream. Returns the 0-based offset of the appended chunk. */
 	append(streamId: string, chunk: string): Promise<number>;
 
-	/** Read chunks starting at `fromOffset` (inclusive). Returns `[]` when caught up. */
-	readFrom(streamId: string, fromOffset: number): Promise<string[]>;
+	/**
+	 * Read a CONTIGUOUS slice of chunks starting at `fromOffset` (inclusive).
+	 * `nextOffset` advances by the true index span (it stops at the first missing
+	 * chunk rather than skipping it). `gap` is true when `fromOffset` is below the
+	 * present floor (its chunk TTL-expired) — the caller must treat that as
+	 * `expired` (fall back to persisted parts), not as a transient empty read.
+	 */
+	readFrom(
+		streamId: string,
+		fromOffset: number,
+	): Promise<{ chunks: string[]; nextOffset: number; gap: boolean }>;
 
 	/** Mark the stream as finished (no more appends). */
 	finish(streamId: string): Promise<void>;
@@ -43,30 +52,55 @@ export class ResumableUIMessageStore {
 	constructor(private store: ResumableStreamStore) {}
 
 	/**
-	 * Returns a `consumeSseStream` callback for `createUIMessageStreamResponse`.
+	 * Persist a `toUIMessages` **chunk-object** stream as JSONL (one
+	 * `JSON.stringify(chunk)` per KV entry). The route frames SSE exactly once at
+	 * the edge from these raw chunks — eliminating the double-frame class.
+	 *
+	 * `onBeforeFirstAppend` is the single-writer fence: before the first append
+	 * the worker performs an epoch-guarded lease-touch on `run_links`; if it
+	 * returns `false` the worker has been superseded by a re-claim and the sink
+	 * aborts with ZERO appends and does NOT seal the stream (the re-claimer's sink
+	 * owns + seals it). A superseded/zombie writer is further blocked by
+	 * `append()`'s post-finish guard.
 	 *
 	 * Usage:
 	 * ```ts
-	 * createUIMessageStreamResponse({
-	 *   stream,
-	 *   consumeSseStream: resumableStore.createSink(streamId),
-	 * })
+	 * const sink = resumableStore.createSink(streamId, { onBeforeFirstAppend });
+	 * await sink({ stream: toUIMessages(result) });
 	 * ```
 	 */
 	createSink(
 		streamId: string,
-	): (options: { stream: ReadableStream<string> }) => Promise<void> {
+		options?: { onBeforeFirstAppend?: () => Promise<boolean> },
+	): (sinkOptions: { stream: ReadableStream<unknown> }) => Promise<void> {
 		return async ({ stream }) => {
 			const reader = stream.getReader();
+			let firstChunk = true;
+			let aborted = false;
 			try {
 				while (true) {
 					const { done, value } = await reader.read();
 					if (done) break;
-					await this.store.append(streamId, value);
+					if (firstChunk) {
+						firstChunk = false;
+						// NOTE: a zero-chunk stream skips this fence entirely. Not a real
+						// path — the worker mints a `start` chunk up front (§3.6), so
+						// every stream has ≥1 chunk; revisit if a zero-chunk producer
+						// is ever introduced.
+						if (options?.onBeforeFirstAppend) {
+							const stillOwn = await options.onBeforeFirstAppend();
+							if (!stillOwn) {
+								aborted = true;
+								break;
+							}
+						}
+					}
+					await this.store.append(streamId, JSON.stringify(value));
 				}
 			} finally {
 				reader.releaseLock();
-				await this.store.finish(streamId);
+				// Do NOT seal when superseded — the re-claimer's sink owns the stream.
+				if (!aborted) await this.store.finish(streamId);
 			}
 		};
 	}
@@ -84,29 +118,40 @@ export class ResumableUIMessageStore {
 		fromOffset = 0,
 		pollIntervalMs = 500,
 	): Promise<ReadableStream<string> | null> {
-		// Quick check: if finished and nothing to read, return null (stream completed)
+		// Quick check: if finished and nothing to read, return null (stream completed
+		// or fully expired — the caller falls back to persisted parts).
 		const finished = await this.store.isFinished(streamId);
 		const initial = await this.store.readFrom(streamId, fromOffset);
-		if (finished && initial.length === 0) return null;
+		if (finished && initial.chunks.length === 0) return null;
 
 		const store = this.store;
 		let offset = fromOffset;
 
 		return new ReadableStream<string>({
 			async pull(controller) {
-				const chunks = await store.readFrom(streamId, offset);
-				if (chunks.length > 0) {
-					for (const chunk of chunks) {
-						controller.enqueue(chunk);
-					}
-					offset += chunks.length;
+				const { chunks, nextOffset, gap } = await store.readFrom(
+					streamId,
+					offset,
+				);
+				if (gap) {
+					// Requested offset is below the expired floor — close rather than
+					// tear. (The T6 route surfaces this as `event: expired` by reading
+					// `gap` from readFrom directly; the legacy route just ends.)
+					controller.close();
+					return;
 				}
+				for (const chunk of chunks) {
+					controller.enqueue(chunk);
+				}
+				offset = nextOffset; // TRUE index span, not += chunks.length
 				const done = await store.isFinished(streamId);
 				if (done) {
-					// Drain any remaining
-					const remaining = await store.readFrom(streamId, offset);
-					for (const chunk of remaining) {
-						controller.enqueue(chunk);
+					// Drain any remaining contiguous tail, then close.
+					const tail = await store.readFrom(streamId, offset);
+					if (!tail.gap) {
+						for (const chunk of tail.chunks) {
+							controller.enqueue(chunk);
+						}
 					}
 					controller.close();
 				} else if (chunks.length === 0) {
