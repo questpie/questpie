@@ -1,2 +1,6 @@
 @import "tailwindcss";
 @import "@questpie/admin/client/styles/index.css";
+
+/* Streamdown (chat markdown renderer) ships Tailwind-classed markup — scan its
+   dist so those utilities exist in the admin bundle. */
+@source "../node_modules/streamdown/dist/*.js";

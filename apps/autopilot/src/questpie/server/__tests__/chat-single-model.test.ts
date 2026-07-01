@@ -259,6 +259,14 @@ describe("POST /api/chat (AUTOPILOT_SINGLE_MODEL)", () => {
 		expect(run?.status).toBe("cancelled");
 		expect(run?.endedAt).toBeTruthy();
 
+		// The durable cancelled marker lives on the turn's USER message — a
+		// cancelled run never writes an assistant row (finalize latch), so this
+		// is what the FE badge renders from after a reload.
+		const userMessage = await setup!.app.collections.chat_messages.findOne({
+			where: { id: created.body.message.id },
+		});
+		expect(userMessage?.runStatus).toBe("cancelled");
+
 		// Single-flight is cleared (activeRun terminal) → a new turn is accepted.
 		const next = await postChat({
 			chatSessionId: created.body.session.id,

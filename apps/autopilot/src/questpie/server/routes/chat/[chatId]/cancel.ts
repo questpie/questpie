@@ -52,6 +52,20 @@ export default route()
 						id: activeRunId,
 						data: { status: "cancelled", endedAt: new Date() },
 					});
+					// A cancelled run never writes an assistant row (finalizeRun's
+					// latch refuses terminal rows — the §4.4 resurrection guard), so
+					// the durable cancelled marker lives on the turn's USER message.
+					const chatMessageId = relationId(run.chatMessage);
+					if (chatMessageId) {
+						try {
+							await collections.chat_messages.updateById({
+								id: chatMessageId,
+								data: { runStatus: "cancelled" },
+							});
+						} catch {
+							// best effort — the run row stays the source of truth
+						}
+					}
 					const runStreamId =
 						typeof run.activeStreamId === "string"
 							? run.activeStreamId.trim()

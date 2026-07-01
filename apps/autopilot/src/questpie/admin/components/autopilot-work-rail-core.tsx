@@ -9,7 +9,12 @@ import {
 	chatAttachmentLabel as attachmentLabel,
 	type ChatAttachment,
 } from "../lib/chat-attachments";
-import { useAutopilotChat } from "../hooks/use-autopilot-chat";
+import {
+	useAutopilotChat,
+	type AutopilotRunInfo,
+	type AutopilotUIMessage,
+} from "../hooks/use-autopilot-chat";
+import { MessageParts, messageText } from "./message-parts";
 
 type Doc = Record<string, any>;
 
@@ -20,18 +25,6 @@ export interface AutopilotWorkRailCoreProps {
 }
 
 // ── Helpers ───────────────────────────────────────────────────
-
-function relationId(value: unknown): string | null {
-	if (typeof value === "string") return value;
-	if (
-		value &&
-		typeof value === "object" &&
-		typeof (value as any).id === "string"
-	) {
-		return (value as any).id;
-	}
-	return null;
-}
 
 function itemTitle(doc: Doc, fallback: string): string {
 	const title = doc.title ?? doc.name ?? doc.id;
@@ -65,178 +58,6 @@ function statusTone(status: unknown): string {
 		default:
 			return "bg-muted-foreground";
 	}
-}
-
-// ── Markdown rendering ────────────────────────────────────────
-
-function InlineMarkdown({ text }: { text: string }) {
-	const nodes: React.ReactNode[] = [];
-	const pattern = /(`[^`]+`|\*\*[^*]+\*\*|\[[^\]]+\]\(https?:\/\/[^)\s]+\))/g;
-	let lastIndex = 0;
-	let match: RegExpExecArray | null;
-
-	while ((match = pattern.exec(text))) {
-		if (match.index > lastIndex) {
-			nodes.push(text.slice(lastIndex, match.index));
-		}
-
-		const token = match[0];
-		if (token.startsWith("`")) {
-			nodes.push(
-				<code
-					key={`${match.index}-code`}
-					className="bg-muted rounded px-1 py-0.5 font-mono text-[0.85em]"
-				>
-					{token.slice(1, -1)}
-				</code>,
-			);
-		} else if (token.startsWith("**")) {
-			nodes.push(
-				<strong key={`${match.index}-strong`} className="font-semibold">
-					{token.slice(2, -2)}
-				</strong>,
-			);
-		} else {
-			const labelEnd = token.indexOf("](");
-			const label = token.slice(1, labelEnd);
-			const href = token.slice(labelEnd + 2, -1);
-			nodes.push(
-				<a
-					key={`${match.index}-link`}
-					href={href}
-					target="_blank"
-					rel="noreferrer"
-					className="text-primary underline underline-offset-2"
-				>
-					{label || href}
-				</a>,
-			);
-		}
-
-		lastIndex = match.index + token.length;
-	}
-
-	if (lastIndex < text.length) nodes.push(text.slice(lastIndex));
-	return <>{nodes}</>;
-}
-
-function MarkdownContent({ content }: { content: string }) {
-	const lines = content.replace(/\r\n/g, "\n").split("\n");
-	const blocks: React.ReactNode[] = [];
-	let paragraph: string[] = [];
-	let list: string[] = [];
-	let code: string[] | null = null;
-	let codeLang = "";
-
-	const flushParagraph = () => {
-		if (paragraph.length === 0) return;
-		const value = paragraph.join(" ").trim();
-		paragraph = [];
-		if (!value) return;
-		blocks.push(
-			<p key={`p-${blocks.length}`} className="mb-2 last:mb-0">
-				<InlineMarkdown text={value} />
-			</p>,
-		);
-	};
-	const flushList = () => {
-		if (list.length === 0) return;
-		const items = list;
-		list = [];
-		blocks.push(
-			<ul key={`ul-${blocks.length}`} className="mb-2 list-disc space-y-1 pl-4">
-				{items.map((item, index) => (
-					<li key={`${index}-${item}`}>
-						<InlineMarkdown text={item} />
-					</li>
-				))}
-			</ul>,
-		);
-	};
-
-	for (const line of lines) {
-		const fence = line.match(/^```(\S*)?/);
-		if (fence) {
-			if (code) {
-				const value = code.join("\n");
-				code = null;
-				blocks.push(
-					<pre
-						key={`code-${blocks.length}`}
-						className="bg-muted mb-2 overflow-x-auto rounded-md p-2.5 font-mono text-[11px] leading-relaxed"
-					>
-						{codeLang ? (
-							<div className="text-muted-foreground mb-1 text-[10px]">
-								{codeLang}
-							</div>
-						) : null}
-						<code>{value}</code>
-					</pre>,
-				);
-				codeLang = "";
-				continue;
-			}
-			flushParagraph();
-			flushList();
-			code = [];
-			codeLang = fence[1] ?? "";
-			continue;
-		}
-
-		if (code) {
-			code.push(line);
-			continue;
-		}
-
-		const trimmed = line.trim();
-		if (!trimmed) {
-			flushParagraph();
-			flushList();
-			continue;
-		}
-
-		const heading = trimmed.match(/^(#{1,3})\s+(.+)$/);
-		if (heading) {
-			flushParagraph();
-			flushList();
-			const level = heading[1].length;
-			const Tag = level === 1 ? "h3" : level === 2 ? "h4" : "h5";
-			blocks.push(
-				<Tag
-					key={`h-${blocks.length}`}
-					className="mt-3 mb-1 text-sm font-semibold first:mt-0"
-				>
-					<InlineMarkdown text={heading[2]} />
-				</Tag>,
-			);
-			continue;
-		}
-
-		const bullet = trimmed.match(/^[-*]\s+(.+)$/);
-		if (bullet) {
-			flushParagraph();
-			list.push(bullet[1]);
-			continue;
-		}
-
-		flushList();
-		paragraph.push(trimmed);
-	}
-
-	if (code) {
-		blocks.push(
-			<pre
-				key={`code-${blocks.length}`}
-				className="bg-muted mb-2 overflow-x-auto rounded-md p-2.5 font-mono text-[11px] leading-relaxed"
-			>
-				<code>{code.join("\n")}</code>
-			</pre>,
-		);
-	}
-	flushParagraph();
-	flushList();
-
-	return <div className="text-sm leading-relaxed break-words">{blocks}</div>;
 }
 
 // ── Attachment helpers ────────────────────────────────────────
@@ -386,8 +207,12 @@ function AttachmentChip({
 	);
 }
 
-function AttachmentSummary({ attachments }: { attachments: ChatAttachment[] }) {
-	if (attachments.length === 0) return null;
+function AttachmentSummary({
+	attachments,
+}: {
+	attachments: ChatAttachment[] | undefined;
+}) {
+	if (!attachments || attachments.length === 0) return null;
 	const first = attachmentLabel(attachments[0], 0);
 	const label =
 		attachments.length === 1 ? first : `${first} +${attachments.length - 1}`;
@@ -458,13 +283,15 @@ function SessionRow({
 	);
 }
 
-function MessageBubble({ message }: { message: Doc }) {
-	const role = String(message.role ?? "assistant");
-	const isUser = role === "user";
-	const attachments = Array.isArray(message.metadata?.attachments)
-		? (message.metadata.attachments as ChatAttachment[])
-		: [];
-	const content = typeof message.content === "string" ? message.content : "";
+function MessageBubble({ message }: { message: AutopilotUIMessage }) {
+	const isUser = message.role === "user";
+	const attachments = message.metadata?.attachments;
+	const runStatus = message.metadata?.runStatus;
+	// Failed turns persist an assistant row (badge lives there); cancelled
+	// turns never do (finalize latch), so the cancel route marks the USER row.
+	const showBadge = isUser
+		? runStatus === "cancelled"
+		: runStatus === "failed" || runStatus === "cancelled";
 
 	return (
 		<div
@@ -478,74 +305,110 @@ function MessageBubble({ message }: { message: Doc }) {
 			>
 				{isUser ? (
 					<div className="text-sm leading-relaxed break-words whitespace-pre-wrap">
-						{content}
+						{messageText(message)}
 					</div>
 				) : (
-					<MarkdownContent content={content} />
+					<MessageParts message={message} />
 				)}
+				{showBadge ? (
+					<div className="text-destructive mt-1 inline-flex items-center gap-1 text-[11px]">
+						<Icon
+							icon={runStatus === "failed" ? "ph:warning-circle" : "ph:prohibit"}
+							className="size-3"
+						/>
+						<span>{runStatus === "failed" ? "Failed" : "Cancelled"}</span>
+					</div>
+				) : null}
 				<AttachmentSummary attachments={attachments} />
 			</div>
 		</div>
 	);
 }
 
-function StreamingMessage({
-	text,
-	isStreaming,
-}: {
-	text: string;
-	isStreaming: boolean;
-}) {
-	if (!text && !isStreaming) return null;
-
-	return (
-		<div className="flex justify-start">
-			<div className="w-full px-1 py-1">
-				{text ? <MarkdownContent content={text} /> : null}
-				{isStreaming ? (
-					<span className="text-primary mt-1 inline-flex items-center gap-1.5 text-[11px]">
-						<span className="bg-primary inline-block size-1.5 animate-pulse rounded-full" />
-						<span>Streaming</span>
-					</span>
-				) : null}
-			</div>
-		</div>
-	);
-}
-
-function StreamStrip({
-	isStreaming,
-	streamError,
+/**
+ * TurnStatusStrip — the live-turn footer (§4.2 submitted/queued states + §4.3
+ * chip + §4.4 cancel + failed-turn retry).
+ */
+function TurnStatusStrip({
+	status,
+	runInfo,
+	error,
+	streamExpired,
 	onCancel,
+	onRetry,
 }: {
-	isStreaming: boolean;
-	streamError: string | null;
+	status: string;
+	runInfo: AutopilotRunInfo | null;
+	error: Error | undefined;
+	streamExpired: boolean;
 	onCancel: () => void;
+	onRetry: () => void;
 }) {
-	if (!isStreaming && !streamError) return null;
+	const busy = status === "submitted" || status === "streaming";
+	const runActive =
+		!!runInfo && ["pending", "claimed", "running"].includes(runInfo.status);
+
+	if (!busy && !runActive && !error && !streamExpired) return null;
+
+	if (error) {
+		return (
+			<div className="text-destructive mx-3 mb-2 flex items-center gap-2 text-[11px]">
+				<span className="bg-destructive size-1.5 shrink-0 rounded-full" />
+				<span className="min-w-0 flex-1 truncate" title={error.message}>
+					{error.message || "The turn failed"}
+				</span>
+				<button
+					type="button"
+					onClick={onRetry}
+					className="hover:text-foreground shrink-0 underline"
+				>
+					Retry
+				</button>
+			</div>
+		);
+	}
+
+	if (streamExpired && !busy) {
+		return (
+			<div className="text-muted-foreground mx-3 mb-2 flex items-center gap-2 text-[11px]">
+				<Icon icon="ph:clock-countdown" className="size-3 shrink-0" />
+				<span className="min-w-0 truncate">
+					Live stream expired — showing saved output
+				</span>
+			</div>
+		);
+	}
+
+	let label = "Working...";
+	let hint: string | null = null;
+	if (runInfo?.status === "pending" || (status === "submitted" && !runInfo)) {
+		label = "Queued — waiting for a worker...";
+		const createdAt = runInfo?.createdAt
+			? new Date(runInfo.createdAt).getTime()
+			: null;
+		if (createdAt && Date.now() - createdAt > 10_000) {
+			hint = "No worker has picked this up yet";
+		}
+	} else if (runInfo?.status === "claimed") {
+		label = "Starting...";
+	}
 
 	return (
 		<div className="text-muted-foreground mx-3 mb-2 flex items-center gap-2 text-[11px]">
-			<span
-				className={[
-					"size-1.5 shrink-0 rounded-full",
-					streamError ? "bg-destructive" : "bg-info",
-				].join(" ")}
-			/>
-			{streamError ? (
-				<span className="text-destructive min-w-0 truncate">{streamError}</span>
-			) : (
-				<span className="min-w-0 truncate">Working...</span>
-			)}
-			{isStreaming ? (
-				<button
-					type="button"
-					onClick={onCancel}
-					className="text-muted-foreground hover:text-foreground ml-auto text-[10px] underline"
-				>
-					Cancel
-				</button>
+			<span className="bg-info size-1.5 shrink-0 animate-pulse rounded-full" />
+			<span className="min-w-0 truncate">{hint ?? label}</span>
+			{runInfo?.worker ? (
+				<span className="text-muted-foreground/70 hidden shrink-0 truncate sm:inline">
+					{runInfo.worker.slice(0, 8)}
+				</span>
 			) : null}
+			<button
+				type="button"
+				onClick={onCancel}
+				className="text-muted-foreground hover:text-foreground ml-auto shrink-0 text-[10px] underline"
+			>
+				Cancel
+			</button>
 		</div>
 	);
 }
@@ -564,7 +427,8 @@ export function AutopilotWorkRailCore({
 	const [attachments, setAttachments] = React.useState<ChatAttachment[]>([]);
 	const [isDropActive, setIsDropActive] = React.useState(false);
 	const [dropError, setDropError] = React.useState<string | null>(null);
-	const messagesEndRef = React.useRef<HTMLDivElement | null>(null);
+	const scrollRef = React.useRef<HTMLDivElement | null>(null);
+	const nearBottomRef = React.useRef(true);
 	const fileInputRef = React.useRef<HTMLInputElement | null>(null);
 
 	const filteredSessions = React.useMemo(() => {
@@ -688,24 +552,33 @@ export function AutopilotWorkRailCore({
 		};
 	}, [appendAttachments]);
 
+	// Stick-to-bottom that releases on scroll-up (§4.2): only auto-scroll on
+	// message growth while the user is already near the bottom.
+	const handleScroll = React.useCallback(() => {
+		const node = scrollRef.current;
+		if (!node) return;
+		nearBottomRef.current =
+			node.scrollHeight - node.scrollTop - node.clientHeight <= 48;
+	}, []);
+
 	React.useEffect(() => {
-		messagesEndRef.current?.scrollIntoView({ block: "end" });
-	}, [chat.messages.length, chat.streamingText]);
+		const node = scrollRef.current;
+		if (!node || !nearBottomRef.current) return;
+		node.scrollTop = node.scrollHeight;
+	}, [chat.messages]);
 
 	const activeSession = chat.sessions.find(
 		(session) => session.id === chat.activeSessionId,
 	);
+	const isBusy = chat.status === "submitted" || chat.status === "streaming";
 	const canSend =
-		(composer.trim().length > 0 || outgoingAttachments.length > 0) &&
-		!chat.isSending;
+		(composer.trim().length > 0 || outgoingAttachments.length > 0) && !isBusy;
 	const isNewChatEmpty =
 		!historyOpen &&
 		!activeSession &&
 		composer.trim().length === 0 &&
 		attachments.length === 0;
 	const showNewButton = historyOpen || !!activeSession || !isNewChatEmpty;
-	const showStreamingMessage =
-		chat.streamingText.trim().length > 0 || chat.isStreaming;
 
 	function startNewChat() {
 		chat.setActiveSessionId(null);
@@ -729,6 +602,7 @@ export function AutopilotWorkRailCore({
 		chat.send(content, outgoingAttachments);
 		setComposer("");
 		setAttachments([]);
+		nearBottomRef.current = true;
 	}
 
 	const title = historyOpen
@@ -844,7 +718,11 @@ export function AutopilotWorkRailCore({
 						</div>
 					</div>
 				) : (
-					<div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+					<div
+						ref={scrollRef}
+						onScroll={handleScroll}
+						className="min-h-0 flex-1 overflow-y-auto px-3 py-3"
+					>
 						{chat.messages.length === 0 ? (
 							<div className="flex h-full min-h-52 flex-col items-center justify-center gap-3 px-6 text-center">
 								<div className="text-primary bg-primary/10 ring-primary/10 flex size-11 items-center justify-center rounded-2xl ring-1">
@@ -863,23 +741,19 @@ export function AutopilotWorkRailCore({
 								{chat.messages.map((message) => (
 									<MessageBubble key={message.id} message={message} />
 								))}
-								{showStreamingMessage ? (
-									<StreamingMessage
-										text={chat.streamingText}
-										isStreaming={chat.isStreaming}
-									/>
-								) : null}
-								<div ref={messagesEndRef} />
 							</div>
 						)}
 					</div>
 				)}
 
 				{!historyOpen ? (
-					<StreamStrip
-						isStreaming={chat.isStreaming}
-						streamError={chat.streamError}
+					<TurnStatusStrip
+						status={chat.status}
+						runInfo={chat.runInfo}
+						error={chat.error}
+						streamExpired={chat.streamExpired}
 						onCancel={chat.cancel}
+						onRetry={chat.retry}
 					/>
 				) : null}
 
@@ -925,13 +799,12 @@ export function AutopilotWorkRailCore({
 								placeholder="Ask anything or create work..."
 								rows={1}
 								className="placeholder:text-muted-foreground field-sizing-content max-h-32 min-h-9 w-full resize-none bg-transparent px-3 pt-2 pb-1 text-base leading-relaxed outline-none disabled:cursor-not-allowed disabled:opacity-50"
-								disabled={chat.isSending}
 							/>
 							<div className="border-border-subtle bg-muted/20 flex min-h-8 items-center gap-1 border-t px-2 py-1">
 								<button
 									type="button"
 									onClick={openFilePicker}
-									disabled={chat.isSending}
+									disabled={isBusy}
 									className="text-muted-foreground hover:bg-muted hover:text-foreground flex size-7 shrink-0 items-center justify-center rounded-md transition-colors disabled:cursor-not-allowed disabled:opacity-50"
 									title="Attach file"
 								>
@@ -946,11 +819,6 @@ export function AutopilotWorkRailCore({
 									</span>
 								) : null}
 								<div className="flex-1" />
-								{chat.sendError ? (
-									<span className="text-destructive max-w-36 truncate text-[11px]">
-										{chat.sendError}
-									</span>
-								) : null}
 								<button
 									type="button"
 									disabled={!canSend}
@@ -959,13 +827,12 @@ export function AutopilotWorkRailCore({
 									title="Send"
 								>
 									<Icon
-										icon={chat.isSending ? "ph:spinner" : "ph:arrow-up"}
-										className={[
-											"size-3.5",
-											chat.isSending ? "animate-spin" : "",
-										].join(" ")}
+										icon={isBusy ? "ph:spinner" : "ph:arrow-up"}
+										className={["size-3.5", isBusy ? "animate-spin" : ""].join(
+											" ",
+										)}
 									/>
-									<span>{chat.isSending ? "Sending" : "Send"}</span>
+									<span>{isBusy ? "Working" : "Send"}</span>
 								</button>
 							</div>
 						</div>

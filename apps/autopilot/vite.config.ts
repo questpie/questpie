@@ -40,7 +40,10 @@ const config = defineConfig(({ mode }) => ({
 	},
 	resolve: {
 		tsconfigPaths: true,
-		dedupe: ["drizzle-orm", "react", "react-dom"],
+		// "ai" is deduped because @ai-sdk/react's isolated install resolves its
+		// own ai@…-canary.170 sibling while the app pins …-canary.173 — without
+		// dedupe the client bundle ships two 16k-line copies of the SDK.
+		dedupe: ["drizzle-orm", "react", "react-dom", "ai"],
 	},
 	build: {
 		rollupOptions: {

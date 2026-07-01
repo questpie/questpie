@@ -1,17 +1,38 @@
 /**
- * useAutopilotChat — client hook for chat v7 (background producer architecture).
+ * useAutopilotChat — client hook for the consolidated run model (T9).
  *
- * Manages chat sessions + messages via the QUESTPIE collection client,
- * sends new turns via `routes.chat(...)`, and streams the assistant response
- * via the resumable SSE endpoint `/api/chat/{chatId}/stream`.
+ * A turn = POST /api/chat mints a run_links row a fleet worker claims, runs,
+ * and streams into resumable-KV; the FE consumes it through `@ai-sdk/react`'s
+ * `useChat` with the custom {@link AutopilotChatTransport} (two channels, two
+ * lifetimes: UIMessage chunks over the KV tail, run lifecycle over run_links
+ * realtime).
+ *
+ * Message identity (§4.5): the optimistic user echo keeps the client-minted
+ * UIMessage id; the server stores it as chat_messages.uiMessageId, so DB
+ * hydration and the live state reconcile to the same ids. The assistant id is
+ * the worker-minted `start.messageId`, persisted the same way by finalizeRun.
+ *
+ * Chat instances are cached per chatKey and survive session switches — a
+ * stream keeps flowing in a background Chat and re-attaches instantly when
+ * the user switches back. A "draft" chat (no server session yet) becomes a
+ * persisted one on first send WITHOUT recreating the Chat (the transport
+ * re-points via getSessionId, so the in-flight stream is untouched).
  */
 
+import { Chat, useChat } from "@ai-sdk/react";
 import { useMutation, useQuery, type QueryClient } from "@tanstack/react-query";
+import type { UIMessage } from "ai";
 import * as React from "react";
 
 import type { ChatAttachment } from "../lib/chat-attachments";
+import {
+	AutopilotChatTransport,
+	type AutopilotTurn,
+} from "../lib/autopilot-chat-transport";
 
 type Doc = Record<string, any>;
+
+const TERMINAL_RUN_STATUSES = new Set(["completed", "failed", "cancelled"]);
 
 function docsFromResult(result: unknown): Doc[] {
 	if (Array.isArray(result)) return result as Doc[];
@@ -25,6 +46,50 @@ function docsFromResult(result: unknown): Doc[] {
 	return [];
 }
 
+function relationId(value: unknown): string | null {
+	if (typeof value === "string") return value;
+	if (
+		value &&
+		typeof value === "object" &&
+		typeof (value as any).id === "string"
+	) {
+		return (value as any).id;
+	}
+	return null;
+}
+
+function newChatKey(): string {
+	if (typeof crypto !== "undefined" && crypto.randomUUID) {
+		return crypto.randomUUID();
+	}
+	return `draft-${Math.random().toString(36).slice(2)}`;
+}
+
+/** Metadata carried on hook-managed UIMessages (render + reconcile inputs). */
+export interface AutopilotMessageMetadata {
+	attachments?: ChatAttachment[];
+	runStatus?: string | null;
+	runId?: string | null;
+	dbId?: string | null;
+	createdAt?: string | null;
+	[key: string]: unknown;
+}
+
+export type AutopilotUIMessage = UIMessage & {
+	metadata?: AutopilotMessageMetadata;
+};
+
+/** Live status of the active turn's run_links row (§4.3 chip). */
+export interface AutopilotRunInfo {
+	id: string;
+	status: string;
+	worker: string | null;
+	tokensInput: number | null;
+	tokensOutput: number | null;
+	error: string | null;
+	createdAt: string | null;
+}
+
 export interface UseAutopilotChatOptions {
 	client: unknown;
 	queryClient: QueryClient;
@@ -33,19 +98,23 @@ export interface UseAutopilotChatOptions {
 
 export interface AutopilotChatState {
 	sessions: Doc[];
-	messages: Doc[];
+	sessionsLoading: boolean;
 	activeSessionId: string | null;
-	streamingText: string;
-	isStreaming: boolean;
-	streamError: string | null;
-	isSending: boolean;
-	sendError: string | null;
 	setActiveSessionId: (id: string | null) => void;
+	messages: AutopilotUIMessage[];
+	/** useChat status: submitted | streaming | ready | error */
+	status: string;
+	error: Error | undefined;
+	/** The active turn's run row (live chip), null when idle. */
+	runInfo: AutopilotRunInfo | null;
+	/** True when the KV tail signalled a TTL gap — persisted parts are shown. */
+	streamExpired: boolean;
 	send: (content: string, attachments: ChatAttachment[]) => void;
 	cancel: () => void;
+	retry: () => void;
+	clearError: () => void;
 	invalidateSessions: () => void;
 	invalidateMessages: () => void;
-	sessionsLoading: boolean;
 }
 
 async function loadSessions(client: unknown) {
@@ -53,10 +122,7 @@ async function loadSessions(client: unknown) {
 	if (!api?.find) return [];
 	try {
 		return docsFromResult(
-			await api.find({
-				limit: 40,
-				orderBy: { updatedAt: "desc" },
-			}),
+			await api.find({ limit: 40, orderBy: { updatedAt: "desc" } }),
 		);
 	} catch {
 		return docsFromResult(await api.find({ limit: 40 }));
@@ -81,8 +147,10 @@ function useCollectionRealtime(
 	collection: string,
 	onChange: () => void,
 	where?: Record<string, unknown>,
+	enabled = true,
 ) {
 	React.useEffect(() => {
+		if (!enabled) return;
 		const realtime = (client as any)?.realtime;
 		if (!realtime?.subscribe) return;
 
@@ -96,105 +164,136 @@ function useCollectionRealtime(
 			undefined,
 			`autopilot-chat:${collection}:${JSON.stringify(where ?? {})}`,
 		);
-	}, [client, collection, onChange, where]);
+	}, [client, collection, onChange, where, enabled]);
+}
+
+/** DB chat_messages row → UIMessage (persisted-parts hydration, §4.2). */
+function rowToUIMessage(row: Doc): AutopilotUIMessage | null {
+	const role = String(row.role ?? "");
+	if (role !== "user" && role !== "assistant") return null;
+
+	const id =
+		typeof row.uiMessageId === "string" && row.uiMessageId
+			? row.uiMessageId
+			: String(row.id);
+
+	// uiMessage is UIMessage[] (finalizeRun persists the turn's messages); be
+	// tolerant of a single-object shape and fall back to plain content text.
+	let parts: unknown[] | null = null;
+	const stored = row.uiMessage;
+	if (Array.isArray(stored) && stored.length > 0) {
+		const last = stored[stored.length - 1];
+		if (last && typeof last === "object" && Array.isArray((last as any).parts)) {
+			parts = (last as any).parts as unknown[];
+		}
+	} else if (
+		stored &&
+		typeof stored === "object" &&
+		Array.isArray((stored as any).parts)
+	) {
+		parts = (stored as any).parts as unknown[];
+	}
+	if (!parts) {
+		const content = typeof row.content === "string" ? row.content : "";
+		parts = content ? [{ type: "text", text: content }] : [];
+	}
+
+	const attachments = Array.isArray(row.metadata?.attachments)
+		? (row.metadata.attachments as ChatAttachment[])
+		: undefined;
+
+	return {
+		id,
+		role: role as "user" | "assistant",
+		parts: parts as AutopilotUIMessage["parts"],
+		metadata: {
+			attachments,
+			runStatus: typeof row.runStatus === "string" ? row.runStatus : null,
+			runId: relationId(row.run),
+			dbId: String(row.id),
+			createdAt:
+				typeof row.createdAt === "string"
+					? row.createdAt
+					: (row.createdAt?.toISOString?.() ?? null),
+		},
+	};
 }
 
 /**
- * Stream the resumable SSE from the chat session's activeStreamId.
- * Accumulates text deltas into `streamingText`.
+ * Merge DB-hydrated messages with local Chat state: the DB list is
+ * authoritative for everything it contains; local-only messages (e.g. a
+ * cancelled turn's partial assistant that was never persisted) are kept,
+ * re-inserted after their nearest persisted predecessor.
  */
-function useChatStream(
-	client: unknown,
-	chatId: string | null,
-	activeStreamId: string | null,
-) {
-	const [streamingText, setStreamingText] = React.useState("");
-	const [isStreaming, setIsStreaming] = React.useState(false);
-	const [error, setError] = React.useState<string | null>(null);
-
-	React.useEffect(() => {
-		setStreamingText("");
-		setError(null);
-
-		if (!chatId || !activeStreamId || typeof window === "undefined") {
-			setIsStreaming(false);
-			return;
+function mergeMessages(
+	local: AutopilotUIMessage[],
+	db: AutopilotUIMessage[],
+): AutopilotUIMessage[] {
+	if (local.length === 0) return db;
+	const dbIds = new Set(db.map((message) => message.id));
+	const merged = [...db];
+	local.forEach((message, index) => {
+		if (dbIds.has(message.id)) return;
+		let insertAt = merged.length;
+		for (let cursor = index - 1; cursor >= 0; cursor--) {
+			const predecessor = local[cursor];
+			const at = merged.findIndex((m) => m.id === predecessor.id);
+			if (at !== -1) {
+				insertAt = at + 1;
+				break;
+			}
 		}
+		merged.splice(insertAt, 0, message);
+		dbIds.add(message.id);
+	});
+	return merged;
+}
 
-		setIsStreaming(true);
-		const apiBasePath = (client as any)?.getBasePath?.() ?? "/api";
-		const url = `${apiBasePath}/chat/${encodeURIComponent(chatId)}/stream`;
-		const source = new EventSource(url);
-		let closed = false;
-
-		source.onmessage = (event) => {
-			if (closed) return;
-			try {
-				// The data is a UIMessage SSE chunk — parse text parts
-				const chunk = event.data;
-				if (typeof chunk === "string" && chunk.trim()) {
-					// UIMessage stream format: each chunk is a JSON line
-					try {
-						const parsed = JSON.parse(chunk);
-						if (parsed.type === "text-delta" && typeof parsed.textDelta === "string") {
-							setStreamingText((prev) => prev + parsed.textDelta);
-						}
-					} catch {
-						// Raw text chunk
-						setStreamingText((prev) => prev + chunk);
-					}
-				}
-			} catch (err) {
-				setError(err instanceof Error ? err.message : String(err));
-			}
-		};
-
-		source.onerror = () => {
-			if (source.readyState === EventSource.CLOSED) {
-				setIsStreaming(false);
-				closed = true;
-			}
-		};
-
-		source.addEventListener("close", () => {
-			setIsStreaming(false);
-			closed = true;
-			source.close();
-		});
-
-		return () => {
-			closed = true;
-			source.close();
-			setIsStreaming(false);
-		};
-	}, [client, chatId, activeStreamId]);
-
-	return { streamingText, isStreaming, error };
+function sameIdSequence(
+	a: AutopilotUIMessage[],
+	b: AutopilotUIMessage[],
+): boolean {
+	if (a.length !== b.length) return false;
+	for (let index = 0; index < a.length; index++) {
+		if (a[index].id !== b[index].id) return false;
+	}
+	return true;
 }
 
 export function useAutopilotChat(
 	options: UseAutopilotChatOptions,
 ): AutopilotChatState {
 	const { client, queryClient, activeRoute } = options;
-	const [activeSessionId, setActiveSessionId] = React.useState<string | null>(
-		null,
-	);
-	const [activeStreamId, setActiveStreamId] = React.useState<string | null>(
-		null,
-	);
 
-	const sessionsQuery = useQuery({
-		queryKey: ["autopilot", "chat", "sessions"],
-		queryFn: () => loadSessions(client),
-		enabled: !!client,
-		staleTime: 20_000,
-	});
+	// ── Chat identity ─────────────────────────────────────────
+	// chatKey = Chat-instance identity (stable across draft → persisted);
+	// sessionId = the server chat_sessions row the queries/realtime follow.
+	const [active, setActive] = React.useState<{
+		key: string;
+		sessionId: string | null;
+	}>(() => ({ key: newChatKey(), sessionId: null }));
 
-	const messagesQuery = useQuery({
-		queryKey: ["autopilot", "chat", "messages", activeSessionId],
-		queryFn: () => loadMessages(client, activeSessionId),
-		enabled: !!client && !!activeSessionId,
-	});
+	const chatsRef = React.useRef(new Map<string, Chat<AutopilotUIMessage>>());
+	const sessionIdByKeyRef = React.useRef(new Map<string, string | null>());
+	const keyBySessionIdRef = React.useRef(new Map<string, string>());
+	// Live turn (chip input) per chatKey, set by the transport's onTurnCreated.
+	const [turns, setTurns] = React.useState<
+		Record<string, { runId: string; messageDbId: string }>
+	>({});
+	const [expiredKeys, setExpiredKeys] = React.useState<Record<string, boolean>>(
+		{},
+	);
+	// Bumped after every seed/reconcile so the resume effect re-evaluates.
+	const [seedGeneration, setSeedGeneration] = React.useState(0);
+	const resumeAttemptedRef = React.useRef(new Set<string>());
+
+	const activeRouteRef = React.useRef(activeRoute);
+	activeRouteRef.current = activeRoute;
+
+	const basePath = React.useMemo(
+		() => (client as any)?.getBasePath?.() ?? "/api",
+		[client],
+	);
 
 	const invalidateSessions = React.useCallback(() => {
 		void queryClient.invalidateQueries({
@@ -204,122 +303,351 @@ export function useAutopilotChat(
 
 	const invalidateMessages = React.useCallback(() => {
 		void queryClient.invalidateQueries({
-			queryKey: ["autopilot", "chat", "messages", activeSessionId],
+			queryKey: ["autopilot", "chat", "messages"],
 		});
-	}, [queryClient, activeSessionId]);
+	}, [queryClient]);
+
+	const invalidateRun = React.useCallback(() => {
+		void queryClient.invalidateQueries({
+			queryKey: ["autopilot", "chat", "run"],
+		});
+	}, [queryClient]);
+
+	const handleTurnCreated = React.useCallback(
+		(key: string, turn: AutopilotTurn) => {
+			const sessionId = relationId(turn.session) ?? turn.session?.id;
+			if (typeof sessionId === "string" && sessionId) {
+				sessionIdByKeyRef.current.set(key, sessionId);
+				keyBySessionIdRef.current.set(sessionId, key);
+				setActive((current) =>
+					current.key === key && current.sessionId !== sessionId
+						? { key, sessionId }
+						: current,
+				);
+			}
+			const messageDbId = turn.message?.id ? String(turn.message.id) : null;
+			if (turn.runId && messageDbId) {
+				setTurns((current) => ({
+					...current,
+					[key]: { runId: String(turn.runId), messageDbId },
+				}));
+			}
+			setExpiredKeys((current) =>
+				current[key] ? { ...current, [key]: false } : current,
+			);
+			invalidateSessions();
+			invalidateRun();
+		},
+		[invalidateSessions, invalidateRun],
+	);
+
+	const handleStreamExpired = React.useCallback((key: string) => {
+		setExpiredKeys((current) => ({ ...current, [key]: true }));
+	}, []);
+
+	const getOrCreateChat = React.useCallback(
+		(key: string): Chat<AutopilotUIMessage> => {
+			let chat = chatsRef.current.get(key);
+			if (chat) return chat;
+
+			const transport = new AutopilotChatTransport({
+				basePath,
+				getSessionId: () => sessionIdByKeyRef.current.get(key) ?? null,
+				getSendContext: () => ({
+					activeRoute: activeRouteRef.current ?? null,
+				}),
+				onTurnCreated: (turn) => handleTurnCreated(key, turn),
+				onStreamExpired: () => handleStreamExpired(key),
+			});
+			chat = new Chat<AutopilotUIMessage>({
+				id: key,
+				transport,
+				onFinish: () => {
+					invalidateMessages();
+					invalidateSessions();
+					invalidateRun();
+				},
+			});
+			chatsRef.current.set(key, chat);
+			return chat;
+		},
+		[
+			basePath,
+			handleTurnCreated,
+			handleStreamExpired,
+			invalidateMessages,
+			invalidateSessions,
+			invalidateRun,
+		],
+	);
+
+	const activeChat = getOrCreateChat(active.key);
+	const chatHelpers = useChat<AutopilotUIMessage>({
+		chat: activeChat,
+		experimental_throttle: 50,
+	});
+
+	// ── Queries + realtime ────────────────────────────────────
+	const sessionsQuery = useQuery({
+		queryKey: ["autopilot", "chat", "sessions"],
+		queryFn: () => loadSessions(client),
+		enabled: !!client,
+		staleTime: 20_000,
+	});
+
+	const messagesQuery = useQuery({
+		queryKey: ["autopilot", "chat", "messages", active.sessionId],
+		queryFn: () => loadMessages(client, active.sessionId),
+		enabled: !!client && !!active.sessionId,
+	});
 
 	const selectedMessagesWhere = React.useMemo(
-		() => (activeSessionId ? { chatSession: activeSessionId } : undefined),
-		[activeSessionId],
+		() => (active.sessionId ? { chatSession: active.sessionId } : undefined),
+		[active.sessionId],
 	);
 
 	useCollectionRealtime(client, "chat_sessions", invalidateSessions);
 	useCollectionRealtime(
 		client,
 		"chat_messages",
-		() => {
-			invalidateMessages();
-			// When messages update, check if streaming is done
-			if (activeSessionId && activeStreamId) {
-				void loadSessions(client).then((sessions) => {
-					const session = sessions.find((s) => s.id === activeSessionId);
-					if (session && !session.activeStreamId) {
-						setActiveStreamId(null);
-					}
-				});
-			}
-		},
+		invalidateMessages,
 		selectedMessagesWhere,
+		!!active.sessionId,
 	);
 
 	const sessions = React.useMemo(
 		() => sessionsQuery.data ?? [],
 		[sessionsQuery.data],
 	);
-	const messages = React.useMemo(
-		() => messagesQuery.data ?? [],
-		[messagesQuery.data],
-	);
 
-	// Stream the active chat
-	const { streamingText, isStreaming, error: streamError } = useChatStream(
-		client,
-		activeSessionId,
-		activeStreamId,
-	);
+	// ── Seed / reconcile Chat state from DB rows ──────────────
+	const dbRows = messagesQuery.data;
+	const chatStatus = chatHelpers.status;
+	React.useEffect(() => {
+		if (!dbRows || !active.sessionId) return;
+		if (chatStatus === "streaming" || chatStatus === "submitted") return;
+		const chat = chatsRef.current.get(active.key);
+		if (!chat) return;
 
-	// ── Send mutation ─────────────────────────────────────────
-	const sendMutation = useMutation({
-		mutationFn: async ({
-			content,
-			attachments,
-		}: {
-			content: string;
-			attachments: ChatAttachment[];
-		}) => {
-			return (client as any).routes.chat({
-				chatSessionId: activeSessionId ?? undefined,
-				content,
-				attachments,
-				metadata: {
-					source: "admin-rail",
-					activeRoute: activeRoute ?? null,
-				},
-			});
+		const mapped = dbRows
+			.map(rowToUIMessage)
+			.filter((message): message is AutopilotUIMessage => message !== null);
+		const merged = mergeMessages(chat.messages, mapped);
+		if (!sameIdSequence(chat.messages, merged)) {
+			chat.messages = merged;
+			// A user-tail appearing while ready (another tab's turn) should allow a
+			// fresh live-attach for this session.
+			const last = merged[merged.length - 1];
+			if (last?.role === "user") {
+				resumeAttemptedRef.current.delete(`${active.key}:${active.sessionId}`);
+			}
+		}
+		setSeedGeneration((generation) => generation + 1);
+	}, [dbRows, active.key, active.sessionId, chatStatus]);
+
+	// ── Resume (manual — §0.2/0.3 of the T9 spec) ─────────────
+	// Only after history has seeded, and only when the last message is a user
+	// turn (an assistant-last history means the turn finished; replaying the
+	// KV stream over it would duplicate parts).
+	React.useEffect(() => {
+		if (!active.sessionId || !messagesQuery.isSuccess) return;
+		const chat = chatsRef.current.get(active.key);
+		if (!chat) return;
+		if (chat.status === "streaming" || chat.status === "submitted") return;
+
+		const resumeKey = `${active.key}:${active.sessionId}`;
+		if (resumeAttemptedRef.current.has(resumeKey)) return;
+		resumeAttemptedRef.current.add(resumeKey);
+
+		const last = chat.messages[chat.messages.length - 1];
+		let shouldResume = false;
+		if (last) {
+			shouldResume = last.role === "user";
+		} else {
+			const session = sessions.find((doc) => doc.id === active.sessionId);
+			const activeRunId = relationId(session?.activeRun);
+			shouldResume = !!activeRunId;
+		}
+		if (shouldResume) {
+			void chat.resumeStream().catch(() => {});
+		}
+	}, [
+		active.key,
+		active.sessionId,
+		messagesQuery.isSuccess,
+		seedGeneration,
+		sessions,
+	]);
+
+	// ── Active-turn run chip (§4.3) ───────────────────────────
+	// Prefer the transport-reported turn; fall back to the hydrated last user
+	// message when re-opening a session with an in-flight run.
+	const chipInput = React.useMemo(():
+		| { messageDbId: string; runId?: string }
+		| null => {
+		const turn = turns[active.key];
+		if (turn) return { messageDbId: turn.messageDbId, runId: turn.runId };
+		if (!active.sessionId) return null;
+		const session = sessions.find((doc) => doc.id === active.sessionId);
+		if (!relationId(session?.activeRun)) return null;
+		const lastUser = [...chatHelpers.messages]
+			.reverse()
+			.find((message) => message.role === "user");
+		const dbId = lastUser?.metadata?.dbId;
+		return dbId ? { messageDbId: dbId } : null;
+	}, [turns, active.key, active.sessionId, sessions, chatHelpers.messages]);
+
+	const runQuery = useQuery({
+		queryKey: [
+			"autopilot",
+			"chat",
+			"run",
+			chipInput?.runId ?? chipInput?.messageDbId ?? "none",
+		],
+		enabled: !!client && !!chipInput,
+		refetchInterval: 20_000,
+		queryFn: async (): Promise<AutopilotRunInfo | null> => {
+			const api = (client as any)?.collections?.run_links;
+			if (!api?.find || !chipInput) return null;
+			const docs = docsFromResult(
+				await api.find({
+					where: chipInput.runId
+						? { id: chipInput.runId }
+						: { chatMessage: chipInput.messageDbId },
+					orderBy: { createdAt: "desc" },
+					limit: 1,
+				}),
+			);
+			const run = docs[0];
+			if (!run) return null;
+			return {
+				id: String(run.id),
+				status: String(run.status ?? "pending"),
+				worker: relationId(run.worker),
+				tokensInput:
+					typeof run.tokensInput === "number" ? run.tokensInput : null,
+				tokensOutput:
+					typeof run.tokensOutput === "number" ? run.tokensOutput : null,
+				error: typeof run.error === "string" ? run.error : null,
+				createdAt:
+					typeof run.createdAt === "string"
+						? run.createdAt
+						: (run.createdAt?.toISOString?.() ?? null),
+			};
 		},
-		onSuccess: (result: Doc) => {
-			const sessionId = result.session?.id ?? result.message?.chatSession;
-			if (sessionId) {
-				setActiveSessionId(String(sessionId));
-			}
-			if (result.streamId) {
-				setActiveStreamId(String(result.streamId));
-			}
-			invalidateSessions();
+	});
+
+	const chipWhere = React.useMemo(
+		() =>
+			chipInput ? { chatMessage: chipInput.messageDbId } : undefined,
+		[chipInput],
+	);
+	useCollectionRealtime(client, "run_links", invalidateRun, chipWhere, !!chipInput);
+
+	const runInfo = runQuery.data ?? null;
+	const runTerminal = runInfo ? TERMINAL_RUN_STATUSES.has(runInfo.status) : false;
+
+	// Drop the turn record once its run is terminal and the chat is idle — the
+	// chip disappears, historical badges render from persisted rows instead.
+	React.useEffect(() => {
+		if (!runTerminal) return;
+		if (chatStatus === "streaming" || chatStatus === "submitted") return;
+		const turn = turns[active.key];
+		if (!turn) return;
+		const timeout = setTimeout(() => {
+			setTurns((current) => {
+				if (!current[active.key]) return current;
+				const next = { ...current };
+				delete next[active.key];
+				return next;
+			});
+		}, 4_000);
+		return () => clearTimeout(timeout);
+	}, [runTerminal, chatStatus, turns, active.key]);
+
+	// ── Actions ───────────────────────────────────────────────
+	const send = React.useCallback(
+		(content: string, attachments: ChatAttachment[]) => {
+			const chat = getOrCreateChat(active.key);
+			setExpiredKeys((current) =>
+				current[active.key] ? { ...current, [active.key]: false } : current,
+			);
+			void chat
+				.sendMessage({
+					text: content,
+					metadata: attachments.length ? { attachments } : undefined,
+				})
+				.catch(() => {
+					// surfaced via chat.error
+				});
+		},
+		[active.key, getOrCreateChat],
+	);
+
+	const cancelMutation = useMutation({
+		mutationFn: async (sessionId: string) => {
+			const response = await fetch(
+				`${basePath}/chat/${encodeURIComponent(sessionId)}/cancel`,
+				{ method: "POST", headers: { "x-questpie-admin": "1" } },
+			);
+			if (!response.ok) throw new Error(`Cancel failed (${response.status})`);
+			return response.json();
+		},
+		onSettled: () => {
+			invalidateRun();
 			invalidateMessages();
 		},
 	});
 
-	const send = React.useCallback(
-		(content: string, attachments: ChatAttachment[]) => {
-			sendMutation.mutate({ content, attachments });
-		},
-		[sendMutation],
-	);
-
 	const cancel = React.useCallback(() => {
-		if (!activeSessionId) return;
-		const apiBasePath = (client as any)?.getBasePath?.() ?? "/api";
-		void fetch(
-			`${apiBasePath}/chat/${encodeURIComponent(activeSessionId)}/cancel`,
-			{ method: "POST" },
-		).then(() => {
-			setActiveStreamId(null);
-			invalidateMessages();
+		const chat = chatsRef.current.get(active.key);
+		void chat?.stop();
+		if (active.sessionId) cancelMutation.mutate(active.sessionId);
+	}, [active.key, active.sessionId, cancelMutation]);
+
+	const retry = React.useCallback(() => {
+		const chat = chatsRef.current.get(active.key);
+		// regenerate() throws on an empty message list — nothing to retry then.
+		if (!chat || chat.messages.length === 0) return;
+		chat.clearError();
+		setExpiredKeys((current) =>
+			current[active.key] ? { ...current, [active.key]: false } : current,
+		);
+		void chat.regenerate().catch(() => {
+			// surfaced via chat.error
 		});
-	}, [client, activeSessionId, invalidateMessages]);
+	}, [active.key]);
+
+	const clearError = React.useCallback(() => {
+		chatsRef.current.get(active.key)?.clearError();
+	}, [active.key]);
+
+	const setActiveSessionId = React.useCallback((id: string | null) => {
+		if (id === null) {
+			setActive({ key: newChatKey(), sessionId: null });
+			return;
+		}
+		const key = keyBySessionIdRef.current.get(id) ?? id;
+		sessionIdByKeyRef.current.set(key, id);
+		keyBySessionIdRef.current.set(id, key);
+		setActive({ key, sessionId: id });
+	}, []);
 
 	return {
 		sessions,
-		messages,
-		activeSessionId,
-		streamingText,
-		isStreaming,
-		streamError,
-		isSending: sendMutation.isPending,
-		sendError: sendMutation.error
-			? sendMutation.error instanceof Error
-				? sendMutation.error.message
-				: "Send failed"
-			: null,
-		setActiveSessionId: (id) => {
-			setActiveSessionId(id);
-			setActiveStreamId(null);
-		},
+		sessionsLoading: sessionsQuery.isLoading,
+		activeSessionId: active.sessionId,
+		setActiveSessionId,
+		messages: chatHelpers.messages,
+		status: chatHelpers.status,
+		error: chatHelpers.error,
+		runInfo,
+		streamExpired: !!expiredKeys[active.key],
 		send,
 		cancel,
+		retry,
+		clearError,
 		invalidateSessions,
 		invalidateMessages,
-		sessionsLoading: sessionsQuery.isLoading,
 	};
 }
