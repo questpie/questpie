@@ -37,6 +37,7 @@ import { secrets } from "../collections/secrets";
 import { taskRelations } from "../collections/task-relations";
 import { tasks } from "../collections/tasks";
 import chatRoute from "../routes/chat";
+import cancelRoute from "../routes/chat/[chatId]/cancel";
 
 describe("POST /api/chat (AUTOPILOT_SINGLE_MODEL)", () => {
 	let setup: { app: MockApp; cleanup: () => Promise<void> } | undefined;
@@ -81,7 +82,7 @@ describe("POST /api/chat (AUTOPILOT_SINGLE_MODEL)", () => {
 				tasks,
 			},
 			services: {},
-			routes: { chat: chatRoute },
+			routes: { chat: chatRoute, "chat/[chatId]/cancel": cancelRoute },
 		});
 		await runTestDbMigrations(setup.app);
 
@@ -133,6 +134,17 @@ describe("POST /api/chat (AUTOPILOT_SINGLE_MODEL)", () => {
 			status: response!.status,
 			body: text ? JSON.parse(text) : null,
 		};
+	}
+
+	async function postCancel(chatSessionId: string) {
+		const response = await handler(
+			new Request(`http://localhost/api/chat/${chatSessionId}/cancel`, {
+				method: "POST",
+			}),
+		);
+		expect(response).not.toBeNull();
+		const text = await response!.text();
+		return { status: response!.status, body: text ? JSON.parse(text) : null };
 	}
 
 	it("mints a kind='chat' run_links row, sets activeRun, returns runId + run-stream id", async () => {
@@ -188,5 +200,31 @@ describe("POST /api/chat (AUTOPILOT_SINGLE_MODEL)", () => {
 			limit: 10,
 		});
 		expect(runs.docs).toHaveLength(1);
+	});
+
+	it("cancel resolves activeRun → run_links.status='cancelled' and clears single-flight", async () => {
+		const created = await postChat({ content: "cancel me" });
+		expect(created.status).toBe(200);
+
+		const cancelled = await postCancel(created.body.session.id);
+		expect(cancelled.status).toBe(200);
+		expect(cancelled.body.cancelled).toBe(true);
+
+		// The active run is now terminal (cancelled) — the T6 tail closes on it and
+		// finalizeRun's latch blocks any late assistant-message resurrection.
+		const run = await setup!.app.collections.run_links.findOne({
+			where: { id: created.body.runId },
+		});
+		expect(run?.status).toBe("cancelled");
+		expect(run?.endedAt).toBeTruthy();
+
+		// Single-flight is cleared (activeRun terminal) → a new turn is accepted.
+		const next = await postChat({
+			chatSessionId: created.body.session.id,
+			content: "a fresh turn after cancel",
+		});
+		expect(next.status).toBe(200);
+		expect(next.body.runId).toBeTruthy();
+		expect(next.body.runId).not.toBe(created.body.runId);
 	});
 });

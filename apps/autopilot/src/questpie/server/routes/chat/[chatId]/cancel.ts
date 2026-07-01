@@ -9,6 +9,9 @@ import { z } from "zod";
 
 import { createQuestpieResumableStreamStore } from "@questpie/ai/harness-core";
 
+import { isSingleModel } from "../../../lib/flags";
+import { activeRunStatus } from "../../../lib/legacy-run-artifacts";
+import { relationId } from "../../../lib/records";
 import { sessionOnly } from "../../../lib/route-access";
 
 export default route()
@@ -31,6 +34,40 @@ export default route()
 		});
 		if (!session) {
 			return { error: "Chat session not found" };
+		}
+
+		// Consolidated path (flag ON): the run_links row is the execution record,
+		// so cancel resolves chat_sessions.activeRun and marks that row cancelled.
+		// The T6 stream tail closes on the terminal status, the worker's 2s
+		// cancel-poll aborts the harness, and finalizeRun's latch (status NOT IN
+		// terminal) refuses to write the assistant message → no resurrection (§4.4).
+		if (isSingleModel()) {
+			const activeRunId = relationId(session.activeRun);
+			if (activeRunId) {
+				const run = await collections.run_links.findOne({
+					where: { id: activeRunId },
+				});
+				if (run && activeRunStatus(run.status)) {
+					await collections.run_links.updateById({
+						id: activeRunId,
+						data: { status: "cancelled", endedAt: new Date() },
+					});
+					const runStreamId =
+						typeof run.activeStreamId === "string"
+							? run.activeStreamId.trim()
+							: "";
+					if (runStreamId && kv) {
+						try {
+							await createQuestpieResumableStreamStore({ kv }).finish(
+								runStreamId,
+							);
+						} catch {
+							// best effort — the tail also closes on the terminal status
+						}
+					}
+				}
+			}
+			return { cancelled: true, chatId };
 		}
 
 		const activeStreamId =
