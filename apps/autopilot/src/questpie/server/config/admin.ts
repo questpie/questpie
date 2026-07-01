@@ -74,6 +74,12 @@ export default adminConfig({
 						icon: { type: "icon", props: { name: "ph:house" } },
 					},
 					{
+						type: "link",
+						label: { en: "Chat" },
+						href: "/admin/chat",
+						icon: { type: "icon", props: { name: "ph:chat-circle" } },
+					},
+					{
 						type: "collection",
 						collection: "tasks",
 						label: { en: "Issues" },
