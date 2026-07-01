@@ -162,7 +162,10 @@ export async function executeJsonRouteInternal<
 	request?: Request,
 	params?: TParams,
 ): Promise<TOutput> {
-	const parsed = definition.schema.parse(input);
+	// Output-only routes (`.outputSchema()` with no `.schema()`) are valid JSON
+	// routes with `unknown` input (route-builder.ts) — their `schema` is undefined,
+	// so pass the raw input through rather than crashing on `.parse`.
+	const parsed = definition.schema ? definition.schema.parse(input) : input;
 	const requestContext = unwrapRequestContext(context);
 	const resolvedContext =
 		requestContext ?? (await app.createContext({ accessMode: "system" }));
