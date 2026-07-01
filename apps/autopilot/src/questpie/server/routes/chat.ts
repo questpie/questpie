@@ -14,8 +14,13 @@ import { ApiError } from "questpie/errors";
 import { route } from "questpie/services";
 import { z } from "zod";
 
+import { createAiRunLink } from "../lib/ai-run-links";
+import { isSingleModel } from "../lib/flags";
+import { activeRunStatus } from "../lib/legacy-run-artifacts";
+import { injectMemoriesIntoInstructions } from "../lib/memory-injection";
 import { mergeRecords, relationId } from "../lib/records";
 import { sessionOnly } from "../lib/route-access";
+import { resolveRuntimeSelection } from "../lib/runtime-selection";
 
 const attachmentSchema = z
 	.object({
@@ -101,17 +106,82 @@ export default route()
 			) as any,
 		});
 
-		// ── Generate stream ID + set active on session ──────────
-		const streamId = `chat-stream:${session.id}:${randomUUID()}`;
 		const projectId = input.projectId ?? relationId(session.project);
 		const taskId = input.taskId ?? relationId(session.task);
+
+		// ── Consolidated single-model path (flag ON) ────────────
+		// The run_links row IS the execution record: the fleet worker claims it,
+		// runs the harness turn, and streams into resumable-KV. Flag OFF keeps the
+		// legacy background-producer body verbatim — the in-process fleet is not
+		// started on boot, so a bare publish-removal would strand the row — until
+		// T9 flips the flag with the standalone worker running.
+		if (isSingleModel()) {
+			// Single-flight (§3.10): reject a second concurrent turn while the
+			// session already holds a non-terminal run.
+			const activeRunId = relationId(session.activeRun);
+			if (activeRunId) {
+				const activeRun = await collections.run_links.findOne({
+					where: { id: activeRunId },
+				});
+				if (activeRun && activeRunStatus(activeRun.status)) {
+					throw ApiError.conflict(
+						"A run is already active for this chat session",
+					);
+				}
+			}
+
+			const runtime = await resolveRuntimeSelection({ collections } as never, {
+				modelId: input.modelId,
+				projectId: projectId ?? undefined,
+			});
+			// Per-turn memory recall (mirrors the task path): the recalled DATA
+			// block is prepended to the prompt the harness passes every turn.
+			const instructions = await injectMemoriesIntoInstructions(
+				{
+					search: (ctx as { search?: unknown }).search,
+					collections: collections as never,
+					projectId: projectId ?? undefined,
+					taskId: taskId ?? undefined,
+				} as never,
+				input.content,
+				input.content,
+			);
+
+			const row = await createAiRunLink({
+				ctx: ctx as never,
+				runtime,
+				initiatedBy: "chat",
+				kind: "chat",
+				chatSessionId: session.id,
+				chatMessageId: message.id,
+				instructions,
+				projectId,
+				taskId,
+				linkMetadata: {
+					modelId: input.modelId ?? null,
+					attachments: input.attachments ?? [],
+				},
+			});
+
+			// The T6 stream tail resolves chat_sessions.activeRun → run_links
+			// .activeStreamId, so persist the run-link's own stream id
+			// (`run-stream:…`), NOT the legacy `chat-stream:` id.
+			await collections.chat_sessions.updateById({
+				id: session.id,
+				data: { activeRun: row.id, activeStreamId: row.activeStreamId },
+			});
+
+			return { session, message, runId: row.id, streamId: row.activeStreamId };
+		}
+
+		// ── Legacy background producer (flag OFF) ───────────────
+		const streamId = `chat-stream:${session.id}:${randomUUID()}`;
 
 		await collections.chat_sessions.updateById({
 			id: session.id,
 			data: { activeStreamId: streamId },
 		});
 
-		// ── Enqueue background producer ─────────────────────────
 		await (queue as any).chatTurnProducer.publish({
 			chatSessionId: session.id,
 			messageId: message.id,

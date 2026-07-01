@@ -258,6 +258,49 @@ describe("task-pipeline workflow", () => {
 		expect(relationId(reviewActivities.docs[0]?.run)).toBe(result.runId);
 	});
 
+	it("flag ON: skips the producer publish; run is kind=task/retryPolicy=none", async () => {
+		const prevFlag = process.env.AUTOPILOT_SINGLE_MODEL;
+		process.env.AUTOPILOT_SINGLE_MODEL = "true";
+		try {
+			const task = await setup!.app.collections.tasks.create({
+				title: "Single-model task",
+				type: "feature",
+				status: "pending",
+				priority: "medium",
+				scopeType: "company",
+				createdBy: "test",
+			} as any);
+
+			const result = await runPipeline(task.id, {
+				"run.claimed": { runId: "will-be-replaced", workerId: "w1" },
+				"run.completed": {
+					status: "completed",
+					summary: "done",
+					knowledgeResourceIds: [],
+				},
+			});
+
+			// The fleet worker claims the run_links row directly, so the workflow
+			// does NOT publish the legacy task-turn-producer.
+			expect(producerPublishes).toHaveLength(0);
+
+			const runs = await setup!.app.collections.run_links.find({
+				where: { task: task.id },
+				limit: 10,
+			});
+			expect(runs.docs).toHaveLength(1);
+			expect(runs.docs[0]).toMatchObject({
+				kind: "task",
+				retryPolicy: "none",
+				initiatedBy: "task",
+			});
+			expect(result.runId).toBe(runs.docs[0].id);
+		} finally {
+			if (prevFlag === undefined) delete process.env.AUTOPILOT_SINGLE_MODEL;
+			else process.env.AUTOPILOT_SINGLE_MODEL = prevFlag;
+		}
+	});
+
 	it("marks task as failed on non-retryable error", async () => {
 		const task = await setup!.app.collections.tasks.create({
 			title: "Failing task",
