@@ -42,6 +42,15 @@ export interface ClaimedRun {
 		expiresAt: Date;
 	};
 	spawn: AgentRuntimeRunRequest;
+	/**
+	 * The claimed `run_links` row (the single execution record) + the
+	 * producerLease epoch the worker fences on. Present when claimRun targets
+	 * run_links (the consolidated model); the worker runs runHarnessRun + the ONE
+	 * finalizeRun against these. (The legacy `spawn` is retained for the
+	 * decoupled-relay routes until T11.)
+	 */
+	run?: Record<string, unknown>;
+	epoch?: number;
 }
 
 export interface CompleteRunInput {

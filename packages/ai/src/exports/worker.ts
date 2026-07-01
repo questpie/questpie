@@ -1,11 +1,11 @@
 import * as os from "node:os";
 
 import { generateSecret } from "../server/modules/ai/services/worker-manager.js";
-import { executeRun } from "../server/worker/execute-run.js";
 import {
-	createHarnessAgentRunner,
-	type HarnessRuntime,
-} from "../server/worker/harness-agent-runner.js";
+	executeRun,
+	type ExecuteRunDeps,
+} from "../server/worker/execute-run.js";
+import type { HarnessRuntime } from "../server/worker/harness-agent-runner.js";
 import { prepareWorkerVolume } from "../server/worker/worker-volume.js";
 
 export interface EmbeddedWorkerConfig {
@@ -15,6 +15,10 @@ export interface EmbeddedWorkerConfig {
 	mcpServers?: unknown[];
 	name?: string;
 	pollIntervalMs?: number;
+	/** App-specific harness skill resolver (autopilot buildHarnessSkills). */
+	resolveSkills?: (
+		run: Record<string, unknown>,
+	) => Promise<unknown[]> | unknown[];
 }
 
 export async function startAIWorker(
@@ -25,15 +29,24 @@ export async function startAIWorker(
 ): Promise<{ stop(): Promise<void>; workerId: string }> {
 	const workerDir = config.workerDir ?? ".questpie/ai-worker";
 	const volume = await prepareWorkerVolume(workerDir);
-	const runner = createHarnessAgentRunner({
-		workerDir,
-		runtimes: config.runtimes,
-		mcpServers: config.mcpServers,
-	});
 
 	const secret = generateSecret();
 	const hostname = config.name ?? os.hostname();
 	const workerManager = ctx.services?.workerManager;
+	const workflows = ctx.workflows;
+
+	// runHarnessRun + finalizeRun execute against run_links via the worker's
+	// system-context (collections/kv) + injected autopilot deps (workflows /
+	// knowledgeResource / skills).
+	const executeDeps: ExecuteRunDeps = {
+		collections: ctx.collections,
+		kv: ctx.kv,
+		workflows,
+		knowledgeResource: ctx.services?.knowledgeResource,
+		workerDir,
+		mcpServers: config.mcpServers,
+		resolveSkills: config.resolveSkills,
+	};
 
 	let workerId = "embedded";
 	const maxConcurrentRuns =
@@ -70,12 +83,7 @@ export async function startAIWorker(
 		if (!claimed || !workerManager) return;
 		const runtime = claimed.spawn?.runtime as HarnessRuntime | undefined;
 		if (!runtime) return;
-		const execution = executeRun(
-			runner,
-			workerManager,
-			claimed,
-			workerId,
-		).finally(() => {
+		const execution = executeRun(executeDeps, claimed).finally(() => {
 			activeRuns.delete(execution);
 		});
 		activeRuns.set(execution, runtime);
@@ -93,6 +101,18 @@ export async function startAIWorker(
 							limit: 1,
 						});
 						if (!claimed) break;
+						// Emit run.claimed BEFORE run.completed so the task-pipeline
+						// workflow's waitForEvent('run.claimed') resolves (the kept
+						// chat-status mirror never emits it).
+						if (claimed.run && workflows?.sendEvent) {
+							void Promise.resolve(
+								workflows.sendEvent(
+									"run.claimed",
+									{ runId: claimed.lease.runId, workerId },
+									{ runId: claimed.lease.runId },
+								),
+							).catch(() => {});
+						}
 						startExecution(claimed);
 					}
 				}

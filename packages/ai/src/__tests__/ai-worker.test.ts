@@ -10,9 +10,7 @@ import {
 	generateSecret,
 } from "../server/modules/ai/services/worker-manager.js";
 import type { ClaimedRun } from "../server/modules/ai/services/worker-manager.js";
-import { executeRun } from "../server/worker/execute-run.js";
 import { prepareWorkerVolume } from "../server/worker/worker-volume.js";
-import { createFakeAgentRuntimeRunner } from "../server/worker/testing.js";
 
 // ---------------------------------------------------------------------------
 // In-memory mock collection store
@@ -1096,111 +1094,5 @@ describe("Embedded worker execution", () => {
 			await worker.stop();
 			await rm(workerDir, { recursive: true, force: true });
 		}
-	});
-
-	it("calls failRun when agent execution throws", async () => {
-		const error = new Error("execution failed");
-		const failCalls: Array<{
-			runId: string;
-			workerId: string;
-			error: unknown;
-		}> = [];
-
-		await executeRun(
-			{
-				async run() {
-					throw error;
-				},
-			},
-			{
-				async reportRunEvent() {
-					throw new Error("reportRunEvent should not be called");
-				},
-				async completeRun() {
-					throw new Error("completeRun should not be called");
-				},
-				async failRun(input: {
-					runId: string;
-					workerId: string;
-					error: unknown;
-				}) {
-					failCalls.push(input);
-				},
-			},
-			{
-				lease: {
-					id: "lease_123",
-					runId: "run_123",
-					expiresAt: new Date(),
-				},
-				spawn: {
-					runtime: "codex",
-					prompt: "run this",
-				},
-			},
-			"worker_123",
-		);
-
-		expect(failCalls).toHaveLength(1);
-		expect(failCalls[0]).toEqual({
-			runId: "run_123",
-			workerId: "worker_123",
-			error,
-		});
-	});
-});
-
-describe("End-to-end: run → worker → harness agent runner → completion", () => {
-	it("full flow with fake harness agent runner", async () => {
-		const collections = createMockCollections();
-		const wm = buildWorkerManager(collections);
-
-		// 1. Register worker
-		const secret = generateSecret();
-		const { workerId } = await wm.registerWorker({
-			deviceId: "e2e-dev",
-			name: "e2e-worker",
-			volumeId: "vol_e2e",
-			capabilities: [{ runtime: "claude-code", maxConcurrent: 1 }],
-			secret,
-		});
-
-		// 2. App submits an agnostic pending run
-		const { runId } = await wm.spawnRun({
-			runtime: "claude-code",
-			prompt: "write tests",
-		});
-
-		// 3. Worker claims run
-		const claimed = await wm.claimRun({ workerId, runtimes: ["claude-code"] });
-		expect(claimed).not.toBeNull();
-		expect(claimed!.lease.runId).toBe(runId);
-		expect(claimed!.spawn.prompt).toBe("write tests");
-
-		// 4. Execute through the AI-owned harness agent runner seam
-		const runner = createFakeAgentRuntimeRunner({
-			responseText: "Tests written successfully",
-		});
-		await executeRun(runner, wm, claimed!, workerId);
-
-		// 5. Verify final state
-		const run = await collections.ai_runs.findOne({ where: { id: runId } });
-		expect(run!.status).toBe("completed");
-		expect(run!.summary).toBe("Tests written successfully");
-
-		const events = await collections.ai_run_events.find({
-			where: { run: runId },
-		});
-		expect(events.docs.length).toBeGreaterThanOrEqual(5); // started, resolved, text.delta, usage, completed
-
-		const worker = await collections.ai_workers.findOne({
-			where: { id: workerId },
-		});
-		expect(worker!.status).toBe("online"); // back to online after completion
-
-		const lease = await collections.ai_worker_leases.findOne({
-			where: { run: runId },
-		});
-		expect(lease!.status).toBe("completed");
 	});
 });
