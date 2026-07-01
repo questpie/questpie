@@ -52,6 +52,7 @@ import _route_runs_runId from "../routes/runs/[runId]";
 import _route_runs_runId_artifacts from "../routes/runs/[runId]/artifacts";
 import _route_runs_runId_artifacts_artifactId_content from "../routes/runs/[runId]/artifacts/[artifactId]/content";
 import _route_runs_runId_events from "../routes/runs/[runId]/events";
+import _route_runs_runId_stream from "../routes/runs/[runId]/stream";
 import _route_runStream from "../routes/run-stream";
 import _route_workspaceInspection_content from "../routes/workspace-inspection/content";
 import _route_workspaceInspection_diff from "../routes/workspace-inspection/diff";
@@ -228,6 +229,7 @@ export type AppRoutes = _ModuleRoutes & {
 	"runs/[runId]/artifacts": RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_runs_runId_artifacts>, RouteParamsFromKey<"runs/[runId]/artifacts">>;
 	"runs/[runId]/artifacts/[artifactId]/content": RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_runs_runId_artifacts_artifactId_content>, RouteParamsFromKey<"runs/[runId]/artifacts/[artifactId]/content">>;
 	"runs/[runId]/events": RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_runs_runId_events>, RouteParamsFromKey<"runs/[runId]/events">>;
+	"runs/[runId]/stream": RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_runs_runId_stream>, RouteParamsFromKey<"runs/[runId]/stream">>;
 	runStream: RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_runStream>, RouteParamsFromKey<"runStream">>;
 	"workspaceInspection/content": RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_workspaceInspection_content>, RouteParamsFromKey<"workspaceInspection/content">>;
 	"workspaceInspection/diff": RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_workspaceInspection_diff>, RouteParamsFromKey<"workspaceInspection/diff">>;

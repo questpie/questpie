@@ -15,16 +15,39 @@ import {
 	createQuestpieResumableStreamStore,
 } from "@questpie/ai/harness-core";
 
+import { isSingleModel } from "../../../lib/flags";
+import { relationId } from "../../../lib/records";
 import { sessionOnly } from "../../../lib/route-access";
+import { createRunStreamResponse } from "../../../lib/run-stream";
 
 export default route()
 	.get()
 	.access(sessionOnly)
 	.raw()
-	.handler(async ({ request, collections, kv, params }) => {
-		const chatId = (params as any).chatId as string;
+	.handler(async (ctx) => {
+		const { request, collections, kv } = ctx;
+		const chatId = (ctx.params as { chatId?: string }).chatId;
 		if (!chatId) {
 			return Response.json({ error: "chatId is required" }, { status: 400 });
+		}
+
+		// Consolidated model (AUTOPILOT_SINGLE_MODEL on): resolve the session's
+		// active run and reuse the generic run-stream tail (the sole SSE framer +
+		// inline liveness). Flag OFF keeps the legacy activeStreamId path below.
+		if (isSingleModel()) {
+			const activeSession = await collections.chat_sessions.findOne({
+				where: { id: chatId },
+			});
+			const runId = relationId(activeSession?.activeRun);
+			if (!runId) return new Response(null, { status: 204 });
+			return createRunStreamResponse({
+				request,
+				collections: collections as never,
+				kv,
+				services: ctx.services as never,
+				workflows: (ctx as { workflows?: unknown }).workflows as never,
+				runId,
+			});
 		}
 
 		const session = await collections.chat_sessions.findOne({

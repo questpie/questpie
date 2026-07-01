@@ -57,6 +57,7 @@ import _route_runs_runId from "../routes/runs/[runId]";
 import _route_runs_runId_artifacts from "../routes/runs/[runId]/artifacts";
 import _route_runs_runId_artifacts_artifactId_content from "../routes/runs/[runId]/artifacts/[artifactId]/content";
 import _route_runs_runId_events from "../routes/runs/[runId]/events";
+import _route_runs_runId_stream from "../routes/runs/[runId]/stream";
 import _route_runStream from "../routes/run-stream";
 import _route_workspaceInspection_content from "../routes/workspace-inspection/content";
 import _route_workspaceInspection_diff from "../routes/workspace-inspection/diff";
@@ -246,6 +247,7 @@ _appPromise = createApp(
 			"runs/[runId]/artifacts": _route_runs_runId_artifacts,
 			"runs/[runId]/artifacts/[artifactId]/content": _route_runs_runId_artifacts_artifactId_content,
 			"runs/[runId]/events": _route_runs_runId_events,
+			"runs/[runId]/stream": _route_runs_runId_stream,
 			runStream: _route_runStream,
 			"workspaceInspection/content": _route_workspaceInspection_content,
 			"workspaceInspection/diff": _route_workspaceInspection_diff,

@@ -29,3 +29,10 @@ export type {
 	QuestpieKVLike,
 	QuestpieResumableStreamStoreOptions,
 } from "../server/modules/ai/lib/questpie-resumable-streams.js";
+
+export { finalizeRun } from "../server/worker/finalize-run.js";
+export type {
+	FinalizeRunDeps,
+	FinalizeRunInput,
+	TerminalRunStatus,
+} from "../server/worker/finalize-run.js";
