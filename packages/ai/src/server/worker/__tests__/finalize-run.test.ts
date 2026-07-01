@@ -17,6 +17,7 @@ interface Captures {
 	events: Array<{ event: string; data: any; match: any }>;
 	created: Array<Record<string, unknown>>;
 	finished: string[];
+	appended: Array<{ streamId: string; data: string }>;
 	knowledge: Array<{ runId: string; summary?: string; source?: string }>;
 }
 
@@ -29,6 +30,7 @@ function makeDeps(initial: Record<string, unknown>): {
 		events: [],
 		created: [],
 		finished: [],
+		appended: [],
 		knowledge: [],
 	};
 	const deps: FinalizeRunDeps = {
@@ -55,6 +57,9 @@ function makeDeps(initial: Record<string, unknown>): {
 			},
 		},
 		streamStore: {
+			async append(streamId: string, data: string) {
+				cap.appended.push({ streamId, data });
+			},
 			async finish(streamId: string) {
 				cap.finished.push(streamId);
 			},
@@ -150,6 +155,12 @@ describe("finalizeRun (T5)", () => {
 		});
 		expect(reaper.finalized).toBe(true);
 		expect(cap.row.status).toBe("failed");
+		// T8: the failed path appends a real error UIMessage chunk + finish before
+		// sealing (the reaper's error wire, §3.6) — no-op if already sealed.
+		expect(cap.appended.map((entry) => entry.data)).toEqual([
+			'{"type":"error","errorText":"worker lease expired"}',
+			'{"type":"finish"}',
+		]);
 
 		// Zombie worker tries to finalize success — latch lost (finalizedAt set,
 		// status terminal). No terminal write, no second event.

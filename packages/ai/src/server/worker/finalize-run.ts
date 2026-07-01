@@ -27,8 +27,15 @@ export interface FinalizeRunDeps {
 		run_links: RunLinksFinalizeCollection;
 		chat_messages?: ChatMessagesCollection;
 	};
-	/** Backing resumable-stream store (has finish()) — seals the stream. */
-	streamStore: { finish(streamId: string): Promise<void> };
+	/**
+	 * Backing resumable-stream store. `finish()` seals the stream; `append()` (used
+	 * on the failed path to write a real error+finish chunk) no-ops post-seal via
+	 * the store's post-finish guard.
+	 */
+	streamStore: {
+		append(streamId: string, data: string): Promise<unknown>;
+		finish(streamId: string): Promise<void>;
+	};
 	workflows?: {
 		sendEvent(
 			event: string,
@@ -123,6 +130,21 @@ export async function finalizeRun(
 		input.activeStreamId ??
 		(typeof row.activeStreamId === "string" ? row.activeStreamId : undefined);
 	if (activeStreamId) {
+		if (input.terminal === "failed" && input.error) {
+			// Append a real error UIMessage chunk + finish so processResponseStream +
+			// the parts renderer ingest a normal error part (not a bespoke sentinel).
+			// No-op if the worker's sink already sealed the stream (post-finish guard),
+			// so a mid-stream worker failure does not double-append.
+			await streamStore
+				.append(
+					activeStreamId,
+					JSON.stringify({ type: "error", errorText: input.error }),
+				)
+				.catch(() => {});
+			await streamStore
+				.append(activeStreamId, JSON.stringify({ type: "finish" }))
+				.catch(() => {});
+		}
 		await streamStore.finish(activeStreamId).catch(() => {});
 	}
 

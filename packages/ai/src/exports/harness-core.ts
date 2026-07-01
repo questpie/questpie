@@ -36,3 +36,5 @@ export type {
 	FinalizeRunInput,
 	TerminalRunStatus,
 } from "../server/worker/finalize-run.js";
+export { reapExpiredRunLinks } from "../server/worker/reap-run-links.js";
+export type { ReapRunLinksDeps } from "../server/worker/reap-run-links.js";

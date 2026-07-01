@@ -3,6 +3,9 @@ import { z } from "zod";
 
 import type { AiRunStatus } from "../lib/execution-contract.js";
 import { asAiJobArgs } from "../lib/handler-context.js";
+import { createQuestpieResumableStreamStore } from "../lib/questpie-resumable-streams.js";
+import type { FinalizeRunDeps } from "../../../worker/finalize-run.js";
+import { reapExpiredRunLinks } from "../../../worker/reap-run-links.js";
 
 export default job({
   name: "ai-worker-timeout",
@@ -69,6 +72,31 @@ export default job({
       }
     }
 
-    return { markedOffline, expiredLeases };
+    // Orphan reaper over run_links (§3.8 mech.2): claimed/running rows whose
+    // producerLease expired are requeued (retryPolicy 'auto') or failed via the
+    // one finalizeRun ('none', incl. every task). The legacy ai_worker_leases /
+    // ai_runs loop above stays until T11 (it iterates empty sets now).
+    const { reapedFailed, reapedRequeued } = await reapExpiredRunLinks(
+      {
+        collections: collections as never,
+        streamStore: createQuestpieResumableStreamStore({
+          kv: (ctx as { kv?: unknown }).kv as Parameters<
+            typeof createQuestpieResumableStreamStore
+          >[0]["kv"],
+        }),
+        workflows: (ctx as { workflows?: FinalizeRunDeps["workflows"] })
+          .workflows,
+        knowledgeResource: (
+          ctx as {
+            services?: {
+              knowledgeResource?: FinalizeRunDeps["knowledgeResource"];
+            };
+          }
+        ).services?.knowledgeResource,
+      },
+      now,
+    );
+
+    return { markedOffline, expiredLeases, reapedFailed, reapedRequeued };
   },
 });
