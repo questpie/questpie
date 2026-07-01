@@ -171,6 +171,17 @@ describe("createRunStreamResponse (T6)", () => {
 		const text = await drain(await createRunStreamResponse(ctx));
 
 		expect(text).toContain("event: expired");
+		// The expired frame's data is a VALID transient data-chunk so AI-SDK
+		// parsers (which ignore the SSE event name) don't throw on it — it is
+		// delivered to onData and never touches message parts.
+		const expiredData = text
+			.split("\n")
+			.find((line) => line.startsWith("data: ") && line.includes("data-expired"));
+		expect(expiredData).toBeTruthy();
+		expect(JSON.parse(expiredData!.slice("data: ".length))).toMatchObject({
+			type: "data-expired",
+			transient: true,
+		});
 	});
 
 	it("inline liveness: claimed row with expired lease → finalizeRun(failed) inline + stream sealed", async () => {

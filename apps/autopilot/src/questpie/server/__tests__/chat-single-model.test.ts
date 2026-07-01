@@ -202,6 +202,47 @@ describe("POST /api/chat (AUTOPILOT_SINGLE_MODEL)", () => {
 		expect(runs.docs).toHaveLength(1);
 	});
 
+	it("stores clientMessageId as the user row's uiMessageId and reuses the row on retry", async () => {
+		const first = await postChat({
+			content: "retry me",
+			clientMessageId: "client-msg-1",
+		});
+		expect(first.status).toBe(200);
+		expect(first.body.message.uiMessageId).toBe("client-msg-1");
+
+		// Terminal-ize the first run so single-flight admits the retry.
+		await setup!.app.collections.run_links.updateById({
+			id: first.body.runId,
+			data: { status: "failed", endedAt: new Date() },
+		});
+
+		// The retry re-sends the SAME clientMessageId → the user row is reused
+		// (no duplicate), while a fresh run is minted and linked to it.
+		const retry = await postChat({
+			chatSessionId: first.body.session.id,
+			content: "retry me",
+			clientMessageId: "client-msg-1",
+		});
+		expect(retry.status).toBe(200);
+		expect(retry.body.message.id).toBe(first.body.message.id);
+		expect(retry.body.runId).not.toBe(first.body.runId);
+
+		const messages = await setup!.app.collections.chat_messages.find({
+			where: { chatSession: first.body.session.id, role: "user" },
+			limit: 10,
+		});
+		expect(messages.docs).toHaveLength(1);
+
+		const retryRun = await setup!.app.collections.run_links.findOne({
+			where: { id: retry.body.runId },
+		});
+		expect(
+			typeof retryRun?.chatMessage === "string"
+				? retryRun?.chatMessage
+				: (retryRun?.chatMessage as { id?: string } | null)?.id,
+		).toBe(first.body.message.id);
+	});
+
 	it("cancel resolves activeRun → run_links.status='cancelled' and clears single-flight", async () => {
 		const created = await postChat({ content: "cancel me" });
 		expect(created.status).toBe(200);

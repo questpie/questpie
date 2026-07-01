@@ -45,6 +45,10 @@ const chatSchema = z
 		taskId: z.string().optional(),
 		modelId: z.string().optional(),
 		content: z.string().optional().default(""),
+		// Stable client-minted UIMessage id (§4.5): stored as the user row's
+		// uiMessageId so the optimistic echo, the persisted row, and a retry
+		// (regenerate) all reconcile to ONE message identity.
+		clientMessageId: z.string().max(64).optional(),
 		attachments: z.array(attachmentSchema).max(20).optional(),
 		metadata: z.record(z.string(), z.unknown()).optional(),
 	})
@@ -94,17 +98,32 @@ export default route()
 			}));
 
 		// ── Create user message ─────────────────────────────────
-		const message = await collections.chat_messages.create({
-			chatSession: session.id,
-			role: "user",
-			content: input.content,
-			model: input.modelId,
-			runStatus: "pending",
-			metadata: mergeRecords(
-				input.metadata,
-				input.attachments?.length ? { attachments: input.attachments } : null,
-			) as any,
-		});
+		// find-or-create by (chatSession, uiMessageId): a retry/regenerate of the
+		// same turn re-sends the same clientMessageId and must NOT duplicate the
+		// user row — the new run simply links to the existing message.
+		const existingMessage = input.clientMessageId
+			? await collections.chat_messages.findOne({
+					where: {
+						chatSession: session.id,
+						uiMessageId: input.clientMessageId,
+						role: "user",
+					},
+				})
+			: null;
+		const message =
+			existingMessage ??
+			(await collections.chat_messages.create({
+				chatSession: session.id,
+				role: "user",
+				content: input.content,
+				model: input.modelId,
+				runStatus: "pending",
+				uiMessageId: input.clientMessageId,
+				metadata: mergeRecords(
+					input.metadata,
+					input.attachments?.length ? { attachments: input.attachments } : null,
+				) as any,
+			}));
 
 		const projectId = input.projectId ?? relationId(session.project);
 		const taskId = input.taskId ?? relationId(session.task);

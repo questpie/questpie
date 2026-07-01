@@ -134,7 +134,14 @@ export async function createRunStreamResponse(
 			if (gap) {
 				// Requested offset below the TTL-expired floor — signal + close so
 				// the FE falls back to persisted parts rather than a torn message.
-				controller.enqueue(encoder.encode("event: expired\ndata: {}\n\n"));
+				// The data payload is a VALID transient data-chunk: AI-SDK parsers
+				// (which ignore the SSE event name) deliver it to onData without
+				// touching message parts, instead of throwing on `{}`.
+				controller.enqueue(
+					encoder.encode(
+						`event: expired\ndata: ${JSON.stringify({ type: "data-expired", data: {}, transient: true })}\n\n`,
+					),
+				);
 				closed = true;
 				controller.close();
 				return;

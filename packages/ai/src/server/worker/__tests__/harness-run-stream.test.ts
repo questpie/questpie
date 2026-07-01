@@ -163,5 +163,18 @@ describe("runHarnessRun (T4)", () => {
 		expect(result.summary).toBe("Hello world");
 		expect(result.tokensInput).toBe(3);
 		expect(result.tokensOutput).toBe(5);
+
+		// 5. the final UIMessage (parts JSON) is accumulated for finalizeRun →
+		// run_links.uiMessages + chat_messages.uiMessage (§4.2 hydration).
+		expect(result.uiMessages).toHaveLength(1);
+		expect(result.uiMessages[0]).toMatchObject({
+			id: result.messageId,
+			role: "assistant",
+		});
+		const textParts = result.uiMessages[0].parts.filter(
+			(part) => part.type === "text",
+		);
+		expect(textParts).toHaveLength(1);
+		expect((textParts[0] as { text?: string }).text).toBe("Hello world");
 	});
 });

@@ -109,6 +109,7 @@ export async function executeRun(
 			tokensOutput: result.tokensOutput,
 			messageId: result.messageId,
 			resumeState: result.resumeState,
+			uiMessages: result.uiMessages,
 			chatSessionId: relationId(row.chatSession),
 		});
 	} catch (error) {

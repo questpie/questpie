@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 
+import { readUIMessageStream, type UIMessage } from "ai";
 import { sql } from "drizzle-orm";
 
 import {
@@ -70,6 +71,9 @@ export interface RunHarnessResult {
 	tokensInput: number;
 	tokensOutput: number;
 	resumeState: unknown;
+	/** Final UIMessage(s) of the turn (parts JSON) — persisted by finalizeRun
+	 * to run_links.uiMessages + chat_messages.uiMessage (§4.2 hydration, T10). */
+	uiMessages: UIMessage[];
 }
 
 /**
@@ -232,8 +236,29 @@ export async function runHarnessRun(
 			}),
 		);
 
+		// Tee: one branch feeds the KV sink, the other accumulates the final
+		// UIMessage snapshot (readUIMessageStream consumes eagerly — no
+		// backpressure coupling). Accumulation is best-effort and never fails
+		// the turn.
+		const [sinkStream, accumulateStream] = (
+			uiStream as ReadableStream<unknown>
+		).tee();
+		let finalMessage: UIMessage | null = null;
+		const accumulated = (async () => {
+			try {
+				for await (const snapshot of readUIMessageStream({
+					stream: accumulateStream as never,
+				})) {
+					finalMessage = snapshot;
+				}
+			} catch {
+				// best effort — a malformed chunk must not fail the turn
+			}
+		})();
+
 		// The sink seals the stream on normal completion (append rejects post-seal).
-		await sink({ stream: uiStream as ReadableStream<unknown> });
+		await sink({ stream: sinkStream });
+		await accumulated;
 
 		const usage = (await Promise.resolve(result.usage).catch(() => ({}))) as {
 			inputTokens?: number;
@@ -251,6 +276,7 @@ export async function runHarnessRun(
 			tokensInput: usage.inputTokens ?? 0,
 			tokensOutput: usage.outputTokens ?? 0,
 			resumeState,
+			uiMessages: finalMessage ? [finalMessage] : [],
 		};
 	} finally {
 		clearTimeout(runTimeout);
