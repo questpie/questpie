@@ -11,8 +11,7 @@ type CreateAiRunLinkInput = {
 	runtime: RuntimeResolution;
 	initiatedBy: InitiatedBy;
 	// Execution discriminant (distinct from initiatedBy = provenance) — the
-	// finalize/claim path branches on this. Optional until the enqueue sites
-	// pass it (T7); legacy producers run in the interim.
+	// finalize/claim path branches on this.
 	kind?: "chat" | "task" | "schedule" | "workflow" | "mcp" | "manual";
 	// Per-row retry decision the reaper consults (T8). Defaults to "none".
 	retryPolicy?: "none" | "auto";
@@ -39,10 +38,10 @@ export async function createAiRunLink(input: CreateAiRunLinkInput) {
 	const spawn = asRecord(input.spawnMetadata);
 	const cwd = typeof spawn.cwd === "string" ? spawn.cwd : undefined;
 
-	// Harness producer path: the run_links row is the single execution record —
-	// there is no ai_runs row and no worker-claim relay for tasks anymore. `cwd`
-	// rides `metadata` so task-turn-producer can run the harness turn straight from
-	// the link (skills are harness-native, not baked here). `aiRun` is unset.
+	// The run_links row is the single execution record a worker claims, streams,
+	// and finalizes. `cwd` rides `metadata` so the claiming worker can run the
+	// harness turn straight from the link (skills are harness-native, not baked
+	// here).
 	const created = await input.ctx.collections.run_links.create({
 		id: linkId,
 		task: input.taskId ?? undefined,

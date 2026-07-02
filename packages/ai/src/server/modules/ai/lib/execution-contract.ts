@@ -10,20 +10,6 @@ export type AiWorkerStatus = "online" | "offline" | "busy" | "draining";
 
 export type AiLeaseStatus = "active" | "completed" | "expired" | "released";
 
-export type AiRunEventLevel = "debug" | "info" | "warn" | "error";
-
-export interface SpawnRunInput {
-	prompt: string;
-	runtime?: string | null;
-	runtimeSessionRef?: string | null;
-	systemPrompt?: string | null;
-	metadata?: Record<string, unknown>;
-}
-
-export interface SpawnedRun {
-	runId: string;
-}
-
 export interface WorkerRuntime {
 	runtime: string;
 	maxConcurrent?: number;
@@ -44,37 +30,11 @@ export interface ClaimedRun {
 	spawn: AgentRuntimeRunRequest;
 	/**
 	 * The claimed `run_links` row (the single execution record) + the
-	 * producerLease epoch the worker fences on. Present when claimRun targets
-	 * run_links (the consolidated model); the worker runs runHarnessRun + the ONE
-	 * finalizeRun against these. (The legacy `spawn` is retained for the
-	 * decoupled-relay routes until T11.)
+	 * producerLease epoch the worker fences on. The worker runs runHarnessRun +
+	 * the ONE finalizeRun against these.
 	 */
 	run?: Record<string, unknown>;
 	epoch?: number;
-}
-
-export interface CompleteRunInput {
-	runId: string;
-	workerId: string;
-	result: {
-		text?: string;
-		sessionRef?: string;
-		inputTokens?: number;
-		outputTokens?: number;
-		cost?: number;
-		stopReason?: string;
-	};
-}
-
-export interface FailRunInput {
-	runId: string;
-	workerId: string;
-	error: unknown;
-}
-
-export interface ReportRunEventInput {
-	runId: string;
-	event: Record<string, unknown>;
 }
 
 export interface AgentRuntimeRunRequest {
@@ -85,13 +45,4 @@ export interface AgentRuntimeRunRequest {
 	systemPrompt?: string;
 	mcpServers?: unknown[];
 	metadata?: Record<string, unknown>;
-}
-
-export interface AgentRuntimeRunHandle {
-	events: AsyncIterable<Record<string, unknown>>;
-	completion: Promise<Record<string, unknown>>;
-}
-
-export interface AgentRuntimeRunner {
-	run(input: AgentRuntimeRunRequest): Promise<AgentRuntimeRunHandle>;
 }

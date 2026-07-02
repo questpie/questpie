@@ -6,7 +6,6 @@ import { collection } from "#questpie/factories";
 export const runLinks = collection("run_links")
 	.fields(({ f }) => ({
 		legacyRunId: f.text().label({ en: "Legacy Run ID" }),
-		aiRun: f.relation("ai_runs").label({ en: "AI Run" }),
 		worker: f.relation("ai_workers").label({ en: "Worker" }),
 		task: f.relation("tasks").label({ en: "Task" }),
 		project: f.relation("projects").label({ en: "Project" }),
@@ -100,7 +99,6 @@ export const runLinks = collection("run_links")
 	)
 	.indexes(({ table }) => [
 		uniqueIndex("run_links_legacy_run_id_idx").on(table.legacyRunId as any),
-		index("run_links_ai_run_idx").on(table.aiRun as any),
 		index("run_links_status_idx").on(table.status as any),
 		index("run_links_task_idx").on(table.task as any),
 		index("run_links_project_idx").on(table.project as any),

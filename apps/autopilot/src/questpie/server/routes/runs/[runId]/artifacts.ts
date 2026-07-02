@@ -9,7 +9,6 @@ import {
 	legacyArtifactRefKinds,
 	normalizeLegacyArtifact,
 } from "../../../lib/legacy-run-artifacts";
-import { relationId } from "../../../lib/records";
 import { sessionOnly } from "../../../lib/route-access";
 import { workflowsFromContext } from "../../../lib/workflows";
 
@@ -72,7 +71,7 @@ export default route()
 		}
 
 		const input = artifactSchema.parse(await parseJson(ctx.request));
-		const actor = requestActor(ctx);
+		requestActor(ctx);
 		const run = await ctx.collections.run_links.findOne({
 			where: { id: ctx.params.runId },
 		});
@@ -94,23 +93,6 @@ export default route()
 			normalizeLegacyArtifact({ ...input, source: "worker" }),
 		);
 		const previewUrl = artifactContentUrl(ctx.params.runId, resource.id);
-
-		const aiRunId = relationId(run.aiRun);
-		const event = aiRunId
-			? await ctx.collections.ai_run_events.create({
-					run: aiRunId,
-					type: "artifact",
-					level: "info",
-					summary: input.title,
-					meta: {
-						actor,
-						artifactId: resource.id,
-						knowledgeResourceId: resource.id,
-						kind: input.kind,
-						previewUrl,
-					},
-				})
-			: null;
 
 		await workflowsFromContext(ctx).sendEvent(
 			"run.event",
@@ -134,7 +116,8 @@ export default route()
 				artifact_id: resource.id,
 				knowledge_resource_id: resource.id,
 				preview_url: previewUrl,
-				event_id: event?.id ?? null,
+				// Wire compat: legacy clients expect the key; ai_run_events is gone.
+				event_id: null,
 				artifact: legacyArtifactFromResource(resource),
 			},
 			{ status: 201 },

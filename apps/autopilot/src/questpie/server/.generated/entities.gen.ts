@@ -31,12 +31,10 @@ import { taskRelations as _coll_task_relations } from "../collections/task-relat
 import { tasks as _coll_tasks } from "../collections/tasks";
 
 // ── Jobs ───────────────────────────────────────────────────
-import _job_chatTurnProducer from "../jobs/chat-turn-producer";
 import _job_cleanup from "../jobs/cleanup";
 import _job_runAvailable from "../jobs/run-available";
 import _job_scheduleTick from "../jobs/schedule-tick";
 import _job_taskEscalation from "../jobs/task-escalation";
-import _job_taskTurnProducer from "../jobs/task-turn-producer";
 
 // ── Routes ─────────────────────────────────────────────────
 import _route_apps_appId_fn from "../routes/apps/[appId]/[fn]";
@@ -51,7 +49,6 @@ import _route_intake from "../routes/intake";
 import _route_runs_runId from "../routes/runs/[runId]";
 import _route_runs_runId_artifacts from "../routes/runs/[runId]/artifacts";
 import _route_runs_runId_artifacts_artifactId_content from "../routes/runs/[runId]/artifacts/[artifactId]/content";
-import _route_runs_runId_events from "../routes/runs/[runId]/events";
 import _route_runs_runId_stream from "../routes/runs/[runId]/stream";
 import _route_runStream from "../routes/run-stream";
 import _route_workspaceInspection_content from "../routes/workspace-inspection/content";
@@ -206,12 +203,10 @@ export type AppGlobals = _ModuleGlobals;
 
 /** All jobs in the app (modules + user, user overrides) */
 export type AppJobs = _ModuleJobs & {
-	chatTurnProducer: Omit<typeof _job_chatTurnProducer, "handler"> & { handler: (args: unknown) => Promise<unknown> };
 	cleanup: Omit<typeof _job_cleanup, "handler"> & { handler: (args: unknown) => Promise<unknown> };
 	runAvailable: Omit<typeof _job_runAvailable, "handler"> & { handler: (args: unknown) => Promise<unknown> };
 	scheduleTick: Omit<typeof _job_scheduleTick, "handler"> & { handler: (args: unknown) => Promise<unknown> };
 	taskEscalation: Omit<typeof _job_taskEscalation, "handler"> & { handler: (args: unknown) => Promise<unknown> };
-	taskTurnProducer: Omit<typeof _job_taskTurnProducer, "handler"> & { handler: (args: unknown) => Promise<unknown> };
 };
 
 /** All routes in the app (modules + user, user overrides) */
@@ -228,7 +223,6 @@ export type AppRoutes = _ModuleRoutes & {
 	"runs/[runId]": RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_runs_runId>, RouteParamsFromKey<"runs/[runId]">>;
 	"runs/[runId]/artifacts": RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_runs_runId_artifacts>, RouteParamsFromKey<"runs/[runId]/artifacts">>;
 	"runs/[runId]/artifacts/[artifactId]/content": RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_runs_runId_artifacts_artifactId_content>, RouteParamsFromKey<"runs/[runId]/artifacts/[artifactId]/content">>;
-	"runs/[runId]/events": RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_runs_runId_events>, RouteParamsFromKey<"runs/[runId]/events">>;
 	"runs/[runId]/stream": RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_runs_runId_stream>, RouteParamsFromKey<"runs/[runId]/stream">>;
 	runStream: RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_runStream>, RouteParamsFromKey<"runStream">>;
 	"workspaceInspection/content": RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_workspaceInspection_content>, RouteParamsFromKey<"workspaceInspection/content">>;

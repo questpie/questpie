@@ -36,12 +36,10 @@ import { taskRelations as _coll_task_relations } from "../collections/task-relat
 import { tasks as _coll_tasks } from "../collections/tasks";
 
 // ── Jobs ───────────────────────────────────────────────────
-import _job_chatTurnProducer from "../jobs/chat-turn-producer";
 import _job_cleanup from "../jobs/cleanup";
 import _job_runAvailable from "../jobs/run-available";
 import _job_scheduleTick from "../jobs/schedule-tick";
 import _job_taskEscalation from "../jobs/task-escalation";
-import _job_taskTurnProducer from "../jobs/task-turn-producer";
 
 // ── Routes ─────────────────────────────────────────────────
 import _route_apps_appId_fn from "../routes/apps/[appId]/[fn]";
@@ -56,7 +54,6 @@ import _route_intake from "../routes/intake";
 import _route_runs_runId from "../routes/runs/[runId]";
 import _route_runs_runId_artifacts from "../routes/runs/[runId]/artifacts";
 import _route_runs_runId_artifacts_artifactId_content from "../routes/runs/[runId]/artifacts/[artifactId]/content";
-import _route_runs_runId_events from "../routes/runs/[runId]/events";
 import _route_runs_runId_stream from "../routes/runs/[runId]/stream";
 import _route_runStream from "../routes/run-stream";
 import _route_workspaceInspection_content from "../routes/workspace-inspection/content";
@@ -226,12 +223,10 @@ _appPromise = createApp(
 			tasks: _coll_tasks,
 		},
 		jobs: {
-			chatTurnProducer: _job_chatTurnProducer,
 			cleanup: _job_cleanup,
 			runAvailable: _job_runAvailable,
 			scheduleTick: _job_scheduleTick,
 			taskEscalation: _job_taskEscalation,
-			taskTurnProducer: _job_taskTurnProducer,
 		},
 		routes: {
 			"apps/[appId]/[fn]": _route_apps_appId_fn,
@@ -246,7 +241,6 @@ _appPromise = createApp(
 			"runs/[runId]": _route_runs_runId,
 			"runs/[runId]/artifacts": _route_runs_runId_artifacts,
 			"runs/[runId]/artifacts/[artifactId]/content": _route_runs_runId_artifacts_artifactId_content,
-			"runs/[runId]/events": _route_runs_runId_events,
 			"runs/[runId]/stream": _route_runs_runId_stream,
 			runStream: _route_runStream,
 			"workspaceInspection/content": _route_workspaceInspection_content,

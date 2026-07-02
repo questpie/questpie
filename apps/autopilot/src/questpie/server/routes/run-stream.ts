@@ -1,58 +1,9 @@
 import { route } from "questpie/services";
 
-import { relationId } from "../lib/records";
 import { sessionOnly } from "../lib/route-access";
 
 function sse(event: string, data: unknown) {
 	return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
-}
-
-type RunEventRecord = {
-	id: string;
-	sequence?: number | null;
-	createdAt?: Date | string | null;
-};
-
-function timeValue(value: Date | string | null | undefined) {
-	if (!value) return 0;
-	const time =
-		value instanceof Date ? value.getTime() : new Date(value).getTime();
-	return Number.isFinite(time) ? time : 0;
-}
-
-function sortRunEvents<T extends RunEventRecord>(events: T[]) {
-	return [...events].sort((a, b) => {
-		const aSequence =
-			typeof a.sequence === "number" && Number.isFinite(a.sequence)
-				? a.sequence
-				: null;
-		const bSequence =
-			typeof b.sequence === "number" && Number.isFinite(b.sequence)
-				? b.sequence
-				: null;
-
-		if (aSequence !== null && bSequence !== null && aSequence !== bSequence) {
-			return aSequence - bSequence;
-		}
-		if (aSequence !== null && bSequence === null) return -1;
-		if (aSequence === null && bSequence !== null) return 1;
-
-		const createdDiff = timeValue(a.createdAt) - timeValue(b.createdAt);
-		if (createdDiff !== 0) return createdDiff;
-		return String(a.id).localeCompare(String(b.id));
-	});
-}
-
-function productRunEvent(
-	event: Record<string, unknown>,
-	input: { runId: string; aiRunId: string },
-) {
-	return {
-		...event,
-		run: input.runId,
-		aiRun: input.aiRunId,
-		metadata: event.meta,
-	};
 }
 
 export default route()
@@ -71,21 +22,17 @@ export default route()
 		const stream = new ReadableStream<Uint8Array>({
 			start(controller) {
 				const encoder = new TextEncoder();
-				const seenEventIds = new Set<string>();
 				let closed = false;
 				let refreshInFlight = false;
 				let refreshQueued = false;
 				let heartbeat: ReturnType<typeof setInterval> | null = null;
 				let unsubscribeRun: (() => void) | null = null;
-				let unsubscribeRunEvents: (() => void) | null = null;
-				let subscribedAiRunId: string | null = null;
 
 				const cleanup = () => {
 					if (closed) return false;
 					closed = true;
 					if (heartbeat) clearInterval(heartbeat);
 					unsubscribeRun?.();
-					unsubscribeRunEvents?.();
 					return true;
 				};
 				cleanupStream = () => {
@@ -124,37 +71,6 @@ export default route()
 						}
 
 						write("run", { type: "run", run });
-						const aiRunId = relationId(run.aiRun);
-						if (!aiRunId) {
-							unsubscribeRunEvents?.();
-							unsubscribeRunEvents = null;
-							subscribedAiRunId = null;
-							return;
-						}
-
-						if (subscribedAiRunId !== aiRunId) {
-							unsubscribeRunEvents?.();
-							unsubscribeRunEvents = realtime.subscribe(() => void refresh(), {
-								resourceType: "collection",
-								resource: "ai_run_events",
-								where: { run: aiRunId },
-							});
-							subscribedAiRunId = aiRunId;
-						}
-
-						const events = await collections.ai_run_events.find({
-							where: { run: aiRunId },
-							orderBy: { createdAt: "asc" },
-							limit: 500,
-						});
-						for (const event of sortRunEvents(events.docs)) {
-							if (seenEventIds.has(event.id)) continue;
-							seenEventIds.add(event.id);
-							write("run_event", {
-								type: "run_event",
-								event: productRunEvent(event, { runId, aiRunId }),
-							});
-						}
 					} catch (error) {
 						write("stream_error", {
 							error: error instanceof Error ? error.message : String(error),

@@ -4,7 +4,6 @@ import { z } from "zod";
 import { mcpTool } from "@questpie/mcp";
 
 import { mcpJson, requireMcpCaller } from "../lib/mcp-tool-helpers";
-import { relationId } from "../lib/records";
 
 export const taskList = mcpTool("task_list", {
 	title: "List tasks",
@@ -101,9 +100,34 @@ export const runGet = mcpTool("run_get", {
 	return mcpJson(run);
 });
 
+const EVENT_PREVIEW_MAX_LENGTH = 200;
+
+function eventPreview(part: Record<string, unknown>): string {
+	const text = typeof part.text === "string" ? part.text : null;
+	const preview = text ?? JSON.stringify(part) ?? "";
+	return preview.length > EVENT_PREVIEW_MAX_LENGTH
+		? `${preview.slice(0, EVENT_PREVIEW_MAX_LENGTH)}…`
+		: preview;
+}
+
+/** Persisted uiMessages tolerate both UIMessage[] and a single object. */
+function persistedUiMessages(run: Record<string, unknown>): unknown[] {
+	const stored = run.uiMessages;
+	if (Array.isArray(stored)) return stored;
+	if (
+		stored &&
+		typeof stored === "object" &&
+		Array.isArray((stored as Record<string, unknown>).parts)
+	) {
+		return [stored];
+	}
+	return [];
+}
+
 export const runEvents = mcpTool("run_events", {
 	title: "List run events",
-	description: "List events for a run.",
+	description:
+		"List events for a run, derived from its persisted transcript (one event per message part).",
 	inputSchema: z.object({
 		id: z.string().min(1).describe("Run id"),
 		limit: z.number().int().positive().max(500).optional(),
@@ -117,20 +141,23 @@ export const runEvents = mcpTool("run_events", {
 	});
 	if (!run) throw ApiError.notFound("Run", input.id);
 
-	const aiRunId = relationId(run.aiRun);
-	if (!aiRunId) return mcpJson([]);
-
-	const result = await ctx.collections.ai_run_events.find({
-		where: { run: aiRunId },
-		limit: input.limit ?? 100,
-		orderBy: { createdAt: "asc" },
-	});
-	return mcpJson(
-		result.docs.map((event: Record<string, unknown>) => ({
-			...event,
-			run: input.id,
-			aiRun: aiRunId,
-			metadata: event.meta,
-		})),
-	);
+	// Events are derived from the run_links row's persisted uiMessages
+	// transcript — the legacy ai_run_events relay is gone.
+	const events: Array<{ type: string; preview: string }> = [];
+	for (const message of persistedUiMessages(run as Record<string, unknown>)) {
+		const parts =
+			message && typeof message === "object"
+				? (message as Record<string, unknown>).parts
+				: null;
+		if (!Array.isArray(parts)) continue;
+		for (const part of parts) {
+			if (!part || typeof part !== "object") continue;
+			const record = part as Record<string, unknown>;
+			events.push({
+				type: typeof record.type === "string" ? record.type : "unknown",
+				preview: eventPreview(record),
+			});
+		}
+	}
+	return mcpJson(events.slice(0, input.limit ?? 100));
 });

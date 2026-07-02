@@ -21,7 +21,6 @@ import runStreamRoute from "../routes/run-stream";
 import runStatusRoute from "../routes/runs/[runId]";
 import runArtifactsRoute from "../routes/runs/[runId]/artifacts";
 import runArtifactContentRoute from "../routes/runs/[runId]/artifacts/[artifactId]/content";
-import runEventsRoute from "../routes/runs/[runId]/events";
 import workspaceContentRoute from "../routes/workspace-inspection/content";
 import workspaceDiffRoute from "../routes/workspace-inspection/diff";
 import workspaceListRoute from "../routes/workspace-inspection/list";
@@ -73,7 +72,7 @@ const routeAccessCases = [
 		methods: ["GET"],
 		mode: "raw",
 		policy: "sessionOnly",
-		reason: "streams run snapshots and AI run events",
+		reason: "streams run snapshots",
 		coverage: "autopilot-route-access.test.ts, chat-realtime-workflow.test.ts",
 	},
 	{
@@ -83,15 +82,6 @@ const routeAccessCases = [
 		mode: "raw",
 		policy: "sessionOnly",
 		reason: "returns run status and linked task/project identifiers",
-		coverage: "autopilot-route-access.test.ts, chat-realtime-workflow.test.ts",
-	},
-	{
-		file: "routes/runs/[runId]/events.ts",
-		route: runEventsRoute,
-		methods: ["GET"],
-		mode: "raw",
-		policy: "sessionOnly",
-		reason: "returns AI run event history",
 		coverage: "autopilot-route-access.test.ts, chat-realtime-workflow.test.ts",
 	},
 	{

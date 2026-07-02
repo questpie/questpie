@@ -1,12 +1,16 @@
 import * as os from "node:os";
 
+import type { HarnessCoreRuntime } from "../server/modules/ai/lib/harness-core.js";
 import { generateSecret } from "../server/modules/ai/services/worker-manager.js";
 import {
 	executeRun,
 	type ExecuteRunDeps,
 } from "../server/worker/execute-run.js";
-import type { HarnessRuntime } from "../server/worker/harness-agent-runner.js";
 import { prepareWorkerVolume } from "../server/worker/worker-volume.js";
+
+// Public worker-entry alias for the harness-core runtime union (the legacy
+// harness-agent-runner that used to own this name is deleted).
+export type HarnessRuntime = HarnessCoreRuntime;
 
 export interface EmbeddedWorkerConfig {
 	runtimes: { runtime: HarnessRuntime; binaryPath?: string }[];
@@ -141,5 +145,3 @@ export async function startAIWorker(
 		},
 	};
 }
-
-export type { HarnessRuntime };

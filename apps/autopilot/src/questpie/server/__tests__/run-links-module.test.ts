@@ -93,8 +93,6 @@ describe("Autopilot AI run links", () => {
 		expect(registeredAiModule).toBe(aiModule);
 		expect(aiModule.config?.admin?.sidebar?.items).toEqual([]);
 		expect(Object.keys(aiModule.collections).sort()).toEqual([
-			"ai_run_events",
-			"ai_runs",
 			"ai_worker_leases",
 			"ai_workers",
 		]);
@@ -109,7 +107,6 @@ describe("Autopilot AI run links", () => {
 
 		expect(runLinks.state.admin?.hidden).toBe(true);
 		expect(runLinks.state.admin?.audit).toBe(false);
-		expect(relationTarget(fields.aiRun)).toBe("ai_runs");
 		expect(relationTarget(fields.resumedFromRun)).toBe("run_links");
 
 		for (const field of [
@@ -165,7 +162,6 @@ describe("Autopilot AI run links", () => {
 		expect(knowledgeResourceSource).toContain("collections.run_links.findOne");
 		expect(runStreamSource).toContain("collections.run_links.findOne");
 		expect(runStreamSource).toContain('resource: "run_links"');
-		expect(runStreamSource).toContain("collections.ai_run_events.find");
 	});
 
 	it("does not register duplicate Autopilot execution infrastructure", () => {
@@ -201,14 +197,15 @@ describe("Autopilot AI run links", () => {
 	});
 
 	it("keeps AI execution mirroring in Autopilot-owned code", () => {
-		expect(aiRunMirrorSource).toContain('ctx.collection !== "ai_runs"');
-		expect(aiRunMirrorSource).toContain('ctx.collection !== "ai_run_events"');
-		expect(aiRunMirrorSource).toContain("where: { aiRun: aiRunId }");
-		expect(aiRunMirrorSource).toContain('"run.claimed"');
-		expect(aiRunMirrorSource).toContain('"run.event"');
-		expect(aiRunMirrorSource).toContain('"run.completed"');
-		expect(aiRunMirrorSource).toContain("knowledgeResource.createRunOutputs");
-		expect(aiRunMirrorSource).toContain("runId: input.runId");
+		expect(aiRunMirrorSource).toContain('ctx.collection !== "run_links"');
+		expect(aiRunMirrorSource).toContain("mirrorChatRunStatus");
+		expect(aiRunMirrorSource).toContain("where: { run: runId }");
+		expect(aiRunMirrorSource).not.toContain('ctx.collection !== "ai_runs"');
+		expect(aiRunMirrorSource).not.toContain(
+			'ctx.collection !== "ai_run_events"',
+		);
+		expect(aiRunMirrorSource).not.toContain("collections.ai_runs");
+		expect(aiRunMirrorSource).not.toContain("collections.ai_run_events");
 	});
 
 	it("keeps run_links ids insertable for legacy run id preservation", () => {

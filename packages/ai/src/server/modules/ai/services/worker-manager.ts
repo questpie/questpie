@@ -6,27 +6,16 @@ import type {
 	AiWorkerStatus,
 	ClaimedRun,
 	ClaimRunInput,
-	CompleteRunInput,
-	FailRunInput,
-	ReportRunEventInput,
 	WorkerRuntime,
 } from "../lib/execution-contract.js";
 
 export type {
-	AgentRuntimeRunHandle,
-	AgentRuntimeRunner,
 	AgentRuntimeRunRequest,
-	AiRunEventLevel,
 	AiRunStatus,
 	AiLeaseStatus,
 	AiWorkerStatus,
 	ClaimedRun,
 	ClaimRunInput,
-	CompleteRunInput,
-	FailRunInput,
-	ReportRunEventInput,
-	SpawnedRun,
-	SpawnRunInput,
 	WorkerRuntime,
 } from "../lib/execution-contract.js";
 
@@ -40,12 +29,6 @@ export function generateSecret(bytes = 32): string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function relationId(value: unknown): string | null {
-	if (typeof value === "string") return value;
-	if (isRecord(value) && typeof value.id === "string") return value.id;
-	return null;
 }
 
 function parseCapabilities(value: unknown): WorkerRuntime[] {
@@ -76,38 +59,17 @@ function maxConcurrentForRuntime(
 	);
 }
 
-function formatError(error: unknown): string {
-	if (error instanceof Error) return error.message;
-	if (typeof error === "string") return error;
-	try {
-		return JSON.stringify(error);
-	} catch {
-		return String(error);
-	}
-}
-
-function eventLevel(value: unknown) {
-	return value === "debug" ||
-		value === "info" ||
-		value === "warn" ||
-		value === "error"
-		? value
-		: "info";
-}
-
-function allowsAutomaticRetry(run: Record<string, unknown> | null | undefined) {
-	const meta = isRecord(run?.meta) ? run.meta : null;
-	return meta?.automaticRetry !== false;
-}
-
 export default service()
 	.lifecycle("singleton")
 	.create((ctx) => {
 		const collections = ctx.app.collections as any;
 
-		async function activeLeaseCount(workerId: string): Promise<number> {
-			const result = await collections.ai_worker_leases.find({
-				where: { worker: workerId, status: "active" },
+		async function activeRunCount(workerId: string): Promise<number> {
+			// run_links is the single execution record — a worker is busy while it
+			// holds rows in a non-terminal claim (same query shape as
+			// activeLeaseCountForRuntime, minus the runtime filter).
+			const result = await collections.run_links.find({
+				where: { worker: workerId, status: { in: ["claimed", "running"] } },
 				limit: 1000,
 			});
 			return result.docs.length;
@@ -182,28 +144,17 @@ export default service()
 			},
 
 			async heartbeat(workerId: string) {
-				const active = await activeLeaseCount(workerId);
+				// Busy-count comes from run_links; per-run liveness is the row's
+				// producerLease (heartbeated by the executing worker), so there is
+				// no ai_worker_leases extension loop here anymore.
+				const active = await activeRunCount(workerId);
 				const status: AiWorkerStatus = active > 0 ? "busy" : "online";
 				await collections.ai_workers.updateById({
 					id: workerId,
 					data: { status, lastHeartbeat: new Date() },
 				});
 
-				const leases = await collections.ai_worker_leases.find({
-					where: { worker: workerId, status: "active" },
-					limit: 1000,
-				});
-				const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
-				await Promise.all(
-					leases.docs.map((lease: { id: string }) =>
-						collections.ai_worker_leases.updateById({
-							id: lease.id,
-							data: { expiresAt },
-						}),
-					),
-				);
-
-				return { activeLeases: leases.docs.length, status };
+				return { activeLeases: active, status };
 			},
 
 			async claimRun(input: ClaimRunInput): Promise<ClaimedRun | null> {
@@ -310,123 +261,6 @@ export default service()
 				}
 
 				return null;
-			},
-
-			async completeRun(input: CompleteRunInput) {
-				await collections.ai_runs.updateById({
-					id: input.runId,
-					data: {
-						status: "completed",
-						summary: input.result.text ?? undefined,
-						runtimeSessionRef: input.result.sessionRef ?? undefined,
-						tokensInput: input.result.inputTokens ?? undefined,
-						tokensOutput: input.result.outputTokens ?? undefined,
-						cost: input.result.cost ?? undefined,
-						endedAt: new Date(),
-					},
-				});
-
-				const lease = await collections.ai_worker_leases.findOne({
-					where: { worker: input.workerId, run: input.runId, status: "active" },
-				});
-				if (lease) {
-					await collections.ai_worker_leases.updateById({
-						id: lease.id,
-						data: { status: "completed" },
-					});
-				}
-
-				const remaining = await activeLeaseCount(input.workerId);
-				await setWorkerStatus(
-					input.workerId,
-					remaining > 0 ? "busy" : "online",
-				);
-			},
-
-			async failRun(input: FailRunInput) {
-				await collections.ai_runs.updateById({
-					id: input.runId,
-					data: {
-						status: "failed",
-						error: formatError(input.error),
-						endedAt: new Date(),
-					},
-				});
-
-				const leases = await collections.ai_worker_leases.find({
-					where: { worker: input.workerId, run: input.runId, status: "active" },
-					limit: 1000,
-				});
-				await Promise.all(
-					(leases.docs as Array<{ id: string }>).map((lease) =>
-						collections.ai_worker_leases.updateById({
-							id: lease.id,
-							data: { status: "released" },
-						}),
-					),
-				);
-
-				const remaining = await activeLeaseCount(input.workerId);
-				await setWorkerStatus(
-					input.workerId,
-					remaining > 0 ? "busy" : "online",
-				);
-			},
-
-			async reportRunEvent(input: ReportRunEventInput) {
-				await collections.ai_run_events.create({
-					run: input.runId,
-					type: (input.event.type as string) ?? "unknown",
-					level: eventLevel(input.event.level),
-					summary: input.event.text ?? input.event.tool ?? undefined,
-					sequence:
-						typeof input.event.sequence === "number"
-							? input.event.sequence
-							: undefined,
-					meta: input.event,
-				});
-			},
-
-			async expireStaleLeases(now = new Date()) {
-				const result = await collections.ai_worker_leases.find({
-					where: { status: "active" },
-					limit: 1000,
-				});
-				const expired = (result.docs as Array<Record<string, unknown>>).filter(
-					(lease) =>
-						lease.expiresAt && new Date(lease.expiresAt as string) < now,
-				);
-
-				for (const lease of expired) {
-					const runId = relationId(lease.run);
-					await collections.ai_worker_leases.updateById({
-						id: lease.id as string,
-						data: { status: "expired" },
-					});
-					if (runId) {
-						const run = await collections.ai_runs.findOne({
-							where: { id: runId },
-						});
-						if (!allowsAutomaticRetry(run)) {
-							await collections.ai_runs.update({
-								where: { id: runId, status: { in: ["claimed", "running"] } },
-								data: {
-									status: "failed",
-									worker: null as any,
-									endedAt: now,
-									error: "Worker lease expired; automatic retry disabled",
-								},
-							});
-							continue;
-						}
-						await collections.ai_runs.update({
-							where: { id: runId, status: { in: ["claimed", "running"] } },
-							data: { status: "pending", worker: null as any },
-						});
-					}
-				}
-
-				return { expiredCount: expired.length };
 			},
 		};
 

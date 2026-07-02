@@ -65,8 +65,6 @@ describe.skipIf(!isBun)("run_code code-mode tool (trusted executor path)", () =>
 		setup = await buildMockApp({
 			modules: [mcpModule],
 			collections: {
-				ai_run_events: aiModule.collections.ai_run_events,
-				ai_runs: aiModule.collections.ai_runs,
 				ai_worker_leases: aiModule.collections.ai_worker_leases,
 				ai_workers: aiModule.collections.ai_workers,
 				activity,

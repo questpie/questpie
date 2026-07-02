@@ -6,9 +6,9 @@ import { z } from "zod";
 // instead of waiting a full poll interval. Best-effort acceleration only — the
 // run_links row is the source of truth, the kick is delivery acceleration.
 //
-// The worker-side poll-nudge consumer lands in T4/T5 (startAIWorker +
-// workerManager re-point to run_links). claimRun is still ai_runs-based until
-// T5, so this handler must NOT attempt a claim yet — it stays a placeholder.
+// Honest status: the worker-side poll-nudge consumer is still unwired —
+// startAIWorker only claims on its own poll interval, so this handler stays a
+// logging placeholder until the kick is plumbed into the worker loop.
 export default job({
 	name: "run-available",
 	schema: z.object({
@@ -19,9 +19,9 @@ export default job({
 	},
 	handler: async (ctx) => {
 		const { logger, payload } = ctx;
-		// Placeholder until T4/T5 wires the poll-nudge into startAIWorker.
+		// Placeholder until the poll-nudge is wired into startAIWorker.
 		logger.debug?.(
-			`run-available kick received (runtime=${payload.runtime ?? "?"}; poll-nudge wiring lands in T4/T5)`,
+			`run-available kick received (runtime=${payload.runtime ?? "?"}; poll-nudge consumer not wired yet)`,
 		);
 	},
 });

@@ -101,8 +101,6 @@ describe("task-pipeline workflow", () => {
 
 		setup = await buildMockApp({
 			collections: {
-				ai_run_events: aiModule.collections.ai_run_events,
-				ai_runs: aiModule.collections.ai_runs,
 				ai_worker_leases: aiModule.collections.ai_worker_leases,
 				ai_workers: aiModule.collections.ai_workers,
 				activity,
@@ -156,9 +154,6 @@ describe("task-pipeline workflow", () => {
 		const createContext = createContextFactory(setup!.app);
 		const ctx = await createContext({ accessMode: "system" });
 		(ctx as any).workflows = workflows;
-		(ctx as any).queue = {
-			taskTurnProducer: { async publish() {} },
-		};
 
 		return taskPipeline.handler({
 			input: {
@@ -236,10 +231,6 @@ describe("task-pipeline workflow", () => {
 				match: { runId: result.runId },
 			},
 		]);
-
-		// The fleet worker claims the pending run_links row directly — no
-		// ai_runs row and no producer publish.
-		expect(relationId(createdRunLinks.docs[0].aiRun)).toBeFalsy();
 
 		const reviewActivities = await setup!.app.collections.activity.find({
 			where: { task: task.id, type: "task.review" },
@@ -340,9 +331,6 @@ describe("task-pipeline workflow", () => {
 
 		const createContext = createContextFactory(setup!.app);
 		const ctx = await createContext({ accessMode: "system" });
-		(ctx as any).queue = {
-			taskTurnProducer: { async publish() {} },
-		};
 
 		const result = await taskPipeline.handler({
 			input: {
@@ -536,9 +524,6 @@ describe("task-pipeline workflow", () => {
 			},
 		};
 		(ctx as any).workflows = workflows;
-		(ctx as any).queue = {
-			taskTurnProducer: { async publish() {} },
-		};
 		workflowEvents = [];
 
 		const result = await taskPipeline.handler({

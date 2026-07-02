@@ -53,8 +53,6 @@ describe("schedule-tick job execution", () => {
 
 		setup = await buildMockApp({
 			collections: {
-				ai_run_events: aiModule.collections.ai_run_events,
-				ai_runs: aiModule.collections.ai_runs,
 				ai_worker_leases: aiModule.collections.ai_worker_leases,
 				ai_workers: aiModule.collections.ai_workers,
 				activity,
