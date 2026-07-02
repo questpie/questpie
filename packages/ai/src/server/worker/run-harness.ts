@@ -254,10 +254,20 @@ export async function runHarnessRun(
 				delta?: unknown;
 				text?: unknown;
 				errorText?: unknown;
+				messageId?: unknown;
 			}>
 		).pipeThrough(
 			new TransformStream({
 				transform(chunk, controller) {
+					// WIRE GUARANTEE: every `start` chunk carries THE turn's messageId.
+					// The REAL harness stream emits start without one (unlike
+					// streamText, which honors generateMessageId) — the FE then keeps
+					// its client-generated id, the persisted row gets the worker id,
+					// and hydration renders the turn TWICE (live-found duplication).
+					if (chunk && chunk.type === "start" && chunk.messageId !== messageId) {
+						controller.enqueue({ ...chunk, messageId });
+						return;
+					}
 					if (chunk && chunk.type === "text-delta") {
 						summaryText +=
 							typeof chunk.delta === "string"
@@ -289,6 +299,13 @@ export async function runHarnessRun(
 		const accumulated = (async () => {
 			try {
 				for await (const snapshot of readUIMessageStream({
+					// Seed the accumulator with the turn's message identity — without
+					// it a stream whose start lacks messageId persists id: "".
+					message: {
+						id: messageId,
+						role: "assistant",
+						parts: [],
+					} as never,
 					stream: accumulateStream as never,
 				})) {
 					finalMessage = snapshot;

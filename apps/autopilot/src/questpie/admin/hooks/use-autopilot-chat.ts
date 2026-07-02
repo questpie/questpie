@@ -244,7 +244,11 @@ function rowToUIMessage(row: Doc): AutopilotUIMessage | null {
  * Merge DB-hydrated messages with local Chat state: the DB list is
  * authoritative for everything it contains; local-only messages (e.g. a
  * cancelled turn's partial assistant that was never persisted) are kept,
- * re-inserted after their nearest persisted predecessor.
+ * re-inserted after their nearest persisted predecessor — UNLESS the DB
+ * already persisted an assistant reply for the same turn (same predecessor),
+ * in which case the persisted row supersedes the streamed copy. Without this
+ * an id drift between the streamed message and the persisted uiMessageId
+ * renders the turn twice.
  */
 function mergeMessages(
 	local: AutopilotUIMessage[],
@@ -263,6 +267,14 @@ function mergeMessages(
 				insertAt = at + 1;
 				break;
 			}
+		}
+		if (
+			message.role === "assistant" &&
+			merged[insertAt]?.role === "assistant"
+		) {
+			// The turn's reply is already persisted right where this streamed
+			// copy would land — persisted wins, drop the local duplicate.
+			return;
 		}
 		merged.splice(insertAt, 0, message);
 		dbIds.add(message.id);
