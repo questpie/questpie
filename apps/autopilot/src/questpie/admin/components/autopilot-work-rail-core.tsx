@@ -283,7 +283,13 @@ function SessionRow({
 	);
 }
 
-function MessageBubble({ message }: { message: AutopilotUIMessage }) {
+function MessageBubble({
+	message,
+	onAnswer,
+}: {
+	message: AutopilotUIMessage;
+	onAnswer?: (answer: string) => void;
+}) {
 	const isUser = message.role === "user";
 	const attachments = message.metadata?.attachments;
 	const runStatus = message.metadata?.runStatus;
@@ -308,7 +314,7 @@ function MessageBubble({ message }: { message: AutopilotUIMessage }) {
 						{messageText(message)}
 					</div>
 				) : (
-					<MessageParts message={message} />
+					<MessageParts message={message} onAnswer={onAnswer} />
 				)}
 				{showBadge ? (
 					<div className="text-destructive mt-1 inline-flex items-center gap-1 text-[11px]">
@@ -617,6 +623,14 @@ export function AutopilotWorkRailCore({
 		nearBottomRef.current = true;
 	}
 
+	const answerQuestion = React.useCallback(
+		(answer: string) => {
+			chat.send(answer, []);
+			nearBottomRef.current = true;
+		},
+		[chat],
+	);
+
 	const title = historyOpen
 		? "Chats"
 		: activeSession
@@ -750,8 +764,20 @@ export function AutopilotWorkRailCore({
 							</div>
 						) : (
 							<div className="flex flex-col gap-3">
-								{chat.messages.map((message) => (
-									<MessageBubble key={message.id} message={message} />
+								{chat.messages.map((message, index) => (
+									<MessageBubble
+										key={message.id}
+										message={message}
+										// AskUserQuestion options are clickable only on the LAST
+										// message while idle — the answer goes out as a new turn.
+										onAnswer={
+											index === chat.messages.length - 1 &&
+											message.role === "assistant" &&
+											!isBusy
+												? answerQuestion
+												: undefined
+										}
+									/>
 								))}
 							</div>
 						)}

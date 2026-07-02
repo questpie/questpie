@@ -3,8 +3,16 @@
  *
  * Shared by the work-rail chat, the mobile chat page, and the run-detail
  * transcript (T10). Text parts render through Streamdown (streaming-safe
- * markdown); tool/reasoning parts render as collapsible cards; unknown part
- * types render nothing (degraded mode: a broken part never blanks the bubble).
+ * markdown); tool parts render through a per-tool REGISTRY (claude-code
+ * builtins get purpose-built cards, MCP/unknown tools a generic one);
+ * unknown part types render nothing (degraded mode: a broken part never
+ * blanks the bubble).
+ *
+ * AskUserQuestion is interactive: the harness auto-resolves the tool call
+ * headlessly and the model ends its turn waiting for the answer as the NEXT
+ * user message — so the card renders the options as buttons and `onAnswer`
+ * (wired by the chat surfaces, absent in read-only run-detail) sends the
+ * choice as a new turn. The harness session resumes from its checkpoint.
  */
 
 import { Icon } from "@iconify/react";
@@ -42,6 +50,39 @@ function toolName(part: PartLike): string {
 	return part.type.startsWith("tool-") ? part.type.slice(5) : part.type;
 }
 
+/**
+ * Claude-code registers file/shell tools under LOWERCASE sdk keys (`read`,
+ * `bash`, `edit`, `write`, `grep`, `glob`, `webSearch`) but others under
+ * capitalized ones (`AskUserQuestion`, `TodoWrite`, `Task`, `WebFetch`…), so
+ * the `tool-{name}` part casing is mixed. Match on a canonical lowercase key
+ * and prettify the display name separately.
+ */
+const PRETTY_TOOL_NAMES: Record<string, string> = {
+	read: "Read",
+	write: "Write",
+	edit: "Edit",
+	bash: "Bash",
+	grep: "Grep",
+	glob: "Glob",
+	websearch: "Web search",
+	webfetch: "Web fetch",
+	notebookedit: "Notebook edit",
+	exitplanmode: "Plan",
+	todowrite: "Todos",
+	askuserquestion: "Question",
+};
+
+function prettyToolName(name: string): string {
+	return PRETTY_TOOL_NAMES[name.toLowerCase()] ?? name;
+}
+
+/** `mcp__server__tool` → { tool, server } for a readable MCP label. */
+function mcpLabel(name: string): { tool: string; server: string } | null {
+	const match = name.match(/^mcp__(.+?)__(.+)$/);
+	if (!match) return null;
+	return { server: match[1], tool: match[2] };
+}
+
 function toolStateMeta(state: unknown): { label: string; tone: string } {
 	switch (state) {
 		case "input-streaming":
@@ -57,6 +98,10 @@ function toolStateMeta(state: unknown): { label: string; tone: string } {
 	}
 }
 
+function isRunning(state: unknown): boolean {
+	return state === "input-streaming" || state === "input-available";
+}
+
 function compactJson(value: unknown): string {
 	if (value === undefined || value === null) return "";
 	if (typeof value === "string") return value;
@@ -67,25 +112,52 @@ function compactJson(value: unknown): string {
 	}
 }
 
-function ToolPartCard({ part }: { part: PartLike }) {
-	const [open, setOpen] = React.useState(false);
-	const meta = toolStateMeta(part.state);
-	const input = compactJson(part.input);
-	const output =
-		part.state === "output-error"
-			? compactJson(part.errorText)
-			: compactJson(part.output);
-	const running = part.state === "input-streaming" || part.state === "input-available";
+function asRecord(value: unknown): Record<string, unknown> {
+	return value && typeof value === "object"
+		? (value as Record<string, unknown>)
+		: {};
+}
+
+function str(value: unknown): string {
+	return typeof value === "string" ? value : "";
+}
+
+// ── Shared card chrome ────────────────────────────────────────
+
+function ToolCard({
+	icon,
+	title,
+	subtitle,
+	state,
+	children,
+	defaultOpen = false,
+	collapsible = true,
+}: {
+	icon: string;
+	title: string;
+	subtitle?: string;
+	state: unknown;
+	children?: React.ReactNode;
+	defaultOpen?: boolean;
+	collapsible?: boolean;
+}) {
+	const [open, setOpen] = React.useState(defaultOpen);
+	const meta = toolStateMeta(state);
+	const running = isRunning(state);
+	const expandable = collapsible && !!children;
 
 	return (
 		<div className="border-border-subtle bg-muted/30 my-1.5 rounded-md border">
 			<button
 				type="button"
-				onClick={() => setOpen((value) => !value)}
-				className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left"
+				onClick={() => expandable && setOpen((value) => !value)}
+				className={[
+					"flex w-full items-center gap-2 px-2.5 py-1.5 text-left",
+					expandable ? "" : "cursor-default",
+				].join(" ")}
 			>
 				<Icon
-					icon={running ? "ph:spinner" : "ph:wrench"}
+					icon={running ? "ph:spinner" : icon}
 					className={[
 						"size-3.5 shrink-0",
 						meta.tone,
@@ -93,39 +165,489 @@ function ToolPartCard({ part }: { part: PartLike }) {
 					].join(" ")}
 				/>
 				<span className="min-w-0 flex-1 truncate font-mono text-[11px]">
-					{toolName(part)}
+					{title}
+					{subtitle ? (
+						<span className="text-muted-foreground"> {subtitle}</span>
+					) : null}
 				</span>
 				{meta.label ? (
 					<span className={["shrink-0 text-[10px]", meta.tone].join(" ")}>
 						{meta.label}
 					</span>
 				) : null}
-				<Icon
-					icon={open ? "ph:caret-up" : "ph:caret-down"}
-					className="text-muted-foreground size-3 shrink-0"
-				/>
+				{expandable ? (
+					<Icon
+						icon={open ? "ph:caret-up" : "ph:caret-down"}
+						className="text-muted-foreground size-3 shrink-0"
+					/>
+				) : null}
 			</button>
-			{open ? (
+			{open && children ? (
 				<div className="border-border-subtle space-y-1.5 border-t px-2.5 py-2">
-					{input ? (
-						<pre className="bg-muted max-h-40 overflow-auto rounded p-2 font-mono text-[10px] leading-relaxed whitespace-pre-wrap">
-							{input}
-						</pre>
-					) : null}
-					{output ? (
-						<pre
-							className={[
-								"bg-muted max-h-40 overflow-auto rounded p-2 font-mono text-[10px] leading-relaxed whitespace-pre-wrap",
-								part.state === "output-error" ? "text-destructive" : "",
-							].join(" ")}
-						>
-							{output}
-						</pre>
-					) : null}
+					{children}
 				</div>
 			) : null}
 		</div>
 	);
+}
+
+function JsonBlock({ value, error }: { value: unknown; error?: boolean }) {
+	const text = compactJson(value);
+	if (!text) return null;
+	return (
+		<pre
+			className={[
+				"bg-muted max-h-40 overflow-auto rounded p-2 font-mono text-[10px] leading-relaxed whitespace-pre-wrap",
+				error ? "text-destructive" : "",
+			].join(" ")}
+		>
+			{text}
+		</pre>
+	);
+}
+
+function outputBlocks(part: PartLike) {
+	return part.state === "output-error" ? (
+		<JsonBlock value={part.errorText} error />
+	) : (
+		<JsonBlock value={part.output} />
+	);
+}
+
+// ── Per-tool cards (claude-code builtins) ─────────────────────
+
+function BashCard({ part }: { part: PartLike }) {
+	const input = asRecord(part.input);
+	const command = str(input.command);
+	return (
+		<ToolCard
+			icon="ph:terminal-window"
+			title="Bash"
+			subtitle={str(input.description) || command.slice(0, 60)}
+			state={part.state}
+		>
+			{command ? (
+				<pre className="bg-muted max-h-24 overflow-auto rounded p-2 font-mono text-[10px] leading-relaxed whitespace-pre-wrap">
+					$ {command}
+				</pre>
+			) : null}
+			{outputBlocks(part)}
+		</ToolCard>
+	);
+}
+
+function DiffBlock({ oldStr, newStr }: { oldStr: string; newStr: string }) {
+	const line = "block px-2 -mx-2 whitespace-pre-wrap";
+	return (
+		<pre className="bg-muted max-h-56 overflow-auto rounded p-2 font-mono text-[10px] leading-relaxed">
+			{oldStr
+				? oldStr.split("\n").map((text, index) => (
+						<span
+							key={`o-${index}`}
+							className={`${line} text-destructive bg-destructive/10`}
+						>
+							- {text}
+						</span>
+					))
+				: null}
+			{newStr
+				? newStr.split("\n").map((text, index) => (
+						<span
+							key={`n-${index}`}
+							className={`${line} text-success bg-success/10`}
+						>
+							+ {text}
+						</span>
+					))
+				: null}
+		</pre>
+	);
+}
+
+function FileToolCard({ part }: { part: PartLike }) {
+	const key = toolName(part).toLowerCase();
+	const input = asRecord(part.input);
+	const path = str(input.file_path) || str(input.path) || str(input.notebook_path);
+	const pattern = str(input.pattern);
+	const icons: Record<string, string> = {
+		read: "ph:file-magnifying-glass",
+		write: "ph:file-plus",
+		edit: "ph:pencil-simple-line",
+		notebookedit: "ph:notebook",
+		glob: "ph:folders",
+		grep: "ph:magnifying-glass",
+	};
+	const range =
+		typeof input.offset === "number" || typeof input.limit === "number"
+			? `:${input.offset ?? 0}${input.limit ? `+${input.limit}` : ""}`
+			: "";
+	const subtitle = path
+		? `${path.split("/").slice(-3).join("/")}${range}`
+		: pattern;
+
+	return (
+		<ToolCard
+			icon={icons[key] ?? "ph:file-text"}
+			title={prettyToolName(key)}
+			subtitle={subtitle}
+			state={part.state}
+		>
+			{key === "edit" ? (
+				<DiffBlock
+					oldStr={str(input.old_string)}
+					newStr={str(input.new_string)}
+				/>
+			) : key === "write" && str(input.content) ? (
+				<pre className="bg-muted max-h-56 overflow-auto rounded p-2 font-mono text-[10px] leading-relaxed whitespace-pre-wrap">
+					{str(input.content)}
+				</pre>
+			) : (key === "grep" || key === "glob") && pattern ? (
+				<div className="font-mono text-[11px]">
+					{pattern}
+					{path ? (
+						<span className="text-muted-foreground"> in {path}</span>
+					) : null}
+				</div>
+			) : (
+				<JsonBlock value={part.input} />
+			)}
+			{outputBlocks(part)}
+		</ToolCard>
+	);
+}
+
+function TodoWriteCard({ part }: { part: PartLike }) {
+	const todos = Array.isArray(asRecord(part.input).todos)
+		? (asRecord(part.input).todos as Array<Record<string, unknown>>)
+		: [];
+	return (
+		<ToolCard
+			icon="ph:list-checks"
+			title="Todos"
+			subtitle={`${todos.length}`}
+			state={part.state}
+			defaultOpen={false}
+		>
+			<div className="space-y-1">
+				{todos.map((todo, index) => {
+					const status = str(todo.status);
+					return (
+						<div key={index} className="flex items-start gap-1.5 text-[11px]">
+							<Icon
+								icon={
+									status === "completed"
+										? "ph:check-circle-fill"
+										: status === "in_progress"
+											? "ph:circle-half-fill"
+											: "ph:circle"
+								}
+								className={[
+									"mt-0.5 size-3 shrink-0",
+									status === "completed"
+										? "text-success"
+										: status === "in_progress"
+											? "text-info"
+											: "text-muted-foreground",
+								].join(" ")}
+							/>
+							<span
+								className={
+									status === "completed"
+										? "text-muted-foreground line-through"
+										: ""
+								}
+							>
+								{str(todo.content)}
+							</span>
+						</div>
+					);
+				})}
+			</div>
+		</ToolCard>
+	);
+}
+
+function TaskCard({ part }: { part: PartLike }) {
+	const input = asRecord(part.input);
+	return (
+		<ToolCard
+			icon="ph:robot"
+			title="Subagent"
+			subtitle={str(input.description)}
+			state={part.state}
+		>
+			{str(input.prompt) ? (
+				<div className="text-muted-foreground max-h-24 overflow-auto text-[11px] whitespace-pre-wrap">
+					{str(input.prompt).slice(0, 600)}
+				</div>
+			) : null}
+			{outputBlocks(part)}
+		</ToolCard>
+	);
+}
+
+function WebCard({ part }: { part: PartLike }) {
+	const key = toolName(part).toLowerCase();
+	const input = asRecord(part.input);
+	const subject = str(input.query) || str(input.url) || str(input.prompt);
+	return (
+		<ToolCard
+			icon={key === "websearch" ? "ph:globe-hemisphere-west" : "ph:globe"}
+			title={prettyToolName(key)}
+			subtitle={subject.slice(0, 70)}
+			state={part.state}
+		>
+			{outputBlocks(part)}
+		</ToolCard>
+	);
+}
+
+function PlanCard({ part }: { part: PartLike }) {
+	const input = asRecord(part.input);
+	const plan = str(input.plan) || str(input.prompt);
+	return (
+		<ToolCard
+			icon="ph:clipboard-text"
+			title="Plan"
+			state={part.state}
+			defaultOpen
+		>
+			{plan ? (
+				<Streamdown parseIncompleteMarkdown className="qp-streamdown space-y-2">
+					{plan}
+				</Streamdown>
+			) : (
+				<JsonBlock value={part.input} />
+			)}
+		</ToolCard>
+	);
+}
+
+function SkillCard({ part }: { part: PartLike }) {
+	const input = asRecord(part.input);
+	return (
+		<ToolCard
+			icon="ph:sparkle"
+			title="Skill"
+			subtitle={str(input.skill)}
+			state={part.state}
+		>
+			{str(input.args) ? (
+				<div className="text-muted-foreground font-mono text-[11px]">
+					{str(input.args)}
+				</div>
+			) : null}
+			{outputBlocks(part)}
+		</ToolCard>
+	);
+}
+
+// ── AskUserQuestion — the interactive card ────────────────────
+
+interface AskQuestion {
+	header?: string;
+	question?: string;
+	multiSelect?: boolean;
+	options?: Array<{ label?: string; description?: string }>;
+}
+
+function askQuestions(part: PartLike): AskQuestion[] {
+	const input = asRecord(part.input);
+	return Array.isArray(input.questions)
+		? (input.questions as AskQuestion[])
+		: [];
+}
+
+function AskUserQuestionCard({
+	part,
+	onAnswer,
+}: {
+	part: PartLike;
+	onAnswer?: (answer: string) => void;
+}) {
+	const questions = askQuestions(part);
+	const [picked, setPicked] = React.useState<Record<number, Set<string>>>({});
+	const [sent, setSent] = React.useState(false);
+	const interactive = !!onAnswer && !sent;
+
+	if (questions.length === 0) {
+		return (
+			<ToolCard
+				icon="ph:chat-centered-dots"
+				title="AskUserQuestion"
+				state={part.state}
+			>
+				<JsonBlock value={part.input} />
+			</ToolCard>
+		);
+	}
+
+	const toggle = (qi: number, label: string, multi: boolean) => {
+		setPicked((current) => {
+			const next = { ...current };
+			const set = new Set(next[qi] ?? []);
+			if (multi) {
+				if (set.has(label)) set.delete(label);
+				else set.add(label);
+			} else {
+				set.clear();
+				set.add(label);
+			}
+			next[qi] = set;
+			return next;
+		});
+	};
+
+	const answerText = () =>
+		questions
+			.map((q, qi) => {
+				const chosen = [...(picked[qi] ?? [])];
+				if (chosen.length === 0) return null;
+				const prefix = q.header || q.question;
+				return prefix ? `${prefix}: ${chosen.join(", ")}` : chosen.join(", ");
+			})
+			.filter(Boolean)
+			.join("\n");
+
+	const singleAutoSend = questions.length === 1 && !questions[0]?.multiSelect;
+	const canSubmit = questions.some((_, qi) => (picked[qi]?.size ?? 0) > 0);
+
+	return (
+		<div className="border-primary/25 bg-primary/5 my-1.5 rounded-md border">
+			<div className="flex items-center gap-2 px-2.5 pt-2">
+				<Icon icon="ph:chat-centered-dots" className="text-primary size-3.5" />
+				<span className="text-primary text-[11px] font-medium">
+					Autopilot sa pýta
+				</span>
+			</div>
+			<div className="space-y-2.5 px-2.5 py-2">
+				{questions.map((q, qi) => (
+					<div key={qi}>
+						{q.question ? (
+							<div className="mb-1.5 text-sm font-medium">{q.question}</div>
+						) : null}
+						<div className="flex flex-col gap-1">
+							{(q.options ?? []).map((option, oi) => {
+								const label = option.label ?? `option-${oi + 1}`;
+								const selected = picked[qi]?.has(label) ?? false;
+								return (
+									<button
+										key={oi}
+										type="button"
+										disabled={!interactive}
+										onClick={() => {
+											if (!interactive) return;
+											if (singleAutoSend) {
+												setSent(true);
+												onAnswer?.(label);
+												return;
+											}
+											toggle(qi, label, !!q.multiSelect);
+										}}
+										className={[
+											"rounded-md border px-2.5 py-1.5 text-left transition-colors",
+											selected
+												? "border-primary bg-primary/15"
+												: "border-border-subtle bg-card",
+											interactive
+												? "hover:border-primary/60 cursor-pointer"
+												: "cursor-default opacity-80",
+										].join(" ")}
+									>
+										<div className="text-xs font-medium">{label}</div>
+										{option.description ? (
+											<div className="text-muted-foreground text-[11px]">
+												{option.description}
+											</div>
+										) : null}
+									</button>
+								);
+							})}
+						</div>
+					</div>
+				))}
+				{interactive && !singleAutoSend ? (
+					<button
+						type="button"
+						disabled={!canSubmit}
+						onClick={() => {
+							const text = answerText();
+							if (!text) return;
+							setSent(true);
+							onAnswer?.(text);
+						}}
+						className="bg-primary text-primary-foreground hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground rounded-md px-2.5 py-1.5 text-xs font-medium"
+					>
+						Odoslať odpoveď
+					</button>
+				) : null}
+				{!onAnswer ? (
+					<div className="text-muted-foreground text-[10px]">
+						Odpoveď pošli ako ďalšiu správu.
+					</div>
+				) : null}
+			</div>
+		</div>
+	);
+}
+
+// ── Generic + MCP fallback ────────────────────────────────────
+
+function GenericToolCard({ part }: { part: PartLike }) {
+	const rawName = toolName(part);
+	const mcp = mcpLabel(rawName);
+	return (
+		<ToolCard
+			icon={mcp ? "ph:plugs-connected" : "ph:wrench"}
+			title={mcp ? mcp.tool : rawName}
+			subtitle={mcp ? `· ${mcp.server}` : undefined}
+			state={part.state}
+		>
+			<JsonBlock value={part.input} />
+			{outputBlocks(part)}
+		</ToolCard>
+	);
+}
+
+/**
+ * The registry: claude-code builtins get purpose-built cards. Matched on the
+ * LOWERCASE tool name — the `tool-{name}` casing is mixed (sdk keys `bash`/
+ * `read`/`edit` are lowercase, `AskUserQuestion`/`TodoWrite`/`Task` are not),
+ * so a case-sensitive switch silently dropped the file/shell tools to generic.
+ */
+function renderToolPart(
+	part: PartLike,
+	key: string,
+	onAnswer?: (answer: string) => void,
+): React.ReactNode {
+	switch (toolName(part).toLowerCase()) {
+		case "askuserquestion":
+			return <AskUserQuestionCard key={key} part={part} onAnswer={onAnswer} />;
+		case "bash":
+		case "bashoutput":
+			return <BashCard key={key} part={part} />;
+		case "read":
+		case "write":
+		case "edit":
+		case "notebookedit":
+		case "glob":
+		case "grep":
+			return <FileToolCard key={key} part={part} />;
+		case "todowrite":
+			return <TodoWriteCard key={key} part={part} />;
+		case "task":
+		case "agent":
+			return <TaskCard key={key} part={part} />;
+		case "websearch":
+		case "webfetch":
+			return <WebCard key={key} part={part} />;
+		case "exitplanmode":
+			return <PlanCard key={key} part={part} />;
+		case "skill":
+			return <SkillCard key={key} part={part} />;
+		default:
+			return <GenericToolCard key={key} part={part} />;
+	}
 }
 
 function ReasoningPart({ part }: { part: PartLike }) {
@@ -191,13 +713,16 @@ function SourcePart({ part }: { part: PartLike }) {
 /**
  * Renders assistant message parts in order. `degraded` forces plain-text
  * rendering of the accumulated text parts only (§4.2 cutover safety switch).
+ * `onAnswer` makes AskUserQuestion cards interactive (chat surfaces only).
  */
 export function MessageParts({
 	message,
 	degraded = false,
+	onAnswer,
 }: {
 	message: UIMessageLike;
 	degraded?: boolean;
+	onAnswer?: (answer: string) => void;
 }) {
 	const parts = partsOf(message);
 
@@ -229,7 +754,7 @@ export function MessageParts({
 					return <ReasoningPart key={key} part={part} />;
 				}
 				if (part.type.startsWith("tool-") || part.type === "dynamic-tool") {
-					return <ToolPartCard key={key} part={part} />;
+					return renderToolPart(part, key, onAnswer);
 				}
 				if (part.type === "file") {
 					return <FilePart key={key} part={part} />;
