@@ -110,8 +110,10 @@ export async function finalizeRun(
 			id: input.runId,
 			finalizedAt: null,
 			status: { notIn: TERMINAL_STATUSES },
+			// json values are stored double-encoded (jsonb string) by the
+			// collection layer — peel with `#>> '{}'` (also matches plain objects).
 			RAW: ({ table }: { table: Record<string, unknown> }) =>
-				sql`(${table.producerLease} ->> 'epoch')::int = ${input.epoch}`,
+				sql`((${table.producerLease} #>> '{}')::jsonb ->> 'epoch')::int = ${input.epoch}`,
 		},
 		data,
 	});

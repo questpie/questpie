@@ -57,6 +57,11 @@ export interface RunHarnessOptions {
 	workerDir: string;
 	skills?: unknown[];
 	mcpServers?: unknown[];
+	/**
+	 * Local-host sandbox settings (e.g. `{ passthroughHomeForAuth: true }` for a
+	 * personal-machine worker whose claude-code bridge reads ~/.claude auth).
+	 */
+	sandbox?: Parameters<typeof createHarnessAgent>[0]["sandbox"];
 	heartbeatMs?: number;
 	leaseMs?: number;
 	cancelPollMs?: number;
@@ -102,6 +107,7 @@ export async function runHarnessRun(
 		workerDir,
 		skills,
 		mcpServers,
+		sandbox,
 		heartbeatMs = DEFAULT_HEARTBEAT_MS,
 		leaseMs = DEFAULT_LEASE_MS,
 		cancelPollMs = DEFAULT_CANCEL_POLL_MS,
@@ -125,10 +131,13 @@ export async function runHarnessRun(
 	// Epoch-guarded CAS. NOTE: `where: { producerLease: { epoch } }` silently
 	// no-ops on a json column (its where-operators are basic-eq only), so the
 	// fence is a RAW jsonb predicate. Zero rows ⇒ re-claimed (epoch bumped).
+	// The collection layer stores json values DOUBLE-ENCODED (a jsonb string,
+	// not an object — live-verified), so peel via `#>> '{}'` first; the form
+	// also matches plain objects, so it survives an encoding fix.
 	const epochWhere = {
 		id: runId,
 		RAW: ({ table }: { table: Record<string, unknown> }) =>
-			sql`(${table.producerLease} ->> 'epoch')::int = ${epoch}`,
+			sql`((${table.producerLease} #>> '{}')::jsonb ->> 'epoch')::int = ${epoch}`,
 	};
 	async function casUpdate(data: Record<string, unknown>): Promise<boolean> {
 		const updated = await collections.run_links.update({
@@ -146,30 +155,10 @@ export async function runHarnessRun(
 		};
 	}
 
-	const agent = createAgent({
-		runtime: run.runtime as "claude-code",
-		workRoot: cwd,
-		instructions: run.instructions,
-		skills: skills as never,
-		mcpServers,
-		permissionMode: "allow-all",
-	});
-
-	const resumed = await resumeOrCreateSession({
-		agent,
-		id: harnessSessionId,
-		abortSignal: signal,
-		loadResumeState: async () =>
-			run.harnessResumeState && typeof run.harnessResumeState === "object"
-				? (run.harnessResumeState as never)
-				: null,
-		// The single end-of-turn detachAndPersist() writes harnessResumeState
-		// epoch-guarded through here.
-		saveResumeState: async (_id, state) => {
-			await casUpdate({ harnessResumeState: state as Record<string, unknown> });
-		},
-	});
-
+	// Timers start BEFORE agent/session creation: a slow or hung harness boot
+	// (bridge spawn, model spin-up) must stay heartbeated — else the lease
+	// expires on a healthy-but-slow boot and the reaper kills it — and must
+	// remain cancellable via the cancel-poll → abort signal.
 	const timers: ReturnType<typeof setInterval>[] = [];
 	const runTimeout = setTimeout(() => abort.abort(), runTimeoutMs);
 
@@ -201,6 +190,32 @@ export async function runHarnessRun(
 
 	let summaryText = "";
 	try {
+		const agent = createAgent({
+			runtime: run.runtime as "claude-code",
+			workRoot: cwd,
+			instructions: run.instructions,
+			skills: skills as never,
+			mcpServers,
+			permissionMode: "allow-all",
+			sandbox,
+		});
+
+		const resumed = await resumeOrCreateSession({
+			agent,
+			id: harnessSessionId,
+			abortSignal: signal,
+			loadResumeState: async () =>
+				run.harnessResumeState && typeof run.harnessResumeState === "object"
+					? (run.harnessResumeState as never)
+					: null,
+			// The single end-of-turn detachAndPersist() writes harnessResumeState
+			// epoch-guarded through here.
+			saveResumeState: async (_id, state) => {
+				await casUpdate({
+					harnessResumeState: state as Record<string, unknown>,
+				});
+			},
+		});
 		const result = await agent.stream({
 			session: resumed.session,
 			prompt: run.instructions,
@@ -216,10 +231,17 @@ export async function runHarnessRun(
 			onBeforeFirstAppend: async () => casUpdate({ producerLease: bumpedLease() }),
 		});
 
+		let firstErrorText: string | null = null;
+		let sawFinish = false;
 		const uiStream = (
 			toUIMessages(result as never, {
 				generateMessageId: () => messageId,
-			}) as ReadableStream<{ type?: string; delta?: unknown; text?: unknown }>
+			}) as ReadableStream<{
+				type?: string;
+				delta?: unknown;
+				text?: unknown;
+				errorText?: unknown;
+			}>
 		).pipeThrough(
 			new TransformStream({
 				transform(chunk, controller) {
@@ -231,6 +253,13 @@ export async function runHarnessRun(
 									? chunk.text
 									: "";
 					}
+					if (chunk && chunk.type === "error" && firstErrorText === null) {
+						firstErrorText =
+							typeof chunk.errorText === "string"
+								? chunk.errorText
+								: "harness stream error";
+					}
+					if (chunk && chunk.type === "finish") sawFinish = true;
 					controller.enqueue(chunk);
 				},
 			}),
@@ -259,6 +288,14 @@ export async function runHarnessRun(
 		// The sink seals the stream on normal completion (append rejects post-seal).
 		await sink({ stream: sinkStream });
 		await accumulated;
+
+		// A stream that carried an error and never reached finish is a FAILED
+		// turn — throw so executeRun finalizes failed (not a bogus "completed"
+		// with an empty summary). A mid-stream error followed by a normal finish
+		// stays a success.
+		if (firstErrorText !== null && !sawFinish) {
+			throw new Error(firstErrorText);
+		}
 
 		const usage = (await Promise.resolve(result.usage).catch(() => ({}))) as {
 			inputTokens?: number;

@@ -65,8 +65,10 @@ export async function reapExpiredRunLinks(
 				where: {
 					id: row.id,
 					status: { in: ACTIVE_STATUSES },
+					// json values are stored double-encoded (jsonb string) by the
+					// collection layer — peel with `#>> '{}'` (also matches objects).
 					RAW: ({ table }: { table: Record<string, unknown> }) =>
-						sql`(${table.producerLease} ->> 'epoch')::int = ${epoch}`,
+						sql`((${table.producerLease} #>> '{}')::jsonb ->> 'epoch')::int = ${epoch}`,
 				},
 				data: {
 					status: "pending",

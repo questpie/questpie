@@ -13,6 +13,8 @@ export interface EmbeddedWorkerConfig {
 	maxConcurrentRuns?: number;
 	workerDir?: string;
 	mcpServers?: unknown[];
+	/** Local-host sandbox settings (e.g. passthroughHomeForAuth for a personal machine). */
+	sandbox?: ExecuteRunDeps["sandbox"];
 	name?: string;
 	pollIntervalMs?: number;
 	/** App-specific harness skill resolver (autopilot buildHarnessSkills). */
@@ -45,6 +47,7 @@ export async function startAIWorker(
 		knowledgeResource: ctx.services?.knowledgeResource,
 		workerDir,
 		mcpServers: config.mcpServers,
+		sandbox: config.sandbox,
 		resolveSkills: config.resolveSkills,
 	};
 

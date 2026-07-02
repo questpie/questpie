@@ -181,6 +181,11 @@ export function toUIMessages<
 	return toUIMessageStream<TOOLS, UI_MESSAGE>({
 		stream: result.stream,
 		tools,
+		// This is a worker-side stream consumed by our own admin UI — surface
+		// the real error text instead of the SDK's masked "An error occurred."
+		// (which hides the diagnosis from run_links.error and the chat strip).
+		onError: (error) =>
+			error instanceof Error ? error.message : String(error),
 		...streamOptions,
 	});
 }

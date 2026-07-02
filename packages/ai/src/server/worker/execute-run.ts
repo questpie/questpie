@@ -34,6 +34,8 @@ export interface ExecuteRunDeps {
 	knowledgeResource?: FinalizeRunDeps["knowledgeResource"];
 	workerDir: string;
 	mcpServers?: unknown[];
+	/** Local-host sandbox settings forwarded to runHarnessRun (auth passthrough etc). */
+	sandbox?: Parameters<typeof runHarnessRun>[0]["sandbox"];
 	/** App-specific (autopilot) harness skill resolver — injected; optional. */
 	resolveSkills?: (
 		run: Record<string, unknown>,
@@ -98,6 +100,7 @@ export async function executeRun(
 			workerDir: deps.workerDir,
 			skills,
 			mcpServers: deps.mcpServers,
+			sandbox: deps.sandbox,
 		});
 		await finalizeRun(finalizeDeps, {
 			runId,

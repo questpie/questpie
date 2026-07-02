@@ -481,39 +481,38 @@ export function useAutopilotChat(
 
 	// ── Active-turn run chip (§4.3) ───────────────────────────
 	// Prefer the transport-reported turn; fall back to the hydrated last user
-	// message when re-opening a session with an in-flight run.
-	const chipInput = React.useMemo(():
-		| { messageDbId: string; runId?: string }
-		| null => {
-		const turn = turns[active.key];
-		if (turn) return { messageDbId: turn.messageDbId, runId: turn.runId };
+	// message when re-opening a session with an in-flight run. Everything is
+	// derived down to PRIMITIVE strings before building where objects — object
+	// identities churning per render caused a realtime resubscribe storm.
+	const activeTurn = turns[active.key] ?? null;
+	const sessionActiveRunId = React.useMemo(() => {
 		if (!active.sessionId) return null;
 		const session = sessions.find((doc) => doc.id === active.sessionId);
-		if (!relationId(session?.activeRun)) return null;
-		const lastUser = [...chatHelpers.messages]
-			.reverse()
-			.find((message) => message.role === "user");
-		const dbId = lastUser?.metadata?.dbId;
-		return dbId ? { messageDbId: dbId } : null;
-	}, [turns, active.key, active.sessionId, sessions, chatHelpers.messages]);
+		return relationId(session?.activeRun);
+	}, [sessions, active.sessionId]);
+	const lastUserDbId = React.useMemo(() => {
+		for (let index = chatHelpers.messages.length - 1; index >= 0; index--) {
+			const message = chatHelpers.messages[index];
+			if (message.role === "user") return message.metadata?.dbId ?? null;
+		}
+		return null;
+	}, [chatHelpers.messages]);
+	const chipRunId = activeTurn?.runId ?? null;
+	const chipMessageDbId =
+		activeTurn?.messageDbId ?? (sessionActiveRunId ? lastUserDbId : null);
 
 	const runQuery = useQuery({
-		queryKey: [
-			"autopilot",
-			"chat",
-			"run",
-			chipInput?.runId ?? chipInput?.messageDbId ?? "none",
-		],
-		enabled: !!client && !!chipInput,
+		queryKey: ["autopilot", "chat", "run", chipRunId ?? chipMessageDbId ?? "none"],
+		enabled: !!client && !!(chipRunId || chipMessageDbId),
 		refetchInterval: 20_000,
 		queryFn: async (): Promise<AutopilotRunInfo | null> => {
 			const api = (client as any)?.collections?.run_links;
-			if (!api?.find || !chipInput) return null;
+			if (!api?.find || !(chipRunId || chipMessageDbId)) return null;
 			const docs = docsFromResult(
 				await api.find({
-					where: chipInput.runId
-						? { id: chipInput.runId }
-						: { chatMessage: chipInput.messageDbId },
+					where: chipRunId
+						? { id: chipRunId }
+						: { chatMessage: chipMessageDbId },
 					orderBy: { createdAt: "desc" },
 					limit: 1,
 				}),
@@ -538,11 +537,16 @@ export function useAutopilotChat(
 	});
 
 	const chipWhere = React.useMemo(
-		() =>
-			chipInput ? { chatMessage: chipInput.messageDbId } : undefined,
-		[chipInput],
+		() => (chipMessageDbId ? { chatMessage: chipMessageDbId } : undefined),
+		[chipMessageDbId],
 	);
-	useCollectionRealtime(client, "run_links", invalidateRun, chipWhere, !!chipInput);
+	useCollectionRealtime(
+		client,
+		"run_links",
+		invalidateRun,
+		chipWhere,
+		!!chipWhere,
+	);
 
 	const runInfo = runQuery.data ?? null;
 	const runTerminal = runInfo ? TERMINAL_RUN_STATUSES.has(runInfo.status) : false;

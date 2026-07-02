@@ -34,6 +34,10 @@ await startAIWorker(ctx, {
 	maxConcurrentRuns: maxConcurrentRuns(),
 	pollIntervalMs: 1000,
 	runtimes: [{ runtime: "claude-code" }],
+	// Personal-machine worker: the claude-code bridge authenticates via the
+	// host Claude subscription (~/.claude), so pass the real HOME through the
+	// otherwise-isolated sandbox HOME.
+	sandbox: { passthroughHomeForAuth: true },
 	mcpServers: [
 		{
 			name: "questpie-autopilot",
