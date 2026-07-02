@@ -5,7 +5,6 @@ import { workflow } from "@questpie/workflows";
 import { createAiRunLink } from "../lib/ai-run-links";
 import type { AppCollections, WorkflowServiceContext } from "../lib/app-types";
 import { classifyRunError, type RunErrorType } from "../lib/error-classifier";
-import { isSingleModel } from "../lib/flags";
 import { injectMemoriesIntoInstructions } from "../lib/memory-injection";
 import { runReflectionStep } from "../lib/memory-reflect-step";
 import { projectWorkspacePath } from "../lib/project-workspace";
@@ -287,16 +286,12 @@ export default workflow({
 			});
 
 			await step.run(`enqueue-task-turn-${attempt}`, async () => {
-				// Flag ON: the fleet worker claims the run_links row and emits
-				// run.claimed/run.completed itself, so no producer publish.
-				// isSingleModel() is a pure env read — deploy-boundary-safe inside a
-				// replayed workflow step.
-				if (isSingleModel()) return;
-				await (ctx.queue as any).taskTurnProducer.publish({
-					runLinkId: run.id,
-					taskId: input.taskId,
-					projectId: relationId(task.project),
-				});
+				// Intentional no-op since the AUTOPILOT_SINGLE_MODEL cutover: the
+				// fleet worker claims the pending run_links row directly and emits
+				// run.claimed/run.completed itself, so there is nothing to enqueue.
+				// The step is KEPT (with this exact name) because removing it would
+				// change the durable-workflow step graph and break replay of
+				// in-flight instances (7-day waitForEvent windows are live).
 			});
 
 			const claimed = await step.waitForEvent(`wait-run-claimed-${attempt}`, {

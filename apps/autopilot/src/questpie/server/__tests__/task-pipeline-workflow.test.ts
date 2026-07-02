@@ -95,7 +95,6 @@ describe("task-pipeline workflow", () => {
 		  }
 		| undefined;
 	let workflowEvents: WorkflowEvent[];
-	let producerPublishes: unknown[] = [];
 
 	beforeEach(async () => {
 		workflowEvents = [];
@@ -157,13 +156,8 @@ describe("task-pipeline workflow", () => {
 		const createContext = createContextFactory(setup!.app);
 		const ctx = await createContext({ accessMode: "system" });
 		(ctx as any).workflows = workflows;
-		producerPublishes = [];
 		(ctx as any).queue = {
-			taskTurnProducer: {
-				async publish(payload: unknown) {
-					producerPublishes.push(payload);
-				},
-			},
+			taskTurnProducer: { async publish() {} },
 		};
 
 		return taskPipeline.handler({
@@ -226,6 +220,8 @@ describe("task-pipeline workflow", () => {
 			status: "pending",
 			runtime: "codex",
 			initiatedBy: "task",
+			kind: "task",
+			retryPolicy: "none",
 		});
 		expect(result.runId).toBe(createdRunLinks.docs[0].id);
 		expect(waitEvents).toEqual([
@@ -241,14 +237,9 @@ describe("task-pipeline workflow", () => {
 			},
 		]);
 
-		// Task execution now runs via the harness producer (task-turn-producer),
-		// not an ai_runs row + worker claim — no ai_runs row is created.
+		// The fleet worker claims the pending run_links row directly — no
+		// ai_runs row and no producer publish.
 		expect(relationId(createdRunLinks.docs[0].aiRun)).toBeFalsy();
-		expect(producerPublishes).toHaveLength(1);
-		expect(producerPublishes[0]).toMatchObject({
-			runLinkId: result.runId,
-			taskId: task.id,
-		});
 
 		const reviewActivities = await setup!.app.collections.activity.find({
 			where: { task: task.id, type: "task.review" },
@@ -256,49 +247,6 @@ describe("task-pipeline workflow", () => {
 		});
 		expect(reviewActivities.docs).toHaveLength(1);
 		expect(relationId(reviewActivities.docs[0]?.run)).toBe(result.runId);
-	});
-
-	it("flag ON: skips the producer publish; run is kind=task/retryPolicy=none", async () => {
-		const prevFlag = process.env.AUTOPILOT_SINGLE_MODEL;
-		process.env.AUTOPILOT_SINGLE_MODEL = "true";
-		try {
-			const task = await setup!.app.collections.tasks.create({
-				title: "Single-model task",
-				type: "feature",
-				status: "pending",
-				priority: "medium",
-				scopeType: "company",
-				createdBy: "test",
-			} as any);
-
-			const result = await runPipeline(task.id, {
-				"run.claimed": { runId: "will-be-replaced", workerId: "w1" },
-				"run.completed": {
-					status: "completed",
-					summary: "done",
-					knowledgeResourceIds: [],
-				},
-			});
-
-			// The fleet worker claims the run_links row directly, so the workflow
-			// does NOT publish the legacy task-turn-producer.
-			expect(producerPublishes).toHaveLength(0);
-
-			const runs = await setup!.app.collections.run_links.find({
-				where: { task: task.id },
-				limit: 10,
-			});
-			expect(runs.docs).toHaveLength(1);
-			expect(runs.docs[0]).toMatchObject({
-				kind: "task",
-				retryPolicy: "none",
-				initiatedBy: "task",
-			});
-			expect(result.runId).toBe(runs.docs[0].id);
-		} finally {
-			if (prevFlag === undefined) delete process.env.AUTOPILOT_SINGLE_MODEL;
-			else process.env.AUTOPILOT_SINGLE_MODEL = prevFlag;
-		}
 	});
 
 	it("marks task as failed on non-retryable error", async () => {

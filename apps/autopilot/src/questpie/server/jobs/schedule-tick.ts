@@ -1,5 +1,3 @@
-import { randomUUID } from "node:crypto";
-
 import type { ExecutorRunResult } from "questpie/executor";
 import { job } from "questpie/services";
 import { z } from "zod";
@@ -19,7 +17,6 @@ import {
 	resolveCollectionWriteRule,
 } from "../apps/mini-app-runner";
 import { createAiRunLink } from "../lib/ai-run-links";
-import { isSingleModel } from "../lib/flags";
 import { asRecord, relationId, stringFrom } from "../lib/records";
 import { resolveRuntimeSelection } from "../lib/runtime-selection";
 import {
@@ -281,54 +278,32 @@ async function triggerChatSchedule(
 				? template.model_id
 				: undefined;
 
-	// The stream id for this scheduled chat (logged below) — `run-stream:…` on
-	// the consolidated path, legacy `chat-stream:…` otherwise.
-	let streamId: string | undefined;
-	if (isSingleModel()) {
-		// Consolidated path: the run_links row is the execution record the fleet
-		// worker claims + streams; the T6 stream tail resolves
-		// chat_sessions.activeRun → run_links.activeStreamId.
-		const runtime = await resolveRuntimeSelection(
-			{ collections: ctx.collections } as never,
-			{ modelId, projectId },
-		);
-		const row = await createAiRunLink({
-			ctx: ctx as never,
-			runtime,
-			initiatedBy: "schedule",
-			kind: "chat",
-			chatSessionId: session.id,
-			chatMessageId: message.id,
-			instructions: prompt,
-			projectId,
-			taskId,
-			scheduleId: schedule.id,
-			scheduleExecutionId: execution.id,
-			linkMetadata: { modelId: modelId ?? null },
-		});
-		await ctx.collections.chat_sessions.updateById({
-			id: session.id,
-			data: { activeRun: row.id, activeStreamId: row.activeStreamId },
-		});
-		streamId = row.activeStreamId ?? undefined;
-	} else {
-		// Legacy background chat-turn-producer (fleet not started on boot).
-		streamId = `chat-stream:${session.id}:${randomUUID()}`;
-		await ctx.collections.chat_sessions.updateById({
-			id: session.id,
-			data: { activeStreamId: streamId },
-		});
-		await (ctx.queue as any).chatTurnProducer.publish({
-			chatSessionId: session.id,
-			messageId: message.id,
-			streamId,
-			prompt,
-			projectId: projectId ?? null,
-			taskId: taskId ?? null,
-			modelId: modelId ?? null,
-			attachments: [],
-		});
-	}
+	// The run_links row is the execution record the fleet worker claims +
+	// streams; the stream tail resolves chat_sessions.activeRun →
+	// run_links.activeStreamId. The `run-stream:…` id is logged below.
+	const runtime = await resolveRuntimeSelection(
+		{ collections: ctx.collections } as never,
+		{ modelId, projectId },
+	);
+	const row = await createAiRunLink({
+		ctx: ctx as never,
+		runtime,
+		initiatedBy: "schedule",
+		kind: "chat",
+		chatSessionId: session.id,
+		chatMessageId: message.id,
+		instructions: prompt,
+		projectId,
+		taskId,
+		scheduleId: schedule.id,
+		scheduleExecutionId: execution.id,
+		linkMetadata: { modelId: modelId ?? null },
+	});
+	await ctx.collections.chat_sessions.updateById({
+		id: session.id,
+		data: { activeRun: row.id, activeStreamId: row.activeStreamId },
+	});
+	const streamId = row.activeStreamId ?? undefined;
 
 	await ctx.collections.activity.create({
 		actor: "job:schedule-tick",

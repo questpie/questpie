@@ -1,14 +1,11 @@
 /**
- * T7 — POST /api/chat under AUTOPILOT_SINGLE_MODEL=true (the consolidated path).
+ * POST /api/chat — the consolidated run model (the only chat path).
  *
- * Flag ON, the route mints a `run_links` row (kind="chat") the fleet worker
- * claims, sets `chat_sessions.activeRun`+`activeStreamId` to the run's own
- * `run-stream:…` id (the T6 stream tail resolves this), publishes the
+ * The route mints a `run_links` row (kind="chat") the fleet worker claims,
+ * sets `chat_sessions.activeRun`+`activeStreamId` to the run's own
+ * `run-stream:…` id (the stream tail resolves this), publishes the
  * `run-available` kick, and returns `{ runId, streamId }`. A second concurrent
  * turn while a non-terminal run is active is rejected 409 (§3.10 single-flight).
- *
- * Flag OFF is covered verbatim by chat-realtime-workflow.test.ts (background
- * producer) — untouched by this cutover.
  */
 
 import { createFetchHandler } from "questpie";
@@ -39,18 +36,13 @@ import { tasks } from "../collections/tasks";
 import chatRoute from "../routes/chat";
 import cancelRoute from "../routes/chat/[chatId]/cancel";
 
-describe("POST /api/chat (AUTOPILOT_SINGLE_MODEL)", () => {
+describe("POST /api/chat (run model)", () => {
 	let setup: { app: MockApp; cleanup: () => Promise<void> } | undefined;
 	let handler: ReturnType<typeof createFetchHandler>;
 	let kicks: Array<{ runtime?: string }>;
-	let producerPublishes: unknown[];
-	let prevFlag: string | undefined;
 
 	beforeEach(async () => {
-		prevFlag = process.env.AUTOPILOT_SINGLE_MODEL;
-		process.env.AUTOPILOT_SINGLE_MODEL = "true";
 		kicks = [];
-		producerPublishes = [];
 
 		const workflows = {
 			async trigger() {
@@ -94,13 +86,6 @@ describe("POST /api/chat (AUTOPILOT_SINGLE_MODEL)", () => {
 					return "kick-job";
 				},
 			},
-			// Legacy producer — must NOT be published on the flag-ON path.
-			chatTurnProducer: {
-				async publish(payload: unknown) {
-					producerPublishes.push(payload);
-					return "producer-job";
-				},
-			},
 		};
 
 		handler = createFetchHandler(setup.app, {
@@ -114,8 +99,6 @@ describe("POST /api/chat (AUTOPILOT_SINGLE_MODEL)", () => {
 	});
 
 	afterEach(async () => {
-		if (prevFlag === undefined) delete process.env.AUTOPILOT_SINGLE_MODEL;
-		else process.env.AUTOPILOT_SINGLE_MODEL = prevFlag;
 		await setup?.cleanup();
 		setup = undefined;
 	});
@@ -179,9 +162,8 @@ describe("POST /api/chat (AUTOPILOT_SINGLE_MODEL)", () => {
 		).toBe(res.body.runId);
 		expect(session?.activeStreamId).toBe(res.body.streamId);
 
-		// Kicked the fleet, did NOT publish the legacy producer.
+		// Kicked the fleet so an idle worker claims promptly.
 		expect(kicks).toHaveLength(1);
-		expect(producerPublishes).toHaveLength(0);
 	});
 
 	it("rejects a second concurrent turn while a run is active (409)", async () => {

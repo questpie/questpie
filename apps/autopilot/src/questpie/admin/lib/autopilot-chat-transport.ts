@@ -1,6 +1,6 @@
 /**
  * AutopilotChatTransport — the ChatTransport bridging `useChat` onto the
- * consolidated run model (AUTOPILOT_SINGLE_MODEL):
+ * consolidated run model:
  *
  * - `sendMessages` POSTs the turn to `/api/chat` (JSON contract
  *   `{session, message, runId, streamId}` — NOT a stream), reports the turn to
@@ -235,10 +235,9 @@ export class AutopilotChatTransport implements ChatTransport<UIMessage> {
 		const turn = (await response.json()) as AutopilotTurn;
 		this.options.onTurnCreated?.(turn);
 		if (!turn.runId) {
-			// Flag-OFF server (legacy contract) — the new FE requires the run model.
-			throw new Error(
-				"Chat run model is not enabled on the server (AUTOPILOT_SINGLE_MODEL)",
-			);
+			// The run-model contract always returns a runId — its absence means a
+			// broken server response, not a stream to attach to.
+			throw new Error("Chat run model did not return a runId");
 		}
 
 		// The run is already enqueued server-side — a transient tail failure must
