@@ -295,8 +295,12 @@ function RunDetailPage() {
 					</div>
 				) : (
 					<div className="space-y-3">
-						{transcript.map((message) => (
-							<MessageParts key={message.id} message={message} />
+						{transcript.map((message, index) => (
+							<MessageParts
+								key={message.id}
+								message={message}
+								live={isActive && index === transcript.length - 1}
+							/>
 						))}
 					</div>
 				)}

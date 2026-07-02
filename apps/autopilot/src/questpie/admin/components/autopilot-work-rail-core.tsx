@@ -286,9 +286,11 @@ function SessionRow({
 function MessageBubble({
 	message,
 	onAnswer,
+	live = false,
 }: {
 	message: AutopilotUIMessage;
 	onAnswer?: (answer: string) => void;
+	live?: boolean;
 }) {
 	const isUser = message.role === "user";
 	const attachments = message.metadata?.attachments;
@@ -314,7 +316,7 @@ function MessageBubble({
 						{messageText(message)}
 					</div>
 				) : (
-					<MessageParts message={message} onAnswer={onAnswer} />
+					<MessageParts message={message} onAnswer={onAnswer} live={live} />
 				)}
 				{showBadge ? (
 					<div className="text-destructive mt-1 inline-flex items-center gap-1 text-[11px]">
@@ -764,21 +766,26 @@ export function AutopilotWorkRailCore({
 							</div>
 						) : (
 							<div className="flex flex-col gap-3">
-								{chat.messages.map((message, index) => (
-									<MessageBubble
-										key={message.id}
-										message={message}
-										// AskUserQuestion options are clickable only on the LAST
-										// message while idle — the answer goes out as a new turn.
-										onAnswer={
-											index === chat.messages.length - 1 &&
-											message.role === "assistant" &&
-											!isBusy
-												? answerQuestion
-												: undefined
-										}
-									/>
-								))}
+								{chat.messages.map((message, index) => {
+									const isLast = index === chat.messages.length - 1;
+									const isAssistant = message.role === "assistant";
+									return (
+										<MessageBubble
+											key={message.id}
+											message={message}
+											// The trailing tool chain collapses to a single live
+											// line only while this message is actively streaming.
+											live={isLast && isAssistant && isBusy}
+											// AskUserQuestion options are clickable only on the LAST
+											// message while idle — the answer goes out as a new turn.
+											onAnswer={
+												isLast && isAssistant && !isBusy
+													? answerQuestion
+													: undefined
+											}
+										/>
+									);
+								})}
 							</div>
 						)}
 					</div>

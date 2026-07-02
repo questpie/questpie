@@ -76,6 +76,45 @@ function prettyToolName(name: string): string {
 	return PRETTY_TOOL_NAMES[name.toLowerCase()] ?? name;
 }
 
+/** Human tool label for lines/summaries — unwraps `mcp__server__tool` too. */
+function toolDisplayName(part: PartLike): string {
+	const raw = toolName(part);
+	const mcp = mcpLabel(raw);
+	return mcp ? mcp.tool : prettyToolName(raw);
+}
+
+/**
+ * "Activity" tools (read/edit/bash/grep/todos/subagents/mcp…) collapse into a
+ * single live line while running and a consolidated summary once the chain
+ * ends. AskUserQuestion (interactive) and ExitPlanMode (a plan the user should
+ * read) are NOT activity — they always render as their full standalone card.
+ */
+function isActivityTool(part: PartLike): boolean {
+	if (part.type !== "dynamic-tool" && !part.type.startsWith("tool-")) {
+		return false;
+	}
+	const name = toolName(part).toLowerCase();
+	return name !== "askuserquestion" && name !== "exitplanmode";
+}
+
+/** Short target for the one-line tool label (path tail / command / query). */
+function toolTarget(part: PartLike): string {
+	const input = asRecord(part.input);
+	const raw =
+		str(input.command) ||
+		str(input.file_path) ||
+		str(input.notebook_path) ||
+		str(input.pattern) ||
+		str(input.query) ||
+		str(input.url) ||
+		str(input.title) ||
+		str(input.description) ||
+		str(input.skill);
+	if (!raw) return "";
+	const value = raw.includes("/") ? raw.split("/").slice(-2).join("/") : raw;
+	return value.length > 52 ? `${value.slice(0, 52)}…` : value;
+}
+
 /** `mcp__server__tool` → { tool, server } for a readable MCP label. */
 function mcpLabel(name: string): { tool: string; server: string } | null {
 	const match = name.match(/^mcp__(.+?)__(.+)$/);
@@ -710,19 +749,178 @@ function SourcePart({ part }: { part: PartLike }) {
 	);
 }
 
+// ── Consolidated tool chain (line while live, summary once done) ──
+
+/** One muted line for the CURRENTLY-active tool in a live chain. */
+function LiveToolLine({ part }: { part: PartLike }) {
+	const running = isRunning(part.state);
+	const error = part.state === "output-error";
+	const target = toolTarget(part);
+	return (
+		<div className="text-muted-foreground my-1 flex items-center gap-1.5 text-[11px]">
+			<Icon
+				icon={
+					running ? "ph:spinner" : error ? "ph:warning-circle" : "ph:check"
+				}
+				className={[
+					"size-3 shrink-0",
+					running
+						? "text-info animate-spin"
+						: error
+							? "text-destructive"
+							: "text-success",
+				].join(" ")}
+			/>
+			<span className="shrink-0 font-medium">{toolDisplayName(part)}</span>
+			{target ? (
+				<span className="min-w-0 truncate font-mono opacity-80">{target}</span>
+			) : null}
+		</div>
+	);
+}
+
+/**
+ * A finished chain of activity tools collapses to one line of consolidated
+ * names (`Read · Edit ×2 · Bash`), expandable to the full per-tool cards.
+ */
+function ConsolidatedToolGroup({
+	parts,
+	groupKey,
+	onAnswer,
+}: {
+	parts: PartLike[];
+	groupKey: string;
+	onAnswer?: (answer: string) => void;
+}) {
+	const [open, setOpen] = React.useState(false);
+	const counts = new Map<string, number>();
+	const order: string[] = [];
+	for (const part of parts) {
+		const name = toolDisplayName(part);
+		if (!counts.has(name)) order.push(name);
+		counts.set(name, (counts.get(name) ?? 0) + 1);
+	}
+	const label = order
+		.map((name) => (counts.get(name)! > 1 ? `${name} ×${counts.get(name)}` : name))
+		.join(" · ");
+	const anyError = parts.some((part) => part.state === "output-error");
+	const anyRunning = parts.some((part) => isRunning(part.state));
+
+	return (
+		<div className="my-1">
+			<button
+				type="button"
+				onClick={() => setOpen((value) => !value)}
+				className="text-muted-foreground hover:text-foreground flex w-full items-center gap-1.5 text-[11px]"
+			>
+				<Icon
+					icon={
+						anyRunning
+							? "ph:spinner"
+							: anyError
+								? "ph:warning-circle"
+								: "ph:wrench"
+					}
+					className={[
+						"size-3 shrink-0",
+						anyRunning
+							? "text-info animate-spin"
+							: anyError
+								? "text-destructive"
+								: "",
+					].join(" ")}
+				/>
+				<span className="min-w-0 flex-1 truncate text-left">{label}</span>
+				<span className="shrink-0 opacity-60">{parts.length}</span>
+				<Icon
+					icon={open ? "ph:caret-up" : "ph:caret-down"}
+					className="size-3 shrink-0"
+				/>
+			</button>
+			{open ? (
+				<div className="mt-1 space-y-1">
+					{parts.map((part, index) =>
+						renderToolPart(part, `${groupKey}-${index}`, onAnswer),
+					)}
+				</div>
+			) : null}
+		</div>
+	);
+}
+
+/** Non-activity parts render standalone (text, reasoning, question, plan…). */
+function renderStandalonePart(
+	part: PartLike,
+	key: string,
+	onAnswer?: (answer: string) => void,
+): React.ReactNode {
+	if (part.type === "text" && typeof part.text === "string") {
+		return part.text ? (
+			<Streamdown
+				key={key}
+				parseIncompleteMarkdown
+				className="qp-streamdown space-y-2"
+			>
+				{part.text}
+			</Streamdown>
+		) : null;
+	}
+	if (part.type === "reasoning") return <ReasoningPart key={key} part={part} />;
+	// Breaker tools (AskUserQuestion / ExitPlanMode) keep their full card.
+	if (part.type.startsWith("tool-") || part.type === "dynamic-tool") {
+		return renderToolPart(part, key, onAnswer);
+	}
+	if (part.type === "file") return <FilePart key={key} part={part} />;
+	if (part.type === "source-url" || part.type === "source-document") {
+		return <SourcePart key={key} part={part} />;
+	}
+	// step-start, data-*, unknown → nothing.
+	return null;
+}
+
+type PartSegment =
+	| { kind: "standalone"; part: PartLike; index: number }
+	| { kind: "tools"; parts: PartLike[]; start: number };
+
+function segmentParts(parts: PartLike[]): PartSegment[] {
+	const segments: PartSegment[] = [];
+	let run: { parts: PartLike[]; start: number } | null = null;
+	const flush = () => {
+		if (run) {
+			segments.push({ kind: "tools", parts: run.parts, start: run.start });
+			run = null;
+		}
+	};
+	parts.forEach((part, index) => {
+		if (isActivityTool(part)) {
+			if (!run) run = { parts: [], start: index };
+			run.parts.push(part);
+		} else {
+			flush();
+			segments.push({ kind: "standalone", part, index });
+		}
+	});
+	flush();
+	return segments;
+}
+
 /**
  * Renders assistant message parts in order. `degraded` forces plain-text
- * rendering of the accumulated text parts only (§4.2 cutover safety switch).
- * `onAnswer` makes AskUserQuestion cards interactive (chat surfaces only).
+ * rendering (§4.2 cutover safety switch). `onAnswer` makes AskUserQuestion
+ * interactive. `live` = this message is the one currently streaming — the
+ * trailing tool chain then shows only the CURRENT tool as a live line;
+ * every finished chain collapses to a consolidated, expandable summary.
  */
 export function MessageParts({
 	message,
 	degraded = false,
 	onAnswer,
+	live = false,
 }: {
 	message: UIMessageLike;
 	degraded?: boolean;
 	onAnswer?: (answer: string) => void;
+	live?: boolean;
 }) {
 	const parts = partsOf(message);
 
@@ -735,38 +933,37 @@ export function MessageParts({
 		) : null;
 	}
 
+	const segments = segmentParts(parts);
+
 	return (
 		<div className="text-sm leading-relaxed break-words">
-			{parts.map((part, index) => {
-				const key = `${message.id}-${index}`;
-				if (part.type === "text" && typeof part.text === "string") {
-					return part.text ? (
-						<Streamdown
+			{segments.map((segment, segmentIndex) => {
+				if (segment.kind === "standalone") {
+					return renderStandalonePart(
+						segment.part,
+						`${message.id}-${segment.index}`,
+						onAnswer,
+					);
+				}
+				const key = `${message.id}-tools-${segment.start}`;
+				const isTrailing = segmentIndex === segments.length - 1;
+				// Live + trailing chain → only the current (last) tool as a line.
+				if (isTrailing && live) {
+					return (
+						<LiveToolLine
 							key={key}
-							parseIncompleteMarkdown
-							className="qp-streamdown space-y-2"
-						>
-							{part.text}
-						</Streamdown>
-					) : null;
+							part={segment.parts[segment.parts.length - 1]}
+						/>
+					);
 				}
-				if (part.type === "reasoning") {
-					return <ReasoningPart key={key} part={part} />;
-				}
-				if (part.type.startsWith("tool-") || part.type === "dynamic-tool") {
-					return renderToolPart(part, key, onAnswer);
-				}
-				if (part.type === "file") {
-					return <FilePart key={key} part={part} />;
-				}
-				if (part.type === "source-url" || part.type === "source-document") {
-					return <SourcePart key={key} part={part} />;
-				}
-				if (part.type === "step-start") {
-					return null;
-				}
-				// data-* and unknown parts render nothing (degraded tolerance).
-				return null;
+				return (
+					<ConsolidatedToolGroup
+						key={key}
+						groupKey={key}
+						parts={segment.parts}
+						onAnswer={onAnswer}
+					/>
+				);
 			})}
 		</div>
 	);
