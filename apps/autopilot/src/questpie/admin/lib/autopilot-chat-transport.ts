@@ -79,9 +79,14 @@ async function errorMessageFrom(response: Response): Promise<string> {
 	return `Request failed (${response.status})`;
 }
 
-/** Parse one SSE frame's `event:` / `data:` lines (data lines joined per spec). */
-function parseSseFrame(frame: string): { event: string | null; data: string } {
+/** Parse one SSE frame's `event:`/`data:`/`id:` lines (data joined per spec). */
+function parseSseFrame(frame: string): {
+	event: string | null;
+	data: string;
+	id: string | null;
+} {
 	let event: string | null = null;
+	let id: string | null = null;
 	const data: string[] = [];
 	for (const rawLine of frame.split("\n")) {
 		const line = rawLine.endsWith("\r") ? rawLine.slice(0, -1) : rawLine;
@@ -89,14 +94,17 @@ function parseSseFrame(frame: string): { event: string | null; data: string } {
 			data.push(line.slice(5).trimStart());
 		} else if (line.startsWith("event:")) {
 			event = line.slice(6).trim();
+		} else if (line.startsWith("id:")) {
+			id = line.slice(3).trim();
 		}
 	}
-	return { event, data: data.join("\n") };
+	return { event, data: data.join("\n"), id };
 }
 
 function parseSseToChunks(
 	body: ReadableStream<Uint8Array>,
 	onExpired?: () => void,
+	onEventId?: (id: string) => void,
 ): ReadableStream<UIMessageChunk> {
 	// TextDecoderStream's lib.dom typing predates typed-array generics — the
 	// runtime shape is a ReadableWritablePair<string, Uint8Array>.
@@ -132,7 +140,8 @@ function parseSseToChunks(
 
 				const frame = buffer.slice(0, frameEnd);
 				buffer = buffer.slice(frameEnd + 2);
-				const { event, data } = parseSseFrame(frame);
+				const { event, data, id } = parseSseFrame(frame);
+				if (id !== null) onEventId?.(id);
 				if (event === "expired") {
 					onExpired?.();
 					await finish(controller);
@@ -170,6 +179,10 @@ function parseSseToChunks(
 
 export class AutopilotChatTransport implements ChatTransport<UIMessage> {
 	private readonly options: AutopilotChatTransportOptions;
+	/** Last SSE id received from the CURRENT live stream — lets a reconnect
+	 * resume at the true offset instead of replaying from 0 (which would
+	 * duplicate parts into a partially-built assistant message). */
+	private lastEventId: string | null = null;
 
 	constructor(options: AutopilotChatTransportOptions) {
 		this.options = options;
@@ -223,10 +236,21 @@ export class AutopilotChatTransport implements ChatTransport<UIMessage> {
 			);
 		}
 
-		const streamResponse = await this.fetch(
-			`${this.options.basePath}/runs/${encodeURIComponent(turn.runId)}/stream`,
-			{ method: "GET", headers: this.headers(false), signal: abortSignal },
-		);
+		// The run is already enqueued server-side — a transient tail failure must
+		// not fail the turn, so retry the attach once before giving up.
+		const attach = () =>
+			this.fetch(
+				`${this.options.basePath}/runs/${encodeURIComponent(turn.runId!)}/stream`,
+				{ method: "GET", headers: this.headers(false), signal: abortSignal },
+			);
+		let streamResponse = await attach().catch((error) => {
+			if (abortSignal?.aborted) throw error;
+			return null;
+		});
+		if (!streamResponse || (streamResponse.status !== 204 && !streamResponse.ok)) {
+			await new Promise((resolve) => setTimeout(resolve, 600));
+			streamResponse = await attach();
+		}
 		if (streamResponse.status !== 204 && !streamResponse.ok) {
 			throw new Error(await errorMessageFrom(streamResponse));
 		}
@@ -239,16 +263,32 @@ export class AutopilotChatTransport implements ChatTransport<UIMessage> {
 				},
 			});
 		}
-		return parseSseToChunks(streamResponse.body, this.options.onStreamExpired);
+		this.lastEventId = null;
+		return parseSseToChunks(
+			streamResponse.body,
+			this.options.onStreamExpired,
+			(id) => {
+				this.lastEventId = id;
+			},
+		);
 	};
 
 	reconnectToStream: ChatTransport<UIMessage>["reconnectToStream"] = async () => {
 		const sessionId = this.options.getSessionId();
 		if (!sessionId) return null;
 
+		// Mid-stream reconnects (auto-recovery after a dropped connection) resume
+		// AFTER the last received id — a fresh mount has none and replays from 0.
+		const resumeFrom = this.lastEventId;
 		const response = await this.fetch(
 			`${this.options.basePath}/chat/${encodeURIComponent(sessionId)}/stream`,
-			{ method: "GET", headers: this.headers(false) },
+			{
+				method: "GET",
+				headers: {
+					...this.headers(false),
+					...(resumeFrom !== null ? { "Last-Event-ID": resumeFrom } : {}),
+				},
+			},
 		);
 		if (response.status === 204) return null;
 		if (!response.ok || !response.body) {
@@ -262,6 +302,12 @@ export class AutopilotChatTransport implements ChatTransport<UIMessage> {
 			}
 			return null;
 		}
-		return parseSseToChunks(response.body, this.options.onStreamExpired);
+		return parseSseToChunks(
+			response.body,
+			this.options.onStreamExpired,
+			(id) => {
+				this.lastEventId = id;
+			},
+		);
 	};
 }

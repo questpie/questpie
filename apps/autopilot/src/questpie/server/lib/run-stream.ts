@@ -34,8 +34,13 @@ interface RunStreamContext {
 }
 
 function resolveOffset(request: Request): number {
+	// SSE semantics: Last-Event-ID is the last id the client RECEIVED — resume
+	// after it. `?offset` remains an explicit from-offset (inclusive).
 	const lastEventId = request.headers.get("Last-Event-ID");
-	if (lastEventId) return Number.parseInt(lastEventId, 10) || 0;
+	if (lastEventId) {
+		const parsed = Number.parseInt(lastEventId, 10);
+		return Number.isFinite(parsed) ? parsed + 1 : 0;
+	}
 	const offsetParam = new URL(request.url).searchParams.get("offset");
 	return offsetParam ? Number.parseInt(offsetParam, 10) || 0 : 0;
 }
@@ -119,51 +124,94 @@ export async function createRunStreamResponse(
 		});
 	};
 
+	// PUSH-based stream (start + internal drive loop) — the same construction
+	// as the framework's realtime SSE, which is proven to flush incrementally
+	// through the dev/prod HTTP stack. A pull-based variant buffered until
+	// close under the bun+vite dev server.
+	const sleep = () =>
+		new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
 	const stream = new ReadableStream<Uint8Array>({
-		async pull(controller) {
-			if (closed) return;
-			if (request.signal.aborted) {
+		start(controller) {
+			const finish = () => {
+				if (closed) return;
 				closed = true;
-				controller.close();
-				return;
-			}
-			const { chunks, nextOffset, gap } = await store.readFrom(
-				activeStreamId,
-				offset,
-			);
-			if (gap) {
-				// Requested offset below the TTL-expired floor — signal + close so
-				// the FE falls back to persisted parts rather than a torn message.
-				// The data payload is a VALID transient data-chunk: AI-SDK parsers
-				// (which ignore the SSE event name) deliver it to onData without
-				// touching message parts, instead of throwing on `{}`.
-				controller.enqueue(
-					encoder.encode(
-						`event: expired\ndata: ${JSON.stringify({ type: "data-expired", data: {}, transient: true })}\n\n`,
-					),
-				);
-				closed = true;
-				controller.close();
-				return;
-			}
-			frame(controller, chunks, offset);
-			offset = nextOffset; // true index span, not += chunks.length
+				try {
+					controller.close();
+				} catch {
+					// already closed
+				}
+			};
 
-			const done = await store.isFinished(activeStreamId);
-			const current = await collections.run_links.findOne({
-				where: { id: runId },
-			});
-			if (done || isTerminal(current?.status)) {
-				const tail = await store.readFrom(activeStreamId, offset);
-				if (!tail.gap) frame(controller, tail.chunks, offset);
-				controller.enqueue(encoder.encode("data: [DONE]\n\n"));
-				closed = true;
-				controller.close();
-				return;
-			}
-			if (chunks.length === 0) {
-				await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
-			}
+			const drive = async () => {
+				while (!closed) {
+					if (request.signal.aborted) {
+						finish();
+						return;
+					}
+					// A transient KV/DB hiccup must not tear the SSE connection —
+					// the whole point of the resumable tail. Back off and retry.
+					let read: { chunks: string[]; nextOffset: number; gap: boolean };
+					try {
+						read = await store.readFrom(activeStreamId, offset);
+					} catch {
+						await sleep();
+						continue;
+					}
+					const { chunks, nextOffset, gap } = read;
+					if (gap) {
+						// Requested offset below the TTL-expired floor — signal + close
+						// so the FE falls back to persisted parts rather than a torn
+						// message. The payload is a VALID transient data-chunk: AI-SDK
+						// parsers (which ignore the SSE event name) deliver it to
+						// onData without touching message parts.
+						controller.enqueue(
+							encoder.encode(
+								`event: expired\ndata: ${JSON.stringify({ type: "data-expired", data: {}, transient: true })}\n\n`,
+							),
+						);
+						finish();
+						return;
+					}
+					frame(controller, chunks, offset);
+					offset = nextOffset; // true index span, not += chunks.length
+
+					let done = false;
+					let current: Record<string, unknown> | null | undefined;
+					try {
+						done = await store.isFinished(activeStreamId);
+						current = await collections.run_links.findOne({
+							where: { id: runId },
+						});
+					} catch {
+						await sleep();
+						continue;
+					}
+					if (done || isTerminal(current?.status)) {
+						// finalizeRun writes the terminal STATUS first, then appends its
+						// error/finish chunks and seals — grant a bounded grace so a
+						// failed turn's error chunk isn't lost to that ordering race.
+						for (let grace = 0; grace < 8 && !done; grace++) {
+							done = await store
+								.isFinished(activeStreamId)
+								.catch(() => false);
+							if (done) break;
+							await new Promise((resolve) => setTimeout(resolve, 150));
+						}
+						const tail = await store.readFrom(activeStreamId, offset).catch(
+							() => ({ chunks: [], nextOffset: offset, gap: true }),
+						);
+						if (!tail.gap) frame(controller, tail.chunks, offset);
+						controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+						finish();
+						return;
+					}
+					if (chunks.length === 0) {
+						await sleep();
+					}
+				}
+			};
+
+			void drive().catch(() => finish());
 		},
 		cancel() {
 			closed = true;
@@ -179,6 +227,7 @@ export async function createRunStreamResponse(
 			"Content-Type": "text/event-stream",
 			"Cache-Control": "no-cache",
 			Connection: "keep-alive",
+			"X-Accel-Buffering": "no",
 		},
 	});
 }

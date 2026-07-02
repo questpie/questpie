@@ -76,7 +76,7 @@ export class ResumableUIMessageStore {
 		return async ({ stream }) => {
 			const reader = stream.getReader();
 			let firstChunk = true;
-			let aborted = false;
+			let sealHere = true;
 			try {
 				while (true) {
 					const { done, value } = await reader.read();
@@ -90,17 +90,23 @@ export class ResumableUIMessageStore {
 						if (options?.onBeforeFirstAppend) {
 							const stillOwn = await options.onBeforeFirstAppend();
 							if (!stillOwn) {
-								aborted = true;
+								// Superseded — the re-claimer's sink owns + seals the stream.
+								sealHere = false;
 								break;
 							}
 						}
 					}
 					await this.store.append(streamId, JSON.stringify(value));
 				}
+			} catch (error) {
+				// A THROWING stream is a failed turn: leave the stream UNSEALED so
+				// finalizeRun(failed) can append its {error, finish} tail (the
+				// post-finish guard would drop it otherwise) and seal exactly once.
+				sealHere = false;
+				throw error;
 			} finally {
 				reader.releaseLock();
-				// Do NOT seal when superseded — the re-claimer's sink owns the stream.
-				if (!aborted) await this.store.finish(streamId);
+				if (sealHere) await this.store.finish(streamId);
 			}
 		};
 	}

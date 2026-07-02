@@ -65,6 +65,27 @@ function newChatKey(): string {
 	return `draft-${Math.random().toString(36).slice(2)}`;
 }
 
+/** The last-open session survives reloads — a mid-stream reload must land
+ * back on the streaming session to reattach (acceptance b). */
+const LAST_SESSION_STORAGE_KEY = "autopilot-chat:last-session";
+
+function readLastSessionId(): string | null {
+	try {
+		return window.localStorage.getItem(LAST_SESSION_STORAGE_KEY);
+	} catch {
+		return null;
+	}
+}
+
+function writeLastSessionId(id: string | null) {
+	try {
+		if (id) window.localStorage.setItem(LAST_SESSION_STORAGE_KEY, id);
+		else window.localStorage.removeItem(LAST_SESSION_STORAGE_KEY);
+	} catch {
+		// storage unavailable — reload restore is best-effort
+	}
+}
+
 /** Metadata carried on hook-managed UIMessages (render + reconcile inputs). */
 export interface AutopilotMessageMetadata {
 	attachments?: ChatAttachment[];
@@ -271,11 +292,23 @@ export function useAutopilotChat(
 	const [active, setActive] = React.useState<{
 		key: string;
 		sessionId: string | null;
-	}>(() => ({ key: newChatKey(), sessionId: null }));
+	}>(() => {
+		const restored =
+			typeof window !== "undefined" ? readLastSessionId() : null;
+		return restored
+			? { key: restored, sessionId: restored }
+			: { key: newChatKey(), sessionId: null };
+	});
 
 	const chatsRef = React.useRef(new Map<string, Chat<AutopilotUIMessage>>());
 	const sessionIdByKeyRef = React.useRef(new Map<string, string | null>());
 	const keyBySessionIdRef = React.useRef(new Map<string, string>());
+	// The localStorage-restored session must be visible to the transport's
+	// getSessionId BEFORE the first send — idempotent render-time backfill.
+	if (active.sessionId && !sessionIdByKeyRef.current.has(active.key)) {
+		sessionIdByKeyRef.current.set(active.key, active.sessionId);
+		keyBySessionIdRef.current.set(active.sessionId, active.key);
+	}
 	// Live turn (chip input) per chatKey, set by the transport's onTurnCreated.
 	const [turns, setTurns] = React.useState<
 		Record<string, { runId: string; messageDbId: string }>
@@ -286,6 +319,8 @@ export function useAutopilotChat(
 	// Bumped after every seed/reconcile so the resume effect re-evaluates.
 	const [seedGeneration, setSeedGeneration] = React.useState(0);
 	const resumeAttemptedRef = React.useRef(new Set<string>());
+	// One automatic offset-resume per turn after a dropped connection.
+	const disconnectRetriedRef = React.useRef(new Set<string>());
 
 	const activeRouteRef = React.useRef(activeRoute);
 	activeRouteRef.current = activeRoute;
@@ -319,6 +354,7 @@ export function useAutopilotChat(
 			if (typeof sessionId === "string" && sessionId) {
 				sessionIdByKeyRef.current.set(key, sessionId);
 				keyBySessionIdRef.current.set(sessionId, key);
+				writeLastSessionId(sessionId);
 				setActive((current) =>
 					current.key === key && current.sessionId !== sessionId
 						? { key, sessionId }
@@ -332,6 +368,7 @@ export function useAutopilotChat(
 					[key]: { runId: String(turn.runId), messageDbId },
 				}));
 			}
+			disconnectRetriedRef.current.delete(key);
 			setExpiredKeys((current) =>
 				current[key] ? { ...current, [key]: false } : current,
 			);
@@ -362,10 +399,21 @@ export function useAutopilotChat(
 			chat = new Chat<AutopilotUIMessage>({
 				id: key,
 				transport,
-				onFinish: () => {
+				onFinish: ({ isDisconnect }) => {
 					invalidateMessages();
 					invalidateSessions();
 					invalidateRun();
+					// A dropped connection mid-turn auto-resumes ONCE at the true
+					// offset (transport sends Last-Event-ID) — the run keeps
+					// executing server-side regardless.
+					if (isDisconnect && !disconnectRetriedRef.current.has(key)) {
+						disconnectRetriedRef.current.add(key);
+						const liveChat = chatsRef.current.get(key);
+						setTimeout(() => {
+							liveChat?.clearError();
+							void liveChat?.resumeStream().catch(() => {});
+						}, 800);
+					}
 				},
 			});
 			chatsRef.current.set(key, chat);
@@ -627,6 +675,7 @@ export function useAutopilotChat(
 	}, [active.key]);
 
 	const setActiveSessionId = React.useCallback((id: string | null) => {
+		writeLastSessionId(id);
 		if (id === null) {
 			setActive({ key: newChatKey(), sessionId: null });
 			return;

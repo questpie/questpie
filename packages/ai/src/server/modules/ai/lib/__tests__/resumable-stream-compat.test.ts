@@ -255,6 +255,43 @@ describe("ResumableUIMessageStore", () => {
 		expect(await backingStore.isFinished(streamId)).toBe(false);
 	});
 
+	it("createSink leaves a THROWING stream unsealed (finalizeRun owns the error tail)", async () => {
+		const kv = createTestKV();
+		const backingStore = new QuestpieResumableStreamStore({
+			kv,
+			ttlSeconds: 60,
+		});
+		const store = new ResumableUIMessageStore(backingStore);
+
+		const streamId = "test-throwing";
+		// Error on a LATER pull — erroring in start() would discard the queued
+		// chunks before the sink ever reads them.
+		let pulls = 0;
+		const objectStream = new ReadableStream<unknown>({
+			pull(controller) {
+				pulls++;
+				if (pulls === 1) {
+					controller.enqueue({ type: "start" });
+					controller.enqueue({ type: "text-delta", id: "0", delta: "x" });
+					return;
+				}
+				controller.error(new Error("mid-stream harness failure"));
+			},
+		});
+
+		await expect(
+			store.createSink(streamId)({ stream: objectStream }),
+		).rejects.toThrow("mid-stream harness failure");
+
+		// Partial chunks persisted, but NOT sealed — finalizeRun(failed) must be
+		// able to append its {error, finish} tail (the post-finish guard would
+		// silently drop it on a sealed stream, hiding the failure from the FE).
+		expect(
+			(await backingStore.readFrom(streamId, 0)).chunks.length,
+		).toBeGreaterThan(0);
+		expect(await backingStore.isFinished(streamId)).toBe(false);
+	});
+
 	it("resumeStream from offset skips already-consumed chunks", async () => {
 		const kv = createTestKV();
 		const backingStore = new QuestpieResumableStreamStore({

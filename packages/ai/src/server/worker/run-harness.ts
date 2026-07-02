@@ -15,6 +15,19 @@ import {
 import { ResumableUIMessageStore } from "../modules/ai/lib/resumable-uimessage-store.js";
 
 const TERMINAL_STATUSES = ["completed", "failed", "cancelled"];
+
+/**
+ * Collection json fields validate PURE JSON — properties holding `undefined`
+ * (e.g. UIMessage.metadata, part.providerMetadata from the SDK's snapshots)
+ * fail validation. Round-trip drops them.
+ */
+function toPlainJson<T>(value: T): T | null {
+	try {
+		return JSON.parse(JSON.stringify(value)) as T;
+	} catch {
+		return null;
+	}
+}
 const DEFAULT_HEARTBEAT_MS = 15_000;
 const DEFAULT_LEASE_MS = 90_000; // 6× heartbeat
 const DEFAULT_CANCEL_POLL_MS = 2_000;
@@ -212,7 +225,7 @@ export async function runHarnessRun(
 			// epoch-guarded through here.
 			saveResumeState: async (_id, state) => {
 				await casUpdate({
-					harnessResumeState: state as Record<string, unknown>,
+					harnessResumeState: toPlainJson(state) as Record<string, unknown>,
 				});
 			},
 		});
@@ -307,13 +320,14 @@ export async function runHarnessRun(
 			.detachAndPersist()
 			.catch(() => run.harnessResumeState ?? null);
 
+		const plainMessage = finalMessage ? toPlainJson(finalMessage) : null;
 		return {
 			messageId,
 			summary: summaryText.trim() || null,
 			tokensInput: usage.inputTokens ?? 0,
 			tokensOutput: usage.outputTokens ?? 0,
-			resumeState,
-			uiMessages: finalMessage ? [finalMessage] : [],
+			resumeState: toPlainJson(resumeState),
+			uiMessages: plainMessage ? [plainMessage] : [],
 		};
 	} finally {
 		clearTimeout(runTimeout);
