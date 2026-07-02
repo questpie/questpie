@@ -43,7 +43,10 @@ const config = defineConfig(({ mode }) => ({
 		// "ai" is deduped because @ai-sdk/react's isolated install resolves its
 		// own ai@…-canary.170 sibling while the app pins …-canary.173 — without
 		// dedupe the client bundle ships two 16k-line copies of the SDK.
-		dedupe: ["drizzle-orm", "react", "react-dom", "ai"],
+		// "@tanstack/react-query" is deduped because bun's isolated installs give
+		// @questpie/admin its own copy — app-page useQuery instances otherwise
+		// subscribe in a different QueryClient universe and never re-render.
+		dedupe: ["drizzle-orm", "react", "react-dom", "ai", "@tanstack/react-query"],
 	},
 	build: {
 		rollupOptions: {

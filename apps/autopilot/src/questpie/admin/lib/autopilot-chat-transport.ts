@@ -101,7 +101,12 @@ function parseSseFrame(frame: string): {
 	return { event, data: data.join("\n"), id };
 }
 
-function parseSseToChunks(
+/**
+ * Parse the run-stream SSE wire (id/data frames, [DONE], event: expired) into
+ * UIMessageChunk objects. Shared by the chat transport and the run-detail
+ * live transcript.
+ */
+export function parseSseToChunks(
 	body: ReadableStream<Uint8Array>,
 	onExpired?: () => void,
 	onEventId?: (id: string) => void,

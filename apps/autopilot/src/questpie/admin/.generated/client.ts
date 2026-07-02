@@ -35,13 +35,14 @@ import _comp_taskDetailComponent from "../components/task-detail-component";
 import _pg_autopilotChat from "../pages/autopilot-chat";
 import _pg_knowledgeHost from "../pages/knowledge-host";
 import _pg_projectInspection from "../pages/project-inspection";
+import _pg_runDetail from "../pages/run-detail";
 
 const admin = {
 	blocks: { ...(_mergedModules["blocks"] as Record<string, unknown>) },
 	views: { ...(_mergedModules["views"] as Record<string, unknown>), [_view_fileDetail.name]: _view_fileDetail, [_view_filesView.name]: _view_filesView, [_view_taskDetail.name]: _view_taskDetail },
 	components: { ...(_mergedModules["components"] as Record<string, unknown>), autopilotWorkRail: _comp_autopilotWorkRail, autopilotWorkRailCore: _comp_autopilotWorkRailCore, fileRenderBlob: _comp_fileRenderBlob, fileRenderDocument: _comp_fileRenderDocument, fileRenderHtml: _comp_fileRenderHtml, fileRenderImage: _comp_fileRenderImage, fileRenderMarkdown: _comp_fileRenderMarkdown, fileRenderMiniapp: _comp_fileRenderMiniapp, fileRenderOffice: _comp_fileRenderOffice, fileRenderPdf: _comp_fileRenderPdf, fileRenderVideo: _comp_fileRenderVideo, filesViewComponent: _comp_filesViewComponent, knowledgeDetailComponent: _comp_knowledgeDetailComponent, knowledgeHost: _comp_knowledgeHost, messageParts: _comp_messageParts, taskDetailComponent: _comp_taskDetailComponent },
 	fields: { ...(_mergedModules["fields"] as Record<string, unknown>) },
-	pages: { ...(_mergedModules["pages"] as Record<string, unknown>), autopilotChat: _pg_autopilotChat, knowledgeHost: _pg_knowledgeHost, projectInspection: _pg_projectInspection },
+	pages: { ...(_mergedModules["pages"] as Record<string, unknown>), autopilotChat: _pg_autopilotChat, knowledgeHost: _pg_knowledgeHost, projectInspection: _pg_projectInspection, runDetail: _pg_runDetail },
 	widgets: { ...(_mergedModules["widgets"] as Record<string, unknown>) },
 };
 

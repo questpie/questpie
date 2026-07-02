@@ -402,10 +402,22 @@ function TurnStatusStrip({
 					{runInfo.worker.slice(0, 8)}
 				</span>
 			) : null}
+			{runInfo ? (
+				<a
+					href={`/admin/run-detail?run=${encodeURIComponent(runInfo.id)}`}
+					className="text-muted-foreground hover:text-foreground ml-auto shrink-0 text-[10px] underline"
+					title="Open run detail"
+				>
+					Details
+				</a>
+			) : null}
 			<button
 				type="button"
 				onClick={onCancel}
-				className="text-muted-foreground hover:text-foreground ml-auto shrink-0 text-[10px] underline"
+				className={[
+					"text-muted-foreground hover:text-foreground shrink-0 text-[10px] underline",
+					runInfo ? "" : "ml-auto",
+				].join(" ")}
 			>
 				Cancel
 			</button>

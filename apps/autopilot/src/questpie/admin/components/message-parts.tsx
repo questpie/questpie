@@ -15,7 +15,7 @@ type UIMessageLike = {
 	id: string;
 	role: string;
 	parts?: unknown;
-	metadata?: Record<string, unknown>;
+	metadata?: unknown;
 };
 
 type PartLike = Record<string, unknown> & { type: string };
