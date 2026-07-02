@@ -77,6 +77,7 @@ import _mig_20260607T120000_add_ai_runs_system_prompt from "../migrations/202606
 import _mig_20260607T130000_make_assets_upload_cols_nullable from "../migrations/20260607T130000_make_assets_upload_cols_nullable";
 import _mig_20260614T120000_add_harness_resumable_fields from "../migrations/20260614T120000_add_harness_resumable_fields";
 import _mig_20260630T202927_add_run_link_worker_kind_finalize from "../migrations/20260630T202927_add_run_link_worker_kind_finalize";
+import _mig_20260702T033832_drop_ai_runs_execution from "../migrations/20260702T033832_drop_ai_runs_execution";
 
 // ── Seeds ──────────────────────────────────────────────────
 import _seed_demoCoverageData from "../seeds/demo-coverage-data";

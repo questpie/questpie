@@ -1,0 +1,250 @@
+{
+  "operations": [
+    {
+      "type": "remove",
+      "path": "ddl.table__COLON__public__DOT__ai_run_events",
+      "timestamp": "2026-07-02T03:38:32.681Z",
+      "migrationId": "dropAiRunsExecution20260702T033832"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.table__COLON__public__DOT__ai_runs",
+      "timestamp": "2026-07-02T03:38:32.681Z",
+      "migrationId": "dropAiRunsExecution20260702T033832"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__ai_run_events__DOT__id",
+      "timestamp": "2026-07-02T03:38:32.681Z",
+      "migrationId": "dropAiRunsExecution20260702T033832"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__ai_run_events__DOT__run",
+      "timestamp": "2026-07-02T03:38:32.681Z",
+      "migrationId": "dropAiRunsExecution20260702T033832"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__ai_run_events__DOT__type",
+      "timestamp": "2026-07-02T03:38:32.681Z",
+      "migrationId": "dropAiRunsExecution20260702T033832"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__ai_run_events__DOT__level",
+      "timestamp": "2026-07-02T03:38:32.681Z",
+      "migrationId": "dropAiRunsExecution20260702T033832"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__ai_run_events__DOT__summary",
+      "timestamp": "2026-07-02T03:38:32.681Z",
+      "migrationId": "dropAiRunsExecution20260702T033832"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__ai_run_events__DOT__sequence",
+      "timestamp": "2026-07-02T03:38:32.681Z",
+      "migrationId": "dropAiRunsExecution20260702T033832"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__ai_run_events__DOT__meta",
+      "timestamp": "2026-07-02T03:38:32.681Z",
+      "migrationId": "dropAiRunsExecution20260702T033832"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__ai_runs__DOT__id",
+      "timestamp": "2026-07-02T03:38:32.681Z",
+      "migrationId": "dropAiRunsExecution20260702T033832"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__ai_runs__DOT__status",
+      "timestamp": "2026-07-02T03:38:32.681Z",
+      "migrationId": "dropAiRunsExecution20260702T033832"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__ai_runs__DOT__runtime",
+      "timestamp": "2026-07-02T03:38:32.681Z",
+      "migrationId": "dropAiRunsExecution20260702T033832"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__ai_runs__DOT__worker",
+      "timestamp": "2026-07-02T03:38:32.681Z",
+      "migrationId": "dropAiRunsExecution20260702T033832"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__ai_runs__DOT__prompt",
+      "timestamp": "2026-07-02T03:38:32.681Z",
+      "migrationId": "dropAiRunsExecution20260702T033832"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__ai_runs__DOT__summary",
+      "timestamp": "2026-07-02T03:38:32.681Z",
+      "migrationId": "dropAiRunsExecution20260702T033832"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__ai_runs__DOT__error",
+      "timestamp": "2026-07-02T03:38:32.681Z",
+      "migrationId": "dropAiRunsExecution20260702T033832"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__ai_runs__DOT__runtimeSessionRef",
+      "timestamp": "2026-07-02T03:38:32.681Z",
+      "migrationId": "dropAiRunsExecution20260702T033832"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__ai_runs__DOT__tokensInput",
+      "timestamp": "2026-07-02T03:38:32.681Z",
+      "migrationId": "dropAiRunsExecution20260702T033832"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__ai_runs__DOT__tokensOutput",
+      "timestamp": "2026-07-02T03:38:32.681Z",
+      "migrationId": "dropAiRunsExecution20260702T033832"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__ai_runs__DOT__cost",
+      "timestamp": "2026-07-02T03:38:32.681Z",
+      "migrationId": "dropAiRunsExecution20260702T033832"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__ai_runs__DOT__startedAt",
+      "timestamp": "2026-07-02T03:38:32.681Z",
+      "migrationId": "dropAiRunsExecution20260702T033832"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__ai_runs__DOT__endedAt",
+      "timestamp": "2026-07-02T03:38:32.681Z",
+      "migrationId": "dropAiRunsExecution20260702T033832"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__ai_runs__DOT__meta",
+      "timestamp": "2026-07-02T03:38:32.681Z",
+      "migrationId": "dropAiRunsExecution20260702T033832"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__run_links__DOT__aiRun",
+      "timestamp": "2026-07-02T03:38:32.681Z",
+      "migrationId": "dropAiRunsExecution20260702T033832"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.index__COLON__public__DOT__ai_run_events__DOT__ai_run_events_run_idx",
+      "timestamp": "2026-07-02T03:38:32.681Z",
+      "migrationId": "dropAiRunsExecution20260702T033832"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.index__COLON__public__DOT__ai_run_events__DOT__ai_run_events_run_sequence_idx",
+      "timestamp": "2026-07-02T03:38:32.681Z",
+      "migrationId": "dropAiRunsExecution20260702T033832"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.index__COLON__public__DOT__ai_runs__DOT__ai_runs_status_idx",
+      "timestamp": "2026-07-02T03:38:32.681Z",
+      "migrationId": "dropAiRunsExecution20260702T033832"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.index__COLON__public__DOT__ai_runs__DOT__ai_runs_worker_idx",
+      "timestamp": "2026-07-02T03:38:32.681Z",
+      "migrationId": "dropAiRunsExecution20260702T033832"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.index__COLON__public__DOT__ai_runs__DOT__ai_runs_runtime_idx",
+      "timestamp": "2026-07-02T03:38:32.681Z",
+      "migrationId": "dropAiRunsExecution20260702T033832"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.index__COLON__public__DOT__run_links__DOT__run_links_ai_run_idx",
+      "timestamp": "2026-07-02T03:38:32.681Z",
+      "migrationId": "dropAiRunsExecution20260702T033832"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.pk__COLON__public__DOT__ai_run_events__DOT__ai_run_events_pkey",
+      "timestamp": "2026-07-02T03:38:32.681Z",
+      "migrationId": "dropAiRunsExecution20260702T033832"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.pk__COLON__public__DOT__ai_runs__DOT__ai_runs_pkey",
+      "timestamp": "2026-07-02T03:38:32.681Z",
+      "migrationId": "dropAiRunsExecution20260702T033832"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__ai_run_events__DOT__created_at",
+      "timestamp": "2026-07-02T03:38:32.681Z",
+      "migrationId": "dropAiRunsExecution20260702T033832"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__ai_run_events__DOT__updated_at",
+      "timestamp": "2026-07-02T03:38:32.681Z",
+      "migrationId": "dropAiRunsExecution20260702T033832"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__ai_runs__DOT__created_at",
+      "timestamp": "2026-07-02T03:38:32.681Z",
+      "migrationId": "dropAiRunsExecution20260702T033832"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__ai_runs__DOT__updated_at",
+      "timestamp": "2026-07-02T03:38:32.681Z",
+      "migrationId": "dropAiRunsExecution20260702T033832"
+    },
+    {
+      "type": "remove",
+      "path": "ddl.column__COLON__public__DOT__ai_runs__DOT__systemPrompt",
+      "timestamp": "2026-07-02T03:38:32.681Z",
+      "migrationId": "dropAiRunsExecution20260702T033832"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__ai_worker_leases__DOT__run",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "run",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "ai_worker_leases"
+      },
+      "timestamp": "2026-07-02T03:38:32.681Z",
+      "migrationId": "dropAiRunsExecution20260702T033832"
+    }
+  ],
+  "metadata": {
+    "migrationId": "dropAiRunsExecution20260702T033832",
+    "timestamp": "2026-07-02T03:38:32.746Z",
+    "prevId": "00000000-0000-0000-0000-000000000000"
+  }
+}

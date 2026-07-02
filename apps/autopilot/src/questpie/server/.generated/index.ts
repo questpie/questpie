@@ -83,6 +83,7 @@ import _mig_20260607T120000_add_ai_runs_system_prompt from "../migrations/202606
 import _mig_20260607T130000_make_assets_upload_cols_nullable from "../migrations/20260607T130000_make_assets_upload_cols_nullable";
 import _mig_20260614T120000_add_harness_resumable_fields from "../migrations/20260614T120000_add_harness_resumable_fields";
 import _mig_20260630T202927_add_run_link_worker_kind_finalize from "../migrations/20260630T202927_add_run_link_worker_kind_finalize";
+import _mig_20260702T033832_drop_ai_runs_execution from "../migrations/20260702T033832_drop_ai_runs_execution";
 
 // ── Seeds ──────────────────────────────────────────────────
 import _seed_demoCoverageData from "../seeds/demo-coverage-data";
@@ -252,7 +253,7 @@ _appPromise = createApp(
 			gitProviderAdapters: _svc_gitProviderAdapters,
 			knowledgeResource: _svc_knowledgeResource,
 		},
-		migrations: [_mig_20260507T095449_jolly_red_phoenix, _mig_20260516T185000_auth_user_admin_columns_repair, _mig_20260517T095535_happy_orange_unicorn, _mig_20260519T135407_add_run_links_and_ai_module, _mig_20260519T142100_backfill_legacy_runs_into_run_links, _mig_20260519T145500_link_schedule_executions_to_run_links, _mig_20260519T161500_drop_legacy_execution_infra, _mig_20260529T001500_drop_workflow_configs, _mig_20260529T003000_drop_capabilities, _mig_20260604T111500_add_api_key_config_id, _mig_20260606T003509_v2_schema, _mig_20260606T004300_autopilot_memories, _mig_20260606T170505_calm_yellow_panda, _mig_20260607T120000_add_ai_runs_system_prompt, _mig_20260607T130000_make_assets_upload_cols_nullable, _mig_20260614T120000_add_harness_resumable_fields, _mig_20260630T202927_add_run_link_worker_kind_finalize],
+		migrations: [_mig_20260507T095449_jolly_red_phoenix, _mig_20260516T185000_auth_user_admin_columns_repair, _mig_20260517T095535_happy_orange_unicorn, _mig_20260519T135407_add_run_links_and_ai_module, _mig_20260519T142100_backfill_legacy_runs_into_run_links, _mig_20260519T145500_link_schedule_executions_to_run_links, _mig_20260519T161500_drop_legacy_execution_infra, _mig_20260529T001500_drop_workflow_configs, _mig_20260529T003000_drop_capabilities, _mig_20260604T111500_add_api_key_config_id, _mig_20260606T003509_v2_schema, _mig_20260606T004300_autopilot_memories, _mig_20260606T170505_calm_yellow_panda, _mig_20260607T120000_add_ai_runs_system_prompt, _mig_20260607T130000_make_assets_upload_cols_nullable, _mig_20260614T120000_add_harness_resumable_fields, _mig_20260630T202927_add_run_link_worker_kind_finalize, _mig_20260702T033832_drop_ai_runs_execution],
 		seeds: [_seed_demoCoverageData, _seed_demoParentIssues, _seed_demoProductData, _seed_demoStressData, _seed_makeAMiniappSkill, _seed_runtimeDefaults, _seed_socialSchedulerApp],
 		views: {
 			fileDetail: _view_fileDetail,
