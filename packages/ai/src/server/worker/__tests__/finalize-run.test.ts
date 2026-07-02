@@ -10,7 +10,19 @@
 
 import { describe, expect, it } from "bun:test";
 
-import { finalizeRun, type FinalizeRunDeps } from "../finalize-run.js";
+import {
+	type FinalizeRunDeps,
+	finalizeRun,
+	MAX_LOG_ARTIFACT_BYTES,
+} from "../finalize-run.js";
+
+interface KnowledgeArtifact {
+	title?: string | null;
+	path?: string | null;
+	kind?: string | null;
+	body?: string | null;
+	contentType?: string | null;
+}
 
 interface Captures {
 	row: Record<string, unknown>;
@@ -18,7 +30,12 @@ interface Captures {
 	created: Array<Record<string, unknown>>;
 	finished: string[];
 	appended: Array<{ streamId: string; data: string }>;
-	knowledge: Array<{ runId: string; summary?: string; source?: string }>;
+	knowledge: Array<{
+		runId: string;
+		summary?: string;
+		source?: string;
+		artifacts?: KnowledgeArtifact[];
+	}>;
 }
 
 function makeDeps(initial: Record<string, unknown>): {
@@ -201,5 +218,147 @@ describe("finalizeRun (T5)", () => {
 		expect(cap.created).toHaveLength(0); // no resurrected assistant message
 		expect(cap.events).toHaveLength(0);
 		expect(cap.row.status).toBe("cancelled");
+	});
+
+	it("OQ6: completed task WITH uiMessages → ONE merged createRunOutputs call (summary + exactly one kind='log' transcript artifact)", async () => {
+		const { deps, cap } = makeDeps({
+			id: "r5",
+			status: "running",
+			activeStreamId: "run-stream:s5",
+			chatSession: null,
+		});
+		const uiMessages = [{ type: "start", messageId: "m5" }, { type: "finish" }];
+
+		const res = await finalizeRun(deps, {
+			runId: "r5",
+			kind: "task",
+			terminal: "completed",
+			epoch: 1,
+			summary: "done",
+			uiMessages,
+		});
+
+		expect(res.finalized).toBe(true);
+		// MERGED: one invocation carrying summary + the log artifact, so the
+		// service's runs/{id}/summary.md semantics are preserved.
+		expect(cap.knowledge).toHaveLength(1);
+		expect(cap.knowledge[0].summary).toBe("done");
+		const artifacts = cap.knowledge[0].artifacts ?? [];
+		expect(artifacts).toHaveLength(1);
+		expect(artifacts[0].kind).toBe("log");
+		expect(artifacts[0].path).toBe("runs/r5/transcript.json");
+		expect(artifacts[0].title).toBe("Run transcript");
+		expect(artifacts[0].contentType).toBe("application/json");
+		expect(artifacts[0].body).toBe(JSON.stringify(uiMessages));
+	});
+
+	it("OQ6: completed non-task (chat) WITH uiMessages → standalone sink call with exactly one kind='log' artifact", async () => {
+		const { deps, cap } = makeDeps({
+			id: "r6",
+			status: "running",
+			activeStreamId: "run-stream:s6",
+			chatSession: "cs6",
+		});
+
+		await finalizeRun(deps, {
+			runId: "r6",
+			kind: "chat",
+			terminal: "completed",
+			epoch: 1,
+			summary: "hi",
+			messageId: "m6",
+			uiMessages: [{ type: "start", messageId: "m6" }],
+		});
+
+		expect(cap.knowledge).toHaveLength(1);
+		expect(cap.knowledge[0].summary).toBeUndefined(); // no summary.md for non-task kinds
+		const artifacts = cap.knowledge[0].artifacts ?? [];
+		expect(artifacts).toHaveLength(1);
+		expect(artifacts[0].kind).toBe("log");
+		expect(artifacts[0].path).toBe("runs/r6/transcript.json");
+	});
+
+	it("OQ6: latch lost → no sink call (no transcript artifact)", async () => {
+		const { deps, cap } = makeDeps({
+			id: "r7",
+			status: "cancelled",
+			activeStreamId: "run-stream:s7",
+			chatSession: null,
+		});
+
+		const res = await finalizeRun(deps, {
+			runId: "r7",
+			kind: "task",
+			terminal: "completed",
+			epoch: 1,
+			summary: "late",
+			uiMessages: [{ type: "start", messageId: "m7" }],
+		});
+
+		expect(res.finalized).toBe(false);
+		expect(cap.knowledge).toHaveLength(0);
+	});
+
+	for (const kind of ["task", "chat"] as const) {
+		it(`OQ6: throwing knowledge sink still finalizes (${kind}: terminal write + run.completed)`, async () => {
+			const { deps, cap } = makeDeps({
+				id: "r8",
+				status: "running",
+				activeStreamId: "run-stream:s8",
+				chatSession: kind === "chat" ? "cs8" : null,
+			});
+			deps.knowledgeResource = {
+				async createRunOutputs() {
+					throw new Error("sink down");
+				},
+			};
+
+			const res = await finalizeRun(deps, {
+				runId: "r8",
+				kind,
+				terminal: "completed",
+				epoch: 1,
+				summary: "done",
+				uiMessages: [{ type: "start", messageId: "m8" }],
+			});
+
+			expect(res.finalized).toBe(true);
+			expect(cap.row.status).toBe("completed"); // terminal write happened
+			expect(cap.row.finalizedAt).not.toBeNull();
+			expect(cap.events).toHaveLength(1); // run.completed still fired
+			expect(cap.events[0].event).toBe("run.completed");
+		});
+	}
+
+	it("OQ6: transcript over MAX_LOG_ARTIFACT_BYTES → oldest messages dropped, {truncated:true} recorded, body under the cap", async () => {
+		const { deps, cap } = makeDeps({
+			id: "r9",
+			status: "running",
+			activeStreamId: "run-stream:s9",
+			chatSession: null,
+		});
+		// 5 × ~100KiB messages ≈ 500KiB serialized — only the newest two fit.
+		const uiMessages = Array.from({ length: 5 }, (_, i) => ({
+			id: i,
+			blob: "x".repeat(100 * 1024),
+		}));
+
+		await finalizeRun(deps, {
+			runId: "r9",
+			kind: "task",
+			terminal: "completed",
+			epoch: 1,
+			summary: "done",
+			uiMessages,
+		});
+
+		const body = cap.knowledge[0]?.artifacts?.[0]?.body ?? "";
+		expect(new TextEncoder().encode(body).length).toBeLessThanOrEqual(
+			MAX_LOG_ARTIFACT_BYTES,
+		);
+		const parsed = JSON.parse(body);
+		expect(parsed.truncated).toBe(true);
+		// Oldest dropped first: only the newest messages remain, in order.
+		expect(parsed.messages.map((m: { id: number }) => m.id)).toEqual([3, 4]);
 	});
 });

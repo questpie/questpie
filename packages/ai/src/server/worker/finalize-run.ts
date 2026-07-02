@@ -48,7 +48,79 @@ export interface FinalizeRunDeps {
 			runId: string;
 			summary?: string;
 			source?: string;
+			/**
+			 * Worker artifacts persisted alongside the run outputs (e.g. the
+			 * kind='log' run transcript). Structurally a subset of the autopilot
+			 * service's WorkerArtifactInput — declared loosely here so packages/ai
+			 * stays free of autopilot types.
+			 */
+			artifacts?: Array<{
+				title?: string | null;
+				path?: string | null;
+				kind?: string | null;
+				body?: string | null;
+				contentType?: string | null;
+			}>;
 		}): Promise<Array<{ id: string }>>;
+	};
+}
+
+/**
+ * Cap on the serialized `runs/{id}/transcript.json` artifact body. When the
+ * uiMessages JSON exceeds it, the OLDEST messages are dropped first and the
+ * truncation is recorded inside the stored JSON as `{truncated: true}`.
+ */
+export const MAX_LOG_ARTIFACT_BYTES = 256 * 1024;
+
+const textEncoder = new TextEncoder();
+
+/**
+ * Serialize uiMessages for the kind='log' transcript artifact, keeping the
+ * newest suffix that fits under MAX_LOG_ARTIFACT_BYTES (tail-truncation:
+ * oldest messages dropped first).
+ */
+function serializeTranscript(uiMessages: unknown[]): string {
+	const full = JSON.stringify(uiMessages);
+	if (textEncoder.encode(full).length <= MAX_LOG_ARTIFACT_BYTES) return full;
+
+	// Walk from the newest message backwards to find the oldest one that still
+	// fits; everything before it is dropped.
+	// Envelope overhead of `{"truncated":true,"messages":[]}`.
+	let size = textEncoder.encode(
+		JSON.stringify({ truncated: true, messages: [] }),
+	).length;
+	let cut = uiMessages.length;
+	for (let i = uiMessages.length - 1; i >= 0; i--) {
+		const entry = JSON.stringify(uiMessages[i]) ?? "null";
+		const cost = textEncoder.encode(entry).length + 1; // +1 for the array comma
+		if (size + cost > MAX_LOG_ARTIFACT_BYTES) break;
+		size += cost;
+		cut = i;
+	}
+	return JSON.stringify({ truncated: true, messages: uiMessages.slice(cut) });
+}
+
+/** The run transcript as a kind='log' knowledge artifact; undefined when there
+ * is no non-empty uiMessages array to persist. */
+function buildLogArtifact(
+	runId: string,
+	uiMessages: unknown,
+):
+	| {
+			title: string;
+			path: string;
+			kind: string;
+			body: string;
+			contentType: string;
+	  }
+	| undefined {
+	if (!Array.isArray(uiMessages) || uiMessages.length === 0) return undefined;
+	return {
+		title: "Run transcript",
+		path: `runs/${runId}/transcript.json`,
+		kind: "log",
+		body: serializeTranscript(uiMessages),
+		contentType: "application/json",
 	};
 }
 
@@ -150,17 +222,35 @@ export async function finalizeRun(
 		await streamStore.finish(activeStreamId).catch(() => {});
 	}
 
+	// Run transcript → kind='log' knowledge artifact, persisted for EVERY kind
+	// when uiMessages is non-empty. Each sink call sits in its own try/catch —
+	// a sink failure must never block the terminal outcome.
+	const logArtifact = buildLogArtifact(input.runId, input.uiMessages);
+
 	let knowledgeResourceIds: string[] = [];
 	if (input.kind === "task" && knowledgeResource?.createRunOutputs) {
 		try {
+			// ONE invocation carrying summary + the log artifact, preserving the
+			// service's runs/{id}/summary.md semantics.
 			const resources = await knowledgeResource.createRunOutputs({
 				runId: input.runId,
 				summary: input.summary ?? undefined,
 				source: "worker",
+				artifacts: logArtifact ? [logArtifact] : undefined,
 			});
 			knowledgeResourceIds = resources.map((resource) => resource.id);
 		} catch {
 			// best-effort: knowledge creation never blocks the terminal outcome
+		}
+	} else if (logArtifact && knowledgeResource?.createRunOutputs) {
+		try {
+			await knowledgeResource.createRunOutputs({
+				runId: input.runId,
+				artifacts: [logArtifact],
+				source: "worker",
+			});
+		} catch {
+			// best-effort: the transcript sink never blocks the terminal outcome
 		}
 	}
 
