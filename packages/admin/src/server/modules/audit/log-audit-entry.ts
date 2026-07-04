@@ -1,6 +1,7 @@
 import { tryGetContext } from "questpie";
 
 import { AUDIT_LOG_COLLECTION } from "./collections/audit-log.js";
+import { toAuditJsonSafe } from "./json-safe.js";
 
 /**
  * Options for a custom audit log entry.
@@ -185,12 +186,14 @@ export async function logAuditEntry(
 			userId,
 			userName,
 			locale: options.locale ?? null,
-			changes: options.changes ?? null,
-			metadata: {
+			changes: toAuditJsonSafe(options.changes ?? null) as
+				| Record<string, unknown>
+				| null,
+			metadata: toAuditJsonSafe({
 				actorType,
 				accessMode: ctx.accessMode ?? "system",
 				...(options.metadata ?? {}),
-			},
+			}) as Record<string, unknown>,
 			title,
 		},
 		{

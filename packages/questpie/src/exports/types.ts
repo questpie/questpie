@@ -62,6 +62,7 @@ export type {
 	ServiceTopLevelInstances,
 	UnionToIntersection,
 } from "#questpie/server/config/codegen-type-utils.js";
+export type { Override } from "#questpie/shared/type-utils.js";
 export type {
 	QuestpieConfig,
 	AnyDrizzleClient,
