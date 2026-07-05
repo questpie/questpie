@@ -10,7 +10,14 @@
  * 5. Regex fallback when env.client.ts cannot be imported
  */
 import { afterAll, describe, expect, it } from "bun:test";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import {
+	mkdir,
+	mkdtemp,
+	readFile,
+	rm,
+	unlink,
+	writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -276,6 +283,25 @@ describe("runCodegen — client env emission", () => {
 		).toBeGreaterThan(0);
 		await expect(
 			readFile(join(dir, ".generated/env.client.expo.ts"), "utf-8"),
+		).rejects.toThrow();
+	});
+
+	it("removes stale client env modules when env.client.ts is deleted", async () => {
+		const dir = await writeFixtureProject({
+			clientEnvImport: `import { clientEnv } from "${CLIENT_ENV_FACTORY_PATH}";`,
+		});
+		await runFixtureCodegen(dir);
+		await readFile(join(dir, ".generated/env.client.expo.ts"), "utf-8");
+		await readFile(join(dir, ".generated/env.client.vite.ts"), "utf-8");
+
+		await unlink(join(dir, "env.client.ts"));
+		await runFixtureCodegen(dir);
+
+		await expect(
+			readFile(join(dir, ".generated/env.client.expo.ts"), "utf-8"),
+		).rejects.toThrow();
+		await expect(
+			readFile(join(dir, ".generated/env.client.vite.ts"), "utf-8"),
 		).rejects.toThrow();
 	});
 });
