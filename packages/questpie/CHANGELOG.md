@@ -1,5 +1,15 @@
 # questpie
 
+## 3.12.0
+
+### Minor Changes
+
+- [#120](https://github.com/questpie/questpie/pull/120) [`2f6e776`](https://github.com/questpie/questpie/commit/2f6e776896a9381514a237447d4dcc85dad558d0) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Framework fixes bundled from the production-readiness work:
+
+  - **Routes:** `executeJsonRoute` no longer crashes on an output-only route (a route declared with `.outputSchema()` and no `.schema()`, whose input is typed `unknown`) — it now passes the raw input through instead of calling `.parse` on an undefined input schema.
+  - **Codegen:** app-level collections now override module-provided collections that share the same key, so a project can specialise a collection a module contributed without a key collision.
+  - **Admin (audit):** the audit-log diff coerces `Date` and other non-JSON values into JSON-safe forms, so audit entries no longer fail to serialise on records containing dates or class instances.
+
 ## 3.11.0
 
 ### Minor Changes
