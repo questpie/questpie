@@ -10,8 +10,8 @@
  * @see RFC-MODULE-ARCHITECTURE §9 (Generated Code)
  */
 
-import { mkdir, rename, writeFile } from "node:fs/promises";
-import { join, relative, resolve } from "node:path";
+import { mkdir, rename, rm, writeFile } from "node:fs/promises";
+import { dirname, join, relative, resolve } from "node:path";
 
 import { discoverFiles } from "./discover.js";
 import { generateClientEnvModules } from "./env-client-template.js";
@@ -645,10 +645,7 @@ export async function runCodegen(
 
 	// 8. Write output
 	if (!dryRun) {
-		await mkdir(outDir, { recursive: true });
-		for (const file of filesToWrite) {
-			await atomicWriteFile(file.path, file.code);
-		}
+		await writeGeneratedFiles(outDir, filesToWrite);
 	}
 
 	return {
@@ -665,9 +662,26 @@ export async function runCodegen(
  * the same directory).
  */
 async function atomicWriteFile(path: string, code: string): Promise<void> {
+	await mkdir(dirname(path), { recursive: true });
 	const tmpPath = `${path}.${process.pid}.tmp`;
 	await writeFile(tmpPath, code, "utf-8");
 	await rename(tmpPath, path);
+}
+
+/**
+ * A codegen target owns its output directory. Recreate it on every non-dry run
+ * so files from removed conventions (for example env.client.* modules) cannot
+ * remain visible after regeneration.
+ */
+async function writeGeneratedFiles(
+	outDir: string,
+	files: Array<{ path: string; code: string }>,
+): Promise<void> {
+	await rm(outDir, { recursive: true, force: true });
+	await mkdir(outDir, { recursive: true });
+	for (const file of files) {
+		await atomicWriteFile(file.path, file.code);
+	}
 }
 
 // ============================================================================
@@ -808,17 +822,18 @@ export async function runAllTargets(
 				}
 
 				if (!dryRun) {
-					await mkdir(targetOutDir, { recursive: true });
-					await atomicWriteFile(outputPath, output.code);
-
+					const filesToWrite = [{ path: outputPath, code: output.code }];
 					if (output.additionalFiles) {
 						for (const [relPath, content] of Object.entries(
 							output.additionalFiles,
 						)) {
-							const absPath = join(targetOutDir, relPath);
-							await atomicWriteFile(absPath, content);
+							filesToWrite.push({
+								path: join(targetOutDir, relPath),
+								code: content,
+							});
 						}
 					}
+					await writeGeneratedFiles(targetOutDir, filesToWrite);
 				}
 
 				results.set(targetId, {
