@@ -4,6 +4,9 @@
 
 // ── Routes ────────────────────────────────────────────
 import _route_mcp from "../routes/mcp";
+import _route_mcp_DELETE from "../routes/mcp.delete";
+import _route_mcp_GET from "../routes/mcp.get";
+import _route_mcp_OPTIONS from "../routes/mcp.options";
 
 // ── Singles ────────────────────────────────────────────────
 import _plugin from "../plugin";
@@ -22,6 +25,9 @@ export type McpJobs = Record<never, never>;
 
 export type McpRoutes = {
 	mcp: typeof _route_mcp extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"mcp">> : typeof _route_mcp;
+	"mcp:DELETE": typeof _route_mcp_DELETE extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"mcp:DELETE">> : typeof _route_mcp_DELETE;
+	"mcp:GET": typeof _route_mcp_GET extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"mcp:GET">> : typeof _route_mcp_GET;
+	"mcp:OPTIONS": typeof _route_mcp_OPTIONS extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"mcp:OPTIONS">> : typeof _route_mcp_OPTIONS;
 };
 
 export type McpFieldTypes = Record<never, never>;
@@ -52,6 +58,9 @@ const _module: McpModule = {
 	name: "questpie-mcp" as const,
 	routes: {
 		mcp: _route_mcp,
+		"mcp:DELETE": _route_mcp_DELETE,
+		"mcp:GET": _route_mcp_GET,
+		"mcp:OPTIONS": _route_mcp_OPTIONS,
 	} as McpRoutes,
 	collections: {},
 	globals: {},
