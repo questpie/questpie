@@ -286,10 +286,11 @@ export default runtimeConfig({
 
 ### When to Use Which
 
-| Adapter               | Use Case                                              |
-| --------------------- | ----------------------------------------------------- |
-| `pgNotifyAdapter`     | Single server, development, simple deployments        |
-| `redisStreamsAdapter` | Multiple servers, horizontal scaling, high throughput |
+| Adapter                    | Use Case                                              |
+| -------------------------- | ----------------------------------------------------- |
+| `pgNotifyAdapter`          | Single server, development, simple deployments        |
+| `redisStreamsAdapter`      | Multiple servers, horizontal scaling, high throughput |
+| `cloudflareRealtimeAdapter` | Cloudflare Workers (Durable Objects)                  |
 
 ## Search
 
@@ -359,6 +360,8 @@ export default runtimeConfig({
 	},
 });
 ```
+
+For local testing without a real SMTP server, `createEtherealSmtpAdapter()` (also from `questpie/adapters/smtp`) provisions an auto-generated Ethereal test account and logs a preview URL for each message.
 
 ### Console (Development)
 
@@ -498,6 +501,8 @@ export default runtimeConfig({
 	},
 });
 ```
+
+On Cloudflare Workers, use `cloudflareKVAdapter()` (backed by a Workers KV namespace) instead of the Redis adapter.
 
 ### Custom Adapter
 

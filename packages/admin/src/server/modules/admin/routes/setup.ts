@@ -76,7 +76,7 @@ export function getAdminUserTableContract(userCollection: {
  *
  * @example
  * ```ts
- * const result = await client.routes.isSetupRequired({});
+ * const result = await client.routes.isSetupRequired.post({});
  * if (result.required) {
  *   // Redirect to setup page
  * }
@@ -106,7 +106,7 @@ export const isSetupRequired = route()
  *
  * @example
  * ```ts
- * const result = await client.routes.createFirstAdmin({
+ * const result = await client.routes.createFirstAdmin.post({
  *   email: "admin@example.com",
  *   password: "securepassword123",
  *   name: "Admin User",

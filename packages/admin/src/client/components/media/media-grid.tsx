@@ -217,7 +217,7 @@ function AssetItem({
 
 			{/* Filename overlay (on hover) */}
 			{asset.filename && (
-				<div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-2 opacity-0 transition-opacity group-hover:opacity-100">
+				<div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-2 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100">
 					<p className="truncate text-xs text-white" title={asset.filename}>
 						{asset.filename}
 					</p>

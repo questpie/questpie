@@ -41,7 +41,7 @@ const getContentLocalesOutputSchema = z.object({
  *
  * @example
  * ```ts
- * const result = await client.routes.getContentLocales({});
+ * const result = await client.routes.getContentLocales.post({});
  * // {
  * //   locales: [
  * //     { code: "en", label: "English", fallback: true },

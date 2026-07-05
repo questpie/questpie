@@ -44,6 +44,54 @@ describe("queue runtime api", () => {
 		await queue.stop();
 	});
 
+	test("job handler runs inside ambient AppContext (B1: ALS established)", async () => {
+		const { getContext } = await import("../../src/server/config/context.js");
+		const adapter = new MockQueueAdapter();
+		const fakeApp = { name: "app" };
+		let captured: any = null;
+		let threw: unknown = null;
+
+		const jobs = {
+			capture: {
+				name: "capture",
+				schema: z.object({}).passthrough(),
+				handler: async () => {
+					// Reads the ambient AppContext (ALS). Before B1 this threw
+					// ("called outside request scope") because the queue invoked the
+					// handler without runWithContext.
+					try {
+						captured = getContext();
+					} catch (err) {
+						threw = err;
+					}
+				},
+			},
+		};
+
+		const queue = createQueueClient(jobs, adapter, {
+			createContext: async () => ({
+				db: { tag: "db" },
+				session: { userId: "u1" },
+				locale: "sk",
+			}),
+			getApp: () => fakeApp,
+		});
+
+		await queue.capture.publish({});
+		await queue.runOnce({ batchSize: 1, jobs: ["capture"] });
+
+		expect(threw).toBeNull();
+		expect(captured).not.toBeNull();
+		expect(captured.app).toBe(fakeApp);
+		expect(captured.db).toEqual({ tag: "db" });
+		expect(captured.session).toEqual({ userId: "u1" });
+		expect(captured.locale).toBe("sk");
+		// Jobs are system scope — matches today's empty-ALS fallback.
+		expect(captured.accessMode).toBe("system");
+
+		await queue.stop();
+	});
+
 	test("cloudflare adapter push consumer acks permanent failures and retries handler errors", async () => {
 		const published: any[] = [];
 		const adapter = cloudflareQueuesAdapter({

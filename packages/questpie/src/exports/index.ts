@@ -34,6 +34,7 @@ export type {
 	JsonRouteHandlerArgs,
 	RawRouteHandlerArgs,
 } from "#questpie/server/routes/types.js";
+export type { AppContextBase } from "#questpie/server/config/app-context-base.js";
 export {
 	type AppContext,
 	extractAppServices,
@@ -252,6 +253,7 @@ export {
 	coreBackendMessages,
 } from "#questpie/server/modules/starter/_messages.js";
 export { route } from "#questpie/server/routes/define-route.js";
+export { routeApp } from "#questpie/server/routes/route-app.js";
 export * from "#questpie/server/routes/index.js";
 export { seed } from "#questpie/server/seed/define-seed.js";
 export * from "#questpie/server/seed/index.js";

@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { sql } from "drizzle-orm";
 
 import { collection } from "../../src/exports/index.js";
+import { isInTransaction } from "../../src/server/collection/crud/shared/transaction.js";
+import { seed } from "../../src/server/seed/define-seed.js";
 import { SeedRunner } from "../../src/server/seed/runner.js";
 import type { Seed } from "../../src/server/seed/types.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
@@ -42,6 +44,14 @@ describe("SeedRunner", () => {
 			),
 		);
 		return (result.rows || result).length > 0;
+	}
+
+	async function seedStepCount(seedId: string): Promise<number> {
+		const result: any = await setup.app.db.execute(
+			sql`SELECT COUNT(*) AS count FROM questpie_seed_steps WHERE seed_id = ${seedId}`,
+		);
+		const row = (result.rows || result)[0];
+		return Number(row.count);
 	}
 
 	// ── Basic run ───────────────────────────────────────────────────────
@@ -144,6 +154,363 @@ describe("SeedRunner", () => {
 			"explicit-context",
 			"implicit-context",
 		]);
+	}, 15_000);
+
+	it("runs normal seeds inside a transaction", async () => {
+		let inTransaction = false;
+
+		await runner.run([
+			makeSeed({
+				id: "transaction-check",
+				run: async () => {
+					inTransaction = isInTransaction();
+				},
+			}),
+		]);
+
+		expect(inTransaction).toBe(true);
+	});
+
+	it("rolls back normal seed writes and tracking on failure", async () => {
+		await setup.cleanup();
+		setup = await buildMockApp({ collections: { seed_posts: seedPosts } });
+		await runTestDbMigrations(setup.app);
+		runner = new SeedRunner(setup.app, { silent: true });
+
+		const seeds: Seed[] = [
+			makeSeed({
+				id: "failing-write",
+				run: async ({ collections }) => {
+					await collections.seed_posts.create({ title: "Rolled back" });
+					throw new Error("fail after write");
+				},
+			}),
+		];
+
+		await expect(runner.run(seeds)).rejects.toThrow("fail after write");
+
+		const docs = await setup.app.collections.seed_posts.find({});
+		expect(docs.totalDocs).toBe(0);
+
+		const status = await runner.status(seeds);
+		expect(status.executed).toHaveLength(0);
+		expect(status.pending.map((seed) => seed.id)).toEqual(["failing-write"]);
+	}, 15_000);
+
+	// ── Step seeds ──────────────────────────────────────────────────────
+
+	it("resumes checkpointed seeds from completed steps", async () => {
+		await setup.cleanup();
+		setup = await buildMockApp({ collections: { seed_posts: seedPosts } });
+		await runTestDbMigrations(setup.app);
+		runner = new SeedRunner(setup.app, { silent: true });
+
+		let firstRuns = 0;
+		let secondRuns = 0;
+		let failSecond = true;
+
+		const seeds: Seed[] = [
+			seed.steps({
+				id: "resume-steps",
+				category: "dev",
+				run: async ({ collections, step }) => {
+					await step("first", async () => {
+						firstRuns++;
+						await collections.seed_posts.create({ title: "First" });
+					});
+
+					await step("second", async () => {
+						secondRuns++;
+						if (failSecond) {
+							failSecond = false;
+							throw new Error("second failed");
+						}
+						await collections.seed_posts.create({ title: "Second" });
+					});
+				},
+			}),
+		];
+
+		await expect(runner.run(seeds)).rejects.toThrow("second failed");
+
+		let docs = await setup.app.collections.seed_posts.find({
+			orderBy: { title: "asc" },
+		});
+		expect(docs.docs.map((doc) => doc.title)).toEqual(["First"]);
+
+		await runner.run(seeds);
+
+		docs = await setup.app.collections.seed_posts.find({
+			orderBy: { title: "asc" },
+		});
+		expect(docs.docs.map((doc) => doc.title)).toEqual(["First", "Second"]);
+		expect(firstRuns).toBe(1);
+		expect(secondRuns).toBe(2);
+
+		const status = await runner.status(seeds);
+		expect(status.executed).toHaveLength(1);
+	});
+
+	it("returns cached step results on rerun", async () => {
+		await setup.cleanup();
+		setup = await buildMockApp({ collections: { seed_posts: seedPosts } });
+		await runTestDbMigrations(setup.app);
+		runner = new SeedRunner(setup.app, { silent: true });
+
+		let computeRuns = 0;
+		let failAfterCompute = true;
+
+		const seeds: Seed[] = [
+			seed.steps({
+				id: "cached-step-result",
+				category: "dev",
+				run: async ({ collections, step }) => {
+					const result = await step("compute", async () => {
+						computeRuns++;
+						return { title: "Cached title" };
+					});
+
+					if (failAfterCompute) {
+						failAfterCompute = false;
+						throw new Error("fail after compute");
+					}
+
+					await step("write", async () => {
+						await collections.seed_posts.create({ title: result.title });
+					});
+				},
+			}),
+		];
+
+		await expect(runner.run(seeds)).rejects.toThrow("fail after compute");
+		await runner.run(seeds);
+
+		const docs = await setup.app.collections.seed_posts.find({});
+		expect(docs.docs.map((doc) => doc.title)).toEqual(["Cached title"]);
+		expect(computeRuns).toBe(1);
+	});
+
+	it("passes a transaction-bound context into step callbacks", async () => {
+		let callbackDbInTransaction = false;
+		let callbackCreateContextDbInTransaction = false;
+
+		const seeds: Seed[] = [
+			seed.steps({
+				id: "step-callback-context",
+				category: "dev",
+				run: async ({ step }) => {
+					await step("check-context", async ({ db, createContext }) => {
+						callbackDbInTransaction = isInTransaction(db);
+						const ctx = await createContext();
+						callbackCreateContextDbInTransaction = isInTransaction(ctx.db);
+					});
+				},
+			}),
+		];
+
+		await runner.run(seeds);
+
+		expect(callbackDbInTransaction).toBe(true);
+		expect(callbackCreateContextDbInTransaction).toBe(true);
+	});
+
+	it("force reruns checkpointed seed steps from the beginning", async () => {
+		await setup.cleanup();
+		setup = await buildMockApp({ collections: { seed_posts: seedPosts } });
+		await runTestDbMigrations(setup.app);
+		runner = new SeedRunner(setup.app, { silent: true });
+
+		let stepRuns = 0;
+		const seeds: Seed[] = [
+			seed.steps({
+				id: "force-steps",
+				category: "dev",
+				run: async ({ collections, step }) => {
+					await step("write", async () => {
+						stepRuns++;
+						await collections.seed_posts.create({
+							title: `Run ${stepRuns}`,
+						});
+					});
+				},
+			}),
+		];
+
+		await runner.run(seeds);
+		expect(await seedStepCount("force-steps")).toBe(1);
+
+		await runner.run(seeds, { force: true });
+
+		const docs = await setup.app.collections.seed_posts.find({
+			orderBy: { title: "asc" },
+		});
+		expect(docs.docs.map((doc) => doc.title)).toEqual(["Run 1", "Run 2"]);
+		expect(stepRuns).toBe(2);
+		expect(await seedStepCount("force-steps")).toBe(1);
+	});
+
+	it("failed force rerun leaves checkpointed seed pending", async () => {
+		await setup.cleanup();
+		setup = await buildMockApp({ collections: { seed_posts: seedPosts } });
+		await runTestDbMigrations(setup.app);
+		runner = new SeedRunner(setup.app, { silent: true });
+
+		let shouldFail = false;
+		const seeds: Seed[] = [
+			seed.steps({
+				id: "force-steps-failure",
+				category: "dev",
+				run: async ({ collections, step }) => {
+					await step("write", async () => {
+						if (shouldFail) throw new Error("forced failure");
+						await collections.seed_posts.create({ title: "Created" });
+					});
+				},
+			}),
+		];
+
+		await runner.run(seeds);
+
+		shouldFail = true;
+		await expect(runner.run(seeds, { force: true })).rejects.toThrow(
+			"forced failure",
+		);
+
+		const status = await runner.status(seeds);
+		expect(status.executed).toHaveLength(0);
+		expect(status.pending.map((seed) => seed.id)).toEqual([
+			"force-steps-failure",
+		]);
+		expect(await seedStepCount("force-steps-failure")).toBe(0);
+	});
+
+	it("failed force rerun resumes from completed force steps", async () => {
+		await setup.cleanup();
+		setup = await buildMockApp({ collections: { seed_posts: seedPosts } });
+		await runTestDbMigrations(setup.app);
+		runner = new SeedRunner(setup.app, { silent: true });
+
+		let firstRuns = 0;
+		let secondRuns = 0;
+		let failSecond = false;
+		const seeds: Seed[] = [
+			seed.steps({
+				id: "force-steps-partial",
+				category: "dev",
+				run: async ({ collections, step }) => {
+					await step("first", async () => {
+						firstRuns++;
+						await collections.seed_posts.create({
+							title: `First ${firstRuns}`,
+						});
+					});
+
+					await step("second", async () => {
+						secondRuns++;
+						if (failSecond) {
+							failSecond = false;
+							throw new Error("second forced failure");
+						}
+						await collections.seed_posts.create({
+							title: `Second ${secondRuns}`,
+						});
+					});
+				},
+			}),
+		];
+
+		await runner.run(seeds);
+
+		failSecond = true;
+		await expect(runner.run(seeds, { force: true })).rejects.toThrow(
+			"second forced failure",
+		);
+
+		await runner.run(seeds);
+
+		const docs = await setup.app.collections.seed_posts.find({
+			orderBy: { title: "asc" },
+		});
+		expect(docs.docs.map((doc) => doc.title)).toEqual([
+			"First 1",
+			"First 2",
+			"Second 1",
+			"Second 3",
+		]);
+		expect(firstRuns).toBe(2);
+		expect(secondRuns).toBe(3);
+		expect(await seedStepCount("force-steps-partial")).toBe(2);
+	});
+
+	it("undo clears checkpointed seed steps", async () => {
+		const seeds: Seed[] = [
+			seed.steps({
+				id: "undo-steps",
+				category: "dev",
+				run: async ({ step }) => {
+					await step("one", async () => null);
+				},
+				undo: async () => {},
+			}),
+		];
+
+		await runner.run(seeds);
+		expect(await seedStepCount("undo-steps")).toBe(1);
+
+		await runner.undo(seeds);
+
+		expect(await seedStepCount("undo-steps")).toBe(0);
+		const status = await runner.status(seeds);
+		expect(status.pending.map((seed) => seed.id)).toEqual(["undo-steps"]);
+	});
+
+	it("reset clears checkpointed seed steps", async () => {
+		const seeds: Seed[] = [
+			seed.steps({
+				id: "reset-steps",
+				category: "dev",
+				run: async ({ step }) => {
+					await step("one", async () => null);
+				},
+			}),
+		];
+
+		await runner.run(seeds);
+		expect(await seedStepCount("reset-steps")).toBe(1);
+
+		await runner.reset({ only: ["reset-steps"] });
+
+		expect(await seedStepCount("reset-steps")).toBe(0);
+		const status = await runner.status(seeds);
+		expect(status.pending.map((seed) => seed.id)).toEqual(["reset-steps"]);
+	});
+
+	it("validate rolls back checkpointed seed writes and step ledger", async () => {
+		await setup.cleanup();
+		setup = await buildMockApp({ collections: { seed_posts: seedPosts } });
+		await runTestDbMigrations(setup.app);
+		runner = new SeedRunner(setup.app, { silent: true });
+
+		const seeds: Seed[] = [
+			seed.steps({
+				id: "validate-steps",
+				category: "dev",
+				run: async ({ collections, step }) => {
+					await step("write", async () => {
+						await collections.seed_posts.create({ title: "Dry run" });
+					});
+				},
+			}),
+		];
+
+		await runner.run(seeds, { validate: true });
+
+		const docs = await setup.app.collections.seed_posts.find({});
+		expect(docs.totalDocs).toBe(0);
+		expect(await seedStepCount("validate-steps")).toBe(0);
+
+		const status = await runner.status(seeds);
+		expect(status.executed).toHaveLength(0);
 	}, 15_000);
 
 	// ── Category filter ─────────────────────────────────────────────────
@@ -294,6 +661,46 @@ describe("SeedRunner", () => {
 		await runner.run(seeds, { only: ["dependant"] });
 
 		expect(ran).toEqual(["base", "dependant"]);
+	});
+
+	it("auto-includes checkpointed dependencies", async () => {
+		const ran: string[] = [];
+
+		const seeds: Seed[] = [
+			seed.steps({
+				id: "checkpointed-base",
+				category: "required",
+				run: async ({ step }) => {
+					await step("base", async () => {
+						ran.push("base");
+					});
+				},
+			}),
+			makeSeed({
+				id: "dependent-simple",
+				category: "dev",
+				dependsOn: ["checkpointed-base"],
+				run: async () => {
+					ran.push("dependent");
+				},
+			}),
+		];
+
+		await runner.run(seeds, { only: ["dependent-simple"] });
+
+		expect(ran).toEqual(["base", "dependent"]);
+		expect(await seedStepCount("checkpointed-base")).toBe(1);
+	});
+
+	it("throws on circular seed dependencies", async () => {
+		const seeds: Seed[] = [
+			makeSeed({ id: "a", dependsOn: ["b"] }),
+			makeSeed({ id: "b", dependsOn: ["a"] }),
+		];
+
+		await expect(runner.run(seeds)).rejects.toThrow(
+			'Circular seed dependency detected at "a"',
+		);
 	});
 
 	// ── Undo ────────────────────────────────────────────────────────────

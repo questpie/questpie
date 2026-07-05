@@ -11,6 +11,7 @@ import { useFieldArray, useFormContext, useWatch } from "react-hook-form";
 
 import type { FieldComponentProps } from "../../builder";
 import { useResolveText, useSafeI18n, useTranslation } from "../../i18n/hooks";
+import { cn } from "../../lib/utils";
 import { resolveOptionLabel } from "../primitives/option-label";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -273,7 +274,7 @@ function PrimitiveArrayField({
 									/>
 								</div>
 								{!readOnly && (orderable || canRemove) && (
-									<div className="flex shrink-0 items-center gap-1">
+									<div className="flex shrink-0 items-center gap-0.5">
 										{orderable && (
 											<>
 												<Button
@@ -307,7 +308,13 @@ function PrimitiveArrayField({
 												type="button"
 												variant="ghost"
 												size="icon-sm"
-												className="relative after:absolute after:-inset-1"
+												// Separate the destructive delete from the move
+												// buttons so it isn't mis-tapped on touch.
+												className={cn(
+													"text-muted-foreground hover:text-destructive relative after:absolute after:-inset-1",
+													orderable &&
+														"border-border-subtle ml-2 border-l pl-2 md:ml-0.5 md:border-l-0 md:pl-0",
+												)}
 												onClick={() => handleRemove(index)}
 												disabled={disabled}
 												title={t("common.remove")}

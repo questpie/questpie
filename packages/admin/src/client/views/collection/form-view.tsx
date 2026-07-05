@@ -45,14 +45,6 @@ import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import { Checkbox } from "../../components/ui/checkbox";
 import {
-	Dialog,
-	DialogContent,
-	DialogDescription,
-	DialogFooter,
-	DialogHeader,
-	DialogTitle,
-} from "../../components/ui/dialog";
-import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
@@ -61,6 +53,14 @@ import {
 } from "../../components/ui/dropdown-menu";
 import { EmptyState } from "../../components/ui/empty-state";
 import { Label } from "../../components/ui/label";
+import {
+	ResponsiveDialog,
+	ResponsiveDialogContent,
+	ResponsiveDialogDescription,
+	ResponsiveDialogFooter,
+	ResponsiveDialogHeader,
+	ResponsiveDialogTitle,
+} from "../../components/ui/responsive-dialog";
 import { scrollFieldIntoView } from "../../contexts/focus-context";
 import {
 	useCollectionValidation,
@@ -82,6 +82,7 @@ import {
 } from "../../hooks/use-collection";
 import { useCollectionFields } from "../../hooks/use-collection-fields";
 import { getLockUser, useLock } from "../../hooks/use-locks";
+import { useIsMobile } from "../../hooks/use-media-query";
 import {
 	ReactiveFieldStatesProvider,
 	useReactiveFields,
@@ -720,6 +721,7 @@ export default function FormView({
 }: FormViewProps): React.ReactElement {
 	const { t } = useTranslation();
 	const resolveText = useResolveText();
+	const isMobile = useIsMobile();
 	const isEditMode = !!id;
 	const collectionKey = adminCollectionKey(collection);
 	const {
@@ -775,6 +777,13 @@ export default function FormView({
 		if (!isLivePreviewOpen) return;
 		previewRef.current?.triggerRefresh();
 	}, [isLivePreviewOpen]);
+
+	// Stable onClose so the prop identity doesn't change every render, keeping the
+	// React.memo'd preview boundary (LivePreviewContent) clean on this prop.
+	const handleClosePreview = React.useCallback(
+		() => setIsLivePreviewOpen(false),
+		[setIsLivePreviewOpen],
+	);
 
 	// Create mode (or missing id) should never keep preview open.
 	// Also wait for schema to load — prevents clearing ?preview on page refresh before
@@ -1916,8 +1925,13 @@ export default function FormView({
 			});
 			return result?.url ?? null;
 		},
+		// On mobile the live split is unusable, so the preview button instead opens
+		// the tokenized URL in a new tab — fetch it eagerly there so the tap is instant.
 		enabled:
-			isLivePreviewOpen && canUseLivePreview && !!client && !!transformedItem,
+			(isLivePreviewOpen || isMobile) &&
+			canUseLivePreview &&
+			!!client &&
+			!!transformedItem,
 		staleTime: 30_000,
 	});
 
@@ -1980,6 +1994,157 @@ export default function FormView({
 			item?.id ||
 			t("collection.edit", { name: collectionLabel })
 		: t("collection.new", { name: collectionLabel });
+
+	// Primary action cluster (save, publish, workflow, history, preview, secondary
+	// menu). Rendered in the top header on desktop; on mobile it moves into a sticky
+	// bottom action bar (NAV-002) so Save/Publish/Delete are reachable without
+	// scrolling a long form back to the top. Defined once so it lives in exactly one
+	// place per render (isMobile is stable per viewport — no double mount).
+	const formActionsCluster = (
+		<>
+			{headerActions}
+
+			{/* Live Preview button. The live split is desktop-only;
+			    on mobile open the tokenized preview URL in a new tab
+			    instead of dropping into the unusable tab flow. */}
+			{canUseLivePreview &&
+				(isMobile ? (
+					<Button
+						type="button"
+						variant="outline"
+						size="icon-sm"
+						disabled={!previewUrl}
+						onClick={() => {
+							if (previewUrl) {
+								window.open(previewUrl, "_blank", "noopener,noreferrer");
+							}
+						}}
+						title={t("preview.livePreview")}
+					>
+						<Icon icon="ph:arrow-square-out" className="size-4" />
+						<span className="sr-only">{t("preview.livePreview")}</span>
+					</Button>
+				) : (
+					<Button
+						type="button"
+						variant="outline"
+						size="icon-sm"
+						onClick={() => setIsLivePreviewOpen(true)}
+						title={t("preview.livePreview")}
+					>
+						<Icon icon="ph:eye" className="size-4" />
+						<span className="sr-only">{t("preview.livePreview")}</span>
+					</Button>
+				))}
+
+			{/* History button — only show when versioning is enabled */}
+			{isEditMode && id && schema?.options?.versioning && (
+				<Button
+					type="button"
+					variant="outline"
+					size="icon-sm"
+					onClick={() => setIsHistoryOpen(true)}
+					title={t("history.title")}
+				>
+					<Icon icon="ph:clock-counter-clockwise" className="size-4" />
+					<span className="sr-only">{t("history.title")}</span>
+				</Button>
+			)}
+
+			{/* Workflow transition dropdown */}
+			{workflowEnabled && isEditMode && id && allowedTransitions.length > 0 && (
+				<DropdownMenu>
+					<DropdownMenuTrigger render={workflowTransitionTriggerRender}>
+						<Icon icon="ph:arrows-left-right" className="size-4" />
+						{t("workflow.transition")}
+					</DropdownMenuTrigger>
+					<DropdownMenuContent align="end">
+						{allowedTransitions.map((stage) => (
+							<DropdownMenuItem
+								key={stage.name}
+								onClick={() =>
+									setTransitionTarget({
+										name: stage.name,
+										label: stage.label,
+									})
+								}
+							>
+								<Icon icon="ph:arrow-right" className="mr-2 size-4" />
+								{stage.label || stage.name}
+							</DropdownMenuItem>
+						))}
+					</DropdownMenuContent>
+				</DropdownMenu>
+			)}
+
+			{/* Primary form actions as buttons */}
+			{visiblePrimaryActions.map((action) => (
+				<ActionButton
+					key={action.id}
+					action={action}
+					collection={collection}
+					helpers={actionHelpers}
+					size="sm"
+					onOpenDialog={(a) => setDialogAction(a)}
+				/>
+			))}
+
+			{/* Save button */}
+			<SaveSubmitButton
+				control={form.control}
+				isMutationPending={isMutationPending}
+				t={t}
+			/>
+
+			{/* Secondary form actions in dropdown */}
+			{visibleSecondaryActions.length > 0 && (
+				<DropdownMenu>
+					<DropdownMenuTrigger render={secondaryActionsTriggerRender}>
+						<Icon icon="ph:dots-three-vertical" className="size-4" />
+						<span className="sr-only">{t("common.moreActions")}</span>
+					</DropdownMenuTrigger>
+					<DropdownMenuContent align="end">
+						{regularSecondary.map((action) => {
+							const iconElement = resolveIconElement(action.icon, {
+								className: "mr-2 size-4",
+							});
+							return (
+								<DropdownMenuItem
+									key={action.id}
+									onClick={() => handleActionClick(action)}
+									disabled={actionLoading}
+								>
+									{iconElement}
+									{resolveText(action.label)}
+								</DropdownMenuItem>
+							);
+						})}
+
+						{regularSecondary.length > 0 && destructiveSecondary.length > 0 && (
+							<DropdownMenuSeparator />
+						)}
+
+						{destructiveSecondary.map((action) => {
+							const iconElement = resolveIconElement(action.icon, {
+								className: "mr-2 size-4",
+							});
+							return (
+								<DropdownMenuItem
+									key={action.id}
+									variant="destructive"
+									onClick={() => handleActionClick(action)}
+									disabled={actionLoading}
+								>
+									{iconElement}
+									{resolveText(action.label)}
+								</DropdownMenuItem>
+							);
+						})}
+					</DropdownMenuContent>
+				</DropdownMenu>
+			)}
+		</>
+	);
 
 	// Form content - extracted for reuse in both layouts
 	const formContent = (
@@ -2134,162 +2299,7 @@ export default function FormView({
 										</>
 									) : undefined
 								}
-								actions={
-									<>
-										{headerActions}
-
-										{/* Live Preview button */}
-										{canUseLivePreview && (
-											<Button
-												type="button"
-												variant="outline"
-												size="icon-sm"
-												onClick={() => setIsLivePreviewOpen(true)}
-												title={t("preview.livePreview")}
-											>
-												<Icon icon="ph:eye" className="size-4" />
-												<span className="sr-only">
-													{t("preview.livePreview")}
-												</span>
-											</Button>
-										)}
-
-										{/* History button — only show when versioning is enabled */}
-										{isEditMode && id && schema?.options?.versioning && (
-											<Button
-												type="button"
-												variant="outline"
-												size="icon-sm"
-												onClick={() => setIsHistoryOpen(true)}
-												title={t("history.title")}
-											>
-												<Icon
-													icon="ph:clock-counter-clockwise"
-													className="size-4"
-												/>
-												<span className="sr-only">{t("history.title")}</span>
-											</Button>
-										)}
-
-										{/* Workflow transition dropdown */}
-										{workflowEnabled &&
-											isEditMode &&
-											id &&
-											allowedTransitions.length > 0 && (
-												<DropdownMenu>
-													<DropdownMenuTrigger
-														render={workflowTransitionTriggerRender}
-													>
-														<Icon
-															icon="ph:arrows-left-right"
-															className="size-4"
-														/>
-														{t("workflow.transition")}
-													</DropdownMenuTrigger>
-													<DropdownMenuContent align="end">
-														{allowedTransitions.map((stage) => (
-															<DropdownMenuItem
-																key={stage.name}
-																onClick={() =>
-																	setTransitionTarget({
-																		name: stage.name,
-																		label: stage.label,
-																	})
-																}
-															>
-																<Icon
-																	icon="ph:arrow-right"
-																	className="mr-2 size-4"
-																/>
-																{stage.label || stage.name}
-															</DropdownMenuItem>
-														))}
-													</DropdownMenuContent>
-												</DropdownMenu>
-											)}
-
-										{/* Primary form actions as buttons */}
-										{visiblePrimaryActions.map((action) => (
-											<ActionButton
-												key={action.id}
-												action={action}
-												collection={collection}
-												helpers={actionHelpers}
-												size="sm"
-												onOpenDialog={(a) => setDialogAction(a)}
-											/>
-										))}
-
-										{/* Save button */}
-										<SaveSubmitButton
-											control={form.control}
-											isMutationPending={isMutationPending}
-											t={t}
-										/>
-
-										{/* Secondary form actions in dropdown */}
-										{visibleSecondaryActions.length > 0 && (
-											<DropdownMenu>
-												<DropdownMenuTrigger
-													render={secondaryActionsTriggerRender}
-												>
-													<Icon
-														icon="ph:dots-three-vertical"
-														className="size-4"
-													/>
-													<span className="sr-only">
-														{t("common.moreActions")}
-													</span>
-												</DropdownMenuTrigger>
-												<DropdownMenuContent align="end">
-													{regularSecondary.map((action) => {
-														const iconElement = resolveIconElement(
-															action.icon,
-															{
-																className: "mr-2 size-4",
-															},
-														);
-														return (
-															<DropdownMenuItem
-																key={action.id}
-																onClick={() => handleActionClick(action)}
-																disabled={actionLoading}
-															>
-																{iconElement}
-																{resolveText(action.label)}
-															</DropdownMenuItem>
-														);
-													})}
-
-													{regularSecondary.length > 0 &&
-														destructiveSecondary.length > 0 && (
-															<DropdownMenuSeparator />
-														)}
-
-													{destructiveSecondary.map((action) => {
-														const iconElement = resolveIconElement(
-															action.icon,
-															{
-																className: "mr-2 size-4",
-															},
-														);
-														return (
-															<DropdownMenuItem
-																key={action.id}
-																variant="destructive"
-																onClick={() => handleActionClick(action)}
-																disabled={actionLoading}
-															>
-																{iconElement}
-																{resolveText(action.label)}
-															</DropdownMenuItem>
-														);
-													})}
-												</DropdownMenuContent>
-											</DropdownMenu>
-										)}
-									</>
-								}
+								actions={isMobile ? undefined : formActionsCluster}
 							/>
 
 							{/* Soft-deleted banner */}
@@ -2314,6 +2324,20 @@ export default function FormView({
 								resolvedFields={resolvedFields as any}
 								schema={schema}
 							/>
+
+							{/* NAV-002 — Mobile sticky action bar. Lives inside <form> so the
+							    submit button still submits. Pinned to the bottom of the scroll
+							    container; safe-area padding clears the iOS home indicator. */}
+							{isMobile && (
+								<div
+									className="qa-form-view__action-bar bg-background border-border-subtle sticky bottom-0 z-20 -mx-3 flex flex-wrap items-center justify-end gap-2 border-t px-3 pt-2"
+									style={{
+										paddingBottom: "max(env(safe-area-inset-bottom), 0.5rem)",
+									}}
+								>
+									{formActionsCluster}
+								</div>
+							)}
 						</form>
 					</RenderProfiler>
 				</ReactiveFieldsManager>
@@ -2321,30 +2345,38 @@ export default function FormView({
 
 			{/* Locale Change Confirmation Dialog */}
 			{localeChangeDialog.open && (
-				<Dialog
+				<ResponsiveDialog
 					open={localeChangeDialog.open}
 					onOpenChange={handleLocaleDialogOpenChange}
 				>
-					<DialogContent showCloseButton={false}>
-						<DialogHeader>
-							<DialogTitle className="flex items-center gap-2">
+					<ResponsiveDialogContent showCloseButton={false}>
+						<ResponsiveDialogHeader>
+							<ResponsiveDialogTitle className="flex items-center gap-2">
 								<Icon icon="ph:warning-fill" className="text-warning size-5" />
 								{t("confirm.localeChange")}
-							</DialogTitle>
-							<DialogDescription>
+							</ResponsiveDialogTitle>
+							<ResponsiveDialogDescription>
 								{t("confirm.localeChangeDescription")}
-							</DialogDescription>
-						</DialogHeader>
-						<DialogFooter>
-							<Button variant="outline" onClick={handleLocaleChangeCancel}>
+							</ResponsiveDialogDescription>
+						</ResponsiveDialogHeader>
+						<ResponsiveDialogFooter>
+							<Button
+								variant="outline"
+								onClick={handleLocaleChangeCancel}
+								className="w-full md:w-auto"
+							>
 								{t("confirm.localeChangeStay")}
 							</Button>
-							<Button variant="destructive" onClick={handleLocaleChangeConfirm}>
+							<Button
+								variant="destructive"
+								onClick={handleLocaleChangeConfirm}
+								className="w-full md:w-auto"
+							>
 								{t("confirm.localeChangeDiscard")}
 							</Button>
-						</DialogFooter>
-					</DialogContent>
-				</Dialog>
+						</ResponsiveDialogFooter>
+					</ResponsiveDialogContent>
+				</ResponsiveDialog>
 			)}
 
 			{/* Action Confirmation Dialog */}
@@ -2408,26 +2440,26 @@ export default function FormView({
 
 			{/* Workflow Transition Confirmation Dialog */}
 			{transitionTarget && (
-				<Dialog
+				<ResponsiveDialog
 					open={!!transitionTarget}
 					onOpenChange={handleWorkflowDialogOpenChange}
 				>
-					<DialogContent>
-						<DialogHeader>
-							<DialogTitle className="flex items-center gap-2">
+					<ResponsiveDialogContent>
+						<ResponsiveDialogHeader>
+							<ResponsiveDialogTitle className="flex items-center gap-2">
 								<Icon icon="ph:arrows-left-right" className="size-5" />
 								{t("workflow.transitionTo", {
 									stage:
 										transitionTarget?.label ?? transitionTarget?.name ?? "",
 								})}
-							</DialogTitle>
-							<DialogDescription>
+							</ResponsiveDialogTitle>
+							<ResponsiveDialogDescription>
 								{t("workflow.transitionDescription", {
 									from: currentStageLabel,
 									to: transitionTarget?.label ?? transitionTarget?.name ?? "",
 								})}
-							</DialogDescription>
-						</DialogHeader>
+							</ResponsiveDialogDescription>
+						</ResponsiveDialogHeader>
 
 						{/* Optional scheduling */}
 						<div className="space-y-3 py-2">
@@ -2465,7 +2497,7 @@ export default function FormView({
 							)}
 						</div>
 
-						<DialogFooter>
+						<ResponsiveDialogFooter>
 							<Button
 								type="button"
 								variant="outline"
@@ -2474,6 +2506,7 @@ export default function FormView({
 									setTransitionSchedule(false);
 									setTransitionScheduledAt(null);
 								}}
+								className="w-full md:w-auto"
 							>
 								{t("common.cancel")}
 							</Button>
@@ -2484,7 +2517,7 @@ export default function FormView({
 									transitionMutation.isPending ||
 									(transitionSchedule && !transitionScheduledAt)
 								}
-								className="gap-2"
+								className="w-full gap-2 md:w-auto"
 							>
 								{transitionMutation.isPending && (
 									<Icon icon="ph:spinner-gap" className="size-4 animate-spin" />
@@ -2493,13 +2526,19 @@ export default function FormView({
 									? t("workflow.scheduleLabel")
 									: t("workflow.transition")}
 							</Button>
-						</DialogFooter>
-					</DialogContent>
-				</Dialog>
+						</ResponsiveDialogFooter>
+					</ResponsiveDialogContent>
+				</ResponsiveDialog>
 			)}
 		</>
 	);
 
+	// formShell is intentionally NOT memoized, and that's correct: the expensive
+	// part (the preview iframe) is insulated by `PreviewPane`'s own React.memo
+	// (audit 8.5(1)), so a FormView re-render only re-renders the cheap live-preview
+	// layout + the form subtree — which MUST re-render anyway to reflect lock /
+	// autosave / workflow / locale state. Memoizing this ~385-line, 50+-dep JSX
+	// would add stale-UI risk (a missing dep → frozen banner/autosave) for no gain.
 	const formShell = <div className="qa-form-view w-full">{formContent}</div>;
 
 	if (!canUseLivePreview) {
@@ -2509,7 +2548,7 @@ export default function FormView({
 	return (
 		<LivePreviewMode
 			open={isLivePreviewOpen}
-			onClose={() => setIsLivePreviewOpen(false)}
+			onClose={handleClosePreview}
 			previewUrl={previewUrl}
 			previewRef={previewRef}
 			onFieldValueEdited={handlePreviewFieldValueEdited}

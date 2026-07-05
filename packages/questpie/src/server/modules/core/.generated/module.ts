@@ -25,7 +25,8 @@ import _route_collection_meta from "../routes/[collection]/meta";
 import _route_collection_schema from "../routes/[collection]/schema";
 import _route_collection_updateBatch from "../routes/[collection]/update-batch";
 import _route_collection_upload from "../routes/[collection]/upload";
-import _route_auth_spread_path from "../routes/auth/[...path]";
+import _route_auth_spread_path_GET from "../routes/auth/[...path].get";
+import _route_auth_spread_path_POST from "../routes/auth/[...path].post";
 import _route_globals_name from "../routes/globals/[name]";
 import _route_globals_name_PATCH from "../routes/globals/[name].patch";
 import _route_globals_name_audit from "../routes/globals/[name]/audit";
@@ -108,7 +109,8 @@ export type CoreRoutes = {
 	"[collection]/schema": typeof _route_collection_schema extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"[collection]/schema">> : typeof _route_collection_schema;
 	"[collection]/updateBatch": typeof _route_collection_updateBatch extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"[collection]/updateBatch">> : typeof _route_collection_updateBatch;
 	"[collection]/upload": typeof _route_collection_upload extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"[collection]/upload">> : typeof _route_collection_upload;
-	"auth/[...path]": typeof _route_auth_spread_path extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"auth/[...path]">> : typeof _route_auth_spread_path;
+	"auth/[...path]:GET": typeof _route_auth_spread_path_GET extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"auth/[...path]:GET">> : typeof _route_auth_spread_path_GET;
+	"auth/[...path]:POST": typeof _route_auth_spread_path_POST extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"auth/[...path]:POST">> : typeof _route_auth_spread_path_POST;
 	"globals/[name]": typeof _route_globals_name extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"globals/[name]">> : typeof _route_globals_name;
 	"globals/[name]:PATCH": typeof _route_globals_name_PATCH extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"globals/[name]:PATCH">> : typeof _route_globals_name_PATCH;
 	"globals/[name]/audit": typeof _route_globals_name_audit extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"globals/[name]/audit">> : typeof _route_globals_name_audit;
@@ -203,7 +205,8 @@ const _module: CoreModule = {
 		"[collection]/schema": _route_collection_schema,
 		"[collection]/updateBatch": _route_collection_updateBatch,
 		"[collection]/upload": _route_collection_upload,
-		"auth/[...path]": _route_auth_spread_path,
+		"auth/[...path]:GET": _route_auth_spread_path_GET,
+		"auth/[...path]:POST": _route_auth_spread_path_POST,
 		"globals/[name]": _route_globals_name,
 		"globals/[name]:PATCH": _route_globals_name_PATCH,
 		"globals/[name]/audit": _route_globals_name_audit,

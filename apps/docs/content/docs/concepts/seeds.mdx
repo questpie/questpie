@@ -11,7 +11,9 @@ Use seeds for data that belongs to the app, not for schema changes. Migrations c
 
 - **Uses full app context.** A seed receives `collections`, `globals`, `db`, `services`, `email`, `queue`, `storage`, `kv`, and the rest of your app context.
 - **Runs in system mode by default.** Seed work bypasses collection, global, and field access rules, so bootstrap data can be created before any user exists.
+- **Runs atomically by default.** Each normal `seed({...})` runs inside one database transaction. If it throws, its database writes and tracking row roll back together.
 - **Tracks what ran.** Completed seeds are recorded in the `questpie_seeds` table and skipped on later runs unless you pass `--force`.
+- **Can checkpoint steps.** `seed.steps({...})` adds a `step(name, fn)` helper for large or side-effectful seeds that need resume behavior.
 - **Orders dependencies.** `dependsOn` lists seed ids that must run first; the runner topologically sorts them before execution.
 - **Filters by category.** Categories let you separate required bootstrap data, local demo data, and test fixtures.
 - **Supports undo.** `seed:undo` calls each seed's optional `undo` handler and removes its tracking row.
@@ -63,7 +65,9 @@ questpie add seed site-settings
 
 ## Idempotent data
 
-A seed should be safe to run more than once. The runner skips already-recorded seeds, but `--force`, reset tracking, fresh databases, and local experiments all re-enter the `run` handler. Check for existing data, use stable unique keys, or update/upsert singletons instead of blindly inserting duplicates.
+Normal seeds are atomic: the runner wraps each `seed({...})` handler in a transaction, and only records the seed after the transaction commits. If a normal seed writes three rows and then throws, those rows roll back and the seed remains pending.
+
+A seed should still be safe to run more than once. The runner skips already-recorded seeds, but `--force`, reset tracking, fresh databases, and local experiments all re-enter the `run` handler. Check for existing data, use stable unique keys, or update/upsert singletons instead of blindly inserting duplicates.
 
 ```ts title="src/questpie/server/seeds/demo-posts.ts"
 import { seed } from "questpie";
@@ -106,6 +110,37 @@ export default seed({
   },
 });
 ```
+
+## Checkpointed steps
+
+Use `seed.steps({...})` when a seed does work that should not restart from the top after a partial failure, such as object-storage uploads, slow imports, external API calls, or large demo datasets. A step seed does not use one seed-wide transaction. Instead, each `step(name, fn)` runs in its own transaction, passes `fn` a transaction-bound seed context, stores a checkpoint in `questpie_seed_steps`, and returns the cached JSON result on the next run.
+
+```ts title="src/questpie/server/seeds/demo-assets.ts"
+import { seed } from "questpie";
+
+export default seed.steps({
+  id: "demoContent",
+  description: "Create demo content with resumable checkpoints",
+  category: "dev",
+  async run({ collections, step }) {
+    const fixture = await step("prepare-fixture", async () => {
+      return {
+        posts: [{ title: "Demo post", slug: "demo-post" }],
+      };
+    });
+
+    await step("create-posts", async ({ collections }) => {
+      for (const post of fixture.posts) {
+        await collections.posts.create(post);
+      }
+    });
+  },
+});
+```
+
+Step results must be JSON-serializable. A void step is allowed; on replay it returns `undefined`. On a re-run, completed steps skip their callback. `questpie seed --force` clears the selected seed's step checkpoints before running, so every step executes again. `seed:reset` also clears step checkpoints for reset seeds.
+
+Keep database mutations in a step seed inside `step(...)`. A step seed does not have a seed-wide rollback boundary, so work outside a step is not checkpointed and is not rolled back if later work fails.
 
 ## Categories
 
@@ -184,7 +219,7 @@ Do not use seeds to model user-facing permissions. Seeds are trusted internal co
 | `questpie seed` | Runs pending seeds. |
 | `questpie seed:status` | Prints pending and executed seeds. |
 | `questpie seed:undo` | Runs `undo` handlers for executed seeds, then removes their tracking rows. |
-| `questpie seed:reset` | Clears tracking rows without changing app data. |
+| `questpie seed:reset` | Clears tracking rows and step checkpoints without changing app data. |
 
 Shared options:
 
@@ -196,7 +231,7 @@ Shared options:
 | `-f, --force` | `seed` | Re-run selected seeds even when tracking says they already executed. |
 | `--validate` | `seed` | Run selected seeds inside a transaction and roll it back. |
 
-`seed:reset` is not an undo. It only clears tracking, so the next `questpie seed` treats those seeds as pending again.
+`seed:reset` is not an undo. It only clears tracking and step checkpoints, so the next `questpie seed` treats those seeds as pending again.
 
 <Callout type="warn" title="Validate only rolls back database writes">
 `questpie seed --validate` runs seed database work inside a transaction and rolls it back. External side effects still run if your seed sends email, calls an HTTP API, publishes a queue job, writes to object storage, or mutates another system. Keep validation-safe seeds free of external side effects, or guard those calls yourself.

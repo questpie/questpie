@@ -357,7 +357,7 @@ yourself:
 ```tsx
 // routes/admin.tsx
 export const Route = createFileRoute("/admin")({
-	loader: async ({ context }) => ({ config: await context.client.routes.getAdminConfig() }),
+	loader: async ({ context }) => ({ config: await context.client.routes.getAdminConfig.post({}) }),
 	head: ({ loaderData }) => ({
 		links: [
 			{ rel: "stylesheet", href: adminCss },

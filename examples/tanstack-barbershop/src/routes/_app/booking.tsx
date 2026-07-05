@@ -124,7 +124,7 @@ function BookingPage() {
 				throw new Error("Missing booking slot parameters.");
 			}
 
-			return client.routes.getAvailableTimeSlots({
+			return client.routes.getAvailableTimeSlots.post({
 				date: selectedDateKey,
 				barberId: selectedBarber.id,
 				serviceId: selectedService.id,
@@ -150,7 +150,8 @@ function BookingPage() {
 	}, [isSlotsError, slotsError, t]);
 
 	const bookingMutation = useMutation({
-		mutationFn: (data: BookingPayload) => client.routes.createBooking(data),
+		mutationFn: (data: BookingPayload) =>
+			client.routes.createBooking.post(data),
 		onSuccess: () => {
 			void queryClient.invalidateQueries({ queryKey: ["slots"] });
 			toast.success(t("booking.error.success"), {

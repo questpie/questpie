@@ -1,5 +1,19 @@
 # @questpie/executor
 
+## 3.0.11
+
+### Patch Changes
+
+- Updated dependencies [[`4ed62ec`](https://github.com/questpie/questpie/commit/4ed62ec7375e7f841a20e7c36c11e15bc4f63b39), [`fed686a`](https://github.com/questpie/questpie/commit/fed686a4a37a34a80783538c632e0597a4a98ec8), [`7c4060d`](https://github.com/questpie/questpie/commit/7c4060df2fbc663cc9d4e718cff4ce72cdd83663), [`6cddd5b`](https://github.com/questpie/questpie/commit/6cddd5b2ec2127db40aa6b97212254689b9f780f)]:
+  - questpie@3.11.0
+
+## 3.0.10
+
+### Patch Changes
+
+- Updated dependencies [[`d673da7`](https://github.com/questpie/questpie/commit/d673da7c463233222c8605851c9957cd2e90027d)]:
+  - questpie@3.10.0
+
 ## 3.0.9
 
 ### Patch Changes

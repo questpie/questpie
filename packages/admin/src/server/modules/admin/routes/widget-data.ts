@@ -64,7 +64,7 @@ const fetchWidgetDataSchema = z.object({
  * @example
  * ```ts
  * // Client usage (via useServerWidgetData hook)
- * const data = await client.routes.fetchWidgetData({ widgetId: "my-widget" });
+ * const data = await client.routes.fetchWidgetData.post({ widgetId: "my-widget" });
  * ```
  */
 export const fetchWidgetData = route()

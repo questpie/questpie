@@ -311,12 +311,12 @@ export function BulkActionToolbar<TItem = any>({
 
 	return (
 		<>
-			{/* Fixed toolbar at bottom of screen */}
+			{/* Fixed toolbar: full-width bottom bar on mobile, centered pill on desktop */}
 			<div
 				data-state={isVisible ? "open" : "closed"}
-				className="qa-bulk-toolbar fixed bottom-6 left-1/2 z-50 max-w-[calc(100%-2rem)] -translate-x-1/2 transition-[opacity,translate,scale] duration-[var(--motion-duration-slow)] ease-[var(--motion-ease-enter)] data-[state=closed]:pointer-events-none data-[state=closed]:translate-y-2 data-[state=closed]:scale-[0.98] data-[state=closed]:opacity-0 data-[state=open]:translate-y-0 data-[state=open]:scale-100 data-[state=open]:opacity-100 motion-reduce:transition-none sm:max-w-none"
+				className="qa-bulk-toolbar fixed inset-x-3 bottom-3 z-50 transition-[opacity,translate,scale] duration-[var(--motion-duration-slow)] ease-[var(--motion-ease-enter)] data-[state=closed]:pointer-events-none data-[state=closed]:translate-y-2 data-[state=closed]:scale-[0.98] data-[state=closed]:opacity-0 data-[state=open]:translate-y-0 data-[state=open]:scale-100 data-[state=open]:opacity-100 motion-reduce:transition-none md:inset-x-auto md:bottom-6 md:left-1/2 md:max-w-none md:-translate-x-1/2"
 			>
-				<div className="qa-bulk-toolbar__bar bg-background border-border flex items-center gap-2 overflow-x-auto rounded-full border px-3 py-2 shadow-lg transition-[gap,padding] duration-[var(--motion-duration-base)] ease-[var(--motion-ease-standard)] sm:gap-3 sm:px-4 sm:py-2.5">
+				<div className="qa-bulk-toolbar__bar bg-background border-border flex w-full items-center gap-2 overflow-x-auto rounded-2xl border px-3 py-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] shadow-lg transition-[gap,padding] duration-[var(--motion-duration-base)] ease-[var(--motion-ease-standard)] md:w-auto md:gap-3 md:rounded-full md:px-4 md:py-2.5 md:pb-2.5">
 					{/* Filter segment - shows when filters are active */}
 					{hasFilters && (
 						<>
@@ -488,7 +488,7 @@ export function BulkActionToolbar<TItem = any>({
 								variant="ghost"
 								size="icon-sm"
 								onClick={() => table.resetRowSelection()}
-								className="size-7 shrink-0"
+								className="size-7 shrink-0 max-md:ml-auto"
 							>
 								<Icon icon="ph:x" className="size-4" />
 								<span className="sr-only">

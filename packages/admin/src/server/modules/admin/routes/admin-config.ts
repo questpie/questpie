@@ -9,7 +9,7 @@
  * @example
  * ```ts
  * // Client usage
- * const config = await client.routes.getAdminConfig({});
+ * const config = await client.routes.getAdminConfig.post({});
  * // { dashboard: {...}, sidebar: {...}, collections: {...}, globals: {...} }
  * ```
  */
@@ -902,7 +902,7 @@ export function buildPublicAdminConfig(
  *
  * ```ts
  * // Client fetches config
- * const config = await client.routes.getAdminConfig({});
+ * const config = await client.routes.getAdminConfig.post({});
  * ```
  */
 const getAdminConfig = route()

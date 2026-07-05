@@ -26,9 +26,12 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { Icon } from "@iconify/react";
 import {
+	type Cell,
+	type Column,
 	type ColumnDef,
 	flexRender,
 	getCoreRowModel,
+	type Row,
 	type RowSelectionState,
 	type SortingState,
 	useReactTable,
@@ -98,6 +101,7 @@ import {
 	TooltipContent,
 	TooltipTrigger,
 } from "../../components/ui/tooltip";
+import { adminCollectionKey } from "../../hooks/query-access";
 import { useActions } from "../../hooks/use-action";
 import {
 	useCollectionDelete,
@@ -105,11 +109,11 @@ import {
 	useCollectionRestore,
 	useCollectionUpdateBatch,
 } from "../../hooks/use-collection";
-import { adminCollectionKey } from "../../hooks/query-access";
 import { useCollectionFields } from "../../hooks/use-collection-fields";
 import { useSuspenseCollectionMeta } from "../../hooks/use-collection-meta";
 import { useSessionState } from "../../hooks/use-current-user";
 import { getLockUser, useLocks } from "../../hooks/use-locks";
+import { useIsMobile } from "../../hooks/use-media-query";
 import { useRealtimeHighlight } from "../../hooks/use-realtime-highlight";
 import {
 	useDeleteSavedView,
@@ -144,6 +148,7 @@ import {
 	computeDefaultColumns,
 	getAllAvailableFields,
 } from "./columns";
+import { formatHeader } from "./columns/column-defaults";
 import { QuickFilterBar } from "./quick-filter-bar";
 import { TableViewSkeleton } from "./view-skeletons";
 
@@ -686,6 +691,434 @@ function SortableTableRow({
 	);
 }
 
+// ============================================================================
+// Mobile card layout (rendering variant of the same table instance)
+// ============================================================================
+
+type MobileLockInfo = { name?: string; image?: string } | null;
+
+/**
+ * Compact "someone is editing" badge for a card header.
+ * Mirrors the desktop title-cell presence indicator.
+ */
+function MobileLockBadge({
+	user,
+	fallbackLabel,
+}: {
+	user: MobileLockInfo;
+	fallbackLabel: string;
+}): React.ReactElement {
+	const label = user?.name?.split(" ")[0] ?? fallbackLabel;
+	return (
+		<span
+			className="text-muted-foreground bg-muted inline-flex max-w-[8rem] shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-xs"
+			title={user?.name ?? fallbackLabel}
+		>
+			{user?.image ? (
+				<img
+					src={user.image}
+					alt=""
+					className="image-outline size-4 rounded-full"
+				/>
+			) : (
+				<Icon icon="ph:pencil-simple" className="size-3" />
+			)}
+			<span className="truncate">{label}</span>
+		</span>
+	);
+}
+
+/**
+ * Cells whose underlying value is empty are skipped on mobile cards so we don't
+ * render "Label: –" filler rows. `false`/`0` are meaningful, NOT empty.
+ */
+function isEmptyCellValue(value: unknown): boolean {
+	return (
+		value === null ||
+		value === undefined ||
+		value === "" ||
+		(Array.isArray(value) && value.length === 0)
+	);
+}
+
+/**
+ * MobileRecordCard - one compact, scannable row per table record ("Smer 2").
+ *
+ * A summary line (checkbox + flexRendered title + the first 1–2 body cells
+ * inline as a muted subtitle) is always visible. Tapping the summary expands an
+ * inline panel with the remaining body cells (label: value) plus an actions row
+ * (Open + row actions); when there is nothing to expand, the tap opens the
+ * record instead. Every value still goes through flexRender so custom cell
+ * renderers + column visibility are preserved. Checkbox and reorder buttons
+ * stop propagation.
+ */
+function MobileRecordCard({
+	row,
+	titleCell,
+	bodyCells,
+	getFieldLabel,
+	rowActions,
+	collection,
+	actionHelpers,
+	onOpenDialog,
+	onOpen,
+	isExpanded,
+	onToggleExpand,
+	isReorderMode,
+	canMoveUp,
+	canMoveDown,
+	onMoveUp,
+	onMoveDown,
+	isHighlighted,
+	isDeleted,
+	deletedLabel,
+	lockUser,
+	editingLabel,
+	selectLabel,
+	openLabel,
+	moveUpLabel,
+	moveDownLabel,
+}: {
+	row: Row<any>;
+	titleCell: Cell<any, unknown> | undefined;
+	bodyCells: Cell<any, unknown>[];
+	getFieldLabel: (columnId: string) => string;
+	rowActions: ActionDefinition[];
+	collection: string;
+	actionHelpers: any;
+	onOpenDialog: (action: ActionDefinition, item: any) => void;
+	onOpen: (item: { id: string }) => void;
+	isExpanded: boolean;
+	onToggleExpand: () => void;
+	isReorderMode: boolean;
+	canMoveUp: boolean;
+	canMoveDown: boolean;
+	onMoveUp: () => void;
+	onMoveDown: () => void;
+	isHighlighted: boolean;
+	isDeleted: boolean;
+	deletedLabel: string;
+	lockUser: MobileLockInfo;
+	editingLabel: string;
+	selectLabel: string;
+	openLabel: string;
+	moveUpLabel: string;
+	moveDownLabel: string;
+}): React.ReactElement {
+	const isSelected = row.getIsSelected();
+	const canSelect = row.getCanSelect();
+	const hasRowActions = rowActions.length > 0;
+
+	// First 1–2 cells become the inline subtitle; the rest live in the expand
+	// panel. Title is never in bodyCells, so this is purely the secondary fields.
+	const subtitleCells = bodyCells.slice(0, 2);
+	const expandCells = bodyCells.slice(2);
+	const canExpand = expandCells.length > 0;
+
+	const stop = React.useCallback((event: React.SyntheticEvent) => {
+		event.stopPropagation();
+	}, []);
+
+	// Tapping the summary expands when there's more to show, otherwise opens the
+	// record. (In select mode TanStack still routes selection via the checkbox.)
+	const handleSummaryActivate = React.useCallback(() => {
+		if (isReorderMode) return;
+		if (canExpand) {
+			onToggleExpand();
+			return;
+		}
+		onOpen(row.original);
+	}, [isReorderMode, canExpand, onToggleExpand, onOpen, row.original]);
+
+	const handleSummaryKeyDown = React.useCallback(
+		(event: React.KeyboardEvent) => {
+			if (isReorderMode) return;
+			if (event.key === "Enter" || event.key === " ") {
+				event.preventDefault();
+				handleSummaryActivate();
+			}
+		},
+		[isReorderMode, handleSummaryActivate],
+	);
+
+	return (
+		<div
+			data-state={isSelected ? "selected" : undefined}
+			className={cn(
+				"qa-record-card bg-card border-border relative flex flex-col overflow-hidden rounded-lg border transition-colors",
+				!isReorderMode && "hover:border-border-strong",
+				isSelected && "border-border-strong bg-muted/40",
+				isHighlighted && "animate-realtime-pulse",
+				isDeleted && "opacity-60",
+			)}
+		>
+			{/* Summary row: checkbox + title/subtitle + chevron (or reorder) */}
+			<div
+				role={isReorderMode ? undefined : "button"}
+				tabIndex={isReorderMode ? undefined : 0}
+				aria-expanded={canExpand ? isExpanded : undefined}
+				onClick={isReorderMode ? undefined : handleSummaryActivate}
+				onKeyDown={isReorderMode ? undefined : handleSummaryKeyDown}
+				className={cn(
+					"focus-visible:ring-ring/40 flex items-center gap-2.5 p-3 transition-colors focus-visible:ring-2 focus-visible:-outline-offset-2 focus-visible:outline-none",
+					!isReorderMode && "active:bg-muted/60 cursor-pointer",
+				)}
+			>
+				<div
+					role="presentation"
+					onClick={stop}
+					onKeyDown={stop}
+					className="relative flex size-9 shrink-0 items-center justify-center after:absolute after:-inset-1.5"
+				>
+					<Checkbox
+						checked={isSelected}
+						disabled={!canSelect}
+						onCheckedChange={(checked) => row.toggleSelected(!!checked)}
+						aria-label={selectLabel}
+					/>
+				</div>
+
+				<div className="flex min-w-0 flex-1 flex-col gap-0.5">
+					<div className="flex min-w-0 items-center gap-2">
+						<span className="text-foreground min-w-0 truncate text-sm font-medium">
+							{titleCell
+								? flexRender(
+										titleCell.column.columnDef.cell,
+										titleCell.getContext(),
+									)
+								: String(row.id)}
+						</span>
+						{isDeleted && (
+							<span className="text-destructive bg-destructive/10 inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-xs">
+								<Icon icon="ph:trash" className="size-3" />
+								{deletedLabel}
+							</span>
+						)}
+						{lockUser !== null && (
+							<MobileLockBadge user={lockUser} fallbackLabel={editingLabel} />
+						)}
+					</div>
+					{subtitleCells.length > 0 && (
+						<div className="text-muted-foreground flex min-w-0 items-center gap-1.5 truncate text-xs">
+							{subtitleCells.map((cell, index) => (
+								<React.Fragment key={cell.id}>
+									{index > 0 && (
+										<span aria-hidden className="shrink-0">
+											·
+										</span>
+									)}
+									{/* stopPropagation so an interactive custom cell doesn't
+									    fall through to the summary's expand/open-on-tap. */}
+									<span
+										role="presentation"
+										onClick={stop}
+										onKeyDown={stop}
+										className="min-w-0 truncate"
+									>
+										{flexRender(cell.column.columnDef.cell, cell.getContext())}
+									</span>
+								</React.Fragment>
+							))}
+						</div>
+					)}
+				</div>
+
+				{isReorderMode ? (
+					<div
+						role="presentation"
+						onClick={stop}
+						onKeyDown={stop}
+						className="flex shrink-0 flex-col"
+					>
+						<Button
+							type="button"
+							variant="ghost"
+							size="icon"
+							onClick={onMoveUp}
+							disabled={!canMoveUp}
+							aria-label={moveUpLabel}
+							title={moveUpLabel}
+						>
+							<Icon icon="ph:caret-up" className="size-4" />
+						</Button>
+						<Button
+							type="button"
+							variant="ghost"
+							size="icon"
+							onClick={onMoveDown}
+							disabled={!canMoveDown}
+							aria-label={moveDownLabel}
+							title={moveDownLabel}
+						>
+							<Icon icon="ph:caret-down" className="size-4" />
+						</Button>
+					</div>
+				) : (
+					canExpand && (
+						<Icon
+							icon="ph:caret-right"
+							aria-hidden
+							className={cn(
+								"text-muted-foreground size-4 shrink-0 transition-transform",
+								isExpanded && "rotate-90",
+							)}
+						/>
+					)
+				)}
+			</div>
+
+			{/* Expand panel: remaining cells (label: value) + actions row.
+			    CSS-only height animation via the grid-rows 0fr→1fr trick. */}
+			{!isReorderMode && canExpand && (
+				<div
+					className={cn(
+						"grid transition-[grid-template-rows] duration-200",
+						isExpanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+					)}
+				>
+					<div className="min-h-0 overflow-hidden">
+						<div className="border-border/70 flex flex-col gap-3 border-t px-3 pt-3 pb-3">
+							<dl className="grid grid-cols-[minmax(6rem,40%)_1fr] gap-x-3 gap-y-1.5 text-sm">
+								{expandCells.map((cell) => (
+									<React.Fragment key={cell.id}>
+										<dt className="text-muted-foreground chrome-meta min-w-0 truncate pt-px text-xs">
+											{getFieldLabel(cell.column.id)}
+										</dt>
+										<dd
+											role="presentation"
+											onClick={stop}
+											onKeyDown={stop}
+											className="text-foreground min-w-0 break-words"
+										>
+											{flexRender(
+												cell.column.columnDef.cell,
+												cell.getContext(),
+											)}
+										</dd>
+									</React.Fragment>
+								))}
+							</dl>
+
+							<div
+								role="presentation"
+								onClick={stop}
+								onKeyDown={stop}
+								className="flex flex-wrap items-center gap-2"
+							>
+								<Button
+									type="button"
+									variant="outline"
+									size="sm"
+									className="gap-2"
+									onClick={() => onOpen(row.original)}
+								>
+									<Icon icon="ph:arrow-square-out" className="size-4" />
+									{openLabel}
+								</Button>
+								{hasRowActions &&
+									rowActions.map((action) => (
+										<ActionButton
+											key={action.id}
+											action={action}
+											collection={collection}
+											item={row.original}
+											helpers={actionHelpers}
+											size="sm"
+											onOpenDialog={(dialogAction) =>
+												onOpenDialog(dialogAction, row.original)
+											}
+										/>
+									))}
+							</div>
+						</div>
+					</div>
+				</div>
+			)}
+		</div>
+	);
+}
+
+/**
+ * MobileSortSheet - re-expresses column sorting as a bottom sheet driving the
+ * SAME setSorting/sorting state. Lists sortable leaf columns; tapping a field
+ * toggles its direction (asc <-> desc) via TanStack's column.toggleSorting.
+ */
+function MobileSortSheet({
+	open,
+	onOpenChange,
+	entries,
+	title,
+	doneLabel,
+	ascLabel,
+	descLabel,
+}: {
+	open: boolean;
+	onOpenChange: (open: boolean) => void;
+	entries: { column: Column<any>; label: string }[];
+	title: string;
+	doneLabel: string;
+	ascLabel: string;
+	descLabel: string;
+}): React.ReactElement {
+	return (
+		<Sheet open={open} onOpenChange={onOpenChange}>
+			<SheetContent
+				side="bottom"
+				className="qa-sort-sheet max-h-[70dvh] rounded-t-2xl"
+			>
+				<SheetHeader className="border-b px-4 py-4">
+					<SheetTitle>{title}</SheetTitle>
+				</SheetHeader>
+				<div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-2">
+					{entries.map(({ column, label }) => {
+						const sorted = column.getIsSorted();
+						return (
+							<button
+								key={column.id}
+								type="button"
+								onClick={() => column.toggleSorting(sorted === "asc")}
+								className={cn(
+									"hover:bg-muted active:bg-muted/70 flex min-h-11 items-center justify-between gap-3 rounded-md px-3 text-left text-sm transition-colors",
+									sorted && "bg-muted/60 font-medium",
+								)}
+							>
+								<span className="min-w-0 truncate">{label}</span>
+								{sorted ? (
+									<span className="text-muted-foreground inline-flex shrink-0 items-center gap-1 text-xs">
+										{sorted === "asc" ? ascLabel : descLabel}
+										<Icon
+											icon={
+												sorted === "asc"
+													? "ph:sort-ascending"
+													: "ph:sort-descending"
+											}
+											className="size-4"
+										/>
+									</span>
+								) : (
+									<Icon
+										icon="ph:arrows-down-up"
+										className="text-muted-foreground/50 size-4 shrink-0"
+									/>
+								)}
+							</button>
+						);
+					})}
+				</div>
+				<SheetFooter className="border-t px-4 py-3">
+					<Button
+						variant="outline"
+						onClick={() => onOpenChange(false)}
+						className="w-full"
+					>
+						{doneLabel}
+					</Button>
+				</SheetFooter>
+			</SheetContent>
+		</Sheet>
+	);
+}
+
 /**
  * Props for TableView component
  */
@@ -815,6 +1248,7 @@ function TableViewInner({
 	actionsConfig,
 }: TableViewProps): React.ReactElement {
 	"use no memo";
+	const isMobile = useIsMobile();
 	const collectionKey = adminCollectionKey(collection);
 	const globalRealtimeConfig = useAdminStore(selectRealtime);
 	const { fields: resolvedFields, schema } = useCollectionFields(collection, {
@@ -907,6 +1341,10 @@ function TableViewInner({
 	});
 	const [searchTerm, setSearchTerm] = useState("");
 	const [isSearchPanelOpen, setIsSearchPanelOpen] = useState(false);
+	const [isSortSheetOpen, setIsSortSheetOpen] = useState(false);
+	const [expandedMobileRowId, setExpandedMobileRowId] = React.useState<
+		string | null
+	>(null);
 	const [isReorderMode, setIsReorderMode] = useState(false);
 	const [activeReorderId, setActiveReorderId] = useState<string | null>(null);
 	const [activeReorderRect, setActiveReorderRect] = useState<{
@@ -1809,7 +2247,99 @@ function TableViewInner({
 			clearReorderOverlay,
 		],
 	);
-	const groupedRowModel = useMemo(() => {
+
+	// Explicit up/down move for touch (mirrors array-field move + the same
+	// optimistic-order + server batch path as drag reorder). Used by the mobile
+	// card layout where column-drag dnd fights page scroll.
+	const handleReorderMove = React.useCallback(
+		async (rowId: string, direction: -1 | 1) => {
+			if (updateBatchMutation.isPending) return;
+
+			const previousOrderIds = sortableRowIds;
+			const oldIndex = previousOrderIds.indexOf(rowId);
+			if (oldIndex === -1) return;
+			const newIndex = oldIndex + direction;
+			if (newIndex < 0 || newIndex >= previousOrderIds.length) return;
+
+			const nextOrderIds = arrayMove(previousOrderIds, oldIndex, newIndex);
+			setOptimisticOrderIds(nextOrderIds);
+
+			const rowsById = new Map(tableRows.map((row) => [String(row.id), row]));
+			const reorderedRows = nextOrderIds
+				.map((id) => rowsById.get(id))
+				.filter((row): row is (typeof tableRows)[number] => !!row);
+
+			try {
+				await updateBatchMutation.mutateAsync({
+					updates: reorderedRows.map((row, index) => ({
+						id: String(row.id),
+						data: { [orderField]: (index + 1) * orderStep },
+					})),
+				});
+				actionHelpers.toast.success(t("collection.orderSaved"));
+			} catch (error) {
+				setOptimisticOrderIds(previousOrderIds);
+				actionHelpers.toast.error(
+					error instanceof Error
+						? error.message
+						: t("collection.orderSaveFailed"),
+				);
+			}
+		},
+		[
+			sortableRowIds,
+			tableRows,
+			updateBatchMutation,
+			orderField,
+			orderStep,
+			t,
+			actionHelpers.toast,
+		],
+	);
+
+	// Sortable columns for the mobile "Sort by" sheet, paired with resolved
+	// labels. Drives the SAME table sort state as the desktop header buttons.
+	const fieldLabelMap = useMemo(() => {
+		const map = new Map<string, string>();
+		for (const field of availableFields) {
+			map.set(field.name, resolveText(field.label, field.name));
+		}
+		return map;
+	}, [availableFields, resolveText]);
+	// Resolve a column's display label without invoking the column header def
+	// with a cell context. Stable identity so mobile cards don't churn on it.
+	const getFieldLabel = React.useCallback(
+		(columnId: string) => fieldLabelMap.get(columnId) ?? formatHeader(columnId),
+		[fieldLabelMap],
+	);
+	const sortableEntries = useMemo(
+		() =>
+			table
+				.getAllLeafColumns()
+				.filter((column) => column.getCanSort())
+				.map((column) => ({
+					column,
+					label: fieldLabelMap.get(column.id) ?? column.id,
+				})),
+		[table, fieldLabelMap],
+	);
+
+	// Title column id for the mobile card header (matches visibleColumnDefs).
+	const mobileTitleColumnId =
+		collectionMeta?.title?.type === "field" && collectionMeta?.title?.fieldName
+			? collectionMeta.title.fieldName
+			: "_title";
+	type GroupedRowEntry =
+		| {
+				type: "group";
+				key: string;
+				label: string;
+				icon: React.ReactNode;
+				count: number;
+				collapsed: boolean;
+		  }
+		| { type: "row"; row: Row<any> };
+	const groupedRowModel = useMemo<GroupedRowEntry[]>(() => {
 		const rows = tableRows;
 		const groupBy = viewState.config.groupBy;
 		if (!groupBy) {
@@ -1939,9 +2469,12 @@ function TableViewInner({
 		deleteViewMutation.mutate(viewId);
 	};
 
-	const handleRowClick = (item: any) => {
-		navigate(`${basePath}/collections/${collection}/${item.id}`);
-	};
+	const handleRowClick = React.useCallback(
+		(item: { id: string }) => {
+			navigate(`${basePath}/collections/${collection}/${item.id}`);
+		},
+		[navigate, basePath, collection],
+	);
 
 	// Bulk delete handler
 	const handleBulkDelete = React.useCallback(
@@ -2121,6 +2654,20 @@ function TableViewInner({
 									</TooltipContent>
 								</Tooltip>
 							)}
+							{isMobile && sortableEntries.length > 0 && (
+								<Button
+									variant="outline"
+									size="icon-sm"
+									className="relative"
+									onClick={() => setIsSortSheetOpen(true)}
+									aria-label={t("viewOptions.sort")}
+								>
+									<Icon icon="ph:sort-ascending" />
+									{sorting.length > 0 && (
+										<span className="bg-foreground absolute top-1 right-1 size-1.5 rounded-full" />
+									)}
+								</Button>
+							)}
 							{showSearch && (
 								<Tooltip>
 									<TooltipTrigger
@@ -2249,315 +2796,419 @@ function TableViewInner({
 					onClearFilters={clearFilters}
 				/>
 
-				{/* Table */}
+				{/* Table (desktop) / cards (mobile) — both render the same table instance */}
 				<div className="qa-table-view__table-wrapper min-w-0">
-					<ScrollFade leftInset={selectColumnWidth + titleColumnWidth}>
-						<DndContext
-							sensors={reorderSensors}
-							collisionDetection={closestCenter}
-							onDragStart={handleReorderDragStart}
-							onDragCancel={handleReorderDragCancel}
-							onDragEnd={handleReorderDragEnd}
-						>
-							<Table
-								className="table-fixed"
-								style={{ width: table.getTotalSize() }}
-								aria-label={resolveText(
-									(config as any)?.label ?? schema?.admin?.config?.label,
-									collection,
-								)}
-							>
-								<colgroup>
-									{visibleLeafColumns.map((column) => (
-										<col key={column.id} style={{ width: column.getSize() }} />
-									))}
-								</colgroup>
-								<TableHeader>
-									{table.getHeaderGroups().map((headerGroup) => (
-										<TableRow
-											key={headerGroup.id}
-											className="hover:bg-transparent"
+					{isMobile ? (
+						<div className="qa-record-cards flex flex-col gap-2">
+							{groupedRowModel.map((entry) => {
+								if (entry.type === "group") {
+									return (
+										<button
+											key={entry.key}
+											type="button"
+											aria-expanded={!entry.collapsed}
+											onClick={() => viewState.toggleCollapsedGroup(entry.key)}
+											className="text-muted-foreground hover:text-foreground active:bg-muted/60 mt-2 flex min-h-11 items-center gap-2 rounded-md px-1 text-xs font-medium transition-colors first:mt-0"
 										>
-											{headerGroup.headers.map((header, headerIndex) => {
-												// Checkbox column gets compact styling
-												const isCheckboxCol = headerIndex === 0;
-												const columnWidth = getColumnSize(
-													header.column,
-													isCheckboxCol ? 40 : 120,
-												);
-												const isStickyColumn =
-													headerIndex < STICKY_TABLE_COLUMN_COUNT;
-												const stickyLeft = isStickyColumn
-													? getStickyLeftOffset(visibleLeafColumns, headerIndex)
-													: undefined;
+											<Icon
+												icon="ph:caret-right-bold"
+												className={cn(
+													"size-3 shrink-0 transition-transform",
+													!entry.collapsed && "rotate-90",
+												)}
+											/>
+											{entry.icon && (
+												<span className="size-4 shrink-0">{entry.icon}</span>
+											)}
+											<span className="min-w-0 truncate">{entry.label}</span>
+											{groupingConfig?.showCounts !== false && (
+												<span className="text-muted-foreground/60 tabular-nums">
+													{entry.count}
+												</span>
+											)}
+										</button>
+									);
+								}
 
-												// Determine aria-sort for sortable columns
-												const sortDirection = header.column.getIsSorted();
-												const ariaSort:
-													| "ascending"
-													| "descending"
-													| "none"
-													| undefined = header.column.getCanSort()
-													? sortDirection === "asc"
-														? "ascending"
-														: sortDirection === "desc"
-															? "descending"
-															: "none"
-													: undefined;
+								const row = entry.row;
+								const visibleCells = row.getVisibleCells();
+								const titleCell = visibleCells.find(
+									(cell) => cell.column.id === mobileTitleColumnId,
+								);
+								const bodyCells = visibleCells.filter(
+									(cell) =>
+										cell.column.id !== "_select" &&
+										cell.column.id !== "_actions" &&
+										cell.column.id !== titleCell?.column.id &&
+										!isEmptyCellValue(cell.getValue?.()),
+								);
+								const rowIdStr = String(row.id);
+								const orderIndex = sortableRowIds.indexOf(rowIdStr);
+								const isRowDeleted = !!(row.original as any)?.deletedAt;
+								const lock = isDocLocked(row.id) ? getLock(row.id) : null;
+								const lockUser = lock ? getLockUser(lock) : null;
 
-												return (
-													<TableHead
-														key={header.id}
-														stickyLeft={stickyLeft}
-														showStickyBorder={
-															headerIndex === STICKY_TABLE_COLUMN_COUNT - 1
-														}
-														className={
-															isCheckboxCol ? "w-9 min-w-9 px-1.5" : undefined
-														}
-														style={getColumnSizeStyle(columnWidth)}
-														aria-sort={ariaSort}
-													>
-														{header.isPlaceholder ? null : (
-															<button
-																type="button"
-																className={
-																	header.column.getCanSort()
-																		? "hover:text-foreground focus-visible:ring-ring/40 -mx-1.5 flex min-h-7 cursor-pointer items-center gap-2 rounded-md px-1.5 transition-colors select-none focus-visible:ring-2 focus-visible:outline-none"
-																		: ""
-																}
-																onClick={header.column.getToggleSortingHandler()}
-																aria-label={
-																	header.column.getCanSort()
-																		? `Sort by ${typeof header.column.columnDef.header === "string" ? header.column.columnDef.header : header.column.id}`
-																		: undefined
-																}
-															>
-																{flexRender(
-																	header.column.columnDef.header,
-																	header.getContext(),
-																)}
-																{header.column.getIsSorted() && (
-																	<span aria-hidden="true">
-																		{header.column.getIsSorted() === "asc"
-																			? "↑"
-																			: "↓"}
-																	</span>
-																)}
-															</button>
-														)}
-													</TableHead>
-												);
-											})}
-										</TableRow>
-									))}
-								</TableHeader>
-								<SortableContext
-									items={sortableRowIds}
-									strategy={verticalListSortingStrategy}
+								return (
+									<MobileRecordCard
+										key={row.id}
+										row={row}
+										titleCell={titleCell}
+										bodyCells={bodyCells}
+										getFieldLabel={getFieldLabel}
+										rowActions={actions.row}
+										collection={collection}
+										actionHelpers={actionHelpers}
+										onOpenDialog={(action, item) => openDialog(action, item)}
+										onOpen={handleRowClick}
+										isExpanded={expandedMobileRowId === row.id}
+										onToggleExpand={() =>
+											setExpandedMobileRowId((cur) =>
+												cur === row.id ? null : row.id,
+											)
+										}
+										isReorderMode={isReorderMode}
+										canMoveUp={orderIndex > 0}
+										canMoveDown={
+											orderIndex >= 0 && orderIndex < sortableRowIds.length - 1
+										}
+										onMoveUp={() => handleReorderMove(rowIdStr, -1)}
+										onMoveDown={() => handleReorderMove(rowIdStr, 1)}
+										isHighlighted={isHighlighted(row.id)}
+										isDeleted={isRowDeleted}
+										deletedLabel={t("common.deleted")}
+										lockUser={
+											lockUser
+												? {
+														name: lockUser.name ?? lockUser.email ?? undefined,
+														image: lockUser.image ?? undefined,
+													}
+												: null
+										}
+										editingLabel={t("table.editing")}
+										selectLabel={t("table.selectRow")}
+										openLabel={t("common.open")}
+										moveUpLabel={t("field.moveUp")}
+										moveDownLabel={t("field.moveDown")}
+									/>
+								);
+							})}
+						</div>
+					) : (
+						<ScrollFade leftInset={selectColumnWidth + titleColumnWidth}>
+							<DndContext
+								sensors={reorderSensors}
+								collisionDetection={closestCenter}
+								onDragStart={handleReorderDragStart}
+								onDragCancel={handleReorderDragCancel}
+								onDragEnd={handleReorderDragEnd}
+							>
+								<Table
+									className="table-fixed"
+									style={{ width: table.getTotalSize() }}
+									aria-label={resolveText(
+										(config as any)?.label ?? schema?.admin?.config?.label,
+										collection,
+									)}
 								>
-									<TableBody>
-										{groupedRowModel.map((entry: any) => {
-											if (entry.type === "group") {
-												return (
-													<TableRow
-														key={entry.key}
-														className="hover:bg-transparent"
-													>
-														<TableCell
-															stickyLeft={0}
-															className="w-9 min-w-9 border-b-0 px-1.5 group-hover/row:bg-transparent"
-															style={getColumnSizeStyle(selectColumnWidth)}
-														/>
-														<TableCell
-															stickyLeft={selectColumnWidth}
-															showStickyBorder
-															className="bg-background top-8 z-20 border-b-0 group-hover/row:bg-transparent"
-															style={getColumnSizeStyle(titleColumnWidth)}
+									<colgroup>
+										{visibleLeafColumns.map((column) => (
+											<col
+												key={column.id}
+												style={{ width: column.getSize() }}
+											/>
+										))}
+									</colgroup>
+									<TableHeader>
+										{table.getHeaderGroups().map((headerGroup) => (
+											<TableRow
+												key={headerGroup.id}
+												className="hover:bg-transparent"
+											>
+												{headerGroup.headers.map((header, headerIndex) => {
+													// Checkbox column gets compact styling
+													const isCheckboxCol = headerIndex === 0;
+													const columnWidth = getColumnSize(
+														header.column,
+														isCheckboxCol ? 40 : 120,
+													);
+													const isStickyColumn =
+														headerIndex < STICKY_TABLE_COLUMN_COUNT;
+													const stickyLeft = isStickyColumn
+														? getStickyLeftOffset(
+																visibleLeafColumns,
+																headerIndex,
+															)
+														: undefined;
+
+													// Determine aria-sort for sortable columns
+													const sortDirection = header.column.getIsSorted();
+													const ariaSort:
+														| "ascending"
+														| "descending"
+														| "none"
+														| undefined = header.column.getCanSort()
+														? sortDirection === "asc"
+															? "ascending"
+															: sortDirection === "desc"
+																? "descending"
+																: "none"
+														: undefined;
+
+													return (
+														<TableHead
+															key={header.id}
+															stickyLeft={stickyLeft}
+															showStickyBorder={
+																headerIndex === STICKY_TABLE_COLUMN_COUNT - 1
+															}
+															className={
+																isCheckboxCol ? "w-9 min-w-9 px-1.5" : undefined
+															}
+															style={getColumnSizeStyle(columnWidth)}
+															aria-sort={ariaSort}
 														>
-															<button
-																type="button"
-																aria-expanded={!entry.collapsed}
-																className="text-muted-foreground hover:text-foreground focus-visible:ring-ring/40 -ml-1 inline-flex min-h-8 items-center gap-2 rounded-md px-1 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none"
-																onClick={() =>
-																	viewState.toggleCollapsedGroup(entry.key)
-																}
-															>
-																<Icon
-																	icon="ph:caret-right-bold"
-																	className={cn(
-																		"size-3 shrink-0 transition-transform",
-																		!entry.collapsed && "rotate-90",
-																	)}
-																/>
-																{entry.icon && (
-																	<span className="size-4 shrink-0">
-																		{entry.icon}
-																	</span>
-																)}
-																<span>{entry.label}</span>
-																{groupingConfig?.showCounts !== false && (
-																	<span className="text-muted-foreground/60 tabular-nums">
-																		{entry.count}
-																	</span>
-																)}
-															</button>
-														</TableCell>
-														{visibleLeafColumns.length >
-															STICKY_TABLE_COLUMN_COUNT && (
-															<TableCell
-																colSpan={
-																	visibleLeafColumns.length -
-																	STICKY_TABLE_COLUMN_COUNT
-																}
-																className="border-b-0"
-															/>
-														)}
-													</TableRow>
-												);
-											}
-
-											const row = entry.row;
-											const isRowDeleted = !!(row.original as any)?.deletedAt;
-											const DataRow = isReorderMode
-												? SortableTableRow
-												: TableRow;
-											return (
-												<DataRow
-													id={String(row.id)}
-													key={row.id}
-													data-state={row.getIsSelected() && "selected"}
-													className={cn(
-														"group",
-														isReorderMode && "bg-muted/[0.18]",
-														isHighlighted(row.id) && "animate-realtime-pulse",
-														isRowDeleted && "opacity-50",
-													)}
-												>
-													{row
-														.getVisibleCells()
-														.map((cell: any, cellIndex: number) => {
-															// Checkbox column gets compact styling
-															const isCheckboxCol = cellIndex === 0;
-															const columnWidth = getColumnSize(
-																cell.column,
-																isCheckboxCol ? 40 : 120,
-															);
-															const isStickyColumn =
-																cellIndex < STICKY_TABLE_COLUMN_COUNT;
-															const stickyLeft = isStickyColumn
-																? getStickyLeftOffset(
-																		visibleLeafColumns,
-																		cellIndex,
-																	)
-																: undefined;
-
-															// Title column (index 1) is clickable
-															const isTitleCol = cellIndex === 1;
-
-															return (
-																<TableCell
-																	key={cell.id}
-																	stickyLeft={stickyLeft}
-																	showStickyBorder={
-																		cellIndex === STICKY_TABLE_COLUMN_COUNT - 1
-																	}
+															{header.isPlaceholder ? null : (
+																<button
+																	type="button"
 																	className={
-																		isCheckboxCol
-																			? "w-9 min-w-9 px-1.5"
+																		header.column.getCanSort()
+																			? "hover:text-foreground focus-visible:ring-ring/40 -mx-1.5 flex min-h-7 cursor-pointer items-center gap-2 rounded-md px-1.5 transition-colors select-none focus-visible:ring-2 focus-visible:outline-none"
+																			: ""
+																	}
+																	onClick={header.column.getToggleSortingHandler()}
+																	aria-label={
+																		header.column.getCanSort()
+																			? `Sort by ${typeof header.column.columnDef.header === "string" ? header.column.columnDef.header : header.column.id}`
 																			: undefined
 																	}
-																	style={getColumnSizeStyle(columnWidth)}
 																>
-																	{isTitleCol ? (
-																		<div className="flex min-w-0 items-center gap-2">
-																			<button
-																				type="button"
-																				onClick={() =>
-																					handleRowClick(row.original)
-																				}
-																				disabled={isReorderMode}
-																				className={cn(
-																					"decoration-muted-foreground/50 hover:decoration-foreground max-w-full min-w-0 text-left underline underline-offset-2 transition-colors disabled:cursor-default disabled:no-underline",
-																					!isReorderMode && "cursor-pointer",
-																				)}
-																			>
-																				{flexRender(
-																					cell.column.columnDef.cell,
-																					cell.getContext(),
-																				)}
-																			</button>
-																			{isRowDeleted && (
-																				<span className="text-destructive bg-destructive/10 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs">
-																					<Icon
-																						icon="ph:trash"
-																						className="size-3"
-																					/>
-																					{t("common.deleted")}
-																				</span>
-																			)}
-																			{isDocLocked(row.id) &&
-																				(() => {
-																					const lock = getLock(row.id);
-																					const user = lock
-																						? getLockUser(lock)
-																						: null;
-																					return (
-																						<span
-																							className="text-muted-foreground bg-muted inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs"
-																							title={
-																								user?.name ??
-																								user?.email ??
-																								"Someone is editing"
-																							}
-																						>
-																							{user?.image ? (
-																								<img
-																									src={user.image}
-																									alt=""
-																									className="image-outline size-4 rounded-full"
-																								/>
-																							) : (
-																								<Icon
-																									icon="ph:pencil-simple"
-																									className="size-3"
-																								/>
-																							)}
-																							<span className="max-w-20 truncate">
-																								{user?.name?.split(" ")[0] ??
-																									t("table.editing")}
-																							</span>
-																						</span>
-																					);
-																				})()}
-																		</div>
-																	) : (
-																		flexRender(
-																			cell.column.columnDef.cell,
-																			cell.getContext(),
-																		)
+																	{flexRender(
+																		header.column.columnDef.header,
+																		header.getContext(),
 																	)}
-																</TableCell>
-															);
-														})}
-												</DataRow>
-											);
-										})}
-									</TableBody>
-								</SortableContext>
-							</Table>
-							<DragOverlay
-								adjustScale={false}
-								dropAnimation={REORDER_DROP_ANIMATION}
-							>
-								<ReorderDragOverlay
-									row={activeReorderRow}
-									columns={visibleLeafColumns}
-									rect={activeReorderRect}
-								/>
-							</DragOverlay>
-						</DndContext>
-					</ScrollFade>
+																	{header.column.getIsSorted() && (
+																		<span aria-hidden="true">
+																			{header.column.getIsSorted() === "asc"
+																				? "↑"
+																				: "↓"}
+																		</span>
+																	)}
+																</button>
+															)}
+														</TableHead>
+													);
+												})}
+											</TableRow>
+										))}
+									</TableHeader>
+									<SortableContext
+										items={sortableRowIds}
+										strategy={verticalListSortingStrategy}
+									>
+										<TableBody>
+											{groupedRowModel.map((entry) => {
+												if (entry.type === "group") {
+													return (
+														<TableRow
+															key={entry.key}
+															className="hover:bg-transparent"
+														>
+															<TableCell
+																stickyLeft={0}
+																className="w-9 min-w-9 border-b-0 px-1.5 group-hover/row:bg-transparent"
+																style={getColumnSizeStyle(selectColumnWidth)}
+															/>
+															<TableCell
+																stickyLeft={selectColumnWidth}
+																showStickyBorder
+																className="bg-background top-8 z-20 border-b-0 group-hover/row:bg-transparent"
+																style={getColumnSizeStyle(titleColumnWidth)}
+															>
+																<button
+																	type="button"
+																	aria-expanded={!entry.collapsed}
+																	className="text-muted-foreground hover:text-foreground focus-visible:ring-ring/40 -ml-1 inline-flex min-h-8 items-center gap-2 rounded-md px-1 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none"
+																	onClick={() =>
+																		viewState.toggleCollapsedGroup(entry.key)
+																	}
+																>
+																	<Icon
+																		icon="ph:caret-right-bold"
+																		className={cn(
+																			"size-3 shrink-0 transition-transform",
+																			!entry.collapsed && "rotate-90",
+																		)}
+																	/>
+																	{entry.icon && (
+																		<span className="size-4 shrink-0">
+																			{entry.icon}
+																		</span>
+																	)}
+																	<span>{entry.label}</span>
+																	{groupingConfig?.showCounts !== false && (
+																		<span className="text-muted-foreground/60 tabular-nums">
+																			{entry.count}
+																		</span>
+																	)}
+																</button>
+															</TableCell>
+															{visibleLeafColumns.length >
+																STICKY_TABLE_COLUMN_COUNT && (
+																<TableCell
+																	colSpan={
+																		visibleLeafColumns.length -
+																		STICKY_TABLE_COLUMN_COUNT
+																	}
+																	className="border-b-0"
+																/>
+															)}
+														</TableRow>
+													);
+												}
+
+												const row = entry.row;
+												const isRowDeleted = !!(row.original as any)?.deletedAt;
+												const DataRow = isReorderMode
+													? SortableTableRow
+													: TableRow;
+												return (
+													<DataRow
+														id={String(row.id)}
+														key={row.id}
+														data-state={row.getIsSelected() && "selected"}
+														className={cn(
+															"group",
+															isReorderMode && "bg-muted/[0.18]",
+															isHighlighted(row.id) && "animate-realtime-pulse",
+															isRowDeleted && "opacity-50",
+														)}
+													>
+														{row
+															.getVisibleCells()
+															.map((cell, cellIndex) => {
+																// Checkbox column gets compact styling
+																const isCheckboxCol = cellIndex === 0;
+																const columnWidth = getColumnSize(
+																	cell.column,
+																	isCheckboxCol ? 40 : 120,
+																);
+																const isStickyColumn =
+																	cellIndex < STICKY_TABLE_COLUMN_COUNT;
+																const stickyLeft = isStickyColumn
+																	? getStickyLeftOffset(
+																			visibleLeafColumns,
+																			cellIndex,
+																		)
+																	: undefined;
+
+																// Title column (index 1) is clickable
+																const isTitleCol = cellIndex === 1;
+
+																return (
+																	<TableCell
+																		key={cell.id}
+																		stickyLeft={stickyLeft}
+																		showStickyBorder={
+																			cellIndex ===
+																			STICKY_TABLE_COLUMN_COUNT - 1
+																		}
+																		className={
+																			isCheckboxCol
+																				? "w-9 min-w-9 px-1.5"
+																				: undefined
+																		}
+																		style={getColumnSizeStyle(columnWidth)}
+																	>
+																		{isTitleCol ? (
+																			<div className="flex min-w-0 items-center gap-2">
+																				<button
+																					type="button"
+																					onClick={() =>
+																						handleRowClick(row.original)
+																					}
+																					disabled={isReorderMode}
+																					className={cn(
+																						"decoration-muted-foreground/50 hover:decoration-foreground max-w-full min-w-0 text-left underline underline-offset-2 transition-colors disabled:cursor-default disabled:no-underline",
+																						!isReorderMode && "cursor-pointer",
+																					)}
+																				>
+																					{flexRender(
+																						cell.column.columnDef.cell,
+																						cell.getContext(),
+																					)}
+																				</button>
+																				{isRowDeleted && (
+																					<span className="text-destructive bg-destructive/10 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs">
+																						<Icon
+																							icon="ph:trash"
+																							className="size-3"
+																						/>
+																						{t("common.deleted")}
+																					</span>
+																				)}
+																				{isDocLocked(row.id) &&
+																					(() => {
+																						const lock = getLock(row.id);
+																						const user = lock
+																							? getLockUser(lock)
+																							: null;
+																						return (
+																							<span
+																								className="text-muted-foreground bg-muted inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs"
+																								title={
+																									user?.name ??
+																									user?.email ??
+																									"Someone is editing"
+																								}
+																							>
+																								{user?.image ? (
+																									<img
+																										src={user.image}
+																										alt=""
+																										className="image-outline size-4 rounded-full"
+																									/>
+																								) : (
+																									<Icon
+																										icon="ph:pencil-simple"
+																										className="size-3"
+																									/>
+																								)}
+																								<span className="max-w-20 truncate">
+																									{user?.name?.split(" ")[0] ??
+																										t("table.editing")}
+																								</span>
+																							</span>
+																						);
+																					})()}
+																			</div>
+																		) : (
+																			flexRender(
+																				cell.column.columnDef.cell,
+																				cell.getContext(),
+																			)
+																		)}
+																	</TableCell>
+																);
+															})}
+													</DataRow>
+												);
+											})}
+										</TableBody>
+									</SortableContext>
+								</Table>
+								<DragOverlay
+									adjustScale={false}
+									dropAnimation={REORDER_DROP_ANIMATION}
+								>
+									<ReorderDragOverlay
+										row={activeReorderRow}
+										columns={visibleLeafColumns}
+										rect={activeReorderRect}
+									/>
+								</DragOverlay>
+							</DndContext>
+						</ScrollFade>
+					)}
 					{/* Empty state rendered outside table to avoid colSpan/border-separate width issues */}
 					{!table.getRowModel().rows.length &&
 						(emptyState || (
@@ -2581,13 +3232,13 @@ function TableViewInner({
 				{/* Footer - Pagination */}
 				{!isSearching && (
 					<div
-						className="qa-table-view__pagination flex items-center justify-between gap-4 py-2 tabular-nums"
+						className="qa-table-view__pagination flex flex-wrap items-center justify-between gap-x-4 gap-y-2 py-2 tabular-nums"
 						role="navigation"
 						aria-label={t("table.pagination")}
 					>
 						{/* Left side - item count and page size */}
 						<div
-							className="text-muted-foreground flex items-center gap-4 text-sm"
+							className="text-muted-foreground flex items-center gap-3 text-sm sm:gap-4"
 							aria-live="polite"
 							aria-atomic="true"
 						>
@@ -2636,43 +3287,55 @@ function TableViewInner({
 								<Icon icon="ph:caret-left" className="size-4" />
 							</Button>
 
-							{/* Page numbers */}
-							{Array.from(
-								{
-									length: Math.min(5, listData?.totalPages ?? 1),
-								},
-								(_, i) => {
-									const currentPage = viewState.config.pagination?.page ?? 1;
-									const totalPages = listData?.totalPages ?? 1;
-									let pageNum: number;
+							{/* Mobile: compact "Page X of Y" instead of numbered buttons */}
+							<span className="text-muted-foreground px-2 text-sm whitespace-nowrap md:hidden">
+								{t("table.page", {
+									page: viewState.config.pagination?.page ?? 1,
+								})}{" "}
+								{t("table.of")} {listData?.totalPages ?? 1}
+							</span>
 
-									if (totalPages <= 5) {
-										pageNum = i + 1;
-									} else if (currentPage <= 3) {
-										pageNum = i + 1;
-									} else if (currentPage >= totalPages - 2) {
-										pageNum = totalPages - 4 + i;
-									} else {
-										pageNum = currentPage - 2 + i;
-									}
+							{/* Desktop: numbered page buttons */}
+							<div className="hidden items-center gap-1 md:flex">
+								{Array.from(
+									{
+										length: Math.min(5, listData?.totalPages ?? 1),
+									},
+									(_, i) => {
+										const currentPage = viewState.config.pagination?.page ?? 1;
+										const totalPages = listData?.totalPages ?? 1;
+										let pageNum: number;
 
-									return (
-										<Button
-											key={pageNum}
-											variant={currentPage === pageNum ? "secondary" : "ghost"}
-											size="sm"
-											className="size-8 min-w-[32px] p-0 tabular-nums"
-											onClick={() => viewState.setPage(pageNum)}
-											aria-label={t("table.page", { page: pageNum })}
-											aria-current={
-												currentPage === pageNum ? "page" : undefined
-											}
-										>
-											{pageNum}
-										</Button>
-									);
-								},
-							)}
+										if (totalPages <= 5) {
+											pageNum = i + 1;
+										} else if (currentPage <= 3) {
+											pageNum = i + 1;
+										} else if (currentPage >= totalPages - 2) {
+											pageNum = totalPages - 4 + i;
+										} else {
+											pageNum = currentPage - 2 + i;
+										}
+
+										return (
+											<Button
+												key={pageNum}
+												variant={
+													currentPage === pageNum ? "secondary" : "ghost"
+												}
+												size="sm"
+												className="size-8 min-w-[32px] p-0 tabular-nums"
+												onClick={() => viewState.setPage(pageNum)}
+												aria-label={t("table.page", { page: pageNum })}
+												aria-current={
+													currentPage === pageNum ? "page" : undefined
+												}
+											>
+												{pageNum}
+											</Button>
+										);
+									},
+								)}
+							</div>
 
 							<Button
 								variant="ghost"
@@ -2733,6 +3396,19 @@ function TableViewInner({
 					supportsSoftDelete={collectionMeta?.softDelete ?? false}
 					defaultFilters={defaultFilters}
 				/>
+
+				{/* Mobile sort sheet (drives the same table sort state) */}
+				{isMobile && sortableEntries.length > 0 && (
+					<MobileSortSheet
+						open={isSortSheetOpen}
+						onOpenChange={setIsSortSheetOpen}
+						entries={sortableEntries}
+						title={t("viewOptions.sort")}
+						doneLabel={t("common.done")}
+						ascLabel={t("table.sortAsc")}
+						descLabel={t("table.sortDesc")}
+					/>
+				)}
 
 				{/* Action Dialog */}
 				{dialogAction && (

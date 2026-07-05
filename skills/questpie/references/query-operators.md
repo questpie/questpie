@@ -24,6 +24,7 @@ Applies to: `text`, `textarea`, `email`, `url`. (`slug` is just a `text` field; 
 | equality     | `{ title: "Hello" }`               | Exact match (shorthand)    |
 | `eq`         | `{ title: { eq: "Hello" } }`       | Exact match                |
 | `ne`         | `{ title: { ne: "Hello" } }`       | Not equal                  |
+| `not`        | `{ title: { not: "Hello" } }`      | Alias for `ne`; `not: null` → `IS NOT NULL` |
 | `in`         | `{ title: { in: ["A", "B"] } }`    | One of values              |
 | `notIn`      | `{ title: { notIn: ["A", "B"] } }` | None of values             |
 | `contains`   | `{ title: { contains: "ell" } }`   | Substring match            |
@@ -60,6 +61,7 @@ Applies to: `number`
 | equality    | `{ price: 1000 }`                    | Exact match           |
 | `eq`        | `{ price: { eq: 1000 } }`            | Exact match           |
 | `ne`        | `{ price: { ne: 1000 } }`            | Not equal             |
+| `not`       | `{ price: { not: 1000 } }`           | Alias for `ne`        |
 | `gt`        | `{ price: { gt: 1000 } }`            | Greater than          |
 | `gte`       | `{ price: { gte: 1000 } }`           | Greater than or equal |
 | `lt`        | `{ price: { lt: 5000 } }`            | Less than             |
@@ -78,6 +80,7 @@ Applies to: `boolean`
 | equality    | `{ isActive: true }`                | Exact match |
 | `eq`        | `{ isActive: { eq: true } }`        | Exact match |
 | `ne`        | `{ isActive: { ne: true } }`        | Not equal   |
+| `not`       | `{ isActive: { not: true } }`       | Alias for ne |
 | `isNull`    | `{ isActive: { isNull: true } }`    | Is NULL     |
 | `isNotNull` | `{ isActive: { isNotNull: true } }` | Is NOT NULL |
 
@@ -90,6 +93,7 @@ Applies to: `date`, `datetime`, `time` (all three share the same operators).
 | equality    | `{ date: "2025-03-01" }`                                 | Exact match    |
 | `eq`        | `{ date: { eq: someDate } }`                             | Exact match    |
 | `ne`        | `{ date: { ne: someDate } }`                             | Not equal      |
+| `not`       | `{ date: { not: someDate } }`                            | Alias for `ne` |
 | `gt`        | `{ date: { gt: "2025-01-01" } }`                         | After          |
 | `gte`       | `{ date: { gte: "2025-01-01" } }`                        | On or after    |
 | `lt`        | `{ date: { lt: "2025-12-31" } }`                         | Before         |
@@ -117,6 +121,7 @@ Applies to: `select` (single value).
 | equality    | `{ status: "published" }`                     | Exact match    |
 | `eq`        | `{ status: { eq: "published" } }`             | Exact match    |
 | `ne`        | `{ status: { ne: "draft" } }`                 | Not equal      |
+| `not`       | `{ status: { not: "draft" } }`                | Alias for `ne` |
 | `in`        | `{ status: { in: ["draft", "published"] } }`  | One of values  |
 | `notIn`     | `{ status: { notIn: ["archived"] } }`         | None of values |
 | `isNull`    | `{ status: { isNull: true } }`                | Is NULL        |

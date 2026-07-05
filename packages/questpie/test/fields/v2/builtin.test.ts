@@ -575,6 +575,19 @@ describe("Cross-cutting field behavior", () => {
 		).toBeDefined();
 	});
 
+	it("all scalar fields expose the not operator (alias for ne)", () => {
+		expect(text().getOperators().column.not).toBeDefined();
+		expect(number().getOperators().column.not).toBeDefined();
+		expect(boolean().getOperators().column.not).toBeDefined();
+		expect(date().getOperators().column.not).toBeDefined();
+		expect(datetime().getOperators().column.not).toBeDefined();
+		expect(email().getOperators().column.not).toBeDefined();
+		expect(url().getOperators().column.not).toBeDefined();
+		expect(
+			select([{ value: "a", label: { en: "A" } }]).getOperators().column.not,
+		).toBeDefined();
+	});
+
 	it("chaining is immutable — original unchanged", () => {
 		const base = text();
 		const required = base.required();

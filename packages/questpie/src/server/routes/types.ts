@@ -98,10 +98,13 @@ type RouteParamsFromSegment<TSegment extends string> =
 			? { [K in TParam]: string }
 			: {};
 
+type StripRouteMethodSuffix<TKey extends string> =
+	TKey extends `${infer TPath}:${HttpMethod}` ? TPath : TKey;
+
 export type RouteParamsFromKey<TKey extends string> =
-	TKey extends `${infer THead}/${infer TTail}`
+	StripRouteMethodSuffix<TKey> extends `${infer THead}/${infer TTail}`
 		? RouteParamsFromSegment<THead> & RouteParamsFromKey<TTail>
-		: RouteParamsFromSegment<TKey>;
+		: RouteParamsFromSegment<StripRouteMethodSuffix<TKey>>;
 
 /**
  * Context passed to JSON route handlers.
@@ -125,16 +128,15 @@ export type JsonRouteHandlerArgs<
 /**
  * Context passed to raw route handlers.
  */
-export type RawRouteHandlerArgs<
-	TParams extends JsonRouteParams = {},
-> = AppContext & {
-	/** Raw incoming request */
-	request: Request;
-	/** Current locale */
-	locale?: string;
-	/** URL path parameters (if pattern-matched) */
-	params: TParams;
-};
+export type RawRouteHandlerArgs<TParams extends JsonRouteParams = {}> =
+	AppContext & {
+		/** Raw incoming request */
+		request: Request;
+		/** Current locale */
+		locale?: string;
+		/** URL path parameters (if pattern-matched) */
+		params: TParams;
+	};
 
 // ============================================================================
 // Route Definitions — New Unified Types
@@ -150,7 +152,7 @@ export type JsonRouteDefinition<
 > = {
 	readonly __brand: "route";
 	readonly mode: "json";
-	readonly method: HttpMethod | HttpMethod[];
+	readonly method: HttpMethod;
 	readonly schema: z.ZodSchema<TInput>;
 	readonly outputSchema?: z.ZodSchema<TOutput>;
 	readonly access?: RouteAccess;
@@ -168,7 +170,7 @@ export type RawRouteDefinition<
 > = {
 	readonly __brand: "route";
 	readonly mode: "raw";
-	readonly method: HttpMethod | HttpMethod[];
+	readonly method: HttpMethod;
 	readonly access?: RouteAccess;
 	readonly meta?: RouteMeta;
 	readonly handler: (
@@ -208,7 +210,7 @@ export type InferRouteOutput<T> = T extends {
 	: T extends {
 				mode: "json";
 				outputSchema?: z.ZodSchema<infer Output> | undefined;
-			}
+		  }
 		? // JSON route definitions carry their output type on the (optional)
 			// `outputSchema` member even when no runtime schema was provided —
 			// `route().handler()` threads the inferred handler return type into
@@ -230,15 +232,17 @@ export type InferRouteParams<T> =
 			? TParams
 			: JsonRouteParams;
 
-export type RouteWithParams<TDef, TParams extends JsonRouteParams> =
-	TDef extends { mode: "json" }
-		? // Rebuild from the schema members instead of inferring the generics
-			// wholesale: codegen-erased handlers (`(args: unknown) => unknown`)
-			// would otherwise poison the inferred `TOutput` with `unknown`.
-			JsonRouteDefinition<InferRouteInput<TDef>, InferRouteOutput<TDef>, TParams>
-		: TDef extends { mode: "raw" }
-			? RawRouteDefinition<TParams>
-			: TDef;
+export type RouteWithParams<
+	TDef,
+	TParams extends JsonRouteParams,
+> = TDef extends { mode: "json" }
+	? // Rebuild from the schema members instead of inferring the generics
+		// wholesale: codegen-erased handlers (`(args: unknown) => unknown`)
+		// would otherwise poison the inferred `TOutput` with `unknown`.
+		JsonRouteDefinition<InferRouteInput<TDef>, InferRouteOutput<TDef>, TParams>
+	: TDef extends { mode: "raw" }
+		? RawRouteDefinition<TParams>
+		: TDef;
 
 // ============================================================================
 // Type Guards

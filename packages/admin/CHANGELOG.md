@@ -1,5 +1,46 @@
 # @questpie/admin
 
+## 3.11.0
+
+### Minor Changes
+
+- [#115](https://github.com/questpie/questpie/pull/115) [`fed686a`](https://github.com/questpie/questpie/commit/fed686a4a37a34a80783538c632e0597a4a98ec8) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Mobile-first admin overhaul — the admin panel is now genuinely usable on phones (≤390px).
+
+  - **Touch foundation:** 44px touch targets and 16px inputs under `@media (pointer: coarse)` (no more iOS zoom-on-focus), `hover: none` fallbacks so hover-only controls stay reachable, `touch-action`/tap-highlight tuning, and `svh`/`dvh` instead of `vh`.
+  - **Navigation & forms:** a persistent mobile header with a reopenable navigation drawer, a sticky bottom save bar on record forms, and confirmation/workflow dialogs that become bottom drawers on mobile.
+  - **List view:** replaces the desktop horizontal-scroll table on mobile with compact, expandable record rows — tap a row to reveal the remaining fields inline — reusing the same cell renderers, selection, bulk actions, sorting, presence and reorder.
+  - **Fields:** native date pickers, correct `inputMode` keyboards, comfortable select/array/relation controls, and a working relation reorder.
+  - **Media, editors, filters, dashboard** reflow for narrow screens; live-preview re-render churn is fixed by isolating the preview iframe behind `React.memo`.
+  - `create-questpie` templates now emit `viewport-fit=cover` + a `theme-color` so the admin sits correctly under device notches with branded browser chrome.
+
+### Patch Changes
+
+- [#116](https://github.com/questpie/questpie/pull/116) [`6cddd5b`](https://github.com/questpie/questpie/commit/6cddd5b2ec2127db40aa6b97212254689b9f780f) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Every user-code entry point now establishes the complete ambient `AppContext`, and lifecycle-hook contexts are self-documenting.
+
+  **Ambient context (`AsyncLocalStorage`).** Queue/cron job consumers — and queue-dispatched scheduled workflow transitions — did NOT establish ambient context: the queue runner invoked job handlers without `runWithContext`, so the ALS store was empty in jobs. Ambient consumers silently degraded (logger trace, admin-audit actor), ctx-less CRUD lost session/locale, and an email sent from a job crashed with `collections is undefined` (the mailer resolves its template-handler args from the empty store). Jobs now run inside `runWithContext` at system scope, so `getContext()`, ctx-less CRUD (inheriting session/locale), and `email.sendTemplate(...)` all work from a job/cron exactly as they do in an HTTP request.
+
+  **Admin server actions** previously received a hand-picked context that omitted `queue`/`email`/`storage`/`kv`/`services`, forcing a stage→`afterChange` workaround for side-effects. They now receive the full `extractAppServices` surface, and `ServerActionContext` extends `AppContextBase` (newly exported from `questpie`) so those services are typed.
+
+  **New guarantee:** every user-code entry point — HTTP, CRUD + hooks, jobs/cron, seeds, admin widgets/prefetch, and admin actions — establishes the complete ambient context and hands handlers the full `AppContext`. The queue (listen/runOnce/push/cron) was the only entry point that didn't.
+
+  Also in this release:
+
+  - **Lifecycle-hook ctx is self-documenting.** The `afterChange` ctx is now a discriminated union on `operation`: `original` is absent on `"create"` and the non-optional previous row on `"update"` (it was `TSelect | undefined` on both, contradicting its own docs). `afterDelete`'s `original` is typed to the deleted row instead of `never`.
+  - **`email.sendTemplate` honors `replyTo`** (it was silently dropped), and a contextless template handler that reaches for an app service now gets a clear, actionable error instead of a cryptic `collections is undefined`.
+  - The framework no longer dogfoods the deprecated `update`/`delete` CRUD aliases internally — prefer `updateById`/`updateMany` and `deleteById`/`deleteMany`.
+
+- Updated dependencies [[`4ed62ec`](https://github.com/questpie/questpie/commit/4ed62ec7375e7f841a20e7c36c11e15bc4f63b39), [`fed686a`](https://github.com/questpie/questpie/commit/fed686a4a37a34a80783538c632e0597a4a98ec8), [`7c4060d`](https://github.com/questpie/questpie/commit/7c4060df2fbc663cc9d4e718cff4ce72cdd83663), [`6cddd5b`](https://github.com/questpie/questpie/commit/6cddd5b2ec2127db40aa6b97212254689b9f780f)]:
+  - questpie@3.11.0
+  - @questpie/tanstack-query@3.11.0
+
+## 3.10.0
+
+### Patch Changes
+
+- Updated dependencies [[`d673da7`](https://github.com/questpie/questpie/commit/d673da7c463233222c8605851c9957cd2e90027d)]:
+  - questpie@3.10.0
+  - @questpie/tanstack-query@3.10.0
+
 ## 3.9.1
 
 ### Patch Changes
@@ -693,7 +734,7 @@
   - **Module system** — core infrastructure (search, realtime, auth, queue) wired as formal service definitions
   - **`fieldType()` + `FieldWithMethods`** — type-safe field chain methods (`.manyToMany()`, `.trim()`, `.autoNow()`, etc.)
   - **Hook type safety** — fully typed `ctx.data` in collection hooks, no more `{ [x: string]: any }` fallback
-  - **Route system** — file-path conventions, method chaining (`.get().post()`), priority matcher
+  - **Route system** — file-path conventions, method-specific route definitions, priority matcher
   - **Workflow transitions** — `transitionStage()` with scheduled transitions, audit logging, admin UI
   - **Version history** — full versions/revert parity across stack with admin UI
   - **Server actions** — real form field mapping, RPC execution, effects handling

@@ -294,7 +294,7 @@ import { useQuery } from "@tanstack/react-query";
 
 const { data } = useQuery({
 	queryKey: ["stats", period],
-	queryFn: () => client.routes.getStats({ period }),
+	queryFn: () => client.routes.getStats.post({ period }),
 });
 ```
 

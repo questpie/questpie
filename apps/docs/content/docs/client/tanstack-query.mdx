@@ -200,18 +200,18 @@ A global always exists (it's a singleton with defaults), so `q.globals.<name>.ge
 
 ## Routes
 
-`q.routes` mirrors your route tree. Traverse the dot-path to a route function, then call `.query(input?)`, `.mutation()`, or `.key(input?)`:
+`q.routes` mirrors your route tree. Traverse the dot-path to the HTTP method leaf, then call `.query(input?)`, `.mutation()`, or `.key(input?)`:
 
 ```ts
 // Read a route as a query.
-const stats = useQuery(q.routes.dashboard.getStats.query({ period: "week" }));
+const stats = useQuery(q.routes.dashboard.getStats.post.query({ period: "week" }));
 
 // Call a route as a mutation.
-const send = useMutation(q.routes.notifications.send.mutation());
+const send = useMutation(q.routes.notifications.send.post.mutation());
 send.mutate({ to: "user@example.com", subject: "Hi" });
 
 // Build the route's query key (for invalidation / prefetch).
-const key = q.routes.dashboard.getStats.key({ period: "week" });
+const key = q.routes.dashboard.getStats.post.key({ period: "week" });
 ```
 
 - **`.query(input?)`** → `queryOptions()`. The `input` is the route's first argument, typed from your route signature.
@@ -221,11 +221,11 @@ const key = q.routes.dashboard.getStats.key({ period: "week" });
 
 
 <Callout type="info" title="`.key()` always builds the query key, there is no mutation-key helper">
-`q.routes.<path>.key()` returns the same key shape as `.query()` (the `'query'` segment), even when a sibling `.mutation()` exists. Mutation keys are set internally on the mutation options object; there's no helper to construct one. Use `.key()` to invalidate or prefetch a route **query**.
+`q.routes.<path>.<method>.key()` returns the same key shape as `.query()` (the `'query'` segment), even when a sibling `.mutation()` exists. Mutation keys are set internally on the mutation options object; there's no helper to construct one. Use `.key()` to invalidate or prefetch a route **query**.
 </Callout>
 
 <Callout type="warn" title="Unknown routes throw at fetch time, not build time">
-The routes proxy is loose, `q.routes.a.b.c.query()` *builds* an options object for any dot-path. The path is only resolved against `client.routes` when the query runs; if it doesn't resolve to a function the fetcher throws `Route not found at path: a.b.c`. There's no build-time check that the route exists, so a typo'd path surfaces as a runtime query error, not a red squiggle. The same lazy-resolution applies to unknown collection/global names.
+The routes proxy is loose, `q.routes.a.b.c.post.query()` *builds* an options object for any dot-path. The path is only resolved against `client.routes` when the query runs; if it doesn't resolve to a function the fetcher throws `Route not found at path: a.b.c.post`. There's no build-time check that the route exists, so a typo'd path surfaces as a runtime query error, not a red squiggle. The same lazy-resolution applies to unknown collection/global names.
 </Callout>
 
 ## Realtime
@@ -313,7 +313,7 @@ Build keys for invalidation with the top-level **`q.key(parts)`** helper, it pre
 queryClient.invalidateQueries({ queryKey: q.key(["collections", "posts"]) });
 
 // Invalidate one route query exactly.
-queryClient.invalidateQueries({ queryKey: q.routes.dashboard.getStats.key({ period: "week" }) });
+queryClient.invalidateQueries({ queryKey: q.routes.dashboard.getStats.post.key({ period: "week" }) });
 
 // Or read the key straight off any builder result:
 const { queryKey } = q.collections.posts.find({ where: { published: true } });

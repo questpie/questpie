@@ -207,8 +207,25 @@ export function RichTextBubbleMenu({
 				duration: [120, 90],
 				interactive: true,
 				maxWidth: "none",
-				offset: [0, 8],
+				// Extra vertical gap clears the native iOS selection handles, and flip
+				// lets the toolbar drop below the selection when there is no room above.
+				offset: [0, 12],
 				placement: "top",
+				popperOptions: {
+					modifiers: [
+						{
+							name: "flip",
+							options: {
+								rootBoundary: "viewport",
+								fallbackPlacements: ["bottom", "top"],
+							},
+						},
+						{
+							name: "preventOverflow",
+							options: { rootBoundary: "viewport", padding: 8 },
+						},
+					],
+				},
 			}}
 			className="qp-rich-text-editor__bubble floating-surface text-popover-foreground"
 		>

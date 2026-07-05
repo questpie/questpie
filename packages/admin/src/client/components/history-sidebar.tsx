@@ -465,9 +465,15 @@ function ValuePreview({
 			</div>
 			{formatted.detail && (
 				<ScrollFade orientation="both" fadeSize={16}>
+					{/*
+					 * Mobile: let the value wrap and grow with the sheet's own scroll
+					 * (no vertical cap) to avoid a nested dual-axis scroll trap in a
+					 * 9rem box. Desktop restores the compact, independently scrollable
+					 * preview.
+					 */}
 					<pre
 						data-scroll-fade-target
-						className="control-surface text-muted-foreground h-auto max-h-36 overflow-auto p-2 font-mono text-[0.6875rem] leading-relaxed whitespace-pre-wrap"
+						className="control-surface text-muted-foreground h-auto overflow-x-auto p-2 font-mono text-[0.6875rem] leading-relaxed whitespace-pre-wrap md:max-h-36 md:overflow-auto"
 					>
 						{formatted.detail}
 					</pre>

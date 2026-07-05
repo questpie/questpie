@@ -146,11 +146,30 @@ export function createQueueClient<
 					db: context.db,
 					session: context.session,
 				});
-				await jobDef.handler({
-					...services,
-					payload: validated,
-					locale: context.locale,
-				} as any);
+				// Establish the ambient AppContext (ALS) for the job so implicit
+				// consumers — mailer template handlers, logger trace, admin-audit
+				// actor, and ctx-less CRUD — work inside jobs exactly as they do in
+				// HTTP/CRUD scopes. Jobs are system scope (matches today's empty-ALS
+				// fallback). `runWithContext` only inherits `_hookDepth` from an
+				// existing parent; a top-level job has none, so no double-count.
+				const { runWithContext } = await import(
+					"#questpie/server/config/context.js"
+				);
+				await runWithContext(
+					{
+						app: appInstance,
+						db: context.db,
+						session: context.session,
+						locale: context.locale,
+						accessMode: "system",
+					},
+					() =>
+						jobDef.handler({
+							...services,
+							payload: validated,
+							locale: context.locale,
+						} as any),
+				);
 			};
 		}
 

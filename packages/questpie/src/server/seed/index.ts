@@ -1,12 +1,20 @@
 export { SeedRunner, type SeedRunnerOptions } from "./runner.js";
 export {
+	type BaseSeed,
+	isStepSeed,
 	type ResetSeedsOptions,
 	type RunSeedsOptions,
 	resolveAutoSeedCategories,
 	type Seed,
 	type SeedCategory,
 	type SeedContext,
+	type SeedFactory,
+	type SeedJsonValue,
 	type SeedRecord,
+	type SeedStepContext,
 	type SeedStatus,
 	type SeedsConfig,
+	type SimpleSeed,
+	type StepSeed,
+	type StepSeedInput,
 } from "./types.js";

@@ -282,7 +282,7 @@ export function RichTextToolbar({
 	return (
 		<div
 			aria-label={t("editor.richTextToolbar")}
-			className="qp-rich-text-editor__toolbar border-border-subtle bg-surface-low flex flex-nowrap items-center gap-1.5 overflow-x-auto border-b p-1.5"
+			className="qp-rich-text-editor__toolbar border-border-subtle bg-surface-low flex flex-wrap items-center gap-1.5 border-b p-1.5 md:flex-nowrap md:overflow-x-auto"
 			role="toolbar"
 		>
 			{/* History Controls */}

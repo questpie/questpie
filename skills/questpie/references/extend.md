@@ -112,6 +112,8 @@ export default runtimeConfig({
 
 Use direct `runtimeConfig({ plugins })` registration only for standalone codegen plugins or custom setups that do not ship a module. Reusable packages should usually attach the plugin to a static module and let codegen extract it from `modules.ts`.
 
+A published module package that ships its own convention dirs declares package-level config with `packageConfig()` (from `questpie/cli`) instead of `runtimeConfig()`; codegen reads it when scanning the package.
+
 ### Configurable Codegen-Aware Modules
 
 When a package ships a module and a `CodegenPlugin`, keep module identity static and put runtime options in a plugin-discovered config file. Codegen imports `modules.ts` before runtime app creation, so it must be able to see the same module/plugin tree regardless of environment or runtime options.
@@ -344,21 +346,19 @@ Once registered and codegen runs, the field is available on `f`:
 
 ### Admin Renderer
 
-Register a React component to render the field in the admin panel:
+The admin renderer is a declarative `field()` definition (not a bare component): default-export `field("<typeName>", { component, cell? })` from `src/questpie/admin/fields/<name>.tsx`, where the name matches the server field type. Codegen discovers it; never edit `.generated/`.
 
-```tsx
-function ColorFieldRenderer({ value, onChange }) {
-	return (
-		<input
-			type="color"
-			value={value || "#000000"}
-			onChange={(e) => onChange(e.target.value)}
-		/>
-	);
+```tsx title="src/questpie/admin/fields/color.tsx"
+import { field, type FieldComponentProps } from "@questpie/admin/client";
+
+function ColorField({ value, onChange }: FieldComponentProps<string>) {
+	return <input type="color" value={value ?? "#000000"} onChange={(e) => onChange?.(e.target.value)} />;
 }
+
+export default field("color", { component: ColorField });
 ```
 
-Place it in `questpie/admin/fields/color.tsx` -- codegen discovers it automatically.
+Full prop contract, cells, and custom views/widgets/pages: the `questpie-admin` skill's `references/custom-ui.md` and `references/recipes.md`.
 
 ## Custom Adapters
 

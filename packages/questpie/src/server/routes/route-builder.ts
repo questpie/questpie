@@ -57,7 +57,7 @@ type HasOutput<T = unknown> = { __output: true; __outputType: T };
 // ============================================================================
 
 interface BuilderConfig {
-	method?: HttpMethod | HttpMethod[];
+	method?: HttpMethod;
 	mode?: "json" | "raw";
 	schema?: z.ZodSchema<any>;
 	outputSchema?: z.ZodSchema<any>;
@@ -92,61 +92,74 @@ export class RouteBuilder<
 	}
 
 	// ── HTTP Method setters ─────────────────────────────────────
-	// Chainable: `.get().post()` registers both GET and POST.
 
-	private _addMethod(m: HttpMethod): HttpMethod | HttpMethod[] {
+	private _setMethod(m: HttpMethod): HttpMethod {
 		const existing = this._config.method;
 		if (!existing) return m;
-		const arr = Array.isArray(existing) ? existing : [existing];
-		return arr.includes(m) ? arr : [...arr, m];
+		if (existing === m) return m;
+		throw new Error(
+			`route() accepts one HTTP method; use method-suffixed route files for multiple methods on the same path`,
+		);
 	}
 
 	get(): RouteBuilder<TParams, HasMethod<"GET">, TMode, TSchema, TOutput> {
 		return new RouteBuilder({
 			...this._config,
-			method: this._addMethod("GET"),
+			method: this._setMethod("GET"),
 		});
 	}
 
 	post(): RouteBuilder<TParams, HasMethod<"POST">, TMode, TSchema, TOutput> {
 		return new RouteBuilder({
 			...this._config,
-			method: this._addMethod("POST"),
+			method: this._setMethod("POST"),
 		});
 	}
 
 	put(): RouteBuilder<TParams, HasMethod<"PUT">, TMode, TSchema, TOutput> {
 		return new RouteBuilder({
 			...this._config,
-			method: this._addMethod("PUT"),
+			method: this._setMethod("PUT"),
 		});
 	}
 
-	delete(): RouteBuilder<TParams, HasMethod<"DELETE">, TMode, TSchema, TOutput> {
+	delete(): RouteBuilder<
+		TParams,
+		HasMethod<"DELETE">,
+		TMode,
+		TSchema,
+		TOutput
+	> {
 		return new RouteBuilder({
 			...this._config,
-			method: this._addMethod("DELETE"),
+			method: this._setMethod("DELETE"),
 		});
 	}
 
 	patch(): RouteBuilder<TParams, HasMethod<"PATCH">, TMode, TSchema, TOutput> {
 		return new RouteBuilder({
 			...this._config,
-			method: this._addMethod("PATCH"),
+			method: this._setMethod("PATCH"),
 		});
 	}
 
 	head(): RouteBuilder<TParams, HasMethod<"HEAD">, TMode, TSchema, TOutput> {
 		return new RouteBuilder({
 			...this._config,
-			method: this._addMethod("HEAD"),
+			method: this._setMethod("HEAD"),
 		});
 	}
 
-	options(): RouteBuilder<TParams, HasMethod<"OPTIONS">, TMode, TSchema, TOutput> {
+	options(): RouteBuilder<
+		TParams,
+		HasMethod<"OPTIONS">,
+		TMode,
+		TSchema,
+		TOutput
+	> {
 		return new RouteBuilder({
 			...this._config,
-			method: this._addMethod("OPTIONS"),
+			method: this._setMethod("OPTIONS"),
 		});
 	}
 
@@ -188,7 +201,13 @@ export class RouteBuilder<
 	 */
 	outputSchema<TNextOutput>(
 		schema: z.ZodSchema<TNextOutput>,
-	): RouteBuilder<TParams, _TMethod, JsonMode, TSchema, HasOutput<TNextOutput>> {
+	): RouteBuilder<
+		TParams,
+		_TMethod,
+		JsonMode,
+		TSchema,
+		HasOutput<TNextOutput>
+	> {
 		return new RouteBuilder({
 			...this._config,
 			mode: "json",
@@ -218,7 +237,9 @@ export class RouteBuilder<
 	/**
 	 * Set access control for this route.
 	 */
-	access(access: RouteAccess): RouteBuilder<TParams, _TMethod, TMode, TSchema, TOutput> {
+	access(
+		access: RouteAccess,
+	): RouteBuilder<TParams, _TMethod, TMode, TSchema, TOutput> {
 		return new RouteBuilder({ ...this._config, access }) as any;
 	}
 
@@ -227,7 +248,9 @@ export class RouteBuilder<
 	/**
 	 * Attach serializable metadata for introspection and integrations.
 	 */
-	meta(meta: RouteMeta): RouteBuilder<TParams, _TMethod, TMode, TSchema, TOutput> {
+	meta(
+		meta: RouteMeta,
+	): RouteBuilder<TParams, _TMethod, TMode, TSchema, TOutput> {
 		return new RouteBuilder({ ...this._config, meta }) as any;
 	}
 
@@ -258,13 +281,17 @@ export class RouteBuilder<
 			: TSchema extends HasSchema<infer TInput>
 				? TOutput extends HasOutput<infer O>
 					? (args: JsonRouteHandlerArgs<TInput, TParams>) => O | Promise<O>
-					: (args: JsonRouteHandlerArgs<TInput, TParams>) => TReturn | Promise<TReturn>
+					: (
+							args: JsonRouteHandlerArgs<TInput, TParams>,
+						) => TReturn | Promise<TReturn>
 				: // Output-only chain (`.outputSchema()` with no `.schema()`): JSON
 					// route with `unknown` input. Output comes from the schema, so the
 					// handler return is unconstrained here.
 					TMode extends JsonMode
 					? (args: JsonRouteHandlerArgs<unknown, TParams>) => any
-					: (args: RawRouteHandlerArgs<TParams>) => Response | Promise<Response>,
+					: (
+							args: RawRouteHandlerArgs<TParams>,
+						) => Response | Promise<Response>,
 	): TMode extends RawMode
 		? RawRouteDefinition<TParams>
 		: TSchema extends HasSchema<infer TInput>

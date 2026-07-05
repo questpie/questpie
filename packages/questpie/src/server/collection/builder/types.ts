@@ -367,24 +367,16 @@ export interface RelationVariant {
  * })
  * ```
  */
-export type HookContext<
-	TData = any,
-	TOriginal = any,
-	TOperation extends "create" | "update" | "delete" | "read" =
-		| "create"
-		| "update"
-		| "delete"
-		| "read",
-> = AppContext & {
+/**
+ * Shared hook-context fields — everything EXCEPT `operation` and `original`.
+ * Factored out so per-operation hook contexts (e.g. {@link AfterChangeContext})
+ * can discriminate `operation`/`original` while reusing the common surface.
+ */
+export type HookContextBase<TData = any> = AppContext & {
 	/**
-	 * The record data (created/updated record)
+	 * The record data (created/updated/deleted record)
 	 */
 	data: TData;
-
-	/**
-	 * Original record (only available for update operations in afterChange/afterRead hooks)
-	 */
-	original: TOriginal extends never ? never : TOriginal | undefined;
 
 	/**
 	 * Current locale
@@ -395,11 +387,6 @@ export type HookContext<
 	 * Access mode (system or user)
 	 */
 	accessMode?: AccessMode;
-
-	/**
-	 * Operation type (specific to hook)
-	 */
-	operation: TOperation;
 
 	// ---- Bulk metadata (present when operation is part of a batch) ----
 
@@ -423,6 +410,26 @@ export type HookContext<
 	 * dispatching jobs, sending emails, search indexing, webhook calls.
 	 */
 	onAfterCommit: (callback: () => Promise<void>) => void;
+};
+
+export type HookContext<
+	TData = any,
+	TOriginal = any,
+	TOperation extends "create" | "update" | "delete" | "read" =
+		| "create"
+		| "update"
+		| "delete"
+		| "read",
+> = HookContextBase<TData> & {
+	/**
+	 * Original record (only available for update operations in afterChange/afterRead hooks)
+	 */
+	original: TOriginal extends never ? never : TOriginal | undefined;
+
+	/**
+	 * Operation type (specific to hook)
+	 */
+	operation: TOperation;
 };
 
 /**
@@ -530,17 +537,26 @@ export type BeforeChangeHook<
 > = HookFunction<TInsert | TUpdate, never, "create" | "update">;
 
 /**
- * AfterChange hook - runs after create/update operations
- * @property data - Complete record (TSelect)
- * @property original - Original record (TSelect) - only available on update operations
- * @property operation - "create" | "update"
- * @remarks Use this for notifications, webhooks, syncing to external services
+ * AfterChange hook context — discriminated by `operation` so `original` is
+ * typed per-operation: absent on `"create"`, the previous row on `"update"`.
  */
-export type AfterChangeHook<TSelect = any> = HookFunction<
-	TSelect,
-	TSelect | undefined,
-	"create" | "update"
->;
+export type AfterChangeContext<TSelect = any> =
+	| (HookContextBase<TSelect> & { operation: "create"; original?: undefined })
+	| (HookContextBase<TSelect> & { operation: "update"; original: TSelect });
+
+/**
+ * AfterChange hook - runs after create/update operations.
+ * @property data - Complete record (TSelect)
+ * @property original - Previous row (TSelect) on `"update"`; absent on `"create"`
+ * @property operation - "create" | "update"
+ * @remarks Use this for notifications, webhooks, syncing to external services.
+ * @remarks Does NOT run on delete — handle deletes in {@link AfterDeleteHook}.
+ * @remarks Narrow on `operation`: `if (ctx.operation === "update") ctx.original`
+ * is the non-optional previous row; on `"create"` `original` is absent.
+ */
+export type AfterChangeHook<TSelect = any> = (
+	ctx: AfterChangeContext<TSelect>,
+) => Promise<void> | void;
 
 /**
  * BeforeRead hook - runs before read operations
@@ -582,17 +598,26 @@ export type BeforeDeleteHook<TSelect = any> = HookFunction<
 >;
 
 /**
- * AfterDelete hook - runs after delete operations
- * @property data - Deleted record (TSelect)
- * @property original - Not available
- * @property operation - "delete"
- * @remarks Use this for cleanup, logging, notifying users
+ * AfterDelete hook context — `data` and `original` are both the deleted row.
  */
-export type AfterDeleteHook<TSelect = any> = HookFunction<
-	TSelect,
-	never,
-	"delete"
->;
+export type AfterDeleteContext<TSelect = any> = HookContextBase<TSelect> & {
+	operation: "delete";
+	/** The deleted row (always populated by the runtime in afterDelete). */
+	original: TSelect;
+};
+
+/**
+ * AfterDelete hook - runs after delete operations.
+ * @property data - The deleted row (TSelect)
+ * @property original - The deleted row (TSelect) - populated by the runtime
+ * @property operation - "delete"
+ * @remarks Use this for cleanup, logging, notifying users.
+ * @remarks `data` is the deleted row; `original` is the same row. afterChange
+ * does NOT fire on delete — this hook does.
+ */
+export type AfterDeleteHook<TSelect = any> = (
+	ctx: AfterDeleteContext<TSelect>,
+) => Promise<void> | void;
 
 /**
  * Context passed to workflow transition hooks.

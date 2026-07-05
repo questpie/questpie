@@ -89,7 +89,7 @@ export function BlockInsertButton({
 			<button
 				type="button"
 				className={cn(
-					"group text-muted-foreground hover:text-foreground relative flex min-h-10 items-center gap-2 text-xs font-medium transition-colors active:scale-[0.96]",
+					"group text-muted-foreground hover:text-foreground relative flex min-h-11 items-center gap-2 text-xs font-medium transition-colors active:scale-[0.96] md:min-h-10",
 					className,
 				)}
 				onClick={handleOpen}

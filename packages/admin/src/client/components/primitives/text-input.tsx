@@ -5,6 +5,21 @@ import { Input } from "../ui/input";
 import type { TextInputProps } from "./types";
 
 /**
+ * Maps an input `type` to its native `inputMode` so touch keyboards match the
+ * field (e.g. `email` surfaces the `@`/`.com` keys). `text` and `password` are
+ * intentionally absent — they keep the standard keyboard, and `password` must
+ * not hint a numeric/other layout.
+ */
+const TYPE_INPUT_MODE: Partial<
+	Record<NonNullable<TextInputProps["type"]>, TextInputProps["inputMode"]>
+> = {
+	email: "email",
+	url: "url",
+	tel: "tel",
+	search: "search",
+};
+
+/**
  * Text Input Primitive
  *
  * A basic text input with value/onChange pattern.
@@ -29,6 +44,7 @@ export function TextInput({
 	readOnly,
 	maxLength,
 	autoComplete,
+	inputMode,
 	className,
 	id,
 	"aria-invalid": ariaInvalid,
@@ -57,6 +73,7 @@ export function TextInput({
 			readOnly={readOnly}
 			maxLength={maxLength}
 			autoComplete={autoComplete}
+			inputMode={inputMode ?? TYPE_INPUT_MODE[type]}
 			aria-invalid={ariaInvalid}
 			aria-describedby={ariaDescribedBy}
 			className={cn("qa-text-input", className)}

@@ -1,6 +1,6 @@
 {
 	"name": "questpie",
-	"version": "3.9.1",
+	"version": "3.11.0",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/questpie/questpie.git",
@@ -140,14 +140,14 @@
 	"devDependencies": {
 		"@electric-sql/pglite": "^0.3.14",
 		"@types/html-to-text": "^9.0.4",
-		"@types/nodemailer": "^7.0.5",
+		"@types/nodemailer": "^8.0.1",
 		"@types/pg": "^8.16.0",
 		"@types/qs": "^6.9.17",
 		"@types/react": "^19.2.7",
 		"bullmq": "^5.0.0",
 		"bun-types": "latest",
 		"drizzle-kit": "1.0.0-beta.6-4414a19",
-		"nodemailer": "^7.0.12",
+		"nodemailer": "^9.0.0",
 		"pg": "^8.13.1",
 		"pg-boss": "^12.5.4",
 		"tsdown": "^0.18.3"
@@ -157,7 +157,7 @@
 		"@react-email/render": "^2.0.0",
 		"bullmq": "^5.0.0",
 		"drizzle-kit": "1.0.0-beta.6-4414a19",
-		"nodemailer": "^7.0.12",
+		"nodemailer": "^9.0.0",
 		"pg": "^8.13.1",
 		"pg-boss": "^12.5.4"
 	},

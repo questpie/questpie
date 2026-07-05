@@ -37,7 +37,7 @@ Reference these guidelines when:
 | `service()`                    | `"questpie"`                 | No             |
 | `email({...})`                 | `"questpie"`                 | No             |
 | `migration({...})`             | `"questpie"`                 | No             |
-| `seed({...})`                  | `"questpie"`                 | No             |
+| `seed({...})` / `seed.steps({...})` | `"questpie"`            | No             |
 | `runtimeConfig({...})`         | `"questpie/app"`             | No             |
 | `appConfig({...})`             | `"questpie/app"`             | No             |
 | `authConfig({...})`            | `"questpie/app"`             | No             |
@@ -107,16 +107,20 @@ Files starting with `_`, `index.ts`, declaration files, tests, and specs are int
 
 | Topic             | File                            | Covers                                                             |
 | ----------------- | ------------------------------- | ------------------------------------------------------------------ |
+| Architecture      | `references/architecture.md`    | Framework overview, tech stack, project structure, file conventions, app bootstrap, data flow |
 | Quickstart        | `references/quickstart.md`      | Scaffold, configure, codegen, migrate, serve, zero to running app |
 | Data Modeling     | `references/data-modeling.md`   | Collections, globals, fields, relations, options, localization     |
 | Field Types       | `references/field-types.md`     | All built-in field types with options and operators                |
 | Type Inference    | `references/type-inference.md`  | The infer-first map: `CollectionDoc` / `CollectionWhere`, `AccessContext` helpers, per-op rule typing, cycle rules |
 | Rules             | `references/rules.md`           | Access control (row/field level), hooks lifecycle, validation, derived request context |
 | Business Logic    | `references/business-logic.md`  | Routes, jobs, services, email templates, context injection         |
+| AppContext        | `references/app-context.md`     | The `AppContext` runtime interface, where it's available, `getContext`, partial context overrides |
 | Durable Workflows | `references/workflows.md`       | Long-running workflows, steps, events, cron, admin UI              |
 | Sandboxed Code    | `references/sandbox.md`         | `ctx.executor.run()`, isolation modes, capability model, Deno engine deployment |
 | CRUD API          | `references/crud-api.md`        | `find`, `create`, `updateById`/`updateMany`, `deleteById`/`deleteMany`, atomic conditional updates, globals API |
+| Seeds             | `references/seeds.md`           | `seed()` vs `seed.steps()`, idempotency, checkpointed steps, categories, `dependsOn`, `undo`, `autoSeed`, seed CLI |
 | Query Operators   | `references/query-operators.md` | `where` clause operators by field type                             |
+| Realtime          | `references/realtime.md`        | Live queries over SSE, automatic broadcasts, `live()`/`liveIter()`, wire protocol, keepalive |
 
 ### Infrastructure
 
@@ -282,4 +286,4 @@ await queue.sendReminder.publish({ userId: "abc" });
 
 ## Full Compiled Document
 
-For the complete framework reference with all topics expanded: `AGENTS.md`
+`AGENTS.md` expands this file plus every `references/` topic inline, in one document. It is generated (`bun run scripts/build-skill-docs.ts`), so read it when you want everything at once, but edit the sources (this file and `references/`), never `AGENTS.md` directly.

@@ -2,6 +2,8 @@
 
 Schema-declared, boot-validated environment variables. One schema, typed access on the server, codegen-emitted typed modules for every frontend bundler. **Never use raw `process.env.X` / `process.env.X!` in QUESTPIE app code**, declare the var in `env.ts` instead.
 
+> **Scaffold default vs. this system.** A fresh `create-questpie` app validates env with `@t3-oss/env-core` in `src/lib/env.ts` - a plain app-level choice, not a framework requirement, and what `quickstart.md` / `production.md` show. The `questpie/env` system documented here (`env()` / `clientEnv()` convention files, boot-ordered validation, codegen-emitted typed client modules) is the framework-native alternative; adopt it when you want validation that fails before adapters/auth/db init and typed client env across bundlers. The two can coexist - pick one as the source for a given var.
+
 ## Server: `env.ts`
 
 Lives beside `questpie.config.ts`. Default-exports `env()`, which validates **at module evaluation**:

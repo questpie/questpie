@@ -14,7 +14,8 @@ import {
 	DragOverlay,
 	type DragStartEvent,
 	KeyboardSensor,
-	PointerSensor,
+	MouseSensor,
+	TouchSensor,
 	useSensor,
 	useSensors,
 } from "@dnd-kit/core";
@@ -42,11 +43,20 @@ export function BlockCanvas() {
 	const blocksByType = useBlockRegistry();
 	const [activeId, setActiveId] = React.useState<string | null>(null);
 
-	// Configure drag sensors with keyboard support
+	// Configure drag sensors. Use Mouse + Touch (instead of Pointer) so each
+	// input type gets its own activation rule: mouse drags after a small move,
+	// while touch needs a short long-press first — otherwise the first
+	// finger-move would scroll the page instead of starting a reorder.
 	const sensors = useSensors(
-		useSensor(PointerSensor, {
+		useSensor(MouseSensor, {
 			activationConstraint: {
 				distance: 8, // Require 8px of movement before starting drag
+			},
+		}),
+		useSensor(TouchSensor, {
+			activationConstraint: {
+				delay: 200,
+				tolerance: 8,
 			},
 		}),
 		useSensor(KeyboardSensor, {

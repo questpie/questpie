@@ -275,6 +275,10 @@ export async function executeAction(
 			locale,
 		}) as unknown as Record<string, unknown>;
 		const context: ServerActionContext = {
+			// Full app service surface (queue, email, storage, kv, user services, …)
+			// so action handlers run side-effects straight from ctx — no
+			// stage→afterChange workaround. Explicit fields below stay authoritative.
+			...services,
 			data: data || {},
 			itemId,
 			itemIds,
@@ -771,7 +775,7 @@ const getActionsConfigResponseSchema = z
  * @example
  * ```ts
  * // From client
- * const result = await client.routes.executeAction({
+ * const result = await client.routes.executeAction.post({
  *   collection: "posts",
  *   actionId: "publish",
  *   itemId: "123",

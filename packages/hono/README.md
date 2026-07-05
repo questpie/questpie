@@ -41,7 +41,7 @@ const client = createClientFromHono<AppType, App>({
 const { docs } = await client.collections.posts.find({ limit: 10 });
 
 // App routes — fully typed
-const stats = await client.routes.getStats({ period: "week" });
+const stats = await client.routes.getStats.post({ period: "week" });
 
 // Custom Hono routes — via Hono RPC
 const result = await client.api.custom.route.$get();

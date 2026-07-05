@@ -9,7 +9,7 @@ The same client runs in the browser, in a Node/Bun script, in a worker, or in a 
 
 ## What it does
 
-- **One typed surface for the whole API.** `client.collections.posts.find(...)`, `client.globals.settings.get()`, `client.routes.admin.stats(...)`, collections, globals, and custom routes are all inferred from `AppConfig`.
+- **One typed surface for the whole API.** `client.collections.posts.find(...)`, `client.globals.settings.get()`, `client.routes.admin.stats.post(...)`, collections, globals, and custom routes are all inferred from `AppConfig`.
 - **Inferred everything.** Collection names, `where` operators, `with` relation hydration, create/update inputs, and return shapes all come from your schema. No hand-written interfaces to drift.
 - **Live queries built in.** `collections.posts.live(...)` and `liveIter(...)` stream access-controlled snapshots over one multiplexed SSE connection, same result type as `find()`.
 - **Uploads with progress.** `collections.media.upload(file, { onProgress })` posts multipart with an `XMLHttpRequest` so you get real progress events and cancellation.
@@ -319,29 +319,25 @@ The remaining global methods mirror collections, with the singleton shapes:
 
 ## Custom routes
 
-Your [routes](/docs/concepts/routes) are reachable as a nested, callable proxy. A route file's path becomes a dot path, camelCased segments mapped to kebab-case URLs:
+Your [routes](/docs/concepts/routes) are reachable as a nested proxy with explicit HTTP method leaves. A route file's path becomes a dot path, camelCased segments mapped to kebab-case URLs:
 
 ```ts
-// routes/admin/stats.ts  →  client.routes.admin.stats(input)
-const stats = await client.routes.admin.stats({ period: "week" });
+// routes/admin/stats.post.ts  ->  client.routes.admin.stats.post(input)
+const stats = await client.routes.admin.stats.post({ period: "week" });
 //    ^? typed from the route's input/output schema
 
-// Calling at any depth sends POST {basePath}/admin/stats with a JSON body.
+// POST/PUT/PATCH/DELETE send input as a JSON body.
 ```
 
-For routes that declare an HTTP method (multi-export `:GET`, `:POST`, …), the leaf gains a method caller:
+GET routes use `.get(input)` and serialize the input into the query string:
 
 ```ts
-// routes/admin/stats.ts exporting `stats:GET`  →  client.routes.admin.stats.get(input)
+// routes/admin/stats.get.ts  ->  client.routes.admin.stats.get(input)
 const stats = await client.routes.admin.stats.get({ period: "week" });
-// GET serializes `input` into the query string; POST/PUT/PATCH/DELETE send it as a JSON body.
-
-// The full URL string is available without calling:
-const url = client.routes.admin.stats.url; // "http://localhost:3000/api/admin/stats"
 ```
 
-<Callout type="info" title="The routes proxy is callable at any depth">
-`client.routes` is a `Proxy`, traversing deeper builds the URL path, and **calling** any node sends the request (default `POST`). Segment names are converted camelCase → kebab-case (`adminStats` → `admin-stats`). Method names are matched case-insensitively (`.get`, `.post`, `.put`, `.delete`, `.patch`). Untyped apps degrade to a permissive `Record<string, any>` so a typed client stays assignable to `QuestpieClient<any>`.
+<Callout type="info" title="Route calls always use a method leaf">
+`client.routes` is a `Proxy`, traversing deeper builds the URL path, and the final `.get` / `.post` / `.put` / `.patch` / `.delete` leaf sends the request. Segment names are converted camelCase → kebab-case (`adminStats` → `admin-stats`). Untyped apps degrade to a permissive `Record<string, any>` so a typed client stays assignable to `QuestpieClient<any>`.
 </Callout>
 
 ## Search

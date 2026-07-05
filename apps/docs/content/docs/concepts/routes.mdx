@@ -10,7 +10,7 @@ A **route** is one HTTP endpoint you declare as a file. You default-export a `ro
 - **Turns a file into an endpoint.** A `route()` export under `routes/` (or `functions/`) becomes a live HTTP route after codegen, no registration, no central router.
 - **Validates input before your handler.** `.schema(z…)` parses the request body with Zod *before* access control and *before* the handler; a bad payload throws a `400` and never reaches your code.
 - **Hands your handler the full context.** Destructure `input` and `params` alongside `collections`, `globals`, `db`, `session`, `queue`, `kv`, `storage`, and the rest, everything arrives through the argument.
-- **Generates a nested typed client method.** `routes/create-booking.ts` becomes `client.routes.createBooking(input)`, with input and return type inferred end to end; nested folders nest the proxy (`routes/admin/stats.ts` → `client.routes.admin.stats`).
+- **Generates a nested typed client method.** `routes/create-booking.post.ts` becomes `client.routes.createBooking.post(input)`, with input and return type inferred end to end; nested folders nest the proxy (`routes/admin/stats.get.ts` → `client.routes.admin.stats.get`).
 - **Gates access, public by default.** `.access(rule)` accepts a boolean or a predicate over the request context. With no rule, the route is public, the inverse of collections.
 - **Drops to raw when you need it.** `.raw()` gives you the `Request` and lets you return any `Response`, streams, redirects, custom content types.
 - **Carries metadata for integrations.** `.meta({ … })` feeds OpenAPI (`title`, `description`, `tags`) and can expose the route as an MCP tool via `meta.mcp`.
@@ -19,7 +19,7 @@ A **route** is one HTTP endpoint you declare as a file. You default-export a `ro
 
 Create one file per route under your `routes/` directory and default-export a `route()`. Chain a method, a `.schema()`, and the terminal `.handler()`. The handler destructures the validated `input` and anything else it needs from the context.
 
-```ts title="src/questpie/server/routes/create-booking.ts"
+```ts title="src/questpie/server/routes/create-booking.post.ts"
 import { route } from "questpie/services";
 import { z } from "zod";
 
@@ -55,7 +55,7 @@ export default route()
 Run `questpie generate` (or `questpie dev`, which watches) and the route is live. Call it from the typed client with the camelCased filename:
 
 ```ts
-const booking = await client.routes.createBooking({
+const booking = await client.routes.createBooking.post({
   barberId: "brb_1",
   serviceId: "svc_1",
   scheduledAt: "2026-07-01T10:00:00.000Z",
@@ -74,35 +74,31 @@ A new route only enters the typed runtime and the client once `questpie generate
 
 ## Where route files live
 
-Codegen scans two directories, `routes/` and `functions/`, recursively, with the path segments as the key (`keySeparator: "/"`). Names must be unique across both directories; a collision (`routes/foo.ts` and `functions/foo.ts`) is a codegen error. Use one route per file.
+Codegen scans two directories, `routes/` and `functions/`, recursively, with the path segments as the key (`keySeparator: "/"`). Names must be unique across both directories; a collision (`routes/foo.post.ts` and `functions/foo.post.ts`) is a codegen error. Use one route per file.
 
 ## File path → key → URL
 
-The filename drives three things at once. A route file maps to a per-segment camelCase **key** (the client path and the registry entry) and a kebab-case **URL pattern** mounted under your API base path (`/api` in the default scaffold). The HTTP verb is the method you chain, defaulting to `POST`:
+The filename drives three things at once. A route file maps to a per-segment camelCase **key** (the client path and the registry entry), a kebab-case **URL pattern** mounted under your API base path (`/api` in the default scaffold), and the typed client method leaf:
 
 | File | Client method | HTTP path |
 | --- | --- | --- |
-| `routes/create-booking.ts` | `client.routes.createBooking` | `POST /api/create-booking` |
-| `routes/get-revenue-stats.ts` | `client.routes.getRevenueStats` | `POST /api/get-revenue-stats` |
-| `routes/admin/stats.ts` | `client.routes.admin.stats` | `POST /api/admin/stats` |
-| `routes/posts/[id].ts` | `client.routes.posts["[id]"]` (literal key) | `GET /api/posts/:id` |
-| `routes/files/[...path].ts` | `client.routes.files["[...path]"]` (literal key) | `GET /api/files/*path` |
+| `routes/create-booking.post.ts` | `client.routes.createBooking.post` | `POST /api/create-booking` |
+| `routes/revenue-stats.get.ts` | `client.routes.revenueStats.get` | `GET /api/revenue-stats` |
+| `routes/admin/stats.get.ts` | `client.routes.admin.stats.get` | `GET /api/admin/stats` |
+| `routes/posts/[id].get.ts` | `client.routes.posts["[id]"].get` (literal key) | `GET /api/posts/:id` |
+| `routes/files/[...path].get.ts` | `client.routes.files["[...path]"].get` (literal key) | `GET /api/files/*path` |
 
-Folders nest into both the URL path and the client proxy: `routes/admin/stats.ts` is reachable as `client.routes.admin.stats(input)`, not `client.routes.adminStats`. A `[param]` segment becomes a dynamic `:param` in the URL; a `[...slug]` segment becomes a catch-all `*slug`. On the **typed** client, though, a `[param]` segment is **not** a value-substitutable index, it stays a **literal bracketed property key**. The client's `ExpandKey` type only splits route keys on `/` and `:`, so `routes/posts/[id].ts` is typed as `client.routes.posts["[id]"]`, the literal string `"[id]"`, not a slot you fill with `"p_1"`. There is no value-substitution anywhere in the proxy (it only camelCases→kebab-cases each segment and joins with `/`).
+Folders nest into both the URL path and the client proxy: `routes/admin/stats.get.ts` is reachable as `client.routes.admin.stats.get(input)`, not `client.routes.adminStats.get`. A `[param]` segment becomes a dynamic `:param` in the URL; a `[...slug]` segment becomes a catch-all `*slug`. On the **typed** client, though, a `[param]` segment is **not** a value-substitutable index, it stays a **literal bracketed property key**. The client's `ExpandKey` type only splits route keys on `/` and `:`, so `routes/posts/[id].get.ts` is typed as `client.routes.posts["[id]"].get`, the literal string `"[id]"`, not a slot you fill with `"p_1"`. There is no value-substitution anywhere in the proxy (it only camelCases→kebab-cases each segment and joins with `/`).
 
 <Callout type="warn" title="The typed client has no value-substitution form for dynamic routes">
-A `[param]` route is reachable on the typed client only as its **literal** key (`client.routes.posts["[id]"]`), which builds the URL `/api/posts/[id]` verbatim, not a real `:id` lookup. To call a dynamic route with an actual id, hit it over HTTP yourself (`fetch("/api/posts/p_1")`) or build the URL manually; the typed client does not splice the value in. The route's **server** handler still reads the resolved value through `params` (see below), it's only the client *call* surface that has no first-class dynamic form.
-</Callout>
-
-<Callout type="info" title="`route()` defaults to `POST`, in raw mode">
-If you chain no HTTP method, the route is registered as `POST` (`this._config.method ?? "POST"`). And a bare `route().handler(…)` with **no** `.schema()` and **no** `.raw()` is a **raw** route, the handler gets no `input` and must return a `Response`. Add a verb and `.schema(…)` to get a typed JSON route.
+A `[param]` route is reachable on the typed client only as its **literal** key plus method leaf (`client.routes.posts["[id]"].get`), which builds the URL `/api/posts/[id]` verbatim, not a real `:id` lookup. To call a dynamic route with an actual id, hit it over HTTP yourself (`fetch("/api/posts/p_1")`) or build the URL manually; the typed client does not splice the value in. The route's **server** handler still reads the resolved value through `params` (see below), it's only the client *call* surface that has no first-class dynamic form.
 </Callout>
 
 ## Path params
 
 URL parameters come from `[param]` segments in the file path. They are **not** declared at runtime, you open them to the type system with the type-only `.params<…>()` method so the handler can read them safely:
 
-```ts title="src/questpie/server/routes/posts/[id].ts"
+```ts title="src/questpie/server/routes/posts/[id].get.ts"
 import { route } from "questpie/services";
 
 export default route()
@@ -147,7 +143,7 @@ The rule runs inside a `try/catch`; **any** exception is swallowed and resolves 
 
 `.schema()` validates the **input**; `.outputSchema()` validates and types the **return value**. Both imply JSON mode.
 
-```ts title="src/questpie/server/routes/subscribe.ts"
+```ts title="src/questpie/server/routes/subscribe.post.ts"
 export default route()
   .post()
   .schema(z.object({ email: z.string().email() }))
@@ -161,12 +157,8 @@ export default route()
   });
 ```
 
-- **Input**, `schema.parse(input)` runs **first**, before access control and before the handler. A Zod failure throws and your code never runs. The JSON HTTP handler reads `input` from the request **body** (JSON or superjson) by default. The typed client mirrors this: every plain `client.routes.foo(input)` call sends a **`POST` with a JSON body**, even for a route you chained `.get()` on. Query-string serialization is a separate, opt-in code path (see the GET callout below).
+- **Input**, `schema.parse(input)` runs **first**, before access control and before the handler. A Zod failure throws and your code never runs. The typed client mirrors the method leaf: `.get(input)` serializes input into the query string, while `.post(input)`, `.put(input)`, `.patch(input)`, and `.delete(input)` send a JSON body.
 - **Output**, when present, `outputSchema.parse(result)` validates and coerces the handler's return at the end. The schema type also **becomes** the route's output type and constrains what the handler may return.
-
-<Callout type="warn" title="A `.get()`-chained route is still called over `POST` by the typed client">
-Chaining `.get()` registers the route on the `GET` verb, but the typed client's default call (`client.routes.foo(input)`) always sends a **`POST` with a JSON body**, so calling a GET-only route that way would `405`. The client only serializes `input` into a **query string** through a dedicated `.get(input)` **leaf**, and that leaf is surfaced *only* for routes that use the `:METHOD` **filename-suffix** convention: a file named `foo.get.ts` gets the route key `foo:GET`, which the client types as `client.routes.foo.get(input)` (a query-string GET). A plainly `.get()`-chained `foo.ts` has key `foo`, no `.get` leaf, no query-string path. So reach for the query-string GET via the `*.get.ts` filename, not by chaining `.get()`.
-</Callout>
 
 <Callout type="info" title="`.schema()` alone gives you a typed return, `.outputSchema()` is optional">
 For a schema route without an output schema, the handler's inferred return type is threaded into the route's output type (and into the client), so you only reach for `.outputSchema()` when you want **runtime** response validation/coercion on top of the inferred type. An `.outputSchema()`-only chain (no `.schema()`) is still a JSON route, its `input` is `unknown`, never raw.
@@ -176,7 +168,7 @@ For a schema route without an output schema, the handler's inferred return type 
 
 `.meta({ … })` attaches serializable, descriptive metadata. It has **no** effect on routing or execution, it feeds introspection, OpenAPI, and MCP. Set `title`, `description`, and `tags` for OpenAPI; set `mcp` to expose the route as an MCP tool.
 
-```ts title="src/questpie/server/routes/get-revenue-stats.ts"
+```ts title="src/questpie/server/routes/get-revenue-stats.post.ts"
 export default route()
   .post()
   .schema(
@@ -220,7 +212,7 @@ OpenAPI reads the top-level `title`, `description`, and `tags` (plus any extra k
 
 When you need full control of the response, streaming, redirects, custom content types, or parsing the request yourself, use `.raw()`. The handler receives the `Request` (always present here) and must return a `Response`.
 
-```ts title="src/questpie/server/routes/health.ts"
+```ts title="src/questpie/server/routes/health.get.ts"
 import { route } from "questpie/services";
 
 export default route()
@@ -240,14 +232,28 @@ export default route()
 
 ## Multiple methods
 
-Method calls are **additive**, chain more than one to register the same handler on several verbs on the same path. Internally the method list dedupes; the runtime config keeps the full array even though the type-state remembers only the last verb.
+One route definition owns one HTTP method. When the same path needs multiple verbs, create sibling method-suffixed files and share the handler from a private helper if the body should stay identical.
 
-```ts title="src/questpie/server/routes/webhook.ts"
+```ts title="src/questpie/server/routes/webhook/_handler.ts"
+import type { RawRouteHandlerArgs } from "questpie/types";
+
+export async function handleWebhook({ request }: RawRouteHandlerArgs) {
+  return new Response("ok");
+}
+```
+
+```ts title="src/questpie/server/routes/webhook/[id].get.ts"
 export default route()
   .get()
-  .post() // this route now answers BOTH GET and POST
   .raw()
-  .handler(({ request }) => new Response("ok"));
+  .handler(handleWebhook);
+```
+
+```ts title="src/questpie/server/routes/webhook/[id].post.ts"
+export default route()
+  .post()
+  .raw()
+  .handler(handleWebhook);
 ```
 
 When the path matches but the method doesn't, the HTTP adapter returns `405` with an `Allow` header; when no route matches at all, it returns `404`.
@@ -258,7 +264,7 @@ When the path matches but the method doesn't, the HTTP adapter returns `405` wit
 
 | Method | Effect |
 | --- | --- |
-| `.get()` `.post()` `.put()` `.delete()` `.patch()` `.head()` `.options()` | Register an HTTP method. **Additive**, chain several to handle multiple verbs. Defaults to `POST` if none is set. |
+| `.get()` `.post()` `.put()` `.delete()` `.patch()` `.head()` `.options()` | Register the route's HTTP method. One route definition has one method; use method-suffixed files for multiple methods on the same path. |
 | `.schema(z…)` | Validate the input with Zod and switch to **JSON mode**. The handler receives a typed, validated `input`. |
 | `.outputSchema(z…)` | Validate/coerce the return value and make that schema the route's output type. JSON mode. Optional. |
 | `.params<{ … }>()` | **Type-only.** Declare the URL params shape so the handler can read `params.x`. No runtime effect, takes no argument. |
@@ -290,7 +296,7 @@ The HTTP adapter runs routes for you, but the same definitions are callable in c
 
 ```ts title="In a test or script"
 import { executeJsonRoute } from "questpie/services";
-import subscribe from "@/questpie/server/routes/subscribe";
+import subscribe from "@/questpie/server/routes/subscribe.post";
 
 const result = await executeJsonRoute(app, subscribe, {
   email: "ada@example.com",
@@ -335,7 +341,7 @@ import type {
   InferRouteParams,
 } from "questpie/types";
 
-import type createBooking from "@/questpie/server/routes/create-booking";
+import type createBooking from "@/questpie/server/routes/create-booking.post";
 
 type Input = InferRouteInput<typeof createBooking>;
 //   ^ { barberId: string; serviceId: string; scheduledAt: string; customerEmail: string }
@@ -347,7 +353,7 @@ type Params = InferRouteParams<typeof createBooking>; // Record<string, string> 
 These read the route definition's **schema** members rather than re-running the handler, so they survive codegen (which erases only the handler body). `InferRouteInput` resolves to `never` for raw routes; `InferRouteOutput` falls back to a loud `unknown` (never a silent `any`) so you are forced to narrow.
 
 <Callout type="info" title="Params in the generated `AppRoutes` come from the filename">
-Codegen derives exact params from the file key via `RouteParamsFromKey`, `RouteParamsFromKey<"users/[id]/posts">` yields `{ id: string }`, and re-attaches them to the generated route type with `RouteWithParams`. This is why a `[id]` route is correctly typed in `client.routes.*` even though the handler's body uses the `.params<…>()` declaration. Both `[id]` and `[...slug]` map to a `string` member.
+Codegen derives exact params from the file key via `RouteParamsFromKey`, `RouteParamsFromKey<"users/[id]/posts:GET">` yields `{ id: string }`, and re-attaches them to the generated route type with `RouteWithParams`. This is why a `[id]` route is correctly typed in `client.routes.*` even though the handler's body uses the `.params<…>()` declaration. Both `[id]` and `[...slug]` map to a `string` member.
 </Callout>
 
 The runtime types and guards live on two entries. From **`questpie/types`**: `InferRouteInput`, `InferRouteOutput`, `InferRouteParams`, `JsonRouteDefinition`, `JsonRouteHandlerArgs`, `RawRouteDefinition`, `RawRouteHandlerArgs`, `RouteDefinition`, `StoredRouteDefinition`, `RouteParamsFromKey`, `RouteWithParams`. From **`questpie/services`** (and the main `questpie` entry): `route`, `RouteBuilder`, the execution helpers (`executeJsonRoute`, `executeRawRoute`, `evaluateRouteAccess`), the guards `isJsonRoute` / `isRawRoute`, and the remaining route types `HttpMethod`, `RouteAccess`, `RouteAccessContext`, `RouteAccessRule`, `RouteMeta`, `RouteMcpMeta`, `RoutesTree`. Introspection (`introspectRoutes`, `IntrospectedRoute`) is on `questpie/introspection`.

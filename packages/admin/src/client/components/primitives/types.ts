@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { HTMLAttributes, ReactNode } from "react";
 
 import type { I18nText } from "../../i18n/types";
 
@@ -33,6 +33,11 @@ export interface TextInputProps extends BasePrimitiveProps {
 	type?: "text" | "email" | "password" | "url" | "tel" | "search";
 	maxLength?: number;
 	autoComplete?: string;
+	/**
+	 * Native virtual-keyboard hint. When omitted it is derived from `type`
+	 * (email/url/tel/search); `text` and `password` keep the standard keyboard.
+	 */
+	inputMode?: HTMLAttributes<HTMLInputElement>["inputMode"];
 }
 
 export interface NumberInputProps extends BasePrimitiveProps {

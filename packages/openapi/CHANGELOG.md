@@ -1,5 +1,30 @@
 # @questpie/openapi
 
+## 3.0.36
+
+### Patch Changes
+
+- Updated dependencies [[`4ed62ec`](https://github.com/questpie/questpie/commit/4ed62ec7375e7f841a20e7c36c11e15bc4f63b39), [`fed686a`](https://github.com/questpie/questpie/commit/fed686a4a37a34a80783538c632e0597a4a98ec8), [`7c4060d`](https://github.com/questpie/questpie/commit/7c4060df2fbc663cc9d4e718cff4ce72cdd83663), [`6cddd5b`](https://github.com/questpie/questpie/commit/6cddd5b2ec2127db40aa6b97212254689b9f780f)]:
+  - questpie@3.11.0
+
+## 3.0.35
+
+### Patch Changes
+
+- [`d673da7`](https://github.com/questpie/questpie/commit/d673da7c463233222c8605851c9957cd2e90027d) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Make custom route calls use one canonical typed client shape: `client.routes.name.method(input)`.
+  Route definitions now accept one HTTP method per builder; use method-suffixed route files for multiple methods on the same path.
+  Route params inferred from method-suffixed keys now ignore the trailing `:METHOD`, so keys like `posts/[id]:GET` and `auth/[...path]:POST` keep their params.
+
+  OpenAPI route generation now keeps operation and schema ids distinct for method-suffixed sibling routes that share one path.
+  Docs and agent-facing examples now show only method-suffixed route files and method-leaf client calls.
+
+  Normal `seed({...})` handlers now run inside a single database transaction, so failed writes and the seed tracking row roll back together. For resumable or side-effectful seed work, `seed.steps({...})` exposes `step(name, fn)`, stores completed step checkpoints in `questpie_seed_steps`, returns cached JSON results on replay, and clears checkpoints during force/reset/undo flows.
+
+  The seed docs and Questpie skill references were updated to describe the new default transaction behavior, the `seed.steps()` API, checkpoint cleanup, and the no seed-wide rollback caveat for step seeds.
+
+- Updated dependencies [[`d673da7`](https://github.com/questpie/questpie/commit/d673da7c463233222c8605851c9957cd2e90027d)]:
+  - questpie@3.10.0
+
 ## 3.0.34
 
 ### Patch Changes
@@ -277,7 +302,7 @@
   - **Module system** — core infrastructure (search, realtime, auth, queue) wired as formal service definitions
   - **`fieldType()` + `FieldWithMethods`** — type-safe field chain methods (`.manyToMany()`, `.trim()`, `.autoNow()`, etc.)
   - **Hook type safety** — fully typed `ctx.data` in collection hooks, no more `{ [x: string]: any }` fallback
-  - **Route system** — file-path conventions, method chaining (`.get().post()`), priority matcher
+  - **Route system** — file-path conventions, method-specific route definitions, priority matcher
   - **Workflow transitions** — `transitionStage()` with scheduled transitions, audit logging, admin UI
   - **Version history** — full versions/revert parity across stack with admin UI
   - **Server actions** — real form field mapping, RPC execution, effects handling

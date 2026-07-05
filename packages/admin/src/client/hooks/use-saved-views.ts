@@ -86,7 +86,7 @@ export function useDeleteSavedView(collectionName: string, userId?: string) {
 				);
 			}
 
-			return collections.admin_saved_views.delete({ id: viewId });
+			return collections.admin_saved_views.deleteById({ id: viewId });
 		},
 		onSuccess: () => {
 			queryClient.invalidateQueries({

@@ -1,12 +1,16 @@
 import { sql } from "drizzle-orm";
 
-import { withTransaction } from "#questpie/server/collection/crud/shared/transaction.js";
+import {
+	getCurrentTransaction,
+	withTransaction,
+} from "#questpie/server/collection/crud/shared/transaction.js";
 import { extractAppServices } from "#questpie/server/config/app-context.js";
 import { runWithContext } from "#questpie/server/config/context.js";
 import type { Questpie } from "#questpie/server/config/questpie.js";
 import { rowsOf } from "#questpie/server/db/driver-result.js";
 import { getEnv, getNodeEnv } from "#questpie/server/utils/env.js";
 
+import { isStepSeed } from "./types.js";
 import type {
 	ResetSeedsOptions,
 	RunSeedsOptions,
@@ -14,7 +18,10 @@ import type {
 	SeedCategory,
 	SeedContext,
 	SeedRecord,
+	SeedStepContext,
 	SeedStatus,
+	SimpleSeed,
+	StepSeed,
 } from "./types.js";
 
 export type SeedRunnerOptions = {
@@ -31,6 +38,7 @@ export type SeedRunnerOptions = {
  */
 export class SeedRunner {
 	private tableName = "questpie_seeds";
+	private stepTableName = "questpie_seed_steps";
 	readonly silent: boolean;
 
 	constructor(
@@ -69,6 +77,18 @@ export class SeedRunner {
 		);
 	}
 
+	async ensureSeedStepsTable(): Promise<void> {
+		await this.app.db.execute(
+			sql`CREATE TABLE IF NOT EXISTS ${sql.identifier(this.stepTableName)} (
+				seed_id TEXT NOT NULL,
+				step_name TEXT NOT NULL,
+				result_json JSONB NOT NULL,
+				executed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+				UNIQUE (seed_id, step_name)
+			)`,
+		);
+	}
+
 	/**
 	 * Run seeds with optional filtering.
 	 * Resolves dependencies and skips already-executed seeds (unless force=true).
@@ -103,6 +123,10 @@ export class SeedRunner {
 			? filtered
 			: filtered.filter((s) => !executedIds.has(s.id));
 
+		if (pending.some(isStepSeed)) {
+			await this.ensureSeedStepsTable();
+		}
+
 		if (pending.length === 0) {
 			this.log("✅ No pending seeds");
 			return;
@@ -117,10 +141,6 @@ export class SeedRunner {
 		this.log(`🌱 Running ${pending.length} seed(s)...`);
 
 		const reqCtx = await this.app.createContext({ accessMode: "system" });
-		const baseServices = extractAppServices(this.app, {
-			db: this.app.db,
-			session: (reqCtx as any).session,
-		});
 
 		for (const seed of pending) {
 			this.log(
@@ -128,30 +148,10 @@ export class SeedRunner {
 			);
 
 			try {
-				const seedCtx: SeedContext = {
-					...baseServices,
-					log: (msg: string) => this.log(`    ${msg}`),
-					createContext: (opts?: {
-						locale?: string;
-						accessMode?: "system" | "user";
-					}) =>
-						this.app.createContext({
-							accessMode: opts?.accessMode ?? "system",
-							locale: opts?.locale,
-						}),
-				} as unknown as SeedContext;
-
-				await seed.run(seedCtx);
-
-				// Record execution (upsert for force re-runs)
-				if (executedIds.has(seed.id)) {
-					await this.app.db.execute(
-						sql`UPDATE ${sql.identifier(this.tableName)} SET executed_at = CURRENT_TIMESTAMP WHERE id = ${seed.id}`,
-					);
+				if (isStepSeed(seed)) {
+					await this.runStepSeed(seed, reqCtx, executedIds, options.force);
 				} else {
-					await this.app.db.execute(
-						sql`INSERT INTO ${sql.identifier(this.tableName)} (id, category) VALUES (${seed.id}, ${seed.category})`,
-					);
+					await this.runSimpleSeed(seed, reqCtx, executedIds);
 				}
 
 				this.log(`  ✅ Seed completed: ${seed.id}`);
@@ -164,6 +164,211 @@ export class SeedRunner {
 		}
 
 		this.log("✅ All seeds completed successfully");
+	}
+
+	private async runSimpleSeed(
+		seed: SimpleSeed,
+		reqCtx: Awaited<ReturnType<Questpie<any>["createContext"]>>,
+		executedIds: Set<string>,
+	): Promise<void> {
+		await withTransaction(this.app.db, async (tx: any) => {
+			const seedCtx = this.createSeedContext(reqCtx, tx);
+
+			await runWithContext(
+				{
+					app: this.app,
+					session: (reqCtx as any).session,
+					db: tx,
+					locale: reqCtx.locale,
+					accessMode: "system",
+					stage: reqCtx.stage,
+				},
+				() => seed.run(seedCtx),
+			);
+
+			await this.recordSeedExecution(seed, executedIds, tx);
+		});
+	}
+
+	private async runStepSeed(
+		seed: StepSeed,
+		reqCtx: Awaited<ReturnType<Questpie<any>["createContext"]>>,
+		executedIds: Set<string>,
+		force?: boolean,
+	): Promise<void> {
+		if (force) {
+			await this.clearForcedStepSeedState(seed.id);
+			executedIds.delete(seed.id);
+		}
+
+		const seedCtx: SeedStepContext = {
+			...this.createSeedContext(reqCtx, this.app.db),
+			step: (name, fn) => this.runSeedStep(seed, name, fn, reqCtx),
+		};
+
+		await runWithContext(
+			{
+				app: this.app,
+				session: (reqCtx as any).session,
+				db: this.app.db,
+				locale: reqCtx.locale,
+				accessMode: "system",
+				stage: reqCtx.stage,
+			},
+			() => seed.run(seedCtx),
+		);
+
+		await this.recordSeedExecution(seed, executedIds, this.app.db);
+	}
+
+	private createSeedContext(
+		reqCtx: Awaited<ReturnType<Questpie<any>["createContext"]>>,
+		db: any,
+	): SeedContext {
+		const services = extractAppServices(this.app, {
+			db,
+			session: (reqCtx as any).session,
+			locale: reqCtx.locale,
+		});
+
+		return {
+			...services,
+			log: (msg: string) => this.log(`    ${msg}`),
+			createContext: (opts?: {
+				locale?: string;
+				accessMode?: "system" | "user";
+			}) =>
+				this.app.createContext({
+					accessMode: opts?.accessMode ?? "system",
+					locale: opts?.locale,
+					db: getCurrentTransaction() ?? db,
+				}),
+		} as unknown as SeedContext;
+	}
+
+	private async recordSeedExecution(
+		seed: Seed,
+		executedIds: Set<string>,
+		db: any,
+	): Promise<void> {
+		await db.execute(
+			sql`INSERT INTO ${sql.identifier(this.tableName)} (id, category)
+				VALUES (${seed.id}, ${seed.category})
+				ON CONFLICT (id) DO UPDATE SET
+					category = EXCLUDED.category,
+					executed_at = CURRENT_TIMESTAMP`,
+		);
+		executedIds.add(seed.id);
+	}
+
+	private async runSeedStep<T>(
+		seed: StepSeed,
+		name: string,
+		fn: (ctx: SeedContext) => T | Promise<T>,
+		reqCtx: Awaited<ReturnType<Questpie<any>["createContext"]>>,
+		db: any = this.app.db,
+	): Promise<T> {
+		const completed = await this.getCompletedSeedStep(seed.id, name, db);
+		if (completed.found) return completed.value as T;
+
+		return withTransaction(db, async (tx: any) => {
+			const stepCtx = this.createSeedContext(reqCtx, tx);
+			const value = await runWithContext(
+				{
+					app: this.app,
+					session: (reqCtx as any).session,
+					db: tx,
+					locale: reqCtx.locale,
+					accessMode: "system",
+					stage: reqCtx.stage,
+				},
+				() => fn(stepCtx),
+			);
+
+			await this.recordSeedStep(seed.id, name, value, tx);
+			return value;
+		});
+	}
+
+	private async getCompletedSeedStep(
+		seedId: string,
+		stepName: string,
+		db: any = this.app.db,
+	): Promise<{ found: true; value: unknown } | { found: false }> {
+		const result: any = await db.execute(
+			sql`SELECT result_json FROM ${sql.identifier(this.stepTableName)} WHERE seed_id = ${seedId} AND step_name = ${stepName} LIMIT 1`,
+		);
+		const row = rowsOf<any>(result)[0];
+		if (!row) return { found: false };
+
+		return {
+			found: true,
+			value: this.decodeStepResult(row.result_json),
+		};
+	}
+
+	private async recordSeedStep(
+		seedId: string,
+		stepName: string,
+		value: unknown,
+		db: any,
+	): Promise<void> {
+		await db.execute(
+			sql`INSERT INTO ${sql.identifier(this.stepTableName)} (seed_id, step_name, result_json)
+				VALUES (${seedId}, ${stepName}, ${this.encodeStepResult(value)}::jsonb)
+				ON CONFLICT (seed_id, step_name) DO UPDATE SET
+					result_json = EXCLUDED.result_json,
+					executed_at = CURRENT_TIMESTAMP`,
+		);
+	}
+
+	private async clearForcedStepSeedState(seedId: string): Promise<void> {
+		await withTransaction(this.app.db, async (tx: any) => {
+			await this.clearSeedSteps(seedId, tx);
+			await this.clearSeedRecord(seedId, tx);
+		});
+	}
+
+	private async clearSeedSteps(
+		seedId: string,
+		db: any = this.app.db,
+	): Promise<void> {
+		await db.execute(
+			sql`DELETE FROM ${sql.identifier(this.stepTableName)} WHERE seed_id = ${seedId}`,
+		);
+	}
+
+	private async clearSeedRecord(
+		seedId: string,
+		db: any = this.app.db,
+	): Promise<void> {
+		await db.execute(
+			sql`DELETE FROM ${sql.identifier(this.tableName)} WHERE id = ${seedId}`,
+		);
+	}
+
+	private encodeStepResult(value: unknown): string {
+		return JSON.stringify({ value });
+	}
+
+	private decodeStepResult(value: unknown): unknown {
+		if (value == null) return undefined;
+
+		let decoded: unknown;
+		try {
+			decoded = typeof value === "string" ? JSON.parse(value) : value;
+		} catch {
+			return undefined;
+		}
+
+		if (
+			decoded &&
+			typeof decoded === "object" &&
+			Object.prototype.hasOwnProperty.call(decoded, "value")
+		) {
+			return (decoded as { value?: unknown }).value;
+		}
+		return undefined;
 	}
 
 	/**
@@ -183,29 +388,16 @@ export class SeedRunner {
 
 		try {
 			await withTransaction(this.app.db, async (tx: any) => {
-				// Create a temporary context with tx db
-				const txServices = extractAppServices(this.app, {
-					db: tx,
-					session: (reqCtx as any).session,
-					locale: reqCtx.locale,
-				});
-
 				for (const seed of pending) {
 					this.log(`  🔍 Validating seed: ${seed.id}`);
 
-					const seedCtx: SeedContext = {
-						...txServices,
-						log: (msg: string) => this.log(`    ${msg}`),
-						createContext: (opts?: {
-							locale?: string;
-							accessMode?: "system" | "user";
-						}) =>
-							this.app.createContext({
-								accessMode: opts?.accessMode ?? "system",
-								locale: opts?.locale,
-								db: tx,
-							}),
-					} as unknown as SeedContext;
+					const seedCtx = isStepSeed(seed)
+						? ({
+								...this.createSeedContext(reqCtx, tx),
+								step: (name, fn) =>
+									this.runSeedStep(seed, name, fn, reqCtx, tx),
+							} as SeedStepContext)
+						: this.createSeedContext(reqCtx, tx);
 
 					await runWithContext(
 						{
@@ -216,7 +408,10 @@ export class SeedRunner {
 							accessMode: "system",
 							stage: reqCtx.stage,
 						},
-						() => seed.run(seedCtx),
+						() =>
+							isStepSeed(seed)
+								? seed.run(seedCtx as SeedStepContext)
+								: seed.run(seedCtx),
 					);
 					this.log(`  ✅ Seed valid: ${seed.id}`);
 				}
@@ -246,6 +441,9 @@ export class SeedRunner {
 		} = {},
 	): Promise<void> {
 		await this.ensureSeedsTable();
+		if (seeds.some(isStepSeed)) {
+			await this.ensureSeedStepsTable();
+		}
 
 		const executed = await this.getExecutedSeeds();
 		const executedIds = new Set(executed.map((s) => s.id));
@@ -277,32 +475,31 @@ export class SeedRunner {
 		this.log(`🔄 Undoing ${toUndo.length} seed(s)...`);
 
 		const reqCtx = await this.app.createContext({ accessMode: "system" });
-		const baseServices = extractAppServices(this.app, {
-			db: this.app.db,
-			session: (reqCtx as any).session,
-		});
 
 		for (const seed of toUndo) {
 			this.log(`  🔄 Undoing seed: ${seed.id}`);
 			try {
-				const seedCtx: SeedContext = {
-					...baseServices,
-					log: (msg: string) => this.log(`    ${msg}`),
-					createContext: (opts?: {
-						locale?: string;
-						accessMode?: "system" | "user";
-					}) =>
-						this.app.createContext({
-							accessMode: opts?.accessMode ?? "system",
-							locale: opts?.locale,
-						}),
-				} as unknown as SeedContext;
+				await withTransaction(this.app.db, async (tx: any) => {
+					const seedCtx = this.createSeedContext(reqCtx, tx);
 
-				await seed.undo?.(seedCtx);
+					await runWithContext(
+						{
+							app: this.app,
+							session: (reqCtx as any).session,
+							db: tx,
+							locale: reqCtx.locale,
+							accessMode: "system",
+							stage: reqCtx.stage,
+						},
+						() => seed.undo?.(seedCtx),
+					);
 
-				await this.app.db.execute(
-					sql`DELETE FROM ${sql.identifier(this.tableName)} WHERE id = ${seed.id}`,
-				);
+					if (isStepSeed(seed)) {
+						await this.clearSeedSteps(seed.id, tx);
+					}
+
+					await this.clearSeedRecord(seed.id, tx);
+				});
 
 				this.log(`  ✅ Undo completed: ${seed.id}`);
 			} catch (error) {
@@ -320,16 +517,23 @@ export class SeedRunner {
 	 */
 	async reset(options: ResetSeedsOptions = {}): Promise<void> {
 		await this.ensureSeedsTable();
+		await this.ensureSeedStepsTable();
 
 		if (options.only?.length) {
 			const ids = options.only;
 			await this.app.db.execute(
 				sql`DELETE FROM ${sql.identifier(this.tableName)} WHERE id IN (${sql.join(ids.map((id) => sql`${id}`))})`,
 			);
+			await this.app.db.execute(
+				sql`DELETE FROM ${sql.identifier(this.stepTableName)} WHERE seed_id IN (${sql.join(ids.map((id) => sql`${id}`))})`,
+			);
 			this.log(`✅ Seed tracking reset for: ${options.only.join(", ")}`);
 		} else {
 			await this.app.db.execute(
 				sql`DELETE FROM ${sql.identifier(this.tableName)}`,
+			);
+			await this.app.db.execute(
+				sql`DELETE FROM ${sql.identifier(this.stepTableName)}`,
 			);
 			this.log("✅ Seed tracking reset");
 		}
@@ -384,9 +588,7 @@ export class SeedRunner {
 	 */
 	private async getExecutedSeeds(): Promise<SeedRecord[]> {
 		const result: any = await this.app.db.execute(
-			sql.raw(
-				`SELECT id, category, executed_at FROM ${this.tableName} ORDER BY executed_at ASC`,
-			),
+			sql`SELECT id, category, executed_at FROM ${sql.identifier(this.tableName)} ORDER BY executed_at ASC`,
 		);
 
 		return rowsOf<any>(result).map((row: any) => ({
@@ -404,11 +606,15 @@ export class SeedRunner {
 		const seedMap = new Map(allSeeds.map((s) => [s.id, s]));
 		const toRunIds = new Set(toRun.map((s) => s.id));
 		const visited = new Set<string>();
+		const visiting = new Set<string>();
 		const sorted: Seed[] = [];
 
 		const visit = (seed: Seed) => {
 			if (visited.has(seed.id)) return;
-			visited.add(seed.id);
+			if (visiting.has(seed.id)) {
+				throw new Error(`Circular seed dependency detected at "${seed.id}"`);
+			}
+			visiting.add(seed.id);
 
 			for (const depId of seed.dependsOn || []) {
 				const dep = seedMap.get(depId);
@@ -426,6 +632,9 @@ export class SeedRunner {
 			if (toRunIds.has(seed.id)) {
 				sorted.push(seed);
 			}
+
+			visiting.delete(seed.id);
+			visited.add(seed.id);
 		};
 
 		for (const seed of toRun) {

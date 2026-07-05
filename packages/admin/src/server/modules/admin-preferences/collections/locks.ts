@@ -26,13 +26,13 @@ import { collection } from "questpie";
  * });
  *
  * // Heartbeat to keep lock alive
- * await app.collections.admin_locks.update({
+ * await app.collections.admin_locks.updateById({
  *   id: lockId,
  *   data: { expiresAt: new Date(Date.now() + 60000) },
  * });
  *
  * // Release lock when closing document
- * await app.collections.admin_locks.delete({ id: lockId });
+ * await app.collections.admin_locks.deleteById({ id: lockId });
  * ```
  */
 export const locksCollection = collection("admin_locks")

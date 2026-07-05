@@ -23,6 +23,7 @@
  */
 
 import { Icon } from "@iconify/react";
+import { keepPreviousData } from "@tanstack/react-query";
 import * as React from "react";
 import { toast } from "sonner";
 
@@ -97,6 +98,9 @@ interface MediaPickerDialogProps {
 // MIME Type Filters
 // ============================================================================
 
+/** Assets fetched per "page". The fetch window grows by this on "Load more". */
+const PAGE_SIZE = 50;
+
 const MIME_TYPE_FILTERS = [
 	{ value: "all", labelKey: "media.allFiles" as const, mimePattern: undefined },
 	{ value: "images", labelKey: "media.images" as const, mimePattern: "image/" },
@@ -135,6 +139,10 @@ export function MediaPickerDialog({
 	const [previewAssetId, setPreviewAssetId] = React.useState<string | null>(
 		null,
 	);
+	// Number of assets to fetch. Grows by PAGE_SIZE via the "Load more" control so
+	// libraries larger than one page are reachable without a separate paginated
+	// hook. Resets to one page whenever the query (search/filter) changes.
+	const [limit, setLimit] = React.useState(PAGE_SIZE);
 
 	// Build where clause for query
 	const where = React.useMemo(() => {
@@ -178,17 +186,31 @@ export function MediaPickerDialog({
 
 	const trimmedSearch = searchQuery.trim();
 
+	// Reset the fetch window back to one page whenever the query changes, so a
+	// large limit from a previous search/filter doesn't carry over (and over-fetch)
+	// into a new one. Guard pattern avoids an effect + extra render.
+	const querySignature = `${trimmedSearch}|${mimeFilter}`;
+	const [prevQuerySignature, setPrevQuerySignature] =
+		React.useState(querySignature);
+	if (prevQuerySignature !== querySignature) {
+		setPrevQuerySignature(querySignature);
+		setLimit(PAGE_SIZE);
+	}
+
 	// Fetch assets
 	const { data, isLoading } = useCollectionList(
 		resolvedCollection || "",
 		{
 			where,
 			search: trimmedSearch || undefined,
-			limit: 50,
+			limit,
 			orderBy: { createdAt: "desc" },
 		},
 		{
 			enabled: open && !!resolvedCollection,
+			// Keep the already-loaded thumbnails on screen while a larger "Load more"
+			// window fetches, instead of flashing the skeleton and losing scroll.
+			placeholderData: keepPreviousData,
 		},
 	);
 
@@ -196,6 +218,11 @@ export function MediaPickerDialog({
 		() => (data?.docs || []) as Asset[],
 		[data?.docs],
 	);
+	const totalDocs: number =
+		typeof data?.totalDocs === "number" ? data.totalDocs : assets.length;
+	// More to fetch when the server reports more rows than we've pulled and the
+	// current window is full (avoids a dangling "Load more" on a partial last page).
+	const canLoadMore = assets.length < totalDocs && assets.length >= limit;
 	const previewAsset = React.useMemo(() => {
 		if (!open || assets.length === 0) return null;
 		return assets.find((asset) => asset.id === previewAssetId) ?? assets[0];
@@ -213,6 +240,7 @@ export function MediaPickerDialog({
 		setSearchQuery("");
 		setMimeFilter("all");
 		setPreviewAssetId(null);
+		setLimit(PAGE_SIZE);
 	}, []);
 
 	const handleOpenChange = React.useCallback(
@@ -269,6 +297,10 @@ export function MediaPickerDialog({
 	const handleCancel = () => {
 		handleOpenChange(false);
 	};
+
+	const handleLoadMore = React.useCallback(() => {
+		setLimit((current) => current + PAGE_SIZE);
+	}, []);
 
 	return (
 		<Sheet open={open} onOpenChange={handleOpenChange} modal={false}>
@@ -348,6 +380,30 @@ export function MediaPickerDialog({
 								className="gap-2"
 								onAssetClick={(asset) => setPreviewAssetId(asset.id)}
 							/>
+
+							{/* Pagination: grows the fetch window. Libraries larger than
+								one page were previously unreachable except via search. */}
+							{!isLoading && assets.length > 0 && (
+								<div className="mt-4 flex flex-col items-center gap-2">
+									<p className="text-muted-foreground chrome-meta text-xs tabular-nums">
+										{t("table.showing", {
+											from: 1,
+											to: assets.length,
+											total: totalDocs,
+										})}
+									</p>
+									{canLoadMore && (
+										<Button
+											variant="outline"
+											onClick={handleLoadMore}
+											className="w-full gap-2 sm:w-auto"
+										>
+											<Icon icon="ph:arrow-down-bold" className="size-4" />
+											{t("table.loadMore")}
+										</Button>
+									)}
+								</div>
+							)}
 						</div>
 						<div className="border-border hidden w-80 shrink-0 flex-col gap-3 border-l pl-4 lg:flex xl:w-96">
 							<p className="text-muted-foreground font-chrome chrome-meta text-xs font-medium">

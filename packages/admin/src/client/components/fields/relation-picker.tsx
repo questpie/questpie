@@ -365,6 +365,23 @@ export function RelationPicker<T extends QuestpieApp>({
 		[selectedIds, onChange],
 	);
 
+	// Reorder an item within the selected-ids array (RelationPicker owns the
+	// value array, so the displays delegate reordering up to here). Guarded at
+	// the array bounds; a no-op move never fires onChange.
+	const handleMove = React.useCallback(
+		(itemId: string, direction: -1 | 1) => {
+			const index = selectedIds.indexOf(itemId);
+			if (index === -1) return;
+			const target = index + direction;
+			if (target < 0 || target >= selectedIds.length) return;
+			const next = [...selectedIds];
+			const [moved] = next.splice(index, 1);
+			next.splice(target, 0, moved);
+			onChange(next);
+		},
+		[selectedIds, onChange],
+	);
+
 	const handleOpenCreate = React.useCallback(() => {
 		setEditingItemId(undefined);
 		setIsSheetOpen(true);
@@ -397,8 +414,24 @@ export function RelationPicker<T extends QuestpieApp>({
 				!readOnly && (!required || selectedIds.length > 1)
 					? (item: any) => handleRemove(item.id)
 					: undefined,
+			onMoveUp:
+				orderable && !readOnly
+					? (item: any) => handleMove(item.id, -1)
+					: undefined,
+			onMoveDown:
+				orderable && !readOnly
+					? (item: any) => handleMove(item.id, 1)
+					: undefined,
 		}),
-		[readOnly, required, selectedIds.length, handleOpenEdit, handleRemove],
+		[
+			readOnly,
+			required,
+			selectedIds.length,
+			handleOpenEdit,
+			handleRemove,
+			orderable,
+			handleMove,
+		],
 	);
 
 	return (
