@@ -52,6 +52,11 @@ export default service({
 		if ("url" in config.db) {
 			app._pgConnectionString = config.db.url;
 
+			// Optional pool tuning (see DbPoolConfig). questpie's config is in ms;
+			// each driver gets its native unit. Omitted keys keep driver defaults.
+			const pool = config.db.pool;
+			const msToSec = (ms: number) => Math.max(1, Math.ceil(ms / 1000));
+
 			// Pick the Postgres driver by runtime so a single `db.url` config runs
 			// on BOTH Bun and Node: Bun → the native zero-dep `bun:sql` client;
 			// Node (e.g. Next.js's server runtime) → `node-postgres` via the
@@ -62,7 +67,21 @@ export default service({
 					import("drizzle-orm/bun-sql"),
 				]);
 
-				const bunSqlClient = new SQL({ url: config.db.url });
+				// Bun's SQL takes all timeouts in SECONDS.
+				const bunSqlClient = new SQL({
+					url: config.db.url,
+					...(pool?.max !== undefined ? { max: pool.max } : {}),
+					...(pool?.connectionTimeoutMs !== undefined
+						? { connectionTimeout: msToSec(pool.connectionTimeoutMs) }
+						: {}),
+					...(pool?.idleTimeoutMs !== undefined
+						? { idleTimeout: msToSec(pool.idleTimeoutMs) }
+						: {}),
+					...(pool?.maxLifetimeMs !== undefined
+						? { maxLifetime: msToSec(pool.maxLifetimeMs) }
+						: {}),
+					...(pool?.prepare !== undefined ? { prepare: pool.prepare } : {}),
+				});
 				app._dbCleanup = () => bunSqlClient.close({ timeout: 5 });
 				return drizzleBun({ client: bunSqlClient, schema });
 			}
@@ -72,7 +91,23 @@ export default service({
 				import("drizzle-orm/node-postgres"),
 			]);
 
-			const pgPool = new pg.Pool({ connectionString: config.db.url });
+			// node-postgres takes acquire/idle timeouts in MILLISECONDS and
+			// connection lifetime in SECONDS. `prepare` has no pool-level knob (it
+			// only creates named statements when a query sets `name`), so it is
+			// intentionally not mapped here.
+			const pgPool = new pg.Pool({
+				connectionString: config.db.url,
+				...(pool?.max !== undefined ? { max: pool.max } : {}),
+				...(pool?.connectionTimeoutMs !== undefined
+					? { connectionTimeoutMillis: pool.connectionTimeoutMs }
+					: {}),
+				...(pool?.idleTimeoutMs !== undefined
+					? { idleTimeoutMillis: pool.idleTimeoutMs }
+					: {}),
+				...(pool?.maxLifetimeMs !== undefined
+					? { maxLifetimeSeconds: msToSec(pool.maxLifetimeMs) }
+					: {}),
+			});
 			app._dbCleanup = () => pgPool.end();
 			return drizzlePg({ client: pgPool, schema });
 		}
