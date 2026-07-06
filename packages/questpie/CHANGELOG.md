@@ -1,5 +1,17 @@
 # questpie
 
+## 3.13.0
+
+### Minor Changes
+
+- [#122](https://github.com/questpie/questpie/pull/122) [`9423a47`](https://github.com/questpie/questpie/commit/9423a47da757508935f192f73cc99b3ea7bac575) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Add optional connection-pool tuning to the `db: { url }` config via a new `pool` field (`DbPoolConfig`): `max`, `connectionTimeoutMs`, `idleTimeoutMs`, `maxLifetimeMs`, and `prepare` (Bun only, for PgBouncer transaction mode). Values are given in milliseconds and mapped to each driver's native unit — Bun `bun:sql` (seconds) and `node-postgres` (ms for acquire/idle, seconds for lifetime).
+
+  Previously `db: { url }` created the pool with zero tuning (`new SQL({ url })` / `new pg.Pool({ connectionString })`), so it inherited driver defaults — notably node-postgres' `connectionTimeoutMillis: 0`, i.e. an unbounded wait to acquire a connection. On a shared Postgres running near its `max_connections` cap, that unbounded wait let a single request stall long enough to trip the SSR stream lifetime cap. Set a bounded `connectionTimeoutMs` so pool acquisition fails fast instead of hanging. Fully backward compatible: omit `pool` to keep the previous behavior.
+
+### Patch Changes
+
+- [#122](https://github.com/questpie/questpie/pull/122) [`9423a47`](https://github.com/questpie/questpie/commit/9423a47da757508935f192f73cc99b3ea7bac575) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Codegen now recreates each target's output directory on every non-dry run, so generated files from a convention that was removed (for example `env.client.*` modules after deleting `env.client.ts`) no longer linger after regeneration.
+
 ## 3.12.0
 
 ### Minor Changes
