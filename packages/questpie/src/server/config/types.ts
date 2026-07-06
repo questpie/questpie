@@ -407,9 +407,54 @@ export type DbCreateResult<TDb extends AnyDrizzleClient = AnyDrizzleClient> =
 			close?: DbCloseFn;
 	  };
 
+/**
+ * Optional connection-pool tuning for the `db: { url }` variant. Applied to
+ * whichever Postgres driver the runtime selects — Bun's native `bun:sql` on
+ * Bun, `node-postgres` on Node. All timeouts are in MILLISECONDS; questpie
+ * converts to each driver's native unit.
+ *
+ * Omit entirely to keep driver defaults (pool `max` 10, and — critically for
+ * node-postgres — NO bounded acquire timeout, i.e. wait forever). On a shared
+ * Postgres running near its connection cap, that "wait forever" is exactly how
+ * a single request stalls long enough to trip an SSR stream lifetime cap. Set a
+ * bounded `connectionTimeoutMs` so pool acquisition fails fast instead.
+ */
+export interface DbPoolConfig {
+	/** Maximum connections in the pool. @default 10 (driver default) */
+	max?: number;
+	/**
+	 * Max time to wait when acquiring/establishing a pooled connection before
+	 * failing. Bounds the "server is at its connection cap" case so callers get
+	 * a fast error instead of hanging.
+	 * → Bun `connectionTimeout` (s), node-postgres `connectionTimeoutMillis` (ms).
+	 * @default driver default (Bun 30000; node-postgres 0 = wait forever)
+	 */
+	connectionTimeoutMs?: number;
+	/**
+	 * Close idle connections after this long.
+	 * → Bun `idleTimeout` (s), node-postgres `idleTimeoutMillis` (ms).
+	 */
+	idleTimeoutMs?: number;
+	/**
+	 * Recycle a connection after this long, even if healthy.
+	 * → Bun `maxLifetime` (s), node-postgres `maxLifetimeSeconds` (s).
+	 * @default 0 (no limit)
+	 */
+	maxLifetimeMs?: number;
+	/**
+	 * Disable server-side NAMED prepared statements. Required to route this pool
+	 * through PgBouncer in transaction mode. Bun only — node-postgres does not
+	 * create named prepared statements unless a query sets `name`.
+	 * @default true
+	 */
+	prepare?: boolean;
+}
+
 export type DbConfig =
 	| {
 			url: string;
+			/** Optional connection-pool tuning. Omit to use driver defaults. */
+			pool?: DbPoolConfig;
 	  }
 	| {
 			pglite: PGliteClient;
