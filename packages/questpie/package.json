@@ -125,6 +125,7 @@
 		"dev": "bun run --watch src/index.ts"
 	},
 	"dependencies": {
+		"@better-auth/oauth-provider": "^1.6.23",
 		"@drepkovsky/tinydi": "^2.3.0",
 		"better-auth": "^1.6.11",
 		"commander": "^14.0.2",
