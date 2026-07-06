@@ -53,7 +53,7 @@ export default authConfig({
 		bearer(),
 		jwt(),
 		oauthProvider({
-			loginPage: "/admin/sign-in",
+			loginPage: "/admin/login",
 			consentPage: "/admin/oauth/consent",
 			scopes: SEED_SCOPES,
 			// Public subset advertised at the discovery endpoints (MO11 expands this).
