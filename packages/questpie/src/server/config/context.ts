@@ -129,6 +129,7 @@ const appContextStorage = new AsyncLocalStorage<
 	{
 		app: unknown;
 		session?: unknown | null;
+		principal?: Principal;
 		db?: unknown;
 		locale?: string;
 		accessMode?: string;
@@ -149,6 +150,7 @@ const MAX_HOOK_RECURSION = 5;
 export interface StoredContext {
 	app: unknown;
 	session?: unknown | null;
+	principal?: Principal;
 	db?: unknown;
 	locale?: string;
 	accessMode?: string;
@@ -226,6 +228,7 @@ export function runWithContext<T>(
 	ctx: {
 		app: unknown;
 		session?: unknown | null;
+		principal?: Principal;
 		db?: unknown;
 		locale?: string;
 		accessMode?: string;
@@ -313,6 +316,47 @@ export function getContext<TApp>(): InferContextExtensionsFromApp<TApp> & {
 }
 
 // ============================================================================
+// Principal (identity on the request context)
+// ============================================================================
+
+/**
+ * Discriminated identity for a request.
+ *
+ * Generalizes the implicit "session is the only identity" model. The variant
+ * discriminates how the request was authenticated:
+ * - `user` — cookie / bearer-session (first-party admin). Today's session path.
+ * - `oauth` — an OAuth 2.1 access token. Resolves to a real `user` plus the
+ *   consented `scopes`; RBAC still applies as that user (scopes are an
+ *   additional gate). Nothing constructs this variant yet — it is populated by
+ *   a later task once token verification lands.
+ * - `system` — stdio / internal / trusted worker. Bypasses access control,
+ *   matching today's `accessMode: "system"` path.
+ *
+ * `accessMode` is derived from `kind` (`system` ⇔ `kind: "system"`, else
+ * `"user"`), so every existing reader of `accessMode` keeps working unchanged.
+ */
+export type Principal =
+	| { kind: "user"; user: User; session: Session }
+	| {
+			kind: "oauth";
+			user: User;
+			clientId: string;
+			scopes: string[];
+			tokenId: string;
+	  }
+	| { kind: "system" };
+
+/**
+ * Derive the legacy `accessMode` from a principal.
+ *
+ * `system` principal ⇔ `"system"` (full-access bypass); every other principal
+ * (`user`, `oauth`) ⇔ `"user"` (access control applies).
+ */
+export function accessModeForPrincipal(principal: Principal): AccessMode {
+	return principal.kind === "system" ? "system" : "user";
+}
+
+// ============================================================================
 // Request Context Types
 // ============================================================================
 
@@ -342,6 +386,19 @@ export interface BaseRequestContext {
 	 * ```
 	 */
 	session?: { user: User; session: Session } | null;
+
+	/**
+	 * Discriminated identity for this request (`user` / `oauth` / `system`).
+	 *
+	 * The richer source of truth that `accessMode` is derived from. `session`
+	 * stays populated for back-compat; `principal` additionally carries the
+	 * OAuth `scopes` when the request is authenticated by an access token.
+	 * Access rules receive this so later work can gate on `principal.scopes`.
+	 *
+	 * Undefined when no identity has been resolved (e.g. a system operation
+	 * without a request).
+	 */
+	principal?: Principal;
 
 	/**
 	 * Current locale for this request

@@ -101,6 +101,9 @@ export function normalizeContext(context: CRUDContext = {}): NormalizedContext {
 		// Cast needed: StoredContext.session is `unknown` (generic ALS store),
 		// but here we know it matches the CRUD session shape.
 		session: context.session ?? (stored?.session as CRUDContext["session"]),
+		// principal: inherited from ALS like session, so nested CRUD and access
+		// rules see the caller's identity (incl. OAuth scopes) automatically.
+		principal: context.principal ?? stored?.principal,
 		db: context.db ?? stored?.db,
 		accessMode: context.accessMode ?? storedAccessMode ?? "system",
 		locale:
