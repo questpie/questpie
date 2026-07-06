@@ -274,7 +274,39 @@ export function scopesFromContext(
 }
 
 /**
- * The OAuth scope gate (MO8).
+ * Verbs that have a coarse umbrella scope (LOCKED #2 lists read/write only). A
+ * granular `<resource>:<name>:<verb>` requirement is ALSO satisfied by the
+ * held coarse `<resource>:<verb>` umbrella — but ONLY for these verbs. Data,
+ * not a `switch (verb)`: `delete` and `invoke` are absent, so they have NO
+ * umbrella (least-privilege — a `:delete` requirement always needs the exact
+ * granular scope, never a coarse grant).
+ */
+const UMBRELLA_ELIGIBLE_VERBS = new Set(["read", "write"]);
+
+/**
+ * The coarse umbrella scope that satisfies a granular `required` scope, or
+ * `undefined` when none applies. Parses the scope string generically (no
+ * per-name / per-resource hardcoding): a granular scope is exactly
+ * `<resource>:<name>:<verb>` (three segments). Its umbrella is
+ * `<resource>:<verb>` — preserving the SAME `<resource>` segment, so
+ * `collections:posts:read` maps to `collections:read` and never to
+ * `globals:read` (cross-resource-kind isolation falls out of the parse). The
+ * verb must be umbrella-eligible ({@link UMBRELLA_ELIGIBLE_VERBS}); otherwise
+ * there is no umbrella. Non-three-segment inputs (an umbrella itself, or a
+ * custom scope like `custom:scoped:use`) yield `undefined` — a custom scope
+ * happens to have three segments but its verb is not read/write, so it never
+ * gains an umbrella.
+ */
+function umbrellaScopeFor(required: string): string | undefined {
+	const segments = required.split(":");
+	if (segments.length !== 3) return undefined;
+	const [resource, , verb] = segments;
+	if (!UMBRELLA_ELIGIBLE_VERBS.has(verb)) return undefined;
+	return `${resource}:${verb}`;
+}
+
+/**
+ * The OAuth scope gate (MO8, extended by the umbrella model — LOCKED #2).
  *
  * Given the scopes the caller holds (from {@link scopesFromContext}) and the
  * scopes an operation requires (from {@link requiredScopesForOperation} or a
@@ -285,9 +317,19 @@ export function scopesFromContext(
  *   `system`, or unauthenticated). The scope gate does not apply and PASSES;
  *   authorization is left entirely to RBAC / MCP rules. This is what keeps the
  *   first-party admin (`user`) and stdio (`system`) paths unchanged.
- * - Otherwise the caller is an `oauth` principal: the gate PASSES iff the held
- *   scopes are a superset of the required scopes (every required scope present —
- *   AND). An empty `required` needs nothing, so it passes for everyone.
+ * - Otherwise the caller is an `oauth` principal: the gate PASSES iff EVERY
+ *   required scope is satisfied — a required scope is satisfied when the caller
+ *   holds it directly OR holds its applicable coarse umbrella
+ *   ({@link umbrellaScopeFor}). An empty `required` needs nothing, so it passes
+ *   for everyone.
+ *
+ * The umbrella widening is deliberately narrow — it can only satisfy a
+ * granular `<resource>:<name>:read|write` with the matching `<resource>:read`
+ * or `<resource>:write` umbrella. `read` and `write` are independent (holding
+ * `collections:write` never satisfies a `<name>:read` requirement, and vice
+ * versa), and there is NO umbrella for `:delete` or `routes:…:invoke`. So the
+ * umbrella grants convenience without ever over-granting across verb, resource
+ * kind, or into delete/invoke.
  *
  * This gate is **additive** — it can only ever REMOVE access from an `oauth`
  * caller. It never grants access on its own: callers still run the MCP rule and
@@ -301,7 +343,11 @@ export function scopeGateAllows(
 	if (heldScopes === undefined) return true;
 	if (required.length === 0) return true;
 	const held = new Set(heldScopes);
-	return required.every((scope) => held.has(scope));
+	return required.every((scope) => {
+		if (held.has(scope)) return true;
+		const umbrella = umbrellaScopeFor(scope);
+		return umbrella !== undefined && held.has(umbrella);
+	});
 }
 
 export async function evaluateMcpRule(

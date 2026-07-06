@@ -528,4 +528,139 @@ describe("MO8 OAuth scope gate", () => {
 			await a.close();
 		}
 	});
+
+	// ---- Coarse UMBRELLAS (LOCKED #2): a coarse scope grants the matching -----
+	// granular verb for EVERY entity of that resource kind, WITHOUT over-granting
+	// across verb, resource kind, or into delete/invoke. This is the out-of-the-
+	// box path: the shipped starter's DCR catalog advertises only these coarse
+	// umbrellas, so a real DCR client holds `collections:read` / `collections:write`
+	// and must still get usable tools.
+
+	it("coarse collections:read grants read tools for a collection (list/get/count) but NOT write/delete", async () => {
+		const names = await listToolNames(
+			oauthCtx(["collections:read"]),
+			setup.app,
+		);
+		// Umbrella satisfies the granular <name>:read for the collection.
+		expect(names).toContain("collections.posts.list");
+		expect(names).toContain("collections.posts.count");
+		expect(names).toContain("collections.posts.get");
+		// No over-grant: read umbrella must NOT enable write/delete tools.
+		expect(names).not.toContain("collections.posts.create");
+		expect(names).not.toContain("collections.posts.update");
+		expect(names).not.toContain("collections.posts.delete");
+	});
+
+	it("coarse collections:read is a CALL-TIME grant too — list succeeds, create is denied", async () => {
+		const server = await createMcpServer(setup.app, {
+			transport: "http",
+			ctx: oauthCtx(["collections:read"]),
+		});
+		const { client, close } = await connect(server);
+		try {
+			// Positive: a read call the umbrella covers succeeds.
+			const listed = await client.callTool({
+				name: "collections.posts.list",
+				arguments: {},
+			});
+			expect(listed.isError).toBeUndefined();
+
+			// Negative: create is neither listed nor callable — a blind call errors,
+			// proving the read umbrella did not silently widen into write.
+			expect(
+				(await client.listTools()).tools.map((t) => t.name),
+			).not.toContain("collections.posts.create");
+			const created = await client.callTool({
+				name: "collections.posts.create",
+				arguments: { data: { title: "should not be created" } },
+			});
+			expect(created.isError).toBe(true);
+		} finally {
+			await close();
+		}
+	});
+
+	it("coarse collections:write grants create/update but NOT read and NOT delete", async () => {
+		const names = await listToolNames(
+			oauthCtx(["collections:write"]),
+			setup.app,
+		);
+		// Umbrella satisfies the granular <name>:write for the collection.
+		expect(names).toContain("collections.posts.create");
+		expect(names).toContain("collections.posts.update");
+		// No over-grant: write does NOT imply read, and there is no delete umbrella.
+		expect(names).not.toContain("collections.posts.list");
+		expect(names).not.toContain("collections.posts.count");
+		expect(names).not.toContain("collections.posts.get");
+		expect(names).not.toContain("collections.posts.delete");
+	});
+
+	it("coarse collections:read + collections:write together grant read+write but STILL not delete", async () => {
+		const names = await listToolNames(
+			oauthCtx(["collections:read", "collections:write"]),
+			setup.app,
+		);
+		expect(names).toContain("collections.posts.list");
+		expect(names).toContain("collections.posts.get");
+		expect(names).toContain("collections.posts.create");
+		expect(names).toContain("collections.posts.update");
+		// :delete has NO umbrella — even holding both coarse scopes, delete is hidden.
+		expect(names).not.toContain("collections.posts.delete");
+	});
+
+	it("coarse collections:* umbrellas do NOT leak across resource kinds (globals stay hidden)", async () => {
+		const names = await listToolNames(
+			oauthCtx(["collections:read", "collections:write"]),
+			setup.app,
+		);
+		// The `collections:*` umbrellas must not satisfy any `globals:<name>:*`.
+		expect(names).not.toContain("globals.siteSettings.get");
+		expect(names).not.toContain("globals.siteSettings.update");
+		// …and must not satisfy a route invoke either (no route umbrella).
+		expect(names).not.toContain("reports.generate");
+	});
+
+	it("coarse globals:read grants the global read tool but not its update", async () => {
+		const names = await listToolNames(
+			oauthCtx(["globals:read"]),
+			setup.app,
+		);
+		expect(names).toContain("globals.siteSettings.get");
+		// No over-grant: globals:read must not enable the global write tool…
+		expect(names).not.toContain("globals.siteSettings.update");
+		// …and must not leak into collections.
+		expect(names).not.toContain("collections.posts.list");
+	});
+
+	it("coarse collections:read does NOT satisfy a collection's delete even at call time", async () => {
+		// A caller holding ONLY the read umbrella must never delete: the tool is
+		// hidden and a direct call is denied by the call-time gate.
+		const seeded = await setup.app.collections.posts.create(
+			{ title: "Must survive" },
+			createTestContext({ accessMode: "system" }),
+		);
+		const server = await createMcpServer(setup.app, {
+			transport: "http",
+			ctx: oauthCtx(["collections:read"]),
+		});
+		const { client, close } = await connect(server);
+		try {
+			expect(
+				(await client.listTools()).tools.map((t) => t.name),
+			).not.toContain("collections.posts.delete");
+			const res = await client.callTool({
+				name: "collections.posts.delete",
+				arguments: { id: (seeded as any).id },
+			});
+			expect(res.isError).toBe(true);
+			// The row survives — the read umbrella granted no delete.
+			const survivor = await setup.app.collections.posts.findOne(
+				{ where: { id: (seeded as any).id } },
+				createTestContext({ accessMode: "system" }),
+			);
+			expect(survivor).not.toBeNull();
+		} finally {
+			await close();
+		}
+	});
 });
