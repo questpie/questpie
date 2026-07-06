@@ -1,4 +1,4 @@
-import type { Questpie } from "questpie";
+import type { AppContext, Questpie, RequestContext } from "questpie";
 
 import type {
 	McpAccessMode,
@@ -6,6 +6,7 @@ import type {
 	McpConfig,
 	McpEntityPolicy,
 	McpExecutionOptions,
+	McpRequiredScopes,
 	McpTransportKind,
 } from "./types.js";
 
@@ -43,6 +44,8 @@ export interface ResolvedMcpPolicy {
 	write?: boolean | McpAccessRule;
 	delete?: boolean | McpAccessRule;
 	operations: Record<string, boolean | McpAccessRule>;
+	requiredScopes?: McpRequiredScopes;
+	operationScopes: Record<string, McpRequiredScopes>;
 	fields?: { include?: string[]; exclude?: string[] };
 	description?: string;
 }
@@ -130,7 +133,7 @@ function normalizePolicy(
 	override?: McpEntityPolicy,
 ): ResolvedMcpPolicy {
 	if (override === false) {
-		return { expose: false, operations: {} };
+		return { expose: false, operations: {}, operationScopes: {} };
 	}
 
 	const base: ResolvedMcpPolicy = {
@@ -139,6 +142,8 @@ function normalizePolicy(
 		write: defaults.write,
 		delete: defaults.delete,
 		operations: { ...(defaults.operations ?? {}) },
+		requiredScopes: defaults.requiredScopes,
+		operationScopes: { ...(defaults.operationScopes ?? {}) },
 		fields: defaults.fields,
 		description: defaults.description,
 	};
@@ -152,6 +157,11 @@ function normalizePolicy(
 		operations: {
 			...base.operations,
 			...(override.operations ?? {}),
+		},
+		requiredScopes: override.requiredScopes ?? base.requiredScopes,
+		operationScopes: {
+			...base.operationScopes,
+			...(override.operationScopes ?? {}),
 		},
 	};
 }
@@ -168,6 +178,101 @@ export function operationRule(
 	return policy.read;
 }
 
+// ============================================================================
+// Declarative scope model (MO7)
+//
+// The default operation→scope mapping is expressed as DATA, parameterized by
+// (entity kind, entity name, operation kind), NOT as a switch over entity
+// names. Adding a collection/global/route contributes its scopes for free —
+// the mapping scales without touching framework code (QUESTPIE invariant).
+// ============================================================================
+
+/**
+ * The `<resource>` segment of a scope, keyed by entity kind. Data, not a
+ * `switch (kind)`. e.g. a collection named `posts` maps under `collections:…`.
+ */
+const SCOPE_RESOURCE_BY_KIND: Record<EntityKind, string> = {
+	collection: "collections",
+	global: "globals",
+	route: "routes",
+};
+
+/**
+ * Operation kind → the scope verb it requires. CRUD reads/writes/deletes map to
+ * `read`/`write`/`delete`; a route invocation maps to `invoke`. Keyed by kind
+ * (not operation name), so `list`/`get`/`count` all resolve to `read` etc.
+ */
+const SCOPE_VERB_BY_OPERATION_KIND: Record<ScopeOperationKind, string> = {
+	read: "read",
+	write: "write",
+	delete: "delete",
+	invoke: "invoke",
+};
+
+export type ScopeOperationKind = "read" | "write" | "delete" | "invoke";
+
+/**
+ * Build the default required scope for an entity operation from the declarative
+ * mapping: `<resource>:<name>:<verb>` — e.g. `collections:posts:read`,
+ * `globals:siteSettings:write`, `routes:reports/generate:invoke`.
+ */
+export function defaultOperationScope(
+	kind: EntityKind,
+	name: string,
+	operationKind: ScopeOperationKind,
+): string {
+	return `${SCOPE_RESOURCE_BY_KIND[kind]}:${name}:${SCOPE_VERB_BY_OPERATION_KIND[operationKind]}`;
+}
+
+/** Normalize an {@link McpRequiredScopes} declaration to a scope list. */
+export function normalizeRequiredScopes(
+	required: McpRequiredScopes | undefined,
+): string[] {
+	if (required === undefined || required === false) return [];
+	return typeof required === "string" ? [required] : [...required];
+}
+
+/**
+ * Resolve the scopes an OAuth caller must hold for a given entity operation.
+ *
+ * Precedence (most specific wins), each level is declarative data:
+ * 1. `policy.operationScopes[operationName]` — per-operation override.
+ * 2. `policy.requiredScopes` — entity-level requirement (all operations).
+ * 3. the default `<resource>:<name>:<verb>` mapping derived from the kind.
+ *
+ * A level set to `false` explicitly requires no scope (stops the fallback).
+ * Returns a (possibly empty) scope list; empty means "no scope required". This
+ * is the model resolution only — the deny/register gate that consumes it is
+ * MO8.
+ */
+export function requiredScopesForOperation(
+	policy: ResolvedMcpPolicy,
+	kind: EntityKind,
+	name: string,
+	operationName: string,
+	operationKind: ScopeOperationKind,
+): string[] {
+	const perOperation = policy.operationScopes[operationName];
+	if (perOperation !== undefined) return normalizeRequiredScopes(perOperation);
+	if (policy.requiredScopes !== undefined) {
+		return normalizeRequiredScopes(policy.requiredScopes);
+	}
+	return [defaultOperationScope(kind, name, operationKind)];
+}
+
+/**
+ * The consented scopes carried by the request, or `undefined` when the caller
+ * is not OAuth-authenticated. Reads `ctx.principal` (populated by MO6): only the
+ * `oauth` principal carries `scopes`; `user` and `system` do not.
+ */
+export function scopesFromContext(
+	ctx: AppContext & Partial<RequestContext>,
+): string[] | undefined {
+	const principal = ctx.principal;
+	if (principal && principal.kind === "oauth") return principal.scopes;
+	return undefined;
+}
+
 export async function evaluateMcpRule(
 	rule: boolean | McpAccessRule | undefined,
 	options: Required<
@@ -180,6 +285,7 @@ export async function evaluateMcpRule(
 		transport: options.transport,
 		accessMode: options.accessMode,
 		session: options.ctx.session,
+		scopes: scopesFromContext(options.ctx),
 		ctx: options.ctx,
 	});
 }
