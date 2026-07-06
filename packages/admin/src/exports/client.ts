@@ -279,6 +279,10 @@ export { DashboardPage } from "#questpie/admin/client/views/pages/dashboard-page
 export { ForgotPasswordPage } from "#questpie/admin/client/views/pages/forgot-password-page.js";
 export { InvitePage } from "#questpie/admin/client/views/pages/invite-page.js";
 export { LoginPage } from "#questpie/admin/client/views/pages/login-page.js";
+export {
+	OAuthConsentPage,
+	type OAuthConsentPageProps,
+} from "#questpie/admin/client/views/pages/oauth-consent-page.js";
 export { ResetPasswordPage } from "#questpie/admin/client/views/pages/reset-password-page.js";
 export {
 	SetupPage,
