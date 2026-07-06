@@ -1,7 +1,12 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 import { isMcpTool } from "./mcp-tool.js";
-import { evaluateMcpRule } from "./policy.js";
+import {
+	evaluateMcpRule,
+	normalizeRequiredScopes,
+	scopeGateAllows,
+	scopesFromContext,
+} from "./policy.js";
 import type { RuntimeScope } from "./runtime.js";
 import { toToolError } from "./runtime.js";
 import { jsonSchemaCompatibleSchema } from "./zod-json-schema.js";
@@ -22,6 +27,11 @@ export async function registerCustomTools(
 			ctx,
 		});
 		if (!allowed) continue;
+		// Scope gate (MO8): a custom tool has no default scope mapping — its
+		// requirement is only what `config.scopes` declares (omitted → none).
+		// `undefined` scopes (user/system) bypass; ANDed with the access rule above.
+		const requiredScopes = normalizeRequiredScopes(tool.config.scopes);
+		if (!scopeGateAllows(scopesFromContext(ctx), requiredScopes)) continue;
 
 		server.registerTool(
 			tool.name || key,
@@ -42,6 +52,10 @@ export async function registerCustomTools(
 						ctx: callCtx,
 					});
 					if (!stillAllowed) throw new Error("MCP access denied");
+					// Scope gate at call time (defense in depth).
+					if (!scopeGateAllows(scopesFromContext(callCtx), requiredScopes)) {
+						throw new Error("MCP access denied");
+					}
 					const parsedInput = tool.config.inputSchema
 						? await tool.config.inputSchema.parseAsync(input)
 						: input;

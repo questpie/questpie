@@ -273,6 +273,37 @@ export function scopesFromContext(
 	return undefined;
 }
 
+/**
+ * The OAuth scope gate (MO8).
+ *
+ * Given the scopes the caller holds (from {@link scopesFromContext}) and the
+ * scopes an operation requires (from {@link requiredScopesForOperation} or a
+ * custom tool's `config.scopes`), decide whether the scope gate passes.
+ *
+ * Semantics:
+ * - `heldScopes === undefined` → the caller is not OAuth-authenticated (`user`,
+ *   `system`, or unauthenticated). The scope gate does not apply and PASSES;
+ *   authorization is left entirely to RBAC / MCP rules. This is what keeps the
+ *   first-party admin (`user`) and stdio (`system`) paths unchanged.
+ * - Otherwise the caller is an `oauth` principal: the gate PASSES iff the held
+ *   scopes are a superset of the required scopes (every required scope present —
+ *   AND). An empty `required` needs nothing, so it passes for everyone.
+ *
+ * This gate is **additive** — it can only ever REMOVE access from an `oauth`
+ * caller. It never grants access on its own: callers still run the MCP rule and
+ * the collection/global `.access()` RBAC independently, and all must pass. The
+ * effective `oauth` permission is therefore `scopes ∩ RBAC`.
+ */
+export function scopeGateAllows(
+	heldScopes: string[] | undefined,
+	required: string[],
+): boolean {
+	if (heldScopes === undefined) return true;
+	if (required.length === 0) return true;
+	const held = new Set(heldScopes);
+	return required.every((scope) => held.has(scope));
+}
+
 export async function evaluateMcpRule(
 	rule: boolean | McpAccessRule | undefined,
 	options: Required<

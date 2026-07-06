@@ -10,7 +10,10 @@ import { z } from "zod";
 import {
 	evaluateMcpRule,
 	operationRule,
+	requiredScopesForOperation,
 	resolveEntityPolicy,
+	scopeGateAllows,
+	scopesFromContext,
 } from "./policy.js";
 import type { RuntimeScope } from "./runtime.js";
 import { toToolError, toToolResult } from "./runtime.js";
@@ -67,6 +70,17 @@ export async function registerRouteTools(
 			{ transport: scope.transport, accessMode: scope.accessMode, ctx },
 		);
 		if (!allowed) continue;
+		// Scope gate (MO8): a route invocation requires `routes:<key>:invoke` (or a
+		// declared override). `undefined` scopes (user/system) bypass; ANDed with
+		// the MCP rule above so an `oauth` caller is `scopes ∩ RBAC`.
+		if (
+			!scopeGateAllows(
+				scopesFromContext(ctx),
+				requiredScopesForOperation(policy, "route", route.key, "execute", "invoke"),
+			)
+		) {
+			continue;
+		}
 
 		const name = route.meta.mcp.name ?? `routes.${sanitizeRouteKey(route.key)}`;
 		const inputSchema = routeInputSchema(route);
@@ -92,6 +106,21 @@ export async function registerRouteTools(
 						},
 					);
 					if (!stillAllowed) throw new Error("MCP access denied");
+					// Scope gate at call time (defense in depth).
+					if (
+						!scopeGateAllows(
+							scopesFromContext(routeCtx),
+							requiredScopesForOperation(
+								policy,
+								"route",
+								route.key,
+								"execute",
+								"invoke",
+							),
+						)
+					) {
+						throw new Error("MCP access denied");
+					}
 
 					const routeInput =
 						route.params.length > 0 ? (input as any).input : input;

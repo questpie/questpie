@@ -17,9 +17,13 @@ import {
 import {
 	evaluateMcpRule,
 	operationRule,
+	requiredScopesForOperation,
 	resolveEntityPolicy,
+	scopeGateAllows,
+	scopesFromContext,
 	type EntityKind,
 	type ResolvedMcpPolicy,
+	type ScopeOperationKind,
 } from "./policy.js";
 import type { RuntimeScope } from "./runtime.js";
 import { toToolError, toToolResult } from "./runtime.js";
@@ -310,6 +314,24 @@ async function shouldRegister(
 		{ transport: scope.transport, accessMode: scope.accessMode, ctx },
 	);
 	if (!mcpAllowed) return false;
+	// Scope gate (MO8): for an `oauth` caller, additionally require the operation's
+	// scopes. `scopesFromContext` is `undefined` for `user`/`system`, so the gate
+	// passes untouched for them — this only narrows `oauth`. ANDed with the RBAC
+	// check below, so the effective `oauth` permission is `scopes ∩ RBAC`.
+	if (
+		!scopeGateAllows(
+			scopesFromContext(ctx),
+			requiredScopesForOperation(
+				policy,
+				kind,
+				entityName,
+				operationName,
+				operationKind as ScopeOperationKind,
+			),
+		)
+	) {
+		return false;
+	}
 	return questpieAllows(scope, kind, entityName, operationKind);
 }
 
@@ -374,6 +396,22 @@ export async function registerCrudTools(
 							{ transport: scope.transport, accessMode: scope.accessMode, ctx },
 						);
 						if (!allowed) throw new Error("MCP access denied");
+						// Scope gate at call time (defense in depth): a tool hidden from
+						// listing for a missing scope must also be denied if called directly.
+						if (
+							!scopeGateAllows(
+								scopesFromContext(ctx),
+								requiredScopesForOperation(
+									policy,
+									"collection",
+									name,
+									operation.name,
+									operation.kind as ScopeOperationKind,
+								),
+							)
+						) {
+							throw new Error("MCP access denied");
+						}
 						const nextInput = filterOperationInput(
 							operation.name,
 							input,
@@ -435,6 +473,22 @@ export async function registerCrudTools(
 							{ transport: scope.transport, accessMode: scope.accessMode, ctx },
 						);
 						if (!allowed) throw new Error("MCP access denied");
+						// Scope gate at call time (defense in depth): a tool hidden from
+						// listing for a missing scope must also be denied if called directly.
+						if (
+							!scopeGateAllows(
+								scopesFromContext(ctx),
+								requiredScopesForOperation(
+									policy,
+									"global",
+									name,
+									operation.name,
+									operation.kind as ScopeOperationKind,
+								),
+							)
+						) {
+							throw new Error("MCP access denied");
+						}
 						const nextInput = filterOperationInput(
 							operation.name,
 							input,
