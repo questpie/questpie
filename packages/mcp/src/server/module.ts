@@ -25,6 +25,34 @@ function withCors(response: Response, request: Request): Response {
 }
 
 /**
+ * Build the `WWW-Authenticate` challenge value for an unauthenticated HTTP MCP
+ * request. `resource_metadata` points at this app's Protected Resource metadata
+ * document (RFC 9728), served at the server root by the core `oauth-protected-
+ * resource` route (MO4). An MCP client reads it to discover the authorization
+ * server and start the OAuth 2.1 flow.
+ *
+ * The origin is derived from `app.config.app.url` — the same base MO2/MO6 use to
+ * bind and verify token audience — so the advertised metadata URL always matches
+ * where discovery actually lives. `new URL(...).origin` strips any path/query and
+ * yields a bare `scheme://host[:port]`, so an app URL with a subpath still
+ * produces a root-mounted metadata URL.
+ */
+function protectedResourceChallenge(appUrl: string): string {
+	const origin = new URL(appUrl).origin;
+	return `Bearer resource_metadata="${origin}/.well-known/oauth-protected-resource"`;
+}
+
+/**
+ * A verified principal is required to reach MCP tool execution over HTTP. The
+ * request context resolves one for a cookie/bearer session (`kind: "user"`) or a
+ * valid OAuth access token (`kind: "oauth"`); an unauthenticated request has
+ * none. Read it structurally — the handler-args type does not surface it.
+ */
+function hasVerifiedPrincipal(ctx: RawRouteHandlerArgs): boolean {
+	return Boolean((ctx as { principal?: unknown }).principal);
+}
+
+/**
  * One MCP Streamable-HTTP transport handler that dispatches internally on
  * `request.method` (GET = SSE stream, POST = JSON-RPC messages, DELETE =
  * session end, OPTIONS = CORS preflight).
@@ -42,6 +70,27 @@ const mcpHandler = async (ctx: RawRouteHandlerArgs): Promise<Response> => {
 	}
 
 	const app = routeApp(ctx);
+
+	// Require a verified principal before any MCP dispatch. The framework's
+	// adapter has already resolved identity onto `ctx` by the time this handler
+	// runs: a cookie/bearer session yields `kind: "user"`, a valid OAuth access
+	// token yields `kind: "oauth"`, and an unauthenticated request yields none.
+	// Without one, answer 401 + `WWW-Authenticate` so an MCP client auto-discovers
+	// the authorization server and starts the OAuth flow — instead of the old
+	// silent `session = null` happy path that only failed later on access checks.
+	// (OPTIONS already returned above, so CORS preflight is unaffected.)
+	if (!hasVerifiedPrincipal(ctx)) {
+		return withCors(
+			new Response(null, {
+				status: 401,
+				headers: {
+					"WWW-Authenticate": protectedResourceChallenge(app.config.app.url),
+				},
+			}),
+			request,
+		);
+	}
+
 	const config = (app.state?.config?.mcp ?? {}) as {
 		http?: {
 			allowedOrigins?: string[];
