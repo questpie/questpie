@@ -36,7 +36,7 @@
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
-		"@better-auth/api-key": "^1.6.11",
+		"@better-auth/api-key": "^1.6.23",
 		"@questpie/admin": "workspace:*",
 		"@questpie/ai": "workspace:*",
 		"@questpie/executor": "workspace:*",

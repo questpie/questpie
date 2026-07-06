@@ -126,7 +126,7 @@
 		"@tanstack/db": "^0.x",
 		"@tanstack/react-query": "^5.x",
 		"@tanstack/react-table": "^8.x",
-		"better-auth": "^1.6.11",
+		"better-auth": "^1.6.23",
 		"drizzle-orm": "1.0.0-beta.6-4414a19",
 		"react": "^19.2.0",
 		"react-dom": "^19.2.0",
