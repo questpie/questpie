@@ -6,10 +6,13 @@ import { collection } from "#questpie/server/collection/builder/collection-build
  * registered MCP clients). `clientSecret` is secret — hidden from reads.
  *
  * `scopes`/`contacts`/`redirectUris`/… are better-auth `string[]` fields and
- * `metadata` is a `json` field; the drizzle adapter serializes both to JSON
- * strings (supportsJSON/supportsArrays = false), so they are stored as text.
- * Reference columns (`userId` → user) stay plain text, matching the existing
- * auth collections (better-auth enforces integrity at the app layer).
+ * `metadata` is a `json` field. The drizzle adapter forces `supportsJSON` and
+ * `supportsArrays` to `true` for the `pg` provider, so better-auth passes these
+ * as native JS arrays/objects and expects native columns — they MUST be `jsonb`
+ * (`f.json()`), not text, or the insert fails with "Invalid input for string
+ * type". `softwareStatement` is a JWT string, so it stays plain text. Reference
+ * columns (`userId` → user) stay plain text, matching the existing auth
+ * collections (better-auth enforces integrity at the app layer).
  */
 export default collection("oauthClient")
 	.options({ timestamps: false })
@@ -20,29 +23,29 @@ export default collection("oauthClient")
 		skipConsent: f.boolean(),
 		enableEndSession: f.boolean(),
 		subjectType: f.text(255),
-		scopes: f.textarea(),
+		scopes: f.json(),
 		userId: f.text(255),
 		createdAt: f.datetime(),
 		updatedAt: f.datetime(),
 		name: f.text(255),
 		uri: f.text(500),
 		icon: f.text(500),
-		contacts: f.textarea(),
+		contacts: f.json(),
 		tos: f.text(500),
 		policy: f.text(500),
 		softwareId: f.text(255),
 		softwareVersion: f.text(255),
 		softwareStatement: f.textarea(),
-		redirectUris: f.textarea().required(),
-		postLogoutRedirectUris: f.textarea(),
+		redirectUris: f.json().required(),
+		postLogoutRedirectUris: f.json(),
 		tokenEndpointAuthMethod: f.text(255),
-		grantTypes: f.textarea(),
-		responseTypes: f.textarea(),
+		grantTypes: f.json(),
+		responseTypes: f.json(),
 		public: f.boolean(),
 		type: f.text(255),
 		requirePKCE: f.boolean(),
 		referenceId: f.text(255),
-		metadata: f.textarea(),
+		metadata: f.json(),
 	}))
 	.access({
 		fields: {

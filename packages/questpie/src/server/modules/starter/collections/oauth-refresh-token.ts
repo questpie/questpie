@@ -3,8 +3,10 @@ import { collection } from "#questpie/server/collection/builder/collection-build
 /**
  * Better Auth `oauthRefreshToken` table (from `@better-auth/oauth-provider`).
  * Backs the `offline_access` scope / refresh-token grant. `token` is secret —
- * hidden from reads. `scopes` is a better-auth `string[]` stored as a JSON
- * string (text). Reference columns stay plain text like the other auth tables.
+ * hidden from reads. `scopes` is a better-auth `string[]`; the pg drizzle
+ * adapter passes it as a native array, so it MUST be a `jsonb` column
+ * (`f.json()`), not text. Reference columns stay plain text like the other
+ * auth tables.
  */
 export default collection("oauthRefreshToken")
 	.options({ timestamps: false })
@@ -18,7 +20,7 @@ export default collection("oauthRefreshToken")
 		createdAt: f.datetime(),
 		revoked: f.datetime(),
 		authTime: f.datetime(),
-		scopes: f.textarea().required(),
+		scopes: f.json().required(),
 	}))
 	.access({
 		fields: {

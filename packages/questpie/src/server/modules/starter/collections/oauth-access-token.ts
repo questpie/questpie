@@ -5,7 +5,8 @@ import { collection } from "#questpie/server/collection/builder/collection-build
  * Stores issued OAuth 2.1 access tokens with their granted `scopes`. Without
  * this table the provider fails at runtime and the MCP HTTP route cannot resolve
  * a session (the regression MO3 fixes). `token` is secret — hidden from reads.
- * `scopes` is a better-auth `string[]` stored as a JSON string (text).
+ * `scopes` is a better-auth `string[]`; the pg drizzle adapter passes it as a
+ * native array, so it MUST be a `jsonb` column (`f.json()`), not text.
  */
 export default collection("oauthAccessToken")
 	.options({ timestamps: false })
@@ -18,7 +19,7 @@ export default collection("oauthAccessToken")
 		refreshId: f.text(255),
 		expiresAt: f.datetime(),
 		createdAt: f.datetime(),
-		scopes: f.textarea().required(),
+		scopes: f.json().required(),
 	}))
 	.access({
 		fields: {

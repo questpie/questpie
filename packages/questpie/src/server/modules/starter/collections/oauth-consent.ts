@@ -4,7 +4,8 @@ import { collection } from "#questpie/server/collection/builder/collection-build
  * Better Auth `oauthConsent` table (from `@better-auth/oauth-provider`). Records
  * a user's granted consent (which `scopes`) for an OAuth client, so the consent
  * screen is skipped on subsequent authorizations. `scopes` is a better-auth
- * `string[]` stored as a JSON string (text). Reference columns stay plain text.
+ * `string[]`; the pg drizzle adapter passes it as a native array, so it MUST be
+ * a `jsonb` column (`f.json()`), not text. Reference columns stay plain text.
  */
 export default collection("oauthConsent")
 	.options({ timestamps: false })
@@ -12,7 +13,7 @@ export default collection("oauthConsent")
 		clientId: f.text(255).required(),
 		userId: f.text(255),
 		referenceId: f.text(255),
-		scopes: f.textarea().required(),
+		scopes: f.json().required(),
 		createdAt: f.datetime(),
 		updatedAt: f.datetime(),
 	}))

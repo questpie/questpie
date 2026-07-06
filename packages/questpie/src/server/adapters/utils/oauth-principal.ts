@@ -111,6 +111,55 @@ export function mcpAudienceForApp(app: {
 }
 
 /**
+ * The `iss` an OAuth 2.1 access token issued by this app's Better Auth provider
+ * carries, derived from the running auth instance so it matches the token by
+ * construction, and passed to `verifyAccessToken` explicitly.
+ *
+ * The provider mints the token `iss` as `jwt().options.jwt.issuer ?? ctx.baseURL`,
+ * where `ctx.baseURL` is `options.baseURL` **with the auth basePath appended**
+ * (default `/api/auth`). The `@better-auth/oauth-provider` resource client,
+ * however, defaults the *expected* issuer to `jwt issuer ?? options.baseURL`
+ * (the BARE baseURL, no basePath). So when no explicit `jwt().issuer` is set —
+ * the common case, including the QUESTPIE starter — every real token is rejected
+ * on an issuer mismatch (`baseURL` vs `baseURL + basePath`). We mirror the
+ * provider's own derivation here:
+ *   1. an explicit `jwt().options.jwt.issuer`, if set (already matches on both
+ *      sides — pass-through), else
+ *   2. `baseURL + basePath` (the real token `iss` when there is no explicit
+ *      issuer — the case the resource client gets wrong).
+ *
+ * Returns `undefined` only when `baseURL` is not a plain string (dynamic
+ * multi-host config) and no explicit issuer is set, letting the resource client
+ * fall back to its own derivation.
+ */
+export async function oauthIssuerForAuth(auth: {
+	options?: { baseURL?: unknown; basePath?: unknown };
+	$context?: Promise<unknown>;
+}): Promise<string | undefined> {
+	// Prefer an explicit jwt() issuer (the provider does the same for the token).
+	try {
+		const ctx = (await auth.$context) as
+			| { getPlugin?: (name: string) => { options?: unknown } | undefined }
+			| undefined;
+		const jwtOptions = ctx?.getPlugin?.("jwt")?.options as
+			| { jwt?: { issuer?: unknown } }
+			| undefined;
+		const explicit = jwtOptions?.jwt?.issuer;
+		if (typeof explicit === "string" && explicit.length > 0) return explicit;
+	} catch {
+		// Fall through to the baseURL + basePath derivation.
+	}
+
+	const baseURL = auth.options?.baseURL;
+	if (typeof baseURL !== "string" || baseURL.length === 0) return undefined;
+	const basePath =
+		typeof auth.options?.basePath === "string"
+			? auth.options.basePath
+			: "/api/auth";
+	return `${baseURL.replace(/\/$/, "")}${basePath}`;
+}
+
+/**
  * Parse the space-delimited OAuth `scope` claim into a deduped, order-preserving
  * list. Returns `[]` for a missing/empty claim.
  */
@@ -159,11 +208,24 @@ export async function resolveOAuthPrincipal<
 		const resourceClient = oauthProviderResourceClient(
 			app.auth as unknown as Parameters<typeof oauthProviderResourceClient>[0],
 		);
-		// `issuer` and `jwksUrl` are auto-derived from the auth instance; we only
-		// bind the audience. Verification enforces signature + aud + iss + exp and
-		// throws on any failure.
+		// `jwksUrl` is auto-derived from the auth instance (baseURL + basePath +
+		// jwksPath). The `issuer`, however, must be supplied: the resource client
+		// defaults it to the bare `baseURL`, but Better Auth mints the token `iss`
+		// as `baseURL + basePath` — so without this, a valid token fails on an
+		// issuer mismatch (see `oauthIssuerForAuth`). We bind the audience to the
+		// MCP endpoint (RFC 8707). Verification enforces signature + aud + iss +
+		// exp and throws on any failure.
+		const issuer = await oauthIssuerForAuth(
+			app.auth as {
+				options?: { baseURL?: unknown; basePath?: unknown };
+				$context?: Promise<unknown>;
+			},
+		);
 		payload = (await resourceClient.getActions().verifyAccessToken(token, {
-			verifyOptions: { audience: mcpAudienceForApp(app) },
+			verifyOptions: {
+				audience: mcpAudienceForApp(app),
+				...(issuer ? { issuer } : {}),
+			},
 		})) as Record<string, unknown>;
 	} catch {
 		// Not a valid OAuth token for this resource (bad signature, wrong
