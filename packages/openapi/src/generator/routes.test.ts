@@ -178,3 +178,79 @@ describe("generateRoutePaths — route meta", () => {
 		);
 	});
 });
+
+describe("generateRoutePaths — per-operation security from access", () => {
+	it("emits security: [] for an explicitly public route (access(true))", () => {
+		const publicRoute = route()
+			.get()
+			.access(true)
+			.schema(z.object({}))
+			.handler(() => ({ ok: true }));
+
+		const routes = { health: publicRoute } as any;
+
+		const result = generateRoutePaths(routes, { basePath: "/api" });
+
+		const op = result.paths["/api/health"].get as any;
+		expect(op.security).toEqual([]);
+	});
+
+	it("emits no per-op security for a gated route (function access rule)", () => {
+		const gatedRoute = route()
+			.get()
+			.access(() => true)
+			.schema(z.object({}))
+			.handler(() => ({ ok: true }));
+
+		const routes = { secret: gatedRoute } as any;
+
+		const result = generateRoutePaths(routes, { basePath: "/api" });
+
+		const op = result.paths["/api/secret"].get as any;
+		expect(op.security).toBeUndefined();
+	});
+
+	it("emits no per-op security when no access is declared", () => {
+		const defaultRoute = route()
+			.get()
+			.schema(z.object({}))
+			.handler(() => ({ ok: true }));
+
+		const routes = { thing: defaultRoute } as any;
+
+		const result = generateRoutePaths(routes, { basePath: "/api" });
+
+		const op = result.paths["/api/thing"].get as any;
+		expect(op.security).toBeUndefined();
+	});
+
+	it("treats access({ execute: true }) as explicitly public (security: [])", () => {
+		const publicRoute = route()
+			.get()
+			.access({ execute: true })
+			.raw()
+			.handler(() => new Response("ok"));
+
+		const routes = { ping: publicRoute } as any;
+
+		const result = generateRoutePaths(routes, { basePath: "/api" });
+
+		const op = result.paths["/api/ping"].get as any;
+		expect(op.security).toEqual([]);
+	});
+
+	it("does not mark access(false) as public", () => {
+		const closedRoute = route()
+			.get()
+			.access(false)
+			.schema(z.object({}))
+			.handler(() => ({ ok: true }));
+
+		const routes = { closed: closedRoute } as any;
+
+		const result = generateRoutePaths(routes, { basePath: "/api" });
+
+		const op = result.paths["/api/closed"].get as any;
+		expect(op.security).toBeUndefined();
+	});
+});
