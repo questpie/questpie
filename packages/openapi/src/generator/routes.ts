@@ -46,6 +46,23 @@ function patternSegmentToOpenApi(segment: string): {
 	return { out: segment };
 }
 
+/**
+ * Whether a route's `access` declaration marks it explicitly public.
+ *
+ * Mirrors the runtime's `extractAccessRule` (routes/execute.ts): `access` is
+ * either a rule (`boolean | fn`) or `{ execute?: rule }`. A route is public iff
+ * the resolved execute rule is exactly the boolean `true` — i.e. `access(true)`
+ * or `access({ execute: true })`. A function rule, `false`, or no `access`
+ * declaration is NOT treated as public here (it inherits the global scheme).
+ */
+function isExplicitlyPublicRouteAccess(access: unknown): boolean {
+	const rule =
+		access !== null && typeof access === "object" && "execute" in access
+			? (access as { execute?: unknown }).execute
+			: access;
+	return rule === true;
+}
+
 interface FlatRouteEntry {
 	/** URL path pattern with file-convention brackets (e.g. "user/[id]"). */
 	path: string;
@@ -213,6 +230,11 @@ export function generateRoutePaths(
 			schema: { type: "string" },
 		}));
 
+		// Explicitly public routes (`access(true)`) opt out of the spec-level
+		// security scheme via an empty `security: []`; gated routes (function
+		// rule or no access) inherit the global scheme by emitting nothing.
+		const isPublic = isExplicitlyPublicRouteAccess(def.access);
+
 		const operation: PathOperation = {
 			operationId: baseOperationId,
 			// `meta.title` -> summary, falling back to the URL path string.
@@ -220,6 +242,7 @@ export function generateRoutePaths(
 			tags: operationTags,
 			...(meta?.description ? { description: meta.description } : {}),
 			...(parameters.length > 0 ? { parameters } : {}),
+			...(isPublic ? { security: [] } : {}),
 			responses: {},
 		};
 
