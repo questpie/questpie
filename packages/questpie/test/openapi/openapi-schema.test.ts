@@ -229,6 +229,238 @@ describe("OpenAPI schema generation", () => {
 		});
 	});
 
+	describe("auth schemas", () => {
+		// A faithful slice of what Better Auth's `openAPI()` plugin emits from
+		// `auth.api.generateOpenAPISchema()`: paths relative to /api/auth, real
+		// request/response schemas, `$ref`s into components, and securitySchemes.
+		function betterAuthOpenApiDoc() {
+			return {
+				openapi: "3.1.1",
+				info: { title: "Better Auth", description: "", version: "1.0" },
+				components: {
+					securitySchemes: {
+						apiKeyCookie: {
+							type: "apiKey",
+							in: "cookie",
+							name: "better-auth.session_token",
+							description: "",
+						},
+						bearerAuth: { type: "http", scheme: "bearer", description: "" },
+					},
+					schemas: {
+						User: {
+							type: "object",
+							properties: {
+								id: { type: "string" },
+								email: { type: "string" },
+							},
+							required: ["id", "email"],
+						},
+						Session: {
+							type: "object",
+							properties: { id: { type: "string" } },
+							required: ["id"],
+						},
+					},
+				},
+				security: [{ apiKeyCookie: [], bearerAuth: [] }],
+				servers: [{ url: "http://localhost:3000/api/auth" }],
+				tags: [{ name: "Default", description: "" }],
+				paths: {
+					"/sign-in/email": {
+						post: {
+							tags: ["Default"],
+							operationId: "signInEmail",
+							requestBody: {
+								content: {
+									"application/json": {
+										schema: {
+											type: "object",
+											properties: {
+												email: { type: "string" },
+												password: { type: "string" },
+											},
+											required: ["email", "password"],
+										},
+									},
+								},
+							},
+							responses: {
+								"200": {
+									description: "Success",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													user: { $ref: "#/components/schemas/User" },
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+					"/get-session": {
+						get: {
+							tags: ["Default"],
+							operationId: "getSession",
+							responses: {
+								"200": {
+									description: "Success",
+									content: {
+										"application/json": {
+											schema: {
+												type: ["object", "null"],
+												properties: {
+													session: { $ref: "#/components/schemas/Session" },
+													user: { $ref: "#/components/schemas/User" },
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+					"/admin/list-users": {
+						get: {
+							tags: ["Default"],
+							operationId: "listUsers",
+							responses: {
+								"200": {
+									description: "Success",
+									content: {
+										"application/json": {
+											schema: { type: "object" },
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			};
+		}
+
+		it("derives real auth paths + schemas from the better-auth openAPI plugin", async () => {
+			const mockCms = {
+				getCollections: () => ({}),
+				getGlobals: () => ({}),
+				auth: {
+					api: {
+						generateOpenAPISchema: async () => betterAuthOpenApiDoc(),
+					},
+				},
+			};
+
+			const spec = await generateOpenApiSpec(mockCms as any, undefined, {
+				info: { title: "Test API", version: "1.0.0" },
+				basePath: "/",
+			});
+
+			// Core endpoints are present and correctly prefixed <basePath>/auth/...
+			expect(spec.paths?.["//auth/sign-in/email"]?.post).toBeDefined();
+			expect(spec.paths?.["//auth/get-session"]?.get).toBeDefined();
+			// Configured-plugin endpoints (admin/*) come through too.
+			expect(spec.paths?.["//auth/admin/list-users"]?.get).toBeDefined();
+
+			// Response schemas are NON-opaque: sign-in references a real schema,
+			// not { type: "object" } with an empty `user`.
+			const signIn = spec.paths?.["//auth/sign-in/email"]?.post as any;
+			const userRef =
+				signIn.responses["200"].content["application/json"].schema.properties
+					.user.$ref;
+			// $ref must be rewritten to the namespaced schema name.
+			expect(userRef).toBe("#/components/schemas/AuthUser");
+
+			// Namespaced component schemas exist and are not empty.
+			const authUser = spec.components?.schemas?.AuthUser as any;
+			expect(authUser).toBeDefined();
+			expect(authUser.type).toBe("object");
+			expect(Object.keys(authUser.properties || {}).length).toBeGreaterThan(0);
+			expect(spec.components?.schemas?.AuthSession).toBeDefined();
+			// Bare (un-namespaced) names must NOT leak into the merged spec.
+			expect(spec.components?.schemas?.User).toBeUndefined();
+
+			// Auth operations are retagged under a single "Auth" tag.
+			expect(signIn.tags).toEqual(["Auth"]);
+			expect(spec.tags?.some((t) => t.name === "Auth")).toBe(true);
+
+			// Better Auth security schemes are merged in (deduped).
+			expect(spec.components?.securitySchemes?.apiKeyCookie).toBeDefined();
+			expect(spec.components?.securitySchemes?.bearerAuth).toBeDefined();
+			// QUESTPIE's own defaults still present.
+			expect(spec.components?.securitySchemes?.cookieAuth).toBeDefined();
+		});
+
+		it("falls back to the hardcoded minimal set when app.auth is absent", async () => {
+			const mockCms = {
+				getCollections: () => ({}),
+				getGlobals: () => ({}),
+			};
+
+			const spec = await generateOpenApiSpec(mockCms as any, undefined, {
+				info: { title: "Test API", version: "1.0.0" },
+				basePath: "/",
+			});
+
+			// The four hardcoded fallback endpoints are documented.
+			expect(spec.paths?.["//auth/sign-in/email"]?.post).toBeDefined();
+			expect(spec.paths?.["//auth/sign-up/email"]?.post).toBeDefined();
+			expect(spec.paths?.["//auth/get-session"]?.get).toBeDefined();
+			expect(spec.paths?.["//auth/sign-out"]?.post).toBeDefined();
+			// The richer plugin-only endpoints are NOT present in the fallback.
+			expect(spec.paths?.["//auth/admin/list-users"]).toBeUndefined();
+		});
+
+		it("falls back when generateOpenAPISchema throws", async () => {
+			const mockCms = {
+				getCollections: () => ({}),
+				getGlobals: () => ({}),
+				auth: {
+					api: {
+						generateOpenAPISchema: async () => {
+							throw new Error("boom");
+						},
+					},
+				},
+			};
+
+			const spec = await generateOpenApiSpec(mockCms as any, undefined, {
+				info: { title: "Test API", version: "1.0.0" },
+				basePath: "/",
+			});
+
+			// Graceful fallback: no crash, hardcoded set present.
+			expect(spec.paths?.["//auth/sign-in/email"]?.post).toBeDefined();
+			expect(spec.paths?.["//auth/admin/list-users"]).toBeUndefined();
+		});
+
+		it("omits auth entirely when config.auth === false", async () => {
+			const mockCms = {
+				getCollections: () => ({}),
+				getGlobals: () => ({}),
+				auth: {
+					api: {
+						generateOpenAPISchema: async () => betterAuthOpenApiDoc(),
+					},
+				},
+			};
+
+			const spec = await generateOpenApiSpec(mockCms as any, undefined, {
+				info: { title: "Test API", version: "1.0.0" },
+				basePath: "/",
+				auth: false,
+			});
+
+			expect(spec.paths?.["//auth/sign-in/email"]).toBeUndefined();
+			expect(spec.paths?.["//auth/admin/list-users"]).toBeUndefined();
+			expect(spec.components?.schemas?.AuthUser).toBeUndefined();
+		});
+	});
+
 	describe("global schemas", () => {
 		it("generates proper JSON schema for global fields", async () => {
 			const settings = global("settings").fields(({ f }) => ({

@@ -48,15 +48,32 @@ export async function generateOpenApiSpec(
 	Object.assign(allSchemas, routeResult.schemas);
 	allTags.push(...routeResult.tags);
 
-	// Auth — awaited so an async auth-schema fragment can be merged here later.
-	const auth = await generateAuthPaths(config);
+	// Auth — awaited so the async Better Auth openAPI-plugin schema fragment
+	// (`app.auth.api.generateOpenAPISchema()`) can be derived and merged here.
+	const auth = await generateAuthPaths(config, app);
 	Object.assign(allPaths, auth.paths);
+	Object.assign(allSchemas, auth.schemas);
 	allTags.push(...auth.tags);
 
 	// Search
 	const search = generateSearchPaths(config);
 	Object.assign(allPaths, search.paths);
 	allTags.push(...search.tags);
+
+	// Security schemes — QUESTPIE's defaults, with any Better-Auth-derived
+	// schemes merged in (deduped; QUESTPIE's own definitions win on key clash).
+	const securitySchemes: Record<string, unknown> = {
+		...auth.securitySchemes,
+		bearerAuth: {
+			type: "http",
+			scheme: "bearer",
+		},
+		cookieAuth: {
+			type: "apiKey",
+			in: "cookie",
+			name: "better-auth.session_token",
+		},
+	};
 
 	return {
 		openapi: "3.1.0",
@@ -69,17 +86,7 @@ export async function generateOpenApiSpec(
 		paths: allPaths,
 		components: {
 			schemas: allSchemas,
-			securitySchemes: {
-				bearerAuth: {
-					type: "http",
-					scheme: "bearer",
-				},
-				cookieAuth: {
-					type: "apiKey",
-					in: "cookie",
-					name: "better-auth.session_token",
-				},
-			},
+			securitySchemes,
 		},
 		tags: allTags,
 		security: [{ bearerAuth: [] }, { cookieAuth: [] }],
