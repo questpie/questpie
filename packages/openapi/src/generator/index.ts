@@ -14,12 +14,18 @@ import { generateSearchPaths } from "./search.js";
 
 /**
  * Generate a complete OpenAPI 3.1 spec from a Questpie app instance and optional routes tree.
+ *
+ * Async-capable: sync sources (collections/globals/routes/search) are merged
+ * eagerly, while the auth fragment is `await`ed so a later task can source it
+ * from an async provider (e.g. Better Auth's `auth.api.generateOpenAPISchema()`)
+ * without changing this signature. For apps whose fragments are all sync
+ * (today's case), the resolved spec is byte-identical to the sync output.
  */
-export function generateOpenApiSpec(
+export async function generateOpenApiSpec(
 	app: Questpie<any>,
 	routes?: RoutesTree,
 	config: OpenApiConfig = {},
-): OpenApiSpec {
+): Promise<OpenApiSpec> {
 	const allPaths: OpenApiSpec["paths"] = {};
 	const allSchemas: Record<string, unknown> = { ...baseComponentSchemas() };
 	const allTags: OpenApiSpec["tags"] = [];
@@ -42,8 +48,8 @@ export function generateOpenApiSpec(
 	Object.assign(allSchemas, routeResult.schemas);
 	allTags.push(...routeResult.tags);
 
-	// Auth
-	const auth = generateAuthPaths(config);
+	// Auth — awaited so an async auth-schema fragment can be merged here later.
+	const auth = await generateAuthPaths(config);
 	Object.assign(allPaths, auth.paths);
 	allTags.push(...auth.tags);
 

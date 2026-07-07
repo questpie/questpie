@@ -80,7 +80,7 @@ export function openApiConfig(
  * ```ts
  * import { generateOpenApiSpec } from "@questpie/openapi/server";
  *
- * const spec = generateOpenApiSpec(app, {
+ * const spec = await generateOpenApiSpec(app, {
  *   info: { title: "My API", version: "1.0.0" },
  * });
  * ```
@@ -88,7 +88,7 @@ export function openApiConfig(
 export function generateOpenApiSpec(
 	app: unknown,
 	config?: OpenApiConfig,
-): OpenApiSpec {
+): Promise<OpenApiSpec> {
 	const routes = (app as any).config?.routes;
 	return generate(app as any, routes, config);
 }
@@ -99,11 +99,11 @@ export function generateOpenApiSpec(
 
 const specCache = new WeakMap<object, { json: string; etag: string }>();
 
-function getCachedSpec(app: unknown, config: OpenApiConfig | undefined) {
+async function getCachedSpec(app: unknown, config: OpenApiConfig | undefined) {
 	const appObj = app as object;
 	let cached = specCache.get(appObj);
 	if (!cached) {
-		const spec = generateOpenApiSpec(app, config);
+		const spec = await generateOpenApiSpec(app, config);
 		const json = JSON.stringify(spec);
 		// Simple hash for ETag — deterministic per spec content
 		let hash = 0;
@@ -159,7 +159,7 @@ export function openApiRoute(
 		.handler(async (ctx) => {
 			const app = (ctx as any).app as Questpie<any>;
 			const resolved = resolveOpenApiConfig(app, config);
-			const { json, etag } = getCachedSpec(app, resolved);
+			const { json, etag } = await getCachedSpec(app, resolved);
 
 			if (ctx.request.headers.get("if-none-match") === etag) {
 				return new Response(null, { status: 304 });
@@ -200,7 +200,7 @@ export function docsRoute(
 			const resolved = resolveOpenApiConfig(app, openApiConfig);
 			const scalarOpts =
 				scalarConfig ?? (resolved as OpenApiModuleConfig)?.scalar;
-			const spec = generateOpenApiSpec(app, resolved);
+			const spec = await generateOpenApiSpec(app, resolved);
 			return serveScalarUI(spec, scalarOpts);
 		});
 }

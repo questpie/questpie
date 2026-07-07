@@ -5,7 +5,7 @@ import { collection, global } from "../../src/exports/index.js";
 
 describe("OpenAPI schema generation", () => {
 	describe("collection schemas", () => {
-		it("generates proper JSON schema for collection fields", () => {
+		it("generates proper JSON schema for collection fields", async () => {
 			const posts = collection("posts").fields(({ f }) => ({
 				title: f.text(255).required(),
 				content: f.textarea(),
@@ -24,7 +24,7 @@ describe("OpenAPI schema generation", () => {
 				getGlobals: () => ({}),
 			};
 
-			const spec = generateOpenApiSpec(mockCms as any, undefined, {
+			const spec = await generateOpenApiSpec(mockCms as any, undefined, {
 				info: { title: "Test API", version: "1.0.0" },
 				basePath: "/",
 			});
@@ -52,7 +52,7 @@ describe("OpenAPI schema generation", () => {
 			expect(insertSchema.required).toContain("title");
 		});
 
-		it("generates document schema with id and timestamps", () => {
+		it("generates document schema with id and timestamps", async () => {
 			const posts = collection("posts").fields(({ f }) => ({
 				title: f.text().required(),
 			}));
@@ -62,7 +62,7 @@ describe("OpenAPI schema generation", () => {
 				getGlobals: () => ({}),
 			};
 
-			const spec = generateOpenApiSpec(mockCms as any, undefined, {
+			const spec = await generateOpenApiSpec(mockCms as any, undefined, {
 				info: { title: "Test API", version: "1.0.0" },
 				basePath: "/",
 			});
@@ -81,7 +81,7 @@ describe("OpenAPI schema generation", () => {
 			expect(baseSchema.properties?.updatedAt).toBeDefined();
 		});
 
-		it("handles relation fields", () => {
+		it("handles relation fields", async () => {
 			const authors = collection("authors").fields(({ f }) => ({
 				name: f.text().required(),
 			}));
@@ -96,7 +96,7 @@ describe("OpenAPI schema generation", () => {
 				getGlobals: () => ({}),
 			};
 
-			const spec = generateOpenApiSpec(mockCms as any, undefined, {
+			const spec = await generateOpenApiSpec(mockCms as any, undefined, {
 				info: { title: "Test API", version: "1.0.0" },
 				basePath: "/",
 			});
@@ -108,7 +108,7 @@ describe("OpenAPI schema generation", () => {
 			expect(insertSchema.properties.author).toBeDefined();
 		});
 
-		it("separates inputFalse and outputFalse fields in collection schemas", () => {
+		it("separates inputFalse and outputFalse fields in collection schemas", async () => {
 			const credentials = collection("credentials").fields(({ f }) => ({
 				title: f.text(255).required(),
 				serverOnly: f.text(255).inputFalse(),
@@ -120,7 +120,7 @@ describe("OpenAPI schema generation", () => {
 				getGlobals: () => ({}),
 			};
 
-			const spec = generateOpenApiSpec(mockCms as any, undefined, {
+			const spec = await generateOpenApiSpec(mockCms as any, undefined, {
 				info: { title: "Test API", version: "1.0.0" },
 				basePath: "/",
 			});
@@ -140,7 +140,7 @@ describe("OpenAPI schema generation", () => {
 			expect(documentFields.properties.secret).toBeUndefined();
 		});
 
-		it("does not generate empty schemas", () => {
+		it("does not generate empty schemas", async () => {
 			const posts = collection("posts").fields(({ f }) => ({
 				title: f.text(100).required(),
 				content: f.textarea(),
@@ -152,7 +152,7 @@ describe("OpenAPI schema generation", () => {
 				getGlobals: () => ({}),
 			};
 
-			const spec = generateOpenApiSpec(mockCms as any, undefined, {
+			const spec = await generateOpenApiSpec(mockCms as any, undefined, {
 				info: { title: "Test API", version: "1.0.0" },
 				basePath: "/",
 			});
@@ -170,7 +170,7 @@ describe("OpenAPI schema generation", () => {
 			expect(insertSchema.properties.views).toBeDefined();
 		});
 
-		it("generates collection versioning paths", () => {
+		it("generates collection versioning paths", async () => {
 			const posts = collection("posts")
 				.fields(({ f }) => ({
 					title: f.text().required(),
@@ -182,7 +182,7 @@ describe("OpenAPI schema generation", () => {
 				getGlobals: () => ({}),
 			};
 
-			const spec = generateOpenApiSpec(mockCms as any, undefined, {
+			const spec = await generateOpenApiSpec(mockCms as any, undefined, {
 				info: { title: "Test API", version: "1.0.0" },
 				basePath: "/",
 			});
@@ -191,7 +191,7 @@ describe("OpenAPI schema generation", () => {
 			expect(spec.paths?.["//posts/{id}/revert"]?.post).toBeDefined();
 		});
 
-		it("generates transition path for workflow-enabled collections", () => {
+		it("generates transition path for workflow-enabled collections", async () => {
 			const posts = collection("posts")
 				.fields(({ f }) => ({
 					title: f.text().required(),
@@ -214,7 +214,7 @@ describe("OpenAPI schema generation", () => {
 				getGlobals: () => ({}),
 			};
 
-			const spec = generateOpenApiSpec(mockCms as any, undefined, {
+			const spec = await generateOpenApiSpec(mockCms as any, undefined, {
 				info: { title: "Test API", version: "1.0.0" },
 				basePath: "/",
 			});
@@ -230,7 +230,7 @@ describe("OpenAPI schema generation", () => {
 	});
 
 	describe("global schemas", () => {
-		it("generates proper JSON schema for global fields", () => {
+		it("generates proper JSON schema for global fields", async () => {
 			const settings = global("settings").fields(({ f }) => ({
 				siteName: f.text(100).required(),
 				siteDescription: f.textarea(),
@@ -242,7 +242,7 @@ describe("OpenAPI schema generation", () => {
 				getGlobals: () => ({ settings }),
 			};
 
-			const spec = generateOpenApiSpec(mockCms as any, undefined, {
+			const spec = await generateOpenApiSpec(mockCms as any, undefined, {
 				info: { title: "Test API", version: "1.0.0" },
 			});
 
@@ -255,7 +255,7 @@ describe("OpenAPI schema generation", () => {
 			expect(updateSchema.properties.maintenanceMode).toBeDefined();
 		});
 
-		it("separates inputFalse and outputFalse fields in global schemas", () => {
+		it("separates inputFalse and outputFalse fields in global schemas", async () => {
 			const settings = global("settings").fields(({ f }) => ({
 				siteName: f.text(100).required(),
 				serverOnly: f.text(100).inputFalse(),
@@ -267,7 +267,7 @@ describe("OpenAPI schema generation", () => {
 				getGlobals: () => ({ settings }),
 			};
 
-			const spec = generateOpenApiSpec(mockCms as any, undefined, {
+			const spec = await generateOpenApiSpec(mockCms as any, undefined, {
 				info: { title: "Test API", version: "1.0.0" },
 			});
 
@@ -283,7 +283,7 @@ describe("OpenAPI schema generation", () => {
 			expect(valueFields.properties.secret).toBeUndefined();
 		});
 
-		it("generates global versioning paths", () => {
+		it("generates global versioning paths", async () => {
 			const settings = global("settings")
 				.fields(({ f }) => ({
 					siteName: f.text().required(),
@@ -295,7 +295,7 @@ describe("OpenAPI schema generation", () => {
 				getGlobals: () => ({ settings }),
 			};
 
-			const spec = generateOpenApiSpec(mockCms as any, undefined, {
+			const spec = await generateOpenApiSpec(mockCms as any, undefined, {
 				info: { title: "Test API", version: "1.0.0" },
 				basePath: "/",
 			});
@@ -304,7 +304,7 @@ describe("OpenAPI schema generation", () => {
 			expect(spec.paths?.["//globals/settings/revert"]?.post).toBeDefined();
 		});
 
-		it("generates transition path for workflow-enabled globals", () => {
+		it("generates transition path for workflow-enabled globals", async () => {
 			const settings = global("settings")
 				.fields(({ f }) => ({
 					siteName: f.text().required(),
@@ -327,7 +327,7 @@ describe("OpenAPI schema generation", () => {
 				getGlobals: () => ({ settings, nav }),
 			};
 
-			const spec = generateOpenApiSpec(mockCms as any, undefined, {
+			const spec = await generateOpenApiSpec(mockCms as any, undefined, {
 				info: { title: "Test API", version: "1.0.0" },
 				basePath: "/",
 			});
