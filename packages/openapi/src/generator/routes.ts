@@ -28,6 +28,27 @@ function routeKeySegmentToPatternSegment(segment: string): string {
 }
 
 /**
+ * Sanitize a route key segment into a fragment safe for an `operationId` and a
+ * `components.schemas` key, both of which must match the OpenAPI 3.1 pattern
+ * `^[a-zA-Z0-9._-]+$`.
+ *
+ * File-convention brackets are unwrapped to their bare param name first
+ * (`[id]` → `id`, `[...slug]` → `slug`) so the readable name survives, then any
+ * remaining out-of-pattern character (`.`, `/`, whitespace, …) is replaced with
+ * `_`. Empty results collapse to `_` so a segment never disappears entirely.
+ */
+function sanitizeIdSegment(segment: string): string {
+	let name = segment;
+	if (name.startsWith("[...") && name.endsWith("]")) {
+		name = name.slice(4, -1);
+	} else if (name.startsWith("[") && name.endsWith("]")) {
+		name = name.slice(1, -1);
+	}
+	const cleaned = name.replace(/[^a-zA-Z0-9._-]/g, "_");
+	return cleaned.length > 0 ? cleaned : "_";
+}
+
+/**
  * Convert a file-convention pattern segment to an OpenAPI path-template
  * segment: `[...slug]` → `{slug}`, `[param]` → `{param}`, literal → as-is.
  */
@@ -214,7 +235,12 @@ export function generateRoutePaths(
 			});
 		}
 
-		const baseOperationId = `route_${entry.segments.join("_")}`;
+		// Sanitize each segment so bracketed params (`[id]`, `[...slug]`) and any
+		// other out-of-pattern character never leak into the `operationId` or the
+		// derived `components.schemas` keys — both must match `^[a-zA-Z0-9._-]+$`.
+		const baseOperationId = `route_${entry.segments
+			.map(sanitizeIdSegment)
+			.join("_")}`;
 		// Method-suffixed sibling routes can share one path; suffix the
 		// operationId with the method so each operation stays unique.
 		const multiMethod = (pathMethodCounts.get(routePath) ?? 0) > 1;

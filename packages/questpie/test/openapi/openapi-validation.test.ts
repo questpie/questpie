@@ -229,6 +229,104 @@ describe("OpenAPI 3.1 validator gate has teeth", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Param-route component keys + operationId must be valid OpenAPI 3.1 keys.
+// A `[param]` / `[...slug]` segment carrying an input/output schema used to emit
+// a `components.schemas` key + `operationId` containing raw `[` / `]` — which
+// violates the `^[a-zA-Z0-9._-]+$` component-key pattern. These lock the fix.
+// ---------------------------------------------------------------------------
+
+describe("OpenAPI param-route keys + operationId sanitization", () => {
+	const OPENAPI_KEY = /^[a-zA-Z0-9._-]+$/;
+
+	// A JSON route on a `[param]` path with BOTH input + output schemas, plus a
+	// `[...slug]` catch-all with a schema — the exact shapes that leaked `[`/`]`.
+	const paramSchemaRoutes = {
+		users: {
+			"[id]": route()
+				.get()
+				.schema(z.object({ q: z.string().optional() }))
+				.outputSchema(z.object({ id: z.string(), name: z.string() }))
+				.handler(() => ({ id: "1", name: "a" })),
+		},
+		files: {
+			"[...slug]": route()
+				.post()
+				.schema(z.object({ path: z.string() }))
+				.handler(() => ({ ok: true })),
+		},
+	};
+
+	function paramApp() {
+		return {
+			getCollections: () => ({}),
+			getGlobals: () => ({}),
+			config: { routes: paramSchemaRoutes },
+		};
+	}
+
+	it("emits valid component-schema keys + operationIds for [param]/[...slug] routes with a schema", async () => {
+		const spec = await generateOpenApiSpec(
+			paramApp() as any,
+			paramSchemaRoutes as any,
+			{ basePath: "/api" },
+		);
+
+		// Every component schema key must satisfy the OpenAPI 3.1 key pattern —
+		// no leaked `[` / `]` / `.` / `/`.
+		const schemaKeys = Object.keys(spec.components.schemas);
+		for (const key of schemaKeys) {
+			expect(key).toMatch(OPENAPI_KEY);
+		}
+
+		// The derived per-route schema keys survive with a readable, sanitized
+		// name (`[id]` → `id`, `[...slug]` → `slug`).
+		expect(schemaKeys).toContain("route_users_id_Input");
+		expect(schemaKeys).toContain("route_users_id_Output");
+		expect(schemaKeys).toContain("route_files_slug_Input");
+
+		// Every operationId across all paths is also a valid key.
+		for (const pathItem of Object.values(spec.paths)) {
+			for (const op of Object.values(pathItem as Record<string, any>)) {
+				if (op && typeof op === "object" && "operationId" in op) {
+					expect(String(op.operationId)).toMatch(OPENAPI_KEY);
+				}
+			}
+		}
+
+		// The request body of the `{id}` GET references the sanitized Input key.
+		const getOp = getOperation(spec, "/api/users/{id}", "get");
+		expect((getOp.requestBody as any).content["application/json"].schema).toEqual(
+			{ $ref: "#/components/schemas/route_users_id_Input" },
+		);
+
+		// Whole document is still valid OpenAPI 3.1.
+		await assertValidOpenApi31(spec);
+	});
+
+	it("leaves non-param route operationIds untouched (no churn)", async () => {
+		const plainRoutes = {
+			widgets: {
+				list: route()
+					.get()
+					.schema(z.object({}))
+					.handler(() => ({ ok: true })),
+			},
+		};
+		const spec = await generateOpenApiSpec(
+			{
+				getCollections: () => ({}),
+				getGlobals: () => ({}),
+				config: { routes: plainRoutes },
+			} as any,
+			plainRoutes as any,
+			{ basePath: "/api" },
+		);
+		const op = getOperation(spec, "/api/widgets/list", "get");
+		expect(op.operationId).toBe("route_widgets_list");
+	});
+});
+
+// ---------------------------------------------------------------------------
 // Reusable helpers exercised against the real spec (so the sibling tasks can
 // rely on them). Also documents the intended content of key operations.
 // ---------------------------------------------------------------------------
