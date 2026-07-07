@@ -1,4 +1,9 @@
 import type { AppContext, Questpie, RequestContext } from "questpie";
+import {
+	defaultOperationScope,
+	type ScopeOperationKind,
+	umbrellaScopeFor,
+} from "questpie";
 
 import type {
 	McpAccessMode,
@@ -9,6 +14,13 @@ import type {
 	McpRequiredScopes,
 	McpTransportKind,
 } from "./types.js";
+
+// The scope naming convention (`<resource>:<name>:<verb>`) and the coarse
+// umbrella derivation are owned by questpie core (`scope-names.ts`) so this gate
+// and the OAuth scope catalog derive from ONE source and can never drift.
+// Re-exported so `@questpie/mcp`'s public API is unchanged for consumers.
+export { defaultOperationScope, umbrellaScopeFor };
+export type { ScopeOperationKind };
 
 export const DEFAULT_MCP_CONFIG: Required<
 	Pick<McpConfig, "crud" | "routes" | "resources" | "http" | "stdio">
@@ -178,52 +190,6 @@ export function operationRule(
 	return policy.read;
 }
 
-// ============================================================================
-// Declarative scope model (MO7)
-//
-// The default operation→scope mapping is expressed as DATA, parameterized by
-// (entity kind, entity name, operation kind), NOT as a switch over entity
-// names. Adding a collection/global/route contributes its scopes for free —
-// the mapping scales without touching framework code (QUESTPIE invariant).
-// ============================================================================
-
-/**
- * The `<resource>` segment of a scope, keyed by entity kind. Data, not a
- * `switch (kind)`. e.g. a collection named `posts` maps under `collections:…`.
- */
-const SCOPE_RESOURCE_BY_KIND: Record<EntityKind, string> = {
-	collection: "collections",
-	global: "globals",
-	route: "routes",
-};
-
-/**
- * Operation kind → the scope verb it requires. CRUD reads/writes/deletes map to
- * `read`/`write`/`delete`; a route invocation maps to `invoke`. Keyed by kind
- * (not operation name), so `list`/`get`/`count` all resolve to `read` etc.
- */
-const SCOPE_VERB_BY_OPERATION_KIND: Record<ScopeOperationKind, string> = {
-	read: "read",
-	write: "write",
-	delete: "delete",
-	invoke: "invoke",
-};
-
-export type ScopeOperationKind = "read" | "write" | "delete" | "invoke";
-
-/**
- * Build the default required scope for an entity operation from the declarative
- * mapping: `<resource>:<name>:<verb>` — e.g. `collections:posts:read`,
- * `globals:siteSettings:write`, `routes:reports/generate:invoke`.
- */
-export function defaultOperationScope(
-	kind: EntityKind,
-	name: string,
-	operationKind: ScopeOperationKind,
-): string {
-	return `${SCOPE_RESOURCE_BY_KIND[kind]}:${name}:${SCOPE_VERB_BY_OPERATION_KIND[operationKind]}`;
-}
-
 /** Normalize an {@link McpRequiredScopes} declaration to a scope list. */
 export function normalizeRequiredScopes(
 	required: McpRequiredScopes | undefined,
@@ -271,38 +237,6 @@ export function scopesFromContext(
 	const principal = ctx.principal;
 	if (principal && principal.kind === "oauth") return principal.scopes;
 	return undefined;
-}
-
-/**
- * Verbs that have a coarse umbrella scope (LOCKED #2 lists read/write only). A
- * granular `<resource>:<name>:<verb>` requirement is ALSO satisfied by the
- * held coarse `<resource>:<verb>` umbrella — but ONLY for these verbs. Data,
- * not a `switch (verb)`: `delete` and `invoke` are absent, so they have NO
- * umbrella (least-privilege — a `:delete` requirement always needs the exact
- * granular scope, never a coarse grant).
- */
-const UMBRELLA_ELIGIBLE_VERBS = new Set(["read", "write"]);
-
-/**
- * The coarse umbrella scope that satisfies a granular `required` scope, or
- * `undefined` when none applies. Parses the scope string generically (no
- * per-name / per-resource hardcoding): a granular scope is exactly
- * `<resource>:<name>:<verb>` (three segments). Its umbrella is
- * `<resource>:<verb>` — preserving the SAME `<resource>` segment, so
- * `collections:posts:read` maps to `collections:read` and never to
- * `globals:read` (cross-resource-kind isolation falls out of the parse). The
- * verb must be umbrella-eligible ({@link UMBRELLA_ELIGIBLE_VERBS}); otherwise
- * there is no umbrella. Non-three-segment inputs (an umbrella itself, or a
- * custom scope like `custom:scoped:use`) yield `undefined` — a custom scope
- * happens to have three segments but its verb is not read/write, so it never
- * gains an umbrella.
- */
-function umbrellaScopeFor(required: string): string | undefined {
-	const segments = required.split(":");
-	if (segments.length !== 3) return undefined;
-	const [resource, , verb] = segments;
-	if (!UMBRELLA_ELIGIBLE_VERBS.has(verb)) return undefined;
-	return `${resource}:${verb}`;
 }
 
 /**

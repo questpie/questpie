@@ -50,19 +50,21 @@ const appUrl =
 const mcpAudience = `${appUrl.replace(/\/$/, "")}/api/mcp`;
 
 /**
- * SEED scope catalog placeholder. The full declarative catalog — generated from
- * collections/globals/routes as `collections:<name>:read|write|delete`,
- * `globals:<name>:read|write`, `routes:<key>:invoke` — lands in MO11. Here we
- * only seed the OIDC scopes the provider needs (`openid` marks it an OIDC
- * server) plus the coarse `collections:*` umbrellas from MO1 #2.
+ * The OIDC base scopes the provider always offers (`openid` marks it an OIDC
+ * server). The QUESTPIE resource scope catalog — the coarse `collections:*`
+ * umbrellas (MO1 #2) plus the granular `collections:<name>:read|write|delete`,
+ * `globals:<name>:read|write`, `routes:<key>:invoke` — is DERIVED from the app's
+ * collections/globals/routes and merged in at auth-instance build time by
+ * `applyOAuthScopeCatalog` (MO11, `core/integrated/auth/scope-catalog.ts`).
+ * `config/auth.ts` cannot see the app's resources, so the framework wires them in
+ * there — the same declarative source the MCP scope gate derives from, so the two
+ * can never drift.
  */
-const SEED_SCOPES: string[] = [
+const OIDC_BASE_SCOPES: string[] = [
 	"openid",
 	"profile",
 	"email",
 	"offline_access",
-	"collections:read",
-	"collections:write",
 ];
 
 export default authConfig({
@@ -73,10 +75,13 @@ export default authConfig({
 		oauthProvider({
 			loginPage: "/admin/login",
 			consentPage: "/admin/oauth/consent",
-			scopes: SEED_SCOPES,
-			// Public subset advertised at the discovery endpoints (MO11 expands this).
+			// Resource scopes (umbrellas + granular) are unioned in by MO11.
+			scopes: OIDC_BASE_SCOPES,
+			// Public subset advertised at the discovery endpoints. MO11 unions the
+			// coarse umbrellas in; the granular per-resource scopes stay grantable
+			// but are not publicly enumerated.
 			advertisedMetadata: {
-				scopes_supported: ["openid", "profile", "email", "collections:read"],
+				scopes_supported: ["openid", "profile", "email"],
 			},
 			// RFC 7591 dynamic client registration — MCP clients self-register —
 			// but keep it gated: unauthenticated registration stays off.

@@ -203,6 +203,15 @@ export * from "#questpie/server/global/crud/global-crud-generator.js";
 export * from "#questpie/server/global/crud/types.js";
 export * from "#questpie/server/i18n/types.js";
 export { auth } from "#questpie/server/modules/core/integrated/auth/merge.js";
+export {
+	defaultOperationScope,
+	SCOPE_RESOURCE_BY_KIND,
+	SCOPE_VERB_BY_OPERATION_KIND,
+	type ScopeEntityKind,
+	type ScopeOperationKind,
+	UMBRELLA_ELIGIBLE_VERBS,
+	umbrellaScopeFor,
+} from "#questpie/server/modules/core/integrated/auth/scope-names.js";
 export * from "#questpie/server/modules/core/integrated/auth/types.js";
 export * from "#questpie/server/modules/core/integrated/mailer/adapter.js";
 export * from "#questpie/server/modules/core/integrated/mailer/service.js";

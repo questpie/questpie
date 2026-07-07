@@ -17,16 +17,18 @@
  *      call time.
  *  (b) stdio trusted `system` worker unchanged — full access, no OAuth.
  *
- * ── Config the test supplies that the framework does NOT yet (documented) ──
- * The provider is configured here with the *granular* per-resource scope catalog
- * (`collections:<name>:read|write|delete`). The starter's `oauthProvider` today
- * seeds only the coarse `collections:read|write` umbrellas — the declarative
- * granular catalog is MO11, not yet wired. Because the DCR endpoint and
- * `/oauth2/authorize` validate requested scopes against the provider catalog, a
- * real DCR client on the *shipped* starter can only obtain coarse scopes, which
- * the granular MCP scope gate then rejects. Supplying the granular catalog here
- * mirrors what MO11 will generate, so the real-token → gate path is exercised
- * faithfully. See the report / knowledge note for the MO11 follow-up.
+ * ── Real generated catalog (MO11) ──
+ * The provider's *granular* per-resource scope catalog
+ * (`collections:<name>:read|write|delete`) is NO LONGER supplied by this test:
+ * MO11's `applyOAuthScopeCatalog` derives it from the registered collections
+ * (`posts`, `lockedNotes`) and merges it into the `oauthProvider()` at
+ * auth-instance build time — the same declarative source the MCP scope gate
+ * derives from. Because the DCR endpoint and `/oauth2/authorize` validate
+ * requested scopes against that catalog, a real DCR client on the *shipped*
+ * starter can now obtain the granular scopes it needs. The `oauthProvider`
+ * override below sets ONLY `validAudiences` (bound to this run's ephemeral port —
+ * an audience concern, orthogonal to scopes); the scope catalog comes from the
+ * framework.
  *
  * The oauth table schema fixes (jsonb array/json columns, unbounded
  * `verification.value`) and the token-issuer verification fix live in the source
@@ -37,18 +39,18 @@
 import { describe, expect, it } from "bun:test";
 import { createHash, randomBytes } from "node:crypto";
 
-import { collection, starterModule } from "questpie";
 import { oauthProvider } from "@better-auth/oauth-provider";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { admin, bearer, jwt } from "better-auth/plugins";
+import { collection, starterModule } from "questpie";
 
 import { createFetchHandler } from "../../questpie/src/server/adapters/http.js";
 import { buildMockApp } from "../../questpie/test/utils/mocks/mock-app-builder.js";
 import { createTestContext } from "../../questpie/test/utils/test-context.js";
 import { runTestDbMigrations } from "../../questpie/test/utils/test-db.js";
 import { createMcpServer, mcpModule } from "../src/exports/index.js";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -76,22 +78,6 @@ const lockedNotes = collection("lockedNotes")
 		update: false,
 		delete: false,
 	});
-
-// The full granular catalog MO11 will generate. `openid` marks the OIDC server.
-const GRANULAR_SCOPES = [
-	"openid",
-	"profile",
-	"email",
-	"offline_access",
-	"collections:read",
-	"collections:write",
-	"collections:posts:read",
-	"collections:posts:write",
-	"collections:posts:delete",
-	"collections:lockedNotes:read",
-	"collections:lockedNotes:write",
-	"collections:lockedNotes:delete",
-];
 
 // A fixed high port so the auth instance's `baseURL` (captured at build time)
 // matches where the JWKS is actually served (the token verifier fetches
@@ -223,7 +209,8 @@ async function obtainAccessToken(
 		);
 		const cBody = await consentResp.json();
 		const redirectUri = cBody?.url ?? cBody?.redirect_uri;
-		if (redirectUri) code = new URL(redirectUri, ORIGIN).searchParams.get("code");
+		if (redirectUri)
+			code = new URL(redirectUri, ORIGIN).searchParams.get("code");
 	}
 	if (!code) throw new Error("no authorization code issued");
 
@@ -279,7 +266,10 @@ describe("MO13 end-to-end OAuth MCP flow + system mode", () => {
 						requireEmailVerification: false,
 					},
 					// Override the starter's oauthProvider (deduped by id "oauth-provider",
-					// override wins) with the granular MO11 catalog + this run's audience.
+					// override wins) ONLY to bind `validAudiences` to this run's ephemeral
+					// port — the starter derives the audience from env at module load, which
+					// won't match. No `scopes` here: MO11's `applyOAuthScopeCatalog` derives
+					// the granular catalog from the registered collections at auth build.
 					plugins: [
 						admin(),
 						bearer(),
@@ -287,7 +277,6 @@ describe("MO13 end-to-end OAuth MCP flow + system mode", () => {
 						oauthProvider({
 							loginPage: "/admin/login",
 							consentPage: "/admin/oauth/consent",
-							scopes: GRANULAR_SCOPES,
 							allowDynamicClientRegistration: true,
 							allowUnauthenticatedClientRegistration: false,
 							validAudiences: [MCP_AUD],
@@ -309,14 +298,19 @@ describe("MO13 end-to-end OAuth MCP flow + system mode", () => {
 					},
 				},
 			},
-			{ app: { url: ORIGIN }, secret: "test-auth-secret-with-more-than-32-chars" },
+			{
+				app: { url: ORIGIN },
+				secret: "test-auth-secret-with-more-than-32-chars",
+			},
 		);
 
 		const handler = createFetchHandler(setup.app);
 		const server = Bun.serve({
 			port: PORT,
 			fetch: (req) =>
-				handler(req).then((r) => r ?? new Response("not found", { status: 404 })),
+				handler(req).then(
+					(r) => r ?? new Response("not found", { status: 404 }),
+				),
 		});
 		await runTestDbMigrations(setup.app);
 		await setup.app.collections.posts.create(
@@ -358,7 +352,12 @@ describe("MO13 end-to-end OAuth MCP flow + system mode", () => {
 			const token = await obtainAccessToken(
 				auth,
 				cookie,
-				["openid", "collections:posts:read", "collections:posts:write", "collections:posts:delete"],
+				[
+					"openid",
+					"collections:posts:read",
+					"collections:posts:write",
+					"collections:posts:delete",
+				],
 				["openid", "collections:posts:read"],
 			);
 
