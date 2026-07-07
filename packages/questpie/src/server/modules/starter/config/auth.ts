@@ -5,9 +5,27 @@
  * MCP-over-OAuth. The OAuth provider replaces the deprecated `mcp` /
  * `oidc-provider` plugins.
  *
+ * ── How MCP-over-OAuth composes (no bespoke internal APIs) ──
+ * The OAuth provider is an AUTH concern and lives HERE, alongside the OAuth
+ * tables (`collections/oauth-*.ts`, `jwks`). The rest of the flow is assembled
+ * from ordinary, userland-visible seams — nothing hidden, no imperative switch:
+ * - This starter config declares `oauthProvider()` + `jwt()` (the provider).
+ * - `coreModule` (auto-included) mounts the root discovery routes
+ *   (`/.well-known/oauth-authorization-server`, `/.well-known/oauth-protected-resource`,
+ *   `/jwks`) as plain `route()` definitions.
+ * - The QUESTPIE adapter resolves a bearer JWT to an `oauth` principal
+ *   (`resolveOAuthPrincipal`) — one auth seam for MCP and any future
+ *   OAuth-protected route.
+ * - `@questpie/mcp`'s `mcpModule` mounts `POST /mcp` (requiring a verified
+ *   principal) and runs the scope gate (`scopeGateAllows`) alongside RBAC.
+ * So an app is OAuth-MCP-ready simply by using the starter (directly, or via
+ * `adminModule`, which bundles it) and adding `mcpModule` — the exact
+ * composition the e2e (`packages/mcp/test/oauth-mcp-e2e.test.ts`) exercises.
+ *
  * User projects can override or extend via their own `config/auth.ts`.
  * Plugins are deduped by ID during merge (see auth/merge.ts), so duplicates —
- * including a user-supplied `oauthProvider()` (id `"oauth-provider"`) — are safe.
+ * including a user-supplied `oauthProvider()` (id `"oauth-provider"`) — are safe;
+ * an app's own admin+bearer config keeps the starter's `oauth-provider`/`jwt`.
  */
 import { oauthProvider } from "@better-auth/oauth-provider";
 import { admin, bearer, jwt } from "better-auth/plugins";

@@ -27,6 +27,7 @@ const TEMPLATE_VAR_REGEX = /\{\{(\w+)\}\}/g;
  */
 const dependencyVersionMap: Record<string, string> = {
 	"@questpie/admin": "latest",
+	"@questpie/mcp": "latest",
 	"@questpie/openapi": "latest",
 	"@questpie/workflows": "latest",
 	"better-auth": "^1.6.11",

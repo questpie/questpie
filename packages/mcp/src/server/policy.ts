@@ -242,8 +242,8 @@ export function normalizeRequiredScopes(
  *
  * A level set to `false` explicitly requires no scope (stops the fallback).
  * Returns a (possibly empty) scope list; empty means "no scope required". This
- * is the model resolution only — the deny/register gate that consumes it is
- * MO8.
+ * resolves the requirement; the deny/register decision that consumes it is
+ * {@link scopeGateAllows}.
  */
 export function requiredScopesForOperation(
 	policy: ResolvedMcpPolicy,

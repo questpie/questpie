@@ -7,6 +7,7 @@ export {
 	defaultOperationScope,
 	normalizeRequiredScopes,
 	requiredScopesForOperation,
+	scopeGateAllows,
 	type ScopeOperationKind,
 	scopesFromContext,
 } from "../server/policy.js";

@@ -82,6 +82,23 @@ export const modules: ModuleDefinition[] = [
 		clientImport: "@questpie/workflows/client/modules/workflows",
 		clientSymbol: "workflowsClientModule",
 	},
+	{
+		id: "mcp",
+		label: "MCP",
+		hint: "Model Context Protocol endpoint (OAuth 2.1)",
+		group: "Optional",
+		// Opt-in, not default: mounting /mcp exposes the whole data model as MCP
+		// tools, so it is a deliberate choice. Available on every runtime — stdio
+		// (trusted `system` worker) needs no OAuth. HTTP MCP is OAuth-gated and
+		// end-to-end complete on a render runtime, where `adminModule` bundles the
+		// `starterModule` that ships the `oauthProvider` + `jwt()` auth config and
+		// the OAuth tables. On a headless runtime (no admin/starter) the HTTP route
+		// mounts but has no OAuth provider, so it stays 401 until you add the
+		// starter's OAuth provider yourself (documented follow-up).
+		deps: { "@questpie/mcp": "latest" },
+		serverImport: "@questpie/mcp/modules/mcp",
+		serverSymbol: "mcpModule",
+	},
 ];
 
 export function getModule(id: string): ModuleDefinition | undefined {

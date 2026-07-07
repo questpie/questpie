@@ -18,7 +18,7 @@ export interface McpAccessRuleContext {
 	 * authenticated by an OAuth access token (`ctx.principal.kind === "oauth"`).
 	 * `undefined` for the `user` (first-party) and `system` (stdio/trusted)
 	 * principals, which carry no scopes. This is the model input the scope gate
-	 * (MO8) reads; MO7 only makes it available and does not enforce it.
+	 * (`scopeGateAllows`) reads when deciding whether a tool is visible/callable.
 	 */
 	scopes?: string[];
 	ctx: AppContext & Partial<RequestContext>;
@@ -48,8 +48,9 @@ export type McpEntityPolicy =
 			 * the entity level (applies to every operation) and/or per operation via
 			 * {@link McpEntityPolicy.operationScopes}. When omitted, the default
 			 * operation→scope mapping is derived from the operation kind (e.g.
-			 * `collections:<name>:read`). This is the declarative model only; the
-			 * gate that consumes it lands in MO8.
+			 * `collections:<name>:read`). Resolved by `requiredScopesForOperation`
+			 * and enforced by the scope gate (`scopeGateAllows`) at both
+			 * `tools/list` and `tools/call`.
 			 */
 			requiredScopes?: McpRequiredScopes;
 			/**
@@ -143,8 +144,9 @@ export interface McpToolConfig<
 	/**
 	 * Scopes an OAuth caller must hold to reach this custom tool (all required —
 	 * AND). Custom tools have no default mapping (there is no resource/operation
-	 * to derive one from), so an omitted value requires no scope. Declarative
-	 * model only; enforced by the scope gate in MO8.
+	 * to derive one from), so an omitted value requires no scope. Enforced by the
+	 * scope gate (`scopeGateAllows`) at both `tools/list` (hidden) and
+	 * `tools/call` (denied); `system`/`user` callers carry no scopes and skip it.
 	 */
 	scopes?: McpRequiredScopes;
 	_meta?: Record<string, unknown>;

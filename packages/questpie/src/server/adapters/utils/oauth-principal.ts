@@ -23,8 +23,9 @@
  * - **RBAC still applies.** The returned principal is `kind: "oauth"`, from
  *   which `accessMode` derives to `"user"` (never `"system"`) — the user's
  *   `.access()` rules run unchanged as that user. Scopes are carried but *not*
- *   enforced here (the scope gate is MO8); they are an additional narrowing gate
- *   layered on top of RBAC.
+ *   enforced here; the `@questpie/mcp` scope gate (`scopeGateAllows`) applies
+ *   them as an additional narrowing gate layered on top of RBAC, so the
+ *   effective `oauth` permission is `scopes ∩ RBAC`.
  *
  * Security invariants (must hold — see the negative unit tests):
  * - An invalid / expired / wrong-`aud` / wrong-`iss` / malformed / unsigned
