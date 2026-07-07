@@ -163,8 +163,34 @@ export function generateRoutePaths(
 
 		const topLevel = patternSegments[0] ?? "routes";
 
-		if (!tagSet.has(topLevel)) {
-			tagSet.add(topLevel);
+		// Serializable route metadata (`.meta({ title, description, tags })`),
+		// the single seam shared with route introspection + MCP.
+		const meta = (def.meta ?? undefined) as
+			| {
+					title?: string;
+					description?: string;
+					tags?: string[];
+			  }
+			| undefined;
+
+		// Operation tags: prefer explicit `meta.tags`, else the default
+		// `Routes: <topLevel>` bucket. Register whichever set is used at the
+		// spec level so there are no orphan tags.
+		const metaTags =
+			Array.isArray(meta?.tags) && meta.tags.length > 0
+				? meta.tags
+				: undefined;
+		const operationTags = metaTags ?? [`Routes: ${topLevel}`];
+
+		if (metaTags) {
+			for (const tag of metaTags) {
+				if (!tagSet.has(tag)) {
+					tagSet.add(tag);
+					tags.push({ name: tag });
+				}
+			}
+		} else if (!tagSet.has(`Routes: ${topLevel}`)) {
+			tagSet.add(`Routes: ${topLevel}`);
 			tags.push({
 				name: `Routes: ${topLevel}`,
 				description: `Routes under ${topLevel}`,
@@ -189,16 +215,21 @@ export function generateRoutePaths(
 
 		const operation: PathOperation = {
 			operationId: baseOperationId,
-			summary: entry.path,
-			tags: [`Routes: ${topLevel}`],
+			// `meta.title` -> summary, falling back to the URL path string.
+			summary: meta?.title ?? entry.path,
+			tags: operationTags,
+			...(meta?.description ? { description: meta.description } : {}),
 			...(parameters.length > 0 ? { parameters } : {}),
 			responses: {},
 		};
 
 		if (isRaw) {
-			// Raw routes take a raw request and return a raw response
-			operation.description =
-				"Raw route - accepts any request body and returns a raw response.";
+			// Raw routes take a raw request and return a raw response. Keep the
+			// default blurb only when `meta.description` did not already set one.
+			if (!operation.description) {
+				operation.description =
+					"Raw route - accepts any request body and returns a raw response.";
+			}
 			operation.requestBody = {
 				content: {
 					"application/json": { schema: {} },
