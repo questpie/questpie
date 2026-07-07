@@ -7,10 +7,10 @@ The **Model Context Protocol (MCP)** integration turns your QUESTPIE app into an
 
 You also get custom tools: drop an `mcpTool()` file under `mcp-tools/` to expose bespoke logic with a typed Zod input and full app context.
 
-<Callout type="warn" title="OAuth 2.1 auth for MCP is in active rework, not shipped yet">
-QUESTPIE is moving the HTTP MCP transport onto a **real OAuth 2.1 authorization-code + PKCE flow** (dynamic client registration, a human consent screen, per-user delegation, and least-privilege **scopes** layered on top of RBAC as `scopes ∩ user-RBAC`). It also adds a first-class `principal` (`user` / `oauth` / `system`).
+<Callout type="info" title="Authenticating external agents? Use OAuth 2.1">
+This page covers the MCP surface itself — tools, policy, transports. For letting **external** AI agents (Claude, IDEs) connect over HTTP, QUESTPIE ships a real **OAuth 2.1 authorization-code + PKCE flow**: dynamic client registration, a human consent screen, per-user delegation, and least-privilege **scopes** layered on top of RBAC as `scopes ∩ RBAC`, plus a first-class `principal` (`user` / `oauth` / `system`). See **[MCP over OAuth 2.1](/docs/integrations/mcp-oauth)**.
 
-**None of that exists in the code today.** This page documents the **current** surface only: HTTP MCP runs under whatever session the request presents (cookie or bearer token), with no scopes, no consent, and no OAuth endpoints. Treat the OAuth model as direction, not behavior, this page will be updated when it lands. Tracked by board goal `mcp-oauth-v1`.
+On an admin-enabled app the HTTP `/api/mcp` route requires a verified principal — a first-party admin session (`user`) or a valid OAuth access token (`oauth`); an unauthenticated request gets a `401` pointing at the OAuth discovery metadata. A trusted local [stdio](#stdio-transport) worker runs as `system` and needs no OAuth.
 </Callout>
 
 <Callout type="info" title="Prerequisites">
@@ -59,7 +59,7 @@ Adding `mcpModule` to `modules.ts` and adding files under `mcp-tools/` both chan
 The bundled HTTP route hardcodes `accessMode: "user"`, it always runs under the request's session, and access rules are always evaluated. The `http.accessMode` config field is therefore ignored for this route; it only matters if you mount MCP on your own transport via `createMcpServer`.
 </Callout>
 
-Authentication today is whatever the request carries. The CORS allow-list already permits `Authorization`, `x-api-key`, and `Mcp-Session-Id` headers, and the session is resolved from those headers the same way as any other request. There is no MCP-specific token, no consent step, and no scope check, see the rework callout at the top of this page.
+The route requires a **verified principal** before it dispatches anything: the framework resolves identity onto the request first, and without one, the route answers `401` with a `WWW-Authenticate` header pointing at the OAuth discovery metadata (so an MCP client auto-discovers the authorization server and starts the flow). A principal comes from either a first-party admin cookie/bearer session (`kind: "user"`) or a valid OAuth access token (`kind: "oauth"`). The CORS allow-list already permits `Authorization`, `x-api-key`, and `Mcp-Session-Id` headers. For the full external-agent OAuth flow — registration, consent, scopes — see [MCP over OAuth 2.1](/docs/integrations/mcp-oauth).
 
 ## How entities become tools
 
@@ -249,7 +249,7 @@ collections: {
 ```
 
 <Callout type="info" title="MCP rules layer on top of `.access()`, they don't replace it">
-An undefined rule evaluates to `true` at the MCP layer, but the collection/global `.access()` rules still run for the connecting user (unless `accessMode` is `"system"`). The MCP policy decides *what is reachable via MCP at all*; your access rules decide *what this user may do*. The richer per-user **scope** model is the OAuth rework, see the callout at the top. See [Access control](/docs/concepts/access-control).
+An undefined rule evaluates to `true` at the MCP layer, but the collection/global `.access()` rules still run for the connecting user (unless `accessMode` is `"system"`). The MCP policy decides *what is reachable via MCP at all*; your access rules decide *what this user may do*. For OAuth callers, a per-user **scope** gate narrows further still (`scopes ∩ RBAC`) — see [MCP over OAuth 2.1](/docs/integrations/mcp-oauth). See [Access control](/docs/concepts/access-control).
 </Callout>
 
 ## Custom tools

@@ -10,6 +10,7 @@ Integrations are modules you add to surface what your app already knows to exter
 | Integration | What it does |
 |---|---|
 | **[MCP](/docs/integrations/mcp)** | Add `mcpModule` and your app becomes a Model Context Protocol server, collections, globals, and opted-in routes become tools an AI client can call, gated by your access rules. |
+| **[MCP over OAuth 2.1](/docs/integrations/mcp-oauth)** | Let external AI agents authenticate to your MCP endpoint through a real OAuth 2.1 + PKCE flow, acting as a real user and bounded by `scopes ∩ RBAC`. |
 | **[OpenAPI and Scalar](/docs/integrations/openapi)** | Add `@questpie/openapi` and your whole API documents itself, an OpenAPI 3.1 spec at `/api/openapi.json` plus interactive [Scalar](https://scalar.com) docs at `/api/docs`. |
 
 ## Related
