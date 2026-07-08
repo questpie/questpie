@@ -161,6 +161,17 @@ export async function oauthIssuerForAuth(auth: {
 }
 
 /**
+ * The JWS algorithm(s) an OAuth access token may be signed with. Better Auth's
+ * `jwt()` plugin — which backs the OAuth provider — signs with EdDSA (Ed25519)
+ * by default, and that is what the QUESTPIE starter issues. Pinning verification
+ * to this exact set is defense-in-depth against algorithm substitution: a token
+ * presenting any other `alg` (a symmetric `HS*`, `none`, or a different
+ * asymmetric family) is rejected by `verifyAccessToken` before its signature is
+ * even checked — independent of what keys the JWKS happens to expose.
+ */
+const EXPECTED_TOKEN_ALGORITHMS = ["EdDSA"];
+
+/**
  * Parse the space-delimited OAuth `scope` claim into a deduped, order-preserving
  * list. Returns `[]` for a missing/empty claim.
  */
@@ -225,6 +236,7 @@ export async function resolveOAuthPrincipal<
 		payload = (await resourceClient.getActions().verifyAccessToken(token, {
 			verifyOptions: {
 				audience: mcpAudienceForApp(app),
+				algorithms: EXPECTED_TOKEN_ALGORITHMS,
 				...(issuer ? { issuer } : {}),
 			},
 		})) as Record<string, unknown>;

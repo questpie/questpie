@@ -1,25 +1,26 @@
 /**
  * MO6 — OAuth access token → `oauth` principal resolution (security-critical).
  *
- * These tests exercise the REAL verification path: an RSA (RS256) access token
- * is minted with `node:crypto` and verified by `verifyAccessToken` (via
- * `oauthProviderResourceClient`) against a matching public JWKS. The ONLY thing
- * stubbed is the JWKS HTTP transport (`globalThis.fetch`) — the signature check,
- * `aud`/`iss`/`exp` enforcement, and claim parsing are all real. RS256 is used
- * (rather than ES256) so the raw RSASSA signature Node produces is exactly the
- * JWS signature, with no DER→JOSE conversion.
+ * These tests exercise the REAL verification path: an EdDSA (Ed25519) access
+ * token — the algorithm Better Auth's `jwt()` plugin issues, and the one the
+ * verifier pins (`EXPECTED_TOKEN_ALGORITHMS`) — is minted with `node:crypto` and
+ * verified by `verifyAccessToken` (via `oauthProviderResourceClient`) against a
+ * matching public JWKS. The ONLY thing stubbed is the JWKS HTTP transport
+ * (`globalThis.fetch`) — the signature check, `aud`/`iss`/`exp` enforcement, and
+ * claim parsing are all real. Ed25519 raw signatures are exactly the JWS
+ * signature, with no DER→JOSE conversion.
  *
  * Covered:
  * - valid token → `principal.kind === "oauth"` with correct user, parsed scopes,
  *   clientId, tokenId; and through `createAdapterContext`, `accessMode === "user"`.
  * - opaque (non-JWT) session bearer → NOT treated as oauth (→ session path).
  * - negatives that must yield NO oauth principal: expired, wrong `aud`, wrong
- *   `iss`, tampered signature, malformed/garbage, `alg: none` (unsigned),
- *   unknown `sub`.
+ *   `iss`, tampered signature, malformed/garbage, `alg: none` (unsigned), a
+ *   header `alg` outside the pinned set (RS256), unknown `sub`.
  */
 
 import { afterEach, describe, expect, test } from "bun:test";
-import { createSign, generateKeyPairSync } from "node:crypto";
+import { generateKeyPairSync, sign } from "node:crypto";
 
 import { createAdapterContext } from "../../src/server/adapters/utils/context.js";
 import { resolveOAuthPrincipal } from "../../src/server/adapters/utils/oauth-principal.js";
@@ -32,29 +33,43 @@ function b64url(input: Buffer | string): string {
 	return Buffer.from(input).toString("base64url");
 }
 
-// One RSA keypair for the whole suite: private key mints tokens, public key is
-// published as the JWKS the verifier fetches.
-const { publicKey, privateKey } = generateKeyPairSync("rsa", {
-	modulusLength: 2048,
-});
+// One Ed25519 keypair for the whole suite: private key mints tokens, public key
+// is published as the JWKS the verifier fetches. EdDSA matches what Better Auth
+// issues and what `EXPECTED_TOKEN_ALGORITHMS` pins.
+const { publicKey, privateKey } = generateKeyPairSync("ed25519");
 const KID = "mo6-test-key";
 const publicJwk = publicKey.export({ format: "jwk" }) as Record<
 	string,
 	unknown
 >;
 publicJwk.kid = KID;
-publicJwk.alg = "RS256";
+publicJwk.alg = "EdDSA";
 publicJwk.use = "sig";
 const JWKS = { keys: [publicJwk] };
 
-/** Mint a real RS256-signed JWT with the given claims (defaults are valid). */
+// A SECOND (RSA / RS256) key published alongside the Ed25519 key — used ONLY to
+// prove the algorithm pin. A token this RSA key VALIDLY signs is still rejected,
+// because RS256 is not in the verifier's pinned `EXPECTED_TOKEN_ALGORITHMS`
+// (["EdDSA"]); without the pin, this same token would verify and resolve.
+const rsa = generateKeyPairSync("rsa", { modulusLength: 2048 });
+const RSA_KID = "mo6-rsa-key";
+const rsaJwk = rsa.publicKey.export({ format: "jwk" }) as Record<
+	string,
+	unknown
+>;
+rsaJwk.kid = RSA_KID;
+rsaJwk.alg = "RS256";
+rsaJwk.use = "sig";
+JWKS.keys.push(rsaJwk);
+
+/** Mint a real EdDSA-signed JWT with the given claims (defaults are valid). */
 function mintToken(
 	claims: Record<string, unknown> = {},
 	opts: { alg?: string; exp?: number; sign?: boolean } = {},
 ): string {
 	const now = Math.floor(Date.now() / 1000);
 	const header = b64url(
-		JSON.stringify({ alg: opts.alg ?? "RS256", kid: KID, typ: "JWT" }),
+		JSON.stringify({ alg: opts.alg ?? "EdDSA", kid: KID, typ: "JWT" }),
 	);
 	const payload = b64url(
 		JSON.stringify({
@@ -74,9 +89,30 @@ function mintToken(
 		// Unsigned / detached — used for the alg:none attack case.
 		return `${signingInput}.`;
 	}
-	const signature = createSign("RSA-SHA256")
-		.update(signingInput)
-		.sign(privateKey);
+	const signature = sign(null, Buffer.from(signingInput), privateKey);
+	return `${signingInput}.${b64url(signature)}`;
+}
+
+/** Mint a genuinely-valid RS256 JWT signed by the published RSA key. */
+function mintRs256Token(): string {
+	const now = Math.floor(Date.now() / 1000);
+	const header = b64url(
+		JSON.stringify({ alg: "RS256", kid: RSA_KID, typ: "JWT" }),
+	);
+	const payload = b64url(
+		JSON.stringify({
+			iss: BASE_URL,
+			aud: AUDIENCE,
+			iat: now,
+			exp: now + 3600,
+			sub: "user-1",
+			scope: "openid collections:posts:read",
+			jti: "tok-rsa",
+			client_id: "client-abc",
+		}),
+	);
+	const signingInput = `${header}.${payload}`;
+	const signature = sign("sha256", Buffer.from(signingInput), rsa.privateKey);
 	return `${signingInput}.${b64url(signature)}`;
 }
 
@@ -322,6 +358,20 @@ describe("resolveOAuthPrincipal — invalid tokens yield NO principal", () => {
 		const resolved = await resolveOAuthPrincipal(
 			app,
 			bearerRequest(unsigned),
+			{},
+		);
+		expect(resolved).toBeNull();
+	});
+
+	test("valid RS256 token whose key is in the JWKS → null (alg outside the pinned set)", async () => {
+		stubJwks();
+		const app = makeApp(makeMockAuth());
+		// The RSA key IS published in the JWKS and the signature IS valid, so this
+		// only fails because RS256 is not in EXPECTED_TOKEN_ALGORITHMS — proving the
+		// algorithm pin rejects a substituted (non-EdDSA) alg on its own.
+		const resolved = await resolveOAuthPrincipal(
+			app,
+			bearerRequest(mintRs256Token()),
 			{},
 		);
 		expect(resolved).toBeNull();
