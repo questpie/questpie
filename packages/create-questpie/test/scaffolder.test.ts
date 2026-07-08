@@ -313,6 +313,67 @@ describe("scaffold", () => {
 		expect(adminModules).toContain("adminClientModule");
 		expect(adminModules).toContain("workflowsClientModule");
 	});
+
+	test("selecting mcp mounts the MCP endpoint module + adds the dependency", async () => {
+		tempDir = await mkdtemp(join(tmpdir(), "create-questpie-"));
+		process.chdir(tempDir);
+
+		// Render runtime: admin brings the starter (OAuth provider + tables), so
+		// the /mcp route this module mounts is OAuth-MCP-ready end to end.
+		await scaffold({
+			projectName: "mcp-app",
+			templateId: "tanstack-start",
+			databaseName: "mcp_app",
+			modules: ["admin", "openapi", "mcp"],
+			installDeps: false,
+			initGit: false,
+			installSkills: false,
+			runCodegen: false,
+		});
+
+		const projectDir = join(tempDir, "mcp-app");
+		const serverModules = await readFile(
+			join(projectDir, "src", "questpie", "server", "modules.ts"),
+			"utf-8",
+		);
+		const packageJson = JSON.parse(
+			await readFile(join(projectDir, "package.json"), "utf-8"),
+		) as { dependencies: Record<string, string> };
+
+		expect(serverModules).toContain(
+			`import { mcpModule } from "@questpie/mcp/modules/mcp";`,
+		);
+		expect(serverModules).toContain("mcpModule,");
+		expect(packageJson.dependencies["@questpie/mcp"]).toBe("latest");
+		// mcp is server-only — it never appears in the admin client module list.
+		const adminModules = await readFile(
+			join(projectDir, "src", "questpie", "admin", "modules.ts"),
+			"utf-8",
+		);
+		expect(adminModules).not.toContain("mcp");
+	});
+
+	test("mcp is available headless too (stdio system mode needs no OAuth)", async () => {
+		tempDir = await mkdtemp(join(tmpdir(), "create-questpie-"));
+		process.chdir(tempDir);
+
+		await scaffold({
+			projectName: "mcp-headless",
+			templateId: "hono",
+			databaseName: "mcp_headless",
+			modules: ["openapi", "mcp"],
+			installDeps: false,
+			initGit: false,
+			installSkills: false,
+			runCodegen: false,
+		});
+
+		const serverModules = await readFile(
+			join(tempDir, "mcp-headless", "src", "questpie", "server", "modules.ts"),
+			"utf-8",
+		);
+		expect(serverModules).toContain("mcpModule,");
+	});
 });
 
 describe("module oracle", () => {
@@ -335,6 +396,8 @@ describe("module oracle", () => {
 		for (const runtime of [...renderRuntimes, ...headlessRuntimes]) {
 			expect(isModuleAllowed("openapi", runtime)).toBe(true);
 			expect(isModuleAllowed("workflows", runtime)).toBe(true);
+			// mcp is server-only (stdio works headless) — allowed everywhere.
+			expect(isModuleAllowed("mcp", runtime)).toBe(true);
 		}
 	});
 

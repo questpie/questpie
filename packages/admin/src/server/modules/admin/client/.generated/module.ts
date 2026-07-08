@@ -37,6 +37,7 @@ import _fld_url from "../fields/url";
 import _pg_dashboard from "../pages/dashboard";
 import _pg_forgotPassword from "../pages/forgotPassword";
 import _pg_login from "../pages/login";
+import _pg_oauthConsent from "../pages/oauthConsent";
 import _pg_resetPassword from "../pages/resetPassword";
 import _pg_setup from "../pages/setup";
 
@@ -93,6 +94,7 @@ export type AdminPages = {
 	dashboard: typeof _pg_dashboard;
 	forgotPassword: typeof _pg_forgotPassword;
 	login: typeof _pg_login;
+	oauthConsent: typeof _pg_oauthConsent;
 	resetPassword: typeof _pg_resetPassword;
 	setup: typeof _pg_setup;
 };
@@ -159,6 +161,7 @@ const _module: AdminModule = {
 		dashboard: _pg_dashboard,
 		forgotPassword: _pg_forgotPassword,
 		login: _pg_login,
+		oauthConsent: _pg_oauthConsent,
 		resetPassword: _pg_resetPassword,
 		setup: _pg_setup,
 	} as AdminPages,

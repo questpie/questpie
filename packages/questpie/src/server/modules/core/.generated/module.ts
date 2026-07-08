@@ -7,6 +7,8 @@ import _job_indexRecords from "../jobs/index-records";
 import _job_scheduledTransition from "../jobs/scheduled-transition";
 
 // ── Routes ────────────────────────────────────────────
+import _route_wellKnown_oauthAuthorizationServer from "../routes/.well-known/oauth-authorization-server";
+import _route_wellKnown_oauthProtectedResource from "../routes/.well-known/oauth-protected-resource";
 import _route_collection from "../routes/[collection]";
 import _route_collection_PATCH from "../routes/[collection].patch";
 import _route_collection_POST from "../routes/[collection].post";
@@ -36,6 +38,7 @@ import _route_globals_name_schema from "../routes/globals/[name]/schema";
 import _route_globals_name_transition from "../routes/globals/[name]/transition";
 import _route_globals_name_versions from "../routes/globals/[name]/versions";
 import _route_health from "../routes/health";
+import _route_jwks from "../routes/jwks";
 import _route_realtime from "../routes/realtime";
 import _route_search from "../routes/search";
 import _route_search_reindex_collection from "../routes/search/reindex/[collection]";
@@ -91,6 +94,8 @@ export type CoreJobs = {
 };
 
 export type CoreRoutes = {
+	".wellKnown/oauthAuthorizationServer": typeof _route_wellKnown_oauthAuthorizationServer extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<".wellKnown/oauthAuthorizationServer">> : typeof _route_wellKnown_oauthAuthorizationServer;
+	".wellKnown/oauthProtectedResource": typeof _route_wellKnown_oauthProtectedResource extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<".wellKnown/oauthProtectedResource">> : typeof _route_wellKnown_oauthProtectedResource;
 	"[collection]": typeof _route_collection extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"[collection]">> : typeof _route_collection;
 	"[collection]:PATCH": typeof _route_collection_PATCH extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"[collection]:PATCH">> : typeof _route_collection_PATCH;
 	"[collection]:POST": typeof _route_collection_POST extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"[collection]:POST">> : typeof _route_collection_POST;
@@ -120,6 +125,7 @@ export type CoreRoutes = {
 	"globals/[name]/transition": typeof _route_globals_name_transition extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"globals/[name]/transition">> : typeof _route_globals_name_transition;
 	"globals/[name]/versions": typeof _route_globals_name_versions extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"globals/[name]/versions">> : typeof _route_globals_name_versions;
 	health: typeof _route_health extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"health">> : typeof _route_health;
+	jwks: typeof _route_jwks extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"jwks">> : typeof _route_jwks;
 	realtime: typeof _route_realtime extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"realtime">> : typeof _route_realtime;
 	search: typeof _route_search extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"search">> : typeof _route_search;
 	"search/reindex/[collection]": typeof _route_search_reindex_collection extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"search/reindex/[collection]">> : typeof _route_search_reindex_collection;
@@ -187,6 +193,8 @@ const _module: CoreModule = {
 		scheduledTransition: _job_scheduledTransition,
 	} as CoreJobs,
 	routes: {
+		".wellKnown/oauthAuthorizationServer": _route_wellKnown_oauthAuthorizationServer,
+		".wellKnown/oauthProtectedResource": _route_wellKnown_oauthProtectedResource,
 		"[collection]": _route_collection,
 		"[collection]:PATCH": _route_collection_PATCH,
 		"[collection]:POST": _route_collection_POST,
@@ -216,6 +224,7 @@ const _module: CoreModule = {
 		"globals/[name]/transition": _route_globals_name_transition,
 		"globals/[name]/versions": _route_globals_name_versions,
 		health: _route_health,
+		jwks: _route_jwks,
 		realtime: _route_realtime,
 		search: _route_search,
 		"search/reindex/[collection]": _route_search_reindex_collection,

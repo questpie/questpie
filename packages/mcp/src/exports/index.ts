@@ -3,6 +3,14 @@ export { createMcpServer } from "../server/create-server.js";
 export { mcpConfig } from "../server/config.js";
 export { mcpTool } from "../server/mcp-tool.js";
 export { mcpPlugin } from "../server/plugin.js";
+export {
+	defaultOperationScope,
+	normalizeRequiredScopes,
+	requiredScopesForOperation,
+	scopeGateAllows,
+	type ScopeOperationKind,
+	scopesFromContext,
+} from "../server/policy.js";
 export { startStdioServer } from "../server/stdio.js";
 export type {
 	McpAccessMode,
@@ -14,6 +22,7 @@ export type {
 	McpEntityPolicy,
 	McpExecutionOptions,
 	McpHttpConfig,
+	McpRequiredScopes,
 	McpResourcesConfig,
 	McpRoutesConfig,
 	McpStdioConfig,
