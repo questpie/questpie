@@ -257,6 +257,7 @@ export * from "#questpie/server/migration/runner.js";
 export * from "#questpie/server/migration/types.js";
 export * from "#questpie/server/modules/starter/.generated/module.js";
 export { default as starterModule } from "#questpie/server/modules/starter/.generated/module.js";
+export { default as oauthModule } from "#questpie/server/modules/oauth/.generated/module.js";
 export {
 	type CoreMessageKey,
 	coreBackendMessages,
