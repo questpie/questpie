@@ -32,6 +32,8 @@ export interface DiscoveredFile {
 	exportType: "default" | "named" | "unknown";
 	/** Name of the first named export found (when exportType is "named"). */
 	namedExportName?: string;
+	/** Literal first factory argument, retained as metadata when present. */
+	factoryArgument?: string;
 	/**
 	 * All named exports found in the file.
 	 * Populated when resolve is "named" or "all".
@@ -63,6 +65,15 @@ export interface DiscoveredFile {
 	 * instead of being destructured into flat keys.
 	 */
 	configKey?: string;
+}
+
+/** Factory-argument metadata contributed by a generated module. */
+export interface FactoryArgumentMetadata {
+	category: string;
+	key: string;
+	value: string;
+	/** Module-qualified source location for actionable conflict errors. */
+	source: string;
 }
 
 // ============================================================================
@@ -355,16 +366,36 @@ export interface CategoryDeclaration {
 	 * 2. Cross-reference with export statements (`export const`, `export { }`,
 	 *    `export default`)
 	 *
-	 * Entity key is ALWAYS derived from the filename, never from the factory
-	 * call's string argument. For single-factory files (1 export), the key
-	 * equals `deriveFileKey(filename)`. For multi-export files, the export
-	 * name is used as fallback.
+	 * By default the first literal string argument is the entity key, with the
+	 * named export or filename as fallback. Set `factoryKeyStrategy` to
+	 * `"export-or-filename"` when the argument has a different runtime meaning.
 	 *
 	 * @example ["collection"] — for collections category
 	 * @example ["block"] — for blocks category
 	 * @example ["view", "listView"] — multiple factory names
 	 */
 	factoryFunctions?: string[];
+
+	/**
+	 * Registry-key policy for factory-aware categories.
+	 *
+	 * - "factory-argument" (default): first string argument, then export/filename
+	 * - "export-or-filename": named export name or default-export filename; the
+	 *   factory argument remains metadata and never becomes the registry key
+	 */
+	factoryKeyStrategy?: "factory-argument" | "export-or-filename";
+
+	/** Optional constraints for the first factory argument. */
+	factoryArgument?: {
+		/** Human-readable value name used in errors, e.g. "wire pattern". */
+		label: string;
+		/** Reject factories whose first argument is not a string literal. */
+		requireLiteral?: boolean;
+		/** Require the value to be unique across the app and generated modules. */
+		unique?: boolean;
+		/** Return an actionable error reason, or undefined when valid. */
+		validate?: (value: string) => string | undefined;
+	};
 
 	// ── Registry / factory type integration ─────────────────────
 
