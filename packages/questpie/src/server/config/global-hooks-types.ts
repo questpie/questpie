@@ -1,7 +1,7 @@
 import type { ResolvedAppHookContext } from "#questpie/server/config/app-context.js";
 import type {
 	AccessMode,
-	DrizzleClientFromQuestpieConfig,
+	AnyDrizzleClient,
 } from "#questpie/server/config/types.js";
 
 // ============================================================================
@@ -16,7 +16,7 @@ export type GlobalCollectionHookContextFields<
 	/** The name/slug of the collection being operated on */
 	collection: string;
 	/** Transaction-bound database client for the current mutation. */
-	db: DrizzleClientFromQuestpieConfig<any>;
+	db: AnyDrizzleClient<any>;
 	data: TData;
 	original: TOriginal | undefined;
 	locale?: string;
@@ -117,7 +117,7 @@ export type GlobalGlobalHookContextFields<TData = any> = {
 	/** The name/slug of the global being operated on */
 	global: string;
 	/** Transaction-bound database client for the current mutation. */
-	db: DrizzleClientFromQuestpieConfig<any>;
+	db: AnyDrizzleClient<any>;
 	data: TData;
 	input?: unknown;
 	locale?: string;
