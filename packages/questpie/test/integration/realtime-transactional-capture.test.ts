@@ -15,6 +15,27 @@ import { buildMockApp } from "../utils/mocks/mock-app-builder";
 import { createTestContext } from "../utils/test-context";
 import { runTestDbMigrations } from "../utils/test-db";
 
+async function settleWithinEventLoopTurns(
+	promise: Promise<unknown>,
+	turns = 50,
+): Promise<boolean> {
+	let settled = false;
+	void promise.finally(() => {
+		settled = true;
+	});
+	for (let turn = 0; turn < turns; turn += 1) {
+		if (settled) return true;
+		await new Promise<void>((resolve) => setImmediate(resolve));
+	}
+	return settled;
+}
+
+async function flushEventLoopTurns(turns = 10): Promise<void> {
+	for (let turn = 0; turn < turns; turn += 1) {
+		await new Promise<void>((resolve) => setImmediate(resolve));
+	}
+}
+
 describe("realtime transactional change capture", () => {
 	let setup: Awaited<ReturnType<typeof buildMockApp>>;
 	let ctx: ReturnType<typeof createTestContext>;
@@ -168,5 +189,169 @@ describe("realtime transactional change capture", () => {
 		} finally {
 			intervalSpy.mockRestore();
 		}
+	});
+
+	it("G9: emits exactly one outbox row and notify for a bulk update", async () => {
+		const notifications: RealtimeChangeEvent[] = [];
+		const notifySpy = spyOn(setup.app.realtime, "notify").mockImplementation(
+			async (event: RealtimeChangeEvent) => {
+				notifications.push(event);
+			},
+		);
+		const first = await setup.app.collections.posts.create(
+			{ title: "First" },
+			ctx,
+		);
+		const second = await setup.app.collections.posts.create(
+			{ title: "Second" },
+			ctx,
+		);
+		notifications.length = 0;
+
+		try {
+			await setup.app.collections.posts.update(
+				{
+					where: { id: { in: [first.id, second.id] } },
+					data: { title: "Updated" },
+				},
+				ctx,
+			);
+		} finally {
+			notifySpy.mockRestore();
+		}
+
+		const rows = await setup.app.db.select().from(questpieRealtimeLogTable);
+		const bulkRows = rows.filter(
+			(row: { operation: string }) => row.operation === "bulk_update",
+		);
+		const bulkNotices = notifications.filter(
+			(event) => event.operation === "bulk_update",
+		);
+
+		expect(bulkRows).toHaveLength(1);
+		expect(bulkNotices).toHaveLength(1);
+		expect(bulkRows[0]?.payload).toEqual({
+			count: 2,
+			recordIds: [first.id, second.id],
+		});
+	});
+
+	it("G9: emits exactly one outbox row and notify for a bulk delete", async () => {
+		const notifications: RealtimeChangeEvent[] = [];
+		const notifySpy = spyOn(setup.app.realtime, "notify").mockImplementation(
+			async (event: RealtimeChangeEvent) => {
+				notifications.push(event);
+			},
+		);
+		const first = await setup.app.collections.posts.create(
+			{ title: "First" },
+			ctx,
+		);
+		const second = await setup.app.collections.posts.create(
+			{ title: "Second" },
+			ctx,
+		);
+		notifications.length = 0;
+
+		try {
+			await setup.app.collections.posts.delete(
+				{ where: { id: { in: [first.id, second.id] } } },
+				ctx,
+			);
+		} finally {
+			notifySpy.mockRestore();
+		}
+
+		const rows = await setup.app.db.select().from(questpieRealtimeLogTable);
+		const bulkRows = rows.filter(
+			(row: { operation: string }) => row.operation === "bulk_delete",
+		);
+		const bulkNotices = notifications.filter(
+			(event) => event.operation === "bulk_delete",
+		);
+
+		expect(bulkRows).toHaveLength(1);
+		expect(bulkNotices).toHaveLength(1);
+		expect(bulkRows[0]?.payload).toEqual({
+			count: 2,
+			recordIds: [first.id, second.id],
+		});
+	});
+
+	it("G9: does not hold the bulk response open for adapter publish", async () => {
+		const first = await setup.app.collections.posts.create(
+			{ title: "First" },
+			ctx,
+		);
+		const second = await setup.app.collections.posts.create(
+			{ title: "Second" },
+			ctx,
+		);
+		let signalPublishStarted = () => {};
+		const publishStarted = new Promise<void>((resolve) => {
+			signalPublishStarted = resolve;
+		});
+		let releasePublish = () => {};
+		const blockedPublish = new Promise<void>((resolve) => {
+			releasePublish = resolve;
+		});
+		const notifySpy = spyOn(setup.app.realtime, "notify").mockImplementation(
+			async (event: RealtimeChangeEvent) => {
+				if (event.operation !== "bulk_update") return;
+				signalPublishStarted();
+				await blockedPublish;
+			},
+		);
+		const mutation = setup.app.collections.posts.update(
+			{
+				where: { id: { in: [first.id, second.id] } },
+				data: { title: "Updated" },
+			},
+			ctx,
+		);
+
+		try {
+			await publishStarted;
+			expect(await settleWithinEventLoopTurns(mutation)).toBe(true);
+		} finally {
+			releasePublish();
+			await mutation;
+			notifySpy.mockRestore();
+		}
+	});
+
+	it("G9: logs fire-and-forget adapter publish failures", async () => {
+		const first = await setup.app.collections.posts.create(
+			{ title: "First" },
+			ctx,
+		);
+		const second = await setup.app.collections.posts.create(
+			{ title: "Second" },
+			ctx,
+		);
+		const notifySpy = spyOn(setup.app.realtime, "notify").mockImplementation(
+			async (event: RealtimeChangeEvent) => {
+				if (event.operation === "bulk_update") {
+					throw new Error("publish failed for bulk_update");
+				}
+			},
+		);
+
+		try {
+			await setup.app.collections.posts.update(
+				{
+					where: { id: { in: [first.id, second.id] } },
+					data: { title: "Updated" },
+				},
+				ctx,
+			);
+			await flushEventLoopTurns();
+		} finally {
+			notifySpy.mockRestore();
+		}
+
+		expect(
+			setup.app.mocks.logger.getLogsContaining("Realtime publish failed"),
+		).toHaveLength(1);
 	});
 });

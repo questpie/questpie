@@ -20,6 +20,7 @@ import type {
 	DrizzleClientFromQuestpieConfig,
 	Locale,
 } from "#questpie/server/config/types.js";
+import type { RealtimeChangeEvent } from "#questpie/server/modules/core/integrated/realtime/types.js";
 import { buildIndexParams } from "#questpie/server/modules/core/integrated/search/index-params.js";
 import type { SearchableConfig } from "#questpie/server/modules/core/integrated/search/types.js";
 import {
@@ -58,9 +59,39 @@ function resolveRealtimePayload(
 	ctx: GlobalCollectionHookContext,
 	hookType: "change" | "delete",
 ): Record<string, unknown> {
-	if (ctx.isBatch) return { count: ctx.count ?? 0 };
+	if (ctx.isBatch) {
+		return {
+			count: ctx.count ?? 0,
+			recordIds: ctx.recordIds ? [...ctx.recordIds] : [],
+		};
+	}
 	if (hookType === "delete") return {};
 	return ctx.data as Record<string, unknown>;
+}
+
+const capturedRealtimeBatches = new WeakSet<object>();
+
+function shouldCaptureRealtimeChange(
+	ctx: GlobalCollectionHookContext,
+): boolean {
+	if (!ctx.isBatch) return true;
+	const batchMarker = ctx.records ?? ctx.recordIds;
+	if (!batchMarker) return true;
+	if (capturedRealtimeBatches.has(batchMarker)) return false;
+	capturedRealtimeBatches.add(batchMarker);
+	return true;
+}
+
+function publishRealtimeAfterCommit(
+	ctx: Pick<GlobalCollectionHookContext, "logger" | "onAfterCommit">,
+	realtime: NonNullable<GlobalCollectionHookContext["realtime"]>,
+	change: RealtimeChangeEvent,
+): void {
+	ctx.onAfterCommit(async () => {
+		void realtime.notify(change).catch((error) => {
+			ctx.logger?.error("[Core] Realtime publish failed:", error);
+		});
+	});
 }
 
 // ============================================================================
@@ -74,6 +105,7 @@ const realtimeHook = {
 	afterChange: async (ctx: GlobalCollectionHookContext) => {
 		const realtime = ctx.realtime;
 		if (!realtime) return;
+		if (!shouldCaptureRealtimeChange(ctx)) return;
 
 		const operation = resolveRealtimeOperation(ctx, "change");
 		const payload = resolveRealtimePayload(ctx, "change");
@@ -91,13 +123,7 @@ const realtimeHook = {
 				{ db: asRealtimeMutationDb(ctx.db) },
 			);
 
-			ctx.onAfterCommit(async () => {
-				try {
-					await realtime.notify(change);
-				} catch {
-					// Realtime adapter may be unavailable
-				}
-			});
+			publishRealtimeAfterCommit(ctx, realtime, change);
 		} catch {
 			// Realtime log table may not exist yet
 		}
@@ -105,6 +131,7 @@ const realtimeHook = {
 	afterDelete: async (ctx: GlobalCollectionHookContext) => {
 		const realtime = ctx.realtime;
 		if (!realtime) return;
+		if (!shouldCaptureRealtimeChange(ctx)) return;
 
 		const operation = resolveRealtimeOperation(ctx, "delete");
 		const payload = resolveRealtimePayload(ctx, "delete");
@@ -122,13 +149,7 @@ const realtimeHook = {
 				{ db: asRealtimeMutationDb(ctx.db) },
 			);
 
-			ctx.onAfterCommit(async () => {
-				try {
-					await realtime.notify(change);
-				} catch {
-					// Realtime adapter may be unavailable
-				}
-			});
+			publishRealtimeAfterCommit(ctx, realtime, change);
 		} catch {
 			// Realtime log table may not exist yet
 		}
@@ -301,13 +322,7 @@ const globalRealtimeHook = {
 				{ db: asRealtimeMutationDb(ctx.db) },
 			);
 
-			ctx.onAfterCommit(async () => {
-				try {
-					await realtime.notify(change);
-				} catch {
-					// Realtime adapter may be unavailable
-				}
-			});
+			publishRealtimeAfterCommit(ctx, realtime, change);
 		} catch {
 			// Realtime log table may not exist yet
 		}
