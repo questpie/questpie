@@ -5,6 +5,8 @@
  * Solves the HTTP/1.1 connection limit problem (6 connections per domain).
  */
 
+import type { GetAuthHeaders } from "../auth.js";
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -76,6 +78,7 @@ export class RealtimeMultiplexer {
 		private baseUrl: string,
 		private withCredentials = true,
 		private debounceMs = 50,
+		private getAuthHeaders?: GetAuthHeaders,
 	) {}
 
 	/**
@@ -204,9 +207,10 @@ export class RealtimeMultiplexer {
 			}));
 
 		try {
+			const authHeaders = await this.getAuthHeaders?.();
 			const response = await fetch(`${this.baseUrl}/realtime`, {
 				method: "POST",
-				headers: { "Content-Type": "application/json" },
+				headers: { "Content-Type": "application/json", ...authHeaders },
 				body: JSON.stringify({ topics: getTopicsPayload() }),
 				credentials: this.withCredentials ? "include" : "omit",
 				signal: this.abortController.signal,
