@@ -21,6 +21,11 @@ import {
 	coreCodegenPlugin,
 	resolveTargetGraph,
 } from "../../src/cli/codegen/index.js";
+import {
+	CODEGEN_MODULE_METADATA_SYMBOL,
+	extractFactoryArgumentsFromModules,
+	loadModuleFactoryArguments,
+} from "../../src/cli/codegen/module-metadata.js";
 import { generateTemplate as _generateTemplate } from "../../src/cli/codegen/template.js";
 import type {
 	CodegenPlugin,
@@ -227,6 +232,66 @@ describe("extractPluginsFromModules", () => {
 		const result = extractPluginsFromModules(modules);
 		expect(result).toHaveLength(1);
 		expect(result[0].name).toBe("only-plugin");
+	});
+});
+
+describe("extractFactoryArgumentsFromModules", () => {
+	it("qualifies generated source metadata and traverses each module once", () => {
+		const symbol = Symbol.for(CODEGEN_MODULE_METADATA_SYMBOL);
+		const child = {
+			name: "questpie-chat",
+			[symbol]: {
+				factoryArguments: [
+					{
+						category: "channels",
+						key: "chatRoom",
+						value: "chat-room-[roomId]",
+						source: "channels/chat-room.ts",
+					},
+				],
+			},
+		};
+		const root = { name: "root", modules: [child, child] };
+
+		expect(extractFactoryArgumentsFromModules([root])).toEqual([
+			{
+				category: "channels",
+				key: "chatRoom",
+				value: "chat-room-[roomId]",
+				source: "questpie-chat:channels/chat-room.ts",
+			},
+		]);
+	});
+
+	it("loads metadata from modules.ts for root codegen", async () => {
+		const rootDir = await mkdtemp(join(tmpdir(), "questpie-module-meta-"));
+		try {
+			await writeFile(
+				join(rootDir, "modules.ts"),
+				[
+					`const symbol = Symbol.for(${JSON.stringify(CODEGEN_MODULE_METADATA_SYMBOL)});`,
+					"export default [{",
+					'  name: "questpie-chat",',
+					"  [symbol]: { factoryArguments: [{",
+					'    category: "channels", key: "chatRoom",',
+					'    value: "chat-room-[roomId]", source: "channels/chat-room.ts"',
+					"  }] }",
+					"}];",
+				].join("\n"),
+				"utf-8",
+			);
+
+			expect(await loadModuleFactoryArguments(rootDir)).toEqual([
+				{
+					category: "channels",
+					key: "chatRoom",
+					value: "chat-room-[roomId]",
+					source: "questpie-chat:channels/chat-room.ts",
+				},
+			]);
+		} finally {
+			await rm(rootDir, { recursive: true, force: true });
+		}
 	});
 });
 

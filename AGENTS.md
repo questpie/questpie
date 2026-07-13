@@ -308,14 +308,15 @@ Every discovered entity (collection, view, block, component, route, etc.) gets a
 | Category with `factoryFunctions`, **named exports**, no string arg           | Export name                                       | `export const heroBlock = block(config)` → key: `heroBlock`                               |
 | Category with `factoryFunctions`, **default export**, factory has string arg | **Factory string arg** (kebab→camelCase)          | `views/table.ts` exports `default view("collection-table", ...)` → key: `collectionTable` |
 | Category with `factoryFunctions`, **default export**, no string arg          | Filename (camelCase)                              | `views/custom.ts` exports `default view(config)` → key: `custom`                          |
+| Category with `factoryKeyStrategy: "export-or-filename"`, named/default      | Export name / filename                            | Channels keep `channel("chat-room-[roomId]")` as wire metadata; key: `chatRoom`           |
 | Category **without** `factoryFunctions`                                      | Filename (camelCase)                              | `fields/boolean.ts` → key: `boolean`                                                      |
 | Recursive category (routes)                                                  | Path segments (camelCase, joined by keySeparator) | `routes/webhooks/stripe.ts` → key: `webhooks/stripe`                                      |
 
-**Why factory arg, not filename?** The factory string arg is the entity's **identity** — it's used at runtime for lookup, serialization, and API contracts. The filename is just file organization. A view named `"collection-table"` could live in `views/table.ts`, `views/default-list.ts`, or any file — the identity is the string passed to `view()`.
+**Why factory arg by default?** For collections, views, blocks, and components the factory string arg is the entity's **identity**—it is used for lookup, serialization, and API contracts. Categories whose argument is a different contract can opt into `factoryKeyStrategy: "export-or-filename"`; channels use this because the builder argument is a stable wire pattern while the filename/export is the typed API key.
 
 Only hyphen-case is camelized; underscores are preserved. Use `global("siteSettings")` or `global("site-settings")` when the generated key should be `siteSettings` — `global("site_settings")` generates `site_settings`.
 
-**Consistency guarantee**: `collection("posts")` → `posts`, `block("hero")` → `hero`, `view("collection-table")` → `collectionTable`, `component("icon")` → `icon`. The factory arg is always the source of truth for the key when available.
+**Default consistency guarantee**: `collection("posts")` → `posts`, `block("hero")` → `hero`, `view("collection-table")` → `collectionTable`, `component("icon")` → `icon`. The factory arg remains the source of truth unless the category explicitly selects `export-or-filename`.
 
 **`keyFromProperty`** (`CategoryDeclaration.keyFromProperty`): Some categories (admin-client views) use a runtime property (e.g. `.name`) as the object key at runtime: `[_view.name]: _view`. This is separate from the discover key — the discover key drives types and imports, `keyFromProperty` drives the runtime object emission in `module.ts`. When `keyFromProperty` is set, types for that category are skipped in module-template (the file-derived key would mismatch the runtime key).
 

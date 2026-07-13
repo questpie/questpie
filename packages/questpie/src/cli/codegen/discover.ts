@@ -16,6 +16,7 @@ import type {
 	DiscoveredFile,
 	DiscoverPattern,
 	DiscoveryResult,
+	FactoryArgumentMetadata,
 } from "./types.js";
 
 // ============================================================================
@@ -153,6 +154,10 @@ interface DiscoveryCategory {
 	keySeparator?: "." | "/";
 	/** Factory function names for multi-export discovery. */
 	factoryFunctions?: string[];
+	/** Registry-key policy for factory-aware categories. */
+	factoryKeyStrategy?: CategoryDeclaration["factoryKeyStrategy"];
+	/** Validation/uniqueness policy for the first factory argument. */
+	factoryArgument?: CategoryDeclaration["factoryArgument"];
 }
 
 /**
@@ -170,6 +175,8 @@ function toDiscoveryCategory(
 		prefix: decl.prefix,
 		keySeparator: decl.keySeparator,
 		factoryFunctions: decl.factoryFunctions,
+		factoryKeyStrategy: decl.factoryKeyStrategy,
+		factoryArgument: decl.factoryArgument,
 	};
 }
 
@@ -224,6 +231,8 @@ export interface DiscoverFilesOptions {
 	categories?: Record<string, CategoryDeclaration>;
 	/** Merged discover patterns from all contributing plugins. */
 	discover?: Record<string, DiscoverPattern>;
+	/** Factory-argument metadata extracted from generated dependency modules. */
+	externalFactoryArguments?: FactoryArgumentMetadata[];
 }
 
 /**
@@ -288,6 +297,12 @@ export async function discoverFiles(
 					map.set(file.key, file);
 				}
 			}
+
+			validateFactoryArguments(
+				category,
+				map,
+				options.externalFactoryArguments ?? [],
+			);
 
 			result.categories.set(name, map);
 		}
@@ -705,14 +720,17 @@ async function processFile(
 		const results: DiscoveredFile[] = [];
 		const namedMatches = matches.filter((m) => !m.isDefault);
 		const defaultMatch = matches.find((m) => m.isDefault);
-		// For named exports: prefer factory string arg (camelCase'd), fall back to export name.
-		// For default exports: key from factory string arg if available, else filename.
-		// See AGENTS.md "Codegen Key Derivation" for the full decision table.
+		const keyFromExport = category.factoryKeyStrategy === "export-or-filename";
 		const fileKey = deriveFileKey(relPath, category);
 		if (namedMatches.length > 0) {
 			// Named factory exports found — each becomes a separate entity
 			for (const m of namedMatches) {
-				const key = m.entityKey ? kebabToCamelCase(m.entityKey) : m.exportName;
+				assertFactoryArgument(category, relPath, m);
+				const key = keyFromExport
+					? m.exportName
+					: m.entityKey
+						? kebabToCamelCase(m.entityKey)
+						: m.exportName;
 				results.push({
 					absolutePath,
 					key,
@@ -721,13 +739,17 @@ async function processFile(
 					source: relPath,
 					exportType: "named",
 					namedExportName: m.exportName,
+					factoryArgument: m.entityKey ?? undefined,
 				});
 			}
 		} else if (defaultMatch) {
 			// Only a default factory export — single entity.
-			const effectiveKey = defaultMatch.entityKey
-				? kebabToCamelCase(defaultMatch.entityKey)
-				: fileKey;
+			assertFactoryArgument(category, relPath, defaultMatch);
+			const effectiveKey = keyFromExport
+				? fileKey
+				: defaultMatch.entityKey
+					? kebabToCamelCase(defaultMatch.entityKey)
+					: fileKey;
 			results.push({
 				absolutePath,
 				key: effectiveKey,
@@ -735,6 +757,7 @@ async function processFile(
 				varName: toVarName(category.prefix, effectiveKey),
 				source: relPath,
 				exportType: "default",
+				factoryArgument: defaultMatch.entityKey ?? undefined,
 			});
 		}
 
@@ -757,6 +780,79 @@ async function processFile(
 			isBundle: exportInfo.isBundle,
 		},
 	];
+}
+
+function assertFactoryArgument(
+	category: DiscoveryCategory,
+	relPath: string,
+	match: FactoryExportMatch,
+): void {
+	const policy = category.factoryArgument;
+	if (!policy) return;
+
+	const exportLabel = match.isDefault
+		? "default export"
+		: `export "${match.exportName}"`;
+	if (match.entityKey === null) {
+		if (policy.requireLiteral) {
+			throw new Error(
+				`Codegen ${category.category} ${policy.label} must be a string literal in ${relPath} (${exportLabel}).`,
+			);
+		}
+		return;
+	}
+
+	const reason = policy.validate?.(match.entityKey);
+	if (reason) {
+		throw new Error(
+			`Invalid ${category.category} ${policy.label} in ${relPath} (${exportLabel}): ${reason}.`,
+		);
+	}
+}
+
+function validateFactoryArguments(
+	category: DiscoveryCategory,
+	files: Map<string, DiscoveredFile>,
+	external: FactoryArgumentMetadata[],
+): void {
+	const policy = category.factoryArgument;
+	if (!policy) return;
+
+	const entries = [
+		...[...files.values()]
+			.filter((file) => file.factoryArgument !== undefined)
+			.map((file) => ({
+				value: file.factoryArgument!,
+				source: file.namedExportName
+					? `${file.source} (export ${file.namedExportName})`
+					: file.source,
+			})),
+		...external
+			.filter((entry) => entry.category === category.category)
+			.map((entry) => ({ value: entry.value, source: entry.source })),
+	];
+
+	const seen = new Map<string, string>();
+	for (const entry of entries) {
+		const reason = policy.validate?.(entry.value);
+		if (reason) {
+			throw new Error(
+				`Invalid ${category.category} ${policy.label} in ${entry.source}: ${reason}.`,
+			);
+		}
+
+		if (!policy.unique) continue;
+		const existing = seen.get(entry.value);
+		if (existing) {
+			throw new Error(
+				`Codegen conflict: duplicate ${category.category} ${policy.label} ${JSON.stringify(entry.value)} found in:\n` +
+					`  - ${existing}\n` +
+					`  - ${entry.source}\n` +
+					`Each ${policy.label} must be unique across the app and modules.`,
+			);
+		}
+		seen.set(entry.value, entry.source);
+	}
 }
 
 /**

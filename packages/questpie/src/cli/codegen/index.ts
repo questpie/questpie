@@ -16,6 +16,7 @@ import { dirname, join, relative, resolve } from "node:path";
 import { discoverFiles } from "./discover.js";
 import { generateClientEnvModules } from "./env-client-template.js";
 import { generateFactoryTemplate } from "./factory-template.js";
+import { loadModuleFactoryArguments } from "./module-metadata.js";
 import { generateModuleTemplate } from "./module-template.js";
 import { generateTemplate } from "./template.js";
 import type {
@@ -441,9 +442,11 @@ export async function runCodegen(
 	}
 
 	// 2. Discover files using the resolved target's categories and discover patterns
+	const externalFactoryArguments = await loadModuleFactoryArguments(rootDir);
 	const discovered = await discoverFiles(rootDir, outDir, {
 		categories: target.categories,
 		discover: target.discover,
+		externalFactoryArguments,
 	});
 
 	// 2b. Warn about files with named exports (not default)
@@ -767,9 +770,12 @@ export async function runAllTargets(
 
 			if (target.generate) {
 				// Custom generator — run discovery, transforms, then the generator
+				const externalFactoryArguments =
+					await loadModuleFactoryArguments(targetRootDir);
 				const discovered = await discoverFiles(targetRootDir, targetOutDir, {
 					categories: target.categories,
 					discover: target.discover,
+					externalFactoryArguments,
 				});
 
 				// Build and run transforms
