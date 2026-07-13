@@ -5,6 +5,8 @@
  * Solves the HTTP/1.1 connection limit problem (6 connections per domain).
  */
 
+import type { GetAuthHeaders } from "../auth.js";
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -131,6 +133,7 @@ export class RealtimeMultiplexer {
 		private withCredentials = true,
 		private debounceMs = 50,
 		runtime: RealtimeMultiplexerRuntime = {},
+		private getAuthHeaders?: GetAuthHeaders,
 	) {
 		this.retryBaseMs = runtime.retryBaseMs ?? 1000;
 		this.maxRetryMs = runtime.maxRetryMs ?? 30_000;
@@ -255,9 +258,10 @@ export class RealtimeMultiplexer {
 		const frames = this.pendingControlFrames.splice(0);
 		this.controlOperation = this.controlOperation
 			.then(async () => {
+				const authHeaders = await this.getAuthHeaders?.();
 				const response = await fetch(`${this.baseUrl}/realtime`, {
 					method: "POST",
-					headers: { "Content-Type": "application/json" },
+					headers: { "Content-Type": "application/json", ...authHeaders },
 					body: JSON.stringify({
 						sessionId: session.sessionId,
 						token: session.token,
@@ -370,9 +374,10 @@ export class RealtimeMultiplexer {
 			}));
 
 		try {
+			const authHeaders = await this.getAuthHeaders?.();
 			const response = await fetch(`${this.baseUrl}/realtime`, {
 				method: "POST",
-				headers: { "Content-Type": "application/json" },
+				headers: { "Content-Type": "application/json", ...authHeaders },
 				body: JSON.stringify({ topics: getTopicsPayload() }),
 				credentials: this.withCredentials ? "include" : "omit",
 				signal: this.abortController.signal,

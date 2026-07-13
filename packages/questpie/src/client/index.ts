@@ -37,12 +37,15 @@ import type {
 	With,
 } from "../server/collection/crud/types.js";
 import type { GlobalUpdateInput } from "../server/global/crud/types.js";
+import type { GetAuthHeaders } from "./auth.js";
 import {
 	buildCollectionTopic,
 	buildGlobalTopic,
 	createRealtimeAPI,
 	type RealtimeAPI,
 } from "./realtime/index.js";
+
+export type { AuthHeaders, GetAuthHeaders } from "./auth.js";
 
 // ============================================================================
 // Upload Types
@@ -237,6 +240,16 @@ export type QuestpieClientConfig = {
 	 * Default headers to include in all requests
 	 */
 	headers?: Record<string, string>;
+
+	/**
+	 * Resolve authentication headers for every request.
+	 *
+	 * The resolver runs immediately before data, upload, and realtime requests,
+	 * so rotated bearer tokens do not require recreating the client. Resolved
+	 * headers override matching static `headers`. Cookie credentials remain
+	 * enabled when this hook is omitted or used.
+	 */
+	getAuthHeaders?: GetAuthHeaders;
 
 	/**
 	 * Enable SuperJSON serialization for enhanced type support (Date, Map, Set, BigInt)
@@ -1014,10 +1027,12 @@ export function createClient<TApp extends QuestpieApp>(
 			? "application/superjson+json"
 			: "application/json";
 
+		const authHeaders = await config.getAuthHeaders?.();
 		const headers: Record<string, string> = {
 			"Content-Type": contentType,
 			...defaultHeaders,
 			...(options.headers as Record<string, string>),
+			...authHeaders,
 		};
 
 		if (useSuperJSON) {
@@ -1098,6 +1113,7 @@ export function createClient<TApp extends QuestpieApp>(
 		baseUrl: `${config.baseURL}${apiBasePath}`,
 		withCredentials: true,
 		debounceMs: 50,
+		getAuthHeaders: config.getAuthHeaders,
 	});
 
 	/**
@@ -1443,10 +1459,29 @@ export function createClient<TApp extends QuestpieApp>(
 							formData.append("path", options.path);
 						}
 
-						// Send request with credentials (cookies)
+						const send = (authHeaders?: Record<string, string>) => {
+							for (const [name, value] of Object.entries(authHeaders ?? {})) {
+								xhr.setRequestHeader(name, value);
+							}
+							xhr.send(formData);
+						};
+
+						// Keep cookie credentials enabled while allowing dynamic bearer auth.
 						xhr.open("POST", url);
 						xhr.withCredentials = true;
-						xhr.send(formData);
+						if (config.getAuthHeaders) {
+							try {
+								Promise.resolve(config.getAuthHeaders()).then(send, (error) => {
+									cleanup();
+									reject(error);
+								});
+							} catch (error) {
+								cleanup();
+								reject(error);
+							}
+						} else {
+							send();
+						}
 					});
 				},
 

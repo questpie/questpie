@@ -5,6 +5,7 @@
  * for the realtime SSE multiplexer.
  */
 
+import type { GetAuthHeaders } from "../auth.js";
 import { RealtimeMultiplexer, type TopicConfig } from "./multiplexer.js";
 
 // ============================================================================
@@ -249,6 +250,7 @@ export function createRealtimeAPI(opts: {
 	baseUrl: string;
 	withCredentials: boolean;
 	debounceMs: number;
+	getAuthHeaders?: GetAuthHeaders;
 }): RealtimeAPI {
 	let multiplexer: RealtimeMultiplexer | null = null;
 
@@ -258,6 +260,8 @@ export function createRealtimeAPI(opts: {
 				opts.baseUrl,
 				opts.withCredentials,
 				opts.debounceMs,
+				{},
+				opts.getAuthHeaders,
 			);
 		}
 		return multiplexer;
