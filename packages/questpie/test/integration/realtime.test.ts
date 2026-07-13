@@ -297,6 +297,7 @@ describe("realtime", () => {
 			const posts = collection("posts").fields(({ f }) => ({
 				title: f.textarea().required(),
 				status: f.textarea().required(),
+				metadata: f.json(),
 			}));
 
 			const testModule = {
@@ -316,7 +317,11 @@ describe("realtime", () => {
 			);
 
 			await setup.app.collections.posts.create(
-				{ title: "Hello", status: "published" },
+				{
+					title: "Hello",
+					status: "published",
+					metadata: { nested: { value: "not-routing-data" } },
+				},
 				ctx,
 			);
 
@@ -324,8 +329,12 @@ describe("realtime", () => {
 
 			expect(events.length).toBe(1);
 			expect(events[0].payload).toBeDefined();
-			expect(events[0].payload?.title).toBe("Hello");
-			expect(events[0].payload?.status).toBe("published");
+			expect(events[0].payload?.before).toBeNull();
+			expect(events[0].payload?.after).toMatchObject({
+				title: "Hello",
+				status: "published",
+			});
+			expect(events[0].payload?.after).not.toHaveProperty("metadata");
 
 			unsub?.();
 		});
@@ -461,8 +470,9 @@ describe("realtime", () => {
 			);
 			await new Promise((resolve) => setTimeout(resolve, 100));
 			expect(events.length).toBe(1);
-			expect(events[0].payload?.status).toBe("published");
-			expect(events[0].payload?.authorId).toBe("author1");
+			const after = events[0].payload?.after as Record<string, unknown>;
+			expect(after.status).toBe("published");
+			expect(after.authorId).toBe("author1");
 
 			unsub?.();
 		});
@@ -1372,10 +1382,38 @@ describe("realtime", () => {
 
 			const hasOldRow = logs.some((row: any) => row.recordId === "old-record");
 			expect(hasOldRow).toBe(false);
-			expect(logs.some((row: any) => row.payload?.name === "new")).toBe(true);
+			expect(logs.some((row: any) => row.payload?.after?.name === "new")).toBe(
+				true,
+			);
 		});
 
-		it("cleans up consumed realtime rows using min consumed seq", async () => {
+		it("cleans up old rows by default with no subscribers", async () => {
+			const adapter = new MockRealtimeAdapter();
+			const items = collection("items").fields(({ f }) => ({
+				name: f.textarea().required(),
+			}));
+
+			setup = await buildMockApp(
+				{ collections: { items } },
+				{ realtime: { adapter } },
+			);
+			await runTestDbMigrations(setup.app);
+
+			await setup.app.db.insert(questpieRealtimeLogTable).values({
+				resourceType: "collection",
+				resource: "items",
+				operation: "create",
+				recordId: "expired-headless-row",
+				createdAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000),
+			});
+
+			await setup.app.realtime.cleanupOutbox(true);
+
+			const logs = await setup.app.db.select().from(questpieRealtimeLogTable);
+			expect(logs).toHaveLength(0);
+		});
+
+		it("does not delete rows from a local subscriber watermark", async () => {
 			const adapter = new MockRealtimeAdapter();
 			const items = collection("items").fields(({ f }) => ({
 				name: f.textarea().required(),
@@ -1419,10 +1457,10 @@ describe("realtime", () => {
 				.orderBy(questpieRealtimeLogTable.seq);
 
 			expect(logs.some((row: any) => row.recordId === "pre-existing")).toBe(
-				false,
+				true,
 			);
 			expect(
-				logs.some((row: any) => row.payload?.name === "after-subscribe"),
+				logs.some((row: any) => row.payload?.after?.name === "after-subscribe"),
 			).toBe(true);
 
 			unsub?.();
@@ -1591,12 +1629,12 @@ describe("realtime", () => {
 			await new Promise((resolve) => setTimeout(resolve, 100));
 
 			expect(events.length).toBe(1);
-			// Payload should include all fields from the create operation
-			expect(events[0].payload?.title).toBe("Public Title");
-			expect(events[0].payload?.content).toBe("Public content");
-			// internalNotes is filtered at read time via CRUD, but event payload
-			// contains the raw data - this is the current behavior
-			expect(events[0].payload?.internalNotes).toBeDefined();
+			const after = events[0].payload?.after as Record<string, unknown>;
+			// The routing projection retains raw scalar fields. ACL filtering is
+			// still applied to the refreshed snapshot, not to the internal outbox row.
+			expect(after.title).toBe("Public Title");
+			expect(after.content).toBe("Public content");
+			expect(after.internalNotes).toBeDefined();
 
 			unsub?.();
 		});

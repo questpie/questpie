@@ -354,4 +354,34 @@ describe("realtime transactional change capture", () => {
 			setup.app.mocks.logger.getLogsContaining("Realtime publish failed"),
 		).toHaveLength(1);
 	});
+
+	it("G8: stores pre/post scalar projections for update and delete", async () => {
+		const post = await setup.app.collections.posts.create(
+			{ title: "Original" },
+			ctx,
+		);
+
+		await setup.app.collections.posts.updateById(
+			{ id: post.id, data: { title: "Updated" } },
+			ctx,
+		);
+		await setup.app.collections.posts.deleteById({ id: post.id }, ctx);
+
+		const rows = await setup.app.db.select().from(questpieRealtimeLogTable);
+		const update = rows.find(
+			(row: { operation: string }) => row.operation === "update",
+		);
+		const deletion = rows.find(
+			(row: { operation: string }) => row.operation === "delete",
+		);
+
+		expect(update?.payload).toMatchObject({
+			before: { id: post.id, title: "Original" },
+			after: { id: post.id, title: "Updated" },
+		});
+		expect(deletion?.payload).toMatchObject({
+			before: { id: post.id, title: "Updated" },
+			after: null,
+		});
+	});
 });

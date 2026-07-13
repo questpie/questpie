@@ -20,7 +20,11 @@ import type {
 	DrizzleClientFromQuestpieConfig,
 	Locale,
 } from "#questpie/server/config/types.js";
-import type { RealtimeChangeEvent } from "#questpie/server/modules/core/integrated/realtime/types.js";
+import type {
+	RealtimeChangeEvent,
+	RealtimeChangePayload,
+	RealtimeEqualityProjection,
+} from "#questpie/server/modules/core/integrated/realtime/types.js";
 import { buildIndexParams } from "#questpie/server/modules/core/integrated/search/index-params.js";
 import type { SearchableConfig } from "#questpie/server/modules/core/integrated/search/types.js";
 import {
@@ -58,15 +62,39 @@ function resolveRealtimeOperation(
 function resolveRealtimePayload(
 	ctx: GlobalCollectionHookContext,
 	hookType: "change" | "delete",
-): Record<string, unknown> {
+): RealtimeChangePayload {
 	if (ctx.isBatch) {
 		return {
 			count: ctx.count ?? 0,
 			recordIds: ctx.recordIds ? [...ctx.recordIds] : [],
 		};
 	}
-	if (hookType === "delete") return {};
-	return ctx.data as Record<string, unknown>;
+
+	const before = hookType === "delete" ? ctx.data : ctx.original;
+	const after = hookType === "delete" ? undefined : ctx.data;
+	return {
+		before: before ? projectRealtimeEqualityFields(before) : null,
+		after: after ? projectRealtimeEqualityFields(after) : null,
+	};
+}
+
+function projectRealtimeEqualityFields(
+	data: unknown,
+): RealtimeEqualityProjection {
+	if (!data || typeof data !== "object" || Array.isArray(data)) return {};
+
+	const projection: RealtimeEqualityProjection = {};
+	for (const [key, value] of Object.entries(data)) {
+		if (
+			value === null ||
+			typeof value === "string" ||
+			typeof value === "number" ||
+			typeof value === "boolean"
+		) {
+			projection[key] = value;
+		}
+	}
+	return projection;
 }
 
 const capturedRealtimeBatches = new WeakSet<object>();
@@ -317,7 +345,10 @@ const globalRealtimeHook = {
 					operation: "update",
 					recordId: ctx.data?.id ?? null,
 					locale: ctx.locale ?? null,
-					payload: ctx.data as Record<string, unknown>,
+					payload: {
+						before: null,
+						after: projectRealtimeEqualityFields(ctx.data),
+					},
 				},
 				{ db: asRealtimeMutationDb(ctx.db) },
 			);

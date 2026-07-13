@@ -12,14 +12,17 @@ import { pathToFileURL } from "node:url";
 
 import type { PGlite } from "@electric-sql/pglite";
 import { sql } from "drizzle-orm";
+import { bigserial, index, jsonb, pgTable, text } from "drizzle-orm/pg-core";
 
 import { createApp, module } from "../../src/exports/index.js";
 import { collection } from "../../src/exports/index.js";
+import { systemTimestamp } from "../../src/server/db/system-columns.js";
 import { MigrationRunner } from "../../src/server/migration/runner.js";
 import type {
 	Migration,
 	OperationSnapshot,
 } from "../../src/server/migration/types.js";
+import { questpieRealtimeLogTable } from "../../src/server/modules/core/integrated/realtime/collection.js";
 import { createPostgresSearchAdapter } from "../../src/server/modules/core/integrated/search/adapters/postgres.js";
 import { MockKVAdapter } from "../utils/mocks/kv.adapter";
 import { MockLogger } from "../utils/mocks/logger.adapter";
@@ -428,6 +431,57 @@ describe("Migration System - DrizzleMigrationGenerator", () => {
 			migrationDir: testMigrationDir,
 		});
 		expect(result2.skipped).toBe(true);
+	});
+
+	test("generates drops for obsolete realtime outbox indexes", async () => {
+		const { DrizzleMigrationGenerator } =
+			await import("../../src/server/migration/generator.js");
+		const generator = new DrizzleMigrationGenerator();
+		const oldRealtimeLogTable = pgTable(
+			"questpie_realtime_log",
+			{
+				seq: bigserial("seq", { mode: "number" }).primaryKey(),
+				resourceType: text("resource_type").notNull(),
+				resource: text("resource").notNull(),
+				operation: text("operation").notNull(),
+				recordId: text("record_id"),
+				locale: text("locale"),
+				payload: jsonb("payload").default({}),
+				createdAt: systemTimestamp("created_at").defaultNow().notNull(),
+			},
+			(table) => [
+				index("idx_realtime_log_seq").on(table.seq),
+				index("idx_realtime_log_resource").on(
+					table.resourceType,
+					table.resource,
+				),
+				index("idx_realtime_log_created_at").on(table.createdAt),
+			],
+		);
+
+		await generator.generateMigration({
+			migrationName: "realtimeIndexesBefore",
+			fileBaseName: "20250108_realtime_indexes_before",
+			schema: { questpieRealtimeLogTable: oldRealtimeLogTable },
+			migrationDir: testMigrationDir,
+		});
+		const result = await generator.generateMigration({
+			migrationName: "dropDeadRealtimeIndexes",
+			fileBaseName: "20250109_drop_dead_realtime_indexes",
+			schema: { questpieRealtimeLogTable },
+			migrationDir: testMigrationDir,
+		});
+
+		expect(result.skipped).toBe(false);
+		const migrationSource = readFileSync(
+			join(testMigrationDir, "20250109_drop_dead_realtime_indexes.ts"),
+			"utf8",
+		);
+		expect(migrationSource).toContain('DROP INDEX "idx_realtime_log_seq"');
+		expect(migrationSource).toContain('DROP INDEX "idx_realtime_log_resource"');
+		expect(migrationSource).not.toContain(
+			'DROP INDEX "idx_realtime_log_created_at"',
+		);
 	});
 
 	test("does not re-emit a column whose migration is on disk but missing from the in-memory list", async () => {

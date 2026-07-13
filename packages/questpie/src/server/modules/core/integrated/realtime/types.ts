@@ -9,6 +9,26 @@ export type RealtimeOperation =
 	| "bulk_update"
 	| "bulk_delete";
 
+export type RealtimeEqualityValue = string | number | boolean | null;
+
+/**
+ * Shallow scalar fields that can participate in cheap equality routing.
+ * Nested objects, arrays, relations, and hydrated payloads are deliberately
+ * excluded from the durable outbox.
+ */
+export type RealtimeEqualityProjection = Record<string, RealtimeEqualityValue>;
+
+/**
+ * Durable routing payload. Single-record changes carry pre/post projections;
+ * bulk changes carry only their affected ids and count.
+ */
+export type RealtimeChangePayload = {
+	before?: RealtimeEqualityProjection | null;
+	after?: RealtimeEqualityProjection | null;
+	count?: number;
+	recordIds?: (string | number)[];
+};
+
 export type RealtimeChangeEvent = {
 	seq: number;
 	resourceType: RealtimeResourceType;
@@ -16,7 +36,7 @@ export type RealtimeChangeEvent = {
 	operation: RealtimeOperation;
 	recordId?: string | null;
 	locale?: string | null;
-	payload?: Record<string, unknown>;
+	payload?: RealtimeChangePayload;
 	createdAt: Date;
 };
 
@@ -84,9 +104,10 @@ export interface RealtimeConfig {
 	/**
 	 * Retention window in days for time-based outbox cleanup.
 	 *
-	 * Note: realtime service always performs watermark cleanup based on
-	 * min consumed seq for active subscribers. `retentionDays` adds an
-	 * additional time-based safety window.
+	 * Cleanup is time-based only so one process can never delete rows that a
+	 * different process has not drained yet. Set to `0` to disable cleanup.
+	 *
+	 * @default 3
 	 */
 	retentionDays?: number;
 

@@ -18,9 +18,5 @@ export const questpieRealtimeLogTable = pgTable(
 		payload: jsonb("payload").default({}),
 		createdAt: systemTimestamp("created_at").defaultNow().notNull(),
 	},
-	(t) => [
-		index("idx_realtime_log_seq").on(t.seq),
-		index("idx_realtime_log_resource").on(t.resourceType, t.resource),
-		index("idx_realtime_log_created_at").on(t.createdAt),
-	],
+	(t) => [index("idx_realtime_log_created_at").on(t.createdAt)],
 );

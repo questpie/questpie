@@ -6,6 +6,7 @@ import type { RealtimeAdapter } from "./adapter.js";
 import { questpieRealtimeLogTable } from "./collection.js";
 import type {
 	RealtimeChangeEvent,
+	RealtimeChangePayload,
 	RealtimeConfig,
 	RealtimeNotice,
 	RealtimeOperation,
@@ -21,12 +22,13 @@ type AppendChangeOptions = {
 	db?: DrizzleClientFromQuestpieConfig<any>;
 };
 
+const DEFAULT_RETENTION_DAYS = 3;
+
 type ListenerEntry = {
 	listener: RealtimeListener;
 	topics: import("./types").RealtimeTopics;
 	whereFilters: Record<string, unknown>;
 	hasComplexWhere: boolean;
-	lastDeliveredSeq: number;
 	// Track which resources this listener cares about (main + dependencies)
 	watchedResources: {
 		collections: Set<string>;
@@ -158,9 +160,11 @@ export class RealtimeService {
 		this.batchSize = config.batchSize ?? 500;
 		this.pollIntervalMs = config.pollIntervalMs ?? (this.adapter ? 0 : 2000);
 		this.retentionDays =
-			typeof config.retentionDays === "number" && config.retentionDays > 0
-				? config.retentionDays
-				: undefined;
+			config.retentionDays === undefined
+				? DEFAULT_RETENTION_DAYS
+				: config.retentionDays > 0
+					? config.retentionDays
+					: undefined;
 		this.retentionCleanupIntervalMs = 60 * 60 * 1000;
 	}
 
@@ -238,7 +242,7 @@ export class RealtimeService {
 			operation: row.operation as RealtimeOperation,
 			recordId: row.recordId ?? null,
 			locale: row.locale ?? null,
-			payload: (row.payload ?? {}) as Record<string, unknown>,
+			payload: (row.payload ?? {}) as RealtimeChangePayload,
 			createdAt: row.createdAt,
 		};
 
@@ -310,7 +314,6 @@ export class RealtimeService {
 			topics: resolvedTopics,
 			whereFilters: whereAnalysis.filters,
 			hasComplexWhere: whereAnalysis.hasComplex,
-			lastDeliveredSeq: this.lastSeq,
 			watchedResources,
 		};
 
@@ -378,7 +381,16 @@ export class RealtimeService {
 
 	private async readSince(seq: number): Promise<RealtimeChangeEvent[]> {
 		const rows = await this.db
-			.select()
+			.select({
+				seq: questpieRealtimeLogTable.seq,
+				resourceType: questpieRealtimeLogTable.resourceType,
+				resource: questpieRealtimeLogTable.resource,
+				operation: questpieRealtimeLogTable.operation,
+				recordId: questpieRealtimeLogTable.recordId,
+				locale: questpieRealtimeLogTable.locale,
+				payload: questpieRealtimeLogTable.payload,
+				createdAt: questpieRealtimeLogTable.createdAt,
+			})
 			.from(questpieRealtimeLogTable)
 			.where(gt(questpieRealtimeLogTable.seq, seq))
 			.orderBy(asc(questpieRealtimeLogTable.seq))
@@ -391,7 +403,7 @@ export class RealtimeService {
 			operation: row.operation as RealtimeOperation,
 			recordId: row.recordId ?? null,
 			locale: row.locale ?? null,
-			payload: (row.payload ?? {}) as Record<string, unknown>,
+			payload: (row.payload ?? {}) as RealtimeChangePayload,
 			createdAt: row.createdAt,
 		}));
 	}
@@ -517,8 +529,13 @@ export class RealtimeService {
 
 	private emit(event: RealtimeChangeEvent): void {
 		// Extract simple equality filters from event payload for matching
+		const afterProjection = event.payload?.after;
 		const eventFilters = event.payload
-			? extractSimpleEquality(event.payload)
+			? extractSimpleEquality(
+					afterProjection && typeof afterProjection === "object"
+						? afterProjection
+						: event.payload,
+				)
 			: {};
 
 		const candidates = new Set<ListenerEntry>();
@@ -592,31 +609,15 @@ export class RealtimeService {
 
 		// Notify all collected listeners
 		for (const entry of notifiedListeners) {
-			entry.lastDeliveredSeq = Math.max(entry.lastDeliveredSeq, event.seq);
 			entry.listener(event);
 		}
 
 		void this.scheduleRetentionCleanup();
 	}
 
-	private getMinConsumedSeq(): number | null {
-		if (this.listeners.size === 0) return null;
-
-		let min = Number.POSITIVE_INFINITY;
-		for (const entry of this.listeners) {
-			min = Math.min(min, entry.lastDeliveredSeq);
-		}
-
-		if (!Number.isFinite(min) || min <= 0) return null;
-		return min;
-	}
-
 	private async scheduleRetentionCleanup(force = false): Promise<void> {
 		const hasTimeRetention = !!this.retentionDays && this.retentionDays > 0;
-		const minConsumedSeq = this.getMinConsumedSeq();
-		const hasWatermarkCleanup = !!minConsumedSeq;
-
-		if (!hasTimeRetention && !hasWatermarkCleanup) return;
+		if (!hasTimeRetention) return;
 
 		const now = Date.now();
 		if (!force && now < this.nextRetentionCleanupAt) return;
@@ -626,20 +627,12 @@ export class RealtimeService {
 		this.nextRetentionCleanupAt = now + this.retentionCleanupIntervalMs;
 
 		try {
-			if (hasTimeRetention) {
-				const cutoff = new Date(
-					now - (this.retentionDays as number) * 24 * 60 * 60 * 1000,
-				);
-				await this.db
-					.delete(questpieRealtimeLogTable)
-					.where(lt(questpieRealtimeLogTable.createdAt, cutoff));
-			}
-
-			if (hasWatermarkCleanup) {
-				await this.db
-					.delete(questpieRealtimeLogTable)
-					.where(lt(questpieRealtimeLogTable.seq, minConsumedSeq as number));
-			}
+			const cutoff = new Date(
+				now - (this.retentionDays as number) * 24 * 60 * 60 * 1000,
+			);
+			await this.db
+				.delete(questpieRealtimeLogTable)
+				.where(lt(questpieRealtimeLogTable.createdAt, cutoff));
 		} catch {
 			// Best-effort cleanup; keep realtime delivery resilient to cleanup failures.
 		} finally {

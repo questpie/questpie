@@ -67,7 +67,7 @@ interface RealtimeConfig {
   adapter?: RealtimeAdapter;       // transport (pg_notify, redis, …). Omit → poll / auto pg_notify
   pollIntervalMs?: number;         // default 2000, drain interval when running pollless (no adapter)
   batchSize?: number;              // default 500, max outbox rows read per drain
-  retentionDays?: number;          // optional time-based outbox safety window
+  retentionDays?: number;          // default 3; set 0 to disable time-based cleanup
   keepAliveIntervalMs?: number;    // default 8000, SSE keep-alive ping interval
 }
 ```
@@ -79,7 +79,7 @@ interface RealtimeConfig {
 | `adapter` | *(none)* | The transport that broadcasts change notices. Omit it for the poll / auto-`pg_notify` default (below). |
 | `pollIntervalMs` | `2000` | How often the service drains the outbox **when there is no adapter** (defaults to `0` if you omit it while an adapter is set). With an adapter, drains are notice-driven, so this is ignored, the poll timer only runs on the no-adapter path. |
 | `batchSize` | `500` | Max outbox rows pulled per drain. Raise it for very high write volume. |
-| `retentionDays` | *(none)* | Adds a time-based cleanup window. The service **always** does watermark cleanup (it deletes rows below the min consumed `seq` across active subscribers); `retentionDays` is an extra safety net for rows no subscriber will ever read. |
+| `retentionDays` | `3` | Time horizon for outbox cleanup, including apps with zero subscribers. Set `0` to disable. Cleanup never uses a process-local subscriber watermark, because that could delete rows another instance has not drained yet. |
 | `keepAliveIntervalMs` | `8000` | Interval between `ping` keep-alive events on each `POST /realtime` SSE stream. |
 
 <Callout type="warn" title="Keep `keepAliveIntervalMs` under your idle timeout">
@@ -250,7 +250,7 @@ The change log lives in one Drizzle table, `questpie_realtime_log`, created by c
 | `resource` | The collection/global name. |
 | `operation` | `create` / `update` / `delete` / `bulk_update` / `bulk_delete`. |
 | `record_id`, `locale` | Nullable; the specific record + locale when applicable. |
-| `payload` | `jsonb` (default `{}`), the change detail, kept server-side (never broadcast). |
+| `payload` | `jsonb` (default `{}`), kept server-side (never broadcast). Single-record changes store shallow scalar `{ before, after }` equality projections; bulk changes store `{ count, recordIds }`. Nested objects, arrays, and hydrated relations are excluded. |
 | `created_at` | Insert timestamp; powers `retentionDays` cleanup. |
 
 
@@ -264,6 +264,8 @@ import type {
   RealtimeAdapter,        // the transport contract you implement for a custom adapter
   RealtimeConfig,         // the `realtime` config shape
   RealtimeChangeEvent,    // a full outbox event
+  RealtimeChangePayload,  // { before, after } or { count, recordIds }
+  RealtimeEqualityProjection, // shallow scalar fields used for equality routing
   RealtimeNotice,         // the minimal broadcast notice
   RealtimeOperation,      // "create" | "update" | "delete" | "bulk_update" | "bulk_delete"
   RealtimeResourceType,   // "collection" | "global"
