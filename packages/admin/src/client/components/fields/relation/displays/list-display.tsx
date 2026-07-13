@@ -2,6 +2,22 @@
  * List Display - vertical list with action buttons
  */
 
+import {
+	closestCenter,
+	DndContext,
+	type DragEndEvent,
+	KeyboardSensor,
+	PointerSensor,
+	useSensor,
+	useSensors,
+} from "@dnd-kit/core";
+import {
+	SortableContext,
+	sortableKeyboardCoordinates,
+	useSortable,
+	verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { Icon } from "@iconify/react";
 import * as React from "react";
 
@@ -10,7 +26,11 @@ import { cn } from "../../../../lib/utils";
 import { CollectionEditLink } from "../../../admin-link";
 import { Button } from "../../../ui/button";
 import { Skeleton } from "../../../ui/skeleton";
-import { getItemDisplayValue, type RelationDisplayProps } from "./types";
+import {
+	getItemDisplayValue,
+	type RelationDisplayProps,
+	type RelationItemActions,
+} from "./types";
 
 function ListSkeleton({
 	count = 3,
@@ -53,6 +73,117 @@ function ListSkeleton({
 	);
 }
 
+/** A single relation item (dynamic record; typed via the shared props). */
+type RelationItem = RelationDisplayProps["items"][number];
+
+/** Edit + remove buttons — shared by the drag row and the up/down row. */
+function RowActions({
+	item,
+	actions,
+}: {
+	item: RelationItem;
+	actions?: RelationItemActions;
+}) {
+	const { t } = useTranslation();
+	return (
+		<>
+			{/* Edit Button */}
+			{actions?.onEdit && (
+				<Button
+					type="button"
+					variant="ghost"
+					size="icon-xs"
+					className="shrink-0"
+					onClick={() => actions.onEdit?.(item)}
+					title={t("common.edit")}
+					aria-label={t("field.editItem")}
+				>
+					<Icon icon="ph:pencil" className="size-3" />
+				</Button>
+			)}
+
+			{/* Remove Button — breaks the LINK (the record itself survives);
+			    the link-break glyph disambiguates from delete. */}
+			{actions?.onRemove && (
+				<Button
+					type="button"
+					variant="ghost"
+					size="icon-xs"
+					className="shrink-0"
+					onClick={() => actions.onRemove?.(item)}
+					title={t("common.remove")}
+					aria-label={t("field.removeItem")}
+				>
+					<Icon icon="ph:link-break" className="size-3" />
+				</Button>
+			)}
+		</>
+	);
+}
+
+/** Draggable row for an orderable relation (dnd-kit). */
+function SortableEditableRow({
+	item,
+	index,
+	actions,
+	renderItem,
+}: {
+	item: RelationItem;
+	index: number;
+	actions?: RelationItemActions;
+	renderItem?: RelationDisplayProps["renderItem"];
+}) {
+	const { t } = useTranslation();
+	const {
+		attributes,
+		listeners,
+		setNodeRef,
+		transform,
+		transition,
+		isDragging,
+	} = useSortable({ id: item.id });
+
+	const style = {
+		transform: CSS.Transform.toString(transform),
+		transition,
+	};
+
+	return (
+		<div
+			ref={setNodeRef}
+			style={style}
+			className={cn(
+				"item-surface border-border bg-card flex items-center gap-2 px-3 py-2.5",
+				isDragging && "relative z-10 opacity-60 shadow-sm",
+			)}
+		>
+			{/* Drag handle — dnd-kit KeyboardSensor makes this keyboard-accessible
+			    (space to lift, arrows to move, space to drop). */}
+			<button
+				type="button"
+				className="text-muted-foreground hover:text-foreground shrink-0 cursor-grab touch-none active:cursor-grabbing"
+				title={t("field.reorder")}
+				aria-label={t("field.reorder")}
+				{...attributes}
+				{...listeners}
+			>
+				<Icon icon="ph:dots-six-vertical" className="size-4" />
+			</button>
+
+			{/* Item Display */}
+			<div className="flex min-w-0 flex-1 items-center gap-2">
+				{renderItem ? (
+					renderItem(item, index)
+				) : (
+					<span className="truncate text-sm">{getItemDisplayValue(item)}</span>
+				)}
+			</div>
+
+			<RowActions item={item} actions={actions} />
+		</div>
+	);
+}
+
 export function ListDisplay({
 	items,
 	collection,
@@ -66,9 +197,56 @@ export function ListDisplay({
 }: RelationDisplayProps) {
 	const { t } = useTranslation();
 
+	const sensors = useSensors(
+		useSensor(PointerSensor),
+		useSensor(KeyboardSensor, {
+			coordinateGetter: sortableKeyboardCoordinates,
+		}),
+	);
+
 	// Show skeleton when loading and no items
 	if (isLoading && items.length === 0) {
 		return <ListSkeleton count={loadingCount} editable={editable} />;
+	}
+
+	// Editable + orderable with drag-and-drop reorder. dnd-kit hands us the
+	// dragged and target ids; RelationPicker owns the value array and applies
+	// the move (onReorder). Falls through to the up/down list when no onReorder.
+	if (editable && orderable && actions?.onReorder) {
+		const handleDragEnd = (event: DragEndEvent) => {
+			const { active, over } = event;
+			if (!over || active.id === over.id) return;
+			const oldIndex = items.findIndex((it) => it.id === active.id);
+			const newIndex = items.findIndex((it) => it.id === over.id);
+			if (oldIndex !== -1 && newIndex !== -1) {
+				actions.onReorder?.(oldIndex, newIndex);
+			}
+		};
+
+		return (
+			<DndContext
+				sensors={sensors}
+				collisionDetection={closestCenter}
+				onDragEnd={handleDragEnd}
+			>
+				<SortableContext
+					items={items.map((it) => it.id)}
+					strategy={verticalListSortingStrategy}
+				>
+					<div className="panel-surface space-y-2 p-3">
+						{items.map((item, index) => (
+							<SortableEditableRow
+								key={item.id}
+								item={item}
+								index={index}
+								actions={actions}
+								renderItem={renderItem}
+							/>
+						))}
+					</div>
+				</SortableContext>
+			</DndContext>
+		);
 	}
 
 	// Editable list with cards
@@ -91,8 +269,8 @@ export function ListDisplay({
 							)}
 						</div>
 
-						{/* Move Buttons (orderable relations) — reorder delegates
-						    up to RelationPicker, which owns the value array */}
+						{/* Move Buttons (orderable relations without drag) — reorder
+						    delegates up to RelationPicker, which owns the value array */}
 						{orderable && actions?.onMoveUp && (
 							<Button
 								type="button"
@@ -122,36 +300,7 @@ export function ListDisplay({
 							</Button>
 						)}
 
-						{/* Edit Button */}
-						{actions?.onEdit && (
-							<Button
-								type="button"
-								variant="ghost"
-								size="icon-xs"
-								className="shrink-0"
-								onClick={() => actions.onEdit?.(item)}
-								title={t("common.edit")}
-								aria-label={t("field.editItem")}
-							>
-								<Icon icon="ph:pencil" className="size-3" />
-							</Button>
-						)}
-
-						{/* Remove Button — breaks the LINK (the record itself survives);
-						    the link-break glyph disambiguates from delete. */}
-						{actions?.onRemove && (
-							<Button
-								type="button"
-								variant="ghost"
-								size="icon-xs"
-								className="shrink-0"
-								onClick={() => actions.onRemove?.(item)}
-								title={t("common.remove")}
-								aria-label={t("field.removeItem")}
-							>
-								<Icon icon="ph:link-break" className="size-3" />
-							</Button>
-						)}
+						<RowActions item={item} actions={actions} />
 					</div>
 				))}
 			</div>

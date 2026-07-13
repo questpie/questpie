@@ -1046,6 +1046,7 @@ export default {
 
 	"field.moveUp": "Nach oben verschieben",
 	"field.moveDown": "Nach unten verschieben",
+	"field.reorder": "Zum Neuordnen ziehen",
 	"field.dragToReorder": "Ziehen zum Neuanordnen",
 	"field.editItem": "Element bearbeiten",
 	"field.removeItem": "Element entfernen",

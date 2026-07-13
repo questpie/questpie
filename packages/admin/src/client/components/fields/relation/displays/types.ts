@@ -39,6 +39,12 @@ export interface RelationItemActions {
 	onMoveUp?: (item: any) => void;
 	/** Move the item one position later in an orderable relation. */
 	onMoveDown?: (item: any) => void;
+	/**
+	 * Reorder an orderable relation by array index (drag-and-drop). When
+	 * present, orderable displays render a drag handle instead of up/down
+	 * buttons; the owner (RelationPicker) applies the move to its value array.
+	 */
+	onReorder?: (fromIndex: number, toIndex: number) => void;
 }
 
 /**

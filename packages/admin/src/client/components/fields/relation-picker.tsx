@@ -405,6 +405,26 @@ export function RelationPicker<T extends QuestpieApp>({
 		[selectedIds, onChange],
 	);
 
+	// Drag-and-drop reorder by array index (dnd-kit gives us from/to). Bounds-
+	// guarded; a no-op move never fires onChange.
+	const handleReorder = React.useCallback(
+		(fromIndex: number, toIndex: number) => {
+			if (
+				fromIndex === toIndex ||
+				fromIndex < 0 ||
+				toIndex < 0 ||
+				fromIndex >= selectedIds.length ||
+				toIndex >= selectedIds.length
+			)
+				return;
+			const next = [...selectedIds];
+			const [moved] = next.splice(fromIndex, 1);
+			next.splice(toIndex, 0, moved);
+			onChange(next);
+		},
+		[selectedIds, onChange],
+	);
+
 	const handleOpenCreate = React.useCallback(() => {
 		setEditingItemId(undefined);
 		setIsSheetOpen(true);
@@ -445,6 +465,7 @@ export function RelationPicker<T extends QuestpieApp>({
 				orderable && !readOnly
 					? (item: any) => handleMove(item.id, 1)
 					: undefined,
+			onReorder: orderable && !readOnly ? handleReorder : undefined,
 		}),
 		[
 			readOnly,
@@ -454,6 +475,7 @@ export function RelationPicker<T extends QuestpieApp>({
 			handleRemove,
 			orderable,
 			handleMove,
+			handleReorder,
 		],
 	);
 

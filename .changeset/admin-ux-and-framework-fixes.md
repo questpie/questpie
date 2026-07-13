@@ -55,8 +55,10 @@ pg-boss singleton, time field).
   the linked records as chips inside it (chip label opens the record editor,
   × unlinks, the menu shows linked options as checked and carries a pinned
   "Create new …" row). The `list` / `chips` / `table` / `cards` / `grid`
-  layouts remain available via `display`; orderable relations keep `list`.
-  Picker options show a secondary context line from the target collection's
+  layouts remain available via `display`; orderable relations keep `list` and
+  now reorder by dragging a handle (dnd-kit, keyboard-accessible) instead of
+  up/down buttons. Picker options show a secondary context line from the
+  target collection's
   list columns. Per-item/per-option collection icons removed (the field label
   carries the icon once). Nested record editors (ResourceSheet) gained a
   context header ("Collection › Edit/Create"); the remove action uses a

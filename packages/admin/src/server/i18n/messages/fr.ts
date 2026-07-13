@@ -863,6 +863,7 @@ export default {
 	"field.editItem": "Modifier l'élément",
 	"field.formEditor": "Éditeur de formulaire",
 	"field.moveDown": "Déplacer vers le bas",
+	"field.reorder": "Glisser pour réordonner",
 	"field.moveUp": "Déplacer vers le haut",
 	"field.noItems": "Aucun élément",
 	"field.removeItem": "Supprimer l'élément",

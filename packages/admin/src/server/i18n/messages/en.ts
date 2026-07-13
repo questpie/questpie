@@ -1020,6 +1020,7 @@ export default {
 	// Field actions
 	"field.moveUp": "Move up",
 	"field.moveDown": "Move down",
+	"field.reorder": "Drag to reorder",
 	"field.dragToReorder": "Drag to reorder",
 	"field.editItem": "Edit item",
 	"field.removeItem": "Remove item",

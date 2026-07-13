@@ -968,6 +968,7 @@ export default {
 	// Field actions
 	"field.moveUp": "Presunúť hore",
 	"field.moveDown": "Presunúť dole",
+	"field.reorder": "Presuňte pre zmenu poradia",
 	"field.dragToReorder": "Presunúť pre zmenu poradia",
 	"field.editItem": "Upraviť položku",
 	"field.removeItem": "Odstrániť položku",
