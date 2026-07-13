@@ -123,6 +123,7 @@
 		}
 	},
 	"scripts": {
+		"bench:realtime": "QUESTPIE_MIGRATIONS_SILENT=1 bun run bench/realtime-baseline.ts",
 		"build": "tsdown",
 		"test": "QUESTPIE_MIGRATIONS_SILENT=1 bun test --max-concurrency=1",
 		"test:watch": "bun test --watch",
