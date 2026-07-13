@@ -64,6 +64,8 @@ export class RedisStreamsAdapter implements RealtimeAdapter {
 		});
 	}
 
+	async startPublisher(): Promise<void> {}
+
 	async stop(): Promise<void> {
 		this.running = false;
 	}

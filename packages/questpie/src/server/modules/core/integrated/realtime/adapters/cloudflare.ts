@@ -75,6 +75,7 @@ export class CloudflareRealtimeAdapter implements RealtimeAdapter {
 	}
 
 	async start(): Promise<void> {}
+	async startPublisher(): Promise<void> {}
 
 	async stop(): Promise<void> {
 		this.handlers.clear();

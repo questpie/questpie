@@ -4,6 +4,7 @@ import type { DrizzleClientFromQuestpieConfig } from "#questpie/server/config/ty
 import type { LoggerAdapter } from "#questpie/server/modules/core/integrated/logger/types.js";
 
 import type { RealtimeAdapter } from "./adapter.js";
+import { PgNotifyAdapter } from "./adapters/pg-notify.js";
 import { questpieRealtimeLogTable } from "./collection.js";
 import type {
 	RealtimeChangeEvent,
@@ -25,6 +26,7 @@ type AppendChangeOptions = {
 };
 
 const DEFAULT_RETENTION_DAYS = 3;
+const DEFAULT_ADAPTER_RECONCILIATION_INTERVAL_MS = 15_000;
 
 type ListenerEntry = {
 	listener: RealtimeListener;
@@ -136,11 +138,15 @@ export class RealtimeService {
 	private pollIntervalMs: number;
 	private batchSize: number;
 	private draining = false;
+	private drainPending = false;
 	private started = false;
 	private startPromise: Promise<void> | null = null;
+	private publisherStartPromise: Promise<void> | null = null;
+	private publisherStarted = false;
 	private lastSeq = 0;
 	private pollTimer: ReturnType<typeof setInterval> | null = null;
 	private unsubscribeAdapter: (() => void) | null = null;
+	private unsubscribeAdapterState: (() => void) | null = null;
 	private subscriptionContext?: RealtimeSubscriptionContext;
 	private retentionDays?: number;
 	private retentionCleanupIntervalMs: number;
@@ -158,11 +164,21 @@ export class RealtimeService {
 		if (config.adapter) {
 			// User provided custom adapter
 			this.adapter = config.adapter;
+		} else if (this.pgConnectionString) {
+			// Create the default publisher at service construction so write-only
+			// instances can broadcast before they ever receive a local subscription.
+			this.adapter = new PgNotifyAdapter({
+				connectionString: this.pgConnectionString,
+				channel: "questpie_realtime",
+			});
 		}
-		// PgNotifyAdapter will be lazily created on first subscribe (if needed)
 
 		this.batchSize = config.batchSize ?? 500;
-		this.pollIntervalMs = config.pollIntervalMs ?? (this.adapter ? 0 : 2000);
+		this.pollIntervalMs =
+			config.pollIntervalMs ??
+			(this.adapter || this.pgConnectionString
+				? DEFAULT_ADAPTER_RECONCILIATION_INTERVAL_MS
+				: 2000);
 		this.retentionDays =
 			config.retentionDays === undefined
 				? DEFAULT_RETENTION_DAYS
@@ -296,7 +312,24 @@ export class RealtimeService {
 
 	async notify(event: RealtimeChangeEvent): Promise<void> {
 		if (!this.adapter) return;
+		await this.initialize();
 		await this.adapter.notify(event);
+	}
+
+	async initialize(): Promise<void> {
+		if (this.publisherStarted) return;
+		if (this.publisherStartPromise) {
+			await this.publisherStartPromise;
+			return;
+		}
+
+		this.publisherStartPromise = (async () => {
+			await this.adapter?.startPublisher?.();
+			this.publisherStarted = true;
+		})().finally(() => {
+			this.publisherStartPromise = null;
+		});
+		await this.publisherStartPromise;
 	}
 
 	/**
@@ -409,10 +442,6 @@ export class RealtimeService {
 					entry,
 				);
 			}
-
-			if (this.listeners.size === 0) {
-				this.stopSafely();
-			}
 		};
 	}
 
@@ -462,23 +491,23 @@ export class RealtimeService {
 		}
 
 		this.startPromise = (async () => {
+			await this.initialize();
 			const latestSeq = await this.getLatestSeq();
-
-			// Lazy-load pg-notify adapter if Postgres connection string is available
-			if (!this.adapter && this.pgConnectionString) {
-				const { PgNotifyAdapter } = await import("./adapters/pg-notify");
-				this.adapter = new PgNotifyAdapter({
-					connectionString: this.pgConnectionString,
-					channel: "questpie_realtime",
-				});
-			}
 
 			if (this.adapter) {
 				await this.adapter.start();
 				this.unsubscribeAdapter = this.adapter.subscribe(() => {
 					this.drainSafely();
 				});
-			} else if (this.pollIntervalMs > 0) {
+				this.unsubscribeAdapterState =
+					this.adapter.onStateChange?.((state) => {
+						if (state === "connected") {
+							void this.drain();
+						}
+					}) ?? null;
+			}
+
+			if (this.pollIntervalMs > 0) {
 				this.pollTimer = setInterval(() => {
 					this.drainSafely();
 				}, this.pollIntervalMs);
@@ -500,6 +529,11 @@ export class RealtimeService {
 				if (this.unsubscribeAdapter) {
 					this.unsubscribeAdapter();
 					this.unsubscribeAdapter = null;
+				}
+
+				if (this.unsubscribeAdapterState) {
+					this.unsubscribeAdapterState();
+					this.unsubscribeAdapterState = null;
 				}
 
 				if (this.adapter) {
@@ -527,7 +561,22 @@ export class RealtimeService {
 	}
 
 	private async stop(): Promise<void> {
-		if (!this.started && !this.startPromise) return;
+		if (
+			!this.started &&
+			!this.startPromise &&
+			!this.publisherStarted &&
+			!this.publisherStartPromise
+		) {
+			return;
+		}
+
+		if (this.publisherStartPromise) {
+			try {
+				await this.publisherStartPromise;
+			} catch {
+				// startup already failed, continue cleanup
+			}
+		}
 
 		if (this.startPromise) {
 			try {
@@ -540,7 +589,6 @@ export class RealtimeService {
 			}
 		}
 
-		if (!this.started) return;
 		this.started = false;
 
 		if (this.pollTimer) {
@@ -553,13 +601,22 @@ export class RealtimeService {
 			this.unsubscribeAdapter = null;
 		}
 
+		if (this.unsubscribeAdapterState) {
+			this.unsubscribeAdapterState();
+			this.unsubscribeAdapterState = null;
+		}
+
 		if (this.adapter) {
 			await this.adapter.stop();
 		}
+		this.publisherStarted = false;
 	}
 
 	private async drain(): Promise<void> {
-		if (this.draining) return;
+		if (this.draining) {
+			this.drainPending = true;
+			return;
+		}
 		this.draining = true;
 
 		try {
@@ -575,7 +632,13 @@ export class RealtimeService {
 				if (events.length < this.batchSize) break;
 			}
 		} finally {
+			const shouldDrainAgain = this.drainPending;
+			this.drainPending = false;
 			this.draining = false;
+
+			if (shouldDrainAgain) {
+				void this.drain();
+			}
 		}
 	}
 

@@ -1,5 +1,5 @@
-import { service } from "#questpie/server/services/define-service.js";
 import { RealtimeService } from "#questpie/server/modules/core/integrated/realtime/service.js";
+import { service } from "#questpie/server/services/define-service.js";
 
 /**
  * Realtime service — creates the RealtimeService from app config.
@@ -10,7 +10,7 @@ import { RealtimeService } from "#questpie/server/modules/core/integrated/realti
 export default service({
 	namespace: null,
 	lifecycle: "singleton",
-	create: ({ app }) => {
+	create: async ({ app }) => {
 		const realtime = new RealtimeService(
 			// Widen — RealtimeService takes the general client type; the generated
 			// `app.db` is narrowed to the app's concrete drizzle schema.
@@ -29,6 +29,7 @@ export default service({
 				return app._resolveGlobalDependencies(globalName, withConfig);
 			},
 		});
+		await realtime.initialize();
 
 		return realtime;
 	},
