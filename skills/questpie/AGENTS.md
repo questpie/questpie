@@ -127,7 +127,9 @@ Files starting with `_`, `index.ts`, declaration files, tests, and specs are int
 | Environment | `references/env.md`                    | `env.ts` + `env.client.ts`: boot-validated, typed env, generated client modules |
 | Auth       | `references/auth.md`                    | Better Auth integration, session, providers, access patterns |
 | Adapters   | `references/infrastructure-adapters.md` | All adapter configs: pg-boss, S3, SMTP, pgNotify, Redis      |
-| MCP        | `references/mcp.md`                     | MCP setup, CRUD tools, route tools, custom tools, security   |
+| MCP        | `references/mcp.md`                     | MCP setup, CRUD tools, route tools, custom tools, OAuth 2.1 + scope∩RBAC |
+| OpenAPI    | `references/openapi.md`                 | OpenAPI 3.1 spec + Scalar UI: introspection, config, caching, honest limitations |
+| AI Runs    | `references/ai.md`                      | Claude Code agent runs: `aiModule`, embedded worker, resumable streams, exactly-once finalize |
 
 ### Extend
 
@@ -4542,13 +4544,17 @@ Every run declares a manifest; anything not granted is denied (default-deny):
 
 | Axis | Grants | Enforced by |
 | --- | --- | --- |
-| `net` | `fetch()` host allowlist (`host[:port]`) | sandbox engine |
-| `import` | remote module-import host allowlist (independent of `net`) | sandbox engine |
-| `timeoutMs` / `memoryMb` | hard wall-clock / per-guest memory bounds | sandbox engine |
+| `net` | `fetch()` host allowlist (`host[:port]`) | sandbox engine (`--allow-net`) |
+| `import` | remote module-import host allowlist (independent of `net`) | sandbox engine (`--allow-import`) |
+| `timeoutMs` / `memoryMb` | hard wall-clock / real V8 heap cap (`--max-old-space-size`) | sandbox engine |
 | `files` | read/write path globs into the file store | bindings broker |
 | `data.collections` | per-collection verbs (`read`/`create`/`update`/`delete`) | bindings broker |
 | `data.globals` / `data.stores` | per-global and per-`document_store`-namespace verbs | bindings broker |
 | `services` / `jobs` / `workflows` | allowed service names / enqueueable jobs / triggerable workflows | bindings broker |
+
+Only `net`/`import`/`timeoutMs`/`memoryMb` are enforced by the **engine** (the Deno subprocess flags). Everything below the line is typed in the manifest but enforced by the **broker** at call time, the engine never sees your collections.
+
+`import` **fails open**: omitting `--allow-import` does NOT deny, Deno silently grants ~7 default hosts (`esm.sh`, `jsr.io`, `deno.land`, …), so an empty `import` allowlist is compiled to an explicit `--deny-import=<those hosts>`. Never alias `net` and `import`.
 
 `secrets: Record<string, string>` injects secrets into the guest without embedding them in source.
 
@@ -4566,11 +4572,23 @@ The broker endpoint is a route the host app mounts (product layers like Autopilo
 
 ## Deployment
 
-The sandbox engine runs as its own service/container reachable at `SANDBOX_URL`; `brokerUrl` must point at the app's own loopback/internal address (the supervisor is trusted), never at anything request-derived:
+The sandbox engine runs as its own service/container reachable at `SANDBOX_URL`; `brokerUrl` must point at the app's own loopback/internal address (the supervisor is trusted), never at anything request-derived. The supervisor is Deno-only and ships as source under `node_modules` (the app image stays Deno-free):
 
 ```bash
-deno run --allow-net --allow-read packages/sandbox/src/sandbox-server.ts
+deno run \
+  --allow-net --allow-env --allow-run \
+  --allow-read --allow-write=$TMPDIR \
+  node_modules/@questpie/sandbox/src/sandbox-server.ts
 ```
+
+Supervisor env: `PORT` (default 8787), `DENO_BIN`, `SANDBOX_BROKER_URL`, `SANDBOX_DISABLE_NETNS_FIREWALL`.
+
+## Security Internals
+
+- **Process-per-request**, not a warm Worker: a Worker can't enforce `memoryMb` and can't reap grandchild Workers, so each run is a fresh subprocess with a real heap cap and SIGTERM→SIGKILL teardown. Before guest code runs, `globalThis.Worker` is nulled and `SharedArrayBuffer`/`Atomics` are deleted.
+- **SSRF egress validation** at manifest time, in BOTH adapter and server: any `net`/`import` host that is (or DNS-resolves to) private/loopback/link-local/CGNAT or `169.254.169.254` is rejected; DNS fails closed. **DNS-rebind pinning is NOT implemented** (`TODO(security)`), the socket IP isn't re-pinned across redirects. The brokered path is safe anyway because the guest runs `--allow-net=[]`.
+- **Brokered `fetch` on the app-bindings path**: the guest has no sockets (`--allow-net=[]`); its native `fetch` is replaced by a shim that RPCs `http.fetch` over stdio to the supervisor, which relays to `brokerUrl` carrying a supervisor-only per-run token (`x-questpie-sandbox-token`).
+- **Linux kernel egress firewall (belt-and-suspenders)**: on Linux with `unshare`/`nft`/`ip` + caps, each run also gets a per-run netns + nftables ruleset (default-DROP). **Gracefully absent** off Linux or when tools/caps are missing (logs a notice, runs without it). Disable with `SANDBOX_DISABLE_NETNS_FIREWALL=1`. The subprocess permission flags are the primary boundary; this is a second layer.
 
 ## Rules
 
@@ -4579,7 +4597,7 @@ deno run --allow-net --allow-read packages/sandbox/src/sandbox-server.ts
 - Never pass `isolation: "trusted"` for code you did not author, there is no sandbox in that mode.
 - Source `brokerUrl` from config/env only; a request-derived broker URL lets a spoofed Host exfiltrate the per-run token.
 
-Full reference: docs page `backend/business-logic/code-execution`.
+Full reference: docs page `adapters/sandbox`.
 
 ---
 
@@ -7274,7 +7292,7 @@ Use `fields.include` / `fields.exclude` for top-level filtering. It applies to c
 
 ### Enabling It
 
-The OAuth provider is an auth concern, not an MCP one: `starterModule` ships the `oauthProvider()` + `jwt()` Better Auth plugins, the OAuth tables (`oauth-*` collections + `jwks`), and - via `coreModule` - the root discovery routes. `adminModule` bundles `starterModule`, so any admin-enabled app already has all of it. You only add the endpoint:
+The OAuth provider is an auth concern, not an MCP one, and lives in a **composable `oauthModule`** (`packages/questpie/src/server/modules/oauth/`): the `oauthProvider()` + `jwt()` Better Auth plugins, the OAuth tables (`oauth-*` collections + `jwks`), and - via `coreModule` - the root discovery routes. `starterModule` bundles `oauthModule` (`modules/starter/modules.ts` → `export default [oauthModule]`), and `adminModule` bundles `starterModule`, so any admin-enabled app already has all of it. You only add the endpoint:
 
 ```ts title="modules.ts"
 import { adminModule } from "@questpie/admin/modules/admin";
@@ -7285,7 +7303,7 @@ export default [adminModule, mcpModule] as const;
 
 (`create-questpie`'s "MCP" option adds `mcpModule` for you.) That composition is exactly what `packages/mcp/test/oauth-mcp-e2e.test.ts` exercises end to end - read it as the source of truth for the flow.
 
-**Limitation:** a headless runtime with no `adminModule`/`starterModule` mounts `/mcp` but has NO OAuth provider, so HTTP MCP stays `401`. Add the starter's OAuth provider yourself to enable it. Stdio (trusted `system` worker) needs no OAuth and works on every runtime.
+**Limitation:** a headless runtime with no `adminModule`/`starterModule` mounts `/mcp` but has NO OAuth provider, so HTTP MCP stays `401` with nothing to discover. A custom-auth/headless app enables it by adding the composable `oauthModule` on top of its own better-auth model (this shipped in 3.3.0, it is no longer a hand-wire-it-yourself follow-up). Stdio (trusted `system` worker) needs no OAuth and works on every runtime.
 
 ### Discovery Endpoints (server root)
 
@@ -7317,7 +7335,7 @@ Scopes are `<resource>:<name>:<verb>`, derived declaratively from the entity - n
 
 Plus two coarse **umbrellas**: `collections:read` and `collections:write`. An umbrella satisfies the matching granular `read`/`write` requirement for the same resource kind (`collections:read` covers `collections:posts:read`). Umbrellas exist for `read`/`write` ONLY - there is deliberately no umbrella for `:delete` or `routes:…:invoke` (least privilege), and `read`/`write` never cross (holding `collections:write` does not satisfy a `:read` requirement).
 
-> The shipped starter today seeds only the coarse `collections:read`/`collections:write` umbrellas in its scope catalog. The full per-resource granular catalog is generated by a later task - until then a real DCR client on the shipped starter can obtain the umbrellas but not the granular scopes.
+> The full granular catalog is DERIVED live, not hand-seeded: `buildScopeCatalog` + `applyOAuthScopeCatalog` (`core/integrated/auth/scope-catalog.ts`, wired at `core/services/auth.ts`) emit `collections:<name>:read|write|delete`, `globals:<name>:read|write`, and `routes:<key>:invoke` and union them into `oauthProvider.scopes` at auth-instance build. So a real DCR client CAN request the granular scopes. Nuance: only the umbrellas are advertised in discovery (`advertisedMetadata.scopes_supported`); the granular scopes are grantable but not enumerated there.
 
 ### Effective Permission = scopes ∩ RBAC
 
@@ -7436,6 +7454,153 @@ await startStdioServer(app);
 - Field filtering is top-level only.
 - Raw routes and unannotated routes are not tools.
 - Custom tool results should use `structuredContent` for machine-readable output.
+
+---
+
+# OpenAPI + Scalar (@questpie/openapi)
+
+Auto-generates an **OpenAPI 3.1** spec by introspecting the running app, collections (CRUD), globals (get/update), standalone routes (Zod-derived schemas), Better Auth, and search, and serves it as raw JSON plus an interactive **Scalar** reference. No decorators, no hand-written spec, no build step: it reads the same runtime metadata (`app.getCollections()`, `app.getGlobals()`, `app.config.routes`) that powers the typed client and admin.
+
+Opt-in package: `bun add @questpie/openapi`. Peer `questpie ^3`, dep `zod ^4`.
+
+## Setup
+
+Register the module (it carries its own codegen plugin); routes are auto-wired:
+
+```ts
+// src/questpie/server/modules.ts
+import { openApiModule } from "@questpie/openapi/server";
+export default [openApiModule /* , … */] as const;
+```
+
+Optional config in `config/openapi.ts`:
+
+```ts
+import { openApiConfig } from "@questpie/openapi/server";
+export default openApiConfig({
+	info: { title: "My API", version: "1.0.0" },
+	servers: [{ url: "https://api.example.com" }],
+	basePath: "/api",           // MUST match the fetch handler's base path
+	scalar: { theme: "purple" },
+	auth: true, search: true,   // set false to omit those paths
+});
+```
+
+Served routes (under `basePath`): `GET /api/openapi.json` (spec) and `GET /api/docs` (Scalar UI). Route keys are hardcoded `openapi.json`/`docs`, the `specPath`/`docsPath` options are **dead** (no-ops).
+
+## Exports
+
+`@questpie/openapi/server` (the real surface): `openApiConfig`, `generateOpenApiSpec(app, config?)`, `openApiRoute`, `docsRoute`, `openApiModule` (also default). `openApiModule` is reachable from the root, `/server`, and `/modules/openapi`. `openApiConfig()` is a pure identity factory (type inference only); config is read at runtime from `app.state.config.openapi`.
+
+Standalone (no module): `const spec = generateOpenApiSpec(app)` returns the full `OpenApiSpec` object.
+
+## What Gets Introspected
+
+- **Collections** → `GET /{c}` (list), `POST /{c}` (create), `/count`, `POST /{c}/delete-many`, `/schema`, `/meta`, `GET|PATCH|DELETE /{c}/{id}`, `/versions`, `/revert`. **Conditional**: `/upload` (needs `state.upload`), `/{id}/restore` (needs `softDelete`), `/{id}/transition` (needs versioning workflow). Components `{Pascal}Document`/`Insert`/`Update`. Tag `Collections: <name>`.
+- **Globals** → `GET|PATCH /globals/{name}`, `/schema`, `/versions`, `/revert`, `/transition` (if workflow). Tag `Globals: <name>`.
+- **Routes** → flattens the routes tree; kebab-cases literals; `[param]`/`[...slug]` → `{param}`/`{slug}`; splits trailing `:METHOD` suffix; input from `.schema()`, output from `.outputSchema()`. `.raw()` routes get a permissive body + generic `200`/`401`. Tag `Routes: <top-level-segment>`.
+- **Auth** (unless `auth:false`) → `/auth/sign-in/email`, `/sign-up/email`, `/get-session`, `/sign-out`.
+- **Search** (unless `search:false`) → `POST /search`, `POST /search/reindex/{collection}`.
+- **Field input/output flags** (undocumented elsewhere): from each field's zod schema it builds insert/update/response variants, `input:false` fields are dropped from request bodies, `output:false` from responses, cross-cases marked `readOnly`/`writeOnly` (recurses into nested fields).
+
+Two security schemes advertised: `bearerAuth` (http bearer) + `cookieAuth` (`better-auth.session_token`). Base components: `ErrorResponse`, `SuccessResponse`, `CountResponse`, `DeleteManyResponse`.
+
+## Caching
+
+`openApiRoute()` lazy-generates the spec once per app instance (`WeakMap`) and serves it with a hash `ETag`, `Cache-Control: public, max-age=3600, stale-while-revalidate=43200`, `Access-Control-Allow-Origin: *`, and `304` on match. **The `docs` route is NOT cached**, `docsRoute()` regenerates the spec on every request.
+
+## Limitations (all TRUE in code, do NOT document the roadmap as done)
+
+- **Zod→JSON-Schema fallback.** Route schemas call `z.toJSONSchema()` with no options; on throw (transforms, refinements) they fall back to `{ type: "object", description: "Schema could not be generated" }`. Collections/globals are more tolerant (`{ unrepresentable: "any" }`).
+- **Security is declared once at spec root, not per-path.** `PathOperation.security` exists in the type but no generator populates it.
+- **Path params are always `{ type: "string" }`** regardless of the real Zod type (routes, collection `{id}`, search `{collection}`).
+- **Route `.meta()` is NOT wired.** `RouteMeta` (`title`/`description`/`tags`/`mcp`) is carried on route defs but the generator ignores it: `summary` is always the path, `tags` always `Routes: <segment>`. (Contrast [[mcp]], which DOES read `meta.mcp`.)
+- `openapi-quality-v1` is a **docs-only roadmap label**, it appears nowhere in the source.
+
+## Rules
+
+- Set `basePath` to match your fetch handler, or documented URLs won't match served ones.
+- Routes without `.outputSchema()` document their response as an opaque `{ type: "object" }`, add output schemas for accurate docs.
+- The spec/docs routes have no built-in access rule; they advertise how to auth but don't enforce it. Gate them yourself if the API surface is sensitive.
+- Don't rely on per-operation security or typed path params yet (see Limitations).
+
+Full reference: docs page `integrations/openapi`. Related: [[mcp]] (same route introspection, but consumes `.meta()`), routes reference.
+
+---
+
+# AI Agent Runs (@questpie/ai)
+
+Run-orchestration layer for executing **Claude Code** agents against durable run records. It owns the reliability primitives, worker leases, exactly-once finalization, and a resumable stream, not a chat SDK. **Headless-first**: server/worker code drives everything; an admin UI can sit on top.
+
+Opt-in package: `bun add @questpie/ai`. Peer deps `questpie`, `@questpie/admin`, `react ^19`, `zod ^4`, `@tanstack/react-query`.
+
+## What Ships vs What You Own
+
+Register `aiModule` in `modules.ts`, then `bun questpie generate`. The module contributes:
+- Collection `ai_workers` (admin-hidden), the worker registry. (`ai_worker_leases` also exists but is **vestigial**; leases now live on `run_links.producerLease`.)
+- Service `workerManager`, `registerWorker`, `deregister`, `heartbeat`, `claimRun`, `authenticate`.
+- Routes `enrollmentTokens`/`enrollmentEnroll`/`workerRegister`/`workerPoll`/`workerHeartbeat`/`workerDeregister`.
+- Cron job `ai-worker-timeout` (`*/5 * * * *`), reaps expired leases, marks dead workers offline.
+
+**You own the `run_links` collection**, the single execution record. The package does NOT ship it; worker/finalize/reap code operates on the injected `collections.run_links`. Fields to model: `kind`, `runtime`, `status` (`pending|claimed|running|completed|failed|cancelled`), `instructions`, `activeStreamId`, `producerLease` (json), `harnessResumeState`, `uiMessages`, `finalizedAt`, `retryPolicy` (`auto`|…).
+
+## Exports
+
+| Import | Contents |
+| --- | --- |
+| `@questpie/ai/modules/ai` | `aiModule` |
+| `@questpie/ai/worker` | `startAIWorker(ctx, config) → { stop, workerId }`, `EmbeddedWorkerConfig`, `HarnessRuntime` (=`"claude-code"`) |
+| `@questpie/ai/harness-core` | `createHarnessAgent`, `resumeOrCreateSession`, `streamTurn`, `toUIMessages`, `ResumableUIMessageStore`, `createQuestpieResumableStreamStore({kv})`, `finalizeRun`, `reapExpiredRunLinks` |
+| `@questpie/ai` | `aiConfig`, `aiPlugin`, contract types (`AiRunStatus`, `AgentRuntimeRunRequest`, …), **hooks unwired, see Gotchas** |
+
+## Embedded Worker (the real execution path)
+
+A separate process with a **system context** (reads `ctx.services.workerManager`, `ctx.collections`, `ctx.kv`):
+
+```ts
+// src/ai-worker.ts
+import { createContext } from "#questpie";
+import { startAIWorker } from "@questpie/ai/worker";
+
+const ctx = await createContext({ accessMode: "system" });
+await startAIWorker(ctx, {
+	runtimes: [{ runtime: "claude-code" }],
+	maxConcurrentRuns: 1,
+	pollIntervalMs: 1000,
+	sandbox: { passthroughHomeForAuth: true }, // reuse ~/.claude on a personal machine
+	mcpServers: [{ name: "questpie", command: process.execPath, args: ["--bun", "run", "./src/mcp-entry.ts"], env: {} }],
+});
+```
+
+Loop: `heartbeat` → `claimRun` (id-scoped CAS `pending`→`claimed`, bumps `producerLease.epoch`) → `executeRun` (streams into the KV sink) → the single `finalizeRun`.
+
+## Resumable Stream + Finalize
+
+Output streams into a KV-backed store (`createQuestpieResumableStreamStore({ kv })`, keys `rs:{id}:*`, 1h TTL). Serve an SSE tail off `store.readFrom(activeStreamId, offset)`; resume via `Last-Event-ID`/`?offset`, `gap`→`expired` fallback to the persisted transcript.
+
+`finalizeRun(deps, input)` is the **exactly-once** latch: `finalizedAt IS NULL` ∧ matching lease `epoch` ∧ non-terminal `status`. It seals the stream, writes terminal status/summary/tokens/`uiMessages`, and (for `kind:"task"`/`"chat"`) writes knowledge artifacts + assistant `chat_messages`, once, even if two workers race.
+
+`reapExpiredRunLinks(deps, now?)` (the cron + inline on each tail read) requeues expired leases when `retryPolicy:"auto"` (bump epoch → `pending`) or fails them via `finalizeRun` otherwise.
+
+## Gotchas (verified against @questpie/ai@3.1.0)
+
+- **`claude-code` runtime ONLY.** `createHarnessAgent` throws for anything else.
+- **`aiConfig`/`aiPlugin`/`config/ai.ts` + `onBeforeRun`/`onAfterComplete` are DEFINED BUT NOT WIRED**, placeholder surface, consumed nowhere. Do not tell users to configure them.
+- **`@questpie/ai/client` exports NOTHING** (relay streaming removed in the chat-v7 cutover). Client streaming = server resumable sink + app-owned SSE tail. The `.tsx` components under `src/client/.../components/` are dead/unexported.
+- **HTTP worker fleet is PARKED** (finalize-over-HTTP is a HITL follow-up). Real usage = in-process embedded worker with in-process `finalizeRun`.
+- **The bundled sandbox is NOT isolation.** `@questpie/ai` uses its own `createLocalHostSandbox` (host `bash -lc`, isolates HOME/XDG, filters secret env). `passthroughHomeForAuth:true` relaxes HOME isolation to read `~/.claude`; the worker runs `permissionMode:"allow-all"`. This is **unrelated** to [[sandbox]] (`@questpie/sandbox`, the Deno code-execution engine), do not conflate.
+- **No live cross-turn attach.** Resume is replay against the persisted per-session HOME; `harnessResumeState` is written once at end-of-turn (the bridge session is destroyed when the turn's job ends).
+- **A decoupled worker needs shared KV (Redis).** The HTTP tail can't see an in-process MemoryKV sink written by another process.
+- **Postgres-coupled epoch fence**, the exactly-once CAS is a raw JSONB predicate over the double-encoded `producerLease` column.
+
+## Rules
+
+- Model `run_links` in the app; never expect the package to ship it.
+- Run the worker as its own process with `createContext({ accessMode: "system" })`.
+- Use the embedded worker + in-process `finalizeRun`; the HTTP fleet is not complete.
+- Don't reach for `@questpie/ai` for trusted first-party automation, that's [[workflows]] and [jobs]. This is for streaming Claude Code agent turns.
+
+Full reference: docs page `integrations/ai`. Related: [[sandbox]] (different sandbox), [[mcp]] (agents connect out via MCP), [[workflows]].
 
 ---
 

@@ -53,8 +53,8 @@ questpie generate
 
 That is the whole setup on an admin-enabled app: `adminModule` provides the OAuth provider + tables + discovery (via the starter it bundles), and `mcpModule` mounts the OAuth-gated `/api/mcp` route. This is exactly the composition the end-to-end test (`packages/mcp/test/oauth-mcp-e2e.test.ts`) exercises.
 
-<Callout type="warn" title="Headless runtimes (Hono, Elysia) do not get the OAuth provider today">
-The OAuth provider is declared **only** in the starter module's auth config (`modules/starter/config/auth.ts`), and the starter is pulled in by the **admin** module. Headless runtimes ship neither. On Hono/Elysia you can still add `mcpModule` and the `/api/mcp` route mounts - but with no OAuth provider behind it, an unauthenticated request just gets a `401` with nothing to discover, and there is no consent screen or token endpoint. **OAuth-MCP requires the admin/starter module today.** Local [stdio](/docs/integrations/mcp#stdio-transport) still works everywhere (it needs no OAuth). Wiring the provider into a headless app manually is a documented follow-up.
+<Callout type="info" title="Headless runtimes (Hono, Elysia) add the OAuth provider with `oauthModule`">
+The OAuth provider lives in a self-contained, composable **`oauthModule`** (`packages/questpie/src/server/modules/oauth/`), the `oauthProvider()` + `jwt()` plugins, the `oauth-*` tables + `jwks`, and the discovery routes. `starterModule` bundles it and `adminModule` pulls the starter in, so an admin-enabled app gets it for free (as above). A **headless / custom-auth** app that ships neither can add `oauthModule` on top of its own better-auth model to get the same provider + tables + discovery, HTTP MCP then works there too. (This shipped in 3.3.0, it is no longer a hand-wire-it-yourself follow-up.) With no provider at all, `/api/mcp` still mounts but stays `401` with nothing to discover. Local [stdio](/docs/integrations/mcp#stdio-transport) needs no OAuth and works everywhere.
 </Callout>
 
 ## The flow
