@@ -563,7 +563,7 @@ function buildExtensionState(
 /**
  * Extract unknown extension keys from RuntimeConfig.
  * Filters out known infrastructure keys so only truly unknown
- * plugin-contributed keys (e.g. `channels`, `workflows`) flow through
+ * plugin-contributed keys (e.g. `channels`, `workflowsRuntime`) flow through
  * to `instance.state`.
  */
 function extractRuntimeExtensions(

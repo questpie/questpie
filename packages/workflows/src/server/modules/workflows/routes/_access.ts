@@ -2,17 +2,15 @@ import type { RouteAccessContext, RouteAccessRule } from "questpie";
 
 import {
 	defaultWorkflowAccess,
+	resolveWorkflowsConfig,
 	type WorkflowAccessOperation,
 	type WorkflowsAccessConfig,
 	type WorkflowsConfigInput,
+	type WorkflowsConfigState,
 } from "../../../config.js";
 
 type WorkflowConfigState = {
-	state?: {
-		config?: {
-			workflows?: WorkflowsConfigInput;
-		};
-	};
+	state?: WorkflowsConfigState;
 };
 
 function isAccessConfig(value: unknown): value is WorkflowsAccessConfig {
@@ -54,7 +52,7 @@ export function workflowRouteAccess(
 ): RouteAccessRule {
 	return async (ctx) => {
 		const app = (ctx as { app?: WorkflowConfigState }).app;
-		const config = app?.state?.config?.workflows;
+		const config = resolveWorkflowsConfig(app?.state);
 		const rule = resolveWorkflowAccessRule(config, operation);
 		return evaluateAccessRule(rule, ctx);
 	};
