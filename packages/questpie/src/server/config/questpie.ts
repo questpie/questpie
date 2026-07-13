@@ -61,6 +61,7 @@ import type {
 } from "#questpie/shared/type-utils.js";
 
 import type { GlobalHooksState } from "./global-hooks-types.js";
+import type { RuntimeConfigExtensions } from "./module-types.js";
 import type { GetMessageKeys, QuestpieConfig } from "./types.js";
 
 interface ResolvedServiceDefinition {
@@ -207,7 +208,8 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 	/** Extension state for plugin-contributed configurations (admin layout, blocks, sidebar, etc.) */
 	public state?: {
 		config?: import("./app-state-config.js").ResolvedAppStateConfig;
-	} & Record<string, unknown>;
+	} & Partial<RuntimeConfigExtensions> &
+		Record<string, unknown>;
 
 	/**
 	 * Validated app environment (from `env.ts`, via `AppDefinition.env`).

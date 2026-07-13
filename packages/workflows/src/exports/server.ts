@@ -17,9 +17,14 @@ export type {
 	WorkflowAccessRule,
 	WorkflowsAccessConfig,
 	WorkflowsConfigInput,
+	WorkflowsConfigState,
 	WorkflowsExecutionLockConfig,
 } from "../server/config.js";
-export { defaultWorkflowAccess, workflowsConfig } from "../server/config.js";
+export {
+	defaultWorkflowAccess,
+	resolveWorkflowsConfig,
+	workflowsConfig,
+} from "../server/config.js";
 
 // Engine — compensation
 export type {

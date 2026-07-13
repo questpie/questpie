@@ -285,6 +285,23 @@ export type AppConfigResolved<T extends AppConfigInput> = {
 // ============================================================================
 
 /**
+ * Plugin-owned runtime configuration keys.
+ *
+ * Packages can augment this interface to add typed keys to both
+ * {@link RuntimeConfig} and `app.state`.
+ *
+ * @example
+ * ```ts
+ * declare module "questpie" {
+ *   interface RuntimeConfigExtensions {
+ *     myPluginRuntime?: MyPluginRuntimeConfig;
+ *   }
+ * }
+ * ```
+ */
+export interface RuntimeConfigExtensions {}
+
+/**
  * Runtime configuration — the shape of `questpie.config.ts` in the new architecture.
  * Contains only runtime infrastructure (db, adapters, secret) and plugin registrations.
  * No entity definitions (collections, globals, etc.) — those come from the definition
@@ -312,7 +329,7 @@ export type AppConfigResolved<T extends AppConfigInput> = {
 export interface RuntimeConfig<
 	TDb extends DbConfig = DbConfig,
 	TStorage extends StorageConfig | undefined = StorageConfig | undefined,
-> {
+> extends RuntimeConfigExtensions {
 	/** Codegen plugins — discover additional file patterns and extend generated output. */
 	plugins?: readonly CodegenPlugin[];
 

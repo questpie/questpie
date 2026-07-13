@@ -40,4 +40,18 @@ describe("workflow route access", () => {
 			}),
 		).resolves.toBe(true);
 	});
+
+	it("prefers runtimeConfig workflow settings over legacy codegen config", async () => {
+		await expect(
+			evaluateRouteAccess(triggerWorkflow.access, {
+				session: null,
+				app: {
+					state: {
+						workflowsRuntime: { access: true },
+						config: { workflows: { access: false } },
+					},
+				},
+			}),
+		).resolves.toBe(true);
+	});
 });
