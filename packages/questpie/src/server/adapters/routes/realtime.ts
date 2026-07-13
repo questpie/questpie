@@ -223,6 +223,7 @@ export async function realtimeSubscribe(
 		start: (controller) => {
 			const unsubscribers: (() => void)[] = [];
 			let closed = false;
+			let transportFailed = false;
 
 			// Per-topic state
 			const topicState = new Map<string, TopicState>();
@@ -319,13 +320,29 @@ export async function realtimeSubscribe(
 
 				const unsub = app.realtime!.subscribe(
 					(event) => {
-						void refresh(topic.id, event.seq);
+						void refresh(topic.id, event.seq).catch((error) => {
+							sendTopicError(
+								topic.id,
+								error instanceof Error ? error.message : "Refresh failed",
+							);
+						});
 					},
 					{
 						resourceType: topic.resourceType,
 						resource: topic.resource,
 						where: topic.where,
 						with: topic.with,
+					},
+					(error) => {
+						transportFailed = true;
+						send("error", {
+							topicId: "*",
+							message:
+								error instanceof Error
+									? error.message
+									: "Realtime transport failed",
+						});
+						closeStream?.();
 					},
 				);
 				unsubscribers.push(unsub);
@@ -359,6 +376,7 @@ export async function realtimeSubscribe(
 				}
 			};
 			closeStream = close;
+			if (transportFailed) close();
 
 			// Handle abort signal
 			if (request.signal) {
@@ -367,29 +385,27 @@ export async function realtimeSubscribe(
 
 			// Send initial snapshots
 			void (async () => {
-				try {
-					const latestSeq = (await app.realtime?.getLatestSeq()) ?? 0;
+				const latestSeq = (await app.realtime?.getLatestSeq()) ?? 0;
 
-					// Initialize all topic states with latest seq
-					for (const topic of validatedTopics) {
-						const state = topicState.get(topic.id);
-						if (state) {
-							state.lastSeq = latestSeq;
-						}
+				// Initialize all topic states with latest seq
+				for (const topic of validatedTopics) {
+					const state = topicState.get(topic.id);
+					if (state) {
+						state.lastSeq = latestSeq;
 					}
-
-					// Fetch initial snapshots for all topics
-					await Promise.all(
-						validatedTopics.map((topic) => refresh(topic.id, latestSeq)),
-					);
-				} catch (error) {
-					send("error", {
-						topicId: "*",
-						message:
-							error instanceof Error ? error.message : "Failed to initialize",
-					});
 				}
-			})();
+
+				// Fetch initial snapshots for all topics
+				await Promise.all(
+					validatedTopics.map((topic) => refresh(topic.id, latestSeq)),
+				);
+			})().catch((error) => {
+				send("error", {
+					topicId: "*",
+					message:
+						error instanceof Error ? error.message : "Failed to initialize",
+				});
+			});
 		},
 		cancel: () => {
 			closeStream?.();

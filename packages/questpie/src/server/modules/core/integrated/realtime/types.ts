@@ -40,6 +40,9 @@ export type RealtimeChangeEvent = {
 	createdAt: Date;
 };
 
+/** Called when realtime delivery fails and the subscriber should reconnect. */
+export type RealtimeErrorListener = (error: unknown) => void;
+
 export type RealtimeNotice = Pick<
 	RealtimeChangeEvent,
 	"seq" | "resourceType" | "resource" | "operation"

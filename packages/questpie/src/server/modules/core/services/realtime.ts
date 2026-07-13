@@ -17,6 +17,7 @@ export default service({
 			app.db as any,
 			app.config.realtime,
 			app._pgConnectionString,
+			app.logger,
 		);
 
 		// Set subscription context for dependency resolution

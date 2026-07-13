@@ -1,6 +1,7 @@
 import { asc, desc, gt, lt } from "drizzle-orm";
 
 import type { DrizzleClientFromQuestpieConfig } from "#questpie/server/config/types.js";
+import type { LoggerAdapter } from "#questpie/server/modules/core/integrated/logger/types.js";
 
 import type { RealtimeAdapter } from "./adapter.js";
 import { questpieRealtimeLogTable } from "./collection.js";
@@ -8,6 +9,7 @@ import type {
 	RealtimeChangeEvent,
 	RealtimeChangePayload,
 	RealtimeConfig,
+	RealtimeErrorListener,
 	RealtimeNotice,
 	RealtimeOperation,
 	RealtimeResourceType,
@@ -26,6 +28,7 @@ const DEFAULT_RETENTION_DAYS = 3;
 
 type ListenerEntry = {
 	listener: RealtimeListener;
+	errorListener?: RealtimeErrorListener;
 	topics: import("./types").RealtimeTopics;
 	whereFilters: Record<string, unknown>;
 	hasComplexWhere: boolean;
@@ -149,6 +152,7 @@ export class RealtimeService {
 		private db: DrizzleClientFromQuestpieConfig<any>,
 		config: RealtimeConfig = {},
 		private pgConnectionString?: string,
+		private logger?: Pick<LoggerAdapter, "error" | "warn">,
 	) {
 		// Auto-configure adapter if connection string is provided
 		if (config.adapter) {
@@ -174,6 +178,46 @@ export class RealtimeService {
 	 */
 	setSubscriptionContext(context: RealtimeSubscriptionContext): void {
 		this.subscriptionContext = context;
+	}
+
+	private reportTransportFailure(message: string, error: unknown): void {
+		this.logger?.error(message, error);
+		const listeners = Array.from(this.listeners);
+		for (const entry of listeners) {
+			try {
+				entry.errorListener?.(error);
+			} catch (listenerError) {
+				this.logger?.error(
+					"[Realtime] Error listener failed while reporting a transport failure",
+					listenerError,
+				);
+			}
+		}
+	}
+
+	private ensureStartedSafely(): void {
+		if (this.started || this.startPromise) return;
+		void this.ensureStarted().catch((error) => {
+			this.reportTransportFailure("[Realtime] Transport startup failed", error);
+		});
+	}
+
+	private drainSafely(): void {
+		void this.drain().catch((error) => {
+			this.reportTransportFailure("[Realtime] Outbox drain failed", error);
+		});
+	}
+
+	private cleanupSafely(force = false): void {
+		void this.scheduleRetentionCleanup(force).catch((error) => {
+			this.logger?.warn("[Realtime] Outbox cleanup failed", error);
+		});
+	}
+
+	private stopSafely(): void {
+		void this.stop().catch((error) => {
+			this.logger?.error("[Realtime] Transport shutdown failed", error);
+		});
 	}
 
 	private addIndexedListener(
@@ -246,7 +290,7 @@ export class RealtimeService {
 			createdAt: row.createdAt,
 		};
 
-		void this.scheduleRetentionCleanup();
+		this.cleanupSafely();
 		return event;
 	}
 
@@ -267,6 +311,7 @@ export class RealtimeService {
 	subscribe(
 		listener: RealtimeListener,
 		topics?: import("./types").RealtimeTopics,
+		errorListener?: RealtimeErrorListener,
 	): () => void {
 		const resolvedTopics = topics ?? {
 			resourceType: "collection",
@@ -311,6 +356,7 @@ export class RealtimeService {
 
 		const entry: ListenerEntry = {
 			listener,
+			errorListener,
 			topics: resolvedTopics,
 			whereFilters: whereAnalysis.filters,
 			hasComplexWhere: whereAnalysis.hasComplex,
@@ -333,7 +379,7 @@ export class RealtimeService {
 			this.addIndexedListener(this.watchedGlobalListeners, resource, entry);
 		}
 
-		void this.ensureStarted();
+		this.ensureStartedSafely();
 
 		return () => {
 			this.listeners.delete(entry);
@@ -365,7 +411,7 @@ export class RealtimeService {
 			}
 
 			if (this.listeners.size === 0) {
-				void this.stop();
+				this.stopSafely();
 			}
 		};
 	}
@@ -430,18 +476,18 @@ export class RealtimeService {
 			if (this.adapter) {
 				await this.adapter.start();
 				this.unsubscribeAdapter = this.adapter.subscribe(() => {
-					void this.drain();
+					this.drainSafely();
 				});
 			} else if (this.pollIntervalMs > 0) {
 				this.pollTimer = setInterval(() => {
-					void this.drain();
+					this.drainSafely();
 				}, this.pollIntervalMs);
 			}
 
 			this.lastSeq = latestSeq;
 			this.started = true;
-			void this.drain();
-			void this.scheduleRetentionCleanup(true);
+			this.drainSafely();
+			this.cleanupSafely(true);
 		})()
 			.catch(async (error) => {
 				this.started = false;
@@ -459,8 +505,11 @@ export class RealtimeService {
 				if (this.adapter) {
 					try {
 						await this.adapter.stop();
-					} catch {
-						// Ignore stop failures during failed startup cleanup
+					} catch (stopError) {
+						this.logger?.warn(
+							"[Realtime] Transport cleanup after failed startup failed",
+							stopError,
+						);
 					}
 				}
 
@@ -483,8 +532,11 @@ export class RealtimeService {
 		if (this.startPromise) {
 			try {
 				await this.startPromise;
-			} catch {
-				// startup already failed, continue cleanup
+			} catch (error) {
+				this.logger?.warn(
+					"[Realtime] Transport startup failed before shutdown",
+					error,
+				);
 			}
 		}
 
@@ -609,10 +661,14 @@ export class RealtimeService {
 
 		// Notify all collected listeners
 		for (const entry of notifiedListeners) {
-			entry.listener(event);
+			try {
+				entry.listener(event);
+			} catch (error) {
+				this.logger?.error("[Realtime] Realtime listener failed", error);
+			}
 		}
 
-		void this.scheduleRetentionCleanup();
+		this.cleanupSafely();
 	}
 
 	private async scheduleRetentionCleanup(force = false): Promise<void> {
@@ -633,8 +689,9 @@ export class RealtimeService {
 			await this.db
 				.delete(questpieRealtimeLogTable)
 				.where(lt(questpieRealtimeLogTable.createdAt, cutoff));
-		} catch {
+		} catch (error) {
 			// Best-effort cleanup; keep realtime delivery resilient to cleanup failures.
+			this.logger?.warn("[Realtime] Outbox cleanup failed", error);
 		} finally {
 			this.retentionCleanupInProgress = false;
 		}

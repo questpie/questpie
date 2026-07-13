@@ -384,4 +384,52 @@ describe("realtime transactional change capture", () => {
 			after: null,
 		});
 	});
+
+	it("H11: silently ignores only a missing realtime table", async () => {
+		const missingTable = new Error("realtime insert failed", {
+			cause: Object.assign(new Error("relation does not exist"), {
+				code: "42P01",
+			}),
+		});
+		const appendSpy = spyOn(
+			setup.app.realtime,
+			"appendChange",
+		).mockImplementation(async () => {
+			throw missingTable;
+		});
+
+		try {
+			await setup.app.collections.posts.create({ title: "No table yet" }, ctx);
+		} finally {
+			appendSpy.mockRestore();
+		}
+
+		expect(
+			setup.app.mocks.logger.getLogsContaining(
+				"Realtime change capture failed",
+			),
+		).toHaveLength(0);
+	});
+
+	it("H11: rate-limits warnings for non-42P01 capture failures", async () => {
+		const appendSpy = spyOn(
+			setup.app.realtime,
+			"appendChange",
+		).mockImplementation(async () => {
+			throw Object.assign(new Error("database unavailable"), { code: "08006" });
+		});
+
+		try {
+			await setup.app.collections.posts.create({ title: "First" }, ctx);
+			await setup.app.collections.posts.create({ title: "Second" }, ctx);
+		} finally {
+			appendSpy.mockRestore();
+		}
+
+		expect(
+			setup.app.mocks.logger.getLogsContaining(
+				"Realtime change capture failed",
+			),
+		).toHaveLength(1);
+	});
 });

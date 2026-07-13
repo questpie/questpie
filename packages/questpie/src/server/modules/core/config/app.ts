@@ -98,6 +98,33 @@ function projectRealtimeEqualityFields(
 }
 
 const capturedRealtimeBatches = new WeakSet<object>();
+const realtimeCaptureWarningAt = new WeakMap<object, number>();
+const REALTIME_CAPTURE_WARNING_INTERVAL_MS = 60_000;
+
+function hasPostgresErrorCode(error: unknown, code: string): boolean {
+	let current = error;
+	const seen = new Set<object>();
+	while (current && typeof current === "object" && !seen.has(current)) {
+		seen.add(current);
+		if ((current as { code?: unknown }).code === code) return true;
+		current = (current as { cause?: unknown }).cause;
+	}
+	return false;
+}
+
+function handleRealtimeCaptureError(
+	logger: GlobalCollectionHookContext["logger"],
+	error: unknown,
+): void {
+	if (hasPostgresErrorCode(error, "42P01") || !logger) return;
+
+	const now = Date.now();
+	const lastWarningAt = realtimeCaptureWarningAt.get(logger) ?? 0;
+	if (now - lastWarningAt < REALTIME_CAPTURE_WARNING_INTERVAL_MS) return;
+
+	realtimeCaptureWarningAt.set(logger, now);
+	logger.warn("[Core] Realtime change capture failed:", error);
+}
 
 function shouldCaptureRealtimeChange(
 	ctx: GlobalCollectionHookContext,
@@ -152,8 +179,8 @@ const realtimeHook = {
 			);
 
 			publishRealtimeAfterCommit(ctx, realtime, change);
-		} catch {
-			// Realtime log table may not exist yet
+		} catch (error) {
+			handleRealtimeCaptureError(ctx.logger, error);
 		}
 	},
 	afterDelete: async (ctx: GlobalCollectionHookContext) => {
@@ -178,8 +205,8 @@ const realtimeHook = {
 			);
 
 			publishRealtimeAfterCommit(ctx, realtime, change);
-		} catch {
-			// Realtime log table may not exist yet
+		} catch (error) {
+			handleRealtimeCaptureError(ctx.logger, error);
 		}
 	},
 };
@@ -354,8 +381,8 @@ const globalRealtimeHook = {
 			);
 
 			publishRealtimeAfterCommit(ctx, realtime, change);
-		} catch {
-			// Realtime log table may not exist yet
+		} catch (error) {
+			handleRealtimeCaptureError(ctx.logger, error);
 		}
 	},
 };

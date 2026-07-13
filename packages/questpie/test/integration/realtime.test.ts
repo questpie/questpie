@@ -1,5 +1,5 @@
 // @ts-nocheck // TODO: Temporary until test utils are fully typed
-import { afterEach, describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it, spyOn } from "bun:test";
 
 import {
 	createAdapterRoutes,
@@ -55,6 +55,12 @@ class LifecycleTrackingRealtimeAdapter extends MockRealtimeAdapter {
 
 	async stop(): Promise<void> {
 		this.stopCalls += 1;
+	}
+}
+
+class FailingStartRealtimeAdapter extends MockRealtimeAdapter {
+	async start(): Promise<void> {
+		throw new Error("adapter start failed");
 	}
 }
 
@@ -1118,6 +1124,42 @@ describe("realtime", () => {
 	// ==========================================================================
 
 	describe("edge cases", () => {
+		it("isolates a throwing listener so later listeners still receive the event", async () => {
+			const adapter = new MockRealtimeAdapter();
+			const items = collection("items").fields(({ f }) => ({
+				name: f.textarea().required(),
+			}));
+
+			setup = await buildMockApp(
+				{ collections: { items } },
+				{ realtime: { adapter } },
+			);
+			await runTestDbMigrations(setup.app);
+
+			let healthyListenerCalls = 0;
+			setup.app.realtime.subscribe(() => {
+				throw new Error("listener failed");
+			}, { resourceType: "collection", resource: "items" });
+			setup.app.realtime.subscribe(() => {
+				healthyListenerCalls += 1;
+			}, { resourceType: "collection", resource: "items" });
+
+			const event: RealtimeChangeEvent = {
+				seq: 1,
+				resourceType: "collection",
+				resource: "items",
+				operation: "create",
+				payload: { before: null, after: { name: "Safe" } },
+				createdAt: new Date(),
+			};
+
+			expect(() => setup.app.realtime.emit(event)).not.toThrow();
+			expect(healthyListenerCalls).toBe(1);
+			expect(
+				setup.app.mocks.logger.getLogsContaining("Realtime listener failed"),
+			).toHaveLength(1);
+		});
+
 		it("restarts adapter after all subscribers disconnect", async () => {
 			const adapter = new LifecycleTrackingRealtimeAdapter();
 			const items = collection("items").fields(({ f }) => ({
@@ -1752,6 +1794,95 @@ describe("realtime", () => {
 	// ==========================================================================
 
 	describe("E2E SSE streaming", () => {
+		it("sends an error event and closes when the transport cannot start", async () => {
+			const adapter = new FailingStartRealtimeAdapter();
+			const items = collection("items")
+				.fields(({ f }) => ({ name: f.textarea().required() }))
+				.access({ read: true });
+
+			setup = await buildMockApp(
+				{ collections: { items } },
+				{ realtime: { adapter } },
+			);
+			await runTestDbMigrations(setup.app);
+
+			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
+			const response = await routes.realtime.subscribe(
+				createRealtimeRequest([collectionTopic("items")]),
+				{},
+				undefined,
+			);
+			const reader = createSSEReader(response.body!);
+
+			let transportError: SSEEvent | undefined;
+			for (let attempt = 0; attempt < 3; attempt += 1) {
+				const event = await reader.readEvent();
+				if (event.event === "error") {
+					transportError = event;
+					break;
+				}
+			}
+
+			expect(transportError?.data).toMatchObject({
+				topicId: "*",
+				message: "adapter start failed",
+			});
+			expect(
+				setup.app.mocks.logger.getLogsContaining("Transport startup failed"),
+			).toHaveLength(1);
+			await expect(reader.readEvent()).rejects.toThrow(
+				"SSE stream closed before event",
+			);
+		});
+
+		it("sends an error event and closes when an outbox drain fails", async () => {
+			const adapter = new MockRealtimeAdapter();
+			const items = collection("items")
+				.fields(({ f }) => ({ name: f.textarea().required() }))
+				.access({ read: true });
+
+			setup = await buildMockApp(
+				{ collections: { items } },
+				{ realtime: { adapter } },
+			);
+			await runTestDbMigrations(setup.app);
+
+			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
+			const response = await routes.realtime.subscribe(
+				createRealtimeRequest([collectionTopic("items")]),
+				{},
+				undefined,
+			);
+			const reader = createSSEReader(response.body!);
+			expect((await reader.readSnapshot()).event).toBe("snapshot");
+			await new Promise((resolve) => setTimeout(resolve, 20));
+
+			const readSpy = spyOn(
+				setup.app.realtime,
+				"readSince",
+			).mockRejectedValue(new Error("drain failed"));
+			try {
+				await adapter.notify({
+					seq: 999,
+					resourceType: "collection",
+					resource: "items",
+					operation: "create",
+					createdAt: new Date(),
+				});
+
+				const transportError = await reader.readEvent();
+				expect(transportError).toMatchObject({
+					event: "error",
+					data: { topicId: "*", message: "drain failed" },
+				});
+				await expect(reader.readEvent()).rejects.toThrow(
+					"SSE stream closed before event",
+				);
+			} finally {
+				readSpy.mockRestore();
+			}
+		});
+
 		it("should stream multiple snapshots on rapid updates", async () => {
 			const adapter = new MockRealtimeAdapter();
 			const counters = collection("counters")
