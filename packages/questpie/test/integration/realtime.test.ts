@@ -1515,7 +1515,7 @@ describe("realtime", () => {
 
 	describe("access control", () => {
 		it("should send error event when user lacks read permission", async () => {
-			const adapter = new MockRealtimeAdapter();
+			const adapter = new LifecycleTrackingRealtimeAdapter();
 			const secrets = collection("secrets")
 				.fields(({ f }) => ({
 					content: f.textarea().required(),
@@ -1566,6 +1566,12 @@ describe("realtime", () => {
 			const error = await reader.readEvent();
 			expect(error.event).toBe("error");
 			expect(error.data.message).toContain("permission");
+			await new Promise((resolve) => setTimeout(resolve, 20));
+			expect(setup.app.realtime.listeners.size).toBe(0);
+			expect(adapter.stopCalls).toBe(1);
+			await expect(reader.readEvent()).rejects.toThrow(
+				"SSE stream closed before event",
+			);
 
 			controller.abort();
 			reader.close();
@@ -1618,6 +1624,54 @@ describe("realtime", () => {
 
 			controller.abort();
 			reader.close();
+		});
+
+		it("removes a denied topic while keeping authorized topics alive", async () => {
+			const adapter = new LifecycleTrackingRealtimeAdapter();
+			const secrets = collection("secrets")
+				.fields(({ f }) => ({ content: f.textarea().required() }))
+				.access({
+					read: ({ session }) => (session?.user as any)?.role === "admin",
+				});
+			const posts = collection("posts")
+				.fields(({ f }) => ({ title: f.textarea().required() }))
+				.access({ read: true });
+			setup = await buildMockApp(
+				{ collections: { secrets, posts } },
+				{ realtime: { adapter } },
+			);
+			await runTestDbMigrations(setup.app);
+
+			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
+			const response = await routes.realtime.subscribe(
+				createRealtimeRequest([
+					collectionTopic("secrets"),
+					collectionTopic("posts"),
+				]),
+				{},
+				{
+					appContext: createTestContext({ accessMode: "user", role: "user" }),
+				},
+			);
+			const reader = createSSEReader(response.body!);
+			const initialEvents = [await reader.readEvent(), await reader.readEvent()];
+
+			expect(initialEvents).toEqual(
+				expect.arrayContaining([
+					expect.objectContaining({
+						event: "error",
+						data: expect.objectContaining({ topicId: "col-secrets" }),
+					}),
+					expect.objectContaining({
+						event: "snapshot",
+						data: expect.objectContaining({ topicId: "col-posts" }),
+					}),
+				]),
+			);
+			expect(setup.app.realtime.listeners.size).toBe(1);
+			expect(adapter.stopCalls).toBe(0);
+
+			await reader.close();
 		});
 
 		it("should filter payload fields based on field-level access", async () => {
@@ -1794,6 +1848,41 @@ describe("realtime", () => {
 	// ==========================================================================
 
 	describe("E2E SSE streaming", () => {
+		it("tears down the connection when controller.enqueue fails", async () => {
+			const adapter = new LifecycleTrackingRealtimeAdapter();
+			const items = collection("items")
+				.fields(({ f }) => ({ name: f.textarea().required() }))
+				.access({ read: true });
+			setup = await buildMockApp(
+				{ collections: { items } },
+				{ realtime: { adapter } },
+			);
+			await runTestDbMigrations(setup.app);
+
+			const enqueueSpy = spyOn(
+				ReadableStreamDefaultController.prototype,
+				"enqueue",
+			).mockImplementation(() => {
+				throw new Error("connection is gone");
+			});
+			let response: Response | undefined;
+			try {
+				const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
+				response = await routes.realtime.subscribe(
+					createRealtimeRequest([collectionTopic("items")]),
+					{},
+					undefined,
+				);
+				await new Promise((resolve) => setTimeout(resolve, 20));
+
+				expect(setup.app.realtime.listeners.size).toBe(0);
+				expect(adapter.stopCalls).toBe(1);
+			} finally {
+				enqueueSpy.mockRestore();
+				await response?.body?.cancel();
+			}
+		});
+
 		it("sends an error event and closes when the transport cannot start", async () => {
 			const adapter = new FailingStartRealtimeAdapter();
 			const items = collection("items")

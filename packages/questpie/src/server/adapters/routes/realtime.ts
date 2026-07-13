@@ -48,6 +48,13 @@ type TopicState = {
 	lastSeq: number;
 };
 
+function isPermanentAccessError(error: unknown): boolean {
+	return (
+		error instanceof ApiError &&
+		(error.code === "FORBIDDEN" || error.code === "UNAUTHORIZED")
+	);
+}
+
 // ============================================================================
 // Standalone Handler
 // ============================================================================
@@ -221,12 +228,16 @@ export async function realtimeSubscribe(
 
 	const stream = new ReadableStream({
 		start: (controller) => {
-			const unsubscribers: (() => void)[] = [];
+			const topicUnsubscribers = new Map<string, () => void>();
 			let closed = false;
-			let transportFailed = false;
+			let closeRequested = false;
 
 			// Per-topic state
 			const topicState = new Map<string, TopicState>();
+			const requestClose = () => {
+				closeRequested = true;
+				closeStream?.();
+			};
 
 			// Helper to send SSE event
 			const send = (event: string, data: unknown) => {
@@ -238,13 +249,23 @@ export async function realtimeSubscribe(
 						),
 					);
 				} catch {
-					// Controller may be closed
+					requestClose();
 				}
 			};
 
 			// Send per-topic error
 			const sendTopicError = (topicId: string, message: string) => {
 				send("error", { topicId, message });
+			};
+
+			const teardownTopic = (topicId: string) => {
+				const unsubscribe = topicUnsubscribers.get(topicId);
+				if (!unsubscribe) return;
+
+				topicUnsubscribers.delete(topicId);
+				topicState.delete(topicId);
+				unsubscribe();
+				if (topicUnsubscribers.size === 0) requestClose();
 			};
 
 			// Refresh a single topic
@@ -305,6 +326,7 @@ export async function realtimeSubscribe(
 						topicId,
 						error instanceof Error ? error.message : "Unknown error",
 					);
+					if (isPermanentAccessError(error)) teardownTopic(topicId);
 				} finally {
 					state.refreshInFlight = false;
 				}
@@ -334,7 +356,6 @@ export async function realtimeSubscribe(
 						with: topic.with,
 					},
 					(error) => {
-						transportFailed = true;
 						send("error", {
 							topicId: "*",
 							message:
@@ -342,10 +363,10 @@ export async function realtimeSubscribe(
 									? error.message
 									: "Realtime transport failed",
 						});
-						closeStream?.();
+						requestClose();
 					},
 				);
-				unsubscribers.push(unsub);
+				topicUnsubscribers.set(topic.id, unsub);
 			}
 
 			// Send initial errors for invalid topics
@@ -366,9 +387,12 @@ export async function realtimeSubscribe(
 				if (closed) return;
 				closed = true;
 				clearInterval(pingTimer);
-				for (const unsub of unsubscribers) {
+				request.signal.removeEventListener("abort", close);
+				for (const unsub of topicUnsubscribers.values()) {
 					unsub();
 				}
+				topicUnsubscribers.clear();
+				topicState.clear();
 				try {
 					controller.close();
 				} catch {
@@ -376,7 +400,7 @@ export async function realtimeSubscribe(
 				}
 			};
 			closeStream = close;
-			if (transportFailed) close();
+			if (closeRequested) close();
 
 			// Handle abort signal
 			if (request.signal) {
