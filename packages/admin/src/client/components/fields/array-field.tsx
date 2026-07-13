@@ -193,7 +193,6 @@ function PrimitiveArrayField({
 		: undefined;
 	const resolvedLabel = label ? resolveText(label) : undefined;
 	const fallbackLabel = resolvedLabel || "item";
-	const emptyLabel = t("array.empty", { name: fallbackLabel });
 	const addLabel = t("array.addItem", { name: fallbackLabel });
 	const form = useFormContext();
 	const { control } = form;
@@ -242,13 +241,10 @@ function PrimitiveArrayField({
 			}
 		>
 			<div className="qa-array-field space-y-3">
-				{fields.length === 0 ? (
-					<div className="panel-surface border-border-subtle border-dashed p-3">
-						<p className="text-muted-foreground text-sm text-pretty">
-							{resolvedPlaceholder || emptyLabel}
-						</p>
-					</div>
-				) : (
+				{/* Empty state IS the add button (dashed): a placeholder box that
+				    just restates "nothing here" above a second full-width button was
+				    two stacked blocks of chrome for zero information. */}
+				{fields.length !== 0 &&
 					fields.map((field, index) => {
 						const canMoveUp = orderable && index > 0;
 						const canMoveDown = orderable && index < fields.length - 1;
@@ -327,14 +323,17 @@ function PrimitiveArrayField({
 								)}
 							</div>
 						);
-					})
-				)}
+					})}
 				{!readOnly && canAddMore && (
 					<Button
 						type="button"
 						variant="outline"
 						onClick={handleAdd}
 						disabled={disabled}
+						className={cn(
+							fields.length === 0 &&
+								"border-border-subtle text-muted-foreground w-full border-dashed",
+						)}
 					>
 						<Icon icon="ph:plus" className="size-4" />
 						{addLabel}

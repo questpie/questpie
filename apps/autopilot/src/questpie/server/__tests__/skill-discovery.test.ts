@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+	buildHarnessSkills,
 	buildSkillsSystemPrompt,
 	COMPANY_SKILLS_PREFIX,
 	discoverSkills,
@@ -280,5 +281,76 @@ describe("buildSkillsSystemPrompt", () => {
 
 		const out = await buildSkillsSystemPrompt(collections);
 		expect(out).toBe("");
+	});
+});
+
+describe("buildHarnessSkills — published skills as harness-native skills", () => {
+	const SKILL_MD = [
+		"---",
+		"name: make-a-miniapp",
+		"description: Build a mini-app.",
+		"---",
+		"",
+		"# Make a mini-app",
+		"Step 1. Do the thing.",
+	].join("\n");
+
+	it("maps a published skill to {name, description, content} with frontmatter stripped", async () => {
+		const collections = fakeCollections({
+			company: [
+				skillRow(
+					`${COMPANY_SKILLS_PREFIX}make-a-miniapp/SKILL.md`,
+					{
+						name: "make-a-miniapp",
+						description: "Build a mini-app.",
+						status: "published",
+					},
+					{ body: SKILL_MD },
+				),
+			],
+		});
+
+		const skills = await buildHarnessSkills(collections);
+		expect(skills).toHaveLength(1);
+		expect(skills[0].name).toBe("make-a-miniapp");
+		expect(skills[0].description).toBe("Build a mini-app.");
+		expect(skills[0].content.trim()).toBe(
+			"# Make a mini-app\nStep 1. Do the thing.",
+		);
+		// The QUESTPIE frontmatter must NOT ride content — the adapter re-adds it.
+		expect(skills[0].content).not.toContain("name: make-a-miniapp");
+	});
+
+	it("excludes drafts (governance) and rows whose body was not loaded", async () => {
+		const collections = fakeCollections({
+			company: [
+				skillRow(
+					`${COMPANY_SKILLS_PREFIX}drafty/SKILL.md`,
+					{ name: "drafty", description: "unreviewed", status: "draft" },
+					{ body: SKILL_MD },
+				),
+				skillRow(`${COMPANY_SKILLS_PREFIX}no-body/SKILL.md`, {
+					name: "no-body",
+					description: "published but body not loaded",
+					status: "published",
+				}),
+			],
+		});
+
+		expect(await buildHarnessSkills(collections)).toEqual([]);
+	});
+
+	it("skips a published skill whose body has no frontmatter fence (fail-safe)", async () => {
+		const collections = fakeCollections({
+			company: [
+				skillRow(
+					`${COMPANY_SKILLS_PREFIX}broken/SKILL.md`,
+					{ name: "broken", description: "d", status: "published" },
+					{ body: "no frontmatter here, just text" },
+				),
+			],
+		});
+
+		expect(await buildHarnessSkills(collections)).toEqual([]);
 	});
 });

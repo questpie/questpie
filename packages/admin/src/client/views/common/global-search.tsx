@@ -452,11 +452,14 @@ export function GlobalSearch({
 			onOpenChange={(open) => !open && closeSearch()}
 		>
 			<ResponsiveDialogContent
-				className="qa-global-search gap-0 p-0 sm:max-w-3xl"
+				// Inherit the canonical floating surface (bg-popover + floating
+				// radius) from DialogContent/DrawerContent — just bound the height
+				// and clip so the input row + results read as one panel.
+				className="qa-global-search flex max-h-[80dvh] flex-col gap-0 overflow-hidden p-0 sm:max-w-3xl"
 				showCloseButton={false}
 			>
 				{/* Search Input */}
-				<div className="qa-global-search__input-area border-border-subtle bg-popover border-b p-3">
+				<div className="qa-global-search__input-area border-border-subtle shrink-0 border-b p-3">
 					<InputGroup className="h-12 border-transparent bg-transparent focus-within:border-transparent focus-within:ring-0 hover:border-transparent">
 						<InputGroupAddon align="inline-start" className="pl-0">
 							<Icon icon="ph:magnifying-glass" className="size-5" />
@@ -481,8 +484,9 @@ export function GlobalSearch({
 					</InputGroup>
 				</div>
 
-				{/* Results */}
-				<div className="qa-global-search__results max-h-[60vh] overflow-y-auto p-2">
+				{/* Results — flex to fill the bounded panel height (min-h-0 lets it
+				    actually scroll inside the flex column). */}
+				<div className="qa-global-search__results min-h-0 flex-1 overflow-y-auto p-2">
 					{hasResults ? (
 						<>
 							{/* Navigation Groups */}
@@ -538,8 +542,9 @@ export function GlobalSearch({
 					)}
 				</div>
 
-				{/* Footer with keyboard hints */}
-				<div className="qa-global-search__footer text-muted-foreground flex items-center justify-end gap-4 border-t px-3 py-2 text-xs">
+				{/* Footer with keyboard hints (desktop only — no physical keyboard
+				    to hint at on touch, and it wastes precious drawer height). */}
+				<div className="qa-global-search__footer text-muted-foreground hidden shrink-0 items-center justify-end gap-4 border-t px-3 py-2 text-xs sm:flex">
 					<span className="flex items-center gap-1">
 						<Kbd className="px-1 text-[10px]">↑</Kbd>
 						<Kbd className="px-1 text-[10px]">↓</Kbd>

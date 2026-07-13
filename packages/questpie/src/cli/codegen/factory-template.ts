@@ -167,7 +167,18 @@ export function generateFactoryTemplate(
 	const fieldTypesCategory = target.categories.fieldTypes;
 	const runtimeFieldImports: Array<{ name: string; from: string }> =
 		fieldTypesCategory?.factoryImports ?? [];
-	if (runtimeFieldImports.length > 0 || userFieldsImportPath) {
+	// App-land field types discovered from the `fields/` directory. The index
+	// template registers them on the app config, but `f.*` is built from THESE
+	// defs — without this merge a discovered `fieldType()` augments the TYPES
+	// (FieldTypeKeys) yet throws "Unknown field type" at runtime.
+	const discoveredFieldTypeFiles = [
+		...(discoveredCategories?.get("fieldTypes")?.values() ?? []),
+	].sort((a, b) => a.key.localeCompare(b.key));
+	if (
+		runtimeFieldImports.length > 0 ||
+		userFieldsImportPath ||
+		discoveredFieldTypeFiles.length > 0
+	) {
 		lines.push(
 			"// ── Runtime Field Imports ──────────────────────────────────",
 		);
@@ -176,6 +187,13 @@ export function generateFactoryTemplate(
 		}
 		if (userFieldsImportPath) {
 			lines.push(`import _userFields from "${userFieldsImportPath}";`);
+		}
+		for (const file of discoveredFieldTypeFiles) {
+			const importSpec =
+				file.exportType === "named" && file.namedExportName
+					? `{ ${file.namedExportName} as ${file.varName} }`
+					: file.varName;
+			lines.push(`import ${importSpec} from "${file.importPath}";`);
 		}
 		lines.push("");
 	}
@@ -194,6 +212,25 @@ export function generateFactoryTemplate(
 		}
 		if (userFieldsImportPath) {
 			spreads.push("..._userFields");
+		}
+		if (discoveredFieldTypeFiles.length > 0) {
+			// fieldType() files export a FieldTypeDefinition ({ name, factory });
+			// the field defs map holds bare factories, so unwrap here.
+			lines.push(
+				"// App field types (fields/ directory) — unwrap fieldType() definitions to factories",
+			);
+			lines.push("const _appFieldTypes = {");
+			for (const file of discoveredFieldTypeFiles) {
+				lines.push(`\t${JSON.stringify(file.key)}: ${file.varName}.factory,`);
+			}
+			lines.push("} as const;");
+			// Type map of the app's own field types (name → builder factory), so
+			// `f.color()` / `f.rating()` are first-class in FieldTypesMap below —
+			// not just wired at runtime. Mirrors how modules contribute their
+			// fields via `_FieldTypes` (see module-template.ts).
+			lines.push("type _AppFieldTypesMap = typeof _appFieldTypes;");
+			lines.push("");
+			spreads.push("..._appFieldTypes");
 		}
 		lines.push(
 			"// Merged field factories — builtins + module-contributed (e.g. richText, blocks) + user fields",
@@ -411,8 +448,18 @@ export function generateFactoryTemplate(
 		lines.push("declare global {");
 		lines.push("\tnamespace Questpie {");
 
-		// Ensure FieldTypesMap always includes builtin fields
-		lines.push("\t\tinterface FieldTypesMap extends BuiltinFields {}");
+		// Ensure FieldTypesMap always includes builtin fields — plus the app's
+		// own `server/fields/` field types when any were discovered, so custom
+		// `f.<name>()` field types are first-class in the type system (not just
+		// at runtime). Without this, `f.color()` in a collection is a type error
+		// even though it works at runtime.
+		if (discoveredFieldTypeFiles.length > 0) {
+			lines.push(
+				"\t\tinterface FieldTypesMap extends BuiltinFields, _AppFieldTypesMap {}",
+			);
+		} else {
+			lines.push("\t\tinterface FieldTypesMap extends BuiltinFields {}");
+		}
 		lines.push(
 			"\t\tinterface FieldTypeRegistry extends Record<keyof _AllFieldTypes, {}> {}",
 		);

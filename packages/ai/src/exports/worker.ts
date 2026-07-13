@@ -1,20 +1,30 @@
 import * as os from "node:os";
 
+import type { HarnessCoreRuntime } from "../server/modules/ai/lib/harness-core.js";
 import { generateSecret } from "../server/modules/ai/services/worker-manager.js";
-import { executeRun } from "../server/worker/execute-run.js";
 import {
-	createSpawnAgentRunner,
-	prepareWorkerVolume,
-	type DirectSpawnRuntime,
-} from "../server/worker/spawn-agent-runner.js";
+	executeRun,
+	type ExecuteRunDeps,
+} from "../server/worker/execute-run.js";
+import { prepareWorkerVolume } from "../server/worker/worker-volume.js";
+
+// Public worker-entry alias for the harness-core runtime union (the legacy
+// harness-agent-runner that used to own this name is deleted).
+export type HarnessRuntime = HarnessCoreRuntime;
 
 export interface EmbeddedWorkerConfig {
-	runtimes: { runtime: DirectSpawnRuntime; binaryPath?: string }[];
+	runtimes: { runtime: HarnessRuntime; binaryPath?: string }[];
 	maxConcurrentRuns?: number;
 	workerDir?: string;
 	mcpServers?: unknown[];
+	/** Local-host sandbox settings (e.g. passthroughHomeForAuth for a personal machine). */
+	sandbox?: ExecuteRunDeps["sandbox"];
 	name?: string;
 	pollIntervalMs?: number;
+	/** App-specific harness skill resolver (autopilot buildHarnessSkills). */
+	resolveSkills?: (
+		run: Record<string, unknown>,
+	) => Promise<unknown[]> | unknown[];
 }
 
 export async function startAIWorker(
@@ -25,15 +35,25 @@ export async function startAIWorker(
 ): Promise<{ stop(): Promise<void>; workerId: string }> {
 	const workerDir = config.workerDir ?? ".questpie/ai-worker";
 	const volume = await prepareWorkerVolume(workerDir);
-	const runner = createSpawnAgentRunner({
-		workerDir,
-		runtimes: config.runtimes,
-		mcpServers: config.mcpServers,
-	});
 
 	const secret = generateSecret();
 	const hostname = config.name ?? os.hostname();
 	const workerManager = ctx.services?.workerManager;
+	const workflows = ctx.workflows;
+
+	// runHarnessRun + finalizeRun execute against run_links via the worker's
+	// system-context (collections/kv) + injected autopilot deps (workflows /
+	// knowledgeResource / skills).
+	const executeDeps: ExecuteRunDeps = {
+		collections: ctx.collections,
+		kv: ctx.kv,
+		workflows,
+		knowledgeResource: ctx.services?.knowledgeResource,
+		workerDir,
+		mcpServers: config.mcpServers,
+		sandbox: config.sandbox,
+		resolveSkills: config.resolveSkills,
+	};
 
 	let workerId = "embedded";
 	const maxConcurrentRuns =
@@ -57,9 +77,9 @@ export async function startAIWorker(
 	}
 
 	let running = true;
-	const activeRuns = new Map<Promise<void>, DirectSpawnRuntime>();
+	const activeRuns = new Map<Promise<void>, HarnessRuntime>();
 	const runtimes = Array.from(new Set(config.runtimes.map((r) => r.runtime)));
-	const activeRunsForRuntime = (runtime: DirectSpawnRuntime) => {
+	const activeRunsForRuntime = (runtime: HarnessRuntime) => {
 		let count = 0;
 		for (const activeRuntime of activeRuns.values()) {
 			if (activeRuntime === runtime) count++;
@@ -68,14 +88,9 @@ export async function startAIWorker(
 	};
 	const startExecution = (claimed: any) => {
 		if (!claimed || !workerManager) return;
-		const runtime = claimed.spawn?.runtime as DirectSpawnRuntime | undefined;
+		const runtime = claimed.spawn?.runtime as HarnessRuntime | undefined;
 		if (!runtime) return;
-		const execution = executeRun(
-			runner,
-			workerManager,
-			claimed,
-			workerId,
-		).finally(() => {
+		const execution = executeRun(executeDeps, claimed).finally(() => {
 			activeRuns.delete(execution);
 		});
 		activeRuns.set(execution, runtime);
@@ -93,6 +108,18 @@ export async function startAIWorker(
 							limit: 1,
 						});
 						if (!claimed) break;
+						// Emit run.claimed BEFORE run.completed so the task-pipeline
+						// workflow's waitForEvent('run.claimed') resolves (the kept
+						// chat-status mirror never emits it).
+						if (claimed.run && workflows?.sendEvent) {
+							void Promise.resolve(
+								workflows.sendEvent(
+									"run.claimed",
+									{ runId: claimed.lease.runId, workerId },
+									{ runId: claimed.lease.runId },
+								),
+							).catch(() => {});
+						}
 						startExecution(claimed);
 					}
 				}
@@ -118,5 +145,3 @@ export async function startAIWorker(
 		},
 	};
 }
-
-export type { DirectSpawnRuntime };

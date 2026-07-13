@@ -16,7 +16,9 @@ import {
 	resolveCollectionRelationFields,
 	resolveCollectionWriteRule,
 } from "../apps/mini-app-runner";
-import { asRecord, relationId } from "../lib/records";
+import { createAiRunLink } from "../lib/ai-run-links";
+import { asRecord, relationId, stringFrom } from "../lib/records";
+import { resolveRuntimeSelection } from "../lib/runtime-selection";
 import {
 	computeNextRunAt,
 	dateOrNull,
@@ -138,17 +140,6 @@ async function cancelActiveExecution(
 				error: `Cancelled by replacement schedule run ${schedule.id}`,
 			},
 		});
-		const aiRunId = relationId(run.aiRun);
-		if (aiRunId) {
-			await ctx.collections.ai_runs.updateById({
-				id: aiRunId,
-				data: {
-					status: "cancelled",
-					endedAt: new Date(),
-					error: `Cancelled by replacement schedule run ${schedule.id}`,
-				},
-			});
-		}
 	}
 	await ctx.collections.activity.create({
 		actor: "job:schedule-tick",
@@ -188,11 +179,12 @@ async function triggerTaskSchedule(
 			| "medium"
 			| "high"
 			| "urgent",
-		project: template.projectId ?? template.project_id ?? undefined,
+		project:
+			stringFrom(template.projectId) ?? stringFrom(template.project_id) ?? undefined,
 		scopeType: (template.projectId || template.project_id
 			? "project"
 			: "company") as "project" | "company",
-		model: template.modelId ?? template.model_id ?? undefined,
+		model: stringFrom(template.modelId) ?? stringFrom(template.model_id) ?? undefined,
 		queue: template.queue != null ? String(template.queue) : undefined,
 		scheduledBy: scheduleActor(schedule.id),
 		createdBy: scheduleActor(schedule.id),
@@ -279,24 +271,39 @@ async function triggerChatSchedule(
 		metadata: { mode: "chat", messageId: message.id },
 	});
 
-	const workflow = await workflowsFromContext(ctx).trigger(
-		"chat-query",
-		{
-			chatSessionId: session.id,
-			messageId: message.id,
-			prompt,
-			projectId: projectId ?? null,
-			taskId: taskId ?? null,
-			scheduleExecutionId: execution.id,
-			modelId:
-				typeof template.modelId === "string"
-					? template.modelId
-					: typeof template.model_id === "string"
-						? template.model_id
-						: null,
-		},
-		{ idempotencyKey: `schedule:${schedule.id}:${execution.id}:chat` },
+	const modelId =
+		typeof template.modelId === "string"
+			? template.modelId
+			: typeof template.model_id === "string"
+				? template.model_id
+				: undefined;
+
+	// The run_links row is the execution record the fleet worker claims +
+	// streams; the stream tail resolves chat_sessions.activeRun →
+	// run_links.activeStreamId. The `run-stream:…` id is logged below.
+	const runtime = await resolveRuntimeSelection(
+		{ collections: ctx.collections } as never,
+		{ modelId, projectId },
 	);
+	const row = await createAiRunLink({
+		ctx: ctx as never,
+		runtime,
+		initiatedBy: "schedule",
+		kind: "chat",
+		chatSessionId: session.id,
+		chatMessageId: message.id,
+		instructions: prompt,
+		projectId,
+		taskId,
+		scheduleId: schedule.id,
+		scheduleExecutionId: execution.id,
+		linkMetadata: { modelId: modelId ?? null },
+	});
+	await ctx.collections.chat_sessions.updateById({
+		id: session.id,
+		data: { activeRun: row.id, activeStreamId: row.activeStreamId },
+	});
+	const streamId = row.activeStreamId ?? undefined;
 
 	await ctx.collections.activity.create({
 		actor: "job:schedule-tick",
@@ -307,7 +314,7 @@ async function triggerChatSchedule(
 		details: {
 			scheduleId: schedule.id,
 			executionId: execution.id,
-			workflowInstanceId: workflow.instanceId,
+			streamId: streamId ?? null,
 			chatSessionId: session.id,
 			messageId: message.id,
 		},
@@ -549,8 +556,11 @@ export default job({
 			if (!isDue(schedule, now)) continue;
 
 			try {
-				const active = await hasActiveExecution(ctx, schedule.id);
 				const policy = String(schedule.concurrencyPolicy ?? "allow");
+				const active =
+					policy === "skip" || policy === "replace"
+						? await hasActiveExecution(ctx, schedule.id)
+						: null;
 				if (active && policy === "skip") {
 					const execution = await ctx.collections.schedule_executions.create({
 						schedule: schedule.id,

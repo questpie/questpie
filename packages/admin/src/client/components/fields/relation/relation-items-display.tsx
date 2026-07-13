@@ -15,7 +15,6 @@ import { useResolveText, useTranslation } from "../../../i18n/hooks";
 import type { I18nText } from "../../../i18n/types";
 import type {
 	CollectionFieldsConfig,
-	IconType,
 	RelationDisplayFields,
 	RelationDisplayMode,
 	RelationDisplayProps,
@@ -42,11 +41,6 @@ interface RelationItemsDisplayProps {
 	 * Collection name
 	 */
 	collection: string;
-
-	/**
-	 * Collection icon (React component or server ComponentReference)
-	 */
-	collectionIcon?: IconType;
 
 	/**
 	 * Action handlers
@@ -113,7 +107,6 @@ export function RelationItemsDisplay({
 	display = "list",
 	items,
 	collection,
-	collectionIcon,
 	actions,
 	editable = false,
 	orderable = false,
@@ -136,7 +129,6 @@ export function RelationItemsDisplay({
 	const displayProps: RelationDisplayProps = {
 		items,
 		collection,
-		collectionIcon,
 		actions,
 		editable,
 		orderable,

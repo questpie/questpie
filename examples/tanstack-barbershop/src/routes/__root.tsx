@@ -34,7 +34,10 @@ export const Route = createRootRoute({
 			},
 			{
 				name: "viewport",
-				content: "width=device-width, initial-scale=1",
+				// viewport-fit=cover: required for env(safe-area-inset-*) to be
+				// non-zero on notched phones — the admin's bottom action bars pad
+				// themselves clear of the home indicator with it.
+				content: "width=device-width, initial-scale=1, viewport-fit=cover",
 			},
 			{
 				title: "TanStack Start Starter",

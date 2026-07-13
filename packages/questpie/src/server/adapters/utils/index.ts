@@ -11,6 +11,11 @@ export {
 	resolveSession,
 } from "./context.js";
 export {
+	mcpAudienceForApp,
+	type ResolvedOAuthPrincipal,
+	resolveOAuthPrincipal,
+} from "./oauth-principal.js";
+export {
 	parseFindOneOptions,
 	parseFindOptions,
 	parseGlobalGetOptions,

@@ -18,7 +18,6 @@ import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
-	DropdownMenuLabel,
 	DropdownMenuSeparator,
 	DropdownMenuSub,
 	DropdownMenuSubContent,
@@ -517,7 +516,7 @@ function QuestpieSymbol({ className }: { className?: string }) {
 				strokeLinecap="square"
 				className="text-foreground"
 			/>
-			<path d="M23 13H13V23H23V13Z" fill="#B700FF" />
+			<path d="M23 13H13V23H23V13Z" fill="var(--primary, #B700FF)" />
 		</svg>
 	);
 }
@@ -1199,69 +1198,41 @@ function UserFooter({
 							{shouldShowThemeToggle && (
 								<>
 									<DropdownMenuSeparator />
-									{isMobile ? (
-										<>
-											<DropdownMenuLabel>
-												{t("ui.toggleTheme")}
-											</DropdownMenuLabel>
+									<DropdownMenuSub>
+										<DropdownMenuSubTrigger>
+											<Icon icon={currentThemeOption.icon} />
+											{t("ui.toggleTheme")}
+										</DropdownMenuSubTrigger>
+										<DropdownMenuSubContent className="min-w-40">
 											{themeItems}
-										</>
-									) : (
-										<DropdownMenuSub>
-											<DropdownMenuSubTrigger>
-												<Icon icon={currentThemeOption.icon} />
-												{t("ui.toggleTheme")}
-											</DropdownMenuSubTrigger>
-											<DropdownMenuSubContent className="min-w-40">
-												{themeItems}
-											</DropdownMenuSubContent>
-										</DropdownMenuSub>
-									)}
+										</DropdownMenuSubContent>
+									</DropdownMenuSub>
 								</>
 							)}
 							{/* UI Language Switcher */}
-							{hasMultipleUiLocales &&
-								(isMobile ? (
-									<>
-										<DropdownMenuSeparator />
-										<DropdownMenuLabel>
-											{t("locale.uiLanguage")}
-										</DropdownMenuLabel>
+							{hasMultipleUiLocales && (
+								<DropdownMenuSub>
+									<DropdownMenuSubTrigger>
+										<Icon icon="ph:globe" />
+										{t("locale.uiLanguage")}
+									</DropdownMenuSubTrigger>
+									<DropdownMenuSubContent>
 										{uiLocaleItems}
-									</>
-								) : (
-									<DropdownMenuSub>
-										<DropdownMenuSubTrigger>
-											<Icon icon="ph:globe" />
-											{t("locale.uiLanguage")}
-										</DropdownMenuSubTrigger>
-
-										<DropdownMenuSubContent>
-											{uiLocaleItems}
-										</DropdownMenuSubContent>
-									</DropdownMenuSub>
-								))}
+									</DropdownMenuSubContent>
+								</DropdownMenuSub>
+							)}
 							{/* Content Language Switcher */}
-							{hasMultipleContentLocales &&
-								(isMobile ? (
-									<>
-										<DropdownMenuSeparator />
-										<DropdownMenuLabel>
-											{t("locale.contentLanguage")}
-										</DropdownMenuLabel>
+							{hasMultipleContentLocales && (
+								<DropdownMenuSub>
+									<DropdownMenuSubTrigger>
+										<Icon icon="ph:translate" />
+										{t("locale.contentLanguage")}
+									</DropdownMenuSubTrigger>
+									<DropdownMenuSubContent>
 										{contentLocaleItems}
-									</>
-								) : (
-									<DropdownMenuSub>
-										<DropdownMenuSubTrigger>
-											<Icon icon="ph:translate" />
-											{t("locale.contentLanguage")}
-										</DropdownMenuSubTrigger>
-										<DropdownMenuSubContent>
-											{contentLocaleItems}
-										</DropdownMenuSubContent>
-									</DropdownMenuSub>
-								))}
+									</DropdownMenuSubContent>
+								</DropdownMenuSub>
+							)}
 							<DropdownMenuSeparator />
 							<DropdownMenuItem variant="destructive" onClick={handleLogout}>
 								<Icon icon="ph:sign-out" className="size-4" />

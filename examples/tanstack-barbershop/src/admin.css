@@ -9,17 +9,24 @@
 
 /* Smoke-test brand overrides — drives a pink primary + brush heading font.
    Demonstrates that visual whitelabeling is purely CSS; nothing in admin
-   config needs to change. */
-:root,
-.light {
-	--primary: oklch(0.65 0.2 25);
-	--ring: oklch(0.65 0.2 25);
-	--sidebar-primary: oklch(0.65 0.2 25);
-	--font-heading: "Caveat Brush", system-ui, sans-serif;
-}
+   config needs to change.
 
+   Selectors mirror base.css exactly (:root,.dark then .light,:root.light):
+   base.css defines light tokens with :root.light (0-2-0), so a plain .light
+   override would silently lose in light mode. At equal specificity these
+   later rules win in both modes by source order. */
+:root,
 .dark {
 	--primary: oklch(0.78 0.18 25);
 	--ring: oklch(0.78 0.18 25);
 	--sidebar-primary: oklch(0.78 0.18 25);
+	--font-heading: "Caveat Brush", system-ui, sans-serif;
+}
+
+.light,
+:root.light {
+	--primary: oklch(0.65 0.2 25);
+	--ring: oklch(0.65 0.2 25);
+	--sidebar-primary: oklch(0.65 0.2 25);
+	--font-heading: "Caveat Brush", system-ui, sans-serif;
 }

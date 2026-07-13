@@ -1,7 +1,6 @@
 {
 	"name": "@questpie/ai",
 	"version": "3.0.0",
-	"private": true,
 	"description": "AI module for QuestPie run and worker execution",
 	"repository": {
 		"type": "git",
@@ -28,6 +27,10 @@
 		"./client/modules/ai": {
 			"types": "./src/exports/client/modules/ai.ts",
 			"default": "./src/exports/client/modules/ai.ts"
+		},
+		"./harness-core": {
+			"types": "./src/exports/harness-core.ts",
+			"default": "./src/exports/harness-core.ts"
 		},
 		"./modules/ai": {
 			"types": "./src/exports/modules/ai.ts",
@@ -57,6 +60,10 @@
 				"types": "./dist/client/modules/ai.d.mts",
 				"default": "./dist/client/modules/ai.mjs"
 			},
+			"./harness-core": {
+				"types": "./dist/harness-core.d.mts",
+				"default": "./dist/harness-core.mjs"
+			},
 			"./modules/ai": {
 				"types": "./dist/modules/ai.d.mts",
 				"default": "./dist/modules/ai.mjs"
@@ -77,14 +84,14 @@
 		"questpie:generate": "bun questpie generate --verbose"
 	},
 	"dependencies": {
-		"@agentclientprotocol/claude-agent-acp": "0.37.0",
-		"@agentclientprotocol/codex-acp": "0.0.44",
-		"@agentclientprotocol/sdk": "0.22.1",
+		"@ai-sdk/harness": "1.0.0-canary.9",
+		"@ai-sdk/harness-claude-code": "1.0.0-canary.5",
+		"@ai-sdk/provider-utils": "5.0.0-canary.48",
 		"@iconify/react": "^6.0.2",
 		"@questpie/admin": "workspace:*",
-		"ai": "^6.0.0",
+		"ai": "7.0.0-canary.173",
 		"questpie": "workspace:*",
-		"spawn-agent": "0.0.1"
+		"ws": "^8.20.1"
 	},
 	"devDependencies": {
 		"@tanstack/react-query": "^5.x",

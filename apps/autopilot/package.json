@@ -36,7 +36,8 @@
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
-		"@better-auth/api-key": "^1.6.11",
+		"@ai-sdk/react": "4.0.0-canary.173",
+		"@better-auth/api-key": "^1.6.23",
 		"@questpie/admin": "workspace:*",
 		"@questpie/ai": "workspace:*",
 		"@questpie/executor": "workspace:*",
@@ -47,11 +48,14 @@
 		"@tanstack/react-query": "^5.62.11",
 		"@tanstack/react-router": "^1.132.0",
 		"@tanstack/react-start": "^1.132.0",
+		"ai": "7.0.0-canary.173",
 		"drizzle-orm": "1.0.0-beta.6-4414a19",
 		"nitro": "latest",
 		"questpie": "workspace:*",
 		"react": "^19.2.0",
 		"react-dom": "^19.2.0",
+		"redis": "^4.7.0",
+		"streamdown": "2.5.0",
 		"tailwind-merge": "^3.4.0",
 		"tailwindcss": "^4.0.6",
 		"zod": "^4.2.1"

@@ -3,7 +3,7 @@
 // Typed factory functions with plugin extensions. Regenerate with: questpie generate
 
 // ── Core Imports ───────────────────────────────────────────
-import { CollectionBuilder, GlobalBuilder, wrapBuilderWithExtensions, builtinFields, type EmptyCollectionState, type EmptyGlobalState, type BuiltinFields, Field } from "questpie/builders";
+import { CollectionBuilder, GlobalBuilder, wrapBuilderWithExtensions, builtinFields, type EmptyCollectionState, type EmptyGlobalState, type BuiltinFields, type CollectionBuilderState, type GlobalBuilderState, type FieldState, Field } from "questpie/builders";
 
 // ── Runtime Field Imports ──────────────────────────────────
 import { adminFields } from "@questpie/admin/fields";
@@ -32,6 +32,19 @@ const _allFieldDefs = Object.fromEntries(
 	Object.entries(_rawFieldDefs).map(([k, v]) => [k, _wrapFieldFactory(v)])
 ) as unknown as typeof _rawFieldDefs;
 
+// ── Entity key registry (names only — acyclic by construction) ─────
+declare global {
+	namespace Questpie {
+		interface CollectionKeys { activity: unknown; admin_audit_log: unknown; agent_memory: unknown; assets: unknown; chat_messages: unknown; chat_sessions: unknown; document_store: unknown; environments: unknown; memory_settings: unknown; models: unknown; projects: unknown; providers: unknown; run_links: unknown; schedule_executions: unknown; schedules: unknown; scripts: unknown; secrets: unknown; task_relations: unknown; tasks: unknown }
+		interface JobKeys { cleanup: unknown; runAvailable: unknown; scheduleTick: unknown; taskEscalation: unknown }
+		interface RouteKeys { "apps/[appId]/[fn]:DELETE": unknown; "apps/[appId]/[fn]:GET": unknown; "apps/[appId]/[fn]:PATCH": unknown; "apps/[appId]/[fn]:POST": unknown; "apps/[appId]/[fn]:PUT": unknown; "apps/[appId]/fs/[...path]:GET": unknown; "apps/[appId]/fs/[...path]:PUT": unknown; "apps/[appId]/token": unknown; chat: unknown; "chat/[chatId]/approve": unknown; "chat/[chatId]/cancel": unknown; "chat/[chatId]/stream": unknown; events: unknown; intake: unknown; "runs/[runId]": unknown; "runs/[runId]/artifacts:GET": unknown; "runs/[runId]/artifacts:POST": unknown; "runs/[runId]/artifacts/[artifactId]/content": unknown; "runs/[runId]/stream": unknown; runStream: unknown; "workspaceInspection/content": unknown; "workspaceInspection/diff": unknown; "workspaceInspection/list": unknown; "workspaceInspection/read": unknown }
+		interface ServiceKeys { gitProviderAdapters: unknown; knowledgeResource: unknown }
+		interface ViewKeys { fileDetail: unknown; filesView: unknown; taskDetail: unknown }
+		interface WorkflowKeys { taskPipeline: unknown }
+		interface McpToolKeys { artifact_create: unknown; knowledge_delete: unknown; knowledge_list: unknown; knowledge_read: unknown; knowledge_search: unknown; knowledge_write: unknown; run_artifact_content: unknown; run_artifact_create: unknown; run_artifacts: unknown; run_code: unknown; run_events: unknown; run_get: unknown; run_list: unknown; schedule_get: unknown; schedule_list: unknown; schedule_trigger: unknown; task_cancel: unknown; task_create: unknown; task_dependencies: unknown; task_dependents: unknown; task_get: unknown; task_list: unknown; task_retry: unknown; task_update: unknown }
+	}
+}
+
 // ── Plugin Imports ─────────────────────────────────────────
 import { type AdminCollectionConfig, type AdminConfigContext, type ListViewConfig, type ListViewConfigContext, type FilterViewsByKind, type FormViewConfig, type FormViewConfigContext, type PreviewConfig, type ServerActionsConfig, type ActionsConfigContext, type AdminGlobalConfig, type AdminConfigInput, createViewCallbackProxy, createComponentCallbackProxy, createActionCallbackProxy, createActionFieldBuilderProxy } from "@questpie/admin/factories";
 import { type AppConfigInput, type AuthConfig } from "questpie/types";
@@ -56,19 +69,19 @@ type _AllFieldTypes = Questpie.FieldTypesMap;
 // Type augmentations — generated from plugin registries
 // ════════════════════════════════════════════════════════════
 
-declare module "questpie" {
-	interface CollectionBuilder<TState> {
+declare module "questpie/builders" {
+	interface CollectionBuilder<TState extends CollectionBuilderState> {
 		admin(configFn: AdminCollectionConfig | ((ctx: AdminConfigContext<_ComponentsRecord>) => AdminCollectionConfig)): CollectionBuilder<TState>;
 		list(configFn: (ctx: ListViewConfigContext<TState extends { fieldDefinitions: infer F extends Record<string, unknown> } ? F : Record<string, unknown>, FilterViewsByKind<_ViewsRecord, "list">, _ComponentsRecord>) => ListViewConfig): CollectionBuilder<TState>;
 		form(configFn: (ctx: FormViewConfigContext<TState extends { fieldDefinitions: infer F extends Record<string, unknown> } ? F : Record<string, unknown>, FilterViewsByKind<_ViewsRecord, "form">>) => FormViewConfig): CollectionBuilder<TState>;
 		preview(config: PreviewConfig): CollectionBuilder<TState>;
 		actions(configFn: (ctx: ActionsConfigContext<Record<string, unknown>, _ComponentsRecord>) => ServerActionsConfig): CollectionBuilder<TState>;
 	}
-	interface GlobalBuilder<TState> {
+	interface GlobalBuilder<TState extends GlobalBuilderState> {
 		admin(configFn: AdminGlobalConfig | ((ctx: AdminConfigContext<_ComponentsRecord>) => AdminGlobalConfig)): GlobalBuilder<TState>;
 		form(configFn: (ctx: FormViewConfigContext<TState extends { fieldDefinitions: infer F extends Record<string, unknown> } ? F : Record<string, unknown>, FilterViewsByKind<_ViewsRecord, "form">>) => FormViewConfig): GlobalBuilder<TState>;
 	}
-	interface Field<TState> {
+	interface Field<TState extends FieldState = FieldState> {
 		admin(config: unknown): Field<TState>;
 		form(configFn: (ctx: { f: Record<string, string> }) => { fields: import('@questpie/admin/factories').FieldLayoutItem[] }): Field<TState>;
 	}

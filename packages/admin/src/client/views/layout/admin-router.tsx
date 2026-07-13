@@ -54,6 +54,9 @@ const AUTH_ROUTE_SEGMENTS = new Set([
 	"reset-password",
 	"accept-invite",
 	"setup",
+	// OAuth 2.1 consent (`/admin/oauth/consent`) — rendered standalone in the
+	// auth layout (no sidebar), like the other pre-session auth pages.
+	"oauth",
 ]);
 const componentLoaderCache = new WeakMap<
 	() => Promise<any>,

@@ -229,26 +229,29 @@ export function WidgetCard({
 			)}
 		>
 			{hasHeader && (
-				<CardHeader className="qa-widget-card__header shrink-0">
+				<CardHeader className="qa-widget-card__header relative shrink-0">
 					<div className="flex min-w-0 items-center gap-2">
 						{resolveIconElement(icon, {
 							className: "size-4 text-muted-foreground",
 						})}
 						<div className="min-w-0 flex-1">
 							{title && (
-								<CardTitle className="truncate text-sm font-medium">
+								<CardTitle
+									title={title}
+									className="line-clamp-2 text-sm leading-snug font-medium"
+								>
 									{title}
 								</CardTitle>
 							)}
 							{description && (
-								<CardDescription className="truncate">
+								<CardDescription title={description} className="truncate">
 									{description}
 								</CardDescription>
 							)}
 						</div>
 					</div>
 					{(onRefresh || onExpand || actions?.length) && (
-						<CardAction>
+						<CardAction className="absolute top-3 right-3 z-10 opacity-0 transition-opacity group-hover/card:opacity-100 focus-within:opacity-100 has-[[data-state=open]]:opacity-100">
 							<div className="flex items-center gap-1">
 								{/* Show first action directly, rest in dropdown on small widgets */}
 								{actions && actions.length > 0 && (

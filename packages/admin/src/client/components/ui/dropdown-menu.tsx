@@ -4,7 +4,15 @@ import { Menu as MenuPrimitive } from "@base-ui/react/menu";
 import { Icon } from "@iconify/react";
 import type * as React from "react";
 
+import { useMediaQuery } from "../../hooks/use-media-query";
 import { cn } from "../../lib/utils";
+
+/**
+ * Submenus default to `openOnHover` — which on touch (no hover) means a tap
+ * can only OPEN a submenu, never close it, and opening is racy. Gate hover
+ * on a real hover-capable pointer so touch devices get reliable tap-to-toggle.
+ */
+const HOVER_CAPABLE = "(hover: hover) and (pointer: fine)";
 
 function DropdownMenu({ ...props }: MenuPrimitive.Root.Props) {
 	return <MenuPrimitive.Root data-slot="dropdown-menu" {...props} />;
@@ -120,10 +128,12 @@ function DropdownMenuSubTrigger({
 }: MenuPrimitive.SubmenuTrigger.Props & {
 	inset?: boolean;
 }) {
+	const canHover = useMediaQuery(HOVER_CAPABLE);
 	return (
 		<MenuPrimitive.SubmenuTrigger
 			data-slot="dropdown-menu-sub-trigger"
 			data-inset={inset}
+			openOnHover={canHover}
 			className={cn(
 				"qa-dropdown-menu__sub-trigger item-surface focus:border-border focus:bg-accent focus:text-accent-foreground data-open:border-border data-open:bg-accent data-open:text-accent-foreground not-data-[variant=destructive]:focus:**:text-accent-foreground flex min-h-9 cursor-default items-center gap-2.5 px-3 py-2 text-sm outline-hidden select-none data-[inset]:pl-9 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
 				className,

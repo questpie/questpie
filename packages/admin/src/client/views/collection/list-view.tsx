@@ -378,7 +378,8 @@ function ListViewInner({
 	viewConfig,
 	navigate,
 	basePath = "/admin",
-	showSearch = true,
+	// Off by default — record search is consolidated into the global search.
+	showSearch = false,
 	showFilters = true,
 	showToolbar = true,
 	realtime,

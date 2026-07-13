@@ -30,6 +30,15 @@ type WorkflowEvent = {
 	data?: unknown;
 };
 
+function relationId(value: unknown): string | null {
+	if (typeof value === "string") return value;
+	if (typeof value === "object" && value && "id" in value) {
+		const id = (value as { id?: unknown }).id;
+		return typeof id === "string" ? id : null;
+	}
+	return null;
+}
+
 describe("schedule-tick job execution", () => {
 	let setup:
 		| {
@@ -44,8 +53,6 @@ describe("schedule-tick job execution", () => {
 
 		setup = await buildMockApp({
 			collections: {
-				ai_run_events: aiModule.collections.ai_run_events,
-				ai_runs: aiModule.collections.ai_runs,
 				ai_worker_leases: aiModule.collections.ai_worker_leases,
 				ai_workers: aiModule.collections.ai_workers,
 				activity,
@@ -85,9 +92,23 @@ describe("schedule-tick job execution", () => {
 			},
 		};
 
+		const mockQueue = {
+			// createAiRunLink's best-effort "worker, wake up" kick.
+			runAvailable: {
+				async publish(payload: unknown) {
+					workflowEvents.push({
+						event: "queue:run-available",
+						data: payload,
+					});
+					return "mock-job-id";
+				},
+			},
+		};
+
 		const createContext = createContextFactory(setup!.app);
 		const ctx = await createContext({ accessMode: "system" });
 		(ctx as any).workflows = workflows;
+		(ctx as any).queue = mockQueue;
 
 		return scheduleTick.handler({
 			...ctx,
@@ -156,7 +177,7 @@ describe("schedule-tick job execution", () => {
 		});
 	});
 
-	it("creates a chat session and triggers chat-query for a due chat-mode schedule", async () => {
+	it("creates a chat session and mints a chat run for a due chat-mode schedule", async () => {
 		const now = new Date("2026-05-07T10:00:00.000Z");
 		const pastDue = new Date("2026-05-07T09:59:00.000Z");
 
@@ -199,12 +220,34 @@ describe("schedule-tick job execution", () => {
 			content: "Summarize yesterday's activity for 2026-05-07",
 		});
 
+		// The run_links row is the execution record the fleet worker claims —
+		// kind="chat", schedule-initiated, linked to the schedule execution.
+		const runs = await setup!.app.collections.run_links.find({
+			where: { chatSession: result.results[0].chatSessionId },
+			limit: 10,
+		});
+		expect(runs.docs).toHaveLength(1);
+		expect(runs.docs[0]).toMatchObject({
+			kind: "chat",
+			initiatedBy: "schedule",
+			status: "pending",
+		});
+		expect(relationId(runs.docs[0].scheduleExecution)).toBe(
+			result.results[0].executionId,
+		);
+
+		// The session points at the run; the stream tail resolves activeRun →
+		// run_links.activeStreamId.
+		const updatedSession = await setup!.app.collections.chat_sessions.findOne({
+			where: { id: result.results[0].chatSessionId },
+		});
+		expect(relationId(updatedSession?.activeRun)).toBe(runs.docs[0].id);
+		expect(updatedSession?.activeStreamId).toBe(runs.docs[0].activeStreamId);
+
+		// The best-effort run-available kick was published.
 		expect(workflowEvents).toHaveLength(1);
 		expect(workflowEvents[0]).toMatchObject({
-			event: "trigger:chat-query",
-			data: {
-				scheduleExecutionId: result.results[0].executionId,
-			},
+			event: "queue:run-available",
 		});
 	});
 

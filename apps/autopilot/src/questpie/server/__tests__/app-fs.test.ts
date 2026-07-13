@@ -2,7 +2,6 @@ import { Buffer } from "node:buffer";
 
 import { describe, expect, it } from "vitest";
 
-import appFsRoute from "../routes/apps/[appId]/fs/[...path]";
 import {
 	appDataPrefix,
 	assertValidAppId,
@@ -11,6 +10,8 @@ import {
 	isTextContentType,
 	resolveAppDataPath,
 } from "../apps/app-fs";
+import appFsGetRoute from "../routes/apps/[appId]/fs/[...path].get";
+import appFsPutRoute from "../routes/apps/[appId]/fs/[...path].put";
 
 // ---------------------------------------------------------------------------
 // In-memory Knowledge double + a `knowledgeResource`-shaped service wrapper.
@@ -76,7 +77,9 @@ function makeKnowledge() {
 }
 
 /** Build the `knowledgeResource` service surface over the knowledge double. */
-function makeKnowledgeResource(knowledge: ReturnType<typeof makeKnowledge>["knowledge"]) {
+function makeKnowledgeResource(
+	knowledge: ReturnType<typeof makeKnowledge>["knowledge"],
+) {
 	return {
 		async readByPath(path: string) {
 			const r = await knowledge.findOne({ where: { path } });
@@ -151,10 +154,9 @@ function callRoute(
 		request,
 		params: { appId, path },
 	};
-	// `appFsRoute` is a RawRouteDefinition; call its handler directly.
-	return (appFsRoute as { handler: (c: unknown) => Promise<Response> }).handler(
-		ctx,
-	);
+	const route = method === "GET" ? appFsGetRoute : appFsPutRoute;
+	// `route` is a RawRouteDefinition; call its handler directly.
+	return (route as { handler: (c: unknown) => Promise<Response> }).handler(ctx);
 }
 
 // ---------------------------------------------------------------------------
@@ -201,12 +203,9 @@ describe("app-fs scope enforcement", () => {
 		expect(() => resolveAppDataPath("social", bad)).toThrow();
 	});
 
-	it.each(["a/b", "..", ".", ""])(
-		"rejects an invalid appId %j",
-		(appId) => {
-			expect(() => assertValidAppId(appId)).toThrow();
-		},
-	);
+	it.each(["a/b", "..", ".", ""])("rejects an invalid appId %j", (appId) => {
+		expect(() => assertValidAppId(appId)).toThrow();
+	});
 });
 
 describe("app-fs format-agnostic encoding", () => {
@@ -234,10 +233,19 @@ describe("app-fs format-agnostic encoding", () => {
 	});
 
 	it("classifies common formats correctly", () => {
-		for (const ct of ["text/plain", "application/json", "text/csv", "image/svg+xml"]) {
+		for (const ct of [
+			"text/plain",
+			"application/json",
+			"text/csv",
+			"image/svg+xml",
+		]) {
 			expect(isTextContentType(ct)).toBe(true);
 		}
-		for (const ct of ["application/octet-stream", "image/png", "application/zip"]) {
+		for (const ct of [
+			"application/octet-stream",
+			"image/png",
+			"application/zip",
+		]) {
 			expect(isTextContentType(ct)).toBe(false);
 		}
 	});
@@ -258,13 +266,24 @@ describe("app-fs route handler", () => {
 		const { knowledgeResource } = setup();
 		const csv = "name,score\nada,99\ngrace,100\n";
 
-		const put = await callRoute(knowledgeResource, "PUT", "social", "scores.csv", {
-			body: csv,
-			contentType: "text/csv",
-		});
+		const put = await callRoute(
+			knowledgeResource,
+			"PUT",
+			"social",
+			"scores.csv",
+			{
+				body: csv,
+				contentType: "text/csv",
+			},
+		);
 		expect(put.status).toBe(201);
 
-		const get = await callRoute(knowledgeResource, "GET", "social", "scores.csv");
+		const get = await callRoute(
+			knowledgeResource,
+			"GET",
+			"social",
+			"scores.csv",
+		);
 		expect(get.status).toBe(200);
 		expect(get.headers.get("content-type")).toBe("text/csv");
 		expect(await get.text()).toBe(csv);
@@ -274,10 +293,16 @@ describe("app-fs route handler", () => {
 		const { knowledgeResource } = setup();
 		const blob = new Uint8Array([0, 1, 2, 3, 250, 255, 128, 64, 0, 7]);
 
-		const put = await callRoute(knowledgeResource, "PUT", "social", "blob.bin", {
-			body: blob,
-			contentType: "application/octet-stream",
-		});
+		const put = await callRoute(
+			knowledgeResource,
+			"PUT",
+			"social",
+			"blob.bin",
+			{
+				body: blob,
+				contentType: "application/octet-stream",
+			},
+		);
 		expect(put.status).toBe(201);
 
 		const get = await callRoute(knowledgeResource, "GET", "social", "blob.bin");
@@ -325,9 +350,15 @@ describe("app-fs route handler", () => {
 			contentType: "text/plain",
 		});
 
-		const listed = await callRoute(knowledgeResource, "GET", "social", "posts", {
-			query: "?list",
-		});
+		const listed = await callRoute(
+			knowledgeResource,
+			"GET",
+			"social",
+			"posts",
+			{
+				query: "?list",
+			},
+		);
 		const body = (await listed.json()) as {
 			prefix: string;
 			entries: { path: string }[];

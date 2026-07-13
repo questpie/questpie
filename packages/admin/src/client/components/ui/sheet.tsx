@@ -43,7 +43,10 @@ function SheetContent({
 	side = "right",
 	showCloseButton = true,
 	animated = true,
-	showOverlay = false,
+	// Overlay by default: a sheet is a layer ABOVE the page — without the
+	// scrim it reads as part of it. Opt out per-surface only with an explicit
+	// reason (none of the current surfaces has one).
+	showOverlay = true,
 	...props
 }: SheetPrimitive.Popup.Props & {
 	side?: "top" | "right" | "bottom" | "left";
@@ -52,16 +55,19 @@ function SheetContent({
 	showOverlay?: boolean;
 }) {
 	const isMobile = useIsMobile();
-	// Full-width mobile sheets need a visible scrim so the layer reads as modal
-	// and the page behind is dimmed. Desktop honours the caller's `showOverlay`.
+	// Full-width mobile sheets ALWAYS need the scrim so the layer reads as
+	// modal and the page behind is dimmed, even if a caller opted out.
 	const overlayVisible = showOverlay || isMobile;
 	const overlayClassName = animated
 		? "qa-sheet__overlay motion-overlay fixed inset-0 z-50 bg-black/80 data-ending-style:opacity-0 data-starting-style:opacity-0"
 		: "qa-sheet__overlay fixed inset-0 z-50 bg-black/80";
 
+	// Full-distance SLIDE, no opacity fade: a translucent mid-fade frame reads
+	// as two forms bleeding through each other ("broken display"), especially
+	// on slower mobile GPUs. A panel slides in; it does not materialize.
 	const contentClassName = animated
-		? "qa-sheet__content bg-background border-border motion-sheet data-starting-style:opacity-0 data-ending-style:opacity-0 data-[side=right]:data-starting-style:translate-x-10 data-[side=right]:data-ending-style:translate-x-10 data-[side=left]:data-starting-style:-translate-x-10 data-[side=left]:data-ending-style:-translate-x-10 data-[side=top]:data-starting-style:-translate-y-10 data-[side=top]:data-ending-style:-translate-y-10 data-[side=bottom]:data-starting-style:translate-y-10 data-[side=bottom]:data-ending-style:translate-y-10 fixed z-50 flex flex-col bg-clip-padding text-sm data-[side=bottom]:inset-x-0 data-[side=bottom]:bottom-0 data-[side=bottom]:h-auto data-[side=bottom]:border-t data-[side=left]:inset-y-0 data-[side=left]:left-0 data-[side=left]:h-full data-[side=left]:w-full data-[side=left]:border-r data-[side=right]:inset-y-0 data-[side=right]:right-0 data-[side=right]:h-full data-[side=right]:w-full data-[side=right]:border-l data-[side=top]:inset-x-0 data-[side=top]:top-0 data-[side=top]:h-auto data-[side=top]:border-b data-[side=left]:sm:max-w-lg data-[side=right]:sm:max-w-lg"
-		: "qa-sheet__content bg-background border-border fixed z-50 flex flex-col bg-clip-padding text-sm data-[side=bottom]:inset-x-0 data-[side=bottom]:bottom-0 data-[side=bottom]:h-auto data-[side=bottom]:border-t data-[side=left]:inset-y-0 data-[side=left]:left-0 data-[side=left]:h-full data-[side=left]:w-full data-[side=left]:border-r data-[side=right]:inset-y-0 data-[side=right]:right-0 data-[side=right]:h-full data-[side=right]:w-full data-[side=right]:border-l data-[side=top]:inset-x-0 data-[side=top]:top-0 data-[side=top]:h-auto data-[side=top]:border-b data-[side=left]:sm:max-w-lg data-[side=right]:sm:max-w-lg";
+		? "qa-sheet__content bg-popover border-border-subtle motion-sheet data-[side=right]:data-starting-style:translate-x-full data-[side=right]:data-ending-style:translate-x-full data-[side=left]:data-starting-style:-translate-x-full data-[side=left]:data-ending-style:-translate-x-full data-[side=top]:data-starting-style:-translate-y-full data-[side=top]:data-ending-style:-translate-y-full data-[side=bottom]:data-starting-style:translate-y-full data-[side=bottom]:data-ending-style:translate-y-full fixed z-50 flex flex-col bg-clip-padding text-sm data-[side=bottom]:inset-x-0 data-[side=bottom]:bottom-0 data-[side=bottom]:h-auto data-[side=bottom]:border-t data-[side=left]:inset-y-0 data-[side=left]:left-0 data-[side=left]:h-full data-[side=left]:w-full data-[side=left]:border-r data-[side=right]:inset-y-0 data-[side=right]:right-0 data-[side=right]:h-full data-[side=right]:w-full data-[side=right]:border-l data-[side=top]:inset-x-0 data-[side=top]:top-0 data-[side=top]:h-auto data-[side=top]:border-b data-[side=left]:sm:max-w-lg data-[side=right]:sm:max-w-lg"
+		: "qa-sheet__content bg-popover border-border-subtle fixed z-50 flex flex-col bg-clip-padding text-sm data-[side=bottom]:inset-x-0 data-[side=bottom]:bottom-0 data-[side=bottom]:h-auto data-[side=bottom]:border-t data-[side=left]:inset-y-0 data-[side=left]:left-0 data-[side=left]:h-full data-[side=left]:w-full data-[side=left]:border-r data-[side=right]:inset-y-0 data-[side=right]:right-0 data-[side=right]:h-full data-[side=right]:w-full data-[side=right]:border-l data-[side=top]:inset-x-0 data-[side=top]:top-0 data-[side=top]:h-auto data-[side=top]:border-b data-[side=left]:sm:max-w-lg data-[side=right]:sm:max-w-lg";
 
 	return (
 		<SheetPortal>
@@ -146,8 +152,14 @@ function SheetDescription({
 	);
 }
 
+/** Close primitive — use inside a header to align the close control with it. */
+function SheetClose(props: SheetPrimitive.Close.Props) {
+	return <SheetPrimitive.Close data-slot="sheet-close" {...props} />;
+}
+
 export {
 	Sheet,
+	SheetClose,
 	SheetContent,
 	SheetHeader,
 	SheetFooter,

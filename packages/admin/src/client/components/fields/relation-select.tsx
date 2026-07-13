@@ -27,6 +27,7 @@ import { SelectSingle } from "../primitives/select-single";
 import type { SelectOption } from "../primitives/types";
 import { ResourceSheet } from "../sheets/resource-sheet";
 import { InputGroupAddon, InputGroupButton } from "../ui/input-group";
+import { getRelationOptionDescription } from "./field-utils";
 import { LocaleBadge } from "./locale-badge";
 
 export interface RelationSelectProps<_T extends QuestpieApp> {
@@ -195,12 +196,13 @@ export function RelationSelect<T extends QuestpieApp>({
 					} else {
 						label = "";
 					}
+					// No per-option icon: it repeats the collection icon shown in
+					// the field label and adds noise, not information. The
+					// description gives each option the context a bare title lacks.
 					return {
 						value: item.id,
 						label,
-						icon: resolveIconElement(collectionIconRef, {
-							className: "size-3.5 text-muted-foreground",
-						}),
+						description: getRelationOptionDescription(item, targetConfig),
 					};
 				});
 			} catch (error) {
@@ -209,15 +211,7 @@ export function RelationSelect<T extends QuestpieApp>({
 				return [];
 			}
 		},
-		[
-			client,
-			targetCollection,
-			filter,
-			renderOption,
-			collectionIconRef,
-			locale,
-			t,
-		],
+		[client, targetCollection, filter, renderOption, targetConfig, locale, t],
 	);
 
 	const queryClient = useQueryClient();
@@ -261,12 +255,9 @@ export function RelationSelect<T extends QuestpieApp>({
 				label: renderValue
 					? String(renderValue(selectedItem))
 					: selectedItem._title || selectedItem.id || "",
-				icon: resolveIconElement(collectionIconRef, {
-					className: "size-3.5 text-muted-foreground",
-				}),
 			},
 		];
-	}, [selectedItem, renderValue, collectionIconRef]);
+	}, [selectedItem, renderValue]);
 
 	const handleOpenCreate = () => {
 		setEditingItemId(undefined);
@@ -341,6 +332,8 @@ export function RelationSelect<T extends QuestpieApp>({
 						clearable={!required}
 						emptyMessage={noResultsLabel}
 						drawerTitle={selectLabel}
+						onCreateNew={handleOpenCreate}
+						createNewLabel={createLabel}
 						selectedLabel={
 							selectedItem?._title || selectedItem?.id || undefined
 						}

@@ -19,9 +19,9 @@ import eventsRoute from "../routes/events";
 import intakeRoute from "../routes/intake";
 import runStreamRoute from "../routes/run-stream";
 import runStatusRoute from "../routes/runs/[runId]";
-import runArtifactsRoute from "../routes/runs/[runId]/artifacts";
+import runArtifactsGetRoute from "../routes/runs/[runId]/artifacts.get";
+import runArtifactsPostRoute from "../routes/runs/[runId]/artifacts.post";
 import runArtifactContentRoute from "../routes/runs/[runId]/artifacts/[artifactId]/content";
-import runEventsRoute from "../routes/runs/[runId]/events";
 import workspaceContentRoute from "../routes/workspace-inspection/content";
 import workspaceDiffRoute from "../routes/workspace-inspection/diff";
 import workspaceListRoute from "../routes/workspace-inspection/list";
@@ -73,7 +73,7 @@ const routeAccessCases = [
 		methods: ["GET"],
 		mode: "raw",
 		policy: "sessionOnly",
-		reason: "streams run snapshots and AI run events",
+		reason: "streams run snapshots",
 		coverage: "autopilot-route-access.test.ts, chat-realtime-workflow.test.ts",
 	},
 	{
@@ -86,21 +86,21 @@ const routeAccessCases = [
 		coverage: "autopilot-route-access.test.ts, chat-realtime-workflow.test.ts",
 	},
 	{
-		file: "routes/runs/[runId]/events.ts",
-		route: runEventsRoute,
+		file: "routes/runs/[runId]/artifacts.get.ts",
+		route: runArtifactsGetRoute,
 		methods: ["GET"],
 		mode: "raw",
 		policy: "sessionOnly",
-		reason: "returns AI run event history",
-		coverage: "autopilot-route-access.test.ts, chat-realtime-workflow.test.ts",
+		reason: "lists run artifacts",
+		coverage: "autopilot-route-access.test.ts",
 	},
 	{
-		file: "routes/runs/[runId]/artifacts.ts",
-		route: runArtifactsRoute,
-		methods: ["GET", "POST"],
+		file: "routes/runs/[runId]/artifacts.post.ts",
+		route: runArtifactsPostRoute,
+		methods: ["POST"],
 		mode: "raw",
 		policy: "sessionOnly",
-		reason: "lists and creates run artifacts",
+		reason: "creates run artifacts",
 		coverage: "autopilot-route-access.test.ts",
 	},
 	{

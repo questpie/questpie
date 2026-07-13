@@ -13,6 +13,7 @@ import { executeAccessRule } from "../../collection/crud/shared/access-control.j
 import type { Questpie } from "../../config/questpie.js";
 import type { QuestpieConfig } from "../../config/types.js";
 import { ApiError } from "../../errors/index.js";
+import { reindexCollection } from "../../modules/core/integrated/search/reindex.js";
 import type {
 	CollectionAccessFilter,
 	PopulatedSearchResponse,
@@ -381,9 +382,11 @@ export async function searchReindex(
 	}
 
 	try {
-		await app.search.reindex(collectionName);
+		// App-layer reindex: iterate the collection's records and (re)build the
+		// index. `SearchAdapter.reindex()` can't do this — it has no CRUD access.
+		const result = await reindexCollection(app, collectionName);
 		return smartResponse(
-			{ success: true, collection: collectionName },
+			{ success: true, collection: collectionName, indexed: result.indexed },
 			request,
 		);
 	} catch (error) {

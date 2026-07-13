@@ -4,6 +4,9 @@
 import "./registries.js";
 
 
+// ── Sub-Modules ────────────────────────────────────────────
+import _modules from "../modules";
+
 // ── Collections ────────────────────────────────────────────
 import _coll_account from "../collections/account";
 import _coll_apikey from "../collections/apikey";
@@ -52,6 +55,7 @@ export type StarterFieldTypes = Record<never, never>;
 
 export type StarterModule = {
 	name: "questpie-starter";
+	modules: typeof _modules;
 	collections: StarterCollections;
 	jobs: StarterJobs;
 	globals: StarterGlobals;
@@ -71,6 +75,7 @@ export type StarterModule = {
 
 const _module: StarterModule = {
 	name: "questpie-starter" as const,
+	modules: _modules,
 	collections: {
 		account: _coll_account,
 		apikey: _coll_apikey,

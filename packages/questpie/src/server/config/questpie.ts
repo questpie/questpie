@@ -1,5 +1,6 @@
 import type { BetterAuthOptions } from "better-auth";
 import { betterAuth } from "better-auth";
+import type { Session, User } from "better-auth/types";
 import type { PgTable } from "drizzle-orm/pg-core";
 
 import {
@@ -11,7 +12,11 @@ import type {
 	RelationConfig,
 } from "#questpie/server/collection/builder/types.js";
 import { extractAppServices } from "#questpie/server/config/app-context.js";
-import type { RequestContext } from "#questpie/server/config/context.js";
+import { accessModeForPrincipal } from "#questpie/server/config/context.js";
+import type {
+	Principal,
+	RequestContext,
+} from "#questpie/server/config/context.js";
 import { QuestpieMigrationsAPI } from "#questpie/server/config/integrated/migrations-api.js";
 import {
 	QuestpieAPI,
@@ -69,6 +74,7 @@ interface ResolvedServiceDefinition {
  */
 const RESERVED_CONTEXT_KEYS = new Set([
 	"session",
+	"principal",
 	"db",
 	"locale",
 	"defaultLocale",
@@ -88,6 +94,30 @@ const RESERVED_CONTEXT_KEYS = new Set([
 	"globals",
 	"~contextExtensions",
 ]);
+
+/**
+ * Reconstruct a {@link Principal} from the legacy `session` + `accessMode`
+ * inputs so `accessMode` can be derived from a single source of truth while
+ * reproducing today's two access modes exactly.
+ *
+ * - `"system"` → `{ kind: "system" }` (full-access bypass, today's stdio path).
+ * - `"user"` **with** a resolved session → `{ kind: "user", user, session }`.
+ * - `"user"` **without** a session → `undefined` (no user to attach; the caller
+ *   keeps the legacy `"user"` accessMode). Matches the session-less HTTP /
+ *   explicit `{ accessMode: "user" }` path.
+ */
+function principalFromLegacy(
+	session: { user: User; session: Session } | null | undefined,
+	accessMode: AccessMode,
+): Principal | undefined {
+	if (accessMode === "system") {
+		return { kind: "system" };
+	}
+	if (session?.user) {
+		return { kind: "user", user: session.user, session: session.session };
+	}
+	return undefined;
+}
 
 export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 	private _collections: Record<string, Collection<AnyCollectionState>> = {};
@@ -962,6 +992,12 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 		userCtx: {
 			/** Auth session from Better Auth (contains user + session) */
 			session?: { user: any; session: any } | null;
+			/**
+			 * Discriminated identity for this request. When provided it is the
+			 * source of truth and `accessMode` is derived from it. When omitted,
+			 * a principal is derived from `session`/`accessMode` for back-compat.
+			 */
+			principal?: Principal;
 			locale?: string;
 			accessMode?: AccessMode;
 			db?: any;
@@ -991,12 +1027,27 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 			}
 		}
 
-		// accessMode defaults:
+		// accessMode defaults (legacy inputs):
 		// - explicit override has highest precedence
 		// - with request → "user" (HTTP scope, access rules apply)
 		// - without request → "system" (job/script scope, bypass access)
-		const accessMode: AccessMode =
+		const legacyAccessMode: AccessMode =
 			userCtx.accessMode ?? (userCtx.request ? "user" : "system");
+
+		// Resolve the effective principal. When callers hand us one (e.g. the
+		// OAuth path) it is authoritative; otherwise reconstruct it from the
+		// legacy session/accessMode inputs so `accessMode` can be *derived* from
+		// a single source of truth while reproducing today's behavior exactly.
+		const principal: Principal | undefined =
+			userCtx.principal ??
+			principalFromLegacy(userCtx.session, legacyAccessMode);
+
+		// `accessMode` is derived from the principal whenever one exists (the
+		// user/oauth/system cases). The session-less "user" request has no user
+		// to attach, so no principal is derived and the legacy value stands.
+		const accessMode: AccessMode = principal
+			? accessModeForPrincipal(principal)
+			: legacyAccessMode;
 
 		// Resolve context extensions exactly once per request.
 		// Idempotence by presence: contexts that already carry the bundle
@@ -1017,6 +1068,7 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 			// Flat merge for handler/ctx reads — never shadows base keys below.
 			...(extensions ?? {}),
 			session: userCtx.session,
+			...(principal ? { principal } : {}),
 			locale,
 			defaultLocale,
 			accessMode,
@@ -1031,7 +1083,7 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 	 */
 	private async resolveContextExtensions(params: {
 		request: Request;
-		session: { user: any; session: any } | null | undefined;
+		session: { user: User; session: Session } | null | undefined;
 		db: any;
 	}): Promise<Record<string, unknown> | undefined> {
 		// Loose call signature on purpose: the static `ContextResolver` params

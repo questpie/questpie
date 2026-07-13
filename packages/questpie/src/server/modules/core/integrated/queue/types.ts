@@ -122,6 +122,16 @@ export interface JobDefinition<
 		 * Cron expression for recurring jobs
 		 */
 		cron?: string;
+
+		/**
+		 * pg-boss queue policy for this job's queue, applied at queue creation.
+		 * Declaring it here (rather than per-publish) is what makes `singletonKey`
+		 * dedupe RELIABLY: the worker's `listen()` and the web's `publish()` both
+		 * create the queue with the SAME policy. `stately` is the usual "one
+		 * in-flight job per key". Only constrains keyed jobs — non-keyed jobs keep
+		 * full throughput. Adapters without policy support ignore it.
+		 */
+		queuePolicy?: PublishOptions["queuePolicy"];
 	};
 }
 
@@ -164,9 +174,25 @@ export interface PublishOptions {
 	startAfter?: number | string | Date;
 
 	/**
-	 * Singleton key - only one job with this key can be queued
+	 * Singleton key — only one job with this key can be queued/active.
+	 *
+	 * NOTE: on the pg-boss adapter this only dedupes when the queue is created
+	 * with a dedupe `queuePolicy` (see below). On a standard-policy queue the
+	 * key is stored but NOT enforced; the adapter warns in that case.
 	 */
 	singletonKey?: string;
+
+	/**
+	 * pg-boss queue policy for this queue, applied when the queue is first
+	 * created. Required for `singletonKey` to actually dedupe:
+	 * - `short` — 1 queued job per key (unlimited active)
+	 * - `singleton` — 1 active job per key (unlimited queued)
+	 * - `stately` — 1 job per key across queued AND active (typical "singleton")
+	 *
+	 * Only affects keyed jobs. Adapters that don't support policies ignore it.
+	 * (Standard queues stay full-throughput for non-keyed jobs.)
+	 */
+	queuePolicy?: "standard" | "short" | "singleton" | "stately" | "exclusive";
 
 	/**
 	 * Number of retry attempts (overrides job default)

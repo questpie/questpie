@@ -48,6 +48,7 @@ describe("HttpSandboxAdapter — fetch timeout (server never responds)", () => {
 
 	beforeAll(() => {
 		server = Bun.serve({
+			hostname: "127.0.0.1",
 			port: 0,
 			fetch() {
 				// Never resolve on its own — only the AbortController (client) or
@@ -57,7 +58,7 @@ describe("HttpSandboxAdapter — fetch timeout (server never responds)", () => {
 				});
 			},
 		});
-		baseUrl = `http://127.0.0.1:${server.port}`;
+		baseUrl = server.url.href.replace(/\/$/, "");
 	});
 
 	afterAll(() => {
@@ -115,6 +116,7 @@ describe("HttpSandboxAdapter — non-JSON server response", () => {
 
 	beforeAll(() => {
 		server = Bun.serve({
+			hostname: "127.0.0.1",
 			port: 0,
 			fetch() {
 				return new Response(next.body, {
@@ -123,7 +125,7 @@ describe("HttpSandboxAdapter — non-JSON server response", () => {
 				});
 			},
 		});
-		baseUrl = `http://127.0.0.1:${server.port}`;
+		baseUrl = server.url.href.replace(/\/$/, "");
 	});
 
 	afterAll(() => {
@@ -163,16 +165,20 @@ describe("HttpSandboxAdapter — URL trailing-slash normalization", () => {
 
 	beforeAll(() => {
 		server = Bun.serve({
+			hostname: "127.0.0.1",
 			port: 0,
 			fetch(req) {
 				seenPaths.push(new URL(req.url).pathname);
 				// A valid JSON result so the adapter parses cleanly (ok path).
-				return new Response(JSON.stringify({ ok: true, output: 42, logs: [] }), {
-					headers: { "content-type": "application/json" },
-				});
+				return new Response(
+					JSON.stringify({ ok: true, output: 42, logs: [] }),
+					{
+						headers: { "content-type": "application/json" },
+					},
+				);
 			},
 		});
-		host = `http://127.0.0.1:${server.port}`;
+		host = server.url.href.replace(/\/$/, "");
 	});
 
 	afterEach(() => {
@@ -219,9 +225,12 @@ describe("HttpSandboxAdapter — custom fetch option", () => {
 				body: init?.body ? JSON.parse(String(init.body)) : undefined,
 				hadSignal: !!init?.signal,
 			});
-			return new Response(JSON.stringify({ ok: true, output: "via-custom", logs: [] }), {
-				headers: { "content-type": "application/json" },
-			});
+			return new Response(
+				JSON.stringify({ ok: true, output: "via-custom", logs: [] }),
+				{
+					headers: { "content-type": "application/json" },
+				},
+			);
 		}) as unknown as typeof fetch;
 
 		const adapter = httpSandboxAdapter({

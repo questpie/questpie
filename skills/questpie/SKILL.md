@@ -67,6 +67,8 @@ export default observabilityConfig({
 
 The module reads the resolved config at runtime from `app.state.config.observability`. Factory modules (`someModule({...})` in `modules.ts`) are acceptable only for simple runtime-only modules whose plugin identity and codegen contributions never change. Full DO/DON'T treatment: `references/extend.md`.
 
+A module's own `module.ts` is **generated** by `questpie generate --module` from convention files (`routes/`, `collections/`, `jobs/`, …) into `.generated/module.ts`; a barrel `index.ts` exports it. **Never hand-write `module.ts` or an inline `route()`/`module({...})` for a module that has any discoverable contribution** - create the convention file and regenerate. Full authoring flow: `references/module-authoring.md`.
+
 ## Admin Auth Contract - Critical
 
 `adminModule` includes the starter auth model and owns the canonical Better Auth `user` collection shape used by admin setup and login guards. That contract includes `user.role` with at least `admin` and `user` values. Do not replace `collection("user")` from scratch in apps that use `adminModule`; merge `starterModule.collections.user` and extend it when custom user fields or layout are needed.
@@ -135,6 +137,7 @@ Files starting with `_`, `index.ts`, declaration files, tests, and specs are int
 | Topic              | File                               | Covers                                                       |
 | ------------------ | ---------------------------------- | ------------------------------------------------------------ |
 | Extend             | `references/extend.md`             | Custom modules, fields, operators, adapters, codegen plugins |
+| Module Authoring   | `references/module-authoring.md`   | How modules are created: convention dirs → codegen `.generated/module.ts`; NEVER hand-write `module.ts`/inline `route()` |
 | Codegen Plugin API | `references/codegen-plugin-api.md` | Plugin architecture, category declarations, templates        |
 | Multi-Tenancy      | `references/multi-tenancy.md`      | `appConfig({ context })` resolver, scope isolation, ScopeProvider |
 

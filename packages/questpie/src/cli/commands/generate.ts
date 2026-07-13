@@ -168,9 +168,14 @@ async function generateMigrationInternal(
 	// Generate migration using DrizzleMigrationGenerator
 	const generator = new DrizzleMigrationGenerator();
 
-	// Build cumulative snapshot from existing migrations' embedded snapshots
-	const cumulativeSnapshot =
-		generator.getCumulativeSnapshotFromMigrations(existingMigrations);
+	// Build the previous cumulative snapshot from the UNION of the on-disk
+	// snapshot chain (authoritative) and the in-memory migration list — so a
+	// migration whose `.json` is on disk but missing from a stale generated list
+	// doesn't get its ops dropped (which re-emits already-applied DDL).
+	const cumulativeSnapshot = await generator.getCumulativeSnapshotUnion(
+		migrationDir,
+		existingMigrations,
+	);
 
 	const result = await generator.generateMigration({
 		migrationName: migrationVariableName,

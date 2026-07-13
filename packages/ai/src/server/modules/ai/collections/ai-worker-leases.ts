@@ -4,7 +4,10 @@ import { index } from "questpie/drizzle-pg-core";
 export const aiWorkerLeasesCollection = collection("ai_worker_leases")
   .fields(({ f }) => ({
     worker: f.relation("ai_workers").required().label({ en: "Worker" }),
-    run: f.relation("ai_runs").required().label({ en: "Run" }),
+    // Vestigial: the ai_runs collection this pointed at is deleted (run_links
+    // is the single execution record). Plain text until the T12 migration
+    // handles the column.
+    run: f.text().required().label({ en: "Run" }),
     claimedAt: f.datetime().required().label({ en: "Claimed At" }),
     expiresAt: f.datetime().label({ en: "Expires At" }),
     status: f

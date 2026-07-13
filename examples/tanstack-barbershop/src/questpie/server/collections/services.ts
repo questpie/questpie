@@ -26,6 +26,17 @@ export const services = collection("services")
 			.label({ en: "Active", sk: "Aktívna" })
 			.default(true)
 			.required(),
+		// App-land custom field type (server/fields/color.ts + admin/fields/
+		// color.tsx). Reactively hidden while the service is inactive — an
+		// inactive service is never shown on the calendar, so its colour is
+		// moot. Proves a custom `f.<name>()` field type AND a reactive
+		// `.admin({ hidden })` on it, end-to-end.
+		color: f
+			.color()
+			.label({ en: "Calendar colour", sk: "Farba v kalendári" })
+			.admin({
+				hidden: ({ data }: { data: { isActive?: boolean } }) => !data.isActive,
+			}),
 		barbers: f
 			.relation("barbers")
 			.manyToMany({
@@ -59,7 +70,7 @@ export const services = collection("services")
 					label: { en: "Service Info", sk: "Informácie o službe" },
 					layout: "grid",
 					columns: 2,
-					fields: [f.name, f.duration, f.price],
+					fields: [f.name, f.duration, f.price, f.color],
 				},
 				{
 					type: "section",

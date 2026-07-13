@@ -8,9 +8,8 @@ import {
 import { describe, expect, it } from "vitest";
 
 import { appBundlePrefix, appDataPrefix } from "../apps/app-resolver";
-import appRoute, {
-	buildEndpointEntrySource,
-} from "../routes/apps/[appId]/[fn]";
+import appRoute from "../routes/apps/[appId]/[fn].post";
+import { buildEndpointEntrySource } from "../routes/apps/[appId]/_fn";
 
 // ---------------------------------------------------------------------------
 // Route-level proof WITHOUT a live DB or the Deno sandbox.

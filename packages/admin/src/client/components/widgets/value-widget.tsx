@@ -173,7 +173,13 @@ export default function ValueWidget({ config }: ValueWidgetProps) {
 
 				{/* Subtitle */}
 				{subtitle && (
-					<p className={cn("text-muted-foreground text-xs", cls.subtitle)}>
+					<p
+							title={subtitle}
+							className={cn(
+								"text-muted-foreground line-clamp-2 text-xs",
+								cls.subtitle,
+							)}
+						>
 						{subtitle}
 					</p>
 				)}

@@ -3,7 +3,7 @@
 // Regenerate with: questpie generate --module
 
 // ── Collections ────────────────────────────────────────────
-import { locksCollection as _coll_admin_locks } from "../collections/locks.collection";
+import { locksCollection as _coll_admin_locks } from "../collections/locks";
 import { adminPreferencesCollection as _coll_admin_preferences } from "../collections/admin-preferences";
 import { savedViewsCollection as _coll_admin_saved_views } from "../collections/saved-views";
 

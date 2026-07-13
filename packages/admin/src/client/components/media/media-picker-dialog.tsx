@@ -303,10 +303,9 @@ export function MediaPickerDialog({
 	}, []);
 
 	return (
-		<Sheet open={open} onOpenChange={handleOpenChange} modal={false}>
+		<Sheet open={open} onOpenChange={handleOpenChange}>
 			<SheetContent
 				side="right"
-				showOverlay={false}
 				className="qa-media-picker w-full p-0 data-[side=right]:sm:max-w-6xl"
 			>
 				<SheetHeader className="px-6 pt-6">

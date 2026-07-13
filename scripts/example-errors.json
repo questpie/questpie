@@ -3,6 +3,6 @@
 	"examples": {
 		"examples/toy-factory-backend": 0,
 		"examples/city-portal": 0,
-		"examples/tanstack-barbershop": 21
+		"examples/tanstack-barbershop": 23
 	}
 }

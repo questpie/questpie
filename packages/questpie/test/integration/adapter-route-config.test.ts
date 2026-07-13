@@ -522,12 +522,18 @@ describe("adapter route config", () => {
 				}),
 			);
 
+			// Access granted by the custom policy → reindex runs. The route now
+			// reindexes at the app layer (iterate records + index) rather than
+			// delegating to the adapter's `reindex()` (which has no CRUD access),
+			// so the response carries an `indexed` count and the mock adapter's
+			// `reindex` is no longer invoked. The point of THIS test — the
+			// `reindexAccess` override granting access — still holds.
 			expect(response?.status).toBe(200);
-			expect(await response?.json()).toEqual({
+			expect(await response?.json()).toMatchObject({
 				success: true,
 				collection: "posts",
 			});
-			expect(reindexedCollections).toEqual(["posts"]);
+			void reindexedCollections;
 		});
 	});
 

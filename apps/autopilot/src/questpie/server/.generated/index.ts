@@ -3,8 +3,10 @@
 // Regenerate with: questpie generate
 
 import { createApp, createContextFactory } from "questpie/app";
-import type { AnyCollectionOrBuilder, AnyGlobalOrBuilder, AppDefinition, CollectionAPI, CollectionSelect, DrizzleClientFromQuestpieConfig, InferContextExtensionsFromAppConfig, InferSessionFromAuthConfig, MailerService, Questpie, QuestpieConfig, QueueClient, QueueJobType, RouteParamsFromKey, RouteWithParams, TablesFromConfig } from "questpie/types";
-import type { z } from "zod";
+import "./names.gen";
+import type { AccessContext, AppDefinition, CollectionSelect, GlobalSelect, HookContext, Where } from "questpie/types";
+import type { AppCollections, AppGlobals, AppRoutes } from "./entities.gen";
+import type { _AppQuestpie, AppAuthConfig, AppSession, AppSessionUser } from "./context.gen";
 
 // ── Runtime ────────────────────────────────────────────────
 import _runtime from "../questpie.config";
@@ -35,20 +37,30 @@ import { tasks as _coll_tasks } from "../collections/tasks";
 
 // ── Jobs ───────────────────────────────────────────────────
 import _job_cleanup from "../jobs/cleanup";
+import _job_runAvailable from "../jobs/run-available";
 import _job_scheduleTick from "../jobs/schedule-tick";
 import _job_taskEscalation from "../jobs/task-escalation";
 
 // ── Routes ─────────────────────────────────────────────────
-import _route_apps_appId_fn from "../routes/apps/[appId]/[fn]";
-import _route_apps_appId_fs_spread_path from "../routes/apps/[appId]/fs/[...path]";
+import _route_apps_appId_fn_DELETE from "../routes/apps/[appId]/[fn].delete";
+import _route_apps_appId_fn_GET from "../routes/apps/[appId]/[fn].get";
+import _route_apps_appId_fn_PATCH from "../routes/apps/[appId]/[fn].patch";
+import _route_apps_appId_fn_POST from "../routes/apps/[appId]/[fn].post";
+import _route_apps_appId_fn_PUT from "../routes/apps/[appId]/[fn].put";
+import _route_apps_appId_fs_spread_path_GET from "../routes/apps/[appId]/fs/[...path].get";
+import _route_apps_appId_fs_spread_path_PUT from "../routes/apps/[appId]/fs/[...path].put";
 import _route_apps_appId_token from "../routes/apps/[appId]/token";
 import _route_chat from "../routes/chat";
+import _route_chat_chatId_approve from "../routes/chat/[chatId]/approve";
+import _route_chat_chatId_cancel from "../routes/chat/[chatId]/cancel";
+import _route_chat_chatId_stream from "../routes/chat/[chatId]/stream";
 import _route_events from "../routes/events";
 import _route_intake from "../routes/intake";
 import _route_runs_runId from "../routes/runs/[runId]";
-import _route_runs_runId_artifacts from "../routes/runs/[runId]/artifacts";
+import _route_runs_runId_artifacts_GET from "../routes/runs/[runId]/artifacts.get";
+import _route_runs_runId_artifacts_POST from "../routes/runs/[runId]/artifacts.post";
 import _route_runs_runId_artifacts_artifactId_content from "../routes/runs/[runId]/artifacts/[artifactId]/content";
-import _route_runs_runId_events from "../routes/runs/[runId]/events";
+import _route_runs_runId_stream from "../routes/runs/[runId]/stream";
 import _route_runStream from "../routes/run-stream";
 import _route_workspaceInspection_content from "../routes/workspace-inspection/content";
 import _route_workspaceInspection_diff from "../routes/workspace-inspection/diff";
@@ -75,15 +87,18 @@ import _mig_20260606T004300_autopilot_memories from "../migrations/20260606T0043
 import _mig_20260606T170505_calm_yellow_panda from "../migrations/20260606T170505_calm_yellow_panda";
 import _mig_20260607T120000_add_ai_runs_system_prompt from "../migrations/20260607T120000_add_ai_runs_system_prompt";
 import _mig_20260607T130000_make_assets_upload_cols_nullable from "../migrations/20260607T130000_make_assets_upload_cols_nullable";
+import _mig_20260614T120000_add_harness_resumable_fields from "../migrations/20260614T120000_add_harness_resumable_fields";
+import _mig_20260630T202927_add_run_link_worker_kind_finalize from "../migrations/20260630T202927_add_run_link_worker_kind_finalize";
+import _mig_20260702T033832_drop_ai_runs_execution from "../migrations/20260702T033832_drop_ai_runs_execution";
 
 // ── Seeds ──────────────────────────────────────────────────
-import _seed_demoCoverageData_seed from "../seeds/demo-coverage-data.seed";
-import _seed_demoParentIssues_seed from "../seeds/demo-parent-issues.seed";
-import _seed_demoProductData_seed from "../seeds/demo-product-data.seed";
-import _seed_demoStressData_seed from "../seeds/demo-stress-data.seed";
-import _seed_makeAMiniappSkill_seed from "../seeds/make-a-miniapp-skill.seed";
-import _seed_runtimeDefaults_seed from "../seeds/runtime-defaults.seed";
-import _seed_socialSchedulerApp_seed from "../seeds/social-scheduler-app.seed";
+import _seed_demoCoverageData from "../seeds/demo-coverage-data";
+import _seed_demoParentIssues from "../seeds/demo-parent-issues";
+import _seed_demoProductData from "../seeds/demo-product-data";
+import _seed_demoStressData from "../seeds/demo-stress-data";
+import _seed_makeAMiniappSkill from "../seeds/make-a-miniapp-skill";
+import _seed_runtimeDefaults from "../seeds/runtime-defaults";
+import _seed_socialSchedulerApp from "../seeds/social-scheduler-app";
 
 // ── Views ──────────────────────────────────────────────────
 import _view_fileDetail from "../views/file-detail";
@@ -91,7 +106,6 @@ import _view_filesView from "../views/files-view";
 import _view_taskDetail from "../views/task-detail";
 
 // ── Workflows ──────────────────────────────────────────────
-import _wf_chatQuery from "../workflows/chat-query";
 import _wf_taskPipeline from "../workflows/task-pipeline";
 
 // ── McpTools ───────────────────────────────────────────────
@@ -128,311 +142,8 @@ import _authConfig from "../config/auth";
 import _adminConfig from "../config/admin";
 import _mcpConfig from "../config/mcp";
 
-// ════════════════════════════════════════════════════════════
-// TYPES — composed from typeof references (zero inference cost)
-// ════════════════════════════════════════════════════════════
-
-import type { ServiceCustomNamespaceInstances, ServiceInstanceOf, ServiceInstancesInNamespace, ServiceTopLevelInstances, UnionToIntersection } from "questpie/types";
-type _RouteDefinitionWithoutHandler<T> = T extends { mode: "raw" } ? Omit<T, "handler"> & { handler: (args: unknown) => Response | Promise<Response> } : Omit<T, "handler"> & { handler: (args: unknown) => unknown | Promise<unknown> };
-type _Module = (typeof _modules)[number];
-type _MPRaw<K extends string> = UnionToIntersection<_Module extends infer M ? M extends Record<K, infer V> ? V : never : never>;
-type _MP<K extends string> = [_MPRaw<K>] extends [never] ? {} : _MPRaw<K>;
-type _ModuleConfig = _MP<"config">;
-type _AppAppConfig = (_ModuleConfig extends { app: infer TApp } ? TApp : {}) & typeof _appConfig;
-type _AppContextExtensions = Partial<InferContextExtensionsFromAppConfig<_AppAppConfig>>;
-type _AppAuthConfig = (_ModuleConfig extends { auth: infer TAuth } ? TAuth : {}) & typeof _authConfig;
-type _AppSession = NonNullable<InferSessionFromAuthConfig<_AppAuthConfig>> | null;
-
-type _ModuleCollections = _MP<"collections">;
-type _ModuleGlobals = _MP<"globals">;
-type _ModuleJobs = _MP<"jobs">;
-type _ModuleRoutes = _MP<"routes">;
-type _ModuleServices = _MP<"services">;
-type _ModuleFieldTypes = _MP<"fieldTypes">;
-type _ModuleViews = _MP<"views">;
-type _ModuleComponents = _MP<"components">;
-type _ModuleBlocks = _MP<"blocks">;
-type _ModuleWorkflows = _MP<"workflows">;
-type _ModuleMcpTools = _MP<"mcpTools">;
-// Registry category extraction from modules
-type _Registry_Collections = _MP<"collections">;
-type _Registry_Globals = _MP<"globals">;
-type _Registry_Jobs = _MP<"jobs">;
-type _Registry_Routes = _MP<"routes">;
-type _Registry_Services = _MP<"services">;
-type _Registry_Emails = _MP<"emails">;
-type _Registry_FieldTypes = _MP<"fieldTypes">;
-type _Registry_Views = _MP<"views">;
-type _Registry_Components = _MP<"components">;
-type _Registry_Blocks = _MP<"blocks">;
-type _Registry_Workflows = _MP<"workflows">;
-type _Registry_McpTools = _MP<"mcpTools">;
-
-// Recursive module property extraction (for fields contributed at each level)
-import type { ExtractModuleProp } from "questpie/types";
-
-type _AllModuleFields = ExtractModuleProp<{ modules: typeof _modules }, "fields">;
-
-// Augment factory registries with user-defined files
-declare global {
-	namespace Questpie {
-		interface ViewsRegistry { fileDetail: typeof _view_fileDetail; filesView: typeof _view_filesView; taskDetail: typeof _view_taskDetail; }
-	}
-}
-
-/** All collections in the app (modules + user, user overrides) */
-export type AppCollections = _ModuleCollections & {
-	activity: typeof _coll_activity;
-	admin_audit_log: typeof _coll_admin_audit_log;
-	agent_memory: typeof _coll_agent_memory;
-	assets: typeof _coll_assets;
-	chat_messages: typeof _coll_chat_messages;
-	chat_sessions: typeof _coll_chat_sessions;
-	document_store: typeof _coll_document_store;
-	environments: typeof _coll_environments;
-	memory_settings: typeof _coll_memory_settings;
-	models: typeof _coll_models;
-	projects: typeof _coll_projects;
-	providers: typeof _coll_providers;
-	run_links: typeof _coll_run_links;
-	schedule_executions: typeof _coll_schedule_executions;
-	schedules: typeof _coll_schedules;
-	scripts: typeof _coll_scripts;
-	secrets: typeof _coll_secrets;
-	task_relations: typeof _coll_task_relations;
-	tasks: typeof _coll_tasks;
-};
-
-/** All globals in the app (modules + user, user overrides) */
-export type AppGlobals = _ModuleGlobals;
-
-/** All jobs in the app (modules + user, user overrides) */
-export type AppJobs = _ModuleJobs & {
-	cleanup: Omit<typeof _job_cleanup, "handler"> & { handler: (args: unknown) => Promise<unknown> };
-	scheduleTick: Omit<typeof _job_scheduleTick, "handler"> & { handler: (args: unknown) => Promise<unknown> };
-	taskEscalation: Omit<typeof _job_taskEscalation, "handler"> & { handler: (args: unknown) => Promise<unknown> };
-};
-
-/** All routes in the app (modules + user, user overrides) */
-export type AppRoutes = _ModuleRoutes & {
-	"apps/[appId]/[fn]": RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_apps_appId_fn>, RouteParamsFromKey<"apps/[appId]/[fn]">>;
-	"apps/[appId]/fs/[...path]": RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_apps_appId_fs_spread_path>, RouteParamsFromKey<"apps/[appId]/fs/[...path]">>;
-	"apps/[appId]/token": RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_apps_appId_token>, RouteParamsFromKey<"apps/[appId]/token">>;
-	chat: RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_chat>, RouteParamsFromKey<"chat">>;
-	events: RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_events>, RouteParamsFromKey<"events">>;
-	intake: RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_intake>, RouteParamsFromKey<"intake">>;
-	"runs/[runId]": RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_runs_runId>, RouteParamsFromKey<"runs/[runId]">>;
-	"runs/[runId]/artifacts": RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_runs_runId_artifacts>, RouteParamsFromKey<"runs/[runId]/artifacts">>;
-	"runs/[runId]/artifacts/[artifactId]/content": RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_runs_runId_artifacts_artifactId_content>, RouteParamsFromKey<"runs/[runId]/artifacts/[artifactId]/content">>;
-	"runs/[runId]/events": RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_runs_runId_events>, RouteParamsFromKey<"runs/[runId]/events">>;
-	runStream: RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_runStream>, RouteParamsFromKey<"runStream">>;
-	"workspaceInspection/content": RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_workspaceInspection_content>, RouteParamsFromKey<"workspaceInspection/content">>;
-	"workspaceInspection/diff": RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_workspaceInspection_diff>, RouteParamsFromKey<"workspaceInspection/diff">>;
-	"workspaceInspection/list": RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_workspaceInspection_list>, RouteParamsFromKey<"workspaceInspection/list">>;
-	"workspaceInspection/read": RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_workspaceInspection_read>, RouteParamsFromKey<"workspaceInspection/read">>;
-};
-
-/** All service definitions in the app (modules + user, user overrides). */
-type _AppServiceDefinitions = _ModuleServices & {
-	gitProviderAdapters: typeof _svc_gitProviderAdapters;
-	knowledgeResource: typeof _svc_knowledgeResource;
-};
-
-/** All services in the app as resolved service instances. */
-export type AppServices = {
-	[K in keyof _AppServiceDefinitions]: ServiceInstanceOf<_AppServiceDefinitions[K]>;
-};
-type _AppDefaultServices = ServiceInstancesInNamespace<_AppServiceDefinitions, "services">;
-type _AppTopLevelServices = ServiceTopLevelInstances<_AppServiceDefinitions>;
-type _AppCustomServiceNamespaces = ServiceCustomNamespaceInstances<_AppServiceDefinitions>;
-
-/** All email templates in the app — use with email.sendTemplate() */
-export type AppEmailTemplates = Record<string, never>;
-
-/** All fieldtypes in the app (modules + user, user overrides) */
-export type AppFieldTypes = _ModuleFieldTypes;
-
-/** All views in the app (modules + user, user overrides) */
-export type AppViews = _ModuleViews & {
-	fileDetail: typeof _view_fileDetail;
-	filesView: typeof _view_filesView;
-	taskDetail: typeof _view_taskDetail;
-};
-
-/** All components in the app (modules + user, user overrides) */
-export type AppComponents = _ModuleComponents;
-
-/** All blocks in the app (modules + user, user overrides) */
-export type AppBlocks = _ModuleBlocks;
-
-/** All workflows in the app (modules + user, user overrides) */
-export type AppWorkflows = _ModuleWorkflows
-	& { [K in typeof _wf_chatQuery.name]: Omit<typeof _wf_chatQuery, "handler" | "onFailure"> & { handler: (args: unknown) => Promise<unknown>; onFailure?: (args: unknown) => Promise<void> } }
-	& { [K in typeof _wf_taskPipeline.name]: Omit<typeof _wf_taskPipeline, "handler" | "onFailure"> & { handler: (args: unknown) => Promise<unknown>; onFailure?: (args: unknown) => Promise<void> } };
-
-/** All mcptools in the app (modules + user, user overrides) */
-export type AppMcpTools = _ModuleMcpTools & {
-	artifact_create: typeof _mcpTool_artifact_create;
-	knowledge_delete: typeof _mcpTool_knowledge_delete;
-	knowledge_list: typeof _mcpTool_knowledge_list;
-	knowledge_read: typeof _mcpTool_knowledge_read;
-	knowledge_search: typeof _mcpTool_knowledge_search;
-	knowledge_write: typeof _mcpTool_knowledge_write;
-	run_artifact_content: typeof _mcpTool_run_artifact_content;
-	run_artifact_create: typeof _mcpTool_run_artifact_create;
-	run_artifacts: typeof _mcpTool_run_artifacts;
-	run_code: typeof _mcpTool_run_code;
-	run_events: typeof _mcpTool_run_events;
-	run_get: typeof _mcpTool_run_get;
-	run_list: typeof _mcpTool_run_list;
-	schedule_get: typeof _mcpTool_schedule_get;
-	schedule_list: typeof _mcpTool_schedule_list;
-	schedule_trigger: typeof _mcpTool_schedule_trigger;
-	task_cancel: typeof _mcpTool_task_cancel;
-	task_create: typeof _mcpTool_task_create;
-	task_dependencies: typeof _mcpTool_task_dependencies;
-	task_dependents: typeof _mcpTool_task_dependents;
-	task_get: typeof _mcpTool_task_get;
-	task_list: typeof _mcpTool_task_list;
-	task_retry: typeof _mcpTool_task_retry;
-	task_update: typeof _mcpTool_task_update;
-};
-
-type _CollectionsAPI = { [K in keyof AppCollections]: CollectionAPI<AppCollections[K], AppCollections> };
-type _JobHandlerCollections = AppCollections;
-type _JobHandlerCollectionsAPI = _CollectionsAPI;
-type _ExecutionContextJob<T> = T extends { name: infer TName extends string; schema: z.ZodSchema<infer TPayload> } ? QueueJobType<TPayload, TName> : never;
-type _ExecutionContextJobs = {
-	cleanup: _ExecutionContextJob<typeof _job_cleanup>;
-	scheduleTick: _ExecutionContextJob<typeof _job_scheduleTick>;
-	taskEscalation: _ExecutionContextJob<typeof _job_taskEscalation>;
-};
-type _ExecutionContextServiceDefinitions = {
-	gitProviderAdapters: typeof _svc_gitProviderAdapters;
-	knowledgeResource: typeof _svc_knowledgeResource;
-};
-type _ExecutionContextDefaultServices = ServiceInstancesInNamespace<_ExecutionContextServiceDefinitions, "services">;
-type _AppCollectionDefinitions = AppCollections & Record<string, AnyCollectionOrBuilder>;
-type _AppGlobalDefinitions = AppGlobals & Record<string, AnyGlobalOrBuilder>;
-type _AppQuestpieConfig = Omit<QuestpieConfig, "app" | "db" | "collections" | "globals" | "auth"> & {
-	app: (typeof _runtime)["app"];
-	db: (typeof _runtime)["db"];
-	collections: _AppCollectionDefinitions;
-	globals: _AppGlobalDefinitions;
-	auth: _AppAuthConfig;
-	storage: (typeof _runtime)["storage"];
-};
-type _AppQuestpieBase = Questpie<_AppQuestpieConfig>;
-type _AppDb = DrizzleClientFromQuestpieConfig<_AppQuestpieConfig>;
-type _AppGlobalsAPI = _AppQuestpieBase["globals"];
-type _AppStorage = _AppQuestpieBase["storage"];
-type _AppTables = TablesFromConfig<_AppQuestpieConfig>;
-type _AppQuestpie = Omit<_AppQuestpieBase, "collections" | "globals"> & {
-	collections: _CollectionsAPI;
-	globals: _AppGlobalsAPI;
-};
-
-// ── AppContext augmentation — auto-types ALL handlers ──────
-type _AppCoreContext = _AppContextExtensions & {
-	// Infrastructure
-	db: _AppDb;
-	email: _AppQuestpie["email"];
-	queue: QueueClient<AppJobs>;
-	storage: _AppStorage;
-	kv: _AppQuestpie["kv"];
-	logger: _AppQuestpie["logger"];
-	search: _AppQuestpie["search"];
-	realtime: _AppQuestpie["realtime"];
-
-	// Entity APIs
-	collections: _CollectionsAPI;
-	globals: _AppGlobalsAPI;
-	tables: _AppTables;
-
-	// Request-scoped
-	session: _AppSession;
-	t: (key: string, params?: Record<string, unknown>, locale?: string) => string;
-
-	// User services
-	services: _AppDefaultServices;
-} & _AppCustomServiceNamespaces;
-
-declare global {
-	namespace Questpie {
-		interface AppContext extends _AppCoreContext, _AppTopLevelServices {}
-
-		interface JobHandlerContext {
-			// Infrastructure
-			db: unknown;
-			email: unknown;
-			queue: QueueClient<_ExecutionContextJobs>;
-			storage: _AppStorage;
-			kv: unknown;
-			logger: unknown;
-			search: unknown;
-			realtime: unknown;
-
-			// Entity APIs
-			collections: _JobHandlerCollectionsAPI;
-			globals: Record<string, unknown>;
-			tables: Record<string, unknown>;
-
-			// Request-scoped
-			session: unknown;
-			t: (key: string, params?: Record<string, unknown>, locale?: string) => string;
-
-			// Top-level services (namespace: null)
-			workflows?: "workflows" extends keyof _AppTopLevelServices ? _AppTopLevelServices["workflows"] : never;
-
-			// User services
-			services: _ExecutionContextDefaultServices;
-		}
-
-		interface WorkflowContext {
-			// Infrastructure
-			db: unknown;
-			email: unknown;
-			queue: QueueClient<_ExecutionContextJobs>;
-			storage: _AppStorage;
-			kv: unknown;
-			logger: unknown;
-			search: unknown;
-			realtime: unknown;
-
-			// Entity APIs
-			collections: _JobHandlerCollectionsAPI;
-			globals: Record<string, unknown>;
-			tables: Record<string, unknown>;
-
-			// Request-scoped
-			session: unknown;
-			t: (key: string, params?: Record<string, unknown>, locale?: string) => string;
-
-			// Top-level services (namespace: null)
-			workflows?: "workflows" extends keyof _AppTopLevelServices ? _AppTopLevelServices["workflows"] : never;
-
-			// User services
-			services: _ExecutionContextDefaultServices;
-		}
-
-		interface ServiceCreateContext extends _AppCoreContext {}
-
-		interface Registry {
-			collections: _Registry_Collections;
-			globals: _Registry_Globals;
-			jobs: _Registry_Jobs;
-			routes: _Registry_Routes;
-			services: _Registry_Services;
-			emails: _Registry_Emails;
-			"~fieldTypes": _Registry_FieldTypes & _AllModuleFields;
-			views: _Registry_Views;
-			components: _Registry_Components;
-			blocks: _Registry_Blocks;
-			workflows: _Registry_Workflows;
-			mcpTools: _Registry_McpTools;
-		}
-	}
-}
+export type * from "./entities.gen";
+export type * from "./context.gen";
 
 /**
  * Select/document type for a collection key — prefer over `Record<string, any>` for docs.
@@ -440,23 +151,61 @@ declare global {
 export type CollectionDoc<K extends keyof AppCollections> = CollectionSelect<AppCollections[K]>;
 
 /**
+ * Select/document type for a global key.
+ */
+export type GlobalDoc<K extends keyof AppGlobals> = GlobalSelect<AppGlobals[K]>;
+
+/**
+ * Typed `where` filter for a collection key — prefer over `Record<string, unknown>`
+ * when building a `where` clause dynamically before a `find`/`findOne` call.
+ */
+export type CollectionWhere<K extends keyof AppCollections> = Where<AppCollections[K], AppConfig>;
+
+/**
+ * Access-rule ctx for shared helpers. `K` narrows `data` to that collection's row.
+ *
+ * CYCLE RULE: import these only from files NOT imported by a collection
+ * (routes, services, jobs, scripts). Helpers imported by collections take
+ * the package-level `AccessContext` from "questpie" instead — see the
+ * type-inference reference.
+ *
+ * @example
+ * ```ts
+ * export async function isOwner(ctx: AccessRuleContext<"posts">) {
+ *   return ctx.data?.authorId === ctx.session?.user.id; // ctx.collections typed
+ * }
+ * ```
+ */
+export type AccessRuleContext<K extends keyof AppCollections | unknown = unknown> =
+	AccessContext<K extends keyof AppCollections ? CollectionDoc<K> : unknown>;
+
+/**
+ * Hook ctx for shared helpers. `K` narrows `data` to that collection's row.
+ * Same cycle rule as `AccessRuleContext`.
+ */
+export type HookRuleContext<K extends keyof AppCollections | unknown = unknown> =
+	HookContext<K extends keyof AppCollections ? CollectionDoc<K> : unknown>;
+
+/**
  * Flat config type for client APIs.
  * Use with `createClient<AppConfig>()` and `createAdminAuthClient<AppConfig>()`.
  * For handler context, use `AppContext` (auto-typed via module augmentation).
  */
 export type AppConfig = {
-	collections: AppCollections & Record<string, AnyCollectionOrBuilder>;
-	globals: AppGlobals & Record<string, AnyGlobalOrBuilder>;
+	collections: AppCollections;
+	globals: AppGlobals;
 	routes: AppRoutes;
 	storage: (typeof _runtime)["storage"];
-	auth: typeof _authConfig;
+	auth: AppAuthConfig;
 };
 
 // ════════════════════════════════════════════════════════════
 // RUNTIME — create the app instance
 // ════════════════════════════════════════════════════════════
 
-export const app = await createApp(
+var _appPromise: Promise<unknown> | undefined;
+
+_appPromise = createApp(
 	({
 		modules: _modules,
 		collections: {
@@ -482,20 +231,30 @@ export const app = await createApp(
 		},
 		jobs: {
 			cleanup: _job_cleanup,
+			runAvailable: _job_runAvailable,
 			scheduleTick: _job_scheduleTick,
 			taskEscalation: _job_taskEscalation,
 		},
 		routes: {
-			"apps/[appId]/[fn]": _route_apps_appId_fn,
-			"apps/[appId]/fs/[...path]": _route_apps_appId_fs_spread_path,
+			"apps/[appId]/[fn]:DELETE": _route_apps_appId_fn_DELETE,
+			"apps/[appId]/[fn]:GET": _route_apps_appId_fn_GET,
+			"apps/[appId]/[fn]:PATCH": _route_apps_appId_fn_PATCH,
+			"apps/[appId]/[fn]:POST": _route_apps_appId_fn_POST,
+			"apps/[appId]/[fn]:PUT": _route_apps_appId_fn_PUT,
+			"apps/[appId]/fs/[...path]:GET": _route_apps_appId_fs_spread_path_GET,
+			"apps/[appId]/fs/[...path]:PUT": _route_apps_appId_fs_spread_path_PUT,
 			"apps/[appId]/token": _route_apps_appId_token,
 			chat: _route_chat,
+			"chat/[chatId]/approve": _route_chat_chatId_approve,
+			"chat/[chatId]/cancel": _route_chat_chatId_cancel,
+			"chat/[chatId]/stream": _route_chat_chatId_stream,
 			events: _route_events,
 			intake: _route_intake,
 			"runs/[runId]": _route_runs_runId,
-			"runs/[runId]/artifacts": _route_runs_runId_artifacts,
+			"runs/[runId]/artifacts:GET": _route_runs_runId_artifacts_GET,
+			"runs/[runId]/artifacts:POST": _route_runs_runId_artifacts_POST,
 			"runs/[runId]/artifacts/[artifactId]/content": _route_runs_runId_artifacts_artifactId_content,
-			"runs/[runId]/events": _route_runs_runId_events,
+			"runs/[runId]/stream": _route_runs_runId_stream,
 			runStream: _route_runStream,
 			"workspaceInspection/content": _route_workspaceInspection_content,
 			"workspaceInspection/diff": _route_workspaceInspection_diff,
@@ -506,15 +265,14 @@ export const app = await createApp(
 			gitProviderAdapters: _svc_gitProviderAdapters,
 			knowledgeResource: _svc_knowledgeResource,
 		},
-		migrations: [_mig_20260507T095449_jolly_red_phoenix, _mig_20260516T185000_auth_user_admin_columns_repair, _mig_20260517T095535_happy_orange_unicorn, _mig_20260519T135407_add_run_links_and_ai_module, _mig_20260519T142100_backfill_legacy_runs_into_run_links, _mig_20260519T145500_link_schedule_executions_to_run_links, _mig_20260519T161500_drop_legacy_execution_infra, _mig_20260529T001500_drop_workflow_configs, _mig_20260529T003000_drop_capabilities, _mig_20260604T111500_add_api_key_config_id, _mig_20260606T003509_v2_schema, _mig_20260606T004300_autopilot_memories, _mig_20260606T170505_calm_yellow_panda, _mig_20260607T120000_add_ai_runs_system_prompt, _mig_20260607T130000_make_assets_upload_cols_nullable],
-		seeds: [_seed_demoCoverageData_seed, _seed_demoParentIssues_seed, _seed_demoProductData_seed, _seed_demoStressData_seed, _seed_makeAMiniappSkill_seed, _seed_runtimeDefaults_seed, _seed_socialSchedulerApp_seed],
+		migrations: [_mig_20260507T095449_jolly_red_phoenix, _mig_20260516T185000_auth_user_admin_columns_repair, _mig_20260517T095535_happy_orange_unicorn, _mig_20260519T135407_add_run_links_and_ai_module, _mig_20260519T142100_backfill_legacy_runs_into_run_links, _mig_20260519T145500_link_schedule_executions_to_run_links, _mig_20260519T161500_drop_legacy_execution_infra, _mig_20260529T001500_drop_workflow_configs, _mig_20260529T003000_drop_capabilities, _mig_20260604T111500_add_api_key_config_id, _mig_20260606T003509_v2_schema, _mig_20260606T004300_autopilot_memories, _mig_20260606T170505_calm_yellow_panda, _mig_20260607T120000_add_ai_runs_system_prompt, _mig_20260607T130000_make_assets_upload_cols_nullable, _mig_20260614T120000_add_harness_resumable_fields, _mig_20260630T202927_add_run_link_worker_kind_finalize, _mig_20260702T033832_drop_ai_runs_execution],
+		seeds: [_seed_demoCoverageData, _seed_demoParentIssues, _seed_demoProductData, _seed_demoStressData, _seed_makeAMiniappSkill, _seed_runtimeDefaults, _seed_socialSchedulerApp],
 		views: {
 			fileDetail: _view_fileDetail,
 			filesView: _view_filesView,
 			taskDetail: _view_taskDetail,
 		},
 		workflows: {
-			[_wf_chatQuery.name]: _wf_chatQuery,
 			[_wf_taskPipeline.name]: _wf_taskPipeline,
 		},
 		mcpTools: {
@@ -551,7 +309,9 @@ export const app = await createApp(
 		},
 	}) satisfies AppDefinition,
 	_runtime,
-) as unknown as _AppQuestpie;
+);
+
+export const app = (await _appPromise) as unknown as _AppQuestpie;
 
 /** Fully typed QUESTPIE app instance. */
 export type App = typeof app;
@@ -569,6 +329,14 @@ export type App = typeof app;
  * const posts = await ctx.collections.posts.find({});
  * ```
  */
-export const createContext = createContextFactory(app);
+export async function createContext(
+	options?: Parameters<ReturnType<typeof createContextFactory>>[0],
+) {
+	while (!_appPromise) {
+		await new Promise((resolve) => setTimeout(resolve, 0));
+	}
+
+	return createContextFactory((await _appPromise) as _AppQuestpie)(options);
+}
 
 // Factories: import { collection, global, ... } from '#questpie/factories';

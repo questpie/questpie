@@ -74,6 +74,12 @@ export default adminConfig({
 						icon: { type: "icon", props: { name: "ph:house" } },
 					},
 					{
+						type: "link",
+						label: { en: "Chat" },
+						href: "/admin/chat",
+						icon: { type: "icon", props: { name: "ph:chat-circle" } },
+					},
+					{
 						type: "collection",
 						collection: "tasks",
 						label: { en: "Issues" },
@@ -193,7 +199,7 @@ export default adminConfig({
 					en: "Open issues, review items, and automation health.",
 				},
 				columns: 4,
-				rowHeight: 132,
+				rowHeight: 156,
 			},
 			{
 				id: "activity",
@@ -202,7 +208,7 @@ export default adminConfig({
 					en: "Latest visible updates from issues and workflow executions.",
 				},
 				columns: 4,
-				rowHeight: 132,
+				rowHeight: 156,
 			},
 		],
 		items: [

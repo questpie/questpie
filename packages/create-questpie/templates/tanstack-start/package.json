@@ -33,7 +33,7 @@
 		"@tanstack/react-query": "^5.62.11",
 		"@tanstack/react-router": "^1.132.0",
 		"@tanstack/react-start": "^1.132.0",
-		"better-auth": "^1.6.11",
+		"better-auth": "^1.6.23",
 		"drizzle-orm": "1.0.0-beta.6-4414a19",
 		"nodemailer": "^7.0.12",
 		"pg": "^8.13.1",

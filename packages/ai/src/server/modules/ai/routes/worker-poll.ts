@@ -4,6 +4,10 @@ import { z } from "zod";
 import { asAiJsonRoute } from "../lib/handler-context.js";
 import { authenticateWorker, getAiServices } from "../lib/service-context.js";
 
+// HTTP fleet surface (intentionally parked, not removed): a remote worker can
+// claim run_links rows over HTTP, but finalize-over-HTTP (the remote
+// counterpart of the in-process finalizeRun) is a follow-up.
+
 const pollSchema = z.object({
 	workerId: z.string(),
 	runtimes: z.array(z.string()).min(1),

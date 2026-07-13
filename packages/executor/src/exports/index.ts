@@ -6,5 +6,5 @@
 // capability — including its security endpoint — is enabled explicitly rather
 // than baked into every app.
 
-export { executorModule } from "../server/module.js";
-export { sandboxRpcRoute } from "../server/routes/sandbox-rpc.js";
+export { executorModule } from "../server/modules/executor/index.js";
+export { sandboxRpcRoute } from "../server/modules/executor/routes/sandbox/rpc.js";

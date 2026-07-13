@@ -3,8 +3,6 @@
 // Regenerate with: questpie generate --module
 
 // ── Collections ────────────────────────────────────────────
-import { aiRunEventsCollection as _coll_ai_run_events } from "../collections/ai-run-events";
-import { aiRunsCollection as _coll_ai_runs } from "../collections/ai-runs";
 import { aiWorkerLeasesCollection as _coll_ai_worker_leases } from "../collections/ai-worker-leases";
 import { aiWorkersCollection as _coll_ai_workers } from "../collections/ai-workers";
 
@@ -14,9 +12,6 @@ import _job_workerTimeout from "../jobs/worker-timeout";
 // ── Routes ────────────────────────────────────────────
 import _route_enrollmentEnroll from "../routes/enrollment-enroll";
 import _route_enrollmentTokens from "../routes/enrollment-tokens";
-import _route_runComplete from "../routes/run-complete";
-import _route_runEvents from "../routes/run-events";
-import _route_runStream from "../routes/run-stream";
 import _route_workerDeregister from "../routes/worker-deregister";
 import _route_workerHeartbeat from "../routes/worker-heartbeat";
 import _route_workerPoll from "../routes/worker-poll";
@@ -35,8 +30,6 @@ import _adminConfig from "../config/admin";
 import type { RouteDefinition, RouteParamsFromKey } from "questpie/types";
 
 export type AiCollections = {
-	ai_run_events: typeof _coll_ai_run_events;
-	ai_runs: typeof _coll_ai_runs;
 	ai_worker_leases: typeof _coll_ai_worker_leases;
 	ai_workers: typeof _coll_ai_workers;
 };
@@ -50,9 +43,6 @@ export type AiJobs = {
 export type AiRoutes = {
 	enrollmentEnroll: typeof _route_enrollmentEnroll extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"enrollmentEnroll">> : typeof _route_enrollmentEnroll;
 	enrollmentTokens: typeof _route_enrollmentTokens extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"enrollmentTokens">> : typeof _route_enrollmentTokens;
-	runComplete: typeof _route_runComplete extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"runComplete">> : typeof _route_runComplete;
-	runEvents: typeof _route_runEvents extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"runEvents">> : typeof _route_runEvents;
-	runStream: typeof _route_runStream extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"runStream">> : typeof _route_runStream;
 	workerDeregister: typeof _route_workerDeregister extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"workerDeregister">> : typeof _route_workerDeregister;
 	workerHeartbeat: typeof _route_workerHeartbeat extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"workerHeartbeat">> : typeof _route_workerHeartbeat;
 	workerPoll: typeof _route_workerPoll extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"workerPoll">> : typeof _route_workerPoll;
@@ -98,8 +88,6 @@ export type AiModule = {
 const _module: AiModule = {
 	name: "questpie-ai" as const,
 	collections: {
-		ai_run_events: _coll_ai_run_events,
-		ai_runs: _coll_ai_runs,
 		ai_worker_leases: _coll_ai_worker_leases,
 		ai_workers: _coll_ai_workers,
 	} as AiCollections,
@@ -109,9 +97,6 @@ const _module: AiModule = {
 	routes: {
 		enrollmentEnroll: _route_enrollmentEnroll,
 		enrollmentTokens: _route_enrollmentTokens,
-		runComplete: _route_runComplete,
-		runEvents: _route_runEvents,
-		runStream: _route_runStream,
 		workerDeregister: _route_workerDeregister,
 		workerHeartbeat: _route_workerHeartbeat,
 		workerPoll: _route_workerPoll,

@@ -160,7 +160,36 @@ export default adminConfig({
 
 The admin uses CSS variables for all theming. Override them in your own CSS file.
 
-The full source of truth is `packages/admin/DESIGN.md`. Key defaults:
+The full source of truth is `packages/admin/DESIGN.md`.
+
+### Theme Mode (light / dark / system)
+
+`AdminLayoutProvider` (and `AdminRouter`) manage the theme themselves: they
+toggle the `.dark` / `.light` class **on `<html>`** and set `color-scheme`.
+Default is `"system"` (follows the OS), the user's choice persists in
+localStorage (`questpie:admin-theme`), and a toggle is shown in the sidebar
+user footer (hide it with `showThemeToggle={false}`).
+
+```tsx
+// Force a mode
+<AdminLayoutProvider theme="dark" ... />
+
+// Or control it yourself
+<AdminLayoutProvider theme={theme} setTheme={setTheme} ... />
+```
+
+**CRITICAL: never wrap the admin in `<div className="dark">`.** Floating UI
+(dialogs, popovers, selects, toasts) renders through portals into
+`document.body` (outside your wrapper), so it follows the `<html>` class
+instead. Result: mixed light/dark surfaces and a theme toggle that appears
+broken. If you want dark always, pass `theme="dark"`; the provider applies it
+at the root where portals can see it.
+
+Token structure in `base.css`: dark values live on `:root, .dark` (dark is
+the default), light values on `.light, :root.light`. Mirror those selectors
+when overriding (see Custom Theme below).
+
+### Key Defaults
 
 | Role          | Dark      | Light     |
 | ------------- | --------- | --------- |
@@ -190,12 +219,46 @@ The full source of truth is `packages/admin/DESIGN.md`. Key defaults:
 
 Separate tokens for independent sidebar theming: `--sidebar`, `--sidebar-foreground`, `--sidebar-primary`, `--sidebar-accent`, `--sidebar-border`, `--sidebar-ring`.
 
-### Custom Theme
+### Custom Theme (Brand Overrides)
 
-1. Copy the admin CSS file
-2. Change variable values
-3. Import your copy instead
-4. Zero component changes needed
+Don't copy or fork the admin stylesheet. Import it, then override tokens
+**after** the import for zero component changes. **Mirror base.css selectors
+exactly** (`:root, .dark` for dark, `.light, :root.light` for light): base.css
+uses `:root.light` (specificity 0-2-0) for light tokens, so a plain `.light`
+or `:root` override silently loses in light mode no matter the import order.
+At equal specificity, source order makes your later rules win in both modes.
+
+```css title="src/admin.css"
+@import "tailwindcss";
+@import "@questpie/admin/client/styles/base.css";
+
+/* Scan admin package for Tailwind classes.
+   Second path covers hoisted/monorepo node_modules layouts. */
+@source "../node_modules/@questpie/admin/";
+@source "../../../node_modules/@questpie/admin/";
+
+:root,
+.dark {
+	/* Lighten brand colors for contrast on dark surfaces */
+	--primary: oklch(0.78 0.18 25);
+	--ring: oklch(0.78 0.18 25);
+	--sidebar-primary: oklch(0.78 0.18 25);
+}
+
+.light,
+:root.light {
+	--primary: oklch(0.65 0.2 25);
+	--ring: oklch(0.65 0.2 25);
+	--sidebar-primary: oklch(0.65 0.2 25);
+}
+```
+
+The `:root.light` bump in base.css is deliberate: in embedded setups the app's
+global stylesheet often defines its own `:root { --primary: ... }` tokens, and
+the extra specificity keeps them from leaking into the admin.
+
+Working example: `examples/tanstack-barbershop/src/admin.css` (pink primary +
+custom heading font, pure CSS whitelabel).
 
 ## Content Localization
 
@@ -414,6 +477,19 @@ const scope = useScopeSafe(); // returns null outside ScopeProvider
 
 For the full server-side setup (context resolver, type augmentation, access rules), see the `questpie` skill's `references/multi-tenancy.md`.
 
+## OAuth Consent Screen (MCP over OAuth)
+
+`adminModule` bundles the OAuth 2.1 authorization-server pieces (via `starterModule`), so an admin-enabled app is also the consent surface for MCP-over-OAuth. When an OAuth client (e.g. an MCP client) needs a signed-in user to approve its requested scopes, the provider redirects to two admin routes:
+
+- `loginPage` → `/admin/login` (the existing admin login) when there is no session.
+- `consentPage` → `/admin/oauth/consent` (built-in page, `showInNav: false`) to approve/deny.
+
+The consent page reads `client_id` + `scope` from the signed authorization query in the URL, renders each requested scope as plain English (`describeScopes`), resolves the client's display name via `GET /oauth2/public-client`, and on Allow/Deny does `POST /oauth2/consent` with `{ accept, oauth_query }` - then follows the returned `redirect_uri` back to the client. There is no `getConsentHTML` helper; the consent screen IS this admin page. Trusted clients (`skip_consent`) are approved server-side and never reach it.
+
+It works out of the box - no wiring needed. To restyle it, the component is `OAuthConsentPage` and scope copy lives in `oauth-scope-descriptions.ts` (`describeScope`), which describes the QUESTPIE scope patterns (`collections:<name>:read|write|delete`, umbrellas, etc.) declaratively.
+
+For the framework side (enabling the provider, the token flow, the scope model, `scopes ∩ RBAC`), see the `questpie` skill's `references/mcp.md`.
+
 ## Common Mistakes
 
 1. **CRITICAL: Using `asChild` prop**, QUESTPIE admin uses `@base-ui/react`, which uses the `render` prop. `asChild` is a Radix pattern and does NOT work here.
@@ -442,3 +518,8 @@ For the full server-side setup (context resolver, type augmentation, access rule
 5. **MEDIUM: Custom `<button>` or `<div>` instead of shadcn components**, use `<Button>`, `<Card>`, etc.
 
 6. **MEDIUM: `console.error` for user errors**, use `toast.error()` from `sonner`.
+
+7. **HIGH: Wrapping the admin in `<div className="dark">`**, the provider
+   manages `.dark`/`.light` on `<html>`; a wrapper div misses portaled UI
+   (dialogs, popovers, toasts) and fights the built-in toggle. Pass
+   `theme="dark"` to `AdminLayoutProvider` instead.

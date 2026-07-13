@@ -7,6 +7,7 @@ import type { AppCollections, WorkflowServiceContext } from "../lib/app-types";
 import { classifyRunError, type RunErrorType } from "../lib/error-classifier";
 import { injectMemoriesIntoInstructions } from "../lib/memory-injection";
 import { runReflectionStep } from "../lib/memory-reflect-step";
+import { projectWorkspacePath } from "../lib/project-workspace";
 import {
 	asRecord,
 	mergeRecords,
@@ -15,7 +16,6 @@ import {
 import type { RunCompletion } from "../lib/run-completion";
 import { resolveRuntimeSelection } from "../lib/runtime-selection";
 import { linkScheduleExecutionRun } from "../lib/schedule-run-links";
-import { buildSkillsSystemPrompt } from "../lib/skill-discovery";
 import { workflowsFromContext } from "../lib/workflows";
 
 type Collections = AppCollections;
@@ -136,7 +136,8 @@ async function releaseDependentTasks(
 		) {
 			continue;
 		}
-		if (!(await dependenciesMet(ctx.collections, dependentTaskId))) continue;
+		if (!(await dependenciesMet(ctx.collections as any, dependentTaskId)))
+			continue;
 
 		await ctx.collections.tasks.updateById({
 			id: dependentTaskId,
@@ -174,7 +175,7 @@ export default workflow({
 
 		if (
 			!(await step.run("check-dependencies", async () =>
-				dependenciesMet(ctx.collections, input.taskId),
+				dependenciesMet(ctx.collections as any, input.taskId),
 			))
 		) {
 			await step.run("mark-waiting-on-dependencies", async () => {
@@ -216,15 +217,11 @@ export default workflow({
 			});
 
 			const run = await step.run(`create-run-${attempt}`, async () => {
-				// Run-start progressive disclosure (§8.3): the published-skills L1 block
-				// rides the run's `systemPrompt` channel (system-level context), not the
-				// task prompt. Drafts excluded; descriptions stay delimited DATA (§8.7).
-				// Empty when nothing is published.
+				// Published skills are now harness-NATIVE: task-turn-producer maps them
+				// to ~/.claude/skills/<name>/SKILL.md in the run sandbox (the model
+				// discovers them itself), so the workflow no longer bakes an L1 skills
+				// text block onto the run.
 				const baseInstructions = taskInstructions(task);
-				const skillsSystemPrompt = await buildSkillsSystemPrompt(
-					ctx.collections,
-					{ projectId: relationId(task.project) },
-				);
 				// Run-start memory RECALL: prepend the scoped active-memory DATA block to
 				// the task instructions so the agent recalls lessons from prior runs on
 				// this task/project/company. DELIMITED DATA, never instructions.
@@ -241,15 +238,22 @@ export default workflow({
 					baseInstructions,
 					log,
 				);
+				const projectId = relationId(task.project);
+				const cwd = await projectWorkspacePath(
+					ctx.collections as any,
+					projectId,
+				);
 				return createAiRunLink({
 					ctx: ctx,
 					runtime,
 					taskId: input.taskId,
-					projectId: relationId(task.project),
+					projectId,
 					initiatedBy: "task",
+					kind: "task",
+					retryPolicy: "none",
 					instructions,
-					systemPrompt: skillsSystemPrompt || undefined,
 					scheduleExecutionId: input.scheduleExecutionId,
+					spawnMetadata: cwd ? { cwd } : undefined,
 					linkMetadata: {
 						runReason: input.runReason ?? "task-pipeline",
 						requestedBy: input.requestedBy ?? "system",
@@ -279,6 +283,15 @@ export default workflow({
 							}),
 					},
 				});
+			});
+
+			await step.run(`enqueue-task-turn-${attempt}`, async () => {
+				// Intentional no-op since the AUTOPILOT_SINGLE_MODEL cutover: the
+				// fleet worker claims the pending run_links row directly and emits
+				// run.claimed/run.completed itself, so there is nothing to enqueue.
+				// The step is KEPT (with this exact name) because removing it would
+				// change the durable-workflow step graph and break replay of
+				// in-flight instances (7-day waitForEvent windows are live).
 			});
 
 			const claimed = await step.waitForEvent(`wait-run-claimed-${attempt}`, {

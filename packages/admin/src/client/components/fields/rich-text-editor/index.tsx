@@ -37,7 +37,12 @@ import {
 	type OutputValue,
 	type RichTextEditorProps,
 } from "./types";
-import { type OutputMode, getCharacterCount, getOutput, isSameValue } from "./utils";
+import {
+	type OutputMode,
+	getCharacterCount,
+	getOutput,
+	isSameValue,
+} from "./utils";
 
 // Re-export types
 export type { RichTextEditorProps } from "./types";
@@ -332,16 +337,20 @@ function RichTextEditorCore({
 		features.characterCount && (showCharacterCount || maxCharacters);
 
 	const isEditable = !disabled && !readOnly;
+	// Synced in an effect — writing a ref during render leaks when React
+	// replays/discards render work.
 	const editorStateRef = React.useRef({
 		allowImages,
 		allowLinks,
 		isEditable,
 	});
-	editorStateRef.current = {
-		allowImages,
-		allowLinks,
-		isEditable,
-	};
+	React.useEffect(() => {
+		editorStateRef.current = {
+			allowImages,
+			allowLinks,
+			isEditable,
+		};
+	});
 
 	const { uploadImageFile } = useRichTextImageUpload({
 		imageCollection,

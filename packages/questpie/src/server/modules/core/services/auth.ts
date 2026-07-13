@@ -1,6 +1,7 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 
+import { applyOAuthScopeCatalog } from "#questpie/server/modules/core/integrated/auth/scope-catalog.js";
 import { service } from "#questpie/server/services/define-service.js";
 
 /**
@@ -8,15 +9,21 @@ import { service } from "#questpie/server/services/define-service.js";
  *
  * Depends on: db (resolved via service container).
  * Namespace: null (top-level in AppContext as `auth`).
+ *
+ * `applyOAuthScopeCatalog` is the one seam that sees both the resolved auth
+ * config and the fully-built `app`: it derives the OAuth scope catalog from the
+ * app's collections/globals/routes (MO11) and merges it into the
+ * `oauthProvider()` plugin. A no-op when no OAuth provider is configured.
  */
 export default service({
 	namespace: null,
 	lifecycle: "singleton",
 	create: ({ app }) => {
+		const authOptions = applyOAuthScopeCatalog(app, app.config.auth ?? {});
 		return betterAuth({
 			baseURL: app.config.app.url,
 			secret: app.config.secret,
-			...(app.config.auth ?? {}),
+			...authOptions,
 			database: drizzleAdapter(app.db, {
 				provider: "pg",
 				schema: app.getSchema(),

@@ -1018,6 +1018,7 @@ export default {
 
 	"field.moveUp": "Přesunout nahoru",
 	"field.moveDown": "Přesunout dolů",
+	"field.reorder": "Přetažením změníte pořadí",
 	"field.dragToReorder": "Přetažením změnit pořadí",
 	"field.editItem": "Upravit položku",
 	"field.removeItem": "Odstranit položku",

@@ -853,6 +853,7 @@ export default {
 	"field.editItem": "Edytuj element",
 	"field.formEditor": "Edytor formularza",
 	"field.moveDown": "Przenieś w dół",
+	"field.reorder": "Przeciągnij, aby zmienić kolejność",
 	"field.moveUp": "Przenieś w górę",
 	"field.noItems": "Brak elementów",
 	"field.removeItem": "Usuń element",

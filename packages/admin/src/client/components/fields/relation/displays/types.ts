@@ -22,7 +22,11 @@ export type IconType =
 /**
  * Display mode for relation items
  */
-export type RelationDisplayMode = "chips" | "list" | "table" | "cards" | "grid";
+export type RelationDisplayMode =
+	// Compact select control with the linked records as chips inside it —
+	// the default (Payload-style). The other modes render the linked records
+	// BELOW a separate add control and are opt-in per field.
+	"select" | "chips" | "list" | "table" | "cards" | "grid";
 
 /**
  * Action handlers for relation items
@@ -35,6 +39,12 @@ export interface RelationItemActions {
 	onMoveUp?: (item: any) => void;
 	/** Move the item one position later in an orderable relation. */
 	onMoveDown?: (item: any) => void;
+	/**
+	 * Reorder an orderable relation by array index (drag-and-drop). When
+	 * present, orderable displays render a drag handle instead of up/down
+	 * buttons; the owner (RelationPicker) applies the move to its value array.
+	 */
+	onReorder?: (fromIndex: number, toIndex: number) => void;
 }
 
 /**
@@ -67,11 +77,6 @@ export interface RelationDisplayProps {
 	 * Collection name for navigation links
 	 */
 	collection: string;
-
-	/**
-	 * Collection icon (React component or server ComponentReference)
-	 */
-	collectionIcon?: IconType;
 
 	/**
 	 * Action handlers

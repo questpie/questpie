@@ -11,7 +11,11 @@
 		"dist",
 		"src/sandbox-server.ts",
 		"src/guest-entry.ts",
-		"src/net-validation.ts"
+		"src/net-validation.ts",
+		"src/server-internals.ts",
+		"src/egress-firewall.ts",
+		"src/types.ts",
+		"src/guest-bindings.ts"
 	],
 	"type": "module",
 	"sideEffects": false,

@@ -6,8 +6,6 @@ import { aiModule } from "../server/modules/ai/index.js";
 describe("AI admin module registration", () => {
 	it("keeps the default admin surface generic and infrastructure-only", () => {
 		expect(Object.keys(aiModule.collections).sort()).toEqual([
-			"ai_run_events",
-			"ai_runs",
 			"ai_worker_leases",
 			"ai_workers",
 		]);
@@ -17,9 +15,7 @@ describe("AI admin module registration", () => {
 	});
 
 	it("keeps AI infrastructure collections hidden from default navigation", () => {
-		expect(aiModule.collections.ai_run_events.state.admin.hidden).toBe(true);
 		expect(aiModule.collections.ai_worker_leases.state.admin.hidden).toBe(true);
-		expect(aiModule.collections.ai_runs.state.admin.hidden).toBe(true);
 		expect(aiModule.collections.ai_workers.state.admin.hidden).toBe(true);
 	});
 

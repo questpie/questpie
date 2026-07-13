@@ -1,10 +1,7 @@
 import type { generateDrizzleJson } from "drizzle-kit/api-postgres";
 
 import { OperationSnapshotManager } from "./operation-snapshot.js";
-import type {
-	GenerateMigrationResult,
-	OperationSnapshot,
-} from "./types.js";
+import type { GenerateMigrationResult, OperationSnapshot } from "./types.js";
 
 // Infer snapshot type from drizzle-kit API
 type DrizzleSnapshotJSON = Awaited<ReturnType<typeof generateDrizzleJson>>;
@@ -279,6 +276,77 @@ export class DrizzleMigrationGenerator {
 		return this.operationManager.buildSnapshotFromOperations(
 			deduplicatedOperations,
 		);
+	}
+
+	/**
+	 * Build the previous cumulative snapshot from BOTH sources of truth, unioned
+	 * and deduped: the on-disk `snapshots/*.json` operations (authoritative —
+	 * everything ever committed) AND the in-memory migration list's embedded
+	 * operations (covers module-contributed migrations that ship an embedded
+	 * snapshot but no on-disk `.json`).
+	 *
+	 * Fixes a class of "re-emit an already-applied op" bugs: when the
+	 * codegen-produced in-memory list (`app.config.migrations`) drifts out of
+	 * sync with the on-disk snapshots — a migration whose `.json` exists on disk
+	 * but is missing from the list — building the previous snapshot from the list
+	 * alone silently DROPS that migration's operations, so the diff re-emits DDL
+	 * that was already applied (e.g. `ADD COLUMN` → "column already exists").
+	 */
+	async getCumulativeSnapshotUnion(
+		migrationDir: string,
+		migrations: Array<{ id: string; snapshot?: OperationSnapshot }>,
+	): Promise<DrizzleSnapshotJSON> {
+		const { existsSync, readFileSync, readdirSync } = await import("node:fs");
+		const { join } = await import("node:path");
+
+		const allOperations: OperationSnapshot["operations"] = [];
+		const idsInList = new Set((migrations ?? []).map((m) => m.id));
+
+		// On-disk snapshots first (authoritative), ordered by timestamp.
+		const snapshotsDir = join(migrationDir, "snapshots");
+		if (existsSync(snapshotsDir)) {
+			const files = readdirSync(snapshotsDir)
+				.filter((file) => file.endsWith(".json"))
+				.sort((a, b) =>
+					this.extractTimestamp(a).localeCompare(this.extractTimestamp(b)),
+				);
+			for (const file of files) {
+				try {
+					const snapshot: OperationSnapshot = JSON.parse(
+						readFileSync(join(snapshotsDir, file), "utf8"),
+					);
+					allOperations.push(...snapshot.operations);
+					// Loud divergence signal: a snapshot on disk whose migration is
+					// absent from the generated list ⇒ stale codegen. We still use the
+					// on-disk snapshot (so its ops are not lost), but warn to fix it.
+					const id = file.replace(/\.json$/, "");
+					if (idsInList.size > 0 && !idsInList.has(id)) {
+						console.warn(
+							`⚠️  Migration snapshot "${id}" exists on disk but is missing from the generated migration list — run \`questpie generate\`. Using the on-disk snapshot so its operations are not re-emitted.`,
+						);
+					}
+				} catch (error) {
+					console.warn(
+						`⚠️  Failed to parse operation snapshot ${file}: ${error}`,
+					);
+				}
+			}
+		}
+
+		// In-memory embedded ops — covers module migrations without an on-disk file.
+		for (const migration of migrations ?? []) {
+			if (migration.snapshot?.operations) {
+				allOperations.push(...migration.snapshot.operations);
+			}
+		}
+
+		if (allOperations.length === 0) {
+			return this.getDefaultSnapshot();
+		}
+
+		const deduplicated =
+			this.operationManager.deduplicateOperations(allOperations);
+		return this.operationManager.buildSnapshotFromOperations(deduplicated);
 	}
 
 	private async getPreviousSnapshot(

@@ -101,8 +101,6 @@ describe("task-pipeline workflow", () => {
 
 		setup = await buildMockApp({
 			collections: {
-				ai_run_events: aiModule.collections.ai_run_events,
-				ai_runs: aiModule.collections.ai_runs,
 				ai_worker_leases: aiModule.collections.ai_worker_leases,
 				ai_workers: aiModule.collections.ai_workers,
 				activity,
@@ -217,6 +215,8 @@ describe("task-pipeline workflow", () => {
 			status: "pending",
 			runtime: "codex",
 			initiatedBy: "task",
+			kind: "task",
+			retryPolicy: "none",
 		});
 		expect(result.runId).toBe(createdRunLinks.docs[0].id);
 		expect(waitEvents).toEqual([
@@ -231,23 +231,6 @@ describe("task-pipeline workflow", () => {
 				match: { runId: result.runId },
 			},
 		]);
-
-		const aiRunId = relationId(createdRunLinks.docs[0].aiRun);
-		expect(aiRunId).toBeTruthy();
-		const aiRun = await setup!.app.collections.ai_runs.findOne({
-			where: { id: aiRunId! },
-		});
-		expect(aiRun).toMatchObject({
-			status: "pending",
-			runtime: "codex",
-			prompt: "Successful task",
-		});
-		expect(aiRun).not.toHaveProperty("task");
-		expect(aiRun).not.toHaveProperty("provider");
-		expect(aiRun).not.toHaveProperty("model");
-		expect(
-			(aiRun?.meta as Record<string, unknown> | undefined)?.autopilot,
-		).toBe(undefined);
 
 		const reviewActivities = await setup!.app.collections.activity.find({
 			where: { task: task.id, type: "task.review" },
@@ -372,9 +355,7 @@ describe("task-pipeline workflow", () => {
 		});
 		expect(createdRunLinks.docs).toHaveLength(2);
 		expect(
-			createdRunLinks.docs.every(
-				(run) => relationId(run.aiRun) && run.initiatedBy === "task",
-			),
+			createdRunLinks.docs.every((run) => run.initiatedBy === "task"),
 		).toBe(true);
 
 		const retryActivities = await setup!.app.collections.activity.find({

@@ -23,11 +23,12 @@ import { useAdminConfig } from "../../hooks/use-admin-config";
 import { useResolveText, useTranslation } from "../../i18n/hooks";
 import { selectClient, useAdminStore } from "../../runtime";
 import { resolveIconElement } from "../component-renderer";
+import { SelectMulti } from "../primitives/select-multi";
 import { SelectSingle } from "../primitives/select-single";
 import type { SelectOption } from "../primitives/types";
 import { ResourceSheet } from "../sheets/resource-sheet";
 import { Button } from "../ui/button";
-import { getAutoColumns } from "./field-utils";
+import { getAutoColumns, getRelationOptionDescription } from "./field-utils";
 import { LocaleBadge } from "./locale-badge";
 import {
 	type RelationDisplayFields,
@@ -119,8 +120,12 @@ export interface RelationPickerProps<_T extends QuestpieApp> {
 	maxItems?: number;
 
 	/**
-	 * Display mode for selected items
-	 * @default "list"
+	 * Display mode for the field.
+	 * - "select" (default): compact select control with linked records as
+	 *   chips inside it — chip label opens the editor, × unlinks.
+	 * - "list" | "chips" | "table" | "cards" | "grid": linked records
+	 *   rendered below a separate add control (default for orderable fields,
+	 *   which need the move buttons).
 	 */
 	display?: RelationDisplayMode;
 
@@ -166,7 +171,7 @@ export function RelationPicker<T extends QuestpieApp>({
 	locale: localeProp,
 	orderable = false,
 	maxItems,
-	display = "list",
+	display,
 	columns,
 	fields,
 	gridColumns,
@@ -196,13 +201,18 @@ export function RelationPicker<T extends QuestpieApp>({
 	const { data: serverConfig } = useAdminConfig();
 	const targetConfig = serverConfig?.collections?.[targetCollection];
 	const collectionIconRef = (targetConfig as any)?.icon;
+	// Default: the compact select-with-chips control. Orderable fields keep
+	// the list rows — reordering needs the move buttons.
+	const effectiveDisplay: RelationDisplayMode =
+		display ?? (orderable ? "list" : "select");
+	const isSelectDisplay = effectiveDisplay === "select";
 	const displayColumns = React.useMemo(() => {
 		if (columns && columns.length > 0) return columns;
-		if (display === "table" && targetConfig) {
+		if (effectiveDisplay === "table" && targetConfig) {
 			return getAutoColumns(targetConfig);
 		}
 		return ["_title"];
-	}, [columns, display, targetConfig]);
+	}, [columns, effectiveDisplay, targetConfig]);
 
 	// Normalize value to array (handles prefill with single string ID)
 	const selectedIds = React.useMemo(() => {
@@ -279,10 +289,11 @@ export function RelationPicker<T extends QuestpieApp>({
 					docs = [];
 				}
 
-				// Filter out already selected items and transform to SelectOption format
+				// The select control shows already-linked options as checked (toggle
+				// semantics); the legacy add-row modes hide them instead.
 				const selectedIdSet = new Set(selectedIds);
 				return docs
-					.filter((opt: any) => !selectedIdSet.has(opt.id))
+					.filter((opt: any) => isSelectDisplay || !selectedIdSet.has(opt.id))
 					.map((item: any) => {
 						let label: string;
 						if (renderOption) {
@@ -294,12 +305,14 @@ export function RelationPicker<T extends QuestpieApp>({
 						} else {
 							label = "";
 						}
+						// No per-option icon: every option shares the collection's
+						// icon, so it carries zero information — the field label
+						// already shows it once. The description gives each option
+						// the context a bare title lacks.
 						return {
 							value: item.id,
 							label,
-							icon: resolveIconElement(collectionIconRef, {
-								className: "size-3.5 text-muted-foreground",
-							}),
+							description: getRelationOptionDescription(item, targetConfig),
 						};
 					});
 			} catch (error) {
@@ -314,10 +327,20 @@ export function RelationPicker<T extends QuestpieApp>({
 			filter,
 			selectedIds,
 			renderOption,
-			collectionIconRef,
+			isSelectDisplay,
+			targetConfig,
 			t,
 		],
 	);
+
+	// Labels for chips whose records may fall outside the loaded option window.
+	const selectedLabels = React.useMemo(() => {
+		const map: Record<string, string> = {};
+		for (const [id, doc] of fetchedItemsMap) {
+			map[id] = doc?._title || id;
+		}
+		return map;
+	}, [fetchedItemsMap]);
 
 	// Refetch for mutations (after create/update)
 	const queryClient = useQueryClient();
@@ -382,6 +405,26 @@ export function RelationPicker<T extends QuestpieApp>({
 		[selectedIds, onChange],
 	);
 
+	// Drag-and-drop reorder by array index (dnd-kit gives us from/to). Bounds-
+	// guarded; a no-op move never fires onChange.
+	const handleReorder = React.useCallback(
+		(fromIndex: number, toIndex: number) => {
+			if (
+				fromIndex === toIndex ||
+				fromIndex < 0 ||
+				toIndex < 0 ||
+				fromIndex >= selectedIds.length ||
+				toIndex >= selectedIds.length
+			)
+				return;
+			const next = [...selectedIds];
+			const [moved] = next.splice(fromIndex, 1);
+			next.splice(toIndex, 0, moved);
+			onChange(next);
+		},
+		[selectedIds, onChange],
+	);
+
 	const handleOpenCreate = React.useCallback(() => {
 		setEditingItemId(undefined);
 		setIsSheetOpen(true);
@@ -422,6 +465,7 @@ export function RelationPicker<T extends QuestpieApp>({
 				orderable && !readOnly
 					? (item: any) => handleMove(item.id, 1)
 					: undefined,
+			onReorder: orderable && !readOnly ? handleReorder : undefined,
 		}),
 		[
 			readOnly,
@@ -431,39 +475,102 @@ export function RelationPicker<T extends QuestpieApp>({
 			handleRemove,
 			orderable,
 			handleMove,
+			handleReorder,
 		],
 	);
 
+	const labelBlock = label && (
+		<div className="flex items-center gap-2">
+			<label
+				htmlFor={name}
+				className="font-chrome flex items-center gap-1.5 text-sm font-medium"
+			>
+				{resolveIconElement(collectionIconRef, {
+					className: "size-3.5 text-muted-foreground",
+				})}
+				{resolvedLabel}
+				{required && <span className="text-destructive">*</span>}
+				{maxItems && (
+					<span className="text-muted-foreground font-chrome chrome-meta ml-2 text-xs tabular-nums">
+						({selectedIds.length}/{maxItems})
+					</span>
+				)}
+			</label>
+			{localized && <LocaleBadge locale={locale || "i18n"} />}
+		</div>
+	);
+
+	const resourceSheet = (
+		<ResourceSheet
+			type="collection"
+			collection={targetCollection}
+			itemId={editingItemId}
+			open={isSheetOpen}
+			onOpenChange={setIsSheetOpen}
+			onSave={handleSheetSave}
+		/>
+	);
+
+	// Compact default: ONE control — linked records live as chips inside the
+	// select (label click edits, × unlinks, menu toggles + creates).
+	if (isSelectDisplay) {
+		return (
+			<div className="qa-relation-picker space-y-2">
+				{labelBlock}
+				<SelectMulti
+					id={name}
+					value={selectedIds}
+					onChange={onChange}
+					loadOptions={loadOptions}
+					queryKey={(search) =>
+						queryOpts.key([
+							"collections",
+							targetCollection,
+							"find",
+							{
+								limit: 50,
+								search,
+								where: filter ?? undefined,
+								withSelected: true,
+							},
+						])
+					}
+					prefetchOnMount
+					placeholder={resolvedPlaceholder || `${addLabel}...`}
+					disabled={disabled || readOnly}
+					emptyMessage={noResultsLabel}
+					drawerTitle={addLabel}
+					maxSelections={maxItems}
+					// Linked records are the field's content — show them all
+					// (wrapping), don't collapse into "+N more".
+					maxVisibleChips={100}
+					selectedLabels={selectedLabels}
+					loading={isLoadingItems}
+					onCreateNew={!readOnly && !disabled ? handleOpenCreate : undefined}
+					createNewLabel={createLabel}
+					onValueClick={
+						!readOnly && !disabled ? (id) => handleOpenEdit(id) : undefined
+					}
+					aria-invalid={!!error}
+				/>
+				{error && (
+					<p className="text-destructive text-sm text-pretty">{error}</p>
+				)}
+				{resourceSheet}
+			</div>
+		);
+	}
+
 	return (
 		<div className="qa-relation-picker space-y-2">
-			{label && (
-				<div className="flex items-center gap-2">
-					<label
-						htmlFor={name}
-						className="font-chrome flex items-center gap-1.5 text-sm font-medium"
-					>
-						{resolveIconElement(collectionIconRef, {
-							className: "size-3.5 text-muted-foreground",
-						})}
-						{resolvedLabel}
-						{required && <span className="text-destructive">*</span>}
-						{maxItems && (
-							<span className="text-muted-foreground font-chrome chrome-meta ml-2 text-xs tabular-nums">
-								({selectedIds.length}/{maxItems})
-							</span>
-						)}
-					</label>
-					{localized && <LocaleBadge locale={locale || "i18n"} />}
-				</div>
-			)}
+			{labelBlock}
 
 			{/* Selected Items Display */}
 			{(selectedItems.length > 0 || isLoadingItems) && (
 				<RelationItemsDisplay
-					display={display}
+					display={effectiveDisplay}
 					items={selectedItems}
 					collection={targetCollection}
-					collectionIcon={collectionIconRef}
 					editable={!readOnly && !disabled}
 					orderable={orderable && !readOnly && !disabled}
 					columns={displayColumns}
@@ -505,6 +612,8 @@ export function RelationPicker<T extends QuestpieApp>({
 							clearable={false}
 							emptyMessage={noResultsLabel}
 							drawerTitle={addLabel}
+							onCreateNew={handleOpenCreate}
+							createNewLabel={createLabel}
 						/>
 					</div>
 
@@ -537,14 +646,7 @@ export function RelationPicker<T extends QuestpieApp>({
 			{error && <p className="text-destructive text-sm text-pretty">{error}</p>}
 
 			{/* Side Sheet for Create/Edit */}
-			<ResourceSheet
-				type="collection"
-				collection={targetCollection}
-				itemId={editingItemId}
-				open={isSheetOpen}
-				onOpenChange={setIsSheetOpen}
-				onSave={handleSheetSave}
-			/>
+			{resourceSheet}
 		</div>
 	);
 }

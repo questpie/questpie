@@ -1,0 +1,259 @@
+/**
+ * POST /api/chat — the consolidated run model (the only chat path).
+ *
+ * The route mints a `run_links` row (kind="chat") the fleet worker claims,
+ * sets `chat_sessions.activeRun`+`activeStreamId` to the run's own
+ * `run-stream:…` id (the stream tail resolves this), publishes the
+ * `run-available` kick, and returns `{ runId, streamId }`. A second concurrent
+ * turn while a non-terminal run is active is rejected 409 (§3.10 single-flight).
+ */
+
+import { createFetchHandler } from "questpie";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+
+import { aiModule } from "@questpie/ai/modules/ai";
+
+import {
+	buildMockApp,
+	type MockApp,
+} from "../../../../../../packages/questpie/test/utils/mocks/mock-app-builder";
+import { runTestDbMigrations } from "../../../../../../packages/questpie/test/utils/test-db";
+import { activity } from "../collections/activity";
+import { chatMessages } from "../collections/chat-messages";
+import { chatSessions } from "../collections/chat-sessions";
+import { environments } from "../collections/environments";
+import assets from "../collections/assets";
+import { models } from "../collections/models";
+import { projects } from "../collections/projects";
+import { providers } from "../collections/providers";
+import { runLinks } from "../collections/run-links";
+import { scheduleExecutions } from "../collections/schedule-executions";
+import { schedules } from "../collections/schedules";
+import { scripts } from "../collections/scripts";
+import { secrets } from "../collections/secrets";
+import { taskRelations } from "../collections/task-relations";
+import { tasks } from "../collections/tasks";
+import chatRoute from "../routes/chat";
+import cancelRoute from "../routes/chat/[chatId]/cancel";
+
+describe("POST /api/chat (run model)", () => {
+	let setup: { app: MockApp; cleanup: () => Promise<void> } | undefined;
+	let handler: ReturnType<typeof createFetchHandler>;
+	let kicks: Array<{ runtime?: string }>;
+
+	beforeEach(async () => {
+		kicks = [];
+
+		const workflows = {
+			async trigger() {
+				return { instanceId: "wf-mock", existing: false };
+			},
+			async sendEvent() {},
+		};
+
+		setup = await buildMockApp({
+			collections: {
+				ai_worker_leases: aiModule.collections.ai_worker_leases,
+				ai_workers: aiModule.collections.ai_workers,
+				activity,
+				chat_messages: chatMessages,
+				chat_sessions: chatSessions,
+				environments,
+				assets,
+				models,
+				projects,
+				providers,
+				run_links: runLinks,
+				schedule_executions: scheduleExecutions,
+				schedules,
+				scripts,
+				secrets,
+				task_relations: taskRelations,
+				tasks,
+			},
+			services: {},
+			routes: { chat: chatRoute, "chat/[chatId]/cancel": cancelRoute },
+		});
+		await runTestDbMigrations(setup.app);
+
+		const mockQueue = {
+			// createAiRunLink's best-effort "worker, wake up" kick.
+			runAvailable: {
+				async publish(payload: { runtime?: string }) {
+					kicks.push(payload);
+					return "kick-job";
+				},
+			},
+		};
+
+		handler = createFetchHandler(setup.app, {
+			basePath: "/api",
+			getSession: async () => ({
+				user: { id: "operator-1" },
+				session: { id: "session-1" },
+			}),
+			extendContext: async () => ({ workflows, queue: mockQueue }),
+		});
+	});
+
+	afterEach(async () => {
+		await setup?.cleanup();
+		setup = undefined;
+	});
+
+	async function postChat(body: unknown) {
+		const response = await handler(
+			new Request("http://localhost/api/chat", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify(body),
+			}),
+		);
+		expect(response).not.toBeNull();
+		const text = await response!.text();
+		return {
+			status: response!.status,
+			body: text ? JSON.parse(text) : null,
+		};
+	}
+
+	async function postCancel(chatSessionId: string) {
+		const response = await handler(
+			new Request(`http://localhost/api/chat/${chatSessionId}/cancel`, {
+				method: "POST",
+			}),
+		);
+		expect(response).not.toBeNull();
+		const text = await response!.text();
+		return { status: response!.status, body: text ? JSON.parse(text) : null };
+	}
+
+	it("mints a kind='chat' run_links row, sets activeRun, returns runId + run-stream id", async () => {
+		const res = await postChat({ content: "Hello there" });
+
+		expect(res.status).toBe(200);
+		expect(res.body.runId).toBeTruthy();
+		expect(typeof res.body.streamId).toBe("string");
+		expect(res.body.streamId.startsWith("run-stream:")).toBe(true);
+
+		// The run_links row is the single execution record — pending, chat kind,
+		// addressing the same stream id returned to the client.
+		const run = await setup!.app.collections.run_links.findOne({
+			where: { id: res.body.runId },
+		});
+		expect(run).toMatchObject({
+			status: "pending",
+			kind: "chat",
+			initiatedBy: "chat",
+		});
+		expect(run?.activeStreamId).toBe(res.body.streamId);
+
+		// The session points at the run; the T6 stream tail resolves activeRun →
+		// run_links.activeStreamId.
+		const session = await setup!.app.collections.chat_sessions.findOne({
+			where: { id: res.body.session.id },
+		});
+		expect(
+			typeof session?.activeRun === "string"
+				? session?.activeRun
+				: (session?.activeRun as { id?: string } | null)?.id,
+		).toBe(res.body.runId);
+		expect(session?.activeStreamId).toBe(res.body.streamId);
+
+		// Kicked the fleet so an idle worker claims promptly.
+		expect(kicks).toHaveLength(1);
+	});
+
+	it("rejects a second concurrent turn while a run is active (409)", async () => {
+		const first = await postChat({ content: "First turn" });
+		expect(first.status).toBe(200);
+
+		const second = await postChat({
+			chatSessionId: first.body.session.id,
+			content: "Second turn while the first is still running",
+		});
+		expect(second.status).toBe(409);
+
+		// Only the first run exists — the second never minted a row.
+		const runs = await setup!.app.collections.run_links.find({
+			where: { chatSession: first.body.session.id },
+			limit: 10,
+		});
+		expect(runs.docs).toHaveLength(1);
+	});
+
+	it("stores clientMessageId as the user row's uiMessageId and reuses the row on retry", async () => {
+		const first = await postChat({
+			content: "retry me",
+			clientMessageId: "client-msg-1",
+		});
+		expect(first.status).toBe(200);
+		expect(first.body.message.uiMessageId).toBe("client-msg-1");
+
+		// Terminal-ize the first run so single-flight admits the retry.
+		await setup!.app.collections.run_links.updateById({
+			id: first.body.runId,
+			data: { status: "failed", endedAt: new Date() },
+		});
+
+		// The retry re-sends the SAME clientMessageId → the user row is reused
+		// (no duplicate), while a fresh run is minted and linked to it.
+		const retry = await postChat({
+			chatSessionId: first.body.session.id,
+			content: "retry me",
+			clientMessageId: "client-msg-1",
+		});
+		expect(retry.status).toBe(200);
+		expect(retry.body.message.id).toBe(first.body.message.id);
+		expect(retry.body.runId).not.toBe(first.body.runId);
+
+		const messages = await setup!.app.collections.chat_messages.find({
+			where: { chatSession: first.body.session.id, role: "user" },
+			limit: 10,
+		});
+		expect(messages.docs).toHaveLength(1);
+
+		const retryRun = await setup!.app.collections.run_links.findOne({
+			where: { id: retry.body.runId },
+		});
+		expect(
+			typeof retryRun?.chatMessage === "string"
+				? retryRun?.chatMessage
+				: (retryRun?.chatMessage as { id?: string } | null)?.id,
+		).toBe(first.body.message.id);
+	});
+
+	it("cancel resolves activeRun → run_links.status='cancelled' and clears single-flight", async () => {
+		const created = await postChat({ content: "cancel me" });
+		expect(created.status).toBe(200);
+
+		const cancelled = await postCancel(created.body.session.id);
+		expect(cancelled.status).toBe(200);
+		expect(cancelled.body.cancelled).toBe(true);
+
+		// The active run is now terminal (cancelled) — the T6 tail closes on it and
+		// finalizeRun's latch blocks any late assistant-message resurrection.
+		const run = await setup!.app.collections.run_links.findOne({
+			where: { id: created.body.runId },
+		});
+		expect(run?.status).toBe("cancelled");
+		expect(run?.endedAt).toBeTruthy();
+
+		// The durable cancelled marker lives on the turn's USER message — a
+		// cancelled run never writes an assistant row (finalize latch), so this
+		// is what the FE badge renders from after a reload.
+		const userMessage = await setup!.app.collections.chat_messages.findOne({
+			where: { id: created.body.message.id },
+		});
+		expect(userMessage?.runStatus).toBe("cancelled");
+
+		// Single-flight is cleared (activeRun terminal) → a new turn is accepted.
+		const next = await postChat({
+			chatSessionId: created.body.session.id,
+			content: "a fresh turn after cancel",
+		});
+		expect(next.status).toBe(200);
+		expect(next.body.runId).toBeTruthy();
+		expect(next.body.runId).not.toBe(created.body.runId);
+	});
+});

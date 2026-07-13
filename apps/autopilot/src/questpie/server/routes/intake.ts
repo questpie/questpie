@@ -2,6 +2,7 @@ import { ApiError } from "questpie/errors";
 import { route } from "questpie/services";
 import { z } from "zod";
 
+import { asRecord } from "../lib/records";
 import { sessionOnly } from "../lib/route-access";
 import { workflowsFromContext } from "../lib/workflows";
 
@@ -45,8 +46,8 @@ export default route()
 			model: input.modelId,
 			queue: input.queue,
 			createdBy: input.createdBy ?? ctx.session?.user?.id ?? "system",
-			context: input.context,
-			metadata: input.metadata,
+			context: input.context ? asRecord(input.context) : undefined,
+			metadata: input.metadata ? asRecord(input.metadata) : undefined,
 		});
 
 		await collections.activity.create({

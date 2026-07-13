@@ -23,6 +23,10 @@ export const chatSessions = collection("chat_sessions")
 		project: f.relation("projects").label({ en: "Project" }),
 		task: f.relation("tasks").label({ en: "Task" }),
 		runtimeSessionRef: f.text().label({ en: "Runtime Session Ref" }),
+		harnessSessionId: f.text().label({ en: "Harness Session ID" }),
+		harnessResumeState: f.json().label({ en: "Harness Resume State" }),
+		activeStreamId: f.text().label({ en: "Active Stream ID" }),
+		activeRun: f.relation("run_links").label({ en: "Active Run" }),
 		metadata: f.json().label({ en: "Metadata" }),
 	}))
 	.title(({ f }) => f.title)

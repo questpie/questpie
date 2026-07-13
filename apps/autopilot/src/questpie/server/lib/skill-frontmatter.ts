@@ -423,3 +423,15 @@ export function parseSkillFrontmatter(body: string): SkillFrontmatter {
 	}
 	return result.data;
 }
+
+/**
+ * The SKILL.md body with its YAML frontmatter stripped — the markdown procedure
+ * only. Used to materialise a published skill as a harness-NATIVE skill
+ * (`HarnessAgentSkill.content`): the claude-code adapter re-adds its own
+ * `name`/`description` frontmatter fence, so the QUESTPIE frontmatter must NOT be
+ * carried into `content` (it would double the fence). Throws (via
+ * {@link splitFrontmatter}) if the body has no opening `---` fence.
+ */
+export function skillBodyWithoutFrontmatter(body: string): string {
+	return splitFrontmatter(body).rest;
+}

@@ -646,7 +646,8 @@ function deriveFileKey(relPath: string, category: DiscoveryCategory): string {
 		// Detect HTTP method suffix on the last segment:
 		// [collection].patch → key "[collection]:PATCH"
 		// globals/[name].delete → key "globals/[name]:DELETE"
-		const methodSuffixRe = /\.(get|post|put|patch|delete)$/i;
+		// mcp.options → key "mcp:OPTIONS"
+		const methodSuffixRe = /\.(get|post|put|patch|delete|options|head)$/i;
 		const methodMatch = stripped.match(methodSuffixRe);
 		const withoutMethod = methodMatch
 			? stripped.slice(0, -methodMatch[0].length)

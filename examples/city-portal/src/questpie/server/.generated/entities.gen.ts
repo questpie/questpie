@@ -54,7 +54,7 @@ import type { RouteParamsFromKey, RouteWithParams } from "questpie/types";
 // TYPES — composed from typeof references (zero inference cost)
 // ════════════════════════════════════════════════════════════
 
-import type { ExtractModulePropArr, ExtractModulePropArrOverride, ServiceCustomNamespaceInstances, ServiceInstanceOf, ServiceInstancesInNamespace, ServiceTopLevelInstances } from "questpie/types";
+import type { ExtractModulePropArr, ExtractModulePropArrOverride, Override, ServiceCustomNamespaceInstances, ServiceInstanceOf, ServiceInstancesInNamespace, ServiceTopLevelInstances } from "questpie/types";
 type _RouteDefinitionWithoutHandler<T> = T extends { mode: "raw" } ? Omit<T, "handler"> & { handler: (args: unknown) => Response | Promise<Response> } : Omit<T, "handler"> & { handler: (args: unknown) => unknown | Promise<unknown> };
 export type _ModuleCollections = ExtractModulePropArrOverride<typeof _modules, "collections">;
 export type _ModuleGlobals = ExtractModulePropArr<typeof _modules, "globals">;
@@ -83,7 +83,7 @@ import type { ExtractModuleProp } from "questpie/types";
 export type _AllModuleFields = ExtractModuleProp<{ modules: typeof _modules }, "fields">;
 
 /** All collections in the app (modules + user, user overrides) */
-export type AppCollections = _ModuleCollections & {
+export type AppCollections = Override<_ModuleCollections, {
 	announcements: typeof _coll_announcements;
 	cities: typeof _coll_cities;
 	cityMembers: typeof _coll_cityMembers;
@@ -92,7 +92,7 @@ export type AppCollections = _ModuleCollections & {
 	news: typeof _coll_news;
 	pages: typeof _coll_pages;
 	submissions: typeof _coll_submissions;
-};
+}>;
 
 /** All globals in the app (modules + user, user overrides) */
 export type AppGlobals = _ModuleGlobals & {

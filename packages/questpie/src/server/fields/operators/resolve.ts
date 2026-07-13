@@ -120,7 +120,8 @@ export function deriveJsonbOperator<TValue>(
 export function resolveContextualOperators<TDef extends OperatorSetDefinition>(
 	def: TDef,
 ): ContextualOperators<TDef["column"], TDef["column"]> {
-	const { column, jsonbCast, jsonbOverrides } = def;
+	const { jsonbCast, jsonbOverrides } = def;
+	const column = (def.column ?? {}) as TDef["column"];
 
 	// No JSONB ops if cast is null
 	if (jsonbCast === null) {

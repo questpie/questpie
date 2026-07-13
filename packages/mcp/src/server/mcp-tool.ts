@@ -29,6 +29,34 @@ class McpToolBuilder<
 	}
 }
 
+/**
+ * Define a custom MCP tool, contributed by a module the same way collections and
+ * routes are (via `ModuleDefinition.mcpTools`). `mcpTool(name, config).handler(fn)`
+ * returns a frozen, branded {@link McpToolDefinition}; the CRUD/route tools the
+ * framework auto-generates are the same shape.
+ *
+ * `config` mirrors the MCP tool contract: `inputSchema`/`outputSchema` (Zod),
+ * `title`/`description`/`annotations` for discovery, plus the two QUESTPIE
+ * authorization hooks that compose exactly like the built-in tools:
+ * - `access` — an {@link McpAccessRule} run against the caller's transport /
+ *   accessMode / session (and, for an OAuth caller, its scopes). Same RBAC-style
+ *   gate the CRUD tools use.
+ * - `scopes` — the OAuth scopes an `oauth` caller must hold ({@link McpToolConfig.scopes}).
+ *   Custom tools have no default scope mapping (unlike CRUD, there is no
+ *   resource/operation to derive one from), so an omitted value requires no
+ *   scope. The shipped scope gate ({@link scopeGateAllows}) enforces this at both
+ *   `tools/list` (hidden) and `tools/call` (denied); `system`/`user` callers
+ *   carry no scopes and skip it, so the effective bound is always `scopes ∩ RBAC`.
+ *
+ * @example
+ * ```ts
+ * export const ping = mcpTool("ops.ping", {
+ *   description: "Health probe",
+ *   inputSchema: z.object({}),
+ *   scopes: "routes:ops/ping:invoke", // only OAuth callers holding this scope
+ * }).handler(async () => ({ content: [{ type: "text", text: "pong" }] }));
+ * ```
+ */
 export function mcpTool<
 	TInputSchema extends z.ZodTypeAny = z.ZodTypeAny,
 	TOutputSchema extends z.ZodTypeAny = z.ZodTypeAny,
