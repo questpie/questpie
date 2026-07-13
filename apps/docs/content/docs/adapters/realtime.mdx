@@ -16,7 +16,7 @@ Read [Configuration](/docs/concepts/configuration) (where adapters are wired in 
 - **Records every change to an outbox.** Each create/update/delete (and bulk variant) appends a row to the `questpie_realtime_log` table, a durable, ordered change log keyed by an auto-incrementing `seq`.
 - **Fans out across instances.** The adapter broadcasts a tiny *notice* ("seq N on collection posts changed") to every process, which then drains the outbox and pushes snapshots to its own SSE subscribers.
 - **Zero-config default.** Turn `realtime` on with `true` and you get a working transport, polling on a non-Postgres setup, or an auto-wired `pg_notify` listener when a Postgres connection is available.
-- **Push transports for scale.** `pgNotifyAdapter` rides the database you already run; `redisStreamsAdapter` uses a Redis consumer group; `cloudflareRealtimeAdapter` is backed by a Durable Object.
+- **Push transports for scale.** `pgNotifyAdapter` rides the database you already run; `redisStreamsAdapter` gives every instance an independent Redis Stream tail; `cloudflareRealtimeAdapter` is backed by a Durable Object.
 - **Privacy-safe by design.** Only a `RealtimeNotice` crosses the wire, never row data. Each subscriber re-runs its own access-controlled query to build its snapshot, so one user's data can't leak through the transport.
 - **Swap with one config line.** The transport is a single `realtime.adapter` value, no app-code change to move from polling to Redis.
 
@@ -147,7 +147,7 @@ On a Postgres app, `realtime: true` already auto-wires `pg_notify` on the defaul
 
 ## `redisStreamsAdapter`, Redis Streams
 
-For Redis-backed fan-out across many instances, use Redis Streams with a consumer group. The `client` is **required**, QUESTPIE doesn't ship a Redis driver, so you bring your own (a small command-shaped object modeled on `node-redis`):
+For Redis-backed fan-out across many instances, use Redis Streams with an independent `XREAD` cursor per app instance. The `client` is **required**, QUESTPIE doesn't ship a Redis driver, so you bring your own (a small command-shaped object modeled on `node-redis`):
 
 ```ts title="src/questpie/server/questpie.config.ts"
 import { runtimeConfig } from "questpie/app";
@@ -165,43 +165,49 @@ export default runtimeConfig({
     adapter: redisStreamsAdapter({
       client: redis,
       // stream: "questpie:realtime",   // default
-      // group: "questpie-realtime",    // default
-      // consumer: "consumer-<uuid>",   // default: random per process
       // blockMs: 5000, batchSize: 100, // defaults
+      // maxLen: 10_000,                // approximate stream cap
     }),
   },
 });
 ```
 
-`RedisStreamsAdapterOptions` is `{ client (required), stream?, group?, consumer?, blockMs?, batchSize? }`.
+`RedisStreamsAdapterOptions` is `{ client (required), reader?, stream?, blockMs?, batchSize?, maxLen?, retryDelayMs?, onError? }`.
 
 | Option | Type | Default | Notes |
 |---|---|---|---|
-| `client` | `RedisStreamsClient` | none **required** | Your Redis client. Must implement `xAdd` + `xReadGroup`; `xGroupCreate` / `xAck` / `quit` / `disconnect` are optional. |
+| `client` | `RedisStreamsClient` | none **required** | Publishing client. Must implement `xAdd` + `xRead`; node-redis clients are automatically duplicated for the blocking reader. |
+| `reader` | `RedisStreamsClient` | auto | Optional already-connected blocking-read client for structural clients without `duplicate()`. |
 | `stream` | `string` | `"questpie:realtime"` | The Redis stream key notices are `XADD`-ed to. |
-| `group` | `string` | `"questpie-realtime"` | Consumer group name. Created with `MKSTREAM`; a `BUSYGROUP` (group already exists) is swallowed. |
-| `consumer` | `string` | `consumer-<random uuid>` | Per-process consumer id. The random default lets every instance read the stream without stealing each other's messages. |
-| `blockMs` | `number` | `5000` | How long `XREADGROUP` blocks waiting for new messages. |
-| `batchSize` | `number` | `100` | `COUNT` per `XREADGROUP` call. |
+| `blockMs` | `number` | `5000` | How long `XREAD` blocks waiting for new messages. |
+| `batchSize` | `number` | `100` | `COUNT` per `XREAD` call. |
+| `maxLen` | `number` | `10000` | Approximate `MAXLEN ~` cap applied by every `XADD`. |
+| `retryDelayMs` | `number` | `500` | Backoff after a read-loop failure. |
+| `onError` | `(error) => void` | `console.warn` | Error hook for read/listener failures. |
 
 Behavior:
 
-- **Uses `XADD` / `XREADGROUP` / `XACK`.** `notify()` `XADD`s the notice fields (`seq`, `resourceType`, `resource`, `operation`) as strings; the read loop acknowledges each delivered message.
-- **Resilient read loop.** On a read error it backs off 500ms and retries while running; `stop()` ends the loop.
+- **Broadcasts instead of load-balancing.** Every adapter tails from `$` with its own `XREAD` cursor, so all running app instances receive each new wake. There is no shared consumer group or pending-entry list.
+- **Bounds the stream.** `notify()` uses `XADD MAXLEN ~ 10000` by default and stores only the notice fields (`seq`, `resourceType`, `resource`, `operation`).
+- **Resilient lifecycle.** A failed loop iteration is reported, backed off, and retried. `stop()` awaits the blocking read's exit before a later `start()` can create another loop.
 - **Driver-agnostic.** Any client matching the `RedisStreamsClient` shape works, the type is modeled on `node-redis` command names but isn't tied to it.
 
 <Callout type="info" title="`RedisStreamsClient` is a structural contract">
 ```ts
 type RedisStreamsClient = {
-  xAdd(stream, id, fields): Promise<string>;
-  xGroupCreate?(stream, group, id, options?: { MKSTREAM?: boolean }): Promise<unknown>;
-  xReadGroup(...args: any[]): Promise<unknown>;
-  xAck?(stream, group, id | id[]): Promise<unknown>;
+  xAdd(stream, id, fields, options?): Promise<string>;
+  xRead(streams: Array<{ key: string; id: string }>, options?): Promise<unknown>;
+  duplicate?(): RedisStreamsClient;
+  connect?(): Promise<unknown>;
+  close?(): Promise<void>;
   quit?(): Promise<void>;
   disconnect?(): void;
+  destroy?(): void;
+  on?(event: "error", handler): unknown;
+  off?(event: "error", handler): unknown;
 };
 ```
-Only `xAdd` and `xReadGroup` are mandatory.
+Only `xAdd` and `xRead` are mandatory. Pass `reader` when a custom client cannot duplicate itself; blocking reads should not share the publishing connection.
 </Callout>
 
 ## `cloudflareRealtimeAdapter`, Durable Objects

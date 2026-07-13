@@ -6,66 +6,119 @@ export type RedisStreamsClient = {
 		stream: string,
 		id: string,
 		fields: Record<string, string>,
+		options?: {
+			TRIM?: {
+				strategy: "MAXLEN";
+				strategyModifier: "~";
+				threshold: number;
+			};
+		},
 	) => Promise<string>;
-	xGroupCreate?: (
-		stream: string,
-		group: string,
-		id: string,
-		options?: { MKSTREAM?: boolean },
+	xRead: (
+		streams: Array<{ key: string; id: string }>,
+		options?: { COUNT?: number; BLOCK?: number },
 	) => Promise<unknown>;
-	xReadGroup: (...args: any[]) => Promise<unknown>;
-	xAck?: (
-		stream: string,
-		group: string,
-		id: string | string[],
-	) => Promise<unknown>;
+	duplicate?: () => RedisStreamsClient;
+	connect?: () => Promise<unknown>;
+	close?: () => Promise<void>;
 	quit?: () => Promise<void>;
 	disconnect?: () => void;
+	destroy?: () => void;
+	on?: (event: "error", handler: (error: unknown) => void) => unknown;
+	off?: (event: "error", handler: (error: unknown) => void) => unknown;
 };
 
 export type RedisStreamsAdapterOptions = {
 	client: RedisStreamsClient;
+	/** Dedicated blocking-read connection. Node-redis clients are duplicated automatically. */
+	reader?: RedisStreamsClient;
 	stream?: string;
+	/** @deprecated Consumer groups are no longer used because they load-balance wakes. */
 	group?: string;
+	/** @deprecated Each adapter instance now owns an independent XREAD cursor. */
 	consumer?: string;
 	blockMs?: number;
 	batchSize?: number;
+	maxLen?: number;
+	retryDelayMs?: number;
+	onError?: (error: unknown) => void;
 };
 
 export class RedisStreamsAdapter implements RealtimeAdapter {
 	private client: RedisStreamsClient;
+	private providedReader?: RedisStreamsClient;
+	private reader: RedisStreamsClient | null = null;
+	private ownsReader = false;
+	private readerErrorHandler?: (error: unknown) => void;
 	private stream: string;
-	private group: string;
-	private consumer: string;
 	private blockMs: number;
 	private batchSize: number;
+	private maxLen: number;
+	private retryDelayMs: number;
+	private onError?: (error: unknown) => void;
 	private listeners = new Set<(notice: RealtimeNotice) => void>();
 	private running = false;
+	private readLoopPromise: Promise<void> | null = null;
+	private stopPromise: Promise<void> | null = null;
 
 	constructor(options: RedisStreamsAdapterOptions) {
 		this.client = options.client;
+		this.providedReader = options.reader;
 		this.stream = options.stream ?? "questpie:realtime";
-		this.group = options.group ?? "questpie-realtime";
-		this.consumer =
-			options.consumer ??
-			`consumer-${
-				globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2)
-			}`;
 		this.blockMs = options.blockMs ?? 5000;
 		this.batchSize = options.batchSize ?? 100;
+		this.maxLen = options.maxLen ?? 10_000;
+		this.retryDelayMs = options.retryDelayMs ?? 500;
+		this.onError = options.onError;
 	}
 
 	async start(): Promise<void> {
 		if (this.running) return;
+		if (this.stopPromise) await this.stopPromise;
+		if (this.running) return;
+
+		await this.ensureReader();
 		this.running = true;
-		await this.ensureGroup();
-		this.readLoop().catch(() => {
-			this.running = false;
+		this.readLoopPromise = this.runReadLoop().catch((error) => {
+			this.reportError("[Realtime] Redis Streams read loop stopped", error);
 		});
 	}
 
 	async stop(): Promise<void> {
+		if (this.stopPromise) return this.stopPromise;
 		this.running = false;
+		const readLoopPromise = this.readLoopPromise;
+		const reader = this.reader;
+		const ownsReader = this.ownsReader;
+		const forceCloseReader = ownsReader
+			? (reader?.destroy ?? reader?.disconnect)
+			: undefined;
+		this.stopPromise = (async () => {
+			try {
+				forceCloseReader?.call(reader);
+			} catch (error) {
+				this.reportError(
+					"[Realtime] Redis Streams reader shutdown failed",
+					error,
+				);
+			}
+			if (readLoopPromise) await readLoopPromise;
+			if (ownsReader && !forceCloseReader) {
+				if (reader?.close) await reader.close();
+				else await reader?.quit?.();
+			}
+		})().finally(() => {
+			if (this.readerErrorHandler) {
+				reader?.off?.("error", this.readerErrorHandler);
+				this.readerErrorHandler = undefined;
+			}
+			if (this.reader === reader) {
+				this.reader = null;
+				this.ownsReader = false;
+			}
+			this.stopPromise = null;
+		});
+		return this.stopPromise;
 	}
 
 	subscribe(handler: (notice: RealtimeNotice) => void): () => void {
@@ -76,66 +129,128 @@ export class RedisStreamsAdapter implements RealtimeAdapter {
 	}
 
 	async notify(event: RealtimeChangeEvent): Promise<void> {
-		await this.client.xAdd(this.stream, "*", {
-			seq: String(event.seq),
-			resourceType: event.resourceType,
-			resource: event.resource,
-			operation: event.operation,
-		});
-	}
-
-	private async ensureGroup(): Promise<void> {
-		if (!this.client.xGroupCreate) return;
-		try {
-			await this.client.xGroupCreate(this.stream, this.group, "$", {
-				MKSTREAM: true,
-			});
-		} catch (error: any) {
-			const message = String(error?.message || "");
-			if (!message.includes("BUSYGROUP")) {
-				throw error;
-			}
-		}
+		await this.client.xAdd(
+			this.stream,
+			"*",
+			{
+				seq: String(event.seq),
+				resourceType: event.resourceType,
+				resource: event.resource,
+				operation: event.operation,
+			},
+			{
+				TRIM: {
+					strategy: "MAXLEN",
+					strategyModifier: "~",
+					threshold: this.maxLen,
+				},
+			},
+		);
 	}
 
 	private async readLoop(): Promise<void> {
+		const reader = this.reader;
+		if (!reader) throw new Error("Redis Streams reader is not initialized");
+
+		let lastId = "$";
 		while (this.running) {
-			let response: unknown;
 			try {
-				response = await this.client.xReadGroup(
-					"GROUP",
-					this.group,
-					this.consumer,
-					"COUNT",
-					this.batchSize,
-					"BLOCK",
-					this.blockMs,
-					"STREAMS",
-					this.stream,
-					">",
+				const response = await reader.xRead(
+					[{ key: this.stream, id: lastId }],
+					{ COUNT: this.batchSize, BLOCK: this.blockMs },
 				);
-			} catch {
 				if (!this.running) break;
-				await new Promise((resolve) => setTimeout(resolve, 500));
-				continue;
-			}
 
-			const messages = this.normalizeResponse(response);
-			if (messages.length === 0) continue;
+				const messages = this.normalizeResponse(response);
+				for (const message of messages) {
+					lastId = message.id;
+					const notice = this.noticeFromFields(message.fields);
+					if (!notice) continue;
 
-			for (const message of messages) {
-				const notice = this.noticeFromFields(message.fields);
-				if (notice) {
 					for (const listener of this.listeners) {
-						listener(notice);
+						try {
+							listener(notice);
+						} catch (error) {
+							this.reportError(
+								"[Realtime] Redis Streams listener failed",
+								error,
+							);
+						}
 					}
 				}
-
-				if (this.client.xAck) {
-					await this.client.xAck(this.stream, this.group, message.id);
-				}
+			} catch (error) {
+				if (!this.running) break;
+				this.reportError(
+					"[Realtime] Redis Streams read failed; retrying",
+					error,
+				);
+				await new Promise((resolve) => setTimeout(resolve, this.retryDelayMs));
 			}
 		}
+	}
+
+	private async ensureReader(): Promise<void> {
+		if (this.reader) return;
+		if (this.providedReader) {
+			this.reader = this.providedReader;
+			this.attachReaderErrorHandler();
+			return;
+		}
+
+		if (this.client.duplicate) {
+			this.reader = this.client.duplicate();
+			this.ownsReader = true;
+			this.attachReaderErrorHandler();
+			try {
+				await this.reader.connect?.();
+			} catch (error) {
+				if (this.readerErrorHandler) {
+					this.reader.off?.("error", this.readerErrorHandler);
+					this.readerErrorHandler = undefined;
+				}
+				this.reader = null;
+				this.ownsReader = false;
+				throw error;
+			}
+			return;
+		}
+
+		this.reader = this.client;
+		this.attachReaderErrorHandler();
+	}
+
+	private attachReaderErrorHandler(): void {
+		if (!this.reader?.on || this.readerErrorHandler) return;
+		this.readerErrorHandler = (error) =>
+			this.reportError(
+				"[Realtime] Redis Streams reader connection error",
+				error,
+			);
+		this.reader.on("error", this.readerErrorHandler);
+	}
+
+	private async runReadLoop(): Promise<void> {
+		try {
+			await this.readLoop();
+		} finally {
+			this.running = false;
+			this.readLoopPromise = null;
+		}
+	}
+
+	private reportError(message: string, error: unknown): void {
+		if (this.onError) {
+			try {
+				this.onError(error);
+				return;
+			} catch (callbackError) {
+				console.warn(
+					"[Realtime] Redis Streams error callback failed",
+					callbackError,
+				);
+			}
+		}
+		console.warn(message, error);
 	}
 
 	private normalizeResponse(response: any): Array<{ id: string; fields: any }> {
