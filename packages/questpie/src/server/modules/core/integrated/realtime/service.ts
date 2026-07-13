@@ -21,6 +21,8 @@ type AppendChangeOptions = {
 	db?: DrizzleClientFromQuestpieConfig<any>;
 };
 
+const DEFAULT_ADAPTER_RECONCILIATION_INTERVAL_MS = 15_000;
+
 type ListenerEntry = {
 	listener: RealtimeListener;
 	topics: import("./types").RealtimeTopics;
@@ -131,11 +133,13 @@ export class RealtimeService {
 	private pollIntervalMs: number;
 	private batchSize: number;
 	private draining = false;
+	private drainPending = false;
 	private started = false;
 	private startPromise: Promise<void> | null = null;
 	private lastSeq = 0;
 	private pollTimer: ReturnType<typeof setInterval> | null = null;
 	private unsubscribeAdapter: (() => void) | null = null;
+	private unsubscribeAdapterState: (() => void) | null = null;
 	private subscriptionContext?: RealtimeSubscriptionContext;
 	private retentionDays?: number;
 	private retentionCleanupIntervalMs: number;
@@ -156,7 +160,11 @@ export class RealtimeService {
 		// PgNotifyAdapter will be lazily created on first subscribe (if needed)
 
 		this.batchSize = config.batchSize ?? 500;
-		this.pollIntervalMs = config.pollIntervalMs ?? (this.adapter ? 0 : 2000);
+		this.pollIntervalMs =
+			config.pollIntervalMs ??
+			(this.adapter || this.pgConnectionString
+				? DEFAULT_ADAPTER_RECONCILIATION_INTERVAL_MS
+				: 2000);
 		this.retentionDays =
 			typeof config.retentionDays === "number" && config.retentionDays > 0
 				? config.retentionDays
@@ -420,7 +428,15 @@ export class RealtimeService {
 				this.unsubscribeAdapter = this.adapter.subscribe(() => {
 					void this.drain();
 				});
-			} else if (this.pollIntervalMs > 0) {
+				this.unsubscribeAdapterState =
+					this.adapter.onStateChange?.((state) => {
+						if (state === "connected") {
+							void this.drain();
+						}
+					}) ?? null;
+			}
+
+			if (this.pollIntervalMs > 0) {
 				this.pollTimer = setInterval(() => {
 					void this.drain();
 				}, this.pollIntervalMs);
@@ -442,6 +458,11 @@ export class RealtimeService {
 				if (this.unsubscribeAdapter) {
 					this.unsubscribeAdapter();
 					this.unsubscribeAdapter = null;
+				}
+
+				if (this.unsubscribeAdapterState) {
+					this.unsubscribeAdapterState();
+					this.unsubscribeAdapterState = null;
 				}
 
 				if (this.adapter) {
@@ -489,13 +510,21 @@ export class RealtimeService {
 			this.unsubscribeAdapter = null;
 		}
 
+		if (this.unsubscribeAdapterState) {
+			this.unsubscribeAdapterState();
+			this.unsubscribeAdapterState = null;
+		}
+
 		if (this.adapter) {
 			await this.adapter.stop();
 		}
 	}
 
 	private async drain(): Promise<void> {
-		if (this.draining) return;
+		if (this.draining) {
+			this.drainPending = true;
+			return;
+		}
 		this.draining = true;
 
 		try {
@@ -511,7 +540,13 @@ export class RealtimeService {
 				if (events.length < this.batchSize) break;
 			}
 		} finally {
+			const shouldDrainAgain = this.drainPending;
+			this.drainPending = false;
 			this.draining = false;
+
+			if (shouldDrainAgain) {
+				void this.drain();
+			}
 		}
 	}
 

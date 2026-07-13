@@ -70,8 +70,10 @@ export interface RealtimeConfig {
 	adapter?: RealtimeAdapter;
 
 	/**
-	 * Poll interval in ms if no adapter is configured.
-	 * @default 2000
+	 * Reconciliation poll interval in ms. Polling runs alongside adapters so a
+	 * dropped wake-up notice cannot stall delivery indefinitely.
+	 *
+	 * @default 15000 with an adapter; 2000 without one
 	 */
 	pollIntervalMs?: number;
 
