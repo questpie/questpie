@@ -35,6 +35,16 @@ interface TimeConfig {
 }
 
 /**
+ * Default mode accepts both HH:MM and HH:MM:SS(.fraction): the admin's native
+ * HTML time input emits HH:MM at minute precision, and Postgres `time`
+ * accepts both — requiring seconds only produced avoidable validation
+ * failures ("09:00" rejected).
+ */
+const TIME_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)(:([0-5]\d)(\.\d+)?)?$/;
+/** `withSeconds: false` keeps the strict minute form. */
+const TIME_MINUTES_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+/**
  * Create a time field (HH:MM:SS, stored as `time` in PostgreSQL).
  *
  * @example
@@ -46,28 +56,30 @@ interface TimeConfig {
 export function time(config?: TimeConfig): Field<TimeFieldState> {
 	const { precision = 0, withSeconds = true } = config ?? {};
 
-	const timePattern = withSeconds
-		? /^([01]\d|2[0-3]):([0-5]\d):([0-5]\d)(\.\d+)?$/
-		: /^([01]\d|2[0-3]):([0-5]\d)$/;
+	const timePattern = withSeconds ? TIME_PATTERN : TIME_MINUTES_PATTERN;
 
-	return wrapFieldComplete(field<TimeFieldState>({
-		type: "time",
-		columnFactory: (name) => pgTime(name, { precision }),
-		schemaFactory: () =>
-			z.string().regex(timePattern, {
-				message: withSeconds
-					? "Invalid time format. Expected HH:MM:SS"
-					: "Invalid time format. Expected HH:MM",
-			}),
-		operatorSet: dateOps,
-		notNull: false,
-		hasDefault: false,
-		localized: false,
-		virtual: false,
-		input: true,
-		output: true,
-		isArray: false,
-	}), timeFieldType.methods, {}) as any;
+	return wrapFieldComplete(
+		field<TimeFieldState>({
+			type: "time",
+			columnFactory: (name) => pgTime(name, { precision }),
+			schemaFactory: () =>
+				z.string().regex(timePattern, {
+					message: withSeconds
+						? "Invalid time format. Expected HH:MM or HH:MM:SS"
+						: "Invalid time format. Expected HH:MM",
+				}),
+			operatorSet: dateOps,
+			notNull: false,
+			hasDefault: false,
+			localized: false,
+			virtual: false,
+			input: true,
+			output: true,
+			isArray: false,
+		}),
+		timeFieldType.methods,
+		{},
+	) as any;
 }
 
 import type { Field } from "../../../fields/field-class.js";
@@ -78,9 +90,7 @@ export const timeFieldType = fieldType("time", {
 	create: (config?: TimeConfig) => {
 		const { precision = 0, withSeconds = true } = config ?? {};
 
-		const timePattern = withSeconds
-			? /^([01]\d|2[0-3]):([0-5]\d):([0-5]\d)(\.\d+)?$/
-			: /^([01]\d|2[0-3]):([0-5]\d)$/;
+		const timePattern = withSeconds ? TIME_PATTERN : TIME_MINUTES_PATTERN;
 
 		return {
 			type: "time",
@@ -88,7 +98,7 @@ export const timeFieldType = fieldType("time", {
 			schemaFactory: () =>
 				z.string().regex(timePattern, {
 					message: withSeconds
-						? "Invalid time format. Expected HH:MM:SS"
+						? "Invalid time format. Expected HH:MM or HH:MM:SS"
 						: "Invalid time format. Expected HH:MM",
 				}),
 			operatorSet: dateOps,

@@ -19,7 +19,8 @@ import eventsRoute from "../routes/events";
 import intakeRoute from "../routes/intake";
 import runStreamRoute from "../routes/run-stream";
 import runStatusRoute from "../routes/runs/[runId]";
-import runArtifactsRoute from "../routes/runs/[runId]/artifacts";
+import runArtifactsGetRoute from "../routes/runs/[runId]/artifacts.get";
+import runArtifactsPostRoute from "../routes/runs/[runId]/artifacts.post";
 import runArtifactContentRoute from "../routes/runs/[runId]/artifacts/[artifactId]/content";
 import workspaceContentRoute from "../routes/workspace-inspection/content";
 import workspaceDiffRoute from "../routes/workspace-inspection/diff";
@@ -85,12 +86,21 @@ const routeAccessCases = [
 		coverage: "autopilot-route-access.test.ts, chat-realtime-workflow.test.ts",
 	},
 	{
-		file: "routes/runs/[runId]/artifacts.ts",
-		route: runArtifactsRoute,
-		methods: ["GET", "POST"],
+		file: "routes/runs/[runId]/artifacts.get.ts",
+		route: runArtifactsGetRoute,
+		methods: ["GET"],
 		mode: "raw",
 		policy: "sessionOnly",
-		reason: "lists and creates run artifacts",
+		reason: "lists run artifacts",
+		coverage: "autopilot-route-access.test.ts",
+	},
+	{
+		file: "routes/runs/[runId]/artifacts.post.ts",
+		route: runArtifactsPostRoute,
+		methods: ["POST"],
+		mode: "raw",
+		policy: "sessionOnly",
+		reason: "creates run artifacts",
 		coverage: "autopilot-route-access.test.ts",
 	},
 	{

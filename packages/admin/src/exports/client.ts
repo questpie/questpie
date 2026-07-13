@@ -452,6 +452,14 @@ export {
 	field,
 	configureField,
 } from "#questpie/admin/client/builder/field/field.js";
+// Field-authoring building blocks: the label/description/error shell and the
+// form-control resolver every built-in field component uses — custom fields
+// get the same chrome instead of hand-rolling it.
+export {
+	FieldCountAccessory,
+	FieldWrapper,
+} from "#questpie/admin/client/components/fields/field-wrapper.js";
+export { useResolvedControl } from "#questpie/admin/client/components/fields/field-utils.js";
 // Component types (for implementing custom fields)
 export type {
 	BaseFieldProps,

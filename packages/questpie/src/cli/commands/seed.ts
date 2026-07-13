@@ -71,14 +71,34 @@ export async function runSeedCommand(options: RunSeedOptions): Promise<void> {
 	try {
 		// Execute the requested action
 		switch (options.action) {
-			case "run":
+			case "run": {
 				await runner.run(seeds, {
 					category,
 					only,
 					force: options.force,
 					validate: options.validate,
 				});
+				// Backfill the search index for the seeded data. Seeds run in this
+				// standalone CLI with no queue worker, so the write-time index jobs
+				// (which a running app defers to the queue) would otherwise never be
+				// processed and the seeded records would be unsearchable.
+				if (app.search) {
+					try {
+						const { reindexAllCollections } =
+							await import("../../server/modules/core/integrated/search/reindex.js");
+						const results = await reindexAllCollections(app as never);
+						const total = results.reduce((n, r) => n + r.indexed, 0);
+						if (total > 0) {
+							console.log(`🔎 Search index backfilled: ${total} record(s)`);
+						}
+					} catch (error) {
+						console.warn(
+							`⚠️  Search index backfill failed (records saved fine): ${error}`,
+						);
+					}
+				}
 				break;
+			}
 
 			case "undo":
 				await runner.undo(seeds, {

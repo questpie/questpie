@@ -25,7 +25,11 @@ function Command({
 		<CommandPrimitive
 			data-slot="command"
 			className={cn(
-				"qa-command bg-popover text-popover-foreground flex size-full flex-col overflow-hidden p-1",
+				// Transparent layout container — no own background/radius. The host
+				// floating surface (Popover / DialogContent / DrawerContent) paints
+				// the single `--popover` panel; a second painted panel here was the
+				// "doubled background" inside drawers.
+				"qa-command text-popover-foreground flex size-full flex-col overflow-hidden p-1",
 				className,
 			)}
 			{...props}

@@ -14,6 +14,11 @@ import _coll_admin_preferences from "../collections/admin-preferences";
 import _coll_admin_saved_views from "../collections/admin-saved-views";
 import _coll_apikey from "../collections/apikey";
 import _coll_assets from "../collections/assets";
+import _coll_jwks from "../collections/jwks";
+import _coll_oauthAccessToken from "../collections/oauth-access-token";
+import _coll_oauthClient from "../collections/oauth-client";
+import _coll_oauthConsent from "../collections/oauth-consent";
+import _coll_oauthRefreshToken from "../collections/oauth-refresh-token";
 import _coll_session from "../collections/session";
 import _coll_user from "../collections/user";
 import _coll_verification from "../collections/verification";
@@ -58,6 +63,11 @@ export type AdminCollections = {
 	admin_saved_views: typeof _coll_admin_saved_views;
 	apikey: typeof _coll_apikey;
 	assets: typeof _coll_assets;
+	jwks: typeof _coll_jwks;
+	oauthAccessToken: typeof _coll_oauthAccessToken;
+	oauthClient: typeof _coll_oauthClient;
+	oauthConsent: typeof _coll_oauthConsent;
+	oauthRefreshToken: typeof _coll_oauthRefreshToken;
 	session: typeof _coll_session;
 	user: typeof _coll_user;
 	verification: typeof _coll_verification;
@@ -122,6 +132,11 @@ const _module: AdminModule = {
 		admin_saved_views: _coll_admin_saved_views,
 		apikey: _coll_apikey,
 		assets: _coll_assets,
+		jwks: _coll_jwks,
+		oauthAccessToken: _coll_oauthAccessToken,
+		oauthClient: _coll_oauthClient,
+		oauthConsent: _coll_oauthConsent,
+		oauthRefreshToken: _coll_oauthRefreshToken,
 		session: _coll_session,
 		user: _coll_user,
 		verification: _coll_verification,

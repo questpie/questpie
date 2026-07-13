@@ -30,7 +30,15 @@ export interface ReactiveFieldState {
  */
 export interface ReactiveFieldResult {
 	field: string;
-	type: "hidden" | "readOnly" | "disabled" | "compute";
+	/**
+	 * The server evaluates field-level reactive admin props (`.admin({ hidden })`
+	 * etc.) and returns them as `type: "prop"` with a `propPath` — NOT as the
+	 * legacy `type: "hidden"` shape the request descriptors use. Both are handled
+	 * in `onSuccess`.
+	 */
+	type: "hidden" | "readOnly" | "disabled" | "compute" | "prop";
+	/** Present when `type === "prop"` — e.g. "hidden" | "readOnly" | "disabled". */
+	propPath?: string;
 	value: unknown;
 	error?: string;
 }
@@ -342,6 +350,19 @@ export function useReactiveFields({
 								shouldTouch: false,
 								shouldValidate: true,
 							});
+						}
+					} else if (result.type === "prop") {
+						// Field-level reactive admin props arrive as `type: "prop"` with
+						// a `propPath`. The field-state props (hidden/readOnly/disabled)
+						// drive the renderer's visibility/interactivity — key them under
+						// their propPath, not the literal "prop".
+						if (
+							result.propPath === "hidden" ||
+							result.propPath === "readOnly" ||
+							result.propPath === "disabled"
+						) {
+							nextState[result.field][result.propPath] =
+								result.value as boolean;
 						}
 					} else {
 						nextState[result.field][result.type] = result.value as boolean;

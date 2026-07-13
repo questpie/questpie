@@ -19,7 +19,6 @@
  */
 
 import { ApiError } from "questpie/errors";
-import { route } from "questpie/services";
 
 import {
 	appDataPrefix,
@@ -38,9 +37,9 @@ import {
  * `fs:read` (GET) / `fs:write` (PUT) pseudo-action (§3.3). REPLACES the old
  * `sessionOnly`.
  */
-const miniAppFsAccess = miniAppTokenAccess(fsPseudoAction);
+export const miniAppFsAccess = miniAppTokenAccess(fsPseudoAction);
 
-type FsContext = Questpie.AppContext & {
+export type FsContext = Questpie.AppContext & {
 	request: Request;
 	params: { appId: string; path: string };
 };
@@ -61,7 +60,7 @@ async function handleList(ctx: FsContext, prefix: string) {
 	return Response.json({ prefix, entries });
 }
 
-async function handleGet(ctx: FsContext, url: URL) {
+export async function handleFsGet(ctx: FsContext, url: URL) {
 	const { appId, path } = ctx.params;
 	const dataPrefix = appDataPrefix(appId);
 	const scopedPath = resolveAppDataPath(appId, path);
@@ -93,7 +92,7 @@ async function handleGet(ctx: FsContext, url: URL) {
 	throw ApiError.notFound("File", path);
 }
 
-async function handlePut(ctx: FsContext) {
+export async function handleFsPut(ctx: FsContext) {
 	const { appId, path } = ctx.params;
 	const scopedPath = resolveAppDataPath(appId, path);
 	if (scopedPath.endsWith("/")) {
@@ -125,16 +124,3 @@ async function handlePut(ctx: FsContext) {
 		{ status: 201 },
 	);
 }
-
-export default route()
-	.get()
-	.put()
-	.access(miniAppFsAccess)
-	.params<{ appId: string; path: string }>()
-	.raw()
-	.handler(async (ctx) => {
-		const c = ctx as FsContext;
-		const url = new URL(c.request.url);
-		if (c.request.method === "PUT") return handlePut(c);
-		return handleGet(c, url);
-	});

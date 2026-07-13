@@ -106,7 +106,7 @@ export const createAdapterContext = async <
 			: resolveSession(app, request, config),
 		resolveLocale(app, request, config, queryLocale),
 	]);
-	const sessionData = resolvedSession as { user: any; session: any } | null;
+	const sessionData = resolvedSession;
 
 	const baseContext: AdapterBaseContext = {
 		session: sessionData,

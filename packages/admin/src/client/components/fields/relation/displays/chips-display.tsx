@@ -7,7 +7,6 @@ import * as React from "react";
 
 import { useTranslation } from "../../../../i18n/hooks";
 import { CollectionEditLink } from "../../../admin-link";
-import { resolveIconElement } from "../../../component-renderer";
 import { Badge } from "../../../ui/badge";
 import { Button } from "../../../ui/button";
 import { Skeleton } from "../../../ui/skeleton";
@@ -31,7 +30,6 @@ function ChipsSkeleton({ count = 3 }: { count?: number }) {
 export function ChipsDisplay({
 	items,
 	collection,
-	collectionIcon,
 	actions,
 	editable = false,
 	linkToDetail = false,
@@ -39,9 +37,6 @@ export function ChipsDisplay({
 	loadingCount = 3,
 }: RelationDisplayProps) {
 	const { t } = useTranslation();
-	const iconElement = resolveIconElement(collectionIcon, {
-		className: "size-3 text-muted-foreground",
-	});
 
 	// Show skeleton when loading and no items
 	if (isLoading && items.length === 0) {
@@ -62,7 +57,6 @@ export function ChipsDisplay({
 							// foundation; give the chip room to contain them cleanly.
 							className="qa-chips-display__chip item-surface border-border bg-secondary text-secondary-foreground inline-flex min-h-11 items-center gap-0.5 py-0.5 pr-1 pl-2 md:min-h-8 md:gap-1"
 						>
-							{iconElement}
 							<span className="text-sm">{displayText}</span>
 							{actions?.onEdit && (
 								<Button
@@ -105,7 +99,6 @@ export function ChipsDisplay({
 								variant="secondary"
 								className="item-surface border-border hover:bg-accent hover:text-accent-foreground cursor-pointer gap-1"
 							>
-								{iconElement}
 								{displayText}
 								<Icon icon="ph:pencil" className="size-3" />
 							</Badge>
@@ -126,7 +119,6 @@ export function ChipsDisplay({
 								variant="secondary"
 								className="item-surface border-border hover:bg-accent hover:text-accent-foreground cursor-pointer gap-1"
 							>
-								{iconElement}
 								{displayText}
 							</Badge>
 						</CollectionEditLink>
@@ -140,7 +132,6 @@ export function ChipsDisplay({
 						variant="secondary"
 						className="item-surface border-border gap-1"
 					>
-						{iconElement}
 						{displayText}
 					</Badge>
 				);

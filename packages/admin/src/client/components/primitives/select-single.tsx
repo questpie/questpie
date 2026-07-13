@@ -26,6 +26,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { FieldSelectTrigger } from "./field-select-control";
 import { resolveOptionLabel } from "./option-label";
+import { SelectCreateRow } from "./select-create-row";
 import type { BasePrimitiveProps, SelectOption, SelectOptions } from "./types";
 import { flattenOptions } from "./types";
 
@@ -76,6 +77,14 @@ interface SelectSingleProps<
 	 * Adds data-slot="input-group-control" for InputGroup focus-ring support.
 	 */
 	asInputGroupControl?: boolean;
+	/**
+	 * Renders a pinned "create new" row at the bottom of the menu — visible even
+	 * when the search has no results, so creation is always one tap away.
+	 * Closes the menu, then invokes the handler.
+	 */
+	onCreateNew?: () => void;
+	/** Label for the create-new row. */
+	createNewLabel?: string;
 }
 
 /**
@@ -119,6 +128,8 @@ export function SelectSingle<TValue extends string = string>({
 	selectedLabel,
 	isLoadingValue = false,
 	asInputGroupControl = false,
+	onCreateNew,
+	createNewLabel,
 }: SelectSingleProps<TValue>) {
 	const resolvedStaticOptions = staticOptions ?? EMPTY_OPTIONS;
 	const resolveText = useResolveText();
@@ -168,12 +179,16 @@ export function SelectSingle<TValue extends string = string>({
 		if (flatStaticOptions.length === 0) {
 			return dynamicOptions as SelectOption<TValue>[];
 		}
-		// Use reduce to build Map immutably - dynamic options override static
-		const mergedMap = [...flatStaticOptions, ...dynamicOptions].reduce(
-			(map, opt) =>
-				new Map(map).set(opt.value as TValue, opt as SelectOption<TValue>),
-			new Map<TValue, SelectOption<TValue>>(),
-		);
+		// Single-pass Map build (dynamic overrides static). The previous
+		// `reduce` cloned the whole Map on every option — O(n²) on every
+		// keystroke; this is O(n).
+		const mergedMap = new Map<TValue, SelectOption<TValue>>();
+		for (const opt of flatStaticOptions) {
+			mergedMap.set(opt.value as TValue, opt as SelectOption<TValue>);
+		}
+		for (const opt of dynamicOptions) {
+			mergedMap.set(opt.value as TValue, opt as SelectOption<TValue>);
+		}
 		return Array.from(mergedMap.values());
 	}, [loadOptions, dynamicOptions, flatStaticOptions]);
 	const showSearchInput =
@@ -371,6 +386,15 @@ export function SelectSingle<TValue extends string = string>({
 					})}
 				</CommandGroup>
 			</CommandList>
+			{onCreateNew && (
+				<SelectCreateRow
+					label={createNewLabel ?? t("relation.createNew", "Create new")}
+					onSelect={() => {
+						setOpen(false);
+						onCreateNew();
+					}}
+				/>
+			)}
 		</Command>
 	);
 
@@ -383,7 +407,7 @@ export function SelectSingle<TValue extends string = string>({
 					<DrawerHeader>
 						<DrawerTitle>{resolvedDrawerTitle}</DrawerTitle>
 					</DrawerHeader>
-					<div className="px-4 pb-6">{CommandContent}</div>
+					<div className="pb-4">{CommandContent}</div>
 				</DrawerContent>
 			</Drawer>
 		);

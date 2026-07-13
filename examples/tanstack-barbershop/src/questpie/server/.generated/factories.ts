@@ -7,6 +7,8 @@ import { CollectionBuilder, GlobalBuilder, wrapBuilderWithExtensions, builtinFie
 
 // ── Runtime Field Imports ──────────────────────────────────
 import { adminFields } from "@questpie/admin/fields";
+import { colorFieldType as _ftype_color } from "../fields/color";
+import { ratingFieldType as _ftype_rating } from "../fields/rating";
 
 const _fieldExt: Record<string, { stateKey: string; resolve: (value: unknown) => unknown }> = {
 	admin: { stateKey: "admin", resolve: (v: unknown) => v },
@@ -19,8 +21,15 @@ const _fieldExt: Record<string, { stateKey: string; resolve: (value: unknown) =>
 	},
 };
 
+// App field types (fields/ directory) — unwrap fieldType() definitions to factories
+const _appFieldTypes = {
+	"color": _ftype_color.factory,
+	"rating": _ftype_rating.factory,
+} as const;
+type _AppFieldTypesMap = typeof _appFieldTypes;
+
 // Merged field factories — builtins + module-contributed (e.g. richText, blocks) + user fields
-const _rawFieldDefs = { ...builtinFields, ...adminFields } as const;
+const _rawFieldDefs = { ...builtinFields, ...adminFields, ..._appFieldTypes } as const;
 
 // Wrap field factories so returned Field instances have extension methods
 type _FieldFactory = (...args: never[]) => unknown;
@@ -41,6 +50,7 @@ declare global {
 		interface RouteKeys { createBooking: unknown; getActiveBarbers: unknown; getAvailableTimeSlots: unknown; getRevenueStats: unknown }
 		interface ServiceKeys { blog: unknown }
 		interface EmailKeys { appointmentConfirmation: unknown; newBlogPost: unknown }
+		interface FieldTypeKeys { color: unknown; rating: unknown }
 		interface BlockKeys { bookingCta: unknown; columns: unknown; contactInfo: unknown; cta: unknown; divider: unknown; gallery: unknown; heading: unknown; hero: unknown; hours: unknown; imageText: unknown; reviews: unknown; services: unknown; spacer: unknown; stats: unknown; team: unknown; text: unknown }
 		interface McpToolKeys { "barbershop.checkAvailability": unknown }
 	}
@@ -90,7 +100,7 @@ declare module "questpie/builders" {
 
 declare global {
 	namespace Questpie {
-		interface FieldTypesMap extends BuiltinFields {}
+		interface FieldTypesMap extends BuiltinFields, _AppFieldTypesMap {}
 		interface FieldTypeRegistry extends Record<keyof _AllFieldTypes, {}> {}
 	}
 }

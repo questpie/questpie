@@ -27,14 +27,24 @@ import { ApiError } from "#questpie/server/errors/index.js";
 
 import { handleError } from "../../../../adapters/utils/response.js";
 
-/** Minimal shape of the Better Auth instance these proxies read. */
+/**
+ * Minimal shape of the Better Auth instance these proxies read.
+ * `getOAuthServerConfig` is contributed by the OAuth provider plugin, which the
+ * base `betterAuth()` type cannot carry — so it is optional here (a method, for
+ * bivariant compatibility with the inferred endpoint type) and its absence is
+ * answered with 501 rather than a crash.
+ */
 type AuthInstance = {
 	handler: (request: Request) => Promise<Response>;
 	api: {
-		getOAuthServerConfig: (args: {
+		getOAuthServerConfig?(args: {
 			request: Request;
 			asResponse: false;
-		}) => Promise<unknown>;
+		}): Promise<unknown>;
+		// The api surface is a bag of plugin-inferred endpoints; we only read
+		// the one above. The index signature keeps this structurally compatible
+		// with any `betterAuth()` instance (and out of weak-type territory).
+		[endpoint: string]: unknown;
 	};
 	options: { basePath?: string };
 };
@@ -43,7 +53,7 @@ function requireAuth(
 	app: Questpie<QuestpieConfig>,
 	request: Request,
 ): AuthInstance | Response {
-	const auth = app.auth as unknown as AuthInstance | undefined;
+	const auth: AuthInstance | undefined = app.auth;
 	if (!auth) {
 		return handleError(ApiError.notImplemented("Authentication"), {
 			request,
@@ -67,6 +77,12 @@ export async function oauthAuthorizationServerMetadata(
 ): Promise<Response> {
 	const auth = requireAuth(app, request);
 	if (auth instanceof Response) return auth;
+	if (!auth.api.getOAuthServerConfig) {
+		return handleError(ApiError.notImplemented("OAuth provider"), {
+			request,
+			app,
+		});
+	}
 	const body = await auth.api.getOAuthServerConfig({
 		request,
 		asResponse: false,
@@ -88,9 +104,7 @@ export async function oauthProtectedResourceMetadata(
 ): Promise<Response> {
 	const auth = requireAuth(app, request);
 	if (auth instanceof Response) return auth;
-	const resourceClient = oauthProviderResourceClient(
-		app.auth as unknown as Parameters<typeof oauthProviderResourceClient>[0],
-	);
+	const resourceClient = oauthProviderResourceClient(app.auth);
 	const metadata = await resourceClient
 		.getActions()
 		.getProtectedResourceMetadata({ resource: mcpAudienceForApp(app) });

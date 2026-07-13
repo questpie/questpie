@@ -8,7 +8,6 @@ import * as React from "react";
 import { useTranslation } from "../../../../i18n/hooks";
 import { cn } from "../../../../lib/utils";
 import { CollectionEditLink } from "../../../admin-link";
-import { resolveIconElement } from "../../../component-renderer";
 import { Button } from "../../../ui/button";
 import { Skeleton } from "../../../ui/skeleton";
 import { getItemDisplayValue, type RelationDisplayProps } from "./types";
@@ -33,7 +32,6 @@ function ListSkeleton({
 						key={key}
 						className="item-surface border-border bg-card flex items-center gap-2 px-3 py-2.5"
 					>
-						<Skeleton variant="text" className="size-3.5" />
 						<Skeleton variant="text" className="h-4 max-w-[200px] flex-1" />
 					</div>
 				))}
@@ -48,7 +46,6 @@ function ListSkeleton({
 					key={key}
 					className="item-surface border-border bg-card flex items-center gap-2 px-3 py-2"
 				>
-					<Skeleton variant="text" className="size-3.5" />
 					<Skeleton variant="text" className="h-4 w-32" />
 				</li>
 			))}
@@ -59,7 +56,6 @@ function ListSkeleton({
 export function ListDisplay({
 	items,
 	collection,
-	collectionIcon,
 	actions,
 	editable = false,
 	orderable = false,
@@ -69,12 +65,6 @@ export function ListDisplay({
 	loadingCount = 3,
 }: RelationDisplayProps) {
 	const { t } = useTranslation();
-	const iconElement = resolveIconElement(collectionIcon, {
-		className: "size-3.5 text-muted-foreground shrink-0",
-	});
-	const smallIconElement = resolveIconElement(collectionIcon, {
-		className: "size-3.5 text-muted-foreground shrink-0",
-	});
 
 	// Show skeleton when loading and no items
 	if (isLoading && items.length === 0) {
@@ -92,7 +82,6 @@ export function ListDisplay({
 					>
 						{/* Item Display */}
 						<div className="flex min-w-0 flex-1 items-center gap-2">
-							{iconElement}
 							{renderItem ? (
 								renderItem(item, index)
 							) : (
@@ -148,7 +137,8 @@ export function ListDisplay({
 							</Button>
 						)}
 
-						{/* Remove Button */}
+						{/* Remove Button — breaks the LINK (the record itself survives);
+						    the link-break glyph disambiguates from delete. */}
 						{actions?.onRemove && (
 							<Button
 								type="button"
@@ -159,7 +149,7 @@ export function ListDisplay({
 								title={t("common.remove")}
 								aria-label={t("field.removeItem")}
 							>
-								<Icon icon="ph:x" className="size-3" />
+								<Icon icon="ph:link-break" className="size-3" />
 							</Button>
 						)}
 					</div>
@@ -191,7 +181,6 @@ export function ListDisplay({
 									"hover:border-border hover:bg-accent hover:text-accent-foreground",
 								)}
 							>
-								{smallIconElement}
 								{displayText}
 								<Icon icon="ph:pencil" className="ml-auto size-3.5 shrink-0" />
 							</button>
@@ -211,7 +200,6 @@ export function ListDisplay({
 									"hover:border-border hover:bg-accent hover:text-accent-foreground",
 								)}
 							>
-								{smallIconElement}
 								{displayText}
 								<Icon
 									icon="ph:arrow-right"
@@ -225,7 +213,6 @@ export function ListDisplay({
 				// Read-only
 				return (
 					<li key={item.id} className={itemSurfaceClass}>
-						{smallIconElement}
 						{displayText}
 					</li>
 				);

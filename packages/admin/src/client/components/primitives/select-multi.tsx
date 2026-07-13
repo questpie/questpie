@@ -26,12 +26,56 @@ import {
 } from "../ui/drawer";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { resolveOptionLabel } from "./option-label";
+import { SelectCreateRow } from "./select-create-row";
 import type { BasePrimitiveProps, SelectOption, SelectOptions } from "./types";
 import { flattenOptions } from "./types";
 
 // Module-level constants for empty arrays to avoid recreating on each render
 const EMPTY_VALUE: string[] = [];
 const EMPTY_OPTIONS: SelectOptions<string> = [];
+
+/**
+ * Chip text inside the trigger. With `onEdit` it becomes the chip's primary
+ * action (open the record editor) — pointer events must not bubble to the
+ * combobox trigger, or every tap would also open the menu.
+ */
+function ChipLabel({
+	label,
+	editTitle,
+	onEdit,
+}: {
+	label: string;
+	editTitle: string;
+	onEdit?: () => void;
+}) {
+	if (!onEdit) {
+		return <span className="max-w-32 truncate">{label}</span>;
+	}
+
+	const stopAnd = (event: React.SyntheticEvent, action?: () => void) => {
+		event.preventDefault();
+		event.stopPropagation();
+		action?.();
+	};
+
+	return (
+		<span
+			role="button"
+			tabIndex={0}
+			title={editTitle}
+			onPointerDown={(event) => stopAnd(event)}
+			onClick={(event) => stopAnd(event, onEdit)}
+			onKeyDown={(event) => {
+				if (event.key === "Enter" || event.key === " ") {
+					stopAnd(event, onEdit);
+				}
+			}}
+			className="max-w-32 cursor-pointer truncate underline-offset-2 hover:underline"
+		>
+			{label}
+		</span>
+	);
+}
 
 interface SelectMultiProps<
 	TValue extends string = string,
@@ -58,6 +102,24 @@ interface SelectMultiProps<
 	drawerTitle?: string;
 	/** Max visible chips before collapsing */
 	maxVisibleChips?: number;
+	/**
+	 * Labels for selected values that may not be present in the loaded
+	 * options (async selects load a windowed option list; the selection can
+	 * point outside it). Keyed by value.
+	 */
+	selectedLabels?: Record<string, string>;
+	/**
+	 * Renders a pinned "create new" row at the bottom of the menu — visible
+	 * even when the search has no results. Closes the menu, then invokes.
+	 */
+	onCreateNew?: () => void;
+	/** Label for the create-new row. */
+	createNewLabel?: string;
+	/**
+	 * Makes chip labels clickable (e.g. open the record editor). The chip's
+	 * remove × keeps working independently.
+	 */
+	onValueClick?: (value: TValue) => void;
 }
 
 /**
@@ -100,6 +162,10 @@ export function SelectMulti<TValue extends string = string>({
 	"aria-invalid": ariaInvalid,
 	drawerTitle = "Select options",
 	maxVisibleChips = 3,
+	selectedLabels,
+	onCreateNew,
+	createNewLabel,
+	onValueClick,
 }: SelectMultiProps<TValue>) {
 	const resolvedValue = value ?? (EMPTY_VALUE as TValue[]);
 	const resolvedStaticOptions = staticOptions ?? EMPTY_OPTIONS;
@@ -149,11 +215,16 @@ export function SelectMulti<TValue extends string = string>({
 		if (flatStaticOptions.length === 0) {
 			return dynamicOptions as SelectOption<TValue>[];
 		}
-		const mergedMap = [...flatStaticOptions, ...dynamicOptions].reduce(
-			(map, opt) =>
-				new Map(map).set(opt.value as TValue, opt as SelectOption<TValue>),
-			new Map<TValue, SelectOption<TValue>>(),
-		);
+		// Single-pass Map build (dynamic overrides static). The previous
+		// `reduce` cloned the whole Map on every option — O(n²) on every
+		// keystroke; this is O(n).
+		const mergedMap = new Map<TValue, SelectOption<TValue>>();
+		for (const opt of flatStaticOptions) {
+			mergedMap.set(opt.value as TValue, opt as SelectOption<TValue>);
+		}
+		for (const opt of dynamicOptions) {
+			mergedMap.set(opt.value as TValue, opt as SelectOption<TValue>);
+		}
 		return Array.from(mergedMap.values());
 	}, [loadOptions, dynamicOptions, flatStaticOptions]);
 	const getOptionLabel = useCallback(
@@ -180,10 +251,15 @@ export function SelectMulti<TValue extends string = string>({
 		);
 	}, [allOptions, search, loadOptions, getOptionLabel]);
 
-	// Get label for a value
+	// Get label for a value. Selected values may not be in the (windowed)
+	// option list — `selectedLabels` covers those; without it an async select
+	// would render raw ids in the chips.
 	const getLabel = useCallback(
 		(val: TValue): string => {
 			const option = allOptions.find((opt) => opt.value === val);
+			if (!option?.label && selectedLabels?.[String(val)]) {
+				return selectedLabels[String(val)];
+			}
 			return resolveOptionLabel({
 				value: val,
 				label: option?.label,
@@ -192,7 +268,7 @@ export function SelectMulti<TValue extends string = string>({
 				locale,
 			});
 		},
-		[allOptions, locale, resolveText, translate],
+		[allOptions, locale, resolveText, translate, selectedLabels],
 	);
 
 	const findOption = useCallback(
@@ -252,6 +328,12 @@ export function SelectMulti<TValue extends string = string>({
 
 	const showLoading = isFetching || externalLoading;
 	const canAddMore = !maxSelections || resolvedValue.length < maxSelections;
+	// Set lookup: the option list does a per-option "is selected" check —
+	// Array.includes would make that quadratic on large lists.
+	const selectedValueSet = useMemo(
+		() => new Set(resolvedValue as string[]),
+		[resolvedValue],
+	);
 
 	// Visible and hidden chips
 	const visibleChips = resolvedValue.slice(0, maxVisibleChips);
@@ -296,7 +378,15 @@ export function SelectMulti<TValue extends string = string>({
 								)}
 							>
 								{chipOption?.icon}
-								<span className="max-w-24 truncate">{getLabel(val)}</span>
+								<ChipLabel
+									label={getLabel(val)}
+									editTitle={t("field.editItem", "Edit item")}
+									onEdit={
+										onValueClick && !disabled
+											? () => onValueClick(val)
+											: undefined
+									}
+								/>
 								{!disabled && (
 									<span
 										aria-hidden="true"
@@ -365,9 +455,7 @@ export function SelectMulti<TValue extends string = string>({
 				<CommandEmpty>{resolvedEmptyMessage}</CommandEmpty>
 				<CommandGroup>
 					{filteredOptions.map((option) => {
-						const isSelected = (resolvedValue as string[]).includes(
-							option.value as string,
-						);
+						const isSelected = selectedValueSet.has(option.value as string);
 						const isDisabled = option.disabled || (!isSelected && !canAddMore);
 						const description = option.description
 							? resolveText(option.description)
@@ -405,6 +493,15 @@ export function SelectMulti<TValue extends string = string>({
 					})}
 				</CommandGroup>
 			</CommandList>
+			{onCreateNew && (
+				<SelectCreateRow
+					label={createNewLabel ?? t("relation.createNew", "Create new")}
+					onSelect={() => {
+						setOpen(false);
+						onCreateNew();
+					}}
+				/>
+			)}
 			{maxSelections && (
 				<div className="text-muted-foreground border-t p-2 text-center text-xs tabular-nums">
 					{resolvedValue.length} / {maxSelections} selected
@@ -431,7 +528,7 @@ export function SelectMulti<TValue extends string = string>({
 					<DrawerHeader>
 						<DrawerTitle>{resolvedDrawerTitle}</DrawerTitle>
 					</DrawerHeader>
-					<div className="px-4 pb-6">{CommandContent}</div>
+					<div className="pb-4">{CommandContent}</div>
 				</DrawerContent>
 			</Drawer>
 		);

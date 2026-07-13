@@ -50,7 +50,9 @@ import _openapi from "../config/openapi";
 import type { AppCollections, AppGlobals, AppJobs, _ModuleCollections, _AppDefaultServices, _AppServicesSeam, _AppTopLevelServices, _AppCustomServiceNamespaces, _Registry_Collections, _Registry_Globals, _Registry_Jobs, _Registry_Routes, _Registry_Services, _Registry_Emails, _Registry_FieldTypes, _Registry_Views, _Registry_Components, _Registry_Blocks, _AllModuleFields } from "./entities.gen";
 import type { AnyCollectionOrBuilder, AnyGlobalOrBuilder, CollectionAPI, DrizzleClientFromQuestpieConfig, InferContextExtensionsFromAppConfig, InferSessionFromAuthConfig, MailerService, Questpie, QuestpieConfig, QueueClient, QueueJobType, ServiceInstancesInNamespace, TablesFromConfig, z } from "questpie/types";
 
-type _MPConfigSub<A extends readonly any[], K extends string> = A extends readonly [infer H, ...infer T extends readonly any[]] ? (H extends { config: infer C } ? (C extends Record<K, infer V> ? V : {}) : {}) & _MPConfigSub<T, K> : {};
+type _MPSubModules<M> = M extends { modules: infer S extends readonly any[] } ? S : readonly [];
+type _MPConfigValue<M, K extends string> = M extends { config: infer C } ? (C extends Record<K, infer V> ? V : {}) : {};
+type _MPConfigSub<A extends readonly any[], K extends string> = A extends readonly [infer H, ...infer T extends readonly any[]] ? _MPConfigSub<_MPSubModules<H>, K> & _MPConfigValue<H, K> & _MPConfigSub<T, K> : {};
 type _AppAppConfig = typeof _appConfig;
 type _AppContextExtensions = Partial<InferContextExtensionsFromAppConfig<_AppAppConfig>>;
 type _AppAuthConfig = _MPConfigSub<typeof _modules, "auth"> & typeof _authConfig;
@@ -238,6 +240,8 @@ declare global {
 }
 
 /** Resolved auth session for this app (`{ user, session } | null`). */
+export type AppAuthConfig = _AppAuthConfig;
+
 export type AppSession = _AppSession;
 
 /** Authenticated user shape from the app session. */

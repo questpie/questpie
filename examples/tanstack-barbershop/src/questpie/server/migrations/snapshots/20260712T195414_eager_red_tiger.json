@@ -1,0 +1,28 @@
+{
+  "operations": [
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__services__DOT__color",
+      "value": {
+        "type": "varchar(9)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "color",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "services"
+      },
+      "timestamp": "2026-07-12T19:54:14.266Z",
+      "migrationId": "eagerRedTiger20260712T195414"
+    }
+  ],
+  "metadata": {
+    "migrationId": "eagerRedTiger20260712T195414",
+    "timestamp": "2026-07-12T19:54:14.323Z",
+    "prevId": "00000000-0000-0000-0000-000000000000"
+  }
+}

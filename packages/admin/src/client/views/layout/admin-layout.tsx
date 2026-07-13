@@ -319,7 +319,7 @@ function AdminShellRail({
 	);
 
 	const baseClass = cn(
-		"qa-admin-layout__secondary-rail bg-background border-border-subtle h-svh min-h-0 shrink-0 overflow-hidden",
+		"qa-admin-layout__secondary-rail bg-background border-border-subtle h-dvh min-h-0 shrink-0 overflow-hidden",
 		isRight ? "border-l" : "border-r",
 		config.hiddenOnMobile === false ? "flex" : "hidden md:flex",
 	);
@@ -488,6 +488,38 @@ export function AdminLayout({
 		return () => document.removeEventListener("keydown", down);
 	}, []);
 
+	// iOS scrolls the WINDOW to reveal a focused input even though the shell
+	// owns scrolling (overflow-hidden + inner scroller). When the keyboard
+	// closes it sometimes leaves that window offset behind — the app sits half
+	// off-screen: blank strip at the bottom, action bars "floating" mid-air,
+	// taps landing next to their targets. Snap the window back once nothing
+	// editable holds focus. Touch devices only; desktop never window-scrolls.
+	React.useEffect(() => {
+		if (typeof window === "undefined") return;
+		if (!window.matchMedia?.("(pointer: coarse)").matches) return;
+		let raf = 0;
+		const snapBack = () => {
+			cancelAnimationFrame(raf);
+			raf = requestAnimationFrame(() => {
+				const active = document.activeElement;
+				const editing =
+					active instanceof HTMLElement &&
+					(active.isContentEditable ||
+						active.matches("input, textarea, select"));
+				if (!editing && (window.scrollY > 0 || window.scrollX > 0)) {
+					window.scrollTo(0, 0);
+				}
+			});
+		};
+		document.addEventListener("focusout", snapBack);
+		window.visualViewport?.addEventListener("resize", snapBack);
+		return () => {
+			cancelAnimationFrame(raf);
+			document.removeEventListener("focusout", snapBack);
+			window.visualViewport?.removeEventListener("resize", snapBack);
+		};
+	}, []);
+
 	return (
 		<AdminThemeAppliedContext.Provider value={true}>
 			<div
@@ -516,7 +548,7 @@ export function AdminLayout({
 				{/* Max-width container for ultrawide monitors - centered with subtle side borders */}
 				<SidebarProvider
 					defaultOpen={!sidebarCollapsedProp}
-					className="qa-admin-layout__sidebar-wrapper bg-sidebar mx-auto h-svh max-w-[1920px] overflow-hidden"
+					className="qa-admin-layout__sidebar-wrapper bg-sidebar mx-auto h-dvh max-w-[1920px] overflow-hidden"
 				>
 					{/* Sidebar */}
 					<AdminSidebar
@@ -534,7 +566,10 @@ export function AdminLayout({
 					{secondaryRailConfig?.placement !== "right" && secondaryRail}
 
 					{/* Content Area */}
-					<SidebarInset className="qa-admin-layout__content bg-background flex h-svh scrollbar-none flex-col overflow-hidden md:rounded-t-2xl">
+					{/* h-dvh (not svh): svh leaves a dead strip at the bottom when the
+					    mobile browser chrome collapses — the shell must track the
+					    dynamic viewport so bottom action bars sit on the real edge. */}
+					<SidebarInset className="qa-admin-layout__content bg-background flex h-dvh scrollbar-none flex-col overflow-hidden md:rounded-t-2xl">
 						{/* Persistent mobile header — reopens nav + global search (md:hidden) */}
 						<AdminTopbar onSearchOpen={openSearch} />
 

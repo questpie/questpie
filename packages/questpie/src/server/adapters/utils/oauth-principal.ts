@@ -217,9 +217,7 @@ export async function resolveOAuthPrincipal<
 
 	let payload: Record<string, unknown>;
 	try {
-		const resourceClient = oauthProviderResourceClient(
-			app.auth as unknown as Parameters<typeof oauthProviderResourceClient>[0],
-		);
+		const resourceClient = oauthProviderResourceClient(app.auth);
 		// `jwksUrl` is auto-derived from the auth instance (baseURL + basePath +
 		// jwksPath). The `issuer`, however, must be supplied: the resource client
 		// defaults it to the bare `baseURL`, but Better Auth mints the token `iss`
@@ -227,12 +225,7 @@ export async function resolveOAuthPrincipal<
 		// issuer mismatch (see `oauthIssuerForAuth`). We bind the audience to the
 		// MCP endpoint (RFC 8707). Verification enforces signature + aud + iss +
 		// exp and throws on any failure.
-		const issuer = await oauthIssuerForAuth(
-			app.auth as {
-				options?: { baseURL?: unknown; basePath?: unknown };
-				$context?: Promise<unknown>;
-			},
-		);
+		const issuer = await oauthIssuerForAuth(app.auth);
 		payload = (await resourceClient.getActions().verifyAccessToken(token, {
 			verifyOptions: {
 				audience: mcpAudienceForApp(app),

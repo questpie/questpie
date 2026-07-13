@@ -63,6 +63,31 @@ export function getAutoColumns(collectionConfig: any): string[] {
 }
 
 /**
+ * Compact secondary line for a relation option/chip: the first two auto list
+ * columns (minus the title) joined with a middle dot — the same secondary
+ * fields the mobile list rows show. Gives picker options enough context to
+ * tell similar records apart ("lukas-novak · lukas@sharpcuts.com").
+ */
+export function getRelationOptionDescription(
+	item: Record<string, unknown>,
+	collectionConfig: unknown,
+): string | undefined {
+	const columns = getAutoColumns(collectionConfig).filter(
+		(col) => col !== "_title",
+	);
+	const parts: string[] = [];
+	for (const col of columns) {
+		if (parts.length >= 2) break;
+		const value = item[col];
+		if (value == null || value === "") continue;
+		if (typeof value === "string" || typeof value === "number") {
+			parts.push(String(value));
+		}
+	}
+	return parts.length > 0 ? parts.join(" · ") : undefined;
+}
+
+/**
  * Grid column classes for responsive layouts.
  * Uses standard responsive breakpoints (sm:, lg:, etc.)
  */

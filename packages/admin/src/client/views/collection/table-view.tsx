@@ -266,10 +266,9 @@ function UploadCollectionSheet({
 	);
 
 	return (
-		<Sheet open={open} onOpenChange={handleOpenChange} modal={false}>
+		<Sheet open={open} onOpenChange={handleOpenChange}>
 			<SheetContent
 				side="right"
-				showOverlay={false}
 				className="qa-upload-sheet w-full p-0 data-[side=right]:sm:max-w-xl"
 			>
 				<SheetHeader className="border-b px-6 py-5">
@@ -667,6 +666,13 @@ function SortableTableRow({
 		},
 	});
 
+	// Stable context value: an inline object would re-render every context
+	// consumer (the reorder handle in each cell) on every row render.
+	const reorderContextValue = React.useMemo(
+		() => ({ attributes, listeners, setActivatorNodeRef }),
+		[attributes, listeners, setActivatorNodeRef],
+	);
+
 	return (
 		<TableRow
 			ref={setNodeRef}
@@ -682,9 +688,7 @@ function SortableTableRow({
 			}}
 			{...props}
 		>
-			<ReorderRowContext.Provider
-				value={{ attributes, listeners, setActivatorNodeRef }}
-			>
+			<ReorderRowContext.Provider value={reorderContextValue}>
 				{children}
 			</ReorderRowContext.Provider>
 		</TableRow>
@@ -864,9 +868,17 @@ function MobileRecordCard({
 					!isReorderMode && "active:bg-muted/60 cursor-pointer",
 				)}
 			>
+				{/* The whole size-9 pad (+ its ::after inset) is the tap target: the
+				    ::after overlay paints ABOVE the 16px checkbox, so a tap can never
+				    reach the checkbox itself — the wrapper must do the toggling.
+				    The checkbox stays keyboard-operable; pointer-events-none keeps a
+				    single toggle path for pointers. */}
 				<div
 					role="presentation"
-					onClick={stop}
+					onClick={(event) => {
+						event.stopPropagation();
+						if (canSelect) row.toggleSelected(!isSelected);
+					}}
 					onKeyDown={stop}
 					className="relative flex size-9 shrink-0 items-center justify-center after:absolute after:-inset-1.5"
 				>
@@ -875,6 +887,7 @@ function MobileRecordCard({
 						disabled={!canSelect}
 						onCheckedChange={(checked) => row.toggleSelected(!!checked)}
 						aria-label={selectLabel}
+						className="pointer-events-none"
 					/>
 				</div>
 
@@ -1239,7 +1252,10 @@ function TableViewInner({
 	viewConfig,
 	navigate,
 	basePath = "/admin",
-	showSearch = true,
+	// Off by default: record search is consolidated into the global search
+	// (⌘K / the top-bar search), which searches records across every collection.
+	// A collection can opt its own in-list search back in via showSearch.
+	showSearch = false,
 	showFilters = true,
 	showToolbar = true,
 	realtime,
@@ -1341,7 +1357,6 @@ function TableViewInner({
 	});
 	const [searchTerm, setSearchTerm] = useState("");
 	const [isSearchPanelOpen, setIsSearchPanelOpen] = useState(false);
-	const [isSortSheetOpen, setIsSortSheetOpen] = useState(false);
 	const [expandedMobileRowId, setExpandedMobileRowId] = React.useState<
 		string | null
 	>(null);
@@ -2312,18 +2327,6 @@ function TableViewInner({
 		(columnId: string) => fieldLabelMap.get(columnId) ?? formatHeader(columnId),
 		[fieldLabelMap],
 	);
-	const sortableEntries = useMemo(
-		() =>
-			table
-				.getAllLeafColumns()
-				.filter((column) => column.getCanSort())
-				.map((column) => ({
-					column,
-					label: fieldLabelMap.get(column.id) ?? column.id,
-				})),
-		[table, fieldLabelMap],
-	);
-
 	// Title column id for the mobile card header (matches visibleColumnDefs).
 	const mobileTitleColumnId =
 		collectionMeta?.title?.type === "field" && collectionMeta?.title?.fieldName
@@ -2653,20 +2656,6 @@ function TableViewInner({
 										{reorderTooltip}
 									</TooltipContent>
 								</Tooltip>
-							)}
-							{isMobile && sortableEntries.length > 0 && (
-								<Button
-									variant="outline"
-									size="icon-sm"
-									className="relative"
-									onClick={() => setIsSortSheetOpen(true)}
-									aria-label={t("viewOptions.sort")}
-								>
-									<Icon icon="ph:sort-ascending" />
-									{sorting.length > 0 && (
-										<span className="bg-foreground absolute top-1 right-1 size-1.5 rounded-full" />
-									)}
-								</Button>
 							)}
 							{showSearch && (
 								<Tooltip>
@@ -3083,113 +3072,110 @@ function TableViewInner({
 															isRowDeleted && "opacity-50",
 														)}
 													>
-														{row
-															.getVisibleCells()
-															.map((cell, cellIndex) => {
-																// Checkbox column gets compact styling
-																const isCheckboxCol = cellIndex === 0;
-																const columnWidth = getColumnSize(
-																	cell.column,
-																	isCheckboxCol ? 40 : 120,
-																);
-																const isStickyColumn =
-																	cellIndex < STICKY_TABLE_COLUMN_COUNT;
-																const stickyLeft = isStickyColumn
-																	? getStickyLeftOffset(
-																			visibleLeafColumns,
-																			cellIndex,
-																		)
-																	: undefined;
+														{row.getVisibleCells().map((cell, cellIndex) => {
+															// Checkbox column gets compact styling
+															const isCheckboxCol = cellIndex === 0;
+															const columnWidth = getColumnSize(
+																cell.column,
+																isCheckboxCol ? 40 : 120,
+															);
+															const isStickyColumn =
+																cellIndex < STICKY_TABLE_COLUMN_COUNT;
+															const stickyLeft = isStickyColumn
+																? getStickyLeftOffset(
+																		visibleLeafColumns,
+																		cellIndex,
+																	)
+																: undefined;
 
-																// Title column (index 1) is clickable
-																const isTitleCol = cellIndex === 1;
+															// Title column (index 1) is clickable
+															const isTitleCol = cellIndex === 1;
 
-																return (
-																	<TableCell
-																		key={cell.id}
-																		stickyLeft={stickyLeft}
-																		showStickyBorder={
-																			cellIndex ===
-																			STICKY_TABLE_COLUMN_COUNT - 1
-																		}
-																		className={
-																			isCheckboxCol
-																				? "w-9 min-w-9 px-1.5"
-																				: undefined
-																		}
-																		style={getColumnSizeStyle(columnWidth)}
-																	>
-																		{isTitleCol ? (
-																			<div className="flex min-w-0 items-center gap-2">
-																				<button
-																					type="button"
-																					onClick={() =>
-																						handleRowClick(row.original)
-																					}
-																					disabled={isReorderMode}
-																					className={cn(
-																						"decoration-muted-foreground/50 hover:decoration-foreground max-w-full min-w-0 text-left underline underline-offset-2 transition-colors disabled:cursor-default disabled:no-underline",
-																						!isReorderMode && "cursor-pointer",
-																					)}
-																				>
-																					{flexRender(
-																						cell.column.columnDef.cell,
-																						cell.getContext(),
-																					)}
-																				</button>
-																				{isRowDeleted && (
-																					<span className="text-destructive bg-destructive/10 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs">
-																						<Icon
-																							icon="ph:trash"
-																							className="size-3"
-																						/>
-																						{t("common.deleted")}
-																					</span>
+															return (
+																<TableCell
+																	key={cell.id}
+																	stickyLeft={stickyLeft}
+																	showStickyBorder={
+																		cellIndex === STICKY_TABLE_COLUMN_COUNT - 1
+																	}
+																	className={
+																		isCheckboxCol
+																			? "w-9 min-w-9 px-1.5"
+																			: undefined
+																	}
+																	style={getColumnSizeStyle(columnWidth)}
+																>
+																	{isTitleCol ? (
+																		<div className="flex min-w-0 items-center gap-2">
+																			<button
+																				type="button"
+																				onClick={() =>
+																					handleRowClick(row.original)
+																				}
+																				disabled={isReorderMode}
+																				className={cn(
+																					"decoration-muted-foreground/50 hover:decoration-foreground max-w-full min-w-0 text-left underline underline-offset-2 transition-colors disabled:cursor-default disabled:no-underline",
+																					!isReorderMode && "cursor-pointer",
 																				)}
-																				{isDocLocked(row.id) &&
-																					(() => {
-																						const lock = getLock(row.id);
-																						const user = lock
-																							? getLockUser(lock)
-																							: null;
-																						return (
-																							<span
-																								className="text-muted-foreground bg-muted inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs"
-																								title={
-																									user?.name ??
-																									user?.email ??
-																									"Someone is editing"
-																								}
-																							>
-																								{user?.image ? (
-																									<img
-																										src={user.image}
-																										alt=""
-																										className="image-outline size-4 rounded-full"
-																									/>
-																								) : (
-																									<Icon
-																										icon="ph:pencil-simple"
-																										className="size-3"
-																									/>
-																								)}
-																								<span className="max-w-20 truncate">
-																									{user?.name?.split(" ")[0] ??
-																										t("table.editing")}
-																								</span>
+																			>
+																				{flexRender(
+																					cell.column.columnDef.cell,
+																					cell.getContext(),
+																				)}
+																			</button>
+																			{isRowDeleted && (
+																				<span className="text-destructive bg-destructive/10 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs">
+																					<Icon
+																						icon="ph:trash"
+																						className="size-3"
+																					/>
+																					{t("common.deleted")}
+																				</span>
+																			)}
+																			{isDocLocked(row.id) &&
+																				(() => {
+																					const lock = getLock(row.id);
+																					const user = lock
+																						? getLockUser(lock)
+																						: null;
+																					return (
+																						<span
+																							className="text-muted-foreground bg-muted inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs"
+																							title={
+																								user?.name ??
+																								user?.email ??
+																								"Someone is editing"
+																							}
+																						>
+																							{user?.image ? (
+																								<img
+																									src={user.image}
+																									alt=""
+																									className="image-outline size-4 rounded-full"
+																								/>
+																							) : (
+																								<Icon
+																									icon="ph:pencil-simple"
+																									className="size-3"
+																								/>
+																							)}
+																							<span className="max-w-20 truncate">
+																								{user?.name?.split(" ")[0] ??
+																									t("table.editing")}
 																							</span>
-																						);
-																					})()}
-																			</div>
-																		) : (
-																			flexRender(
-																				cell.column.columnDef.cell,
-																				cell.getContext(),
-																			)
-																		)}
-																	</TableCell>
-																);
-															})}
+																						</span>
+																					);
+																				})()}
+																		</div>
+																	) : (
+																		flexRender(
+																			cell.column.columnDef.cell,
+																			cell.getContext(),
+																		)
+																	)}
+																</TableCell>
+															);
+														})}
 													</DataRow>
 												);
 											})}
@@ -3396,19 +3382,6 @@ function TableViewInner({
 					supportsSoftDelete={collectionMeta?.softDelete ?? false}
 					defaultFilters={defaultFilters}
 				/>
-
-				{/* Mobile sort sheet (drives the same table sort state) */}
-				{isMobile && sortableEntries.length > 0 && (
-					<MobileSortSheet
-						open={isSortSheetOpen}
-						onOpenChange={setIsSortSheetOpen}
-						entries={sortableEntries}
-						title={t("viewOptions.sort")}
-						doneLabel={t("common.done")}
-						ascLabel={t("table.sortAsc")}
-						descLabel={t("table.sortDesc")}
-					/>
-				)}
 
 				{/* Action Dialog */}
 				{dialogAction && (

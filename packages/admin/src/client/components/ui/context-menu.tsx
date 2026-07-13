@@ -2,7 +2,11 @@ import { ContextMenu as ContextMenuPrimitive } from "@base-ui/react/context-menu
 import { Icon } from "@iconify/react";
 import type * as React from "react";
 
+import { useMediaQuery } from "#questpie/admin/client/hooks/use-media-query";
 import { cn } from "#questpie/admin/client/lib/utils";
+
+/** See dropdown-menu.tsx — hover-only submenu triggers break on touch. */
+const HOVER_CAPABLE = "(hover: hover) and (pointer: fine)";
 
 function ContextMenu({ ...props }: ContextMenuPrimitive.Root.Props) {
 	return <ContextMenuPrimitive.Root data-slot="context-menu" {...props} />;
@@ -124,10 +128,12 @@ function ContextMenuSubTrigger({
 }: ContextMenuPrimitive.SubmenuTrigger.Props & {
 	inset?: boolean;
 }) {
+	const canHover = useMediaQuery(HOVER_CAPABLE);
 	return (
 		<ContextMenuPrimitive.SubmenuTrigger
 			data-slot="context-menu-sub-trigger"
 			data-inset={inset}
+			openOnHover={canHover}
 			className={cn(
 				"qa-context-menu__sub-trigger focus:bg-accent focus:text-accent-foreground data-open:bg-accent data-open:text-accent-foreground not-data-[variant=destructive]:focus:**:text-accent-foreground flex min-h-8 cursor-default items-center gap-2 px-2.5 py-1.5 text-xs outline-hidden select-none data-[inset]:pl-8 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5",
 				className,

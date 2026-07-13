@@ -19,12 +19,13 @@ import type {
 	FieldRuntimeState,
 } from "#questpie/server/fields/field-class-types.js";
 import { Field, field } from "#questpie/server/fields/field-class.js";
-import { json } from "#questpie/server/modules/core/fields/json.js";
 import {
 	booleanOps,
 	numberOps,
 	stringOps,
 } from "#questpie/server/fields/operators/builtin.js";
+import { resolveContextualOperators } from "#questpie/server/fields/operators/resolve.js";
+import { json } from "#questpie/server/modules/core/fields/json.js";
 
 // ============================================================================
 // Helper: Create a text field for testing
@@ -302,6 +303,16 @@ describe("Field V2 — getOperators()", () => {
 		expect(ops.jsonb).toBeDefined();
 		expect(typeof ops.column.eq).toBe("function");
 		expect(typeof ops.jsonb.eq).toBe("function");
+	});
+
+	it("tolerates field types without column operators", () => {
+		const ops = resolveContextualOperators({
+			column: undefined as any,
+			jsonbCast: "text",
+		});
+
+		expect(ops.column).toEqual({});
+		expect(ops.jsonb).toEqual({});
 	});
 });
 

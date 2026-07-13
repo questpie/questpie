@@ -36,8 +36,13 @@ import _job_scheduleTick from "../jobs/schedule-tick";
 import _job_taskEscalation from "../jobs/task-escalation";
 
 // ── Routes ─────────────────────────────────────────────────
-import _route_apps_appId_fn from "../routes/apps/[appId]/[fn]";
-import _route_apps_appId_fs_spread_path from "../routes/apps/[appId]/fs/[...path]";
+import _route_apps_appId_fn_DELETE from "../routes/apps/[appId]/[fn].delete";
+import _route_apps_appId_fn_GET from "../routes/apps/[appId]/[fn].get";
+import _route_apps_appId_fn_PATCH from "../routes/apps/[appId]/[fn].patch";
+import _route_apps_appId_fn_POST from "../routes/apps/[appId]/[fn].post";
+import _route_apps_appId_fn_PUT from "../routes/apps/[appId]/[fn].put";
+import _route_apps_appId_fs_spread_path_GET from "../routes/apps/[appId]/fs/[...path].get";
+import _route_apps_appId_fs_spread_path_PUT from "../routes/apps/[appId]/fs/[...path].put";
 import _route_apps_appId_token from "../routes/apps/[appId]/token";
 import _route_chat from "../routes/chat";
 import _route_chat_chatId_approve from "../routes/chat/[chatId]/approve";
@@ -46,7 +51,8 @@ import _route_chat_chatId_stream from "../routes/chat/[chatId]/stream";
 import _route_events from "../routes/events";
 import _route_intake from "../routes/intake";
 import _route_runs_runId from "../routes/runs/[runId]";
-import _route_runs_runId_artifacts from "../routes/runs/[runId]/artifacts";
+import _route_runs_runId_artifacts_GET from "../routes/runs/[runId]/artifacts.get";
+import _route_runs_runId_artifacts_POST from "../routes/runs/[runId]/artifacts.post";
 import _route_runs_runId_artifacts_artifactId_content from "../routes/runs/[runId]/artifacts/[artifactId]/content";
 import _route_runs_runId_stream from "../routes/runs/[runId]/stream";
 import _route_runStream from "../routes/run-stream";

@@ -16,7 +16,10 @@ import { sql } from "drizzle-orm";
 import { createApp, module } from "../../src/exports/index.js";
 import { collection } from "../../src/exports/index.js";
 import { MigrationRunner } from "../../src/server/migration/runner.js";
-import type { Migration } from "../../src/server/migration/types.js";
+import type {
+	Migration,
+	OperationSnapshot,
+} from "../../src/server/migration/types.js";
 import { createPostgresSearchAdapter } from "../../src/server/modules/core/integrated/search/adapters/postgres.js";
 import { MockKVAdapter } from "../utils/mocks/kv.adapter";
 import { MockLogger } from "../utils/mocks/logger.adapter";
@@ -425,6 +428,110 @@ describe("Migration System - DrizzleMigrationGenerator", () => {
 			migrationDir: testMigrationDir,
 		});
 		expect(result2.skipped).toBe(true);
+	});
+
+	test("does not re-emit a column whose migration is on disk but missing from the in-memory list", async () => {
+		// Regression for the stale-list vs on-disk-snapshot divergence: the CLI
+		// built the previous snapshot from the in-memory `app.config.migrations`
+		// list only. When that codegen-produced list drifts out of sync with the
+		// on-disk snapshots (a migration whose `.json` exists but is absent from
+		// the list), its ops were silently dropped → the diff re-emitted
+		// already-applied DDL (`ADD COLUMN` → "column already exists" on apply).
+		const { DrizzleMigrationGenerator } =
+			await import("../../src/server/migration/generator.js");
+		const generator = new DrizzleMigrationGenerator();
+
+		const makeApp = (def: ReturnType<typeof module>) =>
+			createApp(def, {
+				app: { url: "http://localhost:3000" },
+				db: { pglite: pgClient },
+				email: { adapter: new MockMailAdapter() },
+				queue: { adapter: new MockQueueAdapter() },
+				kv: { adapter: new MockKVAdapter() },
+				logger: { adapter: new MockLogger() },
+			});
+
+		// #1 — collection with just `title`.
+		const appV1 = await makeApp(
+			module({
+				name: "test-app",
+				collections: {
+					posts: collection("posts").fields(({ f }) => ({
+						title: f.text(255).required(),
+					})),
+				},
+			}),
+		);
+		const r1 = await generator.generateMigration({
+			migrationName: "m1",
+			fileBaseName: "20250108_m1",
+			schema: appV1.getSchema(),
+			migrationDir: testMigrationDir,
+		});
+		expect(r1.skipped).toBe(false);
+
+		// #2 — add a `status` column (writes snapshot #2 to disk).
+		const appV2 = await makeApp(
+			module({
+				name: "test-app",
+				collections: {
+					posts: collection("posts").fields(({ f }) => ({
+						title: f.text(255).required(),
+						status: f.text(50),
+					})),
+				},
+			}),
+		);
+		const r2 = await generator.generateMigration({
+			migrationName: "m2",
+			fileBaseName: "20250109_m2",
+			schema: appV2.getSchema(),
+			migrationDir: testMigrationDir,
+		});
+		expect(r2.skipped).toBe(false);
+
+		// Simulate STALE codegen: the in-memory list holds only #1, while #2's
+		// snapshot `.json` remains on disk.
+		const snap1: OperationSnapshot = JSON.parse(
+			readFileSync(
+				join(testMigrationDir, "snapshots", "20250108_m1.json"),
+				"utf8",
+			),
+		);
+		const staleList = [{ id: "20250108_m1", snapshot: snap1 }];
+
+		// BEFORE (bug): previous built from the stale list alone drops #2 →
+		// re-emits `ADD COLUMN "status"`.
+		const stalePrev = generator.getCumulativeSnapshotFromMigrations(staleList);
+		// AFTER (fix): the union also reads #2 from disk → previous already has
+		// `status`, computed BEFORE the buggy generate writes anything.
+		const unionPrev = await generator.getCumulativeSnapshotUnion(
+			testMigrationDir,
+			staleList,
+		);
+
+		const buggy = await generator.generateMigration({
+			migrationName: "m3buggy",
+			fileBaseName: "20250110_m3buggy",
+			schema: appV2.getSchema(),
+			migrationDir: testMigrationDir,
+			cumulativeSnapshot: stalePrev,
+		});
+		expect(buggy.skipped).toBe(false);
+		const buggySql = readFileSync(
+			join(testMigrationDir, "20250110_m3buggy.ts"),
+			"utf8",
+		);
+		expect(buggySql).toContain('ADD COLUMN "status"');
+
+		const fixed = await generator.generateMigration({
+			migrationName: "m4fixed",
+			fileBaseName: "20250111_m4fixed",
+			schema: appV2.getSchema(),
+			migrationDir: testMigrationDir,
+			cumulativeSnapshot: unionPrev,
+		});
+		expect(fixed.skipped).toBe(true);
 	});
 
 	test("should NOT auto-create extensions, but still emit dependent indexes", async () => {

@@ -100,6 +100,17 @@ export interface QueueAdapter {
 	unschedule(jobName: string): Promise<void>;
 
 	/**
+	 * Ensure the queue for a job exists, optionally with a specific policy.
+	 * Called once per job at listener setup so the worker and any publisher
+	 * create the queue with the same declared policy (see `queuePolicy` on the
+	 * job options). Optional — adapters that don't pre-create queues can omit it.
+	 */
+	ensureQueue?(
+		jobName: string,
+		opts?: { policy?: PublishOptions["queuePolicy"] },
+	): Promise<void>;
+
+	/**
 	 * Start long-running consumers (Node/Bun worker mode)
 	 */
 	listen?(

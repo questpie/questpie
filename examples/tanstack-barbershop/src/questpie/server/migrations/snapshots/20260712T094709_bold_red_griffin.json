@@ -1,0 +1,2429 @@
+{
+  "operations": [
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__jwks",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "jwks",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__oauthAccessToken",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "oauthAccessToken",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__oauthClient",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "oauthClient",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__oauthConsent",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "oauthConsent",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__oauthRefreshToken",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "oauthRefreshToken",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__jwks__DOT__id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "name": "id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "jwks"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__jwks__DOT__publicKey",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "publicKey",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "jwks"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__jwks__DOT__privateKey",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "privateKey",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "jwks"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__jwks__DOT__createdAt",
+      "value": {
+        "type": "timestamp(3) with time zone",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "createdAt",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "jwks"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__jwks__DOT__expiresAt",
+      "value": {
+        "type": "timestamp(3) with time zone",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "expiresAt",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "jwks"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthAccessToken__DOT__id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "name": "id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthAccessToken"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthAccessToken__DOT__token",
+      "value": {
+        "type": "varchar(500)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "token",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthAccessToken"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthAccessToken__DOT__clientId",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "clientId",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthAccessToken"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthAccessToken__DOT__sessionId",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "sessionId",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthAccessToken"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthAccessToken__DOT__userId",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "userId",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthAccessToken"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthAccessToken__DOT__referenceId",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "referenceId",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthAccessToken"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthAccessToken__DOT__refreshId",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "refreshId",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthAccessToken"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthAccessToken__DOT__expiresAt",
+      "value": {
+        "type": "timestamp(3) with time zone",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "expiresAt",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthAccessToken"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthAccessToken__DOT__createdAt",
+      "value": {
+        "type": "timestamp(3) with time zone",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "createdAt",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthAccessToken"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthAccessToken__DOT__scopes",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "scopes",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthAccessToken"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "name": "id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__clientId",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "clientId",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__clientSecret",
+      "value": {
+        "type": "varchar(500)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "clientSecret",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__disabled",
+      "value": {
+        "type": "boolean",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "false",
+        "generated": null,
+        "identity": null,
+        "name": "disabled",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__skipConsent",
+      "value": {
+        "type": "boolean",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "skipConsent",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__enableEndSession",
+      "value": {
+        "type": "boolean",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "enableEndSession",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__subjectType",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "subjectType",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__scopes",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "scopes",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__userId",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "userId",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__createdAt",
+      "value": {
+        "type": "timestamp(3) with time zone",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "createdAt",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__updatedAt",
+      "value": {
+        "type": "timestamp(3) with time zone",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "updatedAt",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__name",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "name",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__uri",
+      "value": {
+        "type": "varchar(500)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "uri",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__icon",
+      "value": {
+        "type": "varchar(500)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "icon",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__contacts",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "contacts",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__tos",
+      "value": {
+        "type": "varchar(500)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "tos",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__policy",
+      "value": {
+        "type": "varchar(500)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "policy",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__softwareId",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "softwareId",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__softwareVersion",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "softwareVersion",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__softwareStatement",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "softwareStatement",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__redirectUris",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "redirectUris",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__postLogoutRedirectUris",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "postLogoutRedirectUris",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__tokenEndpointAuthMethod",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "tokenEndpointAuthMethod",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__grantTypes",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "grantTypes",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__responseTypes",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "responseTypes",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__public",
+      "value": {
+        "type": "boolean",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "public",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__type",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "type",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__requirePKCE",
+      "value": {
+        "type": "boolean",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "requirePKCE",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__referenceId",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "referenceId",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__metadata",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "metadata",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthConsent__DOT__id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "name": "id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthConsent"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthConsent__DOT__clientId",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "clientId",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthConsent"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthConsent__DOT__userId",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "userId",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthConsent"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthConsent__DOT__referenceId",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "referenceId",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthConsent"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthConsent__DOT__scopes",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "scopes",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthConsent"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthConsent__DOT__createdAt",
+      "value": {
+        "type": "timestamp(3) with time zone",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "createdAt",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthConsent"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthConsent__DOT__updatedAt",
+      "value": {
+        "type": "timestamp(3) with time zone",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "updatedAt",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthConsent"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthRefreshToken__DOT__id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "name": "id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthRefreshToken"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthRefreshToken__DOT__token",
+      "value": {
+        "type": "varchar(500)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "token",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthRefreshToken"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthRefreshToken__DOT__clientId",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "clientId",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthRefreshToken"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthRefreshToken__DOT__sessionId",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "sessionId",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthRefreshToken"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthRefreshToken__DOT__userId",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "userId",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthRefreshToken"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthRefreshToken__DOT__referenceId",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "referenceId",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthRefreshToken"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthRefreshToken__DOT__expiresAt",
+      "value": {
+        "type": "timestamp(3) with time zone",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "expiresAt",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthRefreshToken"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthRefreshToken__DOT__createdAt",
+      "value": {
+        "type": "timestamp(3) with time zone",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "createdAt",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthRefreshToken"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthRefreshToken__DOT__revoked",
+      "value": {
+        "type": "timestamp(3) with time zone",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "revoked",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthRefreshToken"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthRefreshToken__DOT__authTime",
+      "value": {
+        "type": "timestamp(3) with time zone",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "authTime",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthRefreshToken"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthRefreshToken__DOT__scopes",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "scopes",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthRefreshToken"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__account__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "account"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__account__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "account"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__apikey__DOT__configId",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "'default'",
+        "generated": null,
+        "identity": null,
+        "name": "configId",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "apikey"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__apikey__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "apikey"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__apikey__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "apikey"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__assets__DOT__key",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "key",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "assets"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__assets__DOT__filename",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "filename",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "assets"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__assets__DOT__mime_type",
+      "value": {
+        "type": "varchar(100)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "mime_type",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "assets"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__assets__DOT__size",
+      "value": {
+        "type": "integer",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "size",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "assets"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__assets__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "assets"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__assets__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "assets"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__session__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "session"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__session__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "session"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__user__DOT__image",
+      "value": {
+        "type": "varchar(500)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "image",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "user"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__user__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "user"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__user__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "user"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__verification__DOT__value",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "value",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "verification"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__verification__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "verification"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__verification__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "verification"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_locks__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_locks"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_locks__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_locks"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_preferences__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_preferences"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_preferences__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_preferences"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_saved_views__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_saved_views"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_saved_views__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_saved_views"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_audit_log__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_audit_log"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__admin_audit_log__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "admin_audit_log"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__appointments__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "appointments"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__appointments__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "appointments"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__barber_services__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "barber_services"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__barber_services__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "barber_services"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__barbers__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "barbers"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__barbers__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "barbers"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__blog_posts__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "blog_posts"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__blog_posts__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "blog_posts"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__pages__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "pages"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__pages__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "pages"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__pages_versions__DOT__version_created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "version_created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "pages_versions"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__pages_versions__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "pages_versions"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__pages_versions__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "pages_versions"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__reviews__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "reviews"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__reviews__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "reviews"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__services__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "services"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__services__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "services"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_i18n__DOT__navigation",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'[{\"label\":\"Home\",\"href\":\"/\",\"isExternal\":false},{\"label\":\"Services\",\"href\":\"/services\",\"isExternal\":false},{\"label\":\"Our Team\",\"href\":\"/barbers\",\"isExternal\":false},{\"label\":\"Contact\",\"href\":\"/contact\",\"isExternal\":false}]'",
+        "generated": null,
+        "identity": null,
+        "name": "navigation",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_i18n"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_i18n__DOT__footerLinks",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'[{\"label\":\"Services\",\"href\":\"/services\",\"isExternal\":false},{\"label\":\"Our Team\",\"href\":\"/barbers\",\"isExternal\":false},{\"label\":\"Contact\",\"href\":\"/contact\",\"isExternal\":false},{\"label\":\"Privacy Policy\",\"href\":\"/privacy\",\"isExternal\":false}]'",
+        "generated": null,
+        "identity": null,
+        "name": "footerLinks",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_i18n"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__version_created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "version_created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_versions__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_versions"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_i18n_versions__DOT__navigation",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'[{\"label\":\"Home\",\"href\":\"/\",\"isExternal\":false},{\"label\":\"Services\",\"href\":\"/services\",\"isExternal\":false},{\"label\":\"Our Team\",\"href\":\"/barbers\",\"isExternal\":false},{\"label\":\"Contact\",\"href\":\"/contact\",\"isExternal\":false}]'",
+        "generated": null,
+        "identity": null,
+        "name": "navigation",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_i18n_versions"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__site_settings_i18n_versions__DOT__footerLinks",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "'[{\"label\":\"Services\",\"href\":\"/services\",\"isExternal\":false},{\"label\":\"Our Team\",\"href\":\"/barbers\",\"isExternal\":false},{\"label\":\"Contact\",\"href\":\"/contact\",\"isExternal\":false},{\"label\":\"Privacy Policy\",\"href\":\"/privacy\",\"isExternal\":false}]'",
+        "generated": null,
+        "identity": null,
+        "name": "footerLinks",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "site_settings_i18n_versions"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_realtime_log__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_realtime_log"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_search__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_search"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_search__DOT__updated_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "updated_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_search"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__questpie_search_facets__DOT__created_at",
+      "value": {
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "name": "created_at",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "questpie_search_facets"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__jwks__DOT__jwks_pkey",
+      "value": {
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "name": "jwks_pkey",
+        "schema": "public",
+        "table": "jwks",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__oauthAccessToken__DOT__oauthAccessToken_pkey",
+      "value": {
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "name": "oauthAccessToken_pkey",
+        "schema": "public",
+        "table": "oauthAccessToken",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__oauthClient__DOT__oauthClient_pkey",
+      "value": {
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "name": "oauthClient_pkey",
+        "schema": "public",
+        "table": "oauthClient",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__oauthConsent__DOT__oauthConsent_pkey",
+      "value": {
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "name": "oauthConsent_pkey",
+        "schema": "public",
+        "table": "oauthConsent",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__oauthRefreshToken__DOT__oauthRefreshToken_pkey",
+      "value": {
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "name": "oauthRefreshToken_pkey",
+        "schema": "public",
+        "table": "oauthRefreshToken",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-07-12T09:47:09.508Z",
+      "migrationId": "boldRedGriffin20260712T094709"
+    }
+  ],
+  "metadata": {
+    "migrationId": "boldRedGriffin20260712T094709",
+    "timestamp": "2026-07-12T09:47:09.593Z",
+    "prevId": "00000000-0000-0000-0000-000000000000"
+  }
+}

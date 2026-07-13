@@ -28,8 +28,14 @@
  * ```
  */
 
+import { Icon } from "@iconify/react";
 import * as React from "react";
 
+import type { ComponentReference } from "#questpie/admin/server/augmentation.js";
+
+import { useAdminConfig } from "../../hooks/use-admin-config";
+import { useResolveText, useTranslation } from "../../i18n/hooks";
+import type { I18nText } from "../../i18n/types";
 import {
 	LocaleScopeProvider,
 	selectBasePath,
@@ -38,7 +44,15 @@ import {
 } from "../../runtime";
 import FormView from "../../views/collection/form-view";
 import GlobalFormView from "../../views/globals/global-form-view";
-import { Sheet, SheetContent } from "../ui/sheet";
+import { resolveIconElement } from "../component-renderer";
+import { Button } from "../ui/button";
+import {
+	Sheet,
+	SheetClose,
+	SheetContent,
+	SheetHeader,
+	SheetTitle,
+} from "../ui/sheet";
 
 // ============================================================================
 // Types
@@ -119,6 +133,9 @@ export function ResourceSheet(props: ResourceSheetProps) {
 	const { open, onOpenChange, onSave, side = "right" } = props;
 	const navigate = useAdminStore(selectNavigate);
 	const basePath = useAdminStore(selectBasePath);
+	const { t } = useTranslation();
+	const resolveText = useResolveText();
+	const { data: serverConfig } = useAdminConfig();
 
 	const handleSuccess = React.useCallback(
 		(data: any) => {
@@ -128,39 +145,90 @@ export function ResourceSheet(props: ResourceSheetProps) {
 		[onSave, onOpenChange],
 	);
 
+	// Header context: which resource this sheet edits, and in which mode. The
+	// nested form shows the record title; without the collection name a nested
+	// editor is indistinguishable from the page underneath (you can save the
+	// wrong record without noticing). Server config entries are untyped plain
+	// objects — narrow to just the two fields the header reads.
+	const resourceConfig = (
+		props.type === "collection"
+			? serverConfig?.collections?.[props.collection]
+			: serverConfig?.globals?.[props.global]
+	) as { label?: I18nText; icon?: ComponentReference | string } | undefined;
+	const resourceLabel =
+		resolveText(resourceConfig?.label) ||
+		(props.type === "collection" ? props.collection : props.global);
+	const modeLabel =
+		props.type === "collection"
+			? props.itemId
+				? t("common.edit")
+				: t("common.create")
+			: t("common.edit");
+	const resourceIcon = resolveIconElement(resourceConfig?.icon, {
+		className: "size-3.5 text-muted-foreground shrink-0",
+	});
+
 	return (
-		<Sheet open={open} onOpenChange={onOpenChange} modal={false}>
+		<Sheet open={open} onOpenChange={onOpenChange}>
 			<SheetContent
 				side={side}
-				showOverlay={false}
-				className="qa-resource-sheet overflow-y-auto p-6 pt-12"
+				showCloseButton={false}
+				className="qa-resource-sheet flex flex-col gap-0 p-0"
 			>
-				{/* LocaleScopeProvider isolates locale changes in nested forms */}
-				<LocaleScopeProvider>
-					{props.type === "collection" ? (
-						<FormView
-							collection={props.collection}
-							id={props.itemId}
-							defaultValues={props.defaultValues}
-							config={undefined}
-							allCollectionsConfig={undefined}
-							navigate={navigate}
-							basePath={basePath}
-							onSuccess={handleSuccess}
-							showMeta={false}
-						/>
-					) : (
-						<GlobalFormView
-							global={props.global}
-							config={undefined}
-							allGlobalsConfig={undefined}
-							navigate={navigate}
-							basePath={basePath}
-							onSuccess={handleSuccess}
-							showMeta={false}
-						/>
-					)}
-				</LocaleScopeProvider>
+				{/* Close lives INSIDE the header row so `items-center` aligns it with
+				    the title (the generic absolute top-3 close doesn't know the
+				    header height and sat too low). */}
+				<SheetHeader className="qa-resource-sheet__header border-border-subtle shrink-0 flex-row items-center gap-1.5 border-b py-2.5 pr-2.5 pl-4">
+					{resourceIcon}
+					<span className="text-muted-foreground max-w-[35%] truncate text-sm">
+						{resourceLabel}
+					</span>
+					<span className="text-muted-foreground/60 text-sm" aria-hidden>
+						›
+					</span>
+					<SheetTitle className="truncate">{modeLabel}</SheetTitle>
+					<SheetClose
+						render={
+							<Button
+								type="button"
+								variant="ghost"
+								size="icon-sm"
+								className="ml-auto shrink-0"
+								aria-label={t("common.close")}
+							/>
+						}
+					>
+						<Icon icon="ph:x" className="size-4" />
+					</SheetClose>
+				</SheetHeader>
+				<div className="qa-resource-sheet__body flex-1 overflow-y-auto p-6 pt-4">
+					{/* LocaleScopeProvider isolates locale changes in nested forms */}
+					<LocaleScopeProvider>
+						{props.type === "collection" ? (
+							<FormView
+								collection={props.collection}
+								id={props.itemId}
+								defaultValues={props.defaultValues}
+								config={undefined}
+								allCollectionsConfig={undefined}
+								navigate={navigate}
+								basePath={basePath}
+								onSuccess={handleSuccess}
+								showMeta={false}
+							/>
+						) : (
+							<GlobalFormView
+								global={props.global}
+								config={undefined}
+								allGlobalsConfig={undefined}
+								navigate={navigate}
+								basePath={basePath}
+								onSuccess={handleSuccess}
+								showMeta={false}
+							/>
+						)}
+					</LocaleScopeProvider>
+				</div>
 			</SheetContent>
 		</Sheet>
 	);

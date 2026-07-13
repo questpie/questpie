@@ -339,7 +339,6 @@ export function ObjectArrayField({
 	name,
 	label,
 	description,
-	placeholder,
 	required,
 	disabled,
 	readOnly,
@@ -358,9 +357,6 @@ export function ObjectArrayField({
 	const { t } = useTranslation();
 	const resolveText = useResolveText();
 	const isMobile = useIsMobile();
-	const resolvedPlaceholder = placeholder
-		? resolveText(placeholder)
-		: undefined;
 	const resolvedLabel = label ? resolveText(label) : undefined;
 	const form = useFormContext();
 	const { control } = form;
@@ -397,7 +393,6 @@ export function ObjectArrayField({
 	const canAddMore = !readOnly && withinMaxItems;
 	const canRemove = !readOnly && (!minItems || fields.length > minItems);
 	const fallbackLabel = resolvedLabel || "Item";
-	const emptyLabel = t("array.empty", { name: fallbackLabel });
 	const addLabel = t("array.addItem", { name: fallbackLabel });
 
 	// Resolve item label
@@ -481,14 +476,6 @@ export function ObjectArrayField({
 		}
 	}, []);
 
-	const emptyState = (
-		<div className="panel-surface border-border-subtle border-dashed p-3">
-			<p className="text-muted-foreground text-sm text-pretty">
-				{resolvedPlaceholder || emptyLabel}
-			</p>
-		</div>
-	);
-
 	const editorContent =
 		activeIndex !== null ? (
 			<ObjectArrayItemFields
@@ -534,29 +521,29 @@ export function ObjectArrayField({
 			}
 		>
 			<div className="qa-object-array-field space-y-3">
-				{fields.length === 0
-					? emptyState
-					: fields.map((field, index) => (
-							<ObjectArrayItemRow
-								key={field.id}
-								index={index}
-								totalCount={fields.length}
-								fieldEntries={fieldEntries}
-								layout={layout}
-								columns={columns}
-								name={name}
-								mode={mode}
-								orderable={orderable && !readOnly}
-								canRemove={canRemove}
-								disabled={disabled}
-								itemFieldsDisabled={disabled || readOnly}
-								resolveItemLabel={resolveItemLabel}
-								onEdit={handleEdit}
-								onMove={handleMove}
-								onRemove={handleRemove}
-								t={t}
-							/>
-						))}
+				{/* Empty state IS the add button (dashed) — no placeholder box. */}
+				{fields.length !== 0 &&
+					fields.map((field, index) => (
+						<ObjectArrayItemRow
+							key={field.id}
+							index={index}
+							totalCount={fields.length}
+							fieldEntries={fieldEntries}
+							layout={layout}
+							columns={columns}
+							name={name}
+							mode={mode}
+							orderable={orderable && !readOnly}
+							canRemove={canRemove}
+							disabled={disabled}
+							itemFieldsDisabled={disabled || readOnly}
+							resolveItemLabel={resolveItemLabel}
+							onEdit={handleEdit}
+							onMove={handleMove}
+							onRemove={handleRemove}
+							t={t}
+						/>
+					))}
 			</div>
 
 			{canAddMore && (
@@ -565,6 +552,10 @@ export function ObjectArrayField({
 					variant="outline"
 					onClick={handleAdd}
 					disabled={disabled}
+					className={cn(
+						fields.length === 0 &&
+							"border-border-subtle text-muted-foreground w-full border-dashed",
+					)}
 				>
 					<Icon icon="ph:plus" className="size-4" />
 					{addLabel}

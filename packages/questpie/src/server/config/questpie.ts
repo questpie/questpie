@@ -1,5 +1,6 @@
 import type { BetterAuthOptions } from "better-auth";
 import { betterAuth } from "better-auth";
+import type { Session, User } from "better-auth/types";
 import type { PgTable } from "drizzle-orm/pg-core";
 
 import {
@@ -106,7 +107,7 @@ const RESERVED_CONTEXT_KEYS = new Set([
  *   explicit `{ accessMode: "user" }` path.
  */
 function principalFromLegacy(
-	session: { user: any; session: any } | null | undefined,
+	session: { user: User; session: Session } | null | undefined,
 	accessMode: AccessMode,
 ): Principal | undefined {
 	if (accessMode === "system") {
@@ -1082,7 +1083,7 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 	 */
 	private async resolveContextExtensions(params: {
 		request: Request;
-		session: { user: any; session: any } | null | undefined;
+		session: { user: User; session: Session } | null | undefined;
 		db: any;
 	}): Promise<Record<string, unknown> | undefined> {
 		// Loose call signature on purpose: the static `ContextResolver` params

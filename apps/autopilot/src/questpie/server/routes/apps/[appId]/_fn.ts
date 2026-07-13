@@ -22,7 +22,6 @@
 
 import { ApiError } from "questpie/errors";
 import type { ExecutorRunResult } from "questpie/executor";
-import { route } from "questpie/services";
 
 import {
 	type AppResolverCollections,
@@ -46,7 +45,7 @@ import { miniAppTokenAccess } from "../../../lib/route-access";
  * REPLACES the old `sessionOnly` (which let ANY logged-in admin POST here — the
  * gap §3.3 flagged). The action authorized is the `{fn}` path segment.
  */
-const miniAppActionAccess = miniAppTokenAccess(
+export const miniAppActionAccess = miniAppTokenAccess(
 	(ctx) => (ctx.params as { fn?: string } | undefined)?.fn,
 );
 
@@ -69,7 +68,7 @@ interface RunnerExecutor {
 	}): Promise<ExecutorRunResult>;
 }
 
-type AppRouteContext = Questpie.AppContext & {
+export type AppRouteContext = Questpie.AppContext & {
 	request: Request;
 	params: { appId: string; fn: string };
 	/**
@@ -176,74 +175,64 @@ function resultToResponse(result: ExecutorRunResult): Response {
 	);
 }
 
-export default route()
-	.get()
-	.post()
-	.put()
-	.patch()
-	.delete()
-	.access(miniAppActionAccess)
-	.params<{ appId: string; fn: string }>()
-	.raw()
-	.handler(async (ctx) => {
-		const c = ctx as AppRouteContext;
-		const { appId, fn } = c.params;
+export async function handleMiniAppEndpoint(ctx: AppRouteContext) {
+	const { appId, fn } = ctx.params;
 
-		// `app.executor` is the ExecutorService — accessed via `app` like the core
-		// `/sandbox/rpc` route does, since `executor` is not surfaced on the typed
-		// route AppContext.
-		const executor = c.app.executor;
-		if (!executor || executor.isEnabled === false) {
-			throw ApiError.badRequest(
-				"executor is not configured; the sandboxed mini-app runtime is unavailable",
-			);
-		}
-
-		// 1. Resolve the app + manifest from the Knowledge tree (M3).
-		const resolved = await resolveApp(
-			appId,
-			c.collections as unknown as AppResolverCollections,
+	// `app.executor` is the ExecutorService — accessed via `app` like the core
+	// `/sandbox/rpc` route does, since `executor` is not surfaced on the typed
+	// route AppContext.
+	const executor = ctx.app.executor;
+	if (!executor || executor.isEnabled === false) {
+		throw ApiError.badRequest(
+			"executor is not configured; the sandboxed mini-app runtime is unavailable",
 		);
+	}
 
-		// 2. Confirm `{fn}` is in the app's OPT-IN `actions` registry (default-deny;
-		//    the registry is the only HTTP surface). A non-registered export, a
-		//    reserved framework name (rejected at resolve time), and cron exports
-		//    are all NOT addressable as HTTP actions.
-		const endpoint = resolved.endpoints.find((e) => e.name === fn);
-		if (!endpoint) {
-			throw ApiError.notFound("Mini-app action", `${appId}/${fn}`);
-		}
+	// 1. Resolve the app + manifest from the Knowledge tree (M3).
+	const resolved = await resolveApp(
+		appId,
+		ctx.collections as unknown as AppResolverCollections,
+	);
 
-		// 3. Build the HOST-SIDE, tenant-scoped, non-privileged bindings target
-		//    (G1 knowledge clamp, G2 user-mode principal, G3 relation guard). This
-		//    is the security boundary — never trusts the manifest. The per-collection
-		//    relation-field names (for the G3 where/orderBy guard) are read from the
-		//    runtime collection metadata, not from the untrusted request.
-		const target = buildMiniAppBindingTarget(
-			appId,
-			c as unknown as MiniAppBindingCtx,
-			resolved.capabilities,
-			(name) => resolveCollectionRelationFields(c.app, name),
-			(name, op) => resolveCollectionWriteRule(c.app, name, op),
-		);
+	// 2. Confirm `{fn}` is in the app's OPT-IN `actions` registry (default-deny;
+	//    the registry is the only HTTP surface). A non-registered export, a
+	//    reserved framework name (rejected at resolve time), and cron exports
+	//    are all NOT addressable as HTTP actions.
+	const endpoint = resolved.endpoints.find((e) => e.name === fn);
+	if (!endpoint) {
+		throw ApiError.notFound("Mini-app action", `${appId}/${fn}`);
+	}
 
-		// 4. Build the guest input (request payload + meta) and resolve the broker
-		//    URL the SUPERVISOR uses to reach the host broker (server-to-server).
-		//    The broker URL comes from CONFIG/ENV ONLY — NEVER from `request.url`,
-		//    whose `Host` an attacker controls (token-exfiltration vector).
-		const input = await buildEndpointInput(c.request, appId, fn);
-		const brokerUrl = resolveBrokerUrl(c.app);
+	// 3. Build the HOST-SIDE, tenant-scoped, non-privileged bindings target
+	//    (G1 knowledge clamp, G2 user-mode principal, G3 relation guard). This
+	//    is the security boundary — never trusts the manifest. The per-collection
+	//    relation-field names (for the G3 where/orderBy guard) are read from the
+	//    runtime collection metadata, not from the untrusted request.
+	const target = buildMiniAppBindingTarget(
+		appId,
+		ctx as unknown as MiniAppBindingCtx,
+		resolved.capabilities,
+		(name) => resolveCollectionRelationFields(ctx.app, name),
+		(name, op) => resolveCollectionWriteRule(ctx.app, name, op),
+	);
 
-		// 5. Run sandboxed: the executor service mints the per-run scoped token bound
-		//    to (capabilities, target) and the supervisor brokers the guest's RPCs.
-		const result = await executor.run({
-			source: buildEndpointEntrySource(resolved.entrySource, fn),
-			input,
-			isolation: "sandboxed",
-			capabilities: resolved.capabilities,
-			appBindings: target,
-			brokerUrl,
-		});
+	// 4. Build the guest input (request payload + meta) and resolve the broker
+	//    URL the SUPERVISOR uses to reach the host broker (server-to-server).
+	//    The broker URL comes from CONFIG/ENV ONLY — NEVER from `request.url`,
+	//    whose `Host` an attacker controls (token-exfiltration vector).
+	const input = await buildEndpointInput(ctx.request, appId, fn);
+	const brokerUrl = resolveBrokerUrl(ctx.app);
 
-		return resultToResponse(result);
+	// 5. Run sandboxed: the executor service mints the per-run scoped token bound
+	//    to (capabilities, target) and the supervisor brokers the guest's RPCs.
+	const result = await executor.run({
+		source: buildEndpointEntrySource(resolved.entrySource, fn),
+		input,
+		isolation: "sandboxed",
+		capabilities: resolved.capabilities,
+		appBindings: target,
+		brokerUrl,
 	});
+
+	return resultToResponse(result);
+}

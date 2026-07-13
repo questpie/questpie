@@ -29,6 +29,8 @@ import _block_spacer from "../blocks/spacer";
 import { StatsRenderer as _block_stats } from "../blocks/stats";
 import { TeamRenderer as _block_team } from "../blocks/team";
 import { TextRenderer as _block_text } from "../blocks/text";
+import _fld_color from "../fields/color";
+import _fld_rating from "../fields/rating";
 import type { BlockRendererProps } from "@questpie/admin/client";
 import type { InferBlockValues, InferBlockData } from "@questpie/admin/factories";
 import type { bookingCtaBlock } from "../../server/blocks/booking-cta";
@@ -52,7 +54,7 @@ const admin = {
 	blocks: { ...(_mergedModules["blocks"] as Record<string, unknown>), "booking-cta": _block_bookingCta, "columns": _block_columns, "contact-info": _block_contactInfo, "cta": _block_cta, "divider": _block_divider, "gallery": _block_gallery, "heading": _block_heading, "hero": _block_hero, "hours": _block_hours, "image-text": _block_imageText, "reviews": _block_reviews, "services": _block_services, "spacer": _block_spacer, "stats": _block_stats, "team": _block_team, "text": _block_text },
 	views: { ...(_mergedModules["views"] as Record<string, unknown>) },
 	components: { ...(_mergedModules["components"] as Record<string, unknown>) },
-	fields: { ...(_mergedModules["fields"] as Record<string, unknown>) },
+	fields: { ...(_mergedModules["fields"] as Record<string, unknown>), color: _fld_color, rating: _fld_rating },
 	pages: { ...(_mergedModules["pages"] as Record<string, unknown>) },
 	widgets: { ...(_mergedModules["widgets"] as Record<string, unknown>) },
 };

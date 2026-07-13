@@ -72,7 +72,7 @@ Use `fields.include` / `fields.exclude` for top-level filtering. It applies to c
 
 ### Enabling It
 
-The OAuth provider is an auth concern, not an MCP one: `starterModule` ships the `oauthProvider()` + `jwt()` Better Auth plugins, the OAuth tables (`oauth-*` collections + `jwks`), and — via `coreModule` — the root discovery routes. `adminModule` bundles `starterModule`, so any admin-enabled app already has all of it. You only add the endpoint:
+The OAuth provider is an auth concern, not an MCP one: `starterModule` ships the `oauthProvider()` + `jwt()` Better Auth plugins, the OAuth tables (`oauth-*` collections + `jwks`), and - via `coreModule` - the root discovery routes. `adminModule` bundles `starterModule`, so any admin-enabled app already has all of it. You only add the endpoint:
 
 ```ts title="modules.ts"
 import { adminModule } from "@questpie/admin/modules/admin";
@@ -81,49 +81,49 @@ import mcpModule from "@questpie/mcp";
 export default [adminModule, mcpModule] as const;
 ```
 
-(`create-questpie`'s "MCP" option adds `mcpModule` for you.) That composition is exactly what `packages/mcp/test/oauth-mcp-e2e.test.ts` exercises end to end — read it as the source of truth for the flow.
+(`create-questpie`'s "MCP" option adds `mcpModule` for you.) That composition is exactly what `packages/mcp/test/oauth-mcp-e2e.test.ts` exercises end to end - read it as the source of truth for the flow.
 
 **Limitation:** a headless runtime with no `adminModule`/`starterModule` mounts `/mcp` but has NO OAuth provider, so HTTP MCP stays `401`. Add the starter's OAuth provider yourself to enable it. Stdio (trusted `system` worker) needs no OAuth and works on every runtime.
 
 ### Discovery Endpoints (server root)
 
-- `/.well-known/oauth-authorization-server` — Authorization Server metadata (RFC 8414).
-- `/.well-known/oauth-protected-resource` — Protected Resource metadata (RFC 9728).
-- `/jwks` — JWK set for stateless token verification.
+- `/.well-known/oauth-authorization-server` - Authorization Server metadata (RFC 8414).
+- `/.well-known/oauth-protected-resource` - Protected Resource metadata (RFC 9728).
+- `/jwks` - JWK set for stateless token verification.
 
-These are root-mounted (not under the auth `basePath`) because MCP clients look for them there. They proxy the provider's own helpers — issuer/JWKS/audience stay consistent with how tokens are issued.
+These are root-mounted (not under the auth `basePath`) because MCP clients look for them there. They proxy the provider's own helpers - issuer/JWKS/audience stay consistent with how tokens are issued.
 
 ### The Flow
 
 Register (DCR) → authorize (+PKCE) → consent → token → call:
 
-1. `POST /oauth2/register` — RFC 7591 dynamic client registration. MCP clients self-register as public clients (`token_endpoint_auth_method: "none"`), which forces PKCE.
-2. `GET /oauth2/authorize` — with `code_challenge` (S256) and `resource=<mcp-endpoint-url>`. Redirects to `loginPage` (`/admin/login`) if no session, else to `consentPage` (`/admin/oauth/consent`).
-3. `POST /oauth2/consent` — the admin consent screen approves the requested scopes (see the `questpie-admin` skill).
-4. `POST /oauth2/token` — PKCE verifier + `resource` again → access token.
+1. `POST /oauth2/register` - RFC 7591 dynamic client registration. MCP clients self-register as public clients (`token_endpoint_auth_method: "none"`), which forces PKCE.
+2. `GET /oauth2/authorize` - with `code_challenge` (S256) and `resource=<mcp-endpoint-url>`. Redirects to `loginPage` (`/admin/login`) if no session, else to `consentPage` (`/admin/oauth/consent`).
+3. `POST /oauth2/consent` - the admin consent screen approves the requested scopes (see the `questpie-admin` skill).
+4. `POST /oauth2/token` - PKCE verifier + `resource` again → access token.
 5. `POST /mcp` with `Authorization: Bearer <token>`.
 
-`resource` (RFC 8707) binds the token to the MCP endpoint URL (`<app-url>/api/mcp`) as its audience (`aud`). **Only when `resource` is set is the token a verifiable JWT** (signed EdDSA, verified against `/jwks`); without it the token is opaque and the resource server cannot verify it. There is no `require_pkce` option — PKCE is enforced structurally by public-client (DCR) registration.
+`resource` (RFC 8707) binds the token to the MCP endpoint URL (`<app-url>/api/mcp`) as its audience (`aud`). **Only when `resource` is set is the token a verifiable JWT** (signed EdDSA, verified against `/jwks`); without it the token is opaque and the resource server cannot verify it. There is no `require_pkce` option - PKCE is enforced structurally by public-client (DCR) registration.
 
 ### Scope Model
 
-Scopes are `<resource>:<name>:<verb>`, derived declaratively from the entity — no per-name hardcoding:
+Scopes are `<resource>:<name>:<verb>`, derived declaratively from the entity - no per-name hardcoding:
 
 - Collections: `collections:<name>:read` | `:write` | `:delete`
 - Globals: `globals:<name>:read` | `:write`
 - Routes: `routes:<key>:invoke`
 
-Plus two coarse **umbrellas**: `collections:read` and `collections:write`. An umbrella satisfies the matching granular `read`/`write` requirement for the same resource kind (`collections:read` covers `collections:posts:read`). Umbrellas exist for `read`/`write` ONLY — there is deliberately no umbrella for `:delete` or `routes:…:invoke` (least privilege), and `read`/`write` never cross (holding `collections:write` does not satisfy a `:read` requirement).
+Plus two coarse **umbrellas**: `collections:read` and `collections:write`. An umbrella satisfies the matching granular `read`/`write` requirement for the same resource kind (`collections:read` covers `collections:posts:read`). Umbrellas exist for `read`/`write` ONLY - there is deliberately no umbrella for `:delete` or `routes:…:invoke` (least privilege), and `read`/`write` never cross (holding `collections:write` does not satisfy a `:read` requirement).
 
-> The shipped starter today seeds only the coarse `collections:read`/`collections:write` umbrellas in its scope catalog. The full per-resource granular catalog is generated by a later task — until then a real DCR client on the shipped starter can obtain the umbrellas but not the granular scopes.
+> The shipped starter today seeds only the coarse `collections:read`/`collections:write` umbrellas in its scope catalog. The full per-resource granular catalog is generated by a later task - until then a real DCR client on the shipped starter can obtain the umbrellas but not the granular scopes.
 
 ### Effective Permission = scopes ∩ RBAC
 
-The scope gate is **additive** — it can only ever REMOVE access from an `oauth` caller, never grant it:
+The scope gate is **additive** - it can only ever REMOVE access from an `oauth` caller, never grant it:
 
 - The `oauth` principal's `accessMode` is always `"user"` (never `"system"`), so the collection/global `.access()` RBAC runs as that real user.
-- The scope gate then narrows further: a tool is hidden at `tools/list` and denied at `tools/call` unless the token holds the required scope. So the effective bound is `scopes ∩ RBAC` — a token can never reach anything RBAC denies, and holding a broad scope never over-grants past RBAC.
-- `system` (stdio) and `user` (admin cookie session) callers carry no scopes, so the scope gate does not apply to them — those paths are unchanged. Admin cookie sessions are unaffected by scopes.
+- The scope gate then narrows further: a tool is hidden at `tools/list` and denied at `tools/call` unless the token holds the required scope. So the effective bound is `scopes ∩ RBAC` - a token can never reach anything RBAC denies, and holding a broad scope never over-grants past RBAC.
+- `system` (stdio) and `user` (admin cookie session) callers carry no scopes, so the scope gate does not apply to them - those paths are unchanged. Admin cookie sessions are unaffected by scopes.
 
 ### Declaring Required Scopes
 
@@ -230,7 +230,7 @@ await startStdioServer(app);
 ## Gotchas
 
 - Add `mcpModule` to static `modules.ts`, then run codegen.
-- HTTP callers are always `user` or `oauth`, never `system` — HTTP cannot be elevated to system mode. External access goes through OAuth (bounded by `scopes ∩ RBAC`), not system mode. Only stdio is `system`.
+- HTTP callers are always `user` or `oauth`, never `system` - HTTP cannot be elevated to system mode. External access goes through OAuth (bounded by `scopes ∩ RBAC`), not system mode. Only stdio is `system`.
 - Field filtering is top-level only.
 - Raw routes and unannotated routes are not tools.
 - Custom tool results should use `structuredContent` for machine-readable output.

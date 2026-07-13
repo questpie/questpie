@@ -428,8 +428,16 @@ export function FieldRenderer({
 		enabled: !effectiveFieldState.hidden && !!fieldDef,
 	});
 
+	// Field-level reactive admin props (`f.x().admin({ hidden/readOnly/disabled:
+	// ({ data }) => ... })`) resolve through `useReactiveProps` as component
+	// props, not field-state. Fold the field-state ones back in so they drive
+	// the renderer's visibility/interactivity like the layout-level configs do.
+	const reactivePropHidden = resolvedFieldProps.hidden === true;
+	const reactivePropReadOnly = resolvedFieldProps.readOnly === true;
+	const reactivePropDisabled = resolvedFieldProps.disabled === true;
+
 	// Hidden fields are not rendered
-	if (effectiveFieldState.hidden) return null;
+	if (effectiveFieldState.hidden || reactivePropHidden) return null;
 
 	// Field not found in config
 	if (!fieldDef) {
@@ -461,8 +469,9 @@ export function FieldRenderer({
 		// Pass loading state for async options
 		optionsLoading,
 		// Computed fields are always readonly
-		readOnly: effectiveFieldState.readOnly || isComputed,
-		disabled: effectiveFieldState.disabled === true,
+		readOnly:
+			effectiveFieldState.readOnly || isComputed || reactivePropReadOnly,
+		disabled: effectiveFieldState.disabled === true || reactivePropDisabled,
 		label: resolveText(rawComponentProps.label, "", formValues),
 		description: resolveText(rawComponentProps.description, "", formValues),
 		placeholder: resolveText(rawComponentProps.placeholder, "", formValues),

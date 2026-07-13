@@ -6,7 +6,7 @@ import { createApp, createContextFactory } from "questpie/app";
 import "./names.gen";
 import type { AccessContext, AppDefinition, CollectionSelect, GlobalSelect, HookContext, Where } from "questpie/types";
 import type { AppCollections, AppGlobals, AppRoutes } from "./entities.gen";
-import type { _AppQuestpie, AppSession, AppSessionUser } from "./context.gen";
+import type { _AppQuestpie, AppAuthConfig, AppSession, AppSessionUser } from "./context.gen";
 
 // ── Env (validated before everything else) ─────────────────
 import _env from "../env";
@@ -60,11 +60,18 @@ import _mig_20260307T135142_fancy_orange_tiger from "../migrations/20260307T1351
 import _mig_20260424T221327_bold_yellow_phoenix from "../migrations/20260424T221327_bold_yellow_phoenix";
 import _mig_20260427T093217_eager_blue_phoenix from "../migrations/20260427T093217_eager_blue_phoenix";
 import _mig_20260429T170546_kind_yellow_eagle from "../migrations/20260429T170546_kind_yellow_eagle";
+import _mig_20260615T084209_swift_orange_eagle from "../migrations/20260615T084209_swift_orange_eagle";
+import _mig_20260712T094709_bold_red_griffin from "../migrations/20260712T094709_bold_red_griffin";
+import _mig_20260712T195414_eager_red_tiger from "../migrations/20260712T195414_eager_red_tiger";
 
 // ── Seeds ──────────────────────────────────────────────────
 import _seed_blogPosts from "../seeds/blog-posts";
 import _seed_demoData from "../seeds/demo-data";
 import _seed_siteSettings from "../seeds/site-settings";
+
+// ── FieldTypes ─────────────────────────────────────────────
+import { colorFieldType as _ftype_color } from "../fields/color";
+import { ratingFieldType as _ftype_rating } from "../fields/rating";
 
 // ── Blocks ─────────────────────────────────────────────────
 import { bookingCtaBlock as _bloc_bookingCta } from "../blocks/booking-cta";
@@ -150,7 +157,7 @@ export type AppConfig = {
 	globals: AppGlobals;
 	routes: AppRoutes;
 	storage: (typeof _runtime)["storage"];
-	auth: typeof _authConfig;
+	auth: AppAuthConfig;
 };
 
 // ════════════════════════════════════════════════════════════
@@ -194,8 +201,12 @@ _appPromise = createApp(
 			appointmentConfirmation: _email_appointmentConfirmation,
 			newBlogPost: _email_newBlogPost,
 		},
-		migrations: [_mig_20260206T174642_gentle_azure_eagle, _mig_20260206T180920_fancy_green_tiger, _mig_20260211T100836_calm_blue_phoenix, _mig_20260218T195452_calm_blue_dragon, _mig_20260218T223923_fancy_blue_panda, _mig_20260218T235924_kind_crimson_falcon, _mig_20260307T122102_eager_red_eagle, _mig_20260307T135142_fancy_orange_tiger, _mig_20260424T221327_bold_yellow_phoenix, _mig_20260427T093217_eager_blue_phoenix, _mig_20260429T170546_kind_yellow_eagle],
+		migrations: [_mig_20260206T174642_gentle_azure_eagle, _mig_20260206T180920_fancy_green_tiger, _mig_20260211T100836_calm_blue_phoenix, _mig_20260218T195452_calm_blue_dragon, _mig_20260218T223923_fancy_blue_panda, _mig_20260218T235924_kind_crimson_falcon, _mig_20260307T122102_eager_red_eagle, _mig_20260307T135142_fancy_orange_tiger, _mig_20260424T221327_bold_yellow_phoenix, _mig_20260427T093217_eager_blue_phoenix, _mig_20260429T170546_kind_yellow_eagle, _mig_20260615T084209_swift_orange_eagle, _mig_20260712T094709_bold_red_griffin, _mig_20260712T195414_eager_red_tiger],
 		seeds: [_seed_blogPosts, _seed_demoData, _seed_siteSettings],
+		fieldTypes: {
+			color: _ftype_color,
+			rating: _ftype_rating,
+		},
 		blocks: {
 			[_bloc_bookingCta.state.name]: _bloc_bookingCta,
 			[_bloc_columns.state.name]: _bloc_columns,

@@ -8,7 +8,6 @@ import * as React from "react";
 import { useTranslation } from "../../../../i18n/hooks";
 import { cn } from "../../../../lib/utils";
 import { CollectionEditLink } from "../../../admin-link";
-import { resolveIconElement } from "../../../component-renderer";
 import { Button } from "../../../ui/button";
 import { Skeleton } from "../../../ui/skeleton";
 import {
@@ -51,7 +50,6 @@ function GridSkeleton({
 export function GridDisplay({
 	items,
 	collection,
-	collectionIcon,
 	actions,
 	editable = false,
 	fields,
@@ -91,12 +89,6 @@ export function GridDisplay({
 									alt={getTitle(item)}
 									className="image-outline size-full object-cover"
 								/>
-							</div>
-						) : collectionIcon ? (
-							<div className="bg-muted flex size-8 shrink-0 items-center justify-center rounded-sm">
-								{resolveIconElement(collectionIcon, {
-									className: "size-4 text-muted-foreground",
-								})}
 							</div>
 						) : null}
 						<span className="flex-1 truncate text-sm">{getTitle(item)}</span>

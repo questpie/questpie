@@ -23,13 +23,17 @@ const meta = {
 } as any;
 
 describe("table performance defaults", () => {
-	it("keeps auto-generated table defaults compact", () => {
+	it("auto-generates a populated-but-scalar default column set", () => {
+		// title + up to 6 short scalar fields + createdAt. Heavy/wide types
+		// (richText body, upload image, relation author, AND textarea summary)
+		// are excluded so the table stays readable; `extra` (plain text) now fits
+		// under the raised limit.
 		expect(computeDefaultColumns(fields, { meta })).toEqual([
 			"title",
-			"summary",
 			"status",
 			"featured",
 			"slug",
+			"extra",
 			"createdAt",
 		]);
 	});

@@ -55,11 +55,18 @@ import _mig_20260307T135142_fancy_orange_tiger from "../migrations/20260307T1351
 import _mig_20260424T221327_bold_yellow_phoenix from "../migrations/20260424T221327_bold_yellow_phoenix";
 import _mig_20260427T093217_eager_blue_phoenix from "../migrations/20260427T093217_eager_blue_phoenix";
 import _mig_20260429T170546_kind_yellow_eagle from "../migrations/20260429T170546_kind_yellow_eagle";
+import _mig_20260615T084209_swift_orange_eagle from "../migrations/20260615T084209_swift_orange_eagle";
+import _mig_20260712T094709_bold_red_griffin from "../migrations/20260712T094709_bold_red_griffin";
+import _mig_20260712T195414_eager_red_tiger from "../migrations/20260712T195414_eager_red_tiger";
 
 // ── Seeds ──────────────────────────────────────────────────
 import _seed_blogPosts from "../seeds/blog-posts";
 import _seed_demoData from "../seeds/demo-data";
 import _seed_siteSettings from "../seeds/site-settings";
+
+// ── FieldTypes ─────────────────────────────────────────────
+import { colorFieldType as _ftype_color } from "../fields/color";
+import { ratingFieldType as _ftype_rating } from "../fields/rating";
 
 // ── Blocks ─────────────────────────────────────────────────
 import { bookingCtaBlock as _bloc_bookingCta } from "../blocks/booking-cta";
@@ -97,7 +104,7 @@ import type { RouteParamsFromKey, RouteWithParams } from "questpie/types";
 // TYPES — composed from typeof references (zero inference cost)
 // ════════════════════════════════════════════════════════════
 
-import type { ExtractModulePropArr, ExtractModulePropArrOverride, ServiceCustomNamespaceInstances, ServiceInstanceOf, ServiceInstancesInNamespace, ServiceTopLevelInstances } from "questpie/types";
+import type { ExtractModulePropArr, ExtractModulePropArrOverride, Override, ServiceCustomNamespaceInstances, ServiceInstanceOf, ServiceInstancesInNamespace, ServiceTopLevelInstances } from "questpie/types";
 type _RouteDefinitionWithoutHandler<T> = T extends { mode: "raw" } ? Omit<T, "handler"> & { handler: (args: unknown) => Response | Promise<Response> } : Omit<T, "handler"> & { handler: (args: unknown) => unknown | Promise<unknown> };
 export type _ModuleCollections = ExtractModulePropArrOverride<typeof _modules, "collections">;
 export type _ModuleGlobals = ExtractModulePropArr<typeof _modules, "globals">;
@@ -128,7 +135,7 @@ import type { ExtractModuleProp } from "questpie/types";
 export type _AllModuleFields = ExtractModuleProp<{ modules: typeof _modules }, "fields">;
 
 /** All collections in the app (modules + user, user overrides) */
-export type AppCollections = _ModuleCollections & {
+export type AppCollections = Override<_ModuleCollections, {
 	appointments: typeof _coll_appointments;
 	barber_services: typeof _coll_barber_services;
 	barbers: typeof _coll_barbers;
@@ -136,7 +143,7 @@ export type AppCollections = _ModuleCollections & {
 	pages: typeof _coll_pages;
 	reviews: typeof _coll_reviews;
 	services: typeof _coll_services;
-};
+}>;
 
 /** All globals in the app (modules + user, user overrides) */
 export type AppGlobals = _ModuleGlobals & {
@@ -180,7 +187,10 @@ export type AppEmailTemplates = {
 };
 
 /** All fieldtypes in the app (modules + user, user overrides) */
-export type AppFieldTypes = _ModuleFieldTypes;
+export type AppFieldTypes = _ModuleFieldTypes & {
+	color: typeof _ftype_color;
+	rating: typeof _ftype_rating;
+};
 
 /** All views in the app (modules + user, user overrides) */
 export type AppViews = _ModuleViews;

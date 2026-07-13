@@ -299,6 +299,17 @@ export function createQueueClient<
 				);
 			}
 
+			// Pre-create each job's queue with its declared `queuePolicy` BEFORE the
+			// worker starts consuming — so the worker and any publisher agree on the
+			// policy (queue policy is fixed at creation; whoever creates first wins).
+			if (adapter.ensureQueue) {
+				for (const jobDef of Object.values(jobs)) {
+					await adapter.ensureQueue(jobDef.name, {
+						policy: jobDef.options?.queuePolicy,
+					});
+				}
+			}
+
 			await adapter.listen(buildHandlers(), buildWorkOptions(options));
 			setupGracefulShutdown(options);
 

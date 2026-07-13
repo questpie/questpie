@@ -9,6 +9,7 @@ import { describe, expect, it } from "bun:test";
 
 import { z } from "zod";
 
+import { Field } from "#questpie/server/fields/field-class.js";
 // Import all factories — side effects patch Field.prototype
 import {
 	text,
@@ -25,7 +26,6 @@ import {
 	object,
 	from,
 } from "#questpie/server/modules/core/fields/index.js";
-import { Field } from "#questpie/server/fields/field-class.js";
 
 // ============================================================================
 // Text
@@ -305,6 +305,22 @@ describe("time()", () => {
 		const schema = time().required().toZodSchema();
 		expect(schema.safeParse("14:30:00").success).toBe(true);
 		expect(schema.safeParse("not-a-time").success).toBe(false);
+	});
+
+	it("default mode accepts HH:MM too (native time inputs emit minute precision)", () => {
+		const schema = time().required().toZodSchema();
+		expect(schema.safeParse("09:00").success).toBe(true);
+		expect(schema.safeParse("23:59").success).toBe(true);
+		expect(schema.safeParse("14:30:00.123").success).toBe(true);
+	});
+
+	it("default mode still rejects malformed times", () => {
+		const schema = time().required().toZodSchema();
+		expect(schema.safeParse("9:00").success).toBe(false);
+		expect(schema.safeParse("24:00").success).toBe(false);
+		expect(schema.safeParse("14:60").success).toBe(false);
+		expect(schema.safeParse("14:30:60").success).toBe(false);
+		expect(schema.safeParse("").success).toBe(false);
 	});
 
 	it("without seconds mode validates HH:MM", () => {

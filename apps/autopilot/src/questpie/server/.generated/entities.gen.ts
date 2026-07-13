@@ -37,8 +37,13 @@ import _job_scheduleTick from "../jobs/schedule-tick";
 import _job_taskEscalation from "../jobs/task-escalation";
 
 // ── Routes ─────────────────────────────────────────────────
-import _route_apps_appId_fn from "../routes/apps/[appId]/[fn]";
-import _route_apps_appId_fs_spread_path from "../routes/apps/[appId]/fs/[...path]";
+import _route_apps_appId_fn_DELETE from "../routes/apps/[appId]/[fn].delete";
+import _route_apps_appId_fn_GET from "../routes/apps/[appId]/[fn].get";
+import _route_apps_appId_fn_PATCH from "../routes/apps/[appId]/[fn].patch";
+import _route_apps_appId_fn_POST from "../routes/apps/[appId]/[fn].post";
+import _route_apps_appId_fn_PUT from "../routes/apps/[appId]/[fn].put";
+import _route_apps_appId_fs_spread_path_GET from "../routes/apps/[appId]/fs/[...path].get";
+import _route_apps_appId_fs_spread_path_PUT from "../routes/apps/[appId]/fs/[...path].put";
 import _route_apps_appId_token from "../routes/apps/[appId]/token";
 import _route_chat from "../routes/chat";
 import _route_chat_chatId_approve from "../routes/chat/[chatId]/approve";
@@ -47,7 +52,8 @@ import _route_chat_chatId_stream from "../routes/chat/[chatId]/stream";
 import _route_events from "../routes/events";
 import _route_intake from "../routes/intake";
 import _route_runs_runId from "../routes/runs/[runId]";
-import _route_runs_runId_artifacts from "../routes/runs/[runId]/artifacts";
+import _route_runs_runId_artifacts_GET from "../routes/runs/[runId]/artifacts.get";
+import _route_runs_runId_artifacts_POST from "../routes/runs/[runId]/artifacts.post";
 import _route_runs_runId_artifacts_artifactId_content from "../routes/runs/[runId]/artifacts/[artifactId]/content";
 import _route_runs_runId_stream from "../routes/runs/[runId]/stream";
 import _route_runStream from "../routes/run-stream";
@@ -212,8 +218,13 @@ export type AppJobs = _ModuleJobs & {
 
 /** All routes in the app (modules + user, user overrides) */
 export type AppRoutes = _ModuleRoutes & {
-	"apps/[appId]/[fn]": RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_apps_appId_fn>, RouteParamsFromKey<"apps/[appId]/[fn]">>;
-	"apps/[appId]/fs/[...path]": RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_apps_appId_fs_spread_path>, RouteParamsFromKey<"apps/[appId]/fs/[...path]">>;
+	"apps/[appId]/[fn]:DELETE": RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_apps_appId_fn_DELETE>, RouteParamsFromKey<"apps/[appId]/[fn]:DELETE">>;
+	"apps/[appId]/[fn]:GET": RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_apps_appId_fn_GET>, RouteParamsFromKey<"apps/[appId]/[fn]:GET">>;
+	"apps/[appId]/[fn]:PATCH": RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_apps_appId_fn_PATCH>, RouteParamsFromKey<"apps/[appId]/[fn]:PATCH">>;
+	"apps/[appId]/[fn]:POST": RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_apps_appId_fn_POST>, RouteParamsFromKey<"apps/[appId]/[fn]:POST">>;
+	"apps/[appId]/[fn]:PUT": RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_apps_appId_fn_PUT>, RouteParamsFromKey<"apps/[appId]/[fn]:PUT">>;
+	"apps/[appId]/fs/[...path]:GET": RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_apps_appId_fs_spread_path_GET>, RouteParamsFromKey<"apps/[appId]/fs/[...path]:GET">>;
+	"apps/[appId]/fs/[...path]:PUT": RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_apps_appId_fs_spread_path_PUT>, RouteParamsFromKey<"apps/[appId]/fs/[...path]:PUT">>;
 	"apps/[appId]/token": RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_apps_appId_token>, RouteParamsFromKey<"apps/[appId]/token">>;
 	chat: RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_chat>, RouteParamsFromKey<"chat">>;
 	"chat/[chatId]/approve": RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_chat_chatId_approve>, RouteParamsFromKey<"chat/[chatId]/approve">>;
@@ -222,7 +233,8 @@ export type AppRoutes = _ModuleRoutes & {
 	events: RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_events>, RouteParamsFromKey<"events">>;
 	intake: RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_intake>, RouteParamsFromKey<"intake">>;
 	"runs/[runId]": RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_runs_runId>, RouteParamsFromKey<"runs/[runId]">>;
-	"runs/[runId]/artifacts": RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_runs_runId_artifacts>, RouteParamsFromKey<"runs/[runId]/artifacts">>;
+	"runs/[runId]/artifacts:GET": RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_runs_runId_artifacts_GET>, RouteParamsFromKey<"runs/[runId]/artifacts:GET">>;
+	"runs/[runId]/artifacts:POST": RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_runs_runId_artifacts_POST>, RouteParamsFromKey<"runs/[runId]/artifacts:POST">>;
 	"runs/[runId]/artifacts/[artifactId]/content": RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_runs_runId_artifacts_artifactId_content>, RouteParamsFromKey<"runs/[runId]/artifacts/[artifactId]/content">>;
 	"runs/[runId]/stream": RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_runs_runId_stream>, RouteParamsFromKey<"runs/[runId]/stream">>;
 	runStream: RouteWithParams<_RouteDefinitionWithoutHandler<typeof _route_runStream>, RouteParamsFromKey<"runStream">>;

@@ -42,8 +42,13 @@ import _job_scheduleTick from "../jobs/schedule-tick";
 import _job_taskEscalation from "../jobs/task-escalation";
 
 // ── Routes ─────────────────────────────────────────────────
-import _route_apps_appId_fn from "../routes/apps/[appId]/[fn]";
-import _route_apps_appId_fs_spread_path from "../routes/apps/[appId]/fs/[...path]";
+import _route_apps_appId_fn_DELETE from "../routes/apps/[appId]/[fn].delete";
+import _route_apps_appId_fn_GET from "../routes/apps/[appId]/[fn].get";
+import _route_apps_appId_fn_PATCH from "../routes/apps/[appId]/[fn].patch";
+import _route_apps_appId_fn_POST from "../routes/apps/[appId]/[fn].post";
+import _route_apps_appId_fn_PUT from "../routes/apps/[appId]/[fn].put";
+import _route_apps_appId_fs_spread_path_GET from "../routes/apps/[appId]/fs/[...path].get";
+import _route_apps_appId_fs_spread_path_PUT from "../routes/apps/[appId]/fs/[...path].put";
 import _route_apps_appId_token from "../routes/apps/[appId]/token";
 import _route_chat from "../routes/chat";
 import _route_chat_chatId_approve from "../routes/chat/[chatId]/approve";
@@ -52,7 +57,8 @@ import _route_chat_chatId_stream from "../routes/chat/[chatId]/stream";
 import _route_events from "../routes/events";
 import _route_intake from "../routes/intake";
 import _route_runs_runId from "../routes/runs/[runId]";
-import _route_runs_runId_artifacts from "../routes/runs/[runId]/artifacts";
+import _route_runs_runId_artifacts_GET from "../routes/runs/[runId]/artifacts.get";
+import _route_runs_runId_artifacts_POST from "../routes/runs/[runId]/artifacts.post";
 import _route_runs_runId_artifacts_artifactId_content from "../routes/runs/[runId]/artifacts/[artifactId]/content";
 import _route_runs_runId_stream from "../routes/runs/[runId]/stream";
 import _route_runStream from "../routes/run-stream";
@@ -230,8 +236,13 @@ _appPromise = createApp(
 			taskEscalation: _job_taskEscalation,
 		},
 		routes: {
-			"apps/[appId]/[fn]": _route_apps_appId_fn,
-			"apps/[appId]/fs/[...path]": _route_apps_appId_fs_spread_path,
+			"apps/[appId]/[fn]:DELETE": _route_apps_appId_fn_DELETE,
+			"apps/[appId]/[fn]:GET": _route_apps_appId_fn_GET,
+			"apps/[appId]/[fn]:PATCH": _route_apps_appId_fn_PATCH,
+			"apps/[appId]/[fn]:POST": _route_apps_appId_fn_POST,
+			"apps/[appId]/[fn]:PUT": _route_apps_appId_fn_PUT,
+			"apps/[appId]/fs/[...path]:GET": _route_apps_appId_fs_spread_path_GET,
+			"apps/[appId]/fs/[...path]:PUT": _route_apps_appId_fs_spread_path_PUT,
 			"apps/[appId]/token": _route_apps_appId_token,
 			chat: _route_chat,
 			"chat/[chatId]/approve": _route_chat_chatId_approve,
@@ -240,7 +251,8 @@ _appPromise = createApp(
 			events: _route_events,
 			intake: _route_intake,
 			"runs/[runId]": _route_runs_runId,
-			"runs/[runId]/artifacts": _route_runs_runId_artifacts,
+			"runs/[runId]/artifacts:GET": _route_runs_runId_artifacts_GET,
+			"runs/[runId]/artifacts:POST": _route_runs_runId_artifacts_POST,
 			"runs/[runId]/artifacts/[artifactId]/content": _route_runs_runId_artifacts_artifactId_content,
 			"runs/[runId]/stream": _route_runs_runId_stream,
 			runStream: _route_runStream,

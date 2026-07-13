@@ -25,7 +25,11 @@ const SYSTEM_FIELDS = new Set([
 	"updatedBy",
 ]);
 
-const DEFAULT_CONTENT_COLUMN_LIMIT = 4;
+// Show up to 6 short content columns by default (title + these + createdAt ≈ 8),
+// enough to make a table read as populated rather than sparse. The heavy/wide
+// field types below are excluded so the default never blows out row height or
+// column width — the user can still enable them from the column picker.
+const DEFAULT_CONTENT_COLUMN_LIMIT = 6;
 const HEAVY_DEFAULT_FIELD_TYPES = new Set([
 	"relation",
 	"reverseRelation",
@@ -36,6 +40,7 @@ const HEAVY_DEFAULT_FIELD_TYPES = new Set([
 	"object",
 	"array",
 	"richText",
+	"textarea",
 ]);
 
 // ============================================================================

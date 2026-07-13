@@ -23,6 +23,7 @@ export class PgBossAdapter implements QueueAdapter {
 	private boss: PgBoss;
 	private started = false;
 	private createdQueues = new Set<string>();
+	private warnedSingletonNoop = new Set<string>();
 
 	constructor(options: PgBossAdapterOptions) {
 		this.boss = new PgBoss(options);
@@ -42,10 +43,40 @@ export class PgBossAdapter implements QueueAdapter {
 		}
 	}
 
-	private async ensureQueue(jobName: string): Promise<void> {
+	async ensureQueue(
+		jobName: string,
+		opts?: { policy?: PublishOptions["queuePolicy"] },
+	): Promise<void> {
+		const policy = opts?.policy;
 		if (!this.createdQueues.has(jobName)) {
-			await this.boss.createQueue(jobName);
+			// A queue's policy is fixed at creation. A dedupe policy (short/
+			// singleton/stately) is what makes `singletonKey` actually enforce —
+			// on a `standard` queue pg-boss stores the key but never dedupes.
+			// Policies only constrain KEYED jobs, so non-keyed jobs keep full
+			// throughput regardless.
+			await this.boss.createQueue(
+				jobName,
+				policy ? { policy } : undefined,
+			);
 			this.createdQueues.add(jobName);
+		}
+	}
+
+	/**
+	 * Guard against the silent `singletonKey` no-op: pg-boss ignores the key on a
+	 * standard-policy queue, so a caller expecting dedupe gets duplicates. Warn
+	 * once per queue when a key is used without a dedupe policy.
+	 */
+	private warnIfSingletonNoop(jobName: string, options?: PublishOptions): void {
+		if (
+			options?.singletonKey &&
+			!options.queuePolicy &&
+			!this.warnedSingletonNoop.has(jobName)
+		) {
+			this.warnedSingletonNoop.add(jobName);
+			console.warn(
+				`⚠️  Queue "${jobName}": singletonKey "${options.singletonKey}" was passed but the queue has no dedupe policy — pg-boss will NOT dedupe it. Pass \`queuePolicy: "stately"\` (or "short"/"singleton") when publishing so the queue is created with a policy that enforces the key.`,
+			);
 		}
 	}
 
@@ -55,10 +86,12 @@ export class PgBossAdapter implements QueueAdapter {
 		options?: PublishOptions,
 	): Promise<string | null> {
 		await this.start();
-		await this.ensureQueue(jobName);
-		// pg-boss specific options mapping could happen here if needed
-		// but PublishOptions closely mirrors pg-boss options
-		return this.boss.send(jobName, payload, options as any);
+		await this.ensureQueue(jobName, { policy: options?.queuePolicy });
+		this.warnIfSingletonNoop(jobName, options);
+		// PublishOptions closely mirrors pg-boss send options; queuePolicy is
+		// consumed by ensureQueue above, not forwarded to send().
+		const { queuePolicy: _queuePolicy, ...sendOptions } = options ?? {};
+		return this.boss.send(jobName, payload, sendOptions as any);
 	}
 
 	async schedule(
@@ -68,8 +101,10 @@ export class PgBossAdapter implements QueueAdapter {
 		options?: Omit<PublishOptions, "startAfter">,
 	): Promise<void> {
 		await this.start();
-		await this.ensureQueue(jobName);
-		await this.boss.schedule(jobName, cron, payload, options as any);
+		await this.ensureQueue(jobName, { policy: options?.queuePolicy });
+		this.warnIfSingletonNoop(jobName, options as PublishOptions);
+		const { queuePolicy: _queuePolicy, ...scheduleOptions } = options ?? {};
+		await this.boss.schedule(jobName, cron, payload, scheduleOptions as any);
 	}
 
 	async unschedule(jobName: string): Promise<void> {

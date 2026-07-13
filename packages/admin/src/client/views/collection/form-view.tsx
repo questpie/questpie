@@ -1249,7 +1249,11 @@ export default function FormView({
 		[handleLocaleChangeCancel],
 	);
 
-	const onSubmit = React.useEffectEvent(async (data: any) => {
+	// Plain function on purpose: it is invoked from DOM event handlers (form
+	// onSubmit, Cmd+S via onSubmitRef) — `useEffectEvent` functions may only be
+	// called from inside Effects, so wrapping it there was a rules-of-hooks
+	// violation. Effects that need the latest closure read `onSubmitRef`.
+	const onSubmit = async (data: any) => {
 		const savePromise = async () => {
 			if (isEditMode && id) {
 				return await updateMutation.mutateAsync({
@@ -1305,7 +1309,7 @@ export default function FormView({
 				return `${t("toast.saveFailed")}: ${message}`;
 			},
 		});
-	});
+	};
 
 	// Prevent navigation when there are unsaved changes
 	React.useEffect(() => {
@@ -1511,9 +1515,13 @@ export default function FormView({
 	);
 
 	// Action context for visibility/disabled checks
-	// Use ref for transformedItem to avoid re-computing action visibility on every field change
+	// Use ref for transformedItem to avoid re-computing action visibility on
+	// every field change. Synced in an effect — writing a ref during render
+	// leaks when React replays/discards render work.
 	const transformedItemRef = React.useRef(transformedItem);
-	transformedItemRef.current = transformedItem;
+	React.useEffect(() => {
+		transformedItemRef.current = transformedItem;
+	});
 
 	const actionContext: ActionContext = React.useMemo(
 		() => ({

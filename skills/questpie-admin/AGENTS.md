@@ -418,9 +418,9 @@ For the full server-side setup (context resolver, type augmentation, access rule
 - `loginPage` → `/admin/login` (the existing admin login) when there is no session.
 - `consentPage` → `/admin/oauth/consent` (built-in page, `showInNav: false`) to approve/deny.
 
-The consent page reads `client_id` + `scope` from the signed authorization query in the URL, renders each requested scope as plain English (`describeScopes`), resolves the client's display name via `GET /oauth2/public-client`, and on Allow/Deny does `POST /oauth2/consent` with `{ accept, oauth_query }` — then follows the returned `redirect_uri` back to the client. There is no `getConsentHTML` helper; the consent screen IS this admin page. Trusted clients (`skip_consent`) are approved server-side and never reach it.
+The consent page reads `client_id` + `scope` from the signed authorization query in the URL, renders each requested scope as plain English (`describeScopes`), resolves the client's display name via `GET /oauth2/public-client`, and on Allow/Deny does `POST /oauth2/consent` with `{ accept, oauth_query }` - then follows the returned `redirect_uri` back to the client. There is no `getConsentHTML` helper; the consent screen IS this admin page. Trusted clients (`skip_consent`) are approved server-side and never reach it.
 
-It works out of the box — no wiring needed. To restyle it, the component is `OAuthConsentPage` and scope copy lives in `oauth-scope-descriptions.ts` (`describeScope`), which describes the QUESTPIE scope patterns (`collections:<name>:read|write|delete`, umbrellas, etc.) declaratively.
+It works out of the box - no wiring needed. To restyle it, the component is `OAuthConsentPage` and scope copy lives in `oauth-scope-descriptions.ts` (`describeScope`), which describes the QUESTPIE scope patterns (`collections:<name>:read|write|delete`, umbrellas, etc.) declaratively.
 
 For the framework side (enabling the provider, the token flow, the scope model, `scopes ∩ RBAC`), see the `questpie` skill's `references/mcp.md`.
 

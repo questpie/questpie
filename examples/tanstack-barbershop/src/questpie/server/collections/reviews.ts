@@ -18,16 +18,10 @@ export const reviews = collection("reviews")
 		appointment: f
 			.relation("appointments")
 			.label({ en: "Appointment", sk: "Rezervácia" }),
-		rating: f
-			.select([
-				{ value: "1", label: { en: "1 Star", sk: "1 Hviezdička" } },
-				{ value: "2", label: { en: "2 Stars", sk: "2 Hviezdičky" } },
-				{ value: "3", label: { en: "3 Stars", sk: "3 Hviezdičky" } },
-				{ value: "4", label: { en: "4 Stars", sk: "4 Hviezdičky" } },
-				{ value: "5", label: { en: "5 Stars", sk: "5 Hviezdičiek" } },
-			])
-			.required()
-			.label({ en: "Rating", sk: "Hodnotenie" }),
+		// Custom app-land field type (server/fields/rating.ts + the star UI in
+		// admin/fields/rating.tsx). Same varchar column as the select it
+		// replaced — no migration.
+		rating: f.rating().required().label({ en: "Rating", sk: "Hodnotenie" }),
 		comment: f.textarea().label({ en: "Comment", sk: "Komentár" }).localized(),
 		isApproved: f
 			.boolean()

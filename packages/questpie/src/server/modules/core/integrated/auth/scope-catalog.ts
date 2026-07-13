@@ -21,9 +21,8 @@
 import { oauthProvider, type OAuthOptions } from "@better-auth/oauth-provider";
 import type { BetterAuthOptions } from "better-auth";
 
-import type { Questpie } from "#questpie/server/config/questpie.js";
 import { introspectRoutes } from "#questpie/server/routes/introspection.js";
-import { isJsonRoute } from "#questpie/server/routes/types.js";
+import { isJsonRoute, type RoutesTree } from "#questpie/server/routes/types.js";
 
 import {
 	defaultOperationScope,
@@ -50,6 +49,14 @@ export interface OAuthScopeCatalog {
 /** The better-auth plugin id the OAuth provider registers under. */
 const OAUTH_PROVIDER_PLUGIN_ID = "oauth-provider";
 
+type ScopeCatalogApp = {
+	getCollections(): object;
+	getGlobals(): object;
+	config?: {
+		routes?: RoutesTree;
+	};
+};
+
 function unique(values: string[]): string[] {
 	return [...new Set(values)];
 }
@@ -68,7 +75,7 @@ function unique(values: string[]): string[] {
  * the QUESTPIE resource scopes. {@link applyOAuthScopeCatalog} unions this with
  * whatever the provider already declares.
  */
-export function buildScopeCatalog(app: Questpie<any>): OAuthScopeCatalog {
+export function buildScopeCatalog(app: ScopeCatalogApp): OAuthScopeCatalog {
 	const scopes = new Set<string>();
 
 	// Coarse collection umbrellas (LOCKED #2): only collections get umbrellas,
@@ -114,7 +121,7 @@ export function buildScopeCatalog(app: Questpie<any>): OAuthScopeCatalog {
  * scopes, never removes.
  */
 export function applyOAuthScopeCatalog(
-	app: Questpie<any>,
+	app: ScopeCatalogApp,
 	authOptions: BetterAuthOptions,
 ): BetterAuthOptions {
 	const plugins = authOptions.plugins;

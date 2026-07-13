@@ -67,7 +67,7 @@ export default observabilityConfig({
 
 The module reads the resolved config at runtime from `app.state.config.observability`. Factory modules (`someModule({...})` in `modules.ts`) are acceptable only for simple runtime-only modules whose plugin identity and codegen contributions never change. Full DO/DON'T treatment: `references/extend.md`.
 
-A module's own `module.ts` is **generated** by `questpie generate --module` from convention files (`routes/`, `collections/`, `jobs/`, …) into `.generated/module.ts`; a barrel `index.ts` exports it. **Never hand-write `module.ts` or an inline `route()`/`module({...})` for a module that has any discoverable contribution** — create the convention file and regenerate. Full authoring flow: `references/module-authoring.md`.
+A module's own `module.ts` is **generated** by `questpie generate --module` from convention files (`routes/`, `collections/`, `jobs/`, …) into `.generated/module.ts`; a barrel `index.ts` exports it. **Never hand-write `module.ts` or an inline `route()`/`module({...})` for a module that has any discoverable contribution** - create the convention file and regenerate. Full authoring flow: `references/module-authoring.md`.
 
 ## Admin Auth Contract - Critical
 
