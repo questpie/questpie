@@ -818,15 +818,17 @@ function validateFactoryArguments(
 	const policy = category.factoryArgument;
 	if (!policy) return;
 
+	const localEntries = [...files.values()]
+		.filter((file) => file.factoryArgument !== undefined)
+		.map((file) => ({
+			value: file.factoryArgument!,
+			source: file.namedExportName
+				? `${file.source} (export ${file.namedExportName})`
+				: file.source,
+		}))
+		.sort((a, b) => a.source.localeCompare(b.source));
 	const entries = [
-		...[...files.values()]
-			.filter((file) => file.factoryArgument !== undefined)
-			.map((file) => ({
-				value: file.factoryArgument!,
-				source: file.namedExportName
-					? `${file.source} (export ${file.namedExportName})`
-					: file.source,
-			})),
+		...localEntries,
 		...external
 			.filter((entry) => entry.category === category.category)
 			.map((entry) => ({ value: entry.value, source: entry.source })),
