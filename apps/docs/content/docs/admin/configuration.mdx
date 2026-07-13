@@ -170,7 +170,7 @@ export default function AdminRoute() {
 
 ## CSS and branding
 
-Import the admin stylesheet from your admin CSS entry. Put brand overrides after the admin import so your tokens win by source order.
+Import the admin stylesheet from your admin CSS entry. Put brand overrides after the admin import, and **mirror base.css selectors exactly**: dark values live on `:root, .dark` (dark is the default theme), light values on `.light, :root.light`. At equal specificity your later rules win in both modes. Lighten brand colors in dark mode so they keep contrast on dark surfaces.
 
 ```css title="src/styles/admin.css"
 @import "tailwindcss";
@@ -179,12 +179,41 @@ Import the admin stylesheet from your admin CSS entry. Put brand overrides after
 @source "../node_modules/@questpie/admin/dist";
 
 :root,
-.light {
+.dark {
+	--primary: oklch(0.72 0.16 245);
+	--ring: oklch(0.72 0.16 245);
+	--surface-radius: 0.5rem;
+}
+
+.light,
+:root.light {
 	--primary: oklch(0.58 0.18 245);
 	--ring: oklch(0.58 0.18 245);
 	--surface-radius: 0.5rem;
 }
 ```
+
+<Callout type="warn">
+A plain `.light { ... }` or `:root { ... }` override silently loses in light mode: base.css defines light tokens with `:root.light` (specificity 0-2-0), which beats single-class selectors regardless of import order. That bump is deliberate. In embedded setups the app's global stylesheet often defines its own `:root` tokens, and the extra specificity keeps them from leaking into the admin. Always use the mirrored selectors shown above.
+</Callout>
+
+See `examples/tanstack-barbershop/src/admin.css` for a working whitelabel (custom primary + heading font, pure CSS).
+
+## Theme mode
+
+`AdminLayoutProvider` and `AdminRouter` manage the theme themselves: they toggle the `.dark`/`.light` class on `<html>` and set `color-scheme`. The default is `system` (follows the OS), the user's choice persists in localStorage under `questpie:admin-theme`, and a light/dark toggle is shown in the sidebar user footer (hide it with `showThemeToggle={false}`).
+
+```tsx
+// Force a mode
+<AdminLayoutProvider theme="dark" ... />
+
+// Or control it yourself
+<AdminLayoutProvider theme={theme} setTheme={setTheme} ... />
+```
+
+<Callout type="warn">
+Never wrap the admin in `<div className="dark">`. Dialogs, popovers, selects, and toasts render through portals into `document.body` (outside your wrapper), so they follow the `<html>` class instead and end up in the opposite theme, and the built-in toggle appears broken. To force dark, pass `theme="dark"`; the provider applies it at the root where portals can see it.
+</Callout>
 
 For chrome-level replacement, add client component files under `src/questpie/admin/components/`:
 

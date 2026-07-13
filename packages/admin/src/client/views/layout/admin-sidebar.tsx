@@ -516,7 +516,7 @@ function QuestpieSymbol({ className }: { className?: string }) {
 				strokeLinecap="square"
 				className="text-foreground"
 			/>
-			<path d="M23 13H13V23H23V13Z" fill="#B700FF" />
+			<path d="M23 13H13V23H23V13Z" fill="var(--primary, #B700FF)" />
 		</svg>
 	);
 }

@@ -160,7 +160,36 @@ export default adminConfig({
 
 The admin uses CSS variables for all theming. Override them in your own CSS file.
 
-The full source of truth is `packages/admin/DESIGN.md`. Key defaults:
+The full source of truth is `packages/admin/DESIGN.md`.
+
+### Theme Mode (light / dark / system)
+
+`AdminLayoutProvider` (and `AdminRouter`) manage the theme themselves: they
+toggle the `.dark` / `.light` class **on `<html>`** and set `color-scheme`.
+Default is `"system"` (follows the OS), the user's choice persists in
+localStorage (`questpie:admin-theme`), and a toggle is shown in the sidebar
+user footer (hide it with `showThemeToggle={false}`).
+
+```tsx
+// Force a mode
+<AdminLayoutProvider theme="dark" ... />
+
+// Or control it yourself
+<AdminLayoutProvider theme={theme} setTheme={setTheme} ... />
+```
+
+**CRITICAL: never wrap the admin in `<div className="dark">`.** Floating UI
+(dialogs, popovers, selects, toasts) renders through portals into
+`document.body` (outside your wrapper), so it follows the `<html>` class
+instead. Result: mixed light/dark surfaces and a theme toggle that appears
+broken. If you want dark always, pass `theme="dark"`; the provider applies it
+at the root where portals can see it.
+
+Token structure in `base.css`: dark values live on `:root, .dark` (dark is
+the default), light values on `.light, :root.light`. Mirror those selectors
+when overriding (see Custom Theme below).
+
+### Key Defaults
 
 | Role          | Dark      | Light     |
 | ------------- | --------- | --------- |
@@ -190,12 +219,46 @@ The full source of truth is `packages/admin/DESIGN.md`. Key defaults:
 
 Separate tokens for independent sidebar theming: `--sidebar`, `--sidebar-foreground`, `--sidebar-primary`, `--sidebar-accent`, `--sidebar-border`, `--sidebar-ring`.
 
-### Custom Theme
+### Custom Theme (Brand Overrides)
 
-1. Copy the admin CSS file
-2. Change variable values
-3. Import your copy instead
-4. Zero component changes needed
+Don't copy or fork the admin stylesheet. Import it, then override tokens
+**after** the import for zero component changes. **Mirror base.css selectors
+exactly** (`:root, .dark` for dark, `.light, :root.light` for light): base.css
+uses `:root.light` (specificity 0-2-0) for light tokens, so a plain `.light`
+or `:root` override silently loses in light mode no matter the import order.
+At equal specificity, source order makes your later rules win in both modes.
+
+```css title="src/admin.css"
+@import "tailwindcss";
+@import "@questpie/admin/client/styles/base.css";
+
+/* Scan admin package for Tailwind classes.
+   Second path covers hoisted/monorepo node_modules layouts. */
+@source "../node_modules/@questpie/admin/";
+@source "../../../node_modules/@questpie/admin/";
+
+:root,
+.dark {
+	/* Lighten brand colors for contrast on dark surfaces */
+	--primary: oklch(0.78 0.18 25);
+	--ring: oklch(0.78 0.18 25);
+	--sidebar-primary: oklch(0.78 0.18 25);
+}
+
+.light,
+:root.light {
+	--primary: oklch(0.65 0.2 25);
+	--ring: oklch(0.65 0.2 25);
+	--sidebar-primary: oklch(0.65 0.2 25);
+}
+```
+
+The `:root.light` bump in base.css is deliberate: in embedded setups the app's
+global stylesheet often defines its own `:root { --primary: ... }` tokens, and
+the extra specificity keeps them from leaking into the admin.
+
+Working example: `examples/tanstack-barbershop/src/admin.css` (pink primary +
+custom heading font, pure CSS whitelabel).
 
 ## Content Localization
 
@@ -455,3 +518,8 @@ For the framework side (enabling the provider, the token flow, the scope model, 
 5. **MEDIUM: Custom `<button>` or `<div>` instead of shadcn components**, use `<Button>`, `<Card>`, etc.
 
 6. **MEDIUM: `console.error` for user errors**, use `toast.error()` from `sonner`.
+
+7. **HIGH: Wrapping the admin in `<div className="dark">`**, the provider
+   manages `.dark`/`.light` on `<html>`; a wrapper div misses portaled UI
+   (dialogs, popovers, toasts) and fights the built-in toggle. Pass
+   `theme="dark"` to `AdminLayoutProvider` instead.

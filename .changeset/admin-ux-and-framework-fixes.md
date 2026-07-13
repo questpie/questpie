@@ -23,6 +23,14 @@ pg-boss singleton, time field).
 - Global search on mobile is one cohesive rounded sheet (was torn into
   square-cornered islands overflowing the drawer); keyboard-hint footer is
   desktop-only.
+- Sidebar logo accent follows `--primary` (whitelabel-aware) instead of a
+  hardcoded brand purple, so a brand-override stylesheet retints it. The theme
+  provider already toggles `.dark`/`.light` on `<html>` (default `system`,
+  persisted); docs + the questpie-admin skill now document theme mode, the
+  "never wrap the admin in a `.dark` div" portal gotcha, and mirroring
+  base.css selectors (`:root,.dark` / `.light,:root.light`) for brand
+  overrides. The barbershop example's whitelabel smoke-test is corrected to
+  those selectors.
 
 **Menus (Base UI)**
 
