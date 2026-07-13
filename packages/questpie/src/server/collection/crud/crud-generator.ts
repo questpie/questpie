@@ -2524,41 +2524,41 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						.where(inArray(getColumn(this.table, "id")!, winnerIdList));
 				}
 
+				// Bulk metadata for afterDelete: winners only (fact hooks)
+				const afterDeleteBulkMeta = {
+					isBatch: true as const,
+					recordIds: claimedRecords.map((r: any) => r.id),
+					records: claimedRecords,
+					count: claimedRecords.length,
+				};
+
+				// Execute afterDelete hooks inside the mutation transaction so
+				// transactional side effects share the business commit boundary.
+				for (const record of claimedRecords) {
+					try {
+						await this.executeCollectionHooksWithGlobal(
+							"afterDelete",
+							this.state.hooks?.afterDelete,
+							this.createHookContext({
+								data: record,
+								original: record,
+								operation: "delete",
+								context: txContext,
+								db: tx,
+								bulk: afterDeleteBulkMeta,
+							}),
+						);
+					} catch (err) {
+						// afterDelete hook errors are non-fatal — log and continue
+						console.error(
+							`[QUESTPIE] afterDelete hook error for "${this.state.name}":`,
+							err,
+						);
+					}
+				}
+
 				return claimedRecords;
 			});
-
-			// Bulk metadata for afterDelete: winners only (fact hooks)
-			const afterDeleteBulkMeta = {
-				isBatch: true as const,
-				recordIds: winners.map((r: any) => r.id),
-				records: winners,
-				count: winners.length,
-			};
-
-			// 4. Loop through afterDelete hooks (winners only)
-			for (const record of winners) {
-				// Execute afterDelete hooks
-				try {
-					await this.executeCollectionHooksWithGlobal(
-						"afterDelete",
-						this.state.hooks?.afterDelete,
-						this.createHookContext({
-							data: record,
-							original: record,
-							operation: "delete",
-							context: normalized,
-							db,
-							bulk: afterDeleteBulkMeta,
-						}),
-					);
-				} catch (err) {
-					// afterDelete hook errors are non-fatal — log and continue
-					console.error(
-						`[QUESTPIE] afterDelete hook error for "${this.state.name}":`,
-						err,
-					);
-				}
-			}
 
 			return { success: true, count: winners.length };
 		};

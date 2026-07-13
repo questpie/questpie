@@ -64,27 +64,29 @@ const realtimeHook = {
 		const operation = resolveRealtimeOperation(ctx, "change");
 		const payload = resolveRealtimePayload(ctx, "change");
 
-		// Defer both the log append and broadcast to after-commit.
-		// Running appendChange inside the CRUD transaction can deadlock
-		// on single-connection databases (PGlite) because the insert
-		// waits for the outer transaction to release its lock.
-		ctx.onAfterCommit(async () => {
-			try {
-				const change = await realtime.appendChange({
+		try {
+			const change = await realtime.appendChange(
+				{
 					resourceType: "collection",
 					resource: ctx.collection,
 					operation,
-					recordId: ctx.isBatch ? null : ctx.data?.id ?? null,
+					recordId: ctx.isBatch ? null : (ctx.data?.id ?? null),
 					locale: ctx.locale ?? null,
 					payload,
-				});
-				if (change) {
+				},
+				{ db: ctx.db },
+			);
+
+			ctx.onAfterCommit(async () => {
+				try {
 					await realtime.notify(change);
+				} catch {
+					// Realtime adapter may be unavailable
 				}
-			} catch {
-				// Realtime log table may not exist yet
-			}
-		});
+			});
+		} catch {
+			// Realtime log table may not exist yet
+		}
 	},
 	afterDelete: async (ctx: GlobalCollectionHookContext) => {
 		const realtime = ctx.realtime;
@@ -93,23 +95,29 @@ const realtimeHook = {
 		const operation = resolveRealtimeOperation(ctx, "delete");
 		const payload = resolveRealtimePayload(ctx, "delete");
 
-		ctx.onAfterCommit(async () => {
-			try {
-				const change = await realtime.appendChange({
+		try {
+			const change = await realtime.appendChange(
+				{
 					resourceType: "collection",
 					resource: ctx.collection,
 					operation,
-					recordId: ctx.isBatch ? null : ctx.data?.id ?? null,
+					recordId: ctx.isBatch ? null : (ctx.data?.id ?? null),
 					locale: ctx.locale ?? null,
 					payload,
-				});
-				if (change) {
+				},
+				{ db: ctx.db },
+			);
+
+			ctx.onAfterCommit(async () => {
+				try {
 					await realtime.notify(change);
+				} catch {
+					// Realtime adapter may be unavailable
 				}
-			} catch {
-				// Realtime log table may not exist yet
-			}
-		});
+			});
+		} catch {
+			// Realtime log table may not exist yet
+		}
 	},
 };
 
@@ -266,23 +274,29 @@ const globalRealtimeHook = {
 		const realtime = ctx.realtime;
 		if (!realtime) return;
 
-		ctx.onAfterCommit(async () => {
-			try {
-				const change = await realtime.appendChange({
+		try {
+			const change = await realtime.appendChange(
+				{
 					resourceType: "global",
 					resource: ctx.global,
 					operation: "update",
 					recordId: ctx.data?.id ?? null,
 					locale: ctx.locale ?? null,
 					payload: ctx.data as Record<string, unknown>,
-				});
-				if (change) {
+				},
+				{ db: ctx.db },
+			);
+
+			ctx.onAfterCommit(async () => {
+				try {
 					await realtime.notify(change);
+				} catch {
+					// Realtime adapter may be unavailable
 				}
-			} catch {
-				// Realtime log table may not exist yet
-			}
-		});
+			});
+		} catch {
+			// Realtime log table may not exist yet
+		}
 	},
 };
 
