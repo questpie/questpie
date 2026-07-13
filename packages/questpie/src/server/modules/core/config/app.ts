@@ -16,7 +16,10 @@ import type {
 	GlobalCollectionTransitionHookContext,
 	GlobalGlobalHookContext,
 } from "#questpie/server/config/global-hooks-types.js";
-import type { Locale } from "#questpie/server/config/types.js";
+import type {
+	DrizzleClientFromQuestpieConfig,
+	Locale,
+} from "#questpie/server/config/types.js";
 import { buildIndexParams } from "#questpie/server/modules/core/integrated/search/index-params.js";
 import type { SearchableConfig } from "#questpie/server/modules/core/integrated/search/types.js";
 import {
@@ -28,6 +31,17 @@ import { DEFAULT_LOCALE } from "#questpie/shared/constants.js";
 // ============================================================================
 // Realtime helpers
 // ============================================================================
+
+/**
+ * The pre-codegen hook context deliberately keeps infrastructure members
+ * unknown. Runtime hook execution always supplies the mutation-bound client;
+ * keep that assertion local so generated app hooks retain their precise schema.
+ */
+function asRealtimeMutationDb(
+	db: unknown,
+): DrizzleClientFromQuestpieConfig<any> {
+	return db as DrizzleClientFromQuestpieConfig<any>;
+}
 
 function resolveRealtimeOperation(
 	ctx: GlobalCollectionHookContext,
@@ -74,7 +88,7 @@ const realtimeHook = {
 					locale: ctx.locale ?? null,
 					payload,
 				},
-				{ db: ctx.db },
+				{ db: asRealtimeMutationDb(ctx.db) },
 			);
 
 			ctx.onAfterCommit(async () => {
@@ -105,7 +119,7 @@ const realtimeHook = {
 					locale: ctx.locale ?? null,
 					payload,
 				},
-				{ db: ctx.db },
+				{ db: asRealtimeMutationDb(ctx.db) },
 			);
 
 			ctx.onAfterCommit(async () => {
@@ -284,7 +298,7 @@ const globalRealtimeHook = {
 					locale: ctx.locale ?? null,
 					payload: ctx.data as Record<string, unknown>,
 				},
-				{ db: ctx.db },
+				{ db: asRealtimeMutationDb(ctx.db) },
 			);
 
 			ctx.onAfterCommit(async () => {
