@@ -6,12 +6,15 @@ import {
 	type RealtimeChangeEvent,
 	type RealtimeNotice,
 } from "../../src/exports/index.js";
+import { PgNotifyAdapter } from "../../src/server/modules/core/integrated/realtime/adapters/pg-notify.js";
 import { RealtimeService } from "../../src/server/modules/core/integrated/realtime/service.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 import { runTestDbMigrations } from "../utils/test-db";
 
 class DroppingRealtimeAdapter implements RealtimeAdapter {
 	readonly started: Promise<void>;
+	publisherStarts = 0;
+	stops = 0;
 	private markStarted: () => void = () => {};
 	private noticeHandler: ((notice: RealtimeNotice) => void) | undefined;
 	private stateHandler:
@@ -28,7 +31,13 @@ class DroppingRealtimeAdapter implements RealtimeAdapter {
 		this.markStarted();
 	}
 
-	async stop(): Promise<void> {}
+	async startPublisher(): Promise<void> {
+		this.publisherStarts += 1;
+	}
+
+	async stop(): Promise<void> {
+		this.stops += 1;
+	}
 
 	subscribe(handler: (notice: RealtimeNotice) => void): () => void {
 		this.noticeHandler = handler;
@@ -56,6 +65,65 @@ class DroppingRealtimeAdapter implements RealtimeAdapter {
 
 	emitState(state: "connected" | "disconnected"): void {
 		this.stateHandler?.(state);
+	}
+}
+
+class SharedWakeBroker {
+	private handlers = new Set<(notice: RealtimeNotice) => void>();
+
+	subscribe(handler: (notice: RealtimeNotice) => void): () => void {
+		this.handlers.add(handler);
+		return () => this.handlers.delete(handler);
+	}
+
+	publish(notice: RealtimeNotice): void {
+		for (const handler of this.handlers) handler(notice);
+	}
+}
+
+class BrokerRealtimeAdapter implements RealtimeAdapter {
+	readonly listening: Promise<void>;
+	publisherStarts = 0;
+	localSubscriptions = 0;
+	private markListening: () => void = () => {};
+	private publisherStarted = false;
+	private brokerUnsubscribe: (() => void) | undefined;
+	private handlers = new Set<(notice: RealtimeNotice) => void>();
+
+	constructor(private broker: SharedWakeBroker) {
+		this.listening = new Promise((resolve) => {
+			this.markListening = resolve;
+		});
+	}
+
+	async startPublisher(): Promise<void> {
+		this.publisherStarts += 1;
+		this.publisherStarted = true;
+	}
+
+	async start(): Promise<void> {
+		this.brokerUnsubscribe ??= this.broker.subscribe((notice) => {
+			for (const handler of this.handlers) handler(notice);
+		});
+	}
+
+	async stop(): Promise<void> {
+		this.brokerUnsubscribe?.();
+		this.brokerUnsubscribe = undefined;
+	}
+
+	async notify(event: RealtimeChangeEvent): Promise<void> {
+		if (!this.publisherStarted) {
+			throw new Error("publisher not started");
+		}
+		this.broker.publish(RealtimeService.noticeFromEvent(event));
+	}
+
+	subscribe(handler: (notice: RealtimeNotice) => void): () => void {
+		this.localSubscriptions += 1;
+		this.handlers.add(handler);
+		this.markListening();
+		return () => this.handlers.delete(handler);
 	}
 }
 
@@ -127,6 +195,111 @@ describe("realtime reconciliation", () => {
 
 	afterEach(async () => {
 		await cleanup?.();
+	});
+
+	it("G1: implicit pg publisher notifies with zero local subscribers", async () => {
+		const startPublisherSpy = spyOn(
+			PgNotifyAdapter.prototype,
+			"startPublisher",
+		).mockResolvedValue();
+		const notifySpy = spyOn(
+			PgNotifyAdapter.prototype,
+			"notify",
+		).mockResolvedValue();
+		const realtime = new RealtimeService(
+			new ControlledRealtimeReadDb() as never,
+			{ pollIntervalMs: 0 },
+			"postgres://questpie.test/app",
+		);
+		cleanup = () => realtime.destroy();
+		const change: RealtimeChangeEvent = {
+			seq: 1,
+			resourceType: "collection",
+			resource: "posts",
+			operation: "create",
+			recordId: "post-1",
+			locale: null,
+			payload: { id: "post-1" },
+			createdAt: new Date("2026-07-13T20:00:00.000Z"),
+		};
+
+		try {
+			await realtime.notify(change);
+			expect(notifySpy).toHaveBeenCalledTimes(1);
+			expect(notifySpy).toHaveBeenCalledWith(change);
+		} finally {
+			notifySpy.mockRestore();
+			startPublisherSpy.mockRestore();
+		}
+	});
+
+	it("G1: app boot starts the adapter publisher without a subscription", async () => {
+		const adapter = new DroppingRealtimeAdapter();
+		const setup = await buildMockApp({}, { realtime: { adapter } });
+		cleanup = setup.cleanup;
+
+		expect(adapter.publisherStarts).toBe(1);
+	});
+
+	it("G1: zero listeners keep the app-lifecycle publisher running", async () => {
+		const adapter = new DroppingRealtimeAdapter();
+		const setup = await buildMockApp({}, { realtime: { adapter } });
+		cleanup = setup.cleanup;
+		await runTestDbMigrations(setup.app);
+		const unsubscribe = setup.app.realtime.subscribe(() => {}, {
+			resourceType: "collection",
+			resource: "posts",
+		});
+		await adapter.started;
+
+		unsubscribe();
+		await flushMicrotasks();
+
+		expect(adapter.stops).toBe(0);
+		expect(adapter.publisherStarts).toBe(1);
+	});
+
+	it("G1: a zero-subscriber instance wakes a second service instance", async () => {
+		const broker = new SharedWakeBroker();
+		const publisherAdapter = new BrokerRealtimeAdapter(broker);
+		const receiverAdapter = new BrokerRealtimeAdapter(broker);
+		const publisher = new RealtimeService(
+			new ControlledRealtimeReadDb() as never,
+			{ adapter: publisherAdapter, pollIntervalMs: 0 },
+		);
+		const receiverDb = new ControlledRealtimeReadDb();
+		const receiver = new RealtimeService(receiverDb as never, {
+			adapter: receiverAdapter,
+			pollIntervalMs: 0,
+		});
+		cleanup = async () => {
+			await Promise.all([publisher.destroy(), receiver.destroy()]);
+		};
+		const delivered: RealtimeChangeEvent[] = [];
+		receiver.subscribe((event) => delivered.push(event), {
+			resourceType: "collection",
+			resource: "posts",
+		});
+		await receiverAdapter.listening;
+		await flushMicrotasks();
+
+		const change: RealtimeChangeEvent = {
+			seq: 1,
+			resourceType: "collection",
+			resource: "posts",
+			operation: "create",
+			recordId: "post-1",
+			locale: null,
+			payload: { id: "post-1" },
+			createdAt: new Date("2026-07-13T20:00:00.000Z"),
+		};
+		receiverDb.rows = [change];
+		await publisher.notify(change);
+		await flushMicrotasks();
+
+		expect(delivered).toEqual([change]);
+		expect(publisherAdapter.localSubscriptions).toBe(0);
+		expect(publisherAdapter.publisherStarts).toBe(1);
 	});
 
 	it("G2: adapter mode defaults to a slow reconciliation poll", async () => {

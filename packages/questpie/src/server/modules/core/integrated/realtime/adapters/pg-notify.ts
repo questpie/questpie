@@ -47,8 +47,8 @@ export class PgNotifyAdapter implements RealtimeAdapter {
 
 	async start(): Promise<void> {
 		if (this.started) return;
-		const client = await this.ensureClient();
-		await this.ensureConnected(client);
+		await this.startPublisher();
+		const client = this.client!;
 		await client.query(`LISTEN ${this.channel}`);
 		this.notificationHandler = (msg) => {
 			if (!msg.payload) return;
@@ -66,8 +66,13 @@ export class PgNotifyAdapter implements RealtimeAdapter {
 		this.started = true;
 	}
 
+	async startPublisher(): Promise<void> {
+		const client = await this.ensureClient();
+		await this.ensureConnected(client);
+	}
+
 	async stop(): Promise<void> {
-		if (!this.started) return;
+		const wasStarted = this.started;
 		this.started = false;
 		const client = this.client;
 		if (!client) return;
@@ -77,10 +82,12 @@ export class PgNotifyAdapter implements RealtimeAdapter {
 			this.notificationHandler = undefined;
 		}
 
-		try {
-			await client.query(`UNLISTEN ${this.channel}`);
-		} catch {
-			// Ignore UNLISTEN failures during shutdown.
+		if (wasStarted) {
+			try {
+				await client.query(`UNLISTEN ${this.channel}`);
+			} catch {
+				// Ignore UNLISTEN failures during shutdown.
+			}
 		}
 
 		if (this.ownsClient) {

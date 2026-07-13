@@ -46,11 +46,21 @@ class MockRealtimeAdapter implements RealtimeAdapter {
 }
 
 class LifecycleTrackingRealtimeAdapter extends MockRealtimeAdapter {
+	public readonly started: Promise<void>;
 	public startCalls = 0;
 	public stopCalls = 0;
+	private markStarted: () => void = () => {};
+
+	constructor() {
+		super();
+		this.started = new Promise((resolve) => {
+			this.markStarted = resolve;
+		});
+	}
 
 	async start(): Promise<void> {
 		this.startCalls += 1;
+		this.markStarted();
 	}
 
 	async stop(): Promise<void> {
@@ -223,10 +233,7 @@ describe("realtime", () => {
 				{ id: created.id, data: { title: "Ahoj" } },
 				ctxSk,
 			);
-			await setup.app.collections.posts.deleteById(
-				{ id: created.id },
-				ctxEn,
-			);
+			await setup.app.collections.posts.deleteById({ id: created.id }, ctxEn);
 
 			const logs = await setup.app.db
 				.select()
@@ -1108,7 +1115,7 @@ describe("realtime", () => {
 	// ==========================================================================
 
 	describe("edge cases", () => {
-		it("restarts adapter after all subscribers disconnect", async () => {
+		it("keeps adapter running until app teardown", async () => {
 			const adapter = new LifecycleTrackingRealtimeAdapter();
 			const items = collection("items").fields(({ f }) => ({
 				name: f.textarea().required(),
@@ -1123,21 +1130,24 @@ describe("realtime", () => {
 				resourceType: "collection",
 				resource: "items",
 			});
-			await new Promise((resolve) => setTimeout(resolve, 50));
+			await adapter.started;
 			expect(adapter.startCalls).toBe(1);
 
 			firstUnsub?.();
-			await new Promise((resolve) => setTimeout(resolve, 50));
-			expect(adapter.stopCalls).toBe(1);
+			await Promise.resolve();
+			expect(adapter.stopCalls).toBe(0);
 
 			const secondUnsub = setup.app.realtime?.subscribe(() => {}, {
 				resourceType: "collection",
 				resource: "items",
 			});
-			await new Promise((resolve) => setTimeout(resolve, 50));
-			expect(adapter.startCalls).toBe(2);
+			await Promise.resolve();
+			expect(adapter.startCalls).toBe(1);
 
 			secondUnsub?.();
+			await setup.app.realtime.getLatestSeq();
+			await setup.cleanup();
+			expect(adapter.stopCalls).toBe(1);
 		});
 
 		it("handles multiple subscribers with different filters", async () => {
@@ -1757,18 +1767,9 @@ describe("realtime", () => {
 			const ctx = createTestContext();
 
 			// Create multiple records rapidly
-			await setup.app.collections.counters.create(
-				{ name: "A", value: 1 },
-				ctx,
-			);
-			await setup.app.collections.counters.create(
-				{ name: "B", value: 2 },
-				ctx,
-			);
-			await setup.app.collections.counters.create(
-				{ name: "C", value: 3 },
-				ctx,
-			);
+			await setup.app.collections.counters.create({ name: "A", value: 1 }, ctx);
+			await setup.app.collections.counters.create({ name: "B", value: 2 }, ctx);
+			await setup.app.collections.counters.create({ name: "C", value: 3 }, ctx);
 
 			// Should receive snapshots reflecting the changes
 			let snapshotCount = 0;
