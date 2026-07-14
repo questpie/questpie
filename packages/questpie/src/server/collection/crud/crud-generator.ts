@@ -49,6 +49,7 @@ import {
 	matchesAccessConditions,
 	mergeFieldAccessRules,
 	mergeWhereWithAccess,
+	PRECHECKED_READ_ACCESS,
 	removeRestrictedReadFields,
 	validateFieldsWriteAccess,
 } from "#questpie/server/collection/crud/shared/access-control.js";
@@ -480,9 +481,18 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				// field-level read filtering below stays active.
 				const inheritAccess =
 					(options as Record<PropertyKey, unknown>)[INHERIT_ACCESS] === true;
+				const precheckedAccess = (options as Record<PropertyKey, unknown>)[
+					PRECHECKED_READ_ACCESS
+				] as AccessWhere | true | undefined;
 				const accessWhere = inheritAccess
 					? true
-					: await this.enforceAccessControl("read", normalized, null, options);
+					: (precheckedAccess ??
+						(await this.enforceAccessControl(
+							"read",
+							normalized,
+							null,
+							options,
+						)));
 
 				// Access explicitly denied
 				if (accessWhere === false) {

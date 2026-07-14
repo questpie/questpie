@@ -1,4 +1,8 @@
 export * from "#questpie/server/modules/core/integrated/realtime/adapter.js";
+export {
+	DEFAULT_REALTIME_ADMISSION,
+	type RealtimeAdmissionConfig,
+} from "#questpie/server/modules/core/integrated/realtime/admission.js";
 export * from "#questpie/server/modules/core/integrated/realtime/collection.js";
 export * from "#questpie/server/modules/core/integrated/realtime/service.js";
 export * from "#questpie/server/modules/core/integrated/realtime/snapshot.js";

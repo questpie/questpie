@@ -47,7 +47,8 @@ class SseClientSink implements ClientSink {
 		}
 		if (
 			this.controller.desiredSize !== null &&
-			this.controller.desiredSize <= 0
+			(this.controller.desiredSize <= 0 ||
+				frame.byteLength > this.controller.desiredSize)
 		) {
 			return {
 				status: "busy",
@@ -86,6 +87,13 @@ class SseClientSink implements ClientSink {
 	}
 }
 
+export class RealtimeSnapshotBufferOverflowError extends Error {
+	constructor(readonly maximumBytes: number) {
+		super(`Realtime snapshot buffer exceeds ${maximumBytes} bytes`);
+		this.name = "RealtimeSnapshotBufferOverflowError";
+	}
+}
+
 /** Per-session latest-wins queue used when an SSE stream applies backpressure. */
 export class SseLatestSnapshotWriter {
 	private readonly pending = new Map<string, Uint8Array>();
@@ -93,7 +101,10 @@ export class SseLatestSnapshotWriter {
 	private closed = false;
 	private pendingBytes = 0;
 
-	constructor(private readonly sink: ClientSink) {}
+	constructor(
+		private readonly sink: ClientSink,
+		private readonly maximumBufferedBytes = 1024 * 1024,
+	) {}
 
 	get bufferedBytes(): number {
 		return this.pendingBytes;
@@ -101,11 +112,12 @@ export class SseLatestSnapshotWriter {
 
 	write(topicId: string, frame: Uint8Array): Promise<SinkWriteResult> {
 		return this.run(async () => {
-			if (this.closed) throw new Error("Realtime SSE snapshot writer is closed");
+			if (this.closed)
+				throw new Error("Realtime SSE snapshot writer is closed");
 			this.removePending(topicId);
 			const result = await this.sink.write(frame, "latest-snapshot");
 			if (!this.closed && result.status === "busy") {
-				this.setPending(topicId, frame);
+				this.setPending(topicId, frame, result.bufferedBytes);
 			}
 			return result.status === "busy"
 				? { ...result, bufferedBytes: result.bufferedBytes + this.pendingBytes }
@@ -120,7 +132,7 @@ export class SseLatestSnapshotWriter {
 				this.removePending(topicId);
 				const result = await this.sink.write(frame, "latest-snapshot");
 				if (result.status === "busy") {
-					this.setPending(topicId, frame);
+					this.setPending(topicId, frame, result.bufferedBytes);
 					break;
 				}
 			}
@@ -149,7 +161,17 @@ export class SseLatestSnapshotWriter {
 		this.pendingBytes -= previous.byteLength;
 	}
 
-	private setPending(topicId: string, frame: Uint8Array): void {
+	private setPending(
+		topicId: string,
+		frame: Uint8Array,
+		transportBufferedBytes: number,
+	): void {
+		if (
+			transportBufferedBytes + this.pendingBytes + frame.byteLength >
+			this.maximumBufferedBytes
+		) {
+			throw new RealtimeSnapshotBufferOverflowError(this.maximumBufferedBytes);
+		}
 		this.pending.set(topicId, frame);
 		this.pendingBytes += frame.byteLength;
 	}

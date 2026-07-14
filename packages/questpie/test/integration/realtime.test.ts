@@ -1582,15 +1582,21 @@ describe("realtime", () => {
 	// ==========================================================================
 
 	describe("access control", () => {
-		it("should send error event when user lacks read permission", async () => {
+		it("rejects an anonymous denial before hooks, listeners, or a sink", async () => {
 			const adapter = new LifecycleTrackingRealtimeAdapter();
+			let beforeOperationRuns = 0;
+			let beforeReadRuns = 0;
 			const secrets = collection("secrets")
 				.fields(({ f }) => ({
 					content: f.textarea().required(),
 					level: f.textarea().required(),
 				}))
+				.hooks({
+					beforeOperation: () => void (beforeOperationRuns += 1),
+					beforeRead: () => void (beforeReadRuns += 1),
+				})
 				.access({
-					read: ({ session }) => (session?.user as any)?.role === "admin",
+					read: ({ session }) => Boolean(session),
 					create: true,
 				});
 
@@ -1603,46 +1609,25 @@ describe("realtime", () => {
 			setup = await buildMockApp(testModule, { realtime: { adapter } });
 			await runTestDbMigrations(setup.app);
 
-			// First create some data as admin
-			const adminCtx = createTestContext({ accessMode: "user", role: "admin" });
-			await setup.app.collections.secrets.create(
-				{ content: "Secret content", level: "high" },
-				adminCtx,
-			);
-
 			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
-			const controller = new AbortController();
-
-			// Request without admin role should receive error in SSE stream
-			const request = createRealtimeRequest(
-				[collectionTopic("secrets")],
-				controller.signal,
-			);
+			const request = createRealtimeRequest([collectionTopic("secrets")]);
 
 			const response = await routes.realtime.subscribe(
 				request,
 				{},
 				{
-					appContext: createTestContext({ accessMode: "user", role: "user" }),
+					appContext: createTestContext({
+						accessMode: "user",
+						session: null,
+					}),
 				},
 			);
 
-			expect(response.ok).toBe(true);
-			const reader = createSSEReader(response.body!);
-
-			// Should receive error event due to access denied
-			const error = await reader.readEvent();
-			expect(error.event).toBe("error");
-			expect(error.data.message).toContain("permission");
-			await new Promise((resolve) => setTimeout(resolve, 20));
+			expect(response.ok).toBe(false);
+			expect(beforeOperationRuns).toBe(0);
+			expect(beforeReadRuns).toBe(0);
 			expect(setup.app.realtime.listeners.size).toBe(0);
-			expect(adapter.stopCalls).toBe(0);
-			await expect(reader.readEvent()).rejects.toThrow(
-				"SSE stream closed before event",
-			);
-
-			controller.abort();
-			reader.close();
+			expect(sharedSseKeepAliveTicker.size).toBe(0);
 		});
 
 		it("should allow access for authorized users", async () => {
@@ -1806,7 +1791,7 @@ describe("realtime", () => {
 			unsub?.();
 		});
 
-		it("should handle global access restrictions", async () => {
+		it("rejects a denied global before opening an SSE stream", async () => {
 			const adapter = new MockRealtimeAdapter();
 			const config = global("config")
 				.fields(({ f }) => ({
@@ -1828,13 +1813,7 @@ describe("realtime", () => {
 			await runTestDbMigrations(setup.app);
 
 			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
-			const controller = new AbortController();
-
-			// Non-admin request should receive error in SSE
-			const request = createRealtimeRequest(
-				[globalTopic("config")],
-				controller.signal,
-			);
+			const request = createRealtimeRequest([globalTopic("config")]);
 
 			const response = await routes.realtime.subscribe(
 				request,
@@ -1844,27 +1823,198 @@ describe("realtime", () => {
 				},
 			);
 
+			expect(response.ok).toBe(false);
+			expect(setup.app.realtime.listeners.size).toBe(0);
+		});
+	});
+
+	// ==========================================================================
+	// Admission control
+	// ==========================================================================
+
+	describe("admission control", () => {
+		it("enforces topic, query, and initial-concurrency caps for a mixed batch", async () => {
+			const adapter = new MockRealtimeAdapter();
+			let activeReads = 0;
+			let maximumActiveReads = 0;
+			const observedLimits: number[] = [];
+			const items = collection("items")
+				.fields(({ f }) => ({ name: f.textarea().required() }))
+				.hooks({
+					beforeRead: async ({ data }) => {
+						observedLimits.push(data.limit);
+						activeReads += 1;
+						maximumActiveReads = Math.max(maximumActiveReads, activeReads);
+						await new Promise((resolve) => setTimeout(resolve, 20));
+						activeReads -= 1;
+					},
+				})
+				.access({ read: true });
+			setup = await buildMockApp(
+				{ collections: { items } },
+				{ realtime: { adapter } },
+			);
+			await runTestDbMigrations(setup.app);
+
+			const topics = Array.from({ length: 21 }, (_, index) => ({
+				...collectionTopic("items", { where: { name: `item-${index}` } }),
+				id: `items-${index}`,
+			}));
+			topics[1].limit = 101;
+			topics[2].with = {
+				author: {
+					with: { team: { with: { company: { with: { owner: true } } } } },
+				},
+			};
+
+			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
+			const response = await routes.realtime.subscribe(
+				createRealtimeRequest(topics),
+				{},
+				undefined,
+			);
 			expect(response.ok).toBe(true);
 			const reader = createSSEReader(response.body!);
-
-			let receivedError = false;
-			try {
-				for (let i = 0; i < 5; i++) {
-					const event = await reader.readEvent(500);
-					if (event.event === "error") {
-						receivedError = true;
-						expect(event.data.message).toContain("access");
-						break;
-					}
-				}
-			} catch {
-				// Timeout is acceptable
+			const events: SSEEvent[] = [];
+			for (let index = 0; index < 21; index += 1) {
+				events.push(await reader.readEvent(5000));
 			}
 
-			expect(receivedError).toBe(true);
+			expect(events.filter((event) => event.event === "snapshot")).toHaveLength(
+				18,
+			);
+			expect(
+				events
+					.filter((event) => event.event === "error")
+					.map((event) => event.data.topicId),
+			).toEqual(expect.arrayContaining(["items-1", "items-2", "items-20"]));
+			expect(observedLimits).toHaveLength(18);
+			expect(observedLimits.every((limit) => limit === 100)).toBe(true);
+			expect(maximumActiveReads).toBe(4);
+			expect(setup.app.realtime.listeners.size).toBe(18);
 
-			controller.abort();
-			reader.close();
+			await reader.close();
+			expect(setup.app.realtime.listeners.size).toBe(0);
+		});
+
+		it("preserves the access where constraint alongside the requested filter", async () => {
+			const adapter = new MockRealtimeAdapter();
+			const documents = collection("documents")
+				.fields(({ f }) => ({
+					ownerId: f.textarea().required(),
+					status: f.textarea().required(),
+					title: f.textarea().required(),
+				}))
+				.access({
+					read: ({ input, session }) =>
+						input?.where?.status === "published"
+							? { ownerId: session?.user.id }
+							: false,
+					create: true,
+				});
+			setup = await buildMockApp(
+				{ collections: { documents } },
+				{ realtime: { adapter } },
+			);
+			await runTestDbMigrations(setup.app);
+			const system = createTestContext();
+			await setup.app.collections.documents.create(
+				{ ownerId: "alice", status: "published", title: "allowed" },
+				system,
+			);
+			await setup.app.collections.documents.create(
+				{ ownerId: "alice", status: "draft", title: "wrong status" },
+				system,
+			);
+			await setup.app.collections.documents.create(
+				{ ownerId: "bob", status: "published", title: "wrong owner" },
+				system,
+			);
+
+			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
+			const response = await routes.realtime.subscribe(
+				createRealtimeRequest([
+					collectionTopic("documents", { where: { status: "published" } }),
+				]),
+				{},
+				{
+					appContext: createTestContext({
+						accessMode: "user",
+						session: createMockSession({ id: "alice" }) as any,
+					}),
+				},
+			);
+			const reader = createSSEReader(response.body!);
+			const snapshot = await reader.readSnapshot();
+
+			expect(snapshot.data.data.docs).toEqual([
+				expect.objectContaining({ title: "allowed" }),
+			]);
+			await reader.close();
+		});
+
+		it("removes an oversized snapshot and releases its principal slot", async () => {
+			const adapter = new MockRealtimeAdapter();
+			const largeItems = collection("largeItems")
+				.fields(({ f }) => ({ content: f.textarea().required() }))
+				.access({ read: true, create: true });
+			const smallItems = collection("smallItems")
+				.fields(({ f }) => ({ content: f.textarea().required() }))
+				.access({ read: true });
+			setup = await buildMockApp(
+				{ collections: { largeItems, smallItems } },
+				{
+					realtime: {
+						adapter,
+						admission: { maxBufferedSnapshotBytes: 512 },
+					},
+				},
+			);
+			await runTestDbMigrations(setup.app);
+			await setup.app.collections.largeItems.create(
+				{ content: "x".repeat(2000) },
+				createTestContext(),
+			);
+
+			const session = createMockSession({ id: "same-user" });
+			const appContext = createTestContext({
+				accessMode: "user",
+				session: session as any,
+			});
+			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
+			const oversized = await routes.realtime.subscribe(
+				createRealtimeRequest([collectionTopic("largeItems")]),
+				{},
+				{ appContext },
+			);
+			const oversizedReader = createSSEReader(oversized.body!);
+			const error = await oversizedReader.readEvent();
+			expect(error.event).toBe("error");
+			expect(error.data.message).toContain("Snapshot exceeds 512 bytes");
+			await new Promise((resolve) => setTimeout(resolve, 20));
+			expect(setup.app.realtime.listeners.size).toBe(0);
+			expect(sharedSseKeepAliveTicker.size).toBe(0);
+
+			const replacements = await Promise.all(
+				Array.from({ length: 5 }, () =>
+					routes.realtime.subscribe(
+						createRealtimeRequest([collectionTopic("smallItems")]),
+						{},
+						{ appContext },
+					),
+				),
+			);
+			expect(replacements.every((response) => response.ok)).toBe(true);
+			const replacementReaders = replacements.map((response) =>
+				createSSEReader(response.body!),
+			);
+			await Promise.all(
+				replacementReaders.map((reader) => reader.readSnapshot()),
+			);
+			await Promise.all([
+				oversizedReader.close(),
+				...replacementReaders.map((reader) => reader.close()),
+			]);
 		});
 	});
 
@@ -1873,7 +2023,7 @@ describe("realtime", () => {
 	// ==========================================================================
 
 	describe("shared refresh scheduler", () => {
-		it("runs one pipeline for 100 same-session identical-topic connections", async () => {
+		it("runs one pipeline for the five admitted same-principal connections", async () => {
 			const adapter = new MockRealtimeAdapter();
 			let pipelineRuns = 0;
 			const items = collection("items")
@@ -1893,18 +2043,45 @@ describe("realtime", () => {
 			});
 			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
 			const responses = await Promise.all(
-				Array.from({ length: 100 }, () =>
-					routes.realtime.subscribe(createRealtimeRequest([collectionTopic("items")]), {}, {
-						appContext,
-					}),
+				Array.from({ length: 5 }, () =>
+					routes.realtime.subscribe(
+						createRealtimeRequest([collectionTopic("items")]),
+						{},
+						{
+							appContext,
+						},
+					),
 				),
 			);
-			const readers = responses.map((response) => createSSEReader(response.body!));
+			const readers = responses.map((response) =>
+				createSSEReader(response.body!),
+			);
 			await Promise.all(readers.map((reader) => reader.readSnapshot()));
+			const rejected = await routes.realtime.subscribe(
+				createRealtimeRequest([collectionTopic("items")]),
+				{},
+				{ appContext },
+			);
 
+			expect(rejected.ok).toBe(false);
 			expect(pipelineRuns).toBe(1);
 			expect(setup.app.realtime.listeners.size).toBe(1);
-			await Promise.all(readers.map((reader) => reader.close()));
+
+			await readers[0].close();
+			const replacement = await routes.realtime.subscribe(
+				createRealtimeRequest([collectionTopic("items")]),
+				{},
+				{ appContext },
+			);
+			expect(replacement.ok).toBe(true);
+			const replacementReader = createSSEReader(replacement.body!);
+			await replacementReader.readSnapshot();
+			expect(pipelineRuns).toBe(1);
+
+			await Promise.all([
+				...readers.slice(1).map((reader) => reader.close()),
+				replacementReader.close(),
+			]);
 			expect(setup.app.realtime.listeners.size).toBe(0);
 		});
 
@@ -2263,9 +2440,11 @@ describe("realtime", () => {
 
 		it("should handle client disconnection gracefully", async () => {
 			const adapter = new MockRealtimeAdapter();
-			const items = collection("items").fields(({ f }) => ({
-				name: f.textarea().required(),
-			}));
+			const items = collection("items")
+				.fields(({ f }) => ({
+					name: f.textarea().required(),
+				}))
+				.access({ read: true });
 
 			const testModule = {
 				collections: {

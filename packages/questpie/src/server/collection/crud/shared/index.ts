@@ -14,6 +14,7 @@ export {
 	matchesAccessConditions,
 	mergeFieldAccessRules,
 	mergeWhereWithAccess,
+	PRECHECKED_READ_ACCESS,
 	removeRestrictedReadFields,
 	validateFieldsWriteAccess,
 } from "./access-control.js";

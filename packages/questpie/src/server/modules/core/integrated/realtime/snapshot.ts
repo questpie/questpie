@@ -1,3 +1,5 @@
+import { PRECHECKED_READ_ACCESS } from "#questpie/server/collection/crud/shared/access-control.js";
+
 type CollectionSnapshotCrud = {
 	find(options: Record<string, unknown>, context: unknown): Promise<unknown>;
 };
@@ -7,6 +9,7 @@ type GlobalSnapshotCrud = {
 };
 
 type SnapshotQuery = {
+	accessWhere?: true | Record<string, unknown>;
 	where?: Record<string, unknown>;
 	with?: Record<string, unknown>;
 	limit?: number;
@@ -27,6 +30,7 @@ export function computeRealtimeSnapshot(
 	if (topic.type === "collection") {
 		return topic.crud.find(
 			{
+				[PRECHECKED_READ_ACCESS]: topic.accessWhere,
 				where: topic.where,
 				with: topic.with,
 				limit: topic.limit,
@@ -40,6 +44,7 @@ export function computeRealtimeSnapshot(
 
 	return topic.crud.get(
 		{
+			[PRECHECKED_READ_ACCESS]: topic.accessWhere,
 			where: topic.where,
 			with: topic.with,
 			locale: topic.locale,

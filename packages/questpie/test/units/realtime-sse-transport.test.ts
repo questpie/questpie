@@ -3,6 +3,7 @@ import { describe, expect, it } from "bun:test";
 import {
 	encodeSseComment,
 	encodeSseEvent,
+	RealtimeSnapshotBufferOverflowError,
 	SseLatestSnapshotWriter,
 	SseClientTransport,
 } from "../../src/server/modules/core/integrated/realtime/sse-client-transport.js";
@@ -12,7 +13,7 @@ describe("SseClientTransport", () => {
 	it("delivers serialized frames through a local-session sink", async () => {
 		const frames: Uint8Array[] = [];
 		let closeCalls = 0;
-		let desiredSize = 16;
+		let desiredSize = 128;
 		const transport = new SseClientTransport(
 			{
 				get desiredSize() {
@@ -20,13 +21,13 @@ describe("SseClientTransport", () => {
 				},
 				enqueue: (frame) => {
 					frames.push(frame);
-					desiredSize = 8;
+					desiredSize = 64;
 				},
 				close: () => {
 					closeCalls += 1;
 				},
 			},
-			16,
+			128,
 		);
 
 		await transport.start({ onError: () => {} });
@@ -43,7 +44,7 @@ describe("SseClientTransport", () => {
 
 		await expect(sink.write(frame, "latest-snapshot")).resolves.toEqual({
 			status: "accepted",
-			bufferedBytes: 8,
+			bufferedBytes: 64,
 		});
 		expect(new TextDecoder().decode(frames[0])).toBe(
 			'event: snapshot\ndata: {"topicId":"posts","seq":4,"data":{"docs":[]}}\n\n',
@@ -128,6 +129,20 @@ describe("SseClientTransport", () => {
 		await writer.flush();
 
 		expect(accepted).toEqual(["posts-v2", "pages-v1"]);
+		expect(writer.bufferedBytes).toBe(0);
+	});
+
+	it("rejects pending snapshots that would exceed the edge buffer cap", async () => {
+		const sink = {
+			sessionId: "session-1",
+			write: async () => ({ status: "busy" as const, bufferedBytes: 8 }),
+			close: async () => {},
+		};
+		const writer = new SseLatestSnapshotWriter(sink, 16);
+
+		await expect(
+			writer.write("posts", new Uint8Array(9)),
+		).rejects.toBeInstanceOf(RealtimeSnapshotBufferOverflowError);
 		expect(writer.bufferedBytes).toBe(0);
 	});
 });

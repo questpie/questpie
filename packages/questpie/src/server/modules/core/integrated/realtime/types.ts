@@ -87,6 +87,8 @@ export type RealtimeSubscriptionContext = {
 };
 
 export interface RealtimeConfig {
+	/** Realtime edge-session admission limits. */
+	admission?: Partial<import("./admission.js").RealtimeAdmissionConfig>;
 	/**
 	 * Optional transport adapter (pg_notify, redis streams, etc.).
 	 */

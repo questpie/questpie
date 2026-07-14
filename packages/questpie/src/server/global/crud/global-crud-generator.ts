@@ -21,6 +21,7 @@ import {
 	normalizeContext,
 	normalizeJsonbInput,
 	onAfterCommit,
+	PRECHECKED_READ_ACCESS,
 	removeRestrictedReadFields,
 	splitLocalizedFields,
 	validateFieldsWriteAccess,
@@ -397,12 +398,11 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 			const scopeId = isScoped ? this.resolveScopeId(normalized) : undefined;
 
 			// Enforce access control
-			const canRead = await this.enforceAccessControl(
-				"read",
-				normalized,
-				null,
-				options,
-			);
+			const canRead =
+				(options as Record<PropertyKey, unknown>)[PRECHECKED_READ_ACCESS] ===
+				true
+					? true
+					: await this.enforceAccessControl("read", normalized, null, options);
 			if (!canRead) {
 				throw ApiError.forbidden({
 					operation: "read",

@@ -20,6 +20,9 @@ import type {
 
 import { getDb, normalizeContext } from "./context.js";
 
+/** Internal, non-JSON marker for access already evaluated before CRUD hooks. */
+export const PRECHECKED_READ_ACCESS = Symbol("questpie.precheckedReadAccess");
+
 type FieldDefinitionLike = {
 	_state?: {
 		access?: FieldAccess;
