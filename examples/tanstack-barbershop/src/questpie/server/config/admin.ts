@@ -230,6 +230,7 @@ export default adminConfig({
 							const [currentStats, previousStats] = await Promise.all([
 								getRevenueStats.handler({
 									...ctx,
+									params: {},
 									input: {
 										startDate: currentStart,
 										endDate: currentEnd,
@@ -238,6 +239,7 @@ export default adminConfig({
 								}),
 								getRevenueStats.handler({
 									...ctx,
+									params: {},
 									input: {
 										startDate: previousStart,
 										endDate: previousEnd,
@@ -290,6 +292,7 @@ export default adminConfig({
 							).toISOString();
 							const stats = await getRevenueStats.handler({
 								...ctx,
+								params: {},
 								input: {
 									startDate: currentStart,
 									endDate: now.toISOString(),

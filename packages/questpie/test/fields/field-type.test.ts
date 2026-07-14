@@ -2,15 +2,27 @@
  * QUE-263: fieldType(), wrapFieldComplete(), derive() tests
  */
 import { describe, expect, it } from "bun:test";
-import { z } from "zod";
+
 import { varchar } from "drizzle-orm/pg-core";
+import { z } from "zod";
 
 import { Field, field } from "../../src/server/fields/field-class.js";
 import {
 	fieldType,
 	wrapFieldComplete,
 } from "../../src/server/fields/field-type.js";
+import type {
+	FieldSelect,
+	FieldWhere,
+} from "../../src/server/fields/field-types.js";
 import { stringOps } from "../../src/server/fields/operators/builtin.js";
+import { selectSingleOps } from "../../src/server/fields/operators/builtin.js";
+
+type Equal<A, B> =
+	(<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2
+		? true
+		: false;
+type Expect<T extends true> = T;
 
 // ============================================================================
 // derive()
@@ -18,7 +30,19 @@ import { stringOps } from "../../src/server/fields/operators/builtin.js";
 
 describe("Field.derive()", () => {
 	it("creates a new field with extra state", () => {
-		const f = field({ type: "text", columnFactory: null, schemaFactory: null, operatorSet: stringOps, notNull: false, hasDefault: false, localized: false, virtual: false, input: true, output: true, isArray: false });
+		const f = field({
+			type: "text",
+			columnFactory: null,
+			schemaFactory: null,
+			operatorSet: stringOps,
+			notNull: false,
+			hasDefault: false,
+			localized: false,
+			virtual: false,
+			input: true,
+			output: true,
+			isArray: false,
+		});
 		const derived = f.derive({ pattern: /^[A-Z]/ });
 
 		expect(derived).not.toBe(f);
@@ -27,7 +51,19 @@ describe("Field.derive()", () => {
 	});
 
 	it("cannot change identity properties", () => {
-		const f = field({ type: "text", columnFactory: null, schemaFactory: null, operatorSet: stringOps, notNull: false, hasDefault: false, localized: false, virtual: false, input: true, output: true, isArray: false });
+		const f = field({
+			type: "text",
+			columnFactory: null,
+			schemaFactory: null,
+			operatorSet: stringOps,
+			notNull: false,
+			hasDefault: false,
+			localized: false,
+			virtual: false,
+			input: true,
+			output: true,
+			isArray: false,
+		});
 
 		// @ts-expect-error — type is omitted from derive patch
 		f.derive({ type: "number" });
@@ -117,7 +153,19 @@ describe("fieldType()", () => {
 
 describe("wrapFieldComplete() with extensions", () => {
 	it("extension methods work alongside type methods", () => {
-		const base = field({ type: "text", columnFactory: null, schemaFactory: null, operatorSet: stringOps, notNull: false, hasDefault: false, localized: false, virtual: false, input: true, output: true, isArray: false });
+		const base = field({
+			type: "text",
+			columnFactory: null,
+			schemaFactory: null,
+			operatorSet: stringOps,
+			notNull: false,
+			hasDefault: false,
+			localized: false,
+			virtual: false,
+			input: true,
+			output: true,
+			isArray: false,
+		});
 
 		const typeMethods = {
 			pattern: (f: Field<any>, re: RegExp) => f.derive({ pattern: re }),
@@ -173,5 +221,49 @@ describe("fieldType() without methods", () => {
 		// Common methods still work
 		const required = f.required();
 		expect(required._state.notNull).toBe(true);
+	});
+});
+
+describe("fieldType() type inference", () => {
+	const ratingType = fieldType("rating", {
+		create: () => ({
+			type: "rating",
+			columnFactory: (name: string) => varchar(name, { length: 50 }),
+			schemaFactory: () => z.enum(["1", "2", "3", "4", "5"]),
+			operatorSet: selectSingleOps,
+			notNull: false,
+			hasDefault: false,
+			localized: false,
+			virtual: false,
+			input: true,
+			output: true,
+			isArray: false,
+		}),
+	});
+
+	it("preserves schema value and operator types for app-defined fields", () => {
+		const rating = ratingType.factory();
+
+		type _value = Expect<
+			Equal<FieldSelect<typeof rating>, "1" | "2" | "3" | "4" | "5" | null>
+		>;
+		type _where = Expect<
+			Equal<
+				FieldWhere<typeof rating>,
+				{
+					eq?: string;
+					ne?: string;
+					not?: string | null;
+					in?: string[];
+					notIn?: string[];
+					isNull?: boolean;
+					isNotNull?: boolean;
+				}
+			>
+		>;
+
+		const value: _value = true;
+		const where: _where = true;
+		expect(value && where).toBe(true);
 	});
 });

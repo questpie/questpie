@@ -1,27 +1,12 @@
 {
-	"include": [
-		"src/**/*.ts",
-		"src/**/*.tsx",
-		"*.config.ts"
-	],
-	"exclude": [
-		"node_modules",
-		"dist",
-		"**/*.test.ts"
-	],
+	"include": ["src/**/*.ts", "src/**/*.tsx", "*.config.ts"],
+	"exclude": ["node_modules", "dist", "**/*.test.ts"],
 	"compilerOptions": {
 		"target": "ES2022",
 		"jsx": "react-jsx",
 		"module": "ESNext",
-		"lib": [
-			"ES2022",
-			"DOM",
-			"DOM.Iterable"
-		],
-		"types": [
-			"vite/client",
-			"bun-types"
-		],
+		"lib": ["ES2022", "DOM", "DOM.Iterable"],
+		"types": ["vite/client", "bun-types"],
 		"moduleResolution": "bundler",
 		"resolveJsonModule": true,
 		"allowImportingTsExtensions": true,
@@ -35,12 +20,9 @@
 		"noUncheckedSideEffectImports": true,
 		"baseUrl": ".",
 		"paths": {
-			"@/*": [
-				"./src/*"
-			],
-			"#questpie/*": [
-				"./src/questpie/server/.generated/*"
-			]
+			"@/*": ["./src/*"],
+			"#questpie/*": ["./src/questpie/server/.generated/*"],
+			"#questpie/admin/*": ["../../packages/admin/src/*"]
 		}
 	}
 }

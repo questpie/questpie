@@ -13,11 +13,11 @@
 
 import { createFileRoute } from "@tanstack/react-router";
 
+import env from "@/questpie/server/env";
 import { createPreviewTokenVerifier } from "@questpie/admin/modules/admin";
 import { createDraftModeCookie } from "@questpie/admin/shared";
 
-// Create verifier once (reads secret from env)
-const verifyPreviewToken = createPreviewTokenVerifier();
+const verifyPreviewToken = createPreviewTokenVerifier(env.BETTER_AUTH_SECRET);
 
 export const Route = createFileRoute("/api/preview")({
 	server: {
@@ -46,7 +46,7 @@ export const Route = createFileRoute("/api/preview")({
 				}
 
 				// Verify the token (checks signature and expiration)
-				const payload = verifyPreviewToken(token);
+				const payload = await verifyPreviewToken(token);
 
 				if (!payload) {
 					return new Response("Invalid or expired preview token", {

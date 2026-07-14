@@ -12,8 +12,11 @@
  * @module
  */
 
-import { Field } from "./field-class.js";
+import type { output, ZodType } from "zod";
+
 import type { FieldRuntimeState, FieldState } from "./field-class-types.js";
+import { Field } from "./field-class.js";
+import type { FieldWithMethods } from "./field-with-methods.js";
 
 // ============================================================================
 // Types
@@ -26,14 +29,35 @@ export interface FieldTypeDefinition<
 	TName extends string = string,
 	TArgs extends any[] = any[],
 	TMethods = {},
+	TState extends FieldState = any,
 > {
 	/** Field type name (e.g., "text", "number", "color") */
 	name: TName;
 	/** Factory function that creates a configured field */
-	factory: (...args: TArgs) => Field<any>;
+	factory: (...args: TArgs) => FieldWithMethods<TState, TMethods>;
 	/** Type-specific method implementations */
 	methods: TMethods;
 }
+
+type FieldStateFromRuntime<TState extends FieldRuntimeState> = {
+	type: TState["type"];
+	data: TState["schemaFactory"] extends () => infer TSchema
+		? TSchema extends ZodType
+			? output<TSchema>
+			: unknown
+		: unknown;
+	column: TState["columnFactory"] extends (name: string) => infer TColumn
+		? TColumn
+		: null;
+	notNull: TState["notNull"];
+	hasDefault: TState["hasDefault"];
+	localized: TState["localized"];
+	virtual: TState["virtual"] extends false ? false : true;
+	input: TState["input"];
+	output: TState["output"];
+	isArray: TState["isArray"];
+	operators: TState["operatorSet"];
+};
 
 /**
  * Extension entry for plugin-contributed methods (e.g., .admin(), .form()).
@@ -60,7 +84,10 @@ export interface BuilderExtensionEntry {
  */
 export function wrapFieldComplete(
 	field: Field<any>,
-	typeMethods: Record<string, (field: Field<any>, ...args: any[]) => Field<any>>,
+	typeMethods: Record<
+		string,
+		(field: Field<any>, ...args: any[]) => Field<any>
+	>,
 	extensions: Record<string, BuilderExtensionEntry>,
 ): Field<any> {
 	return new Proxy(field, {
@@ -132,25 +159,35 @@ export function wrapFieldComplete(
 export function fieldType<
 	TName extends string,
 	TArgs extends any[],
-	TMethods extends Record<string, (field: Field<any>, ...args: any[]) => Field<any>>,
+	TState extends FieldRuntimeState,
+	TMethods extends Record<
+		string,
+		(field: Field<any>, ...args: any[]) => Field<any>
+	>,
 >(
 	name: TName,
 	config: {
 		/** Factory function that creates FieldRuntimeState from arguments */
-		create: (...args: TArgs) => FieldRuntimeState;
+		create: (...args: TArgs) => TState;
 		/** Type-specific chain methods */
 		methods?: TMethods;
 	},
-): FieldTypeDefinition<TName, TArgs, TMethods> {
+): FieldTypeDefinition<TName, TArgs, TMethods, FieldStateFromRuntime<TState>> {
 	const methods = config.methods ?? ({} as TMethods);
 
 	return Object.freeze({
 		name,
-		factory: (...args: TArgs): Field<any> => {
+		factory: (...args: TArgs) => {
 			const state = config.create(...args);
 			const field = new Field(state);
-			if (Object.keys(methods).length === 0) return field;
-			return wrapFieldComplete(field, methods, {});
+			const wrapped =
+				Object.keys(methods).length === 0
+					? field
+					: wrapFieldComplete(field, methods, {});
+			return wrapped as FieldWithMethods<
+				FieldStateFromRuntime<TState>,
+				TMethods
+			>;
 		},
 		methods,
 	});
