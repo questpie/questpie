@@ -9,6 +9,7 @@ import {
 	type RealtimeAdapter,
 	type RealtimeChangeEvent,
 } from "../../src/exports/index.js";
+import { sharedSseKeepAliveTicker } from "../../src/server/modules/core/integrated/realtime/sse-keep-alive.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 import { createTestContext } from "../utils/test-context";
 import { runTestDbMigrations } from "../utils/test-db";
@@ -77,6 +78,7 @@ class FailingStartRealtimeAdapter extends MockRealtimeAdapter {
 type SSEEvent = {
 	event: string;
 	data: any;
+	comment?: string;
 };
 
 type TopicInput = {
@@ -147,17 +149,21 @@ const createSSEReader = (stream: ReadableStream<Uint8Array>) => {
 
 				let event = "message";
 				let data = "";
+				let comment: string | undefined;
 				for (const line of chunk.split("\n")) {
 					if (line.startsWith("event:")) {
 						event = line.slice(6).trim();
 					} else if (line.startsWith("data:")) {
 						data += line.slice(5).trim();
+					} else if (line.startsWith(":")) {
+						comment = line.slice(1).trim();
 					}
 				}
 
 				return {
 					event,
 					data: data ? JSON.parse(data) : null,
+					comment,
 				};
 			}
 
@@ -177,7 +183,7 @@ const createSSEReader = (stream: ReadableStream<Uint8Array>) => {
 	): Promise<SSEEvent> => {
 		while (true) {
 			const event = await readEvent(timeoutMs);
-			if (event.event === "ping") {
+			if (event.comment !== undefined) {
 				continue;
 			}
 			// If topicId specified, filter by it
@@ -1859,7 +1865,7 @@ describe("realtime", () => {
 	// ==========================================================================
 
 	describe("keepalive", () => {
-		it("honors realtime.keepAliveIntervalMs for SSE pings", async () => {
+		it("honors realtime.keepAliveIntervalMs with SSE comment pings", async () => {
 			const adapter = new MockRealtimeAdapter();
 			const items = collection("items")
 				.fields(({ f }) => ({
@@ -1889,11 +1895,11 @@ describe("realtime", () => {
 			// With a 50ms keepalive, two pings must arrive well within the
 			// 2s default timeout (default cadence of 8s would time out here).
 			const firstPing = await reader.readEvent();
-			expect(firstPing.event).toBe("ping");
-			expect(typeof firstPing.data.ts).toBe("number");
+			expect(firstPing.comment).toMatch(/^ping \d+$/);
+			expect(firstPing.data).toBeNull();
 
 			const secondPing = await reader.readEvent();
-			expect(secondPing.event).toBe("ping");
+			expect(secondPing.comment).toMatch(/^ping \d+$/);
 
 			controller.abort();
 			reader.close();
@@ -1933,6 +1939,7 @@ describe("realtime", () => {
 				await new Promise((resolve) => setTimeout(resolve, 20));
 
 				expect(setup.app.realtime.listeners.size).toBe(0);
+				expect(sharedSseKeepAliveTicker.size).toBe(0);
 				expect(adapter.stopCalls).toBe(0);
 			} finally {
 				enqueueSpy.mockRestore();

@@ -12,7 +12,9 @@ import { computeRealtimeSnapshot } from "../../modules/core/integrated/realtime/
 import {
 	encodeSseEvent,
 	SseClientTransport,
+	SseLatestSnapshotWriter,
 } from "../../modules/core/integrated/realtime/sse-client-transport.js";
+import { sharedSseKeepAliveTicker } from "../../modules/core/integrated/realtime/sse-keep-alive.js";
 import type { AdapterConfig, AdapterContext } from "../types.js";
 import { resolveContext } from "../utils/context.js";
 import { handleError, sseHeaders } from "../utils/response.js";
@@ -73,7 +75,7 @@ function isPermanentAccessError(error: unknown): boolean {
  * Response: SSE stream with events:
  * - snapshot: { topicId, seq, data }
  * - error: { topicId, message }
- * - ping: { ts }
+ * Keepalive frames are SSE comments and are intentionally invisible to clients.
  */
 export async function realtimeSubscribe(
 	app: Questpie<any>,
@@ -245,8 +247,10 @@ export async function realtimeSubscribe(
 
 	// Create SSE stream
 	let closeStream: (() => void) | null = null;
+	let flushPending: (() => void) | null = null;
+	const highWaterMarkBytes = 1024 * 1024;
 
-	const stream = new ReadableStream({
+	const stream = new ReadableStream<Uint8Array>({
 		start: async (controller) => {
 			const topicUnsubscribers = new Map<string, () => void>();
 			let closed = false;
@@ -258,18 +262,27 @@ export async function realtimeSubscribe(
 				closeRequested = true;
 				closeStream?.();
 			};
-			const transport = new SseClientTransport(controller);
+			const transport = new SseClientTransport(controller, highWaterMarkBytes);
 			await transport.start({ onError: requestClose });
 			const sink = await transport.openSession({
 				sessionId: globalThis.crypto.randomUUID(),
 				principal: resolved.appContext.principal ?? null,
 				resolvePrincipal: async () => resolved.appContext.principal ?? null,
 			});
+			const snapshotWriter = new SseLatestSnapshotWriter(sink);
+			flushPending = () => {
+				void snapshotWriter.flush().catch(requestClose);
+			};
 
 			// Helper to send SSE event
-			const send = async (event: string, data: unknown) => {
+			const send = async (event: string, data: unknown, topicId?: string) => {
 				if (closed) return;
-				await sink.write(encodeSseEvent(event, data), "latest-snapshot");
+				const frame = encodeSseEvent(event, data);
+				if (event === "snapshot" && topicId) {
+					await snapshotWriter.write(topicId, frame);
+					return;
+				}
+				await sink.write(frame, "latest-snapshot");
 			};
 
 			// Send per-topic error
@@ -315,7 +328,7 @@ export async function realtimeSubscribe(
 						state.refreshQueued = false;
 						const data = await computeRealtimeSnapshot(topic, topicContext);
 
-						await send("snapshot", { topicId, seq: state.lastSeq, data });
+						await send("snapshot", { topicId, seq: state.lastSeq, data }, topicId);
 					} while (state.refreshQueued && !closed);
 				} catch (error) {
 					await sendTopicError(
@@ -371,19 +384,24 @@ export async function realtimeSubscribe(
 				await sendTopicError(error.id, error.message);
 			}
 
-			// Ping timer to keep the connection alive. Default 8s — strictly under
+			// Shared ping ticker keeps the connection alive. Default 8s — strictly under
 			// Bun's default 10s idleTimeout and typical proxy timeouts of 30-60s.
 			const keepAliveIntervalMs =
 				app.config?.realtime?.keepAliveIntervalMs ?? 8000;
-			const pingTimer = setInterval(() => {
-				void send("ping", { ts: Date.now() }).catch(requestClose);
-			}, keepAliveIntervalMs);
+			const removeKeepAlive = sharedSseKeepAliveTicker.register(
+				keepAliveIntervalMs,
+				(frame) => {
+					void sink.write(frame, "latest-snapshot").catch(requestClose);
+				},
+			);
 
 			// Cleanup function
 			const close = () => {
 				if (closed) return;
 				closed = true;
-				clearInterval(pingTimer);
+				removeKeepAlive();
+				flushPending = null;
+				snapshotWriter.clear();
 				request.signal.removeEventListener("abort", close);
 				for (const unsub of topicUnsubscribers.values()) {
 					unsub();
@@ -424,9 +442,15 @@ export async function realtimeSubscribe(
 				}).catch(requestClose);
 			});
 		},
+		pull: () => {
+			flushPending?.();
+		},
 		cancel: () => {
 			closeStream?.();
 		},
+	}, {
+		highWaterMark: highWaterMarkBytes,
+		size: (frame) => frame?.byteLength ?? 0,
 	});
 
 	return new Response(stream, {
