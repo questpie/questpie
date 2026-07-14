@@ -70,13 +70,17 @@ Every run declares a manifest; anything not granted is denied (default-deny):
 
 | Axis | Grants | Enforced by |
 | --- | --- | --- |
-| `net` | `fetch()` host allowlist (`host[:port]`) | sandbox engine |
-| `import` | remote module-import host allowlist (independent of `net`) | sandbox engine |
-| `timeoutMs` / `memoryMb` | hard wall-clock / per-guest memory bounds | sandbox engine |
+| `net` | `fetch()` host allowlist (`host[:port]`) | sandbox engine (`--allow-net`) |
+| `import` | remote module-import host allowlist (independent of `net`) | sandbox engine (`--allow-import`) |
+| `timeoutMs` / `memoryMb` | hard wall-clock / real V8 heap cap (`--max-old-space-size`) | sandbox engine |
 | `files` | read/write path globs into the file store | bindings broker |
 | `data.collections` | per-collection verbs (`read`/`create`/`update`/`delete`) | bindings broker |
 | `data.globals` / `data.stores` | per-global and per-`document_store`-namespace verbs | bindings broker |
 | `services` / `jobs` / `workflows` | allowed service names / enqueueable jobs / triggerable workflows | bindings broker |
+
+Only `net`/`import`/`timeoutMs`/`memoryMb` are enforced by the **engine** (the Deno subprocess flags). Everything below the line is typed in the manifest but enforced by the **broker** at call time, the engine never sees your collections.
+
+`import` **fails open**: omitting `--allow-import` does NOT deny, Deno silently grants ~7 default hosts (`esm.sh`, `jsr.io`, `deno.land`, …), so an empty `import` allowlist is compiled to an explicit `--deny-import=<those hosts>`. Never alias `net` and `import`.
 
 `secrets: Record<string, string>` injects secrets into the guest without embedding them in source.
 
@@ -94,11 +98,23 @@ The broker endpoint is a route the host app mounts (product layers like Autopilo
 
 ## Deployment
 
-The sandbox engine runs as its own service/container reachable at `SANDBOX_URL`; `brokerUrl` must point at the app's own loopback/internal address (the supervisor is trusted), never at anything request-derived:
+The sandbox engine runs as its own service/container reachable at `SANDBOX_URL`; `brokerUrl` must point at the app's own loopback/internal address (the supervisor is trusted), never at anything request-derived. The supervisor is Deno-only and ships as source under `node_modules` (the app image stays Deno-free):
 
 ```bash
-deno run --allow-net --allow-read packages/sandbox/src/sandbox-server.ts
+deno run \
+  --allow-net --allow-env --allow-run \
+  --allow-read --allow-write=$TMPDIR \
+  node_modules/@questpie/sandbox/src/sandbox-server.ts
 ```
+
+Supervisor env: `PORT` (default 8787), `DENO_BIN`, `SANDBOX_BROKER_URL`, `SANDBOX_DISABLE_NETNS_FIREWALL`.
+
+## Security Internals
+
+- **Process-per-request**, not a warm Worker: a Worker can't enforce `memoryMb` and can't reap grandchild Workers, so each run is a fresh subprocess with a real heap cap and SIGTERM→SIGKILL teardown. Before guest code runs, `globalThis.Worker` is nulled and `SharedArrayBuffer`/`Atomics` are deleted.
+- **SSRF egress validation** at manifest time, in BOTH adapter and server: any `net`/`import` host that is (or DNS-resolves to) private/loopback/link-local/CGNAT or `169.254.169.254` is rejected; DNS fails closed. **DNS-rebind pinning is NOT implemented** (`TODO(security)`), the socket IP isn't re-pinned across redirects. The brokered path is safe anyway because the guest runs `--allow-net=[]`.
+- **Brokered `fetch` on the app-bindings path**: the guest has no sockets (`--allow-net=[]`); its native `fetch` is replaced by a shim that RPCs `http.fetch` over stdio to the supervisor, which relays to `brokerUrl` carrying a supervisor-only per-run token (`x-questpie-sandbox-token`).
+- **Linux kernel egress firewall (belt-and-suspenders)**: on Linux with `unshare`/`nft`/`ip` + caps, each run also gets a per-run netns + nftables ruleset (default-DROP). **Gracefully absent** off Linux or when tools/caps are missing (logs a notice, runs without it). Disable with `SANDBOX_DISABLE_NETNS_FIREWALL=1`. The subprocess permission flags are the primary boundary; this is a second layer.
 
 ## Rules
 
@@ -107,4 +123,4 @@ deno run --allow-net --allow-read packages/sandbox/src/sandbox-server.ts
 - Never pass `isolation: "trusted"` for code you did not author, there is no sandbox in that mode.
 - Source `brokerUrl` from config/env only; a request-derived broker URL lets a spoofed Host exfiltrate the per-run token.
 
-Full reference: docs page `backend/business-logic/code-execution`.
+Full reference: docs page `adapters/sandbox`.

@@ -1,0 +1,138 @@
+---
+title: AI Agent Runs
+description: Run Claude Code agents against durable run records, an orchestration layer with exactly-once finalization, epoch-fenced worker leases, and a KV-backed resumable stream so in-flight agent runs survive client reconnects.
+---
+
+The **`@questpie/ai`** module is a run-orchestration layer for executing **Claude Code** agents inside a QUESTPIE app. It does not try to be a chat SDK, it owns the hard parts of running long, streaming, resumable agent turns reliably: a worker fleet with epoch-fenced leases, an **exactly-once** run finalizer, and a KV-backed resumable UI-message stream so a run keeps streaming even if the browser reconnects mid-turn.
+
+<Callout type="warn" title="Headless-first, and partly in-flight">
+This package is **server/worker-first**: everything is driven by module + worker code, and an admin UI can sit on top. It is also younger than the core framework, so some of its surface is still stubbed. This page documents **what actually works today** and calls out the parked pieces inline. Concretely, as of `@questpie/ai@3.1.0`:
+
+- The real execution path is the **in-process embedded worker** (`startAIWorker`). The **HTTP worker fleet** (enrollment + poll routes) exists but finalize-over-HTTP is **parked** (HITL follow-up), so a decoupled HTTP fleet is not complete.
+- `aiConfig()` / `aiPlugin` / a `config/ai.ts` file and the `onBeforeRun` / `onAfterComplete` hooks are **defined but not wired** to anything yet, treat them as a placeholder.
+- `@questpie/ai/client` currently **exports nothing** (the relay-based streaming components were removed in the chat-v7 cutover). Client streaming is the server-side resumable sink plus an app-owned SSE tail.
+- Only the **`claude-code`** runtime is supported.
+
+None of the parked surface is documented below as if it works.
+</Callout>
+
+## What it does
+
+- **A worker fleet with leases.** Register `aiModule` and you get the `ai_workers` collection, worker enrollment/register/poll/heartbeat/deregister routes, a service `workerManager`, and a cron job `ai-worker-timeout` (every 5 min) that reaps stale leases and marks dead workers offline.
+- **Exactly-once finalization.** A run is finalized once and only once via an epoch-fenced compare-and-set (`finalizedAt IS NULL` ∧ matching lease epoch ∧ non-terminal status). The finalizer seals the stream, writes the terminal status/summary/tokens, and fires side effects a single time even if two workers race.
+- **Resumable streaming.** Agent output is written into a KV-backed `ResumableUIMessageStore` (keys `rs:{id}:*`, 1h TTL). Your app serves an SSE tail off it; a browser that drops reconnects with `Last-Event-ID` / `?offset` and keeps reading, with a `gap` → `expired` fallback to the persisted transcript.
+- **A Harness execution core.** `createHarnessAgent` wraps `@ai-sdk/harness` + `createClaudeCode()` in a local-host sandbox; `toUIMessages` bridges the harness result stream into AI-SDK `UIMessage` chunks (surfacing real error text, not masking it).
+
+<Callout type="info" title="You own the run record">
+`@questpie/ai` does **not** ship the execution record. Your app defines a **`run_links`** collection (the single row per run, with fields like `kind`, `runtime`, `status`, `instructions`, `activeStreamId`, `producerLease`, `harnessResumeState`, `uiMessages`, `finalizedAt`, `retryPolicy`). The worker, finalizer, and reaper all operate on the `collections.run_links` injected through the app context. See the `tanstack-autopilot` app for a complete `run_links` definition.
+</Callout>
+
+## Quick start
+
+### 1. Register the module
+
+```ts title="src/questpie/server/modules.ts"
+import { adminModule } from "@questpie/admin/modules/admin";
+import { aiModule } from "@questpie/ai/modules/ai";
+
+export default [adminModule, aiModule] as const;
+```
+
+Then run codegen:
+
+```bash
+bun questpie generate
+```
+
+The module contributes the `ai_workers` collection (admin-hidden), the `workerManager` service, the enrollment/register/poll/heartbeat/deregister routes, and the `ai-worker-timeout` cron.
+
+### 2. Define your `run_links` collection
+
+This is the durable execution record your worker claims and finalizes. At minimum it needs `status`, `runtime`, `instructions`, `activeStreamId`, `producerLease`, `finalizedAt`, and `retryPolicy`. Model it as a normal collection under `collections/`.
+
+### 3. Run an embedded worker
+
+The worker is a **separate process** with a resolved **system context** (it reads `ctx.services.workerManager`, `ctx.collections`, `ctx.kv`). Point it at your Claude Code runtime:
+
+```ts title="src/ai-worker.ts"
+import { createContext } from "#questpie";
+import { startAIWorker } from "@questpie/ai/worker";
+
+const ctx = await createContext({ accessMode: "system" });
+
+await startAIWorker(ctx, {
+  runtimes: [{ runtime: "claude-code" }],
+  maxConcurrentRuns: 1,
+  pollIntervalMs: 1000,
+  // Personal-machine auth: let the harness bridge read ~/.claude
+  sandbox: { passthroughHomeForAuth: true },
+  mcpServers: [
+    {
+      name: "questpie",
+      command: process.execPath,
+      args: ["--bun", "run", "./src/mcp-entry.ts"],
+      env: {},
+    },
+  ],
+});
+```
+
+The worker registers itself (`ai_workers` row), then poll-loops `heartbeat` → `claimRun` (an id-scoped CAS `pending` → `claimed` that bumps `producerLease.epoch`) → execute (streaming into the KV sink) → the one `finalizeRun`.
+
+<Callout type="warn" title="A decoupled worker needs shared KV">
+The HTTP SSE tail reads the same resumable stream the worker writes. If the worker runs in a **different process** from the web server, they must share a **Redis** KV, an in-process MemoryKV sink is invisible to the other process. Configure a Redis KV adapter before splitting the worker out.
+</Callout>
+
+### 4. Serve the resumable stream tail
+
+On the server, drive an SSE response off the resumable store and finalize on failure:
+
+```ts title="src/questpie/server/lib/run-stream.ts"
+import {
+  createQuestpieResumableStreamStore,
+  finalizeRun,
+  type FinalizeRunDeps,
+} from "@questpie/ai/harness-core";
+
+const store = createQuestpieResumableStreamStore({ kv });
+
+// Read from an offset to drive the SSE tail; resume via Last-Event-ID / ?offset.
+for await (const chunk of store.readFrom(activeStreamId, offset)) {
+  // write chunk to the SSE response
+}
+
+// Fail a run whose worker lease expired (idempotent, epoch-fenced):
+await finalizeRun(
+  { collections, streamStore: store, workflows } satisfies FinalizeRunDeps,
+  { runId, kind, terminal: "failed", epoch, error: "worker lease expired", activeStreamId },
+);
+```
+
+## Public API
+
+| Import | Key exports |
+| ------ | ----------- |
+| `@questpie/ai/modules/ai` | `aiModule` |
+| `@questpie/ai/worker` | `startAIWorker`, `EmbeddedWorkerConfig`, `HarnessRuntime` |
+| `@questpie/ai/harness-core` | `createHarnessAgent`, `resumeOrCreateSession`, `streamTurn`, `toUIMessages`, `ResumableUIMessageStore`, `createQuestpieResumableStreamStore`, `finalizeRun`, `reapExpiredRunLinks` |
+| `@questpie/ai` | `aiConfig`, `aiPlugin`, contract types (`AiRunStatus`, `AgentRuntimeRunRequest`, …), see the warning about wiring |
+
+`startAIWorker(ctx, config)` returns `{ stop(), workerId }`. `EmbeddedWorkerConfig` takes `runtimes`, `maxConcurrentRuns?`, `pollIntervalMs?`, `sandbox?`, `mcpServers?`, `resolveSkills?(run)`, `workerDir?`, `name?`.
+
+`createHarnessAgent({ runtime, workRoot, instructions?, skills?, tools?, permissionMode?, mcpServers?, sandbox? })` throws for any runtime other than `claude-code`.
+
+## How a run flows
+
+1. Your app inserts a `run_links` row with `status: "pending"`.
+2. A worker's poll loop `claimRun`s it (CAS `pending` → `claimed`, epoch bumped).
+3. `executeRun` → `createHarnessAgent` streams `toUIMessages` chunks into the resumable KV sink under `activeStreamId`, heartbeating under the lease epoch and polling `run_links.status` for cancellation.
+4. The single `finalizeRun` latch seals the stream, writes terminal `status`/summary/tokens/`uiMessages`, and (for `kind: "task"`/`"chat"`) writes knowledge artifacts + assistant messages, exactly once.
+5. `reapExpiredRunLinks` (the cron, plus inline on each tail read) requeues expired leases when `retryPolicy: "auto"` (bump epoch → `pending`) or fails them otherwise, and marks stale workers offline.
+
+## Limitations
+
+- **`claude-code` only.** No other runtime is implemented.
+- **The bundled sandbox is not isolation.** `@questpie/ai` runs the agent through its own local-host sandbox (`createLocalHostSandbox`, a host `bash -lc` spawner that isolates HOME/XDG and filters secret-looking env vars). With `passthroughHomeForAuth: true` (needed to reuse `~/.claude` credentials) that HOME isolation is deliberately relaxed, and the worker runs `permissionMode: "allow-all"`. This is a different thing from [`@questpie/sandbox`](/docs/adapters/sandbox) (the Deno code-execution engine), do not confuse them.
+- **No live cross-turn attach.** Resume is replay/rerun against the persisted per-session HOME; `harnessResumeState` is written once at end-of-turn because the bridge session is destroyed when the turn's job ends.
+- **HTTP worker fleet is parked.** Real usage is the in-process embedded worker with in-process `finalizeRun`.
+- **Postgres-coupled epoch fence.** The exactly-once CAS uses a raw JSONB predicate over the double-encoded `producerLease` column.

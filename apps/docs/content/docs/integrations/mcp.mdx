@@ -318,7 +318,7 @@ import { app } from "#questpie";
 await startStdioServer(app);
 ```
 
-stdio defaults to `accessMode: "system"`, which **bypasses both gates**, the MCP policy and the `.access()` rules, granting full access. This is intended for a trusted, local process, not a network-exposed one. To run stdio under user-scoped access instead, set `stdio.accessMode: "user"` in `config/mcp.ts`.
+stdio defaults to `accessMode: "system"`, which **bypasses the `.access()` RBAC rules** (the RBAC introspection short-circuits to `allowed`). The **MCP policy gate still applies**, an explicit `expose: false`, a config rule, or a custom tool's `access` still gates a `system` caller, with no `config/mcp.ts` the policy defaults are all-permissive, so it *feels* like full access. This is intended for a trusted, local process, not a network-exposed one. To run stdio under user-scoped access instead, set `stdio.accessMode: "user"` in `config/mcp.ts`.
 
 ## Custom transports
 
@@ -367,8 +367,8 @@ There is no global "expose all routes" switch, `routes.exposeAnnotated: true` on
 CRUD tools mirror your collection's columns. Use `fields: { exclude: [...] }` (or `include`) on the entity policy to keep secrets out of tool args and results, relying on the model not to ask for a column is not protection.
 </Callout>
 
-<Callout type="warn" title="stdio with the default access mode bypasses all access rules">
-`startStdioServer` runs as `"system"` by default, every collection, global, and route operation is reachable with no access checks. Only run it as a trusted local process, or set `stdio.accessMode: "user"`.
+<Callout type="warn" title="stdio's default `system` mode bypasses your `.access()` RBAC">
+`startStdioServer` runs as `"system"` by default, so the collection/global `.access()` RBAC rules are skipped. The MCP policy gate (`expose`, config rules, custom-tool `access`) still applies, but with no `config/mcp.ts` the policy defaults are all-permissive, so effectively every operation is reachable. Only run it as a trusted local process, or set `stdio.accessMode: "user"`.
 </Callout>
 
 ## Related
