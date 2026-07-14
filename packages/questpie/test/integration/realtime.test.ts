@@ -87,6 +87,8 @@ type TopicInput = {
 	id: string;
 	resourceType: "collection" | "global";
 	resource: string;
+	operation?: "find" | "count" | "get";
+	recordId?: string;
 	where?: Record<string, unknown>;
 	with?: Record<string, unknown>;
 	limit?: number;
@@ -217,6 +219,84 @@ describe("realtime", () => {
 			await setup.cleanup();
 			// setup = null;
 		}
+	});
+
+	// ==========================================================================
+	// Operation-aware topic tests
+	// ==========================================================================
+
+	describe("operation-aware topics", () => {
+		it("streams live count as an O(1) scalar without running find", async () => {
+			const adapter = new MockRealtimeAdapter();
+			const posts = collection("posts")
+				.fields(({ f }) => ({
+					title: f.textarea().required(),
+				}))
+				.access({ read: true });
+			setup = await buildMockApp(
+				{ collections: { posts } },
+				{ realtime: { adapter } },
+			);
+			await runTestDbMigrations(setup.app);
+			const context = createTestContext();
+			for (let index = 0; index < 32; index += 1) {
+				await setup.app.collections.posts.create(
+					{ title: `Post ${index}` },
+					context,
+				);
+			}
+
+			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
+			const response = await routes.realtime.subscribe(
+				createRealtimeRequest([
+					collectionTopic("posts", { operation: "count" }),
+				]),
+				{},
+				undefined,
+			);
+			expect(response.status).toBe(200);
+			const reader = createSSEReader(response.body!);
+
+			const initial = await reader.readSnapshot();
+			expect(initial.data.data).toBe(32);
+			expect(JSON.stringify(initial.data.data).length).toBeLessThan(16);
+
+			await setup.app.collections.posts.create({ title: "Post 32" }, context);
+			const updated = await reader.readSnapshot();
+			expect(updated.data.data).toBe(33);
+			expect(JSON.stringify(updated.data.data).length).toBeLessThan(16);
+			await reader.close();
+		});
+
+		it("rejects invalid operation and query-shape combinations", async () => {
+			const posts = collection("posts")
+				.fields(({ f }) => ({ title: f.textarea().required() }))
+				.access({ read: true });
+			setup = await buildMockApp(
+				{ collections: { posts } },
+				{ realtime: true },
+			);
+			await runTestDbMigrations(setup.app);
+			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
+
+			const countWithFindLimit = await routes.realtime.subscribe(
+				createRealtimeRequest([
+					collectionTopic("posts", { operation: "count", limit: 1 }),
+				]),
+				{},
+				undefined,
+			);
+			expect(countWithFindLimit.status).toBe(400);
+
+			const unknownOperation = await routes.realtime.subscribe(
+				createRealtimeRequest([
+					collectionTopic("posts", { operation: "delete" as any }),
+				]),
+				{},
+				undefined,
+			);
+			expect(unknownOperation.status).toBe(400);
+		});
 	});
 
 	// ==========================================================================

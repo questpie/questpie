@@ -97,4 +97,46 @@ describe("realtime query options", () => {
 		const reject = () => q.collections.posts.findOne({}, { realtime: true });
 		expect(typeof reject).toBe("function");
 	});
+
+	it("subscribes live counts with a count topic and consumes the scalar payload", async () => {
+		let subscribedTopic: unknown;
+		const client = {
+			collections: {
+				posts: {
+					count: async () => 999,
+				},
+			},
+			globals: {},
+			routes: {},
+			realtime: {
+				subscribe: () => () => {},
+				stream: async function* (topic: unknown) {
+					subscribedTopic = topic;
+					yield 10_000;
+				},
+				destroy: () => {},
+				topicCount: 0,
+				subscriberCount: 0,
+			},
+		} as unknown as QuestpieClient<QuestpieApp>;
+		const queryClient = new QueryClient();
+		const abortController = new AbortController();
+		const options = createQuestpieQueryOptions(client).collections.posts.count(
+			{},
+			{ realtime: true },
+		);
+
+		const value = await (options.queryFn as any)({
+			client: queryClient,
+			queryKey: options.queryKey,
+			signal: abortController.signal,
+		});
+
+		expect(subscribedTopic).toEqual({
+			resourceType: "collection",
+			resource: "posts",
+			operation: "count",
+		});
+		expect(value).toBe(10_000);
+	});
 });

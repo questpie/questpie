@@ -140,26 +140,80 @@ export async function* sseSnapshotStream<TData>(options: {
 /**
  * Build a topic config for a collection query.
  */
+type CollectionFindTopicOptions = {
+	where?: Record<string, unknown>;
+	with?: Record<string, unknown>;
+	limit?: number;
+	offset?: number;
+	orderBy?: Record<string, "asc" | "desc">;
+	locale?: string;
+};
+
+type CollectionCountTopicOptions = Pick<
+	CollectionFindTopicOptions,
+	"where" | "locale"
+>;
+
+type CollectionGetTopicOptions = Pick<
+	CollectionFindTopicOptions,
+	"with" | "locale"
+> & { id: string };
+
 export function buildCollectionTopic(
 	collectionName: string,
-	options?: {
-		where?: Record<string, unknown>;
-		with?: Record<string, unknown>;
-		limit?: number;
-		offset?: number;
-		orderBy?: Record<string, "asc" | "desc">;
-		locale?: string;
-	},
+	options?: CollectionFindTopicOptions,
+	operation?: "find",
+): Extract<TopicConfig, { resourceType: "collection"; operation?: "find" }>;
+export function buildCollectionTopic(
+	collectionName: string,
+	options: CollectionCountTopicOptions | undefined,
+	operation: "count",
+): Extract<TopicConfig, { resourceType: "collection"; operation: "count" }>;
+export function buildCollectionTopic(
+	collectionName: string,
+	options: CollectionGetTopicOptions,
+	operation: "get",
+): Extract<TopicConfig, { resourceType: "collection"; operation: "get" }>;
+export function buildCollectionTopic(
+	collectionName: string,
+	options?:
+		| CollectionFindTopicOptions
+		| CollectionCountTopicOptions
+		| CollectionGetTopicOptions,
+	operation: "find" | "count" | "get" = "find",
 ): TopicConfig {
+	if (operation === "get") {
+		const getOptions = options as CollectionGetTopicOptions;
+		return {
+			resourceType: "collection",
+			resource: collectionName,
+			operation: "get",
+			id: getOptions.id,
+			...(getOptions.with && { with: getOptions.with }),
+			...(getOptions.locale && { locale: getOptions.locale }),
+		};
+	}
+	if (operation === "count") {
+		const countOptions = options as CollectionCountTopicOptions | undefined;
+		return {
+			resourceType: "collection",
+			resource: collectionName,
+			operation: "count",
+			...(countOptions?.where && { where: countOptions.where }),
+			...(countOptions?.locale && { locale: countOptions.locale }),
+		};
+	}
+	const findOptions = options as CollectionFindTopicOptions | undefined;
 	return {
 		resourceType: "collection",
 		resource: collectionName,
-		...(options?.where && { where: options.where }),
-		...(options?.with && { with: options.with }),
-		...(options?.limit !== undefined && { limit: options.limit }),
-		...(options?.offset !== undefined && { offset: options.offset }),
-		...(options?.orderBy && { orderBy: options.orderBy }),
-		...(options?.locale && { locale: options.locale }),
+		operation: "find",
+		...(findOptions?.where && { where: findOptions.where }),
+		...(findOptions?.with && { with: findOptions.with }),
+		...(findOptions?.limit !== undefined && { limit: findOptions.limit }),
+		...(findOptions?.offset !== undefined && { offset: findOptions.offset }),
+		...(findOptions?.orderBy && { orderBy: findOptions.orderBy }),
+		...(findOptions?.locale && { locale: findOptions.locale }),
 	};
 }
 
@@ -177,6 +231,7 @@ export function buildGlobalTopic(
 	return {
 		resourceType: "global",
 		resource: globalName,
+		operation: "get",
 		...(options?.where && { where: options.where }),
 		...(options?.with && { with: options.with }),
 		...(options?.locale && { locale: options.locale }),

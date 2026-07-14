@@ -9,24 +9,42 @@
 // Types
 // ============================================================================
 
-export type TopicConfig = {
-	/** Resource type */
-	resourceType: "collection" | "global";
-	/** Resource name (collection or global name) */
+type TopicCommon = {
+	/** Resource name (collection or global name). */
 	resource: string;
-	/** Optional WHERE filters */
-	where?: Record<string, unknown>;
-	/** Optional relations to include */
-	with?: Record<string, unknown>;
-	/** Pagination limit */
-	limit?: number;
-	/** Pagination offset */
-	offset?: number;
-	/** Order by configuration */
-	orderBy?: Record<string, "asc" | "desc">;
-	/** Content locale */
+	/** Content locale. */
 	locale?: string;
 };
+
+export type TopicConfig =
+	| (TopicCommon & {
+			resourceType: "collection";
+			/** Omitted by legacy callers and normalized to `find` by the server. */
+			operation?: "find";
+			where?: Record<string, unknown>;
+			with?: Record<string, unknown>;
+			limit?: number;
+			offset?: number;
+			orderBy?: Record<string, "asc" | "desc">;
+	  })
+	| (TopicCommon & {
+			resourceType: "collection";
+			operation: "count";
+			where?: Record<string, unknown>;
+	  })
+	| (TopicCommon & {
+			resourceType: "collection";
+			operation: "get";
+			id: string;
+			with?: Record<string, unknown>;
+	  })
+	| (TopicCommon & {
+			resourceType: "global";
+			/** Omitted by legacy callers and normalized to `get` by the server. */
+			operation?: "get";
+			where?: Record<string, unknown>;
+			with?: Record<string, unknown>;
+	  });
 
 export type TopicInput = TopicConfig & {
 	/** Optional custom topic ID. If not provided, one will be generated. */
@@ -340,10 +358,15 @@ export class RealtimeMultiplexer {
 		this.watchdogTriggered = false;
 
 		const getTopicsPayload = () =>
-			Array.from(this.topics.entries()).map(([id, config]) => ({
-				id,
+			Array.from(this.topics.entries()).map(([topicId, config]) => ({
 				...config,
-				...(this.lastSeq.has(id) ? { sinceSeq: this.lastSeq.get(id) } : {}),
+				...(config.resourceType === "collection" && config.operation === "get"
+					? { recordId: config.id }
+					: {}),
+				id: topicId,
+				...(this.lastSeq.has(topicId)
+					? { sinceSeq: this.lastSeq.get(topicId) }
+					: {}),
 			}));
 
 		try {

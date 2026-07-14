@@ -60,12 +60,13 @@ type AdmissionTopic = {
 	id: string;
 	resourceType: "collection" | "global";
 	resource: string;
+	operation?: "find" | "count" | "get";
 	limit?: number;
 	with?: Record<string, unknown>;
 } & Record<string, unknown>;
 
 export type TopicAdmissionResult<TTopic extends AdmissionTopic> =
-	| { accepted: true; topic: TTopic & { limit: number } }
+	| { accepted: true; topic: TTopic & { limit?: number } }
 	| { accepted: false; message: string };
 
 function withDepth(withConfig: Record<string, unknown> | undefined): number {
@@ -92,6 +93,9 @@ export function admitRealtimeTopic<TTopic extends AdmissionTopic>(
 			accepted: false,
 			message: `Topic exceeds maximum relation depth of ${config.maxWithDepth}`,
 		};
+	}
+	if ((topic.operation ?? "find") !== "find") {
+		return { accepted: true, topic: { ...topic } };
 	}
 
 	const limit = topic.limit ?? config.maxFindLimit;

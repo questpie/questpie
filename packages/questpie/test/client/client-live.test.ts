@@ -22,6 +22,8 @@ type SSEConnection = {
 		id: string;
 		resourceType: string;
 		resource: string;
+		operation?: "find" | "count" | "get";
+		recordId?: string;
 		where?: Record<string, unknown>;
 		with?: Record<string, unknown>;
 		limit?: number;
@@ -154,6 +156,7 @@ describe("client live queries", () => {
 		expect(connection.topics).toHaveLength(1);
 		expect(connection.topics[0].resourceType).toBe("collection");
 		expect(connection.topics[0].resource).toBe("posts");
+		expect(connection.topics[0].operation).toBe("find");
 		expect(connection.topics[0].where).toEqual({ status: "published" });
 		expect(connection.topics[0].limit).toBe(10);
 
@@ -187,6 +190,35 @@ describe("client live queries", () => {
 		connection.sendSnapshot(topicId, 3, { docs: [], totalDocs: 0 });
 		await new Promise((resolve) => setTimeout(resolve, 50));
 		expect(snapshots).toHaveLength(2);
+	});
+
+	it("keeps collection get record ids separate from subscription ids", async () => {
+		const multiplexer = new RealtimeMultiplexer(
+			"http://localhost:3000",
+			true,
+			0,
+		);
+		multiplexer.subscribe(
+			{
+				resourceType: "collection",
+				resource: "posts",
+				operation: "get",
+				id: "post-1",
+			},
+			() => {},
+			undefined,
+			"topic-post-1",
+		);
+
+		await waitFor(() => connections.length === 1);
+		expect(connections[0].topics[0]).toMatchObject({
+			id: "topic-post-1",
+			resourceType: "collection",
+			resource: "posts",
+			operation: "get",
+			recordId: "post-1",
+		});
+		multiplexer.destroy();
 	});
 
 	it("adds one mounted topic with one control frame and no reconnect", async () => {

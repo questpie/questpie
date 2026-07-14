@@ -468,7 +468,7 @@ async function* streamRealtimeQuery<TInitialData>(options: {
 	topic: TopicConfig;
 	signal?: AbortSignal;
 	errorMap: QuestpieQueryErrorMap;
-}): AsyncGenerator<unknown, void, unknown> {
+}): AsyncGenerator<TInitialData, void, unknown> {
 	const { realtime, topic, signal, errorMap } = options;
 	try {
 		for await (const snapshot of realtime.stream<TInitialData>(topic, signal)) {
@@ -542,7 +542,7 @@ export function createQuestpieQueryOptions<
 								queryKey: qKey,
 								queryFn: streamedQuery({
 									streamFn: ({ signal }) =>
-										streamRealtimeQuery({
+										streamRealtimeQuery<any>({
 											realtime: client.realtime,
 											topic,
 											signal,
@@ -570,22 +570,22 @@ export function createQuestpieQueryOptions<
 						]);
 
 						if (queryConfig?.realtime && client.realtime) {
-							const topic = buildCollectionTopic(collectionName, options);
-							// For count, we extract totalDocs from the snapshot
+							const topic = buildCollectionTopic(
+								collectionName,
+								options,
+								"count",
+							);
 							return queryOptions({
 								queryKey: qKey,
 								queryFn: streamedQuery({
 									streamFn: ({ signal }) =>
-										streamRealtimeQuery({
+										streamRealtimeQuery<number>({
 											realtime: client.realtime,
 											topic,
 											signal,
 											errorMap,
 										}),
-									reducer: (_: any, chunk: any) =>
-										typeof chunk?.totalDocs === "number"
-											? chunk.totalDocs
-											: chunk,
+									reducer: (_: any, chunk: number) => chunk,
 									initialValue: undefined,
 									refetchMode: "append",
 								}),

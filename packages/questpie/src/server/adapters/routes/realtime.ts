@@ -47,6 +47,10 @@ type TopicInput = {
 	resourceType: "collection" | "global";
 	/** Resource name */
 	resource: string;
+	/** Query operation; omitted legacy topics are normalized by resource type. */
+	operation?: "find" | "count" | "get";
+	/** Record id for a collection `get` topic. */
+	recordId?: string;
 	/** WHERE filters */
 	where?: Record<string, unknown>;
 	/** Relations to include */
@@ -63,8 +67,17 @@ type TopicInput = {
 	sinceSeq?: number;
 };
 
-type ValidatedTopic = TopicInput & {
-	type: "collection" | "global";
+type NormalizedTopicInput =
+	| (TopicInput & { resourceType: "collection"; operation: "find" })
+	| (TopicInput & { resourceType: "collection"; operation: "count" })
+	| (TopicInput & {
+			resourceType: "collection";
+			operation: "get";
+			recordId: string;
+	  })
+	| (TopicInput & { resourceType: "global"; operation: "get" });
+
+type ValidatedTopicMetadata = {
 	crud: any;
 	definition: any;
 	accessWhere?: true | Record<string, unknown>;
@@ -73,6 +86,63 @@ type ValidatedTopic = TopicInput & {
 		context: any,
 	) => string | null | undefined | Promise<string | null | undefined>;
 };
+
+type ValidatedTopic =
+	| (Extract<NormalizedTopicInput, { resourceType: "collection" }> &
+			ValidatedTopicMetadata & { type: "collection" })
+	| (Extract<NormalizedTopicInput, { resourceType: "global" }> &
+			ValidatedTopicMetadata & { type: "global" });
+
+function normalizeTopicOperation(topic: TopicInput): NormalizedTopicInput {
+	if (topic.resourceType !== "collection" && topic.resourceType !== "global") {
+		throw new Error("Invalid realtime resource type");
+	}
+	const operation =
+		topic.operation ?? (topic.resourceType === "global" ? "get" : "find");
+	if (operation !== "find" && operation !== "count" && operation !== "get") {
+		throw new Error("Invalid realtime topic operation");
+	}
+	if (topic.resourceType === "global") {
+		if (operation !== "get") {
+			throw new Error("Global realtime topics only support the get operation");
+		}
+		return { ...topic, resourceType: "global", operation: "get" };
+	}
+	if (operation === "get") {
+		if (!topic.recordId || typeof topic.recordId !== "string") {
+			throw new Error("Collection get topics require a record id");
+		}
+		if (
+			topic.where ||
+			topic.limit !== undefined ||
+			topic.offset !== undefined ||
+			topic.orderBy
+		) {
+			throw new Error(
+				"Collection get topics accept only recordId, with, and locale",
+			);
+		}
+		return {
+			...topic,
+			resourceType: "collection",
+			operation: "get",
+			recordId: topic.recordId,
+		};
+	}
+	if (operation === "count") {
+		if (
+			topic.with ||
+			topic.limit !== undefined ||
+			topic.offset !== undefined ||
+			topic.orderBy ||
+			topic.recordId
+		) {
+			throw new Error("Collection count topics accept only where and locale");
+		}
+		return { ...topic, resourceType: "collection", operation: "count" };
+	}
+	return { ...topic, resourceType: "collection", operation: "find" };
+}
 
 function mergeAccessWhere(
 	where: Record<string, unknown> | undefined,
@@ -187,7 +257,8 @@ async function resolveIncrementalTopic(
 	) {
 		throw new Error("Topic sinceSeq must be a non-negative safe integer");
 	}
-	const topicAdmission = admitRealtimeTopic(rawTopic, admission);
+	const normalizedTopic = normalizeTopicOperation(rawTopic);
+	const topicAdmission = admitRealtimeTopic(normalizedTopic, admission);
 	if (!topicAdmission.accepted) throw new Error(topicAdmission.message);
 	const topic = topicAdmission.topic;
 
@@ -374,17 +445,17 @@ export async function realtimeSubscribe(
 			topicErrors.push({ id: "unknown", message: "Topic must be an object" });
 			continue;
 		}
-		let topic = rawTopic;
+		let topic: NormalizedTopicInput;
 		if (topicIndex >= admission.maxTopicsPerConnection) {
 			topicErrors.push({
-				id: topic.id ?? "unknown",
+				id: rawTopic.id ?? "unknown",
 				message: `Connection accepts at most ${admission.maxTopicsPerConnection} topics`,
 			});
 			continue;
 		}
-		if (!topic.id || typeof topic.id !== "string") {
+		if (!rawTopic.id || typeof rawTopic.id !== "string") {
 			topicErrors.push({
-				id: topic.id ?? "unknown",
+				id: rawTopic.id ?? "unknown",
 				message: app.t(
 					"realtime.topicIdRequired",
 					undefined,
@@ -394,9 +465,9 @@ export async function realtimeSubscribe(
 			continue;
 		}
 
-		if (!topic.resourceType || !topic.resource) {
+		if (!rawTopic.resourceType || !rawTopic.resource) {
 			topicErrors.push({
-				id: topic.id,
+				id: rawTopic.id,
 				message: app.t(
 					"realtime.resourceRequired",
 					undefined,
@@ -406,12 +477,21 @@ export async function realtimeSubscribe(
 			continue;
 		}
 		if (
-			topic.sinceSeq !== undefined &&
-			(!Number.isSafeInteger(topic.sinceSeq) || topic.sinceSeq < 0)
+			rawTopic.sinceSeq !== undefined &&
+			(!Number.isSafeInteger(rawTopic.sinceSeq) || rawTopic.sinceSeq < 0)
 		) {
 			topicErrors.push({
-				id: topic.id,
+				id: rawTopic.id,
 				message: "Topic sinceSeq must be a non-negative safe integer",
+			});
+			continue;
+		}
+		try {
+			topic = normalizeTopicOperation(rawTopic);
+		} catch (error) {
+			topicErrors.push({
+				id: rawTopic.id,
+				message: error instanceof Error ? error.message : "Invalid operation",
 			});
 			continue;
 		}
@@ -472,15 +552,6 @@ export async function realtimeSubscribe(
 					),
 				});
 			}
-		} else {
-			topicErrors.push({
-				id: topic.id,
-				message: app.t(
-					"realtime.invalidResourceType",
-					{ resourceType: topic.resourceType },
-					resolved.appContext.locale,
-				),
-			});
 		}
 	}
 
@@ -674,6 +745,7 @@ export async function realtimeSubscribe(
 						topics: {
 							resourceType: topic.resourceType,
 							resource: topic.resource,
+							operation: topic.operation,
 							where: topic.where,
 							with: topic.with,
 						},
@@ -758,6 +830,10 @@ export async function realtimeSubscribe(
 							try {
 								const rawTopic = {
 									...frame.topic,
+									...(frame.topic.resourceType === "collection" &&
+									frame.topic.operation === "get"
+										? { recordId: frame.topic.id }
+										: {}),
 									id: frame.topicId,
 									sinceSeq: frame.sinceSeq,
 								} as TopicInput;

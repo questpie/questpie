@@ -41,6 +41,25 @@ describe("realtime admission", () => {
 				DEFAULT_REALTIME_ADMISSION,
 			),
 		).toMatchObject({ accepted: false });
+		expect(
+			admitRealtimeTopic(
+				{
+					id: "posts-count",
+					resourceType: "collection",
+					resource: "posts",
+					operation: "count",
+				},
+				DEFAULT_REALTIME_ADMISSION,
+			),
+		).toEqual({
+			accepted: true,
+			topic: {
+				id: "posts-count",
+				resourceType: "collection",
+				resource: "posts",
+				operation: "count",
+			},
+		});
 	});
 
 	it("releases per-principal counters idempotently", () => {

@@ -80,6 +80,8 @@ export type RealtimeRolloutConfig = {
 export type RealtimeTopics = {
 	resourceType: RealtimeResourceType;
 	resource: string;
+	/** Query shape used to compute the latest snapshot. */
+	operation?: "find" | "count" | "get";
 	/**
 	 * WHERE clause for filtering events.
 	 * Simple equality filters are extracted for topic routing.
