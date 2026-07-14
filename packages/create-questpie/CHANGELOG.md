@@ -1,5 +1,11 @@
 # create-questpie
 
+## 2.2.0
+
+### Minor Changes
+
+- [#166](https://github.com/questpie/questpie/pull/166) [`0fd1da3`](https://github.com/questpie/questpie/commit/0fd1da363e432653b8c45cef02ed867d3bf34d47) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Release the MCP module scaffold option so `--module mcp` installs `@questpie/mcp` and registers `mcpModule` in generated projects.
+
 ## 2.1.2
 
 ### Patch Changes
