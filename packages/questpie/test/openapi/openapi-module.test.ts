@@ -33,7 +33,7 @@ function createMockApp(opts?: {
 // ---------------------------------------------------------------------------
 
 describe("generateOpenApiSpec (public API)", () => {
-	it("generates a valid OpenAPI 3.1 spec", () => {
+	it("generates a valid OpenAPI 3.1 spec", async () => {
 		const app = createMockApp({
 			collections: {
 				posts: collection("posts").fields(({ f }) => ({
@@ -42,7 +42,7 @@ describe("generateOpenApiSpec (public API)", () => {
 			},
 		});
 
-		const spec = generateOpenApiSpec(app, {
+		const spec = await generateOpenApiSpec(app, {
 			info: { title: "Test", version: "2.0.0" },
 		});
 
@@ -53,15 +53,15 @@ describe("generateOpenApiSpec (public API)", () => {
 		expect(spec.components.securitySchemes).toBeDefined();
 	});
 
-	it("uses default title and version when not provided", () => {
+	it("uses default title and version when not provided", async () => {
 		const app = createMockApp();
-		const spec = generateOpenApiSpec(app);
+		const spec = await generateOpenApiSpec(app);
 
 		expect(spec.info.title).toBe("QUESTPIE API");
 		expect(spec.info.version).toBe("1.0.0");
 	});
 
-	it("includes collections in the spec", () => {
+	it("includes collections in the spec", async () => {
 		const app = createMockApp({
 			collections: {
 				posts: collection("posts").fields(({ f }) => ({
@@ -70,13 +70,13 @@ describe("generateOpenApiSpec (public API)", () => {
 			},
 		});
 
-		const spec = generateOpenApiSpec(app, { basePath: "/api" });
+		const spec = await generateOpenApiSpec(app, { basePath: "/api" });
 
 		expect(spec.paths["/api/posts"]).toBeDefined();
 		expect(spec.components.schemas?.PostsInsert).toBeDefined();
 	});
 
-	it("includes globals in the spec", () => {
+	it("includes globals in the spec", async () => {
 		const app = createMockApp({
 			globals: {
 				settings: global("settings").fields(({ f }) => ({
@@ -85,12 +85,12 @@ describe("generateOpenApiSpec (public API)", () => {
 			},
 		});
 
-		const spec = generateOpenApiSpec(app, { basePath: "/api" });
+		const spec = await generateOpenApiSpec(app, { basePath: "/api" });
 
 		expect(spec.paths["/api/globals/settings"]).toBeDefined();
 	});
 
-	it("respects exclude config", () => {
+	it("respects exclude config", async () => {
 		const app = createMockApp({
 			collections: {
 				posts: collection("posts").fields(({ f }) => ({
@@ -102,7 +102,7 @@ describe("generateOpenApiSpec (public API)", () => {
 			},
 		});
 
-		const spec = generateOpenApiSpec(app, {
+		const spec = await generateOpenApiSpec(app, {
 			basePath: "/api",
 			exclude: { collections: ["internal"] },
 		});
@@ -159,6 +159,46 @@ describe("openApiRoute", () => {
 		expect((routeDef as any).mode).toBe("raw");
 		expect((routeDef as any).method).toBe("GET");
 		expect(typeof (routeDef as any).handler).toBe("function");
+	});
+});
+
+// ---------------------------------------------------------------------------
+// openApiRoute — ETag / 304 caching (async seam preserves cache semantics)
+// ---------------------------------------------------------------------------
+
+describe("openApiRoute — ETag / 304 caching", () => {
+	function invoke(routeDef: any, app: object, ifNoneMatch?: string) {
+		const headers = new Headers();
+		if (ifNoneMatch) headers.set("if-none-match", ifNoneMatch);
+		const ctx = { app, request: new Request("http://x/api/openapi.json", { headers }) };
+		return routeDef.handler(ctx) as Promise<Response>;
+	}
+
+	it("returns identical ETag on two consecutive requests and 304 on if-none-match", async () => {
+		const app = createMockApp({
+			collections: {
+				posts: collection("posts").fields(({ f }) => ({ title: f.text() })),
+			},
+		});
+		const routeDef = openApiRoute({ basePath: "/api" });
+
+		const first = await invoke(routeDef, app);
+		expect(first.status).toBe(200);
+		const etag = first.headers.get("ETag");
+		expect(etag).toBeTruthy();
+		expect(first.headers.get("Cache-Control")).toBe(
+			"public, max-age=3600, stale-while-revalidate=43200",
+		);
+
+		// Second request (served from the per-app WeakMap cache) → same ETag.
+		const second = await invoke(routeDef, app);
+		expect(second.status).toBe(200);
+		expect(second.headers.get("ETag")).toBe(etag);
+
+		// Conditional request with the ETag → 304 Not Modified, empty body.
+		const conditional = await invoke(routeDef, app, etag!);
+		expect(conditional.status).toBe(304);
+		expect(await conditional.text()).toBe("");
 	});
 });
 
@@ -253,7 +293,7 @@ describe("openApiPlugin", () => {
 // ---------------------------------------------------------------------------
 
 describe("Routes in OpenAPI spec", () => {
-	it("generates flat paths for routes", () => {
+	it("generates flat paths for routes", async () => {
 		const app = createMockApp();
 		const { z } = require("zod");
 
@@ -265,7 +305,7 @@ describe("Routes in OpenAPI spec", () => {
 			},
 		};
 
-		const spec = generateInternal(app as any, routes, {
+		const spec = await generateInternal(app as any, routes, {
 			basePath: "/api",
 		});
 
@@ -274,7 +314,7 @@ describe("Routes in OpenAPI spec", () => {
 		expect(spec.paths["/api/greet"].post.operationId).toBe("route_greet");
 	});
 
-	it("generates nested flat paths for routes", () => {
+	it("generates nested flat paths for routes", async () => {
 		const app = createMockApp();
 
 		const routes = {
@@ -290,7 +330,7 @@ describe("Routes in OpenAPI spec", () => {
 			},
 		};
 
-		const spec = generateInternal(app as any, routes, {
+		const spec = await generateInternal(app as any, routes, {
 			basePath: "/api",
 		});
 

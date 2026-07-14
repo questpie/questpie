@@ -147,6 +147,7 @@
 	},
 	"devDependencies": {
 		"@electric-sql/pglite": "^0.3.14",
+		"@seriousme/openapi-schema-validator": "^2.9.0",
 		"@types/html-to-text": "^9.0.4",
 		"@types/nodemailer": "^8.0.1",
 		"@types/pg": "^8.16.0",

@@ -13,7 +13,7 @@ function hasStageParameter(operation: any): boolean {
 }
 
 describe("OpenAPI workflow stage parameters", () => {
-	it("includes stage query params on workflow-aware endpoints", () => {
+	it("includes stage query params on workflow-aware endpoints", async () => {
 		const app = {
 			getCollections: () => ({
 				posts: {
@@ -35,7 +35,7 @@ describe("OpenAPI workflow stage parameters", () => {
 			}),
 		} as any;
 
-		const spec = generateOpenApiSpec(app, undefined, {
+		const spec = await generateOpenApiSpec(app, undefined, {
 			basePath: "/api",
 		});
 
