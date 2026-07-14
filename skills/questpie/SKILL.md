@@ -126,14 +126,14 @@ Files starting with `_`, `index.ts`, declaration files, tests, and specs are int
 
 ### Infrastructure
 
-| Topic       | File                                    | Covers                                                                                         |
-| ----------- | --------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| Production  | `references/production.md`              | Queue, search, realtime, storage, email, KV adapter setup                                      |
-| Environment | `references/env.md`                     | `env.ts` + `env.client.ts`: boot-validated, typed env, generated client modules                |
-| Auth        | `references/auth.md`                    | Better Auth integration, session, providers, access patterns                                   |
-| Adapters    | `references/infrastructure-adapters.md` | All adapter configs: pg-boss, S3, SMTP, pgNotify, Redis                                        |
-| MCP         | `references/mcp.md`                     | MCP setup, CRUD tools, route tools, custom tools, OAuth 2.1 + scope∩RBAC                        |
-| OpenAPI     | `references/openapi.md`                 | OpenAPI 3.1 spec + Scalar UI: introspection, config, caching, honest limitations                |
+| Topic       | File                                    | Covers                                                                                        |
+| ----------- | --------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Production  | `references/production.md`              | Queue, search, realtime, storage, email, KV adapter setup                                     |
+| Environment | `references/env.md`                     | `env.ts` + `env.client.ts`: boot-validated, typed env, generated client modules               |
+| Auth        | `references/auth.md`                    | Better Auth integration, session, providers, access patterns                                  |
+| Adapters    | `references/infrastructure-adapters.md` | All adapter configs: pg-boss, S3, SMTP, pgNotify, Redis                                       |
+| MCP         | `references/mcp.md`                     | MCP setup, CRUD tools, route tools, custom tools, OAuth 2.1 + scope∩RBAC                      |
+| OpenAPI     | `references/openapi.md`                 | OpenAPI 3.1 spec + Scalar UI: introspection, config, caching, honest limitations              |
 | AI Runs     | `references/ai.md`                      | Claude Code agent runs: `aiModule`, embedded worker, resumable streams, exactly-once finalize |
 
 ### Extend
@@ -150,6 +150,7 @@ Files starting with `_`, `index.ts`, declaration files, tests, and specs are int
 | Topic          | File                           | Covers                                                                                    |
 | -------------- | ------------------------------ | ----------------------------------------------------------------------------------------- |
 | TanStack Query | `references/tanstack-query.md` | `q.collections.*`, `q.globals.*`, `q.routes.*`, realtime snapshots, channel subscriptions |
+| Reactive Apps  | `references/reactive-apps.md`  | React update isolation, query sizing, selectors, bounded channels, presence, diagnostics  |
 
 ## Key Patterns, Quick Reference
 

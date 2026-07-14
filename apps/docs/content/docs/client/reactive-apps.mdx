@@ -1,0 +1,209 @@
+---
+title: Reactive Apps & Performance
+description: Choose live queries, channels, or normal cached reads; isolate React updates; bound high-frequency streams; and understand the current presence contract.
+---
+
+QUESTPIE gives one client three different ways to keep a screen current. The fastest app is not the one that makes every read realtime; it is the one that assigns each kind of state to the smallest correct mechanism.
+
+| Need                                                                        | Use                                                                | Why                                                                                                                                 |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Durable collection/global state that must remain correct after reconnect    | **Live query** with `{ realtime: true }`                           | Re-runs an access-controlled query and delivers the latest snapshot. The transactional outbox and reconciliation heal missed wakes. |
+| A small derived number, such as a cart badge                                | **Live `count()`**                                                 | Transfers and caches one number instead of a row list.                                                                              |
+| Ordered transient events, such as typing, progress, or a reaction animation | **Channel**                                                        | Preserves channel-local event order and validates each payload.                                                                     |
+| A normal screen that only changes after local mutations or navigation       | **Cached query + invalidation**                                    | Avoids keeping a transport subscription and server query active unnecessarily.                                                      |
+| Durable chat, notifications, or audit history                               | **Collection for history**, optionally a channel as a wake/UI hint | The channel replay ledger is bounded delivery infrastructure, not application storage.                                              |
+
+Do not publish a channel event merely to announce ordinary QUESTPIE CRUD. Realtime already records each logical create, update, and delete in the mutation transaction and refreshes matching live queries.
+
+## One connection does not mean one React state
+
+The default client multiplexes many topics over one `POST /realtime` SSE connection. That is connection sharing, not state sharing.
+
+- Every normalized live-query shape gets its own deterministic topic id. `where`, `with`, `limit`, `offset`, `orderBy`, operation, resource, and locale participate in the topic.
+- A received frame is dispatched only to callbacks registered for its `topicId`.
+- TanStack Query stores each query under its own structured key. Components observing another key are not notified by that cache update.
+- Identical live queries share work; different queries remain isolated even when they use the same underlying socket.
+
+For example, these components share the transport but not a cache entry:
+
+```tsx
+function CartIndicator({ cartId }: { cartId: string }) {
+	const { data: itemCount = 0 } = useQuery(
+		q.collections.cartItems.count({ where: { cartId } }, { realtime: true }),
+	);
+
+	return <span aria-label={`${itemCount} items in cart`}>{itemCount}</span>;
+}
+
+function ReviewReactionCount({ reviewId }: { reviewId: string }) {
+	const { data: reactionCount = 0 } = useQuery(
+		q.collections.reviewReactions.count(
+			{ where: { reviewId } },
+			{ realtime: true },
+		),
+	);
+
+	return <span>{reactionCount} reactions</span>;
+}
+```
+
+A review reaction updates the review topic and query key. It does not update the cart query, so it does not by itself re-render `CartIndicator`.
+
+Normal React composition still applies: if one parent component subscribes to both values, that parent renders when either hook changes. Keep independent reactive concerns in separate leaf components when render isolation matters.
+
+## Subscribe to the smallest useful result
+
+Live-query snapshots are complete query results, not row patches. A change wakes the server, the matching query runs again under the subscriber's session, and the newest snapshot replaces the previous cached value.
+
+Prefer:
+
+- `count(..., { realtime: true })` for badges and totals;
+- narrow `where` filters for the exact tenant, cart, room, review, or user;
+- a finite `limit` and intentional `orderBy` for feeds;
+- only the relations needed by the visible component;
+- a normal one-shot query for large exports, reports, grouping, or projections that are not in the realtime wire contract.
+
+Avoid subscribing a global layout to a large `find()` result only to display its count. That pays database, serialization, transport, cache, and render costs for rows the component never uses.
+
+## Select only what the component renders
+
+The query-options builders return normal TanStack Query options. Add `select` when a component needs only a stable projection from a larger live result:
+
+```tsx
+const liveOrders = q.collections.orders.find(
+	{ where: { status: "overdue" }, limit: 20 },
+	{ realtime: true },
+);
+
+const { data: firstOrderId } = useQuery({
+	...liveOrders,
+	select: (snapshot) => snapshot.docs[0]?.id,
+});
+```
+
+TanStack Query runs the selector against that query's cache entry. The component observes the selected value instead of the entire snapshot. Keep expensive selector functions stable by defining them outside the component or memoizing them.
+
+Use `select` to reduce React work, not to hide an oversized server query. Narrow the server query first, then select the exact render value.
+
+## Choose channel consumption by event rate
+
+`q.channels.<name>.subscription(params)` is convenient for short-lived, moderate event streams. It starts with `[]` and appends every received message to a new array. The array therefore grows for the lifetime of that cached subscription.
+
+Do not use the accumulating query for an unbounded, high-frequency stream. Use `subscribe()` or `iter()` and keep an explicit bounded view instead:
+
+```tsx
+const MAX_BURSTS = 50;
+
+function ReactionBursts({ reviewId }: { reviewId: string }) {
+	const [bursts, setBursts] = useState<
+		Array<{ eventId: string; emoji: string }>
+	>([]);
+
+	useEffect(() => {
+		return client.channels.reviewReactions.subscribe(
+			{ reviewId },
+			(message) => {
+				if (message.event !== "burst") return;
+				setBursts((current) => [
+					...current.slice(-(MAX_BURSTS - 1)),
+					{ eventId: message.eventId, emoji: message.data.emoji },
+				]);
+			},
+		);
+	}, [reviewId]);
+
+	return <ReactionOverlay bursts={bursts} />;
+}
+```
+
+For noisy signals such as cursor movement or typing:
+
+- publish state transitions or throttle at the producer;
+- keep payloads small;
+- render from a bounded window or latest-value map;
+- persist only durable state;
+- always unsubscribe or abort when the consumer unmounts.
+
+Ordered channel events are never silently coalesced. A slow consumer is disconnected when its bounded transport queue fills, and falling behind the replay horizon produces an explicit gap. Recover durable state from a collection rather than treating the channel as history.
+
+## Presence: current contract
+
+A channel becomes presence-capable when it has authorization followed by `.presence(resolver)`:
+
+```ts title="src/questpie/server/channels/chat-room.ts"
+export default channel("chat-room-[roomId]")
+	.events({ typing: z.object({ active: z.boolean() }) })
+	.authorize({
+		subscribe: ({ session }) => Boolean(session?.user),
+		publish: ({ session }) => Boolean(session?.user),
+	})
+	.presence(({ params, session }) => ({
+		id: session!.user.id,
+		roomId: params.roomId,
+		name: session!.user.name,
+	}));
+```
+
+The generated client can read a typed member snapshot:
+
+```ts
+const members = await client.channels.chatRoom.presence({ roomId });
+```
+
+The public contract today is a **snapshot promise**, not a presence-change stream:
+
+- Pusher/Soketi uses native provider presence and internally tracks membership changes while the channel is mounted.
+- SSE derives coarse membership from subscriptions on the current app instance; it is not a globally exact occupancy count.
+- There is currently no public `subscribePresence()` API or TanStack presence query that emits every join/leave.
+
+Use the snapshot for lightweight member lists or indicators whose accuracy contract tolerates those limits. A continuously reactive, globally exact presence UI requires the managed provider plus a future public presence observer; do not manufacture trusted membership from client-published `joined`/`left` events.
+
+## Lifecycle and diagnostics
+
+TanStack Query aborts its underlying live/channel iterator when the last observer unmounts according to the query lifecycle. Direct APIs require explicit cleanup:
+
+```tsx
+useEffect(() => {
+	const controller = new AbortController();
+	client.collections.orders.live(
+		{ where: { status: "open" }, limit: 20 },
+		onSnapshot,
+		{ signal: controller.signal },
+	);
+	return () => controller.abort();
+}, []);
+```
+
+During development, inspect the client runtimes for leaks:
+
+```ts
+client.realtime.topicCount;
+client.realtime.subscriberCount;
+client.channels.channelCount;
+client.channels.subscriberCount;
+```
+
+Counts that keep increasing after navigation usually mean a missing cleanup or unstable subscription parameters.
+
+On the server, keep the default admission and slow-consumer limits unless load tests justify a change. Equivalent refresh work is shared per principal by default because row access, field access, and `afterRead` may depend on the session. Never enable cross-principal sharing without proving deterministic access equivalence and testing isolation.
+
+## Performance checklist
+
+Before shipping a reactive screen:
+
+1. Choose live query, live count, channel, or normal query based on the state contract.
+2. Put unrelated subscriptions in separate leaf components.
+3. Narrow live queries with `where`, `limit`, and only necessary relations.
+4. Use `select` when the component renders only a projection.
+5. Bound client event state; do not accumulate an infinite channel array.
+6. Abort or unsubscribe on unmount and parameter changes.
+7. Treat channel replay and presence as bounded delivery features, not durable truth.
+8. Measure query cost, snapshot bytes, topic counts, subscriber counts, and React commits under realistic event rates.
+
+## Related
+
+- [Realtime](/docs/client/realtime), typed collection/global snapshots and lifecycle APIs.
+- [Channels](/docs/client/channels), channel definitions, authorization, publishing, presence, and delivery semantics.
+- [TanStack Query](/docs/client/tanstack-query), generated query options, keys, invalidation, and streamed queries.
+- [Realtime adapter](/docs/adapters/realtime), server admission, slow-consumer limits, transport selection, and per-principal refresh sharing.
+- [Realtime v2 migration](/docs/adapters/realtime-v2-migration), rollout, observability, and rollback.

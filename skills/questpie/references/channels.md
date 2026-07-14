@@ -84,6 +84,8 @@ const members = await client.channels.chatRoom.presence({ roomId });
 stop();
 ```
 
+`presence()` returns one typed member snapshot. Pusher/Soketi tracks native membership while mounted; SSE presence is coarse and app-instance-local. There is no public `subscribePresence()` or TanStack presence query yet, so do not claim a continuously reactive, globally exact occupancy contract. See `references/reactive-apps.md`.
+
 Async consumers use `client.channels.chatRoom.iter(params, { signal })`. TanStack Query exposes an accumulating event query:
 
 ```tsx

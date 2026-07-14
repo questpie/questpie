@@ -1,4 +1,11 @@
 {
 	"title": "Client",
-	"pages": ["index", "sdk", "tanstack-query", "realtime", "channels"]
+	"pages": [
+		"index",
+		"sdk",
+		"tanstack-query",
+		"realtime",
+		"channels",
+		"reactive-apps"
+	]
 }

@@ -152,7 +152,7 @@ const members = await client.channels.chatRoom.presence({ roomId });
 // readonly Array<{ id: string; roomId: string; name: string }>
 ```
 
-Pusher/Soketi uses native provider presence. The SSE tier provides coarse app-instance-local presence from subscription lifecycle, so it is suitable for lightweight indicators, not a globally exact occupancy counter.
+`presence()` resolves one typed member snapshot; it is not a continuous presence-change subscription. Pusher/Soketi uses native provider presence and internally follows membership while the channel is mounted. The SSE tier provides coarse app-instance-local presence from subscription lifecycle, so it is suitable for lightweight indicators, not a globally exact occupancy counter. The public client does not currently expose `subscribePresence()` or a TanStack presence query; see [Reactive Apps & Performance](/docs/client/reactive-apps#presence-current-contract) before promising a live occupancy UI.
 
 ## TanStack Query
 
@@ -206,6 +206,7 @@ Provider client events bypass QUESTPIE's publish route, per-verb authorization, 
 
 ## Related
 
+- [Reactive Apps & Performance](/docs/client/reactive-apps), channel sizing, bounded event state, React isolation, and the current presence contract.
 - [Realtime](/docs/client/realtime), live collection/global snapshots.
 - [Realtime adapter](/docs/adapters/realtime), SSE versus Pusher/Soketi selection, reconciliation, admission, and privacy.
 - [TanStack Query](/docs/client/tanstack-query), the complete option-builder surface.
