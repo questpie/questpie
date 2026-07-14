@@ -18,6 +18,11 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { promisify } from "node:util";
 
+import {
+	assertNoWorkspaceProtocols,
+	replaceWorkspaceVersions,
+} from "./publish-manifest";
+
 const execAsync = promisify(exec);
 
 const ROOT_DIR = path.join(import.meta.dirname, "..");
@@ -82,41 +87,6 @@ function getWorkspaceVersions(
 	return versions;
 }
 
-// Replace workspace:* with actual versions in a dependencies object
-function replaceWorkspaceVersions(
-	deps: Record<string, string> | undefined,
-	versions: Map<string, string>,
-): Record<string, string> | undefined {
-	if (!deps) return deps;
-
-	const result: Record<string, string> = {};
-
-	for (const [name, version] of Object.entries(deps)) {
-		if (version.startsWith("workspace:")) {
-			const actualVersion = versions.get(name);
-			if (actualVersion) {
-				if (version === "workspace:*" || version === "workspace:^") {
-					result[name] = `^${actualVersion}`;
-				} else if (version === "workspace:~") {
-					result[name] = `~${actualVersion}`;
-				} else {
-					result[name] = `^${actualVersion}`;
-				}
-				console.log(`    ${name}: ${version} -> ${result[name]}`);
-			} else {
-				console.warn(
-					`    ⚠️  ${name}: workspace version not found, keeping as-is`,
-				);
-				result[name] = version;
-			}
-		} else {
-			result[name] = version;
-		}
-	}
-
-	return result;
-}
-
 // Topological sort — returns packages in publish order (leaf deps first)
 function topoSort(
 	packages: Map<string, { dir: string; pkg: PackageJson }>,
@@ -133,10 +103,7 @@ function topoSort(
 		if (!entry) return;
 
 		// Visit all workspace dependencies first
-		for (const deps of [
-			entry.pkg.dependencies,
-			entry.pkg.peerDependencies,
-		]) {
+		for (const deps of [entry.pkg.dependencies, entry.pkg.peerDependencies]) {
 			if (!deps) continue;
 			for (const dep of Object.keys(deps)) {
 				if (names.has(dep)) visit(dep);
@@ -171,7 +138,7 @@ async function main() {
 	const originals = new Map<string, string>();
 
 	// Save originals and apply transformations
-	for (const [name, { dir }] of packages) {
+	for (const [, { dir }] of packages) {
 		const packageJsonPath = path.join(dir, "package.json");
 		const original = fs.readFileSync(packageJsonPath, "utf-8");
 		originals.set(packageJsonPath, original);
@@ -221,6 +188,8 @@ async function main() {
 				modified = true;
 			}
 		}
+
+		assertNoWorkspaceProtocols(packageJson);
 
 		if (modified) {
 			fs.writeFileSync(

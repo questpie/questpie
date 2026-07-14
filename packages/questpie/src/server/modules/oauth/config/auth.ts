@@ -77,10 +77,12 @@ export default authConfig({
 			advertisedMetadata: {
 				scopes_supported: ["openid", "profile", "email"],
 			},
-			// RFC 7591 dynamic client registration — MCP clients self-register —
-			// but keep it gated: unauthenticated registration stays off.
+			// RFC 7591 dynamic client registration happens before the user signs in,
+			// so an external MCP client cannot already carry an app session here.
+			// Registration only creates a public PKCE client; it grants no user data
+			// or scopes until the separate authorization + consent flow succeeds.
 			allowDynamicClientRegistration: true,
-			allowUnauthenticatedClientRegistration: false,
+			allowUnauthenticatedClientRegistration: true,
 			// OAuth 2.1: PKCE. There is no global plugin toggle; the provider
 			// enforces PKCE for every DCR-registered (public) client — a client
 			// registering with `require_pkce: false` is rejected. MCP clients

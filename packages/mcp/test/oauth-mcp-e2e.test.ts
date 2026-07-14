@@ -156,7 +156,9 @@ async function obtainAccessToken(
 	const regRes = await auth.handler(
 		new Request(`${AUTH_BASE}/oauth2/register`, {
 			method: "POST",
-			headers: { "content-type": "application/json", cookie },
+			// DCR precedes user authorization, so a new external client has no
+			// QUESTPIE session cookie yet.
+			headers: { "content-type": "application/json" },
 			body: JSON.stringify({
 				redirect_uris: [REDIRECT_URI],
 				client_name: "MO13 MCP Client",
@@ -255,6 +257,39 @@ async function connectStdio(server: McpServer) {
 // ---------------------------------------------------------------------------
 
 describe("MO13 end-to-end OAuth MCP flow + system mode", () => {
+	it("lets a public MCP client register before the user signs in", async () => {
+		const setup = await buildMockApp(
+			{ modules: [starterModule] },
+			{
+				app: { url: ORIGIN },
+				secret: "test-auth-secret-with-more-than-32-chars",
+			},
+		);
+
+		try {
+			await runTestDbMigrations(setup.app);
+			const response = await setup.app.auth.handler(
+				new Request(`${AUTH_BASE}/oauth2/register`, {
+					method: "POST",
+					headers: { "content-type": "application/json" },
+					body: JSON.stringify({
+						redirect_uris: [REDIRECT_URI],
+						client_name: "Unauthenticated MCP Client",
+						token_endpoint_auth_method: "none",
+						grant_types: ["authorization_code"],
+						response_types: ["code"],
+						scope: "openid",
+					}),
+				}),
+			);
+
+			expect(response.status).toBe(200);
+			expect((await response.json()).client_id).toBeString();
+		} finally {
+			await setup.cleanup();
+		}
+	});
+
 	async function setupApp() {
 		const setup = await buildMockApp(
 			{
@@ -278,7 +313,7 @@ describe("MO13 end-to-end OAuth MCP flow + system mode", () => {
 							loginPage: "/admin/login",
 							consentPage: "/admin/oauth/consent",
 							allowDynamicClientRegistration: true,
-							allowUnauthenticatedClientRegistration: false,
+							allowUnauthenticatedClientRegistration: true,
 							validAudiences: [MCP_AUD],
 							accessTokenExpiresIn: 3600,
 						}),
