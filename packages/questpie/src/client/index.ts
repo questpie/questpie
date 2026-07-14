@@ -1114,6 +1114,51 @@ export function createClient<TApp extends QuestpieApp>(
 		withCredentials: true,
 		debounceMs: 50,
 		getAuthHeaders: config.getAuthHeaders,
+		fetcher,
+		refetchTopic: async (topic) => {
+			if (topic.resourceType === "collection") {
+				if (topic.operation === "count") {
+					const queryString = qs.stringify(
+						{ where: topic.where, locale: topic.locale },
+						{ skipNulls: true, arrayFormat: "brackets" },
+					);
+					const result = await request(
+						`${apiBasePath}/${topic.resource}/count${queryString ? `?${queryString}` : ""}`,
+					);
+					return result.count;
+				}
+				if (topic.operation === "get") {
+					const queryString = qs.stringify(
+						{ with: topic.with, locale: topic.locale },
+						{ skipNulls: true, arrayFormat: "brackets" },
+					);
+					return request(
+						`${apiBasePath}/${topic.resource}/${topic.id}${queryString ? `?${queryString}` : ""}`,
+					);
+				}
+				const queryString = qs.stringify(
+					{
+						where: topic.where,
+						with: topic.with,
+						limit: topic.limit,
+						offset: topic.offset,
+						orderBy: topic.orderBy,
+						locale: topic.locale,
+					},
+					{ skipNulls: true, arrayFormat: "brackets" },
+				);
+				return request(
+					`${apiBasePath}/${topic.resource}${queryString ? `?${queryString}` : ""}`,
+				);
+			}
+			const queryString = qs.stringify(
+				{ where: topic.where, with: topic.with, locale: topic.locale },
+				{ skipNulls: true, arrayFormat: "brackets" },
+			);
+			return request(
+				`${apiBasePath}/globals/${topic.resource}${queryString ? `?${queryString}` : ""}`,
+			);
+		},
 	});
 
 	/**

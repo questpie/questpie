@@ -279,7 +279,7 @@ class PusherSessionSink implements ClientSink {
 
 	constructor(
 		readonly sessionId: string,
-		private readonly channel: string,
+		readonly clientChannel: string,
 		private readonly provider: PusherProvider,
 		private readonly onError: (error: unknown) => void,
 		private readonly onClose: () => void,
@@ -299,7 +299,7 @@ class PusherSessionSink implements ClientSink {
 				this.queued = false;
 				if (this.closed) return;
 				void this.provider
-					.trigger(this.channel, "questpie:invalidate", {
+					.trigger(this.clientChannel, "questpie:invalidate", {
 						sessionId: this.sessionId,
 					})
 					.catch(this.onError);

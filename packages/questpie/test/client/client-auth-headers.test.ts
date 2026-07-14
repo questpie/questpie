@@ -110,7 +110,7 @@ describe("client dynamic auth headers", () => {
 		]);
 	});
 
-	it("resolves fresh auth headers for every realtime connection", async () => {
+	it("resolves fresh auth headers for realtime discovery and every connection", async () => {
 		const requests: Array<{
 			authorization: string | null;
 			credentials: RequestCredentials | undefined;
@@ -143,12 +143,13 @@ describe("client dynamic auth headers", () => {
 		});
 
 		const stopFirst = client.collections.posts.live({}, () => {});
-		await waitFor(() => requests.length === 1);
+		await waitFor(() => requests.length === 2);
 		stopFirst();
 		await waitFor(() => client.realtime.topicCount === 0);
+		client.realtime.destroy();
 
 		const stopSecond = client.collections.posts.live({}, () => {});
-		await waitFor(() => requests.length === 2);
+		await waitFor(() => requests.length === 4);
 		stopSecond();
 		client.realtime.destroy();
 
@@ -159,6 +160,14 @@ describe("client dynamic auth headers", () => {
 			},
 			{
 				authorization: "Bearer realtime-2",
+				credentials: "include",
+			},
+			{
+				authorization: "Bearer realtime-3",
+				credentials: "include",
+			},
+			{
+				authorization: "Bearer realtime-4",
 				credentials: "include",
 			},
 		]);

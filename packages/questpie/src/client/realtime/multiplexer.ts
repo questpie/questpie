@@ -6,6 +6,7 @@
  */
 
 import type { GetAuthHeaders } from "../auth.js";
+import type { RealtimeClientTransport } from "./transport.js";
 
 // ============================================================================
 // Types
@@ -102,11 +103,25 @@ export function stableStringify(x: unknown): string {
 	return `{${keys.map((k) => JSON.stringify(k) + ":" + stableStringify((x as Record<string, unknown>)[k])).join(",")}}`;
 }
 
+export function realtimeTopicId(topic: TopicConfig): string {
+	const normalized = stableStringify(topic);
+	if (typeof Buffer !== "undefined") {
+		return Buffer.from(normalized, "utf8").toString("base64url");
+	}
+	const bytes = new TextEncoder().encode(normalized);
+	let binary = "";
+	for (const byte of bytes) binary += String.fromCharCode(byte);
+	return btoa(binary)
+		.replace(/\+/g, "-")
+		.replace(/\//g, "_")
+		.replace(/=+$/, "");
+}
+
 // ============================================================================
 // Multiplexer
 // ============================================================================
 
-export class RealtimeMultiplexer {
+export class RealtimeMultiplexer implements RealtimeClientTransport {
 	private abortController: AbortController | null = null;
 	private subscribers = new Map<string, Set<Subscriber>>();
 	private errorCallbacks = new Map<string, Set<ErrorCallback>>();
@@ -134,6 +149,7 @@ export class RealtimeMultiplexer {
 		private debounceMs = 50,
 		runtime: RealtimeMultiplexerRuntime = {},
 		private getAuthHeaders?: GetAuthHeaders,
+		private fetcher: typeof fetch = globalThis.fetch,
 	) {
 		this.retryBaseMs = runtime.retryBaseMs ?? 1000;
 		this.maxRetryMs = runtime.maxRetryMs ?? 30_000;
@@ -223,19 +239,7 @@ export class RealtimeMultiplexer {
 	 * construction, and unicode-safe.
 	 */
 	private hashTopic(topic: TopicConfig): string {
-		const normalized = stableStringify(topic);
-		if (typeof Buffer !== "undefined") {
-			return Buffer.from(normalized, "utf8").toString("base64url");
-		}
-		// Browser: utf-8 encode before base64 — btoa() is Latin1-only and throws
-		// on unicode (e.g. accented `where` values).
-		const bytes = new TextEncoder().encode(normalized);
-		let binary = "";
-		for (const byte of bytes) binary += String.fromCharCode(byte);
-		return btoa(binary)
-			.replace(/\+/g, "-")
-			.replace(/\//g, "_")
-			.replace(/=+$/, "");
+		return realtimeTopicId(topic);
 	}
 
 	private applyTopologyChange(frame: ControlFrame): void {
@@ -259,7 +263,7 @@ export class RealtimeMultiplexer {
 		this.controlOperation = this.controlOperation
 			.then(async () => {
 				const authHeaders = await this.getAuthHeaders?.();
-				const response = await fetch(`${this.baseUrl}/realtime`, {
+				const response = await this.fetcher(`${this.baseUrl}/realtime`, {
 					method: "POST",
 					headers: { "Content-Type": "application/json", ...authHeaders },
 					body: JSON.stringify({
@@ -375,7 +379,7 @@ export class RealtimeMultiplexer {
 
 		try {
 			const authHeaders = await this.getAuthHeaders?.();
-			const response = await fetch(`${this.baseUrl}/realtime`, {
+			const response = await this.fetcher(`${this.baseUrl}/realtime`, {
 				method: "POST",
 				headers: { "Content-Type": "application/json", ...authHeaders },
 				body: JSON.stringify({ topics: getTopicsPayload() }),

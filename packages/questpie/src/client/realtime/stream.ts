@@ -7,6 +7,11 @@
 
 import type { GetAuthHeaders } from "../auth.js";
 import { RealtimeMultiplexer, type TopicConfig } from "./multiplexer.js";
+import {
+	PusherRealtimeTransport,
+	type PusherRealtimeConfig,
+} from "./pusher.js";
+import type { RealtimeClientTransport } from "./transport.js";
 
 // ============================================================================
 // Types
@@ -65,7 +70,7 @@ export type RealtimeAPI = {
  * ```
  */
 export async function* sseSnapshotStream<TData>(options: {
-	multiplexer: RealtimeMultiplexer;
+	multiplexer: RealtimeClientTransport;
 	topic: TopicConfig;
 	signal?: AbortSignal;
 	customId?: string;
@@ -251,20 +256,69 @@ export function createRealtimeAPI(opts: {
 	withCredentials: boolean;
 	debounceMs: number;
 	getAuthHeaders?: GetAuthHeaders;
+	fetcher?: typeof fetch;
+	refetchTopic?: (topic: TopicConfig) => Promise<unknown>;
 }): RealtimeAPI {
-	let multiplexer: RealtimeMultiplexer | null = null;
+	let transport: RealtimeClientTransport | null = null;
+	let transportPromise: Promise<RealtimeClientTransport> | null = null;
+	let generation = 0;
+	const pending = new Set<object>();
+	const fetcher = opts.fetcher ?? globalThis.fetch;
 
-	const getOrCreate = () => {
-		if (!multiplexer) {
-			multiplexer = new RealtimeMultiplexer(
-				opts.baseUrl,
-				opts.withCredentials,
-				opts.debounceMs,
-				{},
-				opts.getAuthHeaders,
-			);
+	const createSse = () =>
+		new RealtimeMultiplexer(
+			opts.baseUrl,
+			opts.withCredentials,
+			opts.debounceMs,
+			{},
+			opts.getAuthHeaders,
+			fetcher,
+		);
+
+	const getOrCreate = async (): Promise<RealtimeClientTransport> => {
+		if (transport) return transport;
+		if (!transportPromise) {
+			const selectedGeneration = generation;
+			transportPromise = (async () => {
+				try {
+					const authHeaders = await opts.getAuthHeaders?.();
+					const response = await fetcher(`${opts.baseUrl}/realtime/config`, {
+						headers: authHeaders,
+						credentials: opts.withCredentials ? "include" : "omit",
+					});
+					if (
+						response.ok &&
+						response.headers.get("content-type")?.includes("application/json")
+					) {
+						const selected = (await response.json()) as
+							| { transport: "sse" }
+							| { transport: "shared-provider"; config: PusherRealtimeConfig };
+						if (
+							selected.transport === "shared-provider" &&
+							selected.config?.provider === "pusher" &&
+							typeof selected.config.key === "string" &&
+							opts.refetchTopic
+						) {
+							return new PusherRealtimeTransport({
+								baseUrl: opts.baseUrl,
+								fetcher,
+								getAuthHeaders: opts.getAuthHeaders,
+								config: selected.config,
+								refetchTopic: opts.refetchTopic,
+							});
+						}
+					}
+				} catch {
+					// Backward compatibility with servers predating realtime/config.
+				}
+				return createSse();
+			})().then((selected) => {
+				if (selectedGeneration !== generation) selected.destroy();
+				else transport = selected;
+				return selected;
+			});
 		}
-		return multiplexer;
+		return transportPromise;
 	};
 
 	return {
@@ -275,31 +329,63 @@ export function createRealtimeAPI(opts: {
 			customId?: string,
 			onError?: (error: Error) => void,
 		) {
-			return getOrCreate().subscribe(
-				topic,
-				callback as (data: unknown) => void,
-				signal,
-				customId,
-				onError,
-			);
+			const subscriptionGeneration = generation;
+			const marker = {};
+			pending.add(marker);
+			let stopped = false;
+			let stopInner: (() => void) | undefined;
+			void getOrCreate()
+				.then((selected) => {
+					pending.delete(marker);
+					if (stopped || subscriptionGeneration !== generation) return;
+					stopInner = selected.subscribe(
+						topic,
+						callback as (data: unknown) => void,
+						signal,
+						customId,
+						onError,
+					);
+				})
+				.catch((error) => {
+					pending.delete(marker);
+					onError?.(error instanceof Error ? error : new Error(String(error)));
+				});
+			return () => {
+				stopped = true;
+				pending.delete(marker);
+				stopInner?.();
+			};
 		},
 		stream<TData>(topic: TopicConfig, signal?: AbortSignal, customId?: string) {
+			const facade: RealtimeClientTransport = {
+				subscribe: (...args) => this.subscribe(...args),
+				destroy: () => this.destroy(),
+				get topicCount() {
+					return transport?.topicCount ?? pending.size;
+				},
+				get subscriberCount() {
+					return transport?.subscriberCount ?? pending.size;
+				},
+			};
 			return sseSnapshotStream<TData>({
-				multiplexer: getOrCreate(),
+				multiplexer: facade,
 				topic,
 				signal,
 				customId,
 			});
 		},
 		destroy() {
-			multiplexer?.destroy();
-			multiplexer = null;
+			generation += 1;
+			pending.clear();
+			transport?.destroy();
+			transport = null;
+			transportPromise = null;
 		},
 		get topicCount() {
-			return multiplexer?.topicCount ?? 0;
+			return transport?.topicCount ?? pending.size;
 		},
 		get subscriberCount() {
-			return multiplexer?.subscriberCount ?? 0;
+			return transport?.subscriberCount ?? pending.size;
 		},
 	};
 }

@@ -48,6 +48,8 @@ export type ClientCloseReason =
 
 export interface ClientSink {
 	readonly sessionId: string;
+	/** Provider-private channel returned only for managed client transports. */
+	readonly clientChannel?: string;
 	write(frame: Uint8Array, delivery: DeliveryClass): Promise<SinkWriteResult>;
 	close(reason: ClientCloseReason): Promise<void>;
 }

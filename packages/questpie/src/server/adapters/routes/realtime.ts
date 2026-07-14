@@ -32,6 +32,7 @@ import {
 	type RealtimeControlFrame,
 } from "../../modules/core/integrated/realtime/sse-control.js";
 import { sharedSseKeepAliveTicker } from "../../modules/core/integrated/realtime/sse-keep-alive.js";
+import type { ClientSink } from "../../modules/core/integrated/realtime/transport.js";
 import type { AdapterConfig, AdapterContext } from "../types.js";
 import { resolveContext } from "../utils/context.js";
 import { handleError, sseHeaders } from "../utils/response.js";
@@ -361,6 +362,7 @@ export async function realtimeSubscribe(
 	// Parse request body
 	let body: {
 		topics?: TopicInput[];
+		transport?: "shared-provider";
 		sessionId?: string;
 		token?: string;
 		frames?: RealtimeControlFrame[];
@@ -635,6 +637,179 @@ export async function realtimeSubscribe(
 			request,
 			resolved.appContext.locale,
 		);
+	}
+
+	if (body.transport === "shared-provider") {
+		const transportConfig = await app.realtime.getClientTransportConfig({
+			request,
+		});
+		if (transportConfig.transport !== "shared-provider") {
+			releaseConnection();
+			return errorResponse(
+				ApiError.badRequest("Shared-provider realtime is not configured"),
+				request,
+				resolved.appContext.locale,
+			);
+		}
+
+		const edgeSessionId = globalThis.crypto.randomUUID();
+		const controlToken = globalThis.crypto.randomUUID();
+		const topicUnsubscribers = new Map<string, () => void>();
+		let unregisterControl = () => {};
+		let sink: ClientSink | null = null;
+		let closed = false;
+		try {
+			sink = await app.realtime.openClientSession({
+				sessionId: edgeSessionId,
+				principal: resolved.appContext.principal ?? null,
+				resolvePrincipal: async () => resolved.appContext.principal ?? null,
+			});
+			if (!sink.clientChannel) {
+				throw new Error(
+					"Shared-provider session did not expose a client channel",
+				);
+			}
+			const activeSink = sink;
+			const refreshScheduler = getRealtimeRefreshScheduler(app, app.realtime);
+			const limitSnapshotConcurrency = createConcurrencyLimiter(
+				admission.initialSnapshotConcurrency,
+			);
+			const close = () => {
+				if (closed) return;
+				closed = true;
+				releaseConnection();
+				unregisterControl();
+				for (const unsubscribe of topicUnsubscribers.values()) unsubscribe();
+				topicUnsubscribers.clear();
+				void activeSink.close("normal").catch(() => {});
+			};
+			const teardownTopic = (topicId: string) => {
+				const unsubscribe = topicUnsubscribers.get(topicId);
+				if (!unsubscribe) return;
+				topicUnsubscribers.delete(topicId);
+				unsubscribe();
+				if (topicUnsubscribers.size === 0) close();
+			};
+			const subscribeTopic = async (
+				topic: ValidatedTopic,
+				baseContext: any,
+			) => {
+				if (closed) throw new Error("Realtime session is closed");
+				if (topicUnsubscribers.has(topic.id)) {
+					throw new Error("Topic id is already subscribed");
+				}
+				const topicContext =
+					topic.locale && topic.locale !== baseContext.locale
+						? { ...baseContext, locale: topic.locale }
+						: baseContext;
+				const accessKey = await resolveRealtimeAccessKey(
+					edgeSessionId,
+					topicContext,
+					topic.accessCacheKey,
+				);
+				const unsubscribe = refreshScheduler.subscribe({
+					key: schedulerKey(topic, accessKey),
+					topicId: topic.id,
+					topics: {
+						resourceType: topic.resourceType,
+						resource: topic.resource,
+						operation: topic.operation,
+						where: topic.where,
+						with: topic.with,
+					},
+					sinceSeq: topic.sinceSeq,
+					compute: () =>
+						limitSnapshotConcurrency(async () => {
+							const admitted = await evaluateTopicAccess(
+								app,
+								topic,
+								topicContext,
+							);
+							return computeRealtimeSnapshot(admitted, topicContext);
+						}),
+					onFrame: async (frame) => {
+						if (frame.byteLength > admission.maxBufferedSnapshotBytes) {
+							teardownTopic(topic.id);
+							return;
+						}
+						await activeSink.write(frame, "latest-snapshot");
+					},
+					onError: (error) => {
+						if (
+							isPermanentAccessError(error) ||
+							error instanceof RealtimeSnapshotBufferOverflowError
+						) {
+							teardownTopic(topic.id);
+						}
+					},
+					onTransportError: close,
+				});
+				topicUnsubscribers.set(topic.id, unsubscribe);
+			};
+
+			const originalIdentity = realtimeControlIdentity(resolved.appContext);
+			unregisterControl = getRealtimeSseControlRegistry<any>(app).register(
+				edgeSessionId,
+				controlToken,
+				async (frames, controlContext) => {
+					if (closed) throw new Error("Realtime session is closed");
+					if (realtimeControlIdentity(controlContext) !== originalIdentity) {
+						close();
+						throw new Error("Realtime session identity changed");
+					}
+					for (const frame of frames) {
+						if (frame.type === "remove_topic") {
+							teardownTopic(frame.topicId);
+							continue;
+						}
+						if (frame.type !== "add_topic") {
+							throw new Error("Unknown realtime control frame");
+						}
+						if (topicUnsubscribers.size >= admission.maxTopicsPerConnection) {
+							throw new Error(
+								`Connection accepts at most ${admission.maxTopicsPerConnection} topics`,
+							);
+						}
+						const rawTopic = {
+							...frame.topic,
+							...(frame.topic.resourceType === "collection" &&
+							frame.topic.operation === "get"
+								? { recordId: frame.topic.id }
+								: {}),
+							id: frame.topicId,
+							sinceSeq: frame.sinceSeq,
+						} as TopicInput;
+						const topic = await resolveIncrementalTopic(
+							app,
+							rawTopic,
+							controlContext,
+							admission,
+						);
+						await subscribeTopic(topic, controlContext);
+					}
+				},
+			);
+			for (const topic of validatedTopicsById.values()) {
+				await subscribeTopic(topic, resolved.appContext);
+			}
+
+			return Response.json(
+				{
+					transport: "shared-provider",
+					sessionId: edgeSessionId,
+					token: controlToken,
+					channel: activeSink.clientChannel,
+					...(topicErrors.length ? { errors: topicErrors } : {}),
+				},
+				{ headers: { "Cache-Control": "no-store" } },
+			);
+		} catch (error) {
+			if (!closed) releaseConnection();
+			unregisterControl();
+			for (const unsubscribe of topicUnsubscribers.values()) unsubscribe();
+			if (sink) void sink.close("transport_error").catch(() => {});
+			return errorResponse(error, request, resolved.appContext.locale);
+		}
 	}
 
 	// Create SSE stream
