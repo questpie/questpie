@@ -211,7 +211,7 @@ const createSSEReader = (stream: ReadableStream<Uint8Array>) => {
 // Test Suite
 // ============================================================================
 
-describe("realtime", () => {
+describe("realtime matrix", () => {
 	let setup: Awaited<ReturnType<typeof buildMockApp>>;
 
 	afterEach(async () => {

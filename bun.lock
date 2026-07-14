@@ -519,6 +519,7 @@
         "pg-boss": "^12.5.4",
         "pusher": "^5.3.4",
         "pusher-js": "^8.5.0",
+        "redis": "^4.7.0",
         "tsdown": "^0.18.3",
       },
       "peerDependencies": {

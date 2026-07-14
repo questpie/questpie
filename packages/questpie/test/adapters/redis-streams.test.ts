@@ -78,7 +78,7 @@ const change: RealtimeChangeEvent = {
 	createdAt: new Date(),
 };
 
-describe("redis streams adapter", () => {
+describe("redis streams realtime matrix adapter", () => {
 	const adapters: RedisStreamsAdapter[] = [];
 
 	afterEach(async () => {

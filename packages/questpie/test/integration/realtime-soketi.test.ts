@@ -29,11 +29,17 @@ function timeout<T>(promise: Promise<T>, message: string): Promise<T> {
 	]);
 }
 
-function rawClient(server: Pusher): PusherJs {
+function rawClient(server: Pusher, presenceId?: string): PusherJs {
 	const authorize: ChannelAuthorizationHandler = (params, callback) => {
 		callback(
 			null,
-			server.authorizeChannel(params.socketId, params.channelName),
+			server.authorizeChannel(
+				params.socketId,
+				params.channelName,
+				params.channelName.startsWith("presence-")
+					? { user_id: presenceId ?? crypto.randomUUID() }
+					: undefined,
+			),
 		);
 	};
 	return new PusherJsConstructor(credentials.key, {
@@ -56,32 +62,87 @@ function subscribed(channel: Channel): Promise<void> {
 	);
 }
 
-describe.skipIf(!runSoketi)("soketi pusher transport conformance", () => {
-	test("delivers a notice wake between application instances", async () => {
-		const receiver = pusherRealtime(credentials).changeBroker;
+describe.skipIf(!runSoketi)("soketi channel matrix conformance", () => {
+	test("delivers a notice wake to every application instance", async () => {
+		const receivers = [
+			pusherRealtime(credentials).changeBroker,
+			pusherRealtime(credentials).changeBroker,
+		];
 		const publisher = pusherRealtime(credentials).changeBroker;
-		const received = timeout(
-			new Promise<void>((resolve) => {
-				void receiver.start({
-					onWake: (wake) => {
-						if (wake.reason === "publish" && wake.highWaterSeq === 42)
-							resolve();
-					},
-					onError: () => {},
-				});
-			}),
-			"Soketi notice delivery timed out",
-		);
-		await publisher.start({ onWake: () => {}, onError: () => {} });
-		await new Promise((resolve) => setTimeout(resolve, 100));
-		await publisher.publish({
-			kind: "outbox-maybe-advanced",
-			highWaterSeq: 42,
-			reason: "publish",
-		});
+		try {
+			const received = receivers.map((receiver) =>
+				timeout(
+					new Promise<void>((resolve) => {
+						void receiver.start({
+							onWake: (wake) => {
+								if (wake.reason === "publish" && wake.highWaterSeq === 42)
+									resolve();
+							},
+							onError: () => {},
+						});
+					}),
+					"Soketi notice delivery timed out",
+				),
+			);
+			await publisher.start({ onWake: () => {}, onError: () => {} });
+			await new Promise((resolve) => setTimeout(resolve, 100));
+			await publisher.publish({
+				kind: "outbox-maybe-advanced",
+				highWaterSeq: 42,
+				reason: "publish",
+			});
 
-		await received;
-		await Promise.all([receiver.stop(), publisher.stop()]);
+			await Promise.all(received);
+		} finally {
+			await Promise.allSettled([
+				...receivers.map((receiver) => receiver.stop()),
+				publisher.stop(),
+			]);
+		}
+	});
+
+	test("delivers ordered channel events and presence membership", async () => {
+		const server = new Pusher({
+			appId: credentials.appId,
+			key: credentials.key,
+			secret: credentials.secret,
+			host: credentials.host,
+			port: String(credentials.port),
+			useTLS: false,
+		});
+		const first = rawClient(server, "matrix-member-1");
+		const second = rawClient(server, "matrix-member-2");
+		try {
+			const channelName = "presence-questpie-matrix";
+			const firstChannel = first.subscribe(channelName);
+			await subscribed(firstChannel);
+			const memberAdded = timeout(
+				new Promise<{ id: string }>((resolve) => {
+					firstChannel.bind("pusher:member_added", resolve);
+				}),
+				"Soketi presence member was not observed",
+			);
+			const secondChannel = second.subscribe(channelName);
+			await subscribed(secondChannel);
+			expect(await memberAdded).toMatchObject({ id: "matrix-member-2" });
+
+			const events: Array<{ eventId: string }> = [];
+			const ordered = timeout(
+				new Promise<Array<{ eventId: string }>>((resolve) => {
+					firstChannel.bind("message", (data: { eventId: string }) => {
+						events.push(data);
+						if (events.length === 2) resolve(events);
+					});
+				}),
+				"Soketi ordered channel events timed out",
+			);
+			await server.trigger(channelName, "message", { eventId: "1" });
+			await server.trigger(channelName, "message", { eventId: "2" });
+			expect(await ordered).toEqual([{ eventId: "1" }, { eventId: "2" }]);
+		} finally {
+			first.disconnect();
+			second.disconnect();
+		}
 	});
 
 	test("raw hostile client proves SDK channel allowlists are not authorization", async () => {
@@ -95,26 +156,28 @@ describe.skipIf(!runSoketi)("soketi pusher transport conformance", () => {
 		});
 		const hostile = rawClient(server);
 		const receiver = rawClient(server);
-		const channelName = "private-not-in-framework-allowlist";
-		const hostileChannel = hostile.subscribe(channelName);
-		const receiverChannel = receiver.subscribe(channelName);
-		const event = timeout(
-			new Promise<{ attack: boolean }>((resolve) => {
-				receiverChannel.bind("client-hostile", resolve);
-			}),
-			"Hostile client event was not delivered",
-		);
+		try {
+			const channelName = "private-not-in-framework-allowlist";
+			const hostileChannel = hostile.subscribe(channelName);
+			const receiverChannel = receiver.subscribe(channelName);
+			const event = timeout(
+				new Promise<{ attack: boolean }>((resolve) => {
+					receiverChannel.bind("client-hostile", resolve);
+				}),
+				"Hostile client event was not delivered",
+			);
 
-		await Promise.all([
-			subscribed(hostileChannel),
-			subscribed(receiverChannel),
-		]);
-		expect(hostileChannel.trigger("client-hostile", { attack: true })).toBe(
-			true,
-		);
-		expect(await event).toEqual({ attack: true });
-
-		hostile.disconnect();
-		receiver.disconnect();
+			await Promise.all([
+				subscribed(hostileChannel),
+				subscribed(receiverChannel),
+			]);
+			expect(hostileChannel.trigger("client-hostile", { attack: true })).toBe(
+				true,
+			);
+			expect(await event).toEqual({ attack: true });
+		} finally {
+			hostile.disconnect();
+			receiver.disconnect();
+		}
 	});
 });

@@ -1,4 +1,28 @@
 services:
+  postgres:
+    image: postgres:17-alpine
+    ports:
+      - "54329:5432"
+    environment:
+      POSTGRES_DB: questpie_realtime
+      POSTGRES_USER: questpie
+      POSTGRES_PASSWORD: questpie
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U questpie -d questpie_realtime"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+
+  redis:
+    image: redis:7.4-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+
   soketi:
     image: quay.io/soketi/soketi:1.6-16-debian
     ports:
@@ -10,3 +34,12 @@ services:
       # Deliberately provider-wide for the hostile raw-client security test.
       SOKETI_DEFAULT_APP_ENABLE_CLIENT_MESSAGES: "true"
       SOKETI_DEBUG: "1"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          'node -e "require(''http'').get(''http://127.0.0.1:6001/'', () => process.exit(0)).on(''error'', () => process.exit(1))"',
+        ]
+      interval: 2s
+      timeout: 2s
+      retries: 30

@@ -88,4 +88,37 @@ describe("realtime admission", () => {
 			initialSnapshotConcurrency: 4,
 		});
 	});
+
+	it("DoS matrix bounds connection, limit, and relation-depth floods", () => {
+		const registry = new RealtimeAdmissionRegistry(5);
+		const releases = Array.from({ length: 500 }, () =>
+			registry.acquire("one-principal"),
+		);
+		expect(releases.filter(Boolean)).toHaveLength(5);
+		expect(
+			admitRealtimeTopic(
+				{
+					id: "unbounded",
+					resourceType: "collection",
+					resource: "posts",
+					limit: 1_000_000,
+				},
+				DEFAULT_REALTIME_ADMISSION,
+			),
+		).toMatchObject({ accepted: false });
+		expect(
+			admitRealtimeTopic(
+				{
+					id: "deep",
+					resourceType: "collection",
+					resource: "posts",
+					with: {
+						a: { with: { b: { with: { c: { with: { d: true } } } } } },
+					},
+				},
+				DEFAULT_REALTIME_ADMISSION,
+			),
+		).toMatchObject({ accepted: false });
+		for (const release of releases) release?.();
+	});
 });

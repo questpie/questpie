@@ -195,7 +195,7 @@ async function flushMicrotasks(): Promise<void> {
 	}
 }
 
-describe("realtime reconciliation", () => {
+describe("realtime matrix reconciliation", () => {
 	let cleanup: (() => Promise<void>) | undefined;
 
 	afterEach(async () => {

@@ -5,6 +5,7 @@ import { z } from "zod";
 import { createFetchHandler } from "../../src/server/adapters/http.js";
 import { channel } from "../../src/server/channels/channel-builder.js";
 import { ChannelTokenBucketLimiter } from "../../src/server/channels/security.js";
+import type { RealtimeObservation } from "../../src/server/modules/core/integrated/realtime/observer.js";
 import type { PusherProvider } from "../../src/server/modules/core/integrated/realtime/pusher-transport.js";
 import { PusherClientTransport } from "../../src/server/modules/core/integrated/realtime/pusher-transport.js";
 import { setChannelPublishLimiterForTests } from "../../src/server/modules/core/routes/channels/_shared.js";
@@ -14,7 +15,11 @@ import { runTestDbMigrations } from "../utils/test-db.js";
 function channelRequest(
 	path: string,
 	body: Record<string, unknown>,
-	options: { origin?: string; cookie?: boolean } = {},
+	options: {
+		origin?: string;
+		cookie?: boolean;
+		headers?: Record<string, string>;
+	} = {},
 ): Request {
 	return new Request(`https://app.example.com/${path}`, {
 		method: "POST",
@@ -22,6 +27,7 @@ function channelRequest(
 			"Content-Type": "application/json",
 			...(options.origin ? { Origin: options.origin } : {}),
 			...(options.cookie ? { Cookie: "session=test" } : {}),
+			...options.headers,
 		},
 		body: JSON.stringify(body),
 	});
@@ -331,6 +337,35 @@ describe("channel module routes", () => {
 		expect((await publish(rateBody)).status).toBe(429);
 		now = 100;
 		expect((await publish(rateBody)).status).toBe(200);
+
+		now = 0;
+		setChannelPublishLimiterForTests(
+			setup.app,
+			new ChannelTokenBucketLimiter({
+				ratePerSecond: 10,
+				burst: 2,
+				now: () => now,
+			}),
+		);
+		const authenticatedHandler = createFetchHandler(setup.app, {
+			getSession: async (request) => ({
+				user: { id: "shared-user" },
+				session: { id: request.headers.get("x-test-session") },
+			}),
+		});
+		const publishFromTab = (session: string) =>
+			authenticatedHandler(
+				channelRequest("channels/publish", rateBody, {
+					origin: "https://app.example.com",
+					cookie: true,
+					headers: { "x-test-session": session },
+				}),
+			);
+		expect((await publishFromTab("tab-1")).status).toBe(200);
+		expect((await publishFromTab("tab-2")).status).toBe(200);
+		expect((await publishFromTab("tab-3")).status).toBe(429);
+		now = 100;
+		expect((await publishFromTab("tab-3")).status).toBe(200);
 	});
 
 	test("uses one strict origin and credentialed CORS policy for auth and publish", async () => {
@@ -465,5 +500,83 @@ describe("channel module routes", () => {
 		expect(response.status).toBe(409);
 		expect(authorizationCalls).toBe(0);
 		expect(providerCalls).toBe(0);
+	});
+
+	test("SEC-16 channel matrix observations never expose request secrets", async () => {
+		const observations: RealtimeObservation[] = [];
+		const setup = await buildMockApp(
+			{
+				channels: {
+					room: channel("room-[id]")
+						.events({ message: z.object({ text: z.string() }) })
+						.authorize({ subscribe: true, publish: true }),
+				},
+			},
+			{
+				app: { url: "https://app.example.com" },
+				realtime: {
+					retentionDays: 0,
+					observer: { record: (event) => observations.push(event) },
+				},
+			},
+		);
+		cleanup = setup.cleanup;
+		await runTestDbMigrations(setup.app);
+		const handler = createFetchHandler(setup.app);
+		const parameterSecret = "private-parameter-7cb0f3";
+		const socketSecret = "private-socket-7cb0f3";
+		const payloadSecret = "private-payload-7cb0f3";
+
+		const auth = await handler(
+			channelRequest(
+				"channels/auth",
+				{
+					socket_id: socketSecret,
+					channel_name: "private-wire-name-7cb0f3",
+					channel: "room",
+					params: { id: parameterSecret },
+				},
+				{ origin: "https://app.example.com", cookie: true },
+			),
+		);
+		expect(auth.status).toBe(403);
+		const publish = await handler(
+			channelRequest(
+				"channels/publish",
+				{
+					channel: "room",
+					params: { id: parameterSecret },
+					event: "message",
+					data: { text: 42, secret: payloadSecret },
+				},
+				{ origin: "https://app.example.com", cookie: true },
+			),
+		);
+		expect(publish.status).toBe(422);
+
+		const serialized = JSON.stringify(observations);
+		expect(observations.length).toBeGreaterThanOrEqual(2);
+		for (const secret of [parameterSecret, socketSecret, payloadSecret]) {
+			expect(serialized).not.toContain(secret);
+		}
+		expect(
+			observations.every(
+				(event) =>
+					event.type !== "channel.security" ||
+					[
+						"allowed",
+						"access_denied",
+						"origin_denied",
+						"name_invalid",
+						"rate_limited",
+						"payload_invalid",
+						"presence_invalid",
+						"transport_unavailable",
+						"request_invalid",
+						"revoked",
+						"unknown",
+					].includes(event.reason),
+			),
+		).toBe(true);
 	});
 });

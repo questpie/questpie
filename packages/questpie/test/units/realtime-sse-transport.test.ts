@@ -9,7 +9,7 @@ import {
 } from "../../src/server/modules/core/integrated/realtime/sse-client-transport.js";
 import { SharedSseKeepAliveTicker } from "../../src/server/modules/core/integrated/realtime/sse-keep-alive.js";
 
-describe("SseClientTransport", () => {
+describe("realtime matrix SseClientTransport", () => {
 	it("delivers serialized frames through a local-session sink", async () => {
 		const frames: Uint8Array[] = [];
 		let closeCalls = 0;
@@ -147,7 +147,7 @@ describe("SseClientTransport", () => {
 	});
 });
 
-describe("SharedSseKeepAliveTicker", () => {
+describe("realtime matrix SharedSseKeepAliveTicker", () => {
 	it("uses one timer for all registered sessions and emits comment frames", () => {
 		const scheduled: Array<() => void> = [];
 		let cleared = 0;

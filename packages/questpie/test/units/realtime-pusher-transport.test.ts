@@ -101,7 +101,7 @@ class RealtimeReadDb {
 	}
 }
 
-describe("pusher transport change broker", () => {
+describe("pusher channel matrix change broker", () => {
 	test("coalesces notice-only wakes and emits a reconcile wake after reconnect", async () => {
 		const { provider, triggers } = createProvider();
 		let onMessage: ((value: unknown) => void) | undefined;
@@ -278,7 +278,7 @@ describe("pusher transport change broker", () => {
 	});
 });
 
-describe("pusher transport client delivery", () => {
+describe("pusher channel matrix client delivery", () => {
 	test("validates final provider names at the 164-character boundary", () => {
 		expect(() => assertPusherChannelName("a".repeat(164))).not.toThrow();
 		expect(() => assertPusherChannelName("a".repeat(165))).toThrow("1-164");

@@ -12,7 +12,7 @@ import type { RealtimeChangeEvent } from "../../src/server/modules/core/integrat
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-describe("realtime observability", () => {
+describe("realtime matrix observability", () => {
 	test("isolates observer and logger failures while exposing bounded metrics", () => {
 		const events: RealtimeObservation[] = [];
 		const observability = new RealtimeObservability({

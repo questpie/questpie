@@ -22,7 +22,7 @@ const provider: PusherProvider = {
 	getPresenceMemberCount: async () => 0,
 };
 
-describe("pusher transport module routes", () => {
+describe("pusher channel matrix module routes", () => {
 	let setup: Awaited<ReturnType<typeof buildMockApp>>;
 
 	afterEach(async () => {

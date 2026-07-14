@@ -67,6 +67,45 @@ describe("realtime scheduler", () => {
 		expect(realtime.listeners.size).toBe(0);
 	});
 
+	it("deploy storm resumes 500 equivalent clients without a snapshot herd", async () => {
+		const realtime = new FakeRealtimeSource();
+		const observations: Array<{ type: string; subscribers?: number }> = [];
+		const scheduler = new RealtimeRefreshScheduler(realtime, 10, {
+			record: (event) => observations.push(event),
+		});
+		let computes = 0;
+		const frames = Array.from({ length: 500 }, () => 0);
+		const unsubscribers = frames.map((_, index) =>
+			scheduler.subscribe({
+				key: "posts:shared-principal",
+				topicId: "posts",
+				sinceSeq: 4,
+				topics: { resourceType: "collection", resource: "posts" },
+				compute: async () => ({ docs: [], run: ++computes }),
+				onFrame: () => {
+					frames[index] += 1;
+				},
+				onError: () => {},
+			}),
+		);
+
+		await tick();
+		expect(computes).toBe(0);
+		expect(frames.every((count) => count === 0)).toBe(true);
+		expect(realtime.listeners.size).toBe(1);
+
+		realtime.emit(5);
+		await tick();
+		expect(computes).toBe(1);
+		expect(frames.every((count) => count === 1)).toBe(true);
+		expect(observations).toContainEqual(
+			expect.objectContaining({ type: "refresh.completed", subscribers: 500 }),
+		);
+
+		for (const unsubscribe of unsubscribers) unsubscribe();
+		expect(realtime.listeners.size).toBe(0);
+	});
+
 	it("does not share row, field, or afterRead output across access keys", async () => {
 		for (const variant of [
 			"row access",

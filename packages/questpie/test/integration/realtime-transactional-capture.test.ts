@@ -36,7 +36,7 @@ async function flushEventLoopTurns(turns = 10): Promise<void> {
 	}
 }
 
-describe("realtime transactional change capture", () => {
+describe("realtime matrix transactional change capture", () => {
 	let setup: Awaited<ReturnType<typeof buildMockApp>>;
 	let ctx: ReturnType<typeof createTestContext>;
 	let observeCollectionHook:
