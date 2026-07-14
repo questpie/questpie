@@ -23,6 +23,7 @@ import type {
 	ResolveRelationsDeep,
 } from "#questpie/shared/type-utils.js";
 
+import type { ChannelDefinitions } from "../server/channels/channel-builder.js";
 import type {
 	ApplyQuery,
 	CollectionSelect as CollectionSelectFromApp,
@@ -38,6 +39,7 @@ import type {
 } from "../server/collection/crud/types.js";
 import type { GlobalUpdateInput } from "../server/global/crud/types.js";
 import type { GetAuthHeaders } from "./auth.js";
+import { createChannelsAPI, type ChannelsClient } from "./channels/index.js";
 import {
 	buildCollectionTopic,
 	buildGlobalTopic,
@@ -127,10 +129,16 @@ import type { AnyGlobal, GetGlobal } from "#questpie/shared/type-utils.js";
  */
 export interface QuestpieApp {
 	collections: Record<string, AnyCollectionOrBuilder>;
+	channels?: ChannelDefinitions;
 	globals?: Record<string, any>;
 	routes?: Record<string, any>;
 	auth?: any;
 }
+
+type AppChannelDefinitions<TApp extends QuestpieApp> =
+	NonNullable<TApp["channels"]> extends ChannelDefinitions
+		? NonNullable<TApp["channels"]>
+		: {};
 
 /**
  * Type-safe client error with support for ApiErrorShape
@@ -971,6 +979,7 @@ type RouteCallOptions = Omit<RequestInit, "method"> & {
  */
 export type QuestpieClient<TApp extends QuestpieApp> = {
 	collections: CollectionsAPI<TApp>;
+	channels: ChannelsClient<AppChannelDefinitions<TApp>>;
 	globals: GlobalsAPI<TApp>;
 	routes: RoutesClient<TApp["routes"]>;
 	search: SearchAPI;
@@ -1159,6 +1168,12 @@ export function createClient<TApp extends QuestpieApp>(
 				`${apiBasePath}/globals/${topic.resource}${queryString ? `?${queryString}` : ""}`,
 			);
 		},
+	});
+	const channelsApi = createChannelsAPI<AppChannelDefinitions<TApp>>({
+		baseUrl: `${config.baseURL}${apiBasePath}`,
+		withCredentials: true,
+		fetcher,
+		getAuthHeaders: config.getAuthHeaders,
 	});
 
 	/**
@@ -1865,6 +1880,7 @@ export function createClient<TApp extends QuestpieApp>(
 
 	return {
 		collections,
+		channels: channelsApi,
 		globals,
 		routes: routesProxy,
 		search,
@@ -1927,6 +1943,14 @@ export type { GlobalMeta } from "#questpie/shared/global-meta.js";
 // Re-export realtime types and helpers
 export type { RealtimeAPI, TopicConfig, TopicInput } from "./realtime/index.js";
 export { buildCollectionTopic, buildGlobalTopic } from "./realtime/index.js";
+export type {
+	ChannelClient,
+	ChannelMessage,
+	ChannelPublishInput,
+	ChannelPublishReceipt,
+	ChannelsClient,
+	ChannelSubscribeOptions,
+} from "./channels/index.js";
 // Re-export the query-surface types the client's own method signatures are
 // built from, so consumers (e.g. @questpie/tanstack-query) can derive
 // per-call generics without reaching into server internals.

@@ -5,6 +5,7 @@
  * Accepts multiple topics via POST and streams updates for all of them.
  */
 
+import { ChannelsService } from "../../channels/service.js";
 import { executeAccessRule } from "../../collection/crud/shared/access-control.js";
 import type { Questpie } from "../../config/questpie.js";
 import type { QuestpieConfig } from "../../config/types.js";
@@ -21,6 +22,7 @@ import {
 	resolveRealtimeAccessKey,
 } from "../../modules/core/integrated/realtime/refresh-scheduler.js";
 import { computeRealtimeSnapshot } from "../../modules/core/integrated/realtime/snapshot.js";
+import { getSseChannelPresenceRegistry } from "../../modules/core/integrated/realtime/sse-channel-presence.js";
 import {
 	encodeSseEvent,
 	RealtimeSnapshotBufferOverflowError,
@@ -93,6 +95,22 @@ type ValidatedTopic =
 			ValidatedTopicMetadata & { type: "collection" })
 	| (Extract<NormalizedTopicInput, { resourceType: "global" }> &
 			ValidatedTopicMetadata & { type: "global" });
+
+type ChannelSubscriptionInput = {
+	id?: string;
+	channel?: string;
+	params?: Record<string, string>;
+	lastEventId?: string;
+};
+
+type ValidatedChannelSubscription = {
+	id: string;
+	channel: string;
+	params: Record<string, string>;
+	resolvedName: string;
+	lastEventId?: string;
+	presence?: Record<string, unknown>;
+};
 
 function normalizeTopicOperation(topic: TopicInput): NormalizedTopicInput {
 	if (topic.resourceType !== "collection" && topic.resourceType !== "global") {
@@ -306,6 +324,59 @@ async function resolveIncrementalTopic(
 	throw new Error("Invalid resource type");
 }
 
+async function resolveChannelSubscription(
+	app: Questpie<any>,
+	input: ChannelSubscriptionInput,
+	context: any,
+): Promise<ValidatedChannelSubscription> {
+	if (!input.id || typeof input.id !== "string") {
+		throw new Error("Channel subscription id is required");
+	}
+	if (!input.channel || typeof input.channel !== "string") {
+		throw new Error("Channel registry key is required");
+	}
+	if (
+		input.lastEventId !== undefined &&
+		typeof input.lastEventId !== "string"
+	) {
+		throw new Error("Channel lastEventId must be a string");
+	}
+	const params = input.params ?? {};
+	if (
+		!params ||
+		typeof params !== "object" ||
+		Array.isArray(params) ||
+		Object.values(params).some((value) => typeof value !== "string")
+	) {
+		throw new Error("Channel params must be a string record");
+	}
+	const channels = new ChannelsService(
+		app.config.channels ?? {},
+		app.realtime,
+		{ ...context, accessMode: "user" },
+		app.config.realtime?.channelSecurity,
+	);
+	const definition = channels.getDefinition(input.channel);
+	const resolvedName = channels.resolveName(input.channel, params);
+	let presence: Record<string, unknown> | undefined;
+	if (definition.visibility === "presence") {
+		const value = await channels.resolvePresence(input.channel, params);
+		if (value && typeof value === "object") {
+			presence = value as Record<string, unknown>;
+		}
+	} else if (!(await channels.authorize(input.channel, params, "subscribe"))) {
+		throw new Error("Channel subscription is denied");
+	}
+	return {
+		id: input.id,
+		channel: input.channel,
+		params,
+		resolvedName,
+		...(input.lastEventId ? { lastEventId: input.lastEventId } : {}),
+		...(presence ? { presence } : {}),
+	};
+}
+
 // ============================================================================
 // Standalone Handler
 // ============================================================================
@@ -362,6 +433,7 @@ export async function realtimeSubscribe(
 	// Parse request body
 	let body: {
 		topics?: TopicInput[];
+		channels?: ChannelSubscriptionInput[];
 		transport?: "shared-provider";
 		sessionId?: string;
 		token?: string;
@@ -381,7 +453,7 @@ export async function realtimeSubscribe(
 		);
 	}
 
-	const { topics } = body;
+	const { channels: channelInputs, topics } = body;
 	const admission = resolveRealtimeAdmissionConfig(
 		app.config?.realtime?.admission,
 	);
@@ -419,11 +491,15 @@ export async function realtimeSubscribe(
 		}
 	}
 
-	// Validate topics
-	if (!Array.isArray(topics) || topics.length === 0) {
+	// Initial sessions may carry live-query topics, framework channels, or both.
+	if (
+		(topics !== undefined && !Array.isArray(topics)) ||
+		(channelInputs !== undefined && !Array.isArray(channelInputs)) ||
+		((topics?.length ?? 0) === 0 && (channelInputs?.length ?? 0) === 0)
+	) {
 		return errorResponse(
 			ApiError.badRequest(
-				"Topics array is required and must not be empty",
+				"At least one realtime topic or channel is required",
 				undefined,
 				"realtime.topicsRequired",
 			),
@@ -442,7 +518,7 @@ export async function realtimeSubscribe(
 	const collectionDefinitions = app.getCollections() as Record<string, any>;
 	const globalDefinitions = app.getGlobals() as Record<string, any>;
 
-	for (const [topicIndex, rawTopic] of topics.entries()) {
+	for (const [topicIndex, rawTopic] of (topics ?? []).entries()) {
 		if (!rawTopic || typeof rawTopic !== "object" || Array.isArray(rawTopic)) {
 			topicErrors.push({ id: "unknown", message: "Topic must be an object" });
 			continue;
@@ -557,19 +633,33 @@ export async function realtimeSubscribe(
 		}
 	}
 
-	// If no valid topics, return error
-	if (validatedTopics.length === 0) {
-		const errors = topicErrors.map((e) => `${e.id}: ${e.message}`).join("; ");
-		return errorResponse(
-			ApiError.badRequest(
-				`No valid topics provided. Errors: ${errors}`,
-				undefined,
-				"realtime.noValidTopics",
-				{ errors },
-			),
-			request,
-			resolved.appContext.locale,
-		);
+	const validatedChannelsById = new Map<string, ValidatedChannelSubscription>();
+	const channelErrors: Array<{ id: string; message: string }> = [];
+	for (const [index, input] of (channelInputs ?? []).entries()) {
+		const id = input?.id ?? "unknown";
+		if (index + validatedTopics.length >= admission.maxTopicsPerConnection) {
+			channelErrors.push({
+				id,
+				message: `Connection accepts at most ${admission.maxTopicsPerConnection} subscriptions`,
+			});
+			continue;
+		}
+		try {
+			const channel = await resolveChannelSubscription(
+				app,
+				input,
+				resolved.appContext,
+			);
+			if (validatedChannelsById.has(channel.id)) {
+				throw new Error("Channel subscription id is already used");
+			}
+			validatedChannelsById.set(channel.id, channel);
+		} catch (error) {
+			channelErrors.push({
+				id,
+				message: error instanceof Error ? error.message : "Channel rejected",
+			});
+		}
 	}
 
 	const accessValidatedTopics: ValidatedTopic[] = [];
@@ -590,8 +680,8 @@ export async function realtimeSubscribe(
 		}
 	}
 
-	if (accessValidatedTopics.length === 0) {
-		const errors = topicErrors
+	if (accessValidatedTopics.length === 0 && validatedChannelsById.size === 0) {
+		const errors = [...topicErrors, ...channelErrors]
 			.map((error) => `${error.id}: ${error.message}`)
 			.join("; ");
 		return errorResponse(
@@ -640,6 +730,16 @@ export async function realtimeSubscribe(
 	}
 
 	if (body.transport === "shared-provider") {
+		if (validatedChannelsById.size > 0 || validatedTopicsById.size === 0) {
+			releaseConnection();
+			return errorResponse(
+				ApiError.badRequest(
+					"Shared-provider session bootstrap only accepts live-query topics",
+				),
+				request,
+				resolved.appContext.locale,
+			);
+		}
 		const transportConfig = await app.realtime.getClientTransportConfig({
 			request,
 		});
@@ -823,6 +923,7 @@ export async function realtimeSubscribe(
 			let transport: SseClientTransport | null = null;
 			try {
 				const topicUnsubscribers = new Map<string, () => void>();
+				const channelUnsubscribers = new Map<string, () => void>();
 				let closed = false;
 				let closeRequested = false;
 
@@ -867,6 +968,10 @@ export async function realtimeSubscribe(
 						unsub();
 					}
 					topicUnsubscribers.clear();
+					for (const unsub of channelUnsubscribers.values()) {
+						unsub();
+					}
+					channelUnsubscribers.clear();
 					void transport?.stop().catch(() => {});
 				};
 				closeStream = close;
@@ -886,6 +991,17 @@ export async function realtimeSubscribe(
 				const sendTopicError = (topicId: string, message: string) => {
 					return send("error", { topicId, message });
 				};
+				const sendChannelError = (subscriptionId: string, message: string) =>
+					send("error", { channelSubscriptionId: subscriptionId, message });
+
+				const closeIfEmpty = () => {
+					if (
+						topicUnsubscribers.size === 0 &&
+						channelUnsubscribers.size === 0
+					) {
+						requestClose();
+					}
+				};
 
 				const teardownTopic = (topicId: string) => {
 					const unsubscribe = topicUnsubscribers.get(topicId);
@@ -893,7 +1009,57 @@ export async function realtimeSubscribe(
 
 					topicUnsubscribers.delete(topicId);
 					unsubscribe();
-					if (topicUnsubscribers.size === 0) requestClose();
+					closeIfEmpty();
+				};
+
+				const teardownChannel = (subscriptionId: string) => {
+					const unsubscribe = channelUnsubscribers.get(subscriptionId);
+					if (!unsubscribe) return;
+					channelUnsubscribers.delete(subscriptionId);
+					unsubscribe();
+					closeIfEmpty();
+				};
+
+				const subscribeChannel = async (
+					channel: ValidatedChannelSubscription,
+				) => {
+					if (closed) return;
+					if (channelUnsubscribers.has(channel.id)) {
+						await sendChannelError(
+							channel.id,
+							"Channel subscription id is already used",
+						);
+						return;
+					}
+					let unsubscribeLedger: (() => void) | undefined;
+					let unsubscribePresence: (() => void) | undefined;
+					try {
+						unsubscribeLedger = await app.realtime!.subscribeChannel({
+							subscriptionId: `${edgeSessionId}:${channel.id}`,
+							channel: channel.resolvedName,
+							sink,
+							lastEventId: channel.lastEventId,
+							encodeFrame: (frame) => transport!.encodeChannelFrame(frame),
+						});
+						if (channel.presence) {
+							unsubscribePresence = await getSseChannelPresenceRegistry(
+								app,
+							).register({
+								channel: channel.resolvedName,
+								subscriptionId: `${edgeSessionId}:${channel.id}`,
+								sink,
+								data: channel.presence,
+							});
+						}
+						channelUnsubscribers.set(channel.id, () => {
+							unsubscribePresence?.();
+							unsubscribeLedger?.();
+						});
+					} catch (error) {
+						unsubscribePresence?.();
+						unsubscribeLedger?.();
+						throw error;
+					}
 				};
 
 				const subscribeTopic = async (
@@ -988,6 +1154,41 @@ export async function realtimeSubscribe(
 						}
 
 						for (const frame of frames) {
+							if (frame.type === "unsubscribe_channel") {
+								teardownChannel(frame.subscriptionId);
+								continue;
+							}
+							if (frame.type === "subscribe_channel") {
+								if (
+									topicUnsubscribers.size + channelUnsubscribers.size >=
+									admission.maxTopicsPerConnection
+								) {
+									await sendChannelError(
+										frame.subscriptionId,
+										`Connection accepts at most ${admission.maxTopicsPerConnection} subscriptions`,
+									);
+									continue;
+								}
+								try {
+									const channel = await resolveChannelSubscription(
+										app,
+										{
+											id: frame.subscriptionId,
+											channel: frame.channel,
+											params: frame.params,
+											lastEventId: frame.lastEventId,
+										},
+										controlContext,
+									);
+									await subscribeChannel(channel);
+								} catch (error) {
+									await sendChannelError(
+										frame.subscriptionId,
+										error instanceof Error ? error.message : "Channel rejected",
+									);
+								}
+								continue;
+							}
 							if (frame.type === "remove_topic") {
 								teardownTopic(frame.topicId);
 								continue;
@@ -995,7 +1196,10 @@ export async function realtimeSubscribe(
 							if (frame.type !== "add_topic") {
 								throw new Error("Unknown realtime control frame");
 							}
-							if (topicUnsubscribers.size >= admission.maxTopicsPerConnection) {
+							if (
+								topicUnsubscribers.size + channelUnsubscribers.size >=
+								admission.maxTopicsPerConnection
+							) {
 								await sendTopicError(
 									frame.topicId,
 									`Connection accepts at most ${admission.maxTopicsPerConnection} topics`,
@@ -1041,10 +1245,23 @@ export async function realtimeSubscribe(
 				for (const topic of validatedTopicsById.values()) {
 					await subscribeTopic(topic, resolved.appContext);
 				}
+				for (const channel of validatedChannelsById.values()) {
+					try {
+						await subscribeChannel(channel);
+					} catch (error) {
+						await sendChannelError(
+							channel.id,
+							error instanceof Error ? error.message : "Channel rejected",
+						);
+					}
+				}
 
 				// Send initial errors for invalid topics
 				for (const error of topicErrors) {
 					await sendTopicError(error.id, error.message);
+				}
+				for (const error of channelErrors) {
+					await sendChannelError(error.id, error.message);
 				}
 				if (closed) return;
 

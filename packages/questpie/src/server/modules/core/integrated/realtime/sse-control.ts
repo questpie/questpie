@@ -10,9 +10,24 @@ export type RealtimeRemoveTopicFrame = {
 	topicId: string;
 };
 
+export type RealtimeSubscribeChannelFrame = {
+	type: "subscribe_channel";
+	subscriptionId: string;
+	channel: string;
+	params: Record<string, string>;
+	lastEventId?: string;
+};
+
+export type RealtimeUnsubscribeChannelFrame = {
+	type: "unsubscribe_channel";
+	subscriptionId: string;
+};
+
 export type RealtimeControlFrame =
 	| RealtimeAddTopicFrame
-	| RealtimeRemoveTopicFrame;
+	| RealtimeRemoveTopicFrame
+	| RealtimeSubscribeChannelFrame
+	| RealtimeUnsubscribeChannelFrame;
 
 type ControlSession<TContext> = {
 	token: string;

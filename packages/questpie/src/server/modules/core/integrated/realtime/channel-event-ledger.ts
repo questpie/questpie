@@ -68,6 +68,9 @@ export type LocalChannelSubscriptionInput = {
 	channel: string;
 	sink: ClientSink;
 	lastEventId?: string | null;
+	encodeFrame?: (
+		frame: OrderedChannelEventFrame | ChannelGapFrame,
+	) => Uint8Array;
 };
 
 type ChannelEventRow = typeof questpieChannelEventTable.$inferSelect;
@@ -85,6 +88,7 @@ type LocalSubscription = {
 	drainPending: boolean;
 	closed: boolean;
 	retryTimer: ReturnType<typeof setTimeout> | null;
+	encodeFrame?: LocalChannelSubscriptionInput["encodeFrame"];
 };
 
 export function hashResolvedChannel(channel: string): string {
@@ -290,6 +294,7 @@ export class ChannelEventLedger {
 			drainPending: false,
 			closed: false,
 			retryTimer: null,
+			encodeFrame: input.encodeFrame,
 		};
 		this.localSubscriptions.set(subscription.id, subscription);
 		const channelSubscriptions =
@@ -386,7 +391,7 @@ export class ChannelEventLedger {
 			oldestEventId,
 		};
 		await input.sink.write(
-			this.encodeLocalFrame(frame),
+			this.encodeLocalFrame(frame, input.encodeFrame),
 			"ordered-channel-event",
 		);
 	}
@@ -479,7 +484,10 @@ export class ChannelEventLedger {
 		subscription: LocalSubscription,
 		row: ChannelEventRow,
 	): boolean {
-		const frameBytes = this.encodeLocalFrame(this.toLocalFrame(row)).byteLength;
+		const frameBytes = this.encodeLocalFrame(
+			this.toLocalFrame(row),
+			subscription.encodeFrame,
+		).byteLength;
 		if (
 			subscription.pending.length + 1 > this.config.maxBufferedEvents ||
 			subscription.pendingBytes + frameBytes > this.config.maxBufferedBytes
@@ -497,7 +505,10 @@ export class ChannelEventLedger {
 	): Promise<boolean> {
 		while (!subscription.closed && subscription.pending.length > 0) {
 			const row = subscription.pending[0];
-			const encodedFrame = this.encodeLocalFrame(this.toLocalFrame(row));
+			const encodedFrame = this.encodeLocalFrame(
+				this.toLocalFrame(row),
+				subscription.encodeFrame,
+			);
 			const result = await subscription.sink.write(
 				encodedFrame,
 				"ordered-channel-event",
@@ -540,7 +551,9 @@ export class ChannelEventLedger {
 
 	private encodeLocalFrame(
 		frame: OrderedChannelEventFrame | ChannelGapFrame,
+		encodeFrame?: LocalChannelSubscriptionInput["encodeFrame"],
 	): Uint8Array {
+		if (encodeFrame) return encodeFrame(frame);
 		if (this.clientTransport?.channelDeliveryScope === "local-sessions") {
 			const encoded = this.clientTransport.encodeChannelFrame?.(frame);
 			if (encoded) return encoded;

@@ -7,6 +7,7 @@ import {
 	type UseMutationOptions,
 	type UseQueryOptions,
 } from "@tanstack/react-query";
+import type { AnyChannelDefinition, ChannelParamsOf } from "questpie/channels";
 import type {
 	ApplyQuery,
 	CollectionRelations,
@@ -140,6 +141,49 @@ type GlobalKeys<TApp extends QuestpieApp> = Extract<
 	keyof QuestpieClient<TApp>["globals"],
 	string
 >;
+
+/** Extract generated channel registry keys without client control properties. */
+type ChannelKeys<TApp extends QuestpieApp> = Extract<
+	keyof NonNullable<TApp["channels"]>,
+	string
+>;
+
+type ChannelIter<
+	TApp extends QuestpieApp,
+	K extends ChannelKeys<TApp>,
+> = QuestpieClient<TApp>["channels"][K] extends { iter: infer TIter }
+	? TIter extends (...args: any[]) => AsyncGenerator<any, void, unknown>
+		? TIter
+		: never
+	: never;
+
+type ChannelIterMessage<TIter> = TIter extends (
+	...args: any[]
+) => AsyncGenerator<infer TMessage, void, unknown>
+	? TMessage
+	: never;
+
+type ChannelDefinition<
+	TApp extends QuestpieApp,
+	K extends ChannelKeys<TApp>,
+> = NonNullable<TApp["channels"]>[K] extends AnyChannelDefinition
+	? NonNullable<TApp["channels"]>[K]
+	: never;
+
+type ChannelSubscriptionOptionsAPI<
+	TApp extends QuestpieApp,
+	K extends ChannelKeys<TApp>,
+> = keyof ChannelParamsOf<ChannelDefinition<TApp, K>> extends never
+	? {
+			subscription: () => UseQueryOptions<
+				readonly ChannelIterMessage<ChannelIter<TApp, K>>[]
+			>;
+		}
+	: {
+			subscription: (
+				params: ChannelParamsOf<ChannelDefinition<TApp, K>>,
+			) => UseQueryOptions<readonly ChannelIterMessage<ChannelIter<TApp, K>>[]>;
+		};
 
 // Per-collection select/relations — the same derivation the client's own
 // method signatures use, so per-call generics below produce results identical
@@ -387,6 +431,9 @@ export type QuestpieQueryOptionsProxy<TApp extends QuestpieApp = QuestpieApp> =
 		};
 		globals: {
 			[K in GlobalKeys<TApp>]: GlobalQueryOptionsAPI<TApp, K>;
+		};
+		channels: {
+			[K in ChannelKeys<TApp>]: ChannelSubscriptionOptionsAPI<TApp, K>;
 		};
 		routes: RoutesQueryOptionsAPI<QuestpieClient<TApp>["routes"]>;
 		custom: {
@@ -942,6 +989,40 @@ export function createQuestpieQueryOptions<
 		},
 	});
 
+	const channels = new Proxy(
+		{} as QuestpieQueryOptionsProxy<TApp>["channels"],
+		{
+			get: (_target, channelName) => {
+				if (typeof channelName !== "string") return undefined;
+				const channel = client.channels[
+					channelName as ChannelKeys<TApp>
+				] as any;
+				return {
+					subscription: (...args: any[]) => {
+						const queryKey = buildKey(keyPrefix, [
+							"channels",
+							channelName,
+							"subscription",
+							normalizeQueryKeyOptions(args),
+						]);
+						return queryOptions({
+							queryKey,
+							queryFn: streamedQuery({
+								streamFn: ({ signal }) => channel.iter(...args, { signal }),
+								reducer: (messages: readonly unknown[], message: unknown) => [
+									...messages,
+									message,
+								],
+								initialValue: [] as readonly unknown[],
+								refetchMode: "reset",
+							}),
+						});
+					},
+				};
+			},
+		},
+	);
+
 	/**
 	 * Resolve a nested route caller from the client by traversing dot segments.
 	 */
@@ -1034,6 +1115,7 @@ export function createQuestpieQueryOptions<
 	return {
 		collections,
 		globals,
+		channels,
 		routes: routesProxy,
 		custom: {
 			query: (customConfig) =>

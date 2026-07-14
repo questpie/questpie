@@ -1,0 +1,378 @@
+import type { GetAuthHeaders } from "../auth.js";
+import type {
+	ChannelClientTransport,
+	ChannelConnectionInput,
+	ChannelSubscribeOptions,
+	ChannelTransportMessage,
+} from "./types.js";
+
+type Entry = {
+	id: string;
+	input: ChannelConnectionInput;
+	subscribers: Set<(message: ChannelTransportMessage) => void>;
+	errorCallbacks: Set<(error: Error) => void>;
+	lastEventId?: string;
+	presence?: readonly unknown[];
+	presenceWaiters: Set<{
+		resolve: (members: readonly unknown[]) => void;
+		reject: (error: Error) => void;
+	}>;
+};
+
+type ControlFrame =
+	| {
+			type: "subscribe_channel";
+			subscriptionId: string;
+			channel: string;
+			params: Record<string, string>;
+			lastEventId?: string;
+	  }
+	| { type: "unsubscribe_channel"; subscriptionId: string };
+
+type SseEvent = { type: string; data: string };
+
+function channelId(input: ChannelConnectionInput): string {
+	return `channel:${input.resolvedName}`;
+}
+
+/** Multiplexed ordered-channel SSE client with durable last-event resume. */
+export class SseChannelTransport implements ChannelClientTransport {
+	private readonly entries = new Map<string, Entry>();
+	private abortController: AbortController | null = null;
+	private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+	private connecting = false;
+	private destroyed = false;
+	private reconnectPending = false;
+	private retryAttempt = 0;
+	private controlSession: { sessionId: string; token: string } | null = null;
+	private controlOperation: Promise<void> = Promise.resolve();
+
+	constructor(
+		private readonly options: {
+			baseUrl: string;
+			fetcher: typeof fetch;
+			getAuthHeaders?: GetAuthHeaders;
+			withCredentials: boolean;
+		},
+	) {}
+
+	subscribe(
+		input: ChannelConnectionInput,
+		callback: (message: ChannelTransportMessage) => void,
+		options: ChannelSubscribeOptions = {},
+	): () => void {
+		const id = channelId(input);
+		let entry = this.entries.get(input.resolvedName);
+		if (!entry) {
+			entry = {
+				id,
+				input,
+				subscribers: new Set(),
+				errorCallbacks: new Set(),
+				presenceWaiters: new Set(),
+			};
+			this.entries.set(input.resolvedName, entry);
+			this.applyTopology({
+				type: "subscribe_channel",
+				subscriptionId: id,
+				channel: input.registryKey,
+				params: input.params,
+			});
+		}
+		entry.subscribers.add(callback);
+		if (options.onError) entry.errorCallbacks.add(options.onError);
+
+		let stopped = false;
+		const stop = () => {
+			if (stopped) return;
+			stopped = true;
+			options.signal?.removeEventListener("abort", stop);
+			const current = this.entries.get(input.resolvedName);
+			if (!current) return;
+			current.subscribers.delete(callback);
+			if (options.onError) current.errorCallbacks.delete(options.onError);
+			if (current.subscribers.size > 0 || current.presenceWaiters.size > 0)
+				return;
+			this.entries.delete(input.resolvedName);
+			this.applyTopology({
+				type: "unsubscribe_channel",
+				subscriptionId: current.id,
+			});
+			if (this.entries.size === 0) this.abortController?.abort();
+		};
+		options.signal?.addEventListener("abort", stop, { once: true });
+		if (options.signal?.aborted) stop();
+		return stop;
+	}
+
+	async presence(
+		input: ChannelConnectionInput,
+		options: ChannelSubscribeOptions = {},
+	): Promise<readonly unknown[]> {
+		if (options.signal?.aborted) {
+			throw new Error("Channel presence aborted");
+		}
+		if (input.visibility !== "presence") {
+			throw new Error("Channel does not expose presence");
+		}
+		const noop = () => {};
+		const stop = this.subscribe(input, noop, options);
+		const entry = this.entries.get(input.resolvedName)!;
+		if (entry.presence) {
+			stop();
+			return entry.presence;
+		}
+		return new Promise<readonly unknown[]>((resolve, reject) => {
+			const abort = () => waiter.reject(new Error("Channel presence aborted"));
+			const waiter = {
+				resolve: (members: readonly unknown[]) => {
+					options.signal?.removeEventListener("abort", abort);
+					stop();
+					resolve(members);
+				},
+				reject: (error: Error) => {
+					options.signal?.removeEventListener("abort", abort);
+					stop();
+					reject(error);
+				},
+			};
+			entry.presenceWaiters.add(waiter);
+			options.signal?.addEventListener("abort", abort, { once: true });
+		});
+	}
+
+	private applyTopology(frame: ControlFrame): void {
+		if (this.destroyed) return;
+		if (this.controlSession) {
+			void this.sendControl([frame]);
+			return;
+		}
+		if (this.connecting) {
+			this.reconnectPending = true;
+			this.abortController?.abort();
+			return;
+		}
+		this.scheduleConnect(0);
+	}
+
+	private scheduleConnect(delayMs: number): void {
+		if (this.destroyed || this.entries.size === 0) return;
+		if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+		this.reconnectTimer = setTimeout(() => void this.connect(), delayMs);
+	}
+
+	private async connect(): Promise<void> {
+		if (this.destroyed || this.connecting || this.entries.size === 0) return;
+		this.reconnectTimer = null;
+		this.connecting = true;
+		this.controlSession = null;
+		this.abortController = new AbortController();
+		try {
+			const authHeaders = await this.options.getAuthHeaders?.();
+			const response = await this.options.fetcher(
+				`${this.options.baseUrl}/realtime`,
+				{
+					method: "POST",
+					headers: { "Content-Type": "application/json", ...authHeaders },
+					body: JSON.stringify({
+						channels: [...this.entries.values()].map((entry) => ({
+							id: entry.id,
+							channel: entry.input.registryKey,
+							params: entry.input.params,
+							...(entry.lastEventId ? { lastEventId: entry.lastEventId } : {}),
+						})),
+					}),
+					credentials: this.options.withCredentials ? "include" : "omit",
+					signal: this.abortController.signal,
+				},
+			);
+			if (!response.ok || !response.body) {
+				throw new Error(`Channel SSE connection failed: ${response.status}`);
+			}
+			await this.readStream(response.body);
+			throw new Error("Channel SSE stream closed");
+		} catch (error) {
+			if (this.destroyed || this.entries.size === 0) return;
+			if ((error as Error).name !== "AbortError") {
+				const normalized =
+					error instanceof Error ? error : new Error(String(error));
+				if (![...this.entries.values()].some((entry) => entry.lastEventId)) {
+					this.notifyAll(normalized);
+				}
+				const delay = Math.min(1000 * 2 ** this.retryAttempt++, 30_000);
+				this.scheduleConnect(delay * (0.5 + Math.random()));
+			}
+		} finally {
+			this.connecting = false;
+			this.controlSession = null;
+			if (this.reconnectPending) {
+				this.reconnectPending = false;
+				this.scheduleConnect(0);
+			}
+		}
+	}
+
+	private async sendControl(frames: ControlFrame[]): Promise<void> {
+		const session = this.controlSession;
+		if (!session || frames.length === 0) return;
+		this.controlOperation = this.controlOperation
+			.catch(() => {})
+			.then(async () => {
+				const authHeaders = await this.options.getAuthHeaders?.();
+				const response = await this.options.fetcher(
+					`${this.options.baseUrl}/realtime`,
+					{
+						method: "POST",
+						headers: { "Content-Type": "application/json", ...authHeaders },
+						body: JSON.stringify({
+							sessionId: session.sessionId,
+							token: session.token,
+							frames,
+						}),
+						credentials: this.options.withCredentials ? "include" : "omit",
+					},
+				);
+				if (!response.ok) {
+					throw new Error(`Channel SSE control failed: ${response.status}`);
+				}
+			});
+		try {
+			await this.controlOperation;
+		} catch (error) {
+			this.notifyAll(error instanceof Error ? error : new Error(String(error)));
+			this.reconnectPending = true;
+			this.abortController?.abort();
+		}
+	}
+
+	private async readStream(body: ReadableStream<Uint8Array>): Promise<void> {
+		const reader = body.getReader();
+		const decoder = new TextDecoder();
+		let buffer = "";
+		try {
+			while (true) {
+				const { done, value } = await reader.read();
+				if (done) break;
+				buffer += decoder.decode(value, { stream: true });
+				const blocks = buffer.split("\n\n");
+				buffer = blocks.pop() ?? "";
+				for (const block of blocks) {
+					const event = this.parseEvent(block);
+					if (event) this.handleEvent(event);
+				}
+			}
+		} finally {
+			reader.releaseLock();
+		}
+	}
+
+	private parseEvent(block: string): SseEvent | null {
+		let type = "";
+		let data = "";
+		for (const line of block.split("\n")) {
+			if (line.startsWith("event: ")) type = line.slice(7);
+			else if (line.startsWith("data: ")) data = line.slice(6);
+			else if (line.startsWith(":")) return { type: "ping", data: "" };
+		}
+		return type && data ? { type, data } : null;
+	}
+
+	private handleEvent(event: SseEvent): void {
+		if (event.type === "session") {
+			try {
+				const session = JSON.parse(event.data) as {
+					sessionId?: unknown;
+					token?: unknown;
+				};
+				if (
+					typeof session.sessionId === "string" &&
+					typeof session.token === "string"
+				) {
+					this.controlSession = {
+						sessionId: session.sessionId,
+						token: session.token,
+					};
+				}
+			} catch {}
+			return;
+		}
+		if (event.type === "ping") {
+			this.retryAttempt = 0;
+			return;
+		}
+		try {
+			const frame = JSON.parse(event.data) as Record<string, unknown>;
+			if (event.type === "channel_event") {
+				const entry = this.entryForFrame(frame);
+				if (!entry || typeof frame.event !== "string") return;
+				if (typeof frame.eventId === "string")
+					entry.lastEventId = frame.eventId;
+				this.retryAttempt = 0;
+				for (const callback of entry.subscribers) {
+					callback({
+						event: frame.event,
+						eventId: String(frame.eventId ?? ""),
+						data: frame.data,
+					});
+				}
+			} else if (event.type === "channel_presence") {
+				const entry = this.entryForFrame(frame);
+				if (!entry || !Array.isArray(frame.members)) return;
+				entry.presence = frame.members;
+				const waiters = [...entry.presenceWaiters];
+				entry.presenceWaiters.clear();
+				for (const waiter of waiters) waiter.resolve(frame.members);
+			} else if (event.type === "channel_gap") {
+				const entry = this.entryForFrame(frame);
+				if (entry)
+					this.notifyEntry(entry, new Error("Channel event replay gap"));
+			} else if (event.type === "error") {
+				const id = frame.channelSubscriptionId;
+				const entry = [...this.entries.values()].find((item) => item.id === id);
+				if (entry) {
+					this.notifyEntry(
+						entry,
+						new Error(String(frame.message ?? "Channel error")),
+					);
+				}
+			}
+		} catch {}
+	}
+
+	private entryForFrame(frame: Record<string, unknown>): Entry | undefined {
+		return typeof frame.channel === "string"
+			? this.entries.get(frame.channel)
+			: undefined;
+	}
+
+	private notifyEntry(entry: Entry, error: Error): void {
+		for (const callback of entry.errorCallbacks) callback(error);
+		const waiters = [...entry.presenceWaiters];
+		entry.presenceWaiters.clear();
+		for (const waiter of waiters) waiter.reject(error);
+	}
+
+	private notifyAll(error: Error): void {
+		for (const entry of this.entries.values()) this.notifyEntry(entry, error);
+	}
+
+	destroy(): void {
+		if (this.destroyed) return;
+		this.destroyed = true;
+		this.abortController?.abort();
+		if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+		this.notifyAll(new Error("Channel transport destroyed"));
+		this.entries.clear();
+		this.controlSession = null;
+	}
+
+	get channelCount(): number {
+		return this.entries.size;
+	}
+
+	get subscriberCount(): number {
+		let count = 0;
+		for (const entry of this.entries.values()) count += entry.subscribers.size;
+		return count;
+	}
+}

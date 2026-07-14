@@ -27,12 +27,121 @@ function channelRequest(
 	});
 }
 
+async function readSseEvent(
+	reader: ReadableStreamDefaultReader<Uint8Array>,
+	state: { buffer: string },
+	eventType: string,
+): Promise<Record<string, unknown>> {
+	const decoder = new TextDecoder();
+	for (;;) {
+		const blocks = state.buffer.split("\n\n");
+		state.buffer = blocks.pop() ?? "";
+		for (const block of blocks) {
+			const type = block
+				.split("\n")
+				.find((line) => line.startsWith("event: "))
+				?.slice(7);
+			const data = block
+				.split("\n")
+				.find((line) => line.startsWith("data: "))
+				?.slice(6);
+			if (type === eventType && data) return JSON.parse(data);
+		}
+		const next = await reader.read();
+		if (next.done) throw new Error(`SSE ended before ${eventType}`);
+		state.buffer += decoder.decode(next.value, { stream: true });
+	}
+}
+
 describe("channel module routes", () => {
 	let cleanup: (() => Promise<void>) | undefined;
 
 	afterEach(async () => {
 		await cleanup?.();
 		cleanup = undefined;
+	});
+
+	test("streams authorized ordered channels and coarse presence over SSE", async () => {
+		const setup = await buildMockApp(
+			{
+				channels: {
+					room: channel("room-[roomId]")
+						.events({ message: z.object({ text: z.string() }) })
+						.authorize({ subscribe: true, publish: true })
+						.presence(({ params }) => ({
+							id: "member-1",
+							roomId: params.roomId,
+						})),
+				},
+			},
+			{
+				app: { url: "https://app.example.com" },
+				realtime: { retentionDays: 0 },
+			},
+		);
+		cleanup = setup.cleanup;
+		await runTestDbMigrations(setup.app);
+		const handler = createFetchHandler(setup.app);
+
+		const configResponse = await handler(
+			new Request("https://app.example.com/channels/config"),
+		);
+		expect(await configResponse.json()).toMatchObject({
+			transport: "sse",
+			channels: {
+				room: { pattern: "room-[roomId]", visibility: "presence" },
+			},
+		});
+
+		const streamResponse = await handler(
+			new Request("https://app.example.com/realtime", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					channels: [
+						{
+							id: "room-subscription",
+							channel: "room",
+							params: { roomId: "one" },
+						},
+					],
+				}),
+			}),
+		);
+		expect(streamResponse.status).toBe(200);
+		const reader = streamResponse.body!.getReader();
+		const state = { buffer: "" };
+		expect(await readSseEvent(reader, state, "session")).toMatchObject({
+			sessionId: expect.any(String),
+			token: expect.any(String),
+		});
+		expect(await readSseEvent(reader, state, "channel_presence")).toEqual({
+			type: "channel_presence",
+			channel: "presence-room-one",
+			members: [{ id: "member-1", roomId: "one" }],
+		});
+
+		const publishResponse = await handler(
+			channelRequest(
+				"channels/publish",
+				{
+					channel: "room",
+					params: { roomId: "one" },
+					event: "message",
+					data: { text: "hello" },
+				},
+				{ origin: "https://app.example.com", cookie: true },
+			),
+		);
+		expect(publishResponse.status).toBe(200);
+		expect(await readSseEvent(reader, state, "channel_event")).toMatchObject({
+			type: "channel_event",
+			channel: "presence-room-one",
+			event: "message",
+			eventId: expect.any(String),
+			data: { text: "hello" },
+		});
+		await reader.cancel();
 	});
 
 	test("authorizes subscribe independently and never trusts the supplied wire name", async () => {
@@ -289,7 +398,12 @@ describe("channel module routes", () => {
 				headers: { Cookie: "session=test" },
 			}),
 		);
-		expect(await sseConfig.json()).toEqual({ transport: "sse" });
+		expect(await sseConfig.json()).toEqual({
+			transport: "sse",
+			channels: {
+				publicNews: { pattern: "news", visibility: "public" },
+			},
+		});
 
 		const rejectedPreflight = await handler(
 			new Request("https://app.example.com/channels/publish", {

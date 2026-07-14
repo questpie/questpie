@@ -16,10 +16,24 @@ export default route()
 		let origin: string | null = null;
 		try {
 			origin = validateChannelRouteOrigin(ctx, false);
-			const config = await routeApp(ctx).realtime?.getClientTransportConfig({
+			const app = routeApp(ctx);
+			const config = await app.realtime?.getClientTransportConfig({
 				request: ctx.request,
 			});
-			return channelRouteResponse(config ?? { transport: "sse" }, 200, origin);
+			const channels = Object.fromEntries(
+				Object.entries(app.config.channels ?? {}).map(([key, definition]) => [
+					key,
+					{
+						pattern: definition.pattern,
+						visibility: definition.visibility,
+					},
+				]),
+			);
+			return channelRouteResponse(
+				{ ...(config ?? { transport: "sse" }), channels },
+				200,
+				origin,
+			);
 		} catch (error) {
 			return channelRouteError(error, origin);
 		}
