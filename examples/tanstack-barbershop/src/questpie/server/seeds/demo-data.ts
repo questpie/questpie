@@ -458,7 +458,7 @@ export default seed({
 						"Bol som v barbershopoch po celej Európe a Sharp Cuts je ľahko v mojom top 3. David presne pochopil, čo chcem.",
 				},
 			},
-		];
+		] as const;
 		for (const r of reviewsData) {
 			const review = await collections.reviews.create(r.en, ctxEn);
 			await collections.reviews.update(

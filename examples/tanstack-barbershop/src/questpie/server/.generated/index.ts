@@ -5,7 +5,7 @@
 import { createApp, createContextFactory } from "questpie/app";
 import "./names.gen";
 import type { AccessContext, AppDefinition, CollectionSelect, GlobalSelect, HookContext, Where } from "questpie/types";
-import type { AppCollections, AppGlobals, AppRoutes } from "./entities.gen";
+import type { AppCollections, AppChannels, AppGlobals, AppRoutes } from "./entities.gen";
 import type { _AppQuestpie, AppAuthConfig, AppSession, AppSessionUser } from "./context.gen";
 
 // ── Env (validated before everything else) ─────────────────
@@ -154,6 +154,7 @@ export type HookRuleContext<K extends keyof AppCollections | unknown = unknown> 
  */
 export type AppConfig = {
 	collections: AppCollections;
+	channels: AppChannels;
 	globals: AppGlobals;
 	routes: AppRoutes;
 	storage: (typeof _runtime)["storage"];

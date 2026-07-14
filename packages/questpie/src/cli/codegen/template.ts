@@ -799,13 +799,9 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 				lines.push(`\t${safeKey(file.key)}: typeof ${file.varName};`);
 			}
 			lines.push("};");
-			lines.push("type _JobHandlerCollectionsAPI = {");
-			for (const file of localCollections) {
-				lines.push(
-					`\t${safeKey(file.key)}: CollectionAPI<typeof ${file.varName}, _JobHandlerCollections>;`,
-				);
-			}
-			lines.push("};");
+			lines.push(
+				"type _JobHandlerCollectionsAPI = { [K in keyof _JobHandlerCollections]: CollectionAPI<_JobHandlerCollections[K], _JobHandlerCollections> };",
+			);
 		} else {
 			lines.push("type _JobHandlerCollections = AppCollections;");
 			lines.push("type _JobHandlerCollectionsAPI = _CollectionsAPI;");

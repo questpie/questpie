@@ -601,6 +601,32 @@ describe("generateTemplate — collections", () => {
 		expect(code).toContain("posts: typeof _coll_posts;");
 	});
 
+	it("maps job handler APIs over local and module collections", () => {
+		const result = minimalResult();
+		cat(result, "collections").set(
+			"posts",
+			makeFile("posts", {
+				varName: "_coll_posts",
+				exportType: "named",
+				namedExportName: "posts",
+			}),
+		);
+
+		const code = generateTemplate({
+			configImportPath: "../questpie.config",
+			discovered: result,
+			categories: coreCategories(),
+			singletonFactories: coreSingletonFactories(),
+		});
+
+		expect(code).toContain(
+			"type _JobHandlerCollectionsAPI = { [K in keyof _JobHandlerCollections]: CollectionAPI<_JobHandlerCollections[K], _JobHandlerCollections> };",
+		);
+		expect(code).not.toContain(
+			"posts: CollectionAPI<typeof _coll_posts, _JobHandlerCollections>;",
+		);
+	});
+
 	it("emits multiple collections sorted alphabetically", () => {
 		const result = minimalResult();
 		cat(result, "collections").set(

@@ -53,7 +53,7 @@ export const Route = createRootRoute({
 				? [
 						{
 							async: true,
-							crossOrigin: "anonymous",
+							crossOrigin: "anonymous" as const,
 							src: "//unpkg.com/react-scan/dist/auto.global.js",
 						},
 					]
