@@ -165,18 +165,40 @@ export function jsonRequestBody(schema: unknown, description?: string) {
 }
 
 /**
- * Safely convert a Zod schema to JSON Schema.
- * Falls back to a permissive object schema on failure.
+ * Safely convert a Zod schema to JSON Schema for the requested I/O side.
+ * Request schemas use Zod's input contract so transforms retain their
+ * pre-transform validation shape. Unrepresentable output transforms remain
+ * unconstrained instead of being incorrectly described as objects.
  */
-export function zodToJsonSchema(schema: unknown): unknown {
+export function zodToJsonSchema(
+	schema: unknown,
+	io: "input" | "output" = "input",
+): unknown {
 	try {
 		if (schema && typeof schema === "object" && "_def" in schema) {
-			return z.toJSONSchema(schema as z.ZodType);
+			return z.toJSONSchema(schema as z.ZodType, { io });
 		}
 	} catch {
-		// Zod schema couldn't be converted (e.g. transforms, refinements)
+		if (io === "output") {
+			return {
+				description:
+					"This Zod output schema cannot be represented in JSON Schema; runtime validation remains authoritative.",
+			};
+		}
+
+		try {
+			return z.toJSONSchema(schema as z.ZodType, {
+				io: "input",
+				unrepresentable: "any",
+			});
+		} catch {
+			// Fall through to an honest unconstrained schema.
+		}
 	}
-	return { type: "object", description: "Schema could not be generated" };
+	return {
+		description:
+			"Schema could not be represented in JSON Schema; runtime validation remains authoritative.",
+	};
 }
 
 /**

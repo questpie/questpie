@@ -194,9 +194,7 @@ export function generateRoutePaths(
 		// `Routes: <topLevel>` bucket. Register whichever set is used at the
 		// spec level so there are no orphan tags.
 		const metaTags =
-			Array.isArray(meta?.tags) && meta.tags.length > 0
-				? meta.tags
-				: undefined;
+			Array.isArray(meta?.tags) && meta.tags.length > 0 ? meta.tags : undefined;
 		const operationTags = metaTags ?? [`Routes: ${topLevel}`];
 
 		if (metaTags) {
@@ -279,14 +277,14 @@ export function generateRoutePaths(
 
 			if (def.schema) {
 				const schemaName = `${schemaOperationId}_Input`;
-				const converted = zodToJsonSchema(def.schema);
+				const converted = zodToJsonSchema(def.schema, "input");
 				schemas[schemaName] = converted;
 				inputSchema = { $ref: `#/components/schemas/${schemaName}` };
 			}
 
 			if (def.outputSchema) {
 				const schemaName = `${schemaOperationId}_Output`;
-				const converted = zodToJsonSchema(def.outputSchema);
+				const converted = zodToJsonSchema(def.outputSchema, "output");
 				schemas[schemaName] = converted;
 				outputSchema = { $ref: `#/components/schemas/${schemaName}` };
 			}

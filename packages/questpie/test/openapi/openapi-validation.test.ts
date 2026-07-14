@@ -12,6 +12,7 @@
  */
 
 import { describe, expect, it } from "bun:test";
+
 import { route } from "questpie";
 import { z } from "zod";
 
@@ -19,6 +20,7 @@ import { generateOpenApiSpec } from "../../../openapi/src/generator/index.js";
 import { openApiModule } from "../../../openapi/src/server.js";
 import { collection, global } from "../../src/exports/index.js";
 import { createFetchHandler } from "../../src/server/adapters/http.js";
+import coreModule from "../../src/server/modules/core/.generated/module.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder.js";
 import { runTestDbMigrations } from "../utils/test-db.js";
 import {
@@ -171,6 +173,56 @@ describe("OpenAPI 3.1 spec validity (full representative spec)", () => {
 			config: { routes: {} },
 		};
 		const spec = await generateOpenApiSpec(emptyApp as any, {}, {});
+		await assertValidOpenApi31(spec);
+	});
+});
+
+describe("post-realtime-v2 core module route coverage", () => {
+	it("includes the channels and realtime route definitions with exact methods", async () => {
+		const app = {
+			getCollections: () => ({}),
+			getGlobals: () => ({}),
+			config: { routes: coreModule.routes },
+		};
+		const spec = await generateOpenApiSpec(
+			app as any,
+			coreModule.routes as any,
+			{ basePath: "/api", auth: false, search: false },
+		);
+
+		const modulePaths = Object.fromEntries(
+			Object.entries(spec.paths)
+				.filter(
+					([path]) =>
+						path.startsWith("/api/channels/") ||
+						path.startsWith("/api/realtime"),
+				)
+				.map(([path, operations]) => [path, Object.keys(operations).sort()]),
+		);
+
+		expect(modulePaths).toEqual({
+			"/api/channels/auth": ["options", "post"],
+			"/api/channels/config": ["get"],
+			"/api/channels/publish": ["options", "post"],
+			"/api/realtime": ["post"],
+			"/api/realtime/auth": ["post"],
+			"/api/realtime/config": ["get"],
+		});
+
+		for (const path of [
+			"/api/channels/auth",
+			"/api/channels/config",
+			"/api/channels/publish",
+			"/api/realtime/auth",
+			"/api/realtime/config",
+		]) {
+			for (const operation of Object.values(spec.paths[path])) {
+				expect(operation.security).toEqual([]);
+				expect(operation.description).toContain("Raw route");
+			}
+		}
+
+		expect(spec.paths["/api/realtime"].post.security).toBeUndefined();
 		await assertValidOpenApi31(spec);
 	});
 });
