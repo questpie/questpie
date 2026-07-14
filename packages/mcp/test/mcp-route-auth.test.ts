@@ -77,9 +77,7 @@ async function readJsonRpc(response: Response): Promise<any> {
 	try {
 		return JSON.parse(text);
 	} catch {
-		const line = text
-			.split("\n")
-			.find((l) => l.startsWith("data:"));
+		const line = text.split("\n").find((l) => l.startsWith("data:"));
 		return line ? JSON.parse(line.slice("data:".length).trim()) : undefined;
 	}
 }
@@ -112,6 +110,43 @@ describe("MO9 HTTP MCP route auth gate", () => {
 		);
 		// No internal error details leaked in the body.
 		expect(await response!.text()).toBe("");
+	});
+
+	it("advertises reachable protected-resource metadata when mounted under /api", async () => {
+		const appUrl = "https://cms.example.com";
+		const setup = await buildMockApp(
+			{
+				modules: [starterModule, mcpModule],
+				auth: {
+					emailAndPassword: {
+						enabled: true,
+						requireEmailVerification: false,
+					},
+				},
+			},
+			{
+				app: { url: appUrl },
+				secret: "test-auth-secret-with-more-than-32-chars",
+			},
+		);
+		cleanup = setup.cleanup;
+		await runTestDbMigrations(setup.app);
+		const handler = createFetchHandler(setup.app, { basePath: "/api" });
+
+		const response = await handler(toolsListRequest(`${appUrl}/api/mcp`));
+		const challenge = response!.headers.get("WWW-Authenticate");
+		const metadataUrl = challenge?.match(/resource_metadata="([^"]+)"/)?.[1];
+
+		expect(response!.status).toBe(401);
+		expect(metadataUrl).toBe(
+			`${appUrl}/api/.well-known/oauth-protected-resource`,
+		);
+
+		const metadataResponse = await handler(new Request(metadataUrl!));
+		expect(metadataResponse!.status).toBe(200);
+		expect(await metadataResponse!.json()).toMatchObject({
+			resource: `${appUrl}/api/mcp`,
+		});
 	});
 
 	it("derives the challenge origin from app.config.app.url even when it carries a path/port", async () => {

@@ -55,19 +55,27 @@ function withCors(response: Response, request: Request): Response {
 /**
  * Build the `WWW-Authenticate` challenge value for an unauthenticated HTTP MCP
  * request. `resource_metadata` points at this app's Protected Resource metadata
- * document (RFC 9728), served at the server root by the core `oauth-protected-
- * resource` route (MO4). An MCP client reads it to discover the authorization
- * server and start the OAuth 2.1 flow.
+ * document (RFC 9728), served beside the MCP route by the core
+ * `oauth-protected-resource` route (MO4). An MCP client reads it to discover
+ * the authorization server and start the OAuth 2.1 flow.
  *
- * The origin is derived from `app.config.app.url` — the same base MO2/MO6 use to
- * bind and verify token audience — so the advertised metadata URL always matches
- * where discovery actually lives. `new URL(...).origin` strips any path/query and
- * yields a bare `scheme://host[:port]`, so an app URL with a subpath still
- * produces a root-mounted metadata URL.
+ * The public origin comes from `app.config.app.url`, while the mount path comes
+ * from the actual MCP request. This keeps the canonical external host used for
+ * token audience binding, and also preserves adapter base paths such as `/api`.
  */
-function protectedResourceChallenge(appUrl: string): string {
-	const origin = new URL(appUrl).origin;
-	return `Bearer resource_metadata="${origin}/.well-known/oauth-protected-resource"`;
+function protectedResourceChallenge(
+	appUrl: string,
+	requestUrl: string,
+): string {
+	const request = new URL(requestUrl);
+	request.pathname = request.pathname.replace(/\/+$/, "");
+	const metadataPath = new URL(".well-known/oauth-protected-resource", request)
+		.pathname;
+	const metadataUrl = new URL(appUrl);
+	metadataUrl.pathname = metadataPath;
+	metadataUrl.search = "";
+	metadataUrl.hash = "";
+	return `Bearer resource_metadata="${metadataUrl.href}"`;
 }
 
 /**
@@ -100,7 +108,10 @@ export async function mcpHandler(ctx: RawRouteHandlerArgs): Promise<Response> {
 			new Response(null, {
 				status: 401,
 				headers: {
-					"WWW-Authenticate": protectedResourceChallenge(app.config.app.url),
+					"WWW-Authenticate": protectedResourceChallenge(
+						app.config.app.url,
+						request.url,
+					),
 				},
 			}),
 			request,
