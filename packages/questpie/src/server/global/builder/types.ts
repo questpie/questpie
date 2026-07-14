@@ -30,6 +30,15 @@ export type GlobalScopeResolver = (
  */
 export interface GlobalOptions {
 	/**
+	 * Realtime sharing policy. Cross-session sharing is disabled unless this
+	 * resolver returns the same deterministic key for equivalent outputs.
+	 */
+	realtime?: {
+		accessCacheKey?: (
+			context: AppContext,
+		) => string | null | undefined | Promise<string | null | undefined>;
+	};
+	/**
 	 * Postgres schema name to place this global's tables in.
 	 *
 	 * When unset (default), tables live in the `public` schema. When set,

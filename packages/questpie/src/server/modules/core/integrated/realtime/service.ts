@@ -41,35 +41,22 @@ type ListenerEntry = {
 	};
 };
 
-/**
- * Extract simple equality filters from WHERE clause
- * Only extracts { field: value } and { field: { eq: value } }
- * Ignores complex operators, relations, AND/OR/NOT
- */
-function extractSimpleEquality(where: any): Record<string, any> {
-	if (!where || typeof where !== "object") return {};
-
-	const result: Record<string, any> = {};
-
-	for (const [key, value] of Object.entries(where)) {
-		// Skip logical operators and relations
-		if (["AND", "OR", "NOT", "RAW"].includes(key)) continue;
-
-		// Simple equality: { field: value }
-		if (
-			typeof value === "string" ||
-			typeof value === "number" ||
-			typeof value === "boolean"
-		) {
-			result[key] = value;
+/** Compare a durable scalar projection with a normalized equality filter. */
+function projectionMatch(
+	projection: Record<string, unknown> | null | undefined,
+	filters: Record<string, unknown>,
+): "match" | "miss" | "unknown" {
+	if (projection === null) return "miss";
+	if (!projection || typeof projection !== "object") return "unknown";
+	let missing = false;
+	for (const [key, value] of Object.entries(filters)) {
+		if (!(key in projection)) {
+			missing = true;
+			continue;
 		}
-		// Operator syntax: { field: { eq: value } }
-		else if (value && typeof value === "object" && "eq" in value) {
-			result[key] = value.eq;
-		}
+		if (projection[key] !== value) return "miss";
 	}
-
-	return result;
+	return missing ? "unknown" : "match";
 }
 
 /**
@@ -643,16 +630,6 @@ export class RealtimeService {
 	}
 
 	private emit(event: RealtimeChangeEvent): void {
-		// Extract simple equality filters from event payload for matching
-		const afterProjection = event.payload?.after;
-		const eventFilters = event.payload
-			? extractSimpleEquality(
-					afterProjection && typeof afterProjection === "object"
-						? afterProjection
-						: event.payload,
-				)
-			: {};
-
 		const candidates = new Set<ListenerEntry>();
 		if (event.resourceType === "collection") {
 			this.collectIndexedCandidates(
@@ -698,14 +675,6 @@ export class RealtimeService {
 				continue;
 			}
 
-			// For update/delete/bulk operations we do not have previous state in the
-			// event stream, so strict payload-only filtering can miss transitions where
-			// a record leaves the subscriber filter set. Always refresh these subscribers.
-			if (event.operation !== "create") {
-				notifiedListeners.add(entry);
-				continue;
-			}
-
 			// Complex WHERE clauses cannot be safely evaluated from payload-only filters.
 			// Refresh to avoid false negatives for OR/nested/operator-heavy conditions.
 			if (entry.hasComplexWhere) {
@@ -713,11 +682,22 @@ export class RealtimeService {
 				continue;
 			}
 
-			const allFiltersMatch = Object.entries(entry.whereFilters).every(
-				([key, value]) => eventFilters[key] === value,
+			const before = projectionMatch(
+				event.payload?.before,
+				entry.whereFilters,
 			);
+			const after = projectionMatch(
+				event.payload?.after,
+				entry.whereFilters,
+			);
+			const definitelyUnrelated =
+				(event.operation === "create" && after === "miss") ||
+				(event.operation === "delete" && before === "miss") ||
+				(event.operation === "update" &&
+					before === "miss" &&
+					after === "miss");
 
-			if (allFiltersMatch) {
+			if (!definitelyUnrelated) {
 				notifiedListeners.add(entry);
 			}
 		}

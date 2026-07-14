@@ -8,6 +8,10 @@
 import type { Questpie } from "../../config/questpie.js";
 import type { QuestpieConfig } from "../../config/types.js";
 import { ApiError } from "../../errors/index.js";
+import {
+	getRealtimeRefreshScheduler,
+	resolveRealtimeAccessKey,
+} from "../../modules/core/integrated/realtime/refresh-scheduler.js";
 import { computeRealtimeSnapshot } from "../../modules/core/integrated/realtime/snapshot.js";
 import {
 	encodeSseEvent,
@@ -47,13 +51,28 @@ type TopicInput = {
 type ValidatedTopic = TopicInput & {
 	type: "collection" | "global";
 	crud: any;
+	accessCacheKey?: (context: any) =>
+		| string
+		| null
+		| undefined
+		| Promise<string | null | undefined>;
 };
 
-type TopicState = {
-	refreshInFlight: boolean;
-	refreshQueued: boolean;
-	lastSeq: number;
-};
+function stableValue(value: unknown): unknown {
+	if (Array.isArray(value)) return value.map(stableValue);
+	if (!value || typeof value !== "object") return value;
+	return Object.fromEntries(
+		Object.entries(value as Record<string, unknown>)
+			.sort(([left], [right]) => left.localeCompare(right))
+			.map(([key, entry]) => [key, stableValue(entry)]),
+	);
+}
+
+function schedulerKey(topic: ValidatedTopic, accessKey: string): string {
+	const { crud: _crud, accessCacheKey: _accessCacheKey, type: _type, ...input } =
+		topic;
+	return `${JSON.stringify(stableValue(input))}:${accessKey}`;
+}
 
 function isPermanentAccessError(error: unknown): boolean {
 	return (
@@ -151,6 +170,8 @@ export async function realtimeSubscribe(
 	const globalCruds = new Map<string, any>();
 	const collectionApi = app.collections as Record<string, any>;
 	const globalApi = app.globals as Record<string, any>;
+	const collectionDefinitions = app.getCollections() as Record<string, any>;
+	const globalDefinitions = app.getGlobals() as Record<string, any>;
 
 	for (const topic of topics) {
 		if (!topic.id || typeof topic.id !== "string") {
@@ -192,14 +213,28 @@ export async function realtimeSubscribe(
 				continue;
 			}
 			collectionCruds.set(topic.resource, crud);
-			validatedTopics.push({ ...topic, type: "collection", crud });
+			validatedTopics.push({
+				...topic,
+				type: "collection",
+				crud,
+				accessCacheKey:
+					collectionDefinitions[topic.resource]?.state.options.realtime
+						?.accessCacheKey,
+			});
 		} else if (topic.resourceType === "global") {
 			try {
 				const crud =
 					globalCruds.get(topic.resource) ?? globalApi[topic.resource];
 				if (!crud) throw new Error("Global not found");
 				globalCruds.set(topic.resource, crud);
-				validatedTopics.push({ ...topic, type: "global", crud });
+				validatedTopics.push({
+					...topic,
+					type: "global",
+					crud,
+					accessCacheKey:
+						globalDefinitions[topic.resource]?.state.options.realtime
+							?.accessCacheKey,
+				});
 			} catch {
 				topicErrors.push({
 					id: topic.id,
@@ -256,33 +291,28 @@ export async function realtimeSubscribe(
 			let closed = false;
 			let closeRequested = false;
 
-			// Per-topic state
-			const topicState = new Map<string, TopicState>();
 			const requestClose = () => {
 				closeRequested = true;
 				closeStream?.();
 			};
 			const transport = new SseClientTransport(controller, highWaterMarkBytes);
 			await transport.start({ onError: requestClose });
+			const edgeSessionId = globalThis.crypto.randomUUID();
 			const sink = await transport.openSession({
-				sessionId: globalThis.crypto.randomUUID(),
+				sessionId: edgeSessionId,
 				principal: resolved.appContext.principal ?? null,
 				resolvePrincipal: async () => resolved.appContext.principal ?? null,
 			});
 			const snapshotWriter = new SseLatestSnapshotWriter(sink);
+			const refreshScheduler = getRealtimeRefreshScheduler(app, app.realtime!);
 			flushPending = () => {
 				void snapshotWriter.flush().catch(requestClose);
 			};
 
 			// Helper to send SSE event
-			const send = async (event: string, data: unknown, topicId?: string) => {
+			const send = async (event: string, data: unknown) => {
 				if (closed) return;
-				const frame = encodeSseEvent(event, data);
-				if (event === "snapshot" && topicId) {
-					await snapshotWriter.write(topicId, frame);
-					return;
-				}
-				await sink.write(frame, "latest-snapshot");
+				await sink.write(encodeSseEvent(event, data), "latest-snapshot");
 			};
 
 			// Send per-topic error
@@ -295,76 +325,45 @@ export async function realtimeSubscribe(
 				if (!unsubscribe) return;
 
 				topicUnsubscribers.delete(topicId);
-				topicState.delete(topicId);
 				unsubscribe();
 				if (topicUnsubscribers.size === 0) requestClose();
 			};
 
-			// Refresh a single topic
-			const refresh = async (topicId: string, seq?: number) => {
-				const topic = validatedTopicsById.get(topicId);
-				const state = topicState.get(topicId);
-				if (!topic || !state || closed) return;
-
-				if (typeof seq === "number") {
-					state.lastSeq = Math.max(state.lastSeq, seq);
-				}
-
-				if (state.refreshInFlight) {
-					state.refreshQueued = true;
-					return;
-				}
-
-				state.refreshInFlight = true;
-
-				// Use topic-specific locale if provided, otherwise fall back to request locale
+			// Subscribe to each topic
+			for (const topic of validatedTopicsById.values()) {
 				const topicContext =
 					topic.locale && topic.locale !== resolved.appContext.locale
 						? { ...resolved.appContext, locale: topic.locale }
 						: resolved.appContext;
-
-				try {
-					do {
-						state.refreshQueued = false;
-						const data = await computeRealtimeSnapshot(topic, topicContext);
-
-						await send("snapshot", { topicId, seq: state.lastSeq, data }, topicId);
-					} while (state.refreshQueued && !closed);
-				} catch (error) {
-					await sendTopicError(
-						topicId,
-						error instanceof Error ? error.message : "Unknown error",
-					);
-					if (isPermanentAccessError(error)) teardownTopic(topicId);
-				} finally {
-					state.refreshInFlight = false;
-				}
-			};
-
-			// Subscribe to each topic
-			for (const topic of validatedTopics) {
-				topicState.set(topic.id, {
-					refreshInFlight: false,
-					refreshQueued: false,
-					lastSeq: 0,
-				});
-
-				const unsub = app.realtime!.subscribe(
-					(event) => {
-						void refresh(topic.id, event.seq).catch((error) => {
-							void sendTopicError(
-								topic.id,
-								error instanceof Error ? error.message : "Refresh failed",
-							).catch(requestClose);
-						});
-					},
-					{
+				const accessKey = await resolveRealtimeAccessKey(
+					edgeSessionId,
+					topicContext,
+					topic.accessCacheKey,
+				);
+				const unsub = refreshScheduler.subscribe({
+					key: schedulerKey(topic, accessKey),
+					topicId: topic.id,
+					topics: {
 						resourceType: topic.resourceType,
 						resource: topic.resource,
 						where: topic.where,
 						with: topic.with,
 					},
-					(error) => {
+					compute: () => computeRealtimeSnapshot(topic, topicContext),
+					onFrame: async (frame) => {
+						await snapshotWriter.write(topic.id, frame);
+					},
+					onError: (error) => {
+						void sendTopicError(
+							topic.id,
+							error instanceof Error ? error.message : "Refresh failed",
+						)
+							.catch(requestClose)
+							.finally(() => {
+								if (isPermanentAccessError(error)) teardownTopic(topic.id);
+							});
+					},
+					onTransportError: (error) => {
 						void send("error", {
 							topicId: "*",
 							message:
@@ -375,7 +374,7 @@ export async function realtimeSubscribe(
 							.catch(() => {})
 							.finally(requestClose);
 					},
-				);
+				});
 				topicUnsubscribers.set(topic.id, unsub);
 			}
 
@@ -407,7 +406,6 @@ export async function realtimeSubscribe(
 					unsub();
 				}
 				topicUnsubscribers.clear();
-				topicState.clear();
 				void transport.stop().catch(() => {});
 			};
 			closeStream = close;
@@ -417,30 +415,6 @@ export async function realtimeSubscribe(
 			if (request.signal) {
 				request.signal.addEventListener("abort", close);
 			}
-
-			// Send initial snapshots
-			void (async () => {
-				const latestSeq = (await app.realtime?.getLatestSeq()) ?? 0;
-
-				// Initialize all topic states with latest seq
-				for (const topic of validatedTopics) {
-					const state = topicState.get(topic.id);
-					if (state) {
-						state.lastSeq = latestSeq;
-					}
-				}
-
-				// Fetch initial snapshots for all topics
-				await Promise.all(
-					validatedTopics.map((topic) => refresh(topic.id, latestSeq)),
-				);
-			})().catch((error) => {
-				void send("error", {
-					topicId: "*",
-					message:
-						error instanceof Error ? error.message : "Failed to initialize",
-				}).catch(requestClose);
-			});
 		},
 		pull: () => {
 			flushPending?.();

@@ -1,0 +1,259 @@
+import { encodeSseEvent } from "./sse-client-transport.js";
+import type {
+	RealtimeChangeEvent,
+	RealtimeErrorListener,
+	RealtimeTopics,
+} from "./types.js";
+
+type RealtimeSource = {
+	getLatestSeq(): Promise<number>;
+	subscribe(
+		listener: (event: RealtimeChangeEvent) => void,
+		topics: RealtimeTopics,
+		errorListener?: RealtimeErrorListener,
+	): () => void;
+};
+
+type AccessContext = {
+	session?: { session?: { id?: unknown } } | null;
+	principal?: {
+		kind: string;
+		session?: { id?: unknown };
+		tokenId?: unknown;
+	} | null;
+	locale?: string;
+	stage?: string;
+	accessMode?: string;
+};
+
+export type RealtimeAccessCacheKeyResolver<TContext = AccessContext> = (
+	context: TContext,
+) => string | null | undefined | Promise<string | null | undefined>;
+
+export async function resolveRealtimeAccessKey<TContext extends AccessContext>(
+	edgeSessionId: string,
+	context: TContext,
+	resolver?: RealtimeAccessCacheKeyResolver<TContext>,
+): Promise<string> {
+	let identity: string | undefined;
+	if (resolver) {
+		try {
+			const sharedKey = await resolver(context);
+			if (sharedKey) identity = `shared:${sharedKey}`;
+		} catch {
+			// An invalid opt-in must fail safe to the session-scoped default.
+		}
+	}
+
+	if (!identity) {
+		const principal = context.principal;
+		const sessionId = principal?.session?.id ?? context.session?.session?.id;
+		if (typeof sessionId === "string" && sessionId) {
+			identity = `session:${sessionId}`;
+		} else if (
+			principal?.kind === "oauth" &&
+			typeof principal.tokenId === "string" &&
+			principal.tokenId
+		) {
+			identity = `oauth:${principal.tokenId}`;
+		} else {
+			identity = `edge:${edgeSessionId}`;
+		}
+	}
+
+	return JSON.stringify([
+		identity,
+		context.locale ?? "",
+		context.stage ?? "",
+		context.accessMode ?? "",
+	]);
+}
+
+type Subscriber = {
+	onFrame: (frame: Uint8Array) => Promise<void> | void;
+	onError: RealtimeErrorListener;
+	onTransportError?: RealtimeErrorListener;
+};
+
+type SchedulerGroup = {
+	key: string;
+	topicId: string;
+	topics: RealtimeTopics;
+	compute: () => Promise<unknown>;
+	subscribers: Set<Subscriber>;
+	unsubscribe: () => void;
+	lastSeq: number;
+	lastHash?: string;
+	lastFrame?: Uint8Array;
+	refreshInFlight: boolean;
+	refreshQueued: boolean;
+	disposed: boolean;
+};
+
+export type RefreshSubscriptionInput = {
+	key: string;
+	topicId: string;
+	topics: RealtimeTopics;
+	compute: () => Promise<unknown>;
+	onFrame: (frame: Uint8Array) => Promise<void> | void;
+	onError: RealtimeErrorListener;
+	onTransportError?: RealtimeErrorListener;
+};
+
+const sha256 = async (value: string): Promise<string> => {
+	const digest = await globalThis.crypto.subtle.digest(
+		"SHA-256",
+		new TextEncoder().encode(value),
+	);
+	return Array.from(new Uint8Array(digest), (byte) =>
+		byte.toString(16).padStart(2, "0"),
+	).join("");
+};
+
+/** App-scoped compute-once/deliver-many scheduler for live-query snapshots. */
+export class RealtimeRefreshScheduler {
+	private readonly groups = new Map<string, SchedulerGroup>();
+	private readonly pendingComputations: Array<() => void> = [];
+	private activeComputations = 0;
+
+	constructor(
+		private readonly realtime: RealtimeSource,
+		private readonly maxConcurrency = 10,
+	) {}
+
+	subscribe(input: RefreshSubscriptionInput): () => void {
+		let group = this.groups.get(input.key);
+		let created = false;
+		if (!group) {
+			created = true;
+			group = {
+				key: input.key,
+				topicId: input.topicId,
+				topics: input.topics,
+				compute: input.compute,
+				subscribers: new Set(),
+				unsubscribe: () => {},
+				lastSeq: 0,
+				refreshInFlight: false,
+				refreshQueued: false,
+				disposed: false,
+			};
+			this.groups.set(input.key, group);
+			group.unsubscribe = this.realtime.subscribe(
+				(event) => this.requestRefresh(group!, event.seq),
+				input.topics,
+				(error) => this.reportTransportError(group!, error),
+			);
+		}
+
+		const subscriber: Subscriber = {
+			onFrame: input.onFrame,
+			onError: input.onError,
+			onTransportError: input.onTransportError,
+		};
+		group.subscribers.add(subscriber);
+
+		if (group.lastFrame) {
+			void Promise.resolve(input.onFrame(group.lastFrame)).catch(input.onError);
+		} else if (created) {
+			void this.initialize(group);
+		}
+
+		return () => {
+			if (!group!.subscribers.delete(subscriber)) return;
+			if (group!.subscribers.size > 0) return;
+			group!.disposed = true;
+			group!.unsubscribe();
+			this.groups.delete(group!.key);
+		};
+	}
+
+	private async initialize(group: SchedulerGroup): Promise<void> {
+		try {
+			const latestSeq = await this.realtime.getLatestSeq();
+			this.requestRefresh(group, latestSeq);
+		} catch (error) {
+			this.reportError(group, error);
+		}
+	}
+
+	private requestRefresh(group: SchedulerGroup, seq: number): void {
+		if (group.disposed) return;
+		group.lastSeq = Math.max(group.lastSeq, seq);
+		if (group.refreshInFlight) {
+			group.refreshQueued = true;
+			return;
+		}
+		group.refreshInFlight = true;
+		void this.refresh(group);
+	}
+
+	private async refresh(group: SchedulerGroup): Promise<void> {
+		try {
+			do {
+				group.refreshQueued = false;
+				const data = await this.runBounded(group.compute);
+				if (group.disposed) return;
+				const serialized = JSON.stringify(data);
+				const hash = await sha256(serialized);
+				if (hash === group.lastHash) continue;
+
+				group.lastHash = hash;
+				group.lastFrame = encodeSseEvent("snapshot", {
+					topicId: group.topicId,
+					seq: group.lastSeq,
+					data,
+				});
+				const frame = group.lastFrame;
+				for (const subscriber of group.subscribers) {
+					void Promise.resolve(subscriber.onFrame(frame)).catch(
+						subscriber.onError,
+					);
+				}
+			} while (group.refreshQueued && !group.disposed);
+		} catch (error) {
+			this.reportError(group, error);
+		} finally {
+			group.refreshInFlight = false;
+		}
+	}
+
+	private reportError(group: SchedulerGroup, error: unknown): void {
+		for (const subscriber of group.subscribers) subscriber.onError(error);
+	}
+
+	private reportTransportError(group: SchedulerGroup, error: unknown): void {
+		for (const subscriber of group.subscribers) {
+			(subscriber.onTransportError ?? subscriber.onError)(error);
+		}
+	}
+
+	private async runBounded<T>(compute: () => Promise<T>): Promise<T> {
+		if (this.activeComputations >= this.maxConcurrency) {
+			await new Promise<void>((resolve) =>
+				this.pendingComputations.push(resolve),
+			);
+		}
+		this.activeComputations += 1;
+		try {
+			return await compute();
+		} finally {
+			this.activeComputations -= 1;
+			this.pendingComputations.shift()?.();
+		}
+	}
+}
+
+const schedulers = new WeakMap<object, RealtimeRefreshScheduler>();
+
+export function getRealtimeRefreshScheduler(
+	owner: object,
+	realtime: RealtimeSource,
+): RealtimeRefreshScheduler {
+	let scheduler = schedulers.get(owner);
+	if (!scheduler) {
+		scheduler = new RealtimeRefreshScheduler(realtime);
+		schedulers.set(owner, scheduler);
+	}
+	return scheduler;
+}
