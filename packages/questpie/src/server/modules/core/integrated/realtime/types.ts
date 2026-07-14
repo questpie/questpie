@@ -1,4 +1,5 @@
 import type { RealtimeAdapter } from "./adapter.js";
+import type { ChangeBroker, ClientTransport } from "./transport.js";
 
 export type RealtimeResourceType = "collection" | "global";
 
@@ -95,6 +96,10 @@ export interface RealtimeConfig {
 	 * Optional transport adapter (pg_notify, redis streams, etc.).
 	 */
 	adapter?: RealtimeAdapter;
+	/** Cross-instance notice seam used by Realtime v2 transports. */
+	changeBroker?: ChangeBroker;
+	/** Edge delivery seam shared by live queries and typed channels. */
+	clientTransport?: ClientTransport;
 
 	/**
 	 * Reconciliation poll interval in ms. Polling runs alongside adapters so a

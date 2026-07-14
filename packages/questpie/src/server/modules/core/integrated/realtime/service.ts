@@ -7,6 +7,18 @@ import type { RealtimeAdapter } from "./adapter.js";
 import { PgNotifyAdapter } from "./adapters/pg-notify.js";
 import { questpieRealtimeLogTable } from "./collection.js";
 import type {
+	ChangeBroker,
+	ClientAuthInput,
+	ClientAuthResponse,
+	ClientConfigInput,
+	ClientSink,
+	ClientTransport,
+	ClientTransportConfig,
+	EdgeSessionInput,
+	OrderedChannelDelivery,
+	SinkWriteResult,
+} from "./transport.js";
+import type {
 	RealtimeChangeEvent,
 	RealtimeChangePayload,
 	RealtimeConfig,
@@ -117,12 +129,15 @@ function analyzeWhere(where: any): {
 
 export class RealtimeService {
 	private adapter?: RealtimeAdapter;
+	private changeBroker?: ChangeBroker;
+	private clientTransport?: ClientTransport;
 	private listeners = new Set<ListenerEntry>();
 	private directCollectionListeners = new Map<string, Set<ListenerEntry>>();
 	private directGlobalListeners = new Map<string, Set<ListenerEntry>>();
 	private watchedCollectionListeners = new Map<string, Set<ListenerEntry>>();
 	private watchedGlobalListeners = new Map<string, Set<ListenerEntry>>();
 	private pollIntervalMs: number;
+	private readonly configuredPollIntervalMs: number;
 	private batchSize: number;
 	private draining = false;
 	private drainPending = false;
@@ -147,11 +162,13 @@ export class RealtimeService {
 		private pgConnectionString?: string,
 		private logger?: Pick<LoggerAdapter, "error" | "warn">,
 	) {
+		this.changeBroker = config.changeBroker;
+		this.clientTransport = config.clientTransport;
 		// Auto-configure adapter if connection string is provided
 		if (config.adapter) {
 			// User provided custom adapter
 			this.adapter = config.adapter;
-		} else if (this.pgConnectionString) {
+		} else if (this.pgConnectionString && !this.changeBroker) {
 			// Create the default publisher at service construction so write-only
 			// instances can broadcast before they ever receive a local subscription.
 			this.adapter = new PgNotifyAdapter({
@@ -163,9 +180,10 @@ export class RealtimeService {
 		this.batchSize = config.batchSize ?? 500;
 		this.pollIntervalMs =
 			config.pollIntervalMs ??
-			(this.adapter || this.pgConnectionString
+			(this.adapter || this.changeBroker || this.pgConnectionString
 				? DEFAULT_ADAPTER_RECONCILIATION_INTERVAL_MS
 				: 2000);
+		this.configuredPollIntervalMs = this.pollIntervalMs;
 		this.retentionDays =
 			config.retentionDays === undefined
 				? DEFAULT_RETENTION_DAYS
@@ -298,9 +316,16 @@ export class RealtimeService {
 	}
 
 	async notify(event: RealtimeChangeEvent): Promise<void> {
-		if (!this.adapter) return;
+		if (!this.adapter && !this.changeBroker) return;
 		await this.initialize();
-		await this.adapter.notify(event);
+		await Promise.all([
+			this.adapter?.notify(event),
+			this.changeBroker?.publish({
+				kind: "outbox-maybe-advanced",
+				highWaterSeq: event.seq,
+				reason: "publish",
+			}),
+		]);
 	}
 
 	async initialize(): Promise<void> {
@@ -312,11 +337,95 @@ export class RealtimeService {
 
 		this.publisherStartPromise = (async () => {
 			await this.adapter?.startPublisher?.();
+			await this.changeBroker?.start({
+				onWake: () => this.drainSafely(),
+				onError: (error) =>
+					this.reportTransportFailure("[Realtime] Change broker failed", error),
+				onStateChange: (state) => {
+					if (state === "connected") {
+						this.setReconciliationPollInterval(this.configuredPollIntervalMs);
+						this.drainSafely();
+					} else if (state === "unavailable" || state === "failed") {
+						this.setReconciliationPollInterval(
+							this.configuredPollIntervalMs > 0
+								? Math.min(this.configuredPollIntervalMs, 2000)
+								: 0,
+						);
+					}
+				},
+			});
+			await this.clientTransport?.start({
+				onError: (error) =>
+					this.reportTransportFailure(
+						"[Realtime] Client transport failed",
+						error,
+					),
+			});
 			this.publisherStarted = true;
 		})().finally(() => {
 			this.publisherStartPromise = null;
 		});
 		await this.publisherStartPromise;
+	}
+
+	async getClientTransportConfig(
+		input: ClientConfigInput,
+	): Promise<ClientTransportConfig> {
+		await this.initialize();
+		if (!this.clientTransport) return { transport: "sse" };
+		return this.clientTransport.getClientConfig(input);
+	}
+
+	async openClientSession(input: EdgeSessionInput): Promise<ClientSink> {
+		await this.initialize();
+		if (!this.clientTransport) {
+			throw new Error("No configured realtime client transport");
+		}
+		return this.clientTransport.openSession(input);
+	}
+
+	async generateClientAuth(
+		input: ClientAuthInput,
+	): Promise<ClientAuthResponse> {
+		await this.initialize();
+		if (
+			!this.clientTransport ||
+			this.clientTransport.channelDeliveryScope !== "shared-provider"
+		) {
+			throw new Error("Realtime provider auth is not configured");
+		}
+		return this.clientTransport.generateAuth(input);
+	}
+
+	async publishChannel(
+		input: OrderedChannelDelivery,
+	): Promise<SinkWriteResult> {
+		await this.initialize();
+		if (
+			!this.clientTransport ||
+			this.clientTransport.channelDeliveryScope !== "shared-provider"
+		) {
+			throw new Error("Shared-provider channel delivery is not configured");
+		}
+		return this.clientTransport.publishChannel(input);
+	}
+
+	private setReconciliationPollInterval(intervalMs: number): void {
+		if (this.pollIntervalMs === intervalMs) return;
+		this.pollIntervalMs = intervalMs;
+		if (!this.started) return;
+		if (this.pollTimer) {
+			clearInterval(this.pollTimer);
+			this.pollTimer = null;
+		}
+		this.startPollTimer();
+	}
+
+	private startPollTimer(): void {
+		if (this.pollIntervalMs <= 0 || this.pollTimer) return;
+		this.pollTimer = setInterval(() => {
+			this.drainSafely();
+		}, this.pollIntervalMs);
 	}
 
 	/**
@@ -513,11 +622,7 @@ export class RealtimeService {
 					}) ?? null;
 			}
 
-			if (this.pollIntervalMs > 0) {
-				this.pollTimer = setInterval(() => {
-					this.drainSafely();
-				}, this.pollIntervalMs);
-			}
+			this.startPollTimer();
 
 			this.lastSeq = latestSeq;
 			this.started = true;
@@ -615,6 +720,8 @@ export class RealtimeService {
 		if (this.adapter) {
 			await this.adapter.stop();
 		}
+		await this.changeBroker?.stop();
+		await this.clientTransport?.stop();
 		this.publisherStarted = false;
 	}
 

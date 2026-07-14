@@ -1,0 +1,12 @@
+services:
+  soketi:
+    image: quay.io/soketi/soketi:1.6-16-debian
+    ports:
+      - "6001:6001"
+    environment:
+      SOKETI_DEFAULT_APP_ID: questpie-test
+      SOKETI_DEFAULT_APP_KEY: questpie-test-key
+      SOKETI_DEFAULT_APP_SECRET: questpie-test-secret
+      # Deliberately provider-wide for the hostile raw-client security test.
+      SOKETI_DEFAULT_APP_ENABLE_CLIENT_MESSAGES: "true"
+      SOKETI_DEBUG: "1"

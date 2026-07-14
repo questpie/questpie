@@ -35,6 +35,7 @@
 		"./adapters/pgvector-search": "./src/exports/adapters/pgvector-search.ts",
 		"./adapters/plunk": "./src/exports/adapters/plunk.ts",
 		"./adapters/postgres-search": "./src/exports/adapters/postgres-search.ts",
+		"./adapters/pusher": "./src/exports/adapters/pusher.ts",
 		"./adapters/redis-kv": "./src/exports/adapters/redis-kv.ts",
 		"./adapters/redis-streams": "./src/exports/adapters/redis-streams.ts",
 		"./adapters/resend": "./src/exports/adapters/resend.ts",
@@ -84,6 +85,7 @@
 			"./adapters/pgvector-search": "./dist/adapters/pgvector-search.mjs",
 			"./adapters/plunk": "./dist/adapters/plunk.mjs",
 			"./adapters/postgres-search": "./dist/adapters/postgres-search.mjs",
+			"./adapters/pusher": "./dist/adapters/pusher.mjs",
 			"./adapters/redis-kv": "./dist/adapters/redis-kv.mjs",
 			"./adapters/redis-streams": "./dist/adapters/redis-streams.mjs",
 			"./adapters/resend": "./dist/adapters/resend.mjs",
@@ -153,6 +155,8 @@
 		"nodemailer": "^9.0.0",
 		"pg": "^8.13.1",
 		"pg-boss": "^12.5.4",
+		"pusher": "^5.3.4",
+		"pusher-js": "^8.5.0",
 		"tsdown": "^0.18.3"
 	},
 	"peerDependencies": {
@@ -162,7 +166,9 @@
 		"drizzle-kit": "1.0.0-beta.6-4414a19",
 		"nodemailer": "^9.0.0",
 		"pg": "^8.13.1",
-		"pg-boss": "^12.5.4"
+		"pg-boss": "^12.5.4",
+		"pusher": "^5.3.4",
+		"pusher-js": "^8.5.0"
 	},
 	"peerDependenciesMeta": {
 		"@react-email/components": {
@@ -184,6 +190,12 @@
 			"optional": true
 		},
 		"pg-boss": {
+			"optional": true
+		},
+		"pusher": {
+			"optional": true
+		},
+		"pusher-js": {
 			"optional": true
 		}
 	}

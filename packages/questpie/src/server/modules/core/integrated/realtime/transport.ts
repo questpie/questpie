@@ -19,10 +19,18 @@ export interface ChangeBroker {
 	start(input: {
 		onWake: (wake: ChangeWake) => void;
 		onError: (error: unknown) => void;
+		onStateChange?: (state: ChangeBrokerState) => void;
 	}): Promise<void>;
 	publish(wake: ChangeWake): Promise<void>;
 	stop(): Promise<void>;
 }
+
+export type ChangeBrokerState =
+	| "connecting"
+	| "connected"
+	| "unavailable"
+	| "failed"
+	| "disconnected";
 
 export type DeliveryClass = "latest-snapshot" | "ordered-channel-event";
 
@@ -54,6 +62,18 @@ export type ClientConfigInput = {
 	request?: Request;
 };
 
+export type ClientAuthInput = {
+	socketId: string;
+	channel: string;
+	principal: Principal | null;
+};
+
+export type ClientAuthResponse = {
+	auth: string;
+	channel_data?: string;
+	shared_secret?: string;
+};
+
 export type ClientTransportConfig =
 	| { transport: "sse" }
 	| {
@@ -80,6 +100,7 @@ export interface LocalSessionClientTransport extends ClientTransportBase {
 
 export interface SharedProviderClientTransport extends ClientTransportBase {
 	readonly channelDeliveryScope: "shared-provider";
+	generateAuth(input: ClientAuthInput): Promise<ClientAuthResponse>;
 	publishChannel(input: OrderedChannelDelivery): Promise<SinkWriteResult>;
 }
 

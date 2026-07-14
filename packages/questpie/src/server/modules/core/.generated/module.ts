@@ -40,6 +40,8 @@ import _route_globals_name_versions from "../routes/globals/[name]/versions";
 import _route_health from "../routes/health";
 import _route_jwks from "../routes/jwks";
 import _route_realtime from "../routes/realtime";
+import _route_realtime_auth_POST from "../routes/realtime/auth.post";
+import _route_realtime_config from "../routes/realtime/config";
 import _route_search from "../routes/search";
 import _route_search_reindex_collection from "../routes/search/reindex/[collection]";
 
@@ -127,6 +129,8 @@ export type CoreRoutes = {
 	health: typeof _route_health extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"health">> : typeof _route_health;
 	jwks: typeof _route_jwks extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"jwks">> : typeof _route_jwks;
 	realtime: typeof _route_realtime extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"realtime">> : typeof _route_realtime;
+	"realtime/auth:POST": typeof _route_realtime_auth_POST extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"realtime/auth:POST">> : typeof _route_realtime_auth_POST;
+	"realtime/config": typeof _route_realtime_config extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"realtime/config">> : typeof _route_realtime_config;
 	search: typeof _route_search extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"search">> : typeof _route_search;
 	"search/reindex/[collection]": typeof _route_search_reindex_collection extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"search/reindex/[collection]">> : typeof _route_search_reindex_collection;
 };
@@ -226,6 +230,8 @@ const _module: CoreModule = {
 		health: _route_health,
 		jwks: _route_jwks,
 		realtime: _route_realtime,
+		"realtime/auth:POST": _route_realtime_auth_POST,
+		"realtime/config": _route_realtime_config,
 		search: _route_search,
 		"search/reindex/[collection]": _route_search_reindex_collection,
 	} as CoreRoutes,
