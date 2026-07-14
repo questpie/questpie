@@ -1,8 +1,9 @@
 # Realtime v2 transport contract
 
-Status: accepted RT1.1 design gate after adversarial grill on 2026-07-13. This
-document is normative for the transport extraction. It covers all fifteen
-invariants in Part H of the Realtime v2 + Channels analysis.
+Status: accepted RT1.1 design gate after adversarial grill on 2026-07-13;
+channel security model accepted by RT2.0 on 2026-07-14. This document is
+normative for the transport extraction. It covers all fifteen invariants in
+Part H of the Realtime v2 + Channels analysis.
 
 ## Goals and boundaries
 
@@ -448,11 +449,234 @@ modules. Renaming a file/export changes the typed API key but not the wire
 pattern; changing the builder string is an intentional wire-contract change.
 
 Resolved-name collision and parameter classification are security concerns.
-The channel runtime exposes validation hooks for RT2.0 to define fail-closed
-collision handling, parameter size limits, presence-data limits, origin/CSRF
-policy, and the `{ subscribe, publish }` authorization rules. `publish` defaults
-to `subscribe`; direct WS client events remain a separate explicit capability,
-off by default.
+The channel runtime applies the accepted RT2.0 security model below before it
+authorizes, subscribes, or publishes.
+
+## Channel security model
+
+This section is normative for RT2.1, RT3.1, RT3.3, and the RT4.1 cross-driver
+matrix. A transport may enforce stricter provider limits, but it cannot weaken
+these framework rules.
+
+### Authorization and publish boundaries
+
+Channel authorization is a per-verb route-style boolean gate:
+
+```ts
+export type ChannelAuthorization<TContext> = {
+	subscribe: boolean | ((context: TContext) => boolean | Promise<boolean>);
+	publish?: boolean | ((context: TContext) => boolean | Promise<boolean>);
+};
+```
+
+When an authorization map exists and `publish` is omitted, it is the same rule
+as `subscribe`. The two rules are still evaluated independently at operation
+time: membership is not proof that the current principal may publish, and a
+stale subscription decision is never reused as a publish decision. A thrown,
+timed-out, or non-boolean rule result denies the operation and is observed.
+
+No authorization map means public subscription and **no client-originated
+publish**. This preserves useful public read-only channels without silently
+creating an anonymous write endpoint. Trusted server code may publish through
+`ctx.channels` in system access mode, but schema, name, payload-size, ledger,
+and observation rules still apply. A user-mode server context and every
+`channels/publish` request evaluate the `publish` rule.
+
+Server-mediated publish is the framework default on both presets. The runtime
+must, in this order, resolve and validate params, prove the resolved-name
+identity, authenticate the principal, evaluate `publish`, parse the declared
+Zod event schema, enforce serialized size and rate limits, and only then append
+to the ordered event ledger. No rejected publish allocates a channel sequence
+or emits a broker/provider event.
+
+### Direct WebSocket client events
+
+Pusher-compatible client events bypass the framework HTTP publish route and
+therefore bypass the publish rule, Zod parsing, ordered ledger, replay, dedupe,
+and server observation. They are a distinct best-effort capability, not a fast
+path for framework events.
+
+- The provider-app default and every framework channel default are disabled.
+  Opt-in is deliberately two-level: deployment config enables the provider-app
+  capability with an explicit unvalidated-payload acknowledgement, and the
+  channel definition exposes a literal event-name allowlist in the SDK. A
+  boolean `clientEvents: true` is insufficient.
+- Pusher enforces client events at provider-app scope, not per channel. Once
+  enabled, a hostile member can emit any `client-*` name on every private or
+  presence channel in that provider app. The framework allowlist controls only
+  typed SDK send/bind behavior; it is not an authorization boundary.
+- Consequently, a channel exposing direct events cannot have a publish rule
+  stricter than its subscribe rule: provider membership is the only enforceable
+  send gate. Deployments with mixed trust requirements use separate provider
+  apps or keep direct events globally disabled and use server-mediated publish.
+- The client API exposes a distinct operation; regular `.publish()` always uses
+  the server-mediated path and never silently falls back to a client event.
+- The capability is available only for private/presence channels on a managed-WS
+  driver. The SSE preset returns a typed capability error.
+- On-wire names use the provider-required `client-` prefix. They cannot overlap
+  framework event names or `pusher:`/internal namespaces.
+- Payloads are treated as hostile input by receivers. TypeScript inference is a
+  convenience only and must not be described as runtime validation.
+- Delivery is best-effort, non-replayable, and not sent back to the originator.
+  Provider webhooks may improve audit visibility but do not change those QoS
+  semantics.
+
+The SDK applies the same 10 events/second and payload-byte preflight as the
+provider, but this is UX only; a hostile client can bypass the SDK allowlist and
+limiter. Provider rate and payload enforcement remains mandatory.
+
+### Resolved names and collision proof
+
+The server never trusts a client-supplied wire name. Requests identify the
+generated channel key and params; the server validates params and renders the
+application name itself. The final provider name, including `private-` or
+`presence-`, must:
+
+- be non-empty ASCII using only `A-Z a-z 0-9 _ - = @ , . ;`;
+- contain no whitespace, control characters, slash, `#`, or unresolved bracket;
+- be at most 164 characters including the provider prefix;
+- contain only non-empty params satisfying the same alphabet.
+
+Duplicate source patterns are rejected by codegen. Dynamic collisions fail
+closed as well: the bounded resolver matches the rendered application name
+against every registered pattern and enumerates possible param splits. Exactly
+one `(channel key, canonical params)` candidate must remain and it must equal
+the request's claimed identity. Zero, multiple-definition, or ambiguous
+same-pattern matches return `channel_name_collision` before authorization or
+provider contact. This check is deterministic from the generated registry, so
+different app instances cannot claim the same provider wire name for different
+logical channels.
+
+### HTTP origin, CSRF, and CORS policy
+
+`channels/auth` and `channels/publish` are authority-bearing POST endpoints.
+The trusted-origin set defaults to the origin of the configured application URL
+and may be extended only with exact `https://host[:port]` origins. Development
+may additionally allow exact `http://localhost[:port]`, `http://127.0.0.1[:port]`,
+or `http://[::1][:port]`; production rejects non-HTTPS origins. Wildcards,
+paths, credentials in URLs, opaque/null origins, and suffix matching are invalid.
+
+- Cookie-authenticated browser requests require an `Origin` header whose parsed
+  origin is in the trusted set. Missing, malformed, `null`, or untrusted origins
+  are rejected. SameSite cookies are defense in depth, not the CSRF decision.
+- A non-cookie bearer/API-key request may omit `Origin` for server-to-server
+  use. If it supplies `Origin`, that origin must still be trusted.
+- Endpoints accept only their documented JSON or Pusher form encoding and reject
+  simple `text/plain` submissions. GET never authorizes or publishes.
+- Credentialed CORS echoes one exact trusted origin, emits `Vary: Origin`, and
+  never returns `Access-Control-Allow-Origin: *`. OPTIONS validates the origin
+  before advertising POST and the required content/auth headers.
+- Redirects are not used for auth/publish failures; responses are `no-store` and
+  contain no provider secret, raw session identifier, or authorization reason
+  that reveals channel membership.
+
+This strict origin check is the CSRF mechanism for cookie requests. RT3.3 must
+use one shared helper for auth and publish so their policies cannot drift.
+
+### Admission, rate, and payload limits
+
+Limits are checked before expensive authorization where possible and always
+before ledger/provider writes. Initial framework defaults are:
+
+| Limit                                                     |   Default |
+| --------------------------------------------------------- | --------: |
+| channel subscriptions per edge session                    |        20 |
+| server-mediated publishes per edge session per second     |        10 |
+| server-mediated publish token-bucket burst                |        20 |
+| authorization-rule execution timeout                      |  5,000 ms |
+| serialized framework event data (UTF-8 JSON bytes)        |    10,000 |
+| direct client events per managed-WS connection per second |        10 |
+| presence members per resolved channel                     |       100 |
+| serialized presence member object, including id and info  |   1,024 B |
+| presence member id                                        | 128 chars |
+
+The server-mediated limiter is also keyed by authenticated principal (or a
+bounded anonymous IP/edge-session fallback) per app instance, so opening more
+tabs does not multiply the principal's allowance without bound. Distributed
+exact rate limiting remains a non-goal; provider/account limits are additional.
+Exceeding a publish rate returns 429 with a bounded retry hint. Repeated protocol
+or rate violations close the edge session.
+
+The payload cap is measured on the exact JSON string passed as provider event
+data, not JavaScript string length or the pre-validation request body. It is
+enforced before a framework event enters the ordered ledger. Oversize requests
+return 413 and allocate no event id. Binary and cyclic/non-serializable values
+are outside this program.
+
+### Presence-data classification
+
+Presence is private for joining but not private among members. The full member
+object is sent to every current member of the resolved channel. Every presence
+resolver field is therefore classified **channel-member-visible**; it must not
+contain email addresses, roles, permissions, bearer/session tokens, internal
+database keys, or data the principal cannot disclose to every member.
+
+The framework default member id is a stable opaque value derived from the
+principal subject with a deployment secret. An application-supplied id is sent
+verbatim and is an explicit disclosure. IDs use the provider-safe alphabet and
+are at most 128 characters. The complete UTF-8 JSON member object is at most
+1,024 bytes, and a resolved presence channel admits at most 100 distinct
+members. These parity defaults also apply to the SSE coarse-presence preset;
+providers may be stricter. Limit or serialization failure denies the join
+rather than truncating identity or member info.
+
+### Authorization grants, expiry, and revocation
+
+Every auth request resolves the current session afresh. A Pusher subscription
+signature is bound to one provider `socket_id` and one final channel name, is
+returned with `Cache-Control: no-store`, and is never persisted or reused by the
+client. The Pusher protocol does not provide an independent TTL field for that
+signature; its honest lifetime is the provider connection. We do not claim a
+fictional token expiry.
+
+Any framework-minted bearer used by a future transport must be single-purpose,
+single-use, at most 60 seconds old, and bound to principal/session, channel key,
+canonical params hash, verb, and connection nonce. Long-lived provider secrets
+are server-only and never appear in `channels/config`.
+
+Revocation has three mandatory layers:
+
+1. revoked/expired sessions receive no new auth or publish grant;
+2. local-session transports close the affected edge sessions immediately;
+3. managed-WS transports user-authenticate with an opaque provider user id and
+   terminate that user's active provider connections on session revocation or
+   expiry, then require full subscribe authorization on reconnect.
+
+A provider driver that cannot terminate established user connections must
+report that capability honestly and cannot advertise immediate revocation. Its
+documented bounded fallback must force provider reauthentication; RT4.1 measures
+the window. Secret rotation invalidates future grants but is not a substitute
+for terminating already-authorized connections.
+
+### Security observations
+
+The observer records allow/deny outcomes and reason codes for subscribe,
+publish, origin, name collision, rate, size, presence, grant, and revocation
+events. Metric labels use channel definition keys and bounded reason enums, not
+raw resolved names, params, payloads, presence info, tokens, socket ids, or
+principal identifiers. Direct client-event payloads are not observable by the
+framework unless an explicitly configured provider webhook supplies metadata.
+
+### Required security test checklist
+
+| ID     | Rule                                                                                                                                                 | Owning proof                                                  |
+| ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| SEC-01 | `subscribe` and `publish` are evaluated independently; omitted publish reuses subscribe.                                                             | RT3.3 route matrix; RT4.1 both presets.                       |
+| SEC-02 | No auth map is public-read/server-write, not anonymous client-write.                                                                                 | RT3.3 public-channel 200 subscribe / 403 publish.             |
+| SEC-03 | Denied/thrown/timed-out rules allocate no listener, sequence, ledger row, or provider call.                                                          | RT3.3 failure injection; RT4.1 counters.                      |
+| SEC-04 | Framework publish validates Zod before size check, ledger append, and delivery.                                                                      | RT3.3 invalid-event tests; RT4.1 exact publish counts.        |
+| SEC-05 | Direct client events require deployment + channel opt-in and use a separate SDK API/namespace.                                                       | RT2.1 provider config tests; RT4.1 hostile direct-event test. |
+| SEC-06 | Provider-app scope, membership-only authorization, SDK-only allowlist, unvalidated/non-replayable payload, and non-originator delivery are explicit. | RT2.1 Soketi raw-client test; RT4.1 QoS matrix.               |
+| SEC-07 | Final prefixed names enforce alphabet and 164-char cap on resolved values.                                                                           | RT2.1 auth mint boundary tests; RT3.3 SSE boundary parity.    |
+| SEC-08 | Cross-pattern and ambiguous-param resolved collisions fail before auth/provider work.                                                                | RT3.3 resolver tests; RT4.1 two-instance parity.              |
+| SEC-09 | Cookie auth/publish rejects missing, null, malformed, and untrusted origins.                                                                         | RT3.3 CSRF table tests.                                       |
+| SEC-10 | Credentialed CORS reflects only exact trusted origins with `Vary: Origin`; never wildcard.                                                           | RT3.3 OPTIONS/POST tests.                                     |
+| SEC-11 | Per-session and per-principal publish buckets return 429 and recover after the window.                                                               | RT3.3 fake-clock tests; RT4.1 multi-tab flood.                |
+| SEC-12 | Exact serialized payload boundary accepts 10,000 bytes, rejects 10,001 with no event id.                                                             | RT3.3 unit/integration; RT4.1 all drivers.                    |
+| SEC-13 | Presence exposes only the resolver object and enforces 100 members, 1,024 bytes, 128-char id.                                                        | RT2.1 provider auth tests; RT4.1 SSE/WS parity.               |
+| SEC-14 | Auth signatures are socket/channel-bound, `no-store`, and config never leaks provider secret.                                                        | RT2.1 mint/config tests.                                      |
+| SEC-15 | Session revocation denies new grants and terminates/re-authenticates established sessions within the declared window.                                | RT2.1 revocation test; RT4.1 measured drill.                  |
+| SEC-16 | Security observations contain bounded reasons but no raw params, payload, member, token, socket, or principal data.                                  | RT4.1 sensitive-label audit.                                  |
 
 ## Lifecycle and crash safety
 
@@ -531,26 +755,14 @@ isolated and cannot break delivery.
 Dependent implementation tasks may start only after this table is reviewed
 15/15 and any blocker found by the grill is represented on the board.
 
-## Security-model handoff (RT2.0)
+## Security-model status (RT2.0)
 
-RT2.0 owns the final channel security model. Its design must fill the hooks left
-here without weakening transport invariants: `{ subscribe, publish }`
-authorization, server-mediated schema validation, direct-client-event opt-in,
-CSRF/origin handling, resolved-name collision policy, presence-data
-classification and limits, channel/member caps, token expiry, and audit events.
-
-Until RT2.0 is accepted, implementations must default to server-mediated
-publish, direct client events off, no presence payload beyond a stable opaque
-principal id, and fail-closed authorization.
-
-Current provider constraints that RT2.0 must encode are documented by Pusher's
-official Channels documentation: channel names are at most 164 characters and
-use alphanumerics plus `_ - = @ , . ;`; presence channels allow 100 members, a
-1 KiB user object, and a 128-character user id; client events are private or
-presence-only, use the `client-` prefix, are tamperable, and are rate-limited to
-10 events per second per connection. These are driver constraints, not universal
-framework limits, and must be validated on resolved values.
+The channel security model above is accepted. RT2.1 and RT3.3 must reference
+SEC-01 through SEC-16 in implementation evidence; RT4.1 owns the cross-driver
+and hostile-client proofs. Provider constraints remain additional to framework
+limits and are validated on final resolved values.
 
 - <https://pusher.com/docs/channels/using_channels/channels/>
 - <https://pusher.com/docs/channels/using_channels/presence-channels/>
 - <https://pusher.com/docs/channels/using_channels/events/>
+- <https://pusher.com/docs/channels/library_auth_reference/rest-api/>
