@@ -1,0 +1,116 @@
+---
+title: Realtime v2 migration and rollback
+description: Canary Realtime v2 beside an existing adapter, understand the bulk-event change, and roll back without changing schema or losing outbox data.
+---
+
+Realtime v2 keeps the existing `client.collections.*.live()`, `client.globals.*.live()`, raw `client.realtime`, TanStack `{ realtime: true }`, and `RealtimeConfig.adapter` APIs. The SSE wire remains protocol `1`; responses advertise it as `X-Questpie-Realtime-Protocol: 1`, which existing clients safely ignore.
+
+The rollout flag changes server transport selection only. It does not create, delete, or rewrite a table.
+
+## The breaking behavior to audit
+
+Bulk update and bulk delete emit **one durable event per logical operation**, not one event per affected record. A custom `RealtimeAdapter` or outbox consumer must handle:
+
+```ts
+{
+  operation: "bulk_update" | "bulk_delete",
+  payload: {
+    count: number,
+    recordIds: Array<string | number>,
+  },
+}
+```
+
+Do not count adapter notifications to count changed records. Use `payload.count`. Do not expect N per-record events from one bulk mutation.
+
+## Rollout modes
+
+`realtime.rollout.mode` accepts three values:
+
+| Mode       | Cross-instance invalidation                                                                           | Edge delivery                               | Use it for                                                |
+| ---------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------- | --------------------------------------------------------- |
+| `"legacy"` | Existing `adapter` or the poll/implicit-pg fallback                                                   | Existing SSE protocol                       | Baseline and immediate rollback                           |
+| `"v2"`     | `changeBroker`; an existing `adapter` remains the compatibility fallback when no broker is configured | Configured `clientTransport`, otherwise SSE | Normal operation; this is the default                     |
+| `"dual"`   | Existing `adapter` and `changeBroker` both publish the same durable outbox sequence                   | One v2 edge path only                       | Canary comparison without double-delivering client frames |
+
+Dual mode requires both `adapter` and `changeBroker`. It compares whether both invalidation publishes accepted the same durable sequence. A one-sided failure is reported through `onComparison` and logs a warning, while the healthy path continues. If both fail, normal reconciliation polling still provides the durable recovery path and the publish reports failure.
+
+## Recommended migration
+
+### 1. Deploy the new code on the legacy path
+
+Keep the current adapter and pin the baseline explicitly:
+
+```ts
+export default runtimeConfig({
+	realtime: {
+		adapter: existingAdapter,
+		rollout: { mode: "legacy" },
+	},
+});
+```
+
+Verify existing admin, Autopilot, `live()`, `liveIter()`, and TanStack realtime consumers. No client release is required.
+
+### 2. Canary both invalidation paths
+
+Add the v2 broker and compare outcomes. Client snapshots are still emitted once:
+
+```ts
+export default runtimeConfig({
+	realtime: {
+		adapter: existingAdapter,
+		changeBroker: nextBroker,
+		rollout: {
+			mode: "dual",
+			onComparison(result) {
+				if (!result.equivalent) {
+					metrics.increment("realtime.dual_run_mismatch", {
+						legacy: result.legacy,
+						v2: result.v2,
+					});
+				}
+			},
+		},
+	},
+});
+```
+
+Run dual mode long enough to cover deploys, reconnects, bulk mutations, and a broker interruption. The durable outbox remains the source of truth; dual mode compares invalidation acceptance, not application row payloads.
+
+### 3. Select v2
+
+After the canary is clean:
+
+```ts
+export default runtimeConfig({
+	realtime: {
+		changeBroker: nextBroker,
+		clientTransport: nextClientTransport,
+		rollout: { mode: "v2" },
+	},
+});
+```
+
+An app that only has `adapter` can also use the default `v2` mode. QUESTPIE maps that adapter onto the new invalidation/compute/delivery pipeline as a compatibility fallback, so existing configuration does not need a flag-day rewrite.
+
+## Rollback drill
+
+Rollback is a config change:
+
+1. Set `realtime.rollout.mode` to `"legacy"`.
+2. Keep the existing `adapter` configured.
+3. Redeploy or restart every instance.
+4. Confirm `POST /realtime` returns protocol header `1` and a known `live()` consumer receives a fresh snapshot.
+5. Confirm outbox lag returns to normal through the adapter or reconciliation poll.
+
+Do **not** roll back migrations or delete `questpie_realtime_log` / channel-ledger rows. Both modes consume the same durable data, so changing the flag loses neither schema nor committed events. If the adapter itself is unavailable, leave reconciliation polling enabled while restoring it.
+
+## Compatibility checklist
+
+- Existing `realtime: true` works.
+- Existing `realtime: { adapter }` works without adding a broker.
+- Existing SSE clients remain on protocol `1`.
+- Dual mode never sends two snapshot streams to one client.
+- Custom adapter consumers accept consolidated bulk events.
+- The rollback drill succeeds without a down migration or data deletion.

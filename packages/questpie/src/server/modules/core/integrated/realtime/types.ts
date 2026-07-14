@@ -49,6 +49,30 @@ export type RealtimeNotice = Pick<
 	"seq" | "resourceType" | "resource" | "operation"
 >;
 
+export type RealtimeTransportMode = "legacy" | "v2" | "dual";
+
+export type RealtimeDualRunComparison = {
+	/** Durable outbox sequence published through both invalidation paths. */
+	seq: number;
+	legacy: "accepted" | "rejected";
+	v2: "accepted" | "rejected";
+	/** Whether both transports returned the same acceptance result. */
+	equivalent: boolean;
+	legacyError?: unknown;
+	v2Error?: unknown;
+};
+
+export type RealtimeRolloutConfig = {
+	/**
+	 * `legacy` is the rollback path, `v2` selects the new seams, and `dual`
+	 * shadows invalidation through both paths without duplicating client frames.
+	 * @default "v2"
+	 */
+	mode?: RealtimeTransportMode;
+	/** Observes one comparison per dual-run outbox publish. */
+	onComparison?: (comparison: RealtimeDualRunComparison) => void;
+};
+
 /**
  * Topics for realtime subscriptions.
  * Supports hierarchical filtering via WHERE clause and automatic dependency tracking.
@@ -88,6 +112,8 @@ export type RealtimeSubscriptionContext = {
 };
 
 export interface RealtimeConfig {
+	/** Compatibility, canary, and rollback selection. */
+	rollout?: RealtimeRolloutConfig;
 	/** Realtime edge-session admission limits. */
 	admission?: Partial<import("./admission.js").RealtimeAdmissionConfig>;
 	/** Optional maximum random delay before accepting a new edge session. */

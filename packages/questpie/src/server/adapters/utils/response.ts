@@ -23,6 +23,7 @@ export const sseHeaders = {
 	"Cache-Control": "no-cache",
 	Connection: "keep-alive",
 	"X-Accel-Buffering": "no",
+	"X-Questpie-Realtime-Protocol": "1",
 };
 
 /**

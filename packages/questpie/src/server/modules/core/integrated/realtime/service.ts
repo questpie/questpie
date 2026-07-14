@@ -29,6 +29,7 @@ import type {
 	RealtimeChangeEvent,
 	RealtimeChangePayload,
 	RealtimeConfig,
+	RealtimeDualRunComparison,
 	RealtimeErrorListener,
 	RealtimeNotice,
 	RealtimeOperation,
@@ -138,6 +139,10 @@ export class RealtimeService {
 	private adapter?: RealtimeAdapter;
 	private changeBroker?: ChangeBroker;
 	private clientTransport?: ClientTransport;
+	private readonly transportMode: "legacy" | "v2" | "dual";
+	private readonly onDualRunComparison?: (
+		comparison: RealtimeDualRunComparison,
+	) => void;
 	private listeners = new Set<ListenerEntry>();
 	private directCollectionListeners = new Map<string, Set<ListenerEntry>>();
 	private directGlobalListeners = new Map<string, Set<ListenerEntry>>();
@@ -172,8 +177,40 @@ export class RealtimeService {
 		private pgConnectionString?: string,
 		private logger?: Pick<LoggerAdapter, "error" | "warn">,
 	) {
-		this.changeBroker = config.changeBroker;
-		this.clientTransport = config.clientTransport;
+		this.transportMode = config.rollout?.mode ?? "v2";
+		this.onDualRunComparison = config.rollout?.onComparison;
+		if (
+			this.transportMode === "dual" &&
+			(!config.adapter || !config.changeBroker)
+		) {
+			throw new Error(
+				'Realtime rollout mode "dual" requires both adapter and changeBroker',
+			);
+		}
+
+		let compatibleAdapter = config.adapter;
+		if (
+			!compatibleAdapter &&
+			this.pgConnectionString &&
+			(this.transportMode === "legacy" || !config.changeBroker)
+		) {
+			compatibleAdapter = new PgNotifyAdapter({
+				connectionString: this.pgConnectionString,
+				channel: "questpie_realtime",
+			});
+		}
+
+		if (this.transportMode === "legacy") {
+			this.adapter = compatibleAdapter;
+		} else if (this.transportMode === "dual") {
+			this.adapter = config.adapter;
+			this.changeBroker = config.changeBroker;
+			this.clientTransport = config.clientTransport;
+		} else {
+			this.changeBroker = config.changeBroker;
+			this.adapter = this.changeBroker ? undefined : compatibleAdapter;
+			this.clientTransport = config.clientTransport;
+		}
 		this.channelEventLedger = new ChannelEventLedger(
 			this.db,
 			this.changeBroker,
@@ -182,19 +219,6 @@ export class RealtimeService {
 			this.logger,
 			() => this.initialize(),
 		);
-		// Auto-configure adapter if connection string is provided
-		if (config.adapter) {
-			// User provided custom adapter
-			this.adapter = config.adapter;
-		} else if (this.pgConnectionString && !this.changeBroker) {
-			// Create the default publisher at service construction so write-only
-			// instances can broadcast before they ever receive a local subscription.
-			this.adapter = new PgNotifyAdapter({
-				connectionString: this.pgConnectionString,
-				channel: "questpie_realtime",
-			});
-		}
-
 		this.batchSize = config.batchSize ?? 500;
 		this.pollIntervalMs =
 			config.pollIntervalMs ??
@@ -336,6 +360,51 @@ export class RealtimeService {
 	async notify(event: RealtimeChangeEvent): Promise<void> {
 		if (!this.adapter && !this.changeBroker) return;
 		await this.initialize();
+		if (this.transportMode === "dual") {
+			const wake = {
+				kind: "outbox-maybe-advanced" as const,
+				highWaterSeq: event.seq,
+				reason: "publish" as const,
+			};
+			const [legacyResult, v2Result] = await Promise.allSettled([
+				this.adapter!.notify(event),
+				this.changeBroker!.publish(wake),
+			]);
+			const comparison: RealtimeDualRunComparison = {
+				seq: event.seq,
+				legacy: legacyResult.status === "fulfilled" ? "accepted" : "rejected",
+				v2: v2Result.status === "fulfilled" ? "accepted" : "rejected",
+				equivalent: legacyResult.status === v2Result.status,
+				...(legacyResult.status === "rejected"
+					? { legacyError: legacyResult.reason }
+					: {}),
+				...(v2Result.status === "rejected" ? { v2Error: v2Result.reason } : {}),
+			};
+			if (!comparison.equivalent) {
+				this.logger?.warn(
+					"[Realtime] Dual-run invalidation transports diverged",
+					comparison,
+				);
+			}
+			try {
+				this.onDualRunComparison?.(comparison);
+			} catch (error) {
+				this.logger?.warn(
+					"[Realtime] Dual-run comparison observer failed",
+					error,
+				);
+			}
+			if (
+				legacyResult.status === "rejected" &&
+				v2Result.status === "rejected"
+			) {
+				throw new AggregateError(
+					[legacyResult.reason, v2Result.reason],
+					"Both realtime dual-run invalidation transports failed",
+				);
+			}
+			return;
+		}
 		await Promise.all([
 			this.adapter?.notify(event),
 			this.changeBroker?.publish({

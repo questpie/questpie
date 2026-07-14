@@ -1,4 +1,13 @@
 {
 	"title": "Adapters",
-	"pages": ["index", "queue", "search", "realtime", "storage", "email", "kv"]
+	"pages": [
+		"index",
+		"queue",
+		"search",
+		"realtime",
+		"realtime-v2-migration",
+		"storage",
+		"email",
+		"kv"
+	]
 }
