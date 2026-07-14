@@ -12,7 +12,7 @@ Server-first TypeScript application framework. Define your data schema once usin
 
 Reference these guidelines when:
 
-- Creating or modifying collections, globals, routes, jobs, services, emails, blocks
+- Creating or modifying collections, globals, routes, jobs, services, emails, blocks, or channels
 - Working with file conventions or codegen pipeline
 - Configuring adapters (queue, search, storage, realtime, email, KV)
 - Setting up access control, hooks, or validation
@@ -23,25 +23,26 @@ Reference these guidelines when:
 
 ## Import Paths, Critical
 
-| Factory                        | Import From                  | Needs Codegen? |
-| ------------------------------ | ---------------------------- | -------------- |
-| `collection(name)`             | `#questpie/factories`        | Yes            |
-| `global(name)`                 | `#questpie/factories`        | Yes            |
-| `block(name)`                  | `#questpie/factories`        | Yes            |
-| `adminConfig({...})`           | `#questpie/factories`        | Yes            |
-| `route()`                      | `"questpie"`                 | No             |
-| `job({...})`                   | `"questpie"`                 | No             |
-| `service()`                    | `"questpie"`                 | No             |
-| `email({...})`                 | `"questpie"`                 | No             |
-| `migration({...})`             | `"questpie"`                 | No             |
-| `seed({...})` / `seed.steps({...})` | `"questpie"`            | No             |
-| `runtimeConfig({...})`         | `"questpie/app"`             | No             |
-| `appConfig({...})`             | `"questpie/app"`             | No             |
-| `authConfig({...})`            | `"questpie/app"`             | No             |
-| `env({...})`                   | `"questpie/env"`             | No             |
-| `clientEnv({...})`             | `"questpie/env"`             | No             |
-| `createClient<AppConfig>()`    | `"questpie/client"`          | No             |
-| `createQuestpieQueryOptions()` | `"@questpie/tanstack-query"` | No             |
+| Factory                             | Import From                  | Needs Codegen? |
+| ----------------------------------- | ---------------------------- | -------------- |
+| `collection(name)`                  | `#questpie/factories`        | Yes            |
+| `global(name)`                      | `#questpie/factories`        | Yes            |
+| `block(name)`                       | `#questpie/factories`        | Yes            |
+| `channel(pattern)`                  | `"questpie/channels"`        | Yes            |
+| `adminConfig({...})`                | `#questpie/factories`        | Yes            |
+| `route()`                           | `"questpie"`                 | No             |
+| `job({...})`                        | `"questpie"`                 | No             |
+| `service()`                         | `"questpie"`                 | No             |
+| `email({...})`                      | `"questpie"`                 | No             |
+| `migration({...})`                  | `"questpie"`                 | No             |
+| `seed({...})` / `seed.steps({...})` | `"questpie"`                 | No             |
+| `runtimeConfig({...})`              | `"questpie/app"`             | No             |
+| `appConfig({...})`                  | `"questpie/app"`             | No             |
+| `authConfig({...})`                 | `"questpie/app"`             | No             |
+| `env({...})`                        | `"questpie/env"`             | No             |
+| `clientEnv({...})`                  | `"questpie/env"`             | No             |
+| `createClient<AppConfig>()`         | `"questpie/client"`          | No             |
+| `createQuestpieQueryOptions()`      | `"@questpie/tanstack-query"` | No             |
 
 ## Module And Plugin Configuration - Critical
 
@@ -88,13 +89,13 @@ export default authConfig({
 
 After `questpie generate`, the generated server files are the source of truth for what exists in the app. Inspect them before inventing imports, names, fields, or casts:
 
-| Need to know                         | Ground truth                                                                 |
-| ------------------------------------ | ---------------------------------------------------------------------------- |
+| Need to know                           | Ground truth                                                                                                                     |
+| -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | Collections, globals, routes, services | `src/questpie/server/.generated/entities.gen.ts` and `AppCollections`, `AppGlobals`, `AppRoutes`, `AppServices` from `#questpie` |
-| Relation target keys                 | `src/questpie/server/.generated/names.gen.ts`                                |
-| Handler, hook, route, block context  | `src/questpie/server/.generated/context.gen.ts` and `Questpie.AppContext`    |
-| Session and auth user shape          | `AppSession`, `AppSessionUser`, and `AppConfig.auth` from `#questpie`        |
-| Enabled field and builder methods    | `src/questpie/server/.generated/factories.ts`                                |
+| Relation target keys                   | `src/questpie/server/.generated/names.gen.ts`                                                                                    |
+| Handler, hook, route, block context    | `src/questpie/server/.generated/context.gen.ts` and `Questpie.AppContext`                                                        |
+| Session and auth user shape            | `AppSession`, `AppSessionUser`, and `AppConfig.auth` from `#questpie`                                                            |
+| Enabled field and builder methods      | `src/questpie/server/.generated/factories.ts`                                                                                    |
 
 Files starting with `_`, `index.ts`, declaration files, tests, and specs are intentionally invisible to codegen. If something is missing from the generated surface, fix discovery, modules, or config and rerun `questpie generate`; do not add `any`, re-export barrels, or duplicate registries at the call site.
 
@@ -102,47 +103,48 @@ Files starting with `_`, `index.ts`, declaration files, tests, and specs are int
 
 ### Core
 
-| Topic             | File                            | Covers                                                             |
-| ----------------- | ------------------------------- | ------------------------------------------------------------------ |
-| Architecture      | `references/architecture.md`    | Framework overview, tech stack, project structure, file conventions, app bootstrap, data flow |
-| Quickstart        | `references/quickstart.md`      | Scaffold, configure, codegen, migrate, serve, zero to running app |
-| Data Modeling     | `references/data-modeling.md`   | Collections, globals, fields, relations, options, localization     |
-| Field Types       | `references/field-types.md`     | All built-in field types with options and operators                |
+| Topic             | File                            | Covers                                                                                                             |
+| ----------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Architecture      | `references/architecture.md`    | Framework overview, tech stack, project structure, file conventions, app bootstrap, data flow                      |
+| Quickstart        | `references/quickstart.md`      | Scaffold, configure, codegen, migrate, serve, zero to running app                                                  |
+| Data Modeling     | `references/data-modeling.md`   | Collections, globals, fields, relations, options, localization                                                     |
+| Field Types       | `references/field-types.md`     | All built-in field types with options and operators                                                                |
 | Type Inference    | `references/type-inference.md`  | The infer-first map: `CollectionDoc` / `CollectionWhere`, `AccessContext` helpers, per-op rule typing, cycle rules |
-| Rules             | `references/rules.md`           | Access control (row/field level), hooks lifecycle, validation, derived request context |
-| Business Logic    | `references/business-logic.md`  | Routes, jobs, services, email templates, context injection         |
-| AppContext        | `references/app-context.md`     | The `AppContext` runtime interface, where it's available, `getContext`, partial context overrides |
-| Durable Workflows | `references/workflows.md`       | Long-running workflows, steps, events, cron, admin UI              |
-| Sandboxed Code    | `references/sandbox.md`         | `ctx.executor.run()`, isolation modes, capability model, Deno engine deployment |
-| CRUD API          | `references/crud-api.md`        | `find`, `create`, `updateById`/`updateMany`, `deleteById`/`deleteMany`, atomic conditional updates, globals API |
+| Rules             | `references/rules.md`           | Access control (row/field level), hooks lifecycle, validation, derived request context                             |
+| Business Logic    | `references/business-logic.md`  | Routes, jobs, services, email templates, context injection                                                         |
+| AppContext        | `references/app-context.md`     | The `AppContext` runtime interface, where it's available, `getContext`, partial context overrides                  |
+| Durable Workflows | `references/workflows.md`       | Long-running workflows, steps, events, cron, admin UI                                                              |
+| Sandboxed Code    | `references/sandbox.md`         | `ctx.executor.run()`, isolation modes, capability model, Deno engine deployment                                    |
+| CRUD API          | `references/crud-api.md`        | `find`, `create`, `updateById`/`updateMany`, `deleteById`/`deleteMany`, atomic conditional updates, globals API    |
 | Seeds             | `references/seeds.md`           | `seed()` vs `seed.steps()`, idempotency, checkpointed steps, categories, `dependsOn`, `undo`, `autoSeed`, seed CLI |
-| Query Operators   | `references/query-operators.md` | `where` clause operators by field type                             |
-| Realtime          | `references/realtime.md`        | Live queries over SSE, automatic broadcasts, `live()`/`liveIter()`, wire protocol, keepalive |
+| Query Operators   | `references/query-operators.md` | `where` clause operators by field type                                                                             |
+| Realtime          | `references/realtime.md`        | Transactional outbox, reconciliation, live queries, broker/client transport seams, admission                       |
+| Channels          | `references/channels.md`        | Typed application events, authorization, publish contexts, client, presence, TanStack Query                        |
 
 ### Infrastructure
 
-| Topic      | File                                    | Covers                                                       |
-| ---------- | --------------------------------------- | ------------------------------------------------------------ |
-| Production | `references/production.md`              | Queue, search, realtime, storage, email, KV adapter setup    |
-| Environment | `references/env.md`                    | `env.ts` + `env.client.ts`: boot-validated, typed env, generated client modules |
-| Auth       | `references/auth.md`                    | Better Auth integration, session, providers, access patterns |
-| Adapters   | `references/infrastructure-adapters.md` | All adapter configs: pg-boss, S3, SMTP, pgNotify, Redis      |
-| MCP        | `references/mcp.md`                     | MCP setup, CRUD tools, route tools, custom tools, security   |
+| Topic       | File                                    | Covers                                                                          |
+| ----------- | --------------------------------------- | ------------------------------------------------------------------------------- |
+| Production  | `references/production.md`              | Queue, search, realtime, storage, email, KV adapter setup                       |
+| Environment | `references/env.md`                     | `env.ts` + `env.client.ts`: boot-validated, typed env, generated client modules |
+| Auth        | `references/auth.md`                    | Better Auth integration, session, providers, access patterns                    |
+| Adapters    | `references/infrastructure-adapters.md` | All adapter configs: pg-boss, S3, SMTP, pgNotify, Redis                         |
+| MCP         | `references/mcp.md`                     | MCP setup, CRUD tools, route tools, custom tools, security                      |
 
 ### Extend
 
-| Topic              | File                               | Covers                                                       |
-| ------------------ | ---------------------------------- | ------------------------------------------------------------ |
-| Extend             | `references/extend.md`             | Custom modules, fields, operators, adapters, codegen plugins |
+| Topic              | File                               | Covers                                                                                                                   |
+| ------------------ | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Extend             | `references/extend.md`             | Custom modules, fields, operators, adapters, codegen plugins                                                             |
 | Module Authoring   | `references/module-authoring.md`   | How modules are created: convention dirs → codegen `.generated/module.ts`; NEVER hand-write `module.ts`/inline `route()` |
-| Codegen Plugin API | `references/codegen-plugin-api.md` | Plugin architecture, category declarations, templates        |
-| Multi-Tenancy      | `references/multi-tenancy.md`      | `appConfig({ context })` resolver, scope isolation, ScopeProvider |
+| Codegen Plugin API | `references/codegen-plugin-api.md` | Plugin architecture, category declarations, templates                                                                    |
+| Multi-Tenancy      | `references/multi-tenancy.md`      | `appConfig({ context })` resolver, scope isolation, ScopeProvider                                                        |
 
 ### Client
 
-| Topic          | File                           | Covers                                                           |
-| -------------- | ------------------------------ | ---------------------------------------------------------------- |
-| TanStack Query | `references/tanstack-query.md` | `q.collections.*`, `q.globals.*`, `q.routes.*`, realtime queries |
+| Topic          | File                           | Covers                                                                                    |
+| -------------- | ------------------------------ | ----------------------------------------------------------------------------------------- |
+| TanStack Query | `references/tanstack-query.md` | `q.collections.*`, `q.globals.*`, `q.routes.*`, realtime snapshots, channel subscriptions |
 
 ## Key Patterns, Quick Reference
 
@@ -257,19 +259,19 @@ await queue.sendReminder.publish({ userId: "abc" });
 
 ## Common Mistakes
 
-| Severity | Mistake                                                | Fix                                                                                   |
-| -------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------- |
-| CRITICAL | Files in wrong directory                               | Collections in `collections/`, routes in `routes/`, etc.                              |
-| CRITICAL | Convention file has no export                          | Codegen needs one export, `export default` or a named `export const`/`function` both discovered; a file with no export is skipped. Factory categories key from the factory string (`collection("blog-posts")` -> `blogPosts`); non-factory categories key from the filename |
-| CRITICAL | Importing route/job/service from `#questpie/factories` | Use `"questpie"`, only collection/global/block/adminConfig use `#questpie/factories` |
-| CRITICAL | Redefining a module collection (e.g. starter `user`) from scratch | `.merge(starterModule.collections.user)` then add fields, see Extend pattern        |
-| CRITICAL | Casting `session.user` to `any` for admin role checks | Use `session?.user.role`; if it is not typed, fix `modules.ts`, `config/auth.ts`, and regenerated output |
-| HIGH     | Forgetting `questpie generate` after adding files      | Re-run codegen on any file add/remove in convention dirs                              |
-| HIGH     | Job handler uses `input` instead of `payload`          | Jobs destructure `{ payload }`, routes destructure `{ input }`                        |
-| HIGH     | `queue.send("name", data)`                             | Use `queue.jobName.publish(data)`                                                     |
-| HIGH     | `beforeCreate` / `afterCreate` hook names              | Use `beforeChange` / `afterChange` with `operation === "create"` guard                |
-| MEDIUM   | Using npm/yarn instead of Bun                          | QUESTPIE requires Bun as package manager                                              |
-| MEDIUM   | Editing `.generated/` files                            | Never edit, re-run `questpie generate`                                               |
+| Severity | Mistake                                                           | Fix                                                                                                                                                                                                                                                                         |
+| -------- | ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| CRITICAL | Files in wrong directory                                          | Collections in `collections/`, routes in `routes/`, etc.                                                                                                                                                                                                                    |
+| CRITICAL | Convention file has no export                                     | Codegen needs one export, `export default` or a named `export const`/`function` both discovered; a file with no export is skipped. Factory categories key from the factory string (`collection("blog-posts")` -> `blogPosts`); non-factory categories key from the filename |
+| CRITICAL | Importing route/job/service from `#questpie/factories`            | Use `"questpie"`, only collection/global/block/adminConfig use `#questpie/factories`                                                                                                                                                                                        |
+| CRITICAL | Redefining a module collection (e.g. starter `user`) from scratch | `.merge(starterModule.collections.user)` then add fields, see Extend pattern                                                                                                                                                                                                |
+| CRITICAL | Casting `session.user` to `any` for admin role checks             | Use `session?.user.role`; if it is not typed, fix `modules.ts`, `config/auth.ts`, and regenerated output                                                                                                                                                                    |
+| HIGH     | Forgetting `questpie generate` after adding files                 | Re-run codegen on any file add/remove in convention dirs                                                                                                                                                                                                                    |
+| HIGH     | Job handler uses `input` instead of `payload`                     | Jobs destructure `{ payload }`, routes destructure `{ input }`                                                                                                                                                                                                              |
+| HIGH     | `queue.send("name", data)`                                        | Use `queue.jobName.publish(data)`                                                                                                                                                                                                                                           |
+| HIGH     | `beforeCreate` / `afterCreate` hook names                         | Use `beforeChange` / `afterChange` with `operation === "create"` guard                                                                                                                                                                                                      |
+| MEDIUM   | Using npm/yarn instead of Bun                                     | QUESTPIE requires Bun as package manager                                                                                                                                                                                                                                    |
+| MEDIUM   | Editing `.generated/` files                                       | Never edit, re-run `questpie generate`                                                                                                                                                                                                                                      |
 
 ## Preview And Workflow Rules
 
@@ -5510,100 +5512,183 @@ const result = await collections.products.find({
 
 # Realtime
 
-Live queries over SSE. **Broadcasts are automatic**, every collection/global create/update/delete already writes a change event to the `questpie_realtime_log` outbox and notifies subscribers. Do NOT write `afterChange` hooks that "emit" realtime events; a custom emitter double-fires against the built-in broadcast hook.
+Realtime powers two distinct products:
 
-## How It Works
+- **Live queries** re-run a collection/global query under the subscriber's session and deliver the latest access-controlled snapshot. Snapshot wakes are coalescable.
+- **Channels** deliver schema-validated application events in channel-local order. Events are not coalesced. See `references/channels.md`.
 
-1. Every CRUD write appends a change event to the outbox; an adapter (pg_notify / Redis Streams) or 2s polling wakes subscribers
-2. The server **re-runs the subscribed query under the subscriber's auth** and pushes the full result as a `snapshot`, clients never receive raw change events (no `operation`/`recordId` on the client; snapshots are access-controlled)
-3. One SSE connection multiplexes all topics (`POST /realtime`)
+Enable it with `realtime: true`. Do not write CRUD hooks to emit live-query changes: every logical create/update/delete, including bulk operations, already appends one `questpie_realtime_log` row **inside the business transaction**.
 
-Snapshots are idempotent state, not diffs, filtered subscriptions may receive unchanged snapshots on update/delete (over-refresh by design). Always render from the snapshot.
+## Correctness model
 
-## Client-Side Usage
+1. The mutation and outbox row commit or roll back together.
+2. A `ChangeBroker` wake tells instances to drain quickly. Wakes are notice-only, unordered, at-most-once, and may be coalesced.
+3. An unconditional reconciliation poll drains missed outbox rows. Default: 15s with push, 2s without; provider failure tightens to at most 2s.
+4. The server re-runs matching queries under the subscriber's session, including row/field access and `afterRead`, then a `ClientTransport` delivers authorized frames.
+
+The broker is a latency hint; the transactional outbox plus reconciliation is the guarantee. Brokers must never carry rows or snapshots. Equivalent snapshot work is shared per principal by default, never across users unless the application proves deterministic access equivalence.
+
+## Client usage
 
 ```ts
-// React + TanStack Query, typed second arg, no casts needed
+const stop = client.collections.posts.live(
+	{ where: { status: "published" }, with: { author: true }, limit: 50 },
+	(snapshot) => render(snapshot.docs),
+	{ onError: console.error },
+);
+
+for await (const snapshot of client.collections.posts.liveIter(
+	{ where: { status: "published" } },
+	{ signal: controller.signal },
+)) {
+	render(snapshot.docs);
+}
+
+client.globals.siteSettings.live(undefined, (settings) => applyTheme(settings));
+```
+
+`live()` accepts the query options supported by the wire contract: `where`, `with`, `limit`, `offset`, `orderBy`, and `locale`. Prefer these typed wrappers over raw `client.realtime.subscribe()`.
+
+TanStack Query uses the stream for its initial result too; it does not issue a duplicate REST fetch:
+
+```tsx
 const { data } = useQuery(
-	qp.collections.posts.find(
-		{ where: { event: eventId }, limit: 50 },
+	q.collections.posts.find(
+		{ where: { status: "published" }, limit: 20 },
 		{ realtime: true },
 	),
 );
-
-// Vanilla TS, live() is the live form of find(): same options in, same result type out
-const stop = client.collections.posts.live(
-	{
-		where: { event: eventId },
-		with: { author: true },
-		orderBy: { createdAt: "desc" },
-	},
-	(snap) => render(snap.docs), // snap.docs[i].author is typed
-	{ onError: (e) => console.error(e) },
-);
-stop(); // unsubscribe
-
-// Async-iterable form (workers, agents, tests), terminate via AbortSignal
-for await (const snap of client.collections.posts.liveIter(
-	{ where: { event: eventId } },
-	{ signal: controller.signal },
-)) {
-	render(snap.docs);
-}
-
-// Globals mirror get()
-client.globals.siteSettings.live(undefined, (settings) => applyTheme(settings));
-
-// Low-level escape hatch, topic objects, never channel strings; data is untyped
-client.realtime.subscribe(
-	{ resourceType: "collection", resource: "posts", where: { event: eventId } },
-	(data) => {}, // unknown, prefer the typed live() wrappers
-);
 ```
 
-Live options carry exactly what the wire protocol supports: `where`, `with`, `limit`, `offset`, `orderBy`, `locale` (no `columns`/`groupBy`/`search`, compile error).
+`count(..., { realtime: true })` yields a number, not a paginated snapshot. `findOne()` and `findVersions()` do not have realtime forms.
 
-## Wire Protocol (stable contract)
+## Transport selection
 
-`POST <basePath>/realtime` body `{ topics: [{ id, resourceType: "collection" | "global", resource, where?, with?, limit?, offset?, orderBy?, locale? }] }` → SSE events:
+SSE is the default `ClientTransport`; no browser transport config is required. With a normal Postgres URL the server auto-wires `pg_notify`; otherwise it polls every 2s. Explicit pg, Redis, and Cloudflare adapters remain supported as notice brokers.
 
-| Event      | Payload                  | Meaning                                               |
-| ---------- | ------------------------ | ----------------------------------------------------- |
-| `snapshot` | `{ topicId, seq, data }` | Full `find()`/`get()` result under subscriber's auth  |
-| `error`    | `{ topicId, message }`   | Topic-level failure (unknown resource, access denied) |
-| `ping`     | `{ ts }`                 | Keep-alive (default every 8s)                         |
-
-Ignore unknown SSE event types (forward compat).
-
-## Keepalive (Bun)
-
-The stream pings every 8s by default (`realtime.keepAliveIntervalMs`). Bun's default `idleTimeout` is 10s, the default ping survives it, but set headroom explicitly in the server entry:
+For managed WebSockets and native presence, select the isolated Pusher/Soketi preset:
 
 ```ts
-export default { port: 3000, idleTimeout: 30, fetch: server.fetch };
+import { pusherRealtime } from "questpie/adapters/pusher";
+import { runtimeConfig } from "questpie/app";
+
+const managed = pusherRealtime({
+	appId: env.PUSHER_APP_ID,
+	key: env.PUSHER_KEY,
+	secret: env.PUSHER_SECRET,
+	cluster: env.PUSHER_CLUSTER,
+});
+
+export default runtimeConfig({ realtime: { ...managed } });
 ```
 
-## Realtime Adapters
+`pusherRealtime()` supplies both the notice broker and client transport. App-facing `live()`, TanStack, and channel APIs do not change. Direct provider client events are off by default because they bypass framework publish authorization, Zod validation, rate limits, ordered ledger, and replay.
 
-Without an adapter, subscribers wake on a 2s poll. For push-based delivery, configure a realtime adapter in `runtimeConfig`:
+## Admission and lifecycle
+
+Default SSE limits are 20 topics per connection, 5 connections per authenticated principal, `find` limit 100, nested `with` depth 3, 4 concurrent initial snapshots, and 1 MiB buffered snapshot bytes per edge session. Slow consumers are bounded and disconnected rather than allowed unbounded memory growth.
+
+Keep `keepAliveIntervalMs` (default 8s) below the server/proxy idle timeout. `live()` without server `realtime` errors explicitly; it does not silently fall back to a normal query.
+
+Full adapter options and deployment guidance: `references/infrastructure-adapters.md`.
+
+---
+
+# Channels
+
+Channels are typed, ordered application-event streams over the realtime runtime. Use them for chat notifications, progress, typing, or presence. The bounded replay ledger is delivery infrastructure, not durable application history; persist events users must retrieve later in a collection.
+
+## Define and generate
+
+```ts title="channels/chat-room.ts"
+import { channel } from "questpie/channels";
+import { z } from "zod";
+
+export default channel("chat-room-[roomId]")
+	.events({
+		message: z.object({ id: z.string(), text: z.string() }),
+		typing: z.object({ active: z.boolean() }),
+	})
+	.authorize({
+		subscribe: ({ session }) => Boolean(session?.user),
+		publish: ({ session }) => Boolean(session?.user),
+	})
+	.presence(({ params, session }) => ({
+		id: session!.user.id,
+		roomId: params.roomId,
+	}));
+```
+
+The default-export filename derives the registry/API key (`chatRoom`); the builder string is the stable wire pattern. `[roomId]` becomes a required typed parameter. Run `bunx questpie generate` after adding or renaming a channel.
+
+Authorization rules:
+
+- With no `.authorize()`, subscribe is public and browser publish is denied.
+- `.authorize(rule)` uses the rule for subscribe and as the publish fallback.
+- `.authorize({ subscribe, publish })` separates both permissions; omitted publish falls back to subscribe.
+- Server/system contexts may publish; browser publish always uses the framework route, authorization, rate limits, and Zod parsing.
+
+## Publish on the server
+
+Framework handlers and hooks receive a generated `channels` service:
 
 ```ts
-import { pgNotifyAdapter } from "questpie/adapters/pg-notify";
+.handler(async ({ input, channels }) => {
+	return channels.publish("chatRoom", {
+		params: { roomId: input.roomId },
+		event: "message",
+		data: { id: input.id, text: input.text },
+	});
+});
 
-runtimeConfig({
-	realtime: {
-		adapter: pgNotifyAdapter({ connectionString: env.DATABASE_URL }),
-	},
+.hooks({
+	afterChange: [async ({ data, channels }) => {
+		await channels.publish("chatRoom", {
+			params: { roomId: data.roomId },
+			event: "message",
+			data: { id: data.id, text: data.text },
+		});
+	}],
 });
 ```
 
-| Adapter                 | Description                  |
-| ----------------------- | ---------------------------- |
-| _None_ (default)        | Polling-based (every 2s)     |
-| `pgNotifyAdapter()`     | PostgreSQL LISTEN/NOTIFY     |
-| `redisStreamsAdapter()` | Redis Streams consumer group |
+In collection/global/hook files, use the injected `{ channels }`. Never import the generated `app` or defer lookup through ambient `getContext()`; the injected service is generated-type-safe and mutation-context aware.
 
-Full adapter configuration (connection options, multi-instance setup): see `references/infrastructure-adapters.md`.
+## Client, presence, and TanStack Query
+
+```ts
+const stop = client.channels.chatRoom.subscribe({ roomId }, (message) => {
+	if (message.event === "message") console.log(message.data.text);
+});
+
+await client.channels.chatRoom.publish({
+	params: { roomId },
+	event: "typing",
+	data: { active: true },
+});
+
+const members = await client.channels.chatRoom.presence({ roomId });
+stop();
+```
+
+Async consumers use `client.channels.chatRoom.iter(params, { signal })`. TanStack Query exposes an accumulating event query:
+
+```tsx
+const { data: messages = [] } = useQuery(
+	q.channels.chatRoom.subscription({ roomId }),
+);
+```
+
+This differs from live-query `{ realtime: true }`, which retains only the latest snapshot.
+
+## Delivery and security
+
+- Events are ordered per resolved channel and never coalesced. Reconnect can replay an id; clients deduplicate it.
+- Falling behind the bounded replay horizon raises an explicit gap. Recover from persisted state or subscribe from now.
+- Payloads must be JSON-serializable and at most 10,000 UTF-8 bytes.
+- Cookie-authenticated authority routes require an exact trusted Origin; configure extra origins under `realtime.channelSecurity.trustedOrigins`.
+- Client publish token buckets default to 10/s with burst 20 per session and principal.
+- Pusher/Soketi is an opt-in transport preset. Direct provider client events are a separate unsafe capability and are off by default.
 
 ---
 
@@ -6402,7 +6487,7 @@ The exhaustive catalog of adapter config shapes for QUESTPIE infrastructure. For
 - [Database](#database)
 - [Storage](#storage), local, S3, R2, signed URLs
 - [Queue](#queue), pg-boss, BullMQ
-- [Realtime](#realtime), pgNotify, Redis Streams
+- [Realtime](#realtime), SSE, pgNotify, Redis Streams, Cloudflare, Pusher/Soketi
 - [Search](#search), Postgres FTS, pgvector semantic
 - [Email](#email), SMTP, Console, Resend, Plunk, custom
 - [KV Store](#kv-store), Redis, custom, in-memory
@@ -6575,8 +6660,19 @@ Serving stays collection-scoped, the file route verifies the token **and** the c
 ```ts
 import { buildStorageFileUrl, generateSignedUrlToken } from "questpie/storage";
 
-const token = await generateSignedUrlToken(asset.key, app.config.secret!, 900, "assets");
-const url = buildStorageFileUrl(app.config.app.url, "/api", "assets", asset.key, token);
+const token = await generateSignedUrlToken(
+	asset.key,
+	app.config.secret!,
+	900,
+	"assets",
+);
+const url = buildStorageFileUrl(
+	app.config.app.url,
+	"/api",
+	"assets",
+	asset.key,
+	token,
+);
 ```
 
 (`verifySignedUrlToken` is the verification half the serve route runs, you rarely call it yourself.)
@@ -6639,11 +6735,13 @@ handler: async ({ queue }) => {
 
 ## Realtime
 
-SSE-based live updates.
+The realtime runtime writes its outbox row in the business transaction and always reconciles missed notices. `ChangeBroker` handles notice-only cross-instance wakes; `ClientTransport` handles already-authorized edge frames. SSE is the default client transport.
 
-### pgNotify (Single Instance)
+With `realtime: true`, a normal Postgres URL auto-selects `pg_notify`; without a push broker, the outbox is polled every 2s. With push, reconciliation still runs every 15s so a lost wake cannot permanently stall subscribers.
 
-Uses PostgreSQL `LISTEN/NOTIFY`. Best for single-server deployments:
+### pgNotify
+
+Uses PostgreSQL `LISTEN/NOTIFY`. Every listening instance receives the same notice:
 
 ```ts
 import { runtimeConfig } from "questpie/app";
@@ -6660,9 +6758,9 @@ export default runtimeConfig({
 });
 ```
 
-### Redis Streams (Multi-Instance)
+### Redis Streams
 
-Required for horizontal scaling across multiple server instances. Takes a connected, redis-shaped `client` (the node-redis command surface: `xAdd`, `xReadGroup`, `xGroupCreate`, `xAck`), not a URL:
+Takes a connected Redis-shaped `client` with `xAdd` and `xRead`, not a URL. Every app instance owns an independent `XREAD` cursor so notices fan out; consumer groups must not be used because they load-balance wakes and strand subscribers on other instances.
 
 ```ts
 import { createClient } from "redis";
@@ -6681,13 +6779,42 @@ export default runtimeConfig({
 });
 ```
 
+The adapter duplicates the client for its blocking reader when supported; otherwise provide a dedicated `reader`. The `group` and `consumer` options are deprecated compatibility inputs and do not restore consumer-group behavior.
+
+### Pusher/Soketi managed WebSockets
+
+Use the isolated preset when managed WebSocket delivery and native presence are required:
+
+```ts
+import { pusherRealtime } from "questpie/adapters/pusher";
+import { runtimeConfig } from "questpie/app";
+
+const managed = pusherRealtime({
+	appId: env.PUSHER_APP_ID,
+	key: env.PUSHER_KEY,
+	secret: env.PUSHER_SECRET,
+	cluster: env.PUSHER_CLUSTER,
+});
+
+export default runtimeConfig({ realtime: { ...managed } });
+```
+
+The preset supplies a notice-only Pusher `ChangeBroker` and a Pusher `ClientTransport`. Direct provider client events are off by default; they bypass QUESTPIE channel schemas, publish authorization, rate limits, ordered ledger, and replay.
+
+### Cloudflare Durable Objects
+
+`cloudflareRealtimeAdapter()` is a notice-only broker for Workers. It shards Durable Objects by resource type and resource name, and notification work is attached to `waitUntil` so CRUD commits do not wait on the broker. The Worker still reads the durable outbox, re-runs access-controlled snapshots, and performs reconciliation.
+
 ### When to Use Which
 
-| Adapter                    | Use Case                                              |
-| -------------------------- | ----------------------------------------------------- |
-| `pgNotifyAdapter`          | Single server, development, simple deployments        |
-| `redisStreamsAdapter`      | Multiple servers, horizontal scaling, high throughput |
-| `cloudflareRealtimeAdapter` | Cloudflare Workers (Durable Objects)                  |
+| Selection                   | Use case                                                          |
+| --------------------------- | ----------------------------------------------------------------- |
+| Implicit pg + SSE           | Default Postgres deployment                                       |
+| Poll + SSE                  | Zero extra infrastructure without a push-capable database         |
+| `pgNotifyAdapter` + SSE     | Explicit Postgres connection/channel                              |
+| `redisStreamsAdapter` + SSE | Cross-instance Redis notice fan-out                               |
+| `cloudflareRealtimeAdapter` | Cloudflare Workers notice fan-out through sharded Durable Objects |
+| `pusherRealtime`            | Managed WebSockets, native presence, and shared channel delivery  |
 
 ## Search
 
@@ -7109,15 +7236,15 @@ const spec = generateOpenApiSpec(app, {
 
 ## Migrations CLI
 
-| Command                          | Description                                      |
-| -------------------------------- | ------------------------------------------------ |
-| `bunx questpie push`             | Direct schema sync (dev only, no migration file) |
-| `bunx questpie migrate:create`   | Generate migration from schema diff              |
-| `bunx questpie migrate`          | Run pending migrations                           |
-| `bunx questpie migrate:down`     | Rollback last migration                          |
-| `bunx questpie migrate:fresh`    | Drop all and re-run (DESTRUCTIVE)                |
-| `bunx questpie migrate:reset`    | Reset migration tracking                         |
-| `bunx questpie seed`             | Run seed files                                   |
+| Command                        | Description                                      |
+| ------------------------------ | ------------------------------------------------ |
+| `bunx questpie push`           | Direct schema sync (dev only, no migration file) |
+| `bunx questpie migrate:create` | Generate migration from schema diff              |
+| `bunx questpie migrate`        | Run pending migrations                           |
+| `bunx questpie migrate:down`   | Rollback last migration                          |
+| `bunx questpie migrate:fresh`  | Drop all and re-run (DESTRUCTIVE)                |
+| `bunx questpie migrate:reset`  | Reset migration tracking                         |
+| `bunx questpie seed`           | Run seed files                                   |
 
 ## Complete Production Config Example
 
@@ -8263,6 +8390,7 @@ examples/city-portal/
 - [Type Inference](#type-inference), `AppConfig` flow
 - [Direct Client Usage (without TanStack Query)](#direct-client-usage-without-tanstack-query)
 - [Realtime](#realtime), `{ realtime: true }`, adapters, topic builders
+- [Channel Subscriptions](#channel-subscriptions), typed ordered application events
 - [Framework Adapters](#framework-adapters), TanStack Start, Next.js, Hono, Elysia
 - [Common Mistakes](#common-mistakes)
 
@@ -8650,7 +8778,7 @@ client.setLocale("sk"); // Set locale for localized content
 
 ## Realtime
 
-Pass `{ realtime: true }` as the **typed** second argument (`RealtimeQueryConfig`) to `find()`, `count()`, or `get()`, initial data via a normal fetch, then the server pushes full access-controlled snapshots on every matching change. `findOne()` and `findVersions()` have no realtime form (a second argument there is a compile error).
+Pass `{ realtime: true }` as the **typed** second argument (`RealtimeQueryConfig`) to `find()`, `count()`, or `get()`. The stream supplies the initial value and later access-controlled snapshots, so there is no duplicate REST fetch. `findOne()` and `findVersions()` have no realtime form (a second argument there is a compile error). Realtime `count()` remains a scalar number.
 
 ```tsx
 const { data } = useQuery(
@@ -8661,7 +8789,7 @@ const { data } = useQuery(
 );
 ```
 
-Works zero-config (2s polling); add a realtime adapter for instant push:
+Server realtime must be enabled. SSE is the default client transport; a normal Postgres URL auto-wires `pg_notify`, while setups without a push broker reconcile by polling every 2s. An explicit adapter can select a broker:
 
 ```ts
 import { runtimeConfig } from "questpie/app";
@@ -8674,18 +8802,36 @@ export default runtimeConfig({
 });
 ```
 
-Subscriptions are query-shaped topic objects (`{ resourceType, resource, where?, with? }`), there are no channel strings. Outside React, use the typed live form of the same query: `client.collections.posts.live(options, onSnapshot)` / `liveIter(options)` (see AGENTS.md §19 Realtime).
+Live-query subscriptions are query-shaped topic objects (`{ resourceType, resource, where?, with? }`), not application channel strings. Outside React, use the typed live form of the same query: `client.collections.posts.live(options, onSnapshot)` / `liveIter(options)` (see `references/realtime.md`).
 
 To build those topic objects yourself, e.g. manual cache invalidation or a raw `client.realtime.subscribe` call that must match the topic a query subscribed with, use the exported builders instead of hand-writing the shape:
 
 ```ts
-import { buildCollectionTopic, buildGlobalTopic } from "@questpie/tanstack-query"; // re-exported from questpie/client
+import {
+	buildCollectionTopic,
+	buildGlobalTopic,
+} from "@questpie/tanstack-query"; // re-exported from questpie/client
 
-const topic = buildCollectionTopic("posts", { where: { status: "published" }, limit: 20 });
+const topic = buildCollectionTopic("posts", {
+	where: { status: "published" },
+	limit: 20,
+});
 const settingsTopic = buildGlobalTopic("siteSettings");
 ```
 
-For multi-instance deployments, create a Redis client and use `redisStreamsAdapter({ client })`.
+Push is a latency optimization; the transactional outbox and reconciliation poll recover missed broker wakes. See `references/realtime.md`.
+
+## Channel Subscriptions
+
+Generated channels expose an accumulating query option. Unlike live queries, ordered channel events are appended rather than reduced to the newest snapshot:
+
+```tsx
+const { data: messages = [] } = useQuery(
+	q.channels.chatRoom.subscription({ roomId }),
+);
+```
+
+The result is a typed array of `{ event, eventId, data }` unions. The query's abort signal closes the underlying channel iterator. Channel definition, authorization, server publish, and presence are covered in `references/channels.md`.
 
 ## Framework Adapters
 
@@ -8746,20 +8892,9 @@ const posts = await fetch("/api/collections/posts").then((r) => r.json());
 const { docs } = await client.collections.posts.find({ limit: 10 });
 ```
 
-### MEDIUM: Not setting up realtime adapter
+### MEDIUM: Forgetting to enable server realtime
 
-Collection changes do not auto-refresh when realtime is enabled but no adapter is configured. Add a realtime adapter in `questpie.config.ts`:
-
-```ts
-import { runtimeConfig } from "questpie/app";
-import { pgNotifyAdapter } from "questpie/adapters/pg-notify";
-
-export default runtimeConfig({
-	realtime: {
-		adapter: pgNotifyAdapter({ connectionString: process.env.DATABASE_URL }),
-	},
-});
-```
+`{ realtime: true }` is not a request to silently fall back to a normal query. Set `realtime: true` or a realtime object in server runtime config; otherwise the subscription reports an error.
 
 ### MEDIUM: Importing from `questpie/client` in server code or vice versa
 

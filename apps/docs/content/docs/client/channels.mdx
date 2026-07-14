@@ -1,0 +1,211 @@
+---
+title: Channels
+description: Define schema-validated application events with channel(), authorize subscribe and publish separately, then use the generated server, client, presence, and TanStack APIs over SSE or Pusher/Soketi.
+---
+
+Channels are typed application event streams built on the same realtime runtime as live queries. Define each channel once in `channels/`; codegen adds it to request contexts as `channels`, to the generated `AppConfig`, and to `client.channels`. The application API stays the same whether delivery uses the zero-infrastructure SSE path or the managed Pusher/Soketi path.
+
+Use channels for transient events such as chat notifications, progress, typing, or presence. The bounded replay ledger is delivery infrastructure, **not** queryable application history. Persist messages that users must retrieve later in a collection.
+
+## Define a channel
+
+```ts title="src/questpie/server/channels/chat-room.ts"
+import { channel } from "questpie/channels";
+import { z } from "zod";
+
+export default channel("chat-room-[roomId]")
+	.events({
+		message: z.object({ id: z.string(), text: z.string() }),
+		typing: z.object({ active: z.boolean() }),
+	})
+	.authorize({
+		subscribe: async ({ params, session, collections }) => {
+			if (!session?.user) return false;
+			return Boolean(
+				await collections.rooms.findOne({
+					where: { id: params.roomId, members: { contains: session.user.id } },
+				}),
+			);
+		},
+		publish: async ({ params, session, collections }) => {
+			if (!session?.user) return false;
+			return Boolean(
+				await collections.rooms.findOne({
+					where: { id: params.roomId, members: { contains: session.user.id } },
+				}),
+			);
+		},
+	})
+	.presence(({ params, session }) => ({
+		id: session!.user.id,
+		roomId: params.roomId,
+		name: session!.user.name,
+	}));
+```
+
+The registry/API key is `chatRoom`, derived from the default-export filename. The explicit builder string is the stable wire pattern. Renaming the file changes the typed API and causes compile errors at call sites; it does **not** silently rename the wire channel. `[roomId]` becomes a required `{ roomId: string }` parameter everywhere.
+
+Run codegen after adding or renaming a channel:
+
+```bash
+bunx questpie generate
+```
+
+### Visibility and authorization
+
+| Builder state                         | Visibility | Subscribe          | Publish                                    |
+| ------------------------------------- | ---------- | ------------------ | ------------------------------------------ |
+| `channel(...).events(...)`            | public     | allowed by default | client publish denied by default           |
+| `.authorize(rule)`                    | private    | `rule`             | falls back to the same `rule`              |
+| `.authorize({ subscribe, publish })`  | private    | explicit rule      | explicit rule, or `subscribe` when omitted |
+| `.presence(resolver)` after authorize | presence   | authorize first    | authorize first                            |
+
+Authorization receives the generated `AppContext` plus typed `params`. Use `session`, `collections`, `db`, and services directly. A false result, thrown error, or authorization timeout denies the operation. Server/system contexts may publish without a client publish grant; browser publishes still go through the framework route, authorization, rate limits, and Zod parsing.
+
+## Publish on the server
+
+Framework handlers receive a generated, request-bound `channels` service:
+
+```ts title="src/questpie/server/routes/send-message.ts"
+import { route } from "questpie/services";
+import { z } from "zod";
+
+export default route()
+	.post()
+	.schema(z.object({ roomId: z.string(), id: z.string(), text: z.string() }))
+	.handler(async ({ input, channels }) => {
+		return channels.publish("chatRoom", {
+			params: { roomId: input.roomId },
+			event: "message",
+			data: { id: input.id, text: input.text },
+		});
+	});
+```
+
+The event name and input are inferred from the channel's Zod schemas. Zod transforms run before the event enters the ledger. `publish()` resolves to `{ eventId }`, the channel-local ordered id clients use for replay and deduplication.
+
+### Publish from collection or global hooks
+
+Use the hook's injected `{ channels }` argument. It carries the same generated types and the mutation-bound database context:
+
+```ts
+.hooks({
+  afterChange: [async ({ data, channels }) => {
+    await channels.publish("chatRoom", {
+      params: { roomId: data.room },
+      event: "message",
+      data: { id: data.id, text: data.text },
+    });
+  }],
+})
+```
+
+Do not import the generated `app` into a collection/hook file, and do not resolve channels later through ambient `getContext()`. Contextless update/delete calls do not guarantee an ambient scope; the injected hook argument is the reliable and transaction-aware path.
+
+## Subscribe and publish on the client
+
+`createClient<AppConfig>()` exposes one handle per generated channel:
+
+```ts
+const stop = client.channels.chatRoom.subscribe(
+	{ roomId },
+	(message) => {
+		if (message.event === "message") {
+			console.log(message.eventId, message.data.text);
+		} else {
+			console.log(message.data.active);
+		}
+	},
+	{ onError: console.error },
+);
+
+const receipt = await client.channels.chatRoom.publish({
+	params: { roomId },
+	event: "typing",
+	data: { active: true },
+});
+
+stop();
+```
+
+Client publish is server-mediated even on Pusher/Soketi: the request uses the same dynamic auth headers as other client calls, re-evaluates `publish` authorization, validates the event with Zod, enforces payload/origin/rate limits, and only then appends the ordered event.
+
+For async iteration:
+
+```ts
+for await (const message of client.channels.chatRoom.iter(
+	{ roomId },
+	{ signal: controller.signal },
+)) {
+	consume(message);
+}
+```
+
+Call `client.channels.destroy()` only when disposing the whole client-side channel runtime. Normal components should call the subscription's `stop()` function or abort their iterator.
+
+## Presence
+
+Only a channel with `.presence()` has a callable presence API:
+
+```ts
+const members = await client.channels.chatRoom.presence({ roomId });
+// readonly Array<{ id: string; roomId: string; name: string }>
+```
+
+Pusher/Soketi uses native provider presence. The SSE tier provides coarse app-instance-local presence from subscription lifecycle, so it is suitable for lightweight indicators, not a globally exact occupancy counter.
+
+## TanStack Query
+
+The query-options proxy exposes channel subscriptions without adding a separate React provider or bespoke hook:
+
+```tsx
+const { data: messages = [] } = useQuery(
+	q.channels.chatRoom.subscription({ roomId }),
+);
+```
+
+The query starts with `[]` and appends each typed `{ event, eventId, data }` message. Its abort signal closes the underlying iterator. This is an event accumulation query; it is separate from live-query `{ realtime: true }`, whose reducer keeps only the newest collection/global snapshot.
+
+## Transport selection
+
+SSE is the default edge transport. Channel subscribe uses the framework SSE/control routes, publish uses HTTP POST, and presence is coarse/local. No client configuration changes are needed.
+
+To use managed WebSockets and native presence, install the optional Pusher peers and select the preset under `realtime`:
+
+```ts title="src/questpie/server/questpie.config.ts"
+import { pusherRealtime } from "questpie/adapters/pusher";
+import { runtimeConfig } from "questpie/app";
+
+const managed = pusherRealtime({
+	appId: env.PUSHER_APP_ID,
+	key: env.PUSHER_KEY,
+	secret: env.PUSHER_SECRET,
+	cluster: env.PUSHER_CLUSTER,
+	// For Soketi, provide host/wsHost/ports instead.
+});
+
+export default runtimeConfig({
+	realtime: { ...managed },
+});
+```
+
+The client discovers the selected transport from `/channels/config`; `client.channels.*` call sites do not change.
+
+<Callout type="warn" title="Direct Pusher client events are a separate unsafe capability">
+Provider client events bypass QUESTPIE's publish route, per-verb authorization, Zod schemas, ordered ledger, replay, and rate limits. They are off by default. Enabling `clientEvents` requires `acknowledgeProviderWideRisk: true`; its `allowedChannels` list is only an SDK affordance and a raw provider client can bypass it. Prefer `client.channels.<name>.publish()`.
+</Callout>
+
+## Delivery and security contracts
+
+- Framework events are ordered per resolved channel and are never coalesced. Reconnect may replay an event id; clients deduplicate it.
+- Falling behind the bounded replay horizon produces an explicit channel gap rather than invented state. Recover from a persisted collection or subscribe from now.
+- A slow SSE consumer is disconnected after bounded event/byte queues fill; ordered events are not silently dropped.
+- Payloads must be JSON-serializable and at most 10,000 UTF-8 bytes.
+- Cookie-authenticated authority routes require an exact trusted `Origin`. Additional origins belong in `realtime.channelSecurity.trustedOrigins`.
+- Client publishes use independent per-session and per-principal token buckets (defaults: 10/s, burst 20).
+
+## Related
+
+- [Realtime](/docs/client/realtime), live collection/global snapshots.
+- [Realtime adapter](/docs/adapters/realtime), SSE versus Pusher/Soketi selection, reconciliation, admission, and privacy.
+- [TanStack Query](/docs/client/tanstack-query), the complete option-builder surface.

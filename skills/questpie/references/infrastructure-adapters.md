@@ -5,7 +5,7 @@ The exhaustive catalog of adapter config shapes for QUESTPIE infrastructure. For
 - [Database](#database)
 - [Storage](#storage), local, S3, R2, signed URLs
 - [Queue](#queue), pg-boss, BullMQ
-- [Realtime](#realtime), pgNotify, Redis Streams
+- [Realtime](#realtime), SSE, pgNotify, Redis Streams, Cloudflare, Pusher/Soketi
 - [Search](#search), Postgres FTS, pgvector semantic
 - [Email](#email), SMTP, Console, Resend, Plunk, custom
 - [KV Store](#kv-store), Redis, custom, in-memory
@@ -178,8 +178,19 @@ Serving stays collection-scoped, the file route verifies the token **and** the c
 ```ts
 import { buildStorageFileUrl, generateSignedUrlToken } from "questpie/storage";
 
-const token = await generateSignedUrlToken(asset.key, app.config.secret!, 900, "assets");
-const url = buildStorageFileUrl(app.config.app.url, "/api", "assets", asset.key, token);
+const token = await generateSignedUrlToken(
+	asset.key,
+	app.config.secret!,
+	900,
+	"assets",
+);
+const url = buildStorageFileUrl(
+	app.config.app.url,
+	"/api",
+	"assets",
+	asset.key,
+	token,
+);
 ```
 
 (`verifySignedUrlToken` is the verification half the serve route runs, you rarely call it yourself.)
@@ -242,11 +253,13 @@ handler: async ({ queue }) => {
 
 ## Realtime
 
-SSE-based live updates.
+The realtime runtime writes its outbox row in the business transaction and always reconciles missed notices. `ChangeBroker` handles notice-only cross-instance wakes; `ClientTransport` handles already-authorized edge frames. SSE is the default client transport.
 
-### pgNotify (Single Instance)
+With `realtime: true`, a normal Postgres URL auto-selects `pg_notify`; without a push broker, the outbox is polled every 2s. With push, reconciliation still runs every 15s so a lost wake cannot permanently stall subscribers.
 
-Uses PostgreSQL `LISTEN/NOTIFY`. Best for single-server deployments:
+### pgNotify
+
+Uses PostgreSQL `LISTEN/NOTIFY`. Every listening instance receives the same notice:
 
 ```ts
 import { runtimeConfig } from "questpie/app";
@@ -263,9 +276,9 @@ export default runtimeConfig({
 });
 ```
 
-### Redis Streams (Multi-Instance)
+### Redis Streams
 
-Required for horizontal scaling across multiple server instances. Takes a connected, redis-shaped `client` (the node-redis command surface: `xAdd`, `xReadGroup`, `xGroupCreate`, `xAck`), not a URL:
+Takes a connected Redis-shaped `client` with `xAdd` and `xRead`, not a URL. Every app instance owns an independent `XREAD` cursor so notices fan out; consumer groups must not be used because they load-balance wakes and strand subscribers on other instances.
 
 ```ts
 import { createClient } from "redis";
@@ -284,13 +297,42 @@ export default runtimeConfig({
 });
 ```
 
+The adapter duplicates the client for its blocking reader when supported; otherwise provide a dedicated `reader`. The `group` and `consumer` options are deprecated compatibility inputs and do not restore consumer-group behavior.
+
+### Pusher/Soketi managed WebSockets
+
+Use the isolated preset when managed WebSocket delivery and native presence are required:
+
+```ts
+import { pusherRealtime } from "questpie/adapters/pusher";
+import { runtimeConfig } from "questpie/app";
+
+const managed = pusherRealtime({
+	appId: env.PUSHER_APP_ID,
+	key: env.PUSHER_KEY,
+	secret: env.PUSHER_SECRET,
+	cluster: env.PUSHER_CLUSTER,
+});
+
+export default runtimeConfig({ realtime: { ...managed } });
+```
+
+The preset supplies a notice-only Pusher `ChangeBroker` and a Pusher `ClientTransport`. Direct provider client events are off by default; they bypass QUESTPIE channel schemas, publish authorization, rate limits, ordered ledger, and replay.
+
+### Cloudflare Durable Objects
+
+`cloudflareRealtimeAdapter()` is a notice-only broker for Workers. It shards Durable Objects by resource type and resource name, and notification work is attached to `waitUntil` so CRUD commits do not wait on the broker. The Worker still reads the durable outbox, re-runs access-controlled snapshots, and performs reconciliation.
+
 ### When to Use Which
 
-| Adapter                    | Use Case                                              |
-| -------------------------- | ----------------------------------------------------- |
-| `pgNotifyAdapter`          | Single server, development, simple deployments        |
-| `redisStreamsAdapter`      | Multiple servers, horizontal scaling, high throughput |
-| `cloudflareRealtimeAdapter` | Cloudflare Workers (Durable Objects)                  |
+| Selection                   | Use case                                                          |
+| --------------------------- | ----------------------------------------------------------------- |
+| Implicit pg + SSE           | Default Postgres deployment                                       |
+| Poll + SSE                  | Zero extra infrastructure without a push-capable database         |
+| `pgNotifyAdapter` + SSE     | Explicit Postgres connection/channel                              |
+| `redisStreamsAdapter` + SSE | Cross-instance Redis notice fan-out                               |
+| `cloudflareRealtimeAdapter` | Cloudflare Workers notice fan-out through sharded Durable Objects |
+| `pusherRealtime`            | Managed WebSockets, native presence, and shared channel delivery  |
 
 ## Search
 
@@ -712,15 +754,15 @@ const spec = generateOpenApiSpec(app, {
 
 ## Migrations CLI
 
-| Command                          | Description                                      |
-| -------------------------------- | ------------------------------------------------ |
-| `bunx questpie push`             | Direct schema sync (dev only, no migration file) |
-| `bunx questpie migrate:create`   | Generate migration from schema diff              |
-| `bunx questpie migrate`          | Run pending migrations                           |
-| `bunx questpie migrate:down`     | Rollback last migration                          |
-| `bunx questpie migrate:fresh`    | Drop all and re-run (DESTRUCTIVE)                |
-| `bunx questpie migrate:reset`    | Reset migration tracking                         |
-| `bunx questpie seed`             | Run seed files                                   |
+| Command                        | Description                                      |
+| ------------------------------ | ------------------------------------------------ |
+| `bunx questpie push`           | Direct schema sync (dev only, no migration file) |
+| `bunx questpie migrate:create` | Generate migration from schema diff              |
+| `bunx questpie migrate`        | Run pending migrations                           |
+| `bunx questpie migrate:down`   | Rollback last migration                          |
+| `bunx questpie migrate:fresh`  | Drop all and re-run (DESTRUCTIVE)                |
+| `bunx questpie migrate:reset`  | Reset migration tracking                         |
+| `bunx questpie seed`           | Run seed files                                   |
 
 ## Complete Production Config Example
 

@@ -1,24 +1,27 @@
 ---
 title: Realtime adapter
-description: The server-side transport that powers live queries, turn on realtime in your config and changes are recorded to an outbox, then fanned out across every app instance over pg_notify, Redis streams, or Cloudflare Durable Objects.
+description: Configure the durable realtime runtime, its notice broker, SSE or Pusher/Soketi edge delivery, reconciliation, admission limits, privacy, and deployment-specific drivers.
 ---
 
-The **realtime adapter** is the server-side transport behind QUESTPIE's live queries. Set `realtime` in your runtime config and every write is recorded to a change **outbox** table; the adapter then signals each app instance to re-run the affected subscriptions and push fresh snapshots over SSE. With no adapter the service polls that outbox on a timer, fine for a single process. Add `pgNotifyAdapter()` or `redisStreamsAdapter({ client })` and changes propagate the instant they happen, across every horizontally-scaled instance.
+The **realtime runtime** powers live queries and typed channels. Set `realtime` in runtime config and each logical mutation writes one change row to the durable **outbox inside the business transaction**. A broker wake tells app instances to drain that state quickly; a reconciliation poll drains it even when the wake is missing. Authorized frames then leave through the default SSE edge transport or an opt-in Pusher/Soketi client transport.
 
 This page covers the **server** side: the `realtime` config, the outbox/poll model, and each transport adapter's options. The client API, `live()`, `liveIter()`, and the TanStack Query `{ realtime: true }` flag, is taught on [Realtime](/docs/client/realtime).
 
 <Callout type="info" title="Prerequisites">
-Read [Configuration](/docs/concepts/configuration) (where adapters are wired in `questpie.config.ts`) and [Realtime](/docs/client/realtime) (the client `live()` API this transport serves).
+	Read [Configuration](/docs/concepts/configuration) (where adapters are wired
+	in `questpie.config.ts`) and [Realtime](/docs/client/realtime) (the client
+	`live()` API this transport serves).
 </Callout>
 
 ## What it does
 
-- **Records every change to an outbox.** Each create/update/delete (and bulk variant) appends a row to the `questpie_realtime_log` table, a durable, ordered change log keyed by an auto-incrementing `seq`.
-- **Fans out across instances.** The adapter broadcasts a tiny *notice* ("seq N on collection posts changed") to every process, which then drains the outbox and pushes snapshots to its own SSE subscribers.
-- **Zero-config default.** Turn `realtime` on with `true` and you get a working transport, polling on a non-Postgres setup, or an auto-wired `pg_notify` listener when a Postgres connection is available.
+- **Records every logical change transactionally.** Each create/update/delete (and bulk variant) appends one row to `questpie_realtime_log` using the mutation's database transaction.
+- **Fans out across instances.** The adapter broadcasts a tiny _notice_ ("seq N on collection posts changed") to every process, which then drains the outbox and pushes snapshots to its own SSE subscribers.
+- **Zero-infrastructure edge default.** `realtime: true` serves multiplexed SSE. It polls on a non-Postgres setup or auto-wires pg_notify when a normal Postgres connection string is available.
 - **Push transports for scale.** `pgNotifyAdapter` rides the database you already run; `redisStreamsAdapter` gives every instance an independent Redis Stream tail; `cloudflareRealtimeAdapter` is backed by a Durable Object.
-- **Privacy-safe by design.** Only a `RealtimeNotice` crosses the wire, never row data. Each subscriber re-runs its own access-controlled query to build its snapshot, so one user's data can't leak through the transport.
-- **Swap with one config line.** The transport is a single `realtime.adapter` value, no app-code change to move from polling to Redis.
+- **Two explicit seams.** `ChangeBroker` carries lossy notice-only wakes between instances. `ClientTransport` carries already-authorized frames to edge sessions. Live snapshots and channel events have different QoS and are not conflated in a driver.
+- **Privacy-safe by design.** Brokers never carry rows or snapshots. Snapshot sharing is per-principal by default; managed WS delivers access-filtered live-query frames on private per-session channels. Shared multicast is reserved for schema-validated, channel-authorized events.
+- **Switch without changing consumers.** Choose SSE or the Pusher/Soketi preset under `realtime`; `live()`, `{ realtime: true }`, and `client.channels.*` remain unchanged.
 
 ## Quick start
 
@@ -30,8 +33,8 @@ import { runtimeConfig } from "questpie/app";
 import env from "./env"; // declared + validated in env.ts, see Environment
 
 export default runtimeConfig({
-  db: { url: env.DATABASE_URL },
-  realtime: true,
+	db: { url: env.DATABASE_URL },
+	realtime: true,
 });
 ```
 
@@ -45,14 +48,14 @@ That's the whole server requirement. Subscribe from the client with `client.coll
 
 The flow, from a write to a pushed snapshot:
 
-| Step | What happens | Source |
-|---|---|---|
-| 1. Write commits | A create/update/delete appends one row to `questpie_realtime_log` (`appendChange`), `{ seq, resourceType, resource, operation, recordId?, locale?, payload }`. | `realtime/service.ts:217`; `realtime/collection.ts:9` |
-| 2. Signal | The adapter `notify(event)` broadcasts a minimal `RealtimeNotice` (`{ seq, resourceType, resource, operation }`) to every instance. | `realtime/adapter.ts:9`; `realtime/service.ts:249` |
-| 3. Drain | Each instance reacts to the notice (or a poll tick) by `drain()`ing new outbox rows past its watermark. | `realtime/service.ts:418-426` |
-| 4. Re-run + push | For each affected subscription, the server re-runs the query **under the subscriber's session** and pushes the fresh snapshot over its `POST /realtime` SSE stream. | `realtime/service.ts` (drain → listeners) |
+| Step                           | What happens                                                                                                                                                        | Source                                             |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| 1. Transaction captures change | A create/update/delete appends one row to `questpie_realtime_log` using the mutation-bound `db`; the business row and outbox row commit or roll back together.      | `realtime/service.ts`; transactional capture hooks |
+| 2. Signal                      | The adapter `notify(event)` broadcasts a minimal `RealtimeNotice` (`{ seq, resourceType, resource, operation }`) to every instance.                                 | `realtime/adapter.ts:9`; `realtime/service.ts:249` |
+| 3. Drain                       | Each instance reacts to the notice (or a poll tick) by `drain()`ing new outbox rows past its watermark.                                                             | `realtime/service.ts:418-426`                      |
+| 4. Re-run + push               | For each affected subscription, the server re-runs the query **under the subscriber's session** and pushes the fresh snapshot over its `POST /realtime` SSE stream. | `realtime/service.ts` (drain → listeners)          |
 
-The adapter is only the *signal* layer (steps 2-3). The outbox (step 1) and the access-controlled re-run (step 4) happen regardless of which adapter you pick. This is why the notice carries no payload, the snapshot is always rebuilt server-side per subscriber.
+The broker is only a _latency hint_ (steps 2-3). The outbox (step 1), unconditional reconciliation, and access-controlled re-run (step 4) provide correctness regardless of which driver you pick. Wakes are intentionally unordered, at-most-once, and coalescable.
 
 <Callout type="info" title="The notice is a cue, not the data">
 A `RealtimeNotice` is `Pick<RealtimeChangeEvent, "seq" | "resourceType" | "resource" | "operation">`, just enough to say *something matching changed*. The full event (with `payload`) lives in the outbox; subscribers never receive another user's rows over the transport.
@@ -64,44 +67,95 @@ Use `realtime: true` to turn on the default transport. Use an object when you wa
 
 ```ts
 interface RealtimeConfig {
-  adapter?: RealtimeAdapter;       // transport (pg_notify, redis, …). Omit → poll / auto pg_notify
-  pollIntervalMs?: number;         // default 2000, drain interval when running pollless (no adapter)
-  batchSize?: number;              // default 500, max outbox rows read per drain
-  retentionDays?: number;          // default 3; set 0 to disable time-based cleanup
-  keepAliveIntervalMs?: number;    // default 8000, SSE keep-alive ping interval
+	observer?: RealtimeObserver;
+	rollout?: RealtimeRolloutConfig;
+	admission?: Partial<RealtimeAdmissionConfig>;
+	connectionAcceptPacingMs?: number;
+	adapter?: RealtimeAdapter; // legacy-compatible broker adapter
+	changeBroker?: ChangeBroker; // v2 cross-instance notice seam
+	clientTransport?: ClientTransport; // managed edge transport; omit → SSE
+	channelEvents?: Partial<ChannelEventLedgerConfig>;
+	channelSecurity?: ChannelSecurityConfig;
+	pollIntervalMs?: number; // 15000 with push, 2000 without
+	batchSize?: number; // default 500, max outbox rows read per drain
+	retentionDays?: number; // default 3; set 0 to disable time-based cleanup
+	keepAliveIntervalMs?: number; // default 8000, SSE keep-alive ping interval
 }
 ```
 
-
-
-| Option | Default | What it controls |
-|---|---|---|
-| `adapter` | *(none)* | The transport that broadcasts change notices. Omit it for the poll / auto-`pg_notify` default (below). |
-| `pollIntervalMs` | `2000` | How often the service drains the outbox **when there is no adapter** (defaults to `0` if you omit it while an adapter is set). With an adapter, drains are notice-driven, so this is ignored, the poll timer only runs on the no-adapter path. |
-| `batchSize` | `500` | Max outbox rows pulled per drain. Raise it for very high write volume. |
-| `retentionDays` | `3` | Time horizon for outbox cleanup, including apps with zero subscribers. Set `0` to disable. Cleanup never uses a process-local subscriber watermark, because that could delete rows another instance has not drained yet. |
-| `keepAliveIntervalMs` | `8000` | Interval between `ping` keep-alive events on each `POST /realtime` SSE stream. |
+| Option                     | Default                           | What it controls                                                                                                                                                                                                         |
+| -------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `observer`                 | _(none)_                          | Structured lifecycle/admission/transport diagnostics. Observer failures are isolated from delivery.                                                                                                                      |
+| `rollout`                  | v2                                | Compatibility/canary selection (`legacy`, `v2`, or `dual`) used by the migration and rollback path.                                                                                                                      |
+| `admission`                | limits below                      | Edge-session topic, connection, query-shape, concurrency, and buffer caps.                                                                                                                                               |
+| `connectionAcceptPacingMs` | `0`                               | Optional maximum random delay before accepting a new edge session.                                                                                                                                                       |
+| `adapter`                  | _(none)_                          | Existing `RealtimeAdapter` compatibility path, including pg_notify, Redis, and Cloudflare.                                                                                                                               |
+| `changeBroker`             | _(none)_                          | Realtime v2 notice-only broker. If absent, v2 maps an existing `adapter` onto the new runtime.                                                                                                                           |
+| `clientTransport`          | SSE                               | Optional managed edge transport. The Pusher preset supplies both `changeBroker` and `clientTransport`.                                                                                                                   |
+| `channelEvents`            | bounded defaults                  | Ordered-channel replay retention, lease, and slow-consumer buffer tuning.                                                                                                                                                |
+| `channelSecurity`          | secure defaults                   | Trusted origins, payload size, publish rate, and authorization timeout policy.                                                                                                                                           |
+| `pollIntervalMs`           | `15000` with push; `2000` without | Reconciliation interval. It runs **alongside** a broker/adapter so dropped wakes heal; provider failure temporarily tightens it to at most 2s. Set `0` only when deliberately accepting loss of that recovery path.      |
+| `batchSize`                | `500`                             | Max outbox rows pulled per drain. Raise it for very high write volume.                                                                                                                                                   |
+| `retentionDays`            | `3`                               | Time horizon for outbox cleanup, including apps with zero subscribers. Set `0` to disable. Cleanup never uses a process-local subscriber watermark, because that could delete rows another instance has not drained yet. |
+| `keepAliveIntervalMs`      | `8000`                            | Interval between `ping` keep-alive events on each `POST /realtime` SSE stream.                                                                                                                                           |
 
 <Callout type="warn" title="Keep `keepAliveIntervalMs` under your idle timeout">
-The default `8000` ms is deliberately under Bun's default 10s `idleTimeout`, so SSE streams survive on an untuned `Bun.serve`. Behind a proxy with a shorter read timeout (some default to 30-60s, but custom ones can be lower), drop it further so the connection never goes idle long enough to be culled.
+	The default `8000` ms is deliberately under Bun's default 10s `idleTimeout`,
+	so SSE streams survive on an untuned `Bun.serve`. Behind a proxy with a
+	shorter read timeout (some default to 30-60s, but custom ones can be lower),
+	drop it further so the connection never goes idle long enough to be culled.
 </Callout>
+
+### Admission defaults
+
+The SSE edge rejects abusive or accidentally unbounded topics before registering listeners or computing snapshots:
+
+| Limit                                            | Default |
+| ------------------------------------------------ | ------: |
+| Topics per edge connection                       |      20 |
+| Edge connections per authenticated principal     |       5 |
+| Maximum `find` limit (also applied when omitted) |     100 |
+| Maximum nested `with` depth                      |       3 |
+| Concurrent initial snapshots                     |       4 |
+| Buffered snapshot bytes per edge session         |   1 MiB |
+
+Override only the values you have measured:
+
+```ts
+realtime: {
+  admission: {
+    maxTopicsPerConnection: 30,
+    maxFindLimit: 50,
+  },
+}
+```
+
+Equivalent subscriptions compute once and fan out serialized bytes, but the access-equivalence key is session/principal-scoped by default. Row access, field access, and `afterRead` hooks may depend on the current session, so cross-user sharing requires an explicit deterministic opt-in and isolation tests.
 
 ## The default: poll vs auto `pg_notify`
 
-Omitting `adapter` does **not** always mean naive polling. The service resolves the transport lazily on the first subscription (in `ensureStarted()`, triggered from `subscribe()`, not at process boot), like this:
+Omitting `adapter` does **not** always mean naive polling. The runtime selects the compatibility broker like this:
 
 1. **Explicit `adapter` set** → use it.
-2. **No adapter, but a Postgres connection string is available** → the service lazily constructs a `pgNotifyAdapter` on the `questpie_realtime` channel for you. Most Postgres apps get push delivery from `realtime: true` with no extra config.
+2. **No adapter/broker, but a Postgres connection string is available** → construct `pgNotifyAdapter` on `questpie_realtime`. Its publisher starts with the app lifecycle, including write-only workers with no local subscribers.
 3. **No adapter and no Postgres connection** → fall back to polling the outbox every `pollIntervalMs` (default 2s).
 
-
-
-<Callout type="info" title="Polling is real, just laggy">
-The poll path is correct, not a downgrade in behavior, it drains the same outbox and pushes the same access-controlled snapshots, just on a 2s timer instead of on-change. It's a fine default for a single instance and local dev. For multiple processes you want a real adapter (next section) so a write on instance A reaches a subscriber on instance B.
+<Callout type="info" title="Polling is the recovery guarantee">
+	The poll drains the same outbox and pushes the same access-controlled
+	snapshots. Without push it is the 2s primary path; with push it is the slower
+	15s reconciliation path. A notice lowers latency, but missing it does not
+	permanently stall an instance.
 </Callout>
 
-<Callout type="warn" title="One instance, multiple processes need a shared transport">
-The outbox is shared (it's a DB table), but the poll timer and the auto-`pg_notify` listener are **per process**. Polling means each instance independently notices changes on its own timer, workable but laggy and DB-chatty at scale. An explicit `pgNotifyAdapter` / `redisStreamsAdapter` fans a single notice out to all instances the moment a change lands. Reach for one once you run more than one process.
+<Callout
+	type="warn"
+	title="Multi-tier deployments need a broker every writer can reach"
+>
+	The outbox and reconciliation preserve correctness when every tier shares the
+	same database, but latency and DB load degrade when split workers only poll.
+	Ensure API, worker, and subscriber-serving instances use the same explicit
+	pg/Redis/Pusher broker. Do not assume an implicit database URL exists in every
+	process.
 </Callout>
 
 ## `pgNotifyAdapter`, Postgres `LISTEN`/`NOTIFY`
@@ -115,24 +169,24 @@ import { pgNotifyAdapter } from "questpie/adapters/pg-notify";
 import env from "./env";
 
 export default runtimeConfig({
-  db: { url: env.DATABASE_URL },
-  realtime: {
-    adapter: pgNotifyAdapter({
-      connectionString: env.DATABASE_URL,
-      // channel: "questpie_realtime", // default
-    }),
-  },
+	db: { url: env.DATABASE_URL },
+	realtime: {
+		adapter: pgNotifyAdapter({
+			connectionString: env.DATABASE_URL,
+			// channel: "questpie_realtime", // default
+		}),
+	},
 });
 ```
 
 `PgNotifyAdapterOptions` is `{ channel?, client?, connection?, connectionString? }`. You must supply **one** connection source.
 
-| Option | Type | Default | Notes |
-|---|---|---|---|
-| `channel` | `string` | `"questpie_realtime"` | Postgres channel name. Validated against `/^[a-zA-Z0-9_]+$/`, an invalid name throws at construction. |
-| `client` | `pg.Client` | none | An existing `pg` client to reuse. **Not** `.end()`-ed by the adapter on stop (you own its lifecycle). |
-| `connection` | `pg.ClientConfig` | none | A `pg` connection config; the adapter constructs and owns the client. |
-| `connectionString` | `string` | none | A connection URL; the adapter constructs and owns the client. |
+| Option             | Type              | Default               | Notes                                                                                                 |
+| ------------------ | ----------------- | --------------------- | ----------------------------------------------------------------------------------------------------- |
+| `channel`          | `string`          | `"questpie_realtime"` | Postgres channel name. Validated against `/^[a-zA-Z0-9_]+$/`, an invalid name throws at construction. |
+| `client`           | `pg.Client`       | none                  | An existing `pg` client to reuse. **Not** `.end()`-ed by the adapter on stop (you own its lifecycle). |
+| `connection`       | `pg.ClientConfig` | none                  | A `pg` connection config; the adapter constructs and owns the client.                                 |
+| `connectionString` | `string`          | none                  | A connection URL; the adapter constructs and owns the client.                                         |
 
 Behavior:
 
@@ -142,8 +196,49 @@ Behavior:
 - **Uses `LISTEN`/`UNLISTEN` + `pg_notify($1, $2)`.** The notice JSON (`{ seq, resourceType, resource, operation }`) is the channel payload.
 
 <Callout type="info" title="You usually don't need to write this">
-On a Postgres app, `realtime: true` already auto-wires `pg_notify` on the default channel (see [the default](#the-default-poll-vs-auto-pg-notify) above). Configure `pgNotifyAdapter` explicitly only when you want a **non-default channel**, want to **reuse an existing `pg` client**, or are pointing realtime at a **different database** than your main `db`.
+	On a Postgres app, `realtime: true` already auto-wires `pg_notify` on the
+	default channel (see [the default](#the-default-poll-vs-auto-pg-notify)
+	above). Configure `pgNotifyAdapter` explicitly only when you want a
+	**non-default channel**, want to **reuse an existing `pg` client**, or are
+	pointing realtime at a **different database** than your main `db`.
 </Callout>
+
+## Pusher/Soketi preset, managed WebSockets
+
+SSE is the default client delivery path. Select `pusherRealtime()` when you want provider-managed WebSockets, native presence, and shared multicast for framework channel events. The preset supplies both v2 seams: a notice-only `changeBroker` and a `clientTransport`.
+
+```ts title="src/questpie/server/questpie.config.ts"
+import { pusherRealtime } from "questpie/adapters/pusher";
+import { runtimeConfig } from "questpie/app";
+
+const managed = pusherRealtime({
+	appId: env.PUSHER_APP_ID,
+	key: env.PUSHER_KEY,
+	secret: env.PUSHER_SECRET,
+	cluster: env.PUSHER_CLUSTER,
+	// Soketi: host, port, wsHost, wsPort/wssPort, useTLS
+});
+
+export default runtimeConfig({
+	realtime: { ...managed },
+});
+```
+
+The isolated `questpie/adapters/pusher` export is the only entry that loads the optional `pusher` and `pusher-js` peers. Unrelated imports do not load them.
+
+Live-query snapshots remain private per edge session because each snapshot has already passed that principal's row/field access and `afterRead` hooks. The shared provider broker carries only wakes. Framework channel events may use provider multicast after subscribe/publish authorization and Zod validation.
+
+Direct provider client events are **off by default** and are not equivalent to `client.channels.*.publish()`. Enabling them requires:
+
+```ts
+clientEvents: {
+  enabled: true,
+  acknowledgeProviderWideRisk: true,
+  allowedChannels: ["presence-chat-room-one"],
+}
+```
+
+That allowlist only constrains the QUESTPIE SDK. Raw provider clients can bypass it, and their events bypass framework schemas, publish authorization, rate limits, ordered replay, and delivery guarantees.
 
 ## `redisStreamsAdapter`, Redis Streams
 
@@ -160,30 +255,30 @@ const redis = createClient({ url: env.REDIS_URL });
 await redis.connect();
 
 export default runtimeConfig({
-  db: { url: env.DATABASE_URL },
-  realtime: {
-    adapter: redisStreamsAdapter({
-      client: redis,
-      // stream: "questpie:realtime",   // default
-      // blockMs: 5000, batchSize: 100, // defaults
-      // maxLen: 10_000,                // approximate stream cap
-    }),
-  },
+	db: { url: env.DATABASE_URL },
+	realtime: {
+		adapter: redisStreamsAdapter({
+			client: redis,
+			// stream: "questpie:realtime",   // default
+			// blockMs: 5000, batchSize: 100, // defaults
+			// maxLen: 10_000,                // approximate stream cap
+		}),
+	},
 });
 ```
 
 `RedisStreamsAdapterOptions` is `{ client (required), reader?, stream?, blockMs?, batchSize?, maxLen?, retryDelayMs?, onError? }`.
 
-| Option | Type | Default | Notes |
-|---|---|---|---|
-| `client` | `RedisStreamsClient` | none **required** | Publishing client. Must implement `xAdd` + `xRead`; node-redis clients are automatically duplicated for the blocking reader. |
-| `reader` | `RedisStreamsClient` | auto | Optional already-connected blocking-read client for structural clients without `duplicate()`. |
-| `stream` | `string` | `"questpie:realtime"` | The Redis stream key notices are `XADD`-ed to. |
-| `blockMs` | `number` | `5000` | How long `XREAD` blocks waiting for new messages. |
-| `batchSize` | `number` | `100` | `COUNT` per `XREAD` call. |
-| `maxLen` | `number` | `10000` | Approximate `MAXLEN ~` cap applied by every `XADD`. |
-| `retryDelayMs` | `number` | `500` | Backoff after a read-loop failure. |
-| `onError` | `(error) => void` | `console.warn` | Error hook for read/listener failures. |
+| Option         | Type                 | Default               | Notes                                                                                                                        |
+| -------------- | -------------------- | --------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `client`       | `RedisStreamsClient` | none **required**     | Publishing client. Must implement `xAdd` + `xRead`; node-redis clients are automatically duplicated for the blocking reader. |
+| `reader`       | `RedisStreamsClient` | auto                  | Optional already-connected blocking-read client for structural clients without `duplicate()`.                                |
+| `stream`       | `string`             | `"questpie:realtime"` | The Redis stream key notices are `XADD`-ed to.                                                                               |
+| `blockMs`      | `number`             | `5000`                | How long `XREAD` blocks waiting for new messages.                                                                            |
+| `batchSize`    | `number`             | `100`                 | `COUNT` per `XREAD` call.                                                                                                    |
+| `maxLen`       | `number`             | `10000`               | Approximate `MAXLEN ~` cap applied by every `XADD`.                                                                          |
+| `retryDelayMs` | `number`             | `500`                 | Backoff after a read-loop failure.                                                                                           |
+| `onError`      | `(error) => void`    | `console.warn`        | Error hook for read/listener failures.                                                                                       |
 
 Behavior:
 
@@ -219,47 +314,50 @@ import { runtimeConfig } from "questpie/app";
 import { cloudflareRealtimeAdapter } from "questpie/adapters/cloudflare-realtime";
 
 export default runtimeConfig({
-  realtime: {
-    adapter: cloudflareRealtimeAdapter({
-      // A Durable Object namespace binding, or a zero-arg function that
-      // returns one (so you can resolve it lazily from your Worker env).
-      namespace: () => getEnv().QUESTPIE_REALTIME,
-      // objectName: "questpie-realtime",  // default DO instance name
-      // hubPath: "/__questpie/realtime",   // default internal hub path
-    }),
-  },
+	realtime: {
+		adapter: cloudflareRealtimeAdapter({
+			// A Durable Object namespace binding, or a zero-arg function that
+			// returns one (so you can resolve it lazily from your Worker env).
+			namespace: () => getEnv().QUESTPIE_REALTIME,
+			// objectName: "questpie-realtime",  // default shard-name prefix
+			// hubPath: "/__questpie/realtime",   // default internal hub path
+		}),
+	},
 });
 ```
 
-`CloudflareRealtimeAdapterOptions` is `{ namespace (required), objectName?, hubPath? }`. The `namespace` is a Durable Object namespace binding, or a **zero-argument** function that returns one (resolved lazily when the adapter first needs it, so you can defer reading it out of your Worker env).
+`CloudflareRealtimeAdapterOptions` is `{ namespace (required), objectName?, hubPath?, waitUntil?, onError? }`. The `namespace` is a Durable Object namespace binding, or a **zero-argument** function that returns one (resolved lazily when the adapter first needs it, so you can defer reading it out of your Worker env).
 
-| Option | Type | Default | Notes |
-|---|---|---|---|
-| `namespace` | `CloudflareDurableObjectNamespaceInput` | none **required** | The DO namespace binding, or `() => namespace`. |
-| `objectName` | `string` | `"questpie-realtime"` | Name of the DO instance (`idFromName`) all notices route through. |
-| `hubPath` | `string` | `"/__questpie/realtime"` | Internal hub path; the adapter derives `${hubPath}/subscribe` and `${hubPath}/notify`. |
+| Option       | Type                                    | Default                  | Notes                                                                                  |
+| ------------ | --------------------------------------- | ------------------------ | -------------------------------------------------------------------------------------- |
+| `namespace`  | `CloudflareDurableObjectNamespaceInput` | none **required**        | The DO namespace binding, or `() => namespace`.                                        |
+| `objectName` | `string`                                | `"questpie-realtime"`    | Base DO name; the runtime appends resource type and resource name to shard notices.    |
+| `hubPath`    | `string`                                | `"/__questpie/realtime"` | Internal hub path; the adapter derives `${hubPath}/subscribe` and `${hubPath}/notify`. |
+| `waitUntil`  | `(promise) => void`                     | none                     | Keeps the non-blocking notify relay alive for the current Worker event.                |
+| `onError`    | `(error) => void`                       | `console.error`          | Reports background publish and relay failures.                                         |
 
-This adapter carries a `runtime: "cloudflare"` discriminator so the Cloudflare fetch/queue handlers detect it, and it's wired together with the **`createCloudflareRealtimeDurableObjectHandler`** export (from `questpie/adapters/cloudflare`) that implements the DO itself.
+This adapter carries a `runtime: "cloudflare"` discriminator so the Cloudflare fetch/queue handlers detect it, and it's wired together with the **`createCloudflareRealtimeDurableObjectHandler`** export (from `questpie/adapters/cloudflare`) that implements the DO itself. Durable Objects are sharded by `resourceType` and resource; mutation publish is non-blocking, only the minimal notice crosses the DO boundary, and snapshot queries stay in the requesting Worker.
 
 <Callout type="info" title="Cloudflare realtime is a deployment-specific setup">
-Unlike `pg_notify` / Redis, this adapter requires a Durable Object class bound in your `wrangler` config plus the DO handler. It's part of the Cloudflare Workers deployment story rather than a drop-in line. The other two adapters need no Workers-specific wiring.
+	Unlike `pg_notify` / Redis, this adapter requires a Durable Object class bound
+	in your `wrangler` config plus the DO handler. It's part of the Cloudflare
+	Workers deployment story rather than a drop-in line. The other two adapters
+	need no Workers-specific wiring.
 </Callout>
 
 ## The outbox table
 
 The change log lives in one Drizzle table, `questpie_realtime_log`, created by codegen alongside your schema (it's part of the core module). You rarely touch it directly, but it's worth knowing it exists:
 
-| Column | Notes |
-|---|---|
-| `seq` | `bigserial` primary key, the monotonic ordering every subscriber watermarks against. |
-| `resource_type` | `"collection"` or `"global"`. |
-| `resource` | The collection/global name. |
-| `operation` | `create` / `update` / `delete` / `bulk_update` / `bulk_delete`. |
-| `record_id`, `locale` | Nullable; the specific record + locale when applicable. |
-| `payload` | `jsonb` (default `{}`), kept server-side (never broadcast). Single-record changes store shallow scalar `{ before, after }` equality projections; bulk changes store `{ count, recordIds }`. Nested objects, arrays, and hydrated relations are excluded. |
-| `created_at` | Insert timestamp; powers `retentionDays` cleanup. |
-
-
+| Column                | Notes                                                                                                                                                                                                                                                    |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `seq`                 | `bigserial` primary key, the monotonic ordering every subscriber watermarks against.                                                                                                                                                                     |
+| `resource_type`       | `"collection"` or `"global"`.                                                                                                                                                                                                                            |
+| `resource`            | The collection/global name.                                                                                                                                                                                                                              |
+| `operation`           | `create` / `update` / `delete` / `bulk_update` / `bulk_delete`.                                                                                                                                                                                          |
+| `record_id`, `locale` | Nullable; the specific record + locale when applicable.                                                                                                                                                                                                  |
+| `payload`             | `jsonb` (default `{}`), kept server-side (never broadcast). Single-record changes store shallow scalar `{ before, after }` equality projections; bulk changes store `{ count, recordIds }`. Nested objects, arrays, and hydrated relations are excluded. |
+| `created_at`          | Insert timestamp; powers `retentionDays` cleanup.                                                                                                                                                                                                        |
 
 ## TypeScript
 
@@ -267,14 +365,14 @@ The transport contract and config types are exported from `questpie` (and `quest
 
 ```ts
 import type {
-  RealtimeAdapter,        // the transport contract you implement for a custom adapter
-  RealtimeConfig,         // the `realtime` config shape
-  RealtimeChangeEvent,    // a full outbox event
-  RealtimeChangePayload,  // { before, after } or { count, recordIds }
-  RealtimeEqualityProjection, // shallow scalar fields used for equality routing
-  RealtimeNotice,         // the minimal broadcast notice
-  RealtimeOperation,      // "create" | "update" | "delete" | "bulk_update" | "bulk_delete"
-  RealtimeResourceType,   // "collection" | "global"
+	RealtimeAdapter, // the transport contract you implement for a custom adapter
+	RealtimeConfig, // the `realtime` config shape
+	RealtimeChangeEvent, // a full outbox event
+	RealtimeChangePayload, // { before, after } or { count, recordIds }
+	RealtimeEqualityProjection, // shallow scalar fields used for equality routing
+	RealtimeNotice, // the minimal broadcast notice
+	RealtimeOperation, // "create" | "update" | "delete" | "bulk_update" | "bulk_delete"
+	RealtimeResourceType, // "collection" | "global"
 } from "questpie/realtime";
 ```
 
@@ -282,14 +380,16 @@ Each adapter's option type ships from its own entry, `PgNotifyAdapterOptions` fr
 
 ## Build your own transport
 
-`RealtimeAdapter` is a four-method contract, implement it to back realtime on any pub/sub system (NATS, Kafka, a cloud queue):
+`RealtimeAdapter` remains the compatibility contract for an invalidation driver. Realtime v2 internally separates that concern into `ChangeBroker` and keeps edge delivery in `ClientTransport`; new managed presets should implement those independent seams instead of combining broker, auth, and delivery in one object.
+
+The compatibility adapter shape is:
 
 ```ts
 interface RealtimeAdapter {
-  start(): Promise<void>;
-  stop(): Promise<void>;
-  notify(event: RealtimeChangeEvent): Promise<void>;          // broadcast a change
-  subscribe(handler: (notice: RealtimeNotice) => void): () => void; // receive changes; returns unsubscribe
+	start(): Promise<void>;
+	stop(): Promise<void>;
+	notify(event: RealtimeChangeEvent): Promise<void>; // broadcast a change
+	subscribe(handler: (notice: RealtimeNotice) => void): () => void; // receive changes; returns unsubscribe
 }
 ```
 
@@ -298,8 +398,9 @@ interface RealtimeAdapter {
 ## Related
 
 - [Realtime](/docs/client/realtime), the client API this transport powers: `live()`, `liveIter()`, and the TanStack Query `{ realtime: true }` flag.
+- [Channels](/docs/client/channels), typed ordered application events over SSE or Pusher/Soketi.
+- [Realtime v2 migration and rollback](/docs/adapters/realtime-v2-migration), dual-run canaries and the legacy rollback flag.
 - [Configuration](/docs/concepts/configuration), where `realtime` lives in `QuestpieConfig`, alongside the other adapters.
 - [Adapters](/docs/adapters), the hub listing every adapter kind and the swap-the-backend model.
 - [Building a plugin](/docs/extend/build-a-plugin), implement `RealtimeAdapter` (or any adapter contract) yourself.
 - [Multi-tenancy](/docs/extend/multi-tenancy), how access rules re-run per subscriber keep tenant data isolated over realtime.
-- Runnable example: [`examples/tanstack-barbershop`](https://github.com/questpie/questpie/tree/main/examples/tanstack-barbershop), a TanStack Start app using realtime via the typed client and TanStack Query bindings.

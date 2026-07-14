@@ -1,6 +1,6 @@
 ---
 name: questpie
-description: QUESTPIE framework, server-first TypeScript CMS. File-convention codegen, collections, globals, routes, jobs, services, emails, blocks, typed client SDK, TanStack Query integration, adapters (queue, search, realtime, storage, email, KV). Use when building, reviewing, or refactoring any QUESTPIE project.
+description: QUESTPIE framework, server-first TypeScript CMS. File-convention codegen, collections, globals, routes, jobs, services, emails, blocks, typed channels, realtime, typed client SDK, TanStack Query integration, and infrastructure adapters. Use when building, reviewing, or refactoring any QUESTPIE project.
 license: MIT
 metadata:
   author: questpie
@@ -15,7 +15,7 @@ Server-first TypeScript application framework. Define your data schema once usin
 
 Reference these guidelines when:
 
-- Creating or modifying collections, globals, routes, jobs, services, emails, blocks
+- Creating or modifying collections, globals, routes, jobs, services, emails, blocks, or channels
 - Working with file conventions or codegen pipeline
 - Configuring adapters (queue, search, storage, realtime, email, KV)
 - Setting up access control, hooks, or validation
@@ -26,25 +26,26 @@ Reference these guidelines when:
 
 ## Import Paths, Critical
 
-| Factory                        | Import From                  | Needs Codegen? |
-| ------------------------------ | ---------------------------- | -------------- |
-| `collection(name)`             | `#questpie/factories`        | Yes            |
-| `global(name)`                 | `#questpie/factories`        | Yes            |
-| `block(name)`                  | `#questpie/factories`        | Yes            |
-| `adminConfig({...})`           | `#questpie/factories`        | Yes            |
-| `route()`                      | `"questpie"`                 | No             |
-| `job({...})`                   | `"questpie"`                 | No             |
-| `service()`                    | `"questpie"`                 | No             |
-| `email({...})`                 | `"questpie"`                 | No             |
-| `migration({...})`             | `"questpie"`                 | No             |
-| `seed({...})` / `seed.steps({...})` | `"questpie"`            | No             |
-| `runtimeConfig({...})`         | `"questpie/app"`             | No             |
-| `appConfig({...})`             | `"questpie/app"`             | No             |
-| `authConfig({...})`            | `"questpie/app"`             | No             |
-| `env({...})`                   | `"questpie/env"`             | No             |
-| `clientEnv({...})`             | `"questpie/env"`             | No             |
-| `createClient<AppConfig>()`    | `"questpie/client"`          | No             |
-| `createQuestpieQueryOptions()` | `"@questpie/tanstack-query"` | No             |
+| Factory                             | Import From                  | Needs Codegen? |
+| ----------------------------------- | ---------------------------- | -------------- |
+| `collection(name)`                  | `#questpie/factories`        | Yes            |
+| `global(name)`                      | `#questpie/factories`        | Yes            |
+| `block(name)`                       | `#questpie/factories`        | Yes            |
+| `channel(pattern)`                  | `"questpie/channels"`        | Yes            |
+| `adminConfig({...})`                | `#questpie/factories`        | Yes            |
+| `route()`                           | `"questpie"`                 | No             |
+| `job({...})`                        | `"questpie"`                 | No             |
+| `service()`                         | `"questpie"`                 | No             |
+| `email({...})`                      | `"questpie"`                 | No             |
+| `migration({...})`                  | `"questpie"`                 | No             |
+| `seed({...})` / `seed.steps({...})` | `"questpie"`                 | No             |
+| `runtimeConfig({...})`              | `"questpie/app"`             | No             |
+| `appConfig({...})`                  | `"questpie/app"`             | No             |
+| `authConfig({...})`                 | `"questpie/app"`             | No             |
+| `env({...})`                        | `"questpie/env"`             | No             |
+| `clientEnv({...})`                  | `"questpie/env"`             | No             |
+| `createClient<AppConfig>()`         | `"questpie/client"`          | No             |
+| `createQuestpieQueryOptions()`      | `"@questpie/tanstack-query"` | No             |
 
 ## Module And Plugin Configuration - Critical
 
@@ -91,13 +92,13 @@ export default authConfig({
 
 After `questpie generate`, the generated server files are the source of truth for what exists in the app. Inspect them before inventing imports, names, fields, or casts:
 
-| Need to know                         | Ground truth                                                                 |
-| ------------------------------------ | ---------------------------------------------------------------------------- |
+| Need to know                           | Ground truth                                                                                                                     |
+| -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | Collections, globals, routes, services | `src/questpie/server/.generated/entities.gen.ts` and `AppCollections`, `AppGlobals`, `AppRoutes`, `AppServices` from `#questpie` |
-| Relation target keys                 | `src/questpie/server/.generated/names.gen.ts`                                |
-| Handler, hook, route, block context  | `src/questpie/server/.generated/context.gen.ts` and `Questpie.AppContext`    |
-| Session and auth user shape          | `AppSession`, `AppSessionUser`, and `AppConfig.auth` from `#questpie`        |
-| Enabled field and builder methods    | `src/questpie/server/.generated/factories.ts`                                |
+| Relation target keys                   | `src/questpie/server/.generated/names.gen.ts`                                                                                    |
+| Handler, hook, route, block context    | `src/questpie/server/.generated/context.gen.ts` and `Questpie.AppContext`                                                        |
+| Session and auth user shape            | `AppSession`, `AppSessionUser`, and `AppConfig.auth` from `#questpie`                                                            |
+| Enabled field and builder methods      | `src/questpie/server/.generated/factories.ts`                                                                                    |
 
 Files starting with `_`, `index.ts`, declaration files, tests, and specs are intentionally invisible to codegen. If something is missing from the generated surface, fix discovery, modules, or config and rerun `questpie generate`; do not add `any`, re-export barrels, or duplicate registries at the call site.
 
@@ -105,47 +106,48 @@ Files starting with `_`, `index.ts`, declaration files, tests, and specs are int
 
 ### Core
 
-| Topic             | File                            | Covers                                                             |
-| ----------------- | ------------------------------- | ------------------------------------------------------------------ |
-| Architecture      | `references/architecture.md`    | Framework overview, tech stack, project structure, file conventions, app bootstrap, data flow |
-| Quickstart        | `references/quickstart.md`      | Scaffold, configure, codegen, migrate, serve, zero to running app |
-| Data Modeling     | `references/data-modeling.md`   | Collections, globals, fields, relations, options, localization     |
-| Field Types       | `references/field-types.md`     | All built-in field types with options and operators                |
+| Topic             | File                            | Covers                                                                                                             |
+| ----------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Architecture      | `references/architecture.md`    | Framework overview, tech stack, project structure, file conventions, app bootstrap, data flow                      |
+| Quickstart        | `references/quickstart.md`      | Scaffold, configure, codegen, migrate, serve, zero to running app                                                  |
+| Data Modeling     | `references/data-modeling.md`   | Collections, globals, fields, relations, options, localization                                                     |
+| Field Types       | `references/field-types.md`     | All built-in field types with options and operators                                                                |
 | Type Inference    | `references/type-inference.md`  | The infer-first map: `CollectionDoc` / `CollectionWhere`, `AccessContext` helpers, per-op rule typing, cycle rules |
-| Rules             | `references/rules.md`           | Access control (row/field level), hooks lifecycle, validation, derived request context |
-| Business Logic    | `references/business-logic.md`  | Routes, jobs, services, email templates, context injection         |
-| AppContext        | `references/app-context.md`     | The `AppContext` runtime interface, where it's available, `getContext`, partial context overrides |
-| Durable Workflows | `references/workflows.md`       | Long-running workflows, steps, events, cron, admin UI              |
-| Sandboxed Code    | `references/sandbox.md`         | `ctx.executor.run()`, isolation modes, capability model, Deno engine deployment |
-| CRUD API          | `references/crud-api.md`        | `find`, `create`, `updateById`/`updateMany`, `deleteById`/`deleteMany`, atomic conditional updates, globals API |
+| Rules             | `references/rules.md`           | Access control (row/field level), hooks lifecycle, validation, derived request context                             |
+| Business Logic    | `references/business-logic.md`  | Routes, jobs, services, email templates, context injection                                                         |
+| AppContext        | `references/app-context.md`     | The `AppContext` runtime interface, where it's available, `getContext`, partial context overrides                  |
+| Durable Workflows | `references/workflows.md`       | Long-running workflows, steps, events, cron, admin UI                                                              |
+| Sandboxed Code    | `references/sandbox.md`         | `ctx.executor.run()`, isolation modes, capability model, Deno engine deployment                                    |
+| CRUD API          | `references/crud-api.md`        | `find`, `create`, `updateById`/`updateMany`, `deleteById`/`deleteMany`, atomic conditional updates, globals API    |
 | Seeds             | `references/seeds.md`           | `seed()` vs `seed.steps()`, idempotency, checkpointed steps, categories, `dependsOn`, `undo`, `autoSeed`, seed CLI |
-| Query Operators   | `references/query-operators.md` | `where` clause operators by field type                             |
-| Realtime          | `references/realtime.md`        | Live queries over SSE, automatic broadcasts, `live()`/`liveIter()`, wire protocol, keepalive |
+| Query Operators   | `references/query-operators.md` | `where` clause operators by field type                                                                             |
+| Realtime          | `references/realtime.md`        | Transactional outbox, reconciliation, live queries, broker/client transport seams, admission                       |
+| Channels          | `references/channels.md`        | Typed application events, authorization, publish contexts, client, presence, TanStack Query                        |
 
 ### Infrastructure
 
-| Topic      | File                                    | Covers                                                       |
-| ---------- | --------------------------------------- | ------------------------------------------------------------ |
-| Production | `references/production.md`              | Queue, search, realtime, storage, email, KV adapter setup    |
-| Environment | `references/env.md`                    | `env.ts` + `env.client.ts`: boot-validated, typed env, generated client modules |
-| Auth       | `references/auth.md`                    | Better Auth integration, session, providers, access patterns |
-| Adapters   | `references/infrastructure-adapters.md` | All adapter configs: pg-boss, S3, SMTP, pgNotify, Redis      |
-| MCP        | `references/mcp.md`                     | MCP setup, CRUD tools, route tools, custom tools, security   |
+| Topic       | File                                    | Covers                                                                          |
+| ----------- | --------------------------------------- | ------------------------------------------------------------------------------- |
+| Production  | `references/production.md`              | Queue, search, realtime, storage, email, KV adapter setup                       |
+| Environment | `references/env.md`                     | `env.ts` + `env.client.ts`: boot-validated, typed env, generated client modules |
+| Auth        | `references/auth.md`                    | Better Auth integration, session, providers, access patterns                    |
+| Adapters    | `references/infrastructure-adapters.md` | All adapter configs: pg-boss, S3, SMTP, pgNotify, Redis                         |
+| MCP         | `references/mcp.md`                     | MCP setup, CRUD tools, route tools, custom tools, security                      |
 
 ### Extend
 
-| Topic              | File                               | Covers                                                       |
-| ------------------ | ---------------------------------- | ------------------------------------------------------------ |
-| Extend             | `references/extend.md`             | Custom modules, fields, operators, adapters, codegen plugins |
+| Topic              | File                               | Covers                                                                                                                   |
+| ------------------ | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Extend             | `references/extend.md`             | Custom modules, fields, operators, adapters, codegen plugins                                                             |
 | Module Authoring   | `references/module-authoring.md`   | How modules are created: convention dirs → codegen `.generated/module.ts`; NEVER hand-write `module.ts`/inline `route()` |
-| Codegen Plugin API | `references/codegen-plugin-api.md` | Plugin architecture, category declarations, templates        |
-| Multi-Tenancy      | `references/multi-tenancy.md`      | `appConfig({ context })` resolver, scope isolation, ScopeProvider |
+| Codegen Plugin API | `references/codegen-plugin-api.md` | Plugin architecture, category declarations, templates                                                                    |
+| Multi-Tenancy      | `references/multi-tenancy.md`      | `appConfig({ context })` resolver, scope isolation, ScopeProvider                                                        |
 
 ### Client
 
-| Topic          | File                           | Covers                                                           |
-| -------------- | ------------------------------ | ---------------------------------------------------------------- |
-| TanStack Query | `references/tanstack-query.md` | `q.collections.*`, `q.globals.*`, `q.routes.*`, realtime queries |
+| Topic          | File                           | Covers                                                                                    |
+| -------------- | ------------------------------ | ----------------------------------------------------------------------------------------- |
+| TanStack Query | `references/tanstack-query.md` | `q.collections.*`, `q.globals.*`, `q.routes.*`, realtime snapshots, channel subscriptions |
 
 ## Key Patterns, Quick Reference
 
@@ -260,19 +262,19 @@ await queue.sendReminder.publish({ userId: "abc" });
 
 ## Common Mistakes
 
-| Severity | Mistake                                                | Fix                                                                                   |
-| -------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------- |
-| CRITICAL | Files in wrong directory                               | Collections in `collections/`, routes in `routes/`, etc.                              |
-| CRITICAL | Convention file has no export                          | Codegen needs one export, `export default` or a named `export const`/`function` both discovered; a file with no export is skipped. Factory categories key from the factory string (`collection("blog-posts")` -> `blogPosts`); non-factory categories key from the filename |
-| CRITICAL | Importing route/job/service from `#questpie/factories` | Use `"questpie"`, only collection/global/block/adminConfig use `#questpie/factories` |
-| CRITICAL | Redefining a module collection (e.g. starter `user`) from scratch | `.merge(starterModule.collections.user)` then add fields, see Extend pattern        |
-| CRITICAL | Casting `session.user` to `any` for admin role checks | Use `session?.user.role`; if it is not typed, fix `modules.ts`, `config/auth.ts`, and regenerated output |
-| HIGH     | Forgetting `questpie generate` after adding files      | Re-run codegen on any file add/remove in convention dirs                              |
-| HIGH     | Job handler uses `input` instead of `payload`          | Jobs destructure `{ payload }`, routes destructure `{ input }`                        |
-| HIGH     | `queue.send("name", data)`                             | Use `queue.jobName.publish(data)`                                                     |
-| HIGH     | `beforeCreate` / `afterCreate` hook names              | Use `beforeChange` / `afterChange` with `operation === "create"` guard                |
-| MEDIUM   | Using npm/yarn instead of Bun                          | QUESTPIE requires Bun as package manager                                              |
-| MEDIUM   | Editing `.generated/` files                            | Never edit, re-run `questpie generate`                                               |
+| Severity | Mistake                                                           | Fix                                                                                                                                                                                                                                                                         |
+| -------- | ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| CRITICAL | Files in wrong directory                                          | Collections in `collections/`, routes in `routes/`, etc.                                                                                                                                                                                                                    |
+| CRITICAL | Convention file has no export                                     | Codegen needs one export, `export default` or a named `export const`/`function` both discovered; a file with no export is skipped. Factory categories key from the factory string (`collection("blog-posts")` -> `blogPosts`); non-factory categories key from the filename |
+| CRITICAL | Importing route/job/service from `#questpie/factories`            | Use `"questpie"`, only collection/global/block/adminConfig use `#questpie/factories`                                                                                                                                                                                        |
+| CRITICAL | Redefining a module collection (e.g. starter `user`) from scratch | `.merge(starterModule.collections.user)` then add fields, see Extend pattern                                                                                                                                                                                                |
+| CRITICAL | Casting `session.user` to `any` for admin role checks             | Use `session?.user.role`; if it is not typed, fix `modules.ts`, `config/auth.ts`, and regenerated output                                                                                                                                                                    |
+| HIGH     | Forgetting `questpie generate` after adding files                 | Re-run codegen on any file add/remove in convention dirs                                                                                                                                                                                                                    |
+| HIGH     | Job handler uses `input` instead of `payload`                     | Jobs destructure `{ payload }`, routes destructure `{ input }`                                                                                                                                                                                                              |
+| HIGH     | `queue.send("name", data)`                                        | Use `queue.jobName.publish(data)`                                                                                                                                                                                                                                           |
+| HIGH     | `beforeCreate` / `afterCreate` hook names                         | Use `beforeChange` / `afterChange` with `operation === "create"` guard                                                                                                                                                                                                      |
+| MEDIUM   | Using npm/yarn instead of Bun                                     | QUESTPIE requires Bun as package manager                                                                                                                                                                                                                                    |
+| MEDIUM   | Editing `.generated/` files                                       | Never edit, re-run `questpie generate`                                                                                                                                                                                                                                      |
 
 ## Preview And Workflow Rules
 
