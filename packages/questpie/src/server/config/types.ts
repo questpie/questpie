@@ -1,11 +1,12 @@
+import type { ChannelDefinitions } from "#questpie/server/channels/channel-builder.js";
 import type { CollectionBuilder } from "#questpie/server/collection/builder/collection-builder.js";
 import type { Collection } from "#questpie/server/collection/builder/collection.js";
-import type { ResolvedContextResolverBase } from "#questpie/server/config/app-context.js";
 import type {
 	CollectionAccess,
 	ExtractFieldsByLocation,
 	InferTableWithColumns,
 } from "#questpie/server/collection/builder/types.js";
+import type { ResolvedContextResolverBase } from "#questpie/server/config/app-context.js";
 import type { FieldState } from "#questpie/server/fields/field-class-types.js";
 import type { GlobalBuilder } from "#questpie/server/global/builder/global-builder.js";
 import type { Global } from "#questpie/server/global/builder/global.js";
@@ -509,6 +510,9 @@ export interface QuestpieConfig {
 	 * Builders will be automatically built during registration
 	 */
 	collections: Record<string, AnyCollectionOrBuilder>;
+
+	/** Typed realtime channel definitions keyed by their codegen registry key. */
+	channels?: ChannelDefinitions;
 
 	/**
 	 * Globals map - register globals as object with keys

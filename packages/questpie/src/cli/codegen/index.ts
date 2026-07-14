@@ -13,6 +13,7 @@
 import { mkdir, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve } from "node:path";
 
+import { validateChannelWirePattern } from "./channel-pattern.js";
 import { discoverFiles } from "./discover.js";
 import { generateClientEnvModules } from "./env-client-template.js";
 import { generateFactoryTemplate } from "./factory-template.js";
@@ -57,6 +58,21 @@ export function coreCodegenPlugin(): CodegenPlugin {
 						dirs: ["collections"],
 						prefix: "coll",
 						factoryFunctions: ["collection"],
+						registryKey: true,
+						includeInAppState: true,
+						extractFromModules: true,
+					},
+					channels: {
+						dirs: ["channels"],
+						prefix: "channel",
+						factoryFunctions: ["channel"],
+						factoryKeyStrategy: "export-or-filename",
+						factoryArgument: {
+							label: "wire pattern",
+							requireLiteral: true,
+							unique: true,
+							validate: validateChannelWirePattern,
+						},
 						registryKey: true,
 						includeInAppState: true,
 						extractFromModules: true,
@@ -171,6 +187,12 @@ export function coreCodegenPlugin(): CodegenPlugin {
 						description: "Collection definition",
 						template: ({ kebab, camel }) =>
 							`import { collection } from "#questpie/factories";\n\nexport const ${camel} = collection("${kebab}")\n\t.fields(({ f }) => ({\n\t\ttitle: f.text(255).label("Title").required(),\n\t}))\n\t.title(({ f }) => f.title);\n`,
+					},
+					channel: {
+						dir: "channels",
+						description: "Realtime channel definition",
+						template: ({ kebab }) =>
+							`import { channel } from "questpie/channels";\n\nexport default channel("${kebab}")\n\t.events({});\n`,
 					},
 					global: {
 						dir: "globals",

@@ -24,6 +24,8 @@ export type OauthCollections = {
 	oauthRefreshToken: typeof _coll_oauthRefreshToken;
 };
 
+export type OauthChannels = Record<never, never>;
+
 export type OauthGlobals = Record<never, never>;
 
 export type OauthJobs = Record<never, never>;
@@ -39,6 +41,7 @@ export type OauthFieldTypes = Record<never, never>;
 export type OauthModule = {
 	name: "questpie-oauth";
 	collections: OauthCollections;
+	channels: OauthChannels;
 	globals: OauthGlobals;
 	jobs: OauthJobs;
 	routes: OauthRoutes;
@@ -62,6 +65,7 @@ const _module: OauthModule = {
 		oauthConsent: _coll_oauthConsent,
 		oauthRefreshToken: _coll_oauthRefreshToken,
 	} as OauthCollections,
+	channels: {},
 	globals: {},
 	jobs: {},
 	routes: {},

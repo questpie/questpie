@@ -1149,7 +1149,7 @@ describe("multi-export factory discovery", () => {
 	});
 });
 
-describe("factory argument metadata policy", () => {
+describe("channel factory argument metadata policy", () => {
 	let rootDir: string;
 	let outDir: string;
 
@@ -1171,7 +1171,7 @@ describe("factory argument metadata policy", () => {
 
 	const channelCategory = {
 		dirs: ["channels"],
-		prefix: "chan",
+		prefix: "channel",
 		factoryFunctions: ["channel"],
 		factoryKeyStrategy: "export-or-filename" as const,
 		factoryArgument: {
@@ -1181,6 +1181,16 @@ describe("factory argument metadata policy", () => {
 			validate: validateChannelWirePattern,
 		},
 	};
+
+	it("declares the locked channel policy in the core plugin", () => {
+		const target = resolveTargetGraph([coreCodegenPlugin()]).get("server")!;
+		expect(target.categories.channels).toMatchObject(channelCategory);
+		expect(target.categories.channels).toMatchObject({
+			registryKey: true,
+			extractFromModules: true,
+			includeInAppState: true,
+		});
+	});
 
 	it("uses the filename for a default export and keeps the wire pattern as metadata", async () => {
 		await write(
@@ -1217,6 +1227,36 @@ describe("factory argument metadata policy", () => {
 		expect(channels.get("chatRoom")!.factoryArgument).toBe(
 			"chat-room-[roomId]",
 		);
+	});
+
+	it("keeps collection and global factory arguments as their registry keys", async () => {
+		await write(
+			"collections/posts.ts",
+			'export const postsDefinition = collection("posts");',
+		);
+		await write(
+			"globals/site.ts",
+			'export const settingsDefinition = global("site-settings");',
+		);
+		await write(
+			"channels/chat.ts",
+			'export const chatRoom = channel("chat-room-[roomId]");',
+		);
+
+		const target = resolveTargetGraph([coreCodegenPlugin()]).get("server")!;
+		const result = await discoverFiles(rootDir, outDir, {
+			categories: target.categories,
+		});
+
+		expect([...result.categories.get("collections")!.keys()]).toEqual([
+			"posts",
+		]);
+		expect([...result.categories.get("globals")!.keys()]).toEqual([
+			"siteSettings",
+		]);
+		expect([...result.categories.get("channels")!.keys()]).toEqual([
+			"chatRoom",
+		]);
 	});
 
 	it("rejects duplicate wire patterns with both app file locations", async () => {

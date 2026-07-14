@@ -730,7 +730,7 @@ describe("generateModuleTemplate — extra imports", () => {
 	});
 });
 
-describe("generateModuleTemplate — factory argument metadata", () => {
+describe("generateModuleTemplate — channel factory argument metadata", () => {
 	it("emits source metadata under the codegen symbol for module conflict checks", () => {
 		const result = emptyResult(["channels"]);
 		result.categories.get("channels")!.set(
@@ -762,5 +762,7 @@ describe("generateModuleTemplate — factory argument metadata", () => {
 		);
 		expect(code).toContain('"value":"chat-room-[roomId]"');
 		expect(code).toContain('"source":"channels/chat-room.ts"');
+		expect(code).toContain("channels: {");
+		expect(code).toContain("chatRoom: _chatRoom");
 	});
 });

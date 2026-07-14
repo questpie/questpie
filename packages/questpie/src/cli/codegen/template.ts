@@ -231,6 +231,7 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 	// half of the job-handler collections map).
 	const l1ToL2 = [
 		"AppCollections",
+		"AppChannels",
 		"AppGlobals",
 		"AppJobs",
 		"_ModuleCollections",
@@ -321,7 +322,7 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 	);
 	// CollectionDoc/GlobalDoc/AppConfig/createContext read these from L1; the
 	// runtime `as _AppQuestpie` cast + AppSession re-exports read from L2.
-	const l3FromL1 = ["AppCollections", "AppGlobals", "AppRoutes"];
+	const l3FromL1 = ["AppCollections", "AppChannels", "AppGlobals", "AppRoutes"];
 	l3.push(
 		`import type { ${l3FromL1.join(", ")} } from "${layerImport(L1_FILE)}";`,
 	);
@@ -848,11 +849,12 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 			"type _AppGlobalDefinitions = AppGlobals & Record<string, AnyGlobalOrBuilder>;",
 		);
 		lines.push(
-			'type _AppQuestpieConfig = Omit<QuestpieConfig, "app" | "db" | "collections" | "globals" | "auth" | "~contextExtensions"> & {',
+			'type _AppQuestpieConfig = Omit<QuestpieConfig, "app" | "db" | "collections" | "channels" | "globals" | "auth" | "~contextExtensions"> & {',
 		);
 		lines.push('\tapp: (typeof _runtime)["app"];');
 		lines.push('\tdb: (typeof _runtime)["db"];');
 		lines.push("\tcollections: _AppCollectionDefinitions;");
+		lines.push("\tchannels: AppChannels;");
 		lines.push("\tglobals: _AppGlobalDefinitions;");
 		lines.push("\tauth: _AppAuthConfig;");
 		lines.push('\tstorage: (typeof _runtime)["storage"];');
@@ -916,7 +918,7 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 		lines.push('\tlogger: _AppQuestpie["logger"];');
 		lines.push('\tsearch: _AppQuestpie["search"];');
 		lines.push('\trealtime: _AppQuestpie["realtime"];');
-		lines.push("\tchannels: ChannelsService;");
+		lines.push("\tchannels: ChannelsService<AppChannels>;");
 		lines.push("");
 		lines.push("\t// Entity APIs");
 		lines.push("\tcollections: _CollectionsAPI;");
@@ -1057,7 +1059,7 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 			lines.push('\t\t\tlogger: _AppQuestpie["logger"];');
 			lines.push('\t\t\tsearch: _AppQuestpie["search"];');
 			lines.push('\t\t\trealtime: _AppQuestpie["realtime"];');
-			lines.push("\t\t\tchannels: ChannelsService;");
+			lines.push("\t\t\tchannels: ChannelsService<AppChannels>;");
 			lines.push("");
 			lines.push("\t\t\t// Entity APIs");
 			lines.push("\t\t\tcollections: _JobHandlerCollectionsAPI;");
@@ -1354,6 +1356,7 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 	// aggregates already satisfy the SDK's `QuestpieApp` constraint.
 	lines.push("export type AppConfig = {");
 	lines.push("\tcollections: AppCollections;");
+	lines.push("\tchannels: AppChannels;");
 	lines.push("\tglobals: AppGlobals;");
 	lines.push("\troutes: AppRoutes;");
 	lines.push('\tstorage: (typeof _runtime)["storage"];');

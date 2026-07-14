@@ -89,6 +89,8 @@ import type { RouteDefinition, RouteParamsFromKey } from "questpie/types";
 
 export type CoreCollections = Record<never, never>;
 
+export type CoreChannels = Record<never, never>;
+
 export type CoreGlobals = Record<never, never>;
 
 export type CoreJobs = {
@@ -182,6 +184,7 @@ export type CoreModule = {
 	services: CoreServices;
 	fieldTypes: CoreFieldTypes;
 	collections: CoreCollections;
+	channels: CoreChannels;
 	globals: CoreGlobals;
 	messages: Record<never, never>;
 	emails: Record<never, never>;
@@ -271,6 +274,7 @@ const _module: CoreModule = {
 		url: _ftype_url,
 	} as CoreFieldTypes,
 	collections: {},
+	channels: {},
 	globals: {},
 	messages: {},
 	emails: {},

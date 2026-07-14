@@ -1,6 +1,7 @@
 import type { BetterAuthOptions } from "better-auth";
 import type { Adapter } from "files-sdk";
 
+import type { ChannelDefinitions } from "#questpie/server/channels/channel-builder.js";
 import type { CollectionAccess } from "#questpie/server/collection/builder/types.js";
 
 // ============================================================================
@@ -100,6 +101,9 @@ export interface ModuleDefinition {
 
 	/** Collections this module contributes. Later modules override by key. */
 	collections?: Record<string, AnyCollectionOrBuilder>;
+
+	/** Typed realtime channels this module contributes. Later modules override by key. */
+	channels?: ChannelDefinitions;
 
 	/** Globals this module contributes. Later modules override by key. */
 	globals?: Record<string, AnyGlobalOrBuilder>;
@@ -496,6 +500,9 @@ export interface AppDefinition {
 
 	/** Collections discovered from `collections/` directory. */
 	collections?: Record<string, AnyCollectionOrBuilder>;
+
+	/** Typed realtime channels discovered from `channels/` directory. */
+	channels?: ChannelDefinitions;
 
 	/** Globals discovered from `globals/` directory. */
 	globals?: Record<string, AnyGlobalOrBuilder>;
