@@ -145,6 +145,7 @@ export function createQueueClient<
 				const services = extractAppServices(appInstance, {
 					db: context.db,
 					session: context.session,
+					accessMode: "system",
 				});
 				// Establish the ambient AppContext (ALS) for the job so implicit
 				// consumers — mailer template handlers, logger trace, admin-audit

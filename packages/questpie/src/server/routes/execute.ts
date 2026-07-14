@@ -177,6 +177,8 @@ export async function executeJsonRouteInternal<
 		db: resolvedContext.db ?? app.db,
 		session: resolvedContext.session,
 		locale: resolvedContext.locale,
+		accessMode: resolvedContext.accessMode,
+		principal: resolvedContext.principal,
 	});
 
 	// Access control — reject before handler runs
@@ -257,6 +259,8 @@ export async function executeRawRouteInternal(
 		db: resolvedContext.db ?? app.db,
 		session: resolvedContext.session,
 		locale: resolvedContext.locale,
+		accessMode: resolvedContext.accessMode,
+		principal: resolvedContext.principal,
 	});
 
 	// Access control — reject before handler runs

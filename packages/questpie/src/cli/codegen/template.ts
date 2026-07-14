@@ -298,6 +298,7 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 	l2.push(
 		'import type { AnyCollectionOrBuilder, AnyGlobalOrBuilder, CollectionAPI, DrizzleClientFromQuestpieConfig, InferContextExtensionsFromAppConfig, InferSessionFromAuthConfig, MailerService, Questpie, QuestpieConfig, QueueClient, QueueJobType, ServiceInstancesInNamespace, TablesFromConfig, z } from "questpie/types";',
 	);
+	l2.push('import type { ChannelsService } from "questpie/channels";');
 	if (extraImports && extraImports.length > 0) {
 		l2.push("// ── Plugin Imports ─────────────────────────────────────────");
 		for (const imp of extraImports) {
@@ -915,6 +916,7 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 		lines.push('\tlogger: _AppQuestpie["logger"];');
 		lines.push('\tsearch: _AppQuestpie["search"];');
 		lines.push('\trealtime: _AppQuestpie["realtime"];');
+		lines.push("\tchannels: ChannelsService;");
 		lines.push("");
 		lines.push("\t// Entity APIs");
 		lines.push("\tcollections: _CollectionsAPI;");
@@ -1055,6 +1057,7 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 			lines.push('\t\t\tlogger: _AppQuestpie["logger"];');
 			lines.push('\t\t\tsearch: _AppQuestpie["search"];');
 			lines.push('\t\t\trealtime: _AppQuestpie["realtime"];');
+			lines.push("\t\t\tchannels: ChannelsService;");
 			lines.push("");
 			lines.push("\t\t\t// Entity APIs");
 			lines.push("\t\t\tcollections: _JobHandlerCollectionsAPI;");

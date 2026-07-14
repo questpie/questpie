@@ -47,6 +47,7 @@ import _route_search_reindex_collection from "../routes/search/reindex/[collecti
 
 // ── Services ────────────────────────────────────────────
 import _svc_auth from "../services/auth";
+import _svc_channels from "../services/channels";
 import _svc_collectionsApi from "../services/collections-api";
 import _svc_db from "../services/db";
 import _svc_email from "../services/email";
@@ -155,6 +156,7 @@ export type CoreFieldTypes = {
 
 export type CoreServices = {
 	auth: typeof _svc_auth;
+	channels: typeof _svc_channels;
 	collectionsApi: typeof _svc_collectionsApi;
 	db: typeof _svc_db;
 	email: typeof _svc_email;
@@ -237,6 +239,7 @@ const _module: CoreModule = {
 	} as CoreRoutes,
 	services: {
 		auth: _svc_auth,
+		channels: _svc_channels,
 		collectionsApi: _svc_collectionsApi,
 		db: _svc_db,
 		email: _svc_email,

@@ -86,6 +86,10 @@ type _hookSession = Expect<NoAny<Questpie.AppHookContext["session"]>>;
 type _hookDb = Expect<NoAny<Questpie.AppHookContext["db"]>>;
 type _hookCollections = Expect<NoAny<Questpie.AppHookContext["collections"]>>;
 type _hookQueue = Expect<NoAny<Questpie.AppHookContext["queue"]>>;
+type _hookHasChannels = Expect<HasKey<Questpie.AppHookContext, "channels">>;
+type _hookChannelsNotAny = Expect<NoAny<Questpie.AppHookContext["channels"]>>;
+type _jobHasChannels = Expect<HasKey<Questpie.JobHandlerContext, "channels">>;
+type _jobChannelsNotAny = Expect<NoAny<Questpie.JobHandlerContext["channels"]>>;
 
 type _accessSession = Expect<
 	NoAny<Questpie.AppDefaultAccessContext["session"]>

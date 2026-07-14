@@ -26,6 +26,7 @@ import _authConfig from "../config/auth";
 
 import type { AppCollections, AppGlobals, AppJobs, _ModuleCollections, _AppDefaultServices, _AppServicesSeam, _AppTopLevelServices, _AppCustomServiceNamespaces, _Registry_Collections, _Registry_Globals, _Registry_Jobs, _Registry_Routes, _Registry_Services, _Registry_Emails, _Registry_FieldTypes, _AllModuleFields } from "./entities.gen";
 import type { AnyCollectionOrBuilder, AnyGlobalOrBuilder, CollectionAPI, DrizzleClientFromQuestpieConfig, InferContextExtensionsFromAppConfig, InferSessionFromAuthConfig, MailerService, Questpie, QuestpieConfig, QueueClient, QueueJobType, ServiceInstancesInNamespace, TablesFromConfig, z } from "questpie/types";
+import type { ChannelsService } from "questpie/channels";
 
 type _MPSubModules<M> = M extends { modules: infer S extends readonly any[] } ? S : readonly [];
 type _MPConfigValue<M, K extends string> = M extends { config: infer C } ? (C extends Record<K, infer V> ? V : {}) : {};
@@ -87,6 +88,7 @@ type _AppInfraRecord = {
 	logger: _AppQuestpie["logger"];
 	search: _AppQuestpie["search"];
 	realtime: _AppQuestpie["realtime"];
+	channels: ChannelsService;
 
 	// Entity APIs
 	collections: _CollectionsAPI;
@@ -118,6 +120,7 @@ declare global {
 			logger: _AppQuestpie["logger"];
 			search: _AppQuestpie["search"];
 			realtime: _AppQuestpie["realtime"];
+			channels: ChannelsService;
 
 			// Entity APIs
 			collections: _JobHandlerCollectionsAPI;
@@ -145,6 +148,7 @@ declare global {
 			logger: _AppQuestpie["logger"];
 			search: _AppQuestpie["search"];
 			realtime: _AppQuestpie["realtime"];
+			channels: ChannelsService;
 
 			// Entity APIs
 			collections: _JobHandlerCollectionsAPI;
