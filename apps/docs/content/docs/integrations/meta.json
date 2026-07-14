@@ -1,4 +1,4 @@
 {
 	"title": "Integrations",
-	"pages": ["index", "mcp", "mcp-oauth", "openapi"]
+	"pages": ["index", "ai", "mcp", "mcp-oauth", "openapi"]
 }

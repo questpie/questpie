@@ -8,6 +8,7 @@
 		"realtime-v2-migration",
 		"storage",
 		"email",
-		"kv"
+		"kv",
+		"sandbox"
 	]
 }
