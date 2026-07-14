@@ -135,8 +135,9 @@ export interface QuestpieApp {
 	auth?: any;
 }
 
-type AppChannelDefinitions<TApp extends QuestpieApp> =
-	NonNullable<TApp["channels"]> extends ChannelDefinitions
+type AppChannelDefinitions<TApp extends QuestpieApp> = 0 extends 1 & TApp
+	? {}
+	: NonNullable<TApp["channels"]> extends ChannelDefinitions
 		? NonNullable<TApp["channels"]>
 		: {};
 

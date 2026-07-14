@@ -10,10 +10,10 @@ import {
 } from "../../../../../../packages/questpie/test/utils/mocks/mock-app-builder";
 import { runTestDbMigrations } from "../../../../../../packages/questpie/test/utils/test-db";
 import { activity } from "../collections/activity";
+import assets from "../collections/assets";
 import { chatMessages } from "../collections/chat-messages";
 import { chatSessions } from "../collections/chat-sessions";
 import { environments } from "../collections/environments";
-import assets from "../collections/assets";
 import { models } from "../collections/models";
 import { projects } from "../collections/projects";
 import { providers } from "../collections/providers";
@@ -345,6 +345,48 @@ describe("chat realtime workflow contract", () => {
 			await expect(stream.readEvent(150)).rejects.toThrow(
 				/Timed out waiting for SSE event/,
 			);
+		} finally {
+			await stream.close();
+		}
+	});
+
+	it("refreshes an active run through the framework direct-subscribe seam", async () => {
+		const app = setup!.app;
+		await app.collections.run_links.create({
+			id: "active-run-realtime",
+			status: "running",
+			runtime: "codex",
+			initiatedBy: "chat",
+			instructions: "Observe this run",
+		} as any);
+
+		const response = await call("/api/run-stream?runId=active-run-realtime", {
+			method: "GET",
+		});
+		const stream = createSSEReader(response);
+		try {
+			await realtimeAdapter.waitForSubscribers();
+			const initial = await stream.readUntil((events) =>
+				events.some(
+					(event) =>
+						event.event === "run" && event.data.run.status === "running",
+				),
+			);
+			expect(initial.some((event) => event.event === "run")).toBe(true);
+
+			await app.collections.run_links.updateById({
+				id: "active-run-realtime",
+				data: { status: "completed", endedAt: new Date() },
+			});
+			const updated = await stream.readUntil((events) =>
+				events.some(
+					(event) =>
+						event.event === "run" && event.data.run.status === "completed",
+				),
+			);
+			expect(
+				updated.find((event) => event.event === "run")?.data.run.status,
+			).toBe("completed");
 		} finally {
 			await stream.close();
 		}

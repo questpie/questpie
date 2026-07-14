@@ -25,6 +25,11 @@ type App = {
 
 declare const client: QuestpieClient<App>;
 
+// App-agnostic consumers can accept a concrete client without widening the
+// channel map into an index signature that conflicts with lifecycle methods.
+const appAgnosticClient: QuestpieClient<any> = client;
+appAgnosticClient.channels.destroy();
+
 client.channels.news.subscribe((message) => {
 	if (message.event === "metric") {
 		type _outputWasInferred = Expect<Equal<typeof message.data.value, number>>;

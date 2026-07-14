@@ -14,6 +14,7 @@ import type {
 	RegisteredCMS,
 	RegisteredCollectionNames,
 } from "../builder/registry";
+import { subscribeAdminCollectionRealtime } from "./realtime-subscription";
 import { useQuestpieQueryOptions } from "./use-questpie-query-options";
 
 type CollectionRealtimeOptions = {
@@ -38,16 +39,17 @@ function useCollectionRealtimeInvalidation({
 	);
 
 	useEffect(() => {
-		if (!collection || !realtime) return;
-		const realtimeApi = client?.realtime;
-		if (!realtimeApi?.subscribe) return;
 		const topic = JSON.parse(topicSignature);
-		if (!topic) return;
-
-		return realtimeApi.subscribe(topic, () => {
-			void queryClient.invalidateQueries({
-				queryKey: ["questpie", "collections", "collections", collection],
-			});
+		return subscribeAdminCollectionRealtime({
+			client,
+			collection,
+			topic,
+			enabled: realtime,
+			onChange: () => {
+				void queryClient.invalidateQueries({
+					queryKey: ["questpie", "collections", "collections", collection],
+				});
+			},
 		});
 	}, [client, collection, queryClient, realtime, topicSignature]);
 }
