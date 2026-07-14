@@ -8,6 +8,11 @@
 import type { Questpie } from "../../config/questpie.js";
 import type { QuestpieConfig } from "../../config/types.js";
 import { ApiError } from "../../errors/index.js";
+import { computeRealtimeSnapshot } from "../../modules/core/integrated/realtime/snapshot.js";
+import {
+	encodeSseEvent,
+	SseClientTransport,
+} from "../../modules/core/integrated/realtime/sse-client-transport.js";
 import type { AdapterConfig, AdapterContext } from "../types.js";
 import { resolveContext } from "../utils/context.js";
 import { handleError, sseHeaders } from "../utils/response.js";
@@ -140,6 +145,10 @@ export async function realtimeSubscribe(
 	// Validate and resolve all topics upfront
 	const validatedTopics: ValidatedTopic[] = [];
 	const topicErrors: Array<{ id: string; message: string }> = [];
+	const collectionCruds = new Map<string, any>();
+	const globalCruds = new Map<string, any>();
+	const collectionApi = app.collections as Record<string, any>;
+	const globalApi = app.globals as Record<string, any>;
 
 	for (const topic of topics) {
 		if (!topic.id || typeof topic.id !== "string") {
@@ -167,7 +176,8 @@ export async function realtimeSubscribe(
 		}
 
 		if (topic.resourceType === "collection") {
-			const crud = app.collections[topic.resource as any];
+			const crud =
+				collectionCruds.get(topic.resource) ?? collectionApi[topic.resource];
 			if (!crud) {
 				topicErrors.push({
 					id: topic.id,
@@ -179,11 +189,14 @@ export async function realtimeSubscribe(
 				});
 				continue;
 			}
+			collectionCruds.set(topic.resource, crud);
 			validatedTopics.push({ ...topic, type: "collection", crud });
 		} else if (topic.resourceType === "global") {
 			try {
-				const globalConfig = app.getGlobalConfig(topic.resource as any);
-				const crud = globalConfig.generateCRUD(resolved.appContext.db, app);
+				const crud =
+					globalCruds.get(topic.resource) ?? globalApi[topic.resource];
+				if (!crud) throw new Error("Global not found");
+				globalCruds.set(topic.resource, crud);
 				validatedTopics.push({ ...topic, type: "global", crud });
 			} catch {
 				topicErrors.push({
@@ -222,12 +235,19 @@ export async function realtimeSubscribe(
 		);
 	}
 
+	const validatedTopicsById = new Map<string, ValidatedTopic>();
+	for (const topic of validatedTopics) {
+		// Preserve the existing first-match behavior for duplicate topic ids.
+		if (!validatedTopicsById.has(topic.id)) {
+			validatedTopicsById.set(topic.id, topic);
+		}
+	}
+
 	// Create SSE stream
-	const encoder = new TextEncoder();
 	let closeStream: (() => void) | null = null;
 
 	const stream = new ReadableStream({
-		start: (controller) => {
+		start: async (controller) => {
 			const topicUnsubscribers = new Map<string, () => void>();
 			let closed = false;
 			let closeRequested = false;
@@ -238,24 +258,23 @@ export async function realtimeSubscribe(
 				closeRequested = true;
 				closeStream?.();
 			};
+			const transport = new SseClientTransport(controller);
+			await transport.start({ onError: requestClose });
+			const sink = await transport.openSession({
+				sessionId: globalThis.crypto.randomUUID(),
+				principal: resolved.appContext.principal ?? null,
+				resolvePrincipal: async () => resolved.appContext.principal ?? null,
+			});
 
 			// Helper to send SSE event
-			const send = (event: string, data: unknown) => {
+			const send = async (event: string, data: unknown) => {
 				if (closed) return;
-				try {
-					controller.enqueue(
-						encoder.encode(
-							`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`,
-						),
-					);
-				} catch {
-					requestClose();
-				}
+				await sink.write(encodeSseEvent(event, data), "latest-snapshot");
 			};
 
 			// Send per-topic error
 			const sendTopicError = (topicId: string, message: string) => {
-				send("error", { topicId, message });
+				return send("error", { topicId, message });
 			};
 
 			const teardownTopic = (topicId: string) => {
@@ -270,7 +289,7 @@ export async function realtimeSubscribe(
 
 			// Refresh a single topic
 			const refresh = async (topicId: string, seq?: number) => {
-				const topic = validatedTopics.find((t) => t.id === topicId);
+				const topic = validatedTopicsById.get(topicId);
 				const state = topicState.get(topicId);
 				if (!topic || !state || closed) return;
 
@@ -294,35 +313,12 @@ export async function realtimeSubscribe(
 				try {
 					do {
 						state.refreshQueued = false;
-						let data: unknown;
+						const data = await computeRealtimeSnapshot(topic, topicContext);
 
-						if (topic.type === "collection") {
-							data = await topic.crud.find(
-								{
-									where: topic.where,
-									with: topic.with,
-									limit: topic.limit,
-									offset: topic.offset,
-									orderBy: topic.orderBy,
-									locale: topic.locale,
-								},
-								topicContext,
-							);
-						} else {
-							data = await topic.crud.get(
-								{
-									where: topic.where,
-									with: topic.with,
-									locale: topic.locale,
-								},
-								topicContext,
-							);
-						}
-
-						send("snapshot", { topicId, seq: state.lastSeq, data });
+						await send("snapshot", { topicId, seq: state.lastSeq, data });
 					} while (state.refreshQueued && !closed);
 				} catch (error) {
-					sendTopicError(
+					await sendTopicError(
 						topicId,
 						error instanceof Error ? error.message : "Unknown error",
 					);
@@ -343,10 +339,10 @@ export async function realtimeSubscribe(
 				const unsub = app.realtime!.subscribe(
 					(event) => {
 						void refresh(topic.id, event.seq).catch((error) => {
-							sendTopicError(
+							void sendTopicError(
 								topic.id,
 								error instanceof Error ? error.message : "Refresh failed",
-							);
+							).catch(requestClose);
 						});
 					},
 					{
@@ -356,14 +352,15 @@ export async function realtimeSubscribe(
 						with: topic.with,
 					},
 					(error) => {
-						send("error", {
+						void send("error", {
 							topicId: "*",
 							message:
 								error instanceof Error
 									? error.message
 									: "Realtime transport failed",
-						});
-						requestClose();
+						})
+							.catch(() => {})
+							.finally(requestClose);
 					},
 				);
 				topicUnsubscribers.set(topic.id, unsub);
@@ -371,7 +368,7 @@ export async function realtimeSubscribe(
 
 			// Send initial errors for invalid topics
 			for (const error of topicErrors) {
-				sendTopicError(error.id, error.message);
+				await sendTopicError(error.id, error.message);
 			}
 
 			// Ping timer to keep the connection alive. Default 8s — strictly under
@@ -379,7 +376,7 @@ export async function realtimeSubscribe(
 			const keepAliveIntervalMs =
 				app.config?.realtime?.keepAliveIntervalMs ?? 8000;
 			const pingTimer = setInterval(() => {
-				send("ping", { ts: Date.now() });
+				void send("ping", { ts: Date.now() }).catch(requestClose);
 			}, keepAliveIntervalMs);
 
 			// Cleanup function
@@ -393,11 +390,7 @@ export async function realtimeSubscribe(
 				}
 				topicUnsubscribers.clear();
 				topicState.clear();
-				try {
-					controller.close();
-				} catch {
-					// Controller may already be closed
-				}
+				void transport.stop().catch(() => {});
 			};
 			closeStream = close;
 			if (closeRequested) close();
@@ -424,11 +417,11 @@ export async function realtimeSubscribe(
 					validatedTopics.map((topic) => refresh(topic.id, latestSeq)),
 				);
 			})().catch((error) => {
-				send("error", {
+				void send("error", {
 					topicId: "*",
 					message:
 						error instanceof Error ? error.message : "Failed to initialize",
-				});
+				}).catch(requestClose);
 			});
 		},
 		cancel: () => {

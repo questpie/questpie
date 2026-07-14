@@ -1015,6 +1015,44 @@ describe("realtime", () => {
 	// ==========================================================================
 
 	describe("global subscriptions", () => {
+		it("reuses one resolved global CRUD across topics", async () => {
+			const adapter = new MockRealtimeAdapter();
+			const settings = global("settings")
+				.fields(({ f }) => ({ title: f.textarea() }))
+				.access({ read: true, update: true });
+
+			setup = await buildMockApp(
+				{ globals: { settings } },
+				{ realtime: { adapter } },
+			);
+			await runTestDbMigrations(setup.app);
+			const generateCrud = spyOn(
+				setup.app.getGlobalConfig("settings"),
+				"generateCRUD",
+			);
+			const controller = new AbortController();
+			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
+			const firstTopic = globalTopic("settings");
+			const response = await routes.realtime.subscribe(
+				createRealtimeRequest(
+					[firstTopic, { ...firstTopic, id: "global-settings-second" }],
+					controller.signal,
+				),
+				{},
+				undefined,
+			);
+			expect(response.ok).toBe(true);
+			const reader = createSSEReader(response.body!);
+
+			await reader.readSnapshot();
+			await reader.readSnapshot();
+			expect(generateCrud).toHaveBeenCalledTimes(1);
+
+			controller.abort();
+			reader.close();
+			generateCrud.mockRestore();
+		});
+
 		it("re-sends snapshots when global changes", async () => {
 			const adapter = new MockRealtimeAdapter();
 			const settings = global("settings")
@@ -1144,12 +1182,18 @@ describe("realtime", () => {
 			await runTestDbMigrations(setup.app);
 
 			let healthyListenerCalls = 0;
-			setup.app.realtime.subscribe(() => {
-				throw new Error("listener failed");
-			}, { resourceType: "collection", resource: "items" });
-			setup.app.realtime.subscribe(() => {
-				healthyListenerCalls += 1;
-			}, { resourceType: "collection", resource: "items" });
+			setup.app.realtime.subscribe(
+				() => {
+					throw new Error("listener failed");
+				},
+				{ resourceType: "collection", resource: "items" },
+			);
+			setup.app.realtime.subscribe(
+				() => {
+					healthyListenerCalls += 1;
+				},
+				{ resourceType: "collection", resource: "items" },
+			);
 
 			const event: RealtimeChangeEvent = {
 				seq: 1,
@@ -1578,7 +1622,7 @@ describe("realtime", () => {
 			expect(error.data.message).toContain("permission");
 			await new Promise((resolve) => setTimeout(resolve, 20));
 			expect(setup.app.realtime.listeners.size).toBe(0);
-			expect(adapter.stopCalls).toBe(1);
+			expect(adapter.stopCalls).toBe(0);
 			await expect(reader.readEvent()).rejects.toThrow(
 				"SSE stream closed before event",
 			);
@@ -1664,7 +1708,10 @@ describe("realtime", () => {
 				},
 			);
 			const reader = createSSEReader(response.body!);
-			const initialEvents = [await reader.readEvent(), await reader.readEvent()];
+			const initialEvents = [
+				await reader.readEvent(),
+				await reader.readEvent(),
+			];
 
 			expect(initialEvents).toEqual(
 				expect.arrayContaining([
@@ -1886,7 +1933,7 @@ describe("realtime", () => {
 				await new Promise((resolve) => setTimeout(resolve, 20));
 
 				expect(setup.app.realtime.listeners.size).toBe(0);
-				expect(adapter.stopCalls).toBe(1);
+				expect(adapter.stopCalls).toBe(0);
 			} finally {
 				enqueueSpy.mockRestore();
 				await response?.body?.cancel();
@@ -1956,10 +2003,9 @@ describe("realtime", () => {
 			expect((await reader.readSnapshot()).event).toBe("snapshot");
 			await new Promise((resolve) => setTimeout(resolve, 20));
 
-			const readSpy = spyOn(
-				setup.app.realtime,
-				"readSince",
-			).mockRejectedValue(new Error("drain failed"));
+			const readSpy = spyOn(setup.app.realtime, "readSince").mockRejectedValue(
+				new Error("drain failed"),
+			);
 			try {
 				await adapter.notify({
 					seq: 999,

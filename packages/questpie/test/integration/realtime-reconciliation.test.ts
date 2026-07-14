@@ -159,7 +159,12 @@ class ControlledRealtimeReadDb {
 	}
 
 	select(selection?: unknown): SelectQuery {
-		const isLatestSeqRead = selection !== undefined;
+		const isLatestSeqRead =
+			selection !== undefined &&
+			typeof selection === "object" &&
+			selection !== null &&
+			Object.keys(selection).length === 1 &&
+			"seq" in selection;
 		const query: SelectQuery = {
 			from: () => query,
 			where: () => query,
