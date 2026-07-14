@@ -234,6 +234,7 @@ export * from "#questpie/server/modules/core/integrated/queue/worker.js";
 export * from "#questpie/server/modules/core/integrated/realtime/adapter.js";
 export * from "#questpie/server/modules/core/integrated/realtime/collection.js";
 export * from "#questpie/server/modules/core/integrated/realtime/service.js";
+export * from "#questpie/server/modules/core/integrated/realtime/transport.js";
 export * from "#questpie/server/modules/core/integrated/realtime/types.js";
 // Search module
 export * from "#questpie/server/modules/core/integrated/search/collection.js";

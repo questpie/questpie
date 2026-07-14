@@ -27,6 +27,7 @@ export type {
 	AppConfigInput,
 	AppModuleInput,
 	RuntimeConfig,
+	RuntimeConfigExtensions,
 	RuntimeConfigInput,
 	ResolvedRuntimeConfig,
 	ModuleDefinition,

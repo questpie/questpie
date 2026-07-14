@@ -1,6 +1,11 @@
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
 
 import { createClient } from "../../src/client/index.js";
+import {
+	RealtimeMultiplexer,
+	realtimeReconnectDelay,
+} from "../../src/client/realtime/multiplexer.js";
+import { sseSnapshotStream } from "../../src/client/realtime/stream.js";
 
 /**
  * `live()` / `liveIter()` are thin wrappers over the realtime multiplexer,
@@ -17,14 +22,21 @@ type SSEConnection = {
 		id: string;
 		resourceType: string;
 		resource: string;
+		operation?: "find" | "count" | "get";
+		recordId?: string;
 		where?: Record<string, unknown>;
 		with?: Record<string, unknown>;
 		limit?: number;
 		orderBy?: Record<string, string>;
+		sinceSeq?: number;
 	}>;
 	sendSnapshot: (topicId: string, seq: number, data: unknown) => void;
+	sendError: (topicId: string, message: string) => void;
+	close: () => void;
 	aborted: boolean;
 };
+
+type ControlFrame = { type: string; topicId: string; topic?: unknown };
 
 async function waitFor(assertion: () => boolean, timeoutMs = 3000) {
 	const deadline = Date.now() + timeoutMs;
@@ -38,11 +50,13 @@ async function waitFor(assertion: () => boolean, timeoutMs = 3000) {
 describe("client live queries", () => {
 	let originalFetch: typeof globalThis.fetch;
 	let connections: SSEConnection[];
+	let controlFrames: ControlFrame[];
 	let client: ReturnType<typeof createClient<any>>;
 
 	beforeEach(() => {
 		originalFetch = globalThis.fetch;
 		connections = [];
+		controlFrames = [];
 
 		globalThis.fetch = (async (
 			input: RequestInfo | URL,
@@ -53,7 +67,12 @@ describe("client live queries", () => {
 				throw new Error(`Unexpected fetch in test: ${url}`);
 			}
 
-			const { topics } = JSON.parse(String(init?.body));
+			const payload = JSON.parse(String(init?.body));
+			if (payload.sessionId) {
+				controlFrames.push(...payload.frames);
+				return new Response(null, { status: 204 });
+			}
+			const { topics } = payload;
 			let controller!: ReadableStreamDefaultController<Uint8Array>;
 			const body = new ReadableStream<Uint8Array>({
 				start(c) {
@@ -75,6 +94,16 @@ describe("client live queries", () => {
 						// Stream already closed
 					}
 				},
+				sendError(topicId, message) {
+					controller.enqueue(
+						encoder.encode(
+							`event: error\ndata: ${JSON.stringify({ topicId, message })}\n\n`,
+						),
+					);
+				},
+				close() {
+					controller.close();
+				},
 			};
 
 			// Mirror real fetch: aborting the request kills the body stream.
@@ -88,6 +117,11 @@ describe("client live queries", () => {
 			});
 
 			connections.push(connection);
+			controller.enqueue(
+				encoder.encode(
+					`event: session\ndata: ${JSON.stringify({ sessionId: `session-${connections.length}`, token: `token-${connections.length}` })}\n\n`,
+				),
+			);
 			return new Response(body, {
 				status: 200,
 				headers: { "Content-Type": "text/event-stream" },
@@ -100,6 +134,12 @@ describe("client live queries", () => {
 	afterEach(() => {
 		client.realtime.destroy();
 		globalThis.fetch = originalFetch;
+	});
+
+	it("jitters reconnect backoff across the full plus-or-minus 50 percent range", () => {
+		expect(realtimeReconnectDelay(1000, 0, 30_000, () => 0)).toBe(500);
+		expect(realtimeReconnectDelay(1000, 0, 30_000, () => 1)).toBe(1500);
+		expect(realtimeReconnectDelay(1000, 10, 30_000, () => 0.5)).toBe(30_000);
 	});
 
 	it("live() sends the query as a topic and delivers snapshots until unsubscribed", async () => {
@@ -116,6 +156,7 @@ describe("client live queries", () => {
 		expect(connection.topics).toHaveLength(1);
 		expect(connection.topics[0].resourceType).toBe("collection");
 		expect(connection.topics[0].resource).toBe("posts");
+		expect(connection.topics[0].operation).toBe("find");
 		expect(connection.topics[0].where).toEqual({ status: "published" });
 		expect(connection.topics[0].limit).toBe(10);
 
@@ -138,12 +179,125 @@ describe("client live queries", () => {
 		await waitFor(() => snapshots.length === 2);
 		expect(snapshots[1]).toEqual(second);
 
-		// Unsubscribe stops delivery (multiplexer drops the topic + aborts)
+		// Unsubscribe stops delivery through one incremental remove frame.
 		stop();
-		await waitFor(() => connection.aborted);
+		await waitFor(() =>
+			controlFrames.some(
+				(frame) => frame.type === "remove_topic" && frame.topicId === topicId,
+			),
+		);
+		expect(connection.aborted).toBe(false);
 		connection.sendSnapshot(topicId, 3, { docs: [], totalDocs: 0 });
 		await new Promise((resolve) => setTimeout(resolve, 50));
 		expect(snapshots).toHaveLength(2);
+	});
+
+	it("keeps collection get record ids separate from subscription ids", async () => {
+		const multiplexer = new RealtimeMultiplexer(
+			"http://localhost:3000",
+			true,
+			0,
+		);
+		multiplexer.subscribe(
+			{
+				resourceType: "collection",
+				resource: "posts",
+				operation: "get",
+				id: "post-1",
+			},
+			() => {},
+			undefined,
+			"topic-post-1",
+		);
+
+		await waitFor(() => connections.length === 1);
+		expect(connections[0].topics[0]).toMatchObject({
+			id: "topic-post-1",
+			resourceType: "collection",
+			resource: "posts",
+			operation: "get",
+			recordId: "post-1",
+		});
+		multiplexer.destroy();
+	});
+
+	it("adds one mounted topic with one control frame and no reconnect", async () => {
+		const stopPosts = client.collections.posts.live({}, () => {});
+		await waitFor(() => connections.length === 1);
+		await new Promise((resolve) => setTimeout(resolve, 20));
+
+		const stopPages = client.collections.pages.live({}, () => {});
+		await waitFor(() =>
+			controlFrames.some(
+				(frame) =>
+					frame.type === "add_topic" &&
+					(frame.topic as any)?.resource === "pages",
+			),
+		);
+
+		expect(connections).toHaveLength(1);
+		expect(connections[0].aborted).toBe(false);
+		expect(
+			controlFrames.filter((frame) => frame.type === "add_topic"),
+		).toHaveLength(1);
+
+		stopPages();
+		stopPosts();
+	});
+
+	it("reconnects a clean close with sinceSeq and skips duplicate delivery", async () => {
+		const multiplexer = new RealtimeMultiplexer(
+			"http://localhost:3000",
+			true,
+			0,
+			{
+				retryBaseMs: 10,
+				maxRetryMs: 10,
+				pingWatchdogMs: 1000,
+				random: () => 0.5,
+			},
+		);
+		const snapshots: unknown[] = [];
+		multiplexer.subscribe(
+			{ resourceType: "collection", resource: "posts" },
+			(snapshot) => snapshots.push(snapshot),
+			undefined,
+			"resume-posts",
+		);
+		await waitFor(() => connections.length === 1);
+		connections[0].sendSnapshot("resume-posts", 7, { docs: [{ id: "7" }] });
+		await waitFor(() => snapshots.length === 1);
+
+		connections[0].close();
+		await new Promise((resolve) => setTimeout(resolve, 1));
+		expect(connections).toHaveLength(1);
+		await waitFor(() => connections.length === 2);
+		expect(connections[1].topics[0].sinceSeq).toBe(7);
+		await new Promise((resolve) => setTimeout(resolve, 20));
+		expect(snapshots).toHaveLength(1);
+		multiplexer.destroy();
+	});
+
+	it("reconnects a half-open stream when ping activity stops", async () => {
+		const multiplexer = new RealtimeMultiplexer(
+			"http://localhost:3000",
+			true,
+			0,
+			{
+				retryBaseMs: 5,
+				maxRetryMs: 5,
+				pingWatchdogMs: 20,
+				random: () => 0.5,
+			},
+		);
+		multiplexer.subscribe(
+			{ resourceType: "collection", resource: "posts" },
+			() => {},
+		);
+
+		await waitFor(() => connections.length === 2);
+		expect(connections[0].aborted).toBe(true);
+		multiplexer.destroy();
 	});
 
 	it("live() with identical options shares one SSE topic", async () => {
@@ -166,6 +320,34 @@ describe("client live queries", () => {
 
 		stopA();
 		stopB();
+	});
+
+	it("delivers a topic error only to that topic's subscribers", async () => {
+		const postErrors: Error[] = [];
+		const pageErrors: Error[] = [];
+		const stopPosts = client.realtime.subscribe(
+			{ resourceType: "collection", resource: "posts" },
+			() => {},
+			undefined,
+			"posts-topic",
+			(error) => postErrors.push(error),
+		);
+		const stopPages = client.realtime.subscribe(
+			{ resourceType: "collection", resource: "pages" },
+			() => {},
+			undefined,
+			"pages-topic",
+			(error) => pageErrors.push(error),
+		);
+		await waitFor(() => connections.length === 1);
+
+		connections[0].sendError("posts-topic", "posts denied");
+		await waitFor(() => postErrors.length === 1);
+		expect(postErrors[0].message).toBe("posts denied");
+		expect(pageErrors).toHaveLength(0);
+
+		stopPosts();
+		stopPages();
 	});
 
 	it("liveIter() yields snapshots and terminates on abort", async () => {
@@ -195,6 +377,37 @@ describe("client live queries", () => {
 		abortController.abort();
 		await iteration; // generator must terminate
 		expect(received).toHaveLength(1);
+	});
+
+	it("liveIter() installs one abort listener for the whole snapshot stream", async () => {
+		const abortController = new AbortController();
+		const addSpy = spyOn(abortController.signal, "addEventListener");
+		const removeSpy = spyOn(abortController.signal, "removeEventListener");
+		let deliver: ((data: unknown) => void) | undefined;
+		const multiplexer = {
+			subscribe: (_topic: unknown, callback: (data: unknown) => void) => {
+				deliver = callback;
+				return () => {};
+			},
+		} as unknown as RealtimeMultiplexer;
+		const stream = sseSnapshotStream<number>({
+			multiplexer,
+			topic: { resourceType: "collection", resource: "posts" },
+			signal: abortController.signal,
+		});
+
+		const first = stream.next();
+		await waitFor(() => typeof deliver === "function");
+		deliver!(1);
+		expect((await first).value).toBe(1);
+		const second = stream.next();
+		deliver!(2);
+		expect((await second).value).toBe(2);
+		expect(addSpy).toHaveBeenCalledTimes(1);
+
+		abortController.abort();
+		await stream.next();
+		expect(removeSpy).toHaveBeenCalledTimes(1);
 	});
 
 	it("global live() subscribes with a global topic and delivers snapshots", async () => {

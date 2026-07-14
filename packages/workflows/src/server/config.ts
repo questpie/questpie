@@ -44,6 +44,27 @@ export interface WorkflowsConfigInput {
 	executionLock?: WorkflowsExecutionLockConfig;
 }
 
+/** State shape used by workflow runtime consumers. */
+export interface WorkflowsConfigState {
+	/**
+	 * Runtime-only workflow configuration supplied through `runtimeConfig()`.
+	 *
+	 * The `workflows` top-level state key is reserved for generated workflow
+	 * definitions, so runtime settings intentionally use a distinct name.
+	 */
+	workflowsRuntime?: WorkflowsConfigInput;
+	/** Legacy codegen configuration from `config/workflows.ts`. */
+	config?: {
+		workflows?: WorkflowsConfigInput;
+	};
+}
+
+declare module "questpie" {
+	interface RuntimeConfigExtensions {
+		workflowsRuntime?: WorkflowsConfigInput;
+	}
+}
+
 export interface WorkflowsExecutionLockConfig {
 	/**
 	 * How long a worker owns an instance claim without a heartbeat.
@@ -68,6 +89,13 @@ export interface WorkflowsExecutionLockConfig {
 
 export function workflowsConfig<T extends WorkflowsConfigInput>(config: T): T {
 	return config;
+}
+
+/** Resolve runtime settings while preserving `config/workflows.ts` compatibility. */
+export function resolveWorkflowsConfig(
+	state: WorkflowsConfigState | undefined,
+): WorkflowsConfigInput | undefined {
+	return state?.workflowsRuntime ?? state?.config?.workflows;
 }
 
 export function defaultWorkflowAccess(ctx: RouteAccessContext): boolean {

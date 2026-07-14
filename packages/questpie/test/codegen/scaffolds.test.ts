@@ -104,6 +104,7 @@ describe("scaffold types on resolved targets", () => {
 		// Core scaffolds
 		const names = Object.keys(server.scaffolds);
 		expect(names).toContain("collection");
+		expect(names).toContain("channel");
 		expect(names).toContain("global");
 		expect(names).toContain("job");
 		expect(names).toContain("service");
@@ -213,6 +214,24 @@ describe("scaffold template output", () => {
 		expect(output).toContain('collection("blog-posts")');
 		expect(output).toContain("blogPosts");
 		expect(output).toContain('f.text(255).label("Title").required()');
+	});
+
+	it("core channel template keeps the filename key separate from its wire pattern", () => {
+		const graph = resolveTargetGraph([coreCodegenPlugin()]);
+		const scaffold = graph.get("server")!.scaffolds.channel;
+		const output = scaffold.template({
+			kebab: "chat-room",
+			camel: "chatRoom",
+			pascal: "ChatRoom",
+			title: "Chat Room",
+			targetId: "server",
+		});
+
+		expect(scaffold.dir).toBe("channels");
+		expect(output).toContain('import { channel } from "questpie/channels"');
+		expect(output).toContain('channel("chat-room")');
+		expect(output).toContain("export default");
+		expect(output).toContain(".events({})");
 	});
 
 	it("core email template has .tsx extension", () => {

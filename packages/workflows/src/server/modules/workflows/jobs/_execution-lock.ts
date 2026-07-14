@@ -1,7 +1,11 @@
 import { and, eq, inArray, isNull, lte, or } from "questpie/drizzle";
 import type { AnyPgColumn } from "questpie/drizzle-pg-core";
 
-import type { WorkflowsConfigInput } from "../../../config.js";
+import {
+	resolveWorkflowsConfig,
+	type WorkflowsConfigInput,
+	type WorkflowsConfigState,
+} from "../../../config.js";
 import type { WorkflowRuntimeLogger } from "../routes/_helpers.js";
 
 export type WorkflowExecutionLockClaimInput = {
@@ -118,10 +122,7 @@ function getWorkflowsConfig(ctx: unknown): WorkflowsConfigInput | undefined {
 	if (!isRecord(app)) return undefined;
 	const state = app.state;
 	if (!isRecord(state)) return undefined;
-	const config = state.config;
-	if (!isRecord(config)) return undefined;
-	const workflows = config.workflows;
-	return isRecord(workflows) ? (workflows as WorkflowsConfigInput) : undefined;
+	return resolveWorkflowsConfig(state as WorkflowsConfigState);
 }
 
 function isWorkflowExecutionLockProvider(

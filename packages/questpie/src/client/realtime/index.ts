@@ -10,3 +10,8 @@ export {
 	type RealtimeAPI,
 	sseSnapshotStream,
 } from "./stream.js";
+export {
+	PusherRealtimeTransport,
+	type PusherRealtimeConfig,
+} from "./pusher.js";
+export type { RealtimeClientTransport } from "./transport.js";

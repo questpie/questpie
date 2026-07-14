@@ -101,6 +101,7 @@ export type {
 	AppModuleInput,
 	ModuleDefinition,
 	RuntimeConfig,
+	RuntimeConfigExtensions,
 	RuntimeConfigInput,
 	ResolvedRuntimeConfig,
 	AuthConfig,

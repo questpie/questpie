@@ -19,7 +19,8 @@
 			"DOM.Iterable"
 		],
 		"types": [
-			"vite/client"
+			"vite/client",
+			"bun-types"
 		],
 		"moduleResolution": "bundler",
 		"resolveJsonModule": true,

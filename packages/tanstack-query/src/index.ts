@@ -8,6 +8,11 @@ import {
 	type UseQueryOptions,
 } from "@tanstack/react-query";
 import type {
+	AnyChannelDefinition,
+	ChannelParamsOf,
+	ChannelPresenceOf,
+} from "questpie/channels";
+import type {
 	ApplyQuery,
 	CollectionRelations,
 	CollectionSelect,
@@ -88,8 +93,8 @@ type QueryBuilder<TFn extends AnyAsyncFn> =
 export type RealtimeQueryConfig = {
 	/**
 	 * Subscribe the query to live snapshots over the multiplexed SSE stream.
-	 * Initial data comes from a normal fetch; afterwards the server pushes
-	 * full snapshots on every matching change (via `experimental_streamedQuery`).
+	 * The server supplies both the initial value and later full snapshots through
+	 * the same stream (via `experimental_streamedQuery`).
 	 */
 	realtime?: boolean;
 };
@@ -140,6 +145,71 @@ type GlobalKeys<TApp extends QuestpieApp> = Extract<
 	keyof QuestpieClient<TApp>["globals"],
 	string
 >;
+
+/** Extract generated channel registry keys without client control properties. */
+type ChannelKeys<TApp extends QuestpieApp> = Extract<
+	keyof NonNullable<TApp["channels"]>,
+	string
+>;
+
+type ChannelIter<
+	TApp extends QuestpieApp,
+	K extends ChannelKeys<TApp>,
+> = QuestpieClient<TApp>["channels"][K] extends { iter: infer TIter }
+	? TIter extends (
+			...args: infer _TArgs
+		) => AsyncGenerator<unknown, void, unknown>
+		? TIter
+		: never
+	: never;
+
+type ChannelIterMessage<TIter> = TIter extends (
+	...args: infer _TArgs
+) => AsyncGenerator<infer TMessage, void, unknown>
+	? TMessage
+	: never;
+
+type ChannelDefinition<
+	TApp extends QuestpieApp,
+	K extends ChannelKeys<TApp>,
+> = NonNullable<TApp["channels"]>[K] extends AnyChannelDefinition
+	? NonNullable<TApp["channels"]>[K]
+	: never;
+
+type ChannelPresenceOptionsAPI<
+	TApp extends QuestpieApp,
+	K extends ChannelKeys<TApp>,
+> = [ChannelPresenceOf<ChannelDefinition<TApp, K>>] extends [never]
+	? {}
+	: keyof ChannelParamsOf<ChannelDefinition<TApp, K>> extends never
+		? {
+				presence: () => UseQueryOptions<
+					readonly ChannelPresenceOf<ChannelDefinition<TApp, K>>[]
+				>;
+			}
+		: {
+				presence: (
+					params: ChannelParamsOf<ChannelDefinition<TApp, K>>,
+				) => UseQueryOptions<
+					readonly ChannelPresenceOf<ChannelDefinition<TApp, K>>[]
+				>;
+			};
+
+type ChannelSubscriptionOptionsAPI<
+	TApp extends QuestpieApp,
+	K extends ChannelKeys<TApp>,
+> = (keyof ChannelParamsOf<ChannelDefinition<TApp, K>> extends never
+	? {
+			subscription: () => UseQueryOptions<
+				readonly ChannelIterMessage<ChannelIter<TApp, K>>[]
+			>;
+		}
+	: {
+			subscription: (
+				params: ChannelParamsOf<ChannelDefinition<TApp, K>>,
+			) => UseQueryOptions<readonly ChannelIterMessage<ChannelIter<TApp, K>>[]>;
+		}) &
+	ChannelPresenceOptionsAPI<TApp, K>;
 
 // Per-collection select/relations — the same derivation the client's own
 // method signatures use, so per-call generics below produce results identical
@@ -388,6 +458,9 @@ export type QuestpieQueryOptionsProxy<TApp extends QuestpieApp = QuestpieApp> =
 		globals: {
 			[K in GlobalKeys<TApp>]: GlobalQueryOptionsAPI<TApp, K>;
 		};
+		channels: {
+			[K in ChannelKeys<TApp>]: ChannelSubscriptionOptionsAPI<TApp, K>;
+		};
 		routes: RoutesQueryOptionsAPI<QuestpieClient<TApp>["routes"]>;
 		custom: {
 			query: <TData>(config: {
@@ -464,56 +537,18 @@ const wrapMutationFn = <TVariables, TData>(
 };
 
 async function* streamRealtimeQuery<TInitialData>(options: {
-	initialFetch: () => Promise<TInitialData>;
 	realtime: RealtimeAPI;
 	topic: TopicConfig;
 	signal?: AbortSignal;
 	errorMap: QuestpieQueryErrorMap;
-}): AsyncGenerator<unknown, void, unknown> {
-	const { initialFetch, realtime, topic, signal, errorMap } = options;
-	const queue: unknown[] = [];
-	let resolveNext: (() => void) | null = null;
-
-	const notify = () => {
-		resolveNext?.();
-		resolveNext = null;
-	};
-	const handleAbort = () => notify();
-
-	const unsubscribe = realtime.subscribe(
-		topic,
-		(data) => {
-			queue.push(data);
-			notify();
-		},
-		signal,
-	);
-
-	signal?.addEventListener("abort", handleAbort, { once: true });
-
+}): AsyncGenerator<TInitialData, void, unknown> {
+	const { realtime, topic, signal, errorMap } = options;
 	try {
-		try {
-			yield await initialFetch();
-		} catch (error) {
-			throw errorMap(error);
+		for await (const snapshot of realtime.stream<TInitialData>(topic, signal)) {
+			yield snapshot;
 		}
-
-		while (!signal?.aborted) {
-			while (queue.length > 0) {
-				yield queue.shift();
-			}
-
-			if (signal?.aborted) break;
-
-			await new Promise<void>((resolve) => {
-				resolveNext = resolve;
-			});
-			resolveNext = null;
-		}
-	} finally {
-		signal?.removeEventListener("abort", handleAbort);
-		unsubscribe();
-		resolveNext = null;
+	} catch (error) {
+		throw errorMap(error);
 	}
 }
 
@@ -580,8 +615,7 @@ export function createQuestpieQueryOptions<
 								queryKey: qKey,
 								queryFn: streamedQuery({
 									streamFn: ({ signal }) =>
-										streamRealtimeQuery({
-											initialFetch: () => collection.find(options),
+										streamRealtimeQuery<any>({
 											realtime: client.realtime,
 											topic,
 											signal,
@@ -609,23 +643,22 @@ export function createQuestpieQueryOptions<
 						]);
 
 						if (queryConfig?.realtime && client.realtime) {
-							const topic = buildCollectionTopic(collectionName, options);
-							// For count, we extract totalDocs from the snapshot
+							const topic = buildCollectionTopic(
+								collectionName,
+								options,
+								"count",
+							);
 							return queryOptions({
 								queryKey: qKey,
 								queryFn: streamedQuery({
 									streamFn: ({ signal }) =>
-										streamRealtimeQuery({
-											initialFetch: () => collection.count(options),
+										streamRealtimeQuery<number>({
 											realtime: client.realtime,
 											topic,
 											signal,
 											errorMap,
 										}),
-									reducer: (_: any, chunk: any) =>
-										typeof chunk?.totalDocs === "number"
-											? chunk.totalDocs
-											: chunk,
+									reducer: (_: any, chunk: number) => chunk,
 									initialValue: undefined,
 									refetchMode: "append",
 								}),
@@ -883,7 +916,6 @@ export function createQuestpieQueryOptions<
 							queryFn: streamedQuery({
 								streamFn: ({ signal }) =>
 									streamRealtimeQuery({
-										initialFetch: () => global.get(options),
 										realtime: client.realtime,
 										topic,
 										signal,
@@ -983,6 +1015,64 @@ export function createQuestpieQueryOptions<
 		},
 	});
 
+	const channels = new Proxy(
+		{} as QuestpieQueryOptionsProxy<TApp>["channels"],
+		{
+			get: (_target, channelName) => {
+				if (typeof channelName !== "string") return undefined;
+				const channel = Reflect.get(client.channels, channelName) as {
+					iter: (...args: unknown[]) => AsyncGenerator<unknown, void, unknown>;
+					presenceIter: (
+						...args: unknown[]
+					) => AsyncGenerator<readonly unknown[], void, unknown>;
+				};
+				return {
+					subscription: (...args: unknown[]) => {
+						const queryKey = buildKey(keyPrefix, [
+							"channels",
+							channelName,
+							"subscription",
+							normalizeQueryKeyOptions(args),
+						]);
+						return queryOptions({
+							queryKey,
+							queryFn: streamedQuery({
+								streamFn: ({ signal }) => channel.iter(...args, { signal }),
+								reducer: (messages: readonly unknown[], message: unknown) => [
+									...messages,
+									message,
+								],
+								initialValue: [] as readonly unknown[],
+								refetchMode: "reset",
+							}),
+						});
+					},
+					presence: (...args: unknown[]) => {
+						const queryKey = buildKey(keyPrefix, [
+							"channels",
+							channelName,
+							"presence",
+							normalizeQueryKeyOptions(args),
+						]);
+						return queryOptions({
+							queryKey,
+							queryFn: streamedQuery({
+								streamFn: ({ signal }) =>
+									channel.presenceIter(...args, { signal }),
+								reducer: (
+									_roster: readonly unknown[],
+									snapshot: readonly unknown[],
+								) => snapshot,
+								initialValue: [] as readonly unknown[],
+								refetchMode: "reset",
+							}),
+						});
+					},
+				};
+			},
+		},
+	);
+
 	/**
 	 * Resolve a nested route caller from the client by traversing dot segments.
 	 */
@@ -1075,6 +1165,7 @@ export function createQuestpieQueryOptions<
 	return {
 		collections,
 		globals,
+		channels,
 		routes: routesProxy,
 		custom: {
 			query: (customConfig) =>

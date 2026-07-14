@@ -1,3 +1,4 @@
+import { mergeAdminConfig } from "#questpie/server/config/admin-sidebar-merge.js";
 import {
 	resolveAppUrl,
 	resolveDbConfig,
@@ -24,7 +25,6 @@ import {
 	mergeTranslationsConfig,
 } from "#questpie/server/i18n/translator.js";
 import coreModule from "#questpie/server/modules/core/.generated/module.js";
-import { mergeAdminConfig } from "#questpie/server/config/admin-sidebar-merge.js";
 import { mergeAuthOptions } from "#questpie/server/modules/core/integrated/auth/merge.js";
 
 type RuntimeConfigStorageInputGuard<TInput> = TInput extends {
@@ -347,6 +347,7 @@ function mergeConfigBucket(existing: any, incoming: any): any {
 
 const MERGE_FNS = new Map<string, MergeFn>([
 	["collections", mergeRecord],
+	["channels", mergeRecord],
 	["globals", mergeRecord],
 	["jobs", mergeRecord],
 	["routes", mergeRecord],
@@ -413,6 +414,7 @@ const CONFIG_CONSUMED_KEYS = new Set([
 function emptyMergedState(): Record<string, any> {
 	return {
 		collections: {},
+		channels: {},
 		globals: {},
 		jobs: {},
 		routes: {},
@@ -563,7 +565,7 @@ function buildExtensionState(
 /**
  * Extract unknown extension keys from RuntimeConfig.
  * Filters out known infrastructure keys so only truly unknown
- * plugin-contributed keys (e.g. `channels`, `workflows`) flow through
+ * plugin-contributed keys (e.g. `channels`, `workflowsRuntime`) flow through
  * to `instance.state`.
  */
 function extractRuntimeExtensions(
@@ -676,6 +678,7 @@ async function createAppFromDefinition(
 		db: runtime.db,
 		secret: runtime.secret,
 		collections: merged.collections,
+		channels: merged.channels,
 		globals: merged.globals,
 		locale: appCfg.locale,
 		auth: authCfg,

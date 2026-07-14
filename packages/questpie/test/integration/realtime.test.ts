@@ -1,5 +1,7 @@
 // @ts-nocheck // TODO: Temporary until test utils are fully typed
-import { afterEach, describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it, spyOn } from "bun:test";
+
+import { lt } from "drizzle-orm";
 
 import {
 	createAdapterRoutes,
@@ -9,8 +11,9 @@ import {
 	type RealtimeAdapter,
 	type RealtimeChangeEvent,
 } from "../../src/exports/index.js";
+import { sharedSseKeepAliveTicker } from "../../src/server/modules/core/integrated/realtime/sse-keep-alive.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
-import { createTestContext } from "../utils/test-context";
+import { createMockSession, createTestContext } from "../utils/test-context";
 import { runTestDbMigrations } from "../utils/test-db";
 
 // ============================================================================
@@ -46,11 +49,21 @@ class MockRealtimeAdapter implements RealtimeAdapter {
 }
 
 class LifecycleTrackingRealtimeAdapter extends MockRealtimeAdapter {
+	public readonly started: Promise<void>;
 	public startCalls = 0;
 	public stopCalls = 0;
+	private markStarted: () => void = () => {};
+
+	constructor() {
+		super();
+		this.started = new Promise((resolve) => {
+			this.markStarted = resolve;
+		});
+	}
 
 	async start(): Promise<void> {
 		this.startCalls += 1;
+		this.markStarted();
 	}
 
 	async stop(): Promise<void> {
@@ -58,20 +71,30 @@ class LifecycleTrackingRealtimeAdapter extends MockRealtimeAdapter {
 	}
 }
 
+class FailingStartRealtimeAdapter extends MockRealtimeAdapter {
+	async start(): Promise<void> {
+		throw new Error("adapter start failed");
+	}
+}
+
 type SSEEvent = {
 	event: string;
 	data: any;
+	comment?: string;
 };
 
 type TopicInput = {
 	id: string;
 	resourceType: "collection" | "global";
 	resource: string;
+	operation?: "find" | "count" | "get";
+	recordId?: string;
 	where?: Record<string, unknown>;
 	with?: Record<string, unknown>;
 	limit?: number;
 	offset?: number;
 	orderBy?: Record<string, "asc" | "desc">;
+	sinceSeq?: number;
 };
 
 /**
@@ -120,7 +143,10 @@ const createSSEReader = (stream: ReadableStream<Uint8Array>) => {
 	const decoder = new TextDecoder();
 	let buffer = "";
 
-	const readEvent = async (timeoutMs = 2000): Promise<SSEEvent> => {
+	const readEvent = async (
+		timeoutMs = 2000,
+		includeSession = false,
+	): Promise<SSEEvent> => {
 		const deadline = Date.now() + timeoutMs;
 
 		while (Date.now() < deadline) {
@@ -131,18 +157,24 @@ const createSSEReader = (stream: ReadableStream<Uint8Array>) => {
 
 				let event = "message";
 				let data = "";
+				let comment: string | undefined;
 				for (const line of chunk.split("\n")) {
 					if (line.startsWith("event:")) {
 						event = line.slice(6).trim();
 					} else if (line.startsWith("data:")) {
 						data += line.slice(5).trim();
+					} else if (line.startsWith(":")) {
+						comment = line.slice(1).trim();
 					}
 				}
 
-				return {
+				const parsed = {
 					event,
 					data: data ? JSON.parse(data) : null,
+					comment,
 				};
+				if (parsed.event === "session" && !includeSession) continue;
+				return parsed;
 			}
 
 			const { value, done } = await reader.read();
@@ -161,7 +193,7 @@ const createSSEReader = (stream: ReadableStream<Uint8Array>) => {
 	): Promise<SSEEvent> => {
 		while (true) {
 			const event = await readEvent(timeoutMs);
-			if (event.event === "ping") {
+			if (event.comment !== undefined) {
 				continue;
 			}
 			// If topicId specified, filter by it
@@ -179,7 +211,7 @@ const createSSEReader = (stream: ReadableStream<Uint8Array>) => {
 // Test Suite
 // ============================================================================
 
-describe("realtime", () => {
+describe("realtime matrix", () => {
 	let setup: Awaited<ReturnType<typeof buildMockApp>>;
 
 	afterEach(async () => {
@@ -187,6 +219,84 @@ describe("realtime", () => {
 			await setup.cleanup();
 			// setup = null;
 		}
+	});
+
+	// ==========================================================================
+	// Operation-aware topic tests
+	// ==========================================================================
+
+	describe("operation-aware topics", () => {
+		it("streams live count as an O(1) scalar without running find", async () => {
+			const adapter = new MockRealtimeAdapter();
+			const posts = collection("posts")
+				.fields(({ f }) => ({
+					title: f.textarea().required(),
+				}))
+				.access({ read: true });
+			setup = await buildMockApp(
+				{ collections: { posts } },
+				{ realtime: { adapter } },
+			);
+			await runTestDbMigrations(setup.app);
+			const context = createTestContext();
+			for (let index = 0; index < 32; index += 1) {
+				await setup.app.collections.posts.create(
+					{ title: `Post ${index}` },
+					context,
+				);
+			}
+
+			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
+			const response = await routes.realtime.subscribe(
+				createRealtimeRequest([
+					collectionTopic("posts", { operation: "count" }),
+				]),
+				{},
+				undefined,
+			);
+			expect(response.status).toBe(200);
+			const reader = createSSEReader(response.body!);
+
+			const initial = await reader.readSnapshot();
+			expect(initial.data.data).toBe(32);
+			expect(JSON.stringify(initial.data.data).length).toBeLessThan(16);
+
+			await setup.app.collections.posts.create({ title: "Post 32" }, context);
+			const updated = await reader.readSnapshot();
+			expect(updated.data.data).toBe(33);
+			expect(JSON.stringify(updated.data.data).length).toBeLessThan(16);
+			await reader.close();
+		});
+
+		it("rejects invalid operation and query-shape combinations", async () => {
+			const posts = collection("posts")
+				.fields(({ f }) => ({ title: f.textarea().required() }))
+				.access({ read: true });
+			setup = await buildMockApp(
+				{ collections: { posts } },
+				{ realtime: true },
+			);
+			await runTestDbMigrations(setup.app);
+			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
+
+			const countWithFindLimit = await routes.realtime.subscribe(
+				createRealtimeRequest([
+					collectionTopic("posts", { operation: "count", limit: 1 }),
+				]),
+				{},
+				undefined,
+			);
+			expect(countWithFindLimit.status).toBe(400);
+
+			const unknownOperation = await routes.realtime.subscribe(
+				createRealtimeRequest([
+					collectionTopic("posts", { operation: "delete" as any }),
+				]),
+				{},
+				undefined,
+			);
+			expect(unknownOperation.status).toBe(400);
+		});
 	});
 
 	// ==========================================================================
@@ -223,10 +333,7 @@ describe("realtime", () => {
 				{ id: created.id, data: { title: "Ahoj" } },
 				ctxSk,
 			);
-			await setup.app.collections.posts.deleteById(
-				{ id: created.id },
-				ctxEn,
-			);
+			await setup.app.collections.posts.deleteById({ id: created.id }, ctxEn);
 
 			const logs = await setup.app.db
 				.select()
@@ -297,6 +404,7 @@ describe("realtime", () => {
 			const posts = collection("posts").fields(({ f }) => ({
 				title: f.textarea().required(),
 				status: f.textarea().required(),
+				metadata: f.json(),
 			}));
 
 			const testModule = {
@@ -316,7 +424,11 @@ describe("realtime", () => {
 			);
 
 			await setup.app.collections.posts.create(
-				{ title: "Hello", status: "published" },
+				{
+					title: "Hello",
+					status: "published",
+					metadata: { nested: { value: "not-routing-data" } },
+				},
 				ctx,
 			);
 
@@ -324,8 +436,12 @@ describe("realtime", () => {
 
 			expect(events.length).toBe(1);
 			expect(events[0].payload).toBeDefined();
-			expect(events[0].payload?.title).toBe("Hello");
-			expect(events[0].payload?.status).toBe("published");
+			expect(events[0].payload?.before).toBeNull();
+			expect(events[0].payload?.after).toMatchObject({
+				title: "Hello",
+				status: "published",
+			});
+			expect(events[0].payload?.after).not.toHaveProperty("metadata");
 
 			unsub?.();
 		});
@@ -461,8 +577,9 @@ describe("realtime", () => {
 			);
 			await new Promise((resolve) => setTimeout(resolve, 100));
 			expect(events.length).toBe(1);
-			expect(events[0].payload?.status).toBe("published");
-			expect(events[0].payload?.authorId).toBe("author1");
+			const after = events[0].payload?.after as Record<string, unknown>;
+			expect(after.status).toBe("published");
+			expect(after.authorId).toBe("author1");
 
 			unsub?.();
 		});
@@ -720,6 +837,14 @@ describe("realtime", () => {
 
 			expect(filteredEvents.length).toBe(1);
 			expect(filteredEvents[0].operation).toBe("update");
+
+			filteredEvents.length = 0;
+			await setup.app.collections.posts.updateById(
+				{ id: post.id, data: { status: "archived" } },
+				ctx,
+			);
+			await new Promise((resolve) => setTimeout(resolve, 100));
+			expect(filteredEvents).toHaveLength(0);
 
 			unsub?.();
 		});
@@ -992,6 +1117,44 @@ describe("realtime", () => {
 	// ==========================================================================
 
 	describe("global subscriptions", () => {
+		it("reuses one resolved global CRUD across topics", async () => {
+			const adapter = new MockRealtimeAdapter();
+			const settings = global("settings")
+				.fields(({ f }) => ({ title: f.textarea() }))
+				.access({ read: true, update: true });
+
+			setup = await buildMockApp(
+				{ globals: { settings } },
+				{ realtime: { adapter } },
+			);
+			await runTestDbMigrations(setup.app);
+			const generateCrud = spyOn(
+				setup.app.getGlobalConfig("settings"),
+				"generateCRUD",
+			);
+			const controller = new AbortController();
+			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
+			const firstTopic = globalTopic("settings");
+			const response = await routes.realtime.subscribe(
+				createRealtimeRequest(
+					[firstTopic, { ...firstTopic, id: "global-settings-second" }],
+					controller.signal,
+				),
+				{},
+				undefined,
+			);
+			expect(response.ok).toBe(true);
+			const reader = createSSEReader(response.body!);
+
+			await reader.readSnapshot();
+			await reader.readSnapshot();
+			expect(generateCrud).toHaveBeenCalledTimes(1);
+
+			controller.abort();
+			reader.close();
+			generateCrud.mockRestore();
+		});
+
 		it("re-sends snapshots when global changes", async () => {
 			const adapter = new MockRealtimeAdapter();
 			const settings = global("settings")
@@ -1108,7 +1271,49 @@ describe("realtime", () => {
 	// ==========================================================================
 
 	describe("edge cases", () => {
-		it("restarts adapter after all subscribers disconnect", async () => {
+		it("isolates a throwing listener so later listeners still receive the event", async () => {
+			const adapter = new MockRealtimeAdapter();
+			const items = collection("items").fields(({ f }) => ({
+				name: f.textarea().required(),
+			}));
+
+			setup = await buildMockApp(
+				{ collections: { items } },
+				{ realtime: { adapter } },
+			);
+			await runTestDbMigrations(setup.app);
+
+			let healthyListenerCalls = 0;
+			setup.app.realtime.subscribe(
+				() => {
+					throw new Error("listener failed");
+				},
+				{ resourceType: "collection", resource: "items" },
+			);
+			setup.app.realtime.subscribe(
+				() => {
+					healthyListenerCalls += 1;
+				},
+				{ resourceType: "collection", resource: "items" },
+			);
+
+			const event: RealtimeChangeEvent = {
+				seq: 1,
+				resourceType: "collection",
+				resource: "items",
+				operation: "create",
+				payload: { before: null, after: { name: "Safe" } },
+				createdAt: new Date(),
+			};
+
+			expect(() => setup.app.realtime.emit(event)).not.toThrow();
+			expect(healthyListenerCalls).toBe(1);
+			expect(
+				setup.app.mocks.logger.getLogsContaining("Realtime listener failed"),
+			).toHaveLength(1);
+		});
+
+		it("keeps adapter running until app teardown", async () => {
 			const adapter = new LifecycleTrackingRealtimeAdapter();
 			const items = collection("items").fields(({ f }) => ({
 				name: f.textarea().required(),
@@ -1123,21 +1328,24 @@ describe("realtime", () => {
 				resourceType: "collection",
 				resource: "items",
 			});
-			await new Promise((resolve) => setTimeout(resolve, 50));
+			await adapter.started;
 			expect(adapter.startCalls).toBe(1);
 
 			firstUnsub?.();
-			await new Promise((resolve) => setTimeout(resolve, 50));
-			expect(adapter.stopCalls).toBe(1);
+			await Promise.resolve();
+			expect(adapter.stopCalls).toBe(0);
 
 			const secondUnsub = setup.app.realtime?.subscribe(() => {}, {
 				resourceType: "collection",
 				resource: "items",
 			});
-			await new Promise((resolve) => setTimeout(resolve, 50));
-			expect(adapter.startCalls).toBe(2);
+			await Promise.resolve();
+			expect(adapter.startCalls).toBe(1);
 
 			secondUnsub?.();
+			await setup.app.realtime.getLatestSeq();
+			await setup.cleanup();
+			expect(adapter.stopCalls).toBe(1);
 		});
 
 		it("handles multiple subscribers with different filters", async () => {
@@ -1372,10 +1580,38 @@ describe("realtime", () => {
 
 			const hasOldRow = logs.some((row: any) => row.recordId === "old-record");
 			expect(hasOldRow).toBe(false);
-			expect(logs.some((row: any) => row.payload?.name === "new")).toBe(true);
+			expect(logs.some((row: any) => row.payload?.after?.name === "new")).toBe(
+				true,
+			);
 		});
 
-		it("cleans up consumed realtime rows using min consumed seq", async () => {
+		it("cleans up old rows by default with no subscribers", async () => {
+			const adapter = new MockRealtimeAdapter();
+			const items = collection("items").fields(({ f }) => ({
+				name: f.textarea().required(),
+			}));
+
+			setup = await buildMockApp(
+				{ collections: { items } },
+				{ realtime: { adapter } },
+			);
+			await runTestDbMigrations(setup.app);
+
+			await setup.app.db.insert(questpieRealtimeLogTable).values({
+				resourceType: "collection",
+				resource: "items",
+				operation: "create",
+				recordId: "expired-headless-row",
+				createdAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000),
+			});
+
+			await setup.app.realtime.cleanupOutbox(true);
+
+			const logs = await setup.app.db.select().from(questpieRealtimeLogTable);
+			expect(logs).toHaveLength(0);
+		});
+
+		it("does not delete rows from a local subscriber watermark", async () => {
 			const adapter = new MockRealtimeAdapter();
 			const items = collection("items").fields(({ f }) => ({
 				name: f.textarea().required(),
@@ -1419,10 +1655,10 @@ describe("realtime", () => {
 				.orderBy(questpieRealtimeLogTable.seq);
 
 			expect(logs.some((row: any) => row.recordId === "pre-existing")).toBe(
-				false,
+				true,
 			);
 			expect(
-				logs.some((row: any) => row.payload?.name === "after-subscribe"),
+				logs.some((row: any) => row.payload?.after?.name === "after-subscribe"),
 			).toBe(true);
 
 			unsub?.();
@@ -1434,15 +1670,21 @@ describe("realtime", () => {
 	// ==========================================================================
 
 	describe("access control", () => {
-		it("should send error event when user lacks read permission", async () => {
-			const adapter = new MockRealtimeAdapter();
+		it("rejects an anonymous denial before hooks, listeners, or a sink", async () => {
+			const adapter = new LifecycleTrackingRealtimeAdapter();
+			let beforeOperationRuns = 0;
+			let beforeReadRuns = 0;
 			const secrets = collection("secrets")
 				.fields(({ f }) => ({
 					content: f.textarea().required(),
 					level: f.textarea().required(),
 				}))
+				.hooks({
+					beforeOperation: () => void (beforeOperationRuns += 1),
+					beforeRead: () => void (beforeReadRuns += 1),
+				})
 				.access({
-					read: ({ session }) => (session?.user as any)?.role === "admin",
+					read: ({ session }) => Boolean(session),
 					create: true,
 				});
 
@@ -1455,40 +1697,25 @@ describe("realtime", () => {
 			setup = await buildMockApp(testModule, { realtime: { adapter } });
 			await runTestDbMigrations(setup.app);
 
-			// First create some data as admin
-			const adminCtx = createTestContext({ accessMode: "user", role: "admin" });
-			await setup.app.collections.secrets.create(
-				{ content: "Secret content", level: "high" },
-				adminCtx,
-			);
-
 			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
-			const controller = new AbortController();
-
-			// Request without admin role should receive error in SSE stream
-			const request = createRealtimeRequest(
-				[collectionTopic("secrets")],
-				controller.signal,
-			);
+			const request = createRealtimeRequest([collectionTopic("secrets")]);
 
 			const response = await routes.realtime.subscribe(
 				request,
 				{},
 				{
-					appContext: createTestContext({ accessMode: "user", role: "user" }),
+					appContext: createTestContext({
+						accessMode: "user",
+						session: null,
+					}),
 				},
 			);
 
-			expect(response.ok).toBe(true);
-			const reader = createSSEReader(response.body!);
-
-			// Should receive error event due to access denied
-			const error = await reader.readEvent();
-			expect(error.event).toBe("error");
-			expect(error.data.message).toContain("permission");
-
-			controller.abort();
-			reader.close();
+			expect(response.ok).toBe(false);
+			expect(beforeOperationRuns).toBe(0);
+			expect(beforeReadRuns).toBe(0);
+			expect(setup.app.realtime.listeners.size).toBe(0);
+			expect(sharedSseKeepAliveTicker.size).toBe(0);
 		});
 
 		it("should allow access for authorized users", async () => {
@@ -1538,6 +1765,57 @@ describe("realtime", () => {
 
 			controller.abort();
 			reader.close();
+		});
+
+		it("removes a denied topic while keeping authorized topics alive", async () => {
+			const adapter = new LifecycleTrackingRealtimeAdapter();
+			const secrets = collection("secrets")
+				.fields(({ f }) => ({ content: f.textarea().required() }))
+				.access({
+					read: ({ session }) => (session?.user as any)?.role === "admin",
+				});
+			const posts = collection("posts")
+				.fields(({ f }) => ({ title: f.textarea().required() }))
+				.access({ read: true });
+			setup = await buildMockApp(
+				{ collections: { secrets, posts } },
+				{ realtime: { adapter } },
+			);
+			await runTestDbMigrations(setup.app);
+
+			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
+			const response = await routes.realtime.subscribe(
+				createRealtimeRequest([
+					collectionTopic("secrets"),
+					collectionTopic("posts"),
+				]),
+				{},
+				{
+					appContext: createTestContext({ accessMode: "user", role: "user" }),
+				},
+			);
+			const reader = createSSEReader(response.body!);
+			const initialEvents = [
+				await reader.readEvent(),
+				await reader.readEvent(),
+			];
+
+			expect(initialEvents).toEqual(
+				expect.arrayContaining([
+					expect.objectContaining({
+						event: "error",
+						data: expect.objectContaining({ topicId: "col-secrets" }),
+					}),
+					expect.objectContaining({
+						event: "snapshot",
+						data: expect.objectContaining({ topicId: "col-posts" }),
+					}),
+				]),
+			);
+			expect(setup.app.realtime.listeners.size).toBe(1);
+			expect(adapter.stopCalls).toBe(0);
+
+			await reader.close();
 		});
 
 		it("should filter payload fields based on field-level access", async () => {
@@ -1591,17 +1869,17 @@ describe("realtime", () => {
 			await new Promise((resolve) => setTimeout(resolve, 100));
 
 			expect(events.length).toBe(1);
-			// Payload should include all fields from the create operation
-			expect(events[0].payload?.title).toBe("Public Title");
-			expect(events[0].payload?.content).toBe("Public content");
-			// internalNotes is filtered at read time via CRUD, but event payload
-			// contains the raw data - this is the current behavior
-			expect(events[0].payload?.internalNotes).toBeDefined();
+			const after = events[0].payload?.after as Record<string, unknown>;
+			// The routing projection retains raw scalar fields. ACL filtering is
+			// still applied to the refreshed snapshot, not to the internal outbox row.
+			expect(after.title).toBe("Public Title");
+			expect(after.content).toBe("Public content");
+			expect(after.internalNotes).toBeDefined();
 
 			unsub?.();
 		});
 
-		it("should handle global access restrictions", async () => {
+		it("rejects a denied global before opening an SSE stream", async () => {
 			const adapter = new MockRealtimeAdapter();
 			const config = global("config")
 				.fields(({ f }) => ({
@@ -1623,13 +1901,7 @@ describe("realtime", () => {
 			await runTestDbMigrations(setup.app);
 
 			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
-			const controller = new AbortController();
-
-			// Non-admin request should receive error in SSE
-			const request = createRealtimeRequest(
-				[globalTopic("config")],
-				controller.signal,
-			);
+			const request = createRealtimeRequest([globalTopic("config")]);
 
 			const response = await routes.realtime.subscribe(
 				request,
@@ -1639,27 +1911,514 @@ describe("realtime", () => {
 				},
 			);
 
+			expect(response.ok).toBe(false);
+			expect(setup.app.realtime.listeners.size).toBe(0);
+		});
+	});
+
+	// ==========================================================================
+	// Admission control
+	// ==========================================================================
+
+	describe("admission control", () => {
+		it("enforces topic, query, and initial-concurrency caps for a mixed batch", async () => {
+			const adapter = new MockRealtimeAdapter();
+			let activeReads = 0;
+			let maximumActiveReads = 0;
+			const observedLimits: number[] = [];
+			const items = collection("items")
+				.fields(({ f }) => ({ name: f.textarea().required() }))
+				.hooks({
+					beforeRead: async ({ data }) => {
+						observedLimits.push(data.limit);
+						activeReads += 1;
+						maximumActiveReads = Math.max(maximumActiveReads, activeReads);
+						await new Promise((resolve) => setTimeout(resolve, 20));
+						activeReads -= 1;
+					},
+				})
+				.access({ read: true });
+			setup = await buildMockApp(
+				{ collections: { items } },
+				{ realtime: { adapter } },
+			);
+			await runTestDbMigrations(setup.app);
+
+			const topics = Array.from({ length: 21 }, (_, index) => ({
+				...collectionTopic("items", { where: { name: `item-${index}` } }),
+				id: `items-${index}`,
+			}));
+			topics[1].limit = 101;
+			topics[2].with = {
+				author: {
+					with: { team: { with: { company: { with: { owner: true } } } } },
+				},
+			};
+
+			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
+			const response = await routes.realtime.subscribe(
+				createRealtimeRequest(topics),
+				{},
+				undefined,
+			);
 			expect(response.ok).toBe(true);
 			const reader = createSSEReader(response.body!);
-
-			let receivedError = false;
-			try {
-				for (let i = 0; i < 5; i++) {
-					const event = await reader.readEvent(500);
-					if (event.event === "error") {
-						receivedError = true;
-						expect(event.data.message).toContain("access");
-						break;
-					}
-				}
-			} catch {
-				// Timeout is acceptable
+			const events: SSEEvent[] = [];
+			for (let index = 0; index < 21; index += 1) {
+				events.push(await reader.readEvent(5000));
 			}
 
-			expect(receivedError).toBe(true);
+			expect(events.filter((event) => event.event === "snapshot")).toHaveLength(
+				18,
+			);
+			expect(
+				events
+					.filter((event) => event.event === "error")
+					.map((event) => event.data.topicId),
+			).toEqual(expect.arrayContaining(["items-1", "items-2", "items-20"]));
+			expect(observedLimits).toHaveLength(18);
+			expect(observedLimits.every((limit) => limit === 100)).toBe(true);
+			expect(maximumActiveReads).toBe(4);
+			expect(setup.app.realtime.listeners.size).toBe(18);
 
-			controller.abort();
-			reader.close();
+			await reader.close();
+			expect(setup.app.realtime.listeners.size).toBe(0);
+		});
+
+		it("preserves the access where constraint alongside the requested filter", async () => {
+			const adapter = new MockRealtimeAdapter();
+			const documents = collection("documents")
+				.fields(({ f }) => ({
+					ownerId: f.textarea().required(),
+					status: f.textarea().required(),
+					title: f.textarea().required(),
+				}))
+				.access({
+					read: ({ input, session }) =>
+						input?.where?.status === "published"
+							? { ownerId: session?.user.id }
+							: false,
+					create: true,
+				});
+			setup = await buildMockApp(
+				{ collections: { documents } },
+				{ realtime: { adapter } },
+			);
+			await runTestDbMigrations(setup.app);
+			const system = createTestContext();
+			await setup.app.collections.documents.create(
+				{ ownerId: "alice", status: "published", title: "allowed" },
+				system,
+			);
+			await setup.app.collections.documents.create(
+				{ ownerId: "alice", status: "draft", title: "wrong status" },
+				system,
+			);
+			await setup.app.collections.documents.create(
+				{ ownerId: "bob", status: "published", title: "wrong owner" },
+				system,
+			);
+
+			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
+			const response = await routes.realtime.subscribe(
+				createRealtimeRequest([
+					collectionTopic("documents", { where: { status: "published" } }),
+				]),
+				{},
+				{
+					appContext: createTestContext({
+						accessMode: "user",
+						session: createMockSession({ id: "alice" }) as any,
+					}),
+				},
+			);
+			const reader = createSSEReader(response.body!);
+			const snapshot = await reader.readSnapshot();
+
+			expect(snapshot.data.data.docs).toEqual([
+				expect.objectContaining({ title: "allowed" }),
+			]);
+			await reader.close();
+		});
+
+		it("removes an oversized snapshot and releases its principal slot", async () => {
+			const adapter = new MockRealtimeAdapter();
+			const largeItems = collection("largeItems")
+				.fields(({ f }) => ({ content: f.textarea().required() }))
+				.access({ read: true, create: true });
+			const smallItems = collection("smallItems")
+				.fields(({ f }) => ({ content: f.textarea().required() }))
+				.access({ read: true });
+			setup = await buildMockApp(
+				{ collections: { largeItems, smallItems } },
+				{
+					realtime: {
+						adapter,
+						admission: { maxBufferedSnapshotBytes: 512 },
+					},
+				},
+			);
+			await runTestDbMigrations(setup.app);
+			await setup.app.collections.largeItems.create(
+				{ content: "x".repeat(2000) },
+				createTestContext(),
+			);
+
+			const session = createMockSession({ id: "same-user" });
+			const appContext = createTestContext({
+				accessMode: "user",
+				session: session as any,
+			});
+			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
+			const oversized = await routes.realtime.subscribe(
+				createRealtimeRequest([collectionTopic("largeItems")]),
+				{},
+				{ appContext },
+			);
+			const oversizedReader = createSSEReader(oversized.body!);
+			const error = await oversizedReader.readEvent();
+			expect(error.event).toBe("error");
+			expect(error.data.message).toContain("Snapshot exceeds 512 bytes");
+			await new Promise((resolve) => setTimeout(resolve, 20));
+			expect(setup.app.realtime.listeners.size).toBe(0);
+			expect(sharedSseKeepAliveTicker.size).toBe(0);
+
+			const replacements = await Promise.all(
+				Array.from({ length: 5 }, () =>
+					routes.realtime.subscribe(
+						createRealtimeRequest([collectionTopic("smallItems")]),
+						{},
+						{ appContext },
+					),
+				),
+			);
+			expect(replacements.every((response) => response.ok)).toBe(true);
+			const replacementReaders = replacements.map((response) =>
+				createSSEReader(response.body!),
+			);
+			await Promise.all(
+				replacementReaders.map((reader) => reader.readSnapshot()),
+			);
+			await Promise.all([
+				oversizedReader.close(),
+				...replacementReaders.map((reader) => reader.close()),
+			]);
+		});
+	});
+
+	// ==========================================================================
+	// Shared refresh scheduler
+	// ==========================================================================
+
+	describe("shared refresh scheduler", () => {
+		it("adds and removes one topic through control frames without reconnecting", async () => {
+			const adapter = new MockRealtimeAdapter();
+			const items = collection("items")
+				.fields(({ f }) => ({ name: f.textarea().required() }))
+				.access({ read: true });
+			setup = await buildMockApp(
+				{ collections: { items } },
+				{ realtime: { adapter } },
+			);
+			await runTestDbMigrations(setup.app);
+			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
+			const response = await routes.realtime.subscribe(
+				createRealtimeRequest([collectionTopic("items")]),
+				{},
+				undefined,
+			);
+			const reader = createSSEReader(response.body!);
+			const session = await reader.readEvent(2000, true);
+			expect(session.event).toBe("session");
+			await reader.readSnapshot(2000, "col-items");
+
+			const control = (frames: unknown[]) =>
+				routes.realtime.subscribe(
+					new Request("http://localhost/realtime", {
+						method: "POST",
+						headers: { "Content-Type": "application/json" },
+						body: JSON.stringify({
+							sessionId: session.data.sessionId,
+							token: session.data.token,
+							frames,
+						}),
+					}),
+					{},
+					undefined,
+				);
+			const added = await control([
+				{
+					type: "add_topic",
+					topicId: "items-added",
+					topic: {
+						resourceType: "collection",
+						resource: "items",
+						where: { name: "added" },
+					},
+				},
+			]);
+			expect(added.status).toBe(204);
+			expect((await reader.readSnapshot(2000, "items-added")).event).toBe(
+				"snapshot",
+			);
+			expect(setup.app.realtime.listeners.size).toBe(2);
+
+			const removed = await control([
+				{ type: "remove_topic", topicId: "items-added" },
+			]);
+			expect(removed.status).toBe(204);
+			expect(setup.app.realtime.listeners.size).toBe(1);
+			await reader.close();
+		});
+
+		it("resumes an unchanged topic without another initial snapshot", async () => {
+			const adapter = new MockRealtimeAdapter();
+			let reads = 0;
+			const items = collection("items")
+				.fields(({ f }) => ({ name: f.textarea().required() }))
+				.hooks({ beforeRead: () => void (reads += 1) })
+				.access({ read: true, create: true });
+			setup = await buildMockApp(
+				{ collections: { items } },
+				{ realtime: { adapter } },
+			);
+			await runTestDbMigrations(setup.app);
+			const context = createTestContext();
+			await setup.app.collections.items.create({ name: "before" }, context);
+			const sinceSeq = await setup.app.realtime.getLatestSeq();
+
+			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
+			const response = await routes.realtime.subscribe(
+				createRealtimeRequest([collectionTopic("items", { sinceSeq })]),
+				{},
+				undefined,
+			);
+			const reader = createSSEReader(response.body!);
+			await new Promise((resolve) => setTimeout(resolve, 30));
+			expect(reads).toBe(0);
+
+			await setup.app.collections.items.create({ name: "after" }, context);
+			const snapshot = await reader.readSnapshot();
+			expect(snapshot.data.seq).toBeGreaterThan(sinceSeq);
+			expect(snapshot.data.reset).toBe(false);
+			expect(reads).toBe(1);
+			await reader.close();
+		});
+
+		it("forces a reset when sinceSeq is older than the retained horizon", async () => {
+			const adapter = new MockRealtimeAdapter();
+			const items = collection("items")
+				.fields(({ f }) => ({ name: f.textarea().required() }))
+				.access({ read: true, create: true });
+			setup = await buildMockApp(
+				{ collections: { items } },
+				{ realtime: { adapter } },
+			);
+			await runTestDbMigrations(setup.app);
+			const context = createTestContext();
+			for (const name of ["one", "two", "three"]) {
+				await setup.app.collections.items.create({ name }, context);
+			}
+			const latestSeq = await setup.app.realtime.getLatestSeq();
+			await setup.app.db
+				.delete(questpieRealtimeLogTable)
+				.where(lt(questpieRealtimeLogTable.seq, latestSeq));
+
+			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
+			const response = await routes.realtime.subscribe(
+				createRealtimeRequest([collectionTopic("items", { sinceSeq: 0 })]),
+				{},
+				undefined,
+			);
+			const reader = createSSEReader(response.body!);
+			const snapshot = await reader.readSnapshot();
+			expect(snapshot.data.seq).toBe(latestSeq);
+			expect(snapshot.data.reset).toBe(true);
+			await reader.close();
+		});
+
+		it("runs one pipeline for the five admitted same-principal connections", async () => {
+			const adapter = new MockRealtimeAdapter();
+			let pipelineRuns = 0;
+			const items = collection("items")
+				.fields(({ f }) => ({ name: f.textarea().required() }))
+				.hooks({ beforeRead: () => void (pipelineRuns += 1) })
+				.access({ read: true });
+			setup = await buildMockApp(
+				{ collections: { items } },
+				{ realtime: { adapter } },
+			);
+			await runTestDbMigrations(setup.app);
+
+			const session = createMockSession({ id: "same-user" });
+			const appContext = createTestContext({
+				session: session as any,
+				accessMode: "user",
+			});
+			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
+			const responses = await Promise.all(
+				Array.from({ length: 5 }, () =>
+					routes.realtime.subscribe(
+						createRealtimeRequest([collectionTopic("items")]),
+						{},
+						{
+							appContext,
+						},
+					),
+				),
+			);
+			const readers = responses.map((response) =>
+				createSSEReader(response.body!),
+			);
+			await Promise.all(readers.map((reader) => reader.readSnapshot()));
+			const rejected = await routes.realtime.subscribe(
+				createRealtimeRequest([collectionTopic("items")]),
+				{},
+				{ appContext },
+			);
+
+			expect(rejected.ok).toBe(false);
+			expect(pipelineRuns).toBe(1);
+			expect(setup.app.realtime.listeners.size).toBe(1);
+
+			await readers[0].close();
+			const replacement = await routes.realtime.subscribe(
+				createRealtimeRequest([collectionTopic("items")]),
+				{},
+				{ appContext },
+			);
+			expect(replacement.ok).toBe(true);
+			const replacementReader = createSSEReader(replacement.body!);
+			await replacementReader.readSnapshot();
+			expect(pipelineRuns).toBe(1);
+
+			await Promise.all([
+				...readers.slice(1).map((reader) => reader.close()),
+				replacementReader.close(),
+			]);
+			expect(setup.app.realtime.listeners.size).toBe(0);
+		});
+
+		it("separates different sessions unless the entity explicitly shares", async () => {
+			const adapter = new MockRealtimeAdapter();
+			let privateRuns = 0;
+			let publicRuns = 0;
+			const privateItems = collection("privateItems")
+				.fields(({ f }) => ({ name: f.textarea().required() }))
+				.hooks({ beforeRead: () => void (privateRuns += 1) })
+				.access({ read: true });
+			const publicItems = collection("publicItems")
+				.fields(({ f }) => ({ name: f.textarea().required() }))
+				.options({ realtime: { accessCacheKey: () => "public-read" } })
+				.hooks({ beforeRead: () => void (publicRuns += 1) })
+				.access({ read: true });
+			setup = await buildMockApp(
+				{ collections: { privateItems, publicItems } },
+				{ realtime: { adapter } },
+			);
+			await runTestDbMigrations(setup.app);
+
+			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
+			const contexts = ["alice", "bob"].map((id) => ({
+				appContext: createTestContext({
+					session: createMockSession({ id }) as any,
+					accessMode: "user",
+				}),
+			}));
+			const open = async (resource: string, context: any) => {
+				const response = await routes.realtime.subscribe(
+					createRealtimeRequest([collectionTopic(resource)]),
+					{},
+					context,
+				);
+				const reader = createSSEReader(response.body!);
+				await reader.readSnapshot();
+				return reader;
+			};
+
+			const privateReaders = await Promise.all(
+				contexts.map((context) => open("privateItems", context)),
+			);
+			const publicReaders = await Promise.all(
+				contexts.map((context) => open("publicItems", context)),
+			);
+
+			expect(privateRuns).toBe(2);
+			expect(publicRuns).toBe(1);
+			await Promise.all(
+				[...privateReaders, ...publicReaders].map((reader) => reader.close()),
+			);
+		});
+
+		it("isolates row, field, and afterRead output between principals", async () => {
+			const adapter = new MockRealtimeAdapter();
+			const documents = collection("documents")
+				.fields(({ f }) => ({
+					ownerId: f.textarea().required(),
+					title: f.textarea().required(),
+					secret: f.textarea().required(),
+				}))
+				.hooks({
+					afterRead: ({ data, session }) => {
+						data.title = `${data.title}:${session?.user.id}`;
+					},
+				})
+				.access({
+					read: ({ session }) => ({ ownerId: session?.user.id }),
+					create: true,
+					fields: {
+						secret: {
+							read: ({ user }) => user?.id === "bob",
+						},
+					},
+				});
+			setup = await buildMockApp(
+				{ collections: { documents } },
+				{ realtime: { adapter } },
+			);
+			await runTestDbMigrations(setup.app);
+			const system = createTestContext();
+			await setup.app.collections.documents.create(
+				{ ownerId: "alice", title: "Alice", secret: "alice-secret" },
+				system,
+			);
+			await setup.app.collections.documents.create(
+				{ ownerId: "bob", title: "Bob", secret: "bob-secret" },
+				system,
+			);
+
+			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
+			const readFor = async (id: string, role: string) => {
+				const response = await routes.realtime.subscribe(
+					createRealtimeRequest([collectionTopic("documents")]),
+					{},
+					{
+						appContext: createTestContext({
+							session: createMockSession({ id, role }) as any,
+							accessMode: "user",
+						}),
+					},
+				);
+				const reader = createSSEReader(response.body!);
+				return { reader, snapshot: await reader.readSnapshot() };
+			};
+
+			const [alice, bob] = await Promise.all([
+				readFor("alice", "user"),
+				readFor("bob", "admin"),
+			]);
+			expect(alice.snapshot.data.data.docs).toEqual([
+				expect.objectContaining({ ownerId: "alice", title: "Alice:alice" }),
+			]);
+			expect(alice.snapshot.data.data.docs[0]).not.toHaveProperty("secret");
+			expect(bob.snapshot.data.data.docs).toEqual([
+				expect.objectContaining({
+					ownerId: "bob",
+					title: "Bob:bob",
+					secret: "bob-secret",
+				}),
+			]);
+			await Promise.all([alice.reader.close(), bob.reader.close()]);
 		});
 	});
 
@@ -1668,7 +2427,7 @@ describe("realtime", () => {
 	// ==========================================================================
 
 	describe("keepalive", () => {
-		it("honors realtime.keepAliveIntervalMs for SSE pings", async () => {
+		it("honors realtime.keepAliveIntervalMs with SSE comment pings", async () => {
 			const adapter = new MockRealtimeAdapter();
 			const items = collection("items")
 				.fields(({ f }) => ({
@@ -1698,11 +2457,11 @@ describe("realtime", () => {
 			// With a 50ms keepalive, two pings must arrive well within the
 			// 2s default timeout (default cadence of 8s would time out here).
 			const firstPing = await reader.readEvent();
-			expect(firstPing.event).toBe("ping");
-			expect(typeof firstPing.data.ts).toBe("number");
+			expect(firstPing.comment).toMatch(/^ping \d+$/);
+			expect(firstPing.data).toBeNull();
 
 			const secondPing = await reader.readEvent();
-			expect(secondPing.event).toBe("ping");
+			expect(secondPing.comment).toMatch(/^ping \d+$/);
 
 			controller.abort();
 			reader.close();
@@ -1714,7 +2473,131 @@ describe("realtime", () => {
 	// ==========================================================================
 
 	describe("E2E SSE streaming", () => {
-		it("should stream multiple snapshots on rapid updates", async () => {
+		it("tears down the connection when controller.enqueue fails", async () => {
+			const adapter = new LifecycleTrackingRealtimeAdapter();
+			const items = collection("items")
+				.fields(({ f }) => ({ name: f.textarea().required() }))
+				.access({ read: true });
+			setup = await buildMockApp(
+				{ collections: { items } },
+				{ realtime: { adapter } },
+			);
+			await runTestDbMigrations(setup.app);
+
+			const enqueueSpy = spyOn(
+				ReadableStreamDefaultController.prototype,
+				"enqueue",
+			).mockImplementation(() => {
+				throw new Error("connection is gone");
+			});
+			let response: Response | undefined;
+			try {
+				const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
+				response = await routes.realtime.subscribe(
+					createRealtimeRequest([collectionTopic("items")]),
+					{},
+					undefined,
+				);
+				await new Promise((resolve) => setTimeout(resolve, 20));
+
+				expect(setup.app.realtime.listeners.size).toBe(0);
+				expect(sharedSseKeepAliveTicker.size).toBe(0);
+				expect(adapter.stopCalls).toBe(0);
+			} finally {
+				enqueueSpy.mockRestore();
+				await response?.body?.cancel();
+			}
+		});
+
+		it("sends an error event and closes when the transport cannot start", async () => {
+			const adapter = new FailingStartRealtimeAdapter();
+			const items = collection("items")
+				.fields(({ f }) => ({ name: f.textarea().required() }))
+				.access({ read: true });
+
+			setup = await buildMockApp(
+				{ collections: { items } },
+				{ realtime: { adapter } },
+			);
+			await runTestDbMigrations(setup.app);
+
+			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
+			const response = await routes.realtime.subscribe(
+				createRealtimeRequest([collectionTopic("items")]),
+				{},
+				undefined,
+			);
+			const reader = createSSEReader(response.body!);
+
+			let transportError: SSEEvent | undefined;
+			for (let attempt = 0; attempt < 3; attempt += 1) {
+				const event = await reader.readEvent();
+				if (event.event === "error") {
+					transportError = event;
+					break;
+				}
+			}
+
+			expect(transportError?.data).toMatchObject({
+				topicId: "*",
+				message: "adapter start failed",
+			});
+			expect(
+				setup.app.mocks.logger.getLogsContaining("Transport startup failed"),
+			).toHaveLength(1);
+			await expect(reader.readEvent()).rejects.toThrow(
+				"SSE stream closed before event",
+			);
+		});
+
+		it("sends an error event and closes when an outbox drain fails", async () => {
+			const adapter = new MockRealtimeAdapter();
+			const items = collection("items")
+				.fields(({ f }) => ({ name: f.textarea().required() }))
+				.access({ read: true });
+
+			setup = await buildMockApp(
+				{ collections: { items } },
+				{ realtime: { adapter } },
+			);
+			await runTestDbMigrations(setup.app);
+
+			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
+			const response = await routes.realtime.subscribe(
+				createRealtimeRequest([collectionTopic("items")]),
+				{},
+				undefined,
+			);
+			const reader = createSSEReader(response.body!);
+			expect((await reader.readSnapshot()).event).toBe("snapshot");
+			await new Promise((resolve) => setTimeout(resolve, 20));
+
+			const readSpy = spyOn(setup.app.realtime, "readSince").mockRejectedValue(
+				new Error("drain failed"),
+			);
+			try {
+				await adapter.notify({
+					seq: 999,
+					resourceType: "collection",
+					resource: "items",
+					operation: "create",
+					createdAt: new Date(),
+				});
+
+				const transportError = await reader.readEvent();
+				expect(transportError).toMatchObject({
+					event: "error",
+					data: { topicId: "*", message: "drain failed" },
+				});
+				await expect(reader.readEvent()).rejects.toThrow(
+					"SSE stream closed before event",
+				);
+			} finally {
+				readSpy.mockRestore();
+			}
+		});
+
+		it("coalesces rapid updates into a latest snapshot", async () => {
 			const adapter = new MockRealtimeAdapter();
 			const counters = collection("counters")
 				.fields(({ f }) => ({
@@ -1757,38 +2640,13 @@ describe("realtime", () => {
 			const ctx = createTestContext();
 
 			// Create multiple records rapidly
-			await setup.app.collections.counters.create(
-				{ name: "A", value: 1 },
-				ctx,
-			);
-			await setup.app.collections.counters.create(
-				{ name: "B", value: 2 },
-				ctx,
-			);
-			await setup.app.collections.counters.create(
-				{ name: "C", value: 3 },
-				ctx,
-			);
+			await setup.app.collections.counters.create({ name: "A", value: 1 }, ctx);
+			await setup.app.collections.counters.create({ name: "B", value: 2 }, ctx);
+			await setup.app.collections.counters.create({ name: "C", value: 3 }, ctx);
 
-			// Should receive snapshots reflecting the changes
-			let snapshotCount = 0;
-			const startTime = Date.now();
-
-			while (snapshotCount < 3 && Date.now() - startTime < 5000) {
-				try {
-					const snapshot = await reader.readSnapshot();
-					if (snapshot.event === "snapshot") {
-						snapshotCount++;
-						// Each snapshot should have more docs
-						expect(snapshot.data.data.docs.length).toBeGreaterThanOrEqual(0);
-					}
-				} catch {
-					break;
-				}
-			}
-
-			// We should have received at least one update
-			expect(snapshotCount).toBeGreaterThanOrEqual(1);
+			const snapshot = await reader.readSnapshot();
+			expect(snapshot.event).toBe("snapshot");
+			expect(snapshot.data.data.docs.length).toBeGreaterThanOrEqual(1);
 
 			controller.abort();
 			reader.close();
@@ -1796,9 +2654,11 @@ describe("realtime", () => {
 
 		it("should handle client disconnection gracefully", async () => {
 			const adapter = new MockRealtimeAdapter();
-			const items = collection("items").fields(({ f }) => ({
-				name: f.textarea().required(),
-			}));
+			const items = collection("items")
+				.fields(({ f }) => ({
+					name: f.textarea().required(),
+				}))
+				.access({ read: true });
 
 			const testModule = {
 				collections: {

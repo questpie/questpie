@@ -1,6 +1,7 @@
 import type { BetterAuthOptions } from "better-auth";
 import type { Adapter } from "files-sdk";
 
+import type { ChannelDefinitions } from "#questpie/server/channels/channel-builder.js";
 import type { CollectionAccess } from "#questpie/server/collection/builder/types.js";
 
 // ============================================================================
@@ -100,6 +101,9 @@ export interface ModuleDefinition {
 
 	/** Collections this module contributes. Later modules override by key. */
 	collections?: Record<string, AnyCollectionOrBuilder>;
+
+	/** Typed realtime channels this module contributes. Later modules override by key. */
+	channels?: ChannelDefinitions;
 
 	/** Globals this module contributes. Later modules override by key. */
 	globals?: Record<string, AnyGlobalOrBuilder>;
@@ -281,6 +285,23 @@ export type AppConfigResolved<T extends AppConfigInput> = {
 // ============================================================================
 
 /**
+ * Plugin-owned runtime configuration keys.
+ *
+ * Packages can augment this interface to add typed keys to both
+ * {@link RuntimeConfig} and `app.state`.
+ *
+ * @example
+ * ```ts
+ * declare module "questpie" {
+ *   interface RuntimeConfigExtensions {
+ *     myPluginRuntime?: MyPluginRuntimeConfig;
+ *   }
+ * }
+ * ```
+ */
+export interface RuntimeConfigExtensions {}
+
+/**
  * Runtime configuration — the shape of `questpie.config.ts` in the new architecture.
  * Contains only runtime infrastructure (db, adapters, secret) and plugin registrations.
  * No entity definitions (collections, globals, etc.) — those come from the definition
@@ -308,7 +329,7 @@ export type AppConfigResolved<T extends AppConfigInput> = {
 export interface RuntimeConfig<
 	TDb extends DbConfig = DbConfig,
 	TStorage extends StorageConfig | undefined = StorageConfig | undefined,
-> {
+> extends RuntimeConfigExtensions {
 	/** Codegen plugins — discover additional file patterns and extend generated output. */
 	plugins?: readonly CodegenPlugin[];
 
@@ -496,6 +517,9 @@ export interface AppDefinition {
 
 	/** Collections discovered from `collections/` directory. */
 	collections?: Record<string, AnyCollectionOrBuilder>;
+
+	/** Typed realtime channels discovered from `channels/` directory. */
+	channels?: ChannelDefinitions;
 
 	/** Globals discovered from `globals/` directory. */
 	globals?: Record<string, AnyGlobalOrBuilder>;

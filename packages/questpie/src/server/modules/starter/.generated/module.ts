@@ -39,6 +39,8 @@ export type StarterCollections = {
 	verification: typeof _coll_verification;
 };
 
+export type StarterChannels = Record<never, never>;
+
 export type StarterGlobals = Record<never, never>;
 
 export type StarterJobs = {
@@ -58,6 +60,7 @@ export type StarterModule = {
 	modules: typeof _modules;
 	collections: StarterCollections;
 	jobs: StarterJobs;
+	channels: StarterChannels;
 	globals: StarterGlobals;
 	routes: StarterRoutes;
 	fieldTypes: StarterFieldTypes;
@@ -90,6 +93,7 @@ const _module: StarterModule = {
 	messages: {
 		en: _msg_en,
 	},
+	channels: {},
 	globals: {},
 	routes: {},
 	services: {},

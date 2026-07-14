@@ -1,6 +1,6 @@
 ---
 name: questpie-admin
-description: QUESTPIE admin panel, setup, branding, theming, sidebar, dashboard, views, blocks, custom fields, media, localization, live preview, auth, dark mode, CSS variables. Use when building or customizing the QUESTPIE admin UI.
+description: QUESTPIE admin panel, setup, branding, theming, sidebar, dashboard, views, blocks, custom fields, media, localization, realtime refresh and locks, live preview, auth, dark mode, CSS variables. Use when building or customizing the QUESTPIE admin UI.
 license: MIT
 metadata:
   author: questpie
@@ -13,12 +13,12 @@ The QUESTPIE admin panel is a **projection of your server schema**, not the fram
 
 ## Reference Topics
 
-| Topic     | File                      | Covers                                                                                 |
-| --------- | ------------------------- | -------------------------------------------------------------------------------------- |
-| Views     | `references/views.md`     | List views, form views, dashboard, sidebar, filters, bulk actions, visibility, history |
-| Blocks    | `references/blocks.md`    | Block definitions, fields, prefetch, renderers, block picker                           |
+| Topic     | File                      | Covers                                                                                           |
+| --------- | ------------------------- | ------------------------------------------------------------------------------------------------ |
+| Views     | `references/views.md`     | List/form/dashboard views, realtime refresh and locks, sidebar, filters, bulk actions, history   |
+| Blocks    | `references/blocks.md`    | Block definitions, fields, prefetch, renderers, block picker                                     |
 | Custom UI | `references/custom-ui.md` | Declarative `field()`/`view()`/`widget()`/`page()` definitions, component props, reactive fields |
-| Recipes   | `references/recipes.md`   | BE vs FE field, end-to-end custom field, custom admin page (e.g. chat), custom view     |
+| Recipes   | `references/recipes.md`   | BE vs FE field, end-to-end custom field, custom admin page (e.g. chat), custom view              |
 
 ## Full Compiled Document
 
@@ -210,10 +210,10 @@ when overriding (see Custom Theme below).
 
 ### Typography
 
-| Variable      | Value                                                               |
-| ------------- | ------------------------------------------------------------------- |
-| `--font-sans` | `"Geist Variable"`, UI, prose, headings, labels, navigation        |
-| `--font-mono` | `"JetBrains Mono Variable"`, code, file paths, commands, IDs       |
+| Variable      | Value                                                        |
+| ------------- | ------------------------------------------------------------ |
+| `--font-sans` | `"Geist Variable"`, UI, prose, headings, labels, navigation  |
+| `--font-mono` | `"JetBrains Mono Variable"`, code, file paths, commands, IDs |
 
 ### Sidebar Variables
 

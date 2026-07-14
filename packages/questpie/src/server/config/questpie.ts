@@ -38,7 +38,13 @@ import type { KVService } from "#questpie/server/modules/core/integrated/kv/serv
 import type { LoggerService } from "#questpie/server/modules/core/integrated/logger/service.js";
 import type { MailerService } from "#questpie/server/modules/core/integrated/mailer/service.js";
 import type { QueueClient } from "#questpie/server/modules/core/integrated/queue/types.js";
-import { questpieRealtimeLogTable } from "#questpie/server/modules/core/integrated/realtime/collection.js";
+import {
+	questpieChannelDispatchTable,
+	questpieChannelEventTable,
+	questpieChannelHeadTable,
+	questpieChannelPresenceTable,
+	questpieRealtimeLogTable,
+} from "#questpie/server/modules/core/integrated/realtime/collection.js";
 import type { RealtimeService } from "#questpie/server/modules/core/integrated/realtime/service.js";
 import type { SearchService } from "#questpie/server/modules/core/integrated/search/types.js";
 import { resolveAutoSeedCategories } from "#questpie/server/seed/types.js";
@@ -56,6 +62,7 @@ import type {
 } from "#questpie/shared/type-utils.js";
 
 import type { GlobalHooksState } from "./global-hooks-types.js";
+import type { RuntimeConfigExtensions } from "./module-types.js";
 import type { GetMessageKeys, QuestpieConfig } from "./types.js";
 
 interface ResolvedServiceDefinition {
@@ -202,7 +209,8 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 	/** Extension state for plugin-contributed configurations (admin layout, blocks, sidebar, etc.) */
 	public state?: {
 		config?: import("./app-state-config.js").ResolvedAppStateConfig;
-	} & Record<string, unknown>;
+	} & Partial<RuntimeConfigExtensions> &
+		Record<string, unknown>;
 
 	/**
 	 * Validated app environment (from `env.ts`, via `AppDefinition.env`).
@@ -1214,6 +1222,10 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 
 		// 3. Always include realtime log table since realtime service is always initialized
 		schema.questpie_realtime_log = questpieRealtimeLogTable;
+		schema.questpie_channel_head = questpieChannelHeadTable;
+		schema.questpie_channel_event = questpieChannelEventTable;
+		schema.questpie_channel_dispatch = questpieChannelDispatchTable;
+		schema.questpie_channel_presence = questpieChannelPresenceTable;
 
 		// 4. Add search tables if adapter provides local storage schemas
 		// Local adapters (Postgres, PgVector) return their tables for migration generation.

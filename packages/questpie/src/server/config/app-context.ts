@@ -176,6 +176,7 @@ export interface AppCtxInfraDefault {
 	logger?: import("#questpie/server/modules/core/integrated/logger/service.js").LoggerService;
 	search?: import("#questpie/server/modules/core/integrated/search/types.js").SearchService;
 	realtime?: import("#questpie/server/modules/core/integrated/realtime/service.js").RealtimeService;
+	channels?: import("#questpie/server/channels/service.js").ChannelsService;
 	collections?: unknown;
 	globals?: unknown;
 	tables?: unknown;
@@ -359,6 +360,8 @@ export function extractAppServices(
 		db?: any;
 		session?: any;
 		locale?: string;
+		accessMode?: string;
+		principal?: import("#questpie/server/config/context.js").Principal;
 		scope?: import("#questpie/server/config/request-scope.js").RequestScope;
 	},
 ): AppContext {
@@ -394,6 +397,8 @@ export function extractAppServices(
 					db: result.db,
 					session: result.session,
 					locale: overrides?.locale,
+					accessMode: overrides?.accessMode,
+					principal: overrides?.principal,
 				},
 				overrides?.scope,
 			);

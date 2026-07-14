@@ -16,7 +16,15 @@ import type {
 	GlobalCollectionTransitionHookContext,
 	GlobalGlobalHookContext,
 } from "#questpie/server/config/global-hooks-types.js";
-import type { Locale } from "#questpie/server/config/types.js";
+import type {
+	DrizzleClientFromQuestpieConfig,
+	Locale,
+} from "#questpie/server/config/types.js";
+import type {
+	RealtimeChangeEvent,
+	RealtimeChangePayload,
+	RealtimeEqualityProjection,
+} from "#questpie/server/modules/core/integrated/realtime/types.js";
 import { buildIndexParams } from "#questpie/server/modules/core/integrated/search/index-params.js";
 import type { SearchableConfig } from "#questpie/server/modules/core/integrated/search/types.js";
 import {
@@ -28,6 +36,17 @@ import { DEFAULT_LOCALE } from "#questpie/shared/constants.js";
 // ============================================================================
 // Realtime helpers
 // ============================================================================
+
+/**
+ * The pre-codegen hook context deliberately keeps infrastructure members
+ * unknown. Runtime hook execution always supplies the mutation-bound client;
+ * keep that assertion local so generated app hooks retain their precise schema.
+ */
+function asRealtimeMutationDb(
+	db: unknown,
+): DrizzleClientFromQuestpieConfig<any> {
+	return db as DrizzleClientFromQuestpieConfig<any>;
+}
 
 function resolveRealtimeOperation(
 	ctx: GlobalCollectionHookContext,
@@ -43,10 +62,91 @@ function resolveRealtimeOperation(
 function resolveRealtimePayload(
 	ctx: GlobalCollectionHookContext,
 	hookType: "change" | "delete",
-): Record<string, unknown> {
-	if (ctx.isBatch) return { count: ctx.count ?? 0 };
-	if (hookType === "delete") return {};
-	return ctx.data as Record<string, unknown>;
+): RealtimeChangePayload {
+	if (ctx.isBatch) {
+		return {
+			count: ctx.count ?? 0,
+			recordIds: ctx.recordIds ? [...ctx.recordIds] : [],
+		};
+	}
+
+	const before = hookType === "delete" ? ctx.data : ctx.original;
+	const after = hookType === "delete" ? undefined : ctx.data;
+	return {
+		before: before ? projectRealtimeEqualityFields(before) : null,
+		after: after ? projectRealtimeEqualityFields(after) : null,
+	};
+}
+
+function projectRealtimeEqualityFields(
+	data: unknown,
+): RealtimeEqualityProjection {
+	if (!data || typeof data !== "object" || Array.isArray(data)) return {};
+
+	const projection: RealtimeEqualityProjection = {};
+	for (const [key, value] of Object.entries(data)) {
+		if (
+			value === null ||
+			typeof value === "string" ||
+			typeof value === "number" ||
+			typeof value === "boolean"
+		) {
+			projection[key] = value;
+		}
+	}
+	return projection;
+}
+
+const capturedRealtimeBatches = new WeakSet<object>();
+const realtimeCaptureWarningAt = new WeakMap<object, number>();
+const REALTIME_CAPTURE_WARNING_INTERVAL_MS = 60_000;
+
+function hasPostgresErrorCode(error: unknown, code: string): boolean {
+	let current = error;
+	const seen = new Set<object>();
+	while (current && typeof current === "object" && !seen.has(current)) {
+		seen.add(current);
+		if ((current as { code?: unknown }).code === code) return true;
+		current = (current as { cause?: unknown }).cause;
+	}
+	return false;
+}
+
+function handleRealtimeCaptureError(
+	logger: GlobalCollectionHookContext["logger"],
+	error: unknown,
+): void {
+	if (hasPostgresErrorCode(error, "42P01") || !logger) return;
+
+	const now = Date.now();
+	const lastWarningAt = realtimeCaptureWarningAt.get(logger) ?? 0;
+	if (now - lastWarningAt < REALTIME_CAPTURE_WARNING_INTERVAL_MS) return;
+
+	realtimeCaptureWarningAt.set(logger, now);
+	logger.warn("[Core] Realtime change capture failed:", error);
+}
+
+function shouldCaptureRealtimeChange(
+	ctx: GlobalCollectionHookContext,
+): boolean {
+	if (!ctx.isBatch) return true;
+	const batchMarker = ctx.records ?? ctx.recordIds;
+	if (!batchMarker) return true;
+	if (capturedRealtimeBatches.has(batchMarker)) return false;
+	capturedRealtimeBatches.add(batchMarker);
+	return true;
+}
+
+function publishRealtimeAfterCommit(
+	ctx: Pick<GlobalCollectionHookContext, "logger" | "onAfterCommit">,
+	realtime: NonNullable<GlobalCollectionHookContext["realtime"]>,
+	change: RealtimeChangeEvent,
+): void {
+	ctx.onAfterCommit(async () => {
+		void realtime.notify(change).catch((error) => {
+			ctx.logger?.error("[Core] Realtime publish failed:", error);
+		});
+	});
 }
 
 // ============================================================================
@@ -60,56 +160,54 @@ const realtimeHook = {
 	afterChange: async (ctx: GlobalCollectionHookContext) => {
 		const realtime = ctx.realtime;
 		if (!realtime) return;
+		if (!shouldCaptureRealtimeChange(ctx)) return;
 
 		const operation = resolveRealtimeOperation(ctx, "change");
 		const payload = resolveRealtimePayload(ctx, "change");
 
-		// Defer both the log append and broadcast to after-commit.
-		// Running appendChange inside the CRUD transaction can deadlock
-		// on single-connection databases (PGlite) because the insert
-		// waits for the outer transaction to release its lock.
-		ctx.onAfterCommit(async () => {
-			try {
-				const change = await realtime.appendChange({
+		try {
+			const change = await realtime.appendChange(
+				{
 					resourceType: "collection",
 					resource: ctx.collection,
 					operation,
-					recordId: ctx.isBatch ? null : ctx.data?.id ?? null,
+					recordId: ctx.isBatch ? null : (ctx.data?.id ?? null),
 					locale: ctx.locale ?? null,
 					payload,
-				});
-				if (change) {
-					await realtime.notify(change);
-				}
-			} catch {
-				// Realtime log table may not exist yet
-			}
-		});
+				},
+				{ db: asRealtimeMutationDb(ctx.db) },
+			);
+
+			publishRealtimeAfterCommit(ctx, realtime, change);
+		} catch (error) {
+			handleRealtimeCaptureError(ctx.logger, error);
+		}
 	},
 	afterDelete: async (ctx: GlobalCollectionHookContext) => {
 		const realtime = ctx.realtime;
 		if (!realtime) return;
+		if (!shouldCaptureRealtimeChange(ctx)) return;
 
 		const operation = resolveRealtimeOperation(ctx, "delete");
 		const payload = resolveRealtimePayload(ctx, "delete");
 
-		ctx.onAfterCommit(async () => {
-			try {
-				const change = await realtime.appendChange({
+		try {
+			const change = await realtime.appendChange(
+				{
 					resourceType: "collection",
 					resource: ctx.collection,
 					operation,
-					recordId: ctx.isBatch ? null : ctx.data?.id ?? null,
+					recordId: ctx.isBatch ? null : (ctx.data?.id ?? null),
 					locale: ctx.locale ?? null,
 					payload,
-				});
-				if (change) {
-					await realtime.notify(change);
-				}
-			} catch {
-				// Realtime log table may not exist yet
-			}
-		});
+				},
+				{ db: asRealtimeMutationDb(ctx.db) },
+			);
+
+			publishRealtimeAfterCommit(ctx, realtime, change);
+		} catch (error) {
+			handleRealtimeCaptureError(ctx.logger, error);
+		}
 	},
 };
 
@@ -266,23 +364,26 @@ const globalRealtimeHook = {
 		const realtime = ctx.realtime;
 		if (!realtime) return;
 
-		ctx.onAfterCommit(async () => {
-			try {
-				const change = await realtime.appendChange({
+		try {
+			const change = await realtime.appendChange(
+				{
 					resourceType: "global",
 					resource: ctx.global,
 					operation: "update",
 					recordId: ctx.data?.id ?? null,
 					locale: ctx.locale ?? null,
-					payload: ctx.data as Record<string, unknown>,
-				});
-				if (change) {
-					await realtime.notify(change);
-				}
-			} catch {
-				// Realtime log table may not exist yet
-			}
-		});
+					payload: {
+						before: null,
+						after: projectRealtimeEqualityFields(ctx.data),
+					},
+				},
+				{ db: asRealtimeMutationDb(ctx.db) },
+			);
+
+			publishRealtimeAfterCommit(ctx, realtime, change);
+		} catch (error) {
+			handleRealtimeCaptureError(ctx.logger, error);
+		}
 	},
 };
 

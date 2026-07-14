@@ -1,7 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
 import { QueryClient } from "@tanstack/react-query";
-
 import type { QuestpieApp, QuestpieClient } from "questpie/client";
 
 import {
@@ -18,29 +17,34 @@ async function waitFor(assertion: () => boolean) {
 }
 
 describe("realtime query options", () => {
-	it("uses a normal collection fetch for the initial snapshot", async () => {
+	it("uses the server snapshot without a duplicate REST initial fetch", async () => {
 		const initialData = { docs: [{ id: "initial" }], totalDocs: 1 };
-		let subscribeCallback: ((data: unknown) => void) | undefined;
+		let emitSnapshot: ((data: unknown) => void) | undefined;
+		let findCalls = 0;
 		let subscribeCalls = 0;
 		let streamCalls = 0;
 
 		const client = {
 			collections: {
 				posts: {
-					find: async () => initialData,
+					find: async () => {
+						findCalls++;
+						return initialData;
+					},
 				},
 			},
 			globals: {},
 			routes: {},
 			realtime: {
-				subscribe: (_topic: unknown, callback: (data: unknown) => void) => {
+				subscribe: () => {
 					subscribeCalls++;
-					subscribeCallback = callback;
 					return () => {};
 				},
 				stream: async function* () {
 					streamCalls++;
-					throw new Error("stream should not be used");
+					yield await new Promise<unknown>((resolve) => {
+						emitSnapshot = resolve;
+					});
 				},
 				destroy: () => {},
 				topicCount: 0,
@@ -62,14 +66,16 @@ describe("realtime query options", () => {
 			queryKey: query.queryKey,
 			signal: abortController.signal,
 		});
+		await waitFor(() => typeof emitSnapshot === "function");
+		emitSnapshot!(initialData);
 
 		await waitFor(
 			() => queryClient.getQueryData(query.queryKey) === initialData,
 		);
 
-		expect(subscribeCalls).toBe(1);
-		expect(typeof subscribeCallback).toBe("function");
-		expect(streamCalls).toBe(0);
+		expect(findCalls).toBe(0);
+		expect(subscribeCalls).toBe(0);
+		expect(streamCalls).toBe(1);
 
 		abortController.abort();
 		await expect(queryPromise).resolves.toBe(initialData);
@@ -90,5 +96,47 @@ describe("realtime query options", () => {
 		// @ts-expect-error findOne does not accept a realtime config
 		const reject = () => q.collections.posts.findOne({}, { realtime: true });
 		expect(typeof reject).toBe("function");
+	});
+
+	it("subscribes live counts with a count topic and consumes the scalar payload", async () => {
+		let subscribedTopic: unknown;
+		const client = {
+			collections: {
+				posts: {
+					count: async () => 999,
+				},
+			},
+			globals: {},
+			routes: {},
+			realtime: {
+				subscribe: () => () => {},
+				stream: async function* (topic: unknown) {
+					subscribedTopic = topic;
+					yield 10_000;
+				},
+				destroy: () => {},
+				topicCount: 0,
+				subscriberCount: 0,
+			},
+		} as unknown as QuestpieClient<QuestpieApp>;
+		const queryClient = new QueryClient();
+		const abortController = new AbortController();
+		const options = createQuestpieQueryOptions(client).collections.posts.count(
+			{},
+			{ realtime: true },
+		);
+
+		const value = await (options.queryFn as any)({
+			client: queryClient,
+			queryKey: options.queryKey,
+			signal: abortController.signal,
+		});
+
+		expect(subscribedTopic).toEqual({
+			resourceType: "collection",
+			resource: "posts",
+			operation: "count",
+		});
+		expect(value).toBe(10_000);
 	});
 });

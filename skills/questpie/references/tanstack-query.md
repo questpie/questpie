@@ -23,6 +23,7 @@ description:
 - [Type Inference](#type-inference), `AppConfig` flow
 - [Direct Client Usage (without TanStack Query)](#direct-client-usage-without-tanstack-query)
 - [Realtime](#realtime), `{ realtime: true }`, adapters, topic builders
+- [Channel Subscriptions](#channel-subscriptions), typed ordered application events
 - [Framework Adapters](#framework-adapters), TanStack Start, Next.js, Hono, Elysia
 - [Common Mistakes](#common-mistakes)
 
@@ -410,7 +411,7 @@ client.setLocale("sk"); // Set locale for localized content
 
 ## Realtime
 
-Pass `{ realtime: true }` as the **typed** second argument (`RealtimeQueryConfig`) to `find()`, `count()`, or `get()`, initial data via a normal fetch, then the server pushes full access-controlled snapshots on every matching change. `findOne()` and `findVersions()` have no realtime form (a second argument there is a compile error).
+Pass `{ realtime: true }` as the **typed** second argument (`RealtimeQueryConfig`) to `find()`, `count()`, or `get()`. The stream supplies the initial value and later access-controlled snapshots, so there is no duplicate REST fetch. `findOne()` and `findVersions()` have no realtime form (a second argument there is a compile error). Realtime `count()` remains a scalar number.
 
 ```tsx
 const { data } = useQuery(
@@ -421,7 +422,7 @@ const { data } = useQuery(
 );
 ```
 
-Works zero-config (2s polling); add a realtime adapter for instant push:
+Server realtime must be enabled. SSE is the default client transport; a normal Postgres URL auto-wires `pg_notify`, while setups without a push broker reconcile by polling every 2s. An explicit adapter can select a broker:
 
 ```ts
 import { runtimeConfig } from "questpie/app";
@@ -434,18 +435,40 @@ export default runtimeConfig({
 });
 ```
 
-Subscriptions are query-shaped topic objects (`{ resourceType, resource, where?, with? }`), there are no channel strings. Outside React, use the typed live form of the same query: `client.collections.posts.live(options, onSnapshot)` / `liveIter(options)` (see AGENTS.md §19 Realtime).
+Live-query subscriptions are query-shaped topic objects (`{ resourceType, resource, where?, with? }`), not application channel strings. Outside React, use the typed live form of the same query: `client.collections.posts.live(options, onSnapshot)` / `liveIter(options)` (see `references/realtime.md`).
 
 To build those topic objects yourself, e.g. manual cache invalidation or a raw `client.realtime.subscribe` call that must match the topic a query subscribed with, use the exported builders instead of hand-writing the shape:
 
 ```ts
-import { buildCollectionTopic, buildGlobalTopic } from "@questpie/tanstack-query"; // re-exported from questpie/client
+import {
+	buildCollectionTopic,
+	buildGlobalTopic,
+} from "@questpie/tanstack-query"; // re-exported from questpie/client
 
-const topic = buildCollectionTopic("posts", { where: { status: "published" }, limit: 20 });
+const topic = buildCollectionTopic("posts", {
+	where: { status: "published" },
+	limit: 20,
+});
 const settingsTopic = buildGlobalTopic("siteSettings");
 ```
 
-For multi-instance deployments, create a Redis client and use `redisStreamsAdapter({ client })`.
+Push is a latency optimization; the transactional outbox and reconciliation poll recover missed broker wakes. See `references/realtime.md`.
+
+## Channel Subscriptions
+
+Generated channels expose an accumulating query option. Unlike live queries, ordered channel events are appended rather than reduced to the newest snapshot:
+
+```tsx
+const { data: messages = [] } = useQuery(
+	q.channels.chatRoom.subscription({ roomId }),
+);
+
+const { data: members = [] } = useQuery(
+	q.channels.chatRoom.presence({ roomId }),
+);
+```
+
+The subscription result is an accumulating typed array of `{ event, eventId, data }` unions. Presence channels also expose a typed latest-roster query; each snapshot replaces the previous roster. The query abort signal closes the underlying iterator. Channel definition, authorization, server publish, and presence are covered in `references/channels.md`.
 
 ## Framework Adapters
 
@@ -506,20 +529,9 @@ const posts = await fetch("/api/collections/posts").then((r) => r.json());
 const { docs } = await client.collections.posts.find({ limit: 10 });
 ```
 
-### MEDIUM: Not setting up realtime adapter
+### MEDIUM: Forgetting to enable server realtime
 
-Collection changes do not auto-refresh when realtime is enabled but no adapter is configured. Add a realtime adapter in `questpie.config.ts`:
-
-```ts
-import { runtimeConfig } from "questpie/app";
-import { pgNotifyAdapter } from "questpie/adapters/pg-notify";
-
-export default runtimeConfig({
-	realtime: {
-		adapter: pgNotifyAdapter({ connectionString: process.env.DATABASE_URL }),
-	},
-});
-```
+`{ realtime: true }` is not a request to silently fall back to a normal query. Set `realtime: true` or a realtime object in server runtime config; otherwise the subscription reports an error.
 
 ### MEDIUM: Importing from `questpie/client` in server code or vice versa
 

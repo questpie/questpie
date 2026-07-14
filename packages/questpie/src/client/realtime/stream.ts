@@ -5,7 +5,13 @@
  * for the realtime SSE multiplexer.
  */
 
+import type { GetAuthHeaders } from "../auth.js";
 import { RealtimeMultiplexer, type TopicConfig } from "./multiplexer.js";
+import {
+	PusherRealtimeTransport,
+	type PusherRealtimeConfig,
+} from "./pusher.js";
+import type { RealtimeClientTransport } from "./transport.js";
 
 // ============================================================================
 // Types
@@ -64,7 +70,7 @@ export type RealtimeAPI = {
  * ```
  */
 export async function* sseSnapshotStream<TData>(options: {
-	multiplexer: RealtimeMultiplexer;
+	multiplexer: RealtimeClientTransport;
 	topic: TopicConfig;
 	signal?: AbortSignal;
 	customId?: string;
@@ -77,6 +83,7 @@ export async function* sseSnapshotStream<TData>(options: {
 	// Promise resolver/rejecter for when new data arrives or connection fails
 	let resolveNext: (() => void) | null = null;
 	let rejectNext: ((error: Error) => void) | null = null;
+	let pendingError: Error | null = null;
 
 	// Track if the stream is closed
 	let closed = false;
@@ -84,7 +91,12 @@ export async function* sseSnapshotStream<TData>(options: {
 	// Error callback - rejects the waiting promise so the generator throws
 	// instead of waiting forever (prevents infinite loading on server errors)
 	const onError = (error: Error) => {
+		pendingError = error;
 		rejectNext?.(error);
+	};
+	const handleAbort = () => {
+		closed = true;
+		resolveNext?.();
 	};
 
 	// Subscribe to the topic via multiplexer
@@ -100,9 +112,11 @@ export async function* sseSnapshotStream<TData>(options: {
 		customId,
 		onError,
 	);
+	signal?.addEventListener("abort", handleAbort, { once: true });
 
 	try {
 		while (!closed && !signal?.aborted) {
+			if (pendingError) throw pendingError;
 			// Yield all queued items
 			while (queue.length > 0) {
 				yield queue.shift()!;
@@ -113,7 +127,6 @@ export async function* sseSnapshotStream<TData>(options: {
 				await new Promise<void>((resolve, reject) => {
 					resolveNext = resolve;
 					rejectNext = reject;
-					signal?.addEventListener("abort", () => resolve(), { once: true });
 				});
 				resolveNext = null;
 				rejectNext = null;
@@ -121,6 +134,7 @@ export async function* sseSnapshotStream<TData>(options: {
 		}
 	} finally {
 		closed = true;
+		signal?.removeEventListener("abort", handleAbort);
 		unsubscribe();
 	}
 }
@@ -132,26 +146,80 @@ export async function* sseSnapshotStream<TData>(options: {
 /**
  * Build a topic config for a collection query.
  */
+type CollectionFindTopicOptions = {
+	where?: Record<string, unknown>;
+	with?: Record<string, unknown>;
+	limit?: number;
+	offset?: number;
+	orderBy?: Record<string, "asc" | "desc">;
+	locale?: string;
+};
+
+type CollectionCountTopicOptions = Pick<
+	CollectionFindTopicOptions,
+	"where" | "locale"
+>;
+
+type CollectionGetTopicOptions = Pick<
+	CollectionFindTopicOptions,
+	"with" | "locale"
+> & { id: string };
+
 export function buildCollectionTopic(
 	collectionName: string,
-	options?: {
-		where?: Record<string, unknown>;
-		with?: Record<string, unknown>;
-		limit?: number;
-		offset?: number;
-		orderBy?: Record<string, "asc" | "desc">;
-		locale?: string;
-	},
+	options?: CollectionFindTopicOptions,
+	operation?: "find",
+): Extract<TopicConfig, { resourceType: "collection"; operation?: "find" }>;
+export function buildCollectionTopic(
+	collectionName: string,
+	options: CollectionCountTopicOptions | undefined,
+	operation: "count",
+): Extract<TopicConfig, { resourceType: "collection"; operation: "count" }>;
+export function buildCollectionTopic(
+	collectionName: string,
+	options: CollectionGetTopicOptions,
+	operation: "get",
+): Extract<TopicConfig, { resourceType: "collection"; operation: "get" }>;
+export function buildCollectionTopic(
+	collectionName: string,
+	options?:
+		| CollectionFindTopicOptions
+		| CollectionCountTopicOptions
+		| CollectionGetTopicOptions,
+	operation: "find" | "count" | "get" = "find",
 ): TopicConfig {
+	if (operation === "get") {
+		const getOptions = options as CollectionGetTopicOptions;
+		return {
+			resourceType: "collection",
+			resource: collectionName,
+			operation: "get",
+			id: getOptions.id,
+			...(getOptions.with && { with: getOptions.with }),
+			...(getOptions.locale && { locale: getOptions.locale }),
+		};
+	}
+	if (operation === "count") {
+		const countOptions = options as CollectionCountTopicOptions | undefined;
+		return {
+			resourceType: "collection",
+			resource: collectionName,
+			operation: "count",
+			...(countOptions?.where && { where: countOptions.where }),
+			...(countOptions?.locale && { locale: countOptions.locale }),
+		};
+	}
+	const findOptions = options as CollectionFindTopicOptions | undefined;
 	return {
 		resourceType: "collection",
 		resource: collectionName,
-		...(options?.where && { where: options.where }),
-		...(options?.with && { with: options.with }),
-		...(options?.limit !== undefined && { limit: options.limit }),
-		...(options?.offset !== undefined && { offset: options.offset }),
-		...(options?.orderBy && { orderBy: options.orderBy }),
-		...(options?.locale && { locale: options.locale }),
+		operation: "find",
+		...(findOptions?.where && { where: findOptions.where }),
+		...(findOptions?.with && { with: findOptions.with }),
+		...(findOptions?.limit !== undefined && { limit: findOptions.limit }),
+		...(findOptions?.offset !== undefined && { offset: findOptions.offset }),
+		...(findOptions?.orderBy && { orderBy: findOptions.orderBy }),
+		...(findOptions?.locale && { locale: findOptions.locale }),
 	};
 }
 
@@ -169,6 +237,7 @@ export function buildGlobalTopic(
 	return {
 		resourceType: "global",
 		resource: globalName,
+		operation: "get",
 		...(options?.where && { where: options.where }),
 		...(options?.with && { with: options.with }),
 		...(options?.locale && { locale: options.locale }),
@@ -186,18 +255,70 @@ export function createRealtimeAPI(opts: {
 	baseUrl: string;
 	withCredentials: boolean;
 	debounceMs: number;
+	getAuthHeaders?: GetAuthHeaders;
+	fetcher?: typeof fetch;
+	refetchTopic?: (topic: TopicConfig) => Promise<unknown>;
 }): RealtimeAPI {
-	let multiplexer: RealtimeMultiplexer | null = null;
+	let transport: RealtimeClientTransport | null = null;
+	let transportPromise: Promise<RealtimeClientTransport> | null = null;
+	let generation = 0;
+	const pending = new Set<object>();
+	const fetcher = opts.fetcher ?? globalThis.fetch;
 
-	const getOrCreate = () => {
-		if (!multiplexer) {
-			multiplexer = new RealtimeMultiplexer(
-				opts.baseUrl,
-				opts.withCredentials,
-				opts.debounceMs,
-			);
+	const createSse = () =>
+		new RealtimeMultiplexer(
+			opts.baseUrl,
+			opts.withCredentials,
+			opts.debounceMs,
+			{},
+			opts.getAuthHeaders,
+			fetcher,
+		);
+
+	const getOrCreate = async (): Promise<RealtimeClientTransport> => {
+		if (transport) return transport;
+		if (!transportPromise) {
+			const selectedGeneration = generation;
+			transportPromise = (async () => {
+				try {
+					const authHeaders = await opts.getAuthHeaders?.();
+					const response = await fetcher(`${opts.baseUrl}/realtime/config`, {
+						headers: authHeaders,
+						credentials: opts.withCredentials ? "include" : "omit",
+					});
+					if (
+						response.ok &&
+						response.headers.get("content-type")?.includes("application/json")
+					) {
+						const selected = (await response.json()) as
+							| { transport: "sse" }
+							| { transport: "shared-provider"; config: PusherRealtimeConfig };
+						if (
+							selected.transport === "shared-provider" &&
+							selected.config?.provider === "pusher" &&
+							typeof selected.config.key === "string" &&
+							opts.refetchTopic
+						) {
+							return new PusherRealtimeTransport({
+								baseUrl: opts.baseUrl,
+								fetcher,
+								getAuthHeaders: opts.getAuthHeaders,
+								config: selected.config,
+								refetchTopic: opts.refetchTopic,
+							});
+						}
+					}
+				} catch {
+					// Backward compatibility with servers predating realtime/config.
+				}
+				return createSse();
+			})().then((selected) => {
+				if (selectedGeneration !== generation) selected.destroy();
+				else transport = selected;
+				return selected;
+			});
 		}
-		return multiplexer;
+		return transportPromise;
 	};
 
 	return {
@@ -208,31 +329,63 @@ export function createRealtimeAPI(opts: {
 			customId?: string,
 			onError?: (error: Error) => void,
 		) {
-			return getOrCreate().subscribe(
-				topic,
-				callback as (data: unknown) => void,
-				signal,
-				customId,
-				onError,
-			);
+			const subscriptionGeneration = generation;
+			const marker = {};
+			pending.add(marker);
+			let stopped = false;
+			let stopInner: (() => void) | undefined;
+			void getOrCreate()
+				.then((selected) => {
+					pending.delete(marker);
+					if (stopped || subscriptionGeneration !== generation) return;
+					stopInner = selected.subscribe(
+						topic,
+						callback as (data: unknown) => void,
+						signal,
+						customId,
+						onError,
+					);
+				})
+				.catch((error) => {
+					pending.delete(marker);
+					onError?.(error instanceof Error ? error : new Error(String(error)));
+				});
+			return () => {
+				stopped = true;
+				pending.delete(marker);
+				stopInner?.();
+			};
 		},
 		stream<TData>(topic: TopicConfig, signal?: AbortSignal, customId?: string) {
+			const facade: RealtimeClientTransport = {
+				subscribe: (...args) => this.subscribe(...args),
+				destroy: () => this.destroy(),
+				get topicCount() {
+					return transport?.topicCount ?? pending.size;
+				},
+				get subscriberCount() {
+					return transport?.subscriberCount ?? pending.size;
+				},
+			};
 			return sseSnapshotStream<TData>({
-				multiplexer: getOrCreate(),
+				multiplexer: facade,
 				topic,
 				signal,
 				customId,
 			});
 		},
 		destroy() {
-			multiplexer?.destroy();
-			multiplexer = null;
+			generation += 1;
+			pending.clear();
+			transport?.destroy();
+			transport = null;
+			transportPromise = null;
 		},
 		get topicCount() {
-			return multiplexer?.topicCount ?? 0;
+			return transport?.topicCount ?? pending.size;
 		},
 		get subscriberCount() {
-			return multiplexer?.subscriberCount ?? 0;
+			return transport?.subscriberCount ?? pending.size;
 		},
 	};
 }

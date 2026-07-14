@@ -11,6 +11,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { validateChannelWirePattern } from "../../src/cli/codegen/channel-pattern.js";
 import type { DiscoverFilesOptions } from "../../src/cli/codegen/discover.js";
 import {
 	detectExportType,
@@ -1145,5 +1146,194 @@ describe("multi-export factory discovery", () => {
 		const result = await discoverFiles(rootDir, outDir, factoryOpts);
 		const blocks = result.categories.get("blocks")!;
 		expect(blocks.get("hero")!.importPath).toBe(blocks.get("cta")!.importPath);
+	});
+});
+
+describe("channel factory argument metadata policy", () => {
+	let rootDir: string;
+	let outDir: string;
+
+	beforeEach(async () => {
+		rootDir = await mkdtemp(join(tmpdir(), "questpie-factory-policy-"));
+		outDir = join(rootDir, ".generated");
+		await mkdir(outDir, { recursive: true });
+	});
+
+	afterEach(async () => {
+		await rm(rootDir, { recursive: true, force: true });
+	});
+
+	async function write(relPath: string, content: string): Promise<void> {
+		const full = join(rootDir, relPath);
+		await mkdir(join(full, ".."), { recursive: true });
+		await writeFile(full, content, "utf-8");
+	}
+
+	const channelCategory = {
+		dirs: ["channels"],
+		prefix: "channel",
+		factoryFunctions: ["channel"],
+		factoryKeyStrategy: "export-or-filename" as const,
+		factoryArgument: {
+			label: "wire pattern",
+			requireLiteral: true,
+			unique: true,
+			validate: validateChannelWirePattern,
+		},
+	};
+
+	it("declares the locked channel policy in the core plugin", () => {
+		const target = resolveTargetGraph([coreCodegenPlugin()]).get("server")!;
+		expect(target.categories.channels).toMatchObject(channelCategory);
+		expect(target.categories.channels).toMatchObject({
+			registryKey: true,
+			extractFromModules: true,
+			includeInAppState: true,
+		});
+	});
+
+	it("uses the filename for a default export and keeps the wire pattern as metadata", async () => {
+		await write(
+			"channels/chat-room.ts",
+			'export default channel("chat-room-[roomId]");',
+		);
+
+		const result = await discoverFiles(rootDir, outDir, {
+			categories: { channels: channelCategory },
+		});
+		const channels = result.categories.get("channels")!;
+
+		expect([...channels.keys()]).toEqual(["chatRoom"]);
+		expect(channels.get("chatRoom")!.factoryArgument).toBe(
+			"chat-room-[roomId]",
+		);
+	});
+
+	it("uses named exports as keys for multiple definitions in one file", async () => {
+		await write(
+			"channels/rooms.ts",
+			[
+				'export const chatRoom = channel("chat-room-[roomId]");',
+				'export const typingRoom = channel("typing-room-[roomId]");',
+			].join("\n"),
+		);
+
+		const result = await discoverFiles(rootDir, outDir, {
+			categories: { channels: channelCategory },
+		});
+		const channels = result.categories.get("channels")!;
+
+		expect([...channels.keys()]).toEqual(["chatRoom", "typingRoom"]);
+		expect(channels.get("chatRoom")!.factoryArgument).toBe(
+			"chat-room-[roomId]",
+		);
+	});
+
+	it("keeps collection and global factory arguments as their registry keys", async () => {
+		await write(
+			"collections/posts.ts",
+			'export const postsDefinition = collection("posts");',
+		);
+		await write(
+			"globals/site.ts",
+			'export const settingsDefinition = global("site-settings");',
+		);
+		await write(
+			"channels/chat.ts",
+			'export const chatRoom = channel("chat-room-[roomId]");',
+		);
+
+		const target = resolveTargetGraph([coreCodegenPlugin()]).get("server")!;
+		const result = await discoverFiles(rootDir, outDir, {
+			categories: target.categories,
+		});
+
+		expect([...result.categories.get("collections")!.keys()]).toEqual([
+			"posts",
+		]);
+		expect([...result.categories.get("globals")!.keys()]).toEqual([
+			"siteSettings",
+		]);
+		expect([...result.categories.get("channels")!.keys()]).toEqual([
+			"chatRoom",
+		]);
+	});
+
+	it("rejects duplicate wire patterns with both app file locations", async () => {
+		await write(
+			"channels/chat-room.ts",
+			'export default channel("chat-room-[roomId]");',
+		);
+		await write(
+			"channels/legacy-chat.ts",
+			'export default channel("chat-room-[roomId]");',
+		);
+
+		await expect(
+			discoverFiles(rootDir, outDir, {
+				categories: { channels: channelCategory },
+			}),
+		).rejects.toThrow(
+			/channels\/chat-room\.ts[\s\S]*channels\/legacy-chat\.ts/,
+		);
+	});
+
+	it("rejects a duplicate wire pattern contributed by a module", async () => {
+		await write(
+			"channels/chat-room.ts",
+			'export default channel("chat-room-[roomId]");',
+		);
+
+		await expect(
+			discoverFiles(rootDir, outDir, {
+				categories: { channels: channelCategory },
+				externalFactoryArguments: [
+					{
+						category: "channels",
+						key: "moduleChatRoom",
+						value: "chat-room-[roomId]",
+						source: "@acme/chat:channels/chat-room.ts",
+					},
+				],
+			}),
+		).rejects.toThrow(
+			/channels\/chat-room\.ts[\s\S]*@acme\/chat:channels\/chat-room\.ts/,
+		);
+	});
+
+	it("rejects non-literal and transport-unsafe wire patterns", async () => {
+		await write("channels/dynamic.ts", "export default channel(dynamicName);");
+
+		await expect(
+			discoverFiles(rootDir, outDir, {
+				categories: { channels: channelCategory },
+			}),
+		).rejects.toThrow(/wire pattern must be a string literal/);
+
+		await write(
+			"channels/dynamic.ts",
+			'export default channel("chat/room-[roomId]");',
+		);
+
+		await expect(
+			discoverFiles(rootDir, outDir, {
+				categories: { channels: channelCategory },
+			}),
+		).rejects.toThrow(/wire pattern.*slash/i);
+	});
+});
+
+describe("validateChannelWirePattern", () => {
+	it("accepts Pusher-compatible literals and bracket parameters", () => {
+		expect(
+			validateChannelWirePattern("chat-room_[roomId]@=,.;"),
+		).toBeUndefined();
+	});
+
+	it("rejects malformed parameters and unsafe characters", () => {
+		expect(validateChannelWirePattern("chat/[roomId]")).toContain("slash");
+		expect(validateChannelWirePattern("chat [roomId]")).toContain("whitespace");
+		expect(validateChannelWirePattern("chat-[room-id]")).toContain("parameter");
+		expect(validateChannelWirePattern("chat-[roomId")).toContain("bracket");
 	});
 });

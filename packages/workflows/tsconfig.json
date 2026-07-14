@@ -20,6 +20,7 @@
 	},
 	"include": [
 		"src/**/*",
+		"test/types/**/*",
 		"src/server/modules/workflows/.generated/*.ts",
 		"src/client/.generated/*.ts"
 	],

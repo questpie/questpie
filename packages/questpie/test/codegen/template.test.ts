@@ -111,6 +111,7 @@ function emptyResult(categoryNames: string[] = []): DiscoveryResult {
 function minimalResult(): DiscoveryResult {
 	const result = emptyResult([
 		"collections",
+		"channels",
 		"globals",
 		"jobs",
 		"routes",
@@ -224,6 +225,15 @@ describe("generateTemplate — minimal (modules.ts only)", () => {
 
 	it("emits AppGlobals type alias (no user globals)", () => {
 		expect(code).toContain("export type AppGlobals = _ModuleGlobals;");
+	});
+
+	it("emits channels in the app and client config types", () => {
+		expect(code).toContain("export type AppChannels = _ModuleChannels;");
+		expect(code).toContain("\tchannels: AppChannels;");
+		expect(code).toContain("\tchannels: ChannelsService<AppChannels>;");
+		expect(code).toContain(
+			'Omit<QuestpieConfig, "app" | "db" | "collections" | "channels"',
+		);
 	});
 
 	it("emits AppJobs type alias (no user jobs)", () => {

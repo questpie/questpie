@@ -10,12 +10,12 @@ The QUESTPIE admin panel is a **projection of your server schema**, not the fram
 
 ## Reference Topics
 
-| Topic     | File                      | Covers                                                                                 |
-| --------- | ------------------------- | -------------------------------------------------------------------------------------- |
-| Views     | `references/views.md`     | List views, form views, dashboard, sidebar, filters, bulk actions, visibility, history |
-| Blocks    | `references/blocks.md`    | Block definitions, fields, prefetch, renderers, block picker                           |
+| Topic     | File                      | Covers                                                                                           |
+| --------- | ------------------------- | ------------------------------------------------------------------------------------------------ |
+| Views     | `references/views.md`     | List/form/dashboard views, realtime refresh and locks, sidebar, filters, bulk actions, history   |
+| Blocks    | `references/blocks.md`    | Block definitions, fields, prefetch, renderers, block picker                                     |
 | Custom UI | `references/custom-ui.md` | Declarative `field()`/`view()`/`widget()`/`page()` definitions, component props, reactive fields |
-| Recipes   | `references/recipes.md`   | BE vs FE field, end-to-end custom field, custom admin page (e.g. chat), custom view     |
+| Recipes   | `references/recipes.md`   | BE vs FE field, end-to-end custom field, custom admin page (e.g. chat), custom view              |
 
 ## Full Compiled Document
 
@@ -207,10 +207,10 @@ when overriding (see Custom Theme below).
 
 ### Typography
 
-| Variable      | Value                                                               |
-| ------------- | ------------------------------------------------------------------- |
-| `--font-sans` | `"Geist Variable"`, UI, prose, headings, labels, navigation        |
-| `--font-mono` | `"JetBrains Mono Variable"`, code, file paths, commands, IDs       |
+| Variable      | Value                                                        |
+| ------------- | ------------------------------------------------------------ |
+| `--font-sans` | `"Geist Variable"`, UI, prose, headings, labels, navigation  |
+| `--font-mono` | `"JetBrains Mono Variable"`, code, file paths, commands, IDs |
 
 ### Sidebar Variables
 
@@ -527,7 +527,7 @@ For the framework side (enabling the provider, the token flow, the scope model, 
 
 This skill builds on questpie-admin.
 
-Views control how data appears in the QUESTPIE admin panel. They are configured **server-side** on collections and globals via `.list()` / `.form()`, and the admin client renders them from that introspected config. Custom view *types* (kanban, calendar, …) are declarative `view()` definitions discovered by codegen - see `references/custom-ui.md`.
+Views control how data appears in the QUESTPIE admin panel. They are configured **server-side** on collections and globals via `.list()` / `.form()`, and the admin client renders them from that introspected config. Custom view _types_ (kanban, calendar, …) are declarative `view()` definitions discovered by codegen - see `references/custom-ui.md`.
 
 ```text
 Server Config                     Admin UI
@@ -884,6 +884,14 @@ Users can save filter + sort + column combinations as named views.
 ## Bulk Actions
 
 List views support multi-select. Check rows, then use the floating toolbar. Built-in: **Delete** (with confirmation). Soft-delete collections soft-delete instead of permanent removal.
+
+## Realtime consumers and locks
+
+Admin list, dashboard, lock, and collaboration consumers must use the generated typed client surface. For collection/global state, prefer `client.collections.<name>.live()` or TanStack Query `{ realtime: true }`; the server re-runs access-controlled queries and reconciles missed broker wakes. For ordered collaboration events, define a typed channel and use `client.channels.<name>` or `q.channels.<name>.subscription()`.
+
+Do not create custom CRUD hooks that emit one realtime event per record. The framework writes one transactional outbox row per logical mutation, including bulk operations, and the live-query runtime coalesces snapshot wakes. Code that assumes update-many produces N record events will regress bulk behavior.
+
+Lock indicators are hints, not authorization. Writes must still enforce access and conflict rules on the server. Clean up direct subscriptions on unmount, use the returned stop function or abort signal, and call `client.channels.destroy()` only when disposing the entire client runtime.
 
 ## History & Versions
 

@@ -26,11 +26,13 @@ import {
 	safeKey,
 	sortedValues,
 } from "./category-emit.js";
+import { CODEGEN_MODULE_METADATA_SYMBOL } from "./module-metadata.js";
 import type {
 	CategoryDeclaration,
 	DiscoveredFile,
 	DiscoverPattern,
 	DiscoveryResult,
+	FactoryArgumentMetadata,
 } from "./types.js";
 
 // ============================================================================
@@ -101,6 +103,21 @@ export function generateModuleTemplate(
 	} = options;
 
 	const modulesFile = discovered.singles.get("modules") ?? null;
+	const factoryArguments: FactoryArgumentMetadata[] = [];
+	for (const [category, declaration] of categoryMeta) {
+		if (!declaration.factoryArgument) continue;
+		for (const file of discovered.categories.get(category)?.values() ?? []) {
+			if (file.factoryArgument === undefined) continue;
+			factoryArguments.push({
+				category,
+				key: file.key,
+				value: file.factoryArgument,
+				source: file.namedExportName
+					? `${file.source} (export ${file.namedExportName})`
+					: file.source,
+			});
+		}
+	}
 
 	// Derive a PascalCase type prefix from the module name
 	// "questpie-admin" → "Admin", "questpie-audit" → "Audit"
@@ -314,6 +331,9 @@ export function generateModuleTemplate(
 
 	lines.push(`export type ${typePrefix}Module = {`);
 	lines.push(`\tname: "${moduleName}";`);
+	if (factoryArguments.length > 0) {
+		lines.push("\t[key: symbol]: unknown;");
+	}
 	if (modulesFile) {
 		lines.push(`\tmodules: typeof ${modulesFile.varName};`);
 	}
@@ -368,6 +388,11 @@ export function generateModuleTemplate(
 
 	lines.push(`const _module: ${typePrefix}Module = {`);
 	lines.push(`\tname: "${moduleName}" as const,`);
+	if (factoryArguments.length > 0) {
+		lines.push(
+			`\t[Symbol.for(${JSON.stringify(CODEGEN_MODULE_METADATA_SYMBOL)})]: { factoryArguments: ${JSON.stringify(factoryArguments)} },`,
+		);
+	}
 
 	// Sub-modules
 	if (modulesFile) {

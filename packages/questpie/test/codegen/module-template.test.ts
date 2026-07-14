@@ -36,6 +36,7 @@ function makeFile(
 		importPath?: string;
 		exportType?: "default" | "named" | "unknown";
 		namedExportName?: string;
+		factoryArgument?: string;
 		source?: string;
 		isBundle?: boolean;
 	} = {},
@@ -47,6 +48,7 @@ function makeFile(
 		importPath: opts.importPath ?? `../${key}`,
 		exportType: opts.exportType ?? "default",
 		namedExportName: opts.namedExportName,
+		factoryArgument: opts.factoryArgument,
 		source: opts.source ?? `${key}.ts`,
 		isBundle: opts.isBundle,
 	};
@@ -725,5 +727,42 @@ describe("generateModuleTemplate — extra imports", () => {
 
 	it("emits extra type declarations", () => {
 		expect(output).toContain("export type CustomType = string;");
+	});
+});
+
+describe("generateModuleTemplate — channel factory argument metadata", () => {
+	it("emits source metadata under the codegen symbol for module conflict checks", () => {
+		const result = emptyResult(["channels"]);
+		result.categories.get("channels")!.set(
+			"chatRoom",
+			makeFile("chatRoom", {
+				source: "channels/chat-room.ts",
+				factoryArgument: "chat-room-[roomId]",
+			}),
+		);
+
+		const { code } = generateModuleTemplate({
+			moduleName: "questpie-chat",
+			discovered: result,
+			categoryMeta: new Map([
+				[
+					"channels",
+					{
+						dirs: ["channels"],
+						prefix: "chan",
+						factoryFunctions: ["channel"],
+						factoryArgument: { label: "wire pattern", unique: true },
+					} satisfies CategoryDeclaration,
+				],
+			]),
+		});
+
+		expect(code).toContain(
+			'[Symbol.for("questpie.codegen.module-metadata.v1")]',
+		);
+		expect(code).toContain('"value":"chat-room-[roomId]"');
+		expect(code).toContain('"source":"channels/chat-room.ts"');
+		expect(code).toContain("channels: {");
+		expect(code).toContain("chatRoom: _chatRoom");
 	});
 });

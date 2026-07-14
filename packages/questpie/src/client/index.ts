@@ -23,6 +23,7 @@ import type {
 	ResolveRelationsDeep,
 } from "#questpie/shared/type-utils.js";
 
+import type { ChannelDefinitions } from "../server/channels/channel-builder.js";
 import type {
 	ApplyQuery,
 	CollectionSelect as CollectionSelectFromApp,
@@ -37,12 +38,16 @@ import type {
 	With,
 } from "../server/collection/crud/types.js";
 import type { GlobalUpdateInput } from "../server/global/crud/types.js";
+import type { GetAuthHeaders } from "./auth.js";
+import { createChannelsAPI, type ChannelsClient } from "./channels/index.js";
 import {
 	buildCollectionTopic,
 	buildGlobalTopic,
 	createRealtimeAPI,
 	type RealtimeAPI,
 } from "./realtime/index.js";
+
+export type { AuthHeaders, GetAuthHeaders } from "./auth.js";
 
 // ============================================================================
 // Upload Types
@@ -124,10 +129,17 @@ import type { AnyGlobal, GetGlobal } from "#questpie/shared/type-utils.js";
  */
 export interface QuestpieApp {
 	collections: Record<string, AnyCollectionOrBuilder>;
+	channels?: ChannelDefinitions;
 	globals?: Record<string, any>;
 	routes?: Record<string, any>;
 	auth?: any;
 }
+
+type AppChannelDefinitions<TApp extends QuestpieApp> = 0 extends 1 & TApp
+	? {}
+	: NonNullable<TApp["channels"]> extends ChannelDefinitions
+		? NonNullable<TApp["channels"]>
+		: {};
 
 /**
  * Type-safe client error with support for ApiErrorShape
@@ -237,6 +249,16 @@ export type QuestpieClientConfig = {
 	 * Default headers to include in all requests
 	 */
 	headers?: Record<string, string>;
+
+	/**
+	 * Resolve authentication headers for every request.
+	 *
+	 * The resolver runs immediately before data, upload, and realtime requests,
+	 * so rotated bearer tokens do not require recreating the client. Resolved
+	 * headers override matching static `headers`. Cookie credentials remain
+	 * enabled when this hook is omitted or used.
+	 */
+	getAuthHeaders?: GetAuthHeaders;
 
 	/**
 	 * Enable SuperJSON serialization for enhanced type support (Date, Map, Set, BigInt)
@@ -955,9 +977,14 @@ type RouteCallOptions = Omit<RequestInit, "method"> & {
 
 /**
  * Questpie Client
+ *
+ * The app schema is invariant: client methods both consume schema-derived
+ * inputs and return schema-derived outputs. Declaring that relationship keeps
+ * app-agnostic client comparisons from recursively measuring the full API.
  */
-export type QuestpieClient<TApp extends QuestpieApp> = {
+export type QuestpieClient<in out TApp extends QuestpieApp> = {
 	collections: CollectionsAPI<TApp>;
+	channels: ChannelsClient<AppChannelDefinitions<TApp>>;
 	globals: GlobalsAPI<TApp>;
 	routes: RoutesClient<TApp["routes"]>;
 	search: SearchAPI;
@@ -1014,10 +1041,12 @@ export function createClient<TApp extends QuestpieApp>(
 			? "application/superjson+json"
 			: "application/json";
 
+		const authHeaders = await config.getAuthHeaders?.();
 		const headers: Record<string, string> = {
 			"Content-Type": contentType,
 			...defaultHeaders,
 			...(options.headers as Record<string, string>),
+			...authHeaders,
 		};
 
 		if (useSuperJSON) {
@@ -1098,6 +1127,58 @@ export function createClient<TApp extends QuestpieApp>(
 		baseUrl: `${config.baseURL}${apiBasePath}`,
 		withCredentials: true,
 		debounceMs: 50,
+		getAuthHeaders: config.getAuthHeaders,
+		fetcher,
+		refetchTopic: async (topic) => {
+			if (topic.resourceType === "collection") {
+				if (topic.operation === "count") {
+					const queryString = qs.stringify(
+						{ where: topic.where, locale: topic.locale },
+						{ skipNulls: true, arrayFormat: "brackets" },
+					);
+					const result = await request(
+						`${apiBasePath}/${topic.resource}/count${queryString ? `?${queryString}` : ""}`,
+					);
+					return result.count;
+				}
+				if (topic.operation === "get") {
+					const queryString = qs.stringify(
+						{ with: topic.with, locale: topic.locale },
+						{ skipNulls: true, arrayFormat: "brackets" },
+					);
+					return request(
+						`${apiBasePath}/${topic.resource}/${topic.id}${queryString ? `?${queryString}` : ""}`,
+					);
+				}
+				const queryString = qs.stringify(
+					{
+						where: topic.where,
+						with: topic.with,
+						limit: topic.limit,
+						offset: topic.offset,
+						orderBy: topic.orderBy,
+						locale: topic.locale,
+					},
+					{ skipNulls: true, arrayFormat: "brackets" },
+				);
+				return request(
+					`${apiBasePath}/${topic.resource}${queryString ? `?${queryString}` : ""}`,
+				);
+			}
+			const queryString = qs.stringify(
+				{ where: topic.where, with: topic.with, locale: topic.locale },
+				{ skipNulls: true, arrayFormat: "brackets" },
+			);
+			return request(
+				`${apiBasePath}/globals/${topic.resource}${queryString ? `?${queryString}` : ""}`,
+			);
+		},
+	});
+	const channelsApi = createChannelsAPI<AppChannelDefinitions<TApp>>({
+		baseUrl: `${config.baseURL}${apiBasePath}`,
+		withCredentials: true,
+		fetcher,
+		getAuthHeaders: config.getAuthHeaders,
 	});
 
 	/**
@@ -1443,10 +1524,29 @@ export function createClient<TApp extends QuestpieApp>(
 							formData.append("path", options.path);
 						}
 
-						// Send request with credentials (cookies)
+						const send = (authHeaders?: Record<string, string>) => {
+							for (const [name, value] of Object.entries(authHeaders ?? {})) {
+								xhr.setRequestHeader(name, value);
+							}
+							xhr.send(formData);
+						};
+
+						// Keep cookie credentials enabled while allowing dynamic bearer auth.
 						xhr.open("POST", url);
 						xhr.withCredentials = true;
-						xhr.send(formData);
+						if (config.getAuthHeaders) {
+							try {
+								Promise.resolve(config.getAuthHeaders()).then(send, (error) => {
+									cleanup();
+									reject(error);
+								});
+							} catch (error) {
+								cleanup();
+								reject(error);
+							}
+						} else {
+							send();
+						}
 					});
 				},
 
@@ -1785,6 +1885,7 @@ export function createClient<TApp extends QuestpieApp>(
 
 	return {
 		collections,
+		channels: channelsApi,
 		globals,
 		routes: routesProxy,
 		search,
@@ -1847,6 +1948,14 @@ export type { GlobalMeta } from "#questpie/shared/global-meta.js";
 // Re-export realtime types and helpers
 export type { RealtimeAPI, TopicConfig, TopicInput } from "./realtime/index.js";
 export { buildCollectionTopic, buildGlobalTopic } from "./realtime/index.js";
+export type {
+	ChannelClient,
+	ChannelMessage,
+	ChannelPublishInput,
+	ChannelPublishReceipt,
+	ChannelsClient,
+	ChannelSubscribeOptions,
+} from "./channels/index.js";
 // Re-export the query-surface types the client's own method signatures are
 // built from, so consumers (e.g. @questpie/tanstack-query) can derive
 // per-call generics without reaching into server internals.

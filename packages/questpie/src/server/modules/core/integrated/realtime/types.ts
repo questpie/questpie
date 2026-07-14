@@ -1,4 +1,5 @@
 import type { RealtimeAdapter } from "./adapter.js";
+import type { ChangeBroker, ClientTransport } from "./transport.js";
 
 export type RealtimeResourceType = "collection" | "global";
 
@@ -9,6 +10,26 @@ export type RealtimeOperation =
 	| "bulk_update"
 	| "bulk_delete";
 
+export type RealtimeEqualityValue = string | number | boolean | null;
+
+/**
+ * Shallow scalar fields that can participate in cheap equality routing.
+ * Nested objects, arrays, relations, and hydrated payloads are deliberately
+ * excluded from the durable outbox.
+ */
+export type RealtimeEqualityProjection = Record<string, RealtimeEqualityValue>;
+
+/**
+ * Durable routing payload. Single-record changes carry pre/post projections;
+ * bulk changes carry only their affected ids and count.
+ */
+export type RealtimeChangePayload = {
+	before?: RealtimeEqualityProjection | null;
+	after?: RealtimeEqualityProjection | null;
+	count?: number;
+	recordIds?: (string | number)[];
+};
+
 export type RealtimeChangeEvent = {
 	seq: number;
 	resourceType: RealtimeResourceType;
@@ -16,14 +37,41 @@ export type RealtimeChangeEvent = {
 	operation: RealtimeOperation;
 	recordId?: string | null;
 	locale?: string | null;
-	payload?: Record<string, unknown>;
+	payload?: RealtimeChangePayload;
 	createdAt: Date;
 };
+
+/** Called when realtime delivery fails and the subscriber should reconnect. */
+export type RealtimeErrorListener = (error: unknown) => void;
 
 export type RealtimeNotice = Pick<
 	RealtimeChangeEvent,
 	"seq" | "resourceType" | "resource" | "operation"
 >;
+
+export type RealtimeTransportMode = "legacy" | "v2" | "dual";
+
+export type RealtimeDualRunComparison = {
+	/** Durable outbox sequence published through both invalidation paths. */
+	seq: number;
+	legacy: "accepted" | "rejected";
+	v2: "accepted" | "rejected";
+	/** Whether both transports returned the same acceptance result. */
+	equivalent: boolean;
+	legacyError?: unknown;
+	v2Error?: unknown;
+};
+
+export type RealtimeRolloutConfig = {
+	/**
+	 * `legacy` is the rollback path, `v2` selects the new seams, and `dual`
+	 * shadows invalidation through both paths without duplicating client frames.
+	 * @default "v2"
+	 */
+	mode?: RealtimeTransportMode;
+	/** Observes one comparison per dual-run outbox publish. */
+	onComparison?: (comparison: RealtimeDualRunComparison) => void;
+};
 
 /**
  * Topics for realtime subscriptions.
@@ -32,6 +80,8 @@ export type RealtimeNotice = Pick<
 export type RealtimeTopics = {
 	resourceType: RealtimeResourceType;
 	resource: string;
+	/** Query shape used to compute the latest snapshot. */
+	operation?: "find" | "count" | "get";
 	/**
 	 * WHERE clause for filtering events.
 	 * Simple equality filters are extracted for topic routing.
@@ -64,14 +114,38 @@ export type RealtimeSubscriptionContext = {
 };
 
 export interface RealtimeConfig {
+	/** Diagnostic event sink. Observer failures are isolated from delivery. */
+	observer?: import("./observer.js").RealtimeObserver;
+	/** Compatibility, canary, and rollback selection. */
+	rollout?: RealtimeRolloutConfig;
+	/** Realtime edge-session admission limits. */
+	admission?: Partial<import("./admission.js").RealtimeAdmissionConfig>;
+	/** Optional maximum random delay before accepting a new edge session. */
+	connectionAcceptPacingMs?: number;
 	/**
 	 * Optional transport adapter (pg_notify, redis streams, etc.).
 	 */
 	adapter?: RealtimeAdapter;
+	/** Cross-instance notice seam used by Realtime v2 transports. */
+	changeBroker?: ChangeBroker;
+	/** Edge delivery seam shared by live queries and typed channels. */
+	clientTransport?: ClientTransport;
+	/** Durable ordered-channel retention, backpressure, and lease tuning. */
+	channelEvents?: Partial<
+		import("./channel-event-ledger.js").ChannelEventLedgerConfig
+	>;
+	/** Cross-instance lease register tuning for SSE presence channels. */
+	channelPresence?: Partial<
+		import("./sse-channel-presence.js").ChannelPresenceConfig
+	>;
+	/** Security policy shared by channel auth and server-mediated publish routes. */
+	channelSecurity?: import("#questpie/server/channels/security.js").ChannelSecurityConfig;
 
 	/**
-	 * Poll interval in ms if no adapter is configured.
-	 * @default 2000
+	 * Reconciliation poll interval in ms. Polling runs alongside adapters so a
+	 * dropped wake-up notice cannot stall delivery indefinitely.
+	 *
+	 * @default 15000 with an adapter; 2000 without one
 	 */
 	pollIntervalMs?: number;
 
@@ -84,9 +158,10 @@ export interface RealtimeConfig {
 	/**
 	 * Retention window in days for time-based outbox cleanup.
 	 *
-	 * Note: realtime service always performs watermark cleanup based on
-	 * min consumed seq for active subscribers. `retentionDays` adds an
-	 * additional time-based safety window.
+	 * Cleanup is time-based only so one process can never delete rows that a
+	 * different process has not drained yet. Set to `0` to disable cleanup.
+	 *
+	 * @default 3
 	 */
 	retentionDays?: number;
 

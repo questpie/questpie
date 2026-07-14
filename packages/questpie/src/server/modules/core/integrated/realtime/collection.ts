@@ -1,4 +1,15 @@
-import { bigserial, index, jsonb, pgTable, text } from "drizzle-orm/pg-core";
+import {
+	bigint,
+	bigserial,
+	index,
+	integer,
+	jsonb,
+	pgTable,
+	primaryKey,
+	text,
+	timestamp,
+	uniqueIndex,
+} from "drizzle-orm/pg-core";
 
 import { systemTimestamp } from "#questpie/server/db/system-columns.js";
 
@@ -18,9 +29,73 @@ export const questpieRealtimeLogTable = pgTable(
 		payload: jsonb("payload").default({}),
 		createdAt: systemTimestamp("created_at").defaultNow().notNull(),
 	},
-	(t) => [
-		index("idx_realtime_log_seq").on(t.seq),
-		index("idx_realtime_log_resource").on(t.resourceType, t.resource),
-		index("idx_realtime_log_created_at").on(t.createdAt),
+	(t) => [index("idx_realtime_log_created_at").on(t.createdAt)],
+);
+
+/** Per-resolved-channel sequence head. Updating this row serializes publishers. */
+export const questpieChannelHeadTable = pgTable("questpie_channel_head", {
+	channelHash: text("channel_hash").primaryKey(),
+	channel: text("channel").notNull(),
+	lastSeq: bigint("last_seq", { mode: "number" }).default(0).notNull(),
+	updatedAt: systemTimestamp("updated_at").defaultNow().notNull(),
+});
+
+/** Durable ordered channel event ledger. */
+export const questpieChannelEventTable = pgTable(
+	"questpie_channel_event",
+	{
+		channelHash: text("channel_hash").notNull(),
+		seq: bigint("seq", { mode: "number" }).notNull(),
+		eventId: text("event_id").notNull(),
+		channel: text("channel").notNull(),
+		event: text("event").notNull(),
+		schemaIdentity: text("schema_identity").notNull(),
+		payload: jsonb("payload").notNull(),
+		sizeBytes: integer("size_bytes").notNull(),
+		createdAt: systemTimestamp("created_at").defaultNow().notNull(),
+	},
+	(table) => [
+		primaryKey({ columns: [table.channelHash, table.seq] }),
+		uniqueIndex("uq_channel_event_event_id").on(table.eventId),
+		index("idx_channel_event_created_at").on(table.createdAt),
+	],
+);
+
+/** Durable shared-provider cursor and per-channel coordinator lease. */
+export const questpieChannelDispatchTable = pgTable(
+	"questpie_channel_dispatch",
+	{
+		channelHash: text("channel_hash").primaryKey(),
+		publishedSeq: bigint("published_seq", { mode: "number" })
+			.default(0)
+			.notNull(),
+		leaseOwner: text("lease_owner"),
+		leaseExpiresAt: timestamp("lease_expires_at", {
+			withTimezone: true,
+			mode: "date",
+		}),
+		updatedAt: systemTimestamp("updated_at").defaultNow().notNull(),
+	},
+);
+
+/** Connection leases for zero-infrastructure, cross-instance channel presence. */
+export const questpieChannelPresenceTable = pgTable(
+	"questpie_channel_presence",
+	{
+		channelHash: text("channel_hash").notNull(),
+		connectionId: text("connection_id").notNull(),
+		principalId: text("principal_id").notNull(),
+		channel: text("channel").notNull(),
+		data: jsonb("data").notNull(),
+		expiresAt: timestamp("expires_at", {
+			withTimezone: true,
+			mode: "date",
+		}).notNull(),
+		updatedAt: systemTimestamp("updated_at").defaultNow().notNull(),
+	},
+	(table) => [
+		primaryKey({ columns: [table.channelHash, table.connectionId] }),
+		index("idx_channel_presence_channel").on(table.channelHash),
+		index("idx_channel_presence_expiry").on(table.expiresAt),
 	],
 );

@@ -29,6 +29,11 @@ import _route_collection_updateBatch from "../routes/[collection]/update-batch";
 import _route_collection_upload from "../routes/[collection]/upload";
 import _route_auth_spread_path_GET from "../routes/auth/[...path].get";
 import _route_auth_spread_path_POST from "../routes/auth/[...path].post";
+import _route_channels_auth_OPTIONS from "../routes/channels/auth.options";
+import _route_channels_auth_POST from "../routes/channels/auth.post";
+import _route_channels_config from "../routes/channels/config";
+import _route_channels_publish_OPTIONS from "../routes/channels/publish.options";
+import _route_channels_publish_POST from "../routes/channels/publish.post";
 import _route_globals_name from "../routes/globals/[name]";
 import _route_globals_name_PATCH from "../routes/globals/[name].patch";
 import _route_globals_name_audit from "../routes/globals/[name]/audit";
@@ -40,11 +45,14 @@ import _route_globals_name_versions from "../routes/globals/[name]/versions";
 import _route_health from "../routes/health";
 import _route_jwks from "../routes/jwks";
 import _route_realtime from "../routes/realtime";
+import _route_realtime_auth_POST from "../routes/realtime/auth.post";
+import _route_realtime_config from "../routes/realtime/config";
 import _route_search from "../routes/search";
 import _route_search_reindex_collection from "../routes/search/reindex/[collection]";
 
 // ── Services ────────────────────────────────────────────
 import _svc_auth from "../services/auth";
+import _svc_channels from "../services/channels";
 import _svc_collectionsApi from "../services/collections-api";
 import _svc_db from "../services/db";
 import _svc_email from "../services/email";
@@ -86,6 +94,8 @@ import type { RouteDefinition, RouteParamsFromKey } from "questpie/types";
 
 export type CoreCollections = Record<never, never>;
 
+export type CoreChannels = Record<never, never>;
+
 export type CoreGlobals = Record<never, never>;
 
 export type CoreJobs = {
@@ -116,6 +126,11 @@ export type CoreRoutes = {
 	"[collection]/upload": typeof _route_collection_upload extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"[collection]/upload">> : typeof _route_collection_upload;
 	"auth/[...path]:GET": typeof _route_auth_spread_path_GET extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"auth/[...path]:GET">> : typeof _route_auth_spread_path_GET;
 	"auth/[...path]:POST": typeof _route_auth_spread_path_POST extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"auth/[...path]:POST">> : typeof _route_auth_spread_path_POST;
+	"channels/auth:OPTIONS": typeof _route_channels_auth_OPTIONS extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"channels/auth:OPTIONS">> : typeof _route_channels_auth_OPTIONS;
+	"channels/auth:POST": typeof _route_channels_auth_POST extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"channels/auth:POST">> : typeof _route_channels_auth_POST;
+	"channels/config": typeof _route_channels_config extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"channels/config">> : typeof _route_channels_config;
+	"channels/publish:OPTIONS": typeof _route_channels_publish_OPTIONS extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"channels/publish:OPTIONS">> : typeof _route_channels_publish_OPTIONS;
+	"channels/publish:POST": typeof _route_channels_publish_POST extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"channels/publish:POST">> : typeof _route_channels_publish_POST;
 	"globals/[name]": typeof _route_globals_name extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"globals/[name]">> : typeof _route_globals_name;
 	"globals/[name]:PATCH": typeof _route_globals_name_PATCH extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"globals/[name]:PATCH">> : typeof _route_globals_name_PATCH;
 	"globals/[name]/audit": typeof _route_globals_name_audit extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"globals/[name]/audit">> : typeof _route_globals_name_audit;
@@ -127,6 +142,8 @@ export type CoreRoutes = {
 	health: typeof _route_health extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"health">> : typeof _route_health;
 	jwks: typeof _route_jwks extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"jwks">> : typeof _route_jwks;
 	realtime: typeof _route_realtime extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"realtime">> : typeof _route_realtime;
+	"realtime/auth:POST": typeof _route_realtime_auth_POST extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"realtime/auth:POST">> : typeof _route_realtime_auth_POST;
+	"realtime/config": typeof _route_realtime_config extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"realtime/config">> : typeof _route_realtime_config;
 	search: typeof _route_search extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"search">> : typeof _route_search;
 	"search/reindex/[collection]": typeof _route_search_reindex_collection extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"search/reindex/[collection]">> : typeof _route_search_reindex_collection;
 };
@@ -151,6 +168,7 @@ export type CoreFieldTypes = {
 
 export type CoreServices = {
 	auth: typeof _svc_auth;
+	channels: typeof _svc_channels;
 	collectionsApi: typeof _svc_collectionsApi;
 	db: typeof _svc_db;
 	email: typeof _svc_email;
@@ -176,6 +194,7 @@ export type CoreModule = {
 	services: CoreServices;
 	fieldTypes: CoreFieldTypes;
 	collections: CoreCollections;
+	channels: CoreChannels;
 	globals: CoreGlobals;
 	messages: Record<never, never>;
 	emails: Record<never, never>;
@@ -215,6 +234,11 @@ const _module: CoreModule = {
 		"[collection]/upload": _route_collection_upload,
 		"auth/[...path]:GET": _route_auth_spread_path_GET,
 		"auth/[...path]:POST": _route_auth_spread_path_POST,
+		"channels/auth:OPTIONS": _route_channels_auth_OPTIONS,
+		"channels/auth:POST": _route_channels_auth_POST,
+		"channels/config": _route_channels_config,
+		"channels/publish:OPTIONS": _route_channels_publish_OPTIONS,
+		"channels/publish:POST": _route_channels_publish_POST,
 		"globals/[name]": _route_globals_name,
 		"globals/[name]:PATCH": _route_globals_name_PATCH,
 		"globals/[name]/audit": _route_globals_name_audit,
@@ -226,11 +250,14 @@ const _module: CoreModule = {
 		health: _route_health,
 		jwks: _route_jwks,
 		realtime: _route_realtime,
+		"realtime/auth:POST": _route_realtime_auth_POST,
+		"realtime/config": _route_realtime_config,
 		search: _route_search,
 		"search/reindex/[collection]": _route_search_reindex_collection,
 	} as CoreRoutes,
 	services: {
 		auth: _svc_auth,
+		channels: _svc_channels,
 		collectionsApi: _svc_collectionsApi,
 		db: _svc_db,
 		email: _svc_email,
@@ -262,6 +289,7 @@ const _module: CoreModule = {
 		url: _ftype_url,
 	} as CoreFieldTypes,
 	collections: {},
+	channels: {},
 	globals: {},
 	messages: {},
 	emails: {},

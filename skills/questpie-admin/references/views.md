@@ -7,7 +7,7 @@ description: QUESTPIE admin views list-view table form-view sections sidebar das
 
 This skill builds on questpie-admin.
 
-Views control how data appears in the QUESTPIE admin panel. They are configured **server-side** on collections and globals via `.list()` / `.form()`, and the admin client renders them from that introspected config. Custom view *types* (kanban, calendar, …) are declarative `view()` definitions discovered by codegen - see `references/custom-ui.md`.
+Views control how data appears in the QUESTPIE admin panel. They are configured **server-side** on collections and globals via `.list()` / `.form()`, and the admin client renders them from that introspected config. Custom view _types_ (kanban, calendar, …) are declarative `view()` definitions discovered by codegen - see `references/custom-ui.md`.
 
 ```text
 Server Config                     Admin UI
@@ -364,6 +364,14 @@ Users can save filter + sort + column combinations as named views.
 ## Bulk Actions
 
 List views support multi-select. Check rows, then use the floating toolbar. Built-in: **Delete** (with confirmation). Soft-delete collections soft-delete instead of permanent removal.
+
+## Realtime consumers and locks
+
+Admin list, dashboard, lock, and collaboration consumers must use the generated typed client surface. For collection/global state, prefer `client.collections.<name>.live()` or TanStack Query `{ realtime: true }`; the server re-runs access-controlled queries and reconciles missed broker wakes. For ordered collaboration events, define a typed channel and use `client.channels.<name>` or `q.channels.<name>.subscription()`.
+
+Do not create custom CRUD hooks that emit one realtime event per record. The framework writes one transactional outbox row per logical mutation, including bulk operations, and the live-query runtime coalesces snapshot wakes. Code that assumes update-many produces N record events will regress bulk behavior.
+
+Lock indicators are hints, not authorization. Writes must still enforce access and conflict rules on the server. Clean up direct subscriptions on unmount, use the returned stop function or abort signal, and call `client.channels.destroy()` only when disposing the entire client runtime.
 
 ## History & Versions
 

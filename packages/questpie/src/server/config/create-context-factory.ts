@@ -39,6 +39,7 @@ export function createContextFactory(
 		const services = extractAppServices(app, {
 			db: app.db,
 			session: reqCtx.session,
+			accessMode: options?.accessMode ?? "system",
 		});
 		return { ...services, ...reqCtx } as AppContext;
 	};
