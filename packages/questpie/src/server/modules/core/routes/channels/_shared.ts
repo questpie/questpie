@@ -6,7 +6,10 @@ import {
 	ChannelTokenBucketLimiter,
 	resolveChannelRequestOrigin,
 } from "#questpie/server/channels/security.js";
-import { ChannelsService } from "#questpie/server/channels/service.js";
+import {
+	ChannelsService,
+	type ChannelServiceContext,
+} from "#questpie/server/channels/service.js";
 import type { Principal } from "#questpie/server/config/context.js";
 import type { ChannelSecurityObservationReason } from "#questpie/server/modules/core/integrated/realtime/observer.js";
 import { routeApp } from "#questpie/server/routes/route-app.js";
@@ -245,14 +248,12 @@ export async function parseChannelPublishRequest(request: Request): Promise<
 	return parsed.data;
 }
 
-export function requestChannels(
-	ctx: ChannelRouteContext,
-): ChannelsService<any> {
+export function requestChannels(ctx: ChannelRouteContext): ChannelsService {
 	const app = routeApp(ctx);
 	return new ChannelsService(
 		app.config.channels ?? {},
 		app.realtime,
-		{ ...ctx, accessMode: "user" } as any,
+		{ ...ctx, accessMode: "user" } as ChannelServiceContext,
 		app.config.realtime?.channelSecurity,
 	);
 }

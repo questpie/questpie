@@ -22,11 +22,11 @@ export default route()
 			origin = validateChannelRouteOrigin(ctx);
 			const input = await parseChannelPublishRequest(ctx.request);
 			const channels = requestChannels(ctx);
-			const prepared = await channels.preparePublish(input.channel, {
+			const prepared = await channels.preparePublishRequest(input.channel, {
 				params: input.params,
 				event: input.event,
 				data: input.data,
-			} as any);
+			});
 			const quota = consumeChannelPublishQuota(ctx, ctx.request);
 			if (!quota.allowed) {
 				observeChannelSecurity(ctx, {

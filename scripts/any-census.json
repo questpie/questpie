@@ -2,8 +2,8 @@
 	"$comment": "any-census baseline (per-package type-escape counts, non-test src). Regenerate with `bun run scripts/any-census.ts --update` — only commit decreases unless the increase was explicitly approved. CI fails on any increase.",
 	"packages": {
 		"questpie": {
-			": any": 556,
-			"as any": 477,
+			": any": 553,
+			"as any": 475,
 			"as unknown as": 43,
 			"@ts-expect-error": 0
 		},
@@ -14,7 +14,7 @@
 			"@ts-expect-error": 0
 		},
 		"tanstack-query": {
-			": any": 30,
+			": any": 29,
 			"as any": 3,
 			"as unknown as": 0,
 			"@ts-expect-error": 0

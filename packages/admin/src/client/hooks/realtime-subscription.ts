@@ -1,8 +1,10 @@
+import type { RealtimeAPI, TopicConfig } from "questpie/client";
+
 /** @internal Shared direct-subscribe seam used by admin cache invalidation. */
 export function subscribeAdminCollectionRealtime(input: {
-	client: any;
+	client: { realtime?: Pick<RealtimeAPI, "subscribe"> };
 	collection: string | undefined;
-	topic: unknown;
+	topic: TopicConfig | undefined;
 	enabled: boolean | undefined;
 	onChange: () => void;
 }): (() => void) | undefined {

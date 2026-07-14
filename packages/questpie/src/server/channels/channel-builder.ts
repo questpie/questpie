@@ -53,8 +53,10 @@ export interface ChannelDefinition<
 	TAuthorization extends ChannelAuthorization<TPattern> | undefined =
 		| ChannelAuthorization<TPattern>
 		| undefined,
-	TPresence extends ChannelPresenceResolver<TPattern, any> | undefined =
-		| ChannelPresenceResolver<TPattern, any>
+	TPresence extends
+		| ChannelPresenceResolver<TPattern, Record<string, unknown>>
+		| undefined =
+		| ChannelPresenceResolver<TPattern, Record<string, unknown>>
 		| undefined,
 	TVisibility extends ChannelVisibility = ChannelVisibility,
 > {
@@ -81,7 +83,7 @@ export type ChannelEventsOf<TDefinition> =
 
 export type ChannelPresenceOf<TDefinition> =
 	TDefinition extends ChannelDefinition<any, any, any, infer TPresence, any>
-		? TPresence extends (...args: any[]) => infer TResult
+		? TPresence extends (...args: infer _TArgs) => infer TResult
 			? Awaited<TResult>
 			: never
 		: never;
@@ -189,8 +191,9 @@ export class ChannelBuilder<
 	TEvents extends ChannelEventSchemas = {},
 	TAuthorization extends ChannelAuthorization<TPattern> | undefined =
 		NoAuthorization,
-	TPresence extends ChannelPresenceResolver<TPattern, any> | undefined =
-		NoPresence,
+	TPresence extends
+		| ChannelPresenceResolver<TPattern, Record<string, unknown>>
+		| undefined = NoPresence,
 	TVisibility extends ChannelVisibility = "public",
 > implements ChannelDefinition<
 	TPattern,
@@ -228,7 +231,7 @@ export class ChannelBuilder<
 					match[1],
 					"x",
 				]),
-			) as any,
+			) as ChannelParamsOf<AnyChannelDefinition>,
 		);
 		void shortest;
 		Object.freeze(this);

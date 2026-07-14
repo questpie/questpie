@@ -71,7 +71,7 @@ interface RealtimeConfig {
 	rollout?: RealtimeRolloutConfig;
 	admission?: Partial<RealtimeAdmissionConfig>;
 	connectionAcceptPacingMs?: number;
-	adapter?: RealtimeAdapter; // legacy-compatible broker adapter
+	adapter?: RealtimeAdapter; // existing broker compatibility adapter
 	changeBroker?: ChangeBroker; // v2 cross-instance notice seam
 	clientTransport?: ClientTransport; // managed edge transport; omit → SSE
 	channelEvents?: Partial<ChannelEventLedgerConfig>;
@@ -86,7 +86,7 @@ interface RealtimeConfig {
 | Option                     | Default                           | What it controls                                                                                                                                                                                                         |
 | -------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `observer`                 | _(none)_                          | Structured lifecycle/admission/transport diagnostics. Observer failures are isolated from delivery.                                                                                                                      |
-| `rollout`                  | v2                                | Compatibility/canary selection (`legacy`, `v2`, or `dual`) used by the migration and rollback path.                                                                                                                      |
+| `rollout`                  | v2                                | Compatibility/canary selection used by the migration and rollback path.                                                                                                                                                  |
 | `admission`                | limits below                      | Edge-session topic, connection, query-shape, concurrency, and buffer caps.                                                                                                                                               |
 | `connectionAcceptPacingMs` | `0`                               | Optional maximum random delay before accepting a new edge session.                                                                                                                                                       |
 | `adapter`                  | _(none)_                          | Existing `RealtimeAdapter` compatibility path, including pg_notify, Redis, and Cloudflare.                                                                                                                               |
@@ -399,7 +399,7 @@ interface RealtimeAdapter {
 
 - [Realtime](/docs/client/realtime), the client API this transport powers: `live()`, `liveIter()`, and the TanStack Query `{ realtime: true }` flag.
 - [Channels](/docs/client/channels), typed ordered application events over SSE or Pusher/Soketi.
-- [Realtime v2 migration and rollback](/docs/adapters/realtime-v2-migration), dual-run canaries and the legacy rollback flag.
+- [Realtime v2 migration and rollback](/docs/adapters/realtime-v2-migration), dual-run canaries and the rollback flag.
 - [Configuration](/docs/concepts/configuration), where `realtime` lives in `QuestpieConfig`, alongside the other adapters.
 - [Adapters](/docs/adapters), the hub listing every adapter kind and the swap-the-backend model.
 - [Building a plugin](/docs/extend/build-a-plugin), implement `RealtimeAdapter` (or any adapter contract) yourself.

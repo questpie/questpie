@@ -2537,7 +2537,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				// Bulk metadata for afterDelete: winners only (fact hooks)
 				const afterDeleteBulkMeta = {
 					isBatch: true as const,
-					recordIds: claimedRecords.map((r: any) => r.id),
+					recordIds: claimedRecords.map((record) => record.id),
 					records: claimedRecords,
 					count: claimedRecords.length,
 				};

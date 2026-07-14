@@ -1,4 +1,4 @@
-import type { Client, ClientConfig } from "pg";
+import type { Client, ClientConfig, Notification } from "pg";
 
 import type { RealtimeAdapter, RealtimeAdapterState } from "../adapter.js";
 import type { RealtimeChangeEvent, RealtimeNotice } from "../types.js";
@@ -31,7 +31,7 @@ export class PgNotifyAdapter implements RealtimeAdapter {
 	private publisherConnected = false;
 	private ownsListenerClient = true;
 	private ownsPublisherClient = true;
-	private notificationHandler?: (msg: { payload?: string | null }) => void;
+	private notificationHandler?: (msg: Notification) => void;
 	private readonly onError: (error: unknown) => void;
 	private readonly errorLogIntervalMs: number;
 	private readonly lastErrorLogAt = new Map<string, number>();
@@ -109,7 +109,7 @@ export class PgNotifyAdapter implements RealtimeAdapter {
 				listener(notice);
 			}
 		};
-		client.on("notification", this.notificationHandler as any);
+		client.on("notification", this.notificationHandler);
 		this.started = true;
 		this.reconnectAttempt = 0;
 		this.emitState("connected");
@@ -132,7 +132,7 @@ export class PgNotifyAdapter implements RealtimeAdapter {
 		const publisherClient = this.publisherClient;
 
 		if (listenerClient && this.notificationHandler) {
-			listenerClient.off("notification", this.notificationHandler as any);
+			listenerClient.off("notification", this.notificationHandler);
 			this.notificationHandler = undefined;
 		}
 		if (listenerClient) this.detachListenerLifecycle(listenerClient);
@@ -284,7 +284,7 @@ export class PgNotifyAdapter implements RealtimeAdapter {
 		this.started = false;
 		this.listenerConnected = false;
 		if (this.notificationHandler) {
-			client.off("notification", this.notificationHandler as any);
+			client.off("notification", this.notificationHandler);
 			this.notificationHandler = undefined;
 		}
 		this.detachListenerLifecycle(client);

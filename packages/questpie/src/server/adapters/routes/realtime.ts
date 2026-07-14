@@ -5,8 +5,12 @@
  * Accepts multiple topics via POST and streams updates for all of them.
  */
 
-import { ChannelsService } from "../../channels/service.js";
+import {
+	ChannelsService,
+	type ChannelServiceContext,
+} from "../../channels/service.js";
 import { executeAccessRule } from "../../collection/crud/shared/access-control.js";
+import type { RequestContext } from "../../config/context.js";
 import type { Questpie } from "../../config/questpie.js";
 import type { QuestpieConfig } from "../../config/types.js";
 import { ApiError } from "../../errors/index.js";
@@ -86,8 +90,13 @@ type ValidatedTopicMetadata = {
 	accessWhere?: true | Record<string, unknown>;
 	requestedWhere?: Record<string, unknown>;
 	accessCacheKey?: (
-		context: any,
+		context: RealtimeRequestContext,
 	) => string | null | undefined | Promise<string | null | undefined>;
+};
+
+type RealtimeRequestContext = RequestContext & {
+	request?: Request;
+	req?: Request;
 };
 
 type ValidatedTopic =
@@ -174,7 +183,7 @@ function mergeAccessWhere(
 async function evaluateTopicAccess(
 	app: Questpie<any>,
 	topic: ValidatedTopic,
-	context: any,
+	context: RealtimeRequestContext,
 ): Promise<ValidatedTopic> {
 	if (context.accessMode === "system") return topic;
 	const rule = topic.definition.state.access?.read ?? app.defaultAccess?.read;
@@ -245,7 +254,7 @@ function isPermanentAccessError(error: unknown): boolean {
 	);
 }
 
-function realtimeControlIdentity(context: any): string {
+function realtimeControlIdentity(context: RealtimeRequestContext): string {
 	const principal = context.principal;
 	if (principal?.kind === "user" && principal.session?.id) {
 		return `user-session:${principal.session.id}`;
@@ -261,7 +270,7 @@ function realtimeControlIdentity(context: any): string {
 async function resolveIncrementalTopic(
 	app: Questpie<any>,
 	rawTopic: TopicInput,
-	context: any,
+	context: RealtimeRequestContext,
 	admission: ReturnType<typeof resolveRealtimeAdmissionConfig>,
 ): Promise<ValidatedTopic> {
 	if (!rawTopic.id || typeof rawTopic.id !== "string") {
@@ -327,7 +336,7 @@ async function resolveIncrementalTopic(
 async function resolveChannelSubscription(
 	app: Questpie<any>,
 	input: ChannelSubscriptionInput,
-	context: any,
+	context: RealtimeRequestContext,
 ): Promise<ValidatedChannelSubscription> {
 	if (!input.id || typeof input.id !== "string") {
 		throw new Error("Channel subscription id is required");
@@ -353,7 +362,7 @@ async function resolveChannelSubscription(
 	const channels = new ChannelsService(
 		app.config.channels ?? {},
 		app.realtime,
-		{ ...context, accessMode: "user" },
+		{ ...context, accessMode: "user" } as ChannelServiceContext,
 		app.config.realtime?.channelSecurity,
 	);
 	const definition = channels.getDefinition(input.channel);
@@ -810,7 +819,7 @@ export async function realtimeSubscribe(
 			};
 			const subscribeTopic = async (
 				topic: ValidatedTopic,
-				baseContext: any,
+				baseContext: RealtimeRequestContext,
 			) => {
 				if (closed) throw new Error("Realtime session is closed");
 				if (topicUnsubscribers.has(topic.id)) {
@@ -1087,7 +1096,7 @@ export async function realtimeSubscribe(
 
 				const subscribeTopic = async (
 					topic: ValidatedTopic,
-					baseContext: any,
+					baseContext: RealtimeRequestContext,
 				) => {
 					if (closed) return;
 					if (topicUnsubscribers.has(topic.id)) {

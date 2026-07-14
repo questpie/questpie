@@ -152,13 +152,15 @@ type ChannelIter<
 	TApp extends QuestpieApp,
 	K extends ChannelKeys<TApp>,
 > = QuestpieClient<TApp>["channels"][K] extends { iter: infer TIter }
-	? TIter extends (...args: any[]) => AsyncGenerator<any, void, unknown>
+	? TIter extends (
+			...args: infer _TArgs
+		) => AsyncGenerator<unknown, void, unknown>
 		? TIter
 		: never
 	: never;
 
 type ChannelIterMessage<TIter> = TIter extends (
-	...args: any[]
+	...args: infer _TArgs
 ) => AsyncGenerator<infer TMessage, void, unknown>
 	? TMessage
 	: never;
@@ -994,11 +996,11 @@ export function createQuestpieQueryOptions<
 		{
 			get: (_target, channelName) => {
 				if (typeof channelName !== "string") return undefined;
-				const channel = client.channels[
-					channelName as ChannelKeys<TApp>
-				] as any;
+				const channel = Reflect.get(client.channels, channelName) as {
+					iter: (...args: unknown[]) => AsyncGenerator<unknown, void, unknown>;
+				};
 				return {
-					subscription: (...args: any[]) => {
+					subscription: (...args: unknown[]) => {
 						const queryKey = buildKey(keyPrefix, [
 							"channels",
 							channelName,

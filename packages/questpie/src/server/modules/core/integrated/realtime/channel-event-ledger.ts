@@ -6,7 +6,7 @@ import {
 	onAfterCommit,
 	withTransactionOrExisting,
 } from "#questpie/server/collection/crud/shared/transaction.js";
-import type { DrizzleClientFromQuestpieConfig } from "#questpie/server/config/types.js";
+import type { AnyDrizzleClient } from "#questpie/server/config/types.js";
 import type { LoggerAdapter } from "#questpie/server/modules/core/integrated/logger/types.js";
 
 import {
@@ -57,7 +57,7 @@ export type AppendChannelEventInput = {
 };
 
 export type AppendChannelEventOptions = {
-	db?: DrizzleClientFromQuestpieConfig<any>;
+	db?: AnyDrizzleClient<any>;
 };
 
 export type ChannelEventReceipt = Readonly<{
@@ -145,7 +145,7 @@ export class ChannelEventLedger {
 	private cleanupInProgress = false;
 
 	constructor(
-		private readonly db: DrizzleClientFromQuestpieConfig<any>,
+		private readonly db: AnyDrizzleClient<any>,
 		private readonly changeBroker: ChangeBroker | undefined,
 		private readonly clientTransport: ClientTransport | undefined,
 		config: Partial<ChannelEventLedgerConfig> = {},

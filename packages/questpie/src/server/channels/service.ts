@@ -50,11 +50,13 @@ export interface ChannelPublisher {
 
 export type ChannelServiceContext = AppContext & {
 	accessMode?: string;
+	db?: AppendChannelEventOptions["db"];
 	principal?: Principal;
 };
 
-type StoredChannelServiceContext = Record<string, unknown> & {
+type StoredChannelServiceContext = AppContext & {
 	accessMode?: string;
+	db?: AppendChannelEventOptions["db"];
 	principal?: Principal;
 	session?: unknown;
 };
@@ -86,6 +88,12 @@ export type ChannelPublishReceipt = Readonly<{
 
 export type PreparedChannelPublish = Readonly<AppendChannelEventInput>;
 
+type RuntimeChannelPublishInput = {
+	params?: Record<string, string>;
+	event: string;
+	data: unknown;
+};
+
 function isSystemContext(context: StoredChannelServiceContext): boolean {
 	if (context.accessMode === "system") return true;
 	if (context.accessMode === "user") return false;
@@ -103,7 +111,7 @@ export class ChannelsService<
 		context: ChannelServiceContext,
 		private readonly security: ChannelSecurityConfig = {},
 	) {
-		this.context = context as unknown as StoredChannelServiceContext;
+		this.context = { ...context };
 	}
 
 	private readonly context: StoredChannelServiceContext;
@@ -175,7 +183,7 @@ export class ChannelsService<
 		return definition.presenceResolver({
 			...this.context,
 			params,
-		} as any) as ChannelPresenceOf<TChannels[TChannel]>;
+		}) as ChannelPresenceOf<TChannels[TChannel]>;
 	}
 
 	/**
@@ -198,9 +206,28 @@ export class ChannelsService<
 		channel: TChannel,
 		input: ChannelPublishInput<TChannels[TChannel]>,
 	): Promise<PreparedChannelPublish> {
+		return this.prepareRuntimePublish(
+			channel,
+			input as RuntimeChannelPublishInput,
+		);
+	}
+
+	/** @internal Schema-validating route boundary for runtime string input. */
+	preparePublishRequest<TChannel extends keyof TChannels & string>(
+		channel: TChannel,
+		input: RuntimeChannelPublishInput,
+	): Promise<PreparedChannelPublish> {
+		return this.prepareRuntimePublish(channel, input);
+	}
+
+	private async prepareRuntimePublish<
+		TChannel extends keyof TChannels & string,
+	>(
+		channel: TChannel,
+		input: RuntimeChannelPublishInput,
+	): Promise<PreparedChannelPublish> {
 		const definition = this.getDefinition(channel);
-		const params = ((input as { params?: Record<string, string> }).params ??
-			{}) as ChannelParamsOf<TChannels[TChannel]>;
+		const params = (input.params ?? {}) as ChannelParamsOf<TChannels[TChannel]>;
 		const resolvedName = assertUniqueResolvedChannelName(
 			this.definitions,
 			channel,
@@ -213,7 +240,7 @@ export class ChannelsService<
 			);
 		}
 
-		const event = (input as { event: string }).event;
+		const event = input.event;
 		const schema = definition.eventSchemas[event];
 		if (!schema) {
 			throw new ChannelRuntimeError(
@@ -221,9 +248,7 @@ export class ChannelsService<
 				`Unknown event "${event}" on channel "${channel}"`,
 			);
 		}
-		const parsed = await schema.safeParseAsync(
-			(input as { data: unknown }).data,
-		);
+		const parsed = await schema.safeParseAsync(input.data);
 		if (!parsed.success) {
 			throw new ChannelRuntimeError(
 				"channel_event_invalid",
@@ -246,7 +271,7 @@ export class ChannelsService<
 		prepared: PreparedChannelPublish,
 	): Promise<ChannelPublishReceipt> {
 		return this.publisher.appendChannelEvent(prepared, {
-			db: this.context.db as AppendChannelEventOptions["db"],
+			db: this.context.db,
 		});
 	}
 
@@ -263,7 +288,7 @@ export class ChannelsService<
 	}
 
 	private async evaluateRule(
-		rule: ChannelAuthorizationRule<any>,
+		rule: ChannelAuthorizationRule<string>,
 		params: Record<string, string>,
 	): Promise<boolean> {
 		if (typeof rule === "boolean") return rule;
@@ -271,7 +296,7 @@ export class ChannelsService<
 		let timer: ReturnType<typeof setTimeout> | undefined;
 		try {
 			const result = await Promise.race([
-				Promise.resolve(rule({ ...this.context, params } as any)),
+				Promise.resolve(rule({ ...this.context, params })),
 				new Promise<false>((resolve) => {
 					timer = setTimeout(() => resolve(false), timeoutMs);
 				}),

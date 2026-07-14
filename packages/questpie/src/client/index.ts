@@ -977,8 +977,12 @@ type RouteCallOptions = Omit<RequestInit, "method"> & {
 
 /**
  * Questpie Client
+ *
+ * The app schema is invariant: client methods both consume schema-derived
+ * inputs and return schema-derived outputs. Declaring that relationship keeps
+ * app-agnostic client comparisons from recursively measuring the full API.
  */
-export type QuestpieClient<TApp extends QuestpieApp> = {
+export type QuestpieClient<in out TApp extends QuestpieApp> = {
 	collections: CollectionsAPI<TApp>;
 	channels: ChannelsClient<AppChannelDefinitions<TApp>>;
 	globals: GlobalsAPI<TApp>;

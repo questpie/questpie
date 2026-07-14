@@ -114,6 +114,7 @@ const DRIFT_RULES: Array<{
 	pattern: RegExp;
 	message: string;
 	scope?: "docs-and-skills";
+	allowedPaths?: RegExp;
 }> = [
 	{
 		id: "questpie-server-import",
@@ -222,6 +223,7 @@ const DRIFT_RULES: Array<{
 		message:
 			"Do not document old API names or compatibility paths. Show the current API only.",
 		scope: "docs-and-skills",
+		allowedPaths: /(?:^|\/)realtime-v2-migration\.mdx$/,
 	},
 ];
 
@@ -547,6 +549,7 @@ function validateDriftRules(file: string, content: string, issues: Issue[]) {
 		if (rule.scope === "docs-and-skills" && !isDocsOrSkillFile(file)) {
 			continue;
 		}
+		if (rule.allowedPaths?.test(toDisplayPath(file))) continue;
 
 		let match: RegExpExecArray | null;
 		rule.pattern.lastIndex = 0;

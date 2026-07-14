@@ -14,8 +14,18 @@ import type { ChangeBrokerState } from "#questpie/server/modules/core/integrated
 
 export * from "#questpie/server/modules/core/integrated/realtime/pusher-transport.js";
 
-const PusherJsConstructor =
-	(PusherJs as unknown as { Pusher?: typeof PusherJs }).Pusher ?? PusherJs;
+function resolvePusherJsConstructor(value: unknown): typeof PusherJs {
+	if (typeof value === "function") return value as typeof PusherJs;
+	if (value && typeof value === "object") {
+		const constructor = Reflect.get(value, "Pusher");
+		if (typeof constructor === "function") {
+			return constructor as typeof PusherJs;
+		}
+	}
+	throw new TypeError("pusher-js did not expose a constructor");
+}
+
+const PusherJsConstructor = resolvePusherJsConstructor(PusherJs);
 
 export type PusherRealtimeOptions = {
 	appId: string;

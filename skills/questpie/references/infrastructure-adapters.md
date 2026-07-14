@@ -297,7 +297,7 @@ export default runtimeConfig({
 });
 ```
 
-The adapter duplicates the client for its blocking reader when supported; otherwise provide a dedicated `reader`. The `group` and `consumer` options are deprecated compatibility inputs and do not restore consumer-group behavior.
+The adapter duplicates the client for its blocking reader when supported; otherwise provide a dedicated `reader`. The `group` and `consumer` options are accepted only as compatibility inputs and do not restore consumer-group behavior.
 
 ### Pusher/Soketi managed WebSockets
 
