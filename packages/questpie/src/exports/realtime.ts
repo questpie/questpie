@@ -9,5 +9,6 @@ export * from "#questpie/server/modules/core/integrated/realtime/observer.js";
 export * from "#questpie/server/modules/core/integrated/realtime/service.js";
 export * from "#questpie/server/modules/core/integrated/realtime/snapshot.js";
 export * from "#questpie/server/modules/core/integrated/realtime/sse-client-transport.js";
+export type { ChannelPresenceConfig } from "#questpie/server/modules/core/integrated/realtime/sse-channel-presence.js";
 export * from "#questpie/server/modules/core/integrated/realtime/transport.js";
 export * from "#questpie/server/modules/core/integrated/realtime/types.js";

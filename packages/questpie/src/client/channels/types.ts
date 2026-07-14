@@ -77,6 +77,42 @@ type PresenceMethod<TDefinition extends AnyChannelDefinition> = [
 				options?: ChannelSubscribeOptions,
 			) => Promise<readonly ChannelPresenceOf<TDefinition>[]>;
 
+type SubscribePresenceMethod<TDefinition extends AnyChannelDefinition> = [
+	ChannelPresenceOf<TDefinition>,
+] extends [never]
+	? never
+	: keyof ChannelParamsOf<TDefinition> extends never
+		? (
+				callback: (members: readonly ChannelPresenceOf<TDefinition>[]) => void,
+				options?: ChannelSubscribeOptions,
+			) => () => void
+		: (
+				params: ChannelParamsOf<TDefinition>,
+				callback: (members: readonly ChannelPresenceOf<TDefinition>[]) => void,
+				options?: ChannelSubscribeOptions,
+			) => () => void;
+
+type PresenceIterMethod<TDefinition extends AnyChannelDefinition> = [
+	ChannelPresenceOf<TDefinition>,
+] extends [never]
+	? never
+	: keyof ChannelParamsOf<TDefinition> extends never
+		? (
+				options?: ChannelSubscribeOptions,
+			) => AsyncGenerator<
+				readonly ChannelPresenceOf<TDefinition>[],
+				void,
+				unknown
+			>
+		: (
+				params: ChannelParamsOf<TDefinition>,
+				options?: ChannelSubscribeOptions,
+			) => AsyncGenerator<
+				readonly ChannelPresenceOf<TDefinition>[],
+				void,
+				unknown
+			>;
+
 export type ChannelClient<TDefinition extends AnyChannelDefinition> = {
 	subscribe: SubscribeMethod<TDefinition>;
 	publish: (
@@ -84,6 +120,8 @@ export type ChannelClient<TDefinition extends AnyChannelDefinition> = {
 	) => Promise<ChannelPublishReceipt>;
 	iter: IterMethod<TDefinition>;
 	presence: PresenceMethod<TDefinition>;
+	subscribePresence: SubscribePresenceMethod<TDefinition>;
+	presenceIter: PresenceIterMethod<TDefinition>;
 };
 
 export type ChannelsClient<TChannels extends ChannelDefinitions> = {
@@ -133,6 +171,11 @@ export interface ChannelClientTransport {
 		input: ChannelConnectionInput,
 		options?: ChannelSubscribeOptions,
 	): Promise<readonly unknown[]>;
+	subscribePresence(
+		input: ChannelConnectionInput,
+		callback: (members: readonly unknown[]) => void,
+		options?: ChannelSubscribeOptions,
+	): () => void;
 	destroy(): void;
 	readonly channelCount: number;
 	readonly subscriberCount: number;

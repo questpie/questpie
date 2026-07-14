@@ -134,6 +134,10 @@ export interface RealtimeConfig {
 	channelEvents?: Partial<
 		import("./channel-event-ledger.js").ChannelEventLedgerConfig
 	>;
+	/** Cross-instance lease register tuning for SSE presence channels. */
+	channelPresence?: Partial<
+		import("./sse-channel-presence.js").ChannelPresenceConfig
+	>;
 	/** Security policy shared by channel auth and server-mediated publish routes. */
 	channelSecurity?: import("#questpie/server/channels/security.js").ChannelSecurityConfig;
 

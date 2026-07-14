@@ -66,6 +66,18 @@ const presence = client.channels.room.presence({ roomId: "one" });
 type _presence = Expect<
 	Equal<Awaited<typeof presence>, readonly { id: string; roomId: string }[]>
 >;
+client.channels.room.subscribePresence({ roomId: "one" }, (members) => {
+	type _presenceMember = Expect<
+		Equal<(typeof members)[number], { id: string; roomId: string }>
+	>;
+});
+const presenceSnapshots = client.channels.room.presenceIter({ roomId: "one" });
+type _presenceSnapshot = Expect<
+	Equal<
+		Awaited<ReturnType<typeof presenceSnapshots.next>>["value"],
+		readonly { id: string; roomId: string }[] | void
+	>
+>;
 
 // @ts-expect-error parameterized subscriptions require their pattern params
 client.channels.room.subscribe(() => {});
@@ -87,3 +99,7 @@ client.channels.room.publish({
 });
 // @ts-expect-error only presence channels expose presence()
 client.channels.news.presence();
+// @ts-expect-error only presence channels expose subscribePresence()
+client.channels.news.subscribePresence(() => {});
+// @ts-expect-error only presence channels expose presenceIter()
+client.channels.news.presenceIter();

@@ -67,7 +67,7 @@ describe("channel module routes", () => {
 		cleanup = undefined;
 	});
 
-	test("streams authorized ordered channels and coarse presence over SSE", async () => {
+	test("streams authorized ordered channels and live presence over SSE", async () => {
 		const setup = await buildMockApp(
 			{
 				channels: {
@@ -87,7 +87,12 @@ describe("channel module routes", () => {
 		);
 		cleanup = setup.cleanup;
 		await runTestDbMigrations(setup.app);
-		const handler = createFetchHandler(setup.app);
+		const handler = createFetchHandler(setup.app, {
+			getSession: async () => ({
+				user: { id: "member-1" },
+				session: { id: "session-1" },
+			}),
+		});
 
 		const configResponse = await handler(
 			new Request("https://app.example.com/channels/config"),

@@ -301,7 +301,7 @@ The adapter duplicates the client for its blocking reader when supported; otherw
 
 ### Pusher/Soketi managed WebSockets
 
-Use the isolated preset when managed WebSocket delivery and native presence are required:
+Use the isolated preset when managed WebSocket delivery, provider-native presence, and shared provider delivery are required. SSE offers the same application-facing presence feature through Postgres leases:
 
 ```ts
 import { pusherRealtime } from "questpie/adapters/pusher";
@@ -325,14 +325,14 @@ The preset supplies a notice-only Pusher `ChangeBroker` and a Pusher `ClientTran
 
 ### When to Use Which
 
-| Selection                   | Use case                                                          |
-| --------------------------- | ----------------------------------------------------------------- |
-| Implicit pg + SSE           | Default Postgres deployment                                       |
-| Poll + SSE                  | Zero extra infrastructure without a push-capable database         |
-| `pgNotifyAdapter` + SSE     | Explicit Postgres connection/channel                              |
-| `redisStreamsAdapter` + SSE | Cross-instance Redis notice fan-out                               |
-| `cloudflareRealtimeAdapter` | Cloudflare Workers notice fan-out through sharded Durable Objects |
-| `pusherRealtime`            | Managed WebSockets, native presence, and shared channel delivery  |
+| Selection                   | Use case                                                                  |
+| --------------------------- | ------------------------------------------------------------------------- |
+| Implicit pg + SSE           | Default Postgres deployment                                               |
+| Poll + SSE                  | Zero extra infrastructure without a push-capable database                 |
+| `pgNotifyAdapter` + SSE     | Explicit Postgres connection/channel                                      |
+| `redisStreamsAdapter` + SSE | Cross-instance Redis notice fan-out                                       |
+| `cloudflareRealtimeAdapter` | Cloudflare Workers notice fan-out through sharded Durable Objects         |
+| `pusherRealtime`            | Managed WebSockets, provider-native presence, and shared channel delivery |
 
 ## Search
 

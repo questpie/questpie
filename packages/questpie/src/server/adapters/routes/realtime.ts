@@ -26,7 +26,6 @@ import {
 	resolveRealtimeAccessKey,
 } from "../../modules/core/integrated/realtime/refresh-scheduler.js";
 import { computeRealtimeSnapshot } from "../../modules/core/integrated/realtime/snapshot.js";
-import { getSseChannelPresenceRegistry } from "../../modules/core/integrated/realtime/sse-channel-presence.js";
 import {
 	encodeSseEvent,
 	RealtimeSnapshotBufferOverflowError,
@@ -1064,7 +1063,7 @@ export async function realtimeSubscribe(
 						return;
 					}
 					let unsubscribeLedger: (() => void) | undefined;
-					let unsubscribePresence: (() => void) | undefined;
+					let unsubscribePresence: (() => Promise<void>) | undefined;
 					try {
 						unsubscribeLedger = await app.realtime!.subscribeChannel({
 							subscriptionId: `${edgeSessionId}:${channel.id}`,
@@ -1074,21 +1073,28 @@ export async function realtimeSubscribe(
 							encodeFrame: (frame) => transport!.encodeChannelFrame(frame),
 						});
 						if (channel.presence) {
-							unsubscribePresence = await getSseChannelPresenceRegistry(
-								app,
-							).register({
-								channel: channel.resolvedName,
-								subscriptionId: `${edgeSessionId}:${channel.id}`,
-								sink,
-								data: channel.presence,
-							});
+							const principalId = realtimePrincipalKey(resolved.appContext);
+							if (!principalId) {
+								throw new Error(
+									"Presence channel subscription requires a principal",
+								);
+							}
+							unsubscribePresence = await app.realtime!.registerChannelPresence(
+								{
+									channel: channel.resolvedName,
+									connectionId: `${edgeSessionId}:${channel.id}`,
+									principalId,
+									sink,
+									data: channel.presence,
+								},
+							);
 						}
 						channelUnsubscribers.set(channel.id, () => {
-							unsubscribePresence?.();
+							void unsubscribePresence?.().catch(requestClose);
 							unsubscribeLedger?.();
 						});
 					} catch (error) {
-						unsubscribePresence?.();
+						await unsubscribePresence?.();
 						unsubscribeLedger?.();
 						throw error;
 					}

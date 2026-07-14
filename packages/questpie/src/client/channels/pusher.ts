@@ -19,8 +19,10 @@ type Entry = {
 	input: ChannelConnectionInput;
 	channel: ProviderChannel | null;
 	subscribers: Set<(message: ChannelTransportMessage) => void>;
+	presenceSubscribers: Set<(members: readonly unknown[]) => void>;
 	errorCallbacks: Set<(error: Error) => void>;
 	presence?: readonly unknown[];
+	presenceSignature?: string;
 	presenceWaiters: Set<{
 		resolve: (members: readonly unknown[]) => void;
 		reject: (error: Error) => void;
@@ -70,18 +72,7 @@ export class PusherChannelTransport implements ChannelClientTransport {
 		callback: (message: ChannelTransportMessage) => void,
 		options: ChannelSubscribeOptions = {},
 	): () => void {
-		let entry = this.entries.get(input.resolvedName);
-		if (!entry) {
-			entry = {
-				input,
-				channel: null,
-				subscribers: new Set(),
-				errorCallbacks: new Set(),
-				presenceWaiters: new Set(),
-			};
-			this.entries.set(input.resolvedName, entry);
-			void this.mount(entry);
-		}
+		const entry = this.ensureEntry(input);
 		entry.subscribers.add(callback);
 		if (options.onError) entry.errorCallbacks.add(options.onError);
 
@@ -94,7 +85,46 @@ export class PusherChannelTransport implements ChannelClientTransport {
 			if (!current) return;
 			current.subscribers.delete(callback);
 			if (options.onError) current.errorCallbacks.delete(options.onError);
-			if (current.subscribers.size > 0 || current.presenceWaiters.size > 0)
+			if (
+				current.subscribers.size > 0 ||
+				current.presenceSubscribers.size > 0 ||
+				current.presenceWaiters.size > 0
+			)
+				return;
+			this.unmount(input.resolvedName, current);
+		};
+		options.signal?.addEventListener("abort", stop, { once: true });
+		if (options.signal?.aborted) stop();
+		return stop;
+	}
+
+	subscribePresence(
+		input: ChannelConnectionInput,
+		callback: (members: readonly unknown[]) => void,
+		options: ChannelSubscribeOptions = {},
+	): () => void {
+		if (input.visibility !== "presence") {
+			throw new Error("Channel does not expose presence");
+		}
+		const entry = this.ensureEntry(input);
+		entry.presenceSubscribers.add(callback);
+		if (options.onError) entry.errorCallbacks.add(options.onError);
+		if (entry.presence) callback(entry.presence);
+
+		let stopped = false;
+		const stop = () => {
+			if (stopped) return;
+			stopped = true;
+			options.signal?.removeEventListener("abort", stop);
+			const current = this.entries.get(input.resolvedName);
+			if (!current) return;
+			current.presenceSubscribers.delete(callback);
+			if (options.onError) current.errorCallbacks.delete(options.onError);
+			if (
+				current.subscribers.size > 0 ||
+				current.presenceSubscribers.size > 0 ||
+				current.presenceWaiters.size > 0
+			)
 				return;
 			this.unmount(input.resolvedName, current);
 		};
@@ -168,6 +198,22 @@ export class PusherChannelTransport implements ChannelClientTransport {
 			});
 		}
 		return this.pusherPromise;
+	}
+
+	private ensureEntry(input: ChannelConnectionInput): Entry {
+		let entry = this.entries.get(input.resolvedName);
+		if (entry) return entry;
+		entry = {
+			input,
+			channel: null,
+			subscribers: new Set(),
+			presenceSubscribers: new Set(),
+			errorCallbacks: new Set(),
+			presenceWaiters: new Set(),
+		};
+		this.entries.set(input.resolvedName, entry);
+		void this.mount(entry);
+		return entry;
 	}
 
 	private async authorize(
@@ -278,7 +324,11 @@ export class PusherChannelTransport implements ChannelClientTransport {
 	}
 
 	private setPresence(entry: Entry, members: readonly unknown[]): void {
+		const signature = JSON.stringify(members);
+		if (entry.presenceSignature === signature) return;
 		entry.presence = members;
+		entry.presenceSignature = signature;
+		for (const callback of entry.presenceSubscribers) callback(members);
 		const waiters = [...entry.presenceWaiters];
 		entry.presenceWaiters.clear();
 		for (const waiter of waiters) waiter.resolve(members);
@@ -321,7 +371,9 @@ export class PusherChannelTransport implements ChannelClientTransport {
 
 	get subscriberCount(): number {
 		let count = 0;
-		for (const entry of this.entries.values()) count += entry.subscribers.size;
+		for (const entry of this.entries.values()) {
+			count += entry.subscribers.size + entry.presenceSubscribers.size;
+		}
 		return count;
 	}
 }

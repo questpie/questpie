@@ -18,6 +18,10 @@ import {
 	type RealtimeMetricsSnapshot,
 	type RealtimeObservation,
 } from "./observer.js";
+import {
+	type RegisterChannelPresenceInput,
+	SseChannelPresenceRegistry,
+} from "./sse-channel-presence.js";
 import type {
 	ChangeBroker,
 	ClientAuthInput,
@@ -172,6 +176,7 @@ export class RealtimeService {
 	private nextRetentionCleanupAt = 0;
 	private retentionCleanupInProgress = false;
 	private readonly channelEventLedger: ChannelEventLedger;
+	private readonly channelPresenceRegistry: SseChannelPresenceRegistry;
 	private channelPollTimer: ReturnType<typeof setInterval> | null = null;
 	private nextChannelCleanupAt = 0;
 	private readonly observability: RealtimeObservability;
@@ -240,6 +245,11 @@ export class RealtimeService {
 			this.logger,
 			() => this.initialize(),
 			this.observability,
+		);
+		this.channelPresenceRegistry = new SseChannelPresenceRegistry(
+			this.db,
+			config.channelPresence,
+			this.logger,
 		);
 		this.retentionDays =
 			config.retentionDays === undefined
@@ -648,6 +658,13 @@ export class RealtimeService {
 		return this.channelEventLedger.subscribeLocal(input);
 	}
 
+	async registerChannelPresence(
+		input: RegisterChannelPresenceInput,
+	): Promise<() => Promise<void>> {
+		await this.initialize();
+		return this.channelPresenceRegistry.register(input);
+	}
+
 	private setReconciliationPollInterval(intervalMs: number): void {
 		if (this.pollIntervalMs === intervalMs) return;
 		this.pollIntervalMs = intervalMs;
@@ -939,6 +956,7 @@ export class RealtimeService {
 	}
 
 	async destroy(): Promise<void> {
+		await this.channelPresenceRegistry.destroy();
 		await this.stop();
 	}
 

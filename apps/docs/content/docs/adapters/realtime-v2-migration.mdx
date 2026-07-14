@@ -7,6 +7,8 @@ Realtime v2 keeps the existing `client.collections.*.live()`, `client.globals.*.
 
 The rollout flag changes server transport selection only. It does not create, delete, or rewrite a table.
 
+Realtime v2 channels add framework-owned ledger tables, and SSE presence adds `questpie_channel_presence`. Generate and apply the normal QUESTPIE database migration before enabling channel traffic. Do not hand-edit these tables. The presence table contains expiring connection leases; multiple app instances sharing the application database reconcile the same roster.
+
 ## The breaking behavior to audit
 
 Bulk update and bulk delete emit **one durable event per logical operation**, not one event per affected record. A custom `RealtimeAdapter` or outbox consumer must handle:
@@ -104,7 +106,7 @@ Rollback is a config change:
 4. Confirm `POST /realtime` returns protocol header `1` and a known `live()` consumer receives a fresh snapshot.
 5. Confirm outbox lag returns to normal through the adapter or reconciliation poll.
 
-Do **not** roll back migrations or delete `questpie_realtime_log` / channel-ledger rows. Both modes consume the same durable data, so changing the flag loses neither schema nor committed events. If the adapter itself is unavailable, leave reconciliation polling enabled while restoring it.
+Do **not** roll back migrations or delete `questpie_realtime_log`, channel-ledger rows, or `questpie_channel_presence`. Both modes consume the same durable data, so changing the flag loses neither schema nor committed events. Presence lease rows expire or are removed by the runtime. If the adapter itself is unavailable, leave reconciliation polling enabled while restoring it.
 
 ## Compatibility checklist
 

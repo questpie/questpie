@@ -81,10 +81,15 @@ await client.channels.chatRoom.publish({
 });
 
 const members = await client.channels.chatRoom.presence({ roomId });
+const stopPresence = client.channels.chatRoom.subscribePresence(
+	{ roomId },
+	onMembers,
+);
 stop();
+stopPresence();
 ```
 
-`presence()` returns one typed member snapshot. Pusher/Soketi tracks native membership while mounted; SSE presence is coarse and app-instance-local. There is no public `subscribePresence()` or TanStack presence query yet, so do not claim a continuously reactive, globally exact occupancy contract. See `references/reactive-apps.md`.
+`presence()` returns one typed snapshot. `subscribePresence()` emits the initial and later rosters, and `presenceIter(params, { signal })` provides the async-generator form. Pusher/Soketi uses native membership; SSE uses Postgres leases across instances and deduplicates multiple connections by authenticated principal. Crash leave converges after the lease TTL.
 
 Async consumers use `client.channels.chatRoom.iter(params, { signal })`. TanStack Query exposes an accumulating event query:
 
@@ -92,9 +97,13 @@ Async consumers use `client.channels.chatRoom.iter(params, { signal })`. TanStac
 const { data: messages = [] } = useQuery(
 	q.channels.chatRoom.subscription({ roomId }),
 );
+
+const { data: members = [] } = useQuery(
+	q.channels.chatRoom.presence({ roomId }),
+);
 ```
 
-This differs from live-query `{ realtime: true }`, which retains only the latest snapshot.
+The event subscription accumulates messages. The presence query and live-query `{ realtime: true }` retain only the latest snapshot.
 
 ## Delivery and security
 

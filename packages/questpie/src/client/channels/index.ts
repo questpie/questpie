@@ -264,6 +264,67 @@ export function createChannelsAPI<
 					presenceOptions,
 				);
 			},
+			subscribePresence: (...args: unknown[]) => {
+				const hasParams = typeof args[0] !== "function";
+				const params = (hasParams ? args[0] : {}) as Record<string, string>;
+				const callback = (hasParams ? args[1] : args[0]) as (
+					members: readonly unknown[],
+				) => void;
+				const subscribeOptions = (hasParams ? args[2] : args[1]) as
+					| ChannelSubscribeOptions
+					| undefined;
+				const marker = {};
+				const subscriptionGeneration = generation;
+				pending.add(marker);
+				let stopped = false;
+				let stopInner: (() => void) | undefined;
+				void getTransport()
+					.then((selected) => {
+						pending.delete(marker);
+						if (stopped || subscriptionGeneration !== generation) return;
+						const descriptor = descriptorFor(registryKey);
+						stopInner = selected.subscribePresence(
+							connectionInput(registryKey, descriptor, params),
+							callback,
+							subscribeOptions,
+						);
+					})
+					.catch((error) => {
+						pending.delete(marker);
+						subscribeOptions?.onError?.(normalizedError(error));
+					});
+				return () => {
+					stopped = true;
+					pending.delete(marker);
+					stopInner?.();
+				};
+			},
+			presenceIter: (...args: unknown[]) => {
+				const last = args.at(-1) as ChannelSubscribeOptions | undefined;
+				const signal =
+					last?.signal && typeof last.signal.addEventListener === "function"
+						? last.signal
+						: undefined;
+				return channelIterator<readonly unknown[]>(
+					async (callback, onError) => {
+						await getTransport();
+						const hasParams = descriptorFor(registryKey).pattern.includes("[");
+						const params = (hasParams ? args[0] : {}) as Record<string, string>;
+						const iterOptions = (hasParams ? args[1] : args[0]) as
+							| ChannelSubscribeOptions
+							| undefined;
+						return (
+							handle as {
+								subscribePresence: (...args: unknown[]) => () => void;
+							}
+						).subscribePresence(...(hasParams ? [params] : []), callback, {
+							...iterOptions,
+							onError,
+						});
+					},
+					signal,
+				);
+			},
 		};
 		handles.set(registryKey, handle);
 		return handle;

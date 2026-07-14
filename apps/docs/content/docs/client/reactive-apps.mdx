@@ -1,6 +1,6 @@
 ---
 title: Reactive Apps & Performance
-description: Choose live queries, channels, or normal cached reads; isolate React updates; bound high-frequency streams; and understand the current presence contract.
+description: Choose live queries, channels, or normal cached reads; isolate React updates; bound high-frequency streams; and build live presence safely.
 ---
 
 QUESTPIE gives one client three different ways to keep a screen current. The fastest app is not the one that makes every read realtime; it is the one that assigns each kind of state to the smallest correct mechanism.
@@ -126,7 +126,7 @@ For noisy signals such as cursor movement or typing:
 
 Ordered channel events are never silently coalesced. A slow consumer is disconnected when its bounded transport queue fills, and falling behind the replay horizon produces an explicit gap. Recover durable state from a collection rather than treating the channel as history.
 
-## Presence: current contract
+## Live presence
 
 A channel becomes presence-capable when it has authorization followed by `.presence(resolver)`:
 
@@ -144,19 +144,38 @@ export default channel("chat-room-[roomId]")
 	}));
 ```
 
-The generated client can read a typed member snapshot:
+The generated client exposes a one-shot snapshot, a live callback, and an async iterator:
 
 ```ts
 const members = await client.channels.chatRoom.presence({ roomId });
+
+const stop = client.channels.chatRoom.subscribePresence({ roomId }, (members) =>
+	renderRoster(members),
+);
+
+for await (const members of client.channels.chatRoom.presenceIter(
+	{ roomId },
+	{ signal },
+)) {
+	renderRoster(members);
+}
 ```
 
-The public contract today is a **snapshot promise**, not a presence-change stream:
+React apps can consume the latest roster through TanStack Query. Each new snapshot replaces the previous value; it does not grow an event array:
 
-- Pusher/Soketi uses native provider presence and internally tracks membership changes while the channel is mounted.
-- SSE derives coarse membership from subscriptions on the current app instance; it is not a globally exact occupancy count.
-- There is currently no public `subscribePresence()` API or TanStack presence query that emits every join/leave.
+```tsx
+const { data: members = [] } = useQuery(
+	q.channels.chatRoom.presence({ roomId }),
+);
+```
 
-Use the snapshot for lightweight member lists or indicators whose accuracy contract tolerates those limits. A continuously reactive, globally exact presence UI requires the managed provider plus a future public presence observer; do not manufacture trusted membership from client-published `joined`/`left` events.
+The API is transport-independent:
+
+- Pusher/Soketi uses provider-native presence.
+- SSE stores connection leases in Postgres, reconciles them across app instances, and aggregates multiple tabs/devices into one member per authenticated principal.
+- A graceful disconnect removes the connection immediately. After a process or network failure, an SSE member can remain visible until its lease expires; tune `realtime.channelPresence` only when the default 30s lease, 10s heartbeat, and 1s reconciliation interval do not fit the product.
+
+Presence is online-state delivery, not durable history. Do not manufacture trusted membership from client-published `joined`/`left` events, and do not use presence as proof that a user saw or acknowledged something.
 
 ## Lifecycle and diagnostics
 
@@ -197,7 +216,7 @@ Before shipping a reactive screen:
 4. Use `select` when the component renders only a projection.
 5. Bound client event state; do not accumulate an infinite channel array.
 6. Abort or unsubscribe on unmount and parameter changes.
-7. Treat channel replay and presence as bounded delivery features, not durable truth.
+7. Treat channel replay and presence as bounded delivery features, not durable history.
 8. Measure query cost, snapshot bytes, topic counts, subscriber counts, and React commits under realistic event rates.
 
 ## Related

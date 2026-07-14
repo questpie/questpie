@@ -59,21 +59,32 @@ Narrow the server query first; `select` reduces observer/render work, not databa
 
 Throttle noisy producers such as cursor/typing updates, keep payloads small, and always unsubscribe or abort on unmount. Ordered channel events are not coalesced. Recover an explicit replay gap from persisted collection state; the bounded ledger is not durable history.
 
-## Presence contract
+## Live presence
 
-`.authorize(...).presence(resolver)` creates a typed presence channel, and the client reads a snapshot:
+`.authorize(...).presence(resolver)` creates a typed presence channel. The client can read once, subscribe, iterate, or use a latest-snapshot TanStack query:
 
 ```ts
 const members = await client.channels.chatRoom.presence({ roomId });
+const stop = client.channels.chatRoom.subscribePresence({ roomId }, onMembers);
+for await (const members of client.channels.chatRoom.presenceIter(
+	{ roomId },
+	{ signal },
+)) {
+	onMembers(members);
+}
 ```
 
-Presence is not currently a public reactive stream:
+```tsx
+const { data: members = [] } = useQuery(
+	q.channels.chatRoom.presence({ roomId }),
+);
+```
 
-- Pusher/Soketi provides native membership and the transport tracks changes while mounted.
-- SSE presence is coarse and app-instance-local.
-- There is no public `subscribePresence()` or TanStack presence query yet.
+- Pusher/Soketi uses provider-native membership.
+- SSE uses Postgres connection leases, reconciles across instances, and aggregates all connections for one authenticated principal into one member.
+- Graceful leave is immediate. A crashed SSE connection disappears after the lease TTL (default 30s); heartbeat defaults to 10s and reconciliation to 1s.
 
-Do not claim globally exact live occupancy and do not manufacture trusted membership with client-published join/leave events.
+Presence is not durable history or proof of acknowledgement. Do not manufacture trusted membership with client-published join/leave events.
 
 ## Lifecycle and diagnostics
 
@@ -96,5 +107,5 @@ Equivalent server refresh work is shared per principal by default. Never share a
 4. Use `select` for the value actually rendered.
 5. Bound channel state and throttle noisy producers.
 6. Clean up every direct subscription.
-7. Treat replay and presence as bounded delivery features.
+7. Treat replay and presence as bounded delivery features, not durable history.
 8. Measure query cost, snapshot bytes, topics, subscribers, and React commits at realistic event rates.

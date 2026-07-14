@@ -77,3 +77,25 @@ export const questpieChannelDispatchTable = pgTable(
 		updatedAt: systemTimestamp("updated_at").defaultNow().notNull(),
 	},
 );
+
+/** Connection leases for zero-infrastructure, cross-instance channel presence. */
+export const questpieChannelPresenceTable = pgTable(
+	"questpie_channel_presence",
+	{
+		channelHash: text("channel_hash").notNull(),
+		connectionId: text("connection_id").notNull(),
+		principalId: text("principal_id").notNull(),
+		channel: text("channel").notNull(),
+		data: jsonb("data").notNull(),
+		expiresAt: timestamp("expires_at", {
+			withTimezone: true,
+			mode: "date",
+		}).notNull(),
+		updatedAt: systemTimestamp("updated_at").defaultNow().notNull(),
+	},
+	(table) => [
+		primaryKey({ columns: [table.channelHash, table.connectionId] }),
+		index("idx_channel_presence_channel").on(table.channelHash),
+		index("idx_channel_presence_expiry").on(table.expiresAt),
+	],
+);

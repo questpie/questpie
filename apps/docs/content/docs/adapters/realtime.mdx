@@ -75,6 +75,7 @@ interface RealtimeConfig {
 	changeBroker?: ChangeBroker; // v2 cross-instance notice seam
 	clientTransport?: ClientTransport; // managed edge transport; omit → SSE
 	channelEvents?: Partial<ChannelEventLedgerConfig>;
+	channelPresence?: Partial<ChannelPresenceConfig>;
 	channelSecurity?: ChannelSecurityConfig;
 	pollIntervalMs?: number; // 15000 with push, 2000 without
 	batchSize?: number; // default 500, max outbox rows read per drain
@@ -83,21 +84,22 @@ interface RealtimeConfig {
 }
 ```
 
-| Option                     | Default                           | What it controls                                                                                                                                                                                                         |
-| -------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `observer`                 | _(none)_                          | Structured lifecycle/admission/transport diagnostics. Observer failures are isolated from delivery.                                                                                                                      |
-| `rollout`                  | v2                                | Compatibility/canary selection used by the migration and rollback path.                                                                                                                                                  |
-| `admission`                | limits below                      | Edge-session topic, connection, query-shape, concurrency, and buffer caps.                                                                                                                                               |
-| `connectionAcceptPacingMs` | `0`                               | Optional maximum random delay before accepting a new edge session.                                                                                                                                                       |
-| `adapter`                  | _(none)_                          | Existing `RealtimeAdapter` compatibility path, including pg_notify, Redis, and Cloudflare.                                                                                                                               |
-| `changeBroker`             | _(none)_                          | Realtime v2 notice-only broker. If absent, v2 maps an existing `adapter` onto the new runtime.                                                                                                                           |
-| `clientTransport`          | SSE                               | Optional managed edge transport. The Pusher preset supplies both `changeBroker` and `clientTransport`.                                                                                                                   |
-| `channelEvents`            | bounded defaults                  | Ordered-channel replay retention, lease, and slow-consumer buffer tuning.                                                                                                                                                |
-| `channelSecurity`          | secure defaults                   | Trusted origins, payload size, publish rate, and authorization timeout policy.                                                                                                                                           |
-| `pollIntervalMs`           | `15000` with push; `2000` without | Reconciliation interval. It runs **alongside** a broker/adapter so dropped wakes heal; provider failure temporarily tightens it to at most 2s. Set `0` only when deliberately accepting loss of that recovery path.      |
-| `batchSize`                | `500`                             | Max outbox rows pulled per drain. Raise it for very high write volume.                                                                                                                                                   |
-| `retentionDays`            | `3`                               | Time horizon for outbox cleanup, including apps with zero subscribers. Set `0` to disable. Cleanup never uses a process-local subscriber watermark, because that could delete rows another instance has not drained yet. |
-| `keepAliveIntervalMs`      | `8000`                            | Interval between `ping` keep-alive events on each `POST /realtime` SSE stream.                                                                                                                                           |
+| Option                     | Default                                       | What it controls                                                                                                                                                                                                         |
+| -------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `observer`                 | _(none)_                                      | Structured lifecycle/admission/transport diagnostics. Observer failures are isolated from delivery.                                                                                                                      |
+| `rollout`                  | v2                                            | Compatibility/canary selection used by the migration and rollback path.                                                                                                                                                  |
+| `admission`                | limits below                                  | Edge-session topic, connection, query-shape, concurrency, and buffer caps.                                                                                                                                               |
+| `connectionAcceptPacingMs` | `0`                                           | Optional maximum random delay before accepting a new edge session.                                                                                                                                                       |
+| `adapter`                  | _(none)_                                      | Existing `RealtimeAdapter` compatibility path, including pg_notify, Redis, and Cloudflare.                                                                                                                               |
+| `changeBroker`             | _(none)_                                      | Realtime v2 notice-only broker. If absent, v2 maps an existing `adapter` onto the new runtime.                                                                                                                           |
+| `clientTransport`          | SSE                                           | Optional managed edge transport. The Pusher preset supplies both `changeBroker` and `clientTransport`.                                                                                                                   |
+| `channelEvents`            | bounded defaults                              | Ordered-channel replay retention, lease, and slow-consumer buffer tuning.                                                                                                                                                |
+| `channelPresence`          | 30s lease / 10s heartbeat / 1s reconciliation | SSE Postgres presence leases, cross-instance convergence, and provider-parity member limits. Pusher/Soketi presence remains provider-managed.                                                                            |
+| `channelSecurity`          | secure defaults                               | Trusted origins, payload size, publish rate, and authorization timeout policy.                                                                                                                                           |
+| `pollIntervalMs`           | `15000` with push; `2000` without             | Reconciliation interval. It runs **alongside** a broker/adapter so dropped wakes heal; provider failure temporarily tightens it to at most 2s. Set `0` only when deliberately accepting loss of that recovery path.      |
+| `batchSize`                | `500`                                         | Max outbox rows pulled per drain. Raise it for very high write volume.                                                                                                                                                   |
+| `retentionDays`            | `3`                                           | Time horizon for outbox cleanup, including apps with zero subscribers. Set `0` to disable. Cleanup never uses a process-local subscriber watermark, because that could delete rows another instance has not drained yet. |
+| `keepAliveIntervalMs`      | `8000`                                        | Interval between `ping` keep-alive events on each `POST /realtime` SSE stream.                                                                                                                                           |
 
 <Callout type="warn" title="Keep `keepAliveIntervalMs` under your idle timeout">
 	The default `8000` ms is deliberately under Bun's default 10s `idleTimeout`,
@@ -205,7 +207,7 @@ Behavior:
 
 ## Pusher/Soketi preset, managed WebSockets
 
-SSE is the default client delivery path. Select `pusherRealtime()` when you want provider-managed WebSockets, native presence, and shared multicast for framework channel events. The preset supplies both v2 seams: a notice-only `changeBroker` and a `clientTransport`.
+SSE is the default client delivery path and includes Postgres-backed cross-instance presence. Select `pusherRealtime()` when you want provider-managed WebSockets, provider-native presence, and shared multicast for framework channel events. The application-facing channel and presence APIs stay the same. The preset supplies both v2 seams: a notice-only `changeBroker` and a `clientTransport`.
 
 ```ts title="src/questpie/server/questpie.config.ts"
 import { pusherRealtime } from "questpie/adapters/pusher";

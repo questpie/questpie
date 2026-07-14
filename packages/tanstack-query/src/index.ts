@@ -7,7 +7,11 @@ import {
 	type UseMutationOptions,
 	type UseQueryOptions,
 } from "@tanstack/react-query";
-import type { AnyChannelDefinition, ChannelParamsOf } from "questpie/channels";
+import type {
+	AnyChannelDefinition,
+	ChannelParamsOf,
+	ChannelPresenceOf,
+} from "questpie/channels";
 import type {
 	ApplyQuery,
 	CollectionRelations,
@@ -172,10 +176,29 @@ type ChannelDefinition<
 	? NonNullable<TApp["channels"]>[K]
 	: never;
 
+type ChannelPresenceOptionsAPI<
+	TApp extends QuestpieApp,
+	K extends ChannelKeys<TApp>,
+> = [ChannelPresenceOf<ChannelDefinition<TApp, K>>] extends [never]
+	? {}
+	: keyof ChannelParamsOf<ChannelDefinition<TApp, K>> extends never
+		? {
+				presence: () => UseQueryOptions<
+					readonly ChannelPresenceOf<ChannelDefinition<TApp, K>>[]
+				>;
+			}
+		: {
+				presence: (
+					params: ChannelParamsOf<ChannelDefinition<TApp, K>>,
+				) => UseQueryOptions<
+					readonly ChannelPresenceOf<ChannelDefinition<TApp, K>>[]
+				>;
+			};
+
 type ChannelSubscriptionOptionsAPI<
 	TApp extends QuestpieApp,
 	K extends ChannelKeys<TApp>,
-> = keyof ChannelParamsOf<ChannelDefinition<TApp, K>> extends never
+> = (keyof ChannelParamsOf<ChannelDefinition<TApp, K>> extends never
 	? {
 			subscription: () => UseQueryOptions<
 				readonly ChannelIterMessage<ChannelIter<TApp, K>>[]
@@ -185,7 +208,8 @@ type ChannelSubscriptionOptionsAPI<
 			subscription: (
 				params: ChannelParamsOf<ChannelDefinition<TApp, K>>,
 			) => UseQueryOptions<readonly ChannelIterMessage<ChannelIter<TApp, K>>[]>;
-		};
+		}) &
+	ChannelPresenceOptionsAPI<TApp, K>;
 
 // Per-collection select/relations — the same derivation the client's own
 // method signatures use, so per-call generics below produce results identical
@@ -998,6 +1022,9 @@ export function createQuestpieQueryOptions<
 				if (typeof channelName !== "string") return undefined;
 				const channel = Reflect.get(client.channels, channelName) as {
 					iter: (...args: unknown[]) => AsyncGenerator<unknown, void, unknown>;
+					presenceIter: (
+						...args: unknown[]
+					) => AsyncGenerator<readonly unknown[], void, unknown>;
 				};
 				return {
 					subscription: (...args: unknown[]) => {
@@ -1015,6 +1042,27 @@ export function createQuestpieQueryOptions<
 									...messages,
 									message,
 								],
+								initialValue: [] as readonly unknown[],
+								refetchMode: "reset",
+							}),
+						});
+					},
+					presence: (...args: unknown[]) => {
+						const queryKey = buildKey(keyPrefix, [
+							"channels",
+							channelName,
+							"presence",
+							normalizeQueryKeyOptions(args),
+						]);
+						return queryOptions({
+							queryKey,
+							queryFn: streamedQuery({
+								streamFn: ({ signal }) =>
+									channel.presenceIter(...args, { signal }),
+								reducer: (
+									_roster: readonly unknown[],
+									snapshot: readonly unknown[],
+								) => snapshot,
 								initialValue: [] as readonly unknown[],
 								refetchMode: "reset",
 							}),

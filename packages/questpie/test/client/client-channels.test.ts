@@ -11,9 +11,10 @@ type FakePusherOptions = {
 
 class FakeChannel {
 	private readonly listeners = new Map<string, Set<(data: unknown) => void>>();
+	memberInfos: unknown[] = [{ id: "member-1", roomId: "one" }];
 	readonly members = {
 		each: (callback: (member: { info: unknown }) => void) => {
-			callback({ info: { id: "member-1", roomId: "one" } });
+			for (const info of this.memberInfos) callback({ info });
 		},
 	};
 
@@ -103,6 +104,10 @@ describe("channels client", () => {
 					transport: "sse",
 					channels: {
 						news: { pattern: "news", visibility: "public" },
+						room: {
+							pattern: "room-[roomId]",
+							visibility: "presence",
+						},
 					},
 				});
 			}
@@ -134,9 +139,15 @@ describe("channels client", () => {
 			}),
 		});
 		const messages: unknown[] = [];
+		const rosters: unknown[] = [];
 		const errors: Error[] = [];
 		const stop = client.channels.news.subscribe(
 			(message: unknown) => messages.push(message),
+			{ onError: (error: Error) => errors.push(error) },
+		);
+		const stopPresence = client.channels.room.subscribePresence(
+			{ roomId: "one" },
+			(members: unknown) => rosters.push(members),
 			{ onError: (error: Error) => errors.push(error) },
 		);
 
@@ -153,6 +164,20 @@ describe("channels client", () => {
 			data: { title: "Hello" },
 		});
 		expect(errors).toHaveLength(0);
+		streamController!.enqueue(
+			encoder.encode(
+				`event: channel_presence\ndata: ${JSON.stringify({ type: "channel_presence", channel: "presence-room-one", members: [{ id: "member-1" }] })}\n\n`,
+			),
+		);
+		await waitFor(() => rosters.length === 1);
+		expect(rosters).toEqual([[{ id: "member-1" }]]);
+		streamController!.enqueue(
+			encoder.encode(
+				`event: channel_presence\ndata: ${JSON.stringify({ type: "channel_presence", channel: "presence-room-one", members: [{ id: "member-1" }] })}\n\n`,
+			),
+		);
+		await new Promise((resolve) => setTimeout(resolve, 10));
+		expect(rosters).toHaveLength(1);
 
 		await expect(
 			client.channels.news.publish({
@@ -170,6 +195,7 @@ describe("channels client", () => {
 			data: { title: "Published" },
 		});
 
+		stopPresence();
 		stop();
 		client.channels.destroy();
 	});
@@ -213,9 +239,14 @@ describe("channels client", () => {
 			}),
 		});
 		const messages: unknown[] = [];
+		const rosters: unknown[] = [];
 		const stop = client.channels.room.subscribe(
 			{ roomId: "one" },
 			(message: unknown) => messages.push(message),
+		);
+		const stopPresence = client.channels.room.subscribePresence(
+			{ roomId: "one" },
+			(members: unknown) => rosters.push(members),
 		);
 
 		await waitFor(() => FakePusher.instances.length === 1);
@@ -235,9 +266,27 @@ describe("channels client", () => {
 			"pusher:subscription_succeeded",
 			provider.channel.members,
 		);
+		await waitFor(() => rosters.length === 1);
+		expect(rosters[0]).toEqual([{ id: "member-1", roomId: "one" }]);
+		provider.channel.memberInfos = [
+			{ id: "member-1", roomId: "one" },
+			{ id: "member-2", roomId: "one" },
+		];
+		provider.channel.emit("pusher:member_added", {});
+		await waitFor(() => rosters.length === 2);
+		expect(rosters[1]).toEqual([
+			{ id: "member-1", roomId: "one" },
+			{ id: "member-2", roomId: "one" },
+		]);
+		provider.channel.emit("pusher:member_added", {});
+		await new Promise((resolve) => setTimeout(resolve, 10));
+		expect(rosters).toHaveLength(2);
 		await expect(
 			client.channels.room.presence({ roomId: "one" }),
-		).resolves.toEqual([{ id: "member-1", roomId: "one" }]);
+		).resolves.toEqual([
+			{ id: "member-1", roomId: "one" },
+			{ id: "member-2", roomId: "one" },
+		]);
 		const signalPresence = client.channels.signalRoom.presence({
 			signal: "two",
 		});
@@ -253,6 +302,7 @@ describe("channels client", () => {
 		);
 		await expect(signalPresence).resolves.toEqual([
 			{ id: "member-1", roomId: "one" },
+			{ id: "member-2", roomId: "one" },
 		]);
 		await waitFor(() =>
 			requests.some(({ url }) => url.endsWith("/channels/auth")),
@@ -281,6 +331,7 @@ describe("channels client", () => {
 			params: { signal: "two" },
 		});
 
+		stopPresence();
 		stop();
 		client.channels.destroy();
 		expect(provider.disconnected).toBe(true);

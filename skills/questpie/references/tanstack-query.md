@@ -462,9 +462,13 @@ Generated channels expose an accumulating query option. Unlike live queries, ord
 const { data: messages = [] } = useQuery(
 	q.channels.chatRoom.subscription({ roomId }),
 );
+
+const { data: members = [] } = useQuery(
+	q.channels.chatRoom.presence({ roomId }),
+);
 ```
 
-The result is a typed array of `{ event, eventId, data }` unions. The query's abort signal closes the underlying channel iterator. Channel definition, authorization, server publish, and presence are covered in `references/channels.md`.
+The subscription result is an accumulating typed array of `{ event, eventId, data }` unions. Presence channels also expose a typed latest-roster query; each snapshot replaces the previous roster. The query abort signal closes the underlying iterator. Channel definition, authorization, server publish, and presence are covered in `references/channels.md`.
 
 ## Framework Adapters
 
