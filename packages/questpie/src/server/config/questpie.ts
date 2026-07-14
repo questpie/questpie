@@ -38,7 +38,12 @@ import type { KVService } from "#questpie/server/modules/core/integrated/kv/serv
 import type { LoggerService } from "#questpie/server/modules/core/integrated/logger/service.js";
 import type { MailerService } from "#questpie/server/modules/core/integrated/mailer/service.js";
 import type { QueueClient } from "#questpie/server/modules/core/integrated/queue/types.js";
-import { questpieRealtimeLogTable } from "#questpie/server/modules/core/integrated/realtime/collection.js";
+import {
+	questpieChannelDispatchTable,
+	questpieChannelEventTable,
+	questpieChannelHeadTable,
+	questpieRealtimeLogTable,
+} from "#questpie/server/modules/core/integrated/realtime/collection.js";
 import type { RealtimeService } from "#questpie/server/modules/core/integrated/realtime/service.js";
 import type { SearchService } from "#questpie/server/modules/core/integrated/search/types.js";
 import { resolveAutoSeedCategories } from "#questpie/server/seed/types.js";
@@ -1214,6 +1219,9 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 
 		// 3. Always include realtime log table since realtime service is always initialized
 		schema.questpie_realtime_log = questpieRealtimeLogTable;
+		schema.questpie_channel_head = questpieChannelHeadTable;
+		schema.questpie_channel_event = questpieChannelEventTable;
+		schema.questpie_channel_dispatch = questpieChannelDispatchTable;
 
 		// 4. Add search tables if adapter provides local storage schemas
 		// Local adapters (Postgres, PgVector) return their tables for migration generation.

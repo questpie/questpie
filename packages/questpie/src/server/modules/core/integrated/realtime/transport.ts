@@ -87,6 +87,21 @@ export type OrderedChannelDelivery = {
 	eventId: string;
 };
 
+export type OrderedChannelEventFrame = {
+	type: "channel_event";
+	channel: string;
+	event: string;
+	eventId: string;
+	data: unknown;
+};
+
+export type ChannelGapFrame = {
+	type: "channel_gap";
+	channel: string;
+	requestedEventId: string;
+	oldestEventId: string | null;
+};
+
 interface ClientTransportBase {
 	start(input: { onError: (error: unknown) => void }): Promise<void>;
 	openSession(input: EdgeSessionInput): Promise<ClientSink>;
@@ -96,6 +111,9 @@ interface ClientTransportBase {
 
 export interface LocalSessionClientTransport extends ClientTransportBase {
 	readonly channelDeliveryScope: "local-sessions";
+	encodeChannelFrame?(
+		frame: OrderedChannelEventFrame | ChannelGapFrame,
+	): Uint8Array;
 }
 
 export interface SharedProviderClientTransport extends ClientTransportBase {

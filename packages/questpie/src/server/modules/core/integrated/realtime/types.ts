@@ -100,6 +100,10 @@ export interface RealtimeConfig {
 	changeBroker?: ChangeBroker;
 	/** Edge delivery seam shared by live queries and typed channels. */
 	clientTransport?: ClientTransport;
+	/** Durable ordered-channel retention, backpressure, and lease tuning. */
+	channelEvents?: Partial<
+		import("./channel-event-ledger.js").ChannelEventLedgerConfig
+	>;
 
 	/**
 	 * Reconciliation poll interval in ms. Polling runs alongside adapters so a

@@ -5,6 +5,13 @@ import type { LoggerAdapter } from "#questpie/server/modules/core/integrated/log
 
 import type { RealtimeAdapter } from "./adapter.js";
 import { PgNotifyAdapter } from "./adapters/pg-notify.js";
+import {
+	type AppendChannelEventInput,
+	type AppendChannelEventOptions,
+	ChannelEventLedger,
+	type ChannelEventReceipt,
+	type LocalChannelSubscriptionInput,
+} from "./channel-event-ledger.js";
 import { questpieRealtimeLogTable } from "./collection.js";
 import type {
 	ChangeBroker,
@@ -154,6 +161,9 @@ export class RealtimeService {
 	private retentionCleanupIntervalMs: number;
 	private nextRetentionCleanupAt = 0;
 	private retentionCleanupInProgress = false;
+	private readonly channelEventLedger: ChannelEventLedger;
+	private channelPollTimer: ReturnType<typeof setInterval> | null = null;
+	private nextChannelCleanupAt = 0;
 
 	constructor(
 		// TODO: this should be typed better
@@ -164,6 +174,14 @@ export class RealtimeService {
 	) {
 		this.changeBroker = config.changeBroker;
 		this.clientTransport = config.clientTransport;
+		this.channelEventLedger = new ChannelEventLedger(
+			this.db,
+			this.changeBroker,
+			this.clientTransport,
+			config.channelEvents,
+			this.logger,
+			() => this.initialize(),
+		);
 		// Auto-configure adapter if connection string is provided
 		if (config.adapter) {
 			// User provided custom adapter
@@ -338,13 +356,34 @@ export class RealtimeService {
 		this.publisherStartPromise = (async () => {
 			await this.adapter?.startPublisher?.();
 			await this.changeBroker?.start({
-				onWake: () => this.drainSafely(),
+				onWake: (wake) => {
+					if (wake.kind === "channel-events-maybe-advanced") {
+						void this.channelEventLedger
+							.drain(wake.channelHash)
+							.catch((error) =>
+								this.reportTransportFailure(
+									"[Realtime] Channel ledger drain failed",
+									error,
+								),
+							);
+						return;
+					}
+					this.drainSafely();
+				},
 				onError: (error) =>
 					this.reportTransportFailure("[Realtime] Change broker failed", error),
 				onStateChange: (state) => {
 					if (state === "connected") {
 						this.setReconciliationPollInterval(this.configuredPollIntervalMs);
 						this.drainSafely();
+						void this.channelEventLedger
+							.drain()
+							.catch((error) =>
+								this.reportTransportFailure(
+									"[Realtime] Channel reconnect drain failed",
+									error,
+								),
+							);
 					} else if (state === "unavailable" || state === "failed") {
 						this.setReconciliationPollInterval(
 							this.configuredPollIntervalMs > 0
@@ -362,6 +401,8 @@ export class RealtimeService {
 					),
 			});
 			this.publisherStarted = true;
+			this.startChannelPollTimer();
+			await this.channelEventLedger.drain();
 		})().finally(() => {
 			this.publisherStartPromise = null;
 		});
@@ -410,9 +451,30 @@ export class RealtimeService {
 		return this.clientTransport.publishChannel(input);
 	}
 
+	async appendChannelEvent(
+		input: AppendChannelEventInput,
+		options: AppendChannelEventOptions = {},
+	): Promise<ChannelEventReceipt> {
+		const receipt = await this.channelEventLedger.append(input, options);
+		this.cleanupChannelEventsSafely();
+		return receipt;
+	}
+
+	async subscribeChannel(
+		input: LocalChannelSubscriptionInput,
+	): Promise<() => void> {
+		await this.initialize();
+		return this.channelEventLedger.subscribeLocal(input);
+	}
+
 	private setReconciliationPollInterval(intervalMs: number): void {
 		if (this.pollIntervalMs === intervalMs) return;
 		this.pollIntervalMs = intervalMs;
+		if (this.channelPollTimer) {
+			clearInterval(this.channelPollTimer);
+			this.channelPollTimer = null;
+		}
+		if (this.publisherStarted) this.startChannelPollTimer();
 		if (!this.started) return;
 		if (this.pollTimer) {
 			clearInterval(this.pollTimer);
@@ -426,6 +488,34 @@ export class RealtimeService {
 		this.pollTimer = setInterval(() => {
 			this.drainSafely();
 		}, this.pollIntervalMs);
+	}
+
+	private startChannelPollTimer(): void {
+		if (
+			!this.clientTransport ||
+			this.pollIntervalMs <= 0 ||
+			this.channelPollTimer
+		) {
+			return;
+		}
+		this.channelPollTimer = setInterval(() => {
+			void this.channelEventLedger.drain().catch((error) => {
+				this.reportTransportFailure(
+					"[Realtime] Channel reconciliation failed",
+					error,
+				);
+			});
+			this.cleanupChannelEventsSafely();
+		}, this.pollIntervalMs);
+	}
+
+	private cleanupChannelEventsSafely(force = false): void {
+		const now = Date.now();
+		if (!force && now < this.nextChannelCleanupAt) return;
+		this.nextChannelCleanupAt = now + 60 * 60 * 1000;
+		void this.channelEventLedger.cleanup().catch((error) => {
+			this.logger?.warn("[Realtime] Channel ledger cleanup failed", error);
+		});
 	}
 
 	/**
@@ -706,6 +796,10 @@ export class RealtimeService {
 			clearInterval(this.pollTimer);
 			this.pollTimer = null;
 		}
+		if (this.channelPollTimer) {
+			clearInterval(this.channelPollTimer);
+			this.channelPollTimer = null;
+		}
 
 		if (this.unsubscribeAdapter) {
 			this.unsubscribeAdapter();
@@ -720,6 +814,7 @@ export class RealtimeService {
 		if (this.adapter) {
 			await this.adapter.stop();
 		}
+		this.channelEventLedger.destroy();
 		await this.changeBroker?.stop();
 		await this.clientTransport?.stop();
 		this.publisherStarted = false;

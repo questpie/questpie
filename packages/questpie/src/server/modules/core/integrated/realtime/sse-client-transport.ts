@@ -3,9 +3,11 @@ import type {
 	ClientConfigInput,
 	ClientSink,
 	ClientTransportConfig,
+	ChannelGapFrame,
 	DeliveryClass,
 	EdgeSessionInput,
 	LocalSessionClientTransport,
+	OrderedChannelEventFrame,
 	SinkWriteResult,
 } from "./transport.js";
 
@@ -219,6 +221,12 @@ export class SseClientTransport implements LocalSessionClientTransport {
 		_input: ClientConfigInput,
 	): Promise<ClientTransportConfig> {
 		return { transport: "sse" };
+	}
+
+	encodeChannelFrame(
+		frame: OrderedChannelEventFrame | ChannelGapFrame,
+	): Uint8Array {
+		return encodeSseEvent(frame.type, frame);
 	}
 
 	async stop(): Promise<void> {

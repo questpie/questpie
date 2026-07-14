@@ -3,9 +3,10 @@ import type { z } from "zod";
 import type { AppContext } from "#questpie/server/config/app-context.js";
 import type { Principal } from "#questpie/server/config/context.js";
 import type {
-	OrderedChannelDelivery,
-	SinkWriteResult,
-} from "#questpie/server/modules/core/integrated/realtime/transport.js";
+	AppendChannelEventInput,
+	AppendChannelEventOptions,
+	ChannelEventReceipt,
+} from "#questpie/server/modules/core/integrated/realtime/channel-event-ledger.js";
 
 import {
 	type AnyChannelDefinition,
@@ -37,7 +38,10 @@ export class ChannelRuntimeError extends Error {
 }
 
 export interface ChannelPublisher {
-	publishChannel(delivery: OrderedChannelDelivery): Promise<SinkWriteResult>;
+	appendChannelEvent(
+		input: AppendChannelEventInput,
+		options?: AppendChannelEventOptions,
+	): Promise<ChannelEventReceipt>;
 }
 
 export type ChannelServiceContext = AppContext & {
@@ -87,8 +91,6 @@ function isSystemContext(context: StoredChannelServiceContext): boolean {
 export class ChannelsService<
 	TChannels extends ChannelDefinitions = ChannelDefinitions,
 > {
-	private readonly encoder = new TextEncoder();
-
 	constructor(
 		private readonly definitions: TChannels,
 		private readonly publisher: ChannelPublisher,
@@ -201,13 +203,15 @@ export class ChannelsService<
 			);
 		}
 
-		const eventId = crypto.randomUUID();
-		await this.publisher.publishChannel({
-			channel: resolvedName,
-			eventId,
-			frame: this.encoder.encode(JSON.stringify({ event, data: parsed.data })),
-		});
-		return Object.freeze({ eventId });
+		return this.publisher.appendChannelEvent(
+			{
+				channel: resolvedName,
+				event,
+				schemaIdentity: `${String(channel)}:${event}`,
+				data: parsed.data,
+			},
+			{ db: this.context.db as AppendChannelEventOptions["db"] },
+		);
 	}
 
 	async publishBatch(

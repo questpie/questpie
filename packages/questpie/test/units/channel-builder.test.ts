@@ -85,15 +85,15 @@ describe("channel ChannelsService", () => {
 		};
 		const deliveries: Array<{
 			channel: string;
-			eventId: string;
-			frame: Uint8Array;
+			event: string;
+			data: unknown;
 		}> = [];
 		const service = new ChannelsService(
 			definitions,
 			{
-				publishChannel: async (delivery) => {
+				appendChannelEvent: async (delivery) => {
 					deliveries.push(delivery);
-					return { status: "accepted" as const, bufferedBytes: null };
+					return { eventId: "event-1" };
 				},
 			},
 			userContext,
@@ -125,7 +125,7 @@ describe("channel ChannelsService", () => {
 		expect(receipt.eventId).toBeString();
 		expect(deliveries).toHaveLength(1);
 		expect(deliveries[0]?.channel).toBe("private-chat-room-allowed");
-		expect(JSON.parse(new TextDecoder().decode(deliveries[0]?.frame))).toEqual({
+		expect(deliveries[0]).toMatchObject({
 			event: "message",
 			data: { text: "hello" },
 		});
@@ -137,9 +137,9 @@ describe("channel ChannelsService", () => {
 		};
 		let publishes = 0;
 		const publisher = {
-			publishChannel: async () => {
+			appendChannelEvent: async () => {
 				publishes += 1;
-				return { status: "accepted" as const, bufferedBytes: null };
+				return { eventId: `event-${publishes}` };
 			},
 		};
 
@@ -178,10 +178,7 @@ describe("channel ChannelsService", () => {
 		const service = new ChannelsService(
 			definitions,
 			{
-				publishChannel: async () => ({
-					status: "accepted" as const,
-					bufferedBytes: null,
-				}),
+				appendChannelEvent: async () => ({ eventId: "event-1" }),
 			},
 			userContext,
 		);
@@ -201,13 +198,13 @@ describe("channel ChannelsService", () => {
 		const definitions = {
 			news: channel("news").events({ updated: z.object({ id: z.string() }) }),
 		};
-		const frames: string[] = [];
+		const frames: unknown[] = [];
 		const service = new ChannelsService(
 			definitions,
 			{
-				publishChannel: async ({ frame }) => {
-					frames.push(new TextDecoder().decode(frame));
-					return { status: "accepted" as const, bufferedBytes: null };
+				appendChannelEvent: async ({ data }) => {
+					frames.push(data);
+					return { eventId: `event-${frames.length}` };
 				},
 			},
 			{ accessMode: "system" } as any,
@@ -217,9 +214,6 @@ describe("channel ChannelsService", () => {
 			{ channel: "news", event: "updated", data: { id: "1" } },
 			{ channel: "news", event: "updated", data: { id: "2" } },
 		]);
-		expect(frames.map((frame) => JSON.parse(frame).data.id)).toEqual([
-			"1",
-			"2",
-		]);
+		expect(frames.map((frame: any) => frame.id)).toEqual(["1", "2"]);
 	});
 });
