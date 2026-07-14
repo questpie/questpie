@@ -115,8 +115,13 @@ describe("Cloudflare realtime topology", () => {
 				]);
 
 				reader = response.body!.getReader();
-				const initial = await reader.read();
-				const text = new TextDecoder().decode(initial.value);
+				const decoder = new TextDecoder();
+				let text = "";
+				while (!text.includes("event: snapshot")) {
+					const chunk = await reader.read();
+					expect(chunk.done).toBe(false);
+					text += decoder.decode(chunk.value, { stream: true });
+				}
 				expect(text).toContain("event: snapshot");
 				expect(text).toContain('"title":"From Worker DB"');
 			} finally {

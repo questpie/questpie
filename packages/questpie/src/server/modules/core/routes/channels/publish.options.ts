@@ -3,6 +3,7 @@ import { route } from "#questpie/server/routes/define-route.js";
 import {
 	channelRouteHeaders,
 	channelRouteResponse,
+	observeChannelSecurity,
 	validateChannelPreflight,
 	validateChannelRouteOrigin,
 } from "./_shared.js";
@@ -20,6 +21,11 @@ export default route()
 				headers: channelRouteHeaders(origin),
 			});
 		} catch {
+			observeChannelSecurity(ctx, {
+				verb: "origin",
+				outcome: "denied",
+				reason: "origin_denied",
+			});
 			return channelRouteResponse(
 				{ error: "channel_origin_denied" },
 				403,

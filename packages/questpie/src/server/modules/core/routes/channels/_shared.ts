@@ -8,6 +8,7 @@ import {
 } from "#questpie/server/channels/security.js";
 import { ChannelsService } from "#questpie/server/channels/service.js";
 import type { Principal } from "#questpie/server/config/context.js";
+import type { ChannelSecurityObservationReason } from "#questpie/server/modules/core/integrated/realtime/observer.js";
 import { routeApp } from "#questpie/server/routes/route-app.js";
 
 type ChannelRouteContext = object & {
@@ -109,6 +110,41 @@ export function channelRouteError(
 		return channelRouteResponse({ error: code }, status, origin);
 	}
 	return channelRouteResponse({ error: "channel_request_denied" }, 403, origin);
+}
+
+export function channelSecurityReason(
+	error: unknown,
+): ChannelSecurityObservationReason {
+	const code =
+		error instanceof ChannelSecurityError
+			? error.code
+			: error instanceof Error && "code" in error
+				? String((error as { code: unknown }).code)
+				: "";
+	if (code.includes("origin")) return "origin_denied";
+	if (code.includes("name") || code.includes("collision"))
+		return "name_invalid";
+	if (code.includes("payload") || code.includes("event")) {
+		return "payload_invalid";
+	}
+	if (code.includes("presence")) return "presence_invalid";
+	if (code.includes("revok")) return "revoked";
+	if (code.includes("denied") || code.includes("forbidden")) {
+		return "access_denied";
+	}
+	if (error instanceof Error && "status" in error) return "request_invalid";
+	return "unknown";
+}
+
+export function observeChannelSecurity(
+	ctx: ChannelRouteContext,
+	input: {
+		verb: "subscribe" | "publish" | "presence" | "origin" | "grant" | "revoke";
+		outcome: "allowed" | "denied";
+		reason: ChannelSecurityObservationReason;
+	},
+): void {
+	routeApp(ctx).realtime?.record({ type: "channel.security", ...input });
 }
 
 function parseParams(value: unknown): Record<string, string> {

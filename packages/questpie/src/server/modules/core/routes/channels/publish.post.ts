@@ -3,7 +3,9 @@ import { route } from "#questpie/server/routes/define-route.js";
 import {
 	channelRouteError,
 	channelRouteResponse,
+	channelSecurityReason,
 	consumeChannelPublishQuota,
+	observeChannelSecurity,
 	parseChannelPublishRequest,
 	requestChannels,
 	validateChannelRouteOrigin,
@@ -27,6 +29,11 @@ export default route()
 			} as any);
 			const quota = consumeChannelPublishQuota(ctx, ctx.request);
 			if (!quota.allowed) {
+				observeChannelSecurity(ctx, {
+					verb: "publish",
+					outcome: "denied",
+					reason: "rate_limited",
+				});
 				const response = channelRouteResponse(
 					{
 						error: "channel_publish_rate_limited",
@@ -42,8 +49,18 @@ export default route()
 				return response;
 			}
 			const receipt = await channels.publishPrepared(prepared);
+			observeChannelSecurity(ctx, {
+				verb: "publish",
+				outcome: "allowed",
+				reason: "allowed",
+			});
 			return channelRouteResponse(receipt, 200, origin);
 		} catch (error) {
+			observeChannelSecurity(ctx, {
+				verb: "publish",
+				outcome: "denied",
+				reason: channelSecurityReason(error),
+			});
 			if (error instanceof Error && "status" in error) {
 				const status = Number((error as { status: unknown }).status);
 				return channelRouteResponse(

@@ -1,3 +1,4 @@
+import type { RealtimeObservation, RealtimeObserver } from "./observer.js";
 import type {
 	ClientCloseReason,
 	ClientConfigInput,
@@ -38,13 +39,20 @@ class SseClientSink implements ClientSink {
 		private readonly highWaterMark: number,
 		private readonly reportError: (error: unknown) => void,
 		private readonly onClose: () => void,
+		private readonly observe: (event: RealtimeObservation) => void,
 	) {}
 
 	async write(
 		frame: Uint8Array,
-		_delivery: DeliveryClass,
+		delivery: DeliveryClass,
 	): Promise<SinkWriteResult> {
 		if (this.closed) {
+			this.observe({
+				type: "sink.write",
+				delivery,
+				outcome: "failed",
+				bufferedBytes: 0,
+			});
 			throw new Error("Realtime SSE session is closed");
 		}
 		if (
@@ -52,35 +60,56 @@ class SseClientSink implements ClientSink {
 			(this.controller.desiredSize <= 0 ||
 				frame.byteLength > this.controller.desiredSize)
 		) {
-			return {
+			const result = {
 				status: "busy",
 				bufferedBytes: Math.max(
 					0,
 					this.highWaterMark - this.controller.desiredSize,
 				),
-			};
+			} as const;
+			this.observe({
+				type: "sink.write",
+				delivery,
+				outcome: "busy",
+				bufferedBytes: result.bufferedBytes,
+			});
+			return result;
 		}
 
 		try {
 			this.controller.enqueue(frame);
 			const desiredSize = this.controller.desiredSize;
-			return {
+			const result = {
 				status: "accepted",
 				bufferedBytes:
 					desiredSize === null
 						? null
 						: Math.max(0, this.highWaterMark - desiredSize),
-			};
+			} as const;
+			this.observe({
+				type: "sink.write",
+				delivery,
+				outcome: "accepted",
+				bufferedBytes: result.bufferedBytes ?? 0,
+			});
+			return result;
 		} catch (error) {
+			this.observe({
+				type: "sink.write",
+				delivery,
+				outcome: "failed",
+				bufferedBytes: 0,
+			});
 			this.reportError(error);
 			throw error;
 		}
 	}
 
-	async close(_reason: ClientCloseReason): Promise<void> {
+	async close(reason: ClientCloseReason): Promise<void> {
 		if (this.closed) return;
 		this.closed = true;
 		this.onClose();
+		this.observe({ type: "session.closed", transport: "sse", reason });
 		try {
 			this.controller.close();
 		} catch {
@@ -190,7 +219,16 @@ export class SseClientTransport implements LocalSessionClientTransport {
 	constructor(
 		private readonly controller: SseController,
 		private readonly highWaterMark = 1024 * 1024,
+		private readonly observer?: RealtimeObserver,
 	) {}
+
+	private observe(event: RealtimeObservation): void {
+		try {
+			this.observer?.record(event);
+		} catch {
+			// Observability cannot break edge delivery.
+		}
+	}
 
 	async start(input: { onError: (error: unknown) => void }): Promise<void> {
 		this.onError = input.onError;
@@ -212,8 +250,10 @@ export class SseClientTransport implements LocalSessionClientTransport {
 			() => {
 				if (this.sink === sink) this.sink = null;
 			},
+			(event) => this.observe(event),
 		);
 		this.sink = sink;
+		this.observe({ type: "session.opened", transport: "sse" });
 		return sink;
 	}
 

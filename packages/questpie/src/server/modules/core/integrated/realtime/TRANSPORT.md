@@ -136,7 +136,8 @@ export interface SharedProviderClientTransport extends ClientTransportBase {
 }
 
 export type ClientTransport =
-	LocalSessionClientTransport | SharedProviderClientTransport;
+	| LocalSessionClientTransport
+	| SharedProviderClientTransport;
 ```
 
 `EdgeSessionInput` carries the initial resolved principal and a
@@ -706,8 +707,8 @@ The discriminated events cover at least:
 - broker start/stop/reconnect and publish failure;
 - outbox capture failure, drain failure, drain lag rows, drain lag milliseconds,
   and reconciliation duration;
-- refresh started/completed/suppressed/failed with operation and access-key
-  cardinality, but never raw principal or topic values as metric labels;
+- refresh started/completed/suppressed/failed with operation and subscriber
+  count, but never raw principal, access key, or topic values as metric labels;
 - sink buffered bytes, busy results, write failures, slow-consumer disconnects,
   and active sessions;
 - admission rejection by reason;
@@ -715,6 +716,22 @@ The discriminated events cover at least:
 
 Logging and metrics adapters may consume the same events. Observer failure is
 isolated and cannot break delivery.
+
+The built-in snapshot exposes only bounded counter keys. In particular,
+`refresh.started` is the compute count and `refresh.subscriber_deliveries` is
+the fan-out count, so their ratio measures compute-once sharing without an
+access-key label. `drain.poll_healing`, `drain.rows`, and `drain.seq_delta`
+separate reconciliation recovery from broker-triggered work. Durations, lag,
+frame sizes, and per-write buffered bytes remain numeric event fields for an
+OTel adapter to record as histograms rather than unbounded metric labels.
+
+Operators should alert on sustained broker publish failures, any outbox capture
+or drain failure, drain age above the configured reconciliation-poll window,
+and a refresh compute-to-delivery ratio approaching `1` while subscriber count
+is materially higher (a refresh-herd signal). Repeated slow-consumer closes,
+write failures, or an increasing admission-rejection rate are warning signals;
+single access denials and rate-limit rejections are structured audit warnings,
+not paging conditions by themselves.
 
 ## Defect mapping
 

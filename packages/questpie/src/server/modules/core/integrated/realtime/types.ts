@@ -114,6 +114,8 @@ export type RealtimeSubscriptionContext = {
 };
 
 export interface RealtimeConfig {
+	/** Diagnostic event sink. Observer failures are isolated from delivery. */
+	observer?: import("./observer.js").RealtimeObserver;
 	/** Compatibility, canary, and rollback selection. */
 	rollout?: RealtimeRolloutConfig;
 	/** Realtime edge-session admission limits. */

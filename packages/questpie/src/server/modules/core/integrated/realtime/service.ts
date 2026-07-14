@@ -13,6 +13,11 @@ import {
 	type LocalChannelSubscriptionInput,
 } from "./channel-event-ledger.js";
 import { questpieRealtimeLogTable } from "./collection.js";
+import {
+	RealtimeObservability,
+	type RealtimeMetricsSnapshot,
+	type RealtimeObservation,
+} from "./observer.js";
 import type {
 	ChangeBroker,
 	ClientAuthInput,
@@ -169,6 +174,7 @@ export class RealtimeService {
 	private readonly channelEventLedger: ChannelEventLedger;
 	private channelPollTimer: ReturnType<typeof setInterval> | null = null;
 	private nextChannelCleanupAt = 0;
+	private readonly observability: RealtimeObservability;
 
 	constructor(
 		// TODO: this should be typed better
@@ -211,14 +217,6 @@ export class RealtimeService {
 			this.adapter = this.changeBroker ? undefined : compatibleAdapter;
 			this.clientTransport = config.clientTransport;
 		}
-		this.channelEventLedger = new ChannelEventLedger(
-			this.db,
-			this.changeBroker,
-			this.clientTransport,
-			config.channelEvents,
-			this.logger,
-			() => this.initialize(),
-		);
 		this.batchSize = config.batchSize ?? 500;
 		this.pollIntervalMs =
 			config.pollIntervalMs ??
@@ -226,6 +224,23 @@ export class RealtimeService {
 				? DEFAULT_ADAPTER_RECONCILIATION_INTERVAL_MS
 				: 2000);
 		this.configuredPollIntervalMs = this.pollIntervalMs;
+		this.observability = new RealtimeObservability({
+			observer: config.observer,
+			logger: this.logger,
+			drainLagAlertMs:
+				this.configuredPollIntervalMs > 0
+					? this.configuredPollIntervalMs
+					: Number.POSITIVE_INFINITY,
+		});
+		this.channelEventLedger = new ChannelEventLedger(
+			this.db,
+			this.changeBroker,
+			this.clientTransport,
+			config.channelEvents,
+			this.logger,
+			() => this.initialize(),
+			this.observability,
+		);
 		this.retentionDays =
 			config.retentionDays === undefined
 				? DEFAULT_RETENTION_DAYS
@@ -233,6 +248,18 @@ export class RealtimeService {
 					? config.retentionDays
 					: undefined;
 		this.retentionCleanupIntervalMs = 60 * 60 * 1000;
+	}
+
+	observe(event: RealtimeObservation): void {
+		this.observability.record(event);
+	}
+
+	record(event: RealtimeObservation): void {
+		this.observe(event);
+	}
+
+	getMetrics(): RealtimeMetricsSnapshot {
+		return this.observability.snapshot();
 	}
 
 	/**
@@ -265,8 +292,10 @@ export class RealtimeService {
 		});
 	}
 
-	private drainSafely(): void {
-		void this.drain().catch((error) => {
+	private drainSafely(
+		reason: "broker" | "poll" | "reconnect" | "startup" = "broker",
+	): void {
+		void this.drain(reason).catch((error) => {
 			this.reportTransportFailure("[Realtime] Outbox drain failed", error);
 		});
 	}
@@ -330,17 +359,24 @@ export class RealtimeService {
 		options: AppendChangeOptions = {},
 	): Promise<RealtimeChangeEvent> {
 		const db = options.db ?? this.db;
-		const [row] = await db
-			.insert(questpieRealtimeLogTable)
-			.values({
-				resourceType: input.resourceType,
-				resource: input.resource,
-				operation: input.operation,
-				recordId: input.recordId ?? null,
-				locale: input.locale ?? null,
-				payload: input.payload ?? {},
-			})
-			.returning();
+		let row: typeof questpieRealtimeLogTable.$inferSelect;
+		try {
+			[row] = await db
+				.insert(questpieRealtimeLogTable)
+				.values({
+					resourceType: input.resourceType,
+					resource: input.resource,
+					operation: input.operation,
+					recordId: input.recordId ?? null,
+					locale: input.locale ?? null,
+					payload: input.payload ?? {},
+				})
+				.returning();
+			this.observe({ type: "outbox.capture", outcome: "accepted" });
+		} catch (error) {
+			this.observe({ type: "outbox.capture", outcome: "failed" });
+			throw error;
+		}
 
 		const event = {
 			seq: Number(row.seq),
@@ -367,8 +403,8 @@ export class RealtimeService {
 				reason: "publish" as const,
 			};
 			const [legacyResult, v2Result] = await Promise.allSettled([
-				this.adapter!.notify(event),
-				this.changeBroker!.publish(wake),
+				this.publishObserved("legacy", () => this.adapter!.notify(event)),
+				this.publishObserved("v2", () => this.changeBroker!.publish(wake)),
 			]);
 			const comparison: RealtimeDualRunComparison = {
 				seq: event.seq,
@@ -406,13 +442,32 @@ export class RealtimeService {
 			return;
 		}
 		await Promise.all([
-			this.adapter?.notify(event),
-			this.changeBroker?.publish({
-				kind: "outbox-maybe-advanced",
-				highWaterSeq: event.seq,
-				reason: "publish",
-			}),
+			this.adapter
+				? this.publishObserved("legacy", () => this.adapter!.notify(event))
+				: undefined,
+			this.changeBroker
+				? this.publishObserved("v2", () =>
+						this.changeBroker!.publish({
+							kind: "outbox-maybe-advanced",
+							highWaterSeq: event.seq,
+							reason: "publish",
+						}),
+					)
+				: undefined,
 		]);
+	}
+
+	private async publishObserved(
+		seam: "legacy" | "v2",
+		publish: () => Promise<void>,
+	): Promise<void> {
+		try {
+			await publish();
+			this.observe({ type: "broker.publish", seam, outcome: "accepted" });
+		} catch (error) {
+			this.observe({ type: "broker.publish", seam, outcome: "failed" });
+			throw error;
+		}
 	}
 
 	async initialize(): Promise<void> {
@@ -437,14 +492,17 @@ export class RealtimeService {
 							);
 						return;
 					}
-					this.drainSafely();
+					this.drainSafely(
+						wake.reason === "reconnect" ? "reconnect" : "broker",
+					);
 				},
 				onError: (error) =>
 					this.reportTransportFailure("[Realtime] Change broker failed", error),
 				onStateChange: (state) => {
+					this.observe({ type: "broker.lifecycle", state });
 					if (state === "connected") {
 						this.setReconciliationPollInterval(this.configuredPollIntervalMs);
-						this.drainSafely();
+						this.drainSafely("reconnect");
 						void this.channelEventLedger
 							.drain()
 							.catch((error) =>
@@ -491,7 +549,44 @@ export class RealtimeService {
 		if (!this.clientTransport) {
 			throw new Error("No configured realtime client transport");
 		}
-		return this.clientTransport.openSession(input);
+		const sink = await this.clientTransport.openSession(input);
+		const transport =
+			this.clientTransport.channelDeliveryScope === "shared-provider"
+				? "shared-provider"
+				: "sse";
+		this.observe({ type: "session.opened", transport });
+		let closed = false;
+		return {
+			sessionId: sink.sessionId,
+			...(sink.clientChannel ? { clientChannel: sink.clientChannel } : {}),
+			write: async (frame, delivery) => {
+				try {
+					const result = await sink.write(frame, delivery);
+					this.observe({
+						type: "sink.write",
+						delivery,
+						outcome: result.status,
+						bufferedBytes: result.bufferedBytes ?? 0,
+					});
+					return result;
+				} catch (error) {
+					this.observe({
+						type: "sink.write",
+						delivery,
+						outcome: "failed",
+						bufferedBytes: 0,
+					});
+					throw error;
+				}
+			},
+			close: async (reason) => {
+				if (!closed) {
+					closed = true;
+					this.observe({ type: "session.closed", transport, reason });
+				}
+				await sink.close(reason);
+			},
+		};
 	}
 
 	async generateClientAuth(
@@ -504,7 +599,24 @@ export class RealtimeService {
 		) {
 			throw new Error("Realtime provider auth is not configured");
 		}
-		return this.clientTransport.generateAuth(input);
+		try {
+			const auth = await this.clientTransport.generateAuth(input);
+			this.observe({
+				type: "channel.security",
+				verb: "grant",
+				outcome: "allowed",
+				reason: "allowed",
+			});
+			return auth;
+		} catch (error) {
+			this.observe({
+				type: "channel.security",
+				verb: "grant",
+				outcome: "denied",
+				reason: "access_denied",
+			});
+			throw error;
+		}
 	}
 
 	async publishChannel(
@@ -555,7 +667,7 @@ export class RealtimeService {
 	private startPollTimer(): void {
 		if (this.pollIntervalMs <= 0 || this.pollTimer) return;
 		this.pollTimer = setInterval(() => {
-			this.drainSafely();
+			this.drainSafely("poll");
 		}, this.pollIntervalMs);
 	}
 
@@ -771,12 +883,12 @@ export class RealtimeService {
 			if (this.adapter) {
 				await this.adapter.start();
 				this.unsubscribeAdapter = this.adapter.subscribe(() => {
-					this.drainSafely();
+					this.drainSafely("broker");
 				});
 				this.unsubscribeAdapterState =
 					this.adapter.onStateChange?.((state) => {
 						if (state === "connected") {
-							void this.drain();
+							this.drainSafely("reconnect");
 						}
 					}) ?? null;
 			}
@@ -785,7 +897,7 @@ export class RealtimeService {
 
 			this.lastSeq = latestSeq;
 			this.started = true;
-			this.drainSafely();
+			this.drainSafely("startup");
 			this.cleanupSafely(true);
 		})()
 			.catch(async (error) => {
@@ -889,17 +1001,25 @@ export class RealtimeService {
 		this.publisherStarted = false;
 	}
 
-	private async drain(): Promise<void> {
+	private async drain(
+		reason: "broker" | "poll" | "reconnect" | "startup",
+	): Promise<void> {
 		if (this.draining) {
 			this.drainPending = true;
 			return;
 		}
 		this.draining = true;
+		const startedAt = performance.now();
+		const initialSeq = this.lastSeq;
+		let rows = 0;
+		let newestCreatedAt: Date | undefined;
 
 		try {
 			while (true) {
 				const events = await this.readSince(this.lastSeq);
 				if (events.length === 0) break;
+				rows += events.length;
+				newestCreatedAt = events.at(-1)?.createdAt;
 
 				this.lastSeq = events[events.length - 1].seq;
 				for (const event of events) {
@@ -908,13 +1028,27 @@ export class RealtimeService {
 
 				if (events.length < this.batchSize) break;
 			}
+			this.observe({
+				type: "drain.completed",
+				reason,
+				rows,
+				seqDelta: Math.max(0, this.lastSeq - initialSeq),
+				lagMs: newestCreatedAt
+					? Math.max(0, Date.now() - newestCreatedAt.getTime())
+					: 0,
+				durationMs: performance.now() - startedAt,
+				healed: reason === "poll" && rows > 0,
+			});
+		} catch (error) {
+			this.observe({ type: "drain.failed", reason });
+			throw error;
 		} finally {
 			const shouldDrainAgain = this.drainPending;
 			this.drainPending = false;
 			this.draining = false;
 
 			if (shouldDrainAgain) {
-				void this.drain();
+				this.drainSafely(reason);
 			}
 		}
 	}

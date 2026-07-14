@@ -1,3 +1,8 @@
+import {
+	realtimeOperation,
+	type RealtimeObservation,
+	type RealtimeObserver,
+} from "./observer.js";
 import { encodeSseEvent } from "./sse-client-transport.js";
 import type {
 	RealtimeChangeEvent,
@@ -6,6 +11,7 @@ import type {
 } from "./types.js";
 
 type RealtimeSource = {
+	record?(event: RealtimeObservation): void;
 	getLatestSeq(): Promise<number>;
 	getResumeState?(sinceSeq: number): Promise<{
 		latestSeq: number;
@@ -126,7 +132,16 @@ export class RealtimeRefreshScheduler {
 	constructor(
 		private readonly realtime: RealtimeSource,
 		private readonly maxConcurrency = 10,
+		private readonly observer?: RealtimeObserver,
 	) {}
+
+	private observe(event: RealtimeObservation): void {
+		try {
+			this.observer?.record(event);
+		} catch {
+			// Observability cannot break refresh delivery.
+		}
+	}
 
 	subscribe(input: RefreshSubscriptionInput): () => void {
 		let group = this.groups.get(input.key);
@@ -195,9 +210,16 @@ export class RealtimeRefreshScheduler {
 				!resume.reset
 			) {
 				group.lastSeq = latestSeq;
+				this.observe({ type: "resume", outcome: "current" });
 				return;
 			}
 			group.nextReset = resume.reset;
+			if (group.sinceSeq !== undefined) {
+				this.observe({
+					type: "resume",
+					outcome: resume.reset ? "reset" : "replay",
+				});
+			}
 			this.requestRefresh(group, latestSeq);
 		} catch (error) {
 			this.reportError(group, error);
@@ -216,14 +238,28 @@ export class RealtimeRefreshScheduler {
 	}
 
 	private async refresh(group: SchedulerGroup): Promise<void> {
+		const operation = realtimeOperation(group.topics.operation);
 		try {
 			do {
 				group.refreshQueued = false;
+				const startedAt = performance.now();
+				this.observe({
+					type: "refresh.started",
+					operation,
+					subscribers: group.subscribers.size,
+				});
 				const data = await this.runBounded(group.compute);
 				if (group.disposed) return;
 				const serialized = JSON.stringify(data);
 				const hash = await sha256(serialized);
-				if (hash === group.lastHash) continue;
+				if (hash === group.lastHash) {
+					this.observe({
+						type: "refresh.suppressed",
+						operation,
+						subscribers: group.subscribers.size,
+					});
+					continue;
+				}
 
 				group.lastHash = hash;
 				group.lastFrame = encodeSseEvent("snapshot", {
@@ -234,6 +270,13 @@ export class RealtimeRefreshScheduler {
 				});
 				group.nextReset = false;
 				const frame = group.lastFrame;
+				this.observe({
+					type: "refresh.completed",
+					operation,
+					subscribers: group.subscribers.size,
+					durationMs: performance.now() - startedAt,
+					frameBytes: frame.byteLength,
+				});
 				for (const subscriber of group.subscribers) {
 					void Promise.resolve(subscriber.onFrame(frame)).catch(
 						subscriber.onError,
@@ -241,6 +284,11 @@ export class RealtimeRefreshScheduler {
 				}
 			} while (group.refreshQueued && !group.disposed);
 		} catch (error) {
+			this.observe({
+				type: "refresh.failed",
+				operation,
+				subscribers: group.subscribers.size,
+			});
 			this.reportError(group, error);
 		} finally {
 			group.refreshInFlight = false;
@@ -281,7 +329,13 @@ export function getRealtimeRefreshScheduler(
 ): RealtimeRefreshScheduler {
 	let scheduler = schedulers.get(owner);
 	if (!scheduler) {
-		scheduler = new RealtimeRefreshScheduler(realtime);
+		scheduler = new RealtimeRefreshScheduler(
+			realtime,
+			10,
+			realtime.record
+				? { record: (event) => realtime.record?.(event) }
+				: undefined,
+		);
 		schedulers.set(owner, scheduler);
 	}
 	return scheduler;

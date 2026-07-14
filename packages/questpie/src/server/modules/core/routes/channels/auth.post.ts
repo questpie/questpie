@@ -4,6 +4,8 @@ import { routeApp } from "#questpie/server/routes/route-app.js";
 import {
 	channelRouteError,
 	channelRouteResponse,
+	channelSecurityReason,
+	observeChannelSecurity,
 	parseChannelAuthRequest,
 	principalOf,
 	requestChannels,
@@ -38,6 +40,11 @@ export default route()
 			} else if (
 				!(await channels.authorize(input.channel, input.params, "subscribe"))
 			) {
+				observeChannelSecurity(ctx, {
+					verb: "subscribe",
+					outcome: "denied",
+					reason: "access_denied",
+				});
 				return channelRouteResponse(
 					{ error: "channel_subscribe_denied" },
 					403,
@@ -46,6 +53,11 @@ export default route()
 			}
 			const realtime = routeApp(ctx).realtime;
 			if (!realtime) {
+				observeChannelSecurity(ctx, {
+					verb: "grant",
+					outcome: "denied",
+					reason: "transport_unavailable",
+				});
 				return channelRouteResponse(
 					{ error: "channel_transport_unavailable" },
 					404,
@@ -59,8 +71,18 @@ export default route()
 				scope: "channel",
 				presence,
 			});
+			observeChannelSecurity(ctx, {
+				verb: definition.visibility === "presence" ? "presence" : "subscribe",
+				outcome: "allowed",
+				reason: "allowed",
+			});
 			return channelRouteResponse(auth, 200, origin);
 		} catch (error) {
+			observeChannelSecurity(ctx, {
+				verb: "subscribe",
+				outcome: "denied",
+				reason: channelSecurityReason(error),
+			});
 			if (error instanceof Error && "status" in error) {
 				const status = Number((error as { status: unknown }).status);
 				return channelRouteResponse(

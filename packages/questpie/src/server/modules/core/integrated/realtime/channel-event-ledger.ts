@@ -14,6 +14,7 @@ import {
 	questpieChannelEventTable,
 	questpieChannelHeadTable,
 } from "./collection.js";
+import type { RealtimeObservation, RealtimeObserver } from "./observer.js";
 import type {
 	ChannelGapFrame,
 	ChangeBroker,
@@ -150,6 +151,7 @@ export class ChannelEventLedger {
 		config: Partial<ChannelEventLedgerConfig> = {},
 		private readonly logger?: Pick<LoggerAdapter, "error" | "warn">,
 		private readonly ensureDeliveryStarted?: () => Promise<void>,
+		private readonly observer?: RealtimeObserver,
 	) {
 		this.config = {
 			retentionMs: config.retentionMs ?? DEFAULT_RETENTION_MS,
@@ -161,6 +163,14 @@ export class ChannelEventLedger {
 			busyRetryMs: config.busyRetryMs ?? DEFAULT_RETRY_MS,
 			batchSize: config.batchSize ?? DEFAULT_BATCH_SIZE,
 		};
+	}
+
+	private observe(event: RealtimeObservation): void {
+		try {
+			this.observer?.record(event);
+		} catch {
+			// Observability cannot break ordered delivery.
+		}
 	}
 
 	async append(
@@ -275,10 +285,15 @@ export class ChannelEventLedger {
 				(parsed.seq < latestSeq &&
 					(!oldest || parsed.seq < Number(oldest.seq) - 1));
 			if (outsideRetention) {
+				this.observe({ type: "resume", outcome: "gap" });
 				await this.writeGap(input, oldest?.eventId ?? null);
 				return () => {};
 			}
 			cursor = parsed.seq;
+			this.observe({
+				type: "resume",
+				outcome: parsed.seq === latestSeq ? "current" : "replay",
+			});
 		}
 
 		const subscription: LocalSubscription = {

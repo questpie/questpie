@@ -426,6 +426,15 @@ export async function realtimeSubscribe(
 	if (!app.realtime) {
 		return errorResponse(ApiError.notImplemented("Realtime"), request);
 	}
+	const observeAdmission = (
+		reason:
+			| "connection_limit"
+			| "subscription_limit"
+			| "query_limit"
+			| "relation_depth"
+			| "snapshot_bytes"
+			| "access",
+	) => app.realtime!.record({ type: "admission.rejected", reason });
 
 	// Resolve context (auth, locale, etc.)
 	const resolved = await resolveContext(app, request, config, context);
@@ -525,6 +534,7 @@ export async function realtimeSubscribe(
 		}
 		let topic: NormalizedTopicInput;
 		if (topicIndex >= admission.maxTopicsPerConnection) {
+			observeAdmission("subscription_limit");
 			topicErrors.push({
 				id: rawTopic.id ?? "unknown",
 				message: `Connection accepts at most ${admission.maxTopicsPerConnection} topics`,
@@ -576,6 +586,11 @@ export async function realtimeSubscribe(
 
 		const topicAdmission = admitRealtimeTopic(topic, admission);
 		if (!topicAdmission.accepted) {
+			observeAdmission(
+				topicAdmission.message.includes("relation depth")
+					? "relation_depth"
+					: "query_limit",
+			);
 			topicErrors.push({ id: topic.id, message: topicAdmission.message });
 			continue;
 		}
@@ -638,6 +653,7 @@ export async function realtimeSubscribe(
 	for (const [index, input] of (channelInputs ?? []).entries()) {
 		const id = input?.id ?? "unknown";
 		if (index + validatedTopics.length >= admission.maxTopicsPerConnection) {
+			observeAdmission("subscription_limit");
 			channelErrors.push({
 				id,
 				message: `Connection accepts at most ${admission.maxTopicsPerConnection} subscriptions`,
@@ -673,6 +689,7 @@ export async function realtimeSubscribe(
 				await evaluateTopicAccess(app, topic, topicContext),
 			);
 		} catch (error) {
+			observeAdmission("access");
 			topicErrors.push({
 				id: topic.id,
 				message: error instanceof Error ? error.message : "Access denied",
@@ -718,6 +735,7 @@ export async function realtimeSubscribe(
 		realtimePrincipalKey(resolved.appContext),
 	);
 	if (!releaseConnection) {
+		observeAdmission("connection_limit");
 		return errorResponse(
 			ApiError.badRequest(
 				"Realtime connection limit exceeded",
@@ -866,6 +884,7 @@ export async function realtimeSubscribe(
 							throw new Error("Unknown realtime control frame");
 						}
 						if (topicUnsubscribers.size >= admission.maxTopicsPerConnection) {
+							observeAdmission("subscription_limit");
 							throw new Error(
 								`Connection accepts at most ${admission.maxTopicsPerConnection} topics`,
 							);
@@ -931,7 +950,11 @@ export async function realtimeSubscribe(
 					closeRequested = true;
 					closeStream?.();
 				};
-				transport = new SseClientTransport(controller, highWaterMarkBytes);
+				transport = new SseClientTransport(
+					controller,
+					highWaterMarkBytes,
+					app.realtime!,
+				);
 				await transport.start({ onError: requestClose });
 				const edgeSessionId = globalThis.crypto.randomUUID();
 				const sink = await transport.openSession({
@@ -1102,6 +1125,7 @@ export async function realtimeSubscribe(
 							}),
 						onFrame: async (frame) => {
 							if (frame.byteLength > admission.maxBufferedSnapshotBytes) {
+								observeAdmission("snapshot_bytes");
 								await sendTopicError(
 									topic.id,
 									`Snapshot exceeds ${admission.maxBufferedSnapshotBytes} bytes`,
@@ -1163,6 +1187,7 @@ export async function realtimeSubscribe(
 									topicUnsubscribers.size + channelUnsubscribers.size >=
 									admission.maxTopicsPerConnection
 								) {
+									observeAdmission("subscription_limit");
 									await sendChannelError(
 										frame.subscriptionId,
 										`Connection accepts at most ${admission.maxTopicsPerConnection} subscriptions`,
@@ -1200,6 +1225,7 @@ export async function realtimeSubscribe(
 								topicUnsubscribers.size + channelUnsubscribers.size >=
 								admission.maxTopicsPerConnection
 							) {
+								observeAdmission("subscription_limit");
 								await sendTopicError(
 									frame.topicId,
 									`Connection accepts at most ${admission.maxTopicsPerConnection} topics`,
