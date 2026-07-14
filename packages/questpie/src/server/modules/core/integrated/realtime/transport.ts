@@ -66,6 +66,10 @@ export type ClientAuthInput = {
 	socketId: string;
 	channel: string;
 	principal: Principal | null;
+	/** Framework channel routes have already proved subscribe authorization. */
+	scope?: "session" | "channel";
+	/** Presence data classified as visible to every channel member. */
+	presence?: { user_info?: Record<string, unknown> };
 };
 
 export type ClientAuthResponse = {

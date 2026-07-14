@@ -15,8 +15,12 @@ import {
 	type ChannelEventsOf,
 	type ChannelParamsOf,
 	type ChannelPresenceOf,
-	resolveChannelName,
 } from "./channel-builder.js";
+import {
+	assertChannelPayloadSize,
+	assertUniqueResolvedChannelName,
+	type ChannelSecurityConfig,
+} from "./security.js";
 
 export type ChannelRuntimeErrorCode =
 	| "channel_not_found"
@@ -80,6 +84,8 @@ export type ChannelPublishReceipt = Readonly<{
 	eventId: string;
 }>;
 
+export type PreparedChannelPublish = Readonly<AppendChannelEventInput>;
+
 function isSystemContext(context: StoredChannelServiceContext): boolean {
 	if (context.accessMode === "system") return true;
 	if (context.accessMode === "user") return false;
@@ -95,6 +101,7 @@ export class ChannelsService<
 		private readonly definitions: TChannels,
 		private readonly publisher: ChannelPublisher,
 		context: ChannelServiceContext,
+		private readonly security: ChannelSecurityConfig = {},
 	) {
 		this.context = context as unknown as StoredChannelServiceContext;
 	}
@@ -118,7 +125,12 @@ export class ChannelsService<
 		channel: TChannel,
 		params: ChannelParamsOf<TChannels[TChannel]>,
 	): string {
-		return resolveChannelName(this.getDefinition(channel), params);
+		this.getDefinition(channel);
+		return assertUniqueResolvedChannelName(
+			this.definitions,
+			channel,
+			params as Record<string, string>,
+		);
 	}
 
 	async authorize<TChannel extends keyof TChannels & string>(
@@ -127,7 +139,11 @@ export class ChannelsService<
 		verb: "subscribe" | "publish",
 	): Promise<boolean> {
 		const definition = this.getDefinition(channel);
-		resolveChannelName(definition, params);
+		assertUniqueResolvedChannelName(
+			this.definitions,
+			channel,
+			params as Record<string, string>,
+		);
 
 		if (verb === "publish" && isSystemContext(this.context)) return true;
 		const authorization = definition.authorization;
@@ -173,10 +189,23 @@ export class ChannelsService<
 		channel: TChannel,
 		input: ChannelPublishInput<TChannels[TChannel]>,
 	): Promise<ChannelPublishReceipt> {
+		const prepared = await this.preparePublish(channel, input);
+		return this.publishPrepared(prepared);
+	}
+
+	/** Validate a client publish completely without allocating a ledger event id. */
+	async preparePublish<TChannel extends keyof TChannels & string>(
+		channel: TChannel,
+		input: ChannelPublishInput<TChannels[TChannel]>,
+	): Promise<PreparedChannelPublish> {
 		const definition = this.getDefinition(channel);
 		const params = ((input as { params?: Record<string, string> }).params ??
 			{}) as ChannelParamsOf<TChannels[TChannel]>;
-		const resolvedName = resolveChannelName(definition, params);
+		const resolvedName = assertUniqueResolvedChannelName(
+			this.definitions,
+			channel,
+			params as Record<string, string>,
+		);
 		if (!(await this.authorize(channel, params, "publish"))) {
 			throw new ChannelRuntimeError(
 				"channel_publish_denied",
@@ -202,16 +231,23 @@ export class ChannelsService<
 				{ cause: parsed.error },
 			);
 		}
+		assertChannelPayloadSize(parsed.data);
 
-		return this.publisher.appendChannelEvent(
-			{
-				channel: resolvedName,
-				event,
-				schemaIdentity: `${String(channel)}:${event}`,
-				data: parsed.data,
-			},
-			{ db: this.context.db as AppendChannelEventOptions["db"] },
-		);
+		return {
+			channel: resolvedName,
+			event,
+			schemaIdentity: `${String(channel)}:${event}`,
+			data: parsed.data,
+		};
+	}
+
+	/** Append a previously validated publish after route-level admission checks. */
+	publishPrepared(
+		prepared: PreparedChannelPublish,
+	): Promise<ChannelPublishReceipt> {
+		return this.publisher.appendChannelEvent(prepared, {
+			db: this.context.db as AppendChannelEventOptions["db"],
+		});
 	}
 
 	async publishBatch(
@@ -231,10 +267,20 @@ export class ChannelsService<
 		params: Record<string, string>,
 	): Promise<boolean> {
 		if (typeof rule === "boolean") return rule;
+		const timeoutMs = this.security.authorizationTimeoutMs ?? 5_000;
+		let timer: ReturnType<typeof setTimeout> | undefined;
 		try {
-			return (await rule({ ...this.context, params } as any)) === true;
+			const result = await Promise.race([
+				Promise.resolve(rule({ ...this.context, params } as any)),
+				new Promise<false>((resolve) => {
+					timer = setTimeout(() => resolve(false), timeoutMs);
+				}),
+			]);
+			return result === true;
 		} catch {
 			return false;
+		} finally {
+			if (timer) clearTimeout(timer);
 		}
 	}
 }

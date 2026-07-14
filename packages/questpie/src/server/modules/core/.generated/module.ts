@@ -29,6 +29,11 @@ import _route_collection_updateBatch from "../routes/[collection]/update-batch";
 import _route_collection_upload from "../routes/[collection]/upload";
 import _route_auth_spread_path_GET from "../routes/auth/[...path].get";
 import _route_auth_spread_path_POST from "../routes/auth/[...path].post";
+import _route_channels_auth_OPTIONS from "../routes/channels/auth.options";
+import _route_channels_auth_POST from "../routes/channels/auth.post";
+import _route_channels_config from "../routes/channels/config";
+import _route_channels_publish_OPTIONS from "../routes/channels/publish.options";
+import _route_channels_publish_POST from "../routes/channels/publish.post";
 import _route_globals_name from "../routes/globals/[name]";
 import _route_globals_name_PATCH from "../routes/globals/[name].patch";
 import _route_globals_name_audit from "../routes/globals/[name]/audit";
@@ -121,6 +126,11 @@ export type CoreRoutes = {
 	"[collection]/upload": typeof _route_collection_upload extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"[collection]/upload">> : typeof _route_collection_upload;
 	"auth/[...path]:GET": typeof _route_auth_spread_path_GET extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"auth/[...path]:GET">> : typeof _route_auth_spread_path_GET;
 	"auth/[...path]:POST": typeof _route_auth_spread_path_POST extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"auth/[...path]:POST">> : typeof _route_auth_spread_path_POST;
+	"channels/auth:OPTIONS": typeof _route_channels_auth_OPTIONS extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"channels/auth:OPTIONS">> : typeof _route_channels_auth_OPTIONS;
+	"channels/auth:POST": typeof _route_channels_auth_POST extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"channels/auth:POST">> : typeof _route_channels_auth_POST;
+	"channels/config": typeof _route_channels_config extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"channels/config">> : typeof _route_channels_config;
+	"channels/publish:OPTIONS": typeof _route_channels_publish_OPTIONS extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"channels/publish:OPTIONS">> : typeof _route_channels_publish_OPTIONS;
+	"channels/publish:POST": typeof _route_channels_publish_POST extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"channels/publish:POST">> : typeof _route_channels_publish_POST;
 	"globals/[name]": typeof _route_globals_name extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"globals/[name]">> : typeof _route_globals_name;
 	"globals/[name]:PATCH": typeof _route_globals_name_PATCH extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"globals/[name]:PATCH">> : typeof _route_globals_name_PATCH;
 	"globals/[name]/audit": typeof _route_globals_name_audit extends { __brand: "route" } ? RouteDefinition<unknown, unknown, RouteParamsFromKey<"globals/[name]/audit">> : typeof _route_globals_name_audit;
@@ -224,6 +234,11 @@ const _module: CoreModule = {
 		"[collection]/upload": _route_collection_upload,
 		"auth/[...path]:GET": _route_auth_spread_path_GET,
 		"auth/[...path]:POST": _route_auth_spread_path_POST,
+		"channels/auth:OPTIONS": _route_channels_auth_OPTIONS,
+		"channels/auth:POST": _route_channels_auth_POST,
+		"channels/config": _route_channels_config,
+		"channels/publish:OPTIONS": _route_channels_publish_OPTIONS,
+		"channels/publish:POST": _route_channels_publish_POST,
 		"globals/[name]": _route_globals_name,
 		"globals/[name]:PATCH": _route_globals_name_PATCH,
 		"globals/[name]/audit": _route_globals_name_audit,

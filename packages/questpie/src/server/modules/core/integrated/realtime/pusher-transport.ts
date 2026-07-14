@@ -418,9 +418,30 @@ export class PusherClientTransport implements SharedProviderClientTransport {
 		socketId: string;
 		channel: string;
 		principal: Principal | null;
+		scope?: "session" | "channel";
+		presence?: { user_info?: Record<string, unknown> };
 	}): Promise<PusherAuthResponse> {
 		assertSocketId(input.socketId);
 		assertPusherChannelName(input.channel);
+		if (input.scope === "channel") {
+			if (input.channel.startsWith("presence-")) {
+				if (!input.principal) {
+					throw new Error(
+						"Presence channel authorization requires a principal",
+					);
+				}
+				return this.generatePresenceAuth({
+					socketId: input.socketId,
+					channel: input.channel,
+					principal: input.principal,
+					member: input.presence,
+				});
+			}
+			return this.options.provider.authorizeChannel(
+				input.socketId,
+				input.channel,
+			);
+		}
 		const session = this.sessions.get(input.channel);
 		if (!session) throw new Error("Realtime session is not authorized");
 		const currentPrincipal = await session.resolvePrincipal();

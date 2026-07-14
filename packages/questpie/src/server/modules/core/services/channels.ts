@@ -14,6 +14,7 @@ export default service({
 			app.config.channels ?? {},
 			app.realtime,
 			ctx as ChannelServiceContext,
+			app.config.realtime?.channelSecurity,
 		);
 	},
 });
