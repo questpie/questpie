@@ -1,7 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
 import { QueryClient } from "@tanstack/react-query";
-
 import type { QuestpieApp, QuestpieClient } from "questpie/client";
 
 import {
@@ -18,29 +17,34 @@ async function waitFor(assertion: () => boolean) {
 }
 
 describe("realtime query options", () => {
-	it("uses a normal collection fetch for the initial snapshot", async () => {
+	it("uses the server snapshot without a duplicate REST initial fetch", async () => {
 		const initialData = { docs: [{ id: "initial" }], totalDocs: 1 };
-		let subscribeCallback: ((data: unknown) => void) | undefined;
+		let emitSnapshot: ((data: unknown) => void) | undefined;
+		let findCalls = 0;
 		let subscribeCalls = 0;
 		let streamCalls = 0;
 
 		const client = {
 			collections: {
 				posts: {
-					find: async () => initialData,
+					find: async () => {
+						findCalls++;
+						return initialData;
+					},
 				},
 			},
 			globals: {},
 			routes: {},
 			realtime: {
-				subscribe: (_topic: unknown, callback: (data: unknown) => void) => {
+				subscribe: () => {
 					subscribeCalls++;
-					subscribeCallback = callback;
 					return () => {};
 				},
 				stream: async function* () {
 					streamCalls++;
-					throw new Error("stream should not be used");
+					yield await new Promise<unknown>((resolve) => {
+						emitSnapshot = resolve;
+					});
 				},
 				destroy: () => {},
 				topicCount: 0,
@@ -62,14 +66,16 @@ describe("realtime query options", () => {
 			queryKey: query.queryKey,
 			signal: abortController.signal,
 		});
+		await waitFor(() => typeof emitSnapshot === "function");
+		emitSnapshot!(initialData);
 
 		await waitFor(
 			() => queryClient.getQueryData(query.queryKey) === initialData,
 		);
 
-		expect(subscribeCalls).toBe(1);
-		expect(typeof subscribeCallback).toBe("function");
-		expect(streamCalls).toBe(0);
+		expect(findCalls).toBe(0);
+		expect(subscribeCalls).toBe(0);
+		expect(streamCalls).toBe(1);
 
 		abortController.abort();
 		await expect(queryPromise).resolves.toBe(initialData);

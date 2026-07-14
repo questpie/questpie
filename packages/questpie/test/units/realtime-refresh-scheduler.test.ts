@@ -127,6 +127,32 @@ describe("realtime scheduler", () => {
 		expect(frames).toBe(1);
 	});
 
+	it("skips a deploy-restart snapshot when sinceSeq is already current", async () => {
+		const realtime = new FakeRealtimeSource();
+		const scheduler = new RealtimeRefreshScheduler(realtime);
+		let computes = 0;
+		const frames: string[] = [];
+		scheduler.subscribe({
+			key: "posts:session-1:since-4",
+			topicId: "posts",
+			topics: { resourceType: "collection", resource: "posts" },
+			sinceSeq: 4,
+			compute: async () => ({ docs: [], run: ++computes }),
+			onFrame: (frame) => frames.push(new TextDecoder().decode(frame)),
+			onError: () => {},
+		});
+
+		await tick();
+		expect(computes).toBe(0);
+		expect(frames).toHaveLength(0);
+
+		realtime.emit(5);
+		await tick();
+		expect(computes).toBe(1);
+		expect(frames[0]).toContain('"seq":5');
+		expect(frames[0]).toContain('"reset":false');
+	});
+
 	it("bounds refresh computation concurrency", async () => {
 		const realtime = new FakeRealtimeSource();
 		const scheduler = new RealtimeRefreshScheduler(realtime, 2);

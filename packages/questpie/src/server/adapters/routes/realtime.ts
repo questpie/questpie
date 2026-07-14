@@ -27,6 +27,10 @@ import {
 	SseClientTransport,
 	SseLatestSnapshotWriter,
 } from "../../modules/core/integrated/realtime/sse-client-transport.js";
+import {
+	getRealtimeSseControlRegistry,
+	type RealtimeControlFrame,
+} from "../../modules/core/integrated/realtime/sse-control.js";
 import { sharedSseKeepAliveTicker } from "../../modules/core/integrated/realtime/sse-keep-alive.js";
 import type { AdapterConfig, AdapterContext } from "../types.js";
 import { resolveContext } from "../utils/context.js";
@@ -55,6 +59,8 @@ type TopicInput = {
 	orderBy?: Record<string, "asc" | "desc">;
 	/** Content locale override */
 	locale?: string;
+	/** Last snapshot sequence applied by the reconnecting client. */
+	sinceSeq?: number;
 };
 
 type ValidatedTopic = TopicInput & {
@@ -150,6 +156,84 @@ function isPermanentAccessError(error: unknown): boolean {
 	);
 }
 
+function realtimeControlIdentity(context: any): string {
+	const principal = context.principal;
+	if (principal?.kind === "user" && principal.session?.id) {
+		return `user-session:${principal.session.id}`;
+	}
+	if (principal?.kind === "oauth" && principal.tokenId) {
+		return `oauth:${principal.tokenId}`;
+	}
+	if (principal?.kind === "system") return "system";
+	const sessionId = context.session?.session?.id;
+	return sessionId ? `user-session:${sessionId}` : "anonymous";
+}
+
+async function resolveIncrementalTopic(
+	app: Questpie<any>,
+	rawTopic: TopicInput,
+	context: any,
+	admission: ReturnType<typeof resolveRealtimeAdmissionConfig>,
+): Promise<ValidatedTopic> {
+	if (!rawTopic.id || typeof rawTopic.id !== "string") {
+		throw new Error("Topic id is required");
+	}
+	if (!rawTopic.resourceType || !rawTopic.resource) {
+		throw new Error("Topic resource is required");
+	}
+	if (
+		rawTopic.sinceSeq !== undefined &&
+		(!Number.isSafeInteger(rawTopic.sinceSeq) || rawTopic.sinceSeq < 0)
+	) {
+		throw new Error("Topic sinceSeq must be a non-negative safe integer");
+	}
+	const topicAdmission = admitRealtimeTopic(rawTopic, admission);
+	if (!topicAdmission.accepted) throw new Error(topicAdmission.message);
+	const topic = topicAdmission.topic;
+
+	if (topic.resourceType === "collection") {
+		const crud = (app.collections as Record<string, any>)[topic.resource];
+		const definition = (app.getCollections() as Record<string, any>)[
+			topic.resource
+		];
+		if (!crud || !definition) throw new Error("Collection not found");
+		return evaluateTopicAccess(
+			app,
+			{
+				...topic,
+				type: "collection",
+				crud,
+				definition,
+				requestedWhere: topic.where,
+				accessCacheKey: definition.state.options.realtime?.accessCacheKey,
+			},
+			context,
+		);
+	}
+
+	if (topic.resourceType === "global") {
+		const crud = (app.globals as Record<string, any>)[topic.resource];
+		const definition = (app.getGlobals() as Record<string, any>)[
+			topic.resource
+		];
+		if (!crud || !definition) throw new Error("Global not found");
+		return evaluateTopicAccess(
+			app,
+			{
+				...topic,
+				type: "global",
+				crud,
+				definition,
+				requestedWhere: topic.where,
+				accessCacheKey: definition.state.options.realtime?.accessCacheKey,
+			},
+			context,
+		);
+	}
+
+	throw new Error("Invalid resource type");
+}
+
 // ============================================================================
 // Standalone Handler
 // ============================================================================
@@ -158,9 +242,11 @@ function isPermanentAccessError(error: unknown): boolean {
  * Standalone realtime subscribe handler.
  *
  * POST /realtime
- * Body: { topics: [{ id, resourceType, resource, where?, with?, limit?, offset?, orderBy? }] }
+ * Initial body: { topics: [{ id, resourceType, resource, where?, with?, limit?, offset?, orderBy?, sinceSeq? }] }
+ * Control body: { sessionId, token, frames: [{ type: "add_topic" | "remove_topic", ... }] }
  *
  * Response: SSE stream with events:
+ * - session: { sessionId, token }
  * - snapshot: { topicId, seq, data }
  * - error: { topicId, message }
  * Keepalive frames are SSE comments and are intentionally invisible to clients.
@@ -202,7 +288,12 @@ export async function realtimeSubscribe(
 	const resolved = await resolveContext(app, request, config, context);
 
 	// Parse request body
-	let body: { topics?: TopicInput[] };
+	let body: {
+		topics?: TopicInput[];
+		sessionId?: string;
+		token?: string;
+		frames?: RealtimeControlFrame[];
+	};
 	try {
 		body = await request.json();
 	} catch {
@@ -221,6 +312,39 @@ export async function realtimeSubscribe(
 	const admission = resolveRealtimeAdmissionConfig(
 		app.config?.realtime?.admission,
 	);
+	if (body.sessionId || body.frames) {
+		if (
+			!body.sessionId ||
+			!body.token ||
+			!Array.isArray(body.frames) ||
+			body.frames.length === 0 ||
+			body.frames.length > admission.maxTopicsPerConnection
+		) {
+			return errorResponse(
+				ApiError.badRequest("Invalid realtime control request"),
+				request,
+				resolved.appContext.locale,
+			);
+		}
+		try {
+			const dispatched = await getRealtimeSseControlRegistry<any>(app).dispatch(
+				body.sessionId,
+				body.token,
+				body.frames,
+				resolved.appContext,
+			);
+			if (!dispatched) {
+				return errorResponse(
+					ApiError.badRequest("Realtime control session is unavailable"),
+					request,
+					resolved.appContext.locale,
+				);
+			}
+			return new Response(null, { status: 204 });
+		} catch (error) {
+			return errorResponse(error, request, resolved.appContext.locale);
+		}
+	}
 
 	// Validate topics
 	if (!Array.isArray(topics) || topics.length === 0) {
@@ -278,6 +402,16 @@ export async function realtimeSubscribe(
 					undefined,
 					resolved.appContext.locale,
 				),
+			});
+			continue;
+		}
+		if (
+			topic.sinceSeq !== undefined &&
+			(!Number.isSafeInteger(topic.sinceSeq) || topic.sinceSeq < 0)
+		) {
+			topicErrors.push({
+				id: topic.id,
+				message: "Topic sinceSeq must be a non-negative safe integer",
 			});
 			continue;
 		}
@@ -406,6 +540,12 @@ export async function realtimeSubscribe(
 			validatedTopicsById.set(topic.id, topic);
 		}
 	}
+	const pacingMs = app.config?.realtime?.connectionAcceptPacingMs;
+	if (Number.isFinite(pacingMs) && (pacingMs as number) > 0) {
+		await new Promise((resolve) =>
+			setTimeout(resolve, Math.random() * Math.min(pacingMs as number, 30_000)),
+		);
+	}
 
 	const admissionRegistry = getRealtimeAdmissionRegistry(
 		app,
@@ -464,6 +604,7 @@ export async function realtimeSubscribe(
 					admission.initialSnapshotConcurrency,
 				);
 				let removeKeepAlive = () => {};
+				let unregisterControl = () => {};
 				flushPending = () => {
 					void snapshotWriter.flush().catch(requestClose);
 				};
@@ -472,6 +613,7 @@ export async function realtimeSubscribe(
 					closed = true;
 					releaseConnection();
 					removeKeepAlive();
+					unregisterControl();
 					flushPending = null;
 					snapshotWriter.clear();
 					request.signal.removeEventListener("abort", close);
@@ -508,13 +650,19 @@ export async function realtimeSubscribe(
 					if (topicUnsubscribers.size === 0) requestClose();
 				};
 
-				// Subscribe to each topic
-				for (const topic of validatedTopicsById.values()) {
-					if (closed) break;
+				const subscribeTopic = async (
+					topic: ValidatedTopic,
+					baseContext: any,
+				) => {
+					if (closed) return;
+					if (topicUnsubscribers.has(topic.id)) {
+						await sendTopicError(topic.id, "Topic id is already subscribed");
+						return;
+					}
 					const topicContext =
-						topic.locale && topic.locale !== resolved.appContext.locale
-							? { ...resolved.appContext, locale: topic.locale }
-							: resolved.appContext;
+						topic.locale && topic.locale !== baseContext.locale
+							? { ...baseContext, locale: topic.locale }
+							: baseContext;
 					const accessKey = await resolveRealtimeAccessKey(
 						edgeSessionId,
 						topicContext,
@@ -529,6 +677,7 @@ export async function realtimeSubscribe(
 							where: topic.where,
 							with: topic.with,
 						},
+						sinceSeq: topic.sinceSeq,
 						compute: () =>
 							limitSnapshotConcurrency(async () => {
 								const admittedTopic = await evaluateTopicAccess(
@@ -577,6 +726,69 @@ export async function realtimeSubscribe(
 						},
 					});
 					topicUnsubscribers.set(topic.id, unsub);
+				};
+
+				const originalIdentity = realtimeControlIdentity(resolved.appContext);
+				const controlToken = globalThis.crypto.randomUUID();
+				unregisterControl = getRealtimeSseControlRegistry<any>(app).register(
+					edgeSessionId,
+					controlToken,
+					async (frames, controlContext) => {
+						if (closed) throw new Error("Realtime session is closed");
+						if (realtimeControlIdentity(controlContext) !== originalIdentity) {
+							requestClose();
+							throw new Error("Realtime session identity changed");
+						}
+
+						for (const frame of frames) {
+							if (frame.type === "remove_topic") {
+								teardownTopic(frame.topicId);
+								continue;
+							}
+							if (frame.type !== "add_topic") {
+								throw new Error("Unknown realtime control frame");
+							}
+							if (topicUnsubscribers.size >= admission.maxTopicsPerConnection) {
+								await sendTopicError(
+									frame.topicId,
+									`Connection accepts at most ${admission.maxTopicsPerConnection} topics`,
+								);
+								continue;
+							}
+							try {
+								const rawTopic = {
+									...frame.topic,
+									id: frame.topicId,
+									sinceSeq: frame.sinceSeq,
+								} as TopicInput;
+								const topicContext =
+									rawTopic.locale && rawTopic.locale !== controlContext.locale
+										? { ...controlContext, locale: rawTopic.locale }
+										: controlContext;
+								const topic = await resolveIncrementalTopic(
+									app,
+									rawTopic,
+									topicContext,
+									admission,
+								);
+								await subscribeTopic(topic, topicContext);
+							} catch (error) {
+								await sendTopicError(
+									frame.topicId,
+									error instanceof Error ? error.message : "Topic rejected",
+								);
+							}
+						}
+					},
+				);
+				await send("session", {
+					sessionId: edgeSessionId,
+					token: controlToken,
+				});
+
+				// Subscribe to each initial topic.
+				for (const topic of validatedTopicsById.values()) {
+					await subscribeTopic(topic, resolved.appContext);
 				}
 
 				// Send initial errors for invalid topics

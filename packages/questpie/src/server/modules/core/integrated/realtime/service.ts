@@ -441,6 +441,25 @@ export class RealtimeService {
 		return rows[0]?.seq ? Number(rows[0].seq) : 0;
 	}
 
+	async getResumeState(
+		sinceSeq: number,
+	): Promise<{ latestSeq: number; reset: boolean }> {
+		const latestSeq = await this.getLatestSeq();
+		if (sinceSeq === latestSeq) return { latestSeq, reset: false };
+		if (sinceSeq < 0 || sinceSeq > latestSeq) {
+			return { latestSeq, reset: true };
+		}
+		if (latestSeq === 0) return { latestSeq, reset: sinceSeq !== 0 };
+
+		const rows = await this.db
+			.select({ seq: questpieRealtimeLogTable.seq })
+			.from(questpieRealtimeLogTable)
+			.orderBy(asc(questpieRealtimeLogTable.seq))
+			.limit(1);
+		const oldestSeq = rows[0]?.seq ? Number(rows[0].seq) : latestSeq;
+		return { latestSeq, reset: sinceSeq < oldestSeq - 1 };
+	}
+
 	private async readSince(seq: number): Promise<RealtimeChangeEvent[]> {
 		const rows = await this.db
 			.select({
@@ -682,20 +701,12 @@ export class RealtimeService {
 				continue;
 			}
 
-			const before = projectionMatch(
-				event.payload?.before,
-				entry.whereFilters,
-			);
-			const after = projectionMatch(
-				event.payload?.after,
-				entry.whereFilters,
-			);
+			const before = projectionMatch(event.payload?.before, entry.whereFilters);
+			const after = projectionMatch(event.payload?.after, entry.whereFilters);
 			const definitelyUnrelated =
 				(event.operation === "create" && after === "miss") ||
 				(event.operation === "delete" && before === "miss") ||
-				(event.operation === "update" &&
-					before === "miss" &&
-					after === "miss");
+				(event.operation === "update" && before === "miss" && after === "miss");
 
 			if (!definitelyUnrelated) {
 				notifiedListeners.add(entry);

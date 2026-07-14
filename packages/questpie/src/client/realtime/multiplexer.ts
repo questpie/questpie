@@ -41,6 +41,32 @@ type SSEEvent = {
 	data: string;
 };
 
+type ControlFrame =
+	| {
+			type: "add_topic";
+			topicId: string;
+			topic: TopicConfig;
+			sinceSeq?: number;
+	  }
+	| { type: "remove_topic"; topicId: string };
+
+export type RealtimeMultiplexerRuntime = {
+	retryBaseMs?: number;
+	maxRetryMs?: number;
+	pingWatchdogMs?: number;
+	random?: () => number;
+};
+
+export function realtimeReconnectDelay(
+	retryBaseMs: number,
+	attempt: number,
+	maxRetryMs: number,
+	random: () => number,
+): number {
+	const baseDelay = Math.min(retryBaseMs * 2 ** attempt, maxRetryMs);
+	return Math.round(baseDelay * (0.5 + random()));
+}
+
 // ============================================================================
 // Helper: Stable stringify for nested objects
 // ============================================================================
@@ -63,20 +89,36 @@ export function stableStringify(x: unknown): string {
 export class RealtimeMultiplexer {
 	private abortController: AbortController | null = null;
 	private subscribers = new Map<string, Set<Subscriber>>();
-	private errorCallbacks = new Set<ErrorCallback>();
+	private errorCallbacks = new Map<string, Set<ErrorCallback>>();
 	private topics = new Map<string, TopicConfig>();
+	private lastSeq = new Map<string, number>();
 	private customIds = new Map<string, string>();
 	private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+	private watchdogTimer: ReturnType<typeof setTimeout> | null = null;
 	private reconnectAttempts = 0;
 	private connecting = false;
 	private destroyed = false;
 	private reconnectPending = false;
+	private watchdogTriggered = false;
+	private controlSession: { sessionId: string; token: string } | null = null;
+	private pendingControlFrames: ControlFrame[] = [];
+	private controlOperation: Promise<void> = Promise.resolve();
+	private readonly retryBaseMs: number;
+	private readonly maxRetryMs: number;
+	private readonly pingWatchdogMs: number;
+	private readonly random: () => number;
 
 	constructor(
 		private baseUrl: string,
 		private withCredentials = true,
 		private debounceMs = 50,
-	) {}
+		runtime: RealtimeMultiplexerRuntime = {},
+	) {
+		this.retryBaseMs = runtime.retryBaseMs ?? 1000;
+		this.maxRetryMs = runtime.maxRetryMs ?? 30_000;
+		this.pingWatchdogMs = runtime.pingWatchdogMs ?? 25_000;
+		this.random = runtime.random ?? Math.random;
+	}
 
 	/**
 	 * Subscribe to a topic. Returns unsubscribe function.
@@ -98,29 +140,45 @@ export class RealtimeMultiplexer {
 		if (!this.subscribers.has(topicId)) {
 			this.subscribers.set(topicId, new Set());
 			this.topics.set(topicId, topic);
-			this.scheduleReconnect();
+			this.applyTopologyChange({
+				type: "add_topic",
+				topicId,
+				topic,
+				...(this.lastSeq.has(topicId)
+					? { sinceSeq: this.lastSeq.get(topicId) }
+					: {}),
+			});
 		}
 
 		this.subscribers.get(topicId)!.add(callback);
 
 		if (onError) {
-			this.errorCallbacks.add(onError);
+			const callbacks = this.errorCallbacks.get(topicId) ?? new Set();
+			callbacks.add(onError);
+			this.errorCallbacks.set(topicId, callbacks);
 		}
 
+		let unsubscribed = false;
 		const unsubscribe = () => {
+			if (unsubscribed) return;
+			unsubscribed = true;
+			signal?.removeEventListener("abort", unsubscribe);
 			const subs = this.subscribers.get(topicId);
 			if (!subs) return;
 
 			subs.delete(callback);
 			if (onError) {
-				this.errorCallbacks.delete(onError);
+				const callbacks = this.errorCallbacks.get(topicId);
+				callbacks?.delete(onError);
+				if (callbacks?.size === 0) this.errorCallbacks.delete(topicId);
 			}
 
 			if (subs.size === 0) {
 				this.subscribers.delete(topicId);
 				this.topics.delete(topicId);
 				this.customIds.delete(topicHash);
-				this.scheduleReconnect();
+				this.lastSeq.delete(topicId);
+				this.applyTopologyChange({ type: "remove_topic", topicId });
 			}
 		};
 
@@ -159,6 +217,60 @@ export class RealtimeMultiplexer {
 			.replace(/=+$/, "");
 	}
 
+	private applyTopologyChange(frame: ControlFrame): void {
+		if (this.destroyed) return;
+		if (this.controlSession) {
+			this.pendingControlFrames.push(frame);
+			this.flushControlFrames();
+			return;
+		}
+		if (this.connecting) {
+			this.pendingControlFrames.push(frame);
+			return;
+		}
+		this.scheduleReconnect();
+	}
+
+	private flushControlFrames(): void {
+		if (!this.controlSession || this.pendingControlFrames.length === 0) return;
+		const session = this.controlSession;
+		const frames = this.pendingControlFrames.splice(0);
+		this.controlOperation = this.controlOperation
+			.then(async () => {
+				const response = await fetch(`${this.baseUrl}/realtime`, {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({
+						sessionId: session.sessionId,
+						token: session.token,
+						frames,
+					}),
+					credentials: this.withCredentials ? "include" : "omit",
+				});
+				if (!response.ok) {
+					throw new Error(`Realtime control failed: ${response.status}`);
+				}
+			})
+			.catch((error) => {
+				if (this.destroyed || this.controlSession !== session) return;
+				const normalized =
+					error instanceof Error ? error : new Error(String(error));
+				for (const frame of frames) {
+					this.notifyTopicError(frame.topicId, normalized);
+				}
+				this.reconnectPending = true;
+				this.abortController?.abort();
+			});
+	}
+
+	private notifyTopicError(topicId: string, error: Error): void {
+		const callbacks =
+			topicId === "*"
+				? Array.from(this.errorCallbacks.values()).flatMap((set) => [...set])
+				: [...(this.errorCallbacks.get(topicId) ?? [])];
+		for (const callback of new Set(callbacks)) callback(error);
+	}
+
 	/**
 	 * Schedule a reconnection with debounce.
 	 * If stream is active, abort it immediately to apply new topics.
@@ -179,6 +291,31 @@ export class RealtimeMultiplexer {
 		this.reconnectTimer = setTimeout(() => this.connect(), this.debounceMs);
 	}
 
+	private scheduleRetry(): void {
+		if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+		const delay = realtimeReconnectDelay(
+			this.retryBaseMs,
+			this.reconnectAttempts,
+			this.maxRetryMs,
+			this.random,
+		);
+		this.reconnectAttempts += 1;
+		this.reconnectTimer = setTimeout(() => this.connect(), delay);
+	}
+
+	private armWatchdog(): void {
+		if (this.watchdogTimer) clearTimeout(this.watchdogTimer);
+		this.watchdogTimer = setTimeout(() => {
+			this.watchdogTriggered = true;
+			this.abortController?.abort();
+		}, this.pingWatchdogMs);
+	}
+
+	private clearWatchdog(): void {
+		if (this.watchdogTimer) clearTimeout(this.watchdogTimer);
+		this.watchdogTimer = null;
+	}
+
 	/**
 	 * Connect to the realtime endpoint.
 	 */
@@ -186,6 +323,7 @@ export class RealtimeMultiplexer {
 		if (this.connecting || this.destroyed) {
 			return;
 		}
+		this.reconnectTimer = null;
 
 		this.abortController?.abort();
 
@@ -196,11 +334,16 @@ export class RealtimeMultiplexer {
 
 		this.connecting = true;
 		this.abortController = new AbortController();
+		this.controlSession = null;
+		this.pendingControlFrames = [];
+		this.controlOperation = Promise.resolve();
+		this.watchdogTriggered = false;
 
 		const getTopicsPayload = () =>
 			Array.from(this.topics.entries()).map(([id, config]) => ({
 				id,
 				...config,
+				...(this.lastSeq.has(id) ? { sinceSeq: this.lastSeq.get(id) } : {}),
 			}));
 
 		try {
@@ -220,15 +363,16 @@ export class RealtimeMultiplexer {
 				throw new Error("Realtime response has no body");
 			}
 
-			this.reconnectAttempts = 0;
-
+			this.armWatchdog();
 			await this.readStream(response.body);
+			throw new Error("Realtime stream closed");
 		} catch (error) {
 			if (this.destroyed) return;
+			if (this.topics.size === 0) return;
 
 			const isAbort = (error as Error).name === "AbortError";
 
-			if (isAbort) {
+			if (isAbort && !this.watchdogTriggered) {
 				// Let finally block handle reconnectPending cleanly
 				return;
 			}
@@ -236,14 +380,17 @@ export class RealtimeMultiplexer {
 			// Notify subscribers of connection error so they can throw
 			// instead of waiting forever (prevents infinite loading)
 			const err = error instanceof Error ? error : new Error(String(error));
-			for (const cb of this.errorCallbacks) {
-				cb(err);
+			if (
+				!this.watchdogTriggered &&
+				err.message !== "Realtime stream closed" &&
+				this.lastSeq.size === 0
+			) {
+				this.notifyTopicError("*", err);
 			}
-
-			const delay = Math.min(1000 * 2 ** this.reconnectAttempts, 30000);
-			this.reconnectAttempts++;
-			this.reconnectTimer = setTimeout(() => this.connect(), delay);
+			this.scheduleRetry();
 		} finally {
+			this.clearWatchdog();
+			this.controlSession = null;
 			this.connecting = false;
 
 			if (this.reconnectPending) {
@@ -265,6 +412,7 @@ export class RealtimeMultiplexer {
 			while (true) {
 				const { done, value } = await reader.read();
 				if (done) break;
+				this.armWatchdog();
 
 				buffer += decoder.decode(value, { stream: true });
 				const { events, remaining } = this.parseSSE(buffer);
@@ -277,11 +425,6 @@ export class RealtimeMultiplexer {
 		} finally {
 			reader.releaseLock();
 		}
-
-		if (!this.destroyed && this.topics.size > 0) {
-			this.reconnectPending = false;
-			this.scheduleReconnect();
-		}
 	}
 
 	/**
@@ -290,10 +433,15 @@ export class RealtimeMultiplexer {
 	private handleEvent(event: SSEEvent): void {
 		if (event.type === "snapshot") {
 			try {
-				const { topicId, data } = JSON.parse(event.data) as {
+				const { topicId, seq, data } = JSON.parse(event.data) as {
 					topicId: string;
+					seq: number;
 					data: unknown;
 				};
+				if (Number.isSafeInteger(seq) && seq >= 0) {
+					this.lastSeq.set(topicId, seq);
+				}
+				this.reconnectAttempts = 0;
 				const subs = this.subscribers.get(topicId);
 				if (subs) {
 					for (const callback of subs) {
@@ -303,13 +451,28 @@ export class RealtimeMultiplexer {
 			} catch {
 				// Ignore parse errors
 			}
+		} else if (event.type === "session") {
+			try {
+				const session = JSON.parse(event.data) as {
+					sessionId: string;
+					token: string;
+				};
+				if (session.sessionId && session.token) {
+					this.controlSession = session;
+					this.flushControlFrames();
+				}
+			} catch {
+				// Ignore malformed control metadata.
+			}
+		} else if (event.type === "ping") {
+			this.reconnectAttempts = 0;
 		} else if (event.type === "error") {
 			try {
 				const { topicId, message } = JSON.parse(event.data) as {
 					topicId: string;
 					message: string;
 				};
-				console.warn(`Realtime error for topic ${topicId}: ${message}`);
+				this.notifyTopicError(topicId, new Error(message));
 			} catch {
 				// Ignore parse errors
 			}
@@ -330,17 +493,22 @@ export class RealtimeMultiplexer {
 			const lines = block.split("\n");
 			let type = "";
 			let data = "";
+			let ping = false;
 
 			for (const line of lines) {
 				if (line.startsWith("event: ")) {
 					type = line.slice(7);
 				} else if (line.startsWith("data: ")) {
 					data = line.slice(6);
+				} else if (line.startsWith(":")) {
+					ping = true;
 				}
 			}
 
 			if (type && data) {
 				events.push({ type, data });
+			} else if (ping) {
+				events.push({ type: "ping", data: "" });
 			}
 		}
 
@@ -356,10 +524,14 @@ export class RealtimeMultiplexer {
 		if (this.reconnectTimer) {
 			clearTimeout(this.reconnectTimer);
 		}
+		this.clearWatchdog();
 		this.subscribers.clear();
 		this.errorCallbacks.clear();
 		this.topics.clear();
+		this.lastSeq.clear();
 		this.customIds.clear();
+		this.pendingControlFrames = [];
+		this.controlSession = null;
 	}
 
 	get topicCount(): number {

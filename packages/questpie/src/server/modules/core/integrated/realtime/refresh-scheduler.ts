@@ -7,6 +7,10 @@ import type {
 
 type RealtimeSource = {
 	getLatestSeq(): Promise<number>;
+	getResumeState?(sinceSeq: number): Promise<{
+		latestSeq: number;
+		reset: boolean;
+	}>;
 	subscribe(
 		listener: (event: RealtimeChangeEvent) => void,
 		topics: RealtimeTopics,
@@ -79,6 +83,7 @@ type SchedulerGroup = {
 	key: string;
 	topicId: string;
 	topics: RealtimeTopics;
+	sinceSeq?: number;
 	compute: () => Promise<unknown>;
 	subscribers: Set<Subscriber>;
 	unsubscribe: () => void;
@@ -87,6 +92,7 @@ type SchedulerGroup = {
 	lastFrame?: Uint8Array;
 	refreshInFlight: boolean;
 	refreshQueued: boolean;
+	nextReset: boolean;
 	disposed: boolean;
 };
 
@@ -94,6 +100,7 @@ export type RefreshSubscriptionInput = {
 	key: string;
 	topicId: string;
 	topics: RealtimeTopics;
+	sinceSeq?: number;
 	compute: () => Promise<unknown>;
 	onFrame: (frame: Uint8Array) => Promise<void> | void;
 	onError: RealtimeErrorListener;
@@ -130,12 +137,14 @@ export class RealtimeRefreshScheduler {
 				key: input.key,
 				topicId: input.topicId,
 				topics: input.topics,
+				sinceSeq: input.sinceSeq,
 				compute: input.compute,
 				subscribers: new Set(),
 				unsubscribe: () => {},
 				lastSeq: 0,
 				refreshInFlight: false,
 				refreshQueued: false,
+				nextReset: false,
 				disposed: false,
 			};
 			this.groups.set(input.key, group);
@@ -170,7 +179,25 @@ export class RealtimeRefreshScheduler {
 
 	private async initialize(group: SchedulerGroup): Promise<void> {
 		try {
-			const latestSeq = await this.realtime.getLatestSeq();
+			let resume: { latestSeq: number; reset: boolean };
+			if (group.sinceSeq !== undefined && this.realtime.getResumeState) {
+				resume = await this.realtime.getResumeState(group.sinceSeq);
+			} else {
+				resume = {
+					latestSeq: await this.realtime.getLatestSeq(),
+					reset: false,
+				};
+			}
+			const { latestSeq } = resume;
+			if (
+				group.sinceSeq !== undefined &&
+				latestSeq === group.sinceSeq &&
+				!resume.reset
+			) {
+				group.lastSeq = latestSeq;
+				return;
+			}
+			group.nextReset = resume.reset;
 			this.requestRefresh(group, latestSeq);
 		} catch (error) {
 			this.reportError(group, error);
@@ -203,7 +230,9 @@ export class RealtimeRefreshScheduler {
 					topicId: group.topicId,
 					seq: group.lastSeq,
 					data,
+					reset: group.nextReset,
 				});
+				group.nextReset = false;
 				const frame = group.lastFrame;
 				for (const subscriber of group.subscribers) {
 					void Promise.resolve(subscriber.onFrame(frame)).catch(

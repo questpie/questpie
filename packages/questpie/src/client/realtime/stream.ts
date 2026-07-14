@@ -77,6 +77,7 @@ export async function* sseSnapshotStream<TData>(options: {
 	// Promise resolver/rejecter for when new data arrives or connection fails
 	let resolveNext: (() => void) | null = null;
 	let rejectNext: ((error: Error) => void) | null = null;
+	let pendingError: Error | null = null;
 
 	// Track if the stream is closed
 	let closed = false;
@@ -84,7 +85,12 @@ export async function* sseSnapshotStream<TData>(options: {
 	// Error callback - rejects the waiting promise so the generator throws
 	// instead of waiting forever (prevents infinite loading on server errors)
 	const onError = (error: Error) => {
+		pendingError = error;
 		rejectNext?.(error);
+	};
+	const handleAbort = () => {
+		closed = true;
+		resolveNext?.();
 	};
 
 	// Subscribe to the topic via multiplexer
@@ -100,9 +106,11 @@ export async function* sseSnapshotStream<TData>(options: {
 		customId,
 		onError,
 	);
+	signal?.addEventListener("abort", handleAbort, { once: true });
 
 	try {
 		while (!closed && !signal?.aborted) {
+			if (pendingError) throw pendingError;
 			// Yield all queued items
 			while (queue.length > 0) {
 				yield queue.shift()!;
@@ -113,7 +121,6 @@ export async function* sseSnapshotStream<TData>(options: {
 				await new Promise<void>((resolve, reject) => {
 					resolveNext = resolve;
 					rejectNext = reject;
-					signal?.addEventListener("abort", () => resolve(), { once: true });
 				});
 				resolveNext = null;
 				rejectNext = null;
@@ -121,6 +128,7 @@ export async function* sseSnapshotStream<TData>(options: {
 		}
 	} finally {
 		closed = true;
+		signal?.removeEventListener("abort", handleAbort);
 		unsubscribe();
 	}
 }

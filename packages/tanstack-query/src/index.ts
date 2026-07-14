@@ -88,8 +88,8 @@ type QueryBuilder<TFn extends AnyAsyncFn> =
 export type RealtimeQueryConfig = {
 	/**
 	 * Subscribe the query to live snapshots over the multiplexed SSE stream.
-	 * Initial data comes from a normal fetch; afterwards the server pushes
-	 * full snapshots on every matching change (via `experimental_streamedQuery`).
+	 * The server supplies both the initial value and later full snapshots through
+	 * the same stream (via `experimental_streamedQuery`).
 	 */
 	realtime?: boolean;
 };
@@ -464,56 +464,18 @@ const wrapMutationFn = <TVariables, TData>(
 };
 
 async function* streamRealtimeQuery<TInitialData>(options: {
-	initialFetch: () => Promise<TInitialData>;
 	realtime: RealtimeAPI;
 	topic: TopicConfig;
 	signal?: AbortSignal;
 	errorMap: QuestpieQueryErrorMap;
 }): AsyncGenerator<unknown, void, unknown> {
-	const { initialFetch, realtime, topic, signal, errorMap } = options;
-	const queue: unknown[] = [];
-	let resolveNext: (() => void) | null = null;
-
-	const notify = () => {
-		resolveNext?.();
-		resolveNext = null;
-	};
-	const handleAbort = () => notify();
-
-	const unsubscribe = realtime.subscribe(
-		topic,
-		(data) => {
-			queue.push(data);
-			notify();
-		},
-		signal,
-	);
-
-	signal?.addEventListener("abort", handleAbort, { once: true });
-
+	const { realtime, topic, signal, errorMap } = options;
 	try {
-		try {
-			yield await initialFetch();
-		} catch (error) {
-			throw errorMap(error);
+		for await (const snapshot of realtime.stream<TInitialData>(topic, signal)) {
+			yield snapshot;
 		}
-
-		while (!signal?.aborted) {
-			while (queue.length > 0) {
-				yield queue.shift();
-			}
-
-			if (signal?.aborted) break;
-
-			await new Promise<void>((resolve) => {
-				resolveNext = resolve;
-			});
-			resolveNext = null;
-		}
-	} finally {
-		signal?.removeEventListener("abort", handleAbort);
-		unsubscribe();
-		resolveNext = null;
+	} catch (error) {
+		throw errorMap(error);
 	}
 }
 
@@ -581,7 +543,6 @@ export function createQuestpieQueryOptions<
 								queryFn: streamedQuery({
 									streamFn: ({ signal }) =>
 										streamRealtimeQuery({
-											initialFetch: () => collection.find(options),
 											realtime: client.realtime,
 											topic,
 											signal,
@@ -616,7 +577,6 @@ export function createQuestpieQueryOptions<
 								queryFn: streamedQuery({
 									streamFn: ({ signal }) =>
 										streamRealtimeQuery({
-											initialFetch: () => collection.count(options),
 											realtime: client.realtime,
 											topic,
 											signal,
@@ -883,7 +843,6 @@ export function createQuestpieQueryOptions<
 							queryFn: streamedQuery({
 								streamFn: ({ signal }) =>
 									streamRealtimeQuery({
-										initialFetch: () => global.get(options),
 										realtime: client.realtime,
 										topic,
 										signal,

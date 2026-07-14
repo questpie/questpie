@@ -1,6 +1,8 @@
 // @ts-nocheck // TODO: Temporary until test utils are fully typed
 import { afterEach, describe, expect, it, spyOn } from "bun:test";
 
+import { lt } from "drizzle-orm";
+
 import {
 	createAdapterRoutes,
 	collection,
@@ -90,6 +92,7 @@ type TopicInput = {
 	limit?: number;
 	offset?: number;
 	orderBy?: Record<string, "asc" | "desc">;
+	sinceSeq?: number;
 };
 
 /**
@@ -138,7 +141,10 @@ const createSSEReader = (stream: ReadableStream<Uint8Array>) => {
 	const decoder = new TextDecoder();
 	let buffer = "";
 
-	const readEvent = async (timeoutMs = 2000): Promise<SSEEvent> => {
+	const readEvent = async (
+		timeoutMs = 2000,
+		includeSession = false,
+	): Promise<SSEEvent> => {
 		const deadline = Date.now() + timeoutMs;
 
 		while (Date.now() < deadline) {
@@ -160,11 +166,13 @@ const createSSEReader = (stream: ReadableStream<Uint8Array>) => {
 					}
 				}
 
-				return {
+				const parsed = {
 					event,
 					data: data ? JSON.parse(data) : null,
 					comment,
 				};
+				if (parsed.event === "session" && !includeSession) continue;
+				return parsed;
 			}
 
 			const { value, done } = await reader.read();
@@ -2023,6 +2031,132 @@ describe("realtime", () => {
 	// ==========================================================================
 
 	describe("shared refresh scheduler", () => {
+		it("adds and removes one topic through control frames without reconnecting", async () => {
+			const adapter = new MockRealtimeAdapter();
+			const items = collection("items")
+				.fields(({ f }) => ({ name: f.textarea().required() }))
+				.access({ read: true });
+			setup = await buildMockApp(
+				{ collections: { items } },
+				{ realtime: { adapter } },
+			);
+			await runTestDbMigrations(setup.app);
+			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
+			const response = await routes.realtime.subscribe(
+				createRealtimeRequest([collectionTopic("items")]),
+				{},
+				undefined,
+			);
+			const reader = createSSEReader(response.body!);
+			const session = await reader.readEvent(2000, true);
+			expect(session.event).toBe("session");
+			await reader.readSnapshot(2000, "col-items");
+
+			const control = (frames: unknown[]) =>
+				routes.realtime.subscribe(
+					new Request("http://localhost/realtime", {
+						method: "POST",
+						headers: { "Content-Type": "application/json" },
+						body: JSON.stringify({
+							sessionId: session.data.sessionId,
+							token: session.data.token,
+							frames,
+						}),
+					}),
+					{},
+					undefined,
+				);
+			const added = await control([
+				{
+					type: "add_topic",
+					topicId: "items-added",
+					topic: {
+						resourceType: "collection",
+						resource: "items",
+						where: { name: "added" },
+					},
+				},
+			]);
+			expect(added.status).toBe(204);
+			expect((await reader.readSnapshot(2000, "items-added")).event).toBe(
+				"snapshot",
+			);
+			expect(setup.app.realtime.listeners.size).toBe(2);
+
+			const removed = await control([
+				{ type: "remove_topic", topicId: "items-added" },
+			]);
+			expect(removed.status).toBe(204);
+			expect(setup.app.realtime.listeners.size).toBe(1);
+			await reader.close();
+		});
+
+		it("resumes an unchanged topic without another initial snapshot", async () => {
+			const adapter = new MockRealtimeAdapter();
+			let reads = 0;
+			const items = collection("items")
+				.fields(({ f }) => ({ name: f.textarea().required() }))
+				.hooks({ beforeRead: () => void (reads += 1) })
+				.access({ read: true, create: true });
+			setup = await buildMockApp(
+				{ collections: { items } },
+				{ realtime: { adapter } },
+			);
+			await runTestDbMigrations(setup.app);
+			const context = createTestContext();
+			await setup.app.collections.items.create({ name: "before" }, context);
+			const sinceSeq = await setup.app.realtime.getLatestSeq();
+
+			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
+			const response = await routes.realtime.subscribe(
+				createRealtimeRequest([collectionTopic("items", { sinceSeq })]),
+				{},
+				undefined,
+			);
+			const reader = createSSEReader(response.body!);
+			await new Promise((resolve) => setTimeout(resolve, 30));
+			expect(reads).toBe(0);
+
+			await setup.app.collections.items.create({ name: "after" }, context);
+			const snapshot = await reader.readSnapshot();
+			expect(snapshot.data.seq).toBeGreaterThan(sinceSeq);
+			expect(snapshot.data.reset).toBe(false);
+			expect(reads).toBe(1);
+			await reader.close();
+		});
+
+		it("forces a reset when sinceSeq is older than the retained horizon", async () => {
+			const adapter = new MockRealtimeAdapter();
+			const items = collection("items")
+				.fields(({ f }) => ({ name: f.textarea().required() }))
+				.access({ read: true, create: true });
+			setup = await buildMockApp(
+				{ collections: { items } },
+				{ realtime: { adapter } },
+			);
+			await runTestDbMigrations(setup.app);
+			const context = createTestContext();
+			for (const name of ["one", "two", "three"]) {
+				await setup.app.collections.items.create({ name }, context);
+			}
+			const latestSeq = await setup.app.realtime.getLatestSeq();
+			await setup.app.db
+				.delete(questpieRealtimeLogTable)
+				.where(lt(questpieRealtimeLogTable.seq, latestSeq));
+
+			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
+			const response = await routes.realtime.subscribe(
+				createRealtimeRequest([collectionTopic("items", { sinceSeq: 0 })]),
+				{},
+				undefined,
+			);
+			const reader = createSSEReader(response.body!);
+			const snapshot = await reader.readSnapshot();
+			expect(snapshot.data.seq).toBe(latestSeq);
+			expect(snapshot.data.reset).toBe(true);
+			await reader.close();
+		});
+
 		it("runs one pipeline for the five admitted same-principal connections", async () => {
 			const adapter = new MockRealtimeAdapter();
 			let pipelineRuns = 0;
