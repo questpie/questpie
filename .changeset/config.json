@@ -9,9 +9,13 @@
 		[
 			"questpie",
 			"@questpie/admin",
+			"@questpie/ai",
 			"@questpie/elysia",
 			"@questpie/hono",
+			"@questpie/mcp",
 			"@questpie/next",
+			"@questpie/openapi",
+			"@questpie/sandbox",
 			"@questpie/tanstack-query",
 			"@questpie/workflows"
 		]
