@@ -157,7 +157,7 @@ export default mcpConfig({
 
 ### `McpConfig` reference
 
-The full config interface (`packages/mcp/src/server/types.ts:76`):
+The full `McpConfig` interface:
 
 ```ts
 interface McpConfig {
@@ -196,7 +196,7 @@ interface McpConfig {
 
 ### `McpEntityPolicy`, per-entity control
 
-A collection/global/route entry is either a boolean or an object (`packages/mcp/src/server/types.ts:23`):
+A collection/global/route entry is either a boolean or an object:
 
 ```ts
 type McpEntityPolicy =
@@ -222,7 +222,7 @@ Per-transport CRUD defaults differ on purpose. Over **HTTP**, collections defaul
 
 ### Access rules on tools
 
-Anywhere a policy field accepts a rule, you can pass a function (`McpAccessRule`, `packages/mcp/src/server/types.ts:19`):
+Anywhere a policy field accepts a rule, you can pass an `McpAccessRule` function:
 
 ```ts
 type McpAccessRule =
@@ -281,7 +281,7 @@ Scaffold one with `questpie add mcp-tool recalculate-stats`, which creates the f
 
 `mcpTool(name, config)` returns a builder; call `.handler(fn)` to get the frozen definition.
 
-**`config` (`McpToolConfig`)**, all optional (`packages/mcp/src/server/types.ts:102`):
+**`config` (`McpToolConfig`)**, all optional:
 
 | Field | Type | Notes |
 |---|---|---|
@@ -293,7 +293,7 @@ Scaffold one with `questpie add mcp-tool recalculate-stats`, which creates the f
 | `access` | `McpAccessRule` | Evaluated per call; a falsy result hides the tool / denies the call. |
 | `_meta` | `Record<string, unknown>` | Arbitrary metadata passed through to the MCP tool. |
 
-**Handler args (`McpToolHandlerArgs`)** (`packages/mcp/src/server/types.ts:94`):
+**Handler args (`McpToolHandlerArgs`)**:
 
 | Arg | Type | Notes |
 |---|---|---|

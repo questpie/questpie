@@ -186,7 +186,7 @@ Everything below `app`/`db` is optional. The full `RuntimeConfigInput` shape:
 | `autoSeed`     | `boolean \| SeedCategory \| SeedCategory[]` | Run [seeds](/docs/concepts/seeds) on startup.                                  |
 | `cli`          | `{ migrations?, seeds? }`                   | Override generated-migration / [seed](/docs/concepts/seeds) directories.       |
 
-The input type is `RuntimeConfigInput` at `packages/questpie/src/server/config/module-types.ts:407`, defined as `Partial<Pick<RuntimeConfig, "app" | "db">> & Omit<RuntimeConfig, "app" | "db">`, i.e. the resolved `RuntimeConfig` interface (`:308`, where every adapter type lives) with `app` and `db` made optional. `DbConfig` itself is a union, `{ url }`, `{ pglite }`, `{ drizzle }` (a pre-built client, for Neon / Vercel Postgres / Hyperdrive), or `{ create }` (a lazy factory, preferred for Cloudflare Workers).
+The input type is `RuntimeConfigInput`, defined as `Partial<Pick<RuntimeConfig, "app" | "db">> & Omit<RuntimeConfig, "app" | "db">`: the resolved `RuntimeConfig` interface with `app` and `db` made optional. `DbConfig` itself is a union, `{ url }`, `{ pglite }`, `{ drizzle }` (a pre-built client, for Neon / Vercel Postgres / Hyperdrive), or `{ create }` (a lazy factory, preferred for Cloudflare Workers).
 
 <Callout type="info" title="`plugins` is for codegen plugins, not modules">
 	`runtimeConfig({plugins})` registers **codegen plugins** (the thing that adds
@@ -433,7 +433,7 @@ export const blogModule = module({
 	anything in `questpie.config.ts`, adding the module to `modules.ts` is enough.
 </Callout>
 
-The full module surface (`ModuleDefinition`), how modules contribute each category, and the depth-first merge are covered in the Extend → Modules section. The full `module()` and `ModuleDefinition` reference lives at `packages/questpie/src/server/config/create-app.ts:58` and `module-types.ts:94`.
+The full module surface (`ModuleDefinition`), how modules contribute each category, and the depth-first merge are covered in [Extend → Modules](/docs/extend/modules).
 
 ## CLI config
 

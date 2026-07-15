@@ -59,7 +59,7 @@ Import `global` from **`#questpie/factories`**, not from `questpie` directly. Th
 
 ## Reading and writing
 
-At runtime a global lives on `app.globals.<name>`, and on `ctx.globals.<name>` inside hooks, routes, jobs, blocks, and seeds, since the context spreads the full app. The CRUD surface is `get()` and `update()` (plus version/workflow methods when enabled). This is the `GlobalCRUD` interface in `global/crud/types.ts:210`.
+At runtime a global lives on `app.globals.<name>`, and on `ctx.globals.<name>` inside hooks, routes, jobs, blocks, and seeds, since the context spreads the full app. The public `GlobalCRUD` interface exposes `get()` and `update()` plus version/workflow methods when enabled.
 
 ### get(options?, context?)
 
@@ -83,7 +83,7 @@ const settings = await app.globals.siteSettings.get(
 );
 ```
 
-`GlobalGetOptions` (`global/crud/types.ts:64`) accepts exactly: `with` (relations), `columns` (partial selection), `locale`, `localeFallback`, and `stage` (workflow). There is no `where`, `limit`, `offset`, or `orderBy`, a singleton has nothing to filter or paginate.
+`GlobalGetOptions` accepts exactly: `with` (relations), `columns` (partial selection), `locale`, `localeFallback`, and `stage` (workflow). There is no `where`, `limit`, `offset`, or `orderBy`, a singleton has nothing to filter or paginate.
 
 <Callout type="warn" title="`get()` returns `null` until the row exists, and `.default()` does not change that">
 A global has no row until something writes it: a seed, an admin save, or an `update()`. Field `.default(...)` values describe the **admin form's initial state**, not a database default, they are *not* auto-inserted on first read. Always handle `null` on the first read (or seed the global at boot).
@@ -136,7 +136,7 @@ await app.globals.siteSettings.revertToVersion({ version: 3 });
 await app.globals.siteSettings.transitionStage({ stage: "published" });
 ```
 
-`transitionStage()` exists only on workflow-enabled globals; its `scheduledAt` param schedules the transition for a future date instead of running it now (`GlobalTransitionStageParams`, `global/crud/types.ts:121`). `revertToVersion()` accepts `{ version }`, `{ versionId }`, or `{ id }` (`GlobalRevertVersionOptions`, `global/crud/types.ts:134`).
+`transitionStage()` exists only on workflow-enabled globals; its `scheduledAt` param schedules the transition for a future date instead of running it now (`GlobalTransitionStageParams`). `revertToVersion()` accepts `{ version }`, `{ versionId }`, or `{ id }` (`GlobalRevertVersionOptions`).
 
 <Callout type="info" title="`GlobalVersionRecord` has no `versionStage`">
 A collection's version record carries the workflow stage; a global's does not, read the current stage via the `stage` option on `get()` instead.
@@ -157,11 +157,11 @@ const schema = await client.globals.siteSettings.schema(); // full introspection
 const meta = await client.globals.siteSettings.meta();     // timestamps/versioning/localized
 ```
 
-The client surface is `get`, `update`, `schema`, `meta`, `findVersions`, `revertToVersion`, and `transitionStage` (`GlobalAPI` in `client/index.ts:670`). Live subscriptions (`live()`) are available when the realtime adapter is configured.
+The `GlobalAPI` client surface is `get`, `update`, `schema`, `meta`, `findVersions`, `revertToVersion`, and `transitionStage`. Live subscriptions (`live()`) are available when the realtime adapter is configured.
 
 ## Builder API
 
-`global(name)` returns a `GlobalBuilder`. Every method returns the builder, so you chain them and export the result, **codegen calls `.build()` for you**; you never call it yourself in app code. Each method below is grounded in `packages/questpie/src/server/global/builder/`.
+`global(name)` returns a `GlobalBuilder`. Every method returns the builder, so you chain them and export the result, **codegen calls `.build()` for you**; you never call it yourself in app code.
 
 <Callout type="info" title="Method order does not matter">
 `.fields()`, `.options()`, `.access()`, `.hooks()`, `.admin()`, and `.form()` can appear in any order. The barbershop example places `.options()` and `.access()` last; the quick start places them first. Both are valid.
@@ -201,7 +201,7 @@ Mark a field `.localized()` and QUESTPIE generates a `<name>_i18n` table behind 
 })
 ```
 
-`GlobalOptions` (`global/builder/types.ts:31`) is a strict, four-key shape:
+`GlobalOptions` is a strict, four-key shape:
 
 | Option | Type | Default | Effect |
 |---|---|---|---|
@@ -224,7 +224,7 @@ Control who can read and write the global. A rule is a `boolean` or a function r
 })
 ```
 
-`GlobalAccess` (`global/builder/types.ts:211`):
+`GlobalAccess` supports:
 
 | Rule | When it runs | `ctx.data` |
 |---|---|---|
@@ -252,7 +252,7 @@ Run logic around reads and writes. Each hook is a function (or array of function
 })
 ```
 
-`GlobalHooks` (`global/builder/types.ts:153`) are: `beforeUpdate`, `afterUpdate`, `beforeRead`, `afterRead`, `beforeChange`, `afterChange` (the last two are shorthands that run on update), `beforeTransition`, and `afterTransition`. There are **no `create` or `delete` hooks**, a global is never created or deleted, only updated.
+`GlobalHooks` are: `beforeUpdate`, `afterUpdate`, `beforeRead`, `afterRead`, `beforeChange`, `afterChange` (the last two are shorthands that run on update), `beforeTransition`, and `afterTransition`. There are **no `create` or `delete` hooks**, a global is never created or deleted, only updated.
 
 <Callout type="warn" title="Global hooks replace; collection hooks merge">
 Calling `.hooks()` twice on a global keeps only the **last** call's hooks (the builder overwrites `state.hooks`). Collections instead merge successive `.hooks()` into arrays. Put all of a global's hooks in one `.hooks({ … })` call. The same replace-not-merge behavior applies to `.access()`.

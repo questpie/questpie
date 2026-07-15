@@ -147,7 +147,7 @@ export default service({
 });
 ```
 
-When `lifecycle` is omitted, the container decides; the framework's built-in core services set `"singleton"` explicitly, for example the email service at `packages/questpie/src/server/modules/core/services/email.ts:9`.
+When `lifecycle` is omitted, the container decides; the framework's built-in core services, including email, set `"singleton"` explicitly.
 
 <Callout type="warn" title="Singletons outlive every request, don't store request state on them">
 A `"singleton"` is shared across all requests for the life of the process. Never cache the current user, a request's locale, or a per-request transaction on a singleton, it leaks across requests and corrupts data. Put per-request state on a `"request"` service, or read `ctx.session` / `ctx.locale` fresh inside the method that needs it.
@@ -159,7 +159,7 @@ The **public** enum is `"singleton" | "request"`. There is a separate, **non-exp
 
 ## Consuming a service
 
-Wherever you get a handler `ctx`, you get your services on it, routes, hooks, jobs, email handlers, and seeds all share the same context builder (`extractAppServices`, `packages/questpie/src/server/config/app-context.ts:356`). Default-namespace services live under `ctx.services`:
+Wherever you get a handler `ctx`, you get your services on it; routes, hooks, jobs, email handlers, and seeds all share the same context builder. Default-namespace services live under `ctx.services`:
 
 ```ts title="In a route"
 import { route } from "questpie/services";
@@ -229,7 +229,7 @@ The only field a usable service needs. `ctx` is the resolved app surface; whatev
 
 ### `lifecycle`
 
-`"singleton"` or `"request"`. See [Lifecycle](#lifecycle-singleton-vs-request). When omitted, the container decides; built-in core services set `"singleton"` explicitly (e.g. the email service, `packages/questpie/src/server/modules/core/services/email.ts:9`).
+`"singleton"` or `"request"`. See [Lifecycle](#lifecycle-singleton-vs-request). When omitted, the container decides; built-in core services such as email set `"singleton"` explicitly.
 
 ### `dispose(instance)`
 
@@ -252,7 +252,7 @@ export default service({
 
 ### `namespace`
 
-Controls **where** the resolved instance lands on `ctx`. It accepts `string | null` only (not `undefined`, to use the default bucket, just omit the field). The placement rules live in `extractAppServices` (`packages/questpie/src/server/config/app-context.ts:407`):
+Controls **where** the resolved instance lands on `ctx`. It accepts `string | null` only (not `undefined`, to use the default bucket, just omit the field):
 
 | `namespace` value | Lands at | Example |
 |---|---|---|
@@ -272,7 +272,7 @@ export default service({
 ```
 
 <Callout type="warn" title="A `null`-namespace service won't override a built-in `ctx` key">
-Top-level keys like `db`, `session`, `email`, `collections`, `globals`, `queue`, `storage`, `kv`, `logger` are populated directly by the context builder. A `namespace: null` service whose key collides with one of these is **silently skipped**, the existing built-in wins (`if (!(name in result))`, `packages/questpie/src/server/config/app-context.ts:415`). Pick a unique key, or leave it in the default `ctx.services` bucket where collisions can't happen.
+Top-level keys like `db`, `session`, `email`, `collections`, `globals`, `queue`, `storage`, `kv`, `logger` are populated directly by the context builder. A `namespace: null` service whose key collides with one of these is **silently skipped** and the existing built-in wins. Pick a unique key, or leave it in the default `ctx.services` bucket where collisions can't happen.
 </Callout>
 
 ## Built-in services
