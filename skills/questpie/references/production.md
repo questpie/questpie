@@ -24,15 +24,15 @@ This skill builds on questpie-core. It is the **deployment/ops** doc: auth, acce
 
 QUESTPIE uses an adapter-based architecture for all infrastructure. Development defaults work out of the box; production requires explicit adapter configuration in `questpie.config.ts`.
 
-| Service  | Dev Default           | Production Adapter                              |
-| -------- | --------------------- | ----------------------------------------------- |
-| Database | PostgreSQL (local)    | PostgreSQL (remote, SSL)                        |
-| Storage  | Local filesystem      | Files SDK provider adapter (`s3`, `r2`, etc.)   |
-| Queue    | None (jobs skip)      | pg-boss (`pgBossAdapter`)                       |
-| Realtime | pgNotify              | Redis Streams (`redisStreamsAdapter`)           |
-| Email    | Console (logs output) | SMTP (`SmtpAdapter`)                            |
-| KV Store | In-memory             | Redis (`redisKVAdapter`)                        |
-| Logger   | Pino (console)        | Pino (structured JSON)                          |
+| Service  | Dev Default           | Production Adapter                            |
+| -------- | --------------------- | --------------------------------------------- |
+| Database | PostgreSQL (local)    | PostgreSQL (remote, SSL)                      |
+| Storage  | Local filesystem      | Files SDK provider adapter (`s3`, `r2`, etc.) |
+| Queue    | None (jobs skip)      | pg-boss (`pgBossAdapter`)                     |
+| Realtime | pgNotify              | Redis Streams (`redisStreamsAdapter`)         |
+| Email    | Console (logs output) | SMTP (`SmtpAdapter`)                          |
+| KV Store | In-memory             | Redis (`redisKVAdapter`)                      |
+| Logger   | Pino (console)        | Pino (structured JSON)                        |
 
 Every adapter's exact config shape lives in `references/infrastructure-adapters.md`.
 
@@ -92,11 +92,16 @@ PostgreSQL with Drizzle ORM; schema is generated from your collection and global
 
 ### Development: Push
 
-Sync schema directly without migration files:
+Sync a disposable local development database directly without migration files:
 
 ```bash
 bunx questpie push
 ```
+
+> **Never run `questpie push` against production, from a production init
+> container, or from a deployment job.** It bypasses migration history and can
+> apply destructive drift without a reviewable migration. `--force` only
+> acknowledges the CLI warning; it does not make push production-safe.
 
 ### Production: Migration Files
 
@@ -135,12 +140,12 @@ Bun SQL (`new SQL({ url })`) already pools connections internally. In single-ins
 
 ### Adapter Compatibility Matrix
 
-| Adapter                          | Direct PG | PgBouncer (transaction)           | PgBouncer (session)         |
-| -------------------------------- | --------- | --------------------------------- | --------------------------- |
+| Adapter                          | Direct PG | PgBouncer (transaction)          | PgBouncer (session)         |
+| -------------------------------- | --------- | -------------------------------- | --------------------------- |
 | `pgNotifyAdapter` (realtime)     | works     | broken, listens silently dropped | works (pooling neutralized) |
 | `pgBossAdapter` (queue)          | works     | broken, LISTEN/NOTIFY required   | works (pooling neutralized) |
-| Drizzle queries via Bun SQL      | works     | works                             | works                       |
-| `redisStreamsAdapter` (realtime) | n/a       | n/a                               | n/a                         |
+| Drizzle queries via Bun SQL      | works     | works                            | works                       |
+| `redisStreamsAdapter` (realtime) | n/a       | n/a                              | n/a                         |
 
 Prepared statements also break under transaction pooling. If you must use it, ensure your driver disables prepared statements end-to-end.
 
@@ -266,6 +271,9 @@ bunx questpie migrate            # apply to database
 # Or in development:
 bunx questpie push               # direct schema sync (no migration file)
 ```
+
+Production automation must run committed migrations with `bunx questpie
+migrate`. Do not replace a failed migration with `push` to make a rollout pass.
 
 ### HIGH: Using local storage in production without persistent volume
 

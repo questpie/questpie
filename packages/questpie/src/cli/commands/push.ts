@@ -2,11 +2,8 @@ import { existsSync } from "node:fs";
 
 import { toKitDb } from "../../server/db/driver-result.js";
 import { loadQuestpieConfig } from "../config.js";
-import {
-	assertPushStatementsSafe,
-	computePushEntities,
-} from "./push-scope.js";
 import { resolveCliPath } from "../utils.js";
+import { assertPushStatementsSafe, computePushEntities } from "./push-scope.js";
 
 export type PushOptions = {
 	configPath: string;
@@ -26,11 +23,16 @@ export type PushOptions = {
  */
 export async function pushCommand(options: PushOptions): Promise<void> {
 	console.log("🚀 Pushing schema to database...\n");
+	console.log(
+		"⚠️  DEVELOPMENT ONLY: `questpie push` bypasses migration history.",
+	);
+	console.log(
+		"   Never run it against production. Use `questpie migrate:create` and `questpie migrate` instead.\n",
+	);
 
 	if (!options.force) {
-		console.log("⚠️  WARNING: This will modify your database schema directly!");
-		console.log("   Use migrations for production deployments.\n");
-		console.log("   Use --force to skip this warning.\n");
+		console.log("   This will modify your development database directly.");
+		console.log("   Use --force to acknowledge this warning.\n");
 	}
 
 	// Resolve config path

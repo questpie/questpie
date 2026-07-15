@@ -37,3 +37,7 @@ bun run scaffold:verify              # Regenerate codegen + type-check
 bun run db:push                      # Push schema to local dev DB
 bun questpie add collection <name>   # Scaffold an entity (auto-runs codegen)
 ```
+
+**Production database rule:** Never run `db:push` / `questpie push` against
+production or in deployment automation. `--force` does not make it safe. Commit
+`migrate:create` output and run `migrate` during deployment.

@@ -202,6 +202,14 @@ bun run db:push
 
 Under the hood this runs `questpie push`, drizzle-native schema push, for **development only**. It reads your generated schema and applies it straight to the database. For production you generate and run migrations instead (`bun run migrate:create` → `bun run migrate`).
 
+<Callout type="warn" title="Never use db:push in production">
+	`questpie push` bypasses migration history. Do not run it against a production
+	database, from an init container, or from a deployment job. `--force` only
+	acknowledges the development warning; it does not make the command
+	production-safe. Generate, review, and commit a migration with `bun run
+	migrate:create`, then apply it with `bun run migrate` during deployment.
+</Callout>
+
 <Callout type="info" title="Re-run codegen after adding or removing files">
 	If you add or remove a collection or global later, regenerate first (`bun run
 	questpie:generate`, or `bun run scaffold:verify` to also type-check), then

@@ -53,3 +53,10 @@ bun run scaffold:verify     # Regenerate codegen + type-check
 bun run db:push             # Push schema to the local dev database
 bun questpie add collection <name>   # Scaffold an entity (auto-runs codegen)
 ```
+
+## Production database rule
+
+**Never run `bun run db:push` / `questpie push` against production or from a
+deployment init container.** It bypasses migration history; `--force` does not
+make it production-safe. Generate and commit migrations with `bun run
+migrate:create`, then apply them in deployment with `bun run migrate`.
