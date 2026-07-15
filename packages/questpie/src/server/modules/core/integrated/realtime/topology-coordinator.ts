@@ -1,8 +1,9 @@
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 
 import { and, eq, gt, lt, sql } from "drizzle-orm";
 
 import { questpieRealtimeTopologyTable } from "./collection.js";
+import type { RealtimeObservation, RealtimeObserver } from "./observer.js";
 import type { RealtimeControlFrame } from "./sse-control.js";
 import type { ChangeBroker, ChangeWake } from "./transport.js";
 
@@ -45,7 +46,9 @@ type TopologyRow = {
 
 type TopologyMutation =
 	| { status: "accepted"; topology: RealtimeDesiredTopology }
-	| { status: "duplicate" | "stale" | "conflict" | "unsupported" };
+	| {
+			status: "duplicate" | "stale" | "conflict" | "unsupported" | "invalid";
+	  };
 
 type TopologyMutationResult =
 	| { status: "unavailable" }
@@ -96,6 +99,18 @@ interface RealtimeTopologyStore {
 
 function hash(value: string): string {
 	return createHash("sha256").update(value).digest("hex");
+}
+
+function hashEquals(left: string, right: string): boolean {
+	if (!/^[0-9a-f]{64}$/i.test(left) || !/^[0-9a-f]{64}$/i.test(right)) {
+		return false;
+	}
+	const leftBytes = Buffer.from(left, "hex");
+	const rightBytes = Buffer.from(right, "hex");
+	return (
+		leftBytes.byteLength === rightBytes.byteLength &&
+		timingSafeEqual(leftBytes, rightBytes)
+	);
 }
 
 function stableValue(value: unknown): unknown {
@@ -280,8 +295,8 @@ export class MemoryRealtimeTopologyStore implements RealtimeTopologyStore {
 		if (
 			!row ||
 			row.leaseExpiresAt <= this.now() ||
-			row.tokenHash !== input.tokenHash ||
-			row.identityHash !== input.identityHash
+			!hashEquals(row.tokenHash, input.tokenHash) ||
+			!hashEquals(row.identityHash, input.identityHash)
 		) {
 			return { status: "unavailable" };
 		}
@@ -406,8 +421,8 @@ export class PostgresRealtimeTopologyStore implements RealtimeTopologyStore {
 				.for("update");
 			if (
 				!row ||
-				row.tokenHash !== input.tokenHash ||
-				row.identityHash !== input.identityHash
+				!hashEquals(row.tokenHash, input.tokenHash) ||
+				!hashEquals(row.identityHash, input.identityHash)
 			) {
 				return { status: "unavailable" };
 			}
@@ -534,7 +549,13 @@ export class PostgresRealtimeTopologyStore implements RealtimeTopologyStore {
 export type RealtimeTopologyResult =
 	| { status: "unavailable" }
 	| {
-			status: "accepted" | "duplicate" | "stale" | "conflict" | "unsupported";
+			status:
+				| "accepted"
+				| "duplicate"
+				| "stale"
+				| "conflict"
+				| "unsupported"
+				| "invalid";
 			revision: number;
 			desiredRevision: number;
 			appliedRevision: number;
@@ -555,6 +576,7 @@ export class RealtimeTopologyCoordinator {
 	private readonly heartbeatMs: number;
 	private readonly reconcileMs: number;
 	private readonly onError: (error: unknown) => void;
+	private readonly observer?: RealtimeObserver;
 	private readonly handlers = new Map<string, LocalHandler>();
 	private heartbeatTimer?: ReturnType<typeof setInterval>;
 	private reconcileTimer?: ReturnType<typeof setInterval>;
@@ -570,6 +592,7 @@ export class RealtimeTopologyCoordinator {
 			heartbeatMs?: number;
 			reconcileMs?: number;
 			onError?: (error: unknown) => void;
+			observer?: RealtimeObserver;
 		} = {},
 	) {
 		this.ownerId = options.ownerId ?? randomUUID();
@@ -578,6 +601,15 @@ export class RealtimeTopologyCoordinator {
 		this.heartbeatMs = options.heartbeatMs ?? 10_000;
 		this.reconcileMs = options.reconcileMs ?? 1_000;
 		this.onError = options.onError ?? (() => {});
+		this.observer = options.observer;
+	}
+
+	private observe(event: RealtimeObservation): void {
+		try {
+			this.observer?.record(event);
+		} catch {
+			// Topology observations cannot break control or lease handling.
+		}
 	}
 
 	async start(): Promise<void> {
@@ -623,6 +655,13 @@ export class RealtimeTopologyCoordinator {
 			onClose: input.onClose,
 			operation: Promise.resolve(),
 		});
+		this.observe({
+			type: "topology.lifecycle",
+			phase: "open",
+			outcome: "accepted",
+			desiredRevision: topology.revision,
+			appliedRevision: topology.revision,
+		});
 		return {
 			generation: row.ownerGeneration,
 			close: () => this.closeLocal(sessionKey, true, false),
@@ -639,8 +678,14 @@ export class RealtimeTopologyCoordinator {
 		try {
 			topology = canonicalizeTopology(input.topology);
 		} catch {
+			const status = input.topology.version === 1 ? "invalid" : "unsupported";
+			this.observe({
+				type: "topology.lifecycle",
+				phase: "submit",
+				outcome: status,
+			});
 			return {
-				status: "unsupported",
+				status,
 				revision: 0,
 				desiredRevision: 0,
 				appliedRevision: 0,
@@ -678,13 +723,27 @@ export class RealtimeTopologyCoordinator {
 			identityHash: hash(input.identity),
 			mutate,
 		});
-		if (result.status === "unavailable") return result;
+		if (result.status === "unavailable") {
+			this.observe({
+				type: "topology.lifecycle",
+				phase: "submit",
+				outcome: "unavailable",
+			});
+			return result;
+		}
 		const response = {
 			status: result.status,
 			revision: result.row.desiredRevision,
 			desiredRevision: result.row.desiredRevision,
 			appliedRevision: result.row.appliedRevision,
 		} as RealtimeTopologyResult;
+		this.observe({
+			type: "topology.lifecycle",
+			phase: "submit",
+			outcome: result.status,
+			desiredRevision: result.row.desiredRevision,
+			appliedRevision: result.row.appliedRevision,
+		});
 		if (result.status !== "accepted") return response;
 		const wake: ChangeWake = {
 			kind: "topology-maybe-advanced",
@@ -728,12 +787,22 @@ export class RealtimeTopologyCoordinator {
 		handler.operation = handler.operation
 			.catch(() => {})
 			.then(async () => {
+				this.observe({
+					type: "topology.lifecycle",
+					phase: "reconcile",
+					outcome: "started",
+				});
 				const row = await this.store.getOwned({
 					sessionKey,
 					ownerId: this.ownerId,
 					ownerGeneration: handler.generation,
 				});
 				if (!row) {
+					this.observe({
+						type: "topology.lifecycle",
+						phase: "lease",
+						outcome: "expired",
+					});
 					await this.closeLocal(sessionKey, false, true);
 					return;
 				}
@@ -741,6 +810,13 @@ export class RealtimeTopologyCoordinator {
 				try {
 					await handler.apply(row.desiredTopology);
 				} catch (error) {
+					this.observe({
+						type: "topology.lifecycle",
+						phase: "apply",
+						outcome: "failed",
+						desiredRevision: row.desiredRevision,
+						appliedRevision: handler.appliedRevision,
+					});
 					this.onError(error);
 					await this.closeLocal(sessionKey, true, true);
 					return;
@@ -752,10 +828,22 @@ export class RealtimeTopologyCoordinator {
 					revision: row.desiredRevision,
 				});
 				if (!marked) {
+					this.observe({
+						type: "topology.lifecycle",
+						phase: "apply",
+						outcome: "fenced",
+					});
 					await this.closeLocal(sessionKey, false, true);
 					return;
 				}
 				handler.appliedRevision = row.desiredRevision;
+				this.observe({
+					type: "topology.lifecycle",
+					phase: "apply",
+					outcome: "applied",
+					desiredRevision: row.desiredRevision,
+					appliedRevision: row.desiredRevision,
+				});
 			});
 		await handler.operation;
 	}
@@ -768,7 +856,14 @@ export class RealtimeTopologyCoordinator {
 				ownerGeneration: handler.generation,
 				leaseMs: this.leaseMs,
 			});
-			if (!renewed) await this.closeLocal(sessionKey, false, true);
+			if (!renewed) {
+				this.observe({
+					type: "topology.lifecycle",
+					phase: "lease",
+					outcome: "expired",
+				});
+				await this.closeLocal(sessionKey, false, true);
+			}
 		}
 	}
 
@@ -788,6 +883,11 @@ export class RealtimeTopologyCoordinator {
 			});
 		}
 		if (notify) await handler.onClose();
+		this.observe({
+			type: "topology.lifecycle",
+			phase: "close",
+			outcome: "closed",
+		});
 	}
 
 	async stop(): Promise<void> {

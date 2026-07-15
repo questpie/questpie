@@ -81,6 +81,26 @@ export type RealtimeObservation =
 			rolloutMode?: "legacy" | "dual" | "v2";
 	  }
 	| {
+			type: "topology.lifecycle";
+			phase: "open" | "submit" | "reconcile" | "apply" | "lease" | "close";
+			outcome:
+				| "accepted"
+				| "duplicate"
+				| "stale"
+				| "conflict"
+				| "unsupported"
+				| "invalid"
+				| "unavailable"
+				| "started"
+				| "applied"
+				| "failed"
+				| "expired"
+				| "fenced"
+				| "closed";
+			desiredRevision?: number;
+			appliedRevision?: number;
+	  }
+	| {
 			type: "resume";
 			outcome: "replay" | "reset" | "current" | "gap" | "dedupe";
 	  }
@@ -155,6 +175,8 @@ function metricKey(event: RealtimeObservation): string {
 			return `${event.type}|reason=${event.reason}|transport=${event.transport}`;
 		case "admission.rejected":
 			return `${event.type}|reason=${event.reason}|resource=${event.resource ?? "unknown"}|rollout_mode=${event.rolloutMode ?? "v2"}`;
+		case "topology.lifecycle":
+			return `${event.type}|outcome=${event.outcome}|phase=${event.phase}`;
 		case "resume":
 			return `${event.type}|outcome=${event.outcome}`;
 		case "channel.security":
@@ -171,12 +193,20 @@ function alertLevel(
 		(event.type === "outbox.capture" && event.outcome === "failed") ||
 		event.type === "drain.failed" ||
 		event.type === "refresh.failed" ||
-		(event.type === "sink.write" && event.outcome === "failed")
+		(event.type === "sink.write" && event.outcome === "failed") ||
+		(event.type === "topology.lifecycle" && event.outcome === "failed")
 	) {
 		return "error";
 	}
 	if (
 		event.type === "admission.rejected" ||
+		(event.type === "topology.lifecycle" &&
+			(event.outcome === "conflict" ||
+				event.outcome === "unsupported" ||
+				event.outcome === "invalid" ||
+				event.outcome === "unavailable" ||
+				event.outcome === "expired" ||
+				event.outcome === "fenced")) ||
 		(event.type === "channel.security" && event.outcome === "denied") ||
 		(event.type === "session.closed" && event.reason !== "normal") ||
 		(event.type === "drain.completed" && event.lagMs > drainLagAlertMs)

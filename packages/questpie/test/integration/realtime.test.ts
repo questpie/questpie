@@ -2260,6 +2260,75 @@ describe("realtime matrix", () => {
 			});
 			expect(JSON.stringify(desiredError)).not.toContain("must-not-leak");
 
+			const unsupportedVersion = await routes.realtime.subscribe(
+				new Request("http://localhost/realtime", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({
+						sessionId: session.data.sessionId,
+						token: session.data.token,
+						topology: {
+							protocol: "questpie-realtime-topology",
+							version: 2,
+							revision: 1,
+							topics: [],
+							channels: [],
+						},
+					}),
+				}),
+				{},
+				undefined,
+			);
+			expect(unsupportedVersion.status).toBe(400);
+			expect(await unsupportedVersion.json()).toEqual({
+				error: {
+					code: "REALTIME_TOPOLOGY_VERSION_UNSUPPORTED",
+					message: "Realtime topology was rejected",
+				},
+			});
+
+			const invalidTopology = await routes.realtime.subscribe(
+				new Request("http://localhost/realtime", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({
+						sessionId: session.data.sessionId,
+						token: session.data.token,
+						topology: {
+							protocol: "questpie-realtime-topology",
+							version: 1,
+							revision: 1,
+							topics: [
+								{
+									id: "duplicate",
+									topic: {
+										resourceType: "collection",
+										resource: "items",
+									},
+								},
+								{
+									id: "duplicate",
+									topic: {
+										resourceType: "collection",
+										resource: "items",
+									},
+								},
+							],
+							channels: [],
+						},
+					}),
+				}),
+				{},
+				undefined,
+			);
+			expect(invalidTopology.status).toBe(400);
+			expect(await invalidTopology.json()).toEqual({
+				error: {
+					code: "REALTIME_TOPOLOGY_INVALID",
+					message: "Realtime topology was rejected",
+				},
+			});
+
 			const control = (frames: unknown[]) =>
 				routes.realtime.subscribe(
 					new Request("http://localhost/realtime", {

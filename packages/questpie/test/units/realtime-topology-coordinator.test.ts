@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import type { RealtimeObservation } from "../../src/server/modules/core/integrated/realtime/observer.js";
 import {
 	MemoryRealtimeTopologyStore,
 	RealtimeTopologyCoordinator,
@@ -34,6 +35,7 @@ describe("realtime topology coordinator", () => {
 	test("applies, deduplicates, rejects stale revisions, and detects conflicts", async () => {
 		let now = new Date("2026-07-15T20:00:00.000Z");
 		const broker = new RecordingBroker();
+		const observations: RealtimeObservation[] = [];
 		const coordinator = new RealtimeTopologyCoordinator(
 			new MemoryRealtimeTopologyStore(() => now),
 			{
@@ -43,6 +45,7 @@ describe("realtime topology coordinator", () => {
 				leaseMs: 30_000,
 				heartbeatMs: 0,
 				reconcileMs: 0,
+				observer: { record: (event) => observations.push(event) },
 			},
 		);
 		const applied: RealtimeDesiredTopology[] = [];
@@ -74,6 +77,15 @@ describe("realtime topology coordinator", () => {
 		).toMatchObject({ status: "accepted", desiredRevision: 1 });
 		await coordinator.reconcile();
 		expect(applied).toEqual([revisionOne]);
+		expect(observations).toContainEqual({
+			type: "topology.lifecycle",
+			phase: "apply",
+			outcome: "applied",
+			desiredRevision: 1,
+			appliedRevision: 1,
+		});
+		expect(JSON.stringify(observations)).not.toContain("session-a");
+		expect(JSON.stringify(observations)).not.toContain("token-a");
 
 		expect(
 			await coordinator.submit({
@@ -100,6 +112,28 @@ describe("realtime topology coordinator", () => {
 			}),
 		).toMatchObject({ status: "conflict", desiredRevision: 1 });
 		expect(broker.wakes).toHaveLength(1);
+		expect(
+			await coordinator.submit({
+				sessionId: "session-a",
+				token: "token-a",
+				identity: "anonymous",
+				topology: { ...emptyTopology(2), version: 2 } as never,
+			}),
+		).toMatchObject({ status: "unsupported" });
+		expect(
+			await coordinator.submit({
+				sessionId: "session-a",
+				token: "token-a",
+				identity: "anonymous",
+				topology: {
+					...emptyTopology(2),
+					topics: [
+						{ id: "duplicate", topic: {} },
+						{ id: "duplicate", topic: {} },
+					],
+				},
+			}),
+		).toMatchObject({ status: "invalid" });
 
 		await session.close();
 		await coordinator.stop();

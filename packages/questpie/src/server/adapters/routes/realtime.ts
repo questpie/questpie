@@ -541,7 +541,6 @@ export async function realtimeSubscribe(
 			!body.sessionId ||
 			!body.token ||
 			body.topology.protocol !== "questpie-realtime-topology" ||
-			body.topology.version !== 1 ||
 			!Number.isSafeInteger(body.topology.revision) ||
 			body.topology.revision < 1 ||
 			!Array.isArray(body.topology.topics) ||
@@ -614,20 +613,23 @@ export async function realtimeSubscribe(
 					{ status: 404 },
 				);
 			}
-			if (
-				result.status === "stale" ||
-				result.status === "conflict" ||
-				result.status === "unsupported"
-			) {
+			if (result.status !== "accepted" && result.status !== "duplicate") {
 				const code =
 					result.status === "stale"
 						? "REALTIME_TOPOLOGY_STALE"
 						: result.status === "conflict"
 							? "REALTIME_TOPOLOGY_REVISION_CONFLICT"
-							: "REALTIME_TOPOLOGY_VERSION_UNSUPPORTED";
+							: result.status === "unsupported"
+								? "REALTIME_TOPOLOGY_VERSION_UNSUPPORTED"
+								: "REALTIME_TOPOLOGY_INVALID";
 				return Response.json(
 					{ error: { code, message: "Realtime topology was rejected" } },
-					{ status: 409 },
+					{
+						status:
+							result.status === "unsupported" || result.status === "invalid"
+								? 400
+								: 409,
+					},
 				);
 			}
 			return Response.json(

@@ -51,6 +51,32 @@ describe("realtime matrix observability", () => {
 		expect(JSON.stringify(warnings)).not.toContain("where");
 	});
 
+	test("records bounded topology lifecycle metrics and warnings", () => {
+		const warnings: unknown[] = [];
+		const observability = new RealtimeObservability({
+			logger: {
+				warn: (_message, fields) => warnings.push(fields),
+				error: () => {},
+			},
+		});
+
+		observability.record({
+			type: "topology.lifecycle",
+			phase: "submit",
+			outcome: "conflict",
+			desiredRevision: 4,
+			appliedRevision: 3,
+		});
+
+		expect(observability.snapshot().counters).toMatchObject({
+			"topology.lifecycle|outcome=conflict|phase=submit": 1,
+		});
+		expect(warnings).toHaveLength(1);
+		expect(JSON.stringify(warnings)).not.toContain("sessionId");
+		expect(JSON.stringify(warnings)).not.toContain("token");
+		expect(JSON.stringify(warnings)).not.toContain("identity");
+	});
+
 	test("isolates observer and logger failures while exposing bounded metrics", () => {
 		const events: RealtimeObservation[] = [];
 		const observability = new RealtimeObservability({

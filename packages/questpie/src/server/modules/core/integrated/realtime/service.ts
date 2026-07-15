@@ -279,6 +279,7 @@ export class RealtimeService {
 			this.db,
 			{
 				broker: this.changeBroker,
+				observer: this.observability,
 				onError: (error) =>
 					this.reportTransportFailure(
 						"[Realtime] Topology coordinator failed",
