@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import type { RealtimeObservation } from "../../src/server/modules/core/integrated/realtime/observer.js";
 import {
+	MAX_REALTIME_TOPOLOGY_BYTES,
 	MemoryRealtimeTopologyStore,
 	RealtimeTopologyCoordinator,
 	type RealtimeDesiredTopology,
@@ -75,6 +76,20 @@ describe("realtime topology coordinator", () => {
 				topology: revisionOne,
 			}),
 		).toMatchObject({ status: "accepted", desiredRevision: 1 });
+		expect(broker.wakes).toEqual([
+			{
+				kind: "topology-maybe-advanced",
+				sessionKey: expect.any(String),
+				ownerId: "owner-a",
+				ownerGeneration: 1,
+				desiredRevision: 1,
+				reason: "submit",
+			},
+		]);
+		expect(JSON.stringify(broker.wakes)).not.toContain("session-a");
+		expect(JSON.stringify(broker.wakes)).not.toContain("token-a");
+		expect(JSON.stringify(broker.wakes)).not.toContain("anonymous");
+		expect(JSON.stringify(broker.wakes)).not.toContain("topics");
 		await coordinator.reconcile();
 		expect(applied).toEqual([revisionOne]);
 		expect(observations).toContainEqual({
@@ -134,6 +149,23 @@ describe("realtime topology coordinator", () => {
 				},
 			}),
 		).toMatchObject({ status: "invalid" });
+		expect(
+			await coordinator.submit({
+				sessionId: "session-a",
+				token: "token-a",
+				identity: "anonymous",
+				topology: {
+					...emptyTopology(2),
+					topics: [
+						{
+							id: "oversized",
+							topic: { value: "x".repeat(MAX_REALTIME_TOPOLOGY_BYTES) },
+						},
+					],
+				},
+			}),
+		).toMatchObject({ status: "invalid" });
+		expect(broker.wakes).toHaveLength(1);
 
 		await session.close();
 		await coordinator.stop();

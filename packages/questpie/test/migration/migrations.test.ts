@@ -394,6 +394,49 @@ describe("Migration System - DrizzleMigrationGenerator", () => {
 		).toBe(true);
 	});
 
+	test("generates the framework-owned realtime topology schema", async () => {
+		const { DrizzleMigrationGenerator } =
+			await import("../../src/server/migration/generator.js");
+		const app = await createApp(module({ name: "realtime-topology-schema" }), {
+			app: { url: "http://localhost:3000" },
+			db: { pglite: pgClient },
+			email: { adapter: new MockMailAdapter() },
+			queue: { adapter: new MockQueueAdapter() },
+			kv: { adapter: new MockKVAdapter() },
+			logger: { adapter: new MockLogger() },
+		});
+		const schema = app.getSchema();
+		expect(schema.questpie_realtime_topology).toBeDefined();
+
+		const result = await new DrizzleMigrationGenerator().generateMigration({
+			migrationName: "realtimeTopology20250108",
+			fileBaseName: "20250108_realtime_topology",
+			schema,
+			migrationDir: testMigrationDir,
+		});
+
+		expect(result.skipped).toBe(false);
+		const migrationSource = readFileSync(
+			join(testMigrationDir, "20250108_realtime_topology.ts"),
+			"utf8",
+		);
+		for (const fragment of [
+			'CREATE TABLE "questpie_realtime_topology"',
+			'"session_key" text PRIMARY KEY',
+			'"owner_generation" bigserial',
+			'"token_hash" text NOT NULL',
+			'"identity_hash" text NOT NULL',
+			'"lease_expires_at" timestamp with time zone NOT NULL',
+			'"desired_revision" bigint DEFAULT 0 NOT NULL',
+			'"applied_revision" bigint DEFAULT 0 NOT NULL',
+			'"desired_topology" jsonb NOT NULL',
+			'CREATE INDEX "idx_realtime_topology_owner_lease"',
+			'CREATE INDEX "idx_realtime_topology_lease"',
+		]) {
+			expect(migrationSource).toContain(fragment);
+		}
+	});
+
 	test("should skip if no schema changes", async () => {
 		const { DrizzleMigrationGenerator } =
 			await import("../../src/server/migration/generator.js");

@@ -333,7 +333,7 @@ describe("client live queries", () => {
 		multiplexer.destroy();
 	});
 
-	it("reconnects a clean close with sinceSeq and skips duplicate delivery", async () => {
+	it("reconnects with the exact active topic set and per-topic sinceSeq", async () => {
 		const multiplexer = new RealtimeMultiplexer(
 			"http://localhost:3000",
 			true,
@@ -352,17 +352,31 @@ describe("client live queries", () => {
 			undefined,
 			"resume-posts",
 		);
+		multiplexer.subscribe(
+			{ resourceType: "collection", resource: "pages" },
+			(snapshot) => snapshots.push(snapshot),
+			undefined,
+			"resume-pages",
+		);
 		await waitFor(() => connections.length === 1);
 		connections[0].sendSnapshot("resume-posts", 7, { docs: [{ id: "7" }] });
-		await waitFor(() => snapshots.length === 1);
+		connections[0].sendSnapshot("resume-pages", 11, { docs: [{ id: "11" }] });
+		await waitFor(() => snapshots.length === 2);
 
 		connections[0].close();
 		await new Promise((resolve) => setTimeout(resolve, 1));
 		expect(connections).toHaveLength(1);
 		await waitFor(() => connections.length === 2);
-		expect(connections[1].topics[0].sinceSeq).toBe(7);
+		expect(
+			connections[1].topics
+				.map(({ id, resource, sinceSeq }) => ({ id, resource, sinceSeq }))
+				.sort((left, right) => left.id.localeCompare(right.id)),
+		).toEqual([
+			{ id: "resume-pages", resource: "pages", sinceSeq: 11 },
+			{ id: "resume-posts", resource: "posts", sinceSeq: 7 },
+		]);
 		await new Promise((resolve) => setTimeout(resolve, 20));
-		expect(snapshots).toHaveLength(1);
+		expect(snapshots).toHaveLength(2);
 		multiplexer.destroy();
 	});
 
