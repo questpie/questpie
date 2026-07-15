@@ -71,6 +71,15 @@ type ControlFrame =
 	  }
 	| { type: "remove_topic"; topicId: string };
 
+type ControlSession = {
+	sessionId: string;
+	token: string;
+	control?: {
+		protocol: "questpie-realtime-topology";
+		versions: number[];
+	};
+};
+
 export type RealtimeMultiplexerRuntime = {
 	retryBaseMs?: number;
 	maxRetryMs?: number;
@@ -135,9 +144,11 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 	private destroyed = false;
 	private reconnectPending = false;
 	private watchdogTriggered = false;
-	private controlSession: { sessionId: string; token: string } | null = null;
+	private controlSession: ControlSession | null = null;
 	private pendingControlFrames: ControlFrame[] = [];
 	private controlOperation: Promise<void> = Promise.resolve();
+	private controlFlushScheduled = false;
+	private desiredRevision = 0;
 	private readonly retryBaseMs: number;
 	private readonly maxRetryMs: number;
 	private readonly pingWatchdogMs: number;
@@ -246,7 +257,12 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 		if (this.destroyed) return;
 		if (this.controlSession) {
 			this.pendingControlFrames.push(frame);
-			this.flushControlFrames();
+			if (this.supportsDesiredTopology() && this.topics.size === 0) {
+				this.pendingControlFrames = [];
+				this.abortController?.abort();
+				return;
+			}
+			this.scheduleControlFlush();
 			return;
 		}
 		if (this.connecting) {
@@ -256,10 +272,41 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 		this.scheduleReconnect();
 	}
 
+	private supportsDesiredTopology(): boolean {
+		return Boolean(
+			this.controlSession?.control?.protocol === "questpie-realtime-topology" &&
+			this.controlSession.control.versions.includes(1),
+		);
+	}
+
+	private scheduleControlFlush(): void {
+		if (this.controlFlushScheduled) return;
+		this.controlFlushScheduled = true;
+		queueMicrotask(() => {
+			this.controlFlushScheduled = false;
+			this.flushControlFrames();
+		});
+	}
+
 	private flushControlFrames(): void {
 		if (!this.controlSession || this.pendingControlFrames.length === 0) return;
 		const session = this.controlSession;
 		const frames = this.pendingControlFrames.splice(0);
+		const useDesiredTopology = this.supportsDesiredTopology();
+		const revision = useDesiredTopology ? ++this.desiredRevision : 0;
+		const topology = useDesiredTopology
+			? {
+					protocol: "questpie-realtime-topology" as const,
+					version: 1 as const,
+					revision,
+					topics: [...this.topics.entries()].map(([id, topic]) => ({
+						id,
+						topic,
+						...(this.lastSeq.has(id) ? { sinceSeq: this.lastSeq.get(id) } : {}),
+					})),
+					channels: [],
+				}
+			: undefined;
 		this.controlOperation = this.controlOperation
 			.then(async () => {
 				const authHeaders = await this.getAuthHeaders?.();
@@ -269,7 +316,7 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 					body: JSON.stringify({
 						sessionId: session.sessionId,
 						token: session.token,
-						frames,
+						...(topology ? { topology } : { frames }),
 					}),
 					credentials: this.withCredentials ? "include" : "omit",
 				});
@@ -363,6 +410,8 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 		this.controlSession = null;
 		this.pendingControlFrames = [];
 		this.controlOperation = Promise.resolve();
+		this.controlFlushScheduled = false;
+		this.desiredRevision = 0;
 		this.watchdogTriggered = false;
 
 		const getTopicsPayload = () =>
@@ -485,13 +534,10 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 			}
 		} else if (event.type === "session") {
 			try {
-				const session = JSON.parse(event.data) as {
-					sessionId: string;
-					token: string;
-				};
+				const session = JSON.parse(event.data) as ControlSession;
 				if (session.sessionId && session.token) {
 					this.controlSession = session;
-					this.flushControlFrames();
+					this.scheduleControlFlush();
 				}
 			} catch {
 				// Ignore malformed control metadata.
@@ -563,6 +609,7 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 		this.lastSeq.clear();
 		this.customIds.clear();
 		this.pendingControlFrames = [];
+		this.controlFlushScheduled = false;
 		this.controlSession = null;
 	}
 

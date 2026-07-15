@@ -166,6 +166,13 @@ function topologyEquals(
 	return JSON.stringify(left) === JSON.stringify(right);
 }
 
+function normalizeTopologyRow(row: TopologyRow): TopologyRow {
+	return {
+		...row,
+		desiredTopology: canonicalizeTopology(row.desiredTopology),
+	};
+}
+
 function applyLegacyFrames(
 	current: RealtimeDesiredTopology,
 	frames: RealtimeControlFrame[],
@@ -377,7 +384,7 @@ export class PostgresRealtimeTopologyStore implements RealtimeTopologyStore {
 				desiredTopology: input.topology,
 			})
 			.returning();
-		return row as TopologyRow;
+		return normalizeTopologyRow(row as TopologyRow);
 	}
 
 	async mutate(input: {
@@ -404,7 +411,7 @@ export class PostgresRealtimeTopologyStore implements RealtimeTopologyStore {
 			) {
 				return { status: "unavailable" };
 			}
-			const typedRow = row as TopologyRow;
+			const typedRow = normalizeTopologyRow(row as TopologyRow);
 			const mutation = input.mutate(typedRow);
 			if (mutation.status === "accepted") {
 				const [updated] = await tx
@@ -416,7 +423,10 @@ export class PostgresRealtimeTopologyStore implements RealtimeTopologyStore {
 					})
 					.where(eq(questpieRealtimeTopologyTable.sessionKey, input.sessionKey))
 					.returning();
-				return { status: mutation.status, row: updated as TopologyRow };
+				return {
+					status: mutation.status,
+					row: normalizeTopologyRow(updated as TopologyRow),
+				};
 			}
 			return { status: mutation.status, row: typedRow };
 		});
@@ -441,7 +451,7 @@ export class PostgresRealtimeTopologyStore implements RealtimeTopologyStore {
 					gt(questpieRealtimeTopologyTable.leaseExpiresAt, sql`now()`),
 				),
 			);
-		return (row as TopologyRow | undefined) ?? null;
+		return row ? normalizeTopologyRow(row as TopologyRow) : null;
 	}
 
 	async markApplied(input: {

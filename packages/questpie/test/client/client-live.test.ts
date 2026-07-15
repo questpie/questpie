@@ -245,6 +245,89 @@ describe("client live queries", () => {
 		stopPosts();
 	});
 
+	it("coalesces advertised v1 desired topology and closes the last topic locally", async () => {
+		const controls: Array<Record<string, any>> = [];
+		let streamController!: ReadableStreamDefaultController<Uint8Array>;
+		let aborted = false;
+		const fetcher: typeof fetch = async (_input, init) => {
+			const payload = JSON.parse(String(init?.body));
+			if (payload.sessionId) {
+				controls.push(payload);
+				return Response.json(
+					{
+						protocol: "questpie-realtime-topology",
+						version: 1,
+						status: "accepted",
+						revision: payload.topology.revision,
+						desiredRevision: payload.topology.revision,
+						appliedRevision: payload.topology.revision - 1,
+					},
+					{ status: 202 },
+				);
+			}
+			const stream = new ReadableStream<Uint8Array>({
+				start(controller) {
+					streamController = controller;
+					controller.enqueue(
+						encoder.encode(
+							`event: session\ndata: ${JSON.stringify({
+								sessionId: "session-v1",
+								token: "token-v1",
+								control: {
+									protocol: "questpie-realtime-topology",
+									versions: [1],
+								},
+							})}\n\n`,
+						),
+					);
+				},
+			});
+			init?.signal?.addEventListener("abort", () => {
+				aborted = true;
+				streamController.close();
+			});
+			return new Response(stream, {
+				headers: { "Content-Type": "text/event-stream" },
+			});
+		};
+		const multiplexer = new RealtimeMultiplexer(
+			"http://localhost:3000",
+			true,
+			0,
+			{},
+			undefined,
+			fetcher,
+		);
+		const stopPosts = multiplexer.subscribe(
+			{ resourceType: "collection", resource: "posts" },
+			() => {},
+		);
+		await new Promise((resolve) => setTimeout(resolve, 10));
+		const stopPages = multiplexer.subscribe(
+			{ resourceType: "collection", resource: "pages" },
+			() => {},
+		);
+		const stopUsers = multiplexer.subscribe(
+			{ resourceType: "collection", resource: "users" },
+			() => {},
+		);
+
+		await waitFor(() => controls.length === 1);
+		expect(controls[0].topology.revision).toBe(1);
+		expect(controls[0].topology.topics).toHaveLength(3);
+		expect(controls[0].frames).toBeUndefined();
+
+		stopPages();
+		stopUsers();
+		await waitFor(() => controls.length === 2);
+		expect(controls[1].topology.revision).toBe(2);
+		expect(controls[1].topology.topics).toHaveLength(1);
+		stopPosts();
+		await waitFor(() => aborted);
+		expect(controls).toHaveLength(2);
+		multiplexer.destroy();
+	});
+
 	it("reconnects a clean close with sinceSeq and skips duplicate delivery", async () => {
 		const multiplexer = new RealtimeMultiplexer(
 			"http://localhost:3000",

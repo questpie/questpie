@@ -32,6 +32,10 @@ type SessionResponse = {
 	sessionId: string;
 	token: string;
 	channel: string;
+	control?: {
+		protocol: "questpie-realtime-topology";
+		versions: number[];
+	};
 	errors?: Array<{ id: string; message: string }>;
 };
 
@@ -64,6 +68,8 @@ export class PusherRealtimeTransport implements RealtimeClientTransport {
 	> | null = null;
 	private sessionPromise: Promise<void> | null = null;
 	private controlOperation: Promise<void> = Promise.resolve();
+	private desiredRevision = 0;
+	private desiredFlushPromise: Promise<void> | null = null;
 	private refreshPromise: Promise<void> | null = null;
 	private refreshPending = false;
 	private destroyed = false;
@@ -117,6 +123,10 @@ export class PusherRealtimeTransport implements RealtimeClientTransport {
 			if (current.subscribers.size > 0) return;
 			this.topics.delete(topicId);
 			if (current.registered) {
+				if (this.supportsDesiredTopology() && this.topics.size === 0) {
+					this.disconnect();
+					return;
+				}
 				void this.sendControl([{ type: "remove_topic", topicId }]).finally(
 					() => {
 						if (this.topics.size === 0) this.disconnect();
@@ -295,6 +305,7 @@ export class PusherRealtimeTransport implements RealtimeClientTransport {
 	private sendControl(frames: Array<Record<string, unknown>>): Promise<void> {
 		const session = this.session;
 		if (!session || frames.length === 0) return Promise.resolve();
+		if (this.supportsDesiredTopology()) return this.sendDesiredTopology();
 		this.controlOperation = this.controlOperation
 			.catch(() => {})
 			.then(async () => {
@@ -317,6 +328,64 @@ export class PusherRealtimeTransport implements RealtimeClientTransport {
 				}
 			});
 		return this.controlOperation;
+	}
+
+	private supportsDesiredTopology(): boolean {
+		return Boolean(
+			this.session?.control?.protocol === "questpie-realtime-topology" &&
+			this.session.control.versions.includes(1),
+		);
+	}
+
+	private sendDesiredTopology(): Promise<void> {
+		if (this.desiredFlushPromise) return this.desiredFlushPromise;
+		this.desiredFlushPromise = new Promise<void>((resolve, reject) => {
+			queueMicrotask(() => {
+				const session = this.session;
+				if (!session || this.topics.size === 0) {
+					resolve();
+					return;
+				}
+				const topology = {
+					protocol: "questpie-realtime-topology",
+					version: 1,
+					revision: ++this.desiredRevision,
+					topics: [...this.topics.entries()].map(([id, entry]) => ({
+						id,
+						topic: entry.topic,
+					})),
+					channels: [],
+				};
+				this.controlOperation = this.controlOperation
+					.catch(() => {})
+					.then(async () => {
+						const authHeaders = await this.options.getAuthHeaders?.();
+						const response = await this.options.fetcher(
+							`${this.options.baseUrl}/realtime`,
+							{
+								method: "POST",
+								headers: {
+									"Content-Type": "application/json",
+									...authHeaders,
+								},
+								body: JSON.stringify({
+									sessionId: session.sessionId,
+									token: session.token,
+									topology,
+								}),
+								credentials: "include",
+							},
+						);
+						if (!response.ok) {
+							throw new Error(`Realtime control failed: ${response.status}`);
+						}
+					});
+				this.controlOperation.then(resolve, reject);
+			});
+		}).finally(() => {
+			this.desiredFlushPromise = null;
+		});
+		return this.desiredFlushPromise;
 	}
 
 	private scheduleRefresh(): void {
@@ -364,6 +433,7 @@ export class PusherRealtimeTransport implements RealtimeClientTransport {
 		this.pusher = null;
 		this.channel = null;
 		this.session = null;
+		this.desiredRevision = 0;
 	}
 
 	destroy(): void {

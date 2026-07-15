@@ -600,6 +600,17 @@ export class RealtimeService {
 		return this.topologyCoordinator.submitLegacy(input);
 	}
 
+	/** @internal Commit one complete versioned desired topology. */
+	async submitTopology(input: {
+		sessionId: string;
+		token: string;
+		identity: string;
+		topology: RealtimeDesiredTopology;
+	}): Promise<RealtimeTopologyResult> {
+		await this.initialize();
+		return this.topologyCoordinator.submit(input);
+	}
+
 	async getClientTransportConfig(
 		input: ClientConfigInput,
 	): Promise<ClientTransportConfig> {

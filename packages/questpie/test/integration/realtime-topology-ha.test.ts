@@ -120,6 +120,28 @@ function controlRequest(
 	});
 }
 
+function desiredRequest(
+	session: { sessionId: unknown; token: unknown },
+	revision: number,
+	topics: Array<{ id: string; topic: Record<string, unknown> }>,
+) {
+	return new Request("http://localhost/realtime", {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({
+			sessionId: session.sessionId,
+			token: session.token,
+			topology: {
+				protocol: "questpie-realtime-topology",
+				version: 1,
+				revision,
+				topics,
+				channels: [],
+			},
+		}),
+	});
+}
+
 test("applies topic additions and removals through a different app instance", async () => {
 	const database = await createTestDb();
 	const bus = new SharedChangeBus();
@@ -182,10 +204,17 @@ test("applies topic additions and removals through a different app instance", as
 		expect(first.app.realtime.listeners.size).toBe(1);
 
 		const add = await secondRoutes.realtime.subscribe(
-			controlRequest(session, [
+			desiredRequest(session, 1, [
 				{
-					type: "add_topic",
-					topicId: "items-added",
+					id: "items-base",
+					topic: {
+						resourceType: "collection",
+						resource: "items",
+						where: { name: "base" },
+					},
+				},
+				{
+					id: "items-added",
 					topic: {
 						resourceType: "collection",
 						resource: "items",
@@ -196,11 +225,34 @@ test("applies topic additions and removals through a different app instance", as
 			{},
 			undefined,
 		);
-		if (!add.ok) {
+		if (add.status !== 202) {
 			throw new Error(
 				`Cross-instance add was rejected (${add.status}): ${await add.text()}`,
 			);
 		}
+		const duplicate = await secondRoutes.realtime.subscribe(
+			desiredRequest(session, 1, [
+				{
+					id: "items-base",
+					topic: {
+						resourceType: "collection",
+						resource: "items",
+						where: { name: "base" },
+					},
+				},
+				{
+					id: "items-added",
+					topic: {
+						resourceType: "collection",
+						resource: "items",
+						where: { name: "added" },
+					},
+				},
+			]),
+			{},
+			undefined,
+		);
+		expect(duplicate.status).toBe(200);
 		await withTimeout(
 			reader.read("snapshot", "items-added"),
 			"cross-instance added snapshot",

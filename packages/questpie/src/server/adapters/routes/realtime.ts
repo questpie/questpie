@@ -489,6 +489,7 @@ export async function realtimeSubscribe(
 		sessionId?: string;
 		token?: string;
 		frames?: RealtimeControlFrame[];
+		topology?: RealtimeDesiredTopology;
 	};
 	try {
 		body = await request.json();
@@ -508,6 +509,120 @@ export async function realtimeSubscribe(
 	const admission = resolveRealtimeAdmissionConfig(
 		app.config?.realtime?.admission,
 	);
+	if (body.topology !== undefined) {
+		if (
+			!body.sessionId ||
+			!body.token ||
+			body.topology.protocol !== "questpie-realtime-topology" ||
+			body.topology.version !== 1 ||
+			!Number.isSafeInteger(body.topology.revision) ||
+			body.topology.revision < 1 ||
+			!Array.isArray(body.topology.topics) ||
+			!Array.isArray(body.topology.channels) ||
+			body.topology.topics.length + body.topology.channels.length >
+				admission.maxTopicsPerConnection
+		) {
+			return Response.json(
+				{
+					error: {
+						code: "REALTIME_TOPOLOGY_INVALID",
+						message: "Invalid realtime topology request",
+					},
+				},
+				{ status: 400 },
+			);
+		}
+		try {
+			for (const desired of body.topology.topics) {
+				await resolveIncrementalTopic(
+					app,
+					{
+						...desired.topic,
+						id: desired.id,
+						sinceSeq: desired.sinceSeq,
+					} as TopicInput,
+					resolved.appContext,
+					admission,
+				);
+			}
+			for (const desired of body.topology.channels) {
+				await resolveChannelSubscription(
+					app,
+					{
+						id: desired.id,
+						channel: desired.channel,
+						params: desired.params,
+						lastEventId: desired.lastEventId,
+					},
+					resolved.appContext,
+				);
+			}
+			let result;
+			try {
+				result = await app.realtime.submitTopology({
+					sessionId: body.sessionId,
+					token: body.token,
+					identity: realtimeControlIdentity(resolved.appContext),
+					topology: body.topology,
+				});
+			} catch {
+				return Response.json(
+					{
+						error: {
+							code: "REALTIME_TOPOLOGY_STORAGE_UNAVAILABLE",
+							message: "Realtime topology storage is unavailable",
+						},
+					},
+					{ status: 503 },
+				);
+			}
+			if (result.status === "unavailable") {
+				return Response.json(
+					{
+						error: {
+							code: "REALTIME_CONTROL_UNAVAILABLE",
+							message: "Realtime control session is unavailable",
+						},
+					},
+					{ status: 404 },
+				);
+			}
+			if (
+				result.status === "stale" ||
+				result.status === "conflict" ||
+				result.status === "unsupported"
+			) {
+				const code =
+					result.status === "stale"
+						? "REALTIME_TOPOLOGY_STALE"
+						: result.status === "conflict"
+							? "REALTIME_TOPOLOGY_REVISION_CONFLICT"
+							: "REALTIME_TOPOLOGY_VERSION_UNSUPPORTED";
+				return Response.json(
+					{ error: { code, message: "Realtime topology was rejected" } },
+					{ status: 409 },
+				);
+			}
+			return Response.json(
+				{
+					protocol: "questpie-realtime-topology",
+					version: 1,
+					...result,
+				},
+				{ status: result.status === "accepted" ? 202 : 200 },
+			);
+		} catch {
+			return Response.json(
+				{
+					error: {
+						code: "REALTIME_TOPOLOGY_INVALID",
+						message: "Invalid realtime topology request",
+					},
+				},
+				{ status: 400 },
+			);
+		}
+	}
 	if (body.sessionId || body.frames) {
 		if (
 			!body.sessionId ||
@@ -989,6 +1104,10 @@ export async function realtimeSubscribe(
 					sessionId: edgeSessionId,
 					token: controlToken,
 					channel: activeSink.clientChannel,
+					control: {
+						protocol: "questpie-realtime-topology",
+						versions: [1],
+					},
 					...(topicErrors.length ? { errors: topicErrors } : {}),
 				},
 				{ headers: { "Cache-Control": "no-store" } },
@@ -1382,6 +1501,10 @@ export async function realtimeSubscribe(
 				await send("session", {
 					sessionId: edgeSessionId,
 					token: controlToken,
+					control: {
+						protocol: "questpie-realtime-topology",
+						versions: [1],
+					},
 				});
 
 				// Subscribe to each initial topic.
