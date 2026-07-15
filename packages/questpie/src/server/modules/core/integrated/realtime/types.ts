@@ -49,8 +49,11 @@ export type RealtimeNotice = Pick<
 	"seq" | "resourceType" | "resource" | "operation"
 >;
 
-export type RealtimeTransportMode = "legacy" | "v2" | "dual";
+/** @deprecated `legacy` and `dual` are 3.x rollback aids removed in QuestPie 4. */
+export type LegacyRealtimeTransportMode = "legacy" | "dual";
+export type RealtimeTransportMode = "v2" | LegacyRealtimeTransportMode;
 
+/** @deprecated Dual-run comparison is a 3.x migration aid removed in QuestPie 4. */
 export type RealtimeDualRunComparison = {
 	/** Durable outbox sequence published through both invalidation paths. */
 	seq: number;
@@ -69,7 +72,7 @@ export type RealtimeRolloutConfig = {
 	 * @default "v2"
 	 */
 	mode?: RealtimeTransportMode;
-	/** Observes one comparison per dual-run outbox publish. */
+	/** @deprecated Dual-run comparison hooks are removed in QuestPie 4. */
 	onComparison?: (comparison: RealtimeDualRunComparison) => void;
 };
 
@@ -124,6 +127,8 @@ export interface RealtimeConfig {
 	connectionAcceptPacingMs?: number;
 	/**
 	 * Optional transport adapter (pg_notify, redis streams, etc.).
+	 * @deprecated Use `changeBroker`. This compatibility path remains in 3.x and
+	 * is removed in QuestPie 4.
 	 */
 	adapter?: RealtimeAdapter;
 	/** Cross-instance notice seam used by Realtime v2 transports. */

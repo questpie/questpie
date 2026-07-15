@@ -2,6 +2,7 @@ import { asc, desc, gt, lt } from "drizzle-orm";
 
 import type { DrizzleClientFromQuestpieConfig } from "#questpie/server/config/types.js";
 import type { LoggerAdapter } from "#questpie/server/modules/core/integrated/logger/types.js";
+import { getNodeEnv } from "#questpie/server/utils/env.js";
 
 import type { RealtimeAdapter } from "./adapter.js";
 import { PgNotifyAdapter, PgNotifyChangeBroker } from "./adapters/pg-notify.js";
@@ -62,6 +63,28 @@ type AppendChangeOptions = {
 
 const DEFAULT_RETENTION_DAYS = 3;
 const DEFAULT_ADAPTER_RECONCILIATION_INTERVAL_MS = 15_000;
+let warnedLegacyRealtimeRuntime = false;
+
+function warnLegacyRealtimeRuntime(
+	config: RealtimeConfig,
+	logger?: Pick<LoggerAdapter, "warn">,
+): void {
+	if (
+		warnedLegacyRealtimeRuntime ||
+		getNodeEnv() === "test" ||
+		(!config.adapter &&
+			config.rollout?.mode !== "legacy" &&
+			config.rollout?.mode !== "dual" &&
+			!config.rollout?.onComparison)
+	) {
+		return;
+	}
+	warnedLegacyRealtimeRuntime = true;
+	const message =
+		"[Realtime] Legacy adapter/rollout configuration is deprecated in QuestPie 3.x and will be removed in QuestPie 4. Use realtime.changeBroker or the automatic Postgres v2 default.";
+	if (logger) logger.warn(message);
+	else console.warn(message);
+}
 
 type ListenerEntry = {
 	listener: RealtimeListener;
@@ -195,6 +218,7 @@ export class RealtimeService {
 		private pgConnectionString?: string,
 		private logger?: Pick<LoggerAdapter, "error" | "warn">,
 	) {
+		warnLegacyRealtimeRuntime(config, this.logger);
 		this.transportMode = config.rollout?.mode ?? "v2";
 		this.onDualRunComparison = config.rollout?.onComparison;
 		if (

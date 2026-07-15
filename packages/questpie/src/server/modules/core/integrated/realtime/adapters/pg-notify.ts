@@ -409,6 +409,10 @@ export class PgNotifyAdapter implements RealtimeAdapter {
 	}
 }
 
+/**
+ * @deprecated Use `pgNotifyChangeBroker`, or omit `realtime.changeBroker` on a
+ * Postgres app to use the automatic v2 default. Removed in QuestPie 4.
+ */
 export const pgNotifyAdapter = (options: PgNotifyAdapterOptions = {}) =>
 	new PgNotifyAdapter(options);
 

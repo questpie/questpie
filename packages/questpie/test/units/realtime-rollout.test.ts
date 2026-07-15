@@ -123,6 +123,43 @@ function createService(
 }
 
 describe("realtime compatibility rollout", () => {
+	it("warns once outside tests without removing the 3.x runtime", async () => {
+		const previous = process.env.NODE_ENV;
+		process.env.NODE_ENV = "production";
+		const warnings: unknown[][] = [];
+		const logger = {
+			warn: (...args: unknown[]) => warnings.push(args),
+			error: () => {},
+		};
+		const first = new RealtimeService(
+			new EmptyRealtimeDb() as never,
+			{ adapter: new RecordingAdapter(), pollIntervalMs: 0, retentionDays: 0 },
+			undefined,
+			logger,
+		);
+		const second = new RealtimeService(
+			new EmptyRealtimeDb() as never,
+			{
+				adapter: new RecordingAdapter(),
+				rollout: { mode: "legacy" },
+				pollIntervalMs: 0,
+				retentionDays: 0,
+			},
+			undefined,
+			logger,
+		);
+		try {
+			expect(warnings).toHaveLength(1);
+			expect(String(warnings[0]?.[0])).toContain("QuestPie 4");
+			await expect(first.notify(change)).resolves.toBeUndefined();
+			await expect(second.notify(change)).resolves.toBeUndefined();
+		} finally {
+			await Promise.all([first.destroy(), second.destroy()]);
+			if (previous === undefined) delete process.env.NODE_ENV;
+			else process.env.NODE_ENV = previous;
+		}
+	});
+
 	it("auto-selects the v2 Postgres broker for clean Postgres config", async () => {
 		const realtime = new RealtimeService(
 			new EmptyRealtimeDb() as never,
