@@ -61,11 +61,11 @@ const { data } = useQuery(
 
 ## Transport selection
 
-SSE is the default `ClientTransport`; no browser transport config is required. With a normal Postgres URL the server auto-wires `PgNotifyChangeBroker`; otherwise it polls every 2s. Redis Streams and Pusher are supported v2 broker overrides. Cloudflare's adapter remains on the deprecated 3.x compatibility seam. A clean v2 configuration never needs both `RealtimeAdapter` and `ChangeBroker`.
+SSE is the default `ClientTransport`; no browser transport config is required. With a normal Postgres URL the server auto-wires `PgNotifyChangeBroker`; otherwise it polls every 2s. Redis Streams and Pusher are supported v2 broker overrides. A clean v2 configuration uses one `ChangeBroker`.
 
 Realtime topology is durable in `questpie_realtime_topology`. Complete desired topology uses monotonic revisions; a metadata-only broker wake lowers latency and one-second reconciliation heals dropped wakes. This makes companion control HA-safe without sticky routing after the migration is applied and every request-handling replica supports the advertised `questpie-realtime-topology` v1 capability.
 
-Before a production upgrade, run `bunx questpie migrate:create`, review and commit the generated migration, then run `bunx questpie migrate`. Never use `push` for this production schema change. `RealtimeAdapter`, `realtime.adapter`, `pgNotifyAdapter`, and `legacy`/`dual` rollout modes are deprecated in QuestPie 3.x and removed in QuestPie 4.
+Before a production upgrade, run `bunx questpie migrate:create`, review and commit the generated migration, then run `bunx questpie migrate`. Never use `push` for this production schema change. Use the Realtime v2 HA migration guide for the QuestPie 3.x transition and QuestPie 4 removal window.
 
 For managed WebSockets and native presence, select the isolated Pusher/Soketi preset:
 

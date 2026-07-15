@@ -103,7 +103,7 @@ Pusher/Soketi also supplies a v2 broker and client transport. Generic KV is not 
 Replace `realtime.adapter` with `realtime.changeBroker`, and remove `rollout.mode: "legacy" | "dual"` after your compatibility drill. `RealtimeAdapter`, `realtime.adapter`, `pgNotifyAdapter`, and the `legacy`/`dual` modes remain functional but deprecated for the rest of QuestPie 3.x. They are removed in QuestPie 4.
 
 ```ts
-// QuestPie 3.x legacy compatibility — migrate away from this
+// QuestPie 3.x legacy compatibility - migrate away from this
 realtime: {
 	adapter: pgNotifyAdapter({ connectionString: env.DATABASE_URL });
 }

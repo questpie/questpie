@@ -321,7 +321,7 @@ The preset supplies a notice-only Pusher `ChangeBroker` and a Pusher `ClientTran
 
 ### Cloudflare Durable Objects
 
-`cloudflareRealtimeAdapter()` is the deprecated 3.x `RealtimeAdapter` compatibility path for Workers. It shards Durable Objects by resource type and resource name, and notification work is attached to `waitUntil` so CRUD commits do not wait on the adapter. A dedicated v2 `ChangeBroker` replacement is not part of this release.
+Cloudflare Workers use a Durable Object fan-out path because they do not keep a long-lived process-local poller. Consult the Realtime v2 HA migration guide before selecting the QuestPie 3.x deployment path.
 
 ### When to Use Which
 
@@ -331,10 +331,9 @@ The preset supplies a notice-only Pusher `ChangeBroker` and a Pusher `ClientTran
 | Poll + SSE                       | Zero extra infrastructure without a push-capable database                 |
 | `pgNotifyChangeBroker` + SSE     | Explicit Postgres connection/channel                                      |
 | `redisStreamsChangeBroker` + SSE | Cross-instance Redis notice fan-out                                       |
-| `cloudflareRealtimeAdapter`      | Deprecated 3.x Cloudflare compatibility adapter                           |
 | `pusherRealtime`                 | Managed WebSockets, provider-native presence, and shared channel delivery |
 
-`RealtimeAdapter`, `realtime.adapter`, `pgNotifyAdapter`, and the `legacy`/`dual` rollout modes remain deprecated compatibility surfaces through QuestPie 3.x. Migrate to `changeBroker`; they are removed in QuestPie 4. Apply the generated `questpie_realtime_topology` migration before claiming cross-replica no-reconnect control.
+Apply the generated `questpie_realtime_topology` migration before claiming cross-replica no-reconnect control. Use the Realtime v2 HA migration guide for version-transition details.
 
 ## Search
 

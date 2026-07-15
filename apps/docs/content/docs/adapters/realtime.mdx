@@ -67,10 +67,8 @@ Use `realtime: true` to turn on the default transport. Use an object when you wa
 ```ts
 interface RealtimeConfig {
 	observer?: RealtimeObserver;
-	rollout?: RealtimeRolloutConfig;
 	admission?: Partial<RealtimeAdmissionConfig>;
 	connectionAcceptPacingMs?: number;
-	adapter?: RealtimeAdapter; // deprecated 3.x compatibility adapter
 	changeBroker?: ChangeBroker; // v2 cross-instance notice seam
 	clientTransport?: ClientTransport; // managed edge transport; omit → SSE
 	channelEvents?: Partial<ChannelEventLedgerConfig>;
@@ -86,10 +84,8 @@ interface RealtimeConfig {
 | Option                     | Default                                        | What it controls                                                                                                                                                                                                         |
 | -------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `observer`                 | _(none)_                                       | Structured lifecycle/admission/transport diagnostics. Observer failures are isolated from delivery.                                                                                                                      |
-| `rollout`                  | v2                                             | Deprecated 3.x compatibility/canary selection. `legacy` and `dual` are removed in QuestPie 4.                                                                                                                            |
 | `admission`                | limits below                                   | Edge-session topic, connection, query-shape, concurrency, and buffer caps.                                                                                                                                               |
 | `connectionAcceptPacingMs` | `0`                                            | Optional maximum random delay before accepting a new edge session.                                                                                                                                                       |
-| `adapter`                  | _(none)_                                       | Deprecated `RealtimeAdapter` compatibility path. It remains functional through QuestPie 3.x and is removed in QuestPie 4.                                                                                                |
 | `changeBroker`             | Postgres `PgNotifyChangeBroker` when available | Realtime v2 notice-only broker. Set it explicitly for Redis, Pusher, Cloudflare, or a custom broker.                                                                                                                     |
 | `clientTransport`          | SSE                                            | Optional managed edge transport. The Pusher preset supplies both `changeBroker` and `clientTransport`.                                                                                                                   |
 | `channelEvents`            | bounded defaults                               | Ordered-channel replay retention, lease, and slow-consumer buffer tuning.                                                                                                                                                |
@@ -152,12 +148,11 @@ Equivalent subscriptions compute once and fan out serialized bytes, but the acce
 
 ## The default: Postgres broker vs polling
 
-Clean Realtime v2 does not require both a `RealtimeAdapter` and a `ChangeBroker`. The runtime selects one notice path:
+Clean Realtime v2 uses one `ChangeBroker` notice path:
 
 1. **Explicit `changeBroker` set** → use it.
 2. **No broker, but a Postgres connection string is available** → construct `PgNotifyChangeBroker` on `questpie_realtime_v2`. Its publisher starts with the app lifecycle, including write-only workers with no local subscribers.
 3. **No broker and no Postgres connection** → fall back to polling the durable state every `pollIntervalMs` (default 2s for the outbox).
-4. **Deprecated `adapter` set** → keep using the 3.x compatibility bridge. Do not add one to a clean v2 configuration.
 
 <Callout type="info" title="Polling is the recovery guarantee">
 	The poll drains the same outbox and pushes the same access-controlled
@@ -324,45 +319,9 @@ type RedisStreamsClient = {
 Only `xAdd` and `xRead` are mandatory. Pass `reader` when a custom client cannot duplicate itself; blocking reads should not share the publishing connection.
 </Callout>
 
-## `cloudflareRealtimeAdapter`, Durable Objects (3.x compatibility)
+## Cloudflare deployments
 
-On Cloudflare Workers, the existing realtime adapter is backed by a **Durable Object**: there's no long-lived process to hold subscriptions or a poll timer, so the DO is the fan-out point. `cloudflareRealtimeAdapter({ namespace })` proxies subscribe/notify through the deprecated `RealtimeAdapter` compatibility seam. A dedicated v2 `ChangeBroker` replacement is not part of this release.
-
-```ts title="src/questpie/server/questpie.config.ts"
-import { runtimeConfig } from "questpie/app";
-import { cloudflareRealtimeAdapter } from "questpie/adapters/cloudflare-realtime";
-
-export default runtimeConfig({
-	realtime: {
-		adapter: cloudflareRealtimeAdapter({
-			// A Durable Object namespace binding, or a zero-arg function that
-			// returns one (so you can resolve it lazily from your Worker env).
-			namespace: () => getEnv().QUESTPIE_REALTIME,
-			// objectName: "questpie-realtime",  // default shard-name prefix
-			// hubPath: "/__questpie/realtime",   // default internal hub path
-		}),
-	},
-});
-```
-
-`CloudflareRealtimeAdapterOptions` is `{ namespace (required), objectName?, hubPath?, waitUntil?, onError? }`. The `namespace` is a Durable Object namespace binding, or a **zero-argument** function that returns one (resolved lazily when the adapter first needs it, so you can defer reading it out of your Worker env).
-
-| Option       | Type                                    | Default                  | Notes                                                                                  |
-| ------------ | --------------------------------------- | ------------------------ | -------------------------------------------------------------------------------------- |
-| `namespace`  | `CloudflareDurableObjectNamespaceInput` | none **required**        | The DO namespace binding, or `() => namespace`.                                        |
-| `objectName` | `string`                                | `"questpie-realtime"`    | Base DO name; the runtime appends resource type and resource name to shard notices.    |
-| `hubPath`    | `string`                                | `"/__questpie/realtime"` | Internal hub path; the adapter derives `${hubPath}/subscribe` and `${hubPath}/notify`. |
-| `waitUntil`  | `(promise) => void`                     | none                     | Keeps the non-blocking notify relay alive for the current Worker event.                |
-| `onError`    | `(error) => void`                       | `console.error`          | Reports background publish and relay failures.                                         |
-
-This adapter carries a `runtime: "cloudflare"` discriminator so the Cloudflare fetch/queue handlers detect it, and it's wired together with the **`createCloudflareRealtimeDurableObjectHandler`** export (from `questpie/adapters/cloudflare`) that implements the DO itself. Durable Objects are sharded by `resourceType` and resource; mutation publish is non-blocking, only the minimal notice crosses the DO boundary, and snapshot queries stay in the requesting Worker.
-
-<Callout type="info" title="Cloudflare realtime is a deployment-specific setup">
-	Unlike `pg_notify` / Redis, this adapter requires a Durable Object class bound
-	in your `wrangler` config plus the DO handler. It's part of the Cloudflare
-	Workers deployment story rather than a drop-in line. The other two adapters
-	need no Workers-specific wiring.
-</Callout>
+Cloudflare Workers need a Durable Object fan-out path because they do not keep a long-lived process-local poller. Use the [Realtime v2 HA migration guide](/docs/adapters/realtime-v2-migration) for the supported QuestPie 3.x deployment path and its v2 migration status.
 
 ## The outbox table
 
@@ -385,7 +344,6 @@ The transport contract and config types are exported from `questpie` (and `quest
 ```ts
 import type {
 	ChangeBroker, // the notice-only contract for a custom v2 broker
-	RealtimeAdapter, // deprecated 3.x compatibility contract
 	RealtimeConfig, // the `realtime` config shape
 	RealtimeChangeEvent, // a full outbox event
 	RealtimeChangePayload, // { before, after } or { count, recordIds }
@@ -396,13 +354,13 @@ import type {
 } from "questpie/realtime";
 ```
 
-Each adapter's option type ships from its own entry, `PgNotifyChangeBrokerOptions` from `questpie/adapters/pg-notify`, `RedisStreamsAdapterOptions` + `RedisStreamsClient` from `questpie/adapters/redis-streams`, `CloudflareRealtimeAdapterOptions` from `questpie/adapters/cloudflare-realtime`.
+Each broker's option type ships from its own entry, `PgNotifyChangeBrokerOptions` from `questpie/adapters/pg-notify` and `RedisStreamsAdapterOptions` plus `RedisStreamsClient` from `questpie/adapters/redis-streams`.
 
 ## Build your own transport
 
 Implement `ChangeBroker` for a new Realtime v2 invalidation driver. It carries metadata-only wakes; the durable database state remains authoritative and `ClientTransport` handles already-authorized edge delivery.
 
-The compatibility adapter shape is:
+The broker shape is:
 
 ```ts
 interface ChangeBroker {
@@ -418,7 +376,7 @@ interface ChangeBroker {
 
 Wakes may be lost, duplicated, delayed, reordered, or coalesced. They never carry rows, snapshots, credentials, or topology bodies. Wire the broker as `realtime.changeBroker`; reconciliation against durable state supplies correctness.
 
-`RealtimeAdapter` and `realtime.adapter` remain functional only as deprecated QuestPie 3.x compatibility surfaces. New integrations must not implement or configure them. See the migration guide for the removal window.
+See the migration guide for the QuestPie 3.x transition and QuestPie 4 removal window.
 
 ## Related
 
