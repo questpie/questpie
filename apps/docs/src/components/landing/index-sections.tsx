@@ -1,8 +1,7 @@
 import { Link } from "@tanstack/react-router";
-import { type FormEvent, type ReactNode, useState } from "react";
+import { type ReactNode, useState } from "react";
 
 import { buttonVariants } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 import {
@@ -71,7 +70,7 @@ export function Hero() {
 						<Reveal>
 							<div style={{ marginBottom: 22 }}>
 								<Eyebrow dot color="var(--success)">
-									v3.6 · MIT · TypeScript · Bun + Node
+									MIT · TypeScript · Bun + Node
 								</Eyebrow>
 							</div>
 						</Reveal>
@@ -86,14 +85,14 @@ export function Hero() {
 									fontWeight: 600,
 								}}
 							>
-								<span style={{ display: "block" }}>Your site.</span>
+								<span style={{ display: "block" }}>Your schema.</span>
 								<span
 									style={{
 										display: "block",
 										color: "var(--foreground-muted)",
 									}}
 								>
-									Your ops.
+									Your backend.
 								</span>
 								<span
 									style={{
@@ -101,10 +100,10 @@ export function Hero() {
 										color: "var(--foreground-muted)",
 									}}
 								>
-									Your infrastructure.
+									Your admin.
 								</span>
 								<span style={{ display: "block", color: "var(--primary)" }}>
-									One open stack.
+									One open framework.
 								</span>
 							</h1>
 						</Reveal>
@@ -119,9 +118,10 @@ export function Hero() {
 									maxWidth: 500,
 								}}
 							>
-								QUESTPIE replaces the SaaS patchwork with one open-source stack:
-								a typed backend framework, managed cloud, and AI agents that run
-								your business. You own the code. You own the data.
+								Define your data once and get a typed API, admin workspace,
+								auth, jobs and clients from the same TypeScript schema.
+								Self-host the framework today; Cloud and Autopilot are optional
+								products in development.
 							</p>
 						</Reveal>
 						<Reveal delay={180}>
@@ -136,16 +136,16 @@ export function Hero() {
 							>
 								<a
 									className={cn(buttonVariants({ variant: "default" }))}
-									href="/docs"
+									href="/docs/getting-started/tanstack-start"
 								>
-									Start a project
+									Build your first app
 									<LIcon name="arrow-right" size={14} />
 								</a>
 								<Link
 									className={cn(buttonVariants({ variant: "outline" }))}
 									to="/cloud"
 								>
-									Try Cloud
+									Preview Cloud
 									<LIcon name="arrow-down" size={14} />
 								</Link>
 								<a
@@ -244,13 +244,7 @@ function HeroProof() {
 		],
 		["    slug:    f.", FN("text"), "(", NUM("160"), "),"],
 		["    status:  f.", FN("select"), "(["],
-		[
-			"      { value: ",
-			STR('"draft"'),
-			", label: ",
-			STR('"Draft"'),
-			" },",
-		],
+		["      { value: ", STR('"draft"'), ", label: ", STR('"Draft"'), " },"],
 		[
 			"      { value: ",
 			STR('"published"'),
@@ -505,41 +499,44 @@ const PILLARS: Pillar[] = [
 			"Hono, Elysia, Next, TanStack adapters",
 			"MIT. Runs in your codebase",
 		],
-		cta: { label: "Read the docs", href: "/docs" },
+		cta: {
+			label: "Build your first app",
+			href: "/docs/getting-started/tanstack-start",
+		},
 	},
 	{
 		id: "cloud",
 		n: "02",
 		name: "Cloud",
 		status: "soon",
-		statusLabel: "Q3 2026 · Waitlist open",
+		statusLabel: "In development",
 		color: "var(--pillar-cloud)",
 		tagline: "Runtime control plane.",
 		description:
-			"Accounts, projects, environments, managed Postgres, storage, custom domains, builds, rollouts and observability. Plus hosted Autopilot for your account.",
+			"A planned managed runtime for QUESTPIE projects. The product direction includes environments, databases, storage, domains, builds and observability.",
 		points: [
-			"Health-checked deploys + rollback",
-			"Managed Postgres + storage + email",
-			"Custom domains + SSL automatic",
-			"Hosted Autopilot per account",
+			"Planned: health-checked deploys + rollback",
+			"Planned: managed Postgres + storage",
+			"Planned: custom domains + SSL",
+			"Plans and limits are not announced",
 		],
-		cta: { label: "Explore Cloud", href: "/cloud" },
+		cta: { label: "Preview Cloud", href: "/cloud" },
 	},
 	{
 		id: "autopilot",
 		n: "03",
 		name: "Autopilot",
 		status: "beta",
-		statusLabel: "Q4 2026 · Early access",
+		statusLabel: "Early development",
 		color: "var(--pillar-autopilot)",
 		tagline: "AI-native operating layer.",
 		description:
-			"Like Linear for work, Lovable for app building, Zapier for automation. Issues, workflows, schedules, knowledge, agents and an AI builder. Open source.",
+			"An operating layer under active development for issues, durable workflows, schedules, knowledge and agent-assisted work.",
 		points: [
-			"Issues + durable workflows + schedules",
-			"AI builder for QUESTPIE apps",
-			"Pluggable agents · MCP · same RBAC",
-			"Slack / GitHub integrations",
+			"In development: issues + durable workflows",
+			"In development: schedules + knowledge",
+			"Planned: agent-assisted app changes",
+			"Availability and packaging are not final",
 		],
 		cta: { label: "Explore Autopilot", href: "/autopilot" },
 	},
@@ -551,8 +548,8 @@ export function PillarsSection() {
 			<Reveal>
 				<SectionHeading
 					eyebrow="The ecosystem"
-					title="Three products. One platform."
-					lede="Start with the open-source framework today. Add managed infrastructure and AI agents as you grow. Switch off any layer without losing your data."
+					title="One framework. Two optional layers."
+					lede="The open-source Framework is available today. Cloud and Autopilot show the product direction and are not generally available yet."
 					align="center"
 				/>
 			</Reveal>
@@ -805,13 +802,7 @@ export function FrameworkSection() {
 			"(),",
 		],
 		["    status:  f.", FN("select"), "(["],
-		[
-			"      { value: ",
-			STR('"draft"'),
-			", label: ",
-			STR('"Draft"'),
-			" },",
-		],
+		["      { value: ", STR('"draft"'), ", label: ", STR('"Draft"'), " },"],
 		[
 			"      { value: ",
 			STR('"published"'),
@@ -1608,42 +1599,42 @@ const CLOUD_FEATURES = [
 	{
 		icon: "rocket",
 		title: "Health-checked deploys",
-		desc: "Durable build workflow, atomic switchover, one-click rollback when metrics regress.",
+		desc: "Planned: health checks, controlled rollout and rollback for managed deployments.",
 	},
 	{
 		icon: "database",
 		title: "Managed Postgres + storage",
-		desc: "Provisioned, scaled, point-in-time recovery up to 30 days. S3-compatible object storage served via CDN.",
+		desc: "Planned: managed project databases and object storage. Limits are not announced.",
 	},
 	{
 		icon: "globe",
 		title: "Custom domains + SSL",
-		desc: "Point DNS at QUESTPIE. Certificates and routing configured automatically.",
+		desc: "Planned: project domains, certificate provisioning and managed routing.",
 	},
 	{
 		icon: "git-branch",
 		title: "Preview deploys per branch",
-		desc: "Every PR gets a stable URL. Same pipeline as production, build cache reused across deploys.",
+		desc: "Planned: isolated preview environments tied to project branches.",
 	},
 	{
 		icon: "robot",
 		title: "Hosted Autopilot per account",
-		desc: "Managed Autopilot installation mapped to your Cloud projects. AI builder + workflows + agents ready.",
+		desc: "Product direction: optional Autopilot integration for managed projects.",
 	},
 	{
 		icon: "chart-bar",
 		title: "Logs, metrics, alerts",
-		desc: "p95, errors, uptime in dashboard. Alerts to your channels. Same data Cloud uses for health checks.",
+		desc: "Planned: deployment logs and health signals in one project view.",
 	},
 	{
 		icon: "shield",
 		title: "Backups + audit",
-		desc: "Daily backups, PITR restore, audit log on Scale. Data residency configurable on enterprise plans.",
+		desc: "Under evaluation: backup, restore and operational audit capabilities.",
 	},
 	{
 		icon: "users",
 		title: "Team roles + SSO",
-		desc: "Member roles, scoped API keys, SAML/OIDC SSO and audit log on enterprise tiers.",
+		desc: "Under evaluation: project membership and access controls. No enterprise plans are announced.",
 	},
 ];
 
@@ -1654,8 +1645,8 @@ export function CloudSection() {
 				<SectionHeading
 					eyebrow="02 · Cloud"
 					eyebrowColor="var(--pillar-cloud)"
-					title="The runtime control plane."
-					lede="Accounts, projects, environments, managed Postgres, custom domains, builds and rollouts. Plus hosted Autopilot for your account. Framework stays free; Cloud is the part you'd rather not operate."
+					title="A managed runtime in development."
+					lede="This is a product preview, not a generally available service. The direction is managed environments, databases, domains, builds and rollouts for QUESTPIE projects."
 				/>
 			</Reveal>
 
@@ -1735,8 +1726,9 @@ export function CloudSection() {
 			<Reveal delay={160}>
 				<WaitlistRow
 					accent="var(--pillar-cloud)"
-					cta="Reserve your spot"
+					cta="Read the Cloud preview"
 					product="Cloud"
+					href="/cloud"
 				/>
 			</Reveal>
 
@@ -1835,7 +1827,7 @@ function CloudConsoleMock() {
 					className="landing-mono"
 					style={{ fontSize: 11, color: "var(--foreground-subtle)" }}
 				>
-					cloud.questpie.com / deployments
+					Cloud product concept / illustrative data
 				</span>
 				<span
 					className="landing-mono"
@@ -1851,7 +1843,7 @@ function CloudConsoleMock() {
 						borderRadius: 6,
 					}}
 				>
-					us-east-1
+					preview
 				</span>
 			</div>
 
@@ -1875,7 +1867,7 @@ function CloudConsoleMock() {
 					{[
 						{ k: "Deploys", v: "127" },
 						{ k: "p95", v: "84ms" },
-						{ k: "Uptime", v: "99.99%" },
+						{ k: "Uptime", v: "Illustrative" },
 						{ k: "Builds", v: "0 failed" },
 					].map((s) => (
 						<div key={s.k}>
@@ -2009,7 +2001,7 @@ function CloudBuilderMock() {
 					className="landing-mono"
 					style={{ fontSize: 11, color: "var(--foreground)" }}
 				>
-					project · marekstreet
+					Cloud product concept · illustrative project
 				</span>
 				<span
 					className="landing-mono"
@@ -2025,7 +2017,7 @@ function CloudBuilderMock() {
 						borderRadius: 6,
 					}}
 				>
-					eu-west-1
+					preview
 				</span>
 			</div>
 
@@ -2219,12 +2211,12 @@ const AUTOPILOT_CAPS = [
 ];
 
 const RUNTIMES = [
-	{ name: "Claude Code", state: "Active" },
-	{ name: "Codex", state: "Active" },
-	{ name: "Gemini", state: "Planned" },
-	{ name: "Cursor", state: "Planned" },
-	{ name: "OpenCode", state: "Planned" },
-	{ name: "Copilot", state: "Planned" },
+	{ name: "Claude Code", state: "Evaluating" },
+	{ name: "Codex", state: "Evaluating" },
+	{ name: "Gemini", state: "Research" },
+	{ name: "Cursor", state: "Research" },
+	{ name: "OpenCode", state: "Research" },
+	{ name: "Copilot", state: "Research" },
 ];
 
 export function AutopilotSection() {
@@ -2234,8 +2226,8 @@ export function AutopilotSection() {
 				<SectionHeading
 					eyebrow="03 · Autopilot"
 					eyebrowColor="var(--pillar-autopilot)"
-					title="The AI-native operating layer."
-					lede="Like Linear for work, Lovable for app building, Zapier for automation. Issues, durable workflows, schedules, knowledge, agents and an AI builder that edits real code. Open source. Audited. Yours."
+					title="An operating layer in development."
+					lede="Autopilot is an early product direction for issues, durable workflows, schedules, knowledge and agent-assisted work. The preview below is not a promise of general availability or final packaging."
 				/>
 			</Reveal>
 
@@ -2320,8 +2312,9 @@ export function AutopilotSection() {
 			<Reveal delay={200}>
 				<WaitlistRow
 					accent="var(--pillar-autopilot)"
-					cta="Get early access"
+					cta="Read the Autopilot preview"
 					product="Autopilot"
+					href="/autopilot"
 				/>
 			</Reveal>
 
@@ -2648,7 +2641,7 @@ function RuntimeMatrix() {
 							fontWeight: 500,
 						}}
 					>
-						Pluggable backbone. Works with the model you trust.
+						Runtime compatibility is being evaluated.
 					</div>
 				</div>
 				<span
@@ -2696,10 +2689,7 @@ function RuntimeMatrix() {
 							className="landing-mono"
 							style={{
 								fontSize: 10,
-								color:
-									r.state === "Active"
-										? "var(--pillar-autopilot)"
-										: "var(--foreground-subtle)",
+								color: "var(--foreground-subtle)",
 								letterSpacing: "0.04em",
 								textTransform: "uppercase",
 							}}
@@ -2725,18 +2715,13 @@ export function WaitlistRow({
 	accent,
 	cta,
 	product,
+	href,
 }: {
 	accent: string;
 	cta: string;
 	product: string;
+	href: string;
 }) {
-	const [email, setEmail] = useState("");
-	const [submitted, setSubmitted] = useState(false);
-	const submit = (e: FormEvent) => {
-		e.preventDefault();
-		if (!email) return;
-		setSubmitted(true);
-	};
 	return (
 		<div
 			style={{
@@ -2753,53 +2738,21 @@ export function WaitlistRow({
 		>
 			<div style={{ flex: 1, minWidth: 220 }}>
 				<div className="landing-eyebrow" style={{ marginBottom: 4 }}>
-					{product} · Waitlist
+					{product} · Product preview
 				</div>
 				<div style={{ fontSize: 14, color: "var(--foreground)" }}>
-					Be first to try {product}. We email when your environment is ready. No
-					spam, ever.
+					See the current direction, scope and availability notes before
+					deciding whether it fits your roadmap.
 				</div>
 			</div>
-			{submitted ? (
-				<span
-					style={{
-						display: "inline-flex",
-						alignItems: "center",
-						gap: 8,
-						padding: "8px 14px",
-						border: `1px solid ${accent}`,
-						borderRadius: "var(--control-radius)",
-						color: accent,
-						fontSize: 13,
-					}}
-				>
-					<LIcon name="check" size={14} />
-					You're on the list for {product}.
-				</span>
-			) : (
-				<form
-					onSubmit={submit}
-					className="landing-waitlist-form"
-					style={{ display: "flex", gap: 8 }}
-				>
-					<Input
-						type="email"
-						required
-						placeholder="you@company.com"
-						value={email}
-						onChange={(e) => setEmail(e.target.value)}
-						style={{ minWidth: 240 }}
-					/>
-					<button
-						type="submit"
-						className={cn(buttonVariants({ variant: "default" }))}
-						style={accentButtonStyle(accent)}
-					>
-						{cta}
-						<LIcon name="arrow-right" size={14} />
-					</button>
-				</form>
-			)}
+			<a
+				href={href}
+				className={cn(buttonVariants({ variant: "default" }))}
+				style={accentButtonStyle(accent)}
+			>
+				{cta}
+				<LIcon name="arrow-right" size={14} />
+			</a>
 		</div>
 	);
 }
@@ -2821,12 +2774,12 @@ const USE_CASES = [
 		name: "Restaurants & cafés",
 		headline: "Menu, bookings and online orders in one place.",
 		bullets: [
-			"Bilingual menu with allergens, photos and price history",
-			"Reservation engine with floor plan and SMS confirmation",
-			"Online ordering with stock, opening hours and pickup slots",
+			"Model menus, allergens, photos and localized content",
+			"Build reservation routes and staff-facing admin views",
+			"Add ordering rules with hooks, jobs and your payment provider",
 		],
-		proof: { k: "Saving", v: "$214/mo" },
-		stack: ["Framework", "Cloud"] satisfies Stack[],
+		proof: { k: "Foundation", v: "Typed content + operations" },
+		stack: ["Framework"] satisfies Stack[],
 	},
 	{
 		id: "uc-ecommerce",
@@ -2834,12 +2787,12 @@ const USE_CASES = [
 		name: "E-commerce & retail",
 		headline: "A storefront that ships, not 12 plugins glued together.",
 		bullets: [
-			"Products, variants, stock, taxes and discounts as collections",
-			"Stripe + Pay by Square + COD adapters out of the box",
-			"Autopilot drafts product descriptions and SEO meta",
+			"Model products, variants and stock as typed collections",
+			"Integrate payments through routes and services you control",
+			"Reuse the same schema across storefront, API and admin",
 		],
-		proof: { k: "Replaces", v: "Shopify + Klaviyo + Notion" },
-		stack: ["Framework", "Autopilot"] satisfies Stack[],
+		proof: { k: "Foundation", v: "Commerce data + admin" },
+		stack: ["Framework"] satisfies Stack[],
 	},
 	{
 		id: "uc-agencies",
@@ -2847,12 +2800,12 @@ const USE_CASES = [
 		name: "Agencies & studios",
 		headline: "Spin up 30 client sites without spinning out.",
 		bullets: [
-			"Multi-tenant deployments with shared design system",
+			"Share modules and admin configuration across projects",
 			"Per-client admin, custom roles and brand themes",
 			"Hand the keys over. Clients edit without breaking the build",
 		],
-		proof: { k: "Per project", v: "~3 hours to ship" },
-		stack: ["Framework", "Cloud", "Autopilot"] satisfies Stack[],
+		proof: { k: "Foundation", v: "Reusable project patterns" },
+		stack: ["Framework"] satisfies Stack[],
 	},
 	{
 		id: "uc-realestate",
@@ -2861,11 +2814,11 @@ const USE_CASES = [
 		headline: "Listings, leads and pipelines that talk to each other.",
 		bullets: [
 			"Listings with map, gallery, status and price changes",
-			"Lead capture with assignment to agents by region",
-			"Workflows for viewings, follow-ups and contract steps",
+			"Add lead capture and assignment with routes and hooks",
+			"Use jobs and workflows for viewings and follow-ups",
 		],
-		proof: { k: "Pipeline ops", v: "Automated end-to-end" },
-		stack: ["Framework", "Autopilot"] satisfies Stack[],
+		proof: { k: "Foundation", v: "Listings + workflow data" },
+		stack: ["Framework"] satisfies Stack[],
 	},
 	{
 		id: "uc-portfolios",
@@ -2873,12 +2826,12 @@ const USE_CASES = [
 		name: "Portfolios & creators",
 		headline: "A site that grows with your work, not against it.",
 		bullets: [
-			"Case studies with rich text, video and password-gated pages",
-			"Localized content, custom domains and analytics built-in",
-			"Autopilot writes alt-text, tags and SEO for every upload",
+			"Build case studies with rich text, media and access rules",
+			"Localize fields and render them in your existing frontend",
+			"Manage content through schema-driven admin views",
 		],
-		proof: { k: "Setup", v: "10 minutes" },
-		stack: ["Framework", "Cloud"] satisfies Stack[],
+		proof: { k: "Foundation", v: "Content + media workflows" },
+		stack: ["Framework"] satisfies Stack[],
 	},
 	{
 		id: "uc-saas",
@@ -2886,11 +2839,11 @@ const USE_CASES = [
 		name: "Internal tools & SaaS",
 		headline: "Stop building yet another admin from scratch.",
 		bullets: [
-			"Generate full CRUD admins from your existing Postgres schema",
-			"Field-level RBAC, audit log, hooks and impersonation built-in",
+			"Define collections and get typed CRUD plus admin views",
+			"Apply access rules, validation, hooks and jobs in one schema",
 			"Use as the backplane for any TanStack / Next / Hono app",
 		],
-		proof: { k: "Boilerplate", v: "0 lines" },
+		proof: { k: "Foundation", v: "Typed backend + admin" },
 		stack: ["Framework"] satisfies Stack[],
 	},
 ];
@@ -2901,8 +2854,8 @@ export function UseCasesSection() {
 			<Reveal>
 				<SectionHeading
 					eyebrow="For real businesses"
-					title="Built for every kind of business."
-					lede="Use the same Framework + Cloud + Autopilot stack to ship a restaurant menu, a Shopify alternative or a multi-tenant agency platform. Less glue, less SaaS spend, less migration debt."
+					title="A framework for real application models."
+					lede="These are examples of what teams can build with the available Framework. They are starting points, not prebuilt vertical products or benchmark claims."
 				/>
 			</Reveal>
 
@@ -3086,7 +3039,7 @@ function UseCaseCard({ data }: { data: (typeof USE_CASES)[number] }) {
 						fontSize: 12,
 					}}
 				>
-					See template
+					Example use case
 					<LIcon name="arrow-up-right" size={12} />
 				</span>
 			</div>
@@ -3114,8 +3067,8 @@ export function StackSection() {
 			<Reveal>
 				<SectionHeading
 					eyebrow="Architecture"
-					title="What you ship vs. what we run."
-					lede="QUESTPIE is a stack you can read. Open packages on top, open infrastructure underneath. Cloud is the part you'd rather not operate yourself."
+					title="What is available and what is next."
+					lede="Framework and QProbe are available today. Autopilot and Cloud are shown as product direction, with final scope and availability still to be announced."
 					align="center"
 				/>
 			</Reveal>
@@ -3156,15 +3109,15 @@ export function StackSection() {
 					/>
 					<StackRow
 						label="Autopilot"
-						sub="Open source · MIT"
-						badge="Q4 26"
+						sub="Product direction"
+						badge="EARLY"
 						badgeTone="beta"
 						href="/autopilot"
 						items={[
 							{ name: "Issues + workflows", icon: "circle" },
-							{ name: "AI builder", icon: "sparkle" },
-							{ name: "Agents + MCP", icon: "robot" },
-							{ name: "Knowledge + packs", icon: "book-open" },
+							{ name: "Planned AI builder", icon: "sparkle" },
+							{ name: "Agent research", icon: "robot" },
+							{ name: "Knowledge direction", icon: "book-open" },
 						]}
 						accent="var(--pillar-autopilot)"
 					/>
@@ -3183,15 +3136,15 @@ export function StackSection() {
 					/>
 					<StackRow
 						label="Cloud"
-						sub="Managed by QUESTPIE"
-						badge="Q3 26"
+						sub="Planned managed service"
+						badge="PREVIEW"
 						badgeTone="soon"
 						href="/cloud"
 						items={[
-							{ name: "Build + deploy", icon: "rocket" },
-							{ name: "Postgres + storage", icon: "database" },
-							{ name: "Domains + SSL", icon: "globe" },
-							{ name: "Hosted Autopilot", icon: "robot" },
+							{ name: "Planned deployments", icon: "rocket" },
+							{ name: "Planned data services", icon: "database" },
+							{ name: "Planned domains", icon: "globe" },
+							{ name: "Integration direction", icon: "robot" },
 						]}
 						accent="var(--pillar-cloud)"
 						isLast
@@ -3378,91 +3331,79 @@ type Tier = {
 	period: string;
 	description: string;
 	highlighted?: boolean;
+	badge?: string;
 	cta: { label: string; href: string; tone: "primary" | "secondary" };
 	features: Array<[string, boolean]>;
 };
 
 const TIERS: Tier[] = [
 	{
-		name: "Self-host",
+		name: "Framework",
 		price: "Free",
 		period: "MIT",
-		description:
-			"Run QUESTPIE Framework + Autopilot on your own infrastructure.",
-		cta: { label: "Read the docs", href: "/docs", tone: "secondary" },
-		features: [
-			["Collections, admin, auth, workflows", true],
-			["All adapters (Hono / Elysia / Next / TanStack)", true],
-			["Autopilot. Self-hosted, full", true],
-			["Community support", true],
-			["Managed builds + deploys", false],
-			["Managed Postgres + storage", false],
-			["Hosted Autopilot per account", false],
-			["Enterprise SLA + SSO", false],
-		],
-	},
-	{
-		name: "Cloud · Starter",
-		price: "$19",
-		period: "/ month",
-		description: "One project, custom domain, hosted Autopilot.",
-		cta: { label: "Explore Cloud", href: "/cloud", tone: "secondary" },
-		features: [
-			["1 project, 1 environment", true],
-			["Custom domain + SSL", true],
-			["5 GB storage, 100 GB bandwidth", true],
-			["Production Postgres + PITR", true],
-			["Hosted Autopilot, 2 agents", true],
-			["Email + community support", true],
-			["Multi-environment", false],
-			["SSO + audit log", false],
-		],
-	},
-	{
-		name: "Cloud · Pro",
-		price: "$49",
-		period: "/ month",
-		description: "Multi-project teams shipping apps and operating ops.",
+		description: "The open-source framework, available to self-host today.",
 		highlighted: true,
-		cta: { label: "Explore Cloud", href: "/cloud", tone: "primary" },
+		badge: "Available now",
+		cta: {
+			label: "Build your first app",
+			href: "/docs/getting-started/tanstack-start",
+			tone: "primary",
+		},
 		features: [
-			["10 projects, multi-environment", true],
-			["50 GB storage, 1 TB bandwidth", true],
-			["Preview deploys per branch", true],
-			["Hosted Autopilot, unlimited", true],
-			["Knowledge base + workflows", true],
-			["Team roles + API keys", true],
-			["Priority support", true],
-			["SSO + audit log", false],
+			["Collections, globals, routes and jobs", true],
+			["Schema-driven admin and typed clients", true],
+			["Auth, access rules, hooks and validation", true],
+			["All adapters (Hono / Elysia / Next / TanStack)", true],
+			["Cloud service", false],
+			["Autopilot product", false],
 		],
 	},
 	{
-		name: "Cloud · Scale",
-		price: "Custom",
-		period: "SLA",
-		description: "Dedicated capacity for enterprises with compliance needs.",
-		cta: { label: "Talk to us", href: "#contact", tone: "secondary" },
+		name: "Cloud",
+		price: "Preview",
+		period: "In development",
+		description: "A planned managed runtime for QUESTPIE projects.",
+		cta: {
+			label: "Read the Cloud preview",
+			href: "/cloud",
+			tone: "secondary",
+		},
 		features: [
-			["Unlimited projects + envs", true],
-			["Dedicated database + VPC", true],
-			["Custom Autopilot configs + packs", true],
-			["99.99% uptime SLA", true],
-			["SSO + audit log", true],
-			["Solution engineering", true],
-			["Custom contract / data residency", true],
-			["Volume discount", true],
+			["Planned: managed environments", true],
+			["Planned: databases and storage", true],
+			["Planned: domains and deployments", true],
+			["Pricing is not announced", false],
+			["Limits and SLA are not announced", false],
+		],
+	},
+	{
+		name: "Autopilot",
+		price: "Early",
+		period: "In development",
+		description: "An operating layer for workflows and agent-assisted work.",
+		cta: {
+			label: "Read the Autopilot preview",
+			href: "/autopilot",
+			tone: "secondary",
+		},
+		features: [
+			["In development: issues and workflows", true],
+			["In development: schedules and knowledge", true],
+			["Runtime compatibility is being evaluated", true],
+			["Availability is not announced", false],
+			["Packaging and licensing are not final", false],
 		],
 	},
 ];
 
 export function PricingSection() {
 	return (
-		<Section id="pricing" pad="64px 24px 96px">
+		<Section id="availability" pad="64px 24px 96px">
 			<Reveal>
 				<SectionHeading
-					eyebrow="Pricing"
-					title="Free to self-host. Managed when you want it."
-					lede="Framework is open source. Self-host for as long as you like. Cloud just removes the parts of running infrastructure you'd rather skip."
+					eyebrow="Availability"
+					title="Framework now. Cloud and Autopilot when ready."
+					lede="Only the Framework is generally available today. Pricing, limits and launch dates for Cloud and Autopilot have not been announced."
 					align="center"
 				/>
 			</Reveal>
@@ -3470,7 +3411,7 @@ export function PricingSection() {
 				className="landing-pricing-grid"
 				style={{
 					display: "grid",
-					gridTemplateColumns: "repeat(4, minmax(0,1fr))",
+					gridTemplateColumns: "repeat(3, minmax(0,1fr))",
 					gap: 14,
 				}}
 			>
@@ -3523,7 +3464,7 @@ function PricingCard({ tier }: { tier: Tier }) {
 						fontWeight: 600,
 					}}
 				>
-					Popular
+					{tier.badge}
 				</span>
 			)}
 			<div
@@ -3634,15 +3575,15 @@ function PricingCard({ tier }: { tier: Tier }) {
 const FAQ = [
 	{
 		q: "What's the difference between Framework, Cloud and Autopilot?",
-		a: "Framework is the open-source TypeScript engine: collections, admin, auth, workflows, adapters. Autopilot is the open-source AI-native operating layer on top. Issues, workflows, schedules, knowledge, agents and an AI builder. Cloud is the managed runtime control plane that builds, deploys and hosts both. You can run any combination, including just Framework on your own server.",
+		a: "Framework is the open-source TypeScript application framework and is available today. Cloud is a planned managed runtime, and Autopilot is an operating layer in early development. Their pages describe product direction, not generally available services.",
 	},
 	{
-		q: "Is everything really MIT?",
-		a: "Framework and Autopilot are MIT-licensed. You can fork, modify and self-host them forever. Cloud is the only paid product, and it's optional. It exists for teams that don't want to run Postgres, deploys and infrastructure themselves.",
+		q: "What is MIT-licensed?",
+		a: "The QUESTPIE Framework repository is MIT-licensed. Cloud is a planned managed service. Autopilot packaging and licensing will be documented before broader availability; this page does not promise a license for an unreleased product.",
 	},
 	{
-		q: "Can I move from Cloud back to self-hosting later?",
-		a: "Yes. Your project is just QUESTPIE code + a Postgres dump. Export, point it at your own database and deploy with the Hono/Elysia/Next/TanStack adapter of your choice. No proprietary runtime.",
+		q: "Can I self-host the Framework?",
+		a: "Yes. The Framework runs in your application and supports Hono, Elysia, Next.js and TanStack Start adapters. Cloud portability details will be documented when that service has a stable contract.",
 	},
 	{
 		q: "Why a backend framework instead of a hosted platform?",
@@ -3650,15 +3591,15 @@ const FAQ = [
 	},
 	{
 		q: "How does Autopilot stay safe with my data?",
-		a: "Autopilot uses MCP (Model Context Protocol) to expose your collections and routes to agents. The same field-level permissions that apply to your humans apply to agents. Every action is logged, every workflow step is auditable, and you can require human approval anywhere in the workflow.",
+		a: "Autopilot is not generally available. Its permission, audit and approval model is still being validated. Security guarantees and deployment guidance will be documented before broader access.",
 	},
 	{
 		q: "Which AI models does Autopilot work with?",
-		a: "The runtime is pluggable. Claude Code and Codex are active. Gemini, GitHub Copilot, Cursor and OpenCode are on the roadmap. You can configure which runtime to use per agent profile, and rotate without changing your workflows.",
+		a: "Runtime compatibility is under evaluation. Supported providers and their limitations will be documented as part of early-access releases rather than promised here.",
 	},
 	{
-		q: "When does Cloud / Autopilot ship?",
-		a: "Cloud: Q3 2026. Autopilot: Q4 2026. Both are accepting waitlist signups. Framework is shipping today on npm.",
+		q: "When do Cloud and Autopilot ship?",
+		a: "No general-availability date is committed. The Framework ships today; Cloud and Autopilot will publish availability, pricing and support terms when those contracts are ready.",
 	},
 ];
 
@@ -3700,9 +3641,10 @@ export function FaqSection({
 								lineHeight: 1.6,
 							}}
 						>
-							Honest answers. No marketing fluff. Can't find what you need?{" "}
+							Honest answers. No marketing fluff. Want to follow the product
+							direction?{" "}
 							<a
-								href="#contact"
+								href="/cloud"
 								style={{
 									color: "var(--primary)",
 									textDecoration: "underline",
@@ -3710,7 +3652,7 @@ export function FaqSection({
 										"color-mix(in srgb, var(--primary) 40%, transparent)",
 								}}
 							>
-								Ask the team
+								Read the Cloud preview
 							</a>
 							.
 						</p>
@@ -3820,7 +3762,7 @@ export function FinalCta() {
 			>
 				<Reveal>
 					<Eyebrow dot color="var(--primary)">
-						Build. Deploy. Automate.
+						Build with the Framework today.
 					</Eyebrow>
 				</Reveal>
 				<Reveal delay={60}>
@@ -3835,7 +3777,7 @@ export function FinalCta() {
 							marginInline: "auto",
 						}}
 					>
-						One stack you actually own.
+						One schema. A backend you own.
 					</h2>
 				</Reveal>
 				<Reveal delay={120}>
@@ -3849,8 +3791,9 @@ export function FinalCta() {
 							lineHeight: 1.6,
 						}}
 					>
-						Start with Framework today. It's free, open and ready to ship. Add
-						Cloud and Autopilot whenever you outgrow what you can run yourself.
+						Start with the open-source Framework today. Cloud and Autopilot are
+						separate products in development, with availability still to be
+						announced.
 					</p>
 				</Reveal>
 				<Reveal delay={180}>
@@ -3865,7 +3808,7 @@ export function FinalCta() {
 					>
 						<a
 							className={cn(buttonVariants({ variant: "default" }))}
-							href="/docs"
+							href="/docs/getting-started/tanstack-start"
 						>
 							Start building
 							<LIcon name="arrow-right" size={14} />
@@ -3882,9 +3825,9 @@ export function FinalCta() {
 						</a>
 						<a
 							className={cn(buttonVariants({ variant: "ghost" }))}
-							href="#contact"
+							href="/cloud"
 						>
-							Talk to the team
+							Preview Cloud
 						</a>
 					</div>
 				</Reveal>

@@ -1,9 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import {
-	type MouseEvent as ReactMouseEvent,
-	useEffect,
-	useState,
-} from "react";
+import { type MouseEvent as ReactMouseEvent, useEffect, useState } from "react";
 
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -12,7 +8,11 @@ import { LIcon, Wordmark } from "./primitives";
 import { ThemeToggle as LandingThemeToggle } from "./theme-toggle";
 
 const USE_CASE_LINKS = [
-	{ label: "Restaurants & cafés", href: "/#uc-restaurants", icon: "storefront" },
+	{
+		label: "Restaurants & cafés",
+		href: "/#uc-restaurants",
+		icon: "storefront",
+	},
 	{ label: "E-commerce & retail", href: "/#uc-ecommerce", icon: "storefront" },
 	{ label: "Agencies & studios", href: "/#uc-agencies", icon: "users" },
 	{ label: "Real estate", href: "/#uc-realestate", icon: "globe" },
@@ -24,7 +24,7 @@ export type NavKey =
 	| "cloud"
 	| "autopilot"
 	| "use-cases"
-	| "pricing"
+	| "availability"
 	| "docs";
 
 type NavItemDef = {
@@ -44,7 +44,7 @@ const NAV_ITEMS: NavItemDef[] = [
 		href: "/#use-cases",
 		dropdown: USE_CASE_LINKS,
 	},
-	{ key: "pricing", label: "Pricing", href: "/#pricing" },
+	{ key: "availability", label: "Availability", href: "/#availability" },
 	{ key: "docs", label: "Docs", href: "/docs" },
 ];
 
@@ -187,10 +187,10 @@ export function SharedNav({ activeKey }: { activeKey?: NavKey }) {
 							buttonVariants({ variant: "default", size: "sm" }),
 							"landing-hide-sm",
 						)}
-						href="/docs"
+						href="/docs/getting-started/tanstack-start"
 						data-icon="inline-end"
 					>
-						Start free
+						Build with QUESTPIE
 						<LIcon name="arrow-right" size={13} />
 					</a>
 					<Button
@@ -259,13 +259,7 @@ export function SharedNav({ activeKey }: { activeKey?: NavKey }) {
 	);
 }
 
-function NavItem({
-	item,
-	active,
-}: {
-	item: NavItemDef;
-	active?: boolean;
-}) {
+function NavItem({ item, active }: { item: NavItemDef; active?: boolean }) {
 	if (item.dropdown) {
 		return (
 			<div className="landing-nav-dropdown" style={{ position: "relative" }}>
@@ -371,8 +365,7 @@ function NavItem({
 				if (!active) e.currentTarget.style.color = "var(--foreground)";
 			}}
 			onMouseLeave={(e) => {
-				if (!active)
-					e.currentTarget.style.color = "var(--foreground-muted)";
+				if (!active) e.currentTarget.style.color = "var(--foreground-muted)";
 			}}
 		>
 			{item.label}

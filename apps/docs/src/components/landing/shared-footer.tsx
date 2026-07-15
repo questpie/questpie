@@ -20,29 +20,30 @@ export function SharedFooter() {
 				["Framework", "/#framework"],
 				["Cloud", "/cloud"],
 				["Autopilot", "/autopilot"],
-				["Pricing", "/#pricing"],
-				["Changelog", "#"],
+				["Availability", "/#availability"],
+				["Releases", "https://github.com/questpie/questpie/releases"],
 			],
 		},
 		{ title: "Use cases", items: FOOTER_USE_CASES },
 		{
 			title: "Resources",
 			items: [
-				["Documentation", "/docs"],
+				["Documentation", "/docs/getting-started/tanstack-start"],
 				["Examples", "https://github.com/questpie/questpie/tree/main/examples"],
-				["Templates", "#"],
-				["MCP reference", "#"],
-				["RFCs", "#"],
+				[
+					"Templates",
+					"https://github.com/questpie/questpie/tree/main/packages/create-questpie/templates",
+				],
+				["npm", "https://www.npmjs.com/package/questpie"],
 			],
 		},
 		{
 			title: "Company",
 			items: [
 				["GitHub", "https://github.com/questpie/questpie"],
-				["Blog", "#"],
-				["Brand kit", "#"],
-				["Status", "#"],
-				["Contact", "#contact"],
+				["Issues", "https://github.com/questpie/questpie/issues"],
+				["Discussions", "https://github.com/questpie/questpie/discussions"],
+				["License", "https://github.com/questpie/questpie/blob/main/LICENSE"],
 			],
 		},
 	];
@@ -59,8 +60,7 @@ export function SharedFooter() {
 					className="landing-footer-grid"
 					style={{
 						display: "grid",
-						gridTemplateColumns:
-							"minmax(0, 1.2fr) repeat(4, minmax(0, 1fr))",
+						gridTemplateColumns: "minmax(0, 1.2fr) repeat(4, minmax(0, 1fr))",
 						gap: 28,
 						marginBottom: 36,
 					}}
@@ -77,8 +77,8 @@ export function SharedFooter() {
 								maxWidth: 260,
 							}}
 						>
-							One open-source platform for your site, your operations and your
-							infrastructure. Self-host free, or let Cloud run it for you.
+							An open-source TypeScript application framework. Define your
+							schema once and own the backend that runs it.
 						</p>
 						<div style={{ marginTop: 18, display: "flex", gap: 8 }}>
 							<a
@@ -94,14 +94,6 @@ export function SharedFooter() {
 								<LIcon name="github-logo" size={13} />
 								Star on GitHub
 								<LIcon name="star" size={11} />
-							</a>
-							<a
-								className={buttonVariants({ variant: "ghost", size: "sm" })}
-								href="#"
-								data-icon="inline-start"
-							>
-								<LIcon name="chat-circle" size={13} />
-								Discord
 							</a>
 						</div>
 					</div>
@@ -136,8 +128,7 @@ export function SharedFooter() {
 												e.currentTarget.style.color = "var(--foreground)";
 											}}
 											onMouseLeave={(e) => {
-												e.currentTarget.style.color =
-													"var(--foreground-muted)";
+												e.currentTarget.style.color = "var(--foreground-muted)";
 											}}
 										>
 											{label}
@@ -166,17 +157,23 @@ export function SharedFooter() {
 						© 2026 QUESTPIE · MIT · Made in Bratislava
 					</span>
 					<span style={{ display: "inline-flex", gap: 14 }}>
-						<a href="#" style={{ color: "inherit" }}>
-							Privacy
+						<a
+							href="https://github.com/questpie/questpie/blob/main/LICENSE"
+							style={{ color: "inherit" }}
+						>
+							License
 						</a>
-						<a href="#" style={{ color: "inherit" }}>
-							Terms
+						<a
+							href="https://github.com/questpie/questpie"
+							style={{ color: "inherit" }}
+						>
+							GitHub
 						</a>
-						<a href="#" style={{ color: "inherit" }}>
-							Security
-						</a>
-						<a href="#" style={{ color: "inherit" }}>
-							Status
+						<a
+							href="https://www.npmjs.com/package/questpie"
+							style={{ color: "inherit" }}
+						>
+							npm
 						</a>
 					</span>
 				</div>
