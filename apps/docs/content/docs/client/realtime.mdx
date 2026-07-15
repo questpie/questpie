@@ -24,8 +24,8 @@ import { runtimeConfig } from "questpie/app";
 import env from "./env"; // declared + validated in env.ts, see Environment
 
 export default runtimeConfig({
-	db: { url: env.DATABASE_URL },
-	realtime: true,
+  db: { url: env.DATABASE_URL },
+  realtime: true,
 });
 ```
 
@@ -35,13 +35,10 @@ Now subscribe from the client. `live()` takes your query options, a snapshot cal
 import { client } from "@/lib/client.js";
 
 // First snapshot fires immediately; then on every matching change.
-const unsubscribe = client.collections.posts.live(
-	{ where: { published: true }, orderBy: { createdAt: "desc" }, limit: 10 },
-	(snapshot) => {
-		// snapshot is the SAME shape & type as client.collections.posts.find(...)
-		console.log(snapshot.totalDocs, snapshot.docs[0]?.title);
-	},
-);
+const unsubscribe = client.collections.posts.live({ where: { published: true }, orderBy: { createdAt: "desc" }, limit: 10 }, (snapshot) => {
+  // snapshot is the SAME shape & type as client.collections.posts.find(...)
+  console.log(snapshot.totalDocs, snapshot.docs[0]?.title);
+});
 
 // Later, stop listening (e.g. on unmount):
 unsubscribe();
@@ -50,9 +47,7 @@ unsubscribe();
 That callback now re-fires with a fresh, access-filtered top-10 every time a published post changes.
 
 <Callout type="info" title="The first snapshot is your initial data">
-	You do **not** need a separate `find()` before subscribing. `live()` delivers
-	a full snapshot the moment the connection opens, then keeps it fresh. Treat
-	the first callback invocation as "data loaded".
+  You do **not** need a separate `find()` before subscribing. `live()` delivers a full snapshot the moment the connection opens, then keeps it fresh. Treat the first callback invocation as "data loaded".
 </Callout>
 
 ## Example → inferred snapshot
@@ -60,15 +55,12 @@ That callback now re-fires with a fresh, access-filtered top-10 every time a pub
 The snapshot type equals the `find()` result type for the same options, `FindResult<Row, Relations, TQuery>`. Narrow with `columns`? No: `live()` deliberately carries a **subset** of `find()` options (no `columns`), so a snapshot is always the full row plus any `with` relations you requested:
 
 ```ts
-client.collections.posts.live(
-	{ where: { published: true }, with: { author: true }, limit: 5 },
-	(snapshot) => {
-		snapshot.docs[0].author.name;
-		//         ^? string, `with: { author: true }` hydrated the relation
-		snapshot.hasNextPage;
-		//         ^? boolean, full PaginatedResult envelope, same as find()
-	},
-);
+client.collections.posts.live({ where: { published: true }, with: { author: true }, limit: 5 }, (snapshot) => {
+  snapshot.docs[0].author.name;
+  //         ^? string, `with: { author: true }` hydrated the relation
+  snapshot.hasNextPage;
+  //         ^? boolean, full PaginatedResult envelope, same as find()
+});
 ```
 
 A snapshot is a `PaginatedResult<T>` (`{ docs, totalDocs, totalPages, page, hasPrevPage, hasNextPage, prevPage, nextPage, ... }`), or, if your query uses `groupBy`… it can't, because `groupBy` isn't a live option (see below).
@@ -79,25 +71,18 @@ A snapshot is a `PaginatedResult<T>` (`{ docs, totalDocs, totalPages, page, hasP
 
 ```ts
 type LiveQueryOptions<TSelect, TRelations> = {
-	where?: Where<TSelect, TRelations>;
-	with?: With<TRelations>;
-	limit?: number;
-	offset?: number;
-	orderBy?: OrderBy<TSelect>;
-	locale?: string;
+  where?: Where<TSelect, TRelations>;
+  with?: With<TRelations>;
+  limit?: number;
+  offset?: number;
+  orderBy?: OrderBy<TSelect>;
+  locale?: string;
 };
 ```
 
-<Callout
-	type="warn"
-	title="`columns`, `groupBy`, `search`, `includeDeleted`, `stage` are not live options"
->
-	`LiveQueryOptions` intentionally **excludes** `columns`, `groupBy`, `search`,
-	`includeDeleted`, and `stage`. Realtime snapshots are the full query re-run
-	server-side from the topic fields, so column projection / grouping /
-	soft-delete-included / stage-pinned reads aren't expressed over the wire. If
-	you pass them they're simply not part of the subscription. For those, use a
-	one-shot `find()`.
+<Callout type="warn" title="`columns`, `groupBy`, `search`, `includeDeleted`, `stage` are not live options">
+  `LiveQueryOptions` intentionally **excludes** `columns`, `groupBy`, `search`, `includeDeleted`, and `stage`. Realtime snapshots are the full query re-run server-side from the topic fields, so column projection / grouping / soft-delete-included / stage-pinned reads aren't expressed over the wire. If you pass them
+  they're simply not part of the subscription. For those, use a one-shot `find()`.
 </Callout>
 
 ### `LiveSubscribeOptions`, the third argument
@@ -106,21 +91,17 @@ type LiveQueryOptions<TSelect, TRelations> = {
 
 ```ts
 type LiveSubscribeOptions = {
-	signal?: AbortSignal; // abort → auto-unsubscribe
-	onError?: (error: Error) => void; // SSE connection failed
+  signal?: AbortSignal; // abort → auto-unsubscribe
+  onError?: (error: Error) => void; // SSE connection failed
 };
 ```
 
 ```ts
 const ac = new AbortController();
-client.collections.posts.live(
-	{ where: { published: true } },
-	(snapshot) => render(snapshot),
-	{
-		signal: ac.signal,
-		onError: (err) => console.error("realtime dropped:", err),
-	},
-);
+client.collections.posts.live({ where: { published: true } }, (snapshot) => render(snapshot), {
+  signal: ac.signal,
+  onError: (err) => console.error("realtime dropped:", err),
+});
 // ac.abort() unsubscribes, equivalent to calling the returned function.
 ```
 
@@ -133,12 +114,9 @@ client.collections.posts.live(
 ```ts
 const ac = new AbortController();
 
-for await (const snapshot of client.collections.posts.liveIter(
-	{ where: { published: true }, limit: 10 },
-	{ signal: ac.signal },
-)) {
-	console.log("posts now:", snapshot.totalDocs);
-	// ac.abort() ends the loop.
+for await (const snapshot of client.collections.posts.liveIter({ where: { published: true }, limit: 10 }, { signal: ac.signal })) {
+  console.log("posts now:", snapshot.totalDocs);
+  // ac.abort() ends the loop.
 }
 ```
 
@@ -149,13 +127,10 @@ It takes only `{ signal? }`, **no `onError`** (unlike `live()`). A connection fa
 Globals are singletons, so their live API mirrors `get()` with a smaller option set. `GlobalLiveQueryOptions` is `{ with?, locale? }` only, no `where`/`limit`/`offset`/`orderBy`:
 
 ```ts
-const stop = client.globals.siteSettings.live(
-	{ with: { logo: true } },
-	(snapshot) => {
-		// snapshot is the SAME shape & type as client.globals.siteSettings.get(...)
-		document.title = snapshot.title;
-	},
-);
+const stop = client.globals.siteSettings.live({ with: { logo: true } }, (snapshot) => {
+  // snapshot is the SAME shape & type as client.globals.siteSettings.get(...)
+  document.title = snapshot.title;
+});
 ```
 
 `live()` and `liveIter()` carry the same `LiveSubscribeOptions` / `{ signal? }` semantics as collections.
@@ -170,15 +145,12 @@ import { useQuery } from "@tanstack/react-query";
 import { q } from "@/lib/query.js";
 
 function LivePosts() {
-	const { data } = useQuery(
-		// 1st arg: query options. 2nd arg: { realtime: true }.
-		q.collections.posts.find(
-			{ where: { published: true }, limit: 10 },
-			{ realtime: true },
-		),
-	);
+  const { data } = useQuery(
+    // 1st arg: query options. 2nd arg: { realtime: true }.
+    q.collections.posts.find({ where: { published: true }, limit: 10 }, { realtime: true }),
+  );
 
-	return <p>{data?.totalDocs ?? 0} published posts (live)</p>;
+  return <p>{data?.totalDocs ?? 0} published posts (live)</p>;
 }
 ```
 
@@ -192,16 +164,9 @@ Under the hood the hook uses TanStack's `experimental_streamedQuery` with `refet
 `findOne` and every mutation **reject** a `{ realtime: true }` argument at the type level, passing it is a compile error (the tests assert `@ts-expect-error`). There's no live `findOne`; subscribe with `find({ where: { id } })` (or `live()`) and read `docs[0]`.
 </Callout>
 
-<Callout
-	type="warn"
-	title="If the server has no realtime, `{ realtime: true }` errors"
->
-	The client always wires `client.realtime`, so the TanStack flag is honored
-	client-side regardless. The real prerequisite is **server-side realtime**: set
-	`realtime` in your config so `POST /realtime` exists. Without it the SSE
-	connect fails, the stream errors out (and `find()`/`get()`/`live()`'s
-	`onError` fires) rather than silently degrading to a poll. Turn `realtime` on
-	in the server config before relying on live queries.
+<Callout type="warn" title="If the server has no realtime, `{ realtime: true }` errors">
+  The client always wires `client.realtime`, so the TanStack flag is honored client-side regardless. The real prerequisite is **server-side realtime**: set `realtime` in your config so `POST /realtime` exists. Without it the SSE connect fails, the stream errors out (and `find()`/`get()`/`live()`'s `onError` fires)
+  rather than silently degrading to a poll. Turn `realtime` on in the server config before relying on live queries.
 </Callout>
 
 The TanStack realtime topic is derived purely from your read `options` via `buildCollectionTopic` / `buildGlobalTopic`, config-level `locale`/`stage` are **not** added to the topic, only `options.locale` is. Two subscriptions that differ only by `where` get distinct live streams.
@@ -213,12 +178,8 @@ Everything above is the **client** API. None of it works until you turn realtime
 The full server surface, `RealtimeConfig` options, the outbox/poll model, every transport adapter (`pgNotifyAdapter`, `redisStreamsAdapter`, `cloudflareRealtimeAdapter`), and building your own, lives on one page: see [Realtime adapter](/docs/adapters/realtime).
 
 <Callout type="info" title="One client transport, by design">
-	On the default path, `live()` / `liveIter()` calls (and the TanStack flag)
-	share a multiplexed `POST /realtime` SSE connection within the server's
-	admission caps. With Pusher/Soketi selected, the same APIs share the managed
-	provider connection. Always subscribe through the typed wrappers (or
-	`client.realtime`) so the runtime can multiplex, resume, and tear down
-	correctly.
+  On the default path, `live()` / `liveIter()` calls (and the TanStack flag) share a multiplexed `POST /realtime` SSE connection within the server's admission caps. With Pusher/Soketi selected, the same APIs share the managed provider connection. Always subscribe through the typed wrappers (or `client.realtime`) so the
+  runtime can multiplex, resume, and tear down correctly.
 </Callout>
 
 ## Raw realtime, `client.realtime`
@@ -229,34 +190,28 @@ The typed wrappers are the recommended path. If you need to subscribe to a hand-
 import { buildCollectionTopic } from "questpie/client";
 
 // Typed wrapper (preferred), TData inferred, topic built for you:
-const stop = client.collections.posts.live(
-	{ where: { published: true } },
-	onSnap,
-);
+const stop = client.collections.posts.live({ where: { published: true } }, onSnap);
 
 // Raw equivalent, you build the topic and supply TData yourself:
 const stopRaw = client.realtime.subscribe<MySnapshot>(
-	buildCollectionTopic("posts", { where: { published: true } }),
-	(data) => onSnap(data),
-	/* signal */ undefined,
-	/* customId */ undefined,
-	/* onError */ (err) => console.error(err),
+  buildCollectionTopic("posts", { where: { published: true } }),
+  (data) => onSnap(data),
+  /* signal */ undefined,
+  /* customId */ undefined,
+  /* onError */ (err) => console.error(err),
 );
 ```
 
 `RealtimeAPI` is `{ subscribe<TData>(topic, callback, signal?, customId?, onError?) => unsubscribe; stream<TData>(topic, signal?, customId?) => AsyncGenerator; destroy(); topicCount; subscriberCount }`. `subscribe` is the callback form, `stream` the async-iterable form. `destroy()` tears the multiplexer down entirely (it re-creates on the next subscribe). Prefer the typed wrappers, they infer `TData` from the query and can't drift from the topic shape.
 
-`buildCollectionTopic`, `buildGlobalTopic`, and the `RealtimeAPI` / `TopicConfig` / `TopicInput` **types** are re-exported from `questpie/client`. The multiplexer, `createRealtimeAPI`, and `sseSnapshotStream` are internal (not part of the public `questpie/client` surface), you reach them only through `client.realtime`.
+`questpie/client` exports `buildCollectionTopic`, `buildGlobalTopic`, and the `RealtimeAPI`, `TopicConfig`, and `TopicInput` types. Application subscriptions use the generated wrappers or `client.realtime`.
 
 ## Localization
 
 Pass `locale` in the live options to subscribe to a specific localized variant, it becomes part of the topic, so the `en` and `de` views of the same query are independent subscriptions:
 
 ```ts
-client.collections.posts.live(
-	{ where: { published: true }, locale: "de" },
-	onSnap,
-);
+client.collections.posts.live({ where: { published: true }, locale: "de" }, onSnap);
 ```
 
 `setLocale()` on the client mutates request headers for `find`/`create`/etc., but does **not** retarget already-open realtime subscriptions, realtime carries `locale` per topic. To switch a subscription's locale, unsubscribe and re-subscribe with the new `locale`.
@@ -273,13 +228,7 @@ client.collections.posts.live(
 The realtime option and result types come from `questpie/client`:
 
 ```ts
-import type {
-	RealtimeAPI,
-	TopicConfig,
-	TopicInput,
-	FindResult,
-	PaginatedResult,
-} from "questpie/client";
+import type { RealtimeAPI, TopicConfig, TopicInput, FindResult, PaginatedResult } from "questpie/client";
 ```
 
 `LiveQueryOptions`, `GlobalLiveQueryOptions`, and `LiveSubscribeOptions` are structural option types on the client method signatures (inferred at the call site, you rarely import them by name). The snapshot type is `FindResult<Row, Relations, TQuery>` for collections and `ApplyQuery<GlobalSelect, Relations, TQuery>` for globals, identical to `find()` / `get()`.

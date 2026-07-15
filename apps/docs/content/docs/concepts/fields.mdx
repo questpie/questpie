@@ -35,9 +35,7 @@ export const posts = collection("posts").fields(({ f }) => ({
 
 That gives you a `posts` table with the right columns, a validation schema, typed filters, and an admin form, no migrations to hand-write, no types to declare.
 
-<Callout type="info">
-  `f` is a proxy over the registered field types. Accessing an unknown type throws at build time, `Unknown field type: "x". Available types: …`, so typos surface immediately.
-</Callout>
+<Callout type="info">`f` is a proxy over the registered field types. Accessing an unknown type throws at build time, `Unknown field type: "x". Available types: …`, so typos surface immediately.</Callout>
 
 ## Example → inferred types
 
@@ -45,10 +43,10 @@ Each field flows into the generated collection types. A `notNull` field with no 
 
 ```ts
 const posts = collection("posts").fields(({ f }) => ({
-  title: f.text(255).required(),       // required on insert, string on read
-  views: f.number().default(0),         // optional on insert (has default)
+  title: f.text(255).required(), // required on insert, string on read
+  views: f.number().default(0), // optional on insert (has default)
   slug: f.text(255).required().inputOptional(), // NOT NULL column, optional input
-  author: f.relation("user").required(),// FK column, required id string
+  author: f.relation("user").required(), // FK column, required id string
 }));
 
 // After `questpie generate`, the typed client returns rows shaped like:
@@ -66,36 +64,36 @@ The public `ExtractInputType`, `ExtractSelectType`, and `ExtractWhereType` helpe
 
 ## Field types
 
-Every type below is reached as `f.<type>(…)`. The **constructor arg** is positional, there is no options-object constructor. Refine each field with the [shared methods](#shared-methods) plus the type-specific methods listed here.
+Every type below is reached as `f.<type>(…)`. Each constructor has its documented positional argument, then shared and type-specific builder methods refine the field.
 
 Each type has its own page with the full constructor, type-specific methods, operator set, and gotchas. This hub is the overview; follow a link for the detail.
 
-| Field | What it stores |
-|---|---|
-| [`f.text()`](/docs/concepts/fields/text) | Single-line string, a `varchar` (or unbounded `text`) with length, pattern, and string filtering. |
-| [`f.textarea()`](/docs/concepts/fields/textarea) | Unbounded multi-line string, a `text` column rendered as a multiline editor. |
-| [`f.email()`](/docs/concepts/fields/email) | String validated as an email address, with domain-aware filters. |
-| [`f.url()`](/docs/concepts/fields/url) | Web address, a `varchar(2048)` with URL-format validation and host/protocol filters. |
-| [`f.number()`](/docs/concepts/fields/number) | Numeric, integer, smallint, bigint, real, double, or fixed-precision decimal, with value bounds. |
-| [`f.boolean()`](/docs/concepts/fields/boolean) | True/false, a `boolean` column with equality / null filtering. |
-| [`f.date()`](/docs/concepts/fields/date) | Calendar date (no time) as an ISO date string, with auto-now stamping. |
-| [`f.datetime()`](/docs/concepts/fields/datetime) | Instant in time, a `timestamp` reading back as a JS `Date`, with precision and timezone. |
-| [`f.time()`](/docs/concepts/fields/time) | Time of day (`HH:MM:SS`) in a `time` column. |
-| [`f.select()`](/docs/concepts/fields/select) | Enumerated string, read type narrows to the literal union of the option values. |
-| [`f.upload()`](/docs/concepts/fields/upload) | Typed relation to an upload collection, single file, gallery, or inline asset IDs. |
-| [`f.object()`](/docs/concepts/fields/object) | Fixed, typed nested shape in one `jsonb` column. |
-| [`.array()`](/docs/concepts/fields/array) | Wraps any field into a list stored as `jsonb`, with length bounds. |
-| [`f.json()`](/docs/concepts/fields/json) | Schema-less `jsonb` (or `json`) for free-form data you narrow and validate yourself. |
-| [`f.richText()`](/docs/concepts/fields/rich-text) | TipTap WYSIWYG stored as structured JSONB (or markdown). Admin module only. |
+| Field                                             | What it stores                                                                                    |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| [`f.text()`](/docs/concepts/fields/text)          | Single-line string, a `varchar` (or unbounded `text`) with length, pattern, and string filtering. |
+| [`f.textarea()`](/docs/concepts/fields/textarea)  | Unbounded multi-line string, a `text` column rendered as a multiline editor.                      |
+| [`f.email()`](/docs/concepts/fields/email)        | String validated as an email address, with domain-aware filters.                                  |
+| [`f.url()`](/docs/concepts/fields/url)            | Web address, a `varchar(2048)` with URL-format validation and host/protocol filters.              |
+| [`f.number()`](/docs/concepts/fields/number)      | Numeric, integer, smallint, bigint, real, double, or fixed-precision decimal, with value bounds.  |
+| [`f.boolean()`](/docs/concepts/fields/boolean)    | True/false, a `boolean` column with equality / null filtering.                                    |
+| [`f.date()`](/docs/concepts/fields/date)          | Calendar date (no time) as an ISO date string, with auto-now stamping.                            |
+| [`f.datetime()`](/docs/concepts/fields/datetime)  | Instant in time, a `timestamp` reading back as a JS `Date`, with precision and timezone.          |
+| [`f.time()`](/docs/concepts/fields/time)          | Time of day (`HH:MM:SS`) in a `time` column.                                                      |
+| [`f.select()`](/docs/concepts/fields/select)      | Enumerated string, read type narrows to the literal union of the option values.                   |
+| [`f.upload()`](/docs/concepts/fields/upload)      | Typed relation to an upload collection, single file, gallery, or inline asset IDs.                |
+| [`f.object()`](/docs/concepts/fields/object)      | Fixed, typed nested shape in one `jsonb` column.                                                  |
+| [`.array()`](/docs/concepts/fields/array)         | Wraps any field into a list stored as `jsonb`, with length bounds.                                |
+| [`f.json()`](/docs/concepts/fields/json)          | Schema-less `jsonb` (or `json`) for free-form data you narrow and validate yourself.              |
+| [`f.richText()`](/docs/concepts/fields/rich-text) | TipTap WYSIWYG stored as structured JSONB (or markdown). Admin module only.                       |
 
 ### Text & string
 
-| Field | Constructor | Column | Read type | Type-specific methods |
-|---|---|---|---|---|
-| `f.text(maxLength?)` | `maxLength` number (default `255`) **or** `{ mode: "text" }` for unbounded | `varchar(255)`, or `text` in `{ mode: "text" }` | `string` | `.pattern(re)` `.trim()` `.lowercase()` `.uppercase()` `.min(n)` `.max(n)` |
-| `f.textarea()` | none | `text` (unbounded) | `string` | `.min(n)` `.max(n)` |
-| `f.email(maxLength?)` | `maxLength` number (default `255`) | `varchar(maxLength)` | `string` | `.min(n)` `.max(n)` |
-| `f.url(maxLength?)` | `maxLength` number (default `2048`) | `varchar(maxLength)` | `string` | `.min(n)` `.max(n)` |
+| Field                 | Constructor                                                                | Column                                          | Read type | Type-specific methods                                                      |
+| --------------------- | -------------------------------------------------------------------------- | ----------------------------------------------- | --------- | -------------------------------------------------------------------------- |
+| `f.text(maxLength?)`  | `maxLength` number (default `255`) **or** `{ mode: "text" }` for unbounded | `varchar(255)`, or `text` in `{ mode: "text" }` | `string`  | `.pattern(re)` `.trim()` `.lowercase()` `.uppercase()` `.min(n)` `.max(n)` |
+| `f.textarea()`        | none                                                                       | `text` (unbounded)                              | `string`  | `.min(n)` `.max(n)`                                                        |
+| `f.email(maxLength?)` | `maxLength` number (default `255`)                                         | `varchar(maxLength)`                            | `string`  | `.min(n)` `.max(n)`                                                        |
+| `f.url(maxLength?)`   | `maxLength` number (default `2048`)                                        | `varchar(maxLength)`                            | `string`  | `.min(n)` `.max(n)`                                                        |
 
 ```ts
 title: f.text(255).required(),
@@ -108,14 +106,15 @@ website: f.url(),                          // validated z.string().url(), len 20
 For `text`/`textarea`/`email`/`url`, `.min(n)` / `.max(n)` constrain **string length** (they map to `minLength` / `maxLength`). `email` and `url` add `.email()` / `.url()` format validation automatically.
 
 <Callout type="warn">
-  `.trim()`, `.lowercase()`, and `.uppercase()` set runtime state but are **not currently applied to the Zod schema**, `derive-schema.ts` only emits `maxLength` / `minLength` / `pattern` for strings, so these three do not transform or validate the value yet. To normalize input, use a `.zod()` refinement or a field hook instead.
+  `.trim()`, `.lowercase()`, and `.uppercase()` set runtime state but are **not currently applied to the Zod schema**, `derive-schema.ts` only emits `maxLength` / `minLength` / `pattern` for strings, so these three do not transform or validate the value yet. To normalize input, use a `.zod()` refinement or a field hook
+  instead.
 </Callout>
 
 ### Number
 
-| Field | Constructor | Column | Read type | Type-specific methods |
-|---|---|---|---|---|
-| `f.number(mode?)` | `mode`: `"integer"` (default) `\| "smallint" \| "bigint" \| "real" \| "double"`, **or** `{ mode: "decimal"; precision?; scale? }` | `integer` / `smallint` / `bigint` / `real` / `doublePrecision` / `numeric(10, 2)` | `number` | `.min(n)` `.max(n)` `.positive()` `.int()` `.step(n)` |
+| Field             | Constructor                                                                                                                       | Column                                                                            | Read type | Type-specific methods                                 |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | --------- | ----------------------------------------------------- |
+| `f.number(mode?)` | `mode`: `"integer"` (default) `\| "smallint" \| "bigint" \| "real" \| "double"`, **or** `{ mode: "decimal"; precision?; scale? }` | `integer` / `smallint` / `bigint` / `real` / `doublePrecision` / `numeric(10, 2)` | `number`  | `.min(n)` `.max(n)` `.positive()` `.int()` `.step(n)` |
 
 ```ts
 quantity: f.number().required(),                       // integer (default mode)
@@ -128,9 +127,9 @@ Default mode is `"integer"`. `bigint` and `decimal` use Drizzle's `mode: "number
 
 ### Boolean
 
-| Field | Constructor | Column | Read type | Type-specific methods |
-|---|---|---|---|---|
-| `f.boolean()` | none | `boolean` | `boolean` | none |
+| Field         | Constructor | Column    | Read type | Type-specific methods |
+| ------------- | ----------- | --------- | --------- | --------------------- |
+| `f.boolean()` | none        | `boolean` | `boolean` | none                  |
 
 ```ts
 isActive: f.boolean().default(true).required(),
@@ -140,11 +139,11 @@ No type-specific methods, refine with the shared methods only.
 
 ### Date & time
 
-| Field | Constructor | Column | Read type | Type-specific methods |
-|---|---|---|---|---|
-| `f.date()` | none | `date` (`mode: "string"`) | `string` (ISO date) | `.autoNow()` `.autoNowUpdate()` |
-| `f.datetime(config?)` | `{ precision?: 0-6; withTimezone?: boolean }` | `timestamp` (precision `3`, `withTimezone: true`) | `Date` | `.autoNow()` `.autoNowUpdate()` |
-| `f.time(config?)` | `{ precision?: 0-6; withSeconds?: boolean }` | `time` (precision `0`) | `string` (`HH:MM:SS`) | none |
+| Field                 | Constructor                                   | Column                                            | Read type             | Type-specific methods           |
+| --------------------- | --------------------------------------------- | ------------------------------------------------- | --------------------- | ------------------------------- |
+| `f.date()`            | none                                          | `date` (`mode: "string"`)                         | `string` (ISO date)   | `.autoNow()` `.autoNowUpdate()` |
+| `f.datetime(config?)` | `{ precision?: 0-6; withTimezone?: boolean }` | `timestamp` (precision `3`, `withTimezone: true`) | `Date`                | `.autoNow()` `.autoNowUpdate()` |
+| `f.time(config?)`     | `{ precision?: 0-6; withSeconds?: boolean }`  | `time` (precision `0`)                            | `string` (`HH:MM:SS`) | none                            |
 
 ```ts
 createdAt: f.datetime().autoNow().inputFalse(),       // set once on create
@@ -157,9 +156,9 @@ opensAt: f.time(),                                     // "09:00:00"
 
 ### Select
 
-| Field | Constructor | Column | Read type | Type-specific methods |
-|---|---|---|---|---|
-| `f.select(options)` | `readonly SelectOption[]` (static) **or** an `OptionsConfig` (dynamic) | `varchar` (sized to the longest value, min `50`; `255` for dynamic) | literal union of values (static) / `string` (dynamic) | `.enum(name)` |
+| Field               | Constructor                                                            | Column                                                              | Read type                                             | Type-specific methods |
+| ------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------- | ----------------------------------------------------- | --------------------- |
+| `f.select(options)` | `readonly SelectOption[]` (static) **or** an `OptionsConfig` (dynamic) | `varchar` (sized to the longest value, min `50`; `255` for dynamic) | literal union of values (static) / `string` (dynamic) | `.enum(name)`         |
 
 A `SelectOption` is `{ value: string \| number; label: I18nText; description?; disabled?; icon?; className? }`.
 
@@ -178,12 +177,12 @@ tags: f.select([
 ]).array(),
 ```
 
-Passing static options narrows the field's read type to the **literal union** of those values. Multi-select is `.array()`, there is no separate multi factory. Dynamic, server-driven options (search + pagination) use an `OptionsConfig` `{ handler, deps? }`; the read type then widens to `string`. `.enum(name)` creates a fresh `pgEnum` from the option values.
+Passing static options narrows the field's read type to their literal union. Chain `.array()` for multi-select. Dynamic server-driven options use `OptionsConfig { handler, deps? }`, whose read type is `string`. `.enum(name)` creates a `pgEnum` from static option values.
 
 ### Relation
 
-| Field | Constructor | Default column | Read type | Transition methods |
-|---|---|---|---|---|
+| Field                | Constructor                                                                                                | Default column               | Read type                 | Transition methods                                                                       |
+| -------------------- | ---------------------------------------------------------------------------------------------------------- | ---------------------------- | ------------------------- | ---------------------------------------------------------------------------------------- |
 | `f.relation(target)` | collection name `"user"`, lazy `() => ({ name })`, or polymorphic map `{ users: "users", posts: "posts" }` | `varchar(36)` FK (belongsTo) | `string` (the related id) | `.hasMany()` `.manyToMany()` `.multiple()` `.onDelete()` `.onUpdate()` `.relationName()` |
 
 ```ts
@@ -211,15 +210,13 @@ The default form is **belongsTo**: it owns a `varchar(36)` foreign-key column an
 
 The `target` collection name is checked against your registry once codegen runs, so a typo'd target fails to type-check.
 
-<Callout type="info">
-  `.hasMany()`, `.manyToMany()`, `.multiple()` are **transition** methods, they re-shape the field's type state. Chain them early; the order-preserving `.onDelete()` / `.onUpdate()` / `.relationName()` keep whatever state you have accumulated.
-</Callout>
+<Callout type="info">`.hasMany()`, `.manyToMany()`, `.multiple()` are **transition** methods, they re-shape the field's type state. Chain them early; the order-preserving `.onDelete()` / `.onUpdate()` / `.relationName()` keep whatever state you have accumulated.</Callout>
 
 ### Upload
 
-| Field | Constructor | Default column | Read type | Type-specific methods |
-|---|---|---|---|---|
-| `f.upload(config?)` | `{ to?; mimeTypes?; maxSize?; through?; sourceField?; targetField? }` | `varchar(36)` FK to the upload collection (default `"assets"`) | `string` (asset id) | `.multiple()` |
+| Field               | Constructor                                                           | Default column                                                 | Read type           | Type-specific methods |
+| ------------------- | --------------------------------------------------------------------- | -------------------------------------------------------------- | ------------------- | --------------------- |
+| `f.upload(config?)` | `{ to?; mimeTypes?; maxSize?; through?; sourceField?; targetField? }` | `varchar(36)` FK to the upload collection (default `"assets"`) | `string` (asset id) | `.multiple()`         |
 
 ```ts
 avatar: f.upload({ to: "assets", mimeTypes: ["image/*"], maxSize: 5_000_000 }),
@@ -229,17 +226,15 @@ gallery: f.upload({ to: "assets" }).multiple(),  // inline jsonb array of asset 
 
 `upload` is a relation specialised for files, by default it owns a `varchar(36)` FK to the `assets` collection and the admin renders an upload widget (not a relation picker). Setting `through` makes it many-to-many (virtual); `.multiple()` stores an inline `jsonb` array of asset ids.
 
-<Callout type="warn">
-  `mimeTypes` and `maxSize` are captured as admin metadata, **not** enforced as column constraints. They guide the upload UI; enforce hard limits in your storage adapter or a field hook.
-</Callout>
+<Callout type="warn">`mimeTypes` and `maxSize` are captured as admin metadata, **not** enforced as column constraints. They guide the upload UI; enforce hard limits in your storage adapter or a field hook.</Callout>
 
 ### Structured
 
-| Field | Constructor | Column | Read type | Notes |
-|---|---|---|---|---|
-| `f.object(fields)` | `Record<string, Field>` of nested fields | `jsonb` | inferred object from the nested fields | nested `outputFalse()`/virtual fields drop out of the shape |
-| `f.json(config?)` | `{ mode?: "jsonb" \| "json" }` | `jsonb` (default) or `json` | `JsonValue` (narrow with `.$type<T>()`) | schema-less |
-| `<field>.array()` | none (chain method) | `jsonb` | `T[]` of the inner read type | combine with `.minItems()` / `.maxItems()` |
+| Field              | Constructor                              | Column                      | Read type                               | Notes                                                       |
+| ------------------ | ---------------------------------------- | --------------------------- | --------------------------------------- | ----------------------------------------------------------- |
+| `f.object(fields)` | `Record<string, Field>` of nested fields | `jsonb`                     | inferred object from the nested fields  | nested `outputFalse()`/virtual fields drop out of the shape |
+| `f.json(config?)`  | `{ mode?: "jsonb" \| "json" }`           | `jsonb` (default) or `json` | `JsonValue` (narrow with `.$type<T>()`) | schema-less                                                 |
+| `<field>.array()`  | none (chain method)                      | `jsonb`                     | `T[]` of the inner read type            | combine with `.minItems()` / `.maxItems()`                  |
 
 ```ts
 // object, typed nested shape stored as one jsonb column:
@@ -265,23 +260,19 @@ Keep the QUESTPIE field type and use `.drizzle()` when the field needs column-le
 ```ts
 import { sql } from "drizzle-orm";
 
-const externalId = f
-  .text(255)
-  .drizzle((column) => column.$type<`ext_${string}`>());
+const externalId = f.text(255).drizzle((column) => column.$type<`ext_${string}`>());
 
-const createdAt = f
-  .datetime()
-  .drizzle((column) => column.default(sql`now()`));
+const createdAt = f.datetime().drizzle((column) => column.default(sql`now()`));
 ```
 
 Use `.drizzle()` for column builder details such as SQL defaults, Drizzle `$type<T>()`, or a Drizzle option that belongs to the generated column. If the field needs a new storage model, metadata shape, or operator set, create a custom field type with `field()` / `fieldType()` instead.
 
 ### Rich text & blocks (admin module)
 
-| Field | Constructor | Column | Read type |
-|---|---|---|---|
+| Field                  | Constructor                                          | Column                              | Read type                                     |
+| ---------------------- | ---------------------------------------------------- | ----------------------------------- | --------------------------------------------- |
 | `f.richText(options?)` | `{ mode?: "json" \| "markdown" }` (default `"json"`) | `jsonb` (json) or `text` (markdown) | `TipTapDocument` (json) / `string` (markdown) |
-| `f.blocks()` | none | `jsonb` | `BlocksDocument` |
+| `f.blocks()`           | none                                                 | `jsonb`                             | `BlocksDocument`                              |
 
 ```ts
 bio: f.richText().localized(),            // TipTap JSON document
@@ -291,9 +282,7 @@ body: f.blocks(),                          // block-based page builder
 
 These two are contributed by `@questpie/admin` and are only on `f` when the admin module is active. `richText` defaults to a TipTap JSON document (`mode: "markdown"` stores a markdown string instead). `blocks` stores a block tree built from your `block(name)` declarations.
 
-<Callout type="info">
-  `f.richText()` and `f.blocks()` exist only when the admin module is registered, they ride in on the generated `f` alongside the 15 core types. Without the admin module, accessing them throws the "Unknown field type" error.
-</Callout>
+<Callout type="info">`f.richText()` and `f.blocks()` exist only when the admin module is registered, they ride in on the generated `f` alongside the 15 core types. Without the admin module, accessing them throws the "Unknown field type" error.</Callout>
 
 ## Shared methods
 
@@ -301,12 +290,12 @@ These chain methods are available on **every** field type. Each returns a new im
 
 ### Schema & nullability
 
-| Method | Effect |
-|---|---|
-| `.required()` | `NOT NULL` column + required on input (unless it has a default or is `inputOptional`). |
+| Method            | Effect                                                                                                                            |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `.required()`     | `NOT NULL` column + required on input (unless it has a default or is `inputOptional`).                                            |
 | `.default(value)` | Column default, literal, a `() => value` factory, or raw `SQL`. Makes input optional. Type-checked against the field's data type. |
-| `.zod(fn)` | Transform the auto-derived Zod schema (`.refine()`, or replace it). Returning a concrete output narrows the field's value type. |
-| `.$type<T>()` | Type-level only (no runtime effect), pin the value type, mainly for `f.json()`. Pair with `.zod()` for runtime validation. |
+| `.zod(fn)`        | Transform the auto-derived Zod schema (`.refine()`, or replace it). Returning a concrete output narrows the field's value type.   |
+| `.$type<T>()`     | Type-level only (no runtime effect), pin the value type, mainly for `f.json()`. Pair with `.zod()` for runtime validation.        |
 
 ```ts
 email: f.email().required(),
@@ -321,16 +310,16 @@ metadata: f.json<{ flags: string[] }>(),
 
 ### Input/output shaping
 
-| Method | Effect |
-|---|---|
-| `.inputFalse()` | Read-only, excluded from the insert/update input type. |
-| `.inputOptional()` | Always optional on input, even if the column is `NOT NULL`. |
-| `.inputTrue()` | Force into the input type even if the field is virtual. |
-| `.outputFalse()` | Write-only, dropped from the select/output type (e.g. a password). |
-| `.virtual(expr?)` | No DB column; optional `SQL` expression for a computed value. |
-| `.localized()` | Store per-locale values in the i18n side-table. |
-| `.array()` | Wrap the value as an array (stored as `jsonb`). For `select`, this is multi-select. |
-| `.minItems(n)` / `.maxItems(n)` | Array length bounds, only meaningful after `.array()`. |
+| Method                          | Effect                                                                              |
+| ------------------------------- | ----------------------------------------------------------------------------------- |
+| `.inputFalse()`                 | Read-only, excluded from the insert/update input type.                              |
+| `.inputOptional()`              | Always optional on input, even if the column is `NOT NULL`.                         |
+| `.inputTrue()`                  | Force into the input type even if the field is virtual.                             |
+| `.outputFalse()`                | Write-only, dropped from the select/output type (e.g. a password).                  |
+| `.virtual(expr?)`               | No DB column; optional `SQL` expression for a computed value.                       |
+| `.localized()`                  | Store per-locale values in the i18n side-table.                                     |
+| `.array()`                      | Wrap the value as an array (stored as `jsonb`). For `select`, this is multi-select. |
+| `.minItems(n)` / `.maxItems(n)` | Array length bounds, only meaningful after `.array()`.                              |
 
 ```ts
 createdAt: f.datetime().autoNow().inputFalse(),
@@ -343,13 +332,13 @@ tags: f.text().array().maxItems(10),
 
 ### Behaviour & access
 
-| Method | Effect |
-|---|---|
-| `.label(text)` / `.description(text)` | Admin label/help text. `I18nText` = `string \| Record<locale, string>`. |
-| `.hooks(hooks)` | Per-field `beforeChange` / `afterRead` / `validate` / `beforeCreate` / `beforeUpdate`. Each transforms the value (same type in, same type out). |
-| `.access(rules)` | Per-field `read` / `create` / `update` access, `boolean` or `(ctx) => boolean \| Promise<boolean>`. |
-| `.operators(ops)` | Override the WHERE operator set for this field. |
-| `.admin(config)` | Per-field admin UI config (component, placeholder, layout, …). Admin module only. |
+| Method                                | Effect                                                                                                                                          |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.label(text)` / `.description(text)` | Admin label/help text. `I18nText` = `string \| Record<locale, string>`.                                                                         |
+| `.hooks(hooks)`                       | Per-field `beforeChange` / `afterRead` / `validate` / `beforeCreate` / `beforeUpdate`. Each transforms the value (same type in, same type out). |
+| `.access(rules)`                      | Per-field `read` / `create` / `update` access, `boolean` or `(ctx) => boolean \| Promise<boolean>`.                                             |
+| `.operators(ops)`                     | Override the WHERE operator set for this field.                                                                                                 |
+| `.admin(config)`                      | Per-field admin UI config (component, placeholder, layout, …). Admin module only.                                                               |
 
 ```ts
 price: f.number({ mode: "decimal" }).label({ en: "Price", sk: "Cena" }),
@@ -359,16 +348,17 @@ phone: f.text(50).admin({ placeholder: "+1 (555) 000-0000" }),
 ```
 
 <Callout type="warn">
-  Field `afterRead` hooks (and `f.blocks()`'s built-in afterRead) run output processing that can deadlock Bun SQL if executed inside an already-open transaction, the context-inherited tx connection blocks. Keep heavy afterRead/block hydration outside an open `tx`. See the framework invariant in `CLAUDE.md` (`feedback_save_inside_tx`).
+  Field `afterRead` hooks (and `f.blocks()`'s built-in afterRead) run output processing that can deadlock Bun SQL if executed inside an already-open transaction, the context-inherited tx connection blocks. Keep heavy afterRead/block hydration outside an open `tx`. See the framework invariant in `CLAUDE.md`
+  (`feedback_save_inside_tx`).
 </Callout>
 
 ### Low-level escape hatches
 
-| Method | Effect |
-|---|---|
-| `.drizzle(fn)` | Customize the underlying Drizzle column builder (``.default(sql`...`)``, `.$type<T>()`). Applied last when building the column. |
-| `.fromDb(fn)` / `.toDb(fn)` | Pure value mappers at the DB boundary (no type change). |
-| `.set(key, value)` | Generic plugin-extension setter (what `.admin()` / `.form()` use under the hood). |
+| Method                      | Effect                                                                                                                          |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `.drizzle(fn)`              | Customize the underlying Drizzle column builder (``.default(sql`...`)``, `.$type<T>()`). Applied last when building the column. |
+| `.fromDb(fn)` / `.toDb(fn)` | Pure value mappers at the DB boundary (no type change).                                                                         |
+| `.set(key, value)`          | Generic plugin-extension setter (what `.admin()` / `.form()` use under the hood).                                               |
 
 ```ts
 createdAt: f.datetime().drizzle((c) => c.default(sql`now()`)),
@@ -386,10 +376,6 @@ The shared methods above are available on every registered field type.
 
 A new field type is declared with `fieldType(name, { create, methods })`, the declarative way to add a type with its own chain methods. Every built-in exports a matching `<name>FieldType` (`textFieldType`, `numberFieldType`, `relationFieldType`, …) that codegen discovers from your `fields/` directories.
 
-### Custom operator sets
-
-`.operators(ops)` overrides the WHERE operators for a field. Build a set with `operator<TValue>((col, value, ctx) => SQL)` / `operatorSet(...)`. Built-in field types register their corresponding string, number, boolean, date, select, and relation operator sets automatically.
-
 ## TypeScript
 
 Fields are the single origin of your collection's read/insert/where types, you rarely touch field types directly. After `questpie generate`, import the projected collection types:
@@ -397,15 +383,13 @@ Fields are the single origin of your collection's read/insert/where types, you r
 ```ts
 import type { CollectionDoc, CollectionWhere } from "#questpie/types";
 
-type Post = CollectionDoc<"posts">;          // the read shape
-type PostFilter = CollectionWhere<"posts">;  // the typed where clause
+type Post = CollectionDoc<"posts">; // the read shape
+type PostFilter = CollectionWhere<"posts">; // the typed where clause
 ```
 
 If you need the field primitives themselves (building a plugin or a custom field type), they are exported from `questpie` and `questpie/builders`: `Field`, `field`, `fieldType`, `FieldState`, `FieldWithMethods`, the `Extract*Type` helpers, and the reactive types. Admin's `richText` / `blocks` and their state/document types come from `@questpie/admin/fields`.
 
-<Callout type="info">
-  You don't import the field factories (`text`, `relation`, …) directly in app code, they ride in on the destructured `f` inside `.fields()`. Direct factory imports are for library/plugin authors building custom `f` proxies via `createFieldBuilder`.
-</Callout>
+<Callout type="info">You don't import the field factories (`text`, `relation`, …) directly in app code, they ride in on the destructured `f` inside `.fields()`. Direct factory imports are for library/plugin authors building custom `f` proxies via `createFieldBuilder`.</Callout>
 
 ## Related
 

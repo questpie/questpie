@@ -39,12 +39,12 @@ That gives `posts` a `status` column whose read type is `"draft" | "published" |
 
 ## Constructor argument
 
-`f.select()` takes one argument, either a **static options array** or a dynamic **`OptionsConfig`**. There is no options-object constructor.
+`f.select()` takes one argument: either a static options array or a dynamic `OptionsConfig`.
 
-| Call | Stored value | Read type | Column |
-|---|---|---|---|
-| `f.select([...options])` | one option `value` (as string) | **literal union** of the values | `varchar(n)`, where `n` = the longest value's length, minimum `50` |
-| `f.select(optionsConfig)` | any string the handler returns | `string` | `varchar(255)` |
+| Call                      | Stored value                   | Read type                       | Column                                                             |
+| ------------------------- | ------------------------------ | ------------------------------- | ------------------------------------------------------------------ |
+| `f.select([...options])`  | one option `value` (as string) | **literal union** of the values | `varchar(n)`, where `n` = the longest value's length, minimum `50` |
+| `f.select(optionsConfig)` | any string the handler returns | `string`                        | `varchar(255)`                                                     |
 
 For static options, the field data is the **literal union** of the option values, the read/insert/update/`where` types all narrow to `"draft" | "published" | …`. The derived schema is `z.enum(values)`. For a dynamic `OptionsConfig`, the data widens to `string`, the schema is `z.string()`, and the introspection metadata ships an empty options array (the admin fetches them at runtime).
 
@@ -56,14 +56,14 @@ The narrowing comes from the `<const T extends readonly SelectOption[]>` overloa
 
 Each option is a `SelectOption`. Only `value` and `label` are required; the rest drive the admin UI.
 
-| Key | Type | Purpose |
-|---|---|---|
-| `value` | `string \| number` | The stored value. A `number` is coerced to a string for the `varchar` column and the `z.enum` (`String(value)`). |
-| `label` | `I18nText` | What the dropdown shows. `I18nText` = `string \| Record<locale, string>`. |
-| `description?` | `I18nText` | Secondary help text shown under the option. |
-| `disabled?` | `boolean` | Renders the option non-selectable. |
-| `icon?` | `ComponentReference` | An icon next to the option, built with the `c` proxy, e.g. `c.icon("ph:check-circle")`. |
-| `className?` | `string` | Tailwind/utility classes for the option's badge/row (tonal styling). |
+| Key            | Type                 | Purpose                                                                                                          |
+| -------------- | -------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `value`        | `string \| number`   | The stored value. A `number` is coerced to a string for the `varchar` column and the `z.enum` (`String(value)`). |
+| `label`        | `I18nText`           | What the dropdown shows. `I18nText` = `string \| Record<locale, string>`.                                        |
+| `description?` | `I18nText`           | Secondary help text shown under the option.                                                                      |
+| `disabled?`    | `boolean`            | Renders the option non-selectable.                                                                               |
+| `icon?`        | `ComponentReference` | An icon next to the option, built with the `c` proxy, e.g. `c.icon("ph:check-circle")`.                          |
+| `className?`   | `string`             | Tailwind/utility classes for the option's badge/row (tonal styling).                                             |
 
 `value`, `label`, `description`, `disabled`, `icon`, and `className` are all serialized into the admin introspection metadata, so the dropdown and table cells render consistently without any per-project component override.
 
@@ -91,8 +91,8 @@ export const deployments = collection("deployments").fields(({ f, c }) => ({
 
 `.enum(name)` is the only method specific to `select`, on top of the [shared modifiers](/docs/concepts/fields#shared-methods) every field has and `.array()` for multi-select (below).
 
-| Method | Effect |
-|---|---|
+| Method        | Effect                                                                                   |
+| ------------- | ---------------------------------------------------------------------------------------- |
 | `.enum(name)` | Back the column with a native Postgres `enum` type named `name`, instead of a `varchar`. |
 
 Without `.enum()`, a select is stored as a `varchar` and the option set lives only in your schema and the Zod validator, the database itself accepts any string of the right length. `.enum("post_status")` swaps the column for a real `pgEnum` built from the option values, so the **database** enforces the value set too:
@@ -108,12 +108,12 @@ status: f
 ```
 
 <Callout type="warn" title="`.enum()` builds a fresh `pgEnum` from the *static* values">
-`.enum(name)` reads the option values it has at call time and creates a brand-new `pgEnum(name, values)` each call, there is no shared cache, so the same `name` used twice creates two distinct definitions. Call it **after** your options are set. On a select with **no** static options (a dynamic `OptionsConfig`) it only flags `enumType`/`enumName` and leaves the column a `varchar`, since there are no values to build the enum from. Changing the option set later is a Postgres enum migration (add/rename a value), not a free edit.
+  `.enum(name)` creates a new `pgEnum(name, values)` from the static values available at call time. Call it after defining the options and use each enum name for one definition. Dynamic `OptionsConfig` selects remain `varchar` because their values are resolved at runtime. Changing a Postgres enum requires a migration.
 </Callout>
 
 ## Multi-select
 
-There is no separate multi-select factory, chain the shared [`.array()`](/docs/concepts/fields/array) modifier and the field stores a list of option values in a single `jsonb` column. The read type becomes the value union as an array (`("news" | "guide")[]`), and the operator set switches to the **multi-select** operators. Bound the list length with `.minItems(n)` / `.maxItems(n)`:
+Chain the shared [`.array()`](/docs/concepts/fields/array) modifier for multi-select. The field stores option values in one `jsonb` column, returns the value union as an array (`("news" | "guide")[]`), and uses multi-select operators. Bound list length with `.minItems(n)` and `.maxItems(n)`:
 
 ```ts
 tags: f
@@ -131,11 +131,11 @@ tags: f
 
 A single (non-array) select uses the **single-select operator set** (`selectSingleOps`), equality and membership against the value union.
 
-| Operator | Operand | Matches |
-|---|---|---|
-| `eq` / `ne` | a value | Exact equal / not equal. |
-| `in` / `notIn` | value array | Value is (not) in the list. |
-| `isNull` / `isNotNull` | `boolean` | Column is (not) null. |
+| Operator               | Operand     | Matches                     |
+| ---------------------- | ----------- | --------------------------- |
+| `eq` / `ne`            | a value     | Exact equal / not equal.    |
+| `in` / `notIn`         | value array | Value is (not) in the list. |
+| `isNull` / `isNotNull` | `boolean`   | Column is (not) null.       |
 
 ```ts
 // Published or archived posts:
@@ -146,14 +146,14 @@ const { docs } = await app.collections.posts.find({
 
 A **multi-select** (`.array()`) uses `selectMultiOps` instead, the value is a `jsonb` array, so the operators are structural.
 
-| Operator | Operand | Matches |
-|---|---|---|
-| `containsAll` | value array | The stored list contains **all** of these. |
-| `containsAny` | value array | The stored list contains **any** of these. |
-| `eq` | value array | The stored list equals this array exactly. |
-| `length` | `number` | The stored list has exactly this many items. |
-| `isEmpty` / `isNotEmpty` | `boolean` | List is empty (`[]` or null) / non-empty. |
-| `isNull` / `isNotNull` | `boolean` | Column is (not) null. |
+| Operator                 | Operand     | Matches                                      |
+| ------------------------ | ----------- | -------------------------------------------- |
+| `containsAll`            | value array | The stored list contains **all** of these.   |
+| `containsAny`            | value array | The stored list contains **any** of these.   |
+| `eq`                     | value array | The stored list equals this array exactly.   |
+| `length`                 | `number`    | The stored list has exactly this many items. |
+| `isEmpty` / `isNotEmpty` | `boolean`   | List is empty (`[]` or null) / non-empty.    |
+| `isNull` / `isNotNull`   | `boolean`   | Column is (not) null.                        |
 
 ```ts
 // Posts tagged with both "news" and "release":
@@ -200,19 +200,21 @@ export const addresses = collection("addresses").fields(({ f }) => ({
 
 `OptionsConfig` is `{ handler, deps? }`:
 
-| Key | Type | Purpose |
-|---|---|---|
-| `handler` | `(ctx: OptionsContext) => OptionsResult \| Promise<OptionsResult>` | Returns the options for the current form `data` / `search` / `page`. |
-| `deps?` | `string[] \| ((ctx) => any[])` | Sibling field values whose changes refetch the options. Auto-tracked from the handler if omitted. |
+| Key       | Type                                                               | Purpose                                                                                           |
+| --------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
+| `handler` | `(ctx: OptionsContext) => OptionsResult \| Promise<OptionsResult>` | Returns the options for the current form `data` / `search` / `page`.                              |
+| `deps?`   | `string[] \| ((ctx) => any[])`                                     | Sibling field values whose changes refetch the options. Auto-tracked from the handler if omitted. |
 
 The handler's `ctx` (`OptionsContext`) carries `{ data, sibling, search, page, limit, ctx }`, the current form `data`, the `sibling` field values, the `search` string the user typed, the `page`/`limit` for pagination, and the server `ctx` (`{ db, user, req, locale }`). It returns an `OptionsResult`: `{ options: { value, label }[]; hasMore?; total? }`.
 
 <Callout type="info" title="The server `ctx.db` is untyped here">
-Inside an options handler the server context `ctx.ctx.db` is typed `unknown` (`ReactiveServerContext`), so it carries no per-collection autocomplete. To load options from your own tables, query through a typed handle you bring into scope (e.g. an imported `app`), not `ctx.ctx.db.collections.*`. If what you want is a typed reference to another collection's rows, use [`f.relation()`](/docs/concepts/relations) instead.
+  Inside an options handler the server context `ctx.ctx.db` is typed `unknown` (`ReactiveServerContext`), so it carries no per-collection autocomplete. To load options from your own tables, query through a typed handle you bring into scope (e.g. an imported `app`), not `ctx.ctx.db.collections.*`. If what you want is a
+  typed reference to another collection's rows, use [`f.relation()`](/docs/concepts/relations) instead.
 </Callout>
 
 <Callout type="info" title="Dynamic select stores a plain `string`">
-With an `OptionsConfig`, the value isn't known at compile time, so the field's read type is `string` (not a literal union) and the schema is `z.string()`. Use a static options array whenever the set is fixed and known, you get the narrowed type and `z.enum` validation for free. For a typed reference to another collection's rows, reach for [`f.relation()`](/docs/concepts/relations) instead, which gives a real FK and `with:` hydration.
+  With an `OptionsConfig`, the value isn't known at compile time, so the field's read type is `string` (not a literal union) and the schema is `z.string()`. Use a static options array whenever the set is fixed and known, you get the narrowed type and `z.enum` validation for free. For a typed reference to another
+  collection's rows, reach for [`f.relation()`](/docs/concepts/relations) instead, which gives a real FK and `with:` hydration.
 </Callout>
 
 ## When to use it
@@ -220,7 +222,7 @@ With an `OptionsConfig`, the value isn't known at compile time, so the field's r
 - **Static `f.select([...])`**, a small, fixed set of values: a status, a priority, a category, a role. This is the common case; you get the literal union type and `z.enum` validation.
 - **`.enum(name)`**, add it when you want the database to enforce the value set too (a real Postgres `enum`), accepting that changing the set later is an enum migration.
 - **`.array()`**, pick several from the set: tags, feature flags, days of the week.
-- **Dynamic `OptionsConfig`**, the choices are data-driven *but the field still stores a plain string* (e.g. a value pulled from another table you don't want a hard FK to). If you want a typed foreign key with hydration, use [`f.relation()`](/docs/concepts/relations) instead.
+- **Dynamic `OptionsConfig`**, the choices are data-driven _but the field still stores a plain string_ (e.g. a value pulled from another table you don't want a hard FK to). If you want a typed foreign key with hydration, use [`f.relation()`](/docs/concepts/relations) instead.
 
 ## TypeScript
 
@@ -234,8 +236,8 @@ type Post = typeof posts.$infer.select;
 ```ts
 import type { CollectionDoc, CollectionWhere } from "#questpie/types";
 
-type Post = CollectionDoc<"posts">;          // { status: "draft" | "published" | "archived"; ... }
-type PostFilter = CollectionWhere<"posts">;  // { status?: { eq?: "draft" | "published" | "archived"; in?: (...)[]; ... } }
+type Post = CollectionDoc<"posts">; // { status: "draft" | "published" | "archived"; ... }
+type PostFilter = CollectionWhere<"posts">; // { status?: { eq?: "draft" | "published" | "archived"; in?: (...)[]; ... } }
 ```
 
 `.required()` makes the field non-null and required on insert; `.default("draft")` makes the input optional and is type-checked against the value union (`f.select([...]).default("nope")` won't compile). A dynamic `OptionsConfig` widens the type to `string`. See [Fields → inferred types](/docs/concepts/fields#example--inferred-types) for how modifiers flow into the generated types.

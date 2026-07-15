@@ -16,14 +16,14 @@ description: f.boolean() is a true/false field backed by a Postgres boolean colu
 
 ## Quick start
 
-Use `f.boolean()` inside a `.fields()` callback. There is no constructor argument; chain the shared modifiers to refine it.
+Use `f.boolean()` inside a `.fields()` callback, then chain shared modifiers to refine it.
 
 ```ts title="src/questpie/server/collections/posts.ts"
 import { collection } from "#questpie/factories";
 
 export const posts = collection("posts").fields(({ f }) => ({
   published: f.boolean().label("Published").default(false).required(), // NOT NULL, defaults to false
-  featured: f.boolean(),                                               // nullable boolean
+  featured: f.boolean(), // nullable boolean
 }));
 ```
 
@@ -33,22 +33,18 @@ That gives `posts` a `published` column typed `boolean` on read, required on ins
 
 `f.boolean()` takes **no arguments**. It always produces a `boolean` column with a `z.boolean()` schema.
 
-| Call | Column | Schema |
-|---|---|---|
+| Call          | Column    | Schema        |
+| ------------- | --------- | ------------- |
 | `f.boolean()` | `boolean` | `z.boolean()` |
 
 ## Chained methods
 
-`f.boolean()` has **no type-specific methods**, it returns a plain `Field`, not a `FieldWithMethods` wrapper, because there is nothing boolean-specific to refine. Shape it with the [shared modifiers](/docs/concepts/fields#shared-methods) every field carries (`.required()`, `.default()`, `.label()`, `.description()`, `.localized()`, `.array()`, `.access()`, `.hooks()`, …).
+`f.boolean()` uses the common `Field` builder. Shape it with shared modifiers such as `.required()`, `.default()`, `.label()`, `.description()`, `.localized()`, `.array()`, `.access()`, and `.hooks()`.
 
 ```ts
 collection("settings").fields(({ f }) => ({
   // Common pattern: a non-null flag with an explicit default.
-  emailNotifications: f
-    .boolean()
-    .label("Email notifications")
-    .default(true)
-    .required(),
+  emailNotifications: f.boolean().label("Email notifications").default(true).required(),
 }));
 ```
 
@@ -60,9 +56,9 @@ collection("settings").fields(({ f }) => ({
 
 `boolean` uses the **boolean operator set** (`booleanOps`), so every boolean field is filterable with these in a `where` clause. The operand is typed `boolean`.
 
-| Operator | Operand | Matches |
-|---|---|---|
-| `eq` / `ne` | `boolean` | Exact equal / not equal. |
+| Operator               | Operand   | Matches                                                                          |
+| ---------------------- | --------- | -------------------------------------------------------------------------------- |
+| `eq` / `ne`            | `boolean` | Exact equal / not equal.                                                         |
 | `isNull` / `isNotNull` | `boolean` | Column is (not) null. Pass `true` to assert the condition, `false` to invert it. |
 
 ```ts
@@ -77,7 +73,7 @@ const { docs: unset } = await app.collections.posts.find({
 });
 ```
 
-There are no `gt` / `lt` / `in` style operators, for a tri-state value (true / false / unknown), keep the column nullable and filter `isNull` / `isNotNull` alongside `eq`.
+Boolean filters use `eq`, `ne`, `isNull`, and `isNotNull`. Keep the column nullable to model a tri-state value of true, false, or unknown.
 
 For the full query language, combining field filters with `AND` / `OR` / `NOT`, pagination, and `orderBy`, see the [query reference](/docs/concepts/relations).
 
@@ -108,7 +104,7 @@ type Post = typeof posts.$infer.select;
 ```ts
 import type { CollectionDoc, CollectionWhere } from "#questpie/types";
 
-type Post = CollectionDoc<"posts">;        // { published: boolean; ... }
+type Post = CollectionDoc<"posts">; // { published: boolean; ... }
 type PostFilter = CollectionWhere<"posts">; // { published?: { eq?: boolean; ... } }
 ```
 

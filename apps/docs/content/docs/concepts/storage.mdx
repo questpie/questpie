@@ -1,0 +1,69 @@
+---
+title: Storage
+description: Understand how upload collections connect asset metadata, file bytes, visibility, URLs, and direct uploads through a stable storage service.
+---
+
+Storage manages file bytes while upload collections manage asset records. This split keeps application data relational and lets the byte backend move from local disk to object storage without changing collection code.
+
+## The asset model
+
+An upload collection stores metadata such as filename, MIME type, size, visibility, and resolved URL. The storage backend stores the bytes under the asset key.
+
+An `f.upload()` field is a relation to that upload collection. The owning record stores the asset ID and hydrates asset metadata through `with`.
+
+## Upload flow
+
+A server-mediated upload follows this sequence:
+
+1. QUESTPIE validates the upload collection and access rules.
+2. The storage service writes the file bytes.
+3. The upload collection stores the asset metadata.
+4. Reads resolve a public or signed URL from the asset and storage configuration.
+
+The database record and storage object share a stable key. Deletion hooks remove the object when the asset lifecycle ends.
+
+## Define an upload collection
+
+```ts title="collections/assets.ts"
+import { collection } from "#questpie/factories";
+
+export default collection("assets")
+	.fields(({ f }) => ({
+		alt: f.text(),
+	}))
+	.upload({
+		visibility: "public",
+	});
+```
+
+Reference it from another collection:
+
+```ts
+cover: f.upload({ to: "assets" }),
+```
+
+See [Upload fields](/docs/concepts/fields/upload) for relation typing, input shapes, and hydration.
+
+## Visibility and URLs
+
+Public assets resolve to stable URLs. Private assets resolve through signed URLs with an expiry window enforced by the backend.
+
+Keep authorization on the upload collection. Storage visibility determines URL delivery; collection access determines who can create, read, update, or delete the asset record.
+
+## Direct uploads
+
+Object-storage adapters can issue client upload instructions. The browser uploads bytes directly, then the application finalizes the asset record with the returned key and metadata.
+
+This path removes large byte streams from the application server while preserving the same collection and access lifecycle.
+
+## Choose a backend
+
+Local filesystem storage fits development and single-node deployments. Object storage fits replicated applications, CDN delivery, and direct uploads.
+
+See [Storage adapters](/docs/adapters/storage) for filesystem paths, object-storage configuration, signed URLs, environment variables, and custom adapters.
+
+## Related
+
+- [Upload fields](/docs/concepts/fields/upload), model an asset relation.
+- [Collections](/docs/concepts/collections), access rules and lifecycle hooks.
+- [Storage adapters](/docs/adapters/storage), backend configuration and operations.

@@ -26,7 +26,11 @@ export const heroBlock = block("hero")
   .admin(({ c }) => ({
     label: { en: "Hero Section", sk: "Hero sekcia" },
     icon: c.icon("ph:image"),
-    category: { label: { en: "Sections" }, icon: c.icon("ph:layout"), order: 1 },
+    category: {
+      label: { en: "Sections" },
+      icon: c.icon("ph:layout"),
+      order: 1,
+    },
     order: 1,
   }))
   .fields(({ f }) => ({
@@ -62,7 +66,8 @@ questpie push       # adds the jsonb content column to the pages table
 That gives you a `pages.content` field that renders the block editor in the admin, validates each block against its declared fields, and returns a `BlocksDocument` your frontend can render.
 
 <Callout type="warn" title="Blocks require the admin module">
-`f.blocks()` and the `block()` factory only exist when `adminModule` is registered in `src/questpie/server/modules.ts`. The admin module registers the `blocks` (and `richText`) field types, and codegen discovers your `blocks/` files and wires `f.blocks()` onto the generated `f`. Without it, `f.blocks()` is not on the field proxy.
+  `f.blocks()` and the `block()` factory only exist when `adminModule` is registered in `src/questpie/server/modules.ts`. The admin module registers the `blocks` (and `richText`) field types, and codegen discovers your `blocks/` files and wires `f.blocks()` onto the generated `f`. Without it, `f.blocks()` is not on the
+  field proxy.
 </Callout>
 
 ## Example → stored shape
@@ -89,19 +94,17 @@ The TypeScript shape is `BlocksDocument`:
 
 ```ts
 interface BlocksDocument {
-  _tree: BlockNode[];                                  // hierarchy: order + nesting
-  _values: Record<string, BlockValues>;                // blockId → field values
-  _data?: Record<string, Record<string, {}>>;          // blockId → prefetched data
+  _tree: BlockNode[]; // hierarchy: order + nesting
+  _values: Record<string, BlockValues>; // blockId → field values
+  _data?: Record<string, Record<string, {}>>; // blockId → prefetched data
 }
 
 interface BlockNode {
   id: string;
-  type: string;            // block type name, e.g. "hero"
-  children: BlockNode[];   // nested blocks (layout blocks)
+  type: string; // block type name, e.g. "hero"
+  children: BlockNode[]; // nested blocks (layout blocks)
 }
 ```
-
-
 
 <Callout type="info" title="Structure and content are split on purpose">
 `_tree` holds **structure**, `_values` holds **content**, both keyed by `BlockNode.id`. They are separated so reordering or nesting a block never rewrites its values, and child blocks live in `BlockNode.children`, not inside `_values`. The persisted Zod schema validates `{ _tree, _values }`; `_data` is added by the read hook, not stored.
@@ -111,28 +114,26 @@ interface BlockNode {
 
 `block(name)` returns a chainable builder. Every method returns a new builder, so order them top to bottom and end the chain with your export. The block type **name** is the first argument and must match the `type` stored in the tree (it's also the key under `admin.blocks` and the renderer lookup key).
 
-| Method | Purpose |
-|---|---|
-| `.admin(config \| (ctx) => config)` | Label, icon, description, category, order, and visibility in the block picker. |
-| `.fields(({ f }) => ({ ... }))` | The block's fields, same `f` proxy as collections (builtins + `richText` / `blocks`). |
-| `.form(({ f }) => ({ fields }))` | Lay the fields out in the editor with sections / tabs / grid. |
-| `.allowChildren(max?)` | Make this a layout block that can contain other blocks (optionally capped). |
-| `.prefetch(fn \| { with, loader? })` | Fetch related data on read; the result is attached to `_data[blockId]`. |
-
-
+| Method                               | Purpose                                                                               |
+| ------------------------------------ | ------------------------------------------------------------------------------------- |
+| `.admin(config \| (ctx) => config)`  | Label, icon, description, category, order, and visibility in the block picker.        |
+| `.fields(({ f }) => ({ ... }))`      | The block's fields, same `f` proxy as collections (builtins + `richText` / `blocks`). |
+| `.form(({ f }) => ({ fields }))`     | Lay the fields out in the editor with sections / tabs / grid.                         |
+| `.allowChildren(max?)`               | Make this a layout block that can contain other blocks (optionally capped).           |
+| `.prefetch(fn \| { with, loader? })` | Fetch related data on read; the result is attached to `_data[blockId]`.               |
 
 ### `.admin()`, picker metadata
 
 `.admin()` takes a config object or a function receiving `{ c }`, the component-reference proxy (`c.icon("ph:…")`). The shape is `AdminBlockConfig`:
 
-| Option | Type | Effect |
-|---|---|---|
-| `label` | `I18nText` | Display name in the picker. `I18nText` = `string \| Record<locale, string>`. |
-| `description` | `I18nText` | Tooltip / help text. |
-| `icon` | `ComponentReference` | Icon, e.g. `c.icon("ph:image")`. |
-| `category` | `BlockCategoryConfig` | Groups the block: `{ label: I18nText; icon?; order? }`. |
-| `order` | `number` | Order within its category (lower = first). |
-| `hidden` | `boolean` | Hide from the picker. |
+| Option        | Type                  | Effect                                                                       |
+| ------------- | --------------------- | ---------------------------------------------------------------------------- |
+| `label`       | `I18nText`            | Display name in the picker. `I18nText` = `string \| Record<locale, string>`. |
+| `description` | `I18nText`            | Tooltip / help text.                                                         |
+| `icon`        | `ComponentReference`  | Icon, e.g. `c.icon("ph:image")`.                                             |
+| `category`    | `BlockCategoryConfig` | Groups the block: `{ label: I18nText; icon?; order? }`.                      |
+| `order`       | `number`              | Order within its category (lower = first).                                   |
+| `hidden`      | `boolean`             | Hide from the picker.                                                        |
 
 ```ts
 .admin(({ c }) => ({
@@ -142,8 +143,6 @@ interface BlockNode {
   order: 1,
 }))
 ```
-
-
 
 <Callout type="info" title="Reuse one category across blocks">
 Export a helper that returns a `BlockCategoryConfig` so every block in a group shares one label/icon/order. Type it with `AdminConfigContext` and `BlockCategoryConfig` from `@questpie/admin/factories`:
@@ -159,6 +158,7 @@ export const sections = (c: AdminConfigContext["c"]): BlockCategoryConfig => ({
 ```
 
 Then `category: sections(c)` in each block's `.admin()`.
+
 </Callout>
 
 ### `.fields()`, the block's data
@@ -192,8 +192,6 @@ Field values are validated against the block's generated Zod schema and stored u
 }))
 ```
 
-
-
 ### `.allowChildren()`, layout blocks
 
 Call `.allowChildren()` to let a block contain other blocks, that is what `BlockNode.children` is for. Pass a number to cap the count.
@@ -203,12 +201,14 @@ import { block } from "#questpie/factories";
 
 export const columnsBlock = block("columns")
   .admin(({ c }) => ({ label: "Columns", icon: c.icon("ph:columns") }))
-  .allowChildren()        // or .allowChildren(4) for at most 4 children
+  .allowChildren() // or .allowChildren(4) for at most 4 children
   .fields(({ f }) => ({
-    columns: f.select([
-      { value: "2", label: "2" },
-      { value: "3", label: "3" },
-    ]).default("2"),
+    columns: f
+      .select([
+        { value: "2", label: "2" },
+        { value: "3", label: "3" },
+      ])
+      .default("2"),
   }));
 ```
 
@@ -263,7 +263,8 @@ Combine the two: expand fields with `with`, then run a `loader` that receives th
 On key conflicts, loader/function data wins over expanded data (it is merged on top).
 
 <Callout type="warn" title="Prefetch runs in afterRead, keep it outside an open transaction">
-Prefetch runs in the blocks field's `afterRead` hook. Heavy reads inside an **already-open transaction** can deadlock Bun SQL, because the context-inherited tx connection blocks while you query. Keep block hydration (and any field `afterRead`) outside an open `tx`. See the framework invariant in `CLAUDE.md` (`feedback_save_inside_tx`).
+  Prefetch runs in the blocks field's `afterRead` hook. Heavy reads inside an **already-open transaction** can deadlock Bun SQL, because the context-inherited tx connection blocks while you query. Keep block hydration (and any field `afterRead`) outside an open `tx`. See the framework invariant in `CLAUDE.md`
+  (`feedback_save_inside_tx`).
 </Callout>
 
 <Callout type="info" title="Prefetch is best-effort and access-aware">
@@ -281,9 +282,9 @@ import { BlockRenderer, type BlockContent } from "@questpie/admin/client";
 export function PageRenderer({ page }: { page: { content: BlockContent } }) {
   return (
     <BlockRenderer
-      content={page.content}                 // _tree + _values
-      renderers={admin.blocks}               // block type → component
-      data={page.content._data}              // prefetched data, keyed by block id
+      content={page.content} // _tree + _values
+      renderers={admin.blocks} // block type → component
+      data={page.content._data} // prefetched data, keyed by block id
     />
   );
 }
@@ -291,13 +292,13 @@ export function PageRenderer({ page }: { page: { content: BlockContent } }) {
 
 `BlockRenderer` walks `content._tree`, looks up each node's renderer by `type` (falling back from `kebab-case` to `camelCase`), and renders nothing for an unknown type (with a dev-only console warning). Its props (`BlockRendererComponentProps`):
 
-| Prop | Type | Purpose |
-|---|---|---|
-| `content` | `BlockContent` | The stored `{ _tree, _values, _data? }`. |
-| `renderers` | `Record<string, (props) => ReactNode>` | Block type → component, e.g. the generated `admin.blocks`. |
-| `data` | `Record<string, unknown>` | Prefetched `_data`, keyed by block id (optional; for SSR). |
-| `className` | `string` | Container class. |
-| `selectedBlockId`, `onBlockClick`, `onBlockInsert` | none | Editor / live-preview wiring (select + insert affordances). |
+| Prop                                               | Type                                   | Purpose                                                     |
+| -------------------------------------------------- | -------------------------------------- | ----------------------------------------------------------- |
+| `content`                                          | `BlockContent`                         | The stored `{ _tree, _values, _data? }`.                    |
+| `renderers`                                        | `Record<string, (props) => ReactNode>` | Block type → component, e.g. the generated `admin.blocks`.  |
+| `data`                                             | `Record<string, unknown>`              | Prefetched `_data`, keyed by block id (optional; for SSR).  |
+| `className`                                        | `string`                               | Container class.                                            |
+| `selectedBlockId`, `onBlockClick`, `onBlockInsert` | none                                   | Editor / live-preview wiring (select + insert affordances). |
 
 Each renderer receives the block's `id`, typed `values`, prefetched `data`, and rendered `children`:
 
@@ -310,7 +311,7 @@ export function HeroRenderer({ values, data, children }: BlockProps<"hero">) {
     <section style={{ backgroundImage: bgUrl ? `url(${bgUrl})` : undefined }}>
       <h1>{values.title}</h1>
       {values.subtitle && <p>{values.subtitle}</p>}
-      {children}              {/* nested blocks, for layout blocks */}
+      {children} {/* nested blocks, for layout blocks */}
     </section>
   );
 }
@@ -319,23 +320,24 @@ export function HeroRenderer({ values, data, children }: BlockProps<"hero">) {
 `values` is typed from the block's `.fields()`; `data` is typed from its `.prefetch()`. Layout blocks (`.allowChildren()`) render their nested blocks through `children`. The runnable [TanStack barbershop example](https://github.com/questpie/questpie/tree/main/examples/tanstack-barbershop) shows a complete page renderer paired with admin block components.
 
 <Callout type="info" title="What `BlockRenderer` actually passes each renderer">
-At runtime, `BlockRenderer` passes each renderer component `id`, `type` (the block type name, an extra prop the typed shape below omits), `values`, `data`, and the rendered `children`, and nothing else. The `isSelected` / `isPreview` fields in the renderer-props type are **reserved and not wired by `BlockRenderer`**: they are always `undefined` here, so don't build rendering logic on them (selection state lives on the editor wrapper, not the renderer). Stick to `values`, `data`, and `children`.
+  At runtime, `BlockRenderer` passes each renderer component `id`, `type` (the block type name, an extra prop the typed shape below omits), `values`, `data`, and the rendered `children`, and nothing else. The `isSelected` / `isPreview` fields in the renderer-props type are **reserved and not wired by `BlockRenderer`**:
+  they are always `undefined` here, so don't build rendering logic on them (selection state lives on the editor wrapper, not the renderer). Stick to `values`, `data`, and `children`.
 </Callout>
 
 <Callout type="info" title="Same renderers power live preview">
-Wrap fields in `PreviewField` to make them inline-editable in live preview, and forward `selectedBlockId` / `onBlockClick` / `onBlockInsert` from `useCollectionPreview()`, `BlockRenderer` then adds click-to-select and insert affordances in preview mode while rendering the exact same components in production.
+  Wrap fields in `PreviewField` to make them inline-editable in live preview, and forward `selectedBlockId` / `onBlockClick` / `onBlockInsert` from `useCollectionPreview()`, `BlockRenderer` then adds click-to-select and insert affordances in preview mode while rendering the exact same components in production.
 </Callout>
 
 ## Querying blocks fields
 
 The blocks field ships custom operators so you can filter on block **content**, not just presence. They are available on the `where` clause for a blocks field.
 
-| Operator | Value | Matches |
-|---|---|---|
-| `hasBlockType` | `string` | Documents whose tree contains a block of that type. |
-| `blockCount` | `{ op: "gte" \| "lte" \| "eq"; count: number }` | Documents by root-level block count. |
-| `isEmpty` / `isNotEmpty` | none | Documents with no / at least one root block. |
-| `isNull` / `isNotNull` | none | Documents where the field is / isn't null. |
+| Operator                 | Value                                           | Matches                                             |
+| ------------------------ | ----------------------------------------------- | --------------------------------------------------- |
+| `hasBlockType`           | `string`                                        | Documents whose tree contains a block of that type. |
+| `blockCount`             | `{ op: "gte" \| "lte" \| "eq"; count: number }` | Documents by root-level block count.                |
+| `isEmpty` / `isNotEmpty` | none                                            | Documents with no / at least one root block.        |
+| `isNull` / `isNotNull`   | none                                            | Documents where the field is / isn't null.          |
 
 ```ts
 // Pages that contain a CTA block:
@@ -363,7 +365,7 @@ type HeroProps = BlockProps<"hero">;
 // values inferred from .fields(), data inferred from .prefetch()
 ```
 
-`BlockProps<T>` resolves to `BlockRendererProps<InferBlockValues<...>, InferBlockData<...>>` (the per-renderer props type, distinct from the `<BlockRenderer>` component's `BlockRendererComponentProps`), so `values` comes from the block's `.fields()` and `data` from its `.prefetch()`. The renderer props themselves are `{ id, values, data?, children?, isSelected?, isPreview? }`, destructure what you need (`values`, `data`, and `children` are the ones `BlockRenderer` populates; `isSelected` / `isPreview` are reserved and unwired, see the [Rendering](#rendering-on-the-frontend) note). The document and node types come from `@questpie/admin/fields`:
+`BlockProps<T>` resolves renderer props from the block definition: `values` comes from `.fields()`, `data` comes from `.prefetch()`, and `children` carries nested rendering when applicable. The document and node types come from `@questpie/admin/fields`:
 
 ```ts
 import type { BlocksDocument, BlockNode } from "@questpie/admin/fields";
@@ -372,7 +374,7 @@ import type { BlocksDocument, BlockNode } from "@questpie/admin/fields";
 If you build blocks programmatically (a plugin), `block`, `BlockBuilder`, `AdminBlockConfig`, `BlockCategoryConfig`, `AdminConfigContext`, `BlockPrefetchContext`, and the inference helpers `InferBlockValues` / `InferBlockData` are exported from `@questpie/admin/factories` (and `@questpie/admin/server`); `BlockRenderer`, `BlockRendererProps`, `BlockContent`, `BlockNode`, and `isBlockContent` from `@questpie/admin/client`.
 
 <Callout type="info" title="Import `block` from `#questpie/factories`, not `@questpie/admin/server`">
-In app code, always import `block` from `#questpie/factories`. The generated factory wraps the field proxy with your enabled modules so `f.richText()` / `f.blocks()` are available inside a block's `.fields()`; the bare `block()` from `@questpie/admin/server` only sees builtin fields.
+  In app code, always import `block` from `#questpie/factories`. The generated factory wraps the field proxy with your enabled modules so `f.richText()` / `f.blocks()` are available inside a block's `.fields()`; the bare `block()` from `@questpie/admin/server` only sees builtin fields.
 </Callout>
 
 ## Related

@@ -22,8 +22,8 @@ Use `f.json()` inside a `.fields()` callback. It takes an optional config object
 import { collection } from "#questpie/factories";
 
 export const posts = collection("posts").fields(({ f }) => ({
-  metadata: f.json(),                                  // jsonb, any JSON value
-  settings: f.json<{ theme: "light" | "dark" }>(),     // typed, schema-less
+  metadata: f.json(), // jsonb, any JSON value
+  settings: f.json<{ theme: "light" | "dark" }>(), // typed, schema-less
 }));
 ```
 
@@ -33,11 +33,11 @@ That gives `posts` a `metadata` column that accepts any JSON value, and a `setti
 
 `f.json()` takes a single optional config object.
 
-| Call | Column | Schema |
-|---|---|---|
-| `f.json()` | `jsonb` | recursive `jsonValueSchema` |
+| Call                        | Column  | Schema                      |
+| --------------------------- | ------- | --------------------------- |
+| `f.json()`                  | `jsonb` | recursive `jsonValueSchema` |
 | `f.json({ mode: "jsonb" })` | `jsonb` | recursive `jsonValueSchema` |
-| `f.json({ mode: "json" })` | `json` | recursive `jsonValueSchema` |
+| `f.json({ mode: "json" })`  | `json`  | recursive `jsonValueSchema` |
 
 The `mode` selects the underlying Postgres column type. **`jsonb` (the default) is what you want**, it is stored in a decomposed binary format, supports indexing, and is faster to query; the `json` mode stores the exact input text (preserving key order and whitespace) and is rarely needed. The derived schema is the same in both modes.
 
@@ -47,12 +47,12 @@ The `mode` selects the underlying Postgres column type. **`jsonb` (the default) 
 
 ## Chained methods
 
-`f.json()` has **no type-specific methods**, it returns a plain `Field` (no `FieldWithMethods` wrapper), because there is nothing json-specific to refine. You shape it entirely with the [shared modifiers](/docs/concepts/fields#shared-methods) every field carries. Two of them are central to working with JSON.
+`f.json()` uses the common `Field` builder. Shape it with the [shared modifiers](/docs/concepts/fields#shared-methods); the following two are especially useful for JSON values.
 
-| Modifier | Effect on a JSON field |
-|---|---|
-| `.$type<T>()` | **Type-level only**, no runtime effect, pin the read/write value type to `T`. The primary way to type a JSON field.
-| `.zod(fn)` | Replace or refine the auto-derived schema to **actually validate** that shape at runtime.
+| Modifier      | Effect on a JSON field                                                                                              |
+| ------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `.$type<T>()` | **Type-level only**, no runtime effect, pin the read/write value type to `T`. The primary way to type a JSON field. |
+| `.zod(fn)`    | Replace or refine the auto-derived schema to **actually validate** that shape at runtime.                           |
 
 The type argument on `f.json<T>()` is shorthand for `.$type<T>()`, both are type-only. For runtime safety, pair the type with `.zod()`:
 
@@ -79,13 +79,13 @@ collection("users").fields(({ f }) => ({
 
 ## Filtering, operators
 
-`json` uses the **basic operator set** (`basicOps`), equality, membership, and null checks. There are no `gt` / `lt` / `contains` / path operators; a JSON field is filtered as a whole value. The operand is typed against the JSON value (or your narrowed shape via `JsonWhereInput<T>`), not `unknown`.
+`json` uses `basicOps`: equality, membership, and null checks over the whole JSON value. The operand is typed against the JSON value or your narrowed `JsonWhereInput<T>` shape. Use `f.object()` or a custom operator set for path-oriented queries.
 
-| Operator | Operand | Matches |
-|---|---|---|
-| `eq` / `ne` | the JSON value | Whole-value equal / not equal. |
-| `in` / `notIn` | array of JSON values | Whole value is (not) in the list. |
-| `isNull` / `isNotNull` | `boolean` | Column is (not) null. Pass `true` to assert, `false` to invert. |
+| Operator               | Operand              | Matches                                                         |
+| ---------------------- | -------------------- | --------------------------------------------------------------- |
+| `eq` / `ne`            | the JSON value       | Whole-value equal / not equal.                                  |
+| `in` / `notIn`         | array of JSON values | Whole value is (not) in the list.                               |
+| `isNull` / `isNotNull` | `boolean`            | Column is (not) null. Pass `true` to assert, `false` to invert. |
 
 ```ts
 // Rows whose settings exactly match this value
@@ -99,14 +99,14 @@ const { docs: unset } = await app.collections.posts.find({
 });
 ```
 
-The operators compare the value as a whole, there is no built-in filtering *inside* the JSON (by a nested key). When you need to query individual keys, model them as real fields (`f.object()` or top-level columns) instead, or add a custom operator set with `.operators()` (see [Fields → custom operator sets](/docs/concepts/fields#custom-operator-sets)).
+The built-in operators compare the JSON value as a whole. For nested-key queries, model known keys with `f.object()` or top-level columns, or add a custom operator set with `.operators()` (see [Fields → custom operator sets](/docs/concepts/fields#custom-operator-sets)).
 
 For the full query language, combining field filters with `AND` / `OR` / `NOT`, pagination, and `orderBy`, see [Fields → filtering](/docs/concepts/fields). Relation filters and hydration are covered in [Relations](/docs/concepts/relations).
 
 ## When to use it
 
 - **`f.json()`**, free-form or open-ended data with no fixed shape: a settings/preferences blob, a captured third-party webhook payload, feature-flag bags, denormalized snapshots.
-- **`f.json<T>()` + `.zod()`**, data that *does* have a shape but is more naturally one value than separate columns (and you still want type safety + validation).
+- **`f.json<T>()` + `.zod()`**, data that _does_ have a shape but is more naturally one value than separate columns (and you still want type safety + validation).
 - **Reach for [`f.object()`](/docs/concepts/fields#structured) instead** when the nested shape is fixed and you want per-key validation and admin form fields generated automatically, `f.object()` also stores `jsonb`, but each key is its own typed, validated field. Use `f.json()` only when the data is genuinely schema-less.
 - **Need to filter by a nested key?** That's a sign the data should be structured (`f.object()` or separate fields), since the JSON operators match the value as a whole.
 
@@ -119,7 +119,7 @@ tags: f.json<string[]>(),                  // a JSON array, one jsonb column
 events: f.json<Array<{ at: string; type: string }>>(),
 ```
 
-`.array()` is a [shared modifier](/docs/concepts/fields#shared-methods) for making *any field type* repeat, it isn't needed here, since the JSON value can already be an array.
+`.array()` is a [shared modifier](/docs/concepts/fields#shared-methods) for making _any field type_ repeat, it isn't needed here, since the JSON value can already be an array.
 
 ## TypeScript
 
@@ -138,8 +138,8 @@ type Post = typeof posts.$infer.select;
 ```ts
 import type { CollectionDoc, CollectionWhere } from "#questpie/types";
 
-type Post = CollectionDoc<"posts">;          // { settings: { theme: "light" | "dark" } | null; ... }
-type PostFilter = CollectionWhere<"posts">;  // { settings?: { eq?: { theme: "light" | "dark" }; ... } }
+type Post = CollectionDoc<"posts">; // { settings: { theme: "light" | "dark" } | null; ... }
+type PostFilter = CollectionWhere<"posts">; // { settings?: { eq?: { theme: "light" | "dark" }; ... } }
 ```
 
 `.required()` makes the column non-null and the input required; without it the column is nullable and the insert field optional. The `JsonValue` type is exported from `questpie` if you need it directly. See [Fields → inferred types](/docs/concepts/fields#example--inferred-types) for how modifiers flow into the generated types.
