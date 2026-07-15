@@ -303,7 +303,7 @@ Scaffold one with `questpie add mcp-tool recalculate-stats`, which creates the f
 | `accessMode` | `"user" \| "system"` | The resolved access mode. |
 | `request` | `Request \| undefined` | The underlying HTTP request, when available. |
 
-The handler returns a `CallToolResult` (`{ content?, structuredContent?, isError? }`). If you return only `structuredContent`, the runtime synthesizes a JSON `content` block for you.
+The handler returns a `CallToolResult`. Include an MCP `content` array; add `structuredContent` when the model should also receive a machine-readable result. The public handler type requires `content`, so a custom tool must not return only `structuredContent`.
 
 Modules can also contribute tools by declaring `mcpTools` on their `ModuleDefinition`, so an installed package can ship MCP tools.
 
@@ -373,6 +373,7 @@ CRUD tools mirror your collection's columns. Use `fields: { exclude: [...] }` (o
 
 ## Related
 
+- [Connect an AI agent with MCP and OAuth](/docs/getting-started/mcp-ai-agent), a complete scaffold-to-Claude-and-VS-Code tutorial.
 - [Routes](/docs/concepts/routes), where `meta.mcp.expose` is declared to turn a route into an MCP tool; routes are public-by-default, the inverse of collections.
 - [Access control](/docs/concepts/access-control), the `.access()` rules and `session` typing that every HTTP MCP tool call runs through; the MCP policy layers on top.
 - [Collections](/docs/concepts/collections), the entities whose `list`/`get`/`create`/`update`/`delete` become MCP tools.

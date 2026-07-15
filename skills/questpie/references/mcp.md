@@ -152,7 +152,10 @@ Custom tools declare their own scope (no default mapping exists for them, so omi
 export default mcpTool("reports.generate", {
 	inputSchema: z.object({ period: z.string() }),
 	scopes: "routes:reports/generate:invoke",
-}).handler(async ({ input, ctx }) => ({ structuredContent: {} }));
+}).handler(async ({ input, ctx }) => ({
+	structuredContent: {},
+	content: [{ type: "text", text: "Report generated" }],
+}));
 ```
 
 ## Route Tools
@@ -209,6 +212,7 @@ export default mcpTool("generate-report", {
 	access: ({ session }) => !!session,
 }).handler(async ({ input, ctx }) => ({
 	structuredContent: await ctx.services.reports.generate(input),
+	content: [{ type: "text", text: "Report generated" }],
 }));
 ```
 
@@ -233,4 +237,4 @@ await startStdioServer(app);
 - HTTP callers are always `user` or `oauth`, never `system` - HTTP cannot be elevated to system mode. External access goes through OAuth (bounded by `scopes ∩ RBAC`), not system mode. Only stdio is `system`.
 - Field filtering is top-level only.
 - Raw routes and unannotated routes are not tools.
-- Custom tool results should use `structuredContent` for machine-readable output.
+- Custom tool results must include `content`; add `structuredContent` for machine-readable output.
