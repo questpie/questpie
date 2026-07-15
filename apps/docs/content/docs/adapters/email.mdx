@@ -3,14 +3,14 @@ title: Email adapter
 description: The email adapter is the delivery backend for outgoing mail, set one in config and QUESTPIE sends every template and one-off message through it. Swap SMTP, Resend, Plunk, or Console without touching a single template.
 ---
 
-The **email adapter** is the one piece of config that decides *how* your mail is delivered. QUESTPIE ships four, `ConsoleAdapter`, `SmtpAdapter`, `ResendAdapter`, `PlunkAdapter`, and you pick exactly one. Your templates and your `ctx.email.send(...)` / `ctx.email.sendTemplate(...)` calls never change when you swap providers; only the `adapter` in `runtimeConfig` does.
+The **email adapter** is the one piece of config that decides _how_ your mail is delivered. QUESTPIE ships four, `ConsoleAdapter`, `SmtpAdapter`, `ResendAdapter`, `PlunkAdapter`, and you pick exactly one. Your templates and your `ctx.email.send(...)` / `ctx.email.sendTemplate(...)` calls never change when you swap providers; only the `adapter` in `runtimeConfig` does.
 
 > **Prerequisites:** read [Emails](/docs/concepts/emails) first, it owns templates, `EmailResult`, and the `ctx.email` send service. This page owns the adapter slot: which provider delivers the mail, and how to configure each one.
 
 ## What it does
 
 - **Swap providers in one line.** Point `email.adapter` at Console, SMTP, Resend, or Plunk; nothing in your templates or send calls changes.
-- **One contract, four implementations.** Every adapter extends `MailAdapter` and implements a single method, `send(options)`. The framework's own four use that exact base class, there is no privileged internal API.
+- **One contract, four implementations.** Every built-in and custom adapter extends `MailAdapter` and implements `send(options)`.
 - **Console for local dev.** `ConsoleAdapter` logs the rendered email to your logger instead of sending it, no SMTP server, no API key.
 - **Production-ready HTTP and SMTP.** `ResendAdapter` and `PlunkAdapter` POST to their providers' HTTP APIs; `SmtpAdapter` wraps nodemailer for any SMTP server.
 - **Bring your own.** Implement `MailAdapter.send` and wire your class in, the same way the built-in adapters do.
@@ -31,10 +31,7 @@ export default runtimeConfig({
   db: { url: env.DATABASE_URL },
   email: {
     // The provider that delivers mail. Pick exactly one.
-    adapter:
-      env.NODE_ENV === "production"
-        ? new SmtpAdapter({ transport: env.SMTP_URL })
-        : new ConsoleAdapter(),
+    adapter: env.NODE_ENV === "production" ? new SmtpAdapter({ transport: env.SMTP_URL }) : new ConsoleAdapter(),
     defaults: { from: "no-reply@example.com" }, // fallback From for every message
   },
 });
@@ -56,7 +53,7 @@ abstract class MailAdapter {
 }
 ```
 
-By the time `send` is called, the mailer has already **serialized** the message: it filled `from` (from the call, then `defaults.from`, then `"noreply@example.com"`), derived plain `text` from `html` when `text` was missing, and guaranteed at least one body exists. So `from`, `text`, and `html` always arrive as present `string`s (never `undefined`), you never re-derive them. Note the nuance: `from` is always non-empty (it's defaulted), and *at least one* of `text`/`html` is non-empty, but the other may be the empty string `""`. A plain-text-only send (`text` set, `html` omitted) reaches your adapter with `html: ""`, guard for that if your provider rejects an empty HTML body.
+By the time `send` is called, the mailer has already **serialized** the message: it filled `from` (from the call, then `defaults.from`, then `"noreply@example.com"`), derived plain `text` from `html` when `text` was missing, and guaranteed at least one body exists. So `from`, `text`, and `html` always arrive as present `string`s (never `undefined`), you never re-derive them. Note the nuance: `from` is always non-empty (it's defaulted), and _at least one_ of `text`/`html` is non-empty, but the other may be the empty string `""`. A plain-text-only send (`text` set, `html` omitted) reaches your adapter with `html: ""`, guard for that if your provider rejects an empty HTML body.
 
 ```ts
 type SerializableMailOptions = {
@@ -69,11 +66,13 @@ type SerializableMailOptions = {
   html: string; // present; may be "" on a text-only send
   replyTo?: string;
   headers?: Record<string, string>;
-  attachments?: Array<{ filename: string; content: Buffer | string; contentType?: string }>;
+  attachments?: Array<{
+    filename: string;
+    content: Buffer | string;
+    contentType?: string;
+  }>;
 };
 ```
-
-
 
 The concrete adapters are **not** re-exported from the root `questpie` barrel, only the abstract `MailAdapter` base and the mailer types are (via `questpie/mailer`). Import each adapter from its own subpath: `questpie/adapters/console`, `questpie/adapters/smtp`, `questpie/adapters/resend`, `questpie/adapters/plunk`.
 
@@ -88,10 +87,10 @@ new ConsoleAdapter(); // both options optional
 new ConsoleAdapter({ logHtml: true }); // also print the HTML body
 ```
 
-| Option | Type | Default | Notes |
-|---|---|---|---|
-| `logHtml` | `boolean` | `false` | When `false`, the HTML body is replaced with a one-line hint instead of printed (HTML is verbose). |
-| `logger` | `(message: string) => void` | `console.log` | Where each line goes. |
+| Option    | Type                        | Default       | Notes                                                                                              |
+| --------- | --------------------------- | ------------- | -------------------------------------------------------------------------------------------------- |
+| `logHtml` | `boolean`                   | `false`       | When `false`, the HTML body is replaced with a one-line hint instead of printed (HTML is verbose). |
+| `logger`  | `(message: string) => void` | `console.log` | Where each line goes.                                                                              |
 
 It logs `From / To / CC / BCC / Reply-To / Subject`, the plain-text body, attachment filenames, and (only when `logHtml: true`) the HTML. It never sends.
 
@@ -115,10 +114,10 @@ new SmtpAdapter({
 new SmtpAdapter({ transport: "smtp://user:pass@smtp.example.com:587" });
 ```
 
-| Option | Type | Notes |
-|---|---|---|
-| `transport` | `SMTPTransport \| SMTPTransport.Options \| string` | Passed straight to `nodemailer.createTransport`, an options object, an `SMTPTransport` instance, or a connection-string URL. |
-| `afterSendCallback` | `(info: SentMessageInfo) => void \| Promise<void>` | Runs after each send. Handy for logging provider message IDs or preview URLs. |
+| Option              | Type                                               | Notes                                                                                                                        |
+| ------------------- | -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `transport`         | `SMTPTransport \| SMTPTransport.Options \| string` | Passed straight to `nodemailer.createTransport`, an options object, an `SMTPTransport` instance, or a connection-string URL. |
+| `afterSendCallback` | `(info: SentMessageInfo) => void \| Promise<void>` | Runs after each send. Handy for logging provider message IDs or preview URLs.                                                |
 
 `SmtpAdapter` also exposes `verify(): Promise<boolean>`, which proxies nodemailer's SMTP connection check.
 
@@ -147,14 +146,14 @@ import { resendAdapter } from "questpie/adapters/resend";
 resendAdapter({ apiKey: env.RESEND_API_KEY });
 ```
 
-| Option | Type | Default | Notes |
-|---|---|---|---|
-| `apiKey` | `string` | none *(required)* | Your Resend API key (or a key for a Resend-compatible provider). |
-| `baseUrl` | `string` | `"https://api.resend.com"` | Point at a Resend-compatible API. Trailing slashes are stripped. |
-| `userAgent` | `string` | `"questpie-resend-adapter"` | Resend requires a `User-Agent` for direct HTTP calls. |
-| `idempotencyKey` | `string \| ((options) => string \| undefined)` | none | Static or per-email. When present, sets the `Idempotency-Key` header. |
-| `fetch` | `typeof fetch` | global `fetch` | Override for tests or non-standard runtimes. |
-| `afterSendCallback` | `(response: ResendSendResponse, options) => void \| Promise<void>` | none | Runs with the parsed JSON body (e.g. the message `id`) after Resend accepts the email. |
+| Option              | Type                                                               | Default                     | Notes                                                                                  |
+| ------------------- | ------------------------------------------------------------------ | --------------------------- | -------------------------------------------------------------------------------------- |
+| `apiKey`            | `string`                                                           | none _(required)_           | Your Resend API key (or a key for a Resend-compatible provider).                       |
+| `baseUrl`           | `string`                                                           | `"https://api.resend.com"`  | Point at a Resend-compatible API. Trailing slashes are stripped.                       |
+| `userAgent`         | `string`                                                           | `"questpie-resend-adapter"` | Resend requires a `User-Agent` for direct HTTP calls.                                  |
+| `idempotencyKey`    | `string \| ((options) => string \| undefined)`                     | none                        | Static or per-email. When present, sets the `Idempotency-Key` header.                  |
+| `fetch`             | `typeof fetch`                                                     | global `fetch`              | Override for tests or non-standard runtimes.                                           |
+| `afterSendCallback` | `(response: ResendSendResponse, options) => void \| Promise<void>` | none                        | Runs with the parsed JSON body (e.g. the message `id`) after Resend accepts the email. |
 
 Buffer attachments are base64-encoded automatically. On a non-2xx response it throws `Resend API error (<status> <statusText>): <body>`.
 
@@ -168,30 +167,30 @@ import { plunkAdapter } from "questpie/adapters/plunk";
 plunkAdapter({ apiKey: env.PLUNK_SECRET_KEY });
 ```
 
-| Option | Type | Default | Notes |
-|---|---|---|---|
-| `apiKey` | `string` | none *(required)* | A Plunk **secret** key, public keys only track events. |
-| `baseUrl` | `string` | `"https://next-api.useplunk.com"` | Override for self-hosted Plunk. |
-| `fromName` | `string` | none | Display name, applied only when `from` is a bare email (no `"Name <email>"` form). |
-| `subscribed` | `boolean` | none | Subscribe recipients to marketing in Plunk. Leave unset for transactional mail. |
-| `fetch` | `typeof fetch` | global `fetch` | Override for tests or non-standard runtimes. |
-| `afterSendCallback` | `(response: PlunkSendResponse, options) => void \| Promise<void>` | none | Runs with the parsed body after Plunk accepts the email. |
+| Option              | Type                                                              | Default                           | Notes                                                                              |
+| ------------------- | ----------------------------------------------------------------- | --------------------------------- | ---------------------------------------------------------------------------------- |
+| `apiKey`            | `string`                                                          | none _(required)_                 | A Plunk **secret** key, public keys only track events.                             |
+| `baseUrl`           | `string`                                                          | `"https://next-api.useplunk.com"` | Override for self-hosted Plunk.                                                    |
+| `fromName`          | `string`                                                          | none                              | Display name, applied only when `from` is a bare email (no `"Name <email>"` form). |
+| `subscribed`        | `boolean`                                                         | none                              | Subscribe recipients to marketing in Plunk. Leave unset for transactional mail.    |
+| `fetch`             | `typeof fetch`                                                    | global `fetch`                    | Override for tests or non-standard runtimes.                                       |
+| `afterSendCallback` | `(response: PlunkSendResponse, options) => void \| Promise<void>` | none                              | Runs with the parsed body after Plunk accepts the email.                           |
 
 <Callout type="warn" title="Plunk rejects CC and BCC">
-`PlunkAdapter` throws if a message sets `cc` or `bcc`, Plunk's transactional API doesn't document those fields. It also treats a `success: false` body as an error even on an HTTP 2xx response. If you need CC/BCC, use SMTP or Resend.
+  `PlunkAdapter` throws if a message sets `cc` or `bcc`, Plunk's transactional API doesn't document those fields. It also treats a `success: false` body as an error even on an HTTP 2xx response. If you need CC/BCC, use SMTP or Resend.
 </Callout>
 
 ## Choosing an adapter
 
 One recommended path, not a menu:
 
-| Environment | Use | Why |
-|---|---|---|
-| Local development | `ConsoleAdapter` | No external service; the rendered email lands in your logs. |
-| Production (generic SMTP) | `SmtpAdapter` | Works with any SMTP provider; full message support (CC/BCC/attachments). |
-| Production (Resend) | `resendAdapter()` | First-class HTTP API with idempotency keys. |
-| Production (Plunk) | `plunkAdapter()` | Plunk's transactional API (no CC/BCC). |
-| Automated tests with a real inbox | `createEtherealSmtpAdapter()` | Throwaway account + a preview URL per send. |
+| Environment                       | Use                           | Why                                                                      |
+| --------------------------------- | ----------------------------- | ------------------------------------------------------------------------ |
+| Local development                 | `ConsoleAdapter`              | No external service; the rendered email lands in your logs.              |
+| Production (generic SMTP)         | `SmtpAdapter`                 | Works with any SMTP provider; full message support (CC/BCC/attachments). |
+| Production (Resend)               | `resendAdapter()`             | First-class HTTP API with idempotency keys.                              |
+| Production (Plunk)                | `plunkAdapter()`              | Plunk's transactional API (no CC/BCC).                                   |
+| Automated tests with a real inbox | `createEtherealSmtpAdapter()` | Throwaway account + a preview URL per send.                              |
 
 A common setup branches on `NODE_ENV` (see the Quick start) so dev logs to the console and production sends for real.
 
@@ -200,12 +199,12 @@ A common setup branches on `NODE_ENV` (see the Quick start) so dev logs to the c
 - **The adapter is required even in dev**, the core email service asserts it at app build. See the Quick-start callout.
 - **`defaults.from` is the only fallback sender.** If a send call omits `from` and you set no `defaults.from`, mail goes out as `noreply@example.com`. Set `defaults.from` in config.
 - **`adapter` may be a `Promise`.** `MailerConfig.adapter` accepts `MailAdapter | Promise<MailAdapter>`; the promise is awaited lazily on the first send (how `createEtherealSmtpAdapter()` plugs in).
-- **HTTP adapters surface provider errors as thrown `Error`s**, wrap sends you can't afford to lose, or dispatch them from a [job](/docs/concepts/jobs) so failures retry. Resend throws on non-2xx; Plunk throws on non-2xx *or* `success: false`.
+- **HTTP adapters surface provider errors as thrown `Error`s**, wrap sends you can't afford to lose, or dispatch them from a [job](/docs/concepts/jobs) so failures retry. Resend throws on non-2xx; Plunk throws on non-2xx _or_ `success: false`.
 - **Plunk drops CC/BCC**, it throws rather than silently dropping them. See the Plunk callout.
 
 ## Custom adapter
 
-The adapter is an extension point: any class extending `MailAdapter` works, and the framework's own four use that exact base class, there's no internal-only API. Implement the single `send(options: SerializableMailOptions)` method. Because the mailer serializes before handing off, `from`, `text`, and `html` are already present `string`s, so you don't re-derive plain text or default the sender. Just remember that one of `text`/`html` may be `""` (a text-only send forwards `html: ""`), if your provider rejects an empty field, omit it instead of passing the empty string:
+Any class extending `MailAdapter` can provide delivery. Implement `send(options: SerializableMailOptions)`. The mailer passes `from`, `text`, and `html` as strings; one body variant can be empty, so omit empty fields when a provider rejects them:
 
 ```ts title="src/questpie/server/lib/my-mail-adapter.ts"
 import { MailAdapter } from "questpie/mailer";

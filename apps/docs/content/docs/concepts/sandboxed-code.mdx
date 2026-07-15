@@ -1,0 +1,74 @@
+---
+title: Sandboxed code
+description: Understand trusted and sandboxed execution, capability manifests, brokered application access, resource limits, and the executor lifecycle.
+---
+
+The executor runs dynamic code through an explicit isolation mode. Trusted execution is for application-owned code. Sandboxed execution is for user-authored, plugin-authored, or AI-authored code that needs a capability boundary.
+
+## Execution modes
+
+| Mode        | Boundary                       | Use case                               |
+| ----------- | ------------------------------ | -------------------------------------- |
+| `trusted`   | In-process application runtime | Code shipped and reviewed with the app |
+| `sandboxed` | Isolated executor adapter      | Dynamic or untrusted guest code        |
+
+Application code calls the same `ctx.executor.run()` service in both modes. Runtime configuration selects the adapter that enforces sandboxed runs.
+
+## Run guest code
+
+Guest source exports one function that receives serializable input:
+
+```ts
+const result = await ctx.executor.run({
+	isolation: "sandboxed",
+	source: `export default async function (input) {
+    const response = await fetch(input.url);
+    return response.json();
+  }`,
+	input: { url: "https://api.example.com/data" },
+	capabilities: {
+		net: ["api.example.com"],
+		import: [],
+		timeoutMs: 5_000,
+		memoryMb: 128,
+	},
+});
+```
+
+The result contains success state, output, captured logs, and runtime duration.
+
+## Capability manifest
+
+Every run declares its network hosts, import hosts, timeout, and memory budget. The adapter validates and clamps the manifest before starting the guest.
+
+Start with an empty capability set and add only the resources required by the task. Treat capability construction as an authorization decision, not as request data passthrough.
+
+## Brokered application access
+
+`appBindings` exposes a scoped QUESTPIE surface through a broker. The guest calls `questpie.collections`, files, or services through the binding proxy.
+
+The executor mints a per-run token and keeps it outside guest memory. The broker validates the token and capability scope on every application call.
+
+## Lifecycle
+
+A sandboxed run follows this path:
+
+1. The executor validates source, input, and capabilities.
+2. It mints the broker scope for the run.
+3. The sandbox adapter starts an isolated guest process.
+4. The guest returns serializable output and bounded logs.
+5. The adapter terminates the process and releases the run token.
+
+Each run starts with a clean environment. Time and memory limits bound resource consumption independently of application code.
+
+## Deploy the boundary
+
+The core package defines `ExecutorAdapter`. `@questpie/sandbox` provides the Deno supervisor and HTTP adapter that enforce process, filesystem, environment, network, import, and resource permissions.
+
+See [Sandbox adapter](/docs/adapters/sandbox) for supervisor deployment, security layers, environment variables, and documented platform limits.
+
+## Related
+
+- [Services](/docs/concepts/services), access to `ctx.executor`.
+- [Sandbox adapter](/docs/adapters/sandbox), Deno isolation and deployment.
+- [AI integration](/docs/integrations/ai), agent execution and its separate host sandbox model.

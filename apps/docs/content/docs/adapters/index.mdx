@@ -9,24 +9,23 @@ This is the QUESTPIE principle in action: **core, modules, and your own code rea
 
 ## Adapter kinds
 
-QUESTPIE ships six adapter slots. Each page below covers the whole vertical: which backend to choose, how to configure it, and the contract to implement your own.
+QUESTPIE ships seven infrastructure adapter slots. Learn the feature contract on its concept page, then use the adapter page to choose and configure a backend.
 
-| Adapter | What it does | Default |
-|---|---|---|
-| **[Queue](/docs/adapters/queue)** | Where background [jobs](/docs/concepts/jobs) run, store, schedule, and hand work to a worker. | pg-boss (Postgres) |
-| **[Search](/docs/adapters/search)** | Full-text and semantic search behind [`.searchable()`](/docs/concepts/collections#searchable) and `app.search`. | Postgres (FTS + trigram) |
-| **[Realtime](/docs/adapters/realtime)** | The server-side transport that fans out live-query changes across every app instance. | poll-based |
-| **[Storage](/docs/adapters/storage)** | Where uploaded file bytes physically live, plus signed URLs and visibility. | local filesystem |
-| **[Email](/docs/adapters/email)** | The delivery backend for every outgoing [email](/docs/concepts/emails) template and one-off message. | console (dev) |
-| **[KV](/docs/adapters/kv)** | A typed key-value store on `ctx.kv` with TTL and tag-based invalidation. | in-memory |
+| Feature           | Concept                                         | Adapter                                     | Default                  |
+| ----------------- | ----------------------------------------------- | ------------------------------------------- | ------------------------ |
+| Background work   | [Jobs](/docs/concepts/jobs)                     | [Queue](/docs/adapters/queue)               | pg-boss (Postgres)       |
+| Search            | [Search](/docs/concepts/search)                 | [Search adapter](/docs/adapters/search)     | Postgres (FTS + trigram) |
+| Realtime          | [Realtime](/docs/concepts/realtime)             | [Realtime adapter](/docs/adapters/realtime) | poll-based               |
+| File storage      | [Storage](/docs/concepts/storage)               | [Storage adapter](/docs/adapters/storage)   | local filesystem         |
+| Email             | [Emails](/docs/concepts/emails)                 | [Email adapter](/docs/adapters/email)       | console (dev)            |
+| Key-value storage | [KV](/docs/concepts/kv)                         | [KV adapter](/docs/adapters/kv)             | in-memory                |
+| Dynamic code      | [Sandboxed code](/docs/concepts/sandboxed-code) | [Sandbox adapter](/docs/adapters/sandbox)   | trusted only             |
 
 ## How they wire in
 
 You select an adapter once, in `questpie.config.ts` (or the `.build({ ... })` call), and the rest of your code is untouched. See [Configuration](/docs/concepts/configuration) for where each slot lives and how the runtime resolves it.
 
-<Callout type="info">
-Each adapter declares its own capabilities, so the runtime can fail fast or branch, for example, a queue adapter advertises whether it supports long-running workers or push delivery. The per-adapter pages document the relevant flags.
-</Callout>
+<Callout type="info">Each adapter declares its own capabilities, so the runtime can fail fast or branch, for example, a queue adapter advertises whether it supports long-running workers or push delivery. The per-adapter pages document the relevant flags.</Callout>
 
 ## Custom adapters
 
@@ -36,4 +35,4 @@ Every adapter is defined by a public contract, `QueueAdapter`, `SearchAdapter`, 
 
 - [Configuration](/docs/concepts/configuration), where every adapter slot lives and how it's wired.
 - [Building a plugin](/docs/extend/build-a-plugin), implement any adapter contract for a custom backend.
-- [Jobs](/docs/concepts/jobs) · [Search](/docs/adapters/search) · [Emails](/docs/concepts/emails), the features each adapter powers.
+- [Jobs](/docs/concepts/jobs) · [Search](/docs/concepts/search) · [Realtime](/docs/concepts/realtime) · [Storage](/docs/concepts/storage) · [Emails](/docs/concepts/emails) · [KV](/docs/concepts/kv) · [Sandboxed code](/docs/concepts/sandboxed-code), the concepts each adapter implements.

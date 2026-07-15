@@ -19,82 +19,81 @@ export default [adminModule] as const;
 import { collection } from "#questpie/factories";
 
 export const posts = collection("posts")
-	.fields(({ f }) => ({
-		title: f.text(255).label("Title").required(),
-		slug: f.text(120).label("Slug").required(),
-		status: f
-			.select([
-				{ value: "draft", label: "Draft" },
-				{ value: "published", label: "Published" },
-			])
-			.label("Status")
-			.default("draft"),
-		excerpt: f.textarea().label("Excerpt"),
-		body: f.richText().label("Body"),
-		cover: f.upload({ to: "assets" }).label("Cover image"),
-	}))
-	.admin(({ c }) => ({
-		label: "Posts",
-		description: "Editorial content",
-		icon: c.icon("ph:article"),
-		group: "content",
-		order: 10,
-	}))
-	.list(({ v, f }) =>
-		v.collectionTable({
-			columns: [f.title, f.status, "updatedAt"],
-			defaultSort: { field: "updatedAt", direction: "desc" },
-			searchable: [f.title],
-			filterable: [f.status],
-			realtime: true,
-		}),
-	)
-	.form(({ v, f }) =>
-		v.collectionForm({
-			sidebar: {
-				position: "right",
-				fields: [f.status, f.slug, f.cover],
-			},
-			fields: [
-				{
-					type: "section",
-					label: "Content",
-					fields: [f.title, f.excerpt, f.body],
-				},
-			],
-		}),
-	)
-	.preview({
-		enabled: true,
-		position: "right",
-		url: ({ record, locale }) =>
-			`/${locale ?? "en"}/blog/${String(record.slug)}`,
-	})
-	.actions(({ a, c }) => ({
-		builtin: [a.create(), a.save(), a.delete(), a.duplicate()],
-		custom: [
-			a.action({
-				id: "open-preview",
-				label: "Open preview",
-				icon: c.icon("ph:arrow-square-out"),
-				handler: ({ itemId }) => ({
-					type: "redirect",
-					url: `/preview/posts/${itemId}`,
-					external: true,
-				}),
-			}),
-		],
-	}));
+  .fields(({ f }) => ({
+    title: f.text(255).label("Title").required(),
+    slug: f.text(120).label("Slug").required(),
+    status: f
+      .select([
+        { value: "draft", label: "Draft" },
+        { value: "published", label: "Published" },
+      ])
+      .label("Status")
+      .default("draft"),
+    excerpt: f.textarea().label("Excerpt"),
+    body: f.richText().label("Body"),
+    cover: f.upload({ to: "assets" }).label("Cover image"),
+  }))
+  .admin(({ c }) => ({
+    label: "Posts",
+    description: "Editorial content",
+    icon: c.icon("ph:article"),
+    group: "content",
+    order: 10,
+  }))
+  .list(({ v, f }) =>
+    v.collectionTable({
+      columns: [f.title, f.status, "updatedAt"],
+      defaultSort: { field: "updatedAt", direction: "desc" },
+      searchable: [f.title],
+      filterable: [f.status],
+      realtime: true,
+    }),
+  )
+  .form(({ v, f }) =>
+    v.collectionForm({
+      sidebar: {
+        position: "right",
+        fields: [f.status, f.slug, f.cover],
+      },
+      fields: [
+        {
+          type: "section",
+          label: "Content",
+          fields: [f.title, f.excerpt, f.body],
+        },
+      ],
+    }),
+  )
+  .preview({
+    enabled: true,
+    position: "right",
+    url: ({ record, locale }) => `/${locale ?? "en"}/blog/${String(record.slug)}`,
+  })
+  .actions(({ a, c }) => ({
+    builtin: [a.create(), a.save(), a.delete(), a.duplicate()],
+    custom: [
+      a.action({
+        id: "open-preview",
+        label: "Open preview",
+        icon: c.icon("ph:arrow-square-out"),
+        handler: ({ itemId }) => ({
+          type: "redirect",
+          url: `/preview/posts/${itemId}`,
+          external: true,
+        }),
+      }),
+    ],
+  }));
 ```
 
 ## Collection methods
 
-| Method | Purpose |
-|---|---|
-| `.admin(config)` | Label, description, icon, sidebar group, sort order, visibility, and audit participation. |
-| `.list(({ v, f, a, c }) => ...)` | List view choice, columns, sorting, filters, search, grouping, realtime, and list-level actions. |
-| `.form(({ v, f }) => ...)` | Create and edit form layout, sections, tabs, sidebar fields, and form view choice. |
-| `.preview(config)` | Live preview URL builder, position, and default panel size. The URL function runs on the server. |
+| Method                           | Purpose                                                                                              |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `.admin(config)`                 | Label, description, icon, sidebar group, sort order, visibility, and audit participation.            |
+| `.list(({ v, f, a, c }) => ...)` | List view choice, columns, sorting, filters, search, grouping, realtime, and list-level actions.     |
+| `.form(({ v, f }) => ...)`       | Create and edit form layout, sections, tabs, sidebar fields, and form view choice.                   |
+| `.preview(config)`               | Live preview URL builder, position, and default panel size. The URL function runs on the server.     |
 | `.actions(({ a, c, f }) => ...)` | Built-in actions and custom row, single-record, bulk, or header actions. Handlers run on the server. |
 
 `f` is a field-reference proxy, not a string you hand-write. Use `f.title`, `f.status`, and other registered field keys so codegen can keep the view config aligned with the collection schema.
@@ -107,34 +106,34 @@ export const posts = collection("posts")
 
 ## Globals
 
-Globals are singleton documents. They support `.admin()` and `.form()` only. There is no list page, row action, bulk action, or per-record preview for a global.
+Globals are singleton documents. Configure their admin metadata with `.admin()` and their singleton edit layout with `.form()`.
 
 ```ts title="src/questpie/server/globals/site-settings.ts"
 import { global } from "#questpie/factories";
 
 export const siteSettings = global("siteSettings")
-	.fields(({ f }) => ({
-		siteName: f.text(120).label("Site name").required(),
-		homepageTitle: f.text(180).label("Homepage title"),
-		defaultSocialImage: f.upload({ to: "assets" }).label("Default social image"),
-	}))
-	.admin(({ c }) => ({
-		label: "Site settings",
-		icon: c.icon("ph:gear-six"),
-		group: "settings",
-		order: 1,
-	}))
-	.form(({ v, f }) =>
-		v.globalForm({
-			fields: [
-				{
-					type: "section",
-					label: "General",
-					fields: [f.siteName, f.homepageTitle, f.defaultSocialImage],
-				},
-			],
-		}),
-	);
+  .fields(({ f }) => ({
+    siteName: f.text(120).label("Site name").required(),
+    homepageTitle: f.text(180).label("Homepage title"),
+    defaultSocialImage: f.upload({ to: "assets" }).label("Default social image"),
+  }))
+  .admin(({ c }) => ({
+    label: "Site settings",
+    icon: c.icon("ph:gear-six"),
+    group: "settings",
+    order: 1,
+  }))
+  .form(({ v, f }) =>
+    v.globalForm({
+      fields: [
+        {
+          type: "section",
+          label: "General",
+          fields: [f.siteName, f.homepageTitle, f.defaultSocialImage],
+        },
+      ],
+    }),
+  );
 ```
 
 ## Access and visibility
@@ -149,14 +148,14 @@ When `auditModule` is installed, collections and globals participate in audit lo
 
 ```ts
 export const imports = collection("imports")
-	.fields(({ f }) => ({
-		name: f.text(120).required(),
-		payload: f.json(),
-	}))
-	.admin({
-		label: "Imports",
-		audit: false,
-	});
+  .fields(({ f }) => ({
+    name: f.text(120).required(),
+    payload: f.json(),
+  }))
+  .admin({
+    label: "Imports",
+    audit: false,
+  });
 ```
 
 Use this for high-volume technical records where recording every mutation would add noise.

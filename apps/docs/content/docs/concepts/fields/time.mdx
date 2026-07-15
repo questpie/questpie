@@ -24,7 +24,7 @@ import { collection } from "#questpie/factories";
 
 export const businesses = collection("businesses").fields(({ f }) => ({
   name: f.text().required(),
-  opensAt: f.time().required(),  // time column, NOT NULL, "HH:MM:SS"
+  opensAt: f.time().required(), // time column, NOT NULL, "HH:MM:SS"
   closesAt: f.time().required(),
 }));
 ```
@@ -33,9 +33,9 @@ That gives `businesses` two `time` columns, required on insert, validated agains
 
 ```ts
 await app.collections.businesses.create({
-	name: "Cafe",
-	opensAt: "08:00:00",
-	closesAt: "17:30:00",
+  name: "Cafe",
+  opensAt: "08:00:00",
+  closesAt: "17:30:00",
 });
 ```
 
@@ -43,10 +43,10 @@ await app.collections.businesses.create({
 
 `f.time(config?)` takes one optional config object.
 
-| Option | Type | Default | Effect |
-|---|---|---|---|
-| `precision` | `0 \| 1 \| 2 \| 3 \| 4 \| 5 \| 6` | `0` | Fractional-second precision of the `time` column. `0` = whole seconds; `3` = milliseconds. |
-| `withSeconds` | `boolean` | `true` | When `true`, the schema requires `HH:MM:SS` (with optional `.ms`). When `false`, it requires `HH:MM`. |
+| Option        | Type                              | Default | Effect                                                                                                |
+| ------------- | --------------------------------- | ------- | ----------------------------------------------------------------------------------------------------- |
+| `precision`   | `0 \| 1 \| 2 \| 3 \| 4 \| 5 \| 6` | `0`     | Fractional-second precision of the `time` column. `0` = whole seconds; `3` = milliseconds.            |
+| `withSeconds` | `boolean`                         | `true`  | When `true`, the schema requires `HH:MM:SS` (with optional `.ms`). When `false`, it requires `HH:MM`. |
 
 ```ts
 startTime: f.time(),                         // time(0), validates "HH:MM:SS"
@@ -61,7 +61,7 @@ The resulting field data is always a `string`. The derived Zod schema is a `z.st
 </Callout>
 
 <Callout type="warn" title="The value is a STRING, not a Date">
-A time field's data is an `"HH:MM:SS"` **string**, there is no date or timezone attached. Don't pass a `Date`; pass the formatted string (`"09:30:00"`). This differs from [`f.datetime()`](/docs/concepts/fields/datetime), whose value is a real `Date`.
+  A time field stores an `"HH:MM:SS"` string representing time of day. Pass a formatted string such as `"09:30:00"`. Use [`f.datetime()`](/docs/concepts/fields/datetime) when the value needs a calendar date or instant.
 </Callout>
 
 ## Chained methods
@@ -71,26 +71,26 @@ A time field's data is an `"HH:MM:SS"` **string**, there is no date or timezone 
 ```ts
 collection("schedules").fields(({ f }) => ({
   startTime: f.time().required().label("Start"),
-  endTime:   f.time().required().label("End"),
-  reminders: f.time().array(),                  // string[] stored as jsonb
+  endTime: f.time().required().label("End"),
+  reminders: f.time().array(), // string[] stored as jsonb
 }));
 ```
 
 <Callout type="info" title="No `autoNow()` on time fields">
-`.autoNow()` and `.autoNowUpdate()` are [`f.datetime()`](/docs/concepts/fields/datetime) methods (they set the column to the current `Date`). They do **not** exist on `f.time()`. For a literal default time use the shared `.default("09:00:00")` modifier.
+  `.autoNow()` and `.autoNowUpdate()` are [`f.datetime()`](/docs/concepts/fields/datetime) methods (they set the column to the current `Date`). They do **not** exist on `f.time()`. For a literal default time use the shared `.default("09:00:00")` modifier.
 </Callout>
 
 ## Filtering, operators
 
 `time` uses the **date operator set** (`dateOps`), the same set as [`f.datetime()`](/docs/concepts/fields/datetime). Every time field is filterable with these in a `where` clause. The operand is typed `DateInput` (`Date | string`), pass the time string, e.g. `"12:00:00"`.
 
-| Operator | Operand | Matches |
-|---|---|---|
-| `eq` / `ne` | `Date \| string` | Exact equal / not equal. |
-| `gt` / `gte` | `Date \| string` | After / at-or-after the given time. |
-| `lt` / `lte` | `Date \| string` | Before / at-or-before the given time. |
-| `in` / `notIn` | `(Date \| string)[]` | Value is (not) in the list. |
-| `isNull` / `isNotNull` | `boolean` | Column is (not) null. |
+| Operator               | Operand              | Matches                               |
+| ---------------------- | -------------------- | ------------------------------------- |
+| `eq` / `ne`            | `Date \| string`     | Exact equal / not equal.              |
+| `gt` / `gte`           | `Date \| string`     | After / at-or-after the given time.   |
+| `lt` / `lte`           | `Date \| string`     | Before / at-or-before the given time. |
+| `in` / `notIn`         | `(Date \| string)[]` | Value is (not) in the list.           |
+| `isNull` / `isNotNull` | `boolean`            | Column is (not) null.                 |
 
 ```ts
 // Businesses open at or before noon:
@@ -130,8 +130,8 @@ type Business = typeof businesses.$infer.select;
 ```ts
 import type { CollectionDoc, CollectionWhere } from "#questpie/types";
 
-type Business = CollectionDoc<"businesses">;          // { opensAt: string; ... }
-type BusinessFilter = CollectionWhere<"businesses">;  // { opensAt?: { gt?: Date | string; ... } }
+type Business = CollectionDoc<"businesses">; // { opensAt: string; ... }
+type BusinessFilter = CollectionWhere<"businesses">; // { opensAt?: { gt?: Date | string; ... } }
 ```
 
 `.required()` makes the field non-null and required on insert; without it the column is nullable and the insert field optional. `.default("09:00:00")` makes the input optional and is type-checked against `string`. See [Fields → inferred types](/docs/concepts/fields#example--inferred-types) for how modifiers flow into the generated types.

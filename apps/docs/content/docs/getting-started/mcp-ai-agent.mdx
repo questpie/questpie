@@ -59,11 +59,7 @@ bun run db:push
 ```
 
 <Callout type="warn" title="db:push is local development only">
-	`bun run db:push` calls `questpie push`. Never run it against production, in a
-	deployment job, or in an init container. `--force` does not make it
-	production-safe. For production, generate a migration with `bun run
-	migrate:create`, review and commit it, then apply it with `bun run migrate`
-	during deployment.
+  `bun run db:push` calls `questpie push`. Never run it against production, in a deployment job, or in an init container. `--force` does not make it production-safe. For production, generate a migration with `bun run migrate:create`, review and commit it, then apply it with `bun run migrate` during deployment.
 </Callout>
 
 Start the app:
@@ -82,14 +78,14 @@ HTTP MCP is read-only by default. Add `config/mcp.ts` to allow authenticated age
 import { mcpConfig } from "@questpie/mcp";
 
 export default mcpConfig({
-	crud: {
-		collections: {
-			posts: { read: true, write: true, delete: false },
-		},
-		globals: {
-			siteSettings: { read: true, write: false },
-		},
-	},
+  crud: {
+    collections: {
+      posts: { read: true, write: true, delete: false },
+    },
+    globals: {
+      siteSettings: { read: true, write: false },
+    },
+  },
 });
 ```
 
@@ -114,19 +110,19 @@ import { mcpTool } from "@questpie/mcp";
 import { z } from "zod";
 
 export default mcpTool("posts.countPublished", {
-	description: "Count published posts.",
-	inputSchema: z.object({}),
-	outputSchema: z.object({ count: z.number() }),
-	annotations: { readOnlyHint: true },
+  description: "Count published posts.",
+  inputSchema: z.object({}),
+  outputSchema: z.object({ count: z.number() }),
+  annotations: { readOnlyHint: true },
 }).handler(async ({ ctx }) => {
-	const count = await ctx.collections.posts.count({
-		where: { published: true },
-	});
+  const count = await ctx.collections.posts.count({
+    where: { published: true },
+  });
 
-	return {
-		structuredContent: { count },
-		content: [{ type: "text", text: `${count} published posts` }],
-	};
+  return {
+    structuredContent: { count },
+    content: [{ type: "text", text: `${count} published posts` }],
+  };
 });
 ```
 
@@ -190,9 +186,7 @@ bun run migrate
 ```
 
 <Callout type="warn" title="Never replace migrate with push">
-	Production uses `questpie migrate`, not `questpie push`. Do not put `push`,
-	`db:push`, or `push --force` in a container command, init container, CI deploy
-	step, or production runbook.
+  Production uses `questpie migrate`, not `questpie push`. Do not put `push`, `db:push`, or `push --force` in a container command, init container, CI deploy step, or production runbook.
 </Callout>
 
 Before connecting a client, confirm that `/api/mcp`, both root `/.well-known/*` documents, `/api/auth/oauth2/register`, `/admin/login`, and `/admin/oauth/consent` all route to the same deployment.
@@ -220,16 +214,16 @@ Add a workspace MCP configuration:
 
 ```json title=".vscode/mcp.json"
 {
-	"servers": {
-		"questpie": {
-			"type": "http",
-			"url": "https://cms.example.com/api/mcp"
-		}
-	}
+  "servers": {
+    "questpie": {
+      "type": "http",
+      "url": "https://cms.example.com/api/mcp"
+    }
+  }
 }
 ```
 
-There is intentionally no static token and no `oauth.clientId`: VS Code starts with DCR when the server advertises it. See the official [VS Code MCP developer guide](https://code.visualstudio.com/api/extension-guides/ai/mcp) and [MCP server configuration guide](https://code.visualstudio.com/docs/agent-customization/mcp-servers).
+VS Code discovers the server, registers through DCR, then completes browser login and consent. See the official [VS Code MCP developer guide](https://code.visualstudio.com/api/extension-guides/ai/mcp) and [MCP server configuration guide](https://code.visualstudio.com/docs/agent-customization/mcp-servers).
 
 Open the Command Palette and run **MCP: List Servers**. Start `questpie`, confirm that you trust the server, then complete the browser login and consent flow. VS Code lists the discovered tools in Chat's tool picker. If you need to discard a stale DCR registration, run **Authentication: Remove Dynamic Authentication Providers** and reconnect.
 

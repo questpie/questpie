@@ -3,16 +3,16 @@ title: Sandbox adapter
 description: Run untrusted or dynamically-authored code behind a real resource-and-permission boundary, ctx.executor.run() executes guest code in a fresh Deno subprocess with a memory cap, denied filesystem/env, scoped net/import allowlists, and SSRF egress validation.
 ---
 
-The **executor** is the QUESTPIE primitive for running code you did not write, user plugins, AI-authored scripts, knowledge mini-apps, under a default-deny capability model. You call `ctx.executor.run({ source, capabilities, ... })`; the **sandbox adapter** (`@questpie/sandbox`) is the backend that actually enforces the boundary. It is a genuine *resource + permission* boundary, not just a `try/catch`: every run spawns a fresh `deno run` subprocess with a real V8 memory cap, filesystem/env/run/ffi denied, scoped `net`/`import` allowlists, and SSRF-aware egress validation. The main app image never contains Deno, it speaks a small JSON-over-HTTP contract to a standalone supervisor.
+The **sandbox adapter** enforces the isolated mode described in [Sandboxed code](/docs/concepts/sandboxed-code). `@questpie/sandbox` runs each guest in a fresh Deno subprocess with bounded memory, restricted permissions, scoped network and import allowlists, and validated egress.
 
 <Callout type="info" title="Prerequisites">
-This page covers the sandbox **adapter** and its Deno supervisor. The `ctx.executor.run()` API, isolation modes, and capability model are the primitive it powers, available on the app context wherever you write [business logic](/docs/concepts/services). `@questpie/sandbox` is unrelated to the local-host sandbox inside [`@questpie/ai`](/docs/integrations/ai), that one runs a coding agent on the host, this one isolates arbitrary guest code.
+  Start with [Sandboxed code](/docs/concepts/sandboxed-code) for execution modes, capabilities, brokered access, and lifecycle. This page covers the Deno supervisor, deployment, security layers, and platform limits. [`@questpie/ai`](/docs/integrations/ai) has a separate host execution model.
 </Callout>
 
 ## What it does
 
 - **Isolate untrusted code with a real boundary.** Each `ctx.executor.run()` spawns a fresh Deno subprocess with `--v8-flags=--max-old-space-size=<memoryMb>` (an enforced memory cap), `--allow-net=<hosts>` / `--allow-import=<hosts>` (independent allowlists), read scoped to the guest entry file only, and `--deny` on everything else. The supervisor runs the guest with `clearEnv: true`, so its own environment never leaks.
-- **Reject SSRF at the manifest.** Every `net` and `import` host is validated, in the adapter *and* the server, before a socket is opened: a host that is (or DNS-resolves to) private, loopback, link-local, CGNAT, or the `169.254.169.254` cloud-metadata address is rejected, with DNS failing closed.
+- **Reject SSRF at the manifest.** Every `net` and `import` host is validated, in the adapter _and_ the server, before a socket is opened: a host that is (or DNS-resolves to) private, loopback, link-local, CGNAT, or the `169.254.169.254` cloud-metadata address is rejected, with DNS failing closed.
 - **Harden the guest before it runs.** `globalThis.Worker` is nulled (orphan-CPU DoS), `SharedArrayBuffer`/`Atomics` are deleted (Spectre timers), `console.*` is captured into a capped log buffer, and the guest must `export default` a `function(input)`.
 - **Broker capabilities, never hand them out.** When you pass `appBindings`, the guest reaches your app's collections/files/services through a `globalThis.questpie` proxy whose calls are relayed server-to-server to a broker URL carrying a per-run token, the token never enters the guest process.
 
@@ -31,8 +31,7 @@ export default runtimeConfig({
       url: process.env.SANDBOX_URL ?? "http://127.0.0.1:8787",
     }),
     // Where the guest's brokered capability calls are relayed (server-to-server)
-    brokerUrl:
-      process.env.SANDBOX_BROKER_URL ?? "http://127.0.0.1:3000/api/sandbox/rpc",
+    brokerUrl: process.env.SANDBOX_BROKER_URL ?? "http://127.0.0.1:3000/api/sandbox/rpc",
   },
 });
 ```
@@ -82,7 +81,7 @@ const result = await executor.run({
   isolation: "sandboxed",
   capabilities,
   appBindings: target, // capability-scoped surface
-  brokerUrl,           // from config
+  brokerUrl, // from config
 });
 // inside the guest:
 //   const posts = await questpie.collections.posts.find({ limit: 10 });
@@ -91,13 +90,14 @@ const result = await executor.run({
 
 ## Security model
 
-- **Process-per-request, not a warm Worker.** A Worker is a permission boundary but *not* a resource boundary, `memoryMb` is unenforceable in-process and `worker.terminate()` doesn't reap grandchild Workers. A fresh subprocess gives a real V8 heap cap and clean teardown (SIGTERM → SIGKILL after a 250ms grace).
+- **Process-per-request, not a warm Worker.** A Worker is a permission boundary but _not_ a resource boundary, `memoryMb` is unenforceable in-process and `worker.terminate()` doesn't reap grandchild Workers. A fresh subprocess gives a real V8 heap cap and clean teardown (SIGTERM → SIGKILL after a 250ms grace).
 - **`net` and `import` are independent axes, and `import` fails open.** Omitting `--allow-import` does **not** deny, Deno silently grants ~7 default hosts (`esm.sh`, `jsr.io`, `deno.land`, …). So an empty import allowlist emits an explicit `--deny-import=<those hosts>`. Never alias the two axes.
 - **Brokered `fetch` on the bindings path.** When `appBindings` is present the guest runs at `--allow-net=[]` (no sockets at all) and its native `fetch` is replaced by a shim that RPCs `http.fetch` over stdio to the supervisor, which relays to your broker carrying a per-run token in `x-questpie-sandbox-token`. The token is supervisor-only, and the broker (`/api/sandbox/rpc`) re-checks the run's capabilities on every call.
 
 <Callout type="warn" title="Honest limitations">
-- **DNS-rebind pinning is not implemented.** Egress validation happens at manifest time; the exact socket IP is not re-pinned across redirects (`TODO(security)`). The brokered path is safe because the guest has no sockets at all (`--allow-net=[]`); a raw `net`-granted run is validated once, not continuously.
-- **The kernel egress firewall is Linux-only and belt-and-suspenders.** On Linux with `unshare`/`nft`/`ip` and the right capabilities, each run also gets a per-run network namespace + nftables ruleset (default-DROP, private CIDRs dropped, public allowlist accepted). Off Linux, or when those tools/caps are missing, it is **gracefully absent** (logs a notice and runs without it). Disable with `SANDBOX_DISABLE_NETNS_FIREWALL=1`. The ruleset logic is unit-tested; the actual kernel drop is only verified on a real Linux worker. Treat it as a second layer, the subprocess permission flags are the primary boundary.
+  - **DNS-rebind pinning is not implemented.** Egress validation happens at manifest time; the exact socket IP is not re-pinned across redirects (`TODO(security)`). The brokered path is safe because the guest has no sockets at all (`--allow-net=[]`); a raw `net`-granted run is validated once, not continuously. - **The
+  kernel egress firewall is Linux-only and belt-and-suspenders.** On Linux with `unshare`/`nft`/`ip` and the right capabilities, each run also gets a per-run network namespace + nftables ruleset (default-DROP, private CIDRs dropped, public allowlist accepted). Off Linux, or when those tools/caps are missing, it is
+  **gracefully absent** (logs a notice and runs without it). Disable with `SANDBOX_DISABLE_NETNS_FIREWALL=1`. The ruleset logic is unit-tested; the actual kernel drop is only verified on a real Linux worker. Treat it as a second layer, the subprocess permission flags are the primary boundary.
 </Callout>
 
 ## How it fits

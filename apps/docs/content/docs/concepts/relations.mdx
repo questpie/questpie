@@ -45,7 +45,9 @@ By default a relation reads back as the related **id**, not the related row. Hyd
 
 ```ts
 // Without `with`, relations are ids:
-const appt = await client.collections.appointments.findOne({ where: { id: "…" } });
+const appt = await client.collections.appointments.findOne({
+  where: { id: "…" },
+});
 // {
 //   id: string;
 //   customer: string;   // the related user id
@@ -76,11 +78,11 @@ A belongsTo FK is a single `string` in the read shape; under `with` the FK key i
 
 The positional argument to `f.relation(...)` takes three shapes.
 
-| Form | Example | Result |
-|---|---|---|
-| **Collection name** (string) | `f.relation("user")` | belongsTo to the `user` collection, the common case. |
-| **Lazy ref** (function) | `f.relation(() => barbers)` | Same as the string form, but defers the reference, use it to dodge circular imports between two collection files. The function returns the collection (the factory reads `.name` off it). |
-| **Polymorphic map** (object) | `f.relation({ users: "users", posts: "posts" })` | morphTo, stores a `type` + `id` pair so the field can point at *any* listed collection. |
+| Form                         | Example                                          | Result                                                                                                                                                                                    |
+| ---------------------------- | ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Collection name** (string) | `f.relation("user")`                             | belongsTo to the `user` collection, the common case.                                                                                                                                      |
+| **Lazy ref** (function)      | `f.relation(() => barbers)`                      | Same as the string form, but defers the reference, use it to dodge circular imports between two collection files. The function returns the collection (the factory reads `.name` off it). |
+| **Polymorphic map** (object) | `f.relation({ users: "users", posts: "posts" })` | morphTo, stores a `type` + `id` pair so the field can point at _any_ listed collection.                                                                                                   |
 
 ```ts
 // Collection name (default belongsTo)
@@ -104,7 +106,7 @@ The default form is **belongsTo**: it owns a `varchar(36)` foreign-key column on
 
 ### `.hasMany({ foreignKey, onDelete?, relationName? })`
 
-One-to-many. The field becomes **virtual**, it owns no column on this table; the FK lives on the *target* table, named by `foreignKey`. It is absent from the base read shape and populated (as `string[]`, or full rows under `with`) only when queried.
+One-to-many. The field becomes **virtual**, it owns no column on this table; the FK lives on the _target_ table, named by `foreignKey`. It is absent from the base read shape and populated (as `string[]`, or full rows under `with`) only when queried.
 
 ```ts
 // On `barbers`: a barber has many appointments.
@@ -131,14 +133,20 @@ The junction itself is a normal collection of two belongsTo relations:
 
 ```ts title="src/questpie/server/collections/barber-services.ts"
 export const barberServices = collection("barber_services").fields(({ f }) => ({
-  barber: f.relation(() => barbers).required().onDelete("cascade"),
-  service: f.relation(() => services).required().onDelete("cascade"),
+  barber: f
+    .relation(() => barbers)
+    .required()
+    .onDelete("cascade"),
+  service: f
+    .relation(() => services)
+    .required()
+    .onDelete("cascade"),
 }));
 ```
 
 ### `.multiple()`
 
-An inline list of ids. **Unlike `hasMany` / `manyToMany`, this is not virtual**, it owns a single `jsonb` column holding an array of FK uuids on *this* row. Reads back as `string[]`. Reach for it when the set is small and you want it stored on the record itself rather than via a junction table.
+An inline list of ids. **Unlike `hasMany` / `manyToMany`, this is not virtual**, it owns a single `jsonb` column holding an array of FK uuids on _this_ row. Reads back as `string[]`. Reach for it when the set is small and you want it stored on the record itself rather than via a junction table.
 
 ```ts
 // A small inline set of ids stored on this row, here a barber's handful of
@@ -159,12 +167,12 @@ These modifiers preserve the field's accumulated state, so they compose in any o
 
 Set the referential action for the relation. `action` is one of:
 
-| Action | Effect when the referenced row is deleted/updated |
-|---|---|
-| `"cascade"` | Delete/update this row too. |
-| `"set null"` | Null out the FK on this row. |
-| `"restrict"` | Block the operation while this row still references it. |
-| `"no action"` | Defer the check (Postgres default). |
+| Action        | Effect when the referenced row is deleted/updated       |
+| ------------- | ------------------------------------------------------- |
+| `"cascade"`   | Delete/update this row too.                             |
+| `"set null"`  | Null out the FK on this row.                            |
+| `"restrict"`  | Block the operation while this row still references it. |
+| `"no action"` | Defer the check (Postgres default).                     |
 
 ```ts
 // When the parent barber is deleted, delete its barber_services rows too.
@@ -172,7 +180,8 @@ barber: f.relation(() => barbers).required().onDelete("cascade"),
 ```
 
 <Callout type="info">
-  The action flows into the relation graph and is **enforced on the QUESTPIE CRUD path**: `cascade` / `hasMany` cascade-deletes run through `deleteById`, and `restrict` throws a `409 Conflict` ("Cannot delete: related records exist…") when dependents remain. It needs a `relationName` (or an inferred reverse relation) to find the dependents.
+  The action flows into the relation graph and is **enforced on the QUESTPIE CRUD path**: `cascade` / `hasMany` cascade-deletes run through `deleteById`, and `restrict` throws a `409 Conflict` ("Cannot delete: related records exist…") when dependents remain. It needs a `relationName` (or an inferred reverse relation)
+  to find the dependents.
 </Callout>
 
 ### `.relationName(name)`
@@ -194,7 +203,7 @@ const review = await client.collections.reviews.findOne({
   where: { id: "…" },
   with: {
     customer: { columns: { id: true, email: true } }, // partial select on the related row
-    barber: true,                                       // whole row
+    barber: true, // whole row
   },
 });
 
@@ -226,7 +235,8 @@ const barber = await client.collections.barbers.findOne({
 ```
 
 <Callout type="info">
-  Relations are **not** hydrated unless you ask. A field you didn't list in `with` comes back as its id (belongsTo → a single `string`; `multiple` → the raw `string[]` array stored in its column) or is absent entirely (hasMany / manyToMany have no column here). This keeps the default read one query and one row, opt into joins only where you need them. Hydration depth is capped by the type system to keep inference finite, so very deep nested `with` chains stop resolving past the cap.
+  Relations are **not** hydrated unless you ask. A field you didn't list in `with` comes back as its id (belongsTo → a single `string`; `multiple` → the raw `string[]` array stored in its column) or is absent entirely (hasMany / manyToMany have no column here). This keeps the default read one query and one row, opt
+  into joins only where you need them. Hydration depth is capped by the type system to keep inference finite, so very deep nested `with` chains stop resolving past the cap.
 </Callout>
 
 ## Filtering by relation
@@ -239,7 +249,9 @@ A belongsTo field accepts three forms in `where`:
 
 ```ts
 // 1. Match the FK directly (eq / ne / in / notIn / isNull / isNotNull)
-await client.collections.appointments.find({ where: { barber: { eq: barberId } } });
+await client.collections.appointments.find({
+  where: { barber: { eq: barberId } },
+});
 
 // 2. Bare FK shorthand, pass the id value directly
 await client.collections.appointments.find({ where: { barber: barberId } });
@@ -283,7 +295,7 @@ await client.collections.barbers.find({
 ```
 
 <Callout type="warning">
-  The to-many quantifiers are `some` / `none` / `every`, there is no `count` operator you can put in a relation `where`. To count related rows, use `with: { rel: { _count: true } }` on the query instead.
+  Use `some`, `none`, and `every` to filter to-many relations. Request related counts with `with: { rel: { _count: true } }`.
 </Callout>
 
 ## Writing relations (nested create / update)
@@ -339,20 +351,21 @@ The nested mutation supports `connect` (link existing), `create` (insert new), `
 ## Gotchas
 
 <Callout type="warning">
-  **Transition methods reset the chain, order matters.** Put `.hasMany()` / `.manyToMany()` / `.multiple()` first, then refine. They flip the field from the belongsTo type-state to a to-many one; the state-preserving modifiers (`.required()`, `.onDelete()`, `.onUpdate()`, `.relationName()`) carry forward, but a transition applied *after* them is the one that defines the final kind.
+  **Transition methods reset the chain, order matters.** Put `.hasMany()` / `.manyToMany()` / `.multiple()` first, then refine. They flip the field from the belongsTo type-state to a to-many one; the state-preserving modifiers (`.required()`, `.onDelete()`, `.onUpdate()`, `.relationName()`) carry forward, but a
+  transition applied *after* them is the one that defines the final kind.
 </Callout>
 
 <Callout type="warning">
-  **`hasMany` / `manyToMany` are virtual, no column here.** The FK lives on the target table (`hasMany`) or the junction (`manyToMany`), so these fields never appear in this collection's base read shape or insert type, and you never write them by setting a column on this row, you write them with a nested mutation (`connect` / `create` / `set`). `.multiple()` is the exception: it owns a real `jsonb` array column on this table.
+  **`hasMany` / `manyToMany` are virtual, no column here.** The FK lives on the target table (`hasMany`) or the junction (`manyToMany`), so these fields never appear in this collection's base read shape or insert type, and you never write them by setting a column on this row, you write them with a nested mutation
+  (`connect` / `create` / `set`). `.multiple()` is the exception: it owns a real `jsonb` array column on this table.
 </Callout>
 
 <Callout type="warning">
-  **`upload` is the file relation, use it for assets.** `f.upload(...)` is a relation specialised for files: it owns a `varchar(36)` FK to the `assets` collection and the admin renders an upload widget instead of a relation picker. Don't model file links with a raw `f.relation("assets")`, reach for `f.upload()`. See [Fields](/docs/concepts/fields).
+  **`upload` is the file relation, use it for assets.** `f.upload(...)` is a relation specialised for files: it owns a `varchar(36)` FK to the `assets` collection and the admin renders an upload widget instead of a relation picker. Don't model file links with a raw `f.relation("assets")`, reach for `f.upload()`. See
+  [Fields](/docs/concepts/fields).
 </Callout>
 
-<Callout type="info">
-  **`onDelete` / `restrict` enforcement needs a resolvable reverse relation.** Cascade and restrict run on the QUESTPIE CRUD path and walk the relation graph to find dependents; when two relations target the same collection, set `.relationName(...)` so the reverse relation resolves.
-</Callout>
+<Callout type="info">**`onDelete` / `restrict` enforcement needs a resolvable reverse relation.** Cascade and restrict run on the QUESTPIE CRUD path and walk the relation graph to find dependents; when two relations target the same collection, set `.relationName(...)` so the reverse relation resolves.</Callout>
 
 ## TypeScript
 
@@ -361,17 +374,17 @@ You rarely touch relation types directly, they flow into the generated collectio
 ```ts
 import type { CollectionDoc, CollectionWhere } from "#questpie";
 
-type Appointment = CollectionDoc<"appointments">;   // `barber`/`customer` are `string` ids
-type ApptFilter = CollectionWhere<"appointments">;  // typed where, incl. relation filters
+type Appointment = CollectionDoc<"appointments">; // `barber`/`customer` are `string` ids
+type ApptFilter = CollectionWhere<"appointments">; // typed where, incl. relation filters
 ```
 
 `CollectionDoc<"appointments">` resolves the belongsTo fields to ids; passing `with` to a query widens the result to include the populated rows (this happens at the call site, you don't annotate it). `CollectionWhere<"appointments">` types the relation filters above (`is`/`isNot`, `some`/`none`/`every`).
 
-If you are building a plugin or a custom field type and need the relation primitives themselves, four are exported from `questpie`: the `relation` factory, its `RelationFieldState` / `RelationFieldMethods` type-state, and the `RelationFieldMetadata` introspection shape. The other internal symbols (`ToManyRelationFieldState`, `MultipleRelationFieldState`, `MorphToFieldState`, `relationFieldType`, `ReferentialAction`, `InferredRelationType`) are not re-exported from the package entry, reach for them via the `fieldType()` recipe below rather than importing them directly.
+Plugin authors can import the `relation` factory, `RelationFieldState`, `RelationFieldMethods`, and `RelationFieldMetadata` from `questpie`. Generated application types remain the preferred surface for ordinary collection code.
 
 ## Extending
 
-`relation` is itself built on the public `fieldType()` declaration API, its transition methods (`.hasMany()`, `.multiple()`, …) are defined in `relationFieldType.methods`, the same mechanism you use to add your own field type with chain methods. If you need a relation variant the builtins don't cover (a custom referential strategy, a different column layout), you build a new field type the same way the framework builds this one, no internal hooks. See [Fields → custom field types](/docs/concepts/fields) for the `fieldType()` recipe (`create`, `methods`, `toColumn` / `toZodSchema` / `getOperators` / `getMetadata`).
+`relation` uses the public `fieldType()` declaration API, and its transition methods such as `.hasMany()` and `.multiple()` are field-type methods. See [Fields → custom field types](/docs/concepts/fields) for the `fieldType()` recipe.
 
 ## Related
 

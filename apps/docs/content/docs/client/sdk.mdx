@@ -59,7 +59,7 @@ const created = await client.collections.posts.create({
 ```
 
 <Callout type="info" title="`AppConfig` is a type, not a value">
-`createClient<AppConfig>(...)` takes the **generated** `AppConfig` (`typeof app`) as a type parameter, there is no runtime app passed to the client. Run `questpie generate` after changing your schema so `AppConfig` (and therefore every client method) stays in sync. The runtime is a `Proxy`, so any string key returns a callable surface even when the type rejects it, unknown collection/route names are compile-time errors only, not runtime guards.
+`createClient<AppConfig>(...)` takes the generated `AppConfig` as a type parameter. Run `questpie generate` after schema changes so every client method stays synchronized. Collection and route names are checked by TypeScript; runtime authorization and input validation still happen on the server.
 </Callout>
 
 ## Configuration
@@ -77,8 +77,8 @@ export type QuestpieClientConfig = {
 ```
 
 | Option | Default | What it does |
-|---|---|---|
-| `baseURL` *(required)* | none | Origin the client requests against. Combined with `basePath` to form every URL. |
+| --- | --- | --- |
+| `baseURL` _(required)_ | none | Origin the client requests against. Combined with `basePath` to form every URL. |
 | `basePath` | `"/"` | API mount path. Normalized: a leading slash is added if missing, a trailing slash stripped. **Must match** the server handler's `basePath`. |
 | `fetch` | `globalThis.fetch` | Custom fetch (e.g. an instrumented one, or a server-side polyfill). |
 | `headers` | `{}` | Default headers merged into every request. `accept-language` / `Accept-Language` here seeds the initial locale. |
@@ -89,16 +89,25 @@ export type QuestpieClientConfig = {
 ```ts
 {
   collections; // typed CRUD per collection
-  globals;     // typed get/update per global
-  routes;      // typed callers for your custom routes
-  search;      // search + reindex
-  realtime;    // low-level SSE stream API
-  setLocale; getLocale; getBasePath; // locale + base-path helpers
+  globals; // typed get/update per global
+  routes; // typed callers for your custom routes
+  search; // search + reindex
+  realtime; // low-level SSE stream API
+  setLocale;
+  getLocale;
+  getBasePath; // locale + base-path helpers
 }
 ```
 
-<Callout type="warn" title="`basePath` must match the server, and `'/'` reads back as `''`">
-The client's `basePath` and the server handler's `basePath` (`createFetchHandler({ basePath })`, `questpieNext(app, { basePath })`, …) must be identical or requests 404. Use `"/"` for a server-only API, `"/api"` for a fullstack app that also serves a frontend. `getBasePath()` returns the **normalized** path, an empty string `""` when `basePath` is `"/"`, not `"/"`.
+<Callout
+  type="warn"
+  title="`basePath` must match the server, and `'/'` reads back as `''`"
+>
+  The client's `basePath` and the server handler's `basePath`
+  (`createFetchHandler({basePath})`, `questpieNext(app, {basePath})`, …) must be
+  identical or requests 404. Use `"/"` for a server-only API, `"/api"` for a
+  fullstack app that also serves a frontend. `getBasePath()` returns the
+  **normalized** path, an empty string `""` when `basePath` is `"/"`, not `"/"`.
 </Callout>
 
 ## Collections
@@ -119,10 +128,14 @@ const result = await client.collections.posts.find({
 
 // findOne, first match or null. Optimized: a where of ONLY { id } hits GET /:id.
 const post = await client.collections.posts.findOne({ where: { id } });
-const bySlug = await client.collections.posts.findOne({ where: { slug: "hello" } });
+const bySlug = await client.collections.posts.findOne({
+  where: { slug: "hello" },
+});
 
 // count, bare number (the { count } envelope is unwrapped for you).
-const total = await client.collections.posts.count({ where: { published: true } });
+const total = await client.collections.posts.count({
+  where: { published: true },
+});
 ```
 
 `find()` serializes its options into the query string (`qs`, `skipNulls`, bracket arrays) and resolves to a `PaginatedResult`:
@@ -130,7 +143,10 @@ const total = await client.collections.posts.count({ where: { published: true } 
 ```jsonc
 // await client.collections.posts.find({ limit: 2 })
 {
-  "docs": [ { "id": "01J…", "title": "Hello", "published": true }, { "id": "01J…", "title": "World", "published": false } ],
+  "docs": [
+    { "id": "01J…", "title": "Hello", "published": true },
+    { "id": "01J…", "title": "World", "published": false },
+  ],
   "totalDocs": 2,
   "limit": 2,
   "totalPages": 1,
@@ -139,7 +155,7 @@ const total = await client.collections.posts.count({ where: { published: true } 
   "hasPrevPage": false,
   "hasNextPage": false,
   "prevPage": null,
-  "nextPage": null
+  "nextPage": null,
 }
 ```
 
@@ -200,7 +216,12 @@ const { count } = await client.collections.posts.deleteMany({
 ```
 
 <Callout type="warn" title="`updateMany` / `deleteMany` are claim-checked">
-Bulk operations lock the matching rows and re-evaluate `where` at write time, returning only the rows that won the race. `updateMany` returns the array of written rows, an **empty array means nothing matched at write time** (e.g. you lost a concurrent claim), not an error. `deleteMany`'s `count` is exactly the rows that still matched at delete time. `deleteMany` uses `POST /:collection/delete-many` (not `DELETE`) because it carries a body.
+  Bulk operations lock the matching rows and re-evaluate `where` at write time,
+  returning only the rows that won the race. `updateMany` returns the array of
+  written rows, an **empty array means nothing matched at write time** (e.g. you
+  lost a concurrent claim), not an error. `deleteMany`'s `count` is exactly the
+  rows that still matched at delete time. `deleteMany` uses `POST
+  /:collection/delete-many` (not `DELETE`) because it carries a body.
 </Callout>
 
 ### Versions and workflow
@@ -240,8 +261,17 @@ const assets = await client.collections.media.uploadMany(files, {
 });
 ```
 
-<Callout type="warn" title="Upload uses XHR, parses plain JSON, and throws `UploadError`">
-The upload path bypasses the `fetch`/SuperJSON pipeline: it sends `credentials: true` over `XMLHttpRequest`, and parses the response with plain `JSON.parse` (no SuperJSON). On failure it throws **`UploadError`**, *not* `QuestpieClientError`. `UploadError` carries `status` and `response`, with messages like `"Upload failed"`, `"Network error during upload"`, or `"Upload cancelled"`. `uploadMany` aborts between files on `signal` and short-circuits to `[]` for an empty array.
+<Callout
+  type="warn"
+  title="Upload uses XHR, parses plain JSON, and throws `UploadError`"
+>
+  The upload path bypasses the `fetch`/SuperJSON pipeline: it sends
+  `credentials: true` over `XMLHttpRequest`, and parses the response with plain
+  `JSON.parse` (no SuperJSON). On failure it throws **`UploadError`**, *not*
+  `QuestpieClientError`. `UploadError` carries `status` and `response`, with
+  messages like `"Upload failed"`, `"Network error during upload"`, or `"Upload
+  cancelled"`. `uploadMany` aborts between files on `signal` and short-circuits
+  to `[]` for an empty array.
 </Callout>
 
 ### Introspection
@@ -258,7 +288,7 @@ const schema = await client.collections.posts.schema(); // fields, relations, ac
 Every method takes an optional trailing `options` (`{ locale?, localeFallback?, stage? }`) that serializes into the query string, except the reads (which carry locale inside the query options) and `upload`/`meta`/`schema`.
 
 | Method | HTTP | Returns |
-|---|---|---|
+| --- | --- | --- |
 | `find(options?)` | `GET /:collection` | `PaginatedResult` (or `GroupedPaginatedResult` with `groupBy`) |
 | `findOne(options?)` | `GET /:collection/:id` (id-only `where`) or `find` w/ `limit:1` | row or `null` |
 | `count(options?)` | `GET /:collection/count` | `number` |
@@ -300,14 +330,20 @@ const next = await client.globals.settings.update(
 Because a global is a singleton, `update` takes the **data object as its first argument**, `update(data, options?)`, not the `{ id, data }` shape that collections use. The second argument is the query options (`with` / `locale` / `localeFallback` / `stage`). Mixing them up (`update({ id, data })`) writes a bogus `id` field.
 </Callout>
 
-<Callout type="info" title="`get()` is typed non-null, but a global can be empty">
-The client types `get()` as non-null for ergonomics, while the underlying global CRUD can return `null` before the singleton has ever been written. In practice a global resolves to its default/empty record once initialized; guard for the unwritten case if you read a global before any `update`.
+<Callout
+  type="info"
+  title="`get()` is typed non-null, but a global can be empty"
+>
+  The client types `get()` as non-null for ergonomics, while the underlying
+  global CRUD can return `null` before the singleton has ever been written. In
+  practice a global resolves to its default/empty record once initialized; guard
+  for the unwritten case if you read a global before any `update`.
 </Callout>
 
 The remaining global methods mirror collections, with the singleton shapes:
 
 | Method | HTTP | Notes |
-|---|---|---|
+| --- | --- | --- |
 | `get(options?)` | `GET /globals/:global` | `with` / `columns` / `locale` / `localeFallback` / `stage` |
 | `update(data, options?)` | `PATCH /globals/:global` | data first, options second |
 | `schema()` / `meta()` | `GET /globals/:global/schema` · `/meta` | introspection |
@@ -404,11 +440,25 @@ const unsubscribe = client.globals.settings.live({}, (snapshot) => {
 ```
 
 <Callout type="warn" title="`live()` carries a SUBSET of query options">
-Live queries only carry `where`, `with`, `limit`, `offset`, `orderBy`, and `locale` on the wire (`LiveQueryOptions`), they deliberately **exclude** `columns`, `groupBy`, `search`, `includeDeleted`, and `stage`, because each snapshot is a full query result re-run server-side from those fields. Globals carry `with` + `locale` only. Pass an unsupported option and it is dropped, not applied.
+  Live queries only carry `where`, `with`, `limit`, `offset`, `orderBy`, and
+  `locale` on the wire (`LiveQueryOptions`), they deliberately **exclude**
+  `columns`, `groupBy`, `search`, `includeDeleted`, and `stage`, because each
+  snapshot is a full query result re-run server-side from those fields. Globals
+  carry `with` + `locale` only. Pass an unsupported option and it is dropped,
+  not applied.
 </Callout>
 
-<Callout type="info" title="Always provide an unsubscribe path, and handle `onError`">
-The callback form returns an unsubscribe function; call it (or pass `opts.signal` and abort) when the component unmounts, or the SSE subscription leaks. The `onError` callback fires when the connection fails, wire it so a dropped stream surfaces instead of an infinite loading state. `liveIter()` only accepts `signal` (terminate by aborting it); it has no `onError`. Changing `setLocale()` does **not** re-key already-open subscriptions, locale is carried per-topic at subscribe time.
+<Callout
+  type="info"
+  title="Always provide an unsubscribe path, and handle `onError`"
+>
+  The callback form returns an unsubscribe function; call it (or pass
+  `opts.signal` and abort) when the component unmounts, or the SSE subscription
+  leaks. The `onError` callback fires when the connection fails, wire it so a
+  dropped stream surfaces instead of an infinite loading state. `liveIter()`
+  only accepts `signal` (terminate by aborting it); it has no `onError`.
+  Changing `setLocale()` does **not** re-key already-open subscriptions, locale
+  is carried per-topic at subscribe time.
 </Callout>
 
 ### Low-level realtime API
@@ -418,7 +468,10 @@ The callback form returns an unsubscribe function; call it (or pass `opts.signal
 ```ts
 import { buildCollectionTopic, buildGlobalTopic } from "questpie/client";
 
-const topic = buildCollectionTopic("posts", { where: { published: true }, limit: 20 });
+const topic = buildCollectionTopic("posts", {
+  where: { published: true },
+  limit: 20,
+});
 
 // subscribe<TData>(topic, callback, signal?, customId?, onError?) → unsubscribe
 const unsubscribe = client.realtime.subscribe(topic, (data) => {
@@ -426,7 +479,9 @@ const unsubscribe = client.realtime.subscribe(topic, (data) => {
 });
 
 // stream<TData>(topic, signal?, customId?) → AsyncGenerator
-for await (const snap of client.realtime.stream(topic)) { /* ... */ }
+for await (const snap of client.realtime.stream(topic)) {
+  /* ... */
+}
 
 client.realtime.destroy(); // tear down the multiplexer (re-creates lazily on next use)
 ```
@@ -434,7 +489,11 @@ client.realtime.destroy(); // tear down the multiplexer (re-creates lazily on ne
 `buildCollectionTopic(name, options?)` and `buildGlobalTopic(name, options?)` return a `TopicConfig` (`{ resourceType, resource, ...defined options }`), undefined option keys are omitted so the topic hash is stable. Both are value exports from `questpie/client`. `client.realtime` exposes `subscribe`, `stream`, `destroy`, and the `topicCount` / `subscriberCount` getters (which read `0` before the multiplexer is created).
 
 <Callout type="info" title="One SSE connection for every topic">
-The realtime API lazily creates a single `RealtimeMultiplexer` on the first `subscribe`/`stream`, and runs **all** topics over one `POST /realtime` connection, this sidesteps the browser's HTTP/1.1 six-connections-per-domain limit. The connect body is plain JSON (not SuperJSON); reconnects are debounced with exponential backoff.
+  The realtime API lazily creates a single `RealtimeMultiplexer` on the first
+  `subscribe`/`stream`, and runs **all** topics over one `POST /realtime`
+  connection, this sidesteps the browser's HTTP/1.1 six-connections-per-domain
+  limit. The connect body is plain JSON (not SuperJSON); reconnects are
+  debounced with exponential backoff.
 </Callout>
 
 ## Localization
@@ -451,8 +510,15 @@ client.setLocale(); // pass nothing to clear the locale header
 
 Per-call locale overrides go through the method `options` instead, e.g. `find({ where, locale: "de" })` or `create(data, { locale: "de" })`, which serialize into the query string and take precedence over the header for that one call.
 
-<Callout type="warn" title="`setLocale` mutates shared headers; it does not touch open SSE streams">
-`setLocale(locale)` rewrites the client's shared default headers in place, so it affects **every** subsequent collection / global / route / search request. It does **not** re-key already-open realtime subscriptions, those carry their locale per-topic from when they were opened. Re-subscribe (or pass `locale` in the live options) to change a live query's locale.
+<Callout
+  type="warn"
+  title="`setLocale` mutates shared headers; it does not touch open SSE streams"
+>
+  `setLocale(locale)` rewrites the client's shared default headers in place, so
+  it affects **every** subsequent collection / global / route / search request.
+  It does **not** re-key already-open realtime subscriptions, those carry their
+  locale per-topic from when they were opened. Re-subscribe (or pass `locale` in
+  the live options) to change a live query's locale.
 </Callout>
 
 ## Error handling
@@ -516,8 +582,7 @@ import { Elysia } from "elysia";
 import { questpieElysia } from "@questpie/elysia/server";
 import { app } from "#questpie";
 
-const server = new Elysia()
-  .use(questpieElysia(app, { basePath: "/api" }));
+const server = new Elysia().use(questpieElysia(app, { basePath: "/api" }));
 
 export default server;
 ```
@@ -564,7 +629,9 @@ To derive a specific call's argument or result type, index into your client valu
 ```ts
 import { client } from "@/lib/client.js";
 
-type PostsFindResult = Awaited<ReturnType<typeof client.collections.posts.find>>;
+type PostsFindResult = Awaited<
+  ReturnType<typeof client.collections.posts.find>
+>;
 type Post = PostsFindResult["docs"][number];
 type AppClient = typeof client; // hand the whole client to helpers
 ```

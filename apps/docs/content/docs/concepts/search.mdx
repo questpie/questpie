@@ -1,0 +1,95 @@
+---
+title: Search
+description: Understand how QUESTPIE projects collection rows into a search index, keeps it synchronized, applies access rules, and serves lexical or semantic queries.
+---
+
+Search turns collection records into a query-optimized projection. Collections define the searchable content; the search service owns indexing and queries; an adapter supplies the storage and ranking engine.
+
+## The model
+
+The data flow has five stages:
+
+1. A collection declares its search projection with `.searchable()`.
+2. A committed write schedules the affected record for indexing.
+3. The search adapter stores the title, content, metadata, facets, locale, and optional embedding.
+4. `app.search.search()` ranks matching index rows.
+5. The client search endpoint applies access rules and hydrates allowed results into collection documents.
+
+The collection remains the source of truth. Search results are a derived view that can be rebuilt from collection records.
+
+## Define the projection
+
+Use `.searchable()` to select the text and metadata that belong in the index:
+
+```ts title="collections/posts.ts"
+import { collection } from "#questpie/factories";
+
+export default collection("posts")
+	.fields(({ f }) => ({
+		title: f.text().required(),
+		summary: f.textarea(),
+		status: f.select([
+			{ value: "draft", label: "Draft" },
+			{ value: "published", label: "Published" },
+		]),
+	}))
+	.title(({ f }) => f.title)
+	.searchable({
+		content: (record) => record.summary,
+		metadata: (record) => ({ status: record.status }),
+	});
+```
+
+The collection `.title()` field and searchable `content` drive ranking. `metadata` supports filters and facets. Localized collections produce one index projection per locale.
+
+## Query the index
+
+Server code uses the search service:
+
+```ts
+const result = await app.search.search({
+	query: "release notes",
+	collections: ["posts"],
+	filters: { status: "published" },
+	limit: 20,
+});
+```
+
+The response contains ranked index results, a total, and requested facets. The typed client exposes hydrated documents for UI use.
+
+## Indexing lifecycle
+
+Automatic indexing starts after a durable collection change. QUESTPIE batches rapid writes and dispatches the built-in `index-records` job when a queue is configured.
+
+Without a queue, indexing runs synchronously. `manual: true` moves lifecycle control to your application for imports, external synchronization, or specialized batching.
+
+## Ranking modes
+
+The public query contract supports three modes:
+
+| Mode       | Purpose                                                        |
+| ---------- | -------------------------------------------------------------- |
+| `lexical`  | Rank exact terms and full-text matches.                        |
+| `hybrid`   | Combine the lexical signals supported by the selected adapter. |
+| `semantic` | Rank by embedding similarity.                                  |
+
+Adapter capabilities determine which modes are available. Application query code stays stable when the backend changes.
+
+## Access and consistency
+
+The HTTP search route derives collection access filters before returning documents. Treat search as a read model: writes become searchable after the indexing step completes.
+
+Render record data from hydrated documents when freshness matters. Use indexed title, snippets, score, and facets for discovery UI.
+
+## Choose a backend
+
+The default Postgres adapter provides full-text and trigram search. The pgvector adapter adds semantic ranking through an embedding provider.
+
+See [Search adapters](/docs/adapters/search) for extensions, migrations, scoring options, embedding providers, and custom adapter contracts.
+
+## Related
+
+- [Collections](/docs/concepts/collections#searchable), projection configuration with `.searchable()`.
+- [Jobs](/docs/concepts/jobs), the queue-backed indexing lifecycle.
+- [Search adapters](/docs/adapters/search), backend setup and operational details.
+- [Access control](/docs/concepts/access-control), row-level result visibility.

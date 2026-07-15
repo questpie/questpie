@@ -3,7 +3,7 @@ title: Upload field
 description: f.upload() is a typed relation from a row to a separate upload collection (default "assets"), store a single file reference, a many-to-many gallery, or an inline list of asset IDs, and the admin renders a file picker instead of a relation dropdown.
 ---
 
-`f.upload()` links a row to a file stored in a *separate* upload collection, by default the built-in `"assets"` collection. In its single form it's a typed `varchar(36)` foreign key holding one asset ID; the admin renders it as a file picker (upload + browse the media library), not a relation dropdown. Switch it to many-to-many or an inline array when a row needs several files. Reach for it whenever a row references uploaded bytes, a cover image, an attachment, a gallery.
+`f.upload()` links a row to a file stored in a _separate_ upload collection, by default the built-in `"assets"` collection. In its single form it's a typed `varchar(36)` foreign key holding one asset ID; the admin renders it as a file picker (upload + browse the media library), not a relation dropdown. Switch it to many-to-many or an inline array when a row needs several files. Reach for it whenever a row references uploaded bytes, a cover image, an attachment, a gallery.
 
 > **Prerequisites:** read [Fields](/docs/concepts/fields) first, this page covers only the `upload` type. The `f` proxy, the chain-modifier model, and shared modifiers like `.required()` / `.localized()` / `.label()` are taught there.
 
@@ -24,34 +24,35 @@ import { collection } from "#questpie/factories";
 
 export const posts = collection("posts").fields(({ f }) => ({
   title: f.text().required(),
-  coverImage: f.upload(),                          // FK to "assets", optional
-  attachment: f.upload({ to: "documents" }),       // FK to a "documents" upload collection
+  coverImage: f.upload(), // FK to "assets", optional
+  attachment: f.upload({ to: "documents" }), // FK to a "documents" upload collection
 }));
 ```
 
 That gives `posts` a `coverImage` column typed `string` on read (the asset ID), nullable until you add `.required()`, rendered as a file picker in the admin form, and filterable with the belongsTo operators, no junction table or relation wiring written by hand.
 
 <Callout type="info" title="`f.upload()` references a collection, it isn't the byte store">
-The `f.upload()` *field* is a relation **to** an upload collection; the bytes live in that target collection (default `"assets"`). Turning a collection *itself* into the byte store (storage adapter, URL generation, signed URLs, direct-to-storage uploads) is a different concern with the same name. See [Storage adapters](/docs/adapters/storage) for where bytes are persisted and served.
+  The `f.upload()` *field* is a relation **to** an upload collection; the bytes live in that target collection (default `"assets"`). Turning a collection *itself* into the byte store (storage adapter, URL generation, signed URLs, direct-to-storage uploads) is a different concern with the same name. See [Storage
+  adapters](/docs/adapters/storage) for where bytes are persisted and served.
 </Callout>
 
 ## Constructor argument
 
 `f.upload()` takes a single optional config object. Every key is optional.
 
-| Option | Type | Default | Effect |
-|---|---|---|---|
-| `to` | `string` | `"assets"` | Target upload collection the FK points at. Narrows the field's typed target. |
-| `mimeTypes` | `string[]` | none | Accepted by the config but **currently ignored**, no effect anywhere (see gotcha). Use `.admin({ accept })` to constrain the picker. |
-| `maxSize` | `number` | none | Accepted by the config but **currently ignored**, no effect anywhere (see gotcha). Use `.admin({ maxSize })` to constrain the picker. |
-| `through` | `string` | none | Junction collection name. Setting it makes the field **many-to-many** (see below). |
-| `sourceField` | `string` | none | Name of the source FK column on the junction (M2M only). |
-| `targetField` | `string` | none | Name of the target FK column on the junction (M2M only). |
+| Option        | Type       | Default    | Effect                                                                             |
+| ------------- | ---------- | ---------- | ---------------------------------------------------------------------------------- |
+| `to`          | `string`   | `"assets"` | Target upload collection the FK points at. Narrows the field's typed target.       |
+| `mimeTypes`   | `string[]` | none       | Reserved config key. Set picker constraints with `.admin({ accept })`.             |
+| `maxSize`     | `number`   | none       | Reserved config key. Set picker constraints with `.admin({ maxSize })`.            |
+| `through`     | `string`   | none       | Junction collection name. Setting it makes the field **many-to-many** (see below). |
+| `sourceField` | `string`   | none       | Name of the source FK column on the junction (M2M only).                           |
+| `targetField` | `string`   | none       | Name of the target FK column on the junction (M2M only).                           |
 
 The single-upload field is always `varchar(36)`, data `string`, schema `z.string().uuid()`.
 
-<Callout type="warn" title="`mimeTypes` / `maxSize` are accepted but currently ignored">
-`mimeTypes` and `maxSize` are destructured from the config and then never used, they reach **no** part of the field. They are not applied to the column, not to the derived Zod schema, and not to the field's metadata (the `metadataFactory` emits no `mimeTypes`/`maxSize`, and `RelationFieldMetadata` has no such keys), so they have no admin-picker effect either. Today they are dead config. To actually constrain the admin file picker, set them on the **field's admin config** instead, `f.upload().admin({ accept: "image/*", maxSize: 5_000_000 })`, which flows to the picker's `accept` / `maxSize` props. Enforce real upload limits on the target upload collection / storage adapter.
+<Callout type="warn" title="Configure upload constraints at both layers">
+Use `f.upload().admin({ accept: "image/*", maxSize: 5_000_000 })` to constrain the admin picker. Enforce authoritative MIME and size limits on the target upload collection with `.upload({ allowedTypes, maxSize })`.
 </Callout>
 
 ## Variants, single, many-to-many, inline array
@@ -76,22 +77,23 @@ gallery: f.upload({ through: "post_assets" }), // M2M gallery via a junction col
 
 ### Inline array, `.multiple()`
 
-Several assets stored *inline* as a JSONB array of IDs on this row (no junction). `.multiple()` switches the field to a virtual JSONB column with a runtime schema of `z.array(z.string().uuid())`, the value you write/read back is `string[]`. Uses the **multiple** operator set.
+Several assets stored _inline_ as a JSONB array of IDs on this row (no junction). `.multiple()` switches the field to a virtual JSONB column with a runtime schema of `z.array(z.string().uuid())`, the value you write/read back is `string[]`. Uses the **multiple** operator set.
 
 ```ts
 images: f.upload().multiple(),   // string[] of asset IDs, stored inline as jsonb
 ```
 
 <Callout type="info" title="M2M vs `.multiple()`, junction table or inline array">
-Both hold many assets. **`through`** stores the links in a separate junction collection (queryable, supports the `some` / `none` / `every` quantifiers). **`.multiple()`** stores the IDs inline as a JSONB array on the row (no extra table, queried with array operators like `contains`). Use `through` when the relationship itself needs rows (ordering, pivot data); use `.multiple()` for a simple ordered list of files.
+  Both hold many assets. **`through`** stores the links in a separate junction collection (queryable, supports the `some` / `none` / `every` quantifiers). **`.multiple()`** stores the IDs inline as a JSONB array on the row (no extra table, queried with array operators like `contains`). Use `through` when the
+  relationship itself needs rows (ordering, pivot data); use `.multiple()` for a simple ordered list of files.
 </Callout>
 
 ## Chained methods
 
 This method is specific to `upload` (on top of the [shared modifiers](/docs/concepts/fields) every field has). It returns a new immutable field.
 
-| Method | Effect |
-|---|---|
+| Method        | Effect                                                                                  |
+| ------------- | --------------------------------------------------------------------------------------- |
 | `.multiple()` | Switch to an inline JSONB array of asset IDs (runtime value `string[]`, `multipleOps`). |
 
 ```ts
@@ -104,12 +106,12 @@ Which operators a `where: { <field>: { … } }` accepts depends on the variant. 
 
 **Single upload**, the **belongsTo** operator set (`belongsToOps`).
 
-| Operator | Operand | Matches |
-|---|---|---|
-| `eq` / `ne` | `string` | Asset ID equal / not equal. |
-| `in` / `notIn` | `string[]` | Asset ID is (not) in the list. |
-| `isNull` / `isNotNull` | `boolean` | The FK is (not) set. |
-| `is` / `isNot` | related `where` | Filter on the *target* asset's fields (e.g. its `mimeType`). |
+| Operator               | Operand         | Matches                                                      |
+| ---------------------- | --------------- | ------------------------------------------------------------ |
+| `eq` / `ne`            | `string`        | Asset ID equal / not equal.                                  |
+| `in` / `notIn`         | `string[]`      | Asset ID is (not) in the list.                               |
+| `isNull` / `isNotNull` | `boolean`       | The FK is (not) set.                                         |
+| `is` / `isNot`         | related `where` | Filter on the _target_ asset's fields (e.g. its `mimeType`). |
 
 ```ts
 // Posts whose cover image is a specific asset
@@ -125,23 +127,23 @@ const missing = await app.collections.posts.find({
 
 **Many-to-many (`through`)**, the **toMany** operator set (`toManyOps`): the relation quantifiers.
 
-| Operator | Operand | Matches |
-|---|---|---|
-| `some` | related `where` | At least one linked asset matches. |
-| `none` | related `where` | No linked asset matches. |
-| `every` | related `where` | Every linked asset matches. |
-| `count` | `number` | Number of linked assets equals the value. |
+| Operator | Operand         | Matches                                   |
+| -------- | --------------- | ----------------------------------------- |
+| `some`   | related `where` | At least one linked asset matches.        |
+| `none`   | related `where` | No linked asset matches.                  |
+| `every`  | related `where` | Every linked asset matches.               |
+| `count`  | `number`        | Number of linked assets equals the value. |
 
 **Inline array (`.multiple()`)**, the **multiple** operator set (`multipleOps`), querying the JSONB array.
 
-| Operator | Operand | Matches |
-|---|---|---|
-| `contains` | `string` | Array contains the asset ID. |
-| `containsAll` | `string[]` | Array contains all listed IDs. |
-| `containsAny` | `string[]` | Array contains at least one listed ID. |
-| `isEmpty` / `isNotEmpty` | `boolean` | Array is empty / non-empty (treats `null` as empty). |
-| `count` | `number` | Array length equals the value. |
-| `isNull` / `isNotNull` | `boolean` | The JSONB column is (not) null. |
+| Operator                 | Operand    | Matches                                              |
+| ------------------------ | ---------- | ---------------------------------------------------- |
+| `contains`               | `string`   | Array contains the asset ID.                         |
+| `containsAll`            | `string[]` | Array contains all listed IDs.                       |
+| `containsAny`            | `string[]` | Array contains at least one listed ID.               |
+| `isEmpty` / `isNotEmpty` | `boolean`  | Array is empty / non-empty (treats `null` as empty). |
+| `count`                  | `number`   | Array length equals the value.                       |
+| `isNull` / `isNotNull`   | `boolean`  | The JSONB column is (not) null.                      |
 
 ```ts
 // Posts whose inline image list includes a given asset
@@ -155,8 +157,8 @@ For the full query language, combining field filters with `AND` / `OR` / `NOT`, 
 ## When to use it
 
 - **`f.upload()`**, any field that references an uploaded file: a cover image, an avatar, a downloadable attachment. You get a typed asset-ID FK and a file picker in the admin, instead of a free-form string.
-- **`f.upload({ through })` / `f.upload().multiple()`**, when a row holds *several* files: a gallery, a set of attachments. Choose `through` for a junction-backed relation, `.multiple()` for a simple inline list.
-- For a relation to a *non-upload* collection (an author, a category), use [`f.relation()`](/docs/concepts/relations) instead, same FK mechanics, but the admin renders a record picker, not an upload control.
+- **`f.upload({ through })` / `f.upload().multiple()`**, when a row holds _several_ files: a gallery, a set of attachments. Choose `through` for a junction-backed relation, `.multiple()` for a simple inline list.
+- For a relation to a _non-upload_ collection (an author, a category), use [`f.relation()`](/docs/concepts/relations) instead, same FK mechanics, but the admin renders a record picker, not an upload control.
 
 <Callout type="info" title="Hydrate the asset with `with:`">
 A single upload stores only the asset **ID**. To read the asset record itself (its `url`, filename, metadata) alongside the row, hydrate the relation with `with: { coverImage: true }`, exactly like any belongsTo relation (see [Relations → hydration with `with`](/docs/concepts/relations)). The resolved `url` and serving the bytes are covered in [Storage adapters](/docs/adapters/storage).

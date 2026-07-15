@@ -7,8 +7,8 @@ description: .array() wraps any field type into a list stored as a single jsonb 
 
 > **Prerequisites:** read [Fields](/docs/concepts/fields) first, this page covers only the `.array()` modifier. The `f` proxy, the chain-modifier model, and the other shared modifiers (`.required()` / `.default()` / `.localized()`) are taught there.
 
-<Callout type="info" title="There is no `f.array()` factory">
-`.array()` is a **chain modifier**, not a field type, you never call `f.array()`. You build the element field first, then wrap it: `f.text(40).array()`. It is one of the [shared modifiers](/docs/concepts/fields#shared-methods) every field carries.
+<Callout type="info" title="Arrays start from the element field">
+  Build the element field, then wrap it with the `.array()` chain modifier: `f.text(40).array()`. It is one of the [shared modifiers](/docs/concepts/fields#shared-methods) available on field definitions.
 </Callout>
 
 ## What it does
@@ -42,28 +42,28 @@ That gives `posts` a `tags` column typed `string[] | null` on read and a non-nul
 
 `.array()` rewrites four things on the field state.
 
-| Aspect | Before `.array()` | After `.array()` |
-|---|---|---|
-| **Data type** | `T` (the inner field's data) | `T[]` |
-| **Column** | the inner column (e.g. `varchar(40)`) | `jsonb` (always) |
-| **Schema** | the inner Zod schema | `z.array(inner)` |
-| **Operators** | the inner set (e.g. `stringOps`) | `selectMultiOps` (membership) |
-| **`getType()`** | the inner type (`"text"`) | `"array"` |
+| Aspect          | Before `.array()`                     | After `.array()`              |
+| --------------- | ------------------------------------- | ----------------------------- |
+| **Data type**   | `T` (the inner field's data)          | `T[]`                         |
+| **Column**      | the inner column (e.g. `varchar(40)`) | `jsonb` (always)              |
+| **Schema**      | the inner Zod schema                  | `z.array(inner)`              |
+| **Operators**   | the inner set (e.g. `stringOps`)      | `selectMultiOps` (membership) |
+| **`getType()`** | the inner type (`"text"`)             | `"array"`                     |
 
-The inner field is preserved on the state (`innerField` / `innerState`), so per-element validation still runs, `f.text(40).array()` rejects an element longer than 40 characters, and `f.email().array()` rejects a non-email element. The array itself is stored verbatim as a single JSONB value; there is no separate table or row-per-item.
+Per-element validation remains active: `f.text(40).array()` rejects strings longer than 40 characters, and `f.email().array()` validates every email. The array is stored as one JSONB value. Use a related collection when items need independent rows or lifecycle.
 
 <Callout type="info" title="Order doesn't matter for length, but `.minItems()` / `.maxItems()` only apply after `.array()`">
-`.minItems(n)` and `.maxItems(n)` are no-ops unless the field is an array, they refine the `z.array(...)` schema (`arraySchema.min(n)` / `.max(n)`). On a non-array field they set state that nothing reads.
+  `.minItems(n)` and `.maxItems(n)` are no-ops unless the field is an array, they refine the `z.array(...)` schema (`arraySchema.min(n)` / `.max(n)`). On a non-array field they set state that nothing reads.
 </Callout>
 
 ## Chained methods
 
 `.array()` itself takes no arguments. The two modifiers that only make sense on an array are:
 
-| Method | Effect |
-|---|---|
+| Method         | Effect                                                             |
+| -------------- | ------------------------------------------------------------------ |
 | `.minItems(n)` | Array must have **at least** `n` elements (`z.array(...).min(n)`). |
-| `.maxItems(n)` | Array may have **at most** `n` elements (`z.array(...).max(n)`). |
+| `.maxItems(n)` | Array may have **at most** `n` elements (`z.array(...).max(n)`).   |
 
 Everything else is a [shared modifier](/docs/concepts/fields#shared-methods) and applies to the array as a whole:
 
@@ -83,15 +83,15 @@ collection("recipes").fields(({ f }) => ({
 
 An array field uses the **multi-value operator set** (`selectMultiOps`). Every operand element is typed to the inner field's filter value, a `number[]` filters on `number`, a `f.select([...]).array()` filters on its literal union.
 
-| Operator | Operand | Matches |
-|---|---|---|
-| `containsAll` | `Item[]` | Array contains **every** listed value (JSONB `@>`). |
-| `containsAny` | `Item[]` | Array contains **at least one** listed value (JSONB `?\|`). |
-| `eq` | `Item[]` | Array equals the given array **exactly** (same elements, same order). |
-| `length` | `number` | Array has exactly this many elements (`jsonb_array_length`). |
-| `isEmpty` | `boolean` | Array is `[]` **or** `null`. |
-| `isNotEmpty` | `boolean` | Array is non-empty and not null. |
-| `isNull` / `isNotNull` | `boolean` | Column is (not) null. Pass `true` to assert, `false` to invert. |
+| Operator               | Operand   | Matches                                                               |
+| ---------------------- | --------- | --------------------------------------------------------------------- |
+| `containsAll`          | `Item[]`  | Array contains **every** listed value (JSONB `@>`).                   |
+| `containsAny`          | `Item[]`  | Array contains **at least one** listed value (JSONB `?\|`).           |
+| `eq`                   | `Item[]`  | Array equals the given array **exactly** (same elements, same order). |
+| `length`               | `number`  | Array has exactly this many elements (`jsonb_array_length`).          |
+| `isEmpty`              | `boolean` | Array is `[]` **or** `null`.                                          |
+| `isNotEmpty`           | `boolean` | Array is non-empty and not null.                                      |
+| `isNull` / `isNotNull` | `boolean` | Column is (not) null. Pass `true` to assert, `false` to invert.       |
 
 ```ts
 // Posts tagged with BOTH "ts" and "cms"
@@ -136,8 +136,8 @@ type Post = typeof posts.$infer.select;
 ```ts
 import type { CollectionDoc, CollectionWhere } from "#questpie";
 
-type Post = CollectionDoc<"posts">;          // { tags: string[] | null; ratings: number[]; ... }
-type PostFilter = CollectionWhere<"posts">;  // { tags?: { containsAll?: string[]; ... } }
+type Post = CollectionDoc<"posts">; // { tags: string[] | null; ratings: number[]; ... }
+type PostFilter = CollectionWhere<"posts">; // { tags?: { containsAll?: string[]; ... } }
 ```
 
 `.required()` makes the array non-null and required on insert; without it the column is nullable (`Item[] | null`) and the insert field optional. `.minItems()` / `.maxItems()` add length validation to the derived `z.array(...)` schema but have no type-level effect. See [Fields → inferred types](/docs/concepts/fields#example--inferred-types) for how modifiers flow into the generated types.

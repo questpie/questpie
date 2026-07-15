@@ -29,7 +29,9 @@ export default job({
   }),
   // `payload` is z.infer<typeof schema>; everything else is your full AppContext.
   handler: async ({ payload, collections, email }) => {
-    const user = await collections.user.findOne({ where: { id: payload.userId } });
+    const user = await collections.user.findOne({
+      where: { id: payload.userId },
+    });
     if (!user) return;
 
     await email.send({
@@ -81,11 +83,12 @@ collection("user").hooks({
 That's the whole loop: define → wire an adapter → publish. A worker drains the queue (see [Running a worker](#running-a-worker)), and the full options surface follows below.
 
 <Callout type="info" title="Import `job` from `questpie`, not `#questpie/factories`">
-Unlike `collection()`, `job()` takes no generated field types, so there's no `#questpie/factories` variant. `job` is exported from the `questpie` package root and, equivalently, from `questpie/queue` and `questpie/services`, `import { job } from "questpie"` is correct everywhere.
+  Unlike `collection()`, `job()` takes no generated field types, so there's no `#questpie/factories` variant. `job` is exported from the `questpie` package root and, equivalently, from `questpie/queue` and `questpie/services`, `import {job} from "questpie"` is correct everywhere.
 </Callout>
 
 <Callout type="warn" title="Don't dispatch directly from an after* hook">
-`afterChange` runs **inside** the CRUD transaction. If you call `queue.x.publish(...)` directly and the transaction later rolls back, you've enqueued work for a row that never landed, and on a single-connection database (PGlite in dev) it can deadlock against the open transaction. Wrap the dispatch in `onAfterCommit(...)` so it fires only after the write is durable. See [Hooks](/docs/concepts/hooks).
+  `afterChange` runs **inside** the CRUD transaction. If you call `queue.x.publish(...)` directly and the transaction later rolls back, you've enqueued work for a row that never landed, and on a single-connection database (PGlite in dev) it can deadlock against the open transaction. Wrap the dispatch in
+  `onAfterCommit(...)` so it fires only after the write is durable. See [Hooks](/docs/concepts/hooks).
 </Callout>
 
 ## Example → what you get
@@ -111,7 +114,7 @@ await app.queue.sendWelcomeEmail.publish({ userId: 123 });
 A job declares a **durable name** (the string the queue backend stores), but you dispatch it through a **camelCase registration key** that codegen derives from the file/name:
 
 ```ts
-job({ name: "send-welcome-email", /* ... */ });
+job({ name: "send-welcome-email" /* ... */ });
 //          └── durable name (what the adapter stores)
 
 queue.sendWelcomeEmail.publish({ userId });
@@ -134,9 +137,14 @@ The handler receives **one** argument: the validated `payload` plus your full ap
 
 ```ts
 handler: async ({
-  payload,                                          // schema-validated, Zod-parsed payload
-  locale,                                           // locale resolved for this run, when set
-  db, collections, globals, queue, email, search,   // ...the rest is your AppContext, realtime, kv, storage, services, logger, t, app,  // the same services a route or hook gets
+  payload, // schema-validated, Zod-parsed payload
+  locale, // locale resolved for this run, when set
+  db,
+  collections,
+  globals,
+  queue,
+  email,
+  search, // ...the rest is your AppContext, realtime, kv, storage, services, logger, t, app,  // the same services a route or hook gets
 }) => {
   // ...
 };
@@ -147,7 +155,7 @@ handler: async ({
 - Everything else is the flat `AppContext`, `db`, `collections`, `globals`, `queue`, `email`, `search`, `realtime`, `kv`, `storage`, `services`, `logger`, `t`, `app`, `session`. Because the handler gets the **same** `queue` client, a job can enqueue other jobs (fan out, chain, or re-queue).
 
 <Callout type="info" title="`schema` is required, and the payload is validated twice">
-Every job **must** carry a Zod `schema`; it isn't optional. The payload is parsed at **dispatch** time (`publish`/`schedule` throw if it fails) and the framework re-validates the raw job data again before invoking your handler. So inside the handler, `payload` is always well-formed.
+  Every job **must** carry a Zod `schema`; it isn't optional. The payload is parsed at **dispatch** time (`publish`/`schedule` throw if it fails) and the framework re-validates the raw job data again before invoking your handler. So inside the handler, `payload` is always well-formed.
 </Callout>
 
 ## Dispatching
@@ -196,22 +204,20 @@ Throws on adapters without scheduling support.
 
 ```ts
 interface JobDefinition<TPayload, TResult = void, TName extends string = string> {
-  name: TName;                                  // durable job name (use a string literal)
-  schema: z.ZodSchema<TPayload>;                // required, validates the payload
+  name: TName; // durable job name (use a string literal)
+  schema: z.ZodSchema<TPayload>; // required, validates the payload
   handler: (args: JobHandlerArgs<TPayload>) => Promise<TResult>;
   options?: {
-    priority?: number;        // higher = more important
-    retryLimit?: number;      // number of retry attempts
-    retryDelay?: number;      // seconds between retries
-    retryBackoff?: boolean;   // exponential backoff
+    priority?: number; // higher = more important
+    retryLimit?: number; // number of retry attempts
+    retryDelay?: number; // seconds between retries
+    retryBackoff?: boolean; // exponential backoff
     expireInSeconds?: number; // job expiration (seconds)
     startAfter?: number | string | Date; // delay the first run
-    cron?: string;            // recurring schedule (declarative)
+    cron?: string; // recurring schedule (declarative)
   };
 }
 ```
-
-
 
 `job()` itself is an **identity function** at runtime, it returns the definition object unchanged. All typing and validation live in the `JobDefinition` type and in the queue client at dispatch time.
 
@@ -219,20 +225,20 @@ interface JobDefinition<TPayload, TResult = void, TName extends string = string>
 
 These are the **defaults** baked into the job. Each is optional. At dispatch time they're merged with [`PublishOptions`](#publishoptions) via `{ ...jobDef.options, ...publishOptions }`, so call-time options win.
 
-| Option | Type | Effect |
-|---|---|---|
-| `priority` | `number` | Higher values run before lower ones. |
-| `retryLimit` | `number` | How many times to retry a failed run. |
-| `retryDelay` | `number` | **Seconds** to wait between retries. |
-| `retryBackoff` | `boolean` | Use exponential backoff between retries. |
-| `expireInSeconds` | `number` | Drop the job if it hasn't run within this window. |
-| `startAfter` | `number \| string \| Date` | Delay the first run (seconds / ISO string / Date). |
-| `cron` | `string` | Register the job as recurring, see [Recurring jobs](#recurring-jobs). |
+| Option            | Type                       | Effect                                                                |
+| ----------------- | -------------------------- | --------------------------------------------------------------------- |
+| `priority`        | `number`                   | Higher values run before lower ones.                                  |
+| `retryLimit`      | `number`                   | How many times to retry a failed run.                                 |
+| `retryDelay`      | `number`                   | **Seconds** to wait between retries.                                  |
+| `retryBackoff`    | `boolean`                  | Use exponential backoff between retries.                              |
+| `expireInSeconds` | `number`                   | Drop the job if it hasn't run within this window.                     |
+| `startAfter`      | `number \| string \| Date` | Delay the first run (seconds / ISO string / Date).                    |
+| `cron`            | `string`                   | Register the job as recurring, see [Recurring jobs](#recurring-jobs). |
 
 Adapter support varies, see the [adapter comparison](#adapters).
 
 <Callout type="warn" title="`retryDelay` is in seconds, not milliseconds">
-`retryDelay`, `expireInSeconds`, and the numeric form of `startAfter` are all in **seconds**. `retryDelay: 30` means thirty seconds between retries, not thirty milliseconds. The BullMQ adapter multiplies `retryDelay` by 1000 internally; you still pass seconds.
+  `retryDelay`, `expireInSeconds`, and the numeric form of `startAfter` are all in **seconds**. `retryDelay: 30` means thirty seconds between retries, not thirty milliseconds. The BullMQ adapter multiplies `retryDelay` by 1000 internally; you still pass seconds.
 </Callout>
 
 ### `PublishOptions`
@@ -243,9 +249,9 @@ The per-call override surface for `publish()`. It's a superset of `options` minu
 interface PublishOptions {
   priority?: number;
   startAfter?: number | string | Date;
-  singletonKey?: string;     // dedup, only one queued job may carry this key
+  singletonKey?: string; // dedup, only one queued job may carry this key
   retryLimit?: number;
-  retryDelay?: number;       // seconds
+  retryDelay?: number; // seconds
   retryBackoff?: boolean;
   expireInSeconds?: number;
 }
@@ -278,11 +284,11 @@ export default job({
 When a worker starts (`queue.listen()`), it calls `registerSchedules()`, which reads every job's `options.cron` and registers it as a recurring schedule.
 
 <Callout type="warn" title="A cron job's schema must accept an empty payload">
-`registerSchedules()` registers cron jobs by calling `schema.parse({})`, recurring runs carry **no** payload. If your schema requires fields, it throws *"Job &lt;name&gt; has cron schedule but schema does not accept an empty payload."* Use `z.object({})`, or make every field optional or defaulted.
+  `registerSchedules()` registers cron jobs by calling `schema.parse({})`, recurring runs carry **no** payload. If your schema requires fields, it throws *"Job &lt;name&gt; has cron schedule but schema does not accept an empty payload."* Use `z.object({})`, or make every field optional or defaulted.
 </Callout>
 
 <Callout type="info" title="`startAfter` is ignored for cron jobs">
-When a job is registered via `options.cron`, its `cron` and `startAfter` are stripped from the options handed to the adapter, `startAfter` has no meaning for a recurring schedule.
+  When a job is registered via `options.cron`, its `cron` and `startAfter` are stripped from the options handed to the adapter, `startAfter` has no meaning for a recurring schedule.
 </Callout>
 
 Choose `options.cron` (declarative, auto-registered by the worker) for fixed schedules baked into your app. Reach for [`queue.<name>.schedule(payload, cron)`](#schedulepayload-cron-options) only when you need to register a schedule **with a payload** or set one up dynamically at runtime.
@@ -291,8 +297,8 @@ Choose `options.cron` (declarative, auto-registered by the worker) for fixed sch
 
 Defining a job and dispatching it only **enqueues** work, something has to **drain** the queue. QUESTPIE picks the runtime model from the adapter's capabilities, and you start the worker **programmatically** by importing your built app.
 
-<Callout type="warn" title="There is no `questpie worker` CLI command">
-Workers run programmatically, not via the CLI. The `questpie` CLI has commands for codegen, migrations, seeding, and deploy, but nothing for queues. Write a small entrypoint script (below) and run it with your runtime.
+<Callout type="info" title="Workers start from application entrypoints">
+  Write a small entrypoint that imports the built app, selects a consumer model, and runs with your application runtime.
 </Callout>
 
 ### Long-running worker (Node / Bun)
@@ -303,7 +309,7 @@ For a persistent worker process, write an entrypoint that calls `app.queue.liste
 import { app } from "#questpie";
 
 await app.queue.listen({
-  teamSize: 5,  // max concurrent jobs (pg-boss teamSize / BullMQ concurrency)
+  teamSize: 5, // max concurrent jobs (pg-boss teamSize / BullMQ concurrency)
   batchSize: 3, // jobs fetched per poll
 });
 
@@ -352,20 +358,18 @@ export default {
 `createPushConsumer()` throws on pg-boss / BullMQ (they're poll-based, not push).
 
 <Callout type="info" title="Detect capabilities before calling listen / runOnce / schedule">
-Each adapter advertises what it supports via `app.queue.capabilities`, `longRunningConsumer`, `runOnceConsumer`, `pushConsumer`, `scheduling`, `singleton`. If you target multiple runtimes from one codebase, check the relevant flag before calling a method; that's cheaper than catching the throw.
+  Each adapter advertises what it supports via `app.queue.capabilities`, `longRunningConsumer`, `runOnceConsumer`, `pushConsumer`, `scheduling`, `singleton`. If you target multiple runtimes from one codebase, check the relevant flag before calling a method; that's cheaper than catching the throw.
 </Callout>
 
 ## Adapters
 
 You pick the queue backend by passing an adapter to `.build({ queue: { adapter } })`. Each adapter lives in its own subpath so its driver stays out of your bundle unless you import it.
 
-| Adapter | Import | Backed by | Long-running | Run-once | Push | Scheduling | Singleton |
-|---|---|---|---|---|---|---|---|
-| **pg-boss** | `questpie/adapters/pg-boss` | Postgres | yes | yes | no | yes | yes |
-| **BullMQ** | `questpie/adapters/bullmq` | Redis | yes | yes | no | yes | yes |
-| **Cloudflare Queues** | `questpie/adapters/cloudflare-queues` | CF Queues | no | no | yes | no | no |
-
-
+| Adapter               | Import                                | Backed by | Long-running | Run-once | Push | Scheduling | Singleton |
+| --------------------- | ------------------------------------- | --------- | ------------ | -------- | ---- | ---------- | --------- |
+| **pg-boss**           | `questpie/adapters/pg-boss`           | Postgres  | yes          | yes      | no   | yes        | yes       |
+| **BullMQ**            | `questpie/adapters/bullmq`            | Redis     | yes          | yes      | no   | yes        | yes       |
+| **Cloudflare Queues** | `questpie/adapters/cloudflare-queues` | CF Queues | no           | no       | yes  | no         | no        |
 
 ### pg-boss (Postgres)
 
@@ -429,21 +433,39 @@ class MyAdapter implements QueueAdapter {
     singleton: false,
   };
 
-  async start() { /* connect */ }
-  async stop() { /* disconnect */ }
-  async publish(jobName, payload, options) { /* enqueue */ return "job-id"; }
-  async schedule(jobName, cron, payload, options) { /* register cron */ }
-  async unschedule(jobName) { /* cancel cron */ }
-  on(event, handler) { /* "error" listener */ }
+  async start() {
+    /* connect */
+  }
+  async stop() {
+    /* disconnect */
+  }
+  async publish(jobName, payload, options) {
+    /* enqueue */ return "job-id";
+  }
+  async schedule(jobName, cron, payload, options) {
+    /* register cron */
+  }
+  async unschedule(jobName) {
+    /* cancel cron */
+  }
+  on(event, handler) {
+    /* "error" listener */
+  }
 
   // Optional, presence drives capability fallbacks:
-  async listen(handlers, options) { /* long-running consumer */ }
-  async runOnce(handlers, options) { return { processed: 0 }; }
-  createPushConsumer(args) { return async (batch) => {}; }
+  async listen(handlers, options) {
+    /* long-running consumer */
+  }
+  async runOnce(handlers, options) {
+    return { processed: 0 };
+  }
+  createPushConsumer(args) {
+    return async (batch) => {};
+  }
 }
 ```
 
-`start` / `stop` / `publish` / `schedule` / `unschedule` / `on` are **required**; `listen` / `runOnce` / `createPushConsumer` are **optional**, whether you implement each one drives the corresponding capability flag when `capabilities` leaves it unset. Each handler in the `QueueHandlerMap` is keyed by the **durable job name** and receives `{ id, data }`; the framework re-validates `data` against the job's Zod schema before your user handler runs. This is the QUESTPIE principle in action: **the three built-in adapters use the exact same `QueueAdapter` seam your custom adapter does**, there is no privileged internal queue API.
+`start` / `stop` / `publish` / `schedule` / `unschedule` / `on` are **required**; `listen` / `runOnce` / `createPushConsumer` are **optional** and drive their capability flags when `capabilities` leaves them unset. Each `QueueHandlerMap` entry is keyed by the durable job name and receives `{ id, data }`; QUESTPIE validates `data` against the job's Zod schema before the handler runs. Built-in and custom backends implement the same `QueueAdapter` contract.
 
 ## Built-in job: `index-records`
 
