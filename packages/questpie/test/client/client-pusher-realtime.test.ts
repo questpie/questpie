@@ -186,4 +186,91 @@ describe("Pusher realtime client transport", () => {
 		expect(FakePusher.instances[0].disconnected).toBe(true);
 		expect(authVersion).toBeGreaterThanOrEqual(4);
 	});
+
+	test("flushes the newest desired topology and closes the final server session", async () => {
+		const controls: Array<{
+			revision: number;
+			topics: Array<{ id: string }>;
+		}> = [];
+		let releaseFirstControl!: () => void;
+		const firstControlGate = new Promise<void>((resolve) => {
+			releaseFirstControl = resolve;
+		});
+		const fetcher: typeof fetch = async (input, init) => {
+			const url = String(input);
+			if (url.endsWith("/realtime/config")) {
+				return Response.json({
+					transport: "shared-provider",
+					config: { provider: "pusher", key: "public-key" },
+				});
+			}
+			if (url.endsWith("/realtime/auth")) {
+				return Response.json({ auth: "signed" });
+			}
+			if (url.endsWith("/realtime") && init?.method === "POST") {
+				const body = JSON.parse(String(init.body));
+				if (body.transport === "shared-provider") {
+					return Response.json({
+						transport: "shared-provider",
+						sessionId: "session-v1",
+						token: "control-v1",
+						channel: "private-questpie-rt-session-v1",
+						control: {
+							protocol: "questpie-realtime-topology",
+							versions: [1],
+						},
+					});
+				}
+				if (body.topology) {
+					controls.push(body.topology);
+					if (controls.length === 1) await firstControlGate;
+					return Response.json({ status: "accepted" }, { status: 202 });
+				}
+			}
+			if (url.includes("/posts") || url.includes("/pages")) {
+				return Response.json({ docs: [], totalDocs: 0 });
+			}
+			throw new Error(`Unexpected request: ${url}`);
+		};
+		const client = createClient<any>({
+			baseURL: "http://localhost:3000",
+			fetch: fetcher,
+		});
+		const errors: Error[] = [];
+		let postSnapshots = 0;
+		const stopPosts = client.collections.posts.live(
+			{},
+			() => {
+				postSnapshots += 1;
+			},
+			{ onError: (error) => errors.push(error) },
+		);
+		await waitFor(
+			() => FakePusher.instances.length === 1 && postSnapshots === 1,
+		);
+		const stopPages = client.collections.pages.live({}, () => {}, {
+			onError: (error) => errors.push(error),
+		});
+		await waitFor(() => controls.length === 1 || errors.length > 0);
+		expect(errors).toHaveLength(0);
+		expect(controls[0].topics.map((topic) => topic.id)).toHaveLength(2);
+
+		stopPages();
+		releaseFirstControl();
+		await waitFor(() => controls.length === 2);
+		expect(controls[1]).toMatchObject({ revision: 2 });
+		expect(controls[1].topics).toHaveLength(1);
+
+		stopPosts();
+		await waitFor(() => controls.length === 3);
+		expect(controls[2]).toEqual({
+			protocol: "questpie-realtime-topology",
+			version: 1,
+			revision: 3,
+			topics: [],
+			channels: [],
+		});
+		await waitFor(() => FakePusher.instances[0].disconnected);
+		client.realtime.destroy();
+	});
 });

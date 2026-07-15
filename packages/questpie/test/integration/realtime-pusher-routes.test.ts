@@ -1,13 +1,50 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { createFetchHandler } from "../../src/server/adapters/http.js";
+import {
+	createAdapterRoutes,
+	createFetchHandler,
+} from "../../src/server/adapters/http.js";
 import { collection } from "../../src/server/collection/builder/collection-builder.js";
 import {
 	PusherClientTransport,
 	type PusherProvider,
 } from "../../src/server/modules/core/integrated/realtime/pusher-transport.js";
+import type {
+	ChangeBroker,
+	ChangeWake,
+} from "../../src/server/modules/core/integrated/realtime/transport.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
-import { runTestDbMigrations } from "../utils/test-db.js";
+import { createTestDb, runTestDbMigrations } from "../utils/test-db.js";
+
+class SharedChangeBus {
+	private readonly listeners = new Set<(wake: ChangeWake) => void>();
+
+	createBroker(): ChangeBroker {
+		let listener: ((wake: ChangeWake) => void) | undefined;
+		return {
+			start: async ({ onWake, onStateChange }) => {
+				listener = onWake;
+				this.listeners.add(onWake);
+				onStateChange?.("connected");
+			},
+			publish: async (wake) => {
+				for (const onWake of this.listeners) onWake(wake);
+			},
+			stop: async () => {
+				if (listener) this.listeners.delete(listener);
+			},
+		};
+	}
+}
+
+async function waitFor(assertion: () => boolean, timeoutMs = 2_000) {
+	const deadline = Date.now() + timeoutMs;
+	while (Date.now() < deadline) {
+		if (assertion()) return;
+		await new Promise((resolve) => setTimeout(resolve, 5));
+	}
+	throw new Error("Timed out waiting for cross-instance Pusher topology");
+}
 
 const provider: PusherProvider = {
 	trigger: async () => {},
@@ -23,10 +60,11 @@ const provider: PusherProvider = {
 };
 
 describe("pusher channel matrix module routes", () => {
-	let setup: Awaited<ReturnType<typeof buildMockApp>>;
+	let setup: Awaited<ReturnType<typeof buildMockApp>> | undefined;
 
 	afterEach(async () => {
-		await setup.cleanup();
+		await setup?.cleanup();
+		setup = undefined;
 	});
 
 	test("exposes secret-free config and no-store session-bound auth", async () => {
@@ -155,8 +193,13 @@ describe("pusher channel matrix module routes", () => {
 			sessionId: string;
 			token: string;
 			channel: string;
+			control: {
+				protocol: "questpie-realtime-topology";
+				versions: number[];
+			};
 		};
 		expect(session.channel).toMatch(/^private-questpie-rt-/);
+		expect(session.control.versions).toContain(1);
 
 		const auth = new URLSearchParams({
 			socket_id: "123.456",
@@ -179,11 +222,17 @@ describe("pusher channel matrix module routes", () => {
 				body: JSON.stringify({
 					sessionId: session.sessionId,
 					token: session.token,
-					frames: [{ type: "remove_topic", topicId: "posts-topic" }],
+					topology: {
+						protocol: "questpie-realtime-topology",
+						version: 1,
+						revision: 1,
+						topics: [],
+						channels: [],
+					},
 				}),
 			}),
 		);
-		expect(removeResponse.status).toBe(204);
+		expect(removeResponse.status).toBe(202);
 
 		const staleAuthResponse = await handler(
 			new Request("http://localhost/realtime/auth", {
@@ -193,5 +242,133 @@ describe("pusher channel matrix module routes", () => {
 			}),
 		);
 		expect(staleAuthResponse.status).toBe(403);
+	});
+
+	test("applies and closes a Pusher live-query topology through another app instance", async () => {
+		const database = await createTestDb();
+		const bus = new SharedChangeBus();
+		const transport = new PusherClientTransport({
+			provider,
+			key: "public-key",
+			identityKey: "test-secret",
+		});
+		const posts = () =>
+			collection("posts")
+				.fields(({ f }) => ({ title: f.text().required() }))
+				.access({ read: true });
+		const second = await buildMockApp(
+			{ name: "pusher-control", collections: { posts: posts() } },
+			{
+				db: { pglite: database },
+				realtime: {
+					changeBroker: bus.createBroker(),
+					retentionDays: 0,
+				},
+			},
+		);
+		const first = await buildMockApp(
+			{ name: "pusher-owner", collections: { posts: posts() } },
+			{
+				db: { pglite: database },
+				realtime: {
+					changeBroker: bus.createBroker(),
+					clientTransport: transport,
+					retentionDays: 0,
+				},
+			},
+		);
+		try {
+			await runTestDbMigrations(first.app);
+			const firstRoutes = createAdapterRoutes(first.app, {
+				accessMode: "user",
+			});
+			const secondRoutes = createAdapterRoutes(second.app, {
+				accessMode: "user",
+			});
+			const opened = await firstRoutes.realtime.subscribe(
+				new Request("http://localhost/realtime", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({
+						transport: "shared-provider",
+						topics: [
+							{
+								id: "posts-base",
+								resourceType: "collection",
+								resource: "posts",
+								operation: "find",
+							},
+						],
+					}),
+				}),
+				{},
+				undefined,
+			);
+			if (opened.status !== 200) {
+				throw new Error(`Pusher session failed: ${await opened.text()}`);
+			}
+			const session = (await opened.json()) as {
+				sessionId: string;
+				token: string;
+				channel: string;
+			};
+			await waitFor(() => first.app.realtime.listeners.size === 1);
+
+			const control = (revision: number, topics: unknown[]) =>
+				secondRoutes.realtime.subscribe(
+					new Request("http://localhost/realtime", {
+						method: "POST",
+						headers: { "Content-Type": "application/json" },
+						body: JSON.stringify({
+							sessionId: session.sessionId,
+							token: session.token,
+							topology: {
+								protocol: "questpie-realtime-topology",
+								version: 1,
+								revision,
+								topics,
+								channels: [],
+							},
+						}),
+					}),
+					{},
+					undefined,
+				);
+			const added = await control(1, [
+				{
+					id: "posts-base",
+					topic: {
+						resourceType: "collection",
+						resource: "posts",
+						operation: "find",
+					},
+				},
+				{
+					id: "posts-added",
+					topic: {
+						resourceType: "collection",
+						resource: "posts",
+						operation: "find",
+						where: { title: "added" },
+					},
+				},
+			]);
+			expect(added.status).toBe(202);
+			await waitFor(() => first.app.realtime.listeners.size === 2);
+
+			const closed = await control(2, []);
+			expect(closed.status).toBe(202);
+			await waitFor(() => first.app.realtime.listeners.size === 0);
+			await expect(
+				transport.generateAuth({
+					socketId: "123.456",
+					channel: session.channel,
+					principal: null,
+				}),
+			).rejects.toThrow("Realtime session is not authorized");
+		} finally {
+			await Promise.all([first.cleanup(), second.cleanup()]);
+			await database.close();
+		}
 	});
 });

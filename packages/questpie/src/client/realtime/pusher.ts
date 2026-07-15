@@ -70,6 +70,8 @@ export class PusherRealtimeTransport implements RealtimeClientTransport {
 	private controlOperation: Promise<void> = Promise.resolve();
 	private desiredRevision = 0;
 	private desiredFlushPromise: Promise<void> | null = null;
+	private desiredTopologyGeneration = 0;
+	private desiredFlushedGeneration = 0;
 	private refreshPromise: Promise<void> | null = null;
 	private refreshPending = false;
 	private destroyed = false;
@@ -122,11 +124,16 @@ export class PusherRealtimeTransport implements RealtimeClientTransport {
 			if (onError) current.errorCallbacks.delete(onError);
 			if (current.subscribers.size > 0) return;
 			this.topics.delete(topicId);
+			if (this.supportsDesiredTopology()) {
+				const closeAfterFlush = this.topics.size === 0;
+				void this.sendControl([{ type: "remove_topic", topicId }]).finally(
+					() => {
+						if (closeAfterFlush && this.topics.size === 0) this.disconnect();
+					},
+				);
+				return;
+			}
 			if (current.registered) {
-				if (this.supportsDesiredTopology() && this.topics.size === 0) {
-					this.disconnect();
-					return;
-				}
 				void this.sendControl([{ type: "remove_topic", topicId }]).finally(
 					() => {
 						if (this.topics.size === 0) this.disconnect();
@@ -148,6 +155,7 @@ export class PusherRealtimeTransport implements RealtimeClientTransport {
 				await this.sendControl([
 					{ type: "add_topic", topicId, topic: entry.topic },
 				]);
+				if (this.destroyed || this.topics.get(topicId) !== entry) return;
 				entry.registered = true;
 			}
 			await this.refetchEntry(entry);
@@ -253,6 +261,10 @@ export class PusherRealtimeTransport implements RealtimeClientTransport {
 			}));
 		if (removed.length || added.length)
 			await this.sendControl([...removed, ...added]);
+		if (this.topics.size === 0) {
+			this.disconnect();
+			return;
+		}
 		for (const frame of added) {
 			const entry = this.topics.get(frame.topicId);
 			if (entry) entry.registered = true;
@@ -338,14 +350,14 @@ export class PusherRealtimeTransport implements RealtimeClientTransport {
 	}
 
 	private sendDesiredTopology(): Promise<void> {
+		this.desiredTopologyGeneration += 1;
 		if (this.desiredFlushPromise) return this.desiredFlushPromise;
-		this.desiredFlushPromise = new Promise<void>((resolve, reject) => {
-			queueMicrotask(() => {
+		this.desiredFlushPromise = (async () => {
+			await Promise.resolve();
+			while (this.desiredFlushedGeneration < this.desiredTopologyGeneration) {
+				const generation = this.desiredTopologyGeneration;
 				const session = this.session;
-				if (!session || this.topics.size === 0) {
-					resolve();
-					return;
-				}
+				if (!session) return;
 				const topology = {
 					protocol: "questpie-realtime-topology",
 					version: 1,
@@ -356,7 +368,7 @@ export class PusherRealtimeTransport implements RealtimeClientTransport {
 					})),
 					channels: [],
 				};
-				this.controlOperation = this.controlOperation
+				const operation = this.controlOperation
 					.catch(() => {})
 					.then(async () => {
 						const authHeaders = await this.options.getAuthHeaders?.();
@@ -380,9 +392,12 @@ export class PusherRealtimeTransport implements RealtimeClientTransport {
 							throw new Error(`Realtime control failed: ${response.status}`);
 						}
 					});
-				this.controlOperation.then(resolve, reject);
-			});
-		}).finally(() => {
+				this.controlOperation = operation;
+				await operation;
+				if (this.session !== session) return;
+				this.desiredFlushedGeneration = generation;
+			}
+		})().finally(() => {
 			this.desiredFlushPromise = null;
 		});
 		return this.desiredFlushPromise;
@@ -434,6 +449,8 @@ export class PusherRealtimeTransport implements RealtimeClientTransport {
 		this.channel = null;
 		this.session = null;
 		this.desiredRevision = 0;
+		this.desiredTopologyGeneration = 0;
+		this.desiredFlushedGeneration = 0;
 	}
 
 	destroy(): void {
@@ -442,9 +459,14 @@ export class PusherRealtimeTransport implements RealtimeClientTransport {
 		const frames = [...this.topics.entries()]
 			.filter(([, entry]) => entry.registered)
 			.map(([topicId]) => ({ type: "remove_topic", topicId }));
-		if (frames.length) void this.sendControl(frames).catch(() => {});
 		this.topics.clear();
-		this.disconnect();
+		if (frames.length) {
+			void this.sendControl(frames)
+				.catch(() => {})
+				.finally(() => this.disconnect());
+		} else {
+			this.disconnect();
+		}
 	}
 
 	get topicCount(): number {

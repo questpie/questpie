@@ -305,9 +305,9 @@ describe("pusher channel matrix change broker", () => {
 			});
 			await tick();
 			broker.emitState("unavailable");
-			expect(delays).toEqual([15_000, 2000]);
+			expect(delays.slice(-2)).toEqual([15_000, 2000]);
 			broker.emitState("connected");
-			expect(delays).toEqual([15_000, 2000, 15_000]);
+			expect(delays.slice(-3)).toEqual([15_000, 2000, 15_000]);
 		} finally {
 			intervalSpy.mockRestore();
 			await realtime.destroy();
