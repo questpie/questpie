@@ -669,6 +669,31 @@ export async function realtimeSubscribe(
 			);
 		}
 		try {
+			for (const frame of body.frames) {
+				if (frame.type === "add_topic") {
+					await resolveIncrementalTopic(
+						app,
+						{
+							...frame.topic,
+							id: frame.topicId,
+							sinceSeq: frame.sinceSeq,
+						} as TopicInput,
+						resolved.appContext,
+						admission,
+					);
+				} else if (frame.type === "subscribe_channel") {
+					await resolveChannelSubscription(
+						app,
+						{
+							id: frame.subscriptionId,
+							channel: frame.channel,
+							params: frame.params,
+							lastEventId: frame.lastEventId,
+						},
+						resolved.appContext,
+					);
+				}
+			}
 			const result = await app.realtime.submitLegacyTopology({
 				sessionId: body.sessionId,
 				token: body.token,
@@ -693,6 +718,10 @@ export async function realtimeSubscribe(
 			}
 			return new Response(null, { status: 204 });
 		} catch (error) {
+			if (error instanceof RealtimeTopicAdmissionError) {
+				observeTopicRejection(error);
+				return Response.json({ error: error.payload }, { status: 400 });
+			}
 			return errorResponse(error, request, resolved.appContext.locale);
 		}
 	}
@@ -1483,7 +1512,9 @@ export async function realtimeSubscribe(
 									desired.id,
 									`Connection accepts at most ${admission.maxTopicsPerConnection} subscriptions`,
 								);
-								continue;
+								throw new Error(
+									`Connection accepts at most ${admission.maxTopicsPerConnection} subscriptions`,
+								);
 							}
 							try {
 								const channel = await resolveChannelSubscription(
@@ -1502,6 +1533,7 @@ export async function realtimeSubscribe(
 									desired.id,
 									error instanceof Error ? error.message : "Channel rejected",
 								);
+								throw error;
 							}
 						}
 						for (const desired of topology.topics) {
@@ -1515,7 +1547,9 @@ export async function realtimeSubscribe(
 									desired.id,
 									`Connection accepts at most ${admission.maxTopicsPerConnection} topics`,
 								);
-								continue;
+								throw new Error(
+									`Connection accepts at most ${admission.maxTopicsPerConnection} topics`,
+								);
 							}
 							try {
 								const rawTopic = {
@@ -1547,12 +1581,13 @@ export async function realtimeSubscribe(
 										error.message,
 										error.payload,
 									);
-									continue;
+									throw error;
 								}
 								await sendTopicError(
 									desired.id,
 									error instanceof Error ? error.message : "Topic rejected",
 								);
+								throw error;
 							}
 						}
 						appliedTopology = topology;

@@ -150,6 +150,10 @@ test("applies topic additions and removals through a different app instance", as
 		collection("items")
 			.fields(({ f }) => ({ name: f.text().required() }))
 			.access({ read: true });
+	const controlOnly = () =>
+		collection("controlOnly")
+			.fields(({ f }) => ({ name: f.text().required() }))
+			.access({ read: true });
 	const first = await buildMockApp(
 		{
 			name: "topology-first",
@@ -165,7 +169,7 @@ test("applies topic additions and removals through a different app instance", as
 	const second = await buildMockApp(
 		{
 			name: "topology-second",
-			collections: { items: items() },
+			collections: { items: items(), controlOnly: controlOnly() },
 			channels: { room: channel("room-[id]").authorize({ subscribe: true }) },
 		},
 		{
@@ -380,6 +384,30 @@ test("applies topic additions and removals through a different app instance", as
 				(first.app.realtime as any).channelEventLedger.localSubscriptions
 					.size === 0,
 		);
+
+		const ownerApplyFailure = await secondRoutes.realtime.subscribe(
+			desiredRequest(session, 6, [
+				{
+					id: "items-replacement",
+					topic: {
+						resourceType: "collection",
+						resource: "items",
+						where: { name: "replacement" },
+					},
+				},
+				{
+					id: "control-only",
+					topic: {
+						resourceType: "collection",
+						resource: "controlOnly",
+					},
+				},
+			]),
+			{},
+			undefined,
+		);
+		expect(ownerApplyFailure.status).toBe(202);
+		await waitFor(() => first.app.realtime.listeners.size === 0);
 		expect(session.sessionId).toBeTruthy();
 	} finally {
 		await reader?.close().catch(() => {});

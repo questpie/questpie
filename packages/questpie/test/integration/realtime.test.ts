@@ -2303,11 +2303,10 @@ describe("realtime matrix", () => {
 					},
 				},
 			]);
-			expect(rejected.status).toBe(204);
-			const rejection = await reader.readEvent(2000);
+			expect(rejected.status).toBe(400);
+			const rejection = await rejected.json();
 			expect(rejection).toEqual({
-				event: "error",
-				data: {
+				error: {
 					code: "REALTIME_TOPIC_REJECTED",
 					message: "Topic limit must be between 1 and 100",
 					topicId: "items-rejected",
