@@ -1,5 +1,11 @@
 # create-questpie
 
+## 2.2.1
+
+### Patch Changes
+
+- [#170](https://github.com/questpie/questpie/pull/170) [`1e2691f`](https://github.com/questpie/questpie/commit/1e2691f6d2f310860bf81db2219f23dd4d122d10) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Always tear down the application after `questpie push` so adapter handles cannot keep deployment init containers running after the schema is applied. Keep the development-only warning visible with `--force`, and make generated project guidance explicit that production deployments must use committed migrations.
+
 ## 2.2.0
 
 ### Minor Changes
