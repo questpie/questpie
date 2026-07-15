@@ -251,7 +251,7 @@ program
 		"Path to app config file",
 		"questpie.config.ts",
 	)
-	.option("-f, --force", "Skip warning prompt")
+	.option("-f, --force", "Acknowledge the development-only warning")
 	.option("-v, --verbose", "Show SQL statements")
 	.action(async (options) => {
 		try {

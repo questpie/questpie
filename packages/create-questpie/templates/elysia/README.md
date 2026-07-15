@@ -27,6 +27,11 @@ bun run db:push
 bun dev
 ```
 
+> **Production database rule:** `bun run db:push` / `questpie push` is local
+> development only. Never run it against production or in deployment
+> automation, even with `--force`. Generate and commit a migration with `bun
+run migrate:create`, then apply it with `bun run migrate`.
+
 - API docs (Scalar): `http://localhost:3000/api/docs` (the root `/` redirects here)
 - REST API: `http://localhost:3000/api/*`
 

@@ -269,6 +269,7 @@ await queue.sendReminder.publish({ userId: "abc" });
 | CRITICAL | Importing route/job/service from `#questpie/factories`            | Use `"questpie"`, only collection/global/block/adminConfig use `#questpie/factories`                                                                                                                                                                                        |
 | CRITICAL | Redefining a module collection (e.g. starter `user`) from scratch | `.merge(starterModule.collections.user)` then add fields, see Extend pattern                                                                                                                                                                                                |
 | CRITICAL | Casting `session.user` to `any` for admin role checks             | Use `session?.user.role`; if it is not typed, fix `modules.ts`, `config/auth.ts`, and regenerated output                                                                                                                                                                    |
+| CRITICAL | Running `questpie push` against production                        | `push` bypasses migration history and is local-development only. Commit `migrate:create` output and run `questpie migrate` in deployment; `--force` does not make push production-safe                                                                                      |
 | HIGH     | Forgetting `questpie generate` after adding files                 | Re-run codegen on any file add/remove in convention dirs                                                                                                                                                                                                                    |
 | HIGH     | Job handler uses `input` instead of `payload`                     | Jobs destructure `{ payload }`, routes destructure `{ input }`                                                                                                                                                                                                              |
 | HIGH     | `queue.send("name", data)`                                        | Use `queue.jobName.publish(data)`                                                                                                                                                                                                                                           |
@@ -1363,18 +1364,18 @@ bun run dev
 
 Env is validated at boot in `src/lib/env.ts` via `@t3-oss/env-core` (Zod schemas). Add new vars there.
 
-| Variable              | Required | Description                                  |
-| --------------------- | -------- | -------------------------------------------- |
-| `DATABASE_URL`        | Yes      | PostgreSQL connection string                 |
-| `APP_URL`             | No       | Public URL (default: `http://localhost:3000`) |
-| `PORT`                | No       | Server port (default: `3000`)                |
-| `BETTER_AUTH_SECRET`  | No       | Better Auth secret (has a dev default)       |
-| `MAIL_ADAPTER`        | No       | `console`, `smtp`, `resend`, or `plunk`      |
-| `SMTP_HOST`           | No       | SMTP host (when `MAIL_ADAPTER=smtp`)         |
-| `SMTP_PORT`           | No       | SMTP port (when `MAIL_ADAPTER=smtp`)         |
-| `RESEND_API_KEY`      | No       | Resend API key (when `MAIL_ADAPTER=resend`)  |
-| `PLUNK_SECRET_KEY`    | No       | Plunk API key (when `MAIL_ADAPTER=plunk`)    |
-| `REDIS_URL`           | No       | Redis URL when BullMQ, Redis realtime, or Redis KV is selected |
+| Variable             | Required | Description                                                    |
+| -------------------- | -------- | -------------------------------------------------------------- |
+| `DATABASE_URL`       | Yes      | PostgreSQL connection string                                   |
+| `APP_URL`            | No       | Public URL (default: `http://localhost:3000`)                  |
+| `PORT`               | No       | Server port (default: `3000`)                                  |
+| `BETTER_AUTH_SECRET` | No       | Better Auth secret (has a dev default)                         |
+| `MAIL_ADAPTER`       | No       | `console`, `smtp`, `resend`, or `plunk`                        |
+| `SMTP_HOST`          | No       | SMTP host (when `MAIL_ADAPTER=smtp`)                           |
+| `SMTP_PORT`          | No       | SMTP port (when `MAIL_ADAPTER=smtp`)                           |
+| `RESEND_API_KEY`     | No       | Resend API key (when `MAIL_ADAPTER=resend`)                    |
+| `PLUNK_SECRET_KEY`   | No       | Plunk API key (when `MAIL_ADAPTER=plunk`)                      |
+| `REDIS_URL`          | No       | Redis URL when BullMQ, Redis realtime, or Redis KV is selected |
 
 ---
 
@@ -1555,6 +1556,11 @@ Treat the generated output as the app inventory. If a collection, global, route,
 bun run db:push
 ```
 
+`db:push` is for a local development database only. Never use it in production
+or a deployment init container, even with `--force`. For production, generate,
+review, and commit a migration with `bun run migrate:create`, then deploy with
+`bun run migrate`.
+
 Syncs your Drizzle schema directly to the database. No migration files created. Use this during development only.
 
 ### Production (migration files)
@@ -1624,12 +1630,12 @@ The headless templates mount the same `createFetchHandler(app, { basePath: "/api
 
 ### Runtime templates
 
-| Template | Shape |
-|---|---|
+| Template         | Shape                                                     |
+| ---------------- | --------------------------------------------------------- |
 | `tanstack-start` | Full-stack React with admin routes, Vite, Tailwind, Nitro |
-| `next` | Next.js App Router with admin routes |
-| `hono` | Headless Bun API with Hono and OpenAPI/Scalar |
-| `elysia` | Headless Bun API with Elysia and OpenAPI/Scalar |
+| `next`           | Next.js App Router with admin routes                      |
+| `hono`           | Headless Bun API with Hono and OpenAPI/Scalar             |
+| `elysia`         | Headless Bun API with Elysia and OpenAPI/Scalar           |
 
 ---
 
@@ -1779,22 +1785,22 @@ export default route()
 
 ## Quick Reference: CLI Commands
 
-| Command                          | Purpose                                     |
-| -------------------------------- | ------------------------------------------- |
-| `bun create questpie my-app`     | Scaffold a new project                      |
-| `bun run scaffold:verify`        | Regenerate and type-check scaffold          |
-| `bun run questpie:generate`      | Scan conventions, generate types and app    |
-| `bun run db:push`                | Push schema to DB (dev only, no migrations) |
-| `bun run migrate:create`         | Generate migration from schema diff         |
-| `bun run migrate`                | Run pending migrations                      |
-| `bun run migrate:down`           | Rollback last migration                     |
-| `bun run migrate:status`         | Show migration status                       |
-| `bun run migrate:fresh`          | Reset + run all migrations                  |
-| `bunx questpie seed`             | Run pending seeds                           |
-| `bunx questpie seed:undo`        | Undo executed seeds                         |
-| `bunx questpie seed:status`      | Show seed status                            |
-| `bunx questpie seed:reset`       | Reset seed tracking/checkpoints (does not undo data) |
-| `bun run dev`                    | Start development server                    |
+| Command                      | Purpose                                              |
+| ---------------------------- | ---------------------------------------------------- |
+| `bun create questpie my-app` | Scaffold a new project                               |
+| `bun run scaffold:verify`    | Regenerate and type-check scaffold                   |
+| `bun run questpie:generate`  | Scan conventions, generate types and app             |
+| `bun run db:push`            | Push schema to DB (dev only, no migrations)          |
+| `bun run migrate:create`     | Generate migration from schema diff                  |
+| `bun run migrate`            | Run pending migrations                               |
+| `bun run migrate:down`       | Rollback last migration                              |
+| `bun run migrate:status`     | Show migration status                                |
+| `bun run migrate:fresh`      | Reset + run all migrations                           |
+| `bunx questpie seed`         | Run pending seeds                                    |
+| `bunx questpie seed:undo`    | Undo executed seeds                                  |
+| `bunx questpie seed:status`  | Show seed status                                     |
+| `bunx questpie seed:reset`   | Reset seed tracking/checkpoints (does not undo data) |
+| `bun run dev`                | Start development server                             |
 
 ---
 
@@ -5687,10 +5693,15 @@ await client.channels.chatRoom.publish({
 });
 
 const members = await client.channels.chatRoom.presence({ roomId });
+const stopPresence = client.channels.chatRoom.subscribePresence(
+	{ roomId },
+	onMembers,
+);
 stop();
+stopPresence();
 ```
 
-`presence()` returns one typed member snapshot. Pusher/Soketi tracks native membership while mounted; SSE presence is coarse and app-instance-local. There is no public `subscribePresence()` or TanStack presence query yet, so do not claim a continuously reactive, globally exact occupancy contract. See `references/reactive-apps.md`.
+`presence()` returns one typed snapshot. `subscribePresence()` emits the initial and later rosters, and `presenceIter(params, { signal })` provides the async-generator form. Pusher/Soketi uses native membership; SSE uses Postgres leases across instances and deduplicates multiple connections by authenticated principal. Crash leave converges after the lease TTL.
 
 Async consumers use `client.channels.chatRoom.iter(params, { signal })`. TanStack Query exposes an accumulating event query:
 
@@ -5698,9 +5709,13 @@ Async consumers use `client.channels.chatRoom.iter(params, { signal })`. TanStac
 const { data: messages = [] } = useQuery(
 	q.channels.chatRoom.subscription({ roomId }),
 );
+
+const { data: members = [] } = useQuery(
+	q.channels.chatRoom.presence({ roomId }),
+);
 ```
 
-This differs from live-query `{ realtime: true }`, which retains only the latest snapshot.
+The event subscription accumulates messages. The presence query and live-query `{ realtime: true }` retain only the latest snapshot.
 
 ## Delivery and security
 
@@ -5730,15 +5745,15 @@ This differs from live-query `{ realtime: true }`, which retains only the latest
 
 QUESTPIE uses an adapter-based architecture for all infrastructure. Development defaults work out of the box; production requires explicit adapter configuration in `questpie.config.ts`.
 
-| Service  | Dev Default           | Production Adapter                              |
-| -------- | --------------------- | ----------------------------------------------- |
-| Database | PostgreSQL (local)    | PostgreSQL (remote, SSL)                        |
-| Storage  | Local filesystem      | Files SDK provider adapter (`s3`, `r2`, etc.)   |
-| Queue    | None (jobs skip)      | pg-boss (`pgBossAdapter`)                       |
-| Realtime | pgNotify              | Redis Streams (`redisStreamsAdapter`)           |
-| Email    | Console (logs output) | SMTP (`SmtpAdapter`)                            |
-| KV Store | In-memory             | Redis (`redisKVAdapter`)                        |
-| Logger   | Pino (console)        | Pino (structured JSON)                          |
+| Service  | Dev Default           | Production Adapter                            |
+| -------- | --------------------- | --------------------------------------------- |
+| Database | PostgreSQL (local)    | PostgreSQL (remote, SSL)                      |
+| Storage  | Local filesystem      | Files SDK provider adapter (`s3`, `r2`, etc.) |
+| Queue    | None (jobs skip)      | pg-boss (`pgBossAdapter`)                     |
+| Realtime | pgNotify              | Redis Streams (`redisStreamsAdapter`)         |
+| Email    | Console (logs output) | SMTP (`SmtpAdapter`)                          |
+| KV Store | In-memory             | Redis (`redisKVAdapter`)                      |
+| Logger   | Pino (console)        | Pino (structured JSON)                        |
 
 Every adapter's exact config shape lives in `references/infrastructure-adapters.md`.
 
@@ -5798,11 +5813,16 @@ PostgreSQL with Drizzle ORM; schema is generated from your collection and global
 
 ### Development: Push
 
-Sync schema directly without migration files:
+Sync a disposable local development database directly without migration files:
 
 ```bash
 bunx questpie push
 ```
+
+> **Never run `questpie push` against production, from a production init
+> container, or from a deployment job.** It bypasses migration history and can
+> apply destructive drift without a reviewable migration. `--force` only
+> acknowledges the CLI warning; it does not make push production-safe.
 
 ### Production: Migration Files
 
@@ -5841,12 +5861,12 @@ Bun SQL (`new SQL({ url })`) already pools connections internally. In single-ins
 
 ### Adapter Compatibility Matrix
 
-| Adapter                          | Direct PG | PgBouncer (transaction)           | PgBouncer (session)         |
-| -------------------------------- | --------- | --------------------------------- | --------------------------- |
+| Adapter                          | Direct PG | PgBouncer (transaction)          | PgBouncer (session)         |
+| -------------------------------- | --------- | -------------------------------- | --------------------------- |
 | `pgNotifyAdapter` (realtime)     | works     | broken, listens silently dropped | works (pooling neutralized) |
 | `pgBossAdapter` (queue)          | works     | broken, LISTEN/NOTIFY required   | works (pooling neutralized) |
-| Drizzle queries via Bun SQL      | works     | works                             | works                       |
-| `redisStreamsAdapter` (realtime) | n/a       | n/a                               | n/a                         |
+| Drizzle queries via Bun SQL      | works     | works                            | works                       |
+| `redisStreamsAdapter` (realtime) | n/a       | n/a                              | n/a                         |
 
 Prepared statements also break under transaction pooling. If you must use it, ensure your driver disables prepared statements end-to-end.
 
@@ -5972,6 +5992,9 @@ bunx questpie migrate            # apply to database
 # Or in development:
 bunx questpie push               # direct schema sync (no migration file)
 ```
+
+Production automation must run committed migrations with `bunx questpie
+migrate`. Do not replace a failed migration with `push` to make a rollout pass.
 
 ### HIGH: Using local storage in production without persistent volume
 
@@ -6804,7 +6827,7 @@ The adapter duplicates the client for its blocking reader when supported; otherw
 
 ### Pusher/Soketi managed WebSockets
 
-Use the isolated preset when managed WebSocket delivery and native presence are required:
+Use the isolated preset when managed WebSocket delivery, provider-native presence, and shared provider delivery are required. SSE offers the same application-facing presence feature through Postgres leases:
 
 ```ts
 import { pusherRealtime } from "questpie/adapters/pusher";
@@ -6828,14 +6851,14 @@ The preset supplies a notice-only Pusher `ChangeBroker` and a Pusher `ClientTran
 
 ### When to Use Which
 
-| Selection                   | Use case                                                          |
-| --------------------------- | ----------------------------------------------------------------- |
-| Implicit pg + SSE           | Default Postgres deployment                                       |
-| Poll + SSE                  | Zero extra infrastructure without a push-capable database         |
-| `pgNotifyAdapter` + SSE     | Explicit Postgres connection/channel                              |
-| `redisStreamsAdapter` + SSE | Cross-instance Redis notice fan-out                               |
-| `cloudflareRealtimeAdapter` | Cloudflare Workers notice fan-out through sharded Durable Objects |
-| `pusherRealtime`            | Managed WebSockets, native presence, and shared channel delivery  |
+| Selection                   | Use case                                                                  |
+| --------------------------- | ------------------------------------------------------------------------- |
+| Implicit pg + SSE           | Default Postgres deployment                                               |
+| Poll + SSE                  | Zero extra infrastructure without a push-capable database                 |
+| `pgNotifyAdapter` + SSE     | Explicit Postgres connection/channel                                      |
+| `redisStreamsAdapter` + SSE | Cross-instance Redis notice fan-out                                       |
+| `cloudflareRealtimeAdapter` | Cloudflare Workers notice fan-out through sharded Durable Objects         |
+| `pusherRealtime`            | Managed WebSockets, provider-native presence, and shared channel delivery |
 
 ## Search
 
@@ -8997,9 +9020,13 @@ Generated channels expose an accumulating query option. Unlike live queries, ord
 const { data: messages = [] } = useQuery(
 	q.channels.chatRoom.subscription({ roomId }),
 );
+
+const { data: members = [] } = useQuery(
+	q.channels.chatRoom.presence({ roomId }),
+);
 ```
 
-The result is a typed array of `{ event, eventId, data }` unions. The query's abort signal closes the underlying channel iterator. Channel definition, authorization, server publish, and presence are covered in `references/channels.md`.
+The subscription result is an accumulating typed array of `{ event, eventId, data }` unions. Presence channels also expose a typed latest-roster query; each snapshot replaces the previous roster. The query abort signal closes the underlying iterator. Channel definition, authorization, server publish, and presence are covered in `references/channels.md`.
 
 ## Framework Adapters
 
@@ -9134,21 +9161,32 @@ Narrow the server query first; `select` reduces observer/render work, not databa
 
 Throttle noisy producers such as cursor/typing updates, keep payloads small, and always unsubscribe or abort on unmount. Ordered channel events are not coalesced. Recover an explicit replay gap from persisted collection state; the bounded ledger is not durable history.
 
-## Presence contract
+## Live presence
 
-`.authorize(...).presence(resolver)` creates a typed presence channel, and the client reads a snapshot:
+`.authorize(...).presence(resolver)` creates a typed presence channel. The client can read once, subscribe, iterate, or use a latest-snapshot TanStack query:
 
 ```ts
 const members = await client.channels.chatRoom.presence({ roomId });
+const stop = client.channels.chatRoom.subscribePresence({ roomId }, onMembers);
+for await (const members of client.channels.chatRoom.presenceIter(
+	{ roomId },
+	{ signal },
+)) {
+	onMembers(members);
+}
 ```
 
-Presence is not currently a public reactive stream:
+```tsx
+const { data: members = [] } = useQuery(
+	q.channels.chatRoom.presence({ roomId }),
+);
+```
 
-- Pusher/Soketi provides native membership and the transport tracks changes while mounted.
-- SSE presence is coarse and app-instance-local.
-- There is no public `subscribePresence()` or TanStack presence query yet.
+- Pusher/Soketi uses provider-native membership.
+- SSE uses Postgres connection leases, reconciles across instances, and aggregates all connections for one authenticated principal into one member.
+- Graceful leave is immediate. A crashed SSE connection disappears after the lease TTL (default 30s); heartbeat defaults to 10s and reconciliation to 1s.
 
-Do not claim globally exact live occupancy and do not manufacture trusted membership with client-published join/leave events.
+Presence is not durable history or proof of acknowledgement. Do not manufacture trusted membership with client-published join/leave events.
 
 ## Lifecycle and diagnostics
 
@@ -9171,5 +9209,5 @@ Equivalent server refresh work is shared per principal by default. Never share a
 4. Use `select` for the value actually rendered.
 5. Bound channel state and throttle noisy producers.
 6. Clean up every direct subscription.
-7. Treat replay and presence as bounded delivery features.
+7. Treat replay and presence as bounded delivery features, not durable history.
 8. Measure query cost, snapshot bytes, topics, subscribers, and React commits at realistic event rates.

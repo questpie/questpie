@@ -449,6 +449,13 @@ Inside `packages/questpie`:
 - Migration output is silenced in tests via `QUESTPIE_MIGRATIONS_SILENT=1`.
 - Tests use `@electric-sql/pglite` for in-process PostgreSQL.
 
+### Database Schema Safety
+
+- **`questpie push` / `bun run db:push` is for local development only. Never use it against production, in a production init container, or in a deployment job.**
+- `--force` only acknowledges the development warning. It does not make `push` safe for production.
+- Production schema changes must be committed migrations: run `questpie migrate:create`, review and commit the generated migration, then run `questpie migrate` during deployment.
+- Agents must not replace a production migration with `push` to make a rollout pass.
+
 ### Changesets & Publishing
 
 - **Changesets** for versioning: `bun changeset` to create, `bun run version` to apply.

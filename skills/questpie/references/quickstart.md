@@ -66,18 +66,18 @@ bun run dev
 
 Env is validated at boot in `src/lib/env.ts` via `@t3-oss/env-core` (Zod schemas). Add new vars there.
 
-| Variable              | Required | Description                                  |
-| --------------------- | -------- | -------------------------------------------- |
-| `DATABASE_URL`        | Yes      | PostgreSQL connection string                 |
-| `APP_URL`             | No       | Public URL (default: `http://localhost:3000`) |
-| `PORT`                | No       | Server port (default: `3000`)                |
-| `BETTER_AUTH_SECRET`  | No       | Better Auth secret (has a dev default)       |
-| `MAIL_ADAPTER`        | No       | `console`, `smtp`, `resend`, or `plunk`      |
-| `SMTP_HOST`           | No       | SMTP host (when `MAIL_ADAPTER=smtp`)         |
-| `SMTP_PORT`           | No       | SMTP port (when `MAIL_ADAPTER=smtp`)         |
-| `RESEND_API_KEY`      | No       | Resend API key (when `MAIL_ADAPTER=resend`)  |
-| `PLUNK_SECRET_KEY`    | No       | Plunk API key (when `MAIL_ADAPTER=plunk`)    |
-| `REDIS_URL`           | No       | Redis URL when BullMQ, Redis realtime, or Redis KV is selected |
+| Variable             | Required | Description                                                    |
+| -------------------- | -------- | -------------------------------------------------------------- |
+| `DATABASE_URL`       | Yes      | PostgreSQL connection string                                   |
+| `APP_URL`            | No       | Public URL (default: `http://localhost:3000`)                  |
+| `PORT`               | No       | Server port (default: `3000`)                                  |
+| `BETTER_AUTH_SECRET` | No       | Better Auth secret (has a dev default)                         |
+| `MAIL_ADAPTER`       | No       | `console`, `smtp`, `resend`, or `plunk`                        |
+| `SMTP_HOST`          | No       | SMTP host (when `MAIL_ADAPTER=smtp`)                           |
+| `SMTP_PORT`          | No       | SMTP port (when `MAIL_ADAPTER=smtp`)                           |
+| `RESEND_API_KEY`     | No       | Resend API key (when `MAIL_ADAPTER=resend`)                    |
+| `PLUNK_SECRET_KEY`   | No       | Plunk API key (when `MAIL_ADAPTER=plunk`)                      |
+| `REDIS_URL`          | No       | Redis URL when BullMQ, Redis realtime, or Redis KV is selected |
 
 ---
 
@@ -258,6 +258,11 @@ Treat the generated output as the app inventory. If a collection, global, route,
 bun run db:push
 ```
 
+`db:push` is for a local development database only. Never use it in production
+or a deployment init container, even with `--force`. For production, generate,
+review, and commit a migration with `bun run migrate:create`, then deploy with
+`bun run migrate`.
+
 Syncs your Drizzle schema directly to the database. No migration files created. Use this during development only.
 
 ### Production (migration files)
@@ -327,12 +332,12 @@ The headless templates mount the same `createFetchHandler(app, { basePath: "/api
 
 ### Runtime templates
 
-| Template | Shape |
-|---|---|
+| Template         | Shape                                                     |
+| ---------------- | --------------------------------------------------------- |
 | `tanstack-start` | Full-stack React with admin routes, Vite, Tailwind, Nitro |
-| `next` | Next.js App Router with admin routes |
-| `hono` | Headless Bun API with Hono and OpenAPI/Scalar |
-| `elysia` | Headless Bun API with Elysia and OpenAPI/Scalar |
+| `next`           | Next.js App Router with admin routes                      |
+| `hono`           | Headless Bun API with Hono and OpenAPI/Scalar             |
+| `elysia`         | Headless Bun API with Elysia and OpenAPI/Scalar           |
 
 ---
 
@@ -482,22 +487,22 @@ export default route()
 
 ## Quick Reference: CLI Commands
 
-| Command                          | Purpose                                     |
-| -------------------------------- | ------------------------------------------- |
-| `bun create questpie my-app`     | Scaffold a new project                      |
-| `bun run scaffold:verify`        | Regenerate and type-check scaffold          |
-| `bun run questpie:generate`      | Scan conventions, generate types and app    |
-| `bun run db:push`                | Push schema to DB (dev only, no migrations) |
-| `bun run migrate:create`         | Generate migration from schema diff         |
-| `bun run migrate`                | Run pending migrations                      |
-| `bun run migrate:down`           | Rollback last migration                     |
-| `bun run migrate:status`         | Show migration status                       |
-| `bun run migrate:fresh`          | Reset + run all migrations                  |
-| `bunx questpie seed`             | Run pending seeds                           |
-| `bunx questpie seed:undo`        | Undo executed seeds                         |
-| `bunx questpie seed:status`      | Show seed status                            |
-| `bunx questpie seed:reset`       | Reset seed tracking/checkpoints (does not undo data) |
-| `bun run dev`                    | Start development server                    |
+| Command                      | Purpose                                              |
+| ---------------------------- | ---------------------------------------------------- |
+| `bun create questpie my-app` | Scaffold a new project                               |
+| `bun run scaffold:verify`    | Regenerate and type-check scaffold                   |
+| `bun run questpie:generate`  | Scan conventions, generate types and app             |
+| `bun run db:push`            | Push schema to DB (dev only, no migrations)          |
+| `bun run migrate:create`     | Generate migration from schema diff                  |
+| `bun run migrate`            | Run pending migrations                               |
+| `bun run migrate:down`       | Rollback last migration                              |
+| `bun run migrate:status`     | Show migration status                                |
+| `bun run migrate:fresh`      | Reset + run all migrations                           |
+| `bunx questpie seed`         | Run pending seeds                                    |
+| `bunx questpie seed:undo`    | Undo executed seeds                                  |
+| `bunx questpie seed:status`  | Show seed status                                     |
+| `bunx questpie seed:reset`   | Reset seed tracking/checkpoints (does not undo data) |
+| `bun run dev`                | Start development server                             |
 
 ---
 

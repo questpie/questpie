@@ -483,6 +483,13 @@ The configuration files only do something once codegen reads them. The relevant 
 | `questpie push`           | Push the current schema to the dev database (no migration).                                                        |
 | `questpie migrate:create` | Generate a migration from the current schema (production path).                                                    |
 
+<Callout type="warn" title="Production uses migrations, never push">
+	`questpie push` and `bun run db:push` are local-development tools. Never run
+	them against production or in deployment automation, even with `--force`.
+	Production changes must use a reviewed, committed `questpie migrate:create`
+	output followed by `questpie migrate` during deployment.
+</Callout>
+
 `questpie generate` auto-detects the config mode from the file shape (root-app vs module vs `packageConfig`) and sets `QUESTPIE_SKIP_ENV_VALIDATION=1` while it imports your code (codegen must run without a populated env).
 
 <Callout type="idea" title="Watch mode regenerates on structural change only">
