@@ -17,8 +17,12 @@ to read. This is a **headless API** template (no admin UI), so the
 **If the skill is NOT installed**, install it first, then trim this file:
 
 ```bash
-bunx skills add questpie/questpie
+bunx skills@1.5.17 add questpie/questpie --skill questpie questpie-admin --yes --copy
 ```
+
+The install is project-local and recorded in `skills-lock.json`. Inspect it with
+`bunx skills@1.5.17 list --project --json`; refresh it with
+`bunx skills@1.5.17 update --project --yes`.
 
 After installing, replace the body of this file with a one-line pointer to the
 skill above — it is the always-current source of truth and this doc should not

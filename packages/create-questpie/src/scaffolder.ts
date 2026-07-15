@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { cp, readdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
@@ -7,6 +7,7 @@ import * as p from "@clack/prompts";
 
 import { type ModuleDefinition, modules } from "./modules.js";
 import type { ProjectOptions } from "./prompts.js";
+import { getSkillsInstallArgs } from "./skills.js";
 import {
 	detectPackageManager,
 	generatePassword,
@@ -597,27 +598,13 @@ function buildAdminModules(options: ProjectOptions): string {
 	].join("\n");
 }
 
-/**
- * Spawn `bunx skills add questpie/questpie` detached in the target project so
- * the scaffold can complete without blocking on the (network-bound) install.
- * Returns false when the process can't even be spawned (no `bunx` on PATH etc.)
- * so the caller can fall back to printing the manual command.
- */
-function startSkillsInstall(targetDir: string): boolean {
-	try {
-		const child = spawn("bunx", ["skills", "add", "questpie/questpie"], {
-			cwd: targetDir,
-			detached: true,
-			stdio: "ignore",
-		});
-		child.on("error", () => {
-			// Swallow async spawn failures (e.g. bunx missing) — best-effort only.
-		});
-		child.unref();
-		return true;
-	} catch {
-		return false;
-	}
+/** Install the canonical skills synchronously so success or failure is known. */
+function installProjectSkills(targetDir: string): boolean {
+	const result = spawnSync("bunx", getSkillsInstallArgs(), {
+		cwd: targetDir,
+		stdio: "inherit",
+	});
+	return result.status === 0 && result.error === undefined;
 }
 
 export async function scaffold(options: ProjectOptions): Promise<void> {
@@ -687,23 +674,16 @@ export async function scaffold(options: ProjectOptions): Promise<void> {
 		}
 	}
 
-	// 5. Install QUESTPIE agent skills (background, non-blocking).
-	// Reuses the canonical `bunx skills add questpie/questpie` (skills live at the
-	// repo-root `skills/`, maintained separately) — the scaffolder never vendors a
-	// copy. Detached + unref'd so the scaffold finishes immediately while the
-	// install continues; on spawn failure we just print the manual command.
+	// 5. Install the canonical QUESTPIE agent skills and record skills-lock.json.
+	// This is synchronous: never claim success before the installer exits.
 	if (resolvedOptions.installSkills) {
-		const started = startSkillsInstall(targetDir);
-		if (started) {
-			p.log.info(
-				label.info(
-					"Installing QUESTPIE agent skills in the background (`bunx skills add questpie/questpie`)",
-				),
-			);
+		p.log.info(label.info("Installing QUESTPIE agent skills"));
+		if (installProjectSkills(targetDir)) {
+			p.log.success(label.success("Installed QUESTPIE agent skills"));
 		} else {
 			p.log.warn(
 				label.warn(
-					"Could not start skills install — run `bunx skills add questpie/questpie` in the project",
+					`Skills install failed - run \`bunx ${getSkillsInstallArgs().join(" ")}\` in the project`,
 				),
 			);
 		}

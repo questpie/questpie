@@ -10,6 +10,12 @@ import {
 	type RuntimeId,
 } from "../src/modules";
 import { scaffold } from "../src/scaffolder";
+import {
+	getSkillsInstallArgs,
+	QUESTPIE_SKILL_NAMES,
+	QUESTPIE_SKILLS_SOURCE,
+	SKILLS_CLI_PACKAGE,
+} from "../src/skills";
 
 let tempDir: string | undefined;
 const originalCwd = process.cwd();
@@ -34,8 +40,8 @@ describe("scaffold", () => {
 			modules: defaultModuleIds("tanstack-start"),
 			installDeps: false,
 			initGit: false,
-			// Skills install is a backgrounded `bunx skills add` (network) — keep
-			// it off in unit tests; we only assert it leaves no vendored copy.
+			// The canonical skills install is network-bound; parity has a dedicated
+			// disposable installer test, so keep it off in this scaffold smoke test.
 			installSkills: false,
 			runCodegen: false,
 		});
@@ -87,10 +93,20 @@ describe("scaffold", () => {
 			true,
 		);
 
-		// Skills are no longer vendored — they install via a backgrounded
-		// `bunx skills add questpie/questpie`, so the scaffolder writes no
-		// `.agents/skills/` copy.
+		// Skills are installed by the official CLI only when explicitly enabled.
 		expect(existsSync(join(projectDir, ".agents", "skills"))).toBe(false);
+	});
+
+	test("uses the pinned canonical project-local skills install", () => {
+		expect(getSkillsInstallArgs()).toEqual([
+			SKILLS_CLI_PACKAGE,
+			"add",
+			QUESTPIE_SKILLS_SOURCE,
+			"--skill",
+			...QUESTPIE_SKILL_NAMES,
+			"--yes",
+			"--copy",
+		]);
 	});
 
 	test("applies adapter and workflow options to generated project files", async () => {
