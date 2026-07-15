@@ -22,6 +22,12 @@ import {
 	type RegisterChannelPresenceInput,
 	SseChannelPresenceRegistry,
 } from "./sse-channel-presence.js";
+import {
+	createPostgresRealtimeTopologyCoordinator,
+	type RealtimeDesiredTopology,
+	RealtimeTopologyCoordinator,
+	type RealtimeTopologyResult,
+} from "./topology-coordinator.js";
 import type {
 	ChangeBroker,
 	ClientAuthInput,
@@ -177,6 +183,7 @@ export class RealtimeService {
 	private retentionCleanupInProgress = false;
 	private readonly channelEventLedger: ChannelEventLedger;
 	private readonly channelPresenceRegistry: SseChannelPresenceRegistry;
+	private readonly topologyCoordinator: RealtimeTopologyCoordinator;
 	private channelPollTimer: ReturnType<typeof setInterval> | null = null;
 	private nextChannelCleanupAt = 0;
 	private readonly observability: RealtimeObservability;
@@ -244,6 +251,17 @@ export class RealtimeService {
 					? this.configuredPollIntervalMs
 					: Number.POSITIVE_INFINITY,
 		});
+		this.topologyCoordinator = createPostgresRealtimeTopologyCoordinator(
+			this.db,
+			{
+				broker: this.changeBroker,
+				onError: (error) =>
+					this.reportTransportFailure(
+						"[Realtime] Topology coordinator failed",
+						error,
+					),
+			},
+		);
 		this.channelEventLedger = new ChannelEventLedger(
 			this.db,
 			this.changeBroker,
@@ -498,7 +516,10 @@ export class RealtimeService {
 			await this.adapter?.startPublisher?.();
 			await this.changeBroker?.start({
 				onWake: (wake) => {
-					if (wake.kind === "topology-maybe-advanced") return;
+					if (wake.kind === "topology-maybe-advanced") {
+						this.topologyCoordinator.onWake(wake);
+						return;
+					}
 					if (wake.kind === "channel-events-maybe-advanced") {
 						void this.channelEventLedger
 							.drain(wake.channelHash)
@@ -538,6 +559,7 @@ export class RealtimeService {
 					}
 				},
 			});
+			await this.topologyCoordinator.start();
 			await this.clientTransport?.start({
 				onError: (error) =>
 					this.reportTransportFailure(
@@ -552,6 +574,30 @@ export class RealtimeService {
 			this.publisherStartPromise = null;
 		});
 		await this.publisherStartPromise;
+	}
+
+	/** @internal Register the local owner before exposing session capability data. */
+	async openTopologySession(input: {
+		sessionId: string;
+		token: string;
+		identity: string;
+		topology: RealtimeDesiredTopology;
+		apply: (topology: RealtimeDesiredTopology) => Promise<void>;
+		onClose: () => Promise<void> | void;
+	}): Promise<{ generation: number; close(): Promise<void> }> {
+		await this.initialize();
+		return this.topologyCoordinator.open(input);
+	}
+
+	/** @internal Translate a 3.x delta request through durable topology state. */
+	async submitLegacyTopology(input: {
+		sessionId: string;
+		token: string;
+		identity: string;
+		frames: import("./sse-control.js").RealtimeControlFrame[];
+	}): Promise<RealtimeTopologyResult> {
+		await this.initialize();
+		return this.topologyCoordinator.submitLegacy(input);
 	}
 
 	async getClientTransportConfig(
@@ -964,6 +1010,7 @@ export class RealtimeService {
 	}
 
 	async destroy(): Promise<void> {
+		await this.topologyCoordinator.stop();
 		await this.channelPresenceRegistry.destroy();
 		await this.stop();
 	}

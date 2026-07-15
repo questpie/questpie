@@ -32,11 +32,9 @@ import {
 	SseClientTransport,
 	SseLatestSnapshotWriter,
 } from "../../modules/core/integrated/realtime/sse-client-transport.js";
-import {
-	getRealtimeSseControlRegistry,
-	type RealtimeControlFrame,
-} from "../../modules/core/integrated/realtime/sse-control.js";
+import type { RealtimeControlFrame } from "../../modules/core/integrated/realtime/sse-control.js";
 import { sharedSseKeepAliveTicker } from "../../modules/core/integrated/realtime/sse-keep-alive.js";
+import type { RealtimeDesiredTopology } from "../../modules/core/integrated/realtime/topology-coordinator.js";
 import type { ClientSink } from "../../modules/core/integrated/realtime/transport.js";
 import type { AdapterConfig, AdapterContext } from "../types.js";
 import { resolveContext } from "../utils/context.js";
@@ -119,6 +117,42 @@ type ValidatedChannelSubscription = {
 	lastEventId?: string;
 	presence?: Record<string, unknown>;
 };
+
+function createInitialTopology(
+	topics: TopicInput[],
+	channels: ChannelSubscriptionInput[],
+	validTopicIds: ReadonlySet<string>,
+	validChannelIds: ReadonlySet<string>,
+): RealtimeDesiredTopology {
+	return {
+		protocol: "questpie-realtime-topology",
+		version: 1,
+		revision: 0,
+		topics: topics
+			.filter((topic) => validTopicIds.has(topic.id))
+			.map(({ id, sinceSeq, ...topic }) => ({
+				id,
+				topic,
+				...(sinceSeq === undefined ? {} : { sinceSeq }),
+			})),
+		channels: channels
+			.filter(
+				(
+					channel,
+				): channel is Required<
+					Pick<ChannelSubscriptionInput, "id" | "channel" | "params">
+				> &
+					ChannelSubscriptionInput =>
+					Boolean(channel.id && validChannelIds.has(channel.id)),
+			)
+			.map(({ id, channel, params, lastEventId }) => ({
+				id,
+				channel,
+				params,
+				...(lastEventId === undefined ? {} : { lastEventId }),
+			})),
+	};
+}
 
 function normalizeTopicOperation(topic: TopicInput): NormalizedTopicInput {
 	if (topic.resourceType !== "collection" && topic.resourceType !== "global") {
@@ -489,15 +523,24 @@ export async function realtimeSubscribe(
 			);
 		}
 		try {
-			const dispatched = await getRealtimeSseControlRegistry<any>(app).dispatch(
-				body.sessionId,
-				body.token,
-				body.frames,
-				resolved.appContext,
-			);
-			if (!dispatched) {
+			const result = await app.realtime.submitLegacyTopology({
+				sessionId: body.sessionId,
+				token: body.token,
+				identity: realtimeControlIdentity(resolved.appContext),
+				frames: body.frames,
+			});
+			if (result.status === "unavailable") {
 				return errorResponse(
 					ApiError.badRequest("Realtime control session is unavailable"),
+					request,
+					resolved.appContext.locale,
+				);
+			}
+			if (result.status === "conflict") {
+				return errorResponse(
+					ApiError.badRequest(
+						"Realtime control id conflicts with its current value",
+					),
 					request,
 					resolved.appContext.locale,
 				);
@@ -784,6 +827,13 @@ export async function realtimeSubscribe(
 		let unregisterControl = () => {};
 		let sink: ClientSink | null = null;
 		let closed = false;
+		let applyingTopology = false;
+		let appliedTopology = createInitialTopology(
+			topics ?? [],
+			[],
+			new Set(validatedTopicsById.keys()),
+			new Set(),
+		);
 		try {
 			sink = await app.realtime.openClientSession({
 				sessionId: edgeSessionId,
@@ -814,7 +864,7 @@ export async function realtimeSubscribe(
 				if (!unsubscribe) return;
 				topicUnsubscribers.delete(topicId);
 				unsubscribe();
-				if (topicUnsubscribers.size === 0) close();
+				if (topicUnsubscribers.size === 0 && !applyingTopology) close();
 			};
 			const subscribeTopic = async (
 				topic: ValidatedTopic,
@@ -874,23 +924,31 @@ export async function realtimeSubscribe(
 			};
 
 			const originalIdentity = realtimeControlIdentity(resolved.appContext);
-			unregisterControl = getRealtimeSseControlRegistry<any>(app).register(
-				edgeSessionId,
-				controlToken,
-				async (frames, controlContext) => {
+			const topologySession = await app.realtime.openTopologySession({
+				sessionId: edgeSessionId,
+				token: controlToken,
+				identity: originalIdentity,
+				topology: appliedTopology,
+				apply: async (topology) => {
 					if (closed) throw new Error("Realtime session is closed");
-					if (realtimeControlIdentity(controlContext) !== originalIdentity) {
-						close();
-						throw new Error("Realtime session identity changed");
+					applyingTopology = true;
+					const current = new Map(
+						appliedTopology.topics.map((topic) => [topic.id, topic]),
+					);
+					const desiredIds = new Set(topology.topics.map((topic) => topic.id));
+					for (const topicId of topicUnsubscribers.keys()) {
+						const desired = topology.topics.find(
+							(topic) => topic.id === topicId,
+						);
+						if (
+							!desiredIds.has(topicId) ||
+							JSON.stringify(current.get(topicId)) !== JSON.stringify(desired)
+						) {
+							teardownTopic(topicId);
+						}
 					}
-					for (const frame of frames) {
-						if (frame.type === "remove_topic") {
-							teardownTopic(frame.topicId);
-							continue;
-						}
-						if (frame.type !== "add_topic") {
-							throw new Error("Unknown realtime control frame");
-						}
+					for (const desired of topology.topics) {
+						if (topicUnsubscribers.has(desired.id)) continue;
 						if (topicUnsubscribers.size >= admission.maxTopicsPerConnection) {
 							observeAdmission("subscription_limit");
 							throw new Error(
@@ -898,24 +956,29 @@ export async function realtimeSubscribe(
 							);
 						}
 						const rawTopic = {
-							...frame.topic,
-							...(frame.topic.resourceType === "collection" &&
-							frame.topic.operation === "get"
-								? { recordId: frame.topic.id }
+							...desired.topic,
+							...(desired.topic.resourceType === "collection" &&
+							desired.topic.operation === "get"
+								? { recordId: desired.topic.id }
 								: {}),
-							id: frame.topicId,
-							sinceSeq: frame.sinceSeq,
+							id: desired.id,
+							sinceSeq: desired.sinceSeq,
 						} as TopicInput;
 						const topic = await resolveIncrementalTopic(
 							app,
 							rawTopic,
-							controlContext,
+							resolved.appContext,
 							admission,
 						);
-						await subscribeTopic(topic, controlContext);
+						await subscribeTopic(topic, resolved.appContext);
 					}
+					appliedTopology = topology;
+					applyingTopology = false;
+					if (topicUnsubscribers.size === 0) close();
 				},
-			);
+				onClose: close,
+			});
+			unregisterControl = () => void topologySession.close();
 			for (const topic of validatedTopicsById.values()) {
 				await subscribeTopic(topic, resolved.appContext);
 			}
@@ -953,6 +1016,13 @@ export async function realtimeSubscribe(
 				const channelUnsubscribers = new Map<string, () => void>();
 				let closed = false;
 				let closeRequested = false;
+				let applyingTopology = false;
+				let appliedTopology = createInitialTopology(
+					topics ?? [],
+					channelInputs ?? [],
+					new Set(validatedTopicsById.keys()),
+					new Set(validatedChannelsById.keys()),
+				);
 
 				const requestClose = () => {
 					closeRequested = true;
@@ -1026,6 +1096,7 @@ export async function realtimeSubscribe(
 					send("error", { channelSubscriptionId: subscriptionId, message });
 
 				const closeIfEmpty = () => {
+					if (applyingTopology) return;
 					if (
 						topicUnsubscribers.size === 0 &&
 						channelUnsubscribers.size === 0
@@ -1182,85 +1253,111 @@ export async function realtimeSubscribe(
 
 				const originalIdentity = realtimeControlIdentity(resolved.appContext);
 				const controlToken = globalThis.crypto.randomUUID();
-				unregisterControl = getRealtimeSseControlRegistry<any>(app).register(
-					edgeSessionId,
-					controlToken,
-					async (frames, controlContext) => {
+				const topologySession = await app.realtime.openTopologySession({
+					sessionId: edgeSessionId,
+					token: controlToken,
+					identity: originalIdentity,
+					topology: appliedTopology,
+					apply: async (topology) => {
 						if (closed) throw new Error("Realtime session is closed");
-						if (realtimeControlIdentity(controlContext) !== originalIdentity) {
-							requestClose();
-							throw new Error("Realtime session identity changed");
+						applyingTopology = true;
+						const currentTopics = new Map(
+							appliedTopology.topics.map((topic) => [topic.id, topic]),
+						);
+						const currentChannels = new Map(
+							appliedTopology.channels.map((channel) => [channel.id, channel]),
+						);
+						const desiredTopicIds = new Set(
+							topology.topics.map((topic) => topic.id),
+						);
+						const desiredChannelIds = new Set(
+							topology.channels.map((channel) => channel.id),
+						);
+						for (const topicId of topicUnsubscribers.keys()) {
+							const desired = topology.topics.find(
+								(topic) => topic.id === topicId,
+							);
+							if (
+								!desiredTopicIds.has(topicId) ||
+								JSON.stringify(currentTopics.get(topicId)) !==
+									JSON.stringify(desired)
+							) {
+								teardownTopic(topicId);
+							}
+						}
+						for (const channelId of channelUnsubscribers.keys()) {
+							const desired = topology.channels.find(
+								(channel) => channel.id === channelId,
+							);
+							if (
+								!desiredChannelIds.has(channelId) ||
+								JSON.stringify(currentChannels.get(channelId)) !==
+									JSON.stringify(desired)
+							) {
+								teardownChannel(channelId);
+							}
 						}
 
-						for (const frame of frames) {
-							if (frame.type === "unsubscribe_channel") {
-								teardownChannel(frame.subscriptionId);
+						for (const desired of topology.channels) {
+							if (channelUnsubscribers.has(desired.id)) continue;
+							if (
+								topicUnsubscribers.size + channelUnsubscribers.size >=
+								admission.maxTopicsPerConnection
+							) {
+								observeAdmission("subscription_limit");
+								await sendChannelError(
+									desired.id,
+									`Connection accepts at most ${admission.maxTopicsPerConnection} subscriptions`,
+								);
 								continue;
 							}
-							if (frame.type === "subscribe_channel") {
-								if (
-									topicUnsubscribers.size + channelUnsubscribers.size >=
-									admission.maxTopicsPerConnection
-								) {
-									observeAdmission("subscription_limit");
-									await sendChannelError(
-										frame.subscriptionId,
-										`Connection accepts at most ${admission.maxTopicsPerConnection} subscriptions`,
-									);
-									continue;
-								}
-								try {
-									const channel = await resolveChannelSubscription(
-										app,
-										{
-											id: frame.subscriptionId,
-											channel: frame.channel,
-											params: frame.params,
-											lastEventId: frame.lastEventId,
-										},
-										controlContext,
-									);
-									await subscribeChannel(channel);
-								} catch (error) {
-									await sendChannelError(
-										frame.subscriptionId,
-										error instanceof Error ? error.message : "Channel rejected",
-									);
-								}
-								continue;
+							try {
+								const channel = await resolveChannelSubscription(
+									app,
+									{
+										id: desired.id,
+										channel: desired.channel,
+										params: desired.params,
+										lastEventId: desired.lastEventId,
+									},
+									resolved.appContext,
+								);
+								await subscribeChannel(channel);
+							} catch (error) {
+								await sendChannelError(
+									desired.id,
+									error instanceof Error ? error.message : "Channel rejected",
+								);
 							}
-							if (frame.type === "remove_topic") {
-								teardownTopic(frame.topicId);
-								continue;
-							}
-							if (frame.type !== "add_topic") {
-								throw new Error("Unknown realtime control frame");
-							}
+						}
+						for (const desired of topology.topics) {
+							if (topicUnsubscribers.has(desired.id)) continue;
 							if (
 								topicUnsubscribers.size + channelUnsubscribers.size >=
 								admission.maxTopicsPerConnection
 							) {
 								observeAdmission("subscription_limit");
 								await sendTopicError(
-									frame.topicId,
+									desired.id,
 									`Connection accepts at most ${admission.maxTopicsPerConnection} topics`,
 								);
 								continue;
 							}
 							try {
 								const rawTopic = {
-									...frame.topic,
-									...(frame.topic.resourceType === "collection" &&
-									frame.topic.operation === "get"
-										? { recordId: frame.topic.id }
+									...desired.topic,
+									...(desired.topic.resourceType === "collection" &&
+									desired.topic.operation === "get"
+										? { recordId: desired.topic.id }
 										: {}),
-									id: frame.topicId,
-									sinceSeq: frame.sinceSeq,
+									id: desired.id,
+									sinceSeq: desired.sinceSeq,
 								} as TopicInput;
 								const topicContext =
-									rawTopic.locale && rawTopic.locale !== controlContext.locale
-										? { ...controlContext, locale: rawTopic.locale }
-										: controlContext;
+									rawTopic.locale &&
+									rawTopic.locale !== resolved.appContext.locale
+										? { ...resolved.appContext, locale: rawTopic.locale }
+										: resolved.appContext;
 								const topic = await resolveIncrementalTopic(
 									app,
 									rawTopic,
@@ -1270,13 +1367,18 @@ export async function realtimeSubscribe(
 								await subscribeTopic(topic, topicContext);
 							} catch (error) {
 								await sendTopicError(
-									frame.topicId,
+									desired.id,
 									error instanceof Error ? error.message : "Topic rejected",
 								);
 							}
 						}
+						appliedTopology = topology;
+						applyingTopology = false;
+						closeIfEmpty();
 					},
-				);
+					onClose: requestClose,
+				});
+				unregisterControl = () => void topologySession.close();
 				await send("session", {
 					sessionId: edgeSessionId,
 					token: controlToken,

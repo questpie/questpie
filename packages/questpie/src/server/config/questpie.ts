@@ -44,6 +44,7 @@ import {
 	questpieChannelHeadTable,
 	questpieChannelPresenceTable,
 	questpieRealtimeLogTable,
+	questpieRealtimeTopologyTable,
 } from "#questpie/server/modules/core/integrated/realtime/collection.js";
 import type { RealtimeService } from "#questpie/server/modules/core/integrated/realtime/service.js";
 import type { SearchService } from "#questpie/server/modules/core/integrated/search/types.js";
@@ -1226,6 +1227,7 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 		schema.questpie_channel_event = questpieChannelEventTable;
 		schema.questpie_channel_dispatch = questpieChannelDispatchTable;
 		schema.questpie_channel_presence = questpieChannelPresenceTable;
+		schema.questpie_realtime_topology = questpieRealtimeTopologyTable;
 
 		// 4. Add search tables if adapter provides local storage schemas
 		// Local adapters (Postgres, PgVector) return their tables for migration generation.

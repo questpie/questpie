@@ -220,6 +220,29 @@ test("applies topic additions and removals through a different app instance", as
 			);
 		}
 		await waitFor(() => first.app.realtime.listeners.size === 1);
+
+		const swap = await secondRoutes.realtime.subscribe(
+			controlRequest(session, [
+				{ type: "remove_topic", topicId: "items-base" },
+				{
+					type: "add_topic",
+					topicId: "items-replacement",
+					topic: {
+						resourceType: "collection",
+						resource: "items",
+						where: { name: "replacement" },
+					},
+				},
+			]),
+			{},
+			undefined,
+		);
+		expect(swap.status).toBe(204);
+		await withTimeout(
+			reader.read("snapshot", "items-replacement"),
+			"cross-instance replacement snapshot",
+		);
+		await waitFor(() => first.app.realtime.listeners.size === 1);
 		expect(session.sessionId).toBeTruthy();
 	} finally {
 		await reader?.close().catch(() => {});
