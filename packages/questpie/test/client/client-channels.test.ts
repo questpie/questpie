@@ -112,6 +112,8 @@ describe("channels client", () => {
 				});
 			}
 			if (url.endsWith("/realtime")) {
+				const payload = JSON.parse(String(init?.body));
+				if (payload.sessionId) return new Response(null, { status: 204 });
 				const stream = new ReadableStream<Uint8Array>({
 					start(controller) {
 						streamController = controller;
@@ -196,7 +198,109 @@ describe("channels client", () => {
 		});
 
 		stopPresence();
+		await waitFor(() =>
+			requests.some(({ url, init }) => {
+				if (!url.endsWith("/realtime")) return false;
+				const payload = JSON.parse(String(init?.body));
+				return payload.frames?.some(
+					(frame: { type: string }) => frame.type === "unsubscribe_channel",
+				);
+			}),
+		);
+		const controlCount = requests.filter(({ url, init }) => {
+			if (!url.endsWith("/realtime")) return false;
+			return Boolean(JSON.parse(String(init?.body)).sessionId);
+		}).length;
 		stop();
+		await new Promise((resolve) => setTimeout(resolve, 10));
+		expect(
+			requests.filter(({ url, init }) => {
+				if (!url.endsWith("/realtime")) return false;
+				return Boolean(JSON.parse(String(init?.body)).sessionId);
+			}).length,
+		).toBe(controlCount);
+		client.channels.destroy();
+	});
+
+	test("coalesces advertised v1 channel topology and closes the last channel locally", async () => {
+		const controls: Array<{
+			revision: number;
+			channels: Array<{ id: string }>;
+		}> = [];
+		let streamReady = false;
+		let aborted = false;
+		const encoder = new TextEncoder();
+		const fetcher: typeof fetch = async (input, init) => {
+			const url = String(input);
+			if (url.endsWith("/channels/config")) {
+				return Response.json({
+					transport: "sse",
+					channels: {
+						news: { pattern: "news", visibility: "public" },
+						room: {
+							pattern: "room-[roomId]",
+							visibility: "public",
+						},
+					},
+				});
+			}
+			if (url.endsWith("/realtime")) {
+				const payload = JSON.parse(String(init?.body));
+				if (payload.topology) {
+					controls.push(payload.topology);
+					return Response.json({ status: "accepted" }, { status: 202 });
+				}
+				const stream = new ReadableStream<Uint8Array>({
+					start(controller) {
+						streamReady = true;
+						controller.enqueue(
+							encoder.encode(
+								`event: session\ndata: ${JSON.stringify({
+									sessionId: "channels-v1",
+									token: "token-v1",
+									control: {
+										protocol: "questpie-realtime-topology",
+										versions: [1],
+									},
+								})}\n\n`,
+							),
+						);
+						init?.signal?.addEventListener("abort", () => {
+							aborted = true;
+							try {
+								controller.close();
+							} catch {}
+						});
+					},
+				});
+				return new Response(stream, {
+					headers: { "Content-Type": "text/event-stream" },
+				});
+			}
+			throw new Error(`Unexpected request: ${url}`);
+		};
+		const client = createClient<any>({
+			baseURL: "http://localhost:3000",
+			fetch: fetcher,
+		});
+		const stopNews = client.channels.news.subscribe(() => {});
+		await waitFor(() => streamReady);
+		const stopOne = client.channels.room.subscribe({ roomId: "one" }, () => {});
+		const stopTwo = client.channels.room.subscribe({ roomId: "two" }, () => {});
+		await waitFor(() => controls.length === 1);
+		expect(controls[0]).toMatchObject({ revision: 1 });
+		expect(controls[0].channels).toHaveLength(3);
+
+		stopOne();
+		stopTwo();
+		await waitFor(() => controls.length === 2);
+		expect(controls[1]).toMatchObject({ revision: 2 });
+		expect(controls[1].channels).toHaveLength(1);
+
+		stopNews();
+		await waitFor(() => aborted);
+		await new Promise((resolve) => setTimeout(resolve, 10));
+		expect(controls).toHaveLength(2);
 		client.channels.destroy();
 	});
 
