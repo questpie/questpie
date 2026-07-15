@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
 import { createClient } from "../../src/client/index.js";
 import {
 	RealtimeMultiplexer,
+	RealtimeTopicRejectedError,
 	realtimeReconnectDelay,
 } from "../../src/client/realtime/multiplexer.js";
 import { sseSnapshotStream } from "../../src/client/realtime/stream.js";
@@ -31,7 +32,11 @@ type SSEConnection = {
 		sinceSeq?: number;
 	}>;
 	sendSnapshot: (topicId: string, seq: number, data: unknown) => void;
-	sendError: (topicId: string, message: string) => void;
+	sendError: (
+		topicId: string,
+		message: string,
+		payload?: Record<string, unknown>,
+	) => void;
 	close: () => void;
 	aborted: boolean;
 };
@@ -94,10 +99,10 @@ describe("client live queries", () => {
 						// Stream already closed
 					}
 				},
-				sendError(topicId, message) {
+				sendError(topicId, message, payload = {}) {
 					controller.enqueue(
 						encoder.encode(
-							`event: error\ndata: ${JSON.stringify({ topicId, message })}\n\n`,
+							`event: error\ndata: ${JSON.stringify({ topicId, message, ...payload })}\n\n`,
 						),
 					);
 				},
@@ -424,13 +429,89 @@ describe("client live queries", () => {
 		);
 		await waitFor(() => connections.length === 1);
 
-		connections[0].sendError("posts-topic", "posts denied");
+		connections[0].sendError(
+			"posts-topic",
+			"Topic limit must be between 1 and 100",
+			{
+				code: "REALTIME_TOPIC_REJECTED",
+				resource: "posts",
+				operation: "find",
+				retryable: false,
+				details: {
+					reason: "query_limit",
+					requestedLimit: 240,
+					configuredLimit: 100,
+				},
+			},
+		);
 		await waitFor(() => postErrors.length === 1);
-		expect(postErrors[0].message).toBe("posts denied");
+		expect(postErrors[0]).toBeInstanceOf(RealtimeTopicRejectedError);
+		expect(postErrors[0]).toMatchObject({
+			code: "REALTIME_TOPIC_REJECTED",
+			topicId: "posts-topic",
+			resource: "posts",
+			operation: "find",
+			retryable: false,
+			details: {
+				reason: "query_limit",
+				requestedLimit: 240,
+				configuredLimit: 100,
+			},
+		});
 		expect(pageErrors).toHaveLength(0);
+		expect(client.realtime.topicCount).toBe(1);
 
 		stopPosts();
 		stopPages();
+	});
+
+	it("delivers an initial admission response once and removes the rejected topic", async () => {
+		let calls = 0;
+		const fetcher = (async () => {
+			calls += 1;
+			return Response.json(
+				{
+					errors: [
+						{
+							code: "REALTIME_TOPIC_REJECTED",
+							message: "Topic limit must be between 1 and 100",
+							topicId: "media-topic",
+							resource: "media",
+							operation: "find",
+							retryable: false,
+							details: {
+								reason: "query_limit",
+								requestedLimit: 240,
+								configuredLimit: 100,
+							},
+						},
+					],
+				},
+				{ status: 400 },
+			);
+		}) as typeof fetch;
+		const multiplexer = new RealtimeMultiplexer(
+			"http://localhost",
+			true,
+			0,
+			{ retryBaseMs: 1, maxRetryMs: 1 },
+			undefined,
+			fetcher,
+		);
+		const errors: Error[] = [];
+		multiplexer.subscribe(
+			{ resourceType: "collection", resource: "media", limit: 240 },
+			() => {},
+			undefined,
+			"media-topic",
+			(error) => errors.push(error),
+		);
+
+		await waitFor(() => errors.length === 1);
+		expect(errors[0]).toBeInstanceOf(RealtimeTopicRejectedError);
+		expect(calls).toBe(1);
+		expect(multiplexer.topicCount).toBe(0);
+		multiplexer.destroy();
 	});
 
 	it("liveIter() yields snapshots and terminates on abort", async () => {

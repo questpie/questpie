@@ -376,6 +376,19 @@ bounded concurrency pool. Per-principal counters are released by every teardown
 path. A batch with some rejected topics keeps admitted topics alive and emits
 per-topic errors; a request with no admitted topics fails before opening a sink.
 
+`maxFindLimit` is a per-snapshot limit: it applies to the initial `find` and to
+every later refresh. The default remains `100`. Rejection is explicit; the
+runtime must not clamp or split a query because either changes ordering,
+pagination, completeness, and topic-budget semantics. Configuration changes
+require measurements of query cost, serialized size, fan-out, and slow-client
+behavior. Large or paginated read models are not one realtime snapshot.
+
+Topic admission failures use the safe `REALTIME_TOPIC_REJECTED` payload with
+`topicId`, `resource`, `operation`, `retryable: false`, and bounded details.
+Never attach `where`, session data, tokens, or arbitrary input. The edge sends
+the error only to the rejected subscriber; adapters must expose a visible error
+state and must not retry a non-retryable rejection.
+
 The initial defaults are normative and may be changed only with benchmark and
 compatibility evidence:
 
@@ -389,6 +402,18 @@ compatibility evidence:
 | queued latest-snapshot bytes per edge session       |   1 MiB |
 | queued ordered channel events per edge session      |     100 |
 | queued ordered channel-event bytes per edge session |   1 MiB |
+
+## Future deep module: invalidation mode (not implemented)
+
+A future, separately specified `realtime: { mode: "invalidate" }` module may
+publish a bounded invalidation signal and let a read adapter refetch its own
+page instead of streaming complete snapshots. That is a different delivery
+contract: it needs explicit ownership of cache keys, pagination semantics,
+dedupe, authorization revalidation, retry policy, and stale-data behavior.
+
+It must not be added as a flag inside the snapshot pipeline or used to delay HA
+topology work. No invalidate mode is implemented by this design; it requires a
+separate spec and acceptance suite.
 
 The connection count is explicitly per app instance; exact distributed rate
 limiting is outside this program. Provider account/channel limits and RT2.0

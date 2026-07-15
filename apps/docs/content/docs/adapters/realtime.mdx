@@ -131,6 +131,23 @@ realtime: {
 }
 ```
 
+`maxFindLimit` applies to each realtime `find` snapshot, including the initial
+snapshot and every refresh. The default remains `100`. A topic above the limit
+is rejected; QUESTPIE does not clamp or split it because doing so would change
+ordering, pagination, result completeness, and the number of admitted topics.
+Raise the limit only after measuring snapshot compute time, serialized bytes,
+fan-out load, and slow-client behavior for the real query shape.
+
+Large or paginated read models should not be represented by one giant realtime
+snapshot. Keep the paginated reads bounded and use ordinary pagination or a
+purpose-built projection/event flow for the rest of the model.
+
+Rejected topics return `REALTIME_TOPIC_REJECTED` with the topic id, resource,
+operation, `retryable: false`, and bounded details such as the requested and
+configured limits. Query filters are not included. The client delivers the
+error only to that topic, and the TanStack adapter exposes the query as an error
+without retrying the rejected admission.
+
 Equivalent subscriptions compute once and fan out serialized bytes, but the access-equivalence key is session/principal-scoped by default. Row access, field access, and `afterRead` hooks may depend on the current session, so cross-user sharing requires an explicit deterministic opt-in and isolation tests.
 
 ## The default: Postgres broker vs polling

@@ -237,6 +237,8 @@ function LivePosts() {
 
 Under the hood a live query uses React Query's `experimental_streamedQuery` with `refetchMode: "append"` and replaces the cached value with each newest snapshot. `count` uses an operation-aware server topic and streams one scalar number, not the matching rows.
 
+Admission failures such as a `find` limit above the server's configured `maxFindLimit` enter the normal TanStack query `error` state. They are marked non-retryable and are not automatically retried, so the UI does not remain on a silent `undefined` placeholder. Inspect `error.code === "REALTIME_TOPIC_REJECTED"` to render a targeted fallback.
+
 <Callout type="warn" title="Realtime must be enabled on the server">
 `createClient()` always exposes `client.realtime`, so `{ realtime: true }` attempts a stream. If server runtime config does not enable realtime, the connection errors; it does not silently fall back to a one-shot read. `findOne`, `findVersions`, and all mutations never stream.
 </Callout>

@@ -1923,6 +1923,7 @@ describe("realtime matrix", () => {
 	describe("admission control", () => {
 		it("enforces topic, query, and initial-concurrency caps for a mixed batch", async () => {
 			const adapter = new MockRealtimeAdapter();
+			const observations: unknown[] = [];
 			let activeReads = 0;
 			let maximumActiveReads = 0;
 			const observedLimits: number[] = [];
@@ -1940,7 +1941,12 @@ describe("realtime matrix", () => {
 				.access({ read: true });
 			setup = await buildMockApp(
 				{ collections: { items } },
-				{ realtime: { adapter } },
+				{
+					realtime: {
+						adapter,
+						observer: { record: (event) => observations.push(event) },
+					},
+				},
 			);
 			await runTestDbMigrations(setup.app);
 
@@ -1976,6 +1982,33 @@ describe("realtime matrix", () => {
 					.filter((event) => event.event === "error")
 					.map((event) => event.data.topicId),
 			).toEqual(expect.arrayContaining(["items-1", "items-2", "items-20"]));
+			const limitError = events.find(
+				(event) => event.event === "error" && event.data.topicId === "items-1",
+			);
+			expect(limitError?.data).toEqual({
+				code: "REALTIME_TOPIC_REJECTED",
+				message: "Topic limit must be between 1 and 100",
+				topicId: "items-1",
+				resource: "items",
+				operation: "find",
+				retryable: false,
+				details: {
+					reason: "query_limit",
+					requestedLimit: 101,
+					configuredLimit: 100,
+				},
+			});
+			expect(JSON.stringify(limitError?.data)).not.toContain("where");
+			expect(observations).toContainEqual({
+				type: "admission.rejected",
+				reason: "query_limit",
+				resource: "items",
+				operation: "find",
+				requestedLimit: 101,
+				configuredLimit: 100,
+				rolloutMode: "v2",
+			});
+			expect(JSON.stringify(observations)).not.toContain("item-1");
 			expect(observedLimits).toHaveLength(18);
 			expect(observedLimits.every((limit) => limit === 100)).toBe(true);
 			expect(maximumActiveReads).toBe(4);
@@ -1983,6 +2016,53 @@ describe("realtime matrix", () => {
 
 			await reader.close();
 			expect(setup.app.realtime.listeners.size).toBe(0);
+		});
+
+		it("returns a structured non-retryable error when every initial topic is rejected", async () => {
+			const adapter = new MockRealtimeAdapter();
+			const items = collection("items")
+				.fields(({ f }) => ({ name: f.textarea().required() }))
+				.access({ read: true });
+			setup = await buildMockApp(
+				{ collections: { items } },
+				{ realtime: { adapter } },
+			);
+			await runTestDbMigrations(setup.app);
+
+			const routes = createAdapterRoutes(setup.app, { accessMode: "user" });
+			const response = await routes.realtime.subscribe(
+				createRealtimeRequest([
+					{
+						...collectionTopic("items"),
+						id: "oversized-items",
+						limit: 240,
+						where: { name: "must-not-leak" },
+					},
+				]),
+				{},
+				undefined,
+			);
+
+			expect(response.status).toBe(400);
+			const payload = await response.json();
+			expect(payload).toEqual({
+				errors: [
+					{
+						code: "REALTIME_TOPIC_REJECTED",
+						message: "Topic limit must be between 1 and 100",
+						topicId: "oversized-items",
+						resource: "items",
+						operation: "find",
+						retryable: false,
+						details: {
+							reason: "query_limit",
+							requestedLimit: 240,
+							configuredLimit: 100,
+						},
+					},
+				],
+			});
+			expect(JSON.stringify(payload)).not.toContain("must-not-leak");
 		});
 
 		it("preserves the access where constraint alongside the requested filter", async () => {
@@ -2132,6 +2212,54 @@ describe("realtime matrix", () => {
 			expect(session.event).toBe("session");
 			await reader.readSnapshot(2000, "col-items");
 
+			const desiredRejected = await routes.realtime.subscribe(
+				new Request("http://localhost/realtime", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({
+						sessionId: session.data.sessionId,
+						token: session.data.token,
+						topology: {
+							protocol: "questpie-realtime-topology",
+							version: 1,
+							revision: 1,
+							topics: [
+								{
+									id: "items-desired-rejected",
+									topic: {
+										resourceType: "collection",
+										resource: "items",
+										limit: 2000,
+										where: { name: "must-not-leak" },
+									},
+								},
+							],
+							channels: [],
+						},
+					}),
+				}),
+				{},
+				undefined,
+			);
+			expect(desiredRejected.status).toBe(400);
+			const desiredError = await desiredRejected.json();
+			expect(desiredError).toEqual({
+				error: {
+					code: "REALTIME_TOPIC_REJECTED",
+					message: "Topic limit must be between 1 and 100",
+					topicId: "items-desired-rejected",
+					resource: "items",
+					operation: "find",
+					retryable: false,
+					details: {
+						reason: "query_limit",
+						requestedLimit: 2000,
+						configuredLimit: 100,
+					},
+				},
+			});
+			expect(JSON.stringify(desiredError)).not.toContain("must-not-leak");
+
 			const control = (frames: unknown[]) =>
 				routes.realtime.subscribe(
 					new Request("http://localhost/realtime", {
@@ -2161,6 +2289,39 @@ describe("realtime matrix", () => {
 			expect((await reader.readSnapshot(2000, "items-added")).event).toBe(
 				"snapshot",
 			);
+			expect(setup.app.realtime.listeners.size).toBe(2);
+
+			const rejected = await control([
+				{
+					type: "add_topic",
+					topicId: "items-rejected",
+					topic: {
+						resourceType: "collection",
+						resource: "items",
+						limit: 500,
+						where: { name: "must-not-leak" },
+					},
+				},
+			]);
+			expect(rejected.status).toBe(204);
+			const rejection = await reader.readEvent(2000);
+			expect(rejection).toEqual({
+				event: "error",
+				data: {
+					code: "REALTIME_TOPIC_REJECTED",
+					message: "Topic limit must be between 1 and 100",
+					topicId: "items-rejected",
+					resource: "items",
+					operation: "find",
+					retryable: false,
+					details: {
+						reason: "query_limit",
+						requestedLimit: 500,
+						configuredLimit: 100,
+					},
+				},
+			});
+			expect(JSON.stringify(rejection)).not.toContain("must-not-leak");
 			expect(setup.app.realtime.listeners.size).toBe(2);
 
 			const removed = await control([

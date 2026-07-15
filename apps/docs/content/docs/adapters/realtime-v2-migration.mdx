@@ -130,6 +130,12 @@ Do **not** roll back migrations or delete `questpie_realtime_log`, `questpie_rea
 
 Sticky sessions may temporarily reduce reconnects while old replicas remain in service, but they are emergency mitigation only. They do not replace the migration, fencing, durable desired state, or a complete fleet rollout.
 
+After the migration is applied, every request-handling replica advertises
+desired-topology v1, and cross-replica add/remove/reconnect verification passes,
+remove the sticky-session manifest or ingress affinity configuration. Leaving
+affinity enabled after that verification hides routing regressions and is not a
+supported steady-state HA design.
+
 ## Measured topology baseline
 
 The committed benchmark compares one cached-topic replacement with full reconnect at 1, 5, and 15 topics for 1, 100, and 500 clients. On Bun 1.3.14, Apple M2 Pro, and an in-process PGLite fixture:
@@ -149,4 +155,6 @@ These are reproducible workload counts and fixture-specific bytes, not a univers
 - Dual mode never sends two snapshot streams to one client.
 - Custom adapter consumers accept consolidated bulk events.
 - Every request-handling replica is upgraded before claiming no-reconnect HA behavior.
+- Cross-replica add/remove and reconnect/resume pass before removing temporary affinity.
+- The sticky-session manifest or ingress affinity is removed after that verification.
 - The rollback drill succeeds without a down migration or data deletion.

@@ -13,6 +13,44 @@ import type { RealtimeChangeEvent } from "../../src/server/modules/core/integrat
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 describe("realtime matrix observability", () => {
+	test("records bounded rejected-topic dimensions without query payloads", () => {
+		const events: RealtimeObservation[] = [];
+		const warnings: unknown[] = [];
+		const observability = new RealtimeObservability({
+			observer: { record: (event) => events.push(event) },
+			logger: {
+				warn: (_message, fields) => warnings.push(fields),
+				error: () => {},
+			},
+		});
+
+		observability.record({
+			type: "admission.rejected",
+			reason: "query_limit",
+			resource: "media",
+			operation: "find",
+			requestedLimit: 240,
+			configuredLimit: 100,
+			rolloutMode: "v2",
+		});
+
+		expect(events).toEqual([
+			{
+				type: "admission.rejected",
+				reason: "query_limit",
+				resource: "media",
+				operation: "find",
+				requestedLimit: 240,
+				configuredLimit: 100,
+				rolloutMode: "v2",
+			},
+		]);
+		expect(observability.snapshot().counters).toMatchObject({
+			"admission.rejected|reason=query_limit|resource=media|rollout_mode=v2": 1,
+		});
+		expect(JSON.stringify(warnings)).not.toContain("where");
+	});
+
 	test("isolates observer and logger failures while exposing bounded metrics", () => {
 		const events: RealtimeObservation[] = [];
 		const observability = new RealtimeObservability({

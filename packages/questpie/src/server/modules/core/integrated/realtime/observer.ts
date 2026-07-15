@@ -74,6 +74,11 @@ export type RealtimeObservation =
 				| "relation_depth"
 				| "snapshot_bytes"
 				| "access";
+			resource?: string;
+			operation?: "find" | "count" | "get";
+			requestedLimit?: number;
+			configuredLimit?: number;
+			rolloutMode?: "legacy" | "dual" | "v2";
 	  }
 	| {
 			type: "resume";
@@ -149,7 +154,7 @@ function metricKey(event: RealtimeObservation): string {
 		case "session.closed":
 			return `${event.type}|reason=${event.reason}|transport=${event.transport}`;
 		case "admission.rejected":
-			return `${event.type}|reason=${event.reason}`;
+			return `${event.type}|reason=${event.reason}|resource=${event.resource ?? "unknown"}|rollout_mode=${event.rolloutMode ?? "v2"}`;
 		case "resume":
 			return `${event.type}|outcome=${event.outcome}`;
 		case "channel.security":

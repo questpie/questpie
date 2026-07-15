@@ -5,6 +5,8 @@
  * Accepts multiple topics via POST and streams updates for all of them.
  */
 
+import type { RealtimeTopicRejectedPayload } from "#questpie/shared/realtime-error.js";
+
 import {
 	ChannelsService,
 	type ChannelServiceContext,
@@ -18,6 +20,8 @@ import {
 	admitRealtimeTopic,
 	createConcurrencyLimiter,
 	getRealtimeAdmissionRegistry,
+	RealtimeTopicAdmissionError,
+	realtimeTopicRejectedPayload,
 	realtimePrincipalKey,
 	resolveRealtimeAdmissionConfig,
 } from "../../modules/core/integrated/realtime/admission.js";
@@ -320,7 +324,11 @@ async function resolveIncrementalTopic(
 	}
 	const normalizedTopic = normalizeTopicOperation(rawTopic);
 	const topicAdmission = admitRealtimeTopic(normalizedTopic, admission);
-	if (!topicAdmission.accepted) throw new Error(topicAdmission.message);
+	if (!topicAdmission.accepted) {
+		throw new RealtimeTopicAdmissionError(
+			realtimeTopicRejectedPayload(normalizedTopic, topicAdmission),
+		);
+	}
 	const topic = topicAdmission.topic;
 
 	if (topic.resourceType === "collection") {
@@ -476,7 +484,26 @@ export async function realtimeSubscribe(
 			| "relation_depth"
 			| "snapshot_bytes"
 			| "access",
-	) => app.realtime!.record({ type: "admission.rejected", reason });
+		details: Partial<
+			Pick<RealtimeTopicRejectedPayload, "resource" | "operation"> & {
+				requestedLimit?: number;
+				configuredLimit?: number;
+			}
+		> = {},
+	) =>
+		app.realtime!.record({
+			type: "admission.rejected",
+			reason,
+			...details,
+			rolloutMode: app.config?.realtime?.rollout?.mode ?? "v2",
+		});
+	const observeTopicRejection = (error: RealtimeTopicAdmissionError) =>
+		observeAdmission(error.payload.details.reason, {
+			resource: error.payload.resource,
+			operation: error.payload.operation,
+			requestedLimit: error.payload.details.requestedLimit,
+			configuredLimit: error.payload.details.configuredLimit,
+		});
 
 	// Resolve context (auth, locale, etc.)
 	const resolved = await resolveContext(app, request, config, context);
@@ -611,7 +638,11 @@ export async function realtimeSubscribe(
 				},
 				{ status: result.status === "accepted" ? 202 : 200 },
 			);
-		} catch {
+		} catch (error) {
+			if (error instanceof RealtimeTopicAdmissionError) {
+				observeTopicRejection(error);
+				return Response.json({ error: error.payload }, { status: 400 });
+			}
 			return Response.json(
 				{
 					error: {
@@ -685,7 +716,11 @@ export async function realtimeSubscribe(
 
 	// Validate and resolve all topics upfront
 	const validatedTopics: ValidatedTopic[] = [];
-	const topicErrors: Array<{ id: string; message: string }> = [];
+	const topicErrors: Array<{
+		id: string;
+		message: string;
+		rejection?: RealtimeTopicRejectedPayload;
+	}> = [];
 	const collectionCruds = new Map<string, any>();
 	const globalCruds = new Map<string, any>();
 	const collectionApi = app.collections as Record<string, any>;
@@ -752,12 +787,18 @@ export async function realtimeSubscribe(
 
 		const topicAdmission = admitRealtimeTopic(topic, admission);
 		if (!topicAdmission.accepted) {
-			observeAdmission(
-				topicAdmission.message.includes("relation depth")
-					? "relation_depth"
-					: "query_limit",
-			);
-			topicErrors.push({ id: topic.id, message: topicAdmission.message });
+			const rejection = realtimeTopicRejectedPayload(topic, topicAdmission);
+			observeAdmission(rejection.details.reason, {
+				resource: rejection.resource,
+				operation: rejection.operation,
+				requestedLimit: rejection.details.requestedLimit,
+				configuredLimit: rejection.details.configuredLimit,
+			});
+			topicErrors.push({
+				id: topic.id,
+				message: topicAdmission.message,
+				rejection,
+			});
 			continue;
 		}
 		topic = topicAdmission.topic;
@@ -864,6 +905,16 @@ export async function realtimeSubscribe(
 	}
 
 	if (accessValidatedTopics.length === 0 && validatedChannelsById.size === 0) {
+		const rejectionErrors = topicErrors.flatMap((error) =>
+			error.rejection ? [error.rejection] : [],
+		);
+		if (
+			rejectionErrors.length > 0 &&
+			rejectionErrors.length === topicErrors.length &&
+			channelErrors.length === 0
+		) {
+			return Response.json({ errors: rejectionErrors }, { status: 400 });
+		}
 		const errors = [...topicErrors, ...channelErrors]
 			.map((error) => `${error.id}: ${error.message}`)
 			.join("; ");
@@ -1208,8 +1259,12 @@ export async function realtimeSubscribe(
 				};
 
 				// Send per-topic error
-				const sendTopicError = (topicId: string, message: string) => {
-					return send("error", { topicId, message });
+				const sendTopicError = (
+					topicId: string,
+					message: string,
+					rejection?: RealtimeTopicRejectedPayload,
+				) => {
+					return send("error", rejection ?? { topicId, message });
 				};
 				const sendChannelError = (subscriptionId: string, message: string) =>
 					send("error", { channelSubscriptionId: subscriptionId, message });
@@ -1485,6 +1540,15 @@ export async function realtimeSubscribe(
 								);
 								await subscribeTopic(topic, topicContext);
 							} catch (error) {
+								if (error instanceof RealtimeTopicAdmissionError) {
+									observeTopicRejection(error);
+									await sendTopicError(
+										error.payload.topicId,
+										error.message,
+										error.payload,
+									);
+									continue;
+								}
 								await sendTopicError(
 									desired.id,
 									error instanceof Error ? error.message : "Topic rejected",
@@ -1524,7 +1588,7 @@ export async function realtimeSubscribe(
 
 				// Send initial errors for invalid topics
 				for (const error of topicErrors) {
-					await sendTopicError(error.id, error.message);
+					await sendTopicError(error.id, error.message, error.rejection);
 				}
 				for (const error of channelErrors) {
 					await sendChannelError(error.id, error.message);

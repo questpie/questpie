@@ -5,6 +5,10 @@
  * Solves the HTTP/1.1 connection limit problem (6 connections per domain).
  */
 
+import {
+	isRealtimeTopicRejectedPayload,
+	type RealtimeTopicRejectedPayload,
+} from "../../shared/realtime-error.js";
 import type { GetAuthHeaders } from "../auth.js";
 import type { RealtimeClientTransport } from "./transport.js";
 
@@ -61,6 +65,30 @@ type SSEEvent = {
 	type: string;
 	data: string;
 };
+
+export class RealtimeTopicRejectedError extends Error {
+	readonly code = "REALTIME_TOPIC_REJECTED";
+	readonly retryable = false;
+	readonly topicId: string;
+	readonly resource: string;
+	readonly operation: RealtimeTopicRejectedPayload["operation"];
+	readonly details: RealtimeTopicRejectedPayload["details"];
+
+	constructor(payload: RealtimeTopicRejectedPayload) {
+		super(payload.message);
+		this.name = "RealtimeTopicRejectedError";
+		this.topicId = payload.topicId;
+		this.resource = payload.resource;
+		this.operation = payload.operation;
+		this.details = payload.details;
+	}
+}
+
+function toRealtimeError(payload: unknown): Error | null {
+	return isRealtimeTopicRejectedPayload(payload)
+		? new RealtimeTopicRejectedError(payload)
+		: null;
+}
 
 type ControlFrame =
 	| {
@@ -321,16 +349,23 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 					credentials: this.withCredentials ? "include" : "omit",
 				});
 				if (!response.ok) {
-					throw new Error(`Realtime control failed: ${response.status}`);
+					const payload = await response.json().catch(() => null);
+					throw (
+						toRealtimeError((payload as { error?: unknown } | null)?.error) ??
+						new Error(`Realtime control failed: ${response.status}`)
+					);
 				}
 			})
 			.catch((error) => {
 				if (this.destroyed || this.controlSession !== session) return;
 				const normalized =
 					error instanceof Error ? error : new Error(String(error));
-				for (const frame of frames) {
-					this.notifyTopicError(frame.topicId, normalized);
+				if (normalized instanceof RealtimeTopicRejectedError) {
+					this.rejectTopic(normalized);
+					return;
 				}
+				for (const frame of frames)
+					this.notifyTopicError(frame.topicId, normalized);
 				this.reconnectPending = true;
 				this.abortController?.abort();
 			});
@@ -342,6 +377,17 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 				? Array.from(this.errorCallbacks.values()).flatMap((set) => [...set])
 				: [...(this.errorCallbacks.get(topicId) ?? [])];
 		for (const callback of new Set(callbacks)) callback(error);
+	}
+
+	private rejectTopic(error: RealtimeTopicRejectedError): void {
+		this.notifyTopicError(error.topicId, error);
+		this.subscribers.delete(error.topicId);
+		this.errorCallbacks.delete(error.topicId);
+		this.topics.delete(error.topicId);
+		this.lastSeq.delete(error.topicId);
+		for (const [topicHash, customId] of this.customIds) {
+			if (customId === error.topicId) this.customIds.delete(topicHash);
+		}
 	}
 
 	/**
@@ -437,6 +483,19 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 			});
 
 			if (!response.ok) {
+				const payload = (await response.json().catch(() => null)) as {
+					errors?: unknown[];
+				} | null;
+				const admissionErrors =
+					payload?.errors
+						?.map(toRealtimeError)
+						.filter((error) => error !== null) ?? [];
+				if (admissionErrors.length > 0) {
+					for (const error of admissionErrors) {
+						this.rejectTopic(error as RealtimeTopicRejectedError);
+					}
+					return;
+				}
 				throw new Error(`Realtime connection failed: ${response.status}`);
 			}
 
@@ -546,11 +605,16 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 			this.reconnectAttempts = 0;
 		} else if (event.type === "error") {
 			try {
-				const { topicId, message } = JSON.parse(event.data) as {
+				const payload = JSON.parse(event.data) as {
 					topicId: string;
 					message: string;
 				};
-				this.notifyTopicError(topicId, new Error(message));
+				const error = toRealtimeError(payload);
+				if (error instanceof RealtimeTopicRejectedError) {
+					this.rejectTopic(error);
+				} else {
+					this.notifyTopicError(payload.topicId, new Error(payload.message));
+				}
 			} catch {
 				// Ignore parse errors
 			}

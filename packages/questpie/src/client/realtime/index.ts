@@ -1,8 +1,13 @@
 export {
 	RealtimeMultiplexer,
+	RealtimeTopicRejectedError,
 	type TopicConfig,
 	type TopicInput,
 } from "./multiplexer.js";
+export type {
+	RealtimeTopicRejectedDetails,
+	RealtimeTopicRejectedPayload,
+} from "../../shared/realtime-error.js";
 export {
 	buildCollectionTopic,
 	buildGlobalTopic,
