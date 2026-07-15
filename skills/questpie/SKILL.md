@@ -33,10 +33,10 @@ Reference these guidelines when:
 | `block(name)`                       | `#questpie/factories`        | Yes            |
 | `channel(pattern)`                  | `"questpie/channels"`        | Yes            |
 | `adminConfig({...})`                | `#questpie/factories`        | Yes            |
-| `route()`                           | `"questpie"`                 | No             |
-| `job({...})`                        | `"questpie"`                 | No             |
-| `service()`                         | `"questpie"`                 | No             |
-| `email({...})`                      | `"questpie"`                 | No             |
+| `route()`                           | `"questpie/services"`        | No             |
+| `job({...})`                        | `"questpie/services"`        | No             |
+| `service()`                         | `"questpie/services"`        | No             |
+| `email({...})`                      | `"questpie/services"`        | No             |
 | `migration({...})`                  | `"questpie"`                 | No             |
 | `seed({...})` / `seed.steps({...})` | `"questpie"`                 | No             |
 | `runtimeConfig({...})`              | `"questpie/app"`             | No             |
@@ -46,6 +46,11 @@ Reference these guidelines when:
 | `clientEnv({...})`                  | `"questpie/env"`             | No             |
 | `createClient<AppConfig>()`         | `"questpie/client"`          | No             |
 | `createQuestpieQueryOptions()`      | `"@questpie/tanstack-query"` | No             |
+
+The root `questpie` entrypoint keeps compatibility exports for several service
+factories, but app convention files use `questpie/services` for routes, jobs,
+services, and emails. Keep examples on that focused entrypoint so adapter and
+service code does not drift between two equivalent import styles.
 
 ## Module And Plugin Configuration - Critical
 

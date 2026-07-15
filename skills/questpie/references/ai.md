@@ -52,7 +52,7 @@ Output streams into a KV-backed store (`createQuestpieResumableStreamStore({ kv 
 
 `reapExpiredRunLinks(deps, now?)` (the cron + inline on each tail read) requeues expired leases when `retryPolicy:"auto"` (bump epoch → `pending`) or fails them via `finalizeRun` otherwise.
 
-## Gotchas (verified against @questpie/ai@3.1.0)
+## Gotchas (verified against the current `@questpie/ai` module API)
 
 - **`claude-code` runtime ONLY.** `createHarnessAgent` throws for anything else.
 - **`aiConfig`/`aiPlugin`/`config/ai.ts` + `onBeforeRun`/`onAfterComplete` are DEFINED BUT NOT WIRED**, placeholder surface, consumed nowhere. Do not tell users to configure them.
