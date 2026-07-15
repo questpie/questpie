@@ -6,6 +6,7 @@ import {
 	type ChangeBroker,
 	type ChangeWake,
 } from "../../src/exports/index.js";
+import { channel } from "../../src/server/channels/channel-builder.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder.js";
 import { createTestDb, runTestDbMigrations } from "../utils/test-db.js";
 
@@ -150,7 +151,11 @@ test("applies topic additions and removals through a different app instance", as
 			.fields(({ f }) => ({ name: f.text().required() }))
 			.access({ read: true });
 	const first = await buildMockApp(
-		{ name: "topology-first", collections: { items: items() } },
+		{
+			name: "topology-first",
+			collections: { items: items() },
+			channels: { room: channel("room-[id]").authorize({ subscribe: true }) },
+		},
 		{
 			app: { url: "http://topology-first.localhost" },
 			db: { pglite: database },
@@ -158,7 +163,11 @@ test("applies topic additions and removals through a different app instance", as
 		},
 	);
 	const second = await buildMockApp(
-		{ name: "topology-second", collections: { items: items() } },
+		{
+			name: "topology-second",
+			collections: { items: items() },
+			channels: { room: channel("room-[id]").authorize({ subscribe: true }) },
+		},
 		{
 			app: { url: "http://topology-second.localhost" },
 			db: { pglite: database },
@@ -295,6 +304,82 @@ test("applies topic additions and removals through a different app instance", as
 			"cross-instance replacement snapshot",
 		);
 		await waitFor(() => first.app.realtime.listeners.size === 1);
+
+		const addChannel = await secondRoutes.realtime.subscribe(
+			new Request("http://localhost/realtime", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					sessionId: session.sessionId,
+					token: session.token,
+					topology: {
+						protocol: "questpie-realtime-topology",
+						version: 1,
+						revision: 4,
+						topics: [
+							{
+								id: "items-replacement",
+								topic: {
+									resourceType: "collection",
+									resource: "items",
+									where: { name: "replacement" },
+								},
+							},
+						],
+						channels: [
+							{
+								id: "room-one",
+								channel: "room",
+								params: { id: "one" },
+							},
+						],
+					},
+				}),
+			}),
+			{},
+			undefined,
+		);
+		expect(addChannel.status).toBe(202);
+		await waitFor(
+			() =>
+				(first.app.realtime as any).channelEventLedger.localSubscriptions
+					.size === 1,
+		);
+		const localChannel = [
+			...(
+				first.app.realtime as any
+			).channelEventLedger.localSubscriptions.values(),
+		][0].channel as string;
+		await first.app.realtime.appendChannelEvent({
+			channel: localChannel,
+			event: "message",
+			schemaIdentity: "ha-test",
+			data: { text: "cross-instance" },
+		});
+		expect(
+			await withTimeout(reader.read("channel_event"), "typed channel event"),
+		).toMatchObject({ data: { text: "cross-instance" } });
+
+		const removeChannel = await secondRoutes.realtime.subscribe(
+			desiredRequest(session, 5, [
+				{
+					id: "items-replacement",
+					topic: {
+						resourceType: "collection",
+						resource: "items",
+						where: { name: "replacement" },
+					},
+				},
+			]),
+			{},
+			undefined,
+		);
+		expect(removeChannel.status).toBe(202);
+		await waitFor(
+			() =>
+				(first.app.realtime as any).channelEventLedger.localSubscriptions
+					.size === 0,
+		);
 		expect(session.sessionId).toBeTruthy();
 	} finally {
 		await reader?.close().catch(() => {});

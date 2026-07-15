@@ -128,6 +128,22 @@ describe("realtime topology coordinator", () => {
 				closed += 1;
 			},
 		});
+		expect(
+			await coordinator.submit({
+				sessionId: "session-a",
+				token: "wrong-token",
+				identity: "anonymous",
+				topology: emptyTopology(1),
+			}),
+		).toEqual({ status: "unavailable" });
+		expect(
+			await coordinator.submit({
+				sessionId: "session-a",
+				token: "token-a",
+				identity: "someone-else",
+				topology: emptyTopology(1),
+			}),
+		).toEqual({ status: "unavailable" });
 		now = new Date(now.getTime() + 30_001);
 		await coordinator.reconcile();
 
