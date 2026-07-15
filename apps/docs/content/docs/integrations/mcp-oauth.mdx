@@ -182,7 +182,10 @@ export default mcpTool("recalculate-stats", {
   access: ({ session }) => session?.user?.role === "admin",
 }).handler(async ({ input, ctx }) => {
   const updated = await ctx.services.stats.recompute(input.since);
-  return { structuredContent: { updated } };
+  return {
+    structuredContent: { updated },
+    content: [{ type: "text", text: `Updated ${updated} rows.` }],
+  };
 });
 ```
 
@@ -202,6 +205,7 @@ Because effective permission is `scopes ∩ RBAC`, an over-broad scope grant can
 
 ## Related
 
+- [Connect an AI agent with MCP and OAuth](/docs/getting-started/mcp-ai-agent) - scaffold, configure, deploy, and connect Claude plus VS Code end to end.
 - [MCP integration](/docs/integrations/mcp) - the base MCP module: how collections/globals/routes become tools, `config/mcp.ts`, custom tools, and the stdio transport.
 - [Access control](/docs/concepts/access-control) - the `.access()` RBAC rules that every OAuth tool call runs through first; scopes narrow, never widen, what they allow.
 - [Admin auth](/docs/admin/auth) - the auth config the OAuth provider ships in, and the `/admin/login` page the flow redirects to.
