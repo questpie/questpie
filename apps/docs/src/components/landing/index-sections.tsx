@@ -4,6 +4,7 @@ import { type ReactNode, useState } from "react";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
+import questpiePackage from "../../../../../packages/questpie/package.json";
 import {
 	accentButtonStyle,
 	type CodeLine,
@@ -70,7 +71,7 @@ export function Hero() {
 						<Reveal>
 							<div style={{ marginBottom: 22 }}>
 								<Eyebrow dot color="var(--success)">
-									MIT · TypeScript · Bun + Node
+									v{questpiePackage.version} · MIT · TypeScript · Bun + Node
 								</Eyebrow>
 							</div>
 						</Reveal>
