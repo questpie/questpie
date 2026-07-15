@@ -51,10 +51,10 @@ export default modules;
 questpie generate
 ```
 
-That is the whole setup on an admin-enabled app: `adminModule` provides the OAuth provider + tables + discovery (via the starter it bundles), and `mcpModule` mounts the OAuth-gated `/api/mcp` route. This is exactly the composition the end-to-end test (`packages/mcp/test/oauth-mcp-e2e.test.ts`) exercises.
+That is the whole setup on an admin-enabled app: `adminModule` provides the OAuth provider + tables + discovery (via the starter it bundles), and `mcpModule` mounts the OAuth-gated `/api/mcp` route. This composition is covered end to end by the framework test suite.
 
 <Callout type="info" title="Headless runtimes (Hono, Elysia) add the OAuth provider with `oauthModule`">
-The OAuth provider lives in a self-contained, composable **`oauthModule`** (`packages/questpie/src/server/modules/oauth/`), the `oauthProvider()` + `jwt()` plugins, the `oauth-*` tables + `jwks`, and the discovery routes. `starterModule` bundles it and `adminModule` pulls the starter in, so an admin-enabled app gets it for free (as above). A **headless / custom-auth** app that ships neither can add `oauthModule` on top of its own better-auth model to get the same provider + tables + discovery, HTTP MCP then works there too. (This shipped in 3.3.0, it is no longer a hand-wire-it-yourself follow-up.) With no provider at all, `/api/mcp` still mounts but stays `401` with nothing to discover. Local [stdio](/docs/integrations/mcp#stdio-transport) needs no OAuth and works everywhere.
+The OAuth provider lives in the self-contained, composable **`oauthModule`**, alongside the `oauthProvider()` + `jwt()` plugins, the `oauth-*` tables + `jwks`, and the discovery routes. `starterModule` bundles it and `adminModule` pulls the starter in, so an admin-enabled app gets it for free (as above). A **headless / custom-auth** app that ships neither can add `oauthModule` on top of its own better-auth model to get the same provider + tables + discovery, HTTP MCP then works there too. (This shipped in 3.3.0, it is no longer a hand-wire-it-yourself follow-up.) With no provider at all, `/api/mcp` still mounts but stays `401` with nothing to discover. Local [stdio](/docs/integrations/mcp#stdio-transport) needs no OAuth and works everywhere.
 </Callout>
 
 ## The flow

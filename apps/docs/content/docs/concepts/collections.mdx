@@ -209,7 +209,7 @@ The rule context spreads the full `AppContext` (`db`, `session`, `kv`, `queue`, 
 A rule that returns an `AccessWhere` object grants *filtered* access, rows are narrowed by that condition. A rule function that **throws** denies with a reason. Beyond CRUD, two extra rules exist: `serve` (upload-byte access, resolves `serve` → `read` → `defaultAccess.serve` → allow) and `introspect` (admin schema visibility, visible iff any CRUD op is allowed). Field-level rules go under `access.fields` and can only allow/deny (no filtering); their context is slim (`{ req?, user?, doc?, operation }`), not the full `AppContext`.
 
 <Callout type="warn" title="Secure by default">
-An **undefined** access rule is not "open", it requires a session. Leave `read` unset and anonymous reads are rejected. Set `read: true` to make a collection public on purpose. The enforcement is one line, `if (rule === undefined) return !!context.session;`, in `packages/questpie/src/server/collection/crud/shared/access-control.ts:85` (doc-commented "secure by default" at `:54-65`).
+An **undefined** access rule is not "open", it requires a session. Leave `read` unset and anonymous reads are rejected. Set `read: true` to make a collection public on purpose.
 </Callout>
 
 <Callout type="info" title="`.access()` replaces; `.merge()` shallow-merges">

@@ -54,7 +54,7 @@ const posts = collection("posts").fields(({ f }) => ({
 // }
 ```
 
-Like every field, `textarea` is optional and nullable by default; `.required()` makes the column `NOT NULL` and the value required on insert. The read/insert/where shapes are derived by `ExtractSelectType` / `ExtractInputType` / `ExtractWhereType` in `packages/questpie/src/server/fields/field-class-types.ts`.
+Like every field, `textarea` is optional and nullable by default; `.required()` makes the column `NOT NULL` and the value required on insert. The public `ExtractSelectType`, `ExtractInputType`, and `ExtractWhereType` helpers expose its derived read, insert, and filter shapes.
 
 ## Constructor & methods
 
@@ -69,7 +69,7 @@ Like every field, `textarea` is optional and nullable by default; `.required()` 
 bio: f.textarea().min(10).max(2000),   // 10-2000 characters, validated on write
 ```
 
-`.min(n)` / `.max(n)` set length bounds only, they do **not** change the column type, which stays unbounded Postgres `text` regardless. The bounds are applied to the derived Zod schema in `packages/questpie/src/server/fields/derive-schema.ts` (string refinements: `maxLength` / `minLength` / `pattern`).
+`.min(n)` / `.max(n)` set length bounds only, they do **not** change the column type, which stays unbounded Postgres `text` regardless. The bounds are applied to the derived Zod schema during create and update validation.
 
 Everything else comes from the [shared field modifiers](/docs/concepts/fields#shared-methods), `.required()`, `.default()`, `.localized()`, `.label()`, `.description()`, `.hooks()`, `.access()`, `.admin()`, `.zod()`, and the rest. They behave identically on `textarea` as on any field.
 
@@ -103,7 +103,7 @@ await app.collections.posts.find({
 });
 ```
 
-The set is defined as `stringOps` in `packages/questpie/src/server/fields/operators/builtin.ts`. These same operators type the `where` clause on the server (`app.collections.*`) and on the typed client.
+These same string operators type the `where` clause on the server (`app.collections.*`) and on the typed client.
 
 <Callout type="warn" title="No full-text search">
 `contains` / `ilike` are SQL `LIKE` scans, not full-text search, fine for filtering, but not built for ranked search over large prose. For relevance-ranked search across long text, mark the collection `.searchable()` and use the search adapter (pg_trgm / pgvector) rather than a `contains` filter.

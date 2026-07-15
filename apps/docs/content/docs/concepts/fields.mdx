@@ -62,7 +62,7 @@ const posts = collection("posts").fields(({ f }) => ({
 // }
 ```
 
-How the type maps are derived (read-only reference): `ExtractInputType` / `ExtractSelectType` / `ExtractWhereType` in `packages/questpie/src/server/fields/field-class-types.ts`.
+The public `ExtractInputType`, `ExtractSelectType`, and `ExtractWhereType` helpers expose the corresponding type maps for plugin and library authors.
 
 ## Field types
 
@@ -105,7 +105,7 @@ contact: f.email().required(),             // validated z.string().email()
 website: f.url(),                          // validated z.string().url(), len 2048
 ```
 
-For `text`/`textarea`/`email`/`url`, `.min(n)` / `.max(n)` constrain **string length** (they map to `minLength` / `maxLength`). `email` and `url` add `.email()` / `.url()` format validation automatically. Sources: `packages/questpie/src/server/modules/core/fields/{text,textarea,email,url}.ts`.
+For `text`/`textarea`/`email`/`url`, `.min(n)` / `.max(n)` constrain **string length** (they map to `minLength` / `maxLength`). `email` and `url` add `.email()` / `.url()` format validation automatically.
 
 <Callout type="warn">
   `.trim()`, `.lowercase()`, and `.uppercase()` set runtime state but are **not currently applied to the Zod schema**, `derive-schema.ts` only emits `maxLength` / `minLength` / `pattern` for strings, so these three do not transform or validate the value yet. To normalize input, use a `.zod()` refinement or a field hook instead.
@@ -153,7 +153,7 @@ birthday: f.date(),                                    // ISO date string
 opensAt: f.time(),                                     // "09:00:00"
 ```
 
-`datetime` reads back as a real `Date`; `date` and `time` read back as strings. `.autoNow()` sets a `() => new Date()` default; `.autoNowUpdate()` adds a `beforeChange` hook that stamps the current time on every write. The classic pair is `.autoNow().inputFalse()` for `createdAt` and `.autoNowUpdate().inputFalse()` for `updatedAt`. Sources: `packages/questpie/src/server/modules/core/fields/{date,datetime,time}.ts`.
+`datetime` reads back as a real `Date`; `date` and `time` read back as strings. `.autoNow()` sets a `() => new Date()` default; `.autoNowUpdate()` adds a `beforeChange` hook that stamps the current time on every write. The classic pair is `.autoNow().inputFalse()` for `createdAt` and `.autoNowUpdate().inputFalse()` for `updatedAt`.
 
 ### Select
 
@@ -178,7 +178,7 @@ tags: f.select([
 ]).array(),
 ```
 
-Passing static options narrows the field's read type to the **literal union** of those values. Multi-select is `.array()`, there is no separate multi factory. Dynamic, server-driven options (search + pagination) use an `OptionsConfig` `{ handler, deps? }`; the read type then widens to `string`. `.enum(name)` creates a fresh `pgEnum` from the option values. Sources: `packages/questpie/src/server/modules/core/fields/select.ts`, `packages/questpie/src/server/fields/reactive-types.ts`.
+Passing static options narrows the field's read type to the **literal union** of those values. Multi-select is `.array()`, there is no separate multi factory. Dynamic, server-driven options (search + pagination) use an `OptionsConfig` `{ handler, deps? }`; the read type then widens to `string`. `.enum(name)` creates a fresh `pgEnum` from the option values.
 
 ### Relation
 
@@ -289,7 +289,7 @@ content: f.richText({ mode: "markdown" }),// stored as markdown text
 body: f.blocks(),                          // block-based page builder
 ```
 
-These two are contributed by `@questpie/admin` and are only on `f` when the admin module is active. `richText` defaults to a TipTap JSON document (`mode: "markdown"` stores a markdown string instead). `blocks` stores a block tree built from your `block(name)` declarations. Sources: `packages/admin/src/server/fields/{rich-text,blocks}.ts`.
+These two are contributed by `@questpie/admin` and are only on `f` when the admin module is active. `richText` defaults to a TipTap JSON document (`mode: "markdown"` stores a markdown string instead). `blocks` stores a block tree built from your `block(name)` declarations.
 
 <Callout type="info">
   `f.richText()` and `f.blocks()` exist only when the admin module is registered, they ride in on the generated `f` alongside the 15 core types. Without the admin module, accessing them throws the "Unknown field type" error.
@@ -374,7 +374,7 @@ phone: f.text(50).admin({ placeholder: "+1 (555) 000-0000" }),
 createdAt: f.datetime().drizzle((c) => c.default(sql`now()`)),
 ```
 
-Full method source: `packages/questpie/src/server/fields/field-class.ts`.
+The shared methods above are available on every registered field type.
 
 ## Advanced
 
@@ -388,7 +388,7 @@ A new field type is declared with `fieldType(name, { create, methods })`, the de
 
 ### Custom operator sets
 
-`.operators(ops)` overrides the WHERE operators for a field. Build a set with `operator<TValue>((col, value, ctx) => SQL)` / `operatorSet(...)`. The built-in sets, `stringOps`, `numberOps`, `booleanOps`, `dateOps`, `selectSingleOps`, `belongsToOps`, …, live in `packages/questpie/src/server/operators/builtin.ts`.
+`.operators(ops)` overrides the WHERE operators for a field. Build a set with `operator<TValue>((col, value, ctx) => SQL)` / `operatorSet(...)`. Built-in field types register their corresponding string, number, boolean, date, select, and relation operator sets automatically.
 
 ## TypeScript
 
@@ -401,7 +401,7 @@ type Post = CollectionDoc<"posts">;          // the read shape
 type PostFilter = CollectionWhere<"posts">;  // the typed where clause
 ```
 
-If you need the field primitives themselves (building a plugin or a custom field type), they are exported from `questpie` and `questpie/builders`: `Field`, `field`, `fieldType`, `FieldState`, `FieldWithMethods`, the `Extract*Type` helpers, and the reactive types. Admin's `richText` / `blocks` and their state/document types come from `@questpie/admin/fields`. Sources: `packages/questpie/src/exports/index.ts`, `packages/admin/src/exports/fields.ts`.
+If you need the field primitives themselves (building a plugin or a custom field type), they are exported from `questpie` and `questpie/builders`: `Field`, `field`, `fieldType`, `FieldState`, `FieldWithMethods`, the `Extract*Type` helpers, and the reactive types. Admin's `richText` / `blocks` and their state/document types come from `@questpie/admin/fields`.
 
 <Callout type="info">
   You don't import the field factories (`text`, `relation`, …) directly in app code, they ride in on the destructured `f` inside `.fields()`. Direct factory imports are for library/plugin authors building custom `f` proxies via `createFieldBuilder`.

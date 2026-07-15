@@ -69,7 +69,7 @@ collection("orders").fields(({ f }) => ({
 }));
 ```
 
-All five refinements are applied to the derived Zod schema in `applyRefinements` (`packages/questpie/src/server/fields/derive-schema.ts:136`). They run on create and update.
+All five refinements are applied to the derived Zod schema during create and update validation.
 
 <Callout type="info" title="`.min()` / `.max()` here are VALUE bounds, not string length">
 On a number field, `.min(n)` / `.max(n)` constrain the numeric **value**. On [`f.text()`](/docs/concepts/fields/text) the same method names constrain **string length** (they map to `minLength` / `maxLength`). Same names, different meaning, sized by the field's type.

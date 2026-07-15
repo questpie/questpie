@@ -60,10 +60,10 @@ The inner field is preserved on the state (`innerField` / `innerState`), so per-
 
 `.array()` itself takes no arguments. The two modifiers that only make sense on an array are:
 
-| Method | Effect | Source |
-|---|---|---|
-| `.minItems(n)` | Array must have **at least** `n` elements (`z.array(...).min(n)`). | `field-class.ts:336` |
-| `.maxItems(n)` | Array may have **at most** `n` elements (`z.array(...).max(n)`). | `field-class.ts:341` |
+| Method | Effect |
+|---|---|
+| `.minItems(n)` | Array must have **at least** `n` elements (`z.array(...).min(n)`). |
+| `.maxItems(n)` | Array may have **at most** `n` elements (`z.array(...).max(n)`). |
 
 Everything else is a [shared modifier](/docs/concepts/fields#shared-methods) and applies to the array as a whole:
 

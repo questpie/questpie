@@ -63,7 +63,7 @@ On a `url` field, `.min(n)` / `.max(n)` constrain the **number of characters** (
 </Callout>
 
 <Callout type="info" title="URL validation is always on; tighten it with `.zod()`">
-The `.url()` refinement is appended automatically (`derive-schema.ts:131`), you don't add it and you can't turn it off through a field method. To go further (e.g. allow only `https`, or restrict hosts), use the `.zod()` escape hatch: `f.url().zod((s) => s.refine((v) => v.startsWith("https://")))`.
+The `.url()` refinement is appended automatically, you don't add it and you can't turn it off through a field method. To go further (e.g. allow only `https`, or restrict hosts), use the `.zod()` escape hatch: `f.url().zod((s) => s.refine((v) => v.startsWith("https://")))`.
 </Callout>
 
 ## Filtering, operators

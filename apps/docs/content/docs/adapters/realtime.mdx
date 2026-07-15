@@ -48,12 +48,12 @@ That's the whole server requirement. Subscribe from the client with `client.coll
 
 The flow, from a write to a pushed snapshot:
 
-| Step                           | What happens                                                                                                                                                        | Source                                             |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
-| 1. Transaction captures change | A create/update/delete appends one row to `questpie_realtime_log` using the mutation-bound `db`; the business row and outbox row commit or roll back together.      | `realtime/service.ts`; transactional capture hooks |
-| 2. Signal                      | The adapter `notify(event)` broadcasts a minimal `RealtimeNotice` (`{ seq, resourceType, resource, operation }`) to every instance.                                 | `realtime/adapter.ts:9`; `realtime/service.ts:249` |
-| 3. Drain                       | Each instance reacts to the notice (or a poll tick) by `drain()`ing new outbox rows past its watermark.                                                             | `realtime/service.ts:418-426`                      |
-| 4. Re-run + push               | For each affected subscription, the server re-runs the query **under the subscriber's session** and pushes the fresh snapshot over its `POST /realtime` SSE stream. | `realtime/service.ts` (drain → listeners)          |
+| Step                           | What happens                                                                                                                                                        |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Transaction captures change | A create/update/delete appends one row to `questpie_realtime_log` using the mutation-bound `db`; the business row and outbox row commit or roll back together.      |
+| 2. Signal                      | The adapter `notify(event)` broadcasts a minimal `RealtimeNotice` (`{ seq, resourceType, resource, operation }`) to every instance.                                 |
+| 3. Drain                       | Each instance reacts to the notice (or a poll tick) by `drain()`ing new outbox rows past its watermark.                                                             |
+| 4. Re-run + push               | For each affected subscription, the server re-runs the query **under the subscriber's session** and pushes the fresh snapshot over its `POST /realtime` SSE stream. |
 
 The broker is only a _latency hint_ (steps 2-3). The outbox (step 1), unconditional reconciliation, and access-controlled re-run (step 4) provide correctness regardless of which driver you pick. Wakes are intentionally unordered, at-most-once, and coalescable.
 

@@ -156,7 +156,7 @@ The field-level `.admin()` accepts `unknown`, it does not type-check the editor 
 </Callout>
 
 <Callout type="warn" title="Markdown mode round-trips through the markdown extension">
-A `markdown`-mode field stores a plain markdown string. The editor loads and saves it via the `tiptap-markdown` extension, which is wired up from the field's `outputMode`. If you author a custom editor or drop the extension, the body can render empty and autosave an empty string over your content, a real regression that's covered by a dedicated test (`packages/admin/test/client/rich-text-markdown.test.ts`). Stick with the built-in editor for markdown fields.
+A `markdown`-mode field stores a plain markdown string. The editor loads and saves it via the `tiptap-markdown` extension, which is wired up from the field's `outputMode`. If you author a custom editor or drop the extension, the body can render empty and autosave an empty string over your content. Stick with the built-in editor for markdown fields.
 </Callout>
 
 ## TypeScript

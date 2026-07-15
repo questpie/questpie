@@ -97,7 +97,7 @@ export function color() {
 `field` comes from `questpie/builders`; `FieldRuntimeState` requires an `operatorSet`, so reusing `stringOps` gives a `color` field `eq` / `in` / `ilike` / `isNull` and friends for free.
 
 <Callout type="warn" title="`operator` / `operatorSet` / `stringOps` are not public exports">
-The operator-authoring primitives, `operator()`, `operatorSet()`, `extendOperatorSet()`, and the builtin sets (`stringOps`, `numberOps`, …), live at the internal path `#questpie/server/fields/operators/index.js` and are **not** re-exported from `questpie` or `questpie/builders`. Only their *types* (`OperatorFn`, `OperatorMap`, `ContextualOperators`) are public. The public-export surface is verified in `packages/questpie/src/exports/builders.ts`.
+The operator-authoring primitives, `operator()`, `operatorSet()`, `extendOperatorSet()`, and the builtin sets (`stringOps`, `numberOps`, …), live at the internal path `#questpie/server/fields/operators/index.js` and are **not** re-exported from `questpie` or `questpie/builders`. Only their *types* (`OperatorFn`, `OperatorMap`, `ContextualOperators`) are public.
 </Callout>
 
 ### Adding chain methods with `fieldType()`
@@ -160,7 +160,7 @@ When a module declares a `fields` record, codegen extracts those factories (the 
 In a **root app** (not a package), the same effect comes from a single `src/questpie/server/fields.ts` *bundle* file that exports your factories, codegen discovers it via the `fields` discover pattern, spreads its default export into the runtime field map, and augments the type-level `FieldTypesMap`.
 
 <Callout type="info" title="Two `fields` mechanisms, don't confuse them">
-The core plugin has *both* a `fields.ts` single-file discover pattern (the root-app bundle, index.ts:145) and a `fieldTypes` *category* that scans the `fields/` directory for `fieldType()` calls (index.ts:131, `dirs: ["fields"]`). The category feeds the `~fieldTypes` Registry and module extraction; it does **not** auto-inject loose `fields/`-directory files into a root app's `f` proxy. Register via a module's `fields` record (packages) or the `fields.ts` bundle (root apps).
+The core plugin has *both* a `fields.ts` single-file discover pattern for the root-app bundle and a `fieldTypes` *category* that scans the `fields/` directory for `fieldType()` calls. The category feeds the `~fieldTypes` Registry and module extraction; it does **not** auto-inject loose `fields/`-directory files into a root app's `f` proxy. Register via a module's `fields` record (packages) or the `fields.ts` bundle (root apps).
 </Callout>
 
 The full field surface, every common method (`.zod()`, `.drizzle()`, `.array()`, `.access()`, `.hooks()`, …), the `FieldRuntimeState` shape, and the per-type metadata, is in [Fields](/docs/concepts/fields). What's above is the minimum to add your own.
@@ -204,13 +204,13 @@ Infrastructure in QUESTPIE is adapter-shaped. Every subsystem, queue, search, re
 
 Each subsystem has one interface. A few of them:
 
-| Subsystem | Interface | Wire it as | Source |
-|---|---|---|---|
-| Search | `SearchAdapter` | `runtimeConfig({ search })` | `…/integrated/search/types.ts:671` |
-| Realtime | `RealtimeAdapter` | `runtimeConfig({ realtime: { adapter } })` | `…/integrated/realtime/adapter.ts:6` |
-| KV | `KVAdapter` | `runtimeConfig({ kv: { adapter } })` | `…/integrated/kv/adapter.ts:4` |
-| Executor | `ExecutorAdapter` | `runtimeConfig({ executor: { sandboxed } })` | `…/integrated/executor/adapter.ts:146` |
-| Storage | `files-sdk` `Adapter` | `runtimeConfig({ storage: { adapter } })` | `packages/questpie/src/exports/storage.ts:1` |
+| Subsystem | Interface | Wire it as |
+|---|---|---|
+| Search | `SearchAdapter` | `runtimeConfig({ search })` |
+| Realtime | `RealtimeAdapter` | `runtimeConfig({ realtime: { adapter } })` |
+| KV | `KVAdapter` | `runtimeConfig({ kv: { adapter } })` |
+| Executor | `ExecutorAdapter` | `runtimeConfig({ executor: { sandboxed } })` |
+| Storage | `files-sdk` `Adapter` | `runtimeConfig({ storage: { adapter } })` |
 
 A `RealtimeAdapter` is the smallest contract, four methods. Here is the shape of a custom transport adapter:
 

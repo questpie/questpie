@@ -113,7 +113,7 @@ const DRIFT_RULES: Array<{
 	severity: Severity;
 	pattern: RegExp;
 	message: string;
-	scope?: "docs-and-skills";
+	scope?: "docs-and-skills" | "skills-only";
 	allowedPaths?: RegExp;
 }> = [
 	{
@@ -159,14 +159,17 @@ const DRIFT_RULES: Array<{
 			/\bimport\s+\{[^}]*\bcollection\b[^}]*\}\s+from\s+["']questpie["']/g,
 		message:
 			"Convention files should import `collection` from `#questpie/factories`. Keep `questpie` imports only for package/module code.",
+		// Internal contributor guidance intentionally shows package-authoring imports;
+		// it is not rendered by the public docs app.
+		allowedPaths: /^docs\/CODING-GUIDELINES\.md$/,
 	},
 	{
-		id: "user-facing-source-marker",
+		id: "skill-facing-source-marker",
 		severity: "error",
-		pattern: /^\s*Source:\s+/gm,
+		pattern: /^\s*Sources?:\s+/gm,
 		message:
-			"Do not expose source-file provenance in Markdown docs or skills. Keep implementation references out of user-facing guidance.",
-		scope: "docs-and-skills",
+			"Do not expose source-file provenance in skills. Keep implementation references out of user-facing guidance.",
+		scope: "skills-only",
 	},
 	{
 		id: "user-facing-verification-marker",
@@ -328,6 +331,65 @@ function walkDocs(
 
 function stripCodeFences(content: string): string {
 	return content.replace(/```[\s\S]*?```/g, "");
+}
+
+function maskCodeFences(content: string): string {
+	return content.replace(/```[\s\S]*?```/g, (block) =>
+		block.replace(/[^\n]/g, " "),
+	);
+}
+
+export interface PublicDocsProvenanceIssue {
+	id: "provenance-marker" | "internal-repository-path" | "file-line-reference";
+	line: number;
+	message: string;
+}
+
+export function findPublicDocsProvenance(
+	content: string,
+): PublicDocsProvenanceIssue[] {
+	const issues: PublicDocsProvenanceIssue[] = [];
+	const prose = maskCodeFences(content);
+	const rules: Array<{
+		id: PublicDocsProvenanceIssue["id"];
+		pattern: RegExp;
+		message: string;
+	}> = [
+		{
+			id: "provenance-marker",
+			pattern: /^\s*Sources?:\s+.+$/gim,
+			message:
+				"Public docs must explain the API directly instead of exposing an internal Source/Sources audit marker.",
+		},
+		{
+			id: "internal-repository-path",
+			pattern:
+				/(?<![\w/])packages\/[a-z0-9@._-]+\/(?:src|test)\/[a-z0-9_./{}*-]+(?::\d+(?:-\d+)?)?/gi,
+			message:
+				"Public prose must not use an internal packages/* source or test path as provenance. Link a stable public API or explain the behavior directly.",
+		},
+		{
+			id: "file-line-reference",
+			pattern:
+				/(?<![\w/])(?:[a-z0-9_.-]+\/)*[a-z0-9_.-]+\.(?:ts|tsx):\d+(?:-\d+)?/gi,
+			message:
+				"Public prose must not depend on an internal file-and-line reference. Explain the public contract directly.",
+		},
+	];
+
+	for (const rule of rules) {
+		let match: RegExpExecArray | null;
+		rule.pattern.lastIndex = 0;
+		while ((match = rule.pattern.exec(prose))) {
+			issues.push({
+				id: rule.id,
+				line: lineForIndex(prose, match.index),
+				message: `${rule.message} (${rule.id})`,
+			});
+		}
+	}
+
+	return issues;
 }
 
 function extractCodeBlocks(content: string): CodeBlock[] {
@@ -545,8 +607,17 @@ function isDocsOrSkillFile(file: string): boolean {
 }
 
 function validateDriftRules(file: string, content: string, issues: Issue[]) {
+	if (file.startsWith(DOCS_ROOT) && extname(file) === ".mdx") {
+		for (const issue of findPublicDocsProvenance(content)) {
+			addIssue(issues, "drift", "error", file, issue.line, issue.message);
+		}
+	}
+
 	for (const rule of DRIFT_RULES) {
 		if (rule.scope === "docs-and-skills" && !isDocsOrSkillFile(file)) {
+			continue;
+		}
+		if (rule.scope === "skills-only" && !file.startsWith(SKILL_DOCS_ROOT)) {
 			continue;
 		}
 		if (rule.allowedPaths?.test(toDisplayPath(file))) continue;
@@ -920,4 +991,4 @@ function main() {
 	process.exit(hasErrors && !args.report ? 1 : 0);
 }
 
-main();
+if (import.meta.main) main();

@@ -105,7 +105,7 @@ await adapter?.invalidateByTags?.(["post:123", "post:124"]);
 ```
 
 <Callout type="warn" title="On the zero-config default, `app.config.kv?.adapter` is `undefined`">
-`app.config` is your *raw* config object. When you omit `kv.adapter`, the default `MemoryKVAdapter` is constructed **inside** `KVService` (`service.ts:11`) and never written back to `app.config`, so on the default setup `app.config.kv?.adapter` is `undefined` and the `?.` calls above **silently do nothing**, even though `MemoryKVAdapter` fully implements `setWithTags` / `invalidateByTag` (`memory.ts:28`). Tag invalidation is only reachable when you construct an adapter explicitly: either set `kv.adapter` in config and read it back via `app.config.kv?.adapter`, or, cleaner, keep your own reference to the adapter you built and call its tag methods directly.
+`app.config` is your *raw* config object. When you omit `kv.adapter`, the default `MemoryKVAdapter` is constructed **inside** `KVService` and never written back to `app.config`, so on the default setup `app.config.kv?.adapter` is `undefined` and the `?.` calls above **silently do nothing**, even though `MemoryKVAdapter` fully implements `setWithTags` / `invalidateByTag`. Tag invalidation is only reachable when you construct an adapter explicitly: either set `kv.adapter` in config and read it back via `app.config.kv?.adapter`, or, cleaner, keep your own reference to the adapter you built and call its tag methods directly.
 </Callout>
 
 <Callout type="info" title="Tag methods live on the adapter, not the service">
@@ -114,7 +114,7 @@ await adapter?.invalidateByTags?.(["post:123", "post:124"]);
 
 ## Configuration
 
-KV is configured under the `kv` key of your `questpie.config.ts` (`QuestpieConfig.kv`, source: `packages/questpie/src/server/config/types.ts:554`). The shape is `KVConfig`:
+KV is configured under the `kv` key of your `questpie.config.ts`. The shape is `KVConfig`:
 
 ```ts
 interface KVConfig {
@@ -130,7 +130,7 @@ interface KVConfig {
 | `adapter` | `KVAdapter` | `new MemoryKVAdapter()` | The backend. Omit for in-memory. |
 | `defaultTtl` | `number` | _(none)_ | Seconds. Applied by `KVService.set` only when the call omits its own `ttl`. |
 
-Source for the default + `defaultTtl` fallback: `kv/service.ts:11,19`.
+When a call omits its own TTL, the service uses `defaultTtl`.
 
 ## Adapters
 
@@ -180,7 +180,7 @@ export default runtimeConfig({
 });
 ```
 
-`redisKVAdapter` options (source: `kv/adapters/redis.ts:29`):
+`redisKVAdapter` accepts these options:
 
 | Option | Type | Default | Notes |
 |---|---|---|---|
@@ -214,7 +214,7 @@ export default runtimeConfig({
 });
 ```
 
-`cloudflareKVAdapter` options (source: `kv/adapters/cloudflare-kv.ts:41`):
+`cloudflareKVAdapter` accepts these options:
 
 | Option | Type | Default | Notes |
 |---|---|---|---|
@@ -249,7 +249,7 @@ export class MyKVAdapter implements KVAdapter {
 }
 ```
 
-Wire it under `kv.adapter` exactly like the built-ins. The five core methods are required; the three tag methods are optional. `ttl` is always in **seconds**. Source for the contract: `packages/questpie/src/server/modules/core/integrated/kv/adapter.ts:4`. For the full pattern that applies to every adapter kind, see [Building a plugin](/docs/extend/build-a-plugin).
+Wire it under `kv.adapter` exactly like the built-ins. The five core methods are required; the three tag methods are optional. `ttl` is always in **seconds**. For the full pattern that applies to every adapter kind, see [Building a plugin](/docs/extend/build-a-plugin).
 
 ## TypeScript
 

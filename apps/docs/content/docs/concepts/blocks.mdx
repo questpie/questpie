@@ -316,7 +316,7 @@ export function HeroRenderer({ values, data, children }: BlockProps<"hero">) {
 }
 ```
 
-`values` is typed from the block's `.fields()`; `data` is typed from its `.prefetch()`. Layout blocks (`.allowChildren()`) render their nested blocks through `children`. Sources: `packages/admin/src/client/blocks/block-renderer.tsx`, `examples/tanstack-barbershop/src/components/pages/PageRenderer.tsx`, `examples/tanstack-barbershop/src/questpie/admin/blocks/hero.tsx`.
+`values` is typed from the block's `.fields()`; `data` is typed from its `.prefetch()`. Layout blocks (`.allowChildren()`) render their nested blocks through `children`. The runnable [TanStack barbershop example](https://github.com/questpie/questpie/tree/main/examples/tanstack-barbershop) shows a complete page renderer paired with admin block components.
 
 <Callout type="info" title="What `BlockRenderer` actually passes each renderer">
 At runtime, `BlockRenderer` passes each renderer component `id`, `type` (the block type name, an extra prop the typed shape below omits), `values`, `data`, and the rendered `children`, and nothing else. The `isSelected` / `isPreview` fields in the renderer-props type are **reserved and not wired by `BlockRenderer`**: they are always `undefined` here, so don't build rendering logic on them (selection state lives on the editor wrapper, not the renderer). Stick to `values`, `data`, and `children`.
@@ -369,7 +369,7 @@ type HeroProps = BlockProps<"hero">;
 import type { BlocksDocument, BlockNode } from "@questpie/admin/fields";
 ```
 
-If you build blocks programmatically (a plugin), `block`, `BlockBuilder`, `AdminBlockConfig`, `BlockCategoryConfig`, `AdminConfigContext`, `BlockPrefetchContext`, and the inference helpers `InferBlockValues` / `InferBlockData` are exported from `@questpie/admin/factories` (and `@questpie/admin/server`); `BlockRenderer`, `BlockRendererProps`, `BlockContent`, `BlockNode`, and `isBlockContent` from `@questpie/admin/client`. Sources: `packages/admin/src/exports/{server,factories,fields,client}.ts`.
+If you build blocks programmatically (a plugin), `block`, `BlockBuilder`, `AdminBlockConfig`, `BlockCategoryConfig`, `AdminConfigContext`, `BlockPrefetchContext`, and the inference helpers `InferBlockValues` / `InferBlockData` are exported from `@questpie/admin/factories` (and `@questpie/admin/server`); `BlockRenderer`, `BlockRendererProps`, `BlockContent`, `BlockNode`, and `isBlockContent` from `@questpie/admin/client`.
 
 <Callout type="info" title="Import `block` from `#questpie/factories`, not `@questpie/admin/server`">
 In app code, always import `block` from `#questpie/factories`. The generated factory wraps the field proxy with your enabled modules so `f.richText()` / `f.blocks()` are available inside a block's `.fields()`; the bare `block()` from `@questpie/admin/server` only sees builtin fields.
