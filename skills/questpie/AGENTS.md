@@ -30,10 +30,10 @@ Reference these guidelines when:
 | `block(name)`                       | `#questpie/factories`        | Yes            |
 | `channel(pattern)`                  | `"questpie/channels"`        | Yes            |
 | `adminConfig({...})`                | `#questpie/factories`        | Yes            |
-| `route()`                           | `"questpie"`                 | No             |
-| `job({...})`                        | `"questpie"`                 | No             |
-| `service()`                         | `"questpie"`                 | No             |
-| `email({...})`                      | `"questpie"`                 | No             |
+| `route()`                           | `"questpie/services"`        | No             |
+| `job({...})`                        | `"questpie/services"`        | No             |
+| `service()`                         | `"questpie/services"`        | No             |
+| `email({...})`                      | `"questpie/services"`        | No             |
 | `migration({...})`                  | `"questpie"`                 | No             |
 | `seed({...})` / `seed.steps({...})` | `"questpie"`                 | No             |
 | `runtimeConfig({...})`              | `"questpie/app"`             | No             |
@@ -43,6 +43,11 @@ Reference these guidelines when:
 | `clientEnv({...})`                  | `"questpie/env"`             | No             |
 | `createClient<AppConfig>()`         | `"questpie/client"`          | No             |
 | `createQuestpieQueryOptions()`      | `"@questpie/tanstack-query"` | No             |
+
+The root `questpie` entrypoint keeps compatibility exports for several service
+factories, but app convention files use `questpie/services` for routes, jobs,
+services, and emails. Keep examples on that focused entrypoint so adapter and
+service code does not drift between two equivalent import styles.
 
 ## Module And Plugin Configuration - Critical
 
@@ -7735,7 +7740,7 @@ Output streams into a KV-backed store (`createQuestpieResumableStreamStore({ kv 
 
 `reapExpiredRunLinks(deps, now?)` (the cron + inline on each tail read) requeues expired leases when `retryPolicy:"auto"` (bump epoch → `pending`) or fails them via `finalizeRun` otherwise.
 
-## Gotchas (verified against @questpie/ai@3.1.0)
+## Gotchas (verified against the current `@questpie/ai` module API)
 
 - **`claude-code` runtime ONLY.** `createHarnessAgent` throws for anything else.
 - **`aiConfig`/`aiPlugin`/`config/ai.ts` + `onBeforeRun`/`onAfterComplete` are DEFINED BUT NOT WIRED**, placeholder surface, consumed nowhere. Do not tell users to configure them.

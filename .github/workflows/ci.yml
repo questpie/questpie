@@ -198,3 +198,6 @@ jobs:
 
       - name: Validate docs
         run: bun run validate:docs -- --docs-app
+
+      - name: Verify canonical skill install parity
+        run: bun run verify:skills-install

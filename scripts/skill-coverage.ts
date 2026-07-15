@@ -8,14 +8,15 @@
  * entry files, following `export * from` re-exports), greps the shipped skill
  * (`skills/questpie/**`) for every symbol, and reports zeros.
  *
- * Mention-count is a deliberately dumb metric — it cannot tell "taught" from
- * "named". Its only job is to catch ZEROS (the observed failure mode: sandbox,
- * job cron, resend shipped fully implemented with zero skill mentions).
- * Taught-vs-mentioned judgment stays with humans/AI review.
+ * Mention-count is deliberately used only to catch unclassified public values
+ * with zero skill mentions. The report groups the surface into public API,
+ * advanced public API, generated/type-only, and internal instead of presenting
+ * a misleading raw coverage percentage.
  *
  * Config: `skills/questpie/coverage.json` (reviewed together with the skill):
  *   - surfaces:        package → entry files/dirs to scan
  *   - skippedPackages: packages owned by another skill (audit hook)
+ *   - advanced:        public symbol → reason it belongs in advanced reference material
  *   - internal:        symbol → reason; never paged on
  *   - concepts:        non-symbol primitives, each with grep patterns
  *
@@ -45,6 +46,7 @@ interface CoverageConfig {
 	skillRoot: string;
 	surfaces: Array<{ package: string; entries: string[] }>;
 	skippedPackages: Record<string, string>;
+	advanced: Record<string, string>;
 	internal: Record<string, string>;
 	concepts: Array<{ name: string; patterns: string[] }>;
 }
@@ -56,7 +58,12 @@ interface SymbolEntry {
 	file: string;
 }
 
-type Verdict = "taught" | "mentioned" | "absent" | "internal" | "type-only";
+type Verdict =
+	| "public-api"
+	| "advanced-public-api"
+	| "unclassified"
+	| "internal"
+	| "generated/type-only";
 
 interface SymbolReport extends SymbolEntry {
 	mentions: number;
@@ -68,16 +75,18 @@ interface SymbolReport extends SymbolEntry {
 // ----------------------------------------------------------------------------
 
 function stripComments(code: string): string {
-	return code
-		.replace(/\/\*[\s\S]*?\*\//g, "")
-		.replace(/^[ \t]*\/\/.*$/gm, "");
+	return code.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
 }
 
 /** Resolve a re-export specifier to a source file inside the repo, or null for externals. */
 function resolveSpecifier(specifier: string, fromFile: string): string | null {
 	let base: string | null = null;
 	if (specifier.startsWith("#questpie/")) {
-		base = join(ROOT_DIR, "packages/questpie/src", specifier.slice("#questpie/".length));
+		base = join(
+			ROOT_DIR,
+			"packages/questpie/src",
+			specifier.slice("#questpie/".length),
+		);
 	} else if (specifier.startsWith(".")) {
 		base = resolve(dirname(fromFile), specifier);
 	} else {
@@ -116,7 +125,8 @@ function parseExportedNames(
 	}
 
 	// export { A, B as C, type D } [from "..."]
-	const namedPattern = /export\s+(type\s+)?\{([\s\S]*?)\}(?:\s*from\s*["']([^"']+)["'])?/g;
+	const namedPattern =
+		/export\s+(type\s+)?\{([\s\S]*?)\}(?:\s*from\s*["']([^"']+)["'])?/g;
 	while ((match = namedPattern.exec(clean))) {
 		const groupIsType = Boolean(match[1]);
 		for (const raw of match[2]!.split(",")) {
@@ -128,7 +138,12 @@ function parseExportedNames(
 			name = (asMatch[1] ?? asMatch[0])!.trim(); // public name is the alias
 			if (!name || name === "default") continue;
 			if (!/^[A-Za-z_$][\w$]*$/.test(name)) continue;
-			addSymbol(out, { name, kind: isType ? "type" : "value", package: pkg, file });
+			addSymbol(out, {
+				name,
+				kind: isType ? "type" : "value",
+				package: pkg,
+				file,
+			});
 		}
 	}
 
@@ -140,7 +155,8 @@ function parseExportedNames(
 	}
 
 	// export type/interface NAME
-	const typePattern = /export\s+(?:declare\s+)?(type|interface)\s+([A-Za-z_$][\w$]*)/g;
+	const typePattern =
+		/export\s+(?:declare\s+)?(type|interface)\s+([A-Za-z_$][\w$]*)/g;
 	while ((match = typePattern.exec(clean))) {
 		addSymbol(out, { name: match[2]!, kind: "type", package: pkg, file });
 	}
@@ -192,7 +208,13 @@ function extractSurface(config: CoverageConfig): SymbolEntry[] {
 			const file = queue.pop()!;
 			if (visited.has(file)) continue;
 			visited.add(file);
-			parseExportedNames(readFileSync(file, "utf-8"), surface.package, file, symbols, queue);
+			parseExportedNames(
+				readFileSync(file, "utf-8"),
+				surface.package,
+				file,
+				symbols,
+				queue,
+			);
 		}
 	}
 
@@ -210,7 +232,10 @@ function collectSkillText(skillRoot: string): string {
 		for (const dirent of readdirSync(dir, { withFileTypes: true })) {
 			const child = join(dir, dirent.name);
 			if (dirent.isDirectory()) walk(child);
-			else if (dirent.isFile() && [".md", ".mdx"].includes(extname(dirent.name))) {
+			else if (
+				dirent.isFile() &&
+				[".md", ".mdx"].includes(extname(dirent.name))
+			) {
 				parts.push(readFileSync(child, "utf-8"));
 			}
 		}
@@ -251,23 +276,35 @@ function checkDocsNav(): string[] {
 		const display = relative(ROOT_DIR, metaFile);
 		let pages: unknown;
 		try {
-			pages = (JSON.parse(readFileSync(metaFile, "utf-8")) as { pages?: unknown }).pages;
+			pages = (
+				JSON.parse(readFileSync(metaFile, "utf-8")) as { pages?: unknown }
+			).pages;
 		} catch (error) {
-			problems.push(`${display}: invalid JSON (${error instanceof Error ? error.message : error})`);
+			problems.push(
+				`${display}: invalid JSON (${error instanceof Error ? error.message : error})`,
+			);
 			continue;
 		}
 		if (!Array.isArray(pages)) continue;
 
 		const listed = new Set<string>();
 		for (const page of pages) {
-			if (typeof page !== "string" || page.startsWith("http") || page.startsWith("---")) continue;
+			if (
+				typeof page !== "string" ||
+				page.startsWith("http") ||
+				page.startsWith("---")
+			)
+				continue;
 			listed.add(page);
 			const exists =
 				existsSync(join(dir, `${page}.mdx`)) ||
 				existsSync(join(dir, `${page}.md`)) ||
 				existsSync(join(dir, page, "index.mdx")) ||
 				existsSync(join(dir, page, "meta.json"));
-			if (!exists) problems.push(`${display}: references missing page or section \`${page}\``);
+			if (!exists)
+				problems.push(
+					`${display}: references missing page or section \`${page}\``,
+				);
 		}
 
 		for (const dirent of readdirSync(dir, { withFileTypes: true })) {
@@ -278,14 +315,17 @@ function checkDocsNav(): string[] {
 				entry = dirent.name.replace(/\.(md|mdx)$/, "");
 			} else if (
 				dirent.isDirectory() &&
-				(existsSync(join(child, "index.mdx")) || existsSync(join(child, "meta.json")))
+				(existsSync(join(child, "index.mdx")) ||
+					existsSync(join(child, "meta.json")))
 			) {
 				entry = dirent.name;
 			}
 			if (!entry) continue;
 			if (entry === "index" && dir !== DOCS_ROOT) continue;
 			if (!listed.has(entry)) {
-				problems.push(`${display}: page or section \`${entry}\` exists but is not listed in pages`);
+				problems.push(
+					`${display}: page or section \`${entry}\` exists but is not listed in pages`,
+				);
 			}
 		}
 	}
@@ -303,7 +343,9 @@ function main() {
 	const asJson = args.has("--json");
 	const showAll = args.has("--all");
 
-	const config = JSON.parse(readFileSync(CONFIG_PATH, "utf-8")) as CoverageConfig;
+	const config = JSON.parse(
+		readFileSync(CONFIG_PATH, "utf-8"),
+	) as CoverageConfig;
 	const skillText = collectSkillText(config.skillRoot);
 	const surface = extractSurface(config);
 
@@ -311,9 +353,11 @@ function main() {
 		const mentions = countMentions(skillText, entry.name);
 		let verdict: Verdict;
 		if (config.internal[entry.name] !== undefined) verdict = "internal";
-		else if (mentions === 0) verdict = entry.kind === "type" ? "type-only" : "absent";
-		else if (mentions <= 2) verdict = "mentioned";
-		else verdict = "taught";
+		else if (config.advanced[entry.name] !== undefined)
+			verdict = "advanced-public-api";
+		else if (entry.kind === "type") verdict = "generated/type-only";
+		else if (mentions === 0) verdict = "unclassified";
+		else verdict = "public-api";
 		return { ...entry, mentions, verdict };
 	});
 
@@ -326,13 +370,21 @@ function main() {
 
 	const navProblems = checkDocsNav();
 
-	const absentValues = reports.filter((report) => report.verdict === "absent");
-	const untaughtTypes = reports.filter((report) => report.verdict === "type-only");
+	const absentValues = reports.filter(
+		(report) => report.verdict === "unclassified",
+	);
+	const untaughtTypes = reports.filter(
+		(report) => report.verdict === "generated/type-only",
+	);
 	const missingConcepts = conceptReports.filter((concept) => !concept.covered);
 	const staleInternal = Object.keys(config.internal).filter(
 		(name) => !surface.some((entry) => entry.name === name),
 	);
-	const violations = absentValues.length + missingConcepts.length + navProblems.length;
+	const staleAdvanced = Object.keys(config.advanced).filter(
+		(name) => !surface.some((entry) => entry.name === name),
+	);
+	const violations =
+		absentValues.length + missingConcepts.length + navProblems.length;
 
 	if (asJson) {
 		console.log(
@@ -342,17 +394,23 @@ function main() {
 					mode: strict ? "strict" : "warn",
 					summary: {
 						symbols: reports.length,
-						taught: reports.filter((report) => report.verdict === "taught").length,
-						mentioned: reports.filter((report) => report.verdict === "mentioned").length,
-						internal: reports.filter((report) => report.verdict === "internal").length,
-						absentValues: absentValues.length,
-						untaughtTypes: untaughtTypes.length,
+						publicApi: reports.filter(
+							(report) => report.verdict === "public-api",
+						).length,
+						advancedPublicApi: reports.filter(
+							(report) => report.verdict === "advanced-public-api",
+						).length,
+						internal: reports.filter((report) => report.verdict === "internal")
+							.length,
+						unclassifiedValues: absentValues.length,
+						generatedTypeOnly: untaughtTypes.length,
 						missingConcepts: missingConcepts.length,
 						navProblems: navProblems.length,
 					},
 					absentValues,
 					missingConcepts,
 					untaughtTypes: untaughtTypes.map((report) => report.name),
+					staleAdvanced,
 					staleInternal,
 					navProblems,
 					...(showAll ? { symbols: reports, concepts: conceptReports } : {}),
@@ -362,12 +420,18 @@ function main() {
 			),
 		);
 	} else {
-		console.log(`\nSkill coverage — ${config.skillRoot} (${strict ? "strict" : "warn"} mode)`);
 		console.log(
-			`  Symbols: ${reports.length}  taught: ${reports.filter((report) => report.verdict === "taught").length}  mentioned: ${reports.filter((report) => report.verdict === "mentioned").length}  internal: ${reports.filter((report) => report.verdict === "internal").length}  type-only untaught: ${untaughtTypes.length}`,
+			`\nSkill coverage — ${config.skillRoot} (${strict ? "strict" : "warn"} mode)`,
 		);
-		console.log(`  Concepts: ${conceptReports.length}  covered: ${conceptReports.filter((concept) => concept.covered).length}`);
-		console.log(`  Skipped packages: ${Object.keys(config.skippedPackages).join(", ") || "—"}\n`);
+		console.log(
+			`  Symbols: ${reports.length}  public API: ${reports.filter((report) => report.verdict === "public-api").length}  advanced public API: ${reports.filter((report) => report.verdict === "advanced-public-api").length}  generated/type-only: ${untaughtTypes.length}  internal: ${reports.filter((report) => report.verdict === "internal").length}`,
+		);
+		console.log(
+			`  Concepts: ${conceptReports.length}  covered: ${conceptReports.filter((concept) => concept.covered).length}`,
+		);
+		console.log(
+			`  Skipped packages: ${Object.keys(config.skippedPackages).join(", ") || "—"}\n`,
+		);
 
 		if (showAll) {
 			for (const report of reports) {
@@ -384,19 +448,32 @@ function main() {
 			);
 		}
 		for (const concept of missingConcepts) {
-			console.log(`  CONCEPT  ${concept.name} — no pattern matched in the skill.`);
+			console.log(
+				`  CONCEPT  ${concept.name} — no pattern matched in the skill.`,
+			);
 		}
 		for (const problem of navProblems) {
 			console.log(`  DOCS-NAV ${problem}`);
 		}
 		for (const name of staleInternal) {
-			console.log(`  NOTE     internal allowlist entry \`${name}\` no longer matches an exported symbol (stale?)`);
+			console.log(
+				`  NOTE     internal allowlist entry \`${name}\` no longer matches an exported symbol (stale?)`,
+			);
+		}
+		for (const name of staleAdvanced) {
+			console.log(
+				`  NOTE     advanced API entry \`${name}\` no longer matches an exported symbol (stale?)`,
+			);
 		}
 
 		if (violations === 0) {
-			console.log("  OK — every public value export and concept is mentioned in the skill; docs nav is consistent.\n");
+			console.log(
+				"  OK — every public value export and concept is mentioned in the skill; docs nav is consistent.\n",
+			);
 		} else {
-			console.log(`\n  ${violations} coverage violation(s).${strict ? "" : " (warn mode — not failing; pass --strict to gate)"}\n`);
+			console.log(
+				`\n  ${violations} coverage violation(s).${strict ? "" : " (warn mode — not failing; pass --strict to gate)"}\n`,
+			);
 		}
 	}
 

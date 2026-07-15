@@ -26,6 +26,7 @@
 		"validate": "bun run scripts/validate.ts",
 		"validate:docs": "bun run scripts/validate-docs.ts",
 		"validate:docs:report": "bun run scripts/validate-docs.ts --report",
+		"verify:skills-install": "bun run scripts/verify-skill-install.ts",
 		"example-errors": "bun run scripts/example-errors.ts",
 		"check:codegen-layers": "bun run scripts/check-codegen-layers.ts"
 	},
