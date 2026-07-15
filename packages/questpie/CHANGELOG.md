@@ -1,5 +1,13 @@
 # questpie
 
+## 3.15.2
+
+### Patch Changes
+
+- [#176](https://github.com/questpie/questpie/pull/176) [`734737f`](https://github.com/questpie/questpie/commit/734737fd5a079c4063b6ff49f34fbacf01d8a2e8) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Always destroy the loaded app after migration CLI commands so production
+  deployment init containers exit even when configured adapters keep event-loop
+  resources open.
+
 ## 3.15.1
 
 ### Patch Changes
