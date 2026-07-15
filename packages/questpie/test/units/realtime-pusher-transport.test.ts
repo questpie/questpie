@@ -166,6 +166,43 @@ describe("pusher channel matrix change broker", () => {
 		expect(states).toEqual(["connected"]);
 	});
 
+	test("keeps topology wakes metadata-only on the provider path", async () => {
+		const { provider, triggers } = createProvider();
+		let onMessage: ((value: unknown) => void) | undefined;
+		const wakes: unknown[] = [];
+		const broker = new PusherChangeBroker({
+			provider,
+			subscriber: {
+				start: async (input) => {
+					onMessage = input.onMessage;
+				},
+				stop: async () => {},
+			},
+			channel: "questpie-broker-test",
+		});
+		const wake = {
+			kind: "topology-maybe-advanced" as const,
+			sessionKey: "sha256-session-key",
+			ownerId: "owner-a",
+			ownerGeneration: 2,
+			desiredRevision: 7,
+			reason: "submit" as const,
+		};
+
+		await broker.start({
+			onWake: (value) => wakes.push(value),
+			onError: () => {},
+		});
+		await broker.publish({
+			...wake,
+			token: "must-be-stripped",
+		} as ChangeWake);
+		expect(triggers[0]?.data).toEqual(wake);
+
+		onMessage?.({ ...wake, topics: [{ resource: "posts" }] });
+		expect(wakes).toEqual([wake]);
+	});
+
 	test("reports provider failures while publish remains off the caller path", async () => {
 		const errors: unknown[] = [];
 		const provider = createProvider().provider;

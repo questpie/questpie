@@ -2,18 +2,19 @@ import { createHmac, createHash } from "node:crypto";
 
 import type { Principal } from "#questpie/server/config/context.js";
 
-import type {
-	ChangeBroker,
-	ChangeBrokerState,
-	ChangeWake,
-	ClientConfigInput,
-	ClientSink,
-	ClientTransportConfig,
-	DeliveryClass,
-	EdgeSessionInput,
-	OrderedChannelDelivery,
-	SharedProviderClientTransport,
-	SinkWriteResult,
+import {
+	normalizeChangeWake,
+	type ChangeBroker,
+	type ChangeBrokerState,
+	type ChangeWake,
+	type ClientConfigInput,
+	type ClientSink,
+	type ClientTransportConfig,
+	type DeliveryClass,
+	type EdgeSessionInput,
+	type OrderedChannelDelivery,
+	type SharedProviderClientTransport,
+	type SinkWriteResult,
 } from "./transport.js";
 
 const CHANNEL_PATTERN = /^[A-Za-z0-9_\-=@,.;]+$/;
@@ -87,44 +88,6 @@ export type PusherChangeBrokerOptions = {
 	channel: string;
 };
 
-function normalizeChangeWake(value: unknown): ChangeWake | null {
-	if (!value || typeof value !== "object") return null;
-	const fields = value as Record<string, unknown>;
-	const wake = value as Partial<ChangeWake>;
-	if (
-		wake.kind !== "outbox-maybe-advanced" &&
-		wake.kind !== "channel-events-maybe-advanced"
-	) {
-		return null;
-	}
-	if (
-		wake.reason !== "publish" &&
-		wake.reason !== "reconnect" &&
-		wake.reason !== "reconcile"
-	) {
-		return null;
-	}
-	if (wake.kind === "outbox-maybe-advanced") {
-		return {
-			kind: wake.kind,
-			...(typeof wake.highWaterSeq === "number"
-				? { highWaterSeq: wake.highWaterSeq }
-				: {}),
-			reason: wake.reason,
-		};
-	}
-	return {
-		kind: wake.kind,
-		...(typeof fields.channelHash === "string"
-			? { channelHash: fields.channelHash }
-			: {}),
-		...(typeof fields.highWaterEventId === "string"
-			? { highWaterEventId: fields.highWaterEventId }
-			: {}),
-		reason: wake.reason,
-	};
-}
-
 export function assertPusherChannelName(channel: string): void {
 	if (
 		channel.length === 0 ||
@@ -161,9 +124,11 @@ function byteLength(value: unknown): number {
 }
 
 function wakeKey(wake: ChangeWake): string {
-	return wake.kind === "outbox-maybe-advanced"
-		? wake.kind
-		: `${wake.kind}:${wake.channelHash ?? "*"}`;
+	if (wake.kind === "outbox-maybe-advanced") return wake.kind;
+	if (wake.kind === "channel-events-maybe-advanced") {
+		return `${wake.kind}:${wake.channelHash ?? "*"}`;
+	}
+	return `${wake.kind}:${wake.sessionKey}`;
 }
 
 /** Pusher-protocol cross-instance wake broker. Payloads are notice-only. */

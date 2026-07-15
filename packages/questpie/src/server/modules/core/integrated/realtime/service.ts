@@ -4,7 +4,7 @@ import type { DrizzleClientFromQuestpieConfig } from "#questpie/server/config/ty
 import type { LoggerAdapter } from "#questpie/server/modules/core/integrated/logger/types.js";
 
 import type { RealtimeAdapter } from "./adapter.js";
-import { PgNotifyAdapter } from "./adapters/pg-notify.js";
+import { PgNotifyAdapter, PgNotifyChangeBroker } from "./adapters/pg-notify.js";
 import {
 	type AppendChannelEventInput,
 	type AppendChannelEventOptions,
@@ -203,13 +203,20 @@ export class RealtimeService {
 		if (
 			!compatibleAdapter &&
 			this.pgConnectionString &&
-			(this.transportMode === "legacy" || !config.changeBroker)
+			this.transportMode === "legacy"
 		) {
 			compatibleAdapter = new PgNotifyAdapter({
 				connectionString: this.pgConnectionString,
 				channel: "questpie_realtime",
 			});
 		}
+		const compatibleBroker =
+			config.changeBroker ??
+			(!config.adapter && this.pgConnectionString && this.transportMode === "v2"
+				? new PgNotifyChangeBroker({
+						connectionString: this.pgConnectionString,
+					})
+				: undefined);
 
 		if (this.transportMode === "legacy") {
 			this.adapter = compatibleAdapter;
@@ -218,7 +225,7 @@ export class RealtimeService {
 			this.changeBroker = config.changeBroker;
 			this.clientTransport = config.clientTransport;
 		} else {
-			this.changeBroker = config.changeBroker;
+			this.changeBroker = compatibleBroker;
 			this.adapter = this.changeBroker ? undefined : compatibleAdapter;
 			this.clientTransport = config.clientTransport;
 		}
@@ -491,6 +498,7 @@ export class RealtimeService {
 			await this.adapter?.startPublisher?.();
 			await this.changeBroker?.start({
 				onWake: (wake) => {
+					if (wake.kind === "topology-maybe-advanced") return;
 					if (wake.kind === "channel-events-maybe-advanced") {
 						void this.channelEventLedger
 							.drain(wake.channelHash)

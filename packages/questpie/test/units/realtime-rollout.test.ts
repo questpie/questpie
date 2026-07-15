@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 
 import { sseHeaders } from "../../src/server/adapters/utils/response.js";
 import type { RealtimeAdapter } from "../../src/server/modules/core/integrated/realtime/adapter.js";
+import { PgNotifyChangeBroker } from "../../src/server/modules/core/integrated/realtime/adapters/pg-notify.js";
 import { RealtimeService } from "../../src/server/modules/core/integrated/realtime/service.js";
 import type {
 	ChangeBroker,
@@ -122,6 +123,22 @@ function createService(
 }
 
 describe("realtime compatibility rollout", () => {
+	it("auto-selects the v2 Postgres broker for clean Postgres config", async () => {
+		const realtime = new RealtimeService(
+			new EmptyRealtimeDb() as never,
+			{ pollIntervalMs: 0, retentionDays: 0 },
+			"postgres://questpie.test/realtime",
+		);
+		try {
+			expect((realtime as any).changeBroker).toBeInstanceOf(
+				PgNotifyChangeBroker,
+			);
+			expect((realtime as any).adapter).toBeUndefined();
+		} finally {
+			await realtime.destroy();
+		}
+	});
+
 	it("keeps adapter-only config working as the v2 compatibility fallback", async () => {
 		const adapter = new RecordingAdapter();
 		const realtime = createService({ adapter });
@@ -132,6 +149,22 @@ describe("realtime compatibility rollout", () => {
 			expect(await realtime.getClientTransportConfig({})).toEqual({
 				transport: "sse",
 			});
+		} finally {
+			await realtime.destroy();
+		}
+	});
+
+	it("does not replace an explicit compatibility adapter with the Postgres default", async () => {
+		const adapter = new RecordingAdapter();
+		const realtime = new RealtimeService(
+			new EmptyRealtimeDb() as never,
+			{ adapter, pollIntervalMs: 0, retentionDays: 0 },
+			"postgres://questpie.test/realtime",
+		);
+		try {
+			await realtime.notify(change);
+			expect(adapter.notifications).toEqual([change]);
+			expect((realtime as any).changeBroker).toBeUndefined();
 		} finally {
 			await realtime.destroy();
 		}
