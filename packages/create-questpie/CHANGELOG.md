@@ -1,5 +1,13 @@
 # create-questpie
 
+## 2.2.2
+
+### Patch Changes
+
+- [#174](https://github.com/questpie/questpie/pull/174) [`03f17b6`](https://github.com/questpie/questpie/commit/03f17b63c3aff238a076446fbe444e655e65e184) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Wait for the canonical QUESTPIE skill installation, record project-local lock
+  provenance, and report a deterministic recovery command when installation
+  fails.
+
 ## 2.2.1
 
 ### Patch Changes
