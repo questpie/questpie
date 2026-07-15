@@ -10,6 +10,10 @@ import {
 	type RealtimeAdapter,
 	type RealtimeChangeEvent,
 } from "../src/exports/index.js";
+import type {
+	RealtimeObservation,
+	RealtimeObserver,
+} from "../src/server/modules/core/integrated/realtime/observer.js";
 import { buildMockApp } from "../test/utils/mocks/mock-app-builder.js";
 import { createTestContext } from "../test/utils/test-context.js";
 import { runTestDbMigrations } from "../test/utils/test-db.js";
@@ -26,7 +30,20 @@ type Topic = {
 	offset?: number;
 	orderBy?: Record<string, "asc" | "desc">;
 	locale?: string;
+	sinceSeq?: number;
 };
+
+class BenchmarkObserver implements RealtimeObserver {
+	private refreshes = 0;
+
+	record(event: RealtimeObservation): void {
+		if (event.type === "refresh.started") this.refreshes += 1;
+	}
+
+	checkpoint(): number {
+		return this.refreshes;
+	}
+}
 
 class LocalRealtimeAdapter implements RealtimeAdapter {
 	private listeners = new Set<(event: RealtimeChangeEvent) => void>();
@@ -49,24 +66,80 @@ class SnapshotReader {
 	private buffer = "";
 	private decoder = new TextDecoder();
 	private reader: ReadableStreamDefaultReader<Uint8Array>;
+	private receivedBytes = 0;
+	private controlSession: { sessionId: string; token: string } | null = null;
 
 	constructor(stream: ReadableStream<Uint8Array>) {
 		this.reader = stream.getReader();
 	}
 
-	async readSnapshots(count: number): Promise<void> {
+	async readSnapshots(
+		count: number,
+	): Promise<Array<{ topicId: string; seq: number }>> {
 		let received = 0;
+		const snapshots: Array<{ topicId: string; seq: number }> = [];
 		while (received < count) {
 			const event = await this.readEvent();
 			if (event.type === "error") {
 				throw new Error(`Realtime stream error: ${event.data}`);
 			}
-			if (event.type === "snapshot") received += 1;
+			this.captureSession(event);
+			if (event.type === "snapshot") {
+				const frame = JSON.parse(event.data) as {
+					topicId?: unknown;
+					seq?: unknown;
+				};
+				if (
+					typeof frame.topicId === "string" &&
+					typeof frame.seq === "number"
+				) {
+					snapshots.push({ topicId: frame.topicId, seq: frame.seq });
+				}
+				received += 1;
+			}
 		}
+		return snapshots;
+	}
+
+	async readSession(): Promise<void> {
+		while (!this.controlSession) {
+			const event = await this.readEvent();
+			if (event.type === "error") {
+				throw new Error(`Realtime stream error: ${event.data}`);
+			}
+			this.captureSession(event);
+		}
+	}
+
+	get session(): { sessionId: string; token: string } {
+		if (!this.controlSession)
+			throw new Error("Realtime session metadata missing");
+		return this.controlSession;
+	}
+
+	get bytesRead(): number {
+		return this.receivedBytes;
 	}
 
 	async close() {
 		await this.reader.cancel();
+	}
+
+	private captureSession(event: { type: string; data: string }): void {
+		if (event.type !== "session") return;
+		const session = JSON.parse(event.data) as {
+			sessionId?: unknown;
+			token?: unknown;
+		};
+		if (
+			typeof session.sessionId === "string" &&
+			typeof session.token === "string"
+		) {
+			this.controlSession = {
+				sessionId: session.sessionId,
+				token: session.token,
+			};
+		}
 	}
 
 	private async readEvent(): Promise<{ type: string; data: string }> {
@@ -86,14 +159,19 @@ class SnapshotReader {
 
 			const { done, value } = await this.reader.read();
 			if (done) throw new Error("Realtime stream closed before snapshot");
+			this.receivedBytes += value.byteLength;
 			this.buffer += this.decoder.decode(value, { stream: true });
 		}
 	}
 }
 
 type OpenConnection = {
+	appContext: ReturnType<typeof createTestContext>;
 	close: () => Promise<void>;
+	connectionId: string;
 	initialMs: number;
+	initialRequestBytes: number;
+	initialSnapshots: Array<{ topicId: string; seq: number }>;
 	reader: SnapshotReader;
 };
 
@@ -146,6 +224,9 @@ const herdClients = Number(
 const pgNotifyCount = Number(
 	process.env.REALTIME_BENCH_NOTIFY_COUNT ?? (quick ? 1_000 : 20_000),
 );
+const topologyRounds = Number(process.env.REALTIME_BENCH_TOPOLOGY_ROUNDS ?? 1);
+const topologyClients = quick ? [1, 3] : [1, 100, 500];
+const topologySizes = [1, 5, 15];
 
 const authors = collection("benchAuthors").fields(({ f }) => ({
 	name: f.text().required().localized(),
@@ -191,6 +272,15 @@ async function main() {
 			outboxWrites,
 			herdClients,
 			pgNotifyCount,
+			topologyRounds,
+			topologyClients,
+			topologySizes,
+			fixture: {
+				authors: 1,
+				posts: 30,
+				locales: ["en", "sk"],
+				operation: "swap one topic while retaining stable topics",
+			},
 			runtime: `Bun ${Bun.version}`,
 			platform: `${process.platform}/${process.arch}`,
 			revision,
@@ -201,6 +291,7 @@ async function main() {
 	);
 
 	const adapter = new LocalRealtimeAdapter();
+	const observer = new BenchmarkObserver();
 	const setup = await buildMockApp(
 		{
 			collections: { benchAuthors: authors, benchPosts: posts },
@@ -212,6 +303,7 @@ async function main() {
 		{
 			realtime: {
 				adapter,
+				observer,
 				keepAliveIntervalMs: 60_000,
 			},
 		},
@@ -252,40 +344,48 @@ async function main() {
 		const openConnection = async (
 			connectionId: string,
 			topics: Topic[],
+			expectedSnapshots = topics.length,
 		): Promise<OpenConnection> => {
 			const controller = new AbortController();
+			const appContext = createTestContext({
+				accessMode: "user",
+				role: "bench",
+				locale: "sk",
+			});
+			const body = JSON.stringify({
+				topics: topics.map((topic) => ({
+					...topic,
+					id: `${connectionId}:${topic.id}`,
+				})),
+			});
 			const request = new Request("http://localhost/realtime", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({
-					topics: topics.map((topic) => ({
-						...topic,
-						id: `${connectionId}:${topic.id}`,
-					})),
-				}),
+				body,
 				signal: controller.signal,
 			});
 			const startedAt = performance.now();
 			const response = await routes.realtime.subscribe(
 				request,
 				{},
-				{
-					appContext: createTestContext({
-						accessMode: "user",
-						role: "bench",
-						locale: "sk",
-					}),
-				},
+				{ appContext },
 			);
 			if (!response.ok || !response.body) {
 				throw new Error(`Realtime connection failed: ${response.status}`);
 			}
 			const reader = new SnapshotReader(response.body);
-			await reader.readSnapshots(topics.length);
+			const initialSnapshots =
+				expectedSnapshots > 0
+					? await reader.readSnapshots(expectedSnapshots)
+					: (await reader.readSession(), []);
 			const initialMs = performance.now() - startedAt;
 			return {
+				appContext,
+				connectionId,
 				reader,
 				initialMs,
+				initialRequestBytes: Buffer.byteLength(body),
+				initialSnapshots,
 				close: async () => {
 					controller.abort();
 					await reader.close().catch(() => {});
@@ -340,6 +440,301 @@ async function main() {
 		printTable(
 			"Refresh pipeline (ACL + i18n + relation + afterRead)",
 			refreshRows,
+		);
+
+		const topologyTopics = (count: number): Topic[] =>
+			Array.from({ length: count }, (_, index) => ({
+				...refreshTopic,
+				id: `topology-${index}`,
+				limit: 10,
+				offset: index,
+			}));
+		const topicConfig = (input: Topic) => {
+			const { id: _id, sinceSeq: _sinceSeq, ...topic } = input;
+			return topic;
+		};
+		const advanceGlobalOutbox = async () => {
+			await setup.app.db.insert(questpieRealtimeLogTable).values({
+				resourceType: "collection",
+				resource: "benchPosts",
+				operation: "update",
+				recordId: "benchmark-global-advance",
+				payload: {},
+			});
+		};
+
+		type TopologyStrategy = "incremental" | "reconnect";
+		type CursorState = "current" | "globally-advanced";
+		const runTopologyChange = async (input: {
+			strategy: TopologyStrategy;
+			cursorState: CursorState;
+			clients: number;
+			topicCount: number;
+			round: number;
+		}) => {
+			const baseTopics = topologyTopics(input.topicCount);
+			const replacement: Topic = {
+				...refreshTopic,
+				id: `topology-replacement-${input.round}`,
+				limit: 10,
+				offset: input.topicCount + input.round,
+			};
+			const prefix = [
+				"topology",
+				input.strategy,
+				input.cursorState,
+				input.clients,
+				input.topicCount,
+				input.round,
+			].join("-");
+			let connections = await Promise.all(
+				Array.from({ length: input.clients }, (_, index) =>
+					openConnection(`${prefix}-${index}`, [...baseTopics, replacement]),
+				),
+			);
+			const cursorFor = (connection: OpenConnection, topicId: string) => {
+				const snapshot = connection.initialSnapshots.find(
+					(candidate) =>
+						candidate.topicId === `${connection.connectionId}:${topicId}`,
+				);
+				if (!snapshot) throw new Error(`Missing cached cursor for ${topicId}`);
+				return snapshot.seq;
+			};
+			await Promise.all(
+				connections.map(async (connection) => {
+					const body = JSON.stringify({
+						sessionId: connection.reader.session.sessionId,
+						token: connection.reader.session.token,
+						frames: [
+							{
+								type: "remove_topic",
+								topicId: `${connection.connectionId}:${replacement.id}`,
+							},
+						],
+					});
+					const response = await routes.realtime.subscribe(
+						new Request("http://localhost/realtime", {
+							method: "POST",
+							headers: { "Content-Type": "application/json" },
+							body,
+						}),
+						{},
+						{ appContext: connection.appContext },
+					);
+					if (!response.ok) {
+						throw new Error(
+							`Realtime setup control failed: ${response.status}`,
+						);
+					}
+				}),
+			);
+			if (input.cursorState === "globally-advanced") {
+				await advanceGlobalOutbox();
+			}
+
+			const refreshCheckpoint = observer.checkpoint();
+			const wallStartedAt = performance.now();
+			let controlRequests = 0;
+			let connectionRequests = 0;
+			let requestBytes = 0;
+			let responseBytes = 0;
+			let latencies: number[] = [];
+
+			if (input.strategy === "incremental") {
+				latencies = await Promise.all(
+					connections.map(async (connection) => {
+						const replacementCursor = cursorFor(connection, replacement.id);
+						const topic = topicConfig(replacement);
+						const desiredBody = JSON.stringify({
+							sessionId: connection.reader.session.sessionId,
+							token: connection.reader.session.token,
+							topology: {
+								protocol: "questpie-realtime-topology",
+								version: 1,
+								revision: 1,
+								topics: [
+									...baseTopics.slice(0, -1).map((stable) => ({
+										id: `${connection.connectionId}:${stable.id}`,
+										topic: topicConfig(stable),
+										sinceSeq: cursorFor(connection, stable.id),
+									})),
+									{
+										id: `${connection.connectionId}:${replacement.id}`,
+										topic,
+										sinceSeq: replacementCursor,
+									},
+								],
+								channels: [],
+							},
+						});
+						const bridgeBody = JSON.stringify({
+							sessionId: connection.reader.session.sessionId,
+							token: connection.reader.session.token,
+							frames: [
+								{
+									type: "add_topic",
+									topicId: `${connection.connectionId}:${replacement.id}`,
+									topic,
+									sinceSeq: replacementCursor,
+								},
+								{
+									type: "remove_topic",
+									topicId: `${connection.connectionId}:${baseTopics.at(-1)!.id}`,
+								},
+							],
+						});
+						requestBytes += Buffer.byteLength(desiredBody);
+						controlRequests += 1;
+						const bytesBefore = connection.reader.bytesRead;
+						const snapshot =
+							input.cursorState === "globally-advanced"
+								? connection.reader.readSnapshots(1)
+								: null;
+						const startedAt = performance.now();
+						const response = await routes.realtime.subscribe(
+							new Request("http://localhost/realtime", {
+								method: "POST",
+								headers: { "Content-Type": "application/json" },
+								body: bridgeBody,
+							}),
+							{},
+							{ appContext: connection.appContext },
+						);
+						if (!response.ok) {
+							throw new Error(`Realtime control failed: ${response.status}`);
+						}
+						await snapshot;
+						responseBytes += connection.reader.bytesRead - bytesBefore;
+						return performance.now() - startedAt;
+					}),
+				);
+			} else {
+				const previous = connections;
+				const next = await Promise.all(
+					previous.map(async (connection, index) => {
+						const replacementTopics = [
+							...baseTopics.slice(0, -1).map((topic) => ({
+								...topic,
+								sinceSeq: cursorFor(connection, topic.id),
+							})),
+							{
+								...replacement,
+								sinceSeq: cursorFor(connection, replacement.id),
+							},
+						];
+						const startedAt = performance.now();
+						await connection.close();
+						const opened = await openConnection(
+							`${prefix}-reconnect-${index}`,
+							replacementTopics,
+							input.cursorState === "globally-advanced" ? input.topicCount : 0,
+						);
+						return {
+							connection: opened,
+							latency: performance.now() - startedAt,
+						};
+					}),
+				);
+				connections = next.map((result) => result.connection);
+				latencies = next.map((result) => result.latency);
+				connectionRequests = connections.length;
+				requestBytes = connections.reduce(
+					(total, connection) => total + connection.initialRequestBytes,
+					0,
+				);
+				responseBytes = connections.reduce(
+					(total, connection) => total + connection.reader.bytesRead,
+					0,
+				);
+			}
+
+			const wallMs = performance.now() - wallStartedAt;
+			const snapshotQueries = observer.checkpoint() - refreshCheckpoint;
+			await Promise.all(connections.map((connection) => connection.close()));
+			await delay(10);
+			return {
+				latencies,
+				wallMs,
+				controlRequests,
+				connectionRequests,
+				requestBytes,
+				responseBytes,
+				snapshotQueries,
+				stableTopicRecomputations: Math.max(0, snapshotQueries - input.clients),
+			};
+		};
+
+		const topologyRows: BenchmarkRow[] = [];
+		for (const cursorState of ["current", "globally-advanced"] as const) {
+			for (const topicCount of topologySizes) {
+				for (const clients of topologyClients) {
+					for (const strategy of ["incremental", "reconnect"] as const) {
+						console.log(
+							`Topology case: strategy=${strategy} cursor=${cursorState} clients=${clients} topics=${topicCount}`,
+						);
+						const results = [];
+						for (let round = 0; round < topologyRounds; round += 1) {
+							results.push(
+								await runTopologyChange({
+									strategy,
+									cursorState,
+									clients,
+									topicCount,
+									round,
+								}),
+							);
+						}
+						const latencies = results.flatMap((result) => result.latencies);
+						topologyRows.push({
+							strategy,
+							executionProtocol:
+								strategy === "incremental"
+									? "desired-v1 logical / legacy bridge"
+									: "full reconnect",
+							cursorState,
+							clients,
+							topics: topicCount,
+							samples: latencies.length,
+							wallMs: rounded(
+								results.reduce((total, result) => total + result.wallMs, 0),
+							),
+							p50Ms: rounded(percentile(latencies, 0.5)),
+							p99Ms: rounded(percentile(latencies, 0.99)),
+							snapshotQueries: results.reduce(
+								(total, result) => total + result.snapshotQueries,
+								0,
+							),
+							stableRecomputations: results.reduce(
+								(total, result) => total + result.stableTopicRecomputations,
+								0,
+							),
+							controlRequests: results.reduce(
+								(total, result) => total + result.controlRequests,
+								0,
+							),
+							connectionRequests: results.reduce(
+								(total, result) => total + result.connectionRequests,
+								0,
+							),
+							requestBytes: results.reduce(
+								(total, result) => total + result.requestBytes,
+								0,
+							),
+							responseBytes: results.reduce(
+								(total, result) => total + result.responseBytes,
+								0,
+							),
+						});
+					}
+				}
+			}
+		}
+		printTable(
+			"Measured topology swap: incremental desired-state semantics vs reconnect",
+			topologyRows,
+		);
+		console.log(
+			"Inference (not a measured percentage): fewer stable-topic recomputations and response bytes indicate the work avoided by incremental topology. The incremental wall-time path currently executes through the legacy-frame bridge until desired-v1 server control lands; do not publish bridge timing as final desired-v1 performance.",
 		);
 
 		const relationSize = async () => {
