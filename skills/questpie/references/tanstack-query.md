@@ -422,16 +422,12 @@ const { data } = useQuery(
 );
 ```
 
-Server realtime must be enabled. SSE is the default client transport; a normal Postgres URL auto-wires `pg_notify`, while setups without a push broker reconcile by polling every 2s. An explicit adapter can select a broker:
+Server realtime must be enabled. SSE is the default client transport; a normal Postgres URL auto-wires `PgNotifyChangeBroker`, while setups without a push broker reconcile by polling every 2s. No explicit transport is needed for the Postgres default:
 
 ```ts
-import { runtimeConfig } from "questpie/app";
-import { pgNotifyAdapter } from "questpie/adapters/pg-notify";
-
 export default runtimeConfig({
-	realtime: {
-		adapter: pgNotifyAdapter({ connectionString: process.env.DATABASE_URL }),
-	},
+	db: { url: process.env.DATABASE_URL! },
+	realtime: true,
 });
 ```
 

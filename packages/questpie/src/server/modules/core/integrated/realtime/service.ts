@@ -983,8 +983,8 @@ export class RealtimeService {
 		}
 
 		this.startPromise = (async () => {
-			await this.initialize();
 			const latestSeq = await this.getLatestSeq();
+			await this.initialize();
 
 			if (this.adapter) {
 				await this.adapter.start();

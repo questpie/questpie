@@ -255,7 +255,7 @@ handler: async ({ queue }) => {
 
 The realtime runtime writes its outbox row in the business transaction and always reconciles missed notices. `ChangeBroker` handles notice-only cross-instance wakes; `ClientTransport` handles already-authorized edge frames. SSE is the default client transport.
 
-With `realtime: true`, a normal Postgres URL auto-selects `pg_notify`; without a push broker, the outbox is polled every 2s. With push, reconciliation still runs every 15s so a lost wake cannot permanently stall subscribers.
+With `realtime: true`, a normal Postgres URL auto-selects `PgNotifyChangeBroker`; without a push broker, the outbox is polled every 2s. With push, reconciliation still runs every 15s so a lost outbox wake cannot permanently stall subscribers. Revisioned topology has its own durable `questpie_realtime_topology` state and one-second reconciliation, so a companion control request can land on any upgraded replica without sticky routing.
 
 ### pgNotify
 
@@ -263,13 +263,13 @@ Uses PostgreSQL `LISTEN/NOTIFY`. Every listening instance receives the same noti
 
 ```ts
 import { runtimeConfig } from "questpie/app";
-import { pgNotifyAdapter } from "questpie/adapters/pg-notify";
+import { pgNotifyChangeBroker } from "questpie/adapters/pg-notify";
 
 import env from "./env";
 
 export default runtimeConfig({
 	realtime: {
-		adapter: pgNotifyAdapter({
+		changeBroker: pgNotifyChangeBroker({
 			connectionString: env.DATABASE_URL,
 		}),
 	},
@@ -283,7 +283,7 @@ Takes a connected Redis-shaped `client` with `xAdd` and `xRead`, not a URL. Ever
 ```ts
 import { createClient } from "redis";
 import { runtimeConfig } from "questpie/app";
-import { redisStreamsAdapter } from "questpie/adapters/redis-streams";
+import { redisStreamsChangeBroker } from "questpie/adapters/redis-streams";
 
 import env from "./env";
 
@@ -292,7 +292,7 @@ await redis.connect();
 
 export default runtimeConfig({
 	realtime: {
-		adapter: redisStreamsAdapter({ client: redis }),
+		changeBroker: redisStreamsChangeBroker({ client: redis }),
 	},
 });
 ```
@@ -321,18 +321,20 @@ The preset supplies a notice-only Pusher `ChangeBroker` and a Pusher `ClientTran
 
 ### Cloudflare Durable Objects
 
-`cloudflareRealtimeAdapter()` is a notice-only broker for Workers. It shards Durable Objects by resource type and resource name, and notification work is attached to `waitUntil` so CRUD commits do not wait on the broker. The Worker still reads the durable outbox, re-runs access-controlled snapshots, and performs reconciliation.
+`cloudflareRealtimeAdapter()` is the deprecated 3.x `RealtimeAdapter` compatibility path for Workers. It shards Durable Objects by resource type and resource name, and notification work is attached to `waitUntil` so CRUD commits do not wait on the adapter. A dedicated v2 `ChangeBroker` replacement is not part of this release.
 
 ### When to Use Which
 
-| Selection                   | Use case                                                                  |
-| --------------------------- | ------------------------------------------------------------------------- |
-| Implicit pg + SSE           | Default Postgres deployment                                               |
-| Poll + SSE                  | Zero extra infrastructure without a push-capable database                 |
-| `pgNotifyAdapter` + SSE     | Explicit Postgres connection/channel                                      |
-| `redisStreamsAdapter` + SSE | Cross-instance Redis notice fan-out                                       |
-| `cloudflareRealtimeAdapter` | Cloudflare Workers notice fan-out through sharded Durable Objects         |
-| `pusherRealtime`            | Managed WebSockets, provider-native presence, and shared channel delivery |
+| Selection                        | Use case                                                                  |
+| -------------------------------- | ------------------------------------------------------------------------- |
+| Implicit pg + SSE                | Default Postgres deployment                                               |
+| Poll + SSE                       | Zero extra infrastructure without a push-capable database                 |
+| `pgNotifyChangeBroker` + SSE     | Explicit Postgres connection/channel                                      |
+| `redisStreamsChangeBroker` + SSE | Cross-instance Redis notice fan-out                                       |
+| `cloudflareRealtimeAdapter`      | Deprecated 3.x Cloudflare compatibility adapter                           |
+| `pusherRealtime`                 | Managed WebSockets, provider-native presence, and shared channel delivery |
+
+`RealtimeAdapter`, `realtime.adapter`, `pgNotifyAdapter`, and the `legacy`/`dual` rollout modes remain deprecated compatibility surfaces through QuestPie 3.x. Migrate to `changeBroker`; they are removed in QuestPie 4. Apply the generated `questpie_realtime_topology` migration before claiming cross-replica no-reconnect control.
 
 ## Search
 
@@ -770,7 +772,7 @@ const spec = generateOpenApiSpec(app, {
 import { createClient } from "redis";
 import { runtimeConfig } from "questpie/app";
 import { pgBossAdapter } from "questpie/adapters/pg-boss";
-import { pgNotifyAdapter } from "questpie/adapters/pg-notify";
+import { pgNotifyChangeBroker } from "questpie/adapters/pg-notify";
 import { redisKVAdapter } from "questpie/adapters/redis-kv";
 import { SmtpAdapter } from "questpie/adapters/smtp";
 import { s3 } from "files-sdk/s3";
@@ -804,7 +806,7 @@ export default runtimeConfig({
 		}),
 	},
 	realtime: {
-		adapter: pgNotifyAdapter({
+		changeBroker: pgNotifyChangeBroker({
 			connectionString: env.DATABASE_URL,
 		}),
 	},

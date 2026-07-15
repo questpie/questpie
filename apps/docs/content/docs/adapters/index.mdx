@@ -25,11 +25,16 @@ QUESTPIE ships seven infrastructure adapter slots. Learn the feature contract on
 
 You select an adapter once, in `questpie.config.ts` (or the `.build({ ... })` call), and the rest of your code is untouched. See [Configuration](/docs/concepts/configuration) for where each slot lives and how the runtime resolves it.
 
-<Callout type="info">Each adapter declares its own capabilities, so the runtime can fail fast or branch, for example, a queue adapter advertises whether it supports long-running workers or push delivery. The per-adapter pages document the relevant flags.</Callout>
+<Callout type="info">
+	Each adapter declares its own capabilities, so the runtime can fail fast or
+	branch, for example, a queue adapter advertises whether it supports
+	long-running workers or push delivery. The per-adapter pages document the
+	relevant flags.
+</Callout>
 
 ## Custom adapters
 
-Every adapter is defined by a public contract, `QueueAdapter`, `SearchAdapter`, `RealtimeAdapter`, `StorageConfig`, `MailAdapter`, `KVAdapter`, and the built-ins are just implementations of it. To back a concern with a broker the built-ins don't cover, implement the contract and wire your instance into the same config slot. The full build-your-own loop, which applies to every adapter kind, lives in [Building a plugin](/docs/extend/build-a-plugin).
+Every adapter is defined by a public contract, including `QueueAdapter`, `SearchAdapter`, realtime `ChangeBroker`, `StorageConfig`, `MailAdapter`, and `KVAdapter`; the built-ins are implementations of those contracts. To back a concern with infrastructure the built-ins don't cover, implement the matching contract and wire it into its config slot. The full build-your-own loop lives in [Building a plugin](/docs/extend/build-a-plugin).
 
 ## Related
 

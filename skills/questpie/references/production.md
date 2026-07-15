@@ -24,15 +24,15 @@ This skill builds on questpie-core. It is the **deployment/ops** doc: auth, acce
 
 QUESTPIE uses an adapter-based architecture for all infrastructure. Development defaults work out of the box; production requires explicit adapter configuration in `questpie.config.ts`.
 
-| Service  | Dev Default           | Production Adapter                            |
-| -------- | --------------------- | --------------------------------------------- |
-| Database | PostgreSQL (local)    | PostgreSQL (remote, SSL)                      |
-| Storage  | Local filesystem      | Files SDK provider adapter (`s3`, `r2`, etc.) |
-| Queue    | None (jobs skip)      | pg-boss (`pgBossAdapter`)                     |
-| Realtime | pgNotify              | Redis Streams (`redisStreamsAdapter`)         |
-| Email    | Console (logs output) | SMTP (`SmtpAdapter`)                          |
-| KV Store | In-memory             | Redis (`redisKVAdapter`)                      |
-| Logger   | Pino (console)        | Pino (structured JSON)                        |
+| Service  | Dev Default            | Production Adapter                            |
+| -------- | ---------------------- | --------------------------------------------- |
+| Database | PostgreSQL (local)     | PostgreSQL (remote, SSL)                      |
+| Storage  | Local filesystem       | Files SDK provider adapter (`s3`, `r2`, etc.) |
+| Queue    | None (jobs skip)       | pg-boss (`pgBossAdapter`)                     |
+| Realtime | `PgNotifyChangeBroker` | Redis Streams (`redisStreamsChangeBroker`)    |
+| Email    | Console (logs output)  | SMTP (`SmtpAdapter`)                          |
+| KV Store | In-memory              | Redis (`redisKVAdapter`)                      |
+| Logger   | Pino (console)         | Pino (structured JSON)                        |
 
 Every adapter's exact config shape lives in `references/infrastructure-adapters.md`.
 
@@ -128,9 +128,9 @@ Configure migration and seed directories in `questpie.config.ts` under `cli.migr
 
 All adapter config shapes, Storage (local, S3, R2), Queue (pg-boss, BullMQ), Realtime (pgNotify, Redis Streams), Email (SMTP, Console, Resend, Plunk), KV (Redis, custom), Logger, Search, and OpenAPI, live in **`references/infrastructure-adapters.md`**. Each is configured under `runtimeConfig({...})` in `questpie.config.ts`. The deployment-relevant constraints follow.
 
-- **Queue / pg-boss and Realtime / pgNotify** both rely on PostgreSQL `LISTEN/NOTIFY` and silently break behind PgBouncer in transaction pool mode. See [PgBouncer Compatibility](#pgbouncer-compatibility).
+- **Queue / pg-boss and Realtime / PgNotifyChangeBroker** both rely on PostgreSQL `LISTEN/NOTIFY` and silently break behind PgBouncer in transaction pool mode. See [PgBouncer Compatibility](#pgbouncer-compatibility).
 - **Cloudflare Workers** process queues push-based: use `cloudflareQueuesAdapter` from `questpie/adapters/cloudflare` and export the Worker via `createCloudflareWorkerHandlers`, do not run `app.queue.listen()` in a Worker.
-- **Multi-instance realtime** requires `redisStreamsAdapter`; a single instance can use `pgNotifyAdapter`.
+- **Multi-instance realtime** works with the default Postgres `PgNotifyChangeBroker` or an explicit Redis/Pusher/Cloudflare broker. Apply the generated topology migration before enabling HA control.
 
 ## PgBouncer Compatibility
 
@@ -140,25 +140,25 @@ Bun SQL (`new SQL({ url })`) already pools connections internally. In single-ins
 
 ### Adapter Compatibility Matrix
 
-| Adapter                          | Direct PG | PgBouncer (transaction)          | PgBouncer (session)         |
-| -------------------------------- | --------- | -------------------------------- | --------------------------- |
-| `pgNotifyAdapter` (realtime)     | works     | broken, listens silently dropped | works (pooling neutralized) |
-| `pgBossAdapter` (queue)          | works     | broken, LISTEN/NOTIFY required   | works (pooling neutralized) |
-| Drizzle queries via Bun SQL      | works     | works                            | works                       |
-| `redisStreamsAdapter` (realtime) | n/a       | n/a                              | n/a                         |
+| Adapter                               | Direct PG | PgBouncer (transaction)          | PgBouncer (session)         |
+| ------------------------------------- | --------- | -------------------------------- | --------------------------- |
+| `PgNotifyChangeBroker` (realtime)     | works     | broken, listens silently dropped | works (pooling neutralized) |
+| `pgBossAdapter` (queue)               | works     | broken, LISTEN/NOTIFY required   | works (pooling neutralized) |
+| Drizzle queries via Bun SQL           | works     | works                            | works                       |
+| `redisStreamsChangeBroker` (realtime) | n/a       | n/a                              | n/a                         |
 
 Prepared statements also break under transaction pooling. If you must use it, ensure your driver disables prepared statements end-to-end.
 
 ### DB Connection Routing
 
 - **Default and recommended:** direct connection to the PG primary. Bun SQL pools internally; you do not need PgBouncer.
-- **If you must use PgBouncer:** put it in `session` pool mode for any process that runs `pgBossAdapter` or `pgNotifyAdapter`. Session mode pins one server connection per client, which neutralizes pooling but keeps `LISTEN/NOTIFY` working.
+- **If you must use PgBouncer:** put it in `session` pool mode for any process that runs `pgBossAdapter` or `PgNotifyChangeBroker`. Session mode pins one server connection per client, which neutralizes pooling but keeps `LISTEN/NOTIFY` working.
 - **Split topology:** route web traffic through PgBouncer (transaction mode) and run workers (pgBoss, pgNotify) on a direct connection. This works, but realtime fired from web handlers still routes through the same `QUESTPIE_DB`, so realtime in web fails. In practice, going direct everywhere is simpler.
 - **TODO / current limitation:** the framework reads a single `QUESTPIE_DB` env var. There is no built-in split between a pooled URL and a direct URL for LISTEN consumers. Track this if you need a mixed topology.
 
 ## Realtime & SSE Keepalive
 
-SSE-based live updates fan out via the `POST /realtime` multiplexed endpoint. Adapter config (`pgNotifyAdapter`, `redisStreamsAdapter`) is in `references/infrastructure-adapters.md`.
+SSE-based live updates fan out via the `POST /realtime` multiplexed endpoint. Broker config (`pgNotifyChangeBroker`, Redis, Pusher, Cloudflare) is in `references/infrastructure-adapters.md`.
 
 ### SSE Keepalive & Timeouts
 
@@ -225,7 +225,7 @@ CMD ["bun", "run", ".output/server/index.mjs"]
 - Set `APP_URL` to your public domain
 - Enable HTTPS
 - Configure S3 or persistent storage for uploads
-- Use `redisStreamsAdapter` if running multiple instances
+- Use `redisStreamsChangeBroker` when Redis is the shared notice infrastructure
 - Set up health checks
 
 ### Health Check
@@ -314,7 +314,7 @@ queue: {
 
 ### HIGH: PgBouncer transaction pool with pgNotify/pgBoss
 
-Pointing `QUESTPIE_DB` at a PgBouncer in transaction pool mode silently breaks `pgNotifyAdapter` and `pgBossAdapter`. Both rely on PostgreSQL `LISTEN/NOTIFY`, which requires a persistent session. PgBouncer transaction pooling reassigns the session per-transaction, so the listener is dropped right after `LISTEN` returns.
+Pointing `QUESTPIE_DB` at a PgBouncer in transaction pool mode silently breaks `PgNotifyChangeBroker` and `pgBossAdapter`. Both rely on PostgreSQL `LISTEN/NOTIFY`, which requires a persistent session. PgBouncer transaction pooling reassigns the session per-transaction, so the listener is dropped right after `LISTEN` returns.
 
 Symptoms:
 
@@ -326,17 +326,17 @@ Fix:
 ```ts
 // WRONG -- QUESTPIE_DB points at PgBouncer (transaction mode)
 realtime: {
-	adapter: pgNotifyAdapter({ connectionString: env.QUESTPIE_DB });
+	changeBroker: pgNotifyChangeBroker({ connectionString: env.QUESTPIE_DB });
 }
 queue: {
 	adapter: pgBossAdapter({ connectionString: env.QUESTPIE_DB });
 }
 
 // CORRECT -- direct PG connection (Bun SQL pools internally), or switch
-// realtime to redisStreamsAdapter, which takes a connected redis client
+// realtime to redisStreamsChangeBroker, which takes a connected redis client
 // (not a URL) for multi-instance deployments:
 realtime: {
-	adapter: redisStreamsAdapter({ client: redis }); // see infrastructure-adapters.md
+	changeBroker: redisStreamsChangeBroker({ client: redis }); // see infrastructure-adapters.md
 }
 ```
 
@@ -344,7 +344,7 @@ If your infra mandates PgBouncer, use `session` pool mode for processes that run
 
 ## Realtime and Live Preview
 
-The realtime adapter (`pgNotifyAdapter` or `redisStreamsAdapter`) is relevant for **detached or shared preview sessions**, when the preview runs in a separate browser tab, or multiple collaborators view the same preview.
+The realtime broker (`PgNotifyChangeBroker` or `redisStreamsChangeBroker`) is relevant for **detached or shared preview sessions**, when the preview runs in a separate browser tab, or multiple collaborators view the same preview.
 
 For the default **same-tab preview**, realtime is NOT involved. Current same-tab preview uses `postMessage` for refresh/focus messages between the editor and the iframe.
 

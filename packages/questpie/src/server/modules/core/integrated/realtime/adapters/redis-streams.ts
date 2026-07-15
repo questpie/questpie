@@ -1,4 +1,10 @@
 import type { RealtimeAdapter } from "../adapter.js";
+import {
+	type ChangeBroker,
+	type ChangeBrokerState,
+	type ChangeWake,
+	normalizeChangeWake,
+} from "../transport.js";
 import type { RealtimeChangeEvent, RealtimeNotice } from "../types.js";
 
 export type RedisStreamsClient = {
@@ -44,6 +50,7 @@ export type RedisStreamsAdapterOptions = {
 	onError?: (error: unknown) => void;
 };
 
+/** @deprecated Use `RedisStreamsChangeBroker`. Removed in QuestPie 4. */
 export class RedisStreamsAdapter implements RealtimeAdapter {
 	private client: RedisStreamsClient;
 	private providedReader?: RedisStreamsClient;
@@ -320,5 +327,93 @@ export class RedisStreamsAdapter implements RealtimeAdapter {
 	}
 }
 
+/** @deprecated Use `redisStreamsChangeBroker`. Removed in QuestPie 4. */
 export const redisStreamsAdapter = (options: RedisStreamsAdapterOptions) =>
 	new RedisStreamsAdapter(options);
+
+/** Redis Streams implementation of the Realtime v2 notice-only seam. */
+export class RedisStreamsChangeBroker implements ChangeBroker {
+	private readonly adapter: RedisStreamsAdapter;
+	private setErrorHandler: (handler: (error: unknown) => void) => void;
+	private unsubscribe?: () => void;
+	private active = false;
+
+	constructor(options: RedisStreamsAdapterOptions) {
+		let errorHandler = (_error: unknown) => {};
+		this.adapter = new RedisStreamsAdapter({
+			...options,
+			stream: options.stream ?? "questpie:realtime:v2",
+			onError: (error) => errorHandler(error),
+		});
+		this.setErrorHandler = (handler) => {
+			errorHandler = handler;
+		};
+	}
+
+	async start(input: {
+		onWake: (wake: ChangeWake) => void;
+		onError: (error: unknown) => void;
+		onStateChange?: (state: ChangeBrokerState) => void;
+	}): Promise<void> {
+		if (this.active) return;
+		this.active = true;
+		this.setErrorHandler(input.onError);
+		this.unsubscribe = this.adapter.subscribe((notice) => {
+			let wake: ChangeWake | null = null;
+			try {
+				wake = normalizeChangeWake(JSON.parse(notice.resource));
+			} catch {
+				// Invalid messages are reported through the broker error seam below.
+			}
+			if (wake) input.onWake(wake);
+			else input.onError(new Error("Invalid Redis Streams ChangeWake payload"));
+		});
+		input.onStateChange?.("connecting");
+
+		try {
+			await this.adapter.start();
+			input.onStateChange?.("connected");
+		} catch (error) {
+			input.onError(error);
+			input.onStateChange?.("failed");
+			this.reset();
+			throw error;
+		}
+	}
+
+	async publish(wake: ChangeWake): Promise<void> {
+		if (!this.active) {
+			throw new Error("RedisStreamsChangeBroker is not started");
+		}
+		const normalized = normalizeChangeWake(wake);
+		if (!normalized) throw new Error("Invalid ChangeWake payload");
+		await this.adapter.notify({
+			seq:
+				normalized.kind === "outbox-maybe-advanced"
+					? (normalized.highWaterSeq ?? 0)
+					: normalized.kind === "topology-maybe-advanced"
+						? normalized.desiredRevision
+						: 0,
+			resourceType: "global",
+			resource: JSON.stringify(normalized),
+			operation: "update",
+			createdAt: new Date(),
+		});
+	}
+
+	async stop(): Promise<void> {
+		if (!this.active) return;
+		await this.adapter.stop();
+		this.reset();
+	}
+
+	private reset(): void {
+		this.unsubscribe?.();
+		this.unsubscribe = undefined;
+		this.active = false;
+		this.setErrorHandler(() => {});
+	}
+}
+
+export const redisStreamsChangeBroker = (options: RedisStreamsAdapterOptions) =>
+	new RedisStreamsChangeBroker(options);
