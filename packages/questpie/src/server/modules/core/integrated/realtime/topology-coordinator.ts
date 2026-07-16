@@ -2,6 +2,8 @@ import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 
 import { and, eq, gt, lt, sql } from "drizzle-orm";
 
+import type { AnyDrizzleClient } from "#questpie/server/config/types.js";
+
 import { questpieRealtimeTopologyTable } from "./collection.js";
 import type { RealtimeObservation, RealtimeObserver } from "./observer.js";
 import type { RealtimeControlFrame } from "./sse-control.js";
@@ -371,7 +373,7 @@ export class MemoryRealtimeTopologyStore implements RealtimeTopologyStore {
 }
 
 export class PostgresRealtimeTopologyStore implements RealtimeTopologyStore {
-	constructor(private readonly db: any) {}
+	constructor(private readonly db: AnyDrizzleClient<any>) {}
 
 	private leaseDeadline(leaseMs: number) {
 		return sql`now() + (${leaseMs} * interval '1 millisecond')`;
@@ -408,7 +410,7 @@ export class PostgresRealtimeTopologyStore implements RealtimeTopologyStore {
 		identityHash: string;
 		mutate: (row: TopologyRow) => TopologyMutation;
 	}): Promise<TopologyMutationResult> {
-		return this.db.transaction(async (tx: any) => {
+		return this.db.transaction(async (tx) => {
 			const [row] = await tx
 				.select()
 				.from(questpieRealtimeTopologyTable)
@@ -903,7 +905,7 @@ export class RealtimeTopologyCoordinator {
 }
 
 export function createPostgresRealtimeTopologyCoordinator(
-	db: any,
+	db: AnyDrizzleClient<any>,
 	options: ConstructorParameters<typeof RealtimeTopologyCoordinator>[1] = {},
 ): RealtimeTopologyCoordinator {
 	return new RealtimeTopologyCoordinator(
