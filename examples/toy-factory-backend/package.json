@@ -1,6 +1,6 @@
 {
 	"name": "toy-factory-backend-example",
-	"version": "0.0.25",
+	"version": "0.0.26",
 	"private": true,
 	"type": "module",
 	"imports": {
